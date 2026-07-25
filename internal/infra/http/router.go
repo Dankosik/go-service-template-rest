@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -54,6 +55,10 @@ type RouterConfig struct {
 	// a stalled store holds the handler goroutine and its in-flight slot forever.
 	// See idempotencyOutcomeContext.
 	IdempotencyOutcomeTimeout time.Duration
+	// DomainErrors classify the errors a generated operation returns instead of a
+	// typed response. See problem.Mapper for why the seam exists and why the type
+	// lives in a leaf package rather than here.
+	DomainErrors []problem.Mapper
 }
 
 // defaultAuthenticateChallenge is the HTTP authentication scheme advertised when
@@ -74,7 +79,7 @@ func NewRouter(log *slog.Logger, h Handlers, metrics *telemetry.Metrics, cfg Rou
 
 	rejectRequest := RejectRequest(log, cfg.AuthenticateChallenge)
 
-	server := openapi.NewStrictHandlerWithOptions(strict, nil, generatedStrictServerOptions(rejectRequest))
+	server := openapi.NewStrictHandlerWithOptions(strict, nil, generatedStrictServerOptions(rejectRequest, cfg.DomainErrors))
 	requestValidator, err := openAPIRequestValidator(cfg.Authenticate, rejectRequest)
 	if err != nil {
 		return nil, err
@@ -214,24 +219,50 @@ func otelServerName(configured string) string {
 	return net.JoinHostPort(serverName, "0")
 }
 
-func generatedStrictServerOptions(rejectRequest func(http.ResponseWriter, *http.Request, error)) openapi.StrictHTTPServerOptions {
+func generatedStrictServerOptions(
+	rejectRequest func(http.ResponseWriter, *http.Request, error),
+	domainErrors []problem.Mapper,
+) openapi.StrictHTTPServerOptions {
 	return openapi.StrictHTTPServerOptions{
-		RequestErrorHandlerFunc: rejectRequest,
-		ResponseErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) {
-			// A handler that returns its expired context is reporting a spent
-			// request budget, not an internal fault, and this is the path most
-			// timeouts actually take: the generated wrapper commits a response
-			// here, so RequestTimeout never sees an uncommitted one. Reporting
-			// it as 500 would hide every slow dependency inside the error rate.
-			if errors.Is(err, context.DeadlineExceeded) {
-				writeProblem(w, r, problemResponse{
-					code:   problem.CodeGatewayTimeout,
-					detail: "request exceeded its time budget",
-				})
-				return
+		RequestErrorHandlerFunc:  rejectRequest,
+		ResponseErrorHandlerFunc: handleGeneratedResponseError(domainErrors),
+	}
+}
+
+// handleGeneratedResponseError turns an error a generated operation returned into
+// a problem response.
+//
+// The expired-context case is checked before any service mapper, because it is a
+// transport fact rather than a domain one: a mapper that classified it would have
+// to repeat this rule, and one that forgot would hide every slow dependency
+// inside the 5xx rate.
+func handleGeneratedResponseError(domainErrors []problem.Mapper) func(http.ResponseWriter, *http.Request, error) {
+	return func(w http.ResponseWriter, r *http.Request, err error) {
+		// A handler that returns its expired context is reporting a spent
+		// request budget, not an internal fault, and this is the path most
+		// timeouts actually take: the generated wrapper commits a response
+		// here, so RequestTimeout never sees an uncommitted one. Reporting
+		// it as 500 would hide every slow dependency inside the error rate.
+		if errors.Is(err, context.DeadlineExceeded) {
+			writeProblem(w, r, problemResponse{
+				code:   problem.CodeGatewayTimeout,
+				detail: "request exceeded its time budget",
+			})
+			return
+		}
+
+		if mapped, ok := problem.Classify(err, domainErrors); ok {
+			if mapped.RetryAfter > 0 {
+				w.Header().Set("Retry-After", strconv.Itoa(int(mapped.RetryAfter.Round(time.Second).Seconds())))
 			}
-			writeProblem(w, r, problemResponse{code: problem.CodeInternalError, detail: "request failed"})
-		},
+			writeProblem(w, r, problemResponse{code: mapped.Code, detail: mapped.Detail})
+			return
+		}
+
+		// An unclassified error is a fault this service did not anticipate, so it
+		// stays a 500 with no detail: guessing a friendlier status for it is how a
+		// bug starts reading as a client mistake.
+		writeProblem(w, r, problemResponse{code: problem.CodeInternalError, detail: "request failed"})
 	}
 }
 
@@ -381,13 +412,16 @@ func isCORSPreflightRequest(r *http.Request) bool {
 }
 
 // RejectResponse returns the mapper this repository installs for generated
-// strict-server response failures: a spent request budget becomes 504, anything
-// else becomes 500.
+// strict-server response failures: a spent request budget becomes 504, whatever
+// the supplied mappers classify becomes their problem, and anything left becomes
+// 500.
 //
 // A service wiring its own generated strict server needs this, or every slow
-// dependency hides inside its 5xx error rate.
-func RejectResponse() func(http.ResponseWriter, *http.Request, error) {
-	return generatedStrictServerOptions(nil).ResponseErrorHandlerFunc
+// dependency hides inside its 5xx error rate. Passing mappers is what lets its
+// handlers return a domain error instead of hand-building a typed problem
+// response per operation; see problem.Mapper.
+func RejectResponse(domainErrors ...problem.Mapper) func(http.ResponseWriter, *http.Request, error) {
+	return handleGeneratedResponseError(domainErrors)
 }
 
 // The status-to-problem lookup a service needs for its own generated Problem

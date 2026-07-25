@@ -25,8 +25,11 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.HTTP.Addr != ":8080" {
 		t.Fatalf("HTTP.Addr = %q, want :8080", cfg.HTTP.Addr)
 	}
-	if cfg.HTTP.ShutdownTimeout != 30*time.Second {
-		t.Fatalf("HTTP.ShutdownTimeout = %s, want 30s", cfg.HTTP.ShutdownTimeout)
+	if cfg.HTTP.GracePeriod != 45*time.Second {
+		t.Fatalf("HTTP.GracePeriod = %s, want 45s", cfg.HTTP.GracePeriod)
+	}
+	if cfg.HTTP.ShutdownTimeout != 25*time.Second {
+		t.Fatalf("HTTP.ShutdownTimeout = %s, want 25s", cfg.HTTP.ShutdownTimeout)
 	}
 	if cfg.HTTP.ReadinessTimeout != 4*time.Second {
 		t.Fatalf("HTTP.ReadinessTimeout = %s, want 4s", cfg.HTTP.ReadinessTimeout)
@@ -235,8 +238,11 @@ func TestEnvExampleLoadsThroughConfigLoader(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadDetailed() with env/.env.example values error = %v", err)
 	}
-	if cfg.HTTP.ShutdownTimeout != 30*time.Second {
-		t.Fatalf("HTTP.ShutdownTimeout = %s, want 30s from env/.env.example", cfg.HTTP.ShutdownTimeout)
+	if cfg.HTTP.GracePeriod != 45*time.Second {
+		t.Fatalf("HTTP.GracePeriod = %s, want 45s from env/.env.example", cfg.HTTP.GracePeriod)
+	}
+	if cfg.HTTP.ShutdownTimeout != 25*time.Second {
+		t.Fatalf("HTTP.ShutdownTimeout = %s, want 25s from env/.env.example", cfg.HTTP.ShutdownTimeout)
 	}
 }
 

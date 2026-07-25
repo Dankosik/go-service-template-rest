@@ -118,7 +118,7 @@ func mustBuildReferenceRouter(tb testing.TB, bodyLimit int64, repository article
 	apiHandler, err := httpapi.NewAPIHandler(service, httpapi.Options{
 		Authenticate:   httpx.Authenticated(resolveWriter(testWriteToken)),
 		RejectRequest:  httpx.RejectRequest(log, authenticateChallenge),
-		RejectResponse: httpx.RejectResponse(),
+		RejectResponse: httpx.RejectResponse(httpapi.ClassifyError),
 	})
 	if err != nil {
 		tb.Fatalf("NewAPIHandler() error = %v", err)

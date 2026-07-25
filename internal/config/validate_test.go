@@ -110,7 +110,7 @@ func TestShutdownTimeoutMustStayWithinRange(t *testing.T) {
 func TestHTTPShutdownBudgetMustLeaveWriteDrainTime(t *testing.T) {
 	resetConfigEnv(t)
 
-	t.Setenv("APP__HTTP__READINESS_PROPAGATION_DELAY", "25s")
+	t.Setenv("APP__HTTP__READINESS_PROPAGATION_DELAY", "20s")
 	t.Setenv("APP__HTTP__WRITE_TIMEOUT", "10s")
 
 	_, _, err := LoadDetailed(LoadOptions{})

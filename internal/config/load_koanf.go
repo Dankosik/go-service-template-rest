@@ -37,9 +37,8 @@ func loadKoanf(ctx context.Context, opts LoadOptions) (*koanf.Koanf, loadMetadat
 		metadata.failedStage = StageLoadFile
 		return nil, metadata, err
 	}
-	filePolicy := configFilePolicyForLoad(hasExplicitConfigFiles(opts))
 	if opts.ConfigPath != "" {
-		sectionScalarOverrideKeys, err := loadConfigFileWithMetadata(ctx, k, opts.ConfigPath, filePolicy)
+		sectionScalarOverrideKeys, err := loadConfigFileWithMetadata(ctx, k, opts.ConfigPath)
 		if err != nil {
 			metadata.failedStage = StageLoadFile
 			return nil, metadata, err
@@ -47,7 +46,7 @@ func loadKoanf(ctx context.Context, opts LoadOptions) (*koanf.Koanf, loadMetadat
 		metadata.sectionScalarOverrideKeys = append(metadata.sectionScalarOverrideKeys, sectionScalarOverrideKeys...)
 	}
 	for _, overlayPath := range opts.ConfigOverlays {
-		sectionScalarOverrideKeys, err := loadConfigFileWithMetadata(ctx, k, overlayPath, filePolicy)
+		sectionScalarOverrideKeys, err := loadConfigFileWithMetadata(ctx, k, overlayPath)
 		if err != nil {
 			metadata.failedStage = StageLoadFile
 			return nil, metadata, err

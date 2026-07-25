@@ -5,14 +5,36 @@ import "github.com/example/go-service-template-rest/internal/observability/otelc
 // buildVersion is set by the production Docker build and remains "dev" for local builds.
 var buildVersion = "dev"
 
+// buildCommit is the source revision the binary was built from, stamped by the
+// production Docker build.
+//
+// It is a linker variable rather than something read back from
+// runtime/debug.ReadBuildInfo: the image build runs with -buildvcs=false, because
+// .dockerignore keeps .git out of the build context, so the binary carries no
+// vcs.revision of its own. Without this the commit existed only as an OCI image
+// label — unreachable from inside the container, and unjoinable to a span, a
+// metric, or a log line.
+var buildCommit = "unknown"
+
 func defaultValues() map[string]any {
 	return map[string]any{
 		"app.env":         "local",
 		"app.version":     buildVersion,
+		"app.commit":      buildCommit,
 		"app.instance_id": "",
 
-		"http.addr":              ":8080",
-		"http.shutdown_timeout":  "30s",
+		"http.addr": ":8080",
+		// grace_period matches railway.toml's drainingSeconds, the platform this
+		// repository ships a deployment profile for. Kubernetes grants 30s by
+		// default, so a deployment there sets both this and shutdown_timeout;
+		// leaving them mismatched is what validateShutdownGraceBudget rejects at
+		// startup rather than letting a SIGKILL discover it.
+		"http.grace_period": "45s",
+		// shutdown_timeout bounds the drain only. It is 25s rather than the whole
+		// grace period because the teardown after the drain — diagnostics,
+		// background join, pool release, telemetry flush — needs the remaining 17s,
+		// and the flush that records how all three went is what runs last.
+		"http.shutdown_timeout":  "25s",
 		"http.readiness_timeout": "4s",
 		// readiness_propagation_delay holds the drain open long enough for a load
 		// balancer to notice /health/ready failing before connections stop being

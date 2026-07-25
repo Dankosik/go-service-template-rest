@@ -119,12 +119,20 @@ func validateRuntimeConfig(cfg RuntimeConfig) error {
 func validateAppConfig(cfg *AppConfig) error {
 	cfg.Env = strings.TrimSpace(cfg.Env)
 	cfg.Version = strings.TrimSpace(cfg.Version)
+	cfg.Commit = strings.TrimSpace(cfg.Commit)
 	cfg.InstanceID = strings.TrimSpace(cfg.InstanceID)
 	if cfg.Env == "" {
 		return fmt.Errorf("%w: app.env cannot be empty", ErrValidate)
 	}
 	if cfg.Version == "" {
 		return fmt.Errorf("%w: app.version cannot be empty", ErrValidate)
+	}
+	// Rejected rather than defaulted, because the honest unknown is already the
+	// build default: an empty value would publish a resource attribute and a
+	// diagnostic field that read as a lost identifier rather than an unstamped
+	// build.
+	if cfg.Commit == "" {
+		return fmt.Errorf("%w: app.commit cannot be empty", ErrValidate)
 	}
 	return nil
 }
@@ -134,8 +142,21 @@ func validateHTTPConfig(cfg *HTTPConfig) error {
 	if cfg.Addr == "" {
 		return fmt.Errorf("%w: http.addr cannot be empty", ErrValidate)
 	}
+	if err := validateDurationRange("http.grace_period", cfg.GracePeriod, time.Second, 10*time.Minute); err != nil {
+		return err
+	}
 	if err := validateDurationRange("http.shutdown_timeout", cfg.ShutdownTimeout, time.Second, 10*time.Minute); err != nil {
 		return err
+	}
+	// The drain is one stage inside the grace period, never the whole of it. How
+	// much the stages after it need is owned by the composition root, which knows
+	// their ceilings; see validateShutdownGraceBudget.
+	if cfg.ShutdownTimeout > cfg.GracePeriod {
+		return fmt.Errorf(
+			"%w: http.shutdown_timeout must be <= http.grace_period (%s)",
+			ErrValidate,
+			cfg.GracePeriod,
+		)
 	}
 	if err := validateDurationRange("http.readiness_timeout", cfg.ReadinessTimeout, 100*time.Millisecond, 30*time.Second); err != nil {
 		return err

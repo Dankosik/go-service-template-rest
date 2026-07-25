@@ -169,7 +169,10 @@ func TestRouterAppliesRequestTimeoutToHandlers(t *testing.T) {
 func TestGeneratedResponseErrorHandlerMapsExpiredBudget(t *testing.T) {
 	t.Parallel()
 
-	options := generatedStrictServerOptions(handleGeneratedRequestError(slog.New(slog.DiscardHandler), defaultAuthenticateChallenge))
+	options := generatedStrictServerOptions(
+		handleGeneratedRequestError(slog.New(slog.DiscardHandler), defaultAuthenticateChallenge),
+		nil,
+	)
 
 	for _, tc := range []struct {
 		name       string

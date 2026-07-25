@@ -32,6 +32,10 @@ type serveHTTPRuntimeArgs struct {
 	readinessCheck func(context.Context) error
 	admission      *startupAdmissionController
 	shutdownDelay  time.Duration
+	// shutdown is the process-wide teardown deadline. It is armed here, at the
+	// one point that knows serving has ended, and every stage after the drain
+	// draws from it.
+	shutdown *shutdownBudget
 }
 
 type serverResult struct {
@@ -125,6 +129,10 @@ func serveHTTPRuntime(signalCtx context.Context, bootstrapCtx context.Context, a
 	}
 	cancelAdmission()
 
+	// The grace period starts now, not at process start: this is the moment the
+	// platform began counting.
+	args.shutdown.start()
+
 	effectiveShutdownDelay := args.shutdownDelay
 	if !ready {
 		effectiveShutdownDelay = 0
@@ -137,11 +145,21 @@ func serveHTTPRuntime(signalCtx context.Context, bootstrapCtx context.Context, a
 	// configuration none of that window was ever collected — the Prometheus target
 	// simply went down for the last fifteen seconds of every pod's life, which is
 	// exactly the fifteen seconds a rolling deploy is judged on.
-	drainErr := drainAndShutdown(signalCtx, args.log, effectiveShutdownDelay, args.cfg.HTTP.ShutdownTimeout, args.healthSvc, args.srv)
+	drainErr := drainAndShutdown(
+		signalCtx,
+		args.log,
+		effectiveShutdownDelay,
+		// Clamped, so a drain cannot spend budget the stages after it need. The
+		// configured value normally wins; validateShutdownGraceBudget is what
+		// keeps that true rather than leaving it to chance here.
+		args.shutdown.clamp(args.cfg.HTTP.ShutdownTimeout),
+		args.healthSvc,
+		args.srv,
+	)
 	// Stopped only now, so a scraper could still collect everything the drain
 	// produced. It is stopped here rather than by the caller because this function
 	// started its goroutine, and split ownership is what lets one escape.
-	diagnosticsErr := shutdownDiagnostics(signalCtx, args.log, args.metricsSrv)
+	diagnosticsErr := shutdownDiagnostics(signalCtx, args.log, args.shutdown, args.metricsSrv)
 
 	if drainErr != nil {
 		if terminalErr != nil {
@@ -170,15 +188,12 @@ func serveHTTPRuntime(signalCtx context.Context, bootstrapCtx context.Context, a
 // http.Server.Shutdown waits for active requests indefinitely — so without one a
 // stalled scraper would park the process here and take the telemetry flush with it,
 // which is the same failure the dependency close is bounded against.
-func shutdownDiagnostics(base context.Context, log *slog.Logger, server runtimeServer) error {
+func shutdownDiagnostics(base context.Context, log *slog.Logger, budget *shutdownBudget, server runtimeServer) error {
 	if server == nil {
 		return nil
 	}
 
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(base), diagnosticsShutdownTimeout)
-	defer cancel()
-
-	err := server.Shutdown(ctx)
+	err := server.Shutdown(budget.stage(base, diagnosticsShutdownTimeout))
 	switch {
 	case err == nil, errors.Is(err, http.ErrServerClosed):
 		log.InfoContext(base, "diagnostics_stopped", startupLogArgs(startupLogComponentShutdown, "diagnostics", "success")...)

@@ -12,6 +12,7 @@ import (
 	"github.com/example/go-service-template-rest/examples/reference-service/internal/article"
 	"github.com/example/go-service-template-rest/examples/reference-service/internal/article/memory"
 	"github.com/example/go-service-template-rest/examples/reference-service/internal/openapi"
+	"github.com/example/go-service-template-rest/internal/problem"
 	"github.com/example/go-service-template-rest/internal/reqctx"
 	"github.com/getkin/kin-openapi/openapi3filter"
 )
@@ -175,8 +176,22 @@ func testRejectRequest(w http.ResponseWriter, r *http.Request, err error) {
 	writeTestProblem(w, newProblem(r.Context(), http.StatusBadRequest, "request is malformed or invalid"))
 }
 
-func testRejectResponse(w http.ResponseWriter, r *http.Request, _ error) {
-	writeTestProblem(w, newProblem(r.Context(), http.StatusInternalServerError, "request failed"))
+// testRejectResponse mirrors what httpx.RejectResponse(ClassifyError) does in the
+// binary. A feature package must not import that adapter, so the half this package
+// owns — the classification, which is the half that drifts — is driven directly and
+// the router tests above assert the status a real request comes back with.
+func testRejectResponse(w http.ResponseWriter, r *http.Request, err error) {
+	mapped, ok := ClassifyError(err)
+	if !ok {
+		writeTestProblem(w, newProblem(r.Context(), http.StatusInternalServerError, "request failed"))
+		return
+	}
+	definition, published := problem.ForCode(mapped.Code)
+	if !published {
+		writeTestProblem(w, newProblem(r.Context(), http.StatusInternalServerError, "request failed"))
+		return
+	}
+	writeTestProblem(w, newProblem(r.Context(), definition.Status, mapped.Detail))
 }
 
 func writeTestProblem(w http.ResponseWriter, body openapi.Problem) {

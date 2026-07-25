@@ -7,6 +7,7 @@ import (
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/health"
 	httpx "github.com/example/go-service-template-rest/internal/infra/http"
+	"github.com/example/go-service-template-rest/internal/problem"
 )
 
 // runtimeDependencies is the DATABASE=none profile's dependency set. Readiness
@@ -29,18 +30,15 @@ func (runtimeDependencies) IdempotencyStore() httpx.IdempotencyStore { return ni
 // no supervised work.
 func (runtimeDependencies) BackgroundTasks() []background.Task { return nil }
 
+// DomainErrors mirrors the PostgreSQL profile's accessor. This profile holds no
+// dependency whose failures the transport has to classify, so a handler's own
+// errors are the only ones a service maps here.
+func (runtimeDependencies) DomainErrors() []problem.Mapper { return nil }
+
 // Close takes a context to match the PostgreSQL profile's signature, which needs
 // one to bound a pool release that can outlive the HTTP drain. This profile holds
 // nothing that can block, so it ignores it.
 func (runtimeDependencies) Close(_ context.Context) {}
-
-// dependencyCloseContext mirrors the PostgreSQL profile's helper so the shared
-// shutdown sequence in run.go compiles against either profile.
-func dependencyCloseContext(base context.Context) context.Context {
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(base), dependencyCloseTimeout)
-	context.AfterFunc(ctx, cancel)
-	return ctx
-}
 
 // The error result exists because the PostgreSQL profile's implementation of
 // this signature can fail; this profile has nothing that can.

@@ -13,6 +13,7 @@ import (
 	"github.com/example/go-service-template-rest/internal/health"
 	httpx "github.com/example/go-service-template-rest/internal/infra/http"
 	"github.com/example/go-service-template-rest/internal/infra/postgres"
+	"github.com/example/go-service-template-rest/internal/problem"
 )
 
 const (
@@ -90,6 +91,37 @@ func (d runtimeDependencies) BackgroundTasks() []background.Task {
 	}}
 }
 
+// postgresSaturationRetryAfter is the hint on a request refused because every
+// pooled connection was busy. It matches the load-shedding hint for the same
+// reason: saturation means momentarily past capacity, not down, and a long hint
+// turns a brief spike into a client-side outage.
+const postgresSaturationRetryAfter = time.Second
+
+// DomainErrors classifies the dependency failures a handler can surface but
+// should not each have to translate.
+//
+// postgres.ErrSaturated is the one this profile owns, and the pool package has
+// documented this exact mapping since it was written without anything
+// implementing it. It is the database failure that is not the database's fault:
+// every connection is busy serving, so the caller should back off and retry.
+// Answering 500 instead told a client library not to retry the one failure that
+// retrying fixes, and buried a moment of capacity pressure in the same error rate
+// as a genuine bug.
+func (d runtimeDependencies) DomainErrors() []problem.Mapper {
+	return []problem.Mapper{classifyPostgresDomainError}
+}
+
+func classifyPostgresDomainError(err error) (problem.Mapped, bool) {
+	if !errors.Is(err, postgres.ErrSaturated) {
+		return problem.Mapped{}, false
+	}
+	return problem.Mapped{
+		Code:       problem.CodeServiceUnavailable,
+		Detail:     "the service is temporarily at capacity",
+		RetryAfter: postgresSaturationRetryAfter,
+	}, true
+}
+
 // idempotencySweeper is the one method the supervised task needs. Narrowing the
 // parameter to it is what lets the task's timing and failure handling be proved
 // without a database.
@@ -154,17 +186,6 @@ func (d runtimeDependencies) Close(ctx context.Context) {
 		case <-ctx.Done():
 		}
 	})
-}
-
-// dependencyCloseContext bounds a dependency release with its own budget,
-// detached from the signal context that is already canceled by this point.
-func dependencyCloseContext(base context.Context) context.Context {
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(base), dependencyCloseTimeout)
-	// The cancel is deliberately not deferred to the caller: the context is
-	// consumed synchronously by Close, and releasing the timer immediately after
-	// would defeat the bound.
-	context.AfterFunc(ctx, cancel)
-	return ctx
 }
 
 func initRuntimeDependencies(

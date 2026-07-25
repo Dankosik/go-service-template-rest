@@ -57,6 +57,7 @@ new_fixture() {
 		"${root}/internal/health" \
 		"${root}/internal/infra/example" \
 		"${root}/internal/infra/http" \
+		"${root}/internal/problem" \
 		"${root}/scripts/profiles/database-none" \
 		"${root}/tools"
 
@@ -82,14 +83,16 @@ new_fixture() {
 		>"${root}/cmd/service/internal/bootstrap/run.go"
 	printf 'package health\n\ntype Service struct{}\n\nfunc New() *Service { return &Service{} }\n' \
 		>"${root}/internal/health/service.go"
-	# The DATABASE=none profile template imports these two, so the fixture has to
-	# carry them: without them the `go mod tidy` initialization ends with tries to
+	# The DATABASE=none profile template imports these three, so the fixture has to
+	# carry them: without them the `go mod tidy` initialization ends up trying to
 	# resolve the generated module path over the network and fails with a confusing
 	# "Repository not found".
 	printf 'package background\n\nimport "context"\n\ntype Task struct {\n\tName string\n\tRun  func(context.Context) error\n}\n' \
 		>"${root}/internal/background/background.go"
 	printf 'package httpx\n\nimport "context"\n\ntype IdempotencyStore interface {\n\tRelease(ctx context.Context, key string) error\n}\n' \
 		>"${root}/internal/infra/http/http.go"
+	printf 'package problem\n\ntype Mapped struct{ Code string }\n\ntype Mapper func(error) (Mapped, bool)\n' \
+		>"${root}/internal/problem/problem.go"
 	cp \
 		"${ROOT_DIR}/scripts/profiles/database-none/startup_dependencies.go.tmpl" \
 		"${root}/scripts/profiles/database-none/startup_dependencies.go.tmpl"

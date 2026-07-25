@@ -11,6 +11,7 @@ import (
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry/telemetrytest"
+	"go.opentelemetry.io/otel"
 )
 
 func TestTelemetryInitFailureReason(t *testing.T) {
@@ -30,19 +31,19 @@ func TestBootstrapTelemetryStageConfiguresExporter(t *testing.T) {
 	telemetrytest.ClearAmbientExporterEnv(t)
 	telemetrytest.RestoreGlobals(t)
 
-	cleanup, endpoint, err := bootstrapTelemetryStage(
+	stage := bootstrapTelemetryStage(
 		context.Background(),
 		telemetryStageTestConfig("http://127.0.0.1:4318"),
 		telemetry.New(),
 		slog.New(slog.NewJSONHandler(&bytes.Buffer{}, nil)),
 	)
-	if err != nil {
-		t.Fatalf("bootstrapTelemetryStage() error = %v", err)
+	if stage.tracingErr != nil {
+		t.Fatalf("bootstrapTelemetryStage() tracing error = %v", stage.tracingErr)
 	}
-	if endpoint.Source != telemetry.TraceExporterConfigKey {
-		t.Fatalf("endpoint source = %q, want %q", endpoint.Source, telemetry.TraceExporterConfigKey)
+	if stage.traceEndpoint.Source != telemetry.TraceExporterConfigKey {
+		t.Fatalf("endpoint source = %q, want %q", stage.traceEndpoint.Source, telemetry.TraceExporterConfigKey)
 	}
-	t.Cleanup(func() { cleanup(context.Background()) })
+	t.Cleanup(func() { stage.cleanup(context.Background()) })
 }
 
 // A platform that injects only the standard endpoint variable must still get
@@ -53,19 +54,19 @@ func TestBootstrapTelemetryStageUsesAmbientEndpointEnv(t *testing.T) {
 	telemetrytest.RestoreGlobals(t)
 	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://127.0.0.1:4318")
 
-	cleanup, endpoint, err := bootstrapTelemetryStage(
+	stage := bootstrapTelemetryStage(
 		context.Background(),
 		telemetryStageTestConfig(""),
 		telemetry.New(),
 		slog.New(slog.NewJSONHandler(&bytes.Buffer{}, nil)),
 	)
-	if err != nil {
-		t.Fatalf("bootstrapTelemetryStage() error = %v", err)
+	if stage.tracingErr != nil {
+		t.Fatalf("bootstrapTelemetryStage() tracing error = %v", stage.tracingErr)
 	}
-	if endpoint.Source != "OTEL_EXPORTER_OTLP_ENDPOINT" {
-		t.Fatalf("endpoint source = %q, want the ambient endpoint variable", endpoint.Source)
+	if stage.traceEndpoint.Source != "OTEL_EXPORTER_OTLP_ENDPOINT" {
+		t.Fatalf("endpoint source = %q, want the ambient endpoint variable", stage.traceEndpoint.Source)
 	}
-	t.Cleanup(func() { cleanup(context.Background()) })
+	t.Cleanup(func() { stage.cleanup(context.Background()) })
 }
 
 func TestBootstrapTelemetryStageRejectsAmbientExporterEnv(t *testing.T) {
@@ -73,22 +74,23 @@ func TestBootstrapTelemetryStageRejectsAmbientExporterEnv(t *testing.T) {
 	telemetrytest.RestoreGlobals(t)
 	t.Setenv("OTEL_EXPORTER_OTLP_HEADERS", "authorization=Bearer secret-value")
 
-	cleanup, _, err := bootstrapTelemetryStage(
+	stage := bootstrapTelemetryStage(
 		context.Background(),
 		telemetryStageTestConfig("http://127.0.0.1:4318"),
 		telemetry.New(),
 		slog.New(slog.NewJSONHandler(&bytes.Buffer{}, nil)),
 	)
-	cleanup(context.Background())
+	stage.cleanup(context.Background())
+	err := stage.tracingErr
 	if err == nil {
-		t.Fatal("bootstrapTelemetryStage() error = nil, want ambient env rejection")
+		t.Fatal("bootstrapTelemetryStage() tracing error = nil, want ambient env rejection")
 	}
 	if !strings.Contains(err.Error(), "unsupported ambient otel exporter environment") {
-		t.Fatalf("bootstrapTelemetryStage() error = %v, want ambient env context", err)
+		t.Fatalf("bootstrapTelemetryStage() tracing error = %v, want ambient env context", err)
 	}
 	for _, leaked := range []string{"Bearer", "secret-value"} {
 		if strings.Contains(err.Error(), leaked) {
-			t.Fatalf("bootstrapTelemetryStage() error = %v, leaked %q", err, leaked)
+			t.Fatalf("bootstrapTelemetryStage() tracing error = %v, leaked %q", err, leaked)
 		}
 	}
 }
@@ -312,6 +314,57 @@ func TestBootstrapReportStageLogsTelemetryFailureCause(t *testing.T) {
 	// A bare reason class is not actionable; the operator needs the cause.
 	if !strings.Contains(logged, "OTEL_EXPORTER_OTLP_ENDPOINT") {
 		t.Fatalf("log = %q, want the telemetry failure cause", logged)
+	}
+}
+
+// TestBootstrapTelemetryStageInstallsTracingWhenMetricsExportFails is the
+// regression anchor for a cascade that cost all three signals at once.
+//
+// The stage used to return on the first metrics failure, so SetupTracing never
+// ran and the global tracer provider stayed the no-op one. The trigger is
+// ordinary: OTEL_EXPORTER_OTLP_ENDPOINT without a scheme is what most hand
+// written manifests carry, and the endpoint parser rejects it fail-closed. The
+// service then started, reported healthy, and exported no metric and no span —
+// while every log record silently lost trace_id and span_id, because logctx reads
+// them off the span context a real provider produces.
+func TestBootstrapTelemetryStageInstallsTracingWhenMetricsExportFails(t *testing.T) {
+	telemetrytest.ClearAmbientExporterEnv(t)
+	telemetrytest.RestoreGlobals(t)
+
+	cfg := telemetryStageTestConfig("http://127.0.0.1:4318")
+	// Scheme-less, so metric endpoint resolution fails while tracing is fine.
+	cfg.Observability.OTel.Exporter.OTLPMetricsEndpoint = "collector:4318"
+	cfg.Observability.OTel.TracesSampler = "always_on"
+
+	metrics := telemetry.New()
+	stage := bootstrapTelemetryStage(
+		context.Background(),
+		cfg,
+		metrics,
+		slog.New(slog.NewJSONHandler(&bytes.Buffer{}, nil)),
+	)
+	t.Cleanup(func() { stage.cleanup(context.Background()) })
+
+	if stage.tracingErr != nil {
+		t.Fatalf("tracing error = %v, want tracing to survive an unusable metrics endpoint", stage.tracingErr)
+	}
+	if stage.traceEndpoint.Source != telemetry.TraceExporterConfigKey {
+		t.Fatalf("trace endpoint source = %q, want the configured trace endpoint", stage.traceEndpoint.Source)
+	}
+
+	// A no-op provider hands back an invalid span context, which is exactly what
+	// drops correlation off every log record.
+	_, span := otel.GetTracerProvider().Tracer("telemetry-cascade-test").Start(context.Background(), "probe")
+	span.End()
+	if !span.SpanContext().IsValid() {
+		t.Fatal("tracer provider is the no-op one: log records would carry no trace_id or span_id")
+	}
+
+	// The meter provider survives too, so the gauge that reports degraded trace
+	// export can still be recorded — it was unreachable when metrics setup failed
+	// as a unit.
+	if err := metrics.RecordTraceExporterState(context.Background(), true); err != nil {
+		t.Fatalf("RecordTraceExporterState() error = %v, want a usable meter provider", err)
 	}
 }
 

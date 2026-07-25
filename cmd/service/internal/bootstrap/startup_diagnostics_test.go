@@ -1,8 +1,10 @@
 package bootstrap
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"testing"
 	"time"
 
@@ -31,9 +33,49 @@ func TestDiagnosticsServerAlwaysServesMetrics(t *testing.T) {
 
 	srv := newDiagnosticsServer(diagnosticsConfig(false), telemetry.New(), nil)
 
-	resp := serveDiagnostics(srv, http.MethodGet, "/metrics")
+	resp := serveDiagnostics(srv, "/metrics")
 	if resp.Code != http.StatusOK {
 		t.Fatalf("/metrics status = %d, want %d", resp.Code, http.StatusOK)
+	}
+}
+
+// TestDiagnosticsServerServesBuildInfoWithoutPprof pins the one question no
+// other surface in the process could answer: which build is this pod running.
+//
+// The image build stamps the revision into an OCI label, unreachable from inside
+// the container, and builds with -buildvcs=false, so the binary carries no
+// vcs.revision either. The route is deliberately not gated behind pprof — the
+// moment an operator needs the build identity is exactly the moment profiling is
+// off, which is the shipped default.
+func TestDiagnosticsServerServesBuildInfoWithoutPprof(t *testing.T) {
+	t.Parallel()
+
+	cfg := diagnosticsConfig(false)
+	cfg.App = config.AppConfig{Env: "stage", Version: "v1.4.2", Commit: "0a1b2c3d"}
+	cfg.Observability.OTel.ServiceName = "orders"
+
+	resp := serveDiagnostics(newDiagnosticsServer(cfg, telemetry.New(), nil), "/debug/buildinfo")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("/debug/buildinfo status = %d, want %d with pprof disabled", resp.Code, http.StatusOK)
+	}
+	if got := resp.Header().Get("Content-Type"); got != "application/json; charset=utf-8" {
+		t.Fatalf("Content-Type = %q, want JSON", got)
+	}
+
+	var got buildInfo
+	if err := json.Unmarshal(resp.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode build info: %v", err)
+	}
+	want := buildInfo{
+		Service:   "orders",
+		Version:   "v1.4.2",
+		Commit:    "0a1b2c3d",
+		Env:       "stage",
+		GoVersion: runtime.Version(),
+		Platform:  runtime.GOOS + "/" + runtime.GOARCH,
+	}
+	if got != want {
+		t.Fatalf("build info = %+v, want %+v", got, want)
 	}
 }
 
@@ -46,7 +88,7 @@ func TestDiagnosticsServerWithdrawsPprofWhenDisabled(t *testing.T) {
 	srv := newDiagnosticsServer(diagnosticsConfig(false), telemetry.New(), nil)
 
 	for _, path := range []string{"/debug/pprof/", "/debug/pprof/heap", "/debug/pprof/cmdline"} {
-		resp := serveDiagnostics(srv, http.MethodGet, path)
+		resp := serveDiagnostics(srv, path)
 		if resp.Code != http.StatusNotFound {
 			t.Fatalf("%s status = %d, want %d when pprof is disabled", path, resp.Code, http.StatusNotFound)
 		}
@@ -61,7 +103,7 @@ func TestDiagnosticsServerServesPprofWhenEnabled(t *testing.T) {
 	// heap is routed by pprof.Index rather than by its own pattern, so it proves
 	// the prefix mount and not just one explicit handler.
 	for _, path := range []string{"/debug/pprof/", "/debug/pprof/heap", "/debug/pprof/goroutine"} {
-		resp := serveDiagnostics(srv, http.MethodGet, path)
+		resp := serveDiagnostics(srv, path)
 		if resp.Code != http.StatusOK {
 			t.Fatalf("%s status = %d, want %d when pprof is enabled", path, resp.Code, http.StatusOK)
 		}
@@ -131,8 +173,11 @@ func TestDiagnosticsServerNeverServesDefaultServeMux(t *testing.T) {
 	}
 }
 
-func serveDiagnostics(srv *http.Server, method, path string) *httptest.ResponseRecorder {
-	req := httptest.NewRequest(method, path, nil)
+// serveDiagnostics drives one diagnostics route. Every route the private
+// listener publishes for a human or a scraper is GET, so the method is not a
+// parameter.
+func serveDiagnostics(srv *http.Server, path string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodGet, path, nil)
 	resp := httptest.NewRecorder()
 	srv.Handler.ServeHTTP(resp, req)
 	return resp

@@ -265,13 +265,24 @@ func TestIdempotencyStoreSweepDeletesExpiredKeysOnly(t *testing.T) {
 func TestIdempotentMiddlewareReplaysThroughPostgres(t *testing.T) {
 	store := newIdempotencyStore(t, idempotencyTestRetention)
 
+	// The outcome budget is shorter than the handler on purpose. It is the shape
+	// every real write endpoint has, and the one that used to fail: the budget was
+	// built before the handler ran, so by the time the outcome reached PostgreSQL
+	// the context had already expired, the row kept completed_at NULL, and the
+	// retry below was answered 409 in_flight rather than the first attempt's 201.
+	const (
+		outcomeBudget = 250 * time.Millisecond
+		handlerWork   = 2 * outcomeBudget
+	)
+
 	var handled atomic.Int32
 	handler := httpx.Idempotent(
 		store,
-		2*time.Second,
+		outcomeBudget,
 		slog.New(slog.DiscardHandler),
 		http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			handled.Add(1)
+			time.Sleep(handlerWork)
 			w.Header().Set("Location", "/api/v1/articles/created")
 			w.WriteHeader(http.StatusCreated)
 			_, _ = w.Write([]byte(`{"slug":"created"}`))

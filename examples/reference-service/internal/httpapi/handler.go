@@ -3,7 +3,7 @@ package httpapi
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/example/go-service-template-rest/examples/reference-service/internal/article"
@@ -57,28 +57,14 @@ func (h *handler) CreateArticle(ctx context.Context, request openapi.CreateArtic
 		Title:   request.Body.Title,
 		Summary: request.Body.Summary,
 	})
-	switch {
-	case errors.Is(err, article.ErrAlreadyExists):
-		return openapi.CreateArticle409ApplicationProblemPlusJSONResponse{
-			ConflictApplicationProblemPlusJSONResponse: openapi.ConflictApplicationProblemPlusJSONResponse(
-				newProblem(ctx, http.StatusConflict, "an article with this slug already exists"),
-			),
-		}, nil
-	case errors.Is(err, article.ErrInvalid):
-		// The message is the use case's own wording and contains no caller
-		// input, so echoing it cannot reflect attacker-controlled content.
-		return openapi.CreateArticle400ApplicationProblemPlusJSONResponse{
-			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
-				newProblem(ctx, http.StatusBadRequest, "request is malformed or invalid"),
-			),
-		}, nil
-	case err != nil:
-		//nolint:nilerr // A handled domain failure is a valid typed HTTP response.
-		return openapi.CreateArticle500ApplicationProblemPlusJSONResponse{
-			InternalServerErrorApplicationProblemPlusJSONResponse: openapi.InternalServerErrorApplicationProblemPlusJSONResponse(
-				newProblem(ctx, http.StatusInternalServerError, "request failed"),
-			),
-		}, nil
+	if err != nil {
+		// Returned rather than mapped here. The composition root installs
+		// ClassifyError once for the whole feature, so the switch that used to
+		// live in every operation exists in one place. Wrapping adds the
+		// operation while preserving the sentinel identity errors.Is matches on;
+		// an error the table does not recognize stays a 500, which is the honest
+		// answer for a fault this service did not anticipate.
+		return nil, fmt.Errorf("create article: %w", err)
 	}
 
 	return openapi.CreateArticle201JSONResponse{
@@ -95,22 +81,8 @@ func (h *handler) CreateArticle(ctx context.Context, request openapi.CreateArtic
 
 func (h *handler) GetArticle(ctx context.Context, request openapi.GetArticleRequestObject) (openapi.GetArticleResponseObject, error) {
 	found, err := h.articles.Get(ctx, request.Slug)
-	if errors.Is(err, article.ErrNotFound) {
-		return openapi.GetArticle404ApplicationProblemPlusJSONResponse{
-			NotFoundApplicationProblemPlusJSONResponse: openapi.NotFoundApplicationProblemPlusJSONResponse(
-				newProblem(ctx, http.StatusNotFound, "article was not found"),
-			),
-		}, nil
-	}
 	if err != nil {
-		// The strict transport contract represents failures as typed responses;
-		// returning err would bypass the intended API response.
-		//nolint:nilerr // A handled domain failure is a valid typed HTTP response.
-		return openapi.GetArticle500ApplicationProblemPlusJSONResponse{
-			InternalServerErrorApplicationProblemPlusJSONResponse: openapi.InternalServerErrorApplicationProblemPlusJSONResponse(
-				newProblem(ctx, http.StatusInternalServerError, "request failed"),
-			),
-		}, nil
+		return nil, fmt.Errorf("get article: %w", err)
 	}
 
 	return openapi.GetArticle200JSONResponse{

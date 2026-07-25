@@ -33,6 +33,9 @@ const (
 type MetricsConfig struct {
 	ServiceName    string
 	ServiceVersion string
+	// ServiceCommit is the source revision the binary was built from, published
+	// as vcs.revision so a series names the build that produced it.
+	ServiceCommit string
 	// ServiceInstanceID identifies this replica, and must be the same value
 	// SetupTracing was given; see resourceIdentity.
 	ServiceInstanceID string
@@ -75,6 +78,29 @@ var metricExporterEnvConflicts = []string{
 	"OTEL_EXPORTER_OTLP_METRICS_HEADERS",
 }
 
+// MetricsResult reports what metrics setup achieved.
+//
+// ExportErr is separate from the error SetupMetrics returns because the two mean
+// different things. A returned error means no meter provider exists at all;
+// ExportErr means only the OTLP push path could not be built, and the provider
+// is installed and serving the Prometheus registry.
+type MetricsResult struct {
+	// Shutdown flushes and stops the provider. Nil only when SetupMetrics
+	// returned an error.
+	Shutdown func(context.Context) error
+	// Endpoint is the OTLP destination that was resolved, whether or not a
+	// reader could be built for it. An operator debugging where metrics went
+	// needs to see what was attempted.
+	Endpoint ExporterEndpoint
+	// ExportErr reports that OTLP push is unavailable. Scrape still works.
+	ExportErr error
+}
+
+// PushConfigured reports whether metrics are actually being pushed over OTLP.
+func (r MetricsResult) PushConfigured() bool {
+	return r.ExportErr == nil && r.Endpoint.Configured()
+}
+
 // SetupMetrics bridges OpenTelemetry instruments into the service Prometheus
 // registry, and pushes them over OTLP when an endpoint resolves.
 //
@@ -85,26 +111,33 @@ var metricExporterEnvConflicts = []string{
 // honored that variable. Metrics that did not meant a service could export every
 // span while exporting no metric at all, on a port the container image does not
 // publish, and look correctly instrumented while doing it.
-func SetupMetrics(ctx context.Context, metrics *Metrics, cfg MetricsConfig) (func(context.Context) error, ExporterEndpoint, error) {
+//
+// An unusable OTLP destination degrades the push path and nothing else. The
+// version this replaced failed the whole setup, which took the meter provider
+// with it — so a scheme-less OTEL_EXPORTER_OTLP_ENDPOINT, the form most hand
+// written manifests use, left the service with no metrics of any kind and no way
+// to record the gauge that reports the degradation.
+func SetupMetrics(ctx context.Context, metrics *Metrics, cfg MetricsConfig) (MetricsResult, error) {
 	if metrics == nil || metrics.registry == nil {
-		return nil, ExporterEndpoint{}, fmt.Errorf("setup metrics: registry is required")
+		return MetricsResult{}, fmt.Errorf("setup metrics: registry is required")
 	}
 
 	res, err := newResource(ctx, resourceIdentity{
 		serviceName:    cfg.ServiceName,
 		serviceVersion: cfg.ServiceVersion,
+		serviceCommit:  cfg.ServiceCommit,
 		instanceID:     cfg.ServiceInstanceID,
 		deploymentEnv:  cfg.DeploymentEnv,
 	})
 	if err != nil {
-		return nil, ExporterEndpoint{}, err
+		return MetricsResult{}, err
 	}
 	promExporter, err := otelprometheus.New(
 		otelprometheus.WithRegisterer(metrics.registry),
 		otelprometheus.WithTranslationStrategy(otlptranslator.UnderscoreEscapingWithSuffixes),
 	)
 	if err != nil {
-		return nil, ExporterEndpoint{}, fmt.Errorf("create prometheus exporter: %w", err)
+		return MetricsResult{}, fmt.Errorf("create prometheus exporter: %w", err)
 	}
 
 	options := []sdkmetric.Option{
@@ -114,20 +147,16 @@ func SetupMetrics(ctx context.Context, metrics *Metrics, cfg MetricsConfig) (fun
 		sdkmetric.WithResource(res),
 	}
 
-	endpoint, err := ResolveMetricExporterEndpoint(cfg.Exporter)
-	if err != nil {
-		return nil, ExporterEndpoint{}, err
-	}
-	if endpoint.Configured() {
-		reader, readerErr := newOTLPMetricReader(ctx, endpoint, cfg.Exporter)
-		if readerErr != nil {
-			return nil, endpoint, readerErr
+	endpoint, exportErr := ResolveMetricExporterEndpoint(cfg.Exporter)
+	if exportErr == nil && endpoint.Configured() {
+		var reader sdkmetric.Reader
+		if reader, exportErr = newOTLPMetricReader(ctx, endpoint, cfg.Exporter); exportErr == nil {
+			// The export interval comes from OTEL_METRIC_EXPORT_INTERVAL or the
+			// SDK's 60s default. This service adds no setting of its own for it:
+			// whoever runs the collector owns that cadence, and the standard
+			// variable is already how they express it.
+			options = append(options, sdkmetric.WithReader(reader))
 		}
-		// The export interval comes from OTEL_METRIC_EXPORT_INTERVAL or the SDK's
-		// 60s default. This service adds no setting of its own for it: whoever
-		// runs the collector owns that cadence, and the standard variable is
-		// already how they express it.
-		options = append(options, sdkmetric.WithReader(reader))
 	}
 
 	otelSetupMu.Lock()
@@ -151,13 +180,13 @@ func SetupMetrics(ctx context.Context, metrics *Metrics, cfg MetricsConfig) (fun
 	// This registers observable instruments and a callback; it starts no goroutine
 	// and no timer, which is what keeps the package's goleak check meaningful.
 	if err := otelruntime.Start(otelruntime.WithMeterProvider(provider)); err != nil {
-		return nil, endpoint, fmt.Errorf("start go runtime metrics: %w", err)
+		return MetricsResult{}, fmt.Errorf("start go runtime metrics: %w", err)
 	}
 
 	metrics.meterProvider = provider
 	otel.SetMeterProvider(provider)
 
-	return provider.Shutdown, endpoint, nil
+	return MetricsResult{Shutdown: provider.Shutdown, Endpoint: endpoint, ExportErr: exportErr}, nil
 }
 
 func newOTLPMetricReader(

@@ -124,6 +124,7 @@ func TestServeHTTPRuntimeListenError(t *testing.T) {
 		srv:            newFakeRuntimeServer(),
 		readinessCheck: func(context.Context) error { return nil },
 		admission:      newTestStartupAdmissionController(),
+		shutdown:       testShutdownBudget(),
 	})
 
 	if err == nil {
@@ -158,6 +159,7 @@ func TestServeHTTPRuntimeMetricsListenError(t *testing.T) {
 		metricsSrv:     newFakeRuntimeServer(),
 		readinessCheck: func(context.Context) error { return nil },
 		admission:      newTestStartupAdmissionController(),
+		shutdown:       testShutdownBudget(),
 	})
 
 	if err == nil {
@@ -194,6 +196,7 @@ func TestServeHTTPRuntimeStartsAndStopsApplicationAndMetricsServers(t *testing.T
 			metricsSrv:     metricsSrv,
 			readinessCheck: func(context.Context) error { return nil },
 			admission:      admission,
+			shutdown:       testShutdownBudget(),
 		})
 	}()
 
@@ -243,6 +246,7 @@ func TestServeHTTPRuntimeRejectsCanceledStartupBeforeListen(t *testing.T) {
 		srv:            newFakeRuntimeServer(),
 		readinessCheck: func(context.Context) error { return nil },
 		admission:      newTestStartupAdmissionController(),
+		shutdown:       testShutdownBudget(),
 	})
 
 	if err == nil {
@@ -281,6 +285,7 @@ func TestServeHTTPRuntimeMarksReadyWithoutExternalReadinessProbe(t *testing.T) {
 				return nil
 			},
 			admission: admission,
+			shutdown:  testShutdownBudget(),
 		})
 	}(signalCtx, bootstrapCtx)
 
@@ -329,6 +334,7 @@ func TestServeHTTPRuntimeRejectsStartupDeadlineBeforeReadiness(t *testing.T) {
 			return ctx.Err()
 		},
 		admission: newTestStartupAdmissionController(),
+		shutdown:  testShutdownBudget(),
 	})
 
 	if err == nil {
@@ -361,6 +367,7 @@ func TestServeHTTPRuntimeSkipsPropagationDelayBeforeAdmissionReady(t *testing.T)
 			return errors.New("readiness failed")
 		},
 		admission:     newTestStartupAdmissionController(),
+		shutdown:      testShutdownBudget(),
 		shutdownDelay: time.Hour,
 	})
 
@@ -399,6 +406,7 @@ func TestServeHTTPRuntimeReturnsServeFailureBeforeAdmissionReady(t *testing.T) {
 			}
 		},
 		admission: newTestStartupAdmissionController(),
+		shutdown:  testShutdownBudget(),
 	})
 
 	if err == nil {
@@ -438,6 +446,7 @@ func TestServeHTTPRuntimeReturnsPendingServeFailureBeforeMarkingAdmissionReady(t
 			}
 		},
 		admission: admission,
+		shutdown:  testShutdownBudget(),
 	})
 
 	if err == nil {
@@ -506,6 +515,7 @@ func TestServeHTTPRuntimeStopsDiagnosticsAfterTheDrain(t *testing.T) {
 		metricsSrv:     diagnosticsServer,
 		readinessCheck: func(context.Context) error { return nil },
 		admission:      newTestStartupAdmissionController(),
+		shutdown:       testShutdownBudget(),
 	})
 	if err != nil {
 		t.Fatalf("serveHTTPRuntime() error = %v, want nil", err)
@@ -538,7 +548,7 @@ func TestShutdownDiagnosticsForcesCloseOnBudgetExhaustion(t *testing.T) {
 	}
 
 	var logged bytes.Buffer
-	err := shutdownDiagnostics(context.Background(), slog.New(slog.NewJSONHandler(&logged, nil)), server)
+	err := shutdownDiagnostics(context.Background(), slog.New(slog.NewJSONHandler(&logged, nil)), testShutdownBudget(), server)
 	if err != nil {
 		t.Fatalf("shutdownDiagnostics() error = %v, want the abandoned scrape reported as degraded, not failed", err)
 	}
@@ -553,7 +563,7 @@ func TestShutdownDiagnosticsForcesCloseOnBudgetExhaustion(t *testing.T) {
 func TestShutdownDiagnosticsIgnoresAbsentServer(t *testing.T) {
 	t.Parallel()
 
-	if err := shutdownDiagnostics(context.Background(), slog.New(slog.DiscardHandler), nil); err != nil {
+	if err := shutdownDiagnostics(context.Background(), slog.New(slog.DiscardHandler), testShutdownBudget(), nil); err != nil {
 		t.Fatalf("shutdownDiagnostics(nil) error = %v, want nil", err)
 	}
 }

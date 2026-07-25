@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -56,7 +57,10 @@ func bootstrapConfigStage(
 		return config.Config{}, config.LoadReport{}, fmt.Errorf("load config (%s): %w", errorType, err)
 	}
 
-	if err := validateStartupBudgetCompatibility(cfg); err != nil {
+	if err := errors.Join(
+		validateShutdownGraceBudget(cfg),
+		validateStartupBudgetCompatibility(cfg),
+	); err != nil {
 		errorType := startupConfigCompatibilityReason
 		slog.ErrorContext(
 			startupCtx,

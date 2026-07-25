@@ -21,6 +21,10 @@ type Config struct {
 type AppConfig struct {
 	Env     string `koanf:"env"`
 	Version string `koanf:"version"`
+	// Commit is the source revision this binary was built from. It defaults to
+	// what the image build stamped in, and stays overridable for a platform that
+	// knows the revision without driving the build.
+	Commit string `koanf:"commit"`
 	// InstanceID identifies this replica in exported telemetry. Empty resolves to
 	// the hostname, which is the pod name on Kubernetes and the container id on
 	// most other platforms; a platform that exposes neither should set it. Without
@@ -30,7 +34,17 @@ type AppConfig struct {
 }
 
 type HTTPConfig struct {
-	Addr                      string        `koanf:"addr"`
+	Addr string `koanf:"addr"`
+	// GracePeriod is the total time the platform allows between SIGTERM and
+	// SIGKILL — terminationGracePeriodSeconds on Kubernetes, drainingSeconds on
+	// Railway. Every teardown stage draws from it, so it is the one number that
+	// bounds shutdown as a whole. ShutdownTimeout bounds only the HTTP drain;
+	// closing diagnostics, joining background work, releasing pooled
+	// dependencies, and flushing telemetry all still run after it.
+	GracePeriod time.Duration `koanf:"grace_period"`
+	// ShutdownTimeout bounds the HTTP drain, including the readiness
+	// propagation delay in front of it. It is validated against GracePeriod so
+	// the stages after the drain still have budget left.
 	ShutdownTimeout           time.Duration `koanf:"shutdown_timeout"`
 	ReadinessTimeout          time.Duration `koanf:"readiness_timeout"`
 	ReadinessPropagationDelay time.Duration `koanf:"readiness_propagation_delay"`
