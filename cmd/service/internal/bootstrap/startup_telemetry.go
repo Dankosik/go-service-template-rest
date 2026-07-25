@@ -19,7 +19,7 @@ func bootstrapTelemetryStage(
 	cfg config.Config,
 	metrics *telemetry.Metrics,
 	log *slog.Logger,
-) (func(context.Context), error) {
+) (func(context.Context), telemetry.TraceExporterEndpoint, error) {
 	metricsCtx, metricsCancel := withStageBudget(startupCtx, startupTelemetryBudget)
 	metricsShutdown, telemetryInitErr := telemetry.SetupMetrics(metricsCtx, metrics, telemetry.MetricsConfig{
 		ServiceName:    cfg.Observability.OTel.ServiceName,
@@ -28,14 +28,13 @@ func bootstrapTelemetryStage(
 	})
 	metricsCancel()
 	if telemetryInitErr != nil {
-		return func(context.Context) {}, fmt.Errorf("setup metrics: %w", telemetryInitErr)
+		return func(context.Context) {}, telemetry.TraceExporterEndpoint{}, fmt.Errorf("setup metrics: %w", telemetryInitErr)
 	}
 	cleanup := newTelemetryCleanup(log, metricsShutdown)
 
 	exporterCfg := traceExporterConfig(cfg)
-	reportIgnoredAmbientOTLPEnv(startupCtx, log, exporterCfg)
 	telemetryCtx, telemetryCancel := withStageBudget(startupCtx, startupTelemetryBudget)
-	tracingShutdown, telemetryInitErr := telemetry.SetupTracing(telemetryCtx, telemetry.TracingConfig{
+	traceEndpoint, tracingShutdown, telemetryInitErr := telemetry.SetupTracing(telemetryCtx, telemetry.TracingConfig{
 		ServiceName:      cfg.Observability.OTel.ServiceName,
 		ServiceVersion:   cfg.App.Version,
 		DeploymentEnv:    cfg.App.Env,
@@ -44,12 +43,15 @@ func bootstrapTelemetryStage(
 		Exporter:         exporterCfg,
 	})
 	telemetryCancel()
-	recordTraceExporterState(startupCtx, log, metrics, exporterCfg, telemetryInitErr)
+	// Reporting follows setup because only setup knows which setting supplied
+	// the endpoint, and "ignored" must not name the variable that was honored.
+	reportIgnoredAmbientOTLPEnv(startupCtx, log, traceEndpoint)
+	recordTraceExporterState(startupCtx, log, metrics, traceEndpoint, telemetryInitErr)
 	if telemetryInitErr != nil {
-		return cleanup, fmt.Errorf("setup tracing: %w", telemetryInitErr)
+		return cleanup, traceEndpoint, fmt.Errorf("setup tracing: %w", telemetryInitErr)
 	}
 
-	return newTelemetryCleanup(log, tracingShutdown, metricsShutdown), nil
+	return newTelemetryCleanup(log, tracingShutdown, metricsShutdown), traceEndpoint, nil
 }
 
 // recordTraceExporterState publishes trace-export state as a metric so an
@@ -60,10 +62,10 @@ func recordTraceExporterState(
 	ctx context.Context,
 	log *slog.Logger,
 	metrics *telemetry.Metrics,
-	exporterCfg telemetry.TraceExporterConfig,
+	endpoint telemetry.TraceExporterEndpoint,
 	telemetryInitErr error,
 ) {
-	active := telemetryInitErr == nil && strings.TrimSpace(exporterCfg.OTLPEndpoint) != ""
+	active := telemetryInitErr == nil && endpoint.Configured()
 	if err := metrics.RecordTraceExporterState(ctx, active); err != nil {
 		log.Warn(
 			"telemetry_state_metric_unavailable",
@@ -128,21 +130,22 @@ func newTelemetryCleanup(log *slog.Logger, shutdowns ...func(context.Context) er
 	}
 }
 
-// reportIgnoredAmbientOTLPEnv warns when a platform injected the standard
-// OTEL_EXPORTER_OTLP_* variables. This service reads its exporter settings from
-// observability.otel.exporter.* only, so an injected collector endpoint looks
-// effective when it is not — and without the warning the deployment looks
-// healthy while no trace is ever exported, which is the failure an operator
-// finds during an incident.
+// reportIgnoredAmbientOTLPEnv warns about the standard OTEL_EXPORTER_OTLP_*
+// variables a platform injected that this service did not act on. The endpoint
+// variables are honored when this service names no endpoint of its own, so the
+// one that supplied the endpoint is not reported: an operator who sees a
+// variable listed here can trust that it changed nothing.
 //
-// Conflicting credential and trust variables are excluded when this service has
-// its own exporter: that case fails exporter setup and is already reported as
+// Conflicting credential and trust variables are excluded when this service
+// named the endpoint: that case fails exporter setup and is already reported as
 // degraded telemetry, so listing it here as merely "ignored" would contradict
 // that record.
-func reportIgnoredAmbientOTLPEnv(ctx context.Context, log *slog.Logger, exporterCfg telemetry.TraceExporterConfig) {
-	configured := strings.TrimSpace(exporterCfg.OTLPEndpoint) != ""
+func reportIgnoredAmbientOTLPEnv(ctx context.Context, log *slog.Logger, endpoint telemetry.TraceExporterEndpoint) {
 	ignored := telemetry.AmbientOTLPExporterEnv()
-	if configured {
+	ignored = slices.DeleteFunc(ignored, func(name string) bool {
+		return name == endpoint.Source
+	})
+	if endpoint.Source == telemetry.TraceExporterConfigKey {
 		conflicting := telemetry.ConflictingTraceExporterEnv()
 		ignored = slices.DeleteFunc(ignored, func(name string) bool {
 			return slices.Contains(conflicting, name)
@@ -153,7 +156,7 @@ func reportIgnoredAmbientOTLPEnv(ctx context.Context, log *slog.Logger, exporter
 	}
 
 	mode := startupDependencyModeFeatureOff
-	if configured {
+	if endpoint.Configured() {
 		mode = startupDependencyModeConfigured
 	}
 
@@ -168,7 +171,7 @@ func reportIgnoredAmbientOTLPEnv(ctx context.Context, log *slog.Logger, exporter
 			"mode", mode,
 			"reason", "ambient_exporter_env_ignored",
 			"env.ignored", strings.Join(ignored, ", "),
-			"config.key", "observability.otel.exporter.otlp_endpoint",
+			"config.key", telemetry.TraceExporterConfigKey,
 		)...,
 	)
 }

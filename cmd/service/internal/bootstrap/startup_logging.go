@@ -5,9 +5,9 @@ import (
 	"errors"
 	"log/slog"
 	"os"
-	"strings"
 
 	"github.com/example/go-service-template-rest/internal/config"
+	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -65,6 +65,7 @@ func bootstrapReportStage(
 	cfg config.Config,
 	loadOptions config.LoadOptions,
 	configReport config.LoadReport,
+	traceEndpoint telemetry.TraceExporterEndpoint,
 	telemetryInitErr error,
 ) {
 	log.Info(
@@ -110,7 +111,11 @@ func bootstrapReportStage(
 			"app.env", cfg.App.Env,
 			"http.addr", cfg.HTTP.Addr,
 			"metrics.addr", cfg.Observability.Metrics.Addr,
-			"tracing.exporter", traceExporterState(cfg, telemetryInitErr),
+			"tracing.exporter", traceExporterState(traceEndpoint, telemetryInitErr),
+			// The endpoint can come from this service's own configuration or
+			// from a platform-injected variable, and an operator debugging where
+			// traces went needs to know which without reading another line.
+			"tracing.endpoint_source", traceEndpoint.Source,
 			// profile:database-postgres:start
 			"postgres.enabled", cfg.Postgres.Enabled,
 			// profile:database-postgres:end
@@ -121,11 +126,11 @@ func bootstrapReportStage(
 // traceExporterState names the trace-export outcome in the one line an operator
 // already reads at startup. Without it, "this service exports no traces" is
 // only recoverable by correlating a separate warning that a log filter may drop.
-func traceExporterState(cfg config.Config, telemetryInitErr error) string {
+func traceExporterState(traceEndpoint telemetry.TraceExporterEndpoint, telemetryInitErr error) string {
 	switch {
 	case telemetryInitErr != nil:
 		return "degraded"
-	case strings.TrimSpace(cfg.Observability.OTel.Exporter.OTLPEndpoint) == "":
+	case !traceEndpoint.Configured():
 		return "disabled"
 	default:
 		return "active"

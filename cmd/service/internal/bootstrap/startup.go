@@ -38,7 +38,7 @@ func bootstrapRuntime(
 	}
 
 	log := bootstrapLoggerStage(cfg)
-	telemetryCleanup, telemetryInitErr := bootstrapTelemetryStage(startupCtx, cfg, metrics, log)
+	telemetryCleanup, traceEndpoint, telemetryInitErr := bootstrapTelemetryStage(startupCtx, cfg, metrics, log)
 	tracer, bootstrapCtx, bootstrapSpan := bootstrapTraceStage(startupCtx)
 	spanOwnedByCaller := false
 	defer func() {
@@ -47,7 +47,7 @@ func bootstrapRuntime(
 		}
 	}()
 
-	bootstrapReportStage(bootstrapCtx, log, cfg, loadOptions, configReport, telemetryInitErr)
+	bootstrapReportStage(bootstrapCtx, log, cfg, loadOptions, configReport, traceEndpoint, telemetryInitErr)
 
 	result = startupBootstrap{
 		cfg:              cfg,

@@ -106,6 +106,24 @@ if [[ -f Makefile ]]; then
 	make_reference_pattern="${backtick}make [a-z][a-z0-9-]*( [A-Z_][A-Z0-9_]*=[^${backtick}]*)?${backtick}"
 	make_targets="$(grep -oE '^[a-z][a-z0-9-]*:' Makefile | tr -d ':' | sort -u)"
 
+	# Prose is shared across database profiles; the Makefile is not. DATABASE=none
+	# removes the targets below along with the PostgreSQL profile, so a generated
+	# service still reads instructions that name them. That is not a dangling
+	# reference — the command exists in the profile that owns it.
+	#
+	# The tolerance is conditional on the owning profile being absent, so a rename
+	# or deletion upstream still fails here, where the profile is present.
+	database_profile_targets="$(printf '%s\n' \
+		bench-db \
+		bench-db-baseline \
+		bench-db-compare \
+		compose-down \
+		compose-up \
+		migration-validate \
+		sqlc-generate)"
+	database_profile_present=true
+	[[ -d internal/infra/postgres ]] || database_profile_present=false
+
 	documented_targets="$(mktemp)"
 	while IFS= read -r doc; do
 		[[ -f "${doc}" ]] || continue
@@ -124,8 +142,14 @@ if [[ -f Makefile ]]; then
 		[[ -n "${documented}" ]] || continue
 		file="${documented%%:*}"
 		target="${documented#*:}"
-		printf '%s\n' "${make_targets}" | grep -Fxq "${target}" ||
-			fail "${file} references 'make ${target}', which is not a Makefile target"
+		if printf '%s\n' "${make_targets}" | grep -Fxq "${target}"; then
+			continue
+		fi
+		if [[ "${database_profile_present}" == false ]] &&
+			printf '%s\n' "${database_profile_targets}" | grep -Fxq "${target}"; then
+			continue
+		fi
+		fail "${file} references 'make ${target}', which is not a Makefile target"
 	done <"${documented_targets}"
 	rm -f "${documented_targets}"
 fi

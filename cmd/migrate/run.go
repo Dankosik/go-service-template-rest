@@ -19,12 +19,28 @@ import (
 const (
 	imageMigrationSourcePath = "/migrations"
 	localMigrationSourcePath = "migrations"
+
+	// rehearsalAcknowledgementEnv gates the validate subcommand.
+	//
+	// validate applies every migration, rolls all of them back, and applies them
+	// again. That is the point on a throwaway database and a schema drop
+	// anywhere else — and this binary ships in the production image next to the
+	// entrypoint that applies migrations, reading the same APP__POSTGRES__DSN.
+	// One mistyped argument is the whole difference, so the destructive path
+	// requires a variable no production environment sets.
+	rehearsalAcknowledgementEnv   = "MIGRATION_REHEARSAL"
+	rehearsalAcknowledgementValue = "1"
 )
 
 func run(args []string, stdout io.Writer) error {
 	validate, err := parseMigrationCommand(args)
 	if err != nil {
 		return err
+	}
+	if validate {
+		if err := requireRehearsalAcknowledgement(); err != nil {
+			return err
+		}
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -98,6 +114,21 @@ func parseMigrationCommand(args []string) (bool, error) {
 		}
 	}
 	return false, fmt.Errorf("usage: migrate [validate]")
+}
+
+// requireRehearsalAcknowledgement refuses the rehearsal unless the caller said
+// out loud that the target database is disposable. The message names the
+// consequence, because "validate" reads as a read-only check and is not one.
+func requireRehearsalAcknowledgement() error {
+	if os.Getenv(rehearsalAcknowledgementEnv) == rehearsalAcknowledgementValue {
+		return nil
+	}
+	return fmt.Errorf(
+		"migrate validate rehearses down-migrations and destroys all data in the target database; "+
+			"set %s=%s to confirm the target is disposable",
+		rehearsalAcknowledgementEnv,
+		rehearsalAcknowledgementValue,
+	)
 }
 
 func resolveMigrationSourceFrom(imagePath string) (fs.FS, string, bool, error) {

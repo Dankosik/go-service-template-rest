@@ -95,6 +95,54 @@ func TestRunRejectsUnexpectedArguments(t *testing.T) {
 	}
 }
 
+// The rehearsal drops every table. This binary ships in the production image
+// beside the entrypoint that applies migrations and reads the same DSN, so the
+// refusal has to happen before any database work, not after.
+func TestRunRefusesValidateWithoutRehearsalAcknowledgement(t *testing.T) { //nolint:paralleltest // t.Chdir cannot run in parallel.
+	clearAppEnvForTest(t)
+
+	t.Chdir(t.TempDir())
+	t.Setenv(rehearsalAcknowledgementEnv, "")
+	t.Setenv("APP__POSTGRES__ENABLED", "true")
+	t.Setenv("APP__POSTGRES__DSN", "postgres://app:app@localhost:5432/app?sslmode=disable")
+
+	var stdout bytes.Buffer
+
+	err := run([]string{"validate"}, &stdout)
+	if err == nil {
+		t.Fatal("run() error = nil, want rehearsal acknowledgement rejection")
+	}
+	if !strings.Contains(err.Error(), "destroys all data") {
+		t.Fatalf("run() error = %q, want the destructive consequence named", err.Error())
+	}
+	if !strings.Contains(err.Error(), rehearsalAcknowledgementEnv) {
+		t.Fatalf("run() error = %q, want the acknowledgement variable named", err.Error())
+	}
+	if got := stdout.String(); got != "" {
+		t.Fatalf("run() stdout = %q, want empty", got)
+	}
+}
+
+// An acknowledged rehearsal reaches the ordinary migration path, so the guard
+// gates the command without changing what it does.
+func TestRunAllowsValidateWithRehearsalAcknowledgement(t *testing.T) { //nolint:paralleltest // t.Chdir cannot run in parallel.
+	clearAppEnvForTest(t)
+
+	t.Chdir(t.TempDir())
+	t.Setenv(rehearsalAcknowledgementEnv, rehearsalAcknowledgementValue)
+	t.Setenv("APP__POSTGRES__ENABLED", "true")
+	t.Setenv("APP__POSTGRES__DSN", "postgres://app:app@localhost:5432/app?sslmode=disable")
+
+	var stdout bytes.Buffer
+
+	if err := run([]string{"validate"}, &stdout); err != nil {
+		t.Fatalf("run() error = %v, want nil", err)
+	}
+	if got := stdout.String(); got != "no migration files found; skipping migrations\n" {
+		t.Fatalf("run() stdout = %q, want no-migrations message", got)
+	}
+}
+
 func TestResolveMigrationSourceUsesConfiguredPath(t *testing.T) { //nolint:paralleltest // t.Chdir cannot run in parallel.
 	t.Chdir(t.TempDir())
 	if err := os.MkdirAll("custom/migrations", 0o755); err != nil {
