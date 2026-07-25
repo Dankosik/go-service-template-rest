@@ -175,7 +175,7 @@ grep -Fq '# orders' "${derived}/README.md"
 ! grep -Fq 'https://github.com/Dankosik/go-service-template-rest/actions' "${derived}/README.md"
 [[ "${derived_workflow_before}" == "$(workflow_snapshot "${derived}")" ]]
 [[ -f "${derived}/cmd/service/internal/bootstrap/startup_dependencies.go" ]]
-[[ ! -e "${derived}/scripts/profiles/database-none" ]]
+[[ ! -e "${derived}/scripts/profiles" ]]
 [[ "${env_before}" == "$(shasum -a 256 "${derived}/.env")" ]]
 
 full="$(new_fixture full git@github.com:acme/payments.git)"
@@ -324,6 +324,7 @@ postgres_workflow_before="$(workflow_snapshot "${postgres_checkout}")"
 # worked example in tree.
 [[ -e "${postgres_checkout}/examples/reference-service" ]]
 [[ "${postgres_workflow_before}" == "$(workflow_snapshot "${postgres_checkout}")" ]]
+[[ ! -e "${postgres_checkout}/scripts/profiles" ]]
 for retained in \
 	cmd/migrate \
 	internal/infra/httpclient \

@@ -66,10 +66,29 @@ second OpenAPI contract and a second `main()` to maintain. Pass
 | Observability | OpenTelemetry 1.x traces and metrics, Prometheus export, and structured logs |
 | Testing | Race detection and goroutine leak checks; PostgreSQL Testcontainers coverage in the database profile |
 | Delivery | Docker and GitHub Actions security gates; opt-in GHCR publishing with Cosign and CycloneDX |
-| Agent workflow | Compact service-local rules by default; optional full Codex, Claude Code, and Qwen workflow |
+| Agent workflow | The complete Codex, Claude Code, and Qwen workflow, always retained ([what that costs](#what-the-agent-workflow-costs)) |
 
 Major versions describe the supported stack. [`go.mod`](go.mod) owns runtime
 and test dependencies; [`tools/go.mod`](tools/go.mod) owns development tools.
+
+### What the agent workflow costs
+
+Initialization keeps the workflow byte-for-byte; there is no option to decline
+it. Be deliberate about that, because a generated service owns all of it:
+
+| Inherited | Size |
+| --- | --- |
+| `.agents/skills/` | 39 skills, 317 files, ~17,200 lines, 2.1 MB |
+| `.codex/agents/`, `.claude/agents/`, `.qwen/agents/` | 18 specialist definitions each |
+| `specs/` | this template's own closed decision records |
+| `docs/` | 25 files, ~3,300 lines |
+
+Across the repository that is roughly 409 Markdown files and 23,600 lines of
+prose against about 15,100 lines of Go. If your team is going to drive changes
+through Codex, Claude Code, or Qwen, that content is the point of this template
+and the largest thing it gives you. If not, plan to delete it: keep
+[`AGENTS.md`](AGENTS.md) and `docs/`, and drop `.agents/`, `.codex/`,
+`.claude/`, `.qwen/`, and `specs/`.
 
 This is a working service scaffold, not only a prompt collection. The code,
 generated sources, database lifecycle, CI, and agent instructions share one
@@ -154,9 +173,9 @@ api/openapi/service.yaml         API source of truth
 internal/openapi/                generated OpenAPI artifacts
 examples/reference-service/      worked feature-slice example (upstream only)
 migrations/                      SQL migrations (when first owned)
-specs/                           durable task decisions (full agent profile)
-.agents/skills/                  reusable skills (full agent profile)
-.codex/agents/                   Codex specialists (full agent profile)
+specs/                           durable task decisions
+.agents/skills/                  reusable skills
+.codex/agents/                   Codex specialists
 ```
 
 Use the [placement guide](docs/project-structure-and-module-organization.md)

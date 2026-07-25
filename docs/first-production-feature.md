@@ -1,11 +1,17 @@
 # First production feature
 
 This is the maintained path from the health-only scaffold to one useful
-vertical slice. The runnable code under `examples/reference-service` shows the
+vertical slice.
+
+When `examples/reference-service` is present, its runnable code shows the
 package shape, but it is isolated demonstration code: do not import it into the
-production service or treat its in-memory repository as production-ready. A
-derived service may delete the complete example directory; service OpenAPI
-gates discover it only when present.
+production service or treat its in-memory repository as production-ready. Note
+that it uses its own `internal/httpapi` and in-memory repository rather than the
+service's `internal/infra/http` and `internal/infra/postgres`, so read it for the
+ownership boundaries, not as a layout to copy. Initialization removes it unless
+you pass `REFERENCE_EXAMPLE=keep`; service OpenAPI gates discover it only when
+present, and it remains readable
+[upstream](https://github.com/Dankosik/go-service-template-rest/tree/main/examples/reference-service).
 
 ## 1. Close the behavior and trust decision
 
@@ -25,8 +31,9 @@ type. Keep HTTP status codes, generated OpenAPI types, SQL rows, and provider
 payloads outside this package. Add a narrow interface only when the feature
 actually needs dependency inversion over persistence or an outbound system.
 
-Start with sibling unit tests for business invariants and error identity. The
-reference `article.Service` is the closest small example of this boundary.
+Start with sibling unit tests for business invariants and error identity. When
+the reference example is present, its `article.Service` is the closest small
+example of this boundary.
 
 ## 3. Evolve the REST contract
 
@@ -53,6 +60,46 @@ Framework-level transport failures continue to use the shared hand-written
 Problem catalog.
 Extend `httpx.Handlers` and wire the concrete feature in
 `cmd/service/internal/bootstrap`; do not register a parallel manual API route.
+
+### Protected operations
+
+The template ships no placeholder authentication, and the base contract declares
+`security: []`. It does not follow that you have to derive the wiring: a
+spec-declared `securityScheme` only becomes a runtime check through
+`openapi3filter.AuthenticationFunc`, so `internal/infra/http/router.go` needs the
+`Options` field its request validator currently leaves unset.
+
+```go
+validator := oapimiddleware.OapiRequestValidatorWithOptions(spec, &oapimiddleware.Options{
+    DoNotValidateServers: true,
+    // The spec's securitySchemes drive this call, so an operation marked
+    // protected cannot reach a handler without passing the check.
+    Options: openapi3filter.Options{
+        AuthenticationFunc: func(ctx context.Context, input *openapi3filter.AuthenticationInput) error {
+            return authenticate(ctx, input) // your identity design
+        },
+    },
+    ErrorHandlerWithOpts: func(_ context.Context, err error, w http.ResponseWriter, r *http.Request, _ oapimiddleware.ErrorHandlerOpts) {
+        // A failed security requirement is 401, not 400: the request was well
+        // formed and the credential was the problem.
+        var securityErr *openapi3filter.SecurityRequirementsError
+        if errors.As(err, &securityErr) {
+            w.Header().Set("WWW-Authenticate", "Bearer")
+            writeProblem(w, r, problemResponse{code: problemCodeUnauthorized, detail: "credentials are missing or invalid"})
+            return
+        }
+        handleMalformedGeneratedRequest(log, w, r, err)
+    },
+})
+```
+
+Two things this does not decide for you. Compare presented credentials in
+constant time (`crypto/subtle.ConstantTimeCompare`), and add `unauthorized` and
+any `forbidden` entries to the Problem catalog in `internal/infra/http/problem.go`
+plus the matching `401`/`403` responses in the OpenAPI contract, so the failures
+are declared rather than incidental. Identity, key rotation, authorization, and
+audit remain your service's design. `examples/reference-service`, upstream or
+kept, has a working end-to-end version of exactly this wiring.
 
 Add boundary tests for the happy path, malformed path/query/body input,
 unknown JSON fields, every documented failure status, and the chosen

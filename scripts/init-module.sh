@@ -274,10 +274,8 @@ if [[ "${source_checkout}" != true ]]; then
 			test/postgres_integration_test.go \
 			test/postgres_migrate_runner_integration_test.go \
 			cmd/service/internal/bootstrap/startup_dependencies.go \
-			cmd/service/internal/bootstrap/startup_dependencies_address_test.go \
 			cmd/service/internal/bootstrap/startup_dependencies_test.go \
 			cmd/service/internal/bootstrap/startup_rejections_test.go \
-			cmd/service/internal/bootstrap/startup_retry_test.go \
 			internal/infra/telemetry/telemetrytest/metrics.go \
 			env/docker-compose.yml
 		cp \
@@ -309,8 +307,11 @@ if [[ "${source_checkout}" != true ]]; then
 		go -C tools mod edit -droptool=github.com/sqlc-dev/sqlc/cmd/sqlc
 		go mod tidy
 		go -C tools mod tidy
-		rm -rf -- scripts/profiles/database-none
 	fi
+
+	# Profile sources are the generator's own inputs. Every profile has consumed
+	# what it needs by now, so no generated service keeps them.
+	rm -rf -- scripts/profiles
 
 	if [[ "${outbound_http}" == "none" ]]; then
 		rm -rf -- internal/infra/httpclient
