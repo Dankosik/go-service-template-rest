@@ -154,7 +154,7 @@ func TestSetupMetricsPushesToOTLPCollector(t *testing.T) {
 	t.Cleanup(collector.Close)
 
 	metrics := New()
-	shutdown, endpoint, err := SetupMetrics(context.Background(), metrics, MetricsConfig{
+	result, err := SetupMetrics(context.Background(), metrics, MetricsConfig{
 		ServiceName:    "push-service",
 		ServiceVersion: "test-version",
 		DeploymentEnv:  "test-env",
@@ -167,11 +167,11 @@ func TestSetupMetricsPushesToOTLPCollector(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SetupMetrics() error = %v", err)
 	}
-	if !endpoint.Configured() {
-		t.Fatal("SetupMetrics() reported no metrics endpoint for a configured collector root")
+	if !result.PushConfigured() {
+		t.Fatalf("SetupMetrics() is not pushing for a configured collector root: %+v", result)
 	}
-	if endpoint.URL != collector.URL+"/v1/metrics" {
-		t.Fatalf("endpoint URL = %q, want %q", endpoint.URL, collector.URL+"/v1/metrics")
+	if result.Endpoint.URL != collector.URL+"/v1/metrics" {
+		t.Fatalf("endpoint URL = %q, want %q", result.Endpoint.URL, collector.URL+"/v1/metrics")
 	}
 
 	counter, err := metrics.MeterProvider().Meter("metrics-export-test").Int64Counter("template.pushed")
@@ -184,7 +184,7 @@ func TestSetupMetricsPushesToOTLPCollector(t *testing.T) {
 	// export interval.
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := shutdown(shutdownCtx); err != nil {
+	if err := result.Shutdown(shutdownCtx); err != nil {
 		t.Fatalf("shutdown metrics: %v", err)
 	}
 
@@ -205,7 +205,7 @@ func TestSetupMetricsWithoutEndpointStaysScrapeOnly(t *testing.T) {
 	telemetrytest.RestoreGlobals(t)
 
 	metrics := New()
-	shutdown, endpoint, err := SetupMetrics(context.Background(), metrics, MetricsConfig{
+	result, err := SetupMetrics(context.Background(), metrics, MetricsConfig{
 		ServiceName:    "scrape-service",
 		ServiceVersion: "test-version",
 		DeploymentEnv:  "test-env",
@@ -214,13 +214,13 @@ func TestSetupMetricsWithoutEndpointStaysScrapeOnly(t *testing.T) {
 		t.Fatalf("SetupMetrics() error = %v", err)
 	}
 	t.Cleanup(func() {
-		if err := shutdown(context.Background()); err != nil {
+		if err := result.Shutdown(context.Background()); err != nil {
 			t.Fatalf("shutdown metrics: %v", err)
 		}
 	})
 
-	if endpoint.Configured() {
-		t.Fatalf("endpoint = %+v, want none when nothing named a collector", endpoint)
+	if result.Endpoint.Configured() {
+		t.Fatalf("endpoint = %+v, want none when nothing named a collector", result.Endpoint)
 	}
 
 	counter, err := metrics.MeterProvider().Meter("metrics-scrape-test").Int64Counter("template.scraped")

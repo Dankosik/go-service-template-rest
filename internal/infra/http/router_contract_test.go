@@ -181,7 +181,7 @@ func TestGeneratedStrictRequestErrorDetailsAreSanitized(t *testing.T) {
 	log := newTestServiceLogger(&out)
 	const attackerDetail = `invalid "token": secret-value`
 
-	options := generatedStrictServerOptions(handleGeneratedRequestError(log, defaultAuthenticateChallenge))
+	options := generatedStrictServerOptions(handleGeneratedRequestError(log, defaultAuthenticateChallenge), nil)
 	if options.RequestErrorHandlerFunc == nil {
 		t.Fatalf("generatedStrictServerOptions() RequestErrorHandlerFunc = nil")
 	}
@@ -337,7 +337,7 @@ func TestOpenAPIRuntimeContractMetricsExposeRouteLabels(t *testing.T) {
 	log := slog.New(slog.DiscardHandler)
 	metrics := telemetry.New()
 	telemetrytest.RestoreGlobals(t)
-	shutdown, _, err := telemetry.SetupMetrics(context.Background(), metrics, telemetry.MetricsConfig{
+	result, err := telemetry.SetupMetrics(context.Background(), metrics, telemetry.MetricsConfig{
 		ServiceName:    "router-test",
 		ServiceVersion: "test",
 		DeploymentEnv:  "test",
@@ -346,7 +346,7 @@ func TestOpenAPIRuntimeContractMetricsExposeRouteLabels(t *testing.T) {
 		t.Fatalf("SetupMetrics() error = %v", err)
 	}
 	t.Cleanup(func() {
-		if err := shutdown(context.Background()); err != nil {
+		if err := result.Shutdown(context.Background()); err != nil {
 			t.Fatalf("shutdown metrics: %v", err)
 		}
 	})

@@ -19,7 +19,7 @@ func TestSetupMetricsUsesPrivateRegistryAndConfigResource(t *testing.T) {
 	telemetrytest.RestoreGlobals(t)
 
 	metrics := New()
-	shutdown, _, err := SetupMetrics(context.Background(), metrics, MetricsConfig{
+	result, err := SetupMetrics(context.Background(), metrics, MetricsConfig{
 		ServiceName:       " test-service ",
 		ServiceVersion:    " test-version ",
 		ServiceInstanceID: " metrics-instance ",
@@ -29,7 +29,7 @@ func TestSetupMetricsUsesPrivateRegistryAndConfigResource(t *testing.T) {
 		t.Fatalf("SetupMetrics() error = %v", err)
 	}
 	t.Cleanup(func() {
-		if err := shutdown(context.Background()); err != nil {
+		if err := result.Shutdown(context.Background()); err != nil {
 			t.Fatalf("shutdown metrics: %v", err)
 		}
 	})
@@ -108,7 +108,7 @@ func TestRecordTraceExporterStateIsScrapable(t *testing.T) {
 			telemetrytest.RestoreGlobals(t)
 
 			metrics := New()
-			shutdown, _, err := SetupMetrics(context.Background(), metrics, MetricsConfig{
+			result, err := SetupMetrics(context.Background(), metrics, MetricsConfig{
 				ServiceName:    "test-service",
 				ServiceVersion: "test-version",
 				DeploymentEnv:  "test-env",
@@ -117,7 +117,7 @@ func TestRecordTraceExporterStateIsScrapable(t *testing.T) {
 				t.Fatalf("SetupMetrics() error = %v", err)
 			}
 			t.Cleanup(func() {
-				if err := shutdown(context.Background()); err != nil {
+				if err := result.Shutdown(context.Background()); err != nil {
 					t.Fatalf("shutdown metrics: %v", err)
 				}
 			})
@@ -173,8 +173,55 @@ func TestSetupMetricsRequiresRegistry(t *testing.T) {
 	t.Parallel()
 
 	for _, metrics := range []*Metrics{nil, {}} {
-		if _, _, err := SetupMetrics(context.Background(), metrics, MetricsConfig{}); err == nil {
+		if _, err := SetupMetrics(context.Background(), metrics, MetricsConfig{}); err == nil {
 			t.Fatal("SetupMetrics() error = nil, want registry error")
 		}
+	}
+}
+
+// TestSetupMetricsDegradesToScrapeOnlyForUnusableEndpoint keeps a bad collector
+// address from costing every metric the service has.
+//
+// Failing as a unit meant no meter provider at all, so the /metrics endpoint
+// served only the process collector, otelhttp and otelpgx recorded into a no-op,
+// and the gauge that reports degraded telemetry could not be written — the one
+// signal an operator needed was removed by the failure it was supposed to report.
+//
+//nolint:paralleltest // Mutates the process-wide OpenTelemetry MeterProvider.
+func TestSetupMetricsDegradesToScrapeOnlyForUnusableEndpoint(t *testing.T) {
+	telemetrytest.ClearAmbientExporterEnv(t)
+	telemetrytest.RestoreGlobals(t)
+
+	metrics := New()
+	result, err := SetupMetrics(context.Background(), metrics, MetricsConfig{
+		ServiceName:    "degraded-service",
+		ServiceVersion: "test-version",
+		DeploymentEnv:  "test-env",
+		// No scheme, which is what a hand written manifest usually carries and
+		// what the endpoint parser refuses fail-closed.
+		Exporter: MetricExporterConfig{OTLPEndpoint: "collector:4318"},
+	})
+	if err != nil {
+		t.Fatalf("SetupMetrics() error = %v, want scrape-only degradation rather than no provider", err)
+	}
+	t.Cleanup(func() {
+		if err := result.Shutdown(context.Background()); err != nil {
+			t.Fatalf("shutdown metrics: %v", err)
+		}
+	})
+
+	if result.ExportErr == nil {
+		t.Fatal("ExportErr = nil, want the unusable OTLP destination reported")
+	}
+	if result.PushConfigured() {
+		t.Fatal("PushConfigured() = true, want push reported as unavailable")
+	}
+	if err := metrics.RecordTraceExporterState(context.Background(), false); err != nil {
+		t.Fatalf("RecordTraceExporterState() error = %v, want a usable meter provider", err)
+	}
+	// The Go runtime instruments only exist once a meter provider is installed,
+	// so their presence is what proves scrape survived.
+	if scraped := collectMetricsText(t, metrics); !strings.Contains(scraped, "go_goroutine") {
+		t.Fatal("scrape carries no Go runtime series; the meter provider was lost with the OTLP destination")
 	}
 }

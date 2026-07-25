@@ -22,7 +22,13 @@ func bootstrapRuntime(
 	telemetryCleanup := func(context.Context) {}
 	defer func() {
 		if err != nil {
-			telemetryCleanup(startupCtx)
+			// A startup that failed has no shutdown budget yet, so the flush gets
+			// its own bound here. Detached from startupCtx because a spent startup
+			// budget is one of the reasons this path runs, and a flush handed an
+			// already-expired context reports nothing about why.
+			flushCtx, cancel := context.WithTimeout(context.WithoutCancel(startupCtx), telemetryShutdownTimeout)
+			defer cancel()
+			telemetryCleanup(flushCtx)
 		}
 	}()
 
@@ -35,9 +41,10 @@ func bootstrapRuntime(
 	}
 
 	log := bootstrapLoggerStage(cfg)
-	telemetryCleanup, traceEndpoint, telemetryInitErr := bootstrapTelemetryStage(startupCtx, cfg, metrics, log)
+	stage := bootstrapTelemetryStage(startupCtx, cfg, metrics, log)
+	telemetryCleanup = stage.cleanup
 
-	bootstrapReportStage(startupCtx, log, cfg, loadOptions, configReport, traceEndpoint, telemetryInitErr)
+	bootstrapReportStage(startupCtx, log, cfg, loadOptions, configReport, stage.traceEndpoint, stage.tracingErr)
 
 	return startupBootstrap{
 		cfg:              cfg,
