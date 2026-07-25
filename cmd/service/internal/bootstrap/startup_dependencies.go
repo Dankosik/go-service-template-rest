@@ -22,6 +22,17 @@ const (
 	startupPostgresProbeStage     = "startup.probe.postgres"
 )
 
+// Budgets and retry bounds owned by the PostgreSQL startup stage. They live
+// here so the DATABASE=none profile removes them together with this file.
+const (
+	startupReserveBudget  = 3 * time.Second
+	postgresStartupBudget = 15 * time.Second
+
+	startupRetryBaseDelay   = 50 * time.Millisecond
+	startupRetryMaxDelay    = 250 * time.Millisecond
+	postgresStartupAttempts = 2
+)
+
 type (
 	postgresConnectFunc    func(context.Context, postgres.Options) (*postgres.Pool, error)
 	postgresRetryDelayFunc func(int) time.Duration
@@ -108,6 +119,27 @@ func initPostgresWithRetryFunc(
 	}
 
 	return nil, fmt.Errorf("%w: postgres init failed after retries: %w", errDependencyInit, lastErr)
+}
+
+func ensureRemainingStartupBudget(ctx context.Context, minRemaining time.Duration, stage string) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("%w: %s aborted before probe: %w", errDependencyInit, stage, err)
+	}
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		return nil
+	}
+	remaining := time.Until(deadline)
+	if remaining < minRemaining {
+		return fmt.Errorf(
+			"%w: %s aborted due to low remaining startup budget (%s < %s)",
+			errDependencyInit,
+			stage,
+			remaining,
+			minRemaining,
+		)
+	}
+	return nil
 }
 
 func shouldRetryPostgresStartup(err error, attempt int) bool {

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -20,6 +21,11 @@ import (
 const (
 	listenAddress   = ":8080"
 	shutdownTimeout = 5 * time.Second
+
+	// writeTokenEnv supplies the demonstration credential for protected
+	// operations. It is not an authentication design; see
+	// docs/first-production-feature.md before building a real one.
+	writeTokenEnv = "REFERENCE_WRITE_TOKEN"
 )
 
 func main() {
@@ -52,7 +58,13 @@ func run(ctx context.Context, log *slog.Logger) error {
 	if err != nil {
 		return fmt.Errorf("build article service: %w", err)
 	}
-	handler, err := httpapi.NewRouter(articles)
+	// The demonstration credential is required rather than defaulted, so the
+	// example cannot start with a guessable write token baked into source.
+	writeToken := os.Getenv(writeTokenEnv)
+	if strings.TrimSpace(writeToken) == "" {
+		return fmt.Errorf("%s is required to run the reference example", writeTokenEnv)
+	}
+	handler, err := httpapi.NewRouter(articles, writeToken)
 	if err != nil {
 		return fmt.Errorf("build reference router: %w", err)
 	}

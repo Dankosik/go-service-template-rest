@@ -18,21 +18,20 @@ import (
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 )
 
+// Budgets owned by every profile. Dependency-specific budgets and retry bounds
+// live with their dependency stage so a profile that drops the dependency drops
+// them in the same file.
 const (
 	telemetryShutdownTimeout = 5 * time.Second
 	startupBudget            = 30 * time.Second
-	startupReserveBudget     = 3 * time.Second
 	startupFailFastThreshold = 150 * time.Millisecond
-	postgresStartupBudget    = 15 * time.Second
 	startupTelemetryBudget   = 2 * time.Second
 
+	// postgresProbeBudget also bounds config compatibility validation, which
+	// every profile keeps.
 	postgresProbeBudget = 5 * time.Second
 
 	startupReadinessHeadroom = startupFailFastThreshold
-
-	startupRetryBaseDelay   = 50 * time.Millisecond
-	startupRetryMaxDelay    = 250 * time.Millisecond
-	postgresStartupAttempts = 2
 )
 
 func Run(args []string) (runErr error) {
@@ -109,6 +108,7 @@ func Run(args []string) (runErr error) {
 			MaxBodyBytes:     bootstrap.cfg.HTTP.MaxBodyBytes,
 			ReadinessTimeout: bootstrap.cfg.HTTP.ReadinessTimeout,
 			OTelServerName:   bootstrap.cfg.Observability.OTel.ServiceName,
+			LogHealthProbes:  bootstrap.cfg.HTTP.AccessLogHealthProbes,
 		},
 	)
 	if err != nil {

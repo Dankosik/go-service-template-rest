@@ -279,11 +279,17 @@ func TestOpenAPIRuntimeContractOperationsDeclareSecurityDecisions(t *testing.T) 
 	}
 }
 
-// TestOpenAPIRuntimeContractResponsesMatchSpec replays one request per
-// reachable operation/status pair and validates the recorded response —
+// TestOpenAPIRuntimeContractResponsesMatchSpec validates recorded responses —
 // status, Content-Type, and body schema — against the embedded OpenAPI spec.
 // Generated Visit* responses are contract-shaped by construction; this closes
 // the remaining gap for the hand-written problem writer and text responses.
+//
+// The case table is maintained by hand and does NOT enumerate the spec: a new
+// operation or status adds no coverage here and nothing fails to say so. When
+// adding an operation, add its reachable status cases below, or the
+// hand-written response paths for that operation stay unvalidated.
+// TestOpenAPIRuntimeContractOperationsDeclareSecurityDecisions is the test in
+// this file that does iterate the spec automatically.
 func TestOpenAPIRuntimeContractResponsesMatchSpec(t *testing.T) {
 	t.Parallel()
 

@@ -49,6 +49,12 @@ workflow is always retained. Choose `DATABASE=postgres` when the service owns
 PostgreSQL, and choose `OUTBOUND_HTTP=bounded` only when a shared
 fixed-authority client removes repeated provider code.
 
+`examples/reference-service` is a worked feature slice kept in this template for
+reference; initialization removes it so a generated service does not inherit a
+second OpenAPI contract and a second `main()` to maintain. Pass
+`REFERENCE_EXAMPLE=keep` to retain it, and read it here or in
+[first production feature](docs/first-production-feature.md) either way.
+
 ## What You Get
 
 | Area | Included |
@@ -146,7 +152,7 @@ internal/infra/httpclient/       bounded outbound HTTP transport (optional profi
 internal/infra/postgres/         PostgreSQL adapters (PostgreSQL profile)
 api/openapi/service.yaml         API source of truth
 internal/openapi/                generated OpenAPI artifacts
-examples/reference-service/      isolated complete feature-slice example
+examples/reference-service/      worked feature-slice example (upstream only)
 migrations/                      SQL migrations (when first owned)
 specs/                           durable task decisions (full agent profile)
 .agents/skills/                  reusable skills (full agent profile)

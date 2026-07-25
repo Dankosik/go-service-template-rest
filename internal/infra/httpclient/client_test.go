@@ -34,15 +34,29 @@ func TestNewRejectsInvalidConfig(t *testing.T) {
 		{name: "fragment", mutate: func(cfg *Config) { cfg.BaseURL = "https://example.com#fragment" }},
 		{name: "external HTTP", mutate: func(cfg *Config) { cfg.BaseURL = "http://example.com" }},
 		{name: "external private literal", mutate: func(cfg *Config) { cfg.BaseURL = "https://127.0.0.1" }},
-		{name: "Railway HTTPS", mutate: func(cfg *Config) {
+		{name: "private HTTPS", mutate: func(cfg *Config) {
 			cfg.BaseURL = "https://api.railway.internal"
-			cfg.TargetClass = RailwayPrivateHTTP
+			cfg.TargetClass = PrivateHTTP
 		}},
-		{name: "Railway public host", mutate: func(cfg *Config) {
+		{name: "private public host", mutate: func(cfg *Config) {
 			cfg.BaseURL = "http://example.com"
-			cfg.TargetClass = RailwayPrivateHTTP
+			cfg.TargetClass = PrivateHTTP
+		}},
+		{name: "private host outside configured suffix", mutate: func(cfg *Config) {
+			cfg.BaseURL = "http://api.railway.internal"
+			cfg.TargetClass = PrivateHTTP
+			cfg.PrivateHostSuffix = "svc.cluster.local"
+		}},
+		{name: "private suffix cannot be dot only", mutate: func(cfg *Config) {
+			cfg.BaseURL = "http://api.railway.internal"
+			cfg.TargetClass = PrivateHTTP
+			cfg.PrivateHostSuffix = "."
 		}},
 		{name: "invalid target class", mutate: func(cfg *Config) { cfg.TargetClass = 99 }},
+		{name: "external ignores private suffix", mutate: func(cfg *Config) {
+			cfg.BaseURL = "http://provider.example"
+			cfg.PrivateHostSuffix = "provider.example"
+		}},
 		{name: "missing request timeout", mutate: func(cfg *Config) { cfg.RequestTimeout = 0 }},
 		{name: "missing header timeout", mutate: func(cfg *Config) { cfg.ResponseHeaderTimeout = 0 }},
 		{name: "missing header limit", mutate: func(cfg *Config) { cfg.MaxResponseHeaderBytes = 0 }},
@@ -334,7 +348,7 @@ func TestClientEnforcesDecodedLimitPropagatesTraceAndRejectsRedirect(t *testing.
 	}
 	cfg := validExternalConfig()
 	cfg.BaseURL = "http://api.railway.internal:" + port
-	cfg.TargetClass = RailwayPrivateHTTP
+	cfg.TargetClass = PrivateHTTP
 	cfg.MaxResponseBodyBytes = 7
 	client, err := New(cfg, metricnoop.NewMeterProvider())
 	if err != nil {
@@ -430,5 +444,34 @@ func responseWithBody(body string) *http.Response {
 		StatusCode: http.StatusOK,
 		Header:     make(http.Header),
 		Body:       io.NopCloser(strings.NewReader(body)),
+	}
+}
+
+func TestNewAcceptsCustomPrivateHostSuffix(t *testing.T) {
+	t.Parallel()
+
+	for _, tt := range []struct {
+		name    string
+		suffix  string
+		baseURL string
+	}{
+		{name: "kubernetes cluster zone", suffix: "svc.cluster.local", baseURL: "http://billing.default.svc.cluster.local"},
+		{name: "leading dot accepted", suffix: ".internal", baseURL: "http://billing.internal"},
+		{name: "default when unset", suffix: "", baseURL: "http://billing.railway.internal"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			cfg := validExternalConfig()
+			cfg.TargetClass = PrivateHTTP
+			cfg.PrivateHostSuffix = tt.suffix
+			cfg.BaseURL = tt.baseURL
+
+			client, err := New(cfg, metricnoop.NewMeterProvider())
+			if err != nil {
+				t.Fatalf("New() error = %v, want nil", err)
+			}
+			t.Cleanup(client.CloseIdleConnections)
+		})
 	}
 }

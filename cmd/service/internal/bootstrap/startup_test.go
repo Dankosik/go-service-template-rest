@@ -13,7 +13,7 @@ import (
 )
 
 func TestBootstrapNetworkPolicyStageAllowsDeclaredPublicIngress(t *testing.T) {
-	t.Setenv(envNetworkPublicIngressEnabled, "true")
+	t.Setenv(envNetworkPublicIngressAcknowledged, "true")
 
 	netPolicyResult := loadNetworkPolicy()
 	if netPolicyResult.err != nil {
@@ -35,7 +35,7 @@ func TestBootstrapNetworkPolicyStageAllowsDeclaredPublicIngress(t *testing.T) {
 }
 
 func TestBootstrapNetworkPolicyStageRequiresExplicitIngressDeclarationForNonLocalWildcardBind(t *testing.T) {
-	t.Setenv(envNetworkPublicIngressEnabled, "")
+	t.Setenv(envNetworkPublicIngressAcknowledged, "")
 
 	logBuffer := &bytes.Buffer{}
 	logger := slog.New(slog.NewJSONHandler(logBuffer, nil))
@@ -52,7 +52,7 @@ func TestBootstrapNetworkPolicyStageRequiresExplicitIngressDeclarationForNonLoca
 	if !errors.Is(err, errDependencyInit) {
 		t.Fatalf("bootstrapNetworkPolicyStage() error = %v, want wrapped %v", err, errDependencyInit)
 	}
-	if !strings.Contains(err.Error(), envNetworkPublicIngressEnabled) {
+	if !strings.Contains(err.Error(), envNetworkPublicIngressAcknowledged) {
 		t.Fatalf("bootstrapNetworkPolicyStage() error = %v, want missing ingress declaration detail", err)
 	}
 }

@@ -23,6 +23,9 @@ type RouterConfig struct {
 	MaxBodyBytes     int64
 	ReadinessTimeout time.Duration
 	OTelServerName   string
+	// LogHealthProbes re-enables access logging for platform probe routes,
+	// which are excluded by default.
+	LogHealthProbes bool
 }
 
 func NewRouter(log *slog.Logger, h Handlers, metrics *telemetry.Metrics, cfg RouterConfig) (http.Handler, error) {
@@ -60,7 +63,7 @@ func NewRouter(log *slog.Logger, h Handlers, metrics *telemetry.Metrics, cfg Rou
 		apiSubrouter,
 		otelMiddleware,
 		SecurityHeaders,
-		func(next http.Handler) http.Handler { return AccessLog(log, next) },
+		func(next http.Handler) http.Handler { return AccessLog(log, cfg.LogHealthProbes, next) },
 		func(next http.Handler) http.Handler { return RequestBodyLimit(cfg.MaxBodyBytes, next) },
 		func(next http.Handler) http.Handler { return Recover(log, next) },
 	)

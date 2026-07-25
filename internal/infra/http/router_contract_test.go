@@ -263,9 +263,11 @@ func TestOpenAPIRuntimeContractAccessLogIncludesRouteLabel(t *testing.T) {
 
 	var out bytes.Buffer
 	log := slog.New(slog.NewJSONHandler(&out, nil))
+	// Health probes are excluded from the access log by default; this test is
+	// about route labelling and correlation fields, so it opts back in.
 	h := mustNewRouter(t, log, Handlers{
 		Health: health.New(),
-	}, nil, RouterConfig{})
+	}, nil, RouterConfig{LogHealthProbes: true})
 
 	const (
 		requestID = "demo-123"

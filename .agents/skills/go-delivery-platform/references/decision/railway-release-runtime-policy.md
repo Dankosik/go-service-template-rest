@@ -7,7 +7,7 @@ When loaded for symptom "the delivery spec needs platform rollout or runtime pol
 Load for Railway deployment policy, service or dependency placement, region or network-path evidence, release promotion/rollback criteria, healthcheck wiring, overlap/draining windows, restart policy, production replica/capacity baseline, or platform drift in `railway.toml`.
 
 ## Local Source Of Truth
-- `railway.toml` is the non-secret deployment-policy source of truth and says policy changes must pass PR review plus `make guardrails-check`.
+- `railway.toml` is the non-secret deployment-policy source of truth and says policy changes must pass PR review plus the affected CI/release gates (`make check-full` covers the container, migration rehearsal, and image gates locally).
 - `railway.toml` pins `builder = "DOCKERFILE"` and `dockerfilePath = "build/docker/Dockerfile"`.
 - `railway.toml` sets `/health/ready`, `healthcheckTimeout = 180`, `restartPolicyType = "ON_FAILURE"`, `restartPolicyMaxRetries = 5`, `overlapSeconds = 45`, and `drainingSeconds = 30`.
 - `railway.toml` records baseline assertions: production replicas `>=2` and per-replica baseline `2 vCPU / 2 GiB`.
@@ -38,7 +38,7 @@ Load for Railway deployment policy, service or dependency placement, region or n
 - Do not invent deployment-platform capabilities; if Railway behavior is uncertain and it materially affects release safety, record a verification blocker rather than filling in generic cloud behavior.
 
 ## Validation Shape
-Use `make guardrails-check`, the `railway.toml` diff, Railway deployment logs/status, `/health/ready` evidence during the promotion window, restart/rollback event evidence, and target-environment evidence for service/dependency placement, regions, selected network paths, latency, replica/capacity baselines, and required variables.
+Use `make check-full`, the `railway.toml` diff, Railway deployment logs/status, `/health/ready` evidence during the promotion window, restart/rollback event evidence, and target-environment evidence for service/dependency placement, regions, selected network paths, latency, replica/capacity baselines, and required variables.
 
 ## Hand-Off Boundary
 Do not define application readiness semantics, capacity model, or secret values here. Delivery owns the platform evidence and drift controls; application, reliability, and security specs own those underlying decisions.

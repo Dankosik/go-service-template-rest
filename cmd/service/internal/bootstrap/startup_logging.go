@@ -79,6 +79,9 @@ func bootstrapReportStage(
 	)
 
 	if telemetryInitErr != nil {
+		// The cause belongs in the record: telemetry setup errors name
+		// configuration keys and environment variables, never secret values,
+		// and an operator cannot act on a bare reason class.
 		log.Warn(
 			"startup_dependency_degraded",
 			startupLogArgs(
@@ -89,6 +92,7 @@ func bootstrapReportStage(
 				"dependency", startupDependencyTelemetry,
 				"mode", startupDependencyModeFeatureOff,
 				"reason", telemetryInitFailureReason(telemetryInitErr),
+				"err", telemetryInitErr,
 			)...,
 		)
 	}

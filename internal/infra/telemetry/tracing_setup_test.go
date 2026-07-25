@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"slices"
 	"sync"
 	"testing"
 
@@ -247,6 +248,28 @@ func TestSetupTracingSerializesResourceEnvSuppression(t *testing.T) {
 	}
 	if got := os.Getenv("OTEL_SERVICE_NAME"); got != serviceName {
 		t.Fatalf("OTEL_SERVICE_NAME = %q, want %q", got, serviceName)
+	}
+}
+
+func TestAmbientOTLPExporterEnvReportsNamesOnly(t *testing.T) {
+	telemetrytest.ClearAmbientExporterEnv(t)
+	t.Setenv("OTEL_EXPORTER_OTLP_HEADERS", "authorization=Bearer secret-value")
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://collector.example:4318")
+	t.Setenv("OTEL_EXPORTER_OTLP_TIMEOUT", "   ")
+
+	got := AmbientOTLPExporterEnv()
+
+	want := []string{"OTEL_EXPORTER_OTLP_ENDPOINT", "OTEL_EXPORTER_OTLP_HEADERS"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("AmbientOTLPExporterEnv() = %v, want %v", got, want)
+	}
+}
+
+func TestAmbientOTLPExporterEnvEmptyWithoutAmbientEnv(t *testing.T) {
+	telemetrytest.ClearAmbientExporterEnv(t)
+
+	if got := AmbientOTLPExporterEnv(); len(got) != 0 {
+		t.Fatalf("AmbientOTLPExporterEnv() = %v, want empty", got)
 	}
 }
 

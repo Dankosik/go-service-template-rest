@@ -23,16 +23,16 @@ func TestLoadNetworkPolicyFromEnvPublicIngressDeclaration(t *testing.T) {
 			value:        "sometimes",
 			set:          true,
 			wantExplicit: true,
-			wantErr:      "NETWORK_PUBLIC_INGRESS_ENABLED must be a boolean value",
+			wantErr:      "NETWORK_PUBLIC_INGRESS_ACKNOWLEDGED must be a boolean value",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.set {
-				t.Setenv(envNetworkPublicIngressEnabled, tt.value)
+				t.Setenv(envNetworkPublicIngressAcknowledged, tt.value)
 			} else {
-				unsetEnvForTest(t, envNetworkPublicIngressEnabled)
+				unsetEnvForTest(t, envNetworkPublicIngressAcknowledged)
 			}
 
 			policy, err := loadNetworkPolicyFromEnv()
@@ -45,10 +45,40 @@ func TestLoadNetworkPolicyFromEnvPublicIngressDeclaration(t *testing.T) {
 			if err != nil {
 				t.Fatalf("loadNetworkPolicyFromEnv() error = %v", err)
 			}
-			if policy.ingressPublicExplicitValue != tt.wantExplicit {
-				t.Fatalf("ingressPublicExplicitValue = %v, want %v", policy.ingressPublicExplicitValue, tt.wantExplicit)
+			if policy.ingressAcknowledged != tt.wantExplicit {
+				t.Fatalf("ingressAcknowledged = %v, want %v", policy.ingressAcknowledged, tt.wantExplicit)
 			}
 		})
+	}
+}
+
+func TestLoadNetworkPolicyFromEnvRejectsLegacyName(t *testing.T) {
+	unsetEnvForTest(t, envNetworkPublicIngressAcknowledged)
+	t.Setenv(envNetworkPublicIngressLegacy, "true")
+
+	// A silent downgrade would leave an operator believing they had already
+	// acknowledged exposure; the rename must be actionable instead.
+	_, err := loadNetworkPolicyFromEnv()
+	if err == nil {
+		t.Fatal("loadNetworkPolicyFromEnv() error = nil, want legacy name rejection")
+	}
+	for _, want := range []string{envNetworkPublicIngressLegacy, envNetworkPublicIngressAcknowledged, "renamed"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("loadNetworkPolicyFromEnv() error = %v, want to contain %q", err, want)
+		}
+	}
+}
+
+func TestLoadNetworkPolicyFromEnvIgnoresLegacyNameWhenAcknowledged(t *testing.T) {
+	t.Setenv(envNetworkPublicIngressAcknowledged, "false")
+	t.Setenv(envNetworkPublicIngressLegacy, "true")
+
+	policy, err := loadNetworkPolicyFromEnv()
+	if err != nil {
+		t.Fatalf("loadNetworkPolicyFromEnv() error = %v", err)
+	}
+	if !policy.ingressAcknowledged {
+		t.Fatal("ingressAcknowledged = false, want true when the current name is set")
 	}
 }
 
@@ -69,14 +99,14 @@ func TestNetworkPolicyEnforceIngress(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Setenv(envNetworkPublicIngressEnabled, tt.declared)
+			t.Setenv(envNetworkPublicIngressAcknowledged, tt.declared)
 			policy, err := loadNetworkPolicyFromEnv()
 			if err != nil {
 				t.Fatalf("loadNetworkPolicyFromEnv() error = %v", err)
 			}
 			err = policy.withIngressExposure(tt.env, tt.addr).EnforceIngress()
 			if tt.wantError {
-				if err == nil || !strings.Contains(err.Error(), envNetworkPublicIngressEnabled) {
+				if err == nil || !strings.Contains(err.Error(), envNetworkPublicIngressAcknowledged) {
 					t.Fatalf("EnforceIngress() error = %v, want missing declaration", err)
 				}
 				return

@@ -1,7 +1,9 @@
 package bootstrap
 
 type networkPolicy struct {
-	ingressPublicExplicitValue bool
+	// ingressAcknowledged records that an operator answered the public-ingress
+	// question, not which answer they gave.
+	ingressAcknowledged        bool
 	ingressDeclarationRequired bool
 }
 

@@ -42,7 +42,7 @@ func TestRejectStartupForPolicyViolationLogsRootCause(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(logBuffer, nil))
 
 	ctx, span := otel.Tracer("test").Start(context.Background(), "policy-log")
-	rootCause := errors.New("NETWORK_PUBLIC_INGRESS_ENABLED must be a boolean value")
+	rootCause := errors.New("NETWORK_PUBLIC_INGRESS_ACKNOWLEDGED must be a boolean value")
 	err := rejectStartupForPolicyViolation(
 		ctx,
 		span,

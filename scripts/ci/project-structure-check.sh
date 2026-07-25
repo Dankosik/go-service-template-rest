@@ -93,6 +93,43 @@ if [[ -d migrations ]]; then
 	done
 fi
 
+# Documentation and skills tell agents and humans which commands to run. A
+# reference to a target that no longer exists sends them down a failing path,
+# so every documented `make <target>` must resolve in this Makefile.
+if [[ -f Makefile ]]; then
+	# Kept portable to bash 3.2, which macOS still ships and which has no
+	# associative arrays. The backtick lives in a variable so it never has to
+	# survive quoting inside a process substitution.
+	backtick="$(printf '\140')"
+	# Inline-code spans that are entirely a make invocation, so prose such as
+	# "do not make auth global" is ignored.
+	make_reference_pattern="${backtick}make [a-z][a-z0-9-]*( [A-Z_][A-Z0-9_]*=[^${backtick}]*)?${backtick}"
+	make_targets="$(grep -oE '^[a-z][a-z0-9-]*:' Makefile | tr -d ':' | sort -u)"
+
+	documented_targets="$(mktemp)"
+	while IFS= read -r doc; do
+		[[ -f "${doc}" ]] || continue
+		# A file without any make reference is the common case, so a non-zero
+		# grep exit must not abort the scan under `set -e -o pipefail`.
+		matches="$(grep -oE "${make_reference_pattern}" "${doc}" 2>/dev/null || true)"
+		[[ -n "${matches}" ]] || continue
+		printf '%s\n' "${matches}" |
+			sed -E "s|^${backtick}make ([a-z][a-z0-9-]*).*|${doc}:\1|" >>"${documented_targets}"
+		# specs/ records decisions as they were accepted at the time; it is a
+		# historical archive, not live instruction, so renaming a target must
+		# not require rewriting it.
+	done < <(git ls-files -- '*.md' ':!:specs/**' | sort -u)
+
+	while IFS= read -r documented; do
+		[[ -n "${documented}" ]] || continue
+		file="${documented%%:*}"
+		target="${documented#*:}"
+		printf '%s\n' "${make_targets}" | grep -Fxq "${target}" ||
+			fail "${file} references 'make ${target}', which is not a Makefile target"
+	done <"${documented_targets}"
+	rm -f "${documented_targets}"
+fi
+
 if ((failed != 0)); then
 	exit 1
 fi

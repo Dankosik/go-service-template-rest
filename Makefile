@@ -451,11 +451,13 @@ docker-build:
 docker-run:
 	docker run --rm --stop-timeout 45 -p 8080:8080 --env-file .env $(SERVICE_NAME):local
 
+# profile:database-postgres:start
 compose-up:
 	docker compose -f env/docker-compose.yml up -d --wait
 
 compose-down:
 	docker compose -f env/docker-compose.yml down -v
+# profile:database-postgres:end
 
 vendor:
 	go mod vendor

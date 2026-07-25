@@ -67,6 +67,94 @@ func TestBootstrapTelemetryStageRejectsAmbientExporterEnv(t *testing.T) {
 	}
 }
 
+func TestReportIgnoredAmbientOTLPEnvWarnsWhenExporterUnconfigured(t *testing.T) {
+	telemetrytest.ClearAmbientExporterEnv(t)
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://injected-collector.example:4318")
+	t.Setenv("OTEL_EXPORTER_OTLP_HEADERS", "authorization=Bearer secret-value")
+
+	var buf bytes.Buffer
+	reportIgnoredAmbientOTLPEnv(
+		context.Background(),
+		slog.New(slog.NewJSONHandler(&buf, nil)),
+		telemetry.TraceExporterConfig{},
+	)
+
+	logged := buf.String()
+	if !strings.Contains(logged, "telemetry_ambient_env_ignored") {
+		t.Fatalf("log = %q, want ambient env warning", logged)
+	}
+	for _, want := range []string{
+		"OTEL_EXPORTER_OTLP_ENDPOINT",
+		"OTEL_EXPORTER_OTLP_HEADERS",
+		"observability.otel.exporter.otlp_endpoint",
+	} {
+		if !strings.Contains(logged, want) {
+			t.Fatalf("log = %q, want to contain %q", logged, want)
+		}
+	}
+	for _, leaked := range []string{"Bearer", "secret-value", "injected-collector"} {
+		if strings.Contains(logged, leaked) {
+			t.Fatalf("log = %q, leaked %q", logged, leaked)
+		}
+	}
+}
+
+func TestReportIgnoredAmbientOTLPEnvSilentWhenExporterConfigured(t *testing.T) {
+	telemetrytest.ClearAmbientExporterEnv(t)
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://injected-collector.example:4318")
+
+	var buf bytes.Buffer
+	reportIgnoredAmbientOTLPEnv(
+		context.Background(),
+		slog.New(slog.NewJSONHandler(&buf, nil)),
+		telemetry.TraceExporterConfig{OTLPEndpoint: "http://127.0.0.1:4318"},
+	)
+
+	// A configured exporter reaches the hard rejection path instead; warning
+	// here would double-report the same condition.
+	if buf.Len() != 0 {
+		t.Fatalf("log = %q, want no warning when the exporter is configured", buf.String())
+	}
+}
+
+func TestReportIgnoredAmbientOTLPEnvSilentWithoutAmbientEnv(t *testing.T) {
+	telemetrytest.ClearAmbientExporterEnv(t)
+
+	var buf bytes.Buffer
+	reportIgnoredAmbientOTLPEnv(
+		context.Background(),
+		slog.New(slog.NewJSONHandler(&buf, nil)),
+		telemetry.TraceExporterConfig{},
+	)
+
+	if buf.Len() != 0 {
+		t.Fatalf("log = %q, want no warning without ambient env", buf.String())
+	}
+}
+
+func TestBootstrapReportStageLogsTelemetryFailureCause(t *testing.T) {
+	t.Parallel()
+
+	var buf bytes.Buffer
+	bootstrapReportStage(
+		context.Background(),
+		slog.New(slog.NewJSONHandler(&buf, nil)),
+		telemetryStageTestConfig(""),
+		config.LoadOptions{},
+		config.LoadReport{},
+		errors.New("unsupported ambient otel exporter environment (OTEL_EXPORTER_OTLP_ENDPOINT)"),
+	)
+
+	logged := buf.String()
+	if !strings.Contains(logged, "startup_dependency_degraded") {
+		t.Fatalf("log = %q, want degraded warning", logged)
+	}
+	// A bare reason class is not actionable; the operator needs the cause.
+	if !strings.Contains(logged, "OTEL_EXPORTER_OTLP_ENDPOINT") {
+		t.Fatalf("log = %q, want the telemetry failure cause", logged)
+	}
+}
+
 func telemetryStageTestConfig(otlpEndpoint string) config.Config {
 	return config.Config{
 		App: config.AppConfig{

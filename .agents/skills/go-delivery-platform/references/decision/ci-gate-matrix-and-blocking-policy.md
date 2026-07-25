@@ -10,7 +10,7 @@ Load for CI gate matrices, required status checks, local/CI command parity, time
 - `.github/workflows/ci.yml` defines merge-time jobs: `repo-integrity`, `lint`, `openapi-contract`, PR-only `openapi-breaking`, `test`, `test-race`, `test-coverage`, `test-integration`, `migration-validate`, `go-security`, `secret-scan`, and `container-security`.
 - `.github/workflows/nightly.yml` defines slower reliability evidence: flake detection, fuzz smoke, race, integration, OpenAPI checks, vulnerability/static checks, build, and Trivy scan.
 - `.github/workflows/cd.yml` defines publish preflight for tag releases and publish-after-successful-main-CI behavior.
-- `Makefile` is the local command source for parity claims: `make check`, `make check-full`, `make ci-local`, `make docker-ci`, `make migration-validate`, and `make docker-container-security`.
+- `Makefile` is the local command source for parity claims: `make check`, `make check-full`, `make ci-local`, `make check-full`, `make migration-validate`, and `make container-security`.
 
 ## Decision Rubric
 - Name the exact gate tier and job/target that enforces it; avoid prose-only gate names.
@@ -18,7 +18,7 @@ Load for CI gate matrices, required status checks, local/CI command parity, time
 - Treat timed-out, cancelled, missing, or path-filter-skipped required checks as blocking delivery evidence until rerun or covered by exception governance.
 - Distinguish workflow-level skip from job-level skip: GitHub keeps required checks pending when a workflow is skipped by path/branch filters or skip markers, but a job skipped by a conditional can report success. Required aggregate jobs that depend on other jobs need `if: always()` or equivalent failure propagation.
 - If merge queue is enabled, required-check workflows must also run on `merge_group`; otherwise required checks may never report for the merge group.
-- Use focused package proof plus `make lint-fast` when useful for the edit loop; `make check` is a broad local baseline. Require `make check-full` or `make docker-ci` when Docker-backed integration, migration rehearsal, or image scanning evidence matters.
+- Use focused package proof plus `make lint-fast` when useful for the edit loop; `make check` is a broad local baseline. Require `make check-full` or `make check-full` when Docker-backed integration, migration rehearsal, or image scanning evidence matters.
 - Treat nightly failures as release blockers only when they affect a changed path, reveal an active regression, or the release policy explicitly promotes nightly reliability evidence into a hard gate.
 
 ## Imitate
