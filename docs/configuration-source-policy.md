@@ -50,14 +50,28 @@ environment:
 
 - `OTEL_RESOURCE_ATTRIBUTES` and `OTEL_SERVICE_NAME` are ignored; the typed
   config snapshot is the only resource source.
-- Non-empty `OTEL_EXPORTER_OTLP_*` variables are rejected at startup **when
-  this service also has `observability.otel.exporter.otlp_endpoint` set**. The
-  rejection degrades telemetry and is logged; it does not stop the service.
+- When `observability.otel.exporter.otlp_endpoint` is set, ambient
+  `OTEL_EXPORTER_OTLP_*` variables split in two. Variables the explicit
+  exporter options already override — `..._ENDPOINT`, `..._TRACES_ENDPOINT`,
+  `..._INSECURE`, `..._TRACES_INSECURE` — plus ones that carry no destination
+  or credential, such as `..._PROTOCOL`, `..._TIMEOUT`, and `..._COMPRESSION`,
+  are **ignored** and logged as `telemetry_ambient_env_ignored`. Tracing keeps
+  working. Credential and trust material — `..._HEADERS`,
+  `..._TRACES_HEADERS`, `..._CERTIFICATE`, `..._TRACES_CERTIFICATE`,
+  `..._CLIENT_CERTIFICATE`, `..._CLIENT_KEY`, and their `TRACES_` forms — is
+  **rejected**, because this service sets no client certificate or CA pool and
+  sets headers only from config, so an injected value would otherwise travel to
+  the collector unverified. The rejection degrades telemetry and is logged; it
+  does not stop the service.
 - When `observability.otel.exporter.otlp_endpoint` is empty, tracing is
   disabled (valid trace IDs are still produced for propagation and log
   correlation, but no span is exported). If ambient `OTEL_EXPORTER_OTLP_*`
   variables are present in that case, startup logs
   `telemetry_ambient_env_ignored` naming the ignored variables.
+
+The override direction is not an assumption: `otlptracehttp` applies ambient
+environment first and explicit options second, and this service always passes
+`WithEndpointURL`, which owns the endpoint, the URL path, and the TLS scheme.
 
 This matters on platforms that inject the standard variables automatically
 (OpenTelemetry Operator auto-instrumentation, Grafana Alloy, vendor add-ons).
@@ -66,6 +80,12 @@ Injection alone does **not** enable export here. Map the injected endpoint onto
 `telemetry_ambient_env_ignored` as the alarm that this mapping is missing.
 Telemetry setup failures never block startup: they log
 `startup_dependency_degraded` with `reason` and the underlying `err`.
+
+Trace-export state is queryable rather than log-only. The startup summary
+carries `tracing.exporter` as `active`, `disabled`, or `degraded`, and the
+Prometheus diagnostics listener exposes
+`service_startup_trace_exporter_active`. Alert on that gauge: a service that
+exports no traces still answers every request and reports healthy.
 
 `observability.metrics.addr` owns the Prometheus diagnostics listener. It
 defaults to `127.0.0.1:9090`; an empty value disables HTTP exposition. Binding

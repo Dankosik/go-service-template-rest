@@ -9,6 +9,7 @@ const (
 	startupDependencyNetworkPolicy  = "network_policy"
 	startupDependencyIngressPolicy  = "ingress_policy"
 	startupDependencyModeFeatureOff = "feature_off"
+	startupDependencyModeConfigured = "configured"
 )
 
 const (
