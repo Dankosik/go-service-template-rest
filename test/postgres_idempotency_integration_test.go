@@ -5,13 +5,18 @@ package integration_test
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
+	"net/http/httptest"
 	"os"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/idempotency"
+	httpx "github.com/example/go-service-template-rest/internal/infra/http"
 	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	"github.com/example/go-service-template-rest/internal/infra/postgresmigrate"
 )
@@ -248,5 +253,84 @@ func TestIdempotencyStoreSweepDeletesExpiredKeysOnly(t *testing.T) {
 	}
 	if _, err := lasting.Reserve(t.Context(), "live", "fingerprint"); !errors.Is(err, idempotency.ErrInFlight) {
 		t.Fatalf("Reserve(live) after sweep error = %v, want the live reservation intact", err)
+	}
+}
+
+// TestIdempotentMiddlewareReplaysThroughPostgres is the end-to-end seam neither
+// side proves alone: the unit tests drive the middleware with a fake store, and the
+// tests above drive the real store with no middleware. What is only provable here is
+// that the shipped store satisfies the port the transport consumes *behaviorally* —
+// a handler runs once, the retry is answered from PostgreSQL, and the replay is
+// labeled.
+func TestIdempotentMiddlewareReplaysThroughPostgres(t *testing.T) {
+	store := newIdempotencyStore(t, idempotencyTestRetention)
+
+	var handled atomic.Int32
+	handler := httpx.Idempotent(
+		store,
+		2*time.Second,
+		slog.New(slog.DiscardHandler),
+		http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			handled.Add(1)
+			w.Header().Set("Location", "/api/v1/articles/created")
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`{"slug":"created"}`))
+		}),
+	)
+
+	post := func() *httptest.ResponseRecorder {
+		request := httptest.NewRequestWithContext(
+			t.Context(),
+			http.MethodPost,
+			"/api/v1/articles",
+			strings.NewReader(`{"slug":"created"}`),
+		)
+		request.Header.Set(httpx.IdempotencyKeyHeader, "middleware-key")
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		return response
+	}
+
+	first := post()
+	if first.Code != http.StatusCreated {
+		t.Fatalf("first status = %d, want %d", first.Code, http.StatusCreated)
+	}
+	if first.Header().Get("Idempotent-Replay") != "" {
+		t.Fatal("the first attempt is labeled as a replay")
+	}
+
+	replay := post()
+	if replay.Code != http.StatusCreated {
+		t.Fatalf("replay status = %d, want %d", replay.Code, http.StatusCreated)
+	}
+	if replay.Header().Get("Idempotent-Replay") != "true" {
+		t.Fatalf("replay is not labeled: headers = %v", replay.Header())
+	}
+	if got := replay.Header().Get("Location"); got != "/api/v1/articles/created" {
+		t.Fatalf("replayed Location = %q, want the first attempt's header", got)
+	}
+	if replay.Body.String() != first.Body.String() {
+		t.Fatalf("replayed body = %q, want %q", replay.Body.String(), first.Body.String())
+	}
+	if got := handled.Load(); got != 1 {
+		t.Fatalf("handler ran %d times, want exactly 1", got)
+	}
+
+	// The same key with different work must be refused rather than answered with
+	// somebody else's result.
+	reused := httptest.NewRequestWithContext(
+		t.Context(),
+		http.MethodPost,
+		"/api/v1/articles",
+		strings.NewReader(`{"slug":"different"}`),
+	)
+	reused.Header.Set(httpx.IdempotencyKeyHeader, "middleware-key")
+	reusedResponse := httptest.NewRecorder()
+	handler.ServeHTTP(reusedResponse, reused)
+	if reusedResponse.Code != http.StatusConflict {
+		t.Fatalf("reused-key status = %d, want %d", reusedResponse.Code, http.StatusConflict)
+	}
+	if got := handled.Load(); got != 1 {
+		t.Fatalf("handler ran %d times after a reused key, want it never re-run", got)
 	}
 }
