@@ -2,7 +2,6 @@ package bootstrap
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 
 	"github.com/example/go-service-template-rest/internal/config"
@@ -15,7 +14,6 @@ type startupBootstrap struct {
 	log              *slog.Logger
 	tracer           trace.Tracer
 	bootstrapSpan    trace.Span
-	networkPolicy    networkPolicy
 	telemetryCleanup func(context.Context)
 }
 
@@ -40,7 +38,6 @@ func bootstrapRuntime(
 	}
 
 	log := bootstrapLoggerStage(cfg)
-	netPolicyResult := loadNetworkPolicy()
 	telemetryCleanup, telemetryInitErr := bootstrapTelemetryStage(startupCtx, cfg, metrics, log)
 	tracer, bootstrapCtx, bootstrapSpan := bootstrapTraceStage(startupCtx)
 	spanOwnedByCaller := false
@@ -51,23 +48,12 @@ func bootstrapRuntime(
 	}()
 
 	bootstrapReportStage(bootstrapCtx, log, cfg, loadOptions, configReport, telemetryInitErr)
-	netPolicy, err := bootstrapNetworkPolicyStage(
-		bootstrapCtx,
-		bootstrapSpan,
-		log,
-		netPolicyResult,
-		cfg,
-	)
-	if err != nil {
-		return startupBootstrap{}, err
-	}
 
 	result = startupBootstrap{
 		cfg:              cfg,
 		log:              log,
 		tracer:           tracer,
 		bootstrapSpan:    bootstrapSpan,
-		networkPolicy:    netPolicy,
 		telemetryCleanup: telemetryCleanup,
 	}
 	spanOwnedByCaller = true
@@ -76,37 +62,4 @@ func bootstrapRuntime(
 
 func startupBootstrapContext(startupCtx context.Context, bootstrapSpan trace.Span) context.Context {
 	return trace.ContextWithSpan(startupCtx, bootstrapSpan)
-}
-
-func bootstrapNetworkPolicyStage(
-	bootstrapCtx context.Context,
-	bootstrapSpan trace.Span,
-	log *slog.Logger,
-	netPolicyResult networkPolicyLoadResult,
-	cfg config.Config,
-) (networkPolicy, error) {
-	if netPolicyResult.err != nil {
-		return networkPolicy{}, rejectStartupForPolicyViolation(
-			bootstrapCtx,
-			bootstrapSpan,
-			log,
-			startupDependencyNetworkPolicy,
-			fmt.Errorf("invalid network policy configuration: %w", netPolicyResult.err),
-			"policy.class", "ingress",
-			"reason.class", "invalid_configuration",
-		)
-	}
-	netPolicy := netPolicyResult.policy.withIngressExposure(cfg.App.Env, cfg.HTTP.Addr)
-
-	if ingressErr := netPolicy.EnforceIngress(); ingressErr != nil {
-		return networkPolicy{}, rejectStartupForPolicyViolation(
-			bootstrapCtx,
-			bootstrapSpan,
-			log,
-			startupDependencyIngressPolicy,
-			ingressErr,
-		)
-	}
-
-	return netPolicy, nil
 }

@@ -98,10 +98,11 @@ Operational exposure note: `/metrics` defaults to the loopback diagnostics
 address `127.0.0.1:9090`. A non-loopback diagnostics bind requires a private
 scrape network or a separate authenticated design.
 
-Public ingress note: non-local wildcard application binds require an explicit
-`NETWORK_PUBLIC_INGRESS_ACKNOWLEDGED` declaration. It attests that the exposure
-decision was made; both `true` and `false` satisfy it and neither changes the
-bind. The deployment platform enforces reachability.
+Public ingress note: the service binds `http.addr` and does not gate its own
+reachability. The deployment platform — firewall, security group, network
+policy, or service mesh — owns ingress admission, because it is the only layer
+that observes every connection attempt. The startup summary records `app.env`
+and `http.addr` so the effective exposure is visible on every boot.
 
 ### Startup/Shutdown Path
 
