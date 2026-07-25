@@ -3,27 +3,8 @@ package config
 import (
 	"context"
 	"errors"
-	"reflect"
 	"testing"
 )
-
-//nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
-func TestLoadMatchesDetailedDefaults(t *testing.T) {
-	resetConfigEnv(t)
-
-	cfg, err := Load()
-	if err != nil {
-		t.Fatalf("Load() error = %v", err)
-	}
-
-	detailed, _, err := LoadDetailed(LoadOptions{})
-	if err != nil {
-		t.Fatalf("LoadDetailed() error = %v", err)
-	}
-	if !reflect.DeepEqual(cfg, detailed) {
-		t.Fatalf("Load() = %+v, want LoadDetailed defaults %+v", cfg, detailed)
-	}
-}
 
 //nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
 func TestLoadNormalizesStringsAtSemanticValidationOwners(t *testing.T) {
@@ -61,6 +42,8 @@ func TestLoadNormalizesStringsAtSemanticValidationOwners(t *testing.T) {
 	}
 }
 
+// profile:database-postgres:start
+//
 //nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
 func TestFlatPostgresDSNIsIgnored(t *testing.T) {
 	resetConfigEnv(t)
@@ -78,6 +61,8 @@ func TestFlatPostgresDSNIsIgnored(t *testing.T) {
 		t.Fatalf("Postgres.DSN = %q, want empty when only flat key is set", cfg.Postgres.DSN)
 	}
 }
+
+// profile:database-postgres:end
 
 func TestErrorTypeMapping(t *testing.T) {
 	t.Parallel()

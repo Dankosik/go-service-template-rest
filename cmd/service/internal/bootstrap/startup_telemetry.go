@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 
 	"github.com/example/go-service-template-rest/internal/config"
@@ -43,11 +44,39 @@ func bootstrapTelemetryStage(
 		Exporter:         exporterCfg,
 	})
 	telemetryCancel()
+	recordTraceExporterState(startupCtx, log, metrics, exporterCfg, telemetryInitErr)
 	if telemetryInitErr != nil {
 		return cleanup, fmt.Errorf("setup tracing: %w", telemetryInitErr)
 	}
 
 	return newTelemetryCleanup(log, tracingShutdown, metricsShutdown), nil
+}
+
+// recordTraceExporterState publishes trace-export state as a metric so an
+// operator can alert on it. A startup warning is only visible to whoever reads
+// the boot log; a service that answers every request while exporting no traces
+// needs a signal that survives to a dashboard.
+func recordTraceExporterState(
+	ctx context.Context,
+	log *slog.Logger,
+	metrics *telemetry.Metrics,
+	exporterCfg telemetry.TraceExporterConfig,
+	telemetryInitErr error,
+) {
+	active := telemetryInitErr == nil && strings.TrimSpace(exporterCfg.OTLPEndpoint) != ""
+	if err := metrics.RecordTraceExporterState(ctx, active); err != nil {
+		log.Warn(
+			"telemetry_state_metric_unavailable",
+			startupLogArgs(
+				ctx,
+				startupLogComponentStartupProbes,
+				startupOperationTelemetryInit,
+				"degraded",
+				"dependency", startupDependencyTelemetry,
+				"err", err,
+			)...,
+		)
+	}
 }
 
 func newTelemetryCleanup(log *slog.Logger, shutdowns ...func(context.Context) error) func(context.Context) {
@@ -100,16 +129,32 @@ func newTelemetryCleanup(log *slog.Logger, shutdowns ...func(context.Context) er
 }
 
 // reportIgnoredAmbientOTLPEnv warns when a platform injected the standard
-// OTEL_EXPORTER_OTLP_* variables while this service has no configured trace
-// exporter. Without the warning the deployment looks healthy and no trace is
-// ever exported, which is the failure an operator finds during an incident.
+// OTEL_EXPORTER_OTLP_* variables. This service reads its exporter settings from
+// observability.otel.exporter.* only, so an injected collector endpoint looks
+// effective when it is not — and without the warning the deployment looks
+// healthy while no trace is ever exported, which is the failure an operator
+// finds during an incident.
+//
+// Conflicting credential and trust variables are excluded when this service has
+// its own exporter: that case fails exporter setup and is already reported as
+// degraded telemetry, so listing it here as merely "ignored" would contradict
+// that record.
 func reportIgnoredAmbientOTLPEnv(ctx context.Context, log *slog.Logger, exporterCfg telemetry.TraceExporterConfig) {
-	if strings.TrimSpace(exporterCfg.OTLPEndpoint) != "" {
+	configured := strings.TrimSpace(exporterCfg.OTLPEndpoint) != ""
+	ignored := telemetry.AmbientOTLPExporterEnv()
+	if configured {
+		conflicting := telemetry.ConflictingTraceExporterEnv()
+		ignored = slices.DeleteFunc(ignored, func(name string) bool {
+			return slices.Contains(conflicting, name)
+		})
+	}
+	if len(ignored) == 0 {
 		return
 	}
-	ambient := telemetry.AmbientOTLPExporterEnv()
-	if len(ambient) == 0 {
-		return
+
+	mode := startupDependencyModeFeatureOff
+	if configured {
+		mode = startupDependencyModeConfigured
 	}
 
 	log.Warn(
@@ -120,9 +165,9 @@ func reportIgnoredAmbientOTLPEnv(ctx context.Context, log *slog.Logger, exporter
 			startupOperationTelemetryInit,
 			"degraded",
 			"dependency", startupDependencyTelemetry,
-			"mode", startupDependencyModeFeatureOff,
+			"mode", mode,
 			"reason", "ambient_exporter_env_ignored",
-			"env.ignored", strings.Join(ambient, ", "),
+			"env.ignored", strings.Join(ignored, ", "),
 			"config.key", "observability.otel.exporter.otlp_endpoint",
 		)...,
 	)

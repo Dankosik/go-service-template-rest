@@ -464,7 +464,10 @@ func TestOpenAPIRuntimeContractRouteTemplateUsedForOTelSpanName(t *testing.T) {
 	}
 	wantHTTPRoutes := map[string]string{
 		"GET /health/live": "/health/live",
-		"GET /*":           "/*",
+		// A request that matched no route has no route template. http.route must
+		// be absent rather than carrying the root mount's "/*" wildcard, which
+		// would collapse every 404 and 405 into per-method buckets.
+		"GET /*": "",
 	}
 
 	spanNames := make([]string, 0, len(spans))
@@ -473,11 +476,10 @@ func TestOpenAPIRuntimeContractRouteTemplateUsedForOTelSpanName(t *testing.T) {
 		spanNames = append(spanNames, name)
 		if _, ok := wantSpanNames[name]; ok {
 			wantSpanNames[name] = true
-			if wantHTTPRoutes[name] == "" {
-				continue
-			}
-			if gotRoute := spanHTTPRoute(span); gotRoute != wantHTTPRoutes[name] {
-				t.Fatalf("span %q http.route = %q, want %q", name, gotRoute, wantHTTPRoutes[name])
+			if wantRoute, checked := wantHTTPRoutes[name]; checked {
+				if gotRoute := spanHTTPRoute(span); gotRoute != wantRoute {
+					t.Fatalf("span %q http.route = %q, want %q", name, gotRoute, wantRoute)
+				}
 			}
 		}
 	}

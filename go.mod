@@ -5,7 +5,7 @@ go 1.26.5
 require (
 	github.com/exaring/otelpgx v0.11.1
 	github.com/felixge/httpsnoop v1.1.0
-	github.com/getkin/kin-openapi v0.143.0
+	github.com/getkin/kin-openapi v0.144.0
 	github.com/go-chi/chi/v5 v5.3.1
 	github.com/go-viper/mapstructure/v2 v2.5.0
 	github.com/golang-migrate/migrate/v4 v4.19.1

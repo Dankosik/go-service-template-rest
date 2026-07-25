@@ -60,8 +60,10 @@ func TestConfigFileAllowsEmptySecretLikePlaceholders(t *testing.T) {
 	resetConfigEnv(t)
 
 	path := writeTempConfig(t, `
+# profile:database-postgres:start
 postgres:
   dsn: ""
+# profile:database-postgres:end
 observability:
   otel:
     exporter:

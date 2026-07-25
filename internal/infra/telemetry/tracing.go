@@ -61,7 +61,7 @@ func SetupTracing(ctx context.Context, cfg TracingConfig) (func(context.Context)
 		sdktrace.WithSampler(sampler),
 	}
 	if exporterConfigured {
-		if err := rejectUnsupportedAmbientTraceExporterEnv(); err != nil {
+		if err := rejectConflictingTraceExporterEnv(); err != nil {
 			return nil, err
 		}
 		exporter, err := otlptracehttp.New(ctx, exporterOptions...)
@@ -98,10 +98,49 @@ func AmbientOTLPExporterEnv() []string {
 	return names
 }
 
-func rejectUnsupportedAmbientTraceExporterEnv() error {
-	if names := AmbientOTLPExporterEnv(); len(names) > 0 {
+// traceExporterEnvConflicts are the standard OpenTelemetry exporter variables
+// this service must not ignore when it configures its own exporter.
+//
+// otlptracehttp applies ambient environment first and explicit options second,
+// so an explicit option wins for everything it covers. WithEndpointURL covers
+// the endpoint, the URL path, and the TLS scheme, which makes an injected
+// ENDPOINT, TRACES_ENDPOINT, or INSECURE harmless — and those are exactly what
+// a platform collector injects. Credential and trust material is different:
+// this service never sets client certificates or a root CA pool, and it sets
+// headers only when observability.otel.exporter.otlp_headers is non-empty, so
+// these variables would silently travel to the collector unverified.
+//
+// Kept sorted so reported output is stable.
+var traceExporterEnvConflicts = []string{
+	"OTEL_EXPORTER_OTLP_CERTIFICATE",
+	"OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE",
+	"OTEL_EXPORTER_OTLP_CLIENT_KEY",
+	"OTEL_EXPORTER_OTLP_HEADERS",
+	"OTEL_EXPORTER_OTLP_TRACES_CERTIFICATE",
+	"OTEL_EXPORTER_OTLP_TRACES_CLIENT_CERTIFICATE",
+	"OTEL_EXPORTER_OTLP_TRACES_CLIENT_KEY",
+	"OTEL_EXPORTER_OTLP_TRACES_HEADERS",
+}
+
+// ConflictingTraceExporterEnv returns the non-empty ambient exporter variables
+// that a configured exporter cannot safely ignore. See
+// traceExporterEnvConflicts for why the endpoint and transport-tuning variables
+// are deliberately absent.
+func ConflictingTraceExporterEnv() []string {
+	names := make([]string, 0, len(traceExporterEnvConflicts))
+	for _, name := range traceExporterEnvConflicts {
+		if strings.TrimSpace(os.Getenv(name)) != "" {
+			names = append(names, name)
+		}
+	}
+	slices.Sort(names)
+	return names
+}
+
+func rejectConflictingTraceExporterEnv() error {
+	if names := ConflictingTraceExporterEnv(); len(names) > 0 {
 		return fmt.Errorf(
-			"unsupported ambient otel exporter environment (%s): configure observability.otel.exporter.* instead",
+			"unsupported ambient otel exporter environment (%s): injected credentials and trust material are not verifiable here; configure observability.otel.exporter.* instead",
 			strings.Join(names, ", "),
 		)
 	}

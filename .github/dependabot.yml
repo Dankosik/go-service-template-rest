@@ -11,10 +11,13 @@ updates:
         patterns:
           - "*"
 
+  # Development tools reach every generated service but ship in none of them, and
+  # CI proves they still work. Monthly keeps the upgrade stream proportional to
+  # what a tool bump actually risks.
   - package-ecosystem: "gomod"
     directory: "/tools"
     schedule:
-      interval: "weekly"
+      interval: "monthly"
     commit-message:
       prefix: "tools"
     groups:

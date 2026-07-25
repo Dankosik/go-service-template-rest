@@ -47,7 +47,7 @@ provide a real module path and an owner in `@user` or `@org/team` form.
 | --- | --- |
 | `make project-structure-check` | Placement, naming, command, integration-test, migration-pair, and no-empty-placeholder contract |
 | `make check` | Project structure, `fmt-check`, `lint`, and ordinary unit tests |
-| `make ci-local` | Host-toolchain CI aggregate: module, initialization, project structure, format, lint, race, coverage report, generated contracts, Go security, and secret scan |
+| `make ci-local` | Host-toolchain CI aggregate: module, initialization, project structure, format, lint, deep lint, race, coverage report, generated contracts, Go security, and secret scan |
 | `make check-full` | `ci-local` plus required Docker integration, runtime image, migration, and image-security proof |
 | `make pr-check BASE_REF=origin/main` | `check-full` plus OpenAPI breaking comparison when the base contains the spec |
 
@@ -108,6 +108,7 @@ make fmt
 make fmt-check
 make mod-check
 make lint
+make lint-deep
 make lint-fast LINT_BASE_REF=origin/main
 make deadcode
 make nilaway
@@ -115,11 +116,20 @@ make modernize-check
 make test-parallelism-check
 ```
 
-`make lint` runs golangci-lint with `.golangci.yml`, then the repository's
-separate dead-code and NilAway analyzers. The linter's real config load is the
-oracle; a second schema-download check would make local lint depend on network
-availability without proving more. Use the focused targets only when their
-narrower evidence is the claim.
+`make lint` runs golangci-lint with `.golangci.yml`. The linter's real config
+load is the oracle; a second schema-download check would make local lint depend
+on network availability without proving more.
+
+`make lint-deep` runs the whole-program dead-code and NilAway analyses. They are
+separate so `make check` stays cheap enough to run before every commit: on a
+generated health-only service, a cold-cache `make check` measured about 26s and
+`lint-deep` was 9s of it, while a warm edit-loop `make check` measured under 2s
+against 2.6s for `lint-deep` alone. Most of a cold run is compiling the
+dependency graph the analyzers need, not the analyzers themselves, so expect
+both numbers to grow with the service rather than with the rule count.
+`make ci-local` and the CI lint job run both targets, so nothing is optional on
+the way to merge. Use the focused targets only when their narrower evidence is
+the claim.
 
 ## OpenAPI, SQLC, and generated drift
 

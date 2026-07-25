@@ -60,7 +60,7 @@ jobs:
           cache: true
 
       - name: Lint
-        run: make lint
+        run: make lint lint-deep
 
       - name: Verify template initialization contract
         run: make template-init-check

@@ -20,24 +20,24 @@ An empty `APP__...` value is still an explicit final override. Empty values for 
 Unknown keys from files, overlays, or `APP__...` variables always fail
 validation; there is no permissive mode.
 
-## Operational Network Policy Channel
+## Network Admission Ownership
 
-`NETWORK_PUBLIC_INGRESS_ACKNOWLEDGED` is a separate operator policy value owned by bootstrap, not ordinary app runtime config. Bootstrap reads it directly from the process environment after the typed `internal/config.Config` snapshot is built from YAML, `APP__...`, and loader flags.
+Network reachability is not an application concern here. The service binds
+`http.addr` and nothing in this process restricts who can reach it.
 
-There is no YAML overlay or `APP__...` precedence chain for this value: the effective value is the process environment value visible to the service at startup. It exists because explicit declaration matters for public ingress. Missing `NETWORK_PUBLIC_INGRESS_ACKNOWLEDGED` is not the same as setting it to `false`; in non-local wildcard-bind deployments, missing public-ingress declaration fails closed.
+Earlier revisions required an operator to set
+`NETWORK_PUBLIC_INGRESS_ACKNOWLEDGED` to `true` or `false` before a non-local
+wildcard bind would start. That gate is gone. It enforced nothing — both answers
+were accepted and neither changed the bind — and it was inverted in practice: it
+triggered on `app.env`, which defaults to `local`, so it blocked a correctly
+configured production deployment while starting one that had forgotten to set
+the environment at all. The startup summary already records `app.env` and
+`http.addr` on every boot, which is the same information without a failed
+deploy.
 
-**This variable is an attestation, not an enforcement control.** Bootstrap
-checks that an operator answered the question, not which answer they gave:
-`true` and `false` both satisfy the gate, and the service binds the configured
-address either way. Reachability is enforced only by the deployment platform —
-firewall, security group, network policy, or service mesh — because that is the
-only layer that observes every connection attempt. Setting `false` records a
-private-ingress intent that something outside this process must implement.
-
-The variable was previously named `NETWORK_PUBLIC_INGRESS_ENABLED`, whose name
-implied enforcement it never performed. The old name is detected only to raise
-an actionable rename error; it never satisfies the gate, so a deployment that
-still sets it fails closed rather than starting unacknowledged.
+Ingress admission belongs to the deployment platform — firewall, security group,
+network policy, or service mesh — because that is the only layer that observes
+every connection attempt.
 
 Do not migrate feature config into `NETWORK_*`. Outbound network admission belongs to the deployment platform (firewall, network policy, service mesh, or equivalent), where all connection attempts can actually be enforced. Application-specific allowlists, provider authentication, retries, and error mapping belong to the individual service. Go HTTP clients built on `http.DefaultTransport`, including the OTLP HTTP exporter, use the standard `HTTP_PROXY`, `HTTPS_PROXY`, and `NO_PROXY` environment conventions when a proxy is required. The bounded outbound client in `internal/infra/httpclient` is the exception: it sets `Transport.Proxy = nil` because a proxy would resolve and dial on the client's behalf and bypass the post-DNS public-address gate that makes the fixed-authority guarantee meaningful. A service that must reach external providers through a mandatory egress proxy uses a plain `net/http` client in its provider adapter and relies on platform network policy instead.
 
@@ -50,14 +50,28 @@ environment:
 
 - `OTEL_RESOURCE_ATTRIBUTES` and `OTEL_SERVICE_NAME` are ignored; the typed
   config snapshot is the only resource source.
-- Non-empty `OTEL_EXPORTER_OTLP_*` variables are rejected at startup **when
-  this service also has `observability.otel.exporter.otlp_endpoint` set**. The
-  rejection degrades telemetry and is logged; it does not stop the service.
+- When `observability.otel.exporter.otlp_endpoint` is set, ambient
+  `OTEL_EXPORTER_OTLP_*` variables split in two. Variables the explicit
+  exporter options already override — `..._ENDPOINT`, `..._TRACES_ENDPOINT`,
+  `..._INSECURE`, `..._TRACES_INSECURE` — plus ones that carry no destination
+  or credential, such as `..._PROTOCOL`, `..._TIMEOUT`, and `..._COMPRESSION`,
+  are **ignored** and logged as `telemetry_ambient_env_ignored`. Tracing keeps
+  working. Credential and trust material — `..._HEADERS`,
+  `..._TRACES_HEADERS`, `..._CERTIFICATE`, `..._TRACES_CERTIFICATE`,
+  `..._CLIENT_CERTIFICATE`, `..._CLIENT_KEY`, and their `TRACES_` forms — is
+  **rejected**, because this service sets no client certificate or CA pool and
+  sets headers only from config, so an injected value would otherwise travel to
+  the collector unverified. The rejection degrades telemetry and is logged; it
+  does not stop the service.
 - When `observability.otel.exporter.otlp_endpoint` is empty, tracing is
   disabled (valid trace IDs are still produced for propagation and log
   correlation, but no span is exported). If ambient `OTEL_EXPORTER_OTLP_*`
   variables are present in that case, startup logs
   `telemetry_ambient_env_ignored` naming the ignored variables.
+
+The override direction is not an assumption: `otlptracehttp` applies ambient
+environment first and explicit options second, and this service always passes
+`WithEndpointURL`, which owns the endpoint, the URL path, and the TLS scheme.
 
 This matters on platforms that inject the standard variables automatically
 (OpenTelemetry Operator auto-instrumentation, Grafana Alloy, vendor add-ons).
@@ -66,6 +80,12 @@ Injection alone does **not** enable export here. Map the injected endpoint onto
 `telemetry_ambient_env_ignored` as the alarm that this mapping is missing.
 Telemetry setup failures never block startup: they log
 `startup_dependency_degraded` with `reason` and the underlying `err`.
+
+Trace-export state is queryable rather than log-only. The startup summary
+carries `tracing.exporter` as `active`, `disabled`, or `degraded`, and the
+Prometheus diagnostics listener exposes
+`service_startup_trace_exporter_active`. Alert on that gauge: a service that
+exports no traces still answers every request and reports healthy.
 
 `observability.metrics.addr` owns the Prometheus diagnostics listener. It
 defaults to `127.0.0.1:9090`; an empty value disables HTTP exposition. Binding

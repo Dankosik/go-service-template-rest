@@ -90,6 +90,27 @@ func TestAccessLogRecordsUnmatchedHealthLookalikePath(t *testing.T) {
 	if out.Len() == 0 {
 		t.Fatal("access log is empty, want the unmatched request recorded")
 	}
+	// A request that matched no route is labelled <unmatched>, not by the root
+	// mount's "/*" wildcard, so route-based dashboards separate real routes from
+	// unrouted traffic.
+	if !strings.Contains(out.String(), `"route":"<unmatched>"`) {
+		t.Fatalf("access log = %q, want the unmatched route label", out.String())
+	}
+}
+
+func TestAccessLogLabelsWrongMethodAsUnmatched(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	log := slog.New(slog.NewJSONHandler(&out, nil))
+	handler := mustNewRouter(t, log, Handlers{}, nil, RouterConfig{})
+
+	if resp := doRequest(handler, http.MethodDelete, "/health/live"); resp.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("status = %d, want %d", resp.Code, http.StatusMethodNotAllowed)
+	}
+	if !strings.Contains(out.String(), `"route":"<unmatched>"`) {
+		t.Fatalf("access log = %q, want the unmatched route label for a wrong-method request", out.String())
+	}
 }
 
 func TestAccessLogPreservesFlusherInterface(t *testing.T) {

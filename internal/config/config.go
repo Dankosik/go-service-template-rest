@@ -24,11 +24,8 @@ type LoadReport struct {
 	FailedStage      string
 }
 
-func Load() (Config, error) {
-	cfg, _, err := LoadDetailed(LoadOptions{})
-	return cfg, err
-}
-
+// LoadDetailed loads without a caller context. Binaries use
+// LoadDetailedWithContext so a startup budget can cancel the load.
 func LoadDetailed(opts LoadOptions) (Config, LoadReport, error) {
 	return LoadDetailedWithContext(context.Background(), opts)
 }
@@ -73,7 +70,6 @@ func LoadDetailedWithContext(ctx context.Context, opts LoadOptions) (Config, Loa
 	}
 
 	err = validateConfig(
-		ctx,
 		&cfg,
 		append(unknownKeys, metadata.sectionScalarOverrideKeys...),
 	)

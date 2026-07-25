@@ -7,6 +7,7 @@ import (
 	"time"
 )
 
+// profile:database-postgres:start
 func TestPostgresDurationBounds(t *testing.T) {
 	resetConfigEnv(t)
 
@@ -20,6 +21,8 @@ func TestPostgresDurationBounds(t *testing.T) {
 		t.Fatalf("error = %v, want ErrValidate", err)
 	}
 }
+
+// profile:database-postgres:end
 
 func TestMetricsAddressValidation(t *testing.T) {
 	for _, tc := range []struct {
@@ -49,6 +52,7 @@ func TestMetricsAddressValidation(t *testing.T) {
 	}
 }
 
+// profile:database-postgres:start
 func TestPostgresMaxOpenConnsMustStayWithinRange(t *testing.T) {
 	resetConfigEnv(t)
 
@@ -65,6 +69,8 @@ func TestPostgresMaxOpenConnsMustStayWithinRange(t *testing.T) {
 		t.Fatalf("error = %v, want postgres max open conns range policy", err)
 	}
 }
+
+// profile:database-postgres:end
 
 func TestShutdownTimeoutCanBeTunedWhenDrainBudgetIsValid(t *testing.T) {
 	resetConfigEnv(t)
@@ -158,29 +164,11 @@ func TestReadinessTimeoutMustNotExceedWriteTimeout(t *testing.T) {
 	}
 }
 
-func TestReadinessTimeoutMustCoverEnabledProbeBudget(t *testing.T) {
-	resetConfigEnv(t)
+// The readiness/health-check relationship is owned by
+// bootstrap.validateStartupBudgetCompatibility, which enforces it with the
+// startup headroom this package cannot see. It is proved there.
 
-	t.Setenv("APP__HTTP__READINESS_TIMEOUT", "6s")
-	t.Setenv("APP__POSTGRES__ENABLED", "true")
-	t.Setenv("APP__POSTGRES__DSN", "postgres://user:pass@localhost:5432/app?sslmode=disable")
-	t.Setenv("APP__POSTGRES__HEALTHCHECK_TIMEOUT", "7s")
-
-	_, _, err := LoadDetailed(LoadOptions{})
-	if err == nil {
-		t.Fatalf("LoadDetailed() expected validation error for readiness probe budget")
-	}
-	if !errors.Is(err, ErrValidate) {
-		t.Fatalf("error = %v, want ErrValidate", err)
-	}
-	if !strings.Contains(err.Error(), "readiness probe budget") {
-		t.Fatalf("error = %v, want readiness probe budget policy", err)
-	}
-	if !strings.Contains(err.Error(), "postgres.healthcheck_timeout") {
-		t.Fatalf("error = %v, want enabled readiness probe name", err)
-	}
-}
-
+// profile:database-postgres:start
 func TestMigrationTimeoutsMustFitOverallBudget(t *testing.T) {
 	resetConfigEnv(t)
 
@@ -199,6 +187,9 @@ func TestMigrationTimeoutsMustFitOverallBudget(t *testing.T) {
 	}
 }
 
+// profile:database-postgres:end
+
+// profile:database-postgres:start
 func TestPostgresDSNParseIsAdapterOwned(t *testing.T) {
 	resetConfigEnv(t)
 
@@ -214,6 +205,8 @@ func TestPostgresDSNParseIsAdapterOwned(t *testing.T) {
 	}
 }
 
+// profile:database-postgres:end
+
 //nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
 func TestReadDurationParsesDefaultDurations(t *testing.T) {
 	resetConfigEnv(t)
@@ -225,7 +218,9 @@ func TestReadDurationParsesDefaultDurations(t *testing.T) {
 	if cfg.HTTP.ReadTimeout != 5*time.Second {
 		t.Fatalf("HTTP.ReadTimeout = %s, want 5s", cfg.HTTP.ReadTimeout)
 	}
+	// profile:database-postgres:start
 	if cfg.Postgres.ConnMaxLifetime != 30*time.Minute {
 		t.Fatalf("Postgres.ConnMaxLifetime = %s, want 30m", cfg.Postgres.ConnMaxLifetime)
 	}
+	// profile:database-postgres:end
 }

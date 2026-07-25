@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"strings"
 	"testing"
 	"testing/synctest"
@@ -202,31 +203,41 @@ func TestInitRuntimeDependenciesRejectsUnavailablePostgres(t *testing.T) {
 	}
 }
 
-func TestInitPostgresDependencyRejectsLowRemainingStartupBudget(t *testing.T) {
+// A cancelled dependency context must not be reported as a healthy pool. The
+// stage no longer pre-checks remaining budget: the context deadline enforces the
+// bound, and the pre-check only changed the error message.
+func TestInitPostgresDependencyRejectsCancelledDependencyContext(t *testing.T) {
 	t.Parallel()
 
-	probeCtx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
+	probeCtx, cancel := context.WithCancel(context.Background())
+	cancel()
 
 	runtime := postgresStartupRuntime{
 		tracer:        otel.Tracer("test"),
 		bootstrapSpan: trace.SpanFromContext(context.Background()),
 		cfg: config.Config{Postgres: config.PostgresConfig{
-			Enabled: true,
-			DSN:     "postgres://user:pass@localhost:5432/app?sslmode=disable",
+			Enabled:            true,
+			DSN:                "postgres://user:pass@localhost:5432/app?sslmode=disable",
+			ConnectTimeout:     time.Second,
+			HealthcheckTimeout: time.Second,
+			MaxOpenConns:       1,
+			ConnMaxLifetime:    time.Minute,
 		}},
 		log: slog.New(slog.DiscardHandler),
 	}
 
-	_, err := initPostgresDependency(context.Background(), probeCtx, runtime)
+	pool, err := initPostgresDependency(context.Background(), probeCtx, runtime)
 	if err == nil {
-		t.Fatal("initPostgresDependency() error = nil, want low-budget rejection")
+		t.Fatal("initPostgresDependency() error = nil, want cancellation rejection")
+	}
+	if pool != nil {
+		t.Fatal("initPostgresDependency() pool != nil, want no pool handed back on failure")
 	}
 	if !errors.Is(err, errDependencyInit) {
 		t.Fatalf("initPostgresDependency() error = %v, want wrapped %v", err, errDependencyInit)
 	}
-	if !strings.Contains(err.Error(), "postgres init skipped") {
-		t.Fatalf("initPostgresDependency() error = %v, want skipped context", err)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("initPostgresDependency() error = %v, want wrapped context.Canceled", err)
 	}
 }
 
@@ -241,4 +252,155 @@ func (p testProbe) Name() string {
 
 func (p testProbe) Check(ctx context.Context) error {
 	return p.check(ctx)
+}
+
+func TestValidateStartupBudgetCompatibilityRejectsDependencyTimeoutsAboveProbeBudgets(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name    string
+		cfg     config.Config
+		wantKey string
+	}{
+		{
+			name: "postgres connect timeout",
+			cfg: config.Config{
+				Postgres: config.PostgresConfig{
+					Enabled:        true,
+					ConnectTimeout: postgresProbeBudget + time.Nanosecond,
+				},
+			},
+			wantKey: "postgres.connect_timeout",
+		},
+		{
+			name: "postgres healthcheck timeout",
+			cfg: config.Config{
+				Postgres: config.PostgresConfig{
+					Enabled:            true,
+					ConnectTimeout:     postgresProbeBudget,
+					HealthcheckTimeout: postgresProbeBudget + time.Nanosecond,
+				},
+			},
+			wantKey: "postgres.healthcheck_timeout",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := validateStartupBudgetCompatibility(tc.cfg)
+			if err == nil {
+				t.Fatal("validateStartupBudgetCompatibility() error = nil, want validation error")
+			}
+			if !errors.Is(err, config.ErrValidate) {
+				t.Fatalf("error = %v, want ErrValidate", err)
+			}
+			if !strings.Contains(err.Error(), tc.wantKey) {
+				t.Fatalf("error = %v, want key %q", err, tc.wantKey)
+			}
+		})
+	}
+}
+
+func TestValidateStartupBudgetCompatibilityIgnoresDisabledDependencies(t *testing.T) {
+	t.Parallel()
+
+	err := validateStartupBudgetCompatibility(config.Config{
+		HTTP: config.HTTPConfig{ReadinessTimeout: time.Second},
+		Postgres: config.PostgresConfig{
+			ConnectTimeout:     postgresProbeBudget + time.Second,
+			HealthcheckTimeout: postgresProbeBudget + time.Second,
+		},
+	})
+	if err != nil {
+		t.Fatalf("validateStartupBudgetCompatibility() error = %v, want nil for disabled dependencies", err)
+	}
+}
+
+func TestValidateStartupBudgetCompatibilityRequiresReadinessHeadroom(t *testing.T) {
+	t.Parallel()
+
+	cfg := config.Config{
+		HTTP: config.HTTPConfig{
+			ReadinessTimeout: time.Second,
+		},
+		Postgres: config.PostgresConfig{
+			Enabled:            true,
+			HealthcheckTimeout: time.Second,
+		},
+	}
+
+	err := validateStartupBudgetCompatibility(cfg)
+	if err == nil {
+		t.Fatal("validateStartupBudgetCompatibility() error = nil, want readiness headroom validation error")
+	}
+	if !errors.Is(err, config.ErrValidate) {
+		t.Fatalf("error = %v, want ErrValidate", err)
+	}
+	if !strings.Contains(err.Error(), "startup headroom") {
+		t.Fatalf("error = %v, want startup headroom context", err)
+	}
+	if !strings.Contains(err.Error(), "postgres.healthcheck_timeout") {
+		t.Fatalf("error = %v, want readiness probe name", err)
+	}
+
+	cfg.HTTP.ReadinessTimeout = time.Second + startupReadinessHeadroom
+	if err := validateStartupBudgetCompatibility(cfg); err != nil {
+		t.Fatalf("validateStartupBudgetCompatibility() error = %v, want nil when headroom is included", err)
+	}
+}
+
+func TestValidateStartupBudgetCompatibilityAllowsDefaultPostgresReadiness(t *testing.T) {
+	resetBootstrapConfigEnv(t)
+	t.Setenv("APP__POSTGRES__ENABLED", "true")
+	t.Setenv("APP__POSTGRES__DSN", "postgres://user:pass@localhost:5432/app?sslmode=disable")
+
+	cfg, _, err := config.LoadDetailed(config.LoadOptions{})
+	if err != nil {
+		t.Fatalf("config.LoadDetailed() error = %v", err)
+	}
+	if cfg.HTTP.ReadinessTimeout != 4*time.Second {
+		t.Fatalf("HTTP.ReadinessTimeout = %s, want 4s default", cfg.HTTP.ReadinessTimeout)
+	}
+	if cfg.Postgres.HealthcheckTimeout != 3*time.Second {
+		t.Fatalf("Postgres.HealthcheckTimeout = %s, want 3s default", cfg.Postgres.HealthcheckTimeout)
+	}
+
+	if err := validateStartupBudgetCompatibility(cfg); err != nil {
+		t.Fatalf("validateStartupBudgetCompatibility() error = %v, want nil for default Postgres readiness headroom", err)
+	}
+}
+
+func TestBootstrapConfigStageReturnsStartupCompatibilityFailure(t *testing.T) {
+	resetBootstrapConfigEnv(t)
+	t.Setenv("APP__POSTGRES__ENABLED", "true")
+	t.Setenv("APP__POSTGRES__DSN", "postgres://user:pass@localhost:5432/app?sslmode=disable")
+	t.Setenv("APP__POSTGRES__CONNECT_TIMEOUT", "6s")
+
+	_, _, err := bootstrapConfigStage(context.Background(), config.LoadOptions{})
+	if err == nil {
+		t.Fatal("bootstrapConfigStage() error = nil, want startup compatibility validation error")
+	}
+	if !errors.Is(err, config.ErrValidate) {
+		t.Fatalf("error = %v, want ErrValidate", err)
+	}
+}
+
+func resetBootstrapConfigEnv(t *testing.T) {
+	t.Helper()
+
+	for _, item := range os.Environ() {
+		key, value, ok := strings.Cut(item, "=")
+		if !ok {
+			continue
+		}
+		if !strings.HasPrefix(key, "APP__") && key != "APP_CONFIG_ALLOWED_ROOTS" {
+			continue
+		}
+		t.Setenv(key, value)
+		if err := os.Unsetenv(key); err != nil {
+			t.Fatalf("os.Unsetenv(%q) error = %v", key, err)
+		}
+	}
 }

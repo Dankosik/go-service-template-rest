@@ -34,12 +34,14 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.HTTP.ReadinessPropagationDelay != 15*time.Second {
 		t.Fatalf("HTTP.ReadinessPropagationDelay = %s, want 15s", cfg.HTTP.ReadinessPropagationDelay)
 	}
+	// profile:database-postgres:start
 	if cfg.Postgres.Enabled {
 		t.Fatalf("Postgres.Enabled = true, want false")
 	}
 	if cfg.Postgres.DSN != "" {
 		t.Fatalf("Postgres.DSN = %q, want empty", cfg.Postgres.DSN)
 	}
+	// profile:database-postgres:end
 	if cfg.Observability.Metrics.Addr != "127.0.0.1:9090" {
 		t.Fatalf("Observability.Metrics.Addr = %q, want 127.0.0.1:9090", cfg.Observability.Metrics.Addr)
 	}
@@ -156,18 +158,22 @@ observability:
 func TestNamespaceEnvPreservesRawDataBearingStrings(t *testing.T) {
 	resetConfigEnv(t)
 
-	postgresDSN := " postgres://user:pass@localhost:5432/app?sslmode=disable "
 	headers := " authorization=Bearer token, x-trace= spaced value "
-	t.Setenv("APP__POSTGRES__DSN", postgresDSN)
 	t.Setenv("APP__OBSERVABILITY__OTEL__EXPORTER__OTLP_HEADERS", headers)
+	// profile:database-postgres:start
+	postgresDSN := " postgres://user:pass@localhost:5432/app?sslmode=disable "
+	t.Setenv("APP__POSTGRES__DSN", postgresDSN)
+	// profile:database-postgres:end
 
 	cfg, _, err := LoadDetailed(LoadOptions{})
 	if err != nil {
 		t.Fatalf("LoadDetailed() error = %v", err)
 	}
+	// profile:database-postgres:start
 	if cfg.Postgres.DSN != postgresDSN {
 		t.Fatalf("Postgres.DSN = %q, want exact env value %q", cfg.Postgres.DSN, postgresDSN)
 	}
+	// profile:database-postgres:end
 	if cfg.Observability.OTel.Exporter.OTLPHeaders != headers {
 		t.Fatalf("OTLPHeaders = %q, want exact env value %q", cfg.Observability.OTel.Exporter.OTLPHeaders, headers)
 	}

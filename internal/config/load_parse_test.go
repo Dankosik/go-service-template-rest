@@ -32,7 +32,7 @@ func TestParseErrorsExposeSanitizedDetail(t *testing.T) {
 		{name: "duration missing unit", envKey: "APP__HTTP__READ_TIMEOUT", envValue: "150", wantDetail: "missing duration unit"},
 		{name: "int format", envKey: "APP__HTTP__MAX_HEADER_BYTES", envValue: "many", wantDetail: "invalid integer format"},
 		{name: "float finite check", envKey: "APP__OBSERVABILITY__OTEL__TRACES_SAMPLER_ARG", envValue: "NaN", wantDetail: "non-finite numeric value"},
-		{name: "bool format", envKey: "APP__POSTGRES__ENABLED", envValue: "maybe", wantDetail: "invalid boolean format"},
+		{name: "bool format", envKey: "APP__HTTP__ACCESS_LOG_HEALTH_PROBES", envValue: "maybe", wantDetail: "invalid boolean format"},
 		{name: "log level", envKey: "APP__LOG__LEVEL", envValue: "secret-level", wantDetail: "invalid log level"},
 	}
 

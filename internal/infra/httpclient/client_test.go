@@ -37,10 +37,19 @@ func TestNewRejectsInvalidConfig(t *testing.T) {
 		{name: "private HTTPS", mutate: func(cfg *Config) {
 			cfg.BaseURL = "https://api.railway.internal"
 			cfg.TargetClass = PrivateHTTP
+			cfg.PrivateHostSuffix = "railway.internal"
 		}},
 		{name: "private public host", mutate: func(cfg *Config) {
 			cfg.BaseURL = "http://example.com"
 			cfg.TargetClass = PrivateHTTP
+			cfg.PrivateHostSuffix = "railway.internal"
+		}},
+		// No platform default: a private target names its own DNS zone or is
+		// refused, so the package cannot silently assume one platform's zone.
+		{name: "private suffix is required", mutate: func(cfg *Config) {
+			cfg.BaseURL = "http://api.railway.internal"
+			cfg.TargetClass = PrivateHTTP
+			cfg.PrivateHostSuffix = ""
 		}},
 		{name: "private host outside configured suffix", mutate: func(cfg *Config) {
 			cfg.BaseURL = "http://api.railway.internal"
@@ -349,6 +358,7 @@ func TestClientEnforcesDecodedLimitPropagatesTraceAndRejectsRedirect(t *testing.
 	cfg := validExternalConfig()
 	cfg.BaseURL = "http://api.railway.internal:" + port
 	cfg.TargetClass = PrivateHTTP
+	cfg.PrivateHostSuffix = "railway.internal"
 	cfg.MaxResponseBodyBytes = 7
 	client, err := New(cfg, metricnoop.NewMeterProvider())
 	if err != nil {
@@ -457,7 +467,7 @@ func TestNewAcceptsCustomPrivateHostSuffix(t *testing.T) {
 	}{
 		{name: "kubernetes cluster zone", suffix: "svc.cluster.local", baseURL: "http://billing.default.svc.cluster.local"},
 		{name: "leading dot accepted", suffix: ".internal", baseURL: "http://billing.internal"},
-		{name: "default when unset", suffix: "", baseURL: "http://billing.railway.internal"},
+		{name: "railway zone", suffix: "railway.internal", baseURL: "http://billing.railway.internal"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()

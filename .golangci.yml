@@ -77,6 +77,14 @@ linters:
           - exhaustruct
           - gocognit
           - nestif
+      # recordStartupRejection's errorType varies by database profile: the
+      # PostgreSQL startup stage records "dependency_init", and DATABASE=none has
+      # no dependency stage, so a generated service passes one value. A nolint
+      # directive cannot express that — it would itself be unused in the profile
+      # where the parameter does vary.
+      - path: cmd/service/internal/bootstrap/startup_rejections\.go
+        linters:
+          - unparam
   settings:
     iface:
       enable:

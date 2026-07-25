@@ -1,6 +1,6 @@
 # Integration Tests
 
-This Codex-native repository keeps broad executable proof in this directory.
+This repository keeps broad executable proof in this directory.
 
 Store end-to-end, migration-backed, container-backed, and larger cross-package tests in this directory.
 

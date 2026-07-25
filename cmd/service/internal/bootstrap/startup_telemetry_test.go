@@ -99,7 +99,10 @@ func TestReportIgnoredAmbientOTLPEnvWarnsWhenExporterUnconfigured(t *testing.T) 
 	}
 }
 
-func TestReportIgnoredAmbientOTLPEnvSilentWhenExporterConfigured(t *testing.T) {
+// An injected endpoint no longer disables this service's own trace export, so
+// the operator needs to learn that their collector is not the destination. The
+// warning names the variable and the config key that won.
+func TestReportIgnoredAmbientOTLPEnvWarnsOnOverriddenEndpointWhenConfigured(t *testing.T) {
 	telemetrytest.ClearAmbientExporterEnv(t)
 	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://injected-collector.example:4318")
 
@@ -110,10 +113,35 @@ func TestReportIgnoredAmbientOTLPEnvSilentWhenExporterConfigured(t *testing.T) {
 		telemetry.TraceExporterConfig{OTLPEndpoint: "http://127.0.0.1:4318"},
 	)
 
-	// A configured exporter reaches the hard rejection path instead; warning
-	// here would double-report the same condition.
+	logged := buf.String()
+	for _, want := range []string{
+		"telemetry_ambient_env_ignored",
+		"OTEL_EXPORTER_OTLP_ENDPOINT",
+		startupDependencyModeConfigured,
+		"observability.otel.exporter.otlp_endpoint",
+	} {
+		if !strings.Contains(logged, want) {
+			t.Fatalf("log = %q, want %q", logged, want)
+		}
+	}
+}
+
+// A credential or trust variable fails exporter setup and is reported as
+// degraded telemetry. Listing it here as merely "ignored" would contradict that
+// record, so this path stays silent for it.
+func TestReportIgnoredAmbientOTLPEnvSilentOnConflictWhenConfigured(t *testing.T) {
+	telemetrytest.ClearAmbientExporterEnv(t)
+	t.Setenv("OTEL_EXPORTER_OTLP_HEADERS", "authorization=Bearer secret-value")
+
+	var buf bytes.Buffer
+	reportIgnoredAmbientOTLPEnv(
+		context.Background(),
+		slog.New(slog.NewJSONHandler(&buf, nil)),
+		telemetry.TraceExporterConfig{OTLPEndpoint: "http://127.0.0.1:4318"},
+	)
+
 	if buf.Len() != 0 {
-		t.Fatalf("log = %q, want no warning when the exporter is configured", buf.String())
+		t.Fatalf("log = %q, want no warning for a variable that fails exporter setup", buf.String())
 	}
 }
 
@@ -129,6 +157,47 @@ func TestReportIgnoredAmbientOTLPEnvSilentWithoutAmbientEnv(t *testing.T) {
 
 	if buf.Len() != 0 {
 		t.Fatalf("log = %q, want no warning without ambient env", buf.String())
+	}
+}
+
+// The startup summary is the one line an operator already reads. Trace-export
+// state belongs there so "this service exports no traces" does not depend on
+// correlating a separate warning a log filter may drop.
+func TestBootstrapReportStageRecordsTraceExporterState(t *testing.T) {
+	t.Parallel()
+
+	for _, tt := range []struct {
+		name         string
+		otlpEndpoint string
+		initErr      error
+		want         string
+	}{
+		{name: "active", otlpEndpoint: "http://127.0.0.1:4318", want: `"tracing.exporter":"active"`},
+		{name: "disabled", otlpEndpoint: "", want: `"tracing.exporter":"disabled"`},
+		{
+			name:         "degraded",
+			otlpEndpoint: "http://127.0.0.1:4318",
+			initErr:      errors.New("setup tracing: boom"),
+			want:         `"tracing.exporter":"degraded"`,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var buf bytes.Buffer
+			bootstrapReportStage(
+				context.Background(),
+				slog.New(slog.NewJSONHandler(&buf, nil)),
+				telemetryStageTestConfig(tt.otlpEndpoint),
+				config.LoadOptions{},
+				config.LoadReport{},
+				tt.initErr,
+			)
+
+			if !strings.Contains(buf.String(), tt.want) {
+				t.Fatalf("log = %q, want %s", buf.String(), tt.want)
+			}
+		})
 	}
 }
 

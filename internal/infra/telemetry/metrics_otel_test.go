@@ -80,6 +80,84 @@ func TestSetupMetricsUsesPrivateRegistryAndConfigResource(t *testing.T) {
 	}
 }
 
+// A service exporting no traces still answers every request and reports
+// healthy, so trace-export state has to leave the boot log and reach a scrape.
+//
+//nolint:paralleltest // Mutates the process-wide OpenTelemetry MeterProvider.
+func TestRecordTraceExporterStateIsScrapable(t *testing.T) {
+	for _, tt := range []struct {
+		name      string
+		active    bool
+		wantValue string
+	}{
+		{name: "active", active: true, wantValue: "1"},
+		{name: "degraded", active: false, wantValue: "0"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			telemetrytest.RestoreGlobals(t)
+
+			metrics := New()
+			shutdown, err := SetupMetrics(context.Background(), metrics, MetricsConfig{
+				ServiceName:    "test-service",
+				ServiceVersion: "test-version",
+				DeploymentEnv:  "test-env",
+			})
+			if err != nil {
+				t.Fatalf("SetupMetrics() error = %v", err)
+			}
+			t.Cleanup(func() {
+				if err := shutdown(context.Background()); err != nil {
+					t.Fatalf("shutdown metrics: %v", err)
+				}
+			})
+
+			if err := metrics.RecordTraceExporterState(context.Background(), tt.active); err != nil {
+				t.Fatalf("RecordTraceExporterState() error = %v", err)
+			}
+
+			gotValue, ok := scrapedSampleValue(
+				collectMetricsText(t, metrics),
+				"service_startup_trace_exporter_active",
+			)
+			if !ok {
+				t.Fatal("metrics output does not expose service_startup_trace_exporter_active")
+			}
+			if gotValue != tt.wantValue {
+				t.Fatalf("service_startup_trace_exporter_active = %s, want %s", gotValue, tt.wantValue)
+			}
+		})
+	}
+}
+
+// scrapedSampleValue returns the value of the first sample line for name,
+// skipping the HELP and TYPE metadata lines that share the prefix.
+func scrapedSampleValue(metricsText, name string) (string, bool) {
+	for line := range strings.Lines(metricsText) {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, name) {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+		return fields[len(fields)-1], true
+	}
+	return "", false
+}
+
+// A nil or unconfigured Metrics falls back to a no-op provider, so recording
+// must not fail startup.
+func TestRecordTraceExporterStateToleratesNoopProvider(t *testing.T) {
+	t.Parallel()
+
+	for _, metrics := range []*Metrics{nil, {}} {
+		if err := metrics.RecordTraceExporterState(context.Background(), true); err != nil {
+			t.Fatalf("RecordTraceExporterState() error = %v, want nil for a no-op provider", err)
+		}
+	}
+}
+
 func TestSetupMetricsRequiresRegistry(t *testing.T) {
 	t.Parallel()
 

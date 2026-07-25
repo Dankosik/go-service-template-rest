@@ -10,9 +10,15 @@ func defaultValues() map[string]any {
 		"app.env":     "local",
 		"app.version": buildVersion,
 
-		"http.addr":                        ":8080",
-		"http.shutdown_timeout":            "30s",
-		"http.readiness_timeout":           "4s",
+		"http.addr":              ":8080",
+		"http.shutdown_timeout":  "30s",
+		"http.readiness_timeout": "4s",
+		// readiness_propagation_delay holds the drain open long enough for a load
+		// balancer to notice /health/ready failing before connections stop being
+		// accepted. It is production-shaped on purpose, so running the binary
+		// directly waits it out on SIGTERM; env/.env.example sets 0s for local
+		// iteration, and docs/railway-deployment-profile.md does the arithmetic
+		// against the platform's draining window.
 		"http.readiness_propagation_delay": "15s",
 		"http.read_header_timeout":         "5s",
 		"http.read_timeout":                "5s",
@@ -26,6 +32,7 @@ func defaultValues() map[string]any {
 
 		"observability.metrics.addr": "127.0.0.1:9090",
 
+		// profile:database-postgres:start
 		"postgres.enabled":                     false,
 		"postgres.dsn":                         "",
 		"postgres.connect_timeout":             "3s",
@@ -35,6 +42,7 @@ func defaultValues() map[string]any {
 		"postgres.migration_lock_timeout":      "15s",
 		"postgres.max_open_conns":              25,
 		"postgres.conn_max_lifetime":           "30m",
+		// profile:database-postgres:end
 
 		"observability.otel.service_name":           "service",
 		"observability.otel.traces_sampler":         otelconfig.DefaultTracesSampler,

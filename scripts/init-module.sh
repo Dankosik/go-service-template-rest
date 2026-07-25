@@ -71,7 +71,9 @@ remove_profile_blocks() {
 
 	[[ -f "${file}" ]] || return 0
 	temporary="$(mktemp)"
-	if ! awk -v start="# profile:${profile}:start" -v finish="# profile:${profile}:end" '
+	# The sentinel carries no comment prefix so the same markers work in shell,
+	# YAML, Make, Dockerfile, and Go sources.
+	if ! awk -v start="profile:${profile}:start" -v finish="profile:${profile}:end" '
 		index($0, start) {
 			if (skip) exit 2
 			skip = 1
@@ -272,10 +274,8 @@ if [[ "${source_checkout}" != true ]]; then
 			test/postgres_integration_test.go \
 			test/postgres_migrate_runner_integration_test.go \
 			cmd/service/internal/bootstrap/startup_dependencies.go \
-			cmd/service/internal/bootstrap/startup_dependencies_address_test.go \
 			cmd/service/internal/bootstrap/startup_dependencies_test.go \
 			cmd/service/internal/bootstrap/startup_rejections_test.go \
-			cmd/service/internal/bootstrap/startup_retry_test.go \
 			internal/infra/telemetry/telemetrytest/metrics.go \
 			env/docker-compose.yml
 		cp \
@@ -285,22 +285,33 @@ if [[ "${source_checkout}" != true ]]; then
 			cmd/service/internal/bootstrap/startup_dependencies.go \
 			"${current_module}" \
 			"${new_module}"
-		for profile_file in \
-			Makefile \
-			build/docker/Dockerfile \
-			railway.toml \
-			.github/workflows/ci.yml \
-			.github/workflows/cd.yml \
-			.github/dependabot.yml \
-			env/.env.example \
-			env/config/local.yaml; do
+		# Discover the files that carry blocks instead of listing them. A file
+		# missing from a hand-written list fails silently: the generated service
+		# keeps PostgreSQL configuration it has no database for, or stops
+		# compiling because a marked type is gone but its users are not.
+		stripped_go_files=()
+		while IFS= read -r profile_file; do
+			[[ -n "${profile_file}" ]] || continue
 			remove_profile_blocks "${profile_file}" "database-postgres"
-		done
+			if [[ "${profile_file}" == *.go ]]; then
+				stripped_go_files+=("${profile_file}")
+			fi
+		done < <(grep -rl 'profile:database-postgres:start' \
+			Makefile railway.toml build cmd env internal test .github 2>/dev/null || true)
+		# Removing a block can leave a doubled or trailing blank line, which
+		# `make fmt-check` rejects. Reformat what the strip touched so the
+		# generated service passes its own quality gate.
+		if ((${#stripped_go_files[@]} > 0)); then
+			gofmt -w "${stripped_go_files[@]}"
+		fi
 		go -C tools mod edit -droptool=github.com/sqlc-dev/sqlc/cmd/sqlc
 		go mod tidy
 		go -C tools mod tidy
-		rm -rf -- scripts/profiles/database-none
 	fi
+
+	# Profile sources are the generator's own inputs. Every profile has consumed
+	# what it needs by now, so no generated service keeps them.
+	rm -rf -- scripts/profiles
 
 	if [[ "${outbound_http}" == "none" ]]; then
 		rm -rf -- internal/infra/httpclient
