@@ -1,5 +1,13 @@
 -- Idempotency keys: one row per unsafe request a client asked to be executed once.
 --
+-- The version is a timestamp rather than 0001 on purpose. golang-migrate parses the
+-- leading digits as the version, so `0001` and `000001` are the same version — and
+-- `000001_<name>` is exactly what `migrate create -seq` produces for a service's
+-- first migration. A template that claimed version 1 would make that first
+-- migration fail with "duplicate migration file" at deploy time. The timestamp
+-- convention is golang-migrate's own default and cannot collide with a hand-picked
+-- sequence number.
+--
 -- The primary key is what makes the claim atomic. Reserve is a single
 -- INSERT ... ON CONFLICT DO NOTHING, so exactly one of two concurrent attempts
 -- affects a row and the loser learns it lost; the SELECT-then-INSERT shape a
