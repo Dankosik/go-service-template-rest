@@ -306,13 +306,18 @@ grep -Fq 'outbound_http = "none"' "${minimal_checkout}/template.lock"
 grep -Eq '^source_revision = "[0-9a-f]{40}"$' "${minimal_checkout}/template.lock"
 # A generated service owns no generator, so the initialization contract check
 # reports that and succeeds instead of failing the first push of every service.
+#
+# The output goes to a file rather than into `grep -q`: a matching `grep -q`
+# closes the pipe on its first hit, and the SIGPIPE that follows makes `make`
+# report a write error and exit non-zero under pipefail.
 (
 	cd "${minimal_checkout}"
-	make template-init-check | grep -Fq 'upstream-only'
+	make template-init-check >"${TEMP_ROOT}/minimal-init-check.log"
 	# CI runs this unconditionally; the target must survive DATABASE=none.
 	make sqlc-check
 	make project-structure-check
 )
+grep -Fq 'upstream-only' "${TEMP_ROOT}/minimal-init-check.log"
 ! make -C "${minimal_checkout}" help | grep -Fq 'bench-db'
 ! grep -Fq 'preDeployCommand = ["/migrate"]' "${minimal_checkout}/railway.toml"
 ! grep -Fq '/out/migrate' "${minimal_checkout}/build/docker/Dockerfile"
@@ -379,9 +384,10 @@ grep -Fq 'database = "postgres"' "${postgres_checkout}/template.lock"
 grep -Fq 'outbound_http = "bounded"' "${postgres_checkout}/template.lock"
 (
 	cd "${postgres_checkout}"
-	make template-init-check | grep -Fq 'upstream-only'
+	make template-init-check >"${TEMP_ROOT}/postgres-init-check.log"
 	make project-structure-check
 )
+grep -Fq 'upstream-only' "${TEMP_ROOT}/postgres-init-check.log"
 
 if [[ "${TEMPLATE_POSTGRES_PROOF:-0}" == "1" ]]; then
 	(
