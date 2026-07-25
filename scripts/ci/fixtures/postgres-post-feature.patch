@@ -86,7 +86,7 @@ index fd91ca9..293c87a 100644
  
 @@ -125,6 +127,11 @@ func Run(args []string) (runErr error) {
  	// telemetry flush and after background work has been joined.
- 	defer dependencies.Close(dependencyCloseContext(signalCtx))
+ 	defer func() { dependencies.Close(shutdown.stage(signalCtx, dependencyCloseTimeout)) }()
  
 +	articles, err := article.NewService(postgres.NewArticleRepository(dependencies.postgres.PGX()))
 +	if err != nil {
