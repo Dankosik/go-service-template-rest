@@ -13,7 +13,6 @@ import (
 
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/health"
-	"go.opentelemetry.io/otel/trace"
 )
 
 type fakeRuntimeServer struct {
@@ -66,9 +65,7 @@ func (f *fakeRuntimeServer) Shutdown(ctx context.Context) error {
 }
 
 func newTestStartupAdmissionController() *startupAdmissionController {
-	return newStartupAdmissionController(
-		newStartupSpanController(trace.SpanFromContext(context.Background()), func(context.Context) {}),
-	)
+	return newStartupAdmissionController()
 }
 
 func TestStartupAdmissionControllerCheckReady(t *testing.T) {
@@ -114,7 +111,6 @@ func TestServeHTTPRuntimeListenError(t *testing.T) {
 	svc := health.New()
 
 	err := serveHTTPRuntime(context.Background(), context.Background(), serveHTTPRuntimeArgs{
-		bootstrapSpan:  trace.SpanFromContext(context.Background()),
 		cfg:            config.Config{HTTP: config.HTTPConfig{Addr: "127.0.0.1:-1", ShutdownTimeout: time.Second}},
 		log:            logger,
 		healthSvc:      svc,
@@ -143,7 +139,6 @@ func TestServeHTTPRuntimeMetricsListenError(t *testing.T) {
 	}()
 
 	err = serveHTTPRuntime(context.Background(), context.Background(), serveHTTPRuntimeArgs{
-		bootstrapSpan: trace.SpanFromContext(context.Background()),
 		cfg: config.Config{
 			HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second},
 			Observability: config.ObservabilityConfig{
@@ -179,7 +174,6 @@ func TestServeHTTPRuntimeStartsAndStopsApplicationAndMetricsServers(t *testing.T
 	runErrCh := make(chan error, 1)
 	go func() {
 		runErrCh <- serveHTTPRuntime(signalCtx, bootstrapCtx, serveHTTPRuntimeArgs{
-			bootstrapSpan: trace.SpanFromContext(bootstrapCtx),
 			cfg: config.Config{
 				App:  config.AppConfig{Env: "test"},
 				HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second},
@@ -236,7 +230,6 @@ func TestServeHTTPRuntimeRejectsCanceledStartupBeforeListen(t *testing.T) {
 	cancel()
 
 	err := serveHTTPRuntime(signalCtx, context.Background(), serveHTTPRuntimeArgs{
-		bootstrapSpan:  trace.SpanFromContext(context.Background()),
 		cfg:            config.Config{HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second}},
 		log:            logger,
 		healthSvc:      svc,
@@ -265,16 +258,14 @@ func TestServeHTTPRuntimeMarksReadyWithoutExternalReadinessProbe(t *testing.T) {
 	signalCtx, cancelSignal := context.WithCancel(context.Background())
 	defer cancelSignal()
 	bootstrapCtx := context.WithoutCancel(signalCtx)
-	bootstrapSpan := trace.SpanFromContext(bootstrapCtx)
 
 	runErrCh := make(chan error, 1)
-	go func(signalCtx context.Context, bootstrapCtx context.Context, bootstrapSpan trace.Span) {
+	go func(signalCtx context.Context, bootstrapCtx context.Context) {
 		runErrCh <- serveHTTPRuntime(signalCtx, bootstrapCtx, serveHTTPRuntimeArgs{
-			bootstrapSpan: bootstrapSpan,
-			cfg:           config.Config{HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second}},
-			log:           logger,
-			healthSvc:     svc,
-			srv:           srv,
+			cfg:       config.Config{HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second}},
+			log:       logger,
+			healthSvc: svc,
+			srv:       srv,
 			readinessCheck: func(context.Context) error {
 				select {
 				case readinessChecked <- struct{}{}:
@@ -284,7 +275,7 @@ func TestServeHTTPRuntimeMarksReadyWithoutExternalReadinessProbe(t *testing.T) {
 			},
 			admission: admission,
 		})
-	}(signalCtx, bootstrapCtx, bootstrapSpan)
+	}(signalCtx, bootstrapCtx)
 
 	select {
 	case <-readinessChecked:
@@ -322,11 +313,10 @@ func TestServeHTTPRuntimeRejectsStartupDeadlineBeforeReadiness(t *testing.T) {
 	defer cancel()
 
 	err := serveHTTPRuntime(context.Background(), bootstrapCtx, serveHTTPRuntimeArgs{
-		bootstrapSpan: trace.SpanFromContext(context.Background()),
-		cfg:           config.Config{HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second}},
-		log:           logger,
-		healthSvc:     svc,
-		srv:           newFakeRuntimeServer(),
+		cfg:       config.Config{HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second}},
+		log:       logger,
+		healthSvc: svc,
+		srv:       newFakeRuntimeServer(),
 		readinessCheck: func(ctx context.Context) error {
 			<-ctx.Done()
 			return ctx.Err()
@@ -356,11 +346,10 @@ func TestServeHTTPRuntimeSkipsPropagationDelayBeforeAdmissionReady(t *testing.T)
 	}
 
 	err := serveHTTPRuntime(context.Background(), context.Background(), serveHTTPRuntimeArgs{
-		bootstrapSpan: trace.SpanFromContext(context.Background()),
-		cfg:           config.Config{HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: 25 * time.Millisecond}},
-		log:           logger,
-		healthSvc:     svc,
-		srv:           srv,
+		cfg:       config.Config{HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: 25 * time.Millisecond}},
+		log:       logger,
+		healthSvc: svc,
+		srv:       srv,
 		readinessCheck: func(context.Context) error {
 			return errors.New("readiness failed")
 		},
@@ -390,11 +379,10 @@ func TestServeHTTPRuntimeReturnsServeFailureBeforeAdmissionReady(t *testing.T) {
 	}
 
 	err := serveHTTPRuntime(context.Background(), context.Background(), serveHTTPRuntimeArgs{
-		bootstrapSpan: trace.SpanFromContext(context.Background()),
-		cfg:           config.Config{HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second}},
-		log:           logger,
-		healthSvc:     svc,
-		srv:           srv,
+		cfg:       config.Config{HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second}},
+		log:       logger,
+		healthSvc: svc,
+		srv:       srv,
 		readinessCheck: func(ctx context.Context) error {
 			select {
 			case <-ctx.Done():
@@ -430,11 +418,10 @@ func TestServeHTTPRuntimeReturnsPendingServeFailureBeforeMarkingAdmissionReady(t
 	}
 
 	err := serveHTTPRuntime(context.Background(), context.Background(), serveHTTPRuntimeArgs{
-		bootstrapSpan: trace.SpanFromContext(context.Background()),
-		cfg:           config.Config{HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second}},
-		log:           logger,
-		healthSvc:     svc,
-		srv:           srv,
+		cfg:       config.Config{HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second}},
+		log:       logger,
+		healthSvc: svc,
+		srv:       srv,
 		readinessCheck: func(ctx context.Context) error {
 			select {
 			case <-serveReturned:

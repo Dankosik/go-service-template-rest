@@ -42,6 +42,11 @@ type RouterConfig struct {
 	// must name an HTTP authentication scheme, not a contract securityScheme
 	// key. Defaults to Bearer.
 	AuthenticateChallenge string
+	// Idempotency makes a repeated POST or PATCH carrying an Idempotency-Key
+	// answer with the first attempt's result instead of doing the work twice.
+	// Nil leaves the middleware out of the chain entirely; see Idempotent for
+	// what a store has to guarantee.
+	Idempotency IdempotencyStore
 }
 
 // defaultAuthenticateChallenge is the HTTP authentication scheme advertised when
@@ -87,7 +92,7 @@ func NewRouter(log *slog.Logger, h Handlers, metrics *telemetry.Metrics, cfg Rou
 // The order is the contract, outermost first:
 //
 //	RequestCorrelation → OTel → SecurityHeaders → AccessLog → RequestBodyLimit
-//	→ RequestTimeout → MaxInFlight → Recover → apiSubrouter
+//	→ RequestTimeout → MaxInFlight → Recover → Idempotent → apiSubrouter
 func Harden(log *slog.Logger, metrics *telemetry.Metrics, cfg RouterConfig, apiSubrouter http.Handler) (http.Handler, error) {
 	if log == nil {
 		return nil, fmt.Errorf("http router: logger is required")
@@ -129,6 +134,11 @@ func Harden(log *slog.Logger, metrics *telemetry.Metrics, cfg RouterConfig, apiS
 		// access-logged, and outside Recover because it never runs a handler.
 		func(next http.Handler) http.Handler { return MaxInFlight(cfg.MaxInFlight, next) },
 		func(next http.Handler) http.Handler { return Recover(log, next) },
+		// Innermost, so it wraps the handler and nothing else: it must see the
+		// response the operation actually produced, and a panic that Recover
+		// turns into a 500 must unwind through it so the reservation is released
+		// rather than recorded as a completed attempt.
+		func(next http.Handler) http.Handler { return Idempotent(cfg.Idempotency, log, next) },
 	)
 
 	return RequestCorrelation(rootRouter), nil
@@ -369,23 +379,20 @@ func RejectResponse() func(http.ResponseWriter, *http.Request, error) {
 
 // ProblemTypeURI maps an HTTP status to the stable problem type this repository
 // publishes for it, so a service filling its own generated Problem values cannot
-// drift from the envelope the fallback paths emit.
-func ProblemTypeURI(status int) string {
-	for _, code := range []problemCode{
-		problemCodeBadRequest,
-		problemCodeUnauthorized,
-		problemCodeForbidden,
-		problemCodeNotFound,
-		problemCodeMethodNotAllowed,
-		problemCodeRequestEntityTooLarge,
-		problemCodeInternalError,
-		problemCodeServiceUnavailable,
-		problemCodeGatewayTimeout,
-	} {
-		if _, definition := problemDefinitionFor(code); definition.status == status {
-			return definition.typeURI
+// drift from the envelope the fallback paths emit. It reports false for a status
+// this repository publishes no type for.
+//
+// The boolean is the point. This used to return the internal-error type for any
+// uncatalogued status, so a service asking for a 409 received a URI announcing a
+// server fault, in a body that still carried status 409 — and nothing indicated
+// the lookup had failed. A helper whose failure mode is a plausible wrong answer
+// is worse than one that refuses; a caller that sees false has a status this
+// repository does not describe, and must publish its own type for it.
+func ProblemTypeURI(status int) (string, bool) {
+	for _, definition := range problemCatalog {
+		if definition.status == status {
+			return definition.typeURI, true
 		}
 	}
-	_, internal := problemDefinitionFor(problemCodeInternalError)
-	return internal.typeURI
+	return "", false
 }

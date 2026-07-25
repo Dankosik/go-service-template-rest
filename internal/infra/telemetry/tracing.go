@@ -3,9 +3,7 @@ package telemetry
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"os"
-	pathpkg "path"
 	"slices"
 	"strings"
 	"sync"
@@ -20,14 +18,6 @@ import (
 const (
 	// TraceExporterConfigKey is this service's own exporter endpoint setting.
 	TraceExporterConfigKey = "observability.otel.exporter.otlp_endpoint"
-
-	// The standard OpenTelemetry endpoint variables. The signal-specific one is
-	// already a complete traces endpoint; the signal-agnostic one is a root that
-	// OTLP defines the traces path relative to.
-	otelExporterTracesEndpointEnv = "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"
-	otelExporterEndpointEnv       = "OTEL_EXPORTER_OTLP_ENDPOINT"
-
-	otlpTracesPath = "/v1/traces"
 )
 
 type TracingConfig struct {
@@ -44,25 +34,10 @@ type TraceExporterConfig struct {
 	OTLPHeaders  string
 }
 
-type traceOTLPEndpoint struct {
-	endpointURL string
-}
-
-// TraceExporterEndpoint is the resolved OTLP traces endpoint and the setting
-// that supplied it.
-type TraceExporterEndpoint struct {
-	// URL is the full OTLP HTTP traces endpoint. Empty when nothing named one.
-	URL string
-	// Source is the configuration key or environment variable URL came from, so
-	// an operator can tell a platform-injected endpoint from this service's own.
-	// Empty when URL is empty.
-	Source string
-}
-
-// Configured reports whether a trace exporter should be built.
-func (e TraceExporterEndpoint) Configured() bool {
-	return e.URL != ""
-}
+// TraceExporterEndpoint is the resolved OTLP traces endpoint and the setting that
+// supplied it. Metrics resolve the same shape through the same primitives; see
+// otlp_endpoint.go.
+type TraceExporterEndpoint = ExporterEndpoint
 
 // fromConfig reports whether this service, rather than the platform, named the
 // destination. It decides whether ambient credential and trust material is a
@@ -282,7 +257,7 @@ func buildTraceExporterOptions(cfg TraceExporterConfig) ([]otlptracehttp.Option,
 // outcome this resolution must not create.
 func ResolveTraceExporterEndpoint(cfg TraceExporterConfig) (TraceExporterEndpoint, error) {
 	if raw := strings.TrimSpace(cfg.OTLPEndpoint); raw != "" {
-		endpoint, err := parseTraceOTLPEndpoint(raw)
+		endpoint, err := parseSignalOTLPEndpoint(raw, otlpTracesPath)
 		if err != nil {
 			return TraceExporterEndpoint{}, err
 		}
@@ -293,14 +268,14 @@ func ResolveTraceExporterEndpoint(cfg TraceExporterConfig) (TraceExporterEndpoin
 	}
 
 	if raw, ok := nonEmptyEnv(otelExporterTracesEndpointEnv); ok {
-		endpoint, err := parseTraceOTLPEndpoint(raw)
+		endpoint, err := parseSignalOTLPEndpoint(raw, otlpTracesPath)
 		if err != nil {
 			return TraceExporterEndpoint{}, fmt.Errorf("%s: %w", otelExporterTracesEndpointEnv, err)
 		}
 		return TraceExporterEndpoint{URL: endpoint.endpointURL, Source: otelExporterTracesEndpointEnv}, nil
 	}
 	if raw, ok := nonEmptyEnv(otelExporterEndpointEnv); ok {
-		endpoint, err := parseTraceOTLPBaseEndpoint(raw)
+		endpoint, err := parseBaseOTLPEndpoint(raw, otlpTracesPath)
 		if err != nil {
 			return TraceExporterEndpoint{}, fmt.Errorf("%s: %w", otelExporterEndpointEnv, err)
 		}
@@ -308,125 +283,4 @@ func ResolveTraceExporterEndpoint(cfg TraceExporterConfig) (TraceExporterEndpoin
 	}
 
 	return TraceExporterEndpoint{}, nil
-}
-
-func nonEmptyEnv(name string) (string, bool) {
-	value := strings.TrimSpace(os.Getenv(name))
-	return value, value != ""
-}
-
-// parseTraceOTLPEndpoint validates a complete OTLP traces endpoint. A missing
-// path defaults to the OTLP HTTP traces path; any other path is used exactly as
-// given, because a signal-specific endpoint names its own route.
-func parseTraceOTLPEndpoint(raw string) (traceOTLPEndpoint, error) {
-	parsedURL, err := parseTraceOTLPURL(raw)
-	if err != nil {
-		return traceOTLPEndpoint{}, err
-	}
-
-	if path := strings.TrimSpace(parsedURL.EscapedPath()); path == "" || path == "/" {
-		parsedURL.Path = otlpTracesPath
-		parsedURL.RawPath = ""
-	}
-
-	return traceOTLPEndpoint{
-		endpointURL: parsedURL.String(),
-	}, nil
-}
-
-// parseTraceOTLPBaseEndpoint validates a signal-agnostic OTLP root and appends
-// the traces path, which is what OTLP defines OTEL_EXPORTER_OTLP_ENDPOINT to
-// mean. A root carrying a path prefix keeps it, so a collector mounted under a
-// sub-path still resolves.
-func parseTraceOTLPBaseEndpoint(raw string) (traceOTLPEndpoint, error) {
-	parsedURL, err := parseTraceOTLPURL(raw)
-	if err != nil {
-		return traceOTLPEndpoint{}, err
-	}
-
-	parsedURL.Path = pathpkg.Join("/", parsedURL.Path, otlpTracesPath)
-	parsedURL.RawPath = ""
-
-	return traceOTLPEndpoint{
-		endpointURL: parsedURL.String(),
-	}, nil
-}
-
-// parseTraceOTLPURL validates an exporter URL fail-closed: explicit http/https
-// scheme, non-empty host, no userinfo/query/fragment. Errors never echo the raw
-// value, which can carry a credential.
-func parseTraceOTLPURL(raw string) (*url.URL, error) {
-	parsedURL, err := url.Parse(raw)
-	if err != nil {
-		return nil, fmt.Errorf("parse otlp endpoint: invalid endpoint")
-	}
-
-	scheme := strings.ToLower(parsedURL.Scheme)
-	if scheme != "http" && scheme != "https" {
-		return nil, fmt.Errorf("parse otlp endpoint: unsupported scheme")
-	}
-	if parsedURL.User != nil {
-		return nil, fmt.Errorf("parse otlp endpoint: userinfo is not supported")
-	}
-	if strings.TrimSpace(parsedURL.Hostname()) == "" {
-		return nil, fmt.Errorf("parse otlp endpoint: empty host")
-	}
-	if parsedURL.RawQuery != "" {
-		return nil, fmt.Errorf("parse otlp endpoint: query is not supported")
-	}
-	if parsedURL.Fragment != "" {
-		return nil, fmt.Errorf("parse otlp endpoint: fragment is not supported")
-	}
-
-	return parsedURL, nil
-}
-
-func parseOTLPHeaders(raw string) (map[string]string, error) {
-	headers := make(map[string]string)
-
-	pairs := strings.Split(raw, ",")
-	for i, pair := range pairs {
-		entry := strings.TrimSpace(pair)
-		if entry == "" {
-			continue
-		}
-		rawKey, rawValue, ok := strings.Cut(entry, "=")
-		if !ok {
-			return nil, fmt.Errorf("parse otlp headers: malformed entry at position %d", i+1)
-		}
-		key := strings.TrimSpace(rawKey)
-		value := strings.TrimSpace(rawValue)
-		if key == "" {
-			return nil, fmt.Errorf("parse otlp headers: malformed entry at position %d: empty header key", i+1)
-		}
-		if !validOTLPHeaderKey(key) {
-			return nil, fmt.Errorf("parse otlp headers: malformed entry at position %d: invalid header key", i+1)
-		}
-		if value == "" {
-			return nil, fmt.Errorf("parse otlp headers: malformed entry at position %d: empty header value", i+1)
-		}
-		headers[key] = value
-	}
-
-	if len(headers) == 0 {
-		return nil, fmt.Errorf("parse otlp headers: no valid header pairs")
-	}
-	return headers, nil
-}
-
-func validOTLPHeaderKey(key string) bool {
-	if key == "" {
-		return false
-	}
-	for i := 0; i < len(key); i++ {
-		b := key[i]
-		if (b >= 'a' && b <= 'z') ||
-			(b >= 'A' && b <= 'Z') ||
-			(b >= '0' && b <= '9') ||
-			strings.ContainsRune("!#$%&'*+-.^_`|~", rune(b)) {
-			continue
-		}
-		return false
-	}
-	return true
 }

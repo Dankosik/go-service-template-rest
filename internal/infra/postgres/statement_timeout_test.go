@@ -47,6 +47,7 @@ func TestNewRejectsMissingStatementTimeout(t *testing.T) {
 		ConnectTimeout:     time.Second,
 		HealthcheckTimeout: time.Second,
 		MaxOpenConns:       1,
+		AcquireTimeout:     time.Second,
 		ConnMaxLifetime:    time.Minute,
 	})
 	if !errors.Is(err, ErrConfig) {

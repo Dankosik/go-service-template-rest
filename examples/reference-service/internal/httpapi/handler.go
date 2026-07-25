@@ -8,7 +8,13 @@ import (
 
 	"github.com/example/go-service-template-rest/examples/reference-service/internal/article"
 	"github.com/example/go-service-template-rest/examples/reference-service/internal/openapi"
+	"github.com/example/go-service-template-rest/internal/reqctx"
 )
+
+// ArticleWriteScope is the permission a credential must carry to create an
+// article. The composition root decides which credentials are granted it; this
+// package decides which operation requires it.
+const ArticleWriteScope = "articles:write"
 
 var _ openapi.StrictServerInterface = (*handler)(nil)
 
@@ -16,10 +22,28 @@ type handler struct {
 	articles *article.Service
 }
 
-// CreateArticle maps the generated request body onto the feature-owned draft,
-// then maps each domain error identity onto its documented status. The use case
-// never sees an HTTP type and this transport never invents a business rule.
+// CreateArticle authorizes the caller, maps the generated request body onto the
+// feature-owned draft, then maps each domain error identity onto its documented
+// status. The use case never sees an HTTP type and this transport never invents a
+// business rule.
+//
+// The authorization check is why the identity seam exists. The contract's
+// security requirement already proved a credential before this ran, and
+// reqctx.PrincipalFromContext reports who it proved — so this handler decides
+// what that caller may do without reading the Authorization header a second
+// time. An absent principal on an operation that declares `security:` is a
+// wiring defect rather than an anonymous caller, so it is refused rather than
+// challenged.
 func (h *handler) CreateArticle(ctx context.Context, request openapi.CreateArticleRequestObject) (openapi.CreateArticleResponseObject, error) {
+	principal, authenticated := reqctx.PrincipalFromContext(ctx)
+	if !authenticated || !principal.HasScope(ArticleWriteScope) {
+		return openapi.CreateArticle403ApplicationProblemPlusJSONResponse{
+			ForbiddenApplicationProblemPlusJSONResponse: openapi.ForbiddenApplicationProblemPlusJSONResponse(
+				problem("forbidden", "forbidden", http.StatusForbidden, "credentials do not permit this operation"),
+			),
+		}, nil
+	}
+
 	if request.Body == nil {
 		return openapi.CreateArticle400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(

@@ -24,6 +24,32 @@ var (
 	ErrConnect     = errors.New("postgres connect")
 	ErrHealthcheck = errors.New("postgres healthcheck")
 	ErrTransaction = errors.New("postgres transaction")
+
+	// ErrSaturated reports that every pooled connection stayed busy for the whole
+	// acquire budget. It is a distinct identity because it is the one database
+	// failure that is not the database's fault and that the caller should retry:
+	// the server is momentarily past capacity, so a repository maps it onto its
+	// own "temporarily unavailable" domain error and the transport answers 503
+	// with a Retry-After, rather than the 504 an exhausted request budget earns.
+	ErrSaturated = errors.New("postgres pool saturated")
+)
+
+// Querier is the surface shared by a pooled connection and a transaction, so one
+// repository method serves both without knowing which it is running in.
+//
+// This is the type Acquire and InTx hand out. Without it, a repository takes
+// *pgxpool.Pool concretely and therefore cannot be composed into a transaction —
+// which is the reach for PGX that InTx exists to prevent. sqlc generates the same
+// shape as DBTX, so generated queriers accept these values unchanged.
+type Querier interface {
+	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
+var (
+	_ Querier = (*pgxpool.Conn)(nil)
+	_ Querier = (pgx.Tx)(nil)
 )
 
 type Options struct {
@@ -31,7 +57,21 @@ type Options struct {
 	ConnectTimeout     time.Duration
 	HealthcheckTimeout time.Duration
 	MaxOpenConns       int
-	ConnMaxLifetime    time.Duration
+	// MinIdleConns keeps connections open through quiet periods. Left at zero,
+	// pgxpool closes every idle connection after MaxConnIdleTime, so a
+	// low-traffic service pays TCP, TLS, and authentication on the first request
+	// of every spike — concurrently, once per connection the spike needs.
+	MinIdleConns int
+	// AcquireTimeout bounds how long one caller waits for a pooled connection.
+	//
+	// Nothing else does. pgxpool.Acquire waits until a connection frees or the
+	// context is done, and the only deadline on that context is the request
+	// budget — so a slow database does not shed, it queues: each waiting request
+	// holds an in-flight slot for its whole remaining budget until every slot is
+	// held by a connection waiter, and requests that touch no database at all are
+	// shed for capacity the database took.
+	AcquireTimeout  time.Duration
+	ConnMaxLifetime time.Duration
 	// StatementTimeout bounds every statement server-side, and bounds how long a
 	// session may sit idle inside a transaction. The request budget only cancels
 	// client-side, and pgx delivers that cancellation as a separate CancelRequest
@@ -42,7 +82,8 @@ type Options struct {
 }
 
 type Pool struct {
-	pool *pgxpool.Pool
+	pool           *pgxpool.Pool
+	acquireTimeout time.Duration
 }
 
 func New(ctx context.Context, opts Options) (*Pool, error) {
@@ -60,6 +101,12 @@ func New(ctx context.Context, opts Options) (*Pool, error) {
 	}
 	if opts.MaxOpenConns > math.MaxInt32 {
 		return nil, fmt.Errorf("%w: max open conns must be <= %d", ErrConfig, math.MaxInt32)
+	}
+	if opts.MinIdleConns < 0 || opts.MinIdleConns > opts.MaxOpenConns {
+		return nil, fmt.Errorf("%w: min idle conns must be in range [0,%d]", ErrConfig, opts.MaxOpenConns)
+	}
+	if opts.AcquireTimeout <= 0 {
+		return nil, fmt.Errorf("%w: acquire timeout must be > 0", ErrConfig)
 	}
 	if opts.ConnMaxLifetime <= 0 {
 		return nil, fmt.Errorf("%w: conn max lifetime must be > 0", ErrConfig)
@@ -80,7 +127,8 @@ func New(ctx context.Context, opts Options) (*Pool, error) {
 		otelpgx.WithDisableSQLStatementInAttributes(),
 		otelpgx.WithDisableConnectionDetailsInAttributes(),
 	)
-	poolConfig.MaxConns = int32(opts.MaxOpenConns) // #nosec G115 -- validated to be <= math.MaxInt32 above.
+	poolConfig.MaxConns = int32(opts.MaxOpenConns)     // #nosec G115 -- validated to be <= math.MaxInt32 above.
+	poolConfig.MinIdleConns = int32(opts.MinIdleConns) // #nosec G115 -- validated to be <= MaxOpenConns, itself <= math.MaxInt32.
 	poolConfig.MaxConnLifetime = opts.ConnMaxLifetime
 
 	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
@@ -103,7 +151,41 @@ func New(ctx context.Context, opts Options) (*Pool, error) {
 		return nil, fmt.Errorf("record postgres pool metrics: %w", err)
 	}
 
-	return &Pool{pool: pool}, nil
+	return &Pool{pool: pool, acquireTimeout: opts.AcquireTimeout}, nil
+}
+
+// Acquire takes a pooled connection, bounded by the acquire budget rather than by
+// whatever is left of the caller's request budget, and returns ErrSaturated when
+// the budget runs out.
+//
+// This is how a repository gets a Querier outside a transaction. The budget is
+// the reason it exists: an unbounded acquire turns a slow database into a
+// service-wide outage, because every waiting request keeps its in-flight slot
+// until the whole request budget is spent and the shedding limiter then rejects
+// traffic that never needed the database. Failing one caller in a second, with a
+// retryable identity, keeps the rest of the service serving.
+//
+// The returned connection must be released. Callers that want the pool's own
+// unbudgeted convenience methods use PGX.
+func (p *Pool) Acquire(ctx context.Context) (*pgxpool.Conn, error) {
+	if p == nil || p.pool == nil {
+		return nil, fmt.Errorf("%w: postgres pool is nil", ErrConfig)
+	}
+
+	acquireCtx, cancel := context.WithTimeout(ctx, p.acquireTimeout)
+	defer cancel()
+
+	conn, err := p.pool.Acquire(acquireCtx)
+	if err == nil {
+		return conn, nil
+	}
+	// Only the sub-budget expiring means saturation. A caller whose own context
+	// was already done is reporting a spent request budget or a canceled client,
+	// and calling that a capacity problem would hide both.
+	if errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil {
+		return nil, fmt.Errorf("%w: no connection available within %s", ErrSaturated, p.acquireTimeout)
+	}
+	return nil, fmt.Errorf("%w: acquire connection: %w", ErrConnect, err)
 }
 
 // applyStatementTimeouts publishes the budget as session defaults on every
@@ -138,20 +220,26 @@ func (p *Pool) Close() {
 // InTx runs fn inside one transaction, committing when it returns nil and
 // rolling back otherwise.
 //
-// This is the seam that keeps a service from reaching for PGX() to compose two
-// repository calls atomically. fn receives pgx.Tx, which carries the same
-// Query/Exec/QueryRow surface as the pool, so a repository method written against
-// that surface works both inside and outside a transaction without knowing which
-// it is in.
+// This is the seam that keeps a service from reaching for PGX to compose two
+// repository calls atomically. fn receives a pgx.Tx, which satisfies Querier — so
+// a repository method written against Querier works both inside and outside a
+// transaction without knowing which it is in.
+//
+// The connection is taken through Acquire, so opening a transaction is subject to
+// the same acquire budget as any other database work rather than waiting out the
+// caller's whole request budget.
 func (p *Pool) InTx(ctx context.Context, opts pgx.TxOptions, fn func(pgx.Tx) error) error {
-	if p == nil || p.pool == nil {
-		return fmt.Errorf("%w: postgres pool is nil", ErrConfig)
-	}
 	if fn == nil {
 		return fmt.Errorf("%w: transaction function is required", ErrConfig)
 	}
 
-	if err := pgx.BeginTxFunc(ctx, p.pool, opts, fn); err != nil {
+	conn, err := p.Acquire(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Release()
+
+	if err := pgx.BeginTxFunc(ctx, conn, opts, fn); err != nil {
 		return fmt.Errorf("%w: %w", ErrTransaction, err)
 	}
 	return nil
@@ -190,11 +278,36 @@ func (p *Pool) Name() string {
 	return poolName
 }
 
+// Check reports whether the database is reachable, and deliberately does not
+// report whether the pool is busy.
+//
+// A saturated pool is evidence that the database is answering — every connection
+// is in use serving it. Treating that as a readiness failure is how a slow
+// dependency becomes a fleet-wide outage: the refresher's own ping queues behind
+// the traffic, readiness flips, the orchestrator evicts the instance, and its
+// traffic moves to instances that are already saturated. This package's readiness
+// is served from cache for exactly that reason, and the cache is worth nothing if
+// what fills it is itself a pool waiter.
+//
+// The masking window is bounded and worth it. A pool that is saturated because
+// the database died drains within one statement timeout: in-flight queries fail,
+// their connections are destroyed, an acquire then succeeds, and the ping reports
+// the truth.
 func (p *Pool) Check(ctx context.Context) error {
 	if p == nil || p.pool == nil {
 		return fmt.Errorf("%w: postgres pool is nil", ErrHealthcheck)
 	}
-	if err := p.pool.Ping(ctx); err != nil {
+
+	conn, err := p.Acquire(ctx)
+	if err != nil {
+		if errors.Is(err, ErrSaturated) {
+			return nil
+		}
+		return fmt.Errorf("%w: %w", ErrHealthcheck, err)
+	}
+	defer conn.Release()
+
+	if err := conn.Ping(ctx); err != nil {
 		return fmt.Errorf("%w: ping postgres: %w", ErrHealthcheck, err)
 	}
 	return nil

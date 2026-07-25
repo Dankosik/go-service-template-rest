@@ -36,7 +36,6 @@ func dependencyCloseContext(base context.Context) context.Context {
 //nolint:unparam // Profile-shared signature; the PostgreSQL profile returns errors here.
 func initRuntimeDependencies(
 	_ context.Context,
-	_ context.Context,
 	_ startupBootstrap,
 ) (runtimeDependencies, error) {
 	return runtimeDependencies{health: health.New()}, nil

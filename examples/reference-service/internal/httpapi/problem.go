@@ -25,6 +25,8 @@ func problemType(status int32) string {
 		return "https://www.rfc-editor.org/rfc/rfc9110#section-15.5.1"
 	case 401:
 		return "https://www.rfc-editor.org/rfc/rfc9110#section-15.5.2"
+	case 403:
+		return "https://www.rfc-editor.org/rfc/rfc9110#section-15.5.4"
 	case 404:
 		return "https://www.rfc-editor.org/rfc/rfc9110#section-15.5.5"
 	case 409:

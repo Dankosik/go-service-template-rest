@@ -59,14 +59,24 @@ func defaultValues() map[string]any {
 		"postgres.migration_statement_timeout": "2m",
 		"postgres.migration_lock_timeout":      "15s",
 		"postgres.max_open_conns":              25,
-		"postgres.conn_max_lifetime":           "30m",
-		"postgres.statement_timeout":           "8s",
+		// min_idle_conns keeps a small warm floor so a low-traffic service does
+		// not pay a full connect handshake on the first request after a quiet
+		// period, once per connection the arriving burst needs.
+		"postgres.min_idle_conns": 2,
+		// acquire_timeout is a small fraction of http.request_timeout on purpose:
+		// a caller that has waited this long is queued behind a saturated pool,
+		// and telling it so in a second beats spending the rest of its budget in
+		// a queue and answering 504. What is left of the budget is the query's.
+		"postgres.acquire_timeout":   "1s",
+		"postgres.conn_max_lifetime": "30m",
+		"postgres.statement_timeout": "8s",
 		// profile:database-postgres:end
 
-		"observability.otel.service_name":           "service",
-		"observability.otel.traces_sampler":         otelconfig.DefaultTracesSampler,
-		"observability.otel.traces_sampler_arg":     otelconfig.DefaultTracesSamplerArg,
-		"observability.otel.exporter.otlp_endpoint": "",
-		"observability.otel.exporter.otlp_headers":  "",
+		"observability.otel.service_name":                   "service",
+		"observability.otel.traces_sampler":                 otelconfig.DefaultTracesSampler,
+		"observability.otel.traces_sampler_arg":             otelconfig.DefaultTracesSamplerArg,
+		"observability.otel.exporter.otlp_endpoint":         "",
+		"observability.otel.exporter.otlp_metrics_endpoint": "",
+		"observability.otel.exporter.otlp_headers":          "",
 	}
 }
