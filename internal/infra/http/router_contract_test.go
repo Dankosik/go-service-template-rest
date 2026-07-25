@@ -336,7 +336,7 @@ func TestOpenAPIRuntimeContractMetricsExposeRouteLabels(t *testing.T) {
 	log := slog.New(slog.DiscardHandler)
 	metrics := telemetry.New()
 	telemetrytest.RestoreGlobals(t)
-	shutdown, err := telemetry.SetupMetrics(context.Background(), metrics, telemetry.MetricsConfig{
+	shutdown, _, err := telemetry.SetupMetrics(context.Background(), metrics, telemetry.MetricsConfig{
 		ServiceName:    "router-test",
 		ServiceVersion: "test",
 		DeploymentEnv:  "test",

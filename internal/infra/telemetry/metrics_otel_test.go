@@ -19,7 +19,7 @@ func TestSetupMetricsUsesPrivateRegistryAndConfigResource(t *testing.T) {
 	telemetrytest.RestoreGlobals(t)
 
 	metrics := New()
-	shutdown, err := SetupMetrics(context.Background(), metrics, MetricsConfig{
+	shutdown, _, err := SetupMetrics(context.Background(), metrics, MetricsConfig{
 		ServiceName:    " test-service ",
 		ServiceVersion: " test-version ",
 		DeploymentEnv:  " test-env ",
@@ -97,7 +97,7 @@ func TestRecordTraceExporterStateIsScrapable(t *testing.T) {
 			telemetrytest.RestoreGlobals(t)
 
 			metrics := New()
-			shutdown, err := SetupMetrics(context.Background(), metrics, MetricsConfig{
+			shutdown, _, err := SetupMetrics(context.Background(), metrics, MetricsConfig{
 				ServiceName:    "test-service",
 				ServiceVersion: "test-version",
 				DeploymentEnv:  "test-env",
@@ -162,7 +162,7 @@ func TestSetupMetricsRequiresRegistry(t *testing.T) {
 	t.Parallel()
 
 	for _, metrics := range []*Metrics{nil, {}} {
-		if _, err := SetupMetrics(context.Background(), metrics, MetricsConfig{}); err == nil {
+		if _, _, err := SetupMetrics(context.Background(), metrics, MetricsConfig{}); err == nil {
 			t.Fatal("SetupMetrics() error = nil, want registry error")
 		}
 	}

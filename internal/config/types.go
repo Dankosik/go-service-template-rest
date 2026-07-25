@@ -106,10 +106,19 @@ type OTelConfig struct {
 }
 
 type OTelExporterConfig struct {
-	// OTLPEndpoint is the full OTLP HTTP traces endpoint URL (http or https).
-	// A missing path defaults to /v1/traces.
+	// OTLPEndpoint is the OTLP HTTP endpoint URL (http or https). A value with
+	// no path is a collector root and serves both signals, resolving to
+	// /v1/traces and /v1/metrics. A value that already carries a path names the
+	// traces endpoint only, and metrics then need OTLPMetricsEndpoint.
 	OTLPEndpoint string `koanf:"otlp_endpoint"`
-	OTLPHeaders  string `koanf:"otlp_headers"`
+	// OTLPMetricsEndpoint overrides where metrics are pushed. A missing path
+	// defaults to /v1/metrics. Empty falls back to OTLPEndpoint when that names
+	// a root, then to the standard OpenTelemetry endpoint variables.
+	OTLPMetricsEndpoint string `koanf:"otlp_metrics_endpoint"`
+	// OTLPHeaders is the credential for the collector, and covers both signals
+	// because a collector credential belongs to the collector rather than to one
+	// signal.
+	OTLPHeaders string `koanf:"otlp_headers"`
 }
 
 // profile:database-postgres:start
@@ -122,7 +131,19 @@ type PostgresConfig struct {
 	MigrationStatementTimeout time.Duration `koanf:"migration_statement_timeout"`
 	MigrationLockTimeout      time.Duration `koanf:"migration_lock_timeout"`
 	MaxOpenConns              int           `koanf:"max_open_conns"`
-	ConnMaxLifetime           time.Duration `koanf:"conn_max_lifetime"`
+	// MinIdleConns keeps connections open through quiet periods. At zero, pgx
+	// closes every idle connection after its idle timeout, so a low-traffic
+	// service pays TCP, TLS, and authentication on the first request of each
+	// spike — once per connection the spike needs, all at the same moment.
+	MinIdleConns int `koanf:"min_idle_conns"`
+	// AcquireTimeout bounds waiting for a pooled connection. Nothing else does:
+	// an acquire waits out whatever remains of the request budget, so a slow
+	// database does not shed, it queues — and once every in-flight slot is held
+	// by a connection waiter, requests that touch no database at all are shed
+	// for capacity the database took. Validated against http.request_timeout so
+	// a caller that waits still has budget left to run its query.
+	AcquireTimeout  time.Duration `koanf:"acquire_timeout"`
+	ConnMaxLifetime time.Duration `koanf:"conn_max_lifetime"`
 	// StatementTimeout bounds every runtime statement server-side, and bounds
 	// how long a session may sit idle inside a transaction. The request budget
 	// only cancels client-side: if the cancel request itself is lost, which is

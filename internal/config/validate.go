@@ -58,6 +58,17 @@ func validateCrossSectionBudgets(cfg Config) error {
 				cfg.HTTP.RequestTimeout,
 			)
 		}
+		// Strictly less, not at most: a caller that spends the whole request
+		// budget waiting for a connection has nothing left to run a query with,
+		// which makes the wait indistinguishable from the unbounded one this
+		// budget replaced.
+		if cfg.Postgres.AcquireTimeout >= cfg.HTTP.RequestTimeout {
+			return fmt.Errorf(
+				"%w: postgres.acquire_timeout must be < http.request_timeout (%s) so a caller that waited still has budget to query",
+				ErrValidate,
+				cfg.HTTP.RequestTimeout,
+			)
+		}
 		if cfg.HTTP.MaxInFlight > 0 && cfg.HTTP.MaxInFlight < cfg.Postgres.MaxOpenConns {
 			return fmt.Errorf(
 				"%w: http.max_in_flight must be >= postgres.max_open_conns (%d) so shedding cannot be tighter than the pool it protects",
@@ -182,6 +193,7 @@ func validateObservabilityConfig(cfg *ObservabilityConfig) error {
 	cfg.OTel.ServiceName = strings.TrimSpace(cfg.OTel.ServiceName)
 	cfg.OTel.TracesSampler = strings.TrimSpace(cfg.OTel.TracesSampler)
 	cfg.OTel.Exporter.OTLPEndpoint = strings.TrimSpace(cfg.OTel.Exporter.OTLPEndpoint)
+	cfg.OTel.Exporter.OTLPMetricsEndpoint = strings.TrimSpace(cfg.OTel.Exporter.OTLPMetricsEndpoint)
 	if cfg.OTel.ServiceName == "" {
 		return fmt.Errorf("%w: observability.otel.service_name cannot be empty", ErrValidate)
 	}
@@ -246,8 +258,18 @@ func validatePostgres(cfg PostgresConfig) error {
 	); err != nil {
 		return err
 	}
+	if err := validateDurationRange("postgres.acquire_timeout", cfg.AcquireTimeout, 10*time.Millisecond, 30*time.Second); err != nil {
+		return err
+	}
 	if cfg.MaxOpenConns < 1 || cfg.MaxOpenConns > 500 {
 		return fmt.Errorf("%w: postgres.max_open_conns must be in range [1,500]", ErrValidate)
+	}
+	if cfg.MinIdleConns < 0 || cfg.MinIdleConns > cfg.MaxOpenConns {
+		return fmt.Errorf(
+			"%w: postgres.min_idle_conns must be in range [0,postgres.max_open_conns] (%d)",
+			ErrValidate,
+			cfg.MaxOpenConns,
+		)
 	}
 	if err := validateDurationRange("postgres.conn_max_lifetime", cfg.ConnMaxLifetime, time.Minute, 24*time.Hour); err != nil {
 		return err

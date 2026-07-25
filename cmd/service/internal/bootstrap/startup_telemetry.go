@@ -10,8 +10,6 @@ import (
 
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/trace"
 )
 
 func bootstrapTelemetryStage(
@@ -21,15 +19,17 @@ func bootstrapTelemetryStage(
 	log *slog.Logger,
 ) (func(context.Context), telemetry.TraceExporterEndpoint, error) {
 	metricsCtx, metricsCancel := withStageBudget(startupCtx, startupTelemetryBudget)
-	metricsShutdown, telemetryInitErr := telemetry.SetupMetrics(metricsCtx, metrics, telemetry.MetricsConfig{
+	metricsShutdown, metricEndpoint, telemetryInitErr := telemetry.SetupMetrics(metricsCtx, metrics, telemetry.MetricsConfig{
 		ServiceName:    cfg.Observability.OTel.ServiceName,
 		ServiceVersion: cfg.App.Version,
 		DeploymentEnv:  cfg.App.Env,
+		Exporter:       metricExporterConfig(cfg),
 	})
 	metricsCancel()
 	if telemetryInitErr != nil {
 		return func(context.Context) {}, telemetry.TraceExporterEndpoint{}, fmt.Errorf("setup metrics: %w", telemetryInitErr)
 	}
+	reportMetricExporterState(startupCtx, log, metricEndpoint)
 	cleanup := newTelemetryCleanup(log, metricsShutdown)
 
 	exporterCfg := traceExporterConfig(cfg)
@@ -183,12 +183,44 @@ func traceExporterConfig(cfg config.Config) telemetry.TraceExporterConfig {
 	}
 }
 
-// bootstrapTraceStage transfers bootstrapSpan ownership to bootstrapRuntime.
-// bootstrapRuntime ends it on setup failure; startupSpanController closes it after successful startup.
-//
-//nolint:spancheck // bootstrapSpan intentionally outlives this helper and is returned to its lifecycle owner.
-func bootstrapTraceStage(startupCtx context.Context) (trace.Tracer, context.Context, trace.Span) {
-	tracer := otel.Tracer("service.startup")
-	bootstrapCtx, bootstrapSpan := tracer.Start(startupCtx, "config.bootstrap")
-	return tracer, bootstrapCtx, bootstrapSpan
+func metricExporterConfig(cfg config.Config) telemetry.MetricExporterConfig {
+	return telemetry.MetricExporterConfig{
+		OTLPEndpoint:       cfg.Observability.OTel.Exporter.OTLPMetricsEndpoint,
+		SharedOTLPEndpoint: cfg.Observability.OTel.Exporter.OTLPEndpoint,
+		OTLPHeaders:        cfg.Observability.OTel.Exporter.OTLPHeaders,
+	}
+}
+
+// reportMetricExporterState names the metric-export destination in the startup
+// log, because the Prometheus endpoint always exists and therefore proves
+// nothing: a service reachable only by a collector needs the operator to see
+// whether anything is being pushed, and where.
+func reportMetricExporterState(ctx context.Context, log *slog.Logger, endpoint telemetry.ExporterEndpoint) {
+	if !endpoint.Configured() {
+		log.Info(
+			"metrics_exporter_scrape_only",
+			startupLogArgs(
+				ctx,
+				startupLogComponentStartupProbes,
+				startupOperationTelemetryInit,
+				"success",
+				"dependency", startupDependencyTelemetry,
+				"metrics.export", "scrape_only",
+			)...,
+		)
+		return
+	}
+
+	log.Info(
+		"metrics_exporter_configured",
+		startupLogArgs(
+			ctx,
+			startupLogComponentStartupProbes,
+			startupOperationTelemetryInit,
+			"success",
+			"dependency", startupDependencyTelemetry,
+			"metrics.export", "otlp",
+			"metrics.endpoint_source", endpoint.Source,
+		)...,
+	)
 }

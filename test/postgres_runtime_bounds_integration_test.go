@@ -163,8 +163,136 @@ func mustOpenBoundedPool(t *testing.T, ctx context.Context, statementTimeout tim
 		ConnectTimeout:     3 * time.Second,
 		HealthcheckTimeout: 3 * time.Second,
 		MaxOpenConns:       4,
+		AcquireTimeout:     time.Second,
 		ConnMaxLifetime:    time.Hour,
 		StatementTimeout:   statementTimeout,
+	})
+	if err != nil {
+		t.Fatalf("create postgres pool: %v", err)
+	}
+	t.Cleanup(pool.Close)
+	return pool
+}
+
+// TestPostgresAcquireShedsInsteadOfQueueing is the behavior the config rule is
+// written for and the one a unit test cannot show.
+//
+// Without the budget, a caller waiting on a saturated pool waits out whatever
+// remains of its request budget. Every waiter holds an in-flight slot for that
+// whole time, so a slow database fills the shedding limiter with connection
+// waiters and the service starts rejecting requests that never touch it. This
+// pins the two properties that prevent it: the wait ends at the acquire budget
+// rather than at the caller's deadline, and it ends with a distinct retryable
+// identity rather than the timeout an exhausted request budget produces.
+func TestPostgresAcquireShedsInsteadOfQueueing(t *testing.T) {
+	const acquireTimeout = 250 * time.Millisecond
+
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
+	defer cancel()
+
+	pool := mustOpenSaturablePool(t, ctx, acquireTimeout)
+
+	held, err := pool.Acquire(ctx)
+	if err != nil {
+		t.Fatalf("Acquire() error = %v, want the pool's only connection", err)
+	}
+	defer held.Release()
+
+	// A budget far larger than the acquire budget, so what fires can only be the
+	// acquire budget itself.
+	callerCtx, callerCancel := context.WithTimeout(ctx, 30*time.Second)
+	defer callerCancel()
+
+	start := time.Now()
+	conn, err := pool.Acquire(callerCtx)
+	waited := time.Since(start)
+	if err == nil {
+		conn.Release()
+		t.Fatal("Acquire() on a saturated pool succeeded, want ErrSaturated")
+	}
+
+	if !errors.Is(err, postgres.ErrSaturated) {
+		t.Fatalf("Acquire() error = %v, want postgres.ErrSaturated", err)
+	}
+	if callerCtx.Err() != nil {
+		t.Fatalf("caller budget expired (%v); the acquire budget must be what fired", callerCtx.Err())
+	}
+	if waited > 5*acquireTimeout {
+		t.Fatalf("Acquire() waited %s, want the acquire budget of %s", waited, acquireTimeout)
+	}
+}
+
+// TestPostgresAcquireReportsCallerCancellationAsSuchKeepsSaturationHonest keeps
+// ErrSaturated meaning what it says. A caller whose own budget was already spent
+// is reporting a slow request or a gone client, and filing that under capacity
+// would make the saturation signal useless for deciding to shed.
+func TestPostgresAcquireReportsCallerCancellationAsSuch(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
+	defer cancel()
+
+	pool := mustOpenSaturablePool(t, ctx, 5*time.Second)
+
+	held, err := pool.Acquire(ctx)
+	if err != nil {
+		t.Fatalf("Acquire() error = %v", err)
+	}
+	defer held.Release()
+
+	callerCtx, callerCancel := context.WithTimeout(ctx, 100*time.Millisecond)
+	defer callerCancel()
+
+	conn, err := pool.Acquire(callerCtx)
+	if err == nil {
+		conn.Release()
+		t.Fatal("Acquire() succeeded on a saturated pool with a spent caller budget")
+	}
+	if errors.Is(err, postgres.ErrSaturated) {
+		t.Fatalf("Acquire() error = %v, want the caller's own cancellation rather than saturation", err)
+	}
+}
+
+// TestPostgresCheckStaysReadyWhileSaturated is the fleet-wide-eviction guard.
+//
+// Readiness is served from cache precisely so a probe never consumes the capacity
+// it reports on, and that is worth nothing if the refresher filling the cache is
+// itself a connection waiter: a busy pool would flip readiness, the orchestrator
+// would evict the instance, and its traffic would move to instances that are
+// already busy. A saturated pool is evidence the database is answering.
+func TestPostgresCheckStaysReadyWhileSaturated(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
+	defer cancel()
+
+	pool := mustOpenSaturablePool(t, ctx, 250*time.Millisecond)
+
+	held, err := pool.Acquire(ctx)
+	if err != nil {
+		t.Fatalf("Acquire() error = %v", err)
+	}
+
+	if err := pool.Check(ctx); err != nil {
+		t.Fatalf("Check() on a saturated pool = %v, want ready: every connection being in use is evidence the database answers", err)
+	}
+
+	// And it still reports a real failure once the pool is not the reason.
+	held.Release()
+	if err := pool.Check(ctx); err != nil {
+		t.Fatalf("Check() on a free pool = %v, want nil", err)
+	}
+}
+
+// mustOpenSaturablePool opens a single-connection pool so one held connection is
+// full saturation.
+func mustOpenSaturablePool(t *testing.T, ctx context.Context, acquireTimeout time.Duration) *postgres.Pool {
+	t.Helper()
+
+	pool, err := postgres.New(ctx, postgres.Options{
+		DSN:                integrationPostgresDSN(t),
+		ConnectTimeout:     3 * time.Second,
+		HealthcheckTimeout: 3 * time.Second,
+		MaxOpenConns:       1,
+		AcquireTimeout:     acquireTimeout,
+		ConnMaxLifetime:    time.Hour,
+		StatementTimeout:   8 * time.Second,
 	})
 	if err != nil {
 		t.Fatalf("create postgres pool: %v", err)

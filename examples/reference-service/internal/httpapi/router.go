@@ -2,11 +2,9 @@ package httpapi
 
 import (
 	"context"
-	"crypto/subtle"
 	"errors"
 	"fmt"
 	"net/http"
-	"strings"
 
 	"github.com/example/go-service-template-rest/examples/reference-service/internal/article"
 	"github.com/example/go-service-template-rest/examples/reference-service/internal/openapi"
@@ -21,12 +19,14 @@ type RejectFunc func(http.ResponseWriter, *http.Request, error)
 
 // Options carries what the composition root owns.
 type Options struct {
-	// WriteToken is the credential accepted for protected operations. It is a
-	// deliberately minimal stand-in so the example can demonstrate how a
-	// spec-declared security scheme becomes a runtime check; it is NOT an
-	// authentication design. A real service owns identity, key rotation,
-	// authorization, and audit — see docs/first-production-feature.md.
-	WriteToken string
+	// Authenticate validates the security requirement this contract declares and
+	// publishes the caller it proved, so handlers can authorize without reading
+	// the credential a second time. The composition root builds it with
+	// httpx.Authenticated; no credential material reaches this package.
+	//
+	// Nil rejects every protected operation with 401, which is the correct
+	// default for a contract that declares a scheme nothing implements yet.
+	Authenticate openapi3filter.AuthenticationFunc
 	// RejectRequest maps a validator failure onto a response: an oversized body
 	// to 413, a failed security requirement to 401 with a WWW-Authenticate
 	// challenge, everything else to a sanitized 400.
@@ -50,9 +50,6 @@ func NewAPIHandler(articles *article.Service, opts Options) (http.Handler, error
 	if articles == nil {
 		return nil, errors.New("reference api: article service is required")
 	}
-	if strings.TrimSpace(opts.WriteToken) == "" {
-		return nil, errors.New("reference api: write token is required")
-	}
 	if opts.RejectRequest == nil || opts.RejectResponse == nil {
 		return nil, errors.New("reference api: request and response rejection mappers are required")
 	}
@@ -66,9 +63,7 @@ func NewAPIHandler(articles *article.Service, opts Options) (http.Handler, error
 		// The spec's securitySchemes drive this call, so an operation marked
 		// protected cannot reach a handler without passing the check.
 		Options: openapi3filter.Options{
-			AuthenticationFunc: func(_ context.Context, input *openapi3filter.AuthenticationInput) error {
-				return authenticateBearer(input, opts.WriteToken)
-			},
+			AuthenticationFunc: opts.Authenticate,
 		},
 		ErrorHandlerWithOpts: func(
 			_ context.Context,
@@ -90,27 +85,4 @@ func NewAPIHandler(articles *article.Service, opts Options) (http.Handler, error
 		Middlewares:      []openapi.MiddlewareFunc{validator},
 		ErrorHandlerFunc: opts.RejectRequest,
 	}), nil
-}
-
-// authenticateBearer accepts exactly the configured demonstration credential.
-// The comparison is constant time so a wrong token cannot be recovered by
-// timing, which is the one property worth copying from this function.
-func authenticateBearer(input *openapi3filter.AuthenticationInput, expected string) error {
-	if input == nil || input.SecurityScheme == nil {
-		return errors.New("missing security scheme")
-	}
-	if !strings.EqualFold(input.SecurityScheme.Type, "http") ||
-		!strings.EqualFold(input.SecurityScheme.Scheme, "bearer") {
-		return fmt.Errorf("unsupported security scheme %q", input.SecuritySchemeName)
-	}
-
-	header := input.RequestValidationInput.Request.Header.Get("Authorization")
-	presented, ok := strings.CutPrefix(header, "Bearer ")
-	if !ok {
-		return errors.New("bearer credential is missing")
-	}
-	if subtle.ConstantTimeCompare([]byte(strings.TrimSpace(presented)), []byte(expected)) != 1 {
-		return errors.New("bearer credential is invalid")
-	}
-	return nil
 }

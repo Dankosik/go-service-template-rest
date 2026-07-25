@@ -12,8 +12,6 @@ import (
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/config"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/trace"
 )
 
 func TestPostgresDependencyInitFailurePreservesWrappedCause(t *testing.T) {
@@ -151,10 +149,8 @@ func TestInitPostgresDependencyRejectsDisabledProfile(t *testing.T) {
 	t.Parallel()
 
 	runtime := postgresStartupRuntime{
-		tracer:        otel.Tracer("test"),
-		bootstrapSpan: trace.SpanFromContext(context.Background()),
-		cfg:           config.Config{},
-		log:           slog.New(slog.DiscardHandler),
+		cfg: config.Config{},
+		log: slog.New(slog.DiscardHandler),
 	}
 
 	pg, err := initPostgresDependency(context.Background(), context.Background(), runtime)
@@ -178,9 +174,7 @@ func TestInitRuntimeDependenciesRejectsUnavailablePostgres(t *testing.T) {
 	startupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	dependencies, err := initRuntimeDependencies(context.Background(), startupCtx, startupBootstrap{
-		tracer:        otel.Tracer("test"),
-		bootstrapSpan: trace.SpanFromContext(context.Background()),
+	dependencies, err := initRuntimeDependencies(startupCtx, startupBootstrap{
 		cfg: config.Config{
 			Postgres: config.PostgresConfig{
 				Enabled:            true,
@@ -188,6 +182,7 @@ func TestInitRuntimeDependenciesRejectsUnavailablePostgres(t *testing.T) {
 				ConnectTimeout:     10 * time.Millisecond,
 				HealthcheckTimeout: 10 * time.Millisecond,
 				MaxOpenConns:       1,
+				AcquireTimeout:     time.Second,
 				ConnMaxLifetime:    time.Minute,
 				StatementTimeout:   time.Second,
 			},
@@ -214,14 +209,13 @@ func TestInitPostgresDependencyRejectsCancelledDependencyContext(t *testing.T) {
 	cancel()
 
 	runtime := postgresStartupRuntime{
-		tracer:        otel.Tracer("test"),
-		bootstrapSpan: trace.SpanFromContext(context.Background()),
 		cfg: config.Config{Postgres: config.PostgresConfig{
 			Enabled:            true,
 			DSN:                "postgres://user:pass@localhost:5432/app?sslmode=disable",
 			ConnectTimeout:     time.Second,
 			HealthcheckTimeout: time.Second,
 			MaxOpenConns:       1,
+			AcquireTimeout:     time.Second,
 			ConnMaxLifetime:    time.Minute,
 			StatementTimeout:   time.Second,
 		}},

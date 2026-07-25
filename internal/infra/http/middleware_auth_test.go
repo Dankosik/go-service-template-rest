@@ -186,14 +186,28 @@ func securedHandler(tb testing.TB, authenticate openapi3filter.AuthenticationFun
 	return securedHandlerWithLog(tb, authenticate, challenge, slog.New(slog.DiscardHandler))
 }
 
-// securedHandlerWithLog assembles the validator against securedSpec exactly the
-// way openAPIRequestValidator does, so the mapping under test is the one the
-// router installs.
 func securedHandlerWithLog(
 	tb testing.TB,
 	authenticate openapi3filter.AuthenticationFunc,
 	challenge string,
 	log *slog.Logger,
+) http.Handler {
+	tb.Helper()
+	return securedHandlerWithTerminal(tb, authenticate, challenge, log, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+}
+
+// securedHandlerWithTerminal assembles the validator against securedSpec exactly
+// the way openAPIRequestValidator does, so the mapping under test is the one the
+// router installs. The terminal handler is a parameter because the identity seam
+// can only be proved by a handler that inspects the request it was given.
+func securedHandlerWithTerminal(
+	tb testing.TB,
+	authenticate openapi3filter.AuthenticationFunc,
+	challenge string,
+	log *slog.Logger,
+	terminal http.Handler,
 ) http.Handler {
 	tb.Helper()
 
@@ -224,7 +238,5 @@ func securedHandlerWithLog(
 		},
 	})
 
-	return RequestCorrelation(validator(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	})))
+	return RequestCorrelation(validator(terminal))
 }

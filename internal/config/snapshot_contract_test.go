@@ -221,17 +221,20 @@ func sentinelConfigSourceValues() map[string]any {
 		"postgres.migration_statement_timeout": "3m",
 		"postgres.migration_lock_timeout":      "19s",
 		"postgres.max_open_conns":              26,
+		"postgres.min_idle_conns":              3,
+		"postgres.acquire_timeout":             "1500ms",
 		"postgres.conn_max_lifetime":           "45m",
 		"postgres.statement_timeout":           "7s",
 		// profile:database-postgres:end
 
-		"observability.metrics.addr":                "127.0.0.1:19090",
-		"observability.pprof.enabled":               true,
-		"observability.otel.service_name":           "snapshot-service",
-		"observability.otel.traces_sampler":         "always_on",
-		"observability.otel.traces_sampler_arg":     0.25,
-		"observability.otel.exporter.otlp_endpoint": "https://otel.example.com:4318",
-		"observability.otel.exporter.otlp_headers":  "authorization=Bearer snapshot",
+		"observability.metrics.addr":                        "127.0.0.1:19090",
+		"observability.pprof.enabled":                       true,
+		"observability.otel.service_name":                   "snapshot-service",
+		"observability.otel.traces_sampler":                 "always_on",
+		"observability.otel.traces_sampler_arg":             0.25,
+		"observability.otel.exporter.otlp_metrics_endpoint": "https://sentinel-metrics.example/v1/metrics",
+		"observability.otel.exporter.otlp_endpoint":         "https://otel.example.com:4318",
+		"observability.otel.exporter.otlp_headers":          "authorization=Bearer snapshot",
 	}
 }
 
@@ -270,17 +273,20 @@ func expectedSentinelSnapshotValues() map[string]any {
 		"postgres.migration_statement_timeout": 3 * time.Minute,
 		"postgres.migration_lock_timeout":      19 * time.Second,
 		"postgres.max_open_conns":              26,
+		"postgres.min_idle_conns":              3,
+		"postgres.acquire_timeout":             1500 * time.Millisecond,
 		"postgres.conn_max_lifetime":           45 * time.Minute,
 		"postgres.statement_timeout":           7 * time.Second,
 		// profile:database-postgres:end
 
-		"observability.metrics.addr":                "127.0.0.1:19090",
-		"observability.pprof.enabled":               true,
-		"observability.otel.service_name":           "snapshot-service",
-		"observability.otel.traces_sampler":         "always_on",
-		"observability.otel.traces_sampler_arg":     0.25,
-		"observability.otel.exporter.otlp_endpoint": "https://otel.example.com:4318",
-		"observability.otel.exporter.otlp_headers":  "authorization=Bearer snapshot",
+		"observability.metrics.addr":                        "127.0.0.1:19090",
+		"observability.pprof.enabled":                       true,
+		"observability.otel.service_name":                   "snapshot-service",
+		"observability.otel.traces_sampler":                 "always_on",
+		"observability.otel.traces_sampler_arg":             0.25,
+		"observability.otel.exporter.otlp_metrics_endpoint": "https://sentinel-metrics.example/v1/metrics",
+		"observability.otel.exporter.otlp_endpoint":         "https://otel.example.com:4318",
+		"observability.otel.exporter.otlp_headers":          "authorization=Bearer snapshot",
 	}
 }
 

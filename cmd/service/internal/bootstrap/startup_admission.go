@@ -9,14 +9,11 @@ import (
 var errStartupAdmissionPending = errors.New("startup admission is not ready")
 
 type startupAdmissionController struct {
-	ready       atomic.Bool
-	startupSpan *startupSpanController
+	ready atomic.Bool
 }
 
-func newStartupAdmissionController(startupSpan *startupSpanController) *startupAdmissionController {
-	return &startupAdmissionController{
-		startupSpan: startupSpan,
-	}
+func newStartupAdmissionController() *startupAdmissionController {
+	return &startupAdmissionController{}
 }
 
 func (c *startupAdmissionController) MarkReady() {
@@ -24,9 +21,7 @@ func (c *startupAdmissionController) MarkReady() {
 		return
 	}
 
-	if c.ready.CompareAndSwap(false, true) && c.startupSpan != nil {
-		c.startupSpan.MarkReady()
-	}
+	c.ready.Store(true)
 }
 
 func (c *startupAdmissionController) Ready() bool {

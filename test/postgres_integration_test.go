@@ -41,6 +41,7 @@ func TestPostgresPool(t *testing.T) {
 		ConnectTimeout:     3 * time.Second,
 		HealthcheckTimeout: 3 * time.Second,
 		MaxOpenConns:       10,
+		AcquireTimeout:     time.Second,
 		ConnMaxLifetime:    time.Hour,
 		StatementTimeout:   time.Second,
 	})

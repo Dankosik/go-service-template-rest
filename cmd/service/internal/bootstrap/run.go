@@ -30,9 +30,13 @@ import (
 //
 // Shutdown budgets, in the order they are spent after the HTTP drain:
 //
-//	backgroundShutdownTimeout  5s   join supervised background tasks
+//	backgroundShutdownTimeout  5s   cancel and join supervised background tasks
 //	dependencyCloseTimeout     5s   release pooled dependencies
 //	telemetryShutdownTimeout   5s   span and metric flush, last so it records the above
+//
+// Background work is canceled here rather than on the signal, because the HTTP
+// drain above it is still serving requests that depend on it; see
+// newSupervisedBackground.
 //
 // Dependency-specific budgets live with their dependency stage so a profile that
 // drops the dependency drops them in the same file.
@@ -103,17 +107,16 @@ func Run(args []string) (runErr error) {
 	if err != nil {
 		return err
 	}
-	bootstrapSpan := newStartupSpanController(bootstrap.bootstrapSpan, bootstrap.telemetryCleanup)
-	defer bootstrapSpan.Close(startupCtx)
-
-	bootstrapCtx := startupBootstrapContext(startupCtx, bootstrap.bootstrapSpan)
+	// Telemetry is flushed last, so it can carry a record of everything the
+	// shutdown path below it did.
+	defer bootstrap.telemetryCleanup(startupCtx)
 
 	// The GC limit is published before any dependency allocates, so the first
 	// large allocation is already collected against the container's real ceiling
 	// rather than against math.MaxInt64.
 	applyMemoryLimit(bootstrap.log, bootstrap.cfg.Runtime.MemoryLimitRatio)
 
-	dependencies, err := initRuntimeDependencies(bootstrapCtx, startupCtx, bootstrap)
+	dependencies, err := initRuntimeDependencies(startupCtx, bootstrap)
 	if err != nil {
 		return err
 	}
@@ -123,11 +126,16 @@ func Run(args []string) (runErr error) {
 	defer dependencies.Close(dependencyCloseContext(signalCtx))
 
 	healthSvc := dependencies.health
-	startupAdmission := newStartupAdmissionController(bootstrapSpan)
+	startupAdmission := newStartupAdmissionController()
 
-	// Background work is canceled by the signal context, so a SIGTERM reaches
-	// tasks at the same moment it reaches the HTTP drain.
-	supervisor := background.New(signalCtx, bootstrap.log)
+	supervisor := newSupervisedBackground(signalCtx, bootstrap.log)
+	// The ordered teardown below owns the real stop. This is the safety net for
+	// the early returns between here and there: with cancellation detached from
+	// the signal, a return that skipped Shutdown would leave supervised
+	// goroutines running past Run.
+	defer func() {
+		_ = supervisor.Shutdown(backgroundShutdownContext(signalCtx))
+	}()
 	// Readiness is served from cached state, so something has to keep that state
 	// current. Registering it as an ordinary supervised task means a refresher
 	// that dies takes the same reported path as any other failed background work
@@ -185,13 +193,12 @@ func Run(args []string) (runErr error) {
 		metricsSrv = newDiagnosticsServer(bootstrap.cfg, metrics, errorLog)
 	}
 
-	serveErr := serveHTTPRuntime(signalCtx, bootstrapCtx, serveHTTPRuntimeArgs{
-		bootstrapSpan: bootstrap.bootstrapSpan,
-		cfg:           bootstrap.cfg,
-		log:           bootstrap.log,
-		healthSvc:     healthSvc,
-		srv:           srv,
-		metricsSrv:    metricsSrv,
+	serveErr := serveHTTPRuntime(signalCtx, startupCtx, serveHTTPRuntimeArgs{
+		cfg:        bootstrap.cfg,
+		log:        bootstrap.log,
+		healthSvc:  healthSvc,
+		srv:        srv,
+		metricsSrv: metricsSrv,
 		// Admission refreshes rather than probing separately, so the verdict it
 		// admits on is the same one the probe route will serve. Without that, the
 		// first probe after admission could still answer 503 from an unevaluated
@@ -203,16 +210,43 @@ func Run(args []string) (runErr error) {
 		shutdownDelay: bootstrap.cfg.HTTP.ReadinessPropagationDelay,
 	})
 
-	// Ordered teardown. HTTP is already drained; background work is joined before
-	// the dependencies it uses are released, and both happen before the deferred
-	// telemetry flush so the flush can carry a record of how they went.
-	backgroundCtx, cancelBackground := context.WithTimeout(context.WithoutCancel(signalCtx), backgroundShutdownTimeout)
-	backgroundErr := supervisor.Shutdown(backgroundCtx)
-	cancelBackground()
+	// Ordered teardown. HTTP is already drained, so this is the first moment
+	// nothing can still be depending on background work; it is canceled and
+	// joined here, before the dependencies it uses are released, and both happen
+	// before the deferred telemetry flush so the flush can carry a record of how
+	// they went. Shutdown is idempotent, so the deferred safety net above is a
+	// no-op once this has run.
+	backgroundErr := supervisor.Shutdown(backgroundShutdownContext(signalCtx))
 
 	dependencies.Close(dependencyCloseContext(signalCtx))
 
 	return errors.Join(serveErr, backgroundErr)
+}
+
+// newSupervisedBackground builds the supervisor for runtime background work,
+// deliberately detached from the signal context so that Shutdown is the only
+// thing that stops it.
+//
+// Deriving it from signalCtx would cancel every task the instant SIGTERM
+// arrived, while the HTTP drain keeps serving for up to
+// readiness_propagation_delay plus the remaining shutdown_timeout — 30s with the
+// shipped defaults. Every request admitted in that window would run without the
+// work it depends on: an outbox publisher, a write batcher, a token refresher,
+// or a lease renewer would already be gone. Nothing would report it either, so
+// the only artifact is one INFO line saying the task was canceled, in the middle
+// of a shutdown that otherwise looks orderly.
+func newSupervisedBackground(signalCtx context.Context, log *slog.Logger) *background.Supervisor {
+	return background.New(context.WithoutCancel(signalCtx), log)
+}
+
+// backgroundShutdownContext bounds the cancel-and-join, detached from the signal
+// context that is already canceled by the time it is spent.
+func backgroundShutdownContext(base context.Context) context.Context {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(base), backgroundShutdownTimeout)
+	// Consumed synchronously by Shutdown; releasing the timer at the call site
+	// would defeat the bound. dependencyCloseContext does the same.
+	context.AfterFunc(ctx, cancel)
+	return ctx
 }
 
 func parseLoadOptions(args []string) (config.LoadOptions, error) {

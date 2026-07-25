@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/subtle"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -18,6 +19,8 @@ import (
 	"github.com/example/go-service-template-rest/examples/reference-service/internal/httpapi"
 	httpx "github.com/example/go-service-template-rest/internal/infra/http"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
+	"github.com/example/go-service-template-rest/internal/reqctx"
+	"github.com/getkin/kin-openapi/openapi3filter"
 )
 
 // The bounds this example serves under. The real service reads equivalents from
@@ -42,6 +45,11 @@ const (
 	// operations. It is not an authentication design; see
 	// docs/first-production-feature.md before building a real one.
 	writeTokenEnv = "REFERENCE_WRITE_TOKEN"
+
+	// writeTokenSubject is who the demonstration credential stands for. A real
+	// service resolves this from the credential rather than pinning it, but the
+	// value has to be something a log line can attribute an action to.
+	writeTokenSubject = "reference-writer"
 
 	// authenticateChallenge names an HTTP authentication scheme, which is not the
 	// same vocabulary as the contract's securityScheme key.
@@ -88,8 +96,13 @@ func run(ctx context.Context, log *slog.Logger) error {
 	// Composition happens here, not in the feature package: httpapi maps the
 	// feature onto its contract, and this root supplies the transport policy and
 	// wraps the result in the shared middleware chain.
+	//
+	// The credential lives only in this root. httpx.Authenticated turns the
+	// identity it proves into a reqctx.Principal the handler can authorize
+	// against, which is what keeps the scope check out of the credential-parsing
+	// code and the credential out of the feature package.
 	apiHandler, err := httpapi.NewAPIHandler(articles, httpapi.Options{
-		WriteToken:     writeToken,
+		Authenticate:   httpx.Authenticated(resolveWriter(writeToken)),
 		RejectRequest:  httpx.RejectRequest(log, authenticateChallenge),
 		RejectResponse: httpx.RejectResponse(),
 	})
@@ -119,6 +132,41 @@ func run(ctx context.Context, log *slog.Logger) error {
 
 	log.Info("reference_service_started", "http.addr", listener.Addr().String())
 	return serve(ctx, log, listener, handler)
+}
+
+// resolveWriter accepts exactly the configured demonstration credential and
+// reports the caller it stands for.
+//
+// Two properties are worth copying and the rest is not. The comparison is
+// constant time, so a wrong token cannot be recovered by timing. And what it
+// returns is an identity with a scope rather than a bare nil: the operation's
+// permission check then lives with the operation, in httpapi, instead of being
+// implied by whichever credential happened to be accepted here. A real service
+// replaces the token with its own identity design and keeps that shape.
+func resolveWriter(expected string) httpx.PrincipalResolver {
+	return func(_ context.Context, input *openapi3filter.AuthenticationInput) (reqctx.Principal, error) {
+		if input == nil || input.SecurityScheme == nil {
+			return reqctx.Principal{}, errors.New("missing security scheme")
+		}
+		if !strings.EqualFold(input.SecurityScheme.Type, "http") ||
+			!strings.EqualFold(input.SecurityScheme.Scheme, "bearer") {
+			return reqctx.Principal{}, fmt.Errorf("unsupported security scheme %q", input.SecuritySchemeName)
+		}
+
+		header := input.RequestValidationInput.Request.Header.Get("Authorization")
+		presented, ok := strings.CutPrefix(header, "Bearer ")
+		if !ok {
+			return reqctx.Principal{}, errors.New("bearer credential is missing")
+		}
+		if subtle.ConstantTimeCompare([]byte(strings.TrimSpace(presented)), []byte(expected)) != 1 {
+			return reqctx.Principal{}, errors.New("bearer credential is invalid")
+		}
+
+		return reqctx.Principal{
+			Subject: writeTokenSubject,
+			Scopes:  []string{httpapi.ArticleWriteScope},
+		}, nil
+	}
 }
 
 func serve(ctx context.Context, log *slog.Logger, listener net.Listener, handler http.Handler) error {

@@ -12,6 +12,7 @@ import (
 	"github.com/example/go-service-template-rest/examples/reference-service/internal/article"
 	"github.com/example/go-service-template-rest/examples/reference-service/internal/article/memory"
 	"github.com/example/go-service-template-rest/examples/reference-service/internal/openapi"
+	"github.com/example/go-service-template-rest/internal/reqctx"
 	"github.com/getkin/kin-openapi/openapi3filter"
 )
 
@@ -136,7 +137,7 @@ func mustNewRouter(tb testing.TB, service *article.Service) http.Handler {
 	tb.Helper()
 
 	handler, err := NewAPIHandler(service, Options{
-		WriteToken:     testWriteToken,
+		Authenticate:   testAuthenticate(ArticleWriteScope),
 		RejectRequest:  testRejectRequest,
 		RejectResponse: testRejectResponse,
 	})
@@ -144,6 +145,24 @@ func mustNewRouter(tb testing.TB, service *article.Service) http.Handler {
 		tb.Fatalf("NewAPIHandler() error = %v", err)
 	}
 	return handler
+}
+
+// testAuthenticate accepts testWriteToken and grants it scopes. The binary uses
+// httpx.Authenticated for this; a feature package must not import that adapter,
+// so the publishing step it performs is called directly here. Both routes end at
+// reqctx.SetPrincipal, which is the point of that function existing.
+func testAuthenticate(scopes ...string) openapi3filter.AuthenticationFunc {
+	return func(_ context.Context, input *openapi3filter.AuthenticationInput) error {
+		presented, ok := strings.CutPrefix(input.RequestValidationInput.Request.Header.Get("Authorization"), "Bearer ")
+		if !ok || strings.TrimSpace(presented) != testWriteToken {
+			return errors.New("bearer credential is invalid")
+		}
+		reqctx.SetPrincipal(input.RequestValidationInput.Request, reqctx.Principal{
+			Subject: "test-writer",
+			Scopes:  scopes,
+		})
+		return nil
+	}
 }
 
 func testRejectRequest(w http.ResponseWriter, _ *http.Request, err error) {
@@ -302,26 +321,83 @@ func TestRouterRejectsMalformedCreateBodyBeforeUseCase(t *testing.T) {
 	}
 }
 
-func TestNewRouterRejectsEmptyWriteToken(t *testing.T) {
+func TestNewAPIHandlerRejectsMissingCollaborators(t *testing.T) {
 	t.Parallel()
 
-	repository, err := memory.New(nil)
-	if err != nil {
-		t.Fatalf("memory.New() error = %v", err)
+	service := mustArticleService(t)
+
+	if _, err := NewAPIHandler(nil, Options{
+		Authenticate:   testAuthenticate(ArticleWriteScope),
+		RejectRequest:  testRejectRequest,
+		RejectResponse: testRejectResponse,
+	}); err == nil {
+		t.Fatal("NewAPIHandler() error = nil, want rejection of a missing article service")
 	}
-	service, err := article.NewService(repository)
-	if err != nil {
-		t.Fatalf("article.NewService() error = %v", err)
+	if _, err := NewAPIHandler(service, Options{Authenticate: testAuthenticate(ArticleWriteScope)}); err == nil {
+		t.Fatal("NewAPIHandler() error = nil, want rejection of missing reject mappers")
 	}
-	_, err = NewAPIHandler(service, Options{
-		WriteToken:     "   ",
+}
+
+// TestCredentialWithoutWriteScopeIsForbidden is the half of the identity seam a
+// 401 cannot express. The credential is valid — the validator admitted it — and
+// the operation is still refused, which is only decidable because the resolved
+// principal reached the handler.
+func TestCredentialWithoutWriteScopeIsForbidden(t *testing.T) {
+	t.Parallel()
+
+	handler, err := NewAPIHandler(mustArticleService(t), Options{
+		Authenticate:   testAuthenticate("articles:read"),
 		RejectRequest:  testRejectRequest,
 		RejectResponse: testRejectResponse,
 	})
-	if err == nil {
-		t.Fatal("NewAPIHandler() error = nil, want rejection of an empty write token")
+	if err != nil {
+		t.Fatalf("NewAPIHandler() error = %v", err)
 	}
-	if _, err := NewAPIHandler(service, Options{WriteToken: testWriteToken}); err == nil {
-		t.Fatal("NewAPIHandler() error = nil, want rejection of missing reject mappers")
+
+	response := postArticle(t, handler, testWriteToken,
+		`{"slug":"scoped","title":"Scoped","summary":"Requires the write scope."}`)
+
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusForbidden)
 	}
+}
+
+// TestUnauthenticatedRequestIsForbiddenNotChallenged pins the wiring-defect path.
+// An operation that declares `security:` fails closed before a handler runs, so a
+// handler that sees no principal is looking at a broken seam, not an anonymous
+// caller — and answering 401 would tell the client to retry with credentials it
+// already presented.
+func TestUnauthenticatedRequestIsForbiddenNotChallenged(t *testing.T) {
+	t.Parallel()
+
+	admitEveryone := func(context.Context, *openapi3filter.AuthenticationInput) error { return nil }
+	handler, err := NewAPIHandler(mustArticleService(t), Options{
+		Authenticate:   admitEveryone,
+		RejectRequest:  testRejectRequest,
+		RejectResponse: testRejectResponse,
+	})
+	if err != nil {
+		t.Fatalf("NewAPIHandler() error = %v", err)
+	}
+
+	response := postArticle(t, handler, testWriteToken,
+		`{"slug":"unattributed","title":"Unattributed","summary":"No principal was published."}`)
+
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusForbidden)
+	}
+}
+
+func mustArticleService(tb testing.TB) *article.Service {
+	tb.Helper()
+
+	repository, err := memory.New(nil)
+	if err != nil {
+		tb.Fatalf("memory.New() error = %v", err)
+	}
+	service, err := article.NewService(repository)
+	if err != nil {
+		tb.Fatalf("article.NewService() error = %v", err)
+	}
+	return service
 }

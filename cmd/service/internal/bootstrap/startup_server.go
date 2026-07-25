@@ -12,7 +12,6 @@ import (
 
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/health"
-	"go.opentelemetry.io/otel/trace"
 )
 
 // runtimeServer is the http.Server surface this package drives. Close is part of
@@ -25,7 +24,6 @@ type runtimeServer interface {
 }
 
 type serveHTTPRuntimeArgs struct {
-	bootstrapSpan  trace.Span
 	cfg            config.Config
 	log            *slog.Logger
 	healthSvc      *health.Service
@@ -45,7 +43,6 @@ func serveHTTPRuntime(signalCtx context.Context, bootstrapCtx context.Context, a
 	if err := startupRuntimeContextErr(signalCtx, bootstrapCtx); err != nil {
 		return rejectHTTPStartup(
 			bootstrapCtx,
-			args.bootstrapSpan,
 			args.log,
 			"startup.http_listen",
 			fmt.Errorf("startup canceled before http listen: %w", err),
@@ -57,7 +54,6 @@ func serveHTTPRuntime(signalCtx context.Context, bootstrapCtx context.Context, a
 	if err != nil {
 		return rejectHTTPStartup(
 			bootstrapCtx,
-			args.bootstrapSpan,
 			args.log,
 			"startup.http_listen",
 			fmt.Errorf("listen http server: %w", err),
@@ -71,7 +67,6 @@ func serveHTTPRuntime(signalCtx context.Context, bootstrapCtx context.Context, a
 			_ = listener.Close()
 			return rejectHTTPStartup(
 				bootstrapCtx,
-				args.bootstrapSpan,
 				args.log,
 				"startup.metrics_listen",
 				fmt.Errorf("listen metrics server: %w", err),
@@ -85,7 +80,6 @@ func serveHTTPRuntime(signalCtx context.Context, bootstrapCtx context.Context, a
 		}
 		return rejectHTTPStartup(
 			bootstrapCtx,
-			args.bootstrapSpan,
 			args.log,
 			"startup.http_serve",
 			fmt.Errorf("startup canceled before http serve: %w", err),
@@ -175,7 +169,6 @@ func waitForStartupAdmission(
 		if err != nil {
 			return false, false, rejectHTTPStartup(
 				bootstrapCtx,
-				args.bootstrapSpan,
 				args.log,
 				"startup.readiness",
 				fmt.Errorf("startup readiness check failed: %w", err),
@@ -183,39 +176,45 @@ func waitForStartupAdmission(
 		}
 		select {
 		case result := <-runErrCh:
-			return false, false, serverStoppedBeforeReadiness(args, result)
+			return false, false, serverStoppedBeforeReadiness(bootstrapCtx, args, result)
 		default:
 			args.admission.MarkReady()
 			return true, false, nil
 		}
 	case <-signalCtx.Done():
 		args.log.Info("shutdown signal received")
-		recordStartupRejection(args.bootstrapSpan, "startup_error", "startup.readiness", signalCtx.Err())
 		return false, true, nil
 	case <-bootstrapCtx.Done():
 		select {
 		case <-signalCtx.Done():
 			args.log.Info("shutdown signal received")
-			recordStartupRejection(args.bootstrapSpan, "startup_error", "startup.readiness", signalCtx.Err())
 			return false, true, nil
 		default:
 		}
 		err := fmt.Errorf("startup budget exhausted before readiness: %w", bootstrapCtx.Err())
 		args.log.Error("startup budget exhausted before readiness", "err", err)
-		recordStartupRejection(args.bootstrapSpan, "startup_error", "startup.readiness", err)
 		return false, false, err
 	case result := <-runErrCh:
-		return false, false, serverStoppedBeforeReadiness(args, result)
+		return false, false, serverStoppedBeforeReadiness(bootstrapCtx, args, result)
 	}
 }
 
-func serverStoppedBeforeReadiness(args serveHTTPRuntimeArgs, result serverResult) error {
+func serverStoppedBeforeReadiness(ctx context.Context, args serveHTTPRuntimeArgs, result serverResult) error {
 	err := fmt.Errorf("%s server stopped before readiness", result.name)
 	if result.err != nil {
-		args.log.Error(result.name+" server stopped with error", "err", result.err)
 		err = fmt.Errorf("%s server stopped before readiness: %w", result.name, result.err)
 	}
-	recordStartupRejection(args.bootstrapSpan, "startup_error", "startup."+result.name+"_serve", err)
+	args.log.Error(
+		"startup_blocked",
+		startupLogArgs(
+			ctx,
+			startupLogComponentStartupProbes,
+			result.name+"_serve",
+			"error",
+			"error.type", "startup_error",
+			"err", err,
+		)...,
+	)
 	return err
 }
 
@@ -270,12 +269,10 @@ func startupRuntimeContextErr(signalCtx context.Context, bootstrapCtx context.Co
 
 func rejectHTTPStartup(
 	bootstrapCtx context.Context,
-	bootstrapSpan trace.Span,
 	log *slog.Logger,
 	stage string,
 	err error,
 ) error {
-	recordStartupRejection(bootstrapSpan, "startup_error", stage, err)
 	log.Error(
 		"startup_blocked",
 		startupLogArgs(
