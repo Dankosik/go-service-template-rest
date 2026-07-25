@@ -123,11 +123,12 @@ func Idempotent(store IdempotencyStore, outcomeTimeout time.Duration, log *slog.
 			return
 		}
 
-		outcomeCtx, cancelOutcome := idempotencyOutcomeContext(r.Context(), outcomeTimeout)
-		defer cancelOutcome()
-
 		recorder := newIdempotentRecorder(w)
 		completed := false
+		// The release derives its own context from the request rather than taking
+		// one: the point of this budget is that it outlives the request that
+		// earned it, so a spent handler budget cannot stop the compensating write.
+		//nolint:contextcheck // idempotencyOutcomeContext detaches from r.Context() deliberately; see its documentation.
 		defer func() {
 			// A panic unwinding through here, or a handler that committed
 			// nothing, must not leave the key claimed: the work did not finish,
@@ -135,6 +136,8 @@ func Idempotent(store IdempotencyStore, outcomeTimeout time.Duration, log *slog.
 			if completed {
 				return
 			}
+			outcomeCtx, cancelOutcome := idempotencyOutcomeContext(r.Context(), outcomeTimeout)
+			defer cancelOutcome()
 			if releaseErr := store.Release(outcomeCtx, key); releaseErr != nil {
 				log.ErrorContext(outcomeCtx, "idempotency_release_failed", "err", releaseErr)
 			}
@@ -145,6 +148,8 @@ func Idempotent(store IdempotencyStore, outcomeTimeout time.Duration, log *slog.
 		if recorder.status >= http.StatusInternalServerError || recorder.status == 0 {
 			return
 		}
+		outcomeCtx, cancelOutcome := idempotencyOutcomeContext(r.Context(), outcomeTimeout)
+		defer cancelOutcome()
 		if completeErr := store.Complete(outcomeCtx, key, recorder.stored()); completeErr != nil {
 			// The response already reached the client, so this cannot fail the
 			// request. It is logged because it means a retry will re-run work
@@ -159,6 +164,15 @@ func Idempotent(store IdempotencyStore, outcomeTimeout time.Duration, log *slog.
 
 // idempotencyOutcomeContext bounds recording or releasing a reservation after the
 // handler has answered.
+//
+// It must be built at the point of use, once the handler has returned. The
+// deadline is absolute from the moment of the call, so a context built before
+// next.ServeHTTP would spend its whole budget on the handler: with the shipped
+// defaults, every request slower than one second reached Complete with an already
+// expired context, failed instantly, then failed the compensating Release the same
+// way — leaving the key claimed and uncompleted until it expired. A client
+// retrying such a request was answered 409 in_flight for the whole retention
+// window and never learned the outcome of work that had already run.
 //
 // Detached from the request, because the outcome has to be recorded even when the
 // budget that admitted the request has since expired — and bounded, because
@@ -214,7 +228,11 @@ func replayStoredResponse(w http.ResponseWriter, r *http.Request, stored idempot
 		return
 	}
 
+	// Replaced rather than added. stored.Header carries only what the handler
+	// itself produced, so a key present here is one the handler owned, and the
+	// value it chose is the one the replay has to reproduce.
 	for name, values := range stored.Header {
+		w.Header().Del(name)
 		for _, value := range values {
 			w.Header().Add(name, value)
 		}
@@ -274,10 +292,21 @@ type idempotentRecorder struct {
 	status     int
 	body       bytes.Buffer
 	overflowed bool
+	// inherited is the response header as it stood before the handler ran.
+	//
+	// This middleware is the innermost one, so by the time it looks at the
+	// header map, RequestCorrelation has already written X-Request-ID into it
+	// and SecurityHeaders has already written X-Content-Type-Options — into the
+	// same map, because a ResponseWriter has exactly one. Storing those as if
+	// the handler produced them made every replay carry two X-Request-ID values,
+	// the second naming the request that happened to run first, and a duplicated
+	// nosniff. Only keys the handler actually changed are stored; see
+	// storedHeader.
+	inherited http.Header
 }
 
 func newIdempotentRecorder(w http.ResponseWriter) *idempotentRecorder {
-	recorder := &idempotentRecorder{}
+	recorder := &idempotentRecorder{inherited: w.Header().Clone()}
 	recorder.writer = httpsnoop.Wrap(w, httpsnoop.Hooks{
 		WriteHeader: func(next httpsnoop.WriteHeaderFunc) httpsnoop.WriteHeaderFunc {
 			return func(status int) {
@@ -332,10 +361,29 @@ func (r *idempotentRecorder) capture(b []byte) {
 func (r *idempotentRecorder) stored() idempotency.StoredResponse {
 	return idempotency.StoredResponse{
 		Status:     r.status,
-		Header:     r.writer.Header().Clone(),
+		Header:     r.storedHeader(),
 		Body:       slices.Clone(r.body.Bytes()),
 		Replayable: !r.overflowed,
 	}
+}
+
+// storedHeader keeps the response headers this handler owns and drops the ones
+// the middleware outside it had already set.
+//
+// The comparison is by value rather than by key, so a handler that deliberately
+// overrides an inherited header still has that override replayed. A key whose
+// values are untouched belongs to an outer middleware, which will set it again
+// for the request being replayed to — with that request's own identifiers.
+func (r *idempotentRecorder) storedHeader() http.Header {
+	current := r.writer.Header()
+	stored := make(http.Header, len(current))
+	for name, values := range current {
+		if slices.Equal(r.inherited[name], values) {
+			continue
+		}
+		stored[name] = slices.Clone(values)
+	}
+	return stored
 }
 
 // captureWriter adapts the recorder's capture to io.Writer for the ReadFrom tee.

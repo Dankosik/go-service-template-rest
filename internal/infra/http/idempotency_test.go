@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/idempotency"
@@ -40,7 +41,15 @@ func newFakeIdempotencyStore() *fakeIdempotencyStore {
 	}
 }
 
-func (s *fakeIdempotencyStore) Reserve(_ context.Context, key, fingerprint string) (*idempotency.StoredResponse, error) {
+// The three methods honor their context on purpose. A fake that ignores it
+// cannot observe the budget the middleware hands it, which is how an outcome
+// context that had already expired before the handler ran passed every test here
+// while failing every write against a real store.
+func (s *fakeIdempotencyStore) Reserve(ctx context.Context, key, fingerprint string) (*idempotency.StoredResponse, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("reserve idempotency key: %w", err)
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -60,14 +69,22 @@ func (s *fakeIdempotencyStore) Reserve(_ context.Context, key, fingerprint strin
 	return nil, nil //nolint:nilnil // No response and no error is how this contract says the caller owns the key.
 }
 
-func (s *fakeIdempotencyStore) Complete(_ context.Context, key string, response idempotency.StoredResponse) error {
+func (s *fakeIdempotencyStore) Complete(ctx context.Context, key string, response idempotency.StoredResponse) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("complete idempotency key: %w", err)
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.completed[key] = response
 	return nil
 }
 
-func (s *fakeIdempotencyStore) Release(_ context.Context, key string) error {
+func (s *fakeIdempotencyStore) Release(ctx context.Context, key string) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("release idempotency key: %w", err)
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.releases++
@@ -416,6 +433,91 @@ func TestIdempotentBoundsOutcomeRecording(t *testing.T) {
 	observed := <-store.observed
 	if _, hasDeadline := observed.Deadline(); !hasDeadline {
 		t.Fatal("outcome context carries no deadline; a stalled store would hold the handler goroutine forever")
+	}
+}
+
+// TestIdempotentOutcomeBudgetStartsAfterTheHandler pins where the budget begins.
+//
+// A context deadline is absolute from the moment the context is built, so one
+// built before next.ServeHTTP hands the store only what the handler did not
+// spend. With the shipped defaults that was a one second outcome budget against
+// an eight second request budget: every write slower than a second reached
+// Complete already expired, failed, then failed its compensating Release the
+// same way. The key stayed claimed and uncompleted until its retention elapsed,
+// so the client's retry was answered 409 in_flight for a day and never learned
+// the outcome of work that had already run exactly once.
+func TestIdempotentOutcomeBudgetStartsAfterTheHandler(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		const outcomeBudget = time.Second
+
+		store := newFakeIdempotencyStore()
+		handler := Idempotent(store, outcomeBudget, slog.New(slog.DiscardHandler),
+			http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				// Longer than the outcome budget, which is the ordinary case for
+				// any endpoint that writes to a database.
+				time.Sleep(4 * outcomeBudget)
+				w.WriteHeader(http.StatusCreated)
+			}))
+
+		if first := postWithKey(handler, "slow-key", `{"slug":"a"}`); first.Code != http.StatusCreated {
+			t.Fatalf("first status = %d, want %d", first.Code, http.StatusCreated)
+		}
+
+		replay := postWithKey(handler, "slow-key", `{"slug":"a"}`)
+		if replay.Code != http.StatusCreated {
+			t.Fatalf(
+				"replay status = %d, want %d: a budget spent by the handler left the key claimed and uncompleted",
+				replay.Code,
+				http.StatusCreated,
+			)
+		}
+		if replay.Header().Get("Idempotent-Replay") != "true" {
+			t.Fatalf("replay is not labeled: headers = %v", replay.Header())
+		}
+		if store.releaseCount() != 0 {
+			t.Fatalf("release count = %d, want a completed attempt to keep its key", store.releaseCount())
+		}
+	})
+}
+
+// TestIdempotentReplayDoesNotDuplicateInheritedHeaders keeps a replay from
+// answering with the first attempt's correlation identifier.
+//
+// This middleware is innermost, so RequestCorrelation and SecurityHeaders have
+// already written into the one header map a ResponseWriter has by the time the
+// recorder reads it. Storing those as if the handler produced them made every
+// replay carry two X-Request-ID values — the second naming a request that
+// finished long before — and a duplicated nosniff.
+func TestIdempotentReplayDoesNotDuplicateInheritedHeaders(t *testing.T) {
+	t.Parallel()
+
+	inner := idempotentTestHandler(t, newFakeIdempotencyStore(), func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Location", "/api/v1/articles/created")
+		w.WriteHeader(http.StatusCreated)
+	})
+	handler := RequestCorrelation(SecurityHeaders(inner))
+
+	first := postWithKey(handler, "header-key", `{"slug":"a"}`)
+	replay := postWithKey(handler, "header-key", `{"slug":"a"}`)
+
+	if replay.Header().Get("Idempotent-Replay") != "true" {
+		t.Fatalf("replay is not labeled: headers = %v", replay.Header())
+	}
+	for _, name := range []string{requestIDHeader, contentTypeOptionsHeader} {
+		if got := replay.Header().Values(name); len(got) != 1 {
+			t.Fatalf("replayed %s = %v, want exactly one value owned by the current request", name, got)
+		}
+	}
+	if replay.Header().Get(requestIDHeader) == first.Header().Get(requestIDHeader) {
+		t.Fatalf(
+			"replayed %s = %q, want the retrying request's own identifier rather than the first attempt's",
+			requestIDHeader,
+			replay.Header().Get(requestIDHeader),
+		)
+	}
+	// The handler's own headers are still the point of a replay.
+	if got := replay.Header().Get("Location"); got != "/api/v1/articles/created" {
+		t.Fatalf("replayed Location = %q, want the first attempt's header", got)
 	}
 }
 
