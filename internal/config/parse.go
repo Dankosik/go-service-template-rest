@@ -31,29 +31,20 @@ func parseSignedInteger(value any, bitSize int) (int64, error) {
 		return 0, err
 	}
 
+	// The arms below are the types a config source can actually produce, and the
+	// list is deliberately not wider. koanf hands this hook YAML scalars, the
+	// environment provider's strings, and whatever defaultValues put in the
+	// confmap — so int, int64, uint64 for a YAML integer past the int64 range,
+	// float64, and string. The sized and unsigned variants that used to be here
+	// were unreachable through every one of those sources, and an unsupported
+	// type is reported by name rather than silently converted.
 	switch v := value.(type) {
 	case int:
 		return signedIntegerFromInt64(int64(v), lowerBound, upperBound)
-	case int8:
-		return signedIntegerFromInt64(int64(v), lowerBound, upperBound)
-	case int16:
-		return signedIntegerFromInt64(int64(v), lowerBound, upperBound)
-	case int32:
-		return signedIntegerFromInt64(int64(v), lowerBound, upperBound)
 	case int64:
 		return signedIntegerFromInt64(v, lowerBound, upperBound)
-	case uint:
-		return signedIntegerFromUint64(uint64(v), upperBound)
-	case uint8:
-		return signedIntegerFromUint64(uint64(v), upperBound)
-	case uint16:
-		return signedIntegerFromUint64(uint64(v), upperBound)
-	case uint32:
-		return signedIntegerFromUint64(uint64(v), upperBound)
 	case uint64:
 		return signedIntegerFromUint64(v, upperBound)
-	case float32:
-		return signedIntegerFromFloat64(float64(v), lowerBound, upperBound)
 	case float64:
 		return signedIntegerFromFloat64(v, lowerBound, upperBound)
 	case string:
@@ -116,28 +107,15 @@ func signedIntegerFromFloat64(v float64, lowerBound int64, upperBound int64) (in
 
 func parseFloat64(value any) (float64, error) {
 	var n float64
+	// The same reachable set as parseSignedInteger: a YAML ratio written without
+	// a decimal point arrives as an integer, which is why the integer arms are
+	// here at all.
 	switch v := value.(type) {
 	case float64:
 		n = v
-	case float32:
-		n = float64(v)
 	case int:
 		n = float64(v)
-	case int8:
-		n = float64(v)
-	case int16:
-		n = float64(v)
-	case int32:
-		n = float64(v)
 	case int64:
-		n = float64(v)
-	case uint:
-		n = float64(v)
-	case uint8:
-		n = float64(v)
-	case uint16:
-		n = float64(v)
-	case uint32:
 		n = float64(v)
 	case uint64:
 		n = float64(v)

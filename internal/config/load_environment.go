@@ -1,7 +1,6 @@
 package config
 
 import (
-	"os"
 	"strings"
 )
 
@@ -78,16 +77,4 @@ func namespaceEnvForConfigKey(key string) string {
 		return ""
 	}
 	return namespacePrefix + strings.ToUpper(strings.ReplaceAll(trimmed, keyDelimiter, "__"))
-}
-
-func lookupNonEmptyEnv(key string) (string, bool) {
-	value, ok := os.LookupEnv(key)
-	if !ok {
-		return "", false
-	}
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return "", false
-	}
-	return value, true
 }

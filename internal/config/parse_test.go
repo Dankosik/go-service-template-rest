@@ -83,7 +83,7 @@ func TestParseInt(t *testing.T) {
 	t.Run("rejects overflow from unsigned values", func(t *testing.T) {
 		t.Parallel()
 
-		overflow := uint(math.MaxInt) + 1
+		overflow := uint64(math.MaxInt) + 1
 		if _, err := parseInt(overflow); err == nil {
 			t.Fatalf("parseInt() expected overflow error for uint value")
 		}
@@ -107,12 +107,18 @@ func TestParseInt64(t *testing.T) {
 			t.Fatalf("parseInt64(string) = %d, want 922", value)
 		}
 
-		value, err = parseInt64(uint32(11))
+		value, err = parseInt64(uint64(11))
 		if err != nil {
-			t.Fatalf("parseInt64(uint32) error = %v", err)
+			t.Fatalf("parseInt64(uint64) error = %v", err)
 		}
 		if value != 11 {
-			t.Fatalf("parseInt64(uint32) = %d, want 11", value)
+			t.Fatalf("parseInt64(uint64) = %d, want 11", value)
+		}
+
+		// A type no config source can produce is rejected rather than converted,
+		// so an unexpected one is reported by name at startup.
+		if _, err := parseInt64(uint32(11)); err == nil {
+			t.Fatal("parseInt64(uint32) error = nil, want an unsupported type rejection")
 		}
 	})
 
