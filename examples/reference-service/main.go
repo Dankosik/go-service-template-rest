@@ -16,16 +16,36 @@ import (
 	"github.com/example/go-service-template-rest/examples/reference-service/internal/article"
 	"github.com/example/go-service-template-rest/examples/reference-service/internal/article/memory"
 	"github.com/example/go-service-template-rest/examples/reference-service/internal/httpapi"
+	httpx "github.com/example/go-service-template-rest/internal/infra/http"
+	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 )
 
+// The bounds this example serves under. The real service reads equivalents from
+// typed config; they are constants here so the example stays one readable binary,
+// but every one of them is set on purpose rather than left at a zero value.
 const (
 	listenAddress   = ":8080"
 	shutdownTimeout = 5 * time.Second
+
+	readHeaderTimeout = 5 * time.Second
+	readTimeout       = 5 * time.Second
+	// requestTimeout stays below writeTimeout so the budget expires while the
+	// connection can still carry the 504 that reports it.
+	requestTimeout = 8 * time.Second
+	writeTimeout   = 10 * time.Second
+	idleTimeout    = 60 * time.Second
+	maxHeaderBytes = 16 << 10
+	maxBodyBytes   = 1 << 20
+	maxInFlight    = 256
 
 	// writeTokenEnv supplies the demonstration credential for protected
 	// operations. It is not an authentication design; see
 	// docs/first-production-feature.md before building a real one.
 	writeTokenEnv = "REFERENCE_WRITE_TOKEN"
+
+	// authenticateChallenge names an HTTP authentication scheme, which is not the
+	// same vocabulary as the contract's securityScheme key.
+	authenticateChallenge = "Bearer"
 )
 
 func main() {
@@ -64,7 +84,27 @@ func run(ctx context.Context, log *slog.Logger) error {
 	if strings.TrimSpace(writeToken) == "" {
 		return fmt.Errorf("%s is required to run the reference example", writeTokenEnv)
 	}
-	handler, err := httpapi.NewRouter(articles, writeToken)
+
+	// Composition happens here, not in the feature package: httpapi maps the
+	// feature onto its contract, and this root supplies the transport policy and
+	// wraps the result in the shared middleware chain.
+	apiHandler, err := httpapi.NewAPIHandler(articles, httpapi.Options{
+		WriteToken:     writeToken,
+		RejectRequest:  httpx.RejectRequest(log, authenticateChallenge),
+		RejectResponse: httpx.RejectResponse(),
+	})
+	if err != nil {
+		return fmt.Errorf("build reference api handler: %w", err)
+	}
+
+	// The chain instruments every request, so it needs a registry to record into.
+	// This example exposes no scrape endpoint of its own.
+	handler, err := httpx.Harden(log, telemetry.New(), httpx.RouterConfig{
+		MaxBodyBytes:   maxBodyBytes,
+		RequestTimeout: requestTimeout,
+		MaxInFlight:    maxInFlight,
+		OTelServerName: "reference-service",
+	}, apiHandler)
 	if err != nil {
 		return fmt.Errorf("build reference router: %w", err)
 	}
@@ -78,13 +118,21 @@ func run(ctx context.Context, log *slog.Logger) error {
 	}()
 
 	log.Info("reference_service_started", "http.addr", listener.Addr().String())
-	return serve(ctx, listener, handler)
+	return serve(ctx, log, listener, handler)
 }
 
-func serve(ctx context.Context, listener net.Listener, handler http.Handler) error {
+func serve(ctx context.Context, log *slog.Logger, listener net.Listener, handler http.Handler) error {
 	server := &http.Server{
-		Handler:           handler,
-		ReadHeaderTimeout: 5 * time.Second,
+		Handler: handler,
+		// Without ErrorLog, net/http reports malformed request lines and any panic
+		// that escapes the chain as unstructured text on stderr, beside this
+		// service's JSON on stdout.
+		ErrorLog:          slog.NewLogLogger(log.Handler(), slog.LevelError),
+		ReadHeaderTimeout: readHeaderTimeout,
+		ReadTimeout:       readTimeout,
+		WriteTimeout:      writeTimeout,
+		IdleTimeout:       idleTimeout,
+		MaxHeaderBytes:    maxHeaderBytes,
 	}
 	serverErr := make(chan error, 1)
 	go func() {

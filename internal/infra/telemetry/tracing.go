@@ -230,26 +230,19 @@ func withoutOTELResourceEnv() func() {
 }
 
 func buildTraceSampler(name string, arg float64) (sdktrace.Sampler, error) {
-	if !otelconfig.TraceSamplerArgFinite(arg) {
-		return nil, fmt.Errorf("trace sampler arg must be finite")
-	}
-	if !otelconfig.TraceSamplerArgInRange(arg) {
-		return nil, fmt.Errorf("trace sampler arg must be in range [0,1]")
+	if err := otelconfig.ValidateTraceSampler(name, arg); err != nil {
+		return nil, fmt.Errorf("build trace sampler: %w", err)
 	}
 
-	samplerName := otelconfig.TraceSamplerOrDefault(name)
-
-	switch samplerName {
+	switch otelconfig.TraceSamplerOrDefault(name) {
 	case otelconfig.SamplerAlwaysOn:
 		return sdktrace.AlwaysSample(), nil
 	case otelconfig.SamplerAlwaysOff:
 		return sdktrace.NeverSample(), nil
 	case otelconfig.SamplerTraceIDRatio:
 		return sdktrace.TraceIDRatioBased(arg), nil
-	case otelconfig.SamplerParentBasedTraceIDRatio:
-		return sdktrace.ParentBased(sdktrace.TraceIDRatioBased(arg)), nil
 	default:
-		return nil, fmt.Errorf("unsupported trace sampler %q", name)
+		return sdktrace.ParentBased(sdktrace.TraceIDRatioBased(arg)), nil
 	}
 }
 

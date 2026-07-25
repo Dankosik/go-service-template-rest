@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net"
 	"net/http"
 	"strings"
@@ -20,7 +21,7 @@ func TestServeStopsAfterCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	if err := serve(ctx, listener, http.NotFoundHandler()); err != nil {
+	if err := serve(ctx, slog.New(slog.DiscardHandler), listener, http.NotFoundHandler()); err != nil {
 		t.Fatalf("serve() error = %v, want nil", err)
 	}
 }
@@ -36,7 +37,7 @@ func TestServeReturnsListenerFailure(t *testing.T) {
 		t.Fatalf("listener.Close() error = %v", err)
 	}
 
-	err = serve(context.Background(), listener, http.NotFoundHandler())
+	err = serve(context.Background(), slog.New(slog.DiscardHandler), listener, http.NotFoundHandler())
 	if err == nil {
 		t.Fatal("serve() error = nil, want listener failure")
 	}

@@ -145,8 +145,8 @@ func TestValidateSamplerAdditionalErrorCoverage(t *testing.T) {
 
 	const supportedSampler = "parentbased_traceidratio"
 
-	if err := validateSampler(supportedSampler, 0.5); err != nil {
-		t.Fatalf("validateSampler(valid) error = %v, want nil", err)
+	if err := validateObservabilitySampler(supportedSampler, 0.5); err != nil {
+		t.Fatalf("validateObservabilitySampler(valid) error = %v, want nil", err)
 	}
 
 	testCases := []struct {
@@ -179,12 +179,12 @@ func TestValidateSamplerAdditionalErrorCoverage(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			err := validateSampler(tc.sampler, tc.arg)
+			err := validateObservabilitySampler(tc.sampler, tc.arg)
 			if err == nil {
-				t.Fatal("validateSampler() error = nil, want non-nil")
+				t.Fatal("validateObservabilitySampler() error = nil, want non-nil")
 			}
 			if !strings.Contains(err.Error(), tc.wantErr) {
-				t.Fatalf("validateSampler() error = %q, want to contain %q", err.Error(), tc.wantErr)
+				t.Fatalf("validateObservabilitySampler() error = %q, want to contain %q", err.Error(), tc.wantErr)
 			}
 		})
 	}

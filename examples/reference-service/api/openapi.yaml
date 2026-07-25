@@ -156,6 +156,14 @@ components:
         detail:
           type: string
           example: article was not found
+        instance:
+          type: string
+          format: uri-reference
+          description: URI reference identifying this occurrence when the service exposes one.
+        request_id:
+          type: string
+          description: Correlation identifier echoed from X-Request-ID.
+          example: 9ccecdfd92c94665a46406f8ba73cd77
   responses:
     BadRequest:
       description: request is malformed or invalid

@@ -115,6 +115,20 @@ remove_profile_markers() {
 	mv "${temporary}" "${file}"
 }
 
+# remove_postgres_integration_tests deletes the PostgreSQL integration proofs.
+# nullglob is scoped to this function so a pattern that matches nothing expands to
+# nothing instead of to itself.
+remove_postgres_integration_tests() {
+	local previous_nullglob
+	previous_nullglob="$(shopt -p nullglob || true)"
+	shopt -s nullglob
+	local file
+	for file in test/postgres_*_test.go; do
+		rm -f -- "${file}"
+	done
+	eval "${previous_nullglob}"
+}
+
 # strip_profile applies one profile decision across every file that carries its
 # markers, discovering them instead of listing them. A file missing from a
 # hand-written list fails silently: the generated service keeps configuration it
@@ -374,9 +388,12 @@ if [[ "${source_checkout}" != true ]]; then
 
 	if [[ "${database}" == "none" ]]; then
 		rm -rf -- cmd/migrate internal/infra/postgres internal/infra/postgresmigrate
+		# Matched rather than listed. Every test/postgres_*_test.go is PostgreSQL
+		# integration proof by construction, and a new one that a hand-written list
+		# missed leaves an import of a package this profile just deleted — which
+		# surfaces as Go trying to resolve the generated module from the network.
+		remove_postgres_integration_tests
 		rm -f -- \
-			test/postgres_integration_test.go \
-			test/postgres_migrate_runner_integration_test.go \
 			cmd/service/internal/bootstrap/startup_dependencies.go \
 			cmd/service/internal/bootstrap/startup_dependencies_test.go \
 			cmd/service/internal/bootstrap/startup_rejections_test.go \

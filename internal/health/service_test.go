@@ -4,9 +4,12 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 )
 
-func TestServiceReadySuccess(t *testing.T) {
+const testProbeBudget = time.Second
+
+func TestServiceRefreshSuccess(t *testing.T) {
 	t.Parallel()
 
 	db := fakeProbe{name: "db"}
@@ -14,12 +17,12 @@ func TestServiceReadySuccess(t *testing.T) {
 
 	svc := New(db, cache)
 
-	if err := svc.Ready(context.Background()); err != nil {
-		t.Fatalf("Ready() error = %v", err)
+	if err := svc.Refresh(context.Background(), testProbeBudget, 1); err != nil {
+		t.Fatalf("Refresh() error = %v", err)
 	}
 }
 
-func TestServiceReadyFail(t *testing.T) {
+func TestServiceRefreshFail(t *testing.T) {
 	t.Parallel()
 
 	downErr := errors.New("down")
@@ -27,27 +30,63 @@ func TestServiceReadyFail(t *testing.T) {
 
 	svc := New(db)
 
-	err := svc.Ready(context.Background())
+	err := svc.Refresh(context.Background(), testProbeBudget, 1)
 	if err == nil {
-		t.Fatalf("Ready() expected error")
+		t.Fatalf("Refresh() expected error")
 	}
 
 	if !errors.Is(err, downErr) {
-		t.Fatalf("Ready() error = %v, want wrapped %v", err, downErr)
+		t.Fatalf("Refresh() error = %v, want wrapped %v", err, downErr)
 	}
 }
 
-func TestServiceReadyDraining(t *testing.T) {
+// TestServiceRefreshNamesTheFailingProbe keeps a multi-probe service from
+// reporting "not ready" without saying which dependency answered that way.
+func TestServiceRefreshNamesTheFailingProbe(t *testing.T) {
+	t.Parallel()
+
+	svc := New(
+		fakeProbe{name: "db"},
+		fakeProbe{name: "cache", err: errors.New("down")},
+	)
+
+	err := svc.Refresh(context.Background(), testProbeBudget, 1)
+	if err == nil {
+		t.Fatal("Refresh() error = nil, want a failure")
+	}
+	if got := err.Error(); got[:len("cache probe failed")] != "cache probe failed" {
+		t.Fatalf("Refresh() error = %q, want it to name the cache probe first", got)
+	}
+}
+
+// TestServiceRefreshReportsObservedFailureRegardlessOfThreshold keeps admission
+// honest: the threshold exists to protect an instance that was already healthy,
+// not to grant a grace period to one that has never passed a probe.
+func TestServiceRefreshReportsObservedFailureRegardlessOfThreshold(t *testing.T) {
+	t.Parallel()
+
+	downErr := errors.New("down")
+	svc := New(fakeProbe{name: "db", err: downErr})
+
+	if err := svc.Refresh(context.Background(), testProbeBudget, 100); !errors.Is(err, downErr) {
+		t.Fatalf("Refresh() error = %v, want wrapped %v", err, downErr)
+	}
+}
+
+func TestServiceCachedDraining(t *testing.T) {
 	t.Parallel()
 
 	probe := fakeProbe{name: "db"}
 
 	svc := New(probe)
+	if err := svc.Refresh(context.Background(), testProbeBudget, 1); err != nil {
+		t.Fatalf("Refresh() error = %v", err)
+	}
 	svc.StartDrain()
 
-	err := svc.Ready(context.Background())
+	err := svc.Cached()
 	if !errors.Is(err, ErrDraining) {
-		t.Fatalf("Ready() error = %v, want ErrDraining", err)
+		t.Fatalf("Cached() error = %v, want ErrDraining", err)
 	}
 }
 

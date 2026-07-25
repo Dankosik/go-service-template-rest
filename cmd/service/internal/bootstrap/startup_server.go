@@ -15,9 +15,13 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
+// runtimeServer is the http.Server surface this package drives. Close is part of
+// it because the drain needs a way to abandon connections a graceful shutdown
+// gave up on; see forceCloseServers.
 type runtimeServer interface {
 	Serve(net.Listener) error
 	Shutdown(context.Context) error
+	Close() error
 }
 
 type serveHTTPRuntimeArgs struct {

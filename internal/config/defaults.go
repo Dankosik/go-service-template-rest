@@ -24,16 +24,31 @@ func defaultValues() map[string]any {
 		"http.read_timeout":                "5s",
 		// request_timeout stays below write_timeout so the budget expires while
 		// the connection can still carry the 504 that reports it.
-		"http.request_timeout":          "8s",
-		"http.write_timeout":            "10s",
-		"http.idle_timeout":             "60s",
-		"http.max_header_bytes":         16 << 10,
-		"http.max_body_bytes":           int64(1 << 20),
+		"http.request_timeout":  "8s",
+		"http.write_timeout":    "10s",
+		"http.idle_timeout":     "60s",
+		"http.max_header_bytes": 16 << 10,
+		"http.max_body_bytes":   int64(1 << 20),
+		// max_in_flight is deliberately larger than postgres.max_open_conns:
+		// shedding must engage after the pool is saturated and requests start
+		// queueing, not before it is used.
+		"http.max_in_flight":            256,
 		"http.access_log_health_probes": false,
+
+		"health.refresh_interval":  "2s",
+		"health.failure_threshold": 3,
 
 		"log.level": "info",
 
-		"observability.metrics.addr": "127.0.0.1:9090",
+		"runtime.memory_limit_ratio": 0.9,
+
+		// The diagnostics listener binds every interface because a metrics
+		// scraper runs in another pod: a loopback default answers only inside
+		// this network namespace, so the service reports healthy and exports
+		// nothing. The port is not published by the container image, and
+		// observability.pprof.enabled stays off by default.
+		"observability.metrics.addr":  ":9090",
+		"observability.pprof.enabled": false,
 
 		// profile:database-postgres:start
 		"postgres.enabled":                     false,
@@ -45,6 +60,7 @@ func defaultValues() map[string]any {
 		"postgres.migration_lock_timeout":      "15s",
 		"postgres.max_open_conns":              25,
 		"postgres.conn_max_lifetime":           "30m",
+		"postgres.statement_timeout":           "8s",
 		// profile:database-postgres:end
 
 		"observability.otel.service_name":           "service",

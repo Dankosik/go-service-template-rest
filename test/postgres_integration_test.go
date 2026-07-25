@@ -42,6 +42,7 @@ func TestPostgresPool(t *testing.T) {
 		HealthcheckTimeout: 3 * time.Second,
 		MaxOpenConns:       10,
 		ConnMaxLifetime:    time.Hour,
+		StatementTimeout:   time.Second,
 	})
 	if err != nil {
 		t.Fatalf("create postgres pool: %v", err)

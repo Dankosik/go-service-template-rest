@@ -416,10 +416,11 @@ if [[ "${TEMPLATE_POSTGRES_PROOF:-0}" == "1" ]]; then
 		cd "${postgres_checkout}"
 		git apply --recount "${ROOT_DIR}/scripts/ci/fixtures/postgres-post-feature.patch"
 		make openapi-generate sqlc-generate
+		# handlers.go is deliberately absent: the feature composes through
+		# Handlers.API, so it adds files instead of editing shared template source.
 		gofmt -w \
 			internal/article \
-			internal/infra/http/article_handlers.go \
-			internal/infra/http/handlers.go \
+			internal/infra/http/article_api.go \
 			internal/infra/postgres/article_repository.go \
 			cmd/service/internal/bootstrap/run.go \
 			test/postgres_article_feature_integration_test.go

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/config"
@@ -53,10 +54,46 @@ type postgresStartupRuntime struct {
 type runtimeDependencies struct {
 	health   *health.Service
 	postgres *postgres.Pool
+	closed   *sync.Once
 }
 
-func (d runtimeDependencies) Close() {
-	d.postgres.Close()
+// Close releases pooled dependencies, bounded by ctx, and is safe to call twice.
+//
+// The bound is the point. pgxpool.Close blocks until every acquired connection is
+// returned and destroyed and accepts no context of its own, so a handler that
+// outlived the HTTP drain while holding a connection would park the process here
+// until the platform SIGKILLs it — taking the shutdown telemetry with it. A
+// connection still held at this point is a leaked handler, not a slow close, and
+// reporting it beats waiting for it.
+func (d runtimeDependencies) Close(ctx context.Context) {
+	if d.closed == nil {
+		d.postgres.Close()
+		return
+	}
+
+	d.closed.Do(func() {
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			d.postgres.Close()
+		}()
+
+		select {
+		case <-done:
+		case <-ctx.Done():
+		}
+	})
+}
+
+// dependencyCloseContext bounds a dependency release with its own budget,
+// detached from the signal context that is already canceled by this point.
+func dependencyCloseContext(base context.Context) context.Context {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(base), dependencyCloseTimeout)
+	// The cancel is deliberately not deferred to the caller: the context is
+	// consumed synchronously by Close, and releasing the timer immediately after
+	// would defeat the bound.
+	context.AfterFunc(ctx, cancel)
+	return ctx
 }
 
 func initRuntimeDependencies(
@@ -78,6 +115,7 @@ func initRuntimeDependencies(
 	return runtimeDependencies{
 		health:   health.New(newPostgresReadinessProbe(pg, bootstrap.cfg.Postgres.HealthcheckTimeout)),
 		postgres: pg,
+		closed:   new(sync.Once),
 	}, nil
 }
 
@@ -94,6 +132,7 @@ func initPostgres(ctx context.Context, cfg config.PostgresConfig) (*postgres.Poo
 		HealthcheckTimeout: cfg.HealthcheckTimeout,
 		MaxOpenConns:       cfg.MaxOpenConns,
 		ConnMaxLifetime:    cfg.ConnMaxLifetime,
+		StatementTimeout:   cfg.StatementTimeout,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("%w: postgres init failed: %w", errDependencyInit, err)

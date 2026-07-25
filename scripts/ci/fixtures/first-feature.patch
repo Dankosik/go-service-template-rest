@@ -1,5 +1,5 @@
 diff --git a/api/openapi/service.yaml b/api/openapi/service.yaml
-index f450109..598dbe3 100644
+index eff2f34..c089aac 100644
 --- a/api/openapi/service.yaml
 +++ b/api/openapi/service.yaml
 @@ -12,7 +12,38 @@ security: []
@@ -56,22 +56,22 @@ index f450109..598dbe3 100644
        type: object
        required:
 diff --git a/cmd/service/internal/bootstrap/run.go b/cmd/service/internal/bootstrap/run.go
-index 8bef02f..1e6c583 100644
+index ab02bed..e3b3cdc 100644
 --- a/cmd/service/internal/bootstrap/run.go
 +++ b/cmd/service/internal/bootstrap/run.go
-@@ -14,6 +14,7 @@ import (
- 	"time"
+@@ -16,6 +16,7 @@ import (
  
+ 	"github.com/acme/feature-proof/internal/background"
  	"github.com/acme/feature-proof/internal/config"
 +	"github.com/acme/feature-proof/internal/greeting"
  	httpx "github.com/acme/feature-proof/internal/infra/http"
  	"github.com/acme/feature-proof/internal/infra/telemetry"
  )
-@@ -101,6 +102,7 @@ func Run(args []string) (runErr error) {
+@@ -142,6 +143,7 @@ func Run(args []string) (runErr error) {
  	handler, err := httpx.NewRouter(
  		bootstrap.log,
  		httpx.Handlers{
-+			Greeting:      greeting.Service{},
++			API:           httpx.NewGreetingAPI(greeting.Service{}),
  			Health:        healthSvc,
  			ReadinessGate: startupAdmission.CheckReady,
  		},
@@ -88,34 +88,53 @@ index 0000000..2df4efd
 +func (Service) Message(name string) string {
 +	return "Hello, " + name + "!"
 +}
-diff --git a/internal/infra/http/greeting_handlers.go b/internal/infra/http/greeting_handlers.go
+diff --git a/internal/infra/http/greeting_api.go b/internal/infra/http/greeting_api.go
 new file mode 100644
-index 0000000..be3ca59
+index 0000000..f385ec0
 --- /dev/null
-+++ b/internal/infra/http/greeting_handlers.go
-@@ -0,0 +1,13 @@
++++ b/internal/infra/http/greeting_api.go
+@@ -0,0 +1,31 @@
 +package httpx
 +
 +import (
 +	"context"
 +
++	"github.com/acme/feature-proof/internal/greeting"
 +	"github.com/acme/feature-proof/internal/openapi"
 +)
 +
-+func (h strictHandlers) GetGreeting(_ context.Context, request openapi.GetGreetingRequestObject) (openapi.GetGreetingResponseObject, error) {
++// greetingAPI implements the service's own generated operations.
++//
++// The generated interface is embedded and left unset on purpose: this type
++// implements only the operations it owns, and strictHandlers supplies the
++// platform probes, whose explicit methods shadow the embedded ones. That is what
++// lets a feature land without editing handlers.go or any other shared file.
++type greetingAPI struct {
++	openapi.StrictServerInterface
++	greeting greeting.Service
++}
++
++func (a greetingAPI) GetGreeting(_ context.Context, request openapi.GetGreetingRequestObject) (openapi.GetGreetingResponseObject, error) {
 +	return openapi.GetGreeting200JSONResponse{
-+		Message: h.greeting.Message(request.Name),
++		Message: a.greeting.Message(request.Name),
 +	}, nil
 +}
-diff --git a/internal/infra/http/greeting_handlers_test.go b/internal/infra/http/greeting_handlers_test.go
++
++// NewGreetingAPI is the constructor the composition root uses, so greetingAPI can
++// stay unexported.
++func NewGreetingAPI(service greeting.Service) openapi.StrictServerInterface {
++	return greetingAPI{greeting: service}
++}
+diff --git a/internal/infra/http/greeting_api_test.go b/internal/infra/http/greeting_api_test.go
 new file mode 100644
-index 0000000..8bc082f
+index 0000000..4cd9631
 --- /dev/null
-+++ b/internal/infra/http/greeting_handlers_test.go
-@@ -0,0 +1,30 @@
++++ b/internal/infra/http/greeting_api_test.go
+@@ -0,0 +1,49 @@
 +package httpx
 +
 +import (
++	"context"
 +	"log/slog"
 +	"net/http"
 +	"strings"
@@ -130,8 +149,8 @@ index 0000000..8bc082f
 +	t.Parallel()
 +
 +	handler := mustNewRouter(t, slog.New(slog.DiscardHandler), Handlers{
-+		Greeting: greeting.Service{},
-+		Health:   health.New(),
++		API:    greetingAPI{greeting: greeting.Service{}},
++		Health: health.New(),
 +	}, telemetry.New(), RouterConfig{})
 +
 +	response := doRequest(handler, http.MethodGet, "/greetings/Go")
@@ -143,34 +162,21 @@ index 0000000..8bc082f
 +		t.Fatalf("body = %q", body)
 +	}
 +}
-diff --git a/internal/infra/http/handlers.go b/internal/infra/http/handlers.go
-index 9dabd22..1eed339 100644
---- a/internal/infra/http/handlers.go
-+++ b/internal/infra/http/handlers.go
-@@ -5,15 +5,18 @@ import (
- 	"fmt"
- 	"time"
- 
-+	"github.com/acme/feature-proof/internal/greeting"
- 	"github.com/acme/feature-proof/internal/health"
- )
- 
- type Handlers struct {
-+	Greeting      greeting.Service
- 	Health        *health.Service
- 	ReadinessGate func(context.Context) error
- }
- 
- type strictHandlers struct {
-+	greeting         greeting.Service
- 	health           *health.Service
- 	readinessGate    func(context.Context) error
- 	readinessTimeout time.Duration
-@@ -31,6 +34,7 @@ func newStrictHandlers(h Handlers, readinessTimeout time.Duration) (strictHandle
- 	}
- 
- 	return strictHandlers{
-+		greeting:         h.Greeting,
- 		health:           h.Health,
- 		readinessGate:    h.ReadinessGate,
- 		readinessTimeout: readinessTimeout,
++
++// TestRouterRequiresAPIOnceContractGrows pins the guard that makes the seam safe:
++// a contract with operations beyond the platform probes must be given an
++// implementation, or the router refuses to build instead of panicking per request.
++func TestRouterRequiresAPIOnceContractGrows(t *testing.T) {
++	t.Parallel()
++
++	_, err := NewRouter(slog.New(slog.DiscardHandler), Handlers{
++		Health:        health.New(),
++		ReadinessGate: func(ctx context.Context) error { return nil },
++	}, telemetry.New(), RouterConfig{MaxBodyBytes: 1 << 20, RequestTimeout: testRouterRequestTimeout})
++	if err == nil {
++		t.Fatal("NewRouter() error = nil, want a missing-API rejection")
++	}
++	if !strings.Contains(err.Error(), "handlers API is required") {
++		t.Fatalf("NewRouter() error = %v, want it to name the missing API", err)
++	}
++}
