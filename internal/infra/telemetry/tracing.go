@@ -23,6 +23,9 @@ const (
 type TracingConfig struct {
 	ServiceName    string
 	ServiceVersion string
+	// ServiceCommit is the source revision the binary was built from, published
+	// as vcs.revision so a span names the build that produced it.
+	ServiceCommit string
 	// ServiceInstanceID identifies this replica. Resolve it once per process with
 	// ResolveInstanceID and pass the same value to SetupMetrics; see
 	// resourceIdentity for what an absent instance identity costs.
@@ -64,6 +67,7 @@ func SetupTracing(ctx context.Context, cfg TracingConfig) (TraceExporterEndpoint
 	res, err := newResource(ctx, resourceIdentity{
 		serviceName:    cfg.ServiceName,
 		serviceVersion: cfg.ServiceVersion,
+		serviceCommit:  cfg.ServiceCommit,
 		instanceID:     cfg.ServiceInstanceID,
 		deploymentEnv:  cfg.DeploymentEnv,
 	})

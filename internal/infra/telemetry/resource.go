@@ -27,8 +27,12 @@ import (
 type resourceIdentity struct {
 	serviceName    string
 	serviceVersion string
-	instanceID     string
-	deploymentEnv  string
+	// serviceCommit is the source revision the binary was built from. A version
+	// alone is often a branch or a tag that moves, so it does not answer "which
+	// build is this" during a rollout; the revision does.
+	serviceCommit string
+	instanceID    string
+	deploymentEnv string
 }
 
 // instanceIDBytes is the entropy of the last-resort instance identifier. It only
@@ -71,6 +75,7 @@ func newResource(ctx context.Context, identity resourceIdentity) (*resource.Reso
 		resource.WithAttributes(
 			attribute.String("service.name", strings.TrimSpace(identity.serviceName)),
 			attribute.String("service.version", strings.TrimSpace(identity.serviceVersion)),
+			attribute.String("vcs.revision", strings.TrimSpace(identity.serviceCommit)),
 			attribute.String("service.instance.id", ResolveInstanceID(identity.instanceID)),
 			attribute.String("deployment.environment.name", strings.TrimSpace(identity.deploymentEnv)),
 		),
