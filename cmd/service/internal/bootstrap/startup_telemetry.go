@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
@@ -31,6 +32,7 @@ func bootstrapTelemetryStage(
 	cleanup := newTelemetryCleanup(log, metricsShutdown)
 
 	exporterCfg := traceExporterConfig(cfg)
+	reportIgnoredAmbientOTLPEnv(startupCtx, log, exporterCfg)
 	telemetryCtx, telemetryCancel := withStageBudget(startupCtx, startupTelemetryBudget)
 	tracingShutdown, telemetryInitErr := telemetry.SetupTracing(telemetryCtx, telemetry.TracingConfig{
 		ServiceName:      cfg.Observability.OTel.ServiceName,
@@ -95,6 +97,35 @@ func newTelemetryCleanup(log *slog.Logger, shutdowns ...func(context.Context) er
 			)...,
 		)
 	}
+}
+
+// reportIgnoredAmbientOTLPEnv warns when a platform injected the standard
+// OTEL_EXPORTER_OTLP_* variables while this service has no configured trace
+// exporter. Without the warning the deployment looks healthy and no trace is
+// ever exported, which is the failure an operator finds during an incident.
+func reportIgnoredAmbientOTLPEnv(ctx context.Context, log *slog.Logger, exporterCfg telemetry.TraceExporterConfig) {
+	if strings.TrimSpace(exporterCfg.OTLPEndpoint) != "" {
+		return
+	}
+	ambient := telemetry.AmbientOTLPExporterEnv()
+	if len(ambient) == 0 {
+		return
+	}
+
+	log.Warn(
+		"telemetry_ambient_env_ignored",
+		startupLogArgs(
+			ctx,
+			startupLogComponentStartupProbes,
+			startupOperationTelemetryInit,
+			"degraded",
+			"dependency", startupDependencyTelemetry,
+			"mode", startupDependencyModeFeatureOff,
+			"reason", "ambient_exporter_env_ignored",
+			"env.ignored", strings.Join(ambient, ", "),
+			"config.key", "observability.otel.exporter.otlp_endpoint",
+		)...,
+	)
 }
 
 func traceExporterConfig(cfg config.Config) telemetry.TraceExporterConfig {

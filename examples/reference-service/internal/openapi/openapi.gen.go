@@ -27,6 +27,13 @@ type Article struct {
 	Title   string `json:"title"`
 }
 
+// ArticleDraft defines model for ArticleDraft.
+type ArticleDraft struct {
+	Slug    string `json:"slug"`
+	Summary string `json:"summary"`
+	Title   string `json:"title"`
+}
+
 // Problem defines model for Problem.
 type Problem struct {
 	// Code Stable machine-readable error code.
@@ -52,14 +59,29 @@ type Problem struct {
 // BadRequest defines model for BadRequest.
 type BadRequest = Problem
 
+// Conflict defines model for Conflict.
+type Conflict = Problem
+
+// Forbidden defines model for Forbidden.
+type Forbidden = Problem
+
 // InternalServerError defines model for InternalServerError.
 type InternalServerError = Problem
 
 // NotFound defines model for NotFound.
 type NotFound = Problem
 
+// Unauthorized defines model for Unauthorized.
+type Unauthorized = Problem
+
+// CreateArticleJSONRequestBody defines body for CreateArticle for application/json ContentType.
+type CreateArticleJSONRequestBody = ArticleDraft
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// CreateArticle Create an article
+	// (POST /api/v1/articles)
+	CreateArticle(w http.ResponseWriter, r *http.Request)
 	// GetArticle Get an article
 	// (GET /api/v1/articles/{slug})
 	GetArticle(w http.ResponseWriter, r *http.Request, slug string)
@@ -68,6 +90,12 @@ type ServerInterface interface {
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
 
 type Unimplemented struct{}
+
+// CreateArticle Create an article
+// (POST /api/v1/articles)
+func (_ Unimplemented) CreateArticle(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
 
 // GetArticle Get an article
 // (GET /api/v1/articles/{slug})
@@ -83,6 +111,19 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// CreateArticle operation middleware
+func (siw *ServerInterfaceWrapper) CreateArticle(w http.ResponseWriter, r *http.Request) {
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateArticle(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // GetArticle operation middleware
 func (siw *ServerInterfaceWrapper) GetArticle(w http.ResponseWriter, r *http.Request) {
@@ -223,6 +264,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	}
 
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/api/v1/articles", wrapper.CreateArticle)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/api/v1/articles/{slug}", wrapper.GetArticle)
 	})
 
@@ -231,9 +275,119 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 
 type BadRequestApplicationProblemPlusJSONResponse Problem
 
+type ConflictApplicationProblemPlusJSONResponse Problem
+
+type ForbiddenApplicationProblemPlusJSONResponse Problem
+
 type InternalServerErrorApplicationProblemPlusJSONResponse Problem
 
 type NotFoundApplicationProblemPlusJSONResponse Problem
+
+type UnauthorizedApplicationProblemPlusJSONResponse Problem
+
+type CreateArticleRequestObject struct {
+	Body *CreateArticleJSONRequestBody
+}
+
+type CreateArticleResponseObject interface {
+	VisitCreateArticleResponse(w http.ResponseWriter) error
+}
+
+type CreateArticle201ResponseHeaders struct {
+	Location string
+}
+
+type CreateArticle201JSONResponse struct {
+	Body    Article
+	Headers CreateArticle201ResponseHeaders
+}
+
+func (response CreateArticle201JSONResponse) VisitCreateArticleResponse(w http.ResponseWriter) error {
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateArticle400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response CreateArticle400ApplicationProblemPlusJSONResponse) VisitCreateArticleResponse(w http.ResponseWriter) error {
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateArticle401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response CreateArticle401ApplicationProblemPlusJSONResponse) VisitCreateArticleResponse(w http.ResponseWriter) error {
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateArticle403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response CreateArticle403ApplicationProblemPlusJSONResponse) VisitCreateArticleResponse(w http.ResponseWriter) error {
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateArticle409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response CreateArticle409ApplicationProblemPlusJSONResponse) VisitCreateArticleResponse(w http.ResponseWriter) error {
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateArticle500ApplicationProblemPlusJSONResponse struct {
+	InternalServerErrorApplicationProblemPlusJSONResponse
+}
+
+func (response CreateArticle500ApplicationProblemPlusJSONResponse) VisitCreateArticleResponse(w http.ResponseWriter) error {
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
 
 type GetArticleRequestObject struct {
 	Slug string `json:"slug"`
@@ -303,6 +457,9 @@ func (response GetArticle500ApplicationProblemPlusJSONResponse) VisitGetArticleR
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// CreateArticle Create an article
+	// (POST /api/v1/articles)
+	CreateArticle(ctx context.Context, request CreateArticleRequestObject) (CreateArticleResponseObject, error)
 	// GetArticle Get an article
 	// (GET /api/v1/articles/{slug})
 	GetArticle(ctx context.Context, request GetArticleRequestObject) (GetArticleResponseObject, error)
@@ -349,6 +506,37 @@ type strictHandler struct {
 	options     StrictHTTPServerOptions
 }
 
+// CreateArticle operation middleware
+func (sh *strictHandler) CreateArticle(w http.ResponseWriter, r *http.Request) {
+	var request CreateArticleRequestObject
+
+	var body CreateArticleJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateArticle(ctx, request.(CreateArticleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateArticle")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateArticleResponseObject); ok {
+		if err := validResponse.VisitCreateArticleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetArticle operation middleware
 func (sh *strictHandler) GetArticle(w http.ResponseWriter, r *http.Request, slug string) {
 	var request GetArticleRequestObject
@@ -380,20 +568,27 @@ func (sh *strictHandler) GetArticle(w http.ResponseWriter, r *http.Request, slug
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
+	"lDabqD1C1K7afwMAAP//",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

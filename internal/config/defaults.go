@@ -20,6 +20,7 @@ func defaultValues() map[string]any {
 		"http.idle_timeout":                "60s",
 		"http.max_header_bytes":            16 << 10,
 		"http.max_body_bytes":              int64(1 << 20),
+		"http.access_log_health_probes":    false,
 
 		"log.level": "info",
 

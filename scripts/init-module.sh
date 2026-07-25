@@ -7,7 +7,7 @@ TEMPLATE_OWNER="@Dankosik"
 TEMPLATE_API_TITLE="go-service-template-rest"
 
 usage() {
-	echo "usage: CODEOWNER=@user-or-org/team DATABASE=none|postgres OUTBOUND_HTTP=none|bounded $0 [module-path]"
+	echo "usage: CODEOWNER=@user-or-org/team DATABASE=none|postgres OUTBOUND_HTTP=none|bounded REFERENCE_EXAMPLE=remove|keep $0 [module-path]"
 	echo "module-path is derived from git remote origin when omitted"
 }
 
@@ -156,6 +156,18 @@ none | bounded) ;;
 	;;
 esac
 
+# The reference example is upstream teaching material. Keeping it would make a
+# generated service own five extra packages, a second OpenAPI contract, and a
+# second main() that it must lint, test, and regenerate forever.
+reference_example="${REFERENCE_EXAMPLE:-remove}"
+case "${reference_example}" in
+remove | keep) ;;
+*)
+	echo "REFERENCE_EXAMPLE must be one of: remove, keep"
+	exit 1
+	;;
+esac
+
 for required_file in go.mod tools/go.mod env/.env.example .github/CODEOWNERS .golangci.yml api/openapi/service.yaml; do
 	[[ -f "${required_file}" ]] || {
 		echo "required template file not found: ${required_file}"
@@ -264,6 +276,7 @@ if [[ "${source_checkout}" != true ]]; then
 			cmd/service/internal/bootstrap/startup_dependencies_test.go \
 			cmd/service/internal/bootstrap/startup_rejections_test.go \
 			cmd/service/internal/bootstrap/startup_retry_test.go \
+			internal/infra/telemetry/telemetrytest/metrics.go \
 			env/docker-compose.yml
 		cp \
 			scripts/profiles/database-none/startup_dependencies.go.tmpl \
@@ -293,6 +306,10 @@ if [[ "${source_checkout}" != true ]]; then
 		rm -rf -- internal/infra/httpclient
 	fi
 
+	if [[ "${reference_example}" == "remove" ]]; then
+		rm -rf -- examples
+	fi
+
 fi
 
 go mod tidy
@@ -306,6 +323,7 @@ echo "template initialization complete"
 echo "  module: ${new_module}"
 echo "  database: ${database}"
 echo "  outbound HTTP: ${outbound_http}"
+echo "  reference example: ${reference_example}"
 if [[ -n "${codeowner}" ]]; then
 	echo "  codeowner: ${codeowner}"
 fi

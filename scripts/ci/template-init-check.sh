@@ -239,6 +239,10 @@ minimal_workflow_before="$(workflow_snapshot "${minimal_checkout}")"
 	go test ./...
 	go build ./cmd/service
 	make mod-check
+	# Lint the generated profile, not just the template. Profile file removal can
+	# strand symbols whose only consumer was removed, which builds and tests
+	# cannot catch.
+	"${LINTER}" run --allow-parallel-runners --timeout=3m ./...
 	if APP__POSTGRES__ENABLED=true \
 		APP__POSTGRES__DSN='postgres://app:app@127.0.0.1:5432/app?sslmode=disable' \
 		go run ./cmd/service >"${TEMP_ROOT}/minimal-postgres.log" 2>&1; then
@@ -275,21 +279,32 @@ fi
 	cd "${minimal_checkout}"
 	git apply "${ROOT_DIR}/scripts/ci/fixtures/first-feature.patch"
 	make openapi-generate
+	# The health-only baseline needs no request binding helpers. The first
+	# operation with a path or query parameter makes the generated code import
+	# github.com/oapi-codegen/runtime, so the first feature tidies like any
+	# other Go change that adds an import.
+	go mod tidy
 	make openapi-lint openapi-validate
 	gofmt -w internal/greeting internal/infra/http cmd/service/internal/bootstrap/run.go
 	go test ./internal/greeting ./internal/infra/http ./cmd/service/internal/bootstrap
-	rm -rf -- examples/reference-service
 	make openapi-check
 )
+# The default profile must not hand a generated service the reference example's
+# packages, second OpenAPI contract, or second main().
+[[ ! -e "${minimal_checkout}/examples" ]]
 
 postgres_checkout="$(copy_template_checkout full-postgres git@github.com:acme/postgres-service.git)"
 postgres_workflow_before="$(workflow_snapshot "${postgres_checkout}")"
 (
 	cd "${postgres_checkout}"
-	CODEOWNER=@acme/platform DATABASE=postgres OUTBOUND_HTTP=bounded bash ./scripts/init-module.sh
+	CODEOWNER=@acme/platform DATABASE=postgres OUTBOUND_HTTP=bounded REFERENCE_EXAMPLE=keep \
+		bash ./scripts/init-module.sh
 	go test ./...
 	go build ./cmd/service ./cmd/migrate
 )
+# REFERENCE_EXAMPLE=keep is the opt-in escape hatch for teams that want the
+# worked example in tree.
+[[ -e "${postgres_checkout}/examples/reference-service" ]]
 [[ "${postgres_workflow_before}" == "$(workflow_snapshot "${postgres_checkout}")" ]]
 for retained in \
 	cmd/migrate \

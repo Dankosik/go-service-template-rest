@@ -13,14 +13,14 @@ Load for protected branch setup, rulesets, required reviews, CODEOWNERS, require
 
 ## Decision Rubric
 - Protected default branch policy should require PRs, up-to-date required checks, at least one approving review, code-owner review, stale-review dismissal, resolved conversations, force-push denial, deletion denial, and admin enforcement.
-- Required check contexts must be stable and match `.github/workflows/ci.yml`; `make guardrails-check` is the drift alarm for configured contexts and guardrail files.
+- Required check contexts must be stable and match `.github/workflows/ci.yml`; the aggregate `ci-required` job is the single stable context to require, so adding or renaming a job cannot silently drop a gate.
 - Merge queue adoption requires required-check workflows to include the `merge_group` trigger before the ruleset/branch protection requires those checks for queued merges.
 - CODEOWNERS placeholders block code-owner review claims; replacement with real owners is a prerequisite for claiming owner review enforcement.
 - If GitHub rulesets are introduced, state whether they layer with or replace classic branch protection and document the most restrictive effective rule.
 - Any bypass actor needs an exception record with owner, scope, expiry, compensating controls, and audit evidence. Default is no silent bypass.
 
 ## Imitate
-- "Run `make guardrails-check`; then apply `make gh-protect BRANCH=main`; record exported GitHub settings proving strict checks, admin enforcement, stale-review dismissal, code-owner review, and resolved conversations." Copy the command-plus-export proof shape.
+- "Run `make ci-local` for parity; then apply branch protection with `gh api repos/{owner}/{repo}/branches/main/protection`; record the exported GitHub settings proving strict checks, admin enforcement, stale-review dismissal, code-owner review, and resolved conversations." Copy the command-plus-export proof shape. Branch protection is operator-owned: this repository ships no target that mutates GitHub settings.
 - "If `openapi-breaking` becomes a required compatibility gate, add it to GitHub required checks and the guardrails checker in the same change." Copy the two-surface drift-control rule.
 - "If merge queue is enabled, add `merge_group` to required-check workflows before enforcing queued merges." Copy the trigger-policy coupling rule.
 - "Rulesets may be adopted only with an effective-policy note that says which classic branch-protection controls remain active." Copy the anti-ambiguity rule.
@@ -36,7 +36,7 @@ Load for protected branch setup, rulesets, required reviews, CODEOWNERS, require
 - Do not treat GitHub UI screenshots alone as durable policy if a script or guardrail can keep it repo-reviewable.
 
 ## Validation Shape
-Use `make guardrails-check`, `make gh-protect BRANCH=main` or equivalent API/ruleset export, and PR evidence that required checks pass on the merge SHA with code-owner approval and resolved conversations when required.
+Use `make ci-local` for local gate parity, a GitHub branch-protection or ruleset export (`gh api`) as the configuration evidence, and PR evidence that required checks pass on the merge SHA with code-owner approval and resolved conversations when required.
 
 ## Hand-Off Boundary
 Do not decide code ownership, API ownership, or security review ownership here. This file only turns settled ownership policy into merge enforcement.

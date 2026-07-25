@@ -99,8 +99,9 @@ address `127.0.0.1:9090`. A non-loopback diagnostics bind requires a private
 scrape network or a separate authenticated design.
 
 Public ingress note: non-local wildcard application binds require an explicit
-`NETWORK_PUBLIC_INGRESS_ENABLED` declaration. `false` asserts private ingress;
-`true` permits public application ingress because diagnostics are separate.
+`NETWORK_PUBLIC_INGRESS_ACKNOWLEDGED` declaration. It attests that the exposure
+decision was made; both `true` and `false` satisfy it and neither changes the
+bind. The deployment platform enforces reachability.
 
 ### Startup/Shutdown Path
 

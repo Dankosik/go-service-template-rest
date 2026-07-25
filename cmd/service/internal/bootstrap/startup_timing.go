@@ -13,27 +13,6 @@ func withStageBudget(parent context.Context, stageBudget time.Duration) (context
 	return context.WithTimeout(parent, stageBudget) // #nosec G118 -- cancel function is returned to caller.
 }
 
-func ensureRemainingStartupBudget(ctx context.Context, minRemaining time.Duration, stage string) error {
-	if err := ctx.Err(); err != nil {
-		return fmt.Errorf("%w: %s aborted before probe: %w", errDependencyInit, stage, err)
-	}
-	deadline, ok := ctx.Deadline()
-	if !ok {
-		return nil
-	}
-	remaining := time.Until(deadline)
-	if remaining < minRemaining {
-		return fmt.Errorf(
-			"%w: %s aborted due to low remaining startup budget (%s < %s)",
-			errDependencyInit,
-			stage,
-			remaining,
-			minRemaining,
-		)
-	}
-	return nil
-}
-
 func sleepWithContext(ctx context.Context, wait time.Duration) error {
 	if wait <= 0 {
 		return nil

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 
@@ -80,12 +81,29 @@ func SetupTracing(ctx context.Context, cfg TracingConfig) (func(context.Context)
 	return provider.Shutdown, nil
 }
 
-func rejectUnsupportedAmbientTraceExporterEnv() error {
+// AmbientOTLPExporterEnv returns the sorted names of non-empty
+// OTEL_EXPORTER_OTLP_* process variables. This repository configures the trace
+// exporter from observability.otel.exporter.* only, so these standard
+// OpenTelemetry variables are never read. Callers report them instead of
+// letting an injected collector endpoint look effective when it is not.
+func AmbientOTLPExporterEnv() []string {
+	var names []string
 	for _, entry := range os.Environ() {
 		name, value, _ := strings.Cut(entry, "=")
 		if strings.HasPrefix(name, "OTEL_EXPORTER_OTLP_") && strings.TrimSpace(value) != "" {
-			return fmt.Errorf("unsupported ambient otel exporter environment: OTEL_EXPORTER_OTLP*")
+			names = append(names, name)
 		}
+	}
+	slices.Sort(names)
+	return names
+}
+
+func rejectUnsupportedAmbientTraceExporterEnv() error {
+	if names := AmbientOTLPExporterEnv(); len(names) > 0 {
+		return fmt.Errorf(
+			"unsupported ambient otel exporter environment (%s): configure observability.otel.exporter.* instead",
+			strings.Join(names, ", "),
+		)
 	}
 
 	return nil

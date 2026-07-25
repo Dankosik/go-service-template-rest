@@ -30,6 +30,10 @@ type HTTPConfig struct {
 	IdleTimeout               time.Duration `koanf:"idle_timeout"`
 	MaxHeaderBytes            int           `koanf:"max_header_bytes"`
 	MaxBodyBytes              int64         `koanf:"max_body_bytes"`
+	// AccessLogHealthProbes re-enables access logging for /health/live and
+	// /health/ready. It defaults to false because orchestrator probes generate
+	// continuous no-signal log volume.
+	AccessLogHealthProbes bool `koanf:"access_log_health_probes"`
 }
 
 type LogConfig struct {

@@ -20,7 +20,7 @@ Load for Dockerfile expectations, image build evidence, runtime user/entrypoint 
 - Kubernetes `securityContext` policy is relevant only when Kubernetes manifests are in scope; then require `runAsNonRoot`, `allowPrivilegeEscalation: false`, `readOnlyRootFilesystem: true`, dropped capabilities, no privileged mode, and `RuntimeDefault` seccomp unless workload constraints justify an exception.
 
 ## Imitate
-- "A Dockerfile change must preserve `USER nonroot:nonroot`, exec-form `ENTRYPOINT`, digest-pinned base images, and deterministic Go build flags; evidence is the Dockerfile diff plus `make docker-container-security`." Copy the baseline-preservation rule.
+- "A Dockerfile change must preserve `USER nonroot:nonroot`, exec-form `ENTRYPOINT`, digest-pinned base images, and deterministic Go build flags; evidence is the Dockerfile diff plus `make container-security`." Copy the baseline-preservation rule.
 - "A new runtime dependency that needs a shell is an exception request, not a default image expansion." Copy the minimal-image posture.
 - "Kubernetes hardening belongs in the spec only when a manifest/admission surface will enforce it." Copy the enforcement-surface test.
 

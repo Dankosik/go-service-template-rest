@@ -36,8 +36,14 @@ when protected. Run:
 
 ```bash
 make openapi-generate
+go mod tidy
 make openapi-check
 ```
+
+The health-only baseline needs no request-binding helpers. The first operation
+with a path or query parameter makes the generated code import
+`github.com/oapi-codegen/runtime`, so `go mod tidy` records it like any other
+new import.
 
 Generated files under `internal/openapi` are derived output. Do not hand-edit
 them. Implement the generated strict-server operation in
@@ -97,6 +103,13 @@ Create a provider adapter under `internal/infra/<provider>`. Reuse
 was initialized with `OUTBOUND_HTTP=bounded`, reuse
 `internal/infra/httpclient` for fixed-authority URL validation, transport
 bounds, trace propagation, response-size limits, and idle-connection cleanup.
+Select `TargetClass: ExternalHTTPS` for public providers, or `PrivateHTTP` for
+a service reachable only on the platform's private network; set
+`PrivateHostSuffix` to that platform's private DNS zone, which defaults to
+`railway.internal` and is `svc.cluster.local` on Kubernetes. The bounded client
+ignores `HTTP_PROXY`/`HTTPS_PROXY` on purpose, because a proxy would dial on
+the client's behalf and bypass the post-DNS address gate; a provider that must
+be reached through a mandatory egress proxy uses a plain `net/http` client.
 Keep provider authentication, per-operation timeout, retry eligibility,
 provider error mapping, and generated client ownership in the adapter. Let the
 deployment platform enforce network egress. Add tests for

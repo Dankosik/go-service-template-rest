@@ -201,6 +201,7 @@ func sentinelConfigSourceValues() map[string]any {
 		"http.idle_timeout":                "61s",
 		"http.max_header_bytes":            20 << 10,
 		"http.max_body_bytes":              int64(2 << 20),
+		"http.access_log_health_probes":    true,
 
 		"log.level": "warn",
 
@@ -238,6 +239,7 @@ func expectedSentinelSnapshotValues() map[string]any {
 		"http.idle_timeout":                61 * time.Second,
 		"http.max_header_bytes":            20 << 10,
 		"http.max_body_bytes":              int64(2 << 20),
+		"http.access_log_health_probes":    true,
 
 		"log.level": slog.LevelWarn,
 

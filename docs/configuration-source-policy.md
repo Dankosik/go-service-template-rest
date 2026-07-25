@@ -22,15 +22,50 @@ validation; there is no permissive mode.
 
 ## Operational Network Policy Channel
 
-`NETWORK_PUBLIC_INGRESS_ENABLED` is a separate operator policy value owned by bootstrap, not ordinary app runtime config. Bootstrap reads it directly from the process environment after the typed `internal/config.Config` snapshot is built from YAML, `APP__...`, and loader flags.
+`NETWORK_PUBLIC_INGRESS_ACKNOWLEDGED` is a separate operator policy value owned by bootstrap, not ordinary app runtime config. Bootstrap reads it directly from the process environment after the typed `internal/config.Config` snapshot is built from YAML, `APP__...`, and loader flags.
 
-There is no YAML overlay or `APP__...` precedence chain for this value: the effective value is the process environment value visible to the service at startup. It exists because explicit declaration matters for public ingress. Missing `NETWORK_PUBLIC_INGRESS_ENABLED` is not the same as setting it to `false`; in non-local wildcard-bind deployments, missing public-ingress declaration fails closed.
+There is no YAML overlay or `APP__...` precedence chain for this value: the effective value is the process environment value visible to the service at startup. It exists because explicit declaration matters for public ingress. Missing `NETWORK_PUBLIC_INGRESS_ACKNOWLEDGED` is not the same as setting it to `false`; in non-local wildcard-bind deployments, missing public-ingress declaration fails closed.
 
-`NETWORK_PUBLIC_INGRESS_ENABLED` declares whether a non-local wildcard
-  application listener is public (`true`) or private (`false`). Both values are
-  valid when explicit; Prometheus metrics use a separate diagnostics listener.
+**This variable is an attestation, not an enforcement control.** Bootstrap
+checks that an operator answered the question, not which answer they gave:
+`true` and `false` both satisfy the gate, and the service binds the configured
+address either way. Reachability is enforced only by the deployment platform —
+firewall, security group, network policy, or service mesh — because that is the
+only layer that observes every connection attempt. Setting `false` records a
+private-ingress intent that something outside this process must implement.
 
-Do not migrate feature config into `NETWORK_*`. Outbound network admission belongs to the deployment platform (firewall, network policy, service mesh, or equivalent), where all connection attempts can actually be enforced. Application-specific allowlists, provider authentication, retries, and error mapping belong to the individual service. Go HTTP clients and the OTLP HTTP exporter use the standard `HTTP_PROXY`, `HTTPS_PROXY`, and `NO_PROXY` environment conventions when a proxy is required.
+The variable was previously named `NETWORK_PUBLIC_INGRESS_ENABLED`, whose name
+implied enforcement it never performed. The old name is detected only to raise
+an actionable rename error; it never satisfies the gate, so a deployment that
+still sets it fails closed rather than starting unacknowledged.
+
+Do not migrate feature config into `NETWORK_*`. Outbound network admission belongs to the deployment platform (firewall, network policy, service mesh, or equivalent), where all connection attempts can actually be enforced. Application-specific allowlists, provider authentication, retries, and error mapping belong to the individual service. Go HTTP clients built on `http.DefaultTransport`, including the OTLP HTTP exporter, use the standard `HTTP_PROXY`, `HTTPS_PROXY`, and `NO_PROXY` environment conventions when a proxy is required. The bounded outbound client in `internal/infra/httpclient` is the exception: it sets `Transport.Proxy = nil` because a proxy would resolve and dial on the client's behalf and bypass the post-DNS public-address gate that makes the fixed-authority guarantee meaningful. A service that must reach external providers through a mandatory egress proxy uses a plain `net/http` client in its provider adapter and relies on platform network policy instead.
+
+## OpenTelemetry Environment Policy
+
+This service configures OpenTelemetry from `observability.otel.*` only. It
+deliberately does not read the standard `OTEL_*` environment variables, so
+resource identity and exporter target cannot be retargeted by ambient process
+environment:
+
+- `OTEL_RESOURCE_ATTRIBUTES` and `OTEL_SERVICE_NAME` are ignored; the typed
+  config snapshot is the only resource source.
+- Non-empty `OTEL_EXPORTER_OTLP_*` variables are rejected at startup **when
+  this service also has `observability.otel.exporter.otlp_endpoint` set**. The
+  rejection degrades telemetry and is logged; it does not stop the service.
+- When `observability.otel.exporter.otlp_endpoint` is empty, tracing is
+  disabled (valid trace IDs are still produced for propagation and log
+  correlation, but no span is exported). If ambient `OTEL_EXPORTER_OTLP_*`
+  variables are present in that case, startup logs
+  `telemetry_ambient_env_ignored` naming the ignored variables.
+
+This matters on platforms that inject the standard variables automatically
+(OpenTelemetry Operator auto-instrumentation, Grafana Alloy, vendor add-ons).
+Injection alone does **not** enable export here. Map the injected endpoint onto
+`APP__OBSERVABILITY__OTEL__EXPORTER__OTLP_ENDPOINT` explicitly, and treat
+`telemetry_ambient_env_ignored` as the alarm that this mapping is missing.
+Telemetry setup failures never block startup: they log
+`startup_dependency_degraded` with `reason` and the underlying `err`.
 
 `observability.metrics.addr` owns the Prometheus diagnostics listener. It
 defaults to `127.0.0.1:9090`; an empty value disables HTTP exposition. Binding
@@ -70,6 +105,25 @@ Allowed roots can be overridden with `APP_CONFIG_ALLOWED_ROOTS`. In non-local en
   for the actual schema and largest production table.
 - `http.shutdown_timeout` is tunable within validation bounds. `http.readiness_propagation_delay` is counted inside it; the remaining drain budget must still cover `http.write_timeout`.
 - The default process-grace expectation is `30s` HTTP shutdown plus the bootstrap telemetry flush window (`5s`) after HTTP drain. Platform termination grace should cover readiness propagation, HTTP drain, and telemetry flush instead of only the HTTP server timeout.
+
+  **This is a deployment precondition on every platform, not only Railway.** The
+  default worst-case sequence is 35 seconds, so a grace period shorter than that
+  SIGKILLs the service mid-drain and drops in-flight requests. Default grace
+  periods of 10–30 seconds are too short. Configure it explicitly:
+
+  | Platform | Setting |
+  | --- | --- |
+  | Kubernetes | `terminationGracePeriodSeconds: 50` |
+  | Docker | `docker run --stop-timeout 45` / `docker stop --time 45` |
+  | Compose | `stop_grace_period: 45s` |
+  | ECS | `stopTimeout: 45` |
+  | Railway | `drainingSeconds` in `railway.toml` (already set to `45`) |
+
+  Changing `http.shutdown_timeout` changes this number; re-derive it and re-run
+  the runtime-image shutdown check. See
+  [Railway Deployment Profile](railway-deployment-profile.md) for the full
+  derivation.
+- `http.access_log_health_probes` defaults to `false`, so matched `GET /health/live` and `GET /health/ready` requests are served without an access-log line. Orchestrator probes otherwise produce continuous no-signal volume that every log backend bills. The exclusion is route-based: an unmatched path that merely resembles a probe is still recorded, and span route attribution is unchanged. Set it to `true` while debugging readiness.
 
 Postgres DSN driver parsing belongs to `internal/infra/postgres`. `internal/config` validates required presence and generic bounds, while bootstrap asks the Postgres adapter for a sanitized probe address before egress admission. A malformed `postgres.dsn` is therefore classified as dependency initialization during bootstrap address resolution, not as generic config validation, and adapter parse errors must not echo credentials.
 

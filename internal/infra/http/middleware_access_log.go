@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/felixge/httpsnoop"
@@ -12,7 +13,16 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-func AccessLog(log *slog.Logger, next http.Handler) http.Handler {
+// healthProbeRoutePaths are the platform probe routes owned by this template's
+// OpenAPI contract. Orchestrators poll them every few seconds for the life of
+// the pod, so logging them produces steady no-signal volume that is billed by
+// every log backend.
+var healthProbeRoutePaths = []string{"/health/live", "/health/ready"}
+
+// AccessLog records one structured line per request. When logHealthProbes is
+// false, matched health probe routes are served without a log line; span route
+// attribution is unaffected either way.
+func AccessLog(log *slog.Logger, logHealthProbes bool, next http.Handler) http.Handler {
 	if log == nil {
 		log = slog.Default()
 	}
@@ -34,6 +44,11 @@ func AccessLog(log *slog.Logger, next http.Handler) http.Handler {
 		if routePathTemplate != "" {
 			trace.SpanFromContext(r.Context()).SetAttributes(semconv.HTTPRoute(routePathTemplate))
 		}
+		// Route identity exists only after routing completes, so the probe
+		// decision belongs here and not on the level-disabled fast path.
+		if skipHealthProbeLog(r, routePathTemplate, logHealthProbes) {
+			return
+		}
 		route := joinMethodAndPattern(requestMethodLabel(r), routePathTemplate)
 		if route == "" {
 			route = "<unmatched>"
@@ -52,6 +67,15 @@ func AccessLog(log *slog.Logger, next http.Handler) http.Handler {
 			"span_id", spanID,
 		)
 	})
+}
+
+// skipHealthProbeLog matches on the routed template rather than the raw path,
+// so an unmatched request that merely looks like a probe is still recorded.
+func skipHealthProbeLog(r *http.Request, routePathTemplate string, logHealthProbes bool) bool {
+	if logHealthProbes || r == nil || r.Method != http.MethodGet {
+		return false
+	}
+	return slices.Contains(healthProbeRoutePaths, routePathTemplate)
 }
 
 func routePathTemplateForRequest(r *http.Request) string {

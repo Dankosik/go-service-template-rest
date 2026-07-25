@@ -6,11 +6,19 @@ import (
 	"strings"
 )
 
-// EnforceIngress validates that non-local wildcard listeners have an explicit
-// public/private declaration.
+// EnforceIngress requires an explicit operator acknowledgement before a
+// non-local wildcard listener starts. It attests that the exposure decision was
+// made; it does not restrict reachability, which only the deployment platform
+// (firewall, security group, network policy, or service mesh) can enforce.
+// Both "true" and "false" are accepted answers.
 func (p networkPolicy) EnforceIngress() error {
-	if p.ingressDeclarationRequired && !p.ingressPublicExplicitValue {
-		return fmt.Errorf("%w: %s must be explicitly set for non-local wildcard HTTP bind", errDependencyInit, envNetworkPublicIngressEnabled)
+	if p.ingressDeclarationRequired && !p.ingressAcknowledged {
+		return fmt.Errorf(
+			"%w: %s must be set to true or false to acknowledge the exposure of a non-local wildcard HTTP bind; "+
+				"the deployment platform still owns reachability",
+			errDependencyInit,
+			envNetworkPublicIngressAcknowledged,
+		)
 	}
 	return nil
 }

@@ -11,8 +11,48 @@ servers:
 security: []
 tags:
   - name: articles
-    description: Public read-only reference content.
+    description: Reference content with one public read and one protected write.
 paths:
+  /api/v1/articles:
+    post:
+      tags: [articles]
+      summary: Create an article
+      operationId: createArticle
+      x-security-decision:
+        exposure: protected
+        rationale: writes change stored content and require a caller identity
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ArticleDraft"
+      responses:
+        "201":
+          description: article created
+          headers:
+            Location:
+              description: URI of the created article
+              required: true
+              schema:
+                type: string
+                format: uri-reference
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Article"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
   /api/v1/articles/{slug}:
     get:
       tags: [articles]
@@ -44,6 +84,14 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerError"
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: >-
+        Demonstration bearer credential for the reference example only. A real
+        service replaces this with its own identity design; see
+        docs/first-production-feature.md.
   schemas:
     Article:
       type: object
@@ -59,6 +107,27 @@ components:
           type: string
         summary:
           type: string
+    ArticleDraft:
+      type: object
+      additionalProperties: false
+      required:
+        - slug
+        - title
+        - summary
+      properties:
+        slug:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: "^[a-z][a-z0-9-]*$"
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        summary:
+          type: string
+          minLength: 1
+          maxLength: 500
     Problem:
       type: object
       additionalProperties: false
@@ -94,8 +163,26 @@ components:
         application/problem+json:
           schema:
             $ref: "#/components/schemas/Problem"
+    Unauthorized:
+      description: credentials are missing or invalid
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Forbidden:
+      description: credentials are valid but not permitted
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
     NotFound:
       description: article was not found
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Conflict:
+      description: an article with this slug already exists
       content:
         application/problem+json:
           schema:

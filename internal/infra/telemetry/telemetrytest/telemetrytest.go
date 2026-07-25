@@ -13,7 +13,6 @@ import (
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
-	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
@@ -62,28 +61,6 @@ func InstallSpanRecorder(tb testing.TB) *tracetest.SpanRecorder {
 		}
 	})
 	return recorder
-}
-
-// InstallManualReader installs a process-wide meter provider backed by a
-// manual reader so tests can collect metrics on demand. The previous meter
-// provider is restored and the temporary provider is shut down when the test
-// finishes.
-func InstallManualReader(tb testing.TB) *sdkmetric.ManualReader {
-	tb.Helper()
-
-	previousMeterProvider := otel.GetMeterProvider()
-	reader := sdkmetric.NewManualReader()
-	provider := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
-	otel.SetMeterProvider(provider)
-	tb.Cleanup(func() {
-		otel.SetMeterProvider(previousMeterProvider)
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), providerShutdownTimeout)
-		defer cancel()
-		if err := provider.Shutdown(shutdownCtx); err != nil {
-			tb.Errorf("shutdown test meter provider: %v", err)
-		}
-	})
-	return reader
 }
 
 // ClearAmbientExporterEnv blanks every ambient OTLP exporter and proxy

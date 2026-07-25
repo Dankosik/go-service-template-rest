@@ -1,5 +1,11 @@
 // Package httpclient owns the transport-wide safety defaults for outbound HTTP.
 // Provider adapters own authentication and must not put credentials in URLs.
+//
+// The transport deliberately ignores HTTP_PROXY/HTTPS_PROXY: a proxy resolves
+// and dials on the client's behalf, which would bypass the post-DNS
+// public-address gate that makes the fixed-authority guarantee meaningful. A
+// service that must egress through a mandatory proxy uses a plain net/http
+// client in its provider adapter instead.
 package httpclient
 
 import (
@@ -39,15 +45,26 @@ type TargetClass uint8
 const (
 	// ExternalHTTPS permits only HTTPS targets resolving to public addresses.
 	ExternalHTTPS TargetClass = iota + 1
-	// RailwayPrivateHTTP permits only HTTP targets under railway.internal.
-	RailwayPrivateHTTP
+	// PrivateHTTP permits only plaintext HTTP targets under the platform's
+	// private DNS zone, named by Config.PrivateHostSuffix. Transport security
+	// is the platform's private network, not TLS.
+	PrivateHTTP
 )
+
+// DefaultPrivateHostSuffix is the private DNS zone assumed when
+// Config.PrivateHostSuffix is empty. Deployments on other platforms set their
+// own zone, for example ".internal" or ".svc.cluster.local".
+const DefaultPrivateHostSuffix = ".railway.internal"
 
 // Config defines the required safety bounds for one provider authority.
 type Config struct {
-	DependencyName         string
-	BaseURL                string
-	TargetClass            TargetClass
+	DependencyName string
+	BaseURL        string
+	TargetClass    TargetClass
+	// PrivateHostSuffix is the required hostname suffix for PrivateHTTP
+	// targets. Empty means DefaultPrivateHostSuffix. It is ignored for
+	// ExternalHTTPS.
+	PrivateHostSuffix      string
 	RequestTimeout         time.Duration
 	ResponseHeaderTimeout  time.Duration
 	MaxResponseHeaderBytes int64
@@ -175,7 +192,7 @@ func validateConfig(cfg Config) (*url.URL, error) {
 	if baseURL.User != nil || baseURL.RawQuery != "" || baseURL.ForceQuery || baseURL.Fragment != "" {
 		return nil, errors.New("build outbound HTTP client: base URL cannot contain user info, query, or fragment")
 	}
-	if err := validateTarget(baseURL, cfg.TargetClass); err != nil {
+	if err := validateTarget(baseURL, cfg.TargetClass, privateHostSuffix(cfg.PrivateHostSuffix)); err != nil {
 		return nil, err
 	}
 
@@ -200,7 +217,20 @@ func validateBounds(cfg Config) error {
 	return nil
 }
 
-func validateTarget(baseURL *url.URL, targetClass TargetClass) error {
+// privateHostSuffix normalizes the configured private DNS zone and applies the
+// platform default when unset.
+func privateHostSuffix(configured string) string {
+	suffix := strings.ToLower(strings.TrimSpace(configured))
+	if suffix == "" {
+		return DefaultPrivateHostSuffix
+	}
+	if !strings.HasPrefix(suffix, ".") {
+		suffix = "." + suffix
+	}
+	return strings.TrimSuffix(suffix, ".")
+}
+
+func validateTarget(baseURL *url.URL, targetClass TargetClass, requiredPrivateSuffix string) error {
 	switch targetClass {
 	case ExternalHTTPS:
 		if !strings.EqualFold(baseURL.Scheme, "https") {
@@ -209,13 +239,19 @@ func validateTarget(baseURL *url.URL, targetClass TargetClass) error {
 		if address, parseErr := netip.ParseAddr(baseURL.Hostname()); parseErr == nil && isForbiddenExternalAddress(address) {
 			return ErrTargetDenied
 		}
-	case RailwayPrivateHTTP:
+	case PrivateHTTP:
+		if requiredPrivateSuffix == "." || requiredPrivateSuffix == "" {
+			return errors.New("build outbound HTTP client: private target requires a private host suffix")
+		}
 		if !strings.EqualFold(baseURL.Scheme, "http") {
-			return errors.New("build outbound HTTP client: Railway private target requires HTTP")
+			return errors.New("build outbound HTTP client: private target requires HTTP")
 		}
 		hostname := strings.ToLower(strings.TrimSuffix(baseURL.Hostname(), "."))
-		if !strings.HasSuffix(hostname, ".railway.internal") {
-			return errors.New("build outbound HTTP client: Railway private target requires a railway.internal hostname")
+		if !strings.HasSuffix(hostname, requiredPrivateSuffix) {
+			return fmt.Errorf(
+				"build outbound HTTP client: private target requires a %s hostname",
+				strings.TrimPrefix(requiredPrivateSuffix, "."),
+			)
 		}
 	default:
 		return errors.New("build outbound HTTP client: target class is invalid")
