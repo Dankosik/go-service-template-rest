@@ -4,7 +4,6 @@ import (
 	"errors"
 	"strings"
 	"testing"
-	"time"
 )
 
 func TestUnknownKeyRejects(t *testing.T) {
@@ -161,41 +160,6 @@ func TestTST003RequiredIfEnabledContracts(t *testing.T) {
 			t.Fatalf("Postgres.DSN = %q, want %q", cfg.Postgres.DSN, dsn)
 		}
 	})
-}
-
-func TestValidatePostgresReadinessBudget(t *testing.T) {
-	t.Parallel()
-
-	disabled := Config{
-		HTTP:     HTTPConfig{ReadinessTimeout: time.Second},
-		Postgres: PostgresConfig{HealthcheckTimeout: 10 * time.Second},
-	}
-	if err := validatePostgresReadinessBudget(disabled); err != nil {
-		t.Fatalf("validatePostgresReadinessBudget() error = %v, want nil for disabled postgres", err)
-	}
-
-	tooSmall := Config{
-		HTTP: HTTPConfig{ReadinessTimeout: time.Second},
-		Postgres: PostgresConfig{
-			Enabled:            true,
-			HealthcheckTimeout: 2 * time.Second,
-		},
-	}
-	err := validatePostgresReadinessBudget(tooSmall)
-	if err == nil {
-		t.Fatal("validatePostgresReadinessBudget() error = nil, want budget error")
-	}
-	if !errors.Is(err, ErrValidate) {
-		t.Fatalf("error = %v, want ErrValidate", err)
-	}
-	if !strings.Contains(err.Error(), "postgres.healthcheck_timeout") {
-		t.Fatalf("error = %v, want readiness probe budget name", err)
-	}
-
-	tooSmall.HTTP.ReadinessTimeout = 2 * time.Second
-	if err := validatePostgresReadinessBudget(tooSmall); err != nil {
-		t.Fatalf("validatePostgresReadinessBudget() error = %v, want nil when budget fits", err)
-	}
 }
 
 //nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.

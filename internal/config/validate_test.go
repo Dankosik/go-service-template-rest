@@ -158,28 +158,9 @@ func TestReadinessTimeoutMustNotExceedWriteTimeout(t *testing.T) {
 	}
 }
 
-func TestReadinessTimeoutMustCoverEnabledProbeBudget(t *testing.T) {
-	resetConfigEnv(t)
-
-	t.Setenv("APP__HTTP__READINESS_TIMEOUT", "6s")
-	t.Setenv("APP__POSTGRES__ENABLED", "true")
-	t.Setenv("APP__POSTGRES__DSN", "postgres://user:pass@localhost:5432/app?sslmode=disable")
-	t.Setenv("APP__POSTGRES__HEALTHCHECK_TIMEOUT", "7s")
-
-	_, _, err := LoadDetailed(LoadOptions{})
-	if err == nil {
-		t.Fatalf("LoadDetailed() expected validation error for readiness probe budget")
-	}
-	if !errors.Is(err, ErrValidate) {
-		t.Fatalf("error = %v, want ErrValidate", err)
-	}
-	if !strings.Contains(err.Error(), "readiness probe budget") {
-		t.Fatalf("error = %v, want readiness probe budget policy", err)
-	}
-	if !strings.Contains(err.Error(), "postgres.healthcheck_timeout") {
-		t.Fatalf("error = %v, want enabled readiness probe name", err)
-	}
-}
+// The readiness/health-check relationship is owned by
+// bootstrap.validateStartupBudgetCompatibility, which enforces it with the
+// startup headroom this package cannot see. It is proved there.
 
 func TestMigrationTimeoutsMustFitOverallBudget(t *testing.T) {
 	resetConfigEnv(t)

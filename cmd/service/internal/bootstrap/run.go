@@ -18,20 +18,34 @@ import (
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 )
 
-// Budgets owned by every profile. Dependency-specific budgets and retry bounds
-// live with their dependency stage so a profile that drops the dependency drops
-// them in the same file.
+// Budgets owned by every profile. How they nest, outermost first:
+//
+//	startupBudget             30s   flag parsing through readiness admission
+//	 ├─ startupTelemetryBudget 2s   metrics setup, then tracing setup
+//	 ├─ postgresStartupBudget 15s   PostgreSQL profile only (startup_dependencies.go)
+//	 │   └─ postgresProbeBudget 5s  pool open and first ping
+//	 └─ http.readiness_timeout      startup admission (typed config)
+//
+//	telemetryShutdownTimeout   5s   span and metric flush, after the HTTP drain
+//
+// Dependency-specific budgets live with their dependency stage so a profile that
+// drops the dependency drops them in the same file.
 const (
 	telemetryShutdownTimeout = 5 * time.Second
 	startupBudget            = 30 * time.Second
-	startupFailFastThreshold = 150 * time.Millisecond
 	startupTelemetryBudget   = 2 * time.Second
 
-	// postgresProbeBudget also bounds config compatibility validation, which
-	// every profile keeps.
+	// postgresProbeBudget bounds the pool open and first ping. It is also the
+	// ceiling that config compatibility validation enforces on
+	// postgres.connect_timeout and postgres.healthcheck_timeout, so a
+	// configured timeout can never exceed the stage that runs it.
 	postgresProbeBudget = 5 * time.Second
 
-	startupReadinessHeadroom = startupFailFastThreshold
+	// startupReadinessHeadroom is the margin config compatibility validation
+	// requires between a dependency health-check budget and
+	// http.readiness_timeout, so a probe that spends its whole budget still
+	// leaves room to answer the request.
+	startupReadinessHeadroom = 150 * time.Millisecond
 )
 
 func Run(args []string) (runErr error) {

@@ -202,31 +202,41 @@ func TestInitRuntimeDependenciesRejectsUnavailablePostgres(t *testing.T) {
 	}
 }
 
-func TestInitPostgresDependencyRejectsLowRemainingStartupBudget(t *testing.T) {
+// A cancelled dependency context must not be reported as a healthy pool. The
+// stage no longer pre-checks remaining budget: the context deadline enforces the
+// bound, and the pre-check only changed the error message.
+func TestInitPostgresDependencyRejectsCancelledDependencyContext(t *testing.T) {
 	t.Parallel()
 
-	probeCtx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
+	probeCtx, cancel := context.WithCancel(context.Background())
+	cancel()
 
 	runtime := postgresStartupRuntime{
 		tracer:        otel.Tracer("test"),
 		bootstrapSpan: trace.SpanFromContext(context.Background()),
 		cfg: config.Config{Postgres: config.PostgresConfig{
-			Enabled: true,
-			DSN:     "postgres://user:pass@localhost:5432/app?sslmode=disable",
+			Enabled:            true,
+			DSN:                "postgres://user:pass@localhost:5432/app?sslmode=disable",
+			ConnectTimeout:     time.Second,
+			HealthcheckTimeout: time.Second,
+			MaxOpenConns:       1,
+			ConnMaxLifetime:    time.Minute,
 		}},
 		log: slog.New(slog.DiscardHandler),
 	}
 
-	_, err := initPostgresDependency(context.Background(), probeCtx, runtime)
+	pool, err := initPostgresDependency(context.Background(), probeCtx, runtime)
 	if err == nil {
-		t.Fatal("initPostgresDependency() error = nil, want low-budget rejection")
+		t.Fatal("initPostgresDependency() error = nil, want cancellation rejection")
+	}
+	if pool != nil {
+		t.Fatal("initPostgresDependency() pool != nil, want no pool handed back on failure")
 	}
 	if !errors.Is(err, errDependencyInit) {
 		t.Fatalf("initPostgresDependency() error = %v, want wrapped %v", err, errDependencyInit)
 	}
-	if !strings.Contains(err.Error(), "postgres init skipped") {
-		t.Fatalf("initPostgresDependency() error = %v, want skipped context", err)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("initPostgresDependency() error = %v, want wrapped context.Canceled", err)
 	}
 }
 

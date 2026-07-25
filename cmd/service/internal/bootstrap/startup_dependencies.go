@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"math/rand/v2"
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/config"
@@ -22,22 +21,9 @@ const (
 	startupPostgresProbeStage     = "startup.probe.postgres"
 )
 
-// Budgets and retry bounds owned by the PostgreSQL startup stage. They live
-// here so the DATABASE=none profile removes them together with this file.
-const (
-	startupReserveBudget  = 3 * time.Second
-	postgresStartupBudget = 15 * time.Second
-
-	startupRetryBaseDelay   = 50 * time.Millisecond
-	startupRetryMaxDelay    = 250 * time.Millisecond
-	postgresStartupAttempts = 2
-)
-
-type (
-	postgresConnectFunc    func(context.Context, postgres.Options) (*postgres.Pool, error)
-	postgresRetryDelayFunc func(int) time.Duration
-	postgresRetrySleepFunc func(context.Context, time.Duration) error
-)
+// Budget owned by the PostgreSQL startup stage. It lives here so the
+// DATABASE=none profile removes it together with this file.
+const postgresStartupBudget = 15 * time.Second
 
 type postgresStartupRuntime struct {
 	tracer        trace.Tracer
@@ -77,86 +63,24 @@ func initRuntimeDependencies(
 	}, nil
 }
 
-func initPostgresWithRetry(ctx context.Context, cfg config.PostgresConfig) (*postgres.Pool, error) {
-	return initPostgresWithRetryFunc(ctx, cfg, postgres.New, fullJitterDelay, sleepWithContext)
-}
-
-func initPostgresWithRetryFunc(
-	ctx context.Context,
-	cfg config.PostgresConfig,
-	connect postgresConnectFunc,
-	delayFor postgresRetryDelayFunc,
-	sleep postgresRetrySleepFunc,
-) (*postgres.Pool, error) {
-	options := postgres.Options{
+// initPostgres opens the pool once. There is deliberately no retry loop here:
+// postgres.ConnectTimeout already bounds a slow dependency, and a bounded
+// in-process retry cannot survive the failure it would be for — a database
+// restart takes seconds to minutes, far beyond any startup budget. Restarting
+// the process is the platform's job, and every supported deployment target
+// already has a restart policy for it.
+func initPostgres(ctx context.Context, cfg config.PostgresConfig) (*postgres.Pool, error) {
+	pg, err := postgres.New(ctx, postgres.Options{
 		DSN:                cfg.DSN,
 		ConnectTimeout:     cfg.ConnectTimeout,
 		HealthcheckTimeout: cfg.HealthcheckTimeout,
 		MaxOpenConns:       cfg.MaxOpenConns,
 		ConnMaxLifetime:    cfg.ConnMaxLifetime,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("%w: postgres init failed: %w", errDependencyInit, err)
 	}
-
-	var lastErr error
-	for attempt := 1; attempt <= postgresStartupAttempts; attempt++ {
-		if err := ctx.Err(); err != nil {
-			return nil, fmt.Errorf("%w: postgres init canceled: %w", errDependencyInit, err)
-		}
-
-		pg, err := connect(ctx, options)
-		if err == nil {
-			return pg, nil
-		}
-
-		lastErr = err
-		if !shouldRetryPostgresStartup(err, attempt) {
-			break
-		}
-
-		delay := delayFor(attempt)
-		if err := sleep(ctx, delay); err != nil {
-			return nil, fmt.Errorf("%w: postgres retry wait canceled: %w", errDependencyInit, err)
-		}
-	}
-
-	return nil, fmt.Errorf("%w: postgres init failed after retries: %w", errDependencyInit, lastErr)
-}
-
-func ensureRemainingStartupBudget(ctx context.Context, minRemaining time.Duration, stage string) error {
-	if err := ctx.Err(); err != nil {
-		return fmt.Errorf("%w: %s aborted before probe: %w", errDependencyInit, stage, err)
-	}
-	deadline, ok := ctx.Deadline()
-	if !ok {
-		return nil
-	}
-	remaining := time.Until(deadline)
-	if remaining < minRemaining {
-		return fmt.Errorf(
-			"%w: %s aborted due to low remaining startup budget (%s < %s)",
-			errDependencyInit,
-			stage,
-			remaining,
-			minRemaining,
-		)
-	}
-	return nil
-}
-
-func shouldRetryPostgresStartup(err error, attempt int) bool {
-	if attempt >= postgresStartupAttempts {
-		return false
-	}
-	return errors.Is(err, postgres.ErrConnect) || errors.Is(err, postgres.ErrHealthcheck)
-}
-
-func fullJitterDelay(attempt int) time.Duration {
-	backoff := startupRetryBaseDelay << (attempt - 1)
-	backoff = min(backoff, startupRetryMaxDelay)
-	if backoff <= 0 {
-		return 0
-	}
-
-	return rand.N(backoff + 1) // #nosec G404 -- startup retry jitter is not security-sensitive.
+	return pg, nil
 }
 
 type postgresReadinessProbe struct {
@@ -194,20 +118,10 @@ func initPostgresDependency(bootstrapCtx context.Context, dependencyCtx context.
 		)
 	}
 
-	if err := ensureRemainingStartupBudget(
-		dependencyCtx,
-		startupFailFastThreshold+startupReserveBudget,
-		startupPostgresProbeStage,
-	); err != nil {
-		rejectErr := fmt.Errorf("%s init skipped: %w", startupDependencyPostgres, err)
-		recordDependencyProbeRejection(bootstrapCtx, runtime, rejectErr)
-		return nil, rejectErr
-	}
-
 	probeCtx, probeCancel := withStageBudget(dependencyCtx, postgresProbeBudget)
 	probeCtx, probeSpan := runtime.tracer.Start(probeCtx, startupPostgresProbeStage)
 
-	pg, probeErr := initPostgresWithRetry(probeCtx, runtime.cfg.Postgres)
+	pg, probeErr := initPostgres(probeCtx, runtime.cfg.Postgres)
 	parentErr := dependencyCtx.Err()
 	stageErr := probeCtx.Err()
 	if probeErr == nil {

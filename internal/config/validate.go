@@ -37,9 +37,6 @@ func validateConfig(ctx context.Context, cfg *Config, unknownKeys []string) erro
 	if err := validatePostgres(cfg.Postgres); err != nil {
 		return err
 	}
-	if err := validatePostgresReadinessBudget(*cfg); err != nil {
-		return err
-	}
 	if err := checkValidateContext(ctx); err != nil {
 		return err
 	}
@@ -201,20 +198,6 @@ func validateHTTPShutdownBudget(cfg HTTPConfig) error {
 func validateHTTPReadinessWriteTimeout(cfg HTTPConfig) error {
 	if cfg.ReadinessTimeout > cfg.WriteTimeout {
 		return fmt.Errorf("%w: http.readiness_timeout must be <= http.write_timeout", ErrValidate)
-	}
-	return nil
-}
-
-func validatePostgresReadinessBudget(cfg Config) error {
-	if !cfg.Postgres.Enabled {
-		return nil
-	}
-	if cfg.HTTP.ReadinessTimeout < cfg.Postgres.HealthcheckTimeout {
-		return fmt.Errorf(
-			"%w: http.readiness_timeout must be >= readiness probe budget (postgres.healthcheck_timeout = %s)",
-			ErrValidate,
-			cfg.Postgres.HealthcheckTimeout,
-		)
 	}
 	return nil
 }
