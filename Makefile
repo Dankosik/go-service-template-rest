@@ -386,10 +386,6 @@ migration-validate:
 	port="$${address##*:}"; \
 	test -n "$$port" || { echo "failed to resolve rehearsal Postgres port"; exit 1; }; \
 	dsn="postgres://app:app@localhost:$$port/app?sslmode=disable"; \
-	MIGRATION_REHEARSAL=1 \
-		APP__POSTGRES__ENABLED=true \
-		APP__POSTGRES__DSN="$$dsn" \
-		go run ./cmd/migrate validate; \
 	image="$(RUNTIME_IMAGE)"; \
 	if [ -z "$$image" ]; then image="$(SERVICE_NAME):migration"; docker build -f build/docker/Dockerfile -t "$$image" .; fi; \
 	docker run --rm --network "$${project}_default" \

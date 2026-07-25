@@ -7,14 +7,22 @@ import (
 	"testing"
 )
 
-func TestMetricsHandlerExposesRuntimeCollectors(t *testing.T) {
+// TestMetricsHandlerExposesProcessCollectorOnly pins the split between the two
+// runtime signals. Process-level series come from the operating system and are
+// registered here, so they exist on the scrape path only. Go runtime series come
+// from the OpenTelemetry instruments SetupMetrics registers on the meter provider,
+// so they reach the OTLP reader too — which is why the Prometheus Go collector
+// that used to be registered here is gone, and why go_gc_duration_seconds must
+// not come back: two naming schemes for the same facts is what this replaced.
+func TestMetricsHandlerExposesProcessCollectorOnly(t *testing.T) {
 	t.Parallel()
 
 	metricsText := collectMetricsText(t, New())
-	for _, name := range []string{"go_gc_duration_seconds", "process_cpu_seconds_total"} {
-		if !strings.Contains(metricsText, name) {
-			t.Fatalf("metrics output does not contain %q", name)
-		}
+	if !strings.Contains(metricsText, "process_cpu_seconds_total") {
+		t.Fatal("metrics output does not contain process_cpu_seconds_total")
+	}
+	if strings.Contains(metricsText, "go_gc_duration_seconds") {
+		t.Fatal("metrics output contains the Prometheus Go collector, which the OTel runtime instruments replaced")
 	}
 	for _, removed := range []string{
 		"config_load_duration_seconds",

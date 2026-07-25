@@ -13,6 +13,7 @@ import (
 
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 	"github.com/example/go-service-template-rest/internal/openapi"
+	"github.com/example/go-service-template-rest/internal/problem"
 	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/go-chi/chi/v5"
 	oapimiddleware "github.com/oapi-codegen/nethttp-middleware"
@@ -44,9 +45,15 @@ type RouterConfig struct {
 	AuthenticateChallenge string
 	// Idempotency makes a repeated POST or PATCH carrying an Idempotency-Key
 	// answer with the first attempt's result instead of doing the work twice.
-	// Nil leaves the middleware out of the chain entirely; see Idempotent for
-	// what a store has to guarantee.
+	// Nil leaves the middleware out of the chain entirely; see IdempotencyStore
+	// for what a store has to guarantee.
 	Idempotency IdempotencyStore
+	// IdempotencyOutcomeTimeout bounds recording or releasing a reservation after
+	// the handler has answered. It is required when Idempotency is set: that call
+	// is detached from the request budget on purpose, so without a bound of its own
+	// a stalled store holds the handler goroutine and its in-flight slot forever.
+	// See idempotencyOutcomeContext.
+	IdempotencyOutcomeTimeout time.Duration
 }
 
 // defaultAuthenticateChallenge is the HTTP authentication scheme advertised when
@@ -112,6 +119,11 @@ func Harden(log *slog.Logger, metrics *telemetry.Metrics, cfg RouterConfig, apiS
 	if cfg.MaxInFlight < 0 {
 		return nil, fmt.Errorf("http router: max in flight must be >= 0")
 	}
+	// Rejected at construction rather than defaulted, because the default that
+	// would look harmless here is the unbounded one this replaced.
+	if cfg.Idempotency != nil && cfg.IdempotencyOutcomeTimeout <= 0 {
+		return nil, fmt.Errorf("http router: idempotency outcome timeout must be > 0 when an idempotency store is configured")
+	}
 
 	otelMiddleware := otelhttp.NewMiddleware(
 		"http.server",
@@ -138,7 +150,9 @@ func Harden(log *slog.Logger, metrics *telemetry.Metrics, cfg RouterConfig, apiS
 		// response the operation actually produced, and a panic that Recover
 		// turns into a 500 must unwind through it so the reservation is released
 		// rather than recorded as a completed attempt.
-		func(next http.Handler) http.Handler { return Idempotent(cfg.Idempotency, log, next) },
+		func(next http.Handler) http.Handler {
+			return Idempotent(cfg.Idempotency, cfg.IdempotencyOutcomeTimeout, log, next)
+		},
 	)
 
 	return RequestCorrelation(rootRouter), nil
@@ -211,12 +225,12 @@ func generatedStrictServerOptions(rejectRequest func(http.ResponseWriter, *http.
 			// it as 500 would hide every slow dependency inside the error rate.
 			if errors.Is(err, context.DeadlineExceeded) {
 				writeProblem(w, r, problemResponse{
-					code:   problemCodeGatewayTimeout,
+					code:   problem.CodeGatewayTimeout,
 					detail: "request exceeded its time budget",
 				})
 				return
 			}
-			writeProblem(w, r, problemResponse{code: problemCodeInternalError, detail: "request failed"})
+			writeProblem(w, r, problemResponse{code: problem.CodeInternalError, detail: "request failed"})
 		},
 	}
 }
@@ -235,7 +249,7 @@ func handleMalformedGeneratedRequest(log *slog.Logger, w http.ResponseWriter, r 
 	logStrictRequestError(log, r, err)
 	var maxBytesError *http.MaxBytesError
 	if errors.As(err, &maxBytesError) {
-		writeProblem(w, r, problemResponse{code: problemCodeRequestEntityTooLarge, detail: "request body exceeds limit"})
+		writeProblem(w, r, problemResponse{code: problem.CodeRequestEntityTooLarge, detail: "request body exceeds limit"})
 		return
 	}
 	writeMalformedRequestProblem(w, r)
@@ -258,7 +272,7 @@ func handleGeneratedRequestError(log *slog.Logger, challenge string) func(http.R
 			// key like "bearerAuth" is not a legal challenge under RFC 9110. Only
 			// the service knows which scheme it implements, so it supplies this.
 			w.Header().Set("WWW-Authenticate", challenge)
-			writeProblem(w, r, problemResponse{code: problemCodeUnauthorized, detail: "credentials are missing or invalid"})
+			writeProblem(w, r, problemResponse{code: problem.CodeUnauthorized, detail: "credentials are missing or invalid"})
 			return
 		}
 		handleMalformedGeneratedRequest(log, w, r, err)
@@ -281,17 +295,16 @@ func logStrictRequestError(log *slog.Logger, r *http.Request, err error) {
 		return
 	}
 
-	attrs := []any{slog.String("error_class", strictRequestErrorClass(err))}
+	// Correlation comes from the context rather than from attributes assembled
+	// here; see internal/observability/logctx. A nil request still has to be
+	// handled: the generated error handlers are declared with one, and this must
+	// not panic on the path whose whole job is reporting a malformed request.
+	//nolint:contextcheck // There is no parent context when the request is nil, which is the only case this branch exists for.
+	ctx := context.Background()
 	if r != nil {
-		if requestID := requestIDFromContext(r.Context()); requestID != "" {
-			attrs = append(attrs, slog.String("request_id", requestID))
-		}
-		traceID, spanID := traceIDsFromContext(r.Context())
-		if traceID != "" {
-			attrs = append(attrs, slog.String("trace_id", traceID), slog.String("span_id", spanID))
-		}
+		ctx = r.Context()
 	}
-	log.Warn("rejected malformed HTTP request", attrs...)
+	log.WarnContext(ctx, "rejected malformed HTTP request", slog.String("error_class", strictRequestErrorClass(err)))
 }
 
 func strictRequestErrorClass(err error) string {
@@ -303,13 +316,13 @@ func strictRequestErrorClass(err error) string {
 
 func applyHTTPPolicy(root chi.Router) {
 	root.NotFound(func(w http.ResponseWriter, r *http.Request) {
-		writeProblem(w, r, problemResponse{code: problemCodeNotFound, detail: "resource not found"})
+		writeProblem(w, r, problemResponse{code: problem.CodeNotFound, detail: "resource not found"})
 	})
 
 	root.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
 		allowMethods := allowedMethodsForPath(root, r.URL.Path)
 		if len(allowMethods) == 0 {
-			writeProblem(w, r, problemResponse{code: problemCodeNotFound, detail: "resource not found"})
+			writeProblem(w, r, problemResponse{code: problem.CodeNotFound, detail: "resource not found"})
 			return
 		}
 		allowMethods = ensureMethodAllowed(allowMethods, http.MethodOptions)
@@ -318,7 +331,7 @@ func applyHTTPPolicy(root chi.Router) {
 			setAllowHeader(w, allowMethods)
 
 			if isCORSPreflightRequest(r) {
-				writeProblem(w, r, problemResponse{code: problemCodeMethodNotAllowed, detail: "cors preflight is not enabled"})
+				writeProblem(w, r, problemResponse{code: problem.CodeMethodNotAllowed, detail: "cors preflight is not enabled"})
 				return
 			}
 
@@ -327,7 +340,7 @@ func applyHTTPPolicy(root chi.Router) {
 		}
 
 		setAllowHeader(w, allowMethods)
-		writeProblem(w, r, problemResponse{code: problemCodeMethodNotAllowed, detail: "method is not allowed for this resource"})
+		writeProblem(w, r, problemResponse{code: problem.CodeMethodNotAllowed, detail: "method is not allowed for this resource"})
 	})
 }
 
@@ -377,22 +390,9 @@ func RejectResponse() func(http.ResponseWriter, *http.Request, error) {
 	return generatedStrictServerOptions(nil).ResponseErrorHandlerFunc
 }
 
-// ProblemTypeURI maps an HTTP status to the stable problem type this repository
-// publishes for it, so a service filling its own generated Problem values cannot
-// drift from the envelope the fallback paths emit. It reports false for a status
-// this repository publishes no type for.
-//
-// The boolean is the point. This used to return the internal-error type for any
-// uncatalogued status, so a service asking for a 409 received a URI announcing a
-// server fault, in a body that still carried status 409 — and nothing indicated
-// the lookup had failed. A helper whose failure mode is a plausible wrong answer
-// is worse than one that refuses; a caller that sees false has a status this
-// repository does not describe, and must publish its own type for it.
-func ProblemTypeURI(status int) (string, bool) {
-	for _, definition := range problemCatalog {
-		if definition.status == status {
-			return definition.typeURI, true
-		}
-	}
-	return "", false
-}
+// The status-to-problem lookup a service needs for its own generated Problem
+// values is deliberately not here. It lives in internal/problem, because
+// depguard forbids a feature package from importing this adapter — so a helper
+// exported from here was reachable only by another adapter, and every service's
+// httpapi package hand-copied the table instead. The copy in the reference
+// example drifted exactly once, and answered a 409 with the internal-error type.

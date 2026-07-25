@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"slices"
 	"strings"
 	"sync"
@@ -17,19 +16,27 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
 
-func TestSetupTracingUsesConfigResourceAttributesOnly(t *testing.T) {
+// TestSetupTracingMergesAmbientResourceUnderConfig pins both halves of the merge.
+// Configured attributes win, so a platform cannot silently rename this service in
+// every dashboard. Attributes it does not set survive, which is how k8s.pod.name
+// and container.id reach the exported resource — the version this replaced unset
+// OTEL_RESOURCE_ATTRIBUTES around provider construction and discarded them, while
+// protecting nothing, because resource.Merge already gives the local resource
+// precedence.
+func TestSetupTracingMergesAmbientResourceUnderConfig(t *testing.T) {
 	t.Setenv("OTEL_RESOURCE_ATTRIBUTES", "service.name=env-service,service.version=env-version,deployment.environment.name=env,env.only=true")
 	t.Setenv("OTEL_SERVICE_NAME", "env-service-name")
 
 	telemetrytest.RestoreGlobals(t)
 
 	_, shutdown, err := SetupTracing(context.Background(), TracingConfig{
-		ServiceName:      " config-service ",
-		ServiceVersion:   " config-version ",
-		DeploymentEnv:    " config-env ",
-		TracesSampler:    "always_on",
-		TracesSamplerArg: 0.1,
-		Exporter:         testTraceExporter(t),
+		ServiceName:       " config-service ",
+		ServiceVersion:    " config-version ",
+		ServiceInstanceID: " config-instance ",
+		DeploymentEnv:     " config-env ",
+		TracesSampler:     "always_on",
+		TracesSamplerArg:  0.1,
+		Exporter:          testTraceExporter(t),
 	})
 	if err != nil {
 		t.Fatalf("SetupTracing() error = %v", err)
@@ -66,6 +73,7 @@ func TestSetupTracingUsesConfigResourceAttributesOnly(t *testing.T) {
 	for key, want := range map[string]string{
 		"service.name":                "config-service",
 		"service.version":             "config-version",
+		"service.instance.id":         "config-instance",
 		"deployment.environment.name": "config-env",
 	} {
 		got, ok := attrs[key]
@@ -73,8 +81,8 @@ func TestSetupTracingUsesConfigResourceAttributesOnly(t *testing.T) {
 			t.Fatalf("resource attribute %q = %q (present %v), want %q; attrs=%v", key, got, ok, want, attrs)
 		}
 	}
-	if _, ok := attrs["env.only"]; ok {
-		t.Fatalf("resource attribute env.only was read from OTEL_RESOURCE_ATTRIBUTES: %v", attrs)
+	if got, ok := attrs["env.only"]; !ok || got != "true" {
+		t.Fatalf("ambient resource attribute env.only = %q (present %v), want it merged; attrs=%v", got, ok, attrs)
 	}
 }
 
@@ -203,7 +211,12 @@ func testTraceExporter(t *testing.T) TraceExporterConfig {
 	return TraceExporterConfig{OTLPEndpoint: collector.URL}
 }
 
-func TestSetupTracingSerializesResourceEnvSuppression(t *testing.T) {
+// TestSetupTracingIsSafeUnderConcurrentSetup keeps the provider installation
+// serialized. It used to also assert that the ambient resource variables were
+// restored after each call, because setup unset them around provider construction;
+// that suppression is gone, so what remains to prove is that concurrent callers do
+// not corrupt the globals under the race detector.
+func TestSetupTracingIsSafeUnderConcurrentSetup(t *testing.T) {
 	const (
 		resourceAttrs = "service.name=env-service,service.version=env-version,deployment.environment.name=env,env.only=true"
 		serviceName   = "env-service-name"
@@ -247,12 +260,6 @@ func TestSetupTracingSerializesResourceEnvSuppression(t *testing.T) {
 		if err := shutdown(context.Background()); err != nil {
 			t.Fatalf("shutdown tracing: %v", err)
 		}
-	}
-	if got := os.Getenv("OTEL_RESOURCE_ATTRIBUTES"); got != resourceAttrs {
-		t.Fatalf("OTEL_RESOURCE_ATTRIBUTES = %q, want %q", got, resourceAttrs)
-	}
-	if got := os.Getenv("OTEL_SERVICE_NAME"); got != serviceName {
-		t.Fatalf("OTEL_SERVICE_NAME = %q, want %q", got, serviceName)
 	}
 }
 

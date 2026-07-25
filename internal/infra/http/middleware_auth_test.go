@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/example/go-service-template-rest/internal/problem"
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/getkin/kin-openapi/routers/gorillamux"
@@ -60,7 +61,7 @@ func TestUnwiredAuthenticationFailsClosedAs401(t *testing.T) {
 		t.Fatalf("WWW-Authenticate = %q, want %q", got, "Bearer")
 	}
 	assertProblemContentType(t, resp.Header())
-	assertProblemCode(t, resp, problemCodeUnauthorized)
+	assertProblemCode(t, resp, problem.CodeUnauthorized)
 }
 
 func TestRejectedCredentialIs401(t *testing.T) {
@@ -79,7 +80,7 @@ func TestRejectedCredentialIs401(t *testing.T) {
 	if resp.Code != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want %d", resp.Code, http.StatusUnauthorized)
 	}
-	assertProblemCode(t, resp, problemCodeUnauthorized)
+	assertProblemCode(t, resp, problem.CodeUnauthorized)
 }
 
 func TestAcceptedCredentialReachesOperation(t *testing.T) {
@@ -126,7 +127,7 @@ func TestMalformedRequestStaysBadRequest(t *testing.T) {
 	t.Parallel()
 
 	var logged bytes.Buffer
-	reject := handleGeneratedRequestError(slog.New(slog.NewJSONHandler(&logged, nil)), defaultAuthenticateChallenge)
+	reject := handleGeneratedRequestError(newTestServiceLogger(&logged), defaultAuthenticateChallenge)
 
 	resp := httptest.NewRecorder()
 	reject(resp, httptest.NewRequest(http.MethodGet, "/x", nil), errors.New("parameter is required"))
@@ -134,7 +135,7 @@ func TestMalformedRequestStaysBadRequest(t *testing.T) {
 	if resp.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want %d", resp.Code, http.StatusBadRequest)
 	}
-	assertProblemCode(t, resp, problemCodeBadRequest)
+	assertProblemCode(t, resp, problem.CodeBadRequest)
 	if got := resp.Header().Get("WWW-Authenticate"); got != "" {
 		t.Fatalf("WWW-Authenticate = %q, want empty for a malformed request", got)
 	}
@@ -153,7 +154,7 @@ func TestOversizedBodyStaysRequestEntityTooLarge(t *testing.T) {
 	if resp.Code != http.StatusRequestEntityTooLarge {
 		t.Fatalf("status = %d, want %d", resp.Code, http.StatusRequestEntityTooLarge)
 	}
-	assertProblemCode(t, resp, problemCodeRequestEntityTooLarge)
+	assertProblemCode(t, resp, problem.CodeRequestEntityTooLarge)
 }
 
 // TestSecurityRejectionDetailsAreSanitized keeps a 401 from echoing whatever the
@@ -166,7 +167,7 @@ func TestSecurityRejectionDetailsAreSanitized(t *testing.T) {
 	authenticate := func(context.Context, *openapi3filter.AuthenticationInput) error {
 		return errors.New(leak)
 	}
-	handler := securedHandlerWithLog(t, authenticate, defaultAuthenticateChallenge, slog.New(slog.NewJSONHandler(&logged, nil)))
+	handler := securedHandlerWithLog(t, authenticate, defaultAuthenticateChallenge, newTestServiceLogger(&logged))
 
 	resp := doRequest(handler, http.MethodGet, "/secret")
 

@@ -21,6 +21,12 @@ type Config struct {
 type AppConfig struct {
 	Env     string `koanf:"env"`
 	Version string `koanf:"version"`
+	// InstanceID identifies this replica in exported telemetry. Empty resolves to
+	// the hostname, which is the pod name on Kubernetes and the container id on
+	// most other platforms; a platform that exposes neither should set it. Without
+	// an instance identity every replica pushes the same resource, and cumulative
+	// counters from different replicas collide into one series.
+	InstanceID string `koanf:"instance_id"`
 }
 
 type HTTPConfig struct {
@@ -49,6 +55,13 @@ type HTTPConfig struct {
 	// /health/ready. It defaults to false because orchestrator probes generate
 	// continuous no-signal log volume.
 	AccessLogHealthProbes bool `koanf:"access_log_health_probes"`
+	// IdempotencyOutcomeTimeout bounds recording a reservation outcome after the
+	// client has been answered. That call is deliberately detached from the request
+	// budget, so this is the only thing bounding it: without it a stalled store
+	// holds a handler goroutine and its in-flight slot for the life of the process.
+	// Validated against http.shutdown_timeout, because a request can still be
+	// inside it when the drain starts.
+	IdempotencyOutcomeTimeout time.Duration `koanf:"idempotency_outcome_timeout"`
 }
 
 // HealthConfig bounds how readiness state is refreshed. Probes are evaluated on
@@ -144,6 +157,16 @@ type PostgresConfig struct {
 	// a caller that waits still has budget left to run its query.
 	AcquireTimeout  time.Duration `koanf:"acquire_timeout"`
 	ConnMaxLifetime time.Duration `koanf:"conn_max_lifetime"`
+	// IdempotencyRetention is how long a completed idempotency outcome stays
+	// replayable, and therefore how long its row lives. It bounds the table: the
+	// sweep deletes anything past it. Set it to the longest window in which a
+	// client library might still retry — hours, not minutes, because a retry after
+	// expiry re-runs the work the key existed to run once.
+	IdempotencyRetention time.Duration `koanf:"idempotency_retention"`
+	// IdempotencySweepInterval is how often expired keys are deleted. Validated
+	// against IdempotencyRetention, because a sweep less frequent than the
+	// retention window lets the table hold roughly one interval of dead rows.
+	IdempotencySweepInterval time.Duration `koanf:"idempotency_sweep_interval"`
 	// StatementTimeout bounds every runtime statement server-side, and bounds
 	// how long a session may sit idle inside a transaction. The request budget
 	// only cancels client-side: if the cancel request itself is lost, which is

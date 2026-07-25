@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"runtime"
 	"runtime/debug"
+
+	"github.com/example/go-service-template-rest/internal/problem"
 )
 
 func Recover(log *slog.Logger, next http.Handler) http.Handler {
@@ -32,22 +34,19 @@ func Recover(log *slog.Logger, next http.Handler) http.Handler {
 				panic(rec)
 			}
 
-			traceID, spanID := traceIDsFromContext(ctx)
-			log.Error(
+			log.ErrorContext(
+				ctx,
 				"panic recovered",
 				"panic_class", panicClass(rec),
 				"panic_type", fmt.Sprintf("%T", rec),
 				"method", method,
 				"path", path,
-				"request_id", requestIDFromContext(ctx),
-				"trace_id", traceID,
-				"span_id", spanID,
 				"stack", string(debug.Stack()),
 			)
 			if committed() {
 				return
 			}
-			writeProblem(w, r, problemResponse{code: problemCodeInternalError, detail: "request failed"})
+			writeProblem(w, r, problemResponse{code: problem.CodeInternalError, detail: "request failed"})
 		}(r.Context(), r.Method, r.URL.Path)
 		next.ServeHTTP(trackedWriter, r)
 	})

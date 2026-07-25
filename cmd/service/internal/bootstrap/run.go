@@ -30,6 +30,7 @@ import (
 //
 // Shutdown budgets, in the order they are spent after the HTTP drain:
 //
+//	diagnosticsShutdownTimeout 2s   close /metrics, after the drain it measures
 //	backgroundShutdownTimeout  5s   cancel and join supervised background tasks
 //	dependencyCloseTimeout     5s   release pooled dependencies
 //	telemetryShutdownTimeout   5s   span and metric flush, last so it records the above
@@ -56,6 +57,12 @@ const (
 	// connection would otherwise block the process here until the platform
 	// SIGKILLs it, discarding the shutdown telemetry on the way out.
 	dependencyCloseTimeout = 5 * time.Second
+
+	// diagnosticsShutdownTimeout bounds closing the private metrics listener, which
+	// serveHTTPRuntime does after the API drain rather than with it, so a scraper can
+	// still collect what the drain recorded. It is short because the only thing it
+	// can be waiting for is one in-flight scrape.
+	diagnosticsShutdownTimeout = 2 * time.Second
 )
 
 func Run(args []string) (runErr error) {
@@ -64,7 +71,10 @@ func Run(args []string) (runErr error) {
 		return err
 	}
 
-	bootstrapLog := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})).With(
+	// Correlation-carrying from the first record, because config rejection and a
+	// failed exit are logged through this one before bootstrapLoggerStage replaces
+	// it with the configured logger.
+	bootstrapLog := newProcessLogger(os.Stdout, slog.LevelInfo).With(
 		"service.name", "service",
 		"service.version", "unknown",
 		"deployment.environment.name", "unknown",
@@ -77,10 +87,10 @@ func Run(args []string) (runErr error) {
 	defer stop()
 	defer func() {
 		if runErr != nil {
-			slog.Error(
+			slog.ErrorContext(
+				signalCtx,
 				"process_exit",
 				startupLogArgs(
-					signalCtx,
 					"lifecycle",
 					"process_exit",
 					"error",
@@ -89,10 +99,10 @@ func Run(args []string) (runErr error) {
 			)
 			return
 		}
-		slog.Info(
+		slog.InfoContext(
+			signalCtx,
 			"process_exit",
 			startupLogArgs(
-				signalCtx,
 				"lifecycle",
 				"process_exit",
 				"success",
@@ -146,6 +156,13 @@ func Run(args []string) (runErr error) {
 			return healthSvc.Watch(ctx, bootstrap.cfg.Health.RefreshInterval, bootstrap.cfg.Health.FailureThreshold)
 		},
 	})
+	// Whatever upkeep the active profile's dependencies need — the idempotency
+	// sweep under DATABASE=postgres, nothing under DATABASE=none. Registering it
+	// here rather than inside the dependency stage means it is canceled and joined
+	// by the same ordered teardown as every other supervised task.
+	for _, task := range dependencies.BackgroundTasks() {
+		supervisor.Go(task)
+	}
 
 	handler, err := httpx.NewRouter(
 		bootstrap.log,
@@ -160,6 +177,11 @@ func Run(args []string) (runErr error) {
 			MaxInFlight:     bootstrap.cfg.HTTP.MaxInFlight,
 			OTelServerName:  bootstrap.cfg.Observability.OTel.ServiceName,
 			LogHealthProbes: bootstrap.cfg.HTTP.AccessLogHealthProbes,
+			// Nil under DATABASE=none, which leaves the middleware out of the
+			// chain: this repository ships no store that satisfies the atomic
+			// claim and expiry the replay depends on without a database.
+			Idempotency:               dependencies.IdempotencyStore(),
+			IdempotencyOutcomeTimeout: bootstrap.cfg.HTTP.IdempotencyOutcomeTimeout,
 			// Authenticate is deliberately unset. This contract declares no
 			// security requirement, so nothing reaches the seam; an operation
 			// that adds one gets a fail-closed 401 until a service supplies its

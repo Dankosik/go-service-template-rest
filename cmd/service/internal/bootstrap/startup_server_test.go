@@ -1,12 +1,15 @@
 package bootstrap
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"log/slog"
 	"net"
+	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -21,6 +24,7 @@ type fakeRuntimeServer struct {
 	stopServeOnce sync.Once
 	onServe       func(net.Listener) error
 	onShutdown    func(context.Context) error
+	onClose       func() error
 }
 
 func newFakeRuntimeServer() *fakeRuntimeServer {
@@ -48,6 +52,9 @@ func (f *fakeRuntimeServer) Close() error {
 		f.stopServeOnce.Do(func() {
 			close(f.stopServe)
 		})
+	}
+	if f.onClose != nil {
+		return f.onClose()
 	}
 	return nil
 }
@@ -441,5 +448,112 @@ func TestServeHTTPRuntimeReturnsPendingServeFailureBeforeMarkingAdmissionReady(t
 	}
 	if admission.Ready() {
 		t.Fatal("startup admission marked ready while serve failure was already pending")
+	}
+}
+
+// TestServeHTTPRuntimeStopsDiagnosticsAfterTheDrain pins the shutdown ordering that
+// keeps the drain measurable.
+//
+// The version this replaced passed the diagnostics server into the same
+// drainAndShutdown call as the API, so /metrics closed at the instant the drain
+// began — and with the shipped scrape-only configuration the readiness propagation
+// delay and the whole in-flight drain went uncollected. The assertion is on order
+// because the failure mode is invisible in behavior: everything still shuts down,
+// and the metrics for the last window of the pod's life simply do not exist.
+func TestServeHTTPRuntimeStopsDiagnosticsAfterTheDrain(t *testing.T) {
+	t.Parallel()
+
+	var (
+		mu    sync.Mutex
+		order []string
+	)
+	record := func(name string) {
+		mu.Lock()
+		defer mu.Unlock()
+		order = append(order, name)
+	}
+
+	apiServer := newFakeRuntimeServer()
+	apiServer.onShutdown = func(context.Context) error {
+		record("api_drained")
+		_ = apiServer.Close()
+		return nil
+	}
+	diagnosticsServer := newFakeRuntimeServer()
+	diagnosticsServer.onShutdown = func(context.Context) error {
+		record("diagnostics_stopped")
+		_ = diagnosticsServer.Close()
+		return nil
+	}
+
+	signalCtx, cancelSignal := context.WithCancel(context.Background())
+	go func() {
+		<-apiServer.serveStarted
+		<-diagnosticsServer.serveStarted
+		cancelSignal()
+	}()
+
+	err := serveHTTPRuntime(signalCtx, context.Background(), serveHTTPRuntimeArgs{
+		cfg: config.Config{
+			HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second},
+			Observability: config.ObservabilityConfig{
+				Metrics: config.MetricsConfig{Addr: "127.0.0.1:0"},
+			},
+		},
+		log:            slog.New(slog.DiscardHandler),
+		healthSvc:      health.New(),
+		srv:            apiServer,
+		metricsSrv:     diagnosticsServer,
+		readinessCheck: func(context.Context) error { return nil },
+		admission:      newTestStartupAdmissionController(),
+	})
+	if err != nil {
+		t.Fatalf("serveHTTPRuntime() error = %v, want nil", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	want := []string{"api_drained", "diagnostics_stopped"}
+	if !slices.Equal(order, want) {
+		t.Fatalf("shutdown order = %v, want %v", order, want)
+	}
+}
+
+// TestShutdownDiagnosticsForcesCloseOnBudgetExhaustion pins the bound on the
+// diagnostics stop. It runs after the API drain, so without a budget of its own a
+// scrape that never completes would park the process here and take the telemetry
+// flush with it — the same failure the dependency close is bounded against.
+func TestShutdownDiagnosticsForcesCloseOnBudgetExhaustion(t *testing.T) {
+	t.Parallel()
+
+	var closed atomic.Bool
+	server := newFakeRuntimeServer()
+	server.onShutdown = func(ctx context.Context) error {
+		<-ctx.Done()
+		return ctx.Err()
+	}
+	server.onClose = func() error {
+		closed.Store(true)
+		return nil
+	}
+
+	var logged bytes.Buffer
+	err := shutdownDiagnostics(context.Background(), slog.New(slog.NewJSONHandler(&logged, nil)), server)
+	if err != nil {
+		t.Fatalf("shutdownDiagnostics() error = %v, want the abandoned scrape reported as degraded, not failed", err)
+	}
+	if !closed.Load() {
+		t.Fatal("shutdownDiagnostics() did not force the listener closed after its budget expired")
+	}
+	if !strings.Contains(logged.String(), "diagnostics_forced") {
+		t.Fatalf("log = %q, want the forced close recorded", logged.String())
+	}
+}
+
+func TestShutdownDiagnosticsIgnoresAbsentServer(t *testing.T) {
+	t.Parallel()
+
+	if err := shutdownDiagnostics(context.Background(), slog.New(slog.DiscardHandler), nil); err != nil {
+		t.Fatalf("shutdownDiagnostics(nil) error = %v, want nil", err)
 	}
 }

@@ -118,7 +118,7 @@ func serveHTTPRuntime(signalCtx context.Context, bootstrapCtx context.Context, a
 	if ready && !stopRequested {
 		select {
 		case <-signalCtx.Done():
-			args.log.Info("shutdown signal received")
+			args.log.InfoContext(signalCtx, "shutdown signal received")
 		case result := <-runErrCh:
 			serverErr = serverStoppedAfterReadiness(args.log, result)
 		}
@@ -129,25 +129,81 @@ func serveHTTPRuntime(signalCtx context.Context, bootstrapCtx context.Context, a
 	if !ready {
 		effectiveShutdownDelay = 0
 	}
-	servers := []shutdownServer{args.srv}
-	if args.metricsSrv != nil {
-		servers = append(servers, args.metricsSrv)
-	}
-	if err := drainAndShutdown(signalCtx, args.log, effectiveShutdownDelay, args.cfg.HTTP.ShutdownTimeout, args.healthSvc, servers...); err != nil {
+	// The diagnostics listener is deliberately not in this drain. Everything worth
+	// measuring happens during the window it occupies: the readiness propagation
+	// delay, up to the whole remaining shutdown budget of in-flight requests, and
+	// the shed and timed-out responses they produce. The version this replaced closed
+	// /metrics at the same instant as the API, so with the shipped scrape-only
+	// configuration none of that window was ever collected — the Prometheus target
+	// simply went down for the last fifteen seconds of every pod's life, which is
+	// exactly the fifteen seconds a rolling deploy is judged on.
+	drainErr := drainAndShutdown(signalCtx, args.log, effectiveShutdownDelay, args.cfg.HTTP.ShutdownTimeout, args.healthSvc, args.srv)
+	// Stopped only now, so a scraper could still collect everything the drain
+	// produced. It is stopped here rather than by the caller because this function
+	// started its goroutine, and split ownership is what lets one escape.
+	diagnosticsErr := shutdownDiagnostics(signalCtx, args.log, args.metricsSrv)
+
+	if drainErr != nil {
 		if terminalErr != nil {
-			return errors.Join(terminalErr, err)
+			return errors.Join(terminalErr, drainErr, diagnosticsErr)
 		}
-		return errors.Join(serverErr, err)
+		return errors.Join(serverErr, drainErr, diagnosticsErr)
 	}
 	if terminalErr != nil {
-		return terminalErr
+		return errors.Join(terminalErr, diagnosticsErr)
 	}
 	if serverErr != nil {
-		return serverErr
+		return errors.Join(serverErr, diagnosticsErr)
+	}
+	if diagnosticsErr != nil {
+		return diagnosticsErr
 	}
 
-	args.log.Info("shutdown complete")
+	args.log.InfoContext(signalCtx, "shutdown complete")
 	return nil
+}
+
+// shutdownDiagnostics closes the private listener under its own budget, and is
+// safe to call twice.
+//
+// It needs a bound of its own: an in-flight scrape holds the connection, and
+// http.Server.Shutdown waits for active requests indefinitely — so without one a
+// stalled scraper would park the process here and take the telemetry flush with it,
+// which is the same failure the dependency close is bounded against.
+func shutdownDiagnostics(base context.Context, log *slog.Logger, server runtimeServer) error {
+	if server == nil {
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(base), diagnosticsShutdownTimeout)
+	defer cancel()
+
+	err := server.Shutdown(ctx)
+	switch {
+	case err == nil, errors.Is(err, http.ErrServerClosed):
+		log.InfoContext(base, "diagnostics_stopped", startupLogArgs(startupLogComponentShutdown, "diagnostics", "success")...)
+		return nil
+	case errors.Is(err, context.DeadlineExceeded):
+		// A scrape outlived the budget. Closing abandons it, which is the same
+		// trade the API drain makes, and leaves the flush below able to run.
+		closeErr := server.Close()
+		log.WarnContext(
+			base,
+			"diagnostics_forced",
+			startupLogArgs(
+				startupLogComponentShutdown,
+				"diagnostics",
+				"degraded",
+				"reason", "scrape_outlived_shutdown_budget",
+			)...,
+		)
+		if closeErr != nil && !errors.Is(closeErr, http.ErrServerClosed) {
+			return fmt.Errorf("close diagnostics server: %w", closeErr)
+		}
+		return nil
+	default:
+		return fmt.Errorf("shutdown diagnostics server: %w", err)
+	}
 }
 
 func normalizeServeError(err error) error {
@@ -182,17 +238,17 @@ func waitForStartupAdmission(
 			return true, false, nil
 		}
 	case <-signalCtx.Done():
-		args.log.Info("shutdown signal received")
+		args.log.InfoContext(signalCtx, "shutdown signal received")
 		return false, true, nil
 	case <-bootstrapCtx.Done():
 		select {
 		case <-signalCtx.Done():
-			args.log.Info("shutdown signal received")
+			args.log.InfoContext(signalCtx, "shutdown signal received")
 			return false, true, nil
 		default:
 		}
 		err := fmt.Errorf("startup budget exhausted before readiness: %w", bootstrapCtx.Err())
-		args.log.Error("startup budget exhausted before readiness", "err", err)
+		args.log.ErrorContext(bootstrapCtx, "startup budget exhausted before readiness", "err", err)
 		return false, false, err
 	case result := <-runErrCh:
 		return false, false, serverStoppedBeforeReadiness(bootstrapCtx, args, result)
@@ -204,10 +260,10 @@ func serverStoppedBeforeReadiness(ctx context.Context, args serveHTTPRuntimeArgs
 	if result.err != nil {
 		err = fmt.Errorf("%s server stopped before readiness: %w", result.name, result.err)
 	}
-	args.log.Error(
+	args.log.ErrorContext(
+		ctx,
 		"startup_blocked",
 		startupLogArgs(
-			ctx,
 			startupLogComponentStartupProbes,
 			result.name+"_serve",
 			"error",
@@ -273,10 +329,10 @@ func rejectHTTPStartup(
 	stage string,
 	err error,
 ) error {
-	log.Error(
+	log.ErrorContext(
+		bootstrapCtx,
 		"startup_blocked",
 		startupLogArgs(
-			bootstrapCtx,
 			startupLogComponentStartupProbes,
 			strings.TrimPrefix(stage, "startup."),
 			"error",

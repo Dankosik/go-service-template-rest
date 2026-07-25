@@ -51,7 +51,7 @@ func TestRouterAddsRequestIDHeader(t *testing.T) {
 		t.Parallel()
 
 		var out bytes.Buffer
-		log := slog.New(slog.NewJSONHandler(&out, nil))
+		log := newTestServiceLogger(&out)
 		h := mustNewRouter(t, log, Handlers{
 			Health: health.New(),
 		}, telemetry.New(), RouterConfig{})
@@ -76,11 +76,11 @@ func TestRouterAddsRequestIDHeader(t *testing.T) {
 		if strings.Contains(resp.Body.String(), invalidRequestID) {
 			t.Fatalf("problem body leaked invalid request ID: %q", resp.Body.String())
 		}
-		var problem map[string]any
-		if err := json.Unmarshal(resp.Body.Bytes(), &problem); err != nil {
+		var decoded map[string]any
+		if err := json.Unmarshal(resp.Body.Bytes(), &decoded); err != nil {
 			t.Fatalf("unmarshal problem: %v", err)
 		}
-		if got := problem["request_id"]; got != responseRequestID {
+		if got := decoded["request_id"]; got != responseRequestID {
 			t.Fatalf("problem request_id = %v, want %q", got, responseRequestID)
 		}
 		logLine := out.String()

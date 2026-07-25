@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/example/go-service-template-rest/internal/problem"
 	"golang.org/x/sync/semaphore"
 )
 
@@ -49,7 +50,7 @@ func MaxInFlight(limit int, next http.Handler) http.Handler {
 		if !sem.TryAcquire(1) {
 			w.Header().Set("Retry-After", retryAfter)
 			writeProblem(w, r, problemResponse{
-				code:   problemCodeServiceUnavailable,
+				code:   problem.CodeServiceUnavailable,
 				detail: "server is at capacity",
 			})
 			return

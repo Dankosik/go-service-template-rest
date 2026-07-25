@@ -11,7 +11,15 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
+
+	"github.com/example/go-service-template-rest/internal/idempotency"
+	"github.com/example/go-service-template-rest/internal/problem"
 )
+
+// testIdempotencyOutcomeTimeout bounds recording an outcome in tests. It is short
+// on purpose: a test that hangs here would hang for the whole default budget.
+const testIdempotencyOutcomeTimeout = 500 * time.Millisecond
 
 // fakeIdempotencyStore is the single-process stand-in for the storage a service
 // supplies. It is deliberately not offered as production code: a map is correct
@@ -20,7 +28,7 @@ import (
 type fakeIdempotencyStore struct {
 	mu        sync.Mutex
 	reserved  map[string]string
-	completed map[string]StoredResponse
+	completed map[string]idempotency.StoredResponse
 	failWith  error
 	releases  int
 }
@@ -28,11 +36,11 @@ type fakeIdempotencyStore struct {
 func newFakeIdempotencyStore() *fakeIdempotencyStore {
 	return &fakeIdempotencyStore{
 		reserved:  map[string]string{},
-		completed: map[string]StoredResponse{},
+		completed: map[string]idempotency.StoredResponse{},
 	}
 }
 
-func (s *fakeIdempotencyStore) Reserve(_ context.Context, key, fingerprint string) (*StoredResponse, error) {
+func (s *fakeIdempotencyStore) Reserve(_ context.Context, key, fingerprint string) (*idempotency.StoredResponse, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -41,18 +49,18 @@ func (s *fakeIdempotencyStore) Reserve(_ context.Context, key, fingerprint strin
 	}
 	if existing, held := s.reserved[key]; held {
 		if existing != fingerprint {
-			return nil, ErrIdempotencyKeyReused
+			return nil, idempotency.ErrKeyReused
 		}
 		if stored, done := s.completed[key]; done {
 			return &stored, nil
 		}
-		return nil, ErrIdempotencyInFlight
+		return nil, idempotency.ErrInFlight
 	}
 	s.reserved[key] = fingerprint
 	return nil, nil //nolint:nilnil // No response and no error is how this contract says the caller owns the key.
 }
 
-func (s *fakeIdempotencyStore) Complete(_ context.Context, key string, response StoredResponse) error {
+func (s *fakeIdempotencyStore) Complete(_ context.Context, key string, response idempotency.StoredResponse) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.completed[key] = response
@@ -123,7 +131,7 @@ func TestIdempotentRefusesAKeyReusedForDifferentIntent(t *testing.T) {
 	if response.Code != http.StatusConflict {
 		t.Fatalf("status = %d, want %d for a key reused on a different request", response.Code, http.StatusConflict)
 	}
-	assertProblemCode(t, response, problemCodeConflict)
+	assertProblemCode(t, response, problem.CodeConflict)
 }
 
 func TestIdempotentReportsAnInFlightAttemptAsRetryable(t *testing.T) {
@@ -189,7 +197,7 @@ func TestIdempotentReleasesTheKeyOnPanic(t *testing.T) {
 	t.Parallel()
 
 	store := newFakeIdempotencyStore()
-	handler := Recover(slog.New(slog.DiscardHandler), Idempotent(store, slog.New(slog.DiscardHandler),
+	handler := Recover(slog.New(slog.DiscardHandler), Idempotent(store, testIdempotencyOutcomeTimeout, slog.New(slog.DiscardHandler),
 		http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 			panic("handler exploded")
 		})))
@@ -250,7 +258,7 @@ func TestIdempotentRejectsAMalformedKey(t *testing.T) {
 	if response.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusBadRequest)
 	}
-	assertProblemCode(t, response, problemCodeBadRequest)
+	assertProblemCode(t, response, problem.CodeBadRequest)
 }
 
 // TestIdempotentSurfacesAStoreFailureAsInternal keeps a broken store from
@@ -305,14 +313,14 @@ func TestIdempotentNilStoreLeavesTheChainUnchanged(t *testing.T) {
 
 	terminal := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
 
-	if got := Idempotent(nil, nil, terminal); fmt.Sprintf("%p", got) != fmt.Sprintf("%p", terminal) {
+	if got := Idempotent(nil, testIdempotencyOutcomeTimeout, nil, terminal); fmt.Sprintf("%p", got) != fmt.Sprintf("%p", terminal) {
 		t.Fatal("Idempotent(nil, ...) wrapped the handler; a service without a store must pay nothing")
 	}
 }
 
 func idempotentTestHandler(tb testing.TB, store IdempotencyStore, handler http.HandlerFunc) http.Handler {
 	tb.Helper()
-	return Idempotent(store, slog.New(slog.DiscardHandler), handler)
+	return Idempotent(store, testIdempotencyOutcomeTimeout, slog.New(slog.DiscardHandler), handler)
 }
 
 func createdHandler(w http.ResponseWriter, _ *http.Request) {
@@ -342,4 +350,129 @@ func readAllBody(r *http.Request) (string, error) {
 		return "", err //nolint:wrapcheck // Test helper reporting the read failure verbatim.
 	}
 	return string(body), nil
+}
+
+// blockingIdempotencyStore never returns from Complete. It stands in for the
+// failure the outcome budget exists for: a row lock held by a long transaction,
+// or a connection wedged mid-retransmit.
+type blockingIdempotencyStore struct {
+	released chan struct{}
+	observed chan context.Context
+}
+
+func newBlockingIdempotencyStore() *blockingIdempotencyStore {
+	return &blockingIdempotencyStore{
+		released: make(chan struct{}),
+		observed: make(chan context.Context, 1),
+	}
+}
+
+//nolint:nilnil // A nil response with a nil error is the contract: this attempt owns the key.
+func (s *blockingIdempotencyStore) Reserve(context.Context, string, string) (*idempotency.StoredResponse, error) {
+	return nil, nil
+}
+
+func (s *blockingIdempotencyStore) Complete(ctx context.Context, _ string, _ idempotency.StoredResponse) error {
+	select {
+	case s.observed <- ctx:
+	default:
+	}
+	select {
+	case <-ctx.Done():
+		//nolint:wrapcheck // The test asserts on the context error identity.
+		return ctx.Err()
+	case <-s.released:
+		return nil
+	}
+}
+
+func (s *blockingIdempotencyStore) Release(context.Context, string) error { return nil }
+
+// TestIdempotentBoundsOutcomeRecording is the regression anchor for the defect
+// that made this budget necessary. The outcome context is detached from the
+// request so a spent budget cannot stop the record from being written — and
+// context.WithoutCancel returns a context with no deadline at all, so before this
+// bound existed a stalled store held the handler goroutine and its in-flight slot
+// for the life of the process, after the client had already been answered.
+func TestIdempotentBoundsOutcomeRecording(t *testing.T) {
+	t.Parallel()
+
+	store := newBlockingIdempotencyStore()
+	t.Cleanup(func() { close(store.released) })
+	handler := idempotentTestHandler(t, store, createdHandler)
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_ = postWithKey(handler, "outcome-budget", `{"slug":"a"}`)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("handler did not return: recording the outcome is unbounded")
+	}
+
+	observed := <-store.observed
+	if _, hasDeadline := observed.Deadline(); !hasDeadline {
+		t.Fatal("outcome context carries no deadline; a stalled store would hold the handler goroutine forever")
+	}
+}
+
+// TestIdempotentRecorderPreservesOptionalWriterInterfaces pins the property the
+// hand-rolled recorder lost. Embedding http.ResponseWriter in a struct promotes
+// only its three methods, so enabling idempotency handed every handler beneath it
+// a writer that could not flush — which broke streamed responses on a deploy that
+// changed no handler.
+func TestIdempotentRecorderPreservesOptionalWriterInterfaces(t *testing.T) {
+	t.Parallel()
+
+	var (
+		sawFlusher bool
+		flushErr   error
+	)
+	handler := idempotentTestHandler(t, newFakeIdempotencyStore(), func(w http.ResponseWriter, _ *http.Request) {
+		_, sawFlusher = w.(http.Flusher)
+		w.WriteHeader(http.StatusCreated)
+		flushErr = http.NewResponseController(w).Flush()
+	})
+
+	postWithKey(handler, "streaming-key", `{"slug":"a"}`)
+
+	if !sawFlusher {
+		t.Fatal("recorder is not an http.Flusher; a streaming handler beneath it cannot flush")
+	}
+	if flushErr != nil {
+		t.Fatalf("http.ResponseController.Flush() error = %v, want nil", flushErr)
+	}
+}
+
+// TestIdempotentRecorderCapturesReadFromBodies keeps the replay honest for a
+// handler that hands the writer a reader. Those bytes bypass Write, so without the
+// ReadFrom hook the store held an empty body and still reported it replayable —
+// and the retry was answered 200 with nothing in it.
+func TestIdempotentRecorderCapturesReadFromBodies(t *testing.T) {
+	t.Parallel()
+
+	const body = `{"slug":"copied"}`
+	store := newFakeIdempotencyStore()
+	handler := idempotentTestHandler(t, store, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+		if _, err := io.Copy(w, strings.NewReader(body)); err != nil {
+			t.Errorf("copy response body: %v", err)
+		}
+	})
+
+	first := postWithKey(handler, "readfrom-key", `{"slug":"a"}`)
+	if first.Body.String() != body {
+		t.Fatalf("first response body = %q, want %q", first.Body.String(), body)
+	}
+
+	replay := postWithKey(handler, "readfrom-key", `{"slug":"a"}`)
+	if replay.Header().Get("Idempotent-Replay") != "true" {
+		t.Fatalf("replay is not labeled: headers = %v", replay.Header())
+	}
+	if replay.Body.String() != body {
+		t.Fatalf("replayed body = %q, want %q", replay.Body.String(), body)
+	}
 }

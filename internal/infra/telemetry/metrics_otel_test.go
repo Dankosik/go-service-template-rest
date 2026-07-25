@@ -20,9 +20,10 @@ func TestSetupMetricsUsesPrivateRegistryAndConfigResource(t *testing.T) {
 
 	metrics := New()
 	shutdown, _, err := SetupMetrics(context.Background(), metrics, MetricsConfig{
-		ServiceName:    " test-service ",
-		ServiceVersion: " test-version ",
-		DeploymentEnv:  " test-env ",
+		ServiceName:       " test-service ",
+		ServiceVersion:    " test-version ",
+		ServiceInstanceID: " metrics-instance ",
+		DeploymentEnv:     " test-env ",
 	})
 	if err != nil {
 		t.Fatalf("SetupMetrics() error = %v", err)
@@ -51,16 +52,26 @@ func TestSetupMetricsUsesPrivateRegistryAndConfigResource(t *testing.T) {
 		"template_operations_total",
 		`service_name="test-service"`,
 		`service_version="test-version"`,
+		`service_instance_id="metrics-instance"`,
 		`deployment_environment_name="test-env"`,
+		// Registered on the meter provider rather than on this registry, so the
+		// same series also reach a configured OTLP reader. The Prometheus Go
+		// collector this replaced reached only the scrape path.
+		"go_goroutine_count",
 	} {
 		if !strings.Contains(metricsText, pattern) {
 			t.Fatalf("metrics output does not contain %q\n%s", pattern, metricsText)
 		}
 	}
-	for _, forbidden := range []string{"env-service", "env_only"} {
-		if strings.Contains(metricsText, forbidden) {
-			t.Fatalf("metrics output contains ambient resource value %q\n%s", forbidden, metricsText)
-		}
+	// Configured attributes win the merge with OTEL_RESOURCE_ATTRIBUTES, so the
+	// ambient service.name loses — while an attribute this service does not set
+	// survives. That is the whole point of no longer unsetting the variable: it is
+	// how a platform contributes k8s.pod.name and container.id.
+	if strings.Contains(metricsText, "env-service") {
+		t.Fatalf("ambient OTEL_SERVICE_NAME overrode the configured service name\n%s", metricsText)
+	}
+	if !strings.Contains(metricsText, "env_only") {
+		t.Fatalf("ambient OTEL_RESOURCE_ATTRIBUTES was discarded instead of merged\n%s", metricsText)
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
