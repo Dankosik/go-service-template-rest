@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/config"
+	"github.com/example/go-service-template-rest/internal/infra/postgres"
+	"github.com/example/go-service-template-rest/internal/problem"
 )
 
 func TestPostgresDependencyInitFailurePreservesWrappedCause(t *testing.T) {
@@ -494,5 +496,40 @@ func TestRuntimeDependenciesIdempotencyStoreIsNilWithoutAStore(t *testing.T) {
 	}
 	if tasks := (runtimeDependencies{}).BackgroundTasks(); len(tasks) != 0 {
 		t.Fatalf("BackgroundTasks() = %v, want none without a store", tasks)
+	}
+}
+
+// TestPostgresDomainErrorsMapSaturationToRetryableUnavailable closes the gap
+// between what internal/infra/postgres documented and what the transport did.
+//
+// ErrSaturated is the one database failure that is not the database's fault:
+// every connection is busy serving, so the request should be told to come back
+// rather than told the server broke. It reached a handler as an ordinary error
+// and came out as 500, which tells a client library not to retry the one failure
+// retrying fixes, and buries a moment of capacity pressure in the same rate as a
+// genuine bug.
+func TestPostgresDomainErrorsMapSaturationToRetryableUnavailable(t *testing.T) {
+	t.Parallel()
+
+	mappers := runtimeDependencies{}.DomainErrors()
+	if len(mappers) == 0 {
+		t.Fatal("DomainErrors() is empty; the pool's own failures reach handlers unclassified")
+	}
+
+	mapped, ok := problem.Classify(fmt.Errorf("load article: %w", postgres.ErrSaturated), mappers)
+	if !ok {
+		t.Fatal("postgres.ErrSaturated is unclassified; it answers 500 instead of a retryable 503")
+	}
+	if mapped.Code != problem.CodeServiceUnavailable {
+		t.Fatalf("code = %q, want %q", mapped.Code, problem.CodeServiceUnavailable)
+	}
+	if mapped.RetryAfter <= 0 {
+		t.Fatal("RetryAfter is unset; a 503 with no hint reads as down rather than busy")
+	}
+
+	// A connect failure is the database's fault and is not retryable in the same
+	// sense, so it must not be dressed up as capacity pressure.
+	if _, ok := problem.Classify(fmt.Errorf("dial: %w", postgres.ErrConnect), mappers); ok {
+		t.Fatal("postgres.ErrConnect was classified as a client-retryable problem")
 	}
 }

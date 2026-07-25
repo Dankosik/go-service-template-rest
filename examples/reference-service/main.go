@@ -106,9 +106,14 @@ func run(ctx context.Context, log *slog.Logger) error {
 	// against, which is what keeps the scope check out of the credential-parsing
 	// code and the credential out of the feature package.
 	apiHandler, err := httpapi.NewAPIHandler(articles, httpapi.Options{
-		Authenticate:   httpx.Authenticated(resolveWriter(writeToken)),
-		RejectRequest:  httpx.RejectRequest(log, authenticateChallenge),
-		RejectResponse: httpx.RejectResponse(),
+		Authenticate:  httpx.Authenticated(resolveWriter(writeToken)),
+		RejectRequest: httpx.RejectRequest(log, authenticateChallenge),
+		// One classification table for the whole feature. Handlers return their
+		// use case's error and this decides what the client sees, so adding an
+		// operation does not mean copying a switch — which is how the local
+		// status table this replaced drifted and answered a 409 with the
+		// internal-error type.
+		RejectResponse: httpx.RejectResponse(httpapi.ClassifyError),
 	})
 	if err != nil {
 		return fmt.Errorf("build reference api handler: %w", err)
