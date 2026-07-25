@@ -190,9 +190,11 @@ func sentinelConfigSourceValues() map[string]any {
 	return map[string]any{
 		"app.env":         "stage",
 		"app.version":     "v-snapshot-test",
+		"app.commit":      "c0ffee-snapshot-test",
 		"app.instance_id": "instance-snapshot-test",
 
 		"http.addr":                        ":18080",
+		"http.grace_period":                "61s",
 		"http.shutdown_timeout":            "31s",
 		"http.readiness_timeout":           "4s",
 		"http.readiness_propagation_delay": "16s",
@@ -246,9 +248,11 @@ func expectedSentinelSnapshotValues() map[string]any {
 	return map[string]any{
 		"app.env":         "stage",
 		"app.version":     "v-snapshot-test",
+		"app.commit":      "c0ffee-snapshot-test",
 		"app.instance_id": "instance-snapshot-test",
 
 		"http.addr":                        ":18080",
+		"http.grace_period":                61 * time.Second,
 		"http.shutdown_timeout":            31 * time.Second,
 		"http.readiness_timeout":           4 * time.Second,
 		"http.readiness_propagation_delay": 16 * time.Second,
