@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 
@@ -16,19 +16,27 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
 
-func TestSetupTracingUsesConfigResourceAttributesOnly(t *testing.T) {
+// TestSetupTracingMergesAmbientResourceUnderConfig pins both halves of the merge.
+// Configured attributes win, so a platform cannot silently rename this service in
+// every dashboard. Attributes it does not set survive, which is how k8s.pod.name
+// and container.id reach the exported resource — the version this replaced unset
+// OTEL_RESOURCE_ATTRIBUTES around provider construction and discarded them, while
+// protecting nothing, because resource.Merge already gives the local resource
+// precedence.
+func TestSetupTracingMergesAmbientResourceUnderConfig(t *testing.T) {
 	t.Setenv("OTEL_RESOURCE_ATTRIBUTES", "service.name=env-service,service.version=env-version,deployment.environment.name=env,env.only=true")
 	t.Setenv("OTEL_SERVICE_NAME", "env-service-name")
 
 	telemetrytest.RestoreGlobals(t)
 
-	shutdown, err := SetupTracing(context.Background(), TracingConfig{
-		ServiceName:      " config-service ",
-		ServiceVersion:   " config-version ",
-		DeploymentEnv:    " config-env ",
-		TracesSampler:    "always_on",
-		TracesSamplerArg: 0.1,
-		Exporter:         testTraceExporter(t),
+	_, shutdown, err := SetupTracing(context.Background(), TracingConfig{
+		ServiceName:       " config-service ",
+		ServiceVersion:    " config-version ",
+		ServiceInstanceID: " config-instance ",
+		DeploymentEnv:     " config-env ",
+		TracesSampler:     "always_on",
+		TracesSamplerArg:  0.1,
+		Exporter:          testTraceExporter(t),
 	})
 	if err != nil {
 		t.Fatalf("SetupTracing() error = %v", err)
@@ -65,6 +73,7 @@ func TestSetupTracingUsesConfigResourceAttributesOnly(t *testing.T) {
 	for key, want := range map[string]string{
 		"service.name":                "config-service",
 		"service.version":             "config-version",
+		"service.instance.id":         "config-instance",
 		"deployment.environment.name": "config-env",
 	} {
 		got, ok := attrs[key]
@@ -72,15 +81,18 @@ func TestSetupTracingUsesConfigResourceAttributesOnly(t *testing.T) {
 			t.Fatalf("resource attribute %q = %q (present %v), want %q; attrs=%v", key, got, ok, want, attrs)
 		}
 	}
-	if _, ok := attrs["env.only"]; ok {
-		t.Fatalf("resource attribute env.only was read from OTEL_RESOURCE_ATTRIBUTES: %v", attrs)
+	if got, ok := attrs["env.only"]; !ok || got != "true" {
+		t.Fatalf("ambient resource attribute env.only = %q (present %v), want it merged; attrs=%v", got, ok, attrs)
 	}
 }
 
 func TestSetupTracingWithoutExporterDoesNotRecord(t *testing.T) {
+	// "Without exporter" now includes the ambient endpoint variables, so this
+	// test states that condition rather than inheriting the machine's.
+	telemetrytest.ClearAmbientExporterEnv(t)
 	telemetrytest.RestoreGlobals(t)
 
-	shutdown, err := SetupTracing(t.Context(), TracingConfig{
+	_, shutdown, err := SetupTracing(t.Context(), TracingConfig{
 		ServiceName:      "test-service",
 		ServiceVersion:   "test",
 		DeploymentEnv:    "test",
@@ -115,7 +127,7 @@ func BenchmarkTracingWithoutExporter(b *testing.B) {
 		otel.SetTextMapPropagator(previousPropagator)
 	})
 
-	shutdown, err := SetupTracing(b.Context(), TracingConfig{
+	_, shutdown, err := SetupTracing(b.Context(), TracingConfig{
 		ServiceName:      "benchmark-service",
 		ServiceVersion:   "benchmark",
 		DeploymentEnv:    "benchmark",
@@ -145,7 +157,7 @@ func BenchmarkTracingWithoutExporter(b *testing.B) {
 func TestSetupTracingDoesNotApplyResourceIdentityFallbacks(t *testing.T) {
 	telemetrytest.RestoreGlobals(t)
 
-	shutdown, err := SetupTracing(context.Background(), TracingConfig{
+	_, shutdown, err := SetupTracing(context.Background(), TracingConfig{
 		TracesSampler:    "always_on",
 		TracesSamplerArg: 0.1,
 		Exporter:         testTraceExporter(t),
@@ -199,7 +211,12 @@ func testTraceExporter(t *testing.T) TraceExporterConfig {
 	return TraceExporterConfig{OTLPEndpoint: collector.URL}
 }
 
-func TestSetupTracingSerializesResourceEnvSuppression(t *testing.T) {
+// TestSetupTracingIsSafeUnderConcurrentSetup keeps the provider installation
+// serialized. It used to also assert that the ambient resource variables were
+// restored after each call, because setup unset them around provider construction;
+// that suppression is gone, so what remains to prove is that concurrent callers do
+// not corrupt the globals under the race detector.
+func TestSetupTracingIsSafeUnderConcurrentSetup(t *testing.T) {
 	const (
 		resourceAttrs = "service.name=env-service,service.version=env-version,deployment.environment.name=env,env.only=true"
 		serviceName   = "env-service-name"
@@ -208,6 +225,7 @@ func TestSetupTracingSerializesResourceEnvSuppression(t *testing.T) {
 	t.Setenv("OTEL_RESOURCE_ATTRIBUTES", resourceAttrs)
 	t.Setenv("OTEL_SERVICE_NAME", serviceName)
 
+	telemetrytest.ClearAmbientExporterEnv(t)
 	telemetrytest.RestoreGlobals(t)
 
 	shutdowns := make(chan func(context.Context) error, setupCount)
@@ -215,7 +233,7 @@ func TestSetupTracingSerializesResourceEnvSuppression(t *testing.T) {
 	var wg sync.WaitGroup
 	for i := range setupCount {
 		wg.Go(func() {
-			shutdown, err := SetupTracing(context.Background(), TracingConfig{
+			_, shutdown, err := SetupTracing(context.Background(), TracingConfig{
 				ServiceName:      fmt.Sprintf("config-service-%d", i),
 				ServiceVersion:   "config-version",
 				DeploymentEnv:    "config-env",
@@ -242,12 +260,6 @@ func TestSetupTracingSerializesResourceEnvSuppression(t *testing.T) {
 		if err := shutdown(context.Background()); err != nil {
 			t.Fatalf("shutdown tracing: %v", err)
 		}
-	}
-	if got := os.Getenv("OTEL_RESOURCE_ATTRIBUTES"); got != resourceAttrs {
-		t.Fatalf("OTEL_RESOURCE_ATTRIBUTES = %q, want %q", got, resourceAttrs)
-	}
-	if got := os.Getenv("OTEL_SERVICE_NAME"); got != serviceName {
-		t.Fatalf("OTEL_SERVICE_NAME = %q, want %q", got, serviceName)
 	}
 }
 
@@ -433,7 +445,102 @@ func TestConflictingTraceExporterEnvReportsCredentialAndTrustNamesOnly(t *testin
 	}
 }
 
-func TestSetupTracingDoesNotEnableExporterFromAmbientOTLPEndpointEnv(t *testing.T) {
+// TestSetupTracingExportsToAmbientOTLPEndpointEnv covers the deployment this
+// service is most often put into: a platform injects the standard OpenTelemetry
+// endpoint variable and expects traces. Ignoring it would leave the service
+// reporting healthy, answering every request, and exporting nothing.
+func TestSetupTracingExportsToAmbientOTLPEndpointEnv(t *testing.T) {
+	tests := []struct {
+		name      string
+		envName   string
+		envSuffix string
+		wantPath  string
+	}{
+		{
+			name:     "signal-agnostic root gains the traces path",
+			envName:  "OTEL_EXPORTER_OTLP_ENDPOINT",
+			wantPath: "/v1/traces",
+		},
+		{
+			name:      "signal-agnostic root keeps its prefix",
+			envName:   "OTEL_EXPORTER_OTLP_ENDPOINT",
+			envSuffix: "/otlp",
+			wantPath:  "/otlp/v1/traces",
+		},
+		{
+			name:      "signal-specific endpoint is used exactly",
+			envName:   "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
+			envSuffix: "/collect/traces",
+			wantPath:  "/collect/traces",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			telemetrytest.ClearAmbientExporterEnv(t)
+			telemetrytest.RestoreGlobals(t)
+
+			requests := make(chan string, 1)
+			collector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				requests <- r.URL.Path
+				w.WriteHeader(http.StatusOK)
+			}))
+			t.Cleanup(collector.Close)
+			t.Setenv(tt.envName, collector.URL+tt.envSuffix)
+
+			endpoint, shutdown := setupRecordingTracing(t, TraceExporterConfig{})
+			if endpoint.Source != tt.envName {
+				t.Fatalf("endpoint source = %q, want %q", endpoint.Source, tt.envName)
+			}
+
+			exportOneGlobalSpan(t, "ambient-env-export")
+			if err := shutdown(context.Background()); err != nil {
+				t.Fatalf("shutdown tracing: %v", err)
+			}
+			assertCollectorPath(t, requests, tt.wantPath)
+		})
+	}
+}
+
+// TestSetupTracingPrefersConfiguredEndpointOverAmbientEnv keeps this service's
+// own setting authoritative: the ambient variable is a fallback, not an
+// override, so a platform cannot redirect a service that named its collector.
+func TestSetupTracingPrefersConfiguredEndpointOverAmbientEnv(t *testing.T) {
+	telemetrytest.ClearAmbientExporterEnv(t)
+	telemetrytest.RestoreGlobals(t)
+
+	configured := make(chan string, 1)
+	configuredCollector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		configured <- r.URL.Path
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(configuredCollector.Close)
+
+	ambient := make(chan string, 1)
+	ambientCollector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ambient <- r.URL.Path
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(ambientCollector.Close)
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", ambientCollector.URL)
+
+	endpoint, shutdown := setupRecordingTracing(t, TraceExporterConfig{OTLPEndpoint: configuredCollector.URL})
+	if endpoint.Source != TraceExporterConfigKey {
+		t.Fatalf("endpoint source = %q, want %q", endpoint.Source, TraceExporterConfigKey)
+	}
+
+	exportOneGlobalSpan(t, "configured-endpoint-wins")
+	if err := shutdown(context.Background()); err != nil {
+		t.Fatalf("shutdown tracing: %v", err)
+	}
+	assertCollectorPath(t, configured, "/v1/traces")
+	assertNoCollectorRequest(t, ambient, "ambient endpoint collector")
+}
+
+// TestSetupTracingDoesNotSendConfiguredHeadersToAmbientEndpoint is the one case
+// the ambient fallback must refuse: configured headers are this service's own
+// credential, and an ambient endpoint is a destination it never named.
+func TestSetupTracingDoesNotSendConfiguredHeadersToAmbientEndpoint(t *testing.T) {
 	telemetrytest.ClearAmbientExporterEnv(t)
 	telemetrytest.RestoreGlobals(t)
 
@@ -445,26 +552,92 @@ func TestSetupTracingDoesNotEnableExporterFromAmbientOTLPEndpointEnv(t *testing.
 	t.Cleanup(collector.Close)
 	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", collector.URL)
 
-	shutdown, err := SetupTracing(context.Background(), envPolicyTracingConfig(TraceExporterConfig{}))
+	endpoint, shutdown := setupRecordingTracing(t, TraceExporterConfig{
+		OTLPHeaders: "authorization=Bearer secret-value",
+	})
+	if endpoint.Configured() {
+		t.Fatalf("endpoint = %+v, want no exporter when headers pin an unnamed destination", endpoint)
+	}
+
+	exportOneGlobalSpan(t, "headers-pin-destination")
+	if err := shutdown(context.Background()); err != nil {
+		t.Fatalf("shutdown tracing: %v", err)
+	}
+	assertNoCollectorRequest(t, requests, "ambient endpoint collector")
+}
+
+// TestSetupTracingAcceptsAmbientCredentialsForAnAmbientEndpoint records why the
+// conflict rule is scoped to a configured endpoint: when the platform supplies
+// the collector, its credentials belong to that collector, and rejecting them
+// would refuse the ordinary injected-collector deployment.
+func TestSetupTracingAcceptsAmbientCredentialsForAnAmbientEndpoint(t *testing.T) {
+	telemetrytest.ClearAmbientExporterEnv(t)
+	telemetrytest.RestoreGlobals(t)
+
+	collector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(collector.Close)
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", collector.URL)
+	t.Setenv("OTEL_EXPORTER_OTLP_HEADERS", "authorization=Bearer platform-token")
+
+	endpoint, shutdown := setupRecordingTracing(t, TraceExporterConfig{})
+	if !endpoint.Configured() {
+		t.Fatal("endpoint is not configured, want the platform-supplied collector")
+	}
+	if err := shutdown(context.Background()); err != nil {
+		t.Fatalf("shutdown tracing: %v", err)
+	}
+}
+
+// TestResolveTraceExporterEndpointRejectsInvalidAmbientEndpoint keeps ambient
+// values under the same fail-closed validation as configured ones, and keeps the
+// raw value out of the error because it can carry a credential.
+func TestResolveTraceExporterEndpointRejectsInvalidAmbientEndpoint(t *testing.T) {
+	telemetrytest.ClearAmbientExporterEnv(t)
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "https://user:secret-value@collector.example:4318")
+
+	_, err := ResolveTraceExporterEndpoint(TraceExporterConfig{})
+	if err == nil {
+		t.Fatal("ResolveTraceExporterEndpoint() error = nil, want non-nil")
+	}
+	if !strings.Contains(err.Error(), "OTEL_EXPORTER_OTLP_ENDPOINT") {
+		t.Fatalf("error = %v, want the variable name", err)
+	}
+	if strings.Contains(err.Error(), "secret-value") {
+		t.Fatalf("error = %v, leaked the raw value", err)
+	}
+}
+
+func setupRecordingTracing(t *testing.T, exporter TraceExporterConfig) (TraceExporterEndpoint, func(context.Context) error) {
+	t.Helper()
+
+	endpoint, shutdown, err := SetupTracing(context.Background(), TracingConfig{
+		ServiceName:      "test-service",
+		ServiceVersion:   "test",
+		DeploymentEnv:    "local",
+		TracesSampler:    "always_on",
+		TracesSamplerArg: 1,
+		Exporter:         exporter,
+	})
 	if err != nil {
 		t.Fatalf("SetupTracing() error = %v", err)
 	}
-	t.Cleanup(func() {
-		if err := shutdown(context.Background()); err != nil {
-			t.Fatalf("shutdown tracing: %v", err)
-		}
-	})
+	return endpoint, shutdown
+}
+
+func exportOneGlobalSpan(t *testing.T, name string) {
+	t.Helper()
 
 	provider, ok := otel.GetTracerProvider().(*sdktrace.TracerProvider)
 	if !ok {
 		t.Fatalf("global tracer provider = %T, want *sdktrace.TracerProvider", otel.GetTracerProvider())
 	}
-	_, span := provider.Tracer("telemetry-test").Start(context.Background(), "ambient-env-disabled")
+	_, span := provider.Tracer("telemetry-test").Start(context.Background(), name)
 	span.End()
 	if err := provider.ForceFlush(context.Background()); err != nil {
 		t.Fatalf("force flush trace provider: %v", err)
 	}
-	assertNoCollectorRequest(t, requests, "ambient endpoint collector")
 }
 
 //nolint:tparallel // Top-level t.Parallel would make the t.Setenv subtest invalid.

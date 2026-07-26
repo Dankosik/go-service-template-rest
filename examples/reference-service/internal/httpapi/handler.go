@@ -3,12 +3,18 @@ package httpapi
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/example/go-service-template-rest/examples/reference-service/internal/article"
 	"github.com/example/go-service-template-rest/examples/reference-service/internal/openapi"
+	"github.com/example/go-service-template-rest/internal/reqctx"
 )
+
+// ArticleWriteScope is the permission a credential must carry to create an
+// article. The composition root decides which credentials are granted it; this
+// package decides which operation requires it.
+const ArticleWriteScope = "articles:write"
 
 var _ openapi.StrictServerInterface = (*handler)(nil)
 
@@ -16,14 +22,32 @@ type handler struct {
 	articles *article.Service
 }
 
-// CreateArticle maps the generated request body onto the feature-owned draft,
-// then maps each domain error identity onto its documented status. The use case
-// never sees an HTTP type and this transport never invents a business rule.
+// CreateArticle authorizes the caller, maps the generated request body onto the
+// feature-owned draft, then maps each domain error identity onto its documented
+// status. The use case never sees an HTTP type and this transport never invents a
+// business rule.
+//
+// The authorization check is why the identity seam exists. The contract's
+// security requirement already proved a credential before this ran, and
+// reqctx.PrincipalFromContext reports who it proved — so this handler decides
+// what that caller may do without reading the Authorization header a second
+// time. An absent principal on an operation that declares `security:` is a
+// wiring defect rather than an anonymous caller, so it is refused rather than
+// challenged.
 func (h *handler) CreateArticle(ctx context.Context, request openapi.CreateArticleRequestObject) (openapi.CreateArticleResponseObject, error) {
+	principal, authenticated := reqctx.PrincipalFromContext(ctx)
+	if !authenticated || !principal.HasScope(ArticleWriteScope) {
+		return openapi.CreateArticle403ApplicationProblemPlusJSONResponse{
+			ForbiddenApplicationProblemPlusJSONResponse: openapi.ForbiddenApplicationProblemPlusJSONResponse(
+				newProblem(ctx, http.StatusForbidden, "credentials do not permit this operation"),
+			),
+		}, nil
+	}
+
 	if request.Body == nil {
 		return openapi.CreateArticle400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
-				problem("bad_request", "bad request", http.StatusBadRequest, "request body is required"),
+				newProblem(ctx, http.StatusBadRequest, "request body is required"),
 			),
 		}, nil
 	}
@@ -33,28 +57,14 @@ func (h *handler) CreateArticle(ctx context.Context, request openapi.CreateArtic
 		Title:   request.Body.Title,
 		Summary: request.Body.Summary,
 	})
-	switch {
-	case errors.Is(err, article.ErrAlreadyExists):
-		return openapi.CreateArticle409ApplicationProblemPlusJSONResponse{
-			ConflictApplicationProblemPlusJSONResponse: openapi.ConflictApplicationProblemPlusJSONResponse(
-				problem("conflict", "conflict", http.StatusConflict, "an article with this slug already exists"),
-			),
-		}, nil
-	case errors.Is(err, article.ErrInvalid):
-		// The message is the use case's own wording and contains no caller
-		// input, so echoing it cannot reflect attacker-controlled content.
-		return openapi.CreateArticle400ApplicationProblemPlusJSONResponse{
-			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
-				problem("bad_request", "bad request", http.StatusBadRequest, "request is malformed or invalid"),
-			),
-		}, nil
-	case err != nil:
-		//nolint:nilerr // A handled domain failure is a valid typed HTTP response.
-		return openapi.CreateArticle500ApplicationProblemPlusJSONResponse{
-			InternalServerErrorApplicationProblemPlusJSONResponse: openapi.InternalServerErrorApplicationProblemPlusJSONResponse(
-				problem("internal_error", "internal server error", http.StatusInternalServerError, "request failed"),
-			),
-		}, nil
+	if err != nil {
+		// Returned rather than mapped here. The composition root installs
+		// ClassifyError once for the whole feature, so the switch that used to
+		// live in every operation exists in one place. Wrapping adds the
+		// operation while preserving the sentinel identity errors.Is matches on;
+		// an error the table does not recognize stays a 500, which is the honest
+		// answer for a fault this service did not anticipate.
+		return nil, fmt.Errorf("create article: %w", err)
 	}
 
 	return openapi.CreateArticle201JSONResponse{
@@ -71,22 +81,8 @@ func (h *handler) CreateArticle(ctx context.Context, request openapi.CreateArtic
 
 func (h *handler) GetArticle(ctx context.Context, request openapi.GetArticleRequestObject) (openapi.GetArticleResponseObject, error) {
 	found, err := h.articles.Get(ctx, request.Slug)
-	if errors.Is(err, article.ErrNotFound) {
-		return openapi.GetArticle404ApplicationProblemPlusJSONResponse{
-			NotFoundApplicationProblemPlusJSONResponse: openapi.NotFoundApplicationProblemPlusJSONResponse(
-				problem("not_found", "not found", http.StatusNotFound, "article was not found"),
-			),
-		}, nil
-	}
 	if err != nil {
-		// The strict transport contract represents failures as typed responses;
-		// returning err would bypass the intended API response.
-		//nolint:nilerr // A handled domain failure is a valid typed HTTP response.
-		return openapi.GetArticle500ApplicationProblemPlusJSONResponse{
-			InternalServerErrorApplicationProblemPlusJSONResponse: openapi.InternalServerErrorApplicationProblemPlusJSONResponse(
-				problem("internal_error", "internal server error", http.StatusInternalServerError, "request failed"),
-			),
-		}, nil
+		return nil, fmt.Errorf("get article: %w", err)
 	}
 
 	return openapi.GetArticle200JSONResponse{

@@ -20,7 +20,8 @@ RUN module_path="$(go list -m)" && \
     if [ "${resolved_version}" = "dev" ] && [ -n "${RAILWAY_GIT_COMMIT_SHA}" ]; then \
       resolved_version="sha-$(printf '%.12s' "${RAILWAY_GIT_COMMIT_SHA}")"; \
     fi && \
-    ldflags="-s -w -buildid= -X ${module_path}/internal/config.buildVersion=${resolved_version}" && \
+    resolved_commit="${RAILWAY_GIT_COMMIT_SHA:-${VCS_REF}}" && \
+    ldflags="-s -w -buildid= -X ${module_path}/internal/config.buildVersion=${resolved_version} -X ${module_path}/internal/config.buildCommit=${resolved_commit}" && \
     GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build \
       -trimpath \
       -mod=readonly \
@@ -34,7 +35,8 @@ RUN module_path="$(go list -m)" && \
     if [ "${resolved_version}" = "dev" ] && [ -n "${RAILWAY_GIT_COMMIT_SHA}" ]; then \
       resolved_version="sha-$(printf '%.12s' "${RAILWAY_GIT_COMMIT_SHA}")"; \
     fi && \
-    ldflags="-s -w -buildid= -X ${module_path}/internal/config.buildVersion=${resolved_version}" && \
+    resolved_commit="${RAILWAY_GIT_COMMIT_SHA:-${VCS_REF}}" && \
+    ldflags="-s -w -buildid= -X ${module_path}/internal/config.buildVersion=${resolved_version} -X ${module_path}/internal/config.buildCommit=${resolved_commit}" && \
     GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build \
       -trimpath \
       -mod=readonly \

@@ -2,7 +2,7 @@
 name: evidence-agent
 description: Fast read-only evidence subagent for bounded discovery, drift checks, and mechanical repair proposals without gate authority.
 tools: Read, Grep, Glob, Bash
-model: haiku
+model: sonnet
 effort: low
 ---
 

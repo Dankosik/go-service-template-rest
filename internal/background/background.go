@@ -1,0 +1,225 @@
+// Package background supervises non-HTTP work for the lifetime of the process.
+//
+// Without a seam here, the first scheduled job a service adds gets started with
+// a bare `go` against context.Background(). Two things follow. On SIGTERM the
+// HTTP server drains correctly and the job is killed mid-iteration by process
+// exit, so a job that writes to a database leaves a partial batch with no
+// compensating record. And a panic inside it takes the whole process down —
+// Recover is HTTP middleware and never sees it — during a window that may carry
+// no HTTP traffic at all, so the only artifact is a restart.
+//
+// This is a supervisor, not a job framework. It owns cancellation, panic
+// containment, the join, and reporting a task that failed; schedules, retries,
+// and locking belong to the task.
+package background
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"log/slog"
+	"runtime/debug"
+	"sync"
+	"sync/atomic"
+
+	"golang.org/x/sync/errgroup"
+)
+
+var (
+	// ErrPanic marks a task failure that came from a recovered panic rather than
+	// a returned error, so a caller can tell a bug from an expected failure.
+	ErrPanic = errors.New("background task panicked")
+
+	// ErrTaskFailed reports, through Check, that a supervised task ended with an
+	// error while the process was still meant to be serving. It is a distinct
+	// identity because readiness is what consumes it.
+	ErrTaskFailed = errors.New("background task failed")
+)
+
+// Task is one supervised unit of work. Run must return when its context is done;
+// a task that ignores cancellation is bounded only by the shutdown budget.
+type Task struct {
+	Name string
+	Run  func(context.Context) error
+}
+
+// Supervisor runs tasks under one cancelable context and joins them on shutdown.
+type Supervisor struct {
+	log *slog.Logger
+
+	// group joins the tasks and keeps the first error for Shutdown. It is a bare
+	// errgroup.Group rather than errgroup.WithContext on purpose; see taskCtx.
+	group *errgroup.Group
+	// taskCtx is the context handed to every task, and is canceled only by New's
+	// parent or by Shutdown.
+	//
+	// It is deliberately not an errgroup.WithContext context. That context is
+	// canceled the first time any task returns an error, so one failing worker
+	// stopped every other supervised task in the process — including the
+	// readiness refresher, which returns nil on cancellation and therefore
+	// exited through the ordinary stopped path. Readiness then served whatever
+	// verdict it happened to hold when the unrelated task failed, forever, while
+	// the process kept accepting traffic. Isolation is the whole point of a
+	// supervisor; a task that needs a sibling reports that through Check.
+	//nolint:containedctx // A supervisor's whole job is owning the lifetime it hands out.
+	taskCtx   context.Context
+	cancel    context.CancelFunc
+	startOnce sync.Once
+	stopOnce  sync.Once
+	stopErr   error
+
+	// stopping reports that Shutdown has begun, so a task ending during the drain
+	// is an ordinary stop rather than something readiness has to report.
+	stopping atomic.Bool
+	// failure holds the first task that ended with an error while the process was
+	// still serving. It is what Check reports.
+	failure atomic.Pointer[taskFailure]
+}
+
+type taskFailure struct {
+	task string
+	err  error
+}
+
+// New builds a supervisor whose tasks are canceled when ctx is done or Shutdown
+// is called, whichever happens first.
+func New(ctx context.Context, log *slog.Logger) *Supervisor {
+	if log == nil {
+		log = slog.Default()
+	}
+	taskCtx, cancel := context.WithCancel(ctx)
+
+	return &Supervisor{
+		log:     log,
+		group:   new(errgroup.Group),
+		taskCtx: taskCtx,
+		cancel:  cancel,
+	}
+}
+
+// Go starts task. A panic inside Run is recovered and converted into an error so
+// one bad iteration cannot take the process down, while a task that keeps
+// panicking still surfaces through Shutdown rather than being swallowed.
+func (s *Supervisor) Go(task Task) {
+	name := task.Name
+	if name == "" {
+		name = "unnamed"
+	}
+	if task.Run == nil {
+		s.log.Error("background_task_invalid", "component", "background", "task", name, "reason", "run is nil")
+		return
+	}
+
+	s.startOnce.Do(func() {
+		s.log.Info("background_supervisor_started", "component", "background")
+	})
+	s.log.Info("background_task_started", "component", "background", "task", name)
+
+	s.group.Go(func() error {
+		err := s.runTask(name, task.Run)
+		s.recordStop(name, err)
+		return err
+	})
+}
+
+// runTask executes one task and normalizes how it ended.
+func (s *Supervisor) runTask(name string, run func(context.Context) error) (runErr error) {
+	defer func() {
+		recovered := recover()
+		if recovered == nil {
+			return
+		}
+		// The stack is captured here, inside the deferred function, because it is
+		// the only place the panicking goroutine's frames still exist.
+		s.log.Error(
+			"background_task_panic",
+			"component", "background",
+			"task", name,
+			"panic_type", fmt.Sprintf("%T", recovered),
+			"stack", string(debug.Stack()),
+		)
+		runErr = fmt.Errorf("%w: %s", ErrPanic, name)
+	}()
+
+	if err := run(s.taskCtx); err != nil {
+		// Cancellation is how shutdown asks a task to stop, so it is not a task
+		// failure and must not poison the group's error.
+		if errors.Is(err, context.Canceled) && s.taskCtx.Err() != nil {
+			s.log.Info("background_task_canceled", "component", "background", "task", name)
+			return nil
+		}
+		s.log.Error("background_task_failed", "component", "background", "task", name, "err", err)
+		return fmt.Errorf("background task %s: %w", name, err)
+	}
+	s.log.Info("background_task_stopped", "component", "background", "task", name)
+	return nil
+}
+
+// recordStop publishes a task that failed while the process was still serving, so
+// Check can report it.
+//
+// A task that ends during the drain, or that returns nil, is not recorded: the
+// first is an ordinary stop and the second is a task that chose to finish. Only a
+// failure means the process is still running without work it was built to do.
+func (s *Supervisor) recordStop(name string, err error) {
+	if err == nil || s.stopping.Load() || s.taskCtx.Err() != nil {
+		return
+	}
+	s.failure.CompareAndSwap(nil, &taskFailure{task: name, err: err})
+}
+
+// Name identifies this supervisor as a readiness probe.
+func (s *Supervisor) Name() string {
+	return "background"
+}
+
+// Check reports the first supervised task that failed while the process was still
+// serving, and is what makes a dead worker visible to readiness.
+//
+// Nothing else would report it. A failed task is logged once and then the process
+// keeps answering every request without the work that task was doing — an outbox
+// that no longer publishes, a lease that no longer renews — until the next deploy.
+// The error is only surfaced at Shutdown, which is exactly too late.
+//
+// Tasks are not restarted here. Whether a failure is recoverable depends on what
+// the task already did, so the honest signal is to stop taking traffic and let the
+// platform's restart policy start a clean process.
+func (s *Supervisor) Check(context.Context) error {
+	failure := s.failure.Load()
+	if failure == nil {
+		return nil
+	}
+	return fmt.Errorf("%w: %s: %w", ErrTaskFailed, failure.task, failure.err)
+}
+
+// Shutdown cancels every task and waits for them to return, bounded by ctx.
+//
+// A task that outlives ctx is reported rather than waited on: blocking here
+// would hold up the rest of shutdown — including the telemetry flush that has to
+// record this exact outcome — behind work that has already ignored its
+// cancellation once.
+func (s *Supervisor) Shutdown(ctx context.Context) error {
+	s.stopOnce.Do(func() {
+		// Marked before the cancel, so a task that ends because of it is not
+		// recorded as a failure readiness has to report.
+		s.stopping.Store(true)
+		s.cancel()
+
+		joined := make(chan error, 1)
+		go func() { joined <- s.group.Wait() }()
+
+		select {
+		case err := <-joined:
+			s.stopErr = err
+		case <-ctx.Done():
+			s.stopErr = fmt.Errorf("background tasks did not stop within the shutdown budget: %w", ctx.Err())
+		}
+
+		if s.stopErr != nil {
+			s.log.Error("background_shutdown_failed", "component", "background", "err", s.stopErr)
+			return
+		}
+		s.log.Info("background_shutdown_completed", "component", "background")
+	})
+	return s.stopErr
+}

@@ -6,14 +6,11 @@ import (
 
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
-	"go.opentelemetry.io/otel/trace"
 )
 
 type startupBootstrap struct {
 	cfg              config.Config
 	log              *slog.Logger
-	tracer           trace.Tracer
-	bootstrapSpan    trace.Span
 	telemetryCleanup func(context.Context)
 }
 
@@ -25,7 +22,13 @@ func bootstrapRuntime(
 	telemetryCleanup := func(context.Context) {}
 	defer func() {
 		if err != nil {
-			telemetryCleanup(startupCtx)
+			// A startup that failed has no shutdown budget yet, so the flush gets
+			// its own bound here. Detached from startupCtx because a spent startup
+			// budget is one of the reasons this path runs, and a flush handed an
+			// already-expired context reports nothing about why.
+			flushCtx, cancel := context.WithTimeout(context.WithoutCancel(startupCtx), telemetryShutdownTimeout)
+			defer cancel()
+			telemetryCleanup(flushCtx)
 		}
 	}()
 
@@ -38,28 +41,14 @@ func bootstrapRuntime(
 	}
 
 	log := bootstrapLoggerStage(cfg)
-	telemetryCleanup, telemetryInitErr := bootstrapTelemetryStage(startupCtx, cfg, metrics, log)
-	tracer, bootstrapCtx, bootstrapSpan := bootstrapTraceStage(startupCtx)
-	spanOwnedByCaller := false
-	defer func() {
-		if !spanOwnedByCaller {
-			bootstrapSpan.End()
-		}
-	}()
+	stage := bootstrapTelemetryStage(startupCtx, cfg, metrics, log)
+	telemetryCleanup = stage.cleanup
 
-	bootstrapReportStage(bootstrapCtx, log, cfg, loadOptions, configReport, telemetryInitErr)
+	bootstrapReportStage(startupCtx, log, cfg, loadOptions, configReport, stage.traceEndpoint, stage.tracingErr)
 
-	result = startupBootstrap{
+	return startupBootstrap{
 		cfg:              cfg,
 		log:              log,
-		tracer:           tracer,
-		bootstrapSpan:    bootstrapSpan,
 		telemetryCleanup: telemetryCleanup,
-	}
-	spanOwnedByCaller = true
-	return result, nil
-}
-
-func startupBootstrapContext(startupCtx context.Context, bootstrapSpan trace.Span) context.Context {
-	return trace.ContextWithSpan(startupCtx, bootstrapSpan)
+	}, nil
 }

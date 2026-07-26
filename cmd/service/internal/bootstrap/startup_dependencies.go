@@ -5,20 +5,20 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
+	"github.com/example/go-service-template-rest/internal/background"
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/health"
+	httpx "github.com/example/go-service-template-rest/internal/infra/http"
 	"github.com/example/go-service-template-rest/internal/infra/postgres"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
+	"github.com/example/go-service-template-rest/internal/problem"
 )
 
 const (
 	startupDependencyPostgres     = "postgres"
 	startupPostgresProbeOperation = "postgres_probe"
-	startupPostgresResolveStage   = "startup.resolve.postgres"
-	startupPostgresProbeStage     = "startup.probe.postgres"
 )
 
 // Budgets owned by the PostgreSQL startup stage. They live here so the
@@ -44,40 +44,203 @@ const (
 var errDependencyInit = errors.New("dependency init")
 
 type postgresStartupRuntime struct {
-	tracer        trace.Tracer
-	bootstrapSpan trace.Span
-	cfg           config.Config
-	log           *slog.Logger
+	cfg config.Config
+	log *slog.Logger
 }
 
 type runtimeDependencies struct {
-	health   *health.Service
-	postgres *postgres.Pool
+	readiness   health.Probe
+	postgres    *postgres.Pool
+	idempotency *postgres.IdempotencyStore
+	// idempotencySweepInterval is held rather than re-read from config, so the
+	// supervised task and the store it prunes cannot be configured apart.
+	idempotencySweepInterval time.Duration
+	closed                   *sync.Once
 }
 
-func (d runtimeDependencies) Close() {
-	d.postgres.Close()
+// IdempotencyStore returns the store the HTTP chain replays completed attempts
+// from, or nil when this profile has none.
+//
+// The explicit nil check is load-bearing. Returning a nil *postgres.IdempotencyStore
+// as the interface would produce a non-nil interface holding a nil pointer, so the
+// middleware would install itself and dereference nothing on the first POST
+// carrying a key.
+func (d runtimeDependencies) IdempotencyStore() httpx.IdempotencyStore {
+	if d.idempotency == nil {
+		return nil
+	}
+	return d.idempotency
+}
+
+// ReadinessProbes returns what this profile's dependencies contribute to the
+// readiness verdict.
+//
+// The health service is built by the caller rather than here, because the
+// supervisor is a probe too and it does not exist yet at this point in startup;
+// see run.go. Returning probes instead of a service is what lets both profiles
+// share that composition.
+func (d runtimeDependencies) ReadinessProbes() []health.Probe {
+	if d.readiness == nil {
+		return nil
+	}
+	return []health.Probe{d.readiness}
+}
+
+// BackgroundTasks returns the supervised work this profile's dependencies need.
+//
+// It exists so run.go stays profile-independent: the DATABASE=none profile returns
+// nothing and the shared startup path is unchanged.
+func (d runtimeDependencies) BackgroundTasks() []background.Task {
+	if d.idempotency == nil {
+		return nil
+	}
+
+	store := d.idempotency
+	interval := d.idempotencySweepInterval
+	return []background.Task{{
+		Name: "idempotency_sweep",
+		Run: func(ctx context.Context) error {
+			return sweepIdempotencyKeys(ctx, store, interval)
+		},
+	}}
+}
+
+// readinessProbeBudget is how long one steady-state readiness evaluation may
+// take, and is profile-owned because the dependency being probed is.
+//
+// It is passed to health.Watch separately from the refresh interval. The two used
+// to be one argument, which clamped this budget to the interval: with the shipped
+// defaults a 3s postgres.healthcheck_timeout became 2s in steady state while
+// startup admission still granted the full 3s, so a database answering in between
+// passed admission and then flapped out of rotation. Configuration validation
+// keeps health.refresh_interval above this value.
+func readinessProbeBudget(cfg config.Config) time.Duration {
+	return cfg.Postgres.HealthcheckTimeout
+}
+
+// postgresSaturationRetryAfter is the hint on a request refused because every
+// pooled connection was busy. It matches the load-shedding hint for the same
+// reason: saturation means momentarily past capacity, not down, and a long hint
+// turns a brief spike into a client-side outage.
+const postgresSaturationRetryAfter = time.Second
+
+// DomainErrors classifies the dependency failures a handler can surface but
+// should not each have to translate.
+//
+// postgres.ErrSaturated is the one this profile owns, and the pool package has
+// documented this exact mapping since it was written without anything
+// implementing it. It is the database failure that is not the database's fault:
+// every connection is busy serving, so the caller should back off and retry.
+// Answering 500 instead told a client library not to retry the one failure that
+// retrying fixes, and buried a moment of capacity pressure in the same error rate
+// as a genuine bug.
+func (d runtimeDependencies) DomainErrors() []problem.Mapper {
+	return []problem.Mapper{classifyPostgresDomainError}
+}
+
+func classifyPostgresDomainError(err error) (problem.Mapped, bool) {
+	if !errors.Is(err, postgres.ErrSaturated) {
+		return problem.Mapped{}, false
+	}
+	return problem.Mapped{
+		Code:       problem.CodeServiceUnavailable,
+		Detail:     "the service is temporarily at capacity",
+		RetryAfter: postgresSaturationRetryAfter,
+	}, true
+}
+
+// idempotencySweeper is the one method the supervised task needs. Narrowing the
+// parameter to it is what lets the task's timing and failure handling be proved
+// without a database.
+type idempotencySweeper interface {
+	Sweep(ctx context.Context) (int64, error)
+}
+
+// sweepIdempotencyKeys deletes expired reservations until ctx is done.
+//
+// It returns nil on cancellation so the supervisor treats a drain as an ordinary
+// stop, and it reports a failed sweep without returning: one failed pass is a
+// transient database problem, and taking the process down for it would trade a
+// slowly growing table for an outage. A pass that keeps failing shows up as a
+// repeated error record rather than as silence.
+func sweepIdempotencyKeys(ctx context.Context, store idempotencySweeper, interval time.Duration) error {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-ticker.C:
+			removed, err := store.Sweep(ctx)
+			if err != nil {
+				if ctx.Err() != nil {
+					return nil
+				}
+				slog.ErrorContext(ctx, "idempotency_sweep_failed", "component", "idempotency", "err", err)
+				continue
+			}
+			if removed > 0 {
+				slog.InfoContext(ctx, "idempotency_sweep_completed", "component", "idempotency", "removed", removed)
+			}
+		}
+	}
+}
+
+// Close releases pooled dependencies, bounded by ctx, and is safe to call twice.
+//
+// The bound is the point. pgxpool.Close blocks until every acquired connection is
+// returned and destroyed and accepts no context of its own, so a handler that
+// outlived the HTTP drain while holding a connection would park the process here
+// until the platform SIGKILLs it — taking the shutdown telemetry with it. A
+// connection still held at this point is a leaked handler, not a slow close, and
+// reporting it beats waiting for it.
+func (d runtimeDependencies) Close(ctx context.Context) {
+	if d.closed == nil {
+		d.postgres.Close()
+		return
+	}
+
+	d.closed.Do(func() {
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			d.postgres.Close()
+		}()
+
+		select {
+		case <-done:
+		case <-ctx.Done():
+		}
+	})
 }
 
 func initRuntimeDependencies(
-	bootstrapCtx context.Context,
 	startupCtx context.Context,
 	bootstrap startupBootstrap,
 ) (runtimeDependencies, error) {
 	postgresCtx, postgresCancel := withStageBudget(startupCtx, postgresStartupBudget)
-	pg, err := initPostgresDependency(bootstrapCtx, postgresCtx, postgresStartupRuntime{
-		tracer:        bootstrap.tracer,
-		bootstrapSpan: bootstrap.bootstrapSpan,
-		cfg:           bootstrap.cfg,
-		log:           bootstrap.log,
+	pg, err := initPostgresDependency(startupCtx, postgresCtx, postgresStartupRuntime{
+		cfg: bootstrap.cfg,
+		log: bootstrap.log,
 	})
 	postgresCancel()
 	if err != nil {
 		return runtimeDependencies{}, err
 	}
+
+	idempotencyStore, err := postgres.NewIdempotencyStore(pg, bootstrap.cfg.Postgres.IdempotencyRetention)
+	if err != nil {
+		pg.Close()
+		return runtimeDependencies{}, fmt.Errorf("%w: idempotency store init failed: %w", errDependencyInit, err)
+	}
+
 	return runtimeDependencies{
-		health:   health.New(newPostgresReadinessProbe(pg, bootstrap.cfg.Postgres.HealthcheckTimeout)),
-		postgres: pg,
+		readiness:                newPostgresReadinessProbe(pg, bootstrap.cfg.Postgres.HealthcheckTimeout),
+		postgres:                 pg,
+		idempotency:              idempotencyStore,
+		idempotencySweepInterval: bootstrap.cfg.Postgres.IdempotencySweepInterval,
+		closed:                   new(sync.Once),
 	}, nil
 }
 
@@ -93,7 +256,10 @@ func initPostgres(ctx context.Context, cfg config.PostgresConfig) (*postgres.Poo
 		ConnectTimeout:     cfg.ConnectTimeout,
 		HealthcheckTimeout: cfg.HealthcheckTimeout,
 		MaxOpenConns:       cfg.MaxOpenConns,
+		MinIdleConns:       cfg.MinIdleConns,
+		AcquireTimeout:     cfg.AcquireTimeout,
 		ConnMaxLifetime:    cfg.ConnMaxLifetime,
+		StatementTimeout:   cfg.StatementTimeout,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("%w: postgres init failed: %w", errDependencyInit, err)
@@ -172,14 +338,13 @@ func initPostgresDependency(bootstrapCtx context.Context, dependencyCtx context.
 	if !runtime.cfg.Postgres.Enabled {
 		return nil, rejectPostgresStartupForDependencyInit(
 			bootstrapCtx,
-			runtime.bootstrapSpan,
 			runtime.log,
 			errors.New("postgres is required by the DATABASE=postgres profile"),
 		)
 	}
 
 	probeCtx, probeCancel := withStageBudget(dependencyCtx, postgresProbeBudget)
-	probeCtx, probeSpan := runtime.tracer.Start(probeCtx, startupPostgresProbeStage)
+	probeStarted := time.Now()
 
 	pg, probeErr := initPostgres(probeCtx, runtime.cfg.Postgres)
 	parentErr := dependencyCtx.Err()
@@ -192,16 +357,7 @@ func initPostgresDependency(bootstrapCtx context.Context, dependencyCtx context.
 		}
 	}
 	probeCancel()
-
-	attrs := []attribute.KeyValue{attribute.String("dep", startupDependencyPostgres)}
-	if probeErr != nil {
-		probeSpan.RecordError(probeErr)
-		attrs = append(attrs, attribute.String("result", "error"))
-	} else {
-		attrs = append(attrs, attribute.String("result", "success"))
-	}
-	probeSpan.SetAttributes(attrs...)
-	probeSpan.End()
+	probeDuration := time.Since(probeStarted)
 
 	pgReturned := false
 	defer func() {
@@ -212,9 +368,24 @@ func initPostgresDependency(bootstrapCtx context.Context, dependencyCtx context.
 
 	if probeErr != nil {
 		sanitizedErr := postgresDependencyInitFailure(probeErr)
-		recordDependencyProbeRejection(bootstrapCtx, runtime, sanitizedErr)
+		recordDependencyProbeRejection(bootstrapCtx, runtime, probeDuration, sanitizedErr)
 		return nil, sanitizedErr
 	}
+
+	// The probe duration is reported here because nothing else measures how long
+	// a dependency took to become usable, and a startup that is slow rather than
+	// broken is otherwise indistinguishable from one that is merely starting.
+	runtime.log.InfoContext(
+		bootstrapCtx,
+		"startup_dependency_ready",
+		startupLogArgs(
+			startupLogComponentStartupProbes,
+			startupPostgresProbeOperation,
+			"success",
+			"dependency", startupDependencyPostgres,
+			"probe.duration_ms", probeDuration.Milliseconds(),
+		)...,
+	)
 
 	pgReturned = true
 	return pg, nil
@@ -232,16 +403,14 @@ func postgresDependencyInitFailure(err error) error {
 
 func rejectPostgresStartupForDependencyInit(
 	ctx context.Context,
-	bootstrapSpan trace.Span,
 	log *slog.Logger,
 	err error,
 ) error {
 	rejectErr := postgresDependencyInitFailure(err)
-	recordStartupRejection(bootstrapSpan, "dependency_init", startupPostgresResolveStage, rejectErr)
-	log.Error(
+	log.ErrorContext(
+		ctx,
 		"startup_blocked",
 		startupLogArgs(
-			ctx,
 			startupLogComponentStartupProbes,
 			"postgres_config",
 			"error",
@@ -253,17 +422,22 @@ func rejectPostgresStartupForDependencyInit(
 	return rejectErr
 }
 
-func recordDependencyProbeRejection(ctx context.Context, runtime postgresStartupRuntime, err error) {
-	recordStartupRejection(runtime.bootstrapSpan, "dependency_init", startupPostgresProbeStage, err)
-	runtime.log.Error(
+func recordDependencyProbeRejection(
+	ctx context.Context,
+	runtime postgresStartupRuntime,
+	probeDuration time.Duration,
+	err error,
+) {
+	runtime.log.ErrorContext(
+		ctx,
 		"startup_blocked",
 		startupLogArgs(
-			ctx,
 			startupLogComponentStartupProbes,
 			startupPostgresProbeOperation,
 			"error",
 			"error.type", "dependency_init",
 			"dependency", startupDependencyPostgres,
+			"probe.duration_ms", probeDuration.Milliseconds(),
 			"err", err,
 		)...,
 	)

@@ -79,14 +79,13 @@ func configEnvResetKeys(t *testing.T) []string {
 
 	knownKeys := configLeafKeysFromType(t, reflect.TypeFor[Config](), "")
 	knownSections := knownConfigSections()
-	keySet := make(map[string]struct{}, len(knownKeys)+len(knownSections)+1)
+	keySet := make(map[string]struct{}, len(knownKeys)+len(knownSections))
 	for _, key := range knownKeys {
 		keySet[namespaceEnvForConfigKey(key)] = struct{}{}
 	}
 	for key := range knownSections {
 		keySet[namespaceEnvForConfigKey(key)] = struct{}{}
 	}
-	keySet[allowedConfigRootsEnvVar] = struct{}{}
 
 	keys := make([]string, 0, len(keySet))
 	for key := range keySet {

@@ -110,7 +110,7 @@ func TestShutdownTimeoutMustStayWithinRange(t *testing.T) {
 func TestHTTPShutdownBudgetMustLeaveWriteDrainTime(t *testing.T) {
 	resetConfigEnv(t)
 
-	t.Setenv("APP__HTTP__READINESS_PROPAGATION_DELAY", "25s")
+	t.Setenv("APP__HTTP__READINESS_PROPAGATION_DELAY", "20s")
 	t.Setenv("APP__HTTP__WRITE_TIMEOUT", "10s")
 
 	_, _, err := LoadDetailed(LoadOptions{})
@@ -129,6 +129,7 @@ func TestReadinessTimeoutMustNotExceedWriteTimeout(t *testing.T) {
 	t.Run("greater readiness timeout rejects", func(t *testing.T) {
 		resetConfigEnv(t)
 		t.Setenv("APP__HTTP__READINESS_TIMEOUT", "6s")
+		t.Setenv("APP__HTTP__REQUEST_TIMEOUT", "5s")
 		t.Setenv("APP__HTTP__WRITE_TIMEOUT", "5s")
 
 		_, _, err := LoadDetailed(LoadOptions{})
@@ -154,6 +155,7 @@ func TestReadinessTimeoutMustNotExceedWriteTimeout(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			resetConfigEnv(t)
 			t.Setenv("APP__HTTP__READINESS_TIMEOUT", tc.readinessTimeout)
+			t.Setenv("APP__HTTP__REQUEST_TIMEOUT", tc.writeTimeout)
 			t.Setenv("APP__HTTP__WRITE_TIMEOUT", tc.writeTimeout)
 
 			_, _, err := LoadDetailed(LoadOptions{})
@@ -224,3 +226,379 @@ func TestReadDurationParsesDefaultDurations(t *testing.T) {
 	}
 	// profile:database-postgres:end
 }
+
+// The request budget must expire while the connection can still carry the 504
+// that reports it, so it may not outlast the response write deadline.
+func TestRequestTimeoutMustNotExceedWriteTimeout(t *testing.T) {
+	t.Run("greater request timeout rejects", func(t *testing.T) {
+		resetConfigEnv(t)
+		t.Setenv("APP__HTTP__REQUEST_TIMEOUT", "6s")
+		t.Setenv("APP__HTTP__WRITE_TIMEOUT", "5s")
+
+		_, _, err := LoadDetailed(LoadOptions{})
+		if err == nil {
+			t.Fatalf("LoadDetailed() expected validation error for request timeout beyond write timeout")
+		}
+		if !errors.Is(err, ErrValidate) {
+			t.Fatalf("error = %v, want ErrValidate", err)
+		}
+		if !strings.Contains(err.Error(), "http.request_timeout must be <= http.write_timeout") {
+			t.Fatalf("error = %v, want request/write timeout compatibility policy", err)
+		}
+	})
+
+	for _, tc := range []struct {
+		name           string
+		requestTimeout string
+		writeTimeout   string
+	}{
+		{name: "equal timeout allows", requestTimeout: "5s", writeTimeout: "5s"},
+		{name: "lower request timeout allows", requestTimeout: "4s", writeTimeout: "5s"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			resetConfigEnv(t)
+			t.Setenv("APP__HTTP__READINESS_TIMEOUT", "1s")
+			t.Setenv("APP__HTTP__REQUEST_TIMEOUT", tc.requestTimeout)
+			t.Setenv("APP__HTTP__WRITE_TIMEOUT", tc.writeTimeout)
+
+			_, _, err := LoadDetailed(LoadOptions{})
+			if err != nil {
+				t.Fatalf("LoadDetailed() error = %v", err)
+			}
+		})
+	}
+}
+
+func TestRequestTimeoutRejectsOutOfRangeValues(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		value string
+	}{
+		{name: "below lower bound", value: "50ms"},
+		{name: "above upper bound", value: "11m"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			resetConfigEnv(t)
+			t.Setenv("APP__HTTP__REQUEST_TIMEOUT", tc.value)
+
+			_, _, err := LoadDetailed(LoadOptions{})
+			if err == nil {
+				t.Fatalf("LoadDetailed() expected validation error for http.request_timeout = %q", tc.value)
+			}
+			if !errors.Is(err, ErrValidate) {
+				t.Fatalf("error = %v, want ErrValidate", err)
+			}
+			if !strings.Contains(err.Error(), "http.request_timeout must be in range") {
+				t.Fatalf("error = %v, want request timeout range policy", err)
+			}
+		})
+	}
+}
+
+func TestHealthRefreshBounds(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		interval  string
+		threshold string
+		wantErr   bool
+	}{
+		{name: "defaults accepted"},
+		{name: "interval too small", interval: "50ms", wantErr: true},
+		{name: "interval too large", interval: "2m", wantErr: true},
+		{name: "threshold zero", threshold: "0", wantErr: true},
+		{name: "threshold too large", threshold: "101", wantErr: true},
+		{name: "threshold one accepted", threshold: "1"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			resetConfigEnv(t)
+			if tc.interval != "" {
+				t.Setenv("APP__HEALTH__REFRESH_INTERVAL", tc.interval)
+			}
+			if tc.threshold != "" {
+				t.Setenv("APP__HEALTH__FAILURE_THRESHOLD", tc.threshold)
+			}
+
+			_, _, err := LoadDetailed(LoadOptions{})
+			if tc.wantErr && !errors.Is(err, ErrValidate) {
+				t.Fatalf("LoadDetailed() error = %v, want ErrValidate", err)
+			}
+			if !tc.wantErr && err != nil {
+				t.Fatalf("LoadDetailed() error = %v", err)
+			}
+		})
+	}
+}
+
+func TestRuntimeMemoryLimitRatioBounds(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		ratio   string
+		wantErr bool
+	}{
+		{name: "default accepted"},
+		{name: "zero disables detection", ratio: "0"},
+		{name: "one accepted", ratio: "1"},
+		{name: "negative", ratio: "-0.1", wantErr: true},
+		{name: "above one", ratio: "1.1", wantErr: true},
+		{name: "not a number", ratio: "NaN", wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			resetConfigEnv(t)
+			if tc.ratio != "" {
+				t.Setenv("APP__RUNTIME__MEMORY_LIMIT_RATIO", tc.ratio)
+			}
+
+			_, _, err := LoadDetailed(LoadOptions{})
+			if tc.wantErr && err == nil {
+				t.Fatal("LoadDetailed() error = nil, want non-nil")
+			}
+			if !tc.wantErr && err != nil {
+				t.Fatalf("LoadDetailed() error = %v", err)
+			}
+		})
+	}
+}
+
+func TestMaxInFlightBounds(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		value   string
+		wantErr bool
+	}{
+		{name: "default accepted"},
+		{name: "zero disables shedding", value: "0"},
+		{name: "negative", value: "-1", wantErr: true},
+		{name: "above ceiling", value: "100001", wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			resetConfigEnv(t)
+			if tc.value != "" {
+				t.Setenv("APP__HTTP__MAX_IN_FLIGHT", tc.value)
+			}
+
+			_, _, err := LoadDetailed(LoadOptions{})
+			if tc.wantErr && !errors.Is(err, ErrValidate) {
+				t.Fatalf("LoadDetailed() error = %v, want ErrValidate", err)
+			}
+			if !tc.wantErr && err != nil {
+				t.Fatalf("LoadDetailed() error = %v", err)
+			}
+		})
+	}
+}
+
+// TestMaxConnectionsBounds covers the accept ceiling, which bounds what
+// max_in_flight cannot: a connection costs a goroutine and its buffers before
+// any middleware, including the load shedder, ever runs.
+func TestMaxConnectionsBounds(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		connections string
+		inFlight    string
+		wantErr     bool
+	}{
+		{name: "default accepted"},
+		{name: "zero accepts without a bound", connections: "0"},
+		{name: "negative", connections: "-1", wantErr: true},
+		{name: "above ceiling", connections: "1000001", wantErr: true},
+		{name: "equal to in flight accepted", connections: "256", inFlight: "256"},
+		// A cap under the advertised concurrency means excess callers never get
+		// the 503 with a Retry-After that shedding would have given them; they
+		// wait in the kernel backlog and time out at connect instead.
+		{name: "below in flight", connections: "128", inFlight: "256", wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			resetConfigEnv(t)
+			if tc.connections != "" {
+				t.Setenv("APP__HTTP__MAX_CONNECTIONS", tc.connections)
+			}
+			if tc.inFlight != "" {
+				t.Setenv("APP__HTTP__MAX_IN_FLIGHT", tc.inFlight)
+			}
+
+			_, _, err := LoadDetailed(LoadOptions{})
+			if tc.wantErr && !errors.Is(err, ErrValidate) {
+				t.Fatalf("LoadDetailed() error = %v, want ErrValidate", err)
+			}
+			if !tc.wantErr && err != nil {
+				t.Fatalf("LoadDetailed() error = %v", err)
+			}
+		})
+	}
+}
+
+func TestPprofRequiresDiagnosticsListener(t *testing.T) {
+	resetConfigEnv(t)
+	t.Setenv("APP__OBSERVABILITY__PPROF__ENABLED", "true")
+	t.Setenv("APP__OBSERVABILITY__METRICS__ADDR", "")
+
+	_, _, err := LoadDetailed(LoadOptions{})
+	if !errors.Is(err, ErrValidate) {
+		t.Fatalf("LoadDetailed() error = %v, want ErrValidate", err)
+	}
+	if !strings.Contains(err.Error(), "observability.metrics.addr") {
+		t.Fatalf("error = %q, want it to name observability.metrics.addr", err.Error())
+	}
+}
+
+// profile:database-postgres:start
+func TestStatementTimeoutMustFitRequestBudget(t *testing.T) {
+	for _, tc := range []struct {
+		name             string
+		statementTimeout string
+		requestTimeout   string
+		wantErr          bool
+	}{
+		{name: "defaults are coherent"},
+		{name: "equal budgets allowed", statementTimeout: "8s", requestTimeout: "8s"},
+		{name: "smaller statement budget allowed", statementTimeout: "3s", requestTimeout: "8s"},
+		{name: "statement budget outlives request", statementTimeout: "9s", requestTimeout: "8s", wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			resetConfigEnv(t)
+			if tc.statementTimeout != "" {
+				t.Setenv("APP__POSTGRES__STATEMENT_TIMEOUT", tc.statementTimeout)
+			}
+			if tc.requestTimeout != "" {
+				t.Setenv("APP__HTTP__REQUEST_TIMEOUT", tc.requestTimeout)
+			}
+			t.Setenv("APP__POSTGRES__ENABLED", "true")
+			t.Setenv("APP__POSTGRES__DSN", "postgres://app:app@127.0.0.1:5432/app?sslmode=disable")
+
+			_, _, err := LoadDetailed(LoadOptions{})
+			if tc.wantErr {
+				if !errors.Is(err, ErrValidate) {
+					t.Fatalf("LoadDetailed() error = %v, want ErrValidate", err)
+				}
+				if !strings.Contains(err.Error(), "postgres.statement_timeout") {
+					t.Fatalf("error = %q, want it to name postgres.statement_timeout", err.Error())
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("LoadDetailed() error = %v", err)
+			}
+		})
+	}
+}
+
+func TestMaxInFlightMustCoverPool(t *testing.T) {
+	resetConfigEnv(t)
+	t.Setenv("APP__POSTGRES__ENABLED", "true")
+	t.Setenv("APP__POSTGRES__DSN", "postgres://app:app@127.0.0.1:5432/app?sslmode=disable")
+	t.Setenv("APP__POSTGRES__MAX_OPEN_CONNS", "25")
+	t.Setenv("APP__HTTP__MAX_IN_FLIGHT", "10")
+
+	_, _, err := LoadDetailed(LoadOptions{})
+	if !errors.Is(err, ErrValidate) {
+		t.Fatalf("LoadDetailed() error = %v, want ErrValidate", err)
+	}
+	if !strings.Contains(err.Error(), "postgres.max_open_conns") {
+		t.Fatalf("error = %q, want it to name postgres.max_open_conns", err.Error())
+	}
+}
+
+// TestShedDisabledSkipsPoolCoverage keeps "shedding off" from being rejected by
+// the rule that only exists to keep shedding wider than the pool.
+func TestShedDisabledSkipsPoolCoverage(t *testing.T) {
+	resetConfigEnv(t)
+	t.Setenv("APP__POSTGRES__ENABLED", "true")
+	t.Setenv("APP__POSTGRES__DSN", "postgres://app:app@127.0.0.1:5432/app?sslmode=disable")
+	t.Setenv("APP__POSTGRES__MAX_OPEN_CONNS", "25")
+	t.Setenv("APP__HTTP__MAX_IN_FLIGHT", "0")
+
+	if _, _, err := LoadDetailed(LoadOptions{}); err != nil {
+		t.Fatalf("LoadDetailed() error = %v", err)
+	}
+}
+
+// profile:database-postgres:end
+
+// profile:database-postgres:start
+
+// TestAcquireTimeoutMustLeaveQueryBudget keeps the two numbers one budget. An
+// acquire budget at or above the request budget is not a bound: a caller that
+// waited it out has nothing left to run a query with, which is the unbounded
+// wait this setting replaced.
+func TestAcquireTimeoutMustLeaveQueryBudget(t *testing.T) {
+	for _, tc := range []struct {
+		name           string
+		acquireTimeout string
+		requestTimeout string
+		wantErr        bool
+	}{
+		{name: "defaults are coherent"},
+		{name: "small slice of the budget allowed", acquireTimeout: "1s", requestTimeout: "8s"},
+		{name: "equal budgets rejected", acquireTimeout: "8s", requestTimeout: "8s", wantErr: true},
+		{name: "acquire budget outlives request", acquireTimeout: "9s", requestTimeout: "8s", wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			resetConfigEnv(t)
+			if tc.acquireTimeout != "" {
+				t.Setenv("APP__POSTGRES__ACQUIRE_TIMEOUT", tc.acquireTimeout)
+			}
+			if tc.requestTimeout != "" {
+				t.Setenv("APP__HTTP__REQUEST_TIMEOUT", tc.requestTimeout)
+			}
+			t.Setenv("APP__POSTGRES__ENABLED", "true")
+			t.Setenv("APP__POSTGRES__DSN", "postgres://app:app@127.0.0.1:5432/app?sslmode=disable")
+
+			_, _, err := LoadDetailed(LoadOptions{})
+			if tc.wantErr {
+				if !errors.Is(err, ErrValidate) {
+					t.Fatalf("LoadDetailed() error = %v, want ErrValidate", err)
+				}
+				if !strings.Contains(err.Error(), "postgres.acquire_timeout") {
+					t.Fatalf("error = %q, want it to name postgres.acquire_timeout", err.Error())
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("LoadDetailed() error = %v", err)
+			}
+		})
+	}
+}
+
+func TestMinIdleConnsMustFitPool(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		minIdleConns string
+		maxOpenConns string
+		wantErr      bool
+	}{
+		{name: "defaults are coherent"},
+		{name: "no warm floor allowed", minIdleConns: "0", maxOpenConns: "25"},
+		{name: "whole pool warm allowed", minIdleConns: "25", maxOpenConns: "25"},
+		{name: "warm floor above pool ceiling", minIdleConns: "26", maxOpenConns: "25", wantErr: true},
+		{name: "negative warm floor", minIdleConns: "-1", maxOpenConns: "25", wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			resetConfigEnv(t)
+			if tc.minIdleConns != "" {
+				t.Setenv("APP__POSTGRES__MIN_IDLE_CONNS", tc.minIdleConns)
+			}
+			if tc.maxOpenConns != "" {
+				t.Setenv("APP__POSTGRES__MAX_OPEN_CONNS", tc.maxOpenConns)
+			}
+			t.Setenv("APP__POSTGRES__ENABLED", "true")
+			t.Setenv("APP__POSTGRES__DSN", "postgres://app:app@127.0.0.1:5432/app?sslmode=disable")
+
+			_, _, err := LoadDetailed(LoadOptions{})
+			if tc.wantErr {
+				if !errors.Is(err, ErrValidate) {
+					t.Fatalf("LoadDetailed() error = %v, want ErrValidate", err)
+				}
+				if !strings.Contains(err.Error(), "postgres.min_idle_conns") {
+					t.Fatalf("error = %q, want it to name postgres.min_idle_conns", err.Error())
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("LoadDetailed() error = %v", err)
+			}
+		})
+	}
+}
+
+// profile:database-postgres:end

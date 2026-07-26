@@ -2,9 +2,13 @@ package bootstrap
 
 import (
 	"context"
+	"time"
 
+	"github.com/example/go-service-template-rest/internal/background"
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/health"
+	httpx "github.com/example/go-service-template-rest/internal/infra/http"
+	"github.com/example/go-service-template-rest/internal/problem"
 )
 
 // runtimeDependencies is the DATABASE=none profile's dependency set. Readiness
@@ -13,22 +17,52 @@ import (
 // This profile carries no PostgreSQL configuration at all, so an
 // APP__POSTGRES__* variable is rejected by config validation as an unknown key
 // rather than by a runtime check here.
-type runtimeDependencies struct {
-	health *health.Service
+type runtimeDependencies struct{}
+
+// ReadinessProbes mirrors the PostgreSQL profile's accessor so the shared startup
+// path in run.go composes the health service the same way under either profile.
+// This profile has no dependency to probe; startup admission and the background
+// supervisor still contribute their own.
+func (runtimeDependencies) ReadinessProbes() []health.Probe { return nil }
+
+// IdempotencyStore mirrors the PostgreSQL profile's accessor. This profile has no
+// storage that satisfies the two properties the middleware needs — a single atomic
+// claim and expiry — so it returns nil and the middleware stays out of the chain.
+func (runtimeDependencies) IdempotencyStore() httpx.IdempotencyStore { return nil }
+
+// BackgroundTasks mirrors the PostgreSQL profile's accessor so the shared startup
+// path in run.go compiles against either profile. This profile's dependencies need
+// no supervised work.
+func (runtimeDependencies) BackgroundTasks() []background.Task { return nil }
+
+// DomainErrors mirrors the PostgreSQL profile's accessor. This profile holds no
+// dependency whose failures the transport has to classify, so a handler's own
+// errors are the only ones a service maps here.
+func (runtimeDependencies) DomainErrors() []problem.Mapper { return nil }
+
+// readinessProbeBudget mirrors the PostgreSQL profile's accessor. This profile
+// probes no dependency, so the evaluation only has to fit inside the budget the
+// readiness route itself answers within.
+func readinessProbeBudget(cfg config.Config) time.Duration {
+	return cfg.HTTP.ReadinessTimeout
 }
 
-func (runtimeDependencies) Close() {}
+// Close takes a context to match the PostgreSQL profile's signature, which needs
+// one to bound a pool release that can outlive the HTTP drain. This profile holds
+// nothing that can block, so it ignores it.
+func (runtimeDependencies) Close(_ context.Context) {}
 
 // The error result exists because the PostgreSQL profile's implementation of
 // this signature can fail; this profile has nothing that can.
 //
-//nolint:unparam // Profile-shared signature; the PostgreSQL profile returns errors here.
+// There is deliberately no nolint:unparam here. The body is a single return, and
+// unparam skips those as stubs — so the directive this replaced was itself
+// reported as unused, which fails lint in every generated DATABASE=none service.
 func initRuntimeDependencies(
-	_ context.Context,
 	_ context.Context,
 	_ startupBootstrap,
 ) (runtimeDependencies, error) {
-	return runtimeDependencies{health: health.New()}, nil
+	return runtimeDependencies{}, nil
 }
 
 // validateStartupBudgetCompatibility relates configured dependency budgets to

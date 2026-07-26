@@ -12,16 +12,19 @@ import (
 
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/health"
-	"go.opentelemetry.io/otel/trace"
+	"golang.org/x/net/netutil"
 )
 
+// runtimeServer is the http.Server surface this package drives. Close is part of
+// it because the drain needs a way to abandon connections a graceful shutdown
+// gave up on; see forceCloseServers.
 type runtimeServer interface {
 	Serve(net.Listener) error
 	Shutdown(context.Context) error
+	Close() error
 }
 
 type serveHTTPRuntimeArgs struct {
-	bootstrapSpan  trace.Span
 	cfg            config.Config
 	log            *slog.Logger
 	healthSvc      *health.Service
@@ -30,6 +33,10 @@ type serveHTTPRuntimeArgs struct {
 	readinessCheck func(context.Context) error
 	admission      *startupAdmissionController
 	shutdownDelay  time.Duration
+	// shutdown is the process-wide teardown deadline. It is armed here, at the
+	// one point that knows serving has ended, and every stage after the drain
+	// draws from it.
+	shutdown *shutdownBudget
 }
 
 type serverResult struct {
@@ -41,7 +48,6 @@ func serveHTTPRuntime(signalCtx context.Context, bootstrapCtx context.Context, a
 	if err := startupRuntimeContextErr(signalCtx, bootstrapCtx); err != nil {
 		return rejectHTTPStartup(
 			bootstrapCtx,
-			args.bootstrapSpan,
 			args.log,
 			"startup.http_listen",
 			fmt.Errorf("startup canceled before http listen: %w", err),
@@ -53,12 +59,12 @@ func serveHTTPRuntime(signalCtx context.Context, bootstrapCtx context.Context, a
 	if err != nil {
 		return rejectHTTPStartup(
 			bootstrapCtx,
-			args.bootstrapSpan,
 			args.log,
 			"startup.http_listen",
 			fmt.Errorf("listen http server: %w", err),
 		)
 	}
+	listener = boundedAPIListener(listener, args.cfg.HTTP.MaxConnections)
 
 	var metricsListener net.Listener
 	if args.metricsSrv != nil && args.cfg.Observability.Metrics.Addr != "" {
@@ -67,7 +73,6 @@ func serveHTTPRuntime(signalCtx context.Context, bootstrapCtx context.Context, a
 			_ = listener.Close()
 			return rejectHTTPStartup(
 				bootstrapCtx,
-				args.bootstrapSpan,
 				args.log,
 				"startup.metrics_listen",
 				fmt.Errorf("listen metrics server: %w", err),
@@ -81,7 +86,6 @@ func serveHTTPRuntime(signalCtx context.Context, bootstrapCtx context.Context, a
 		}
 		return rejectHTTPStartup(
 			bootstrapCtx,
-			args.bootstrapSpan,
 			args.log,
 			"startup.http_serve",
 			fmt.Errorf("startup canceled before http serve: %w", err),
@@ -120,36 +124,123 @@ func serveHTTPRuntime(signalCtx context.Context, bootstrapCtx context.Context, a
 	if ready && !stopRequested {
 		select {
 		case <-signalCtx.Done():
-			args.log.Info("shutdown signal received")
+			args.log.InfoContext(signalCtx, "shutdown signal received")
 		case result := <-runErrCh:
 			serverErr = serverStoppedAfterReadiness(args.log, result)
 		}
 	}
 	cancelAdmission()
 
+	// The grace period starts now, not at process start: this is the moment the
+	// platform began counting.
+	args.shutdown.start()
+
 	effectiveShutdownDelay := args.shutdownDelay
 	if !ready {
 		effectiveShutdownDelay = 0
 	}
-	servers := []shutdownServer{args.srv}
-	if args.metricsSrv != nil {
-		servers = append(servers, args.metricsSrv)
-	}
-	if err := drainAndShutdown(signalCtx, args.log, effectiveShutdownDelay, args.cfg.HTTP.ShutdownTimeout, args.healthSvc, servers...); err != nil {
+	// The diagnostics listener is deliberately not in this drain. Everything worth
+	// measuring happens during the window it occupies: the readiness propagation
+	// delay, up to the whole remaining shutdown budget of in-flight requests, and
+	// the shed and timed-out responses they produce. The version this replaced closed
+	// /metrics at the same instant as the API, so with the shipped scrape-only
+	// configuration none of that window was ever collected — the Prometheus target
+	// simply went down for the last fifteen seconds of every pod's life, which is
+	// exactly the fifteen seconds a rolling deploy is judged on.
+	drainErr := drainAndShutdown(
+		signalCtx,
+		args.log,
+		effectiveShutdownDelay,
+		// Clamped, so a drain cannot spend budget the stages after it need. The
+		// configured value normally wins; validateShutdownGraceBudget is what
+		// keeps that true rather than leaving it to chance here.
+		args.shutdown.clamp(args.cfg.HTTP.ShutdownTimeout),
+		args.healthSvc,
+		args.srv,
+	)
+	// Stopped only now, so a scraper could still collect everything the drain
+	// produced. It is stopped here rather than by the caller because this function
+	// started its goroutine, and split ownership is what lets one escape.
+	diagnosticsErr := shutdownDiagnostics(signalCtx, args.log, args.shutdown, args.metricsSrv)
+
+	if drainErr != nil {
 		if terminalErr != nil {
-			return errors.Join(terminalErr, err)
+			return errors.Join(terminalErr, drainErr, diagnosticsErr)
 		}
-		return errors.Join(serverErr, err)
+		return errors.Join(serverErr, drainErr, diagnosticsErr)
 	}
 	if terminalErr != nil {
-		return terminalErr
+		return errors.Join(terminalErr, diagnosticsErr)
 	}
 	if serverErr != nil {
-		return serverErr
+		return errors.Join(serverErr, diagnosticsErr)
+	}
+	if diagnosticsErr != nil {
+		return diagnosticsErr
 	}
 
-	args.log.Info("shutdown complete")
+	args.log.InfoContext(signalCtx, "shutdown complete")
 	return nil
+}
+
+// shutdownDiagnostics closes the private listener under its own budget, and is
+// safe to call twice.
+//
+// It needs a bound of its own: an in-flight scrape holds the connection, and
+// http.Server.Shutdown waits for active requests indefinitely — so without one a
+// stalled scraper would park the process here and take the telemetry flush with it,
+// which is the same failure the dependency close is bounded against.
+func shutdownDiagnostics(base context.Context, log *slog.Logger, budget *shutdownBudget, server runtimeServer) error {
+	if server == nil {
+		return nil
+	}
+
+	err := server.Shutdown(budget.stage(base, diagnosticsShutdownTimeout))
+	switch {
+	case err == nil, errors.Is(err, http.ErrServerClosed):
+		log.InfoContext(base, "diagnostics_stopped", startupLogArgs(startupLogComponentShutdown, "diagnostics", "success")...)
+		return nil
+	case errors.Is(err, context.DeadlineExceeded):
+		// A scrape outlived the budget. Closing abandons it, which is the same
+		// trade the API drain makes, and leaves the flush below able to run.
+		closeErr := server.Close()
+		log.WarnContext(
+			base,
+			"diagnostics_forced",
+			startupLogArgs(
+				startupLogComponentShutdown,
+				"diagnostics",
+				"degraded",
+				"reason", "scrape_outlived_shutdown_budget",
+			)...,
+		)
+		if closeErr != nil && !errors.Is(closeErr, http.ErrServerClosed) {
+			return fmt.Errorf("close diagnostics server: %w", closeErr)
+		}
+		return nil
+	default:
+		return fmt.Errorf("shutdown diagnostics server: %w", err)
+	}
+}
+
+// boundedAPIListener caps how many connections the API accepts at once.
+//
+// It covers the half of overload the middleware chain cannot see. MaxInFlight
+// sheds past its limit and records that it did, but shedding happens inside a
+// handler — so every connection beyond the limit has already cost a goroutine,
+// a read buffer, a write buffer, and a header parse up to http.max_header_bytes
+// by the time it is rejected. A connection flood, or one client fleet with a
+// misconfigured pool, therefore grows the heap without bound behind a load
+// shedder that reports the service is coping. Excess callers wait in the kernel
+// accept queue instead, which costs this process nothing.
+//
+// The diagnostics listener is deliberately not capped: it serves a scraper, and
+// a metrics endpoint that blocks during an incident is the wrong trade.
+func boundedAPIListener(listener net.Listener, maxConnections int) net.Listener {
+	if maxConnections <= 0 {
+		return listener
+	}
+	return netutil.LimitListener(listener, maxConnections)
 }
 
 func normalizeServeError(err error) error {
@@ -171,7 +262,6 @@ func waitForStartupAdmission(
 		if err != nil {
 			return false, false, rejectHTTPStartup(
 				bootstrapCtx,
-				args.bootstrapSpan,
 				args.log,
 				"startup.readiness",
 				fmt.Errorf("startup readiness check failed: %w", err),
@@ -179,39 +269,45 @@ func waitForStartupAdmission(
 		}
 		select {
 		case result := <-runErrCh:
-			return false, false, serverStoppedBeforeReadiness(args, result)
+			return false, false, serverStoppedBeforeReadiness(bootstrapCtx, args, result)
 		default:
 			args.admission.MarkReady()
 			return true, false, nil
 		}
 	case <-signalCtx.Done():
-		args.log.Info("shutdown signal received")
-		recordStartupRejection(args.bootstrapSpan, "startup_error", "startup.readiness", signalCtx.Err())
+		args.log.InfoContext(signalCtx, "shutdown signal received")
 		return false, true, nil
 	case <-bootstrapCtx.Done():
 		select {
 		case <-signalCtx.Done():
-			args.log.Info("shutdown signal received")
-			recordStartupRejection(args.bootstrapSpan, "startup_error", "startup.readiness", signalCtx.Err())
+			args.log.InfoContext(signalCtx, "shutdown signal received")
 			return false, true, nil
 		default:
 		}
 		err := fmt.Errorf("startup budget exhausted before readiness: %w", bootstrapCtx.Err())
-		args.log.Error("startup budget exhausted before readiness", "err", err)
-		recordStartupRejection(args.bootstrapSpan, "startup_error", "startup.readiness", err)
+		args.log.ErrorContext(bootstrapCtx, "startup budget exhausted before readiness", "err", err)
 		return false, false, err
 	case result := <-runErrCh:
-		return false, false, serverStoppedBeforeReadiness(args, result)
+		return false, false, serverStoppedBeforeReadiness(bootstrapCtx, args, result)
 	}
 }
 
-func serverStoppedBeforeReadiness(args serveHTTPRuntimeArgs, result serverResult) error {
+func serverStoppedBeforeReadiness(ctx context.Context, args serveHTTPRuntimeArgs, result serverResult) error {
 	err := fmt.Errorf("%s server stopped before readiness", result.name)
 	if result.err != nil {
-		args.log.Error(result.name+" server stopped with error", "err", result.err)
 		err = fmt.Errorf("%s server stopped before readiness: %w", result.name, result.err)
 	}
-	recordStartupRejection(args.bootstrapSpan, "startup_error", "startup."+result.name+"_serve", err)
+	args.log.ErrorContext(
+		ctx,
+		"startup_blocked",
+		startupLogArgs(
+			startupLogComponentStartupProbes,
+			result.name+"_serve",
+			"error",
+			"error.type", "startup_error",
+			"err", err,
+		)...,
+	)
 	return err
 }
 
@@ -266,16 +362,14 @@ func startupRuntimeContextErr(signalCtx context.Context, bootstrapCtx context.Co
 
 func rejectHTTPStartup(
 	bootstrapCtx context.Context,
-	bootstrapSpan trace.Span,
 	log *slog.Logger,
 	stage string,
 	err error,
 ) error {
-	recordStartupRejection(bootstrapSpan, "startup_error", stage, err)
-	log.Error(
+	log.ErrorContext(
+		bootstrapCtx,
 		"startup_blocked",
 		startupLogArgs(
-			bootstrapCtx,
 			startupLogComponentStartupProbes,
 			strings.TrimPrefix(stage, "startup."),
 			"error",

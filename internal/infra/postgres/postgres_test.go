@@ -50,7 +50,9 @@ func TestNewRejectsEmptyDSN(t *testing.T) {
 		ConnectTimeout:     time.Second,
 		HealthcheckTimeout: time.Second,
 		MaxOpenConns:       10,
+		AcquireTimeout:     time.Second,
 		ConnMaxLifetime:    time.Minute,
+		StatementTimeout:   time.Second,
 	})
 	if err == nil {
 		t.Fatal("New() error = nil, want non-nil")
@@ -76,16 +78,20 @@ func TestNewRejectsInvalidOptions(t *testing.T) {
 				DSN:                "postgres://user:pass@localhost:5432/db?sslmode=disable",
 				HealthcheckTimeout: time.Second,
 				MaxOpenConns:       10,
+				AcquireTimeout:     time.Second,
 				ConnMaxLifetime:    time.Minute,
+				StatementTimeout:   time.Second,
 			},
 		},
 		{
 			name: "healthcheck timeout",
 			opts: Options{
-				DSN:             "postgres://user:pass@localhost:5432/db?sslmode=disable",
-				ConnectTimeout:  time.Second,
-				MaxOpenConns:    10,
-				ConnMaxLifetime: time.Minute,
+				DSN:              "postgres://user:pass@localhost:5432/db?sslmode=disable",
+				ConnectTimeout:   time.Second,
+				MaxOpenConns:     10,
+				AcquireTimeout:   time.Second,
+				ConnMaxLifetime:  time.Minute,
+				StatementTimeout: time.Second,
 			},
 		},
 		{
@@ -94,7 +100,9 @@ func TestNewRejectsInvalidOptions(t *testing.T) {
 				DSN:                "postgres://user:pass@localhost:5432/db?sslmode=disable",
 				ConnectTimeout:     time.Second,
 				HealthcheckTimeout: time.Second,
+				AcquireTimeout:     time.Second,
 				ConnMaxLifetime:    time.Minute,
+				StatementTimeout:   time.Second,
 			},
 		},
 		{
@@ -132,7 +140,9 @@ func TestNewInvalidDSNIsRedacted(t *testing.T) {
 		ConnectTimeout:     time.Second,
 		HealthcheckTimeout: time.Second,
 		MaxOpenConns:       10,
+		AcquireTimeout:     time.Second,
 		ConnMaxLifetime:    time.Minute,
+		StatementTimeout:   time.Second,
 	})
 	if err == nil {
 		t.Fatal("New() error = nil, want non-nil")

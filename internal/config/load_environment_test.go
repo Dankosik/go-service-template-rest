@@ -25,8 +25,11 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.HTTP.Addr != ":8080" {
 		t.Fatalf("HTTP.Addr = %q, want :8080", cfg.HTTP.Addr)
 	}
-	if cfg.HTTP.ShutdownTimeout != 30*time.Second {
-		t.Fatalf("HTTP.ShutdownTimeout = %s, want 30s", cfg.HTTP.ShutdownTimeout)
+	if cfg.HTTP.GracePeriod != 45*time.Second {
+		t.Fatalf("HTTP.GracePeriod = %s, want 45s", cfg.HTTP.GracePeriod)
+	}
+	if cfg.HTTP.ShutdownTimeout != 25*time.Second {
+		t.Fatalf("HTTP.ShutdownTimeout = %s, want 25s", cfg.HTTP.ShutdownTimeout)
 	}
 	if cfg.HTTP.ReadinessTimeout != 4*time.Second {
 		t.Fatalf("HTTP.ReadinessTimeout = %s, want 4s", cfg.HTTP.ReadinessTimeout)
@@ -42,8 +45,11 @@ func TestLoadDefaults(t *testing.T) {
 		t.Fatalf("Postgres.DSN = %q, want empty", cfg.Postgres.DSN)
 	}
 	// profile:database-postgres:end
-	if cfg.Observability.Metrics.Addr != "127.0.0.1:9090" {
-		t.Fatalf("Observability.Metrics.Addr = %q, want 127.0.0.1:9090", cfg.Observability.Metrics.Addr)
+	if cfg.Observability.Metrics.Addr != ":9090" {
+		t.Fatalf("Observability.Metrics.Addr = %q, want :9090", cfg.Observability.Metrics.Addr)
+	}
+	if cfg.Observability.Pprof.Enabled {
+		t.Fatal("Observability.Pprof.Enabled = true, want false by default")
 	}
 	if cfg.Observability.OTel.ServiceName == "" {
 		t.Fatal("Observability.OTel.ServiceName is empty")
@@ -232,8 +238,11 @@ func TestEnvExampleLoadsThroughConfigLoader(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadDetailed() with env/.env.example values error = %v", err)
 	}
-	if cfg.HTTP.ShutdownTimeout != 30*time.Second {
-		t.Fatalf("HTTP.ShutdownTimeout = %s, want 30s from env/.env.example", cfg.HTTP.ShutdownTimeout)
+	if cfg.HTTP.GracePeriod != 45*time.Second {
+		t.Fatalf("HTTP.GracePeriod = %s, want 45s from env/.env.example", cfg.HTTP.GracePeriod)
+	}
+	if cfg.HTTP.ShutdownTimeout != 25*time.Second {
+		t.Fatalf("HTTP.ShutdownTimeout = %s, want 25s from env/.env.example", cfg.HTTP.ShutdownTimeout)
 	}
 }
 

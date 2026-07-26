@@ -2,10 +2,11 @@ package otelconfig
 
 import (
 	"math"
+	"strings"
 	"testing"
 )
 
-func TestTraceSamplerVocabulary(t *testing.T) {
+func TestTraceSamplerOrDefault(t *testing.T) {
 	t.Parallel()
 
 	if got := TraceSamplerOrDefault("  "); got != DefaultTracesSampler {
@@ -14,41 +15,56 @@ func TestTraceSamplerVocabulary(t *testing.T) {
 	if got := TraceSamplerOrDefault(" ALWAYS_ON "); got != SamplerAlwaysOn {
 		t.Fatalf("TraceSamplerOrDefault() = %q, want %q", got, SamplerAlwaysOn)
 	}
-	if !TraceSamplerSupported(" TRACEIDRATIO ") {
-		t.Fatal("TraceSamplerSupported(TRACEIDRATIO) = false, want true")
+}
+
+func TestValidateTraceSamplerAccepts(t *testing.T) {
+	t.Parallel()
+
+	samplers := []string{
+		"",
+		" TRACEIDRATIO ",
+		SamplerAlwaysOn,
+		SamplerAlwaysOff,
+		SamplerTraceIDRatio,
+		SamplerParentBasedTraceIDRatio,
 	}
-	if TraceSamplerSupported("sometimes") {
-		t.Fatal("TraceSamplerSupported(sometimes) = true, want false")
+	for _, sampler := range samplers {
+		for _, arg := range []float64{0, DefaultTracesSamplerArg, 1} {
+			if err := ValidateTraceSampler(sampler, arg); err != nil {
+				t.Fatalf("ValidateTraceSampler(%q, %v) error = %v, want nil", sampler, arg, err)
+			}
+		}
 	}
 }
 
-func TestTraceSamplerArgValidation(t *testing.T) {
+func TestValidateTraceSamplerRejects(t *testing.T) {
 	t.Parallel()
 
-	for _, arg := range []float64{0, DefaultTracesSamplerArg, 1} {
-		if !TraceSamplerArgFinite(arg) {
-			t.Fatalf("TraceSamplerArgFinite(%v) = false, want true", arg)
-		}
-		if !TraceSamplerArgInRange(arg) {
-			t.Fatalf("TraceSamplerArgInRange(%v) = false, want true", arg)
-		}
+	testCases := []struct {
+		name    string
+		sampler string
+		arg     float64
+		wantErr string
+	}{
+		{name: "unknown name", sampler: "sometimes", arg: 0.5, wantErr: "traces_sampler is unsupported"},
+		{name: "nan arg", sampler: SamplerTraceIDRatio, arg: math.NaN(), wantErr: "traces_sampler_arg must be finite"},
+		{name: "positive inf arg", sampler: SamplerTraceIDRatio, arg: math.Inf(1), wantErr: "traces_sampler_arg must be finite"},
+		{name: "negative inf arg", sampler: SamplerTraceIDRatio, arg: math.Inf(-1), wantErr: "traces_sampler_arg must be finite"},
+		{name: "below range", sampler: SamplerTraceIDRatio, arg: -0.1, wantErr: "traces_sampler_arg must be in range [0,1]"},
+		{name: "above range", sampler: SamplerTraceIDRatio, arg: 1.1, wantErr: "traces_sampler_arg must be in range [0,1]"},
 	}
 
-	for _, arg := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
-		if TraceSamplerArgFinite(arg) {
-			t.Fatalf("TraceSamplerArgFinite(%v) = true, want false", arg)
-		}
-		if TraceSamplerArgInRange(arg) {
-			t.Fatalf("TraceSamplerArgInRange(%v) = true, want false", arg)
-		}
-	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 
-	for _, arg := range []float64{-0.1, 1.1} {
-		if !TraceSamplerArgFinite(arg) {
-			t.Fatalf("TraceSamplerArgFinite(%v) = false, want true", arg)
-		}
-		if TraceSamplerArgInRange(arg) {
-			t.Fatalf("TraceSamplerArgInRange(%v) = true, want false", arg)
-		}
+			err := ValidateTraceSampler(tc.sampler, tc.arg)
+			if err == nil {
+				t.Fatal("ValidateTraceSampler() error = nil, want non-nil")
+			}
+			if !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("ValidateTraceSampler() error = %q, want to contain %q", err.Error(), tc.wantErr)
+			}
+		})
 	}
 }

@@ -1,24 +1,74 @@
 package httpapi
 
-import "github.com/example/go-service-template-rest/examples/reference-service/internal/openapi"
+import (
+	"context"
+	"errors"
+	"net/http"
 
-func problem(code, title string, status int32, detail string) openapi.Problem {
-	return openapi.Problem{
-		Code:   code,
-		Detail: &detail,
-		Status: status,
-		Title:  title,
-		Type:   problemType(status),
+	"github.com/example/go-service-template-rest/examples/reference-service/internal/article"
+	"github.com/example/go-service-template-rest/examples/reference-service/internal/openapi"
+	"github.com/example/go-service-template-rest/internal/problem"
+	"github.com/example/go-service-template-rest/internal/reqctx"
+)
+
+// ClassifyError maps this feature's error identities onto the problems a client
+// sees, once, for every operation.
+//
+// It lives beside the operations rather than in the composition root so it is
+// tested with them: the router tests below drive a real request through a real
+// use case and assert the status, which is the only thing that catches a mapping
+// that drifted. The root installs it — see the reference binary — because the
+// transport that consumes it is an adapter this package must not import.
+//
+// The details are this service's own wording. Passing err.Error() through would
+// put use-case internals, and eventually a dependency's message, in a response
+// body.
+func ClassifyError(err error) (problem.Mapped, bool) {
+	switch {
+	case errors.Is(err, article.ErrNotFound):
+		return problem.Mapped{Code: problem.CodeNotFound, Detail: "article was not found"}, true
+	case errors.Is(err, article.ErrAlreadyExists):
+		return problem.Mapped{Code: problem.CodeConflict, Detail: "an article with this slug already exists"}, true
+	case errors.Is(err, article.ErrInvalid):
+		return problem.Mapped{Code: problem.CodeBadRequest, Detail: "request is malformed or invalid"}, true
+	default:
+		// An unclassified error is a fault this service did not anticipate. The
+		// transport answers 500 for it, which is the honest status: guessing a
+		// friendlier one is how a bug starts reading as a client mistake.
+		return problem.Mapped{}, false
 	}
 }
 
-func problemType(status int32) string {
-	switch status {
-	case 400:
-		return "https://www.rfc-editor.org/rfc/rfc9110#section-15.5.1"
-	case 404:
-		return "https://www.rfc-editor.org/rfc/rfc9110#section-15.5.5"
-	default:
-		return "https://www.rfc-editor.org/rfc/rfc9110#section-15.6.1"
+// newProblem builds one of this example's generated Problem values from the
+// shared catalog.
+//
+// Two things are worth copying. The code, title, and type URI come from
+// internal/problem rather than from a table in this package: the local table
+// this replaced fell through to the 500 type URI for a 409, so a slug conflict
+// advertised itself as an internal error — and no test noticed, because the
+// status in the body was still 409. And the body carries the request identifier,
+// so a domain error is as traceable as the transport rejections the template's
+// own middleware writes; a hand-filled Problem that omits it is how half a
+// service's error responses become unsearchable.
+func newProblem(ctx context.Context, status int, detail string) openapi.Problem {
+	definition, ok := problem.For(status)
+	if !ok {
+		// A status the shared catalog does not publish is a contract defect in
+		// this package rather than a runtime condition. Answering with the
+		// internal-error envelope is the only honest option left: it must not
+		// claim the status that was asked for, because nothing describes it.
+		definition, _ = problem.For(http.StatusInternalServerError)
 	}
+
+	built := openapi.Problem{
+		Code:   string(definition.Code),
+		Detail: &detail,
+		Status: int32(definition.Status), // #nosec G115 -- catalog entries are fixed HTTP status constants.
+		Title:  definition.Title,
+		Type:   definition.TypeURI,
+	}
+	if requestID := reqctx.RequestID(ctx); requestID != "" {
+		built.RequestId = &requestID
+	}
+	return built
 }

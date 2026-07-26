@@ -9,6 +9,7 @@
 package httpclient
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -70,6 +71,33 @@ type Config struct {
 	ResponseHeaderTimeout  time.Duration
 	MaxResponseHeaderBytes int64
 	MaxResponseBodyBytes   int64
+	// MaxConnsPerHost bounds concurrent connections to the fixed authority, and
+	// is the bulkhead between one slow provider and the rest of the service.
+	//
+	// Nothing else provides it. net/http leaves this unlimited, so a provider
+	// that goes slow is answered by every in-flight request opening its own
+	// connection and holding it for the whole request budget — the service's
+	// entire http.max_in_flight allowance spent waiting on one dependency, with
+	// requests that never touch it shed for the capacity. Excess callers wait
+	// here instead, bounded by the request budget they already carry.
+	MaxConnsPerHost int
+	// MaxIdleConnsPerHost is how many connections survive between bursts. Empty
+	// follows MaxConnsPerHost, which is the right answer for a client pinned to
+	// one authority.
+	//
+	// It has to be set. net/http's default is DefaultMaxIdleConnsPerHost, which
+	// is 2 — correct for a general-purpose client spread across many hosts, and
+	// badly wrong here: a burst of fifty calls opens fifty connections and keeps
+	// two, so the next burst pays forty-eight TCP and TLS handshakes against the
+	// callers' request budgets. That reads on a dashboard as the provider having
+	// gotten slower.
+	MaxIdleConnsPerHost int
+	// Retry bounds repeat attempts, and is disabled by its zero value. A provider's
+	// rolling deploy resets in-flight connections for a few seconds, and without a
+	// policy here every service writes its own — usually fixed-delay, for every
+	// method, with no attempt cap tied to the caller's remaining budget. See
+	// retryTransport for the three rules that make a repeat safe.
+	Retry RetryPolicy
 }
 
 // Client owns one reusable HTTP client and its underlying connection pool.
@@ -105,6 +133,11 @@ func New(cfg Config, meterProvider metric.MeterProvider) (*Client, error) {
 	transport.MaxResponseHeaderBytes = cfg.MaxResponseHeaderBytes
 	transport.TLSClientConfig = nil
 	transport.DialTLSContext = nil
+	// Both are set explicitly, because the clone carries net/http's defaults for
+	// a general-purpose client and this one is pinned to a single authority. See
+	// Config.MaxConnsPerHost and Config.MaxIdleConnsPerHost.
+	transport.MaxConnsPerHost = cfg.MaxConnsPerHost
+	transport.MaxIdleConnsPerHost = cmp.Or(cfg.MaxIdleConnsPerHost, cfg.MaxConnsPerHost)
 
 	if cfg.TargetClass == ExternalHTTPS {
 		dialer := &net.Dialer{
@@ -133,8 +166,17 @@ func New(cfg Config, meterProvider metric.MeterProvider) (*Client, error) {
 		scheme:    baseURL.Scheme,
 		authority: baseURL.Host,
 	}
+	// Retries sit inside the instrumentation so each attempt is its own span and
+	// its own metric sample: a dependency that only succeeds on the second try is
+	// otherwise indistinguishable from one that is simply slow. They sit outside the
+	// authority and response-size bounds, so a retried request is checked against
+	// the same fixed target as the first one.
+	var repeatable http.RoundTripper = bounded
+	if cfg.Retry.enabled() {
+		repeatable = retryTransport{base: bounded, policy: cfg.Retry}
+	}
 	instrumented := otelhttp.NewTransport(
-		bounded,
+		repeatable,
 		otelhttp.WithMeterProvider(meterProvider),
 		otelhttp.WithPropagators(propagation.TraceContext{}),
 		otelhttp.WithSpanOptions(trace.WithAttributes(
@@ -214,6 +256,30 @@ func validateBounds(cfg Config) error {
 	}
 	if cfg.MaxResponseBodyBytes <= 0 {
 		return errors.New("build outbound HTTP client: response body limit must be positive")
+	}
+	// Required rather than defaulted, for the same reason every other bound here
+	// is: the value that would look harmless is net/http's unlimited one, and a
+	// missing bulkhead is invisible until the provider it was meant to contain
+	// takes the service down with it.
+	if cfg.MaxConnsPerHost <= 0 {
+		return errors.New("build outbound HTTP client: max conns per host must be positive")
+	}
+	if cfg.MaxIdleConnsPerHost < 0 {
+		return errors.New("build outbound HTTP client: max idle conns per host must be >= 0")
+	}
+	if cfg.MaxIdleConnsPerHost > cfg.MaxConnsPerHost {
+		return errors.New("build outbound HTTP client: max idle conns per host must be <= max conns per host")
+	}
+	if cfg.Retry.MaxAttempts < 0 {
+		return errors.New("build outbound HTTP client: retry max attempts must be >= 0")
+	}
+	if cfg.Retry.BaseDelay < 0 {
+		return errors.New("build outbound HTTP client: retry base delay must be >= 0")
+	}
+	// A policy that names attempts without a delay would retry immediately, which
+	// is the shape that turns one failure into a burst.
+	if cfg.Retry.MaxAttempts > 1 && cfg.Retry.BaseDelay <= 0 {
+		return errors.New("build outbound HTTP client: retry base delay is required when max attempts is > 1")
 	}
 	return nil
 }

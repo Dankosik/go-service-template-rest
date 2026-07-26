@@ -5,35 +5,44 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/example/go-service-template-rest/internal/infra/telemetry/telemetrytest"
 )
 
+// Every subtest clears the ambient exporter environment, because resolution now
+// falls back to the standard OpenTelemetry variables and a developer or CI
+// machine that exports one would otherwise change what these assert.
+// t.Setenv forbids t.Parallel, so these run sequentially.
+//
+//nolint:tparallel,paralleltest // ambient env control is process-wide state.
 func TestBuildTraceExporterOptions(t *testing.T) {
 	t.Run("not configured", func(t *testing.T) {
-		t.Parallel()
+		telemetrytest.ClearAmbientExporterEnv(t)
 
-		options, configured, err := buildTraceExporterOptions(TraceExporterConfig{})
+		options, endpoint, err := buildTraceExporterOptions(TraceExporterConfig{})
 		if err != nil {
 			t.Fatalf("buildTraceExporterOptions() error = %v", err)
 		}
-		if configured {
-			t.Fatalf("configured = true, want false")
+		if endpoint.Configured() {
+			t.Fatalf("endpoint = %+v, want unconfigured", endpoint)
 		}
 		if len(options) != 0 {
 			t.Fatalf("options len = %d, want 0", len(options))
 		}
 	})
 
-	t.Run("headers without endpoint do not configure sdk default exporter", func(t *testing.T) {
+	t.Run("headers without endpoint do not reach an ambient destination", func(t *testing.T) {
+		telemetrytest.ClearAmbientExporterEnv(t)
 		t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://env-collector.example:4318")
 
-		options, configured, err := buildTraceExporterOptions(TraceExporterConfig{
+		options, endpoint, err := buildTraceExporterOptions(TraceExporterConfig{
 			OTLPHeaders: "authorization=Bearer token",
 		})
 		if err != nil {
 			t.Fatalf("buildTraceExporterOptions() error = %v", err)
 		}
-		if configured {
-			t.Fatalf("configured = true, want false")
+		if endpoint.Configured() {
+			t.Fatalf("endpoint = %+v, want unconfigured", endpoint)
 		}
 		if len(options) != 0 {
 			t.Fatalf("options len = %d, want 0", len(options))
@@ -41,17 +50,17 @@ func TestBuildTraceExporterOptions(t *testing.T) {
 	})
 
 	t.Run("configured endpoint and headers", func(t *testing.T) {
-		t.Parallel()
+		telemetrytest.ClearAmbientExporterEnv(t)
 
-		options, configured, err := buildTraceExporterOptions(TraceExporterConfig{
+		options, endpoint, err := buildTraceExporterOptions(TraceExporterConfig{
 			OTLPEndpoint: "https://otel.example.com:4318",
 			OTLPHeaders:  "authorization=Bearer token",
 		})
 		if err != nil {
 			t.Fatalf("buildTraceExporterOptions() error = %v", err)
 		}
-		if !configured {
-			t.Fatalf("configured = false, want true")
+		if endpoint.Source != TraceExporterConfigKey {
+			t.Fatalf("endpoint source = %q, want %q", endpoint.Source, TraceExporterConfigKey)
 		}
 		if len(options) == 0 {
 			t.Fatalf("options len = 0, want > 0")
@@ -59,7 +68,7 @@ func TestBuildTraceExporterOptions(t *testing.T) {
 	})
 
 	t.Run("endpoint without path defaults to the traces path", func(t *testing.T) {
-		t.Parallel()
+		telemetrytest.ClearAmbientExporterEnv(t)
 
 		paths := make(chan string, 1)
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -68,14 +77,14 @@ func TestBuildTraceExporterOptions(t *testing.T) {
 		}))
 		t.Cleanup(server.Close)
 
-		options, configured, err := buildTraceExporterOptions(TraceExporterConfig{
+		options, endpoint, err := buildTraceExporterOptions(TraceExporterConfig{
 			OTLPEndpoint: server.URL,
 		})
 		if err != nil {
 			t.Fatalf("buildTraceExporterOptions() error = %v", err)
 		}
-		if !configured {
-			t.Fatalf("configured = false, want true")
+		if !endpoint.Configured() {
+			t.Fatalf("endpoint = %+v, want configured", endpoint)
 		}
 
 		exportOneTestSpan(t, options)
@@ -83,7 +92,7 @@ func TestBuildTraceExporterOptions(t *testing.T) {
 	})
 
 	t.Run("endpoint path is used exactly as configured", func(t *testing.T) {
-		t.Parallel()
+		telemetrytest.ClearAmbientExporterEnv(t)
 
 		paths := make(chan string, 1)
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -92,14 +101,14 @@ func TestBuildTraceExporterOptions(t *testing.T) {
 		}))
 		t.Cleanup(server.Close)
 
-		options, configured, err := buildTraceExporterOptions(TraceExporterConfig{
+		options, endpoint, err := buildTraceExporterOptions(TraceExporterConfig{
 			OTLPEndpoint: server.URL + "/custom/traces",
 		})
 		if err != nil {
 			t.Fatalf("buildTraceExporterOptions() error = %v", err)
 		}
-		if !configured {
-			t.Fatalf("configured = false, want true")
+		if !endpoint.Configured() {
+			t.Fatalf("endpoint = %+v, want configured", endpoint)
 		}
 
 		exportOneTestSpan(t, options)
@@ -107,7 +116,7 @@ func TestBuildTraceExporterOptions(t *testing.T) {
 	})
 
 	t.Run("scheme-less endpoint is rejected fail-closed", func(t *testing.T) {
-		t.Parallel()
+		telemetrytest.ClearAmbientExporterEnv(t)
 
 		_, _, err := buildTraceExporterOptions(TraceExporterConfig{
 			OTLPEndpoint: "otel.internal:4318",
@@ -121,9 +130,8 @@ func TestBuildTraceExporterOptions(t *testing.T) {
 	})
 }
 
+//nolint:tparallel,paralleltest // ambient env control is process-wide state.
 func TestTraceOTLPEndpointRedactsInvalidAndSecretBearingEndpoints(t *testing.T) {
-	t.Parallel()
-
 	testCases := []struct {
 		name    string
 		raw     string
@@ -168,20 +176,20 @@ func TestTraceOTLPEndpointRedactsInvalidAndSecretBearingEndpoints(t *testing.T) 
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
+			telemetrytest.ClearAmbientExporterEnv(t)
 
-			_, _, err := traceExporterOTLPEndpoint(TraceExporterConfig{
+			_, err := ResolveTraceExporterEndpoint(TraceExporterConfig{
 				OTLPEndpoint: tc.raw,
 			})
 			if err == nil {
-				t.Fatal("traceExporterOTLPEndpoint() error = nil, want non-nil")
+				t.Fatal("ResolveTraceExporterEndpoint() error = nil, want non-nil")
 			}
 			if !strings.Contains(err.Error(), tc.wantErr) {
-				t.Fatalf("traceExporterOTLPEndpoint() error = %v, want %q", err, tc.wantErr)
+				t.Fatalf("ResolveTraceExporterEndpoint() error = %v, want %q", err, tc.wantErr)
 			}
 			for _, leaked := range []string{tc.raw, "secret-value", "Bearer"} {
 				if strings.Contains(err.Error(), leaked) {
-					t.Fatalf("traceExporterOTLPEndpoint() error = %v, leaked %q", err, leaked)
+					t.Fatalf("ResolveTraceExporterEndpoint() error = %v, leaked %q", err, leaked)
 				}
 			}
 		})

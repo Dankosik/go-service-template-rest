@@ -188,22 +188,34 @@ func flattenConfigSnapshotValues(t *testing.T, value reflect.Value, prefix strin
 
 func sentinelConfigSourceValues() map[string]any {
 	return map[string]any{
-		"app.env":     "stage",
-		"app.version": "v-snapshot-test",
+		"app.env":         "stage",
+		"app.version":     "v-snapshot-test",
+		"app.commit":      "c0ffee-snapshot-test",
+		"app.instance_id": "instance-snapshot-test",
 
 		"http.addr":                        ":18080",
+		"http.grace_period":                "61s",
 		"http.shutdown_timeout":            "31s",
 		"http.readiness_timeout":           "4s",
 		"http.readiness_propagation_delay": "16s",
 		"http.read_header_timeout":         "6s",
 		"http.read_timeout":                "7s",
+		"http.request_timeout":             "9s",
 		"http.write_timeout":               "11s",
 		"http.idle_timeout":                "61s",
 		"http.max_header_bytes":            20 << 10,
 		"http.max_body_bytes":              int64(2 << 20),
+		"http.max_in_flight":               512,
+		"http.max_connections":             1024,
 		"http.access_log_health_probes":    true,
+		"http.idempotency_outcome_timeout": "2s",
+
+		"health.refresh_interval":  "3s",
+		"health.failure_threshold": 5,
 
 		"log.level": "warn",
+
+		"runtime.memory_limit_ratio": 0.75,
 
 		// profile:database-postgres:start
 		"postgres.enabled":                     true,
@@ -214,36 +226,55 @@ func sentinelConfigSourceValues() map[string]any {
 		"postgres.migration_statement_timeout": "3m",
 		"postgres.migration_lock_timeout":      "19s",
 		"postgres.max_open_conns":              26,
+		"postgres.min_idle_conns":              3,
+		"postgres.acquire_timeout":             "1500ms",
 		"postgres.conn_max_lifetime":           "45m",
+		"postgres.statement_timeout":           "7s",
+		"postgres.idempotency_retention":       "26h",
+		"postgres.idempotency_sweep_interval":  "7m",
 		// profile:database-postgres:end
 
-		"observability.metrics.addr":                "127.0.0.1:19090",
-		"observability.otel.service_name":           "snapshot-service",
-		"observability.otel.traces_sampler":         "always_on",
-		"observability.otel.traces_sampler_arg":     0.25,
-		"observability.otel.exporter.otlp_endpoint": "https://otel.example.com:4318",
-		"observability.otel.exporter.otlp_headers":  "authorization=Bearer snapshot",
+		"observability.metrics.addr":                        "127.0.0.1:19090",
+		"observability.pprof.enabled":                       true,
+		"observability.otel.service_name":                   "snapshot-service",
+		"observability.otel.traces_sampler":                 "always_on",
+		"observability.otel.traces_sampler_arg":             0.25,
+		"observability.otel.exporter.otlp_metrics_endpoint": "https://sentinel-metrics.example/v1/metrics",
+		"observability.otel.exporter.otlp_endpoint":         "https://otel.example.com:4318",
+		"observability.otel.exporter.otlp_headers":          "authorization=Bearer snapshot",
 	}
 }
 
 func expectedSentinelSnapshotValues() map[string]any {
 	return map[string]any{
-		"app.env":     "stage",
-		"app.version": "v-snapshot-test",
+		"app.env":         "stage",
+		"app.version":     "v-snapshot-test",
+		"app.commit":      "c0ffee-snapshot-test",
+		"app.instance_id": "instance-snapshot-test",
 
 		"http.addr":                        ":18080",
+		"http.grace_period":                61 * time.Second,
 		"http.shutdown_timeout":            31 * time.Second,
 		"http.readiness_timeout":           4 * time.Second,
 		"http.readiness_propagation_delay": 16 * time.Second,
 		"http.read_header_timeout":         6 * time.Second,
 		"http.read_timeout":                7 * time.Second,
+		"http.request_timeout":             9 * time.Second,
 		"http.write_timeout":               11 * time.Second,
 		"http.idle_timeout":                61 * time.Second,
 		"http.max_header_bytes":            20 << 10,
 		"http.max_body_bytes":              int64(2 << 20),
+		"http.max_in_flight":               512,
+		"http.max_connections":             1024,
 		"http.access_log_health_probes":    true,
+		"http.idempotency_outcome_timeout": 2 * time.Second,
+
+		"health.refresh_interval":  3 * time.Second,
+		"health.failure_threshold": 5,
 
 		"log.level": slog.LevelWarn,
+
+		"runtime.memory_limit_ratio": 0.75,
 
 		// profile:database-postgres:start
 		"postgres.enabled":                     true,
@@ -254,15 +285,22 @@ func expectedSentinelSnapshotValues() map[string]any {
 		"postgres.migration_statement_timeout": 3 * time.Minute,
 		"postgres.migration_lock_timeout":      19 * time.Second,
 		"postgres.max_open_conns":              26,
+		"postgres.min_idle_conns":              3,
+		"postgres.acquire_timeout":             1500 * time.Millisecond,
 		"postgres.conn_max_lifetime":           45 * time.Minute,
+		"postgres.statement_timeout":           7 * time.Second,
+		"postgres.idempotency_retention":       26 * time.Hour,
+		"postgres.idempotency_sweep_interval":  7 * time.Minute,
 		// profile:database-postgres:end
 
-		"observability.metrics.addr":                "127.0.0.1:19090",
-		"observability.otel.service_name":           "snapshot-service",
-		"observability.otel.traces_sampler":         "always_on",
-		"observability.otel.traces_sampler_arg":     0.25,
-		"observability.otel.exporter.otlp_endpoint": "https://otel.example.com:4318",
-		"observability.otel.exporter.otlp_headers":  "authorization=Bearer snapshot",
+		"observability.metrics.addr":                        "127.0.0.1:19090",
+		"observability.pprof.enabled":                       true,
+		"observability.otel.service_name":                   "snapshot-service",
+		"observability.otel.traces_sampler":                 "always_on",
+		"observability.otel.traces_sampler_arg":             0.25,
+		"observability.otel.exporter.otlp_metrics_endpoint": "https://sentinel-metrics.example/v1/metrics",
+		"observability.otel.exporter.otlp_endpoint":         "https://otel.example.com:4318",
+		"observability.otel.exporter.otlp_headers":          "authorization=Bearer snapshot",
 	}
 }
 

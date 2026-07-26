@@ -1,7 +1,8 @@
 diff --git a/api/openapi/service.yaml b/api/openapi/service.yaml
+index 9a1993f..2f2d827 100644
 --- a/api/openapi/service.yaml
 +++ b/api/openapi/service.yaml
-@@ -12,6 +12,44 @@ security: []
+@@ -12,7 +12,36 @@ security: []
  tags:
    - name: system
      description: Operational endpoints for liveness and readiness.
@@ -38,7 +39,7 @@ diff --git a/api/openapi/service.yaml b/api/openapi/service.yaml
    /health/live:
      get:
        tags: [system]
-@@ -66,6 +104,35 @@ paths:
+@@ -66,6 +95,28 @@ paths:
                  example: not ready
  components:
    schemas:
@@ -68,72 +69,47 @@ diff --git a/api/openapi/service.yaml b/api/openapi/service.yaml
        type: object
        required:
 diff --git a/cmd/service/internal/bootstrap/run.go b/cmd/service/internal/bootstrap/run.go
+index fd91ca9..293c87a 100644
 --- a/cmd/service/internal/bootstrap/run.go
 +++ b/cmd/service/internal/bootstrap/run.go
-@@ -13,8 +13,10 @@ import (
+@@ -14,9 +14,11 @@ import (
  	"syscall"
  	"time"
  
 +	"github.com/acme/postgres-service/internal/article"
+ 	"github.com/acme/postgres-service/internal/background"
  	"github.com/acme/postgres-service/internal/config"
+ 	"github.com/acme/postgres-service/internal/health"
  	httpx "github.com/acme/postgres-service/internal/infra/http"
 +	"github.com/acme/postgres-service/internal/infra/postgres"
  	"github.com/acme/postgres-service/internal/infra/telemetry"
  )
-@@ -94,12 +96,18 @@ func Run(args []string) (runErr error) {
- 	}
- 	defer dependencies.Close()
+ 
+@@ -125,6 +127,11 @@ func Run(args []string) (runErr error) {
+ 	// telemetry flush and after background work has been joined.
+ 	defer func() { dependencies.Close(shutdown.stage(signalCtx, dependencyCloseTimeout)) }()
  
 +	articles, err := article.NewService(postgres.NewArticleRepository(dependencies.postgres.PGX()))
 +	if err != nil {
 +		return fmt.Errorf("build article service: %w", err)
 +	}
 +
- 	healthSvc := dependencies.health
- 	startupAdmission := newStartupAdmissionController(bootstrapSpan)
+ 	startupAdmission := newStartupAdmissionController()
  
+@@ -150,6 +157,7 @@ func Run(args []string) (runErr error) {
  	handler, err := httpx.NewRouter(
  		bootstrap.log,
  		httpx.Handlers{
-+			Articles:      articles,
++			API:           httpx.NewArticleAPI(articles),
  			Health:        healthSvc,
  			ReadinessGate: startupAdmission.CheckReady,
  		},
-diff --git a/internal/infra/http/handlers.go b/internal/infra/http/handlers.go
---- a/internal/infra/http/handlers.go
-+++ b/internal/infra/http/handlers.go
-@@ -5,14 +5,17 @@ import (
- 	"fmt"
- 	"time"
- 
-+	"github.com/acme/postgres-service/internal/article"
- 	"github.com/acme/postgres-service/internal/health"
- )
- 
- type Handlers struct {
-+	Articles      *article.Service
- 	Health        *health.Service
- 	ReadinessGate func(context.Context) error
- }
- 
- type strictHandlers struct {
-+	articles         *article.Service
- 	health           *health.Service
- 	readinessGate    func(context.Context) error
- 	readinessTimeout time.Duration
-@@ -31,6 +34,7 @@ func newStrictHandlers(h Handlers, readinessTimeout time.Duration) (strictHandle
- 	}
- 
- 	return strictHandlers{
-+		articles:         h.Articles,
- 		health:           h.Health,
- 		readinessGate:    h.ReadinessGate,
- 		readinessTimeout: readinessTimeout,
 diff --git a/internal/article/article.go b/internal/article/article.go
 new file mode 100644
+index 0000000..e04617b
 --- /dev/null
 +++ b/internal/article/article.go
-@@ -0,0 +1,43 @@
+@@ -0,0 +1,40 @@
 +package article
 +
 +import (
@@ -174,11 +150,12 @@ new file mode 100644
 +	}
 +	return created, nil
 +}
-diff --git a/internal/infra/http/article_handlers.go b/internal/infra/http/article_handlers.go
+diff --git a/internal/infra/http/article_api.go b/internal/infra/http/article_api.go
 new file mode 100644
+index 0000000..e8e4317
 --- /dev/null
-+++ b/internal/infra/http/article_handlers.go
-@@ -0,0 +1,28 @@
++++ b/internal/infra/http/article_api.go
+@@ -0,0 +1,46 @@
 +package httpx
 +
 +import (
@@ -186,20 +163,37 @@ new file mode 100644
 +	"errors"
 +	"fmt"
 +
++	"github.com/acme/postgres-service/internal/article"
 +	"github.com/acme/postgres-service/internal/openapi"
 +)
 +
-+func (h strictHandlers) CreateArticle(
++// articleAPI implements this service's own generated operations.
++//
++// The generated interface is embedded and left unset: this type implements only
++// what it owns, and strictHandlers supplies the platform probes, whose explicit
++// methods shadow the embedded ones. Adding a feature therefore adds a file
++// instead of editing handlers.go or any other shared template source.
++type articleAPI struct {
++	openapi.StrictServerInterface
++	articles *article.Service
++}
++
++// NewArticleAPI is the constructor the composition root uses.
++func NewArticleAPI(articles *article.Service) openapi.StrictServerInterface {
++	return articleAPI{articles: articles}
++}
++
++func (a articleAPI) CreateArticle(
 +	ctx context.Context,
 +	request openapi.CreateArticleRequestObject,
 +) (openapi.CreateArticleResponseObject, error) {
 +	if request.Body == nil {
 +		return nil, errors.New("create article request body is required")
 +	}
-+	if h.articles == nil {
++	if a.articles == nil {
 +		return nil, errors.New("article handler is not configured")
 +	}
-+	created, err := h.articles.Create(ctx, request.Body.Title)
++	created, err := a.articles.Create(ctx, request.Body.Title)
 +	if err != nil {
 +		return nil, fmt.Errorf("create article: %w", err)
 +	}
@@ -210,9 +204,10 @@ new file mode 100644
 +}
 diff --git a/internal/infra/postgres/article_repository.go b/internal/infra/postgres/article_repository.go
 new file mode 100644
+index 0000000..4aeff28
 --- /dev/null
 +++ b/internal/infra/postgres/article_repository.go
-@@ -0,0 +1,31 @@
+@@ -0,0 +1,28 @@
 +package postgres
 +
 +import (
@@ -243,6 +238,7 @@ new file mode 100644
 +}
 diff --git a/internal/infra/postgres/queries/articles.sql b/internal/infra/postgres/queries/articles.sql
 new file mode 100644
+index 0000000..e624378
 --- /dev/null
 +++ b/internal/infra/postgres/queries/articles.sql
 @@ -0,0 +1,4 @@
@@ -252,24 +248,27 @@ new file mode 100644
 +RETURNING id, title;
 diff --git a/migrations/000001_articles_create.down.sql b/migrations/000001_articles_create.down.sql
 new file mode 100644
+index 0000000..5f6bacd
 --- /dev/null
 +++ b/migrations/000001_articles_create.down.sql
 @@ -0,0 +1 @@
 +DROP TABLE articles;
 diff --git a/migrations/000001_articles_create.up.sql b/migrations/000001_articles_create.up.sql
 new file mode 100644
+index 0000000..3de4d2d
 --- /dev/null
 +++ b/migrations/000001_articles_create.up.sql
-@@ -0,0 +1,5 @@
+@@ -0,0 +1,4 @@
 +CREATE TABLE articles (
 +    id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
 +    title text NOT NULL CHECK (char_length(title) BETWEEN 1 AND 120)
 +);
 diff --git a/test/postgres_article_feature_integration_test.go b/test/postgres_article_feature_integration_test.go
 new file mode 100644
+index 0000000..a44756c
 --- /dev/null
 +++ b/test/postgres_article_feature_integration_test.go
-@@ -0,0 +1,183 @@
+@@ -0,0 +1,170 @@
 +//go:build integration
 +
 +package integration_test
@@ -290,6 +289,7 @@ new file mode 100644
 +	"github.com/acme/postgres-service/internal/health"
 +	httpx "github.com/acme/postgres-service/internal/infra/http"
 +	"github.com/acme/postgres-service/internal/infra/postgres"
++	"github.com/acme/postgres-service/internal/infra/postgres/pgtest"
 +	"github.com/acme/postgres-service/internal/infra/postgresmigrate"
 +	"github.com/acme/postgres-service/internal/infra/telemetry"
 +	"github.com/jackc/pgx/v5/pgxpool"
@@ -299,7 +299,7 @@ new file mode 100644
 +	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 +	defer cancel()
 +
-+	dsn := integrationPostgresDSN(t)
++	dsn := pgtest.DSN(t)
 +	changed, err := postgresmigrate.MigrateUp(ctx, postgresmigrate.MigrationOptions{
 +		DSN:              dsn,
 +		SourceFS:         os.DirFS(".."),
@@ -328,15 +328,15 @@ new file mode 100644
 +	handler, err := httpx.NewRouter(
 +		slog.New(slog.NewTextHandler(io.Discard, nil)),
 +		httpx.Handlers{
-+			Articles:      articles,
++			API:           httpx.NewArticleAPI(articles),
 +			Health:        health.New(),
 +			ReadinessGate: func(context.Context) error { return nil },
 +		},
 +		telemetry.New(),
 +		httpx.RouterConfig{
-+			MaxBodyBytes:     1 << 20,
-+			ReadinessTimeout: time.Second,
-+			OTelServerName:   "postgres-feature-proof",
++			MaxBodyBytes:   1 << 20,
++			RequestTimeout: 5 * time.Second,
++			OTelServerName: "postgres-feature-proof",
 +		},
 +	)
 +	if err != nil {

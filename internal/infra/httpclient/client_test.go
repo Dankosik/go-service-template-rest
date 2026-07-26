@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -70,6 +71,12 @@ func TestNewRejectsInvalidConfig(t *testing.T) {
 		{name: "missing header timeout", mutate: func(cfg *Config) { cfg.ResponseHeaderTimeout = 0 }},
 		{name: "missing header limit", mutate: func(cfg *Config) { cfg.MaxResponseHeaderBytes = 0 }},
 		{name: "missing body limit", mutate: func(cfg *Config) { cfg.MaxResponseBodyBytes = 0 }},
+		{name: "missing conn limit", mutate: func(cfg *Config) { cfg.MaxConnsPerHost = 0 }},
+		{name: "negative idle conn limit", mutate: func(cfg *Config) { cfg.MaxIdleConnsPerHost = -1 }},
+		{name: "idle conn limit above conn limit", mutate: func(cfg *Config) {
+			cfg.MaxConnsPerHost = 4
+			cfg.MaxIdleConnsPerHost = 5
+		}},
 	}
 
 	for _, tt := range tests {
@@ -427,6 +434,7 @@ func validExternalConfig() Config {
 		ResponseHeaderTimeout:  500 * time.Millisecond,
 		MaxResponseHeaderBytes: 32 << 10,
 		MaxResponseBodyBytes:   1 << 20,
+		MaxConnsPerHost:        8,
 	}
 }
 
@@ -483,5 +491,147 @@ func TestNewAcceptsCustomPrivateHostSuffix(t *testing.T) {
 			}
 			t.Cleanup(client.CloseIdleConnections)
 		})
+	}
+}
+
+// TestClientReusesConnectionsAcrossBursts covers the net/http default this
+// package exists to override.
+//
+// A transport cloned from http.DefaultTransport keeps DefaultMaxIdleConnsPerHost
+// idle connections, which is 2. That is right for a client spread across many
+// hosts and wrong for one pinned to a single authority: each burst opened a
+// connection per concurrent call and kept two, so the next burst paid a TCP and
+// TLS handshake for every connection beyond the second — inside the request
+// budget of the caller that triggered it.
+func TestClientReusesConnectionsAcrossBursts(t *testing.T) {
+	t.Parallel()
+
+	const (
+		burstSize  = 6
+		burstCount = 3
+	)
+
+	var opened atomic.Int64
+	// Unstarted, because ConnState has to be installed before the serve loop
+	// reads it; httptest.NewServer would already be accepting.
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	server.Config.ConnState = func(_ net.Conn, state http.ConnState) {
+		if state == http.StateNew {
+			opened.Add(1)
+		}
+	}
+	server.Start()
+	t.Cleanup(server.Close)
+
+	// httptest binds loopback, which the external public-address gate refuses.
+	// The private class is the one that permits a plaintext internal host, and
+	// the dialer below is what points that name at the test server.
+	cfg := validExternalConfig()
+	cfg.TargetClass = PrivateHTTP
+	cfg.PrivateHostSuffix = ".internal"
+	cfg.BaseURL = "http://provider.internal"
+	client, err := New(cfg, nil)
+	if err != nil {
+		t.Fatalf("New() error = %v, want nil", err)
+	}
+	client.transport.DialContext = func(ctx context.Context, network, _ string) (net.Conn, error) {
+		var dialer net.Dialer
+		return dialer.DialContext(ctx, network, strings.TrimPrefix(server.URL, "http://"))
+	}
+
+	for range burstCount {
+		var wg sync.WaitGroup
+		for range burstSize {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				request, reqErr := http.NewRequestWithContext(
+					context.Background(), http.MethodGet, "http://provider.internal/", nil)
+				if reqErr != nil {
+					return
+				}
+				response, doErr := client.Do(request)
+				if doErr != nil {
+					return
+				}
+				_, _ = io.Copy(io.Discard, response.Body)
+				_ = response.Body.Close()
+			}()
+		}
+		wg.Wait()
+	}
+
+	// The first burst has to dial; the ones after it must not. Allowing the
+	// burst size plus slack keeps the test about pooling rather than about how
+	// many goroutines happened to race into the first burst.
+	if got := opened.Load(); got > burstSize+1 {
+		t.Fatalf("opened %d connections across %d bursts of %d, want the pool reused after the first burst",
+			got, burstCount, burstSize)
+	}
+}
+
+// TestRetryReusesTheConnectionItAbandons covers the other half of the same cost.
+//
+// drainResponse used to close the abandoned response without reading it, which
+// net/http reports to its read loop as a body that never reached EOF — so the
+// connection was destroyed instead of pooled and every retry dialed again,
+// against a dependency that had just answered 503.
+func TestRetryReusesTheConnectionItAbandons(t *testing.T) {
+	t.Parallel()
+
+	var opened atomic.Int64
+	var attempts atomic.Int64
+	// Unstarted for the same reason as above: ConnState must be set before the
+	// serve loop reads it.
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if attempts.Add(1) == 1 {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = w.Write([]byte(`{"error":"try again"}`))
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	server.Config.ConnState = func(_ net.Conn, state http.ConnState) {
+		if state == http.StateNew {
+			opened.Add(1)
+		}
+	}
+	server.Start()
+	t.Cleanup(server.Close)
+
+	cfg := validExternalConfig()
+	cfg.TargetClass = PrivateHTTP
+	cfg.PrivateHostSuffix = ".internal"
+	cfg.BaseURL = "http://provider.internal"
+	cfg.Retry = RetryPolicy{MaxAttempts: 2, BaseDelay: time.Millisecond}
+	client, err := New(cfg, nil)
+	if err != nil {
+		t.Fatalf("New() error = %v, want nil", err)
+	}
+	client.transport.DialContext = func(ctx context.Context, network, _ string) (net.Conn, error) {
+		var dialer net.Dialer
+		return dialer.DialContext(ctx, network, strings.TrimPrefix(server.URL, "http://"))
+	}
+
+	request, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://provider.internal/", nil)
+	if err != nil {
+		t.Fatalf("NewRequestWithContext() error = %v, want nil", err)
+	}
+	response, err := client.Do(request)
+	if err != nil {
+		t.Fatalf("Do() error = %v, want nil", err)
+	}
+	t.Cleanup(func() { _ = response.Body.Close() })
+
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want %d after the retry", response.StatusCode, http.StatusOK)
+	}
+	if attempts.Load() != 2 {
+		t.Fatalf("server saw %d attempts, want 2", attempts.Load())
+	}
+	if got := opened.Load(); got != 1 {
+		t.Fatalf("opened %d connections for one retried request, want 1: the abandoned response must be drained, not just closed", got)
 	}
 }

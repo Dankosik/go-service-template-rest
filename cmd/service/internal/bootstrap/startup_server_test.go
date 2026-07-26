@@ -1,19 +1,21 @@
 package bootstrap
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"log/slog"
 	"net"
+	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"testing/synctest"
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/health"
-	"go.opentelemetry.io/otel/trace"
 )
 
 type fakeRuntimeServer struct {
@@ -22,6 +24,7 @@ type fakeRuntimeServer struct {
 	stopServeOnce sync.Once
 	onServe       func(net.Listener) error
 	onShutdown    func(context.Context) error
+	onClose       func() error
 }
 
 func newFakeRuntimeServer() *fakeRuntimeServer {
@@ -44,6 +47,18 @@ func (f *fakeRuntimeServer) Serve(listener net.Listener) error {
 	return nil
 }
 
+func (f *fakeRuntimeServer) Close() error {
+	if f.stopServe != nil {
+		f.stopServeOnce.Do(func() {
+			close(f.stopServe)
+		})
+	}
+	if f.onClose != nil {
+		return f.onClose()
+	}
+	return nil
+}
+
 func (f *fakeRuntimeServer) Shutdown(ctx context.Context) error {
 	if f.stopServe != nil {
 		f.stopServeOnce.Do(func() {
@@ -57,9 +72,7 @@ func (f *fakeRuntimeServer) Shutdown(ctx context.Context) error {
 }
 
 func newTestStartupAdmissionController() *startupAdmissionController {
-	return newStartupAdmissionController(
-		newStartupSpanController(trace.SpanFromContext(context.Background()), func(context.Context) {}),
-	)
+	return newStartupAdmissionController()
 }
 
 func TestStartupAdmissionControllerCheckReady(t *testing.T) {
@@ -105,13 +118,13 @@ func TestServeHTTPRuntimeListenError(t *testing.T) {
 	svc := health.New()
 
 	err := serveHTTPRuntime(context.Background(), context.Background(), serveHTTPRuntimeArgs{
-		bootstrapSpan:  trace.SpanFromContext(context.Background()),
 		cfg:            config.Config{HTTP: config.HTTPConfig{Addr: "127.0.0.1:-1", ShutdownTimeout: time.Second}},
 		log:            logger,
 		healthSvc:      svc,
 		srv:            newFakeRuntimeServer(),
 		readinessCheck: func(context.Context) error { return nil },
 		admission:      newTestStartupAdmissionController(),
+		shutdown:       testShutdownBudget(),
 	})
 
 	if err == nil {
@@ -134,7 +147,6 @@ func TestServeHTTPRuntimeMetricsListenError(t *testing.T) {
 	}()
 
 	err = serveHTTPRuntime(context.Background(), context.Background(), serveHTTPRuntimeArgs{
-		bootstrapSpan: trace.SpanFromContext(context.Background()),
 		cfg: config.Config{
 			HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second},
 			Observability: config.ObservabilityConfig{
@@ -147,6 +159,7 @@ func TestServeHTTPRuntimeMetricsListenError(t *testing.T) {
 		metricsSrv:     newFakeRuntimeServer(),
 		readinessCheck: func(context.Context) error { return nil },
 		admission:      newTestStartupAdmissionController(),
+		shutdown:       testShutdownBudget(),
 	})
 
 	if err == nil {
@@ -170,7 +183,6 @@ func TestServeHTTPRuntimeStartsAndStopsApplicationAndMetricsServers(t *testing.T
 	runErrCh := make(chan error, 1)
 	go func() {
 		runErrCh <- serveHTTPRuntime(signalCtx, bootstrapCtx, serveHTTPRuntimeArgs{
-			bootstrapSpan: trace.SpanFromContext(bootstrapCtx),
 			cfg: config.Config{
 				App:  config.AppConfig{Env: "test"},
 				HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second},
@@ -184,6 +196,7 @@ func TestServeHTTPRuntimeStartsAndStopsApplicationAndMetricsServers(t *testing.T
 			metricsSrv:     metricsSrv,
 			readinessCheck: func(context.Context) error { return nil },
 			admission:      admission,
+			shutdown:       testShutdownBudget(),
 		})
 	}()
 
@@ -227,13 +240,13 @@ func TestServeHTTPRuntimeRejectsCanceledStartupBeforeListen(t *testing.T) {
 	cancel()
 
 	err := serveHTTPRuntime(signalCtx, context.Background(), serveHTTPRuntimeArgs{
-		bootstrapSpan:  trace.SpanFromContext(context.Background()),
 		cfg:            config.Config{HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second}},
 		log:            logger,
 		healthSvc:      svc,
 		srv:            newFakeRuntimeServer(),
 		readinessCheck: func(context.Context) error { return nil },
 		admission:      newTestStartupAdmissionController(),
+		shutdown:       testShutdownBudget(),
 	})
 
 	if err == nil {
@@ -256,16 +269,14 @@ func TestServeHTTPRuntimeMarksReadyWithoutExternalReadinessProbe(t *testing.T) {
 	signalCtx, cancelSignal := context.WithCancel(context.Background())
 	defer cancelSignal()
 	bootstrapCtx := context.WithoutCancel(signalCtx)
-	bootstrapSpan := trace.SpanFromContext(bootstrapCtx)
 
 	runErrCh := make(chan error, 1)
-	go func(signalCtx context.Context, bootstrapCtx context.Context, bootstrapSpan trace.Span) {
+	go func(signalCtx context.Context, bootstrapCtx context.Context) {
 		runErrCh <- serveHTTPRuntime(signalCtx, bootstrapCtx, serveHTTPRuntimeArgs{
-			bootstrapSpan: bootstrapSpan,
-			cfg:           config.Config{HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second}},
-			log:           logger,
-			healthSvc:     svc,
-			srv:           srv,
+			cfg:       config.Config{HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second}},
+			log:       logger,
+			healthSvc: svc,
+			srv:       srv,
 			readinessCheck: func(context.Context) error {
 				select {
 				case readinessChecked <- struct{}{}:
@@ -274,8 +285,9 @@ func TestServeHTTPRuntimeMarksReadyWithoutExternalReadinessProbe(t *testing.T) {
 				return nil
 			},
 			admission: admission,
+			shutdown:  testShutdownBudget(),
 		})
-	}(signalCtx, bootstrapCtx, bootstrapSpan)
+	}(signalCtx, bootstrapCtx)
 
 	select {
 	case <-readinessChecked:
@@ -313,16 +325,16 @@ func TestServeHTTPRuntimeRejectsStartupDeadlineBeforeReadiness(t *testing.T) {
 	defer cancel()
 
 	err := serveHTTPRuntime(context.Background(), bootstrapCtx, serveHTTPRuntimeArgs{
-		bootstrapSpan: trace.SpanFromContext(context.Background()),
-		cfg:           config.Config{HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second}},
-		log:           logger,
-		healthSvc:     svc,
-		srv:           newFakeRuntimeServer(),
+		cfg:       config.Config{HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second}},
+		log:       logger,
+		healthSvc: svc,
+		srv:       newFakeRuntimeServer(),
 		readinessCheck: func(ctx context.Context) error {
 			<-ctx.Done()
 			return ctx.Err()
 		},
 		admission: newTestStartupAdmissionController(),
+		shutdown:  testShutdownBudget(),
 	})
 
 	if err == nil {
@@ -347,15 +359,15 @@ func TestServeHTTPRuntimeSkipsPropagationDelayBeforeAdmissionReady(t *testing.T)
 	}
 
 	err := serveHTTPRuntime(context.Background(), context.Background(), serveHTTPRuntimeArgs{
-		bootstrapSpan: trace.SpanFromContext(context.Background()),
-		cfg:           config.Config{HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: 25 * time.Millisecond}},
-		log:           logger,
-		healthSvc:     svc,
-		srv:           srv,
+		cfg:       config.Config{HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: 25 * time.Millisecond}},
+		log:       logger,
+		healthSvc: svc,
+		srv:       srv,
 		readinessCheck: func(context.Context) error {
 			return errors.New("readiness failed")
 		},
 		admission:     newTestStartupAdmissionController(),
+		shutdown:      testShutdownBudget(),
 		shutdownDelay: time.Hour,
 	})
 
@@ -381,11 +393,10 @@ func TestServeHTTPRuntimeReturnsServeFailureBeforeAdmissionReady(t *testing.T) {
 	}
 
 	err := serveHTTPRuntime(context.Background(), context.Background(), serveHTTPRuntimeArgs{
-		bootstrapSpan: trace.SpanFromContext(context.Background()),
-		cfg:           config.Config{HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second}},
-		log:           logger,
-		healthSvc:     svc,
-		srv:           srv,
+		cfg:       config.Config{HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second}},
+		log:       logger,
+		healthSvc: svc,
+		srv:       srv,
 		readinessCheck: func(ctx context.Context) error {
 			select {
 			case <-ctx.Done():
@@ -395,6 +406,7 @@ func TestServeHTTPRuntimeReturnsServeFailureBeforeAdmissionReady(t *testing.T) {
 			}
 		},
 		admission: newTestStartupAdmissionController(),
+		shutdown:  testShutdownBudget(),
 	})
 
 	if err == nil {
@@ -408,42 +420,162 @@ func TestServeHTTPRuntimeReturnsServeFailureBeforeAdmissionReady(t *testing.T) {
 func TestServeHTTPRuntimeReturnsPendingServeFailureBeforeMarkingAdmissionReady(t *testing.T) {
 	t.Parallel()
 
-	logger := slog.New(slog.DiscardHandler)
-	svc := health.New()
-	srv := newFakeRuntimeServer()
-	admission := newTestStartupAdmissionController()
-	serveReturned := make(chan struct{})
-	serveErr := errors.New("serve failed while admission succeeded")
+	// Driven under synctest because "already pending" means two different things
+	// on either side of one goroutine hop. The fake server signals when Serve
+	// returns; the code under test only sees the failure once the serving
+	// goroutine has delivered it to its channel. Waiting on the signal alone left
+	// that hop unsynchronized, so admission occasionally won the race and the
+	// assertion below failed for a reason the production code was not guilty of.
+	synctest.Test(t, func(t *testing.T) {
+		logger := slog.New(slog.DiscardHandler)
+		svc := health.New()
+		srv := newFakeRuntimeServer()
+		admission := newTestStartupAdmissionController()
+		serveReturned := make(chan struct{})
+		serveErr := errors.New("serve failed while admission succeeded")
 
-	srv.onServe = func(net.Listener) error {
-		defer close(serveReturned)
-		return serveErr
-	}
+		srv.onServe = func(net.Listener) error {
+			defer close(serveReturned)
+			return serveErr
+		}
 
-	err := serveHTTPRuntime(context.Background(), context.Background(), serveHTTPRuntimeArgs{
-		bootstrapSpan: trace.SpanFromContext(context.Background()),
-		cfg:           config.Config{HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second}},
-		log:           logger,
-		healthSvc:     svc,
-		srv:           srv,
-		readinessCheck: func(ctx context.Context) error {
-			select {
-			case <-serveReturned:
+		err := serveHTTPRuntime(context.Background(), context.Background(), serveHTTPRuntimeArgs{
+			cfg:       config.Config{HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second}},
+			log:       logger,
+			healthSvc: svc,
+			srv:       srv,
+			readinessCheck: func(ctx context.Context) error {
+				select {
+				case <-serveReturned:
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+				// Every other goroutine is durably blocked or finished by the time
+				// this returns, which is what makes the serve result actually
+				// pending rather than merely imminent.
+				synctest.Wait()
 				return nil
-			case <-ctx.Done():
-				return ctx.Err()
-			}
-		},
-		admission: admission,
-	})
+			},
+			admission: admission,
+			shutdown:  testShutdownBudget(),
+		})
 
-	if err == nil {
-		t.Fatal("serveHTTPRuntime() error = nil, want pending serve failure")
+		if err == nil {
+			t.Fatal("serveHTTPRuntime() error = nil, want pending serve failure")
+		}
+		if !errors.Is(err, serveErr) {
+			t.Fatalf("serveHTTPRuntime() error = %v, want wrapped %v", err, serveErr)
+		}
+		if admission.Ready() {
+			t.Fatal("startup admission marked ready while serve failure was already pending")
+		}
+	})
+}
+
+// TestServeHTTPRuntimeStopsDiagnosticsAfterTheDrain pins the shutdown ordering that
+// keeps the drain measurable.
+//
+// The version this replaced passed the diagnostics server into the same
+// drainAndShutdown call as the API, so /metrics closed at the instant the drain
+// began — and with the shipped scrape-only configuration the readiness propagation
+// delay and the whole in-flight drain went uncollected. The assertion is on order
+// because the failure mode is invisible in behavior: everything still shuts down,
+// and the metrics for the last window of the pod's life simply do not exist.
+func TestServeHTTPRuntimeStopsDiagnosticsAfterTheDrain(t *testing.T) {
+	t.Parallel()
+
+	var (
+		mu    sync.Mutex
+		order []string
+	)
+	record := func(name string) {
+		mu.Lock()
+		defer mu.Unlock()
+		order = append(order, name)
 	}
-	if !errors.Is(err, serveErr) {
-		t.Fatalf("serveHTTPRuntime() error = %v, want wrapped %v", err, serveErr)
+
+	apiServer := newFakeRuntimeServer()
+	apiServer.onShutdown = func(context.Context) error {
+		record("api_drained")
+		_ = apiServer.Close()
+		return nil
 	}
-	if admission.Ready() {
-		t.Fatal("startup admission marked ready while serve failure was already pending")
+	diagnosticsServer := newFakeRuntimeServer()
+	diagnosticsServer.onShutdown = func(context.Context) error {
+		record("diagnostics_stopped")
+		_ = diagnosticsServer.Close()
+		return nil
+	}
+
+	signalCtx, cancelSignal := context.WithCancel(context.Background())
+	go func() {
+		<-apiServer.serveStarted
+		<-diagnosticsServer.serveStarted
+		cancelSignal()
+	}()
+
+	err := serveHTTPRuntime(signalCtx, context.Background(), serveHTTPRuntimeArgs{
+		cfg: config.Config{
+			HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second},
+			Observability: config.ObservabilityConfig{
+				Metrics: config.MetricsConfig{Addr: "127.0.0.1:0"},
+			},
+		},
+		log:            slog.New(slog.DiscardHandler),
+		healthSvc:      health.New(),
+		srv:            apiServer,
+		metricsSrv:     diagnosticsServer,
+		readinessCheck: func(context.Context) error { return nil },
+		admission:      newTestStartupAdmissionController(),
+		shutdown:       testShutdownBudget(),
+	})
+	if err != nil {
+		t.Fatalf("serveHTTPRuntime() error = %v, want nil", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	want := []string{"api_drained", "diagnostics_stopped"}
+	if !slices.Equal(order, want) {
+		t.Fatalf("shutdown order = %v, want %v", order, want)
+	}
+}
+
+// TestShutdownDiagnosticsForcesCloseOnBudgetExhaustion pins the bound on the
+// diagnostics stop. It runs after the API drain, so without a budget of its own a
+// scrape that never completes would park the process here and take the telemetry
+// flush with it — the same failure the dependency close is bounded against.
+func TestShutdownDiagnosticsForcesCloseOnBudgetExhaustion(t *testing.T) {
+	t.Parallel()
+
+	var closed atomic.Bool
+	server := newFakeRuntimeServer()
+	server.onShutdown = func(ctx context.Context) error {
+		<-ctx.Done()
+		return ctx.Err()
+	}
+	server.onClose = func() error {
+		closed.Store(true)
+		return nil
+	}
+
+	var logged bytes.Buffer
+	err := shutdownDiagnostics(context.Background(), slog.New(slog.NewJSONHandler(&logged, nil)), testShutdownBudget(), server)
+	if err != nil {
+		t.Fatalf("shutdownDiagnostics() error = %v, want the abandoned scrape reported as degraded, not failed", err)
+	}
+	if !closed.Load() {
+		t.Fatal("shutdownDiagnostics() did not force the listener closed after its budget expired")
+	}
+	if !strings.Contains(logged.String(), "diagnostics_forced") {
+		t.Fatalf("log = %q, want the forced close recorded", logged.String())
+	}
+}
+
+func TestShutdownDiagnosticsIgnoresAbsentServer(t *testing.T) {
+	t.Parallel()
+
+	if err := shutdownDiagnostics(context.Background(), slog.New(slog.DiscardHandler), testShutdownBudget(), nil); err != nil {
+		t.Fatalf("shutdownDiagnostics(nil) error = %v, want nil", err)
 	}
 }

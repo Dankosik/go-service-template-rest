@@ -1,7 +1,6 @@
 package httpx
 
 import (
-	"context"
 	"log/slog"
 	"net/http"
 	"slices"
@@ -49,24 +48,54 @@ func AccessLog(log *slog.Logger, logHealthProbes bool, next http.Handler) http.H
 		if skipHealthProbeLog(r, routePathTemplate, logHealthProbes) {
 			return
 		}
-		route := joinMethodAndPattern(requestMethodLabel(r), routePathTemplate)
+		// The method is used verbatim. Normalizing it to a bounded label was
+		// unreachable: joinMethodAndPattern discards the method whenever the
+		// route template is empty, and a non-empty template means chi matched a
+		// route, which only exists for the methods the contract declares. The
+		// bounded label that observability does need is otelhttp's, which maps
+		// anything outside the RFC methods to _OTHER on its own spans and metrics.
+		route := joinMethodAndPattern(r.Method, routePathTemplate)
 		if route == "" {
 			route = "<unmatched>"
 		}
 
-		traceID, spanID := traceIDsFromContext(r.Context())
-		log.Info(
-			"request",
+		// Correlation is not listed here. The process logger publishes
+		// request_id, trace_id, and span_id from the context every record is
+		// logged with; see internal/observability/logctx. A logger built without
+		// that decorator loses them, which is what the wiring test in
+		// cmd/service/internal/bootstrap exists to catch.
+		//
+		// problem_code is what separates the several failures that share a status.
+		// A 503 is load shedding, a saturated connection pool, or a draining
+		// instance; a 409 is an idempotency replay conflict or a domain conflict.
+		// Status alone cannot tell them apart, and during an incident that
+		// distinction is the whole question. Its cardinality is bounded by the
+		// problem catalog.
+		attrs := []any{
 			"method", r.Method,
 			"path", r.URL.Path,
 			"route", route,
 			"status", captured.Code,
 			"duration_ms", captured.Duration.Milliseconds(),
-			"request_id", requestIDFromContext(r.Context()),
-			"trace_id", traceID,
-			"span_id", spanID,
-		)
+		}
+		if code := problemCodeForRequest(r); code != "" {
+			attrs = append(attrs, "problem_code", code)
+		}
+		log.InfoContext(r.Context(), "request", attrs...)
 	})
+}
+
+// problemCodeForRequest returns the problem code this request was answered with,
+// or the empty string when it was not answered with one.
+func problemCodeForRequest(r *http.Request) string {
+	if r == nil {
+		return ""
+	}
+	record, ok := r.Context().Value(problemRecordContextKey{}).(*problemRecord)
+	if !ok {
+		return ""
+	}
+	return string(record.code)
 }
 
 // skipHealthProbeLog matches on the routed template rather than the raw path,
@@ -109,13 +138,6 @@ func normalizeRoutePathTemplate(method, pattern string) string {
 	return pattern
 }
 
-func requestMethodLabel(r *http.Request) string {
-	if r == nil {
-		return otherHTTPMethodLabel
-	}
-	return normalizeHTTPMethodLabel(r.Method)
-}
-
 func joinMethodAndPattern(method, pattern string) string {
 	pattern = strings.TrimSpace(pattern)
 	if pattern == "" {
@@ -129,10 +151,7 @@ func joinMethodAndPattern(method, pattern string) string {
 	return method + " " + pattern
 }
 
-func traceIDsFromContext(ctx context.Context) (string, string) {
-	spanContext := trace.SpanContextFromContext(ctx)
-	if !spanContext.IsValid() {
-		return "", ""
-	}
-	return spanContext.TraceID().String(), spanContext.SpanID().String()
-}
+// Reading trace identifiers off the context is deliberately absent from this
+// package. internal/observability/logctx publishes them on every record from the
+// context it was logged with, so a helper here would only let one of the two
+// copies drift.

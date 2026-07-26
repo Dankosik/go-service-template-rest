@@ -1,0 +1,37 @@
+# Template-owned instruction surface.
+#
+# Every path listed here is mirrored verbatim from this template into a derived
+# repository by `make template-sync`, including deletions inside listed
+# directories. A path may appear here only while it carries no
+# repository-specific content: no service name, no module path, no deployment
+# target, no owner. `make template-owned-purity-check` enforces that.
+#
+# Repository-specific instructions belong in the repo-owned documents named in
+# docs/template-sync.md. They are never listed here and the sync never reads or
+# writes them.
+#
+# Syntax: one path per line, relative to the repository root. A trailing slash
+# marks a directory, mirrored recursively with deletions. Blank lines and lines
+# starting with `#` are ignored.
+
+AGENTS.md
+CLAUDE.md
+QWEN.md
+
+docs/agent-harness.md
+docs/benchmarking.md
+docs/configuration-source-policy.md
+docs/skill-authoring.md
+docs/spec-first-workflow.md
+docs/subagent-brief-template.md
+docs/template-sync.md
+docs/spec-first-workflow/
+
+.agents/skills/
+.claude/agents/
+.codex/agents/
+.qwen/agents/
+
+template-owned.paths
+scripts/template-sync.sh
+scripts/ci/template-owned-purity-check.sh

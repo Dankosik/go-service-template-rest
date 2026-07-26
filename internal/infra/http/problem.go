@@ -1,10 +1,12 @@
 package httpx
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 
 	"github.com/example/go-service-template-rest/internal/openapi"
+	"github.com/example/go-service-template-rest/internal/problem"
 )
 
 const (
@@ -13,43 +15,64 @@ const (
 )
 
 type problemResponse struct {
-	code   problemCode
+	code   problem.Code
 	detail string
 }
 
-type problemCode string
-
-const (
-	problemCodeBadRequest            problemCode = "bad_request"
-	problemCodeNotFound              problemCode = "not_found"
-	problemCodeMethodNotAllowed      problemCode = "method_not_allowed"
-	problemCodeRequestEntityTooLarge problemCode = "request_entity_too_large"
-	problemCodeInternalError         problemCode = "internal_error"
-)
-
-type problemDefinition struct {
-	status  int
-	title   string
-	typeURI string
+// problemRecord carries the problem code this request was answered with back out
+// to the access log.
+//
+// It is a pointer in the context rather than a value written onto the request,
+// because the request struct the log sees is not the one a handler answers on:
+// chi replaces it when it installs its route context, so an in-place mutation
+// deeper in the chain is invisible from outside the generated router. One shared
+// holder installed at the top is what survives that.
+//
+// The value is only read after the handler has returned, on the same goroutine
+// that served the request, so it needs no synchronization.
+type problemRecord struct {
+	code problem.Code
 }
 
-func writeProblem(w http.ResponseWriter, r *http.Request, problem problemResponse) {
-	code, definition := problemDefinitionFor(problem.code)
+type problemRecordContextKey struct{}
+
+func contextWithProblemRecord(ctx context.Context) (context.Context, *problemRecord) {
+	record := &problemRecord{}
+	return context.WithValue(ctx, problemRecordContextKey{}, record), record
+}
+
+// recordProblemCode publishes the code answered for this request. The first one
+// wins: an outer middleware that replaces an inner response — Recover turning a
+// panic into a 500 — is reporting the same failure, and the innermost code is the
+// one that says what actually went wrong.
+func recordProblemCode(ctx context.Context, code problem.Code) {
+	record, ok := ctx.Value(problemRecordContextKey{}).(*problemRecord)
+	if !ok || record.code != "" {
+		return
+	}
+	record.code = code
+}
+
+func writeProblem(w http.ResponseWriter, r *http.Request, response problemResponse) {
+	definition := problemDefinitionFor(response.code)
+	if r != nil {
+		recordProblemCode(r.Context(), definition.Code)
+	}
 	p := openapi.Problem{
-		Code:      string(code),
-		Detail:    optionalProblemString(problem.detail),
+		Code:      string(definition.Code),
+		Detail:    optionalProblemString(response.detail),
 		Instance:  nil,
 		RequestId: nil,
-		Status:    int32(definition.status), // #nosec G115 -- catalog entries are fixed HTTP status constants.
-		Title:     definition.title,
-		Type:      definition.typeURI,
+		Status:    int32(definition.Status), // #nosec G115 -- catalog entries are fixed HTTP status constants.
+		Title:     definition.Title,
+		Type:      definition.TypeURI,
 	}
 	if r != nil {
 		p.RequestId = optionalProblemString(requestIDFromContext(r.Context()))
 	}
 
 	w.Header().Set("Content-Type", problemJSONContentType)
-	w.WriteHeader(definition.status)
+	w.WriteHeader(definition.Status)
 	if err := json.NewEncoder(w).Encode(p); err != nil {
 		// The status and headers are already committed; callers cannot recover here.
 		return
@@ -58,46 +81,24 @@ func writeProblem(w http.ResponseWriter, r *http.Request, problem problemRespons
 
 func writeMalformedRequestProblem(w http.ResponseWriter, r *http.Request) {
 	writeProblem(w, r, problemResponse{
-		code:   problemCodeBadRequest,
+		code:   problem.CodeBadRequest,
 		detail: malformedRequestProblemDetail,
 	})
 }
 
-func problemDefinitionFor(code problemCode) (problemCode, problemDefinition) {
-	switch code {
-	case problemCodeBadRequest:
-		return code, problemDefinition{
-			status:  http.StatusBadRequest,
-			title:   "bad request",
-			typeURI: "https://www.rfc-editor.org/rfc/rfc9110#section-15.5.1",
-		}
-	case problemCodeNotFound:
-		return code, problemDefinition{
-			status:  http.StatusNotFound,
-			title:   "not found",
-			typeURI: "https://www.rfc-editor.org/rfc/rfc9110#section-15.5.5",
-		}
-	case problemCodeMethodNotAllowed:
-		return code, problemDefinition{
-			status:  http.StatusMethodNotAllowed,
-			title:   "method not allowed",
-			typeURI: "https://www.rfc-editor.org/rfc/rfc9110#section-15.5.6",
-		}
-	case problemCodeRequestEntityTooLarge:
-		return code, problemDefinition{
-			status:  http.StatusRequestEntityTooLarge,
-			title:   "request entity too large",
-			typeURI: "https://www.rfc-editor.org/rfc/rfc9110#section-15.5.14",
-		}
-	case problemCodeInternalError:
-		return code, problemDefinition{
-			status:  http.StatusInternalServerError,
-			title:   "internal server error",
-			typeURI: "https://www.rfc-editor.org/rfc/rfc9110#section-15.6.1",
-		}
-	default:
-		return problemDefinitionFor(problemCodeInternalError)
+// problemDefinitionFor resolves a code against the shared catalog, substituting
+// the internal-error entry for one it does not publish.
+//
+// The substitution is safe because the callers are this package's own fallback
+// paths, which pass constants from that same catalog. A caller that can pass an
+// arbitrary status uses problem.For, which refuses instead — see its
+// documentation for why a plausible wrong answer is the worse failure.
+func problemDefinitionFor(code problem.Code) problem.Definition {
+	if definition, ok := problem.ForCode(code); ok {
+		return definition
 	}
+	internalError, _ := problem.ForCode(problem.CodeInternalError)
+	return internalError
 }
 
 func optionalProblemString(value string) *string {

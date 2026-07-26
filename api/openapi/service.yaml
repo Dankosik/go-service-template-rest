@@ -107,6 +107,17 @@ components:
         application/problem+json:
           schema:
             $ref: "#/components/schemas/Problem"
+    # There are deliberately no Unauthorized, Forbidden, or ServiceUnavailable
+    # response components here. No operation in this contract declares a security
+    # requirement, and load shedding answers before a request reaches an
+    # operation — so every one of them would be an unreferenced component
+    # describing behavior no declared operation can produce.
+    #
+    # An operation that adds `security:` declares its own 401 and 403 alongside
+    # the ones below; TestOpenAPIRuntimeContractOperationsDeclareSecurityDecisions
+    # fails the build if it does not. The runtime already emits the matching
+    # problem codes: see problemCodeUnauthorized and problemCodeServiceUnavailable
+    # in internal/infra/http/problem.go.
     RequestEntityTooLarge:
       description: request body exceeds configured limit
       content:

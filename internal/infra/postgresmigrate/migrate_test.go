@@ -144,74 +144,45 @@ func TestMigrateUpReportsRunFailureWithReadableSource(t *testing.T) {
 	}
 }
 
-func TestValidateMigrationsRejectsInvalidInputBeforeConnecting(t *testing.T) {
+func TestMigrateDownRejectsInvalidInputBeforeConnecting(t *testing.T) {
 	t.Parallel()
 
-	err := ValidateMigrations(context.Background(), MigrationOptions{})
+	err := MigrateDown(context.Background(), MigrationOptions{})
 	if err == nil {
-		t.Fatal("ValidateMigrations() error = nil, want non-nil")
+		t.Fatal("MigrateDown() error = nil, want non-nil")
 	}
 	if !strings.Contains(err.Error(), "migration source path is empty") {
-		t.Fatalf("ValidateMigrations() error = %q, want source path validation", err.Error())
+		t.Fatalf("MigrateDown() error = %q, want source path validation", err.Error())
 	}
 }
 
-func TestExecuteMigrations(t *testing.T) {
+func TestApplyMigrations(t *testing.T) {
 	t.Parallel()
 
 	upErr := errors.New("up failed")
-	downErr := errors.New("down failed")
-	reapplyErr := errors.New("reapply failed")
 
 	testCases := []struct {
 		name        string
-		rehearse    bool
 		upErrs      []error
-		downErr     error
 		wantChanged bool
-		wantCalls   []string
 		wantErr     error
 		wantErrText string
 	}{
 		{
-			name:        "apply only",
+			name:        "applies pending migrations",
 			wantChanged: true,
-			wantCalls:   []string{"up", "close"},
 		},
 		{
-			name:        "rehearse full migration chain",
-			rehearse:    true,
-			wantChanged: true,
-			wantCalls:   []string{"up", "down", "up", "close"},
-		},
-		{
-			name:      "rehearse up-to-date schema",
-			rehearse:  true,
-			upErrs:    []error{migrate.ErrNoChange},
-			wantCalls: []string{"up", "down", "up", "close"},
+			// An already-current schema is the ordinary outcome of every deploy
+			// after the one that introduced a migration, not a failure.
+			name:   "up-to-date schema reports no change",
+			upErrs: []error{migrate.ErrNoChange},
 		},
 		{
 			name:        "apply failure",
 			upErrs:      []error{upErr},
-			wantCalls:   []string{"up", "close"},
 			wantErr:     upErr,
 			wantErrText: "run postgres migrations",
-		},
-		{
-			name:        "rollback failure",
-			rehearse:    true,
-			downErr:     downErr,
-			wantCalls:   []string{"up", "down", "close"},
-			wantErr:     downErr,
-			wantErrText: "roll back all postgres migrations",
-		},
-		{
-			name:        "reapply failure",
-			rehearse:    true,
-			upErrs:      []error{nil, reapplyErr},
-			wantCalls:   []string{"up", "down", "up", "close"},
-			wantErr:     reapplyErr,
-			wantErrText: "reapply all postgres migrations",
 		},
 	}
 
@@ -219,32 +190,29 @@ func TestExecuteMigrations(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			runner := &migrationExecutorStub{
-				upErrs:  tc.upErrs,
-				downErr: tc.downErr,
-			}
-			changed, err := executeMigrations(context.Background(), runner, tc.rehearse)
+			runner := &migrationExecutorStub{upErrs: tc.upErrs}
+			changed, err := applyMigrations(context.Background(), runner)
 			if tc.wantErr != nil {
 				if !errors.Is(err, tc.wantErr) {
-					t.Fatalf("executeMigrations() error = %v, want wrapped %v", err, tc.wantErr)
+					t.Fatalf("applyMigrations() error = %v, want wrapped %v", err, tc.wantErr)
 				}
 				if !strings.Contains(err.Error(), tc.wantErrText) {
-					t.Fatalf("executeMigrations() error = %q, want to contain %q", err.Error(), tc.wantErrText)
+					t.Fatalf("applyMigrations() error = %q, want to contain %q", err.Error(), tc.wantErrText)
 				}
 			} else if err != nil {
-				t.Fatalf("executeMigrations() error = %v, want nil", err)
+				t.Fatalf("applyMigrations() error = %v, want nil", err)
 			}
 			if changed != tc.wantChanged {
-				t.Fatalf("executeMigrations() changed = %t, want %t", changed, tc.wantChanged)
+				t.Fatalf("applyMigrations() changed = %t, want %t", changed, tc.wantChanged)
 			}
-			if !slices.Equal(runner.calls, tc.wantCalls) {
-				t.Fatalf("executeMigrations() calls = %v, want %v", runner.calls, tc.wantCalls)
+			if !slices.Equal(runner.calls, []string{"up"}) {
+				t.Fatalf("applyMigrations() calls = %v, want [up]", runner.calls)
 			}
 		})
 	}
 }
 
-func TestExecuteMigrationsJoinsOperationAndCloseFailures(t *testing.T) {
+func TestRunMigrationOperationJoinsOperationAndCloseFailures(t *testing.T) {
 	t.Parallel()
 
 	upErr := errors.New("up failed")
@@ -256,35 +224,43 @@ func TestExecuteMigrationsJoinsOperationAndCloseFailures(t *testing.T) {
 		databaseCloseErr: databaseCloseErr,
 	}
 
-	_, err := executeMigrations(context.Background(), runner, false)
+	err := runMigrationOperation(context.Background(), runner, func(executor migrationExecutor) error {
+		_, applyErr := applyMigrations(context.Background(), executor)
+		return applyErr
+	})
 	for _, want := range []error{upErr, sourceCloseErr, databaseCloseErr} {
 		if !errors.Is(err, want) {
-			t.Fatalf("executeMigrations() error = %v, want wrapped %v", err, want)
+			t.Fatalf("runMigrationOperation() error = %v, want wrapped %v", err, want)
 		}
 	}
 	if !strings.Contains(err.Error(), "close migration runner") {
-		t.Fatalf("executeMigrations() error = %q, want close context", err.Error())
+		t.Fatalf("runMigrationOperation() error = %q, want close context", err.Error())
 	}
 	if !slices.Equal(runner.calls, []string{"up", "close"}) {
-		t.Fatalf("executeMigrations() calls = %v, want [up close]", runner.calls)
+		t.Fatalf("runMigrationOperation() calls = %v, want [up close]", runner.calls)
 	}
 }
 
-func TestExecuteMigrationsReturnsCancellationAndClosesRunner(t *testing.T) {
+func TestRunMigrationOperationReportsCancellationAndClosesRunner(t *testing.T) {
 	t.Parallel()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	runner := &migrationExecutorStub{onUp: cancel}
 
-	changed, err := executeMigrations(ctx, runner, false)
+	changed := false
+	err := runMigrationOperation(ctx, runner, func(executor migrationExecutor) error {
+		applied, applyErr := applyMigrations(ctx, executor)
+		changed = applied
+		return applyErr
+	})
 	if changed {
-		t.Fatal("executeMigrations() changed = true, want false after cancellation")
+		t.Fatal("runMigrationOperation() reported a schema change, want none after cancellation")
 	}
 	if !errors.Is(err, context.Canceled) {
-		t.Fatalf("executeMigrations() error = %v, want context.Canceled", err)
+		t.Fatalf("runMigrationOperation() error = %v, want context.Canceled", err)
 	}
 	if !slices.Equal(runner.calls, []string{"up", "close"}) {
-		t.Fatalf("executeMigrations() calls = %v, want [up close]", runner.calls)
+		t.Fatalf("runMigrationOperation() calls = %v, want [up close]", runner.calls)
 	}
 }
 

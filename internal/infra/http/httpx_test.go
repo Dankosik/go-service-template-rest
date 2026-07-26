@@ -3,6 +3,7 @@ package httpx
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"log/slog"
 	"mime"
 	"net/http"
@@ -13,12 +14,17 @@ import (
 
 	"github.com/example/go-service-template-rest/internal/health"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
+	"github.com/example/go-service-template-rest/internal/observability/logctx"
 	"github.com/example/go-service-template-rest/internal/openapi"
+	"github.com/example/go-service-template-rest/internal/problem"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.37.0"
 )
 
-const testRouterMaxBodyBytes int64 = 1 << 20
+const (
+	testRouterMaxBodyBytes   int64 = 1 << 20
+	testRouterRequestTimeout       = 5 * time.Second
+)
 
 func mustNewRouter(tb testing.TB, log *slog.Logger, h Handlers, metrics *telemetry.Metrics, cfg RouterConfig) http.Handler {
 	tb.Helper()
@@ -29,14 +35,21 @@ func mustNewRouter(tb testing.TB, log *slog.Logger, h Handlers, metrics *telemet
 	if h.ReadinessGate == nil {
 		h.ReadinessGate = func(context.Context) error { return nil }
 	}
+	if h.API == nil {
+		h.API = unimplementedAPI{}
+	}
+	// Readiness is served from cached state, and an unevaluated cache fails
+	// closed. Seeding it here mirrors what bootstrap does before it admits
+	// traffic; a test that wants "not ready" supplies a failing probe.
+	_ = h.Health.Refresh(context.Background(), time.Second, 1)
 	if metrics == nil {
 		metrics = telemetry.New()
 	}
-	if cfg.ReadinessTimeout <= 0 {
-		cfg.ReadinessTimeout = time.Second
-	}
 	if cfg.MaxBodyBytes <= 0 {
 		cfg.MaxBodyBytes = testRouterMaxBodyBytes
+	}
+	if cfg.RequestTimeout <= 0 {
+		cfg.RequestTimeout = testRouterRequestTimeout
 	}
 	if cfg.OTelServerName == "" {
 		cfg.OTelServerName = "router-test"
@@ -106,14 +119,37 @@ func assertProblemContentType(t *testing.T, header http.Header) {
 	}
 }
 
-func assertProblemCode(t *testing.T, resp *httptest.ResponseRecorder, wantCode problemCode) {
+func assertProblemCode(t *testing.T, resp *httptest.ResponseRecorder, wantCode problem.Code) {
 	t.Helper()
 
-	var problem openapi.Problem
-	if err := json.Unmarshal(resp.Body.Bytes(), &problem); err != nil {
+	var decoded openapi.Problem
+	if err := json.Unmarshal(resp.Body.Bytes(), &decoded); err != nil {
 		t.Fatalf("unmarshal problem: %v", err)
 	}
-	if got := problem.Code; got != string(wantCode) {
+	if got := decoded.Code; got != string(wantCode) {
 		t.Fatalf("problem code = %q, want %q", got, wantCode)
 	}
+}
+
+// unimplementedAPI satisfies the generated server interface without implementing
+// any operation.
+//
+// Embedding leaves every method nil, which is exactly what a test that only
+// exercises the platform probes or the fallback policy needs. It exists so that
+// adding the first real operation to the contract does not break every inherited
+// router test: those tests are not about that operation, and requiring them all
+// to grow a stub would be friction the template inflicted on day one. A test that
+// does exercise an operation passes a real implementation instead.
+type unimplementedAPI struct {
+	openapi.StrictServerInterface
+}
+
+// newTestServiceLogger builds a logger with the same shape a service runs with:
+// the correlation decorator over a JSON handler. Tests that assert on log content
+// need it, because this package no longer assembles request_id, trace_id, and
+// span_id per call site — the decorator publishes them from the context. A test
+// that logged through a bare handler would assert that correlation is absent and
+// pass whether or not the wiring is right.
+func newTestServiceLogger(out io.Writer) *slog.Logger {
+	return slog.New(logctx.New(slog.NewJSONHandler(out, nil)))
 }

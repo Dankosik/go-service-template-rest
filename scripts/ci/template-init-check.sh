@@ -2,6 +2,37 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+
+# assert replaces a bare `[[ ... ]]` line. Under `set -e`, bash 3.2 — still the
+# /bin/bash macOS ships — does not abort on a failing bare conditional, so those
+# assertions silently passed locally and only failed on CI's bash 5. Routing them
+# through a command that exits also gives the failure a name instead of an
+# unexplained exit 1.
+assert() {
+	local description="$1"
+	shift
+	if ! "$@"; then
+		echo "template initialization contract: ${description}"
+		exit 1
+	fi
+}
+
+path_absent() { [[ ! -e "$1" ]]; }
+path_present() { [[ -e "$1" ]]; }
+file_present() { [[ -f "$1" ]]; }
+same_text() { [[ "$1" == "$2" ]]; }
+
+# This check drives scripts/init-module.sh against fixtures, so it only means
+# anything in the template source checkout. Initialization consumes and removes
+# scripts/profiles/, so a generated service inherits a CI step with no generator
+# left to verify. Say so and succeed: a service that owns no generator has not
+# broken the generator contract, and failing here would make the first push of
+# every generated repository red.
+if [[ ! -d "${ROOT_DIR}/scripts/profiles" ]]; then
+	echo "template initialization contract is upstream-only; scripts/profiles/ is absent, so this checkout is a generated service"
+	exit 0
+fi
+
 TEMP_ROOT="$(mktemp -d -t template-init-check.XXXXXX)"
 export GOCACHE="${GOCACHE:-${ROOT_DIR}/.cache/go-build}"
 export GOLANGCI_LINT_CACHE="${GOLANGCI_LINT_CACHE:-${ROOT_DIR}/.cache/golangci-lint}"
@@ -22,8 +53,11 @@ new_fixture() {
 		"${root}/env" \
 		"${root}/internal/config" \
 		"${root}/internal/example" \
+		"${root}/internal/background" \
 		"${root}/internal/health" \
 		"${root}/internal/infra/example" \
+		"${root}/internal/infra/http" \
+		"${root}/internal/problem" \
 		"${root}/scripts/profiles/database-none" \
 		"${root}/tools"
 
@@ -49,6 +83,16 @@ new_fixture() {
 		>"${root}/cmd/service/internal/bootstrap/run.go"
 	printf 'package health\n\ntype Service struct{}\n\nfunc New() *Service { return &Service{} }\n' \
 		>"${root}/internal/health/service.go"
+	# The DATABASE=none profile template imports these three, so the fixture has to
+	# carry them: without them the `go mod tidy` initialization ends up trying to
+	# resolve the generated module path over the network and fails with a confusing
+	# "Repository not found".
+	printf 'package background\n\nimport "context"\n\ntype Task struct {\n\tName string\n\tRun  func(context.Context) error\n}\n' \
+		>"${root}/internal/background/background.go"
+	printf 'package httpx\n\nimport "context"\n\ntype IdempotencyStore interface {\n\tRelease(ctx context.Context, key string) error\n}\n' \
+		>"${root}/internal/infra/http/http.go"
+	printf 'package problem\n\ntype Mapped struct{ Code string }\n\ntype Mapper func(error) (Mapped, bool)\n' \
+		>"${root}/internal/problem/problem.go"
 	cp \
 		"${ROOT_DIR}/scripts/profiles/database-none/startup_dependencies.go.tmpl" \
 		"${root}/scripts/profiles/database-none/startup_dependencies.go.tmpl"
@@ -90,7 +134,7 @@ workflow_snapshot() {
 	(
 		cd "${root}"
 		{
-			for path in .agents .codex .claude .qwen specs; do
+			for path in .agents .codex .claude .qwen; do
 				if [[ ! -e "${path}" && ! -L "${path}" ]]; then
 					printf 'missing %s\n' "${path}"
 					continue
@@ -128,6 +172,11 @@ copy_template_checkout() {
 
 	git -C "${root}" init -q
 	git -C "${root}" remote add origin "${origin}"
+	# A repository created from the template has history, and initialization
+	# records the revision it derived from. An empty commit gives the fixture a
+	# HEAD to resolve without paying to stage the whole tree.
+	git -C "${root}" -c user.email=template-init-check@example.com -c user.name=template-init-check \
+		commit -q --allow-empty -m "template checkout"
 	printf '%s\n' "${root}"
 }
 
@@ -173,10 +222,11 @@ grep -Fq '"service.name", "orders"' "${derived}/cmd/service/internal/bootstrap/r
 grep -Fqx 'APP__OBSERVABILITY__OTEL__SERVICE_NAME=orders' "${derived}/env/.env.example"
 grep -Fq '# orders' "${derived}/README.md"
 ! grep -Fq 'https://github.com/Dankosik/go-service-template-rest/actions' "${derived}/README.md"
-[[ "${derived_workflow_before}" == "$(workflow_snapshot "${derived}")" ]]
-[[ -f "${derived}/cmd/service/internal/bootstrap/startup_dependencies.go" ]]
-[[ ! -e "${derived}/scripts/profiles" ]]
-[[ "${env_before}" == "$(shasum -a 256 "${derived}/.env")" ]]
+assert "agent workflow changed during initialization" same_text "${derived_workflow_before}" "$(workflow_snapshot "${derived}")"
+assert "specs/ must not survive initialization" path_absent "${derived}/specs"
+assert "startup_dependencies.go is missing" file_present "${derived}/cmd/service/internal/bootstrap/startup_dependencies.go"
+assert "scripts/profiles/ must not survive initialization" path_absent "${derived}/scripts/profiles"
+assert "an existing .env was rewritten" same_text "${env_before}" "$(shasum -a 256 "${derived}/.env")"
 
 full="$(new_fixture full git@github.com:acme/payments.git)"
 full_workflow_before="$(workflow_snapshot "${full}")"
@@ -185,7 +235,8 @@ full_workflow_before="$(workflow_snapshot "${full}")"
 	CODEOWNER=@acme/platform DATABASE=postgres \
 		bash "${ROOT_DIR}/scripts/init-module.sh"
 )
-[[ "${full_workflow_before}" == "$(workflow_snapshot "${full}")" ]]
+assert "agent workflow changed during postgres initialization" same_text "${full_workflow_before}" "$(workflow_snapshot "${full}")"
+assert "specs/ must not survive postgres initialization" path_absent "${full}/specs"
 
 {
 	echo "package example"
@@ -250,7 +301,7 @@ minimal_workflow_before="$(workflow_snapshot "${minimal_checkout}")"
 		exit 1
 	fi
 )
-[[ "${minimal_workflow_before}" == "$(workflow_snapshot "${minimal_checkout}")" ]]
+assert "agent workflow changed during minimal initialization" same_text "${minimal_workflow_before}" "$(workflow_snapshot "${minimal_checkout}")"
 # This profile carries no PostgreSQL configuration at all, so an APP__POSTGRES__*
 # variable is an unknown key rather than a runtime feature check. That is the
 # stronger rejection: it names every key it refused and it happens before any
@@ -277,9 +328,30 @@ for removed in \
 	internal/infra/postgresmigrate \
 	env/docker-compose.yml \
 	test/postgres_integration_test.go \
-	test/postgres_migrate_runner_integration_test.go; do
-	[[ ! -e "${minimal_checkout}/${removed}" ]]
+	test/postgres_migrate_runner_integration_test.go \
+	.github/assets \
+	.github/ISSUE_TEMPLATE; do
+	assert "${removed} must not survive DATABASE=none initialization" path_absent "${minimal_checkout}/${removed}"
 done
+# The generated service must record where it came from, or a later upstream fix
+# has no revision to be reviewed against.
+grep -Fq 'database = "none"' "${minimal_checkout}/template.lock"
+grep -Fq 'outbound_http = "none"' "${minimal_checkout}/template.lock"
+grep -Eq '^source_revision = "[0-9a-f]{40}"$' "${minimal_checkout}/template.lock"
+# A generated service owns no generator, so the initialization contract check
+# reports that and succeeds instead of failing the first push of every service.
+#
+# The output goes to a file rather than into `grep -q`: a matching `grep -q`
+# closes the pipe on its first hit, and the SIGPIPE that follows makes `make`
+# report a write error and exit non-zero under pipefail.
+(
+	cd "${minimal_checkout}"
+	make template-init-check >"${TEMP_ROOT}/minimal-init-check.log"
+	# CI runs this unconditionally; the target must survive DATABASE=none.
+	make sqlc-check
+	make project-structure-check
+)
+grep -Fq 'upstream-only' "${TEMP_ROOT}/minimal-init-check.log"
 ! make -C "${minimal_checkout}" help | grep -Fq 'bench-db'
 ! grep -Fq 'preDeployCommand = ["/migrate"]' "${minimal_checkout}/railway.toml"
 ! grep -Fq '/out/migrate' "${minimal_checkout}/build/docker/Dockerfile"
@@ -295,7 +367,7 @@ if (
 fi
 (
 	cd "${minimal_checkout}"
-	git apply "${ROOT_DIR}/scripts/ci/fixtures/first-feature.patch"
+	git apply --recount "${ROOT_DIR}/scripts/ci/fixtures/first-feature.patch"
 	make openapi-generate
 	# The health-only baseline needs no request binding helpers. The first
 	# operation with a path or query parameter makes the generated code import
@@ -309,7 +381,7 @@ fi
 )
 # The default profile must not hand a generated service the reference example's
 # packages, second OpenAPI contract, or second main().
-[[ ! -e "${minimal_checkout}/examples" ]]
+assert "examples/ must not survive initialization" path_absent "${minimal_checkout}/examples"
 
 postgres_checkout="$(copy_template_checkout full-postgres git@github.com:acme/postgres-service.git)"
 postgres_workflow_before="$(workflow_snapshot "${postgres_checkout}")"
@@ -322,27 +394,46 @@ postgres_workflow_before="$(workflow_snapshot "${postgres_checkout}")"
 )
 # REFERENCE_EXAMPLE=keep is the opt-in escape hatch for teams that want the
 # worked example in tree.
-[[ -e "${postgres_checkout}/examples/reference-service" ]]
-[[ "${postgres_workflow_before}" == "$(workflow_snapshot "${postgres_checkout}")" ]]
-[[ ! -e "${postgres_checkout}/scripts/profiles" ]]
+assert "REFERENCE_EXAMPLE=keep did not retain examples/" path_present "${postgres_checkout}/examples/reference-service"
+assert "agent workflow changed during postgres+bounded initialization" same_text "${postgres_workflow_before}" "$(workflow_snapshot "${postgres_checkout}")"
+assert "specs/ must not survive postgres+bounded initialization" path_absent "${postgres_checkout}/specs"
+assert "scripts/profiles/ must not survive postgres initialization" path_absent "${postgres_checkout}/scripts/profiles"
 for retained in \
 	cmd/migrate \
 	internal/infra/httpclient \
 	internal/infra/postgres \
 	internal/infra/postgresmigrate \
 	env/docker-compose.yml; do
-	[[ -e "${postgres_checkout}/${retained}" ]]
+	assert "${retained} must survive DATABASE=postgres initialization" path_present "${postgres_checkout}/${retained}"
 done
+# A resolved profile leaves no markers in either direction. They are generator
+# inputs, and a retained profile has consumed them just as a removed one has.
+if grep -rn 'profile:database-postgres' \
+	"${postgres_checkout}/cmd" "${postgres_checkout}/internal" "${postgres_checkout}/env" \
+	"${postgres_checkout}/.github" "${postgres_checkout}/build" \
+	"${postgres_checkout}/Makefile" "${postgres_checkout}/railway.toml" 2>/dev/null; then
+	echo "database-postgres profile left profile markers behind"
+	exit 1
+fi
+grep -Fq 'database = "postgres"' "${postgres_checkout}/template.lock"
+grep -Fq 'outbound_http = "bounded"' "${postgres_checkout}/template.lock"
+(
+	cd "${postgres_checkout}"
+	make template-init-check >"${TEMP_ROOT}/postgres-init-check.log"
+	make project-structure-check
+)
+grep -Fq 'upstream-only' "${TEMP_ROOT}/postgres-init-check.log"
 
 if [[ "${TEMPLATE_POSTGRES_PROOF:-0}" == "1" ]]; then
 	(
 		cd "${postgres_checkout}"
 		git apply --recount "${ROOT_DIR}/scripts/ci/fixtures/postgres-post-feature.patch"
 		make openapi-generate sqlc-generate
+		# handlers.go is deliberately absent: the feature composes through
+		# Handlers.API, so it adds files instead of editing shared template source.
 		gofmt -w \
 			internal/article \
-			internal/infra/http/article_handlers.go \
-			internal/infra/http/handlers.go \
+			internal/infra/http/article_api.go \
 			internal/infra/postgres/article_repository.go \
 			cmd/service/internal/bootstrap/run.go \
 			test/postgres_article_feature_integration_test.go

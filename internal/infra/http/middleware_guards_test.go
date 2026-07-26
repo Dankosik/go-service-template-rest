@@ -11,6 +11,7 @@ import (
 
 	"github.com/example/go-service-template-rest/internal/health"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
+	"github.com/example/go-service-template-rest/internal/problem"
 )
 
 func TestRouterAddsSecurityHeaders(t *testing.T) {
@@ -49,7 +50,7 @@ func TestRouterRejectsRequestBodyTooLarge(t *testing.T) {
 			t.Fatalf("status = %d, want %d", resp.Code, http.StatusRequestEntityTooLarge)
 		}
 		assertProblemContentType(t, resp.Header())
-		assertProblemCode(t, resp, problemCodeRequestEntityTooLarge)
+		assertProblemCode(t, resp, problem.CodeRequestEntityTooLarge)
 		if !strings.Contains(resp.Body.String(), "request body exceeds limit") {
 			t.Fatalf("body = %q, want %q", resp.Body.String(), "request body exceeds limit")
 		}

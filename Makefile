@@ -14,9 +14,13 @@ GO_REQUIRED_VERSION := $(shell awk '/^go / {print $$2; exit}' go.mod)
 TEST_REPORT_DIR := .artifacts/test
 TEST_JUNIT_FILE := $(TEST_REPORT_DIR)/junit.xml
 TEST_JSON_FILE := $(TEST_REPORT_DIR)/test2json.json
+# Effective coverage is measured across the whole module, so a freshly generated
+# service already sits near this floor on template tests alone. Initialization
+# lowers it to 70.0 so early feature work has runway; raise it as your own tests
+# land. See rebase_coverage_floor in scripts/init-module.sh.
 COVERAGE_MIN ?= 80.0
 COVERAGE_GOTOOLCHAIN ?= go$(GO_REQUIRED_VERSION)
-COVERAGE_EXCLUDE_REGEX ?= (^|/)internal/openapi/openapi\.gen\.go:|(^|/)internal/infra/postgres/sqlcgen/|(^|/)internal/infra/telemetry/telemetrytest/|(^|/)cmd/service/main\.go:|(^|/)cmd/migrate/main\.go:
+COVERAGE_EXCLUDE_REGEX ?= (^|/)internal/openapi/openapi\.gen\.go:|(^|/)internal/infra/postgres/sqlcgen/|(^|/)internal/infra/postgres/pgtest/|(^|/)internal/infra/telemetry/telemetrytest/|(^|/)cmd/service/main\.go:|(^|/)cmd/migrate/main\.go:
 FUZZ_TIME ?= 45s
 LINT_BASE_REF ?= origin/main
 LINT_CONCURRENCY ?= 4
@@ -51,13 +55,14 @@ HTTP_BENCH_DOCKER_NETWORK ?=
 HTTP_BENCH_RAW_SAMPLES ?= 0
 
 TRIVY_IMAGE ?= aquasec/trivy:0.72.0@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f
+CLAUDE_SKILLS_CHECK_SCRIPT := bash ./scripts/ci/claude-skills-check.sh
 GENERATED_DRIFT_CHECK_SCRIPT := bash ./scripts/ci/generated-drift-check.sh
 PROJECT_STRUCTURE_CHECK_SCRIPT := bash ./scripts/ci/project-structure-check.sh
+TEMPLATE_OWNED_PURITY_CHECK_SCRIPT := bash ./scripts/ci/template-owned-purity-check.sh
+TEMPLATE_SYNC_SCRIPT := bash ./scripts/template-sync.sh
+TEMPLATE ?= ../go-service-template-rest
 BENCHMARK_SCRIPT := bash ./scripts/dev/benchmark.sh
 BENCHMARK_REMOTE_SCRIPT := bash ./scripts/dev/benchmark-remote.sh
-# profile:database-postgres:start
-DATABASE_CI_TARGETS := sqlc-check
-# profile:database-postgres:end
 
 .DEFAULT_GOAL := help
 
@@ -66,9 +71,10 @@ DATABASE_CI_TARGETS := sqlc-check
 	bench bench-baseline bench-compare bench-profile bench-http bench-http-inspect benchmark-infra-check benchmark-remote-check benchmark-remote-image \
 	lint lint-deep lint-fast deadcode nilaway modernize-check test-parallelism-check govulncheck gosec go-security secret-scan ci-local \
 	openapi-generate openapi-drift-check openapi-runtime-contract-check openapi-lint openapi-validate openapi-breaking openapi-check \
-	container-security run build docker-build docker-run vendor claude-skills-sync
+	sqlc-check container-security run build docker-build docker-run vendor claude-skills-sync claude-skills-check \
+	template-sync template-sync-check template-sync-all template-owned-purity-check
 # profile:database-postgres:start
-.PHONY: bench-db bench-db-baseline bench-db-compare sqlc-generate sqlc-check migration-validate compose-up compose-down
+.PHONY: bench-db bench-db-baseline bench-db-compare sqlc-generate migration-validate compose-up compose-down
 # profile:database-postgres:end
 
 help:
@@ -76,6 +82,8 @@ help:
 	@echo "  make template-init MODULE=github.com/acme/service CODEOWNER=@acme/team"
 	@echo "  make check              # formatting, lint, and unit tests"
 	@echo "  make project-structure-check"
+	@echo "  make template-sync-check TEMPLATE=<path>   # drift against the template instructions"
+	@echo "  make template-sync TEMPLATE=<path>         # adopt them as its own commit"
 	@echo "  make ci-local           # deterministic native CI aggregate"
 	@echo "  make check-full         # native aggregate plus Docker-backed gates"
 	@echo "  make pr-check BASE_REF=origin/main"
@@ -112,16 +120,48 @@ template-init-check:
 project-structure-check:
 	$(PROJECT_STRUCTURE_CHECK_SCRIPT)
 
+template-owned-purity-check:
+	$(TEMPLATE_OWNED_PURITY_CHECK_SCRIPT)
+
+# TEMPLATE points at a checkout of the template that owns the instructions.
+# Run these from the derived repository; the template is the source of truth.
+template-sync-check:
+	$(TEMPLATE_SYNC_SCRIPT) --check --from "$(TEMPLATE)" --repo .
+
+template-sync:
+	$(TEMPLATE_SYNC_SCRIPT) --apply --from "$(TEMPLATE)" --repo .
+
+# Fan out from this template to several local checkouts in one run.
+template-sync-all:
+	@if [ -z "$(TARGETS)" ]; then echo "TARGETS is required: make template-sync-all TARGETS=\"../a ../b\"" >&2; exit 2; fi
+	$(TEMPLATE_SYNC_SCRIPT) --apply --from . --targets $(TARGETS)
+
+# .claude/skills holds nothing but generated links, so every entry is cleared
+# before the rebuild. Deleting only symlinks would leave behind the regular
+# files a checkout without symlink support materializes, and `ln -s` would then
+# either fail on a file or silently create the link *inside* a directory.
+# A real directory is the one entry that may hold the only copy of something,
+# so it stops the rebuild instead of being removed.
 claude-skills-sync:
 	@mkdir -p .claude/skills
-	@find .claude/skills -maxdepth 1 -type l -delete
+	@set -e; for entry in .claude/skills/*; do \
+		{ [ -e "$$entry" ] || [ -L "$$entry" ]; } || continue; \
+		if [ -d "$$entry" ] && [ ! -L "$$entry" ]; then \
+			echo "$$entry is a real directory, not a generated link; move or remove it first" >&2; \
+			exit 1; \
+		fi; \
+		rm -f "$$entry"; \
+	done
 	@set -e; for d in .agents/skills/*/; do n=$$(basename "$$d"); ln -s "../../.agents/skills/$$n" ".claude/skills/$$n"; done
 	@echo ".claude/skills: $$(ls .claude/skills | wc -l | tr -d ' ') skill links"
 
-check: project-structure-check fmt-check lint test
+claude-skills-check:
+	$(CLAUDE_SKILLS_CHECK_SCRIPT)
+
+check: project-structure-check template-owned-purity-check claude-skills-check fmt-check lint test
 
 ci-local:
-	$(MAKE) mod-check template-init-check project-structure-check fmt-check lint lint-deep test-race test-report $(DATABASE_CI_TARGETS) openapi-check go-security secret-scan
+	$(MAKE) mod-check template-init-check project-structure-check template-owned-purity-check claude-skills-check fmt-check lint lint-deep test-race test-report sqlc-check openapi-check go-security secret-scan
 
 check-full:
 	@command -v docker >/dev/null 2>&1 || { echo "Docker is required for make check-full"; exit 1; }
@@ -328,10 +368,14 @@ sqlc-generate:
 	else \
 		$(GO_TOOL) sqlc generate -f internal/infra/postgres/sqlc.yaml; \
 	fi
+# profile:database-postgres:end
 
+# sqlc-check stays outside the database profile because CI runs it unconditionally.
+# Without query sources it reports that there is nothing to generate and also
+# fails on generated output left behind without them, which is the drift a
+# profile-less service can still have.
 sqlc-check:
 	$(GENERATED_DRIFT_CHECK_SCRIPT) sqlc
-# profile:database-postgres:end
 
 openapi-generate:
 	go generate $(OPENAPI_PACKAGES)
@@ -381,9 +425,6 @@ migration-validate:
 	port="$${address##*:}"; \
 	test -n "$$port" || { echo "failed to resolve rehearsal Postgres port"; exit 1; }; \
 	dsn="postgres://app:app@localhost:$$port/app?sslmode=disable"; \
-	APP__POSTGRES__ENABLED=true \
-		APP__POSTGRES__DSN="$$dsn" \
-		go run ./cmd/migrate validate; \
 	image="$(RUNTIME_IMAGE)"; \
 	if [ -z "$$image" ]; then image="$(SERVICE_NAME):migration"; docker build -f build/docker/Dockerfile -t "$$image" .; fi; \
 	docker run --rm --network "$${project}_default" \

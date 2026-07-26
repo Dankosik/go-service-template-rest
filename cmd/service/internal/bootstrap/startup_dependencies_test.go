@@ -7,13 +7,14 @@ import (
 	"log/slog"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"testing/synctest"
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/config"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/trace"
+	"github.com/example/go-service-template-rest/internal/infra/postgres"
+	"github.com/example/go-service-template-rest/internal/problem"
 )
 
 func TestPostgresDependencyInitFailurePreservesWrappedCause(t *testing.T) {
@@ -151,10 +152,8 @@ func TestInitPostgresDependencyRejectsDisabledProfile(t *testing.T) {
 	t.Parallel()
 
 	runtime := postgresStartupRuntime{
-		tracer:        otel.Tracer("test"),
-		bootstrapSpan: trace.SpanFromContext(context.Background()),
-		cfg:           config.Config{},
-		log:           slog.New(slog.DiscardHandler),
+		cfg: config.Config{},
+		log: slog.New(slog.DiscardHandler),
 	}
 
 	pg, err := initPostgresDependency(context.Background(), context.Background(), runtime)
@@ -178,9 +177,7 @@ func TestInitRuntimeDependenciesRejectsUnavailablePostgres(t *testing.T) {
 	startupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	dependencies, err := initRuntimeDependencies(context.Background(), startupCtx, startupBootstrap{
-		tracer:        otel.Tracer("test"),
-		bootstrapSpan: trace.SpanFromContext(context.Background()),
+	dependencies, err := initRuntimeDependencies(startupCtx, startupBootstrap{
 		cfg: config.Config{
 			Postgres: config.PostgresConfig{
 				Enabled:            true,
@@ -188,12 +185,14 @@ func TestInitRuntimeDependenciesRejectsUnavailablePostgres(t *testing.T) {
 				ConnectTimeout:     10 * time.Millisecond,
 				HealthcheckTimeout: 10 * time.Millisecond,
 				MaxOpenConns:       1,
+				AcquireTimeout:     time.Second,
 				ConnMaxLifetime:    time.Minute,
+				StatementTimeout:   time.Second,
 			},
 		},
 		log: slog.New(slog.DiscardHandler),
 	})
-	dependencies.Close()
+	dependencies.Close(context.Background())
 
 	if err == nil {
 		t.Fatal("initRuntimeDependencies() error = nil, want unavailable PostgreSQL rejection")
@@ -213,15 +212,15 @@ func TestInitPostgresDependencyRejectsCancelledDependencyContext(t *testing.T) {
 	cancel()
 
 	runtime := postgresStartupRuntime{
-		tracer:        otel.Tracer("test"),
-		bootstrapSpan: trace.SpanFromContext(context.Background()),
 		cfg: config.Config{Postgres: config.PostgresConfig{
 			Enabled:            true,
 			DSN:                "postgres://user:pass@localhost:5432/app?sslmode=disable",
 			ConnectTimeout:     time.Second,
 			HealthcheckTimeout: time.Second,
 			MaxOpenConns:       1,
+			AcquireTimeout:     time.Second,
 			ConnMaxLifetime:    time.Minute,
+			StatementTimeout:   time.Second,
 		}},
 		log: slog.New(slog.DiscardHandler),
 	}
@@ -402,5 +401,135 @@ func resetBootstrapConfigEnv(t *testing.T) {
 		if err := os.Unsetenv(key); err != nil {
 			t.Fatalf("os.Unsetenv(%q) error = %v", key, err)
 		}
+	}
+}
+
+// fakeIdempotencySweeper counts sweeps and can fail on demand.
+type fakeIdempotencySweeper struct {
+	sweeps  atomic.Int64
+	failing atomic.Bool
+}
+
+func (s *fakeIdempotencySweeper) Sweep(context.Context) (int64, error) {
+	s.sweeps.Add(1)
+	if s.failing.Load() {
+		return 0, errors.New("sweep failed")
+	}
+	return 1, nil
+}
+
+// TestSweepIdempotencyKeysRunsUntilCancellation pins the two properties the sweeper
+// needs as supervised work: it keeps running on the configured interval, and it
+// treats cancellation as an ordinary stop rather than a task failure.
+func TestSweepIdempotencyKeysRunsUntilCancellation(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		const interval = time.Minute
+
+		sweeper := &fakeIdempotencySweeper{}
+		ctx, cancel := context.WithCancel(context.Background())
+		done := make(chan error, 1)
+		go func() { done <- sweepIdempotencyKeys(ctx, sweeper, interval) }()
+
+		synctest.Wait()
+		if got := sweeper.sweeps.Load(); got != 0 {
+			t.Fatalf("sweeps before the first tick = %d, want 0", got)
+		}
+
+		time.Sleep(3 * interval)
+		synctest.Wait()
+		if got := sweeper.sweeps.Load(); got != 3 {
+			t.Fatalf("sweeps after 3 intervals = %d, want 3", got)
+		}
+
+		cancel()
+		synctest.Wait()
+		if err := <-done; err != nil {
+			t.Fatalf("sweepIdempotencyKeys() error = %v, want nil on cancellation", err)
+		}
+	})
+}
+
+// TestSweepIdempotencyKeysSurvivesAFailedPass keeps a transient database failure
+// from ending the task. One failed sweep leaves rows behind; ending the task would
+// leave every later one behind too, and the table it bounds would grow unwatched.
+func TestSweepIdempotencyKeysSurvivesAFailedPass(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		const interval = time.Minute
+
+		sweeper := &fakeIdempotencySweeper{}
+		sweeper.failing.Store(true)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		done := make(chan error, 1)
+		go func() { done <- sweepIdempotencyKeys(ctx, sweeper, interval) }()
+
+		time.Sleep(2 * interval)
+		synctest.Wait()
+		if got := sweeper.sweeps.Load(); got != 2 {
+			t.Fatalf("sweeps after 2 failing intervals = %d, want the task still running", got)
+		}
+
+		sweeper.failing.Store(false)
+		time.Sleep(interval)
+		synctest.Wait()
+		if got := sweeper.sweeps.Load(); got != 3 {
+			t.Fatalf("sweeps after recovery = %d, want 3", got)
+		}
+
+		cancel()
+		synctest.Wait()
+		if err := <-done; err != nil {
+			t.Fatalf("sweepIdempotencyKeys() error = %v, want nil on cancellation", err)
+		}
+	})
+}
+
+// TestRuntimeDependenciesIdempotencyStoreIsNilWithoutAStore is the typed-nil trap.
+// Returning the field directly would produce a non-nil interface holding a nil
+// pointer, so the middleware would install itself and dereference nothing on the
+// first POST carrying a key.
+func TestRuntimeDependenciesIdempotencyStoreIsNilWithoutAStore(t *testing.T) {
+	t.Parallel()
+
+	if store := (runtimeDependencies{}).IdempotencyStore(); store != nil {
+		t.Fatalf("IdempotencyStore() = %v, want a nil interface", store)
+	}
+	if tasks := (runtimeDependencies{}).BackgroundTasks(); len(tasks) != 0 {
+		t.Fatalf("BackgroundTasks() = %v, want none without a store", tasks)
+	}
+}
+
+// TestPostgresDomainErrorsMapSaturationToRetryableUnavailable closes the gap
+// between what internal/infra/postgres documented and what the transport did.
+//
+// ErrSaturated is the one database failure that is not the database's fault:
+// every connection is busy serving, so the request should be told to come back
+// rather than told the server broke. It reached a handler as an ordinary error
+// and came out as 500, which tells a client library not to retry the one failure
+// retrying fixes, and buries a moment of capacity pressure in the same rate as a
+// genuine bug.
+func TestPostgresDomainErrorsMapSaturationToRetryableUnavailable(t *testing.T) {
+	t.Parallel()
+
+	mappers := runtimeDependencies{}.DomainErrors()
+	if len(mappers) == 0 {
+		t.Fatal("DomainErrors() is empty; the pool's own failures reach handlers unclassified")
+	}
+
+	mapped, ok := problem.Classify(fmt.Errorf("load article: %w", postgres.ErrSaturated), mappers)
+	if !ok {
+		t.Fatal("postgres.ErrSaturated is unclassified; it answers 500 instead of a retryable 503")
+	}
+	if mapped.Code != problem.CodeServiceUnavailable {
+		t.Fatalf("code = %q, want %q", mapped.Code, problem.CodeServiceUnavailable)
+	}
+	if mapped.RetryAfter <= 0 {
+		t.Fatal("RetryAfter is unset; a 503 with no hint reads as down rather than busy")
+	}
+
+	// A connect failure is the database's fault and is not retryable in the same
+	// sense, so it must not be dressed up as capacity pressure.
+	if _, ok := problem.Classify(fmt.Errorf("dial: %w", postgres.ErrConnect), mappers); ok {
+		t.Fatal("postgres.ErrConnect was classified as a client-retryable problem")
 	}
 }

@@ -8,11 +8,14 @@ import (
 	"net"
 	"net/http"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 	"github.com/example/go-service-template-rest/internal/openapi"
+	"github.com/example/go-service-template-rest/internal/problem"
+	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/go-chi/chi/v5"
 	oapimiddleware "github.com/oapi-codegen/nethttp-middleware"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
@@ -20,35 +23,198 @@ import (
 )
 
 type RouterConfig struct {
-	MaxBodyBytes     int64
-	ReadinessTimeout time.Duration
-	OTelServerName   string
+	MaxBodyBytes int64
+	// RequestTimeout bounds every handler. See RequestTimeout in
+	// middleware_timeout.go for why the net/http server timeouts do not.
+	RequestTimeout time.Duration
+	// MaxInFlight bounds concurrent handler execution. Zero disables shedding.
+	// See MaxInFlight in middleware_inflight.go for why a time budget alone is
+	// not backpressure.
+	MaxInFlight    int
+	OTelServerName string
 	// LogHealthProbes re-enables access logging for platform probe routes,
 	// which are excluded by default.
 	LogHealthProbes bool
+	// Authenticate validates one security requirement declared by the OpenAPI
+	// contract. Nil rejects every secured operation with 401, which is the
+	// correct default for a contract that declares a scheme the service has not
+	// implemented yet. Operations with no security requirement never reach it.
+	Authenticate openapi3filter.AuthenticationFunc
+	// AuthenticateChallenge is the WWW-Authenticate value sent with a 401. It
+	// must name an HTTP authentication scheme, not a contract securityScheme
+	// key. Defaults to Bearer.
+	AuthenticateChallenge string
+	// Idempotency makes a repeated POST or PATCH carrying an Idempotency-Key
+	// answer with the first attempt's result instead of doing the work twice.
+	// Nil leaves the middleware out of the chain entirely; see IdempotencyStore
+	// for what a store has to guarantee.
+	//
+	// Only NewRouter honors it, because only NewRouter owns the generated router
+	// the middleware has to sit inside; Harden rejects it rather than installing
+	// it where it would run before authentication. A service that builds its own
+	// generated server installs Idempotent in its own ChiServerOptions.Middlewares
+	// instead — see Idempotent for where in that list it belongs.
+	Idempotency IdempotencyStore
+	// IdempotencyOutcomeTimeout bounds recording or releasing a reservation after
+	// the handler has answered. It is required when Idempotency is set: that call
+	// is detached from the request budget on purpose, so without a bound of its own
+	// a stalled store holds the handler goroutine and its in-flight slot forever.
+	// See idempotencyOutcomeContext.
+	IdempotencyOutcomeTimeout time.Duration
+	// DomainErrors classify the errors a generated operation returns instead of a
+	// typed response. See problem.Mapper for why the seam exists and why the type
+	// lives in a leaf package rather than here.
+	DomainErrors []problem.Mapper
+	// RateLimit rejects a caller that is over its budget with 429. Nil leaves the
+	// middleware out of the chain, which is the shipped default; see RateLimiter
+	// for why the limit and the identity it charges are the service's decision,
+	// and NewKeyedRateLimiter for the one implementation this repository ships.
+	RateLimit RateLimiter
+	// RateLimitKey reports which bucket a request is charged against, and is
+	// required when RateLimit is set. There is no default: the identity worth
+	// limiting is the whole decision, and the two candidates a template could
+	// guess — the client address and a forwarded-for header — are respectively
+	// useless and spoofable without knowing the edge. See HeaderRateLimitKey.
+	RateLimitKey RateLimitKeyFunc
 }
 
+// defaultAuthenticateChallenge is the HTTP authentication scheme advertised when
+// a service declares security requirements without naming its own challenge.
+const defaultAuthenticateChallenge = "Bearer"
+
+// NewRouter builds the service router for this repository's own OpenAPI contract:
+// the generated strict server behind the request validator, wrapped in the
+// hardened chain Harden owns.
 func NewRouter(log *slog.Logger, h Handlers, metrics *telemetry.Metrics, cfg RouterConfig) (http.Handler, error) {
 	if log == nil {
 		return nil, fmt.Errorf("http router: logger is required")
 	}
+	strict, err := newStrictHandlers(h)
+	if err != nil {
+		return nil, err
+	}
 
+	rejectRequest := RejectRequest(log, cfg.AuthenticateChallenge)
+
+	server := openapi.NewStrictHandlerWithOptions(strict, nil, generatedStrictServerOptions(rejectRequest, cfg.DomainErrors))
+	requestValidator, err := openAPIRequestValidator(cfg.Authenticate, rejectRequest)
+	if err != nil {
+		return nil, err
+	}
+
+	idempotency, err := idempotencyMiddleware(log, cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	// Order inside the generated router matters and is the reverse of a chi
+	// chain: the wrapper applies this slice innermost-first, so the validator
+	// listed last is the outermost of the two and idempotency runs after it.
+	// See idempotencyMiddleware for why that is the only correct order.
+	generatedMiddlewares := []openapi.MiddlewareFunc{requestValidator}
+	if idempotency != nil {
+		generatedMiddlewares = []openapi.MiddlewareFunc{idempotency, requestValidator}
+	}
+	apiSubrouter := openapi.HandlerWithOptions(server, generatedChiServerOptions(rejectRequest, generatedMiddlewares...))
+
+	// Cleared, because this function has already placed the middleware inside the
+	// generated router. Leaving it set would trip Harden's own rejection of a
+	// configuration it cannot honor.
+	hardenCfg := cfg
+	hardenCfg.Idempotency = nil
+	hardenCfg.IdempotencyOutcomeTimeout = 0
+
+	return Harden(log, metrics, hardenCfg, apiSubrouter)
+}
+
+// idempotencyMiddleware builds the idempotency middleware for a generated
+// router's per-operation chain, or nil when no store is configured.
+//
+// It belongs inside the generated router rather than in Harden's root chain,
+// and the difference is not cosmetic. Harden receives the API as an opaque
+// http.Handler, so anything it installs runs before the generated validator —
+// which is what resolves the security requirement and what matches the route.
+// Reserving there claimed a key for every unauthenticated POST to every path,
+// including ones this service does not route, and then recorded the resulting
+// 401 or 404 as the key's completed outcome. A client whose credential expired
+// between two attempts was replayed its own 401 for the whole retention window
+// after refreshing it, and the work it was retrying never ran.
+func idempotencyMiddleware(log *slog.Logger, cfg RouterConfig) (openapi.MiddlewareFunc, error) {
+	if cfg.Idempotency == nil {
+		return nil, nil //nolint:nilnil // No store configured is the ordinary case, not a failure.
+	}
+	// Rejected rather than defaulted, because the default that would look
+	// harmless here is the unbounded one this replaced.
+	if cfg.IdempotencyOutcomeTimeout <= 0 {
+		return nil, fmt.Errorf("http router: idempotency outcome timeout must be > 0 when an idempotency store is configured")
+	}
+
+	return func(next http.Handler) http.Handler {
+		return Idempotent(cfg.Idempotency, cfg.IdempotencyOutcomeTimeout, log, next)
+	}, nil
+}
+
+// Harden wraps an API handler in this repository's middleware chain and its
+// 404/405/Allow fallback policy, and is what NewRouter is built on.
+//
+// It is exported because the chain is the valuable part and it is entirely
+// independent of any generated type: a service whose OpenAPI contract lives in
+// its own package — the reference example is one — can inherit correlation,
+// tracing, access logging, body limits, the request budget, load shedding, and
+// panic recovery without reimplementing them. Building a second router by hand is
+// how a service ends up with none of them while believing it inherited all of
+// them.
+//
+// The order is the contract, outermost first:
+//
+//	RequestCorrelation → OTel → SecurityHeaders → AccessLog → RequestBodyLimit
+//	→ RequestTimeout → MaxInFlight → RateLimit → Recover → apiSubrouter
+//
+// Idempotency is deliberately not in it. Everything here runs before the
+// generated validator authenticates the caller or matches the route, which is
+// the wrong side of both for a middleware that claims a durable key; see
+// idempotencyMiddleware. A service composing its own generated server installs
+// Idempotent in its own ChiServerOptions.Middlewares instead.
+func Harden(log *slog.Logger, metrics *telemetry.Metrics, cfg RouterConfig, apiSubrouter http.Handler) (http.Handler, error) {
+	if log == nil {
+		return nil, fmt.Errorf("http router: logger is required")
+	}
 	if metrics == nil {
 		return nil, fmt.Errorf("http router: metrics is required")
+	}
+	if apiSubrouter == nil {
+		return nil, fmt.Errorf("http router: api subrouter is required")
 	}
 	if cfg.MaxBodyBytes <= 0 {
 		return nil, fmt.Errorf("http router: max body bytes must be > 0")
 	}
-	strict, err := newStrictHandlers(h, cfg.ReadinessTimeout)
-	if err != nil {
-		return nil, err
+	if cfg.RequestTimeout <= 0 {
+		return nil, fmt.Errorf("http router: request timeout must be > 0")
+	}
+	if cfg.MaxInFlight < 0 {
+		return nil, fmt.Errorf("http router: max in flight must be >= 0")
+	}
+	// Refused rather than ignored. This function cannot place the middleware
+	// correctly — everything it installs runs ahead of the generated validator,
+	// so a key would be claimed before the caller is authenticated and before
+	// the route is matched. Silently dropping the field would be worse: the
+	// service would look protected and would not be.
+	if cfg.Idempotency != nil {
+		return nil, fmt.Errorf(
+			"http router: idempotency cannot be installed by Harden, which runs ahead of the generated validator: " +
+				"install httpx.Idempotent in the generated router's ChiServerOptions.Middlewares, ahead of the request validator",
+		)
+	}
+	// Same reason: a limiter with no key silently limits nothing, which looks
+	// exactly like a limiter that is working.
+	if cfg.RateLimit != nil && cfg.RateLimitKey == nil {
+		return nil, fmt.Errorf("http router: rate limit key is required when a rate limiter is configured")
 	}
 
-	server := openapi.NewStrictHandlerWithOptions(strict, nil, generatedStrictServerOptions(log))
-	requestValidator, err := openAPIRequestValidator(log)
-	if err != nil {
-		return nil, err
-	}
+	// Built once here rather than per request. The meter provider is already
+	// installed by this point in startup, so these instruments reach both the
+	// Prometheus registry and the OTLP reader.
+	serverLoad := metrics.ServerLoad()
 
 	otelMiddleware := otelhttp.NewMiddleware(
 		"http.server",
@@ -57,21 +223,58 @@ func NewRouter(log *slog.Logger, h Handlers, metrics *telemetry.Metrics, cfg Rou
 		otelhttp.WithServerName(otelServerName(cfg.OTelServerName)),
 	)
 
-	apiSubrouter := openapi.HandlerWithOptions(server, generatedChiServerOptions(log, requestValidator))
-
 	rootRouter := newRootRouter(
 		apiSubrouter,
 		otelMiddleware,
 		SecurityHeaders,
 		func(next http.Handler) http.Handler { return AccessLog(log, cfg.LogHealthProbes, next) },
 		func(next http.Handler) http.Handler { return RequestBodyLimit(cfg.MaxBodyBytes, next) },
+		// The budget sits inside the access log, so a timed-out request is still
+		// recorded with its duration, and outside Recover, so a recovered panic
+		// has already committed its response before the budget is inspected.
+		func(next http.Handler) http.Handler { return RequestTimeout(cfg.RequestTimeout, next) },
+		// Shedding sits inside the budget so a shed request is still traced and
+		// access-logged, and outside Recover because it never runs a handler.
+		func(next http.Handler) http.Handler { return MaxInFlight(cfg.MaxInFlight, serverLoad, next) },
+		// Rate limiting sits inside shedding, so a service past capacity as a whole
+		// answers 503 before it starts attributing the overload to one caller, and
+		// well outside the generated validator, so an over-budget caller does not
+		// get their body schema-validated before being told no.
+		func(next http.Handler) http.Handler { return RateLimit(cfg.RateLimit, cfg.RateLimitKey, next) },
+		// Innermost here, and still outside the generated router, so a panic
+		// raised inside an operation unwinds through the idempotency middleware
+		// — releasing the reservation — before it becomes a 500.
 		func(next http.Handler) http.Handler { return Recover(log, next) },
 	)
 
 	return RequestCorrelation(rootRouter), nil
 }
 
-func openAPIRequestValidator(log *slog.Logger) (openapi.MiddlewareFunc, error) {
+// RejectRequest returns the validator error mapper this repository installs:
+// oversized bodies become 413, failed security requirements become 401 with a
+// WWW-Authenticate challenge, and everything else becomes a sanitized 400.
+//
+// A service wiring its own generated validator needs this, or it reproduces the
+// defect where a missing credential is reported as a malformed request.
+func RejectRequest(log *slog.Logger, challenge string) func(http.ResponseWriter, *http.Request, error) {
+	if strings.TrimSpace(challenge) == "" {
+		challenge = defaultAuthenticateChallenge
+	}
+	return handleGeneratedRequestError(log, challenge)
+}
+
+// openAPIRequestValidator builds the contract validator and installs the
+// authentication seam.
+//
+// authenticate must be forwarded even when nil. openapi3filter returns
+// ErrAuthenticationServiceMissing when no AuthenticationFunc is set, so a
+// contract that declares a security requirement fails closed either way — but it
+// fails as an unmapped error, and handleAuthenticatedRequestError is what turns
+// that into a 401 instead of a 400 that no client will retry with credentials.
+func openAPIRequestValidator(
+	authenticate openapi3filter.AuthenticationFunc,
+	rejectRequest func(http.ResponseWriter, *http.Request, error),
+) (openapi.MiddlewareFunc, error) {
 	spec, err := openapi.GetSpec()
 	if err != nil {
 		return nil, fmt.Errorf("http router: load embedded OpenAPI spec: %w", err)
@@ -79,6 +282,9 @@ func openAPIRequestValidator(log *slog.Logger) (openapi.MiddlewareFunc, error) {
 
 	return oapimiddleware.OapiRequestValidatorWithOptions(spec, &oapimiddleware.Options{
 		DoNotValidateServers: true,
+		Options: openapi3filter.Options{
+			AuthenticationFunc: authenticate,
+		},
 		ErrorHandlerWithOpts: func(
 			_ context.Context,
 			err error,
@@ -86,7 +292,7 @@ func openAPIRequestValidator(log *slog.Logger) (openapi.MiddlewareFunc, error) {
 			r *http.Request,
 			_ oapimiddleware.ErrorHandlerOpts,
 		) {
-			handleMalformedGeneratedRequest(log, w, r, err)
+			rejectRequest(w, r, err)
 		},
 	}), nil
 }
@@ -100,23 +306,60 @@ func otelServerName(configured string) string {
 	return net.JoinHostPort(serverName, "0")
 }
 
-func generatedStrictServerOptions(log *slog.Logger) openapi.StrictHTTPServerOptions {
+func generatedStrictServerOptions(
+	rejectRequest func(http.ResponseWriter, *http.Request, error),
+	domainErrors []problem.Mapper,
+) openapi.StrictHTTPServerOptions {
 	return openapi.StrictHTTPServerOptions{
-		RequestErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) {
-			handleMalformedGeneratedRequest(log, w, r, err)
-		},
-		ResponseErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, _ error) {
-			writeProblem(w, r, problemResponse{code: problemCodeInternalError, detail: "request failed"})
-		},
+		RequestErrorHandlerFunc:  rejectRequest,
+		ResponseErrorHandlerFunc: handleGeneratedResponseError(domainErrors),
 	}
 }
 
-func generatedChiServerOptions(log *slog.Logger, middlewares ...openapi.MiddlewareFunc) openapi.ChiServerOptions {
+// handleGeneratedResponseError turns an error a generated operation returned into
+// a problem response.
+//
+// The expired-context case is checked before any service mapper, because it is a
+// transport fact rather than a domain one: a mapper that classified it would have
+// to repeat this rule, and one that forgot would hide every slow dependency
+// inside the 5xx rate.
+func handleGeneratedResponseError(domainErrors []problem.Mapper) func(http.ResponseWriter, *http.Request, error) {
+	return func(w http.ResponseWriter, r *http.Request, err error) {
+		// A handler that returns its expired context is reporting a spent
+		// request budget, not an internal fault, and this is the path most
+		// timeouts actually take: the generated wrapper commits a response
+		// here, so RequestTimeout never sees an uncommitted one. Reporting
+		// it as 500 would hide every slow dependency inside the error rate.
+		if errors.Is(err, context.DeadlineExceeded) {
+			writeProblem(w, r, problemResponse{
+				code:   problem.CodeGatewayTimeout,
+				detail: "request exceeded its time budget",
+			})
+			return
+		}
+
+		if mapped, ok := problem.Classify(err, domainErrors); ok {
+			if mapped.RetryAfter > 0 {
+				w.Header().Set("Retry-After", strconv.Itoa(int(mapped.RetryAfter.Round(time.Second).Seconds())))
+			}
+			writeProblem(w, r, problemResponse{code: mapped.Code, detail: mapped.Detail})
+			return
+		}
+
+		// An unclassified error is a fault this service did not anticipate, so it
+		// stays a 500 with no detail: guessing a friendlier status for it is how a
+		// bug starts reading as a client mistake.
+		writeProblem(w, r, problemResponse{code: problem.CodeInternalError, detail: "request failed"})
+	}
+}
+
+func generatedChiServerOptions(
+	rejectRequest func(http.ResponseWriter, *http.Request, error),
+	middlewares ...openapi.MiddlewareFunc,
+) openapi.ChiServerOptions {
 	return openapi.ChiServerOptions{
-		Middlewares: middlewares,
-		ErrorHandlerFunc: func(w http.ResponseWriter, r *http.Request, err error) {
-			handleMalformedGeneratedRequest(log, w, r, err)
-		},
+		Middlewares:      middlewares,
+		ErrorHandlerFunc: rejectRequest,
 	}
 }
 
@@ -124,10 +367,34 @@ func handleMalformedGeneratedRequest(log *slog.Logger, w http.ResponseWriter, r 
 	logStrictRequestError(log, r, err)
 	var maxBytesError *http.MaxBytesError
 	if errors.As(err, &maxBytesError) {
-		writeProblem(w, r, problemResponse{code: problemCodeRequestEntityTooLarge, detail: "request body exceeds limit"})
+		writeProblem(w, r, problemResponse{code: problem.CodeRequestEntityTooLarge, detail: "request body exceeds limit"})
 		return
 	}
 	writeMalformedRequestProblem(w, r)
+}
+
+// handleGeneratedRequestError maps a validator rejection, adding the one case
+// handleMalformedGeneratedRequest cannot classify on its own.
+//
+// A failed security requirement is 401, not 400: the request framing was fine
+// and the credential was the problem. Reporting it as 400 tells a client to stop
+// rather than to authenticate, and no client library retries with credentials on
+// a 400.
+func handleGeneratedRequestError(log *slog.Logger, challenge string) func(http.ResponseWriter, *http.Request, error) {
+	return func(w http.ResponseWriter, r *http.Request, err error) {
+		var securityErr *openapi3filter.SecurityRequirementsError
+		if errors.As(err, &securityErr) {
+			logStrictRequestError(log, r, err)
+			// The challenge names an HTTP authentication scheme, which is not the
+			// same vocabulary as the contract's securityScheme names: a contract
+			// key like "bearerAuth" is not a legal challenge under RFC 9110. Only
+			// the service knows which scheme it implements, so it supplies this.
+			w.Header().Set("WWW-Authenticate", challenge)
+			writeProblem(w, r, problemResponse{code: problem.CodeUnauthorized, detail: "credentials are missing or invalid"})
+			return
+		}
+		handleMalformedGeneratedRequest(log, w, r, err)
+	}
 }
 
 func newRootRouter(
@@ -146,17 +413,16 @@ func logStrictRequestError(log *slog.Logger, r *http.Request, err error) {
 		return
 	}
 
-	attrs := []any{slog.String("error_class", strictRequestErrorClass(err))}
+	// Correlation comes from the context rather than from attributes assembled
+	// here; see internal/observability/logctx. A nil request still has to be
+	// handled: the generated error handlers are declared with one, and this must
+	// not panic on the path whose whole job is reporting a malformed request.
+	//nolint:contextcheck // There is no parent context when the request is nil, which is the only case this branch exists for.
+	ctx := context.Background()
 	if r != nil {
-		if requestID := requestIDFromContext(r.Context()); requestID != "" {
-			attrs = append(attrs, slog.String("request_id", requestID))
-		}
-		traceID, spanID := traceIDsFromContext(r.Context())
-		if traceID != "" {
-			attrs = append(attrs, slog.String("trace_id", traceID), slog.String("span_id", spanID))
-		}
+		ctx = r.Context()
 	}
-	log.Warn("rejected malformed HTTP request", attrs...)
+	log.WarnContext(ctx, "rejected malformed HTTP request", slog.String("error_class", strictRequestErrorClass(err)))
 }
 
 func strictRequestErrorClass(err error) string {
@@ -168,13 +434,13 @@ func strictRequestErrorClass(err error) string {
 
 func applyHTTPPolicy(root chi.Router) {
 	root.NotFound(func(w http.ResponseWriter, r *http.Request) {
-		writeProblem(w, r, problemResponse{code: problemCodeNotFound, detail: "resource not found"})
+		writeProblem(w, r, problemResponse{code: problem.CodeNotFound, detail: "resource not found"})
 	})
 
 	root.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
 		allowMethods := allowedMethodsForPath(root, r.URL.Path)
 		if len(allowMethods) == 0 {
-			writeProblem(w, r, problemResponse{code: problemCodeNotFound, detail: "resource not found"})
+			writeProblem(w, r, problemResponse{code: problem.CodeNotFound, detail: "resource not found"})
 			return
 		}
 		allowMethods = ensureMethodAllowed(allowMethods, http.MethodOptions)
@@ -183,7 +449,7 @@ func applyHTTPPolicy(root chi.Router) {
 			setAllowHeader(w, allowMethods)
 
 			if isCORSPreflightRequest(r) {
-				writeProblem(w, r, problemResponse{code: problemCodeMethodNotAllowed, detail: "cors preflight is not enabled"})
+				writeProblem(w, r, problemResponse{code: problem.CodeMethodNotAllowed, detail: "cors preflight is not enabled"})
 				return
 			}
 
@@ -192,8 +458,25 @@ func applyHTTPPolicy(root chi.Router) {
 		}
 
 		setAllowHeader(w, allowMethods)
-		writeProblem(w, r, problemResponse{code: problemCodeMethodNotAllowed, detail: "method is not allowed for this resource"})
+		writeProblem(w, r, problemResponse{code: problem.CodeMethodNotAllowed, detail: "method is not allowed for this resource"})
 	})
+}
+
+// boundedHTTPMethods is the set probed to build an Allow header, and bounds how
+// many router matches one 405 costs.
+//
+// CONNECT and TRACE are deliberately absent. chi cannot route CONNECT from an
+// ordinary handler and oapi-codegen never generates a TRACE operation, so
+// probing for them costs a router match per 405 and can only ever answer no —
+// while advertising TRACE in an Allow header is a finding in most scanners.
+var boundedHTTPMethods = []string{
+	http.MethodGet,
+	http.MethodHead,
+	http.MethodDelete,
+	http.MethodOptions,
+	http.MethodPatch,
+	http.MethodPost,
+	http.MethodPut,
 }
 
 func allowedMethodsForPath(root chi.Router, path string) []string {
@@ -231,3 +514,23 @@ func isCORSPreflightRequest(r *http.Request) bool {
 	}
 	return r.Header.Get("Origin") != "" && r.Header.Get("Access-Control-Request-Method") != ""
 }
+
+// RejectResponse returns the mapper this repository installs for generated
+// strict-server response failures: a spent request budget becomes 504, whatever
+// the supplied mappers classify becomes their problem, and anything left becomes
+// 500.
+//
+// A service wiring its own generated strict server needs this, or every slow
+// dependency hides inside its 5xx error rate. Passing mappers is what lets its
+// handlers return a domain error instead of hand-building a typed problem
+// response per operation; see problem.Mapper.
+func RejectResponse(domainErrors ...problem.Mapper) func(http.ResponseWriter, *http.Request, error) {
+	return handleGeneratedResponseError(domainErrors)
+}
+
+// The status-to-problem lookup a service needs for its own generated Problem
+// values is deliberately not here. It lives in internal/problem, because
+// depguard forbids a feature package from importing this adapter — so a helper
+// exported from here was reachable only by another adapter, and every service's
+// httpapi package hand-copied the table instead. The copy in the reference
+// example drifted exactly once, and answered a 409 with the internal-error type.

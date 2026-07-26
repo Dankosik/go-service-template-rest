@@ -9,35 +9,29 @@ import (
 var errStartupAdmissionPending = errors.New("startup admission is not ready")
 
 type startupAdmissionController struct {
-	ready       atomic.Bool
-	startupSpan *startupSpanController
+	ready atomic.Bool
 }
 
-func newStartupAdmissionController(startupSpan *startupSpanController) *startupAdmissionController {
-	return &startupAdmissionController{
-		startupSpan: startupSpan,
-	}
+func newStartupAdmissionController() *startupAdmissionController {
+	return &startupAdmissionController{}
 }
+
+// The methods below carry no nil-receiver guard. The controller is constructed
+// unconditionally in Run and reaches every caller through a field that is always
+// set, so a nil check here is an unreachable branch on the path a readiness probe
+// takes for the life of the pod — and one that would turn a wiring mistake into a
+// permanent 503 instead of a panic on the first request.
 
 func (c *startupAdmissionController) MarkReady() {
-	if c == nil {
-		return
-	}
-
-	if c.ready.CompareAndSwap(false, true) && c.startupSpan != nil {
-		c.startupSpan.MarkReady()
-	}
+	c.ready.Store(true)
 }
 
 func (c *startupAdmissionController) Ready() bool {
-	if c == nil {
-		return false
-	}
 	return c.ready.Load()
 }
 
 func (c *startupAdmissionController) CheckReady(context.Context) error {
-	if c == nil || !c.Ready() {
+	if !c.Ready() {
 		return errStartupAdmissionPending
 	}
 	return nil
