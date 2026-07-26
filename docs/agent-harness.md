@@ -66,7 +66,8 @@ This part is owned here, not by either vendor, and applies to both:
 
 - Set a goal only for a genuinely long-running, multi-step, or resumable implementation outcome, never during a non-implementation phase.
 - One root control spans the outcome. The task list is its step ledger, not a second control.
-- Carry the accepted stop condition into the goal text, including the invariants that must not change and an explicit bound such as `or stop after 20 turns`.
+- Carry the accepted stop condition and the invariants that must not change into the goal text. The stop condition is the phase-owned one — the outcome closed with its mapped proof, or the honest blocker ([Stop Rule](spec-first-workflow/phases/implementation-validation-closeout.md#stop-rule)) — and the text must let either ending satisfy it, because a condition that recognizes only success cannot end a genuinely blocked run.
+- Never bound a goal by a turn, step, or iteration count. A counter measures spending, not completion: it cuts an honest run off mid-outcome and lets a stuck one run to the same number. What it stands in for is a run that has stopped converging, and the signal for that is evidence, not arithmetic — a turn that changes no file, no ledger entry, and no command result is a stall, and a stall ends the goal by reporting the blocker.
 - The goal text is the directive in both harnesses: setting a goal starts work immediately and no separate prompt follows. A brief that will not fit the harness's goal text means the outcome is too broad for one goal, never a reason to send a second message.
 
 ### The difference that changes how you write it

@@ -18,7 +18,7 @@ Direct work that satisfies these conditions enters the [implementation phase](sp
 
 Use `structured` for the normal non-trivial case. Keep only the `spec.md`, `tasks.md`, design, or test artifacts whose decisions must survive; root self-review is sufficient unless the independent-review trigger below applies.
 
-Use `orchestrated` when coordination itself is a real problem: broad or multi-owner scope, hard-to-reverse decisions, conflicting evidence, explicit multi-agent work, or likely multi-session execution. Orchestrated work may still omit research, design, test-plan, or rollout artifacts when their questions are not present.
+Use `orchestrated` when coordination itself is a real problem: broad or multi-owner scope, hard-to-reverse decisions, conflicting evidence, explicit multi-agent work, dirty-checkout isolation, separate context, or likely multi-session execution. Orchestrated work may still omit research, design, test-plan, or rollout artifacts when their questions are not present.
 
 Re-evaluate the path only when evidence changes risk, ownership, reversibility, or proof. A path is not a quality tier.
 
@@ -113,11 +113,13 @@ repeated prompt and tool description. Reasoning effort and response verbosity
 are harness controls owned by [Agent Harness](agent-harness.md); set them there
 instead of asking a model in prose to think harder or answer at length.
 
-Change one instruction group at a time. Retain examples and style guidance only
-when they encode a product requirement or close a measured gap, then review
-realistic trigger, near-miss, and completion cases. This repository does not own
-a fake agent runner or judge; without an externally owned live evaluation
-system, invocation and model-behavior claims remain explicitly unproven.
+Change one instruction group at a time, and prefer removal: when a behavior
+already has an owner, delete the weaker statement instead of adding a
+clarifying one. Retain examples and style guidance only when they encode a
+product requirement or close a measured gap, then review realistic trigger,
+near-miss, and completion cases. This repository does not own a fake agent
+runner or judge; without an externally owned live evaluation system, invocation
+and model-behavior claims remain explicitly unproven.
 
 Instruction edits prove only an instruction-level mitigation. Claim changed
 model behavior only after an external live evaluation exercises the relevant
