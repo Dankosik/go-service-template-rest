@@ -153,6 +153,8 @@ The role files therefore carry **no behavior**. Everything a Worker must do alre
 
 These worker roles exist only under `.claude/agents/`. They are deliberately not mirrored to `.codex/agents/` or `.qwen/agents/`: a Codex subagent is `sandbox_mode = "read-only"` by construction and can never be a write lane, and the Codex Worker is a native App control with no definition file. Mirroring them would advertise a lane that harness cannot run.
 
+**Reopen when Claude Code gains an `effort` parameter on the `Agent` call.** These three definitions exist for one reason: effort has no dispatch channel. Give it one — [several open requests ask for exactly that](https://github.com/anthropics/claude-code/issues/39220) — and the files carry nothing a task-class table in this document could not state directly, and should be deleted rather than kept because they exist. Check this whenever the harness version moves: a definition that outlives its only justification is the kind of thing nobody removes, because removing it is nobody's task.
+
 ### Read-only lanes
 
 Read-only lanes follow [Subagents And Handoff](spec-first-workflow/shared/subagents-and-handoff.md): one distinct decision-changing question per lane, concurrency bounded by current capacity and independence, and read-only boundaries stated in each brief.
