@@ -46,6 +46,7 @@ provide a real module path and an owner in `@user` or `@org/team` form.
 | Command | Meaning |
 | --- | --- |
 | `make project-structure-check` | Placement, naming, command, integration-test, migration-pair, and no-empty-placeholder contract |
+| `make claude-skills-check` | Every `.agents/skills/` entry is exposed to Claude Code by a matching `.claude/skills/` symlink, and no link outlives its skill |
 | `make check` | Project structure, `fmt-check`, `lint`, and ordinary unit tests |
 | `make ci-local` | Host-toolchain CI aggregate: module, initialization, project structure, format, lint, deep lint, race, coverage report, generated contracts, Go security, and secret scan |
 | `make check-full` | `ci-local` plus required Docker integration, runtime image, migration, and image-security proof |

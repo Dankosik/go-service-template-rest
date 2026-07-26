@@ -43,6 +43,9 @@ jobs:
       - name: Verify template-owned paths carry no repository-specific content
         run: make template-owned-purity-check
 
+      - name: Verify Claude skill links match the canonical skill set
+        run: make claude-skills-check
+
       - name: Verify formatting drift
         run: make fmt-check
 

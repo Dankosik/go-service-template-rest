@@ -64,6 +64,59 @@ members of a positively independent planned wave. A Worker receives an outcome-f
 with editable boundaries, current facts, success criteria, focused proof, and
 a real stop condition.
 
+Select the Worker's tier from the task class, because the tier is where the
+lane's reasoning effort is fixed: mechanical work whose route and proof are
+already decided, ordinary implementation, or a protected domain. The harness
+document owns the tier names and how a harness expresses them.
+
+#### Route Discovery Stays Root-Local
+
+Delegate execution, never discovery. A task is delegable when the route is
+already known and only the doing remains. A task whose next step depends on
+what the previous step turns up is not delegable at any tier: defect diagnosis,
+a failing check whose cause is unidentified, a performance question without a
+measurement, and any work whose plan is written by its own intermediate
+findings. Keep that root-local until the route is known, then delegate what
+remains.
+
+The reason is structural, not stylistic. A Worker starts from a fresh context:
+it receives its brief, the repository instructions, and the tree, and nothing
+else. It cannot see the root's reasoning, the command output the root already
+read, or the hypothesis the root already discarded. Every handoff of a
+discovery loop therefore pays to rediscover what the root already knew, and
+returns a summary that has dropped exactly the detail the next step needed —
+the error text, the stack, the surprising state.
+
+This is also why a brief is not a task title. Whatever the root has already
+established has to travel inside the brief, because nothing else crosses:
+the reproducer, the located owner, the cause when it is known, the expected
+behavior, and the exact proof command. A brief that says what to achieve
+without what is already known is a request to redo the root's work.
+
+Splitting one discovery loop across several Workers compounds the same loss at
+every boundary and produces changes nobody can attribute. When a task turns out
+to be discovery rather than execution after dispatch, that is a real blocker:
+the Worker returns it, and the root resolves the route before delegating again.
+
+#### Correction Loop
+
+A returned candidate that misses an accepted criterion goes back to **the same
+Worker**, with its context intact, through the harness's own correction channel.
+Spawning a fresh Worker for the same task instead is a defect: it throws away
+the reasoning that made the second attempt cheaper than the first, and it
+re-opens questions the first attempt already closed.
+
+A correction brief names the finding, the criterion it violates, and the proof
+that must change — not a restatement of the whole task. Route it through the
+[Diagnostic Gate](#diagnostic-gate) so a correction that cannot name a
+candidate-caused regression, a violated accepted criterion, or missing proof is
+recorded as an observation rather than re-entering the write lane.
+
+Replace a Worker only for an execution stall that produces no new turn, or for
+an invalidated base, and then continue the same exact brief from the frozen
+candidate. Worker replacement resets context; it is a recovery action, never a
+correction technique.
+
 #### Scope Lock
 
 A candidate is scope-valid only when every changed path is authorized by an

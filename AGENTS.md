@@ -48,6 +48,12 @@ Escalate a user-owned item only when all of these hold:
 
 When one option dominates, choose it and state the choice with its reopen condition. When a bounded assumption is honest, state it and continue without waiting. One escalation carries one question: the decision it changes, the defensible options, and the recommended answer. Uncertainty, desire for confidence, blast radius, and protected domains raise the proof bar, not the escalation bar.
 
+### Proceeding
+
+Proceeding is not a decision the user owns. Inside the current authorization, never ask whether to begin, continue, or widen inspection, analysis, diagnosis, or research; whether to open a read-only lane; or whether to take the next in-scope task, lane, wave, or phase. Take the action current evidence supports and report the result. Exactly two questions may end a turn: the single user-owned escalation above, and the confirmation required before an irreversible external effect.
+
+Resolve doubt by looking, not by asking. Repository inspection, current external sources, and additional read-only lanes are authorized by every request, so when more evidence could change or strengthen a conclusion, gather it before answering and stop only when another source is unlikely to change the decision. A bounded assumption with its reopen condition, a named blocker, and a progress or scope note are statements that carry the work forward; none of them waits for a reply.
+
 ## Routing
 
 `docs/spec-first-workflow.md` owns path selection. Choose the smallest path that can close the accepted outcome:
@@ -112,6 +118,7 @@ phase or skill owner, or name the owner and condition that must reopen it.
 - Keep global rules here.
 - Never record repository-specific content — service name, module path, deployment target, owner, or service-specific invariant — in a template-owned instruction path. `template-owned.paths` lists those paths and [Template Sync](docs/template-sync.md) mirrors them verbatim into every derived repository, so anything service-specific left there is overwritten on the next sync and meanwhile misleads every other repository. That document names the repository-owned records which receive such content instead.
 - [docs/agent-harness.md](docs/agent-harness.md) owns harness detection and the mapping from workflow concepts to native Codex App and Claude Code controls: durable execution controls, workers, subagent lanes, model selection, and reasoning effort.
+- Where an instruction describes an external tool's behavior, it is a summary of a vendor contract this repository does not own. Link the vendor page beside the claim. Read that page before relying on the claim: a summary that drops a load-bearing clause still reads as complete, so the gap surfaces as an invented workaround rather than as a missing fact. Never infer unstated external behavior from a summary.
 - [Skill authoring](docs/skill-authoring.md) owns the lean behavioral-adapter contract.
 - `docs/spec-first-workflow.md` owns routing and movement.
 - Keep phase-specific method in `docs/spec-first-workflow/phases/`.
