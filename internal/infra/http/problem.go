@@ -1,6 +1,7 @@
 package httpx
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 
@@ -18,8 +19,45 @@ type problemResponse struct {
 	detail string
 }
 
+// problemRecord carries the problem code this request was answered with back out
+// to the access log.
+//
+// It is a pointer in the context rather than a value written onto the request,
+// because the request struct the log sees is not the one a handler answers on:
+// chi replaces it when it installs its route context, so an in-place mutation
+// deeper in the chain is invisible from outside the generated router. One shared
+// holder installed at the top is what survives that.
+//
+// The value is only read after the handler has returned, on the same goroutine
+// that served the request, so it needs no synchronization.
+type problemRecord struct {
+	code problem.Code
+}
+
+type problemRecordContextKey struct{}
+
+func contextWithProblemRecord(ctx context.Context) (context.Context, *problemRecord) {
+	record := &problemRecord{}
+	return context.WithValue(ctx, problemRecordContextKey{}, record), record
+}
+
+// recordProblemCode publishes the code answered for this request. The first one
+// wins: an outer middleware that replaces an inner response — Recover turning a
+// panic into a 500 — is reporting the same failure, and the innermost code is the
+// one that says what actually went wrong.
+func recordProblemCode(ctx context.Context, code problem.Code) {
+	record, ok := ctx.Value(problemRecordContextKey{}).(*problemRecord)
+	if !ok || record.code != "" {
+		return
+	}
+	record.code = code
+}
+
 func writeProblem(w http.ResponseWriter, r *http.Request, response problemResponse) {
 	definition := problemDefinitionFor(response.code)
+	if r != nil {
+		recordProblemCode(r.Context(), definition.Code)
+	}
 	p := openapi.Problem{
 		Code:      string(definition.Code),
 		Detail:    optionalProblemString(response.detail),

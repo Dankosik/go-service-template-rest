@@ -420,44 +420,56 @@ func TestServeHTTPRuntimeReturnsServeFailureBeforeAdmissionReady(t *testing.T) {
 func TestServeHTTPRuntimeReturnsPendingServeFailureBeforeMarkingAdmissionReady(t *testing.T) {
 	t.Parallel()
 
-	logger := slog.New(slog.DiscardHandler)
-	svc := health.New()
-	srv := newFakeRuntimeServer()
-	admission := newTestStartupAdmissionController()
-	serveReturned := make(chan struct{})
-	serveErr := errors.New("serve failed while admission succeeded")
+	// Driven under synctest because "already pending" means two different things
+	// on either side of one goroutine hop. The fake server signals when Serve
+	// returns; the code under test only sees the failure once the serving
+	// goroutine has delivered it to its channel. Waiting on the signal alone left
+	// that hop unsynchronized, so admission occasionally won the race and the
+	// assertion below failed for a reason the production code was not guilty of.
+	synctest.Test(t, func(t *testing.T) {
+		logger := slog.New(slog.DiscardHandler)
+		svc := health.New()
+		srv := newFakeRuntimeServer()
+		admission := newTestStartupAdmissionController()
+		serveReturned := make(chan struct{})
+		serveErr := errors.New("serve failed while admission succeeded")
 
-	srv.onServe = func(net.Listener) error {
-		defer close(serveReturned)
-		return serveErr
-	}
+		srv.onServe = func(net.Listener) error {
+			defer close(serveReturned)
+			return serveErr
+		}
 
-	err := serveHTTPRuntime(context.Background(), context.Background(), serveHTTPRuntimeArgs{
-		cfg:       config.Config{HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second}},
-		log:       logger,
-		healthSvc: svc,
-		srv:       srv,
-		readinessCheck: func(ctx context.Context) error {
-			select {
-			case <-serveReturned:
+		err := serveHTTPRuntime(context.Background(), context.Background(), serveHTTPRuntimeArgs{
+			cfg:       config.Config{HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second}},
+			log:       logger,
+			healthSvc: svc,
+			srv:       srv,
+			readinessCheck: func(ctx context.Context) error {
+				select {
+				case <-serveReturned:
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+				// Every other goroutine is durably blocked or finished by the time
+				// this returns, which is what makes the serve result actually
+				// pending rather than merely imminent.
+				synctest.Wait()
 				return nil
-			case <-ctx.Done():
-				return ctx.Err()
-			}
-		},
-		admission: admission,
-		shutdown:  testShutdownBudget(),
-	})
+			},
+			admission: admission,
+			shutdown:  testShutdownBudget(),
+		})
 
-	if err == nil {
-		t.Fatal("serveHTTPRuntime() error = nil, want pending serve failure")
-	}
-	if !errors.Is(err, serveErr) {
-		t.Fatalf("serveHTTPRuntime() error = %v, want wrapped %v", err, serveErr)
-	}
-	if admission.Ready() {
-		t.Fatal("startup admission marked ready while serve failure was already pending")
-	}
+		if err == nil {
+			t.Fatal("serveHTTPRuntime() error = nil, want pending serve failure")
+		}
+		if !errors.Is(err, serveErr) {
+			t.Fatalf("serveHTTPRuntime() error = %v, want wrapped %v", err, serveErr)
+		}
+		if admission.Ready() {
+			t.Fatal("startup admission marked ready while serve failure was already pending")
+		}
+	})
 }
 
 // TestServeHTTPRuntimeStopsDiagnosticsAfterTheDrain pins the shutdown ordering that

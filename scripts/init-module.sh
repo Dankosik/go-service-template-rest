@@ -123,7 +123,7 @@ remove_postgres_integration_tests() {
 	previous_nullglob="$(shopt -p nullglob || true)"
 	shopt -s nullglob
 	local file
-	for file in test/postgres_*_test.go; do
+	for file in test/postgres_*_test.go examples/*/postgres_*_test.go; do
 		rm -f -- "${file}"
 	done
 	eval "${previous_nullglob}"

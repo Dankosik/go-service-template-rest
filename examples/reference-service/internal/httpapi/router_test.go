@@ -27,7 +27,7 @@ func TestRouterGetArticle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("memory.New() error = %v", err)
 	}
-	service, err := article.NewService(repository)
+	service, err := article.NewService(repository, repository)
 	if err != nil {
 		t.Fatalf("article.NewService() error = %v", err)
 	}
@@ -55,7 +55,7 @@ func TestRouterMapsMissingArticleToProblem(t *testing.T) {
 	if err != nil {
 		t.Fatalf("memory.New() error = %v", err)
 	}
-	service, err := article.NewService(repository)
+	service, err := article.NewService(repository, repository)
 	if err != nil {
 		t.Fatalf("article.NewService() error = %v", err)
 	}
@@ -80,7 +80,7 @@ func TestRouterRejectsInvalidSlugBeforeUseCase(t *testing.T) {
 	t.Parallel()
 
 	repository := &countingRepository{}
-	service, err := article.NewService(repository)
+	service, err := article.NewService(repository, repository)
 	if err != nil {
 		t.Fatalf("article.NewService() error = %v", err)
 	}
@@ -111,6 +111,15 @@ func (r *countingRepository) Create(context.Context, article.Article) error {
 	return nil
 }
 
+func (r *countingRepository) AppendEvent(context.Context, article.Event) error {
+	r.calls++
+	return nil
+}
+
+func (r *countingRepository) Do(_ context.Context, fn func(article.Repository) error) error {
+	return fn(r)
+}
+
 // newTestRouter builds the router over an empty in-memory repository.
 func newTestRouter(t *testing.T, seed ...article.Article) http.Handler {
 	t.Helper()
@@ -119,7 +128,7 @@ func newTestRouter(t *testing.T, seed ...article.Article) http.Handler {
 	if err != nil {
 		t.Fatalf("memory.New() error = %v", err)
 	}
-	service, err := article.NewService(repository)
+	service, err := article.NewService(repository, repository)
 	if err != nil {
 		t.Fatalf("article.NewService() error = %v", err)
 	}
@@ -318,7 +327,7 @@ func TestRouterRejectsMalformedCreateBodyBeforeUseCase(t *testing.T) {
 			t.Parallel()
 
 			repository := &countingRepository{}
-			service, err := article.NewService(repository)
+			service, err := article.NewService(repository, repository)
 			if err != nil {
 				t.Fatalf("article.NewService() error = %v", err)
 			}
@@ -410,7 +419,7 @@ func mustArticleService(tb testing.TB) *article.Service {
 	if err != nil {
 		tb.Fatalf("memory.New() error = %v", err)
 	}
-	service, err := article.NewService(repository)
+	service, err := article.NewService(repository, repository)
 	if err != nil {
 		tb.Fatalf("article.NewService() error = %v", err)
 	}

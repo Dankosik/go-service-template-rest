@@ -367,7 +367,7 @@ if (
 fi
 (
 	cd "${minimal_checkout}"
-	git apply "${ROOT_DIR}/scripts/ci/fixtures/first-feature.patch"
+	git apply --recount "${ROOT_DIR}/scripts/ci/fixtures/first-feature.patch"
 	make openapi-generate
 	# The health-only baseline needs no request binding helpers. The first
 	# operation with a path or query parameter makes the generated code import

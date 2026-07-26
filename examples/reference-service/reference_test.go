@@ -1,4 +1,4 @@
-package main
+package referenceservice
 
 import (
 	"context"
@@ -17,10 +17,44 @@ import (
 
 const testWriteToken = "reference-write-token"
 
+var seedArticles = []article.Article{{
+	Slug:      "clear-owners",
+	Title:     "Keep responsibilities with their owner",
+	Summary:   "A transport maps HTTP, a use case owns behavior, and an adapter owns storage details.",
+	Published: true,
+}}
+
 // These tests live at the composition root because that is where the transport
 // adapter is wired. The feature package must not import it, so the assertions
 // that the example actually inherits the shared chain and the shared rejection
 // mapping belong here.
+
+// TestReferenceServiceServesOverHTTP exercises the composition end to end through
+// a real server rather than a recorder, which is what the deleted main used to
+// half-prove with a hand-rolled listener and a lifecycle nobody should copy.
+func TestReferenceServiceServesOverHTTP(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(mustNewHandler(t))
+	t.Cleanup(server.Close)
+
+	request, err := http.NewRequestWithContext(t.Context(), http.MethodGet, server.URL+"/api/v1/articles/clear-owners", nil)
+	if err != nil {
+		t.Fatalf("build request error = %v", err)
+	}
+	response, err := server.Client().Do(request)
+	if err != nil {
+		t.Fatalf("GET article error = %v", err)
+	}
+	t.Cleanup(func() { _ = response.Body.Close() })
+
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want %d", response.StatusCode, http.StatusOK)
+	}
+	if got := response.Header.Get("X-Request-ID"); got == "" {
+		t.Fatal("X-Request-ID is empty, want correlation applied by the shared chain")
+	}
+}
 
 // TestReferenceRouterInheritsHardenedChain is the point of routing this example
 // through httpx.Harden. Before it did, a reader copying the example got a router
@@ -29,7 +63,7 @@ const testWriteToken = "reference-write-token"
 func TestReferenceRouterInheritsHardenedChain(t *testing.T) {
 	t.Parallel()
 
-	handler := mustBuildReferenceRouter(t, maxBodyBytes, memoryRepository(t))
+	handler := mustNewHandler(t)
 
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/articles/clear-owners", nil))
@@ -71,7 +105,7 @@ func TestReferenceRouterRejectsOversizedBody(t *testing.T) {
 func TestReferenceRouterMapsMissingCredentialTo401(t *testing.T) {
 	t.Parallel()
 
-	handler := mustBuildReferenceRouter(t, maxBodyBytes, memoryRepository(t))
+	handler := mustNewHandler(t)
 
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/articles", strings.NewReader(`{"slug":"s","title":"t","summary":"x"}`))
 	request.Header.Set("Content-Type", "application/json")
@@ -105,11 +139,57 @@ func TestReferenceRouterRecoversPanicFromFeatureCode(t *testing.T) {
 	}
 }
 
-// mustBuildReferenceRouter composes exactly what run() composes.
-func mustBuildReferenceRouter(tb testing.TB, bodyLimit int64, repository article.Repository) http.Handler {
+// TestReferenceRouterLimitsOneCallerWithoutAffectingAnother is the property the
+// rate limiter seam exists for: global shedding cannot tell two callers apart, so
+// one client's burst costs everyone else their requests.
+func TestReferenceRouterLimitsOneCallerWithoutAffectingAnother(t *testing.T) {
+	t.Parallel()
+
+	handler := mustNewHandler(t)
+
+	limited := false
+	for range rateLimitBurst * 2 {
+		if readArticleStatus(handler, "Bearer "+testWriteToken) == http.StatusTooManyRequests {
+			limited = true
+			break
+		}
+	}
+	if !limited {
+		t.Fatalf("a caller never hit the %d/s limit after %d requests", rateLimitPerSecond, rateLimitBurst*2)
+	}
+
+	if got := readArticleStatus(handler, "Bearer some-other-caller"); got == http.StatusTooManyRequests {
+		t.Fatal("a second caller was limited by the first caller's burst")
+	}
+}
+
+func readArticleStatus(handler http.Handler, authorization string) int {
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/articles/clear-owners", nil)
+	request.Header.Set("Authorization", authorization)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	return response.Code
+}
+
+func mustNewHandler(tb testing.TB) http.Handler {
 	tb.Helper()
 
-	service, err := article.NewService(repository)
+	handler, err := NewHandler(slog.New(slog.DiscardHandler), Options{
+		WriteToken: testWriteToken,
+		Seed:       seedArticles,
+	})
+	if err != nil {
+		tb.Fatalf("NewHandler() error = %v", err)
+	}
+	return handler
+}
+
+// mustBuildReferenceRouter composes what NewHandler composes, with the transport
+// bounds a single test needs to vary.
+func mustBuildReferenceRouter(tb testing.TB, bodyLimit int64, repository articleStore) http.Handler {
+	tb.Helper()
+
+	service, err := article.NewService(repository, repository)
 	if err != nil {
 		tb.Fatalf("article.NewService() error = %v", err)
 	}
@@ -126,7 +206,7 @@ func mustBuildReferenceRouter(tb testing.TB, bodyLimit int64, repository article
 
 	handler, err := httpx.Harden(log, telemetry.New(), httpx.RouterConfig{
 		MaxBodyBytes:   bodyLimit,
-		RequestTimeout: requestTimeout,
+		RequestTimeout: RequestTimeout,
 		MaxInFlight:    maxInFlight,
 		OTelServerName: "reference-service-test",
 	}, apiHandler)
@@ -136,15 +216,17 @@ func mustBuildReferenceRouter(tb testing.TB, bodyLimit int64, repository article
 	return handler
 }
 
-func memoryRepository(tb testing.TB) article.Repository {
+// articleStore is both halves of what the use case needs, which is what a real
+// adapter supplies from one type.
+type articleStore interface {
+	article.Repository
+	article.Atomically
+}
+
+func memoryRepository(tb testing.TB) *memory.Repository {
 	tb.Helper()
 
-	repository, err := memory.New([]article.Article{{
-		Slug:      "clear-owners",
-		Title:     "Keep responsibilities with their owner",
-		Summary:   "A transport maps HTTP, a use case owns behavior, and an adapter owns storage details.",
-		Published: true,
-	}})
+	repository, err := memory.New(seedArticles)
 	if err != nil {
 		tb.Fatalf("memory.New() error = %v", err)
 	}
@@ -159,4 +241,12 @@ func (panickingRepository) FindBySlug(context.Context, string) (article.Article,
 
 func (panickingRepository) Create(context.Context, article.Article) error {
 	panic("feature code bug")
+}
+
+func (panickingRepository) AppendEvent(context.Context, article.Event) error {
+	panic("feature code bug")
+}
+
+func (p panickingRepository) Do(_ context.Context, fn func(article.Repository) error) error {
+	return fn(p)
 }

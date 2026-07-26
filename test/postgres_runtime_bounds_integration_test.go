@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/infra/postgres"
+	"github.com/example/go-service-template-rest/internal/infra/postgres/pgtest"
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -159,7 +160,7 @@ func mustOpenBoundedPool(t *testing.T, ctx context.Context, statementTimeout tim
 	t.Helper()
 
 	pool, err := postgres.New(ctx, postgres.Options{
-		DSN:                integrationPostgresDSN(t),
+		DSN:                pgtest.DSN(t),
 		ConnectTimeout:     3 * time.Second,
 		HealthcheckTimeout: 3 * time.Second,
 		MaxOpenConns:       4,
@@ -286,7 +287,7 @@ func mustOpenSaturablePool(t *testing.T, ctx context.Context, acquireTimeout tim
 	t.Helper()
 
 	pool, err := postgres.New(ctx, postgres.Options{
-		DSN:                integrationPostgresDSN(t),
+		DSN:                pgtest.DSN(t),
 		ConnectTimeout:     3 * time.Second,
 		HealthcheckTimeout: 3 * time.Second,
 		MaxOpenConns:       1,

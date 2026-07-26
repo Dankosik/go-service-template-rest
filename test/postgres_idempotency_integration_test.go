@@ -18,7 +18,7 @@ import (
 	"github.com/example/go-service-template-rest/internal/idempotency"
 	httpx "github.com/example/go-service-template-rest/internal/infra/http"
 	"github.com/example/go-service-template-rest/internal/infra/postgres"
-	"github.com/example/go-service-template-rest/internal/infra/postgresmigrate"
+	"github.com/example/go-service-template-rest/internal/infra/postgres/pgtest"
 )
 
 const (
@@ -35,19 +35,9 @@ const (
 func newIdempotencyPool(t *testing.T) *postgres.Pool {
 	t.Helper()
 
-	dsn := integrationPostgresDSN(t)
+	dsn := pgtest.Migrated(t, os.DirFS(".."), "migrations")
 	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
 	defer cancel()
-
-	if _, err := postgresmigrate.MigrateUp(ctx, postgresmigrate.MigrationOptions{
-		DSN:              dsn,
-		SourceFS:         os.DirFS(".."),
-		SourcePath:       "migrations",
-		StatementTimeout: time.Minute,
-		LockTimeout:      15 * time.Second,
-	}); err != nil {
-		t.Fatalf("apply repository migrations: %v", err)
-	}
 
 	pool, err := postgres.New(ctx, postgres.Options{
 		DSN:                dsn,

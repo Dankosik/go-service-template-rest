@@ -59,6 +59,17 @@ type RouterConfig struct {
 	// typed response. See problem.Mapper for why the seam exists and why the type
 	// lives in a leaf package rather than here.
 	DomainErrors []problem.Mapper
+	// RateLimit rejects a caller that is over its budget with 429. Nil leaves the
+	// middleware out of the chain, which is the shipped default; see RateLimiter
+	// for why the limit and the identity it charges are the service's decision,
+	// and NewKeyedRateLimiter for the one implementation this repository ships.
+	RateLimit RateLimiter
+	// RateLimitKey reports which bucket a request is charged against, and is
+	// required when RateLimit is set. There is no default: the identity worth
+	// limiting is the whole decision, and the two candidates a template could
+	// guess — the client address and a forwarded-for header — are respectively
+	// useless and spoofable without knowing the edge. See HeaderRateLimitKey.
+	RateLimitKey RateLimitKeyFunc
 }
 
 // defaultAuthenticateChallenge is the HTTP authentication scheme advertised when
@@ -129,6 +140,16 @@ func Harden(log *slog.Logger, metrics *telemetry.Metrics, cfg RouterConfig, apiS
 	if cfg.Idempotency != nil && cfg.IdempotencyOutcomeTimeout <= 0 {
 		return nil, fmt.Errorf("http router: idempotency outcome timeout must be > 0 when an idempotency store is configured")
 	}
+	// Same reason: a limiter with no key silently limits nothing, which looks
+	// exactly like a limiter that is working.
+	if cfg.RateLimit != nil && cfg.RateLimitKey == nil {
+		return nil, fmt.Errorf("http router: rate limit key is required when a rate limiter is configured")
+	}
+
+	// Built once here rather than per request. The meter provider is already
+	// installed by this point in startup, so these instruments reach both the
+	// Prometheus registry and the OTLP reader.
+	serverLoad := metrics.ServerLoad()
 
 	otelMiddleware := otelhttp.NewMiddleware(
 		"http.server",
@@ -149,7 +170,12 @@ func Harden(log *slog.Logger, metrics *telemetry.Metrics, cfg RouterConfig, apiS
 		func(next http.Handler) http.Handler { return RequestTimeout(cfg.RequestTimeout, next) },
 		// Shedding sits inside the budget so a shed request is still traced and
 		// access-logged, and outside Recover because it never runs a handler.
-		func(next http.Handler) http.Handler { return MaxInFlight(cfg.MaxInFlight, next) },
+		func(next http.Handler) http.Handler { return MaxInFlight(cfg.MaxInFlight, serverLoad, next) },
+		// Rate limiting sits inside shedding, so a service past capacity as a whole
+		// answers 503 before it starts attributing the overload to one caller, and
+		// well outside the generated validator, so an over-budget caller does not
+		// get their body schema-validated before being told no.
+		func(next http.Handler) http.Handler { return RateLimit(cfg.RateLimit, cfg.RateLimitKey, next) },
 		func(next http.Handler) http.Handler { return Recover(log, next) },
 		// Innermost, so it wraps the handler and nothing else: it must see the
 		// response the operation actually produced, and a panic that Recover

@@ -19,7 +19,10 @@
 // identifier for the body comes from internal/reqctx.
 package problem
 
-import "net/http"
+import (
+	"net/http"
+	"slices"
+)
 
 // Code is the stable machine-readable error code a client matches on.
 type Code string
@@ -162,9 +165,13 @@ func ForCode(code Code) (Definition, bool) {
 	return Definition{}, false
 }
 
-// All returns every published definition. It exists for the tests that assert
-// the catalog is internally consistent, and for a service that wants to generate
-// contract documentation from it rather than restate it.
+// All returns every published definition, so a caller can render the catalog
+// rather than restate it — a contract document, a client's error table, or the
+// tests here that assert the catalog is internally consistent.
+//
+// The copy is not defensive habit. catalog is package state read by every
+// problem response the service writes, so handing out the backing array would let
+// one caller's sort or append change what every later response reports.
 func All() []Definition {
-	return append([]Definition(nil), catalog...)
+	return slices.Clone(catalog)
 }

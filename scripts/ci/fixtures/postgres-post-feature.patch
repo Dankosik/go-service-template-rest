@@ -79,6 +79,7 @@ index fd91ca9..293c87a 100644
 +	"github.com/acme/postgres-service/internal/article"
  	"github.com/acme/postgres-service/internal/background"
  	"github.com/acme/postgres-service/internal/config"
+ 	"github.com/acme/postgres-service/internal/health"
  	httpx "github.com/acme/postgres-service/internal/infra/http"
 +	"github.com/acme/postgres-service/internal/infra/postgres"
  	"github.com/acme/postgres-service/internal/infra/telemetry"
@@ -93,7 +94,6 @@ index fd91ca9..293c87a 100644
 +		return fmt.Errorf("build article service: %w", err)
 +	}
 +
- 	healthSvc := dependencies.health
  	startupAdmission := newStartupAdmissionController()
  
 @@ -150,6 +157,7 @@ func Run(args []string) (runErr error) {
@@ -289,6 +289,7 @@ index 0000000..a44756c
 +	"github.com/acme/postgres-service/internal/health"
 +	httpx "github.com/acme/postgres-service/internal/infra/http"
 +	"github.com/acme/postgres-service/internal/infra/postgres"
++	"github.com/acme/postgres-service/internal/infra/postgres/pgtest"
 +	"github.com/acme/postgres-service/internal/infra/postgresmigrate"
 +	"github.com/acme/postgres-service/internal/infra/telemetry"
 +	"github.com/jackc/pgx/v5/pgxpool"
@@ -298,7 +299,7 @@ index 0000000..a44756c
 +	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 +	defer cancel()
 +
-+	dsn := integrationPostgresDSN(t)
++	dsn := pgtest.DSN(t)
 +	changed, err := postgresmigrate.MigrateUp(ctx, postgresmigrate.MigrationOptions{
 +		DSN:              dsn,
 +		SourceFS:         os.DirFS(".."),

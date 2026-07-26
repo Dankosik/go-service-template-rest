@@ -95,6 +95,127 @@ func TestOnePanicDoesNotStopSiblingWork(t *testing.T) {
 	}
 }
 
+// TestFailedTaskLeavesSiblingsRunning is the isolation property, asserted before
+// any Shutdown so it cannot be satisfied by the shutdown cancel.
+//
+// The supervisor used to hand tasks an errgroup.WithContext context, which is
+// canceled the first time any task returns an error. One failing worker therefore
+// stopped every other supervised task in the process, including the readiness
+// refresher — which returns nil on cancellation and so left no trace beyond an
+// INFO line, while readiness kept serving the verdict it happened to hold.
+func TestFailedTaskLeavesSiblingsRunning(t *testing.T) {
+	t.Parallel()
+
+	failed := make(chan struct{})
+	sup := New(context.Background(), discardLogger())
+
+	sibling := make(chan struct{})
+	sup.Go(Task{Name: "sibling", Run: func(ctx context.Context) error {
+		<-ctx.Done()
+		close(sibling)
+		return nil
+	}})
+	sup.Go(Task{Name: "failing", Run: func(context.Context) error {
+		defer close(failed)
+		return errors.New("consumer lost its lease")
+	}})
+
+	<-failed
+	select {
+	case <-sibling:
+		t.Fatal("sibling task was canceled by an unrelated task failure")
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	if err := sup.Shutdown(context.Background()); err == nil {
+		t.Fatal("Shutdown() error = nil, want the failing task's error")
+	}
+	<-sibling
+}
+
+// TestCheckReportsAFailedTask is what makes a dead worker reach readiness instead
+// of only the shutdown log.
+func TestCheckReportsAFailedTask(t *testing.T) {
+	t.Parallel()
+
+	taskErr := errors.New("outbox publish failed")
+	sup := New(context.Background(), discardLogger())
+
+	if err := sup.Check(context.Background()); err != nil {
+		t.Fatalf("Check() before any failure = %v, want nil", err)
+	}
+
+	sup.Go(Task{Name: "outbox", Run: func(context.Context) error { return taskErr }})
+
+	err := waitForCheckFailure(t, sup)
+	if !errors.Is(err, ErrTaskFailed) || !errors.Is(err, taskErr) {
+		t.Fatalf("Check() = %v, want ErrTaskFailed wrapping %v", err, taskErr)
+	}
+	if !strings.Contains(err.Error(), "outbox") {
+		t.Fatalf("Check() = %q, want it to name the task", err.Error())
+	}
+	if sup.Name() != "background" {
+		t.Fatalf("Name() = %q, want \"background\"", sup.Name())
+	}
+}
+
+// TestCheckIgnoresTasksStoppedByShutdown keeps an ordinary drain from being
+// reported as a readiness failure, which would fail the probe of every instance
+// that is shutting down cleanly.
+func TestCheckIgnoresTasksStoppedByShutdown(t *testing.T) {
+	t.Parallel()
+
+	sup := New(context.Background(), discardLogger())
+	sup.Go(Task{Name: "worker", Run: func(ctx context.Context) error {
+		<-ctx.Done()
+		return ctx.Err()
+	}})
+
+	if err := sup.Shutdown(context.Background()); err != nil {
+		t.Fatalf("Shutdown() error = %v, want nil", err)
+	}
+	if err := sup.Check(context.Background()); err != nil {
+		t.Fatalf("Check() after a clean shutdown = %v, want nil", err)
+	}
+}
+
+// TestCheckIgnoresTasksThatFinishedTheirWork keeps a one-shot task from failing
+// readiness for having completed.
+func TestCheckIgnoresTasksThatFinishedTheirWork(t *testing.T) {
+	t.Parallel()
+
+	sup := New(context.Background(), discardLogger())
+	sup.Go(Task{Name: "one_shot", Run: func(context.Context) error { return nil }})
+
+	// Shutdown joins the task, so the check below cannot race its return.
+	if err := sup.Shutdown(context.Background()); err != nil {
+		t.Fatalf("Shutdown() error = %v, want nil", err)
+	}
+	if err := sup.Check(context.Background()); err != nil {
+		t.Fatalf("Check() after a task finished = %v, want nil", err)
+	}
+}
+
+// waitForCheckFailure polls until the supervisor reports a failed task. The
+// record is published after Run returns, so a test cannot synchronize on the
+// task's own signal.
+func waitForCheckFailure(tb testing.TB, sup *Supervisor) error {
+	tb.Helper()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if err := sup.Check(context.Background()); err != nil {
+			return err
+		}
+		time.Sleep(time.Millisecond)
+	}
+	// Fatal ends the test, so what follows never runs — but the result still has
+	// to be non-nil, because the caller inspects it and nothing in the type
+	// system says Fatal does not return.
+	tb.Fatal("Check() never reported the failed task")
+	return errors.New("Check() never reported the failed task")
+}
+
 func TestTaskErrorIsReported(t *testing.T) {
 	t.Parallel()
 

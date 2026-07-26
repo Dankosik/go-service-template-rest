@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/example/go-service-template-rest/internal/infra/telemetry"
+
 	"github.com/example/go-service-template-rest/internal/problem"
 )
 
@@ -22,7 +24,7 @@ func TestMaxInFlightShedsPastLimitWithoutQueueing(t *testing.T) {
 
 	release := make(chan struct{})
 	entered := make(chan struct{}, 1)
-	handler := MaxInFlight(1, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	handler := MaxInFlight(1, telemetry.ServerLoad{}, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		entered <- struct{}{}
 		<-release
 		w.WriteHeader(http.StatusNoContent)
@@ -67,7 +69,7 @@ func TestMaxInFlightShedsPastLimitWithoutQueueing(t *testing.T) {
 func TestMaxInFlightReleasesCapacity(t *testing.T) {
 	t.Parallel()
 
-	handler := MaxInFlight(1, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	handler := MaxInFlight(1, telemetry.ServerLoad{}, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
@@ -85,7 +87,7 @@ func TestMaxInFlightReleasesCapacity(t *testing.T) {
 func TestMaxInFlightReleasesCapacityAfterPanic(t *testing.T) {
 	t.Parallel()
 
-	handler := MaxInFlight(1, Recover(slog.New(slog.DiscardHandler), http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+	handler := MaxInFlight(1, telemetry.ServerLoad{}, Recover(slog.New(slog.DiscardHandler), http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		panic("boom")
 	})))
 
@@ -107,7 +109,7 @@ func TestMaxInFlightExemptsHealthProbes(t *testing.T) {
 	entered := make(chan struct{}, 1)
 
 	var probes atomic.Int64
-	handler := MaxInFlight(1, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := MaxInFlight(1, telemetry.ServerLoad{}, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if isHealthProbeRequest(r) {
 			probes.Add(1)
 			w.WriteHeader(http.StatusOK)
@@ -143,7 +145,7 @@ func TestMaxInFlightOnlyExemptsProbeReads(t *testing.T) {
 	release := make(chan struct{})
 	defer close(release)
 	entered := make(chan struct{}, 1)
-	handler := MaxInFlight(1, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+	handler := MaxInFlight(1, telemetry.ServerLoad{}, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 		entered <- struct{}{}
 		<-release
 	}))
@@ -168,7 +170,7 @@ func TestMaxInFlightDisabledWhenNotPositive(t *testing.T) {
 		inner := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusTeapot)
 		})
-		handler := MaxInFlight(limit, inner)
+		handler := MaxInFlight(limit, telemetry.ServerLoad{}, inner)
 
 		resp := doRequest(handler, http.MethodGet, "/work")
 		if resp.Code != http.StatusTeapot {
@@ -198,7 +200,7 @@ func TestShedResponseIsCorrelatedAndLogged(t *testing.T) {
 	chain := RequestCorrelation(
 		AccessLog(log, false,
 			RequestTimeout(time.Minute,
-				MaxInFlight(1, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+				MaxInFlight(1, telemetry.ServerLoad{}, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 					entered <- struct{}{}
 					<-release
 				})),
