@@ -9,6 +9,7 @@ import (
 	"testing/fstest"
 	"time"
 
+	"github.com/example/go-service-template-rest/internal/infra/postgres/pgtest"
 	"github.com/example/go-service-template-rest/internal/infra/postgresmigrate"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -17,7 +18,7 @@ func TestPostgresMigrateUpAppliesAndReplaysMigrations(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
 	defer cancel()
 
-	dsn := integrationPostgresDSN(t)
+	dsn := pgtest.DSN(t)
 	migrationFS := fstest.MapFS{
 		"migrations/000001_integration.up.sql":   {Data: []byte("select 1;")},
 		"migrations/000001_integration.down.sql": {Data: []byte("select 1;")},
@@ -110,7 +111,7 @@ func TestMigrateDownExercisesEveryDownMigration(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
 	defer cancel()
 
-	dsn := integrationPostgresDSN(t)
+	dsn := pgtest.DSN(t)
 	migrationFS := fstest.MapFS{
 		"migrations/000001_integration.up.sql": {
 			Data: []byte("select 1;"),
@@ -150,7 +151,7 @@ func TestPostgresMigrateBoundsLongStatement(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 
-	dsn := integrationPostgresDSN(t)
+	dsn := pgtest.DSN(t)
 	migrationFS := fstest.MapFS{
 		"migrations/000001_slow.up.sql":   {Data: []byte("select pg_sleep(5);")},
 		"migrations/000001_slow.down.sql": {Data: []byte("select 1;")},
@@ -177,7 +178,7 @@ func TestPostgresMigrateReportsDirtyVersion(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 
-	dsn := integrationPostgresDSN(t)
+	dsn := pgtest.DSN(t)
 	migrationFS := fstest.MapFS{
 		"migrations/000001_fail.up.sql": {
 			Data: []byte("select * from migration_failure_missing_relation;"),

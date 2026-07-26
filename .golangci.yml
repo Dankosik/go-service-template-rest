@@ -162,6 +162,9 @@ linters:
           files:
             - "$all"
             - "!**/internal/infra/postgres/*.go"
+            # pgtest is a PostgreSQL adapter like the two above, scoped to tests:
+            # it creates and drops the per-test database, which is driver work.
+            - "!**/internal/infra/postgres/pgtest/*.go"
             - "!**/internal/infra/postgresmigrate/*.go"
           deny:
             - pkg: database/sql

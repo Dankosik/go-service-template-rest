@@ -49,7 +49,7 @@ type postgresStartupRuntime struct {
 }
 
 type runtimeDependencies struct {
-	health      *health.Service
+	readiness   health.Probe
 	postgres    *postgres.Pool
 	idempotency *postgres.IdempotencyStore
 	// idempotencySweepInterval is held rather than re-read from config, so the
@@ -72,6 +72,20 @@ func (d runtimeDependencies) IdempotencyStore() httpx.IdempotencyStore {
 	return d.idempotency
 }
 
+// ReadinessProbes returns what this profile's dependencies contribute to the
+// readiness verdict.
+//
+// The health service is built by the caller rather than here, because the
+// supervisor is a probe too and it does not exist yet at this point in startup;
+// see run.go. Returning probes instead of a service is what lets both profiles
+// share that composition.
+func (d runtimeDependencies) ReadinessProbes() []health.Probe {
+	if d.readiness == nil {
+		return nil
+	}
+	return []health.Probe{d.readiness}
+}
+
 // BackgroundTasks returns the supervised work this profile's dependencies need.
 //
 // It exists so run.go stays profile-independent: the DATABASE=none profile returns
@@ -89,6 +103,19 @@ func (d runtimeDependencies) BackgroundTasks() []background.Task {
 			return sweepIdempotencyKeys(ctx, store, interval)
 		},
 	}}
+}
+
+// readinessProbeBudget is how long one steady-state readiness evaluation may
+// take, and is profile-owned because the dependency being probed is.
+//
+// It is passed to health.Watch separately from the refresh interval. The two used
+// to be one argument, which clamped this budget to the interval: with the shipped
+// defaults a 3s postgres.healthcheck_timeout became 2s in steady state while
+// startup admission still granted the full 3s, so a database answering in between
+// passed admission and then flapped out of rotation. Configuration validation
+// keeps health.refresh_interval above this value.
+func readinessProbeBudget(cfg config.Config) time.Duration {
+	return cfg.Postgres.HealthcheckTimeout
 }
 
 // postgresSaturationRetryAfter is the hint on a request refused because every
@@ -209,7 +236,7 @@ func initRuntimeDependencies(
 	}
 
 	return runtimeDependencies{
-		health:                   health.New(newPostgresReadinessProbe(pg, bootstrap.cfg.Postgres.HealthcheckTimeout)),
+		readiness:                newPostgresReadinessProbe(pg, bootstrap.cfg.Postgres.HealthcheckTimeout),
 		postgres:                 pg,
 		idempotency:              idempotencyStore,
 		idempotencySweepInterval: bootstrap.cfg.Postgres.IdempotencySweepInterval,

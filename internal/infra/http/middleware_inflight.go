@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 	"github.com/example/go-service-template-rest/internal/problem"
 	"golang.org/x/sync/semaphore"
 )
@@ -30,9 +31,14 @@ const shedRetryAfter = time.Second
 // cannot get capacity now is better told so in a millisecond than told so after
 // the whole budget has been spent waiting.
 //
+// load records what the limiter did. Without it the limit is unobservable: a shed
+// request is one more 503 on a route that also answers 503 when the connection
+// pool saturates, and nothing reports how close the service runs to the limit —
+// so http.max_in_flight is set once from a guess and never revisited.
+//
 // Platform probe routes are exempt. Shedding a readiness probe would evict the
 // instance for being busy, which is the opposite of what shedding is for.
-func MaxInFlight(limit int, next http.Handler) http.Handler {
+func MaxInFlight(limit int, load telemetry.ServerLoad, next http.Handler) http.Handler {
 	if limit <= 0 {
 		return next
 	}
@@ -48,6 +54,7 @@ func MaxInFlight(limit int, next http.Handler) http.Handler {
 		// TryAcquire rather than Acquire: blocking here would rebuild the queue
 		// this middleware exists to prevent, just one layer further out.
 		if !sem.TryAcquire(1) {
+			load.Shed(r.Context())
 			w.Header().Set("Retry-After", retryAfter)
 			writeProblem(w, r, problemResponse{
 				code:   problem.CodeServiceUnavailable,
@@ -56,6 +63,11 @@ func MaxInFlight(limit int, next http.Handler) http.Handler {
 			return
 		}
 		defer sem.Release(1)
+
+		// Recorded around the handler rather than around the whole middleware, so
+		// the gauge measures occupancy of the limit and not the shed path.
+		released := load.Admitted(r.Context())
+		defer released()
 
 		next.ServeHTTP(w, r)
 	})

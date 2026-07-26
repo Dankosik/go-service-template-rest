@@ -17,6 +17,7 @@ import (
 
 	"github.com/example/go-service-template-rest/internal/background"
 	"github.com/example/go-service-template-rest/internal/config"
+	"github.com/example/go-service-template-rest/internal/health"
 	httpx "github.com/example/go-service-template-rest/internal/infra/http"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 )
@@ -238,7 +239,6 @@ func Run(args []string) (runErr error) {
 	// telemetry flush and after background work has been joined.
 	defer func() { dependencies.Close(shutdown.stage(signalCtx, dependencyCloseTimeout)) }()
 
-	healthSvc := dependencies.health
 	startupAdmission := newStartupAdmissionController()
 
 	supervisor := newSupervisedBackground(signalCtx, bootstrap.log)
@@ -249,14 +249,29 @@ func Run(args []string) (runErr error) {
 	defer func() {
 		_ = supervisor.Shutdown(shutdown.stage(signalCtx, backgroundShutdownTimeout))
 	}()
+
+	// The supervisor is a readiness probe in its own right. A supervised task
+	// that failed is not restarted and is not coming back, so the process would
+	// otherwise keep taking traffic without the work that task existed to do —
+	// an outbox that no longer publishes, a lease that no longer renews — with
+	// one ERROR log line as the only evidence. Composed here rather than inside
+	// the dependency stage because that stage runs before the supervisor exists.
+	healthSvc := health.New(append(dependencies.ReadinessProbes(), supervisor)...)
+
 	// Readiness is served from cached state, so something has to keep that state
 	// current. Registering it as an ordinary supervised task means a refresher
-	// that dies takes the same reported path as any other failed background work
-	// instead of leaving a stale verdict behind.
+	// that dies takes the same reported path as any other failed background work;
+	// health.Cached expiring a verdict nothing is refreshing is what covers the
+	// ways it can die without reporting.
 	supervisor.Go(background.Task{
 		Name: "readiness_refresh",
 		Run: func(ctx context.Context) error {
-			return healthSvc.Watch(ctx, bootstrap.cfg.Health.RefreshInterval, bootstrap.cfg.Health.FailureThreshold)
+			return healthSvc.Watch(
+				ctx,
+				bootstrap.cfg.Health.RefreshInterval,
+				readinessProbeBudget(bootstrap.cfg),
+				bootstrap.cfg.Health.FailureThreshold,
+			)
 		},
 	})
 	// Whatever upkeep the active profile's dependencies need — the idempotency

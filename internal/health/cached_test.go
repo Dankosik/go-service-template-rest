@@ -131,7 +131,7 @@ func TestWatchRefreshesOnIntervalAndStopsOnCancel(t *testing.T) {
 
 		ctx, cancel := context.WithCancel(context.Background())
 		watchErr := make(chan error, 1)
-		go func() { watchErr <- svc.Watch(ctx, testRefreshInterval, testFailureThreshold) }()
+		go func() { watchErr <- svc.Watch(ctx, testRefreshInterval, testProbeBudget, testFailureThreshold) }()
 
 		synctest.Wait()
 		if got := probe.calls.Load(); got != 1 {
@@ -159,9 +159,9 @@ func TestWatchRefreshesOnIntervalAndStopsOnCancel(t *testing.T) {
 	})
 }
 
-// TestWatchBoundsEachEvaluationByInterval stops refreshes from piling up behind
-// a probe that outlives its own refresh period.
-func TestWatchBoundsEachEvaluationByInterval(t *testing.T) {
+// TestWatchBoundsEachEvaluationByProbeBudget stops refreshes from piling up
+// behind a probe that outlives its own budget.
+func TestWatchBoundsEachEvaluationByProbeBudget(t *testing.T) {
 	t.Parallel()
 
 	synctest.Test(t, func(t *testing.T) {
@@ -169,9 +169,9 @@ func TestWatchBoundsEachEvaluationByInterval(t *testing.T) {
 
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		go func() { _ = svc.Watch(ctx, testRefreshInterval, 1) }()
+		go func() { _ = svc.Watch(ctx, testRefreshInterval, testProbeBudget, 1) }()
 
-		time.Sleep(testRefreshInterval + time.Millisecond)
+		time.Sleep(testProbeBudget + time.Millisecond)
 		synctest.Wait()
 
 		err := svc.Cached()
@@ -181,15 +181,75 @@ func TestWatchBoundsEachEvaluationByInterval(t *testing.T) {
 	})
 }
 
+// TestWatchSpendsTheProbeBudgetNotTheInterval is the defect this signature
+// exists to prevent: the two used to be the same argument, so a probe budget
+// larger than the refresh period was silently clamped to the period and a
+// dependency that passed startup admission flapped in steady state.
+func TestWatchSpendsTheProbeBudgetNotTheInterval(t *testing.T) {
+	t.Parallel()
+
+	synctest.Test(t, func(t *testing.T) {
+		const (
+			interval    = 500 * time.Millisecond
+			probeBudget = 4 * time.Second
+		)
+		probe := &deadlineProbe{}
+		svc := New(probe)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		go func() { _ = svc.Watch(ctx, interval, probeBudget, 1) }()
+		synctest.Wait()
+
+		if got := probe.budget.Load(); time.Duration(got) != probeBudget {
+			t.Fatalf("probe budget = %s, want the configured %s", time.Duration(got), probeBudget)
+		}
+	})
+}
+
+// TestCachedRefusesAStaleVerdict is the second half of the readiness fix: even
+// when the refresher stops for a reason this package cannot see, the verdict it
+// left behind must expire rather than be served for the life of the process.
+func TestCachedRefusesAStaleVerdict(t *testing.T) {
+	t.Parallel()
+
+	synctest.Test(t, func(t *testing.T) {
+		probe := &countingProbe{name: "db"}
+		svc := New(probe)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		go func() { _ = svc.Watch(ctx, testRefreshInterval, testProbeBudget, testFailureThreshold) }()
+		synctest.Wait()
+		if err := svc.Cached(); err != nil {
+			t.Fatalf("Cached() while refreshing error = %v, want nil", err)
+		}
+
+		// The refresher stops without the drain flag ever being set, which is what
+		// an unrelated failure or a panic in the supervisor looks like from here.
+		cancel()
+		synctest.Wait()
+
+		time.Sleep(staleBudget(testRefreshInterval, testProbeBudget) + time.Second)
+		synctest.Wait()
+
+		if err := svc.Cached(); !errors.Is(err, ErrStale) {
+			t.Fatalf("Cached() after the refresher stopped error = %v, want ErrStale", err)
+		}
+	})
+}
+
 func TestWatchRejectsUnusableSettings(t *testing.T) {
 	t.Parallel()
 
 	svc := New(fakeProbe{name: "db"})
 
-	if err := svc.Watch(context.Background(), 0, 1); err == nil {
+	if err := svc.Watch(context.Background(), 0, testProbeBudget, 1); err == nil {
 		t.Fatal("Watch(interval=0) error = nil, want non-nil")
 	}
-	if err := svc.Watch(context.Background(), testRefreshInterval, 0); err == nil {
+	if err := svc.Watch(context.Background(), testRefreshInterval, 0, 1); err == nil {
+		t.Fatal("Watch(probeBudget=0) error = nil, want non-nil")
+	}
+	if err := svc.Watch(context.Background(), testRefreshInterval, testProbeBudget, 0); err == nil {
 		t.Fatal("Watch(threshold=0) error = nil, want non-nil")
 	}
 }
@@ -202,7 +262,7 @@ func TestWatchReturnsImmediatelyOnCanceledContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	if err := svc.Watch(ctx, testRefreshInterval, testFailureThreshold); err != nil {
+	if err := svc.Watch(ctx, testRefreshInterval, testProbeBudget, testFailureThreshold); err != nil {
 		t.Fatalf("Watch() error = %v, want nil", err)
 	}
 	if got := probe.calls.Load(); got != 0 {
@@ -225,6 +285,23 @@ func (p *countingProbe) Check(context.Context) error {
 	if err := p.err.Load(); err != nil {
 		return *err
 	}
+	return nil
+}
+
+// deadlineProbe records the budget the evaluation handed it, which is what
+// distinguishes a configured probe budget from the refresh interval.
+type deadlineProbe struct {
+	budget atomic.Int64
+}
+
+func (p *deadlineProbe) Name() string { return "deadline" }
+
+func (p *deadlineProbe) Check(ctx context.Context) error {
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		return errors.New("evaluation ran without a budget")
+	}
+	p.budget.Store(int64(time.Until(deadline)))
 	return nil
 }
 

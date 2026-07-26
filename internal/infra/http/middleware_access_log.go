@@ -58,16 +58,38 @@ func AccessLog(log *slog.Logger, logHealthProbes bool, next http.Handler) http.H
 		// logged with; see internal/observability/logctx. A logger built without
 		// that decorator loses them, which is what the wiring test in
 		// cmd/service/internal/bootstrap exists to catch.
-		log.InfoContext(
-			r.Context(),
-			"request",
+		//
+		// problem_code is what separates the several failures that share a status.
+		// A 503 is load shedding, a saturated connection pool, or a draining
+		// instance; a 409 is an idempotency replay conflict or a domain conflict.
+		// Status alone cannot tell them apart, and during an incident that
+		// distinction is the whole question. Its cardinality is bounded by the
+		// problem catalog.
+		attrs := []any{
 			"method", r.Method,
 			"path", r.URL.Path,
 			"route", route,
 			"status", captured.Code,
 			"duration_ms", captured.Duration.Milliseconds(),
-		)
+		}
+		if code := problemCodeForRequest(r); code != "" {
+			attrs = append(attrs, "problem_code", code)
+		}
+		log.InfoContext(r.Context(), "request", attrs...)
 	})
+}
+
+// problemCodeForRequest returns the problem code this request was answered with,
+// or the empty string when it was not answered with one.
+func problemCodeForRequest(r *http.Request) string {
+	if r == nil {
+		return ""
+	}
+	record, ok := r.Context().Value(problemRecordContextKey{}).(*problemRecord)
+	if !ok {
+		return ""
+	}
+	return string(record.code)
 }
 
 // skipHealthProbeLog matches on the routed template rather than the raw path,
