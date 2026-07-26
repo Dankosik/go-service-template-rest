@@ -109,8 +109,9 @@ re-opens questions the first attempt already closed.
 A correction brief names the finding, the criterion it violates, and the proof
 that must change — not a restatement of the whole task. Route it through the
 [Diagnostic Gate](#diagnostic-gate) so a correction that cannot name a
-candidate-caused regression, a violated accepted criterion, or missing proof is
-recorded as an observation rather than re-entering the write lane.
+candidate-caused regression, a violated accepted criterion or repository-owned
+invariant, or missing proof is recorded as an observation rather than
+re-entering the write lane.
 
 Replace a Worker only for an execution stall that produces no new turn, or for
 an invalidated base, and then continue the same exact brief from the frozen
