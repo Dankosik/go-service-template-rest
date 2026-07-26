@@ -3,6 +3,7 @@ package httpclient
 import (
 	"errors"
 	"fmt"
+	"io"
 	"math/rand/v2"
 	"net/http"
 	"strconv"
@@ -222,12 +223,28 @@ func fitsRemainingBudget(request *http.Request, delay time.Duration) bool {
 	return time.Until(deadline) > 2*delay
 }
 
-// drainResponse discards a response that is about to be replaced, so its
-// connection returns to the pool instead of being held until the caller's context
-// ends. The body is already bounded by responseLimitTransport.
+// maxDrainBytes bounds what is read from a response that is being abandoned. A
+// body larger than this is not worth the read: the connection is one handshake,
+// and the point of draining is to be cheaper than that.
+const maxDrainBytes = 64 << 10
+
+// drainResponse consumes and closes a response that is about to be replaced, so
+// its connection returns to the pool instead of being torn down.
+//
+// The read is the part that matters, and closing alone does not do it. net/http
+// hands back a body whose Close reports to the transport's read loop whether the
+// body reached EOF; a close before EOF marks the connection unusable and it is
+// discarded rather than pooled. So the version that only closed made every retry
+// pay a fresh TCP and TLS handshake — against a dependency that had just
+// answered 429 or 503, which is exactly when adding connection load is worst,
+// and inside the remaining budget of a caller that is already one attempt down.
+//
+// The body is bounded twice over: responseLimitTransport has already capped it,
+// and the limit below caps what is read of that.
 func drainResponse(response *http.Response) {
 	if response == nil || response.Body == nil {
 		return
 	}
+	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxDrainBytes))
 	_ = response.Body.Close()
 }

@@ -188,14 +188,8 @@ func validateHTTPConfig(cfg *HTTPConfig) error {
 	if err := validateHTTPShutdownBudget(*cfg); err != nil {
 		return err
 	}
-	if cfg.MaxHeaderBytes <= 0 {
-		return fmt.Errorf("%w: http.max_header_bytes must be > 0", ErrValidate)
-	}
-	if cfg.MaxBodyBytes <= 0 {
-		return fmt.Errorf("%w: http.max_body_bytes must be > 0", ErrValidate)
-	}
-	if cfg.MaxInFlight < 0 || cfg.MaxInFlight > 100_000 {
-		return fmt.Errorf("%w: http.max_in_flight must be in range [0,100000]", ErrValidate)
+	if err := validateHTTPCapacityBounds(*cfg); err != nil {
+		return err
 	}
 	if err := validateDurationRange(
 		"http.idempotency_outcome_timeout",
@@ -206,6 +200,47 @@ func validateHTTPConfig(cfg *HTTPConfig) error {
 		return err
 	}
 	return validateHTTPIdempotencyShutdownBudget(*cfg)
+}
+
+// validateHTTPCapacityBounds owns the four settings that decide how much work
+// and how many callers one process admits. They are grouped because they are
+// read together — see validateHTTPConnectionCeiling for the one relationship
+// between them that a range check cannot express.
+func validateHTTPCapacityBounds(cfg HTTPConfig) error {
+	if cfg.MaxHeaderBytes <= 0 {
+		return fmt.Errorf("%w: http.max_header_bytes must be > 0", ErrValidate)
+	}
+	if cfg.MaxBodyBytes <= 0 {
+		return fmt.Errorf("%w: http.max_body_bytes must be > 0", ErrValidate)
+	}
+	if cfg.MaxInFlight < 0 || cfg.MaxInFlight > 100_000 {
+		return fmt.Errorf("%w: http.max_in_flight must be in range [0,100000]", ErrValidate)
+	}
+	if cfg.MaxConnections < 0 || cfg.MaxConnections > 1_000_000 {
+		return fmt.Errorf("%w: http.max_connections must be in range [0,1000000]", ErrValidate)
+	}
+	return validateHTTPConnectionCeiling(cfg)
+}
+
+// validateHTTPConnectionCeiling keeps the accept cap above the concurrency the
+// service advertises.
+//
+// The two bound different things and only make sense together. max_in_flight is
+// how many requests may execute a handler; max_connections is how many callers
+// may be attached at all. Setting the second below the first means the service
+// cannot reach its own concurrency ceiling, and the excess callers do not get
+// the 503 with a Retry-After that shedding would have given them — they wait in
+// the kernel backlog and time out at connect, which is a worse signal for a
+// client and an invisible one for an operator.
+func validateHTTPConnectionCeiling(cfg HTTPConfig) error {
+	if cfg.MaxConnections == 0 || cfg.MaxConnections >= cfg.MaxInFlight {
+		return nil
+	}
+	return fmt.Errorf(
+		"%w: http.max_connections must be >= http.max_in_flight (%d)",
+		ErrValidate,
+		cfg.MaxInFlight,
+	)
 }
 
 // validateHTTPIdempotencyShutdownBudget keeps the outcome bound inside the drain.

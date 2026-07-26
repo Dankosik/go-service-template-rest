@@ -11,6 +11,8 @@ import (
 	"runtime/debug"
 	"strconv"
 	"strings"
+
+	"github.com/example/go-service-template-rest/internal/config"
 )
 
 // GOMAXPROCS is deliberately absent from this file. Since Go 1.25 the runtime
@@ -47,15 +49,18 @@ var errNoMemoryLimit = errors.New("no cgroup memory limit found")
 // garbage collector, and reports what it decided so the choice is visible in the
 // startup log rather than inferred from an exit code.
 //
+// It returns the detected container limit, or zero when there is none, so the
+// caller can relate the process's other byte budgets to the same number.
+//
 // ratio <= 0 disables detection.
-func applyMemoryLimit(log *slog.Logger, ratio float64) {
+func applyMemoryLimit(log *slog.Logger, ratio float64) int64 {
 	if ratio <= 0 {
 		log.Info(
 			"runtime_memory_limit_skipped",
 			"component", "runtime_limits",
 			"reason", "detection_disabled",
 		)
-		return
+		return 0
 	}
 	if raw, ok := os.LookupEnv(memoryLimitEnv); ok && strings.TrimSpace(raw) != "" {
 		log.Info(
@@ -64,7 +69,7 @@ func applyMemoryLimit(log *slog.Logger, ratio float64) {
 			"reason", "already_set_by_platform",
 			"env", memoryLimitEnv,
 		)
-		return
+		return 0
 	}
 
 	limit, err := detectCgroupMemoryLimit(os.DirFS("/"))
@@ -83,7 +88,7 @@ func applyMemoryLimit(log *slog.Logger, ratio float64) {
 			"reason", "no_container_limit",
 			"err", err,
 		)
-		return
+		return 0
 	}
 
 	applied := int64(float64(limit) * ratio)
@@ -95,7 +100,7 @@ func applyMemoryLimit(log *slog.Logger, ratio float64) {
 			"limit.bytes", limit,
 			"ratio", ratio,
 		)
-		return
+		return 0
 	}
 
 	debug.SetMemoryLimit(applied)
@@ -105,6 +110,72 @@ func applyMemoryLimit(log *slog.Logger, ratio float64) {
 		"limit.bytes", limit,
 		"ratio", ratio,
 		"gomemlimit.bytes", applied,
+	)
+	return limit
+}
+
+// requestBufferCopiesPerRequest is how many full copies of one request body the
+// request path can hold at once.
+//
+// Two: the OpenAPI validator reads the body and puts back a copy, and the
+// idempotency middleware does the same for its fingerprint. The response
+// capture is a third buffer of its own, bounded separately by
+// maxIdempotentResponseBytes rather than by http.max_body_bytes, and is left
+// out here — this estimate is about the number http.max_body_bytes controls.
+const requestBufferCopiesPerRequest = 2
+
+// requestBufferBudgetRatio is the share of the GC's own limit that admitted
+// request bodies may account for before the arithmetic is worth reporting.
+//
+// It is a fraction rather than the whole limit because the buffers are not what
+// the process is for: the same heap holds the connection pool, the metric
+// registry, and whatever the handlers allocate on top of the body they were
+// given.
+const requestBufferBudgetRatio = 0.25
+
+// reportRequestBufferBudget relates http.max_in_flight and http.max_body_bytes
+// to the memory limit the GC was just given.
+//
+// Nothing else does. The two settings are validated independently — one must be
+// positive, the other must fit a range — so their product is a number no layer
+// ever computes, and it is the number that decides whether the process survives
+// its own concurrency. The shipped defaults are modest; raising
+// http.max_body_bytes for file uploads is a one-line change that multiplies it
+// by whatever the new limit is, and the first evidence of that is the GC burning
+// CPU against a limit live data has already passed, then an OOM kill. Readiness
+// reports healthy throughout, because a cached dependency probe still succeeds.
+//
+// It reports rather than rejects. A service whose handlers stream instead of
+// buffering is legitimately over the estimate, and refusing to start would be
+// wrong for it; a number in the startup log is what the other case needs.
+//
+// limit is the detected container limit, and zero — no cgroup limit, or
+// detection disabled — skips the check, because there is nothing to relate to.
+func reportRequestBufferBudget(log *slog.Logger, cfg config.Config, limit int64) {
+	if limit <= 0 || cfg.Runtime.MemoryLimitRatio <= 0 {
+		return
+	}
+	// Zero disables shedding, which means the ceiling is however many requests
+	// arrive at once. That is unbounded, so there is no product to compare.
+	if cfg.HTTP.MaxInFlight <= 0 {
+		return
+	}
+
+	worstCase := int64(cfg.HTTP.MaxInFlight) * cfg.HTTP.MaxBodyBytes * requestBufferCopiesPerRequest
+	budget := int64(float64(limit) * cfg.Runtime.MemoryLimitRatio * requestBufferBudgetRatio)
+	if worstCase <= budget {
+		return
+	}
+
+	log.Warn(
+		"runtime_request_buffer_budget_exceeded",
+		"component", "runtime_limits",
+		"reason", "max_in_flight_times_max_body_bytes_exceeds_memory_budget",
+		"http.max_in_flight", cfg.HTTP.MaxInFlight,
+		"http.max_body_bytes", cfg.HTTP.MaxBodyBytes,
+		"request_buffers.worst_case_bytes", worstCase,
+		"request_buffers.budget_bytes", budget,
+		"limit.bytes", limit,
 	)
 }
 

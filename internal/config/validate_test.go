@@ -387,6 +387,46 @@ func TestMaxInFlightBounds(t *testing.T) {
 	}
 }
 
+// TestMaxConnectionsBounds covers the accept ceiling, which bounds what
+// max_in_flight cannot: a connection costs a goroutine and its buffers before
+// any middleware, including the load shedder, ever runs.
+func TestMaxConnectionsBounds(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		connections string
+		inFlight    string
+		wantErr     bool
+	}{
+		{name: "default accepted"},
+		{name: "zero accepts without a bound", connections: "0"},
+		{name: "negative", connections: "-1", wantErr: true},
+		{name: "above ceiling", connections: "1000001", wantErr: true},
+		{name: "equal to in flight accepted", connections: "256", inFlight: "256"},
+		// A cap under the advertised concurrency means excess callers never get
+		// the 503 with a Retry-After that shedding would have given them; they
+		// wait in the kernel backlog and time out at connect instead.
+		{name: "below in flight", connections: "128", inFlight: "256", wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			resetConfigEnv(t)
+			if tc.connections != "" {
+				t.Setenv("APP__HTTP__MAX_CONNECTIONS", tc.connections)
+			}
+			if tc.inFlight != "" {
+				t.Setenv("APP__HTTP__MAX_IN_FLIGHT", tc.inFlight)
+			}
+
+			_, _, err := LoadDetailed(LoadOptions{})
+			if tc.wantErr && !errors.Is(err, ErrValidate) {
+				t.Fatalf("LoadDetailed() error = %v, want ErrValidate", err)
+			}
+			if !tc.wantErr && err != nil {
+				t.Fatalf("LoadDetailed() error = %v", err)
+			}
+		})
+	}
+}
+
 func TestPprofRequiresDiagnosticsListener(t *testing.T) {
 	resetConfigEnv(t)
 	t.Setenv("APP__OBSERVABILITY__PPROF__ENABLED", "true")

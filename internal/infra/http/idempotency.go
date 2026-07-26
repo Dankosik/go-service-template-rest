@@ -74,6 +74,12 @@ type IdempotencyStore interface {
 // and adding it breaks nothing. Safe methods are untouched, because replaying a
 // GET is what a cache is for.
 //
+// This belongs inside the generated router's per-operation middleware list,
+// ahead of the request validator so the validator wraps it. Installed further
+// out — in the root chain, where it looks like it belongs — it claims keys for
+// unauthenticated callers and unrouted paths, and records the resulting
+// rejection as the key's outcome. See storableOutcome.
+//
 // A 5xx is never stored. A server fault is the one outcome a client should be
 // free to retry, and holding it would turn one bad minute into a key that
 // answers 500 until it expires.
@@ -145,7 +151,7 @@ func Idempotent(store IdempotencyStore, outcomeTimeout time.Duration, log *slog.
 
 		next.ServeHTTP(recorder.writer, r)
 
-		if recorder.status >= http.StatusInternalServerError || recorder.status == 0 {
+		if !storableOutcome(recorder.status) {
 			return
 		}
 		outcomeCtx, cancelOutcome := idempotencyOutcomeContext(r.Context(), outcomeTimeout)
@@ -200,6 +206,35 @@ func idempotentMethod(method string) bool {
 	return slices.Contains([]string{http.MethodPost, http.MethodPatch}, method)
 }
 
+// storableOutcome reports whether a status is a result worth replaying.
+//
+// A key stands for one unit of work, so only an answer that reflects whether
+// that work happened may be stored. The refusals below do not:
+//
+//   - 401 and 403 describe the credential presented on this attempt, not the
+//     request. Storing them meant a client that refreshed an expired token and
+//     retried the byte-identical request was replayed its own 401 until the key
+//     expired, because the fingerprint covers the request and not the credential.
+//   - 408 and 429 are explicit invitations to try again, so recording either as
+//     the final answer contradicts what the service just told the client.
+//
+// 5xx is refused for the same reason it always was: a server fault is the one
+// outcome a client should be free to retry. A zero status means the handler
+// committed nothing at all, which is not an outcome either. Everything left is
+// a decision about the request itself — a 201, a validation 400, a domain 409 —
+// and repeating it is exactly what the key is for.
+func storableOutcome(status int) bool {
+	switch status {
+	case 0,
+		http.StatusUnauthorized,
+		http.StatusForbidden,
+		http.StatusRequestTimeout,
+		http.StatusTooManyRequests:
+		return false
+	}
+	return status < http.StatusInternalServerError
+}
+
 func rejectIdempotencyReservation(w http.ResponseWriter, r *http.Request, log *slog.Logger, err error) {
 	switch {
 	case errors.Is(err, idempotency.ErrInFlight):
@@ -248,12 +283,26 @@ func replayStoredResponse(w http.ResponseWriter, r *http.Request, stored idempot
 // presented with a different request is refused rather than answered with
 // somebody else's result.
 //
+// The query is part of the intent and was the expensive omission. A contract
+// that expresses a variant in the query rather than the body — ?format=pdf,
+// ?dryRun=true, ?version=2 — produced one fingerprint for every variant, so the
+// second request with the same key was answered with the first one's stored
+// 201 and its Location header. That is a silent wrong answer: the client is
+// told the work succeeded and the work it asked for never ran. It is
+// canonicalized through url.Values.Encode, which sorts by key, so a client that
+// reorders its parameters between attempts is still the same request.
+//
+// Content-Type is included for the same reason: the same bytes mean different
+// things as JSON and as CSV.
+//
 // The body is read into memory and put back. That is bounded: RequestBodyLimit
 // has already wrapped it in a MaxBytesReader, and the generated validator reads
-// it the same way for any secured operation.
+// it the same way for any operation that declares one.
 func requestFingerprint(r *http.Request) (string, error) {
 	digest := sha256.New()
 	_, _ = io.WriteString(digest, r.Method+"\n"+r.URL.Path+"\n")
+	_, _ = io.WriteString(digest, r.URL.Query().Encode()+"\n")
+	_, _ = io.WriteString(digest, r.Header.Get("Content-Type")+"\n")
 
 	if r.Body == nil || r.Body == http.NoBody {
 		return hex.EncodeToString(digest.Sum(nil)), nil

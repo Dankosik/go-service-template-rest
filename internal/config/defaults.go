@@ -55,7 +55,14 @@ func defaultValues() map[string]any {
 		// max_in_flight is deliberately larger than postgres.max_open_conns:
 		// shedding must engage after the pool is saturated and requests start
 		// queueing, not before it is used.
-		"http.max_in_flight":            256,
+		"http.max_in_flight": 256,
+		// max_connections is well above max_in_flight, because the two bound
+		// different things: shedding answers 503 with a Retry-After, while this
+		// leaves a caller in the kernel backlog with no answer at all. The
+		// headroom is what keeps the informative rejection the common one, and
+		// this the backstop against a connection flood costing a goroutine and
+		// two buffers apiece until the process is OOM-killed.
+		"http.max_connections":          4096,
 		"http.access_log_health_probes": false,
 		// idempotency_outcome_timeout matches postgres.acquire_timeout: recording an
 		// outcome is one short statement, and a store that cannot take it in a second

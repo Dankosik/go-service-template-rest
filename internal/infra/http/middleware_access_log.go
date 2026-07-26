@@ -48,7 +48,13 @@ func AccessLog(log *slog.Logger, logHealthProbes bool, next http.Handler) http.H
 		if skipHealthProbeLog(r, routePathTemplate, logHealthProbes) {
 			return
 		}
-		route := joinMethodAndPattern(requestMethodLabel(r), routePathTemplate)
+		// The method is used verbatim. Normalizing it to a bounded label was
+		// unreachable: joinMethodAndPattern discards the method whenever the
+		// route template is empty, and a non-empty template means chi matched a
+		// route, which only exists for the methods the contract declares. The
+		// bounded label that observability does need is otelhttp's, which maps
+		// anything outside the RFC methods to _OTHER on its own spans and metrics.
+		route := joinMethodAndPattern(r.Method, routePathTemplate)
 		if route == "" {
 			route = "<unmatched>"
 		}
@@ -130,13 +136,6 @@ func normalizeRoutePathTemplate(method, pattern string) string {
 		return ""
 	}
 	return pattern
-}
-
-func requestMethodLabel(r *http.Request) string {
-	if r == nil {
-		return otherHTTPMethodLabel
-	}
-	return normalizeHTTPMethodLabel(r.Method)
 }
 
 func joinMethodAndPattern(method, pattern string) string {
