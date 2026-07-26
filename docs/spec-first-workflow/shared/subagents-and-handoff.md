@@ -69,7 +69,7 @@ say so and state the evidence boundary; do not pad a clean review.
 
 ## Review Independence
 
-Use an independent reviewer when the user requests one or when an artifact controls an orchestrated, high-impact, hard-to-reverse, protected-domain, cross-owner, or materially contested decision that its author cannot credibly falsify alone. Artifact presence alone does not trigger a reviewer. Other structured artifacts use root self-review. An explicitly requested independent review of completed implementation is a separate read-only boundary after implementation, not an internal gate.
+Use an independent reviewer when an artifact controls an orchestrated, high-impact, hard-to-reverse, protected-domain, cross-owner, or materially contested decision that its author cannot credibly falsify alone. Artifact presence alone does not trigger a reviewer. Other structured artifacts use root self-review. An explicitly requested independent review of completed implementation is a separate read-only boundary after implementation, not an internal gate.
 
 The reviewer:
 
@@ -112,7 +112,7 @@ If those sources disagree, the task is blocked until the narrowest owner reconci
 
 Treat handoff as a chain of custody: name the accepted source, movement evidence, next owner, authority boundary, proof obligation, next executable action, and exact stop/reopen owner and condition so the receiver can continue without reconstructing chat.
 
-Emit a handoff prompt only when the user asks for one or the current actor/session cannot continue. Name the outcome, minimal read set, non-obvious constraints, current evidence, next action, and stop/reopen owner; otherwise return the phase result without manufacturing another session.
+Emit a handoff prompt only when the current actor or session cannot continue. Name the outcome, minimal read set, non-obvious constraints, current evidence, next action, and stop/reopen owner; otherwise return the phase result without manufacturing another session.
 
 A risk-triggered research-synthesis challenge and triggered specification, technical-design, test-design, and task-readiness reviews are internal checkpoints. The root launches the applicable read-only lane and continues automatically in the same session when possible.
 

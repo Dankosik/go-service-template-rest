@@ -35,6 +35,10 @@ status: draft | ready | blocked
 ## Blockers / decisions needed  <!-- only when blocked -->
 ```
 
+`Blockers / decisions needed` carries only an item the user or a named external
+owner owns under [Decision
+Ownership](../../../AGENTS.md#decision-ownership).
+
 Record changed, removed, and deliberately unchanged behavior. For a replaced
 surface, either make removal/refactor part of the target state or state the
 current compatibility owner, evidence for retention, and exit condition.
@@ -127,6 +131,7 @@ disposition, repair, and convergence.
 ## Stop Rule
 
 Continue to design or planning when the Decision Bar is met and any triggered
-review has returned `PASS`. Reopen intake, research, or a user/specialist
-decision when the missing answer belongs there. Do not start implementation
-from a blocked spec.
+review has returned `PASS`. Reopen intake, research, or a specialist decision
+when the missing answer belongs there; reopen a user decision only under
+[Decision Ownership](../../../AGENTS.md#decision-ownership). Do not start
+implementation from a blocked spec.

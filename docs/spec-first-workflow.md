@@ -18,7 +18,7 @@ Direct work that satisfies these conditions enters the [implementation phase](sp
 
 Use `structured` for the normal non-trivial case. Keep only the `spec.md`, `tasks.md`, design, or test artifacts whose decisions must survive; root self-review is sufficient unless the independent-review trigger below applies.
 
-Use `orchestrated` when coordination itself is a real problem: broad or multi-owner scope, hard-to-reverse decisions, conflicting evidence, explicit multi-agent work, or likely multi-session execution. Orchestrated work may still omit research, design, test-plan, or rollout artifacts when their questions are not present.
+Use `orchestrated` when coordination itself is a real problem: broad or multi-owner scope, hard-to-reverse decisions, conflicting evidence, explicit multi-agent work, dirty-checkout isolation, separate context, or likely multi-session execution. Orchestrated work may still omit research, design, test-plan, or rollout artifacts when their questions are not present.
 
 Re-evaluate the path only when evidence changes risk, ownership, reversibility, or proof. A path is not a quality tier.
 
@@ -77,10 +77,12 @@ Before moving forward, close the inputs required by the next phase action or imp
 A request authorizing end-to-end implementation may continue through the needed phases and reviews in one session. Stop only when:
 
 - the user explicitly named that boundary;
-- a required user or external decision is missing;
+- a required external decision or input is unavailable from its named owner;
 - the next action requires new authority;
 - current evidence shows that an earlier decision must change;
 - the remaining work needs durable resume or coordination that has not yet been recorded.
+
+Absent one of those conditions, movement is automatic: enter the next phase, task, or wave, and report what it produced instead of asking whether to enter it ([Proceeding](../AGENTS.md#proceeding)).
 
 Review, repair, and re-review of non-implementation artifacts stay with the artifact owner until the shared convergence condition is met. Implementation moves only under the [current phase-owned execution, acceptance, review, correction, and closeout contract](spec-first-workflow/phases/implementation-validation-closeout.md). [Subagents And Handoff](spec-first-workflow/shared/subagents-and-handoff.md) owns non-implementation review and handoff mechanics.
 
@@ -101,11 +103,23 @@ action, completion criterion, or stop condition. Prefer the allowed behavior;
 reserve prohibitions for safety, authorization, or a decisive exclusion. Avoid
 broad tone or brevity labels; name the required content and what may be omitted.
 
-Change one instruction group at a time. Retain examples and style guidance only
-when they encode a product requirement or close a measured gap, then review
-realistic trigger, near-miss, and completion cases. This repository does not own
-a fake agent runner or judge; without an externally owned live evaluation
-system, invocation and model-behavior claims remain explicitly unproven.
+Keep each policy compact and in one location. Restating an approval or
+confirmation rule produces unnecessary approval requests, so link the owning
+rule instead of repeating it. Hold every skill, subagent, and tool description
+to the machine contract in [Skill Authoring](skill-authoring.md#invocation) —
+leading word, distinct triggers, owned outcome, decisive exclusion — and expose
+only material the current task can act on; a long session amplifies every
+repeated prompt and tool description. Reasoning effort and response verbosity
+are harness controls owned by [Agent Harness](agent-harness.md); set them there
+instead of asking a model in prose to think harder or answer at length.
+
+Change one instruction group at a time, and prefer removal: when a behavior
+already has an owner, delete the weaker statement instead of adding a
+clarifying one. Retain examples and style guidance only when they encode a
+product requirement or close a measured gap, then review realistic trigger,
+near-miss, and completion cases. This repository does not own a fake agent
+runner or judge; without an externally owned live evaluation system, invocation
+and model-behavior claims remain explicitly unproven.
 
 Instruction edits prove only an instruction-level mitigation. Claim changed
 model behavior only after an external live evaluation exercises the relevant

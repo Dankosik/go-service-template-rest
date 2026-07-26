@@ -53,7 +53,7 @@ For direct work, the root edits the assigned checkout, performs one coherent sel
 
 ### Worker Execution
 
-Keep direct work root-local. For structured or orchestrated implementation, delegate each ready ledger task by default to one harness-native implementation Worker in an isolated worktree — a Codex App Worker with managed worktree, or a Claude Code background subagent with worktree isolation, per [Agent Harness](../../agent-harness.md#control-map) — once its behavior, mechanism, ownership, editable boundary, proof, and stop condition are closed. Dependencies schedule Workers sequentially; a planned wave with positive independence permits concurrent dispatch. Sequential work is not a reason for root-local implementation. Root-local implementation is limited to direct work or an unavailable native Worker control; reclassify a structured task as direct only when it satisfies the router's current direct criteria. Create one root durable execution control (Codex Goal or Claude Code task list) only for a genuinely multi-step or resumable outcome.
+Keep direct work root-local. For structured or orchestrated implementation, delegate each ready ledger task by default to one harness-native implementation Worker in an isolated worktree — a Codex App Worker with managed worktree, or a Claude Code background subagent with worktree isolation, per [Agent Harness](../../agent-harness.md#control-map) — once its behavior, mechanism, ownership, editable boundary, proof, and stop condition are closed. Dependencies schedule Workers sequentially; a planned wave with positive independence permits concurrent dispatch. Sequential work is not a reason for root-local implementation. Root-local implementation is limited to direct work or an unavailable native Worker control; reclassify a structured task as direct only when it satisfies the router's current direct criteria. Create one root durable execution control — a Codex Goal, or `/goal` plus the task list in Claude Code ([Claude Code Goal Mechanics](../../agent-harness.md#claude-code-goal-mechanics)) — only for a genuinely multi-step or resumable outcome.
 
 Before dispatching from uncommitted accepted input, identify the source
 checkout and authorized paths and inspect its current diff/status. Record a
@@ -63,6 +63,60 @@ Keep one write Worker per ledger task; several write Workers may run only as
 members of a positively independent planned wave. A Worker receives an outcome-first brief
 with editable boundaries, current facts, success criteria, focused proof, and
 a real stop condition.
+
+Select the Worker's tier from the task class, because the tier is where the
+lane's reasoning effort is fixed: mechanical work whose route and proof are
+already decided, ordinary implementation, or a protected domain. The harness
+document owns the tier names and how a harness expresses them.
+
+#### Route Discovery Stays Root-Local
+
+Delegate execution, never discovery. A task is delegable when the route is
+already known and only the doing remains. A task whose next step depends on
+what the previous step turns up is not delegable at any tier: defect diagnosis,
+a failing check whose cause is unidentified, a performance question without a
+measurement, and any work whose plan is written by its own intermediate
+findings. Keep that root-local until the route is known, then delegate what
+remains.
+
+The reason is structural, not stylistic. A Worker starts from a fresh context:
+it receives its brief, the repository instructions, and the tree, and nothing
+else. It cannot see the root's reasoning, the command output the root already
+read, or the hypothesis the root already discarded. Every handoff of a
+discovery loop therefore pays to rediscover what the root already knew, and
+returns a summary that has dropped exactly the detail the next step needed —
+the error text, the stack, the surprising state.
+
+This is also why a brief is not a task title. Whatever the root has already
+established has to travel inside the brief, because nothing else crosses:
+the reproducer, the located owner, the cause when it is known, the expected
+behavior, and the exact proof command. A brief that says what to achieve
+without what is already known is a request to redo the root's work.
+
+Splitting one discovery loop across several Workers compounds the same loss at
+every boundary and produces changes nobody can attribute. When a task turns out
+to be discovery rather than execution after dispatch, that is a real blocker:
+the Worker returns it, and the root resolves the route before delegating again.
+
+#### Correction Loop
+
+A returned candidate that misses an accepted criterion goes back to **the same
+Worker**, with its context intact, through the harness's own correction channel.
+Spawning a fresh Worker for the same task instead is a defect: it throws away
+the reasoning that made the second attempt cheaper than the first, and it
+re-opens questions the first attempt already closed.
+
+A correction brief names the finding, the criterion it violates, and the proof
+that must change — not a restatement of the whole task. Route it through the
+[Diagnostic Gate](#diagnostic-gate) so a correction that cannot name a
+candidate-caused regression, a violated accepted criterion or repository-owned
+invariant, or missing proof is recorded as an observation rather than
+re-entering the write lane.
+
+Replace a Worker only for an execution stall that produces no new turn, or for
+an invalidated base, and then continue the same exact brief from the frozen
+candidate. Worker replacement resets context; it is a recovery action, never a
+correction technique.
 
 #### Scope Lock
 
@@ -78,7 +132,7 @@ paths. A scope-invalid candidate has one disposition: reject it in full from
 the recorded base while other provisional wave members remain unaffected. A
 required boundary expansion reopens the scope owner before implementation.
 
-For every Worker task, the root explicitly selects and passes the best-suited available model and a task-matched reasoning effort through the current harness's supported controls; never inherit a controllable default or ask the user to choose. This is the user's standing request. [Agent Harness](../../agent-harness.md#model-and-effort-selection) owns model tiers, effort baselines, and evaluation rules.
+For every Worker task, the root explicitly selects and passes the best-suited available model and a task-matched reasoning effort through the current harness's supported controls; never inherit a controllable default and never ask the user to choose. [Agent Harness](../../agent-harness.md#model-and-effort-selection) owns model tiers, effort baselines, and evaluation rules.
 
 #### Progress
 

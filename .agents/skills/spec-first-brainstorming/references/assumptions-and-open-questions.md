@@ -1,6 +1,6 @@
 # Assumptions And Open Questions
 
-Behavior Change Thesis: When loaded for the symptom "the frame depends on implied facts, missing owner decisions, or an unprioritized question pile," this file makes the model choose labeled assumptions and owner-routed blocking questions instead of the likely mistake of inventing answers or producing a generic TODO list.
+Behavior Change Thesis: When loaded for the symptom "the frame depends on implied facts, missing owner decisions, or an unprioritized question pile," this file makes the model choose labeled assumptions and decided technical defaults instead of the likely mistake of inventing answers, producing a generic TODO list, or exporting agent-owned branches to the user as questions.
 
 ## When To Load
 Load this when the request says "should be fine," "obviously," "just," "we know," or similar, or when the open questions do not say who owns the answer and what answer would unblock design.
@@ -8,9 +8,10 @@ Load this when the request says "should be fine," "obviously," "just," "we know,
 ## Decision Rubric
 - Mark uncertain facts as `[assumption]`; do not disguise them as decisions.
 - Each assumption needs risk and validation path. If it has no risk, it probably does not belong here.
-- Each blocking question needs owner and unblock condition.
-- Use tags such as `[blocks design]`, `[blocks API design]`, `[blocks data/reliability design]`, or `[nice to know]`.
-- Do not answer product policy, architecture, API, data, security, reliability, or rollout questions unless the user or repository evidence already supplied the answer.
+- Decide architecture, API, data, security, reliability, and rollout branches yourself from current evidence and record each as `[decided]` with its reopen condition.
+- Route a branch forward as `[blocks design]` only when a later phase owns that decision and the frame genuinely cannot fix it. The branch stays agent-owned there; it never becomes a user question on the way.
+- Tag `[user-owned]` only for an item that survives [Decision Ownership](../../../../AGENTS.md#decision-ownership), and give it an owner and unblock condition.
+- Use `[nice to know]` for anything that cannot block readiness.
 
 ## Imitate
 Input:
@@ -28,19 +29,19 @@ Assumptions
   Risk: Some event types may be intentionally repeated with different meaning.
   Validation path: Classify event types and side effects during specification.
 
+Decisions
+- [decided] This service's receiver contract owns duplicate-event semantics; partner payloads are untrusted input, not an authority.
+  Reopen condition: A partner contract or upstream event gateway already defines dedupe as its guarantee.
+- [decided] Recognize a duplicate for the longest partner retry horizon in current evidence, and treat a later repeat as a new event.
+  Reopen condition: Measured partner retry behavior exceeds that horizon, or retention cost makes it infeasible.
+
 Open Questions
-- [blocks design] Who owns the duplicate-event semantics: this service contract, a partner contract, or an upstream event gateway?
-  Owner: API/domain spec lane.
-  Unblock condition: A source-of-truth decision for event identity and repeat handling.
-- [blocks data/reliability design] What is the required duplicate-recognition window?
-  Owner: data/reliability spec lanes.
-  Unblock condition: A retention or replay horizon that downstream design can preserve.
 - [nice to know] Which partner produces the highest duplicate volume?
   Owner: research or operations.
   Unblock condition: Evidence for prioritization; not required to frame semantics.
 ```
 
-Copy: the output targets event identity semantics before any datastore or middleware choice.
+Copy: event identity semantics are decided before any datastore or middleware choice, not handed back as a question.
 
 Input:
 ```text
@@ -57,16 +58,18 @@ Assumptions
   Risk: Abuse may happen before or after project creation, or require different controls.
   Validation path: Map the user action where abuse becomes costly before security design.
 
+Decisions
+- [decided] Existing unverified users keep their projects and are prompted, not blocked; enforcement applies to new project creation only.
+  Reopen condition: The abuse evidence shows existing unverified accounts are the dominant source.
+
 Open Questions
-- [blocks design] What abuse behavior must change?
+- [user-owned] What abuse behavior must change?
+  Why it survives: Both "stop throwaway-account signup floods" and "stop shared-credential resale" are defensible, they lead to different controls, and neither can be assumed honestly from repository evidence.
   Owner: product/security framing.
   Unblock condition: A concrete abuse scenario and success signal.
-- [blocks API/domain design] What should happen to existing unverified users with projects?
-  Owner: product/domain spec lane.
-  Unblock condition: Acceptance semantics for existing accounts.
 ```
 
-Copy: the proposed control is not accepted until the abuse behavior and enforcement point are proven.
+Copy: the one branch that changes the accepted outcome reaches the user; the compatibility branch is decided.
 
 Input:
 ```text
@@ -83,16 +86,17 @@ Assumptions
   Risk: Async work may hide the bottleneck instead of addressing it.
   Validation path: Gather timing evidence before performance design.
 
+Decisions
+- [decided] Expose `queued`, `running`, `succeeded`, `failed`, and `expired` as the user-visible lifecycle, with a terminal failure reason.
+  Reopen condition: An existing client contract already fixes different status semantics.
+
 Open Questions
 - [blocks design] Which report types exceed acceptable latency, and by how much?
   Owner: performance/research lane.
-  Unblock condition: Measured or accepted latency threshold.
-- [blocks product/API design] What user-visible lifecycle states are required?
-  Owner: API/domain spec lane.
-  Unblock condition: Accepted status semantics before contract design.
+  Unblock condition: Measured latency per report type; measure rather than ask.
 ```
 
-Copy: performance suspicion is separated from user-visible async behavior.
+Copy: the measurable branch becomes an agent-owned evidence obligation, and the contract shape is decided rather than surveyed.
 
 ## Reject
 Bad:
@@ -113,7 +117,15 @@ Open Questions
 
 Why: implementation questions arrived before the unknown behavior semantics were owned.
 
+Bad:
+```markdown
+Open Questions
+- [blocks design] Should dedupe live in middleware, the handler, or a unique index?
+  Owner: user.
+```
+
+Why: it hands the user a technical menu. Mechanism is agent-owned; decide it and record the reopen condition.
+
 ## Agent Traps
 - Do not ask every possible specialist question. Ask the questions that change framing or route the next spec lanes.
-- Do not let `[nice to know]` questions block readiness.
 - Do not say "owner: team" unless the routing is meaningful enough for the orchestrator to act on it.
