@@ -141,9 +141,17 @@ This is the loop that makes the root an orchestrator rather than a dispatcher.
 
 ### Role and effort selection
 
-- Effort has no dispatch parameter, so the root selects it by **choosing the role**: `worker-mechanical` (`low`), `worker-standard` (`medium`), `worker-critical` (`high`). Match the tier to the task class, not to habit; running every lane at the session's effort is how a mechanical regeneration ends up costing what a money-invariant change costs.
-- Model still overrides at dispatch and survives a later `SendMessage`, so the two axes are independent: the role fixes effort, the dispatch parameter can retune the model.
-- These worker roles exist only under `.claude/agents/`. They are deliberately not mirrored to `.codex/agents/` or `.qwen/agents/`: a Codex subagent is `sandbox_mode = "read-only"` by construction and can never be a write lane, and the Codex Worker is a native App control with no definition file. Mirroring them would advertise a lane that harness cannot run.
+The two axes resolve through different channels, so the root steers them differently.
+
+**Model is chosen at dispatch.** Pass `model` on the `Agent` call, using the task-class tiers in [Model And Effort Selection](#model-and-effort-selection). No definition file is needed to express a model choice, and the `model` in a role's frontmatter is only that tier's default for a dispatch that omits it. A per-invocation model also survives a later `SendMessage`.
+
+**Effort is chosen by choosing the role.** There is no `effort` parameter on the `Agent` call and no other in-session channel, so a role definition is the only carrier: `worker-mechanical` (`low`), `worker-standard` (`medium`), `worker-critical` (`high`). An instruction such as "run mechanical work at low effort" is unimplementable without one — the root would read it, find no mechanism, and the lane would silently inherit the session level. That inheritance is how a mechanical regeneration ends up costing what a money-invariant change costs.
+
+Because the axes are independent, the three roles cover the whole grid: `worker-standard` dispatched with `model: "opus"` is Opus at medium effort. Add a role only for a new effort level, never for a new model combination.
+
+The role files therefore carry **no behavior**. Everything a Worker must do already lives in `AGENTS.md` and the implementation phase; a role that restates it creates a second place to keep in sync. Each worker definition is frontmatter plus a pointer to the contract, and nothing more.
+
+These worker roles exist only under `.claude/agents/`. They are deliberately not mirrored to `.codex/agents/` or `.qwen/agents/`: a Codex subagent is `sandbox_mode = "read-only"` by construction and can never be a write lane, and the Codex Worker is a native App control with no definition file. Mirroring them would advertise a lane that harness cannot run.
 
 ### Read-only lanes
 
