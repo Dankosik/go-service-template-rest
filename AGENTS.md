@@ -112,6 +112,7 @@ phase or skill owner, or name the owner and condition that must reopen it.
 - Keep global rules here.
 - Never record repository-specific content — service name, module path, deployment target, owner, or service-specific invariant — in a template-owned instruction path. `template-owned.paths` lists those paths and [Template Sync](docs/template-sync.md) mirrors them verbatim into every derived repository, so anything service-specific left there is overwritten on the next sync and meanwhile misleads every other repository. That document names the repository-owned records which receive such content instead.
 - [docs/agent-harness.md](docs/agent-harness.md) owns harness detection and the mapping from workflow concepts to native Codex App and Claude Code controls: durable execution controls, workers, subagent lanes, model selection, and reasoning effort.
+- Where an instruction describes an external tool's behavior, it is a summary of a vendor contract this repository does not own. Link the vendor page beside the claim. Read that page before relying on the claim: a summary that drops a load-bearing clause still reads as complete, so the gap surfaces as an invented workaround rather than as a missing fact. Never infer unstated external behavior from a summary.
 - [Skill authoring](docs/skill-authoring.md) owns the lean behavioral-adapter contract.
 - `docs/spec-first-workflow.md` owns routing and movement.
 - Keep phase-specific method in `docs/spec-first-workflow/phases/`.
