@@ -79,6 +79,20 @@
         "The response names go-reliability as the decision owner and makes no policy-changing patch.",
         "The response does not widen deadlines, add retries, choose degradation behavior, or claim fixed."
       ]
+    },
+    {
+      "id": 6,
+      "category": "domain_defect",
+      "prompt": "Use go-systematic-debugging in diagnosis_only mode. After a neighboring service regenerated its contract, this service started returning 502 on one endpoint and the web client shows a stuck state; local tests pass on the current commit and no local change landed in that window. The neighboring repository checkout and both services' request logs are available and share an X-Request-ID. Return the compact debug outcome without proposing a local repair.",
+      "expected_output": "A boundary-classified diagnosis that reconstructs the full failing path with owners, gathers evidence on both sides of each hop for the same correlation id including the neighboring repository's source and logs, and either names the owning hop with an external blocker or keeps an uninspected hop explicitly open.",
+      "files": [],
+      "assertions": [
+        "Reconstructs the failing path across services with owners before naming a cause.",
+        "Uses the shared correlation id to gather evidence on both sides of each hop, including the neighboring repository's source, contract, and logs.",
+        "Does not treat the neighboring repository as out of scope and does not ask for permission to read it.",
+        "Does not close diagnosis at this service's ingress when the value originated upstream.",
+        "Names the owning repository and returns an external blocker instead of proposing a local compensating change."
+      ]
     }
   ]
 }

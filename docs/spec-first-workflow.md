@@ -101,6 +101,16 @@ action, completion criterion, or stop condition. Prefer the allowed behavior;
 reserve prohibitions for safety, authorization, or a decisive exclusion. Avoid
 broad tone or brevity labels; name the required content and what may be omitted.
 
+Keep each policy compact and in one location. Restating an approval or
+confirmation rule produces unnecessary approval requests, so link the owning
+rule instead of repeating it. Hold every skill, subagent, and tool description
+to the machine contract in [Skill Authoring](skill-authoring.md#invocation) —
+leading word, distinct triggers, owned outcome, decisive exclusion — and expose
+only material the current task can act on; a long session amplifies every
+repeated prompt and tool description. Reasoning effort and response verbosity
+are harness controls owned by [Agent Harness](agent-harness.md); set them there
+instead of asking a model in prose to think harder or answer at length.
+
 Change one instruction group at a time. Retain examples and style guidance only
 when they encode a product requirement or close a measured gap, then review
 realistic trigger, near-miss, and completion cases. This repository does not own

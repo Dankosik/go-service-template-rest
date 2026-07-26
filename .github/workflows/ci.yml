@@ -40,6 +40,9 @@ jobs:
       - name: Verify project structure
         run: make project-structure-check
 
+      - name: Verify template-owned paths carry no repository-specific content
+        run: make template-owned-purity-check
+
       - name: Verify formatting drift
         run: make fmt-check
 
