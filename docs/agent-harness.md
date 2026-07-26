@@ -19,7 +19,7 @@ The workflow instructions in this repository are harness-neutral. This document 
 
 | Workflow concept | Codex App | Claude Code | Qwen Code |
 | --- | --- | --- | --- |
-| Durable execution control (implementation only) | Codex Goal | `/goal <condition>` carries the outcome's completion condition; the task list (`TaskCreate`/`TaskUpdate`) is its step ledger. One root control spans the outcome | Task list (`todo_write`, or team `task_create`/`task_update`); one root task tree spans the outcome |
+| Durable execution control (implementation only) | `/goal <objective>` behind the `features.goals` flag; the evaluator inspects real files, tests, logs and artifacts. One root control spans the outcome | `/goal <condition>` carries the outcome's completion condition and the evaluator sees only the transcript; the task list (`TaskCreate`/`TaskUpdate`) is its step ledger. One root control spans the outcome | Task list (`todo_write`, or team `task_create`/`task_update`); one root task tree spans the outcome |
 | Implementation worker with isolated worktree | Native App Worker with managed worktree | Background subagent: `Agent` tool with `run_in_background: true` and `isolation: "worktree"` | Background subagent: `Agent` tool with `run_in_background: true` and `isolation: "worktree"` |
 | Read-only research/challenge/review lane | Project subagents in `.codex/agents/*.toml` | `Agent` tool lane: built-in `Explore`, `Plan`, or `general-purpose`, or a project agent in `.claude/agents/*.md` | `Agent` tool lane: built-in `Explore` or `general-purpose`, or a project agent in `.qwen/agents/*.md` |
 | Per-lane model selection | Per-worker/subagent model control in the App | `model` parameter on the `Agent` tool call (dispatch-time override) over `model` frontmatter in `.claude/agents/*.md` (role default) | `model` frontmatter in `.qwen/agents/*.md` (`inherit`, `fast`, a model ID, or `authType:modelId`); exact model IDs are provider-specific |
@@ -55,18 +55,53 @@ The dispatch policy lives in the [implementation phase](spec-first-workflow/phas
 - A wrong result is evidence to improve the diagnosis, brief, or route, not by itself a reason to raise effort. Implementation correction follows its phase-owned frozen-finding contract and never raises effort merely to keep a repair loop active.
 - Required non-implementation re-review remains at least as capable (model and effort) as the review that found the issue. Implementation correction uses delta-only verification instead of re-review.
 
-## Claude Code Goal Mechanics
+## Goal Mechanics
 
-`/goal` is the Claude Code equivalent of a Codex Goal and carries the same restriction: set one only for a genuinely long-running, multi-step, or resumable implementation outcome, never during a non-implementation phase. It requires Claude Code v2.1.139 or later. Vendor authority: [Keep Claude working toward a goal](https://code.claude.com/docs/en/goal).
+Both harnesses expose a durable execution control typed as `/goal`. The name and the repository policy are shared; the vendor contracts are not. Write a goal from the section for the harness you are in, never from the other one.
 
-- `/goal <condition>` sets the condition and starts a turn immediately **with the condition itself as the directive; no separate prompt is sent**. One goal is active per session and a new one replaces it. `/goal` alone reports the condition, elapsed turns, token spend, and the evaluator's last reason. `/goal clear` ends it early; `stop`, `off`, `reset`, `none`, and `cancel` are accepted aliases.
-- Because the condition is the directive, the whole brief travels inside it: outcome, authorities, boundaries, and finish line in one command. Never split a goal into a task prompt plus a separate `/goal` message. A brief that will not compress into the 4,000-character condition is evidence that the outcome is too broad for one goal, not a reason to send two messages.
-- Evaluation is a session-scoped prompt-based Stop hook. After each turn the configured small fast model judges the condition against the conversation and either clears the goal or returns a reason that steers the next turn.
-- **The evaluator runs no tools and reads no files.** Write the condition against evidence the run itself surfaces: name the [validation matrix](../AGENTS.md#validation-matrix) command and the result that proves the claim. A condition the transcript cannot demonstrate closes on an assertion instead of proof.
-- Carry the accepted stop condition into the goal text, including the invariants that must not change and an explicit bound such as `or stop after 20 turns`. The condition holds up to 4,000 characters; there is no separate turn limit.
+### Shared repository policy
+
+This part is owned here, not by either vendor, and applies to both:
+
+- Set a goal only for a genuinely long-running, multi-step, or resumable implementation outcome, never during a non-implementation phase.
+- One root control spans the outcome. The task list is its step ledger, not a second control.
+- Carry the accepted stop condition into the goal text, including the invariants that must not change and an explicit bound such as `or stop after 20 turns`.
+- The goal text is the directive in both harnesses: setting a goal starts work immediately and no separate prompt follows. A brief that will not fit the harness's goal text means the outcome is too broad for one goal, never a reason to send a second message.
+
+### The difference that changes how you write it
+
+The two evaluators do not have the same powers, so the same goal text is not equally provable in both.
+
+| | Codex | Claude Code |
+| --- | --- | --- |
+| Evaluator input | Concrete evidence: files, tests, logs, benchmark output, generated artifacts. It can rerun commands across turns | The conversation only. It calls no tools and reads no files |
+| What the goal must name | The verification surface that proves the outcome | The command whose printed result proves the outcome |
+| Failure mode when written wrong | A vague finish line the evidence cannot settle | A true claim the transcript never demonstrated, closed on assertion |
+
+In Codex, name the artifact and let the evaluator go look. In Claude Code, name the command and require its output in the transcript, because nothing outside the transcript is visible to the evaluator.
+
+### Codex Goal Mechanics
+
+Vendor authority: [Follow a goal](https://learn.chatgpt.com/use-cases/follow-goals) and [Using Goals in Codex](https://developers.openai.com/cookbook/examples/codex/using_goals_in_codex).
+
+- `/goal` is behind a feature flag. If it is absent from the slash-command list, enable `features.goals` in `config.toml` or run `codex features enable goals`. Available in the Codex CLI and the desktop app.
+- `/goal <objective>` starts work immediately toward that objective. `/goal` alone reports the current goal; `/goal pause`, `/goal resume`, and `/goal clear` control the run.
+- The vendor pattern is `/goal <desired end state> verified by <specific evidence> while preserving <constraints>. Use <allowed inputs, tools, or boundaries>.` A complete goal states outcome, verification surface, constraints, boundaries, iteration policy, and blocked stop conditions.
+- Completion is evidence-based: an objective is complete only after it is checked against the relevant files, tests, logs, benchmark output, or generated artifacts, never because the model believes it is probably done.
+- No character limit is documented. Length is bounded by usefulness, not by the tool.
+
+### Claude Code Goal Mechanics
+
+Vendor authority: [Keep Claude working toward a goal](https://code.claude.com/docs/en/goal). Requires Claude Code v2.1.139 or later.
+
+- `/goal <condition>` sets the condition and starts a turn immediately **with the condition itself as the directive; no separate prompt is sent**. One goal is active per session and a new one replaces it. `/goal` alone reports the condition, elapsed turns, token spend, and the evaluator's last reason. `/goal clear` ends it early; `stop`, `off`, `reset`, `none`, and `cancel` are accepted aliases. There is no pause or resume.
+- The condition holds up to 4,000 characters; there is no separate turn limit.
+- Evaluation is a session-scoped prompt-based Stop hook. After each turn the configured small fast model, Haiku by default, judges the condition against the conversation and either clears the goal or returns a reason that steers the next turn.
+- **The evaluator runs no tools and reads no files.** Write the condition against evidence the run itself surfaces: name the [validation matrix](../AGENTS.md#validation-matrix) command and the printed result that proves the claim. A condition the transcript cannot demonstrate closes on an assertion instead of proof.
 - A goal does not change permissions. Pair it with auto mode for unattended turns: auto mode removes per-tool prompts, the goal removes per-turn prompts.
 - `--resume` and `--continue` restore an active goal; its turn, timer, and token baselines reset. An achieved or cleared goal is not restored.
 - Non-interactive, `claude -p "/goal <condition>"` runs the loop to completion in one invocation. Add `--output-format stream-json --verbose`, because the default text output prints nothing until the condition is met.
+- Requires a trusted workspace and is unavailable when `disableAllHooks` or `allowManagedHooksOnly` is set, because the evaluator is part of the hooks system.
 - `/goal` needs a trusted workspace and is unavailable when `disableAllHooks` or `allowManagedHooksOnly` is set, because the evaluator is part of the hooks system.
 
 ## Claude Code Worker Mechanics
