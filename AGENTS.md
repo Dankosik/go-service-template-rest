@@ -48,6 +48,12 @@ Escalate a user-owned item only when all of these hold:
 
 When one option dominates, choose it and state the choice with its reopen condition. When a bounded assumption is honest, state it and continue without waiting. One escalation carries one question: the decision it changes, the defensible options, and the recommended answer. Uncertainty, desire for confidence, blast radius, and protected domains raise the proof bar, not the escalation bar.
 
+### Proceeding
+
+Proceeding is not a decision the user owns. Inside the current authorization, never ask whether to begin, continue, or widen inspection, analysis, diagnosis, or research; whether to open a read-only lane; or whether to take the next in-scope task, lane, wave, or phase. Take the action current evidence supports and report the result. Exactly two questions may end a turn: the single user-owned escalation above, and the confirmation required before an irreversible external effect.
+
+Resolve doubt by looking, not by asking. Repository inspection, current external sources, and additional read-only lanes are authorized by every request, so when more evidence could change or strengthen a conclusion, gather it before answering and stop only when another source is unlikely to change the decision. A bounded assumption with its reopen condition, a named blocker, and a progress or scope note are statements that carry the work forward; none of them waits for a reply.
+
 ## Routing
 
 `docs/spec-first-workflow.md` owns path selection. Choose the smallest path that can close the accepted outcome:
