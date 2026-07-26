@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/idempotency"
+	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 	"github.com/example/go-service-template-rest/internal/problem"
 )
 
@@ -96,6 +97,20 @@ func (s *fakeIdempotencyStore) releaseCount() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.releases
+}
+
+// reservedCount reports how many keys were ever claimed, which is what proves a
+// request that reached no operation never touched the store.
+func (s *fakeIdempotencyStore) reservedCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.reserved)
+}
+
+func (s *fakeIdempotencyStore) completedCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.completed)
 }
 
 // TestIdempotentReplaysTheFirstResult is the whole point: a client that retried
@@ -576,5 +591,176 @@ func TestIdempotentRecorderCapturesReadFromBodies(t *testing.T) {
 	}
 	if replay.Body.String() != body {
 		t.Fatalf("replayed body = %q, want %q", replay.Body.String(), body)
+	}
+}
+
+// TestNewRouterKeepsIdempotencyBehindRoutingAndAuth pins the middleware's
+// position in the composed router, which is the part that cannot be proved by
+// calling Idempotent directly.
+//
+// The middleware used to sit in Harden's root chain, outside the generated
+// router. Everything there runs before the validator matches a route or checks
+// a security requirement, so a POST to a path this service does not serve — or
+// one from a caller it would reject — still claimed a durable key and then
+// recorded the rejection as that key's completed outcome. These cases fail
+// against that wiring and pass against the generated per-operation chain.
+func TestNewRouterKeepsIdempotencyBehindRoutingAndAuth(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name       string
+		method     string
+		target     string
+		wantStatus int
+	}{
+		{
+			name:       "unrouted path never reserves",
+			method:     http.MethodPost,
+			target:     "/does-not-exist",
+			wantStatus: http.StatusNotFound,
+		},
+		{
+			name:       "unsupported method on a real path never reserves",
+			method:     http.MethodPost,
+			target:     "/health/live",
+			wantStatus: http.StatusMethodNotAllowed,
+		},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			store := newFakeIdempotencyStore()
+			handler := mustNewRouter(t, slog.New(slog.DiscardHandler), Handlers{}, nil, RouterConfig{
+				Idempotency:               store,
+				IdempotencyOutcomeTimeout: testIdempotencyOutcomeTimeout,
+			})
+
+			request := httptest.NewRequest(testCase.method, testCase.target, strings.NewReader(`{}`))
+			request.Header.Set(IdempotencyKeyHeader, "key-1")
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+
+			if response.Code != testCase.wantStatus {
+				t.Fatalf("status = %d, want %d", response.Code, testCase.wantStatus)
+			}
+			if reserved := store.reservedCount(); reserved != 0 {
+				t.Fatalf("store reserved %d keys for a request that reached no operation, want 0", reserved)
+			}
+		})
+	}
+}
+
+// TestHardenRefusesIdempotencyItCannotPlace keeps the field from being silently
+// dropped by the one composition path that cannot honor it. A service that set
+// it and got no error would look protected and would not be.
+func TestHardenRefusesIdempotencyItCannotPlace(t *testing.T) {
+	t.Parallel()
+
+	terminal := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
+
+	_, err := Harden(slog.New(slog.DiscardHandler), telemetry.New(), RouterConfig{
+		MaxBodyBytes:              testRouterMaxBodyBytes,
+		RequestTimeout:            testRouterRequestTimeout,
+		Idempotency:               newFakeIdempotencyStore(),
+		IdempotencyOutcomeTimeout: testIdempotencyOutcomeTimeout,
+	}, terminal)
+	if err == nil {
+		t.Fatal("Harden() error = nil; a store it cannot place must be refused, not ignored")
+	}
+	if !strings.Contains(err.Error(), "ChiServerOptions.Middlewares") {
+		t.Fatalf("Harden() error = %q, want it to name the seam that does honor a store", err)
+	}
+}
+
+// TestIdempotentStoresOnlyOutcomesThatDescribeTheWork covers the statuses whose
+// storage was the second half of the same defect.
+//
+// A credential rejection describes the attempt, not the request, and the
+// fingerprint deliberately excludes the credential — so storing a 401 meant a
+// client that refreshed an expired token and retried the byte-identical request
+// was replayed its own 401 for the whole retention window, and the work never
+// ran.
+func TestIdempotentStoresOnlyOutcomesThatDescribeTheWork(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name       string
+		status     int
+		wantStored bool
+	}{
+		{name: "expired credential is not the request's outcome", status: http.StatusUnauthorized},
+		{name: "insufficient permission is not the request's outcome", status: http.StatusForbidden},
+		{name: "request timeout invites a retry", status: http.StatusRequestTimeout},
+		{name: "rate limiting invites a retry", status: http.StatusTooManyRequests},
+		{name: "server fault stays retryable", status: http.StatusInternalServerError},
+		{name: "created is the work", status: http.StatusCreated, wantStored: true},
+		{name: "validation rejection is a decision about the request", status: http.StatusBadRequest, wantStored: true},
+		{name: "domain conflict is a decision about the request", status: http.StatusConflict, wantStored: true},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			store := newFakeIdempotencyStore()
+			handler := idempotentTestHandler(t, store, func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(testCase.status)
+			})
+
+			if got := postWithKey(handler, "key-1", `{"slug":"first"}`).Code; got != testCase.status {
+				t.Fatalf("status = %d, want %d", got, testCase.status)
+			}
+
+			if stored := store.completedCount(); (stored == 1) != testCase.wantStored {
+				t.Fatalf("store completed %d outcomes for %d, want stored = %v", stored, testCase.status, testCase.wantStored)
+			}
+			if testCase.wantStored {
+				return
+			}
+			// A key that was not completed has to be released, or the retry this
+			// status invites is refused for work that never happened.
+			if store.releaseCount() != 1 {
+				t.Fatalf("store released %d reservations for %d, want 1", store.releaseCount(), testCase.status)
+			}
+		})
+	}
+}
+
+// TestRequestFingerprintSeparatesRequestsThatDifferOnlyInTheQuery covers the
+// omission that made the same key answer two different requests with one
+// result: a contract expressing a variant in the query rather than the body.
+func TestRequestFingerprintSeparatesRequestsThatDifferOnlyInTheQuery(t *testing.T) {
+	t.Parallel()
+
+	fingerprintOf := func(t *testing.T, target string, contentType string) string {
+		t.Helper()
+		request := httptest.NewRequest(http.MethodPost, target, strings.NewReader(`{"slug":"first"}`))
+		if contentType != "" {
+			request.Header.Set("Content-Type", contentType)
+		}
+		fingerprint, err := requestFingerprint(request)
+		if err != nil {
+			t.Fatalf("requestFingerprint() error = %v, want nil", err)
+		}
+		return fingerprint
+	}
+
+	csv := fingerprintOf(t, "/api/v1/exports?format=csv", "")
+	pdf := fingerprintOf(t, "/api/v1/exports?format=pdf", "")
+	if csv == pdf {
+		t.Fatal("requestFingerprint() matched two requests differing only in the query; the second would replay the first's response")
+	}
+
+	// Parameter order is not intent. A client that reorders between attempts is
+	// still retrying the same request and must not be told its key was reused.
+	if a, b := fingerprintOf(t, "/api/v1/exports?a=1&b=2", ""), fingerprintOf(t, "/api/v1/exports?b=2&a=1", ""); a != b {
+		t.Fatal("requestFingerprint() split one request across two parameter orderings")
+	}
+
+	// The same bytes mean different things under different media types.
+	if a, b := fingerprintOf(t, "/api/v1/exports", "application/json"), fingerprintOf(t, "/api/v1/exports", "text/csv"); a == b {
+		t.Fatal("requestFingerprint() matched two requests differing only in Content-Type")
 	}
 }

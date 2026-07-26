@@ -206,6 +206,7 @@ func sentinelConfigSourceValues() map[string]any {
 		"http.max_header_bytes":            20 << 10,
 		"http.max_body_bytes":              int64(2 << 20),
 		"http.max_in_flight":               512,
+		"http.max_connections":             1024,
 		"http.access_log_health_probes":    true,
 		"http.idempotency_outcome_timeout": "2s",
 
@@ -264,6 +265,7 @@ func expectedSentinelSnapshotValues() map[string]any {
 		"http.max_header_bytes":            20 << 10,
 		"http.max_body_bytes":              int64(2 << 20),
 		"http.max_in_flight":               512,
+		"http.max_connections":             1024,
 		"http.access_log_health_probes":    true,
 		"http.idempotency_outcome_timeout": 2 * time.Second,
 

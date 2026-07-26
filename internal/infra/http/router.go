@@ -48,6 +48,12 @@ type RouterConfig struct {
 	// answer with the first attempt's result instead of doing the work twice.
 	// Nil leaves the middleware out of the chain entirely; see IdempotencyStore
 	// for what a store has to guarantee.
+	//
+	// Only NewRouter honors it, because only NewRouter owns the generated router
+	// the middleware has to sit inside; Harden rejects it rather than installing
+	// it where it would run before authentication. A service that builds its own
+	// generated server installs Idempotent in its own ChiServerOptions.Middlewares
+	// instead — see Idempotent for where in that list it belongs.
 	Idempotency IdempotencyStore
 	// IdempotencyOutcomeTimeout bounds recording or releasing a reservation after
 	// the handler has answered. It is required when Idempotency is set: that call
@@ -96,9 +102,56 @@ func NewRouter(log *slog.Logger, h Handlers, metrics *telemetry.Metrics, cfg Rou
 		return nil, err
 	}
 
-	apiSubrouter := openapi.HandlerWithOptions(server, generatedChiServerOptions(rejectRequest, requestValidator))
+	idempotency, err := idempotencyMiddleware(log, cfg)
+	if err != nil {
+		return nil, err
+	}
 
-	return Harden(log, metrics, cfg, apiSubrouter)
+	// Order inside the generated router matters and is the reverse of a chi
+	// chain: the wrapper applies this slice innermost-first, so the validator
+	// listed last is the outermost of the two and idempotency runs after it.
+	// See idempotencyMiddleware for why that is the only correct order.
+	generatedMiddlewares := []openapi.MiddlewareFunc{requestValidator}
+	if idempotency != nil {
+		generatedMiddlewares = []openapi.MiddlewareFunc{idempotency, requestValidator}
+	}
+	apiSubrouter := openapi.HandlerWithOptions(server, generatedChiServerOptions(rejectRequest, generatedMiddlewares...))
+
+	// Cleared, because this function has already placed the middleware inside the
+	// generated router. Leaving it set would trip Harden's own rejection of a
+	// configuration it cannot honor.
+	hardenCfg := cfg
+	hardenCfg.Idempotency = nil
+	hardenCfg.IdempotencyOutcomeTimeout = 0
+
+	return Harden(log, metrics, hardenCfg, apiSubrouter)
+}
+
+// idempotencyMiddleware builds the idempotency middleware for a generated
+// router's per-operation chain, or nil when no store is configured.
+//
+// It belongs inside the generated router rather than in Harden's root chain,
+// and the difference is not cosmetic. Harden receives the API as an opaque
+// http.Handler, so anything it installs runs before the generated validator —
+// which is what resolves the security requirement and what matches the route.
+// Reserving there claimed a key for every unauthenticated POST to every path,
+// including ones this service does not route, and then recorded the resulting
+// 401 or 404 as the key's completed outcome. A client whose credential expired
+// between two attempts was replayed its own 401 for the whole retention window
+// after refreshing it, and the work it was retrying never ran.
+func idempotencyMiddleware(log *slog.Logger, cfg RouterConfig) (openapi.MiddlewareFunc, error) {
+	if cfg.Idempotency == nil {
+		return nil, nil //nolint:nilnil // No store configured is the ordinary case, not a failure.
+	}
+	// Rejected rather than defaulted, because the default that would look
+	// harmless here is the unbounded one this replaced.
+	if cfg.IdempotencyOutcomeTimeout <= 0 {
+		return nil, fmt.Errorf("http router: idempotency outcome timeout must be > 0 when an idempotency store is configured")
+	}
+
+	return func(next http.Handler) http.Handler {
+		return Idempotent(cfg.Idempotency, cfg.IdempotencyOutcomeTimeout, log, next)
+	}, nil
 }
 
 // Harden wraps an API handler in this repository's middleware chain and its
@@ -115,7 +168,13 @@ func NewRouter(log *slog.Logger, h Handlers, metrics *telemetry.Metrics, cfg Rou
 // The order is the contract, outermost first:
 //
 //	RequestCorrelation → OTel → SecurityHeaders → AccessLog → RequestBodyLimit
-//	→ RequestTimeout → MaxInFlight → Recover → Idempotent → apiSubrouter
+//	→ RequestTimeout → MaxInFlight → RateLimit → Recover → apiSubrouter
+//
+// Idempotency is deliberately not in it. Everything here runs before the
+// generated validator authenticates the caller or matches the route, which is
+// the wrong side of both for a middleware that claims a durable key; see
+// idempotencyMiddleware. A service composing its own generated server installs
+// Idempotent in its own ChiServerOptions.Middlewares instead.
 func Harden(log *slog.Logger, metrics *telemetry.Metrics, cfg RouterConfig, apiSubrouter http.Handler) (http.Handler, error) {
 	if log == nil {
 		return nil, fmt.Errorf("http router: logger is required")
@@ -135,10 +194,16 @@ func Harden(log *slog.Logger, metrics *telemetry.Metrics, cfg RouterConfig, apiS
 	if cfg.MaxInFlight < 0 {
 		return nil, fmt.Errorf("http router: max in flight must be >= 0")
 	}
-	// Rejected at construction rather than defaulted, because the default that
-	// would look harmless here is the unbounded one this replaced.
-	if cfg.Idempotency != nil && cfg.IdempotencyOutcomeTimeout <= 0 {
-		return nil, fmt.Errorf("http router: idempotency outcome timeout must be > 0 when an idempotency store is configured")
+	// Refused rather than ignored. This function cannot place the middleware
+	// correctly — everything it installs runs ahead of the generated validator,
+	// so a key would be claimed before the caller is authenticated and before
+	// the route is matched. Silently dropping the field would be worse: the
+	// service would look protected and would not be.
+	if cfg.Idempotency != nil {
+		return nil, fmt.Errorf(
+			"http router: idempotency cannot be installed by Harden, which runs ahead of the generated validator: " +
+				"install httpx.Idempotent in the generated router's ChiServerOptions.Middlewares, ahead of the request validator",
+		)
 	}
 	// Same reason: a limiter with no key silently limits nothing, which looks
 	// exactly like a limiter that is working.
@@ -176,14 +241,10 @@ func Harden(log *slog.Logger, metrics *telemetry.Metrics, cfg RouterConfig, apiS
 		// well outside the generated validator, so an over-budget caller does not
 		// get their body schema-validated before being told no.
 		func(next http.Handler) http.Handler { return RateLimit(cfg.RateLimit, cfg.RateLimitKey, next) },
+		// Innermost here, and still outside the generated router, so a panic
+		// raised inside an operation unwinds through the idempotency middleware
+		// — releasing the reservation — before it becomes a 500.
 		func(next http.Handler) http.Handler { return Recover(log, next) },
-		// Innermost, so it wraps the handler and nothing else: it must see the
-		// response the operation actually produced, and a panic that Recover
-		// turns into a 500 must unwind through it so the reservation is released
-		// rather than recorded as a completed attempt.
-		func(next http.Handler) http.Handler {
-			return Idempotent(cfg.Idempotency, cfg.IdempotencyOutcomeTimeout, log, next)
-		},
 	)
 
 	return RequestCorrelation(rootRouter), nil
@@ -399,6 +460,23 @@ func applyHTTPPolicy(root chi.Router) {
 		setAllowHeader(w, allowMethods)
 		writeProblem(w, r, problemResponse{code: problem.CodeMethodNotAllowed, detail: "method is not allowed for this resource"})
 	})
+}
+
+// boundedHTTPMethods is the set probed to build an Allow header, and bounds how
+// many router matches one 405 costs.
+//
+// CONNECT and TRACE are deliberately absent. chi cannot route CONNECT from an
+// ordinary handler and oapi-codegen never generates a TRACE operation, so
+// probing for them costs a router match per 405 and can only ever answer no —
+// while advertising TRACE in an Allow header is a finding in most scanners.
+var boundedHTTPMethods = []string{
+	http.MethodGet,
+	http.MethodHead,
+	http.MethodDelete,
+	http.MethodOptions,
+	http.MethodPatch,
+	http.MethodPost,
+	http.MethodPut,
 }
 
 func allowedMethodsForPath(root chi.Router, path string) []string {

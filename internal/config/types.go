@@ -65,6 +65,14 @@ type HTTPConfig struct {
 	// on a finite resource until all of them spend the full budget waiting.
 	// Zero disables shedding.
 	MaxInFlight int `koanf:"max_in_flight"`
+	// MaxConnections bounds how many connections the API listener accepts at
+	// once. MaxInFlight does not: it bounds handler execution, and every
+	// accepted connection already costs a goroutine and its read and write
+	// buffers before any middleware runs. Excess callers wait in the kernel
+	// backlog, where they cost nothing. Validated against MaxInFlight so the cap
+	// can never shed below the concurrency the service advertises. Zero accepts
+	// without a bound.
+	MaxConnections int `koanf:"max_connections"`
 	// AccessLogHealthProbes re-enables access logging for /health/live and
 	// /health/ready. It defaults to false because orchestrator probes generate
 	// continuous no-signal log volume.
