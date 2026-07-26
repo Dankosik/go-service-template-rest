@@ -77,7 +77,7 @@ Before moving forward, close the inputs required by the next phase action or imp
 A request authorizing end-to-end implementation may continue through the needed phases and reviews in one session. Stop only when:
 
 - the user explicitly named that boundary;
-- a required user or external decision is missing;
+- a required external decision or input is unavailable from its named owner;
 - the next action requires new authority;
 - current evidence shows that an earlier decision must change;
 - the remaining work needs durable resume or coordination that has not yet been recorded.

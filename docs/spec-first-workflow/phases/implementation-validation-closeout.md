@@ -53,7 +53,7 @@ For direct work, the root edits the assigned checkout, performs one coherent sel
 
 ### Worker Execution
 
-Keep direct work root-local. For structured or orchestrated implementation, delegate each ready ledger task by default to one harness-native implementation Worker in an isolated worktree — a Codex App Worker with managed worktree, or a Claude Code background subagent with worktree isolation, per [Agent Harness](../../agent-harness.md#control-map) — once its behavior, mechanism, ownership, editable boundary, proof, and stop condition are closed. Dependencies schedule Workers sequentially; a planned wave with positive independence permits concurrent dispatch. Sequential work is not a reason for root-local implementation. Root-local implementation is limited to direct work or an unavailable native Worker control; reclassify a structured task as direct only when it satisfies the router's current direct criteria. Create one root durable execution control (Codex Goal or Claude Code task list) only for a genuinely multi-step or resumable outcome.
+Keep direct work root-local. For structured or orchestrated implementation, delegate each ready ledger task by default to one harness-native implementation Worker in an isolated worktree — a Codex App Worker with managed worktree, or a Claude Code background subagent with worktree isolation, per [Agent Harness](../../agent-harness.md#control-map) — once its behavior, mechanism, ownership, editable boundary, proof, and stop condition are closed. Dependencies schedule Workers sequentially; a planned wave with positive independence permits concurrent dispatch. Sequential work is not a reason for root-local implementation. Root-local implementation is limited to direct work or an unavailable native Worker control; reclassify a structured task as direct only when it satisfies the router's current direct criteria. Create one root durable execution control — a Codex Goal, or `/goal` plus the task list in Claude Code ([Claude Code Goal Mechanics](../../agent-harness.md#claude-code-goal-mechanics)) — only for a genuinely multi-step or resumable outcome.
 
 Before dispatching from uncommitted accepted input, identify the source
 checkout and authorized paths and inspect its current diff/status. Record a
@@ -78,7 +78,7 @@ paths. A scope-invalid candidate has one disposition: reject it in full from
 the recorded base while other provisional wave members remain unaffected. A
 required boundary expansion reopens the scope owner before implementation.
 
-For every Worker task, the root explicitly selects and passes the best-suited available model and a task-matched reasoning effort through the current harness's supported controls; never inherit a controllable default or ask the user to choose. This is the user's standing request. [Agent Harness](../../agent-harness.md#model-and-effort-selection) owns model tiers, effort baselines, and evaluation rules.
+For every Worker task, the root explicitly selects and passes the best-suited available model and a task-matched reasoning effort through the current harness's supported controls; never inherit a controllable default and never ask the user to choose. [Agent Harness](../../agent-harness.md#model-and-effort-selection) owns model tiers, effort baselines, and evaluation rules.
 
 #### Progress
 

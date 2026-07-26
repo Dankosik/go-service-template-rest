@@ -19,7 +19,7 @@ The workflow instructions in this repository are harness-neutral. This document 
 
 | Workflow concept | Codex App | Claude Code | Qwen Code |
 | --- | --- | --- | --- |
-| Durable execution control (implementation only) | Codex Goal | Task list (`TaskCreate`/`TaskUpdate`); one root task tree spans the outcome | Task list (`todo_write`, or team `task_create`/`task_update`); one root task tree spans the outcome |
+| Durable execution control (implementation only) | Codex Goal | `/goal <condition>` carries the outcome's completion condition; the task list (`TaskCreate`/`TaskUpdate`) is its step ledger. One root control spans the outcome | Task list (`todo_write`, or team `task_create`/`task_update`); one root task tree spans the outcome |
 | Implementation worker with isolated worktree | Native App Worker with managed worktree | Background subagent: `Agent` tool with `run_in_background: true` and `isolation: "worktree"` | Background subagent: `Agent` tool with `run_in_background: true` and `isolation: "worktree"` |
 | Read-only research/challenge/review lane | Project subagents in `.codex/agents/*.toml` | `Agent` tool lane: built-in `Explore`, `Plan`, or `general-purpose`, or a project agent in `.claude/agents/*.md` | `Agent` tool lane: built-in `Explore` or `general-purpose`, or a project agent in `.qwen/agents/*.md` |
 | Per-lane model selection | Per-worker/subagent model control in the App | `model` parameter on the `Agent` tool call (dispatch-time override) over `model` frontmatter in `.claude/agents/*.md` (role default) | `model` frontmatter in `.qwen/agents/*.md` (`inherit`, `fast`, a model ID, or `authType:modelId`); exact model IDs are provider-specific |
@@ -32,11 +32,12 @@ The dispatch policy lives in the [implementation phase](spec-first-workflow/phas
 
 | Task class | Codex App | Claude Code | Qwen Code |
 | --- | --- | --- | --- |
-| Clear mechanical work | Luna | Haiku (`claude-haiku-4-5`) | `fast` (the configured `fastModel`) |
+| Clear mechanical work | Luna | Sonnet (`claude-sonnet-5`) | `fast` (the configured `fastModel`) |
 | Ordinary implementation and review | Terra | Sonnet (`claude-sonnet-5`) | `inherit` (the session model) |
-| Complex or high-consequence work | Sol | Opus (`claude-opus-4-8`) | `inherit`, or a stronger configured model ID |
+| Root orchestration, complex, cross-cutting refactoring, or high-consequence work | Sol | Opus (`claude-opus-5`) | `inherit`, or a stronger configured model ID |
 | Explicit user request for the most capable model | — | Fable (`claude-fable-5`) | The strongest configured model ID |
 
+- **Claude Code runs a two-model ladder.** Sonnet 5 carries every mechanical and ordinary lane; Opus 5 carries the root session and every complex, cross-cutting-refactoring, or high-consequence lane. Haiku is no longer a default tier — select it only for a lane that is both trivial and latency-bound, and say why. Run the root on Opus 5 (`--model opus`, or the app's model selector) whenever it orchestrates workers or owns acceptance for a structured or orchestrated outcome.
 - Qwen Code model tiers are provider-specific: the `model` frontmatter in `.qwen/agents/*.md` accepts `inherit`, `fast`, a bare model ID, or `authType:modelId`. `fast` resolves to the configured `fastModel` and falls back to `inherit` when none is set; `inherit` (or an omitted field) uses the session model. Pick exact model IDs from the models configured for the active provider rather than hardcoding them. Qwen Code does not yet expose a per-agent reasoning-effort field, so a lane inherits the session effort.
 
 - Claude Code accepts the aliases `haiku`, `sonnet`, `opus`, and `fable` on the `Agent` tool and in agent frontmatter; the exact model IDs are for SDK and API dispatch.
@@ -54,13 +55,26 @@ The dispatch policy lives in the [implementation phase](spec-first-workflow/phas
 - A wrong result is evidence to improve the diagnosis, brief, or route, not by itself a reason to raise effort. Implementation correction follows its phase-owned frozen-finding contract and never raises effort merely to keep a repair loop active.
 - Required non-implementation re-review remains at least as capable (model and effort) as the review that found the issue. Implementation correction uses delta-only verification instead of re-review.
 
+## Claude Code Goal Mechanics
+
+`/goal` is the Claude Code equivalent of a Codex Goal and carries the same restriction: set one only for a genuinely long-running, multi-step, or resumable implementation outcome, never during a non-implementation phase. It requires Claude Code v2.1.139 or later.
+
+- `/goal <condition>` sets the condition and starts a turn immediately; one goal is active per session. `/goal` alone reports the condition, elapsed turns, token spend, and the evaluator's last reason. `/goal clear` ends it early.
+- Evaluation is a session-scoped prompt-based Stop hook. After each turn the configured small fast model judges the condition against the conversation and either clears the goal or returns a reason that steers the next turn.
+- **The evaluator runs no tools and reads no files.** Write the condition against evidence the run itself surfaces: name the [validation matrix](../AGENTS.md#validation-matrix) command and the result that proves the claim. A condition the transcript cannot demonstrate closes on an assertion instead of proof.
+- Carry the accepted stop condition into the goal text, including the invariants that must not change and an explicit bound such as `or stop after 20 turns`. The condition holds up to 4,000 characters; there is no separate turn limit.
+- A goal does not change permissions. Pair it with auto mode for unattended turns: auto mode removes per-tool prompts, the goal removes per-turn prompts.
+- `--resume` and `--continue` restore an active goal; its turn, timer, and token baselines reset. An achieved or cleared goal is not restored.
+- Non-interactive, `claude -p "/goal <condition>"` runs the loop to completion in one invocation. Add `--output-format stream-json --verbose`, because the default text output prints nothing until the condition is met.
+- `/goal` needs a trusted workspace and is unavailable when `disableAllHooks` or `allowManagedHooksOnly` is set, because the evaluator is part of the hooks system.
+
 ## Claude Code Worker Mechanics
 
 - Keep one write worker per ready ledger task: one background `Agent` lane with `isolation: "worktree"`. Several write workers may run only as members of a positively independent planned wave. The worktree is the isolation boundary; the root still owns acceptance and integration per the implementation phase.
 - The worker receives the same outcome-first brief the implementation phase requires. Route correction briefs to the same worker with `SendMessage` so its context survives; replace the worker only for an execution stall or invalidated base, and continue the same exact brief from the frozen candidate.
 - Follow completion notifications instead of polling or narrating unchanged state.
 - Read-only lanes follow [Subagents And Handoff](spec-first-workflow/shared/subagents-and-handoff.md): one distinct decision-changing question per lane, concurrency bounded by current capacity and independence, and read-only boundaries stated in each brief.
-- The Claude Code task list follows the same rule as a Codex Goal: create it only for genuinely long-running, multi-step, or resumable implementation, never during non-implementation phases.
+- The task list is the goal's step ledger and carries the same implementation-only restriction ([Claude Code Goal Mechanics](#claude-code-goal-mechanics)).
 
 ## Repository Wiring
 
