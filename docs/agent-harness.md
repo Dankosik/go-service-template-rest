@@ -57,9 +57,10 @@ The dispatch policy lives in the [implementation phase](spec-first-workflow/phas
 
 ## Claude Code Goal Mechanics
 
-`/goal` is the Claude Code equivalent of a Codex Goal and carries the same restriction: set one only for a genuinely long-running, multi-step, or resumable implementation outcome, never during a non-implementation phase. It requires Claude Code v2.1.139 or later.
+`/goal` is the Claude Code equivalent of a Codex Goal and carries the same restriction: set one only for a genuinely long-running, multi-step, or resumable implementation outcome, never during a non-implementation phase. It requires Claude Code v2.1.139 or later. Vendor authority: [Keep Claude working toward a goal](https://code.claude.com/docs/en/goal).
 
-- `/goal <condition>` sets the condition and starts a turn immediately; one goal is active per session. `/goal` alone reports the condition, elapsed turns, token spend, and the evaluator's last reason. `/goal clear` ends it early.
+- `/goal <condition>` sets the condition and starts a turn immediately **with the condition itself as the directive; no separate prompt is sent**. One goal is active per session and a new one replaces it. `/goal` alone reports the condition, elapsed turns, token spend, and the evaluator's last reason. `/goal clear` ends it early; `stop`, `off`, `reset`, `none`, and `cancel` are accepted aliases.
+- Because the condition is the directive, the whole brief travels inside it: outcome, authorities, boundaries, and finish line in one command. Never split a goal into a task prompt plus a separate `/goal` message. A brief that will not compress into the 4,000-character condition is evidence that the outcome is too broad for one goal, not a reason to send two messages.
 - Evaluation is a session-scoped prompt-based Stop hook. After each turn the configured small fast model judges the condition against the conversation and either clears the goal or returns a reason that steers the next turn.
 - **The evaluator runs no tools and reads no files.** Write the condition against evidence the run itself surfaces: name the [validation matrix](../AGENTS.md#validation-matrix) command and the result that proves the claim. A condition the transcript cannot demonstrate closes on an assertion instead of proof.
 - Carry the accepted stop condition into the goal text, including the invariants that must not change and an explicit bound such as `or stop after 20 turns`. The condition holds up to 4,000 characters; there is no separate turn limit.
