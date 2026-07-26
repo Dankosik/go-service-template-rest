@@ -94,6 +94,7 @@ phase or skill owner, or name the owner and condition that must reopen it.
 ## Instruction Ownership
 
 - Keep global rules here.
+- Never record repository-specific content — service name, module path, deployment target, owner, or service-specific invariant — in a template-owned instruction path. `template-owned.paths` lists those paths and [Template Sync](docs/template-sync.md) mirrors them verbatim into every derived repository, so anything service-specific left there is overwritten on the next sync and meanwhile misleads every other repository. That document names the repository-owned records which receive such content instead.
 - [docs/agent-harness.md](docs/agent-harness.md) owns harness detection and the mapping from workflow concepts to native Codex App and Claude Code controls: durable execution controls, workers, subagent lanes, model selection, and reasoning effort.
 - [Skill authoring](docs/skill-authoring.md) owns the lean behavioral-adapter contract.
 - `docs/spec-first-workflow.md` owns routing and movement.
