@@ -82,6 +82,8 @@ A request authorizing end-to-end implementation may continue through the needed 
 - current evidence shows that an earlier decision must change;
 - the remaining work needs durable resume or coordination that has not yet been recorded.
 
+Absent one of those conditions, movement is automatic: enter the next phase, task, or wave, and report what it produced instead of asking whether to enter it ([Proceeding](../AGENTS.md#proceeding)).
+
 Review, repair, and re-review of non-implementation artifacts stay with the artifact owner until the shared convergence condition is met. Implementation moves only under the [current phase-owned execution, acceptance, review, correction, and closeout contract](spec-first-workflow/phases/implementation-validation-closeout.md). [Subagents And Handoff](spec-first-workflow/shared/subagents-and-handoff.md) owns non-implementation review and handoff mechanics.
 
 ### Phase Lock
