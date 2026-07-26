@@ -64,6 +64,30 @@ members of a positively independent planned wave. A Worker receives an outcome-f
 with editable boundaries, current facts, success criteria, focused proof, and
 a real stop condition.
 
+Select the Worker's tier from the task class, because the tier is where the
+lane's reasoning effort is fixed: mechanical work whose route and proof are
+already decided, ordinary implementation, or a protected domain. The harness
+document owns the tier names and how a harness expresses them.
+
+#### Correction Loop
+
+A returned candidate that misses an accepted criterion goes back to **the same
+Worker**, with its context intact, through the harness's own correction channel.
+Spawning a fresh Worker for the same task instead is a defect: it throws away
+the reasoning that made the second attempt cheaper than the first, and it
+re-opens questions the first attempt already closed.
+
+A correction brief names the finding, the criterion it violates, and the proof
+that must change — not a restatement of the whole task. Route it through the
+[Diagnostic Gate](#diagnostic-gate) so a correction that cannot name a
+candidate-caused regression, a violated accepted criterion, or missing proof is
+recorded as an observation rather than re-entering the write lane.
+
+Replace a Worker only for an execution stall that produces no new turn, or for
+an invalidated base, and then continue the same exact brief from the frozen
+candidate. Worker replacement resets context; it is a recovery action, never a
+correction technique.
+
 #### Scope Lock
 
 A candidate is scope-valid only when every changed path is authorized by an
