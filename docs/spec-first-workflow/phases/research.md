@@ -23,7 +23,7 @@ Resolve only evidence gaps that can change a task decision. Research closes deci
 
 ## Method
 
-Scale depth to decision impact, reversibility, uncertainty, and evidence volatility, not source or lane count. Before searching, classify each open item and route it to its smallest owner: research an evidence question; route a target, policy, or risk-tolerance choice to its decision owner; route a mechanism choice to design; or carry a later proof obligation to test design. Do not substitute missing proof for an unset acceptance target. Label each decision-changing quantity as a measured baseline, external limit or quota, forecast, accepted target, or assumption. Map only materially affected evidence lenses, marking each researched, established by current authoritative evidence, or not triggered with a concrete reason.
+Scale depth to decision impact, reversibility, uncertainty, and evidence volatility, not source or lane count. Before searching, classify each open item and route it to its smallest owner: research an evidence question; route a target, policy, or risk-tolerance choice to its owner under [Decision Ownership](../../../AGENTS.md#decision-ownership); route a mechanism choice to design; or carry a later proof obligation to test design. Do not substitute missing proof for an unset acceptance target. Label each decision-changing quantity as a measured baseline, external limit or quota, forecast, accepted target, or assumption. Map only materially affected evidence lenses, marking each researched, established by current authoritative evidence, or not triggered with a concrete reason.
 
 For each question, state:
 

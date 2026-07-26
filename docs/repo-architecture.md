@@ -127,6 +127,24 @@ When a task introduces async work, keep the extension path stable:
 
 Preferred rule: if the workload has a distinct lifecycle or scaling model, add a new binary instead of hiding durable background loops inside HTTP handlers.
 
+## System Neighbors
+
+The runtime flows above stop at this service's edges. This section records what is on the other side of those edges, and it is the inventory that boundary-crossing diagnosis and design consume before reading any code. This record is repository-owned: [Template Sync](./template-sync.md) never mirrors it, so each derived service maintains its own.
+
+The template itself ships no neighbor. A derived service replaces the placeholder row with one row per system it exchanges work with — inbound callers and clients, outbound providers, brokers, jobs, and managed dependencies.
+
+| Neighbor | Role on the failing path | Canonical contract source | Local checkout or clone | Runtime evidence | Owner |
+| --- | --- | --- | --- | --- | --- |
+| _(none in the template)_ | inbound caller, outbound provider, broker, job, or managed dependency | its repository, generated contract, published spec, or live contract endpoint | path or clone URL | the log/trace query, dashboard, or command that reads it | accountable team or person |
+
+Rules that stay stable:
+
+- A neighbor belongs here as soon as this service calls it, is called by it, or shares durable state with it — not only when a task changes it.
+- Record where its current contract actually lives, not a local copy or generated client standing in for it.
+- Record the concrete way to read its runtime evidence, plus the correlation field that joins it to this service's `X-Request-ID` and W3C Trace Context. Without that join, cross-service evidence cannot be gathered for one unit of work.
+- A neighbor discovered during diagnosis is added here as part of closing that diagnosis.
+- Record access paths and query shapes only. Credentials, tokens, and customer data never belong in this file.
+
 ## Extension Seams
 
 Use these seams when extending the repository:

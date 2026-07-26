@@ -32,13 +32,13 @@ A brief, usually in chat:
 1. Reconstruct the likely outcome, scope, authority, success signal, and affected surfaces before asking anything.
 2. Resolve repository facts, current owners relevant to routing, and current constraints by bounded inspection; leave target ownership and placement to the owning design phase.
 3. State safe assumptions with their boundary and reopen condition.
-4. Ask the smallest single user-owned blocking question only when its answer would materially change behavior, scope, ownership, safety, authorization, or proof and no safe bounded assumption exists.
+4. Ask a question only under [Decision Ownership](../../../AGENTS.md#decision-ownership).
 5. Close intake once the brief makes `direct`, `structured`, or `orchestrated` selectable.
 
 Use `grilling` only when the user explicitly requests an exhaustive stress test or interview. Repetition in the user's input is a priority signal, not a reason to expand the questionnaire.
 
 ## Stop Rule
 
-Continue to the selected path when the outcome, scope, authority, constraints, success signal, affected surfaces, and material assumptions are clear enough. Stop and ask the smallest user-owned blocking question when guessing would change correctness or authority.
+Continue to the selected path when the outcome, scope, authority, constraints, success signal, affected surfaces, and material assumptions are clear enough.
 
 Do not research broadly, design, plan, or implement merely to avoid resolving a genuinely blocking intent decision.
