@@ -12,13 +12,14 @@ Load when the failing path leaves this process: a caller-supplied value, a rejec
 - Read each neighbor's canonical contract from its own repository, generated contract, published spec, or live contract endpoint. Its client code, a vendored copy, and this repository's expectations are not its contract.
 - Classify each hop against its contract as producer defect, local defect, consumer defect, contract disagreement, or transport/infrastructure between hops. Only a classified hop is cleared; an uninspected hop stays an open hypothesis.
 - Separate one cause with several downstream symptoms from several independent defects. A cascade is proven by the correlation identity and ordering, not by plausibility.
-- Fix at the earliest owner of the violated invariant. When that owner is another repository, return an external blocker with the owner and the evidence rather than compensating locally; add a local guard only when this repository owns the contract it fails to enforce.
+- Fix at the earliest owner of the violated invariant. In `fix_authorized`, edit an available neighboring repository when it owns the repair, following its instructions and preserving unrelated work; do not compensate locally merely to stay inside the assigned checkout. Return an external blocker when the owning repository is unavailable, read-only, outside the accepted outcome, or the request does not authorize its required action. In `diagnosis_only`, name the owning repository without editing it. Add a local guard only when this repository owns the contract it fails to enforce.
 - Carry the minimum sanitized field that supports the claim; secrets, tokens, credentials, and customer data never leave a neighbor's logs.
 
 ## Imitate
 
 ```text
 Symptom: client shows "payment pending" indefinitely; this service logs 502 from billing.
+Mode: diagnosis_only.
 Path: web client -> gateway -> this service -> billing-service -> ledger worker.
 Correlation: X-Request-ID 8f3c... found in gateway, this service, billing; absent in ledger.
 Evidence per hop (both sides):
