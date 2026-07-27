@@ -64,10 +64,10 @@ members of a positively independent planned wave. A Worker receives an outcome-f
 with editable boundaries, current facts, success criteria, focused proof, and
 a real stop condition.
 
-Select the Worker's tier from the task class, because the tier is where the
-lane's reasoning effort is fixed: mechanical work whose route and proof are
-already decided, ordinary implementation, or a protected domain. The harness
-document owns the tier names and how a harness expresses them.
+Select the Worker's model and reasoning effort independently from the remaining
+execution rather than the overall importance of the outcome. Do not infer the
+model from the effort class. The harness document owns the tier mappings,
+stronger-model conditions, and how the current harness expresses both controls.
 
 #### Route Discovery Stays Root-Local
 
