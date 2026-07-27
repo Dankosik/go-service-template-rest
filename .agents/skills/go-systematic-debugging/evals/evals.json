@@ -93,6 +93,19 @@
         "Does not close diagnosis at this service's ingress when the value originated upstream.",
         "Names the owning repository and returns an external blocker instead of proposing a local compensating change."
       ]
+    },
+    {
+      "id": 7,
+      "category": "domain_defect",
+      "prompt": "Use go-systematic-debugging in fix_authorized mode. Correlated logs and contracts prove the first broken invariant is owned by an available neighboring repository. Its instructions and clean checkout are available, the accepted outcome requires that repair, and a local compensating guard would be wrong. Return the compact repair outcome.",
+      "expected_output": "Repair the violated invariant in the neighboring repository under its own instructions, preserve unrelated work, run proof in every changed repository, and do not request a separate task or confirmation solely because the repair crosses a repository boundary.",
+      "files": [],
+      "assertions": [
+        "Names the neighboring repository as the earliest repair owner and changes it instead of adding a local compensating guard.",
+        "Loads the neighboring repository's instructions and inspects its checkout and dirty state before editing.",
+        "Does not request a separate task or confirmation solely because the repair crosses a repository boundary.",
+        "Validates every changed repository and reports any unavailable integrated proof honestly."
+      ]
     }
   ]
 }
