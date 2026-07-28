@@ -290,6 +290,10 @@ func TestBoundedAPIListenerCapsAcceptedConnections(t *testing.T) {
 		t.Cleanup(func() { _ = listener.Close() })
 
 		release := make(chan struct{})
+		releaseAll := sync.OnceFunc(func() { close(release) })
+		defer releaseAll()
+		limitReached := make(chan struct{})
+		signalLimitReached := sync.OnceFunc(func() { close(limitReached) })
 		var concurrent atomic.Int64
 		var peak atomic.Int64
 		server := &http.Server{
@@ -302,6 +306,9 @@ func TestBoundedAPIListenerCapsAcceptedConnections(t *testing.T) {
 						break
 					}
 				}
+				if peak.Load() == limit {
+					signalLimitReached()
+				}
 				<-release
 				concurrent.Add(-1)
 				w.WriteHeader(http.StatusOK)
@@ -311,18 +318,25 @@ func TestBoundedAPIListenerCapsAcceptedConnections(t *testing.T) {
 		t.Cleanup(func() { _ = server.Close() })
 
 		var wg sync.WaitGroup
+		client := &http.Client{Timeout: 5 * time.Second}
 		for range limit * 3 {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				client := &http.Client{Timeout: 5 * time.Second}
 				request, reqErr := http.NewRequestWithContext(
 					context.Background(), http.MethodGet, "http://"+base.Addr().String()+"/", nil)
 				if reqErr != nil {
+					t.Errorf("NewRequestWithContext() error = %v", reqErr)
 					return
 				}
+				// LimitListener releases capacity when the connection closes, so
+				// keeping an idle test connection alive would make queued requests
+				// wait for the client's diagnostic timeout rather than exercise
+				// the next admitted connection.
+				request.Close = true
 				response, doErr := client.Do(request)
 				if doErr != nil {
+					t.Errorf("client.Do() error = %v", doErr)
 					return
 				}
 				_, _ = io.Copy(io.Discard, response.Body)
@@ -330,12 +344,15 @@ func TestBoundedAPIListenerCapsAcceptedConnections(t *testing.T) {
 			}()
 		}
 
-		// Give the excess callers time to reach the accept queue, then let the
-		// admitted ones finish. Without the cap, every one of them would have
-		// been accepted and be sitting in the handler by now.
-		time.Sleep(200 * time.Millisecond)
+		// Release the admitted requests only after the listener reaches its cap.
+		// The timeout diagnoses a broken accept path; it is not synchronization.
+		select {
+		case <-limitReached:
+		case <-time.After(5 * time.Second):
+			t.Fatal("listener did not reach its connection limit")
+		}
 		observedPeak := peak.Load()
-		close(release)
+		releaseAll()
 		wg.Wait()
 
 		if observedPeak > limit {

@@ -76,6 +76,11 @@ working directory must set distinct paths and must never operate another
 service's state. See the runner skill for the canonical ownership and resource
 limit procedure.
 
+SSH readiness retries wait five seconds and provider deletion checks wait two
+seconds by default. The lifecycle self-check sets both delays to zero because
+its fake provider is synchronous; real runs keep the defaults unless measured
+provider behavior justifies another interval.
+
 When repeated fresh-Droplet startup time matters, build the optional reusable
 snapshot once and source its generated, non-secret image reference before
 preflight or execution:

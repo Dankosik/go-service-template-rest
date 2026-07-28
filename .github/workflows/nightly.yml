@@ -20,11 +20,9 @@ env:
 jobs:
   reliability:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
 
       - name: Setup Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -35,52 +33,17 @@ jobs:
             go.sum
             tools/go.sum
 
-      - name: Setup Node
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: "22.23.1"
-
-      - name: Verify module integrity
-        run: make mod-check
-
-      - name: Verify project structure
-        run: make project-structure-check
-
-      - name: Verify formatting drift
-        run: make fmt-check
-
-      - name: Lint
-        run: make lint
-
-      - name: Modernize suggestions (informational)
-        continue-on-error: true
-        run: make modernize-check
-
-      - name: Test parallelism suggestions (informational)
-        continue-on-error: true
-        run: make test-parallelism-check
-
       - name: Flake detection run
         run: make test-flake-smoke
 
       - name: Fuzz smoke run
         run: make test-fuzz-smoke FUZZ_TIME=${{ env.FUZZ_TIME }}
 
-      - name: Race detector
-        run: make test-race
-
       - name: Integration tests
         run: REQUIRE_DOCKER=1 make test-integration
 
       - name: Benchmark infrastructure check
         run: make benchmark-infra-check
-
-      - name: OpenAPI contract checks
-        run: |
-          make openapi-drift-check
-          go test ./internal/openapi
-          make openapi-validate
-          make openapi-lint
 
       - name: Run Go security checks
         run: make go-security
@@ -94,25 +57,5 @@ jobs:
           image-ref: service:nightly
           format: table
           exit-code: "1"
-          ignore-unfixed: true
-          severity: CRITICAL,HIGH
-
-  repository-security:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Scan repository filesystem/config with Trivy (informational)
-        continue-on-error: true
-        uses: aquasecurity/trivy-action@c07df6fec6fa692e6fd1200d50aaa1fdd66f03c8 # 0.34.2
-        with:
-          scan-type: fs
-          scan-ref: .
-          scanners: vuln,misconfig
-          format: table
-          exit-code: "0"
           ignore-unfixed: true
           severity: CRITICAL,HIGH

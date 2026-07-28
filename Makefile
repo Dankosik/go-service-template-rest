@@ -10,6 +10,7 @@ GO_FILES := $(shell git ls-files --cached --others --exclude-standard -- '*.go' 
 GOFUMPT_FILES := $(filter-out internal/openapi/openapi.gen.go internal/infra/postgres/sqlcgen/%,$(GO_FILES))
 REDOCLY_CLI_VERSION := 2.40.0
 GO_TOOL := bash ./scripts/run-go-tool.sh
+GOLANGCI_LINT ?= $(GO_TOOL) golangci-lint
 GO_REQUIRED_VERSION := $(shell awk '/^go / {print $$2; exit}' go.mod)
 TEST_REPORT_DIR := .artifacts/test
 TEST_JUNIT_FILE := $(TEST_REPORT_DIR)/junit.xml
@@ -24,6 +25,9 @@ COVERAGE_EXCLUDE_REGEX ?= (^|/)internal/openapi/openapi\.gen\.go:|(^|/)internal/
 FUZZ_TIME ?= 45s
 LINT_BASE_REF ?= origin/main
 LINT_CONCURRENCY ?= 4
+GENTLE_GOMAXPROCS ?= 6
+GENTLE_NICE ?= 10
+SECRET_SCAN_BASE_REF ?= $(if $(strip $(BASE_REF)),$(BASE_REF),origin/main)
 
 BENCH_PACKAGE ?= ./...
 BENCH_PATTERN ?= .
@@ -46,7 +50,7 @@ BENCH_DB_CURRENT ?= .artifacts/bench/db/current.txt
 BENCH_DB_COMPARE_OUTPUT ?= .artifacts/bench/db/comparison.txt
 BENCH_DB_WORKLOAD_ID ?=
 BENCH_DB_SCHEMA_PATH := $(if $(wildcard migrations/*.up.sql),migrations,)
-POSTGRES_TEST_IMAGE := $(shell sed -n 's/^const postgresTestImage = "\(.*\)"$$/\1/p' test/postgres_integration_test.go)
+POSTGRES_TEST_IMAGE := $(shell sed -n 's/^const DefaultImage = "\(.*\)"$$/\1/p' internal/infra/postgres/pgtest/pgtest.go)
 # profile:database-postgres:end
 HTTP_BENCH_SCRIPT ?= test/performance/http/single-flow.js
 HTTP_BENCH_ARTIFACT_DIR ?= .artifacts/bench/http
@@ -55,9 +59,12 @@ HTTP_BENCH_DOCKER_NETWORK ?=
 HTTP_BENCH_RAW_SAMPLES ?= 0
 
 TRIVY_IMAGE ?= aquasec/trivy:0.72.0@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f
+TRIVY_CACHE_VOLUME ?= trivy-cache
 CLAUDE_SKILLS_CHECK_SCRIPT := bash ./scripts/ci/claude-skills-check.sh
+CI_CHANGE_SCOPE_SCRIPT := bash ./scripts/ci/ci-change-scope.sh
 GENERATED_DRIFT_CHECK_SCRIPT := bash ./scripts/ci/generated-drift-check.sh
 PROJECT_STRUCTURE_CHECK_SCRIPT := bash ./scripts/ci/project-structure-check.sh
+SECRET_SCAN_SCRIPT := bash ./scripts/ci/secret-scan.sh
 TEMPLATE_OWNED_PURITY_CHECK_SCRIPT := bash ./scripts/ci/template-owned-purity-check.sh
 TEMPLATE_SYNC_SCRIPT := bash ./scripts/template-sync.sh
 TEMPLATE ?= ../go-service-template-rest
@@ -66,11 +73,16 @@ BENCHMARK_REMOTE_SCRIPT := bash ./scripts/dev/benchmark-remote.sh
 
 .DEFAULT_GOAL := help
 
-.PHONY: help template-init template-init-check project-structure-check check check-full pr-check \
-	tidy fmt mod-check fmt-check test test-summary test-watch test-race test-cover test-report coverage-effective-total coverage-summary coverage-check test-fuzz-smoke test-flake-smoke test-integration \
+# One same-target A/B on the 10-core/16-GiB reference Mac measured 138.7s
+# serial versus 294.6s with make -j4. Re-measure after host, toolchain, or
+# aggregate membership changes before enabling parallel prerequisites.
+.NOTPARALLEL: check mod-check lint-deep go-security openapi-check ci-local
+
+.PHONY: help template-init template-init-check project-structure-check ci-change-scope-check check check-gentle check-full check-full-gentle pr-check \
+	tidy fmt mod-check mod-tidy-check mod-verify fmt-check test test-watch test-race test-cover test-report coverage-effective-total coverage-summary coverage-check test-fuzz-smoke test-flake-smoke test-integration \
 	bench bench-baseline bench-compare bench-profile bench-http bench-http-inspect benchmark-infra-check benchmark-remote-check benchmark-remote-image \
-	lint lint-deep lint-fast deadcode nilaway modernize-check test-parallelism-check govulncheck gosec go-security secret-scan ci-local \
-	openapi-generate openapi-drift-check openapi-runtime-contract-check openapi-lint openapi-validate openapi-breaking openapi-check \
+	lint lint-deep lint-fast deadcode nilaway modernize-check test-parallelism-check govulncheck gosec go-security secret-scan secret-scan-history secret-scan-check ci-local ci-local-gentle \
+	openapi-generate openapi-drift-check openapi-reference-compile openapi-runtime-contract-check openapi-lint openapi-validate openapi-breaking openapi-check \
 	sqlc-check container-security run build docker-build docker-run vendor claude-skills-sync claude-skills-check \
 	template-sync template-sync-check template-sync-all template-owned-purity-check
 # profile:database-postgres:start
@@ -81,17 +93,21 @@ help:
 	@echo "Setup and everyday development:"
 	@echo "  make template-init MODULE=github.com/acme/service CODEOWNER=@acme/team"
 	@echo "  make check              # formatting, lint, and unit tests"
+	@echo "  make check-gentle       # same checks with bounded Go concurrency"
 	@echo "  make project-structure-check"
 	@echo "  make template-sync-check TEMPLATE=<path>   # drift against the template instructions"
 	@echo "  make template-sync TEMPLATE=<path>         # adopt them as its own commit"
 	@echo "  make ci-local           # deterministic native CI aggregate"
+	@echo "  make ci-local-gentle    # same aggregate with bounded Go concurrency"
 	@echo "  make check-full         # native aggregate plus Docker-backed gates"
+	@echo "  make check-full-gentle  # same full gate with bounded host Go concurrency"
 	@echo "  make pr-check BASE_REF=origin/main"
 	@echo "  make run"
 	@echo ""
 	@echo "Focused validation:"
 	@echo "  make test | test-race | test-report | test-integration"
-	@echo "  make lint | lint-deep | lint-fast | go-security | secret-scan"
+	@echo "  make mod-check | mod-tidy-check | mod-verify"
+	@echo "  make lint | lint-deep | lint-fast | go-security | secret-scan | secret-scan-history"
 	@echo "  make openapi-check"
 # profile:database-postgres:start
 	@echo "  make sqlc-check | migration-validate"
@@ -119,6 +135,9 @@ template-init-check:
 
 project-structure-check:
 	$(PROJECT_STRUCTURE_CHECK_SCRIPT)
+
+ci-change-scope-check:
+	$(CI_CHANGE_SCOPE_SCRIPT) self-test
 
 template-owned-purity-check:
 	$(TEMPLATE_OWNED_PURITY_CHECK_SCRIPT)
@@ -158,10 +177,15 @@ claude-skills-sync:
 claude-skills-check:
 	$(CLAUDE_SKILLS_CHECK_SCRIPT)
 
-check: project-structure-check template-owned-purity-check claude-skills-check fmt-check lint test
+check: project-structure-check ci-change-scope-check template-owned-purity-check claude-skills-check fmt-check lint test
 
-ci-local:
-	$(MAKE) mod-check template-init-check project-structure-check template-owned-purity-check claude-skills-check fmt-check lint lint-deep test-race test-report sqlc-check openapi-check go-security secret-scan
+check-gentle:
+	nice -n $(GENTLE_NICE) env GOMAXPROCS=$(GENTLE_GOMAXPROCS) $(MAKE) check
+
+ci-local: mod-tidy-check project-structure-check ci-change-scope-check template-owned-purity-check claude-skills-check fmt-check lint lint-deep test-race test-report sqlc-check openapi-check go-security secret-scan
+
+ci-local-gentle:
+	nice -n $(GENTLE_NICE) env GOMAXPROCS=$(GENTLE_GOMAXPROCS) $(MAKE) ci-local
 
 check-full:
 	@command -v docker >/dev/null 2>&1 || { echo "Docker is required for make check-full"; exit 1; }
@@ -174,9 +198,14 @@ check-full:
 # profile:database-postgres:end
 	$(MAKE) container-security CONTAINER_IMAGE=$(SERVICE_NAME):ci
 
+check-full-gentle:
+	nice -n $(GENTLE_NICE) env GOMAXPROCS=$(GENTLE_GOMAXPROCS) $(MAKE) check-full
+
 pr-check:
 	@test -n "$(BASE_REF)" || { echo "BASE_REF is required, for example BASE_REF=origin/main"; exit 1; }
 	$(MAKE) check-full
+	$(MAKE) template-init-check
+	$(MAKE) mod-verify
 	@mkdir -p .cache
 	@base_openapi="$$(mktemp .cache/openapi-base.XXXXXX)"; \
 	trap 'rm -f "$$base_openapi"' EXIT; \
@@ -193,15 +222,19 @@ fmt:
 	$(GO_TOOL) goimports -w $(GO_FILES)
 	$(GO_TOOL) gofumpt -w $(GOFUMPT_FILES)
 
-mod-check:
+mod-check: mod-tidy-check mod-verify
+
+mod-tidy-check:
 	GOFLAGS= go mod tidy -diff
-	go mod verify
 	GOFLAGS= go -C tools mod tidy -diff
-	go -C tools mod verify
 	@test "$$(awk '/^go / {print $$2; exit}' go.mod)" = "$$(awk '/^go / {print $$2; exit}' tools/go.mod)" || { \
 		echo "go.mod and tools/go.mod must use the same Go version"; \
 		exit 1; \
 	}
+
+mod-verify:
+	go mod verify
+	go -C tools mod verify
 
 fmt-check:
 	@unformatted="$$( $(GO_TOOL) goimports -l $(GO_FILES) )"; \
@@ -220,23 +253,21 @@ fmt-check:
 	fi
 
 test:
-	$(GO_TOOL) gotestsum --format=pkgname-and-test-fails -- ./...
-
-test-summary: test
+	$(GO_TOOL) gotestsum --format=pkgname-and-test-fails -- -vet=off ./...
 
 test-watch:
-	$(GO_TOOL) gotestsum --watch --format=pkgname-and-test-fails
+	$(GO_TOOL) gotestsum --watch --format=pkgname-and-test-fails -- -vet=off ./...
 
 test-race:
-	go test -race ./...
+	go test -vet=off -race ./...
 
 test-cover:
-	GOTOOLCHAIN=$(COVERAGE_GOTOOLCHAIN) GOCOVERDIR= go test -covermode=atomic -coverprofile=coverage.out ./...
+	GOTOOLCHAIN=$(COVERAGE_GOTOOLCHAIN) GOCOVERDIR= go test -vet=off -covermode=set -coverprofile=coverage.out ./...
 	$(MAKE) coverage-summary
 
 test-report:
 	@mkdir -p $(TEST_REPORT_DIR)
-	GOTOOLCHAIN=$(COVERAGE_GOTOOLCHAIN) GOCOVERDIR= $(GO_TOOL) gotestsum --format=standard-verbose --junitfile=$(TEST_JUNIT_FILE) --jsonfile=$(TEST_JSON_FILE) -- -covermode=atomic -coverprofile=coverage.out ./...
+	GOTOOLCHAIN=$(COVERAGE_GOTOOLCHAIN) GOCOVERDIR= $(GO_TOOL) gotestsum --format=pkgname-and-test-fails --junitfile=$(TEST_JUNIT_FILE) --jsonfile=$(TEST_JSON_FILE) -- -vet=off -covermode=set -coverprofile=coverage.out ./...
 	$(MAKE) coverage-summary
 	$(MAKE) coverage-check COVERAGE_MIN=$(COVERAGE_MIN)
 
@@ -270,19 +301,19 @@ test-fuzz-smoke:
 	@found=0; \
 	pkgs="$$(go list ./...)" || exit $$?; \
 	for pkg in $$pkgs; do \
-		fuzz_targets="$$(go test "$$pkg" -list '^Fuzz' 2>&1)" || { status=$$?; printf '%s\n' "$$fuzz_targets"; exit $$status; }; \
+		fuzz_targets="$$(go test -vet=off "$$pkg" -list '^Fuzz' 2>&1)" || { status=$$?; printf '%s\n' "$$fuzz_targets"; exit $$status; }; \
 		if printf '%s\n' "$$fuzz_targets" | grep -q '^Fuzz'; then \
 			found=1; \
-			go test "$$pkg" -run '^$$' -fuzz=Fuzz -fuzztime=$(FUZZ_TIME) || exit $$?; \
+			go test -vet=off "$$pkg" -run '^$$' -fuzz=Fuzz -fuzztime=$(FUZZ_TIME) || exit $$?; \
 		fi; \
 	done; \
 	if [ "$$found" -eq 0 ]; then echo "no fuzz targets found; skipping fuzz smoke run"; fi
 
 test-flake-smoke:
-	go test -count=5 -shuffle=on ./...
+	go test -vet=off -count=5 -shuffle=on ./...
 
 test-integration:
-	go test -tags=integration ./test/...
+	go test -count=1 -tags=integration ./test/...
 
 bench:
 	BENCH_PACKAGE="$(BENCH_PACKAGE)" BENCH_PATTERN="$(BENCH_PATTERN)" BENCH_COUNT="$(BENCH_COUNT)" BENCH_TIME="$(BENCH_TIME)" BENCH_TAGS="$(BENCH_TAGS)" BENCH_OUTPUT="$(BENCH_OUTPUT)" BENCH_WORKLOAD_ID="$(BENCH_WORKLOAD_ID)" $(BENCHMARK_SCRIPT) run
@@ -327,12 +358,12 @@ benchmark-remote-image:
 # commit. deadcode and nilaway are whole-program analyses that dominate its wall
 # clock; they live in lint-deep, which ci-local and the CI lint job run.
 lint:
-	$(GO_TOOL) golangci-lint run --allow-parallel-runners --concurrency=$(LINT_CONCURRENCY) --timeout=3m
+	$(GOLANGCI_LINT) run --allow-serial-runners --concurrency=$(LINT_CONCURRENCY) --timeout=3m
 
 lint-deep: deadcode nilaway
 
 lint-fast:
-	$(GO_TOOL) golangci-lint run --fast-only --new-from-rev=$(LINT_BASE_REF) --concurrency=$(LINT_CONCURRENCY) --timeout=3m
+	$(GOLANGCI_LINT) run --allow-serial-runners --fast-only --new-from-rev=$(LINT_BASE_REF) --concurrency=$(LINT_CONCURRENCY) --timeout=3m
 
 deadcode:
 	$(GO_TOOL) deadcode -test -tags=integration ./...
@@ -346,18 +377,24 @@ modernize-check:
 	go fix -diff ./...
 
 test-parallelism-check:
-	$(GO_TOOL) golangci-lint run --enable-only=paralleltest,tparallel --timeout=3m --max-issues-per-linter=0 --max-same-issues=0
+	$(GOLANGCI_LINT) run --allow-serial-runners --concurrency=$(LINT_CONCURRENCY) --enable-only=paralleltest,tparallel --timeout=3m --max-issues-per-linter=0 --max-same-issues=0
 
 govulncheck:
 	$(GO_TOOL) govulncheck ./...
 
 gosec:
-	$(GO_TOOL) gosec -exclude-generated -exclude-dir=.agents -exclude-dir=.cache -exclude-dir=.artifacts ./...
+	GOSECGOVERSION=go$(GO_REQUIRED_VERSION) $(GO_TOOL) gosec $(if $(strip $(GOMAXPROCS)),-concurrency=$(GOMAXPROCS)) -quiet -exclude-generated -exclude-dir=.agents -exclude-dir=.cache -exclude-dir=.artifacts ./...
 
 go-security: govulncheck gosec
 
 secret-scan:
-	$(GO_TOOL) gitleaks git --no-banner --redact --exit-code 1 --baseline-path .gitleaks.baseline.json .
+	$(SECRET_SCAN_SCRIPT) change "$(SECRET_SCAN_BASE_REF)"
+
+secret-scan-history:
+	$(SECRET_SCAN_SCRIPT) history
+
+secret-scan-check:
+	$(SECRET_SCAN_SCRIPT) self-test
 
 # profile:database-postgres:start
 sqlc-generate:
@@ -381,13 +418,26 @@ openapi-generate:
 openapi-drift-check:
 	$(GENERATED_DRIFT_CHECK_SCRIPT) openapi
 
+openapi-reference-compile:
+	@if [ -n "$(REFERENCE_OPENAPI_PACKAGE)" ]; then \
+		go test -vet=off $(REFERENCE_OPENAPI_PACKAGE); \
+	fi
+
 openapi-runtime-contract-check:
-	@tests="$$(go test ./internal/infra/http -list '^TestOpenAPIRuntimeContract')" || { status=$$?; printf '%s\n' "$$tests"; exit $$status; }; \
-	printf '%s\n' "$$tests" | grep -q '^TestOpenAPIRuntimeContract' || { echo "no OpenAPI runtime contract tests matched"; exit 1; }
-	go test ./internal/infra/http -run '^TestOpenAPIRuntimeContract' -count=1
+	@report="$$(mktemp)"; \
+	trap 'rm -f "$$report"' EXIT; \
+	if ! go test -vet=off -json ./internal/infra/http -run '^TestOpenAPIRuntimeContract' -count=1 >"$$report" 2>&1; then \
+		cat "$$report"; \
+		exit 1; \
+	fi; \
+	if ! grep -Eq '"Action":"run".*"Test":"TestOpenAPIRuntimeContract[^"]*"' "$$report"; then \
+		cat "$$report"; \
+		echo "no OpenAPI runtime contract tests matched"; \
+		exit 1; \
+	fi
 
 openapi-lint:
-	npx @redocly/cli@$(REDOCLY_CLI_VERSION) lint --config .redocly.yaml $(OPENAPI_FILES)
+	REDOCLY_SUPPRESS_UPDATE_NOTICE=true REDOCLY_TELEMETRY=off npm_config_prefer_offline=true npx --yes @redocly/cli@$(REDOCLY_CLI_VERSION) lint --config .redocly.yaml $(OPENAPI_FILES)
 
 openapi-validate:
 	@set -e; for file in $(OPENAPI_FILES); do $(GO_TOOL) validate -- "$$file"; done
@@ -402,9 +452,7 @@ openapi-breaking:
 		$(GO_TOOL) oasdiff breaking --fail-on ERR $(BASE_OPENAPI) $(OPENAPI_FILE); \
 	fi
 
-openapi-check: openapi-drift-check
-	go test $(OPENAPI_PACKAGES)
-	$(MAKE) openapi-runtime-contract-check openapi-lint openapi-validate
+openapi-check: openapi-drift-check openapi-reference-compile openapi-runtime-contract-check openapi-lint openapi-validate
 
 # profile:database-postgres:start
 migration-validate:
@@ -469,8 +517,11 @@ container-security:
 	if [ -z "$$image" ]; then image="$(SERVICE_NAME):ci"; docker build -f build/docker/Dockerfile -t "$$image" .; fi; \
 	docker run --rm \
 		-v /var/run/docker.sock:/var/run/docker.sock \
+		-v "$(TRIVY_CACHE_VOLUME):/root/.cache/trivy" \
 		-e DOCKER_HOST=unix:///var/run/docker.sock \
 		"$(TRIVY_IMAGE)" image \
+		--cache-dir /root/.cache/trivy \
+		--quiet \
 		--severity HIGH,CRITICAL \
 		--ignore-unfixed \
 		--exit-code 1 \

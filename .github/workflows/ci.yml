@@ -6,6 +6,12 @@ on:
       - main
   pull_request:
   workflow_dispatch:
+    inputs:
+      go_cache_enabled:
+        description: Restore and save the setup-go module/build cache
+        required: true
+        type: boolean
+        default: true
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -16,6 +22,7 @@ permissions:
 
 env:
   GOFLAGS: -mod=readonly
+  GO_CACHE_ENABLED: ${{ github.event_name != 'workflow_dispatch' || inputs.go_cache_enabled }}
   TRIVY_DB_REPOSITORY: ghcr.io/aquasecurity/trivy-db:2
   COVERAGE_MIN: "80.0"
 
@@ -23,25 +30,76 @@ jobs:
   repo-integrity:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    outputs:
+      expensive_required: ${{ steps.change_scope.outputs.expensive_required }}
+      template_required: ${{ steps.change_scope.outputs.template_required }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
+      - name: Classify change scope
+        id: change_scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BASE_SHA: ${{ github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          case "${EVENT_NAME}" in
+            pull_request) BASE_SHA="${PR_BASE_SHA}" ;;
+            push) BASE_SHA="${PUSH_BASE_SHA}" ;;
+            *)
+              echo "scope=full" >> "$GITHUB_OUTPUT"
+              echo "expensive_required=true" >> "$GITHUB_OUTPUT"
+              echo "template_required=true" >> "$GITHUB_OUTPUT"
+              exit 0
+              ;;
+          esac
+
+          if [ -z "${BASE_SHA}" ] ||
+            [ "${BASE_SHA}" = "0000000000000000000000000000000000000000" ] ||
+            ! git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
+            SCOPE="full"
+            TEMPLATE_REQUIRED="true"
+          else
+            SCOPE="$(
+              git diff --name-only -z "${BASE_SHA}" "${HEAD_SHA}" |
+                bash ./scripts/ci/ci-change-scope.sh classify
+            )"
+            TEMPLATE_REQUIRED="$(
+              git diff --name-only -z "${BASE_SHA}" "${HEAD_SHA}" |
+                bash ./scripts/ci/ci-change-scope.sh template-required
+            )"
+          fi
+
+          echo "scope=${SCOPE}" >> "$GITHUB_OUTPUT"
+          echo "template_required=${TEMPLATE_REQUIRED}" >> "$GITHUB_OUTPUT"
+          if [ "${SCOPE}" = "docs-only" ]; then
+            echo "expensive_required=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "expensive_required=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Setup Go
+        if: steps.change_scope.outputs.expensive_required == 'true'
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-          cache: true
+          cache: ${{ env.GO_CACHE_ENABLED }}
           cache-dependency-path: |
             go.sum
             tools/go.sum
 
       - name: Verify module integrity
+        if: steps.change_scope.outputs.expensive_required == 'true'
         run: make mod-check
 
       - name: Verify project structure
         run: make project-structure-check
+
+      - name: Verify CI change-scope routing
+        run: make ci-change-scope-check
 
       - name: Verify template-owned paths carry no repository-specific content
         run: make template-owned-purity-check
@@ -50,12 +108,15 @@ jobs:
         run: make claude-skills-check
 
       - name: Verify formatting drift
+        if: steps.change_scope.outputs.expensive_required == 'true'
         run: make fmt-check
 
       - name: Verify sqlc generation drift
+        if: steps.change_scope.outputs.expensive_required == 'true'
         run: make sqlc-check
 
   lint:
+    if: needs.repo-integrity.outputs.expensive_required == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: repo-integrity
@@ -66,39 +127,112 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-          cache: true
+          cache: ${{ env.GO_CACHE_ENABLED }}
           cache-dependency-path: |
             go.sum
             tools/go.sum
 
-      - name: Lint
-        run: make lint lint-deep
+      - name: Resolve golangci-lint version
+        id: golangci_lint
+        run: |
+          VERSION="$(awk '$1 == "github.com/golangci/golangci-lint/v2" { print $2 }' tools/go.mod)"
+          test -n "${VERSION}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
 
-  template-postgres-feature:
+      - name: Install golangci-lint
+        uses: golangci/golangci-lint-action@e7fa5ac41e1cf5b7d48e45e42232ce7ada589601 # v9.1.0
+        with:
+          version: ${{ steps.golangci_lint.outputs.version }}
+          install-only: true
+
+      - name: Lint
+        run: make lint lint-deep GOLANGCI_LINT=golangci-lint
+
+  template-minimal-feature:
+    if: needs.repo-integrity.outputs.expensive_required == 'true' && needs.repo-integrity.outputs.template_required == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: repo-integrity
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - name: Detect template source checkout
+        id: template_source
+        run: |
+          if [ -d scripts/profiles ]; then
+            echo "required=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "required=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Setup Node
+        if: steps.template_source.outputs.required == 'true'
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22.23.1"
 
       - name: Setup Go
+        if: steps.template_source.outputs.required == 'true'
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-          cache: true
+          cache: ${{ env.GO_CACHE_ENABLED }}
+          cache-dependency-path: |
+            go.sum
+            tools/go.sum
+
+      - name: Resolve golangci-lint version
+        if: steps.template_source.outputs.required == 'true'
+        id: golangci_lint
+        run: |
+          VERSION="$(awk '$1 == "github.com/golangci/golangci-lint/v2" { print $2 }' tools/go.mod)"
+          test -n "${VERSION}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Install golangci-lint
+        if: steps.template_source.outputs.required == 'true'
+        uses: golangci/golangci-lint-action@e7fa5ac41e1cf5b7d48e45e42232ce7ada589601 # v9.1.0
+        with:
+          version: ${{ steps.golangci_lint.outputs.version }}
+          install-only: true
+
+      - name: Prove generated minimal service
+        if: steps.template_source.outputs.required == 'true'
+        run: TEMPLATE_INIT_PROFILE=minimal make template-init-check GOLANGCI_LINT_BIN=golangci-lint
+
+  template-postgres-feature:
+    if: needs.repo-integrity.outputs.expensive_required == 'true' && needs.repo-integrity.outputs.template_required == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: repo-integrity
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Detect template source checkout
+        id: template_source
+        run: |
+          if [ -d scripts/profiles ]; then
+            echo "required=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "required=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Go
+        if: steps.template_source.outputs.required == 'true'
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: ${{ env.GO_CACHE_ENABLED }}
           cache-dependency-path: |
             go.sum
             tools/go.sum
 
       - name: Prove generated PostgreSQL POST vertical slice
-        run: REQUIRE_DOCKER=1 TEMPLATE_POSTGRES_PROOF=1 make template-init-check
+        if: steps.template_source.outputs.required == 'true'
+        run: REQUIRE_DOCKER=1 TEMPLATE_INIT_PROFILE=postgres TEMPLATE_POSTGRES_PROOF=1 make template-init-check
 
   openapi-contract:
+    if: needs.repo-integrity.outputs.expensive_required == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: repo-integrity
@@ -114,7 +248,7 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-          cache: true
+          cache: ${{ env.GO_CACHE_ENABLED }}
           cache-dependency-path: |
             go.sum
             tools/go.sum
@@ -122,8 +256,8 @@ jobs:
       - name: Detect OpenAPI codegen drift
         run: make openapi-drift-check
 
-      - name: Compile generated OpenAPI package
-        run: go test ./internal/openapi
+      - name: Compile reference OpenAPI package
+        run: make openapi-reference-compile
 
       - name: Verify OpenAPI runtime contract
         run: make openapi-runtime-contract-check
@@ -135,7 +269,7 @@ jobs:
         run: make openapi-lint
 
   openapi-breaking:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && needs.repo-integrity.outputs.expensive_required == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs:
@@ -150,7 +284,7 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-          cache: true
+          cache: ${{ env.GO_CACHE_ENABLED }}
           cache-dependency-path: |
             go.sum
             tools/go.sum
@@ -170,6 +304,7 @@ jobs:
         run: BASE_OPENAPI=/tmp/openapi-base.yaml make openapi-breaking
 
   test-race:
+    if: needs.repo-integrity.outputs.expensive_required == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: repo-integrity
@@ -180,15 +315,14 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-          cache: true
-          cache-dependency-path: |
-            go.sum
-            tools/go.sum
+          cache: ${{ env.GO_CACHE_ENABLED }}
+          cache-dependency-path: go.sum
 
       - name: Race detector
         run: make test-race
 
   test-coverage:
+    if: needs.repo-integrity.outputs.expensive_required == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: repo-integrity
@@ -199,10 +333,8 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-          cache: true
-          cache-dependency-path: |
-            go.sum
-            tools/go.sum
+          cache: ${{ env.GO_CACHE_ENABLED }}
+          cache-dependency-path: go.sum
 
       - name: Coverage + JUnit + JSON
         run: make test-report COVERAGE_MIN=${{ env.COVERAGE_MIN }}
@@ -244,6 +376,17 @@ jobs:
             else
               echo "- test2json report was not produced."
             fi
+            echo
+            echo "### Slowest tests"
+            echo
+            echo '```text'
+            if ! bash ./scripts/run-go-tool.sh gotestsum tool slowest \
+              --jsonfile .artifacts/test/test2json.json \
+              --threshold 0s \
+              --num 10; then
+              echo "slow-test report was unavailable"
+            fi
+            echo '```'
             echo "- JUnit artifact: .artifacts/test/junit.xml"
             echo "- test2json artifact: .artifacts/test/test2json.json"
           } >> "${GITHUB_STEP_SUMMARY}"
@@ -265,6 +408,7 @@ jobs:
           if-no-files-found: error
 
   test-integration:
+    if: needs.repo-integrity.outputs.expensive_required == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     needs: repo-integrity
@@ -275,94 +419,14 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-          cache: true
-          cache-dependency-path: |
-            go.sum
-            tools/go.sum
+          cache: ${{ env.GO_CACHE_ENABLED }}
+          cache-dependency-path: go.sum
 
       - name: Integration tests
         run: REQUIRE_DOCKER=1 make test-integration
 
-  # profile:database-postgres:start
-  migration-validate:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    needs: repo-integrity
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-
-      - name: Detect migration changes
-        id: migration_changes
-        run: |
-          case "${{ github.event_name }}" in
-            pull_request)
-              BASE_REF="${{ github.event.pull_request.base.sha }}"
-              ;;
-            push)
-              BASE_REF="${{ github.event.before }}"
-              ;;
-            workflow_dispatch)
-              echo "should_run=true" >> "$GITHUB_OUTPUT"
-              exit 0
-              ;;
-            *)
-              echo "should_run=false" >> "$GITHUB_OUTPUT"
-              exit 0
-              ;;
-          esac
-
-          if [ -z "${BASE_REF}" ] || [ "${BASE_REF}" = "0000000000000000000000000000000000000000" ]; then
-            echo "should_run=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          if git diff --name-only "${BASE_REF}" "${{ github.sha }}" |
-            grep -Eq '^(migrations/|env/docker-compose\.yml$|cmd/(migrate|service)/|internal/|build/docker/Dockerfile$|Makefile$|go\.(mod|sum)$|\.github/workflows/ci\.yml$)'; then
-            echo "should_run=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "should_run=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Setup Go
-        if: steps.migration_changes.outputs.should_run == 'true'
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-          cache: true
-          cache-dependency-path: |
-            go.sum
-            tools/go.sum
-
-      - name: Build production runtime image
-        if: steps.migration_changes.outputs.should_run == 'true'
-        id: runtime_image
-        run: |
-          VERSION="sha-${GITHUB_SHA:0:12}"
-          docker build \
-            --build-arg APP_VERSION="${VERSION}" \
-            --build-arg VCS_REF="${GITHUB_SHA}" \
-            --build-arg SOURCE_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
-            -f build/docker/Dockerfile \
-            -t service:migration-ci \
-            .
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-
-      - name: Validate migrations and production runtime image
-        if: steps.migration_changes.outputs.should_run == 'true'
-        run: |
-          make migration-validate \
-            RUNTIME_IMAGE=service:migration-ci \
-            RUNTIME_EXPECTED_VERSION="${{ steps.runtime_image.outputs.version }}"
-
-      - name: Skip migration validation
-        if: steps.migration_changes.outputs.should_run != 'true'
-        run: echo "no migration files changed"
-
-  # profile:database-postgres:end
   dependency-review:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && needs.repo-integrity.outputs.expensive_required == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: repo-integrity
@@ -378,6 +442,7 @@ jobs:
           comment-summary-in-pr: never
 
   go-security:
+    if: needs.repo-integrity.outputs.expensive_required == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: repo-integrity
@@ -388,7 +453,7 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-          cache: true
+          cache: ${{ env.GO_CACHE_ENABLED }}
           cache-dependency-path: |
             go.sum
             tools/go.sum
@@ -412,23 +477,77 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-          cache: true
+          cache: ${{ env.GO_CACHE_ENABLED }}
           cache-dependency-path: |
             go.sum
             tools/go.sum
 
-      - name: Run gitleaks
-        run: make secret-scan
+      - name: Verify secret-scan routing
+        run: make secret-scan-check
+
+      - name: Scan pull-request worktree and commits
+        if: github.event_name == 'pull_request'
+        run: make secret-scan SECRET_SCAN_BASE_REF="${{ github.event.pull_request.base.sha }}"
+
+      - name: Scan full repository history
+        if: github.event_name != 'pull_request'
+        run: make secret-scan-history
 
   container-security:
+    if: needs.repo-integrity.outputs.expensive_required == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     needs: repo-integrity
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
 
-      - name: Build container image
-        run: docker build -f build/docker/Dockerfile -t service:ci .
+      # profile:database-postgres:start
+      - name: Detect migration changes
+        id: migration_changes
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BASE_SHA: ${{ github.event.before }}
+        run: |
+          case "${EVENT_NAME}" in
+            pull_request) BASE_SHA="${PR_BASE_SHA}" ;;
+            push) BASE_SHA="${PUSH_BASE_SHA}" ;;
+            workflow_dispatch)
+              echo "should_run=true" >> "$GITHUB_OUTPUT"
+              exit 0
+              ;;
+            *)
+              echo "should_run=false" >> "$GITHUB_OUTPUT"
+              exit 0
+              ;;
+          esac
+
+          if [ -z "${BASE_SHA}" ] ||
+            [ "${BASE_SHA}" = "0000000000000000000000000000000000000000" ] ||
+            ! git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+          elif git diff --name-only "${BASE_SHA}" "${GITHUB_SHA}" |
+            grep -Eq '^(migrations/|env/docker-compose\.yml$|cmd/(migrate|service)/|internal/|build/docker/Dockerfile$|Makefile$|go\.(mod|sum)$|\.github/workflows/ci\.yml$)'; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+          fi
+      # profile:database-postgres:end
+
+      - name: Build production runtime image
+        id: runtime_image
+        run: |
+          VERSION="sha-${GITHUB_SHA:0:12}"
+          docker build \
+            --build-arg APP_VERSION="${VERSION}" \
+            --build-arg VCS_REF="${GITHUB_SHA}" \
+            --build-arg SOURCE_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
+            -f build/docker/Dockerfile \
+            -t service:ci \
+            .
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: Scan image with Trivy
         uses: aquasecurity/trivy-action@c07df6fec6fa692e6fd1200d50aaa1fdd66f03c8 # 0.34.2
@@ -439,6 +558,19 @@ jobs:
           ignore-unfixed: true
           severity: CRITICAL,HIGH
 
+      # profile:database-postgres:start
+      - name: Validate migrations and production runtime image
+        if: ${{ always() && !cancelled() && steps.runtime_image.outcome == 'success' && steps.migration_changes.outputs.should_run == 'true' }}
+        run: |
+          make migration-validate \
+            RUNTIME_IMAGE=service:ci \
+            RUNTIME_EXPECTED_VERSION="${{ steps.runtime_image.outputs.version }}"
+
+      - name: Skip migration validation
+        if: ${{ steps.migration_changes.outputs.should_run != 'true' }}
+        run: echo "no migration files changed"
+      # profile:database-postgres:end
+
   ci-required:
     name: ci-required
     if: ${{ always() }}
@@ -447,15 +579,13 @@ jobs:
     needs:
       - repo-integrity
       - lint
+      - template-minimal-feature
       - template-postgres-feature
       - openapi-contract
       - openapi-breaking
       - test-race
       - test-coverage
       - test-integration
-      # profile:database-postgres:start
-      - migration-validate
-      # profile:database-postgres:end
       - dependency-review
       - go-security
       - secret-scan
@@ -464,12 +594,38 @@ jobs:
       - name: Require every applicable CI job
         env:
           EVENT_NAME: ${{ github.event_name }}
+          EXPENSIVE_REQUIRED: ${{ needs.repo-integrity.outputs.expensive_required }}
+          TEMPLATE_REQUIRED: ${{ needs.repo-integrity.outputs.template_required }}
           RESULTS: ${{ toJSON(needs) }}
         run: |
-          jq -e --arg event "$EVENT_NAME" '
+          jq -e \
+            --arg event "$EVENT_NAME" \
+            --arg expensive "$EXPENSIVE_REQUIRED" \
+            --arg template "$TEMPLATE_REQUIRED" '
             all(
               to_entries[];
               if (
+                $expensive == "false" and (
+                  .key == "lint" or
+                  .key == "template-minimal-feature" or
+                  .key == "template-postgres-feature" or
+                  .key == "openapi-contract" or
+                  .key == "openapi-breaking" or
+                  .key == "test-race" or
+                  .key == "test-coverage" or
+                  .key == "test-integration" or
+                  .key == "dependency-review" or
+                  .key == "go-security" or
+                  .key == "container-security"
+                )
+              ) or (
+                $template == "false" and (
+                  .key == "template-minimal-feature" or
+                  .key == "template-postgres-feature"
+                )
+              )
+              then .value.result == "skipped"
+              elif (
                 (.key == "openapi-breaking" or .key == "dependency-review") and
                 $event != "pull_request"
               )

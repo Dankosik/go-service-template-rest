@@ -548,28 +548,30 @@ func TestServeHTTPRuntimeStopsDiagnosticsAfterTheDrain(t *testing.T) {
 func TestShutdownDiagnosticsForcesCloseOnBudgetExhaustion(t *testing.T) {
 	t.Parallel()
 
-	var closed atomic.Bool
-	server := newFakeRuntimeServer()
-	server.onShutdown = func(ctx context.Context) error {
-		<-ctx.Done()
-		return ctx.Err()
-	}
-	server.onClose = func() error {
-		closed.Store(true)
-		return nil
-	}
+	synctest.Test(t, func(t *testing.T) {
+		var closed atomic.Bool
+		server := newFakeRuntimeServer()
+		server.onShutdown = func(ctx context.Context) error {
+			<-ctx.Done()
+			return ctx.Err()
+		}
+		server.onClose = func() error {
+			closed.Store(true)
+			return nil
+		}
 
-	var logged bytes.Buffer
-	err := shutdownDiagnostics(context.Background(), slog.New(slog.NewJSONHandler(&logged, nil)), testShutdownBudget(), server)
-	if err != nil {
-		t.Fatalf("shutdownDiagnostics() error = %v, want the abandoned scrape reported as degraded, not failed", err)
-	}
-	if !closed.Load() {
-		t.Fatal("shutdownDiagnostics() did not force the listener closed after its budget expired")
-	}
-	if !strings.Contains(logged.String(), "diagnostics_forced") {
-		t.Fatalf("log = %q, want the forced close recorded", logged.String())
-	}
+		var logged bytes.Buffer
+		err := shutdownDiagnostics(context.Background(), slog.New(slog.NewJSONHandler(&logged, nil)), testShutdownBudget(), server)
+		if err != nil {
+			t.Fatalf("shutdownDiagnostics() error = %v, want the abandoned scrape reported as degraded, not failed", err)
+		}
+		if !closed.Load() {
+			t.Fatal("shutdownDiagnostics() did not force the listener closed after its budget expired")
+		}
+		if !strings.Contains(logged.String(), "diagnostics_forced") {
+			t.Fatalf("log = %q, want the forced close recorded", logged.String())
+		}
+	})
 }
 
 func TestShutdownDiagnosticsIgnoresAbsentServer(t *testing.T) {

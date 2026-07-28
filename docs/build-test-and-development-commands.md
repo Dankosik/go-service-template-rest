@@ -18,10 +18,68 @@ Go-version consistency for both modules. Container tools and test dependencies
 are pinned at their owning command or test seam.
 
 Keep the Go and BuildKit caches between runs. `gosec` uses the normal Go build
-cache, GitHub Actions keys its Go cache from both `go.sum` files, and the
-production Dockerfile persists module and compiler caches across BuildKit
-builds. Do not use `go clean -cache`, `docker build --no-cache`, or automatic
-BuildKit pruning as an edit-loop speed technique.
+cache. GitHub's race, coverage, and integration jobs key their cache only from
+the runtime `go.sum`; jobs that execute pinned tools also include
+`tools/go.sum`. Every workflow job that runs golangci-lint derives the exact
+version from `tools/go.mod`, installs its release binary through the same
+SHA-pinned action, and still invokes the Make or template-check owner. Local and
+CI configuration therefore have the same owner without compiling the linter in
+every cold job. The action restores its golangci-lint analysis cache before its
+install-only step returns and saves it after the owning Make or template check;
+no second `actions/cache` step owns the same directory.
+
+The production Dockerfile persists module and compiler caches across BuildKit
+builds, but bind-mounts the source only for compilation. `.dockerignore`
+excludes API source, examples, tool sources, test files, and testdata from that
+runtime build context, so changes to those files do not create source layers or
+invalidate the production binary. Scripts inherit `go env GOCACHE` and the
+linter's canonical cache instead of creating repository-local copies that CI
+does not restore. Do not use `go clean -cache`, `docker build --no-cache`, or
+automatic BuildKit pruning as an edit-loop speed technique.
+
+Local Trivy scans reuse the shared `trivy-cache` Docker volume for the
+vulnerability database. The target suppresses progress/update noise but not
+findings. Do not prune this volume routinely; remove it manually only when a
+corrupt database is diagnosed or reclaiming its roughly gigabyte-scale disk
+cost is worth making the next scan cold. See [Trivy cache
+management](https://trivy.dev/latest/docs/configuration/cache/).
+
+The pinned Redocly command prefers the local npm cache and disables update
+notices and telemetry. It does not replace the exact version pin or turn a
+missing package into a successful offline skip.
+
+GitHub's Docker cache backend is appropriate only after the repository has
+durable cache-budget headroom and a compatible non-default Buildx driver. See
+the [GitHub cache limits](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching#usage-limits-and-eviction-policy)
+and [Docker backend requirements](https://docs.docker.com/build/cache/backends/gha/).
+
+### Temporary Docker resource lifecycle
+
+The command or test that creates a temporary Docker resource owns its normal
+cleanup. Use [`docker run --rm`](https://docs.docker.com/reference/cli/docker/container/run/#rm)
+for throwaway containers. Register a trap before ephemeral Compose work and run
+[`docker compose down -v --remove-orphans`](https://docs.docker.com/reference/cli/docker/compose/down/)
+from that trap. For Testcontainers, register
+[`CleanupContainer` or `Terminate`](https://golang.testcontainers.org/features/garbage_collector/#terminate-function)
+immediately after a successful `Run`. Named volumes require the matching
+`RemoveVolumes` termination option or owner cleanup.
+
+Resources that may survive an interrupted owner can opt into the workstation
+janitor only when deletion is safe and all four labels are present:
+
+```text
+codex.cleanup=auto
+codex.data=ephemeral
+codex.owner=<repository-or-task>
+codex.expires_at=<Unix-seconds>
+```
+
+Attach those labels when an explicitly created volume, network, image, or
+container is created. The owner still removes it on success; the janitor is
+only crash recovery. Never apply the labels to database state, operator data,
+shared caches, reusable environments, or any resource whose loss would require
+recovery rather than regeneration. An old or currently unreferenced resource
+is not deletion proof.
 
 ## Initialize a derived service
 
@@ -54,12 +112,54 @@ provide a real module path and an owner in `@user` or `@org/team` form.
 | `make project-structure-check` | Placement, naming, command, integration-test, migration-pair, and no-empty-placeholder contract |
 | `make claude-skills-check` | Every `.agents/skills/` entry is exposed to Claude Code by a matching `.claude/skills/` symlink, and no link outlives its skill |
 | `make check` | Project structure, `fmt-check`, `lint`, and ordinary unit tests |
-| `make ci-local` | Host-toolchain CI aggregate: module, initialization, project structure, format, lint, deep lint, race, coverage report, generated contracts, Go security, and secret scan |
+| `make ci-local` | Fast host-toolchain CI aggregate: manifest drift, project structure, format, lint, deep lint, race, coverage report, generated contracts, Go security, and secret scan |
 | `make check-full` | `ci-local` plus required Docker integration, runtime image, migration, and image-security proof |
-| `make pr-check BASE_REF=origin/main` | `check-full` plus OpenAPI breaking comparison when the base contains the spec |
+| `make pr-check BASE_REF=origin/main` | `check-full` plus template initialization, downloaded-module verification, and OpenAPI breaking comparison when the base contains the spec |
+
+Module validation is split without weakening the aggregate:
+
+- `make mod-tidy-check` checks root/tools manifest drift and Go-version parity;
+- `make mod-verify` verifies downloaded root/tools module content;
+- `make mod-check` runs both and remains the CI/release gate.
+
+`ci-local` and `check-full` intentionally use `mod-tidy-check`; downloaded
+content and the generator contract belong to `pr-check` and their focused
+targets. Merge CI still runs `mod-check`, and its minimal and PostgreSQL
+generator proofs run as independent jobs. Generated services no longer own
+`scripts/profiles`, so those jobs stop after checkout instead of installing Go,
+Node, or golangci-lint. Run `make mod-verify` or
+`make template-init-check` while changing their owning inputs, and run
+`make pr-check BASE_REF=origin/main` for the complete pre-PR proof.
+
+Merge CI skips both generated-service jobs when every changed path is an
+ordinary Go or API implementation path that initialization does not transform.
+Changes to generator scripts, profiles, bootstrap/config/PostgreSQL ownership,
+modules, Make, Docker, environment, workflows, or any unknown path run both
+profiles. An empty or unresolvable comparison also runs both profiles.
 
 `check-full` fails immediately when Docker is unavailable. It never converts a
-missing container runtime into a successful skip.
+missing container runtime into a successful skip. `test-integration` disables
+Go's result cache because current dependency startup, health, behavior, and
+cleanup are the proof; ordinary unit-test and build caches remain enabled.
+
+CI classifies the base-to-HEAD path set before starting runtime-heavy jobs.
+Markdown-only changes under the repository instructions, `docs/`, or `specs/`
+run repository integrity, secret scanning, and the stable `ci-required`
+aggregate while skipping repo-integrity Go setup, module/format/generated
+checks, Dependency Review, Go runtime, integration, OpenAPI, and container
+jobs. The secret job keeps Go setup for its pinned scanner. Dependency Review
+remains active for non-doc pull requests. An empty, mixed, unrecognized,
+manually dispatched, or unresolvable comparison runs the full matrix.
+`make ci-change-scope-check` locks this fail-closed policy locally.
+
+Manual CI exposes `go_cache_enabled` solely for same-ref cache A/B runs. Push
+and pull-request CI always keep the `actions/setup-go` module/build cache
+enabled. Compare sequential manual runs on the same ref; concurrent runs cancel
+each other by design.
+
+The container job builds the production runtime image once. Trivy scans that
+tag and migration validation reuses it when a migration, runtime, dependency,
+Dockerfile, Makefile, or CI owner changed.
 
 ### Keep the laptop responsive
 
@@ -68,15 +168,31 @@ The normal commands favor throughput and retain all caches. On a 10-core,
 while preserving the same test and analysis coverage:
 
 ```bash
-GOMAXPROCS=6 GOFLAGS="-p=6" make test
-GOMAXPROCS=6 make check
-taskpolicy -b env GOMAXPROCS=6 make ci-local
+make check-gentle
+make ci-local-gentle
+GOMAXPROCS=6 make test
+GOMAXPROCS=6 make check-full
 ```
 
-`taskpolicy` is macOS-only and lowers scheduling priority; `GOMAXPROCS` bounds
-Go runtime and default package-build parallelism. The regular linter is already
-capped by `LINT_CONCURRENCY=4`, which remains overrideable when a different
-machine has a measured reason.
+The gentle targets set `GOMAXPROCS` to `GENTLE_GOMAXPROCS=6` and run at
+`GENTLE_NICE=10` by default while executing exactly the normal target graph.
+Go uses `GOMAXPROCS` for runtime and default package-build parallelism, and
+gosec follows that explicit bound. golangci-lint remains independently capped
+at `LINT_CONCURRENCY=4`: an A/B against automatic concurrency found no wall-time
+benefit, so the smaller worker count wins. [`nice`](https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man3/nice.3.html)
+only lowers CPU scheduling priority when other work competes for the host; it
+does not impose an idle-host sleep or memory limit. All values remain
+overrideable when another machine has a measured reason.
+
+Broad Make aggregates serialize their heavyweight prerequisites even when
+`MAKEFLAGS=-j` is inherited, and golangci-lint callers wait on its native
+runner lock instead of bypassing it. On the 10-core/16-GiB reference Mac, one
+same-target A/B measured 138.7s sequentially and 294.6s with `make -j4`, a
+2.1x slowdown. Re-measure after the host, Go toolchain, or aggregate membership
+changes; until then, do not start another broad Go or Docker gate on the same
+host while one is active. Use focused checks or wait. See
+[GNU Make `.NOTPARALLEL`](https://www.gnu.org/software/make/manual/html_node/Parallel-Disable.html)
+and [golangci-lint runner flags](https://golangci-lint.run/docs/configuration/cli/).
 
 OrbStack limits are machine-wide. Record the current values, stop or preserve
 unrelated workloads, then use this balanced profile only when a restart is
@@ -91,13 +207,21 @@ orb config set memory_mib 6144
 
 Some settings take effect only after restarting OrbStack. Restore the recorded
 values with the same `orb config set` commands when maximum local throughput is
-more important than responsiveness.
+more important than responsiveness. Do not hardcode Compose or builder
+CPU/memory limits from laptop capacity alone. First record peak use for the
+representative integration/build workload and retain headroom; otherwise the
+limit can turn a healthy test into throttling, swapping, OOM, or flaky proof.
 
 ## Tests
 
+Mandatory golangci-lint owns `govet` for the current repository. Repeated unit,
+race, coverage, fuzz, flake, and OpenAPI test commands therefore pass
+`-vet=off`; this removes duplicate analyzer work without reducing the gate.
+Disposable generated-template tests and integration-tag tests retain Go's
+default vet because they are not equivalent to the current-tree lint run.
+
 ```bash
 make test
-make test-summary
 make test-watch
 make test-race
 make test-cover
@@ -107,12 +231,14 @@ make test-flake-smoke
 make test-integration
 ```
 
-`make test` uses the pinned `gotestsum` format; `make test-summary` is its
-compatibility alias. The coverage job also executes the ordinary test suite, so
-CI does not carry a duplicate standalone test job. `lint` owns the configured
-Go analyzers, including vet-class checks.
+`make test` uses the pinned `gotestsum` format. The coverage job also executes
+the ordinary test suite, so CI does not carry a duplicate standalone test job.
+`lint` owns the configured Go analyzers, including vet-class checks.
 
 Effective filtered coverage is the merge gate; raw coverage is informational.
+Coverage uses `-covermode=set`: the gate asks whether each statement executed,
+not how many concurrent executions occurred, so the more expensive atomic
+counter mode adds no evidence. See [Go coverage modes](https://go.dev/blog/cover).
 The configured filter excludes generated OpenAPI and sqlc code, the
 test-support `internal/infra/telemetry/telemetrytest` package, and `cmd`
 composition roots. Integration-tag coverage is separate. Repository maintainers
@@ -157,7 +283,12 @@ make test-parallelism-check
 
 `make lint` runs golangci-lint with `.golangci.yml`. The linter's real config
 load is the oracle; a second schema-download check would make local lint depend
-on network availability without proving more.
+on network availability without proving more. `GOLANGCI_LINT` is an
+execution-path override used by CI after its pinned binary installer; local
+commands default to the version in `tools/go.mod`. The template check accepts
+the narrower `GOLANGCI_LINT_BIN` path override. Every invocation uses
+`--allow-serial-runners`, so concurrent repository sessions queue on the
+linter's native lock instead of running analyzers twice.
 
 `make lint-deep` runs the whole-program dead-code and NilAway analyses. They are
 separate so `make check` stays cheap enough to run before every commit: on a
@@ -170,11 +301,15 @@ both numbers to grow with the service rather than with the rule count.
 the way to merge. Use the focused targets only when their narrower evidence is
 the claim.
 
+`make test-watch` passes `-vet=off` to the same current-tree test path as
+`make test`; mandatory lint remains the single `govet` owner.
+
 ## OpenAPI, SQLC, and generated drift
 
 ```bash
 make openapi-generate
 make openapi-drift-check
+make openapi-reference-compile
 make openapi-runtime-contract-check
 make openapi-lint
 make openapi-validate
@@ -183,6 +318,11 @@ make openapi-check
 make sqlc-generate
 make sqlc-check
 ```
+
+The runtime contract compiles the main generated OpenAPI package through the
+real router. `openapi-reference-compile` separately compiles the optional
+reference package; `openapi-check` composes both owners without compiling the
+main generated package twice.
 
 `api/openapi/service.yaml`, its adjacent generation config, migrations, and SQL
 query sources are authoritative. When `examples/reference-service` exists, its
@@ -208,11 +348,21 @@ make govulncheck
 make gosec
 make go-security
 make secret-scan
+make secret-scan-history
 make container-security CONTAINER_IMAGE=service:ci
 ```
 
-The first four commands use pinned Go tools. `container-security` scans the
-actual runtime image with digest-pinned Trivy and requires Docker.
+`secret-scan` checks the current reviewable worktree and commits after the
+merge base with `SECRET_SCAN_BASE_REF=origin/main` by default. It scans full
+history when that ref is unavailable, so a configuration mistake cannot skip
+proof. `secret-scan-history` is the explicit full-history gate used on main and
+release. The Go tools are pinned. `gosec` receives the repository
+Go version directly, avoiding its fallback `go list`, and follows an explicit
+`GOMAXPROCS` concurrency bound when one is present; see [gosec
+performance](https://github.com/securego/gosec#performance). `container-security`
+scans the actual runtime image with digest-pinned Trivy and requires Docker.
+Its database cache persists in the shared `trivy-cache` Docker volume, so
+repeated scans do not download the same database again.
 
 ## Migrations and containers
 
@@ -244,7 +394,31 @@ the rehearsal begins.
 `docker-build` and `docker-run` operate on the production Dockerfile. Compose
 exists for runtime dependencies, not to emulate every native Make target. Its
 PostgreSQL healthcheck probes every second during startup, then returns to the
-five-second steady-state interval.
+30-second steady-state interval, avoiding a permanent 12-probes-per-minute
+wake-up loop without delaying readiness.
+
+Integration packages pay for one PostgreSQL container per test binary, while
+each test still owns and drops an isolated database.
+The disposable cluster passes `POSTGRES_INITDB_ARGS=--no-sync`; together with
+Testcontainers' built-in `fsync=off`, this skips crash-durability work that the
+suite does not claim to test. Do not copy either setting to a persistent
+database: PostgreSQL explicitly warns that an interrupted `initdb --no-sync`
+cluster may be corrupt. See the [official image initialization
+contract](https://github.com/docker-library/docs/blob/master/postgres/README.md)
+and [`initdb --no-sync`](https://www.postgresql.org/docs/17/app-initdb.html).
+
+All Testcontainers runs keep Ryuk enabled so an interrupted process still has a
+cleanup owner. A same-host A/B found no wall-time benefit from disabling it, so
+workflows do not trade that cleanup for an unmeasured optimization. Cross-run
+container reuse remains disabled because it weakens freshness and cleanup
+ownership. See the
+[Testcontainers cleanup contract](https://golang.testcontainers.org/features/garbage_collector/)
+and [configuration reference](https://golang.testcontainers.org/features/configuration/).
+
+The pinned Distroless runtime already supplies `/usr/share/zoneinfo`, so the
+Docker build does not also link `time/tzdata` into each binary. Reopen that
+choice if the final image changes to `scratch` or another runtime without a
+system timezone database.
 
 ## Run and build
 

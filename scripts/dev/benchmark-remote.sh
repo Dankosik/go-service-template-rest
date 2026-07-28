@@ -17,6 +17,8 @@ GOLDEN_IMAGE="${DO_BENCH_GOLDEN_IMAGE:-0}"
 SSH_CIDR="${DO_BENCH_SSH_CIDR:-auto}"
 ENV_FILE="${DO_BENCH_ENV_FILE:-}"
 TELEMETRY="${DO_BENCH_TELEMETRY:-0}"
+SSH_RETRY_DELAY="${DO_BENCH_SSH_RETRY_DELAY:-5}"
+PROVIDER_POLL_DELAY="${DO_BENCH_PROVIDER_POLL_DELAY:-2}"
 IMAGE_BUILD_SIZE="${DO_BENCH_IMAGE_BUILD_SIZE:-s-1vcpu-1gb}"
 IMAGE_BASE="${DO_BENCH_IMAGE_BASE:-ubuntu-24-04-x64}"
 IMAGE_NAME="${DO_BENCH_IMAGE_NAME:-}"
@@ -82,6 +84,8 @@ configuration:
   DO_BENCH_STATE_FILE                use a distinct file for every concurrent runner
   DO_BENCH_ENV_FILE                  optional ignored file copied remotely as .env.bench
   DO_BENCH_TELEMETRY                 1 records CPU, memory, disk, and network every 5s; default: 0
+  DO_BENCH_SSH_RETRY_DELAY           seconds between SSH retries; default: 5
+  DO_BENCH_PROVIDER_POLL_DELAY       seconds between deletion checks; default: 2
 EOF
 }
 
@@ -267,6 +271,14 @@ check_prerequisites() {
 		echo "DO_BENCH_GOLDEN_IMAGE must be 0 or 1" >&2
 		return 1
 	}
+	[[ "${SSH_RETRY_DELAY}" =~ ^[0-9]+([.][0-9]+)?$ ]] || {
+		echo "DO_BENCH_SSH_RETRY_DELAY must be a non-negative number" >&2
+		return 1
+	}
+	[[ "${PROVIDER_POLL_DELAY}" =~ ^[0-9]+([.][0-9]+)?$ ]] || {
+		echo "DO_BENCH_PROVIDER_POLL_DELAY must be a non-negative number" >&2
+		return 1
+	}
 
 	fingerprint="$(ssh_key_fingerprint)"
 	[[ -n "${fingerprint}" ]] || {
@@ -425,11 +437,11 @@ wait_for_ssh() {
 			chmod 600 "${KNOWN_HOSTS_FILE}"
 			break
 		fi
-		sleep 5
+		sleep "${SSH_RETRY_DELAY}"
 	done
 	[[ -s "${KNOWN_HOSTS_FILE}" ]] || {
 		rm -f "${temporary}"
-		echo "SSH host key was not available after 5 minutes" >&2
+		echo "SSH host key was not available within the configured retry window" >&2
 		return 1
 	}
 
@@ -440,9 +452,9 @@ wait_for_ssh() {
 		if ssh "${args[@]}" "${REMOTE_USER}@${PUBLIC_IP}" true >/dev/null 2>&1; then
 			return 0
 		fi
-		sleep 5
+		sleep "${SSH_RETRY_DELAY}"
 	done
-	echo "SSH authentication was not available after 5 minutes" >&2
+	echo "SSH authentication was not available within the configured retry window" >&2
 	return 1
 }
 
@@ -457,9 +469,9 @@ wait_for_cloud_init() {
 		fi
 		[[ "${status}" -eq 255 ]] || return "${status}"
 		echo "SSH connection was interrupted while waiting for cloud-init; retrying" >&2
-		sleep 5
+		sleep "${SSH_RETRY_DELAY}"
 	done
-	echo "SSH connection did not remain available while waiting for cloud-init" >&2
+	echo "SSH connection did not remain available within the configured retry window" >&2
 	return 1
 }
 
@@ -563,9 +575,9 @@ wait_for_power_off() {
 		if status="$(doctl_cmd compute droplet get "${DROPLET_ID}" --format Status --no-header)"; then
 			[[ "${status}" != off ]] || return 0
 		fi
-		sleep 5
+		sleep "${PROVIDER_POLL_DELAY}"
 	done
-	echo "Droplet ${DROPLET_ID} did not power off within 5 minutes" >&2
+	echo "Droplet ${DROPLET_ID} did not power off within the configured polling window" >&2
 	return 1
 }
 
@@ -597,8 +609,8 @@ warm_image_dependencies() {
 	fi
 
 	if [[ -z "${IMAGE_DOCKER_IMAGES}" ]]; then
-		if [[ -r test/postgres_integration_test.go ]]; then
-			postgres_image="$(sed -n 's/^const postgresTestImage = "\(.*\)"$/\1/p' test/postgres_integration_test.go)"
+		if [[ -r internal/infra/postgres/pgtest/pgtest.go ]]; then
+			postgres_image="$(sed -n 's/^const DefaultImage = "\(.*\)"$/\1/p' internal/infra/postgres/pgtest/pgtest.go)"
 		fi
 		if [[ -r scripts/dev/benchmark.sh ]]; then
 			k6_image="$(sed -n 's/^K6_IMAGE_DEFAULT="\(.*\)"$/\1/p' scripts/dev/benchmark.sh)"
@@ -996,7 +1008,7 @@ wait_for_absence() {
 		if "${check}"; then
 			return 0
 		fi
-		sleep 2
+		sleep "${PROVIDER_POLL_DELAY}"
 	done
 	echo "${resource} deletion was not confirmed within 60 seconds" >&2
 	return 1

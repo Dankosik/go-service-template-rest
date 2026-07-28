@@ -30,13 +30,22 @@ command_line() {
 	awk -v pattern="${pattern}" 'index($0, pattern) { print NR; exit }' "${FAKE_DO_LOG}"
 }
 
-mkdir -p "${FIXTURE_DIR}/scripts/dev" "${FIXTURE_DIR}/test" "${FAKE_BIN}" "${FAKE_DO_ROOT}"
+mkdir -p \
+	"${FIXTURE_DIR}/internal/infra/postgres/pgtest" \
+	"${FIXTURE_DIR}/scripts/dev" \
+	"${FAKE_BIN}" \
+	"${FAKE_DO_ROOT}"
 cp "${ROOT_DIR}/scripts/dev/benchmark-remote.sh" "${FIXTURE_DIR}/scripts/dev/benchmark-remote.sh"
 cp "${ROOT_DIR}/scripts/dev/benchmark.sh" "${FIXTURE_DIR}/scripts/dev/benchmark.sh"
-cp "${ROOT_DIR}/test/postgres_integration_test.go" "${FIXTURE_DIR}/test/postgres_integration_test.go"
+cp "${ROOT_DIR}/internal/infra/postgres/pgtest/pgtest.go" \
+	"${FIXTURE_DIR}/internal/infra/postgres/pgtest/pgtest.go"
 printf 'benchmark fixture v1\n' >"${FIXTURE_DIR}/README.md"
 git -C "${FIXTURE_DIR}" init -q
-git -C "${FIXTURE_DIR}" add README.md scripts/dev/benchmark-remote.sh scripts/dev/benchmark.sh test/postgres_integration_test.go
+git -C "${FIXTURE_DIR}" add \
+	README.md \
+	internal/infra/postgres/pgtest/pgtest.go \
+	scripts/dev/benchmark-remote.sh \
+	scripts/dev/benchmark.sh
 git -C "${FIXTURE_DIR}" -c user.name=benchmark-check -c user.email=benchmark-check@example.invalid commit -qm fixture
 ssh-keygen -q -t ed25519 -N '' -f "${SSH_KEY}"
 
@@ -208,8 +217,10 @@ run_runner() {
 		PATH="${FAKE_BIN}:${PATH}" \
 			FAKE_DO_ROOT="${FAKE_DO_ROOT}" \
 			FAKE_DO_LOG="${FAKE_DO_LOG}" \
-			FAKE_SSH_LOG="${FAKE_SSH_LOG}" \
+		FAKE_SSH_LOG="${FAKE_SSH_LOG}" \
 		FAKE_SSH_FAIL_CLOUD_INIT_ONCE=1 \
+		DO_BENCH_SSH_RETRY_DELAY=0 \
+		DO_BENCH_PROVIDER_POLL_DELAY=0 \
 		DO_BENCH_STATE_FILE="${STATE_FILE}" \
 		DO_BENCH_SSH_PRIVATE_KEY="${SSH_KEY}" \
 		DO_BENCH_SSH_PUBLIC_KEY="${SSH_KEY}.pub" \

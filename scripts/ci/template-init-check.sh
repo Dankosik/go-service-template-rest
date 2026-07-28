@@ -2,6 +2,15 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+TEMPLATE_INIT_PROFILE="${TEMPLATE_INIT_PROFILE:-all}"
+
+case "${TEMPLATE_INIT_PROFILE}" in
+	all | minimal | postgres) ;;
+	*)
+		echo "TEMPLATE_INIT_PROFILE must be one of: all, minimal, postgres" >&2
+		exit 2
+		;;
+esac
 
 # assert replaces a bare `[[ ... ]]` line. Under `set -e`, bash 3.2 — still the
 # /bin/bash macOS ships — does not abort on a failing bare conditional, so those
@@ -34,10 +43,15 @@ if [[ ! -d "${ROOT_DIR}/scripts/profiles" ]]; then
 fi
 
 TEMP_ROOT="$(mktemp -d -t template-init-check.XXXXXX)"
-export GOCACHE="${GOCACHE:-${ROOT_DIR}/.cache/go-build}"
-export GOLANGCI_LINT_CACHE="${GOLANGCI_LINT_CACHE:-${ROOT_DIR}/.cache/golangci-lint}"
-mkdir -p "${GOCACHE}" "${GOLANGCI_LINT_CACHE}"
-LINTER="$(go -C "${ROOT_DIR}/tools" tool -n golangci-lint)"
+# Go and golangci-lint own their cache paths. In CI those are the paths restored
+# by setup-go; redirecting them here creates a large unpersisted duplicate.
+if [[ "${TEMPLATE_INIT_PROFILE}" != "postgres" ]]; then
+	if [[ -n "${GOLANGCI_LINT_BIN:-}" ]]; then
+		LINTER="${GOLANGCI_LINT_BIN}"
+	else
+		LINTER="$(go -C "${ROOT_DIR}/tools" tool -n golangci-lint)"
+	fi
+fi
 trap 'rm -rf "${TEMP_ROOT}"' EXIT
 
 new_fixture() {
@@ -201,13 +215,14 @@ expect_unchanged_failure() {
 	}
 }
 
-derived="$(new_fixture derived git@github.com:acme/orders.git true)"
-env_before="$(shasum -a 256 "${derived}/.env")"
-derived_workflow_before="$(workflow_snapshot "${derived}")"
-(
-	cd "${derived}"
-	CODEOWNER=@acme/platform bash "${ROOT_DIR}/scripts/init-module.sh"
-)
+if [[ "${TEMPLATE_INIT_PROFILE}" != "postgres" ]]; then
+	derived="$(new_fixture derived git@github.com:acme/orders.git true)"
+	env_before="$(shasum -a 256 "${derived}/.env")"
+	derived_workflow_before="$(workflow_snapshot "${derived}")"
+	(
+		cd "${derived}"
+		CODEOWNER=@acme/platform bash "${ROOT_DIR}/scripts/init-module.sh"
+	)
 
 grep -Fqx "module github.com/acme/orders" "${derived}/go.mod"
 grep -Fqx "module github.com/acme/orders/tools" "${derived}/tools/go.mod"
@@ -227,33 +242,6 @@ assert "specs/ must not survive initialization" path_absent "${derived}/specs"
 assert "startup_dependencies.go is missing" file_present "${derived}/cmd/service/internal/bootstrap/startup_dependencies.go"
 assert "scripts/profiles/ must not survive initialization" path_absent "${derived}/scripts/profiles"
 assert "an existing .env was rewritten" same_text "${env_before}" "$(shasum -a 256 "${derived}/.env")"
-
-full="$(new_fixture full git@github.com:acme/payments.git)"
-full_workflow_before="$(workflow_snapshot "${full}")"
-(
-	cd "${full}"
-	CODEOWNER=@acme/platform DATABASE=postgres \
-		bash "${ROOT_DIR}/scripts/init-module.sh"
-)
-assert "agent workflow changed during postgres initialization" same_text "${full_workflow_before}" "$(workflow_snapshot "${full}")"
-assert "specs/ must not survive postgres initialization" path_absent "${full}/specs"
-
-{
-	echo "package example"
-	echo
-	echo 'import _ "github.com/acme/orders/internal/infra/example"'
-} >"${derived}/internal/example/forbidden.go"
-if (
-	cd "${derived}"
-	"${LINTER}" run --enable-only=depguard ./... >"${TEMP_ROOT}/depguard.log" 2>&1
-); then
-	echo "depguard accepted a feature-to-infra import after module initialization"
-	exit 1
-fi
-grep -Fq "depguard" "${TEMP_ROOT}/depguard.log" || {
-	cat "${TEMP_ROOT}/depguard.log"
-	exit 1
-}
 
 source_checkout="$(new_fixture source git@github.com:Dankosik/go-service-template-rest.git true)"
 source_before="$(snapshot "${source_checkout}")"
@@ -289,11 +277,36 @@ minimal_workflow_before="$(workflow_snapshot "${minimal_checkout}")"
 	CODEOWNER=@acme/platform DATABASE=none bash ./scripts/init-module.sh
 	go test ./...
 	go build ./cmd/service
-	make mod-check
-	# Lint the generated profile, not just the template. Profile file removal can
-	# strand symbols whose only consumer was removed, which builds and tests
-	# cannot catch.
-	"${LINTER}" run --allow-parallel-runners --timeout=3m ./...
+	make mod-tidy-check
+	# One full linter load proves both that profile removal stranded no symbols
+	# and that initialization rewrote depguard's module-qualified rules. The
+	# intentional violation must be the only reported issue.
+	mkdir -p internal/depguardprobe
+	{
+		echo "package depguardprobe"
+		echo
+		echo 'import httpx "github.com/acme/feature-proof/internal/infra/http"'
+		echo
+		echo "var _ httpx.IdempotencyStore"
+	} >internal/depguardprobe/forbidden.go
+	if "${LINTER}" run \
+		--allow-serial-runners \
+		--timeout=3m \
+		--show-stats=false \
+		--output.text.colors=false \
+		--output.text.print-issued-lines=false \
+		--output.text.path="${TEMP_ROOT}/minimal-lint.log" \
+		./...; then
+		echo "depguard accepted a feature-to-infra import after module initialization"
+		exit 1
+	fi
+	issue_count="$(grep -Ec '^[^:]+:[0-9]+:[0-9]+: .+ \([^()]+\)$' "${TEMP_ROOT}/minimal-lint.log" || true)"
+	if [[ "${issue_count}" != 1 ]] || ! grep -Fq '(depguard)' "${TEMP_ROOT}/minimal-lint.log"; then
+		cat "${TEMP_ROOT}/minimal-lint.log"
+		echo "generated minimal profile must have exactly the intentional depguard issue"
+		exit 1
+	fi
+	rm -rf internal/depguardprobe
 	if APP__POSTGRES__ENABLED=true \
 		APP__POSTGRES__DSN='postgres://app:app@127.0.0.1:5432/app?sslmode=disable' \
 		go run ./cmd/service >"${TEMP_ROOT}/minimal-postgres.log" 2>&1; then
@@ -374,24 +387,25 @@ fi
 	# github.com/oapi-codegen/runtime, so the first feature tidies like any
 	# other Go change that adds an import.
 	go mod tidy
-	make openapi-lint openapi-validate
 	gofmt -w internal/greeting internal/infra/http cmd/service/internal/bootstrap/run.go
 	go test ./internal/greeting ./internal/infra/http ./cmd/service/internal/bootstrap
 	make openapi-check
 )
 # The default profile must not hand a generated service the reference example's
 # packages, second OpenAPI contract, or second main().
-assert "examples/ must not survive initialization" path_absent "${minimal_checkout}/examples"
+	assert "examples/ must not survive initialization" path_absent "${minimal_checkout}/examples"
+fi
 
-postgres_checkout="$(copy_template_checkout full-postgres git@github.com:acme/postgres-service.git)"
-postgres_workflow_before="$(workflow_snapshot "${postgres_checkout}")"
-(
-	cd "${postgres_checkout}"
-	CODEOWNER=@acme/platform DATABASE=postgres OUTBOUND_HTTP=bounded REFERENCE_EXAMPLE=keep \
-		bash ./scripts/init-module.sh
-	go test ./...
-	go build ./cmd/service ./cmd/migrate
-)
+if [[ "${TEMPLATE_INIT_PROFILE}" != "minimal" ]]; then
+	postgres_checkout="$(copy_template_checkout full-postgres git@github.com:acme/postgres-service.git)"
+	postgres_workflow_before="$(workflow_snapshot "${postgres_checkout}")"
+	(
+		cd "${postgres_checkout}"
+		CODEOWNER=@acme/platform DATABASE=postgres OUTBOUND_HTTP=bounded REFERENCE_EXAMPLE=keep \
+			bash ./scripts/init-module.sh
+		go test ./...
+		go build ./cmd/service ./cmd/migrate
+	)
 # REFERENCE_EXAMPLE=keep is the opt-in escape hatch for teams that want the
 # worked example in tree.
 assert "REFERENCE_EXAMPLE=keep did not retain examples/" path_present "${postgres_checkout}/examples/reference-service"
@@ -447,12 +461,13 @@ fi
 malformed_outbound="$(new_fixture malformed-outbound git@github.com:acme/malformed-outbound.git)"
 expect_unchanged_failure "${malformed_outbound}" \
 	env CODEOWNER=@acme/platform OUTBOUND_HTTP=custom bash "${ROOT_DIR}/scripts/init-module.sh"
-if (
-	cd "${postgres_checkout}"
-	go list -deps ./cmd/service | grep -F 'github.com/golang-migrate/migrate'
-); then
-	echo "service dependency graph includes migration implementation"
-	exit 1
+	if (
+		cd "${postgres_checkout}"
+		go list -deps ./cmd/service | grep -F 'github.com/golang-migrate/migrate'
+	); then
+		echo "service dependency graph includes migration implementation"
+		exit 1
+	fi
 fi
 
 echo "template initialization contract passed"

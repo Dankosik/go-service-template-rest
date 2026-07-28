@@ -8,17 +8,18 @@ COPY go.mod go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod \
     go mod download
 
-COPY . .
-
 ARG APP_VERSION=dev
 ARG VCS_REF=unknown
 ARG RAILWAY_GIT_COMMIT_SHA
 ARG TARGETOS
 ARG TARGETARCH
 ENV CGO_ENABLED=0
-RUN --mount=type=cache,target=/go/pkg/mod \
+RUN --mount=type=bind,target=. \
+    --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     module_path="$(go list -m)" && \
+    build_packages="./cmd/service" && \
+    if [ -d ./cmd/migrate ]; then build_packages="${build_packages} ./cmd/migrate"; fi && \
     resolved_version="${APP_VERSION}" && \
     if [ "${resolved_version}" = "dev" ] && [ -n "${RAILWAY_GIT_COMMIT_SHA}" ]; then \
       resolved_version="sha-$(printf '%.12s' "${RAILWAY_GIT_COMMIT_SHA}")"; \
@@ -30,26 +31,10 @@ RUN --mount=type=cache,target=/go/pkg/mod \
       -mod=readonly \
       -buildvcs=false \
       -ldflags="${ldflags}" \
-      -tags=timetzdata \
-      -o /out/service ./cmd/service
+      -o /out/ ${build_packages}
 # profile:database-postgres:start
-RUN --mount=type=cache,target=/go/pkg/mod \
-    --mount=type=cache,target=/root/.cache/go-build \
-    module_path="$(go list -m)" && \
-    resolved_version="${APP_VERSION}" && \
-    if [ "${resolved_version}" = "dev" ] && [ -n "${RAILWAY_GIT_COMMIT_SHA}" ]; then \
-      resolved_version="sha-$(printf '%.12s' "${RAILWAY_GIT_COMMIT_SHA}")"; \
-    fi && \
-    resolved_commit="${RAILWAY_GIT_COMMIT_SHA:-${VCS_REF}}" && \
-    ldflags="-s -w -buildid= -X ${module_path}/internal/config.buildVersion=${resolved_version} -X ${module_path}/internal/config.buildCommit=${resolved_commit}" && \
-    GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build \
-      -trimpath \
-      -mod=readonly \
-      -buildvcs=false \
-      -ldflags="${ldflags}" \
-      -tags=timetzdata \
-      -o /out/migrate ./cmd/migrate
-RUN mkdir -p /out/migrations && \
+RUN --mount=type=bind,target=. \
+    mkdir -p /out/migrations && \
     if [ -d /src/migrations ]; then cp -R /src/migrations/. /out/migrations/; fi
 # profile:database-postgres:end
 

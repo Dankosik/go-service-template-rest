@@ -100,6 +100,9 @@ network policy that keeps the listener private.
   revocation or rotation and records the owner, date, and rationale in the
   approving pull request. History rewriting is a separate repository-owner
   decision and does not replace credential revocation.
+- `make secret-scan` must cover the reviewable worktree and every commit after
+  the base merge point. `make secret-scan-history` remains mandatory on main,
+  nightly, and release; a missing base ref falls back to that full scan.
 - Secret-like YAML keys may exist only as empty placeholders for schema/default visibility.
 - Non-empty secret-like YAML values are rejected at load time (`dsn`, `password`, `token`, `secret`, `authorization`, `otlp_headers`).
 - In non-local environments, file-based config is hardened:
