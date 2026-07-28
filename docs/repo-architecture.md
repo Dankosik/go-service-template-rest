@@ -29,6 +29,19 @@ It does not restate the full tree, every command, or task-local design choices.
 | `internal/observability/otelconfig/` | Narrow shared OTel config vocabulary, defaults, and pure validation helpers used by config and telemetry. | Config loading, OTel SDK construction, exporter setup, or generic observability helpers. |
 | `migrations/` | SQL schema migration source of truth. | Runtime repository logic or generated Go bindings. |
 
+## Domain Vocabulary
+
+Keep only accepted cross-task terms whose interpretation changes behavior,
+violation outcome, authority, proof, or handoff. Task-local or unsettled terms
+stay in their owning specification; endpoint, table, queue, and package names
+do not become domain vocabulary merely because they recur.
+
+| Term | Means here | Does not mean | Authority source | Semantic owner | Decision affected |
+| --- | --- | --- | --- | --- | --- |
+
+The template defines no service-specific terms. A derived service adds rows as
+stable domain decisions emerge.
+
 ## Source-Of-Truth Ownership
 
 Keep these ownership rules stable across tasks:

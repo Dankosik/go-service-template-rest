@@ -19,7 +19,7 @@ These documents stay repository-owned and the sync never touches them:
 | Repository-owned | Records |
 | --- | --- |
 | `README.md` | What this service is and who consumes it |
-| `docs/repo-architecture.md` | This service's boundaries, ownership, interaction style, and system neighbors |
+| `docs/repo-architecture.md` | This service's boundaries, ownership, interaction style, system neighbors, and stable domain vocabulary |
 | `docs/project-structure-and-module-organization.md` | This service's package layout |
 | `docs/build-test-and-development-commands.md` | The commands this service actually has |
 | `docs/ci-cd-production-ready.md` | This repository's setup, module path, and owners |

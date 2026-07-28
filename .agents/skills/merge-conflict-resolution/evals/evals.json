@@ -1,0 +1,44 @@
+{
+  "skill_name": "merge-conflict-resolution",
+  "evals": [
+    {
+      "id": 0,
+      "category": "domain_defect",
+      "prompt": "Use merge-conflict-resolution on an active rebase. One side adds accepted request validation to a handler; the other adds required correlation logging in the same hunk. The spec, both commits, callers, and focused tests are available. Resolve and finish the authorized rebase.",
+      "expected_output": "A hunk-level resolution that reconstructs and preserves both compatible intents, validates the handler behavior, stages only resolved paths, and continues the rebase.",
+      "files": [],
+      "assertions": [
+        "Inspects the active operation, base, both sides, and conflict paths before editing",
+        "Traces validation and correlation logging to their accepted sources",
+        "Preserves both compatible intents instead of choosing one whole side",
+        "Runs focused affected proof before continuing the rebase",
+        "Preserves unrelated work"
+      ]
+    },
+    {
+      "id": 1,
+      "category": "unresolved_policy",
+      "prompt": "Use merge-conflict-resolution on an active merge. One side returns 404 for an absent resource and the other returns 200 with an empty representation. No spec, issue, contract test, or current source of truth chooses the client-visible behavior. Resolve the conflict safely.",
+      "expected_output": "Leave the operation intact and return the missing client-visible behavior decision as the exact blocker without choosing either side.",
+      "files": [],
+      "assertions": [
+        "Identifies the 404-versus-200 choice as an unset public behavior decision",
+        "Does not select ours, theirs, or invent a hybrid response",
+        "Leaves the active operation recoverable and reports the exact blocker",
+        "Does not stage or continue an unresolved operation"
+      ]
+    },
+    {
+      "id": 2,
+      "category": "neighbor",
+      "prompt": "Use merge-conflict-resolution. The repository is clean and no merge, rebase, cherry-pick, revert, or unmerged path is active. The request is to implement a new endpoint from an accepted spec.",
+      "expected_output": "Decline conflict-resolution work and route the accepted implementation to its normal implementation owner.",
+      "files": [],
+      "assertions": [
+        "Performs no merge-conflict workflow",
+        "Does not create a merge or rebase operation",
+        "Routes the accepted feature to the normal implementation owner"
+      ]
+    }
+  ]
+}

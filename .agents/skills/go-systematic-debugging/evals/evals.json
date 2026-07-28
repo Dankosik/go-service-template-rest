@@ -26,7 +26,8 @@
         "Recommends goroutine dump or runtime forensics before speculative code edits",
         "Uses at least one concrete Go dump, profile, or trace command",
         "Identifies the likely blocked boundary rather than only the symptom location",
-        "Includes a concrete verification or next experiment section"
+        "Includes a concrete verification or next experiment section",
+        "Captures perishable live evidence before requiring a local red-capable reproduction loop"
       ]
     },
     {
@@ -105,6 +106,20 @@
         "Loads the neighboring repository's instructions and inspects its checkout and dirty state before editing.",
         "Does not request a separate task or confirmation solely because the repair crosses a repository boundary.",
         "Validates every changed repository and reports any unavailable integrated proof honestly."
+      ]
+    },
+    {
+      "id": 8,
+      "category": "domain_defect",
+      "prompt": "Use go-systematic-debugging in fix_authorized mode. A deterministic parser bug is locally accessible, but the report only says one valid fixture fails. The package has many fixtures and a broad test takes four minutes. Before proposing a cause or edit, establish the smallest red-capable, agent-runnable command for the exact reported behavior and minimize its fixture, configuration, caller, and steps. Return the compact debugging outcome.",
+      "expected_output": "A diagnosis that runs one focused command capable of failing on the exact parser symptom, records its RED result, minimizes the scenario until retained elements are load-bearing, and keeps repair closed until that observable exists.",
+      "files": [],
+      "assertions": [
+        "Names one exact command that has been run and can fail on the reported parser behavior",
+        "Requires the signal to assert the exact symptom rather than merely complete without crashing",
+        "Makes the command deterministic or records a measured failure rate",
+        "Minimizes inputs, callers, configuration, and steps before ranking causal hypotheses",
+        "Does not open the repair gate from static code suspicion alone"
       ]
     }
   ]
