@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"os"
 	"strings"
-	"sync/atomic"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -401,101 +400,6 @@ func resetBootstrapConfigEnv(t *testing.T) {
 		if err := os.Unsetenv(key); err != nil {
 			t.Fatalf("os.Unsetenv(%q) error = %v", key, err)
 		}
-	}
-}
-
-// fakeIdempotencySweeper counts sweeps and can fail on demand.
-type fakeIdempotencySweeper struct {
-	sweeps  atomic.Int64
-	failing atomic.Bool
-}
-
-func (s *fakeIdempotencySweeper) Sweep(context.Context) (int64, error) {
-	s.sweeps.Add(1)
-	if s.failing.Load() {
-		return 0, errors.New("sweep failed")
-	}
-	return 1, nil
-}
-
-// TestSweepIdempotencyKeysRunsUntilCancellation pins the two properties the sweeper
-// needs as supervised work: it keeps running on the configured interval, and it
-// treats cancellation as an ordinary stop rather than a task failure.
-func TestSweepIdempotencyKeysRunsUntilCancellation(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
-		const interval = time.Minute
-
-		sweeper := &fakeIdempotencySweeper{}
-		ctx, cancel := context.WithCancel(context.Background())
-		done := make(chan error, 1)
-		go func() { done <- sweepIdempotencyKeys(ctx, sweeper, interval) }()
-
-		synctest.Wait()
-		if got := sweeper.sweeps.Load(); got != 0 {
-			t.Fatalf("sweeps before the first tick = %d, want 0", got)
-		}
-
-		time.Sleep(3 * interval)
-		synctest.Wait()
-		if got := sweeper.sweeps.Load(); got != 3 {
-			t.Fatalf("sweeps after 3 intervals = %d, want 3", got)
-		}
-
-		cancel()
-		synctest.Wait()
-		if err := <-done; err != nil {
-			t.Fatalf("sweepIdempotencyKeys() error = %v, want nil on cancellation", err)
-		}
-	})
-}
-
-// TestSweepIdempotencyKeysSurvivesAFailedPass keeps a transient database failure
-// from ending the task. One failed sweep leaves rows behind; ending the task would
-// leave every later one behind too, and the table it bounds would grow unwatched.
-func TestSweepIdempotencyKeysSurvivesAFailedPass(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
-		const interval = time.Minute
-
-		sweeper := &fakeIdempotencySweeper{}
-		sweeper.failing.Store(true)
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-		done := make(chan error, 1)
-		go func() { done <- sweepIdempotencyKeys(ctx, sweeper, interval) }()
-
-		time.Sleep(2 * interval)
-		synctest.Wait()
-		if got := sweeper.sweeps.Load(); got != 2 {
-			t.Fatalf("sweeps after 2 failing intervals = %d, want the task still running", got)
-		}
-
-		sweeper.failing.Store(false)
-		time.Sleep(interval)
-		synctest.Wait()
-		if got := sweeper.sweeps.Load(); got != 3 {
-			t.Fatalf("sweeps after recovery = %d, want 3", got)
-		}
-
-		cancel()
-		synctest.Wait()
-		if err := <-done; err != nil {
-			t.Fatalf("sweepIdempotencyKeys() error = %v, want nil on cancellation", err)
-		}
-	})
-}
-
-// TestRuntimeDependenciesIdempotencyStoreIsNilWithoutAStore is the typed-nil trap.
-// Returning the field directly would produce a non-nil interface holding a nil
-// pointer, so the middleware would install itself and dereference nothing on the
-// first POST carrying a key.
-func TestRuntimeDependenciesIdempotencyStoreIsNilWithoutAStore(t *testing.T) {
-	t.Parallel()
-
-	if store := (runtimeDependencies{}).IdempotencyStore(); store != nil {
-		t.Fatalf("IdempotencyStore() = %v, want a nil interface", store)
-	}
-	if tasks := (runtimeDependencies{}).BackgroundTasks(); len(tasks) != 0 {
-		t.Fatalf("BackgroundTasks() = %v, want none without a store", tasks)
 	}
 }
 

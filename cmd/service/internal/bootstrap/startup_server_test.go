@@ -230,6 +230,55 @@ func TestServeHTTPRuntimeStartsAndStopsApplicationAndMetricsServers(t *testing.T
 	}
 }
 
+func TestServeHTTPRuntimeStopsAfterBackgroundFailure(t *testing.T) {
+	t.Parallel()
+
+	srv := newFakeRuntimeServer()
+	admission := newTestStartupAdmissionController()
+	failures := make(chan error, 1)
+	taskErr := errors.New("consumer lost its lease")
+
+	runErrCh := make(chan error, 1)
+	go func() {
+		runErrCh <- serveHTTPRuntime(context.Background(), context.Background(), serveHTTPRuntimeArgs{
+			cfg: config.Config{
+				App:  config.AppConfig{Env: "test"},
+				HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second},
+			},
+			log:                slog.New(slog.DiscardHandler),
+			healthSvc:          health.New(),
+			srv:                srv,
+			readinessCheck:     func(context.Context) error { return nil },
+			backgroundFailures: failures,
+			admission:          admission,
+			shutdown:           testShutdownBudget(),
+		})
+	}()
+
+	select {
+	case <-srv.serveStarted:
+	case <-time.After(time.Second):
+		t.Fatal("application server did not start")
+	}
+	deadline := time.Now().Add(time.Second)
+	for !admission.Ready() && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if !admission.Ready() {
+		t.Fatal("startup admission was not marked ready")
+	}
+
+	failures <- taskErr
+	select {
+	case err := <-runErrCh:
+		if !errors.Is(err, taskErr) {
+			t.Fatalf("serveHTTPRuntime() error = %v, want wrapped %v", err, taskErr)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("serveHTTPRuntime() did not stop after the background failure")
+	}
+}
+
 func TestServeHTTPRuntimeRejectsCanceledStartupBeforeListen(t *testing.T) {
 	t.Parallel()
 

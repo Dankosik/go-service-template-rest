@@ -166,28 +166,26 @@ func New(cfg Config, meterProvider metric.MeterProvider) (*Client, error) {
 		scheme:    baseURL.Scheme,
 		authority: baseURL.Host,
 	}
-	// Retries sit inside the instrumentation so each attempt is its own span and
-	// its own metric sample: a dependency that only succeeds on the second try is
-	// otherwise indistinguishable from one that is simply slow. They sit outside the
-	// authority and response-size bounds, so a retried request is checked against
-	// the same fixed target as the first one.
-	var repeatable http.RoundTripper = bounded
-	if cfg.Retry.enabled() {
-		repeatable = retryTransport{base: bounded, policy: cfg.Retry}
-	}
+	// Instrumentation sits inside retries so each attempt is its own span and
+	// metric sample. The fixed-authority and response-size bounds remain innermost
+	// and therefore apply to every attempt.
 	instrumented := otelhttp.NewTransport(
-		repeatable,
+		bounded,
 		otelhttp.WithMeterProvider(meterProvider),
 		otelhttp.WithPropagators(propagation.TraceContext{}),
 		otelhttp.WithSpanOptions(trace.WithAttributes(
 			attribute.String("dependency.name", strings.TrimSpace(cfg.DependencyName)),
 		)),
 	)
+	var roundTripper http.RoundTripper = instrumented
+	if cfg.Retry.enabled() {
+		roundTripper = retryTransport{base: instrumented, policy: cfg.Retry}
+	}
 
 	return &Client{
 		baseURL: baseURL.String(),
 		httpClient: &http.Client{
-			Transport: instrumented,
+			Transport: roundTripper,
 			Timeout:   cfg.RequestTimeout,
 			CheckRedirect: func(*http.Request, []*http.Request) error {
 				return http.ErrUseLastResponse

@@ -2,6 +2,7 @@ package httpclient
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -10,6 +11,9 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/example/go-service-template-rest/internal/infra/telemetry/telemetrytest"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const (
@@ -20,7 +24,7 @@ const (
 // newRetryTestClient builds a client whose fixed target is a private-zone hostname
 // and whose dialer reaches the test server, which is how the rest of this package
 // exercises a live request through the real bounded transport chain. The retry
-// decorator is inside that chain rather than around a bare RoundTripper, so these
+// decorator wraps that chain rather than a bare RoundTripper, so these
 // tests also cover its interaction with the authority and response-size bounds.
 func newRetryTestClient(t *testing.T, handler http.Handler, policy RetryPolicy) *Client {
 	t.Helper()
@@ -113,9 +117,9 @@ func TestRetryLeavesUnsafeMethodsAlone(t *testing.T) {
 	}
 }
 
-// TestRetryRepeatsKeyedUnsafeMethod is the other half: a caller that attached an
-// Idempotency-Key has already made the repeat safe, and the server's own middleware
-// will replay rather than re-run.
+// TestRetryRepeatsKeyedUnsafeMethod is the other half: attaching an
+// Idempotency-Key is the caller's explicit assertion that the upstream operation
+// persists and scopes that key.
 func TestRetryRepeatsKeyedUnsafeMethod(t *testing.T) {
 	t.Parallel()
 
@@ -195,6 +199,73 @@ func TestRetryStopsAtMaxAttempts(t *testing.T) {
 	}
 	if got := attempts.Load(); got != retryTestMaxAttempts {
 		t.Fatalf("attempts = %d, want %d", got, retryTestMaxAttempts)
+	}
+}
+
+func TestRetryCancellationNeverReturnsADrainedResponse(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://provider.example", nil)
+	if err != nil {
+		t.Fatalf("build request: %v", err)
+	}
+	transport := retryTransport{
+		base: roundTripFunc(func(*http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusServiceUnavailable,
+				Header:     make(http.Header),
+				Body: cancelReadCloser{
+					cancel: cancel,
+				},
+			}, nil
+		}),
+		policy: RetryPolicy{MaxAttempts: 2, BaseDelay: time.Hour},
+	}
+
+	response, err := transport.RoundTrip(request)
+	if response != nil {
+		if response.Body != nil {
+			_ = response.Body.Close()
+		}
+		t.Fatalf("RoundTrip() response = %#v, want nil after its body was drained", response)
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("RoundTrip() error = %v, want context.Canceled", err)
+	}
+}
+
+func TestRetryRecordsOneClientSpanPerAttempt(t *testing.T) {
+	recorder := telemetrytest.InstallSpanRecorder(t)
+
+	var attempts atomic.Int32
+	client := newRetryTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if attempts.Add(1) == 1 {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}), RetryPolicy{MaxAttempts: 2, BaseDelay: retryTestBaseDelay})
+	request, err := http.NewRequestWithContext(context.Background(), http.MethodGet, client.BaseURL(), nil)
+	if err != nil {
+		t.Fatalf("build request: %v", err)
+	}
+
+	response, err := client.Do(request)
+	if err != nil {
+		t.Fatalf("Do() error = %v, want nil", err)
+	}
+	_, _ = io.Copy(io.Discard, response.Body)
+	_ = response.Body.Close()
+
+	var clientSpans int
+	for _, span := range recorder.Ended() {
+		if span.SpanKind() == trace.SpanKindClient {
+			clientSpans++
+		}
+	}
+	if clientSpans != 2 {
+		t.Fatalf("client spans = %d, want one for each of 2 attempts", clientSpans)
 	}
 }
 
@@ -303,3 +374,14 @@ func TestNewRejectsIncoherentRetryPolicy(t *testing.T) {
 		t.Fatalf("New(no retry policy) error = %v, want nil", err)
 	}
 }
+
+type cancelReadCloser struct {
+	cancel context.CancelFunc
+}
+
+func (c cancelReadCloser) Read([]byte) (int, error) {
+	c.cancel()
+	return 0, io.EOF
+}
+
+func (cancelReadCloser) Close() error { return nil }

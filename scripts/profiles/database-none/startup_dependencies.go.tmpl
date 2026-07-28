@@ -4,10 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/example/go-service-template-rest/internal/background"
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/health"
-	httpx "github.com/example/go-service-template-rest/internal/infra/http"
 	"github.com/example/go-service-template-rest/internal/problem"
 )
 
@@ -24,16 +22,6 @@ type runtimeDependencies struct{}
 // This profile has no dependency to probe; startup admission and the background
 // supervisor still contribute their own.
 func (runtimeDependencies) ReadinessProbes() []health.Probe { return nil }
-
-// IdempotencyStore mirrors the PostgreSQL profile's accessor. This profile has no
-// storage that satisfies the two properties the middleware needs — a single atomic
-// claim and expiry — so it returns nil and the middleware stays out of the chain.
-func (runtimeDependencies) IdempotencyStore() httpx.IdempotencyStore { return nil }
-
-// BackgroundTasks mirrors the PostgreSQL profile's accessor so the shared startup
-// path in run.go compiles against either profile. This profile's dependencies need
-// no supervised work.
-func (runtimeDependencies) BackgroundTasks() []background.Task { return nil }
 
 // DomainErrors mirrors the PostgreSQL profile's accessor. This profile holds no
 // dependency whose failures the transport has to classify, so a handler's own

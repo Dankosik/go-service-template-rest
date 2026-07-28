@@ -1,6 +1,7 @@
 package httpclient
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -10,10 +11,8 @@ import (
 	"time"
 )
 
-// idempotencyKeyHeader marks a request the caller has made safe to repeat. It is
-// the same header the inbound middleware keys on, which is deliberate: a caller
-// that generated a key for its own request has already decided a repeat is
-// harmless.
+// idempotencyKeyHeader marks a request whose upstream operation contract makes a
+// repeat safe.
 const idempotencyKeyHeader = "Idempotency-Key"
 
 // retryJitterFraction is how much of each computed delay is randomized. Full
@@ -47,9 +46,8 @@ func (p RetryPolicy) enabled() bool {
 // loop gets wrong.
 //
 // Only repeatable requests. A GET or HEAD may be repeated by definition; anything
-// else is repeated only when the caller attached an Idempotency-Key, because a
-// retried POST that the server did process creates the second resource this
-// repository's inbound middleware exists to prevent.
+// else is repeated only when the caller attached an Idempotency-Key, because the
+// client cannot infer whether the upstream operation scopes and persists that key.
 //
 // Never past the caller's deadline. The delay and one more attempt have to fit in
 // what remains of the request context, or the retry is skipped and the last result
@@ -89,7 +87,7 @@ func (t retryTransport) RoundTrip(request *http.Request) (*http.Response, error)
 
 		select {
 		case <-request.Context().Done():
-			return response, err
+			return nil, context.Cause(request.Context())
 		case <-time.After(delay):
 		}
 
@@ -119,8 +117,8 @@ func (t retryTransport) retryRequest(request *http.Request) (*http.Response, err
 //
 // A GET, HEAD, or OPTIONS may be repeated by definition. Anything else is repeated
 // only when the caller attached an Idempotency-Key: a retried POST that the server
-// did process creates the second resource this repository's inbound middleware
-// exists to prevent, and only the caller knows whether it made that safe.
+// did process creates a second resource unless the upstream operation made the key
+// durable, and only the caller knows whether that contract exists.
 //
 // A body that has already been read also has to be rewindable, and only GetBody can
 // do that. net/http populates it for the body types it knows; a caller that supplied

@@ -387,8 +387,7 @@ if [[ "${source_checkout}" != true ]]; then
 	rebase_coverage_floor
 
 	if [[ "${database}" == "none" ]]; then
-		# migrations goes with the runner. The only migration the template ships
-		# creates the idempotency table, which this profile has no store for.
+		# The migration runner and directory belong to the PostgreSQL profile.
 		rm -rf -- cmd/migrate internal/infra/postgres internal/infra/postgresmigrate migrations
 		# Matched rather than listed. Every test/postgres_*_test.go is PostgreSQL
 		# integration proof by construction, and a new one that a hand-written list

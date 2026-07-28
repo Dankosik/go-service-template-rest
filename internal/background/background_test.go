@@ -179,20 +179,15 @@ func TestCheckIgnoresTasksStoppedByShutdown(t *testing.T) {
 	}
 }
 
-// TestCheckIgnoresTasksThatFinishedTheirWork keeps a one-shot task from failing
-// readiness for having completed.
-func TestCheckIgnoresTasksThatFinishedTheirWork(t *testing.T) {
+func TestUnexpectedTaskStopFailsTheProcess(t *testing.T) {
 	t.Parallel()
 
 	sup := New(context.Background(), discardLogger())
 	sup.Go(Task{Name: "one_shot", Run: func(context.Context) error { return nil }})
 
-	// Shutdown joins the task, so the check below cannot race its return.
-	if err := sup.Shutdown(context.Background()); err != nil {
-		t.Fatalf("Shutdown() error = %v, want nil", err)
-	}
-	if err := sup.Check(context.Background()); err != nil {
-		t.Fatalf("Check() after a task finished = %v, want nil", err)
+	err := <-sup.Failures()
+	if !errors.Is(err, ErrTaskFailed) || !errors.Is(err, ErrTaskStopped) {
+		t.Fatalf("Failures() = %v, want ErrTaskFailed wrapping ErrTaskStopped", err)
 	}
 }
 
@@ -319,8 +314,8 @@ func TestNilRunIsRejectedWithoutStarting(t *testing.T) {
 	sup := New(context.Background(), slog.New(slog.NewJSONHandler(&logged, nil)))
 	sup.Go(Task{Name: "broken"})
 
-	if err := sup.Shutdown(context.Background()); err != nil {
-		t.Fatalf("Shutdown() error = %v, want nil", err)
+	if err := <-sup.Failures(); !errors.Is(err, ErrTaskFailed) {
+		t.Fatalf("Failures() = %v, want ErrTaskFailed", err)
 	}
 	if !strings.Contains(logged.String(), "background_task_invalid") {
 		t.Fatalf("log = %q, want an invalid-task record", logged.String())

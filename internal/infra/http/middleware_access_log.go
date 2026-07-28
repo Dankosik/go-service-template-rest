@@ -67,13 +67,12 @@ func AccessLog(log *slog.Logger, logHealthProbes bool, next http.Handler) http.H
 		//
 		// problem_code is what separates the several failures that share a status.
 		// A 503 is load shedding, a saturated connection pool, or a draining
-		// instance; a 409 is an idempotency replay conflict or a domain conflict.
+		// instance; a 409 is a domain conflict.
 		// Status alone cannot tell them apart, and during an incident that
 		// distinction is the whole question. Its cardinality is bounded by the
 		// problem catalog.
 		attrs := []any{
 			"method", r.Method,
-			"path", r.URL.Path,
 			"route", route,
 			"status", captured.Code,
 			"duration_ms", captured.Duration.Milliseconds(),

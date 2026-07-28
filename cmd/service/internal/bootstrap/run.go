@@ -254,12 +254,8 @@ func Run(args []string) (runErr error) {
 		_ = supervisor.Shutdown(shutdown.stage(signalCtx, backgroundShutdownTimeout))
 	}()
 
-	// The supervisor is a readiness probe in its own right. A supervised task
-	// that failed is not restarted and is not coming back, so the process would
-	// otherwise keep taking traffic without the work that task existed to do —
-	// an outbox that no longer publishes, a lease that no longer renews — with
-	// one ERROR log line as the only evidence. Composed here rather than inside
-	// the dependency stage because that stage runs before the supervisor exists.
+	// The failure channel below terminates serving; the readiness probe makes the
+	// same failure visible during the short interval before the drain begins.
 	healthSvc := health.New(append(dependencies.ReadinessProbes(), supervisor)...)
 
 	// Readiness is served from cached state, so something has to keep that state
@@ -278,14 +274,6 @@ func Run(args []string) (runErr error) {
 			)
 		},
 	})
-	// Whatever upkeep the active profile's dependencies need — the idempotency
-	// sweep under DATABASE=postgres, nothing under DATABASE=none. Registering it
-	// here rather than inside the dependency stage means it is canceled and joined
-	// by the same ordered teardown as every other supervised task.
-	for _, task := range dependencies.BackgroundTasks() {
-		supervisor.Go(task)
-	}
-
 	handler, err := httpx.NewRouter(
 		bootstrap.log,
 		httpx.Handlers{
@@ -299,11 +287,6 @@ func Run(args []string) (runErr error) {
 			MaxInFlight:     bootstrap.cfg.HTTP.MaxInFlight,
 			OTelServerName:  bootstrap.cfg.Observability.OTel.ServiceName,
 			LogHealthProbes: bootstrap.cfg.HTTP.AccessLogHealthProbes,
-			// Nil under DATABASE=none, which leaves the middleware out of the
-			// chain: this repository ships no store that satisfies the atomic
-			// claim and expiry the replay depends on without a database.
-			Idempotency:               dependencies.IdempotencyStore(),
-			IdempotencyOutcomeTimeout: bootstrap.cfg.HTTP.IdempotencyOutcomeTimeout,
 			// The active profile's dependency failures, classified once here
 			// rather than in every operation. A service appends its own domain
 			// mappers to this slice; see httpx.DomainErrorMapper.
@@ -342,11 +325,12 @@ func Run(args []string) (runErr error) {
 	}
 
 	serveErr := serveHTTPRuntime(signalCtx, startupCtx, serveHTTPRuntimeArgs{
-		cfg:        bootstrap.cfg,
-		log:        bootstrap.log,
-		healthSvc:  healthSvc,
-		srv:        srv,
-		metricsSrv: metricsSrv,
+		cfg:                bootstrap.cfg,
+		log:                bootstrap.log,
+		healthSvc:          healthSvc,
+		srv:                srv,
+		metricsSrv:         metricsSrv,
+		backgroundFailures: supervisor.Failures(),
 		// Admission refreshes rather than probing separately, so the verdict it
 		// admits on is the same one the probe route will serve. Without that, the
 		// first probe after admission could still answer 503 from an unevaluated
