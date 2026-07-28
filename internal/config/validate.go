@@ -69,13 +69,6 @@ func validateCrossSectionBudgets(cfg Config) error {
 				cfg.HTTP.RequestTimeout,
 			)
 		}
-		if cfg.HTTP.MaxInFlight > 0 && cfg.HTTP.MaxInFlight < cfg.Postgres.MaxOpenConns {
-			return fmt.Errorf(
-				"%w: http.max_in_flight must be >= postgres.max_open_conns (%d) so shedding cannot be tighter than the pool it protects",
-				ErrValidate,
-				cfg.Postgres.MaxOpenConns,
-			)
-		}
 	}
 	// profile:database-postgres:end
 

@@ -210,7 +210,7 @@ func isResponseTooLarge(err error) bool {
 
 // retryDelay computes the wait before attempt, preferring the server's own hint.
 func retryDelay(base time.Duration, attempt int, response *http.Response) time.Duration {
-	if hinted, ok := retryAfter(response); ok {
+	if hinted, ok := retryAfter(response, time.Now()); ok {
 		return hinted
 	}
 
@@ -226,10 +226,9 @@ func retryDelay(base time.Duration, attempt int, response *http.Response) time.D
 	return backoff - time.Duration(retryJitterFraction*float64(backoff)) + jitter
 }
 
-// retryAfter reads the server's hint. Only the delay-seconds form is honored: the
-// HTTP-date form requires trusting the client's clock against the server's, and a
-// skewed clock turns a one-second hint into a minutes-long stall.
-func retryAfter(response *http.Response) (time.Duration, bool) {
+// retryAfter reads either Retry-After form. A valid server Date is the reference
+// for an HTTP-date hint, so ordinary client/server clock skew does not distort it.
+func retryAfter(response *http.Response, now time.Time) (time.Duration, bool) {
 	if response == nil {
 		return 0, false
 	}
@@ -237,11 +236,19 @@ func retryAfter(response *http.Response) (time.Duration, bool) {
 	if raw == "" {
 		return 0, false
 	}
-	seconds, err := strconv.Atoi(raw)
-	if err != nil || seconds < 0 {
+	if seconds, err := strconv.Atoi(raw); err == nil && seconds >= 0 {
+		return time.Duration(seconds) * time.Second, true
+	}
+	retryAt, err := http.ParseTime(raw)
+	if err != nil {
 		return 0, false
 	}
-	return time.Duration(seconds) * time.Second, true
+	reference := now
+	if serverDate, dateErr := http.ParseTime(response.Header.Get("Date")); dateErr == nil {
+		reference = serverDate
+	}
+	delay := retryAt.Sub(reference)
+	return delay, delay >= 0
 }
 
 // fitsRemainingBudget reports whether the delay leaves room for another attempt.

@@ -482,30 +482,12 @@ func TestStatementTimeoutMustFitRequestBudget(t *testing.T) {
 	}
 }
 
-func TestMaxInFlightMustCoverPool(t *testing.T) {
+func TestHTTPAdmissionAndPoolCapacityAreIndependent(t *testing.T) {
 	resetConfigEnv(t)
 	t.Setenv("APP__POSTGRES__ENABLED", "true")
 	t.Setenv("APP__POSTGRES__DSN", "postgres://app:app@127.0.0.1:5432/app?sslmode=disable")
 	t.Setenv("APP__POSTGRES__MAX_OPEN_CONNS", "25")
 	t.Setenv("APP__HTTP__MAX_IN_FLIGHT", "10")
-
-	_, _, err := LoadDetailed(LoadOptions{})
-	if !errors.Is(err, ErrValidate) {
-		t.Fatalf("LoadDetailed() error = %v, want ErrValidate", err)
-	}
-	if !strings.Contains(err.Error(), "postgres.max_open_conns") {
-		t.Fatalf("error = %q, want it to name postgres.max_open_conns", err.Error())
-	}
-}
-
-// TestShedDisabledSkipsPoolCoverage keeps "shedding off" from being rejected by
-// the rule that only exists to keep shedding wider than the pool.
-func TestShedDisabledSkipsPoolCoverage(t *testing.T) {
-	resetConfigEnv(t)
-	t.Setenv("APP__POSTGRES__ENABLED", "true")
-	t.Setenv("APP__POSTGRES__DSN", "postgres://app:app@127.0.0.1:5432/app?sslmode=disable")
-	t.Setenv("APP__POSTGRES__MAX_OPEN_CONNS", "25")
-	t.Setenv("APP__HTTP__MAX_IN_FLIGHT", "0")
 
 	if _, _, err := LoadDetailed(LoadOptions{}); err != nil {
 		t.Fatalf("LoadDetailed() error = %v", err)
