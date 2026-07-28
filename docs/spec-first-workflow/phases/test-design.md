@@ -21,6 +21,12 @@ Before writing scenarios, disposition every material acceptance claim, invariant
 
 For each resulting proof obligation, design the smallest falsifier: a controlled setup/action/failure trigger plus an oracle that rejects a plausible incorrect observable result, state, emission, or side effect. Then select the narrowest complementary proving level and runnable command that can establish that oracle.
 
+Source or instruction text is not a behavioral oracle merely because a string
+is present or absent. For scripts and workflows, exercise controlled behavior
+and observe output or side effects. Check exact text only when that text is
+itself the accepted external artifact, such as generated configuration,
+protocol output, or a diagnostic contract.
+
 Route performance proof decisions through `go-performance` and
 [Benchmarking](../../benchmarking.md); keep the accepted workload and scale
 boundary, measured path or structural oracle, budget or structural constraint,

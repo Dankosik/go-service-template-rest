@@ -4,7 +4,7 @@ These examples show compact, conditional handoffs. They do not use every possibl
 
 ## Example 1: HTTP OPTIONS / CORS Policy Bug
 
-Raw fixture: `evals/files/http-options-cors.md`
+Raw fixture: `files/http-options-cors.md`
 
 ```md
 Objective
@@ -24,19 +24,19 @@ Stop if the behavior is owned outside router policy or requires a public-contrac
 
 ## Example 2: Repo-Local Skill / Prompt Tooling Request
 
-Raw fixture: `evals/files/skill-tooling.md`
+Raw fixture: `files/skill-tooling.md`
 
 ```md
 Revise the existing repository-local prompt-composer skill so it reconstructs arbitrary messy user intent and emits a compact English coding-agent handoff rather than performing literal translation or generic prompt polish.
 
-Success means the canonical `.agents/skills/` source and useful examples/evals agree; the skill preserves exact identifiers, adds repository context only when it changes execution, and remains local to this repository.
+Success means the canonical `.agents/skills/` source and useful examples agree; the skill preserves exact identifiers, adds repository context only when it changes execution, and remains local to this repository.
 
 Inspect `.agents/skills/agent-prompt-composer/`. Keep dependencies minimal. Validate with `git diff --check`. Do not create a global or home-directory skill.
 ```
 
 ## Example 3: Flaky Shutdown / Drain Investigation
 
-Raw fixture: `evals/files/flaky-shutdown.md`
+Raw fixture: `files/flaky-shutdown.md`
 
 ```md
 Objective

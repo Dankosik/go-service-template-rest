@@ -116,14 +116,22 @@ Vendor authority: [Subagents](https://code.claude.com/docs/en/sub-agents), in pa
 
 - Keep one write worker per ready ledger task: one background `Agent` lane with `isolation: "worktree"`. Several write workers may run only as members of a positively independent planned wave. The worktree is the isolation boundary; the root still owns acceptance and integration per the implementation phase.
 - Pass `isolation` as a dispatch parameter rather than moving it into the role's frontmatter. A dispatch-parameter worktree branches from the parent's `HEAD`, which is the accepted integrated base the wave needs; frontmatter isolation follows the `--worktree` base rule and branches from the repository's default branch unless [`worktree.baseRef`](https://code.claude.com/docs/en/worktrees#choose-the-base-branch) is `"head"`.
-- The worker receives the same outcome-first brief the implementation phase requires.
+- When the exact accepted `tasks.md` is visible in the worker worktree, dispatch
+  its path and task ID plus only live facts absent from the ledger. Inline the
+  full outcome-first brief only when that ledger revision is unavailable.
 - A background worker keeps every MCP tool but a reduced built-in set: `Read`, `Grep`, `Glob`, `Bash`, `PowerShell`, `Edit`, `Write`, `NotebookEdit`, `WebFetch`, `WebSearch`, `TodoWrite`, `Skill`, `ToolSearch`, `EnterWorktree`, `ExitWorktree`, `Monitor`, `TaskStop`, `SendMessage`, and `Artifact`. That covers implementation; do not narrow it further with a `tools` allowlist unless the task genuinely requires less.
 
 ### What crosses into a worker
 
-A worker starts from a fresh context window. It receives the brief, the repository instructions, a `git status` snapshot taken when the parent session started, and any skills its role preloads. It does **not** receive the root's conversation, the command output the root already read, the root's output style, or the root's auto memory. Its context window is sized by its own model, so delegating to a smaller model gives that lane a smaller window.
+A worker starts from a fresh context window. It receives the dispatch, files in
+its worktree, the repository instructions, a `git status` snapshot taken when
+the parent session started, and any skills its role preloads. It does **not**
+receive the root's conversation, the command output the root already read, the
+root's output style, or the root's auto memory. Its context window is sized by
+its own model, so delegating to a smaller model gives that lane a smaller
+window.
 
-This is why [Route Discovery Stays Root-Local](spec-first-workflow/phases/implementation-validation-closeout.md#route-discovery-stays-root-local) is a rule and not a preference: nothing the root learned reaches the lane except through the brief. `/subtask` forks are the one exception — a fork inherits the parent conversation and its exact tool pool — but a fork continues one line of reasoning rather than opening an independent lane, so it is not a substitute for a Worker.
+This is why [Route Discovery Stays Root-Local](spec-first-workflow/phases/implementation-validation-closeout.md#route-discovery-stays-root-local) is a rule and not a preference: nothing the root learned reaches the lane except through the accepted ledger entry or dispatch. `/subtask` forks are the one exception — a fork inherits the parent conversation and its exact tool pool — but a fork continues one line of reasoning rather than opening an independent lane, so it is not a substitute for a Worker.
 
 ### Monitor
 

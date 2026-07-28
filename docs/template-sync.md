@@ -26,7 +26,12 @@ These documents stay repository-owned and the sync never touches them:
 | `docs/railway-deployment-profile.md` | This service's deployment target |
 | `docs/first-production-feature.md` | Template-only onboarding; not shipped to services |
 
-Record a service-specific decision in one of those, or in a task-local artifact. Never in an owned path. `make template-owned-purity-check` fails when an owned path names the repository's own module, when the manifest lists a repository-owned document, or when the manifest stops carrying the sync mechanism itself.
+Record a service-specific decision in one of those, or in a task-local artifact.
+Never in an owned path. `make template-owned-purity-check` validates safe
+manifest paths, existing non-empty owners, non-overlap, repository-owned
+exclusions, and propagation of the sync mechanism. Content portability remains
+a review responsibility; the actual sync independently refuses an owned path
+that names the target module.
 
 ## Adopting Instruction Changes
 

@@ -60,9 +60,11 @@ checkout and authorized paths and inspect its current diff/status. Record a
 base only when the candidate will leave that checkout or several provisional
 deltas must be compared. Do not stash, clean, ignore, or mutate user changes.
 Keep one write Worker per ledger task; several write Workers may run only as
-members of a positively independent planned wave. A Worker receives an outcome-first brief
-with editable boundaries, current facts, success criteria, focused proof, and
-a real stop condition.
+members of a positively independent planned wave. When the Worker can read the
+exact accepted `tasks.md` revision, its task entry is the brief body: dispatch
+only the artifact path, task ID, and current facts that the ledger could not
+contain. Do not paste or restate the task. Send the full outcome-first brief
+inline only when that exact ledger is unavailable to the Worker.
 
 Select the Worker's model and reasoning effort independently from the remaining
 execution rather than the overall importance of the outcome. Do not infer the
@@ -80,18 +82,18 @@ findings. Keep that root-local until the route is known, then delegate what
 remains.
 
 The reason is structural, not stylistic. A Worker starts from a fresh context:
-it receives its brief, the repository instructions, and the tree, and nothing
-else. It cannot see the root's reasoning, the command output the root already
-read, or the hypothesis the root already discarded. Every handoff of a
+it receives its dispatch, the repository instructions, and the tree, and
+nothing else. It cannot see the root's reasoning, the command output the root
+already read, or the hypothesis the root already discarded. Every handoff of a
 discovery loop therefore pays to rediscover what the root already knew, and
 returns a summary that has dropped exactly the detail the next step needed —
 the error text, the stack, the surprising state.
 
-This is also why a brief is not a task title. Whatever the root has already
-established has to travel inside the brief, because nothing else crosses:
-the reproducer, the located owner, the cause when it is known, the expected
-behavior, and the exact proof command. A brief that says what to achieve
-without what is already known is a request to redo the root's work.
+This is also why a dispatch is not a task title. Whatever the root has already
+established has to live in the accepted ledger entry or the dispatch's live
+delta: the reproducer, the located owner, the cause when it is known, the
+expected behavior, and the exact proof command. A handoff that says what to
+achieve without what is already known is a request to redo the root's work.
 
 Splitting one discovery loop across several Workers compounds the same loss at
 every boundary and produces changes nobody can attribute. When a task turns out
