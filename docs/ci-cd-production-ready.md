@@ -84,12 +84,26 @@ that the artifact is vulnerability-free or that a deployment is healthy.
 - Dependency Review blocks newly introduced runtime vulnerabilities at high or
   critical severity.
 - `ci-required` is the stable merge-admission context. It fails unless every
-  applicable local CI job succeeds and accepts PR-only jobs as skipped only
-  outside pull requests.
+  applicable local CI job succeeds. It accepts PR-only jobs as skipped outside
+  pull requests and runtime-heavy jobs as skipped only after the fail-closed
+  path classifier proves a Markdown-only instruction, `docs/`, or `specs/`
+  change.
+- Markdown-only routing also skips repo-integrity Go setup,
+  module/format/generated checks, and Dependency Review. Those paths cannot
+  alter module manifests; repository integrity, the secret job with its pinned
+  Go-based scanner, and `ci-required` remain mandatory.
 - Coverage owns ordinary suite execution; race and integration remain separate
-  because they prove different risks.
+  because they prove different risks. Mandatory lint owns `govet`, so repeated
+  current-tree test commands disable their duplicate default vet pass.
+- Race, coverage, and integration restore a runtime-only Go cache. Tool jobs
+  include `tools/go.sum`; every lint-consuming CI, template-proof, and
+  release-preflight job uses a SHA-pinned official installer for the exact
+  golangci-lint version in that module and still enters through its Make or
+  template-check owner.
 - OpenAPI and SQLC sources own generated output and drift checks.
-- Migration validation owns reversible rehearsal plus production-image
+- The container job builds one production image; migration validation and
+  Trivy reuse that exact tag. Migration validation owns reversible rehearsal plus
+  production-image
   migration, startup, readiness, embedded-version, read-only runtime, and
   SIGTERM proof.
 - Go vulnerability, source security, secret, dependency, and container scans
@@ -98,12 +112,16 @@ that the artifact is vulnerability-free or that a deployment is healthy.
   Publication jobs are admitted only when the repository variable
   `ENABLE_GHCR_PUBLISH` is exactly `true`; derived repositories otherwise
   perform no registry login, push, signing, or attestation.
+- Publish jobs install the pinned Cosign release directly, without a Go
+  toolchain, and the second Trivy invocation reuses the binary installed by the
+  vulnerability scan. SBOM generation, digest signing, attestations, and both
+  verifier paths remain mandatory.
 - `railway.toml` owns only generic, non-secret Railway source-build policy.
 
 Timed-out, cancelled, missing, or failed required checks are not passing
-evidence. An intentionally skipped migration job is acceptable only when its
-path detector reports that no migration, runtime-image, startup, dependency, or
-workflow owner changed.
+evidence. Empty, mixed, unrecognized, manually dispatched, or unresolvable path
+sets run the full matrix. Secret and repository-integrity proof remains active
+for Markdown-only changes.
 
 ## GitHub merge and release governance
 
@@ -137,8 +155,9 @@ organization's workflows. An organization may later replace only two stable
 policy boundaries with full-SHA-pinned reusable workflows:
 
 - `go-policy.yml`: no inputs or secrets; dependency review plus
-  `make go-security` and `make secret-scan`; read-only permissions and one
-  final `required` job;
+  `make go-security`; pull requests run `make secret-scan` with the trusted base
+  SHA, while main and release run `make secret-scan-history`; read-only
+  permissions and one final `required` job;
 - `sign-attest-image.yml`: one validated
   `ghcr.io/<organization>/<service>@sha256:...` input; scan, CycloneDX SBOM,
   keyless signing, provenance and SBOM attestations, and verification for that
@@ -170,16 +189,23 @@ through a ruleset in one repository.
 
 - `make check` — ordinary edit loop.
 - `make ci-local` — broad native CI aggregate.
+- `make secret-scan` — current worktree plus base-to-HEAD commits;
+  `make secret-scan-history` — full-history main/release proof.
 - `make migration-validate` — disposable PostgreSQL, reversible migration
   rehearsal, production-image migrator, startup, readiness, and SIGTERM.
 - `make check-full` — native, Docker-backed integration, runtime image, migration,
   and container security.
-- `make pr-check BASE_REF=origin/main` — full proof plus base-relative OpenAPI
-  compatibility.
-- CI's `template-postgres-feature` job initializes a temporary PostgreSQL
-  service, generates its first POST contract and sqlc query, and proves valid,
+- `make pr-check BASE_REF=origin/main` — full proof plus template,
+  downloaded-module, and base-relative OpenAPI compatibility.
+- CI's parallel `template-minimal-feature` and `template-postgres-feature` jobs
+  initialize temporary generated services independently. The PostgreSQL job
+  generates its first POST contract and sqlc query, and proves valid,
   rejected, commit, and rollback paths against the pinned PostgreSQL image.
   The fixture is not shipped in the base runtime.
+- Nightly does not rerun deterministic merge gates on the same commit. It owns
+  repeated flake/fuzz execution, fresh container integration, benchmark
+  lifecycle verification, current vulnerability analysis, and a fresh runtime
+  image scan.
 
 Use the smallest command that proves the current change while iterating. Before
 claiming image, migration, or deployment readiness, use the Docker-backed gate

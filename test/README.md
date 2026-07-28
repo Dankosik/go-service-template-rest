@@ -42,8 +42,15 @@ Docker behavior:
 
 Shared PostgreSQL harness:
 - `TestMain` starts one digest-pinned PostgreSQL container for the whole package and terminates it after the run.
-- Call `integrationPostgresDSN(t)` for database-backed tests: it creates a database owned by the calling test on the shared container and drops it in `t.Cleanup`, so tests stay isolated without paying container startup per test.
-- The `postgresTestImage` constant in `postgres_integration_test.go` is the single image source; the Makefile and benchmark scripts extract it.
+- Call `integrationPostgresDSN(t)` for database-backed tests: it creates a
+  database owned by the calling test on the shared container and drops it in
+  `t.Cleanup`, so tests stay isolated without paying container startup per
+  test.
+- `pgtest.DefaultImage` in `internal/infra/postgres/pgtest/pgtest.go` is the
+  single test-image source; the Makefile and benchmark scripts extract it.
+- The disposable cluster skips initdb and server crash-durability sync work.
+  All runs retain Ryuk. Do not add cross-run reuse or copy the durability
+  settings to persistent PostgreSQL.
 
 Migration-backed helpers:
 - Prefer `make migration-validate` when the claim is migration correctness.

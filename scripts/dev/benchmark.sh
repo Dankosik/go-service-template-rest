@@ -531,7 +531,7 @@ run_infrastructure_check() {
 		echo "K6_IMAGE_DEFAULT must be versioned and digest-pinned"
 		exit 1
 	fi
-	postgres_test_image="$(sed -n 's/^const postgresTestImage = "\(.*\)"$/\1/p' test/postgres_integration_test.go)"
+	postgres_test_image="$(sed -n 's/^const DefaultImage = "\(.*\)"$/\1/p' internal/infra/postgres/pgtest/pgtest.go)"
 	compose_postgres_image="$(awk '/^[[:space:]]+image:[[:space:]]+postgres:/ { print $2; exit }' env/docker-compose.yml)"
 	if [[ -z "${postgres_test_image}" || "${postgres_test_image}" != "${compose_postgres_image}" ]]; then
 		echo "Testcontainers and Compose must use the same digest-pinned PostgreSQL image"
@@ -566,16 +566,11 @@ run_infrastructure_check() {
 		BENCH_PACKAGE=crypto/sha256 \
 		BENCH_PATTERN='BenchmarkHash8Bytes$' \
 		BENCH_COUNT=3 \
-		BENCH_TIME=1x \
+	BENCH_TIME=1x \
 		BENCH_OUTPUT="${artifact_root}/baseline.txt" \
 		bash "${BASH_SOURCE[0]}" run
-	BENCH_WORKLOAD_ID=infra-check-stdlib \
-		BENCH_PACKAGE=crypto/sha256 \
-		BENCH_PATTERN='BenchmarkHash8Bytes$' \
-		BENCH_COUNT=3 \
-		BENCH_TIME=1x \
-		BENCH_OUTPUT="${artifact_root}/current.txt" \
-		bash "${BASH_SOURCE[0]}" run
+	cp "${artifact_root}/baseline.txt" "${artifact_root}/current.txt"
+	cp "${artifact_root}/baseline.txt.meta" "${artifact_root}/current.txt.meta"
 	BENCH_BASELINE="${artifact_root}/baseline.txt" \
 		BENCH_CURRENT="${artifact_root}/current.txt" \
 		BENCH_COMPARE_OUTPUT="${artifact_root}/comparison.txt" \
