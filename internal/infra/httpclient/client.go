@@ -197,6 +197,9 @@ func New(cfg Config, meterProvider metric.MeterProvider) (*Client, error) {
 
 // Do sends a request through the client's fixed target and resource bounds.
 func (c *Client) Do(request *http.Request) (*http.Response, error) {
+	if hasBlankIdempotencyKey(request) {
+		return nil, errors.New("send outbound HTTP request: Idempotency-Key must not be blank")
+	}
 	// #nosec G704 -- authorityTransport rejects requests outside the configured scheme and authority before dialing.
 	response, err := c.httpClient.Do(request)
 	if err != nil {

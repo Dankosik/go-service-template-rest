@@ -16,6 +16,7 @@ import (
 var (
 	errArticleMissing = errors.New("article not found")
 	errPoolSaturated  = errors.New("pool saturated")
+	errPoolBackedUp   = errors.New("pool backed up")
 )
 
 func classifyTestDomainError(err error) (problem.Mapped, bool) {
@@ -26,7 +27,13 @@ func classifyTestDomainError(err error) (problem.Mapped, bool) {
 		return problem.Mapped{
 			Code:       problem.CodeServiceUnavailable,
 			Detail:     "the service is temporarily at capacity",
-			RetryAfter: 2 * time.Second,
+			RetryAfter: 100 * time.Millisecond,
+		}, true
+	case errors.Is(err, errPoolBackedUp):
+		return problem.Mapped{
+			Code:       problem.CodeServiceUnavailable,
+			Detail:     "the service is temporarily at capacity",
+			RetryAfter: 1100 * time.Millisecond,
 		}, true
 	default:
 		return problem.Mapped{}, false
@@ -62,6 +69,14 @@ func TestRejectResponseClassifiesDomainErrors(t *testing.T) {
 			// cleared in a second loses the traffic that was about to succeed.
 			name:           "classified with a retry hint",
 			err:            fmt.Errorf("create article: %w", errPoolSaturated),
+			wantStatus:     http.StatusServiceUnavailable,
+			wantCode:       problem.CodeServiceUnavailable,
+			wantDetail:     "the service is temporarily at capacity",
+			wantRetryAfter: "1",
+		},
+		{
+			name:           "classified with a fractional retry hint",
+			err:            fmt.Errorf("create article: %w", errPoolBackedUp),
 			wantStatus:     http.StatusServiceUnavailable,
 			wantCode:       problem.CodeServiceUnavailable,
 			wantDetail:     "the service is temporarily at capacity",

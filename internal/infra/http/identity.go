@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/example/go-service-template-rest/internal/reqctx"
 	"github.com/getkin/kin-openapi/openapi3filter"
@@ -14,6 +15,8 @@ import (
 // with the validator this repository installs, and it fails closed rather than
 // admitting an unattributed request if some future version changes that.
 var errUnresolvableAuthenticatedRequest = errors.New("authenticated request is unavailable")
+
+var errInvalidAuthenticatedPrincipal = errors.New("authenticated principal subject is empty")
 
 // PrincipalResolver validates one security requirement and reports who the
 // caller is. Returning an error rejects the request exactly as an
@@ -46,6 +49,9 @@ func Authenticated(resolve PrincipalResolver) openapi3filter.AuthenticationFunc 
 		principal, err := resolve(ctx, input)
 		if err != nil {
 			return err
+		}
+		if strings.TrimSpace(principal.Subject) == "" {
+			return errInvalidAuthenticatedPrincipal
 		}
 
 		request := authenticatedRequest(input)

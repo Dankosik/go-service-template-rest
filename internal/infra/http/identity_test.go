@@ -89,6 +89,30 @@ func TestAuthenticatedRejectionKeepsUnauthorizedMapping(t *testing.T) {
 	assertProblemCode(t, resp, problem.CodeUnauthorized)
 }
 
+func TestAuthenticatedRejectsPrincipalWithoutSubject(t *testing.T) {
+	t.Parallel()
+
+	reached := false
+	authenticate := Authenticated(func(context.Context, *openapi3filter.AuthenticationInput) (reqctx.Principal, error) {
+		return reqctx.Principal{Subject: " \t", Scopes: []string{"articles:write"}}, nil
+	})
+	terminal := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		reached = true
+		w.WriteHeader(http.StatusNoContent)
+	})
+	handler := securedHandlerWithTerminal(t, authenticate, defaultAuthenticateChallenge, slog.New(slog.DiscardHandler), terminal)
+
+	resp := doRequest(handler, http.MethodGet, "/secret")
+
+	if resp.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", resp.Code, http.StatusUnauthorized)
+	}
+	if reached {
+		t.Fatal("operation ran for an authenticated principal without a subject")
+	}
+	assertProblemCode(t, resp, problem.CodeUnauthorized)
+}
+
 // TestAuthenticatedNilResolverStaysFailClosed keeps the unwired default the same
 // as leaving RouterConfig.Authenticate nil: 401, not an admitted request with no
 // principal.
