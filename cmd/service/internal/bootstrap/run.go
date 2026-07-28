@@ -271,6 +271,9 @@ func Run(args []string) (runErr error) {
 				bootstrap.cfg.Health.RefreshInterval,
 				readinessProbeBudget(bootstrap.cfg),
 				bootstrap.cfg.Health.FailureThreshold,
+				func(err error) {
+					logReadinessTransition(ctx, bootstrap.log, err)
+				},
 			)
 		},
 	})
@@ -354,6 +357,27 @@ func Run(args []string) (runErr error) {
 	dependencies.Close(shutdown.stage(signalCtx, dependencyCloseTimeout))
 
 	return errors.Join(serveErr, backgroundErr)
+}
+
+func logReadinessTransition(ctx context.Context, log *slog.Logger, err error) {
+	if err != nil {
+		log.WarnContext(
+			ctx,
+			"readiness_transition",
+			"component", "readiness",
+			"operation", "refresh",
+			"outcome", "unhealthy",
+			"err", err,
+		)
+		return
+	}
+	log.InfoContext(
+		ctx,
+		"readiness_transition",
+		"component", "readiness",
+		"operation", "refresh",
+		"outcome", "healthy",
+	)
 }
 
 // newSupervisedBackground builds the supervisor for runtime background work,

@@ -119,6 +119,8 @@ func (s *Service) staleness(state *readinessState) error {
 
 // Watch refreshes cached readiness every interval until ctx is done, and returns
 // nil on cancellation so it can be supervised as an ordinary background task.
+// onTransition receives the cached failure on healthy-to-unhealthy changes and
+// nil on recovery; the initial evaluation is not a transition.
 //
 // The first evaluation runs immediately: a service that has just been admitted
 // must not report ErrNotEvaluated for a whole interval. failureThreshold applies
@@ -133,7 +135,12 @@ func (s *Service) staleness(state *readinessState) error {
 // admission and then flap out of rotation. Configuration cross-validation keeps
 // interval above probeBudget so evaluations cannot pile up behind a slow
 // dependency.
-func (s *Service) Watch(ctx context.Context, interval, probeBudget time.Duration, failureThreshold int) error {
+func (s *Service) Watch(
+	ctx context.Context,
+	interval, probeBudget time.Duration,
+	failureThreshold int,
+	onTransition func(error),
+) error {
 	if interval <= 0 {
 		return fmt.Errorf("health watch: interval must be > 0")
 	}
@@ -156,6 +163,7 @@ func (s *Service) Watch(ctx context.Context, interval, probeBudget time.Duration
 	s.staleAfter.Store(int64(staleBudget(interval, probeBudget)))
 
 	_ = s.Refresh(ctx, probeBudget, failureThreshold)
+	previousErr := s.state.Load().err
 
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
@@ -165,6 +173,11 @@ func (s *Service) Watch(ctx context.Context, interval, probeBudget time.Duration
 			return nil
 		case <-ticker.C:
 			_ = s.Refresh(ctx, probeBudget, failureThreshold)
+			currentErr := s.state.Load().err
+			if onTransition != nil && (previousErr == nil) != (currentErr == nil) {
+				onTransition(currentErr)
+			}
+			previousErr = currentErr
 		}
 	}
 }

@@ -131,7 +131,7 @@ func TestWatchRefreshesOnIntervalAndStopsOnCancel(t *testing.T) {
 
 		ctx, cancel := context.WithCancel(context.Background())
 		watchErr := make(chan error, 1)
-		go func() { watchErr <- svc.Watch(ctx, testRefreshInterval, testProbeBudget, testFailureThreshold) }()
+		go func() { watchErr <- svc.Watch(ctx, testRefreshInterval, testProbeBudget, testFailureThreshold, nil) }()
 
 		synctest.Wait()
 		if got := probe.calls.Load(); got != 1 {
@@ -169,7 +169,7 @@ func TestWatchBoundsEachEvaluationByProbeBudget(t *testing.T) {
 
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		go func() { _ = svc.Watch(ctx, testRefreshInterval, testProbeBudget, 1) }()
+		go func() { _ = svc.Watch(ctx, testRefreshInterval, testProbeBudget, 1, nil) }()
 
 		time.Sleep(testProbeBudget + time.Millisecond)
 		synctest.Wait()
@@ -198,7 +198,7 @@ func TestWatchSpendsTheProbeBudgetNotTheInterval(t *testing.T) {
 
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		go func() { _ = svc.Watch(ctx, interval, probeBudget, 1) }()
+		go func() { _ = svc.Watch(ctx, interval, probeBudget, 1, nil) }()
 		synctest.Wait()
 
 		if got := probe.budget.Load(); time.Duration(got) != probeBudget {
@@ -218,7 +218,7 @@ func TestCachedRefusesAStaleVerdict(t *testing.T) {
 		svc := New(probe)
 
 		ctx, cancel := context.WithCancel(context.Background())
-		go func() { _ = svc.Watch(ctx, testRefreshInterval, testProbeBudget, testFailureThreshold) }()
+		go func() { _ = svc.Watch(ctx, testRefreshInterval, testProbeBudget, testFailureThreshold, nil) }()
 		synctest.Wait()
 		if err := svc.Cached(); err != nil {
 			t.Fatalf("Cached() while refreshing error = %v, want nil", err)
@@ -243,13 +243,13 @@ func TestWatchRejectsUnusableSettings(t *testing.T) {
 
 	svc := New(fakeProbe{name: "db"})
 
-	if err := svc.Watch(context.Background(), 0, testProbeBudget, 1); err == nil {
+	if err := svc.Watch(context.Background(), 0, testProbeBudget, 1, nil); err == nil {
 		t.Fatal("Watch(interval=0) error = nil, want non-nil")
 	}
-	if err := svc.Watch(context.Background(), testRefreshInterval, 0, 1); err == nil {
+	if err := svc.Watch(context.Background(), testRefreshInterval, 0, 1, nil); err == nil {
 		t.Fatal("Watch(probeBudget=0) error = nil, want non-nil")
 	}
-	if err := svc.Watch(context.Background(), testRefreshInterval, testProbeBudget, 0); err == nil {
+	if err := svc.Watch(context.Background(), testRefreshInterval, testProbeBudget, 0, nil); err == nil {
 		t.Fatal("Watch(threshold=0) error = nil, want non-nil")
 	}
 }
@@ -262,12 +262,61 @@ func TestWatchReturnsImmediatelyOnCanceledContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	if err := svc.Watch(ctx, testRefreshInterval, testProbeBudget, testFailureThreshold); err != nil {
+	if err := svc.Watch(ctx, testRefreshInterval, testProbeBudget, testFailureThreshold, nil); err != nil {
 		t.Fatalf("Watch() error = %v, want nil", err)
 	}
 	if got := probe.calls.Load(); got != 0 {
 		t.Fatalf("probe calls = %d, want 0 for an already-canceled context", got)
 	}
+}
+
+func TestWatchReportsOnlyEffectiveReadinessTransitions(t *testing.T) {
+	t.Parallel()
+
+	synctest.Test(t, func(t *testing.T) {
+		downErr := errors.New("down")
+		probe := &countingProbe{name: "db"}
+		svc := New(probe)
+		transitions := make(chan error, 2)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		go func() {
+			_ = svc.Watch(ctx, testRefreshInterval, testProbeBudget, testFailureThreshold, func(err error) {
+				transitions <- err
+			})
+		}()
+		synctest.Wait()
+		if got := len(transitions); got != 0 {
+			t.Fatalf("initial transition count = %d, want 0", got)
+		}
+
+		probe.err.Store(&downErr)
+		time.Sleep(2 * testRefreshInterval)
+		synctest.Wait()
+		if got := len(transitions); got != 0 {
+			t.Fatalf("transition count below failure threshold = %d, want 0", got)
+		}
+
+		time.Sleep(testRefreshInterval)
+		synctest.Wait()
+		if err := <-transitions; !errors.Is(err, downErr) {
+			t.Fatalf("unhealthy transition error = %v, want wrapped %v", err, downErr)
+		}
+
+		time.Sleep(testRefreshInterval)
+		synctest.Wait()
+		if got := len(transitions); got != 0 {
+			t.Fatalf("duplicate unhealthy transition count = %d, want 0", got)
+		}
+
+		probe.err.Store(nil)
+		time.Sleep(testRefreshInterval)
+		synctest.Wait()
+		if err := <-transitions; err != nil {
+			t.Fatalf("healthy transition error = %v, want nil", err)
+		}
+	})
 }
 
 type countingProbe struct {

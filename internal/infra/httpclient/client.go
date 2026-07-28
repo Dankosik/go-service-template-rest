@@ -40,6 +40,43 @@ const (
 // ErrTargetDenied reports a request or resolved address outside the client's fixed target.
 var ErrTargetDenied = errors.New("outbound HTTP target denied")
 
+var (
+	// netip.Addr.IsGlobalUnicast intentionally follows the IP protocol's broad
+	// definition, not IANA's globally-reachable registry. These are the
+	// special-purpose ranges it would otherwise admit.
+	nonPublicIPv4Prefixes = [...]netip.Prefix{
+		netip.MustParsePrefix("100.64.0.0/10"),
+		netip.MustParsePrefix("192.0.0.0/24"),
+		netip.MustParsePrefix("192.0.2.0/24"),
+		netip.MustParsePrefix("192.88.99.0/24"),
+		netip.MustParsePrefix("198.18.0.0/15"),
+		netip.MustParsePrefix("198.51.100.0/24"),
+		netip.MustParsePrefix("203.0.113.0/24"),
+		netip.MustParsePrefix("240.0.0.0/4"),
+	}
+	globallyReachableIPv4SpecialPrefixes = [...]netip.Prefix{
+		netip.MustParsePrefix("192.0.0.9/32"),
+		netip.MustParsePrefix("192.0.0.10/32"),
+	}
+	allocatedGlobalIPv6Prefix = netip.MustParsePrefix("2000::/3")
+	publicNAT64Prefix         = netip.MustParsePrefix("64:ff9b::/96")
+	nonPublicIPv6Prefixes     = [...]netip.Prefix{
+		netip.MustParsePrefix("2001::/23"),
+		netip.MustParsePrefix("2001:db8::/32"),
+		netip.MustParsePrefix("2002::/16"),
+		netip.MustParsePrefix("3fff::/20"),
+	}
+	globallyReachableIPv6SpecialPrefixes = [...]netip.Prefix{
+		netip.MustParsePrefix("2001:1::1/128"),
+		netip.MustParsePrefix("2001:1::2/128"),
+		netip.MustParsePrefix("2001:1::3/128"),
+		netip.MustParsePrefix("2001:3::/32"),
+		netip.MustParsePrefix("2001:4:112::/48"),
+		netip.MustParsePrefix("2001:20::/28"),
+		netip.MustParsePrefix("2001:30::/28"),
+	}
+)
+
 // TargetClass selects the transport security policy for one fixed provider authority.
 type TargetClass uint8
 
@@ -139,22 +176,22 @@ func New(cfg Config, meterProvider metric.MeterProvider) (*Client, error) {
 	transport.MaxConnsPerHost = cfg.MaxConnsPerHost
 	transport.MaxIdleConnsPerHost = cmp.Or(cfg.MaxIdleConnsPerHost, cfg.MaxConnsPerHost)
 
-	if cfg.TargetClass == ExternalHTTPS {
-		dialer := &net.Dialer{
-			Timeout:        defaultDialTimeout,
-			KeepAlive:      defaultKeepAlive,
-			ControlContext: enforcePublicDialAddress,
+	dialer := &net.Dialer{
+		Timeout:   defaultDialTimeout,
+		KeepAlive: defaultKeepAlive,
+		ControlContext: func(_ context.Context, _, address string, _ syscall.RawConn) error {
+			return enforceDialAddress(cfg.TargetClass, address)
+		},
+	}
+	transport.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+		conn, dialErr := dialer.DialContext(ctx, network, address)
+		if errors.Is(dialErr, ErrTargetDenied) {
+			return nil, ErrTargetDenied
 		}
-		transport.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
-			conn, dialErr := dialer.DialContext(ctx, network, address)
-			if errors.Is(dialErr, ErrTargetDenied) {
-				return nil, ErrTargetDenied
-			}
-			if dialErr != nil {
-				return nil, fmt.Errorf("dial outbound HTTP target: %w", dialErr)
-			}
-			return conn, nil
+		if dialErr != nil {
+			return nil, fmt.Errorf("dial outbound HTTP target: %w", dialErr)
 		}
+		return conn, nil
 	}
 
 	if meterProvider == nil {
@@ -390,25 +427,72 @@ func (b *responseBody) Read(p []byte) (int, error) {
 	return n, fmt.Errorf("read outbound HTTP response body: %w", err)
 }
 
-func enforcePublicDialAddress(_ context.Context, _, address string, _ syscall.RawConn) error {
+func enforceDialAddress(targetClass TargetClass, address string) error {
 	host, _, err := net.SplitHostPort(address)
 	if err != nil {
 		return ErrTargetDenied
 	}
 	resolved, err := netip.ParseAddr(host)
-	if err != nil || isForbiddenExternalAddress(resolved) {
+	if err != nil {
 		return ErrTargetDenied
 	}
-	return nil
+	switch targetClass {
+	case ExternalHTTPS:
+		if !isForbiddenExternalAddress(resolved) {
+			return nil
+		}
+	case PrivateHTTP:
+		if resolved.Unmap().IsPrivate() {
+			return nil
+		}
+	}
+	return ErrTargetDenied
 }
 
 func isForbiddenExternalAddress(address netip.Addr) bool {
 	address = address.Unmap()
-	return !address.IsValid() ||
+	if !address.IsValid() ||
 		!address.IsGlobalUnicast() ||
 		address.IsPrivate() ||
 		address.IsLoopback() ||
 		address.IsLinkLocalUnicast() ||
 		address.IsMulticast() ||
-		address.IsUnspecified()
+		address.IsUnspecified() {
+		return true
+	}
+
+	if address.Is4() {
+		for _, prefix := range globallyReachableIPv4SpecialPrefixes {
+			if prefix.Contains(address) {
+				return false
+			}
+		}
+		for _, prefix := range nonPublicIPv4Prefixes {
+			if prefix.Contains(address) {
+				return true
+			}
+		}
+		return false
+	}
+
+	if publicNAT64Prefix.Contains(address) {
+		bits := address.As16()
+		return isForbiddenExternalAddress(netip.AddrFrom4([4]byte{
+			bits[12], bits[13], bits[14], bits[15],
+		}))
+	}
+	if !allocatedGlobalIPv6Prefix.Contains(address) {
+		return true
+	}
+	for _, prefix := range globallyReachableIPv6SpecialPrefixes {
+		if prefix.Contains(address) {
+			return false
+		}
+	}
+	for _, prefix := range nonPublicIPv6Prefixes {
+		if prefix.Contains(address) {
+			return true
+		}
+	}
+	return false
 }

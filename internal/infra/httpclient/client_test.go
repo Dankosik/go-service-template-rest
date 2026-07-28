@@ -254,35 +254,54 @@ func TestResponseLimitTransportBoundsDecodedBody(t *testing.T) {
 	}
 }
 
-func TestPublicDialAddressGate(t *testing.T) {
+func TestDialAddressGate(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		address string
-		allowed bool
+		name        string
+		targetClass TargetClass
+		address     string
+		allowed     bool
 	}{
-		{address: "8.8.8.8:443", allowed: true},
-		{address: "[2606:4700:4700::1111]:443", allowed: true},
-		{address: "10.0.0.1:443"},
-		{address: "127.0.0.1:443"},
-		{address: "169.254.169.254:80"},
-		{address: "224.0.0.1:443"},
-		{address: "255.255.255.255:443"},
-		{address: "[::]:443"},
-		{address: "example.com:443"},
-		{address: "invalid"},
+		{name: "external public IPv4", targetClass: ExternalHTTPS, address: "8.8.8.8:443", allowed: true},
+		{name: "external public IPv6", targetClass: ExternalHTTPS, address: "[2606:4700:4700::1111]:443", allowed: true},
+		{name: "external public NAT64", targetClass: ExternalHTTPS, address: "[64:ff9b::808:808]:443", allowed: true},
+		{name: "external public IPv4 special", targetClass: ExternalHTTPS, address: "192.0.0.9:443", allowed: true},
+		{name: "external public IPv6 special", targetClass: ExternalHTTPS, address: "[2001:1::1]:443", allowed: true},
+		{name: "external private", targetClass: ExternalHTTPS, address: "10.0.0.1:443"},
+		{name: "external shared", targetClass: ExternalHTTPS, address: "100.64.0.1:443"},
+		{name: "external loopback", targetClass: ExternalHTTPS, address: "127.0.0.1:443"},
+		{name: "external metadata", targetClass: ExternalHTTPS, address: "169.254.169.254:80"},
+		{name: "external protocol assignment", targetClass: ExternalHTTPS, address: "192.0.0.8:443"},
+		{name: "external documentation IPv4", targetClass: ExternalHTTPS, address: "192.0.2.1:443"},
+		{name: "external benchmark IPv4", targetClass: ExternalHTTPS, address: "198.18.0.1:443"},
+		{name: "external documentation IPv6", targetClass: ExternalHTTPS, address: "[2001:db8::1]:443"},
+		{name: "external benchmark IPv6", targetClass: ExternalHTTPS, address: "[2001:2::1]:443"},
+		{name: "external documentation IPv6 future", targetClass: ExternalHTTPS, address: "[3fff::1]:443"},
+		{name: "external unallocated IPv6", targetClass: ExternalHTTPS, address: "[4000::1]:443"},
+		{name: "external NAT64 private", targetClass: ExternalHTTPS, address: "[64:ff9b::a00:1]:443"},
+		{name: "external multicast", targetClass: ExternalHTTPS, address: "224.0.0.1:443"},
+		{name: "external broadcast", targetClass: ExternalHTTPS, address: "255.255.255.255:443"},
+		{name: "external unspecified", targetClass: ExternalHTTPS, address: "[::]:443"},
+		{name: "private RFC1918", targetClass: PrivateHTTP, address: "10.0.0.1:80", allowed: true},
+		{name: "private ULA", targetClass: PrivateHTTP, address: "[fd00::1]:80", allowed: true},
+		{name: "private public", targetClass: PrivateHTTP, address: "8.8.8.8:80"},
+		{name: "private shared", targetClass: PrivateHTTP, address: "100.64.0.1:80"},
+		{name: "private loopback", targetClass: PrivateHTTP, address: "127.0.0.1:80"},
+		{name: "hostname", targetClass: ExternalHTTPS, address: "example.com:443"},
+		{name: "invalid", targetClass: ExternalHTTPS, address: "invalid"},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.address, func(t *testing.T) {
+		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			err := enforcePublicDialAddress(context.Background(), "tcp", tt.address, nil)
+			err := enforceDialAddress(tt.targetClass, tt.address)
 			if tt.allowed && err != nil {
-				t.Fatalf("enforcePublicDialAddress() error = %v, want nil", err)
+				t.Fatalf("enforceDialAddress() error = %v, want nil", err)
 			}
 			if !tt.allowed && !errors.Is(err, ErrTargetDenied) {
-				t.Fatalf("enforcePublicDialAddress() error = %v, want %v", err, ErrTargetDenied)
+				t.Fatalf("enforceDialAddress() error = %v, want %v", err, ErrTargetDenied)
 			}
 		})
 	}

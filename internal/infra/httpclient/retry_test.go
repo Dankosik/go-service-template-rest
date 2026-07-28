@@ -346,22 +346,42 @@ func TestRetryDoesNotOutliveTheRequestBudget(t *testing.T) {
 	}
 }
 
-func TestRetryHonorsRetryAfterSeconds(t *testing.T) {
+func TestRetryHonorsRetryAfter(t *testing.T) {
 	t.Parallel()
 
-	if got, ok := retryAfter(&http.Response{Header: http.Header{"Retry-After": []string{"3"}}}); !ok || got != 3*time.Second {
+	now := time.Date(1994, time.November, 6, 8, 49, 37, 0, time.UTC)
+	if got, ok := retryAfter(&http.Response{Header: http.Header{"Retry-After": []string{"3"}}}, now); !ok || got != 3*time.Second {
 		t.Fatalf("retryAfter(3) = (%s, %t), want (3s, true)", got, ok)
 	}
-	// The HTTP-date form is deliberately ignored: honoring it means trusting the
-	// client's clock against the server's, and skew turns a one-second hint into a
-	// stall measured in minutes.
-	if _, ok := retryAfter(&http.Response{
-		Header: http.Header{"Retry-After": []string{"Wed, 21 Oct 2026 07:28:00 GMT"}},
-	}); ok {
-		t.Fatal("retryAfter(HTTP-date) reported a delay, want it ignored")
+	for _, tt := range []struct {
+		name string
+		raw  string
+		want time.Duration
+	}{
+		{name: "IMF-fixdate", raw: "Sun, 06 Nov 1994 08:49:40 GMT", want: 3 * time.Second},
+		{name: "RFC850", raw: "Sunday, 06-Nov-94 08:49:41 GMT", want: 4 * time.Second},
+		{name: "asctime", raw: "Sun Nov  6 08:49:42 1994", want: 5 * time.Second},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got, ok := retryAfter(&http.Response{
+				Header: http.Header{"Retry-After": []string{tt.raw}},
+			}, now); !ok || got != tt.want {
+				t.Fatalf("retryAfter(%q) = (%s, %t), want (%s, true)", tt.raw, got, ok, tt.want)
+			}
+		})
 	}
-	for _, raw := range []string{"", "-1", "soon"} {
-		if _, ok := retryAfter(&http.Response{Header: http.Header{"Retry-After": []string{raw}}}); ok {
+
+	response := &http.Response{Header: http.Header{
+		"Date":        []string{"Wed, 21 Oct 2026 07:27:58 GMT"},
+		"Retry-After": []string{"Wed, 21 Oct 2026 07:28:00 GMT"},
+	}}
+	if got, ok := retryAfter(response, time.Date(2026, time.October, 21, 8, 28, 0, 0, time.UTC)); !ok || got != 2*time.Second {
+		t.Fatalf("retryAfter() with server Date = (%s, %t), want (2s, true)", got, ok)
+	}
+
+	for _, raw := range []string{"", "-1", "soon", "Sun, 06 Nov 1994 08:49:36 GMT"} {
+		if _, ok := retryAfter(&http.Response{Header: http.Header{"Retry-After": []string{raw}}}, now); ok {
 			t.Fatalf("retryAfter(%q) reported a delay, want it ignored", raw)
 		}
 	}
