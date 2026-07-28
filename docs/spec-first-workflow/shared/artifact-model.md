@@ -121,4 +121,9 @@ Use additional fields only when they change an action or verdict.
 4. If artifacts conflict, stop and reopen the narrowest decision owner; do not merge the conflict silently.
 5. Before continuing an implementation task, rerun the smallest ledger proof that can detect workspace drift affecting the next unchecked task; broaden only when the result or changed surface requires it.
 
-Keep only active task bundles. After completion, move durable decisions into canonical docs/code and delete the completed bundle; Git remains the history.
+Keep only active task bundles. At closeout, remove execution-only state such as
+`tasks.md`, `workflow-plan.md`, and `Active wave`. Retain a completed spec or
+design only when another live authority names it as a durable decision source;
+otherwise delete the completed bundle after moving durable decisions into
+canonical docs or code. Git remains the history, so a completed task ledger is
+never kept as an archive.

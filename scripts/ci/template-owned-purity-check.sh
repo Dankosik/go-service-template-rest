@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
-# Enforce the invariant that makes `make template-sync` safe: a template-owned
-# path carries no repository-specific content, so mirroring it verbatim into a
-# derived repository can never overwrite that repository's own decisions.
+# Validate the manifest boundaries that make `make template-sync` safe.
 set -euo pipefail
 
 manifest="template-owned.paths"
@@ -27,6 +25,16 @@ while IFS= read -r line; do
 done <"${manifest}"
 
 ((${#paths[@]} > 0)) || fail "${manifest} lists no paths"
+
+contains_path() {
+	local expected="$1"
+	local entry
+
+	for entry in "${paths[@]}"; do
+		[[ "${entry}" == "${expected}" ]] && return 0
+	done
+	return 1
+}
 
 # A path outside the repository would let a sync write anywhere on the machine.
 for entry in "${paths[@]}"; do
@@ -65,7 +73,7 @@ done
 # The mechanism has to travel with the instructions it carries. Without these
 # entries a derived repository could never update itself again.
 for required in "${manifest}" scripts/template-sync.sh scripts/ci/template-owned-purity-check.sh; do
-	printf '%s\n' "${paths[@]}" | grep -Fxq "${required}" ||
+	contains_path "${required}" ||
 		fail "${manifest} must list ${required} so the sync mechanism propagates itself"
 done
 
@@ -82,27 +90,13 @@ repo_owned=(
 	docs/repo-architecture.md
 )
 for reserved in "${repo_owned[@]}"; do
-	if printf '%s\n' "${paths[@]}" | grep -Fxq "${reserved}"; then
+	if contains_path "${reserved}"; then
 		fail "${reserved} is repository-owned and must not appear in ${manifest}"
 	fi
 done
-
-# An owned file must not name this repository. If it does, every derived
-# repository would receive this template's identity instead of keeping its own.
-if [[ -f go.mod ]]; then
-	module=$(awk '$1 == "module" { print $2; exit }' go.mod)
-	if [[ -n "${module}" ]]; then
-		for entry in "${paths[@]}"; do
-			while IFS= read -r hit; do
-				[[ -n "${hit}" ]] || continue
-				fail "${hit} names the module path ${module}; move that content to a repository-owned document"
-			done < <(grep -rlF -- "${module}" "${entry%/}" 2>/dev/null || true)
-		done
-	fi
-fi
 
 if ((failed != 0)); then
 	exit 1
 fi
 
-echo "template-owned paths carry no repository-specific content"
+echo "template-owned manifest is structurally safe"

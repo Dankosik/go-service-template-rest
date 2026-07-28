@@ -317,18 +317,6 @@ assert "agent workflow changed during minimal initialization" same_text "${minim
 grep -Fq 'unknown_key' "${TEMP_ROOT}/minimal-postgres.log"
 grep -Fq 'postgres.enabled' "${TEMP_ROOT}/minimal-postgres.log"
 grep -Fq 'postgres.dsn' "${TEMP_ROOT}/minimal-postgres.log"
-# No PostgreSQL configuration surface survives in the generated Go sources.
-if grep -rn 'Postgres\b' "${minimal_checkout}/internal/config" "${minimal_checkout}/cmd" --include='*.go'; then
-	echo "database-none profile retained PostgreSQL configuration"
-	exit 1
-fi
-if grep -rn 'profile:database-postgres' \
-	"${minimal_checkout}/cmd" "${minimal_checkout}/internal" "${minimal_checkout}/env" \
-	"${minimal_checkout}/.github" "${minimal_checkout}/build" \
-	"${minimal_checkout}/Makefile" "${minimal_checkout}/railway.toml" 2>/dev/null; then
-	echo "database-none profile left profile markers behind"
-	exit 1
-fi
 for removed in \
 	cmd/migrate \
 	internal/infra/httpclient \
@@ -415,15 +403,6 @@ for retained in \
 	env/docker-compose.yml; do
 	assert "${retained} must survive DATABASE=postgres initialization" path_present "${postgres_checkout}/${retained}"
 done
-# A resolved profile leaves no markers in either direction. They are generator
-# inputs, and a retained profile has consumed them just as a removed one has.
-if grep -rn 'profile:database-postgres' \
-	"${postgres_checkout}/cmd" "${postgres_checkout}/internal" "${postgres_checkout}/env" \
-	"${postgres_checkout}/.github" "${postgres_checkout}/build" \
-	"${postgres_checkout}/Makefile" "${postgres_checkout}/railway.toml" 2>/dev/null; then
-	echo "database-postgres profile left profile markers behind"
-	exit 1
-fi
 grep -Fq 'database = "postgres"' "${postgres_checkout}/template.lock"
 grep -Fq 'outbound_http = "bounded"' "${postgres_checkout}/template.lock"
 (

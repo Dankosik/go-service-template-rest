@@ -19,7 +19,7 @@ At implementation entry and after every accepted wave, the root reads the next p
 
 The root clips the wave to current native App task capacity and narrows or serializes only members whose current check fails or remains uncertain. It records the adjusted wave in transient execution context or the existing ledger and continues unaffected work. Capacity, completion order, drift, or an implementation overlap changes the schedule locally; it does not by itself reopen planning or create a second scheduling artifact.
 
-The root dispatches every task in the selected wave before waiting for a wave result. Each task gets one native App task, one managed worktree based on the same authoritative integration state, one outcome-first brief, and its own explicit model/effort selection. The root records the task-to-App-task-to-worktree mapping in transient execution context or the existing ledger evidence. No parallel status field or scheduler artifact is added.
+The root dispatches every task in the selected wave before waiting for a wave result. Each task gets one native App task, one managed worktree based on the same authoritative integration state, and its own explicit model/effort selection. When the exact accepted ledger revision is visible in that worktree, the dispatch carries its `tasks.md` path and task ID plus only live facts absent from the entry; otherwise it carries the full outcome-first brief. The root records the task-to-App-task-to-worktree mapping in transient execution context or the existing ledger evidence. No parallel status field or scheduler artifact is added.
 
 ### Execution and fan-in state
 
@@ -43,7 +43,7 @@ Every returned result passes the implementation phase's [Scope Lock](../../../do
 
 ### Convergence ownership
 
-The implementation phase's [Monotonic Acceptance](../../../docs/spec-first-workflow/phases/implementation-validation-closeout.md#monotonic-acceptance) is canonical. This design adds only wave fan-in: one frozen combined candidate covers every assembled member and affected integration seam, and each admissible task-local finding returns in the existing outcome-first brief to its owning Worker.
+The implementation phase's [Monotonic Acceptance](../../../docs/spec-first-workflow/phases/implementation-validation-closeout.md#monotonic-acceptance) is canonical. This design adds only wave fan-in: one frozen combined candidate covers every assembled member and affected integration seam, and each admissible task-local finding returns as a delta-only correction to its owning Worker.
 
 ### Completion
 

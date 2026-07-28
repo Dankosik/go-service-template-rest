@@ -7,6 +7,9 @@ description: "Test strategy: Use when accepted behavior needs risk scenarios, pr
 
 Load the [shared specialist contract](../specialist-contract.md). Reconstruct every accepted proof obligation from approved behavior, design/test handoffs, affected contract, state, trust and lifecycle boundaries, and current proof surfaces. Build one falsifier for each obligation from a scenario, fail-before discriminator, deterministic control and fixtures, independent oracle, proving layer, command, cleanup proof, and reopen condition.
 
+Do not treat source-string presence as behavior; exact text is an oracle only
+when the text itself is the accepted external artifact.
+
 ## Choose The Branch
 
 - **Decision** — select when proof policy is absent or changing. Load the [decision selector](references/decision/index.md) for one result-changing risk. Return one shared Decision disposition per obligation; completion requires a falsifier and reopen condition for every obligation needing proof.
