@@ -66,7 +66,7 @@ func TestReferenceRouterInheritsHardenedChain(t *testing.T) {
 	handler := mustNewHandler(t)
 
 	response := httptest.NewRecorder()
-	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/articles/clear-owners", nil))
+	handler.ServeHTTP(response, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/articles/clear-owners", nil))
 
 	if got := response.Header().Get("X-Request-ID"); got == "" {
 		t.Fatal("X-Request-ID is empty, want correlation applied by the shared chain")
@@ -85,7 +85,7 @@ func TestReferenceRouterRejectsOversizedBody(t *testing.T) {
 	handler := mustBuildReferenceRouter(t, 16, memoryRepository(t))
 
 	body := `{"slug":"a-very-long-slug-value","title":"t","summary":"s"}`
-	request := httptest.NewRequest(http.MethodPost, "/api/v1/articles", strings.NewReader(body))
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/articles", strings.NewReader(body))
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Authorization", "Bearer "+testWriteToken)
 	response := httptest.NewRecorder()
@@ -107,7 +107,7 @@ func TestReferenceRouterMapsMissingCredentialTo401(t *testing.T) {
 
 	handler := mustNewHandler(t)
 
-	request := httptest.NewRequest(http.MethodPost, "/api/v1/articles", strings.NewReader(`{"slug":"s","title":"t","summary":"x"}`))
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/articles", strings.NewReader(`{"slug":"s","title":"t","summary":"x"}`))
 	request.Header.Set("Content-Type", "application/json")
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
@@ -129,7 +129,7 @@ func TestReferenceRouterRecoversPanicFromFeatureCode(t *testing.T) {
 	handler := mustBuildReferenceRouter(t, maxBodyBytes, panickingRepository{})
 
 	response := httptest.NewRecorder()
-	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/articles/anything", nil))
+	handler.ServeHTTP(response, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/articles/anything", nil))
 
 	if response.Code != http.StatusInternalServerError {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusInternalServerError)
@@ -164,7 +164,7 @@ func TestReferenceRouterLimitsOneCallerWithoutAffectingAnother(t *testing.T) {
 }
 
 func readArticleStatus(handler http.Handler, authorization string) int {
-	request := httptest.NewRequest(http.MethodGet, "/api/v1/articles/clear-owners", nil)
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/articles/clear-owners", nil)
 	request.Header.Set("Authorization", authorization)
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)

@@ -379,7 +379,7 @@ func TestOpenAPIRuntimeContractResponsesMatchSpec(t *testing.T) {
 				t.Fatalf("status = %d, want %d; body = %q", resp.Code, tc.wantStatus, resp.Body.String())
 			}
 
-			req := httptest.NewRequest(tc.method, tc.target, nil)
+			req := httptest.NewRequestWithContext(context.Background(), tc.method, tc.target, nil)
 			route, pathParams, err := specRouter.FindRoute(req)
 			if err != nil {
 				t.Fatalf("FindRoute(%s %s) error = %v", tc.method, tc.target, err)

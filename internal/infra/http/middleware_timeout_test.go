@@ -91,7 +91,7 @@ func TestRequestTimeoutIgnoresClientCancellation(t *testing.T) {
 		<-r.Context().Done()
 	}))
 
-	req := httptest.NewRequest(http.MethodGet, "/canceled", nil).WithContext(ctx)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/canceled", nil).WithContext(ctx)
 	resp := httptest.NewRecorder()
 	handler.ServeHTTP(resp, req)
 
@@ -203,7 +203,7 @@ func TestGeneratedResponseErrorHandlerMapsExpiredBudget(t *testing.T) {
 			t.Parallel()
 
 			resp := httptest.NewRecorder()
-			options.ResponseErrorHandlerFunc(resp, httptest.NewRequest(http.MethodGet, "/x", nil), tc.err)
+			options.ResponseErrorHandlerFunc(resp, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/x", nil), tc.err)
 
 			if resp.Code != tc.wantStatus {
 				t.Fatalf("status = %d, want %d", resp.Code, tc.wantStatus)

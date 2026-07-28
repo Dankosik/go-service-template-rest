@@ -107,7 +107,7 @@ func TestRejectResponseClassifiesDomainErrors(t *testing.T) {
 			t.Parallel()
 
 			response := httptest.NewRecorder()
-			reject(response, httptest.NewRequest(http.MethodGet, "/api/v1/articles/x", nil), tc.err)
+			reject(response, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/articles/x", nil), tc.err)
 
 			if response.Code != tc.wantStatus {
 				t.Fatalf("status = %d, want %d; body = %s", response.Code, tc.wantStatus, response.Body.String())
@@ -163,7 +163,7 @@ func TestRejectResponseUsesTheFirstMatchingMapper(t *testing.T) {
 	// be filtered out by the caller.
 	RejectResponse(nil, specific, broad)(
 		response,
-		httptest.NewRequest(http.MethodPost, "/api/v1/articles", nil),
+		httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/articles", nil),
 		errors.New("boom"),
 	)
 
@@ -178,7 +178,7 @@ func TestRejectResponseWithoutMappersKeepsTheTransportFallback(t *testing.T) {
 	t.Parallel()
 
 	response := httptest.NewRecorder()
-	RejectResponse()(response, httptest.NewRequest(http.MethodGet, "/api/v1/articles/x", nil), errors.New("boom"))
+	RejectResponse()(response, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/articles/x", nil), errors.New("boom"))
 
 	if response.Code != http.StatusInternalServerError {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusInternalServerError)

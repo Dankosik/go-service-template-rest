@@ -39,7 +39,7 @@ func TestAuthenticatedPrincipalReachesOperation(t *testing.T) {
 	})
 	handler := securedHandlerWithTerminal(t, authenticate, defaultAuthenticateChallenge, slog.New(slog.DiscardHandler), terminal)
 
-	req := httptest.NewRequest(http.MethodGet, "/secret", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/secret", nil)
 	req.Header.Set("Authorization", "Bearer right")
 	resp := httptest.NewRecorder()
 	handler.ServeHTTP(resp, req)

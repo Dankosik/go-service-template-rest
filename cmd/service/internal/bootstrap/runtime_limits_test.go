@@ -226,9 +226,7 @@ func TestBoundedAPIListenerCapsAcceptedConnections(t *testing.T) {
 		var wg sync.WaitGroup
 		client := &http.Client{Timeout: 5 * time.Second}
 		for range limit * 3 {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+			wg.Go(func() {
 				request, reqErr := http.NewRequestWithContext(
 					context.Background(), http.MethodGet, "http://"+base.Addr().String()+"/", nil)
 				if reqErr != nil {
@@ -247,7 +245,7 @@ func TestBoundedAPIListenerCapsAcceptedConnections(t *testing.T) {
 				}
 				_, _ = io.Copy(io.Discard, response.Body)
 				_ = response.Body.Close()
-			}()
+			})
 		}
 
 		// Release the admitted requests only after the listener reaches its cap.

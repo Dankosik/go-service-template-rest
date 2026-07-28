@@ -31,11 +31,9 @@ func TestMaxInFlightShedsPastLimitWithoutQueueing(t *testing.T) {
 	}))
 
 	var admitted sync.WaitGroup
-	admitted.Add(1)
-	go func() {
-		defer admitted.Done()
+	admitted.Go(func() {
 		doRequest(handler, http.MethodGet, "/work")
-	}()
+	})
 
 	select {
 	case <-entered:

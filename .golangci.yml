@@ -20,6 +20,7 @@ linters:
     - depguard
     - dupl
     - durationcheck
+    - embeddedstructfieldcheck
     - errchkjson
     - sqlclosecheck
     - errorlint
@@ -29,14 +30,22 @@ linters:
     - forbidigo
     - forcetypeassert
     - gocheckcompilerdirectives
+    - gochecknoinits
     - contextcheck
     - cyclop
     - gocritic
     - gocognit
     - iface
+    - inamedparam
+    - interfacebloat
+    - intrange
+    - iotamixing
     - loggercheck
     - makezero
+    - mirror
+    - misspell
     - musttag
+    - nakedret
     - nestif
     - nilerr
     - nilnesserr

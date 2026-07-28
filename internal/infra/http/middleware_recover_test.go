@@ -2,6 +2,7 @@ package httpx
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -50,7 +51,7 @@ func TestRecoverLogsPanicClassWithoutRawValue(t *testing.T) {
 		panic(secretValue)
 	})))
 
-	req := httptest.NewRequest(http.MethodGet, secretPath, nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, secretPath, nil)
 	req.Pattern = "GET /users/{id}"
 	req.Header.Set(requestIDHeader, "req-panic-123")
 	resp := httptest.NewRecorder()
@@ -175,7 +176,7 @@ func TestRecoverRepanicsErrAbortHandler(t *testing.T) {
 	}))
 
 	resp := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/abort", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/abort", nil)
 
 	func() {
 		defer func() {

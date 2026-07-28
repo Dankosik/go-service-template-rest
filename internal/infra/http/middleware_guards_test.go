@@ -1,6 +1,7 @@
 package httpx
 
 import (
+	"context"
 	"errors"
 	"io"
 	"log/slog"
@@ -40,7 +41,7 @@ func TestRouterRejectsRequestBodyTooLarge(t *testing.T) {
 	t.Run("known content length is rejected before reading", func(t *testing.T) {
 		t.Parallel()
 
-		req := httptest.NewRequest(http.MethodGet, "/health/live", strings.NewReader("ab"))
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/health/live", strings.NewReader("ab"))
 		req.ContentLength = 2
 		resp := httptest.NewRecorder()
 
@@ -64,7 +65,7 @@ func TestRouterRejectsRequestBodyTooLarge(t *testing.T) {
 			_, readErr = io.ReadAll(r.Body)
 		}))
 
-		req := httptest.NewRequest(http.MethodPost, "/any", strings.NewReader(`{"message":"a"}`))
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/any", strings.NewReader(`{"message":"a"}`))
 		req.ContentLength = -1
 		resp := httptest.NewRecorder()
 

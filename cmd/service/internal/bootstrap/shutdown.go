@@ -14,7 +14,7 @@ type startupDrainer interface {
 }
 
 type shutdownServer interface {
-	Shutdown(context.Context) error
+	Shutdown(ctx context.Context) error
 	Close() error
 }
 

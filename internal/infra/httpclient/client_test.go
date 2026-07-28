@@ -465,6 +465,7 @@ func (f roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) 
 
 type trackedBody struct {
 	io.ReadCloser
+
 	closed *atomic.Bool
 }
 
@@ -563,9 +564,7 @@ func TestClientReusesConnectionsAcrossBursts(t *testing.T) {
 	for range burstCount {
 		var wg sync.WaitGroup
 		for range burstSize {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+			wg.Go(func() {
 				request, reqErr := http.NewRequestWithContext(
 					context.Background(), http.MethodGet, "http://provider.internal/", nil)
 				if reqErr != nil {
@@ -577,7 +576,7 @@ func TestClientReusesConnectionsAcrossBursts(t *testing.T) {
 				}
 				_, _ = io.Copy(io.Discard, response.Body)
 				_ = response.Body.Close()
-			}()
+			})
 		}
 		wg.Wait()
 	}
