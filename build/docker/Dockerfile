@@ -5,7 +5,8 @@ FROM --platform=$BUILDPLATFORM golang:1.26.5-bookworm@sha256:1ecb7edf62a0408027b
 WORKDIR /src
 
 COPY go.mod go.sum ./
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download
 
 COPY . .
 
@@ -15,7 +16,9 @@ ARG RAILWAY_GIT_COMMIT_SHA
 ARG TARGETOS
 ARG TARGETARCH
 ENV CGO_ENABLED=0
-RUN module_path="$(go list -m)" && \
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    module_path="$(go list -m)" && \
     resolved_version="${APP_VERSION}" && \
     if [ "${resolved_version}" = "dev" ] && [ -n "${RAILWAY_GIT_COMMIT_SHA}" ]; then \
       resolved_version="sha-$(printf '%.12s' "${RAILWAY_GIT_COMMIT_SHA}")"; \
@@ -30,7 +33,9 @@ RUN module_path="$(go list -m)" && \
       -tags=timetzdata \
       -o /out/service ./cmd/service
 # profile:database-postgres:start
-RUN module_path="$(go list -m)" && \
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    module_path="$(go list -m)" && \
     resolved_version="${APP_VERSION}" && \
     if [ "${resolved_version}" = "dev" ] && [ -n "${RAILWAY_GIT_COMMIT_SHA}" ]; then \
       resolved_version="sha-$(printf '%.12s' "${RAILWAY_GIT_COMMIT_SHA}")"; \

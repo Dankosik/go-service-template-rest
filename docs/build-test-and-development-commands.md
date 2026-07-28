@@ -17,6 +17,12 @@ dependencies remain in the root `go.mod`. `make mod-check` verifies and checks
 Go-version consistency for both modules. Container tools and test dependencies
 are pinned at their owning command or test seam.
 
+Keep the Go and BuildKit caches between runs. `gosec` uses the normal Go build
+cache, GitHub Actions keys its Go cache from both `go.sum` files, and the
+production Dockerfile persists module and compiler caches across BuildKit
+builds. Do not use `go clean -cache`, `docker build --no-cache`, or automatic
+BuildKit pruning as an edit-loop speed technique.
+
 ## Initialize a derived service
 
 ```bash
@@ -54,6 +60,38 @@ provide a real module path and an owner in `@user` or `@org/team` form.
 
 `check-full` fails immediately when Docker is unavailable. It never converts a
 missing container runtime into a successful skip.
+
+### Keep the laptop responsive
+
+The normal commands favor throughput and retain all caches. On a 10-core,
+16-GiB development Mac, this bounded profile leaves capacity for the desktop
+while preserving the same test and analysis coverage:
+
+```bash
+GOMAXPROCS=6 GOFLAGS="-p=6" make test
+GOMAXPROCS=6 make check
+taskpolicy -b env GOMAXPROCS=6 make ci-local
+```
+
+`taskpolicy` is macOS-only and lowers scheduling priority; `GOMAXPROCS` bounds
+Go runtime and default package-build parallelism. The regular linter is already
+capped by `LINT_CONCURRENCY=4`, which remains overrideable when a different
+machine has a measured reason.
+
+OrbStack limits are machine-wide. Record the current values, stop or preserve
+unrelated workloads, then use this balanced profile only when a restart is
+safe:
+
+```bash
+orb config get cpu
+orb config get memory_mib
+orb config set cpu 6
+orb config set memory_mib 6144
+```
+
+Some settings take effect only after restarting OrbStack. Restore the recorded
+values with the same `orb config set` commands when maximum local throughput is
+more important than responsiveness.
 
 ## Tests
 
@@ -204,7 +242,9 @@ startup log, and requires a clean SIGTERM exit. Cleanup is registered before
 the rehearsal begins.
 
 `docker-build` and `docker-run` operate on the production Dockerfile. Compose
-exists for runtime dependencies, not to emulate every native Make target.
+exists for runtime dependencies, not to emulate every native Make target. Its
+PostgreSQL healthcheck probes every second during startup, then returns to the
+five-second steady-state interval.
 
 ## Run and build
 

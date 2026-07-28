@@ -33,6 +33,9 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+          cache-dependency-path: |
+            go.sum
+            tools/go.sum
 
       - name: Verify module integrity
         run: make mod-check
@@ -64,12 +67,12 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+          cache-dependency-path: |
+            go.sum
+            tools/go.sum
 
       - name: Lint
         run: make lint lint-deep
-
-      - name: Verify template initialization contract
-        run: make template-init-check
 
   template-postgres-feature:
     runs-on: ubuntu-latest
@@ -88,6 +91,9 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+          cache-dependency-path: |
+            go.sum
+            tools/go.sum
 
       - name: Prove generated PostgreSQL POST vertical slice
         run: REQUIRE_DOCKER=1 TEMPLATE_POSTGRES_PROOF=1 make template-init-check
@@ -109,6 +115,9 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+          cache-dependency-path: |
+            go.sum
+            tools/go.sum
 
       - name: Detect OpenAPI codegen drift
         run: make openapi-drift-check
@@ -142,6 +151,9 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+          cache-dependency-path: |
+            go.sum
+            tools/go.sum
 
       - name: Extract base OpenAPI spec
         run: |
@@ -169,6 +181,9 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+          cache-dependency-path: |
+            go.sum
+            tools/go.sum
 
       - name: Race detector
         run: make test-race
@@ -185,6 +200,9 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+          cache-dependency-path: |
+            go.sum
+            tools/go.sum
 
       - name: Coverage + JUnit + JSON
         run: make test-report COVERAGE_MIN=${{ env.COVERAGE_MIN }}
@@ -258,6 +276,9 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+          cache-dependency-path: |
+            go.sum
+            tools/go.sum
 
       - name: Integration tests
         run: REQUIRE_DOCKER=1 make test-integration
@@ -310,6 +331,9 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+          cache-dependency-path: |
+            go.sum
+            tools/go.sum
 
       - name: Build production runtime image
         if: steps.migration_changes.outputs.should_run == 'true'
@@ -365,6 +389,9 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+          cache-dependency-path: |
+            go.sum
+            tools/go.sum
 
       - name: Run govulncheck
         run: make govulncheck
@@ -386,6 +413,9 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+          cache-dependency-path: |
+            go.sum
+            tools/go.sum
 
       - name: Run gitleaks
         run: make secret-scan
@@ -417,6 +447,7 @@ jobs:
     needs:
       - repo-integrity
       - lint
+      - template-postgres-feature
       - openapi-contract
       - openapi-breaking
       - test-race
