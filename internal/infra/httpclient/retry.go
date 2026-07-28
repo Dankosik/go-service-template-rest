@@ -8,6 +8,7 @@ import (
 	"math/rand/v2"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -135,7 +136,42 @@ func repeatableRequest(request *http.Request) bool {
 	case http.MethodGet, http.MethodHead, http.MethodOptions:
 		return true
 	}
-	return request.Header.Get(idempotencyKeyHeader) != ""
+	return hasUsableIdempotencyKey(request)
+}
+
+func hasBlankIdempotencyKey(request *http.Request) bool {
+	if request == nil {
+		return false
+	}
+	switch request.Method {
+	case http.MethodGet, http.MethodHead, http.MethodOptions:
+		return false
+	}
+	present, usable := idempotencyKeyState(request.Header)
+	return present && !usable
+}
+
+func hasUsableIdempotencyKey(request *http.Request) bool {
+	if request == nil {
+		return false
+	}
+	_, usable := idempotencyKeyState(request.Header)
+	return usable
+}
+
+func idempotencyKeyState(header http.Header) (present bool, usable bool) {
+	for name, values := range header {
+		if !strings.EqualFold(name, idempotencyKeyHeader) {
+			continue
+		}
+		present = true
+		for _, value := range values {
+			if strings.TrimSpace(value) != "" {
+				return true, true
+			}
+		}
+	}
+	return present, false
 }
 
 func hasBody(request *http.Request) bool {

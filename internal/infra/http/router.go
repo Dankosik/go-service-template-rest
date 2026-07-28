@@ -260,7 +260,7 @@ func handleGeneratedResponseError(domainErrors []problem.Mapper) func(http.Respo
 
 		if mapped, ok := problem.Classify(err, domainErrors); ok {
 			if mapped.RetryAfter > 0 {
-				w.Header().Set("Retry-After", strconv.Itoa(int(mapped.RetryAfter.Round(time.Second).Seconds())))
+				w.Header().Set("Retry-After", strconv.Itoa(retryAfterSeconds(mapped.RetryAfter)))
 			}
 			writeProblem(w, r, problemResponse{code: mapped.Code, detail: mapped.Detail})
 			return

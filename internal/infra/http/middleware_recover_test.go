@@ -44,12 +44,14 @@ func TestRecoverLogsPanicClassWithoutRawValue(t *testing.T) {
 	var out bytes.Buffer
 	log := newTestServiceLogger(&out)
 	const secretValue = "secret-value"
+	const secretPath = "/users/private-account-123"
 
 	handler := RequestCorrelation(Recover(log, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		panic(secretValue)
 	})))
 
-	req := httptest.NewRequest(http.MethodGet, "/panic", nil)
+	req := httptest.NewRequest(http.MethodGet, secretPath, nil)
+	req.Pattern = "GET /users/{id}"
 	req.Header.Set(requestIDHeader, "req-panic-123")
 	resp := httptest.NewRecorder()
 	handler.ServeHTTP(resp, req)
@@ -60,6 +62,12 @@ func TestRecoverLogsPanicClassWithoutRawValue(t *testing.T) {
 	assertProblemCode(t, resp, problem.CodeInternalError)
 	if strings.Contains(out.String(), secretValue) {
 		t.Fatalf("panic log leaks raw recovered value: %q", out.String())
+	}
+	if strings.Contains(out.String(), secretPath) || strings.Contains(out.String(), `"path":`) {
+		t.Fatalf("panic log leaks raw request path: %q", out.String())
+	}
+	if !strings.Contains(out.String(), `"route":"GET /users/{id}"`) {
+		t.Fatalf("panic log = %q, want bounded route template", out.String())
 	}
 	if !strings.Contains(out.String(), `"panic_class":"string"`) {
 		t.Fatalf("panic log = %q, want panic_class", out.String())

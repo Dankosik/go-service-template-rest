@@ -19,7 +19,7 @@ func Recover(log *slog.Logger, next http.Handler) http.Handler {
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		trackedWriter, committed := trackResponseCommit(w)
-		defer func(ctx context.Context, method, path string) {
+		defer func(ctx context.Context, request *http.Request) {
 			rec := recover()
 			if rec == nil {
 				return
@@ -34,20 +34,24 @@ func Recover(log *slog.Logger, next http.Handler) http.Handler {
 				panic(rec)
 			}
 
+			route := joinMethodAndPattern(request.Method, routePathTemplateForRequest(request))
+			if route == "" {
+				route = "<unmatched>"
+			}
 			log.ErrorContext(
 				ctx,
 				"panic recovered",
 				"panic_class", panicClass(rec),
 				"panic_type", fmt.Sprintf("%T", rec),
-				"method", method,
-				"path", path,
+				"method", request.Method,
+				"route", route,
 				"stack", string(debug.Stack()),
 			)
 			if committed() {
 				return
 			}
 			writeProblem(w, r, problemResponse{code: problem.CodeInternalError, detail: "request failed"})
-		}(r.Context(), r.Method, r.URL.Path)
+		}(r.Context(), r)
 		next.ServeHTTP(trackedWriter, r)
 	})
 }

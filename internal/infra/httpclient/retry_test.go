@@ -3,6 +3,7 @@ package httpclient
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -170,6 +171,47 @@ func TestRetryRepeatsKeyedUnsafeMethod(t *testing.T) {
 		if body != `{"amount":1}` {
 			t.Fatalf("attempt body = %q, want the original payload", body)
 		}
+	}
+}
+
+func TestClientRejectsBlankIdempotencyKeyBeforeSending(t *testing.T) {
+	t.Parallel()
+
+	for _, key := range []string{"", " \t"} {
+		t.Run(fmt.Sprintf("%q", key), func(t *testing.T) {
+			t.Parallel()
+
+			var attempts atomic.Int32
+			client := newRetryTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				attempts.Add(1)
+				w.WriteHeader(http.StatusCreated)
+			}), RetryPolicy{})
+			request, err := http.NewRequestWithContext(
+				context.Background(),
+				http.MethodPost,
+				client.BaseURL(),
+				strings.NewReader(`{}`),
+			)
+			if err != nil {
+				t.Fatalf("build request: %v", err)
+			}
+			request.Header[idempotencyKeyHeader] = []string{key}
+
+			response, err := client.Do(request)
+
+			if err == nil {
+				if response != nil && response.Body != nil {
+					_ = response.Body.Close()
+				}
+				t.Fatal("Do() error = nil, want blank idempotency key rejected")
+			}
+			if response != nil {
+				t.Fatalf("Do() response = %#v, want nil", response)
+			}
+			if got := attempts.Load(); got != 0 {
+				t.Fatalf("attempts = %d, want 0", got)
+			}
+		})
 	}
 }
 

@@ -48,6 +48,35 @@ func TestRouterGetArticle(t *testing.T) {
 	}
 }
 
+func TestOpenAPIOperationsDeclareHardenedMiddlewareFailures(t *testing.T) {
+	t.Parallel()
+
+	spec, err := openapi.GetSpec()
+	if err != nil {
+		t.Fatalf("openapi.GetSpec() error = %v", err)
+	}
+	for path, item := range spec.Paths.Map() {
+		if item == nil || strings.HasPrefix(path, "/health/") {
+			continue
+		}
+		for method, operation := range item.Operations() {
+			for _, status := range []string{"413", "429", "503", "504"} {
+				responseRef := operation.Responses.Value(status)
+				if responseRef == nil || responseRef.Value == nil {
+					t.Errorf("%s %s lacks %s response from the hardened middleware chain", method, path, status)
+					continue
+				}
+				if responseRef.Value.Content.Get("application/problem+json") == nil {
+					t.Errorf("%s %s response %s is not application/problem+json", method, path, status)
+				}
+				if (status == "429" || status == "503") && responseRef.Value.Headers["Retry-After"] == nil {
+					t.Errorf("%s %s response %s lacks Retry-After", method, path, status)
+				}
+			}
+		}
+	}
+}
+
 func TestRouterMapsMissingArticleToProblem(t *testing.T) {
 	t.Parallel()
 
@@ -386,12 +415,11 @@ func TestCredentialWithoutWriteScopeIsForbidden(t *testing.T) {
 	}
 }
 
-// TestUnauthenticatedRequestIsForbiddenNotChallenged pins the wiring-defect path.
+// TestMissingAuthenticatedPrincipalIsInternalError pins the wiring-defect path.
 // An operation that declares `security:` fails closed before a handler runs, so a
-// handler that sees no principal is looking at a broken seam, not an anonymous
-// caller — and answering 401 would tell the client to retry with credentials it
-// already presented.
-func TestUnauthenticatedRequestIsForbiddenNotChallenged(t *testing.T) {
+// handler that sees no principal is looking at a broken seam, not a caller whose
+// valid credentials lack permission.
+func TestMissingAuthenticatedPrincipalIsInternalError(t *testing.T) {
 	t.Parallel()
 
 	admitEveryone := func(context.Context, *openapi3filter.AuthenticationInput) error { return nil }
@@ -407,8 +435,8 @@ func TestUnauthenticatedRequestIsForbiddenNotChallenged(t *testing.T) {
 	response := postArticle(t, handler, testWriteToken,
 		`{"slug":"unattributed","title":"Unattributed","summary":"No principal was published."}`)
 
-	if response.Code != http.StatusForbidden {
-		t.Fatalf("status = %d, want %d", response.Code, http.StatusForbidden)
+	if response.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusInternalServerError)
 	}
 }
 

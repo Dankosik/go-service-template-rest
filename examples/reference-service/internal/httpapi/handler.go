@@ -3,6 +3,7 @@ package httpapi
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -36,7 +37,10 @@ type handler struct {
 // challenged.
 func (h *handler) CreateArticle(ctx context.Context, request openapi.CreateArticleRequestObject) (openapi.CreateArticleResponseObject, error) {
 	principal, authenticated := reqctx.PrincipalFromContext(ctx)
-	if !authenticated || !principal.HasScope(ArticleWriteScope) {
+	if !authenticated {
+		return nil, errors.New("authenticated principal missing")
+	}
+	if !principal.HasScope(ArticleWriteScope) {
 		return openapi.CreateArticle403ApplicationProblemPlusJSONResponse{
 			ForbiddenApplicationProblemPlusJSONResponse: openapi.ForbiddenApplicationProblemPlusJSONResponse(
 				newProblem(ctx, http.StatusForbidden, "credentials do not permit this operation"),
