@@ -130,6 +130,7 @@ func New(ctx context.Context, opts Options) (*Pool, error) {
 	poolConfig.MaxConns = int32(opts.MaxOpenConns)     // #nosec G115 -- validated to be <= math.MaxInt32 above.
 	poolConfig.MinIdleConns = int32(opts.MinIdleConns) // #nosec G115 -- validated to be <= MaxOpenConns, itself <= math.MaxInt32.
 	poolConfig.MaxConnLifetime = opts.ConnMaxLifetime
+	poolConfig.MaxConnLifetimeJitter = opts.ConnMaxLifetime / 10
 
 	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
 	if err != nil {

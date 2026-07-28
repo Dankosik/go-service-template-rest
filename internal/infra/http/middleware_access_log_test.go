@@ -42,6 +42,29 @@ func TestAccessLogPreservesFirstFinalStatus(t *testing.T) {
 	}
 }
 
+func TestAccessLogOmitsRawRequestPath(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	handler := AccessLog(newTestServiceLogger(&out), true, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	request := httptest.NewRequest(http.MethodGet, "/users/secret-account", nil)
+	request.Pattern = "GET /users/{id}"
+	handler.ServeHTTP(httptest.NewRecorder(), request)
+
+	var event map[string]any
+	if err := json.Unmarshal([]byte(strings.TrimSpace(out.String())), &event); err != nil {
+		t.Fatalf("unmarshal access log: %v", err)
+	}
+	if _, ok := event["path"]; ok {
+		t.Fatalf("access log contains raw path: %v", event)
+	}
+	if got := event["route"]; got != "GET /users/{id}" {
+		t.Fatalf("logged route = %v, want the route template", got)
+	}
+}
+
 func TestAccessLogSkipsHealthProbesByDefault(t *testing.T) {
 	t.Parallel()
 

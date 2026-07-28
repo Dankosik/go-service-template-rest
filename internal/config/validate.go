@@ -191,15 +191,7 @@ func validateHTTPConfig(cfg *HTTPConfig) error {
 	if err := validateHTTPCapacityBounds(*cfg); err != nil {
 		return err
 	}
-	if err := validateDurationRange(
-		"http.idempotency_outcome_timeout",
-		cfg.IdempotencyOutcomeTimeout,
-		10*time.Millisecond,
-		30*time.Second,
-	); err != nil {
-		return err
-	}
-	return validateHTTPIdempotencyShutdownBudget(*cfg)
+	return nil
 }
 
 // validateHTTPCapacityBounds owns the four settings that decide how much work
@@ -240,24 +232,6 @@ func validateHTTPConnectionCeiling(cfg HTTPConfig) error {
 		"%w: http.max_connections must be >= http.max_in_flight (%d)",
 		ErrValidate,
 		cfg.MaxInFlight,
-	)
-}
-
-// validateHTTPIdempotencyShutdownBudget keeps the outcome bound inside the drain.
-//
-// A request admitted just before SIGTERM can be inside the outcome call when the
-// drain starts, and http.Server.Shutdown waits for it. A bound larger than the
-// whole shutdown budget would mean the drain gives up, force-closes the
-// connection, and the process then waits on a goroutine that is still writing to a
-// store — which is the shutdown this budget exists to keep orderly.
-func validateHTTPIdempotencyShutdownBudget(cfg HTTPConfig) error {
-	if cfg.IdempotencyOutcomeTimeout <= cfg.ShutdownTimeout {
-		return nil
-	}
-	return fmt.Errorf(
-		"%w: http.idempotency_outcome_timeout must be <= http.shutdown_timeout (%s)",
-		ErrValidate,
-		cfg.ShutdownTimeout,
 	)
 }
 
@@ -358,17 +332,6 @@ func validatePostgres(cfg PostgresConfig) error {
 		return err
 	}
 	if err := validateDurationRange("postgres.statement_timeout", cfg.StatementTimeout, 100*time.Millisecond, 10*time.Minute); err != nil {
-		return err
-	}
-	if err := validateDurationRange("postgres.idempotency_retention", cfg.IdempotencyRetention, time.Minute, 30*24*time.Hour); err != nil {
-		return err
-	}
-	if err := validateDurationRange(
-		"postgres.idempotency_sweep_interval",
-		cfg.IdempotencySweepInterval,
-		time.Second,
-		cfg.IdempotencyRetention,
-	); err != nil {
 		return err
 	}
 

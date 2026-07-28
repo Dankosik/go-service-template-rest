@@ -165,8 +165,8 @@ const (
 // RouterConfig.RateLimit and get no middleware — but a nil *KeyedRateLimiter
 // stored in a RateLimiter interface is a non-nil interface holding a nil pointer,
 // so the middleware would install itself and dereference nothing on the first
-// request that carried a key. It is the same trap runtimeDependencies.IdempotencyStore
-// exists to avoid, and a service that wants no limiting leaves the field unset.
+// request that carried a key. A service that wants no limiting leaves the
+// field unset.
 func NewKeyedRateLimiter(perSecond float64, burst, maxKeys int) (*KeyedRateLimiter, error) {
 	if perSecond <= 0 {
 		return nil, fmt.Errorf("keyed rate limiter: requests per second must be > 0")
@@ -214,6 +214,10 @@ func (l *KeyedRateLimiter) bucket(key string) *rate.Limiter {
 	if limiter, ok := l.previous[key]; ok {
 		// Promoted, so a caller that is still active does not lose its bucket —
 		// and therefore its accumulated debt — when a generation rolls over.
+		if len(l.current) >= l.maxKeys {
+			l.previous = l.current
+			l.current = make(map[string]*rate.Limiter, min(l.maxKeys, rateLimitInitialKeys))
+		}
 		l.current[key] = limiter
 		return limiter
 	}

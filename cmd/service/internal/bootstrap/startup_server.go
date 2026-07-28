@@ -25,14 +25,15 @@ type runtimeServer interface {
 }
 
 type serveHTTPRuntimeArgs struct {
-	cfg            config.Config
-	log            *slog.Logger
-	healthSvc      *health.Service
-	srv            runtimeServer
-	metricsSrv     runtimeServer
-	readinessCheck func(context.Context) error
-	admission      *startupAdmissionController
-	shutdownDelay  time.Duration
+	cfg                config.Config
+	log                *slog.Logger
+	healthSvc          *health.Service
+	srv                runtimeServer
+	metricsSrv         runtimeServer
+	readinessCheck     func(context.Context) error
+	backgroundFailures <-chan error
+	admission          *startupAdmissionController
+	shutdownDelay      time.Duration
 	// shutdown is the process-wide teardown deadline. It is armed here, at the
 	// one point that knows serving has ended, and every stage after the drain
 	// draws from it.
@@ -122,12 +123,7 @@ func serveHTTPRuntime(signalCtx context.Context, bootstrapCtx context.Context, a
 	var serverErr error
 
 	if ready && !stopRequested {
-		select {
-		case <-signalCtx.Done():
-			args.log.InfoContext(signalCtx, "shutdown signal received")
-		case result := <-runErrCh:
-			serverErr = serverStoppedAfterReadiness(args.log, result)
-		}
+		serverErr, terminalErr = waitForRuntimeStop(signalCtx, args, runErrCh)
 	}
 	cancelAdmission()
 
@@ -181,6 +177,22 @@ func serveHTTPRuntime(signalCtx context.Context, bootstrapCtx context.Context, a
 
 	args.log.InfoContext(signalCtx, "shutdown complete")
 	return nil
+}
+
+func waitForRuntimeStop(
+	signalCtx context.Context,
+	args serveHTTPRuntimeArgs,
+	runErrCh <-chan serverResult,
+) (serverErr error, terminalErr error) {
+	select {
+	case <-signalCtx.Done():
+		args.log.InfoContext(signalCtx, "shutdown signal received")
+	case result := <-runErrCh:
+		serverErr = serverStoppedAfterReadiness(args.log, result)
+	case err := <-args.backgroundFailures:
+		terminalErr = fmt.Errorf("background task failed after readiness: %w", err)
+	}
+	return serverErr, terminalErr
 }
 
 // shutdownDiagnostics closes the private listener under its own budget, and is
@@ -270,6 +282,13 @@ func waitForStartupAdmission(
 		select {
 		case result := <-runErrCh:
 			return false, false, serverStoppedBeforeReadiness(bootstrapCtx, args, result)
+		case err := <-args.backgroundFailures:
+			return false, false, rejectHTTPStartup(
+				bootstrapCtx,
+				args.log,
+				"startup.background",
+				fmt.Errorf("background task failed before readiness: %w", err),
+			)
 		default:
 			args.admission.MarkReady()
 			return true, false, nil
@@ -289,6 +308,13 @@ func waitForStartupAdmission(
 		return false, false, err
 	case result := <-runErrCh:
 		return false, false, serverStoppedBeforeReadiness(bootstrapCtx, args, result)
+	case err := <-args.backgroundFailures:
+		return false, false, rejectHTTPStartup(
+			bootstrapCtx,
+			args.log,
+			"startup.background",
+			fmt.Errorf("background task failed before readiness: %w", err),
+		)
 	}
 }
 

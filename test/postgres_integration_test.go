@@ -27,7 +27,7 @@ func TestPostgresPool(t *testing.T) {
 	spanRecorder := telemetrytest.InstallSpanRecorder(t)
 	metricReader := telemetrytest.InstallManualReader(t)
 
-	pool, err := postgres.New(ctx, postgres.Options{
+	opts := postgres.Options{
 		DSN:                dsn,
 		ConnectTimeout:     3 * time.Second,
 		HealthcheckTimeout: 3 * time.Second,
@@ -35,13 +35,17 @@ func TestPostgresPool(t *testing.T) {
 		AcquireTimeout:     time.Second,
 		ConnMaxLifetime:    time.Hour,
 		StatementTimeout:   time.Second,
-	})
+	}
+	pool, err := postgres.New(ctx, opts)
 	if err != nil {
 		t.Fatalf("create postgres pool: %v", err)
 	}
 	t.Cleanup(pool.Close)
 	if pool.PGX() == nil {
 		t.Fatal("postgres PGX() = nil, want initialized pool")
+	}
+	if got, want := pool.PGX().Config().MaxConnLifetimeJitter, opts.ConnMaxLifetime/10; got != want {
+		t.Fatalf("MaxConnLifetimeJitter = %s, want %s", got, want)
 	}
 
 	t.Run("readiness probe", func(t *testing.T) {

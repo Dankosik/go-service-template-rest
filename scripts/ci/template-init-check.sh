@@ -67,7 +67,6 @@ new_fixture() {
 		"${root}/env" \
 		"${root}/internal/config" \
 		"${root}/internal/example" \
-		"${root}/internal/background" \
 		"${root}/internal/health" \
 		"${root}/internal/infra/example" \
 		"${root}/internal/infra/http" \
@@ -97,13 +96,11 @@ new_fixture() {
 		>"${root}/cmd/service/internal/bootstrap/run.go"
 	printf 'package health\n\ntype Service struct{}\n\nfunc New() *Service { return &Service{} }\n' \
 		>"${root}/internal/health/service.go"
-	# The DATABASE=none profile template imports these three, so the fixture has to
+	# The DATABASE=none profile template imports these packages, so the fixture has to
 	# carry them: without them the `go mod tidy` initialization ends up trying to
 	# resolve the generated module path over the network and fails with a confusing
 	# "Repository not found".
-	printf 'package background\n\nimport "context"\n\ntype Task struct {\n\tName string\n\tRun  func(context.Context) error\n}\n' \
-		>"${root}/internal/background/background.go"
-	printf 'package httpx\n\nimport "context"\n\ntype IdempotencyStore interface {\n\tRelease(ctx context.Context, key string) error\n}\n' \
+	printf 'package httpx\n' \
 		>"${root}/internal/infra/http/http.go"
 	printf 'package problem\n\ntype Mapped struct{ Code string }\n\ntype Mapper func(error) (Mapped, bool)\n' \
 		>"${root}/internal/problem/problem.go"
@@ -285,9 +282,7 @@ minimal_workflow_before="$(workflow_snapshot "${minimal_checkout}")"
 	{
 		echo "package depguardprobe"
 		echo
-		echo 'import httpx "github.com/acme/feature-proof/internal/infra/http"'
-		echo
-		echo "var _ httpx.IdempotencyStore"
+		echo 'import _ "github.com/acme/feature-proof/internal/infra/http"'
 	} >internal/depguardprobe/forbidden.go
 	if "${LINTER}" run \
 		--allow-serial-runners \

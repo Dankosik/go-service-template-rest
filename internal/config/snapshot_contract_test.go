@@ -208,7 +208,6 @@ func sentinelConfigSourceValues() map[string]any {
 		"http.max_in_flight":               512,
 		"http.max_connections":             1024,
 		"http.access_log_health_probes":    true,
-		"http.idempotency_outcome_timeout": "2s",
 
 		"health.refresh_interval":  "3s",
 		"health.failure_threshold": 5,
@@ -230,8 +229,6 @@ func sentinelConfigSourceValues() map[string]any {
 		"postgres.acquire_timeout":             "1500ms",
 		"postgres.conn_max_lifetime":           "45m",
 		"postgres.statement_timeout":           "7s",
-		"postgres.idempotency_retention":       "26h",
-		"postgres.idempotency_sweep_interval":  "7m",
 		// profile:database-postgres:end
 
 		"observability.metrics.addr":                        "127.0.0.1:19090",
@@ -267,7 +264,6 @@ func expectedSentinelSnapshotValues() map[string]any {
 		"http.max_in_flight":               512,
 		"http.max_connections":             1024,
 		"http.access_log_health_probes":    true,
-		"http.idempotency_outcome_timeout": 2 * time.Second,
 
 		"health.refresh_interval":  3 * time.Second,
 		"health.failure_threshold": 5,
@@ -289,8 +285,6 @@ func expectedSentinelSnapshotValues() map[string]any {
 		"postgres.acquire_timeout":             1500 * time.Millisecond,
 		"postgres.conn_max_lifetime":           45 * time.Minute,
 		"postgres.statement_timeout":           7 * time.Second,
-		"postgres.idempotency_retention":       26 * time.Hour,
-		"postgres.idempotency_sweep_interval":  7 * time.Minute,
 		// profile:database-postgres:end
 
 		"observability.metrics.addr":                        "127.0.0.1:19090",

@@ -64,11 +64,6 @@ func defaultValues() map[string]any {
 		// two buffers apiece until the process is OOM-killed.
 		"http.max_connections":          4096,
 		"http.access_log_health_probes": false,
-		// idempotency_outcome_timeout matches postgres.acquire_timeout: recording an
-		// outcome is one short statement, and a store that cannot take it in a second
-		// is not going to take it in ten. Overshooting costs handler goroutines that
-		// are already holding an in-flight slot with nobody waiting on the answer.
-		"http.idempotency_outcome_timeout": "1s",
 
 		"health.refresh_interval":  "2s",
 		"health.failure_threshold": 3,
@@ -105,11 +100,6 @@ func defaultValues() map[string]any {
 		"postgres.acquire_timeout":   "1s",
 		"postgres.conn_max_lifetime": "30m",
 		"postgres.statement_timeout": "8s",
-		// 24h covers every client retry policy worth honoring, and the sweep keeps
-		// the table proportional to one day of unsafe requests rather than to the
-		// lifetime of the service.
-		"postgres.idempotency_retention":      "24h",
-		"postgres.idempotency_sweep_interval": "5m",
 		// profile:database-postgres:end
 
 		"observability.otel.service_name":                   "service",

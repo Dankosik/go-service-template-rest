@@ -8,10 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/example/go-service-template-rest/internal/background"
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/health"
-	httpx "github.com/example/go-service-template-rest/internal/infra/http"
 	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	"github.com/example/go-service-template-rest/internal/problem"
 )
@@ -49,27 +47,9 @@ type postgresStartupRuntime struct {
 }
 
 type runtimeDependencies struct {
-	readiness   health.Probe
-	postgres    *postgres.Pool
-	idempotency *postgres.IdempotencyStore
-	// idempotencySweepInterval is held rather than re-read from config, so the
-	// supervised task and the store it prunes cannot be configured apart.
-	idempotencySweepInterval time.Duration
-	closed                   *sync.Once
-}
-
-// IdempotencyStore returns the store the HTTP chain replays completed attempts
-// from, or nil when this profile has none.
-//
-// The explicit nil check is load-bearing. Returning a nil *postgres.IdempotencyStore
-// as the interface would produce a non-nil interface holding a nil pointer, so the
-// middleware would install itself and dereference nothing on the first POST
-// carrying a key.
-func (d runtimeDependencies) IdempotencyStore() httpx.IdempotencyStore {
-	if d.idempotency == nil {
-		return nil
-	}
-	return d.idempotency
+	readiness health.Probe
+	postgres  *postgres.Pool
+	closed    *sync.Once
 }
 
 // ReadinessProbes returns what this profile's dependencies contribute to the
@@ -84,25 +64,6 @@ func (d runtimeDependencies) ReadinessProbes() []health.Probe {
 		return nil
 	}
 	return []health.Probe{d.readiness}
-}
-
-// BackgroundTasks returns the supervised work this profile's dependencies need.
-//
-// It exists so run.go stays profile-independent: the DATABASE=none profile returns
-// nothing and the shared startup path is unchanged.
-func (d runtimeDependencies) BackgroundTasks() []background.Task {
-	if d.idempotency == nil {
-		return nil
-	}
-
-	store := d.idempotency
-	interval := d.idempotencySweepInterval
-	return []background.Task{{
-		Name: "idempotency_sweep",
-		Run: func(ctx context.Context) error {
-			return sweepIdempotencyKeys(ctx, store, interval)
-		},
-	}}
 }
 
 // readinessProbeBudget is how long one steady-state readiness evaluation may
@@ -149,44 +110,6 @@ func classifyPostgresDomainError(err error) (problem.Mapped, bool) {
 	}, true
 }
 
-// idempotencySweeper is the one method the supervised task needs. Narrowing the
-// parameter to it is what lets the task's timing and failure handling be proved
-// without a database.
-type idempotencySweeper interface {
-	Sweep(ctx context.Context) (int64, error)
-}
-
-// sweepIdempotencyKeys deletes expired reservations until ctx is done.
-//
-// It returns nil on cancellation so the supervisor treats a drain as an ordinary
-// stop, and it reports a failed sweep without returning: one failed pass is a
-// transient database problem, and taking the process down for it would trade a
-// slowly growing table for an outage. A pass that keeps failing shows up as a
-// repeated error record rather than as silence.
-func sweepIdempotencyKeys(ctx context.Context, store idempotencySweeper, interval time.Duration) error {
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return nil
-		case <-ticker.C:
-			removed, err := store.Sweep(ctx)
-			if err != nil {
-				if ctx.Err() != nil {
-					return nil
-				}
-				slog.ErrorContext(ctx, "idempotency_sweep_failed", "component", "idempotency", "err", err)
-				continue
-			}
-			if removed > 0 {
-				slog.InfoContext(ctx, "idempotency_sweep_completed", "component", "idempotency", "removed", removed)
-			}
-		}
-	}
-}
-
 // Close releases pooled dependencies, bounded by ctx, and is safe to call twice.
 //
 // The bound is the point. pgxpool.Close blocks until every acquired connection is
@@ -229,18 +152,10 @@ func initRuntimeDependencies(
 		return runtimeDependencies{}, err
 	}
 
-	idempotencyStore, err := postgres.NewIdempotencyStore(pg, bootstrap.cfg.Postgres.IdempotencyRetention)
-	if err != nil {
-		pg.Close()
-		return runtimeDependencies{}, fmt.Errorf("%w: idempotency store init failed: %w", errDependencyInit, err)
-	}
-
 	return runtimeDependencies{
-		readiness:                newPostgresReadinessProbe(pg, bootstrap.cfg.Postgres.HealthcheckTimeout),
-		postgres:                 pg,
-		idempotency:              idempotencyStore,
-		idempotencySweepInterval: bootstrap.cfg.Postgres.IdempotencySweepInterval,
-		closed:                   new(sync.Once),
+		readiness: newPostgresReadinessProbe(pg, bootstrap.cfg.Postgres.HealthcheckTimeout),
+		postgres:  pg,
+		closed:    new(sync.Once),
 	}, nil
 }
 

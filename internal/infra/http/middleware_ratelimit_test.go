@@ -158,6 +158,31 @@ func TestKeyedRateLimiterBoundsItsKeyMap(t *testing.T) {
 	}
 }
 
+func TestKeyedRateLimiterBoundsPromotionsIntoAFullGeneration(t *testing.T) {
+	t.Parallel()
+
+	const maxKeys = 8
+	limiter := mustNewKeyedRateLimiter(t, 1000, 1000, maxKeys)
+
+	for i := range maxKeys {
+		limiter.Allow(context.Background(), "old-"+strconv.Itoa(i))
+	}
+	for i := range maxKeys {
+		limiter.Allow(context.Background(), "current-"+strconv.Itoa(i))
+	}
+	for i := range maxKeys {
+		limiter.Allow(context.Background(), "old-"+strconv.Itoa(i))
+	}
+
+	limiter.mu.Lock()
+	live := len(limiter.current) + len(limiter.previous)
+	limiter.mu.Unlock()
+
+	if live > 2*maxKeys {
+		t.Fatalf("tracked keys after promotion = %d, want at most two generations of %d", live, maxKeys)
+	}
+}
+
 // TestKeyedRateLimiterKeepsActiveCallersAcrossGenerations keeps a caller that is
 // still sending from having its debt forgiven every time the map rolls over,
 // which would make the limit unenforceable under key churn.

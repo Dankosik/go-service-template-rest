@@ -30,10 +30,13 @@ var (
 	// a returned error, so a caller can tell a bug from an expected failure.
 	ErrPanic = errors.New("background task panicked")
 
-	// ErrTaskFailed reports, through Check, that a supervised task ended with an
-	// error while the process was still meant to be serving. It is a distinct
-	// identity because readiness is what consumes it.
+	// ErrTaskFailed reports that a supervised task ended with an error while the
+	// process was still meant to be serving.
 	ErrTaskFailed = errors.New("background task failed")
+
+	// ErrTaskStopped reports a long-running supervised task that returned without
+	// shutdown asking it to stop.
+	ErrTaskStopped = errors.New("background task stopped unexpectedly")
 )
 
 // Task is one supervised unit of work. Run must return when its context is done;
@@ -57,10 +60,9 @@ type Supervisor struct {
 	// canceled the first time any task returns an error, so one failing worker
 	// stopped every other supervised task in the process — including the
 	// readiness refresher, which returns nil on cancellation and therefore
-	// exited through the ordinary stopped path. Readiness then served whatever
-	// verdict it happened to hold when the unrelated task failed, forever, while
-	// the process kept accepting traffic. Isolation is the whole point of a
-	// supervisor; a task that needs a sibling reports that through Check.
+	// exited through the ordinary stopped path. Keeping sibling cancellation under
+	// Shutdown preserves the ordered drain after the failure reaches the process
+	// lifecycle owner.
 	//nolint:containedctx // A supervisor's whole job is owning the lifetime it hands out.
 	taskCtx   context.Context
 	cancel    context.CancelFunc
@@ -74,6 +76,9 @@ type Supervisor struct {
 	// failure holds the first task that ended with an error while the process was
 	// still serving. It is what Check reports.
 	failure atomic.Pointer[taskFailure]
+	// failures delivers the same first failure to the process lifecycle owner.
+	// It is buffered because the failing task must never wait for that owner.
+	failures chan error
 }
 
 type taskFailure struct {
@@ -90,16 +95,16 @@ func New(ctx context.Context, log *slog.Logger) *Supervisor {
 	taskCtx, cancel := context.WithCancel(ctx)
 
 	return &Supervisor{
-		log:     log,
-		group:   new(errgroup.Group),
-		taskCtx: taskCtx,
-		cancel:  cancel,
+		log:      log,
+		group:    new(errgroup.Group),
+		taskCtx:  taskCtx,
+		cancel:   cancel,
+		failures: make(chan error, 1),
 	}
 }
 
 // Go starts task. A panic inside Run is recovered and converted into an error so
-// one bad iteration cannot take the process down, while a task that keeps
-// panicking still surfaces through Shutdown rather than being swallowed.
+// the process can run its ordered drain instead of losing shutdown telemetry.
 func (s *Supervisor) Go(task Task) {
 	name := task.Name
 	if name == "" {
@@ -107,6 +112,7 @@ func (s *Supervisor) Go(task Task) {
 	}
 	if task.Run == nil {
 		s.log.Error("background_task_invalid", "component", "background", "task", name, "reason", "run is nil")
+		s.recordStop(name, errors.New("run is nil"))
 		return
 	}
 
@@ -151,21 +157,33 @@ func (s *Supervisor) runTask(name string, run func(context.Context) error) (runE
 		s.log.Error("background_task_failed", "component", "background", "task", name, "err", err)
 		return fmt.Errorf("background task %s: %w", name, err)
 	}
-	s.log.Info("background_task_stopped", "component", "background", "task", name)
-	return nil
+	if s.taskCtx.Err() != nil {
+		s.log.Info("background_task_stopped", "component", "background", "task", name)
+		return nil
+	}
+	err := fmt.Errorf("%w: %s", ErrTaskStopped, name)
+	s.log.Error("background_task_failed", "component", "background", "task", name, "err", err)
+	return err
 }
 
 // recordStop publishes a task that failed while the process was still serving, so
 // Check can report it.
 //
-// A task that ends during the drain, or that returns nil, is not recorded: the
-// first is an ordinary stop and the second is a task that chose to finish. Only a
-// failure means the process is still running without work it was built to do.
+// A task that ends during the drain is an ordinary stop. Any other return means
+// the process is still running without work it was built to do.
 func (s *Supervisor) recordStop(name string, err error) {
 	if err == nil || s.stopping.Load() || s.taskCtx.Err() != nil {
 		return
 	}
-	s.failure.CompareAndSwap(nil, &taskFailure{task: name, err: err})
+	failure := &taskFailure{task: name, err: err}
+	if s.failure.CompareAndSwap(nil, failure) {
+		s.failures <- taskFailureError(failure)
+	}
+}
+
+// Failures reports the first task failure to the process lifecycle owner.
+func (s *Supervisor) Failures() <-chan error {
+	return s.failures
 }
 
 // Name identifies this supervisor as a readiness probe.
@@ -174,12 +192,8 @@ func (s *Supervisor) Name() string {
 }
 
 // Check reports the first supervised task that failed while the process was still
-// serving, and is what makes a dead worker visible to readiness.
-//
-// Nothing else would report it. A failed task is logged once and then the process
-// keeps answering every request without the work that task was doing — an outbox
-// that no longer publishes, a lease that no longer renews — until the next deploy.
-// The error is only surfaced at Shutdown, which is exactly too late.
+// serving, and makes that failure visible to readiness while the lifecycle owner
+// begins the drain.
 //
 // Tasks are not restarted here. Whether a failure is recoverable depends on what
 // the task already did, so the honest signal is to stop taking traffic and let the
@@ -189,6 +203,10 @@ func (s *Supervisor) Check(context.Context) error {
 	if failure == nil {
 		return nil
 	}
+	return taskFailureError(failure)
+}
+
+func taskFailureError(failure *taskFailure) error {
 	return fmt.Errorf("%w: %s: %w", ErrTaskFailed, failure.task, failure.err)
 }
 
