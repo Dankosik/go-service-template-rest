@@ -30,6 +30,14 @@ real path, then expand from that proven slice. Otherwise keep local or
 already-proven work on its existing direct path. The slice contains only
 retained implementation and required proof.
 
+When one mechanical contract change fans out so broadly that no bounded slice
+can remain valid and green, plan `expand -> migrate -> contract`: add the
+compatible new form, move bounded caller batches while both forms work, then
+remove the old form after every consumer has moved. Keep the contract cleanup
+in the same ledger and block it on every migration batch. Use one atomic task
+when it can stay valid and provable; do not add compatibility machinery merely
+to split work.
+
 ## Outputs
 
 A compact `tasks.md`:

@@ -9,6 +9,7 @@ Load this before the invariant register when important words in the prompt or re
 ## Decision Rubric
 - Define only terms that can change allowed behavior, violation outcome, ownership, proof, or handoff. Do not build a glossary for every noun.
 - For each loaded term, state: local meaning, non-meaning, authority source, actor allowed to decide it, and one decision it affects.
+- Persist an accepted term in repository-owned `docs/repo-architecture.md#domain-vocabulary` only when it recurs across tasks and a different interpretation could change future behavior, ownership, or proof; create that section lazily in the existing document when the first term qualifies. Keep task-local, unsettled, endpoint, table, and package vocabulary in its current owner; under read-only authorization, return the exact vocabulary row instead of editing.
 - Prefer repo-local policy vocabulary over package, endpoint, table, queue, or UI names.
 - Treat "owner" as a policy authority question, not merely the file or service that notices the condition.
 - Treat "done", "approved", "valid", and "active" as state or gate words until proven cosmetic.
@@ -20,6 +21,7 @@ Term: task
 Means here: a user-requested unit of work governed by the spec-first workflow.
 Does not mean: goroutine, make target, test case, or arbitrary code edit.
 Authority source: AGENTS.md plus task-local workflow artifacts.
+Semantic owner: the workflow contract named by AGENTS.md.
 Decision it affects: whether the session-boundary and implementation-readiness invariants apply.
 ```
 
@@ -30,6 +32,7 @@ Term: canonical skill source
 Means here: `.agents/skills/<skill>` is the authoring source for repository skills.
 Does not mean: generated or copied skill content outside `.agents/skills`.
 Authority source: repository skill source-of-truth policy.
+Semantic owner: repository instruction policy.
 Decision it affects: edits must land in `.agents/skills`.
 ```
 
@@ -40,6 +43,7 @@ Term: owner
 Means here: the actor or policy surface with authority to keep the domain rule true.
 Does not mean: whichever handler, table, or package first detects the violation.
 Authority source: approved spec, workflow contract, or domain ownership map.
+Semantic owner: the actor named by that authority.
 Decision it affects: the invariant register names `orchestrator workflow contract` as owner rather than `workflow-plan.md`.
 ```
 

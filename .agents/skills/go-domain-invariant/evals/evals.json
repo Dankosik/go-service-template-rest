@@ -77,6 +77,21 @@
       ]
     },
     {
+      "id": 6,
+      "category": "domain_defect",
+      "prompt": "Use the go-domain-invariant decision branch. Three accepted feature specs use `settled` with the same repository-wide meaning: the payout provider acknowledged the transfer and the local immutable result was recorded. It does not mean that a webhook was merely received or that a database row exists. The accepted specs name Finance as the semantic owner allowed to change this meaning. This task authorizes repository documentation edits, and `docs/repo-architecture.md` has a Domain Vocabulary section. Return the compact domain decision and its persistence action without creating a new glossary file.",
+      "expected_output": "Define the accepted cross-task term with its non-meaning, authority, semantic owner, and affected decision, then persist one row in the repository-owned Domain Vocabulary section.",
+      "files": [],
+      "expectations": [
+        "Defines `settled` and explicitly excludes webhook receipt and mere row existence",
+        "Names the accepted specs or repository domain policy as authority",
+        "Names Finance as the semantic owner allowed to change the term",
+        "Records the term in `docs/repo-architecture.md#domain-vocabulary` because it is stable and cross-task",
+        "Does not create CONTEXT.md, an ADR, or another glossary",
+        "Does not persist endpoint, table, package, or unsettled vocabulary"
+      ]
+    },
+    {
       "id": 100,
       "category": "domain_defect",
       "prompt": "We're adding order cancellation to a Go service used by marketplace sellers. Current states are `pending_payment`, `paid`, `packing`, `shipped`, `delivered`, `cancelled`. Business notes:\n- seller can cancel before parcel handoff, but finance insists refund only after payment is confirmed\n- payment provider webhooks can arrive late or duplicated\n- customer UI must not show `cancelled` before refund obligation is clear\n- API contract is mostly frozen; I only need domain sections ready to paste into `spec.md`\nWrite only the domain sections we need, not a full architecture doc. Make duplicate/replay semantics explicit and call out any follow-up handoffs if transport or data work is implied.",
