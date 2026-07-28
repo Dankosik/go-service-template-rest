@@ -6,6 +6,17 @@
 [build]
 builder = "DOCKERFILE"
 dockerfilePath = "build/docker/Dockerfile"
+watchPatterns = [
+  "/.dockerignore",
+  "/api/**",
+  "/build/docker/**",
+  "/cmd/**",
+  "/internal/**",
+  "/migrations/**",
+  "/go.mod",
+  "/go.sum",
+  "/railway.toml",
+]
 
 [deploy]
 # profile:database-postgres:start

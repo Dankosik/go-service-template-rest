@@ -44,6 +44,8 @@ can read from the derived source repository:
 
 - `builder = "DOCKERFILE"`
 - `dockerfilePath = "build/docker/Dockerfile"`
+- `watchPatterns` covering runtime source, module manifests, migrations, the
+  production Dockerfile, `.dockerignore`, and this policy file
 - `preDeployCommand = ["/migrate"]` (PostgreSQL profile only)
 - `healthcheckPath = "/health/ready"`
 - `healthcheckTimeout = 180`
@@ -51,6 +53,11 @@ can read from the derived source repository:
 - `restartPolicyMaxRetries = 5`
 - `overlapSeconds = 45`
 - `drainingSeconds = 45`
+
+The watch patterns prevent documentation, test, local Compose, and agent-only
+changes from starting a Railway source deployment. Keep them conservative:
+when a new path can affect the runtime image or deployment policy, add it in
+the same pull request.
 
 The application default worst-case shutdown sequence is 35 seconds: the
 30-second HTTP shutdown budget (which includes the 15-second

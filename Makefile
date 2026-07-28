@@ -327,7 +327,7 @@ benchmark-remote-image:
 # commit. deadcode and nilaway are whole-program analyses that dominate its wall
 # clock; they live in lint-deep, which ci-local and the CI lint job run.
 lint:
-	$(GO_TOOL) golangci-lint run --allow-parallel-runners --timeout=3m
+	$(GO_TOOL) golangci-lint run --allow-parallel-runners --concurrency=$(LINT_CONCURRENCY) --timeout=3m
 
 lint-deep: deadcode nilaway
 
@@ -352,9 +352,7 @@ govulncheck:
 	$(GO_TOOL) govulncheck ./...
 
 gosec:
-	@gosec_cache="$$(mktemp -d)"; \
-	trap 'rm -rf "$$gosec_cache"' EXIT; \
-	GOCACHE="$$gosec_cache" $(GO_TOOL) gosec -exclude-generated -exclude-dir=.agents -exclude-dir=.cache -exclude-dir=.artifacts ./...
+	$(GO_TOOL) gosec -exclude-generated -exclude-dir=.agents -exclude-dir=.cache -exclude-dir=.artifacts ./...
 
 go-security: govulncheck gosec
 
