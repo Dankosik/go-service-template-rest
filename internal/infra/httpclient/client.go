@@ -408,6 +408,7 @@ func (t responseLimitTransport) RoundTrip(req *http.Request) (*http.Response, er
 
 type responseBody struct {
 	io.ReadCloser
+
 	limit int64
 }
 

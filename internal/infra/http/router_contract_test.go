@@ -142,7 +142,7 @@ func TestOpenAPIRuntimeContractRouterHTTPPolicy(t *testing.T) {
 	t.Run("cors preflight is explicit and fail-closed", func(t *testing.T) {
 		t.Parallel()
 
-		req := httptest.NewRequest(http.MethodOptions, "/health/live", nil)
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodOptions, "/health/live", nil)
 		req.Header.Set("Origin", "https://example.com")
 		req.Header.Set("Access-Control-Request-Method", http.MethodGet)
 		resp := httptest.NewRecorder()
@@ -190,7 +190,7 @@ func TestGeneratedStrictRequestErrorDetailsAreSanitized(t *testing.T) {
 		options.RequestErrorHandlerFunc(w, r, errors.New(attackerDetail))
 	}))
 
-	req := httptest.NewRequest(http.MethodGet, "/health/live", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/health/live", nil)
 	req.Header.Set(requestIDHeader, "req-123")
 	req.Header.Set("Traceparent", "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01")
 	req = req.WithContext(propagation.TraceContext{}.Extract(req.Context(), propagation.HeaderCarrier(req.Header)))
@@ -246,7 +246,7 @@ func TestGeneratedChiRequestErrorDetailsAreSanitized(t *testing.T) {
 		options.ErrorHandlerFunc(w, r, errors.New(attackerDetail))
 	}))
 
-	req := httptest.NewRequest(http.MethodGet, "/health/live", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/health/live", nil)
 	req.Header.Set(requestIDHeader, "req-chi-123")
 	req.Header.Set("Traceparent", "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01")
 	req = req.WithContext(propagation.TraceContext{}.Extract(req.Context(), propagation.HeaderCarrier(req.Header)))
@@ -303,7 +303,7 @@ func TestOpenAPIRuntimeContractAccessLogIncludesRouteLabel(t *testing.T) {
 		traceID   = "4bf92f3577b34da6a3ce929d0e0e4736"
 	)
 
-	req := httptest.NewRequest(http.MethodGet, "/health/ready", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/health/ready", nil)
 	req.Header.Set(requestIDHeader, requestID)
 	req.Header.Set("Traceparent", "00-"+traceID+"-00f067aa0ba902b7-01")
 	resp := httptest.NewRecorder()
@@ -355,13 +355,13 @@ func TestOpenAPIRuntimeContractMetricsExposeRouteLabels(t *testing.T) {
 		Health: health.New(),
 	}, metrics, RouterConfig{})
 
-	liveReq := httptest.NewRequest(http.MethodGet, "/health/live", nil)
+	liveReq := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/health/live", nil)
 	liveReq.Host = "attacker-controlled.example:65535"
 	liveResp := httptest.NewRecorder()
 	h.ServeHTTP(liveResp, liveReq)
 
 	metricsResp := httptest.NewRecorder()
-	metrics.Handler().ServeHTTP(metricsResp, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	metrics.Handler().ServeHTTP(metricsResp, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/metrics", nil))
 
 	if metricsResp.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", metricsResp.Code, http.StatusOK)

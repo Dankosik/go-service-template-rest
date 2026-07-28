@@ -29,6 +29,7 @@ type strictHandlers struct {
 	// HealthLive and HealthReady methods in health_handlers.go shadow whatever it
 	// supplies for those two, so platform probe behavior stays owned here.
 	openapi.StrictServerInterface
+
 	health        *health.Service
 	readinessGate func(context.Context) error
 }

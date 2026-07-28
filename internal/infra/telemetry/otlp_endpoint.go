@@ -155,7 +155,7 @@ func validOTLPHeaderKey(key string) bool {
 	if key == "" {
 		return false
 	}
-	for i := 0; i < len(key); i++ {
+	for i := range len(key) {
 		b := key[i]
 		if (b >= 'a' && b <= 'z') ||
 			(b >= 'A' && b <= 'Z') ||

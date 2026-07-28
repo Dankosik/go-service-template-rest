@@ -66,7 +66,7 @@ func mustNewRouter(tb testing.TB, log *slog.Logger, h Handlers, metrics *telemet
 // response. Tests that need custom headers, bodies with unusual framing, or
 // other request mutation keep building the request explicitly at the call site.
 func doRequest(h http.Handler, method, target string) *httptest.ResponseRecorder {
-	req := httptest.NewRequest(method, target, nil)
+	req := httptest.NewRequestWithContext(context.Background(), method, target, nil)
 	resp := httptest.NewRecorder()
 	h.ServeHTTP(resp, req)
 	return resp
@@ -75,7 +75,7 @@ func doRequest(h http.Handler, method, target string) *httptest.ResponseRecorder
 // doJSONRequest executes a request carrying a JSON body against h and returns
 // the recorded response.
 func doJSONRequest(h http.Handler, method, target, body string) *httptest.ResponseRecorder {
-	req := httptest.NewRequest(method, target, strings.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), method, target, strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	resp := httptest.NewRecorder()
 	h.ServeHTTP(resp, req)

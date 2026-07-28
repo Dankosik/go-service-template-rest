@@ -46,7 +46,7 @@ func TestMetricsNilAndZeroValueHandlersReturnNotFound(t *testing.T) {
 	t.Parallel()
 
 	for _, metrics := range []*Metrics{nil, {}} {
-		req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/metrics", nil)
 		resp := httptest.NewRecorder()
 		metrics.Handler().ServeHTTP(resp, req)
 		if resp.Code != http.StatusNotFound {
@@ -58,7 +58,7 @@ func TestMetricsNilAndZeroValueHandlersReturnNotFound(t *testing.T) {
 func collectMetricsText(t *testing.T, metrics *Metrics) string {
 	t.Helper()
 
-	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/metrics", nil)
 	resp := httptest.NewRecorder()
 	metrics.Handler().ServeHTTP(resp, req)
 

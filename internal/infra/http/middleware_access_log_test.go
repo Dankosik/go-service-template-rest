@@ -2,6 +2,7 @@ package httpx
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -49,7 +50,7 @@ func TestAccessLogOmitsRawRequestPath(t *testing.T) {
 	handler := AccessLog(newTestServiceLogger(&out), true, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
-	request := httptest.NewRequest(http.MethodGet, "/users/secret-account", nil)
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/users/secret-account", nil)
 	request.Pattern = "GET /users/{id}"
 	handler.ServeHTTP(httptest.NewRecorder(), request)
 
@@ -175,11 +176,13 @@ func BenchmarkAccessLog(b *testing.B) {
 		{name: "disabled", level: slog.LevelWarn},
 	} {
 		b.Run(tc.name, func(b *testing.B) {
-			log := slog.New(logctx.New(slog.NewJSONHandler(io.Discard, &slog.HandlerOptions{Level: tc.level})))
+			// The benchmark needs JSON encoding and a configurable enabled level;
+			// slog.DiscardHandler provides neither signal.
+			log := slog.New(logctx.New(slog.NewJSONHandler(io.Discard, &slog.HandlerOptions{Level: tc.level}))) //nolint:sloglint // Benchmark configurable JSON encoding.
 			handler := AccessLog(log, true, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(http.StatusNoContent)
 			}))
-			request := httptest.NewRequest(http.MethodGet, "/health/live", nil)
+			request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/health/live", nil)
 			request.Pattern = "GET /health/live"
 			response := httptest.NewRecorder()
 

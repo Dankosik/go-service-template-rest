@@ -234,10 +234,10 @@ func (s *Supervisor) Shutdown(ctx context.Context) error {
 		}
 
 		if s.stopErr != nil {
-			s.log.Error("background_shutdown_failed", "component", "background", "err", s.stopErr)
+			s.log.ErrorContext(ctx, "background_shutdown_failed", "component", "background", "err", s.stopErr)
 			return
 		}
-		s.log.Info("background_shutdown_completed", "component", "background")
+		s.log.InfoContext(ctx, "background_shutdown_completed", "component", "background")
 	})
 	return s.stopErr
 }

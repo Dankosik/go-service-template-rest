@@ -69,7 +69,7 @@ func TestRateLimitLeavesUnkeyedRequestsAlone(t *testing.T) {
 
 	for range 5 {
 		resp := httptest.NewRecorder()
-		handler.ServeHTTP(resp, httptest.NewRequest(http.MethodGet, "/resource", nil))
+		handler.ServeHTTP(resp, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/resource", nil))
 		if resp.Code != http.StatusOK {
 			t.Fatalf("unkeyed request status = %d, want %d", resp.Code, http.StatusOK)
 		}
@@ -86,7 +86,7 @@ func TestRateLimitExemptsHealthProbes(t *testing.T) {
 
 	for range 10 {
 		resp := httptest.NewRecorder()
-		request := httptest.NewRequest(http.MethodGet, "/health/ready", nil)
+		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/health/ready", nil)
 		request.Header.Set(rateLimitTestHeader, "prober")
 		handler.ServeHTTP(resp, request)
 		if resp.Code != http.StatusOK {
@@ -121,7 +121,7 @@ func TestHeaderRateLimitKeyDoesNotLeakTheCredential(t *testing.T) {
 	const secret = "super-secret-api-key"
 	key := HeaderRateLimitKey(rateLimitTestHeader)
 
-	request := httptest.NewRequest(http.MethodGet, "/resource", nil)
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/resource", nil)
 	request.Header.Set(rateLimitTestHeader, secret)
 
 	got := key(request)
@@ -131,7 +131,7 @@ func TestHeaderRateLimitKeyDoesNotLeakTheCredential(t *testing.T) {
 	if strings.Contains(got, secret) {
 		t.Fatalf("key %q contains the credential", got)
 	}
-	if key(httptest.NewRequest(http.MethodGet, "/resource", nil)) != "" {
+	if key(httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/resource", nil)) != "" {
 		t.Fatal("key for an absent header is not empty")
 	}
 }
@@ -242,13 +242,11 @@ func TestKeyedRateLimiterIsSafeUnderConcurrentKeys(t *testing.T) {
 
 	var waitGroup sync.WaitGroup
 	for worker := range 8 {
-		waitGroup.Add(1)
-		go func() {
-			defer waitGroup.Done()
+		waitGroup.Go(func() {
 			for i := range 200 {
 				limiter.Allow(context.Background(), "w"+strconv.Itoa(worker)+"-"+strconv.Itoa(i%64))
 			}
-		}()
+		})
 	}
 	waitGroup.Wait()
 }
@@ -277,7 +275,7 @@ func okHandler() http.Handler {
 
 func doRateLimitedRequest(handler http.Handler, caller string) *httptest.ResponseRecorder {
 	resp := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodGet, "/resource", nil)
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/resource", nil)
 	request.Header.Set(rateLimitTestHeader, caller)
 	handler.ServeHTTP(resp, request)
 	return resp

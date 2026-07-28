@@ -19,8 +19,8 @@ import (
 // it because the drain needs a way to abandon connections a graceful shutdown
 // gave up on; see forceCloseServers.
 type runtimeServer interface {
-	Serve(net.Listener) error
-	Shutdown(context.Context) error
+	Serve(listener net.Listener) error
+	Shutdown(ctx context.Context) error
 	Close() error
 }
 
@@ -99,12 +99,12 @@ func serveHTTPRuntime(signalCtx context.Context, bootstrapCtx context.Context, a
 	}
 	runErrCh := make(chan serverResult, serverCount)
 	go func() {
-		args.log.Info("http server started", "addr", listener.Addr().String(), "env", args.cfg.App.Env)
+		args.log.InfoContext(bootstrapCtx, "http server started", "addr", listener.Addr().String(), "env", args.cfg.App.Env)
 		runErrCh <- serverResult{name: "http", err: normalizeServeError(args.srv.Serve(listener))}
 	}()
 	if metricsListener != nil {
 		go func() {
-			args.log.Info("metrics server started", "addr", metricsListener.Addr().String(), "env", args.cfg.App.Env)
+			args.log.InfoContext(bootstrapCtx, "metrics server started", "addr", metricsListener.Addr().String(), "env", args.cfg.App.Env)
 			runErrCh <- serverResult{name: "metrics", err: normalizeServeError(args.metricsSrv.Serve(metricsListener))}
 		}()
 	}

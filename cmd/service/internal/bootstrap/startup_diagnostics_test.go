@@ -1,6 +1,7 @@
 package bootstrap
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -155,7 +156,7 @@ func TestDiagnosticsServerKeepsAPIWriteTimeoutWithoutPprof(t *testing.T) {
 func TestDiagnosticsServerNeverServesDefaultServeMux(t *testing.T) {
 	t.Parallel()
 
-	req := httptest.NewRequest(http.MethodGet, "/debug/pprof/", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/debug/pprof/", nil)
 	resp := httptest.NewRecorder()
 	http.DefaultServeMux.ServeHTTP(resp, req)
 	if resp.Code != http.StatusOK {
@@ -177,7 +178,7 @@ func TestDiagnosticsServerNeverServesDefaultServeMux(t *testing.T) {
 // listener publishes for a human or a scraper is GET, so the method is not a
 // parameter.
 func serveDiagnostics(srv *http.Server, path string) *httptest.ResponseRecorder {
-	req := httptest.NewRequest(http.MethodGet, path, nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, path, nil)
 	resp := httptest.NewRecorder()
 	srv.Handler.ServeHTTP(resp, req)
 	return resp

@@ -72,7 +72,7 @@ func TestRejectedCredentialIs401(t *testing.T) {
 	}
 	handler := securedHandler(t, authenticate, defaultAuthenticateChallenge)
 
-	req := httptest.NewRequest(http.MethodGet, "/secret", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/secret", nil)
 	req.Header.Set("Authorization", "Bearer wrong")
 	resp := httptest.NewRecorder()
 	handler.ServeHTTP(resp, req)
@@ -93,7 +93,7 @@ func TestAcceptedCredentialReachesOperation(t *testing.T) {
 	}
 	handler := securedHandler(t, authenticate, defaultAuthenticateChallenge)
 
-	req := httptest.NewRequest(http.MethodGet, "/secret", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/secret", nil)
 	req.Header.Set("Authorization", "Bearer right")
 	resp := httptest.NewRecorder()
 	handler.ServeHTTP(resp, req)
@@ -130,7 +130,7 @@ func TestMalformedRequestStaysBadRequest(t *testing.T) {
 	reject := handleGeneratedRequestError(newTestServiceLogger(&logged), defaultAuthenticateChallenge)
 
 	resp := httptest.NewRecorder()
-	reject(resp, httptest.NewRequest(http.MethodGet, "/x", nil), errors.New("parameter is required"))
+	reject(resp, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/x", nil), errors.New("parameter is required"))
 
 	if resp.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want %d", resp.Code, http.StatusBadRequest)
@@ -149,7 +149,7 @@ func TestOversizedBodyStaysRequestEntityTooLarge(t *testing.T) {
 	reject := handleGeneratedRequestError(slog.New(slog.DiscardHandler), defaultAuthenticateChallenge)
 
 	resp := httptest.NewRecorder()
-	reject(resp, httptest.NewRequest(http.MethodPost, "/x", nil), &http.MaxBytesError{Limit: 1})
+	reject(resp, httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/x", nil), &http.MaxBytesError{Limit: 1})
 
 	if resp.Code != http.StatusRequestEntityTooLarge {
 		t.Fatalf("status = %d, want %d", resp.Code, http.StatusRequestEntityTooLarge)

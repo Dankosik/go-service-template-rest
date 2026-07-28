@@ -34,7 +34,7 @@ func TestRouterGetArticle(t *testing.T) {
 	router := mustNewRouter(t, service)
 
 	response := httptest.NewRecorder()
-	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/articles/"+want.Slug, nil))
+	router.ServeHTTP(response, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/articles/"+want.Slug, nil))
 
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusOK, response.Body.String())
@@ -91,7 +91,7 @@ func TestRouterMapsMissingArticleToProblem(t *testing.T) {
 	router := mustNewRouter(t, service)
 
 	response := httptest.NewRecorder()
-	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/articles/missing", nil))
+	router.ServeHTTP(response, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/articles/missing", nil))
 
 	if response.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusNotFound, response.Body.String())
@@ -116,7 +116,7 @@ func TestRouterRejectsInvalidSlugBeforeUseCase(t *testing.T) {
 	router := mustNewRouter(t, service)
 
 	response := httptest.NewRecorder()
-	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/v1/articles/INVALID", nil))
+	router.ServeHTTP(response, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/articles/INVALID", nil))
 
 	if response.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusBadRequest, response.Body.String())
@@ -245,7 +245,7 @@ func writeTestProblem(w http.ResponseWriter, body openapi.Problem) {
 func postArticle(t *testing.T, router http.Handler, token, body string) *httptest.ResponseRecorder {
 	t.Helper()
 
-	request := httptest.NewRequest(http.MethodPost, "/api/v1/articles", strings.NewReader(body))
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/articles", strings.NewReader(body))
 	request.Header.Set("Content-Type", "application/json")
 	if token != "" {
 		request.Header.Set("Authorization", "Bearer "+token)
@@ -279,7 +279,7 @@ func TestRouterCreateArticleReturnsCreatedWithLocation(t *testing.T) {
 
 	// A created article must be readable through the public operation.
 	read := httptest.NewRecorder()
-	router.ServeHTTP(read, httptest.NewRequest(http.MethodGet, "/api/v1/articles/clear-owners", nil))
+	router.ServeHTTP(read, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/articles/clear-owners", nil))
 	if read.Code != http.StatusOK {
 		t.Fatalf("read-back status = %d, want %d; body = %s", read.Code, http.StatusOK, read.Body.String())
 	}

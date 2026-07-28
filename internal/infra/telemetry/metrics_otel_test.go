@@ -74,7 +74,7 @@ func TestSetupMetricsUsesPrivateRegistryAndConfigResource(t *testing.T) {
 		t.Fatalf("ambient OTEL_RESOURCE_ATTRIBUTES was discarded instead of merged\n%s", metricsText)
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/metrics", nil)
 	req.Header.Set("Accept", "application/openmetrics-text; version=1.0.0")
 	resp := httptest.NewRecorder()
 	metrics.Handler().ServeHTTP(resp, req)

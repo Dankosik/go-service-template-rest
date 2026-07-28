@@ -2,6 +2,7 @@ package httpx
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -36,7 +37,7 @@ func TestRouterAddsRequestIDHeader(t *testing.T) {
 
 		const wantRequestID = "demo-123"
 
-		req := httptest.NewRequest(http.MethodGet, "/health/live", nil)
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/health/live", nil)
 		req.Header.Set(requestIDHeader, wantRequestID)
 		resp := httptest.NewRecorder()
 
@@ -57,7 +58,7 @@ func TestRouterAddsRequestIDHeader(t *testing.T) {
 		}, telemetry.New(), RouterConfig{})
 		const invalidRequestID = "user@example.com"
 
-		req := httptest.NewRequest(http.MethodGet, "/does-not-exist", nil)
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/does-not-exist", nil)
 		req.Header.Set(requestIDHeader, invalidRequestID)
 		resp := httptest.NewRecorder()
 
@@ -97,7 +98,7 @@ func TestRouterAddsRequestIDHeader(t *testing.T) {
 
 		tooLongRequestID := strings.Repeat("a", 129)
 
-		req := httptest.NewRequest(http.MethodGet, "/health/live", nil)
+		req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/health/live", nil)
 		req.Header.Set(requestIDHeader, tooLongRequestID)
 		resp := httptest.NewRecorder()
 
