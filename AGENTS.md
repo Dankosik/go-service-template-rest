@@ -102,7 +102,7 @@ Structured and orchestrated work follows the workflow router's [Required Spine](
 
 ## Implementation And Evidence
 
-- During implementation, follow the phase-owned [Acceptance Posture](docs/spec-first-workflow/phases/implementation-validation-closeout.md#acceptance-posture), [Progress](docs/spec-first-workflow/phases/implementation-validation-closeout.md#progress), [Scope Lock](docs/spec-first-workflow/phases/implementation-validation-closeout.md#scope-lock), [Correction Loop](docs/spec-first-workflow/phases/implementation-validation-closeout.md#correction-loop), and [Diagnostic Gate](docs/spec-first-workflow/phases/implementation-validation-closeout.md#diagnostic-gate). That phase owns root-local versus Worker execution, inspection before editing, proof reuse, acceptance, and integration. A real blocker ends implementation and is reported.
+- During implementation, follow the phase-owned [Acceptance Posture](docs/spec-first-workflow/phases/implementation-validation-closeout.md#acceptance-posture) and the matching execution branch: [Local Execution](docs/spec-first-workflow/phases/implementation-validation-closeout.md#local-execution) for direct work, or [Worker Execution](docs/spec-first-workflow/phases/implementation-validation-closeout.md#worker-execution) for structured or orchestrated ledger work. The Worker branch owns its scope, progress, correction, diagnostic, acceptance, and integration rules. The phase owns inspection before editing, proof reuse, acceptance, and integration. A real blocker ends implementation and is reported.
 
 ## Validation Matrix
 

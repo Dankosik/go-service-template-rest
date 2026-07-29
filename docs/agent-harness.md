@@ -131,7 +131,7 @@ root's output style, or the root's auto memory. Its context window is sized by
 its own model, so delegating to a smaller model gives that lane a smaller
 window.
 
-This is why [Route Discovery Stays Root-Local](spec-first-workflow/phases/implementation-validation-closeout.md#route-discovery-stays-root-local) is a rule and not a preference: nothing the root learned reaches the lane except through the accepted ledger entry or dispatch. `/subtask` forks are the one exception — a fork inherits the parent conversation and its exact tool pool — but a fork continues one line of reasoning rather than opening an independent lane, so it is not a substitute for a Worker.
+This is why [Execution-Ready Dispatch](spec-first-workflow/phases/implementation-worker-execution.md#execution-ready-dispatch) is a rule and not a preference: nothing the root learned reaches the lane except through the accepted ledger entry or dispatch. `/subtask` forks are the one exception — a fork inherits the parent conversation and its exact tool pool — but a fork continues one line of reasoning rather than opening an independent lane, so it is not a substitute for a Worker.
 
 ### Monitor
 

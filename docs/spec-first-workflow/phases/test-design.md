@@ -17,9 +17,13 @@ Turn risky behavior into explicit proof obligations before implementation. Keep 
 
 ## Method
 
-Before writing scenarios, disposition every material acceptance claim, invariant, state transition, failure mode, and protected side effect affected by the change as existing sufficient proof, existing proof to strengthen, one or more `TD-*` scenarios, a named non-test proof that can falsify the claim, or an explicitly authorized residual-risk acceptance with evidence, owner, and reopen condition. Omission is not disposition. Derive this proof surface from approved behavior and affected contract, runtime, state, trust, and lifecycle boundaries, not from existing test names or implementation branches.
+Run this universal kernel before applying any conditional branch:
 
-For each resulting proof obligation, design the smallest falsifier: a controlled setup/action/failure trigger plus an oracle that rejects a plausible incorrect observable result, state, emission, or side effect. Then select the narrowest complementary proving level and runnable command that can establish that oracle.
+1. Inventory every affected material acceptance claim, invariant, state transition, failure mode, and protected side effect from approved behavior and the affected contract, runtime, state, trust, and lifecycle boundaries.
+2. Give each proof obligation exactly one current disposition: sufficient existing proof; existing proof to strengthen; one or more `TD-*` scenarios; a named non-test falsifier; or explicitly authorized residual-risk acceptance with evidence, owner, and reopen condition. Omission is not disposition.
+3. For every disposition except residual-risk acceptance, verify or design the smallest falsifier: a controlled setup/action/failure trigger plus an oracle that rejects a plausible incorrect observable result, state, emission, or side effect. Select the narrowest complementary proof boundary or type and runnable command that can establish that oracle.
+
+### Conditional Branches
 
 Source or instruction text is not a behavioral oracle merely because a string
 is present or absent. For scripts and workflows, exercise controlled behavior
@@ -44,11 +48,13 @@ repository completion only to triggered repository-native gates.
 
 ## Outputs
 
-When a durable matrix is unnecessary, return a compact inline proof handoff for Planning. Otherwise create `test-plan.md` with the canonical row shape:
+When a durable matrix is unnecessary, return a compact inline proof handoff for Planning. Otherwise create `test-plan.md` and give each proof obligation one compact row:
 
 ```text
-TD-ID | source claim/risk | scenario class | current proof/gap | proof boundary/type | controlled setup/action/failure trigger | oracle: result plus relevant state/emissions/forbidden side effects | fail-before/regression discriminator or phase-allowed reason unavailable | proof command/family | residual gap/reopen owner
+TD-ID | source claim/risk | disposition | smallest falsifier: controlled setup/action/failure trigger plus oracle, or authorized residual-risk acceptance | proof boundary/type plus command/family when executable | Planning handoff/reopen owner
 ```
+
+Add current-proof gaps, scenario classes, fail-before discriminators, unavailable proof inputs, non-test proof details, and residual-risk details only when the corresponding branch is triggered.
 
 Choose the smallest set of complementary proof boundaries that jointly proves the claim: unit, integration, contract, component/process, e2e smoke, or a repository-specific proof type. Each level owns a distinct observable; broader proof does not merely duplicate narrower proof. Include happy path, material failure/edge/negative paths, and protected-domain branches only when triggered by the accepted change.
 
@@ -66,7 +72,7 @@ Apply focused root self-review when test design is triggered. Run independent QA
 
 The reviewer returns one verdict under the shared convergence contract:
 
-- `PASS`: every material risk has a credible, owned, executable proof path or an authorized recorded acceptance with evidence, owner, and reopen condition, and no affected lens is uncovered;
+- `PASS`: every proof obligation has one valid disposition from the universal kernel; every executable proof disposition is credible, owned, and command-addressable; every residual-risk acceptance has authorization evidence, an owner, and a reopen condition; and no affected lens is uncovered;
 - `CONCERNS`: a bounded downstream proof obligation may move after its owner, observable, and reopen condition are recorded and no test-strategy decision remains open;
 - `FAIL`: a missing scenario, observable, proof level, feasible command path, owner, or upstream decision prevents honest planning.
 
@@ -74,6 +80,6 @@ When test design owns that review, findings return to the owning root for dispos
 
 ## Stop Rule
 
-Continue to planning when every material acceptance claim, invariant, transition, failure mode, and protected side effect is dispositioned as sufficient existing proof, an owned executable proof path, a named non-test falsifier, or an explicitly authorized residual-risk acceptance with evidence, owner, and reopen condition, and any triggered review has returned `PASS` or dispositioned `CONCERNS`. Reopen specification/design when a scenario cannot be written without deciding behavior, failure policy, ownership, or rollout.
+Continue to Planning when every proof obligation has one final disposition from the universal kernel, each proof required by the accepted current completion is executable, and the inline handoff or `test-plan.md` lets Planning place that proof without choosing a scenario, oracle, proving level, command, or owner. Any triggered review must have returned `PASS` or dispositioned `CONCERNS`.
 
-Do not create a test plan whose only content is headings or generic “add coverage” tasks.
+Reopen specification or design when a proof obligation cannot be closed without deciding behavior, failure policy, ownership, or rollout.

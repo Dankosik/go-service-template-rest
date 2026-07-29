@@ -18,63 +18,7 @@ Trace each material flow from actor or trigger through caller-visible completion
 
 ## Method
 
-Reconstruct every material flow, then trace actor/trigger -> ingress/producer -> ordered runtime hops -> storage/broker -> affected consumers and side effects -> caller-visible completion or durable finality. Activate only the triggered architecture, contract, exact-byte, release-graph, and fan-out branches below.
-
-## Go Runtime Closure
-
-For a material flow entering or changing Go runtime code, classify only the
-triggered pressures: mechanism- or proof-changing context budgets; goroutine
-owner, stop, unblock, and join; error identity across layers; body, rows, file,
-transaction, timer, or shutdown lifetime; mutable publication; and canonical or
-generated authority. Apply the matching Go methods to close those pressures.
-Exact package and file placement remains owned by Go Code / Ownership Design.
-
-## Outputs
-
-When the shared [persistence trigger](../shared/artifact-model.md#when-to-persist) applies, use `design/overview.md` or one focused file. Split contracts, data, sequence, or rollout only when that creates a useful review/ownership boundary.
-
-For each material mechanism decision, record the selected mechanism, accepted decision drivers, supporting current evidence, bounded assumptions, a measurable acceptance boundary, material consequences for failure, operations, and rollout, required proof, and the reopen condition. When existing behavior changes, distinguish observed current state from the selected target state and name what is retained, replaced, or removed. Use the questions below as coverage checks; omit unaffected domains.
-
-- What target-state component/runtime topology, system-level dependency direction, and invariant/write/process ownership are required, and which surfaces are derived?
-- What accepted caller-completion/finality and consistency semantics, workload, and critical path determine request-path versus background work, sync/async interactions, capacity, latency/throughput/resource budgets, backpressure, and load shedding?
-- What is the happy-path sequence and each material failure/partial-work branch?
-- What are timeout, cancellation, retry/no-retry, idempotency, cleanup, recovery, and degraded-mode rules?
-- What contract, schema, cache, consistency, retention, or mixed-version behavior changes?
-- What security, tenant, secret, abuse, observability, and cardinality boundaries matter?
-- For any transition, what target authority, mixed-version checkpoints, reconciliation, exit/removal proof, rollback limit, and owner bound it?
-- When a real live fork exists, which surviving viable simpler or established alternatives were rejected, and why? Do not manufacture options for completeness.
-
-## Architecture Rule
-
-When one of those system decisions is live, apply `go-system-architecture` to the affected boundary and satisfy its completion criterion. Otherwise keep this phase compact.
-
-## Performance Rule
-
-When a material flow's work can grow with input or data cardinality, traffic,
-round trips, serialization or copies, fan-out, retained memory, or contention,
-or when an accepted latency, throughput, capacity, or resource objective applies,
-use the `go-performance` Decision branch before mechanism closure. Close the
-representative workload and scale boundary, critical path and amplification
-shape, accepted budget or structural constraint, least-complex viable option,
-claim-matched proof, and reopen owner. Prefer eliminating, batching, or bounding
-work before cache, concurrency, pooling, PGO, or custom machinery. When a numeric
-target is unavailable, use an evidence-bounded `constraint_only` disposition if
-it closes the implementation fork; otherwise reopen the target's owner instead
-of inventing a budget.
-
-## Contract Rule
-
-When a caller-visible API, generated contract, event, or material shared interface changes, decide the semantics before implementation:
-
-- audience/owner and trust boundary;
-- request/message, response/result, error/status, validation, and limits;
-- retry, idempotency, concurrency, async, freshness, and compatibility behavior where relevant;
-- canonical source and generated outputs;
-- proof and migration/deprecation consequences.
-
-When canonicalization, hashing, signing, or verification depends on a data shape, close it at byte level: exact schema, field order, requiredness/nullability, bounds, exact bytes covered by canonicalization, digest, or signature, and at least one deterministic non-secret golden vector. When keyed signing or verification applies, also define public trust-material lookup and rotation. A metamodel or prose field list is insufficient. Environment-owned keys or trust data follow the router's [implementation-input closure](../../spec-first-workflow.md#implementation-input-closure); do not persist production secrets or private keys in repository artifacts.
-
-Design against an external platform or service requires current official contract evidence. When integration shape or operational fit is non-obvious, also consume credible real implementations or engineering writeups for proven patterns and failure modes. Do not infer current external behavior from model memory. `design/contracts/` is optional context; it never replaces the runtime OpenAPI/event/proto source.
+Reconstruct every material flow before choosing a mechanism. Trace actor/trigger -> ingress/producer -> ordered runtime and storage/broker hops -> every affected consumer and side effect -> caller-visible completion or durable finality. Then apply only a branch whose explicit trigger matches evidence from that trace.
 
 ## Interaction And Data Flow
 
@@ -88,6 +32,40 @@ For each material flow, record only decisions implementation must not invent:
 
 When a durable design artifact is required, add a Mermaid diagram only when compact text is insufficient for a reviewer to validate ordering, ownership, fan-out, recovery, or transformation. Use `sequenceDiagram` for temporal request/event ordering and `flowchart` for topology or data transformation. The diagram is a review aid; it must agree with the normative text and canonical contracts and must not become another source of truth.
 
+## Outputs
+
+When the shared [persistence trigger](../shared/artifact-model.md#when-to-persist) applies, use `design/overview.md` or one focused file. Split contracts, data, sequence, or rollout only when that creates a useful review/ownership boundary.
+
+For each material mechanism decision, record the selected mechanism, decision drivers and current evidence, bounded assumptions, a measurable acceptance boundary, material consequences for failure, operations, and rollout, required proof, and the reopen condition. When behavior changes, distinguish observed current state from the target state and name what is retained, replaced, or removed. The material-flow record is the universal coverage check; add only branch-specific decisions whose trigger matches.
+
+## Go Runtime Closure
+
+When a material flow enters or changes Go runtime code, apply [Go Change Surface](../../../AGENTS.md#go-change-surface) only to pressures that can change the system mechanism or required proof. Leave package/file placement to [Go Code / Ownership Design](go-code-ownership-design.md); changed-code conformance remains owned by [Implementation / Validation / Closeout](implementation-validation-closeout.md).
+
+## Architecture Rule
+
+When a material boundary crossing changes component/runtime authority, source of truth, sync/async interaction, consistency, failure ownership, or migration, apply `go-system-architecture` to that crossing and satisfy its completion criterion. Otherwise keep the flow in the universal kernel.
+
+## Performance Rule
+
+When a material flow is scale-sensitive—its work grows with input or data cardinality, traffic, round trips, serialization or copies, fan-out, retained memory, or contention—or has an accepted latency, throughput, capacity, or resource objective, apply the `go-performance` Decision branch before mechanism closure and satisfy its completion criterion. If evidence cannot support a numeric budget, use an evidence-bounded `constraint_only` disposition only when it closes the implementation fork; otherwise reopen the budget owner.
+
+## Contract Rule
+
+When a caller-visible API, generated contract, event, or material shared interface changes, decide the semantics before implementation:
+
+- audience/owner and trust boundary;
+- request/message, response/result, error/status, validation, and limits;
+- retry, idempotency, concurrency, async, freshness, and compatibility behavior where relevant;
+- canonical source and generated outputs;
+- proof and migration/deprecation consequences.
+
+Route client-visible REST semantics to `go-api-contract`, durable event and replay semantics to `go-distributed`, and trust material, signing, tenant, secret, or abuse policy to `go-security`; keep this section's canonical-source, exact-byte, and external-evidence rules authoritative across those handoffs.
+
+When canonicalization, hashing, signing, or verification depends on a data shape, close it at byte level: exact schema, field order, requiredness/nullability, bounds, exact bytes covered by canonicalization, digest, or signature, and at least one deterministic non-secret golden vector. When keyed signing or verification applies, also define public trust-material lookup and rotation. A metamodel or prose field list is insufficient. Environment-owned keys or trust data follow the router's [implementation-input closure](../../spec-first-workflow.md#implementation-input-closure); do not persist production secrets or private keys in repository artifacts.
+
+Design against an external platform or service requires current official contract evidence. When integration shape or operational fit is non-obvious, also consume credible real implementations or engineering writeups for proven patterns and failure modes. Do not infer current external behavior from model memory. `design/contracts/` is optional context; it never replaces the runtime OpenAPI/event/proto source.
+
 ## System Release Closure
 
 When the accepted outcome spans multiple deployables, repositories, or managed dependencies, derive the smallest affected deployment graph and its integrated release proof from the documented material flows. Close that graph as one system rather than treating each repository as independently complete. Keep the result inline unless the shared persistence trigger requires a durable design artifact.
@@ -100,12 +78,8 @@ An unverified cross-region or otherwise remote latency-sensitive path is a block
 
 ## Fan-Out And Review
 
-At phase entry, identify the materially affected domains: architecture/topology, domain behavior, contract, data, security, reliability/distributed flow, observability/performance, and delivery/rollout. Apply each matching method locally by default. A separate lane is triggered only for one concrete bounded independent question that can change a material design decision or its required evidence, under the shared [Delegation Decision](../shared/subagents-and-handoff.md#delegation-decision). Do not run unaffected lenses, and do not turn the number of affected domains into a required lane count.
-
-Parallelize only concrete bounded questions that can be answered independently and can change a material design decision or its required evidence; keep dependent decisions sequential and synthesize all results before selecting the mechanism.
-
-Apply focused root self-review after the system and Go-ownership decisions are complete. Run independent [Technical Design Review](technical-design-review.md) only when the shared review trigger applies; repair and fresh review are required only for `FAIL` or a material repair.
+After the material-flow trace identifies affected domains, apply the matching methods under [Routing](../../../AGENTS.md#routing) locally. Load the shared [Delegation Decision](../shared/subagents-and-handoff.md#delegation-decision) only when considering a separate lane, and [Technical Design Review](technical-design-review.md) only when the shared review trigger applies. Keep dependent decisions sequential and synthesize every material lane result before selecting the mechanism. Apply focused root self-review after system and Go-ownership decisions are complete.
 
 ## Stop Rule
 
-Continue to Go ownership only when every material flow is traceable in order from actor/trigger through owners, contracts and data authority, runtime sequence, and failure/recovery to caller-visible completion or durable finality, and package/file placement will not reopen a material system decision. Continue to test design or planning after Go ownership and any triggered review have reached `PASS` or dispositioned `CONCERNS`. Reopen the narrowest upstream evidence or decision owner when a missing fact, unset decision, or untraceable material flow can change accepted behavior, ownership, mechanism choice, or proof feasibility; when that owner is external, report the blocker and narrow the completion claim.
+Continue to Go ownership only when [Interaction And Data Flow](#interaction-and-data-flow) is complete for every material flow and package/file placement cannot reopen a material system decision. Continue to test design or planning after Go ownership and any triggered review have reached `PASS` or dispositioned `CONCERNS`. Reopen the narrowest upstream evidence or decision owner when a missing fact, unset decision, or untraceable material flow can change accepted behavior, ownership, mechanism choice, or proof feasibility; when that owner is external, report the blocker and narrow the completion claim.

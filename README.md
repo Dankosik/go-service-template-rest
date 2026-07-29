@@ -78,12 +78,12 @@ it. Be deliberate about that, because a generated service owns all of it:
 
 | Inherited | Size |
 | --- | --- |
-| `.agents/skills/` | 39 skills, 358 files, ~20,600 lines, 2.1 MB |
+| `.agents/skills/` | 35 skills, 304 files, ~17,200 lines, 1.7 MB |
 | `.codex/agents/`, `.claude/agents/`, `.qwen/agents/` | 18 specialist definitions each |
-| `docs/` | 25 files, ~3,400 lines |
+| `docs/` | 29 files, ~4,600 lines |
 
-Across the repository that is roughly 409 Markdown files and 23,700 lines of
-prose against about 17,900 lines of Go. If your team is going to drive changes
+Across the repository that is roughly 383 Markdown files and 22,600 lines of
+prose against about 27,600 lines of Go. If your team is going to drive changes
 through Codex, Claude Code, or Qwen, that content is the point of this template
 and the largest thing it gives you. If not, plan to delete it: keep
 [`AGENTS.md`](AGENTS.md) and `docs/`, and drop `.agents/`, `.codex/`,

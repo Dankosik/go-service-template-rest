@@ -1,18 +1,20 @@
 # Specification Review
 
+Review the fixed candidate through one kernel:
+reconstruct -> falsify -> disposition -> verdict.
+
 Apply the shared [Review
 Independence](../shared/subagents-and-handoff.md#review-independence) contract.
-That shared contract owns the generic review envelope and convergence; this file
-supplies only Specification-specific affected-surface reconstruction,
-falsification lenses, finding fields, and verdict consequences.
+That shared contract owns review triggering, the generic finding envelope,
+verdict semantics, convergence, read-only boundaries, and return routing. This
+file owns only Specification-specific affected-surface reconstruction,
+falsifiers, evidence anchors, and completion coverage.
 
 ## Read When
 
-- The user requests an independent spec review.
-- Structured or orchestrated work has a completed specification.
-- The spec is high-impact, hard to reverse, ambiguous, cross-owner, or otherwise
-  difficult for its author to falsify credibly.
-- A repaired spec needs confirmation that a prior blocker is closed.
+- The shared Review Independence contract selects or requires independent review
+  of a fixed specification.
+- The user explicitly requests a standalone independent specification review.
 
 ## Inputs
 
@@ -23,24 +25,16 @@ falsification lenses, finding fields, and verdict consequences.
 
 ## Outputs
 
-Add these Specification-specific fields to the shared review envelope:
+Use the shared [Review Finding
+Envelope](../shared/subagents-and-handoff.md#review-finding-envelope). For
+Specification, anchor each surviving finding to the fixed candidate and the
+contradicting evidence or omitted affected surface.
 
-- spec anchor and evidence;
-- downstream impact;
-- smallest Specification repair or upstream reopen target.
-
-Verdict consequences:
-
-- `PASS`: within the stated evidence boundary, no readiness gap, current-phase
-  defect, unowned question, or uncovered affected lens remains.
-- `CONCERNS`: a bounded risk or proof obligation may move after its downstream
-  owner, observable, and reopen condition are recorded and no specification
-  decision remains open; no fresh review is required for that disposition.
-- `FAIL`: a missing or contradictory decision prevents honest design/planning.
+A surviving finding is Specification-blocking when it exposes a missing or
+contradictory Specification-owned decision that would force design or planning
+to invent product meaning.
 
 ## Review Method
-
-Review the fixed candidate through one kernel: reconstruct -> falsify -> disposition -> verdict.
 
 Reconstruct the affected behavior surface independently from the accepted
 brief, relevant research, current runtime/generated contracts, and repository
@@ -51,16 +45,12 @@ evidence-bounded verdict on the current candidate.
 
 Try to falsify the spec with the smallest decision-changing questions:
 
-- Do material rules expose the context, trigger, preconditions, observable
-  outcome, and applicable failure/absence/replay/recovery semantics needed to
-  prevent downstream invention?
-- Does a branching policy, lifecycle, interpretation-sensitive rule, or quality
-  target use the smallest representation needed to remove ambiguity?
-- Are factual claims grounded, normative choices explicitly accepted,
-  inferences and assumptions labeled, and missing or conflicting evidence
-  explicit?
-- Are invariants, authority/source-of-truth ownership, compatibility, failure
-  expectations, and proof feasible where relevant?
+- Which material affected surface reconstructed outside the candidate is
+  omitted, contradicted, or unsupported enough that design or planning must
+  invent product meaning?
+- Which decision-changing claim, authority, invariant, compatibility or failure
+  expectation, or proof obligation fails against a named current source or
+  lacks a feasible falsifier?
 - Does a non-goal, risk acceptance, or proof obligation hide a decision the spec
   must make now?
 - Could two reasonable downstream implementations satisfy the wording yet
@@ -69,10 +59,11 @@ Try to falsify the spec with the smallest decision-changing questions:
 
 Report only findings that can change readiness or required proof. Do not block
 on writing style, optional detail, or a lens independently shown not to be
-triggered. The review stays read-only; repairs belong to the owning author.
+triggered.
 
 ## Stop Rule
 
-For an internal checkpoint, return the complete review result to the owning root
-under the shared Review Independence contract. For an explicitly requested
-standalone review, return the complete result to the user and stop read-only.
+Stop when every independently reconstructed material affected surface has been
+tested, every surviving readiness or required proof issue is anchored, and one
+evidence-bounded verdict covers the fixed candidate. Return routing follows the
+shared contract.
