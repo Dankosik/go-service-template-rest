@@ -100,7 +100,7 @@ if ((failed != 0)); then
 fi
 
 template_sync_behavior_check() (
-	local fixture template target target_with_link outside sync_script
+	local fixture template target target_with_link outside sync_script check_output
 	fixture=$(mktemp -d "${TMPDIR:-/tmp}/template-sync-check.XXXXXX")
 	trap 'rm -rf -- "${fixture}"' EXIT
 	template="${fixture}/template"
@@ -116,6 +116,8 @@ template_sync_behavior_check() (
 	git -C "${template}" add template-owned.paths owned/version
 	git -C "${template}" -c user.name=template-sync-check -c user.email=template-sync-check@example.invalid commit -qm v1
 	git clone -q "${template}" "${target}"
+	git -C "${target}" config user.name template-sync-check
+	git -C "${target}" config user.email template-sync-check@example.invalid
 	printf 'template legacy\n' >"${target}/.template-sync"
 	git -C "${target}" add .template-sync
 	git -C "${target}" -c user.name=template-sync-check -c user.email=template-sync-check@example.invalid commit -qm legacy-receipt
@@ -174,7 +176,10 @@ template_sync_behavior_check() (
 		return 1
 	}
 	mkdir "${template}/owned/empty"
-	bash "${sync_script}" --check --from "${template}" --repo "${target}" >/dev/null
+	if ! check_output=$(bash "${sync_script}" --check --from "${template}" --repo "${target}" 2>&1); then
+		printf '%s\n' "${check_output}" >&2
+		return 1
+	fi
 
 	git clone -q "${template}" "${target_with_link}"
 	printf 'outside\n' >"${outside}/sentinel"

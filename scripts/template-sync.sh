@@ -202,10 +202,10 @@ diff_entry() {
 			printf '  + %s (absent in target)\n' "${entry}"
 			return 1
 		fi
-		local delta
-		delta=$(rsync -a --checksum --delete --prune-empty-dirs --dry-run --itemize-changes \
-			"${source%/}/" "${destination}/" 2>&1 || true)
-		[[ -z "${delta}" ]] && return 0
+		local delta status=0
+		delta=$(git diff --no-ext-diff --no-index --name-status -- "${source%/}" "${destination}" 2>&1) || status=$?
+		((status == 0)) && return 0
+		((status == 1)) || fail "could not compare ${entry}: ${delta}"
 		printf '%s\n' "${delta}" | sed "s|${source_root}/||g; s|${repo}/||g; s|^|  |"
 		return 1
 	fi
@@ -224,7 +224,7 @@ apply_entry() {
 	local repo="$1" entry="$2" source="${source_root}/$2"
 	if [[ "${entry}" == */ ]]; then
 		mkdir -p "${repo}/${entry%/}"
-		rsync -a --checksum --delete --prune-empty-dirs "${source%/}/" "${repo}/${entry%/}/"
+		rsync -a --checksum --no-times --delete --prune-empty-dirs "${source%/}/" "${repo}/${entry%/}/"
 		return
 	fi
 	mkdir -p "$(dirname -- "${repo}/${entry}")"
