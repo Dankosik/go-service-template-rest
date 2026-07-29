@@ -414,8 +414,7 @@ type responseBody struct {
 
 func (b *responseBody) Read(p []byte) (int, error) {
 	n, err := b.ReadCloser.Read(p)
-	var maxBytesErr *http.MaxBytesError
-	if errors.As(err, &maxBytesErr) {
+	if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
 		_ = b.Close()
 		return n, &ResponseTooLargeError{Limit: b.limit}
 	}

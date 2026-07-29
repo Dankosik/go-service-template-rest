@@ -413,8 +413,7 @@ func TestClientEnforcesDecodedLimitPropagatesTraceAndRejectsRedirect(t *testing.
 	if got, want := string(body), "decoded"; got != want {
 		t.Fatalf("decoded body = %q, want %q", got, want)
 	}
-	var tooLarge *ResponseTooLargeError
-	if !errors.As(readErr, &tooLarge) {
+	if _, ok := errors.AsType[*ResponseTooLargeError](readErr); !ok {
 		t.Fatalf("decoded body error = %v, want ResponseTooLargeError", readErr)
 	}
 	if err := response.Body.Close(); err != nil {

@@ -14,7 +14,7 @@ import (
 // machine that exports one would otherwise change what these assert.
 // t.Setenv forbids t.Parallel, so these run sequentially.
 //
-//nolint:tparallel,paralleltest // ambient env control is process-wide state.
+//nolint:paralleltest // ambient env control is process-wide state.
 func TestBuildTraceExporterOptions(t *testing.T) {
 	t.Run("not configured", func(t *testing.T) {
 		telemetrytest.ClearAmbientExporterEnv(t)
@@ -130,7 +130,7 @@ func TestBuildTraceExporterOptions(t *testing.T) {
 	})
 }
 
-//nolint:tparallel,paralleltest // ambient env control is process-wide state.
+//nolint:paralleltest // ambient env control is process-wide state.
 func TestTraceOTLPEndpointRedactsInvalidAndSecretBearingEndpoints(t *testing.T) {
 	testCases := []struct {
 		name    string

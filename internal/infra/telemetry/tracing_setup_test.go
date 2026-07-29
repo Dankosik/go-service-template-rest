@@ -639,5 +639,3 @@ func exportOneGlobalSpan(t *testing.T, name string) {
 		t.Fatalf("force flush trace provider: %v", err)
 	}
 }
-
-//nolint:tparallel // Top-level t.Parallel would make the t.Setenv subtest invalid.

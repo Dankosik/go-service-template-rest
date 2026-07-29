@@ -150,6 +150,8 @@ type OTelExporterConfig struct {
 }
 
 // profile:database-postgres:start
+
+// PostgresConfig defines PostgreSQL connection, migration, and pool settings.
 type PostgresConfig struct {
 	Enabled                   bool          `koanf:"enabled"`
 	DSN                       string        `koanf:"dsn"`

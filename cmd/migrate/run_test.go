@@ -258,9 +258,12 @@ func TestResolveMigrationSourceReportsEmptyDirectory(t *testing.T) { //nolint:pa
 func TestResolveMigrationSourceReportsAbsentDirectories(t *testing.T) { //nolint:paralleltest // t.Chdir cannot run in parallel.
 	t.Chdir(t.TempDir())
 
-	_, _, _, err := resolveMigrationSourceFrom("image-migrations")
+	sourceFS, sourcePath, found, err := resolveMigrationSourceFrom("image-migrations")
 	if !errors.Is(err, errMigrationSourceMissing) {
 		t.Fatalf("resolveMigrationSourceFrom() error = %v, want %v", err, errMigrationSourceMissing)
+	}
+	if sourceFS != nil || sourcePath != "" || found {
+		t.Fatalf("resolveMigrationSourceFrom() = (%T, %q, %t), want zero values on error", sourceFS, sourcePath, found)
 	}
 	for _, want := range []string{"image-migrations", localMigrationSourcePath} {
 		if !strings.Contains(err.Error(), want) {
@@ -272,9 +275,12 @@ func TestResolveMigrationSourceReportsAbsentDirectories(t *testing.T) { //nolint
 func TestResolveMigrationSourcePropagatesDirectoryReadFailure(t *testing.T) { //nolint:paralleltest // t.Chdir cannot run in parallel.
 	t.Chdir(t.TempDir())
 
-	_, _, _, err := resolveMigrationSourceFrom("\x00")
+	sourceFS, sourcePath, found, err := resolveMigrationSourceFrom("\x00")
 	if err == nil {
 		t.Fatal("resolveMigrationSourceFrom() error = nil, want directory read failure")
+	}
+	if sourceFS != nil || sourcePath != "" || found {
+		t.Fatalf("resolveMigrationSourceFrom() = (%T, %q, %t), want zero values on error", sourceFS, sourcePath, found)
 	}
 	if !strings.Contains(err.Error(), "read migration directory") {
 		t.Fatalf("resolveMigrationSourceFrom() error = %q, want source context", err.Error())

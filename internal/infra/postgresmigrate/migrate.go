@@ -199,8 +199,7 @@ func joinMigrationContextError(operation string, operationErr, contextErr error)
 }
 
 func migrationOperationError(operation string, err error) error {
-	var dirty migrate.ErrDirty
-	if errors.As(err, &dirty) {
+	if dirty, ok := errors.AsType[migrate.ErrDirty](err); ok {
 		return fmt.Errorf(
 			"%s: postgres migration state is dirty at version %d; automatic force is disabled; repair and verify the schema, then follow docs/railway-deployment-profile.md: %w",
 			operation,
