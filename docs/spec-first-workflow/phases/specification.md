@@ -50,13 +50,12 @@ Specification owns observable scope, behavior, policy, authority, and source-of-
 Derive the affected behavior surface from the accepted brief, relevant
 research, current runtime/generated contracts, and repository or consumer
 surfaces the accepted outcome can affect; do not infer coverage only from what
-an existing spec already mentions. For each material lens, decide whether it
-is decided now, preserves an unchanged invariant, carries a named constraint or
-proof consequence, is not triggered for a concrete reason, or is blocked by a
-named evidence or decision owner. A blocked disposition is non-ready and follows
-the existing reopen rules; it cannot satisfy the Decision Bar.
-Persist this inventory only when it changes an action, verdict, handoff, or
-resume decision.
+an existing spec already mentions. Start with the behavior delta and important
+unchanged invariants. Consider an additional lens only when current evidence
+shows it can change that meaning, constrain it, or alter required proof. For
+each triggered lens, record the decision, unchanged constraint, proof
+consequence, or named reopen owner. Persist this inventory only when it changes
+an action, verdict, handoff, or resume decision.
 
 For each material rule, state only the parts that can change interpretation:
 actor or context, trigger or input, preconditions, rule or invariant, state and
@@ -66,7 +65,8 @@ falsifier or proof expectation. Keep each rule unambiguous and observable at the
 correct ownership level; define decision-changing terms, units, and bounds. Use
 stable rule IDs only when multiple owners or downstream artifacts need them.
 
-Choose the smallest representation that removes ambiguity:
+Use plain prose by default. When a material rule remains ambiguous, use the
+smallest matching representation:
 
 - explicit precondition, trigger, and response for conditional behavior;
 - decisive context/event/outcome examples for interpretation-sensitive rules;
@@ -77,9 +77,8 @@ Choose the smallest representation that removes ambiguity:
 - a quality scenario naming source, stimulus, environment, affected surface,
   response, and response measure for a material non-functional outcome.
 
-Use plain prose when it is already unambiguous. Do not expand examples into
-exhaustive test design, force a representation for an unaffected concern, or
-invent an unset target.
+Keep the representation to the ambiguity it resolves. Leave exhaustive
+scenarios to test design, and omit unaffected concerns and unset targets.
 
 Ground each decision-changing factual claim in current evidence and each
 normative choice in an explicit accepted decision. Label inferences and
@@ -93,18 +92,19 @@ The spec is ready when:
 
 - material behavior, task-specific success criteria, and important unchanged
   invariants are explicit and falsifiable;
-- every triggered material lens—including public contract, data, security,
-  money, reliability, performance, observability/operability,
-  concurrency/lifecycle, delivery, or cross-service behavior—has the decision,
-  unchanged constraint, or proof consequence needed by the accepted scope;
+- every material lens triggered by the affected behavior surface has the
+  decision, unchanged constraint, or proof consequence needed by the accepted
+  scope; examples include public contract, data, security, money, reliability,
+  performance, observability/operability, concurrency/lifecycle, delivery, and
+  cross-service behavior;
 - runtime/generated sources of truth and decision-changing evidence are named
   where they matter;
 - non-goals do not hide required target-state work;
 - assumptions have boundaries and reopen conditions;
 - no unresolved scope, behavior, policy, authority, source-of-truth, or
   risk-acceptance alternative owned by Specification remains;
-- live mechanism or placement alternatives are handed to design with their
-  decision drivers;
+- design receives the accepted behavior, constraints, and decision drivers
+  needed to choose any live mechanism or placement alternative;
 - design and planning can proceed without inventing product meaning;
 - no material `TBD` remains.
 
@@ -131,7 +131,8 @@ disposition, repair, and convergence.
 ## Stop Rule
 
 Continue to design or planning when the Decision Bar is met and any triggered
-review has returned `PASS`. Reopen intake, research, or a specialist decision
-when the missing answer belongs there; reopen a user decision only under
+review has returned `PASS` or dispositioned `CONCERNS`. Reopen intake, research,
+or a specialist decision when the missing answer belongs there; reopen a user
+decision only under
 [Decision Ownership](../../../AGENTS.md#decision-ownership). Do not start
 implementation from a blocked spec.

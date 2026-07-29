@@ -1,6 +1,6 @@
 # Go Code / Ownership Design
 
-Place the accepted mechanism in Go packages and files without changing behavior. Give each changed responsibility one clear, evidence-backed owner and make its affected execution paths reviewer-traceable.
+Give each changed responsibility one clear, evidence-backed owner, then place the accepted mechanism in Go packages and files without changing behavior. Make every affected execution path reviewer-traceable.
 
 ## Read When
 
@@ -12,26 +12,23 @@ Place the accepted mechanism in Go packages and files without changing behavior.
 
 - Ready spec and system/integration design when present.
 - `docs/repo-architecture.md` and current package/file responsibilities.
-- Relevant callers, siblings, composition root, generated sources, tests, and any replaced or compatibility paths.
 
 ## Method
 
-Reconstruct the complete changed-responsibility set from current files and symbols, callers, siblings, composition roots, generated sources, tests, and replaced or compatibility paths. For each responsibility, select one clear implementation/source owner with current evidence and state why that owner stays or changes. Separately disposition its package/file placement, dependency/composition, generated authority, cleanup owner, and test/proof owner. Validate every selected owner against the actual Go import graph, `internal` visibility, generated/manual boundary, and acyclicity. Do not add a producer-owned interface used only to reverse an invalid dependency; repair the owner or dependency direction instead.
+Reconstruct the complete changed-responsibility set from current files and symbols, callers, siblings, composition roots, generated sources, tests, and replaced or compatibility paths. Build the per-responsibility ownership record below from that evidence. Validate every recorded decision against the actual Go import graph, `internal` visibility, generated/manual boundary, and acyclicity.
 
 ## Outputs
 
 A compact ownership section in `design/overview.md` or `design/go-code-ownership.md`, grouped by affected responsibility:
 
-- source: implementation/source owner, current file/symbol evidence, why that owner stays or changes, selected package/file placement, and what stays, moves, is added, or is removed; only when exact file selection depends on implementation-local facts, give the owning surface, deterministic placement rule, and inspection bounds instead;
+- owner/placement: implementation owner; current file/symbol evidence; why that owner stays or changes; when a real placement fork exists, each viable alternative owner/location and why it is rejected; exact package/file placement; and what stays, moves, is added, or is removed. Only when exact file selection depends on implementation-local facts, give the owning surface, deterministic placement rule, and inspection bounds instead;
 - dependency/composition: dependency direction, composition boundary, and the owner and minimum required shape of each introduced or changed cross-package type, error, mapping, constructor, or exported symbol that planning would otherwise choose;
 - authority: generated source of truth and its hand-written change or regeneration point;
 - concrete types by default; when a present consumer must substitute implementations or direct coupling would violate dependency direction, use the smallest interface in the consumer package and name its composition-root wiring;
 - cleanup: keep/split rationale plus the disposition of each replaced or compatibility path and every now-obsolete caller, wiring/registration, test, config, generated input/artifact, and doc; if retained, name the present need, owner, and removal condition;
 - test and proof: test owner and proof entrypoint.
 
-Add a file, package, or seam only when the selected responsibility owner cannot preserve the required responsibility, dependency direction, or generated/manual boundary in the current surface.
-
-Keep symbols unexported and code with its current owner unless the selected responsibility or dependency direction requires a move. Prefer explicit control flow, the Go standard library, and established repository patterns. Expected future reuse, line count alone, or test convenience alone do not justify a new interface, package, helper, factory, or seam. Keep owner-specific behavior out of generic helper buckets, one-product factories, and speculative extension points.
+Keep owner-specific behavior with its current owner and symbols unexported. Add the smallest new surface or seam only when a present responsibility cannot remain there without violating required dependency direction or the generated/manual boundary. Prefer explicit control flow, the Go standard library, and established repository patterns. Expected future reuse, line count, test convenience, generic helper naming, and one-product factories do not meet that admission rule.
 
 ## Review
 
@@ -39,4 +36,4 @@ Apply focused root self-review with system design before planning. Use independe
 
 ## Stop Rule
 
-This phase is complete when accepted behavior is preserved, every changed responsibility has an evidence-backed owner and file placement or deterministic implementation-local rule, planning has no material ownership, dependency, generated/manual, or exported-surface decision left to make, and any triggered technical-design review has returned `PASS` or dispositioned `CONCERNS`. Reopen system design if the proposed ownership changes runtime behavior or source of truth; reopen specification if it changes scope or contract.
+This phase is complete when accepted behavior is preserved and every changed responsibility has an evidence-backed owner, package/file placement or deterministic implementation-local rule, dependency/composition disposition, generated/manual authority and hand-written change or regeneration point, cleanup disposition, and test/proof owner and entrypoint. The resulting import graph must be validated as acyclic, planning must have no material ownership, placement, dependency, generated/manual, cleanup, test/proof, or exported-surface decision left to make, and any triggered technical-design review must have returned `PASS` or dispositioned `CONCERNS`. Reopen system design only when placement cannot preserve the accepted mechanism, runtime behavior, or source of truth; reopen specification only when placement cannot preserve scope or contract.

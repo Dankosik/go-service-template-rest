@@ -1,49 +1,48 @@
 # Technical Design Review
 
-Apply the shared [Review Independence](../shared/subagents-and-handoff.md#review-independence) contract. This file supplies only design-specific falsification lenses and verdict consequences; it does not define another workflow phase.
+Apply the shared [Review Independence](../shared/subagents-and-handoff.md#review-independence) contract. This adapter adds only the technical-design falsification kernel and design-specific verdict threshold; it does not define another workflow phase.
 
 ## Read When
 
-- The user requests independent design review.
-- Structured or orchestrated work has triggered and completed technical design.
-- Design is high-impact, hard to reverse, cross-owner, or difficult for the author to falsify.
-- A repaired design needs confirmation that a prior blocker is closed.
+- The shared [independent-review trigger](../shared/subagents-and-handoff.md#review-independence) applies to a completed fixed technical design.
+- The user requests a standalone independent review of a completed fixed technical design.
 
 ## Inputs
 
-- Ready spec and current fixed design candidate or diff.
-- Relevant repository architecture and runtime/generated sources.
-- Dispositioned accepted risks/downstream proof obligations and prior design findings.
+- Ready spec and current fixed system/integration design plus Go ownership design when present, or their current diff.
+- Relevant repository architecture, current runtime/generated authorities, and affected consumer surfaces.
+- Dispositioned accepted risks/downstream proof obligations and still-valid prior findings.
 
 ## Outputs
 
-Ranked anchored findings and one verdict:
+Use the shared [Review Finding Envelope](../shared/subagents-and-handoff.md#review-finding-envelope). Add the earliest unsupported design edge and its smallest reopen owner.
 
-- `PASS`: the sufficient material evidence boundary has no hidden design work, current-phase defect, unowned question, or uncovered affected lens.
-- `CONCERNS`: a bounded risk or proof obligation may move after its downstream owner, observable, and reopen condition are recorded and no design decision remains open; no fresh review is required for that disposition.
-- `FAIL`: specification or design must change first.
+Design-specific verdict threshold:
+
+- `PASS`: every reconstructed material trace and triggered lens is supported within the stated evidence boundary; no downstream owner must invent behavior, mechanism, authority, or ownership.
+- `CONCERNS`: only bounded downstream risks or proof obligations dispositionable under the shared rule remain; no behavior, mechanism, authority, ownership, or required-input choice remains open.
+- `FAIL`: an earliest unsupported edge requires Specification, System / Integration Design, or Go Code / Ownership Design to close or change a decision, or a named external owner to supply a blocking input before movement.
 
 ## Review Method
 
-Trace each accepted behavior through mechanism -> material flow -> source of truth -> package/file owner -> closed implementation input -> proving surface. Record the earliest unsupported edge for each material behavior trace and suppress downstream noise only behind that edge. Continue across every other trace and materially affected lens to collect the complete compatible finding set before issuing the verdict.
+Independently reconstruct every material behavior trace from the ready spec, current runtime/generated evidence, and affected consumer surfaces. Candidate omission does not establish that a trace or lens is untriggered.
 
-### Implementation-Input Closure Gate
+For each trace, follow accepted behavior -> selected mechanism -> ordered material flow and finality -> contract or data authority when relevant -> system owner and package/file owner when Go ownership is triggered -> implementation input required by the next owner -> proving surface when non-obvious proof is triggered. The first edge without compatible evidence is the earliest unsupported edge and the finding anchor. Suppress consequences downstream of that edge, but continue every unaffected trace and triggered lens before issuing the verdict.
 
-Inventory every input-bearing design surface on the current completion path. Materialize one representative of each materially distinct contract, record, configuration, migration input, or proof setup from approved sources without choosing semantics; for byte- or signature-sensitive behavior, also reproduce each required golden vector. A gap here is a design or upstream reopen finding, not implementation discovery.
+At each triggered implementation-input edge, verify only whether the input is canonical, mechanically derivable without a semantic choice, or available from a named external owner under [Implementation-Input Closure](../../spec-first-workflow.md#implementation-input-closure). Record the first unmet input and its reopen owner. Materialization and semantic choice remain with the owning phase. For byte- or signature-sensitive behavior, verify that the design names the canonical golden vector and its authority; reproduction remains with the proof owner.
 
-## Review Questions
+Activate only falsification lenses triggered by the reconstructed affected surface:
 
-- Are source of truth, contracts, runtime sequence, failure behavior, data/consistency, rollout, and proof explicit where relevant?
-- Can a fresh reviewer trace every material flow from its actor or trigger to caller-visible completion or durable finality without guessing its owners, contract, data authority, or failure/recovery behavior?
-- Where compact text is insufficient, does the smallest useful diagram clarify ordering, ownership, fan-out, recovery, or transformation and agree with the normative text and canonical sources?
-- Are package/file ownership, dependency direction, generated/manual authority, cleanup, and test ownership clear?
-- For every scale-sensitive material path, is growth in queries, network calls, serialization or copies, allocations, goroutines, scans, and retained data bounded or justified against the accepted workload, and is the selected mechanism the least-complex option that can satisfy the performance decision?
-- Are viable alternatives genuinely closed, or has implementation been left a live fork?
-- Can planning name task owners, files, tests, and evidence without deciding design?
-- Does the design add abstraction, dependency, or machinery without a present requirement?
+- Flow and authority: could two reasonable implementations follow the candidate yet differ in caller- or operator-visible behavior, ordering/finality, contract or data authority, failure/recovery, or rollout?
+- Current evidence: does a runtime, generated, provider, or consumer authority contradict the selected mechanism, contract, owner, or transition?
+- Ownership, when placement, dependency direction, generated authority, or cleanup is material: does the selected owner fit the current graph and leave no live ownership fork?
+- Performance, when a path is scale-sensitive or has an accepted objective: can work amplification exceed the workload or budget, or can a simpler established mechanism satisfy the same decision?
+- Alternatives, when current evidence leaves a real viable fork: does the selected mechanism close it on explicit decision drivers?
+- Proof, when the mechanism creates non-obvious proof or an accepted downstream proof obligation: is the named proving surface feasible from available observables and inputs without choosing design?
+- Machinery, when the candidate adds an abstraction, dependency, or mechanism: what present requirement or accepted constraint makes it necessary?
 
-Do not block on local naming or task order after the owning design decision is clear.
+Implementation-local naming and task order remain downstream details unless they change a contract, ownership, or proof feasibility. Output ends at findings, reopen owners, and verdict; task breakdown, test design, implementation artifacts, and repair remain with their owning phases.
 
 ## Stop Rule
 
-For an internal checkpoint, return findings to the owning root for disposition under the shared convergence contract. Re-review only after `FAIL` repair or a material change to behavior, contracts, ownership, shared assumptions, or proof. For an explicitly user-requested standalone review, return findings and stop read-only.
+Stop after the complete compatible finding set and verdict. Apply the shared disposition, convergence, fresh-review, and standalone-review boundaries.

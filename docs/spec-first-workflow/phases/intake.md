@@ -18,27 +18,20 @@ Skip when the request already supplies a clear outcome, scope, authority, constr
 
 ## Outputs
 
-A brief, usually in chat:
-
-- outcome, why it matters, and the authority granted;
-- in-scope and out-of-scope work;
-- confirmed affected surfaces, current repository owners relevant to routing, and material constraints;
-- success/proof signal;
-- bounded assumptions and what would invalidate them;
-- next useful phase or direct action.
+A brief, usually in chat, under the [Task Contract](../../../AGENTS.md#task-contract), containing only the accepted outcome and authority plus any scope boundary, constraint, success/proof signal, surface/owner fact, or bounded assumption that can change routing. Include the business meaning only when it changes interpretation, and finish with the Stop Rule's result.
 
 ## Method
 
-1. Reconstruct the likely outcome, scope, authority, success signal, and affected surfaces before asking anything.
-2. Resolve repository facts, current owners relevant to routing, and current constraints by bounded inspection; leave target ownership and placement to the owning design phase.
+1. Reconstruct the likely outcome, scope, authority, and success signal before asking anything.
+2. Inspect only repository facts and surface/owner signals that can change path selection; leave decision-changing evidence and mechanism or placement to their owning phases.
 3. State safe assumptions with their boundary and reopen condition.
 4. Ask a question only under [Decision Ownership](../../../AGENTS.md#decision-ownership).
-5. Close intake once the brief makes `direct`, `structured`, or `orchestrated` selectable.
+5. Finish with the Stop Rule's named path and first action, or its single blocking question.
 
 Use `grilling` only when the user explicitly requests an exhaustive stress test or interview. Repetition in the user's input is a priority signal, not a reason to expand the questionnaire.
 
 ## Stop Rule
 
-Continue to the selected path when the outcome, scope, authority, constraints, success signal, affected surfaces, and material assumptions are clear enough.
+End Intake with a named path and first action when that action can proceed without guessing user intent or exceeding granted authority. Otherwise, return the one user-owned blocking question permitted by [Decision Ownership](../../../AGENTS.md#decision-ownership).
 
-Do not research broadly, design, plan, or implement merely to avoid resolving a genuinely blocking intent decision.
+Carry open evidence, mechanism, placement, proof-strategy, or execution questions to their owning phase; Intake needs only enough information to route them.
