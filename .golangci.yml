@@ -101,6 +101,10 @@ linters:
         linters:
           - unparam
   settings:
+    staticcheck:
+      checks:
+        - all
+        - "-ST1000"
     sloglint:
       # Correlation is published by internal/observability/logctx from the context
       # a record is logged with, so a call that drops the context it already holds
@@ -130,7 +134,7 @@ linters:
         - empty
         - stdlib
         - generic
-        - '^github\.com/example/go-service-template-rest/.*/openapi\..*ResponseObject$'
+        - '^.*/internal/openapi\..*ResponseObject$'
         - '^go\.opentelemetry\.io/otel/metric\.MeterProvider$'
         - '^go\.opentelemetry\.io/otel/sdk/metric\.Reader$'
         - '^go\.opentelemetry\.io/otel/sdk/trace\.Sampler$'
