@@ -94,13 +94,14 @@ When a failure is isolated and the reviewed independence basis still holds, shri
 
 ### Monotonic Acceptance
 
-The root is an acceptance authority. Each Worker return first passes Scope Lock
-plus ownership, mergeability, and proof-provenance intake. The first
-acceptance-ready candidate becomes the frozen baseline for exactly one full
-acceptance review and its initial mapped proof. That review freezes one complete
-finite finding set containing only candidate-caused regressions, concrete
-violations of accepted criteria or repository invariants, and proof missing
-from an accepted claim. All other observations retain observation status.
+The root is the acceptance authority. Each Worker return first passes Scope
+Lock plus ownership, mergeability, and proof-provenance intake. The first
+acceptance-ready candidate becomes the frozen baseline for one full acceptance
+review and its initial mapped proof. That review creates the finite finding set
+supported by the evidence then available, containing only candidate-caused
+regressions, concrete violations of accepted criteria or repository
+invariants, and proof missing from an accepted claim. All other observations
+retain observation status.
 
 Correction verification covers the open findings, the delta from the frozen
 baseline, and proof invalidated by that delta; unchanged bytes retain their
@@ -112,17 +113,17 @@ proof accepts the candidate immediately.
 
 ### Diagnostic Gate
 
-A correction that introduces a regression, reopens a finding, or fails to
-shrink the open set has one disposition: reject the entire delta and retain the
-preceding frozen baseline. Its bytes serve only as diagnosis evidence;
-rejection removes write authority for that finding. Read-only diagnosis against
-the retained baseline restores write authority only when evidence independent
-of the rejected bytes falsifies the rejected causal hypothesis and establishes
-a different causal owner, expected observable, and bounded edit for the same
-finding. Otherwise the finding returns the honest blocker.
+A correction that introduces a regression, reopens a dispositioned finding, or
+fails to shrink the current finding set has one disposition: reject the delta
+and retain the preceding frozen baseline. Its bytes are diagnosis evidence
+only, never accepted change or proof. Re-enter correction only when
+[Progress](#progress) has new evidence that changes the causal hypothesis or
+expected observable; otherwise return the honest blocker.
 
-Concrete evidence first available after the full review that proves a critical
-security breach, data loss or corruption, or critical violation of an accepted
-public contract stops correction and reopens that evidence's owner.
+Current evidence outranks the finding set. Evidence first available after the
+full review adds or reopens a finding only when it proves a candidate-caused
+regression, a violation of an accepted criterion or repository invariant, or
+missing proof for an accepted claim. Reopen an upstream owner only when that
+evidence invalidates an accepted decision rather than the candidate.
 
 The local repository default/main is the authoritative integration branch unless the user names another persistent branch. Run mapped claim-scoped proof on the reviewed candidate, integrate only the accepted delta, and confirm the authoritative diff still contains that candidate without unrelated changes. If integration changes relevant content, validate the affected claims before acceptance. Use a commit/tree identity only when proof crosses a checkout or integration boundary; never hash individual files or specifications for this purpose. Preserve unrelated dirty state during integration; publication remains governed by [AGENTS.md Authorization And Boundaries](../../../AGENTS.md#authorization-and-boundaries).

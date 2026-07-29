@@ -34,7 +34,14 @@ not completion evidence.
 
 ## Implement
 
-Inspect the owning code, callers, siblings, tests, and generated/manual boundary before editing. For a defect, repair the narrowest shared owner proved by the reproducer. Preserve accepted behavior, cleanup, authority, and protected-domain constraints; remove replaced paths only when compatibility does not require them.
+Inspect current diff/status and trace the accepted observable through its
+production wiring, owning code, callers, siblings, tests, and generated/manual
+boundary before editing. For a defect, fix the narrowest owning surface whose
+contract the reproducer proves is violated. Preserve unrelated user work,
+accepted unchanged behavior, authoritative source ownership, and
+protected-domain constraints. When a canonical source owns derived output,
+change it first and regenerate; remove replaced paths unless current
+compatibility retains them.
 
 Treat task paths and symbols as navigation anchors; current canonical source
 determines placement. Adapt local placement drift while accepted behavior,
@@ -74,9 +81,15 @@ Review the changed outcome for correctness, affected error/context/resource beha
 
 ## Validate
 
-Validate every stated claim against the repository
-[Task Contract](../../../AGENTS.md#task-contract) and the smallest matching
+Reconcile the accepted outcome in both directions: each accepted changed or
+deliberately unchanged behavior maps to the retained delta or current
+authoritative evidence that no implementation change is required, and to
+current proof or an explicit unverified remainder; every retained change and
+completion claim maps back to an accepted criterion. Use the smallest matching
 [Validation Matrix](../../../AGENTS.md#validation-matrix) proof.
+
+Proof of a production-path claim must exercise that path or separately prove
+both the owning behavior and the production wiring that reaches it.
 
 Performance validation is triggered by an accepted performance claim, budget,
 or materially affected hot path; it is not a ceremony for every change. If the
@@ -96,4 +109,16 @@ State what changed, the important behavior consequence, proof actually run, and 
 
 ## Stop Rule
 
-Finish direct work when the bounded outcome is self-reviewed and every stated claim has matching current evidence or an honest gap. Worker execution finishes when the frozen finding set is empty and its mapped proof passes, or with the honest blocker when an admissible finding cannot close. A changed decision or unavailable evidence reopens its narrowest upstream owner; after sufficient proof, closeout is the only authorized next action.
+Close the outcome only when the bounded accepted outcome—including any required
+production path, replacement cleanup, and canonical/generated
+synchronization—is complete, the bounded diff is self-reviewed, and every
+accepted completion claim has matching current proof. If implementation is
+complete but required proof is unavailable, stop as `implementation complete;
+verification incomplete`, name the unverified claim and next proof or reopen
+owner, and do not claim outcome completion or readiness.
+
+Worker execution accepts a candidate only when its current admissible finding
+set is empty and mapped proof passes; an unclosed finding is a blocker and
+unavailable proof is partial verification. A changed decision reopens its
+narrowest upstream owner; after sufficient proof, closeout is the only
+authorized next action.

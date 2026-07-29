@@ -45,7 +45,7 @@ For review and handoff, the owning macro phases are specification (including any
 | Clarify raw or interpretation-sensitive input. | [Intake](spec-first-workflow/phases/intake.md) | A routing-sufficient brief or one blocking question. |
 | Resolve evidence that can change a decision. | [Research](spec-first-workflow/phases/research.md) | Supported findings, limits, conflicts, and decision implications. |
 | Define behavior, invariants, scope, and proof expectations. | [Specification](spec-first-workflow/phases/specification.md) | A compact decision record, reviewed as required by path and risk. |
-| Choose runtime/system behavior. | [System / Integration Design](spec-first-workflow/phases/system-integration-design.md) | Contracts, sources of truth, sequence, failure, data, and rollout decisions. |
+| Choose runtime mechanism, integration flow, and operational realization for accepted behavior. | [System / Integration Design](spec-first-workflow/phases/system-integration-design.md) | Contracts, sources of truth, sequence, failure, data, and rollout decisions. |
 | Choose Go ownership and placement. | [Go Code / Ownership Design](spec-first-workflow/phases/go-code-ownership-design.md) | Package/file owners, dependency direction, cleanup, and test ownership. |
 | Make non-obvious proof explicit. | [Test Design](spec-first-workflow/phases/test-design.md) | Risk scenarios, proof levels, observables, and commands. |
 | Turn decisions into executable work. | [Planning](spec-first-workflow/phases/planning.md) | A small, dependency-ordered ledger with completion proof. |

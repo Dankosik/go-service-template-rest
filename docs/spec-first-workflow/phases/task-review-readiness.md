@@ -20,11 +20,13 @@ Ranked anchored findings and one verdict:
 
 - `PASS`: the next task or real parallel wave is executable from closed inputs with adequate proof and no hidden decision that can invalidate it.
 - `CONCERNS`: a bounded later risk or proof obligation may move after its owner, checkpoint, observable, and reopen condition are recorded and it cannot invalidate the next accepted result.
-- `FAIL`: the ledger or an upstream decision must be repaired first.
+- `FAIL`: executor simulation of the next task or wave reaches an unrecorded behavior, mechanism, placement, ownership, test/proof strategy, rollout, or concurrency choice; a mandatory input or gate is unavailable; a write/resource/interface conflict makes the wave unsafe; or the named check cannot establish the claimed postcondition.
 
 ## Review Method
 
-Independently walk the next executable task or real parallel wave through its proof using cited sources and current inputs. Report hidden decisions, unavailable required inputs, unsafe concurrency, unowned deltas, or unprovable claims that can invalidate that work. Inspect later tasks only for a decision or dependency that can invalidate the next accepted result.
+Independently dry-run the next executable task or real parallel wave from dispatch through acceptance using only the fixed ledger, cited sources, and current repository evidence. Resolve every prerequisite and handoff, locate the writable surface through the named owner or discovery rule, follow required canonical ordering, and trace the postcondition through the named check and its oracle to the real path. For a wave, simulate every pair from the same accepted base and attempt to falsify writable-surface, mutable-resource, interface, and assumption independence.
+
+Report the first point where execution would need an unrecorded choice or unavailable input, with its exact anchor and owning repair or reopen boundary. The reviewer does not reslice tasks, author replacement wording, or choose the missing decision. Inspect later tasks only for a decision or dependency capable of invalidating the next accepted result.
 
 ## Falsification Questions
 
