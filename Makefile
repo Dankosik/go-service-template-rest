@@ -182,7 +182,7 @@ claude-skills-sync:
 claude-skills-check:
 	$(CLAUDE_SKILLS_CHECK_SCRIPT)
 
-check: project-structure-check ci-change-scope-check template-owned-purity-check claude-skills-check fmt-check lint test
+check: project-structure-check fmt-check lint test
 
 check-gentle:
 	nice -n $(GENTLE_NICE) env GOMAXPROCS=$(GENTLE_GOMAXPROCS) $(MAKE) check

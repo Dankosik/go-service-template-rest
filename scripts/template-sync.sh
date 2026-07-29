@@ -153,6 +153,8 @@ first_manifest_symlink() {
 # They are generated, so they are absent from the manifest, but the sync still has
 # to commit what it changed rather than leave the target dirty behind it.
 generated_paths=(.claude/skills)
+# Historical generated receipts removed by the sync.
+retired_paths=(.template-sync)
 
 template_revision=$(git -C "${template}" rev-parse --short HEAD 2>/dev/null || echo "")
 source_root="${template}"
@@ -171,16 +173,15 @@ ignored_source=$(git -C "${template}" ls-files --others --ignored --exclude-stan
 [[ -z "${ignored_source}" ]] ||
 	fail "template manifest contains ignored content; first: $(printf '%s' "${ignored_source}" | head -1)"
 
-# `.template-sync` records the revision a target was synced from, so the source
-# tree has to match that revision. Mirroring uncommitted template edits would
-# stamp every target with a revision that never contained what they received.
+# Apply only a committed template snapshot. The sync commit names that revision,
+# so uncommitted source edits must not enter the mirrored content.
 if [[ "${mode}" == "apply" ]]; then
 	[[ -n "${template_revision}" ]] ||
-		fail "template is not a git repository, so no source revision can be recorded: ${template}"
+		fail "template is not a git repository, so no committed source revision is available: ${template}"
 	if [[ -n "$(git -C "${template}" status --porcelain -- "${template_pathspecs[@]}")" ]]; then
 		printf 'template-sync: the template has uncommitted changes inside its own manifest:\n' >&2
 		git -C "${template}" status --porcelain -- "${template_pathspecs[@]}" | sed 's/^/  /' >&2
-		fail "commit them first so .template-sync can name the revision targets actually received"
+		fail "commit them first so targets receive one reviewable template revision"
 	fi
 	source_snapshot=$(mktemp -d "${TMPDIR:-/tmp}/template-sync.XXXXXX")
 	git -C "${template}" archive HEAD -- "${template_pathspecs[@]}" |
@@ -201,10 +202,10 @@ diff_entry() {
 			printf '  + %s (absent in target)\n' "${entry}"
 			return 1
 		fi
-		local delta
-		delta=$(rsync -a --checksum --delete --prune-empty-dirs --dry-run --itemize-changes \
-			"${source%/}/" "${destination}/" 2>&1 || true)
-		[[ -z "${delta}" ]] && return 0
+		local delta status=0
+		delta=$(git diff --no-ext-diff --no-index --name-status -- "${source%/}" "${destination}" 2>&1) || status=$?
+		((status == 0)) && return 0
+		((status == 1)) || fail "could not compare ${entry}: ${delta}"
 		printf '%s\n' "${delta}" | sed "s|${source_root}/||g; s|${repo}/||g; s|^|  |"
 		return 1
 	fi
@@ -223,7 +224,7 @@ apply_entry() {
 	local repo="$1" entry="$2" source="${source_root}/$2"
 	if [[ "${entry}" == */ ]]; then
 		mkdir -p "${repo}/${entry%/}"
-		rsync -a --checksum --delete --prune-empty-dirs "${source%/}/" "${repo}/${entry%/}/"
+		rsync -a --checksum --no-times --delete --prune-empty-dirs "${source%/}/" "${repo}/${entry%/}/"
 		return
 	fi
 	mkdir -p "$(dirname -- "${repo}/${entry}")"
@@ -236,8 +237,8 @@ apply_entry() {
 collect_present() {
 	local repo="$1" entry
 	present=()
-	for entry in "${paths[@]}" "${generated_paths[@]}"; do
-		if [[ -e "${repo}/${entry%/}" ]]; then present+=("${entry%/}"); fi
+	for entry in "${paths[@]}" "${generated_paths[@]}" "${retired_paths[@]}"; do
+		if [[ -e "${repo}/${entry%/}" || -L "${repo}/${entry%/}" ]]; then present+=("${entry%/}"); fi
 	done
 	# A trailing false test would return non-zero and `set -e` would end the run.
 	return 0
@@ -335,6 +336,12 @@ for target in "${targets[@]}"; do
 			report+="${entry_report}"$'\n'
 		fi
 	done
+	for entry in "${retired_paths[@]}"; do
+		if [[ -e "${repo}/${entry}" || -L "${repo}/${entry}" ]]; then
+			drift=1
+			report+="  - ${entry} (retired)"$'\n'
+		fi
+	done
 
 	if ((drift == 0)); then
 		printf '   in sync with template %s\n' "${template_revision}"
@@ -385,6 +392,7 @@ for target in "${targets[@]}"; do
 	assert_no_identity_leak "${repo}"
 
 	for entry in "${paths[@]}"; do apply_entry "${repo}" "${entry}"; done
+	for entry in "${retired_paths[@]}"; do rm -f -- "${repo}/${entry}"; done
 
 	if [[ -f "${repo}/scripts/template-sync.sh" ]]; then
 		chmod +x "${repo}/scripts/template-sync.sh" "${repo}/scripts/ci/template-owned-purity-check.sh"
@@ -395,8 +403,6 @@ for target in "${targets[@]}"; do
 			continue
 		fi
 	fi
-	printf 'template %s\n' "$(git -C "${template}" rev-parse HEAD)" >"${repo}/.template-sync"
-
 	if [[ "${commit}" == false ]]; then
 		printf '   synced into the working tree, not committed\n'
 		synced_targets=$((synced_targets + 1))
@@ -406,12 +412,17 @@ for target in "${targets[@]}"; do
 	# The manifest was clean before the mirror ran, so everything staged here was
 	# produced by this sync. No work in progress can enter this commit.
 	collect_present "${repo}"
-	present+=(.template-sync)
-	git -C "${repo}" add -A -- "${present[@]}"
-	if [[ -n "$(git -C "${repo}" diff --cached --name-only -- "${present[@]}")" ]]; then
+	commit_paths=("${present[@]}")
+	for entry in "${retired_paths[@]}"; do
+		if git -C "${repo}" ls-files --error-unmatch "${entry}" >/dev/null 2>&1; then
+			commit_paths+=("${entry}")
+		fi
+	done
+	git -C "${repo}" add -A -- "${commit_paths[@]}"
+	if [[ -n "$(git -C "${repo}" diff --cached --name-only -- "${commit_paths[@]}")" ]]; then
 		git -C "${repo}" commit -q \
 			-m "Sync template-owned instructions to ${template_revision}" \
-			-- "${present[@]}"
+			-- "${commit_paths[@]}"
 		printf '   synced and committed at template %s\n' "${template_revision}"
 	fi
 	synced_targets=$((synced_targets + 1))

@@ -282,6 +282,7 @@ expect_unchanged_failure "${malformed_owner}" \
 	env CODEOWNER=acme/platform bash "${ROOT_DIR}/scripts/init-module.sh"
 
 minimal_checkout="$(copy_template_checkout full-minimal git@github.com:acme/feature-proof.git)"
+minimal_source_revision="$(git -C "${minimal_checkout}" rev-parse HEAD)"
 minimal_workflow_before="$(workflow_snapshot "${minimal_checkout}")"
 (
 	cd "${minimal_checkout}"
@@ -352,7 +353,7 @@ done
 # has no revision to be reviewed against.
 grep -Fq 'database = "none"' "${minimal_checkout}/template.lock"
 grep -Fq 'outbound_http = "none"' "${minimal_checkout}/template.lock"
-grep -Eq '^source_revision = "[0-9a-f]{40}"$' "${minimal_checkout}/template.lock"
+grep -Fqx "source_revision = \"${minimal_source_revision}\"" "${minimal_checkout}/template.lock"
 # A generated service owns no generator, so the initialization contract check
 # reports that and succeeds instead of failing the first push of every service.
 #
