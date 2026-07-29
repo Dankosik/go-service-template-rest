@@ -20,7 +20,7 @@ INV-SKILL-CANONICAL-001
 Statement: A repository skill change is authoritative only when it is made under `.agents/skills`.
 Type: local_hard_invariant
 Owner: repository skill source-of-truth policy
-Source of truth: specs/agents-skills-source-of-truth/spec.md
+Source of truth: docs/skill-authoring.md
 Enforcement point: repository checks and reviewer discipline
 Observable pass/fail: no active tooling or docs treat top-level `skills/` as canonical
 Violation outcome: reject the change or repair the source-of-truth drift before validation closes

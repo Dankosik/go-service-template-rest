@@ -116,6 +116,9 @@ template_sync_behavior_check() (
 	git -C "${template}" add template-owned.paths owned/version
 	git -C "${template}" -c user.name=template-sync-check -c user.email=template-sync-check@example.invalid commit -qm v1
 	git clone -q "${template}" "${target}"
+	printf 'template legacy\n' >"${target}/.template-sync"
+	git -C "${target}" add .template-sync
+	git -C "${target}" -c user.name=template-sync-check -c user.email=template-sync-check@example.invalid commit -qm legacy-receipt
 
 	printf 'v2\n' >"${template}/owned/version"
 	git -C "${template}" add owned/version
@@ -145,9 +148,28 @@ template_sync_behavior_check() (
 	}
 	rm "${target}/owned/ignored.txt"
 
+	bash "${sync_script}" --apply --from "${template}" --repo "${target}" >/dev/null
+	grep -Fxq v2 "${target}/owned/version" || {
+		echo "template-owned purity: committed sync did not apply" >&2
+		return 1
+	}
+	[[ ! -e "${target}/.template-sync" ]] || {
+		echo "template-owned purity: sync retained the retired .template-sync receipt" >&2
+		return 1
+	}
+	git -C "${target}" show --format= --name-status HEAD |
+		grep -Eq '^D[[:space:]]+\.template-sync$' || {
+		echo "template-owned purity: sync commit omitted the retired .template-sync receipt" >&2
+		return 1
+	}
+
+	printf 'v3\n' >"${template}/owned/version"
+	git -C "${template}" add owned/version
+	git -C "${template}" -c user.name=template-sync-check -c user.email=template-sync-check@example.invalid commit -qm v3
+
 	git -C "${target}" checkout -q --detach
 	bash "${sync_script}" --apply --no-commit --from "${template}" --repo "${target}" >/dev/null
-	grep -Fxq v2 "${target}/owned/version" || {
+	grep -Fxq v3 "${target}/owned/version" || {
 		echo "template-owned purity: detached --no-commit sync did not apply" >&2
 		return 1
 	}

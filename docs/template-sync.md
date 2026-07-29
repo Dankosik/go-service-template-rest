@@ -42,7 +42,7 @@ make template-sync-check TEMPLATE=../go-service-template-rest
 make template-sync TEMPLATE=../go-service-template-rest
 ```
 
-`template-sync-check` prints the drift and exits non-zero, so a derived repository can gate on it in its own CI and learn that it is behind without anyone remembering to look. `template-sync` mirrors the exact committed `HEAD` snapshot of the manifest, rebuilds the `.claude/skills` symlinks through `make claude-skills-sync`, and records the source revision in `.template-sync`. Ignored and untracked empty content does not enter that snapshot. Those symlinks are generated rather than mirrored, so they stay out of the manifest, but the sync commits the ones it changed instead of leaving the target dirty behind it.
+`template-sync-check` compares the owned content directly, prints the drift, and exits non-zero, so a derived repository can gate on it in its own CI without a separate revision receipt. `template-sync` mirrors the exact committed `HEAD` snapshot of the manifest, rebuilds the `.claude/skills` symlinks through `make claude-skills-sync`, and removes the retired `.template-sync` file. Ignored and untracked empty content does not enter that snapshot. Generated paths stay out of the manifest, but the sync commits the ones it changed instead of leaving the target dirty behind it.
 
 To fan out from this template to several local checkouts in one run:
 
@@ -75,7 +75,7 @@ Every refusal happens before the first write, so a refused target is left exactl
 | Refusal | Why it matters |
 | --- | --- |
 | Manifest paths hold uncommitted changes | The mirror would destroy them |
-| The template's own manifest is dirty | `.template-sync` would name a revision that never held what targets received |
+| The template's own manifest is dirty | Targets must receive one committed, reviewable template revision |
 | A manifest path contains a symlink | The copy could read or write outside the repository |
 | Ignored content exists inside the template or target manifest | It could leak into a target or be silently deleted |
 | Detached HEAD with commits enabled | A sync commit would belong to no branch; `--no-commit` remains safe |
