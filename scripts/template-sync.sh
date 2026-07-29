@@ -119,12 +119,57 @@ while IFS= read -r line; do
 done <"${manifest}"
 ((${#paths[@]} > 0)) || fail "manifest lists no paths"
 
+template_pathspecs=()
+for entry in "${paths[@]}"; do template_pathspecs+=("${entry%/}"); done
+
+# Symlinks inside an owned path can redirect a read or write outside the
+# repository. Check every path component and every nested entry before diffing.
+first_manifest_symlink() {
+	local root="$1" entry component candidate nested
+	local -a components=()
+
+	for entry in "${paths[@]}"; do
+		components=()
+		IFS='/' read -r -a components <<<"${entry%/}"
+		candidate="${root}"
+		for component in "${components[@]}"; do
+			candidate="${candidate}/${component}"
+			if [[ -L "${candidate}" ]]; then
+				printf '%s' "${candidate#"${root}/"}"
+				return
+			fi
+		done
+		if [[ "${entry}" == */ && -d "${root}/${entry%/}" ]]; then
+			nested=$(find "${root}/${entry%/}" -type l -print -quit 2>/dev/null || true)
+			if [[ -n "${nested}" ]]; then
+				printf '%s' "${nested#"${root}/"}"
+				return
+			fi
+		fi
+	done
+}
+
 # Tracked paths the sync regenerates as a side effect of mirroring `.agents/skills`.
 # They are generated, so they are absent from the manifest, but the sync still has
 # to commit what it changed rather than leave the target dirty behind it.
 generated_paths=(.claude/skills)
 
 template_revision=$(git -C "${template}" rev-parse --short HEAD 2>/dev/null || echo "")
+source_root="${template}"
+source_snapshot=""
+
+cleanup() {
+	[[ -z "${source_snapshot}" ]] || rm -rf -- "${source_snapshot}"
+}
+trap cleanup EXIT
+
+source_symlink=$(first_manifest_symlink "${template}")
+[[ -z "${source_symlink}" ]] ||
+	fail "template manifest contains symlink ${source_symlink}; owned paths must not redirect outside the repository"
+
+ignored_source=$(git -C "${template}" ls-files --others --ignored --exclude-standard -- "${template_pathspecs[@]}" 2>/dev/null || true)
+[[ -z "${ignored_source}" ]] ||
+	fail "template manifest contains ignored content; first: $(printf '%s' "${ignored_source}" | head -1)"
 
 # `.template-sync` records the revision a target was synced from, so the source
 # tree has to match that revision. Mirroring uncommitted template edits would
@@ -132,18 +177,23 @@ template_revision=$(git -C "${template}" rev-parse --short HEAD 2>/dev/null || e
 if [[ "${mode}" == "apply" ]]; then
 	[[ -n "${template_revision}" ]] ||
 		fail "template is not a git repository, so no source revision can be recorded: ${template}"
-	template_pathspecs=()
-	for entry in "${paths[@]}"; do template_pathspecs+=("${entry%/}"); done
 	if [[ -n "$(git -C "${template}" status --porcelain -- "${template_pathspecs[@]}")" ]]; then
 		printf 'template-sync: the template has uncommitted changes inside its own manifest:\n' >&2
 		git -C "${template}" status --porcelain -- "${template_pathspecs[@]}" | sed 's/^/  /' >&2
 		fail "commit them first so .template-sync can name the revision targets actually received"
 	fi
+	source_snapshot=$(mktemp -d "${TMPDIR:-/tmp}/template-sync.XXXXXX")
+	git -C "${template}" archive HEAD -- "${template_pathspecs[@]}" |
+		tar -xf - -C "${source_snapshot}"
+	source_root="${source_snapshot}"
+	source_symlink=$(first_manifest_symlink "${source_root}")
+	[[ -z "${source_symlink}" ]] ||
+		fail "template revision contains symlink ${source_symlink}; owned paths must not redirect outside the repository"
 fi
 
 # Compare one manifest entry. Prints a human-readable delta, returns 1 on drift.
 diff_entry() {
-	local repo="$1" entry="$2" source="${template}/$2" destination
+	local repo="$1" entry="$2" source="${source_root}/$2" destination
 	destination="${repo}/${entry%/}"
 	if [[ "${entry}" == */ ]]; then
 		[[ -d "${source}" ]] || fail "manifest lists a missing template directory: ${entry}"
@@ -152,9 +202,10 @@ diff_entry() {
 			return 1
 		fi
 		local delta
-		delta=$(diff -rq "${source%/}" "${destination}" 2>&1 || true)
+		delta=$(rsync -a --checksum --delete --prune-empty-dirs --dry-run --itemize-changes \
+			"${source%/}/" "${destination}/" 2>&1 || true)
 		[[ -z "${delta}" ]] && return 0
-		printf '%s\n' "${delta}" | sed "s|${template}/||g; s|${repo}/||g; s|^|  |"
+		printf '%s\n' "${delta}" | sed "s|${source_root}/||g; s|${repo}/||g; s|^|  |"
 		return 1
 	fi
 	[[ -f "${source}" ]] || fail "manifest lists a missing template file: ${entry}"
@@ -169,10 +220,10 @@ diff_entry() {
 
 # Copy one manifest entry, mirroring deletions inside directories.
 apply_entry() {
-	local repo="$1" entry="$2" source="${template}/$2"
+	local repo="$1" entry="$2" source="${source_root}/$2"
 	if [[ "${entry}" == */ ]]; then
 		mkdir -p "${repo}/${entry%/}"
-		rsync -a --delete "${source%/}/" "${repo}/${entry%/}/"
+		rsync -a --checksum --delete --prune-empty-dirs "${source%/}/" "${repo}/${entry%/}/"
 		return
 	fi
 	mkdir -p "$(dirname -- "${repo}/${entry}")"
@@ -215,7 +266,7 @@ ignored_paths() {
 	listing=$(
 		for entry in "${paths[@]}"; do
 			if [[ "${entry}" == */ ]]; then
-				(cd "${template}" && find "${entry%/}" -type f 2>/dev/null || true)
+				(cd "${source_root}" && find "${entry%/}" -type f 2>/dev/null || true)
 			else
 				printf '%s\n' "${entry}"
 			fi
@@ -232,7 +283,7 @@ assert_no_identity_leak() {
 	module=$(awk '$1 == "module" { print $2; exit }' "${repo}/go.mod")
 	[[ -n "${module}" ]] || return 0
 	for entry in "${paths[@]}"; do
-		hit=$(grep -rlF -- "${module}" "${template}/${entry%/}" 2>/dev/null || true)
+		hit=$(grep -rlF -- "${module}" "${source_root}/${entry%/}" 2>/dev/null || true)
 		[[ -z "${hit}" ]] || fail "owned path ${entry} contains the target module path ${module}; it carries repository-specific content and must leave the manifest"
 	done
 	return 0
@@ -248,6 +299,31 @@ for target in "${targets[@]}"; do
 
 	if [[ "${repo}" == "${template}" ]]; then
 		printf '   skipped: target is the template itself\n'
+		continue
+	fi
+
+	target_symlink=$(first_manifest_symlink "${repo}")
+	if [[ -n "${target_symlink}" ]]; then
+		if [[ "${mode}" == "check" ]]; then
+			printf '  ! manifest symlink: %s\n' "${target_symlink}"
+			drifted_targets=$((drifted_targets + 1))
+		else
+			reject "manifest contains symlink ${target_symlink}; refusing a copy that could leave the repository"
+		fi
+		continue
+	fi
+
+	target_ignored=""
+	if git -C "${repo}" rev-parse --git-dir >/dev/null 2>&1; then
+		target_ignored=$(git -C "${repo}" ls-files --others --ignored --exclude-standard -- "${template_pathspecs[@]}" 2>/dev/null || true)
+	fi
+	if [[ -n "${target_ignored}" ]]; then
+		if [[ "${mode}" == "check" ]]; then
+			printf '  ! ignored manifest content; first: %s\n' "$(printf '%s' "${target_ignored}" | head -1)"
+			drifted_targets=$((drifted_targets + 1))
+		else
+			reject "ignored content inside the manifest could be deleted; first: $(printf '%s' "${target_ignored}" | head -1)"
+		fi
 		continue
 	fi
 
@@ -278,7 +354,7 @@ for target in "${targets[@]}"; do
 		reject "not a git repository"
 		continue
 	fi
-	if ! git -C "${repo}" symbolic-ref -q HEAD >/dev/null; then
+	if [[ "${commit}" == true ]] && ! git -C "${repo}" symbolic-ref -q HEAD >/dev/null; then
 		reject "detached HEAD, so a sync commit would not belong to any branch"
 		continue
 	fi

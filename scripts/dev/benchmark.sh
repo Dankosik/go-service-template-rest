@@ -27,7 +27,7 @@ HTTP_BENCH_DOCKER_NETWORK="${HTTP_BENCH_DOCKER_NETWORK:-}"
 HTTP_BENCH_RAW_SAMPLES="${HTTP_BENCH_RAW_SAMPLES:-0}"
 
 usage() {
-	echo "usage: $0 <run|compare|profile|http|http-inspect|check>"
+	echo "usage: $0 <run|compare|profile|http|http-inspect|check|source-fingerprint>"
 }
 
 require_positive_integer() {
@@ -82,47 +82,27 @@ schema_fingerprint() {
 	} | git hash-object --stdin
 }
 
-repository_files() {
-	local file
+repository_fingerprint() (
+	local snapshot_dir object_dir tree
+	# A temporary index captures Git path/content/mode semantics in one pass
+	# without touching the repository index or spawning a process per file.
+	snapshot_dir=$(mktemp -d "${TMPDIR:-/tmp}/benchmark-source-fingerprint.XXXXXX")
+	trap 'rm -rf -- "${snapshot_dir}"' EXIT
+	mkdir "${snapshot_dir}/objects"
+	object_dir=$(CDPATH='' cd -- "$(git rev-parse --git-path objects)" && pwd)
 
-	while IFS= read -r -d '' file; do
-		if [[ -e "${file}" || -L "${file}" ]]; then
-			printf '%s\0' "${file}"
-		fi
-	done < <(git ls-files --cached --others --exclude-standard -z)
-}
+	snapshot_git() {
+		GIT_INDEX_FILE="${snapshot_dir}/index" \
+			GIT_OBJECT_DIRECTORY="${snapshot_dir}/objects" \
+			GIT_ALTERNATE_OBJECT_DIRECTORIES="${object_dir}" \
+			git "$@"
+	}
 
-repository_object_id() {
-	local file="$1"
-	local link_target
-
-	if [[ ! -L "${file}" ]]; then
-		git hash-object --no-filters -- "${file}"
-		return
-	fi
-	if ! link_target="$({ readlink "./${file}" || exit; printf x; })"; then
-		echo "failed to read benchmark source symlink: ${file}" >&2
-		return 1
-	fi
-	link_target="${link_target%x}"
-	printf '%s' "${link_target}" | git hash-object --stdin
-}
-
-repository_fingerprint() {
-	local file mode object_id
-
-	{
-		while IFS= read -r -d '' file; do
-			if mode="$(stat -f '%Lp' -- "${file}" 2>/dev/null)"; then
-				:
-			else
-				mode="$(stat -c '%a' -- "${file}")"
-			fi
-			object_id="$(repository_object_id "${file}")"
-			printf '%s\0%s\0%s\0' "${mode}" "${object_id}" "${file}"
-		done < <(repository_files)
-	} | shasum -a 256 | awk '{ print $1 }'
-}
+	snapshot_git read-tree HEAD
+	snapshot_git add -A -- .
+	tree=$(snapshot_git write-tree)
+	printf '%s' "${tree}" | shasum -a 256 | awk '{ print $1 }'
+)
 
 write_run_metadata() {
 	local output="$1"
@@ -634,6 +614,9 @@ http-inspect)
 	;;
 check)
 	run_infrastructure_check
+	;;
+source-fingerprint)
+	repository_fingerprint
 	;;
 *)
 	usage
