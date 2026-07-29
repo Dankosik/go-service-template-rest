@@ -53,9 +53,12 @@ Try to falsify the spec with the smallest decision-changing questions:
   lacks a feasible falsifier?
 - Does a non-goal, risk acceptance, or proof obligation hide a decision the spec
   must make now?
-- Could two reasonable downstream implementations satisfy the wording yet
-  differ on the user/operator-visible outcome, scope, deliberately unchanged
-  behavior, or another product decision needed by design/planning?
+- Could two reasonable downstream implementations satisfy the candidate yet
+  differ in any material actor, context, trigger, precondition, contract
+  outcome, invariant or precedence rule, state transition or side effect,
+  source-of-truth, absence, currentness, or finality semantics, rejection,
+  duplication, replay, failure, or recovery behavior, compatibility or
+  deliberately unchanged behavior, or measurable success condition?
 
 Report only findings that can change readiness or required proof. Do not block
 on writing style, optional detail, or a lens independently shown not to be
@@ -66,4 +69,8 @@ triggered.
 Stop when every independently reconstructed material affected surface has been
 tested, every surviving readiness or required proof issue is anchored, and one
 evidence-bounded verdict covers the fixed candidate. Return routing follows the
-shared contract.
+shared contract. `PASS` is available only when no such divergence or other
+Specification-owned decision remains. Use `CONCERNS` only for a bounded proof or
+risk obligation over already accepted behavior; unresolved observable behavior,
+policy, authority, compatibility, source-of-truth semantics, or success meaning
+is `FAIL` and reopens Specification.

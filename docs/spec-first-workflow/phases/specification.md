@@ -45,7 +45,14 @@ current compatibility owner, evidence for retention, and exit condition.
 
 ## Method
 
-Specification owns observable scope, behavior, policy, authority, and source-of-truth semantics. Technical design owns runtime mechanism, sequence, and package/file placement unless a mechanism is itself an accepted external constraint. Close this boundary before detailing rules so downstream work cannot silently turn a mechanism choice into product meaning.
+Specification owns user/operator-observable scope, behavior, policy, authority,
+source-of-truth semantics, and proof expectations. Behavior remains
+Specification-owned when it crosses services or is observable only through
+rejection, failure, replay, recovery, finality, or operator action. Technical
+design owns the contract or schema shape, runtime mechanism and sequence, and
+package or file placement that realize the ready spec, unless a mechanism is an
+accepted external constraint. Reopen Specification whenever choosing a
+mechanism would otherwise choose product or system meaning.
 
 Derive the affected behavior surface from the accepted brief, relevant
 research, current runtime/generated contracts, and repository or consumer
@@ -57,13 +64,29 @@ each triggered lens, record the decision, unchanged constraint, proof
 consequence, or named reopen owner. Persist this inventory only when it changes
 an action, verdict, handoff, or resume decision.
 
-For each material rule, state only the parts that can change interpretation:
-actor or context, trigger or input, preconditions, rule or invariant, state and
-side effects, observable outcome, applicable rejection/failure/absence/replay/
-recovery behavior, deliberately unchanged behavior, and the nearest feasible
-falsifier or proof expectation. Keep each rule unambiguous and observable at the
-correct ownership level; define decision-changing terms, units, and bounds. Use
-stable rule IDs only when multiple owners or downstream artifacts need them.
+Close each accepted intent and decision-changing evidence implication as a
+behavioral rule or an explicit unchanged, non-goal, or blocked disposition. For
+each candidate rule, ask whether two reasonable implementations could satisfy
+its wording yet differ in a user- or operator-visible result. Resolve every such
+divergence from current authority or evidence, a Specification-owned decision,
+or a bounded assumption with an objective reopen condition. A summary of inputs
+is traceability evidence, not a behavioral contract.
+
+A material rule is complete when it fixes every interpretation-changing part
+of: actor and context; trigger and input; preconditions; normative rule,
+invariant, and precedence; states, allowed transitions, and side effects;
+observable outcome and contract delta; applicable rejection, absence,
+duplication, replay, failure, and recovery behavior; deliberately unchanged
+behavior; and the nearest feasible falsifier or proof expectation. Omit a part
+only when current evidence shows it cannot change interpretation. Define
+decision-changing terms, units, bounds, default or no-match behavior, and
+terminal behavior. Use stable rule IDs only when multiple owners or downstream
+artifacts need them.
+
+When source-of-truth semantics are triggered, state which fact is authoritative,
+which observations are derived, what absence, currentness, and finality mean,
+and which authority wins a conflict. Name a concrete runtime or storage
+mechanism only when it is an accepted external constraint.
 
 Use plain prose by default. When a material rule remains ambiguous, use the
 smallest matching representation:
@@ -80,44 +103,58 @@ smallest matching representation:
 Keep the representation to the ambiguity it resolves. Leave exhaustive
 scenarios to test design, and omit unaffected concerns and unset targets.
 
-Ground each decision-changing factual claim in current evidence and each
-normative choice in an explicit accepted decision. Label inferences and
-assumptions, and expose missing or conflicting evidence. Missing support
-narrows the claim or blocks/reopens its owner; it is not evidence of absence.
-Keep raw evidence in research.
+Ground each decision-changing factual claim in current evidence. Resolve each
+normative choice from the accepted outcome, a named authority, or the applicable
+owner under [Decision Ownership](../../../AGENTS.md#decision-ownership), and
+record the chosen rule and rationale. A bounded assumption is valid only when it
+keeps the accepted outcome honest and useful; name its safe boundary and
+objective reopen condition. Missing user- or external-owner policy blocks that
+owner. Missing support for a Specification-owned choice requires a narrower
+claim or a recorded Specification decision, not deferral to design. Keep raw
+evidence in research.
 
 ## Decision Bar
 
-The spec is ready when:
+The spec is ready only when a downstream reader can derive one behavioral
+answer for every materially affected case without choosing product meaning:
 
-- material behavior, task-specific success criteria, and important unchanged
-  invariants are explicit and falsifiable;
-- every material lens triggered by the affected behavior surface has the
-  decision, unchanged constraint, or proof consequence needed by the accepted
-  scope; examples include public contract, data, security, money, reliability,
-  performance, observability/operability, concurrency/lifecycle, delivery, and
-  cross-service behavior;
-- runtime/generated sources of truth and decision-changing evidence are named
-  where they matter;
-- non-goals do not hide required target-state work;
-- assumptions have boundaries and reopen conditions;
-- no unresolved scope, behavior, policy, authority, source-of-truth, or
-  risk-acceptance alternative owned by Specification remains;
+- each accepted intent and decision-changing evidence implication is closed as
+  a falsifiable behavioral rule, an explicit unchanged or non-goal disposition,
+  or a blocker owned by the user or a named external owner;
+- every material rule passes the completeness and two-implementation divergence
+  tests in Method, including every triggered normal, boundary, rejection,
+  absence, duplication, replay, failure, recovery, compatibility, and
+  deliberately unchanged outcome;
+- interacting rules define precedence and default or no-match behavior, and
+  lifecycle rules define allowed, invalid, repeated, and terminal transitions;
+- source-of-truth semantics define authoritative and derived facts plus material
+  absence, currentness, finality, and conflict behavior rather than merely
+  naming a source;
+- changed, removed, compatible, and deliberately unchanged behavior is explicit,
+  and non-goals do not hide required target-state work;
+- each success criterion names its observable scope and pass/fail condition;
+  numeric targets appear only when supported by accepted authority or evidence;
+- each proof expectation names the nearest feasible falsifier and evidence
+  boundary without selecting an implementation mechanism;
+- each assumption names the affected rule, safe boundary, objective invalidating
+  evidence, reopen owner, and reopen condition;
+- every materially triggered lens has the decision, unchanged constraint, or
+  proof consequence required by the accepted scope;
+- no unresolved scope, behavior, policy, authority, source-of-truth,
+  compatibility, or risk-acceptance alternative owned by Specification remains;
 - design receives the accepted behavior, constraints, and decision drivers
   needed to choose any live mechanism or placement alternative;
-- design and planning can proceed without inventing product meaning;
 - no material `TBD` remains.
 
 Only uncertainty about proving an already accepted rule may carry as a
 downstream proof obligation. Missing scope, behavior, invariant, ownership,
-compatibility, authority, or risk-acceptance decisions remain current-phase
-defects.
+compatibility, authority, source-of-truth, success meaning, or risk-acceptance
+decisions remain current-phase defects.
 
 Unless the accepted outcome is explicitly a prototype or staged result, close
-every materially triggered production behavior needed by the accepted scope,
-including applicable failure, compatibility, security, lifecycle, and
-operability semantics. Do not invent numeric targets, policies, consumers, or
-scope. Do not add exhaustive sections for unaffected concerns.
+every materially triggered production behavior required by the accepted scope.
+Use only triggered rules and supported values; unaffected concerns create no
+section or decision.
 
 ## Review
 

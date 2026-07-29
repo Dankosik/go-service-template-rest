@@ -27,7 +27,7 @@ Design-specific verdict threshold:
 
 Independently reconstruct every material behavior trace from the ready spec, current runtime/generated evidence, and affected consumer surfaces. Candidate omission does not establish that a trace or lens is untriggered.
 
-For each trace, follow accepted behavior -> selected mechanism -> ordered material flow and finality -> contract or data authority when relevant -> system owner and package/file owner when Go ownership is triggered -> implementation input required by the next owner -> proving surface when non-obvious proof is triggered. The first edge without compatible evidence is the earliest unsupported edge and the finding anchor. Suppress consequences downstream of that edge, but continue every unaffected trace and triggered lens before issuing the verdict.
+For each trace, follow accepted behavior and explicit design drivers -> viable same-level substitutes or evidence that no real fork remains -> selected architecture -> ordered material flow and finality -> contract or data authority when relevant -> system owner and package/file owner when Go ownership is triggered -> implementation input required by the next owner -> proving surface when non-obvious proof is triggered. The first edge without compatible evidence is the earliest unsupported edge and the finding anchor. Suppress consequences downstream of that edge, but continue every unaffected trace and triggered lens before issuing the verdict.
 
 At each triggered implementation-input edge, verify only whether the input is canonical, mechanically derivable without a semantic choice, or available from a named external owner under [Implementation-Input Closure](../../spec-first-workflow.md#implementation-input-closure). Record the first unmet input and its reopen owner. Materialization and semantic choice remain with the owning phase. For byte- or signature-sensitive behavior, verify that the design names the canonical golden vector and its authority; reproduction remains with the proof owner.
 
@@ -35,11 +35,13 @@ Activate only falsification lenses triggered by the reconstructed affected surfa
 
 - Flow and authority: could two reasonable implementations follow the candidate yet differ in caller- or operator-visible behavior, ordering/finality, contract or data authority, failure/recovery, or rollout?
 - Current evidence: does a runtime, generated, provider, or consumer authority contradict the selected mechanism, contract, owner, or transition?
-- Ownership, when placement, dependency direction, generated authority, or cleanup is material: does the selected owner fit the current graph and leave no live ownership fork?
+- Ownership, when placement, dependency direction, generated authority, or cleanup is material: does every selected system decision entering Go map exactly once to a feasible responsibility and package/file owner, does that owner fit the current import and composition graph, and is every live ownership fork closed?
 - Performance, when a path is scale-sensitive or has an accepted objective: can work amplification exceed the workload or budget, or can a simpler established mechanism satisfy the same decision?
-- Alternatives, when current evidence leaves a real viable fork: does the selected mechanism close it on explicit decision drivers?
+- Synthesis and selection: when current evidence leaves a real fork, are materially distinct viable substitutes compared at the same decision level against the same explicit drivers and evidence, does the selected architecture dominate, and was a simpler deletion, reuse, native, or established mechanism omitted? When no fork is recorded, does current evidence actually collapse it?
 - Proof, when the mechanism creates non-obvious proof or an accepted downstream proof obligation: is the named proving surface feasible from available observables and inputs without choosing design?
 - Machinery, when the candidate adds an abstraction, dependency, or mechanism: what present requirement or accepted constraint makes it necessary?
+
+A reviewer may name a concrete evidence-backed simpler substitute only to falsify the selected architecture and anchor a System / Integration Design reopen; composing or selecting the replacement remains with that owner.
 
 Implementation-local naming and task order remain downstream details unless they change a contract, ownership, or proof feasibility. Output ends at findings, reopen owners, and verdict; task breakdown, test design, implementation artifacts, and repair remain with their owning phases.
 

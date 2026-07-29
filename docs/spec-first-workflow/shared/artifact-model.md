@@ -75,20 +75,11 @@ A useful `spec.md` follows the canonical shape and adaptive authoring method in
 [Specification](../phases/specification.md). This file owns artifact
 persistence and status, not a second Specification template.
 
-A useful `tasks.md` usually needs:
-
-```markdown
-Global constraints: <exact constraints shared by multiple tasks; omit when none>
-- [ ] ID: outcome
-  - Source: <narrow anchors>
-  - Owner/surface/resources: <writable owner; execution-exclusive resources or none>
-  - Depends on: <IDs or none>
-  - Handoff: <exact consumes/produces contract; omit when none>
-  - Proof: <claim; check; expected observable>
-  - Reopen if: <objective invalidation condition; omit when none>
-```
-
-Add `Planned waves` only when at least two ready tasks will actually be dispatched concurrently; dependency order is sufficient for sequential work.
+A useful `tasks.md` uses the canonical shape, authoring rules, planned-wave
+contract, and readiness criterion in [Planning](../phases/planning.md). This
+file owns whether and when `tasks.md` is persisted, its lifecycle status,
+active-wave resume state, and removal; it does not define a second ledger
+schema.
 
 When an active wave must survive compaction, interruption, or session handoff, add one compact `Active wave` block to this same ledger with the adjusted member IDs, accepted integration base, task-to-App-task/worktree state, disposable candidate identity when one exists, and next root action or open causal class. Update it only at a material transition and remove or collapse it into task evidence after atomic wave acceptance; do not create a scheduler file or reconstruct it from chat.
 

@@ -53,7 +53,7 @@ Choose the smallest triggered branch and load only its rule:
 
 - [Current-state or semantic baseline](research-branches.md#current-state-or-semantic-baseline) when current state can change accepted behavior or a later decision.
 - [Current external contract](research-branches.md#current-external-contract) when external-platform, Go, toolchain, runtime, or dependency behavior would otherwise be inferred from memory.
-- [Solution discovery and comparison](research-branches.md#solution-discovery-and-comparison) when a mechanism or implementation choice remains live.
+- [Solution discovery evidence](research-branches.md#solution-discovery-evidence) when a mechanism or implementation choice remains live.
 - [Empirical claim or probe](research-branches.md#empirical-claim-or-probe) when the decision uses empirical/runtime evidence or authoritative sources cannot resolve a decision-changing empirical claim.
 - [Conflict or freshness](research-branches.md#conflict-or-freshness) when material sources conflict, freshness can flip the decision, or an approval-critical hard-to-reverse claim needs semantic challenge.
 

@@ -5,4 +5,4 @@ description: "Task ledger: Use when ready decisions need one delegated, dependen
 
 # Planning And Task Breakdown
 
-Must read [Planning](../../../docs/spec-first-workflow/phases/planning.md); it owns the ledger shape and readiness boundary. Build the smallest candidate ledger from implementation-changing accepted obligations. Give each task an owner, real dependencies, matching proof, and cleanup or reopen condition only when present. Do not create waves for sequential work. Authoring ends when the next task or real parallel wave can execute without inventing policy; escalate only blockers that can invalidate that work.
+Must read and apply [Planning](../../../docs/spec-first-workflow/phases/planning.md); it is the single owner of ledger authoring, shape, and readiness. Return its compact `tasks.md` candidate or the blocking upstream owner.
