@@ -71,8 +71,7 @@ func TestRouterRejectsRequestBodyTooLarge(t *testing.T) {
 
 		handler.ServeHTTP(resp, req)
 
-		var maxBytesErr *http.MaxBytesError
-		if !errors.As(readErr, &maxBytesErr) {
+		if _, ok := errors.AsType[*http.MaxBytesError](readErr); !ok {
 			t.Fatalf("read error = %v, want *http.MaxBytesError", readErr)
 		}
 	})

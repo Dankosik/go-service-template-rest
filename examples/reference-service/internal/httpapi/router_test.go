@@ -205,8 +205,7 @@ func testAuthenticate(scopes ...string) openapi3filter.AuthenticationFunc {
 }
 
 func testRejectRequest(w http.ResponseWriter, r *http.Request, err error) {
-	var securityErr *openapi3filter.SecurityRequirementsError
-	if errors.As(err, &securityErr) {
+	if _, ok := errors.AsType[*openapi3filter.SecurityRequirementsError](err); ok {
 		w.Header().Set("WWW-Authenticate", "Bearer")
 		writeTestProblem(w, newProblem(r.Context(), http.StatusUnauthorized, "credentials are missing or invalid"))
 		return

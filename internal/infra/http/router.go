@@ -285,8 +285,7 @@ func generatedChiServerOptions(
 
 func handleMalformedGeneratedRequest(log *slog.Logger, w http.ResponseWriter, r *http.Request, err error) {
 	logStrictRequestError(log, r, err)
-	var maxBytesError *http.MaxBytesError
-	if errors.As(err, &maxBytesError) {
+	if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
 		writeProblem(w, r, problemResponse{code: problem.CodeRequestEntityTooLarge, detail: "request body exceeds limit"})
 		return
 	}
@@ -302,8 +301,7 @@ func handleMalformedGeneratedRequest(log *slog.Logger, w http.ResponseWriter, r 
 // a 400.
 func handleGeneratedRequestError(log *slog.Logger, challenge string) func(http.ResponseWriter, *http.Request, error) {
 	return func(w http.ResponseWriter, r *http.Request, err error) {
-		var securityErr *openapi3filter.SecurityRequirementsError
-		if errors.As(err, &securityErr) {
+		if _, ok := errors.AsType[*openapi3filter.SecurityRequirementsError](err); ok {
 			logStrictRequestError(log, r, err)
 			// The challenge names an HTTP authentication scheme, which is not the
 			// same vocabulary as the contract's securityScheme names: a contract
