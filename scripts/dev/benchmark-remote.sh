@@ -246,6 +246,8 @@ remote_ssh() {
 	while IFS= read -r -d '' value; do
 		args+=("${value}")
 	done < <(ssh_args)
+	# Remote command arguments are assembled locally by design.
+	# shellcheck disable=SC2029
 	ssh "${args[@]}" "${REMOTE_USER}@${PUBLIC_IP}" "$@"
 }
 
@@ -917,10 +919,10 @@ allow_from_state() {
 		echo "target and source runners must use the same region/VPC" >&2
 		return 1
 	}
-	[[ "${port}" =~ ^[0-9]+$ ]] && ((port >= 1 && port <= 65535)) || {
+	if ! [[ "${port}" =~ ^[0-9]+$ ]] || ((port < 1 || port > 65535)); then
 		echo "port must be between 1 and 65535" >&2
 		return 1
-	}
+	fi
 	doctl_cmd compute firewall add-rules "${FIREWALL_ID}" \
 		--inbound-rules "protocol:tcp,ports:${port},address:${source_private}/32"
 	echo "allowed TCP ${port} from ${source_private}/32"
@@ -1004,7 +1006,7 @@ wait_for_absence() {
 	local check="$2"
 	local attempt
 
-	for attempt in $(seq 1 30); do
+	for ((attempt = 1; attempt <= 30; attempt++)); do
 		if "${check}"; then
 			return 0
 		fi

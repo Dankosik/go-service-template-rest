@@ -95,6 +95,11 @@ that the artifact is vulnerability-free or that a deployment is healthy.
 - Coverage owns ordinary suite execution; race and integration remain separate
   because they prove different risks. Mandatory lint owns `govet`, so repeated
   current-tree test commands disable their duplicate default vet pass.
+- Delivery quality checks GitHub Actions semantics with actionlint,
+  medium-or-higher severity and high confidence workflow-security findings with
+  zizmor, tracked shell scripts with digest-pinned ShellCheck, and the
+  production Dockerfile with BuildKit's native checks. The job is required for
+  every non-docs-only change and enters through `make delivery-quality`.
 - Race, coverage, and integration restore a runtime-only Go cache. Tool jobs
   include `tools/go.sum`; every lint-consuming CI, template-proof, and
   release-preflight job uses a SHA-pinned official installer for the exact

@@ -21,6 +21,26 @@ Repository-wide contract for reliable Go-service changes with the least workflow
 - Add CPU or memory limits only from a representative peak measurement with headroom; a limit that creates throttling, swapping, OOMs, or flaky proof is not an optimization.
 - For a performance claim, follow [Benchmarking](docs/benchmarking.md); it owns proof level, workload and budget, evidence, remote execution, and completion policy.
 
+## Go Readability
+
+For behaviorally equivalent Go choices, optimize for the next maintainer. Make
+what the code does and why it does it apparent through names, ordinary control
+flow, and comments that record non-obvious rationale, constraints, or public
+contracts.
+
+Resolve style trade-offs in this order: clarity, simplicity, concision,
+maintainability, then local consistency. Prefer the least mechanism that
+preserves the accepted behavior; shorter code wins only when it also reduces
+what a reader must remember.
+
+Use the [Google Go Style Guide](https://google.github.io/styleguide/go/guide.html)
+for judgment priority and the relevant
+[Go Code Review Comments](https://go.dev/wiki/CodeReviewComments) for Go idioms.
+Let formatters and linters own mechanical style, and keep style edits
+change-scoped. Changed Go is readable when its normal path, error path,
+ownership or lifetime, and non-obvious policy are clear without reconstructing
+hidden modes or speculative abstractions.
+
 ## Collaboration
 
 - Lead with the conclusion. Separate established facts, inferences, trade-offs, and proof gaps.
@@ -104,13 +124,14 @@ Use the smallest matching check:
 ## Go Change Surface
 
 When work can change Go, classify only the triggered pressures: package owner,
-import direction, composition, or exported surface; method sets, nil/zero,
-errors, or context; resource or transaction lifetime; mutable ownership,
-aliasing, concurrency, or lifecycle; hot-path work amplification, resource cost,
-or capacity; canonical, generated, or hand-written authority; and
-repository-native proof. Activate only the matching existing Go methods;
-untriggered categories create no work. Close every triggered category with its
-phase or skill owner, or name the owner and condition that must reopen it.
+import direction, composition, or exported surface; reader-visible control flow,
+naming, helper shape, or test diagnostics; method sets, nil/zero, errors, or
+context; resource or transaction lifetime; mutable ownership, aliasing,
+concurrency, or lifecycle; hot-path work amplification, resource cost, or
+capacity; canonical, generated, or hand-written authority; and repository-native
+proof. Activate only the matching existing Go methods; untriggered categories
+create no work. Close every triggered category with its phase or skill owner, or
+name the owner and condition that must reopen it.
 
 ## Instruction Ownership
 

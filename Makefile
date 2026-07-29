@@ -8,6 +8,7 @@ OPENAPI_FILES := $(OPENAPI_FILE) $(REFERENCE_OPENAPI_FILE)
 OPENAPI_PACKAGES := ./internal/openapi $(REFERENCE_OPENAPI_PACKAGE)
 GO_FILES := $(shell git ls-files --cached --others --exclude-standard -- '*.go' 2>/dev/null | awk '!/^(\.agents|\.cache|vendor)\//' | while IFS= read -r file; do [ -f "$$file" ] && printf '%s\n' "$$file"; done)
 GOFUMPT_FILES := $(filter-out internal/openapi/openapi.gen.go internal/infra/postgres/sqlcgen/%,$(GO_FILES))
+SHELL_FILES := $(shell git ls-files --cached --others --exclude-standard -- '*.sh' 2>/dev/null | awk '!/^(\.agents|\.cache|vendor)\//' | while IFS= read -r file; do [ -f "$$file" ] && printf '%s\n' "$$file"; done)
 REDOCLY_CLI_VERSION := 2.40.0
 GO_TOOL := bash ./scripts/run-go-tool.sh
 GOLANGCI_LINT ?= $(GO_TOOL) golangci-lint
@@ -60,6 +61,9 @@ HTTP_BENCH_RAW_SAMPLES ?= 0
 
 TRIVY_IMAGE ?= aquasec/trivy:0.72.0@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f
 TRIVY_CACHE_VOLUME ?= trivy-cache
+ACTIONLINT_IMAGE ?= rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
+SHELLCHECK_IMAGE ?= koalaman/shellcheck:v0.11.0@sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d
+ZIZMOR_IMAGE ?= ghcr.io/zizmorcore/zizmor:1.28.0@sha256:8e6b3e4fb74d1aa5d23e83ea369f386c66eced0d1fb944d32cd8b2aac100b00d
 CLAUDE_SKILLS_CHECK_SCRIPT := bash ./scripts/ci/claude-skills-check.sh
 CI_CHANGE_SCOPE_SCRIPT := bash ./scripts/ci/ci-change-scope.sh
 GENERATED_DRIFT_CHECK_SCRIPT := bash ./scripts/ci/generated-drift-check.sh
@@ -76,12 +80,13 @@ BENCHMARK_REMOTE_SCRIPT := bash ./scripts/dev/benchmark-remote.sh
 # One same-target A/B on the 10-core/16-GiB reference Mac measured 138.7s
 # serial versus 294.6s with make -j4. Re-measure after host, toolchain, or
 # aggregate membership changes before enabling parallel prerequisites.
-.NOTPARALLEL: check mod-check lint-deep go-security openapi-check ci-local
+.NOTPARALLEL: check mod-check lint-deep go-security openapi-check delivery-quality ci-local
 
 .PHONY: help template-init template-init-check project-structure-check ci-change-scope-check check check-gentle check-full check-full-gentle pr-check \
 	tidy fmt mod-check mod-tidy-check mod-verify fmt-check test test-watch test-race test-cover test-report coverage-effective-total coverage-summary coverage-check test-fuzz-smoke test-flake-smoke test-integration \
 	bench bench-baseline bench-compare bench-profile bench-http bench-http-inspect benchmark-infra-check benchmark-remote-check benchmark-remote-image \
 	lint lint-deep lint-fast deadcode nilaway modernize-check test-parallelism-check govulncheck gosec go-security secret-scan secret-scan-history secret-scan-check ci-local ci-local-gentle \
+	actionlint zizmor shellcheck dockerfile-check delivery-quality \
 	openapi-generate openapi-drift-check openapi-reference-compile openapi-runtime-contract-check openapi-lint openapi-validate openapi-breaking openapi-check \
 	sqlc-check container-security run build docker-build docker-run vendor claude-skills-sync claude-skills-check \
 	template-sync template-sync-check template-sync-all template-owned-purity-check
@@ -107,7 +112,7 @@ help:
 	@echo "Focused validation:"
 	@echo "  make test | test-race | test-report | test-integration"
 	@echo "  make mod-check | mod-tidy-check | mod-verify"
-	@echo "  make lint | lint-deep | lint-fast | go-security | secret-scan | secret-scan-history"
+	@echo "  make lint | lint-deep | lint-fast | delivery-quality | go-security | secret-scan | secret-scan-history"
 	@echo "  make openapi-check"
 # profile:database-postgres:start
 	@echo "  make sqlc-check | migration-validate"
@@ -190,6 +195,7 @@ ci-local-gentle:
 check-full:
 	@command -v docker >/dev/null 2>&1 || { echo "Docker is required for make check-full"; exit 1; }
 	@docker info >/dev/null 2>&1 || { echo "Docker daemon is not reachable"; exit 1; }
+	$(MAKE) delivery-quality
 	$(MAKE) ci-local
 	REQUIRE_DOCKER=1 $(MAKE) test-integration
 	docker build -f build/docker/Dockerfile -t $(SERVICE_NAME):ci .
@@ -378,6 +384,48 @@ modernize-check:
 
 test-parallelism-check:
 	$(GOLANGCI_LINT) run --allow-serial-runners --concurrency=$(LINT_CONCURRENCY) --enable-only=paralleltest,tparallel --timeout=3m --max-issues-per-linter=0 --max-same-issues=0
+
+actionlint:
+	@command -v docker >/dev/null 2>&1 || { echo "Docker is required for actionlint"; exit 1; }
+	@docker info >/dev/null 2>&1 || { echo "Docker daemon is not reachable"; exit 1; }
+	docker run --rm --read-only --network none \
+		-v "$(CURDIR):/src:ro" \
+		-w /src \
+		"$(ACTIONLINT_IMAGE)"
+
+zizmor:
+	@command -v docker >/dev/null 2>&1 || { echo "Docker is required for zizmor"; exit 1; }
+	@docker info >/dev/null 2>&1 || { echo "Docker daemon is not reachable"; exit 1; }
+	docker run --rm --read-only --network none \
+		-v "$(CURDIR):/src:ro" \
+		-w /src \
+		"$(ZIZMOR_IMAGE)" \
+		--offline \
+		--strict-collection \
+		--min-severity medium \
+		--min-confidence high \
+		--no-progress \
+		--color never \
+		--render-links never \
+		--show-audit-urls always \
+		.
+
+shellcheck:
+	@command -v docker >/dev/null 2>&1 || { echo "Docker is required for ShellCheck"; exit 1; }
+	@docker info >/dev/null 2>&1 || { echo "Docker daemon is not reachable"; exit 1; }
+	@test -n "$(SHELL_FILES)" || { echo "no shell scripts found; skipping ShellCheck"; exit 0; }
+	docker run --rm --read-only --network none \
+		-v "$(CURDIR):/src:ro" \
+		-w /src \
+		"$(SHELLCHECK_IMAGE)" \
+		-- $(SHELL_FILES)
+
+dockerfile-check:
+	@command -v docker >/dev/null 2>&1 || { echo "Docker is required for Dockerfile checks"; exit 1; }
+	@docker info >/dev/null 2>&1 || { echo "Docker daemon is not reachable"; exit 1; }
+	docker buildx build --check -f build/docker/Dockerfile .
+
+delivery-quality: actionlint zizmor shellcheck dockerfile-check
 
 govulncheck:
 	$(GO_TOOL) govulncheck ./...

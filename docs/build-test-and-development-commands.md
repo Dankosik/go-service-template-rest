@@ -7,9 +7,9 @@ that would be awkward or misleading inside a recipe.
 
 - Go at the version declared in `go.mod`.
 - Node.js and `npx` for the pinned Redocly OpenAPI lint command.
-- Docker only for container-backed integration tests, migration rehearsal,
-  runtime-image build and scan, Compose, real-PostgreSQL benchmarks, and k6 HTTP
-  benchmarks.
+- Docker for ShellCheck, Dockerfile checks, container-backed integration tests,
+  migration rehearsal, runtime-image build and scan, Compose, real-PostgreSQL
+  benchmarks, and k6 HTTP benchmarks.
 
 Go tools are pinned through the `tool` block in `tools/go.mod` and invoked by
 `scripts/run-go-tool.sh` from the repository root. Runtime and test
@@ -111,9 +111,10 @@ provide a real module path and an owner in `@user` or `@org/team` form.
 | --- | --- |
 | `make project-structure-check` | Placement, naming, command, integration-test, migration-pair, and no-empty-placeholder contract |
 | `make claude-skills-check` | Every `.agents/skills/` entry is exposed to Claude Code by a matching `.claude/skills/` symlink, and no link outlives its skill |
+| `make delivery-quality` | Digest-pinned actionlint, medium-or-higher/high-confidence zizmor security audit, ShellCheck for repository scripts, and native BuildKit Dockerfile checks |
 | `make check` | Project structure, `fmt-check`, `lint`, and ordinary unit tests |
 | `make ci-local` | Fast host-toolchain CI aggregate: manifest drift, project structure, format, lint, deep lint, race, coverage report, generated contracts, Go security, and secret scan |
-| `make check-full` | `ci-local` plus required Docker integration, runtime image, migration, and image-security proof |
+| `make check-full` | `delivery-quality` and `ci-local` plus required Docker integration, runtime image, migration, and image-security proof |
 | `make pr-check BASE_REF=origin/main` | `check-full` plus template initialization, downloaded-module verification, and OpenAPI breaking comparison when the base contains the spec |
 
 Module validation is split without weakening the aggregate:
@@ -160,6 +161,13 @@ each other by design.
 The container job builds the production runtime image once. Trivy scans that
 tag and migration validation reuses it when a migration, runtime, dependency,
 Dockerfile, Makefile, or CI owner changed.
+
+The `delivery-quality` job checks workflow semantics with actionlint,
+medium-or-higher severity and high confidence workflow-security findings with
+zizmor, tracked shell scripts with ShellCheck, and the production Dockerfile
+with BuildKit's native checks. The same `make delivery-quality` owner runs
+locally under `check-full`; all analyzers mount the repository read-only, run
+without network access, and are pinned by digest.
 
 ### Keep the laptop responsive
 
