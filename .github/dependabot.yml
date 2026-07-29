@@ -4,6 +4,8 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: "deps"
     groups:
@@ -18,6 +20,8 @@ updates:
     directory: "/tools"
     schedule:
       interval: "monthly"
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: "tools"
     groups:
@@ -29,6 +33,8 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: "ci"
     groups:
@@ -40,6 +46,8 @@ updates:
     directory: "/build/docker"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: "docker"
     groups:
@@ -52,6 +60,8 @@ updates:
     directory: "/env"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: "docker"
     groups:

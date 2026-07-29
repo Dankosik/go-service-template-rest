@@ -30,6 +30,15 @@ path_absent() { [[ ! -e "$1" ]]; }
 path_present() { [[ -e "$1" ]]; }
 file_present() { [[ -f "$1" ]]; }
 same_text() { [[ "$1" == "$2" ]]; }
+grep_absent() {
+	local status
+	if grep "$@"; then
+		return 1
+	else
+		status=$?
+	fi
+	[[ "${status}" -eq 1 ]]
+}
 
 # This check drives scripts/init-module.sh against fixtures, so it only means
 # anything in the template source checkout. Initialization consumes and removes
@@ -43,8 +52,9 @@ if [[ ! -d "${ROOT_DIR}/scripts/profiles" ]]; then
 fi
 
 TEMP_ROOT="$(mktemp -d -t template-init-check.XXXXXX)"
-# Go and golangci-lint own their cache paths. In CI those are the paths restored
-# by setup-go; redirecting them here creates a large unpersisted duplicate.
+# Go and golangci-lint normally own the cache paths restored by CI. Keep those
+# canonical paths here; the generated fixture lint below documents its one
+# narrow isolation exception.
 if [[ "${TEMPLATE_INIT_PROFILE}" != "postgres" ]]; then
 	if [[ -n "${GOLANGCI_LINT_BIN:-}" ]]; then
 		LINTER="${GOLANGCI_LINT_BIN}"
@@ -223,9 +233,12 @@ if [[ "${TEMPLATE_INIT_PROFILE}" != "postgres" ]]; then
 
 grep -Fqx "module github.com/acme/orders" "${derived}/go.mod"
 grep -Fqx "module github.com/acme/orders/tools" "${derived}/tools/go.mod"
-! grep -R -Fq "github.com/example/go-service-template-rest" \
-	"${derived}/internal" "${derived}/.golangci.yml"
-! grep -v '^[[:space:]]*#' "${derived}/.github/CODEOWNERS" | grep -Fq "@Dankosik"
+assert "template module survived initialization" grep_absent -R -Fq \
+	"github.com/example/go-service-template-rest" "${derived}/internal" "${derived}/.golangci.yml"
+if grep -v '^[[:space:]]*#' "${derived}/.github/CODEOWNERS" | grep -Fq "@Dankosik"; then
+	echo "template initialization contract: template CODEOWNER survived initialization"
+	exit 1
+fi
 grep -v '^[[:space:]]*#' "${derived}/.github/CODEOWNERS" | grep -Fq "@acme/platform"
 grep -Fqx '  title: "orders"' "${derived}/api/openapi/service.yaml"
 grep -Fqx 'SERVICE_NAME := orders' "${derived}/Makefile"
@@ -233,7 +246,8 @@ grep -Fq '"observability.otel.service_name":           "orders"' "${derived}/int
 grep -Fq '"service.name", "orders"' "${derived}/cmd/service/internal/bootstrap/run.go"
 grep -Fqx 'APP__OBSERVABILITY__OTEL__SERVICE_NAME=orders' "${derived}/env/.env.example"
 grep -Fq '# orders' "${derived}/README.md"
-! grep -Fq 'https://github.com/Dankosik/go-service-template-rest/actions' "${derived}/README.md"
+assert "template actions URL survived initialization" grep_absent -Fq \
+	'https://github.com/Dankosik/go-service-template-rest/actions' "${derived}/README.md"
 assert "agent workflow changed during initialization" same_text "${derived_workflow_before}" "$(workflow_snapshot "${derived}")"
 assert "specs/ must not survive initialization" path_absent "${derived}/specs"
 assert "startup_dependencies.go is missing" file_present "${derived}/cmd/service/internal/bootstrap/startup_dependencies.go"
@@ -275,16 +289,21 @@ minimal_workflow_before="$(workflow_snapshot "${minimal_checkout}")"
 	go test ./...
 	go build ./cmd/service
 	make mod-tidy-check
-	# One full linter load proves both that profile removal stranded no symbols
-	# and that initialization rewrote depguard's module-qualified rules. The
-	# intentional violation must be the only reported issue.
-	mkdir -p internal/depguardprobe
-	{
-		echo "package depguardprobe"
-		echo
-		echo 'import _ "github.com/acme/feature-proof/internal/infra/http"'
-	} >internal/depguardprobe/forbidden.go
-	if "${LINTER}" run \
+		# One full linter load proves both that profile removal stranded no symbols
+		# and that initialization rewrote depguard's module-qualified rules. The
+		# intentional violation must be the only reported issue. This generated
+		# checkout reuses one module path under a fresh absolute temp path on every
+		# run. Isolate only this invocation: shared golangci-lint cache entries can
+		# otherwise return findings whose source paths belong to an already deleted
+		# checkout.
+		mkdir -p internal/depguardprobe
+		mkdir -p "${TEMP_ROOT}/golangci-lint-cache"
+		{
+			echo "package depguardprobe"
+			echo
+			echo 'import _ "github.com/acme/feature-proof/internal/infra/http"'
+		} >internal/depguardprobe/forbidden.go
+		if GOLANGCI_LINT_CACHE="${TEMP_ROOT}/golangci-lint-cache" "${LINTER}" run \
 		--allow-serial-runners \
 		--timeout=3m \
 		--show-stats=false \
@@ -348,11 +367,18 @@ grep -Eq '^source_revision = "[0-9a-f]{40}"$' "${minimal_checkout}/template.lock
 	make project-structure-check
 )
 grep -Fq 'upstream-only' "${TEMP_ROOT}/minimal-init-check.log"
-! make -C "${minimal_checkout}" help | grep -Fq 'bench-db'
-! grep -Fq 'preDeployCommand = ["/migrate"]' "${minimal_checkout}/railway.toml"
-! grep -Fq '/out/migrate' "${minimal_checkout}/build/docker/Dockerfile"
-! grep -Fq 'migration-validate:' "${minimal_checkout}/.github/workflows/ci.yml"
-! grep -Fq 'APP__POSTGRES__ENABLED' "${minimal_checkout}/env/.env.example"
+if make -C "${minimal_checkout}" help | grep -Fq 'bench-db'; then
+	echo "template initialization contract: DATABASE=none help retained database commands"
+	exit 1
+fi
+assert "DATABASE=none retained the migration deploy command" grep_absent -Fq \
+	'preDeployCommand = ["/migrate"]' "${minimal_checkout}/railway.toml"
+assert "DATABASE=none retained the migration binary" grep_absent -Fq \
+	'/out/migrate' "${minimal_checkout}/build/docker/Dockerfile"
+assert "DATABASE=none retained migration validation" grep_absent -Fq \
+	'migration-validate:' "${minimal_checkout}/.github/workflows/ci.yml"
+assert "DATABASE=none retained PostgreSQL configuration" grep_absent -Fq \
+	'APP__POSTGRES__ENABLED' "${minimal_checkout}/env/.env.example"
 if (
 	cd "${minimal_checkout}"
 	go list -m all |

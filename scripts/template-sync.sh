@@ -40,8 +40,8 @@ reject() {
 	rejected_targets=$((rejected_targets + 1))
 }
 
-script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-default_template=$(CDPATH= cd -- "${script_dir}/.." && pwd)
+script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
+default_template=$(CDPATH='' cd -- "${script_dir}/.." && pwd)
 
 mode=""
 template="${default_template}"
@@ -95,7 +95,7 @@ done
 
 command -v rsync >/dev/null 2>&1 || fail "rsync is required"
 
-template=$(CDPATH= cd -- "${template}" 2>/dev/null && pwd) || fail "template directory not found"
+template=$(CDPATH='' cd -- "${template}" 2>/dev/null && pwd) || fail "template directory not found"
 manifest="${template}/template-owned.paths"
 [[ -f "${manifest}" ]] || fail "manifest not found: ${manifest}"
 
@@ -243,7 +243,7 @@ synced_targets=0
 rejected_targets=0
 
 for target in "${targets[@]}"; do
-	repo=$(CDPATH= cd -- "${target}" 2>/dev/null && pwd) || fail "target directory not found: ${target}"
+	repo=$(CDPATH='' cd -- "${target}" 2>/dev/null && pwd) || fail "target directory not found: ${target}"
 	printf '== %s\n' "${repo}"
 
 	if [[ "${repo}" == "${template}" ]]; then

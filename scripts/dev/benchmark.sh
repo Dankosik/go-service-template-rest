@@ -576,7 +576,7 @@ run_infrastructure_check() {
 		BENCH_COMPARE_OUTPUT="${artifact_root}/comparison.txt" \
 		bash "${BASH_SOURCE[0]}" compare
 
-	HTTP_BENCH_ENV_FILE= \
+	HTTP_BENCH_ENV_FILE='' \
 		HTTP_BENCH_ARTIFACT_DIR="${artifact_root}/http-steady" \
 		HTTP_BENCH_WORKLOAD_ID=infra-check-steady \
 		HTTP_BENCH_BASE_URL=http://example.invalid \
@@ -595,7 +595,7 @@ run_infrastructure_check() {
 	grep -Fq '"flow_duration{flow:single_flow}"' "${artifact_root}/http-steady/inspect.json"
 	grep -Fq '"p(99)"' "${artifact_root}/http-steady/inspect.json"
 
-	HTTP_BENCH_ENV_FILE= \
+	HTTP_BENCH_ENV_FILE='' \
 		HTTP_BENCH_ARTIFACT_DIR="${artifact_root}/http-ramping" \
 		HTTP_BENCH_WORKLOAD_ID=infra-check-ramping \
 		HTTP_BENCH_BASE_URL=http://example.invalid \
