@@ -2,10 +2,12 @@
 
 Choose the execution carrier from the task's execution need, not its workflow
 label. Use one harness-native implementation Worker for a ready ledger task only
-when the user explicitly requests a Worker, its isolated checkout protects
-unrelated state, a bounded separate context is needed while the root coordinates
-other owners, or it belongs to a positively independent planned wave. Otherwise
-execute the closed ledger task root-locally under [Local
+when the user explicitly requests a Worker, root-local execution would
+materially risk unrelated dirty state and an isolated checkout is the narrowest
+safe boundary, the root must continue coordinating another owner while this
+closed task executes in a bounded separate context, or the task belongs to a
+positively independent planned wave. Otherwise execute the closed ledger task
+root-locally under [Local
 Execution](implementation-validation-closeout.md#local-execution) and the same
 acceptance contract.
 
@@ -98,12 +100,13 @@ When a failure is isolated and the reviewed independence basis still holds, shri
 
 The root is the acceptance authority. Each Worker return first passes Scope
 Lock plus ownership, mergeability, and proof-provenance intake. The first
-acceptance-ready candidate becomes the frozen baseline for one full acceptance
-review and its initial mapped proof. That review creates the finite finding set
-supported by the evidence then available, containing only candidate-caused
-regressions, concrete violations of accepted criteria or repository
-invariants, and proof missing from an accepted claim. All other observations
-retain observation status.
+intake-valid candidate becomes the frozen baseline for the phase-owned bounded
+[acceptance review](implementation-validation-closeout.md#review) and its
+initial mapped proof. That review creates the finite finding set supported by
+the evidence then available, containing only candidate-caused regressions,
+concrete violations of accepted criteria or repository invariants, and proof
+missing from an accepted claim. All other observations retain observation
+status.
 
 Correction verification covers the open findings, the delta from the frozen
 baseline, and proof invalidated by that delta; unchanged bytes retain their

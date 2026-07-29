@@ -1,8 +1,8 @@
 ---
 name: agent-prompt-composer
-description: "Reconstruction: Use when incomplete, mixed-language, instruction-noisy, or rough source input needs a high-signal English coding handoff grounded in the repository. Own preserved identifiers, facts, authorization, bounded inference, and one agent-ready brief; Skip when the prompt is already clear or needs only translation or copy editing."
+description: "Reconstruction: Use when incomplete, mixed-language, instruction-noisy, or rough source input needs a high-signal English Intake brief grounded in the repository. Own faithful source reconstruction under the canonical Intake contract; Skip when the request is already routing-sufficient or needs only translation or copy editing."
 ---
 
 # Agent Prompt Composer
 
-Reconstruct only source material that can change the outcome, editable boundary, authority or safety, implementation owner, proof, or stop condition. Preserve an identifier, path, or command only when downstream action depends on it; discard wrapper noise and link inherited repository rules instead of copying them. Use [repository authorization](../../../AGENTS.md#authorization-and-boundaries) and [Subagents and Handoff](../../../docs/spec-first-workflow/shared/subagents-and-handoff.md). Load [examples](references/example-transformations.md) only when output calibration is genuinely unclear. Return one compact English handoff that lets the coding agent act without re-deriving a material decision; otherwise name the one blocker that changes scope, safety, ownership, or proof.
+Apply [Intake](../../../docs/spec-first-workflow/phases/intake.md) as the output contract. Preserve only source material that can change its accepted outcome or business meaning, scope or non-goals, authority, observable success, routing facts, assumption boundary, or stop condition. Preserve an identifier, path, or command only when downstream action depends on it; discard wrapper noise and link inherited repository rules instead of copying them. Load [examples](references/example-transformations.md) only when output calibration is genuinely unclear. Return the Intake brief or its single blocking question.

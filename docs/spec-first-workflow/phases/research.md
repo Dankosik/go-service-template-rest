@@ -18,7 +18,7 @@ Research owns discovering, verifying, falsifying, comparing, and synthesizing th
 ## Outputs
 
 - A compact open-item map. For each item, retain the affected decision and owner, its Method classification, downstream disposition, and any carried constraint, assumption, risk, proof obligation, blocker/reopen condition, or objective refresh trigger.
-- For each evidence question, retain one cross-source synthesis that separates established fact, inference, conflict, authoritative absence, assumption, and unknown; treats an unavailable or unsearched decision-relevant surface as unknown rather than absence; disposes the leading hypothesis and material counter-evidence; attaches claim-level source scope/revision/date and evidence limits; and states which downstream decision the evidence supports, constrains, eliminates, or leaves open.
+- For each evidence question, retain one cross-source synthesis organized by decision-changing claim rather than by source. It separates established fact, inference, conflict, authoritative absence, assumption, and unknown; treats an unavailable or unsearched decision-relevant surface as unknown rather than absence; disposes the leading hypothesis and material counter-evidence; attaches claim-level source scope/revision/date and evidence limits; explains how authority, applicability, agreement, conflict, and counter-evidence make the conclusion follow or remain unresolved; states which downstream decision the evidence supports, constrains, eliminates, or leaves open; and records why further relevant source inspection or, when applicable, a safe discriminating probe is unlikely to change that disposition.
 - For each decision-changing quantity, retain its provenance label.
 - When a solution choice is live, a compact candidate map: the neutral frame; each candidate's decision slot and relationship; materially distinct families at the live decision level and representative implementations only where relevant; scanned rungs; local-fit evidence or rejection reason for excluded viable candidates; any decision-flip condition; and the bounded stop rationale.
 - A compact `research/*.md` note only when reuse or auditability justifies it.
@@ -27,7 +27,7 @@ If persisted, retain only sanitized evidence or a safe pointer, never secrets or
 
 ## Method
 
-Scale depth to decision impact, reversibility, uncertainty, and evidence volatility, not source or lane count. Before searching, classify each open item and route it to its smallest owner: research an evidence question; route a target, policy, or risk-tolerance choice to its owner under [Decision Ownership](../../../AGENTS.md#decision-ownership); route a mechanism choice to design; or carry a later proof obligation to test design. Do not substitute missing proof for an unset acceptance target. Label each decision-changing quantity as a measured baseline, external limit or quota, forecast, accepted target, or assumption. Before selecting a branch, identify only evidence lenses that could change the named decision. Mark each selected lens `researched` or `established by current authoritative evidence`; for a plausible lens intentionally excluded, record `not triggered: <concrete reason>`.
+Scale depth to decision impact, reversibility, uncertainty, and evidence volatility, not source or lane count. Before searching, classify each open item and route it to its smallest owner: research an evidence question; route a target, policy, or risk-tolerance choice to its owner under [Decision Ownership](../../../AGENTS.md#decision-ownership); route a mechanism choice to design; or carry a later proof obligation to test design. Do not substitute missing proof for an unset acceptance target. Label each decision-changing quantity as a measured baseline, external limit or quota, forecast, accepted target, or assumption. Before selecting a branch, derive the evidence lenses from the named decision, its authority path, and every current surface that can independently change the answer. For each plausible lens, record `researched`, `established by current authoritative evidence`, or `not triggered: <current evidence showing why it cannot change the decision>`.
 
 ### Question Closure
 
@@ -38,7 +38,7 @@ Before substantive search, write each decision-changing question in this form; r
 - the smallest evidence that could falsify the leading implication;
 - the authoritative source boundary and most authoritative practical source within it;
 - the semantic terms, identifiers or aliases, applicable versions, and failure modes that could expose differently named or contradictory evidence;
-- the minimum evidence needed;
+- the minimum coverage needed across every authority, local-applicability, observation, and counter-evidence surface that can independently change the answer;
 - how absence, conflict, or staleness will be handled;
 - when to stop searching.
 
@@ -58,7 +58,7 @@ Choose the smallest triggered branch and load only its rule:
 - [Empirical claim or probe](research-branches.md#empirical-claim-or-probe) when the decision uses empirical/runtime evidence or authoritative sources cannot resolve a decision-changing empirical claim.
 - [Conflict or freshness](research-branches.md#conflict-or-freshness) when material sources conflict, freshness can flip the decision, or an approval-critical hard-to-reverse claim needs semantic challenge.
 
-Load another branch only for an independent evidence pressure that can change the named decision.
+After applying the first branch, load another only when its distinct evidence pressure can independently change the same or another named decision; one question may therefore require more than one branch.
 
 Use independent read-only lanes only for separable questions where parallel context materially helps.
 
@@ -78,4 +78,4 @@ The owning root applies the shared [Review Independence](../shared/subagents-and
 
 ## Stop Rule
 
-Finish when every required Output is present; every triggered evidence surface has been inspected or its unavailability recorded with the decision effect; each leading implication has been tested against material counter-evidence and dispositioned; the cross-source synthesis gives the named downstream owner an explicit decision implication; and another source is unlikely to change the affected decision. For solution discovery, also satisfy the branch's [candidate-space saturation rule](research-branches.md#solution-discovery-evidence). The next owner must be able to act without repeating the search or re-synthesizing the sources. A bounded gap required by the next phase blocks and reopens its smallest evidence or decision owner; an optional later proof may carry only with its owner and recheck condition. Any triggered `research only` review must have returned `PASS` or dispositioned `CONCERNS`. Hand the implications to the named downstream owner; do not write the final specification or design decision inside research.
+Finish when every required Output is present; every triggered evidence surface has been inspected or its unavailability recorded with the decision effect; each leading implication has been tested against material counter-evidence and dispositioned; the cross-source synthesis gives the named downstream owner an explicit decision implication; and its recorded stop rationale shows that further source inspection or, when applicable, a safe discriminating probe is unlikely to change, narrow, or reopen the affected decision. For solution discovery, also satisfy the branch's [candidate-space saturation rule](research-branches.md#solution-discovery-evidence). The next owner must be able to act without repeating the search or re-synthesizing the sources. A bounded gap required by the next phase blocks and reopens its smallest evidence or decision owner; an optional later proof may carry only with its owner and recheck condition. Any triggered `research only` review must have returned `PASS` or dispositioned `CONCERNS`. Hand the implications to the named downstream owner; do not write the final specification or design decision inside research.

@@ -82,14 +82,14 @@ or a bounded assumption with an objective reopen condition.
 
 A material rule is complete when it fixes every interpretation-changing part
 of: actor and context; trigger and input; preconditions; normative rule,
-invariant, and precedence; states, allowed transitions, and side effects;
-observable outcome and contract delta; applicable rejection, absence,
-duplication, replay, failure, and recovery behavior; deliberately unchanged
-behavior; and the nearest feasible falsifier or proof expectation. Omit a part
-only when current evidence shows it cannot change interpretation. Define
-decision-changing terms, units, bounds, default or no-match behavior, and
-terminal behavior. Use stable rule IDs only when multiple owners or downstream
-artifacts need them.
+invariant, and precedence; states and allowed transitions; observable outcome
+and contract delta; applicable normal, rejection, absence, duplication, replay,
+failure, and recovery behavior; side effects required, forbidden, or already
+possible at each observable outcome; deliberately unchanged behavior; and the
+nearest feasible falsifier or proof expectation. Omit a part only when current
+evidence shows it cannot change interpretation. Define decision-changing terms,
+units, bounds, default or no-match behavior, and terminal behavior. Use stable
+rule IDs only when multiple owners or downstream artifacts need them.
 
 When source-of-truth semantics are triggered, state which fact is authoritative,
 which observations are derived, what absence, currentness, and finality mean,
@@ -123,9 +123,10 @@ evidence in research.
 
 ## Decision Bar
 
-The spec is ready only when every materially affected case has one falsifiable
-behavioral answer and every live downstream realization permitted by the spec
-is behaviorally equivalent:
+The spec is ready only when the affected behavior surface has been reconstructed
+from every applicable source named in Method, each resulting materially affected
+case has one falsifiable behavioral answer, and every live downstream
+realization permitted by the spec is behaviorally equivalent:
 
 - each accepted intent and decision-changing evidence implication is closed as
   a traceable, falsifiable behavioral rule grounded in accepted intent, current

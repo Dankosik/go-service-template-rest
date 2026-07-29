@@ -1,6 +1,6 @@
 # Example Transformations
 
-These examples show compact, conditional handoffs. They do not use every possible heading.
+These examples show compact, routing-sufficient Intake briefs. They do not use every possible heading.
 
 ## Example 1: HTTP OPTIONS / CORS Policy Bug
 
@@ -12,14 +12,19 @@ Fix and regression-test HTTP `OPTIONS` handling so a known non-preflight route r
 
 Success criteria
 - Focused router tests cover both branches and preserve intentional `problem+json` behavior.
-- OpenAPI and generated bindings remain unchanged unless bounded inspection proves the public contract changes.
+- OpenAPI and generated bindings remain unchanged.
 
 Constraints and evidence
+- Bounded repository inspection established that existing router composition and contract tests own both `OPTIONS` branches, OpenAPI owns neither fallback, and no client-visible contract decision remains open.
+- The change is reversible, has one package owner, and focused router tests provide bounded validation.
 - Inspect `internal/infra/http/router.go` and `internal/infra/http/router_contract_test.go` first.
 - Preserve the exact signals `OPTIONS`, `Allow`, `preflight`, `CORS`, and `problem json`.
-- Run focused `./internal/infra/http` tests; run `make openapi-check` only if contract-owned files change.
+- Run focused `./internal/infra/http` tests.
 
-Stop if the behavior is owned outside router policy or requires a public-contract decision; report the owner and required reopen instead of broadening the patch.
+Reopen the smallest owner if new repository evidence invalidates the recorded router ownership, no-contract-delta fact, or bounded proof.
+
+Path / first owner
+`direct` -> Implementation with the accepted outcome and routing facts above.
 ```
 
 ## Example 2: Repo-Local Skill / Prompt Tooling Request
@@ -27,11 +32,14 @@ Stop if the behavior is owned outside router policy or requires a public-contrac
 Raw fixture: `files/skill-tooling.md`
 
 ```md
-Revise the existing repository-local prompt-composer skill so it reconstructs arbitrary messy user intent and emits a compact English coding-agent handoff rather than performing literal translation or generic prompt polish.
+Revise the existing repository-local prompt-composer skill so it reconstructs arbitrary messy user intent into one routing-sufficient English brief governed by canonical Intake.
 
-Success means the canonical `.agents/skills/` source and useful examples agree; the skill preserves exact identifiers, adds repository context only when it changes execution, and remains local to this repository.
+Success means canonical Intake owns the output contract, the `.agents/skills/` source and useful examples agree, the skill preserves exact identifiers, and it adds repository context only when it changes routing.
 
 Inspect `.agents/skills/agent-prompt-composer/`. Keep dependencies minimal. Validate with `git diff --check`. Do not create a global or home-directory skill.
+
+Path / first owner
+`direct` -> Implementation in `.agents/skills/agent-prompt-composer/`, including alignment of any disclosed example that still describes a separate handoff contract.
 ```
 
 ## Example 3: Flaky Shutdown / Drain Investigation
@@ -52,4 +60,7 @@ Inspect/evidence
 - Do not use a timeout increase as the primary fix without evidence that timeout behavior is the contract.
 
 If bounded inspection cannot identify the failing owner or reproducer, stop with the evidence gathered and the smallest next diagnostic target.
+
+Path / first owner
+`structured` -> Research with the open question: identify the failing owner and reproducer and determine which observed lifecycle boundary can change the eventual fix. `direct` is insufficient while the concurrency or lifecycle cause and proof boundary remain unresolved.
 ```

@@ -30,7 +30,10 @@ not completion evidence.
 
 - The bounded code, tests, configuration, generated output, or documentation change.
 - Claim-scoped review and proof evidence.
-- An honest completion, partial-verification, or blocker statement.
+- A closeout that claims outcome completion only with qualifying proof;
+  otherwise an honest named blocker. When implementation is complete and only
+  required proof is unavailable, report that blocker as `implementation
+  complete; verification incomplete`.
 
 ## Implement
 
@@ -136,17 +139,24 @@ any required real production wiring, shared-cause repair, replacement cleanup,
 and canonical/generated synchronization—is complete; the retained task delta
 contains no unrelated change and has been reviewed against every triggered
 risk; and each completion claim has current proof of equal scope. A
-production-path claim must exercise the relevant path or separately prove both
-its owning behavior and production wiring.
+production-path claim is complete only when current proof would fail if either
+its owning behavior or production wiring were absent or wrong. Prefer one
+exercise of the relevant observable path. Split proof qualifies only when it
+separately exercises the owner and the production wiring or composition and
+establishes that together they realize that same path; otherwise implementation
+may be complete, but production-path verification remains incomplete.
 
 If implementation is complete but required proof is unavailable, stop as
 `implementation complete; verification incomplete`. Name the unverified claim,
 the narrower evidence obtained, and the next proof or reopen owner; do not claim
-outcome completion or readiness.
+outcome completion or readiness. This is the `blocked` lifecycle state for a
+durable goal or artifact, not a third completion state.
 
-Worker execution uses the same criterion. Accept a candidate immediately when
-its current admissible finding set is empty and mapped proof passes. Proof
-unavailable for an external or environmental reason yields partial
-verification, not another correction loop. A changed decision reopens its
-narrowest upstream owner; after sufficient proof, closeout is the only
-authorized next action.
+Worker execution uses the same criterion and status boundary. Accept a
+candidate immediately when its current admissible finding set is empty and
+mapped proof passes. A candidate-caused proof failure or an accepted proof
+surface missing from the retained delta remains an implementation finding.
+Inability to run required proof for a named external or environmental reason
+stops as `implementation complete; verification incomplete`, not as acceptance
+or another correction loop. A changed decision reopens its narrowest upstream
+owner; after sufficient proof, closeout is the only authorized next action.
