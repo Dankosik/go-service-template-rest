@@ -22,11 +22,13 @@ Derive explicit design drivers before selecting the target architecture: accepte
 
 Treat the current architecture as evidence, not as the default target. Inspect it only until the relevant constraints, reusable capabilities, owners, and retained, replaced, or removed surface are known. For each unresolved architecture decision slot, construct materially distinct viable target-state substitutes at the same decision level only when current evidence leaves a real fork. Consider only live rungs: deletion or retention, existing owner, pattern, or infrastructure reuse, native platform capability, established dependency or managed capability, and custom machinery. A viable candidate fixes the relevant boundaries, authority, ordering and finality, failure and recovery, and operational consequences; a pattern, product, or topology label alone does not.
 
-Compare surviving substitutes against the same drivers and current evidence. Select one coherent architecture, record why it dominates and why each viable rejected substitute loses, and name the assumption or reopen condition that could reverse the choice. When evidence leaves one viable mechanism, record what collapses the fork without manufacturing alternatives. Then trace the selected architecture through Interaction And Data Flow; if that trace exposes an unresolved mechanism or boundary, return to this selection step.
+Compare surviving substitutes against the same drivers and current evidence. Select one coherent architecture, record why it dominates and why each viable rejected substitute loses, and name the assumption or reopen condition that could reverse the choice. When evidence leaves one viable mechanism, record what collapses the fork without manufacturing alternatives. Selection is closed only when every material driver is satisfied or enforced by the target decisions, every affected component, edge, store, contract, or custom mechanism included in the target is necessary for at least one driver, and the combined decisions remain coherent across all material flows. Then trace the selected architecture through Interaction And Data Flow; if that trace exposes an unresolved mechanism or boundary, return to this selection step.
 
 ## Interaction And Data Flow
 
 Interaction design is complete when a fresh reviewer can trace every material flow from its actor or trigger to caller-visible completion or durable finality without inventing ownership, contract, data authority, or failure/recovery behavior. A flow is material when its ordering, ownership, contract, authority, failure behavior, or finality can change implementation, rollout, or proof. Show current and target flows only when their difference matters.
+
+Select only mechanisms that are behaviorally equivalent under the ready spec; if the trace exposes alternatives with materially different user- or operator-visible outcomes, reopen Specification instead of deciding that divergence here.
 
 For each material flow, record only decisions implementation must not invent:
 
@@ -40,7 +42,7 @@ When a durable design artifact is required, add a Mermaid diagram only when comp
 
 When the shared [persistence trigger](../shared/artifact-model.md#when-to-persist) applies, use `design/overview.md` or one focused file. Split contracts, data, sequence, or rollout only when that creates a useful review/ownership boundary.
 
-For each material mechanism decision, record the selected mechanism, decision drivers and current evidence, bounded assumptions, a measurable acceptance boundary, material consequences for failure, operations, and rollout, required proof, and the reopen condition. When behavior changes, distinguish observed current state from the target state and name what is retained, replaced, or removed. The material-flow record is the universal coverage check; add only branch-specific decisions whose trigger matches.
+For each material architecture decision slot, record the applicable drivers and current evidence; the surviving substitutes or evidence that no real fork remains; the selected mechanism and why each viable rejected substitute loses; bounded assumptions; a measurable acceptance boundary; material failure, operational, and rollout consequences; required proof; and the reopen condition. When behavior changes, distinguish observed current state from the target state and name what is retained, replaced, or removed. The material-flow record is the universal coverage check; add only branch-specific decisions whose trigger matches.
 
 For each security or trust, performance or capacity, observability or operability, rollout or rollback, compatibility, or mixed-version pressure triggered by the selected architecture, record only the architecture-level decision, owner, operational or proof boundary, and reopen condition. Apply the matching specialist method by reference rather than restating it here.
 
@@ -58,15 +60,26 @@ When a material flow is scale-sensitive—its work grows with input or data card
 
 ## Contract Rule
 
-When a caller-visible API, generated contract, event, or material shared interface changes, decide the semantics before implementation:
+When a caller-visible API, generated contract, event, or material shared
+interface changes, realize the ready spec's closed semantics as a concrete
+contract and runtime path:
 
-- audience/owner and trust boundary;
-- request/message, response/result, error/status, validation, and limits;
-- retry, idempotency, concurrency, async, freshness, and compatibility behavior where relevant;
-- canonical source and generated outputs;
-- proof and migration/deprecation consequences.
+- map every accepted request/message, response/result, error/status,
+  validation, limit, retry, idempotency, concurrency, async, freshness, and
+  compatibility rule to its exact representation and transport behavior;
+- select the canonical source, generated outputs, transformation and wiring
+  owners, and drift boundary;
+- close representation- and rollout-level proof plus migration/deprecation
+  sequencing.
 
-Route client-visible REST semantics to `go-api-contract`, durable event and replay semantics to `go-distributed`, and trust material, signing, tenant, secret, or abuse policy to `go-security`; keep this section's canonical-source, exact-byte, and external-evidence rules authoritative across those handoffs.
+An absent or ambiguous observable contract rule reopens Specification; design
+does not choose among different caller- or operator-visible outcomes. Reuse
+`go-api-contract` for client-visible REST only to realize a behaviorally
+equivalent canonical representation and transport wiring after Specification
+has applied it to semantics. Route durable event mechanism and replay to
+`go-distributed`, and trust-material, signing, tenant, secret, or abuse
+mechanism to `go-security`; keep this section's canonical-source, exact-byte,
+and external-evidence rules authoritative across those handoffs.
 
 When canonicalization, hashing, signing, or verification depends on a data shape, close it at byte level: exact schema, field order, requiredness/nullability, bounds, exact bytes covered by canonicalization, digest, or signature, and at least one deterministic non-secret golden vector. When keyed signing or verification applies, also define public trust-material lookup and rotation. A metamodel or prose field list is insufficient. Environment-owned keys or trust data follow the router's [implementation-input closure](../../spec-first-workflow.md#implementation-input-closure); do not persist production secrets or private keys in repository artifacts.
 
@@ -88,4 +101,4 @@ After the design drivers and current evidence identify affected domains, apply t
 
 ## Stop Rule
 
-Continue to Go ownership only when one coherent target-state architecture is fixed; every real mechanism fork is closed by comparison against the same drivers or by evidence that no fork remains; [Interaction And Data Flow](#interaction-and-data-flow) is complete for every material flow; every triggered cross-cutting pressure is dispositioned; and package/file placement cannot reopen a material system decision. Continue to test design or planning after Go ownership and any triggered review have reached `PASS` or dispositioned `CONCERNS`. Reopen the narrowest upstream evidence or decision owner when a missing fact, unset decision, or untraceable material flow can change accepted behavior, ownership, mechanism choice, or proof feasibility; when that owner is external, report the blocker and narrow the completion claim.
+Continue to Go ownership only when architecture selection is closed under [Architecture Synthesis And Selection](#architecture-synthesis-and-selection); [Interaction And Data Flow](#interaction-and-data-flow) is complete for every material flow; every triggered cross-cutting pressure is dispositioned; and package/file placement cannot reopen a material system decision. Continue to test design or planning after Go ownership and any triggered review have reached `PASS` or dispositioned `CONCERNS`. Reopen the narrowest upstream evidence or decision owner when a missing fact, unset decision, or untraceable material flow can change accepted behavior, ownership, mechanism choice, or proof feasibility; when that owner is external, report the blocker and narrow the completion claim.

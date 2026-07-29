@@ -35,13 +35,19 @@ not completion evidence.
 ## Implement
 
 Inspect current diff/status and trace the accepted observable through its
-production wiring, owning code, callers, siblings, tests, and generated/manual
-boundary before editing. For a defect, fix the narrowest owning surface whose
-contract the reproducer proves is violated. Preserve unrelated user work,
-accepted unchanged behavior, authoritative source ownership, and
-protected-domain constraints. When a canonical source owns derived output,
-change it first and regenerate; remove replaced paths unless current
-compatibility retains them.
+production entry point and wiring, owning code, every relevant caller and
+sibling that can reach the same behavior, tests, and generated/manual boundary
+before editing. For a defect, use the reproducer to identify the violated
+contract and fix the narrowest shared causal owner reached by every affected
+path; keep a leaf-specific fix only when evidence proves the cause is
+leaf-specific.
+
+Preserve unrelated user work, accepted unchanged behavior, authoritative source
+ownership, and protected-domain constraints. When a canonical source owns
+derived output, change it first and regenerate. When behavior or wiring is
+replaced, remove its superseded code, wiring, tests, configuration, generated
+output, and documentation unless a named compatibility requirement still
+exercises them.
 
 Treat task paths and symbols as navigation anchors; current canonical source
 determines placement. Adapt local placement drift while accepted behavior,
@@ -52,24 +58,32 @@ Accepted behavior is complete only on the real production path; a placeholder,
 temporary hardcoding, TODO, mock success, or undeclared `v1` is a blocker unless
 the accepted outcome explicitly permits it.
 
-Before a production Go edit, apply `go-coder`; route an unknown cause to `go-systematic-debugging` and test-only work to `go-test-implementation`. During implementation, `go-coder` owns the change. Apply only the Go, contract, data, lifecycle, or delivery methods triggered by the changed surface as review lenses under [Review](#review) below. Missing accepted policy reopens its narrow upstream decision owner.
+Before a production Go edit, apply `go-coder`; route an unknown cause to
+`go-systematic-debugging` and test-only work to `go-test-implementation`. These
+skills supply methods under this phase and do not own completion. Apply only the
+Go, contract, data, lifecycle, or delivery methods triggered by the changed
+surface as review lenses under [Review](#review) below. Missing accepted policy
+reopens its narrow upstream decision owner.
 
 ### Local Execution
 
-For direct work, the root edits the assigned checkout, performs one coherent
-self-review of the bounded diff, and runs the Validation Matrix's smallest
-matching proof. The bounded working-tree diff is its complete execution record
-unless current evidence invalidates the router's direct criteria.
+Root-local execution covers direct work and ready ledger tasks routed here by
+[Worker Execution](implementation-worker-execution.md). The root edits the
+assigned checkout, performs one coherent self-review of the bounded diff, and
+runs the Validation Matrix's smallest matching proof. The bounded working-tree
+diff is the complete execution record for direct work; ledger work also retains
+its accepted task entry. Reopen the path only when evidence changes risk,
+ownership, reversibility, or proof.
 
 ### Worker Execution
 
-For every structured or orchestrated ledger task, read
+For ledger work, read
 [Implementation Worker Execution](implementation-worker-execution.md) before
-choosing the Worker route or its unavailable-control fallback, dispatching,
-correcting, accepting, or integrating a candidate. That branch owns execution
-readiness, unrelated dirty-state protection, model and effort selection, Scope
-Lock, planned waves, monotonic acceptance, rejected-delta handling, and local
-integration.
+selecting or operating a Worker. That branch defines the execution-need trigger
+and owns carrier-specific dispatch, dirty-state protection, Scope Lock, planned
+waves, correction continuity, rejected-delta handling, candidate intake, and
+candidate handoff. This phase retains completion, acceptance, and integration
+authority.
 
 ### Immutable Evidence
 
@@ -77,7 +91,14 @@ Proof belongs to the relevant content and claim it exercised. Record the command
 
 ## Review
 
-Review the changed outcome for correctness, affected error/context/resource behavior, generated authority, security/data/rollout risk when triggered, unnecessary abstraction, stale replacements, and proof adequacy. Surrounding and transitive context informs the bounded judgment, while unrelated or pre-existing defects, style preferences, and unproven suspicions remain observations. Resolve repository-answerable uncertainty before asking another actor.
+Review the bounded diff and resulting production behavior for correctness;
+affected error, context, ownership, concurrency, resource, and lifecycle
+behavior; canonical/generated authority; triggered security, data, and rollout
+risk; unnecessary machinery; stale replacement surfaces; and proof adequacy.
+Surrounding and transitive context informs the bounded judgment, while unrelated
+or pre-existing defects, style preferences, and unproven suspicions remain
+observations. Resolve repository-answerable uncertainty before asking another
+actor.
 
 ## Validate
 
@@ -88,8 +109,8 @@ current proof or an explicit unverified remainder; every retained change and
 completion claim maps back to an accepted criterion. Use the smallest matching
 [Validation Matrix](../../../AGENTS.md#validation-matrix) proof.
 
-Proof of a production-path claim must exercise that path or separately prove
-both the owning behavior and the production wiring that reaches it.
+Apply the [Stop Rule](#stop-rule)'s production-path proof criterion before
+treating implementation evidence as completion.
 
 Performance validation is triggered by an accepted performance claim, budget,
 or materially affected hot path; it is not a ceremony for every change. If the
@@ -109,16 +130,23 @@ State what changed, the important behavior consequence, proof actually run, and 
 
 ## Stop Rule
 
-Close the outcome only when the bounded accepted outcome—including any required
-production path, replacement cleanup, and canonical/generated
-synchronization—is complete, the bounded diff is self-reviewed, and every
-accepted completion claim has matching current proof. If implementation is
-complete but required proof is unavailable, stop as `implementation complete;
-verification incomplete`, name the unverified claim and next proof or reopen
-owner, and do not claim outcome completion or readiness.
+Close the outcome only when every accepted changed or deliberately unchanged
+behavior has a terminal disposition; the bounded accepted outcome—including
+any required real production wiring, shared-cause repair, replacement cleanup,
+and canonical/generated synchronization—is complete; the retained task delta
+contains no unrelated change and has been reviewed against every triggered
+risk; and each completion claim has current proof of equal scope. A
+production-path claim must exercise the relevant path or separately prove both
+its owning behavior and production wiring.
 
-Worker execution accepts a candidate only when its current admissible finding
-set is empty and mapped proof passes; an unclosed finding is a blocker and
-unavailable proof is partial verification. A changed decision reopens its
+If implementation is complete but required proof is unavailable, stop as
+`implementation complete; verification incomplete`. Name the unverified claim,
+the narrower evidence obtained, and the next proof or reopen owner; do not claim
+outcome completion or readiness.
+
+Worker execution uses the same criterion. Accept a candidate immediately when
+its current admissible finding set is empty and mapped proof passes. Proof
+unavailable for an external or environmental reason yields partial
+verification, not another correction loop. A changed decision reopens its
 narrowest upstream owner; after sufficient proof, closeout is the only
 authorized next action.

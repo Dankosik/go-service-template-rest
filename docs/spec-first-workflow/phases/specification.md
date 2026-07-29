@@ -19,8 +19,9 @@ completion bar while keeping the spec as small as the decision surface allows.
 
 ## Outputs
 
-For structured/orchestrated work, a compact `spec.md`; direct work may keep the
-same decisions inline. Use only applicable sections:
+For structured/orchestrated work, synthesize a compact behavioral contract in
+`spec.md`; direct work may keep the same rules inline. A summary of inputs is
+traceability evidence, not the contract. Use only applicable sections:
 
 ```markdown
 # <User/operator-visible outcome>
@@ -45,14 +46,22 @@ current compatibility owner, evidence for retention, and exit condition.
 
 ## Method
 
-Specification owns user/operator-observable scope, behavior, policy, authority,
-source-of-truth semantics, and proof expectations. Behavior remains
-Specification-owned when it crosses services or is observable only through
-rejection, failure, replay, recovery, finality, or operator action. Technical
-design owns the contract or schema shape, runtime mechanism and sequence, and
-package or file placement that realize the ready spec, unless a mechanism is an
-accepted external constraint. Reopen Specification whenever choosing a
-mechanism would otherwise choose product or system meaning.
+Specification owns every material choice that can change user- or
+operator-visible meaning: scope, behavior, policy, contract semantics,
+authority, source-of-truth semantics, compatibility, and proof expectations.
+This ownership includes cross-service behavior and outcomes visible only
+through rejection, failure, replay, recovery, finality, or operator action.
+Apply `go-api-contract` here when client-visible REST semantics are affected;
+close the audience, request and response meaning, errors and status, validation,
+limits, retry and idempotency behavior, concurrency or async semantics,
+freshness, and compatibility before technical design.
+
+Technical design owns concrete contract/schema representation, runtime
+mechanism and sequence, and package/file placement only after those semantics
+are fixed, unless a mechanism is an accepted external constraint. It may choose
+only behaviorally equivalent realizations. If a representation or mechanism
+choice would select among materially different observable outcomes, reopen
+Specification.
 
 Derive the affected behavior surface from the accepted brief, relevant
 research, current runtime/generated contracts, and repository or consumer
@@ -69,8 +78,7 @@ behavioral rule or an explicit unchanged, non-goal, or blocked disposition. For
 each candidate rule, ask whether two reasonable implementations could satisfy
 its wording yet differ in a user- or operator-visible result. Resolve every such
 divergence from current authority or evidence, a Specification-owned decision,
-or a bounded assumption with an objective reopen condition. A summary of inputs
-is traceability evidence, not a behavioral contract.
+or a bounded assumption with an objective reopen condition.
 
 A material rule is complete when it fixes every interpretation-changing part
 of: actor and context; trigger and input; preconditions; normative rule,
@@ -115,12 +123,15 @@ evidence in research.
 
 ## Decision Bar
 
-The spec is ready only when a downstream reader can derive one behavioral
-answer for every materially affected case without choosing product meaning:
+The spec is ready only when every materially affected case has one falsifiable
+behavioral answer and every live downstream realization permitted by the spec
+is behaviorally equivalent:
 
 - each accepted intent and decision-changing evidence implication is closed as
-  a falsifiable behavioral rule, an explicit unchanged or non-goal disposition,
-  or a blocker owned by the user or a named external owner;
+  a traceable, falsifiable behavioral rule grounded in accepted intent, current
+  evidence or a named authority, or an explicit Specification-owned decision
+  with rationale; otherwise it is an explicit unchanged or non-goal
+  disposition, or a blocker owned by the user or a named external owner;
 - every material rule passes the completeness and two-implementation divergence
   tests in Method, including every triggered normal, boundary, rejection,
   absence, duplication, replay, failure, recovery, compatibility, and
@@ -142,8 +153,9 @@ answer for every materially affected case without choosing product meaning:
   proof consequence required by the accepted scope;
 - no unresolved scope, behavior, policy, authority, source-of-truth,
   compatibility, or risk-acceptance alternative owned by Specification remains;
-- design receives the accepted behavior, constraints, and decision drivers
-  needed to choose any live mechanism or placement alternative;
+- design receives closed behavioral semantics and may choose only concrete
+  representations, mechanisms, sequences, and placements that preserve them
+  without choosing product or system meaning;
 - no material `TBD` remains.
 
 Only uncertainty about proving an already accepted rule may carry as a

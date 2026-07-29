@@ -24,9 +24,9 @@ Ranked anchored findings and one verdict:
 
 ## Review Method
 
-Independently dry-run the next executable task or real parallel wave from dispatch through acceptance using only the fixed ledger, cited sources, and current repository evidence. Resolve every prerequisite and handoff, locate the writable surface through the named owner or discovery rule, follow required canonical ordering, and trace the postcondition through the named check and its oracle to the real path. For a wave, simulate every pair from the same accepted base and attempt to falsify writable-surface, mutable-resource, interface, and assumption independence.
+Independently dry-run the next executable task or real parallel wave from dispatch through acceptance using only the fixed ledger, cited sources, and current repository evidence. Resolve every prerequisite and handoff, locate the writable surface through the named owner or discovery rule, follow required canonical ordering, and trace the postcondition through the named check and its oracle to the real path. For a wave, simulate every pair from the same accepted base and attempt to falsify writable-surface, mutable-resource, interface, and assumption independence. At simulated acceptance, test the resulting repository and any deployment or migration state against Planning's split-boundary rule; unfinished coupled companion work fails the task boundary.
 
-Report the first point where execution would need an unrecorded choice or unavailable input, with its exact anchor and owning repair or reopen boundary. The reviewer does not reslice tasks, author replacement wording, or choose the missing decision. Inspect later tasks only for a decision or dependency capable of invalidating the next accepted result.
+For each evidence-valid task path or wave member, report the earliest point where execution would need an unrecorded choice or unavailable input, with its exact anchor and owning repair or reopen boundary. Stop that path at the blocker, continue the remaining bounded simulation where evidence is still valid, and consolidate the independent material blockers reached. The reviewer does not reslice tasks, author replacement wording, or choose the missing decision. Inspect later tasks only for a decision or dependency capable of invalidating the next accepted result.
 
 ## Falsification Questions
 
