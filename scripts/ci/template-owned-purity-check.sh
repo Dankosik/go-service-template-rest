@@ -99,4 +99,80 @@ if ((failed != 0)); then
 	exit 1
 fi
 
-echo "template-owned manifest is structurally safe"
+template_sync_behavior_check() (
+	local fixture template target target_with_link outside sync_script
+	fixture=$(mktemp -d "${TMPDIR:-/tmp}/template-sync-check.XXXXXX")
+	trap 'rm -rf -- "${fixture}"' EXIT
+	template="${fixture}/template"
+	target="${fixture}/target"
+	target_with_link="${fixture}/target-with-link"
+	outside="${fixture}/outside"
+	sync_script="$(pwd)/scripts/template-sync.sh"
+
+	mkdir -p "${template}/owned" "${outside}"
+	printf 'owned/\n' >"${template}/template-owned.paths"
+	printf 'v1\n' >"${template}/owned/version"
+	git -C "${template}" init -q
+	git -C "${template}" add template-owned.paths owned/version
+	git -C "${template}" -c user.name=template-sync-check -c user.email=template-sync-check@example.invalid commit -qm v1
+	git clone -q "${template}" "${target}"
+
+	printf 'v2\n' >"${template}/owned/version"
+	git -C "${template}" add owned/version
+	git -C "${template}" -c user.name=template-sync-check -c user.email=template-sync-check@example.invalid commit -qm v2
+
+	printf 'owned/ignored.txt\n' >"${template}/.git/info/exclude"
+	printf 'ignored source\n' >"${template}/owned/ignored.txt"
+	if bash "${sync_script}" --apply --no-commit --from "${template}" --repo "${target}" >/dev/null 2>&1; then
+		echo "template-owned purity: sync accepted ignored source content" >&2
+		return 1
+	fi
+	grep -Fxq v1 "${target}/owned/version" || {
+		echo "template-owned purity: ignored source content changed the target" >&2
+		return 1
+	}
+	rm "${template}/owned/ignored.txt"
+
+	printf 'owned/ignored.txt\n' >"${target}/.git/info/exclude"
+	printf 'ignored target\n' >"${target}/owned/ignored.txt"
+	if bash "${sync_script}" --apply --no-commit --from "${template}" --repo "${target}" >/dev/null 2>&1; then
+		echo "template-owned purity: sync accepted ignored target content" >&2
+		return 1
+	fi
+	grep -Fxq 'ignored target' "${target}/owned/ignored.txt" || {
+		echo "template-owned purity: ignored target content was deleted" >&2
+		return 1
+	}
+	rm "${target}/owned/ignored.txt"
+
+	git -C "${target}" checkout -q --detach
+	bash "${sync_script}" --apply --no-commit --from "${template}" --repo "${target}" >/dev/null
+	grep -Fxq v2 "${target}/owned/version" || {
+		echo "template-owned purity: detached --no-commit sync did not apply" >&2
+		return 1
+	}
+	mkdir "${template}/owned/empty"
+	bash "${sync_script}" --check --from "${template}" --repo "${target}" >/dev/null
+
+	git clone -q "${template}" "${target_with_link}"
+	printf 'outside\n' >"${outside}/sentinel"
+	git -C "${target_with_link}" rm -qr owned
+	ln -s "${outside}" "${target_with_link}/owned"
+	git -C "${target_with_link}" add owned
+	git -C "${target_with_link}" -c user.name=template-sync-check -c user.email=template-sync-check@example.invalid commit -qm symlink
+	if bash "${sync_script}" --apply --no-commit --from "${template}" --repo "${target_with_link}" >/dev/null 2>&1; then
+		echo "template-owned purity: sync followed a target symlink" >&2
+		return 1
+	fi
+	grep -Fxq outside "${outside}/sentinel" || {
+		echo "template-owned purity: symlink refusal changed outside content" >&2
+		return 1
+	}
+	[[ ! -e "${outside}/version" ]] || {
+		echo "template-owned purity: sync copied through a target symlink" >&2
+		return 1
+	}
+)
+
+template_sync_behavior_check
+echo "template-owned manifest and sync behavior are safe"
