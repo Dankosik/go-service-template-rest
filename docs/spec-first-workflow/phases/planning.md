@@ -56,8 +56,8 @@ Global constraints: <exact constraints shared by multiple tasks; omit when none>
 - [ ] T1: <verifiable postcondition; execution-changing accepted constraints>
   - Source: <narrow stable spec/design/test/rollout anchor(s)>
   - Owner/surface/resources: <canonical owner for each writable surface; initial authorized writable paths or bounded discovery rule; mutable, exclusive, or non-concurrent resources, or none>
-  - Depends on: <ID — exact output/state or safety/proof gate consumed; needed to start, complete, or prove; or none>
-  - Handoff: <exact consumed/produced contract for an output dependency; omit when none>
+  - Depends on: <ID — output handoff, exact consumed state, or exact safety/proof gate; needed to start, complete, or prove; or none>
+  - Handoff: <for an output dependency: exact produced output and consumed input/acceptance condition; omit when none>
   - External input/gate: <required non-ledger input or rollout gate; named owner; objective availability checkpoint; omit when none>
   - Proof: <claim; command/check; expected observable>
   - Reopen if: <concrete objective future invalidation condition; upstream owner; omit when none>
@@ -65,9 +65,9 @@ Global constraints: <exact constraints shared by multiple tasks; omit when none>
 
 Add only fields that change execution. Put a constraint in `Global constraints` only when its exact meaning applies across multiple tasks; keep task-specific constraints in the task outcome. Write each task title as the postcondition that becomes true. Put paths and symbols in `Owner/surface/resources` and commands in `Proof`; neither creates a task boundary.
 
-A split boundary is valid only when the completed task leaves the repository, and every deployment or migration state it creates or assumes, internally consistent, supported by the accepted compatibility or rollback policy, independently reviewable, and provable without unfinished companion work. Group the canonical source, generated or mirrored output, required tests and fixtures, migration/runtime compatibility, required documentation, and replacement cleanup needed for that state in the same task. As an oversized-task preflight, identify distinct ownership, review, failure/recovery, rollback, and proof domains inside the outcome. Split separable domains when each can end at such a boundary. Do not use file count, estimated minutes, or desired Worker count as a sizing rule.
+A split boundary is valid only when the completed task leaves the repository, and every deployment or migration state it creates or assumes, internally consistent, supported by the accepted compatibility or rollback policy, independently reviewable, and provable without unfinished companion work. Group the canonical source, generated or mirrored output, required tests and fixtures, migration/runtime compatibility, required documentation, and replacement cleanup needed for that state in the same task. As an oversized-task preflight, identify distinct ownership, review, failure/recovery, rollback, and proof domains inside the outcome. A useful split isolates a distinct owner, review/proof, failure/recovery, or rollback domain; creates a required handoff; enables an actual wave with positive independence evidence; or leaves an independently shippable accepted outcome. Keep the work in the same task when none of those benefits applies. Do not use file count, estimated minutes, or desired Worker count as a sizing rule.
 
-For sequential work, `Depends on` is the complete ordering authority; do not create one-task waves. Record an edge only when the downstream task consumes the upstream task's output or state, or must cross its safety or proof gate, and name whether the edge is required to start, complete, or prove the downstream task. Document order, review preference, and convenient sequencing are not dependencies. Use `Handoff` only for an output edge and name both the produced and consumed sides without copying implementation steps.
+For sequential work, `Depends on` is the complete ordering authority; do not create one-task waves. Record an edge only when the downstream task consumes the upstream task's output or state, or must cross its safety or proof gate, and name whether the edge is required to start, complete, or prove the downstream task. Document order, review preference, and convenient sequencing are not dependencies. For an output edge, record the produced/consumed contract once in `Handoff`; in `Depends on`, write only `<ID> — output handoff — needed to <start|complete|prove>`. For a state or safety/proof gate, omit `Handoff` and name the consumed state or gate in `Depends on`.
 
 Add one compact `Planned waves` section only when at least two ready tasks will actually run concurrently:
 
@@ -99,7 +99,7 @@ Attach each proof to the earliest task whose completed output makes its claim tr
 Planning must make these explicit where relevant:
 
 - canonical source before generated/mirrored output;
-- proof-first regression work and test-plan scenario IDs;
+- accepted regression-proof order inside the task whose outcome makes the behavior true, including test-plan scenario IDs; a deliberately failing intermediate check is not a completed task boundary;
 - accepted performance workload/scale boundaries, hot-path amplification or resource constraints, and matching benchmark, load, profile, query-count, or other claim-matched proof;
 - migrations/backfills/rollout order and rollback gates;
 - cleanup of replaced code, tests, fixtures, config, docs, skills, or mirrors;
@@ -121,6 +121,6 @@ Task review and planning-owned disposition are internal checkpoints. Fresh revie
 
 ## Stop Rule
 
-The ledger is ready only when every implementation-changing accepted obligation has one reconciliation disposition; every task is an outcome-shaped valid boundary with its accepted writable owner or discovery rule, consumed outputs and gates, coupled companion changes, claim-matched task-local proof, and objective reopen condition when one exists; and an executor dry-run of the next task or recorded wave reaches acceptance without chat history, an unavailable mandatory input, or a new behavior, mechanism, placement, ownership, test/proof strategy, rollout, or concurrency decision.
+The ledger is ready only when every implementation-changing accepted obligation has one auditable reconciliation disposition; every task is a useful outcome boundary whose completed repository and deployment or migration state is internally valid and independently reviewable; every writable owner or bounded discovery rule, mutable resource, external gate, canonical order, dependency or handoff, task-local proof, and objective reopen condition that changes execution is concrete and recorded once; and every dependency is justified by a consumed output or state or by a safety or proof gate.
 
-Every planned wave carries current positive independence evidence. Later work remains owned and dependency-ordered; later unavailable inputs have named owners and objective checkpoints and cannot invalidate the next accepted result. Any triggered review must return `PASS` or dispositioned `CONCERNS`.
+An executor dry-run of the next task or actual wave must reach acceptance using only the ledger, cited current inputs, and available mandatory gates—without chat history, unfinished companion work, or a new product or behavior, mechanism, placement, ownership, test/proof strategy, rollout, or concurrency decision. Every actual wave carries current positive pairwise independence evidence. Later work remains owned and dependency-ordered; later unavailable inputs have named owners and objective checkpoints and cannot invalidate the next accepted result. Any triggered review must return `PASS` or dispositioned `CONCERNS`.

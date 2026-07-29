@@ -1,6 +1,6 @@
 # Go Code / Ownership Design
 
-Give each changed responsibility one clear, evidence-backed owner, then place the accepted mechanism in Go packages and files without changing behavior. Make every affected execution path reviewer-traceable.
+Give each changed responsibility one clear, evidence-backed owner, then place the selected system mechanism in Go packages and files while preserving accepted behavior and system decisions. Make every affected execution path reviewer-traceable.
 
 ## Read When
 

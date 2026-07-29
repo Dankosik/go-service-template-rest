@@ -34,6 +34,7 @@ At each triggered implementation-input edge, verify only whether the input is ca
 Activate only falsification lenses triggered by the reconstructed affected surface:
 
 - Flow and authority: could two reasonable implementations follow the candidate yet differ in caller- or operator-visible behavior, ordering/finality, contract or data authority, failure/recovery, or rollout?
+- Cross-flow coherence: do shared components, contracts, stores, authorities, state transitions, and failure/recovery policies have one compatible meaning across all material traces, or does one trace silently require a different owner, ordering, finality, synchronization, degradation, or recovery boundary?
 - Current evidence: does a runtime, generated, provider, or consumer authority contradict the selected mechanism, contract, owner, or transition?
 - Ownership, when placement, dependency direction, generated authority, or cleanup is material: does every selected system decision entering Go map exactly once to a feasible responsibility and package/file owner, does that owner fit the current import and composition graph, and is every live ownership fork closed?
 - Performance, when a path is scale-sensitive or has an accepted objective: can work amplification exceed the workload or budget, or can a simpler established mechanism satisfy the same decision?

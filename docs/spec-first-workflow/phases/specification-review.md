@@ -30,6 +30,11 @@ Envelope](../shared/subagents-and-handoff.md#review-finding-envelope). For
 Specification, anchor each surviving finding to the fixed candidate and the
 contradicting evidence or omitted affected surface.
 
+For a divergence finding, name the competing reasonable user/operator-visible
+outcomes the candidate permits and the exact Specification-owned rule that must
+close the fork. Return absent user- or external-owner policy to its named owner;
+leave runtime realization to Technical Design.
+
 A surviving finding is Specification-blocking when it exposes a missing or
 contradictory Specification-owned decision that would force design or planning
 to invent product meaning.

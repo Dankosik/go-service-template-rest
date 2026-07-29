@@ -114,7 +114,7 @@ Vendor authority: [Subagents](https://code.claude.com/docs/en/sub-agents), in pa
 
 ### Dispatch
 
-- Keep one write worker per ready ledger task: one background `Agent` lane with `isolation: "worktree"`. Several write workers may run only as members of a positively independent planned wave. The worktree is the isolation boundary; the root still owns acceptance and integration per the implementation phase.
+- When Worker execution is selected, keep one write worker per ready ledger task: one background `Agent` lane with `isolation: "worktree"`. Several write workers may run only as members of a positively independent planned wave. The worktree is the isolation boundary; the root still owns acceptance and integration per the implementation phase.
 - Pass `isolation` as a dispatch parameter rather than moving it into the role's frontmatter. A dispatch-parameter worktree branches from the parent's `HEAD`, which is the accepted integrated base the wave needs; frontmatter isolation follows the `--worktree` base rule and branches from the repository's default branch unless [`worktree.baseRef`](https://code.claude.com/docs/en/worktrees#choose-the-base-branch) is `"head"`.
 - When the exact accepted `tasks.md` is visible in the worker worktree, dispatch
   its path and task ID plus only live facts absent from the ledger. Inline the

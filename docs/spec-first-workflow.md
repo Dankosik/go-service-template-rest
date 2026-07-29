@@ -32,7 +32,7 @@ Structured and orchestrated work evaluates the phase router in order:
 4. complete system and Go-ownership design when implementation would otherwise choose mechanism or placement, then apply path/risk-matched review;
 5. complete test design when proof is non-obvious, then apply path/risk-matched QA review;
 6. complete `tasks.md` and its path/risk-matched readiness review;
-7. enter [Implementation / Validation / Closeout](spec-first-workflow/phases/implementation-validation-closeout.md) with one direct outcome or the next ready planned ledger task or wave; that phase owns direct root-local execution, default Worker execution for ready ledger tasks, root acceptance, integrated review, adaptation to execution drift, and validation.
+7. enter [Implementation / Validation / Closeout](spec-first-workflow/phases/implementation-validation-closeout.md) with one direct outcome or the next ready planned ledger task or wave; that phase owns execution-carrier selection, root-local execution, triggered Worker execution, root acceptance, integrated review, adaptation to execution drift, and validation.
 
 Scoping down research, design, or test design needs one concrete reason in the current artifact or handoff, not a new phase-control file. Specification and planning remain required; independent review follows the shared trigger rather than artifact presence alone.
 
@@ -44,8 +44,8 @@ For review and handoff, the owning macro phases are specification (including any
 | --- | --- | --- |
 | Clarify raw or interpretation-sensitive input. | [Intake](spec-first-workflow/phases/intake.md) | A routing-sufficient brief or one blocking question. |
 | Resolve evidence that can change a decision. | [Research](spec-first-workflow/phases/research.md) | Supported findings, limits, conflicts, and decision implications. |
-| Define behavior, invariants, scope, and proof expectations. | [Specification](spec-first-workflow/phases/specification.md) | A compact decision record, reviewed as required by path and risk. |
-| Choose runtime mechanism, integration flow, and operational realization for accepted behavior. | [System / Integration Design](spec-first-workflow/phases/system-integration-design.md) | Contracts, sources of truth, sequence, failure, data, and rollout decisions. |
+| Synthesize accepted intent and evidence into falsifiable product and system behavior. | [Specification](spec-first-workflow/phases/specification.md) | A ready behavioral contract that design can realize without choosing product meaning. |
+| Realize the ready behavioral contract as a runtime mechanism and integration flow. | [System / Integration Design](spec-first-workflow/phases/system-integration-design.md) | Concrete contract/schema representations, ownership and data flow, failure/recovery mechanisms, and rollout decisions. |
 | Choose Go ownership and placement. | [Go Code / Ownership Design](spec-first-workflow/phases/go-code-ownership-design.md) | Package/file owners, dependency direction, cleanup, and test ownership. |
 | Make non-obvious proof explicit. | [Test Design](spec-first-workflow/phases/test-design.md) | Risk scenarios, proof levels, observables, and commands. |
 | Turn decisions into executable work. | [Planning](spec-first-workflow/phases/planning.md) | A small, dependency-ordered ledger with completion proof. |

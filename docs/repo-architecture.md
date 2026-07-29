@@ -1,7 +1,7 @@
 # Repository Architecture Baseline
 
-This document is the stable repository-wide architecture baseline for `go-service-template-rest`.
-Use it to recover the standing component boundaries, ownership rules, and runtime flow before writing task-local design in `specs/<feature-id>/design/`.
+This document is the stable repository-wide current-state architecture baseline for `go-service-template-rest`.
+Use it as evidence to recover standing constraints, owners, reusable capabilities, and runtime flows before writing task-local design in `specs/<feature-id>/design/`. [System / Integration Design](spec-first-workflow/phases/system-integration-design.md) owns deciding which affected surfaces the target retains, replaces, or removes.
 
 This file is intentionally narrower than:
 - [Project Structure & Module Organization](./project-structure-and-module-organization.md)

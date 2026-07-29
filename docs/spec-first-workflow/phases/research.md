@@ -1,6 +1,6 @@
 # Research
 
-Resolve only evidence gaps that can change a task decision. Research closes decision-changing questions rather than accumulating sources.
+Research owns discovering, verifying, falsifying, comparing, and synthesizing the evidence that can change a task decision. It closes decision-changing questions rather than accumulating sources.
 
 ## Read When
 
@@ -18,7 +18,7 @@ Resolve only evidence gaps that can change a task decision. Research closes deci
 ## Outputs
 
 - A compact open-item map. For each item, retain the affected decision and owner, its Method classification, downstream disposition, and any carried constraint, assumption, risk, proof obligation, blocker/reopen condition, or objective refresh trigger.
-- For each evidence question, retain fact/inference/conflict/missing-evidence status; any hypothesis disposition; a claim-level source with scope/revision/date; evidence limits; and the decision implication.
+- For each evidence question, retain one cross-source synthesis that separates established fact, inference, conflict, authoritative absence, assumption, and unknown; treats an unavailable or unsearched decision-relevant surface as unknown rather than absence; disposes the leading hypothesis and material counter-evidence; attaches claim-level source scope/revision/date and evidence limits; and states which downstream decision the evidence supports, constrains, eliminates, or leaves open.
 - For each decision-changing quantity, retain its provenance label.
 - When a solution choice is live, a compact candidate map: the neutral frame; each candidate's decision slot and relationship; materially distinct families at the live decision level and representative implementations only where relevant; scanned rungs; local-fit evidence or rejection reason for excluded viable candidates; any decision-flip condition; and the bounded stop rationale.
 - A compact `research/*.md` note only when reuse or auditability justifies it.
@@ -31,27 +31,28 @@ Scale depth to decision impact, reversibility, uncertainty, and evidence volatil
 
 ### Question Closure
 
-For each question, state:
+Before substantive search, write each decision-changing question in this form; revise it only when evidence changes the decision boundary:
 
 - the decision, owner, driver, or observable criterion it can change;
 - the leading hypothesis or live alternatives and what evidence would falsify them, when present;
 - the smallest evidence that could falsify the leading implication;
 - the authoritative source boundary and most authoritative practical source within it;
+- the semantic terms, identifiers or aliases, applicable versions, and failure modes that could expose differently named or contradictory evidence;
 - the minimum evidence needed;
 - how absence, conflict, or staleness will be handled;
 - when to stop searching.
 
-Prefer primary/current sources. A missing hit is not proof of absence unless the searched source is authoritative for absence. For a material absence claim, record the authoritative surfaces and search boundary.
+A missing hit is not proof of absence unless the searched source is authoritative for absence. For a material absence claim, record the authoritative surfaces and search boundary.
 
 Actively test the leading claim against material counter-evidence and the strongest viable alternative, including reuse, status quo, deletion, or process change when one can satisfy the accepted outcome. Do not invent weights or aggregate scores. When an uncertain driver could reverse the implication, record the range or threshold that would flip it, its owner, and the smallest evidence that would resolve it.
 
-For questions other than solution discovery, stop when another source is unlikely to change the decision.
+For questions other than solution discovery, apply the [Stop Rule](#stop-rule) to the affected decision.
 
 ### Branch Selection
 
 Choose the smallest triggered branch and load only its rule:
 
-- [Current-state or semantic baseline](research-branches.md#current-state-or-semantic-baseline) when current state can change accepted behavior or a later decision.
+- [Current-state or semantic baseline](research-branches.md#current-state-or-semantic-baseline) when repository, generated, runtime, persisted or deployed, consumer, or operator-observed state can change accepted behavior or a later decision, especially when those surfaces may diverge.
 - [Current external contract](research-branches.md#current-external-contract) when external-platform, Go, toolchain, runtime, or dependency behavior would otherwise be inferred from memory.
 - [Solution discovery evidence](research-branches.md#solution-discovery-evidence) when a mechanism or implementation choice remains live.
 - [Empirical claim or probe](research-branches.md#empirical-claim-or-probe) when the decision uses empirical/runtime evidence or authoritative sources cannot resolve a decision-changing empirical claim.
@@ -77,4 +78,4 @@ The owning root applies the shared [Review Independence](../shared/subagents-and
 
 ## Stop Rule
 
-Finish when every decision-changing question is supported, honestly bounded, or blocked with a reopen owner, and the next owner can distinguish established, uncertain, and freshness-sensitive material without repeating the same search or inventing missing evidence. A bounded gap required by the next phase blocks and reopens its smallest evidence or decision owner; an optional later proof may carry only with its owner and recheck condition. Any triggered `research only` review must have returned `PASS` or dispositioned `CONCERNS`. Hand the implications to the named downstream owner; do not write the final specification or design decision inside research.
+Finish when every required Output is present; every triggered evidence surface has been inspected or its unavailability recorded with the decision effect; each leading implication has been tested against material counter-evidence and dispositioned; the cross-source synthesis gives the named downstream owner an explicit decision implication; and another source is unlikely to change the affected decision. For solution discovery, also satisfy the branch's [candidate-space saturation rule](research-branches.md#solution-discovery-evidence). The next owner must be able to act without repeating the search or re-synthesizing the sources. A bounded gap required by the next phase blocks and reopens its smallest evidence or decision owner; an optional later proof may carry only with its owner and recheck condition. Any triggered `research only` review must have returned `PASS` or dispositioned `CONCERNS`. Hand the implications to the named downstream owner; do not write the final specification or design decision inside research.

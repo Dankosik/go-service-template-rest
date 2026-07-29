@@ -1,17 +1,19 @@
 # Implementation Worker Execution
 
-For structured or orchestrated implementation, delegate each ready ledger task
-by default to one harness-native implementation Worker with the isolation
-defined by the [Agent Harness control map](../../agent-harness.md#control-map)
-once its behavior, mechanism, ownership, editable boundary, proof, and stop
-condition are closed. Dependencies schedule Workers sequentially; a planned
-wave with positive independence permits concurrent dispatch.
+Choose the execution carrier from the task's execution need, not its workflow
+label. Use one harness-native implementation Worker for a ready ledger task only
+when the user explicitly requests a Worker, its isolated checkout protects
+unrelated state, a bounded separate context is needed while the root coordinates
+other owners, or it belongs to a positively independent planned wave. Otherwise
+execute the closed ledger task root-locally under [Local
+Execution](implementation-validation-closeout.md#local-execution) and the same
+acceptance contract.
 
-When the native Worker control is unavailable, execute the same closed ledger
-task root-locally and state the missing control; reclassify it only when the
-router's direct criteria hold. Create one harness-native root durable execution
-control only for a genuinely multi-step or resumable outcome; [Agent
-Harness](../../agent-harness.md#goal-mechanics) owns the mechanism.
+When a required native Worker control is unavailable, execute the same closed
+ledger task root-locally and state the missing control; this changes the carrier,
+not the workflow path or acceptance contract. Create one harness-native root
+durable execution control only for a genuinely multi-step or resumable outcome;
+[Agent Harness](../../agent-harness.md#goal-mechanics) owns the mechanism.
 
 Before dispatching from uncommitted accepted input, identify the source
 checkout and authorized paths and inspect its current diff/status. Record a
