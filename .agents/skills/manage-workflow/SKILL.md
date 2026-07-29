@@ -11,6 +11,7 @@ when the path or next owner is open.
 
 Select one current owner and read only its instruction:
 
+- raw or interpretation-sensitive input: [Intake](../../../docs/spec-first-workflow/phases/intake.md)
 - decision-changing evidence: [Research](../../../docs/spec-first-workflow/phases/research.md)
 - behavior and invariants: [Specification](../../../docs/spec-first-workflow/phases/specification.md)
 - runtime, contracts, data, failure, or rollout: [System Design](../../../docs/spec-first-workflow/phases/system-integration-design.md)

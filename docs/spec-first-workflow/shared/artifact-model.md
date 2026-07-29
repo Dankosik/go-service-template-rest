@@ -60,7 +60,10 @@ status: draft | ready | blocked | done
 
 - `draft`: still being authored or repaired.
 - `ready`: the artifact has closed every decision it owns, and its next consumer can act without semantic invention. A ready `tasks.md` additionally closes the inputs and proof for its next executable task or real parallel wave plus any decision that could invalidate that work.
-- `blocked`: name the missing decision/evidence and reopen owner.
+- `blocked`: name the missing decision/evidence and reopen owner. This also
+  represents `implementation complete; verification incomplete` when the
+  implementation is finished but required proof is unavailable; record the
+  unverified claim, narrower evidence, and next proof or reopen owner.
 - `done`: use for execution/closeout state, not as a substitute for evidence.
 
 When review is triggered, `PASS` or dispositioned `CONCERNS` can move an artifact to `ready`; `FAIL` requires repair or reopening and fresh review.

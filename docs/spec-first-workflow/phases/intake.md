@@ -24,8 +24,8 @@ An Intake brief, usually in chat, that lets the workflow router and first owner 
 
 ## Method
 
-1. Distill rather than paraphrase: preserve explicit values, corrections, priorities, exclusions, and the requested result; separate that result from suggested means; label inferred meaning as a bounded assumption or the permitted blocking question.
-2. Inspect only enough current repository state to identify the referenced surface, existing owner or artifact, reversibility or protected-domain trigger, and continuation state when any can change the path or first owner; record the routing consequence. Route a question that requires decision-changing evidence to Research.
+1. Distill one coherent contract rather than paraphrasing: apply explicit corrections, collapse repetition without losing priority, preserve operative values and exclusions, and separate the requested result from suggested means. Resolve clear supersession; give every remaining conflict one disposition through items 2–4 before accepting the brief.
+2. Inspect only enough current repository state to resolve every still-unknown [Choose A Path](../../spec-first-workflow.md#choose-a-path) discriminator that can change the path or first owner: the referenced surface and current owner or artifact, affected breadth and ownership count, reversibility, protected-domain or cross-service triggers, validation boundedness, and dirty or continuation state when relevant. Record each established fact with its routing consequence. Route a question that requires decision-changing evidence to Research.
 3. Under [Decision Ownership](../../../AGENTS.md#decision-ownership), keep an inference as a bounded assumption only when being wrong would leave the first owner's output usable without reopening an Intake-owned intent or authority decision; state its boundary and objective reopen condition.
 4. Ask a question only under [Decision Ownership](../../../AGENTS.md#decision-ownership).
 5. Finish with the smallest valid path. For `structured` or `orchestrated`, name the routing fact that makes the next-smaller path insufficient. Name the first owner and the exact accepted input or open question it receives; otherwise return the Stop Rule's single blocking question.
@@ -34,6 +34,10 @@ Use `grilling` only when the user explicitly requests an exhaustive stress test 
 
 ## Stop Rule
 
-End Intake only when the brief lets the router select the smallest valid path from the accepted outcome and recorded routing facts, and lets the named first owner begin without rereading the raw request to choose the intended user- or operator-visible result, business meaning when material, meaningful scope and non-goals, authorization and external-effect boundary, or observable success signal. Give every unresolved item one disposition: a bounded assumption with its safe boundary and objective reopen condition, a named downstream question, or the single blocking question permitted by [Decision Ownership](../../../AGENTS.md#decision-ownership).
+End Intake only when all three checks pass:
 
-Carry each open evidence, behavior or policy, mechanism, placement, proof-strategy, or execution question to its owning phase with the question and routing consequence recorded. Preserve a downstream answer in the brief only when the user supplied it or current authority establishes it. Treat an unresolved Intake-owned intent or authorization decision as the Stop Rule's blocking question.
+- Every material statement about outcome, business meaning, scope or non-goals, authority, and observable success is user-supplied, established by current authority, or labeled as a bounded assumption with its boundary and objective reopen condition.
+- Every routing-changing repository fact has a recorded routing consequence, and the smallest path and named first owner follow from the accepted contract and those facts.
+- The first owner can begin from the brief without choosing an Intake-owned result, business meaning, requested scope boundary, authorization, or observable success signal.
+
+Give every unresolved item exactly one disposition: a bounded assumption, a downstream question with its owner and routing consequence, or the single blocking question permitted by [Decision Ownership](../../../AGENTS.md#decision-ownership). Carry evidence, behavior, mechanism, placement, proof-strategy, or execution questions downstream only when the accepted outcome, business meaning, scope, and authority already make their answer a downstream decision. Keep any unresolved user-owned outcome, business meaning or policy value, requested scope boundary, or authorization decision that changes the first owner's permitted work in Intake as the blocking question.
