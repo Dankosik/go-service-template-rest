@@ -320,7 +320,7 @@ func handleGeneratedRequestError(log *slog.Logger, challenge string) func(http.R
 func newRootRouter(
 	apiSubrouter http.Handler,
 	middlewares ...func(http.Handler) http.Handler,
-) chi.Router {
+) *chi.Mux {
 	root := chi.NewRouter()
 	root.Use(middlewares...)
 	root.Mount("/", apiSubrouter)

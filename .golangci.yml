@@ -18,6 +18,7 @@ linters:
     - containedctx
     - copyloopvar
     - depguard
+    - dogsled
     - dupl
     - durationcheck
     - embeddedstructfieldcheck
@@ -31,6 +32,8 @@ linters:
     - forcetypeassert
     - gocheckcompilerdirectives
     - gochecknoinits
+    - gochecksumtype
+    - goconst
     - contextcheck
     - cyclop
     - gocritic
@@ -39,6 +42,7 @@ linters:
     - inamedparam
     - interfacebloat
     - intrange
+    - ireturn
     - iotamixing
     - loggercheck
     - makezero
@@ -108,6 +112,20 @@ linters:
         - unused
         - opaque
         - unexported
+    goconst:
+      ignore-tests: true
+      min-occurrences: 4
+    ireturn:
+      allow:
+        - anon
+        - error
+        - empty
+        - stdlib
+        - generic
+        - '^github\.com/example/go-service-template-rest/.*/openapi\..*ResponseObject$'
+        - '^go\.opentelemetry\.io/otel/metric\.MeterProvider$'
+        - '^go\.opentelemetry\.io/otel/sdk/metric\.Reader$'
+        - '^go\.opentelemetry\.io/otel/sdk/trace\.Sampler$'
     depguard:
       rules:
         feature_packages_no_adapters:
