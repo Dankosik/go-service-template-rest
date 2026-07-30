@@ -264,6 +264,9 @@ linters:
       include:
         - '^github\.com/example/go-service-template-rest/internal/openapi\.Problem$'
         - '^github\.com/example/go-service-template-rest/internal/config\.(Config|AppConfig|HTTPConfig|LogConfig|ObservabilityConfig|OTelConfig|OTelExporterConfig|PostgresConfig)$'
+        # profile:grpc:start
+        - '^github\.com/example/go-service-template-rest/internal/config\.(GRPCConfig|GRPCServerConfig|GRPCTLSConfig)$'
+        # profile:grpc:end
     forbidigo:
       analyze-types: true
       forbid:

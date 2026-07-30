@@ -32,13 +32,18 @@ Structured and orchestrated work evaluates the phase router in order:
 4. complete system and Go-ownership design when implementation would otherwise choose mechanism or placement, then apply path/risk-matched review;
 5. complete test design when proof is non-obvious, then apply path/risk-matched QA review;
 6. complete `tasks.md` and its path/risk-matched readiness review;
-7. enter [Implementation / Validation / Closeout](spec-first-workflow/phases/implementation-validation-closeout.md) with one direct outcome or the next ready planned ledger task or wave; that phase owns execution-carrier selection, root-local execution, triggered Worker execution, root acceptance, integrated review, adaptation to execution drift, and validation.
+7. enter [Implementation / Validation / Closeout](spec-first-workflow/phases/implementation-validation-closeout.md) with one direct outcome or the next ready planned acceptance unit or wave; that phase owns execution-carrier selection, root-local execution, triggered Worker execution, root candidate intake, acceptance and integration, risk-triggered independent implementation review, adaptation to execution drift, and validation.
 
 Scoping down research, design, or test design needs one concrete reason in the current artifact or handoff, not a new phase-control file. Specification and planning remain required; independent review follows the shared trigger rather than artifact presence alone.
 
 For review and handoff, the owning macro phases are specification (including any supporting intake and research), technical design (system/integration plus Go ownership), test design, planning, and implementation/validation/closeout. A user-named `research only` boundary makes research the owning macro phase; other supporting-step boundaries stop under their own stop rule without creating an extra review receipt.
 
 ## Phase Router
+
+Read the matching phase before its first governed action. The link in this
+table is a context pointer, not evidence that the target is already loaded.
+Direct `change`, `build`, and `fix` requests start by reading Implementation /
+Validation / Closeout even when their route is already obvious.
 
 | Need | Read | Outcome |
 | --- | --- | --- |
@@ -62,9 +67,24 @@ Independent review, when triggered, is an internal method of the artifact-owning
 | Test technical design and ownership readiness. | [Technical Design Review](spec-first-workflow/phases/technical-design-review.md) | Findings and verdict returned to technical design. |
 | Falsify non-obvious scenarios and proof feasibility. | [Test Design](spec-first-workflow/phases/test-design.md#review) | Independent QA findings and verdict returned to test design. |
 | Test whether a ledger is executable. | [Task Review / Readiness](spec-first-workflow/phases/task-review-readiness.md) | Findings and verdict returned to planning. |
-For every triggered non-implementation review, phase movement follows the shared [Review Independence](spec-first-workflow/shared/subagents-and-handoff.md#review-independence) rule. A dispositioned `CONCERNS` verdict may move; `FAIL` may not. Implementation acceptance and closeout follow the current root-owned review contract in the implementation phase.
+| Independently falsify a fixed high-risk implementation acceptance unit. | [Independent Implementation Review](spec-first-workflow/phases/implementation-validation-closeout.md#independent-implementation-review) | A one-shot `PASS`, `FAIL`, or `BLOCKED` verdict returned to root acceptance. |
 
-Read [Artifact Model](spec-first-workflow/shared/artifact-model.md) only for persistence, status, ownership, or resume decisions. Read [Subagents And Handoff](spec-first-workflow/shared/subagents-and-handoff.md) only for delegation, independent review, resume, or handoff mechanics. Read `docs/repo-architecture.md` before design that affects repository boundaries or generated-source ownership.
+Every independent review follows the shared [Review Independence](spec-first-workflow/shared/subagents-and-handoff.md#review-independence) trigger. A dispositioned `CONCERNS` verdict may move for non-implementation artifacts; `FAIL` may not. Implementation review returns its verdict to the root-owned acceptance contract and is not triggered by a `tasks.md` entry alone.
+
+### Conditional Read Gate
+
+Load a conditional owner immediately before the first action in its row and
+keep it out of context when the trigger is absent:
+
+| Trigger | Read before |
+| --- | --- |
+| Persist, inspect status/ownership, or resume from task artifacts. | [Artifact Model](spec-first-workflow/shared/artifact-model.md) |
+| Delegate, open an independent review, resume a lane, or hand off. | [Subagents And Handoff](spec-first-workflow/shared/subagents-and-handoff.md) |
+| Choose or operate a durable control, Worker/subagent carrier, model, or reasoning effort. | [Agent Harness](agent-harness.md) |
+| Design changes repository boundaries or generated-source ownership. | [Repository Architecture](repo-architecture.md) |
+
+Re-run this gate when phase movement or current evidence introduces a new row;
+do not reload an unchanged owner merely to produce a routing receipt.
 
 ## Phase Movement
 
@@ -72,7 +92,7 @@ Close before movement: move forward only when the current owner has dispositione
 
 ### Implementation-Input Closure
 
-Before moving forward, close the inputs required by the next phase action or implementation task/wave: each is canonical, mechanically derivable without a semantic choice, or available from a named external owner. Also close any cross-task decision that could invalidate that next work. Later inputs may remain open with an owner and checkpoint when they cannot invalidate the next accepted result; they block only when the current task would otherwise be unusable or dishonest.
+Before moving forward, close the inputs required by the next phase action or implementation acceptance unit/wave: each is canonical, mechanically derivable without a semantic choice, or available from a named external owner. Also close any cross-task decision that could invalidate that next work. Later inputs may remain open with an owner and checkpoint when they cannot invalidate the next accepted result; they block only when the current unit would otherwise be unusable or dishonest.
 
 A request authorizing end-to-end implementation may continue through the needed phases and reviews in one session. Stop only when:
 
@@ -84,17 +104,17 @@ A request authorizing end-to-end implementation may continue through the needed 
 
 Absent one of those conditions, movement is automatic: enter the next phase, task, or wave, and report what it produced instead of asking whether to enter it ([Proceeding](../AGENTS.md#proceeding)).
 
-Review, repair, and re-review of non-implementation artifacts stay with the artifact owner until the shared convergence condition is met. Implementation moves only under the [current phase-owned execution, acceptance, review, correction, and closeout contract](spec-first-workflow/phases/implementation-validation-closeout.md). [Subagents And Handoff](spec-first-workflow/shared/subagents-and-handoff.md) owns non-implementation review and handoff mechanics.
+Review, repair, and re-review of non-implementation artifacts stay with the artifact owner until the shared convergence condition is met. Implementation moves only under the [current phase-owned execution, review, correction, acceptance, integration, and closeout contract](spec-first-workflow/phases/implementation-validation-closeout.md). [Subagents And Handoff](spec-first-workflow/shared/subagents-and-handoff.md) owns triggered review independence and handoff mechanics.
 
 ### Phase Lock
 
-Planning readiness on the current `tasks.md` candidate commits the next transition to its first executable task or real parallel wave. Status checks and compaction resume from artifacts without changing the phase. Concrete new evidence that invalidates a named accepted input or readiness disposition reopens only its smallest owner and preserves every unaffected disposition.
+Planning readiness on the current `tasks.md` candidate commits the next transition to its first executable acceptance unit or real parallel wave. Status checks and compaction resume from artifacts without changing the phase. Concrete new evidence that invalidates a named accepted input or readiness disposition reopens only its smallest owner and preserves every unaffected disposition.
 
 At a true macro-phase boundary, follow [Handoff](spec-first-workflow/shared/subagents-and-handoff.md#handoff).
 
 ## Prompt Maintenance
 
-Current references: for Codex sessions, OpenAI's [model and prompting guidance for GPT-5.6](https://developers.openai.com/api/docs/guides/latest-model?model=gpt-5.6#prompting-best-practices); for Claude Code sessions, Anthropic's [Claude Code documentation](https://code.claude.com/docs) and [prompt-engineering guidance](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/overview). [Agent Harness](agent-harness.md) owns which harness's native controls apply.
+Current references: Matt Pocock's [Building Great Skills glossary](https://github.com/mattpocock/skills/blob/main/skills/productivity/writing-great-skills/GLOSSARY.md) owns the vocabulary for predictability, information hierarchy, steering, and pruning; OpenAI's [model and prompting guidance for GPT-5.6](https://developers.openai.com/api/docs/guides/latest-model?model=gpt-5.6#prompting-best-practices) owns current Codex model guidance; Anthropic's [Claude Code documentation](https://code.claude.com/docs) and [prompt-engineering guidance](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/overview) own the Claude Code vendor contract. [Agent Harness](agent-harness.md) owns which harness's native controls apply.
 
 Use the repository [Task Contract](../AGENTS.md#task-contract) as the
 outcome-first prompt schema. State each durable instruction once in its
@@ -117,7 +137,9 @@ Change one instruction group at a time, and prefer removal: when a behavior
 already has an owner, delete the weaker statement instead of adding a
 clarifying one. Retain examples and style guidance only when they encode a
 product requirement or close a measured gap, then review realistic trigger,
-near-miss, and completion cases. This repository does not own a fake agent
+near-miss, and completion cases. Use the disclosed [Workflow Behavior
+Evals](spec-first-workflow/shared/workflow-behavior-evals.md) for orchestration
+changes. This repository owns the cases and trace assertions, not a fake agent
 runner or judge; without an externally owned live evaluation system, invocation
 and model-behavior claims remain explicitly unproven.
 

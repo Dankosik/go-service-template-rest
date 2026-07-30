@@ -1,6 +1,6 @@
 ---
 name: go-concurrency
-description: "Concurrency: Use when changed Go touches goroutines, shared state, channels, locks, atomics, WaitGroups, timers, worker bounds, cancellation unblock, or join protocols. Own happens-before and lifecycle-mechanism review; Skip when service resilience policy, durable replay, or Go context API semantics is primary."
+description: "Concurrency: Use for goroutines, shared state, channels, locks, atomics, timers, worker bounds, cancellation, or joins. Own happens-before/lifecycle; Skip resilience policy, replay, or context semantics."
 ---
 
 # Go Concurrency

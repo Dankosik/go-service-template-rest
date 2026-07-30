@@ -19,10 +19,13 @@ type Metrics struct {
 const (
 	// serverMeterName owns the instruments the HTTP chain records itself, as
 	// opposed to the ones otelhttp derives from the request.
-	serverMeterName = "service.http.server"
+	serverMeterName     = "service.http.server"
+	grpcServerMeterName = "service.grpc.server"
 
 	activeRequestsInstrument = "http.server.active_requests"
 	shedRequestsInstrument   = "http.server.shed_requests"
+	activeRPCsInstrument     = "rpc.server.active_requests"
+	shedRPCsInstrument       = "rpc.server.shed_requests"
 )
 
 // ServerLoad is what the request path records about its own admission control.
@@ -44,17 +47,46 @@ type ServerLoad struct {
 // not stop the service from serving, and the OpenTelemetry API guarantees a
 // usable instrument alongside the error.
 func (m *Metrics) ServerLoad() ServerLoad {
-	meter := m.MeterProvider().Meter(serverMeterName)
-
-	active, _ := meter.Int64UpDownCounter(
+	return m.serverLoad(
+		serverMeterName,
 		activeRequestsInstrument,
-		metric.WithDescription("Requests currently executing a handler, against the http.max_in_flight limit."),
-		metric.WithUnit("{request}"),
+		shedRequestsInstrument,
+		"Requests currently executing a handler, against the http.max_in_flight limit.",
+		"Requests rejected without running a handler because the in-flight limit was reached.",
+		"{request}",
+	)
+}
+
+// GRPCServerLoad builds the admission-control instruments for business RPCs.
+func (m *Metrics) GRPCServerLoad() ServerLoad {
+	return m.serverLoad(
+		grpcServerMeterName,
+		activeRPCsInstrument,
+		shedRPCsInstrument,
+		"RPCs currently executing a handler, against the grpc.server.max_concurrent_rpcs limit.",
+		"RPCs rejected before running a handler because the process RPC limit was reached.",
+		"{rpc}",
+	)
+}
+
+func (m *Metrics) serverLoad(
+	meterName string,
+	activeName string,
+	shedName string,
+	activeDescription string,
+	shedDescription string,
+	unit string,
+) ServerLoad {
+	meter := m.MeterProvider().Meter(meterName)
+	active, _ := meter.Int64UpDownCounter(
+		activeName,
+		metric.WithDescription(activeDescription),
+		metric.WithUnit(unit),
 	)
 	shed, _ := meter.Int64Counter(
-		shedRequestsInstrument,
-		metric.WithDescription("Requests rejected without running a handler because the in-flight limit was reached."),
-		metric.WithUnit("{request}"),
+		shedName,
+		metric.WithDescription(shedDescription),
+		metric.WithUnit(unit),
 	)
 	return ServerLoad{active: active, shed: shed}
 }

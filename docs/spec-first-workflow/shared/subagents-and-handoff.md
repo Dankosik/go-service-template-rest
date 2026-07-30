@@ -37,9 +37,23 @@ Use a subagent when all are true:
 - separate context or review independence materially improves the result;
 - the output can be checked and synthesized by the root.
 
-Good lanes include independent source research, one specialist design question, or review of a fixed non-implementation revision. Bad lanes include broad “review everything,” duplicate lenses, tiny lookups, and any implementation review, acceptance, specialist analysis, re-review, or repair.
+Good lanes include independent source research, one specialist design question,
+review of a fixed non-implementation revision, and a triggered [independent
+implementation review](#implementation-review-independence) of a fixed
+acceptance unit.
+Bad lanes include broad “review everything,” duplicate lenses, tiny lookups,
+discretionary implementation review, implementation specialist analysis, and
+any implementation or review repair.
 
-The root owns scope, lane choice, synthesis, integration, task acceptance, and completion claims. Built-in subagents are read-only research, challenge, or review lanes; they never implement or repair code, config, docs, or tests. In the Codex App a lane is a project subagent; in Claude Code it is an `Agent` tool lane ([Agent Harness](../../agent-harness.md#control-map)). The harness-native implementation Worker is outside this contract and follows the [implementation phase](../phases/implementation-validation-closeout.md#worker-execution).
+The root owns scope, lane choice, synthesis, correction routing, integration,
+acceptance, completion claims, and mechanical ledger updates. Built-in
+subagents are read-only research, challenge, or review lanes; they never
+implement or repair code, config, docs, or tests.
+In the Codex App a lane is a project subagent; in Claude Code it is an `Agent`
+tool lane ([Agent Harness](../../agent-harness.md#control-map)). The
+harness-native implementation Worker is outside this contract and follows the
+[implementation
+phase](../phases/implementation-validation-closeout.md#worker-execution).
 
 Run one lane per distinct decision-changing question. Current harness capacity, mutable-state independence, and root synthesis cost bound concurrency; do not add a lane for coverage or confidence alone. Nested delegation is not a default and needs its own independent evidence question. If a lane exposes a new owner decision, return it to the root rather than expanding scope.
 
@@ -47,7 +61,8 @@ For read-only subagents, choose the currently available model and reasoning effo
 
 ## Lane Brief
 
-One lane owns one question, one evidence boundary, and one root disposition. Keep the brief outcome-first:
+One lane owns one question, one evidence boundary, and one consuming
+disposition. Keep the brief outcome-first:
 
 ```text
 Question: <one decision or falsification target>
@@ -69,9 +84,15 @@ say so and state the evidence boundary; do not pad a clean review.
 
 ## Review Independence
 
-Use an independent reviewer when an artifact controls an orchestrated, high-impact, hard-to-reverse, protected-domain, cross-owner, or materially contested decision that its author cannot credibly falsify alone. Artifact presence alone does not trigger a reviewer. Other structured artifacts use root self-review. An explicitly requested independent review of completed implementation is a separate read-only boundary after implementation, not an internal gate.
+Use an independent reviewer when an artifact controls an orchestrated,
+high-impact, hard-to-reverse, protected-domain, cross-owner, or materially
+contested decision that its author cannot credibly falsify alone. Artifact
+or `tasks.md` presence alone does not trigger a reviewer. Other structured
+artifacts and ordinary implementation use root self-review. Apply the same
+trigger to a fixed implementation acceptance unit; an explicit user request for
+independent review also triggers it.
 
-The reviewer:
+A triggered non-implementation reviewer:
 
 - reads the current fixed artifact or diff;
 - reports anchored findings and a verdict recommendation;
@@ -81,11 +102,38 @@ The reviewer:
 
 When independent review is triggered, one whole-artifact reviewer is the default. Run a specialist first only for one concrete high-impact question the root cannot credibly cover locally. If the reviewer discovers such a question, run one bounded specialist follow-up and return only that disposition; do not repeat an unchanged whole candidate. A domain label or desire for more confidence does not justify another reviewer.
 
-For each triggered non-implementation boundary, review convergence is: fixed candidate -> independent findings and verdict -> disposition. Repair and focused fresh review apply only to `FAIL` or to a material candidate change made to resolve a concern. Reuse unaffected findings. Implementation findings instead follow the root-owned Worker correction loop in the implementation phase.
+For each triggered non-implementation boundary, review convergence is: fixed
+candidate -> independent findings and verdict -> disposition. Repair and
+focused fresh review apply only to `FAIL` or to a material candidate change
+made to resolve a concern. Reuse unaffected findings.
 
 A triggered review moves on `PASS`. `CONCERNS` also moves once each concern has a downstream proof or risk owner, observable, and reopen condition and leaves no behavior or mechanism for implementation to invent; this disposition does not require another review. A concern that cannot be carried that way is `FAIL`. `FAIL` blocks movement until repair or upstream reopen and focused fresh review. Do not repeat an unchanged candidate or launch speculative lenses merely to collect confidence.
 
 A material mutation after review invalidates only the affected findings and proof. Wording-only edits and recorded concern dispositions do not trigger another review.
+
+## Implementation Review Independence
+
+Each triggered implementation review uses one fresh, one-shot read-only lane
+against one fixed acceptance unit. [Agent
+Harness](../../agent-harness.md#read-only-lanes) chooses the ordinary or
+critical role and harness-native clean-context mechanism. The implementation
+actor and implementation Worker are not eligible reviewers, and a lane used for
+one unit is not resumed for another task ID or unit.
+
+Give the lane the `tasks.md` path and grouped unit IDs or singleton task ID,
+cited accepted sources,
+authoritative candidate location, and irreproducible external evidence. The
+reviewer derives its result from the current contract, candidate, production
+path, dependencies, retained scope, and claim-scoped proof rather than an
+implementation summary. It may run safe non-mutating checks.
+
+The reviewer keeps the candidate fixed, edits and repairs nothing, and returns
+the [phase-defined verdict and
+evidence](../phases/implementation-validation-closeout.md#independent-implementation-review)
+unchanged. A material candidate or proof-precondition change invalidates that
+verdict; the root routes correction and opens a fresh lane only when the review
+trigger still applies. The reviewer uses existing proof receipts and runs only
+the missing or adversarial falsifier required by its question.
 
 ## Fan-In
 
@@ -93,7 +141,7 @@ For each material lane result, keep only:
 
 - conclusion and strongest evidence;
 - uncertainty or conflict;
-- root disposition: accept, reject, repair, carry as proof/risk, or reopen;
+- consuming disposition: accept, reject, repair, carry as proof/risk, or reopen;
 - destination artifact or owner.
 
 Do not paste raw transcripts into authoritative artifacts.
@@ -108,6 +156,12 @@ Resume from artifacts, not remembered chat:
 
 If those sources disagree, the task is blocked until the narrowest owner reconciles them.
 
+When compaction or accumulated lane history makes completed coordination larger
+than the live decision state, refresh the ledger's compact `Active wave` block
+and continue from that artifact in a fresh root context when the harness
+supports it. Carry no transcript replay; retain only accepted inputs, unit and
+candidate identities, proof receipts, open causal class, and next action.
+
 ## Handoff
 
 Treat handoff as a chain of custody: name the accepted source, movement evidence, next owner, authority boundary, proof obligation, next executable action, and exact stop/reopen owner and condition so the receiver can continue without reconstructing chat.
@@ -121,6 +175,7 @@ complete review result and stop at the requested review boundary. It gains no
 repair, implementation, or workflow-handoff authority unless the user separately
 grants it.
 
-When that request independently reviews completed implementation, it begins only
-after implementation/validation/closeout has ended and never retroactively becomes
-an implementation acceptance or closeout gate.
+An explicitly requested review of completed implementation may run inside
+implementation when the request makes it an acceptance condition; otherwise it
+begins after implementation/validation/closeout and never retroactively becomes
+an acceptance or closeout gate.

@@ -65,7 +65,7 @@ const (
 	dependencyCloseTimeout = 5 * time.Second
 
 	// diagnosticsShutdownTimeout bounds closing the private metrics listener, which
-	// serveHTTPRuntime does after the API drain rather than with it, so a scraper can
+	// serveRuntime does after the API drain rather than with it, so a scraper can
 	// still collect what the drain recorded. It is short because the only thing it
 	// can be waiting for is one in-flight scrape.
 	diagnosticsShutdownTimeout = 2 * time.Second
@@ -277,6 +277,7 @@ func Run(args []string) (runErr error) {
 			)
 		},
 	})
+	domainErrors := dependencies.DomainErrors()
 	handler, err := httpx.NewRouter(
 		bootstrap.log,
 		httpx.Handlers{
@@ -293,7 +294,7 @@ func Run(args []string) (runErr error) {
 			// The active profile's dependency failures, classified once here
 			// rather than in every operation. A service appends its own domain
 			// mappers to this slice; see httpx.DomainErrorMapper.
-			DomainErrors: dependencies.DomainErrors(),
+			DomainErrors: domainErrors,
 			// Authenticate is deliberately unset. This contract declares no
 			// security requirement, so nothing reaches the seam; an operation
 			// that adds one gets a fail-closed 401 until a service supplies its
@@ -322,16 +323,40 @@ func Run(args []string) (runErr error) {
 		MaxHeaderBytes:    bootstrap.cfg.HTTP.MaxHeaderBytes,
 	}
 
+	// profile:grpc:start
+	var grpcSrv grpcRuntimeServer
+	if bootstrap.cfg.GRPC.Server.Enabled {
+		builtGRPC, buildErr := newGRPCRuntime(
+			bootstrap.cfg,
+			bootstrap.log,
+			metrics,
+			domainErrors,
+			grpcRuntimeBindings{
+				// The first owned gRPC service and its authentication or
+				// authorization policy are composed here. Generated handlers
+				// stay outside grpcx.
+			},
+		)
+		if buildErr != nil {
+			return buildErr
+		}
+		grpcSrv = builtGRPC
+	}
+	// profile:grpc:end
+
 	var metricsSrv runtimeServer
 	if bootstrap.cfg.Observability.Metrics.Addr != "" {
 		metricsSrv = newDiagnosticsServer(bootstrap.cfg, metrics, errorLog)
 	}
 
-	serveErr := serveHTTPRuntime(signalCtx, startupCtx, serveHTTPRuntimeArgs{
-		cfg:                bootstrap.cfg,
-		log:                bootstrap.log,
-		healthSvc:          healthSvc,
-		srv:                srv,
+	serveErr := serveRuntime(signalCtx, startupCtx, serveRuntimeArgs{
+		cfg:       bootstrap.cfg,
+		log:       bootstrap.log,
+		healthSvc: healthSvc,
+		httpSrv:   srv,
+		// profile:grpc:start
+		grpcSrv: grpcSrv,
+		// profile:grpc:end
 		metricsSrv:         metricsSrv,
 		backgroundFailures: supervisor.Failures(),
 		// Admission refreshes rather than probing separately, so the verdict it

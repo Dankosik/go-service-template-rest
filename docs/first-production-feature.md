@@ -61,6 +61,19 @@ Problem catalog.
 Extend `httpx.Handlers` and wire the concrete feature in
 `cmd/service/internal/bootstrap`; do not register a parallel manual API route.
 
+<!-- profile:grpc:start -->
+### Native gRPC operation
+
+When the accepted contract is gRPC instead of, or beside, REST, define it under
+`api/proto`, generate `internal/gen/proto`, implement the generated interface
+as a thin adapter over the same feature service, and register it through
+the `newGRPCRuntime` call in `cmd/service/internal/bootstrap/run.go`. Do not duplicate the use case
+for streaming or return raw dependency statuses. Run `make proto-check` and
+the focused gRPC tests from [Native gRPC](grpc.md); add
+`BASE_REF=origin/main make proto-breaking` once the contract has a published
+base.
+<!-- profile:grpc:end -->
+
 ### Protected operations
 
 The template ships no placeholder authentication, and the base contract declares

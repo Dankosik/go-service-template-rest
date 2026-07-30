@@ -11,12 +11,27 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 ARG APP_VERSION=dev
 ARG VCS_REF=unknown
 ARG RAILWAY_GIT_COMMIT_SHA
+ARG PGO_PROFILE=off
 ARG TARGETOS
 ARG TARGETARCH
 ENV CGO_ENABLED=0
 RUN --mount=type=bind,target=. \
     --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
+    if [ "${PGO_PROFILE}" = "auto" ] || [ -z "${PGO_PROFILE}" ]; then \
+      echo "PGO_PROFILE must be off or name an explicit representative CPU profile" >&2; \
+      exit 2; \
+    fi && \
+    if [ "${PGO_PROFILE}" != "off" ]; then \
+      if [ ! -f "${PGO_PROFILE}" ]; then \
+        echo "PGO profile does not exist: ${PGO_PROFILE}" >&2; \
+        exit 2; \
+      fi; \
+      if ! go tool pprof -raw "${PGO_PROFILE}" >/dev/null; then \
+        echo "PGO profile is not a valid CPU profile: ${PGO_PROFILE}" >&2; \
+        exit 2; \
+      fi; \
+    fi && \
     module_path="$(go list -m)" && \
     build_packages="./cmd/service" && \
     if [ -d ./cmd/migrate ]; then build_packages="${build_packages} ./cmd/migrate"; fi && \
@@ -27,6 +42,7 @@ RUN --mount=type=bind,target=. \
     resolved_commit="${RAILWAY_GIT_COMMIT_SHA:-${VCS_REF}}" && \
     ldflags="-s -w -buildid= -X ${module_path}/internal/config.buildVersion=${resolved_version} -X ${module_path}/internal/config.buildCommit=${resolved_commit}" && \
     GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build \
+      -pgo="${PGO_PROFILE}" \
       -trimpath \
       -mod=readonly \
       -buildvcs=false \

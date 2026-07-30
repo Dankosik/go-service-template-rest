@@ -1,6 +1,6 @@
 ---
 name: go-data-architecture
-description: "Data architecture: Use when authoritative data ownership, models, tenant identity, schema evolution, backfills, retention, history, projections, or datastore fit must be decided. Own data truth and lifecycle; Skip when runtime DB/cache behavior, business acceptance, distributed recovery, or implementation ownership is primary."
+description: "Data architecture: Use for authority, tenant identity, schema evolution, backfills, retention, projections, or datastore fit. Own truth/lifecycle; Skip runtime DB/cache, domain, recovery, or code placement."
 ---
 
 # Go Data Architecture

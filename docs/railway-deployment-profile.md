@@ -75,6 +75,28 @@ Do not use project-specific BuildKit cache mount IDs in the template
 Dockerfile. A derived service may add them after it owns and verifies its
 Railway service ID.
 
+<!-- profile:grpc:start -->
+## Native gRPC networking
+
+The gRPC profile adds a second application listener but does not change
+Railway exposure automatically. `railway.toml` still targets the REST port and
+uses `/health/ready`; enabling `APP__GRPC__SERVER__ENABLED` neither publishes
+the gRPC port nor proves that a public Railway HTTP domain preserves native
+gRPC HTTP/2 trailers.
+
+For service-to-service traffic in one Railway environment, bind the gRPC
+listener to `::` and call `<service>.railway.internal:<grpc-port>` through
+Railway private networking. Choose application TLS when the service contract
+requires endpoint identity beyond the private encrypted mesh; otherwise
+plaintext still requires the explicit `ALLOW_PLAINTEXT` acknowledgement.
+
+For public native gRPC, either prove the current public HTTP path end to end
+with unary and streaming trailer checks or configure Railway TCP Proxy. A TCP
+Proxy deployment requires application TLS and client hostname verification;
+the proxy hostname and port are deployment-owned values and do not belong in
+this template. See [Native gRPC](grpc.md) for runtime config and proof.
+<!-- profile:grpc:end -->
+
 ## Migration contract
 
 - Railway runs one `/migrate` pre-deploy command before promotion.

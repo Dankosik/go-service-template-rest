@@ -1,6 +1,6 @@
 ---
 name: go-system-architecture
-description: "System architecture: Use when service boundaries, topology, source of truth, sync/async flow, consistency, failure, or migration must be decided. Own runtime and component authority; Skip when package placement, local data mechanics, domain policy, or implementation review is primary."
+description: "System architecture: Use for service boundaries, topology/protocol, truth, consistency, failure, or migration. Own runtime interactions; Skip Go placement, local data, domain policy, or implementation."
 ---
 
 # Go System Architecture

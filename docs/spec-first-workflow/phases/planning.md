@@ -22,10 +22,10 @@ Direct changes may use an inline plan.
 2. Give every obligation exactly one reconciliation disposition: one task, several named task deltas with a distinct postcondition and proof for each, or a proved no-implementation disposition. Compile those dispositions into the smallest coherent task outcomes under the task-boundary rule below.
 3. Reconcile both directions: every task delta and proof maps to one obligation disposition, every obligation disposition is represented, and task boundaries follow valid postconditions rather than source-document structure.
 4. Link-check the working set against the current repository and accepted deployment topology. For each accepted change to a contract, schema, canonical/generated authority, identifier, composition point, migration, or rollout state, confirm the accepted ownership record against every current producer, consumer, mirror, proof carrier, configuration/documentation surface, and replacement surface within its impact boundary. Give each reached surface one auditable boundary disposition: coupled into the outcome task, assigned to named task deltas whose intermediate states and handoffs satisfy the split rule, or proved unchanged. A required surface without accepted ownership or placement reopens its narrow design owner; Planning does not choose it.
-5. Record a planned wave only when multiple ready tasks will actually run concurrently and current evidence establishes their independence.
-6. Prove that the next task or real wave is executable from closed inputs; later tasks need owners and dependencies, not prematurely materialized inputs.
+5. Record a planned wave only when multiple ready acceptance units will actually run concurrently and current evidence establishes their independence.
+6. Prove that the next acceptance unit or real wave is executable from closed inputs; later tasks need owners and dependencies, not prematurely materialized inputs.
 
-When integration is the primary uncertainty, make the next task the smallest
+When integration is the primary uncertainty, make the next acceptance unit the smallest
 production-grade end-to-end slice. The slice establishes one supported behavior
 through the real production entry point, every uncertain integration seam, and
 the final observable response, effect, or authoritative state, together with
@@ -59,6 +59,7 @@ Global constraints: <exact constraints shared by multiple tasks; omit when none>
   - Owner/surface/resources: <canonical owner for each writable surface; initial authorized writable paths or bounded discovery rule; mutable, exclusive, or non-concurrent resources, or none>
   - Depends on: <ID — output handoff, exact consumed state, or exact safety/proof gate; needed to start, complete, or prove; or none>
   - Handoff: <for an output dependency: exact produced output and consumed input/acceptance condition; omit when none>
+  - Alias of: <task ID and exact accepted receipt consumed; use only when this entry has no implementation delta; omit otherwise>
   - External input/gate: <required non-ledger input or rollout gate; named owner; objective availability checkpoint; omit when none>
   - Proof: <claim; command/check; expected observable>
   - Reopen if: <concrete objective future invalidation condition; upstream owner; omit when none>
@@ -68,22 +69,45 @@ Add only fields that change execution. Put a constraint in `Global constraints` 
 
 A split boundary is valid only when the completed task leaves the repository, and every deployment or migration state it creates or assumes, internally consistent, supported by the accepted compatibility or rollback policy, independently reviewable, and provable without unfinished companion work. Group the canonical source, generated or mirrored output, required tests and fixtures, migration/runtime compatibility, required documentation, and replacement cleanup needed for that state in the same task. As an oversized-task preflight, identify distinct ownership, review, failure/recovery, rollback, and proof domains inside the outcome. A useful split isolates a distinct owner, review/proof, failure/recovery, or rollback domain; creates a required handoff; enables an actual wave with positive independence evidence; or leaves an independently shippable accepted outcome. Keep the work in the same task when none of those benefits applies. Do not use file count, estimated minutes, or desired Worker count as a sizing rule.
 
+An **acceptance unit** is the smallest fixed candidate that one actor can
+implement, prove, review when triggered, and integrate without a consumer
+depending on an intermediate state. One implementation task is the default
+unit. Group adjacent ready tasks only when they share the same canonical owner,
+editable boundary, proof preconditions, and final-state validity; record a
+compact `Acceptance units` entry only for a grouped unit:
+
+```markdown
+## Acceptance units
+- A1: T2, T3 — <shared owner, boundary, and proof reason>
+```
+
+The unit is the Worker, final-proof, review, and integration boundary; it is not
+another task lifecycle. A task whose only postcondition is receipt of another
+task's accepted result is a **receipt alias**: record `Alias of`, give it no
+writable surface or proof command, and close it mechanically when the named
+receipt is present. Receipt aliases never create a Worker, reviewer, validation
+run, or integration commit.
+
 For sequential work, `Depends on` is the complete ordering authority; do not create one-task waves. Record an edge only when the downstream task consumes the upstream task's output or state, or must cross its safety or proof gate, and name whether the edge is required to start, complete, or prove the downstream task. Document order, review preference, and convenient sequencing are not dependencies. For an output edge, record the produced/consumed contract once in `Handoff`; in `Depends on`, write only `<ID> — output handoff — needed to <start|complete|prove>`. For a state or safety/proof gate, omit `Handoff` and name the consumed state or gate in `Depends on`.
 
-Add one compact `Planned waves` section only when at least two ready tasks will actually run concurrently:
+Add one compact `Planned waves` section only when at least two ready acceptance units will actually run concurrently:
 
 ```markdown
 ## Planned waves
-- W1: T1, T2
+- W1: A1, T4
   - Base: <same accepted commit, tree, or recorded frozen base>
   - Independence: <current anchors showing pairwise-disjoint writable surfaces and mutable resources, preserved canonical/generated and migration/rollout coupling, and no interface or assumption produced by one member and consumed by another>
 ```
 
-Only recorded positive evidence establishes a wave. A task whose independence is unavailable remains dependency-scheduled until current evidence establishes the boundary. Implementation may narrow a planned wave when current evidence changes.
+Use a singleton task ID for its implied unit and a grouped unit ID where one is
+recorded. Only positive evidence establishes a wave. A unit whose independence
+is unavailable remains dependency-scheduled until current evidence establishes
+the boundary. Implementation may narrow a planned wave when current evidence
+changes.
 
 Cite the narrowest stable source anchor and state enough of the relevant accepted obligation in the task outcome to make execution unambiguous; do not copy source prose. State the verifiable postcondition and only execution-changing accepted constraints, including preserved or forbidden behavior and any accepted state-transition, data-flow, failure/recovery, privacy, or security boundary. Do not prescribe discretionary coding steps; name an exact method or order only when accepted design, generated-source, migration, rollout, or proof dependencies fix it. Do not make implementation recover an execution-critical constraint, invariant, non-goal, exact value, interface, or proof expectation from a broad document link or chat history.
 
-`Owner/surface/resources` names the canonical owner for every writable surface, the initial authorized writable paths or bounded discovery rule, and every mutable, exclusive, or non-concurrent external or proof resource that can affect execution, such as a database, port, environment, migration target, destructive fixture, lock, or generated pair; use `none` when there is no such resource. A discovery rule may resolve exact files only inside an already accepted owner; it names the inspection bound and deterministic placement rule and grants write authority only to the resolved companion surfaces. If the owning repository, package, or generated authority is still a choice, reopen its design owner. `Owner/surface/resources` records authoritative implementation, data, generated-source, and external ownership plus the writable and mutable-resource envelope; it does not select an execution carrier. Root-local versus Worker execution, checkout or worktree, model, and harness control remain Implementation decisions under [Implementation Worker Execution](implementation-worker-execution.md). `External input/gate` records later non-ledger availability; if it is mandatory for the next task and unavailable, it belongs in `Blocked stop`.
+`Owner/surface/resources` names the canonical owner for every writable surface, the initial authorized writable paths or bounded discovery rule, and every mutable, exclusive, or non-concurrent external or proof resource that can affect execution, such as a database, port, environment, migration target, destructive fixture, lock, or generated pair; use `none` when there is no such resource. A discovery rule may resolve exact files only inside an already accepted owner; it names the inspection bound and deterministic placement rule and grants write authority only to the resolved companion surfaces. If the owning repository, package, or generated authority is still a choice, reopen its design owner. `Owner/surface/resources` records authoritative implementation, data, generated-source, and external ownership plus the writable and mutable-resource envelope; it does not select an execution carrier. Root-local versus Worker execution, checkout or worktree, model, and harness control remain Implementation decisions under [Implementation Worker Execution](implementation-worker-execution.md). `External input/gate` records later non-ledger availability; if it is mandatory for the next unit and unavailable, it belongs in `Blocked stop`.
 
 Every Go implementation task carries the owning package or a bounded discovery
 rule, the canonical source and any derived generated surfaces, accepted Go
@@ -110,7 +134,7 @@ Planning must make these explicit where relevant:
 
 Preserve an accepted example or scenario when it defines required behavior or proof. Use local obligation keys only when dense inputs cannot otherwise be audited from narrow source anchors. A no-implementation disposition must cite either current authoritative evidence that the obligation is already satisfied or an accepted upstream decision that no implementation change is required, plus its proving surface or objective recheck condition. When one obligation requires several task deltas, its single reconciliation disposition lists those task IDs; each task carries only its distinct postcondition, proof obligation, and actual interface or handoff. Put an unchanged constraint shared by several tasks once in `Global constraints`. Keep reconciliation inline unless the mapping is too dense to audit without a compact table; do not create a separate traceability artifact by default.
 
-Before readiness, walk the next task or actual parallel wave through its proof using current inputs. Also resolve any later decision that could invalidate that work. A later unavailable input keeps its dependent task pending with an owner and checkpoint; it blocks readiness only when the next accepted result would otherwise be unusable or when final completion is being claimed.
+Before readiness, walk the next acceptance unit or actual parallel wave through its proof using current inputs. Also resolve any later decision that could invalidate that work. A later unavailable input keeps its dependent task pending with an owner and checkpoint; it blocks readiness only when the next accepted result would otherwise be unusable or when final completion is being claimed.
 
 ## Readiness Review
 
@@ -126,4 +150,4 @@ The ledger is ready only when every implementation-changing accepted obligation 
 
 Every task must leave repository and deployment or migration state internally valid, independently reviewable, and acceptable with its own claim-matched proof. Every writable owner or bounded discovery rule, mutable resource, external gate, canonical order, dependency or handoff, and objective reopen condition that changes execution must be concrete and recorded once; every dependency must be justified by a consumed output or state or by a safety or proof gate.
 
-A carrier-neutral executor dry-run of the next task or actual wave must reach acceptance using only the complete fixed ledger, cited current inputs, and available mandatory gates—without chat history, unfinished companion work, or a new product or behavior, mechanism, placement, ownership, test/proof strategy, rollout, concurrency, or execution-carrier decision. Every actual wave must carry current positive pairwise independence evidence. Later work remains owned and dependency-ordered; later unavailable inputs have named owners and objective checkpoints and cannot invalidate the next accepted result. Any triggered review must return `PASS` or dispositioned `CONCERNS`.
+A carrier-neutral executor dry-run of the next acceptance unit or actual wave must reach acceptance using only the complete fixed ledger, cited current inputs, and available mandatory gates—without chat history, unfinished companion work, or a new product or behavior, mechanism, placement, ownership, test/proof strategy, rollout, concurrency, or execution-carrier decision. Every actual wave must carry current positive pairwise independence evidence. Later work remains owned and dependency-ordered; later unavailable inputs have named owners and objective checkpoints and cannot invalidate the next accepted result. Any triggered review must return `PASS` or dispositioned `CONCERNS`.

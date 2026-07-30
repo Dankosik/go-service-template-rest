@@ -1,6 +1,6 @@
 ---
 name: go-observability
-description: "Observability: Use when logs, metrics, traces, SLI/SLOs, alerts, diagnostics, privacy, cardinality, sampling, or cost needs a decision, or when changed telemetry needs conformance review. Own telemetry policy, operator evidence, and review; Skip when reliability behavior, performance behavior, or delivery governance is primary."
+description: "Observability: Use for logs, metrics, traces, SLI/SLOs, alerts, diagnostics, privacy, cardinality, sampling, cost, or review. Own policy/operator evidence; Skip reliability, performance, or delivery."
 ---
 
 # Go Observability

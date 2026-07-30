@@ -1,6 +1,6 @@
 ---
 name: go-db-cache
-description: "DB/cache: Use when runtime SQL, transactions, cache role, freshness, invalidation, fallback, or observability needs a decision, or when changed DB/cache paths need conformance review. Own data-access and cache policy and review; Skip when schema authority, distributed consistency, endpoint semantics, or broad concurrency is primary."
+description: "DB/cache: Use for runtime SQL, transactions, cache freshness/invalidation, fallback, observability, or review. Own access policy; Skip schema authority, distributed consistency, API semantics, or concurrency."
 ---
 
 # Go DB Cache

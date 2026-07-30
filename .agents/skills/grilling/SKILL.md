@@ -1,6 +1,6 @@
 ---
 name: grilling
-description: "Grill: Use when the user explicitly asks to grill or stress-test a plan, decision, or idea. Own a relentless one-question-at-a-time interview through every material decision branch and a recommended answer for each decision; Skip when a direct answer or implementation is requested without that challenge."
+description: "Grill: Use only when the user explicitly asks to grill/stress-test a plan, decision, or idea. Own a one-question-at-a-time challenge with recommendations; Skip ordinary answers or implementation."
 ---
 
 # Grill

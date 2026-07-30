@@ -1,6 +1,6 @@
 ---
 name: go-performance
-description: "Performance: Use when latency, throughput, allocation, contention, memory, capacity, or workload budgets need a decision; when a design introduces workload amplification such as per-item I/O or serialization, growing scans, fan-out, batching, retention, or contention; or when changed hot paths and benchmark/profile evidence need review. Own measurable performance policy and conformance; Skip when correctness, reliability, or DB/cache policy is primary."
+description: "Performance: Use for latency, throughput, allocation, contention, capacity, workload amplification/budgets, hot paths, or benchmarks. Own measurable policy; Skip correctness, reliability, or DB/cache policy."
 ---
 
 # Go Performance

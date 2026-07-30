@@ -1,6 +1,6 @@
 ---
 name: go-security
-description: "Security: Use when trust boundaries, identity, authorization, tenant isolation, browser/token controls, secrets, abuse, injection, or SSRF needs a decision, or when changed Go crosses those boundaries. Own security policy and conformance review; Skip when the primary concern is non-security API, data, reliability, or implementation placement."
+description: "Security: Use for trust boundaries, identity, authorization, tenant isolation, tokens, secrets, injection, SSRF, or review. Own policy; Skip non-security API, data, reliability, or placement."
 ---
 
 # Go Security

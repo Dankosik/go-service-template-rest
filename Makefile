@@ -1,15 +1,20 @@
 SERVICE_NAME := service
 SERVICE_CMD := ./cmd/service
 BINARY := bin/$(SERVICE_NAME)
+GO ?= go
+PGO_PROFILE ?= off
 OPENAPI_FILE := api/openapi/service.yaml
 REFERENCE_OPENAPI_FILE := $(wildcard examples/reference-service/api/openapi.yaml)
 REFERENCE_OPENAPI_PACKAGE := $(if $(REFERENCE_OPENAPI_FILE),./examples/reference-service/internal/openapi)
 OPENAPI_FILES := $(OPENAPI_FILE) $(REFERENCE_OPENAPI_FILE)
 OPENAPI_PACKAGES := ./internal/openapi $(REFERENCE_OPENAPI_PACKAGE)
 GO_FILES := $(shell git ls-files --cached --others --exclude-standard -- '*.go' 2>/dev/null | awk '!/^(\.agents|\.cache|vendor)\//' | while IFS= read -r file; do [ -f "$$file" ] && printf '%s\n' "$$file"; done)
-GOFUMPT_FILES := $(filter-out internal/openapi/openapi.gen.go internal/infra/postgres/sqlcgen/%,$(GO_FILES))
+PROTO_GENERATED_GO_FILES := internal/gen/proto/% examples/grpc-reference-service/internal/gen/proto/%
+GOIMPORTS_FILES := $(filter-out $(PROTO_GENERATED_GO_FILES),$(GO_FILES))
+GOFUMPT_FILES := $(filter-out internal/openapi/openapi.gen.go internal/infra/postgres/sqlcgen/% $(PROTO_GENERATED_GO_FILES),$(GO_FILES))
 SHELL_FILES := $(shell git ls-files --cached --others --exclude-standard -- '*.sh' 2>/dev/null | awk '!/^(\.agents|\.cache|vendor)\//' | while IFS= read -r file; do [ -f "$$file" ] && printf '%s\n' "$$file"; done)
 REDOCLY_CLI_VERSION := 2.40.0
+REDOCLY_CLI ?= npx --yes @redocly/cli@$(REDOCLY_CLI_VERSION)
 GO_TOOL := bash ./scripts/run-go-tool.sh
 GOLANGCI_LINT ?= $(GO_TOOL) golangci-lint
 GO_REQUIRED_VERSION := $(shell awk '/^go / {print $$2; exit}' go.mod)
@@ -22,7 +27,7 @@ TEST_JSON_FILE := $(TEST_REPORT_DIR)/test2json.json
 # land. See rebase_coverage_floor in scripts/init-module.sh.
 COVERAGE_MIN ?= 80.0
 COVERAGE_GOTOOLCHAIN ?= go$(GO_REQUIRED_VERSION)
-COVERAGE_EXCLUDE_REGEX ?= (^|/)internal/openapi/openapi\.gen\.go:|(^|/)internal/infra/postgres/sqlcgen/|(^|/)internal/infra/postgres/pgtest/|(^|/)internal/infra/telemetry/telemetrytest/|(^|/)cmd/service/main\.go:|(^|/)cmd/migrate/main\.go:
+COVERAGE_EXCLUDE_REGEX ?= (^|/)internal/openapi/openapi\.gen\.go:|(^|/)internal/infra/postgres/sqlcgen/|(^|/)internal/infra/postgres/pgtest/|(^|/)internal/infra/telemetry/telemetrytest/|(^|/)internal/gen/proto/|(^|/)examples/grpc-reference-service/cmd/benchmark-server/main\.go:|(^|/)cmd/service/main\.go:|(^|/)cmd/migrate/main\.go:
 FUZZ_TIME ?= 45s
 LINT_BASE_REF ?= origin/main
 LINT_CONCURRENCY ?= 4
@@ -58,6 +63,18 @@ HTTP_BENCH_ARTIFACT_DIR ?= .artifacts/bench/http
 HTTP_BENCH_ENV_FILE ?= .env.bench
 HTTP_BENCH_DOCKER_NETWORK ?=
 HTTP_BENCH_RAW_SAMPLES ?= 0
+# profile:grpc-reference-benchmark:start
+GRPC_BENCH_SCRIPT ?= test/performance/grpc/all-cardinalities.js
+GRPC_BENCH_ARTIFACT_DIR ?= .artifacts/bench/grpc
+GRPC_BENCH_RAW_SAMPLES ?= 0
+GRPC_BENCH_WORKLOAD_ID ?= grpc-reference-all-cardinalities
+GRPC_BENCH_PAYLOAD_BYTES ?= 64
+GRPC_BENCH_STREAM_MESSAGES ?= 4
+GRPC_BENCH_VUS ?= 1
+GRPC_BENCH_WARMUP_DURATION ?= 3s
+GRPC_BENCH_DURATION ?= 10s
+GRPC_BENCH_RPC_TIMEOUT ?= 10s
+# profile:grpc-reference-benchmark:end
 
 TRIVY_IMAGE ?= aquasec/trivy:0.72.0@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f
 TRIVY_CACHE_VOLUME ?= trivy-cache
@@ -65,6 +82,8 @@ ACTIONLINT_IMAGE ?= rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47e
 SHELLCHECK_IMAGE ?= koalaman/shellcheck:v0.11.0@sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d
 ZIZMOR_IMAGE ?= ghcr.io/zizmorcore/zizmor:1.28.0@sha256:8e6b3e4fb74d1aa5d23e83ea369f386c66eced0d1fb944d32cd8b2aac100b00d
 CLAUDE_SKILLS_CHECK_SCRIPT := bash ./scripts/ci/claude-skills-check.sh
+CLAUDE_SKILLS_SYNC_SCRIPT := bash ./scripts/claude-skills-sync.sh
+CODEX_AGENTS_SYNC_SCRIPT := bash ./scripts/codex-agents-sync.sh
 CI_CHANGE_SCOPE_SCRIPT := bash ./scripts/ci/ci-change-scope.sh
 GENERATED_DRIFT_CHECK_SCRIPT := bash ./scripts/ci/generated-drift-check.sh
 PROJECT_STRUCTURE_CHECK_SCRIPT := bash ./scripts/ci/project-structure-check.sh
@@ -80,7 +99,7 @@ BENCHMARK_REMOTE_SCRIPT := bash ./scripts/dev/benchmark-remote.sh
 # One same-target A/B on the 10-core/16-GiB reference Mac measured 138.7s
 # serial versus 294.6s with make -j4. Re-measure after host, toolchain, or
 # aggregate membership changes before enabling parallel prerequisites.
-.NOTPARALLEL: check mod-check lint-deep go-security openapi-check delivery-quality ci-local
+.NOTPARALLEL: check mod-check lint-deep go-security openapi-check proto-check delivery-quality ci-local
 
 .PHONY: help template-init template-init-check project-structure-check ci-change-scope-check check check-gentle check-full check-full-gentle pr-check \
 	tidy fmt mod-check mod-tidy-check mod-verify fmt-check test test-watch test-race test-cover test-report coverage-effective-total coverage-summary coverage-check test-fuzz-smoke test-flake-smoke test-integration \
@@ -88,8 +107,12 @@ BENCHMARK_REMOTE_SCRIPT := bash ./scripts/dev/benchmark-remote.sh
 	lint lint-deep lint-fast deadcode nilaway modernize-check test-parallelism-check govulncheck gosec go-security secret-scan secret-scan-history secret-scan-check ci-local ci-local-gentle \
 	actionlint zizmor shellcheck dockerfile-check delivery-quality \
 	openapi-generate openapi-drift-check openapi-reference-compile openapi-runtime-contract-check openapi-lint openapi-validate openapi-breaking openapi-check \
-	sqlc-check container-security run build docker-build docker-run vendor claude-skills-sync claude-skills-check \
+	proto-format proto-format-check proto-lint proto-generate proto-drift-check proto-breaking proto-check \
+	sqlc-check container-security run build build-pgo docker-build docker-run vendor claude-skills-sync claude-skills-check codex-agents-sync codex-agents-check \
 	template-sync template-sync-check template-sync-all template-owned-purity-check
+# profile:grpc-reference-benchmark:start
+.PHONY: bench-grpc bench-grpc-smoke bench-grpc-inspect
+# profile:grpc-reference-benchmark:end
 # profile:database-postgres:start
 .PHONY: bench-db bench-db-baseline bench-db-compare sqlc-generate migration-validate compose-up compose-down
 # profile:database-postgres:end
@@ -100,6 +123,7 @@ help:
 	@echo "  make check              # formatting, lint, and unit tests"
 	@echo "  make check-gentle       # same checks with bounded Go concurrency"
 	@echo "  make project-structure-check"
+	@echo "  make codex-agents-check | claude-skills-check"
 	@echo "  make template-sync-check TEMPLATE=<path>   # drift against the template instructions"
 	@echo "  make template-sync TEMPLATE=<path>         # adopt them as its own commit"
 	@echo "  make ci-local           # deterministic native CI aggregate"
@@ -108,12 +132,14 @@ help:
 	@echo "  make check-full-gentle  # same full gate with bounded host Go concurrency"
 	@echo "  make pr-check BASE_REF=origin/main"
 	@echo "  make run"
+	@echo "  make build | build-pgo PGO_PROFILE=<cpu.pprof>"
 	@echo ""
 	@echo "Focused validation:"
 	@echo "  make test | test-race | test-report | test-integration"
 	@echo "  make mod-check | mod-tidy-check | mod-verify"
 	@echo "  make lint | lint-deep | lint-fast | delivery-quality | go-security | secret-scan | secret-scan-history"
 	@echo "  make openapi-check"
+	@echo "  make proto-check"
 # profile:database-postgres:start
 	@echo "  make sqlc-check | migration-validate"
 # profile:database-postgres:end
@@ -125,6 +151,9 @@ help:
 	@echo "  make bench-db BENCH_DB_WORKLOAD_ID=<fixture-state> | bench-db-baseline | bench-db-compare"
 # profile:database-postgres:end
 	@echo "  make bench-http | bench-http-inspect | benchmark-infra-check | benchmark-remote-check | benchmark-remote-image"
+# profile:grpc-reference-benchmark:start
+	@echo "  make bench-grpc | bench-grpc-smoke | bench-grpc-inspect"
+# profile:grpc-reference-benchmark:end
 	@echo ""
 	@echo "Reference: docs/build-test-and-development-commands.md"
 
@@ -148,46 +177,37 @@ template-owned-purity-check:
 	$(TEMPLATE_OWNED_PURITY_CHECK_SCRIPT)
 
 # TEMPLATE points at a checkout of the template that owns the instructions.
-# Run these from the derived repository; the template is the source of truth.
+# Run the source script from that checkout so a stale target copy never controls
+# its own upgrade.
 template-sync-check:
-	$(TEMPLATE_SYNC_SCRIPT) --check --from "$(TEMPLATE)" --repo .
+	bash "$(TEMPLATE)/scripts/template-sync.sh" --check --from "$(TEMPLATE)" --repo .
 
 template-sync:
-	$(TEMPLATE_SYNC_SCRIPT) --apply --from "$(TEMPLATE)" --repo .
+	bash "$(TEMPLATE)/scripts/template-sync.sh" --apply --from "$(TEMPLATE)" --repo .
 
 # Fan out from this template to several local checkouts in one run.
 template-sync-all:
 	@if [ -z "$(TARGETS)" ]; then echo "TARGETS is required: make template-sync-all TARGETS=\"../a ../b\"" >&2; exit 2; fi
 	$(TEMPLATE_SYNC_SCRIPT) --apply --from . --targets $(TARGETS)
 
-# .claude/skills holds nothing but generated links, so every entry is cleared
-# before the rebuild. Deleting only symlinks would leave behind the regular
-# files a checkout without symlink support materializes, and `ln -s` would then
-# either fail on a file or silently create the link *inside* a directory.
-# A real directory is the one entry that may hold the only copy of something,
-# so it stops the rebuild instead of being removed.
 claude-skills-sync:
-	@mkdir -p .claude/skills
-	@set -e; for entry in .claude/skills/*; do \
-		{ [ -e "$$entry" ] || [ -L "$$entry" ]; } || continue; \
-		if [ -d "$$entry" ] && [ ! -L "$$entry" ]; then \
-			echo "$$entry is a real directory, not a generated link; move or remove it first" >&2; \
-			exit 1; \
-		fi; \
-		rm -f "$$entry"; \
-	done
-	@set -e; for d in .agents/skills/*/; do n=$$(basename "$$d"); ln -s "../../.agents/skills/$$n" ".claude/skills/$$n"; done
-	@echo ".claude/skills: $$(ls .claude/skills | wc -l | tr -d ' ') skill links"
+	$(CLAUDE_SKILLS_SYNC_SCRIPT) --apply --repo .
 
 claude-skills-check:
 	$(CLAUDE_SKILLS_CHECK_SCRIPT)
+
+codex-agents-sync:
+	$(CODEX_AGENTS_SYNC_SCRIPT) --apply --repo .
+
+codex-agents-check:
+	$(CODEX_AGENTS_SYNC_SCRIPT) --check --repo .
 
 check: project-structure-check fmt-check lint test
 
 check-gentle:
 	nice -n $(GENTLE_NICE) env GOMAXPROCS=$(GENTLE_GOMAXPROCS) $(MAKE) check
 
-ci-local: mod-tidy-check project-structure-check ci-change-scope-check template-owned-purity-check claude-skills-check fmt-check lint lint-deep test-race test-report sqlc-check openapi-check go-security secret-scan
+ci-local: mod-tidy-check project-structure-check ci-change-scope-check template-owned-purity-check claude-skills-check fmt-check lint lint-deep test-race test-report sqlc-check openapi-check proto-check go-security secret-scan
 
 ci-local-gentle:
 	nice -n $(GENTLE_NICE) env GOMAXPROCS=$(GENTLE_GOMAXPROCS) $(MAKE) ci-local
@@ -220,12 +240,13 @@ pr-check:
 	else \
 		echo "No base OpenAPI spec at $(BASE_REF):$(OPENAPI_FILE); breaking check not applicable"; \
 	fi
+	$(MAKE) proto-breaking BASE_REF="$(BASE_REF)"
 
 tidy:
 	go mod tidy
 
 fmt:
-	$(GO_TOOL) goimports -w $(GO_FILES)
+	$(GO_TOOL) goimports -w $(GOIMPORTS_FILES)
 	$(GO_TOOL) gofumpt -w $(GOFUMPT_FILES)
 
 mod-check: mod-tidy-check mod-verify
@@ -243,7 +264,7 @@ mod-verify:
 	go -C tools mod verify
 
 fmt-check:
-	@unformatted="$$( $(GO_TOOL) goimports -l $(GO_FILES) )"; \
+	@unformatted="$$( $(GO_TOOL) goimports -l $(GOIMPORTS_FILES) )"; \
 	if [ -n "$$unformatted" ]; then \
 		echo "goimports required for:"; \
 		echo "$$unformatted"; \
@@ -350,6 +371,17 @@ bench-http:
 
 bench-http-inspect:
 	HTTP_BENCH_SCRIPT="$(HTTP_BENCH_SCRIPT)" HTTP_BENCH_ARTIFACT_DIR="$(HTTP_BENCH_ARTIFACT_DIR)" HTTP_BENCH_ENV_FILE="$(HTTP_BENCH_ENV_FILE)" HTTP_BENCH_DOCKER_NETWORK="$(HTTP_BENCH_DOCKER_NETWORK)" HTTP_BENCH_RAW_SAMPLES=0 $(BENCHMARK_SCRIPT) http-inspect
+
+# profile:grpc-reference-benchmark:start
+bench-grpc:
+	GRPC_BENCH_SCRIPT="$(GRPC_BENCH_SCRIPT)" GRPC_BENCH_ARTIFACT_DIR="$(GRPC_BENCH_ARTIFACT_DIR)" GRPC_BENCH_RAW_SAMPLES="$(GRPC_BENCH_RAW_SAMPLES)" GRPC_BENCH_WORKLOAD_ID="$(GRPC_BENCH_WORKLOAD_ID)" GRPC_BENCH_PAYLOAD_BYTES="$(GRPC_BENCH_PAYLOAD_BYTES)" GRPC_BENCH_STREAM_MESSAGES="$(GRPC_BENCH_STREAM_MESSAGES)" GRPC_BENCH_VUS="$(GRPC_BENCH_VUS)" GRPC_BENCH_WARMUP_DURATION="$(GRPC_BENCH_WARMUP_DURATION)" GRPC_BENCH_DURATION="$(GRPC_BENCH_DURATION)" GRPC_BENCH_RPC_TIMEOUT="$(GRPC_BENCH_RPC_TIMEOUT)" $(BENCHMARK_SCRIPT) grpc
+
+bench-grpc-smoke:
+	GRPC_BENCH_SCRIPT="$(GRPC_BENCH_SCRIPT)" GRPC_BENCH_ARTIFACT_DIR="$(GRPC_BENCH_ARTIFACT_DIR)" GRPC_BENCH_RAW_SAMPLES=0 GRPC_BENCH_WORKLOAD_ID="$(GRPC_BENCH_WORKLOAD_ID)" GRPC_BENCH_PAYLOAD_BYTES="$(GRPC_BENCH_PAYLOAD_BYTES)" GRPC_BENCH_STREAM_MESSAGES="$(GRPC_BENCH_STREAM_MESSAGES)" GRPC_BENCH_RPC_TIMEOUT="$(GRPC_BENCH_RPC_TIMEOUT)" $(BENCHMARK_SCRIPT) grpc-smoke
+
+bench-grpc-inspect:
+	GRPC_BENCH_SCRIPT="$(GRPC_BENCH_SCRIPT)" GRPC_BENCH_ARTIFACT_DIR="$(GRPC_BENCH_ARTIFACT_DIR)" GRPC_BENCH_RAW_SAMPLES=0 $(BENCHMARK_SCRIPT) grpc-inspect
+# profile:grpc-reference-benchmark:end
 
 benchmark-infra-check:
 	$(BENCHMARK_SCRIPT) check
@@ -485,7 +517,7 @@ openapi-runtime-contract-check:
 	fi
 
 openapi-lint:
-	REDOCLY_SUPPRESS_UPDATE_NOTICE=true REDOCLY_TELEMETRY=off npm_config_prefer_offline=true npx --yes @redocly/cli@$(REDOCLY_CLI_VERSION) lint --config .redocly.yaml $(OPENAPI_FILES)
+	REDOCLY_SUPPRESS_UPDATE_NOTICE=true REDOCLY_TELEMETRY=off npm_config_prefer_offline=true $(REDOCLY_CLI) lint --config .redocly.yaml $(OPENAPI_FILES)
 
 openapi-validate:
 	@set -e; for file in $(OPENAPI_FILES); do $(GO_TOOL) validate -- "$$file"; done
@@ -501,6 +533,26 @@ openapi-breaking:
 	fi
 
 openapi-check: openapi-drift-check openapi-reference-compile openapi-runtime-contract-check openapi-lint openapi-validate
+
+proto-format:
+	@if [ -f ./scripts/proto.sh ]; then bash ./scripts/proto.sh format; else echo "gRPC capability disabled; protobuf format not applicable"; fi
+
+proto-format-check:
+	@if [ -f ./scripts/proto.sh ]; then bash ./scripts/proto.sh format-check; else echo "gRPC capability disabled; protobuf format not applicable"; fi
+
+proto-lint:
+	@if [ -f ./scripts/proto.sh ]; then bash ./scripts/proto.sh lint; else echo "gRPC capability disabled; protobuf lint not applicable"; fi
+
+proto-generate:
+	@if [ -f ./scripts/proto.sh ]; then bash ./scripts/proto.sh generate; else echo "gRPC capability disabled; protobuf generation not applicable"; fi
+
+proto-drift-check:
+	@if [ -f ./scripts/proto.sh ]; then bash ./scripts/proto.sh drift; else echo "gRPC capability disabled; protobuf drift not applicable"; fi
+
+proto-breaking:
+	@if [ -f ./scripts/proto.sh ]; then BASE_REF="$(BASE_REF)" bash ./scripts/proto.sh breaking; else echo "gRPC capability disabled; protobuf breaking check not applicable"; fi
+
+proto-check: proto-format-check proto-lint proto-drift-check
 
 # profile:database-postgres:start
 migration-validate:
@@ -583,11 +635,32 @@ run:
 	go run $(SERVICE_CMD)
 
 build:
+	@if [ "$(PGO_PROFILE)" != "off" ]; then \
+		if [ -z "$(PGO_PROFILE)" ] || [ "$(PGO_PROFILE)" = "auto" ]; then \
+			echo "PGO_PROFILE must be off or name an explicit representative CPU profile" >&2; \
+			exit 2; \
+		fi; \
+		if [ ! -f "$(PGO_PROFILE)" ]; then \
+			echo "PGO profile does not exist: $(PGO_PROFILE)" >&2; \
+			exit 2; \
+		fi; \
+		if ! $(GO) tool pprof -raw "$(PGO_PROFILE)" >/dev/null; then \
+			echo "PGO profile is not a valid CPU profile: $(PGO_PROFILE)" >&2; \
+			exit 2; \
+		fi; \
+	fi
 	mkdir -p bin
-	CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o $(BINARY) $(SERVICE_CMD)
+	CGO_ENABLED=0 $(GO) build -pgo="$(PGO_PROFILE)" -trimpath -ldflags='-s -w' -o $(BINARY) $(SERVICE_CMD)
+
+build-pgo:
+	@if [ -z "$(PGO_PROFILE)" ] || [ "$(PGO_PROFILE)" = "off" ] || [ "$(PGO_PROFILE)" = "auto" ]; then \
+		echo "PGO_PROFILE must name an explicit representative CPU profile" >&2; \
+		exit 2; \
+	fi
+	$(MAKE) build GO="$(GO)" PGO_PROFILE="$(PGO_PROFILE)"
 
 docker-build:
-	docker build -f build/docker/Dockerfile -t $(SERVICE_NAME):local .
+	docker build --build-arg PGO_PROFILE="$(PGO_PROFILE)" -f build/docker/Dockerfile -t $(SERVICE_NAME):local .
 
 docker-run:
 	docker run --rm --stop-timeout 45 -p 8080:8080 --env-file .env $(SERVICE_NAME):local

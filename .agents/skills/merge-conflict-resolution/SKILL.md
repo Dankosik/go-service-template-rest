@@ -1,6 +1,6 @@
 ---
 name: merge-conflict-resolution
-description: "Merge conflicts: Use when an active Git merge, rebase, cherry-pick, or revert conflict needs analysis or authorized local resolution. Own intent reconstruction, hunk resolution, affected proof, and safe continuation; Under read-only authorization report only; Skip when no conflict is active."
+description: "Merge conflicts: Use for an active merge, rebase, cherry-pick, or revert conflict. Own intent, resolution, proof, and continuation; report only under read-only authorization; Skip when no conflict is active."
 ---
 
 # Merge Conflict Resolution

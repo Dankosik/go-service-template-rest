@@ -70,13 +70,16 @@ reopens its narrow upstream decision owner.
 
 ### Local Execution
 
-Root-local execution covers direct work and ready ledger tasks routed here by
+Root-local execution covers direct work and ready acceptance units routed here by
 [Worker Execution](implementation-worker-execution.md). The root edits the
 assigned checkout, performs one coherent self-review of the bounded diff, and
 runs the Validation Matrix's smallest matching proof. The bounded working-tree
 diff is the complete execution record for direct work; ledger work also retains
-its accepted task entry. Reopen the path only when evidence changes risk,
-ownership, reversibility, or proof.
+its accepted task entry. The root accepts the fixed candidate when the Stop Rule
+passes and any triggered [independent implementation
+review](#independent-implementation-review) has returned a passing verdict.
+Reopen the path only when evidence changes risk, ownership, reversibility, or
+proof.
 
 ### Worker Execution
 
@@ -85,12 +88,24 @@ For ledger work, read
 selecting or operating a Worker. That branch defines the execution-need trigger
 and owns carrier-specific dispatch, dirty-state protection, Scope Lock, planned
 waves, correction continuity, rejected-delta handling, candidate intake, and
-candidate handoff. This phase retains completion, acceptance, and integration
-authority.
+candidate handoff. This phase retains implementation, correction, acceptance,
+and integration authority.
 
 ### Immutable Evidence
 
 Proof belongs to the relevant content and claim it exercised. Record the command, relevant environment/preconditions, result, and gaps. Attach a commit/tree identity only when reusing proof across a checkout or integration boundary; the current bounded diff is sufficient for local work. Reuse proof while the relevant content, preconditions, claim scope, provenance, and risk surface remain unchanged.
+
+### Proof Ownership
+
+Assign one final owner to each deterministic gate for an acceptance unit. A
+Worker owns iterative focused checks while changing its candidate. The final
+owner runs the gate once on the exact accepted tree: use the Worker's receipt
+when its tree and preconditions cross into integration unchanged; otherwise the
+root runs the gate after integration. The root validates the receipt, tree
+identity, preconditions, scope, and claimed observable instead of automatically
+repeating the command. A reviewer runs only a missing or adversarial falsifier
+needed for its independent question. A deterministic result retains its
+disposition while tree, preconditions, command, and claim are unchanged.
 
 ## Review
 
@@ -127,6 +142,44 @@ summaries, stale evidence, and checks that miss the stated claim do not qualify.
 When a required check cannot run, record the command, reason, narrower evidence,
 and unverified remainder.
 
+## Independent Implementation Review
+
+After root-local execution or Worker integration produces a fixed acceptance
+unit that passes bounded root review and mapped validation, invoke one
+independent lane only when the shared [Review
+Independence](../shared/subagents-and-handoff.md#review-independence) trigger
+applies or the user explicitly requested it. The reviewer judges the grouped
+unit IDs or singleton task against the authoritative current checkout and
+evidence. A Worker return remains provisional until root intake freezes it.
+
+The one-shot lane answers one question: may the root accept this fixed unit? It
+returns exactly one verdict:
+
+- `PASS`: every accepted task postcondition and constraint is present on the
+  real path, the retained delta is in scope, and current proof satisfies this
+  phase's Stop Rule.
+- `FAIL`: a candidate-caused regression, accepted criterion violation, missing
+  required surface, or remediable proof gap prevents acceptance. Return
+  anchored findings and the smallest repair or reopen owner.
+- `BLOCKED`: implementation may be complete, but required external or
+  environmental proof is unavailable. Name the unverified claim, narrower
+  evidence, and next proof owner.
+
+The root routes `FAIL` to local repair or the same Worker correction loop and
+records `BLOCKED` as `implementation complete; verification incomplete`. The
+reviewer edits neither candidate nor `tasks.md`; the root owns the acceptance
+decision but cannot treat a triggered `FAIL` or `BLOCKED` as passing. A material
+candidate or proof-precondition change invalidates the verdict and triggers a
+new one-shot lane only for the affected review boundary.
+
+After root acceptance, apply the immediate persisted transition owned by
+[Artifact Model](../shared/artifact-model.md#minimal-status). When the unit
+contains the final unchecked task, the root also checks the ledger's global
+`Completion` condition and every required task disposition.
+
+An inline direct outcome with no persisted `tasks.md` has no ledger transition;
+the root closes it only under this phase's Stop Rule and evidence requirements.
+
 ## Close Out
 
 State what changed, the important behavior consequence, proof actually run, and remaining gap or reopen owner. Apply the [Task Contract](../../../AGENTS.md#task-contract) to readiness and completion language.
@@ -152,11 +205,7 @@ the narrower evidence obtained, and the next proof or reopen owner; do not claim
 outcome completion or readiness. This is the `blocked` lifecycle state for a
 durable goal or artifact, not a third completion state.
 
-Worker execution uses the same criterion and status boundary. Accept a
-candidate immediately when its current admissible finding set is empty and
-mapped proof passes. A candidate-caused proof failure or an accepted proof
-surface missing from the retained delta remains an implementation finding.
-Inability to run required proof for a named external or environmental reason
-stops as `implementation complete; verification incomplete`, not as acceptance
-or another correction loop. A changed decision reopens its narrowest upstream
-owner; after sufficient proof, closeout is the only authorized next action.
+For a ledger acceptance unit, these criteria determine whether the root may
+accept the fixed candidate and what a triggered reviewer must falsify. A changed
+decision reopens its narrowest upstream owner; after acceptance, closeout is the
+only authorized next action.

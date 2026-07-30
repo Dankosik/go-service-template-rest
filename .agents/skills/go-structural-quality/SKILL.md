@@ -1,6 +1,6 @@
 ---
 name: go-structural-quality
-description: "Structural quality: Use when the user requests a harsh whole-diff review or a change is structurally overbuilt across files. Own abstraction cost, spaghetti growth, mixed responsibility, speculative flexibility, and missed deletion; Skip when Go semantics, local readability, or accepted architecture conformance is primary."
+description: "Structural quality: Use for harsh whole-diff review or cross-file overbuild. Own abstraction cost, mixed responsibility, and missed deletion; Skip Go semantics, local readability, or architecture."
 ---
 
 # Go Structural Quality

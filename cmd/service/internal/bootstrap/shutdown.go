@@ -13,6 +13,17 @@ type startupDrainer interface {
 	StartDrain()
 }
 
+// profile:grpc:start
+type startupDrainSet []startupDrainer
+
+func (set startupDrainSet) StartDrain() {
+	for _, drainer := range set {
+		drainer.StartDrain()
+	}
+}
+
+// profile:grpc:end
+
 type shutdownServer interface {
 	Shutdown(ctx context.Context) error
 	Close() error

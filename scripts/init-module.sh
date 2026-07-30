@@ -7,7 +7,7 @@ TEMPLATE_OWNER="@Dankosik"
 TEMPLATE_API_TITLE="go-service-template-rest"
 
 usage() {
-	echo "usage: CODEOWNER=@user-or-org/team DATABASE=none|postgres OUTBOUND_HTTP=none|bounded REFERENCE_EXAMPLE=remove|keep $0 [module-path]"
+	echo "usage: CODEOWNER=@user-or-org/team DATABASE=none|postgres GRPC=none|enabled OUTBOUND_HTTP=none|bounded REFERENCE_EXAMPLE=remove|keep $0 [module-path]"
 	echo "module-path is derived from git remote origin when omitted"
 }
 
@@ -126,6 +126,7 @@ remove_postgres_integration_tests() {
 	for file in test/postgres_*_test.go examples/*/postgres_*_test.go; do
 		rm -f -- "${file}"
 	done
+	rm -f -- test/grpc_process_integration_test.go
 	eval "${previous_nullglob}"
 }
 
@@ -152,7 +153,7 @@ strip_profile() {
 			stripped_go_files+=("${profile_file}")
 		fi
 	done < <(grep -rl "profile:${profile}:start" \
-		Makefile railway.toml build cmd env internal test .github 2>/dev/null || true)
+		README.md Makefile railway.toml .golangci.yml build cmd docs env internal test .github scripts/dev 2>/dev/null || true)
 
 	if ((${#stripped_go_files[@]} > 0)); then
 		gofmt -w "${stripped_go_files[@]}"
@@ -165,8 +166,9 @@ strip_profile() {
 # from — and therefore no way to review or pull a later upstream fix.
 write_template_lock() {
 	local database="$1"
-	local outbound_http="$2"
-	local reference_example="$3"
+	local grpc="$2"
+	local outbound_http="$3"
+	local reference_example="$4"
 	local source_revision
 
 	source_revision="$(git rev-parse HEAD 2>/dev/null || true)"
@@ -182,6 +184,7 @@ write_template_lock() {
 source = "${TEMPLATE_SOURCE}"
 source_revision = "${source_revision}"
 database = "${database}"
+grpc = "${grpc}"
 outbound_http = "${outbound_http}"
 reference_example = "${reference_example}"
 EOF
@@ -266,6 +269,15 @@ none | postgres) ;;
 	;;
 esac
 
+grpc="${GRPC:-none}"
+case "${grpc}" in
+none | enabled) ;;
+*)
+	echo "GRPC must be one of: none, enabled"
+	exit 1
+	;;
+esac
+
 outbound_http="${OUTBOUND_HTTP:-none}"
 case "${outbound_http}" in
 none | bounded) ;;
@@ -343,12 +355,42 @@ if [[ "${new_module}" != "${current_module}" ]] && ! grep -Fq "${current_module}
 	exit 1
 fi
 
+if [[ -f template.lock ]]; then
+	if [[ -d scripts/profiles ]]; then
+		echo "template.lock exists while unresolved profile sources remain"
+		exit 1
+	fi
+	for expected in \
+		"database = \"${database}\"" \
+		"grpc = \"${grpc}\"" \
+		"outbound_http = \"${outbound_http}\"" \
+		"reference_example = \"${reference_example}\""; do
+		grep -Fqx "${expected}" template.lock || {
+			echo "repository is already initialized with different profile choices"
+			exit 1
+		}
+	done
+	echo "template initialization already complete"
+	echo "  module: ${new_module}"
+	echo "  database: ${database}"
+	echo "  gRPC: ${grpc}"
+	echo "  outbound HTTP: ${outbound_http}"
+	echo "  reference example: ${reference_example}"
+	exit 0
+fi
+
 if [[ "${new_module}" != "${current_module}" ]]; then
 	go mod edit -module="${new_module}"
 	go -C tools mod edit -module="${new_module}/tools"
 
 	while IFS= read -r file; do
 		[[ -f "${file}" ]] || continue
+		# Generated protobuf descriptors embed the go_package value as encoded
+		# bytes. A textual replacement can change its length and corrupt the
+		# descriptor, so rewrite the schema and regenerate these files below.
+		if [[ "${file}" == internal/gen/proto/* || "${file}" == */internal/gen/proto/* ]]; then
+			continue
+		fi
 		if grep -Fq "${current_module}" "${file}"; then
 			replace_literal "${file}" "${current_module}" "${new_module}"
 		fi
@@ -415,6 +457,42 @@ if [[ "${source_checkout}" != true ]]; then
 		strip_profile database-postgres keep
 	fi
 
+	if [[ "${grpc}" == "none" ]]; then
+		rm -rf -- \
+			internal/gen/proto \
+			internal/infra/grpc \
+			internal/infra/grpcclient \
+			examples/grpc-reference-service
+		rm -f -- \
+			buf.yaml \
+			buf.gen.yaml \
+			cmd/service/internal/bootstrap/startup_grpc.go \
+			cmd/service/internal/bootstrap/startup_grpc_test.go \
+			docs/grpc.md \
+			internal/config/grpc_config_test.go \
+			test/grpc_process_integration_test.go \
+			scripts/proto.sh \
+			scripts/run-buf.sh \
+			scripts/ci/proto-check.sh
+		strip_profile grpc remove
+		go -C tools mod edit -droptool=google.golang.org/protobuf/cmd/protoc-gen-go
+		go -C tools mod edit -droptool=google.golang.org/grpc/cmd/protoc-gen-go-grpc
+	else
+		strip_profile grpc keep
+		bash ./scripts/proto.sh generate
+	fi
+
+	# The end-to-end gRPC benchmark imports the removable reference schema and
+	# command. Keep its shared runner/Make/docs surface only when both owners are
+	# retained; the in-package grpcx microbenchmarks remain gRPC-runtime-owned.
+	if [[ "${grpc}" == "enabled" && "${reference_example}" == "keep" ]]; then
+		strip_profile grpc-reference-benchmark keep
+	else
+		rm -rf -- test/performance/grpc
+		rm -f -- scripts/dev/benchmark-grpc-check.sh
+		strip_profile grpc-reference-benchmark remove
+	fi
+
 	# Profile sources are the generator's own inputs. Every profile has consumed
 	# what it needs by now, so no generated service keeps them.
 	rm -rf -- scripts/profiles
@@ -440,11 +518,12 @@ if [[ "${source_checkout}" != true ]]; then
 		rm -rf -- examples
 	fi
 
-	write_template_lock "${database}" "${outbound_http}" "${reference_example}"
+	write_template_lock "${database}" "${grpc}" "${outbound_http}" "${reference_example}"
 
 fi
 
 go mod tidy
+go -C tools mod tidy
 
 if [[ ! -f .env ]]; then
 	cp env/.env.example .env
@@ -454,6 +533,7 @@ fi
 echo "template initialization complete"
 echo "  module: ${new_module}"
 echo "  database: ${database}"
+echo "  gRPC: ${grpc}"
 echo "  outbound HTTP: ${outbound_http}"
 echo "  reference example: ${reference_example}"
 if [[ -n "${codeowner}" ]]; then

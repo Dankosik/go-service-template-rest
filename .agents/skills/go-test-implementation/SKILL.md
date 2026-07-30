@@ -1,6 +1,6 @@
 ---
 name: go-test-implementation
-description: "Executable proof: Use when approved behavior or test design is ready for Go test code and fixtures. Own the smallest deterministic layer and independent oracle covering required success and failure paths; Skip when production behavior must change, proof strategy is unresolved, existing tests need review, or claims need closeout verification."
+description: "Executable proof: Use when approved behavior/test design is ready for Go tests. Own the smallest deterministic layer/oracle; Skip production changes, unresolved strategy, test review, or claim verification."
 ---
 
 # Go Test Implementation

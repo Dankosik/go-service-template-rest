@@ -7,8 +7,11 @@ import (
 
 // Config is the immutable runtime snapshot built during startup.
 type Config struct {
-	App           AppConfig           `koanf:"app"`
-	HTTP          HTTPConfig          `koanf:"http"`
+	App  AppConfig  `koanf:"app"`
+	HTTP HTTPConfig `koanf:"http"`
+	// profile:grpc:start
+	GRPC GRPCConfig `koanf:"grpc"`
+	// profile:grpc:end
 	Health        HealthConfig        `koanf:"health"`
 	Log           LogConfig           `koanf:"log"`
 	Observability ObservabilityConfig `koanf:"observability"`
@@ -78,6 +81,52 @@ type HTTPConfig struct {
 	// continuous no-signal log volume.
 	AccessLogHealthProbes bool `koanf:"access_log_health_probes"`
 }
+
+// profile:grpc:start
+
+type GRPCConfig struct {
+	Server GRPCServerConfig `koanf:"server"`
+}
+
+type GRPCServerConfig struct {
+	Enabled bool   `koanf:"enabled"`
+	Addr    string `koanf:"addr"`
+
+	// TransportSecurity is explicit whenever the server is enabled. "tls"
+	// loads the configured certificate and key during bootstrap; "plaintext"
+	// additionally requires AllowPlaintext so an operator cannot disable
+	// transport security by changing one value.
+	TransportSecurity string        `koanf:"transport_security"`
+	AllowPlaintext    bool          `koanf:"allow_plaintext"`
+	TLS               GRPCTLSConfig `koanf:"tls"`
+
+	// MaxConnections bounds accepted HTTP/2 connections. MaxConcurrentRPCs is
+	// the process-wide handler admission limit shared by unary and streaming
+	// RPCs; MaxConcurrentStreams is the per-connection HTTP/2 stream limit.
+	MaxConnections       int `koanf:"max_connections"`
+	MaxConcurrentRPCs    int `koanf:"max_concurrent_rpcs"`
+	MaxConcurrentStreams int `koanf:"max_concurrent_streams"`
+
+	MaxHeaderListBytes     int  `koanf:"max_header_list_bytes"`
+	MaxReceiveMessageBytes int  `koanf:"max_receive_message_bytes"`
+	MaxSendMessageBytes    int  `koanf:"max_send_message_bytes"`
+	AccessLogHealthChecks  bool `koanf:"access_log_health_checks"`
+	// AccessLogSuccessSampleRate applies only to successful RPCs below
+	// AccessLogSlowThreshold. Errors always remain visible while INFO logging is
+	// enabled. The default of 1 preserves one completion record per business RPC.
+	AccessLogSuccessSampleRate float64       `koanf:"access_log_success_sample_rate"`
+	AccessLogSlowThreshold     time.Duration `koanf:"access_log_slow_threshold"`
+	// TelemetryHealthChecks re-enables server-side OTel spans and duration
+	// metrics for routine standard health polling.
+	TelemetryHealthChecks bool `koanf:"telemetry_health_checks"`
+}
+
+type GRPCTLSConfig struct {
+	CertFile string `koanf:"cert_file"`
+	KeyFile  string `koanf:"key_file"`
+}
+
+// profile:grpc:end
 
 // HealthConfig bounds how readiness state is refreshed. Probes are evaluated on
 // this interval rather than per request, so a probe route can never consume the

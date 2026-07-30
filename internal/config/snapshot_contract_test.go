@@ -209,6 +209,25 @@ func sentinelConfigSourceValues() map[string]any {
 		"http.max_connections":             1024,
 		"http.access_log_health_probes":    true,
 
+		// profile:grpc:start
+		"grpc.server.enabled":                        true,
+		"grpc.server.addr":                           ":19091",
+		"grpc.server.transport_security":             "tls",
+		"grpc.server.allow_plaintext":                false,
+		"grpc.server.tls.cert_file":                  "/run/secrets/snapshot.crt",
+		"grpc.server.tls.key_file":                   "/run/secrets/snapshot.key",
+		"grpc.server.max_connections":                2048,
+		"grpc.server.max_concurrent_rpcs":            384,
+		"grpc.server.max_concurrent_streams":         128,
+		"grpc.server.max_header_list_bytes":          24 << 10,
+		"grpc.server.max_receive_message_bytes":      6 << 20,
+		"grpc.server.max_send_message_bytes":         7 << 20,
+		"grpc.server.access_log_health_checks":       true,
+		"grpc.server.access_log_success_sample_rate": 0.25,
+		"grpc.server.access_log_slow_threshold":      "750ms",
+		"grpc.server.telemetry_health_checks":        true,
+		// profile:grpc:end
+
 		"health.refresh_interval":  "3s",
 		"health.failure_threshold": 5,
 
@@ -264,6 +283,25 @@ func expectedSentinelSnapshotValues() map[string]any {
 		"http.max_in_flight":               512,
 		"http.max_connections":             1024,
 		"http.access_log_health_probes":    true,
+
+		// profile:grpc:start
+		"grpc.server.enabled":                        true,
+		"grpc.server.addr":                           ":19091",
+		"grpc.server.transport_security":             "tls",
+		"grpc.server.allow_plaintext":                false,
+		"grpc.server.tls.cert_file":                  "/run/secrets/snapshot.crt",
+		"grpc.server.tls.key_file":                   "/run/secrets/snapshot.key",
+		"grpc.server.max_connections":                2048,
+		"grpc.server.max_concurrent_rpcs":            384,
+		"grpc.server.max_concurrent_streams":         128,
+		"grpc.server.max_header_list_bytes":          24 << 10,
+		"grpc.server.max_receive_message_bytes":      6 << 20,
+		"grpc.server.max_send_message_bytes":         7 << 20,
+		"grpc.server.access_log_health_checks":       true,
+		"grpc.server.access_log_success_sample_rate": 0.25,
+		"grpc.server.access_log_slow_threshold":      750 * time.Millisecond,
+		"grpc.server.telemetry_health_checks":        true,
+		// profile:grpc:end
 
 		"health.refresh_interval":  3 * time.Second,
 		"health.failure_threshold": 5,

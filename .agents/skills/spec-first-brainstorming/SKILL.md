@@ -1,6 +1,6 @@
 ---
 name: spec-first-brainstorming
-description: "Problem frame: Use when a chosen or mostly chosen feature/refactor direction still needs an engineering-ready behavior delta, scope, constraints, assumptions, and readiness decision. Own that frame, its decided defaults, surviving user-owned questions, challenge routing, and next owner; Skip when raw ideation, final design decisions, or task breakdown is primary."
+description: "Problem frame: Use when a chosen feature/refactor needs a behavior delta, scope, constraints, assumptions, and readiness. Own that frame/next owner; Skip raw ideation, final design, or task breakdown."
 ---
 
 # Spec First Brainstorming

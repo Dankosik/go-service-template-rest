@@ -1,6 +1,6 @@
 ---
 name: go-chi
-description: "Chi transport: Use when router composition, middleware, OpenAPI wiring, fallbacks, CORS, or route labels need a decision, or when changed chi routing needs conformance review. Own chi transport decisions and review; Skip when client-visible API semantics, system topology, or a general Go defect is primary."
+description: "Chi transport: Use for router composition, middleware, OpenAPI wiring, fallbacks, CORS, labels, or routing review. Own chi decisions; Skip client API semantics, system topology, or general Go defects."
 ---
 
 # Go Chi

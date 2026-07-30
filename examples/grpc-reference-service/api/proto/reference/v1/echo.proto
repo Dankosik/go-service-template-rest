@@ -1,0 +1,73 @@
+edition = "2023";
+
+package reference.v1;
+
+import "google/protobuf/go_features.proto";
+
+option features.(pb.go).api_level = API_OPAQUE;
+option go_package = "github.com/example/go-service-template-rest/examples/grpc-reference-service/internal/gen/proto/reference/v1;referencev1";
+
+// EchoService demonstrates unary and every streaming RPC cardinality.
+service EchoService {
+  // Unary echoes one value.
+  rpc Unary(UnaryRequest) returns (UnaryResponse);
+  // ServerStream emits a bounded sequence for one request.
+  rpc ServerStream(ServerStreamRequest) returns (stream ServerStreamResponse);
+  // ClientStream collects a client-provided sequence into one response.
+  rpc ClientStream(stream ClientStreamRequest) returns (ClientStreamResponse);
+  // BidiStream echoes each value on the bidirectional stream.
+  rpc BidiStream(stream BidiStreamRequest) returns (stream BidiStreamResponse);
+}
+
+// UnaryRequest carries the value for a unary echo.
+message UnaryRequest {
+  // value is returned unchanged.
+  string value = 1;
+}
+
+// UnaryResponse returns the unary echo value.
+message UnaryResponse {
+  // value is copied from the request.
+  string value = 1;
+}
+
+// ServerStreamRequest configures a bounded server stream.
+message ServerStreamRequest {
+  // value is repeated in each streamed response.
+  string value = 1;
+  // count in [1, 1024] emits that many responses; non-positive emits none.
+  // Larger values fail with RESOURCE_EXHAUSTED before the first response.
+  int32 count = 2;
+}
+
+// ServerStreamResponse is one item in the server sequence.
+message ServerStreamResponse {
+  // value is copied from the request.
+  string value = 1;
+  // sequence is the one-based item position.
+  int32 sequence = 2;
+}
+
+// ClientStreamRequest is one value sent by the client.
+message ClientStreamRequest {
+  // value is appended to the collected response.
+  string value = 1;
+}
+
+// ClientStreamResponse contains every received client value.
+message ClientStreamResponse {
+  // values preserve client send order.
+  repeated string values = 1;
+}
+
+// BidiStreamRequest is one value on the bidirectional stream.
+message BidiStreamRequest {
+  // value is echoed in the corresponding response.
+  string value = 1;
+}
+
+// BidiStreamResponse echoes one bidirectional request.
+message BidiStreamResponse {
+  // value is copied from the corresponding request.
+  string value = 1;
+}

@@ -24,11 +24,23 @@ type runtimeServer interface {
 	Close() error
 }
 
-type serveHTTPRuntimeArgs struct {
-	cfg                config.Config
-	log                *slog.Logger
-	healthSvc          *health.Service
-	srv                runtimeServer
+// profile:grpc:start
+type grpcRuntimeServer interface {
+	runtimeServer
+	MarkServing()
+	StartDrain()
+}
+
+// profile:grpc:end
+
+type serveRuntimeArgs struct {
+	cfg       config.Config
+	log       *slog.Logger
+	healthSvc *health.Service
+	httpSrv   runtimeServer
+	// profile:grpc:start
+	grpcSrv grpcRuntimeServer
+	// profile:grpc:end
 	metricsSrv         runtimeServer
 	readinessCheck     func(context.Context) error
 	backgroundFailures <-chan error
@@ -45,7 +57,61 @@ type serverResult struct {
 	err  error
 }
 
-func serveHTTPRuntime(signalCtx context.Context, bootstrapCtx context.Context, args serveHTTPRuntimeArgs) error {
+type runtimeListeners struct {
+	http net.Listener
+	// profile:grpc:start
+	grpc net.Listener
+	// profile:grpc:end
+	metrics net.Listener
+}
+
+func bindRuntimeListeners(ctx context.Context, args serveRuntimeArgs) (runtimeListeners, string, error) {
+	var listeners runtimeListeners
+	var listenConfig net.ListenConfig
+
+	httpListener, err := listenConfig.Listen(ctx, "tcp", args.cfg.HTTP.Addr)
+	if err != nil {
+		return listeners, "startup.http_listen", fmt.Errorf("listen http server: %w", err)
+	}
+	listeners.http = boundedAPIListener(httpListener, args.cfg.HTTP.MaxConnections)
+
+	// profile:grpc:start
+	if args.grpcSrv != nil {
+		grpcListener, grpcErr := listenConfig.Listen(ctx, "tcp", args.cfg.GRPC.Server.Addr)
+		if grpcErr != nil {
+			listeners.close()
+			return runtimeListeners{}, "startup.grpc_listen", fmt.Errorf("listen gRPC server: %w", grpcErr)
+		}
+		listeners.grpc = boundedAPIListener(grpcListener, args.cfg.GRPC.Server.MaxConnections)
+	}
+	// profile:grpc:end
+
+	if args.metricsSrv != nil && args.cfg.Observability.Metrics.Addr != "" {
+		metricsListener, metricsErr := listenConfig.Listen(ctx, "tcp", args.cfg.Observability.Metrics.Addr)
+		if metricsErr != nil {
+			listeners.close()
+			return runtimeListeners{}, "startup.metrics_listen", fmt.Errorf("listen metrics server: %w", metricsErr)
+		}
+		listeners.metrics = metricsListener
+	}
+	return listeners, "", nil
+}
+
+func (l runtimeListeners) close() {
+	if l.http != nil {
+		_ = l.http.Close()
+	}
+	// profile:grpc:start
+	if l.grpc != nil {
+		_ = l.grpc.Close()
+	}
+	// profile:grpc:end
+	if l.metrics != nil {
+		_ = l.metrics.Close()
+	}
+}
+
+func serveRuntime(signalCtx context.Context, bootstrapCtx context.Context, args serveRuntimeArgs) error {
 	if err := startupRuntimeContextErr(signalCtx, bootstrapCtx); err != nil {
 		return rejectHTTPStartup(
 			bootstrapCtx,
@@ -55,36 +121,18 @@ func serveHTTPRuntime(signalCtx context.Context, bootstrapCtx context.Context, a
 		)
 	}
 
-	var listenConfig net.ListenConfig
-	listener, err := listenConfig.Listen(bootstrapCtx, "tcp", args.cfg.HTTP.Addr)
+	listeners, stage, err := bindRuntimeListeners(bootstrapCtx, args)
 	if err != nil {
-		return rejectHTTPStartup(
-			bootstrapCtx,
-			args.log,
-			"startup.http_listen",
-			fmt.Errorf("listen http server: %w", err),
-		)
+		return rejectHTTPStartup(bootstrapCtx, args.log, stage, err)
 	}
-	listener = boundedAPIListener(listener, args.cfg.HTTP.MaxConnections)
+	listener := listeners.http
+	// profile:grpc:start
+	grpcListener := listeners.grpc
+	// profile:grpc:end
+	metricsListener := listeners.metrics
 
-	var metricsListener net.Listener
-	if args.metricsSrv != nil && args.cfg.Observability.Metrics.Addr != "" {
-		metricsListener, err = listenConfig.Listen(bootstrapCtx, "tcp", args.cfg.Observability.Metrics.Addr)
-		if err != nil {
-			_ = listener.Close()
-			return rejectHTTPStartup(
-				bootstrapCtx,
-				args.log,
-				"startup.metrics_listen",
-				fmt.Errorf("listen metrics server: %w", err),
-			)
-		}
-	}
 	if err := startupRuntimeContextErr(signalCtx, bootstrapCtx); err != nil {
-		_ = listener.Close()
-		if metricsListener != nil {
-			_ = metricsListener.Close()
-		}
+		listeners.close()
 		return rejectHTTPStartup(
 			bootstrapCtx,
 			args.log,
@@ -94,14 +142,27 @@ func serveHTTPRuntime(signalCtx context.Context, bootstrapCtx context.Context, a
 	}
 
 	serverCount := 1
+	// profile:grpc:start
+	if grpcListener != nil {
+		serverCount++
+	}
+	// profile:grpc:end
 	if metricsListener != nil {
 		serverCount++
 	}
 	runErrCh := make(chan serverResult, serverCount)
 	go func() {
 		args.log.InfoContext(bootstrapCtx, "http server started", "addr", listener.Addr().String(), "env", args.cfg.App.Env)
-		runErrCh <- serverResult{name: "http", err: normalizeServeError(args.srv.Serve(listener))}
+		runErrCh <- serverResult{name: "http", err: normalizeServeError(args.httpSrv.Serve(listener))}
 	}()
+	// profile:grpc:start
+	if grpcListener != nil {
+		go func() {
+			args.log.InfoContext(bootstrapCtx, "gRPC server started", "addr", grpcListener.Addr().String(), "env", args.cfg.App.Env)
+			runErrCh <- serverResult{name: "grpc", err: args.grpcSrv.Serve(grpcListener)}
+		}()
+	}
+	// profile:grpc:end
 	if metricsListener != nil {
 		go func() {
 			args.log.InfoContext(bootstrapCtx, "metrics server started", "addr", metricsListener.Addr().String(), "env", args.cfg.App.Env)
@@ -143,6 +204,14 @@ func serveHTTPRuntime(signalCtx context.Context, bootstrapCtx context.Context, a
 	// configuration none of that window was ever collected — the Prometheus target
 	// simply went down for the last fifteen seconds of every pod's life, which is
 	// exactly the fifteen seconds a rolling deploy is judged on.
+	drainer := startupDrainer(args.healthSvc)
+	applicationServers := []shutdownServer{args.httpSrv}
+	// profile:grpc:start
+	if args.grpcSrv != nil {
+		drainer = startupDrainSet{args.healthSvc, args.grpcSrv}
+		applicationServers = append(applicationServers, args.grpcSrv)
+	}
+	// profile:grpc:end
 	drainErr := drainAndShutdown(
 		signalCtx,
 		args.log,
@@ -151,8 +220,8 @@ func serveHTTPRuntime(signalCtx context.Context, bootstrapCtx context.Context, a
 		// configured value normally wins; validateShutdownGraceBudget is what
 		// keeps that true rather than leaving it to chance here.
 		args.shutdown.clamp(args.cfg.HTTP.ShutdownTimeout),
-		args.healthSvc,
-		args.srv,
+		drainer,
+		applicationServers...,
 	)
 	// Stopped only now, so a scraper could still collect everything the drain
 	// produced. It is stopped here rather than by the caller because this function
@@ -181,7 +250,7 @@ func serveHTTPRuntime(signalCtx context.Context, bootstrapCtx context.Context, a
 
 func waitForRuntimeStop(
 	signalCtx context.Context,
-	args serveHTTPRuntimeArgs,
+	args serveRuntimeArgs,
 	runErrCh <-chan serverResult,
 ) (serverErr error, terminalErr error) {
 	select {
@@ -265,7 +334,7 @@ func normalizeServeError(err error) error {
 func waitForStartupAdmission(
 	signalCtx context.Context,
 	bootstrapCtx context.Context,
-	args serveHTTPRuntimeArgs,
+	args serveRuntimeArgs,
 	admissionErrCh <-chan error,
 	runErrCh <-chan serverResult,
 ) (ready bool, stopRequested bool, terminalErr error) {
@@ -290,6 +359,11 @@ func waitForStartupAdmission(
 				fmt.Errorf("background task failed before readiness: %w", err),
 			)
 		default:
+			// profile:grpc:start
+			if args.grpcSrv != nil {
+				args.grpcSrv.MarkServing()
+			}
+			// profile:grpc:end
 			args.admission.MarkReady()
 			return true, false, nil
 		}
@@ -318,7 +392,7 @@ func waitForStartupAdmission(
 	}
 }
 
-func serverStoppedBeforeReadiness(ctx context.Context, args serveHTTPRuntimeArgs, result serverResult) error {
+func serverStoppedBeforeReadiness(ctx context.Context, args serveRuntimeArgs, result serverResult) error {
 	err := fmt.Errorf("%s server stopped before readiness", result.name)
 	if result.err != nil {
 		err = fmt.Errorf("%s server stopped before readiness: %w", result.name, result.err)

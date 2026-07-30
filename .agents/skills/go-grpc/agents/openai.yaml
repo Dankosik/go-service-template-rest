@@ -1,0 +1,4 @@
+interface:
+  display_name: "Go gRPC"
+  short_description: "Production gRPC decisions and conformance review"
+  default_prompt: "Use $go-grpc to review this grpc-go change against its production transport contract."

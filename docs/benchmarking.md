@@ -410,6 +410,31 @@ representative query plan when the bottleneck may be server-side.
 Do not expose `/debug/pprof` merely for this workflow. A runtime profiling
 endpoint needs its own access-control and operational decision.
 
+## Use a representative CPU profile for PGO
+
+PGO is a candidate build input only after the CPU profile matches the service
+and workload whose performance matters. A synthetic benchmark profile can
+validate the build path and guide investigation, but it is not a production
+profile.
+
+Record the profile's service/source revision, workload identity, Go version,
+collection interval, and SHA-256 beside the private delivery artifact. Build
+locally with:
+
+```bash
+make build-pgo PGO_PROFILE=<representative-cpu.pprof>
+```
+
+For the production image, stage the private profile inside the build context
+and pass the same repository-relative `PGO_PROFILE` build argument. Every
+activated local or image build validates that explicit profile with
+`go tool pprof` before compilation. Compare the PGO binary against
+`PGO_PROFILE=off` under the same workload and environment, with independent
+correctness proof. Refresh the profile after a material compiler, workload,
+schema, or hot-path change; rebuild with `off` for rollback. Never commit a
+generic synthetic `default.pgo`, because Go's automatic discovery can silently
+make it an input to later builds.
+
 ## Completion and CI policy
 
 A performance claim closes only when:
@@ -454,6 +479,8 @@ evidence.
 - Grafana k6 [ramping arrival rate](https://grafana.com/docs/k6/latest/using-k6/scenarios/executors/ramping-arrival-rate/)
 - Grafana k6 [arrival-rate VU allocation](https://grafana.com/docs/k6/latest/using-k6/scenarios/concepts/arrival-rate-vu-allocation/)
 - Grafana k6 [built-in HTTP metrics](https://grafana.com/docs/k6/latest/using-k6/metrics/reference/)
+- Grafana k6 [gRPC overview](https://grafana.com/docs/k6/latest/using-k6/protocols/grpc/)
+- Grafana k6 [gRPC streams](https://grafana.com/docs/k6/latest/javascript-api/k6-net-grpc/stream/)
 - Grafana k6 [result outputs](https://grafana.com/docs/k6/latest/results-output/)
 - Grafana k6 [large-test generator sizing](https://grafana.com/docs/k6/latest/testing-guides/running-large-tests/)
 - Grafana k6 [thresholds](https://grafana.com/docs/k6/latest/using-k6/thresholds/)

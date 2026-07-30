@@ -5,9 +5,9 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 TEMPLATE_INIT_PROFILE="${TEMPLATE_INIT_PROFILE:-all}"
 
 case "${TEMPLATE_INIT_PROFILE}" in
-	all | minimal | postgres) ;;
+	all | minimal | postgres | grpc) ;;
 	*)
-		echo "TEMPLATE_INIT_PROFILE must be one of: all, minimal, postgres" >&2
+		echo "TEMPLATE_INIT_PROFILE must be one of: all, minimal, postgres, grpc" >&2
 		exit 2
 		;;
 esac
@@ -338,20 +338,44 @@ grep -Fq 'unknown_key' "${TEMP_ROOT}/minimal-postgres.log"
 grep -Fq 'postgres.enabled' "${TEMP_ROOT}/minimal-postgres.log"
 grep -Fq 'postgres.dsn' "${TEMP_ROOT}/minimal-postgres.log"
 for removed in \
+	buf.yaml \
+	buf.gen.yaml \
 	cmd/migrate \
+	cmd/service/internal/bootstrap/startup_grpc.go \
+	cmd/service/internal/bootstrap/startup_grpc_test.go \
+	docs/grpc.md \
+	internal/config/grpc_config_test.go \
 	internal/infra/httpclient \
+	internal/infra/grpc \
+	internal/infra/grpcclient \
 	internal/infra/postgres \
 	internal/infra/postgresmigrate \
+	scripts/dev/benchmark-grpc-check.sh \
+	scripts/proto.sh \
+	scripts/run-buf.sh \
+	scripts/ci/proto-check.sh \
 	env/docker-compose.yml \
+	test/grpc_process_integration_test.go \
+	test/performance/grpc \
 	test/postgres_integration_test.go \
 	test/postgres_migrate_runner_integration_test.go \
 	.github/assets \
 	.github/ISSUE_TEMPLATE; do
 	assert "${removed} must not survive DATABASE=none initialization" path_absent "${minimal_checkout}/${removed}"
 done
+for benchmark_surface in \
+	Makefile \
+	scripts/dev/benchmark.sh \
+	docs/benchmarking.md \
+	docs/build-test-and-development-commands.md; do
+	assert "GRPC=none retained gRPC reference benchmark commands in ${benchmark_surface}" \
+		grep_absent -Eq 'bench-grpc|GRPC_BENCH|grpc-smoke|grpc-inspect' \
+		"${minimal_checkout}/${benchmark_surface}"
+done
 # The generated service must record where it came from, or a later upstream fix
 # has no revision to be reviewed against.
 grep -Fq 'database = "none"' "${minimal_checkout}/template.lock"
+grep -Fq 'grpc = "none"' "${minimal_checkout}/template.lock"
 grep -Fq 'outbound_http = "none"' "${minimal_checkout}/template.lock"
 grep -Fqx "source_revision = \"${minimal_source_revision}\"" "${minimal_checkout}/template.lock"
 # A generated service owns no generator, so the initialization contract check
@@ -365,6 +389,7 @@ grep -Fqx "source_revision = \"${minimal_source_revision}\"" "${minimal_checkout
 	make template-init-check >"${TEMP_ROOT}/minimal-init-check.log"
 	# CI runs this unconditionally; the target must survive DATABASE=none.
 	make sqlc-check
+	make proto-check
 	make project-structure-check
 )
 grep -Fq 'upstream-only' "${TEMP_ROOT}/minimal-init-check.log"
@@ -406,7 +431,7 @@ fi
 	assert "examples/ must not survive initialization" path_absent "${minimal_checkout}/examples"
 fi
 
-if [[ "${TEMPLATE_INIT_PROFILE}" != "minimal" ]]; then
+if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "postgres" ]]; then
 	postgres_checkout="$(copy_template_checkout full-postgres git@github.com:acme/postgres-service.git)"
 	postgres_workflow_before="$(workflow_snapshot "${postgres_checkout}")"
 	(
@@ -469,6 +494,84 @@ expect_unchanged_failure "${malformed_outbound}" \
 		echo "service dependency graph includes migration implementation"
 		exit 1
 	fi
+fi
+
+if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "grpc" ]]; then
+	malformed_grpc="$(new_fixture malformed-grpc git@github.com:acme/malformed-grpc.git)"
+	expect_unchanged_failure "${malformed_grpc}" \
+		env CODEOWNER=@acme/platform GRPC=custom bash "${ROOT_DIR}/scripts/init-module.sh"
+
+	grpc_checkout="$(copy_template_checkout full-grpc git@github.com:acme/grpc-service.git)"
+	grpc_workflow_before="$(workflow_snapshot "${grpc_checkout}")"
+	(
+		cd "${grpc_checkout}"
+		CODEOWNER=@acme/platform DATABASE=none GRPC=enabled REFERENCE_EXAMPLE=keep \
+			bash ./scripts/init-module.sh
+		go test ./...
+		go build ./cmd/service
+		make proto-check
+	)
+assert "gRPC enabled initialization removed server adapter" path_present "${grpc_checkout}/internal/infra/grpc"
+assert "gRPC enabled initialization removed client adapter" path_present "${grpc_checkout}/internal/infra/grpcclient"
+assert "gRPC enabled initialization removed Buf config" file_present "${grpc_checkout}/buf.yaml"
+assert "gRPC enabled initialization removed protobuf workflow" file_present "${grpc_checkout}/scripts/proto.sh"
+assert "gRPC enabled initialization removed bootstrap wiring" file_present "${grpc_checkout}/cmd/service/internal/bootstrap/startup_grpc.go"
+assert "gRPC enabled initialization removed guide" file_present "${grpc_checkout}/docs/grpc.md"
+assert "gRPC enabled initialization removed reference" path_present "${grpc_checkout}/examples/grpc-reference-service"
+assert "gRPC reference profile removed benchmark lifecycle proof" file_present "${grpc_checkout}/scripts/dev/benchmark-grpc-check.sh"
+assert "gRPC reference profile removed k6 scenario" file_present "${grpc_checkout}/test/performance/grpc/all-cardinalities.js"
+grep -Fq 'bench-grpc-smoke' "${grpc_checkout}/Makefile"
+grep -Fq 'GRPC_BENCH_SCRIPT' "${grpc_checkout}/scripts/dev/benchmark.sh"
+grep -Fq 'bench-grpc-smoke' "${grpc_checkout}/docs/grpc.md"
+assert "gRPC reference profile retained unresolved benchmark markers" \
+	grep_absent -R -Fq 'profile:grpc-reference-benchmark:' \
+	"${grpc_checkout}/Makefile" \
+	"${grpc_checkout}/scripts/dev/benchmark.sh" \
+	"${grpc_checkout}/docs"
+grep -Fq 'grpc = "enabled"' "${grpc_checkout}/template.lock"
+assert "agent workflow changed during gRPC initialization" same_text "${grpc_workflow_before}" "$(workflow_snapshot "${grpc_checkout}")"
+grpc_snapshot="$(snapshot "${grpc_checkout}")"
+(
+	cd "${grpc_checkout}"
+	CODEOWNER=@acme/platform DATABASE=none GRPC=enabled REFERENCE_EXAMPLE=keep \
+		bash ./scripts/init-module.sh
+)
+assert "repeated gRPC initialization changed the checkout" same_text "${grpc_snapshot}" "$(snapshot "${grpc_checkout}")"
+
+grpc_default_checkout="$(copy_template_checkout default-grpc git@github.com:acme/grpc-default-service.git)"
+(
+	cd "${grpc_default_checkout}"
+	CODEOWNER=@acme/platform DATABASE=none GRPC=enabled \
+		bash ./scripts/init-module.sh
+	go test ./...
+	go build ./cmd/service
+	make proto-check
+)
+assert "default gRPC initialization removed server adapter" path_present "${grpc_default_checkout}/internal/infra/grpc"
+assert "default gRPC initialization removed client adapter" path_present "${grpc_default_checkout}/internal/infra/grpcclient"
+assert "default gRPC initialization retained reference examples" path_absent "${grpc_default_checkout}/examples"
+assert "default gRPC initialization retained benchmark lifecycle proof" path_absent "${grpc_default_checkout}/scripts/dev/benchmark-grpc-check.sh"
+assert "default gRPC initialization retained gRPC performance scenario" path_absent "${grpc_default_checkout}/test/performance/grpc"
+for benchmark_surface in \
+	Makefile \
+	scripts/dev/benchmark.sh \
+	docs/grpc.md \
+	docs/benchmarking.md \
+	docs/build-test-and-development-commands.md; do
+	assert "REFERENCE_EXAMPLE=remove retained gRPC reference benchmark commands in ${benchmark_surface}" \
+		grep_absent -Eq 'bench-grpc|GRPC_BENCH|grpc-smoke|grpc-inspect' \
+		"${grpc_default_checkout}/${benchmark_surface}"
+done
+grep -Fq 'grpc = "enabled"' "${grpc_default_checkout}/template.lock"
+grep -Fq 'reference_example = "remove"' "${grpc_default_checkout}/template.lock"
+grpc_default_snapshot="$(snapshot "${grpc_default_checkout}")"
+(
+	cd "${grpc_default_checkout}"
+	CODEOWNER=@acme/platform DATABASE=none GRPC=enabled \
+		bash ./scripts/init-module.sh
+)
+assert "repeated default gRPC initialization changed the checkout" \
+	same_text "${grpc_default_snapshot}" "$(snapshot "${grpc_default_checkout}")"
 fi
 
 echo "template initialization contract passed"

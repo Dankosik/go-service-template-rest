@@ -16,7 +16,41 @@ var buildVersion = "dev"
 // metric, or a log line.
 var buildCommit = "unknown"
 
+// profile:grpc:start
+
+// DefaultGRPCServerConfig returns the canonical production defaults without
+// reading files or environment variables. Runtime loading and benchmark-only
+// composition consume the same value so their transport bounds cannot drift.
+func DefaultGRPCServerConfig() GRPCServerConfig {
+	return GRPCServerConfig{
+		Enabled:           false,
+		Addr:              "",
+		TransportSecurity: "",
+		AllowPlaintext:    false,
+		TLS: GRPCTLSConfig{
+			CertFile: "",
+			KeyFile:  "",
+		},
+		MaxConnections:             4096,
+		MaxConcurrentRPCs:          256,
+		MaxConcurrentStreams:       100,
+		MaxHeaderListBytes:         16 << 10,
+		MaxReceiveMessageBytes:     4 << 20,
+		MaxSendMessageBytes:        4 << 20,
+		AccessLogHealthChecks:      false,
+		AccessLogSuccessSampleRate: 1,
+		AccessLogSlowThreshold:     0,
+		TelemetryHealthChecks:      false,
+	}
+}
+
+// profile:grpc:end
+
 func defaultValues() map[string]any {
+	// profile:grpc:start
+	grpcServer := DefaultGRPCServerConfig()
+	// profile:grpc:end
+
 	return map[string]any{
 		"app.env":         "local",
 		"app.version":     buildVersion,
@@ -64,6 +98,28 @@ func defaultValues() map[string]any {
 		// two buffers apiece until the process is OOM-killed.
 		"http.max_connections":          4096,
 		"http.access_log_health_probes": false,
+
+		// profile:grpc:start
+		// gRPC is compiled into the enabled template profile but remains
+		// disabled until a service chooses an address and an explicit transport
+		// security mode.
+		"grpc.server.enabled":                        grpcServer.Enabled,
+		"grpc.server.addr":                           grpcServer.Addr,
+		"grpc.server.transport_security":             grpcServer.TransportSecurity,
+		"grpc.server.allow_plaintext":                grpcServer.AllowPlaintext,
+		"grpc.server.tls.cert_file":                  grpcServer.TLS.CertFile,
+		"grpc.server.tls.key_file":                   grpcServer.TLS.KeyFile,
+		"grpc.server.max_connections":                grpcServer.MaxConnections,
+		"grpc.server.max_concurrent_rpcs":            grpcServer.MaxConcurrentRPCs,
+		"grpc.server.max_concurrent_streams":         grpcServer.MaxConcurrentStreams,
+		"grpc.server.max_header_list_bytes":          grpcServer.MaxHeaderListBytes,
+		"grpc.server.max_receive_message_bytes":      grpcServer.MaxReceiveMessageBytes,
+		"grpc.server.max_send_message_bytes":         grpcServer.MaxSendMessageBytes,
+		"grpc.server.access_log_health_checks":       grpcServer.AccessLogHealthChecks,
+		"grpc.server.access_log_success_sample_rate": grpcServer.AccessLogSuccessSampleRate,
+		"grpc.server.access_log_slow_threshold":      grpcServer.AccessLogSlowThreshold.String(),
+		"grpc.server.telemetry_health_checks":        grpcServer.TelemetryHealthChecks,
+		// profile:grpc:end
 
 		"health.refresh_interval":  "2s",
 		"health.failure_threshold": 3,
