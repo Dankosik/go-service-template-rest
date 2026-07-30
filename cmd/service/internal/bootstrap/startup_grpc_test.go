@@ -118,12 +118,17 @@ func TestNewGRPCRuntimeMapsObservabilityPolicy(t *testing.T) {
 
 			var output bytes.Buffer
 			log := slog.New(slog.NewJSONHandler(&output, nil))
-			connection := startGRPCRuntimeConnection(t, cfg, log)
+			connection, server := startGRPCRuntimeConnection(t, cfg, log)
 			healthClient := healthgrpc.NewHealthClient(connection)
 			spansBefore := len(spanRecorder.Ended())
 
 			if _, err := healthClient.Check(t.Context(), &healthgrpc.HealthCheckRequest{}); err != nil {
 				t.Fatalf("Health.Check() error = %v", err)
+			}
+			// A client reply can arrive before the server stats handler publishes
+			// its ended span. Graceful shutdown is the owned RPC-lifecycle barrier.
+			if err := server.Shutdown(t.Context()); err != nil {
+				t.Fatalf("Server.Shutdown() error = %v", err)
 			}
 
 			if got := strings.Contains(output.String(), `"msg":"grpc_request"`); got != testCase.wantAccessLog {
@@ -390,7 +395,7 @@ func startGRPCRuntimeConnection(
 	t *testing.T,
 	cfg config.Config,
 	log *slog.Logger,
-) *grpc.ClientConn {
+) (*grpc.ClientConn, *grpcx.Server) {
 	t.Helper()
 
 	server, err := newGRPCRuntime(cfg, log, telemetry.New(), nil, grpcRuntimeBindings{})
@@ -420,7 +425,7 @@ func startGRPCRuntimeConnection(
 			t.Errorf("Server.Serve() error = %v", err)
 		}
 	})
-	return connection
+	return connection, server
 }
 
 func grpcRuntimeTestConfig() config.Config {
