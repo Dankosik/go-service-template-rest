@@ -1,6 +1,6 @@
 ---
 name: go-reliability
-description: "Reliability: Use when timeouts, retries, overload, degradation, readiness, startup, drain, shutdown, recovery, or rollout needs a decision, or when changed Go must conform to accepted resilience policy. Own service resilience policy and review; Skip when synchronization, durable replay, or Go context API semantics is primary."
+description: "Reliability: Use for timeouts, retries, overload, degradation, readiness, startup/drain/shutdown, recovery, rollout, or review. Own service policy; Skip synchronization, durable replay, or context semantics."
 ---
 
 # Go Reliability

@@ -12,6 +12,21 @@ Every split spends one of two budgets: a model-invoked skill spends context load
 
 Material with no independent trigger or steps is not a skill: keep it in a canonical non-triggerable external reference rather than spending model context or human recall on it.
 
+The canonical `.agents/skills` set is cross-harness and keeps a non-empty
+`name` and `description` for portable discovery. Do not emulate a glossary
+user-only skill by deleting required metadata; keep genuinely non-triggerable
+material as an external reference, or use a harness-native invocation policy
+only when that skill is intentionally harness-specific.
+
+Codex starts with skill names, descriptions, and paths, then loads `SKILL.md`
+only after selection; its initial catalog has a bounded context budget and may
+shorten descriptions or omit skills when crowded ([OpenAI Skills](https://learn.chatgpt.com/docs/build-skills)).
+Front-load the leading word and decisive trigger so shortening preserves
+invocation. The repository structural gate keeps its own name/description bytes
+at or below 8,000; global skills and paths still consume catalog space, so that
+budget is headroom, not proof of invocation. A rule that must always apply
+belongs in bootstrapped `AGENTS.md`, not only in a skill.
+
 ## Information Hierarchy
 
 Keep ordered actions and material shared by every branch in `SKILL.md`. End on the smallest checkable outcome that proves the skill's job; enumerate items only when omitting one can change correctness, safety, or the downstream decision.

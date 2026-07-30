@@ -1,6 +1,6 @@
 ---
 name: planning-and-task-breakdown
-description: "Task ledger: Use when ready decisions need one delegated, dependency-ordered tasks.md with owners, proof, cleanup, and reopen conditions. Own faithful ledger authoring; Skip when behavior remains unresolved, implementation is requested, or root planning-phase ownership and readiness review are needed."
+description: "Task ledger: Use when ready decisions need delegated, ordered tasks.md with owners, proof, cleanup, and reopen conditions. Own ledger authoring; Skip unresolved behavior, implementation, or root planning."
 ---
 
 # Planning And Task Breakdown

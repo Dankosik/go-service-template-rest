@@ -1,13 +1,15 @@
 ---
 name: manage-workflow
-description: "Workflow: Use when repository work needs path or phase selection, movement across research, specification, technical design, test design, planning, implementation, or resume from task artifacts. Own the smallest valid path, current decision owner, exact instruction loading, transition, and reopen decision; Skip when a direct task or an already-owned domain action can proceed without workflow routing."
+description: "Workflow loading: Use for path/phase selection, movement/resume, or before change/build/fix. Own the current required read set and next owner; Skip when AGENTS.md fully owns the answer."
 ---
 
 # Manage Workflow
 
 Reconstruct the accepted outcome, authorization, repository state, and active
-task artifacts. Read the [workflow router](../../../docs/spec-first-workflow.md)
-when the path or next owner is open.
+task artifacts. A direct `change`, `build`, or `fix` reads
+[Implementation](../../../docs/spec-first-workflow/phases/implementation-validation-closeout.md)
+before editing. Read the [workflow router](../../../docs/spec-first-workflow.md)
+when the path or next owner is open or the route is structured/orchestrated.
 
 Select one current owner and read only its instruction:
 
@@ -25,6 +27,11 @@ only for persistence or resume, [Subagents and Handoff](../../../docs/spec-first
 only for triggered review, delegation, or handoff, and
 [Agent Harness](../../../docs/agent-harness.md) only for a native control.
 Apply independently triggered domain skills directly.
+
+The read set is complete only when every file required before the next governed
+action has actually been read; a link or remembered summary does not close it.
+Re-evaluate it when evidence changes the phase, risk, ownership, proof, or
+harness control.
 
 Finish only at the phase stop rule. Move when authorized inputs are closed;
 otherwise return the blocker or named boundary. New evidence reopens the

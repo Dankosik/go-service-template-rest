@@ -1,6 +1,6 @@
 ---
 name: go-api-contract
-description: "API contract: Use when client-visible REST resources, representations, HTTP semantics, errors, pagination, idempotency, async behavior, or compatibility must be decided. Own the API decision and its proof; Skip when router topology, system/data architecture, security policy, or implementation is primary."
+description: "API contract: Use for client-visible REST resources, HTTP/errors, pagination, idempotency, async behavior, or compatibility. Own semantics/proof; Skip transport topology, security, or implementation."
 ---
 
 # Go API Contract

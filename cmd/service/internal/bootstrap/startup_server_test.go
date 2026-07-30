@@ -71,6 +71,34 @@ func (f *fakeRuntimeServer) Shutdown(ctx context.Context) error {
 	return nil
 }
 
+// profile:grpc:start
+type fakeGRPCRuntimeServer struct {
+	*fakeRuntimeServer
+
+	markServing     chan struct{}
+	startDrain      chan struct{}
+	markServingOnce sync.Once
+	startDrainOnce  sync.Once
+}
+
+func newFakeGRPCRuntimeServer() *fakeGRPCRuntimeServer {
+	return &fakeGRPCRuntimeServer{
+		fakeRuntimeServer: newFakeRuntimeServer(),
+		markServing:       make(chan struct{}),
+		startDrain:        make(chan struct{}),
+	}
+}
+
+func (f *fakeGRPCRuntimeServer) MarkServing() {
+	f.markServingOnce.Do(func() { close(f.markServing) })
+}
+
+func (f *fakeGRPCRuntimeServer) StartDrain() {
+	f.startDrainOnce.Do(func() { close(f.startDrain) })
+}
+
+// profile:grpc:end
+
 func newTestStartupAdmissionController() *startupAdmissionController {
 	return newStartupAdmissionController()
 }
@@ -117,21 +145,21 @@ func TestServeHTTPRuntimeListenError(t *testing.T) {
 	logger := slog.New(slog.DiscardHandler)
 	svc := health.New()
 
-	err := serveHTTPRuntime(context.Background(), context.Background(), serveHTTPRuntimeArgs{
+	err := serveRuntime(context.Background(), context.Background(), serveRuntimeArgs{
 		cfg:            config.Config{HTTP: config.HTTPConfig{Addr: "127.0.0.1:-1", ShutdownTimeout: time.Second}},
 		log:            logger,
 		healthSvc:      svc,
-		srv:            newFakeRuntimeServer(),
+		httpSrv:        newFakeRuntimeServer(),
 		readinessCheck: func(context.Context) error { return nil },
 		admission:      newTestStartupAdmissionController(),
 		shutdown:       testShutdownBudget(),
 	})
 
 	if err == nil {
-		t.Fatal("serveHTTPRuntime() error = nil, want non-nil")
+		t.Fatal("serveRuntime() error = nil, want non-nil")
 	}
 	if !strings.Contains(err.Error(), "listen http server") {
-		t.Fatalf("serveHTTPRuntime() err = %v, want listen context", err)
+		t.Fatalf("serveRuntime() err = %v, want listen context", err)
 	}
 }
 
@@ -146,7 +174,7 @@ func TestServeHTTPRuntimeMetricsListenError(t *testing.T) {
 		_ = occupied.Close()
 	}()
 
-	err = serveHTTPRuntime(context.Background(), context.Background(), serveHTTPRuntimeArgs{
+	err = serveRuntime(context.Background(), context.Background(), serveRuntimeArgs{
 		cfg: config.Config{
 			HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second},
 			Observability: config.ObservabilityConfig{
@@ -155,7 +183,7 @@ func TestServeHTTPRuntimeMetricsListenError(t *testing.T) {
 		},
 		log:            slog.New(slog.DiscardHandler),
 		healthSvc:      health.New(),
-		srv:            newFakeRuntimeServer(),
+		httpSrv:        newFakeRuntimeServer(),
 		metricsSrv:     newFakeRuntimeServer(),
 		readinessCheck: func(context.Context) error { return nil },
 		admission:      newTestStartupAdmissionController(),
@@ -163,10 +191,10 @@ func TestServeHTTPRuntimeMetricsListenError(t *testing.T) {
 	})
 
 	if err == nil {
-		t.Fatal("serveHTTPRuntime() error = nil, want metrics listen failure")
+		t.Fatal("serveRuntime() error = nil, want metrics listen failure")
 	}
 	if !strings.Contains(err.Error(), "listen metrics server") {
-		t.Fatalf("serveHTTPRuntime() err = %v, want metrics listen context", err)
+		t.Fatalf("serveRuntime() err = %v, want metrics listen context", err)
 	}
 }
 
@@ -182,7 +210,7 @@ func TestServeHTTPRuntimeStartsAndStopsApplicationAndMetricsServers(t *testing.T
 
 	runErrCh := make(chan error, 1)
 	go func() {
-		runErrCh <- serveHTTPRuntime(signalCtx, bootstrapCtx, serveHTTPRuntimeArgs{
+		runErrCh <- serveRuntime(signalCtx, bootstrapCtx, serveRuntimeArgs{
 			cfg: config.Config{
 				App:  config.AppConfig{Env: "test"},
 				HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second},
@@ -192,7 +220,7 @@ func TestServeHTTPRuntimeStartsAndStopsApplicationAndMetricsServers(t *testing.T
 			},
 			log:            slog.New(slog.DiscardHandler),
 			healthSvc:      health.New(),
-			srv:            appSrv,
+			httpSrv:        appSrv,
 			metricsSrv:     metricsSrv,
 			readinessCheck: func(context.Context) error { return nil },
 			admission:      admission,
@@ -223,10 +251,10 @@ func TestServeHTTPRuntimeStartsAndStopsApplicationAndMetricsServers(t *testing.T
 	select {
 	case err := <-runErrCh:
 		if err != nil {
-			t.Fatalf("serveHTTPRuntime() error = %v, want nil", err)
+			t.Fatalf("serveRuntime() error = %v, want nil", err)
 		}
 	case <-time.After(2 * time.Second):
-		t.Fatal("serveHTTPRuntime() did not stop both servers")
+		t.Fatal("serveRuntime() did not stop both servers")
 	}
 }
 
@@ -240,14 +268,14 @@ func TestServeHTTPRuntimeStopsAfterBackgroundFailure(t *testing.T) {
 
 	runErrCh := make(chan error, 1)
 	go func() {
-		runErrCh <- serveHTTPRuntime(context.Background(), context.Background(), serveHTTPRuntimeArgs{
+		runErrCh <- serveRuntime(context.Background(), context.Background(), serveRuntimeArgs{
 			cfg: config.Config{
 				App:  config.AppConfig{Env: "test"},
 				HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second},
 			},
 			log:                slog.New(slog.DiscardHandler),
 			healthSvc:          health.New(),
-			srv:                srv,
+			httpSrv:            srv,
 			readinessCheck:     func(context.Context) error { return nil },
 			backgroundFailures: failures,
 			admission:          admission,
@@ -272,10 +300,10 @@ func TestServeHTTPRuntimeStopsAfterBackgroundFailure(t *testing.T) {
 	select {
 	case err := <-runErrCh:
 		if !errors.Is(err, taskErr) {
-			t.Fatalf("serveHTTPRuntime() error = %v, want wrapped %v", err, taskErr)
+			t.Fatalf("serveRuntime() error = %v, want wrapped %v", err, taskErr)
 		}
 	case <-time.After(2 * time.Second):
-		t.Fatal("serveHTTPRuntime() did not stop after the background failure")
+		t.Fatal("serveRuntime() did not stop after the background failure")
 	}
 }
 
@@ -288,21 +316,21 @@ func TestServeHTTPRuntimeRejectsCanceledStartupBeforeListen(t *testing.T) {
 	signalCtx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	err := serveHTTPRuntime(signalCtx, context.Background(), serveHTTPRuntimeArgs{
+	err := serveRuntime(signalCtx, context.Background(), serveRuntimeArgs{
 		cfg:            config.Config{HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second}},
 		log:            logger,
 		healthSvc:      svc,
-		srv:            newFakeRuntimeServer(),
+		httpSrv:        newFakeRuntimeServer(),
 		readinessCheck: func(context.Context) error { return nil },
 		admission:      newTestStartupAdmissionController(),
 		shutdown:       testShutdownBudget(),
 	})
 
 	if err == nil {
-		t.Fatal("serveHTTPRuntime() error = nil, want non-nil")
+		t.Fatal("serveRuntime() error = nil, want non-nil")
 	}
 	if !errors.Is(err, context.Canceled) {
-		t.Fatalf("serveHTTPRuntime() err = %v, want wrapped %v", err, context.Canceled)
+		t.Fatalf("serveRuntime() err = %v, want wrapped %v", err, context.Canceled)
 	}
 }
 
@@ -321,11 +349,11 @@ func TestServeHTTPRuntimeMarksReadyWithoutExternalReadinessProbe(t *testing.T) {
 
 	runErrCh := make(chan error, 1)
 	go func(signalCtx context.Context, bootstrapCtx context.Context) {
-		runErrCh <- serveHTTPRuntime(signalCtx, bootstrapCtx, serveHTTPRuntimeArgs{
+		runErrCh <- serveRuntime(signalCtx, bootstrapCtx, serveRuntimeArgs{
 			cfg:       config.Config{HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second}},
 			log:       logger,
 			healthSvc: svc,
-			srv:       srv,
+			httpSrv:   srv,
 			readinessCheck: func(context.Context) error {
 				select {
 				case readinessChecked <- struct{}{}:
@@ -357,10 +385,10 @@ func TestServeHTTPRuntimeMarksReadyWithoutExternalReadinessProbe(t *testing.T) {
 	select {
 	case err := <-runErrCh:
 		if err != nil {
-			t.Fatalf("serveHTTPRuntime() error = %v, want nil", err)
+			t.Fatalf("serveRuntime() error = %v, want nil", err)
 		}
 	case <-time.After(2 * time.Second):
-		t.Fatal("serveHTTPRuntime() did not return after shutdown signal")
+		t.Fatal("serveRuntime() did not return after shutdown signal")
 	}
 }
 
@@ -373,11 +401,11 @@ func TestServeHTTPRuntimeRejectsStartupDeadlineBeforeReadiness(t *testing.T) {
 	bootstrapCtx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()
 
-	err := serveHTTPRuntime(context.Background(), bootstrapCtx, serveHTTPRuntimeArgs{
+	err := serveRuntime(context.Background(), bootstrapCtx, serveRuntimeArgs{
 		cfg:       config.Config{HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second}},
 		log:       logger,
 		healthSvc: svc,
-		srv:       newFakeRuntimeServer(),
+		httpSrv:   newFakeRuntimeServer(),
 		readinessCheck: func(ctx context.Context) error {
 			<-ctx.Done()
 			return ctx.Err()
@@ -387,10 +415,10 @@ func TestServeHTTPRuntimeRejectsStartupDeadlineBeforeReadiness(t *testing.T) {
 	})
 
 	if err == nil {
-		t.Fatal("serveHTTPRuntime() error = nil, want non-nil")
+		t.Fatal("serveRuntime() error = nil, want non-nil")
 	}
 	if !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("serveHTTPRuntime() error = %v, want wrapped %v", err, context.DeadlineExceeded)
+		t.Fatalf("serveRuntime() error = %v, want wrapped %v", err, context.DeadlineExceeded)
 	}
 }
 
@@ -407,11 +435,11 @@ func TestServeHTTPRuntimeSkipsPropagationDelayBeforeAdmissionReady(t *testing.T)
 		return nil
 	}
 
-	err := serveHTTPRuntime(context.Background(), context.Background(), serveHTTPRuntimeArgs{
+	err := serveRuntime(context.Background(), context.Background(), serveRuntimeArgs{
 		cfg:       config.Config{HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: 25 * time.Millisecond}},
 		log:       logger,
 		healthSvc: svc,
-		srv:       srv,
+		httpSrv:   srv,
 		readinessCheck: func(context.Context) error {
 			return errors.New("readiness failed")
 		},
@@ -421,13 +449,13 @@ func TestServeHTTPRuntimeSkipsPropagationDelayBeforeAdmissionReady(t *testing.T)
 	})
 
 	if err == nil {
-		t.Fatal("serveHTTPRuntime() error = nil, want non-nil")
+		t.Fatal("serveRuntime() error = nil, want non-nil")
 	}
 	if !shutdownCalled {
 		t.Fatal("server shutdown was not called before admission-ready")
 	}
 	if !strings.Contains(err.Error(), "startup readiness check failed") {
-		t.Fatalf("serveHTTPRuntime() err = %v, want startup readiness context", err)
+		t.Fatalf("serveRuntime() err = %v, want startup readiness context", err)
 	}
 }
 
@@ -441,11 +469,11 @@ func TestServeHTTPRuntimeReturnsServeFailureBeforeAdmissionReady(t *testing.T) {
 		return errors.New("boom")
 	}
 
-	err := serveHTTPRuntime(context.Background(), context.Background(), serveHTTPRuntimeArgs{
+	err := serveRuntime(context.Background(), context.Background(), serveRuntimeArgs{
 		cfg:       config.Config{HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second}},
 		log:       logger,
 		healthSvc: svc,
-		srv:       srv,
+		httpSrv:   srv,
 		readinessCheck: func(ctx context.Context) error {
 			select {
 			case <-ctx.Done():
@@ -459,10 +487,10 @@ func TestServeHTTPRuntimeReturnsServeFailureBeforeAdmissionReady(t *testing.T) {
 	})
 
 	if err == nil {
-		t.Fatal("serveHTTPRuntime() error = nil, want non-nil")
+		t.Fatal("serveRuntime() error = nil, want non-nil")
 	}
 	if !strings.Contains(err.Error(), "http server stopped before readiness: boom") {
-		t.Fatalf("serveHTTPRuntime() err = %v, want pre-readiness serve failure", err)
+		t.Fatalf("serveRuntime() err = %v, want pre-readiness serve failure", err)
 	}
 }
 
@@ -488,11 +516,11 @@ func TestServeHTTPRuntimeReturnsPendingServeFailureBeforeMarkingAdmissionReady(t
 			return serveErr
 		}
 
-		err := serveHTTPRuntime(context.Background(), context.Background(), serveHTTPRuntimeArgs{
+		err := serveRuntime(context.Background(), context.Background(), serveRuntimeArgs{
 			cfg:       config.Config{HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second}},
 			log:       logger,
 			healthSvc: svc,
-			srv:       srv,
+			httpSrv:   srv,
 			readinessCheck: func(ctx context.Context) error {
 				select {
 				case <-serveReturned:
@@ -510,10 +538,10 @@ func TestServeHTTPRuntimeReturnsPendingServeFailureBeforeMarkingAdmissionReady(t
 		})
 
 		if err == nil {
-			t.Fatal("serveHTTPRuntime() error = nil, want pending serve failure")
+			t.Fatal("serveRuntime() error = nil, want pending serve failure")
 		}
 		if !errors.Is(err, serveErr) {
-			t.Fatalf("serveHTTPRuntime() error = %v, want wrapped %v", err, serveErr)
+			t.Fatalf("serveRuntime() error = %v, want wrapped %v", err, serveErr)
 		}
 		if admission.Ready() {
 			t.Fatal("startup admission marked ready while serve failure was already pending")
@@ -530,6 +558,105 @@ func TestServeHTTPRuntimeReturnsPendingServeFailureBeforeMarkingAdmissionReady(t
 // delay and the whole in-flight drain went uncollected. The assertion is on order
 // because the failure mode is invisible in behavior: everything still shuts down,
 // and the metrics for the last window of the pod's life simply do not exist.
+// profile:grpc:start
+func TestServeRuntimeCoordinatesGRPCReadinessAndDrain(t *testing.T) {
+	t.Parallel()
+
+	httpServer := newFakeRuntimeServer()
+	grpcServer := newFakeGRPCRuntimeServer()
+	signalCtx, cancelSignal := context.WithCancel(context.Background())
+	result := make(chan error, 1)
+
+	go func() {
+		result <- serveRuntime(signalCtx, context.Background(), serveRuntimeArgs{
+			cfg: config.Config{
+				App:  config.AppConfig{Env: "test"},
+				HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second},
+				GRPC: config.GRPCConfig{Server: config.GRPCServerConfig{
+					Addr:           "127.0.0.1:0",
+					MaxConnections: 4,
+				}},
+			},
+			log:            slog.New(slog.DiscardHandler),
+			healthSvc:      health.New(),
+			httpSrv:        httpServer,
+			grpcSrv:        grpcServer,
+			readinessCheck: func(context.Context) error { return nil },
+			admission:      newTestStartupAdmissionController(),
+			shutdown:       testShutdownBudget(),
+		})
+	}()
+
+	for name, started := range map[string]<-chan struct{}{
+		"http": httpServer.serveStarted,
+		"grpc": grpcServer.serveStarted,
+	} {
+		select {
+		case <-started:
+		case <-time.After(time.Second):
+			t.Fatalf("%s server did not start", name)
+		}
+	}
+	select {
+	case <-grpcServer.markServing:
+	case <-time.After(time.Second):
+		t.Fatal("gRPC health was not marked serving after startup admission")
+	}
+
+	cancelSignal()
+	select {
+	case err := <-result:
+		if err != nil {
+			t.Fatalf("serveRuntime() error = %v, want nil", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("serveRuntime() did not stop")
+	}
+	select {
+	case <-grpcServer.startDrain:
+	default:
+		t.Fatal("gRPC health was not put into drain before shutdown")
+	}
+}
+
+func TestServeRuntimeRejectsGRPCListenFailureBeforeServing(t *testing.T) {
+	t.Parallel()
+
+	var listenConfig net.ListenConfig
+	occupied, err := listenConfig.Listen(t.Context(), "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("net.Listen() error = %v", err)
+	}
+	t.Cleanup(func() { _ = occupied.Close() })
+
+	grpcServer := newFakeGRPCRuntimeServer()
+	err = serveRuntime(context.Background(), context.Background(), serveRuntimeArgs{
+		cfg: config.Config{
+			HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second},
+			GRPC: config.GRPCConfig{Server: config.GRPCServerConfig{
+				Addr:           occupied.Addr().String(),
+				MaxConnections: 4,
+			}},
+		},
+		log:       slog.New(slog.DiscardHandler),
+		healthSvc: health.New(),
+		httpSrv:   newFakeRuntimeServer(),
+		grpcSrv:   grpcServer,
+		admission: newTestStartupAdmissionController(),
+		shutdown:  testShutdownBudget(),
+	})
+	if err == nil || !strings.Contains(err.Error(), "listen gRPC server") {
+		t.Fatalf("serveRuntime() error = %v, want gRPC listen failure", err)
+	}
+	select {
+	case <-grpcServer.serveStarted:
+		t.Fatal("gRPC server started after listener acquisition failed")
+	default:
+	}
+}
+
+// profile:grpc:end
+
 func TestServeHTTPRuntimeStopsDiagnosticsAfterTheDrain(t *testing.T) {
 	t.Parallel()
 
@@ -563,7 +690,7 @@ func TestServeHTTPRuntimeStopsDiagnosticsAfterTheDrain(t *testing.T) {
 		cancelSignal()
 	}()
 
-	err := serveHTTPRuntime(signalCtx, context.Background(), serveHTTPRuntimeArgs{
+	err := serveRuntime(signalCtx, context.Background(), serveRuntimeArgs{
 		cfg: config.Config{
 			HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second},
 			Observability: config.ObservabilityConfig{
@@ -572,14 +699,14 @@ func TestServeHTTPRuntimeStopsDiagnosticsAfterTheDrain(t *testing.T) {
 		},
 		log:            slog.New(slog.DiscardHandler),
 		healthSvc:      health.New(),
-		srv:            apiServer,
+		httpSrv:        apiServer,
 		metricsSrv:     diagnosticsServer,
 		readinessCheck: func(context.Context) error { return nil },
 		admission:      newTestStartupAdmissionController(),
 		shutdown:       testShutdownBudget(),
 	})
 	if err != nil {
-		t.Fatalf("serveHTTPRuntime() error = %v, want nil", err)
+		t.Fatalf("serveRuntime() error = %v, want nil", err)
 	}
 
 	mu.Lock()

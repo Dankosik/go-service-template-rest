@@ -51,7 +51,8 @@ hidden modes or speculative abstractions.
 - Explicit user, system, and developer instructions win.
 - This file owns request authorization, the agent/user decision boundary, and repository-wide invariants.
 - Skills provide methods; they neither create work nor override this contract, accepted decisions, or task-local decisions.
-- [docs/spec-first-workflow.md](docs/spec-first-workflow.md) is the workflow router. Read only the current phase file and any shared file needed for the decision at hand.
+- A Markdown link names an owner; it does not load that owner's instructions. Before the first phase-governed action, load the smallest current read set: every `change`, `build`, or `fix` loads [Implementation / Validation / Closeout](docs/spec-first-workflow/phases/implementation-validation-closeout.md); an open path or phase, or any structured/orchestrated route, first loads the [workflow router](docs/spec-first-workflow.md) and then its current phase. Load the router's conditional owner before its governed action.
+- Instruction loading is a gate, not a receipt: the matching owner must be read before the first edit, durable-artifact mutation, native-control dispatch, or readiness/completion claim it governs. Re-evaluate the read set only when evidence changes the phase, risk, ownership, proof, or harness control; retain only the current phase and triggered conditional owners.
 - Task-local artifacts own accepted task decisions. Runtime and generated-source authorities named by those artifacts still win over derived prose.
 
 ## Authorization And Boundaries
@@ -141,5 +142,5 @@ name the owner and condition that must reopen it.
 - Where an instruction describes an external tool's behavior, it is a summary of a vendor contract this repository does not own. Link the vendor page beside the claim. Read that page before relying on the claim: a summary that drops a load-bearing clause still reads as complete, so the gap surfaces as an invented workaround rather than as a missing fact. Never infer unstated external behavior from a summary.
 - [Skill authoring](docs/skill-authoring.md) owns the lean behavioral-adapter contract.
 - Keep phase-specific method in `docs/spec-first-workflow/phases/`.
-- `shared/artifact-model.md` owns persistence; `shared/subagents-and-handoff.md` owns built-in subagent delegation, triggered non-implementation review independence, convergence, and handoff.
+- `shared/artifact-model.md` owns persistence; `shared/subagents-and-handoff.md` owns built-in subagent delegation, triggered review independence, convergence, and handoff.
 - [Prompt Maintenance](docs/spec-first-workflow.md#prompt-maintenance) owns instruction phrasing, deduplication, and behavior-evaluation boundaries.

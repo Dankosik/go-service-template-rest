@@ -39,6 +39,7 @@ make template-init \
   MODULE=github.com/your-org/my-service \
   CODEOWNER=@your-org/backend \
   DATABASE=none \
+  GRPC=none \
   OUTBOUND_HTTP=none
 make check
 make run
@@ -48,6 +49,11 @@ The defaults create a service with no database dependency. The complete agent
 workflow is always retained. Choose `DATABASE=postgres` when the service owns
 PostgreSQL, and choose `OUTBOUND_HTTP=bounded` only when a shared
 fixed-authority client removes repeated provider code.
+<!-- profile:grpc:start -->
+Choose `GRPC=enabled`
+when the service publishes or consumes native gRPC; see the
+[gRPC guide](docs/grpc.md).
+<!-- profile:grpc:end -->
 
 `examples/reference-service` is a worked feature slice kept in this template for
 reference; initialization removes it so a generated service does not inherit a
@@ -67,6 +73,12 @@ second OpenAPI contract and a second `main()` to maintain. Pass
 | Testing | Race detection and goroutine leak checks; PostgreSQL Testcontainers coverage in the database profile |
 | Delivery | Docker and GitHub Actions security gates; opt-in GHCR publishing with Cosign and CycloneDX |
 | Agent workflow | The complete Codex, Claude Code, and Qwen workflow, always retained ([what that costs](#what-the-agent-workflow-costs)) |
+
+<!-- profile:grpc:start -->
+The optional native gRPC profile adds gRPC-Go client/server support, Buf v2,
+Edition 2023 Opaque messages, all four RPC cardinalities, standard health, and
+bounded drain.
+<!-- profile:grpc:end -->
 
 Major versions describe the supported stack. [`go.mod`](go.mod) owns runtime
 and test dependencies; [`tools/go.mod`](tools/go.mod) owns development tools.
@@ -182,6 +194,13 @@ specs/                           durable task decisions (upstream only)
 .codex/agents/                   Codex specialists
 ```
 
+<!-- profile:grpc:start -->
+With `GRPC=enabled`, `api/proto/` owns protobuf contracts,
+`internal/gen/proto/` is generated, `internal/infra/grpc/` owns server policy
+and lifecycle, and `internal/infra/grpcclient/` constructs shared bounded
+client connections.
+<!-- profile:grpc:end -->
+
 Use the [placement guide](docs/project-structure-and-module-organization.md)
 before choosing packages or tests.
 
@@ -199,6 +218,14 @@ before choosing packages or tests.
 | `make test-integration` | Container-backed integration tests when present |
 | `make go-security` | Go static security and vulnerability checks |
 
+<!-- profile:grpc:start -->
+`make proto-check` owns protobuf format, contract documentation, lint, and
+generated-code drift. Repositories retaining proto2/proto3 contracts use
+`BASE_REF=origin/main make proto-check` so only paths present with legacy
+syntax at that base are accepted; use
+`BASE_REF=origin/main make proto-breaking` for compatibility.
+<!-- profile:grpc:end -->
+
 Performance work uses the narrowest matching benchmark level. DigitalOcean is
 preferred only when `doctl` is already installed and authorized; local
 benchmarks remain the supported fallback. See [Benchmarking](docs/benchmarking.md).
@@ -212,6 +239,11 @@ benchmarks remain the supported fallback. See [Benchmarking](docs/benchmarking.m
 - [Agent Harness](docs/agent-harness.md)
 - [Benchmarking](docs/benchmarking.md)
 - [Railway Deployment Profile](docs/railway-deployment-profile.md)
+
+<!-- profile:grpc:start -->
+For schema, server, client, streaming, lifecycle, and deployment guidance, see
+[Native gRPC](docs/grpc.md).
+<!-- profile:grpc:end -->
 
 ## Community
 

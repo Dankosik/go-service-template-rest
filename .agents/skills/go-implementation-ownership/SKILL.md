@@ -1,6 +1,6 @@
 ---
 name: go-implementation-ownership
-description: "Implementation ownership: Use when accepted decisions need Go package, file, dependency, cleanup, and proof placement, or when changed Go may violate those accepted boundaries. Own implementation placement and conformance; Skip when system topology, domain policy, Go semantics, or local readability is primary."
+description: "Implementation ownership: Use for Go package/file/dependency, cleanup, proof placement, or boundary review. Own code placement; Skip system topology, domain policy, Go semantics, or local readability."
 ---
 
 # Go Implementation Ownership

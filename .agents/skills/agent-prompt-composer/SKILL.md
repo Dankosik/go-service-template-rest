@@ -1,6 +1,6 @@
 ---
 name: agent-prompt-composer
-description: "Reconstruction: Use when incomplete, mixed-language, instruction-noisy, or rough source input needs a high-signal English Intake brief grounded in the repository. Own faithful source reconstruction under the canonical Intake contract; Skip when the request is already routing-sufficient or needs only translation or copy editing."
+description: "Reconstruction: Use when rough, mixed-language, or noisy input needs a repository-grounded English Intake brief. Own fidelity; Skip routing-ready input or translation/editing."
 ---
 
 # Agent Prompt Composer

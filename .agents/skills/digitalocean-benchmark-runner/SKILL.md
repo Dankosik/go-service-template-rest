@@ -1,6 +1,6 @@
 ---
 name: digitalocean-benchmark-runner
-description: "DigitalOcean benchmarks: Use when an agent must provision, operate, or clean up ephemeral DigitalOcean Droplets for Go, PostgreSQL, or external HTTP benchmark execution, including private dirty source or a separate k6 generator. Own secure paid-resource lifecycle, same-testbed comparison, artifact return, and cleanup; Skip when measurement stays local, the workload or budget is undecided, or only code-level performance analysis is requested."
+description: "DigitalOcean benchmark: Use for authorized Go/PostgreSQL/HTTP measurements on ephemeral Droplets. Own paid-resource security, comparable evidence, artifacts, and cleanup; Skip local or undecided workloads."
 ---
 
 # DigitalOcean Benchmark Runner

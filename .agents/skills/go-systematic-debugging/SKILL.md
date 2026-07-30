@@ -1,6 +1,6 @@
 ---
 name: go-systematic-debugging
-description: "Root cause: Use when a Go bug, flaky test, build failure, hang, deadlock, timeout incident, or production regression needs causal diagnosis. Own the first broken invariant and, only when authorized, the smallest causal fix and replayed proof; Skip when feature implementation, unresolved policy design, broad review, or claim-only verification is primary."
+description: "Root cause: Use for Go bugs, flaky tests, build failures, hangs, deadlocks, timeouts, or regressions. Own the first broken invariant and authorized proof/fix; Skip features, policy design, or broad review."
 ---
 
 # Go Systematic Debugging

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Mirror the template-owned instruction surface between this template and the
-# repositories derived from it. The manifest `template-owned.paths` is the only
-# authority for what moves; nothing outside it is read, written, or staged.
+# repositories derived from it. The manifest `template-owned.paths` owns copied
+# content; generated Claude skill links and the managed Codex agent-registry
+# block are derived from that content and travel with the same sync.
 #
 # The sync never commits work it did not produce. A target whose manifest paths
 # hold uncommitted changes is refused, because overwriting them would destroy
@@ -22,10 +23,10 @@ usage:
   --targets   apply to several targets in one run
   --no-commit leave the mirrored result in the working tree without committing
 
-Uncommitted work outside the manifest is never read, staged, or touched: a target
-can carry any amount of work in progress and still sync. Uncommitted work inside
-the manifest refuses that target by name, before anything is written, and the run
-exits non-zero. Commit or discard those paths yourself, then sync again.
+Uncommitted work outside the manifest and its generated `.claude/skills` and
+`.codex/config.toml` views is never staged or touched. Changes inside those
+owned/generated paths refuse the target before any write. Commit or discard
+those paths yourself, then sync again.
 EOF
 }
 
@@ -149,10 +150,10 @@ first_manifest_symlink() {
 	done
 }
 
-# Tracked paths the sync regenerates as a side effect of mirroring `.agents/skills`.
-# They are generated, so they are absent from the manifest, but the sync still has
-# to commit what it changed rather than leave the target dirty behind it.
-generated_paths=(.claude/skills)
+# Tracked paths the sync regenerates from template-owned skills and roles. They
+# are absent from the manifest because one is a symlink view and the other keeps
+# repository-specific config outside its managed block.
+generated_paths=(.claude/skills .codex/config.toml)
 # Historical generated receipts removed by the sync.
 retired_paths=(.template-sync)
 
@@ -191,6 +192,13 @@ if [[ "${mode}" == "apply" ]]; then
 	[[ -z "${source_symlink}" ]] ||
 		fail "template revision contains symlink ${source_symlink}; owned paths must not redirect outside the repository"
 fi
+
+claude_skills_helper="${source_root}/scripts/claude-skills-sync.sh"
+[[ -f "${claude_skills_helper}" ]] ||
+	fail "template-owned Claude skill helper is missing: scripts/claude-skills-sync.sh"
+codex_agents_helper="${source_root}/scripts/codex-agents-sync.sh"
+[[ -f "${codex_agents_helper}" ]] ||
+	fail "template-owned Codex agent helper is missing: scripts/codex-agents-sync.sh"
 
 # Compare one manifest entry. Prints a human-readable delta, returns 1 on drift.
 diff_entry() {
@@ -342,6 +350,18 @@ for target in "${targets[@]}"; do
 			report+="  - ${entry} (retired)"$'\n'
 		fi
 	done
+	if ! generated_report=$(bash "${claude_skills_helper}" --check --repo "${repo}" 2>&1); then
+		drift=1
+		while IFS= read -r line; do
+			[[ -n "${line}" ]] && report+="  ! ${line}"$'\n'
+		done <<<"${generated_report}"
+	fi
+	if ! generated_report=$(bash "${codex_agents_helper}" --check --repo "${repo}" 2>&1); then
+		drift=1
+		while IFS= read -r line; do
+			[[ -n "${line}" ]] && report+="  ! ${line}"$'\n'
+		done <<<"${generated_report}"
+	fi
 
 	if ((drift == 0)); then
 		printf '   in sync with template %s\n' "${template_revision}"
@@ -390,18 +410,31 @@ for target in "${targets[@]}"; do
 	fi
 
 	assert_no_identity_leak "${repo}"
+	if ! preflight_report=$(bash "${claude_skills_helper}" --preflight --repo "${repo}" 2>&1); then
+		[[ -z "${preflight_report}" ]] ||
+			printf '%s\n' "${preflight_report}" | sed 's/^/   /'
+		reject "generated Claude skill links cannot be rebuilt safely"
+		continue
+	fi
 
 	for entry in "${paths[@]}"; do apply_entry "${repo}" "${entry}"; done
 	for entry in "${retired_paths[@]}"; do rm -f -- "${repo}/${entry}"; done
 
 	if [[ -f "${repo}/scripts/template-sync.sh" ]]; then
-		chmod +x "${repo}/scripts/template-sync.sh" "${repo}/scripts/ci/template-owned-purity-check.sh"
+		chmod +x \
+			"${repo}/scripts/template-sync.sh" \
+			"${repo}/scripts/claude-skills-sync.sh" \
+			"${repo}/scripts/codex-agents-sync.sh" \
+			"${repo}/scripts/ci/claude-skills-check.sh" \
+			"${repo}/scripts/ci/template-owned-purity-check.sh"
 	fi
-	if [[ -f "${repo}/Makefile" ]] && grep -q '^claude-skills-sync:' "${repo}/Makefile"; then
-		if ! make -C "${repo}" --no-print-directory claude-skills-sync; then
-			reject "claude-skills-sync failed; the mirror is in the working tree and was not committed"
-			continue
-		fi
+	if ! bash "${repo}/scripts/claude-skills-sync.sh" --apply --repo "${repo}"; then
+		reject "Claude skill link rebuild failed; the mirror is in the working tree and was not committed"
+		continue
+	fi
+	if ! bash "${repo}/scripts/codex-agents-sync.sh" --apply --repo "${repo}"; then
+		reject "Codex agent registry rebuild failed; the mirror is in the working tree and was not committed"
+		continue
 	fi
 	if [[ "${commit}" == false ]]; then
 		printf '   synced into the working tree, not committed\n'

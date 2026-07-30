@@ -1,6 +1,6 @@
 ---
 name: go-delivery-platform
-description: "Delivery platform: Use when CI/CD gates, release trust, drift controls, containers, migrations, or rollout policy needs a decision, or when changed delivery controls need conformance review. Own delivery acceptance and review; Skip when API, data, security, reliability, or pipeline implementation is primary."
+description: "Delivery platform: Use for CI/CD gates, release trust, drift, containers, migrations, rollout, or control review. Own delivery acceptance; Skip API, data, security, reliability, or pipeline implementation."
 ---
 
 # Go Delivery Platform

@@ -14,9 +14,14 @@ package reqctx
 
 import (
 	"context"
+	"crypto/rand"
 	"net/http"
 	"slices"
+	"strings"
 )
+
+// MaxRequestIDLength is the shared wire limit for a correlation identifier.
+const MaxRequestIDLength = 128
 
 // Principal is the authenticated caller of the current request.
 //
@@ -104,4 +109,39 @@ func ContextWithRequestID(ctx context.Context, requestID string) context.Context
 func RequestID(ctx context.Context) string {
 	requestID, _ := ctx.Value(requestIDContextKey{}).(string)
 	return requestID
+}
+
+// ContextWithAcceptedRequestID validates a transport candidate, generates a
+// replacement when needed, and returns both the enriched context and the value
+// that may be sent back to the caller.
+func ContextWithAcceptedRequestID(ctx context.Context, candidate string) (context.Context, string) {
+	requestID := strings.TrimSpace(candidate)
+	if !ValidRequestID(requestID) {
+		requestID = rand.Text()
+	}
+	return ContextWithRequestID(ctx, requestID), requestID
+}
+
+// ValidRequestID reports whether value is safe to carry in logs and response
+// metadata. The alphabet is intentionally transport-neutral and unchanged from
+// the original HTTP contract.
+func ValidRequestID(value string) bool {
+	if len(value) == 0 || len(value) > MaxRequestIDLength {
+		return false
+	}
+	for index := range len(value) {
+		character := value[index]
+		if (character >= 'a' && character <= 'z') ||
+			(character >= 'A' && character <= 'Z') ||
+			(character >= '0' && character <= '9') {
+			continue
+		}
+		switch character {
+		case '.', '_', '~', '-':
+			continue
+		default:
+			return false
+		}
+	}
+	return true
 }

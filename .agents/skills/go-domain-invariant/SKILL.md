@@ -1,6 +1,6 @@
 ---
 name: go-domain-invariant
-description: "Domain invariants: Use when business terms, transitions, acceptance, violation, replay, or effect-order policy needs a decision, or when changed Go may violate accepted business rules. Own domain policy and conformance; Skip when transport, data/cache mechanics, security enforcement, or test structure is primary."
+description: "Domain invariants: Use for business terms, transitions, acceptance, violations, replay, effect order, or review. Own domain policy; Skip transport, data/cache mechanics, security, or test structure."
 ---
 
 # Go Domain Invariant

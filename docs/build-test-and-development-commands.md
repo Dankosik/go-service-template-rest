@@ -17,6 +17,14 @@ dependencies remain in the root `go.mod`. `make mod-check` verifies and checks
 Go-version consistency for both modules. Container tools and test dependencies
 are pinned at their owning command or test seam.
 
+<!-- profile:grpc:start -->
+Buf is pinned separately by `scripts/run-buf.sh` and installed into the
+repository tool cache with an isolated `go install ...@version`. Buf explicitly
+does not recommend sharing its dependency graph through a project's Go tools
+module. Protobuf generation needs neither an ambient `protoc` binary nor a Buf
+account; the official Go plugins remain pinned in `tools/go.mod`.
+<!-- profile:grpc:end -->
+
 Keep the Go and BuildKit caches between runs. `gosec` uses the normal Go build
 cache. GitHub's race, coverage, and integration jobs key their cache only from
 the runtime `go.sum`; jobs that execute pinned tools also include
@@ -87,7 +95,8 @@ is not deletion proof.
 make template-init \
   MODULE=github.com/acme/orders \
   CODEOWNER=@acme/backend \
-  DATABASE=none
+  DATABASE=none \
+  GRPC=none
 make template-init-check
 ```
 
@@ -99,6 +108,12 @@ derived README; preserves an existing `.env`; and tidies both modules.
 and tool surfaces. `DATABASE=postgres` retains them. The complete agent
 workflow and its harness files are always retained and are not an
 initialization profile.
+<!-- profile:grpc:start -->
+`GRPC=none` removes the native gRPC runtime, protobuf workflow, generated
+reference, gRPC-specific docs/tests/config, and their module dependencies.
+`GRPC=enabled` retains them, while the runtime listener stays disabled until
+its config explicitly selects an address and transport security mode.
+<!-- profile:grpc:end -->
 
 The template source checkout may run the command without arguments for normal
 local setup; it keeps the template module and CODEOWNERS unchanged while
@@ -115,7 +130,7 @@ provide a real module path and an owner in `@user` or `@org/team` form.
 | `make check` | Project structure, `fmt-check`, `lint`, and ordinary unit tests |
 | `make ci-local` | Fast host-toolchain CI aggregate: manifest drift, project structure, format, lint, deep lint, race, coverage report, generated contracts, Go security, and secret scan |
 | `make check-full` | `delivery-quality` and `ci-local` plus required Docker integration, runtime image, migration, and image-security proof |
-| `make pr-check BASE_REF=origin/main` | `check-full` plus template initialization, downloaded-module verification, and OpenAPI breaking comparison when the base contains the spec |
+| `make pr-check BASE_REF=origin/main` | `check-full` plus template initialization, downloaded-module verification, and OpenAPI/Protobuf breaking comparison when the base contains each contract |
 
 Module validation is split without weakening the aggregate:
 
@@ -247,10 +262,11 @@ Effective filtered coverage is the merge gate; raw coverage is informational.
 Coverage uses `-covermode=set`: the gate asks whether each statement executed,
 not how many concurrent executions occurred, so the more expensive atomic
 counter mode adds no evidence. See [Go coverage modes](https://go.dev/blog/cover).
-The configured filter excludes generated OpenAPI and sqlc code, the
-test-support `internal/infra/telemetry/telemetrytest` package, and `cmd`
-composition roots. Integration-tag coverage is separate. Repository maintainers
-own `COVERAGE_MIN` changes and must record the rationale. Treat
+The configured filter excludes generated OpenAPI, sqlc, and protobuf code,
+test-support packages, process-only `cmd` composition roots, and the dedicated
+gRPC benchmark executable. The production gRPC adapters and reference service
+remain inside the gate. Integration-tag coverage is separate. Repository
+maintainers own `COVERAGE_MIN` changes and must record the rationale. Treat
 `COVERAGE_MIN` as a floor rather than a target; add tests for meaningful risk,
 not to manufacture a fixed percentage-point margin.
 
@@ -312,7 +328,7 @@ the claim.
 `make test-watch` passes `-vet=off` to the same current-tree test path as
 `make test`; mandatory lint remains the single `govet` owner.
 
-## OpenAPI, SQLC, and generated drift
+## OpenAPI, Protobuf, SQLC, and generated drift
 
 ```bash
 make openapi-generate
@@ -322,7 +338,21 @@ make openapi-runtime-contract-check
 make openapi-lint
 make openapi-validate
 make openapi-check
+```
 
+<!-- profile:grpc:start -->
+```bash
+make proto-format
+make proto-format-check
+make proto-generate
+make proto-lint
+make proto-drift-check
+make proto-check
+BASE_REF=origin/main make proto-breaking
+```
+<!-- profile:grpc:end -->
+
+```bash
 make sqlc-generate
 make sqlc-check
 ```
@@ -348,6 +378,21 @@ For a PR comparison:
 git show origin/main:api/openapi/service.yaml > /tmp/service-base.yaml
 make openapi-breaking BASE_OPENAPI=/tmp/service-base.yaml
 ```
+
+<!-- profile:grpc:start -->
+`api/proto/**/*.proto` is the protobuf authority and `internal/gen/proto` is
+derived output. `proto-check` rejects formatting drift, missing public contract
+documentation, lint violations, and generated-code drift; it also proves the
+isolated four-cardinality example while it exists. When no production `.proto`
+exists, production checks are stable no-ops; the upstream reference remains
+executable evidence. New Go contracts must use Edition 2023 with schema-owned
+`API_OPAQUE`. A retained proto2/proto3 path requires
+`BASE_REF=<comparison-ref> make proto-check`; the same syntax at a path absent
+from that base is rejected.
+`proto-breaking` requires a readable `BASE_REF`, distinguishes an absent base
+contract from an invalid ref, and applies Buf `FILE` rules. See
+[Native gRPC](grpc.md) for schema, server, client, streaming, and runtime use.
+<!-- profile:grpc:end -->
 
 ## Security
 
@@ -433,10 +478,23 @@ system timezone database.
 ```bash
 make run
 make build
+make build-pgo PGO_PROFILE=.artifacts/bench/profiles/cpu.pprof
 make vendor
 ```
 
-`run` loads `.env` when present. `build` writes `bin/service`.
+`run` loads `.env` when present. `build` writes `bin/service` and defaults to
+`-pgo=off`, so an accidentally copied `default.pgo` cannot change a release.
+Every local or Docker build with PGO activated requires an existing,
+non-automatic profile that `go tool pprof` can read before compilation starts.
+`build-pgo` is the explicit local entrypoint and builds the same binary with
+that exact input. `docker-build` accepts the same `PGO_PROFILE`; an activated
+profile must be a repository-relative file inside the Docker build context.
+
+The template does not ship a universal profile. Production PGO input must come
+from the same service and a representative workload, remain private delivery
+evidence with revision/workload/toolchain/hash metadata, and be refreshed after
+material workload, compiler, schema, or hot-path changes. Use
+`PGO_PROFILE=off` to rebuild the rollback artifact.
 
 ## Benchmarking
 
@@ -478,14 +536,41 @@ make bench-db-compare
 
 make bench-http
 make bench-http-inspect
+```
+
+<!-- profile:grpc-reference-benchmark:start -->
+```bash
+make bench-grpc-inspect
+make bench-grpc-smoke
+make bench-grpc
+```
+<!-- profile:grpc-reference-benchmark:end -->
+
+```bash
 make benchmark-infra-check
 ```
 
 Go and in-process HTTP benchmarks use the host toolchain of the selected
 environment. Database benchmarks use the existing Testcontainers seam.
 External HTTP load uses the digest-pinned k6 image owned by
-`scripts/dev/benchmark.sh`. Workload, comparison, and evidence rules are in
+`scripts/dev/benchmark.sh`.
+<!-- profile:grpc-reference-benchmark:start -->
+The gRPC targets use that same image against a
+benchmark-only loopback command composed through the production gRPC adapter:
+`bench-grpc-inspect` checks the canonical schema and scenario,
+`bench-grpc-smoke` proves all four RPC cardinalities once, and `bench-grpc`
+runs the warmup plus measured synthetic workload.
+
+The main gRPC controls are `GRPC_BENCH_WORKLOAD_ID`,
+`GRPC_BENCH_PAYLOAD_BYTES`, `GRPC_BENCH_STREAM_MESSAGES`, `GRPC_BENCH_VUS`,
+`GRPC_BENCH_WARMUP_DURATION`, `GRPC_BENCH_DURATION`,
+`GRPC_BENCH_RPC_TIMEOUT`, and `GRPC_BENCH_RAW_SAMPLES`. Results are
+mode-scoped under `.artifacts/bench/grpc/`. A Docker daemon that can run the
+repository-pinned image is mandatory for inspect, smoke, and synthetic
+activation; shell lifecycle proof alone does not validate the k6 schema or
+claim performance. Workload, comparison, and evidence rules are in
 [Benchmarking](benchmarking.md).
+<!-- profile:grpc-reference-benchmark:end -->
 
 For faster fresh-Droplet startup, source the non-secret reference produced by
 `benchmark-remote-image`, then return to the normal least-privilege context:

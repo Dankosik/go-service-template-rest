@@ -123,6 +123,15 @@ that the artifact is vulnerability-free or that a deployment is healthy.
   verifier paths remain mandatory.
 - `railway.toml` owns only generic, non-secret Railway source-build policy.
 
+<!-- profile:grpc:start -->
+For the gRPC profile, protobuf source owns generated Go. Merge CI runs the
+pinned Buf lint, drift, schema-policy, malformed-input, invalid-base,
+absent-base, and breaking-change self-test. The schema-policy gate uses the
+event comparison commit to reject new proto2/proto3 paths while allowing a
+legacy path retained at that base; pull requests compare an owned production
+schema with the same explicit base commit.
+<!-- profile:grpc:end -->
+
 Timed-out, cancelled, missing, or failed required checks are not passing
 evidence. Empty, mixed, unrecognized, manually dispatched, or unresolvable path
 sets run the full matrix. Secret and repository-integrity proof remains active
@@ -211,6 +220,14 @@ through a ruleset in one repository.
   repeated flake/fuzz execution, fresh container integration, benchmark
   lifecycle verification, current vulnerability analysis, and a fresh runtime
   image scan.
+
+<!-- profile:grpc:start -->
+For the gRPC profile, `make pr-check BASE_REF=origin/main` uses the same base
+for protobuf compatibility when `api/proto` exists. The
+`template-minimal-feature` CI job also initializes the native gRPC profile and
+proves retained adapters, generation, all-cardinality compilation, and
+idempotence.
+<!-- profile:grpc:end -->
 
 Use the smallest command that proves the current change while iterating. Before
 claiming image, migration, or deployment readiness, use the Docker-backed gate

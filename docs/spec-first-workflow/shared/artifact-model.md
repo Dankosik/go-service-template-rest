@@ -59,14 +59,49 @@ status: draft | ready | blocked | done
 ```
 
 - `draft`: still being authored or repaired.
-- `ready`: the artifact has closed every decision it owns, and its next consumer can act without semantic invention. A ready `tasks.md` additionally closes the inputs and proof for its next executable task or real parallel wave plus any decision that could invalidate that work.
+- `ready`: the artifact has closed every decision it owns, and its next consumer can act without semantic invention. A ready `tasks.md` additionally closes the inputs and proof for its next executable acceptance unit or real parallel wave plus any decision that could invalidate that work.
 - `blocked`: name the missing decision/evidence and reopen owner. This also
   represents `implementation complete; verification incomplete` when the
   implementation is finished but required proof is unavailable; record the
   unverified claim, narrower evidence, and next proof or reopen owner.
-- `done`: use for execution/closeout state, not as a substitute for evidence.
+- `done`: use for execution/closeout state, not as a substitute for evidence. A
+  `tasks.md` ledger reaches `done` only after the final accepted unit also
+  passes its global `Completion` condition.
 
 When review is triggered, `PASS` or dispositioned `CONCERNS` can move an artifact to `ready`; `FAIL` requires repair or reopening and fresh review.
+
+For `tasks.md`, the implementation phase's [root acceptance
+contract](../phases/implementation-validation-closeout.md#stop-rule) authorizes
+the state transition. When an acceptance unit passes mapped proof and any
+triggered independent review, change every member task to `[x]` together. Record
+one compact unit receipt only when proof must survive a checkout, session, or
+external-environment boundary:
+
+```markdown
+  - Accepted: <unit or task IDs>; evidence: <command or source and result>; candidate: <bounded diff or commit/tree>
+```
+
+Use `current bounded diff` for same-checkout proof and a commit/tree identity
+only when proof crosses a checkout or integration boundary. A failed triggered
+review leaves the unit unchecked for repair. When implementation is complete
+but required proof is blocked, leave it unchecked, set the ledger to `status:
+blocked`, and append or replace one unit-local line:
+
+```markdown
+  - Blocked: <unit or task IDs>; unverified: <claim>; evidence: <narrower evidence>; next proof owner: <owner and condition>; candidate: <bounded diff or commit/tree>
+```
+
+Replace that line with the accepted receipt after proof instead of accumulating
+attempts. Do not add a second lifecycle field.
+
+Record a passing unit immediately: until its member checkboxes are `[x]`, the
+unit satisfies no dependency and no dependent task or new planned wave may
+start. Members already running inside the same accepted planned wave may
+continue. A receipt alias closes mechanically in the same ledger edit once its
+named accepted receipt exists; it creates no candidate or proof. Task selection
+and resume derive completed and remaining work from the persisted checkboxes.
+After the final accepted task and any aliases, set `status: done` in the same
+edit.
 
 Add a reviewed revision or verdict only when a review actually occurred. Do not maintain parallel fields for phase state, artifact lifecycle, record validity, session boundary, handoff readiness, waiver, and routing revision unless a concrete external consumer requires them.
 
@@ -84,7 +119,7 @@ file owns whether and when `tasks.md` is persisted, its lifecycle status,
 active-wave resume state, and removal; it does not define a second ledger
 schema.
 
-When an active wave must survive compaction, interruption, or session handoff, add one compact `Active wave` block to this same ledger with the adjusted member IDs, accepted integration base, task-to-App-task/worktree state, disposable candidate identity when one exists, and next root action or open causal class. Update it only at a material transition and remove or collapse it into task evidence after atomic wave acceptance; do not create a scheduler file or reconstruct it from chat.
+When an active wave must survive compaction, interruption, or session handoff, add one compact `Active wave` block to this same ledger with the acceptance-unit IDs, accepted integration base, unit-to-App-task/worktree state, frozen candidate identity when one exists, and next root action or open causal class. Update it only at a material transition and remove or collapse it into task evidence after atomic unit acceptance; do not create a scheduler file or reconstruct it from chat.
 
 A useful `workflow-plan.md` usually needs:
 
@@ -113,7 +148,10 @@ Use additional fields only when they change an action or verdict.
 2. Otherwise read `workflow-plan.md` when it exists for a real multi-session task.
 3. Then read the decision artifact named there: usually `spec.md`, followed by only the design, test, research, or rollout files needed for the next action.
 4. If artifacts conflict, stop and reopen the narrowest decision owner; do not merge the conflict silently.
-5. Before continuing an implementation task, rerun the smallest ledger proof that can detect workspace drift affecting the next unchecked task; broaden only when the result or changed surface requires it.
+5. Before continuing an implementation unit, compare its recorded tree and proof
+   preconditions with the workspace. Reuse the receipt when they match; when they
+   drift or the receipt is unavailable, run the smallest ledger proof that can
+   detect the affected change and broaden only when its result requires it.
 
 Keep only active task bundles. At closeout, remove execution-only state such as
 `tasks.md`, `workflow-plan.md`, and `Active wave`. Retain a completed spec or

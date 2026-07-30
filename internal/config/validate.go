@@ -26,6 +26,11 @@ func validateConfig(cfg *Config, unknownKeys []string) error {
 	if err := validateHTTPConfig(&cfg.HTTP); err != nil {
 		return err
 	}
+	// profile:grpc:start
+	if err := validateGRPCConfig(&cfg.GRPC); err != nil {
+		return err
+	}
+	// profile:grpc:end
 	if err := validateHealthConfig(cfg.Health); err != nil {
 		return err
 	}
@@ -227,6 +232,144 @@ func validateHTTPConnectionCeiling(cfg HTTPConfig) error {
 		cfg.MaxInFlight,
 	)
 }
+
+// profile:grpc:start
+
+func validateGRPCConfig(cfg *GRPCConfig) error {
+	server := &cfg.Server
+	server.Addr = strings.TrimSpace(server.Addr)
+	server.TransportSecurity = strings.ToLower(strings.TrimSpace(server.TransportSecurity))
+	server.TLS.CertFile = strings.TrimSpace(server.TLS.CertFile)
+	server.TLS.KeyFile = strings.TrimSpace(server.TLS.KeyFile)
+
+	if err := validateGRPCCapacityBounds(*server); err != nil {
+		return err
+	}
+	if math.IsNaN(server.AccessLogSuccessSampleRate) ||
+		math.IsInf(server.AccessLogSuccessSampleRate, 0) ||
+		server.AccessLogSuccessSampleRate < 0 ||
+		server.AccessLogSuccessSampleRate > 1 {
+		return fmt.Errorf(
+			"%w: grpc.server.access_log_success_sample_rate must be finite and in range [0,1]",
+			ErrValidate,
+		)
+	}
+	if server.AccessLogSlowThreshold < 0 {
+		return fmt.Errorf(
+			"%w: grpc.server.access_log_slow_threshold must be non-negative",
+			ErrValidate,
+		)
+	}
+	switch server.TransportSecurity {
+	case "", "plaintext", "tls":
+	default:
+		return fmt.Errorf(
+			"%w: grpc.server.transport_security must be one of plaintext or tls",
+			ErrValidate,
+		)
+	}
+	if !server.Enabled {
+		return nil
+	}
+	if err := validateGRPCAddress(server.Addr); err != nil {
+		return err
+	}
+
+	switch server.TransportSecurity {
+	case "plaintext":
+		if !server.AllowPlaintext {
+			return fmt.Errorf(
+				"%w: grpc.server.allow_plaintext must be true when transport_security is plaintext",
+				ErrValidate,
+			)
+		}
+		if server.TLS.CertFile != "" || server.TLS.KeyFile != "" {
+			return fmt.Errorf(
+				"%w: grpc.server.tls cert_file and key_file must be empty when transport_security is plaintext",
+				ErrValidate,
+			)
+		}
+	case "tls":
+		if server.AllowPlaintext {
+			return fmt.Errorf(
+				"%w: grpc.server.allow_plaintext must be false when transport_security is tls",
+				ErrValidate,
+			)
+		}
+		if server.TLS.CertFile == "" || server.TLS.KeyFile == "" {
+			return fmt.Errorf(
+				"%w: grpc.server.tls cert_file and key_file are required when transport_security is tls",
+				ErrValidate,
+			)
+		}
+	default:
+		return fmt.Errorf(
+			"%w: grpc.server.transport_security is required when grpc.server.enabled is true",
+			ErrValidate,
+		)
+	}
+	return nil
+}
+
+func validateGRPCCapacityBounds(cfg GRPCServerConfig) error {
+	if cfg.MaxConnections <= 0 || cfg.MaxConnections > 1_000_000 {
+		return fmt.Errorf("%w: grpc.server.max_connections must be in range [1,1000000]", ErrValidate)
+	}
+	if cfg.MaxConcurrentRPCs <= 0 || cfg.MaxConcurrentRPCs > 100_000 {
+		return fmt.Errorf("%w: grpc.server.max_concurrent_rpcs must be in range [1,100000]", ErrValidate)
+	}
+	if cfg.MaxConcurrentStreams <= 0 || cfg.MaxConcurrentStreams > 100_000 {
+		return fmt.Errorf("%w: grpc.server.max_concurrent_streams must be in range [1,100000]", ErrValidate)
+	}
+	if cfg.MaxHeaderListBytes <= 0 || cfg.MaxHeaderListBytes > math.MaxInt32 {
+		return fmt.Errorf(
+			"%w: grpc.server.max_header_list_bytes must be in range [1,%d]",
+			ErrValidate,
+			math.MaxInt32,
+		)
+	}
+	if cfg.MaxReceiveMessageBytes <= 0 || cfg.MaxReceiveMessageBytes > math.MaxInt32 {
+		return fmt.Errorf(
+			"%w: grpc.server.max_receive_message_bytes must be in range [1,%d]",
+			ErrValidate,
+			math.MaxInt32,
+		)
+	}
+	if cfg.MaxSendMessageBytes <= 0 || cfg.MaxSendMessageBytes > math.MaxInt32 {
+		return fmt.Errorf(
+			"%w: grpc.server.max_send_message_bytes must be in range [1,%d]",
+			ErrValidate,
+			math.MaxInt32,
+		)
+	}
+
+	connectionCapacity := uint64(cfg.MaxConnections) * uint64(cfg.MaxConcurrentStreams)
+	if uint64(cfg.MaxConcurrentRPCs) > connectionCapacity {
+		return fmt.Errorf(
+			"%w: grpc.server.max_concurrent_rpcs must be <= max_connections * max_concurrent_streams (%d)",
+			ErrValidate,
+			connectionCapacity,
+		)
+	}
+	return nil
+}
+
+func validateGRPCAddress(addr string) error {
+	if addr == "" {
+		return fmt.Errorf("%w: grpc.server.addr cannot be empty when grpc.server.enabled is true", ErrValidate)
+	}
+	_, rawPort, err := net.SplitHostPort(addr)
+	if err != nil {
+		return fmt.Errorf("%w: grpc.server.addr must be host:port", ErrValidate)
+	}
+	port, err := strconv.ParseUint(rawPort, 10, 16)
+	if err != nil || port == 0 {
+		return fmt.Errorf("%w: grpc.server.addr port must be in range [1,65535]", ErrValidate)
+	}
+	return nil
+}
+
+// profile:grpc:end
 
 func validateObservabilityConfig(cfg *ObservabilityConfig) error {
 	cfg.Metrics.Addr = strings.TrimSpace(cfg.Metrics.Addr)

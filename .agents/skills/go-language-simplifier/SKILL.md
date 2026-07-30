@@ -1,6 +1,6 @@
 ---
 name: go-language-simplifier
-description: "Go readability: Use when behaviorally correct, locally owned Go is hard to understand or change because of control flow, predicates, naming, or helper shape. Own behavior-preserving simplification review; Skip when Go semantics, package ownership, or explicit whole-diff structural overbuild is primary."
+description: "Go readability: Use when correct local Go is obscured by control flow, predicates, naming, or helpers. Own behavior-preserving simplification; Skip Go semantics, package ownership, or whole-diff overbuild."
 ---
 
 # Go Language Simplifier

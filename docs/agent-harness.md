@@ -16,6 +16,25 @@ The workflow instructions in this repository are harness-neutral. This document 
 - Treat every Codex App `collaboration.spawn_agent` lane as a built-in read-only subagent, including one dispatched with `agent_type: "worker"`; never use it for an implementation write lane or as a substitute for the separate App task above ([OpenAI Subagents](https://learn.chatgpt.com/docs/agent-configuration/subagents.md)).
 - When the current session lacks the needed native control, do the work root-locally under the owning phase's local-execution rules and state the missing control; do not invent a substitute.
 
+## Instruction Loading Map
+
+Keep cross-harness gates in `AGENTS.md`, because every supported harness loads
+that file through its native bootstrap. Keep phase, shared, and harness method
+behind the conditional read gate; loading every owner permanently spends
+context and attention without making its trigger more precise.
+
+| Harness | Guaranteed bootstrap | Conditional content | Current verification |
+| --- | --- | --- | --- |
+| Codex | Codex builds the `AGENTS.md` chain before work, once per run, subject to `project_doc_max_bytes` ([AGENTS.md discovery](https://developers.openai.com/codex/guides/agents-md)). | Skill name/description metadata is discoverable first; full `SKILL.md` loads only after selection. Custom subagents exist only when their `[agents.<name>].config_file` registry entry resolves ([Skills](https://learn.chatgpt.com/docs/build-skills), [Config reference](https://learn.chatgpt.com/docs/config-file/config-reference#configtoml)). | Start a fresh run with `codex --ask-for-approval never "List the active instruction sources and summarize their loading gate."`; use the session JSONL or opt-in TUI log to inspect the actual chain. |
+| Claude Code | Root `CLAUDE.md` imports `AGENTS.md` with `@AGENTS.md`; imports enter startup context. | Skills remain discoverable until invoked. Ordinary custom subagents receive the loaded `CLAUDE.md` hierarchy; use a role's `skills` field only when its full skill content must be present at lane startup ([Memory](https://code.claude.com/docs/en/memory), [Subagents](https://code.claude.com/docs/en/sub-agents)). | `/memory` shows loaded instruction files. Use the `InstructionsLoaded` hook when a trace must prove which file loaded, when, and why. |
+| Qwen Code | Qwen loads project `AGENTS.md`, `QWEN.md`, and local context at session start ([Memory](https://qwenlm.github.io/qwen-code-docs/en/users/features/memory/)). | Skills are model-invoked from their descriptions and their bodies load when selected; project subagents are discovered from `.qwen/agents/` ([Skills](https://qwenlm.github.io/qwen-code-docs/en/users/features/skills/), [Subagents](https://qwenlm.github.io/qwen-code-docs/en/users/features/sub-agents/)). | `/memory` lists loaded instruction files; `/skills` and `/agents` expose the discoverable adapters. |
+
+Structural checks prove bootstrap files, imports, registries, and mirrors. They
+cannot prove that a stochastic model selected a conditional pointer. Use
+[Workflow Behavior Evals](spec-first-workflow/shared/workflow-behavior-evals.md)
+for the trace boundary, including the order between the required read and the
+first governed action.
+
 ## Control Map
 
 | Workflow concept | Codex App | Claude Code | Qwen Code |
@@ -30,7 +49,7 @@ The workflow instructions in this repository are harness-neutral. This document 
 
 ## Model And Effort Selection
 
-The dispatch policy lives in the [implementation phase](spec-first-workflow/phases/implementation-validation-closeout.md#worker-execution) and in [Subagents And Handoff](spec-first-workflow/shared/subagents-and-handoff.md): the root explicitly and independently selects the best-suited available model and a task-matched reasoning effort for every worker and read-only lane, and never inherits a harness default when the controls exist. This table owns the per-harness tiers:
+The dispatch policy lives in the [implementation phase](spec-first-workflow/phases/implementation-validation-closeout.md#worker-execution) and in [Subagents And Handoff](spec-first-workflow/shared/subagents-and-handoff.md): the root explicitly and independently selects the best-suited available model and an acceptance-unit-matched reasoning effort for every worker and read-only lane, and never inherits a parent epic's tier when the controls exist. This table owns the per-harness tiers:
 
 | Task class | Codex App | Claude Code | Qwen Code |
 | --- | --- | --- | --- |
@@ -40,13 +59,13 @@ The dispatch policy lives in the [implementation phase](spec-first-workflow/phas
 | Root orchestration or work with unresolved complex reasoning | Sol | Opus (`claude-opus-5`) | `inherit`, or a stronger configured model ID |
 | Explicit user request for the most capable model | — | Fable (`claude-fable-5`) | The strongest configured model ID |
 
-- **Codex App implementation is Terra-first after clear mechanical work.** Once behavior, mechanism, ownership, editable boundary, proof, and stop condition are closed, use Terra at `medium`; raise effort to `high` or `xhigh` for complex, cross-cutting, protected-domain, or high-consequence execution. Those properties, file count, and overall outcome importance do not by themselves justify Sol. Use Sol for implementation only when a representative evaluation or a diagnosed prior Terra `xhigh` result shows a capability gap after brief and route defects are excluded, and state that gap in the dispatch brief. Keep unresolved architecture, cause, or route discovery root-local instead of delegating it to a stronger Worker.
-- **Claude Code runs a two-model ladder.** Sonnet 5 carries every mechanical and ordinary lane; Opus 5 carries the root session and every complex, cross-cutting-refactoring, or high-consequence lane. Haiku is no longer a default tier — select it only for a lane that is both trivial and latency-bound, and say why. Run the root on Opus 5 (`--model opus`, or the app's model selector) whenever it orchestrates workers or owns acceptance for a structured or orchestrated outcome.
+- **Codex App implementation is Terra-first after clear mechanical work.** Once behavior, mechanism, ownership, editable boundary, proof, and stop condition are closed, use Terra at `medium`. Raise effort only when this leaf unit still contains a named reasoning pressure and representative evidence shows a quality gain; cross-cutting scope, protected-domain labels, file count, parent-epic importance, and a previous failure are not sufficient alone. Use Sol or `max` only for the highest-consequence unresolved boundary after brief and route defects are excluded and lower tiers are shown insufficient. Keep unresolved architecture, cause, or route discovery root-local instead of delegating it to a stronger Worker.
+- **Claude Code runs a two-model ladder.** Sonnet 5 carries every mechanical and ordinary lane; Opus 5 carries the root session and every complex, cross-cutting-refactoring, or high-consequence lane. Haiku is no longer a default tier — select it only for a lane that is both trivial and latency-bound, and say why. Run the root on Opus 5 (`--model opus`, or the app's model selector) whenever it orchestrates workers or coordinates a structured or orchestrated outcome.
 - Qwen Code model tiers are provider-specific: the `model` frontmatter in `.qwen/agents/*.md` accepts `inherit`, `fast`, a bare model ID, or `authType:modelId`. `fast` resolves to the configured `fastModel` and falls back to `inherit` when none is set; `inherit` (or an omitted field) uses the session model. Pick exact model IDs from the models configured for the active provider rather than hardcoding them. Qwen Code does not yet expose a per-agent reasoning-effort field, so a lane inherits the session effort.
 
 - Claude Code accepts the aliases `haiku`, `sonnet`, `opus`, and `fable` on the `Agent` tool and in agent frontmatter; the exact model IDs are for SDK and API dispatch.
 - **Defaults are fallbacks, overrides are the contract.** The `model:` frontmatter in `.claude/agents/*.md` records each role's tier default; it never substitutes for the per-dispatch choice. Claude Code resolves a lane's model as: `CLAUDE_CODE_SUBAGENT_MODEL` env var → the `model` parameter on the `Agent` tool call → the definition's `model` frontmatter → the session model. The root passes a dispatch-time `model` whenever task difficulty, evidence volume, latency/cost, or consequence departs from the role default; the parameter also sticks for follow-up messages to that lane.
-- Reasoning effort has no per-dispatch parameter. It resolves as: `CLAUDE_CODE_EFFORT_LEVEL` env var → the definition's `effort` frontmatter → the session effort → the model default. **The root therefore selects effort by selecting the role**, which is why the tiers exist as separate definitions rather than as one worker with a parameter: write lanes `worker-mechanical` (`low`), `worker-standard` (`medium`), `worker-critical` (`high`); review lanes `evidence-agent` (`low`), `critical-reviewer-agent` and `critical-adjudicator-agent` (`xhigh`). A role that leaves `effort` unset inherits the session level, so dispatching every write lane through the generic `claude` agent silently runs mechanical work at whatever the session happens to be set to.
+- Reasoning effort has no per-dispatch parameter. It resolves as: `CLAUDE_CODE_EFFORT_LEVEL` env var → the definition's `effort` frontmatter → the session effort → the model default. **The root therefore selects effort by selecting the role**, which is why the tiers exist as separate definitions rather than as one worker with a parameter: write lanes `worker-mechanical` (`low`), `worker-standard` (`medium`), `worker-critical` (`high`); review lanes `evidence-agent` (`low`), `task-acceptance-agent` (`medium`), and `critical-reviewer-agent` or `critical-adjudicator-agent` (`xhigh`). A role that leaves `effort` unset inherits the session level, so dispatching every write lane through the generic `claude` agent silently runs mechanical work at whatever the session happens to be set to.
 - Map reasoning effort to the task, not habit ([OpenAI guidance](https://developers.openai.com/api/docs/guides/latest-model?model=gpt-5.6#prompting-best-practices), [Anthropic guidance](https://support.claude.com/en/articles/8664678-change-the-model-effort-and-thinking-settings)):
 
 | Effort | Use for |
@@ -57,7 +76,7 @@ The dispatch policy lives in the [implementation phase](spec-first-workflow/phas
 | `max` | The hardest architecture, research, or formal-reasoning work when lower effort is demonstrably insufficient. |
 
 - A wrong result is evidence to improve the diagnosis, brief, or route, not by itself a reason to raise effort. Implementation correction follows its phase-owned frozen-finding contract and never raises effort merely to keep a repair loop active.
-- Required non-implementation re-review remains at least as capable (model and effort) as the review that found the issue. Implementation correction uses delta-only verification instead of re-review.
+- Required re-review remains at least as capable (model and effort) as the review that found the issue. Implementation correction uses delta-only root verification; when independent implementation review remains triggered, the fixed candidate enters a fresh one-shot lane.
 
 ## Goal Mechanics
 
@@ -114,11 +133,11 @@ Vendor authority: [Subagents](https://code.claude.com/docs/en/sub-agents), in pa
 
 ### Dispatch
 
-- When Worker execution is selected, keep one write worker per ready ledger task: one background `Agent` lane with `isolation: "worktree"`. Several write workers may run only as members of a positively independent planned wave. The worktree is the isolation boundary; the root still owns acceptance and integration per the implementation phase.
+- When Worker execution is selected, keep one write worker per ready acceptance unit: one background `Agent` lane with `isolation: "worktree"`. Several write workers may run only as members of a positively independent planned wave. The worktree is the isolation boundary; the root owns candidate intake, acceptance, and integration.
 - Pass `isolation` as a dispatch parameter rather than moving it into the role's frontmatter. A dispatch-parameter worktree branches from the parent's `HEAD`, which is the accepted integrated base the wave needs; frontmatter isolation follows the `--worktree` base rule and branches from the repository's default branch unless [`worktree.baseRef`](https://code.claude.com/docs/en/worktrees#choose-the-base-branch) is `"head"`.
-- When the exact accepted `tasks.md` is visible in the worker worktree, dispatch
-  its path and task ID plus only live facts absent from the ledger. Inline the
-  full outcome-first brief only when that ledger revision is unavailable.
+- Dispatch only after the exact accepted `tasks.md` revision is in the base
+  visible to the worker. Pass its path and acceptance-unit or task IDs plus only
+  live facts absent from the ledger.
 - A background worker keeps every MCP tool but a reduced built-in set: `Read`, `Grep`, `Glob`, `Bash`, `PowerShell`, `Edit`, `Write`, `NotebookEdit`, `WebFetch`, `WebSearch`, `TodoWrite`, `Skill`, `ToolSearch`, `EnterWorktree`, `ExitWorktree`, `Monitor`, `TaskStop`, `SendMessage`, and `Artifact`. That covers implementation; do not narrow it further with a `tools` allowlist unless the task genuinely requires less.
 
 ### What crosses into a worker
@@ -135,7 +154,9 @@ This is why [Execution-Ready Dispatch](spec-first-workflow/phases/implementation
 
 ### Monitor
 
-- Follow completion notifications instead of polling or narrating unchanged state.
+- Follow completion notifications and group relevant targets in one native wait
+  when available. An unchanged timeout preserves the existing disposition and
+  produces no new analysis, narration, message, or candidate inspection.
 - A completing worker returns its **agent ID**. Record it: the ID, not the display name, is the reliable address for everything below.
 - `/tasks` lists running and finished lanes for a human; the root does not need it to know a lane finished.
 
@@ -143,8 +164,11 @@ This is why [Execution-Ready Dispatch](spec-first-workflow/phases/implementation
 
 This is the loop that makes the root an orchestrator rather than a dispatcher.
 
-- Send the correction to the **same worker** with `SendMessage`, addressed by its agent ID. The worker retains its full history — previous tool calls, results, and reasoning — and continues from where it stopped rather than restarting. A completed worker auto-resumes on `SendMessage` with no new `Agent` invocation.
-- This works mid-task as well as after completion: a worker treats a message from the agent that launched it as ordinary task direction, including a course correction while it is still working.
+- After the worker returns a frozen candidate, send one batched correction to the
+  **same worker** with `SendMessage`, addressed by its agent ID. The worker
+  retains its full history and continues from where it stopped.
+- While the worker is active, message only a safety stop or an accepted-input
+  invalidation. Review findings wait for its returned frozen candidate.
 - Spawning a **new** worker instead of correcting the existing one is a defect, not a shortcut: it discards the context that makes the second attempt cheaper than the first. Replace a worker only for an execution stall that produces no new turn, or for an invalidated base, and then continue the same exact brief from the frozen candidate.
 - Address by agent ID, not by name. If a re-spawned worker has taken a name, `SendMessage` refuses the send rather than delivering to the wrong lane, and reports which agent the name now reaches.
 - A worker the **user** stopped does not auto-resume; `SendMessage` returns a refusal. That one needs a human to type into its transcript.
@@ -171,7 +195,20 @@ These worker roles exist only under `.claude/agents/`. They are deliberately not
 
 Read-only lanes follow [Subagents And Handoff](spec-first-workflow/shared/subagents-and-handoff.md): one distinct decision-changing question per lane, concurrency bounded by current capacity and independence, and read-only boundaries stated in each brief.
 
-The task list is the goal's step ledger and carries the same implementation-only restriction ([Claude Code Goal Mechanics](#claude-code-goal-mechanics)).
+Triggered independent implementation review opens a new one-shot lane with
+fresh context. Dispatch `task-acceptance-agent` for an ordinary bounded unit.
+Dispatch `critical-reviewer-agent` only for the highest-consequence boundary
+when current unit-specific evidence justifies the critical tier.
+
+In the Codex App, dispatch the selected role with no inherited root turns. In
+Claude Code and Qwen Code, start a new lane of that role; an implementation
+Worker or transcript-inheriting subtask/fork is not an independent reviewer.
+Pass only the `tasks.md` path and unit or task IDs, candidate location, and
+irreproducible external evidence allowed by the shared implementation-review
+independence contract. Never resume that reviewer for a different unit.
+
+Harness-native task lists remain execution controls. They do not replace the
+repository `tasks.md` ledger or receive its acceptance receipts.
 
 ## Repository Wiring
 

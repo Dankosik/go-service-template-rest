@@ -119,6 +119,11 @@ func bootstrapReportStage(
 			"config.overlay_count", len(loadOptions.ConfigOverlays),
 			"app.env", cfg.App.Env,
 			"http.addr", cfg.HTTP.Addr,
+			// profile:grpc:start
+			"grpc.enabled", cfg.GRPC.Server.Enabled,
+			"grpc.addr", cfg.GRPC.Server.Addr,
+			"grpc.transport_security", cfg.GRPC.Server.TransportSecurity,
+			// profile:grpc:end
 			"metrics.addr", cfg.Observability.Metrics.Addr,
 			"tracing.exporter", traceExporterState(traceEndpoint, telemetryInitErr),
 			// The endpoint can come from this service's own configuration or

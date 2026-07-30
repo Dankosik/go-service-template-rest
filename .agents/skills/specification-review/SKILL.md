@@ -1,6 +1,6 @@
 ---
 name: specification-review
-description: "Evidence boundary: Use when a fixed spec candidate needs a risk-triggered or explicitly requested read-only review. Own anchored findings and a PASS, CONCERNS, or FAIL verdict against current evidence and authorities; Skip when root self-review, editing, repair, or open-ended spec authoring is sufficient."
+description: "Evidence boundary: Use for risk-triggered or explicit read-only review of a fixed spec. Own anchored findings and PASS/CONCERNS/FAIL; Skip root self-review, editing, repair, or open-ended authoring."
 ---
 
 # Specification Review

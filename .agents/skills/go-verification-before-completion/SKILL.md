@@ -1,6 +1,6 @@
 ---
 name: go-verification-before-completion
-description: "Claim-scoped proof: Use when a correctness, readiness, or completion claim needs current evidence of equal scope. Own claim-to-command matching, result inspection, proof scope, and explicit gaps; Skip when code or tests must change, root cause is unknown, test strategy is unresolved, or implementation is still underway."
+description: "Claim-scoped proof: Use when correctness/readiness/completion needs current evidence. Own claim-command matching, scope, and gaps; Skip changes, unknown cause, unresolved strategy, or active implementation."
 ---
 
 # Go Verification Before Completion

@@ -211,6 +211,12 @@ jobs:
         if: steps.template_source.outputs.required == 'true'
         run: TEMPLATE_INIT_PROFILE=minimal make template-init-check GOLANGCI_LINT_BIN=golangci-lint
 
+      # profile:grpc:start
+      - name: Prove generated native gRPC service
+        if: steps.template_source.outputs.required == 'true'
+        run: TEMPLATE_INIT_PROFILE=grpc make template-init-check GOLANGCI_LINT_BIN=golangci-lint
+      # profile:grpc:end
+
   template-postgres-feature:
     if: needs.repo-integrity.outputs.expensive_required == 'true' && needs.repo-integrity.outputs.template_required == 'true'
     runs-on: ubuntu-latest
@@ -249,6 +255,10 @@ jobs:
     needs: repo-integrity
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        # profile:grpc:start
+        with:
+          fetch-depth: 0
+        # profile:grpc:end
 
       - name: Setup Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -278,6 +288,28 @@ jobs:
 
       - name: Lint OpenAPI rules
         run: make openapi-lint
+
+      # profile:grpc:start
+      - name: Verify Protobuf format, lint, generation drift, and failure branches
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BASE_SHA: ${{ github.event.before }}
+        run: |
+          case "${EVENT_NAME}" in
+            pull_request) BASE_SHA="${PR_BASE_SHA}" ;;
+            push) BASE_SHA="${PUSH_BASE_SHA}" ;;
+            *) BASE_SHA="$(git rev-parse HEAD^ 2>/dev/null || true)" ;;
+          esac
+          if [ -n "${BASE_SHA}" ] &&
+            [ "${BASE_SHA}" != "0000000000000000000000000000000000000000" ] &&
+            git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
+            BASE_REF="${BASE_SHA}" make proto-check
+          else
+            make proto-check
+          fi
+          bash ./scripts/ci/proto-check.sh
+      # profile:grpc:end
 
   openapi-breaking:
     if: github.event_name == 'pull_request' && needs.repo-integrity.outputs.expensive_required == 'true'
@@ -313,6 +345,11 @@ jobs:
       - name: Check OpenAPI breaking changes
         if: env.BASE_SPEC_FOUND == 'true'
         run: BASE_OPENAPI=/tmp/openapi-base.yaml make openapi-breaking
+
+      # profile:grpc:start
+      - name: Check Protobuf breaking changes
+        run: BASE_REF="${{ github.event.pull_request.base.sha }}" make proto-breaking
+      # profile:grpc:end
 
   test-race:
     if: needs.repo-integrity.outputs.expensive_required == 'true'

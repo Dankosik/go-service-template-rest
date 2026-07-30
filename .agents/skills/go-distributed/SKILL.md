@@ -1,6 +1,6 @@
 ---
 name: go-distributed
-description: "Distributed flow: Use when durable cross-service consistency, sagas, messages, replay, ordering, compensation, redrive, or reconciliation needs a decision, or when changed durable behavior needs review. Own distributed recovery policy and conformance; Skip when local transactions, synchronization, service lifecycle, or system topology is primary."
+description: "Distributed flow: Use for cross-service consistency, sagas, replay, ordering, compensation, redrive, reconciliation, or review. Own recovery; Skip local transactions, synchronization, lifecycle, or topology."
 ---
 
 # Go Distributed

@@ -1,6 +1,6 @@
 ---
 name: pre-spec-challenge
-description: "Pressure-test: Use when existing research or framing needs a few independent, discriminating questions before specification or planning. Own hidden assumptions, ownership, failure semantics, irreversible consequences, and rollout risk, plus the next owner; Skip when framing is blank, ordinary spec review is needed, or one isolated high-impact approval question is primary."
+description: "Pressure-test: Use when research/framing needs discriminating questions before spec/planning. Own hidden risks and next owner; Skip blank framing, ordinary review, or one approval question."
 ---
 
 # Pre Spec Challenge

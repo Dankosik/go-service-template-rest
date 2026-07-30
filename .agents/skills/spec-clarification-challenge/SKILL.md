@@ -1,6 +1,6 @@
 ---
 name: spec-clarification-challenge
-description: "Approval question: Use when one candidate-spec decision is high-impact, hard to reverse, or explicitly challenged. Own a read-only pressure test with evidence, options, a recommended option, and decision owner; Skip when framing is blank, whole-spec review is needed, or the clarification is low-impact."
+description: "Approval question: Use for one high-impact, hard-to-reverse, or challenged spec decision. Own read-only evidence/options/recommendation; Skip blank framing, whole-spec review, or low-impact clarification."
 ---
 
 # Spec Clarification Challenge

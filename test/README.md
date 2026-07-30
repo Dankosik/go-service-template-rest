@@ -36,6 +36,15 @@ Feature-author placement:
 | Endpoint plus real persistence plus bootstrap composition | Target the owning packages first, then use `test/` with the `integration` tag when a real database-backed flow is required to prove the combined contract. |
 | Generated drift for OpenAPI and SQLC | Use the owning make targets instead of integration tests. |
 
+<!-- profile:grpc:start -->
+The upstream/PostgreSQL profile's `grpc_process_integration_test.go` is
+intentionally broad:
+it builds and starts the production binary against the shared PostgreSQL
+harness, waits for both standard gRPC health and existing HTTP readiness, sends
+SIGTERM, and proves coordinated clean shutdown. Generated service behavior and
+all four RPC cardinalities remain in focused package/reference tests.
+<!-- profile:grpc:end -->
+
 Docker behavior:
 - Local `make test-integration` skips Docker-backed tests when Docker is unavailable.
 - CI sets `REQUIRE_DOCKER=1`, so Docker unavailability fails the job instead of silently skipping.

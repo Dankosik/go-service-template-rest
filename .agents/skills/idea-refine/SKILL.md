@@ -1,6 +1,6 @@
 ---
 name: idea-refine
-description: "Convergence: Use when a raw, solution-led, or ambiguous product idea still lacks one concrete direction worth engineering. Own the problem, outcome, core bet, MVP boundary, assumptions, and remaining decision; Skip when the direction is chosen and only engineering framing remains."
+description: "Convergence: Use when a raw or solution-led idea lacks one buildable direction. Own problem, outcome, MVP, assumptions, and decision; Skip when direction is chosen and only engineering framing remains."
 ---
 
 # Idea Refine
