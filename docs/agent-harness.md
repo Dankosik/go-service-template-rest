@@ -60,17 +60,17 @@ The dispatch policy lives in the [implementation phase](spec-first-workflow/phas
 | Explicit user request for the most capable model | — | Fable (`claude-fable-5`) | The strongest configured model ID |
 
 - **Codex App implementation is Terra-first after clear mechanical work.** Once behavior, mechanism, ownership, editable boundary, proof, and stop condition are closed, use Terra at `medium`. Raise effort only when this leaf unit still contains a named reasoning pressure and representative evidence shows a quality gain; cross-cutting scope, protected-domain labels, file count, parent-epic importance, and a previous failure are not sufficient alone. Use Sol or `max` only for the highest-consequence unresolved boundary after brief and route defects are excluded and lower tiers are shown insufficient. Keep unresolved architecture, cause, or route discovery root-local instead of delegating it to a stronger Worker.
-- **Claude Code runs a two-model ladder.** Sonnet 5 carries every mechanical and ordinary lane; Opus 5 carries the root session and every complex, cross-cutting-refactoring, or high-consequence lane. Haiku is no longer a default tier — select it only for a lane that is both trivial and latency-bound, and say why. Run the root on Opus 5 (`--model opus`, or the app's model selector) whenever it orchestrates workers or coordinates a structured or orchestrated outcome.
+- **Claude Code runs a two-model ladder.** Sonnet 5 carries every mechanical and ordinary lane; Opus 5 carries the root session and every complex, cross-cutting-refactoring, or high-consequence lane. Haiku is no longer a default tier — select it only for a trivial lane when current task evidence or representative evaluation shows no material quality loss, and say why. Run the root on Opus 5 (`--model opus`, or the app's model selector) whenever it orchestrates workers or coordinates a structured or orchestrated outcome.
 - Qwen Code model tiers are provider-specific: the `model` frontmatter in `.qwen/agents/*.md` accepts `inherit`, `fast`, a bare model ID, or `authType:modelId`. `fast` resolves to the configured `fastModel` and falls back to `inherit` when none is set; `inherit` (or an omitted field) uses the session model. Pick exact model IDs from the models configured for the active provider rather than hardcoding them. Qwen Code does not yet expose a per-agent reasoning-effort field, so a lane inherits the session effort.
 
 - Claude Code accepts the aliases `haiku`, `sonnet`, `opus`, and `fable` on the `Agent` tool and in agent frontmatter; the exact model IDs are for SDK and API dispatch.
-- **Defaults are fallbacks, overrides are the contract.** The `model:` frontmatter in `.claude/agents/*.md` records each role's tier default; it never substitutes for the per-dispatch choice. Claude Code resolves a lane's model as: `CLAUDE_CODE_SUBAGENT_MODEL` env var → the `model` parameter on the `Agent` tool call → the definition's `model` frontmatter → the session model. The root passes a dispatch-time `model` whenever task difficulty, evidence volume, latency/cost, or consequence departs from the role default; the parameter also sticks for follow-up messages to that lane.
+- **Defaults are fallbacks, overrides are the contract.** The `model:` frontmatter in `.claude/agents/*.md` records each role's tier default; it never substitutes for the per-dispatch choice. Claude Code resolves a lane's model as: `CLAUDE_CODE_SUBAGENT_MODEL` env var → the `model` parameter on the `Agent` tool call → the definition's `model` frontmatter → the session model. The root passes a dispatch-time `model` whenever task difficulty, evidence volume, or consequence departs from the role default; a lower tier is valid only when current task evidence or representative evaluation shows no material quality loss. The parameter also sticks for follow-up messages to that lane.
 - Reasoning effort has no per-dispatch parameter. It resolves as: `CLAUDE_CODE_EFFORT_LEVEL` env var → the definition's `effort` frontmatter → the session effort → the model default. **The root therefore selects effort by selecting the role**, which is why the tiers exist as separate definitions rather than as one worker with a parameter: write lanes `worker-mechanical` (`low`), `worker-standard` (`medium`), `worker-critical` (`high`); review lanes `evidence-agent` (`low`), `task-acceptance-agent` (`medium`), and `critical-reviewer-agent` or `critical-adjudicator-agent` (`xhigh`). A role that leaves `effort` unset inherits the session level, so dispatching every write lane through the generic `claude` agent silently runs mechanical work at whatever the session happens to be set to.
 - Map reasoning effort to the task, not habit ([OpenAI guidance](https://developers.openai.com/api/docs/guides/latest-model?model=gpt-5.6#prompting-best-practices), [Anthropic guidance](https://support.claude.com/en/articles/8664678-change-the-model-effort-and-thinking-settings)):
 
 | Effort | Use for |
 | --- | --- |
-| `low` | Clear, bounded, latency-sensitive mechanical work whose route and proof are already known. |
+| `low` | Clear, bounded mechanical work whose route and proof are already known and whose lower effort has no material quality loss on current task evidence or representative evaluation. |
 | `medium` (default) | Ordinary implementation, review, and document analysis. Use this as the balanced starting point. |
 | `high` / `xhigh` | Complex debugging, broad synthesis, or high-consequence reasoning when task evidence or a representative evaluation shows that extra reasoning improves the outcome. |
 | `max` | The hardest architecture, research, or formal-reasoning work when lower effort is demonstrably insufficient. |
@@ -195,17 +195,25 @@ These worker roles exist only under `.claude/agents/`. They are deliberately not
 
 Read-only lanes follow [Subagents And Handoff](spec-first-workflow/shared/subagents-and-handoff.md): one distinct decision-changing question per lane, concurrency bounded by current capacity and independence, and read-only boundaries stated in each brief.
 
+Start ordinary research, design, challenge, and review lanes with fresh context
+when the harness supports it. In the Codex App, dispatch the selected role with
+no inherited root turns; inherit only the smallest recent turn set when a
+non-review question depends on irreproducible user context that is unavailable
+from the accepted brief or cited sources. In Claude Code and Qwen Code, start a
+new lane of the selected role. Pass only the shared Lane Brief, minimal artifact
+or source pointers, and irreproducible current facts. Return only the shared
+Fan-In envelope rather than replaying the lane transcript.
+
 Triggered independent implementation review opens a new one-shot lane with
 fresh context. Dispatch `task-acceptance-agent` for an ordinary bounded unit.
 Dispatch `critical-reviewer-agent` only for the highest-consequence boundary
 when current unit-specific evidence justifies the critical tier.
 
-In the Codex App, dispatch the selected role with no inherited root turns. In
-Claude Code and Qwen Code, start a new lane of that role; an implementation
-Worker or transcript-inheriting subtask/fork is not an independent reviewer.
-Pass only the `tasks.md` path and unit or task IDs, candidate location, and
-irreproducible external evidence allowed by the shared implementation-review
-independence contract. Never resume that reviewer for a different unit.
+An implementation Worker or transcript-inheriting subtask/fork is not an
+independent reviewer. Pass an implementation reviewer only the `tasks.md` path
+and unit or task IDs, candidate location, and irreproducible external evidence
+allowed by the shared implementation-review independence contract. Never
+resume that reviewer for a different unit.
 
 Harness-native task lists remain execution controls. They do not replace the
 repository `tasks.md` ledger or receive its acceptance receipts.

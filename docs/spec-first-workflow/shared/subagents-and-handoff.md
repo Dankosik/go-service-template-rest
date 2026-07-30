@@ -22,28 +22,52 @@ Use built-in subagents and session handoffs only when they reduce a real context
 
 ## Stop Rule
 
-Do not create a built-in subagent lane for work that is sequential, tightly coupled to the root's reasoning, or cheaper to do locally. Do not create a session handoff when the current session can safely finish.
+Do not create a built-in subagent lane for work that is sequential, tightly
+coupled to the root's reasoning, duplicates another lane, lacks an independently
+checkable evidence boundary, or would reduce the coherence of the final
+synthesis. Do not create a session handoff when the current session can safely
+finish.
 
 ## Delegation Decision
 
-Skills define method; subagents provide separate context and independence. At the start of each non-implementation macro phase, identify materially affected domains and apply matching skills locally by default. Delegate only one concrete bounded question when independent evidence, separate context, parallelism, or review independence can change the result. A domain name, matching keyword, skill handoff, or desire for more confidence alone never creates a lane.
+**Fan-out.** Skills define method; subagents provide separate context and
+independence. At the start of each non-implementation macro phase, map the
+current decision-changing questions and their dependencies before substantive
+work. A question is lane-eligible when all are true:
 
-If no separate read-only lane helps, keep the reasoning in the root and state the reason only in an existing phase artifact or handoff; do not create a standalone gate record. Required independent reviews still use a separate read-only reviewer.
-
-Use a subagent when all are true:
-
-- the question is concrete and bounded;
-- it can be answered independently of mutable work in other lanes;
-- separate context or review independence materially improves the result;
+- it is concrete and bounded and can change a named decision, criterion, or
+  downstream disposition;
+- it can be answered independently of mutable work and dependent reasoning in
+  other lanes;
+- it has a checkable evidence boundary;
+- separate specialist, clean context, independent evidence, or review
+  independence can improve coverage, falsification, or coherence;
 - the output can be checked and synthesized by the root.
+
+Dispatch every lane-eligible question to one read-only lane when the current
+harness exposes a native carrier and capacity. Run positively independent lanes
+concurrently. Research and Technical Design use fan-out as their default
+execution shape; other non-implementation phases apply the same rule to
+eligible discovery, challenge, and review questions. Intake keeps user-intent
+and authorization decisions in the root and routes decision-changing evidence
+questions to Research.
+
+Keep in the root any ordered chain whose next decision depends on the previous
+result, cross-lane synthesis, final artifact decisions, correction routing, and
+all acceptance and completion claims. If no question is lane-eligible or the
+native carrier is unavailable, continue root-locally and record the quality,
+independence, or coherence reason only in an existing phase artifact or handoff;
+do not create a standalone gate record. Cost, token use, latency, task size, and
+local convenience do not justify skipping an eligible lane. Required
+independent reviews still use a separate read-only reviewer.
 
 Good lanes include independent source research, one specialist design question,
 review of a fixed non-implementation revision, and a triggered [independent
 implementation review](#implementation-review-independence) of a fixed
 acceptance unit.
-Bad lanes include broad “review everything,” duplicate lenses, tiny lookups,
-discretionary implementation review, implementation specialist analysis, and
-any implementation or review repair.
+Bad lanes include broad “review everything,” duplicate lenses, questions
+without an independent evidence boundary, discretionary implementation review,
+implementation specialist analysis, and any implementation or review repair.
 
 The root owns scope, lane choice, synthesis, correction routing, integration,
 acceptance, completion claims, and mechanical ledger updates. Built-in
@@ -55,9 +79,20 @@ harness-native implementation Worker is outside this contract and follows the
 [implementation
 phase](../phases/implementation-validation-closeout.md#worker-execution).
 
-Run one lane per distinct decision-changing question. Current harness capacity, mutable-state independence, and root synthesis cost bound concurrency; do not add a lane for coverage or confidence alone. Nested delegation is not a default and needs its own independent evidence question. If a lane exposes a new owner decision, return it to the root rather than expanding scope.
+Run one lane per distinct decision-changing question. Current harness capacity,
+mutable-state independence, and synthesis coherence bound concurrency; do not
+add a duplicate lane for confidence alone. Nested delegation is not a default
+and needs its own independent evidence question. If a lane exposes a new owner
+decision, return it to the root rather than expanding scope.
 
-For read-only subagents, choose the currently available model and reasoning effort from task difficulty, evidence volume, latency/cost, and consequence of error, using the [harness model map](../../agent-harness.md#model-and-effort-selection). Re-review should be at least as capable as the review that found the issue. The implementation phase separately owns native Worker dispatch and execution.
+For read-only subagents, choose the currently available model and reasoning
+effort from task difficulty, evidence volume, and consequence of error, using
+the [harness model map](../../agent-harness.md#model-and-effort-selection).
+Never choose a weaker lane to reduce cost, token use, or latency; a lower tier
+is valid only when current task evidence or representative evaluation shows no
+material quality loss. Re-review should be at least as capable as the review
+that found the issue. The implementation phase separately owns native Worker
+dispatch and execution.
 
 ## Lane Brief
 

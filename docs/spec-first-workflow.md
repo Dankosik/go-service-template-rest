@@ -20,6 +20,10 @@ Use `structured` for the normal non-trivial case. Keep only the `spec.md`, `task
 
 Use `orchestrated` when coordination itself is a real problem: broad or multi-owner scope, hard-to-reverse decisions, conflicting evidence, explicit multi-agent work, dirty-checkout isolation, separate context, or likely multi-session execution. Orchestrated work may still omit research, design, test-plan, or rollout artifacts when their questions are not present.
 
+A bounded read-only lane selected by the shared fan-out policy does not by
+itself change a structured path into an orchestrated path; coordination must
+still be a material problem.
+
 Re-evaluate the path only when evidence changes risk, ownership, reversibility, or proof. A path is not a quality tier.
 
 ### Required Spine
@@ -33,6 +37,12 @@ Structured and orchestrated work evaluates the phase router in order:
 5. complete test design when proof is non-obvious, then apply path/risk-matched QA review;
 6. complete `tasks.md` and its path/risk-matched readiness review;
 7. enter [Implementation / Validation / Closeout](spec-first-workflow/phases/implementation-validation-closeout.md) with one direct outcome or the next ready planned acceptance unit or wave; that phase owns execution-carrier selection, root-local execution, triggered Worker execution, root candidate intake, acceptance and integration, risk-triggered independent implementation review, adaptation to execution drift, and validation.
+
+Before substantive work in each non-implementation macro phase, apply the
+shared [Delegation Decision](spec-first-workflow/shared/subagents-and-handoff.md#delegation-decision).
+Research and Technical Design use its lane-eligible fan-out as their default
+execution shape; the other phases use it for eligible discovery, challenge, and
+review questions.
 
 Scoping down research, design, or test design needs one concrete reason in the current artifact or handoff, not a new phase-control file. Specification and planning remain required; independent review follows the shared trigger rather than artifact presence alone.
 
@@ -79,7 +89,7 @@ keep it out of context when the trigger is absent:
 | Trigger | Read before |
 | --- | --- |
 | Persist, inspect status/ownership, or resume from task artifacts. | [Artifact Model](spec-first-workflow/shared/artifact-model.md) |
-| Delegate, open an independent review, resume a lane, or hand off. | [Subagents And Handoff](spec-first-workflow/shared/subagents-and-handoff.md) |
+| Enter a non-implementation macro phase, delegate, open an independent review, resume a lane, or hand off. | [Subagents And Handoff](spec-first-workflow/shared/subagents-and-handoff.md) |
 | Choose or operate a durable control, Worker/subagent carrier, model, or reasoning effort. | [Agent Harness](agent-harness.md) |
 | Design changes repository boundaries or generated-source ownership. | [Repository Architecture](repo-architecture.md) |
 
