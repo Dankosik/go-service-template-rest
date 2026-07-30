@@ -97,7 +97,17 @@ An unverified cross-region or otherwise remote latency-sensitive path is a block
 
 ## Fan-Out And Review
 
-After the design drivers and current evidence identify affected domains, apply the matching methods under [Routing](../../../AGENTS.md#routing) locally. Load the shared [Delegation Decision](../shared/subagents-and-handoff.md#delegation-decision) only when considering a separate lane, and [Technical Design Review](technical-design-review.md) only when the shared review trigger applies. Keep dependent decisions sequential and synthesize every material lane result before final selection. Apply focused root self-review after system and Go-ownership decisions are complete.
+After the design drivers and current evidence identify affected domains and
+decision slots, apply the shared [Delegation
+Decision](../shared/subagents-and-handoff.md#delegation-decision) and the
+matching methods under [Routing](../../../AGENTS.md#routing). Route eligible
+architecture, contract, data, security, reliability, delivery, observability,
+performance, and Go-ownership questions to their specialist read-only lanes.
+Keep dependent decisions sequential in the root, synthesize every material lane
+result before final selection, and retain one coherent cross-domain
+architecture. Load [Technical Design Review](technical-design-review.md) only
+when the shared review trigger applies. Apply focused root self-review after
+system and Go-ownership decisions are complete.
 
 ## Stop Rule
 

@@ -16,7 +16,8 @@ guidance](https://developers.openai.com/api/docs/guides/latest-model?model=gpt-5
 ## Run Contract
 
 Capture the root and lane tool trace, durable artifacts, final diff, proof
-receipts, verdicts, total tokens, wall time, wait time, tool calls, messages,
+receipts, verdicts, root and lane input tokens when the harness reports them,
+compaction events, total tokens, wall time, wait time, tool calls, messages,
 correction batches, and model/effort choices. Redact secrets without changing
 event order.
 
@@ -24,15 +25,20 @@ For each instruction change:
 
 1. run the same representative cases before and after the change;
 2. judge every required outcome and trace assertion;
-3. compare correctness, completeness, retained scope, proof quality, tokens,
-   wall time, wait time, calls, turns, retries, and corrections;
-4. accept a speed or cost improvement only when every quality assertion still
-   passes;
+3. compare correctness, completeness, depth, evidence coverage, coherence,
+   retained scope, proof quality, root-context pressure, tokens, wall time,
+   wait time, calls, turns, retries, and corrections;
+4. treat result quality, evidence coverage, and coherence as acceptance
+   criteria; retain cost, token use, and latency as diagnostics only;
 5. keep the instruction only when it changes a measured behavior or protects a
    hard authorization or safety boundary.
 
-Use at least one ordinary unit, one high-risk unit, one Worker correction, and
-one multi-Worker wave. A single happy path cannot qualify a workflow change.
+For a change that can affect implementation or Worker behavior, use at least
+one ordinary unit, one high-risk unit, one Worker correction, and one
+multi-Worker wave. For a non-implementation fan-out change, use at least one
+Research case, one Technical Design case, and one dependent or duplicate
+near-miss in a third non-implementation macro phase. A single happy path cannot
+qualify a workflow change.
 
 ## Cases
 
@@ -208,10 +214,49 @@ the selected lane receives its role body before review.
 leading trigger, or a role file exists on disk but is absent from the harness
 registry or selector.
 
+### WBE-14 — Quality-First Phase Fan-Out
+
+**Given:** one Research case and one Technical Design case whose current
+question or decision-slot maps each contain several bounded, independently
+checkable questions plus one cross-lane synthesis decision.
+
+**Pass:** Subagents And Handoff is read before substantive phase work; every
+lane-eligible question gets one narrow read-only lane with fresh minimal
+context; positively independent lanes run concurrently up to current capacity;
+the root does not repeat their searches, retains the cross-lane decision, and
+reduces each return through the Fan-In envelope into one coherent phase result.
+Cost, token use, latency, task size, and local convenience do not suppress an
+eligible lane or select a weaker model or effort.
+
+**Fail:** the root performs eligible questions sequentially without a missing
+carrier or quality/coherence reason, dispatches overlapping or broad lanes,
+passes the full root transcript without need, repeats lane research, pastes raw
+returns into the artifact, lets a lane own the final cross-domain synthesis, or
+lowers lane capability to reduce cost, tokens, or latency without equal-quality
+evidence.
+
+### WBE-15 — Fan-Out Near-Miss And Review Separation
+
+**Given:** one Specification, Test Design, or Planning case with one small but
+decision-changing specialist question whose separate context can improve the
+result, one ordered chain whose next question depends on the previous answer,
+one duplicate lens, and no independent-review trigger.
+
+**Pass:** the eligible specialist question gets one read-only lane regardless
+of size or resource use; the ordered chain remains in the root; the duplicate
+lane is omitted; the root records the quality, independence, or coherence
+disposition in the existing artifact or handoff; and no reviewer or approval
+gate is created.
+
+**Fail:** size, speed, cost, or token use suppresses the eligible lane; the phase
+name forces the dependent or duplicate lane; or specialist fan-out is treated
+as an independent-review verdict.
+
 ## Acceptance
 
-Every applicable case must pass. Compare aggregate quality and resource metrics
-across repeated representative runs; report variance and incomplete cases.
-Lower calls, tokens, or latency are supporting evidence only after the same
-outcome, scope, proof, and safety assertions pass. An instruction-level diff
-without a live trace remains a candidate mitigation, not a behavior claim.
+Every applicable case must pass. Compare aggregate quality first and keep
+resource metrics diagnostic across repeated representative runs; report
+variance and incomplete cases. Lower calls, tokens, cost, or latency never
+justify skipping an eligible lane or accepting a weaker outcome, scope, proof,
+or safety result. An instruction-level diff without a live trace remains a
+candidate mitigation, not a behavior claim.

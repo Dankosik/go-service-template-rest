@@ -60,7 +60,10 @@ Choose the smallest triggered branch and load only its rule:
 
 After applying the first branch, load another only when its distinct evidence pressure can independently change the same or another named decision; one question may therefore require more than one branch.
 
-Use independent read-only lanes only for separable questions where parallel context materially helps.
+After Question Closure and branch selection expose the current question and
+lens map, apply the shared [Delegation
+Decision](../shared/subagents-and-handoff.md#delegation-decision). The root
+retains cross-source synthesis and every downstream disposition.
 
 Apply [Downstream input closure](research-branches.md#downstream-input-closure) only when research identifies a concrete required external input or a conclusion carries a later proof obligation.
 
