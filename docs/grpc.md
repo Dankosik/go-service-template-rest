@@ -286,7 +286,7 @@ conn, err := grpcclient.New(
         TransportCredentials: tlsCredentials,
         MeterProvider:        metrics.MeterProvider(),
         TracerProvider:       otel.GetTracerProvider(),
-        Propagators:          propagation.TraceContext{},
+        Propagation:          grpcclient.PropagationTrustedService,
     },
 )
 if err != nil {
@@ -301,6 +301,21 @@ I/O. The connection owns resolution, reconnect, and connection reuse. Do not
 create one connection per call. Plaintext callers must still pass
 `insecure.NewCredentials()` explicitly.
 
+Propagation is selected once per dependency connection, not per call:
+
+- `PropagationNone` is the fail-closed zero value: client spans and metrics
+  remain local, while no trace or request ID crosses the target boundary.
+- `PropagationTraceContext` sends only W3C `traceparent`/`tracestate`.
+- `PropagationTrustedService` additionally sends the validated request ID from
+  the request context.
+
+The client removes caller-, credential-, and resolver-supplied
+`traceparent`, `tracestate`, `baggage`, and `x-request-id` before
+OpenTelemetry injects the selected allowlist. Baggage is never propagated.
+Choose `TrustedService` only when the named neighbor is allowed to receive the
+diagnostic request ID; TLS or private-network placement alone does not imply
+that trust. Unknown policy values fail during construction.
+
 Each operation owns its realistic deadline:
 
 ```go
@@ -313,14 +328,18 @@ response, err := client.GetOrder(
 )
 ```
 
-The template installs no retry service config, does not opt into
-`WaitForReady`, and sets no universal deadline. grpc-go may still perform a
-transparent retry before an RPC is committed to the server, and a resolver may
-supply a service config with retry policy. Any application retry policy remains
-a per-method business decision: enable it only when replay is safe, bound
-attempts/backoff inside the caller's deadline, and monitor attempts. Long-lived
-streams need an explicit idle/duration policy owned by the feature; the server
-does not apply the HTTP request timeout to them.
+The shared client rejects proxy delegation and resolver-supplied service
+configuration so neither can bypass its final resolver-metadata guard or add a
+hidden retry/balancer policy. It does not opt into `WaitForReady` and sets no
+universal deadline. grpc-go may still perform a transparent retry before an
+RPC is committed to the server; the correlation allowlist is applied to every
+such attempt. Any application retry policy remains a per-method business
+decision: enable it only when replay is safe, bound attempts/backoff inside
+the caller's deadline, and monitor attempts. A dependency that genuinely
+requires a proxy or resolver service config needs a separate design that
+preserves the same final metadata boundary. Long-lived streams need an
+explicit idle/duration policy owned by the feature; the server does not apply
+the HTTP request timeout to them.
 
 Client defaults are 16 KiB received metadata and 4 MiB sent/received messages.
 The server also has finite connection, process-RPC, per-connection-stream,

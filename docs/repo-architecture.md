@@ -22,7 +22,7 @@ It does not restate the full tree, every command, or task-local design choices.
 | `internal/openapi/` | Generated Go bindings derived from the OpenAPI contract. | Manual business logic; hand-editing should not become the source of truth. |
 | `internal/<feature>/` | Feature-owned use cases, business types, ports, invariants, and domain errors. | HTTP details, driver details, runtime config, process lifecycle. |
 | `internal/infra/http/` | HTTP server, middleware, request/response mapping, route policy, and observability at the transport edge. | Core business rules or config loading. |
-| `internal/infra/httpclient/` (`OUTBOUND_HTTP=bounded`) | Optional shared outbound target validation, transport bounds, trace propagation, and idle-pool cleanup. | Provider authentication, operation budgets, retries, error mapping, or readiness policy. |
+| `internal/infra/httpclient/` (`OUTBOUND_HTTP=bounded`) | Optional shared outbound target validation, transport bounds, explicit correlation-policy enforcement, and idle-pool cleanup. | Provider authentication, concrete trust selection, operation budgets, retries, error mapping, or readiness policy. |
 | `internal/infra/postgres/` | Optional Postgres connection/pool lifecycle and repository code. | Process lifecycle, migrations, HTTP behavior, config precedence rules. |
 | `internal/infra/postgresmigrate/` | Optional migration execution used by `cmd/migrate`. | Runtime pool ownership or application startup. |
 | `internal/infra/telemetry/` | OpenTelemetry tracing/metrics SDK setup and Prometheus export. | Feature semantics, startup logging, or request routing decisions. |
@@ -33,9 +33,15 @@ It does not restate the full tree, every command, or task-local design choices.
 The gRPC profile adds four boundaries: `api/proto/` owns protobuf contracts,
 `internal/gen/proto/` contains derived messages and interfaces,
 `internal/infra/grpc/` owns native server policy and lifecycle, and
-`internal/infra/grpcclient/` constructs bounded shared client connections.
-None owns feature semantics, storage schemas, authentication policy,
-per-operation deadlines, retry eligibility, or dependency criticality.
+`internal/infra/grpcclient/` constructs bounded shared client connections and
+enforces an explicit outbound correlation policy. Its zero policy retains local
+telemetry but emits no remote correlation; the trace-only and trusted-service
+policies are selected per dependency, and none propagates baggage. The client
+also disables environment proxies and resolver-provided service configs so
+they cannot bypass metadata enforcement. None of these packages owns feature
+semantics, storage schemas, authentication policy, per-operation deadlines,
+retry eligibility, dependency criticality, or the trust decision for a
+concrete neighbor.
 <!-- profile:grpc:end -->
 
 ## Domain Vocabulary
@@ -104,7 +110,8 @@ internal/infra/grpc
   -> generated handlers registered only by bootstrap
 
 internal/infra/grpcclient
-  -> generated clients owned by each dependency adapter
+  -> one shared connection per dependency
+  -> generated clients owned by that dependency adapter
 ```
 <!-- profile:grpc:end -->
 
@@ -201,9 +208,10 @@ Use these seams when extending the repository:
 - New HTTP capability: first consume the approved `spec.md` behavior/contract delta plus any needed system/integration contract decisions; then update `api/openapi/service.yaml`, regenerate `internal/openapi`, add use-case logic in `internal/<feature>`, and wire handlers/routes in `internal/infra/http`. Do not use OpenAPI edits, generated code, handlers, or tests to invent resource, status, error, retry, async, freshness, or compatibility semantics.
 <!-- profile:grpc:start -->
 - New gRPC capability: define the accepted RPC and compatibility behavior first; add an Edition 2023 Opaque schema under `api/proto`, regenerate `internal/gen/proto`, implement a thin feature-facing adapter, and register it in `cmd/service/internal/bootstrap/startup_grpc.go`. Generated handlers, raw statuses, streaming mechanics, and tests do not own domain semantics, deadlines, retry safety, authentication, or stream-duration policy.
+- New outbound gRPC dependency: construct one bootstrap-owned `grpcclient` connection, explicitly select `PropagationNone`, `PropagationTraceContext`, or `PropagationTrustedService` at that neighbor's trust boundary, pass it to the provider-generated client, and close it during shutdown and partial-startup cleanup. The zero policy emits no remote correlation; trusted service adds only a valid context request ID to W3C Trace Context; baggage is always omitted. Generated standard health and provider clients consume the same `grpc.ClientConnInterface` seam. Environment proxies and resolver-provided service configs are deliberately disabled; a dependency that requires either needs its own design instead of weakening the shared connection.
 <!-- profile:grpc:end -->
 - New persistence flow: add a deterministic migration under `migrations`, add SQLC query sources under `internal/infra/postgres/queries`, regenerate `internal/infra/postgres/sqlcgen`, add a hand-written Postgres repository that maps generated rows into feature-facing types, add a feature-owned port only if needed, then wire the concrete adapter in `cmd/service/internal/bootstrap`.
-- New integration adapter: add it under `internal/infra/<integration>`; add a feature-owned contract only if `internal/<feature>` needs inversion over the concrete adapter; wire concrete dependencies in `cmd/service/internal/bootstrap`. For ordinary provider-specific clients, start with `net/http`. When the repository was initialized with `OUTBOUND_HTTP=bounded`, reuse `internal/infra/httpclient` for fixed-authority transport safety while keeping authentication, operation budgets, retry eligibility, provider errors, and generated clients in the provider adapter. Credentials belong in headers; query-string authentication requires a separate telemetry-disclosure design. When the adapter calls another microservice, first verify the provider's current contract from its repository, generated contract, published spec, or live contract endpoint, then record the source used in the owning spec/design/tasks proof. Before enabling a runtime dependency, define config keys and secret-source policy, platform egress policy, criticality, retry and timeout budget, readiness participation, cleanup on partial initialization, low-cardinality metrics labels, and bootstrap tests.
+- New integration adapter: add it under `internal/infra/<integration>`; add a feature-owned contract only if `internal/<feature>` needs inversion over the concrete adapter; wire concrete dependencies in `cmd/service/internal/bootstrap`. For ordinary provider-specific clients, start with `net/http`. When the repository was initialized with `OUTBOUND_HTTP=bounded`, reuse `internal/infra/httpclient` for fixed-authority transport safety and explicitly select `PropagationNone`, `PropagationTraceContext`, or `PropagationTrustedService` per dependency; zero emits no remote correlation. Keep authentication, operation budgets, retry eligibility, provider errors, and generated clients in the provider adapter. Credentials belong in headers; query-string authentication requires a separate telemetry-disclosure design. When the adapter calls another microservice, first verify the provider's current contract from its repository, generated contract, published spec, or live contract endpoint, then record the source used in the owning spec/design/tasks proof. Before enabling a runtime dependency, define config keys and secret-source policy, platform egress policy, criticality, retry and timeout budget, readiness participation, cleanup on partial initialization, low-cardinality metrics labels, and bootstrap tests.
 - New outbound target: fixed targets must declare source, timeout, redirect policy, and DNS/IP-class behavior before bootstrap wiring; the deployment owns network-level egress enforcement. Dynamic or user-controlled URLs require a separate security design.
 - New durable schema behavior: evolve `migrations/` first, then keep adapter or generated access code derived from that schema.
 - New executable surface: add `cmd/<binary>/main.go` with its own bootstrap path and reuse feature/infra packages instead of duplicating logic.

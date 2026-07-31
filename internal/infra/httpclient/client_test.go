@@ -113,8 +113,12 @@ func TestNewBuildsBoundedInstrumentedClient(t *testing.T) {
 	if got := client.httpClient.Timeout; got != cfg.RequestTimeout {
 		t.Fatalf("http client timeout = %s, want %s", got, cfg.RequestTimeout)
 	}
-	if _, ok := client.httpClient.Transport.(*otelhttp.Transport); !ok {
-		t.Fatalf("http client transport = %T, want *otelhttp.Transport", client.httpClient.Transport)
+	sanitizer, ok := client.httpClient.Transport.(propagationSanitizer)
+	if !ok {
+		t.Fatalf("http client transport = %T, want propagationSanitizer", client.httpClient.Transport)
+	}
+	if _, ok := sanitizer.base.(*otelhttp.Transport); !ok {
+		t.Fatalf("sanitizer base = %T, want *otelhttp.Transport", sanitizer.base)
 	}
 	if client.transport.Proxy != nil {
 		t.Fatal("base transport proxy is enabled")
@@ -386,6 +390,7 @@ func TestClientEnforcesDecodedLimitPropagatesTraceAndRejectsRedirect(t *testing.
 	cfg.TargetClass = PrivateHTTP
 	cfg.PrivateHostSuffix = "railway.internal"
 	cfg.MaxResponseBodyBytes = 7
+	cfg.Propagation = PropagationTraceContext
 	client, err := New(cfg, metricnoop.NewMeterProvider())
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
