@@ -36,9 +36,10 @@ func TestGRPCProcessLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("filepath.Abs() error = %v", err)
 	}
+	serviceRoot := initializedProcessServiceRoot(t, repositoryRoot)
 	binaryPath := filepath.Join(t.TempDir(), "service")
 	build := exec.CommandContext(t.Context(), "go", "build", "-o", binaryPath, "./cmd/service")
-	build.Dir = repositoryRoot
+	build.Dir = serviceRoot
 	if output, buildErr := build.CombinedOutput(); buildErr != nil {
 		t.Fatalf("build service: %v\n%s", buildErr, output)
 	}
@@ -48,7 +49,7 @@ func TestGRPCProcessLifecycle(t *testing.T) {
 	postgresDSN := pgtest.DSN(t)
 	var output bytes.Buffer
 	process := exec.Command(binaryPath)
-	process.Dir = repositoryRoot
+	process.Dir = serviceRoot
 	process.Env = append(
 		cleanServiceEnvironment(os.Environ()),
 		"APP__APP__ENV=integration",
@@ -156,6 +157,77 @@ func TestGRPCProcessLifecycle(t *testing.T) {
 	}
 }
 
+func initializedProcessServiceRoot(t *testing.T, repositoryRoot string) string {
+	t.Helper()
+
+	temporaryRoot := t.TempDir()
+	archivePath := filepath.Join(temporaryRoot, "template.tar")
+	archive := exec.CommandContext(
+		t.Context(),
+		"git",
+		"archive",
+		"--format=tar",
+		"--output="+archivePath,
+		"HEAD",
+	)
+	archive.Dir = repositoryRoot
+	if output, err := archive.CombinedOutput(); err != nil {
+		t.Fatalf("archive template HEAD: %v\n%s", err, output)
+	}
+
+	serviceRoot := filepath.Join(temporaryRoot, "service")
+	if err := os.Mkdir(serviceRoot, 0o750); err != nil {
+		t.Fatalf("create initialized service root: %v", err)
+	}
+	extract := exec.CommandContext(t.Context(), "tar", "-xf", archivePath, "-C", serviceRoot)
+	if output, err := extract.CombinedOutput(); err != nil {
+		t.Fatalf("extract template HEAD: %v\n%s", err, output)
+	}
+	initializeGit := exec.CommandContext(t.Context(), "git", "init", "-q")
+	initializeGit.Dir = serviceRoot
+	if output, err := initializeGit.CombinedOutput(); err != nil {
+		t.Fatalf("initialize fixture Git repository: %v\n%s", err, output)
+	}
+	commitGit := exec.CommandContext(
+		t.Context(),
+		"git",
+		"-c",
+		"user.email=grpc-process-integration@example.com",
+		"-c",
+		"user.name=grpc-process-integration",
+		"commit",
+		"-q",
+		"--allow-empty",
+		"-m",
+		"template checkout",
+	)
+	commitGit.Dir = serviceRoot
+	if output, err := commitGit.CombinedOutput(); err != nil {
+		t.Fatalf("create fixture Git HEAD: %v\n%s", err, output)
+	}
+
+	initialize := exec.CommandContext(
+		t.Context(),
+		"bash",
+		"./scripts/init-module.sh",
+		"github.com/acme/grpc-process-integration",
+	)
+	initialize.Dir = serviceRoot
+	initialize.Env = append(
+		cleanServiceEnvironment(os.Environ()),
+		"CODEOWNER=@acme/platform",
+		"DATABASE=postgres",
+		"GRPC=enabled",
+		"AUTHN=none",
+		"OUTBOUND_HTTP=bounded",
+		"REFERENCE_EXAMPLE=remove",
+	)
+	if output, err := initialize.CombinedOutput(); err != nil {
+		t.Fatalf("initialize process-test service: %v\n%s", err, output)
+	}
+	return serviceRoot
+}
+
 func freeTCPAddress(t *testing.T) string {
 	t.Helper()
 
@@ -175,6 +247,10 @@ func cleanServiceEnvironment(environment []string) []string {
 	for _, entry := range environment {
 		key, _, _ := strings.Cut(entry, "=")
 		if strings.HasPrefix(key, "APP__") || strings.HasPrefix(key, "OTEL_") {
+			continue
+		}
+		switch key {
+		case "CODEOWNER", "DATABASE", "GRPC", "AUTHN", "OUTBOUND_HTTP", "REFERENCE_EXAMPLE":
 			continue
 		}
 		clean = append(clean, entry)
