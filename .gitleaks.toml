@@ -18,3 +18,11 @@ condition = "AND"
 regexTarget = "line"
 regexes = ['''key and value shape, freshness/TTL/invalidation/stampede behavior''']
 paths = ['''^\.agents/skills/go-db-cache-spec/SKILL\.md$''']
+
+# profile:authn-oidc-jwt:start
+[[allowlists]]
+targetRules = ["private-key"]
+description = "Public deterministic RSA fixtures used only to sign OIDC verifier test tokens"
+condition = "AND"
+paths = ['''^internal/infra/oidcjwt/testdata/test-key-[12]\.pem$''']
+# profile:authn-oidc-jwt:end

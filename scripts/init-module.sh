@@ -7,7 +7,7 @@ TEMPLATE_OWNER="@Dankosik"
 TEMPLATE_API_TITLE="go-service-template-rest"
 
 usage() {
-	echo "usage: CODEOWNER=@user-or-org/team DATABASE=none|postgres GRPC=none|enabled OUTBOUND_HTTP=none|bounded REFERENCE_EXAMPLE=remove|keep $0 [module-path]"
+	echo "usage: CODEOWNER=@user-or-org/team DATABASE=none|postgres GRPC=none|enabled AUTHN=none|oidc-jwt OUTBOUND_HTTP=none|bounded REFERENCE_EXAMPLE=remove|keep $0 [module-path]"
 	echo "module-path is derived from git remote origin when omitted"
 }
 
@@ -153,7 +153,7 @@ strip_profile() {
 			stripped_go_files+=("${profile_file}")
 		fi
 	done < <(grep -rl "profile:${profile}:start" \
-		README.md Makefile railway.toml .golangci.yml build cmd docs env internal test .github scripts/dev 2>/dev/null || true)
+		README.md Makefile railway.toml .gitleaks.toml .golangci.yml api build cmd docs env internal test .github scripts/dev 2>/dev/null || true)
 
 	if ((${#stripped_go_files[@]} > 0)); then
 		gofmt -w "${stripped_go_files[@]}"
@@ -167,8 +167,9 @@ strip_profile() {
 write_template_lock() {
 	local database="$1"
 	local grpc="$2"
-	local outbound_http="$3"
-	local reference_example="$4"
+	local authn="$3"
+	local outbound_http="$4"
+	local reference_example="$5"
 	local source_revision
 
 	source_revision="$(git rev-parse HEAD 2>/dev/null || true)"
@@ -185,6 +186,7 @@ source = "${TEMPLATE_SOURCE}"
 source_revision = "${source_revision}"
 database = "${database}"
 grpc = "${grpc}"
+authn = "${authn}"
 outbound_http = "${outbound_http}"
 reference_example = "${reference_example}"
 EOF
@@ -252,6 +254,11 @@ make check
 The client API contract is \`api/openapi/service.yaml\`. Start with
 \`docs/first-production-feature.md\` for the first vertical slice and
 \`docs/repo-architecture.md\` for ownership boundaries.
+
+<!-- profile:authn-oidc-jwt:start -->
+Authentication uses strict OIDC discovery and signed JWT access tokens. Configure it
+using \`docs/authentication.md\` before starting the service.
+<!-- profile:authn-oidc-jwt:end -->
 EOF
 }
 
@@ -274,6 +281,19 @@ case "${grpc}" in
 none | enabled) ;;
 *)
 	echo "GRPC must be one of: none, enabled"
+	exit 1
+	;;
+esac
+
+if [[ "${AUTHN+x}" == "x" && -z "${AUTHN-}" ]]; then
+	echo "AUTHN must be one of: none, oidc-jwt"
+	exit 1
+fi
+authn="${AUTHN:-none}"
+case "${authn}" in
+none | oidc-jwt) ;;
+*)
+	echo "AUTHN must be one of: none, oidc-jwt"
 	exit 1
 	;;
 esac
@@ -363,6 +383,7 @@ if [[ -f template.lock ]]; then
 	for expected in \
 		"database = \"${database}\"" \
 		"grpc = \"${grpc}\"" \
+		"authn = \"${authn}\"" \
 		"outbound_http = \"${outbound_http}\"" \
 		"reference_example = \"${reference_example}\""; do
 		grep -Fqx "${expected}" template.lock || {
@@ -374,6 +395,7 @@ if [[ -f template.lock ]]; then
 	echo "  module: ${new_module}"
 	echo "  database: ${database}"
 	echo "  gRPC: ${grpc}"
+	echo "  authentication: ${authn}"
 	echo "  outbound HTTP: ${outbound_http}"
 	echo "  reference example: ${reference_example}"
 	exit 0
@@ -457,6 +479,25 @@ if [[ "${source_checkout}" != true ]]; then
 		strip_profile database-postgres keep
 	fi
 
+	if [[ "${authn}" == "none" ]]; then
+		rm -rf -- internal/infra/oidcjwt
+		rm -f -- \
+			cmd/service/internal/bootstrap/authn_bootstrap_test.go \
+			cmd/service/internal/bootstrap/authn_readiness_test.go \
+			cmd/service/internal/bootstrap/startup_authn.go \
+			internal/config/authn_config_test.go \
+			internal/infra/grpc/authn_health_test.go \
+			internal/infra/http/authn_router_test.go \
+			internal/infra/httpclient/authn_policy_test.go \
+			docs/authentication.md
+		replace_literal api/openapi/service.yaml \
+			'security: [{bearerAuth: []}]' \
+			'security: []'
+		strip_profile authn-oidc-jwt remove
+	else
+		strip_profile authn-oidc-jwt keep
+	fi
+
 	if [[ "${grpc}" == "none" ]]; then
 		rm -rf -- \
 			internal/gen/proto \
@@ -466,10 +507,14 @@ if [[ "${source_checkout}" != true ]]; then
 		rm -f -- \
 			buf.yaml \
 			buf.gen.yaml \
+			cmd/service/internal/bootstrap/authn_readiness_test.go \
 			cmd/service/internal/bootstrap/startup_grpc.go \
 			cmd/service/internal/bootstrap/startup_grpc_test.go \
 			docs/grpc.md \
 			internal/config/grpc_config_test.go \
+			internal/infra/oidcjwt/grpc.go \
+			internal/infra/oidcjwt/grpc_test.go \
+			internal/infra/oidcjwt/grpc_tls_test.go \
 			test/grpc_process_integration_test.go \
 			scripts/proto.sh \
 			scripts/run-buf.sh \
@@ -510,7 +555,7 @@ if [[ "${source_checkout}" != true ]]; then
 	# template rather than for this service.
 	rm -rf -- .github/assets .github/ISSUE_TEMPLATE
 
-	if [[ "${outbound_http}" == "none" ]]; then
+	if [[ "${outbound_http}" == "none" && "${authn}" == "none" ]]; then
 		rm -rf -- internal/infra/httpclient
 	fi
 
@@ -518,7 +563,14 @@ if [[ "${source_checkout}" != true ]]; then
 		rm -rf -- examples
 	fi
 
-	write_template_lock "${database}" "${grpc}" "${outbound_http}" "${reference_example}"
+	# Authentication selection changes canonical OpenAPI security and removes
+	# generator-only marker comments. Regenerate after the profile is resolved so
+	# the initialized service starts with byte-current embedded contract output.
+	if [[ -d internal/openapi ]]; then
+		go generate ./internal/openapi
+	fi
+
+	write_template_lock "${database}" "${grpc}" "${authn}" "${outbound_http}" "${reference_example}"
 
 fi
 
@@ -534,6 +586,7 @@ echo "template initialization complete"
 echo "  module: ${new_module}"
 echo "  database: ${database}"
 echo "  gRPC: ${grpc}"
+echo "  authentication: ${authn}"
 echo "  outbound HTTP: ${outbound_http}"
 echo "  reference example: ${reference_example}"
 if [[ -n "${codeowner}" ]]; then

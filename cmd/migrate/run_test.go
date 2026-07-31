@@ -326,4 +326,11 @@ func clearAppEnvForTest(t *testing.T) {
 			_ = os.Unsetenv(state.name)
 		}
 	})
+	// profile:authn-oidc-jwt:start
+	// Migration tests exercise PostgreSQL behavior; supply the separately
+	// required authentication policy rather than weakening runtime defaults.
+	t.Setenv("APP__AUTHN__ISSUER", "https://issuer.example.com")
+	t.Setenv("APP__AUTHN__AUDIENCE", "service-api")
+	t.Setenv("APP__AUTHN__TRUSTED_PROXY_CIDRS", "127.0.0.0/8,::1/128")
+	// profile:authn-oidc-jwt:end
 }

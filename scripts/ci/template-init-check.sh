@@ -5,9 +5,9 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 TEMPLATE_INIT_PROFILE="${TEMPLATE_INIT_PROFILE:-all}"
 
 case "${TEMPLATE_INIT_PROFILE}" in
-	all | minimal | postgres | grpc) ;;
+	all | minimal | postgres | grpc | authn) ;;
 	*)
-		echo "TEMPLATE_INIT_PROFILE must be one of: all, minimal, postgres, grpc" >&2
+		echo "TEMPLATE_INIT_PROFILE must be one of: all, minimal, postgres, grpc, authn" >&2
 		exit 2
 		;;
 esac
@@ -343,8 +343,12 @@ for removed in \
 	cmd/migrate \
 	cmd/service/internal/bootstrap/startup_grpc.go \
 	cmd/service/internal/bootstrap/startup_grpc_test.go \
+	cmd/service/internal/bootstrap/startup_authn.go \
+	docs/authentication.md \
 	docs/grpc.md \
+	internal/config/authn_config_test.go \
 	internal/config/grpc_config_test.go \
+	internal/infra/oidcjwt \
 	internal/infra/httpclient \
 	internal/infra/grpc \
 	internal/infra/grpcclient \
@@ -376,6 +380,7 @@ done
 # has no revision to be reviewed against.
 grep -Fq 'database = "none"' "${minimal_checkout}/template.lock"
 grep -Fq 'grpc = "none"' "${minimal_checkout}/template.lock"
+grep -Fq 'authn = "none"' "${minimal_checkout}/template.lock"
 grep -Fq 'outbound_http = "none"' "${minimal_checkout}/template.lock"
 grep -Fqx "source_revision = \"${minimal_source_revision}\"" "${minimal_checkout}/template.lock"
 # A generated service owns no generator, so the initialization contract check
@@ -572,6 +577,236 @@ grpc_default_snapshot="$(snapshot "${grpc_default_checkout}")"
 )
 assert "repeated default gRPC initialization changed the checkout" \
 	same_text "${grpc_default_snapshot}" "$(snapshot "${grpc_default_checkout}")"
+fi
+
+if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "authn" ]]; then
+	malformed_authn="$(new_fixture malformed-authn git@github.com:acme/malformed-authn.git)"
+	expect_unchanged_failure "${malformed_authn}" \
+		env CODEOWNER=@acme/platform AUTHN=custom bash "${ROOT_DIR}/scripts/init-module.sh"
+
+	empty_authn="$(new_fixture empty-authn git@github.com:acme/empty-authn.git)"
+	expect_unchanged_failure "${empty_authn}" \
+		env CODEOWNER=@acme/platform AUTHN= bash "${ROOT_DIR}/scripts/init-module.sh"
+
+	verify_authn_none_profile() {
+		local authn_choice="$1"
+		local grpc_choice="$2"
+		local outbound_choice="$3"
+		local fixture_name="authn-${authn_choice}-${grpc_choice}-${outbound_choice}"
+		local checkout
+		local revision
+		local before
+		local -a init_environment=(
+			"CODEOWNER=@acme/platform"
+			"DATABASE=none"
+			"GRPC=${grpc_choice}"
+			"OUTBOUND_HTTP=${outbound_choice}"
+		)
+
+		checkout="$(copy_template_checkout "${fixture_name}" "git@github.com:acme/${fixture_name}-service.git")"
+		revision="$(git -C "${checkout}" rev-parse HEAD)"
+		(
+			cd "${checkout}"
+			if [[ "${authn_choice}" == "default" ]]; then
+				env -u AUTHN "${init_environment[@]}" bash ./scripts/init-module.sh
+			else
+				env "${init_environment[@]}" AUTHN=none bash ./scripts/init-module.sh
+			fi
+			go test -vet=off ./...
+			go build ./cmd/service
+			make openapi-check
+			if [[ "${grpc_choice}" == "enabled" ]]; then
+				make proto-check
+			fi
+			if go list -deps ./cmd/service | grep -E 'internal/infra/oidcjwt|go-jose/go-jose'; then
+				echo "${fixture_name} production graph retained authentication"
+				exit 1
+			fi
+			if grep -Fq 'github.com/go-jose/go-jose/v4' go.mod; then
+				echo "${fixture_name} retained a direct or indirect JWT requirement in go.mod"
+				exit 1
+			fi
+		)
+
+		for removed in \
+			cmd/service/internal/bootstrap/authn_bootstrap_test.go \
+			cmd/service/internal/bootstrap/authn_readiness_test.go \
+			cmd/service/internal/bootstrap/startup_authn.go \
+			docs/authentication.md \
+			internal/config/authn_config_test.go \
+			internal/infra/grpc/authn_health_test.go \
+			internal/infra/http/authn_router_test.go \
+			internal/infra/httpclient/authn_policy_test.go \
+			internal/infra/oidcjwt; do
+			assert "${fixture_name} retained ${removed}" path_absent "${checkout}/${removed}"
+		done
+		assert "${fixture_name} retained bearer security" \
+			grep_absent -Fq 'bearerAuth' "${checkout}/api/openapi/service.yaml"
+		assert "${fixture_name} retained authentication environment" \
+			grep_absent -Fq 'APP__AUTHN__' "${checkout}/env/.env.example"
+		assert "${fixture_name} retained unresolved authentication markers" \
+			grep_absent -R -Fq 'profile:authn-oidc-jwt:' \
+			"${checkout}/README.md" \
+			"${checkout}/api" \
+			"${checkout}/cmd" \
+			"${checkout}/docs" \
+			"${checkout}/env" \
+			"${checkout}/internal" \
+			"${checkout}/.github"
+		if [[ "${outbound_choice}" == "bounded" ]]; then
+			assert "${fixture_name} removed requested bounded HTTP client" \
+				path_present "${checkout}/internal/infra/httpclient"
+		else
+			assert "${fixture_name} retained dormant HTTP client" \
+				path_absent "${checkout}/internal/infra/httpclient"
+		fi
+		grep -Fq 'authn = "none"' "${checkout}/template.lock"
+		grep -Fq "grpc = \"${grpc_choice}\"" "${checkout}/template.lock"
+		grep -Fq "outbound_http = \"${outbound_choice}\"" "${checkout}/template.lock"
+		grep -Fqx "source_revision = \"${revision}\"" "${checkout}/template.lock"
+
+		before="$(snapshot "${checkout}")"
+		(
+			cd "${checkout}"
+			if [[ "${authn_choice}" == "default" ]]; then
+				env -u AUTHN "${init_environment[@]}" bash ./scripts/init-module.sh
+			else
+				env "${init_environment[@]}" AUTHN=none bash ./scripts/init-module.sh
+			fi
+		)
+		assert "repeated ${fixture_name} initialization changed the checkout" \
+			same_text "${before}" "$(snapshot "${checkout}")"
+	}
+
+	for authn_choice in default explicit; do
+		for grpc_choice in none enabled; do
+			for outbound_choice in none bounded; do
+				verify_authn_none_profile "${authn_choice}" "${grpc_choice}" "${outbound_choice}"
+			done
+		done
+	done
+
+	authn_http_checkout="$(copy_template_checkout authn-http git@github.com:acme/authn-http-service.git)"
+	authn_http_revision="$(git -C "${authn_http_checkout}" rev-parse HEAD)"
+	(
+		cd "${authn_http_checkout}"
+		CODEOWNER=@acme/platform DATABASE=none GRPC=none AUTHN=oidc-jwt OUTBOUND_HTTP=none \
+			bash ./scripts/init-module.sh
+		go test -vet=off ./...
+		go build ./cmd/service
+		make openapi-check
+	)
+	for retained in \
+		cmd/service/internal/bootstrap/startup_authn.go \
+		docs/authentication.md \
+		internal/config/authn_config_test.go \
+		internal/infra/httpclient \
+		internal/infra/oidcjwt; do
+		assert "AUTHN=oidc-jwt removed ${retained}" path_present "${authn_http_checkout}/${retained}"
+	done
+	assert "GRPC=none retained the OIDC gRPC adapter" \
+		path_absent "${authn_http_checkout}/internal/infra/oidcjwt/grpc.go"
+	assert "GRPC=none retained the OIDC gRPC proof" \
+		path_absent "${authn_http_checkout}/internal/infra/oidcjwt/grpc_test.go"
+	assert "AUTHN=oidc-jwt retained unresolved profile markers" \
+		grep_absent -R -Fq 'profile:authn-oidc-jwt:' \
+		"${authn_http_checkout}/README.md" \
+		"${authn_http_checkout}/api" \
+		"${authn_http_checkout}/cmd" \
+		"${authn_http_checkout}/docs" \
+		"${authn_http_checkout}/env" \
+		"${authn_http_checkout}/internal" \
+		"${authn_http_checkout}/.github"
+	grep -Fq 'authn = "oidc-jwt"' "${authn_http_checkout}/template.lock"
+	grep -Fqx "source_revision = \"${authn_http_revision}\"" "${authn_http_checkout}/template.lock"
+	grep -Fq 'type: http' "${authn_http_checkout}/api/openapi/service.yaml"
+	grep -Fq 'scheme: bearer' "${authn_http_checkout}/api/openapi/service.yaml"
+	grep -Fq 'APP__AUTHN__ISSUER=' "${authn_http_checkout}/env/.env.example"
+	(
+		cd "${authn_http_checkout}"
+		go list -m -f '{{.Path}}' all | grep -Fx 'github.com/go-jose/go-jose/v4'
+	)
+	authn_http_snapshot="$(snapshot "${authn_http_checkout}")"
+	(
+		cd "${authn_http_checkout}"
+		CODEOWNER=@acme/platform DATABASE=none GRPC=none AUTHN=oidc-jwt OUTBOUND_HTTP=none \
+			bash ./scripts/init-module.sh
+	)
+	assert "repeated HTTP OIDC initialization changed the checkout" \
+		same_text "${authn_http_snapshot}" "$(snapshot "${authn_http_checkout}")"
+
+	authn_http_bounded_checkout="$(copy_template_checkout authn-http-bounded git@github.com:acme/authn-http-bounded-service.git)"
+	(
+		cd "${authn_http_bounded_checkout}"
+		CODEOWNER=@acme/platform DATABASE=none GRPC=none AUTHN=oidc-jwt OUTBOUND_HTTP=bounded \
+			bash ./scripts/init-module.sh
+		go test -vet=off ./...
+		go build ./cmd/service
+		make openapi-check
+	)
+	assert "AUTHN=oidc-jwt with OUTBOUND_HTTP=bounded removed shared HTTP client" \
+		path_present "${authn_http_bounded_checkout}/internal/infra/httpclient"
+	assert "AUTHN=oidc-jwt HTTP bounded profile retained the gRPC adapter" \
+		path_absent "${authn_http_bounded_checkout}/internal/infra/oidcjwt/grpc.go"
+	grep -Fq 'authn = "oidc-jwt"' "${authn_http_bounded_checkout}/template.lock"
+	grep -Fq 'outbound_http = "bounded"' "${authn_http_bounded_checkout}/template.lock"
+	authn_http_bounded_snapshot="$(snapshot "${authn_http_bounded_checkout}")"
+	(
+		cd "${authn_http_bounded_checkout}"
+		CODEOWNER=@acme/platform DATABASE=none GRPC=none AUTHN=oidc-jwt OUTBOUND_HTTP=bounded \
+			bash ./scripts/init-module.sh
+	)
+	assert "repeated bounded HTTP OIDC initialization changed the checkout" \
+		same_text "${authn_http_bounded_snapshot}" "$(snapshot "${authn_http_bounded_checkout}")"
+
+	authn_grpc_checkout="$(copy_template_checkout authn-grpc git@github.com:acme/authn-grpc-service.git)"
+	(
+		cd "${authn_grpc_checkout}"
+		CODEOWNER=@acme/platform DATABASE=none GRPC=enabled AUTHN=oidc-jwt OUTBOUND_HTTP=none \
+			bash ./scripts/init-module.sh
+		go test -vet=off ./...
+		go build ./cmd/service
+		make proto-check
+	)
+	assert "AUTHN=oidc-jwt with GRPC=enabled removed the unary/stream adapter" \
+		file_present "${authn_grpc_checkout}/internal/infra/oidcjwt/grpc.go"
+	assert "AUTHN=oidc-jwt with GRPC=enabled removed gRPC parity proof" \
+		file_present "${authn_grpc_checkout}/internal/infra/oidcjwt/grpc_test.go"
+	grep -Fq 'authn = "oidc-jwt"' "${authn_grpc_checkout}/template.lock"
+	grep -Fq 'grpc = "enabled"' "${authn_grpc_checkout}/template.lock"
+	authn_grpc_snapshot="$(snapshot "${authn_grpc_checkout}")"
+	(
+		cd "${authn_grpc_checkout}"
+		CODEOWNER=@acme/platform DATABASE=none GRPC=enabled AUTHN=oidc-jwt OUTBOUND_HTTP=none \
+			bash ./scripts/init-module.sh
+	)
+	assert "repeated gRPC OIDC initialization changed the checkout" \
+		same_text "${authn_grpc_snapshot}" "$(snapshot "${authn_grpc_checkout}")"
+
+	authn_grpc_bounded_checkout="$(copy_template_checkout authn-grpc-bounded git@github.com:acme/authn-grpc-bounded-service.git)"
+	(
+		cd "${authn_grpc_bounded_checkout}"
+		CODEOWNER=@acme/platform DATABASE=none GRPC=enabled AUTHN=oidc-jwt OUTBOUND_HTTP=bounded \
+			bash ./scripts/init-module.sh
+		go test -vet=off ./...
+		go build ./cmd/service
+		make proto-check
+	)
+	assert "AUTHN=oidc-jwt gRPC bounded profile removed shared HTTP client" \
+		path_present "${authn_grpc_bounded_checkout}/internal/infra/httpclient"
+	assert "AUTHN=oidc-jwt gRPC bounded profile removed gRPC adapter" \
+		file_present "${authn_grpc_bounded_checkout}/internal/infra/oidcjwt/grpc.go"
+	grep -Fq 'authn = "oidc-jwt"' "${authn_grpc_bounded_checkout}/template.lock"
+	grep -Fq 'grpc = "enabled"' "${authn_grpc_bounded_checkout}/template.lock"
+	grep -Fq 'outbound_http = "bounded"' "${authn_grpc_bounded_checkout}/template.lock"
+	authn_grpc_bounded_snapshot="$(snapshot "${authn_grpc_bounded_checkout}")"
+	(
+		cd "${authn_grpc_bounded_checkout}"
+		CODEOWNER=@acme/platform DATABASE=none GRPC=enabled AUTHN=oidc-jwt OUTBOUND_HTTP=bounded \
+			bash ./scripts/init-module.sh
+	)
+	assert "repeated bounded gRPC OIDC initialization changed the checkout" \
+		same_text "${authn_grpc_bounded_snapshot}" "$(snapshot "${authn_grpc_bounded_checkout}")"
 fi
 
 echo "template initialization contract passed"

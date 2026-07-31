@@ -20,6 +20,12 @@ import (
 	"github.com/example/go-service-template-rest/internal/health"
 	httpx "github.com/example/go-service-template-rest/internal/infra/http"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
+
+	// profile:grpc:start
+	// profile:authn-oidc-jwt:start
+	"google.golang.org/grpc"
+	// profile:authn-oidc-jwt:end
+	// profile:grpc:end
 )
 
 // Budgets owned by every profile. How they nest, outermost first:
@@ -163,7 +169,42 @@ func validateShutdownGraceBudget(cfg config.Config) error {
 	)
 }
 
-func Run(args []string) (runErr error) {
+// runtimeWiring carries the one process edge that tests must stop without
+// binding sockets. Authentication adds only capability-owned construction and
+// stage observation fields; initialization removes those fields and values with
+// the rest of the profile.
+type runtimeWiring struct {
+	dependencies func(context.Context, startupBootstrap) (runtimeDependencies, error)
+	serve        func(context.Context, context.Context, serveRuntimeArgs) error
+	// profile:authn-oidc-jwt:start
+	initAuthn  func(context.Context, config.Config, *telemetry.Metrics, *slog.Logger) (authnRuntime, error)
+	authnStage func(authnBootstrapStage)
+	// profile:authn-oidc-jwt:end
+}
+
+func productionRuntimeWiring() runtimeWiring {
+	return runtimeWiring{
+		dependencies: initRuntimeDependencies,
+		serve:        serveRuntime,
+		// profile:authn-oidc-jwt:start
+		initAuthn: func(
+			ctx context.Context,
+			cfg config.Config,
+			metrics *telemetry.Metrics,
+			log *slog.Logger,
+		) (authnRuntime, error) {
+			return initAuthn(ctx, cfg, metrics, log)
+		},
+		authnStage: func(authnBootstrapStage) {},
+		// profile:authn-oidc-jwt:end
+	}
+}
+
+func Run(args []string) error {
+	return runWithRuntime(args, productionRuntimeWiring())
+}
+
+func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 	loadOptions, err := parseLoadOptions(args)
 	if err != nil {
 		return err
@@ -234,7 +275,7 @@ func Run(args []string) (runErr error) {
 	// nothing else multiplies the two.
 	reportRequestBufferBudget(bootstrap.log, bootstrap.cfg, memoryLimit)
 
-	dependencies, err := initRuntimeDependencies(startupCtx, bootstrap)
+	dependencies, err := wiring.dependencies(startupCtx, bootstrap)
 	if err != nil {
 		return err
 	}
@@ -242,6 +283,17 @@ func Run(args []string) (runErr error) {
 	// returns below; the ordered shutdown path closes it explicitly, before the
 	// telemetry flush and after background work has been joined.
 	defer func() { dependencies.Close(shutdown.stage(signalCtx, dependencyCloseTimeout)) }()
+
+	// profile:authn-oidc-jwt:start
+	authnVerifier, err := wiring.initAuthn(startupCtx, bootstrap.cfg, metrics, bootstrap.log)
+	if err != nil {
+		return err
+	}
+	wiring.authnStage(authnStageTrustEstablished)
+	// Close is the pre-Run partial-start safety net and is idempotent after the
+	// supervised runtime has joined.
+	defer authnVerifier.Close()
+	// profile:authn-oidc-jwt:end
 
 	startupAdmission := newStartupAdmissionController()
 
@@ -281,8 +333,18 @@ func Run(args []string) (runErr error) {
 	handler, err := httpx.NewRouter(
 		bootstrap.log,
 		httpx.Handlers{
-			Health:        healthSvc,
-			ReadinessGate: startupAdmission.CheckReady,
+			Health: healthSvc,
+			ReadinessGate: func(ctx context.Context) error {
+				if err := startupAdmission.CheckReady(ctx); err != nil {
+					return err
+				}
+				// profile:authn-oidc-jwt:start
+				if err := authnVerifier.CheckReady(); err != nil {
+					return fmt.Errorf("check authentication readiness: %w", err)
+				}
+				// profile:authn-oidc-jwt:end
+				return nil
+			},
 		},
 		metrics,
 		httpx.RouterConfig{
@@ -295,15 +357,18 @@ func Run(args []string) (runErr error) {
 			// rather than in every operation. A service appends its own domain
 			// mappers to this slice; see httpx.DomainErrorMapper.
 			DomainErrors: domainErrors,
-			// Authenticate is deliberately unset. This contract declares no
-			// security requirement, so nothing reaches the seam; an operation
-			// that adds one gets a fail-closed 401 until a service supplies its
-			// own AuthenticationFunc here.
+			// profile:authn-oidc-jwt:start
+			Authenticate:          httpx.Authenticated(authnVerifier.ResolveHTTP),
+			AuthenticateChallenge: "Bearer",
+			// profile:authn-oidc-jwt:end
 		},
 	)
 	if err != nil {
 		return fmt.Errorf("build http router: %w", err)
 	}
+	// profile:authn-oidc-jwt:start
+	wiring.authnStage(authnStageHTTPRouterBuilt)
+	// profile:authn-oidc-jwt:end
 
 	// ErrorLog routes net/http's own reporting through the service logger. With it
 	// unset, a malformed request line, a TLS handshake failure, or a panic that
@@ -322,6 +387,9 @@ func Run(args []string) (runErr error) {
 		IdleTimeout:       bootstrap.cfg.HTTP.IdleTimeout,
 		MaxHeaderBytes:    bootstrap.cfg.HTTP.MaxHeaderBytes,
 	}
+	// profile:authn-oidc-jwt:start
+	wiring.authnStage(authnStageHTTPServerBuilt)
+	// profile:authn-oidc-jwt:end
 
 	// profile:grpc:start
 	var grpcSrv grpcRuntimeServer
@@ -332,6 +400,10 @@ func Run(args []string) (runErr error) {
 			metrics,
 			domainErrors,
 			grpcRuntimeBindings{
+				// profile:authn-oidc-jwt:start
+				UnaryPolicy:     []grpc.UnaryServerInterceptor{authnVerifier.UnaryInterceptor()},
+				StreamingPolicy: []grpc.StreamServerInterceptor{authnVerifier.StreamInterceptor()},
+				// profile:authn-oidc-jwt:end
 				// The first owned gRPC service and its authentication or
 				// authorization policy are composed here. Generated handlers
 				// stay outside grpcx.
@@ -341,15 +413,35 @@ func Run(args []string) (runErr error) {
 			return buildErr
 		}
 		grpcSrv = builtGRPC
+		// profile:authn-oidc-jwt:start
+		wiring.authnStage(authnStageGRPCServerBuilt)
+		setGRPCAuthnReady(grpcSrv, authnVerifier.CheckReady() == nil)
+		// profile:authn-oidc-jwt:end
 	}
 	// profile:grpc:end
+
+	// profile:authn-oidc-jwt:start
+	supervisor.Go(background.Task{
+		Name: "authn_jwks_refresh",
+		Run: func(ctx context.Context) error {
+			if err := authnVerifier.Run(ctx, func(current bool) {
+				// profile:grpc:start
+				setGRPCAuthnReady(grpcSrv, current)
+				// profile:grpc:end
+			}); err != nil {
+				return fmt.Errorf("run authentication trust refresh: %w", err)
+			}
+			return nil
+		},
+	})
+	// profile:authn-oidc-jwt:end
 
 	var metricsSrv runtimeServer
 	if bootstrap.cfg.Observability.Metrics.Addr != "" {
 		metricsSrv = newDiagnosticsServer(bootstrap.cfg, metrics, errorLog)
 	}
 
-	serveErr := serveRuntime(signalCtx, startupCtx, serveRuntimeArgs{
+	serveErr := wiring.serve(signalCtx, startupCtx, serveRuntimeArgs{
 		cfg:       bootstrap.cfg,
 		log:       bootstrap.log,
 		healthSvc: healthSvc,
@@ -364,7 +456,15 @@ func Run(args []string) (runErr error) {
 		// first probe after admission could still answer 503 from an unevaluated
 		// cache and have the instance pulled straight back out of rotation.
 		readinessCheck: func(ctx context.Context) error {
-			return healthSvc.Refresh(ctx, bootstrap.cfg.HTTP.ReadinessTimeout, bootstrap.cfg.Health.FailureThreshold)
+			if err := healthSvc.Refresh(ctx, bootstrap.cfg.HTTP.ReadinessTimeout, bootstrap.cfg.Health.FailureThreshold); err != nil {
+				return fmt.Errorf("refresh initial readiness: %w", err)
+			}
+			// profile:authn-oidc-jwt:start
+			if err := authnVerifier.CheckReady(); err != nil {
+				return fmt.Errorf("check authentication readiness: %w", err)
+			}
+			// profile:authn-oidc-jwt:end
+			return nil
 		},
 		admission:     startupAdmission,
 		shutdownDelay: bootstrap.cfg.HTTP.ReadinessPropagationDelay,

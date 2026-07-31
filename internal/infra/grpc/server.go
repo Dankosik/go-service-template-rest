@@ -26,6 +26,10 @@ type Server struct {
 
 	healthMu sync.Mutex
 	draining bool
+	// profile:authn-oidc-jwt:start
+	admitted   bool
+	authnReady bool
+	// profile:authn-oidc-jwt:end
 
 	gracefulOnce sync.Once
 	stopOnce     sync.Once
@@ -128,8 +132,11 @@ func NewServer(cfg Config, options Options) (*Server, error) {
 	}
 
 	return &Server{
-		server:       nativeServer,
-		health:       healthServer,
+		server: nativeServer,
+		health: healthServer,
+		// profile:authn-oidc-jwt:start
+		authnReady: true,
+		// profile:authn-oidc-jwt:end
 		gracefulDone: make(chan struct{}),
 		forceStarted: make(chan struct{}),
 	}, nil
@@ -173,8 +180,37 @@ func (s *Server) MarkServing() {
 	if s.draining {
 		return
 	}
+	// profile:authn-oidc-jwt:start
+	s.admitted = true
+	if !s.authnReady {
+		s.health.SetServingStatus("", healthgrpc.HealthCheckResponse_NOT_SERVING)
+		return
+	}
+	// profile:authn-oidc-jwt:end
 	s.health.SetServingStatus("", healthgrpc.HealthCheckResponse_SERVING)
 }
+
+// profile:authn-oidc-jwt:start
+
+// SetAuthnReady composes current authentication trust into standard health.
+func (s *Server) SetAuthnReady(ready bool) {
+	if s == nil {
+		return
+	}
+	s.healthMu.Lock()
+	defer s.healthMu.Unlock()
+	if s.draining {
+		return
+	}
+	s.authnReady = ready
+	status := healthgrpc.HealthCheckResponse_NOT_SERVING
+	if s.admitted && ready {
+		status = healthgrpc.HealthCheckResponse_SERVING
+	}
+	s.health.SetServingStatus("", status)
+}
+
+// profile:authn-oidc-jwt:end
 
 // StartDrain makes every registered health service NOT_SERVING and prevents a
 // later startup result from making it serving again.

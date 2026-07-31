@@ -12,9 +12,13 @@ import (
 	"strings"
 	"time"
 
+	// profile:authn-oidc-jwt:start
+	"github.com/example/go-service-template-rest/internal/infra/oidcjwt"
+	// profile:authn-oidc-jwt:end
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 	"github.com/example/go-service-template-rest/internal/openapi"
 	"github.com/example/go-service-template-rest/internal/problem"
+	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/go-chi/chi/v5"
 	oapimiddleware "github.com/oapi-codegen/nethttp-middleware"
@@ -199,7 +203,14 @@ func openAPIRequestValidator(
 	if err != nil {
 		return nil, fmt.Errorf("http router: load embedded OpenAPI spec: %w", err)
 	}
+	return requestValidator(spec, authenticate, rejectRequest), nil
+}
 
+func requestValidator(
+	spec *openapi3.T,
+	authenticate openapi3filter.AuthenticationFunc,
+	rejectRequest func(http.ResponseWriter, *http.Request, error),
+) openapi.MiddlewareFunc {
 	return oapimiddleware.OapiRequestValidatorWithOptions(spec, &oapimiddleware.Options{
 		DoNotValidateServers: true,
 		Options: openapi3filter.Options{
@@ -214,7 +225,7 @@ func openAPIRequestValidator(
 		) {
 			rejectRequest(w, r, err)
 		},
-	}), nil
+	})
 }
 
 func otelServerName(configured string) string {
@@ -301,6 +312,36 @@ func handleMalformedGeneratedRequest(log *slog.Logger, w http.ResponseWriter, r 
 // a 400.
 func handleGeneratedRequestError(log *slog.Logger, challenge string) func(http.ResponseWriter, *http.Request, error) {
 	return func(w http.ResponseWriter, r *http.Request, err error) {
+		// profile:authn-oidc-jwt:start
+		if authnError, ok := errors.AsType[*oidcjwt.Error](err); ok {
+			logStrictRequestError(log, r, err)
+			switch kind, _ := oidcjwt.KindOf(authnError); kind {
+			case oidcjwt.KindMissing:
+				w.Header().Set("WWW-Authenticate", "Bearer")
+				writeProblem(w, r, problemResponse{code: problem.CodeUnauthorized, detail: "credentials are missing"})
+			case oidcjwt.KindInvalid:
+				w.Header().Set("WWW-Authenticate", `Bearer error="invalid_token"`)
+				writeProblem(w, r, problemResponse{code: problem.CodeUnauthorized, detail: "credentials are invalid"})
+			case oidcjwt.KindMalformed:
+				w.Header().Set("WWW-Authenticate", `Bearer error="invalid_request"`)
+				writeProblem(w, r, problemResponse{code: problem.CodeBadRequest, detail: "authentication credential is malformed"})
+			case oidcjwt.KindOversize:
+				writeProblem(w, r, problemResponse{
+					code:   problem.CodeRequestHeaderFieldsTooLarge,
+					detail: "authentication credential is too large",
+				})
+			case oidcjwt.KindUnavailable:
+				w.Header().Set("Retry-After", "30")
+				writeProblem(w, r, problemResponse{code: problem.CodeServiceUnavailable, detail: "authentication trust is unavailable"})
+			case oidcjwt.KindUntrustedTransport:
+				writeProblem(w, r, problemResponse{code: problem.CodeBadRequest, detail: "authentication transport is untrusted"})
+			default:
+				w.Header().Set("WWW-Authenticate", challenge)
+				writeProblem(w, r, problemResponse{code: problem.CodeUnauthorized, detail: "credentials are invalid"})
+			}
+			return
+		}
+		// profile:authn-oidc-jwt:end
 		if _, ok := errors.AsType[*openapi3filter.SecurityRequirementsError](err); ok {
 			logStrictRequestError(log, r, err)
 			// The challenge names an HTTP authentication scheme, which is not the

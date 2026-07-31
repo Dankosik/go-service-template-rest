@@ -211,6 +211,12 @@ jobs:
         if: steps.template_source.outputs.required == 'true'
         run: TEMPLATE_INIT_PROFILE=minimal make template-init-check GOLANGCI_LINT_BIN=golangci-lint
 
+      # profile:authn-oidc-jwt:start
+      - name: Prove generated OIDC JWT services
+        if: steps.template_source.outputs.required == 'true'
+        run: TEMPLATE_INIT_PROFILE=authn make template-init-check GOLANGCI_LINT_BIN=golangci-lint
+      # profile:authn-oidc-jwt:end
+
       # profile:grpc:start
       - name: Prove generated native gRPC service
         if: steps.template_source.outputs.required == 'true'

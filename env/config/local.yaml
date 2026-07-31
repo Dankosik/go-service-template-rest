@@ -4,6 +4,15 @@ app:
 http:
   addr: ":8080"
 
+# profile:authn-oidc-jwt:start
+# Replace these with a real local HTTPS issuer and proxy boundary. The
+# reserved example host intentionally cannot provide production trust.
+authn:
+  issuer: "https://issuer.example.com"
+  audience: "https://api.example.com"
+  trusted_proxy_cidrs: "127.0.0.0/8,::1/128"
+# profile:authn-oidc-jwt:end
+
 log:
   level: debug
 

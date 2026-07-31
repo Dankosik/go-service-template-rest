@@ -72,6 +72,11 @@ func resetConfigEnv(t *testing.T) {
 		}
 	})
 	t.Setenv("APP__APP__ENV", "local")
+	// profile:authn-oidc-jwt:start
+	t.Setenv("APP__AUTHN__ISSUER", "https://issuer.example.com")
+	t.Setenv("APP__AUTHN__AUDIENCE", "https://api.example.com")
+	t.Setenv("APP__AUTHN__TRUSTED_PROXY_CIDRS", "127.0.0.0/8,::1/128")
+	// profile:authn-oidc-jwt:end
 }
 
 func configEnvResetKeys(t *testing.T) []string {
