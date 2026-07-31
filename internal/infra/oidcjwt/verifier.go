@@ -327,8 +327,17 @@ func (v *Verifier) Run(ctx context.Context, onTrustCurrent func(bool)) error {
 			publishCurrent()
 		case <-refreshTimer.C():
 			scheduled = v.beginRefresh("scheduled", false)
+			if scheduled == nil {
+				refreshTimer.Reset(RefreshCooldown)
+				continue
+			}
 			scheduledDone = scheduled.done
 		case <-scheduledDone:
+			if scheduled == nil {
+				scheduledDone = nil
+				refreshTimer.Reset(RefreshCooldown)
+				continue
+			}
 			next := RefreshCooldown
 			if scheduled.err == nil {
 				next = RefreshInterval

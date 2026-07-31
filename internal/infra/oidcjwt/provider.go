@@ -65,7 +65,10 @@ func bootstrapTrust(
 	now func() time.Time,
 	log *slog.Logger,
 ) (*keySet, string, providerClient, error) {
-	issuerURL, _ := url.Parse(policy.issuer)
+	issuerURL, err := url.Parse(policy.issuer)
+	if err != nil || issuerURL == nil {
+		return nil, "", providerClient{}, errors.New("OIDC startup failed at issuer validation")
+	}
 	authority := &url.URL{Scheme: issuerURL.Scheme, Host: issuerURL.Host}
 	discoveryClient, err := factory(authority.String())
 	if err != nil {
@@ -86,7 +89,10 @@ func bootstrapTrust(
 		return nil, "", providerClient{}, errors.New("OIDC startup failed at discovery validation")
 	}
 
-	jwksURL, _ := url.Parse(document.JWKSURI)
+	jwksURL, err := url.Parse(document.JWKSURI)
+	if err != nil || jwksURL == nil {
+		return nil, "", providerClient{}, errors.New("OIDC startup failed at JWKS URL validation")
+	}
 	jwksAuthority := (&url.URL{Scheme: jwksURL.Scheme, Host: jwksURL.Host}).String()
 	jwksClient, err := factory(jwksAuthority)
 	if err != nil {
@@ -136,6 +142,7 @@ func fetchDocument(ctx context.Context, client requestClient, target string) ([]
 func validProviderURL(raw string) bool {
 	parsed, err := url.Parse(strings.TrimSpace(raw))
 	return err == nil &&
+		parsed != nil &&
 		parsed.IsAbs() &&
 		strings.EqualFold(parsed.Scheme, "https") &&
 		parsed.Host != "" &&
