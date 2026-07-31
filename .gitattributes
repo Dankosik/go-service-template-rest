@@ -3,3 +3,6 @@
 # Generated artifacts: keep visible in history but collapse in review UIs where supported.
 internal/openapi/openapi.gen.go linguist-generated=true
 *.gen.go linguist-generated=true
+
+# Unified-diff fixtures necessarily prefix tab-indented context with one space.
+scripts/ci/fixtures/*.patch whitespace=-space-before-tab

@@ -68,14 +68,14 @@ index ab02bed..e3b3cdc 100644
  	httpx "github.com/acme/feature-proof/internal/infra/http"
  	"github.com/acme/feature-proof/internal/infra/telemetry"
  )
-@@ -142,6 +143,7 @@ func Run(args []string) (runErr error) {
+@@ -280,6 +281,7 @@ func Run(args []string) (runErr error) {
+ 	domainErrors := dependencies.DomainErrors()
  	handler, err := httpx.NewRouter(
  		bootstrap.log,
  		httpx.Handlers{
-+			API:           httpx.NewGreetingAPI(greeting.Service{}),
- 			Health:        healthSvc,
- 			ReadinessGate: startupAdmission.CheckReady,
- 		},
++			API:    httpx.NewGreetingAPI(greeting.Service{}),
+ 			Health: healthSvc,
+ 			ReadinessGate: func(ctx context.Context) error {
 diff --git a/internal/greeting/service.go b/internal/greeting/service.go
 new file mode 100644
 index 0000000..2df4efd

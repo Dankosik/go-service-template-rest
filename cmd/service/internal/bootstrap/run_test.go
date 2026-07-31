@@ -206,4 +206,11 @@ func resetShutdownConfigEnv(t *testing.T) {
 			}
 		}
 	}
+	// profile:authn-oidc-jwt:start
+	// Authentication trust has no executable defaults. This test is about the
+	// shipped shutdown budgets, so it supplies the unrelated required policy.
+	t.Setenv("APP__AUTHN__ISSUER", "https://issuer.example.com")
+	t.Setenv("APP__AUTHN__AUDIENCE", "service-api")
+	t.Setenv("APP__AUTHN__TRUSTED_PROXY_CIDRS", "127.0.0.0/8,::1/128")
+	// profile:authn-oidc-jwt:end
 }

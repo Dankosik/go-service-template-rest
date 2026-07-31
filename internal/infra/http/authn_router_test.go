@@ -1,0 +1,277 @@
+package httpx
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"sync/atomic"
+	"testing"
+
+	"github.com/example/go-service-template-rest/internal/health"
+	"github.com/example/go-service-template-rest/internal/infra/oidcjwt"
+	"github.com/example/go-service-template-rest/internal/infra/telemetry"
+	serviceopenapi "github.com/example/go-service-template-rest/internal/openapi"
+	"github.com/example/go-service-template-rest/internal/problem"
+	"github.com/example/go-service-template-rest/internal/reqctx"
+	"github.com/getkin/kin-openapi/openapi3"
+	"github.com/getkin/kin-openapi/openapi3filter"
+	"github.com/go-chi/chi/v5"
+)
+
+const secureTestContract = `openapi: 3.0.3
+info:
+  title: secure test
+  version: 1.0.0
+paths:
+  /secure:
+    get:
+      operationId: secure
+      security:
+        - bearerAuth: []
+      responses:
+        "204":
+          description: accepted
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+`
+
+func TestHTTPAuthnBoundary(t *testing.T) {
+	spec, err := openapi3.NewLoader().LoadFromData([]byte(secureTestContract))
+	if err != nil {
+		t.Fatalf("load secure test contract: %v", err)
+	}
+	if err := spec.Validate(t.Context()); err != nil {
+		t.Fatalf("validate secure test contract: %v", err)
+	}
+
+	tests := []struct {
+		name          string
+		kind          oidcjwt.Kind
+		headers       []string
+		remoteAddr    string
+		wantStatus    int
+		wantChallenge string
+		wantRetry     string
+		wantCode      problem.Code
+		wantDetail    string
+		wantCalls     int64
+	}{
+		{
+			name:       "valid identity reaches handler",
+			headers:    []string{"Bearer opaque-token"},
+			wantStatus: http.StatusNoContent,
+			wantCalls:  1,
+		},
+		{
+			name:          "missing credential",
+			kind:          oidcjwt.KindMissing,
+			wantStatus:    http.StatusUnauthorized,
+			wantChallenge: "Bearer",
+			wantCode:      problem.CodeUnauthorized,
+			wantDetail:    "credentials are missing",
+		},
+		{
+			name:          "invalid token",
+			kind:          oidcjwt.KindInvalid,
+			headers:       []string{"Bearer invalid-token"},
+			wantStatus:    http.StatusUnauthorized,
+			wantChallenge: `Bearer error="invalid_token"`,
+			wantCode:      problem.CodeUnauthorized,
+			wantDetail:    "credentials are invalid",
+		},
+		{
+			name:          "malformed credential",
+			kind:          oidcjwt.KindMalformed,
+			headers:       []string{"Basic opaque-token"},
+			wantStatus:    http.StatusBadRequest,
+			wantChallenge: `Bearer error="invalid_request"`,
+			wantCode:      problem.CodeBadRequest,
+			wantDetail:    "authentication credential is malformed",
+		},
+		{
+			name:          "duplicate credential",
+			kind:          oidcjwt.KindMalformed,
+			headers:       []string{"Bearer one", "Bearer two"},
+			wantStatus:    http.StatusBadRequest,
+			wantChallenge: `Bearer error="invalid_request"`,
+			wantCode:      problem.CodeBadRequest,
+			wantDetail:    "authentication credential is malformed",
+		},
+		{
+			name:       "oversized token",
+			kind:       oidcjwt.KindOversize,
+			headers:    []string{"Bearer " + strings.Repeat("x", oidcjwt.MaxTokenBytes+1)},
+			wantStatus: http.StatusRequestHeaderFieldsTooLarge,
+			wantCode:   problem.CodeRequestHeaderFieldsTooLarge,
+			wantDetail: "authentication credential is too large",
+		},
+		{
+			name:       "unavailable trust requests a bounded retry",
+			kind:       oidcjwt.KindUnavailable,
+			headers:    []string{"Bearer opaque-token"},
+			wantStatus: http.StatusServiceUnavailable,
+			wantRetry:  "30",
+			wantCode:   problem.CodeServiceUnavailable,
+			wantDetail: "authentication trust is unavailable",
+		},
+		{
+			name:       "untrusted transport",
+			kind:       oidcjwt.KindUntrustedTransport,
+			headers:    []string{"Bearer opaque-token"},
+			remoteAddr: "198.51.100.10:1234",
+			wantStatus: http.StatusBadRequest,
+			wantCode:   problem.CodeBadRequest,
+			wantDetail: "authentication transport is untrusted",
+		},
+	}
+
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			var calls atomic.Int64
+			resolve := func(
+				_ context.Context,
+				input *openapi3filter.AuthenticationInput,
+			) (reqctx.Principal, error) {
+				request := authenticatedRequest(input)
+				if request == nil {
+					t.Fatal("authentication input has no request")
+				}
+				request.Header.Del("Authorization")
+				if testCase.kind != 0 {
+					return reqctx.Principal{}, fmt.Errorf(
+						"poison parser/provider detail: %w",
+						oidcjwt.Failure(testCase.kind),
+					)
+				}
+				return reqctx.Principal{Subject: "opaque-subject"}, nil
+			}
+			reject := RejectRequest(slog.New(slog.DiscardHandler), "Bearer")
+			router := chi.NewRouter()
+			router.Use(requestValidator(spec, Authenticated(resolve), reject))
+			router.Get("/secure", func(w http.ResponseWriter, request *http.Request) {
+				calls.Add(1)
+				principal, ok := reqctx.PrincipalFromContext(request.Context())
+				if !ok || principal.Subject != "opaque-subject" {
+					t.Fatalf("handler principal = (%+v, %v), want opaque subject", principal, ok)
+				}
+				if request.Header.Get("Authorization") != "" {
+					t.Fatal("handler-visible Authorization header was retained")
+				}
+				w.WriteHeader(http.StatusNoContent)
+			})
+
+			response := httptest.NewRecorder()
+			request := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/secure", nil)
+			request.RemoteAddr = testCase.remoteAddr
+			if request.RemoteAddr == "" {
+				request.RemoteAddr = "127.0.0.1:1234"
+			}
+			request.Header.Set("X-Forwarded-Proto", "https")
+			for _, value := range testCase.headers {
+				request.Header.Add("Authorization", value)
+			}
+			router.ServeHTTP(response, request)
+
+			if response.Code != testCase.wantStatus {
+				t.Fatalf("status = %d, want %d; body = %s", response.Code, testCase.wantStatus, response.Body.String())
+			}
+			if got := response.Header().Get("WWW-Authenticate"); got != testCase.wantChallenge {
+				t.Fatalf("WWW-Authenticate = %q, want %q", got, testCase.wantChallenge)
+			}
+			if calls.Load() != testCase.wantCalls {
+				t.Fatalf("handler calls = %d, want %d", calls.Load(), testCase.wantCalls)
+			}
+			if strings.Contains(response.Body.String(), "poison") ||
+				strings.Contains(response.Body.String(), "parser") ||
+				strings.Contains(response.Body.String(), "provider") {
+				t.Fatal("response leaked authentication error detail")
+			}
+			if got := response.Header().Get("Retry-After"); got != testCase.wantRetry {
+				t.Fatalf("Retry-After = %q, want %q", got, testCase.wantRetry)
+			}
+			if testCase.wantCode != "" {
+				assertAuthnProblem(t, response, testCase.wantCode, testCase.wantStatus, testCase.wantDetail)
+			}
+		})
+	}
+}
+
+func assertAuthnProblem(
+	t *testing.T,
+	response *httptest.ResponseRecorder,
+	wantCode problem.Code,
+	wantStatus int,
+	wantDetail string,
+) {
+	t.Helper()
+	if got := response.Header().Get("Content-Type"); !strings.HasPrefix(got, "application/problem+json") {
+		t.Fatalf("Content-Type = %q, want application/problem+json", got)
+	}
+	var decoded serviceopenapi.Problem
+	if err := json.Unmarshal(response.Body.Bytes(), &decoded); err != nil {
+		t.Fatalf("decode authentication problem: %v", err)
+	}
+	if decoded.Code != string(wantCode) ||
+		decoded.Status != int32(wantStatus) ||
+		decoded.Detail == nil ||
+		*decoded.Detail != wantDetail ||
+		decoded.Title == "" ||
+		decoded.Type == "" {
+		t.Fatalf(
+			"authentication problem = %+v, want code %q status %d detail %q with stable title/type",
+			decoded,
+			wantCode,
+			wantStatus,
+			wantDetail,
+		)
+	}
+}
+
+func TestOpenAPIRuntimeContract(t *testing.T) {
+	t.Run("Authn", func(t *testing.T) {
+		spec, err := serviceopenapi.GetSpec()
+		if err != nil {
+			t.Fatalf("load generated OpenAPI: %v", err)
+		}
+		if len(spec.Security) != 1 {
+			t.Fatalf("top-level security = %#v, want exactly one requirement", spec.Security)
+		}
+		requirement := spec.Security[0]
+		scopes, ok := requirement["bearerAuth"]
+		if !ok || len(requirement) != 1 || len(scopes) != 0 {
+			t.Fatalf("top-level security requirement = %#v, want bearerAuth only", requirement)
+		}
+		if spec.Components == nil || spec.Components.SecuritySchemes["bearerAuth"] == nil {
+			t.Fatal("generated OpenAPI has no bearerAuth security scheme")
+		}
+
+		for _, path := range []string{"/health/live", "/health/ready"} {
+			item := spec.Paths.Value(path)
+			if item == nil || item.Get == nil || item.Get.Security == nil || len(*item.Get.Security) != 0 {
+				t.Fatalf("%s GET security = %#v, want explicit anonymous override", path, item)
+			}
+		}
+
+		router := mustNewRouter(
+			t,
+			slog.New(slog.DiscardHandler),
+			Handlers{Health: health.New()},
+			telemetry.New(),
+			RouterConfig{},
+		)
+		for _, path := range []string{"/health/live", "/health/ready"} {
+			response := doRequest(router, http.MethodGet, path)
+			if response.Code != http.StatusOK {
+				t.Fatalf("%s status = %d, want %d", path, response.Code, http.StatusOK)
+			}
+		}
+	})
+}

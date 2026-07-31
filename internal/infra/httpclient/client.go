@@ -101,6 +101,12 @@ type Config struct {
 	DependencyName string
 	BaseURL        string
 	TargetClass    TargetClass
+	// profile:authn-oidc-jwt:start
+	// DisableInstrumentation prevents fixed identity-provider endpoints and
+	// credential-adjacent request metadata from entering the general outbound
+	// trace path. It is reserved for the OIDC trust bootstrap.
+	DisableInstrumentation bool
+	// profile:authn-oidc-jwt:end
 	// PrivateHostSuffix is the required hostname suffix for PrivateHTTP
 	// targets, and is required for them. It is ignored for ExternalHTTPS.
 	PrivateHostSuffix      string
@@ -206,7 +212,7 @@ func New(cfg Config, meterProvider metric.MeterProvider) (*Client, error) {
 	// Instrumentation sits inside retries so each attempt is its own span and
 	// metric sample. The fixed-authority and response-size bounds remain innermost
 	// and therefore apply to every attempt.
-	instrumented := otelhttp.NewTransport(
+	var instrumented http.RoundTripper = otelhttp.NewTransport(
 		bounded,
 		otelhttp.WithMeterProvider(meterProvider),
 		otelhttp.WithPropagators(propagation.TraceContext{}),
@@ -214,7 +220,12 @@ func New(cfg Config, meterProvider metric.MeterProvider) (*Client, error) {
 			attribute.String("dependency.name", strings.TrimSpace(cfg.DependencyName)),
 		)),
 	)
-	var roundTripper http.RoundTripper = instrumented
+	// profile:authn-oidc-jwt:start
+	if cfg.DisableInstrumentation {
+		instrumented = bounded
+	}
+	// profile:authn-oidc-jwt:end
+	roundTripper := instrumented
 	if cfg.Retry.enabled() {
 		roundTripper = retryTransport{base: instrumented, policy: cfg.Retry}
 	}

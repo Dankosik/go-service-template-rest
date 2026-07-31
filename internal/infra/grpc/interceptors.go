@@ -281,6 +281,10 @@ func mappedStatus(mapped problem.Mapped) error {
 		code = codes.Aborted
 	case problem.CodeRequestEntityTooLarge, problem.CodeTooManyRequests:
 		code = codes.ResourceExhausted
+	// profile:authn-oidc-jwt:start
+	case problem.CodeRequestHeaderFieldsTooLarge:
+		code = codes.ResourceExhausted
+	// profile:authn-oidc-jwt:end
 	case problem.CodeServiceUnavailable:
 		code = codes.Unavailable
 	case problem.CodeGatewayTimeout:

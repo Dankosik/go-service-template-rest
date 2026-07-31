@@ -209,6 +209,12 @@ func sentinelConfigSourceValues() map[string]any {
 		"http.max_connections":             1024,
 		"http.access_log_health_probes":    true,
 
+		// profile:authn-oidc-jwt:start
+		"authn.issuer":              "https://issuer.snapshot.example",
+		"authn.audience":            "snapshot-api",
+		"authn.trusted_proxy_cidrs": "192.0.2.0/24",
+		// profile:authn-oidc-jwt:end
+
 		// profile:grpc:start
 		"grpc.server.enabled":                        true,
 		"grpc.server.addr":                           ":19091",
@@ -283,6 +289,12 @@ func expectedSentinelSnapshotValues() map[string]any {
 		"http.max_in_flight":               512,
 		"http.max_connections":             1024,
 		"http.access_log_health_probes":    true,
+
+		// profile:authn-oidc-jwt:start
+		"authn.issuer":              "https://issuer.snapshot.example",
+		"authn.audience":            "snapshot-api",
+		"authn.trusted_proxy_cidrs": "192.0.2.0/24",
+		// profile:authn-oidc-jwt:end
 
 		// profile:grpc:start
 		"grpc.server.enabled":                        true,

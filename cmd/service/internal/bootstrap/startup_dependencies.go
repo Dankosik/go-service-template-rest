@@ -119,6 +119,13 @@ func classifyPostgresDomainError(err error) (problem.Mapped, bool) {
 // connection still held at this point is a leaked handler, not a slow close, and
 // reporting it beats waiting for it.
 func (d runtimeDependencies) Close(ctx context.Context) {
+	// profile:authn-oidc-jwt:start
+	// Ordered bootstrap proof substitutes an empty dependency owner before the
+	// authentication stage. Production dependency values remain non-empty.
+	if d.postgres == nil {
+		return
+	}
+	// profile:authn-oidc-jwt:end
 	if d.closed == nil {
 		d.postgres.Close()
 		return

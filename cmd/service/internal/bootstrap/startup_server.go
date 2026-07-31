@@ -29,7 +29,20 @@ type grpcRuntimeServer interface {
 	runtimeServer
 	MarkServing()
 	StartDrain()
+	// profile:authn-oidc-jwt:start
+	SetAuthnReady(ready bool)
+	// profile:authn-oidc-jwt:end
 }
+
+// profile:authn-oidc-jwt:start
+
+func setGRPCAuthnReady(server grpcRuntimeServer, ready bool) {
+	if server != nil {
+		server.SetAuthnReady(ready)
+	}
+}
+
+// profile:authn-oidc-jwt:end
 
 // profile:grpc:end
 

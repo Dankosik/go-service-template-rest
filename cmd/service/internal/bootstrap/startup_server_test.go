@@ -79,6 +79,9 @@ type fakeGRPCRuntimeServer struct {
 	startDrain      chan struct{}
 	markServingOnce sync.Once
 	startDrainOnce  sync.Once
+	// profile:authn-oidc-jwt:start
+	authnReadiness chan bool
+	// profile:authn-oidc-jwt:end
 }
 
 func newFakeGRPCRuntimeServer() *fakeGRPCRuntimeServer {
@@ -86,12 +89,22 @@ func newFakeGRPCRuntimeServer() *fakeGRPCRuntimeServer {
 		fakeRuntimeServer: newFakeRuntimeServer(),
 		markServing:       make(chan struct{}),
 		startDrain:        make(chan struct{}),
+		// profile:authn-oidc-jwt:start
+		authnReadiness: make(chan bool, 8),
+		// profile:authn-oidc-jwt:end
 	}
 }
 
 func (f *fakeGRPCRuntimeServer) MarkServing() {
 	f.markServingOnce.Do(func() { close(f.markServing) })
 }
+
+// profile:authn-oidc-jwt:start
+func (f *fakeGRPCRuntimeServer) SetAuthnReady(ready bool) {
+	f.authnReadiness <- ready
+}
+
+// profile:authn-oidc-jwt:end
 
 func (f *fakeGRPCRuntimeServer) StartDrain() {
 	f.startDrainOnce.Do(func() { close(f.startDrain) })
