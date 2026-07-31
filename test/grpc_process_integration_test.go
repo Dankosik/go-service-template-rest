@@ -18,6 +18,7 @@ import (
 
 	"github.com/example/go-service-template-rest/internal/infra/grpcclient"
 	"github.com/example/go-service-template-rest/internal/infra/postgres/pgtest"
+	"github.com/example/go-service-template-rest/internal/reqctx"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -85,7 +86,10 @@ func TestGRPCProcessLifecycle(t *testing.T) {
 
 	conn, err := grpcclient.New(
 		grpcclient.DefaultConfig(grpcAddr),
-		grpcclient.Options{TransportCredentials: insecure.NewCredentials()},
+		grpcclient.Options{
+			TransportCredentials: insecure.NewCredentials(),
+			Propagation:          grpcclient.PropagationTrustedService,
+		},
 	)
 	if err != nil {
 		t.Fatalf("build gRPC health client: %v", err)
@@ -98,10 +102,7 @@ func TestGRPCProcessLifecycle(t *testing.T) {
 	retry := time.NewTicker(20 * time.Millisecond)
 	defer retry.Stop()
 	const requestID = "grpc_process_integration_123"
-	readyCallCtx := metadata.NewOutgoingContext(
-		readyCtx,
-		metadata.Pairs("x-request-id", requestID),
-	)
+	readyCallCtx := reqctx.ContextWithRequestID(readyCtx, requestID)
 	var responseHeader metadata.MD
 	for {
 		response, checkErr := healthClient.Check(

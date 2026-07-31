@@ -56,6 +56,7 @@ migrations/                                schema migration source
 internal/infra/postgres/queries/            sqlc query source
 internal/infra/postgres/sqlcgen/            generated sqlc output
 internal/infra/<outbound-system>/            outbound adapter
+internal/infra/grpcclient/                   bounded shared gRPC client connection
 cmd/<worker>/                               additional process
 api/proto/                                  protobuf source
 test/performance/http/<feature>.js           multi-step k6 scenario
@@ -76,7 +77,8 @@ packages. There is no reserved empty `api/proto/`, `migrations/`, `queries/`, or
 | `internal/config/` | config schema, defaults, loading, parsing, validation, immutable snapshot | feature behavior and adapter construction |
 | `internal/openapi/` | generated Go bindings and generation config | hand-written handlers or business logic |
 | `internal/infra/http/` (`package httpx`) | HTTP mapping, router, middleware, Problem responses | SQL, database repositories, business decisions |
-| `internal/infra/httpclient/` (`OUTBOUND_HTTP=bounded`) | outbound fixed-authority transport safety and lifecycle | provider auth, retries, error mapping, or business policy |
+| `internal/infra/httpclient/` (`OUTBOUND_HTTP=bounded`) | outbound fixed-authority transport safety, correlation enforcement, retry mechanism, and lifecycle | provider auth, concrete trust selection, retry eligibility, error mapping, or business policy |
+| `internal/infra/grpcclient/` (`GRPC=enabled`) | bounded shared connections, correlation-policy enforcement, resolver metadata sanitization, and connection lifecycle seam | provider auth, concrete trust selection, operation deadlines or retries, generated-client ownership, or readiness policy |
 | `internal/infra/postgres/` | pool, concrete repositories, query mapping | HTTP behavior, migration execution, and business policy |
 | `internal/infra/postgresmigrate/` | Goose lifecycle, source/state admission, lock, and migration result metadata | service startup, domain policy, and production rollback commands |
 | `internal/infra/telemetry/` | OpenTelemetry/Prometheus SDK setup and exporters | feature policy |
@@ -297,6 +299,12 @@ until it names a concrete owner.
    order.
 6. Add config, telemetry, startup wiring, and cleanup only for dependencies the
    feature actually uses.
+   For an outbound gRPC dependency, bootstrap owns one reusable
+   `grpcclient` connection and closes it; the dependency adapter owns the
+   generated client and selects `PropagationNone`, `PropagationTraceContext`,
+   or `PropagationTrustedService` from the accepted trust boundary. No policy
+   propagates baggage, and the shared connection deliberately supports neither
+   environment proxies nor resolver-provided service configs.
 7. Add sibling unit/contract tests and `test/<feature>_integration_test.go` only
    when real infrastructure is part of the claim.
 8. Run the matching generators, `make project-structure-check`, focused tests,

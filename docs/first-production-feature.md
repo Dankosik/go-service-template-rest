@@ -234,7 +234,8 @@ Create a provider adapter under `internal/infra/<provider>`. Reuse
 `net/http` directly for an ordinary provider-specific client. If the repository
 was initialized with `OUTBOUND_HTTP=bounded`, reuse
 `internal/infra/httpclient` for fixed-authority URL validation, transport
-bounds, trace propagation, response-size limits, and idle-connection cleanup.
+bounds, explicit correlation-policy enforcement, response-size limits, and
+idle-connection cleanup.
 Select `TargetClass: ExternalHTTPS` for public providers, or `PrivateHTTP` for
 a service reachable only on the platform's private network. `PrivateHTTP`
 requires `PrivateHostSuffix`, your platform's private DNS zone — for example
@@ -249,6 +250,97 @@ provider error mapping, and generated client ownership in the adapter. Let the
 deployment platform enforce network egress. Add tests for
 timeout/cancellation, oversized responses, redirects, error bodies, and
 cleanup. Dynamic or user-controlled URLs require a separate SSRF design.
+
+The zero propagation policy is `PropagationNone`: local client telemetry
+remains, but no trace or request ID is disclosed remotely. Select
+`PropagationTraceContext` for an approved W3C-only boundary, or
+`PropagationTrustedService` for a service allowed to receive both W3C Trace
+Context and the valid request ID already in the operation context. Private DNS
+or TLS alone does not establish that trust. All modes remove caller-supplied
+`traceparent`, `tracestate`, `baggage`, and `X-Request-ID` before each attempt;
+baggage is never propagated.
+
+Generate the provider client from its authoritative versioned OpenAPI schema,
+then give it the bounded client through oapi-codegen's generated seam:
+
+```go
+bounded, err := httpclient.New(httpclient.Config{
+    DependencyName:         "orders",
+    BaseURL:                "http://orders.railway.internal:8080",
+    TargetClass:            httpclient.PrivateHTTP,
+    PrivateHostSuffix:      "railway.internal",
+    RequestTimeout:         2 * time.Second,
+    ResponseHeaderTimeout:  time.Second,
+    MaxResponseHeaderBytes: 16 << 10,
+    MaxResponseBodyBytes:   1 << 20,
+    MaxConnsPerHost:        16,
+    Propagation:            httpclient.PropagationTrustedService,
+}, metrics.MeterProvider())
+if err != nil {
+    return err
+}
+
+orders, err := ordersv1.NewClient(
+    bounded.BaseURL(),
+    ordersv1.WithHTTPClient(bounded),
+)
+if err != nil {
+    bounded.CloseIdleConnections()
+    return err
+}
+// Bootstrap retains bounded for reuse and closes its idle pool at shutdown.
+_ = orders // The adapter calls the provider's generated operations with ctx unchanged.
+```
+
+The adapter passes the operation context unchanged and maps generated
+transport types and errors into feature-owned types and errors. It does not
+hand-edit generated code or duplicate the provider schema locally.
+
+<!-- profile:grpc:start -->
+### Call another service over gRPC
+
+Create one long-lived connection per fixed dependency with
+`internal/infra/grpcclient`, share it between that dependency's generated
+clients, and let bootstrap close the connection during shutdown. The
+constructor is lazy: successful construction does not prove that the target is
+reachable. Each operation still owns its deadline, retry eligibility, and
+provider-error mapping.
+
+Select propagation at the dependency's trust boundary. `PropagationNone` is
+the zero value: it retains local client telemetry while sending no remote
+correlation. `PropagationTraceContext` sends only W3C Trace Context.
+`PropagationTrustedService` additionally sends the valid request ID already in
+the operation context. Private DNS or TLS does not by itself justify the
+trusted-service policy. Every policy removes stale `traceparent`,
+`tracestate`, `baggage`, and `x-request-id` metadata before the call; baggage
+is never propagated.
+
+```go
+connection, err := grpcclient.New(
+    grpcclient.DefaultConfig("dns:///orders.railway.internal:9000"),
+    grpcclient.Options{
+        TransportCredentials: credentials.NewTLS(tlsConfig),
+        Propagation:          grpcclient.PropagationTrustedService,
+    },
+)
+if err != nil {
+    return err
+}
+// Bootstrap retains connection for reuse and calls connection.Close() during
+// shutdown or after any later startup failure.
+
+healthClient := healthgrpc.NewHealthClient(connection)
+_ = healthClient // Provider-generated clients use the same grpc.ClientConnInterface seam.
+```
+
+Pass the operation context unchanged to the generated method. The shared
+connection deliberately ignores environment proxies and resolver-provided
+service configurations, so a proxy, resolver-selected balancer, or configured
+retry cannot silently bypass its metadata policy. A dependency that requires
+one of those mechanisms needs a separate design. grpc-go's native transparent
+retry may still occur before commitment; application retry remains an explicit
+per-operation adapter decision.
+<!-- profile:grpc:end -->
 
 ## 7. Wire, observe, and prove
 

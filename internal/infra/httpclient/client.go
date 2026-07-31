@@ -26,7 +26,6 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	metricnoop "go.opentelemetry.io/otel/metric/noop"
-	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -141,6 +140,9 @@ type Config struct {
 	// method, with no attempt cap tied to the caller's remaining budget. See
 	// retryTransport for the three rules that make a repeat safe.
 	Retry RetryPolicy
+	// Propagation is the immutable correlation-disclosure policy for this
+	// target. Its zero value emits nothing remotely.
+	Propagation PropagationPolicy
 }
 
 // Client owns one reusable HTTP client and its underlying connection pool.
@@ -215,7 +217,7 @@ func New(cfg Config, meterProvider metric.MeterProvider) (*Client, error) {
 	var instrumented http.RoundTripper = otelhttp.NewTransport(
 		bounded,
 		otelhttp.WithMeterProvider(meterProvider),
-		otelhttp.WithPropagators(propagation.TraceContext{}),
+		otelhttp.WithPropagators(policyPropagator{policy: cfg.Propagation}),
 		otelhttp.WithSpanOptions(trace.WithAttributes(
 			attribute.String("dependency.name", strings.TrimSpace(cfg.DependencyName)),
 		)),
@@ -225,9 +227,10 @@ func New(cfg Config, meterProvider metric.MeterProvider) (*Client, error) {
 		instrumented = bounded
 	}
 	// profile:authn-oidc-jwt:end
-	roundTripper := instrumented
+	sanitized := propagationSanitizer{base: instrumented}
+	var roundTripper http.RoundTripper = sanitized
 	if cfg.Retry.enabled() {
-		roundTripper = retryTransport{base: instrumented, policy: cfg.Retry}
+		roundTripper = retryTransport{base: sanitized, policy: cfg.Retry}
 	}
 
 	return &Client{
@@ -267,6 +270,9 @@ func (c *Client) CloseIdleConnections() {
 }
 
 func validateConfig(cfg Config) (*url.URL, error) {
+	if !cfg.Propagation.valid() {
+		return nil, errors.New("build outbound HTTP client: propagation policy is invalid")
+	}
 	if strings.TrimSpace(cfg.DependencyName) == "" {
 		return nil, errors.New("build outbound HTTP client: dependency name is required")
 	}

@@ -10,7 +10,6 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/otel/metric"
 	metricnoop "go.opentelemetry.io/otel/metric/noop"
-	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
 	tracenoop "go.opentelemetry.io/otel/trace/noop"
 	"google.golang.org/grpc"
@@ -47,7 +46,7 @@ type Options struct {
 	TransportCredentials credentials.TransportCredentials
 	MeterProvider        metric.MeterProvider
 	TracerProvider       trace.TracerProvider
-	Propagators          propagation.TextMapPropagator
+	Propagation          PropagationPolicy
 }
 
 // New constructs a shareable ClientConn without performing network I/O. The
@@ -70,6 +69,9 @@ func New(cfg Config, options Options) (*grpc.ClientConn, error) {
 	if cfg.MaxSendMessageBytes <= 0 {
 		return nil, errors.New("build gRPC client: max send message bytes must be positive")
 	}
+	if !options.Propagation.valid() {
+		return nil, errors.New("build gRPC client: propagation policy is invalid")
+	}
 
 	meterProvider := options.MeterProvider
 	if meterProvider == nil {
@@ -79,14 +81,16 @@ func New(cfg Config, options Options) (*grpc.ClientConn, error) {
 	if tracerProvider == nil {
 		tracerProvider = tracenoop.NewTracerProvider()
 	}
-	propagators := options.Propagators
-	if propagators == nil {
-		propagators = propagation.TraceContext{}
-	}
+	propagators := policyPropagator{policy: options.Propagation}
 
 	connection, err := grpc.NewClient(
 		target,
 		grpc.WithTransportCredentials(options.TransportCredentials),
+		grpc.WithDisableServiceConfig(),
+		grpc.WithNoProxy(),
+		grpc.WithResolvers(sanitizingResolverBuilders(target)...),
+		grpc.WithChainUnaryInterceptor(propagationUnaryInterceptor),
+		grpc.WithChainStreamInterceptor(propagationStreamInterceptor),
 		grpc.WithMaxHeaderListSize(cfg.MaxHeaderListBytes),
 		grpc.WithDefaultCallOptions(
 			grpc.MaxCallRecvMsgSize(cfg.MaxReceiveMessageBytes),
