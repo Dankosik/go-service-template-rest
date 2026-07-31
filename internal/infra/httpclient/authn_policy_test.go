@@ -63,7 +63,11 @@ func TestAuthnExternalHTTPSPolicy(t *testing.T) {
 		t.Fatalf("New(ordinary egress) error = %v", err)
 	}
 	t.Cleanup(ordinaryClient.CloseIdleConnections)
-	if _, ok := ordinaryClient.httpClient.Transport.(*otelhttp.Transport); !ok {
-		t.Fatalf("ordinary transport = %T, want instrumented transport", ordinaryClient.httpClient.Transport)
+	sanitized, ok := ordinaryClient.httpClient.Transport.(propagationSanitizer)
+	if !ok {
+		t.Fatalf("ordinary transport = %T, want propagation sanitizer", ordinaryClient.httpClient.Transport)
+	}
+	if _, ok := sanitized.base.(*otelhttp.Transport); !ok {
+		t.Fatalf("ordinary inner transport = %T, want instrumented transport", sanitized.base)
 	}
 }

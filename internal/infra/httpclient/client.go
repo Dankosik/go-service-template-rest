@@ -222,15 +222,15 @@ func New(cfg Config, meterProvider metric.MeterProvider) (*Client, error) {
 			attribute.String("dependency.name", strings.TrimSpace(cfg.DependencyName)),
 		)),
 	)
-	// profile:authn-oidc-jwt:start
-	if cfg.DisableInstrumentation {
-		instrumented = bounded
-	}
-	// profile:authn-oidc-jwt:end
 	sanitized := propagationSanitizer{base: instrumented}
 	var roundTripper http.RoundTripper = sanitized
+	// profile:authn-oidc-jwt:start
+	if cfg.DisableInstrumentation {
+		roundTripper = bounded
+	}
+	// profile:authn-oidc-jwt:end
 	if cfg.Retry.enabled() {
-		roundTripper = retryTransport{base: sanitized, policy: cfg.Retry}
+		roundTripper = retryTransport{base: roundTripper, policy: cfg.Retry}
 	}
 
 	return &Client{
