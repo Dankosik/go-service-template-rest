@@ -70,12 +70,10 @@ status: draft | ready | blocked | done
 
 When review is triggered, `PASS` or dispositioned `CONCERNS` can move an artifact to `ready`; `FAIL` requires repair or reopening and fresh review.
 
-For `tasks.md`, the implementation phase's [root acceptance
-contract](../phases/implementation-validation-closeout.md#stop-rule) authorizes
-the state transition. When an acceptance unit passes mapped proof and any
-triggered independent review, change every member task to `[x]` together. Record
-one compact unit receipt only when proof must survive a checkout, session, or
-external-environment boundary:
+For `tasks.md`, the implementation phase's [Acceptance-Unit
+Closure](../phases/implementation-validation-closeout.md#acceptance-unit-closure)
+authorizes the state transition. Record one compact unit receipt only when
+proof must survive a checkout, session, or external-environment boundary:
 
 ```markdown
   - Accepted: <unit or task IDs>; evidence: <command or source and result>; candidate: <bounded diff or commit/tree>
@@ -94,14 +92,12 @@ blocked`, and append or replace one unit-local line:
 Replace that line with the accepted receipt after proof instead of accumulating
 attempts. Do not add a second lifecycle field.
 
-Record a passing unit immediately: until its member checkboxes are `[x]`, the
-unit satisfies no dependency and no dependent task or new planned wave may
-start. Members already running inside the same accepted planned wave may
-continue. A receipt alias closes mechanically in the same ledger edit once its
-named accepted receipt exists; it creates no candidate or proof. Task selection
-and resume derive completed and remaining work from the persisted checkboxes.
-After the final accepted task and any aliases, set `status: done` in the same
-edit.
+The accepted-unit transition changes every member task to `[x]` in one ledger
+edit. A receipt alias closes mechanically in that edit once its named accepted
+receipt exists; it creates no candidate or proof. Task selection, dependency
+movement, and resume follow the phase-owned closure using the persisted
+checkboxes. After the final accepted task and any aliases, set `status: done` in
+the same edit.
 
 Add a reviewed revision or verdict only when a review actually occurred. Do not maintain parallel fields for phase state, artifact lifecycle, record validity, session boundary, handoff readiness, waiver, and routing revision unless a concrete external consumer requires them.
 

@@ -441,6 +441,11 @@ if [[ "${source_checkout}" != true ]]; then
 			cmd/service/internal/bootstrap/startup_dependencies_test.go \
 			cmd/service/internal/bootstrap/startup_rejections_test.go \
 			internal/infra/telemetry/telemetrytest/metrics.go \
+			scripts/ci/migration-source-check.sh \
+			scripts/ci/migration-history-check.sh \
+			scripts/ci/migration-check-self-test.sh \
+			scripts/ci/migration-image-history-check.sh \
+			scripts/ci/migration-publication-check.sh \
 			env/docker-compose.yml
 		cp \
 			scripts/profiles/database-none/startup_dependencies.go.tmpl \
@@ -451,6 +456,7 @@ if [[ "${source_checkout}" != true ]]; then
 			"${new_module}"
 		strip_profile database-postgres remove
 		go -C tools mod edit -droptool=github.com/sqlc-dev/sqlc/cmd/sqlc
+		go -C tools mod edit -droptool=github.com/pressly/goose/v3/cmd/goose
 		go mod tidy
 		go -C tools mod tidy
 	else

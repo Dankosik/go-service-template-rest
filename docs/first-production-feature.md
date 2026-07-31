@@ -170,19 +170,28 @@ feature. Neither `migrations/` nor `internal/infra/postgres/queries/` exists yet
 `project-structure-check` rejects both until they hold real content, so you
 create each one with its first file rather than inheriting an empty placeholder.
 
-`golang-migrate` applies migrations in filename order, and every change is a
-pair:
+Goose applies migrations by the fixed-width numeric prefix. Every change is one
+file with explicit directions:
 
 ```text
-migrations/0001_create_orders.up.sql
-migrations/0001_create_orders.down.sql
+migrations/000001_orders_create.sql
 ```
 
-Keep one logical change per pair with a `down` that genuinely reverses `up`, go
-additive first — add a column nullable, backfill, constrain it in a later pair —
-so a rollback never strands rows, and keep `CREATE INDEX CONCURRENTLY` out of the
-transaction the runner opens. `sqlc.yaml` reads `migrations/*.up.sql` as the
-schema, so a new table reaches generation only once its `up` file exists.
+```sql
+-- +goose Up
+CREATE TABLE orders (...);
+
+-- +goose Down
+DROP TABLE orders;
+```
+
+Keep one logical change per file with a `Down` section that genuinely reverses
+`Up`. Go additive first — add a column nullable, backfill, constrain it in a
+later migration — so rollback does not strand rows. Every migration is
+transactional: `-- +goose NO TRANSACTION`, environment substitution, Go
+migrations, nested directories, symlinks, and non-canonical filenames are
+rejected before a database connection is opened. `sqlc.yaml` reads the
+directory and derives schema from Goose `Up` sections.
 
 Each query file names itself and its result shape:
 
@@ -191,12 +200,13 @@ Each query file names itself and its result shape:
 SELECT id, customer_id, total_cents FROM orders WHERE id = $1;
 ```
 
-Add paired deterministic migrations under `migrations/`, SQL query
+Add deterministic Goose migrations under `migrations/`, SQL query
 sources under `internal/infra/postgres/queries`, and regenerate with:
 
 ```bash
 make sqlc-generate
 make sqlc-check
+make migration-check
 make migration-validate
 ```
 

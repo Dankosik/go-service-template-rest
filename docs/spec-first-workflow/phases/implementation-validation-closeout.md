@@ -35,6 +35,21 @@ not completion evidence.
   required proof is unavailable, report that blocker as `implementation
   complete; verification incomplete`.
 
+## Acceptance-Unit Closure
+
+For ledger work, select one ready acceptance unit from the authoritative ledger
+and keep its recorded boundary fixed through implementation, bounded root
+review, mapped validation, any triggered fresh one-shot review, root acceptance,
+and the immediate persisted transition defined by [Artifact
+Model](../shared/artifact-model.md#minimal-status). That transition is the
+unit's completion criterion.
+
+Only after that transition may task selection re-evaluate `Depends on` and
+start a dependent unit or new planned wave. Members already running inside the
+same accepted planned wave remain provisional and may continue. When the
+transition cannot occur, the current unit remains selected for the phase-owned
+correction, reopen, or blocker disposition.
+
 ## Implement
 
 Inspect current diff/status and trace the accepted observable through its
@@ -172,10 +187,11 @@ decision but cannot treat a triggered `FAIL` or `BLOCKED` as passing. A material
 candidate or proof-precondition change invalidates the verdict and triggers a
 new one-shot lane only for the affected review boundary.
 
-After root acceptance, apply the immediate persisted transition owned by
-[Artifact Model](../shared/artifact-model.md#minimal-status). When the unit
-contains the final unchecked task, the root also checks the ledger's global
-`Completion` condition and every required task disposition.
+After root acceptance, return to
+[Acceptance-Unit Closure](#acceptance-unit-closure) and apply its persisted
+transition through [Artifact Model](../shared/artifact-model.md#minimal-status).
+When the unit contains the final unchecked task, the root also checks the
+ledger's global `Completion` condition and every required task disposition.
 
 An inline direct outcome with no persisted `tasks.md` has no ledger transition;
 the root closes it only under this phase's Stop Rule and evidence requirements.
@@ -207,5 +223,6 @@ durable goal or artifact, not a third completion state.
 
 For a ledger acceptance unit, these criteria determine whether the root may
 accept the fixed candidate and what a triggered reviewer must falsify. A changed
-decision reopens its narrowest upstream owner; after acceptance, closeout is the
-only authorized next action.
+decision reopens its narrowest upstream owner; after acceptance, completing
+[Acceptance-Unit Closure](#acceptance-unit-closure) is the only authorized next
+action before closeout or later work.

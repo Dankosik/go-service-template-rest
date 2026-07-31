@@ -6,238 +6,311 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"os"
-	pathpkg "path"
-	"strings"
+	"log/slog"
 	"time"
 
-	"github.com/example/go-service-template-rest/internal/infra/postgres"
-	migrate "github.com/golang-migrate/migrate/v4"
-	pgxmigrate "github.com/golang-migrate/migrate/v4/database/pgx/v5"
-	"github.com/golang-migrate/migrate/v4/source/iofs"
-	_ "github.com/jackc/pgx/v5/stdlib" // registers the pgx/v5 database/sql driver
+	"github.com/pressly/goose/v3"
+	"github.com/pressly/goose/v3/database"
+	gooselock "github.com/pressly/goose/v3/lock"
 )
 
 type MigrationOptions struct {
 	DSN              string
 	SourceFS         fs.FS
 	SourcePath       string
+	ConnectTimeout   time.Duration
 	StatementTimeout time.Duration
 	LockTimeout      time.Duration
+	CleanupTimeout   time.Duration
+	Logger           *slog.Logger
 }
 
-type migrationExecutor interface {
-	Up() error
-	Down() error
-	Close() (error, error)
+type migrationDirection string
+
+const (
+	directionUp   migrationDirection = "up"
+	directionDown migrationDirection = "down"
+)
+
+// MigrateUp applies every pending canonical migration under the Goose session lock.
+func MigrateUp(ctx context.Context, opts MigrationOptions) (RunResult, error) {
+	return migrate(ctx, opts, directionUp)
 }
 
-// MigrateUp applies pending migrations and reports whether anything changed.
-func MigrateUp(ctx context.Context, opts MigrationOptions) (bool, error) {
-	changed := false
-	err := withMigrationRunner(ctx, opts, func(runner migrationExecutor) error {
-		applied, upErr := applyMigrations(ctx, runner)
-		changed = applied
-		return upErr
-	})
-	if err != nil {
-		return false, err
-	}
-	return changed, nil
-}
-
-// MigrateDown rolls every applied migration back.
+// MigrateDown rolls every applied migration back on a disposable database.
 //
-// It destroys the schema and everything in it, and is deliberately not reachable
-// from the migrate binary. The version this replaced exposed it as a `validate`
-// subcommand that applied, rolled back, and reapplied — shipped in the production
-// image, next to the entrypoint that applies migrations, reading the same
-// APP__POSTGRES__DSN. It needed an env-var interlock to be safe there, and a
-// capability that needs an interlock to be safe in the place it is installed does
-// not belong in that place.
-//
-// Proving that down migrations work is CI's job against a throwaway database, which
-// is what test/postgres_migrate_runner_integration_test.go does with this.
-func MigrateDown(ctx context.Context, opts MigrationOptions) error {
-	return withMigrationRunner(ctx, opts, func(runner migrationExecutor) error {
-		downErr := runner.Down()
-		if contextErr := ctx.Err(); contextErr != nil {
-			return joinMigrationContextError("roll back all postgres migrations", downErr, contextErr)
-		}
-		if downErr != nil {
-			return migrationOperationError("roll back all postgres migrations", downErr)
-		}
-		return nil
-	})
+// Production composition deliberately exposes only MigrateUp.
+func MigrateDown(ctx context.Context, opts MigrationOptions) (RunResult, error) {
+	return migrate(ctx, opts, directionDown)
 }
 
-// withMigrationRunner opens the source and database drivers, hands the runner to
-// operate, and closes both whatever operate did.
-func withMigrationRunner(ctx context.Context, opts MigrationOptions, operate func(migrationExecutor) error) error {
-	normalizedSourcePath, err := normalizeMigrationSourcePath(opts.SourcePath)
-	if err != nil {
-		return err
-	}
-	if err := validateMigrationTimeouts(opts); err != nil {
-		return err
-	}
-
-	normalizedDSN, err := postgres.NormalizeDSN(opts.DSN)
-	if err != nil {
-		return fmt.Errorf("validate postgres migration dsn: %w", err)
-	}
-
-	sourceFS := opts.SourceFS
-	if sourceFS == nil {
-		sourceFS = os.DirFS("/")
-	}
-
-	sourceDriver, err := iofs.New(sourceFS, normalizedSourcePath)
-	if err != nil {
-		return fmt.Errorf("open migration source %q: %w", opts.SourcePath, err)
-	}
-
-	databaseHandle, err := sql.Open("pgx/v5", normalizedDSN)
-	if err != nil {
-		sourceCloseErr := sourceDriver.Close()
-		if sourceCloseErr != nil {
-			return errors.Join(
-				fmt.Errorf("open postgres migration database: %w", err),
-				fmt.Errorf("close migration source: %w", sourceCloseErr),
-			)
-		}
-		return fmt.Errorf("open postgres migration database: %w", err)
-	}
-
-	// The migration driver owns databaseHandle only after WithInstance
-	// succeeds; every failure path here must close it directly.
-	databaseDriver, err := pgxmigrate.WithInstance(databaseHandle, &pgxmigrate.Config{
-		StatementTimeout: opts.StatementTimeout,
-	})
-	if err != nil {
-		closeErr := closeMigrationResources(sourceDriver, databaseHandle)
-		if closeErr != nil {
-			return errors.Join(
-				fmt.Errorf("open postgres migration driver: %w", err),
-				closeErr,
-			)
-		}
-		return fmt.Errorf("open postgres migration driver: %w", err)
-	}
-
-	runner, err := migrate.NewWithInstance("iofs", sourceDriver, "pgx", databaseDriver)
-	if err != nil {
-		closeErr := closeMigrationResources(sourceDriver, databaseDriver)
-		if closeErr != nil {
-			return errors.Join(
-				fmt.Errorf("build migration runner: %w", err),
-				closeErr,
-			)
-		}
-		return fmt.Errorf("build migration runner: %w", err)
-	}
-	runner.LockTimeout = opts.LockTimeout
-	stopSignals := make(chan bool, 1)
-	runner.GracefulStop = stopSignals
-	stopWatcher := context.AfterFunc(ctx, func() { stopSignals <- true })
-	defer stopWatcher()
-
-	return runMigrationOperation(ctx, runner, operate)
-}
-
-func runMigrationOperation(
+func migrate(
 	ctx context.Context,
-	runner migrationExecutor,
-	operate func(migrationExecutor) error,
-) (err error) {
+	opts MigrationOptions,
+	direction migrationDirection,
+) (result RunResult, retErr error) {
+	started := time.Now()
 	defer func() {
-		sourceErr, databaseErr := runner.Close()
-		if closeErr := errors.Join(sourceErr, databaseErr); closeErr != nil {
-			err = errors.Join(err, fmt.Errorf("close migration runner: %w", closeErr))
+		result.Duration = time.Since(started)
+	}()
+
+	source, err := admitSource(opts.SourceFS, opts.SourcePath)
+	if err != nil {
+		return result, stageError(FailureSource, err)
+	}
+	if err := validateMigrationOptions(opts); err != nil {
+		return result, stageError(FailureConfig, err)
+	}
+
+	executionCtx, cancelExecution, err := executionContext(ctx, opts.CleanupTimeout)
+	if err != nil {
+		return result, stageError(FailureConfig, err)
+	}
+	defer cancelExecution()
+
+	db, err := openMigrationDB(opts)
+	if err != nil {
+		return result, stageError(FailureConfig, err)
+	}
+
+	locker, err := gooselock.NewPostgresSessionLocker(
+		gooselock.WithLockTimeout(1, secondsCeiling(opts.LockTimeout)),
+		gooselock.WithUnlockTimeout(1, secondsCeiling(opts.CleanupTimeout)),
+	)
+	if err != nil {
+		_ = db.Close()
+		return result, stageError(FailureConfig, fmt.Errorf("build goose session locker: %w", err))
+	}
+
+	var (
+		lockConn *sql.Conn
+		locked   bool
+	)
+	defer func() {
+		cleanupErr := cleanupMigrationResources(ctx, opts.CleanupTimeout, locker, lockConn, locked, db)
+		if cleanupErr != nil {
+			retErr = stageError(FailureCleanup, errors.Join(retErr, cleanupErr))
 		}
 	}()
 
-	if ctxErr := ctx.Err(); ctxErr != nil {
-		return fmt.Errorf("run postgres migrations canceled: %w", ctxErr)
+	if err := db.PingContext(executionCtx); err != nil {
+		return result, stageError(FailureConnect, fmt.Errorf("ping postgres migration database: %w", err))
 	}
-	return operate(runner)
-}
+	lockConn, err = acquireMigrationLock(executionCtx, db, locker, opts.LockTimeout)
+	if err != nil {
+		return result, err
+	}
+	locked = true
 
-// applyMigrations runs Up and reports whether the schema moved. ErrNoChange is not
-// a failure: an already-current schema is the ordinary outcome of every deploy after
-// the one that introduced a migration.
-func applyMigrations(ctx context.Context, runner migrationExecutor) (bool, error) {
-	upErr := runner.Up()
-	if contextErr := ctx.Err(); contextErr != nil {
-		return false, joinMigrationContextError("run postgres migrations", upErr, contextErr)
+	store, err := database.NewStore(database.DialectPostgres, goose.DefaultTablename)
+	if err != nil {
+		return result, stageError(FailureConfig, fmt.Errorf("build goose postgres store: %w", err))
 	}
-	if upErr != nil {
-		if errors.Is(upErr, migrate.ErrNoChange) {
-			return false, nil
+	before, err := loadMigrationState(executionCtx, lockConn, store, source.Migrations)
+	if err != nil {
+		return result, stageError(FailureState, err)
+	}
+	result.Before = before.Current
+	result.After = before.Current
+	result.Target = before.Target
+	if direction == directionDown {
+		result.Target = 0
+		before.Target = 0
+	}
+	logMigrationPlan(executionCtx, opts.Logger, direction, before, len(source.Migrations))
+
+	if len(source.Migrations) == 0 {
+		return result, nil
+	}
+
+	provider, err := goose.NewProvider(
+		goose.DialectPostgres,
+		db,
+		source.FS,
+		goose.WithDisableGlobalRegistry(true),
+		goose.WithLogger(goose.NopLogger()),
+		goose.WithVerbose(false),
+	)
+	if err != nil {
+		return result, stageError(FailureSource, fmt.Errorf("build goose provider: %w", err))
+	}
+
+	var gooseResults []*goose.MigrationResult
+	switch direction {
+	case directionUp:
+		gooseResults, err = provider.Up(executionCtx)
+	case directionDown:
+		gooseResults, err = provider.DownTo(executionCtx, 0)
+	default:
+		return result, stageError(FailureConfig, fmt.Errorf("unsupported migration direction %q", direction))
+	}
+	result.Migrations = migrationResultsFromGoose(gooseResults)
+
+	if err != nil {
+		if partial, ok := errors.AsType[*goose.PartialError](err); ok {
+			result.Migrations = migrationResultsFromGoose(partial.Applied)
+			failed := migrationResultFromGoose(partial.Failed)
+			result.Failed = &failed
 		}
-		return false, migrationOperationError("run postgres migrations", upErr)
+		setPartialAfter(&result, direction, source.Migrations)
+		logMigrationResults(executionCtx, opts.Logger, result)
+		return result, stageError(FailureExecute, err)
 	}
-	return true, nil
+
+	setPartialAfter(&result, direction, source.Migrations)
+	after, stateErr := loadMigrationState(executionCtx, lockConn, store, source.Migrations)
+	if stateErr != nil {
+		logMigrationResults(executionCtx, opts.Logger, result)
+		return result, stageError(FailureState, stateErr)
+	}
+	result.After = after.Current
+	logMigrationResults(executionCtx, opts.Logger, result)
+	return result, nil
 }
 
-func validateMigrationTimeouts(opts MigrationOptions) error {
+func acquireMigrationLock(
+	ctx context.Context,
+	db *sql.DB,
+	locker gooselock.SessionLocker,
+	timeout time.Duration,
+) (*sql.Conn, error) {
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return nil, stageError(
+			FailureConnect,
+			fmt.Errorf("acquire postgres migration lock connection: %w", err),
+		)
+	}
+
+	lockCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	if err := locker.SessionLock(lockCtx, conn); err != nil {
+		return conn, stageError(FailureLock, fmt.Errorf("acquire goose session lock: %w", err))
+	}
+	return conn, nil
+}
+
+func validateMigrationOptions(opts MigrationOptions) error {
+	if opts.ConnectTimeout <= 0 {
+		return fmt.Errorf("postgres migration connect timeout must be > 0")
+	}
 	if opts.StatementTimeout <= 0 {
 		return fmt.Errorf("postgres migration statement timeout must be > 0")
 	}
 	if opts.LockTimeout <= 0 {
 		return fmt.Errorf("postgres migration lock timeout must be > 0")
 	}
+	if opts.CleanupTimeout <= 0 {
+		return fmt.Errorf("postgres migration cleanup timeout must be > 0")
+	}
 	return nil
 }
 
-func joinMigrationContextError(operation string, operationErr, contextErr error) error {
-	canceled := fmt.Errorf("%s canceled: %w", operation, contextErr)
-	if operationErr == nil {
-		return canceled
+func cleanupMigrationResources(
+	parent context.Context,
+	budget time.Duration,
+	locker gooselock.SessionLocker,
+	conn *sql.Conn,
+	locked bool,
+	db *sql.DB,
+) error {
+	cleanupCtx, cancel := detachedCleanupContext(parent, budget)
+	defer cancel()
+
+	var cleanupErr error
+	if locked && conn != nil {
+		if err := locker.SessionUnlock(cleanupCtx, conn); err != nil {
+			cleanupErr = errors.Join(cleanupErr, fmt.Errorf("release goose session lock: %w", err))
+		}
 	}
-	return errors.Join(migrationOperationError(operation, operationErr), canceled)
+	if conn != nil {
+		if err := conn.Close(); err != nil {
+			cleanupErr = errors.Join(cleanupErr, fmt.Errorf("close postgres migration lock connection: %w", err))
+		}
+	}
+	if db != nil {
+		if err := db.Close(); err != nil {
+			cleanupErr = errors.Join(cleanupErr, fmt.Errorf("close postgres migration database: %w", err))
+		}
+	}
+	return cleanupErr
 }
 
-func migrationOperationError(operation string, err error) error {
-	if dirty, ok := errors.AsType[migrate.ErrDirty](err); ok {
-		return fmt.Errorf(
-			"%s: postgres migration state is dirty at version %d; automatic force is disabled; repair and verify the schema, then follow docs/railway-deployment-profile.md: %w",
-			operation,
-			dirty.Version,
-			err,
+func setPartialAfter(
+	result *RunResult,
+	direction migrationDirection,
+	source []sourceMigration,
+) {
+	if len(result.Migrations) == 0 {
+		return
+	}
+	switch direction {
+	case directionUp:
+		result.After = result.Migrations[len(result.Migrations)-1].Version
+	case directionDown:
+		beforeIndex := -1
+		for i, migration := range source {
+			if migration.Version == result.Before {
+				beforeIndex = i
+				break
+			}
+		}
+		remainingIndex := beforeIndex - len(result.Migrations)
+		if remainingIndex < 0 {
+			result.After = 0
+			return
+		}
+		result.After = source[remainingIndex].Version
+	}
+}
+
+func logMigrationPlan(
+	ctx context.Context,
+	logger *slog.Logger,
+	direction migrationDirection,
+	state migrationState,
+	sourceCount int,
+) {
+	if logger == nil {
+		return
+	}
+	logger.InfoContext(
+		ctx,
+		"migration_plan",
+		"migration.direction", string(direction),
+		"migration.before", state.Current,
+		"migration.target", state.Target,
+		"migration.source_count", sourceCount,
+		"migration.applied_count", len(state.Applied),
+	)
+}
+
+func logMigrationResults(ctx context.Context, logger *slog.Logger, result RunResult) {
+	if logger == nil {
+		return
+	}
+	for _, migration := range result.Migrations {
+		logger.InfoContext(
+			ctx,
+			"migration_result",
+			"migration.version", migration.Version,
+			"migration.filename", migration.Filename,
+			"migration.direction", migration.Direction,
+			"migration.duration", migration.Duration,
+			"migration.empty", migration.Empty,
+			"outcome", "success",
 		)
 	}
-	return fmt.Errorf("%s: %w", operation, err)
-}
-
-func normalizeMigrationSourcePath(raw string) (string, error) {
-	trimmed := strings.TrimSpace(raw)
-	if trimmed == "" {
-		return "", fmt.Errorf("migration source path is empty")
+	if result.Failed != nil {
+		logger.ErrorContext(
+			ctx,
+			"migration_result",
+			"migration.version", result.Failed.Version,
+			"migration.filename", result.Failed.Filename,
+			"migration.direction", result.Failed.Direction,
+			"migration.duration", result.Failed.Duration,
+			"migration.empty", result.Failed.Empty,
+			"outcome", "error",
+		)
 	}
-
-	normalized := pathpkg.Clean("/" + trimmed)
-	normalized = strings.TrimPrefix(normalized, "/")
-	if normalized == "." || normalized == "" {
-		return "", fmt.Errorf("migration source path is empty")
-	}
-	if !fs.ValidPath(normalized) {
-		return "", fmt.Errorf("migration source path %q is invalid", raw)
-	}
-
-	return normalized, nil
-}
-
-func closeMigrationResources(sourceCloser interface{ Close() error }, databaseCloser interface{ Close() error }) error {
-	var sourceErr error
-	if sourceCloser != nil {
-		sourceErr = sourceCloser.Close()
-	}
-
-	var databaseErr error
-	if databaseCloser != nil {
-		databaseErr = databaseCloser.Close()
-	}
-
-	return errors.Join(sourceErr, databaseErr)
 }

@@ -11,7 +11,7 @@ on:
 
 concurrency:
   group: cd-${{ github.workflow }}-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'workflow_run' }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -28,11 +28,15 @@ jobs:
       vars.ENABLE_GHCR_PUBLISH == 'true' &&
       github.event_name == 'workflow_run' &&
       github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.head_repository.full_name == github.repository &&
       github.event.workflow_run.head_branch == github.event.repository.default_branch &&
       github.event.workflow_run.head_sha == github.sha
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    concurrency:
+      group: migration-publication-${{ github.repository }}
+      cancel-in-progress: false
     permissions:
       contents: read
       packages: write
@@ -40,6 +44,8 @@ jobs:
       attestations: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Prepare image metadata
         id: meta
@@ -63,10 +69,55 @@ jobs:
         run: |
           printf '%s' "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USER}" --password-stdin
 
+      # profile:database-postgres:start
+      - name: Resolve migration publication mode
+        id: migration_history
+        env:
+          CANDIDATE_SHA: ${{ github.event.workflow_run.head_sha }}
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY_NAME: ${{ github.event.repository.name }}
+          GITHUB_REPOSITORY_OWNER_TYPE: ${{ github.event.repository.owner.type }}
+          MIGRATION_HISTORY_BOOTSTRAP_SHA: ${{ vars.MIGRATION_HISTORY_BOOTSTRAP_SHA }}
+        run: |
+          mode="$(bash ./scripts/ci/migration-image-history-check.sh package-mode)"
+          echo "mode=${mode}" >> "$GITHUB_OUTPUT"
+      # profile:database-postgres:end
+
       - name: Install cosign
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
         with:
           cosign-release: ${{ env.COSIGN_VERSION }}
+
+      # profile:database-postgres:start
+      - name: Load trusted migration history image
+        if: steps.migration_history.outputs.mode == 'history'
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          marker="${{ steps.meta.outputs.image_repo }}:migration-history"
+          digest="$(
+            docker buildx imagetools inspect \
+              --format '{{.Manifest.Digest}}' \
+              "${marker}"
+          )"
+          test -n "${digest}"
+          image="${{ steps.meta.outputs.image_repo }}@${digest}"
+          escaped_repository="${GITHUB_REPOSITORY//./\\.}"
+          identity="^https://github\\.com/${escaped_repository}/\\.github/workflows/cd\\.yml@refs/(heads/.+|tags/v.+)$"
+          cosign verify \
+            --certificate-identity-regexp "${identity}" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            "${image}"
+          gh attestation verify "oci://${image}" --repo "${GITHUB_REPOSITORY}"
+          docker pull "${image}"
+          container="$(docker create "${image}")"
+          trap 'docker rm -f "${container}" >/dev/null 2>&1 || true' EXIT
+          mkdir -p .artifacts/migration-history
+          docker cp "${container}:/migrations/." .artifacts/migration-history/
+          docker rm -f "${container}" >/dev/null
+          trap - EXIT
+      # profile:database-postgres:end
 
       - name: Build image
         run: |
@@ -79,6 +130,19 @@ jobs:
             .
 
       # profile:database-postgres:start
+      - name: Verify candidate preserves published migrations
+        if: steps.migration_history.outputs.mode == 'history'
+        run: |
+          container="$(docker create "${{ steps.meta.outputs.primary_image }}")"
+          trap 'docker rm -f "${container}" >/dev/null 2>&1 || true' EXIT
+          mkdir -p .artifacts/migration-candidate
+          docker cp "${container}:/migrations/." .artifacts/migration-candidate/
+          docker rm -f "${container}" >/dev/null
+          trap - EXIT
+          bash ./scripts/ci/migration-image-history-check.sh compare \
+            .artifacts/migration-history \
+            .artifacts/migration-candidate
+
       - name: Validate migrations and runtime image
         run: |
           make migration-validate \
@@ -154,6 +218,20 @@ jobs:
             --repo "${GITHUB_REPOSITORY}" \
             --predicate-type "https://cyclonedx.org/bom"
 
+      # profile:database-postgres:start
+      - name: Advance verified migration history marker
+        run: |
+          docker tag \
+            "${{ steps.meta.outputs.primary_image }}" \
+            "${{ steps.meta.outputs.image_repo }}:migration-history"
+          docker push "${{ steps.meta.outputs.image_repo }}:migration-history"
+          test "$(
+            docker buildx imagetools inspect \
+              --format '{{.Manifest.Digest}}' \
+              "${{ steps.meta.outputs.image_repo }}:migration-history"
+          )" = "${{ steps.digest.outputs.digest }}"
+      # profile:database-postgres:end
+
       - name: Promote verified main tag
         run: |
           docker tag \
@@ -187,10 +265,26 @@ jobs:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    permissions:
+      actions: read
+      contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+
+      - name: Require successful push CI for release commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          runs="$(
+            gh api --paginate --slurp \
+              "/repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?event=push&head_sha=${GITHUB_SHA}&status=completed&per_page=100"
+          )"
+          jq -e --arg sha "${GITHUB_SHA}" \
+            'any(.[] | .workflow_runs[]?;
+              .head_sha == $sha and .event == "push" and .conclusion == "success")' \
+            <<<"${runs}" >/dev/null
 
       - name: Setup Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -265,6 +359,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: release-preflight
     timeout-minutes: 45
+    concurrency:
+      group: migration-publication-${{ github.repository }}
+      cancel-in-progress: false
     permissions:
       contents: read
       packages: write
@@ -295,10 +392,54 @@ jobs:
         run: |
           printf '%s' "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USER}" --password-stdin
 
+      # profile:database-postgres:start
+      - name: Resolve migration publication mode
+        id: migration_history
+        env:
+          CANDIDATE_SHA: ${{ github.sha }}
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY_NAME: ${{ github.event.repository.name }}
+          GITHUB_REPOSITORY_OWNER_TYPE: ${{ github.event.repository.owner.type }}
+          MIGRATION_HISTORY_BOOTSTRAP_SHA: ${{ vars.MIGRATION_HISTORY_BOOTSTRAP_SHA }}
+        run: |
+          mode="$(bash ./scripts/ci/migration-image-history-check.sh package-mode)"
+          echo "mode=${mode}" >> "$GITHUB_OUTPUT"
+      # profile:database-postgres:end
+
       - name: Install cosign
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
         with:
           cosign-release: ${{ env.COSIGN_VERSION }}
+
+      # profile:database-postgres:start
+      - name: Load trusted migration history image
+        if: steps.migration_history.outputs.mode == 'history'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          marker="${{ steps.meta.outputs.image_repo }}:migration-history"
+          digest="$(
+            docker buildx imagetools inspect \
+              --format '{{.Manifest.Digest}}' \
+              "${marker}"
+          )"
+          test -n "${digest}"
+          image="${{ steps.meta.outputs.image_repo }}@${digest}"
+          escaped_repository="${GITHUB_REPOSITORY//./\\.}"
+          identity="^https://github\\.com/${escaped_repository}/\\.github/workflows/cd\\.yml@refs/(heads/.+|tags/v.+)$"
+          cosign verify \
+            --certificate-identity-regexp "${identity}" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            "${image}"
+          gh attestation verify "oci://${image}" --repo "${GITHUB_REPOSITORY}"
+          docker pull "${image}"
+          container="$(docker create "${image}")"
+          trap 'docker rm -f "${container}" >/dev/null 2>&1 || true' EXIT
+          mkdir -p .artifacts/migration-history
+          docker cp "${container}:/migrations/." .artifacts/migration-history/
+          docker rm -f "${container}" >/dev/null
+          trap - EXIT
+      # profile:database-postgres:end
 
       - name: Build image
         run: |
@@ -311,6 +452,19 @@ jobs:
             .
 
       # profile:database-postgres:start
+      - name: Verify candidate preserves published migrations
+        if: steps.migration_history.outputs.mode == 'history'
+        run: |
+          container="$(docker create "${{ steps.meta.outputs.primary_image }}")"
+          trap 'docker rm -f "${container}" >/dev/null 2>&1 || true' EXIT
+          mkdir -p .artifacts/migration-candidate
+          docker cp "${container}:/migrations/." .artifacts/migration-candidate/
+          docker rm -f "${container}" >/dev/null
+          trap - EXIT
+          bash ./scripts/ci/migration-image-history-check.sh compare \
+            .artifacts/migration-history \
+            .artifacts/migration-candidate
+
       - name: Validate migrations and runtime image
         run: |
           make migration-validate \
@@ -384,6 +538,20 @@ jobs:
           gh attestation verify "oci://${IMAGE}" \
             --repo "${GITHUB_REPOSITORY}" \
             --predicate-type "https://cyclonedx.org/bom"
+
+      # profile:database-postgres:start
+      - name: Advance verified migration history marker
+        run: |
+          docker tag \
+            "${{ steps.meta.outputs.primary_image }}" \
+            "${{ steps.meta.outputs.image_repo }}:migration-history"
+          docker push "${{ steps.meta.outputs.image_repo }}:migration-history"
+          test "$(
+            docker buildx imagetools inspect \
+              --format '{{.Manifest.Digest}}' \
+              "${{ steps.meta.outputs.image_repo }}:migration-history"
+          )" = "${{ steps.digest.outputs.digest }}"
+      # profile:database-postgres:end
 
       - name: Promote verified release tags
         run: |

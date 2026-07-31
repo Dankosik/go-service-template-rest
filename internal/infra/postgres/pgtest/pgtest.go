@@ -47,6 +47,7 @@ import (
 const DefaultImage = "postgres:17@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d"
 
 const (
+	externalDSNEnv        = "PGTEST_POSTGRES_DSN"
 	containerStartTimeout = 2 * time.Minute
 	databaseOpTimeout     = time.Minute
 	migrationTimeout      = time.Minute
@@ -64,6 +65,10 @@ var (
 // It returns an exit code rather than calling os.Exit, so the caller's TestMain
 // stays the one place the process ends.
 func Main(m *testing.M, image string) int {
+	if externalDSN := strings.TrimSpace(os.Getenv(externalDSNEnv)); externalDSN != "" {
+		adminDSN = externalDSN
+		return m.Run()
+	}
 	if strings.TrimSpace(image) == "" {
 		image = DefaultImage
 	}
@@ -160,8 +165,10 @@ func Migrated(tb testing.TB, source fs.FS, path string) string {
 		DSN:              dsn,
 		SourceFS:         source,
 		SourcePath:       path,
+		ConnectTimeout:   databaseOpTimeout,
 		StatementTimeout: migrationTimeout,
 		LockTimeout:      migrationLockTimeout,
+		CleanupTimeout:   migrationLockTimeout,
 	}); err != nil {
 		tb.Fatalf("apply migrations from %s: %v", path, err)
 	}

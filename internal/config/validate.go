@@ -451,6 +451,12 @@ func validatePostgres(cfg PostgresConfig) error {
 	); err != nil {
 		return err
 	}
+	if cfg.MigrationLockTimeout >= cfg.MigrationTimeout {
+		return fmt.Errorf(
+			"%w: postgres.migration_lock_timeout must be less than postgres.migration_timeout to reserve cleanup time",
+			ErrValidate,
+		)
+	}
 	if err := validateDurationRange("postgres.acquire_timeout", cfg.AcquireTimeout, 10*time.Millisecond, 30*time.Second); err != nil {
 		return err
 	}

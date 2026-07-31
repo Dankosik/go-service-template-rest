@@ -55,7 +55,7 @@ BENCH_DB_BASELINE ?= .artifacts/bench/db/baseline.txt
 BENCH_DB_CURRENT ?= .artifacts/bench/db/current.txt
 BENCH_DB_COMPARE_OUTPUT ?= .artifacts/bench/db/comparison.txt
 BENCH_DB_WORKLOAD_ID ?=
-BENCH_DB_SCHEMA_PATH := $(if $(wildcard migrations/*.up.sql),migrations,)
+BENCH_DB_SCHEMA_PATH := $(if $(wildcard migrations/*.sql),migrations,)
 POSTGRES_TEST_IMAGE := $(shell sed -n 's/^const DefaultImage = "\(.*\)"$$/\1/p' internal/infra/postgres/pgtest/pgtest.go)
 # profile:database-postgres:end
 HTTP_BENCH_SCRIPT ?= test/performance/http/single-flow.js
@@ -87,6 +87,11 @@ CODEX_AGENTS_SYNC_SCRIPT := bash ./scripts/codex-agents-sync.sh
 CI_CHANGE_SCOPE_SCRIPT := bash ./scripts/ci/ci-change-scope.sh
 GENERATED_DRIFT_CHECK_SCRIPT := bash ./scripts/ci/generated-drift-check.sh
 PROJECT_STRUCTURE_CHECK_SCRIPT := bash ./scripts/ci/project-structure-check.sh
+# profile:database-postgres:start
+MIGRATION_SOURCE_CHECK_SCRIPT := bash ./scripts/ci/migration-source-check.sh
+MIGRATION_HISTORY_CHECK_SCRIPT := bash ./scripts/ci/migration-history-check.sh
+MIGRATION_PUBLICATION_CHECK_SCRIPT := bash ./scripts/ci/migration-publication-check.sh
+# profile:database-postgres:end
 SECRET_SCAN_SCRIPT := bash ./scripts/ci/secret-scan.sh
 TEMPLATE_OWNED_PURITY_CHECK_SCRIPT := bash ./scripts/ci/template-owned-purity-check.sh
 TEMPLATE_SYNC_SCRIPT := bash ./scripts/template-sync.sh
@@ -114,7 +119,7 @@ BENCHMARK_REMOTE_SCRIPT := bash ./scripts/dev/benchmark-remote.sh
 .PHONY: bench-grpc bench-grpc-smoke bench-grpc-inspect
 # profile:grpc-reference-benchmark:end
 # profile:database-postgres:start
-.PHONY: bench-db bench-db-baseline bench-db-compare sqlc-generate migration-validate compose-up compose-down
+.PHONY: bench-db bench-db-baseline bench-db-compare sqlc-generate migration-source-check migration-history-check migration-check migration-check-self-test migration-publication-check migration-validate compose-up compose-down
 # profile:database-postgres:end
 
 help:
@@ -492,6 +497,22 @@ sqlc-generate:
 sqlc-check:
 	$(GENERATED_DRIFT_CHECK_SCRIPT) sqlc
 
+# profile:database-postgres:start
+migration-source-check:
+	$(MIGRATION_SOURCE_CHECK_SCRIPT)
+
+migration-history-check:
+	BASE_REF="$(BASE_REF)" HEAD_REF="$(HEAD_REF)" MIGRATION_HISTORY_MODE="$(if $(MIGRATION_HISTORY_MODE),$(MIGRATION_HISTORY_MODE),worktree)" $(MIGRATION_HISTORY_CHECK_SCRIPT)
+
+migration-check-self-test:
+	bash ./scripts/ci/migration-check-self-test.sh
+
+migration-check: migration-source-check migration-history-check migration-check-self-test
+
+migration-publication-check:
+	$(MIGRATION_PUBLICATION_CHECK_SCRIPT)
+# profile:database-postgres:end
+
 openapi-generate:
 	go generate $(OPENAPI_PACKAGES)
 
@@ -571,6 +592,9 @@ migration-validate:
 	port="$${address##*:}"; \
 	test -n "$$port" || { echo "failed to resolve rehearsal Postgres port"; exit 1; }; \
 	dsn="postgres://app:app@localhost:$$port/app?sslmode=disable"; \
+	$(MIGRATION_SOURCE_CHECK_SCRIPT); \
+	PGTEST_POSTGRES_DSN="$$dsn" REQUIRE_DOCKER=1 $(GO) test -vet=off -count=1 -tags=integration ./test \
+		-run '^TestPostgresMigrateRepositorySourceRehearsal$$'; \
 	image="$(RUNTIME_IMAGE)"; \
 	if [ -z "$$image" ]; then image="$(SERVICE_NAME):migration"; docker build -f build/docker/Dockerfile -t "$$image" .; fi; \
 	docker run --rm --network "$${project}_default" \

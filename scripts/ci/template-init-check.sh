@@ -350,6 +350,11 @@ for removed in \
 	internal/infra/grpcclient \
 	internal/infra/postgres \
 	internal/infra/postgresmigrate \
+	scripts/ci/migration-source-check.sh \
+	scripts/ci/migration-history-check.sh \
+	scripts/ci/migration-check-self-test.sh \
+	scripts/ci/migration-image-history-check.sh \
+	scripts/ci/migration-publication-check.sh \
 	scripts/dev/benchmark-grpc-check.sh \
 	scripts/proto.sh \
 	scripts/run-buf.sh \
@@ -403,14 +408,23 @@ assert "DATABASE=none retained the migration binary" grep_absent -Fq \
 	'/out/migrate' "${minimal_checkout}/build/docker/Dockerfile"
 assert "DATABASE=none retained migration validation" grep_absent -Fq \
 	'migration-validate:' "${minimal_checkout}/.github/workflows/ci.yml"
+assert "DATABASE=none retained migration Make targets" grep_absent -Fq \
+	'migration-check:' "${minimal_checkout}/Makefile"
 assert "DATABASE=none retained PostgreSQL configuration" grep_absent -Fq \
 	'APP__POSTGRES__ENABLED' "${minimal_checkout}/env/.env.example"
 if (
 	cd "${minimal_checkout}"
 	go list -m all |
-		grep -E 'github.com/(exaring/otelpgx|golang-migrate/migrate|jackc/pgx|testcontainers/testcontainers-go)'
+		grep -E 'github.com/(exaring/otelpgx|jackc/pgx|pressly/goose|testcontainers/testcontainers-go)'
 ); then
 	echo "database-none profile retained PostgreSQL runtime dependencies"
+	exit 1
+fi
+if (
+	cd "${minimal_checkout}"
+	go -C tools tool -n goose >/dev/null 2>&1
+); then
+	echo "database-none profile retained the Goose CLI tool"
 	exit 1
 fi
 (
@@ -452,6 +466,11 @@ for retained in \
 	internal/infra/httpclient \
 	internal/infra/postgres \
 	internal/infra/postgresmigrate \
+	scripts/ci/migration-source-check.sh \
+	scripts/ci/migration-history-check.sh \
+	scripts/ci/migration-check-self-test.sh \
+	scripts/ci/migration-image-history-check.sh \
+	scripts/ci/migration-publication-check.sh \
 	env/docker-compose.yml; do
 	assert "${retained} must survive DATABASE=postgres initialization" path_present "${postgres_checkout}/${retained}"
 done
@@ -461,6 +480,9 @@ grep -Fq 'outbound_http = "bounded"' "${postgres_checkout}/template.lock"
 	cd "${postgres_checkout}"
 	make template-init-check >"${TEMP_ROOT}/postgres-init-check.log"
 	make project-structure-check
+	make migration-check migration-publication-check
+	go -C tools tool -n goose >/dev/null
+	go -C tools tool -n sqlc >/dev/null
 )
 grep -Fq 'upstream-only' "${TEMP_ROOT}/postgres-init-check.log"
 
@@ -468,6 +490,7 @@ if [[ "${TEMPLATE_POSTGRES_PROOF:-0}" == "1" ]]; then
 	(
 		cd "${postgres_checkout}"
 		git apply --recount "${ROOT_DIR}/scripts/ci/fixtures/postgres-post-feature.patch"
+		make migration-check
 		make openapi-generate sqlc-generate
 		# handlers.go is deliberately absent: the feature composes through
 		# Handlers.API, so it adds files instead of editing shared template source.
@@ -488,8 +511,9 @@ malformed_outbound="$(new_fixture malformed-outbound git@github.com:acme/malform
 expect_unchanged_failure "${malformed_outbound}" \
 	env CODEOWNER=@acme/platform OUTBOUND_HTTP=custom bash "${ROOT_DIR}/scripts/init-module.sh"
 	if (
-		cd "${postgres_checkout}"
-		go list -deps ./cmd/service | grep -F 'github.com/golang-migrate/migrate'
+	cd "${postgres_checkout}"
+		go list -deps ./cmd/service |
+			grep -E 'github.com/pressly/goose|internal/infra/postgresmigrate'
 	); then
 		echo "service dependency graph includes migration implementation"
 		exit 1

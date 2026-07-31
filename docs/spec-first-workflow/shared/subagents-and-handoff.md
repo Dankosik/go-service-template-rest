@@ -155,12 +155,26 @@ critical role and harness-native clean-context mechanism. The implementation
 actor and implementation Worker are not eligible reviewers, and a lane used for
 one unit is not resumed for another task ID or unit.
 
+Before accepting the review question, resolve the supplied task IDs against the
+authoritative ledger. A valid dispatch identifies exactly one recorded
+singleton or grouped acceptance unit. Otherwise reject the handoff without a
+phase verdict:
+
+```text
+REVIEW_HANDOFF_INVALID
+received: <task or unit IDs>
+recorded units: <matching singleton or grouped units, or none>
+```
+
+The root corrects the boundary and opens a fresh one-shot lane.
+
 Give the lane the `tasks.md` path and grouped unit IDs or singleton task ID,
 cited accepted sources,
 authoritative candidate location, and irreproducible external evidence. The
 reviewer derives its result from the current contract, candidate, production
 path, dependencies, retained scope, and claim-scoped proof rather than an
-implementation summary. It may run safe non-mutating checks.
+implementation summary. It may run safe non-mutating checks and inspect wider
+candidate context, but returns a verdict only for the resolved unit.
 
 The reviewer keeps the candidate fixed, edits and repairs nothing, and returns
 the [phase-defined verdict and

@@ -67,11 +67,11 @@ second OpenAPI contract and a second `main()` to maintain. Pass
 | --- | --- |
 | Service foundation | Go 1.26, `chi v5`, `koanf v2`, graceful shutdown, health and readiness |
 | API contract | OpenAPI 3.0 and `oapi-codegen v2` with generated request bindings and typed responses |
-| Data | No database by default; optional PostgreSQL 17, `pgx v5`, `golang-migrate v4`, and `sqlc` profile |
+| Data | No database by default; optional PostgreSQL 17, `pgx v5`, `goose v3`, and `sqlc` profile |
 | Outbound HTTP | Standard library by default; optional fixed-authority transport bounds and response-size protection |
 | Observability | OpenTelemetry 1.x traces and metrics, Prometheus export, and structured logs |
 | Testing | Race detection and goroutine leak checks; PostgreSQL Testcontainers coverage in the database profile |
-| Delivery | Docker and GitHub Actions security gates; opt-in GHCR publishing with Cosign and CycloneDX |
+| Delivery | Docker and GitHub Actions security gates; opt-in GHCR publishing with Cosign, CycloneDX, and durable migration-history enforcement |
 | Agent workflow | The complete Codex, Claude Code, and Qwen workflow, always retained ([what that costs](#what-the-agent-workflow-costs)) |
 
 <!-- profile:grpc:start -->
@@ -214,6 +214,7 @@ before choosing packages or tests.
 | `BASE_REF=origin/main make pr-check` | Pull-request checks and OpenAPI compatibility |
 | `make openapi-check` | OpenAPI generation, drift, runtime, lint, and schema checks |
 | `make sqlc-check` | SQL generation drift (PostgreSQL profile) |
+| `make migration-check` | Goose source grammar and append-only review history (PostgreSQL profile) |
 | `make migration-validate` | Migration rehearsal (PostgreSQL profile) |
 | `make test-integration` | Container-backed integration tests when present |
 | `make go-security` | Go static security and vulnerability checks |
