@@ -121,13 +121,11 @@ jobs:
 
       - name: Build image
         run: |
-          docker build \
-            --build-arg APP_VERSION="${{ steps.meta.outputs.version }}" \
-            --build-arg VCS_REF="${GITHUB_SHA}" \
-            --build-arg SOURCE_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
-            -f build/docker/Dockerfile \
-            -t "${{ steps.meta.outputs.image_repo }}:${{ steps.meta.outputs.tag_sha }}" \
-            .
+          APP_VERSION="${{ steps.meta.outputs.version }}" \
+            VCS_REF="${GITHUB_SHA}" \
+            SOURCE_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
+            make runtime-image-build \
+              RUNTIME_IMAGE="${{ steps.meta.outputs.image_repo }}:${{ steps.meta.outputs.tag_sha }}"
 
       # profile:database-postgres:start
       - name: Verify candidate preserves published migrations
@@ -443,13 +441,10 @@ jobs:
 
       - name: Build image
         run: |
-          docker build \
-            --build-arg APP_VERSION="${{ steps.meta.outputs.version }}" \
-            --build-arg VCS_REF="${GITHUB_SHA}" \
-            --build-arg SOURCE_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
-            -f build/docker/Dockerfile \
-            -t "${{ steps.meta.outputs.primary_image }}" \
-            .
+          APP_VERSION="${{ steps.meta.outputs.version }}" \
+            VCS_REF="${GITHUB_SHA}" \
+            SOURCE_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
+            make runtime-image-build RUNTIME_IMAGE="${{ steps.meta.outputs.primary_image }}"
 
       # profile:database-postgres:start
       - name: Verify candidate preserves published migrations

@@ -422,6 +422,7 @@ repeated scans do not download the same database again.
 ```bash
 make migration-check
 make migration-validate
+make runtime-image-build RUNTIME_IMAGE=service:ci
 make docker-build
 make docker-run
 make compose-up
@@ -450,6 +451,15 @@ It starts the same image with a read-only filesystem and dropped capabilities,
 waits for `/health/ready`, optionally checks `RUNTIME_EXPECTED_VERSION` in the
 startup log, and requires a clean SIGTERM exit. Cleanup is registered before
 the rehearsal begins.
+
+`runtime-image-build` builds the current checkout directly after template
+initialization. In the unresolved upstream template only, it first creates a
+temporary deterministic `DATABASE=postgres`, `GRPC=enabled`, `AUTHN=none`,
+`OUTBOUND_HTTP=bounded` service and builds that production-shaped source. This
+keeps missing OIDC trust configuration fail-closed while giving migration,
+startup, shutdown, and container-security checks one runnable image to share.
+The temporary initialized checkout and its removed authentication pack are
+asserted before the build and deleted afterward.
 
 `docker-build` and `docker-run` operate on the production Dockerfile. Compose
 exists for runtime dependencies, not to emulate every native Make target. Its

@@ -113,7 +113,7 @@ BENCHMARK_REMOTE_SCRIPT := bash ./scripts/dev/benchmark-remote.sh
 	actionlint zizmor shellcheck dockerfile-check delivery-quality \
 	openapi-generate openapi-drift-check openapi-reference-compile openapi-runtime-contract-check openapi-lint openapi-validate openapi-breaking openapi-check \
 	proto-format proto-format-check proto-lint proto-generate proto-drift-check proto-breaking proto-check \
-	sqlc-check container-security run build build-pgo docker-build docker-run vendor claude-skills-sync claude-skills-check codex-agents-sync codex-agents-check \
+	sqlc-check runtime-image-build container-security run build build-pgo docker-build docker-run vendor claude-skills-sync claude-skills-check codex-agents-sync codex-agents-check \
 	template-sync template-sync-check template-sync-all template-owned-purity-check
 # profile:grpc-reference-benchmark:start
 .PHONY: bench-grpc bench-grpc-smoke bench-grpc-inspect
@@ -223,7 +223,7 @@ check-full:
 	$(MAKE) delivery-quality
 	$(MAKE) ci-local
 	REQUIRE_DOCKER=1 $(MAKE) test-integration
-	docker build -f build/docker/Dockerfile -t $(SERVICE_NAME):ci .
+	$(MAKE) runtime-image-build RUNTIME_IMAGE=$(SERVICE_NAME):ci
 # profile:database-postgres:start
 	$(MAKE) migration-validate RUNTIME_IMAGE=$(SERVICE_NAME):ci
 # profile:database-postgres:end
@@ -651,6 +651,9 @@ container-security:
 		--exit-code 1 \
 		--format table \
 		"$$image"
+
+runtime-image-build:
+	bash ./scripts/ci/runtime-image-build.sh "$(RUNTIME_IMAGE)"
 
 run:
 	@set -a; \

@@ -220,6 +220,10 @@ through a ruleset in one repository.
 - `make ci-local` — broad native CI aggregate.
 - `make secret-scan` — current worktree plus base-to-HEAD commits;
   `make secret-scan-history` — full-history main/release proof.
+- `make runtime-image-build RUNTIME_IMAGE=service:ci` — direct production-image
+  build for an initialized service; in the unresolved upstream template, a
+  deterministic PostgreSQL + gRPC + bounded-HTTP service with authentication
+  physically removed is initialized first.
 - `make migration-validate` — disposable PostgreSQL, reversible migration
   rehearsal, production-image migrator, startup, readiness, and SIGTERM.
 - `make check-full` — native, Docker-backed integration, runtime image, migration,

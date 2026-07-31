@@ -621,13 +621,10 @@ jobs:
         id: runtime_image
         run: |
           VERSION="sha-${GITHUB_SHA:0:12}"
-          docker build \
-            --build-arg APP_VERSION="${VERSION}" \
-            --build-arg VCS_REF="${GITHUB_SHA}" \
-            --build-arg SOURCE_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
-            -f build/docker/Dockerfile \
-            -t service:ci \
-            .
+          APP_VERSION="${VERSION}" \
+            VCS_REF="${GITHUB_SHA}" \
+            SOURCE_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
+            make runtime-image-build RUNTIME_IMAGE=service:ci
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: Scan image with Trivy
