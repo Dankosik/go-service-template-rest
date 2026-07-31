@@ -82,7 +82,7 @@ func TestOTelStatsHandlersTraceAndMeasureUnaryAndStreamingRPCs(t *testing.T) {
 			TransportCredentials: insecure.NewCredentials(),
 			MeterProvider:        meterProvider,
 			TracerProvider:       tracerProvider,
-			Propagators:          propagation.TraceContext{},
+			Propagation:          grpcclient.PropagationTraceContext,
 		},
 	)
 	if err != nil {

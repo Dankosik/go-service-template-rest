@@ -8,13 +8,16 @@ info:
 servers:
   - url: /
     description: current service origin
-security: []
+security: [{bearerAuth: []}]
 tags:
   - name: system
     description: Operational endpoints for liveness and readiness.
 paths:
   /health/live:
     get:
+      # profile:authn-oidc-jwt:start
+      security: []
+      # profile:authn-oidc-jwt:end
       tags: [system]
       summary: Liveness probe
       operationId: healthLive
@@ -37,6 +40,9 @@ paths:
           $ref: "#/components/responses/InternalServerError"
   /health/ready:
     get:
+      # profile:authn-oidc-jwt:start
+      security: []
+      # profile:authn-oidc-jwt:end
       tags: [system]
       summary: Readiness probe
       operationId: healthReady
@@ -65,6 +71,14 @@ paths:
                 type: string
                 example: not ready
 components:
+  # profile:authn-oidc-jwt:start
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Strict RFC 9068 access token issued by the configured OIDC issuer.
+  # profile:authn-oidc-jwt:end
   schemas:
     Problem:
       type: object

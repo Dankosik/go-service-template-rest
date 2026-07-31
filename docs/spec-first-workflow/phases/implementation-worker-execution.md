@@ -121,9 +121,8 @@ shrink the wave to the proven passing subset. Review, prove, and integrate that
 subset while the failed member and its dependents remain provisional. Keep
 coupled members together when the failure crosses an interface, invariant,
 generated/manual authority, mutable resource, or proof precondition. Start
-later work only after the required acceptance units complete the persisted
-transition owned by [Artifact
-Model](../shared/artifact-model.md#minimal-status).
+later work only through the phase-owned [Acceptance-Unit
+Closure](implementation-validation-closeout.md#acceptance-unit-closure).
 
 ## Candidate Intake And Correction
 

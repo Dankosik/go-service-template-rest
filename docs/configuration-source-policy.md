@@ -124,9 +124,12 @@ Allowed roots can be overridden with `APP_CONFIG_ALLOWED_ROOTS`. In non-local en
   in-flight statement can still take up to its separate
   `postgres.migration_statement_timeout`, which defaults to `2m`.
   `postgres.migration_lock_timeout` bounds waiting for the migration lock and
-  defaults to `15s`. Statement and lock budgets must not exceed the overall
-  budget. A service owner should increase them only from rehearsal evidence
-  for the actual schema and largest production table.
+  defaults to `15s`; the migrator also reserves that duration for detached
+  advisory-lock release and connection cleanup. The statement budget must not
+  exceed the overall budget, and the lock budget must be strictly smaller than
+  it so the cleanup reserve is non-empty. A service owner should increase them
+  only from rehearsal evidence for the actual schema and largest production
+  table.
 - `http.shutdown_timeout` is tunable within validation bounds. `http.readiness_propagation_delay` is counted inside it; the remaining drain budget must still cover `http.write_timeout`.
 - The default process-grace expectation is `30s` HTTP shutdown plus the bootstrap telemetry flush window (`5s`) after HTTP drain. Platform termination grace should cover readiness propagation, HTTP drain, and telemetry flush instead of only the HTTP server timeout.
 

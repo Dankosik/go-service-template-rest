@@ -69,7 +69,6 @@ index 9a1993f..2f2d827 100644
        type: object
        required:
 diff --git a/cmd/service/internal/bootstrap/run.go b/cmd/service/internal/bootstrap/run.go
-index fd91ca9..293c87a 100644
 --- a/cmd/service/internal/bootstrap/run.go
 +++ b/cmd/service/internal/bootstrap/run.go
 @@ -14,9 +14,11 @@ import (
@@ -85,7 +84,8 @@ index fd91ca9..293c87a 100644
  	"github.com/acme/postgres-service/internal/infra/telemetry"
  )
  
-@@ -125,6 +127,11 @@ func Run(args []string) (runErr error) {
+@@ -277,6 +279,11 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
+ 	// returns below; the ordered shutdown path closes it explicitly, before the
  	// telemetry flush and after background work has been joined.
  	defer func() { dependencies.Close(shutdown.stage(signalCtx, dependencyCloseTimeout)) }()
  
@@ -96,14 +96,14 @@ index fd91ca9..293c87a 100644
 +
  	startupAdmission := newStartupAdmissionController()
  
-@@ -150,6 +157,7 @@ func Run(args []string) (runErr error) {
+ 	supervisor := newSupervisedBackground(signalCtx, bootstrap.log)
+@@ -325,6 +332,7 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
  	handler, err := httpx.NewRouter(
  		bootstrap.log,
  		httpx.Handlers{
 +			API:           httpx.NewArticleAPI(articles),
- 			Health:        healthSvc,
- 			ReadinessGate: startupAdmission.CheckReady,
- 		},
+ 			Health: healthSvc,
+ 			ReadinessGate: func(ctx context.Context) error {
 diff --git a/internal/article/article.go b/internal/article/article.go
 new file mode 100644
 index 0000000..e04617b
@@ -246,23 +246,20 @@ index 0000000..e624378
 +INSERT INTO articles (title)
 +VALUES ($1)
 +RETURNING id, title;
-diff --git a/migrations/000001_articles_create.down.sql b/migrations/000001_articles_create.down.sql
-new file mode 100644
-index 0000000..5f6bacd
---- /dev/null
-+++ b/migrations/000001_articles_create.down.sql
-@@ -0,0 +1 @@
-+DROP TABLE articles;
-diff --git a/migrations/000001_articles_create.up.sql b/migrations/000001_articles_create.up.sql
+diff --git a/migrations/000001_articles_create.sql b/migrations/000001_articles_create.sql
 new file mode 100644
 index 0000000..3de4d2d
 --- /dev/null
-+++ b/migrations/000001_articles_create.up.sql
-@@ -0,0 +1,4 @@
++++ b/migrations/000001_articles_create.sql
+@@ -0,0 +1,8 @@
++-- +goose Up
 +CREATE TABLE articles (
 +    id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
 +    title text NOT NULL CHECK (char_length(title) BETWEEN 1 AND 120)
 +);
++
++-- +goose Down
++DROP TABLE articles;
 diff --git a/test/postgres_article_feature_integration_test.go b/test/postgres_article_feature_integration_test.go
 new file mode 100644
 index 0000000..a44756c
@@ -300,18 +297,20 @@ index 0000000..a44756c
 +	defer cancel()
 +
 +	dsn := pgtest.DSN(t)
-+	changed, err := postgresmigrate.MigrateUp(ctx, postgresmigrate.MigrationOptions{
++	result, err := postgresmigrate.MigrateUp(ctx, postgresmigrate.MigrationOptions{
 +		DSN:              dsn,
 +		SourceFS:         os.DirFS(".."),
 +		SourcePath:       "migrations",
++		ConnectTimeout:   3 * time.Second,
 +		StatementTimeout: 2 * time.Minute,
 +		LockTimeout:      15 * time.Second,
++		CleanupTimeout:   15 * time.Second,
 +	})
 +	if err != nil {
 +		t.Fatalf("apply fixture migration: %v", err)
 +	}
-+	if !changed {
-+		t.Fatal("fixture migration reported no change")
++	if len(result.Migrations) != 1 || result.After != 1 {
++		t.Fatalf("fixture migration result = %#v, want one applied migration at version 1", result)
 +	}
 +
 +	pool, err := pgxpool.New(ctx, dsn)

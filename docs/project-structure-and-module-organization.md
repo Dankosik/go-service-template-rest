@@ -56,6 +56,7 @@ migrations/                                schema migration source
 internal/infra/postgres/queries/            sqlc query source
 internal/infra/postgres/sqlcgen/            generated sqlc output
 internal/infra/<outbound-system>/            outbound adapter
+internal/infra/grpcclient/                   bounded shared gRPC client connection
 cmd/<worker>/                               additional process
 api/proto/                                  protobuf source
 test/performance/http/<feature>.js           multi-step k6 scenario
@@ -76,8 +77,10 @@ packages. There is no reserved empty `api/proto/`, `migrations/`, `queries/`, or
 | `internal/config/` | config schema, defaults, loading, parsing, validation, immutable snapshot | feature behavior and adapter construction |
 | `internal/openapi/` | generated Go bindings and generation config | hand-written handlers or business logic |
 | `internal/infra/http/` (`package httpx`) | HTTP mapping, router, middleware, Problem responses | SQL, database repositories, business decisions |
-| `internal/infra/httpclient/` (`OUTBOUND_HTTP=bounded`) | outbound fixed-authority transport safety and lifecycle | provider auth, retries, error mapping, or business policy |
-| `internal/infra/postgres/` | pool, migrations, concrete repositories, query mapping | HTTP behavior and business policy |
+| `internal/infra/httpclient/` (`OUTBOUND_HTTP=bounded`) | outbound fixed-authority transport safety, correlation enforcement, retry mechanism, and lifecycle | provider auth, concrete trust selection, retry eligibility, error mapping, or business policy |
+| `internal/infra/grpcclient/` (`GRPC=enabled`) | bounded shared connections, correlation-policy enforcement, resolver metadata sanitization, and connection lifecycle seam | provider auth, concrete trust selection, operation deadlines or retries, generated-client ownership, or readiness policy |
+| `internal/infra/postgres/` | pool, concrete repositories, query mapping | HTTP behavior, migration execution, and business policy |
+| `internal/infra/postgresmigrate/` | Goose lifecycle, source/state admission, lock, and migration result metadata | service startup, domain policy, and production rollback commands |
 | `internal/infra/telemetry/` | OpenTelemetry/Prometheus SDK setup and exporters | feature policy |
 | `internal/observability/otelconfig/` | pure sampler/exporter policy values | SDK construction and repository runtime imports |
 | `api/openapi/` | client-visible REST source of truth | generated Go or runtime handlers |
@@ -112,7 +115,8 @@ Use the first matching rule.
    - concrete feature adapter:
      `internal/infra/postgres/<feature>_repository.go`;
    - migration:
-     `migrations/NNNNNN_<feature>_<change>.up.sql` and matching `.down.sql`;
+     `migrations/NNNNNN_<feature>_<change>.sql` with one Goose `Up` and one
+     `Down` section;
    - sqlc source: `internal/infra/postgres/queries/<feature>.sql`;
    - generated result: `internal/infra/postgres/sqlcgen/`.
 5. Is it another outbound system?
@@ -220,12 +224,13 @@ that binary; file size alone is not a package boundary.
 | --- | --- | --- |
 | `api/openapi/service.yaml` + `internal/openapi/oapi-codegen.yaml` | `internal/openapi/openapi.gen.go` | `make openapi-check` |
 | `examples/reference-service/api/openapi.yaml` + example generation config | `examples/reference-service/internal/openapi/openapi.gen.go` | `make openapi-check` |
-| `migrations/*.up.sql` + `internal/infra/postgres/queries/*.sql` | `internal/infra/postgres/sqlcgen/` | `make sqlc-check` |
+| Goose `Up` sections in `migrations/*.sql` + `internal/infra/postgres/queries/*.sql` | `internal/infra/postgres/sqlcgen/` | `make sqlc-check` |
 | `.agents/skills/` | harness adapters | `make template-init-check` where applicable |
 
 Never hand-edit generated Go. With no owned migrations or queries, their source
-and generated directories are absent and the migration/sqlc commands
-intentionally no-op.
+and generated directories are absent. SQLC reports that there is nothing to
+generate; migration source checks accept the pre-first-migration state, while
+runtime rehearsal still connects and verifies that database state is empty.
 
 ## 6. Test level
 
@@ -253,7 +258,7 @@ Use the narrowest real owner:
 | command directories contain `main.go` | `make project-structure-check` |
 | integration suffix/tag/package | `make project-structure-check` |
 | no empty speculative source/generated directories | `make project-structure-check` |
-| migration up/down pairing | `make project-structure-check` |
+| canonical Goose source and append-only history | `make migration-check` |
 | OpenAPI/sqlc generated drift | `make openapi-check`, `make sqlc-check` |
 | runtime OpenAPI route ownership | package `_contract_test.go` tests |
 | all remaining placement and naming decisions | this document; review risk |
@@ -270,7 +275,7 @@ observed.
 | order domain error | `internal/orders/errors.go` |
 | `POST /orders` handler | `internal/infra/http/orders_handlers.go` |
 | order Postgres adapter | `internal/infra/postgres/orders_repository.go` |
-| create orders table | `migrations/000001_orders_create.up.sql` plus `.down.sql` |
+| create orders table | `migrations/000001_orders_create.sql` with Goose `Up` and `Down` sections |
 | order sqlc operations | `internal/infra/postgres/queries/orders.sql` |
 | request authentication middleware | `internal/infra/http/middleware_authentication.go` |
 | Stripe outbound client | `internal/infra/stripe/client.go` |
@@ -289,10 +294,17 @@ until it names a concrete owner.
    `api/openapi/service.yaml`.
 3. Add feature behavior and consumer-owned ports before concrete adapters.
 4. Add `<feature>_handlers.go`; do not register a manual business route.
-5. If persistence is required, add the first paired migration, query source,
-   generated sqlc output, and hand-written repository in that order.
+5. If persistence is required, add the first single-file Goose migration,
+   query source, generated sqlc output, and hand-written repository in that
+   order.
 6. Add config, telemetry, startup wiring, and cleanup only for dependencies the
    feature actually uses.
+   For an outbound gRPC dependency, bootstrap owns one reusable
+   `grpcclient` connection and closes it; the dependency adapter owns the
+   generated client and selects `PropagationNone`, `PropagationTraceContext`,
+   or `PropagationTrustedService` from the accepted trust boundary. No policy
+   propagates baggage, and the shared connection deliberately supports neither
+   environment proxies nor resolver-provided service configs.
 7. Add sibling unit/contract tests and `test/<feature>_integration_test.go` only
    when real infrastructure is part of the claim.
 8. Run the matching generators, `make project-structure-check`, focused tests,

@@ -189,6 +189,25 @@ func TestMigrationTimeoutsMustFitOverallBudget(t *testing.T) {
 	}
 }
 
+func TestMigrationLockTimeoutMustLeaveCleanupReserve(t *testing.T) {
+	resetConfigEnv(t)
+
+	t.Setenv("APP__POSTGRES__MIGRATION_TIMEOUT", "30s")
+	t.Setenv("APP__POSTGRES__MIGRATION_STATEMENT_TIMEOUT", "20s")
+	t.Setenv("APP__POSTGRES__MIGRATION_LOCK_TIMEOUT", "30s")
+
+	_, _, err := LoadDetailed(LoadOptions{})
+	if err == nil {
+		t.Fatal("LoadDetailed() error = nil, want cleanup reserve error")
+	}
+	if !errors.Is(err, ErrValidate) {
+		t.Fatalf("error = %v, want ErrValidate", err)
+	}
+	if !strings.Contains(err.Error(), "reserve cleanup time") {
+		t.Fatalf("error = %v, want cleanup reserve context", err)
+	}
+}
+
 // profile:database-postgres:end
 
 // profile:database-postgres:start

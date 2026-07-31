@@ -9,6 +9,9 @@ import (
 type Config struct {
 	App  AppConfig  `koanf:"app"`
 	HTTP HTTPConfig `koanf:"http"`
+	// profile:authn-oidc-jwt:start
+	Authn AuthnConfig `koanf:"authn"`
+	// profile:authn-oidc-jwt:end
 	// profile:grpc:start
 	GRPC GRPCConfig `koanf:"grpc"`
 	// profile:grpc:end
@@ -20,6 +23,19 @@ type Config struct {
 	Postgres PostgresConfig `koanf:"postgres"`
 	// profile:database-postgres:end
 }
+
+// profile:authn-oidc-jwt:start
+
+// AuthnConfig names the immutable issuer boundary. Cryptographic, cache, size,
+// and time policy is fixed by the capability rather than provider-controlled
+// configuration.
+type AuthnConfig struct {
+	Issuer            string `koanf:"issuer"`
+	Audience          string `koanf:"audience"`
+	TrustedProxyCIDRs string `koanf:"trusted_proxy_cidrs"`
+}
+
+// profile:authn-oidc-jwt:end
 
 type AppConfig struct {
 	Env     string `koanf:"env"`

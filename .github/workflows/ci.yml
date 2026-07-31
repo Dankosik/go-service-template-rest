@@ -82,7 +82,6 @@ jobs:
           fi
 
       - name: Setup Go
-        if: steps.change_scope.outputs.expensive_required == 'true'
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
@@ -97,6 +96,34 @@ jobs:
 
       - name: Verify project structure
         run: make project-structure-check
+
+      # profile:database-postgres:start
+      - name: Verify migration source and append-only history
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BASE_SHA: ${{ github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          case "${EVENT_NAME}" in
+            pull_request)
+              MODE="merge-base"
+              BASE="${PR_BASE_SHA}"
+              ;;
+            push)
+              MODE="exact-base"
+              BASE="${PUSH_BASE_SHA}"
+              ;;
+            *)
+              MODE="worktree"
+              BASE=""
+              ;;
+          esac
+          make migration-check \
+            MIGRATION_HISTORY_MODE="${MODE}" \
+            BASE_REF="${BASE}" \
+            HEAD_REF="${HEAD_SHA}"
+      # profile:database-postgres:end
 
       - name: Verify CI change-scope routing
         run: make ci-change-scope-check
@@ -210,6 +237,12 @@ jobs:
       - name: Prove generated minimal service
         if: steps.template_source.outputs.required == 'true'
         run: TEMPLATE_INIT_PROFILE=minimal make template-init-check GOLANGCI_LINT_BIN=golangci-lint
+
+      # profile:authn-oidc-jwt:start
+      - name: Prove generated OIDC JWT services
+        if: steps.template_source.outputs.required == 'true'
+        run: TEMPLATE_INIT_PROFILE=authn make template-init-check GOLANGCI_LINT_BIN=golangci-lint
+      # profile:authn-oidc-jwt:end
 
       # profile:grpc:start
       - name: Prove generated native gRPC service
@@ -588,13 +621,10 @@ jobs:
         id: runtime_image
         run: |
           VERSION="sha-${GITHUB_SHA:0:12}"
-          docker build \
-            --build-arg APP_VERSION="${VERSION}" \
-            --build-arg VCS_REF="${GITHUB_SHA}" \
-            --build-arg SOURCE_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
-            -f build/docker/Dockerfile \
-            -t service:ci \
-            .
+          APP_VERSION="${VERSION}" \
+            VCS_REF="${GITHUB_SHA}" \
+            SOURCE_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
+            make runtime-image-build RUNTIME_IMAGE=service:ci
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: Scan image with Trivy

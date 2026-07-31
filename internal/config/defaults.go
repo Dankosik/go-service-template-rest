@@ -99,6 +99,14 @@ func defaultValues() map[string]any {
 		"http.max_connections":          4096,
 		"http.access_log_health_probes": false,
 
+		// profile:authn-oidc-jwt:start
+		// Trust policy has no executable placeholder. OIDC profiles fail config
+		// validation until deployment supplies every required value.
+		"authn.issuer":              "",
+		"authn.audience":            "",
+		"authn.trusted_proxy_cidrs": "",
+		// profile:authn-oidc-jwt:end
+
 		// profile:grpc:start
 		// gRPC is compiled into the enabled template profile but remains
 		// disabled until a service chooses an address and an explicit transport

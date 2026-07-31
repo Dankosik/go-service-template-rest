@@ -182,7 +182,13 @@ func TestGRPCEnabledTransportSecurity(t *testing.T) {
 			}
 
 			cfg, _, err := LoadDetailed(LoadOptions{})
-			if tc.wantErrPart == "" {
+			wantErrPart := tc.wantErrPart
+			// profile:authn-oidc-jwt:start
+			if tc.name == "explicit plaintext" {
+				wantErrPart = "authn OIDC profile requires"
+			}
+			// profile:authn-oidc-jwt:end
+			if wantErrPart == "" {
 				if err != nil {
 					t.Fatalf("LoadDetailed() error = %v", err)
 				}
@@ -194,8 +200,8 @@ func TestGRPCEnabledTransportSecurity(t *testing.T) {
 			if !errors.Is(err, ErrValidate) {
 				t.Fatalf("LoadDetailed() error = %v, want ErrValidate", err)
 			}
-			if !strings.Contains(err.Error(), tc.wantErrPart) {
-				t.Fatalf("LoadDetailed() error = %v, want %q", err, tc.wantErrPart)
+			if !strings.Contains(err.Error(), wantErrPart) {
+				t.Fatalf("LoadDetailed() error = %v, want %q", err, wantErrPart)
 			}
 		})
 	}

@@ -71,10 +71,12 @@ A split boundary is valid only when the completed task leaves the repository, an
 
 An **acceptance unit** is the smallest fixed candidate that one actor can
 implement, prove, review when triggered, and integrate without a consumer
-depending on an intermediate state. One implementation task is the default
-unit. Group adjacent ready tasks only when they share the same canonical owner,
-editable boundary, proof preconditions, and final-state validity; record a
-compact `Acceptance units` entry only for a grouped unit:
+depending on an intermediate state. The ledger's acceptance-unit map is
+authoritative: every implementation task is a singleton unit unless exactly one
+recorded `Acceptance units` entry contains its task ID; membership in more than
+one entry is invalid. Group adjacent ready tasks only when they share the same
+canonical owner, editable boundary, proof preconditions, and final-state
+validity; record a compact entry only for a grouped unit:
 
 ```markdown
 ## Acceptance units
@@ -119,7 +121,7 @@ A known decision-changing ambiguity or missing input required by a mandatory pat
 
 Name the claim before its check. A command is not proof unless its expected observable can establish that claim. Prefer the smallest repository-native automated check unless the accepted proof strategy requires manual observation or automation cannot establish the required observable.
 
-Attach each proof to the earliest task whose completed output makes its claim true, and require that proof before accepting the task. A later proof task is valid only for a cross-task, deployed, migration, or environment claim that cannot exist earlier; it names the exact prior outputs it consumes and proves only that integrated claim.
+Attach each proof to the earliest task whose completed output makes its claim true, and require that proof before accepting the task. A later proof task is valid only for a cross-task, deployed, migration, or environment claim that cannot exist earlier; it names the exact accepted upstream outputs it consumes and proves only that integrated claim. It may inspect the complete integrated candidate, but its acceptance boundary remains its recorded singleton or grouped unit; wider evidence does not accept upstream units or widen the current verdict. Evidence that invalidates an accepted upstream input follows the workflow's narrow reopen contract.
 
 Planning must make these explicit where relevant:
 

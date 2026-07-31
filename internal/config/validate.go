@@ -4,6 +4,12 @@ import (
 	"fmt"
 	"math"
 	"net"
+
+	// profile:authn-oidc-jwt:start
+	"net/netip"
+	"net/url"
+
+	// profile:authn-oidc-jwt:end
 	"sort"
 	"strconv"
 	"strings"
@@ -26,6 +32,11 @@ func validateConfig(cfg *Config, unknownKeys []string) error {
 	if err := validateHTTPConfig(&cfg.HTTP); err != nil {
 		return err
 	}
+	// profile:authn-oidc-jwt:start
+	if err := validateAuthnConfig(&cfg.Authn); err != nil {
+		return err
+	}
+	// profile:authn-oidc-jwt:end
 	// profile:grpc:start
 	if err := validateGRPCConfig(&cfg.GRPC); err != nil {
 		return err
@@ -49,6 +60,60 @@ func validateConfig(cfg *Config, unknownKeys []string) error {
 	}
 	return validateCrossSectionBudgets(*cfg)
 }
+
+// profile:authn-oidc-jwt:start
+
+func validateAuthnConfig(cfg *AuthnConfig) error {
+	cfg.Issuer = strings.TrimSpace(cfg.Issuer)
+	cfg.Audience = strings.TrimSpace(cfg.Audience)
+	cfg.TrustedProxyCIDRs = strings.TrimSpace(cfg.TrustedProxyCIDRs)
+
+	issuer, err := url.Parse(cfg.Issuer)
+	if err != nil ||
+		!issuer.IsAbs() ||
+		!strings.EqualFold(issuer.Scheme, "https") ||
+		issuer.Host == "" ||
+		issuer.Hostname() == "" ||
+		issuer.Opaque != "" ||
+		issuer.User != nil ||
+		issuer.RawQuery != "" ||
+		issuer.ForceQuery ||
+		issuer.Fragment != "" {
+		return fmt.Errorf(
+			"%w: authn.issuer must be an absolute HTTPS URL without user info, query, or fragment",
+			ErrValidate,
+		)
+	}
+	if cfg.Audience == "" {
+		return fmt.Errorf("%w: authn.audience cannot be empty", ErrValidate)
+	}
+
+	canonical := make([]string, 0)
+	seen := make(map[netip.Prefix]struct{})
+	for value := range strings.SplitSeq(cfg.TrustedProxyCIDRs, ",") {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		prefix, err := netip.ParsePrefix(value)
+		if err != nil {
+			return fmt.Errorf("%w: authn.trusted_proxy_cidrs contains an invalid CIDR", ErrValidate)
+		}
+		prefix = prefix.Masked()
+		if _, exists := seen[prefix]; exists {
+			return fmt.Errorf("%w: authn.trusted_proxy_cidrs contains a duplicate CIDR", ErrValidate)
+		}
+		seen[prefix] = struct{}{}
+		canonical = append(canonical, prefix.String())
+	}
+	if len(canonical) == 0 {
+		return fmt.Errorf("%w: authn.trusted_proxy_cidrs must contain at least one CIDR", ErrValidate)
+	}
+	cfg.TrustedProxyCIDRs = strings.Join(canonical, ",")
+	return nil
+}
+
+// profile:authn-oidc-jwt:end
 
 // validateCrossSectionBudgets rejects settings that are each individually legal
 // but incoherent together. A budget that only holds inside one section is not a
@@ -274,7 +339,18 @@ func validateGRPCConfig(cfg *GRPCConfig) error {
 	if err := validateGRPCAddress(server.Addr); err != nil {
 		return err
 	}
+	if err := validateEnabledGRPCTransport(server); err != nil {
+		return err
+	}
+	// profile:authn-oidc-jwt:start
+	if err := validateGRPCAuthnTransport(server); err != nil {
+		return err
+	}
+	// profile:authn-oidc-jwt:end
+	return nil
+}
 
+func validateEnabledGRPCTransport(server *GRPCServerConfig) error {
 	switch server.TransportSecurity {
 	case "plaintext":
 		if !server.AllowPlaintext {
@@ -310,6 +386,20 @@ func validateGRPCConfig(cfg *GRPCConfig) error {
 	}
 	return nil
 }
+
+// profile:authn-oidc-jwt:start
+
+func validateGRPCAuthnTransport(server *GRPCServerConfig) error {
+	if server.TransportSecurity != "tls" {
+		return fmt.Errorf(
+			"%w: authn OIDC profile requires grpc.server.transport_security=tls",
+			ErrValidate,
+		)
+	}
+	return nil
+}
+
+// profile:authn-oidc-jwt:end
 
 func validateGRPCCapacityBounds(cfg GRPCServerConfig) error {
 	if cfg.MaxConnections <= 0 || cfg.MaxConnections > 1_000_000 {
@@ -450,6 +540,12 @@ func validatePostgres(cfg PostgresConfig) error {
 		cfg.MigrationTimeout,
 	); err != nil {
 		return err
+	}
+	if cfg.MigrationLockTimeout >= cfg.MigrationTimeout {
+		return fmt.Errorf(
+			"%w: postgres.migration_lock_timeout must be less than postgres.migration_timeout to reserve cleanup time",
+			ErrValidate,
+		)
 	}
 	if err := validateDurationRange("postgres.acquire_timeout", cfg.AcquireTimeout, 10*time.Millisecond, 30*time.Second); err != nil {
 		return err

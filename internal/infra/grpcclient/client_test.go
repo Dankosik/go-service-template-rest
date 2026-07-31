@@ -95,6 +95,10 @@ func TestNewRejectsMissingTrustAndBounds(t *testing.T) {
 			mutate:      func(cfg *grpcclient.Config) { cfg.MaxSendMessageBytes = -1 },
 			credentials: true,
 		},
+		{
+			name:        "unknown propagation policy",
+			credentials: true,
+		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
@@ -106,6 +110,9 @@ func TestNewRejectsMissingTrustAndBounds(t *testing.T) {
 			options := grpcclient.Options{}
 			if testCase.credentials {
 				options.TransportCredentials = insecure.NewCredentials()
+			}
+			if testCase.name == "unknown propagation policy" {
+				options.Propagation = grpcclient.PropagationPolicy(255)
 			}
 			if connection, err := grpcclient.New(cfg, options); err == nil {
 				_ = connection.Close()

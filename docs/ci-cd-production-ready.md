@@ -45,10 +45,21 @@ post-deploy checks. A GHCR attestation does not certify this independent build.
 `.github/workflows/cd.yml` builds one image, validates migrations and runtime
 behavior against that image, scans it, generates its SBOM, pushes an immutable
 build tag to obtain the registry digest, signs and attests that digest, verifies
-the evidence, and only then promotes `main`, version, or `latest` tags.
+the evidence, advances the verified `migration-history` marker, and only then
+promotes `main`, version, or `latest` tags. Main and release publication share
+one non-cancelling concurrency group, so they cannot race the history marker.
 
 The workflow writes the immutable `image@sha256:...` reference to the job
 summary. Deploy that digest rather than resolving a mutable tag later.
+
+For a new PostgreSQL package, set repository variable
+`MIGRATION_HISTORY_BOOTSTRAP_SHA` to the exact first candidate SHA before
+enabling publication. Bootstrap succeeds only when the complete GHCR package
+listing proves that the repository package is absent. Clear the variable after
+the first successful publication. If any package already exists, the workflow
+requires a signed and attested `migration-history` marker and blocks when that
+marker cannot be verified. This prevents a branch rewrite or release tag from
+redefining already published migration bytes.
 
 ## Verify a published image
 
@@ -106,6 +117,10 @@ that the artifact is vulnerability-free or that a deployment is healthy.
   golangci-lint version in that module and still enters through its Make or
   template-check owner.
 - OpenAPI and SQLC sources own generated output and drift checks.
+- `make migration-check` owns canonical Goose syntax plus append-only
+  base-to-candidate review history. CD independently compares the candidate
+  image with the last verified registry marker, so branch history is not the
+  only durable authority.
 - The container job builds one production image; migration validation and
   Trivy reuse that exact tag. Migration validation owns reversible rehearsal plus
   production-image
@@ -205,6 +220,10 @@ through a ruleset in one repository.
 - `make ci-local` — broad native CI aggregate.
 - `make secret-scan` — current worktree plus base-to-HEAD commits;
   `make secret-scan-history` — full-history main/release proof.
+- `make runtime-image-build RUNTIME_IMAGE=service:ci` — direct production-image
+  build for an initialized service; in the unresolved upstream template, a
+  deterministic PostgreSQL + gRPC + bounded-HTTP service with authentication
+  physically removed is initialized first.
 - `make migration-validate` — disposable PostgreSQL, reversible migration
   rehearsal, production-image migrator, startup, readiness, and SIGTERM.
 - `make check-full` — native, Docker-backed integration, runtime image, migration,

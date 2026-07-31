@@ -31,6 +31,16 @@ a signed GHCR image, CycloneDX SBOM, build provenance, and an immutable
 Railway or another platform after verifying it. Publication is disabled by
 default.
 
+For a PostgreSQL service, first publication is fail-closed. The owner must
+confirm that the repository's GHCR container package does not yet exist and set
+`MIGRATION_HISTORY_BOOTSTRAP_SHA` to the exact candidate commit. After that
+candidate publishes successfully, clear the variable. Every later main or
+release publication verifies the signed and attested `migration-history` image,
+requires its `/migrations` corpus to be a byte-identical prefix of the
+candidate, advances the marker to the verified candidate digest, and only then
+promotes public aliases. If the package already exists but the marker is
+missing, publication stays blocked for an explicit history-recovery procedure.
+
 This is opt-in operator configuration. Neither `railway.toml` nor the workflow
 contains a Railway project identifier or changes a Railway service.
 
@@ -102,11 +112,14 @@ this template. See [Native gRPC](grpc.md) for runtime config and proof.
 - Railway runs one `/migrate` pre-deploy command before promotion.
 - The runtime image contains `/migrate` and `/migrations/`; the directory is
   empty until the first owned migration and the migrator then exits as an
-  explicit successful no-op.
+  explicit successful no-op after connecting, acquiring the Goose lock, and
+  confirming that database state is also empty.
 - Application startup does not run migrations.
-- When migrations exist, CI rehearses `up all -> down all -> up all` on a
-  disposable Compose database. It always runs the image's migrator, starts the
-  production image against the database, checks readiness, and sends SIGTERM.
+- CI validates canonical transactional Goose source and append-only review
+  history. When migrations exist, it rehearses `up all -> down all -> up all`
+  on a disposable Compose database. It always runs the image's migrator, starts
+  the production image against the database, checks readiness, and sends
+  SIGTERM.
 - Overlapping releases require mixed-version-compatible schema changes.
 - Destructive or forward-only changes require a staged
   expand/migrate/verify/contract plan and an explicit recovery method.
@@ -115,46 +128,47 @@ this template. See [Native gRPC](grpc.md) for runtime config and proof.
 - The migrator owns explicit overall, statement, and lock budgets through
   `APP__POSTGRES__MIGRATION_TIMEOUT`,
   `APP__POSTGRES__MIGRATION_STATEMENT_TIMEOUT`, and
-  `APP__POSTGRES__MIGRATION_LOCK_TIMEOUT`. Railway documents that a failed
-  pre-deploy command blocks deployment and is not retried, but does not publish
-  a platform timeout for this command, so do not rely on an implicit provider
-  bound.
+  `APP__POSTGRES__MIGRATION_LOCK_TIMEOUT`. The lock budget is also the detached
+  cleanup reserve and must be strictly below the overall budget. Railway
+  documents that a failed pre-deploy command blocks deployment and is not
+  retried, but does not publish a platform timeout for this command, so do not
+  rely on an implicit provider bound.
 
-### Dirty migration recovery
+### Failed migration recovery
 
-A failed migration may leave `schema_migrations` dirty. Later runs stop and
-report the exact version; the template never forces a version automatically.
+A failed migration file is rolled back because every accepted file runs in a
+transaction. Earlier files that completed in the same run remain committed and
+recorded in `goose_db_version`. The runner has no dirty-bit escape hatch and
+never forces a version. It also refuses to run if applied versions are not an
+exact prefix of the image source.
 
-1. Keep promotion blocked. Inspect the failed migration, PostgreSQL logs, and
-   the actual schema at the reported version.
-2. Choose and execute the migration's declared recovery: restore, complete the
-   intended change, or reverse its partial effects. Back up first when the
-   service's recovery policy requires it.
-3. Through an approved database console with exclusive migration ownership,
-   lock and inspect the version row:
-
-   ```sql
-   BEGIN;
-   LOCK TABLE schema_migrations IN ACCESS EXCLUSIVE MODE;
-   SELECT version, dirty FROM schema_migrations;
-   ```
-
-4. Only after the schema is verified to match a specific migration boundary,
-   set that verified version and clear dirty state in the same transaction:
+1. Keep promotion blocked. Use the safe terminal fields
+   `failure.stage`, `failure.context`, `failure.sqlstate`,
+   `migration.before`, `migration.after`, and the failed filename to correlate
+   the pre-deploy run with PostgreSQL logs. The runner deliberately does not log
+   the DSN, SQL text, or wrapped driver error.
+2. Inspect the actual schema and Goose state through an approved database
+   console:
 
    ```sql
-   UPDATE schema_migrations
-   SET version = <verified_version>, dirty = false;
-   COMMIT;
+   SELECT id, version_id, is_applied, tstamp
+   FROM goose_db_version
+   ORDER BY id;
    ```
 
+3. If the failed file is unchanged, correct the cause — for example a lock,
+   statement budget, permissions, or conflicting data — and rerun the same
+   image. If SQL must change, append a reviewed corrective migration; never edit
+   an already published file.
+4. If manual DDL or state-table edits created divergence, restore from the
+   service's approved backup/recovery path or execute a separately reviewed
+   corrective procedure under exclusive migration ownership. Do not edit
+   `goose_db_version` merely to unblock deployment.
 5. Rerun `/migrate`, then verify readiness and the service's material durable
-   path. Roll back the transaction instead of committing if the inspection is
-   inconclusive.
+   path.
 
-Do not paste a production DSN into shell history and do not clear `dirty`
-merely to unblock deployment. The version update records operator-verified
-state; it does not repair a partially applied migration.
+Do not paste a production DSN into shell history. A state-table edit can hide
+schema divergence; it cannot repair it.
 
 ## Operator-owned configuration
 

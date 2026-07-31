@@ -83,7 +83,7 @@ done
 if [[ -d api/proto && -z "$(find api/proto -type f -name '*.proto' -print -quit)" ]]; then
 	fail "api/proto/ must not exist before the first owned .proto contract"
 fi
-if [[ -d migrations && -z "$(find migrations -type f -name '*.up.sql' -print -quit)" ]]; then
+if [[ -d migrations && -z "$(find migrations -mindepth 1 -maxdepth 1 -type f -name '*.sql' -print -quit)" ]]; then
 	fail "migrations/ must not exist before the first owned migration"
 fi
 if [[ -d internal/infra/postgres/queries &&
@@ -96,16 +96,15 @@ if [[ -d internal/infra/postgres/sqlcgen &&
 fi
 
 if [[ -d migrations ]]; then
-	for up in migrations/*.up.sql; do
-		[[ -e "${up}" ]] || continue
-		down="${up%.up.sql}.down.sql"
-		[[ -f "${down}" ]] || fail "${up} is missing paired ${down}"
-	done
-	for down in migrations/*.down.sql; do
-		[[ -e "${down}" ]] || continue
-		up="${down%.down.sql}.up.sql"
-		[[ -f "${up}" ]] || fail "${down} is missing paired ${up}"
-	done
+	while IFS= read -r nested; do
+		[[ -n "${nested}" ]] && fail "${nested} is nested; migrations must be flat"
+	done < <(find migrations -mindepth 1 -type d -print)
+	while IFS= read -r migration; do
+		[[ -n "${migration}" ]] || continue
+		name="${migration##*/}"
+		[[ "${name}" =~ ^[0-9]{6}_[a-z][a-z0-9]*(_[a-z0-9]+)*\.sql$ ]] ||
+			fail "${migration} must match NNNNNN_lower_snake.sql"
+	done < <(find migrations -mindepth 1 -maxdepth 1 -type f -print)
 fi
 
 if ((failed != 0)); then

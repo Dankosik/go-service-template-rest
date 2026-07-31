@@ -35,11 +35,14 @@ const (
 	CodeMethodNotAllowed      Code = "method_not_allowed"
 	CodeConflict              Code = "conflict"
 	CodeRequestEntityTooLarge Code = "request_entity_too_large"
-	CodeUnprocessableContent  Code = "unprocessable_content"
-	CodeTooManyRequests       Code = "too_many_requests"
-	CodeInternalError         Code = "internal_error"
-	CodeServiceUnavailable    Code = "service_unavailable"
-	CodeGatewayTimeout        Code = "gateway_timeout"
+	// profile:authn-oidc-jwt:start
+	CodeRequestHeaderFieldsTooLarge Code = "request_header_fields_too_large"
+	// profile:authn-oidc-jwt:end
+	CodeUnprocessableContent Code = "unprocessable_content"
+	CodeTooManyRequests      Code = "too_many_requests"
+	CodeInternalError        Code = "internal_error"
+	CodeServiceUnavailable   Code = "service_unavailable"
+	CodeGatewayTimeout       Code = "gateway_timeout"
 )
 
 // Definition is one published problem class.
@@ -105,6 +108,14 @@ var catalog = []Definition{
 		Title:   "request entity too large",
 		TypeURI: "https://www.rfc-editor.org/rfc/rfc9110#section-15.5.14",
 	},
+	// profile:authn-oidc-jwt:start
+	{
+		Code:    CodeRequestHeaderFieldsTooLarge,
+		Status:  http.StatusRequestHeaderFieldsTooLarge,
+		Title:   "request header fields too large",
+		TypeURI: "https://www.rfc-editor.org/rfc/rfc6585#section-5",
+	},
+	// profile:authn-oidc-jwt:end
 	{
 		Code:    CodeUnprocessableContent,
 		Status:  http.StatusUnprocessableEntity,

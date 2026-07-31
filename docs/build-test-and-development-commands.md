@@ -124,7 +124,7 @@ provide a real module path and an owner in `@user` or `@org/team` form.
 
 | Command | Meaning |
 | --- | --- |
-| `make project-structure-check` | Placement, naming, command, integration-test, migration-pair, and no-empty-placeholder contract |
+| `make project-structure-check` | Placement, naming, command, integration-test, canonical migration filename, and no-empty-placeholder contract |
 | `make claude-skills-check` | Every `.agents/skills/` entry is exposed to Claude Code by a matching `.claude/skills/` symlink, and no link outlives its skill |
 | `make delivery-quality` | Digest-pinned actionlint, medium-or-higher/high-confidence zizmor security audit, ShellCheck for repository scripts, and native BuildKit Dockerfile checks |
 | `make check` | Project structure, `fmt-check`, `lint`, and ordinary unit tests |
@@ -420,29 +420,46 @@ repeated scans do not download the same database again.
 ## Migrations and containers
 
 ```bash
+make migration-check
 make migration-validate
+make runtime-image-build RUNTIME_IMAGE=service:ci
 make docker-build
 make docker-run
 make compose-up
 make compose-down
 ```
 
+`migration-check` validates the canonical six-digit Goose filename and
+single-file `Up`/`Down` grammar, rejects non-transactional or environment-
+substituted SQL, invokes the pinned Goose parser, and proves append-only history
+against the selected comparison commit.
+
 When owned migration files exist, `migration-validate` rehearses `up all`,
-`down all`, and `up all`. With no migrations, the host and image migration
-entrypoints return a successful explicit no-op. The command requires Docker
-and creates an isolated Compose project on a dynamic host port; it never
-accepts an operator-supplied database because the rehearsal rolls back every
-migration. It exercises the host migration tool, then runs the runtime image's
-`/migrate` entrypoint on the Compose network.
+`down all`, and `up all` through the repository adapter, then runs the exact
+runtime image's `/migrate` entrypoint. With no migrations, both paths still
+connect, acquire the migration lock, inspect database state, and return a
+successful explicit no-op. The command requires Docker and creates an isolated
+Compose project on a dynamic host port; it never accepts an operator-supplied
+database because the rehearsal intentionally rolls migrations back.
 The migrator defaults to a `5m` overall budget, `2m` per statement, and `15s`
-for lock acquisition. Override the typed `APP__POSTGRES__MIGRATION_*` values
-only from rehearsal evidence. Dirty-state recovery is operator-controlled and
-documented in `docs/railway-deployment-profile.md`; normal execution never
-forces a migration version.
+for lock acquisition and detached cleanup. The lock budget must remain below
+the overall budget so cleanup time is reserved. Override the typed
+`APP__POSTGRES__MIGRATION_*` values only from rehearsal evidence. Recovery is
+operator-controlled and documented in `docs/railway-deployment-profile.md`;
+normal execution never edits or forces Goose state.
 It starts the same image with a read-only filesystem and dropped capabilities,
 waits for `/health/ready`, optionally checks `RUNTIME_EXPECTED_VERSION` in the
 startup log, and requires a clean SIGTERM exit. Cleanup is registered before
 the rehearsal begins.
+
+`runtime-image-build` builds the current checkout directly after template
+initialization. In the unresolved upstream template only, it first creates a
+temporary deterministic `DATABASE=postgres`, `GRPC=enabled`, `AUTHN=none`,
+`OUTBOUND_HTTP=bounded` service and builds that production-shaped source. This
+keeps missing OIDC trust configuration fail-closed while giving migration,
+startup, shutdown, and container-security checks one runnable image to share.
+The temporary initialized checkout and its removed authentication pack are
+asserted before the build and deleted afterward.
 
 `docker-build` and `docker-run` operate on the production Dockerfile. Compose
 exists for runtime dependencies, not to emulate every native Make target. Its
@@ -599,6 +616,8 @@ a repository script to rewrite its own protection policy.
 
 `.github/workflows/cd.yml` owns release validation and runtime image
 publication. It reports an immutable digest and promotes mutable tags only
-after signature and attestation verification. `railway.toml` owns the generic,
-non-secret Railway source-build profile; it does not connect the template to a
-Railway project or make GHCR evidence apply to Railway's independent build.
+after signature and attestation verification and after advancing the shared
+verified `migration-history` marker. The marker corpus must be a byte-identical
+prefix of every later image. `railway.toml` owns the generic, non-secret Railway
+source-build profile; it does not connect the template to a Railway project or
+make GHCR evidence apply to Railway's independent build.

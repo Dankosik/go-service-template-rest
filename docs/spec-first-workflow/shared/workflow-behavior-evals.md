@@ -110,15 +110,18 @@ preconditions without an invalidated result or distinct claim.
 ### WBE-06 — Risk-Triggered Fresh Review
 
 **Given:** one ordinary acceptance unit, one unit that meets the independent
-review trigger, and a later distinct task ID.
+review trigger, a material correction to that reviewed unit, and a later
+distinct task ID.
 
 **Pass:** the ordinary unit closes with root review and proof only. The
-high-risk unit gets one fresh one-shot reviewer. A later unit gets a different
-lane if review is triggered. Critical tier appears only with unit-specific
-highest-consequence evidence.
+high-risk unit gets one fresh one-shot reviewer; its material correction gets a
+new one-shot lane while unaffected proof is reused. A later unit gets a
+different lane if review is triggered. Critical tier appears only with
+unit-specific highest-consequence evidence.
 
-**Fail:** every checkbox creates a reviewer, one reviewer lane is resumed across
-units, or a risk label alone selects the critical tier.
+**Fail:** every checkbox creates a reviewer, one reviewer lane is resumed after
+material correction or across units, or a risk label alone selects the critical
+tier.
 
 ### WBE-07 — Lean Dispatch And Leaf Effort
 
@@ -251,6 +254,44 @@ gate is created.
 **Fail:** size, speed, cost, or token use suppresses the eligible lane; the phase
 name forces the dependent or duplicate lane; or specialist fan-out is treated
 as an independent-review verdict.
+
+### WBE-16 — Sequential Acceptance-Unit Closure
+
+**Given:** three sequential tasks `T1 -> T2 -> T3` with no `Acceptance units`
+section. `T1` is ordinary, `T2` meets the independent-review trigger, and `T3`
+proves an integrated claim by inspecting the complete candidate.
+
+**Pass:** the ledger resolves three singleton units. `T1` completes root review,
+mapped proof, root acceptance, and its persisted transition without an
+independent reviewer before the first `T2` selection, dispatch, or
+implementation action. `T2` receives one fresh reviewer and completes its
+persisted transition before the first `T3` selection, dispatch, or
+implementation action. `T3` may inspect the complete candidate, but its verdict
+and transition name only `T3`. The trace preserves each transition at its unit
+boundary instead of backfilling them at final closeout.
+
+**Fail:** a dependent unit is selected, dispatched, or implemented before the
+upstream persisted transition; an ordinary unit receives a reviewer solely
+because it is a task; the root defers earlier transitions until final proof; or
+the `T3` verdict creates, replaces, or retroactively justifies acceptance for
+`T1` or `T2`.
+
+### WBE-17 — Review Boundary And Explicit Group
+
+**Given:** one ledger records `T1`, `T2`, and `T3` as singleton units while a
+review brief requests `T1-T3`; a near-miss ledger explicitly records `A1: T1,
+T2` and dispatches `A1`.
+
+**Pass:** the singleton-ledger lane returns `REVIEW_HANDOFF_INVALID` with the
+received IDs and recorded units, returns no phase verdict, and is replaced by a
+fresh lane with one valid unit. The near-miss accepts `A1` as exactly one
+recorded grouped boundary and permits one triggered review and one atomic
+transition for `T1` and `T2`.
+
+**Fail:** the unrecorded multi-ID boundary receives `PASS`, `FAIL`, or `BLOCKED`;
+the invalid lane is resumed with corrected IDs; the explicit group is split
+into mandatory per-task reviewers; or whole-candidate evidence silently widens
+either recorded boundary.
 
 ## Acceptance
 

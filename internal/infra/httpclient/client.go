@@ -26,7 +26,6 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	metricnoop "go.opentelemetry.io/otel/metric/noop"
-	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -101,6 +100,12 @@ type Config struct {
 	DependencyName string
 	BaseURL        string
 	TargetClass    TargetClass
+	// profile:authn-oidc-jwt:start
+	// DisableInstrumentation prevents fixed identity-provider endpoints and
+	// credential-adjacent request metadata from entering the general outbound
+	// trace path. It is reserved for the OIDC trust bootstrap.
+	DisableInstrumentation bool
+	// profile:authn-oidc-jwt:end
 	// PrivateHostSuffix is the required hostname suffix for PrivateHTTP
 	// targets, and is required for them. It is ignored for ExternalHTTPS.
 	PrivateHostSuffix      string
@@ -135,6 +140,9 @@ type Config struct {
 	// method, with no attempt cap tied to the caller's remaining budget. See
 	// retryTransport for the three rules that make a repeat safe.
 	Retry RetryPolicy
+	// Propagation is the immutable correlation-disclosure policy for this
+	// target. Its zero value emits nothing remotely.
+	Propagation PropagationPolicy
 }
 
 // Client owns one reusable HTTP client and its underlying connection pool.
@@ -206,17 +214,23 @@ func New(cfg Config, meterProvider metric.MeterProvider) (*Client, error) {
 	// Instrumentation sits inside retries so each attempt is its own span and
 	// metric sample. The fixed-authority and response-size bounds remain innermost
 	// and therefore apply to every attempt.
-	instrumented := otelhttp.NewTransport(
+	var instrumented http.RoundTripper = otelhttp.NewTransport(
 		bounded,
 		otelhttp.WithMeterProvider(meterProvider),
-		otelhttp.WithPropagators(propagation.TraceContext{}),
+		otelhttp.WithPropagators(policyPropagator{policy: cfg.Propagation}),
 		otelhttp.WithSpanOptions(trace.WithAttributes(
 			attribute.String("dependency.name", strings.TrimSpace(cfg.DependencyName)),
 		)),
 	)
-	var roundTripper http.RoundTripper = instrumented
+	sanitized := propagationSanitizer{base: instrumented}
+	var roundTripper http.RoundTripper = sanitized
+	// profile:authn-oidc-jwt:start
+	if cfg.DisableInstrumentation {
+		roundTripper = bounded
+	}
+	// profile:authn-oidc-jwt:end
 	if cfg.Retry.enabled() {
-		roundTripper = retryTransport{base: instrumented, policy: cfg.Retry}
+		roundTripper = retryTransport{base: roundTripper, policy: cfg.Retry}
 	}
 
 	return &Client{
@@ -256,6 +270,9 @@ func (c *Client) CloseIdleConnections() {
 }
 
 func validateConfig(cfg Config) (*url.URL, error) {
+	if !cfg.Propagation.valid() {
+		return nil, errors.New("build outbound HTTP client: propagation policy is invalid")
+	}
 	if strings.TrimSpace(cfg.DependencyName) == "" {
 		return nil, errors.New("build outbound HTTP client: dependency name is required")
 	}
