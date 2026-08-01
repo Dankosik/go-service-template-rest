@@ -55,21 +55,29 @@ git -C "${CHECKOUT}" \
 	-c user.email=runtime-image-build@invalid \
 	commit --allow-empty -qm "runtime image fixture"
 
+profile_environment=(
+	"CODEOWNER=@acme/platform"
+	"DATABASE=postgres"
+	"GRPC=enabled"
+	"AUTHN=none"
+	"OUTBOUND_HTTP=bounded"
+	"REFERENCE_EXAMPLE=remove"
+)
+# profile:messaging-nats-jetstream:start
+profile_environment+=("MESSAGING=nats-jetstream")
+# profile:messaging-nats-jetstream:end
 (
 	cd "${CHECKOUT}"
-	CODEOWNER=@acme/platform \
-		DATABASE=postgres \
-		GRPC=enabled \
-		AUTHN=none \
-		OUTBOUND_HTTP=bounded \
-		REFERENCE_EXAMPLE=remove \
-		bash ./scripts/init-module.sh github.com/acme/runtime-image-proof
+	env "${profile_environment[@]}" bash ./scripts/init-module.sh github.com/acme/runtime-image-proof
 )
 
 grep -Fqx 'database = "postgres"' "${CHECKOUT}/template.lock"
 grep -Fqx 'grpc = "enabled"' "${CHECKOUT}/template.lock"
 grep -Fqx 'authn = "none"' "${CHECKOUT}/template.lock"
 grep -Fqx 'outbound_http = "bounded"' "${CHECKOUT}/template.lock"
+# profile:messaging-nats-jetstream:start
+grep -Fqx 'messaging = "nats-jetstream"' "${CHECKOUT}/template.lock"
+# profile:messaging-nats-jetstream:end
 [[ ! -d "${CHECKOUT}/internal/infra/oidcjwt" ]]
 
 build_image "${CHECKOUT}"

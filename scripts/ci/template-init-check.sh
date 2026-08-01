@@ -3,11 +3,18 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 TEMPLATE_INIT_PROFILE="${TEMPLATE_INIT_PROFILE:-all}"
+valid_profiles="all, minimal, postgres, grpc, authn"
+# profile:messaging-nats-jetstream:start
+valid_profiles="${valid_profiles}, messaging"
+# profile:messaging-nats-jetstream:end
 
 case "${TEMPLATE_INIT_PROFILE}" in
 	all | minimal | postgres | grpc | authn) ;;
+	# profile:messaging-nats-jetstream:start
+	messaging) ;;
+	# profile:messaging-nats-jetstream:end
 	*)
-		echo "TEMPLATE_INIT_PROFILE must be one of: all, minimal, postgres, grpc, authn" >&2
+		echo "TEMPLATE_INIT_PROFILE must be one of: ${valid_profiles}" >&2
 		exit 2
 		;;
 esac
@@ -281,6 +288,15 @@ malformed_owner="$(new_fixture malformed-owner git@github.com:acme/malformed-own
 expect_unchanged_failure "${malformed_owner}" \
 	env CODEOWNER=acme/platform bash "${ROOT_DIR}/scripts/init-module.sh"
 
+# profile:messaging-nats-jetstream:start
+malformed_messaging="$(new_fixture malformed-messaging git@github.com:acme/malformed-messaging.git)"
+expect_unchanged_failure "${malformed_messaging}" \
+	env CODEOWNER=@acme/platform MESSAGING=custom bash "${ROOT_DIR}/scripts/init-module.sh"
+empty_messaging="$(new_fixture empty-messaging git@github.com:acme/empty-messaging.git)"
+expect_unchanged_failure "${empty_messaging}" \
+	env CODEOWNER=@acme/platform MESSAGING= bash "${ROOT_DIR}/scripts/init-module.sh"
+# profile:messaging-nats-jetstream:end
+
 minimal_checkout="$(copy_template_checkout full-minimal git@github.com:acme/feature-proof.git)"
 minimal_source_revision="$(git -C "${minimal_checkout}" rev-parse HEAD)"
 minimal_workflow_before="$(workflow_snapshot "${minimal_checkout}")"
@@ -328,6 +344,14 @@ minimal_workflow_before="$(workflow_snapshot "${minimal_checkout}")"
 		echo "database-none service accepted enabled PostgreSQL"
 		exit 1
 	fi
+	# profile:messaging-nats-jetstream:start
+	if APP__MESSAGING__ENABLED=true \
+		APP__MESSAGING__URLS='nats://127.0.0.1:4222' \
+		go run ./cmd/service >"${TEMP_ROOT}/minimal-messaging.log" 2>&1; then
+		echo "messaging-none service accepted messaging configuration"
+		exit 1
+	fi
+	# profile:messaging-nats-jetstream:end
 )
 assert "agent workflow changed during minimal initialization" same_text "${minimal_workflow_before}" "$(workflow_snapshot "${minimal_checkout}")"
 # This profile carries no PostgreSQL configuration at all, so an APP__POSTGRES__*
@@ -337,6 +361,11 @@ assert "agent workflow changed during minimal initialization" same_text "${minim
 grep -Fq 'unknown_key' "${TEMP_ROOT}/minimal-postgres.log"
 grep -Fq 'postgres.enabled' "${TEMP_ROOT}/minimal-postgres.log"
 grep -Fq 'postgres.dsn' "${TEMP_ROOT}/minimal-postgres.log"
+# profile:messaging-nats-jetstream:start
+grep -Fq 'unknown_key' "${TEMP_ROOT}/minimal-messaging.log"
+grep -Fq 'messaging.enabled' "${TEMP_ROOT}/minimal-messaging.log"
+grep -Fq 'messaging.urls' "${TEMP_ROOT}/minimal-messaging.log"
+# profile:messaging-nats-jetstream:end
 for removed in \
 	buf.yaml \
 	buf.gen.yaml \
@@ -372,6 +401,19 @@ for removed in \
 	.github/ISSUE_TEMPLATE; do
 	assert "${removed} must not survive DATABASE=none initialization" path_absent "${minimal_checkout}/${removed}"
 done
+# profile:messaging-nats-jetstream:start
+for removed in \
+	internal/infra/natsjs \
+	cmd/worker \
+	cmd/service/internal/bootstrap/startup_messaging.go \
+	cmd/service/internal/bootstrap/startup_messaging_test.go \
+	docs/durable-messaging.md \
+	internal/config/messaging.go \
+	internal/config/messaging_test.go \
+	test/nats_messaging_integration_test.go; do
+	assert "${removed} must not survive MESSAGING=none initialization" path_absent "${minimal_checkout}/${removed}"
+done
+# profile:messaging-nats-jetstream:end
 for benchmark_surface in \
 	Makefile \
 	scripts/dev/benchmark.sh \
@@ -387,7 +429,14 @@ grep -Fq 'database = "none"' "${minimal_checkout}/template.lock"
 grep -Fq 'grpc = "none"' "${minimal_checkout}/template.lock"
 grep -Fq 'authn = "none"' "${minimal_checkout}/template.lock"
 grep -Fq 'outbound_http = "none"' "${minimal_checkout}/template.lock"
+# profile:messaging-nats-jetstream:start
+grep -Fq 'messaging = "none"' "${minimal_checkout}/template.lock"
+# profile:messaging-nats-jetstream:end
 grep -Fqx "source_revision = \"${minimal_source_revision}\"" "${minimal_checkout}/template.lock"
+# profile:messaging-nats-jetstream:start
+expect_unchanged_failure "${minimal_checkout}" \
+	env CODEOWNER=@acme/platform MESSAGING=nats-jetstream bash "${ROOT_DIR}/scripts/init-module.sh"
+# profile:messaging-nats-jetstream:end
 # A generated service owns no generator, so the initialization contract check
 # reports that and succeeds instead of failing the first push of every service.
 #
@@ -396,7 +445,7 @@ grep -Fqx "source_revision = \"${minimal_source_revision}\"" "${minimal_checkout
 # report a write error and exit non-zero under pipefail.
 (
 	cd "${minimal_checkout}"
-	make template-init-check >"${TEMP_ROOT}/minimal-init-check.log"
+	TEMPLATE_INIT_PROFILE=minimal make template-init-check >"${TEMP_ROOT}/minimal-init-check.log"
 	# CI runs this unconditionally; the target must survive DATABASE=none.
 	make sqlc-check
 	make proto-check
@@ -407,10 +456,23 @@ if make -C "${minimal_checkout}" help | grep -Fq 'bench-db'; then
 	echo "template initialization contract: DATABASE=none help retained database commands"
 	exit 1
 fi
+# profile:messaging-nats-jetstream:start
+if make -C "${minimal_checkout}" help | grep -Fq 'worker'; then
+	echo "template initialization contract: MESSAGING=none help retained worker commands"
+	exit 1
+fi
+# profile:messaging-nats-jetstream:end
 assert "DATABASE=none retained the migration deploy command" grep_absent -Fq \
 	'preDeployCommand = ["/migrate"]' "${minimal_checkout}/railway.toml"
 assert "DATABASE=none retained the migration binary" grep_absent -Fq \
 	'/out/migrate' "${minimal_checkout}/build/docker/Dockerfile"
+# profile:messaging-nats-jetstream:start
+assert "MESSAGING=none retained the worker binary" grep_absent -Fq \
+	'/out/worker' "${minimal_checkout}/build/docker/Dockerfile"
+assert "MESSAGING=none retained CI/profile wiring" grep_absent -R -Eq \
+	'nats-jetstream|natsjs|cmd/worker|build-worker|run-worker|APP__MESSAGING__|TEMPLATE_INIT_PROFILE.*messaging' \
+	"${minimal_checkout}/scripts/ci"
+# profile:messaging-nats-jetstream:end
 assert "DATABASE=none retained migration validation" grep_absent -Fq \
 	'migration-validate:' "${minimal_checkout}/.github/workflows/ci.yml"
 assert "DATABASE=none retained migration Make targets" grep_absent -Fq \
@@ -425,6 +487,15 @@ if (
 	echo "database-none profile retained PostgreSQL runtime dependencies"
 	exit 1
 fi
+# profile:messaging-nats-jetstream:start
+if (
+	cd "${minimal_checkout}"
+	go list -m all | grep -Fq 'github.com/nats-io/nats.go'
+); then
+	echo "messaging-none profile retained NATS runtime dependencies"
+	exit 1
+fi
+# profile:messaging-nats-jetstream:end
 if (
 	cd "${minimal_checkout}"
 	go -C tools tool -n goose >/dev/null 2>&1
@@ -449,6 +520,91 @@ fi
 # packages, second OpenAPI contract, or second main().
 	assert "examples/ must not survive initialization" path_absent "${minimal_checkout}/examples"
 fi
+
+# profile:messaging-nats-jetstream:start
+if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "messaging" ]]; then
+	messaging_checkout="$(copy_template_checkout full-messaging git@github.com:acme/messaging-service.git)"
+	messaging_revision="$(git -C "${messaging_checkout}" rev-parse HEAD)"
+	(
+		cd "${messaging_checkout}"
+		CODEOWNER=@acme/platform DATABASE=none GRPC=none AUTHN=none MESSAGING=nats-jetstream \
+			bash ./scripts/init-module.sh
+		go test -vet=off ./...
+		make build build-worker
+		make mod-tidy-check
+	)
+	for retained in \
+		cmd/worker \
+		cmd/service/internal/bootstrap/startup_messaging.go \
+		docs/durable-messaging.md \
+		internal/config/messaging.go \
+		internal/infra/natsjs \
+		test/nats_messaging_integration_test.go; do
+		assert "MESSAGING=nats-jetstream removed ${retained}" path_present "${messaging_checkout}/${retained}"
+	done
+	grep -Fq 'messaging = "nats-jetstream"' "${messaging_checkout}/template.lock"
+	grep -Fqx "source_revision = \"${messaging_revision}\"" "${messaging_checkout}/template.lock"
+	grep -Fq '/out/worker' "${messaging_checkout}/build/docker/Dockerfile"
+	make -C "${messaging_checkout}" help >"${TEMP_ROOT}/messaging-help.log"
+	grep -Fq 'run-worker' "${TEMP_ROOT}/messaging-help.log"
+	(
+		cd "${messaging_checkout}"
+		go list -m -f '{{.Path}}' all | grep -Fx 'github.com/nats-io/nats.go'
+	)
+	messaging_marker='profile:messaging''-nats-jetstream:'
+	assert "selected messaging checkout retained unresolved profile markers" \
+		grep_absent -R -Fq "${messaging_marker}" \
+		"${messaging_checkout}/.github" \
+		"${messaging_checkout}/Makefile" \
+		"${messaging_checkout}/README.md" \
+		"${messaging_checkout}/build" \
+		"${messaging_checkout}/cmd" \
+		"${messaging_checkout}/docs" \
+		"${messaging_checkout}/env" \
+		"${messaging_checkout}/internal" \
+		"${messaging_checkout}/scripts/ci"
+	messaging_snapshot="$(snapshot "${messaging_checkout}")"
+	(
+		cd "${messaging_checkout}"
+		CODEOWNER=@acme/platform DATABASE=none GRPC=none AUTHN=none MESSAGING=nats-jetstream \
+			bash ./scripts/init-module.sh
+	)
+	assert "repeated messaging initialization changed the checkout" \
+		same_text "${messaging_snapshot}" "$(snapshot "${messaging_checkout}")"
+	expect_unchanged_failure "${messaging_checkout}" \
+		env CODEOWNER=@acme/platform DATABASE=none GRPC=none AUTHN=none MESSAGING=none \
+		bash "${ROOT_DIR}/scripts/init-module.sh"
+
+	messaging_full_checkout="$(copy_template_checkout full-messaging-combination git@github.com:acme/messaging-full-service.git)"
+	(
+		cd "${messaging_full_checkout}"
+		CODEOWNER=@acme/platform DATABASE=postgres GRPC=enabled AUTHN=oidc-jwt \
+			OUTBOUND_HTTP=bounded MESSAGING=nats-jetstream REFERENCE_EXAMPLE=keep \
+			bash ./scripts/init-module.sh
+		go test -vet=off ./...
+		go build ./cmd/service ./cmd/worker ./cmd/migrate
+		make proto-check mod-tidy-check project-structure-check
+	)
+	for choice in \
+		'database = "postgres"' \
+		'grpc = "enabled"' \
+		'authn = "oidc-jwt"' \
+		'outbound_http = "bounded"' \
+		'messaging = "nats-jetstream"' \
+		'reference_example = "keep"'; do
+		grep -Fqx "${choice}" "${messaging_full_checkout}/template.lock"
+	done
+	messaging_full_snapshot="$(snapshot "${messaging_full_checkout}")"
+	(
+		cd "${messaging_full_checkout}"
+		CODEOWNER=@acme/platform DATABASE=postgres GRPC=enabled AUTHN=oidc-jwt \
+			OUTBOUND_HTTP=bounded MESSAGING=nats-jetstream REFERENCE_EXAMPLE=keep \
+			bash ./scripts/init-module.sh
+	)
+	assert "repeated full messaging initialization changed the checkout" \
+		same_text "${messaging_full_snapshot}" "$(snapshot "${messaging_full_checkout}")"
+fi
+# profile:messaging-nats-jetstream:end
 
 if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "postgres" ]]; then
 	postgres_checkout="$(copy_template_checkout full-postgres git@github.com:acme/postgres-service.git)"

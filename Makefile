@@ -1,6 +1,10 @@
 SERVICE_NAME := service
 SERVICE_CMD := ./cmd/service
 BINARY := bin/$(SERVICE_NAME)
+# profile:messaging-nats-jetstream:start
+WORKER_CMD := ./cmd/worker
+WORKER_BINARY := bin/$(SERVICE_NAME)-worker
+# profile:messaging-nats-jetstream:end
 GO ?= go
 PGO_PROFILE ?= off
 OPENAPI_FILE := api/openapi/service.yaml
@@ -21,6 +25,10 @@ GO_REQUIRED_VERSION := $(shell awk '/^go / {print $$2; exit}' go.mod)
 TEST_REPORT_DIR := .artifacts/test
 TEST_JUNIT_FILE := $(TEST_REPORT_DIR)/junit.xml
 TEST_JSON_FILE := $(TEST_REPORT_DIR)/test2json.json
+INTEGRATION_PACKAGES := ./test/...
+# profile:messaging-nats-jetstream:start
+INTEGRATION_PACKAGES += ./internal/infra/natsjs ./cmd/worker/internal/bootstrap
+# profile:messaging-nats-jetstream:end
 # Effective coverage is measured across the whole module, so a freshly generated
 # service already sits near this floor on template tests alone. Initialization
 # lowers it to 70.0 so early feature work has runway; raise it as your own tests
@@ -115,6 +123,9 @@ BENCHMARK_REMOTE_SCRIPT := bash ./scripts/dev/benchmark-remote.sh
 	proto-format proto-format-check proto-lint proto-generate proto-drift-check proto-breaking proto-check \
 	sqlc-check runtime-image-build container-security run build build-pgo docker-build docker-run vendor claude-skills-sync claude-skills-check codex-agents-sync codex-agents-check \
 	template-sync template-sync-check template-sync-all template-owned-purity-check
+# profile:messaging-nats-jetstream:start
+.PHONY: run-worker build-worker
+# profile:messaging-nats-jetstream:end
 # profile:grpc-reference-benchmark:start
 .PHONY: bench-grpc bench-grpc-smoke bench-grpc-inspect
 # profile:grpc-reference-benchmark:end
@@ -138,6 +149,9 @@ help:
 	@echo "  make pr-check BASE_REF=origin/main"
 	@echo "  make run"
 	@echo "  make build | build-pgo PGO_PROFILE=<cpu.pprof>"
+# profile:messaging-nats-jetstream:start
+	@echo "  make run-worker | build-worker"
+# profile:messaging-nats-jetstream:end
 	@echo ""
 	@echo "Focused validation:"
 	@echo "  make test | test-race | test-report | test-integration"
@@ -345,7 +359,7 @@ test-flake-smoke:
 	go test -vet=off -count=5 -shuffle=on ./...
 
 test-integration:
-	go test -count=1 -tags=integration ./test/...
+	go test -p=1 -count=1 -tags=integration $(INTEGRATION_PACKAGES)
 
 bench:
 	BENCH_PACKAGE="$(BENCH_PACKAGE)" BENCH_PATTERN="$(BENCH_PATTERN)" BENCH_COUNT="$(BENCH_COUNT)" BENCH_TIME="$(BENCH_TIME)" BENCH_TAGS="$(BENCH_TAGS)" BENCH_OUTPUT="$(BENCH_OUTPUT)" BENCH_WORKLOAD_ID="$(BENCH_WORKLOAD_ID)" $(BENCHMARK_SCRIPT) run
@@ -661,6 +675,14 @@ run:
 	set +a; \
 	go run $(SERVICE_CMD)
 
+# profile:messaging-nats-jetstream:start
+run-worker:
+	@set -a; \
+	if [ -f .env ]; then . ./.env; fi; \
+	set +a; \
+	go run $(WORKER_CMD)
+# profile:messaging-nats-jetstream:end
+
 build:
 	@if [ "$(PGO_PROFILE)" != "off" ]; then \
 		if [ -z "$(PGO_PROFILE)" ] || [ "$(PGO_PROFILE)" = "auto" ]; then \
@@ -678,6 +700,12 @@ build:
 	fi
 	mkdir -p bin
 	CGO_ENABLED=0 $(GO) build -pgo="$(PGO_PROFILE)" -trimpath -ldflags='-s -w' -o $(BINARY) $(SERVICE_CMD)
+
+# profile:messaging-nats-jetstream:start
+build-worker:
+	mkdir -p bin
+	CGO_ENABLED=0 $(GO) build -trimpath -ldflags='-s -w' -o $(WORKER_BINARY) $(WORKER_CMD)
+# profile:messaging-nats-jetstream:end
 
 build-pgo:
 	@if [ -z "$(PGO_PROFILE)" ] || [ "$(PGO_PROFILE)" = "off" ] || [ "$(PGO_PROFILE)" = "auto" ]; then \

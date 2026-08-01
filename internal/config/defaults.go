@@ -134,6 +134,27 @@ func defaultValues() map[string]any {
 
 		"log.level": "info",
 
+		// profile:messaging-nats-jetstream:start
+		"messaging.enabled":                        false,
+		"messaging.urls":                           "",
+		"messaging.credentials_file":               "",
+		"messaging.root_ca_file":                   "",
+		"messaging.allow_plaintext":                false,
+		"messaging.allow_unauthenticated":          false,
+		"messaging.stream":                         "",
+		"messaging.max_payload_bytes":              256 << 10,
+		"messaging.max_pending_publishes":          64,
+		"messaging.worker.consumer":                "",
+		"messaging.worker.filter_subject":          "",
+		"messaging.worker.dead_letter_subject":     "",
+		"messaging.worker.max_concurrency":         8,
+		"messaging.worker.max_delivery_bytes":      1 << 20,
+		"messaging.worker.handler_timeout":         "30s",
+		"messaging.worker.retry_delays":            "1s,5s,30s,2m",
+		"messaging.worker.dead_letter_retry_delay": "30s",
+		"messaging.worker.drain_timeout":           "20s",
+		// profile:messaging-nats-jetstream:end
+
 		"runtime.memory_limit_ratio": 0.9,
 
 		// The diagnostics listener binds every interface because a metrics

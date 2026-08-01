@@ -48,6 +48,11 @@ func validateConfig(cfg *Config, unknownKeys []string) error {
 	if err := validateRuntimeConfig(cfg.Runtime); err != nil {
 		return err
 	}
+	// profile:messaging-nats-jetstream:start
+	if err := validateMessagingConfig(&cfg.Messaging); err != nil {
+		return err
+	}
+	// profile:messaging-nats-jetstream:end
 
 	// profile:database-postgres:start
 	if err := validatePostgres(cfg.Postgres); err != nil {
@@ -326,7 +331,7 @@ func validateGRPCConfig(cfg *GRPCConfig) error {
 		)
 	}
 	switch server.TransportSecurity {
-	case "", "plaintext", "tls":
+	case "", "plaintext", secureTransportTLS:
 	default:
 		return fmt.Errorf(
 			"%w: grpc.server.transport_security must be one of plaintext or tls",
@@ -365,7 +370,7 @@ func validateEnabledGRPCTransport(server *GRPCServerConfig) error {
 				ErrValidate,
 			)
 		}
-	case "tls":
+	case secureTransportTLS:
 		if server.AllowPlaintext {
 			return fmt.Errorf(
 				"%w: grpc.server.allow_plaintext must be false when transport_security is tls",
@@ -390,7 +395,7 @@ func validateEnabledGRPCTransport(server *GRPCServerConfig) error {
 // profile:authn-oidc-jwt:start
 
 func validateGRPCAuthnTransport(server *GRPCServerConfig) error {
-	if server.TransportSecurity != "tls" {
+	if server.TransportSecurity != secureTransportTLS {
 		return fmt.Errorf(
 			"%w: authn OIDC profile requires grpc.server.transport_security=tls",
 			ErrValidate,

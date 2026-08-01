@@ -239,6 +239,27 @@ func sentinelConfigSourceValues() map[string]any {
 
 		"log.level": "warn",
 
+		// profile:messaging-nats-jetstream:start
+		"messaging.enabled":                        true,
+		"messaging.urls":                           "tls://nats.snapshot.example:4222",
+		"messaging.credentials_file":               "/run/secrets/nats.creds",
+		"messaging.root_ca_file":                   "/run/secrets/nats-ca.pem",
+		"messaging.allow_plaintext":                false,
+		"messaging.allow_unauthenticated":          false,
+		"messaging.stream":                         "EVENTS",
+		"messaging.max_payload_bytes":              300 << 10,
+		"messaging.max_pending_publishes":          17,
+		"messaging.worker.consumer":                "snapshot-worker",
+		"messaging.worker.filter_subject":          "events.snapshot.>",
+		"messaging.worker.dead_letter_subject":     "dead.snapshot",
+		"messaging.worker.max_concurrency":         9,
+		"messaging.worker.max_delivery_bytes":      2 << 20,
+		"messaging.worker.handler_timeout":         "31s",
+		"messaging.worker.retry_delays":            "2s,7s",
+		"messaging.worker.dead_letter_retry_delay": "41s",
+		"messaging.worker.drain_timeout":           "21s",
+		// profile:messaging-nats-jetstream:end
+
 		"runtime.memory_limit_ratio": 0.75,
 
 		// profile:database-postgres:start
@@ -319,6 +340,27 @@ func expectedSentinelSnapshotValues() map[string]any {
 		"health.failure_threshold": 5,
 
 		"log.level": slog.LevelWarn,
+
+		// profile:messaging-nats-jetstream:start
+		"messaging.enabled":                        true,
+		"messaging.urls":                           "tls://nats.snapshot.example:4222",
+		"messaging.credentials_file":               "/run/secrets/nats.creds",
+		"messaging.root_ca_file":                   "/run/secrets/nats-ca.pem",
+		"messaging.allow_plaintext":                false,
+		"messaging.allow_unauthenticated":          false,
+		"messaging.stream":                         "EVENTS",
+		"messaging.max_payload_bytes":              300 << 10,
+		"messaging.max_pending_publishes":          17,
+		"messaging.worker.consumer":                "snapshot-worker",
+		"messaging.worker.filter_subject":          "events.snapshot.>",
+		"messaging.worker.dead_letter_subject":     "dead.snapshot",
+		"messaging.worker.max_concurrency":         9,
+		"messaging.worker.max_delivery_bytes":      2 << 20,
+		"messaging.worker.handler_timeout":         31 * time.Second,
+		"messaging.worker.retry_delays":            "2s,7s",
+		"messaging.worker.dead_letter_retry_delay": 41 * time.Second,
+		"messaging.worker.drain_timeout":           21 * time.Second,
+		// profile:messaging-nats-jetstream:end
 
 		"runtime.memory_limit_ratio": 0.75,
 

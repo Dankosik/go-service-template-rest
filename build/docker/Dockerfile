@@ -34,6 +34,9 @@ RUN --mount=type=bind,target=. \
     fi && \
     module_path="$(go list -m)" && \
     build_packages="./cmd/service" && \
+# profile:messaging-nats-jetstream:start
+    if [ -d ./cmd/worker ]; then build_packages="${build_packages} ./cmd/worker"; fi && \
+# profile:messaging-nats-jetstream:end
     if [ -d ./cmd/migrate ]; then build_packages="${build_packages} ./cmd/migrate"; fi && \
     resolved_version="${APP_VERSION}" && \
     if [ "${resolved_version}" = "dev" ] && [ -n "${RAILWAY_GIT_COMMIT_SHA}" ]; then \
@@ -65,6 +68,9 @@ LABEL org.opencontainers.image.version="${APP_VERSION}" \
 
 WORKDIR /
 COPY --from=build /out/service /service
+# profile:messaging-nats-jetstream:start
+COPY --from=build /out/worker /worker
+# profile:messaging-nats-jetstream:end
 # profile:database-postgres:start
 COPY --from=build /out/migrate /migrate
 COPY --from=build /out/migrations /migrations

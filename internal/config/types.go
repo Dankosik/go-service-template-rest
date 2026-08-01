@@ -15,14 +15,46 @@ type Config struct {
 	// profile:grpc:start
 	GRPC GRPCConfig `koanf:"grpc"`
 	// profile:grpc:end
-	Health        HealthConfig        `koanf:"health"`
-	Log           LogConfig           `koanf:"log"`
+	Health HealthConfig `koanf:"health"`
+	Log    LogConfig    `koanf:"log"`
+	// profile:messaging-nats-jetstream:start
+	Messaging MessagingConfig `koanf:"messaging"`
+	// profile:messaging-nats-jetstream:end
 	Observability ObservabilityConfig `koanf:"observability"`
 	Runtime       RuntimeConfig       `koanf:"runtime"`
 	// profile:database-postgres:start
 	Postgres PostgresConfig `koanf:"postgres"`
 	// profile:database-postgres:end
 }
+
+// profile:messaging-nats-jetstream:start
+
+type MessagingConfig struct {
+	Enabled              bool                  `koanf:"enabled"`
+	URLs                 string                `koanf:"urls"`
+	CredentialsFile      string                `koanf:"credentials_file"`
+	RootCAFile           string                `koanf:"root_ca_file"`
+	AllowPlaintext       bool                  `koanf:"allow_plaintext"`
+	AllowUnauthenticated bool                  `koanf:"allow_unauthenticated"`
+	Stream               string                `koanf:"stream"`
+	MaxPayloadBytes      int                   `koanf:"max_payload_bytes"`
+	MaxPendingPublishes  int                   `koanf:"max_pending_publishes"`
+	Worker               MessagingWorkerConfig `koanf:"worker"`
+}
+
+type MessagingWorkerConfig struct {
+	Consumer             string        `koanf:"consumer"`
+	FilterSubject        string        `koanf:"filter_subject"`
+	DeadLetterSubject    string        `koanf:"dead_letter_subject"`
+	MaxConcurrency       int           `koanf:"max_concurrency"`
+	MaxDeliveryBytes     int           `koanf:"max_delivery_bytes"`
+	HandlerTimeout       time.Duration `koanf:"handler_timeout"`
+	RetryDelays          string        `koanf:"retry_delays"`
+	DeadLetterRetryDelay time.Duration `koanf:"dead_letter_retry_delay"`
+	DrainTimeout         time.Duration `koanf:"drain_timeout"`
+}
+
+// profile:messaging-nats-jetstream:end
 
 // profile:authn-oidc-jwt:start
 

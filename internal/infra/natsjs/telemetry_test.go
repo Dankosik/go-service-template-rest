@@ -1,0 +1,165 @@
+package natsjs
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"log/slog"
+	"reflect"
+	"strings"
+	"testing"
+	"time"
+
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/metric/metricdata"
+)
+
+func TestMessagingTelemetryContract(t *testing.T) {
+	const (
+		payloadCanary    = "PAYLOAD_CANARY"
+		credentialCanary = "CREDENTIAL_PATH_CANARY"
+		brokerCanary     = "BROKER_ERROR_CANARY"
+		eventTypeCanary  = "EVENT_TYPE_CANARY"
+		headerCanary     = "HEADER_CANARY"
+	)
+
+	reader := sdkmetric.NewManualReader()
+	provider := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
+	t.Cleanup(func() { _ = provider.Shutdown(context.Background()) })
+	var logs bytes.Buffer
+	sig, err := newSignals(Observability{
+		Logger: slog.New(slog.NewJSONHandler(&logs, nil)),
+		Meter:  provider.Meter(instrumentationScope),
+	}, RoleWorker, func() bool { return true })
+	if err != nil {
+		t.Fatalf("newSignals() error = %v", err)
+	}
+	t.Cleanup(sig.close)
+
+	ctx := t.Context()
+	event := Event{
+		Subject: "events.test", MessageID: "message-1", PublicationID: "publication-1",
+		Type: eventTypeCanary, Schema: headerCanary, Payload: []byte(payloadCanary),
+	}
+	msg := Message{
+		subject: "events.test", messageID: "message-1", publicationID: "publication-1",
+		eventType: eventTypeCanary, schema: headerCanary, payload: []byte(payloadCanary),
+		metadata: DeliveryMetadata{Consumer: "events-worker", NumDelivered: 2},
+	}
+	sig.publish(ctx, event, "accepted", "none", time.Now())
+	sig.connection(ctx, "disconnected")
+	sig.fetchMessages.Add(ctx, 1)
+	sig.fetchBytes.Add(ctx, 64)
+	sig.consumeActive.Add(ctx, 1)
+	sig.handler(ctx, msg, "retryable", "handler_retry", time.Now())
+	sig.redeliveries.Add(ctx, 1)
+	sig.retries.Add(ctx, 1)
+	sig.dlqTransfers.Add(ctx, 1, metric.WithAttributes(attribute.String("outcome", "accepted")))
+	sig.drainOperations.Add(ctx, 1, metric.WithAttributes(attribute.String("outcome", "graceful")))
+	sig.forcedShutdowns.Add(ctx, 1)
+
+	var collected metricdata.ResourceMetrics
+	if err := reader.Collect(ctx, &collected); err != nil {
+		t.Fatalf("Collect() error = %v", err)
+	}
+	want := map[string]map[string]string{
+		"messaging.publish.operations": {"outcome": "accepted"},
+		"messaging.publish.duration":   {"outcome": "accepted"},
+		"messaging.connection.events":  {"event": "disconnected"},
+		"messaging.readiness":          {"role": "worker"},
+		"messaging.fetch.messages":     {},
+		"messaging.fetch.bytes":        {},
+		"messaging.consume.active":     {},
+		"messaging.handler.operations": {"outcome": "retryable"},
+		"messaging.handler.duration":   {"outcome": "retryable"},
+		"messaging.redeliveries":       {},
+		"messaging.retries":            {},
+		"messaging.dlq.transfers":      {"outcome": "accepted"},
+		"messaging.drain.operations":   {"outcome": "graceful"},
+		"messaging.forced_shutdowns":   {},
+	}
+	got := messagingMetricAttributes(t, collected)
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("metric attributes = %#v, want %#v", got, want)
+	}
+
+	serialized := logs.String()
+	for _, forbidden := range []string{payloadCanary, credentialCanary, brokerCanary, eventTypeCanary, headerCanary} {
+		if strings.Contains(serialized, forbidden) {
+			t.Fatalf("messaging logs contain forbidden value %q: %s", forbidden, serialized)
+		}
+	}
+	for _, required := range []string{"messaging_publish", "messaging_connection", "messaging_delivery", "message_id", "subject", "outcome", "reason"} {
+		if !strings.Contains(serialized, required) {
+			t.Fatalf("messaging logs are missing %q: %s", required, serialized)
+		}
+	}
+
+	_, _, classified := classifyPublishError(errors.New(brokerCanary))
+	if classified == nil {
+		t.Fatal("classifyPublishError() returned nil for broker failure")
+	}
+	if strings.Contains(classified.Error(), brokerCanary) {
+		t.Fatalf("classified broker error leaked raw text: %v", classified)
+	}
+	cfg := DefaultConfig()
+	cfg.URLs = []string{"tls://127.0.0.1:1"}
+	cfg.CredentialsFile = "/" + credentialCanary
+	cfg.Stream = "EVENTS"
+	connectCtx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+	defer cancel()
+	_, err = Connect(connectCtx, cfg, RoleProducer, Observability{})
+	if err == nil || strings.Contains(err.Error(), credentialCanary) {
+		t.Fatalf("Connect() error = %v, want sanitized failure", err)
+	}
+}
+
+func messagingMetricAttributes(t *testing.T, collected metricdata.ResourceMetrics) map[string]map[string]string {
+	t.Helper()
+	result := make(map[string]map[string]string)
+	for _, scope := range collected.ScopeMetrics {
+		if scope.Scope.Name != instrumentationScope {
+			continue
+		}
+		for _, measured := range scope.Metrics {
+			sets := aggregationAttributeSets(t, measured.Data)
+			if len(sets) != 1 {
+				t.Fatalf("%s data point attribute sets = %#v, want one", measured.Name, sets)
+			}
+			result[measured.Name] = sets[0]
+		}
+	}
+	return result
+}
+
+func aggregationAttributeSets(t *testing.T, aggregation metricdata.Aggregation) []map[string]string {
+	t.Helper()
+	var sets []attribute.Set
+	switch data := aggregation.(type) {
+	case metricdata.Sum[int64]:
+		for _, point := range data.DataPoints {
+			sets = append(sets, point.Attributes)
+		}
+	case metricdata.Gauge[int64]:
+		for _, point := range data.DataPoints {
+			sets = append(sets, point.Attributes)
+		}
+	case metricdata.Histogram[float64]:
+		for _, point := range data.DataPoints {
+			sets = append(sets, point.Attributes)
+		}
+	default:
+		t.Fatalf("unexpected metric aggregation %T", aggregation)
+	}
+	result := make([]map[string]string, 0, len(sets))
+	for _, set := range sets {
+		values := make(map[string]string)
+		for _, value := range set.ToSlice() {
+			values[string(value.Key)] = value.Value.AsString()
+		}
+		result = append(result, values)
+	}
+	return result
+}
