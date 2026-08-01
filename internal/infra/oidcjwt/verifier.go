@@ -40,7 +40,6 @@ type Verifier struct {
 	jwksURI       string
 	client        providerClient
 	now           func() time.Time
-	newTimer      timerFactory
 	log           *slog.Logger
 	metrics       authnMetrics
 	keys          atomic.Pointer[keySet]
@@ -72,9 +71,6 @@ func New(
 		policy,
 		productionClientFactory(meterProvider),
 		time.Now,
-		func(duration time.Duration) verifierTimer {
-			return newRealVerifierTimer(duration)
-		},
 		meterProvider,
 		log,
 	)
@@ -85,17 +81,11 @@ func newVerifier(
 	policy Policy,
 	factory clientFactory,
 	now func() time.Time,
-	newTimer timerFactory,
 	meterProvider metric.MeterProvider,
 	log *slog.Logger,
 ) (*Verifier, error) {
 	if now == nil {
 		now = time.Now
-	}
-	if newTimer == nil {
-		newTimer = func(duration time.Duration) verifierTimer {
-			return newRealVerifierTimer(duration)
-		}
 	}
 	if log == nil {
 		log = slog.Default()
@@ -107,18 +97,17 @@ func newVerifier(
 	baseCtx, cancel := context.WithCancel(context.Background())
 	metricWarning := newAuthnMetricWarning(log)
 	verifier := &Verifier{
-		policy:   policy,
-		jwksURI:  jwksURI,
-		client:   client,
-		now:      now,
-		newTimer: newTimer,
-		log:      log,
-		metrics:  newAuthnMetrics(meterProvider, metricWarning),
-		install:  make(chan struct{}, 1),
-		baseCtx:  baseCtx,
-		cancel:   cancel,
-		state:    lifecycleNew,
-		runDone:  make(chan struct{}),
+		policy:  policy,
+		jwksURI: jwksURI,
+		client:  client,
+		now:     now,
+		log:     log,
+		metrics: newAuthnMetrics(meterProvider, metricWarning),
+		install: make(chan struct{}, 1),
+		baseCtx: baseCtx,
+		cancel:  cancel,
+		state:   lifecycleNew,
+		runDone: make(chan struct{}),
 	}
 	verifier.keys.Store(keys)
 	verifier.unregisterAge = registerKeyAgeGauge(meterProvider, verifier.keys.Load, now, metricWarning)
@@ -304,8 +293,8 @@ func (v *Verifier) Run(ctx context.Context, onTrustCurrent func(bool)) error {
 	publishCurrent()
 
 	refreshDue := v.keys.Load().fetchedAt.Add(RefreshInterval)
-	refreshTimer := v.newTimer(until(v.now(), refreshDue))
-	staleTimer := v.newTimer(until(v.now(), v.keys.Load().fetchedAt.Add(MaxKeySetAge)))
+	refreshTimer := time.NewTimer(until(v.now(), refreshDue))
+	staleTimer := time.NewTimer(until(v.now(), v.keys.Load().fetchedAt.Add(MaxKeySetAge)))
 	var (
 		scheduled     *refreshCall
 		scheduledDone <-chan struct{}
@@ -325,7 +314,7 @@ func (v *Verifier) Run(ctx context.Context, onTrustCurrent func(bool)) error {
 			refreshTimer.Reset(until(v.now(), keys.fetchedAt.Add(RefreshInterval)))
 			staleTimer.Reset(until(v.now(), keys.fetchedAt.Add(MaxKeySetAge)))
 			publishCurrent()
-		case <-refreshTimer.C():
+		case <-refreshTimer.C:
 			scheduled = v.beginRefresh("scheduled", false)
 			if scheduled == nil {
 				refreshTimer.Reset(RefreshCooldown)
@@ -346,7 +335,7 @@ func (v *Verifier) Run(ctx context.Context, onTrustCurrent func(bool)) error {
 			scheduledDone = nil
 			refreshTimer.Reset(next)
 			publishCurrent()
-		case <-staleTimer.C():
+		case <-staleTimer.C:
 			publishCurrent()
 		}
 	}

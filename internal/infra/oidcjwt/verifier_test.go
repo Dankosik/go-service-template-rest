@@ -454,7 +454,6 @@ func TestSameKIDRotation(t *testing.T) {
 		func() time.Time { return now },
 		nil,
 		nil,
-		nil,
 	)
 	if err != nil {
 		t.Fatalf("newVerifier() error = %v", err)
@@ -538,7 +537,6 @@ func TestStaleUnknownKIDPerformsRequestDrivenRecovery(t *testing.T) {
 		func() time.Time { return now },
 		nil,
 		nil,
-		nil,
 	)
 	if err != nil {
 		t.Fatalf("newVerifier() error = %v", err)
@@ -603,7 +601,6 @@ func TestInitialTrustOutageFailsClosed(t *testing.T) {
 		time.Now,
 		nil,
 		nil,
-		nil,
 	)
 	if err == nil || strings.Contains(err.Error(), "poison") {
 		t.Fatalf("newVerifier() error = %v, want sanitized startup failure", err)
@@ -642,7 +639,6 @@ func TestInitialTrustHonorsCancellationAndDeadline(t *testing.T) {
 					return providerClient{request: client, close: func() {}}, nil
 				},
 				time.Now,
-				nil,
 				nil,
 				nil,
 			)
@@ -695,7 +691,6 @@ func TestStaleKeySetFailsReadinessAndVerificationClosed(t *testing.T) {
 		func() time.Time { return now },
 		nil,
 		nil,
-		nil,
 	)
 	if err != nil {
 		t.Fatalf("newVerifier() error = %v", err)
@@ -726,7 +721,6 @@ func TestErrorsAndLogsRedactCredentialAndProviderContent(t *testing.T) {
 			return providerClient{request: client, close: func() {}}, nil
 		},
 		time.Now,
-		nil,
 		nil,
 		log,
 	)
@@ -765,7 +759,6 @@ func TestAuthnRedactionCoversRefreshPanicAndTelemetry(t *testing.T) {
 			return providerClient{request: client, close: func() {}}, nil
 		},
 		func() time.Time { return now },
-		nil,
 		provider,
 		slog.New(slog.NewJSONHandler(&output, nil)),
 	)
@@ -1018,7 +1011,6 @@ func newTestVerifierWithClient(t *testing.T, now time.Time, client *scriptedClie
 			return providerClient{request: client, close: func() {}}, nil
 		},
 		func() time.Time { return now },
-		nil,
 		nil,
 		nil,
 	)

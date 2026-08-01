@@ -109,7 +109,6 @@ func TestAuthnMetrics(t *testing.T) {
 					return providerClient{request: client, close: func() {}}, nil
 				},
 				func() time.Time { return now },
-				nil,
 				provider,
 				log,
 			)
