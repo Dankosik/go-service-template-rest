@@ -183,7 +183,7 @@ jobs:
           cosign sign "${{ steps.meta.outputs.image_repo }}@${{ steps.digest.outputs.digest }}"
 
       - name: Attest build provenance
-        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4.2.0
+        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4.2.1
         with:
           subject-name: ${{ steps.meta.outputs.image_repo }}
           subject-digest: ${{ steps.digest.outputs.digest }}
@@ -191,7 +191,7 @@ jobs:
           create-storage-record: false
 
       - name: Attest SBOM
-        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4.2.0
+        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4.2.1
         with:
           subject-name: ${{ steps.meta.outputs.image_repo }}
           subject-digest: ${{ steps.digest.outputs.digest }}
@@ -301,7 +301,7 @@ jobs:
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: Install golangci-lint
-        uses: golangci/golangci-lint-action@e7fa5ac41e1cf5b7d48e45e42232ce7ada589601 # v9.1.0
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           version: ${{ steps.golangci_lint.outputs.version }}
           install-only: true
@@ -502,7 +502,7 @@ jobs:
           cosign sign "${{ steps.meta.outputs.image_repo }}@${{ steps.digest.outputs.digest }}"
 
       - name: Attest build provenance
-        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4.2.0
+        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4.2.1
         with:
           subject-name: ${{ steps.meta.outputs.image_repo }}
           subject-digest: ${{ steps.digest.outputs.digest }}
@@ -510,7 +510,7 @@ jobs:
           create-storage-record: false
 
       - name: Attest SBOM
-        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4.2.0
+        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4.2.1
         with:
           subject-name: ${{ steps.meta.outputs.image_repo }}
           subject-digest: ${{ steps.digest.outputs.digest }}
