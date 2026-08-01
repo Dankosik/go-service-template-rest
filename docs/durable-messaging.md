@@ -55,8 +55,11 @@ per-key ordering.
 
 ## Worker
 
-Replace the deliberate `nil` in `cmd/worker/main.go` with one feature-owned,
-duplicate-safe `natsjs.Handler`, then run:
+Replace the rejecting body of `buildFeatureHandler` in `cmd/worker/main.go` with
+one feature-owned, duplicate-safe `natsjs.Handler`. The builder receives the
+loaded `config.Config` and logger and may return a cleanup function for its own
+dependencies; bootstrap invokes that cleanup on startup failure and shutdown.
+Then run:
 
 ```bash
 make run-worker
@@ -85,8 +88,11 @@ the pack does not claim exactly-once processing and provides no outbox or inbox.
 
 Broker unavailability, missing topology, or incompatible consumer configuration
 fails startup before listener admission. A disconnect flips readiness false;
-`nats.go` retries connection 60 times at roughly one-second intervals with no
-offline publish buffer. Exhaustion is terminal and starts process drain.
+`nats.go` retries each server URL in its client pool (configured or discovered)
+at most 60 times, waits roughly one second after traversing that pool, and keeps
+no offline publish buffer. A connect attempt may additionally spend the fixed
+five-second connect timeout, so exhaustion duration grows with the number and
+network behavior of pool URLs. Exhaustion is terminal and starts process drain.
 
 On shutdown, new fetches and publishes stop first. In-flight handlers may finish
 within `WORKER__DRAIN_TIMEOUT`; expiry cancels them, closes the connection, and

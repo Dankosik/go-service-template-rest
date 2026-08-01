@@ -60,8 +60,6 @@ type DeliveryMetadata struct {
 	StreamSequence, ConsumerSequence uint64
 	NumDelivered, NumPending         uint64
 	StoredAt                         time.Time
-	SourceSubject                    string
-	SourcePublicationID              string
 }
 
 type Message struct {
@@ -244,15 +242,13 @@ func decodeMessage(msg jetstream.Msg, metadata *jetstream.MsgMetadata) (context.
 		createdAt:     createdAt.UTC(),
 		payload:       slices.Clone(msg.Data()),
 		metadata: DeliveryMetadata{
-			Stream:              metadata.Stream,
-			Consumer:            metadata.Consumer,
-			StreamSequence:      metadata.Sequence.Stream,
-			ConsumerSequence:    metadata.Sequence.Consumer,
-			NumDelivered:        metadata.NumDelivered,
-			NumPending:          metadata.NumPending,
-			StoredAt:            metadata.Timestamp.UTC(),
-			SourceSubject:       msg.Subject(),
-			SourcePublicationID: header.Get(headerPublicationID),
+			Stream:           metadata.Stream,
+			Consumer:         metadata.Consumer,
+			StreamSequence:   metadata.Sequence.Stream,
+			ConsumerSequence: metadata.Sequence.Consumer,
+			NumDelivered:     metadata.NumDelivered,
+			NumPending:       metadata.NumPending,
+			StoredAt:         metadata.Timestamp.UTC(),
 		},
 	}, nil
 }

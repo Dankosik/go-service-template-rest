@@ -10,12 +10,8 @@ import (
 )
 
 const (
-	HeaderLimitBytes        = 8 << 10
-	ResidentDeliveryLimit   = 64 << 20
-	DefaultMaxPayloadBytes  = 256 << 10
-	DefaultMaxPending       = 64
-	DefaultMaxConcurrency   = 8
-	DefaultMaxDeliveryBytes = 1 << 20
+	HeaderLimitBytes      = 8 << 10
+	ResidentDeliveryLimit = 64 << 20
 
 	operationTimeout = 5 * time.Second
 )
@@ -50,24 +46,7 @@ type WorkerConfig struct {
 	DeadLetterRetryDelay time.Duration
 }
 
-func DefaultConfig() Config {
-	return Config{
-		MaxPayloadBytes:     DefaultMaxPayloadBytes,
-		MaxPendingPublishes: DefaultMaxPending,
-	}
-}
-
-func DefaultWorkerConfig() WorkerConfig {
-	return WorkerConfig{
-		MaxConcurrency:       DefaultMaxConcurrency,
-		MaxDeliveryBytes:     DefaultMaxDeliveryBytes,
-		HandlerTimeout:       30 * time.Second,
-		RetryDelays:          []time.Duration{time.Second, 5 * time.Second, 30 * time.Second, 2 * time.Minute},
-		DeadLetterRetryDelay: 30 * time.Second,
-	}
-}
-
-func ValidateConfig(cfg Config) error {
+func validateConfig(cfg Config) error {
 	if len(cfg.URLs) == 0 {
 		return fmt.Errorf("%w: messaging URLs are required", ErrRejected)
 	}

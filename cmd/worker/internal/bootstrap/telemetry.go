@@ -21,7 +21,7 @@ func setupTelemetry(ctx context.Context, cfg config.Config, metrics *telemetry.M
 		},
 	})
 	if err != nil {
-		return nil, fmt.Errorf("initialize worker metrics")
+		return nil, fmt.Errorf("initialize worker metrics: %w", err)
 	}
 	_, tracingShutdown, tracingErr := telemetry.SetupTracing(ctx, telemetry.TracingConfig{
 		ServiceName: cfg.Observability.OTel.ServiceName, ServiceVersion: cfg.App.Version,

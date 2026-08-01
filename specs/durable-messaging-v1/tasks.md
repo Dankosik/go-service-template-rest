@@ -120,6 +120,40 @@ all Docker-backed or broad Go gates remain serialized.
   - Reopen if: any gate fails; route to the earliest owning task rather than
     weakening or skipping the oracle.
 
+- [x] T5: close the principal ownership audit findings without widening the
+  concrete NATS capability
+  - Source: `spec.md` M02 through M10 and invariants; `test-plan.md` TD-02
+    through TD-15; the current base-to-candidate ownership audit of
+    `a93162d9e7168e82a04575c2c81a3c294e4bf443`.
+  - Owner/surface/resources: `internal/infra/natsjs/`, service and worker
+    bootstrap, messaging config/defaults, selected-only messaging docs and
+    workflow artifacts, and their existing unit/integration/process fixtures;
+    one serialized local NATS/Docker proof owner. Preserve direct `nats.go`,
+    one consumer/handler per worker, feature-owned event semantics, physical
+    `MESSAGING=none` removal, and the no-outbox/inbox boundary.
+  - Depends on: T4 — accepted candidate and exact audit base — needed to start.
+  - Deliverable: terminal handler failures cannot be lost; inbound deliveries
+    enforce the admitted header envelope; served readiness fails immediately
+    during messaging loss and recovers only after a fresh probe; worker feature
+    construction can consume loaded config and owns cleanup before broker
+    admission; terminal diagnostics retain safe location/identity evidence;
+    reconnect documentation matches pinned SDK behavior; test-only defaults,
+    dead state, and duplicate metadata are removed; ACK/DLQ/capacity/admission
+    and drain proofs observe authoritative completion rather than handler entry
+    or scheduler luck.
+  - Proof: focused package/component tests for each repaired contract; focused
+    race/goleak for NATS and bootstrap lifecycle; serialized
+    `REQUIRE_DOCKER=1 make test-integration`; messaging profile initialization
+    and repository gates only after the focused owners pass. Expected
+    observables include preserved `ErrTerminal`, no handler call for an
+    oversized inbound header, immediate HTTP 503 during disconnect, confirmed
+    zero ACK-pending/empty final-success DLQ, released publish capacity after
+    ambiguous cancellation/deadline, rejected missing topology/config drift,
+    bounded safe panic diagnostics, and clean physical removal.
+  - Reopen if: a repair requires a generic broker abstraction, more than one
+    consumer per worker, outbox/inbox semantics, or a changed feature error or
+    idempotency policy; reopen the narrow Design or Specification owner.
+
 ## Completion evidence
 
 - Independent implementation re-review passed for all fixed high-risk units.
@@ -144,7 +178,32 @@ all Docker-backed or broad Go gates remain serialized.
   validation tree, including `none`, explicit-empty/invalid, selected minimal,
   selected maximal, cross-selection, and repeated byte-stability oracles.
 - No material reliability, lifecycle, composition, or profile finding remains.
-  No push, PR, deployment, purchase, cloud resource, or other external write
+
+### T5 audit-repair closure
+
+- Independent acceptance review passed staged tree
+  `d94f310ec67efaa503a8744406114591ba30dc08` after correcting terminal
+  propagation, immediate served readiness, feature/telemetry construction and
+  cleanup order, safe terminal diagnostics, reconnect documentation, and every
+  deterministic proof gap named by the ownership audit.
+- `go test -vet=off -race ./internal/infra/natsjs
+  ./cmd/worker/internal/bootstrap ./cmd/service/internal/bootstrap -count=1`
+  passed 188 tests; focused telemetry, handler-construction, process-readiness,
+  reconnect, admission, publish-ambiguity, ACK/DLQ, trace, and drain cases also
+  passed while the repair was narrowed.
+- `REQUIRE_DOCKER=1 make test-integration` passed the serialized real-broker
+  owners; the final `make check-full` completed with exit code 0 and reran that
+  aggregate together with lint, NilAway, repository race, runtime image,
+  migration, security, and container proof.
+- `TEMPLATE_INIT_PROFILE=messaging make template-init-check` completed with
+  exit code 0 on the final repaired tree, including physical `MESSAGING=none`
+  removal, selected minimal/maximal composition, cross-selection rejection, and
+  repeated byte stability.
+- One non-blocking proof boundary remains explicit in `test-plan.md`: a
+  readable-but-server-rejected NATS credentials fixture is required only if an
+	  authenticated-NATS release claim is introduced. Current admission rejects an
+	  unreadable credentials file and does not claim that broader fixture.
+- No push, PR, deployment, purchase, cloud resource, or other external write
   was performed.
 
 ## Closeout sequence

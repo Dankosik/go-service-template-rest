@@ -3,6 +3,7 @@ package natsjs
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -10,7 +11,7 @@ import (
 )
 
 func TestExplicitAckPolicy(t *testing.T) {
-	cfg := DefaultWorkerConfig()
+	cfg := testWorkerConfig()
 	cfg.Consumer = "events-worker"
 	cfg.FilterSubject = "events.>"
 	desired := desiredConsumerConfig(cfg)
@@ -20,10 +21,31 @@ func TestExplicitAckPolicy(t *testing.T) {
 	if desired.MaxDeliver != -1 || desired.MaxRequestBatch != 1 || desired.MaxWaiting != 2 {
 		t.Fatalf("consumer bounds = MaxDeliver %d, MaxRequestBatch %d, MaxWaiting %d", desired.MaxDeliver, desired.MaxRequestBatch, desired.MaxWaiting)
 	}
-	mutated := desired
-	mutated.HeadersOnly = true
-	if consumerConfigEqual(mutated, desired) {
-		t.Fatal("consumerConfigEqual accepted delivery-affecting mutation")
+	mutations := map[string]func(*jetstream.ConsumerConfig){
+		"durable":                   func(cfg *jetstream.ConsumerConfig) { cfg.Durable = "other" },
+		"deliver policy":            func(cfg *jetstream.ConsumerConfig) { cfg.DeliverPolicy = jetstream.DeliverLastPolicy },
+		"ack policy":                func(cfg *jetstream.ConsumerConfig) { cfg.AckPolicy = jetstream.AckNonePolicy },
+		"ack wait":                  func(cfg *jetstream.ConsumerConfig) { cfg.AckWait++ },
+		"max deliver":               func(cfg *jetstream.ConsumerConfig) { cfg.MaxDeliver = 1 },
+		"replay policy":             func(cfg *jetstream.ConsumerConfig) { cfg.ReplayPolicy = jetstream.ReplayOriginalPolicy },
+		"max waiting":               func(cfg *jetstream.ConsumerConfig) { cfg.MaxWaiting++ },
+		"max ack pending":           func(cfg *jetstream.ConsumerConfig) { cfg.MaxAckPending++ },
+		"max request batch":         func(cfg *jetstream.ConsumerConfig) { cfg.MaxRequestBatch++ },
+		"max request expires":       func(cfg *jetstream.ConsumerConfig) { cfg.MaxRequestExpires++ },
+		"max request bytes":         func(cfg *jetstream.ConsumerConfig) { cfg.MaxRequestMaxBytes++ },
+		"filter subject":            func(cfg *jetstream.ConsumerConfig) { cfg.FilterSubject = "events.other" },
+		"headers only":              func(cfg *jetstream.ConsumerConfig) { cfg.HeadersOnly = true },
+		"push delivery":             func(cfg *jetstream.ConsumerConfig) { cfg.DeliverSubject = "deliver.events" },
+		"server redelivery backoff": func(cfg *jetstream.ConsumerConfig) { cfg.BackOff = []time.Duration{time.Second} },
+	}
+	for name, mutate := range mutations {
+		t.Run(name, func(t *testing.T) {
+			mutated := desired
+			mutate(&mutated)
+			if consumerConfigEqual(mutated, desired) {
+				t.Fatal("consumerConfigEqual accepted delivery-affecting mutation")
+			}
+		})
 	}
 	metadataOnly := desired
 	metadataOnly.Description = "operator note"
@@ -48,6 +70,16 @@ func TestSingleMessageFetch(t *testing.T) {
 	}
 	if consumer.batch != 1 {
 		t.Fatalf("Fetch batch = %d, want 1", consumer.batch)
+	}
+}
+
+func TestWorkerWaitForHandlersPreservesTerminalError(t *testing.T) {
+	w := &Worker{fatal: make(chan error, 1)}
+	want := fmt.Errorf("%w: handler failed", ErrTerminal)
+	w.fatal <- want
+
+	if err := w.waitForHandlers(make(chan struct{}), 0, nil); !errors.Is(err, want) {
+		t.Fatalf("waitForHandlers() error = %v, want %v", err, want)
 	}
 }
 

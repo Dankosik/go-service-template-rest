@@ -6,8 +6,6 @@ import (
 	"strings"
 )
 
-const secureTransportTLS = "tls"
-
 func validateMessagingConfig(cfg *MessagingConfig) error {
 	cfg.URLs = strings.TrimSpace(cfg.URLs)
 	cfg.CredentialsFile = strings.TrimSpace(cfg.CredentialsFile)

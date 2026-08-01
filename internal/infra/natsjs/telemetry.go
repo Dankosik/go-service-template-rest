@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/nats-io/nats.go/jetstream"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
@@ -160,4 +161,20 @@ func (s *signals) handler(ctx context.Context, msg Message, outcome, reason stri
 		"consumer", msg.Metadata().Consumer, "attempt", msg.Metadata().NumDelivered,
 		"outcome", outcome, "duration_seconds", duration, "reason", reason,
 	)
+}
+
+func (s *signals) terminal(ctx context.Context, subject string, metadata *jetstream.MsgMetadata, reason string, handlerFrames []string) {
+	args := []any{"operation", "consume", "subject", subject, "outcome", "terminal", "reason", reason}
+	if metadata != nil {
+		args = append(args,
+			"stream", metadata.Stream,
+			"consumer", metadata.Consumer,
+			"stream_sequence", metadata.Sequence.Stream,
+			"attempt", metadata.NumDelivered,
+		)
+	}
+	if len(handlerFrames) != 0 {
+		args = append(args, "handler_frames", handlerFrames)
+	}
+	s.log.ErrorContext(ctx, "messaging_terminal_delivery", args...)
 }

@@ -5,18 +5,26 @@ package bootstrap
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net"
 	"net/http"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/infra/natsjs"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 )
+
+const workerTestMaxDeliveryBytes = 1 << 20
+
+func workerTestProducerConfig() natsjs.Config {
+	return natsjs.Config{MaxPayloadBytes: 256 << 10, MaxPendingPublishes: 64}
+}
 
 func TestNATSWorkerComposition(t *testing.T) {
 	url, js := workerNATSFixture(t)
@@ -29,10 +37,12 @@ func TestNATSWorkerComposition(t *testing.T) {
 	runCtx, cancelRun := context.WithCancel(t.Context())
 	runErr := make(chan error, 1)
 	go func() {
-		runErr <- run(runCtx, nil, func(_ context.Context, msg natsjs.Message) error {
-			entered <- msg
-			<-release
-			return nil
+		runErr <- run(runCtx, nil, func(context.Context, config.Config, *slog.Logger) (natsjs.Handler, func(), error) {
+			return func(_ context.Context, msg natsjs.Message) error {
+				entered <- msg
+				<-release
+				return nil
+			}, nil, nil
 		})
 	}()
 	waitWorker(t, 10*time.Second, func() bool {
@@ -40,7 +50,7 @@ func TestNATSWorkerComposition(t *testing.T) {
 		return err == nil
 	}, "worker consumer admission")
 
-	producerCfg := natsjs.DefaultConfig()
+	producerCfg := workerTestProducerConfig()
 	producerCfg.URLs = []string{url}
 	producerCfg.AllowPlaintext = true
 	producerCfg.AllowUnauthenticated = true
@@ -88,15 +98,17 @@ func TestNATSWorkerHandlerPanicIsSupervised(t *testing.T) {
 	defer cancelRun()
 	runErr := make(chan error, 1)
 	go func() {
-		runErr <- run(runCtx, nil, func(context.Context, natsjs.Message) error {
-			panic("worker panic canary")
+		runErr <- run(runCtx, nil, func(context.Context, config.Config, *slog.Logger) (natsjs.Handler, func(), error) {
+			return func(context.Context, natsjs.Message) error {
+				panic("worker panic canary")
+			}, nil, nil
 		})
 	}()
 	waitWorker(t, 10*time.Second, func() bool {
 		_, err := js.Consumer(t.Context(), "EVENTS", "panic-composition-worker")
 		return err == nil
 	}, "panic worker consumer admission")
-	producerCfg := natsjs.DefaultConfig()
+	producerCfg := workerTestProducerConfig()
 	producerCfg.URLs = []string{url}
 	producerCfg.AllowPlaintext = true
 	producerCfg.AllowUnauthenticated = true
@@ -152,8 +164,8 @@ func workerNATSFixture(t *testing.T) (string, jetstream.JetStream) {
 		t.Fatalf("create JetStream fixture: %v", err)
 	}
 	for _, stream := range []jetstream.StreamConfig{
-		{Name: "EVENTS", Subjects: []string{"events.>"}, Storage: jetstream.FileStorage, MaxMsgSize: natsjs.DefaultMaxDeliveryBytes},
-		{Name: "EVENTS_DLQ", Subjects: []string{"dead.>"}, Storage: jetstream.FileStorage, MaxMsgSize: 2 * natsjs.DefaultMaxDeliveryBytes},
+		{Name: "EVENTS", Subjects: []string{"events.>"}, Storage: jetstream.FileStorage, MaxMsgSize: workerTestMaxDeliveryBytes},
+		{Name: "EVENTS_DLQ", Subjects: []string{"dead.>"}, Storage: jetstream.FileStorage, MaxMsgSize: 2 * workerTestMaxDeliveryBytes},
 	} {
 		if _, err := js.CreateStream(t.Context(), stream); err != nil {
 			t.Fatalf("create stream %s: %v", stream.Name, err)

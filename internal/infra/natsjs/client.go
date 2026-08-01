@@ -41,7 +41,7 @@ type Client struct {
 }
 
 func Connect(ctx context.Context, cfg Config, role Role, obs Observability) (*Client, error) {
-	if err := ValidateConfig(cfg); err != nil {
+	if err := validateConfig(cfg); err != nil {
 		return nil, err
 	}
 	if err := ctx.Err(); err != nil {
@@ -64,6 +64,9 @@ func Connect(ctx context.Context, cfg Config, role Role, obs Observability) (*Cl
 		nats.Timeout(boundedTimeout(ctx)),
 		nats.ReconnectWait(time.Second),
 		nats.ReconnectJitter(50*time.Millisecond, 50*time.Millisecond),
+		// nats.go applies MaxReconnects to each server URL, not to the pool as
+		// a whole. Keep the concrete policy here and document its multi-URL
+		// exhaustion behavior instead of exposing speculative tuning knobs.
 		nats.MaxReconnects(60),
 		nats.ReconnectBufSize(-1),
 		nats.DisconnectErrHandler(func(_ *nats.Conn, _ error) {

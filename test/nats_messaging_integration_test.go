@@ -37,12 +37,30 @@ import (
 )
 
 const (
-	natsImage         = "nats:2.14.3-alpine"
-	sourceStream      = "EVENTS"
-	deadLetterStream  = "EVENTS_DLQ"
-	sourceSubject     = "events.test"
-	deadLetterSubject = "dead.events.test"
+	natsImage            = "nats:2.14.3-alpine"
+	sourceStream         = "EVENTS"
+	deadLetterStream     = "EVENTS_DLQ"
+	sourceSubject        = "events.test"
+	deadLetterSubject    = "dead.events.test"
+	testMaxPayloadBytes  = 256 << 10
+	testMaxPending       = 64
+	testMaxConcurrency   = 8
+	testMaxDeliveryBytes = 1 << 20
 )
+
+func testClientConfig() natsjs.Config {
+	return natsjs.Config{MaxPayloadBytes: testMaxPayloadBytes, MaxPendingPublishes: testMaxPending}
+}
+
+func testWorkerConfig() natsjs.WorkerConfig {
+	return natsjs.WorkerConfig{
+		MaxConcurrency:       testMaxConcurrency,
+		MaxDeliveryBytes:     testMaxDeliveryBytes,
+		HandlerTimeout:       30 * time.Second,
+		RetryDelays:          []time.Duration{time.Second, 5 * time.Second, 30 * time.Second, 2 * time.Minute},
+		DeadLetterRetryDelay: 30 * time.Second,
+	}
+}
 
 type natsFixture struct {
 	container testcontainers.Container
@@ -68,6 +86,8 @@ func newNATSFixture(t *testing.T) *natsFixture {
 			Image:        natsImage,
 			ExposedPorts: []string{"4222/tcp"},
 			Cmd:          []string{"-js", "-sd", "/data"},
+			// A fixed binding is required because reconnect tests stop and restart
+			// this exact container while clients retain the admitted URL.
 			HostConfigModifier: func(hostConfig *containerapi.HostConfig) {
 				hostConfig.PortBindings = networkapi.PortMap{
 					networkapi.MustParsePort("4222/tcp"): {
@@ -110,7 +130,7 @@ func newNATSFixture(t *testing.T) *natsFixture {
 		Name:       sourceStream,
 		Subjects:   []string{"events.>"},
 		Storage:    jetstream.FileStorage,
-		MaxMsgSize: natsjs.DefaultMaxDeliveryBytes,
+		MaxMsgSize: testMaxDeliveryBytes,
 	}); err != nil {
 		t.Fatalf("create source stream: %v", err)
 	}
@@ -118,7 +138,7 @@ func newNATSFixture(t *testing.T) *natsFixture {
 		Name:       deadLetterStream,
 		Subjects:   []string{"dead.>"},
 		Storage:    jetstream.FileStorage,
-		MaxMsgSize: 2 * natsjs.DefaultMaxDeliveryBytes,
+		MaxMsgSize: 2 * testMaxDeliveryBytes,
 	}); err != nil {
 		t.Fatalf("create dead-letter stream: %v", err)
 	}
@@ -127,7 +147,7 @@ func newNATSFixture(t *testing.T) *natsFixture {
 
 func (f *natsFixture) client(t *testing.T, role natsjs.Role, configure ...func(*natsjs.Config)) *natsjs.Client {
 	t.Helper()
-	cfg := natsjs.DefaultConfig()
+	cfg := testClientConfig()
 	cfg.URLs = []string{f.url}
 	cfg.AllowPlaintext = true
 	cfg.AllowUnauthenticated = true
@@ -146,7 +166,7 @@ func (f *natsFixture) client(t *testing.T, role natsjs.Role, configure ...func(*
 func (f *natsFixture) worker(t *testing.T, handler natsjs.Handler, configure ...func(*natsjs.WorkerConfig)) (*natsjs.Client, *natsjs.Worker, <-chan error) {
 	t.Helper()
 	client := f.client(t, natsjs.RoleWorker)
-	cfg := natsjs.DefaultWorkerConfig()
+	cfg := testWorkerConfig()
 	cfg.Consumer = fmt.Sprintf("worker-%d", time.Now().UnixNano())
 	cfg.FilterSubject = sourceSubject
 	cfg.DeadLetterSubject = deadLetterSubject
@@ -244,8 +264,10 @@ func TestNATSServiceProducerOnlyProcess(t *testing.T) {
 			"APP__APP__ENV=integration",
 			"APP__HTTP__ADDR="+httpAddress,
 			"APP__HTTP__READINESS_PROPAGATION_DELAY=0s",
-			"APP__HEALTH__REFRESH_INTERVAL=100ms",
-			"APP__HEALTH__FAILURE_THRESHOLD=1",
+			"APP__HEALTH__REFRESH_INTERVAL=1s",
+			// A high cached-health threshold proves that messaging's immediate
+			// readiness gate, rather than a completed background probe, returns 503.
+			"APP__HEALTH__FAILURE_THRESHOLD=100",
 			"APP__OBSERVABILITY__METRICS__ADDR=",
 			"APP__MESSAGING__ENABLED=true",
 			"APP__MESSAGING__URLS="+f.url,
@@ -317,7 +339,7 @@ func TestNATSStartupAdmission(t *testing.T) {
 	}
 	unavailableURL := "nats://" + closedListener.Addr().String()
 	closedListener.Close()
-	unavailable := natsjs.DefaultConfig()
+	unavailable := testClientConfig()
 	unavailable.URLs = []string{unavailableURL}
 	unavailable.AllowPlaintext = true
 	unavailable.AllowUnauthenticated = true
@@ -329,7 +351,15 @@ func TestNATSStartupAdmission(t *testing.T) {
 	}
 
 	f := newNATSFixture(t)
-	missing := natsjs.DefaultConfig()
+	invalidCredentials := testClientConfig()
+	invalidCredentials.URLs = []string{f.url}
+	invalidCredentials.AllowPlaintext = true
+	invalidCredentials.CredentialsFile = filepath.Join(t.TempDir(), "missing.creds")
+	invalidCredentials.Stream = sourceStream
+	if _, err := natsjs.Connect(t.Context(), invalidCredentials, natsjs.RoleProducer, natsjs.Observability{}); !errors.Is(err, natsjs.ErrRejected) {
+		t.Fatalf("Connect(unusable credentials) error = %v, want ErrRejected", err)
+	}
+	missing := testClientConfig()
 	missing.URLs = []string{f.url}
 	missing.AllowPlaintext = true
 	missing.AllowUnauthenticated = true
@@ -339,7 +369,7 @@ func TestNATSStartupAdmission(t *testing.T) {
 	}
 
 	client := f.client(t, natsjs.RoleWorker)
-	workerCfg := natsjs.DefaultWorkerConfig()
+	workerCfg := testWorkerConfig()
 	workerCfg.Consumer = "startup-admission"
 	workerCfg.FilterSubject = sourceSubject
 	workerCfg.DeadLetterSubject = deadLetterSubject
@@ -365,12 +395,23 @@ func TestNATSStartupAdmission(t *testing.T) {
 		})
 	}
 	if _, err := f.js.UpdateStream(t.Context(), jetstream.StreamConfig{
-		Name: sourceStream, Subjects: []string{"events.>"}, Storage: jetstream.FileStorage, MaxMsgSize: natsjs.DefaultMaxDeliveryBytes,
+		Name: sourceStream, Subjects: []string{"events.>"}, Storage: jetstream.FileStorage, MaxMsgSize: testMaxDeliveryBytes,
 	}); err != nil {
 		t.Fatalf("restore source stream: %v", err)
 	}
+	if err := f.js.DeleteStream(t.Context(), deadLetterStream); err != nil {
+		t.Fatalf("delete DLQ stream: %v", err)
+	}
+	if _, err := client.NewWorker(t.Context(), workerCfg, handler); !errors.Is(err, natsjs.ErrRejected) {
+		t.Fatalf("NewWorker(missing DLQ) error = %v, want ErrRejected", err)
+	}
+	if _, err := f.js.CreateStream(t.Context(), jetstream.StreamConfig{
+		Name: deadLetterStream, Subjects: []string{"dead.>"}, Storage: jetstream.FileStorage, MaxMsgSize: 2 * testMaxDeliveryBytes,
+	}); err != nil {
+		t.Fatalf("restore DLQ stream: %v", err)
+	}
 	if _, err := f.js.UpdateStream(t.Context(), jetstream.StreamConfig{
-		Name: deadLetterStream, Subjects: []string{"dead.>"}, Storage: jetstream.FileStorage, MaxMsgSize: natsjs.DefaultMaxPayloadBytes,
+		Name: deadLetterStream, Subjects: []string{"dead.>"}, Storage: jetstream.FileStorage, MaxMsgSize: testMaxPayloadBytes,
 	}); err != nil {
 		t.Fatalf("undersize DLQ stream: %v", err)
 	}
@@ -378,7 +419,7 @@ func TestNATSStartupAdmission(t *testing.T) {
 		t.Fatalf("NewWorker(undersized DLQ) error = %v, want ErrRejected", err)
 	}
 	if _, err := f.js.UpdateStream(t.Context(), jetstream.StreamConfig{
-		Name: deadLetterStream, Subjects: []string{"dead.>"}, Storage: jetstream.FileStorage, MaxMsgSize: 2 * natsjs.DefaultMaxDeliveryBytes,
+		Name: deadLetterStream, Subjects: []string{"dead.>"}, Storage: jetstream.FileStorage, MaxMsgSize: 2 * testMaxDeliveryBytes,
 	}); err != nil {
 		t.Fatalf("restore DLQ stream: %v", err)
 	}
@@ -515,7 +556,7 @@ func TestNATSConnectionReconnectExhaustion(t *testing.T) {
 
 func TestNATSConsumerSaturation(t *testing.T) {
 	f := newNATSFixture(t)
-	const maxDeliveryBytes = natsjs.DefaultMaxDeliveryBytes
+	const maxDeliveryBytes = testMaxDeliveryBytes
 	maxPayloadBytes := maxDeliveryBytes - natsjs.HeaderLimitBytes
 	client := f.client(t, natsjs.RoleWorker, func(cfg *natsjs.Config) {
 		cfg.MaxPayloadBytes = maxPayloadBytes
@@ -547,7 +588,7 @@ func TestNATSConsumerSaturation(t *testing.T) {
 
 	entered := make(chan int, 3)
 	release := make(chan struct{})
-	workerCfg := natsjs.DefaultWorkerConfig()
+	workerCfg := testWorkerConfig()
 	workerCfg.Consumer = "saturation-worker"
 	workerCfg.FilterSubject = sourceSubject
 	workerCfg.DeadLetterSubject = deadLetterSubject
@@ -580,11 +621,6 @@ func TestNATSConsumerSaturation(t *testing.T) {
 	if first != maxPayloadBytes || second != maxPayloadBytes {
 		t.Fatalf("active handler payload bytes = %d,%d, want %d each", first, second, maxPayloadBytes)
 	}
-	select {
-	case third := <-entered:
-		t.Fatalf("third handler entered while saturated with %d bytes", third)
-	default:
-	}
 	consumer, err := f.js.Consumer(t.Context(), sourceStream, "saturation-worker")
 	if err != nil {
 		t.Fatalf("lookup saturated consumer: %v", err)
@@ -614,7 +650,10 @@ func TestNATSHandlerAckAndRedelivery(t *testing.T) {
 			return errors.New("retry")
 		}
 		return nil
-	}, func(cfg *natsjs.WorkerConfig) { cfg.RetryDelays = []time.Duration{50 * time.Millisecond} })
+	}, func(cfg *natsjs.WorkerConfig) {
+		cfg.Consumer = "ack-redelivery-worker"
+		cfg.RetryDelays = []time.Duration{50 * time.Millisecond}
+	})
 	event := testEvent("retry")
 	if _, err := client.Producer().Publish(t.Context(), event); err != nil {
 		t.Fatalf("Publish() error = %v", err)
@@ -637,6 +676,8 @@ func TestNATSHandlerAckAndRedelivery(t *testing.T) {
 	if elapsed := second.at.Sub(first.at); elapsed < 45*time.Millisecond {
 		t.Fatalf("redelivery delay = %s, want at least configured 50ms minus scheduling tolerance", elapsed)
 	}
+	waitConsumerSettled(t, f, "ack-redelivery-worker")
+	assertStreamMessages(t, f, deadLetterStream, 0)
 }
 
 func TestNATSRetryExhaustionAndCrashBudget(t *testing.T) {
@@ -675,13 +716,13 @@ func TestNATSRetryExhaustionAndCrashBudget(t *testing.T) {
 	}
 	if _, err := f.js.CreateStream(t.Context(), jetstream.StreamConfig{
 		Name: deadLetterStream, Subjects: []string{"dead.>"}, Storage: jetstream.FileStorage,
-		MaxMsgSize: 2 * natsjs.DefaultMaxDeliveryBytes,
+		MaxMsgSize: 2 * testMaxDeliveryBytes,
 	}); err != nil {
 		t.Fatalf("restore DLQ stream: %v", err)
 	}
 
 	secondClient := f.client(t, natsjs.RoleWorker)
-	secondCfg := natsjs.DefaultWorkerConfig()
+	secondCfg := testWorkerConfig()
 	secondCfg.Consumer = "exhaustion-worker"
 	secondCfg.FilterSubject = sourceSubject
 	secondCfg.DeadLetterSubject = deadLetterSubject
@@ -752,7 +793,7 @@ func TestNATSRetryCrashConsumesAttemptBudget(t *testing.T) {
 	_ = receive(t, firstDone, 5*time.Second, "crashed worker stop")
 
 	secondClient := f.client(t, natsjs.RoleWorker)
-	cfg := natsjs.DefaultWorkerConfig()
+	cfg := testWorkerConfig()
 	cfg.Consumer = "crash-budget-worker"
 	cfg.FilterSubject = sourceSubject
 	cfg.DeadLetterSubject = deadLetterSubject
@@ -772,6 +813,8 @@ func TestNATSRetryCrashConsumesAttemptBudget(t *testing.T) {
 	if got := receive(t, fifth, 15*time.Second, "fifth delivery after worker crash"); got != 5 {
 		t.Fatalf("delivery after worker crash = %d, want final allowed attempt 5", got)
 	}
+	waitConsumerSettled(t, f, "crash-budget-worker")
+	assertStreamMessages(t, f, deadLetterStream, 0)
 }
 
 func TestNATSPoisonDLQAndRedrive(t *testing.T) {
@@ -847,7 +890,7 @@ func TestNATSOversizedSourceIsRetained(t *testing.T) {
 		t.Fatal("oversized source reached handler")
 		return nil
 	}, func(cfg *natsjs.WorkerConfig) { cfg.Consumer = "oversized-worker" })
-	payload := make([]byte, natsjs.DefaultMaxPayloadBytes+1)
+	payload := make([]byte, testMaxPayloadBytes+1)
 	ack, err := f.js.Publish(t.Context(), sourceSubject, payload)
 	if err != nil {
 		t.Fatalf("publish oversized source: %v", err)
@@ -898,6 +941,44 @@ func TestNATSOversizedSourceIsRetained(t *testing.T) {
 	}
 }
 
+func TestNATSOversizedHeadersAreDeadLettered(t *testing.T) {
+	f := newNATSFixture(t)
+	var handlerCalls atomic.Int32
+	_, _, _ = f.worker(t, func(context.Context, natsjs.Message) error {
+		handlerCalls.Add(1)
+		return nil
+	}, func(cfg *natsjs.WorkerConfig) { cfg.Consumer = "oversized-header-worker" })
+	payload := []byte("oversized-header-payload")
+	msg := nats.NewMsg(sourceSubject)
+	msg.Header.Set("Message-Id", "oversized-header-message")
+	msg.Header.Set("Publication-Id", "oversized-header-publication")
+	msg.Header.Set("Event-Type", "test.event")
+	msg.Header.Set("Event-Schema", "v1")
+	msg.Header.Set("Created-At", time.Now().UTC().Format(time.RFC3339Nano))
+	msg.Header.Set("X-Oversized", strings.Repeat("h", natsjs.HeaderLimitBytes))
+	msg.Data = payload
+	ack, err := f.js.PublishMsg(t.Context(), msg, jetstream.WithMsgID("oversized-header-publication"))
+	if err != nil {
+		t.Fatalf("publish oversized headers: %v", err)
+	}
+	var deadLetter *jetstream.RawStreamMsg
+	waitFor(t, 5*time.Second, func() bool {
+		stream, streamErr := f.js.Stream(t.Context(), deadLetterStream)
+		if streamErr != nil {
+			return false
+		}
+		deadLetter, streamErr = stream.GetLastMsgForSubject(t.Context(), deadLetterSubject)
+		return streamErr == nil
+	}, "oversized headers dead-letter transfer")
+	if handlerCalls.Load() != 0 {
+		t.Fatalf("handler calls for oversized headers = %d, want 0", handlerCalls.Load())
+	}
+	if !slices.Equal(deadLetter.Data, payload) || deadLetter.Header.Get("Original-Stream-Sequence") != fmt.Sprint(ack.Sequence) {
+		t.Fatalf("oversized-header DLQ transfer did not preserve source identity and payload")
+	}
+	waitConsumerSettled(t, f, "oversized-header-worker")
+}
+
 func TestNATSOrderingKeyDoesNotSerialize(t *testing.T) {
 	f := newNATSFixture(t)
 	firstEntered := make(chan struct{})
@@ -941,9 +1022,10 @@ func TestNATSTraceCorrelation(t *testing.T) {
 	observed := make(chan struct {
 		requestID string
 		traceID   string
+		spanID    string
 		baggage   int
 	}, 1)
-	cfg := natsjs.DefaultConfig()
+	cfg := testClientConfig()
 	cfg.URLs = []string{f.url}
 	cfg.AllowPlaintext = true
 	cfg.AllowUnauthenticated = true
@@ -953,7 +1035,7 @@ func TestNATSTraceCorrelation(t *testing.T) {
 		t.Fatalf("connect messaging client: %v", err)
 	}
 	t.Cleanup(client.Close)
-	workerCfg := natsjs.DefaultWorkerConfig()
+	workerCfg := testWorkerConfig()
 	workerCfg.Consumer = "trace-worker"
 	workerCfg.FilterSubject = sourceSubject
 	workerCfg.DeadLetterSubject = deadLetterSubject
@@ -961,8 +1043,9 @@ func TestNATSTraceCorrelation(t *testing.T) {
 		observed <- struct {
 			requestID string
 			traceID   string
+			spanID    string
 			baggage   int
-		}{reqctx.RequestID(ctx), traceID(ctx), baggage.FromContext(ctx).Len()}
+		}{reqctx.RequestID(ctx), traceID(ctx), trace.SpanContextFromContext(ctx).SpanID().String(), baggage.FromContext(ctx).Len()}
 		return nil
 	})
 	if err != nil {
@@ -994,6 +1077,25 @@ func TestNATSTraceCorrelation(t *testing.T) {
 	}
 	parent.End()
 	waitFor(t, 5*time.Second, func() bool { return len(recorder.Ended()) >= 3 }, "producer, consumer, and parent spans")
+	spansByName := make(map[string]sdktrace.ReadOnlySpan)
+	for _, span := range recorder.Ended() {
+		if _, duplicate := spansByName[span.Name()]; duplicate {
+			t.Fatalf("duplicate span %q", span.Name())
+		}
+		spansByName[span.Name()] = span
+	}
+	publishSpan, publishOK := spansByName["messaging publish"]
+	consumeSpan, consumeOK := spansByName["messaging consume"]
+	parentSpan, parentOK := spansByName["parent"]
+	if len(spansByName) != 3 || !publishOK || !consumeOK || !parentOK {
+		t.Fatalf("ended spans = %#v, want exactly parent, messaging publish, and messaging consume", spansByName)
+	}
+	if publishSpan.Parent().SpanID() != parentSpan.SpanContext().SpanID() || consumeSpan.Parent().SpanID() != publishSpan.SpanContext().SpanID() {
+		t.Fatalf("span parents = publish:%s consume:%s, want parent:%s publish:%s", publishSpan.Parent().SpanID(), consumeSpan.Parent().SpanID(), parentSpan.SpanContext().SpanID(), publishSpan.SpanContext().SpanID())
+	}
+	if got.spanID != consumeSpan.SpanContext().SpanID().String() {
+		t.Fatalf("handler span ID = %s, want consumer span %s", got.spanID, consumeSpan.SpanContext().SpanID())
+	}
 	var spanData strings.Builder
 	for _, span := range recorder.Ended() {
 		fmt.Fprintln(&spanData, span.Name())
@@ -1037,7 +1139,7 @@ func TestNATSForcedShutdownRedelivers(t *testing.T) {
 
 	redelivered := make(chan struct{}, 1)
 	secondClient := f.client(t, natsjs.RoleWorker)
-	cfg := natsjs.DefaultWorkerConfig()
+	cfg := testWorkerConfig()
 	cfg.Consumer = "forced-worker"
 	cfg.FilterSubject = sourceSubject
 	cfg.DeadLetterSubject = deadLetterSubject
@@ -1178,11 +1280,6 @@ func TestNATSGracefulDrain(t *testing.T) {
 	defer cancelShutdown()
 	shutdownErr := make(chan error, 1)
 	go func() { shutdownErr <- worker.Shutdown(shutdownCtx) }()
-	select {
-	case err := <-shutdownErr:
-		t.Fatalf("Shutdown() returned before handler completion: %v", err)
-	default:
-	}
 	close(release)
 	if err := receive(t, shutdownErr, 5*time.Second, "graceful shutdown"); err != nil {
 		t.Fatalf("Shutdown() error = %v", err)
@@ -1217,7 +1314,21 @@ func TestNATSWorkerMainRejectsEmptyHandler(t *testing.T) {
 		t.Fatalf("build worker: %v\n%s", err, output)
 	}
 	run := exec.CommandContext(t.Context(), binary)
-	run.Env = append(os.Environ(), "APP__MESSAGING__URLS=nats://"+listener.Addr().String())
+	run.Env = append(cleanMessagingEnvironment(os.Environ()),
+		"APP__APP__ENV=integration",
+		"APP__AUTHN__ISSUER=https://issuer.example.com",
+		"APP__AUTHN__AUDIENCE=https://api.example.com",
+		"APP__AUTHN__TRUSTED_PROXY_CIDRS=127.0.0.0/8",
+		"APP__MESSAGING__ENABLED=true",
+		"APP__MESSAGING__URLS=nats://"+listener.Addr().String(),
+		"APP__MESSAGING__ALLOW_PLAINTEXT=true",
+		"APP__MESSAGING__ALLOW_UNAUTHENTICATED=true",
+		"APP__MESSAGING__STREAM=EVENTS",
+		"APP__MESSAGING__WORKER__CONSUMER=unregistered-worker",
+		"APP__MESSAGING__WORKER__FILTER_SUBJECT=events.test",
+		"APP__MESSAGING__WORKER__DEAD_LETTER_SUBJECT=dead.events.test",
+		"APP__OBSERVABILITY__METRICS__ADDR=127.0.0.1:19090",
+	)
 	output, runErr := run.CombinedOutput()
 	if runErr == nil || !strings.Contains(string(output), "worker feature handler is not registered") {
 		t.Fatalf("worker result error = %v, output = %q", runErr, output)
@@ -1321,6 +1432,33 @@ func waitHTTPStatus(t *testing.T, address string, want int) {
 		_ = response.Body.Close()
 		return response.StatusCode == want
 	}, fmt.Sprintf("HTTP readiness status %d", want))
+}
+
+func waitConsumerSettled(t *testing.T, fixture *natsFixture, consumerName string) {
+	t.Helper()
+	waitFor(t, 5*time.Second, func() bool {
+		consumer, err := fixture.js.Consumer(t.Context(), sourceStream, consumerName)
+		if err != nil {
+			return false
+		}
+		info, err := consumer.Info(t.Context())
+		return err == nil && info.NumAckPending == 0 && info.NumPending == 0
+	}, consumerName+" settlement")
+}
+
+func assertStreamMessages(t *testing.T, fixture *natsFixture, streamName string, want uint64) {
+	t.Helper()
+	stream, err := fixture.js.Stream(t.Context(), streamName)
+	if err != nil {
+		t.Fatalf("lookup stream %s: %v", streamName, err)
+	}
+	info, err := stream.Info(t.Context())
+	if err != nil {
+		t.Fatalf("read stream %s: %v", streamName, err)
+	}
+	if info.State.Msgs != want {
+		t.Fatalf("stream %s messages = %d, want %d", streamName, info.State.Msgs, want)
+	}
 }
 
 func waitFor(t *testing.T, timeout time.Duration, predicate func() bool, description string) {

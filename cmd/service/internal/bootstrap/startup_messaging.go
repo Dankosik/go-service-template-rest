@@ -50,6 +50,10 @@ func (m messagingRuntime) Producer() *natsjs.Producer {
 	return m.client.Producer()
 }
 
+func (m messagingRuntime) Ready() bool {
+	return m.client == nil || m.client.Ready()
+}
+
 func (m messagingRuntime) ReadinessProbes() []health.Probe {
 	if m.client == nil {
 		return nil

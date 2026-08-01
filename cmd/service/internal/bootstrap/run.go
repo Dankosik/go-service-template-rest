@@ -353,6 +353,11 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 				if err := startupAdmission.CheckReady(ctx); err != nil {
 					return err
 				}
+				// profile:messaging-nats-jetstream:start
+				if !messaging.Ready() {
+					return fmt.Errorf("messaging is not ready")
+				}
+				// profile:messaging-nats-jetstream:end
 				// profile:authn-oidc-jwt:start
 				if err := authnVerifier.CheckReady(); err != nil {
 					return fmt.Errorf("check authentication readiness: %w", err)

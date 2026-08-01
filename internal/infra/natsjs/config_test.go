@@ -6,13 +6,34 @@ import (
 	"time"
 )
 
+const (
+	testMaxPayloadBytes  = 256 << 10
+	testMaxPending       = 64
+	testMaxConcurrency   = 8
+	testMaxDeliveryBytes = 1 << 20
+)
+
+func testConfig() Config {
+	return Config{MaxPayloadBytes: testMaxPayloadBytes, MaxPendingPublishes: testMaxPending}
+}
+
+func testWorkerConfig() WorkerConfig {
+	return WorkerConfig{
+		MaxConcurrency:       testMaxConcurrency,
+		MaxDeliveryBytes:     testMaxDeliveryBytes,
+		HandlerTimeout:       30 * time.Second,
+		RetryDelays:          []time.Duration{time.Second, 5 * time.Second, 30 * time.Second, 2 * time.Minute},
+		DeadLetterRetryDelay: 30 * time.Second,
+	}
+}
+
 func TestConfigValidation(t *testing.T) {
-	valid := DefaultConfig()
+	valid := testConfig()
 	valid.URLs = []string{"tls://nats.example:4222"}
 	valid.CredentialsFile = "/run/secrets/nats.creds"
 	valid.Stream = "EVENTS"
-	if err := ValidateConfig(valid); err != nil {
-		t.Fatalf("ValidateConfig(valid) error = %v", err)
+	if err := validateConfig(valid); err != nil {
+		t.Fatalf("validateConfig(valid) error = %v", err)
 	}
 
 	cases := map[string]func(*Config){
@@ -28,8 +49,8 @@ func TestConfigValidation(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			cfg := valid
 			mutate(&cfg)
-			if err := ValidateConfig(cfg); !errors.Is(err, ErrRejected) {
-				t.Fatalf("ValidateConfig() error = %v, want ErrRejected", err)
+			if err := validateConfig(cfg); !errors.Is(err, ErrRejected) {
+				t.Fatalf("validateConfig() error = %v, want ErrRejected", err)
 			}
 		})
 	}
@@ -39,36 +60,36 @@ func TestConfigValidation(t *testing.T) {
 	plaintext.CredentialsFile = ""
 	plaintext.AllowPlaintext = true
 	plaintext.AllowUnauthenticated = true
-	if err := ValidateConfig(plaintext); err != nil {
-		t.Fatalf("ValidateConfig(explicit local escape hatches) error = %v", err)
+	if err := validateConfig(plaintext); err != nil {
+		t.Fatalf("validateConfig(explicit local escape hatches) error = %v", err)
 	}
 }
 
 func TestWorkerAdmissionBound(t *testing.T) {
-	cfg := DefaultWorkerConfig()
+	cfg := testWorkerConfig()
 	cfg.Consumer = "events-worker"
 	cfg.FilterSubject = "events.>"
 	cfg.DeadLetterSubject = "dead.events"
-	if err := ValidateWorkerConfig(cfg, DefaultMaxPayloadBytes); err != nil {
+	if err := ValidateWorkerConfig(cfg, testMaxPayloadBytes); err != nil {
 		t.Fatalf("ValidateWorkerConfig(valid) error = %v", err)
 	}
 
 	cfg.MaxConcurrency = ResidentDeliveryLimit/cfg.MaxDeliveryBytes + 1
-	if err := ValidateWorkerConfig(cfg, DefaultMaxPayloadBytes); !errors.Is(err, ErrRejected) {
+	if err := ValidateWorkerConfig(cfg, testMaxPayloadBytes); !errors.Is(err, ErrRejected) {
 		t.Fatalf("ValidateWorkerConfig(over resident bound) error = %v, want ErrRejected", err)
 	}
 
-	cfg = DefaultWorkerConfig()
+	cfg = testWorkerConfig()
 	cfg.Consumer = "events-worker"
 	cfg.FilterSubject = "events.>"
 	cfg.DeadLetterSubject = "events.dead"
-	if err := ValidateWorkerConfig(cfg, DefaultMaxPayloadBytes); !errors.Is(err, ErrRejected) {
+	if err := ValidateWorkerConfig(cfg, testMaxPayloadBytes); !errors.Is(err, ErrRejected) {
 		t.Fatalf("ValidateWorkerConfig(overlapping DLQ) error = %v, want ErrRejected", err)
 	}
 
 	cfg.DeadLetterSubject = "dead.events"
 	cfg.RetryDelays = []time.Duration{0}
-	if err := ValidateWorkerConfig(cfg, DefaultMaxPayloadBytes); !errors.Is(err, ErrRejected) {
+	if err := ValidateWorkerConfig(cfg, testMaxPayloadBytes); !errors.Is(err, ErrRejected) {
 		t.Fatalf("ValidateWorkerConfig(zero retry) error = %v, want ErrRejected", err)
 	}
 }

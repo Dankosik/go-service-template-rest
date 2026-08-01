@@ -40,7 +40,7 @@ func TestEventValidation(t *testing.T) {
 }
 
 func TestProducerAdmissionAndCopy(t *testing.T) {
-	p := newProducer(nil, 1, DefaultMaxPayloadBytes)
+	p := newProducer(nil, 1, testMaxPayloadBytes)
 	if err := p.begin(); err != nil {
 		t.Fatalf("begin(first) error = %v", err)
 	}
@@ -55,7 +55,7 @@ func TestProducerAdmissionAndCopy(t *testing.T) {
 
 	event := validTestEvent()
 	ctx := reqctx.ContextWithRequestID(context.Background(), "request-1")
-	msg, err := buildNATSMessage(ctx, event, DefaultMaxPayloadBytes)
+	msg, err := buildNATSMessage(ctx, event, testMaxPayloadBytes)
 	if err != nil {
 		t.Fatalf("buildNATSMessage() error = %v", err)
 	}
@@ -91,9 +91,6 @@ func TestMessageIsImmutable(t *testing.T) {
 	first[0] = 'Y'
 	if got := string(decoded.Payload()); got != "payload" {
 		t.Fatalf("decoded payload mutated through alias: %q", got)
-	}
-	if got := decoded.Metadata().SourcePublicationID; got != "publication-1" {
-		t.Fatalf("source publication ID = %q", got)
 	}
 	if decoded.PublicationID() != "publication-1" || decoded.Type() != "created" || decoded.Schema() != "v1" ||
 		decoded.OrderingKey() != "account-1" || decoded.CorrelationID() != "" || !decoded.CreatedAt().Equal(validTestEvent().CreatedAt) {

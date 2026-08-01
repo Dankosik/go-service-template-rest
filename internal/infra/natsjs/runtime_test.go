@@ -7,6 +7,7 @@ import (
 	"maps"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -207,9 +208,17 @@ func TestWorkerHandleOutcomes(t *testing.T) {
 			t.Fatalf("handle(metadata failure) error = %v", err)
 		}
 		oversized := unitSource(t, 1)
-		oversized.data = make([]byte, DefaultMaxPayloadBytes+1)
+		oversized.data = make([]byte, testMaxPayloadBytes+1)
 		if err := worker.handle(t.Context(), oversized); !errors.Is(err, ErrTerminal) {
 			t.Fatalf("handle(oversized) error = %v", err)
+		}
+		oversizedHeaders := unitSource(t, 1)
+		oversizedHeaders.header.Set("X-Oversized", strings.Repeat("x", HeaderLimitBytes))
+		if err := worker.handle(t.Context(), oversizedHeaders); err != nil {
+			t.Fatalf("handle(oversized headers) error = %v", err)
+		}
+		if oversizedHeaders.ackCount != 1 {
+			t.Fatalf("oversized header source ack count = %d, want confirmed DLQ handoff", oversizedHeaders.ackCount)
 		}
 	})
 
@@ -243,6 +252,21 @@ func TestWorkerHandleOutcomes(t *testing.T) {
 	})
 }
 
+func TestHandlerPanicFramesAreSanitized(t *testing.T) {
+	const panicCanary = "PANIC_VALUE_CANARY"
+	worker := unitWorker(t, &recordingJetStream{}, func(context.Context, Message) error {
+		panic(panicCanary)
+	})
+	frames, _ := worker.invokeHandler(t.Context(), Message{})
+	joined := strings.Join(frames, "\n")
+	if len(frames) == 0 || !strings.Contains(joined, "TestHandlerPanicFramesAreSanitized") {
+		t.Fatalf("panic frames = %q, want test handler location", frames)
+	}
+	if strings.Contains(joined, panicCanary) {
+		t.Fatalf("panic frames leaked recovered value: %q", frames)
+	}
+}
+
 func TestNewWorkerAdmission(t *testing.T) {
 	for _, missingConsumer := range []bool{false, true} {
 		name := "existing consumer"
@@ -250,7 +274,7 @@ func TestNewWorkerAdmission(t *testing.T) {
 			name = "create missing consumer"
 		}
 		t.Run(name, func(t *testing.T) {
-			cfg := DefaultWorkerConfig()
+			cfg := testWorkerConfig()
 			cfg.Consumer = "events-worker"
 			cfg.FilterSubject = "events.>"
 			cfg.DeadLetterSubject = "dead.events"
@@ -288,9 +312,28 @@ func TestWorkerShutdownStateTransitions(t *testing.T) {
 	forced := unitWorker(t, &recordingJetStream{}, func(context.Context, Message) error { return nil })
 	canceled, cancel := context.WithCancel(t.Context())
 	cancel()
-	if err := forced.Shutdown(canceled); !errors.Is(err, context.Canceled) || !forced.terminal.Load() {
-		t.Fatalf("Shutdown(forced) error = %v, terminal = %t", err, forced.terminal.Load())
+	if err := forced.Shutdown(canceled); !errors.Is(err, context.Canceled) || !forced.client.draining.Load() {
+		t.Fatalf("Shutdown(forced) error = %v, draining = %t", err, forced.client.draining.Load())
 	}
+}
+
+func TestWorkerShutdownWaitsForRunCompletion(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		worker := unitWorker(t, &recordingJetStream{}, func(context.Context, Message) error { return nil })
+		result := make(chan error, 1)
+		go func() { result <- worker.Shutdown(t.Context()) }()
+		synctest.Wait()
+		select {
+		case err := <-result:
+			t.Fatalf("Shutdown() returned before Run completion: %v", err)
+		default:
+		}
+		close(worker.runDone)
+		synctest.Wait()
+		if err := <-result; err != nil {
+			t.Fatalf("Shutdown() error = %v", err)
+		}
+	})
 }
 
 type recordingJetStream struct {
@@ -366,7 +409,7 @@ func unitClient(t *testing.T, broker jetstream.JetStream, role Role) *Client {
 		t.Fatalf("newSignals() error = %v", err)
 	}
 	t.Cleanup(sig.close)
-	cfg := DefaultConfig()
+	cfg := testConfig()
 	cfg.Stream = "EVENTS"
 	client := &Client{
 		cfg:         cfg,
@@ -384,7 +427,7 @@ func unitClient(t *testing.T, broker jetstream.JetStream, role Role) *Client {
 func unitWorker(t *testing.T, broker jetstream.JetStream, handler Handler) *Worker {
 	t.Helper()
 	client := unitClient(t, broker, RoleWorker)
-	cfg := DefaultWorkerConfig()
+	cfg := testWorkerConfig()
 	cfg.Consumer = "events-worker"
 	cfg.FilterSubject = "events.>"
 	cfg.DeadLetterSubject = "dead.events"
@@ -400,7 +443,7 @@ func unitWorker(t *testing.T, broker jetstream.JetStream, handler Handler) *Work
 
 func unitSource(t *testing.T, delivered uint64) *fakeMsg {
 	t.Helper()
-	msg, err := buildNATSMessage(t.Context(), validTestEvent(), DefaultMaxPayloadBytes)
+	msg, err := buildNATSMessage(t.Context(), validTestEvent(), testMaxPayloadBytes)
 	if err != nil {
 		t.Fatalf("buildNATSMessage() error = %v", err)
 	}

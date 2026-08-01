@@ -3,13 +3,16 @@ package natsjs
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"io"
 	"log/slog"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/nats-io/nats.go/jetstream"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
@@ -54,6 +57,10 @@ func TestMessagingTelemetryContract(t *testing.T) {
 	sig.fetchBytes.Add(ctx, 64)
 	sig.consumeActive.Add(ctx, 1)
 	sig.handler(ctx, msg, "retryable", "handler_retry", time.Now())
+	sig.terminal(ctx, msg.Subject(), &jetstream.MsgMetadata{
+		Stream: "EVENTS", Consumer: "events-worker", NumDelivered: 2,
+		Sequence: jetstream.SequencePair{Stream: 3, Consumer: 2},
+	}, "handler_panic", []string{"featureHandler handler_test.go:42"})
 	sig.redeliveries.Add(ctx, 1)
 	sig.retries.Add(ctx, 1)
 	sig.dlqTransfers.Add(ctx, 1, metric.WithAttributes(attribute.String("outcome", "accepted")))
@@ -91,10 +98,22 @@ func TestMessagingTelemetryContract(t *testing.T) {
 			t.Fatalf("messaging logs contain forbidden value %q: %s", forbidden, serialized)
 		}
 	}
-	for _, required := range []string{"messaging_publish", "messaging_connection", "messaging_delivery", "message_id", "subject", "outcome", "reason"} {
+	for _, required := range []string{"messaging_publish", "messaging_connection", "messaging_delivery", "messaging_terminal_delivery", "message_id", "subject", "outcome", "reason"} {
 		if !strings.Contains(serialized, required) {
 			t.Fatalf("messaging logs are missing %q: %s", required, serialized)
 		}
+	}
+	records := decodeMessagingLogs(t, serialized)
+	delivery := messagingLogByMessage(t, records, "messaging_delivery")
+	if delivery["consumer"] != "events-worker" || delivery["attempt"] != float64(2) {
+		t.Fatalf("messaging delivery log = %#v, want consumer and attempt", delivery)
+	}
+	terminal := messagingLogByMessage(t, records, "messaging_terminal_delivery")
+	if terminal["stream"] != "EVENTS" || terminal["consumer"] != "events-worker" ||
+		terminal["stream_sequence"] != float64(3) || terminal["attempt"] != float64(2) ||
+		terminal["reason"] != "handler_panic" ||
+		!reflect.DeepEqual(terminal["handler_frames"], []any{"featureHandler handler_test.go:42"}) {
+		t.Fatalf("terminal delivery log = %#v, want safe source identity", terminal)
 	}
 
 	_, _, classified := classifyPublishError(errors.New(brokerCanary))
@@ -104,7 +123,7 @@ func TestMessagingTelemetryContract(t *testing.T) {
 	if strings.Contains(classified.Error(), brokerCanary) {
 		t.Fatalf("classified broker error leaked raw text: %v", classified)
 	}
-	cfg := DefaultConfig()
+	cfg := testConfig()
 	cfg.URLs = []string{"tls://127.0.0.1:1"}
 	cfg.CredentialsFile = "/" + credentialCanary
 	cfg.Stream = "EVENTS"
@@ -114,6 +133,35 @@ func TestMessagingTelemetryContract(t *testing.T) {
 	if err == nil || strings.Contains(err.Error(), credentialCanary) {
 		t.Fatalf("Connect() error = %v, want sanitized failure", err)
 	}
+}
+
+func decodeMessagingLogs(t *testing.T, serialized string) []map[string]any {
+	t.Helper()
+	decoder := json.NewDecoder(strings.NewReader(serialized))
+	var records []map[string]any
+	for {
+		var record map[string]any
+		err := decoder.Decode(&record)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			t.Fatalf("decode messaging log: %v", err)
+		}
+		records = append(records, record)
+	}
+	return records
+}
+
+func messagingLogByMessage(t *testing.T, records []map[string]any, message string) map[string]any {
+	t.Helper()
+	for _, record := range records {
+		if record["msg"] == message {
+			return record
+		}
+	}
+	t.Fatalf("messaging log %q not found in %#v", message, records)
+	return nil
 }
 
 func messagingMetricAttributes(t *testing.T, collected metricdata.ResourceMetrics) map[string]map[string]string {

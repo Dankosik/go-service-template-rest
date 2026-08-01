@@ -6,11 +6,12 @@ import (
 )
 
 const (
-	StageLoadDefaults = "config.load.defaults"
-	StageLoadFile     = "config.load.file"
-	StageLoadEnv      = "config.load.env"
-	StageParse        = "config.parse"
-	StageValidate     = "config.validate"
+	StageLoadDefaults  = "config.load.defaults"
+	StageLoadFile      = "config.load.file"
+	StageLoadEnv       = "config.load.env"
+	StageParse         = "config.parse"
+	StageValidate      = "config.validate"
+	secureTransportTLS = "tls"
 )
 
 type LoadOptions struct {

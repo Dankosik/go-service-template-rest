@@ -11,7 +11,7 @@ import (
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 )
 
-func newDiagnosticsServer(addr string, healthSvc *health.Service, metrics *telemetry.Metrics) *http.Server {
+func newDiagnosticsServer(addr string, healthSvc *health.Service, messagingReady func() bool, metrics *telemetry.Metrics) *http.Server {
 	if addr == "" {
 		return nil
 	}
@@ -20,6 +20,10 @@ func newDiagnosticsServer(addr string, healthSvc *health.Service, metrics *telem
 		writer.WriteHeader(http.StatusOK)
 	})
 	mux.HandleFunc("GET /health/ready", func(writer http.ResponseWriter, _ *http.Request) {
+		if !messagingReady() {
+			http.Error(writer, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
+			return
+		}
 		if err := healthSvc.Cached(); err != nil {
 			http.Error(writer, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
 			return

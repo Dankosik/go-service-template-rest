@@ -162,17 +162,23 @@ func initializedProcessServiceRoot(t *testing.T, repositoryRoot string) string {
 
 	temporaryRoot := t.TempDir()
 	archivePath := filepath.Join(temporaryRoot, "template.tar")
+	tree := exec.CommandContext(t.Context(), "git", "write-tree")
+	tree.Dir = repositoryRoot
+	treeOutput, err := tree.Output()
+	if err != nil {
+		t.Fatalf("write staged process-test tree: %v", err)
+	}
 	archive := exec.CommandContext(
 		t.Context(),
 		"git",
 		"archive",
 		"--format=tar",
 		"--output="+archivePath,
-		"HEAD",
+		strings.TrimSpace(string(treeOutput)),
 	)
 	archive.Dir = repositoryRoot
 	if output, err := archive.CombinedOutput(); err != nil {
-		t.Fatalf("archive template HEAD: %v\n%s", err, output)
+		t.Fatalf("archive staged template tree: %v\n%s", err, output)
 	}
 
 	serviceRoot := filepath.Join(temporaryRoot, "service")

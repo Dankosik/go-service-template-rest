@@ -26,15 +26,20 @@ const (
 	telemetryClose   = 5 * time.Second
 )
 
-func Run(args []string, handler natsjs.Handler) error {
+// HandlerBuilder constructs the feature-owned handler after the worker has
+// loaded and validated its runtime configuration. Any returned cleanup runs
+// before Run returns, including when the builder returns an invalid result.
+type HandlerBuilder func(context.Context, config.Config, *slog.Logger) (handler natsjs.Handler, cleanup func(), err error)
+
+func Run(args []string, buildHandler HandlerBuilder) error {
 	signalCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	return run(signalCtx, args, handler)
+	return run(signalCtx, args, buildHandler)
 }
 
-func run(signalCtx context.Context, args []string, handler natsjs.Handler) error {
-	if handler == nil {
-		return fmt.Errorf("%w: worker feature handler is not registered", natsjs.ErrRejected)
+func run(signalCtx context.Context, args []string, buildHandler HandlerBuilder) error {
+	if buildHandler == nil {
+		return fmt.Errorf("%w: worker feature handler builder is not registered", natsjs.ErrRejected)
 	}
 	loadOptions, err := parseLoadOptions(args)
 	if err != nil {
@@ -63,6 +68,16 @@ func run(signalCtx context.Context, args []string, handler natsjs.Handler) error
 		return err
 	}
 	defer telemetryCleanup()
+	handler, handlerCleanup, err := buildHandler(startupCtx, cfg, log)
+	if handlerCleanup != nil {
+		defer handlerCleanup()
+	}
+	if err != nil {
+		return fmt.Errorf("initialize worker feature handler: %w", err)
+	}
+	if handler == nil {
+		return fmt.Errorf("%w: worker feature handler is not registered", natsjs.ErrRejected)
+	}
 	client, err := natsjs.Connect(startupCtx, messagingClientConfig(cfg.Messaging), natsjs.RoleWorker, natsjs.Observability{Logger: log})
 	if err != nil {
 		return fmt.Errorf("initialize worker messaging: %w", err)
@@ -76,7 +91,7 @@ func run(signalCtx context.Context, args []string, handler natsjs.Handler) error
 	if err := healthSvc.Refresh(startupCtx, cfg.HTTP.ReadinessTimeout, cfg.Health.FailureThreshold); err != nil {
 		return fmt.Errorf("admit worker readiness: %w", err)
 	}
-	diagnostics := newDiagnosticsServer(cfg.Observability.Metrics.Addr, healthSvc, metrics)
+	diagnostics := newDiagnosticsServer(cfg.Observability.Metrics.Addr, healthSvc, client.Ready, metrics)
 	listener, err := listenDiagnostics(startupCtx, cfg.Observability.Metrics.Addr)
 	if err != nil {
 		return err

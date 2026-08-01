@@ -4,7 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"reflect"
+	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -25,7 +28,6 @@ type Worker struct {
 
 	draining atomic.Bool
 	started  atomic.Bool
-	terminal atomic.Bool
 	fatal    chan error
 	runDone  chan struct{}
 
@@ -262,6 +264,16 @@ func (w *Worker) waitForHandlers(completion <-chan struct{}, active int, runErr 
 			}
 		}
 	}
+	// fail publishes the terminal error before the handler publishes its
+	// completion. The final completion can still win a select when both channels
+	// are ready, so inspect the already-published terminal result once more before
+	// reporting a graceful stop.
+	if runErr == nil {
+		select {
+		case runErr = <-w.fatal:
+		default:
+		}
+	}
 	return runErr
 }
 
@@ -298,7 +310,6 @@ func (w *Worker) Shutdown(ctx context.Context) error {
 
 func (w *Worker) ForceClose() {
 	w.StartDrain()
-	w.terminal.Store(true)
 	w.mu.Lock()
 	if w.handlerCancel != nil {
 		w.handlerCancel()
@@ -310,10 +321,15 @@ func (w *Worker) ForceClose() {
 func (w *Worker) handle(handlerRoot context.Context, source jetstream.Msg) error {
 	metadata, err := source.Metadata()
 	if err != nil {
+		w.client.signals.terminal(handlerRoot, source.Subject(), nil, "metadata_unavailable", nil)
 		return fmt.Errorf("%w: source metadata unavailable", ErrTerminal)
 	}
 	if wireSize(source) > w.cfg.MaxDeliveryBytes || len(source.Data()) > w.client.cfg.MaxPayloadBytes {
+		w.client.signals.terminal(handlerRoot, source.Subject(), metadata, "delivery_bound", nil)
 		return fmt.Errorf("%w: retained source exceeds admitted message bound", ErrTerminal)
+	}
+	if encodedHeaderBytes(source.Headers()) > HeaderLimitBytes {
+		return w.deadLetter(handlerRoot, source, metadata, Message{}, "malformed")
 	}
 	if metadata.NumDelivered > 1 {
 		w.client.signals.redeliveries.Add(handlerRoot, 1)
@@ -340,12 +356,13 @@ func (w *Worker) handle(handlerRoot context.Context, source jetstream.Msg) error
 	handlerCtx, cancel := context.WithTimeout(ctx, w.cfg.HandlerTimeout)
 	started := time.Now()
 	w.client.signals.consumeActive.Add(ctx, 1)
-	handlerErr, handlerPanicked := w.invokeHandler(handlerCtx, decoded)
+	panicFrames, handlerErr := w.invokeHandler(handlerCtx, decoded)
 	handlerContextErr := handlerCtx.Err()
 	w.client.signals.consumeActive.Add(ctx, -1)
 	cancel()
-	if handlerPanicked {
+	if len(panicFrames) != 0 {
 		w.client.signals.handler(ctx, decoded, "terminal", "handler_panic", started)
+		w.client.signals.terminal(ctx, decoded.Subject(), metadata, "handler_panic", panicFrames)
 		return fmt.Errorf("%w: feature handler panicked", ErrTerminal)
 	}
 	if handlerErr == nil {
@@ -387,14 +404,31 @@ func (w *Worker) handle(handlerRoot context.Context, source jetstream.Msg) error
 	return nil
 }
 
-func (w *Worker) invokeHandler(ctx context.Context, msg Message) (err error, panicked bool) {
+func (w *Worker) invokeHandler(ctx context.Context, msg Message) (panicFrames []string, err error) {
 	defer func() {
 		if recover() != nil {
 			err = nil
-			panicked = true
+			panicFrames = captureHandlerPanicFrames()
 		}
 	}()
-	return w.handler(ctx, msg), false
+	return nil, w.handler(ctx, msg)
+}
+
+func captureHandlerPanicFrames() []string {
+	programCounters := make([]uintptr, 16)
+	count := runtime.Callers(3, programCounters)
+	iterator := runtime.CallersFrames(programCounters[:count])
+	frames := make([]string, 0, 8)
+	for len(frames) < cap(frames) {
+		frame, more := iterator.Next()
+		if frame.Function != "" && !strings.HasPrefix(frame.Function, "runtime.") && !strings.Contains(frame.Function, ".invokeHandler") {
+			frames = append(frames, fmt.Sprintf("%s %s:%d", frame.Function, filepath.Base(frame.File), frame.Line))
+		}
+		if !more {
+			break
+		}
+	}
+	return frames
 }
 
 func (w *Worker) deadLetter(ctx context.Context, source jetstream.Msg, metadata *jetstream.MsgMetadata, decoded Message, reason string) error {
@@ -402,6 +436,7 @@ func (w *Worker) deadLetter(ctx context.Context, source jetstream.Msg, metadata 
 	msg.Subject = w.cfg.DeadLetterSubject
 	if err := validateEncodedMessage(msg, w.client.cfg.MaxPayloadBytes); err != nil {
 		w.client.signals.dlqTransfers.Add(ctx, 1, metric.WithAttributes(attribute.String("outcome", "rejected")))
+		w.client.signals.terminal(ctx, source.Subject(), metadata, "dlq_envelope", nil)
 		return fmt.Errorf("%w: retained source cannot fit dead-letter envelope", ErrTerminal)
 	}
 	publishCtx, cancel := context.WithTimeout(ctx, operationTimeout)
@@ -420,6 +455,7 @@ func (w *Worker) deadLetter(ctx context.Context, source jetstream.Msg, metadata 
 			_ = source.NakWithDelay(w.cfg.DeadLetterRetryDelay)
 			return nil
 		}
+		w.client.signals.terminal(ctx, source.Subject(), metadata, "dlq_rejected", nil)
 		return fmt.Errorf("%w: dead-letter publish rejected", ErrTerminal)
 	}
 	w.client.signals.dlqTransfers.Add(ctx, 1, metric.WithAttributes(attribute.String("outcome", "accepted")))
@@ -433,7 +469,6 @@ func (w *Worker) deadLetter(ctx context.Context, source jetstream.Msg, metadata 
 }
 
 func (w *Worker) fail(err error) {
-	w.terminal.Store(true)
 	w.StartDrain()
 	w.client.signalTerminal(err)
 	select {
