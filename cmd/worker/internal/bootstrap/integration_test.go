@@ -34,15 +34,19 @@ func TestNATSWorkerComposition(t *testing.T) {
 
 	entered := make(chan natsjs.Message, 1)
 	release := make(chan struct{})
+	cleaned := make(chan struct{})
 	runCtx, cancelRun := context.WithCancel(t.Context())
 	runErr := make(chan error, 1)
 	go func() {
-		runErr <- run(runCtx, nil, func(context.Context, config.Config, *slog.Logger) (natsjs.Handler, func(), error) {
+		runErr <- run(runCtx, nil, func(_ context.Context, _ config.Config, _ *slog.Logger, producer *natsjs.Producer) (natsjs.Handler, func(context.Context), error) {
+			if producer == nil {
+				return nil, nil, errors.New("worker producer is nil")
+			}
 			return func(_ context.Context, msg natsjs.Message) error {
 				entered <- msg
 				<-release
 				return nil
-			}, nil, nil
+			}, func(context.Context) { close(cleaned) }, nil
 		})
 	}()
 	waitWorker(t, 10*time.Second, func() bool {
@@ -88,6 +92,68 @@ func TestNATSWorkerComposition(t *testing.T) {
 	case <-time.After(10 * time.Second):
 		t.Fatal("worker composition did not drain")
 	}
+	select {
+	case <-cleaned:
+	default:
+		t.Fatal("graceful worker returned before feature cleanup")
+	}
+}
+
+func TestNATSWorkerForcedShutdownDoesNotRaceHandlerCleanup(t *testing.T) {
+	url, js := workerNATSFixture(t)
+	diagnosticsAddress := reserveWorkerAddress(t)
+	setWorkerEnvironment(t, url, "forced-cleanup-worker", diagnosticsAddress)
+	t.Setenv("APP__MESSAGING__WORKER__DRAIN_TIMEOUT", "50ms")
+
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	exited := make(chan struct{})
+	cleaned := make(chan struct{}, 1)
+	runCtx, cancelRun := context.WithCancel(t.Context())
+	runErr := make(chan error, 1)
+	go func() {
+		runErr <- run(runCtx, nil, func(context.Context, config.Config, *slog.Logger, *natsjs.Producer) (natsjs.Handler, func(context.Context), error) {
+			return func(context.Context, natsjs.Message) error {
+				close(entered)
+				<-release
+				close(exited)
+				return nil
+			}, func(context.Context) { cleaned <- struct{}{} }, nil
+		})
+	}()
+	waitWorker(t, 10*time.Second, func() bool {
+		_, err := js.Consumer(t.Context(), "EVENTS", "forced-cleanup-worker")
+		return err == nil
+	}, "forced-cleanup worker admission")
+
+	producerCfg := workerTestProducerConfig()
+	producerCfg.URLs = []string{url}
+	producerCfg.AllowPlaintext = true
+	producerCfg.AllowUnauthenticated = true
+	producerCfg.Stream = "EVENTS"
+	producer, err := natsjs.Connect(t.Context(), producerCfg, natsjs.RoleProducer, natsjs.Observability{})
+	if err != nil {
+		t.Fatalf("connect forced-cleanup producer: %v", err)
+	}
+	t.Cleanup(producer.Close)
+	if _, err := producer.Producer().Publish(t.Context(), natsjs.Event{
+		Subject: "events.test", MessageID: natsjs.NewID(), PublicationID: natsjs.NewID(),
+		Type: "composition.forced-cleanup", Schema: "v1", CreatedAt: time.Now().UTC(), Payload: []byte("forced cleanup"),
+	}); err != nil {
+		t.Fatalf("publish forced-cleanup fixture: %v", err)
+	}
+	receiveWorker(t, entered, 10*time.Second, "forced-cleanup handler entry")
+	cancelRun()
+	if err := receiveWorker(t, runErr, 5*time.Second, "forced worker shutdown"); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("forced worker shutdown error = %v, want deadline exceeded", err)
+	}
+	select {
+	case <-cleaned:
+		t.Fatal("feature cleanup raced an uncooperative handler")
+	default:
+	}
+	close(release)
+	receiveWorker(t, exited, 5*time.Second, "forced handler exit")
 }
 
 func TestNATSWorkerHandlerPanicIsSupervised(t *testing.T) {
@@ -98,7 +164,7 @@ func TestNATSWorkerHandlerPanicIsSupervised(t *testing.T) {
 	defer cancelRun()
 	runErr := make(chan error, 1)
 	go func() {
-		runErr <- run(runCtx, nil, func(context.Context, config.Config, *slog.Logger) (natsjs.Handler, func(), error) {
+		runErr <- run(runCtx, nil, func(context.Context, config.Config, *slog.Logger, *natsjs.Producer) (natsjs.Handler, func(context.Context), error) {
 			return func(context.Context, natsjs.Message) error {
 				panic("worker panic canary")
 			}, nil, nil

@@ -21,10 +21,28 @@ build_image() {
 		"${context}"
 }
 
+# profile:messaging-nats-jetstream:start
+verify_worker_image() {
+	local output
+	if output="$(docker run --rm --read-only --network none --entrypoint /worker "${IMAGE}" 2>&1)"; then
+		echo "runtime image worker exited successfully without a registered feature handler" >&2
+		exit 1
+	fi
+	if ! grep -Fq 'worker feature handler builder is not registered' <<<"${output}"; then
+		echo "runtime image worker did not execute the expected fail-closed binary" >&2
+		echo "${output}" >&2
+		exit 1
+	fi
+}
+# profile:messaging-nats-jetstream:end
+
 # Generated services no longer own profile sources, so their checkout is
 # already the exact production source and needs no fixture.
 if [[ ! -d "${ROOT_DIR}/scripts/profiles" ]]; then
 	build_image "${ROOT_DIR}"
+	# profile:messaging-nats-jetstream:start
+	verify_worker_image
+	# profile:messaging-nats-jetstream:end
 	exit 0
 fi
 
@@ -81,3 +99,6 @@ grep -Fqx 'messaging = "nats-jetstream"' "${CHECKOUT}/template.lock"
 [[ ! -d "${CHECKOUT}/internal/infra/oidcjwt" ]]
 
 build_image "${CHECKOUT}"
+# profile:messaging-nats-jetstream:start
+verify_worker_image
+# profile:messaging-nats-jetstream:end

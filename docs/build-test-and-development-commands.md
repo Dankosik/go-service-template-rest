@@ -298,7 +298,8 @@ skip an unavailable container dependency according to the test contract;
 as full CI does.
 <!-- profile:messaging-nats-jetstream:start -->
 The selected messaging profile adds its package-level dispatch/ACK ambiguity
-proof and real NATS JetStream process suite to the same aggregate.
+proof, real NATS JetStream process suite, and a serialized tagged race subset
+to the same aggregate. Run the latter directly with `make test-messaging-race`.
 <!-- profile:messaging-nats-jetstream:end -->
 
 ## Formatting and analysis
@@ -469,6 +470,9 @@ temporary deterministic `DATABASE=postgres`, `GRPC=enabled`, `AUTHN=none`,
 `OUTBOUND_HTTP=bounded` service and builds that production-shaped source. This
 keeps missing OIDC trust configuration fail-closed while giving migration,
 startup, shutdown, and container-security checks one runnable image to share.
+When messaging is selected, the check also executes the image's `/worker`
+entrypoint and requires its unconfigured feature boundary to fail before any
+network access.
 The temporary initialized checkout and its removed authentication pack are
 asserted before the build and deleted afterward.
 

@@ -154,6 +154,38 @@ all Docker-backed or broad Go gates remain serialized.
     consumer per worker, outbox/inbox semantics, or a changed feature error or
     idempotency policy; reopen the narrow Design or Specification owner.
 
+- [x] T6: close the residual lifecycle and proof gaps found by the follow-up
+  ownership audit
+  - Source: the follow-up principal audit of current branch base
+    `75e03c097444165725b73d5b29684c03d1f506dc`; T5 evidence remains historical
+    and does not substitute for this repair.
+  - Owner/surface/resources: `internal/infra/natsjs/`, worker bootstrap,
+    selected Makefile/docs/profile blocks, and their existing unit and real-NATS
+    fixtures. Preserve one worker per client and direct `nats.go` ownership.
+  - Deliverable: connected topology failures cannot enter reconnect recovery;
+    `NewWorker` rejects a second sequential or concurrent registration before
+    broker mutation; failed `NakWithDelay` is terminal; `AckWait` derives from
+    the actual settlement budget; bootstrap joins every owned runtime goroutine
+    and never races feature cleanup with an uncooperative forced handler; one
+    process grace deadline bounds drain, diagnostics, background joins, feature
+    cleanup, and telemetry flush;
+    abrupt close is no longer a public application API; the SDK's asynchronous
+    drain is not wrapped in another goroutine; drain linearizes handler admission;
+    the feature builder receives the admitted producer; async broker errors retain
+    a bounded safe class; worker logs retain trace correlation and telemetry
+    degradation cause; process fixtures use the working tree; real valid and
+    rejected `.creds` paths are exercised; selected integration concurrency runs
+    under `-race` and is physically removed with `MESSAGING=none`; runtime image
+    proof executes the real fail-closed `/worker` artifact.
+  - Proof: focused unit/race and real-NATS regressions,
+    `make test-messaging-race`, `make check-full`, and
+    `TEMPLATE_INIT_PROFILE=messaging make template-init-check` all pass
+    serially; the aggregate covers lint, NilAway, coverage, full race, runtime
+    image execution, migration rehearsal, and container security.
+  - Reopen if: a second consumer must share one client, feature cleanup must run
+    after an uncooperative handler exceeds the process deadline, or settlement
+    grows another broker round trip; reopen the narrow lifecycle design owner.
+
 ## Completion evidence
 
 - Independent implementation re-review passed for all fixed high-risk units.
@@ -199,12 +231,36 @@ all Docker-backed or broad Go gates remain serialized.
   exit code 0 on the final repaired tree, including physical `MESSAGING=none`
   removal, selected minimal/maximal composition, cross-selection rejection, and
   repeated byte stability.
-- One non-blocking proof boundary remains explicit in `test-plan.md`: a
-  readable-but-server-rejected NATS credentials fixture is required only if an
-	  authenticated-NATS release claim is introduced. Current admission rejects an
-	  unreadable credentials file and does not claim that broader fixture.
+- The runtime-generated operator/JWT fixture now proves both valid `.creds`
+  readiness and broker rejection for a readable credential issued to an unknown
+  account; no credential material is retained in the repository.
 - No push, PR, deployment, purchase, cloud resource, or other external write
   was performed.
+
+### T6 ownership-audit closure
+
+- Fresh independent T6 acceptance review passed the current `75e03c0 + dirty`
+  working tree after checking transport, worker lifecycle, process-fixture,
+  profile, logging, and image-proof owners; no material finding remains in the
+  accepted repair scope.
+- The focused `natsjs`/worker-bootstrap suite passed 88 tests under `-race`.
+- `make test-report` passed 1208 tests with two intentional skips and effective
+  coverage 80.0%; `make check-full` completed with exit code 0 and included lint,
+  NilAway, the full untagged race suite, generated/module/structure checks,
+  real-broker/process tests, runtime image, migration, and container security.
+- `REQUIRE_DOCKER=1 make test-integration` passed the complete serialized
+  real-NATS/process owners (root 207.135s, package 15.838s, worker 1.862s) and
+  its tagged race subset, including authentication, singleton admission,
+  reconnect, saturation, process composition, and both drain paths.
+- `TEMPLATE_INIT_PROFILE=messaging make template-init-check` passed none,
+  selected-minimal, selected-maximal, cross-selection, repeatability, broad
+  residue scanning, and removal of every `github.com/nats-io/` dependency.
+- Runtime image proof executed `/worker` with a read-only filesystem and no
+  network, migration rehearsal exited 0, and Trivy reported zero HIGH/CRITICAL
+  findings in `service`, `worker`, and `migrate`.
+- The repair candidate passed final local acceptance as a working-tree change
+  based on `75e03c097444165725b73d5b29684c03d1f506dc`; commit, PR, and merge
+  identities remain publication evidence and are not embedded in this record.
 
 ## Closeout sequence
 
@@ -213,9 +269,10 @@ artifact/task complete in the working tree; remove any execution-only artifact
 that is not part of the durable record; run `git diff --check` and review the
 complete diff/status; create one local commit containing source plus final
 artifacts; then verify the branch and worktree are clean. Goal completion occurs
-only after that clean post-commit check. No file is edited after the commit, and
-no push, PR, deployment, infrastructure purchase/resource, or other external
-write is authorized.
+only after that clean post-commit check. No file is edited after the
+implementation commit. Push, PR, merge, deployment, infrastructure
+purchase/resource, or another external write requires separate explicit
+authorization.
 
 ## Independent readiness review
 

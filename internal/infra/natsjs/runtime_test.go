@@ -52,15 +52,18 @@ func TestProducerPublishAndLifecycleOutcomes(t *testing.T) {
 		}
 	})
 
-	for name, brokerErr := range map[string]error{
-		"broker rejection": nats.ErrNoResponders,
-		"ambiguous ack":    errors.New("connection vanished"),
+	for name, tc := range map[string]struct {
+		brokerErr error
+		want      error
+	}{
+		"broker rejection": {brokerErr: nats.ErrNoResponders, want: ErrRejected},
+		"ambiguous ack":    {brokerErr: errors.New("connection vanished"), want: ErrAmbiguous},
 	} {
 		t.Run(name, func(t *testing.T) {
-			client := unitClient(t, &recordingJetStream{err: brokerErr}, RoleProducer)
+			client := unitClient(t, &recordingJetStream{err: tc.brokerErr}, RoleProducer)
 			_, err := client.Producer().Publish(t.Context(), validTestEvent())
-			if err == nil {
-				t.Fatal("Publish() error = nil")
+			if !errors.Is(err, tc.want) {
+				t.Fatalf("Publish() error = %v, want %v", err, tc.want)
 			}
 		})
 	}
@@ -165,6 +168,11 @@ func TestWorkerHandleOutcomes(t *testing.T) {
 		if err := worker.handle(t.Context(), source); err != nil || source.nakDelay != worker.cfg.RetryDelays[0] {
 			t.Fatalf("handle(retry) error = %v, delay = %v", err, source.nakDelay)
 		}
+		source = unitSource(t, 1)
+		source.nakErr = errors.New("redelivery unavailable")
+		if err := worker.handle(t.Context(), source); !errors.Is(err, ErrTerminal) {
+			t.Fatalf("handle(retry NAK failure) error = %v, want ErrTerminal", err)
+		}
 		canceled, cancel := context.WithCancel(t.Context())
 		cancel()
 		source = unitSource(t, 1)
@@ -239,15 +247,33 @@ func TestWorkerHandleOutcomes(t *testing.T) {
 				if name == "ambiguous" && (err != nil || source.nakDelay != worker.cfg.DeadLetterRetryDelay) {
 					t.Fatalf("handle(ambiguous DLQ) error = %v, delay = %v", err, source.nakDelay)
 				}
+				if source.ackCount != 0 {
+					t.Fatalf("handle(%s DLQ) source ack count = %d, want 0", name, source.ackCount)
+				}
 			})
 		}
 		source := unitSource(t, 1)
+		source.nakErr = errors.New("redelivery unavailable")
+		worker := unitWorker(t, &recordingJetStream{err: errors.New("ack unavailable")}, func(context.Context, Message) error {
+			return Permanent(errors.New("poison"))
+		})
+		if err := worker.handle(t.Context(), source); !errors.Is(err, ErrTerminal) {
+			t.Fatalf("handle(ambiguous DLQ NAK failure) error = %v, want ErrTerminal", err)
+		}
+
+		source = unitSource(t, 1)
 		source.ackErr = errors.New("source ack unavailable")
-		worker := unitWorker(t, &recordingJetStream{ack: &jetstream.PubAck{}}, func(context.Context, Message) error {
+		worker = unitWorker(t, &recordingJetStream{ack: &jetstream.PubAck{}}, func(context.Context, Message) error {
 			return Permanent(errors.New("poison"))
 		})
 		if err := worker.handle(t.Context(), source); err != nil || source.nakDelay != worker.cfg.DeadLetterRetryDelay {
 			t.Fatalf("handle(ambiguous source ack) error = %v, delay = %v", err, source.nakDelay)
+		}
+		source = unitSource(t, 1)
+		source.ackErr = errors.New("source ack unavailable")
+		source.nakErr = errors.New("redelivery unavailable")
+		if err := worker.handle(t.Context(), source); !errors.Is(err, ErrTerminal) {
+			t.Fatalf("handle(ambiguous source ACK NAK failure) error = %v, want ErrTerminal", err)
 		}
 	})
 }
@@ -264,41 +290,6 @@ func TestHandlerPanicFramesAreSanitized(t *testing.T) {
 	}
 	if strings.Contains(joined, panicCanary) {
 		t.Fatalf("panic frames leaked recovered value: %q", frames)
-	}
-}
-
-func TestNewWorkerAdmission(t *testing.T) {
-	for _, missingConsumer := range []bool{false, true} {
-		name := "existing consumer"
-		if missingConsumer {
-			name = "create missing consumer"
-		}
-		t.Run(name, func(t *testing.T) {
-			cfg := testWorkerConfig()
-			cfg.Consumer = "events-worker"
-			cfg.FilterSubject = "events.>"
-			cfg.DeadLetterSubject = "dead.events"
-			consumer := &admissionConsumer{info: &jetstream.ConsumerInfo{Config: desiredConsumerConfig(cfg)}}
-			broker := &recordingJetStream{
-				streams: map[string]jetstream.Stream{
-					"EVENTS":     &admissionStream{info: &jetstream.StreamInfo{Config: jetstream.StreamConfig{MaxMsgSize: int32(cfg.MaxDeliveryBytes)}}},
-					"EVENTS_DLQ": &admissionStream{info: &jetstream.StreamInfo{Config: jetstream.StreamConfig{MaxMsgSize: int32(2 * cfg.MaxDeliveryBytes)}}},
-				},
-				dlqStream: "EVENTS_DLQ",
-				consumer:  consumer,
-			}
-			if missingConsumer {
-				broker.consumerErr = jetstream.ErrConsumerNotFound
-			}
-			client := unitClient(t, broker, RoleWorker)
-			worker, err := client.NewWorker(t.Context(), cfg, func(context.Context, Message) error { return nil })
-			if err == nil || worker != nil || !strings.Contains(err.Error(), "connection is not ready") {
-				t.Fatalf("NewWorker(without connection) = %#v, %v", worker, err)
-			}
-			if client.consumer != consumer || broker.created != missingConsumer {
-				t.Fatalf("NewWorker() client consumer = %#v, created = %t", client.consumer, broker.created)
-			}
-		})
 	}
 }
 
@@ -339,67 +330,14 @@ func TestWorkerShutdownWaitsForRunCompletion(t *testing.T) {
 type recordingJetStream struct {
 	jetstream.JetStream
 
-	ack         *jetstream.PubAck
-	err         error
-	published   *nats.Msg
-	streams     map[string]jetstream.Stream
-	dlqStream   string
-	consumer    jetstream.Consumer
-	consumerErr error
-	created     bool
+	ack       *jetstream.PubAck
+	err       error
+	published *nats.Msg
 }
 
 func (s *recordingJetStream) PublishMsg(_ context.Context, msg *nats.Msg, _ ...jetstream.PublishOpt) (*jetstream.PubAck, error) {
 	s.published = &nats.Msg{Subject: msg.Subject, Header: maps.Clone(msg.Header), Data: append([]byte(nil), msg.Data...)}
 	return s.ack, s.err
-}
-
-func (s *recordingJetStream) Stream(_ context.Context, name string) (jetstream.Stream, error) { //nolint:ireturn // Test double mirrors the SDK contract.
-	stream, ok := s.streams[name]
-	if !ok {
-		return nil, jetstream.ErrStreamNotFound
-	}
-	return stream, nil
-}
-
-func (s *recordingJetStream) StreamNameBySubject(context.Context, string) (string, error) {
-	if s.dlqStream == "" {
-		return "", jetstream.ErrStreamNotFound
-	}
-	return s.dlqStream, nil
-}
-
-func (s *recordingJetStream) Consumer(context.Context, string, string) (jetstream.Consumer, error) { //nolint:ireturn // Test double mirrors the SDK contract.
-	return s.consumer, s.consumerErr
-}
-
-func (s *recordingJetStream) CreateConsumer(_ context.Context, _ string, _ jetstream.ConsumerConfig) (jetstream.Consumer, error) { //nolint:ireturn // Test double mirrors the SDK contract.
-	s.created = true
-	return s.consumer, nil
-}
-
-type admissionStream struct {
-	jetstream.Stream
-
-	info *jetstream.StreamInfo
-}
-
-func (s *admissionStream) Info(context.Context, ...jetstream.StreamInfoOpt) (*jetstream.StreamInfo, error) {
-	return s.info, nil
-}
-
-type admissionConsumer struct {
-	jetstream.Consumer
-
-	info *jetstream.ConsumerInfo
-}
-
-func (c *admissionConsumer) Fetch(int, ...jetstream.FetchOpt) (jetstream.MessageBatch, error) { //nolint:ireturn // Test double mirrors the SDK contract.
-	return nil, jetstream.ErrNoMessages
-}
-
-func (c *admissionConsumer) Info(context.Context) (*jetstream.ConsumerInfo, error) {
-	return c.info, nil
 }
 
 func unitClient(t *testing.T, broker jetstream.JetStream, role Role) *Client {

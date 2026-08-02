@@ -28,6 +28,7 @@ TEST_JSON_FILE := $(TEST_REPORT_DIR)/test2json.json
 INTEGRATION_PACKAGES := ./test/...
 # profile:messaging-nats-jetstream:start
 INTEGRATION_PACKAGES += ./internal/infra/natsjs ./cmd/worker/internal/bootstrap
+MESSAGING_RACE_PACKAGES := ./internal/infra/natsjs ./cmd/worker/internal/bootstrap ./test/...
 # profile:messaging-nats-jetstream:end
 # Effective coverage is measured across the whole module, so a freshly generated
 # service already sits near this floor on template tests alone. Initialization
@@ -124,7 +125,7 @@ BENCHMARK_REMOTE_SCRIPT := bash ./scripts/dev/benchmark-remote.sh
 	sqlc-check runtime-image-build container-security run build build-pgo docker-build docker-run vendor claude-skills-sync claude-skills-check codex-agents-sync codex-agents-check \
 	template-sync template-sync-check template-sync-all template-owned-purity-check
 # profile:messaging-nats-jetstream:start
-.PHONY: run-worker build-worker
+.PHONY: run-worker build-worker test-messaging-race
 # profile:messaging-nats-jetstream:end
 # profile:grpc-reference-benchmark:start
 .PHONY: bench-grpc bench-grpc-smoke bench-grpc-inspect
@@ -151,6 +152,7 @@ help:
 	@echo "  make build | build-pgo PGO_PROFILE=<cpu.pprof>"
 # profile:messaging-nats-jetstream:start
 	@echo "  make run-worker | build-worker"
+	@echo "  make test-messaging-race"
 # profile:messaging-nats-jetstream:end
 	@echo ""
 	@echo "Focused validation:"
@@ -307,6 +309,11 @@ test-watch:
 test-race:
 	go test -vet=off -race ./...
 
+# profile:messaging-nats-jetstream:start
+test-messaging-race:
+	go test -vet=off -p=1 -count=1 -race -tags=integration $(MESSAGING_RACE_PACKAGES) -run '^(TestNATSWorkerRegistrationIsSingleton|TestNATSPublishDispatchCancellationAndNoRetry|TestNATSWorkerComposition|TestNATSWorkerForcedShutdownDoesNotRaceHandlerCleanup|TestNATSWorkerConnectionLossAndReconnect|TestNATSConsumerSaturation|TestNATSForcedShutdownRedelivers|TestNATSGracefulDrain)$$'
+# profile:messaging-nats-jetstream:end
+
 test-cover:
 	GOTOOLCHAIN=$(COVERAGE_GOTOOLCHAIN) GOCOVERDIR= go test -vet=off -covermode=set -coverprofile=coverage.out ./...
 	$(MAKE) coverage-summary
@@ -360,6 +367,9 @@ test-flake-smoke:
 
 test-integration:
 	go test -p=1 -count=1 -tags=integration $(INTEGRATION_PACKAGES)
+# profile:messaging-nats-jetstream:start
+	$(MAKE) test-messaging-race
+# profile:messaging-nats-jetstream:end
 
 bench:
 	BENCH_PACKAGE="$(BENCH_PACKAGE)" BENCH_PATTERN="$(BENCH_PATTERN)" BENCH_COUNT="$(BENCH_COUNT)" BENCH_TIME="$(BENCH_TIME)" BENCH_TAGS="$(BENCH_TAGS)" BENCH_OUTPUT="$(BENCH_OUTPUT)" BENCH_WORKLOAD_ID="$(BENCH_WORKLOAD_ID)" $(BENCHMARK_SCRIPT) run

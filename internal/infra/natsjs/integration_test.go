@@ -88,6 +88,63 @@ func (f *packageNATSFixture) client(t *testing.T, pending int) *Client {
 	return client
 }
 
+func TestNATSWorkerRegistrationIsSingleton(t *testing.T) {
+	f := newPackageNATSFixture(t)
+	client := f.client(t, testMaxPending)
+	cfg := testWorkerConfig()
+	cfg.Consumer = "singleton-first"
+	cfg.FilterSubject = "events.test"
+	cfg.DeadLetterSubject = "dead.events.test"
+	if _, err := client.NewWorker(t.Context(), cfg, func(context.Context, Message) error { return nil }); err != nil {
+		t.Fatalf("NewWorker(first) error = %v", err)
+	}
+	second := cfg
+	second.Consumer = "singleton-second"
+	if worker, err := client.NewWorker(t.Context(), second, func(context.Context, Message) error { return nil }); worker != nil || !errors.Is(err, ErrRejected) {
+		t.Fatalf("NewWorker(second) = %#v, %v, want ErrRejected", worker, err)
+	}
+	if _, err := f.js.Consumer(t.Context(), "EVENTS", second.Consumer); !errors.Is(err, jetstream.ErrConsumerNotFound) {
+		t.Fatalf("second consumer lookup error = %v, want no broker mutation", err)
+	}
+
+	concurrentClient := f.client(t, testMaxPending)
+	concurrent := cfg
+	concurrent.Consumer = "singleton-concurrent"
+	start := make(chan struct{})
+	results := make(chan error, 2)
+	for range 2 {
+		go func() {
+			<-start
+			_, err := concurrentClient.NewWorker(t.Context(), concurrent, func(context.Context, Message) error { return nil })
+			results <- err
+		}()
+	}
+	close(start)
+	var accepted, rejected int
+	for range 2 {
+		switch err := <-results; {
+		case err == nil:
+			accepted++
+		case errors.Is(err, ErrRejected):
+			rejected++
+		default:
+			t.Fatalf("concurrent NewWorker() error = %v", err)
+		}
+	}
+	if accepted != 1 || rejected != 1 {
+		t.Fatalf("concurrent NewWorker() accepted = %d, rejected = %d, want 1 each", accepted, rejected)
+	}
+}
+
+func TestNATSConnectedTopologyErrorDoesNotEnterReconnect(t *testing.T) {
+	f := newPackageNATSFixture(t)
+	client := f.client(t, testMaxPending)
+	client.ready.Store(false)
+	if client.waitForReconnect(t.Context(), jetstream.ErrConsumerDeleted) {
+		t.Fatal("connected topology error entered reconnect recovery")
+	}
+}
+
 func TestNATSPublishDispatchCancellationAndNoRetry(t *testing.T) {
 	f := newPackageNATSFixture(t)
 	client := f.client(t, 2)

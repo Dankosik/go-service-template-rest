@@ -36,8 +36,9 @@ type Client struct {
 	closed      chan struct{}
 	closedOnce  sync.Once
 
-	probeMu  sync.RWMutex
-	consumer pullConsumer
+	probeMu       sync.RWMutex
+	consumer      pullConsumer
+	workerClaimed bool
 }
 
 func Connect(ctx context.Context, cfg Config, role Role, obs Observability) (*Client, error) {
@@ -85,8 +86,8 @@ func Connect(ctx context.Context, cfg Config, role Role, obs Observability) (*Cl
 			default:
 			}
 		}),
-		nats.ErrorHandler(func(_ *nats.Conn, _ *nats.Subscription, _ error) {
-			c.signals.connection(context.WithoutCancel(ctx), "async_error")
+		nats.ErrorHandler(func(_ *nats.Conn, _ *nats.Subscription, err error) {
+			c.signals.asyncError(context.WithoutCancel(ctx), err)
 		}),
 		nats.ClosedHandler(func(nc *nats.Conn) {
 			c.ready.Store(false)
@@ -197,25 +198,17 @@ func (c *Client) Shutdown(ctx context.Context) error {
 		return fmt.Errorf("wait for admitted messaging publishes: %w", err)
 	}
 	c.intentional.Store(true)
-	errCh := make(chan error, 1)
-	go func() { errCh <- c.nc.Drain() }()
+	if err := c.nc.Drain(); err != nil && !errors.Is(err, nats.ErrConnectionClosed) {
+		c.Close()
+		return fmt.Errorf("%w: messaging connection drain failed", ErrTerminal)
+	}
 	select {
-	case err := <-errCh:
-		if err != nil && !errors.Is(err, nats.ErrConnectionClosed) {
-			c.Close()
-			return fmt.Errorf("%w: messaging connection drain failed", ErrTerminal)
-		}
-		select {
-		case <-c.closed:
-		case <-ctx.Done():
-			c.Close()
-			return fmt.Errorf("wait for messaging connection drain: %w", ctx.Err())
-		}
+	case <-c.closed:
 		c.signals.close()
 		return nil
 	case <-ctx.Done():
 		c.Close()
-		return fmt.Errorf("drain messaging connection: %w", ctx.Err())
+		return fmt.Errorf("wait for messaging connection drain: %w", ctx.Err())
 	}
 }
 
@@ -249,7 +242,7 @@ func (c *Client) waitForReconnect(ctx context.Context, err error) bool {
 	if c == nil || c.nc == nil {
 		return false
 	}
-	if !c.nc.IsReconnecting() && c.ready.Load() &&
+	if !c.nc.IsReconnecting() &&
 		!errors.Is(err, nats.ErrDisconnected) &&
 		!errors.Is(err, nats.ErrReconnectBufExceeded) &&
 		!errors.Is(err, jetstream.ErrConnectionClosed) &&

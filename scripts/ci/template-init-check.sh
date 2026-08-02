@@ -469,9 +469,20 @@ assert "DATABASE=none retained the migration binary" grep_absent -Fq \
 # profile:messaging-nats-jetstream:start
 assert "MESSAGING=none retained the worker binary" grep_absent -Fq \
 	'/out/worker' "${minimal_checkout}/build/docker/Dockerfile"
-assert "MESSAGING=none retained CI/profile wiring" grep_absent -R -Eq \
-	'nats-jetstream|natsjs|cmd/worker|build-worker|run-worker|APP__MESSAGING__|TEMPLATE_INIT_PROFILE.*messaging' \
-	"${minimal_checkout}/scripts/ci"
+assert "MESSAGING=none retained runtime, documentation, or CI wiring" grep_absent -R -Eq \
+	'nats-jetstream|natsjs|cmd/worker|build-worker|run-worker|APP__MESSAGING__|TEMPLATE_INIT_PROFILE.*messaging|durable-messaging|messaging-race' \
+	"${minimal_checkout}/Makefile" \
+	"${minimal_checkout}/README.md" \
+	"${minimal_checkout}/.github" \
+	"${minimal_checkout}/build" \
+	"${minimal_checkout}/cmd" \
+	"${minimal_checkout}/docs" \
+	"${minimal_checkout}/env" \
+	"${minimal_checkout}/internal" \
+	"${minimal_checkout}/railway.toml" \
+	"${minimal_checkout}/scripts/ci" \
+	"${minimal_checkout}/scripts/dev" \
+	"${minimal_checkout}/test"
 # profile:messaging-nats-jetstream:end
 assert "DATABASE=none retained migration validation" grep_absent -Fq \
 	'migration-validate:' "${minimal_checkout}/.github/workflows/ci.yml"
@@ -490,9 +501,9 @@ fi
 # profile:messaging-nats-jetstream:start
 if (
 	cd "${minimal_checkout}"
-	go list -m all | grep -Fq 'github.com/nats-io/nats.go'
+	go list -m all | grep -Fq 'github.com/nats-io/'
 ); then
-	echo "messaging-none profile retained NATS runtime dependencies"
+	echo "messaging-none profile retained NATS dependencies"
 	exit 1
 fi
 # profile:messaging-nats-jetstream:end
@@ -544,7 +555,6 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "mess
 	done
 	grep -Fq 'messaging = "nats-jetstream"' "${messaging_checkout}/template.lock"
 	grep -Fqx "source_revision = \"${messaging_revision}\"" "${messaging_checkout}/template.lock"
-	grep -Fq '/out/worker' "${messaging_checkout}/build/docker/Dockerfile"
 	make -C "${messaging_checkout}" help >"${TEMP_ROOT}/messaging-help.log"
 	grep -Fq 'run-worker' "${TEMP_ROOT}/messaging-help.log"
 	(

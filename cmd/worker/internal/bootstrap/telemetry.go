@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 
@@ -9,7 +10,7 @@ import (
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 )
 
-func setupTelemetry(ctx context.Context, cfg config.Config, metrics *telemetry.Metrics, log *slog.Logger) (func(), error) {
+func setupTelemetry(ctx context.Context, cfg config.Config, metrics *telemetry.Metrics, log *slog.Logger) (func(context.Context), error) {
 	instanceID := telemetry.ResolveInstanceID(cfg.App.InstanceID)
 	metricsResult, err := telemetry.SetupMetrics(ctx, metrics, telemetry.MetricsConfig{
 		ServiceName: cfg.Observability.OTel.ServiceName, ServiceVersion: cfg.App.Version,
@@ -33,14 +34,18 @@ func setupTelemetry(ctx context.Context, cfg config.Config, metrics *telemetry.M
 		},
 	})
 	if tracingErr != nil {
-		log.WarnContext(ctx, "worker_tracing_degraded", "operation", "telemetry_init", "outcome", "degraded")
+		log.WarnContext(ctx, "worker_tracing_degraded",
+			"operation", "telemetry_init", "outcome", "degraded",
+			"reason", workerTelemetryFailureReason(tracingErr), "err", tracingErr,
+		)
 	}
 	if metricsResult.ExportErr != nil {
-		log.WarnContext(ctx, "worker_metrics_export_degraded", "operation", "telemetry_init", "outcome", "degraded")
+		log.WarnContext(ctx, "worker_metrics_export_degraded",
+			"operation", "telemetry_init", "outcome", "degraded",
+			"reason", workerTelemetryFailureReason(metricsResult.ExportErr), "err", metricsResult.ExportErr,
+		)
 	}
-	return func() {
-		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), telemetryClose)
-		defer cancel()
+	return func(shutdownCtx context.Context) {
 		if tracingShutdown != nil {
 			_ = tracingShutdown(shutdownCtx)
 		}
@@ -48,4 +53,15 @@ func setupTelemetry(ctx context.Context, cfg config.Config, metrics *telemetry.M
 			_ = metricsResult.Shutdown(shutdownCtx)
 		}
 	}, nil
+}
+
+func workerTelemetryFailureReason(err error) string {
+	switch {
+	case errors.Is(err, context.DeadlineExceeded):
+		return "deadline_exceeded"
+	case errors.Is(err, context.Canceled):
+		return "canceled"
+	default:
+		return "setup_error"
+	}
 }

@@ -55,10 +55,12 @@ per-key ordering.
 
 ## Worker
 
-Replace the rejecting body of `buildFeatureHandler` in `cmd/worker/main.go` with
-one feature-owned, duplicate-safe `natsjs.Handler`. The builder receives the
-loaded `config.Config` and logger and may return a cleanup function for its own
-dependencies; bootstrap invokes that cleanup on startup failure and shutdown.
+Replace the deliberate `nil` passed to `bootstrap.Run` in `cmd/worker/main.go`
+with a binary-local `bootstrap.HandlerBuilder`. The builder receives the loaded
+`config.Config`, logger, and admitted concrete `*natsjs.Producer`, then returns
+one feature-owned, duplicate-safe `natsjs.Handler` and optional
+`func(context.Context)` dependency cleanup. Bootstrap invokes that cleanup on
+startup failure and shutdown; it must honor the supplied deadline.
 Then run:
 
 ```bash
@@ -96,13 +98,16 @@ network behavior of pool URLs. Exhaustion is terminal and starts process drain.
 
 On shutdown, new fetches and publishes stop first. In-flight handlers may finish
 within `WORKER__DRAIN_TIMEOUT`; expiry cancels them, closes the connection, and
-leaves unacknowledged messages for redelivery. Use the low-cardinality
-`messaging.*` metrics and correlated logs/traces for diagnosis. Redrive preserves
-the logical message ID and original subject but uses a new publication ID.
+leaves unacknowledged messages for redelivery. Startup rejects a worker whose
+drain plus diagnostics, background join, feature cleanup, and telemetry flush
+cannot fit inside `HTTP__GRACE_PERIOD`; every shutdown stage draws from that
+single process deadline. Use the low-cardinality `messaging.*` metrics and
+correlated logs/traces for diagnosis. Redrive preserves the logical message ID
+and original subject but uses a new publication ID.
 
 Real broker validation is part of the profile:
 
 ```bash
 REQUIRE_DOCKER=1 make test-integration
-go test -vet=off -race ./internal/infra/natsjs ./cmd/worker/internal/bootstrap
+make test-messaging-race
 ```

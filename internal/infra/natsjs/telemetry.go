@@ -2,11 +2,13 @@ package natsjs
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
 	"time"
 
+	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -149,6 +151,30 @@ func (s *signals) publish(ctx context.Context, event Event, outcome, reason stri
 func (s *signals) connection(ctx context.Context, event string) {
 	s.connectionEvents.Add(ctx, 1, metric.WithAttributes(attribute.String("event", event)))
 	s.log.InfoContext(ctx, "messaging_connection", "operation", "connection", "outcome", event)
+}
+
+func (s *signals) asyncError(ctx context.Context, err error) {
+	s.connectionEvents.Add(ctx, 1, metric.WithAttributes(attribute.String("event", "async_error")))
+	s.log.WarnContext(ctx, "messaging_connection",
+		"operation", "connection", "outcome", "async_error", "reason", asyncErrorReason(err),
+	)
+}
+
+func asyncErrorReason(err error) string {
+	switch {
+	case errors.Is(err, nats.ErrSlowConsumer):
+		return "slow_consumer"
+	case errors.Is(err, nats.ErrAuthorization), errors.Is(err, nats.ErrAuthExpired), errors.Is(err, nats.ErrAuthRevoked):
+		return "authentication"
+	case errors.Is(err, nats.ErrPermissionViolation):
+		return "permission"
+	case errors.Is(err, nats.ErrMaxPayload):
+		return "message_bound"
+	case errors.Is(err, nats.ErrConnectionClosed), errors.Is(err, nats.ErrDisconnected), errors.Is(err, nats.ErrStaleConnection):
+		return "connection"
+	default:
+		return "other"
+	}
 }
 
 func (s *signals) handler(ctx context.Context, msg Message, outcome, reason string, started time.Time) {

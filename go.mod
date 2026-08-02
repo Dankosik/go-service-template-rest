@@ -18,7 +18,9 @@ require (
 	github.com/knadh/koanf/v2 v2.3.5
 	github.com/moby/moby/api v1.55.0
 	github.com/moby/moby/client v0.5.0
+	github.com/nats-io/jwt/v2 v2.8.2
 	github.com/nats-io/nats.go v1.52.0
+	github.com/nats-io/nkeys v0.4.16
 	github.com/oapi-codegen/nethttp-middleware v1.2.0
 	github.com/oapi-codegen/runtime v1.6.0
 	github.com/pressly/goose/v3 v3.27.3
@@ -91,7 +93,6 @@ require (
 	github.com/moby/sys/userns v0.1.0 // indirect
 	github.com/moby/term v0.5.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/nats-io/nkeys v0.4.15 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/oasdiff/yaml v0.1.1 // indirect
 	github.com/oasdiff/yaml3 v0.0.14 // indirect

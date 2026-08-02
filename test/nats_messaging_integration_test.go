@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/netip"
@@ -26,8 +27,10 @@ import (
 	"github.com/example/go-service-template-rest/internal/reqctx"
 	containerapi "github.com/moby/moby/api/types/container"
 	networkapi "github.com/moby/moby/api/types/network"
+	"github.com/nats-io/jwt/v2"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
+	"github.com/nats-io/nkeys"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 	"go.opentelemetry.io/otel/baggage"
@@ -46,6 +49,7 @@ const (
 	testMaxPending       = 64
 	testMaxConcurrency   = 8
 	testMaxDeliveryBytes = 1 << 20
+	testOperationTimeout = 5 * time.Second
 )
 
 func testClientConfig() natsjs.Config {
@@ -67,6 +71,155 @@ type natsFixture struct {
 	url       string
 	raw       *nats.Conn
 	js        jetstream.JetStream
+}
+
+type authenticatedNATSFixture struct {
+	url                    string
+	credentialsFile        string
+	invalidCredentialsFile string
+}
+
+type testNATSAccount struct {
+	public      string
+	claim       string
+	credentials []byte
+}
+
+func newAuthenticatedNATSFixture(t *testing.T) *authenticatedNATSFixture {
+	t.Helper()
+	operatorKey, err := nkeys.CreateOperator()
+	if err != nil {
+		t.Fatalf("create NATS test operator key: %v", err)
+	}
+	operatorPublic, err := operatorKey.PublicKey()
+	if err != nil {
+		t.Fatalf("read NATS test operator public key: %v", err)
+	}
+	systemAccount := newTestNATSAccount(t, operatorKey, false)
+	account := newTestNATSAccount(t, operatorKey, true)
+	invalidAccount := newTestNATSAccount(t, operatorKey, true)
+	operatorClaims := jwt.NewOperatorClaims(operatorPublic)
+	operatorClaims.SystemAccount = systemAccount.public
+	operatorClaim, err := operatorClaims.Encode(operatorKey)
+	if err != nil {
+		t.Fatalf("encode NATS test operator claim: %v", err)
+	}
+	serverConfig := fmt.Sprintf(`operator: %s
+resolver: MEMORY
+resolver_preload: {
+  %s: %s
+  %s: %s
+}
+jetstream {
+  store_dir: /data
+}
+`, operatorClaim, systemAccount.public, systemAccount.claim, account.public, account.claim)
+	container, err := testcontainers.GenericContainer(t.Context(), testcontainers.GenericContainerRequest{
+		ContainerRequest: testcontainers.ContainerRequest{
+			Image:        natsImage,
+			ExposedPorts: []string{"4222/tcp"},
+			Cmd:          []string{"-c", "/etc/nats/auth.conf"},
+			Files: []testcontainers.ContainerFile{{
+				Reader: strings.NewReader(serverConfig), ContainerFilePath: "/etc/nats/auth.conf", FileMode: 0o644,
+			}},
+			WaitingFor: wait.ForAll(wait.ForListeningPort("4222/tcp"), wait.ForLog("Server is ready")).WithDeadline(time.Minute),
+		},
+		Started: false,
+	})
+	if err != nil {
+		t.Fatalf("create authenticated NATS container: %v", err)
+	}
+	t.Cleanup(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cleanupCancel()
+		if err := container.Terminate(cleanupCtx); err != nil {
+			t.Errorf("terminate authenticated NATS container: %v", err)
+		}
+	})
+	if err := container.Start(t.Context()); err != nil {
+		logs, logsErr := container.Logs(t.Context())
+		if logsErr != nil {
+			t.Fatalf("start authenticated NATS container: %v; read logs: %v", err, logsErr)
+		}
+		output, readErr := io.ReadAll(logs)
+		_ = logs.Close()
+		if readErr != nil {
+			t.Fatalf("start authenticated NATS container: %v; read log body: %v", err, readErr)
+		}
+		t.Fatalf("start authenticated NATS container: %v\n%s", err, output)
+	}
+	endpoint, err := container.Endpoint(t.Context(), "")
+	if err != nil {
+		t.Fatalf("resolve authenticated NATS endpoint: %v", err)
+	}
+	credentialsDirectory := t.TempDir()
+	credentialsFile := filepath.Join(credentialsDirectory, "valid.creds")
+	invalidCredentialsFile := filepath.Join(credentialsDirectory, "invalid.creds")
+	if err := os.WriteFile(credentialsFile, account.credentials, 0o600); err != nil {
+		t.Fatalf("write valid NATS credentials: %v", err)
+	}
+	if err := os.WriteFile(invalidCredentialsFile, invalidAccount.credentials, 0o600); err != nil {
+		t.Fatalf("write invalid NATS credentials: %v", err)
+	}
+	url := "nats://" + endpoint
+	raw, err := nats.Connect(url, nats.UserCredentials(credentialsFile), nats.Timeout(5*time.Second))
+	if err != nil {
+		t.Fatalf("connect authenticated NATS fixture: %v", err)
+	}
+	t.Cleanup(raw.Close)
+	js, err := jetstream.New(raw)
+	if err != nil {
+		t.Fatalf("create authenticated JetStream fixture: %v", err)
+	}
+	if _, err := js.CreateStream(t.Context(), jetstream.StreamConfig{
+		Name: sourceStream, Subjects: []string{"events.>"}, Storage: jetstream.FileStorage, MaxMsgSize: testMaxDeliveryBytes,
+	}); err != nil {
+		t.Fatalf("create authenticated source stream: %v", err)
+	}
+	return &authenticatedNATSFixture{url: url, credentialsFile: credentialsFile, invalidCredentialsFile: invalidCredentialsFile}
+}
+
+func newTestNATSAccount(t *testing.T, operatorKey nkeys.KeyPair, enableJetStream bool) testNATSAccount {
+	t.Helper()
+	accountKey, err := nkeys.CreateAccount()
+	if err != nil {
+		t.Fatalf("create NATS test account key: %v", err)
+	}
+	accountPublic, err := accountKey.PublicKey()
+	if err != nil {
+		t.Fatalf("read NATS test account public key: %v", err)
+	}
+	accountClaims := jwt.NewAccountClaims(accountPublic)
+	if enableJetStream {
+		accountClaims.Limits.JetStreamLimits = jwt.JetStreamLimits{
+			MemoryStorage: jwt.NoLimit, DiskStorage: jwt.NoLimit, Streams: jwt.NoLimit, Consumer: jwt.NoLimit,
+		}
+	}
+	accountClaim, err := accountClaims.Encode(operatorKey)
+	if err != nil {
+		t.Fatalf("encode NATS test account claim: %v", err)
+	}
+	userKey, err := nkeys.CreateUser()
+	if err != nil {
+		t.Fatalf("create NATS test user key: %v", err)
+	}
+	userPublic, err := userKey.PublicKey()
+	if err != nil {
+		t.Fatalf("read NATS test user public key: %v", err)
+	}
+	userClaim, err := jwt.NewUserClaims(userPublic).Encode(accountKey)
+	if err != nil {
+		t.Fatalf("encode NATS test user claim: %v", err)
+	}
+	userSeed, err := userKey.Seed()
+	if err != nil {
+		t.Fatalf("read NATS test user seed: %v", err)
+	}
+	credentials, err := jwt.FormatUserConfig(userClaim, userSeed)
+	if err != nil {
+		t.Fatalf("format NATS test credentials: %v", err)
+	}
+	return testNATSAccount{public: accountPublic, claim: accountClaim, credentials: credentials}
 }
 
 func newNATSFixture(t *testing.T) *natsFixture {
@@ -186,7 +339,7 @@ func (f *natsFixture) worker(t *testing.T, handler natsjs.Handler, configure ...
 	}()
 	t.Cleanup(func() {
 		cancel()
-		worker.ForceClose()
+		stopWorker(worker)
 		select {
 		case <-done:
 		case <-time.After(5 * time.Second):
@@ -194,6 +347,12 @@ func (f *natsFixture) worker(t *testing.T, handler natsjs.Handler, configure ...
 		}
 	})
 	return client, worker, errCh
+}
+
+func stopWorker(worker *natsjs.Worker) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_ = worker.Shutdown(ctx)
 }
 
 func testEvent(payload string) natsjs.Event {
@@ -430,9 +589,9 @@ func TestNATSStartupAdmission(t *testing.T) {
 	}
 	incompatibleConfig := jetstream.ConsumerConfig{
 		Name: "incompatible", Durable: "incompatible", DeliverPolicy: jetstream.DeliverAllPolicy,
-		AckPolicy: jetstream.AckExplicitPolicy, AckWait: workerCfg.HandlerTimeout + 11*time.Second,
+		AckPolicy: jetstream.AckExplicitPolicy, AckWait: workerCfg.HandlerTimeout + 2*testOperationTimeout + time.Second,
 		MaxDeliver: -1, ReplayPolicy: jetstream.ReplayInstantPolicy, MaxWaiting: 2,
-		MaxAckPending: workerCfg.MaxConcurrency, MaxRequestBatch: 1, MaxRequestExpires: 5 * time.Second,
+		MaxAckPending: workerCfg.MaxConcurrency, MaxRequestBatch: 1, MaxRequestExpires: testOperationTimeout,
 		MaxRequestMaxBytes: workerCfg.MaxDeliveryBytes, FilterSubject: workerCfg.FilterSubject, HeadersOnly: true,
 	}
 	consumer, err := stream.CreateConsumer(t.Context(), incompatibleConfig)
@@ -456,6 +615,29 @@ func TestNATSStartupAdmission(t *testing.T) {
 	}
 	if handlerCalls.Load() != 0 {
 		t.Fatalf("handler calls during failed admission = %d, want 0", handlerCalls.Load())
+	}
+}
+
+func TestNATSAuthenticatedStartupAdmission(t *testing.T) {
+	f := newAuthenticatedNATSFixture(t)
+	valid := testClientConfig()
+	valid.URLs = []string{f.url}
+	valid.AllowPlaintext = true
+	valid.CredentialsFile = f.credentialsFile
+	valid.Stream = sourceStream
+	client, err := natsjs.Connect(t.Context(), valid, natsjs.RoleProducer, natsjs.Observability{})
+	if err != nil {
+		t.Fatalf("Connect(valid broker credentials) error = %v", err)
+	}
+	if !client.Ready() {
+		t.Fatal("authenticated client was not ready after topology admission")
+	}
+	client.Close()
+
+	invalid := valid
+	invalid.CredentialsFile = f.invalidCredentialsFile
+	if client, err := natsjs.Connect(t.Context(), invalid, natsjs.RoleProducer, natsjs.Observability{}); client != nil || !errors.Is(err, natsjs.ErrRejected) {
+		t.Fatalf("Connect(credentials for unknown account) = %#v, %v, want ErrRejected before readiness", client, err)
 	}
 }
 
@@ -613,7 +795,7 @@ func TestNATSConsumerSaturation(t *testing.T) {
 	}()
 	t.Cleanup(func() {
 		cancelRun()
-		worker.ForceClose()
+		stopWorker(worker)
 		<-done
 	})
 	first := receive(t, entered, 5*time.Second, "first handler")
@@ -789,7 +971,7 @@ func TestNATSRetryCrashConsumesAttemptBudget(t *testing.T) {
 			t.Fatalf("crash-budget delivery = %d, want %d", got, attempt)
 		}
 	}
-	worker.ForceClose()
+	stopWorker(worker)
 	_ = receive(t, firstDone, 5*time.Second, "crashed worker stop")
 
 	secondClient := f.client(t, natsjs.RoleWorker)
@@ -1090,6 +1272,9 @@ func TestNATSTraceCorrelation(t *testing.T) {
 	if len(spansByName) != 3 || !publishOK || !consumeOK || !parentOK {
 		t.Fatalf("ended spans = %#v, want exactly parent, messaging publish, and messaging consume", spansByName)
 	}
+	if publishSpan.SpanKind() != trace.SpanKindProducer || consumeSpan.SpanKind() != trace.SpanKindConsumer {
+		t.Fatalf("messaging span kinds = publish:%s consume:%s, want Producer/Consumer", publishSpan.SpanKind(), consumeSpan.SpanKind())
+	}
 	if publishSpan.Parent().SpanID() != parentSpan.SpanContext().SpanID() || consumeSpan.Parent().SpanID() != publishSpan.SpanContext().SpanID() {
 		t.Fatalf("span parents = publish:%s consume:%s, want parent:%s publish:%s", publishSpan.Parent().SpanID(), consumeSpan.Parent().SpanID(), parentSpan.SpanContext().SpanID(), publishSpan.SpanContext().SpanID())
 	}
@@ -1257,15 +1442,27 @@ func TestNATSGracefulDrain(t *testing.T) {
 	f := newNATSFixture(t)
 	entered := make(chan struct{})
 	release := make(chan struct{})
-	client, worker, _ := f.worker(t, func(context.Context, natsjs.Message) error {
+	pendingHandled := make(chan struct{}, 1)
+	client, worker, _ := f.worker(t, func(_ context.Context, msg natsjs.Message) error {
+		if string(msg.Payload()) == "pending" {
+			pendingHandled <- struct{}{}
+			return nil
+		}
 		close(entered)
 		<-release
 		return nil
-	}, func(cfg *natsjs.WorkerConfig) { cfg.Consumer = "graceful-worker" })
+	}, func(cfg *natsjs.WorkerConfig) {
+		cfg.Consumer = "graceful-worker"
+		cfg.MaxConcurrency = 1
+	})
 	if _, err := client.Producer().Publish(t.Context(), testEvent("in flight")); err != nil {
 		t.Fatalf("publish in-flight message: %v", err)
 	}
 	receiveSignal(t, entered, 5*time.Second, "in-flight handler")
+	producer := f.client(t, natsjs.RoleProducer)
+	if _, err := producer.Producer().Publish(t.Context(), testEvent("pending")); err != nil {
+		t.Fatalf("publish pending message: %v", err)
+	}
 	worker.StartDrain()
 	if client.Ready() {
 		t.Fatal("client remained ready after StartDrain")
@@ -1284,6 +1481,32 @@ func TestNATSGracefulDrain(t *testing.T) {
 	if err := receive(t, shutdownErr, 5*time.Second, "graceful shutdown"); err != nil {
 		t.Fatalf("Shutdown() error = %v", err)
 	}
+	select {
+	case <-pendingHandled:
+		t.Fatal("worker admitted pending message after drain started")
+	default:
+	}
+
+	recoveryClient := f.client(t, natsjs.RoleWorker)
+	recoveryCfg := testWorkerConfig()
+	recoveryCfg.Consumer = "graceful-worker"
+	recoveryCfg.FilterSubject = sourceSubject
+	recoveryCfg.DeadLetterSubject = deadLetterSubject
+	recoveryCfg.MaxConcurrency = 1
+	recovered := make(chan struct{}, 1)
+	recoveryWorker, err := recoveryClient.NewWorker(t.Context(), recoveryCfg, func(_ context.Context, msg natsjs.Message) error {
+		if string(msg.Payload()) == "pending" {
+			recovered <- struct{}{}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("create recovery worker: %v", err)
+	}
+	recoveryCtx, recoveryCancel := context.WithCancel(t.Context())
+	defer recoveryCancel()
+	go func() { _ = recoveryWorker.Run(recoveryCtx) }()
+	receiveSignal(t, recovered, 10*time.Second, "pending message redelivery after graceful drain")
 }
 
 func TestNATSWorkerMainRejectsEmptyHandler(t *testing.T) {
@@ -1297,7 +1520,7 @@ func TestNATSWorkerMainRejectsEmptyHandler(t *testing.T) {
 		defer close(acceptDone)
 		connection, acceptErr := listener.Accept()
 		if acceptErr == nil {
-			connection.Close()
+			_ = connection.Close()
 			accepted <- struct{}{}
 		}
 	}()
@@ -1330,10 +1553,12 @@ func TestNATSWorkerMainRejectsEmptyHandler(t *testing.T) {
 		"APP__OBSERVABILITY__METRICS__ADDR=127.0.0.1:19090",
 	)
 	output, runErr := run.CombinedOutput()
-	if runErr == nil || !strings.Contains(string(output), "worker feature handler is not registered") {
+	if runErr == nil || !strings.Contains(string(output), "worker feature handler builder is not registered") {
 		t.Fatalf("worker result error = %v, output = %q", runErr, output)
 	}
-	listener.Close()
+	if err := listener.Close(); err != nil {
+		t.Fatalf("close connection sentinel: %v", err)
+	}
 	<-acceptDone
 	select {
 	case <-accepted:
@@ -1344,27 +1569,9 @@ func TestNATSWorkerMainRejectsEmptyHandler(t *testing.T) {
 
 func initializedMessagingServiceRoot(t *testing.T, repositoryRoot string) string {
 	t.Helper()
-	tree := exec.CommandContext(t.Context(), "git", "write-tree")
-	tree.Dir = repositoryRoot
-	treeOutput, err := tree.Output()
-	if err != nil {
-		t.Fatalf("write staged messaging tree: %v", err)
-	}
 	temporaryRoot := t.TempDir()
-	archivePath := filepath.Join(temporaryRoot, "template.tar")
-	archive := exec.CommandContext(t.Context(), "git", "archive", "--format=tar", "--output="+archivePath, strings.TrimSpace(string(treeOutput)))
-	archive.Dir = repositoryRoot
-	if output, err := archive.CombinedOutput(); err != nil {
-		t.Fatalf("archive staged messaging tree: %v\n%s", err, output)
-	}
 	serviceRoot := filepath.Join(temporaryRoot, "service")
-	if err := os.Mkdir(serviceRoot, 0o750); err != nil {
-		t.Fatalf("create messaging service root: %v", err)
-	}
-	extract := exec.CommandContext(t.Context(), "tar", "-xf", archivePath, "-C", serviceRoot)
-	if output, err := extract.CombinedOutput(); err != nil {
-		t.Fatalf("extract staged messaging tree: %v\n%s", err, output)
-	}
+	copyCurrentRepository(t, repositoryRoot, serviceRoot)
 	initializeGit := exec.CommandContext(t.Context(), "git", "init", "-q")
 	initializeGit.Dir = serviceRoot
 	if output, err := initializeGit.CombinedOutput(); err != nil {

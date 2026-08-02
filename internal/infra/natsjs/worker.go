@@ -43,6 +43,8 @@ type pullConsumer interface {
 	Info(ctx context.Context) (*jetstream.ConsumerInfo, error)
 }
 
+const settlementSchedulingSlack = time.Second
+
 func (c *Client) NewWorker(ctx context.Context, cfg WorkerConfig, handler Handler) (*Worker, error) {
 	if handler == nil {
 		return nil, fmt.Errorf("%w: messaging handler is required", ErrRejected)
@@ -50,6 +52,18 @@ func (c *Client) NewWorker(ctx context.Context, cfg WorkerConfig, handler Handle
 	if err := ValidateWorkerConfig(cfg, c.cfg.MaxPayloadBytes); err != nil {
 		return nil, err
 	}
+	c.probeMu.Lock()
+	if c.workerClaimed || c.consumer != nil {
+		c.probeMu.Unlock()
+		return nil, fmt.Errorf("%w: messaging client already owns a worker", ErrRejected)
+	}
+	c.workerClaimed = true
+	c.probeMu.Unlock()
+	defer func() {
+		c.probeMu.Lock()
+		c.workerClaimed = false
+		c.probeMu.Unlock()
+	}()
 	probeCtx, cancel := context.WithTimeout(ctx, boundedTimeout(ctx))
 	defer cancel()
 	source, err := c.js.Stream(probeCtx, c.cfg.Stream)
@@ -110,6 +124,9 @@ func (c *Client) NewWorker(ctx context.Context, cfg WorkerConfig, handler Handle
 	c.consumer = consumer
 	c.probeMu.Unlock()
 	if err := c.Check(ctx); err != nil {
+		c.probeMu.Lock()
+		c.consumer = nil
+		c.probeMu.Unlock()
 		return nil, err
 	}
 	return w, nil
@@ -121,9 +138,11 @@ func desiredConsumerConfig(cfg WorkerConfig) jetstream.ConsumerConfig {
 		Durable:       cfg.Consumer,
 		DeliverPolicy: jetstream.DeliverAllPolicy,
 		AckPolicy:     jetstream.AckExplicitPolicy,
-		AckWait:       cfg.HandlerTimeout + 11*time.Second,
-		MaxDeliver:    -1,
-		ReplayPolicy:  jetstream.ReplayInstantPolicy,
+		// Cover the handler, DLQ publish, source acknowledgement, and a small
+		// scheduling margin without exposing another operator setting.
+		AckWait:      cfg.HandlerTimeout + 2*operationTimeout + settlementSchedulingSlack,
+		MaxDeliver:   -1,
+		ReplayPolicy: jetstream.ReplayInstantPolicy,
 		// A canceled pull can remain broker-side until its five-second expiry.
 		// Two slots let the one local fetch loop recover without treating that
 		// bounded stale request as a terminal MaxWaiting failure.
@@ -203,15 +222,10 @@ func (w *Worker) fetchLoop(ctx, fetchCtx, handlerRoot context.Context, completio
 			return active, runErr
 		}
 		for msg := range batch.Messages() {
+			if !w.startHandler(ctx, handlerRoot, msg, completion) {
+				break
+			}
 			active++
-			w.client.signals.fetchMessages.Add(ctx, 1)
-			w.client.signals.fetchBytes.Add(ctx, int64(wireSize(msg)))
-			go func() {
-				defer func() { completion <- struct{}{} }()
-				if err := w.handle(handlerRoot, msg); err != nil {
-					w.fail(err)
-				}
-			}()
 		}
 		batchErr := batch.Error()
 		cancel()
@@ -225,6 +239,25 @@ func (w *Worker) fetchLoop(ctx, fetchCtx, handlerRoot context.Context, completio
 		}
 	}
 	return active, nil
+}
+
+func (w *Worker) startHandler(ctx, handlerRoot context.Context, msg jetstream.Msg, completion chan<- struct{}) bool {
+	w.mu.Lock()
+	if w.draining.Load() {
+		w.mu.Unlock()
+		return false
+	}
+	messageBytes := wireSize(msg)
+	go func() {
+		defer func() { completion <- struct{}{} }()
+		if err := w.handle(handlerRoot, msg); err != nil {
+			w.fail(err)
+		}
+	}()
+	w.mu.Unlock()
+	w.client.signals.fetchMessages.Add(ctx, 1)
+	w.client.signals.fetchBytes.Add(ctx, int64(messageBytes))
+	return true
 }
 
 func (w *Worker) pollStop(ctx context.Context) error {
@@ -278,15 +311,16 @@ func (w *Worker) waitForHandlers(completion <-chan struct{}, active int, runErr 
 }
 
 func (w *Worker) StartDrain() {
-	if !w.draining.CompareAndSwap(false, true) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.draining.Load() {
 		return
 	}
+	w.draining.Store(true)
 	w.client.StopPublish()
-	w.mu.Lock()
 	if w.fetchCancel != nil {
 		w.fetchCancel()
 	}
-	w.mu.Unlock()
 }
 
 func (w *Worker) Shutdown(ctx context.Context) error {
@@ -300,7 +334,7 @@ func (w *Worker) Shutdown(ctx context.Context) error {
 		w.client.signals.drainOperations.Add(ctx, 1, metric.WithAttributes(attribute.String("outcome", "graceful")))
 		return nil
 	case <-ctx.Done():
-		w.ForceClose()
+		w.forceClose()
 		metricCtx := context.WithoutCancel(ctx)
 		w.client.signals.drainOperations.Add(metricCtx, 1, metric.WithAttributes(attribute.String("outcome", "forced")))
 		w.client.signals.forcedShutdowns.Add(metricCtx, 1)
@@ -308,7 +342,7 @@ func (w *Worker) Shutdown(ctx context.Context) error {
 	}
 }
 
-func (w *Worker) ForceClose() {
+func (w *Worker) forceClose() {
 	w.StartDrain()
 	w.mu.Lock()
 	if w.handlerCancel != nil {
@@ -400,8 +434,7 @@ func (w *Worker) handle(handlerRoot context.Context, source jetstream.Msg) error
 	}
 	w.client.signals.handler(ctx, decoded, outcome, "handler_retry", started)
 	w.client.signals.retries.Add(ctx, 1)
-	_ = source.NakWithDelay(w.cfg.RetryDelays[metadata.NumDelivered-1])
-	return nil
+	return w.requestRedelivery(ctx, source, metadata, w.cfg.RetryDelays[metadata.NumDelivered-1], "handler_redelivery")
 }
 
 func (w *Worker) invokeHandler(ctx context.Context, msg Message) (panicFrames []string, err error) {
@@ -452,8 +485,7 @@ func (w *Worker) deadLetter(ctx context.Context, source jetstream.Msg, metadata 
 		outcome, _, wrapped := classifyPublishError(err)
 		w.client.signals.dlqTransfers.Add(ctx, 1, metric.WithAttributes(attribute.String("outcome", outcome)))
 		if errors.Is(wrapped, ErrAmbiguous) {
-			_ = source.NakWithDelay(w.cfg.DeadLetterRetryDelay)
-			return nil
+			return w.requestRedelivery(ctx, source, metadata, w.cfg.DeadLetterRetryDelay, "dlq_redelivery")
 		}
 		w.client.signals.terminal(ctx, source.Subject(), metadata, "dlq_rejected", nil)
 		return fmt.Errorf("%w: dead-letter publish rejected", ErrTerminal)
@@ -463,7 +495,15 @@ func (w *Worker) deadLetter(ctx context.Context, source jetstream.Msg, metadata 
 	err = source.DoubleAck(ackCtx)
 	ackCancel()
 	if err != nil {
-		_ = source.NakWithDelay(w.cfg.DeadLetterRetryDelay)
+		return w.requestRedelivery(ctx, source, metadata, w.cfg.DeadLetterRetryDelay, "source_ack_redelivery")
+	}
+	return nil
+}
+
+func (w *Worker) requestRedelivery(ctx context.Context, source jetstream.Msg, metadata *jetstream.MsgMetadata, delay time.Duration, reason string) error {
+	if err := source.NakWithDelay(delay); err != nil {
+		w.client.signals.terminal(ctx, source.Subject(), metadata, reason+"_rejected", nil)
+		return fmt.Errorf("%w: request delayed source redelivery", ErrTerminal)
 	}
 	return nil
 }

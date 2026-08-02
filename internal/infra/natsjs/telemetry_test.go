@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"reflect"
@@ -12,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
@@ -132,6 +134,24 @@ func TestMessagingTelemetryContract(t *testing.T) {
 	_, err = Connect(connectCtx, cfg, RoleProducer, Observability{})
 	if err == nil || strings.Contains(err.Error(), credentialCanary) {
 		t.Fatalf("Connect() error = %v, want sanitized failure", err)
+	}
+}
+
+func TestAsyncConnectionErrorIsClassifiedWithoutRawBrokerText(t *testing.T) {
+	const brokerCanary = "BROKER_ERROR_CANARY"
+	var logs bytes.Buffer
+	sig, err := newSignals(Observability{Logger: slog.New(slog.NewJSONHandler(&logs, nil))}, RoleWorker, func() bool { return false })
+	if err != nil {
+		t.Fatalf("newSignals() error = %v", err)
+	}
+	t.Cleanup(sig.close)
+	sig.asyncError(t.Context(), fmt.Errorf("%s: %w", brokerCanary, nats.ErrPermissionViolation))
+	if strings.Contains(logs.String(), brokerCanary) {
+		t.Fatalf("async connection log leaked raw broker error: %s", logs.String())
+	}
+	record := messagingLogByMessage(t, decodeMessagingLogs(t, logs.String()), "messaging_connection")
+	if record["outcome"] != "async_error" || record["reason"] != "permission" {
+		t.Fatalf("async connection log = %#v, want classified permission", record)
 	}
 }
 

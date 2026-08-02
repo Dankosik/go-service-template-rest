@@ -66,30 +66,38 @@ func TestConfigValidation(t *testing.T) {
 }
 
 func TestWorkerAdmissionBound(t *testing.T) {
-	cfg := testWorkerConfig()
-	cfg.Consumer = "events-worker"
-	cfg.FilterSubject = "events.>"
-	cfg.DeadLetterSubject = "dead.events"
-	if err := ValidateWorkerConfig(cfg, testMaxPayloadBytes); err != nil {
+	valid := testWorkerConfig()
+	valid.Consumer = "events-worker"
+	valid.FilterSubject = "events.>"
+	valid.DeadLetterSubject = "dead.events"
+	if err := ValidateWorkerConfig(valid, testMaxPayloadBytes); err != nil {
 		t.Fatalf("ValidateWorkerConfig(valid) error = %v", err)
 	}
 
-	cfg.MaxConcurrency = ResidentDeliveryLimit/cfg.MaxDeliveryBytes + 1
-	if err := ValidateWorkerConfig(cfg, testMaxPayloadBytes); !errors.Is(err, ErrRejected) {
-		t.Fatalf("ValidateWorkerConfig(over resident bound) error = %v, want ErrRejected", err)
+	cases := map[string]func(*WorkerConfig){
+		"invalid consumer":        func(cfg *WorkerConfig) { cfg.Consumer = "events worker" },
+		"invalid filter":          func(cfg *WorkerConfig) { cfg.FilterSubject = "events.>.invalid" },
+		"invalid dead letter":     func(cfg *WorkerConfig) { cfg.DeadLetterSubject = "dead.*" },
+		"overlapping dead letter": func(cfg *WorkerConfig) { cfg.DeadLetterSubject = "events.dead" },
+		"zero concurrency":        func(cfg *WorkerConfig) { cfg.MaxConcurrency = 0 },
+		"zero delivery bound":     func(cfg *WorkerConfig) { cfg.MaxDeliveryBytes = 0 },
+		"undersized envelope":     func(cfg *WorkerConfig) { cfg.MaxDeliveryBytes = testMaxPayloadBytes + HeaderLimitBytes - 1 },
+		"resident bound":          func(cfg *WorkerConfig) { cfg.MaxConcurrency = ResidentDeliveryLimit/cfg.MaxDeliveryBytes + 1 },
+		"zero handler timeout":    func(cfg *WorkerConfig) { cfg.HandlerTimeout = 0 },
+		"no retry delays":         func(cfg *WorkerConfig) { cfg.RetryDelays = nil },
+		"too many retry delays": func(cfg *WorkerConfig) {
+			cfg.RetryDelays = []time.Duration{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+		},
+		"zero retry delay":       func(cfg *WorkerConfig) { cfg.RetryDelays = []time.Duration{0} },
+		"zero dead letter retry": func(cfg *WorkerConfig) { cfg.DeadLetterRetryDelay = 0 },
 	}
-
-	cfg = testWorkerConfig()
-	cfg.Consumer = "events-worker"
-	cfg.FilterSubject = "events.>"
-	cfg.DeadLetterSubject = "events.dead"
-	if err := ValidateWorkerConfig(cfg, testMaxPayloadBytes); !errors.Is(err, ErrRejected) {
-		t.Fatalf("ValidateWorkerConfig(overlapping DLQ) error = %v, want ErrRejected", err)
-	}
-
-	cfg.DeadLetterSubject = "dead.events"
-	cfg.RetryDelays = []time.Duration{0}
-	if err := ValidateWorkerConfig(cfg, testMaxPayloadBytes); !errors.Is(err, ErrRejected) {
-		t.Fatalf("ValidateWorkerConfig(zero retry) error = %v, want ErrRejected", err)
+	for name, mutate := range cases {
+		t.Run(name, func(t *testing.T) {
+			cfg := valid
+			mutate(&cfg)
+			if err := ValidateWorkerConfig(cfg, testMaxPayloadBytes); !errors.Is(err, ErrRejected) {
+				t.Fatalf("ValidateWorkerConfig() error = %v, want ErrRejected", err)
+			}
+		})
 	}
 }
