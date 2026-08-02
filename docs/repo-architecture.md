@@ -178,7 +178,8 @@ The lifecycle baseline is: config and dependency validation happen before accept
 The optional NATS JetStream profile ships a separate `cmd/worker` composition
 root and concrete `internal/infra/natsjs` producer/consumer owner. The service
 process remains producer-only; the worker fails before connecting until a
-feature registers its duplicate-safe handler. See [Durable messaging](./durable-messaging.md).
+binary-local handler adapter is registered to invoke duplicate-safe feature
+behavior. See [Durable messaging](./durable-messaging.md).
 <!-- profile:messaging-nats-jetstream:end -->
 
 When a task introduces async work, keep the extension path stable:

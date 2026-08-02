@@ -41,7 +41,7 @@ Outbox/inbox persistence, broker deployment, cloud resources, fleet rollout, pub
 ### M04 — Producer completion
 
 - A publish succeeds only after the broker accepts the message into the expected durable stream and returns its acknowledgement within the caller deadline or the smaller configured publish budget.
-- A rejection, cancellation, deadline, disconnect, stream mismatch, or resource-limit response is returned as failure. An error or timeout is explicitly ambiguous about whether the broker stored the message.
+- Validation, pre-dispatch cancellation, a definite API rejection, stream mismatch, or resource-limit response is rejected before or conclusively at dispatch. Cancellation, deadline, disconnect, or loss after dispatch without a broker acknowledgement is ambiguous about whether the broker stored the message.
 - Producer cancellation stops waiting and never converts an unknown result into success.
 - The producer has a finite pending-publication and memory bound. Capacity exhaustion rejects new work; it never grows an unbounded queue or reports false acceptance.
 

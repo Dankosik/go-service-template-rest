@@ -471,8 +471,11 @@ temporary deterministic `DATABASE=postgres`, `GRPC=enabled`, `AUTHN=none`,
 keeps missing OIDC trust configuration fail-closed while giving migration,
 startup, shutdown, and container-security checks one runnable image to share.
 When messaging is selected, the check also executes the image's `/worker`
-entrypoint and requires its unconfigured feature boundary to fail before any
-network access.
+entrypoint with messaging explicitly disabled. The unresolved template must
+fail at its unregistered-handler boundary; a derived service with a registered
+handler must fail at the disabled-transport boundary. Both checks run with no
+network access. The derived feature's real handler composition remains owned by
+its broker integration test.
 The temporary initialized checkout and its removed authentication pack are
 asserted before the build and deleted afterward.
 
