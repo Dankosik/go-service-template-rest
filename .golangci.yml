@@ -201,6 +201,11 @@ linters:
           files:
             - "$all"
             - "!**/internal/infra/postgres/*.go"
+            # profile:outbox-postgres:start
+            # The optional outbox store is itself a PostgreSQL runtime adapter;
+            # its directory is removed when OUTBOX=none.
+            - "!**/internal/infra/postgresoutbox/store*.go"
+            # profile:outbox-postgres:end
             # pgtest is a PostgreSQL adapter like the two above, scoped to tests:
             # it creates and drops the per-test database, which is driver work.
             - "!**/internal/infra/postgres/pgtest/*.go"
@@ -219,6 +224,9 @@ linters:
           files:
             - "$all"
             - "!**/internal/infra/postgres/*.go"
+            # profile:outbox-postgres:start
+            - "!**/internal/infra/postgresoutbox/store*.go"
+            # profile:outbox-postgres:end
           deny:
             - pkg: github.com/example/go-service-template-rest/internal/infra/postgres/sqlcgen
               desc: generated sqlc types stay behind the hand-written internal/infra/postgres adapter.

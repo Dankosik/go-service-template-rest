@@ -187,6 +187,21 @@ func defaultValues() map[string]any {
 		"postgres.statement_timeout": "8s",
 		// profile:database-postgres:end
 
+		// profile:outbox-postgres:start
+		"outbox.enabled":              false,
+		"outbox.poll_interval":        "500ms",
+		"outbox.publish_timeout":      "10s",
+		"outbox.lease_duration":       "30s",
+		"outbox.max_attempts":         10,
+		"outbox.retry_base":           "1s",
+		"outbox.retry_max":            "5m",
+		"outbox.observation_interval": "5s",
+		"outbox.cleanup_interval":     "1m",
+		"outbox.published_retention":  "168h",
+		"outbox.cleanup_batch_size":   1000,
+		"outbox.drain_timeout":        "20s",
+		// profile:outbox-postgres:end
+
 		"observability.otel.service_name":                   "service",
 		"observability.otel.traces_sampler":                 otelconfig.DefaultTracesSampler,
 		"observability.otel.traces_sampler_arg":             otelconfig.DefaultTracesSamplerArg,

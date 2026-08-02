@@ -25,6 +25,9 @@ type Config struct {
 	// profile:database-postgres:start
 	Postgres PostgresConfig `koanf:"postgres"`
 	// profile:database-postgres:end
+	// profile:outbox-postgres:start
+	Outbox OutboxConfig `koanf:"outbox"`
+	// profile:outbox-postgres:end
 }
 
 // profile:messaging-nats-jetstream:start
@@ -281,3 +284,22 @@ type PostgresConfig struct {
 }
 
 // profile:database-postgres:end
+
+// profile:outbox-postgres:start
+
+type OutboxConfig struct {
+	Enabled             bool          `koanf:"enabled"`
+	PollInterval        time.Duration `koanf:"poll_interval"`
+	PublishTimeout      time.Duration `koanf:"publish_timeout"`
+	LeaseDuration       time.Duration `koanf:"lease_duration"`
+	MaxAttempts         int           `koanf:"max_attempts"`
+	RetryBase           time.Duration `koanf:"retry_base"`
+	RetryMax            time.Duration `koanf:"retry_max"`
+	ObservationInterval time.Duration `koanf:"observation_interval"`
+	CleanupInterval     time.Duration `koanf:"cleanup_interval"`
+	PublishedRetention  time.Duration `koanf:"published_retention"`
+	CleanupBatchSize    int           `koanf:"cleanup_batch_size"`
+	DrainTimeout        time.Duration `koanf:"drain_timeout"`
+}
+
+// profile:outbox-postgres:end
