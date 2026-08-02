@@ -155,6 +155,27 @@ func TestAsyncConnectionErrorIsClassifiedWithoutRawBrokerText(t *testing.T) {
 	}
 }
 
+func TestAsyncErrorReason(t *testing.T) {
+	tests := map[string]struct {
+		err  error
+		want string
+	}{
+		"slow consumer":  {err: nats.ErrSlowConsumer, want: "slow_consumer"},
+		"authentication": {err: fmt.Errorf("wrapped: %w", nats.ErrAuthExpired), want: "authentication"},
+		"message bound":  {err: nats.ErrMaxPayload, want: "message_bound"},
+		"connection":     {err: nats.ErrDisconnected, want: "connection"},
+		"other":          {err: errors.New("unexpected"), want: "other"},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			if got := asyncErrorReason(tt.err); got != tt.want {
+				t.Fatalf("asyncErrorReason() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func decodeMessagingLogs(t *testing.T, serialized string) []map[string]any {
 	t.Helper()
 	decoder := json.NewDecoder(strings.NewReader(serialized))
