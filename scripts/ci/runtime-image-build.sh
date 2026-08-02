@@ -36,6 +36,25 @@ verify_worker_image() {
 }
 # profile:messaging-nats-jetstream:end
 
+# profile:outbox-postgres:start
+verify_outbox_relay_image() {
+	local output
+	if output="$(docker run --rm --read-only --network none --entrypoint /outbox-relay "${IMAGE}" 2>&1)"; then
+		echo "runtime image outbox relay exited successfully without a publisher" >&2
+		exit 1
+	fi
+	if ! grep -Fxq 'outbox relay failed: error_class=config' <<<"${output}"; then
+		echo "runtime image outbox relay did not execute the expected fail-closed binary" >&2
+		echo "${output}" >&2
+		exit 1
+	fi
+	if grep -Fq 'outbox publisher builder is not registered' <<<"${output}"; then
+		echo "runtime image outbox relay leaked raw startup error text" >&2
+		exit 1
+	fi
+}
+# profile:outbox-postgres:end
+
 # Generated services no longer own profile sources, so their checkout is
 # already the exact production source and needs no fixture.
 if [[ ! -d "${ROOT_DIR}/scripts/profiles" ]]; then
@@ -43,6 +62,9 @@ if [[ ! -d "${ROOT_DIR}/scripts/profiles" ]]; then
 	# profile:messaging-nats-jetstream:start
 	verify_worker_image
 	# profile:messaging-nats-jetstream:end
+	# profile:outbox-postgres:start
+	verify_outbox_relay_image
+	# profile:outbox-postgres:end
 	exit 0
 fi
 
@@ -79,6 +101,9 @@ profile_environment=(
 	"GRPC=enabled"
 	"AUTHN=none"
 	"OUTBOUND_HTTP=bounded"
+	# profile:outbox-postgres:start
+	"OUTBOX=postgres"
+	# profile:outbox-postgres:end
 	"REFERENCE_EXAMPLE=remove"
 )
 # profile:messaging-nats-jetstream:start
@@ -93,6 +118,9 @@ grep -Fqx 'database = "postgres"' "${CHECKOUT}/template.lock"
 grep -Fqx 'grpc = "enabled"' "${CHECKOUT}/template.lock"
 grep -Fqx 'authn = "none"' "${CHECKOUT}/template.lock"
 grep -Fqx 'outbound_http = "bounded"' "${CHECKOUT}/template.lock"
+# profile:outbox-postgres:start
+grep -Fqx 'outbox = "postgres"' "${CHECKOUT}/template.lock"
+# profile:outbox-postgres:end
 # profile:messaging-nats-jetstream:start
 grep -Fqx 'messaging = "nats-jetstream"' "${CHECKOUT}/template.lock"
 # profile:messaging-nats-jetstream:end
@@ -102,3 +130,6 @@ build_image "${CHECKOUT}"
 # profile:messaging-nats-jetstream:start
 verify_worker_image
 # profile:messaging-nats-jetstream:end
+# profile:outbox-postgres:start
+verify_outbox_relay_image
+# profile:outbox-postgres:end

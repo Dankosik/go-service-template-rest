@@ -7,7 +7,7 @@ TEMPLATE_OWNER="@Dankosik"
 TEMPLATE_API_TITLE="go-service-template-rest"
 
 usage() {
-	echo "usage: CODEOWNER=@user-or-org/team DATABASE=none|postgres GRPC=none|enabled AUTHN=none|oidc-jwt OUTBOUND_HTTP=none|bounded MESSAGING=none|nats-jetstream REFERENCE_EXAMPLE=remove|keep $0 [module-path]"
+	echo "usage: CODEOWNER=@user-or-org/team DATABASE=none|postgres OUTBOX=none|postgres GRPC=none|enabled AUTHN=none|oidc-jwt OUTBOUND_HTTP=none|bounded MESSAGING=none|nats-jetstream REFERENCE_EXAMPLE=remove|keep $0 [module-path]"
 	echo "module-path is derived from git remote origin when omitted"
 }
 
@@ -166,11 +166,12 @@ strip_profile() {
 # from — and therefore no way to review or pull a later upstream fix.
 write_template_lock() {
 	local database="$1"
-	local grpc="$2"
-	local authn="$3"
-	local outbound_http="$4"
-	local messaging="$5"
-	local reference_example="$6"
+	local outbox="$2"
+	local grpc="$3"
+	local authn="$4"
+	local outbound_http="$5"
+	local messaging="$6"
+	local reference_example="$7"
 	local source_revision
 
 	source_revision="$(git rev-parse HEAD 2>/dev/null || true)"
@@ -186,6 +187,7 @@ write_template_lock() {
 source = "${TEMPLATE_SOURCE}"
 source_revision = "${source_revision}"
 database = "${database}"
+outbox = "${outbox}"
 grpc = "${grpc}"
 authn = "${authn}"
 outbound_http = "${outbound_http}"
@@ -266,6 +268,11 @@ This service includes the direct NATS JetStream messaging pack. Configure stream
 publisher limits, and the separate consumer worker using
 \`docs/durable-messaging.md\` before enabling it.
 <!-- profile:messaging-nats-jetstream:end -->
+<!-- profile:outbox-postgres:start -->
+This service includes the PostgreSQL transactional outbox and its separately
+deployed bounded relay. Publication is at-least-once and consumers must tolerate
+duplicate event IDs; see \`docs/postgres-transactional-outbox.md\`.
+<!-- profile:outbox-postgres:end -->
 EOF
 }
 
@@ -282,6 +289,23 @@ none | postgres) ;;
 	exit 1
 	;;
 esac
+
+if [[ "${OUTBOX+x}" == "x" && -z "${OUTBOX-}" ]]; then
+	echo "OUTBOX must be one of: none, postgres"
+	exit 1
+fi
+outbox="${OUTBOX:-none}"
+case "${outbox}" in
+none | postgres) ;;
+*)
+	echo "OUTBOX must be one of: none, postgres"
+	exit 1
+	;;
+esac
+if [[ "${outbox}" == "postgres" && "${database}" != "postgres" ]]; then
+	echo "OUTBOX=postgres requires DATABASE=postgres"
+	exit 1
+fi
 
 grpc="${GRPC:-none}"
 case "${grpc}" in
@@ -402,6 +426,7 @@ if [[ -f template.lock ]]; then
 	fi
 	for expected in \
 		"database = \"${database}\"" \
+		"outbox = \"${outbox}\"" \
 		"grpc = \"${grpc}\"" \
 		"authn = \"${authn}\"" \
 		"outbound_http = \"${outbound_http}\"" \
@@ -415,6 +440,7 @@ if [[ -f template.lock ]]; then
 	echo "template initialization already complete"
 	echo "  module: ${new_module}"
 	echo "  database: ${database}"
+	echo "  outbox: ${outbox}"
 	echo "  gRPC: ${grpc}"
 	echo "  authentication: ${authn}"
 	echo "  outbound HTTP: ${outbound_http}"
@@ -471,6 +497,26 @@ if [[ "${source_checkout}" != true ]]; then
 		"title: \"${service_name}\""
 	write_derived_readme "${service_name}" "${new_module}"
 	rebase_coverage_floor
+
+	if [[ "${outbox}" == "none" ]]; then
+		rm -rf -- cmd/outbox-relay internal/infra/postgresoutbox
+		rm -f -- \
+			internal/config/outbox_config_test.go \
+			internal/infra/postgres/queries/postgres_outbox.sql \
+			migrations/000001_postgres_outbox.sql \
+			test/postgres_outbox_integration_test.go \
+			test/postgres_outbox_natsjs_integration_test.go \
+			docs/postgres-transactional-outbox.md
+		if ! find internal/infra/postgres/queries -type f -name '*.sql' -print -quit 2>/dev/null | grep -q .; then
+			rm -rf -- internal/infra/postgres/queries internal/infra/postgres/sqlcgen
+		else
+			make sqlc-generate
+		fi
+		rmdir migrations 2>/dev/null || true
+		strip_profile outbox-postgres remove
+	else
+		strip_profile outbox-postgres keep
+	fi
 
 	if [[ "${database}" == "none" ]]; then
 		# The migration runner and directory belong to the PostgreSQL profile.
@@ -534,7 +580,8 @@ if [[ "${source_checkout}" != true ]]; then
 			docs/durable-messaging.md \
 			internal/config/messaging.go \
 			internal/config/messaging_test.go \
-			test/nats_messaging_integration_test.go
+			test/nats_messaging_integration_test.go \
+			test/postgres_outbox_natsjs_integration_test.go
 		strip_profile messaging-nats-jetstream remove
 		go mod tidy
 	else
@@ -613,7 +660,7 @@ if [[ "${source_checkout}" != true ]]; then
 		go generate ./internal/openapi
 	fi
 
-	write_template_lock "${database}" "${grpc}" "${authn}" "${outbound_http}" "${messaging}" "${reference_example}"
+	write_template_lock "${database}" "${outbox}" "${grpc}" "${authn}" "${outbound_http}" "${messaging}" "${reference_example}"
 
 fi
 
@@ -628,6 +675,7 @@ fi
 echo "template initialization complete"
 echo "  module: ${new_module}"
 echo "  database: ${database}"
+echo "  outbox: ${outbox}"
 echo "  gRPC: ${grpc}"
 echo "  authentication: ${authn}"
 echo "  outbound HTTP: ${outbound_http}"

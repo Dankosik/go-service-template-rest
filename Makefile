@@ -5,6 +5,10 @@ BINARY := bin/$(SERVICE_NAME)
 WORKER_CMD := ./cmd/worker
 WORKER_BINARY := bin/$(SERVICE_NAME)-worker
 # profile:messaging-nats-jetstream:end
+# profile:outbox-postgres:start
+OUTBOX_RELAY_CMD := ./cmd/outbox-relay
+OUTBOX_RELAY_BINARY := bin/$(SERVICE_NAME)-outbox-relay
+# profile:outbox-postgres:end
 GO ?= go
 PGO_PROFILE ?= off
 OPENAPI_FILE := api/openapi/service.yaml
@@ -30,6 +34,9 @@ INTEGRATION_PACKAGES := ./test/...
 INTEGRATION_PACKAGES += ./internal/infra/natsjs ./cmd/worker/internal/bootstrap
 MESSAGING_RACE_PACKAGES := ./internal/infra/natsjs ./cmd/worker/internal/bootstrap ./test/...
 # profile:messaging-nats-jetstream:end
+# profile:outbox-postgres:start
+OUTBOX_RACE_PACKAGES := ./internal/infra/postgres ./internal/infra/postgresoutbox ./cmd/outbox-relay/internal/bootstrap ./test/...
+# profile:outbox-postgres:end
 # Effective coverage is measured across the whole module, so a freshly generated
 # service already sits near this floor on template tests alone. Initialization
 # lowers it to 70.0 so early feature work has runway; raise it as your own tests
@@ -37,6 +44,9 @@ MESSAGING_RACE_PACKAGES := ./internal/infra/natsjs ./cmd/worker/internal/bootstr
 COVERAGE_MIN ?= 80.0
 COVERAGE_GOTOOLCHAIN ?= go$(GO_REQUIRED_VERSION)
 COVERAGE_EXCLUDE_REGEX ?= (^|/)internal/openapi/openapi\.gen\.go:|(^|/)internal/infra/postgres/sqlcgen/|(^|/)internal/infra/postgres/pgtest/|(^|/)internal/infra/telemetry/telemetrytest/|(^|/)internal/gen/proto/|(^|/)examples/grpc-reference-service/cmd/benchmark-server/main\.go:|(^|/)cmd/service/main\.go:|(^|/)cmd/migrate/main\.go:
+# profile:outbox-postgres:start
+COVERAGE_EXCLUDE_REGEX := $(COVERAGE_EXCLUDE_REGEX)|(^|/)cmd/outbox-relay/main\.go:
+# profile:outbox-postgres:end
 FUZZ_TIME ?= 45s
 LINT_BASE_REF ?= origin/main
 LINT_CONCURRENCY ?= 4
@@ -127,6 +137,9 @@ BENCHMARK_REMOTE_SCRIPT := bash ./scripts/dev/benchmark-remote.sh
 # profile:messaging-nats-jetstream:start
 .PHONY: run-worker build-worker test-messaging-race
 # profile:messaging-nats-jetstream:end
+# profile:outbox-postgres:start
+.PHONY: run-outbox-relay build-outbox-relay test-outbox-race
+# profile:outbox-postgres:end
 # profile:grpc-reference-benchmark:start
 .PHONY: bench-grpc bench-grpc-smoke bench-grpc-inspect
 # profile:grpc-reference-benchmark:end
@@ -154,6 +167,10 @@ help:
 	@echo "  make run-worker | build-worker"
 	@echo "  make test-messaging-race"
 # profile:messaging-nats-jetstream:end
+# profile:outbox-postgres:start
+	@echo "  make run-outbox-relay | build-outbox-relay"
+	@echo "  make test-outbox-race"
+# profile:outbox-postgres:end
 	@echo ""
 	@echo "Focused validation:"
 	@echo "  make test | test-race | test-report | test-integration"
@@ -314,6 +331,11 @@ test-messaging-race:
 	go test -vet=off -p=1 -count=1 -race -tags=integration $(MESSAGING_RACE_PACKAGES) -run '^(TestNATSWorkerRegistrationIsSingleton|TestNATSPublishDispatchCancellationAndNoRetry|TestNATSWorkerComposition|TestNATSWorkerForcedShutdownDoesNotRaceHandlerCleanup|TestNATSWorkerConnectionLossAndReconnect|TestNATSConsumerSaturation|TestNATSForcedShutdownRedelivers|TestNATSGracefulDrain)$$'
 # profile:messaging-nats-jetstream:end
 
+# profile:outbox-postgres:start
+test-outbox-race:
+	go test -vet=off -p=1 -count=1 -race -tags=integration $(OUTBOX_RACE_PACKAGES) -run '^Test(PostgresOutbox|InTxCommitOutcomes|OutboxRelay)'
+# profile:outbox-postgres:end
+
 test-cover:
 	GOTOOLCHAIN=$(COVERAGE_GOTOOLCHAIN) GOCOVERDIR= go test -vet=off -covermode=set -coverprofile=coverage.out ./...
 	$(MAKE) coverage-summary
@@ -370,6 +392,17 @@ test-integration:
 # profile:messaging-nats-jetstream:start
 	$(MAKE) test-messaging-race
 # profile:messaging-nats-jetstream:end
+# profile:outbox-postgres:start
+	$(MAKE) test-outbox-race
+# profile:outbox-postgres:end
+
+# profile:outbox-postgres:start
+run-outbox-relay:
+	@set -a; \
+	if [ -f .env ]; then . ./.env; fi; \
+	set +a; \
+	go run $(OUTBOX_RELAY_CMD)
+# profile:outbox-postgres:end
 
 bench:
 	BENCH_PACKAGE="$(BENCH_PACKAGE)" BENCH_PATTERN="$(BENCH_PATTERN)" BENCH_COUNT="$(BENCH_COUNT)" BENCH_TIME="$(BENCH_TIME)" BENCH_TAGS="$(BENCH_TAGS)" BENCH_OUTPUT="$(BENCH_OUTPUT)" BENCH_WORKLOAD_ID="$(BENCH_WORKLOAD_ID)" $(BENCHMARK_SCRIPT) run
@@ -620,7 +653,10 @@ migration-validate:
 	PGTEST_POSTGRES_DSN="$$dsn" REQUIRE_DOCKER=1 $(GO) test -vet=off -count=1 -tags=integration ./test \
 		-run '^TestPostgresMigrateRepositorySourceRehearsal$$'; \
 	image="$(RUNTIME_IMAGE)"; \
-	if [ -z "$$image" ]; then image="$(SERVICE_NAME):migration"; docker build -f build/docker/Dockerfile -t "$$image" .; fi; \
+	if [ -z "$$image" ]; then \
+		image="$(SERVICE_NAME):migration"; \
+		$(MAKE) runtime-image-build RUNTIME_IMAGE="$$image" || exit 1; \
+	fi; \
 	docker run --rm --network "$${project}_default" \
 		-e APP__POSTGRES__ENABLED=true \
 		-e APP__POSTGRES__DSN="postgres://app:app@postgres:5432/app?sslmode=disable" \
@@ -692,6 +728,12 @@ run-worker:
 	set +a; \
 	go run $(WORKER_CMD)
 # profile:messaging-nats-jetstream:end
+
+# profile:outbox-postgres:start
+build-outbox-relay:
+	mkdir -p bin
+	CGO_ENABLED=0 $(GO) build -trimpath -ldflags='-s -w' -o $(OUTBOX_RELAY_BINARY) $(OUTBOX_RELAY_CMD)
+# profile:outbox-postgres:end
 
 build:
 	@if [ "$(PGO_PROFILE)" != "off" ]; then \

@@ -37,6 +37,9 @@ RUN --mount=type=bind,target=. \
 # profile:messaging-nats-jetstream:start
     if [ -d ./cmd/worker ]; then build_packages="${build_packages} ./cmd/worker"; fi && \
 # profile:messaging-nats-jetstream:end
+# profile:outbox-postgres:start
+    if [ -d ./cmd/outbox-relay ]; then build_packages="${build_packages} ./cmd/outbox-relay"; fi && \
+# profile:outbox-postgres:end
     if [ -d ./cmd/migrate ]; then build_packages="${build_packages} ./cmd/migrate"; fi && \
     resolved_version="${APP_VERSION}" && \
     if [ "${resolved_version}" = "dev" ] && [ -n "${RAILWAY_GIT_COMMIT_SHA}" ]; then \
@@ -71,6 +74,9 @@ COPY --from=build /out/service /service
 # profile:messaging-nats-jetstream:start
 COPY --from=build /out/worker /worker
 # profile:messaging-nats-jetstream:end
+# profile:outbox-postgres:start
+COPY --from=build /out/outbox-relay /outbox-relay
+# profile:outbox-postgres:end
 # profile:database-postgres:start
 COPY --from=build /out/migrate /migrate
 COPY --from=build /out/migrations /migrations

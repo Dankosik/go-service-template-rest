@@ -96,6 +96,7 @@ make template-init \
   MODULE=github.com/acme/orders \
   CODEOWNER=@acme/backend \
   DATABASE=none \
+  OUTBOX=none \
   GRPC=none \
   MESSAGING=none
 make template-init-check
@@ -109,6 +110,13 @@ derived README; preserves an existing `.env`; and tidies both modules.
 and tool surfaces. `DATABASE=postgres` retains them. The complete agent
 workflow and its harness files are always retained and are not an
 initialization profile.
+<!-- profile:outbox-postgres:start -->
+`OUTBOX=none` removes the outbox schema, sqlc source/output, runtime package,
+relay command, configuration, tests, docs, image binary, and Make targets.
+`OUTBOX=postgres` requires `DATABASE=postgres` and retains those surfaces; it
+does not choose a broker adapter. The relay command fails closed until the
+service registers one. See [PostgreSQL transactional outbox](./postgres-transactional-outbox.md).
+<!-- profile:outbox-postgres:end -->
 <!-- profile:grpc:start -->
 `GRPC=none` removes the native gRPC runtime, protobuf workflow, generated
 reference, gRPC-specific docs/tests/config, and their module dependencies.
@@ -132,6 +140,10 @@ provide a real module path and an owner in `@user` or `@org/team` form.
 | Command | Meaning |
 | --- | --- |
 | `make project-structure-check` | Placement, naming, command, integration-test, canonical migration filename, and no-empty-placeholder contract |
+<!-- profile:outbox-postgres:start -->
+| `make run-outbox-relay` / `make build-outbox-relay` | Run or build the separately deployed outbox relay; a missing publisher fails closed |
+| `make test-outbox-race` | Serialized real-PostgreSQL relay, crash-window, lifecycle, and race proof |
+<!-- profile:outbox-postgres:end -->
 | `make claude-skills-check` | Every `.agents/skills/` entry is exposed to Claude Code by a matching `.claude/skills/` symlink, and no link outlives its skill |
 | `make delivery-quality` | Digest-pinned actionlint, medium-or-higher/high-confidence zizmor security audit, ShellCheck for repository scripts, and native BuildKit Dockerfile checks |
 | `make check` | Project structure, `fmt-check`, `lint`, and ordinary unit tests |

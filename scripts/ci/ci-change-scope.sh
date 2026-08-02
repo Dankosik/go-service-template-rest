@@ -39,6 +39,14 @@ is_template_independent_path() {
     return 0
   fi
 
+  # profile:outbox-postgres:start
+  case "${path}" in
+    internal/infra/postgresoutbox/* | cmd/outbox-relay/*)
+      return 1
+      ;;
+  esac
+  # profile:outbox-postgres:end
+
   case "${path}" in
     internal/config/* | \
       internal/infra/postgres/* | \

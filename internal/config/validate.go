@@ -59,6 +59,11 @@ func validateConfig(cfg *Config, unknownKeys []string) error {
 		return err
 	}
 	// profile:database-postgres:end
+	// profile:outbox-postgres:start
+	if err := validateOutbox(cfg.Outbox, cfg.Postgres); err != nil {
+		return err
+	}
+	// profile:outbox-postgres:end
 
 	if err := validateObservabilityConfig(&cfg.Observability); err != nil {
 		return err
@@ -576,6 +581,66 @@ func validatePostgres(cfg PostgresConfig) error {
 }
 
 // profile:database-postgres:end
+
+// profile:outbox-postgres:start
+
+func validateOutbox(cfg OutboxConfig, postgres PostgresConfig) error {
+	if cfg.Enabled && !postgres.Enabled {
+		return fmt.Errorf("%w: outbox.enabled requires postgres.enabled", ErrValidate)
+	}
+	for _, duration := range []struct {
+		name  string
+		value time.Duration
+	}{
+		{name: "outbox.poll_interval", value: cfg.PollInterval},
+		{name: "outbox.publish_timeout", value: cfg.PublishTimeout},
+		{name: "outbox.lease_duration", value: cfg.LeaseDuration},
+		{name: "outbox.retry_base", value: cfg.RetryBase},
+		{name: "outbox.retry_max", value: cfg.RetryMax},
+		{name: "outbox.observation_interval", value: cfg.ObservationInterval},
+		{name: "outbox.cleanup_interval", value: cfg.CleanupInterval},
+		{name: "outbox.published_retention", value: cfg.PublishedRetention},
+		{name: "outbox.drain_timeout", value: cfg.DrainTimeout},
+	} {
+		if duration.value <= 0 {
+			return fmt.Errorf("%w: %s must be positive", ErrValidate, duration.name)
+		}
+	}
+	if cfg.MaxAttempts < 1 || cfg.MaxAttempts > 100 {
+		return fmt.Errorf("%w: outbox.max_attempts must be in range [1,100]", ErrValidate)
+	}
+	if cfg.RetryMax < cfg.RetryBase {
+		return fmt.Errorf("%w: outbox.retry_max must be >= outbox.retry_base", ErrValidate)
+	}
+	if cfg.CleanupBatchSize < 1 || cfg.CleanupBatchSize > 10_000 {
+		return fmt.Errorf("%w: outbox.cleanup_batch_size must be in range [1,10000]", ErrValidate)
+	}
+	if !durationExceedsSum(
+		cfg.LeaseDuration,
+		cfg.PublishTimeout,
+		time.Second,
+		postgres.AcquireTimeout,
+		postgres.StatementTimeout,
+	) {
+		return fmt.Errorf(
+			"%w: outbox.lease_duration must exceed publish, publisher-join, postgres acquire, and statement budgets",
+			ErrValidate,
+		)
+	}
+	return nil
+}
+
+func durationExceedsSum(total time.Duration, parts ...time.Duration) bool {
+	for _, part := range parts {
+		if total <= part {
+			return false
+		}
+		total -= part
+	}
+	return true
+}
+
+// profile:outbox-postgres:end
 
 func validateHTTPShutdownBudget(cfg HTTPConfig) error {
 	effectiveDrainBudget := cfg.ShutdownTimeout - cfg.ReadinessPropagationDelay

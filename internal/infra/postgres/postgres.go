@@ -24,6 +24,10 @@ var (
 	ErrConnect     = errors.New("postgres connect")
 	ErrHealthcheck = errors.New("postgres healthcheck")
 	ErrTransaction = errors.New("postgres transaction")
+	// ErrCommitUnknown means PostgreSQL may have committed even though the
+	// client did not receive a definitive result. Callers must reconcile or
+	// preserve the original operation identity instead of retrying blindly.
+	ErrCommitUnknown = errors.New("postgres commit outcome unknown")
 
 	// ErrSaturated reports that every pooled connection stayed busy for the whole
 	// acquire budget. It is a distinct identity because it is the one database
@@ -84,6 +88,7 @@ type Options struct {
 type Pool struct {
 	pool           *pgxpool.Pool
 	acquireTimeout time.Duration
+	commitTx       func(context.Context, pgx.Tx) error
 }
 
 func New(ctx context.Context, opts Options) (*Pool, error) {
@@ -152,7 +157,11 @@ func New(ctx context.Context, opts Options) (*Pool, error) {
 		return nil, fmt.Errorf("record postgres pool metrics: %w", err)
 	}
 
-	return &Pool{pool: pool, acquireTimeout: opts.AcquireTimeout}, nil
+	return &Pool{
+		pool:           pool,
+		acquireTimeout: opts.AcquireTimeout,
+		commitTx:       commitTx,
+	}, nil
 }
 
 // Acquire takes a pooled connection, bounded by the acquire budget rather than by
@@ -230,6 +239,9 @@ func (p *Pool) Close() {
 // the same acquire budget as any other database work rather than waiting out the
 // caller's whole request budget.
 func (p *Pool) InTx(ctx context.Context, opts pgx.TxOptions, fn func(pgx.Tx) error) error {
+	if p == nil {
+		return fmt.Errorf("%w: postgres pool is nil", ErrConfig)
+	}
 	if fn == nil {
 		return fmt.Errorf("%w: transaction function is required", ErrConfig)
 	}
@@ -240,10 +252,60 @@ func (p *Pool) InTx(ctx context.Context, opts pgx.TxOptions, fn func(pgx.Tx) err
 	}
 	defer conn.Release()
 
-	if err := pgx.BeginTxFunc(ctx, conn, opts, fn); err != nil {
+	tx, err := conn.BeginTx(ctx, opts)
+	if err != nil {
+		return fmt.Errorf("%w: %w", ErrTransaction, err)
+	}
+
+	commit := p.commitTx
+	if commit == nil {
+		commit = commitTx
+	}
+	if err := runInTx(ctx, tx, fn, commit); err != nil {
 		return fmt.Errorf("%w: %w", ErrTransaction, err)
 	}
 	return nil
+}
+
+func runInTx(
+	ctx context.Context,
+	tx pgx.Tx,
+	fn func(pgx.Tx) error,
+	commit func(context.Context, pgx.Tx) error,
+) (err error) {
+	defer func() {
+		rollbackErr := tx.Rollback(ctx)
+		if rollbackErr != nil && !errors.Is(rollbackErr, pgx.ErrTxClosed) {
+			err = rollbackErr
+		}
+	}()
+
+	if err := fn(tx); err != nil {
+		_ = tx.Rollback(ctx)
+		return err
+	}
+
+	if err := commit(ctx, tx); err != nil {
+		if commitDefinitelyFailed(err) {
+			return err
+		}
+		return fmt.Errorf("%w: %w", ErrCommitUnknown, err)
+	}
+	return nil
+}
+
+func commitTx(ctx context.Context, tx pgx.Tx) error {
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit transaction: %w", err)
+	}
+	return nil
+}
+
+func commitDefinitelyFailed(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) ||
+		errors.Is(err, pgx.ErrTxCommitRollback) ||
+		pgconn.SafeToRetry(err)
 }
 
 // Retryable reports whether err is a PostgreSQL failure that the same request

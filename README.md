@@ -39,6 +39,7 @@ make template-init \
   MODULE=github.com/your-org/my-service \
   CODEOWNER=@your-org/backend \
   DATABASE=none \
+  OUTBOX=none \
   GRPC=none \
   AUTHN=none \
   OUTBOUND_HTTP=none \
@@ -51,6 +52,12 @@ The defaults create a service with no database dependency. The complete agent
 workflow is always retained. Choose `DATABASE=postgres` when the service owns
 PostgreSQL, and choose `OUTBOUND_HTTP=bounded` only when a shared
 fixed-authority client removes repeated provider code.
+<!-- profile:outbox-postgres:start -->
+Choose `DATABASE=postgres OUTBOX=postgres` when a request transaction must
+durably record an outbound event for a separately deployed relay. Publication
+is at-least-once, so consumers must tolerate duplicate event IDs; see the
+[PostgreSQL transactional outbox](docs/postgres-transactional-outbox.md).
+<!-- profile:outbox-postgres:end -->
 <!-- profile:authn-oidc-jwt:start -->
 Choose `AUTHN=oidc-jwt` for strict OIDC discovery and signed JWT access-token
 authentication; see [OIDC/JWT authentication](docs/authentication.md).
@@ -78,6 +85,9 @@ second OpenAPI contract and a second `main()` to maintain. Pass
 | Service foundation | Go 1.26, `chi v5`, `koanf v2`, graceful shutdown, health and readiness |
 | API contract | OpenAPI 3.0 and `oapi-codegen v2` with generated request bindings and typed responses |
 | Data | No database by default; optional PostgreSQL 17, `pgx v5`, `goose v3`, and `sqlc` profile |
+<!-- profile:outbox-postgres:start -->
+| Transactional outbox | Optional PostgreSQL intent store and separately deployed bounded relay; broker adapter remains service-owned |
+<!-- profile:outbox-postgres:end -->
 | Outbound HTTP | Standard library by default; optional fixed-authority transport bounds and response-size protection |
 <!-- profile:messaging-nats-jetstream:start -->
 | Messaging | Optional direct NATS JetStream producer and separate bounded durable pull-consumer worker |
