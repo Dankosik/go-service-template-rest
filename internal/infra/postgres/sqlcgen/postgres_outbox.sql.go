@@ -40,8 +40,8 @@ WITH candidate AS (
     FROM outbox_events AS event
     WHERE event.published_at IS NULL
       AND event.poisoned_at IS NULL
-      AND event.available_at <= clock_timestamp()
-      AND (event.lease_expires_at IS NULL OR event.lease_expires_at <= clock_timestamp())
+      AND event.available_at <= statement_timestamp()
+      AND (event.lease_expires_at IS NULL OR event.lease_expires_at <= statement_timestamp())
       AND (
           event.ordering_key IS NULL
           OR NOT EXISTS (
@@ -136,7 +136,7 @@ const cleanupPublishedOutboxEvents = `-- name: CleanupPublishedOutboxEvents :man
 WITH expired AS (
     SELECT id
     FROM outbox_events
-    WHERE published_at < clock_timestamp()
+    WHERE published_at < statement_timestamp()
         - $1::double precision * interval '1 millisecond'
     ORDER BY published_at, id
     FOR UPDATE SKIP LOCKED

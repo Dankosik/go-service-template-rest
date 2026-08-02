@@ -588,6 +588,9 @@ func validateOutbox(cfg OutboxConfig, postgres PostgresConfig) error {
 	if cfg.Enabled && !postgres.Enabled {
 		return fmt.Errorf("%w: outbox.enabled requires postgres.enabled", ErrValidate)
 	}
+	if cfg.Enabled && postgres.MaxOpenConns < 2 {
+		return fmt.Errorf("%w: outbox.enabled requires postgres.max_open_conns >= 2", ErrValidate)
+	}
 	for _, duration := range []struct {
 		name  string
 		value time.Duration

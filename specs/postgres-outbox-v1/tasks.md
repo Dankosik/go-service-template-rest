@@ -1,13 +1,13 @@
 # PostgreSQL transactional outbox V1 implementation ledger
 
-status: ready
+status: done
 
 Completion: `OUTBOX=postgres` retains a canonical PostgreSQL outbox and a
-separately runnable fail-closed relay whose fixed local candidate proves atomic
-intent, leases/crash recovery, explicit at-least-once duplicates, bounded
-failure/lifecycle/telemetry, real NATS acknowledgement, and physical
-`OUTBOX=none` purity; the candidate passes independent implementation review,
-claim-scoped final validation, one local commit, and clean task-owned status.
+separately runnable fail-closed relay whose fixed local repair candidate proves
+atomic intent, leases/crash recovery, explicit at-least-once duplicates,
+bounded failure/lifecycle/telemetry, real NATS acknowledgement, and physical
+`OUTBOX=none` purity; the repair passes claim-scoped final validation, is
+locally committed, and leaves clean task-owned status.
 
 Blocked stop: stop without a completion claim if canonical Goose/sqlc authority
 changes, a mandatory real PostgreSQL/NATS/Docker proof input becomes unavailable,
@@ -65,6 +65,14 @@ and IDs across retries/redrive; serialize Docker and broad Go gates.
   - Depends on: T1, T2, T3, T4, T5 — all accepted outputs and focused proof gates — needed to start.
   - Proof: independent implementation review returns PASS on the fixed tree; then, without overlapping broad gates, run `go test -vet=off -count=1 ./internal/infra/postgres ./internal/infra/postgresoutbox ./internal/config ./cmd/outbox-relay/internal/bootstrap`, `go test -vet=off -race -count=1 ./internal/infra/postgres ./internal/infra/postgresoutbox ./cmd/outbox-relay/internal/bootstrap`, `REQUIRE_DOCKER=1 go test -vet=off -p=1 -count=1 -tags=integration ./test -run '^TestPostgresOutbox'`, `make sqlc-check`, `make migration-check`, `make migration-validate`, `make template-init-check`, `make check-full`, and `git diff --check`; inspect the commit diff/status, create one local commit, and require `git status --short` empty.
 
+- [x] T7: The accepted performance-audit repair closes JSON admission parity, fatal-attempt exhaustion, maintenance/readiness ownership, stable PostgreSQL eligibility cutoffs, and UTF8/pool fail-closed admission without changing at-least-once, ordering, Publisher, or deployment ownership.
+  - Source: `spec.md` OUT-2, OUT-4..6, OUT-9..10; `design/overview.md` “Canonical schema”, “Claim”, “Retry, poison, redrive, cleanup, observation”, and “Relay process and lifecycle”; `test-plan.md` TD-01, TD-15, TD-23, TD-26, TD-29..30; accepted audit repair request.
+  - Owner/surface/resources: additive migration and canonical outbox query/sqlc output; `internal/infra/postgresoutbox/{store,relay}.go`; outbox config admission; focused component/integration tests, profile removal manifests, and docs; one serialized PostgreSQL/Docker fixture.
+  - Depends on: T6 — fixed audited candidate identity — needed to keep the repair boundary explicit.
+  - Proof: escaped-NUL/arbitrary-number parity and non-UTF8 rejection; only adapter-proven non-acceptance reaches poison at `MaxAttempts`, while ack-crash, timeout, panic, stuck, and progress ambiguity preserve retry or duplicate recovery at the threshold; slow publication retains fresh readiness and fatal fan-in clears it before sibling join; blocked cleanup does not block publication; one-connection relay config is rejected; 100k future/recent-row `EXPLAIN (ANALYZE, BUFFERS, WAL, SETTINGS)` uses bounded index access; then run the existing T6 serialized gate set, inspect the repair diff, commit locally, and require clean status.
+  - Acceptance: PASS — reviewer: `/root/t7_safe_exhaustion_acceptance` (fresh independent critical review, read-only); evidence: focused/unit/race/PostgreSQL integration proof, generated/migration/profile drift, serialized template matrix, exact-tree `make check-full`, bounded PostgreSQL plans, and repeated local A/B stress measurements passed; candidate: accepted semantic unit at source fingerprint `b14cb0ffed764e08838a2039f9896b2b781001d5a6b34b0246350ddaa2772bb0`, followed only by `gofumpt` and lint-equivalent `if`-to-`switch` closure at source fingerprint `e0e875b727f42aa4615264b1ef67db6c7d3c579e530b293a2bf944239f02e58e`.
+  - Reopen if: the bounded plan loses its index access, the maintenance loop can outlive `Run`, fatal recovery publishes or increments past the limit, or the new migration cannot rehearse Up/Down/Up; query/data/concurrency owner.
+
 ## Reconciliation
 
 - Profile selection/purity and runtime admission: T4, with cross-profile broker
@@ -77,7 +85,8 @@ and IDs across retries/redrive; serialize Docker and broad Go gates.
 - Process lifecycle, readiness and no-noop composition: T3 and T4.
 - Migration/sqlc/generated/image/rollout documentation: T2 and T4.
 - Every mandatory proof and completion/local-commit boundary: earliest owning
-  task above, then integrated fixed-candidate closeout T6.
+  task above, then original fixed-candidate closeout T6 and accepted audit repair
+  closeout T7.
 
 No parallel wave is planned: T2 consumes T1 transaction semantics; T3 consumes
 T2 generated/store APIs; T4 enumerates T3 runtime/config/profile surfaces; T5

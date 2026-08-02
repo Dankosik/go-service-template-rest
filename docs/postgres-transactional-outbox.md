@@ -58,6 +58,8 @@ occurrence time, exact JSON payload bytes, exact JSON-object metadata bytes,
 and an optional ordering key plus positive sequence. Text fields and the
 ordering key are limited to 256 bytes, payload to 256 KiB, metadata to 32 KiB,
 and the complete stored envelope to 288 KiB.
+The migration fails closed unless PostgreSQL uses `server_encoding=UTF8`, so
+database text-byte constraints match the Go envelope contract.
 
 For an ordering key, retained PostgreSQL high-water state rejects equal or
 lower sequences even after event cleanup. Gaps are allowed. Only the earliest
@@ -80,11 +82,17 @@ idempotent. A crash before acknowledgement, cancellation, or forced shutdown
 also leaves durable work for lease recovery rather than inventing success.
 
 Temporary failures use full-jitter exponential retry from one second to five
-minutes by default. A permanent adapter rejection or the tenth unsuccessful
-attempt moves the row to poison state. Poison rows are never discarded and
-block later work for the same ordering key. Operators redrive one with a unique
-audit ID; the operation is idempotent for that audit ID and retains the original
-event ID and bytes.
+minutes by default. A permanent adapter rejection poisons immediately. The
+tenth adapter-proven `ErrPublicationNotAccepted` failure moves the row to poison
+state. Poison rows are never discarded and block later work for the same
+ordering key. Operators redrive one with a unique audit ID; the operation is
+idempotent for that audit ID and retains the original event ID and bytes.
+
+The attempt threshold is evaluated only when the adapter proves the broker did
+not durably accept the event. An unclassified error, timeout, disconnect, panic,
+or expired lease with an ambiguous acknowledgement/progress commit remains
+retryable or eligible for duplicate recovery even at that threshold; the relay
+never trades possible event loss for a strict attempt-count cap.
 
 ## Runtime and operations
 
@@ -100,7 +108,9 @@ The default relay settings are:
 
 The lease must exceed the publish timeout, the fixed one-second publisher join
 bound, and PostgreSQL acquire and statement budgets. Configuration validation
-rejects an unsafe combination before publisher or database mutation.
+rejects an unsafe combination before publisher or database mutation. An enabled
+relay requires at least two PostgreSQL pool connections so maintenance cannot
+take the publication loop's only connection.
 
 Readiness requires valid configuration, a real publisher, reachable expected
 schema, a running relay loop, and a fresh PostgreSQL state observation. A stale

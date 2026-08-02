@@ -244,7 +244,7 @@ func boundedOutcome(value string) string {
 func boundedErrorType(value string) string {
 	switch value {
 	case "none", "database", "lost_lease", "validation", "stuck", "panic",
-		"publisher_permanent", "publisher_timeout", "publisher_canceled", "publisher_temporary":
+		"publisher_permanent", "publisher_rejected", "publisher_timeout", "publisher_canceled", "publisher_temporary":
 		return value
 	default:
 		return "other"

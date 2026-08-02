@@ -3,6 +3,7 @@ package postgresoutbox
 import (
 	"context"
 	"errors"
+	"sync/atomic"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -238,15 +239,18 @@ func TestRelayReadinessRequiresFreshObservation(t *testing.T) {
 
 	relay := &Relay{config: RelayConfig{ObservationInterval: time.Minute}, drain: make(chan struct{})}
 	relay.ready.Store(true)
-	relay.observed.Store(time.Now().UnixNano())
+	fresh := time.Now()
+	relay.observed.Store(&fresh)
 	if !relay.Ready() {
 		t.Fatal("Ready() = false after a fresh successful observation")
 	}
-	relay.observed.Store(time.Now().Add(-2 * time.Minute).UnixNano())
+	stale := time.Now().Add(-2 * time.Minute)
+	relay.observed.Store(&stale)
 	if relay.Ready() {
 		t.Fatal("Ready() = true after the observation became stale")
 	}
-	relay.observed.Store(time.Now().UnixNano())
+	fresh = time.Now()
+	relay.observed.Store(&fresh)
 	relay.StartDrain()
 	if relay.Ready() {
 		t.Fatal("Ready() = true while draining")
@@ -284,27 +288,26 @@ func TestRelayRunPublishesAndDrains(t *testing.T) {
 func TestRelayRunMaintainsWhileEmpty(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		claims := 0
-		observations := 0
+		var observations atomic.Int64
 		cleanups := 0
+		var relay *Relay
 		store := &relayStoreStub{
 			observe: func(context.Context) (StateObservation, error) {
-				observations++
+				observations.Add(1)
 				return StateObservation{}, nil
 			},
 			cleanup: func(context.Context, time.Duration, int) (int, error) {
 				cleanups++
+				relay.StartDrain() //nolint:contextcheck // Drain has no context-bearing variant.
 				return 0, nil
 			},
 		}
-		relay := newUnitRelay(store, publisherFunc(func(context.Context, Event) error { return nil }))
+		relay = newUnitRelay(store, publisherFunc(func(context.Context, Event) error { return nil }))
 		relay.config.PollInterval = 2 * time.Second
 		relay.config.ObservationInterval = time.Second
 		relay.config.CleanupInterval = time.Second
 		store.claim = func(_ context.Context, _ time.Duration) (ClaimedEvent, error) {
 			claims++
-			if claims == 2 {
-				relay.StartDrain() //nolint:contextcheck // Drain has no context-bearing variant.
-			}
 			return ClaimedEvent{}, ErrNoWork
 		}
 
@@ -313,8 +316,149 @@ func TestRelayRunMaintainsWhileEmpty(t *testing.T) {
 		if result.Err != nil || !result.CleanupSafe || time.Since(started) != time.Second {
 			t.Fatalf("Run() = %+v elapsed=%s", result, time.Since(started))
 		}
-		if claims != 2 || observations != 2 || cleanups != 1 {
-			t.Fatalf("claims=%d observations=%d cleanups=%d, want 2/2/1", claims, observations, cleanups)
+		if claims != 1 || observations.Load() != 2 || cleanups != 1 {
+			t.Fatalf("claims=%d observations=%d cleanups=%d, want 1/2/1", claims, observations.Load(), cleanups)
+		}
+	})
+}
+
+func TestRelayReadinessStaysFreshDuringSlowPublish(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		publishStarted := make(chan struct{})
+		publishRelease := make(chan struct{})
+		claimed := false
+		var observations atomic.Int64
+		store := &relayStoreStub{
+			claim: func(context.Context, time.Duration) (ClaimedEvent, error) {
+				if claimed {
+					return ClaimedEvent{}, ErrNoWork
+				}
+				claimed = true
+				return ClaimedEvent{Event: outboxEventForUnit(), Token: "lease", CycleAttemptCount: 1}, nil
+			},
+			observe: func(context.Context) (StateObservation, error) {
+				observations.Add(1)
+				return StateObservation{}, nil
+			},
+		}
+		relay := newUnitRelay(store, publisherFunc(func(context.Context, Event) error {
+			close(publishStarted)
+			<-publishRelease
+			return nil
+		}))
+		relay.config.PublishTimeout = time.Hour
+		relay.config.LeaseDuration = 2 * time.Hour
+		relay.config.ObservationInterval = time.Second
+
+		result := make(chan RelayResult, 1)
+		go func() { result <- relay.Run(context.Background()) }()
+		<-publishStarted
+		time.Sleep(3 * time.Second)
+		if !relay.Ready() || observations.Load() < 3 {
+			t.Fatalf("during slow publish ready=%t observations=%d, want true/>=3", relay.Ready(), observations.Load())
+		}
+		relay.StartDrain()
+		close(publishRelease)
+		synctest.Wait()
+		if got := <-result; got.Err != nil || !got.CleanupSafe {
+			t.Fatalf("Run() = %+v", got)
+		}
+	})
+}
+
+func TestRelayPublicationDoesNotWaitForCleanup(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		cleanupStarted := make(chan struct{})
+		cleanupRelease := make(chan struct{})
+		published := make(chan struct{})
+		claims := 0
+		store := &relayStoreStub{
+			claim: func(context.Context, time.Duration) (ClaimedEvent, error) {
+				claims++
+				if claims == 1 {
+					return ClaimedEvent{}, ErrNoWork
+				}
+				if claims > 2 {
+					return ClaimedEvent{}, ErrNoWork
+				}
+				return ClaimedEvent{Event: outboxEventForUnit(), Token: "lease", CycleAttemptCount: 1}, nil
+			},
+			cleanup: func(context.Context, time.Duration, int) (int, error) {
+				close(cleanupStarted)
+				<-cleanupRelease
+				return 0, nil
+			},
+		}
+		relay := newUnitRelay(store, publisherFunc(func(context.Context, Event) error {
+			close(published)
+			return nil
+		}))
+		relay.config.PollInterval = 2 * time.Second
+		relay.config.CleanupInterval = time.Second
+		relay.config.ObservationInterval = time.Hour
+
+		result := make(chan RelayResult, 1)
+		go func() { result <- relay.Run(context.Background()) }()
+		<-cleanupStarted
+		<-published
+		relay.StartDrain()
+		close(cleanupRelease)
+		synctest.Wait()
+		if got := <-result; got.Err != nil || !got.CleanupSafe {
+			t.Fatalf("Run() = %+v", got)
+		}
+	})
+}
+
+func TestRelayFatalLoopClearsReadinessBeforeSiblingJoin(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		observeErr := errors.New("observe failed")
+		var observations atomic.Int64
+		store := &relayStoreStub{
+			claim: func(context.Context, time.Duration) (ClaimedEvent, error) {
+				return ClaimedEvent{Event: outboxEventForUnit(), Token: "lease", CycleAttemptCount: 1}, nil
+			},
+			observe: func(context.Context) (StateObservation, error) {
+				if observations.Add(1) > 1 {
+					return StateObservation{}, observeErr
+				}
+				return StateObservation{}, nil
+			},
+		}
+		publishStarted := make(chan struct{})
+		publisherCanceled := make(chan struct{})
+		publisherRelease := make(chan struct{})
+		relay := newUnitRelay(store, publisherFunc(func(ctx context.Context, _ Event) error {
+			close(publishStarted)
+			<-ctx.Done()
+			close(publisherCanceled)
+			<-publisherRelease
+			return ctx.Err()
+		}))
+		relay.config.PublishTimeout = time.Hour
+		relay.config.LeaseDuration = 2 * time.Hour
+		relay.config.ObservationInterval = time.Second
+
+		result := make(chan RelayResult, 1)
+		go func() { result <- relay.Run(context.Background()) }()
+		<-publishStarted
+		if !relay.Ready() {
+			t.Fatal("Ready() = false before the fatal observation")
+		}
+		time.Sleep(time.Second)
+		<-publisherCanceled
+		if relay.Ready() {
+			t.Fatal("Ready() = true while the fatal loop waits for its sibling")
+		}
+		select {
+		case got := <-result:
+			t.Fatalf("Run() completed before publisher join: %+v", got)
+		default:
+		}
+		close(publisherRelease)
+		synctest.Wait()
+		if got := <-result; !errors.Is(got.Err, observeErr) || !got.CleanupSafe {
+			t.Fatalf("Run() = %+v", got)
 		}
 	})
 }
@@ -344,25 +488,31 @@ func TestRelayRunFailures(t *testing.T) {
 func TestRelayPublicationDispositions(t *testing.T) {
 	t.Parallel()
 
+	stateErr := errors.New("write failed")
 	tests := []struct {
-		name         string
-		publishErr   error
-		attempt      int
-		storeErr     error
-		wantPoison   string
-		wantRetry    string
-		wantStateErr bool
+		name       string
+		publishErr error
+		attempt    int
+		storeErr   error
+		wantPoison string
+		wantRetry  string
+		wantErr    error
 	}{
 		{name: "temporary retry", publishErr: errors.New("temporary"), attempt: 1, wantRetry: "publisher_temporary"},
+		{name: "ambiguous threshold retry", publishErr: errors.New("temporary"), attempt: 3, wantRetry: "publisher_temporary"},
 		{name: "permanent poison", publishErr: ErrPermanentPublication, attempt: 1, wantPoison: "publisher_permanent"},
-		{name: "exhausted poison", publishErr: errors.New("temporary"), attempt: 3, wantPoison: "attempt_exhausted"},
-		{name: "state failure", publishErr: errors.New("temporary"), attempt: 1, storeErr: errors.New("write failed"), wantRetry: "publisher_temporary", wantStateErr: true},
+		{name: "rejected retry", publishErr: ErrPublicationNotAccepted, attempt: 1, wantRetry: "publisher_rejected"},
+		{name: "rejected exhaustion", publishErr: ErrPublicationNotAccepted, attempt: 3, wantPoison: "attempt_exhausted"},
+		{name: "publisher panic retry", publishErr: ErrPublisherPanic, attempt: 1, wantRetry: "publisher_temporary", wantErr: ErrPublisherPanic},
+		{name: "publisher panic threshold retry", publishErr: ErrPublisherPanic, attempt: 3, wantRetry: "publisher_temporary", wantErr: ErrPublisherPanic},
+		{name: "state failure", publishErr: errors.New("temporary"), attempt: 1, storeErr: stateErr, wantRetry: "publisher_temporary", wantErr: stateErr},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 			poisonClass := ""
 			retryClass := ""
+			wantDelay := retryDelay(time.Second, time.Minute, test.attempt, func(limit time.Duration) time.Duration { return limit })
 			store := &relayStoreStub{
 				markPoisoned: func(_ context.Context, _, _, class string) error {
 					poisonClass = class
@@ -370,8 +520,8 @@ func TestRelayPublicationDispositions(t *testing.T) {
 				},
 				scheduleRetry: func(_ context.Context, _, _, class string, delay time.Duration) error {
 					retryClass = class
-					if delay != time.Second {
-						t.Errorf("retry delay = %s, want 1s", delay)
+					if delay != wantDelay {
+						t.Errorf("retry delay = %s, want %s", delay, wantDelay)
 					}
 					return test.storeErr
 				},
@@ -380,7 +530,7 @@ func TestRelayPublicationDispositions(t *testing.T) {
 			result := relay.publish(t.Context(), ClaimedEvent{
 				Event: outboxEventForUnit(), Token: "lease", CycleAttemptCount: test.attempt,
 			})
-			if !result.cleanupSafe || (result.err != nil) != test.wantStateErr {
+			if !result.cleanupSafe || (test.wantErr == nil && result.err != nil) || (test.wantErr != nil && !errors.Is(result.err, test.wantErr)) {
 				t.Fatalf("publish() = %+v", result)
 			}
 			if poisonClass != test.wantPoison || retryClass != test.wantRetry {
@@ -437,26 +587,44 @@ func TestRelayHelpersAndValidation(t *testing.T) {
 }
 
 func TestRelayMaintenanceWaitAndProgressFailures(t *testing.T) {
-	t.Parallel()
-
-	observeErr := errors.New("observe")
-	relay := newUnitRelay(&relayStoreStub{
-		observe: func(context.Context) (StateObservation, error) { return StateObservation{}, observeErr },
-	}, publisherFunc(func(context.Context, Event) error { return nil }))
-	now := time.Now()
-	nextObservation, nextCleanup := now, now.Add(time.Hour)
-	if err := relay.maintain(t.Context(), now, &nextObservation, &nextCleanup); !errors.Is(err, observeErr) {
-		t.Fatalf("maintain(observe) error = %v", err)
+	for _, test := range []struct {
+		name string
+		err  error
+	}{
+		{
+			name: "observe",
+			err:  errors.New("observe"),
+		},
+		{
+			name: "cleanup",
+			err:  errors.New("cleanup"),
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				store := &relayStoreStub{}
+				switch test.name {
+				case "observe":
+					store.observe = func(context.Context) (StateObservation, error) { return StateObservation{}, test.err }
+				case "cleanup":
+					store.cleanup = func(context.Context, time.Duration, int) (int, error) { return 0, test.err }
+				}
+				relay := newUnitRelay(store, publisherFunc(func(context.Context, Event) error { return nil }))
+				if test.name == "observe" {
+					relay.config.ObservationInterval = time.Second
+				} else {
+					relay.config.CleanupInterval = time.Second
+				}
+				started := time.Now()
+				result := relay.runMaintenance(context.Background())
+				if !errors.Is(result.Err, test.err) || !result.CleanupSafe || time.Since(started) != time.Second {
+					t.Fatalf("runMaintenance() = %+v elapsed=%s", result, time.Since(started))
+				}
+			})
+		})
 	}
-	cleanupErr := errors.New("cleanup")
-	relay = newUnitRelay(&relayStoreStub{
-		cleanup: func(context.Context, time.Duration, int) (int, error) { return 0, cleanupErr },
-	}, publisherFunc(func(context.Context, Event) error { return nil }))
-	nextObservation, nextCleanup = now.Add(time.Hour), now
-	if err := relay.maintain(t.Context(), now, &nextObservation, &nextCleanup); !errors.Is(err, cleanupErr) {
-		t.Fatalf("maintain(cleanup) error = %v", err)
-	}
 
+	relay := newUnitRelay(&relayStoreStub{}, publisherFunc(func(context.Context, Event) error { return nil }))
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	if relay.wait(ctx, time.Hour) {
@@ -490,7 +658,7 @@ func TestRelayAttemptFatalAndStateFailures(t *testing.T) {
 	claim := ClaimedEvent{Event: outboxEventForUnit(), Token: "lease", CycleAttemptCount: 1}
 	store := &relayStoreStub{claim: func(context.Context, time.Duration) (ClaimedEvent, error) { return claim, nil }}
 	relay := newUnitRelay(store, publisherFunc(func(context.Context, Event) error { panic("publisher") }))
-	if result, keepRunning := relay.runAttempt(t.Context(), time.Now().Add(time.Hour), time.Now().Add(time.Hour)); keepRunning || !errors.Is(result.Err, ErrPublisherPanic) || !result.CleanupSafe {
+	if result, keepRunning := relay.runAttempt(t.Context()); keepRunning || !errors.Is(result.Err, ErrPublisherPanic) || !result.CleanupSafe {
 		t.Fatalf("runAttempt(panic) = %+v keep=%t", result, keepRunning)
 	}
 
@@ -500,7 +668,7 @@ func TestRelayAttemptFatalAndStateFailures(t *testing.T) {
 		scheduleRetry: func(context.Context, string, string, string, time.Duration) error { return stateErr },
 	}
 	relay = newUnitRelay(store, publisherFunc(func(context.Context, Event) error { return errors.New("temporary") }))
-	if result, keepRunning := relay.runAttempt(t.Context(), time.Now().Add(time.Hour), time.Now().Add(time.Hour)); keepRunning || !errors.Is(result.Err, stateErr) || !result.CleanupSafe {
+	if result, keepRunning := relay.runAttempt(t.Context()); keepRunning || !errors.Is(result.Err, stateErr) || !result.CleanupSafe {
 		t.Fatalf("runAttempt(state) = %+v keep=%t", result, keepRunning)
 	}
 
@@ -508,7 +676,7 @@ func TestRelayAttemptFatalAndStateFailures(t *testing.T) {
 	cancel()
 	store = &relayStoreStub{claim: func(context.Context, time.Duration) (ClaimedEvent, error) { return claim, nil }}
 	relay = newUnitRelay(store, publisherFunc(func(context.Context, Event) error { return context.Canceled }))
-	if result, keepRunning := relay.runAttempt(ctx, time.Now().Add(time.Hour), time.Now().Add(time.Hour)); keepRunning || result.Err != nil || !result.CleanupSafe {
+	if result, keepRunning := relay.runAttempt(ctx); keepRunning || result.Err != nil || !result.CleanupSafe {
 		t.Fatalf("runAttempt(canceled) = %+v keep=%t", result, keepRunning)
 	}
 }

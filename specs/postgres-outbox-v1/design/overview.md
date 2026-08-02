@@ -75,7 +75,7 @@ flowchart LR
 | Broker | Durable acknowledgement of the same event ID is authoritative for one publication attempt. PostgreSQL progress may lag and cause a duplicate. |
 | `cmd/migrate` | Existing migration runtime exclusively owns schema change. No app or relay auto-migration exists. |
 
-The affected release graph is one additive PostgreSQL migration, any
+The affected release graph is additive PostgreSQL migrations, any
 feature-writer deployment that begins appending, the separately deployed relay,
 and an externally selected broker/adapter. This repository proves the migration,
 writer/relay local path, and the accepted NATS adapter's event-ID acknowledgement
@@ -85,7 +85,9 @@ credentials, capacity, or a production adapter composition.
 ## Canonical schema
 
 `migrations/000001_postgres_outbox.sql` is the first canonical six-digit,
-transactional Goose source. SQLC consumes this file through
+transactional Goose source; `000002_postgres_outbox_json_parity.sql` keeps the
+database validator byte-compatible with Go and rejects non-UTF8 databases.
+SQLC consumes these files through
 `internal/infra/postgres/sqlc.yaml`. Application startup and relay startup only
 verify that required relations/columns are present by executing their first
 bounded query; they never invoke Goose.
@@ -119,11 +121,14 @@ bounded query; they never invoke Goose.
 | `last_redriven_at` | `timestamptz NULL` | server time of latest redrive |
 
 Database checks enforce text limits/control exclusion; pairing and positive
-ordering sequence; valid UTF-8/JSON by `convert_from(..., 'UTF8')::jsonb`;
+ordering sequence; valid UTF-8/JSON by `convert_from(..., 'UTF8')::json`;
 metadata object shape; exact byte caps; the 288 KiB sum over text/payload/
 metadata; non-negative counters; and coherent terminal/lease columns. PostgreSQL
 cast failure rejects malformed bytes. Go performs the same checks first for a
 stable `ErrInvalidEvent`, but SQL constraints are the bypass-resistant authority.
+Database encoding is immutable after creation, so the additive migration fails
+closed unless `server_encoding=UTF8`; under that admission, text `octet_length`
+and Go byte limits have the same meaning.
 
 Indexes are limited to current query shapes:
 
@@ -218,14 +223,18 @@ from a connection-kill race.
 One statement and transaction performs:
 
 1. Select one row whose `published_at` and `poisoned_at` are null,
-   `available_at <= clock_timestamp()`, and lease is null or expired.
+   `available_at <= statement_timestamp()`, and lease is null or expired at
+   that stable statement timestamp.
 2. For an ordered event, reject it while any smaller sequence for the same key
    remains unpublished, including retry, lease, recovery, or poison state.
 3. Order by `available_at, created_at, id`; lock the candidate with
    `FOR UPDATE OF outbox_events SKIP LOCKED LIMIT 1`.
-4. Update it with a newly supplied token, `lease_expires_at =
+4. Update the row with a newly supplied token, `lease_expires_at =
    clock_timestamp() + lease_duration`, attempt counters, and
    `last_attempt_at = clock_timestamp()`, then return the exact envelope/state.
+   Claim never poisons solely from the counter: an expired lease may represent
+   durable broker acknowledgement followed by a crash before PostgreSQL
+   finalization, so recovery must retain the duplicate-publication path.
 
 The CTE locks a physical candidate only for this short transaction. Committing
 the token and expiry creates durable ownership. With one current lease per row,
@@ -254,16 +263,20 @@ duplicate. No statement deletes an unfinished row.
 
 - Retry uses full-jitter exponential delay in `[0, min(5m, 1s*2^(attempt-1))]`.
   The relay supplies the chosen interval; PostgreSQL supplies absolute time.
-- `errors.Is(err, ErrPermanentPublication)` poisons immediately. Timeout,
-  disconnect, cancellation, and ambiguous acknowledgement are retryable unless
-  process shutdown owns cancellation. Claim 10 ends the delivery cycle as
-  poison. Only bounded class enums are stored/labelled.
+- `errors.Is(err, ErrPermanentPublication)` poisons immediately. Only
+  `errors.Is(err, ErrPublicationNotAccepted)` proves that a retryable occurrence
+  was not durably accepted; claim 10 or later for that class becomes
+  `attempt_exhausted`. Every unclassified error, timeout, disconnect, and joined
+  Publisher panic remains retryable beyond the threshold. Progress-commit
+  ambiguity, process-owned cancellation, and an unsafe stuck Publisher leave
+  the lease for duplicate recovery. Only bounded class enums are stored or
+  labelled.
 - `Redrive(ctx, id, auditID)` is one transaction: resolve an existing audit ID
   idempotently, otherwise lock a poison row, insert the retained audit record,
   clear poison/error/lease, reset cycle attempts and availability, increment
   redrive count, and record the latest audit ID/server time. Reuse for another
   event is rejected. There is no HTTP/CLI operator surface in V1.
-- Cleanup selects at most 1,000 rows with `published_at < clock_timestamp()-7d`
+- Cleanup selects at most 1,000 rows with `published_at < statement_timestamp()-7d`
   using `FOR UPDATE SKIP LOCKED`, deletes only those IDs, and commits. Multiple
   replicas are safe; ordering heads are unrelated and cannot be deleted.
 - Observation is one read-only bounded aggregate over state predicates plus
@@ -303,8 +316,11 @@ type Publisher interface {
 ```
 
 Nil is valid only after durable broker acknowledgement for `Event.ID`.
-`ErrPermanentPublication` is the one optional classification seam. The pack
-ships no implementation. `cmd/outbox-relay/main.go` deliberately passes no
+`ErrPermanentPublication` and `ErrPublicationNotAccepted` are the two optional
+classification seams: the former is terminal, while the latter means the
+adapter can prove no durable broker acceptance and therefore permits bounded
+retry exhaustion. Every unclassified error remains ambiguous. The pack ships
+no implementation. `cmd/outbox-relay/main.go` deliberately passes no
 builder; bootstrap rejects it before config/dependency mutation. A derived
 service supplies a builder from its chosen transport package. No noop, logging,
 discard, in-memory, or fire-and-forget fallback exists.
@@ -358,10 +374,13 @@ sharing broker-specific code:
 An empty fresh observation is ready. A transient broker failure after admission
 remains ready while retry/backlog signals change. Database/schema/observation
 loss, fatal Publisher panic, relay-loop exit, or drain is unready. Liveness is
-process/diagnostics-loop only. A publisher panic is recovered at the loop
-boundary solely to return a fatal supervised error; it does not mark retry,
-poison, or success. Forced shutdown leaves the committed lease to expire. A
-Publisher that does not stop after cancellation produces the same
+process/diagnostics-loop only. A publisher panic is recovered after its
+goroutine terminates; because its acknowledgement outcome is ambiguous, the
+relay records a token-fenced retry without marking delivery or applying the
+attempt threshold, then returns the fatal supervised error. If that state
+transition cannot be proven, lease recovery remains available.
+Forced shutdown leaves the committed lease to expire. A Publisher that does
+not stop after cancellation produces the same
 cleanup-unsafe exit used by the current worker lifecycle; bootstrap never races
 dependency cleanup against unknown goroutine ownership.
 
@@ -391,7 +410,8 @@ These are operational policy inputs, not per-event choices. Environment names
 follow the existing `APP__OUTBOX__...` mapping. An initialized template that
 retains the pack documents the keys in `env/.env.example`. When the pack is
 removed, the type, defaults, validation, environment examples, tests, and docs
-are absent.
+are absent. An enabled relay also requires `postgres.max_open_conns >= 2`, so
+one maintenance query cannot consume the publication loop's only connection.
 
 ## Observability and recovery
 
@@ -442,7 +462,8 @@ remain byte-stable and a different choice is rejected.
 For `OUTBOX=none`, the initializer removes:
 
 - `cmd/outbox-relay/` and `internal/infra/postgresoutbox/`;
-- `migrations/000001_postgres_outbox.sql`, the outbox sqlc query, and current
+- both `migrations/000001_postgres_outbox.sql` and
+  `000002_postgres_outbox_json_parity.sql`, the outbox sqlc query, and current
   outbox-derived sqlc output; it removes `migrations/` when empty;
 - the deterministic/real-broker outbox tests and reference transaction proof;
 - the outbox doc and its links;
@@ -471,7 +492,7 @@ messaging removal sets so either absent capability physically removes it.
 | Responsibility | File / shape | Dependency and authority |
 | --- | --- | --- |
 | Immutable envelope, validation, ID helper | `event.go` | Concrete `Event`; `NewID` uses `crypto/rand.Text`; no domain event definitions |
-| Consumer boundary | `publisher.go` | One-method `Publisher`; `ErrPermanentPublication`; no implementation |
+| Consumer boundary | `publisher.go` | One-method `Publisher`; terminal and proven-not-accepted error seams; no implementation |
 | Append/claim/progress/redrive/cleanup/observe | `store.go` | Concrete `Store` over existing `*postgres.Pool`; append accepts `pgx.Tx`; sqlc is generated query authority |
 | One-at-a-time loop, retry/drain/crash handling | `relay.go` | Public composition accepts concrete `*Store` and consumer-owned `Publisher`; an unexported store contract is the deterministic fault seam; no clock/factory interface |
 | Bounded metrics/logging snapshot | `telemetry.go` | Existing OTel meter/slog; callbacks read memory only |
@@ -519,7 +540,8 @@ unsafe-cleanup admission without importing its NATS-specific code.
 
 ### Canonical and support surfaces
 
-- migration: `migrations/000001_postgres_outbox.sql`;
+- migrations: `migrations/000001_postgres_outbox.sql` and
+  `migrations/000002_postgres_outbox_json_parity.sql`;
 - query source: `internal/infra/postgres/queries/postgres_outbox.sql`;
 - generated: `internal/infra/postgres/sqlcgen/*` via existing `make sqlc`;
 - config: existing `internal/config`, `env/.env.example`;

@@ -63,6 +63,7 @@ func TestTelemetryBoundedContract(t *testing.T) {
 		{operation: "claim", outcome: "empty", errorType: "none"},
 		{operation: "recovery", outcome: "success", errorType: "none"},
 		{operation: "publish", outcome: "error", errorType: "publisher_temporary"},
+		{operation: "publish", outcome: "error", errorType: "publisher_rejected"},
 		{operation: "mark_published", outcome: "reconciled", errorType: "none"},
 		{operation: "schedule_retry", outcome: "success", errorType: "none"},
 		{operation: "poison", outcome: "success", errorType: "publisher_permanent"},

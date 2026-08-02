@@ -55,7 +55,7 @@ type Relay struct {
 	drain     chan struct{}
 	drainOnce sync.Once
 	ready     atomic.Bool
-	observed  atomic.Int64
+	observed  atomic.Pointer[time.Time]
 	inflight  atomic.Int64
 	jitter    func(time.Duration) time.Duration
 	markEvent func(context.Context, string, string) error
@@ -96,7 +96,7 @@ func (r *Relay) Ready() bool {
 		return false
 	}
 	observedAt := r.observed.Load()
-	return observedAt != 0 && time.Since(time.Unix(0, observedAt)) <= r.config.ObservationInterval
+	return observedAt != nil && time.Since(*observedAt) <= r.config.ObservationInterval
 }
 
 func (r *Relay) StartDrain() {
@@ -111,8 +111,9 @@ func (r *Relay) StartDrain() {
 	r.observeProcessState()
 }
 
-// Run owns one claim and publication at a time. StartDrain stops new claims but
-// lets the current attempt finish; canceling ctx forces that attempt to stop.
+// Run owns one claim and publication at a time while maintenance runs alongside
+// it. StartDrain stops new claims but lets the current attempt finish; canceling
+// ctx forces that attempt to stop.
 func (r *Relay) Run(ctx context.Context) (result RelayResult) {
 	result.CleanupSafe = true
 	if r == nil {
@@ -133,64 +134,81 @@ func (r *Relay) Run(ctx context.Context) (result RelayResult) {
 	}
 	r.ready.Store(true)
 	r.observeProcessState()
-	return r.runLoop(ctx)
+
+	runCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	results := make(chan RelayResult, 2)
+	go func() { results <- r.runLoop(runCtx) }()
+	go func() { results <- r.runMaintenance(runCtx) }()
+	first := <-results
+	if first.Err != nil || !first.CleanupSafe {
+		r.ready.Store(false)
+		r.observeProcessState()
+		cancel()
+	}
+	second := <-results
+	return RelayResult{
+		CleanupSafe: first.CleanupSafe && second.CleanupSafe,
+		Err:         errors.Join(first.Err, second.Err),
+	}
 }
 
 func (r *Relay) runLoop(ctx context.Context) RelayResult {
 	result := RelayResult{CleanupSafe: true}
-	nextObservation := time.Now().Add(r.config.ObservationInterval)
-	nextCleanup := time.Now().Add(r.config.CleanupInterval)
 	for {
 		if r.stopped(ctx) {
 			return result
 		}
-		now := time.Now()
-		if err := r.maintain(ctx, now, &nextObservation, &nextCleanup); err != nil {
-			result.Err = err
-			return result
-		}
-		if r.stopped(ctx) {
-			return result
-		}
-		if attemptResult, keepRunning := r.runAttempt(ctx, nextObservation, nextCleanup); !keepRunning {
+		if attemptResult, keepRunning := r.runAttempt(ctx); !keepRunning {
 			return attemptResult
 		}
 	}
 }
 
-func (r *Relay) maintain(
-	ctx context.Context,
-	now time.Time,
-	nextObservation *time.Time,
-	nextCleanup *time.Time,
-) error {
-	if !now.Before(*nextObservation) {
-		if err := r.observe(ctx); err != nil {
-			return err
+func (r *Relay) runMaintenance(ctx context.Context) RelayResult {
+	result := RelayResult{CleanupSafe: true}
+	nextObservation := time.Now().Add(r.config.ObservationInterval)
+	nextCleanup := time.Now().Add(r.config.CleanupInterval)
+	for r.wait(ctx, minDuration(time.Until(nextObservation), time.Until(nextCleanup))) {
+		now := time.Now()
+		if !now.Before(nextObservation) {
+			if err := r.observe(ctx); err != nil {
+				if r.stopped(ctx) {
+					return result
+				}
+				result.Err = err
+				return result
+			}
+			nextObservation = time.Now().Add(r.config.ObservationInterval)
 		}
-		*nextObservation = now.Add(r.config.ObservationInterval)
-	}
-	if !now.Before(*nextCleanup) {
-		if err := r.cleanup(ctx); err != nil {
-			return err
+		if r.stopped(ctx) {
+			return result
 		}
-		*nextCleanup = now.Add(r.config.CleanupInterval)
+		if !now.Before(nextCleanup) {
+			if err := r.cleanup(ctx); err != nil {
+				if r.stopped(ctx) {
+					return result
+				}
+				result.Err = err
+				return result
+			}
+			nextCleanup = time.Now().Add(r.config.CleanupInterval)
+		}
 	}
-	return nil
+	return result
 }
 
-func (r *Relay) runAttempt(
-	ctx context.Context,
-	nextObservation time.Time,
-	nextCleanup time.Time,
-) (RelayResult, bool) {
+func (r *Relay) runAttempt(ctx context.Context) (RelayResult, bool) {
 	result := RelayResult{CleanupSafe: true}
 	claim, err := r.store.Claim(ctx, r.config.LeaseDuration)
 	if errors.Is(err, ErrNoWork) {
-		keepRunning := r.wait(ctx, minDuration(r.config.PollInterval, time.Until(nextObservation), time.Until(nextCleanup)))
+		keepRunning := r.wait(ctx, r.config.PollInterval)
 		return result, keepRunning
 	}
 	if err != nil {
+		if r.stopped(ctx) {
+			return result, false
+		}
 		result.Err = fmt.Errorf("claim outbox event: %w", err)
 		return result, false
 	}
@@ -238,19 +256,23 @@ func (r *Relay) publish(ctx context.Context, claim ClaimedEvent) publishResult {
 		}
 		return published
 	}
-	if errors.Is(published.err, ErrPublisherPanic) {
+	publisherPanicked := errors.Is(published.err, ErrPublisherPanic)
+	switch {
+	case publisherPanicked:
 		r.recordOperation(ctx, "publish", "error", "panic", started)
-		return published
-	}
-	if published.err == nil {
+	case published.err == nil:
 		r.recordOperation(ctx, "publish", "success", "none", started)
 		if err := r.markPublished(ctx, claim); err != nil {
 			return publishResult{err: err, cleanupSafe: true}
 		}
 		return publishResult{cleanupSafe: true}
+	default:
+		r.recordOperation(ctx, "publish", "error", publicationErrorClass(published.err), started)
 	}
-	r.recordOperation(ctx, "publish", "error", publicationErrorClass(published.err), started)
 	if ctx.Err() != nil {
+		if publisherPanicked {
+			return published
+		}
 		return publishResult{cleanupSafe: true}
 	}
 
@@ -261,7 +283,7 @@ func (r *Relay) publish(ctx context.Context, claim ClaimedEvent) publishResult {
 	case errors.Is(published.err, ErrPermanentPublication):
 		poisonClass = "publisher_permanent"
 		err = r.store.MarkPoisoned(ctx, claim.Event.ID, claim.Token, poisonClass)
-	case claim.CycleAttemptCount >= r.config.MaxAttempts:
+	case errors.Is(published.err, ErrPublicationNotAccepted) && claim.CycleAttemptCount >= r.config.MaxAttempts:
 		poisonClass = "attempt_exhausted"
 		err = r.store.MarkPoisoned(ctx, claim.Event.ID, claim.Token, poisonClass)
 	default:
@@ -269,10 +291,17 @@ func (r *Relay) publish(ctx context.Context, claim ClaimedEvent) publishResult {
 		err = r.store.ScheduleRetry(ctx, claim.Event.ID, claim.Token, errorClass, delay)
 	}
 	if err != nil {
-		return publishResult{err: fmt.Errorf("record outbox publication failure: %w", err), cleanupSafe: true}
+		stateErr := fmt.Errorf("record outbox publication failure: %w", err)
+		if publisherPanicked {
+			stateErr = errors.Join(ErrPublisherPanic, stateErr)
+		}
+		return publishResult{err: stateErr, cleanupSafe: true}
 	}
 	if poisonClass != "" && r.telemetry != nil {
 		r.telemetry.LogPoison(ctx, claim.Event.ID, poisonClass, claim.CycleAttemptCount)
+	}
+	if publisherPanicked {
+		return published
 	}
 	return publishResult{cleanupSafe: true}
 }
@@ -348,12 +377,10 @@ func (r *Relay) observe(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("observe outbox: %w", err)
 	}
+	observedAt := time.Now()
+	r.observed.Store(&observedAt)
 	if r.telemetry != nil {
-		observedAt := time.Now()
-		r.observed.Store(observedAt.UnixNano())
 		r.telemetry.RecordObservation(observation, observedAt)
-	} else {
-		r.observed.Store(time.Now().UnixNano())
 	}
 	return nil
 }
@@ -447,6 +474,8 @@ func publicationErrorClass(err error) string {
 	switch {
 	case errors.Is(err, ErrPermanentPublication):
 		return "publisher_permanent"
+	case errors.Is(err, ErrPublicationNotAccepted):
+		return "publisher_rejected"
 	case errors.Is(err, context.DeadlineExceeded):
 		return "publisher_timeout"
 	case errors.Is(err, context.Canceled):

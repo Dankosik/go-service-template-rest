@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"reflect"
 	"strings"
@@ -19,6 +20,7 @@ import (
 
 	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	"github.com/example/go-service-template-rest/internal/infra/postgres/pgtest"
+	"github.com/example/go-service-template-rest/internal/infra/postgresmigrate"
 	"github.com/example/go-service-template-rest/internal/infra/postgresoutbox"
 	"github.com/jackc/pgx/v5"
 	"go.opentelemetry.io/otel/attribute"
@@ -49,6 +51,26 @@ func TestPostgresOutboxEnvelope(t *testing.T) {
 	}
 	if !bytes.Equal(again.Event.Payload, payload) {
 		t.Fatal("mutating returned payload changed durable bytes")
+	}
+	for _, test := range []struct {
+		id       string
+		payload  []byte
+		metadata []byte
+	}{
+		{id: "escaped-nul", payload: []byte(`{"value":"\u0000"}`), metadata: []byte(`{"value":"\u0000"}`)},
+		{id: "arbitrary-number", payload: []byte(`1e1000000`), metadata: []byte(`{"value":1e1000000}`)},
+	} {
+		event := outboxEvent(test.id)
+		event.Payload = test.payload
+		event.Metadata = test.metadata
+		mustAppendOutbox(t, ctx, pool, store, event)
+		stored, err := store.Get(ctx, test.id)
+		if err != nil {
+			t.Fatalf("Get(%s): %v", test.id, err)
+		}
+		if !bytes.Equal(stored.Event.Payload, test.payload) || !bytes.Equal(stored.Event.Metadata, test.metadata) {
+			t.Fatalf("stored JSON parity bytes for %s changed", test.id)
+		}
 	}
 
 	_, err = pool.PGX().Exec(ctx, `
@@ -142,6 +164,56 @@ func TestPostgresOutboxEnvelope(t *testing.T) {
 		if _, err := pool.PGX().Exec(ctx, statement); err == nil {
 			t.Fatalf("asymmetric ordering pair insert succeeded: %s", statement)
 		}
+	}
+}
+
+func TestPostgresOutboxRejectsNonUTF8Database(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
+	defer cancel()
+
+	dsn := pgtest.DSN(t)
+	parsed, err := url.Parse(dsn)
+	if err != nil {
+		t.Fatalf("parse PostgreSQL DSN: %v", err)
+	}
+	databaseName := "latin_" + strings.TrimPrefix(parsed.Path, "/")
+	adminURL := *parsed
+	adminURL.Path = "/postgres"
+	admin, err := pgx.Connect(ctx, adminURL.String())
+	if err != nil {
+		t.Fatalf("connect PostgreSQL admin database: %v", err)
+	}
+	defer func() { _ = admin.Close(context.Background()) }()
+	// databaseName is derived from pgtest's counter-only database identifier.
+	if _, err := admin.Exec(ctx, "CREATE DATABASE "+databaseName+" ENCODING 'LATIN1' LC_COLLATE 'C' LC_CTYPE 'C' TEMPLATE template0"); err != nil {
+		t.Fatalf("create LATIN1 database: %v", err)
+	}
+	t.Cleanup(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cleanupCancel()
+		cleanup, cleanupErr := pgx.Connect(cleanupCtx, adminURL.String())
+		if cleanupErr != nil {
+			t.Errorf("connect to drop LATIN1 database: %v", cleanupErr)
+			return
+		}
+		defer func() { _ = cleanup.Close(cleanupCtx) }()
+		if _, cleanupErr = cleanup.Exec(cleanupCtx, "DROP DATABASE "+databaseName+" WITH (FORCE)"); cleanupErr != nil {
+			t.Errorf("drop LATIN1 database: %v", cleanupErr)
+		}
+	})
+	latinURL := *parsed
+	latinURL.Path = "/" + databaseName
+	_, err = postgresmigrate.MigrateUp(ctx, postgresmigrate.MigrationOptions{
+		DSN:              latinURL.String(),
+		SourceFS:         os.DirFS(".."),
+		SourcePath:       "migrations",
+		ConnectTimeout:   10 * time.Second,
+		StatementTimeout: 30 * time.Second,
+		LockTimeout:      5 * time.Second,
+		CleanupTimeout:   5 * time.Second,
+	})
+	if err == nil || !strings.Contains(err.Error(), "server_encoding=UTF8") {
+		t.Fatalf("MigrateUp(LATIN1) error = %v, want server_encoding=UTF8 rejection", err)
 	}
 }
 
@@ -746,7 +818,9 @@ func TestPostgresOutboxAckCrashDuplicate(t *testing.T) {
 	firstAttempt := <-attempts
 	postgresSleep(t, ctx, pool, 0.02)
 
-	relay := mustNewOutboxRelay(t, store, publisher, nil, testRelayConfig())
+	config := testRelayConfig()
+	config.MaxAttempts = 1
+	relay := mustNewOutboxRelay(t, store, publisher, nil, config)
 	result := runOutboxRelay(ctx, relay)
 	secondAttempt := <-attempts
 	relay.StartDrain()
@@ -759,7 +833,7 @@ func TestPostgresOutboxAckCrashDuplicate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get(): %v", err)
 	}
-	if record.PublishedAt.IsZero() || record.TotalAttemptCount != 2 {
+	if record.PublishedAt.IsZero() || record.CycleAttemptCount != 2 || record.TotalAttemptCount != 2 {
 		t.Fatalf("final record published=%v attempts=%d, want published and 2", record.PublishedAt, record.TotalAttemptCount)
 	}
 }
@@ -1084,7 +1158,7 @@ func TestPostgresOutboxRetryAndPoison(t *testing.T) {
 		var attempts atomic.Int64
 		publisher := testPublisherFunc(func(context.Context, postgresoutbox.Event) error {
 			attempts.Add(1)
-			return errors.New("temporary")
+			return fmt.Errorf("broker rejected: %w", postgresoutbox.ErrPublicationNotAccepted)
 		})
 		config := testRelayConfig()
 		config.MaxAttempts = 3
@@ -1119,6 +1193,67 @@ func TestPostgresOutboxRetryAndPoison(t *testing.T) {
 		assertRelayResult(t, result, true, nil)
 		if attempts.Load() != 1 {
 			t.Fatalf("permanent attempts = %d, want 1", attempts.Load())
+		}
+	})
+
+	t.Run("ambiguous fatal panic remains recoverable past the threshold", func(t *testing.T) {
+		ctx, pool, store := newOutboxFixture(t)
+		mustAppendOutbox(t, ctx, pool, store, outboxEvent("fatal-exhaustion"))
+		var attempts atomic.Int64
+		publisher := testPublisherFunc(func(context.Context, postgresoutbox.Event) error {
+			attempts.Add(1)
+			panic("fatal publisher")
+		})
+		config := testRelayConfig()
+		config.MaxAttempts = 1
+		config.RetryBase = time.Nanosecond
+		config.RetryMax = time.Nanosecond
+		for range 2 {
+			relay := mustNewOutboxRelay(t, store, publisher, nil, config)
+			assertRelayResult(t, runOutboxRelay(ctx, relay), true, postgresoutbox.ErrPublisherPanic)
+		}
+
+		waitForOutboxCount(t, ctx, pool, "poisoned_at IS NULL AND published_at IS NULL AND lease_token IS NULL", 1)
+		record, err := store.Get(ctx, "fatal-exhaustion")
+		if err != nil {
+			t.Fatalf("Get(): %v", err)
+		}
+		if attempts.Load() != 2 || record.CycleAttemptCount != 2 || record.TotalAttemptCount != 2 || !record.PoisonedAt.IsZero() || record.LastErrorClass != "publisher_temporary" {
+			t.Fatalf(
+				"fatal attempts publisher/cycle/total/poison/class = %d/%d/%d/%v/%q, want 2/2/2/zero/publisher_temporary",
+				attempts.Load(), record.CycleAttemptCount, record.TotalAttemptCount, record.PoisonedAt, record.LastErrorClass,
+			)
+		}
+	})
+
+	t.Run("ambiguous timeout remains retryable at the threshold", func(t *testing.T) {
+		ctx, pool, store := newOutboxFixture(t)
+		mustAppendOutbox(t, ctx, pool, store, outboxEvent("timeout-threshold"))
+		var attempts atomic.Int64
+		publisher := testPublisherFunc(func(ctx context.Context, _ postgresoutbox.Event) error {
+			attempts.Add(1)
+			<-ctx.Done()
+			return ctx.Err()
+		})
+		config := testRelayConfig()
+		config.MaxAttempts = 1
+		config.PublishTimeout = 5 * time.Millisecond
+		config.RetryBase = time.Hour
+		config.RetryMax = time.Hour
+		relay := mustNewOutboxRelay(t, store, publisher, nil, config)
+		result := runOutboxRelay(ctx, relay)
+		waitForOutboxCount(t, ctx, pool, "poisoned_at IS NULL AND published_at IS NULL AND lease_token IS NULL AND available_at > clock_timestamp()", 1)
+		relay.StartDrain()
+		assertRelayResult(t, result, true, nil)
+		record, err := store.Get(ctx, "timeout-threshold")
+		if err != nil {
+			t.Fatalf("Get(): %v", err)
+		}
+		if attempts.Load() != 1 || record.CycleAttemptCount != 1 || !record.PoisonedAt.IsZero() || record.LastErrorClass != "publisher_timeout" {
+			t.Fatalf(
+				"timeout attempts/cycle/poison/class = %d/%d/%v/%q, want 1/1/zero/publisher_timeout",
+				attempts.Load(), record.CycleAttemptCount, record.PoisonedAt, record.LastErrorClass,
+			)
 		}
 	})
 }

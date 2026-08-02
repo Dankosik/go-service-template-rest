@@ -504,6 +504,7 @@ if [[ "${source_checkout}" != true ]]; then
 			internal/config/outbox_config_test.go \
 			internal/infra/postgres/queries/postgres_outbox.sql \
 			migrations/000001_postgres_outbox.sql \
+			migrations/000002_postgres_outbox_json_parity.sql \
 			test/postgres_outbox_integration_test.go \
 			test/postgres_outbox_natsjs_integration_test.go \
 			docs/postgres-transactional-outbox.md

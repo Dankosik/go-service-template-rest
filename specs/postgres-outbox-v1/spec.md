@@ -23,8 +23,8 @@ status: ready
   domain-specific event definitions.
 - Exactly-once publication or consumption, global ordering, event sourcing,
   CDC/Debezium infrastructure, schema auto-migration, or runtime migration.
-- Unbounded buffering, indefinite retry, automatic poison discard, automatic
-  operator redrive, or partitioning without measured need.
+- Unbounded in-process buffering, silent/unobservable retry, automatic poison
+  discard, automatic operator redrive, or partitioning without measured need.
 
 ## Behavior and contract delta
 
@@ -155,16 +155,25 @@ Only the relay retries publication. The default policy is:
 - a 10-second publication attempt timeout;
 - a 30-second lease, which must exceed the publication and progress-commit
   budgets with scheduling margin;
-- at most 10 claims per delivery cycle;
+- a default claim threshold of 10: only an adapter-proven not-accepted error on
+  claim 10 or later poisons, while every ambiguous outcome remains retryable or
+  reclaimable beyond the threshold because duplicate recovery outranks
+  exhaustion;
 - full-jitter exponential retry from a 1-second base to a 5-minute cap;
 - caller cancellation stops new claims; graceful drain may finish the current
   attempt inside its remaining process budget; forced shutdown cancels it and
   leaves the lease to expire.
 
 Validation/topology/authentication/authorization or adapter-declared permanent
-failures become poison immediately. Other failures retry until the attempt
-limit. Exhaustion becomes durable poison; it is not delivery and is never
-deleted automatically.
+failures become poison immediately. An adapter may wrap
+`ErrPublicationNotAccepted` only when it can prove the broker did not durably
+accept the event; those failures retry until the attempt threshold. Every
+unclassified error, timeout, disconnect, Publisher panic, missing or ambiguous
+acknowledgement, progress-commit ambiguity, forced cancellation, or unsafe stuck
+Publisher is never poisoned solely from the counter; it remains retryable or
+eligible for duplicate recovery. Exhaustion becomes durable poison only after
+adapter-proven non-acceptance; it is not delivery and is never deleted
+automatically.
 
 Redrive is an explicit operator-owned transition identified by a required
 unique audit ID. It preserves the event ID and envelope, records redrive count,
