@@ -14,12 +14,13 @@ instrumentation run only scenarios that exercise shared admission, callbacks,
 fetch, handlers, and shutdown.
 
 The real-broker fixture uses Testcontainers with
-`nats:2.14.3-alpine`, JetStream file storage, bounded contexts, unique stream and
-consumer names, and unconditional termination registered immediately after
-container acquisition. Messaging subtests are intentionally not parallel: the
-loss/reconnect and stopped-server cases own the container lifecycle. A stopped
-or unavailable Docker daemon fails when `REQUIRE_DOCKER=1`; a local conditional
-skip is never completion evidence.
+`nats:2.14.3-alpine@sha256:c11af972c99ae542de8925e6a7d9c533aa1eb039660420d2074beed6089b3bf0`,
+JetStream file storage, bounded contexts, unique stream and consumer names, and
+unconditional termination registered immediately after container acquisition.
+Messaging subtests are intentionally not parallel: the loss/reconnect and
+stopped-server cases own the container lifecycle. A stopped or unavailable
+Docker daemon fails when `REQUIRE_DOCKER=1`; a local conditional skip is never
+completion evidence.
 
 No mandatory fixture is unavailable. The repository already owns
 Testcontainers and OTel SDK dependencies, process helpers, `health.Service`, the

@@ -172,7 +172,7 @@ func (c *Client) Run(ctx context.Context) error {
 		case err := <-c.terminal:
 			return err
 		case <-c.events:
-			probeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), operationTimeout)
+			probeCtx, cancel := context.WithTimeout(ctx, operationTimeout)
 			_ = c.Check(probeCtx)
 			cancel()
 		}

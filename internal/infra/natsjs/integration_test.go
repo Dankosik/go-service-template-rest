@@ -21,13 +21,15 @@ type packageNATSFixture struct {
 	js        jetstream.JetStream
 }
 
+const packageNATSImage = "nats:2.14.3-alpine@sha256:c11af972c99ae542de8925e6a7d9c533aa1eb039660420d2074beed6089b3bf0"
+
 func newPackageNATSFixture(t *testing.T) *packageNATSFixture {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
 	defer cancel()
 	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: testcontainers.ContainerRequest{
-			Image:        "nats:2.14.3-alpine",
+			Image:        packageNATSImage,
 			ExposedPorts: []string{"4222/tcp"},
 			Cmd:          []string{"-js", "-sd", "/data"},
 			WaitingFor: wait.ForAll(
@@ -142,6 +144,24 @@ func TestNATSConnectedTopologyErrorDoesNotEnterReconnect(t *testing.T) {
 	client.ready.Store(false)
 	if client.waitForReconnect(t.Context(), jetstream.ErrConsumerDeleted) {
 		t.Fatal("connected topology error entered reconnect recovery")
+	}
+}
+
+func TestNATSReconnectProbeStopsWithRunContext(t *testing.T) {
+	f := newPackageNATSFixture(t)
+	client := f.client(t, testMaxPending)
+	probeEntered := make(chan struct{}, 1)
+	client.js = blockingStreamLookup{JetStream: client.js, entered: probeEntered}
+
+	runCtx, cancelRun := context.WithCancel(t.Context())
+	runErr := make(chan error, 1)
+	client.events <- eventReconnect
+	go func() { runErr <- client.Run(runCtx) }()
+
+	receivePackage(t, probeEntered, 5*time.Second, "reconnect probe")
+	cancelRun()
+	if err := receivePackage(t, runErr, time.Second, "messaging client cancellation"); !errors.Is(err, context.Canceled) {
+		t.Fatalf("Run() error = %v, want context.Canceled", err)
 	}
 }
 
@@ -336,6 +356,17 @@ type wrappingConsumer struct {
 	pullConsumer
 	failDoubleAck bool
 	doubleAcks    chan<- struct{}
+}
+
+type blockingStreamLookup struct {
+	jetstream.JetStream
+	entered chan<- struct{}
+}
+
+func (s blockingStreamLookup) Stream(ctx context.Context, _ string) (jetstream.Stream, error) {
+	s.entered <- struct{}{}
+	<-ctx.Done()
+	return nil, ctx.Err()
 }
 
 func (c wrappingConsumer) Fetch(batch int, opts ...jetstream.FetchOpt) (jetstream.MessageBatch, error) {

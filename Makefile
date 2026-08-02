@@ -311,7 +311,7 @@ test-race:
 
 # profile:messaging-nats-jetstream:start
 test-messaging-race:
-	go test -vet=off -p=1 -count=1 -race -tags=integration $(MESSAGING_RACE_PACKAGES) -run '^(TestNATSWorkerRegistrationIsSingleton|TestNATSPublishDispatchCancellationAndNoRetry|TestNATSWorkerComposition|TestNATSWorkerForcedShutdownDoesNotRaceHandlerCleanup|TestNATSWorkerConnectionLossAndReconnect|TestNATSConsumerSaturation|TestNATSForcedShutdownRedelivers|TestNATSGracefulDrain)$$'
+	go test -vet=off -p=1 -count=1 -race -tags=integration $(MESSAGING_RACE_PACKAGES) -run '^(TestNATSWorkerRegistrationIsSingleton|TestNATSReconnectProbeStopsWithRunContext|TestNATSPublishDispatchCancellationAndNoRetry|TestNATSWorkerComposition|TestNATSWorkerForcedShutdownDoesNotRaceHandlerCleanup|TestNATSWorkerConnectionLossAndReconnect|TestNATSConsumerSaturation|TestNATSForcedShutdownRedelivers|TestNATSGracefulDrain)$$'
 # profile:messaging-nats-jetstream:end
 
 test-cover:
