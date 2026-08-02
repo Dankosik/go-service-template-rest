@@ -161,28 +161,8 @@ func initializedProcessServiceRoot(t *testing.T, repositoryRoot string) string {
 	t.Helper()
 
 	temporaryRoot := t.TempDir()
-	archivePath := filepath.Join(temporaryRoot, "template.tar")
-	archive := exec.CommandContext(
-		t.Context(),
-		"git",
-		"archive",
-		"--format=tar",
-		"--output="+archivePath,
-		"HEAD",
-	)
-	archive.Dir = repositoryRoot
-	if output, err := archive.CombinedOutput(); err != nil {
-		t.Fatalf("archive template HEAD: %v\n%s", err, output)
-	}
-
 	serviceRoot := filepath.Join(temporaryRoot, "service")
-	if err := os.Mkdir(serviceRoot, 0o750); err != nil {
-		t.Fatalf("create initialized service root: %v", err)
-	}
-	extract := exec.CommandContext(t.Context(), "tar", "-xf", archivePath, "-C", serviceRoot)
-	if output, err := extract.CombinedOutput(); err != nil {
-		t.Fatalf("extract template HEAD: %v\n%s", err, output)
-	}
+	copyCurrentRepository(t, repositoryRoot, serviceRoot)
 	initializeGit := exec.CommandContext(t.Context(), "git", "init", "-q")
 	initializeGit.Dir = serviceRoot
 	if output, err := initializeGit.CombinedOutput(); err != nil {

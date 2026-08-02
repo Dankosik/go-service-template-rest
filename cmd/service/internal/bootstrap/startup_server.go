@@ -59,6 +59,9 @@ type serveRuntimeArgs struct {
 	backgroundFailures <-chan error
 	admission          *startupAdmissionController
 	shutdownDelay      time.Duration
+	// profile:messaging-nats-jetstream:start
+	preDrain func()
+	// profile:messaging-nats-jetstream:end
 	// shutdown is the process-wide teardown deadline. It is armed here, at the
 	// one point that knows serving has ended, and every stage after the drain
 	// draws from it.
@@ -204,6 +207,11 @@ func serveRuntime(signalCtx context.Context, bootstrapCtx context.Context, args 
 	// The grace period starts now, not at process start: this is the moment the
 	// platform began counting.
 	args.shutdown.start()
+	// profile:messaging-nats-jetstream:start
+	if args.preDrain != nil {
+		args.preDrain()
+	}
+	// profile:messaging-nats-jetstream:end
 
 	effectiveShutdownDelay := args.shutdownDelay
 	if !ready {

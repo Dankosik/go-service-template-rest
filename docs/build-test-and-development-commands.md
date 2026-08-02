@@ -96,7 +96,8 @@ make template-init \
   MODULE=github.com/acme/orders \
   CODEOWNER=@acme/backend \
   DATABASE=none \
-  GRPC=none
+  GRPC=none \
+  MESSAGING=none
 make template-init-check
 ```
 
@@ -114,6 +115,12 @@ reference, gRPC-specific docs/tests/config, and their module dependencies.
 `GRPC=enabled` retains them, while the runtime listener stays disabled until
 its config explicitly selects an address and transport security mode.
 <!-- profile:grpc:end -->
+<!-- profile:messaging-nats-jetstream:start -->
+`MESSAGING=none` removes every messaging source, command, configuration, test,
+document, binary, and module dependency. `MESSAGING=nats-jetstream` retains the
+direct producer and separate consumer worker described in
+[Durable messaging](./durable-messaging.md).
+<!-- profile:messaging-nats-jetstream:end -->
 
 The template source checkout may run the command without arguments for normal
 local setup; it keeps the template module and CODEOWNERS unchanged while
@@ -289,6 +296,11 @@ Integration tests use the `integration` build tag. Local focused execution may
 skip an unavailable container dependency according to the test contract;
 `REQUIRE_DOCKER=1 make test-integration` makes Docker availability mandatory,
 as full CI does.
+<!-- profile:messaging-nats-jetstream:start -->
+The selected messaging profile adds its package-level dispatch/ACK ambiguity
+proof, real NATS JetStream process suite, and a serialized tagged race subset
+to the same aggregate. Run the latter directly with `make test-messaging-race`.
+<!-- profile:messaging-nats-jetstream:end -->
 
 ## Formatting and analysis
 
@@ -458,6 +470,9 @@ temporary deterministic `DATABASE=postgres`, `GRPC=enabled`, `AUTHN=none`,
 `OUTBOUND_HTTP=bounded` service and builds that production-shaped source. This
 keeps missing OIDC trust configuration fail-closed while giving migration,
 startup, shutdown, and container-security checks one runnable image to share.
+When messaging is selected, the check also executes the image's `/worker`
+entrypoint and requires its unconfigured feature boundary to fail before any
+network access.
 The temporary initialized checkout and its removed authentication pack are
 asserted before the build and deleted afterward.
 

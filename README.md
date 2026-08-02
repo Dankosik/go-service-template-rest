@@ -41,7 +41,8 @@ make template-init \
   DATABASE=none \
   GRPC=none \
   AUTHN=none \
-  OUTBOUND_HTTP=none
+  OUTBOUND_HTTP=none \
+  MESSAGING=none
 make check
 make run
 ```
@@ -59,6 +60,10 @@ Choose `GRPC=enabled`
 when the service publishes or consumes native gRPC; see the
 [gRPC guide](docs/grpc.md).
 <!-- profile:grpc:end -->
+<!-- profile:messaging-nats-jetstream:start -->
+Choose `MESSAGING=nats-jetstream` for bounded direct JetStream publishing and a
+separate durable pull-consumer worker; see [durable messaging](docs/durable-messaging.md).
+<!-- profile:messaging-nats-jetstream:end -->
 
 `examples/reference-service` is a worked feature slice kept in this template for
 reference; initialization removes it so a generated service does not inherit a
@@ -74,6 +79,9 @@ second OpenAPI contract and a second `main()` to maintain. Pass
 | API contract | OpenAPI 3.0 and `oapi-codegen v2` with generated request bindings and typed responses |
 | Data | No database by default; optional PostgreSQL 17, `pgx v5`, `goose v3`, and `sqlc` profile |
 | Outbound HTTP | Standard library by default; optional fixed-authority transport bounds and response-size protection |
+<!-- profile:messaging-nats-jetstream:start -->
+| Messaging | Optional direct NATS JetStream producer and separate bounded durable pull-consumer worker |
+<!-- profile:messaging-nats-jetstream:end -->
 <!-- profile:authn-oidc-jwt:start -->
 | Authentication | Optional strict OIDC discovery and RS256 JWT access-token verification for HTTP and native gRPC |
 <!-- profile:authn-oidc-jwt:end -->

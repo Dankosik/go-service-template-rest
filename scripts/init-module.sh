@@ -7,7 +7,7 @@ TEMPLATE_OWNER="@Dankosik"
 TEMPLATE_API_TITLE="go-service-template-rest"
 
 usage() {
-	echo "usage: CODEOWNER=@user-or-org/team DATABASE=none|postgres GRPC=none|enabled AUTHN=none|oidc-jwt OUTBOUND_HTTP=none|bounded REFERENCE_EXAMPLE=remove|keep $0 [module-path]"
+	echo "usage: CODEOWNER=@user-or-org/team DATABASE=none|postgres GRPC=none|enabled AUTHN=none|oidc-jwt OUTBOUND_HTTP=none|bounded MESSAGING=none|nats-jetstream REFERENCE_EXAMPLE=remove|keep $0 [module-path]"
 	echo "module-path is derived from git remote origin when omitted"
 }
 
@@ -153,7 +153,7 @@ strip_profile() {
 			stripped_go_files+=("${profile_file}")
 		fi
 	done < <(grep -rl "profile:${profile}:start" \
-		README.md Makefile railway.toml .gitleaks.toml .golangci.yml api build cmd docs env internal test .github scripts/dev 2>/dev/null || true)
+		README.md Makefile railway.toml .gitleaks.toml .golangci.yml api build cmd docs env internal test .github scripts/dev scripts/ci 2>/dev/null || true)
 
 	if ((${#stripped_go_files[@]} > 0)); then
 		gofmt -w "${stripped_go_files[@]}"
@@ -169,7 +169,8 @@ write_template_lock() {
 	local grpc="$2"
 	local authn="$3"
 	local outbound_http="$4"
-	local reference_example="$5"
+	local messaging="$5"
+	local reference_example="$6"
 	local source_revision
 
 	source_revision="$(git rev-parse HEAD 2>/dev/null || true)"
@@ -188,6 +189,7 @@ database = "${database}"
 grpc = "${grpc}"
 authn = "${authn}"
 outbound_http = "${outbound_http}"
+messaging = "${messaging}"
 reference_example = "${reference_example}"
 EOF
 }
@@ -259,6 +261,11 @@ The client API contract is \`api/openapi/service.yaml\`. Start with
 Authentication uses strict OIDC discovery and signed JWT access tokens. Configure it
 using \`docs/authentication.md\` before starting the service.
 <!-- profile:authn-oidc-jwt:end -->
+<!-- profile:messaging-nats-jetstream:start -->
+This service includes the direct NATS JetStream messaging pack. Configure streams,
+publisher limits, and the separate consumer worker using
+\`docs/durable-messaging.md\` before enabling it.
+<!-- profile:messaging-nats-jetstream:end -->
 EOF
 }
 
@@ -303,6 +310,19 @@ case "${outbound_http}" in
 none | bounded) ;;
 *)
 	echo "OUTBOUND_HTTP must be one of: none, bounded"
+	exit 1
+	;;
+esac
+
+if [[ "${MESSAGING+x}" == "x" && -z "${MESSAGING-}" ]]; then
+	echo "MESSAGING must be one of: none, nats-jetstream"
+	exit 1
+fi
+messaging="${MESSAGING:-none}"
+case "${messaging}" in
+none | nats-jetstream) ;;
+*)
+	echo "MESSAGING must be one of: none, nats-jetstream"
 	exit 1
 	;;
 esac
@@ -385,6 +405,7 @@ if [[ -f template.lock ]]; then
 		"grpc = \"${grpc}\"" \
 		"authn = \"${authn}\"" \
 		"outbound_http = \"${outbound_http}\"" \
+		"messaging = \"${messaging}\"" \
 		"reference_example = \"${reference_example}\""; do
 		grep -Fqx "${expected}" template.lock || {
 			echo "repository is already initialized with different profile choices"
@@ -397,6 +418,7 @@ if [[ -f template.lock ]]; then
 	echo "  gRPC: ${grpc}"
 	echo "  authentication: ${authn}"
 	echo "  outbound HTTP: ${outbound_http}"
+	echo "  messaging: ${messaging}"
 	echo "  reference example: ${reference_example}"
 	exit 0
 fi
@@ -504,6 +526,21 @@ if [[ "${source_checkout}" != true ]]; then
 		strip_profile authn-oidc-jwt keep
 	fi
 
+	if [[ "${messaging}" == "none" ]]; then
+		rm -rf -- cmd/worker internal/infra/natsjs
+		rm -f -- \
+			cmd/service/internal/bootstrap/startup_messaging.go \
+			cmd/service/internal/bootstrap/startup_messaging_test.go \
+			docs/durable-messaging.md \
+			internal/config/messaging.go \
+			internal/config/messaging_test.go \
+			test/nats_messaging_integration_test.go
+		strip_profile messaging-nats-jetstream remove
+		go mod tidy
+	else
+		strip_profile messaging-nats-jetstream keep
+	fi
+
 	if [[ "${grpc}" == "none" ]]; then
 		rm -rf -- \
 			internal/gen/proto \
@@ -576,7 +613,7 @@ if [[ "${source_checkout}" != true ]]; then
 		go generate ./internal/openapi
 	fi
 
-	write_template_lock "${database}" "${grpc}" "${authn}" "${outbound_http}" "${reference_example}"
+	write_template_lock "${database}" "${grpc}" "${authn}" "${outbound_http}" "${messaging}" "${reference_example}"
 
 fi
 
@@ -594,6 +631,7 @@ echo "  database: ${database}"
 echo "  gRPC: ${grpc}"
 echo "  authentication: ${authn}"
 echo "  outbound HTTP: ${outbound_http}"
+echo "  messaging: ${messaging}"
 echo "  reference example: ${reference_example}"
 if [[ -n "${codeowner}" ]]; then
 	echo "  codeowner: ${codeowner}"

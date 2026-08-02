@@ -174,7 +174,12 @@ The lifecycle baseline is: config and dependency validation happen before accept
 
 ### Background / Async Extension Path
 
-The baseline repository does not ship an always-on background worker runtime.
+<!-- profile:messaging-nats-jetstream:start -->
+The optional NATS JetStream profile ships a separate `cmd/worker` composition
+root and concrete `internal/infra/natsjs` producer/consumer owner. The service
+process remains producer-only; the worker fails before connecting until a
+feature registers its duplicate-safe handler. See [Durable messaging](./durable-messaging.md).
+<!-- profile:messaging-nats-jetstream:end -->
 
 When a task introduces async work, keep the extension path stable:
 1. Put business behavior in `internal/<feature>`.
@@ -212,6 +217,9 @@ Use these seams when extending the repository:
 <!-- profile:grpc:end -->
 - New persistence flow: add one canonical transactional Goose file under `migrations`, add SQLC query sources under `internal/infra/postgres/queries`, regenerate `internal/infra/postgres/sqlcgen`, add a hand-written Postgres repository that maps generated rows into feature-facing types, add a feature-owned port only if needed, then wire the concrete adapter in `cmd/service/internal/bootstrap`.
 - New integration adapter: add it under `internal/infra/<integration>`; add a feature-owned contract only if `internal/<feature>` needs inversion over the concrete adapter; wire concrete dependencies in `cmd/service/internal/bootstrap`. For ordinary provider-specific clients, start with `net/http`. When the repository was initialized with `OUTBOUND_HTTP=bounded`, reuse `internal/infra/httpclient` for fixed-authority transport safety and explicitly select `PropagationNone`, `PropagationTraceContext`, or `PropagationTrustedService` per dependency; zero emits no remote correlation. Keep authentication, operation budgets, retry eligibility, provider errors, and generated clients in the provider adapter. Credentials belong in headers; query-string authentication requires a separate telemetry-disclosure design. When the adapter calls another microservice, first verify the provider's current contract from its repository, generated contract, published spec, or live contract endpoint, then record the source used in the owning spec/design/tasks proof. Before enabling a runtime dependency, define config keys and secret-source policy, platform egress policy, criticality, retry and timeout budget, readiness participation, cleanup on partial initialization, low-cardinality metrics labels, and bootstrap tests.
+<!-- profile:messaging-nats-jetstream:start -->
+- New durable event flow: keep payload/schema semantics in the feature, compose the concrete `natsjs.Producer` or one duplicate-safe worker handler at bootstrap, and use the existing message identity and ACK boundary. Add outbox or inbox persistence only through its separate accepted workflow; do not hide it inside the transport package.
+<!-- profile:messaging-nats-jetstream:end -->
 - New outbound target: fixed targets must declare source, timeout, redirect policy, and DNS/IP-class behavior before bootstrap wiring; the deployment owns network-level egress enforcement. Dynamic or user-controlled URLs require a separate security design.
 - New durable schema behavior: evolve `migrations/` first, then keep adapter or generated access code derived from that schema.
 - New executable surface: add `cmd/<binary>/main.go` with its own bootstrap path and reuse feature/infra packages instead of duplicating logic.

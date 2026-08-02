@@ -306,9 +306,24 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 		_ = supervisor.Shutdown(shutdown.stage(signalCtx, backgroundShutdownTimeout))
 	}()
 
+	// profile:messaging-nats-jetstream:start
+	messaging, err := initMessagingRuntime(startupCtx, bootstrap.cfg.Messaging, bootstrap.log)
+	if err != nil {
+		return err
+	}
+	defer messaging.Close()
+	if messaging.client != nil {
+		supervisor.Go(background.Task{Name: "messaging_connection", Run: messaging.client.Run})
+	}
+	// profile:messaging-nats-jetstream:end
+
 	// The failure channel below terminates serving; the readiness probe makes the
 	// same failure visible during the short interval before the drain begins.
-	healthSvc := health.New(append(dependencies.ReadinessProbes(), supervisor)...)
+	readinessProbes := dependencies.ReadinessProbes()
+	// profile:messaging-nats-jetstream:start
+	readinessProbes = append(readinessProbes, messaging.ReadinessProbes()...)
+	// profile:messaging-nats-jetstream:end
+	healthSvc := health.New(append(readinessProbes, supervisor)...)
 
 	// Readiness is served from cached state, so something has to keep that state
 	// current. Registering it as an ordinary supervised task means a refresher
@@ -338,6 +353,11 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 				if err := startupAdmission.CheckReady(ctx); err != nil {
 					return err
 				}
+				// profile:messaging-nats-jetstream:start
+				if !messaging.Ready() {
+					return fmt.Errorf("messaging is not ready")
+				}
+				// profile:messaging-nats-jetstream:end
 				// profile:authn-oidc-jwt:start
 				if err := authnVerifier.CheckReady(); err != nil {
 					return fmt.Errorf("check authentication readiness: %w", err)
@@ -468,7 +488,10 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 		},
 		admission:     startupAdmission,
 		shutdownDelay: bootstrap.cfg.HTTP.ReadinessPropagationDelay,
-		shutdown:      shutdown,
+		// profile:messaging-nats-jetstream:start
+		preDrain: messaging.StartDrain,
+		// profile:messaging-nats-jetstream:end
+		shutdown: shutdown,
 	})
 
 	// Ordered teardown. HTTP is already drained, so this is the first moment
@@ -477,11 +500,21 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 	// before the deferred telemetry flush so the flush can carry a record of how
 	// they went. Shutdown is idempotent, so the deferred safety net above is a
 	// no-op once this has run.
-	backgroundErr := supervisor.Shutdown(shutdown.stage(signalCtx, backgroundShutdownTimeout))
+	backgroundCtx := shutdown.stage(signalCtx, backgroundShutdownTimeout)
+	// profile:messaging-nats-jetstream:start
+	messagingErr := messaging.Shutdown(backgroundCtx)
+	// profile:messaging-nats-jetstream:end
+	backgroundErr := supervisor.Shutdown(backgroundCtx)
 
 	dependencies.Close(shutdown.stage(signalCtx, dependencyCloseTimeout))
 
-	return errors.Join(serveErr, backgroundErr)
+	return errors.Join(
+		serveErr,
+		// profile:messaging-nats-jetstream:start
+		messagingErr,
+		// profile:messaging-nats-jetstream:end
+		backgroundErr,
+	)
 }
 
 func logReadinessTransition(ctx context.Context, log *slog.Logger, err error) {

@@ -21,10 +21,28 @@ build_image() {
 		"${context}"
 }
 
+# profile:messaging-nats-jetstream:start
+verify_worker_image() {
+	local output
+	if output="$(docker run --rm --read-only --network none --entrypoint /worker "${IMAGE}" 2>&1)"; then
+		echo "runtime image worker exited successfully without a registered feature handler" >&2
+		exit 1
+	fi
+	if ! grep -Fq 'worker feature handler builder is not registered' <<<"${output}"; then
+		echo "runtime image worker did not execute the expected fail-closed binary" >&2
+		echo "${output}" >&2
+		exit 1
+	fi
+}
+# profile:messaging-nats-jetstream:end
+
 # Generated services no longer own profile sources, so their checkout is
 # already the exact production source and needs no fixture.
 if [[ ! -d "${ROOT_DIR}/scripts/profiles" ]]; then
 	build_image "${ROOT_DIR}"
+	# profile:messaging-nats-jetstream:start
+	verify_worker_image
+	# profile:messaging-nats-jetstream:end
 	exit 0
 fi
 
@@ -55,21 +73,32 @@ git -C "${CHECKOUT}" \
 	-c user.email=runtime-image-build@invalid \
 	commit --allow-empty -qm "runtime image fixture"
 
+profile_environment=(
+	"CODEOWNER=@acme/platform"
+	"DATABASE=postgres"
+	"GRPC=enabled"
+	"AUTHN=none"
+	"OUTBOUND_HTTP=bounded"
+	"REFERENCE_EXAMPLE=remove"
+)
+# profile:messaging-nats-jetstream:start
+profile_environment+=("MESSAGING=nats-jetstream")
+# profile:messaging-nats-jetstream:end
 (
 	cd "${CHECKOUT}"
-	CODEOWNER=@acme/platform \
-		DATABASE=postgres \
-		GRPC=enabled \
-		AUTHN=none \
-		OUTBOUND_HTTP=bounded \
-		REFERENCE_EXAMPLE=remove \
-		bash ./scripts/init-module.sh github.com/acme/runtime-image-proof
+	env "${profile_environment[@]}" bash ./scripts/init-module.sh github.com/acme/runtime-image-proof
 )
 
 grep -Fqx 'database = "postgres"' "${CHECKOUT}/template.lock"
 grep -Fqx 'grpc = "enabled"' "${CHECKOUT}/template.lock"
 grep -Fqx 'authn = "none"' "${CHECKOUT}/template.lock"
 grep -Fqx 'outbound_http = "bounded"' "${CHECKOUT}/template.lock"
+# profile:messaging-nats-jetstream:start
+grep -Fqx 'messaging = "nats-jetstream"' "${CHECKOUT}/template.lock"
+# profile:messaging-nats-jetstream:end
 [[ ! -d "${CHECKOUT}/internal/infra/oidcjwt" ]]
 
 build_image "${CHECKOUT}"
+# profile:messaging-nats-jetstream:start
+verify_worker_image
+# profile:messaging-nats-jetstream:end
