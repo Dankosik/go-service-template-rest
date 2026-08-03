@@ -766,6 +766,26 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "outb
 	assert "OUTBOX=postgres changed the outbox migration set" same_text \
 		"$(cd "${ROOT_DIR}" && printf '%s\n' migrations/*_postgres_outbox*.sql)" \
 		"$(cd "${outbox_checkout}" && printf '%s\n' migrations/*_postgres_outbox*.sql)"
+	# The template edits its migrations in place because nothing has applied
+	# them; a generated service is the opposite case and must refuse, with no
+	# escape it could be talked into. Exercised on an isolated copy of the
+	# generated tree so the fixture's own git state stays untouched.
+	(
+		rewrite_probe="${TEMP_ROOT}/outbox-rewrite-probe"
+		mkdir -p "${rewrite_probe}"
+		cp -R "${outbox_checkout}/migrations" "${rewrite_probe}/migrations"
+		cp -R "${outbox_checkout}/scripts" "${rewrite_probe}/scripts"
+		cd "${rewrite_probe}"
+		git init -q .
+		git add -A
+		git -c user.email=init-check@example.invalid -c user.name=init-check commit -qm generated
+		printf '\n-- rewritten after generation\n' >>migrations/000001_postgres_outbox.sql
+		if MIGRATION_REPO_ROOT="${rewrite_probe}" MIGRATION_HISTORY_MODE=worktree \
+			bash ./scripts/ci/migration-history-check.sh >/dev/null 2>&1; then
+			echo "template initialization contract: generated service accepted a migration rewrite" >&2
+			exit 1
+		fi
+	)
 	grep -Fqx 'database = "postgres"' "${outbox_checkout}/template.lock"
 	grep -Fqx 'outbox = "postgres"' "${outbox_checkout}/template.lock"
 	grep -Fqx "source_revision = \"${outbox_revision}\"" "${outbox_checkout}/template.lock"

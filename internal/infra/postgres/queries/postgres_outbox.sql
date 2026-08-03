@@ -1,3 +1,5 @@
+-- An unordered event owns no ordering head, so it stores the envelope alone and
+-- leaves the ordering columns at their defaults.
 -- name: InsertOutboxEvent :exec
 INSERT INTO outbox_events (
     id,
@@ -7,10 +9,7 @@ INSERT INTO outbox_events (
     schema_name,
     occurred_at,
     payload,
-    metadata,
-    ordering_key,
-    ordering_sequence,
-    ordering_ready
+    metadata
 ) VALUES (
     sqlc.arg(id),
     sqlc.arg(event_type),
@@ -19,10 +18,7 @@ INSERT INTO outbox_events (
     sqlc.arg(schema_name),
     sqlc.arg(occurred_at),
     sqlc.arg(payload),
-    sqlc.arg(metadata),
-    sqlc.narg(ordering_key),
-    sqlc.narg(ordering_sequence),
-    sqlc.arg(ordering_ready)
+    sqlc.arg(metadata)
 );
 
 -- An ordered append advances its key's retained high-water mark and stores the
