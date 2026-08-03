@@ -188,6 +188,236 @@ func (q *Queries) GetOutboxEvent(ctx context.Context, id string) (OutboxEvent, e
 	return i, err
 }
 
+const insertOutboxEvents = `-- name: InsertOutboxEvents :exec
+INSERT INTO outbox_events (
+    id,
+    event_type,
+    source,
+    destination,
+    schema_name,
+    occurred_at,
+    payload,
+    metadata
+)
+SELECT
+    unnest($1::text[]),
+    unnest($2::text[]),
+    unnest($3::text[]),
+    unnest($4::text[]),
+    unnest($5::text[]),
+    unnest($6::timestamptz[]),
+    unnest($7::bytea[]),
+    unnest($8::bytea[])
+`
+
+type InsertOutboxEventsParams struct {
+	Ids          []string
+	EventTypes   []string
+	Sources      []string
+	Destinations []string
+	SchemaNames  []string
+	OccurredAts  []pgtype.Timestamptz
+	Payloads     [][]byte
+	Metadatas    [][]byte
+}
+
+// Every event of one append that owns no ordering head, in one statement.
+//
+// Each column arrives as one array rather than each event as one statement.
+// That is what makes a multi-event append cheap: PostgreSQL sets up the
+// executor once instead of once per event, and setting it up opens this
+// table's indexes again every time, which costs more than the insert itself.
+// A feature that emits several events per business transaction therefore pays
+// one round trip and one executor setup, and holds its own row locks for that
+// much less time.
+//
+// A call carrying no ordering key uses this statement rather than the one
+// below, which is worth a second statement to maintain: the ordering-head
+// insert and its arbiter index are initialized on every execution even when no
+// event touches a head, and that setup costs more than a whole single-event
+// insert. Ordering columns stay at their table defaults here.
+// Set-returning functions in one select list advance in lockstep, which is how
+// the column arrays are zipped back into rows.
+func (q *Queries) InsertOutboxEvents(ctx context.Context, arg InsertOutboxEventsParams) error {
+	_, err := q.db.Exec(ctx, insertOutboxEvents,
+		arg.Ids,
+		arg.EventTypes,
+		arg.Sources,
+		arg.Destinations,
+		arg.SchemaNames,
+		arg.OccurredAts,
+		arg.Payloads,
+		arg.Metadatas,
+	)
+	return err
+}
+
+const insertOutboxEventsWithOrdering = `-- name: InsertOutboxEventsWithOrdering :many
+WITH input AS (
+    SELECT
+        unnest($1::text[]) AS id,
+        unnest($2::text[]) AS event_type,
+        unnest($3::text[]) AS source,
+        unnest($4::text[]) AS destination,
+        unnest($5::text[]) AS schema_name,
+        unnest($6::timestamptz[]) AS occurred_at,
+        unnest($7::bytea[]) AS payload,
+        unnest($8::bytea[]) AS metadata,
+        unnest($9::text[]) AS ordering_key,
+        unnest($10::bigint[]) AS ordering_sequence
+), event AS (
+    SELECT
+        input.id,
+        input.event_type,
+        input.source,
+        input.destination,
+        input.schema_name,
+        input.occurred_at,
+        input.payload,
+        input.metadata,
+        nullif(input.ordering_key, '') AS ordering_key,
+        nullif(input.ordering_sequence, 0) AS ordering_sequence
+    FROM input
+), ordered_key AS (
+    SELECT
+        event.ordering_key,
+        min(event.ordering_sequence) AS first_sequence,
+        max(event.ordering_sequence) AS last_sequence
+    FROM event
+    WHERE event.ordering_key IS NOT NULL
+    GROUP BY event.ordering_key
+), head AS (
+    INSERT INTO outbox_ordering_heads AS existing (ordering_key, last_sequence, current_sequence)
+    SELECT ordered_key.ordering_key, ordered_key.last_sequence, ordered_key.first_sequence
+    FROM ordered_key
+    -- Concurrent appends that touch the same keys take their locks in the same
+    -- order, so they queue behind each other instead of deadlocking.
+    ORDER BY ordered_key.ordering_key
+    ON CONFLICT (ordering_key) DO UPDATE
+    SET last_sequence = EXCLUDED.last_sequence,
+        current_sequence = coalesce(existing.current_sequence, EXCLUDED.current_sequence),
+        updated_at = clock_timestamp()
+    WHERE existing.last_sequence < EXCLUDED.current_sequence
+    RETURNING existing.ordering_key, existing.current_sequence
+), rejected AS (
+    SELECT ordered_key.ordering_key, ordered_key.first_sequence
+    FROM ordered_key
+    WHERE NOT EXISTS (
+        SELECT 1 FROM head WHERE head.ordering_key = ordered_key.ordering_key
+    )
+), stored AS (
+    INSERT INTO outbox_events (
+        id,
+        event_type,
+        source,
+        destination,
+        schema_name,
+        occurred_at,
+        payload,
+        metadata,
+        ordering_key,
+        ordering_sequence,
+        ordering_ready
+    )
+    SELECT
+        event.id,
+        event.event_type,
+        event.source,
+        event.destination,
+        event.schema_name,
+        event.occurred_at,
+        event.payload,
+        event.metadata,
+        event.ordering_key,
+        event.ordering_sequence,
+        event.ordering_key IS NOT NULL AND head.current_sequence = event.ordering_sequence
+    FROM event
+    LEFT JOIN head ON head.ordering_key = event.ordering_key
+    WHERE NOT EXISTS (SELECT 1 FROM rejected)
+)
+SELECT
+    rejected.ordering_key::text AS ordering_key,
+    rejected.first_sequence::bigint AS first_sequence
+FROM rejected
+ORDER BY rejected.ordering_key
+`
+
+type InsertOutboxEventsWithOrderingParams struct {
+	Ids               []string
+	EventTypes        []string
+	Sources           []string
+	Destinations      []string
+	SchemaNames       []string
+	OccurredAts       []pgtype.Timestamptz
+	Payloads          [][]byte
+	Metadatas         [][]byte
+	OrderingKeys      []string
+	OrderingSequences []int64
+}
+
+type InsertOutboxEventsWithOrderingRow struct {
+	OrderingKey   string
+	FirstSequence int64
+}
+
+// Every event of one append when at least one of them owns an ordering head.
+// It stores the ordered and unordered events together and advances the head of
+// every key the call touches, so a mixed append is still one statement and one
+// round trip.
+//
+// The ordering columns carry the same zero value the Go event does: an empty
+// key and a zero sequence mean the event owns no ordering head.
+//
+// `head` advances each key's retained high-water mark once per key instead of
+// once per event, so several events for one key take that head's row lock a
+// single time. `last_sequence` is the retained authority that rejects a
+// replayed sequence, and cleanup never deletes a head, so the rejection
+// outlives the events it was derived from. `current_sequence` names the key's
+// earliest unpublished sequence, and `ordering_ready` marks the one event that
+// matches it as the key's claimable head.
+//
+// The guard compares the retained mark against the call's *first* new sequence,
+// so a call is accepted only when all of its sequences clear that mark. Within
+// one call the events of a key may arrive in any order; they are stored and
+// published in sequence order either way.
+//
+// The statement's own result is the rejection report: one row per key whose
+// first new sequence did not clear its retained mark, and no rows at all on the
+// normal path. One rejected key stores nothing, which is the same all-or-
+// nothing outcome the caller's transaction would produce anyway. A
+// data-modifying CTE runs to completion whether or not the primary query reads
+// its output, so returning only rejections skips no work.
+func (q *Queries) InsertOutboxEventsWithOrdering(ctx context.Context, arg InsertOutboxEventsWithOrderingParams) ([]InsertOutboxEventsWithOrderingRow, error) {
+	rows, err := q.db.Query(ctx, insertOutboxEventsWithOrdering,
+		arg.Ids,
+		arg.EventTypes,
+		arg.Sources,
+		arg.Destinations,
+		arg.SchemaNames,
+		arg.OccurredAts,
+		arg.Payloads,
+		arg.Metadatas,
+		arg.OrderingKeys,
+		arg.OrderingSequences,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []InsertOutboxEventsWithOrderingRow
+	for rows.Next() {
+		var i InsertOutboxEventsWithOrderingRow
+		if err := rows.Scan(&i.OrderingKey, &i.FirstSequence); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const insertOutboxRedrive = `-- name: InsertOutboxRedrive :exec
 INSERT INTO outbox_redrives (audit_id, event_id, cycle_number)
 VALUES ($1, $2, $3)
