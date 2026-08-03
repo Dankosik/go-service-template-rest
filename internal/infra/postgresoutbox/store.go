@@ -75,6 +75,8 @@ type StateObservation struct {
 	EventsIndexBytes          int64
 	OrderingHeadsBytes        int64
 	OrderingHeadsIndexBytes   int64
+	RedrivesBytes             int64
+	RedrivesIndexBytes        int64
 }
 
 func NewStore(pool *postgres.Pool, telemetry *Telemetry) (*Store, error) {
@@ -100,18 +102,24 @@ func (s *Store) Append(ctx context.Context, tx pgx.Tx, event Event) (err error) 
 	queries := sqlcgen.New(tx)
 	var orderingKey *string
 	var orderingSequence *int64
+	orderingReady := false
 	if event.OrderingKey != "" {
-		if _, err := queries.AdvanceOutboxOrderingHead(ctx, sqlcgen.AdvanceOutboxOrderingHeadParams{
+		currentSequence, err := queries.AdvanceOutboxOrderingHead(ctx, sqlcgen.AdvanceOutboxOrderingHeadParams{
 			OrderingKey:      event.OrderingKey,
 			OrderingSequence: event.OrderingSequence,
-		}); err != nil {
+		})
+		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				return fmt.Errorf("%w: key %q sequence %d is not above the retained high-water mark", ErrOrderingSequence, event.OrderingKey, event.OrderingSequence)
 			}
 			return fmt.Errorf("advance outbox ordering head: %w", err)
 		}
+		if currentSequence == nil {
+			return errors.New("advance outbox ordering head returned no current sequence")
+		}
 		orderingKey = &event.OrderingKey
 		orderingSequence = &event.OrderingSequence
+		orderingReady = *currentSequence == event.OrderingSequence
 	}
 
 	if err := queries.InsertOutboxEvent(ctx, sqlcgen.InsertOutboxEventParams{
@@ -125,6 +133,7 @@ func (s *Store) Append(ctx context.Context, tx pgx.Tx, event Event) (err error) 
 		Metadata:         event.Metadata,
 		OrderingKey:      orderingKey,
 		OrderingSequence: orderingSequence,
+		OrderingReady:    orderingReady,
 	}); err != nil {
 		return fmt.Errorf("insert outbox event: %w", err)
 	}
@@ -167,14 +176,41 @@ func (s *Store) Claim(ctx context.Context, leaseDuration time.Duration) (claimed
 	return claimed, nil
 }
 
-func (s *Store) MarkPublished(ctx context.Context, id, token string) (err error) {
+func (s *Store) MarkPublished(ctx context.Context, claim ClaimedEvent) (err error) {
 	started := time.Now()
 	defer func() { s.recordOperation(ctx, "mark_published", started, err) }()
-	if err := validateProgressIdentity(id, token); err != nil {
+	if err := validateProgressIdentity(claim.Event.ID, claim.Token); err != nil {
 		return err
 	}
-	rows, err := s.queries.MarkOutboxPublished(ctx, sqlcgen.MarkOutboxPublishedParams{ID: id, LeaseToken: &token})
-	return progressResult("mark outbox published", rows, err)
+	if claim.Event.OrderingKey == "" {
+		rows, err := s.queries.MarkOutboxPublished(ctx, sqlcgen.MarkOutboxPublishedParams{
+			ID: claim.Event.ID, LeaseToken: &claim.Token,
+		})
+		return progressResult("mark outbox published", rows, err)
+	}
+	if err := validateText("ordering_key", claim.Event.OrderingKey, maxTextBytes); err != nil || claim.Event.OrderingSequence < 1 {
+		return fmt.Errorf("%w: ordered claim identity is invalid", ErrConfig)
+	}
+
+	params := sqlcgen.MarkOrderedOutboxPublishedParams{
+		ID:               claim.Event.ID,
+		LeaseToken:       &claim.Token,
+		OrderingKey:      claim.Event.OrderingKey,
+		OrderingSequence: &claim.Event.OrderingSequence,
+	}
+	for range 2 {
+		result, err := s.queries.MarkOrderedOutboxPublished(ctx, params)
+		if err != nil {
+			return fmt.Errorf("mark ordered outbox published: %w", err)
+		}
+		if result.MarkedCount == 1 && result.AdvancedCount == 1 && result.UnblockedCount <= 1 {
+			return nil
+		}
+		if !result.SnapshotConflict {
+			return ErrLeaseLost
+		}
+	}
+	return ErrLeaseLost
 }
 
 func (s *Store) ScheduleRetry(ctx context.Context, id, token, errorClass string, delay time.Duration) (err error) {
@@ -337,6 +373,8 @@ func (s *Store) Observe(ctx context.Context) (observation StateObservation, err 
 			EventsIndexBytes:          storage.EventsIndexBytes,
 			OrderingHeadsBytes:        storage.OrderingHeadsBytes,
 			OrderingHeadsIndexBytes:   storage.OrderingHeadsIndexBytes,
+			RedrivesBytes:             storage.RedrivesBytes,
+			RedrivesIndexBytes:        storage.RedrivesIndexBytes,
 		}
 		return nil
 	})

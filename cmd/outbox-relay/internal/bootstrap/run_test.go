@@ -239,23 +239,53 @@ func TestOutboxRelayOuterJoinTimeout(t *testing.T) {
 
 func TestOutboxRelayForcedShutdownSkipsDependencyCleanup(t *testing.T) {
 	var order []string
-	cleanupRelayDependencies(
+	if err := cleanupRelayDependencies(
 		t.Context(),
 		true,
 		func(context.Context) { order = append(order, "publisher") },
 		func() { order = append(order, "postgres") },
-	)
+	); err != nil {
+		t.Fatalf("safe cleanup error = %v", err)
+	}
 	if got := strings.Join(order, ","); got != "publisher,postgres" {
 		t.Fatalf("safe cleanup order = %q, want publisher,postgres", got)
 	}
-	cleanupRelayDependencies(
+	if err := cleanupRelayDependencies(
 		t.Context(),
 		false,
 		func(context.Context) { order = append(order, "unsafe-publisher") },
 		func() { order = append(order, "unsafe-postgres") },
-	)
+	); err != nil {
+		t.Fatalf("unsafe cleanup error = %v", err)
+	}
 	if got := strings.Join(order, ","); got != "publisher,postgres" {
 		t.Fatalf("cleanup-unsafe dependencies were closed: %q", got)
+	}
+}
+
+func TestOutboxRelayPublisherCleanupIsBounded(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		started := make(chan struct{})
+		release := make(chan struct{})
+		result := make(chan error, 1)
+		go func() {
+			result <- closePublisher(context.Background(), func(context.Context) {
+				close(started)
+				<-release
+			})
+		}()
+		<-started
+		err := <-result
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("closePublisher(stuck) error = %v, want deadline", err)
+		}
+		close(release)
+		synctest.Wait()
+	})
+
+	if err := closePublisher(t.Context(), func(context.Context) { panic("secret") }); err == nil ||
+		!strings.Contains(err.Error(), "panicked") || strings.Contains(err.Error(), "secret") {
+		t.Fatalf("closePublisher(panic) error = %v, want redacted panic", err)
 	}
 }
 

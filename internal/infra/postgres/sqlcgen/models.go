@@ -32,12 +32,14 @@ type OutboxEvent struct {
 	RedriveCount      int32
 	LastRedriveID     *string
 	LastRedrivenAt    pgtype.Timestamptz
+	OrderingReady     bool
 }
 
 type OutboxOrderingHead struct {
-	OrderingKey  string
-	LastSequence int64
-	UpdatedAt    pgtype.Timestamptz
+	OrderingKey     string
+	LastSequence    int64
+	UpdatedAt       pgtype.Timestamptz
+	CurrentSequence *int64
 }
 
 type OutboxRedrife struct {

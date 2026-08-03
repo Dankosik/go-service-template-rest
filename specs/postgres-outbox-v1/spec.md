@@ -41,7 +41,7 @@ the complete profile combination before its first mutation.
 - The chosen value is recorded in `template.lock`; repeating the same
   initialization is byte-stable, and a later different choice is rejected
   without mutation.
-- Removing the outbox's only migration also removes an otherwise-empty
+- Removing the outbox migrations also removes an otherwise-empty
   repository `migrations/` directory so the canonical migration source check
   remains valid.
 
@@ -208,8 +208,10 @@ automatic API rejection based on backlog because no accepted capacity threshold
 exists.
 
 Published rows are retained for seven days by default. Cleanup runs separately
-from publication every minute, deletes at most 1,000 published rows per
-transaction using published time, and never deletes pending, leased,
+from publication in transactions of at most 1,000 published rows using
+published time. An incomplete batch returns to the one-minute cadence; a full
+batch schedules another bounded batch no later than the poll interval. Cleanup
+never deletes pending, leased,
 retry-wait, recovery-due, or poison rows. Partitioning is absent; measured
 relation/index size, vacuum lag, claim-plan degradation, or cleanup-budget
 failure reopens data/performance design.
@@ -229,13 +231,15 @@ The relay is a separate process with diagnostics and no API routes.
   acknowledgement does not by itself change relay readiness: the ready relay is
   still correctly making durable retry/poison progress and the outage is exposed
   by operation/backlog signals. Fatal adapter/relay-loop failure, PostgreSQL or
-  schema loss, stale state observation, or drain makes readiness false. Backlog
+  schema loss, a state observation older than two configured observation
+  intervals, or drain makes readiness false. Backlog
   age or poison alone does not make a capable relay unready.
 - Shutdown marks readiness false, stops new claims, gives the current attempt a
   20-second drain window, cancels it on expiry, closes diagnostics and database
   resources, and flushes telemetry inside the repository's one process grace
-  period. A forced stop leaves durable lease recovery rather than marking loss
-  or success.
+  period. Publisher cleanup has its own five-second supervision bound; timeout
+  or panic is returned as a process error instead of hanging shutdown. A forced
+  stop leaves durable lease recovery rather than marking loss or success.
 - Broker outage accumulates visible retry/backlog state. It never terminates or
   degrades the API process merely because publication is unavailable.
 
@@ -246,8 +250,9 @@ The relay exposes broker-neutral low-cardinality signals for:
 - mutually exclusive counts and oldest timestamps for eligible, in-progress,
   retry-wait, recovery-due, ordering-blocked, poison, and published-retained
   states;
-- retained ordering high-water row count plus table/index byte observations, so
-  key-cardinality growth cannot hide behind event-row cleanup;
+- retained ordering high-water row count plus event, ordering-head, and redrive
+  table/index byte observations, so key-cardinality or audit-ledger growth cannot
+  hide behind event-row cleanup;
 - last successful state observation and last durable publication progress;
 - claim, publish, progress-commit, retry, poison, recovery, redrive, cleanup,
   observation, and drain operation outcomes/durations;
@@ -267,21 +272,21 @@ forensics, never ordinary per-event success logs.
 
 ### OUT-11 — Migration, compatibility, rollout, and rollback
 
-The canonical Goose runtime remains the only schema owner. The first outbox
-migration is a normal transactional, logged PostgreSQL migration with canonical
-Up and disposable-proof Down sections. Application startup and relay startup
-never migrate.
+The canonical Goose runtime remains the only schema owner. Outbox migrations
+are normal transactional, logged PostgreSQL migrations with canonical Up and
+disposable-proof Down sections. Published versions remain append-only.
+Application startup and relay startup never migrate.
 
-Rollout order is:
+On a fresh database, rollout order is migration, writer, then relay. On a
+populated `000001` database, `000002` is deliberately not mixed-version safe:
+drain and stop every old relay, quiesce every old writer, wait for its database
+transactions to finish, and require every old process to exit before applying
+the migration. Run the zero-row ordering-head invariant readback defined in the
+operations guide before admitting only the version-2 writer and relay. Never
+run a version-1 process against schema version 2.
 
-1. apply the additive outbox migration through `/migrate`;
-2. deploy a writer version that can atomically append the V1 envelope;
-3. deploy a relay with a proven publisher adapter;
-4. observe fresh backlog/progress and drain any rollout backlog.
-
-The API may run before the relay; committed rows form backlog. The relay may run
-before any writer and observes an empty queue. Mixed old/new API instances are
-safe because the schema is additive.
+The version-2 API may run before its relay; committed rows form backlog. The
+version-2 relay may run before any writer and observes an empty queue.
 
 Rollback stops new writer behavior or the relay but leaves the table and rows
 intact. It does not retract published events, run production Down, or remove
@@ -346,7 +351,7 @@ and a separately proved release operation.
    high-cardinality labels. Cleanup proof also demonstrates that deleting a
    published event cannot delete or weaken its ordering high-water row.
 6. Canonical migration Up/no-op/Down/Up, sqlc drift, image packaging, and
-   service/relay process startup prove one migration path.
+   service/relay process startup prove one ordered migration path.
 7. Initialization proves invalid combination rejection before mutation,
    `OUTBOX=none` physical purity, retained-profile completeness, alternate-choice
    refusal, and repeated byte stability.

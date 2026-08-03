@@ -23,6 +23,8 @@ func TestClassifyCommitOutcome(t *testing.T) {
 		want bool
 	}{
 		{name: "server rejection", err: &pgconn.PgError{Code: "23505"}, want: true},
+		{name: "transaction resolution unknown", err: &pgconn.PgError{Code: "08007"}},
+		{name: "statement completion unknown", err: &pgconn.PgError{Code: "40003"}},
 		{name: "commit returned rollback", err: pgx.ErrTxCommitRollback, want: true},
 		{name: "request was not sent", err: safeToRetryError{}, want: true},
 		{name: "wrapped request was not sent", err: errors.Join(errors.New("commit"), safeToRetryError{}), want: true},

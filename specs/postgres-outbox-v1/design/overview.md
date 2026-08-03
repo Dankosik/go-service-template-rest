@@ -10,7 +10,7 @@ status: ready
 | API survives broker outage | A committed row is the request-path finality boundary; relay owns later publication | API/domain commit continues while PostgreSQL accepts the finite backlog |
 | At-least-once, crash recovery, multiple replicas | Short lease claim, publish outside SQL transaction, token-fenced progress update | Crash-after-ack produces the same event ID twice and never loss |
 | No broker ownership | Broker-neutral event plus a one-method consumer-owned `Publisher`; no adapter or fallback ships | Missing builder fails relay startup; every selected adapter needs real-broker conformance |
-| PostgreSQL 17 and merged migration transition are canonical | One normal transactional Goose migration; sqlc reads that schema; neither runtime migrates | Canonical source/history/image rehearsal passes |
+| PostgreSQL 17 and merged migration transition are canonical | Normal transactional Goose migrations; sqlc reads their final schema; neither runtime migrates | Canonical source/history/image rehearsal passes |
 | Structurally optional template pack | Every owned byte has an outbox profile marker/path and disappears for `OUTBOX=none` | Initialization purity and byte-stability matrix |
 | Bounded work and shutdown | One in-flight event per relay, one-row claims, finite timeouts/retries/cleanup batches | Race/liveness, drain and forced-stop proof |
 | Ordering survives event cleanup | A separate durable per-key high-water table owns append monotonicity | Lower/equal late inserts fail after event cleanup; row/byte growth is observed |
@@ -75,7 +75,7 @@ flowchart LR
 | Broker | Durable acknowledgement of the same event ID is authoritative for one publication attempt. PostgreSQL progress may lag and cause a duplicate. |
 | `cmd/migrate` | Existing migration runtime exclusively owns schema change. No app or relay auto-migration exists. |
 
-The affected release graph is one additive PostgreSQL migration, any
+The affected release graph is the canonical additive PostgreSQL migrations, any
 feature-writer deployment that begins appending, the separately deployed relay,
 and an externally selected broker/adapter. This repository proves the migration,
 writer/relay local path, and the accepted NATS adapter's event-ID acknowledgement
@@ -84,8 +84,11 @@ credentials, capacity, or a production adapter composition.
 
 ## Canonical schema
 
-`migrations/000001_postgres_outbox.sql` is the first canonical six-digit,
-transactional Goose source. SQLC consumes this file through
+`migrations/000001_postgres_outbox.sql` remains the immutable first canonical
+six-digit transactional Goose source. The additive transactional
+`migrations/000002_postgres_outbox_ordering_ready.sql` backfills the materialized
+head state and replaces the JSON/claim constraints and indexes. SQLC consumes
+both files through
 `internal/infra/postgres/sqlc.yaml`. Application startup and relay startup only
 verify that required relations/columns are present by executing their first
 bounded query; they never invoke Goose.
@@ -104,6 +107,7 @@ bounded query; they never invoke Goose.
 | `metadata` | `bytea DEFAULT '\x7b7d'` | exact valid UTF-8 JSON object bytes, 2..32 KiB |
 | `ordering_key` | `text NULL` | 1..256 bytes/no controls; paired with sequence |
 | `ordering_sequence` | `bigint NULL` | positive; paired with key |
+| `ordering_ready` | `boolean DEFAULT false` | meaningful only for ordered unpublished rows; true only for the current sequence of a key |
 | `created_at` | `timestamptz DEFAULT clock_timestamp()` | database receipt time |
 | `available_at` | `timestamptz DEFAULT clock_timestamp()` | next eligible server time |
 | `cycle_attempt_count` | `integer DEFAULT 0` | resets only on explicit redrive |
@@ -119,20 +123,25 @@ bounded query; they never invoke Goose.
 | `last_redriven_at` | `timestamptz NULL` | server time of latest redrive |
 
 Database checks enforce text limits/control exclusion; pairing and positive
-ordering sequence; valid UTF-8/JSON by `convert_from(..., 'UTF8')::jsonb`;
+ordering sequence; valid UTF-8/JSON by `convert_from(..., 'UTF8')::json`;
 metadata object shape; exact byte caps; the 288 KiB sum over text/payload/
 metadata; non-negative counters; and coherent terminal/lease columns. PostgreSQL
-cast failure rejects malformed bytes. Go performs the same checks first for a
+cast failure rejects malformed bytes. The `json` cast deliberately matches Go's
+JSON validator while preserving exact `bytea`: unlike `jsonb`, it does not reject
+valid JSON solely because a number exceeds PostgreSQL `numeric` or a string
+contains the escaped zero code point. Go performs the same checks first for a
 stable `ErrInvalidEvent`, but SQL constraints are the bypass-resistant authority.
 
 Indexes are limited to current query shapes:
 
 - primary key on `id`;
 - unique partial `(ordering_key, ordering_sequence)` for ordered occurrences;
-- partial claim index `(available_at, created_at, id)` where unpublished and
-  not poison;
+- partial claim index `(available_at, created_at, id)` where unpublished, not
+  poison, and either unordered or `ordering_ready`;
 - partial ordering-head lookup `(ordering_key, ordering_sequence)` where
   unpublished and `ordering_key IS NOT NULL`;
+- unique partial `(ordering_key)` where unpublished, ordered, and
+  `ordering_ready`, enforcing one materialized head per key;
 - partial cleanup index `(published_at, id)` where published;
 - partial poison index `(poisoned_at, id)` where poison.
 
@@ -146,13 +155,20 @@ growth remain the operational guardrails. V1 has no partitioning.
 | --- | --- | --- |
 | `ordering_key` | `text PRIMARY KEY` | same 1..256 byte/control contract |
 | `last_sequence` | `bigint` | positive last admitted value |
+| `current_sequence` | `bigint NULL` | current unpublished head, or null when the key has no retained unpublished event |
 | `updated_at` | `timestamptz` | server time of admission |
 
 Ordered append first executes one `INSERT .. ON CONFLICT .. DO UPDATE WHERE
 last_sequence < excluded.last_sequence RETURNING`. Zero returned rows means an
 equal/lower sequence and aborts the feature transaction. Gaps are accepted.
-The event insert follows in the same transaction. The high-water row has no
-automatic cleanup; observation reports row count and table/index bytes.
+When no unpublished head exists, the same locked statement installs the new
+sequence as `current_sequence`; the event insert records whether it is that
+head. The event insert follows in the same transaction. Published finalization
+locks this same head row before changing the event, then atomically hands
+`ordering_ready` to the next retained sequence. Append and finalization therefore
+serialize on one row per ordering key without predecessor scans or in-memory
+coordination. The high-water row has no automatic cleanup; observation reports
+row count and table/index bytes.
 
 ### `outbox_redrives`
 
@@ -189,9 +205,10 @@ replaces its `pgx.BeginTxFunc` delegation with the same explicit begin/callback/
 rollback/commit sequence and preserves `ErrTransaction` for compatibility:
 
 - begin, callback, and rollback-path errors remain ordinary transaction errors;
-- a commit error carrying a PostgreSQL `PgError`, `pgx.ErrTxCommitRollback`, or
-  `pgconn.SafeToRetry(err)` is a definite failed commit and cannot have produced
-  the requested commit result;
+- `pgx.ErrTxCommitRollback`, `pgconn.SafeToRetry(err)`, and PostgreSQL errors
+  other than SQLSTATE `08007` (`transaction_resolution_unknown`) or `40003`
+  (`statement_completion_unknown`) are definite failures and cannot have
+  produced the requested commit result;
 - any other commit transport/context result additionally wraps the new
   `postgres.ErrCommitUnknown` sentinel. The caller reports ambiguity and does
   not manufacture or retry a new event occurrence.
@@ -217,15 +234,17 @@ from a connection-kill race.
 
 One statement and transaction performs:
 
-1. Select one row whose `published_at` and `poisoned_at` are null,
-   `available_at <= clock_timestamp()`, and lease is null or expired.
-2. For an ordered event, reject it while any smaller sequence for the same key
-   remains unpublished, including retry, lease, recovery, or poison state.
+1. Select one row whose `published_at` and `poisoned_at` are null, which is
+   unordered or has `ordering_ready = true`, whose `available_at <=
+   statement_timestamp()`, and whose lease is null or expired.
+2. The materialized `ordering_ready` state keeps retry, lease, recovery, and
+   poison heads ahead of every later sequence without a correlated predecessor
+   scan.
 3. Order by `available_at, created_at, id`; lock the candidate with
    `FOR UPDATE OF outbox_events SKIP LOCKED LIMIT 1`.
 4. Update it with a newly supplied token, `lease_expires_at =
-   clock_timestamp() + lease_duration`, attempt counters, and
-   `last_attempt_at = clock_timestamp()`, then return the exact envelope/state.
+   statement_timestamp() + lease_duration`, attempt counters, and
+   `last_attempt_at = statement_timestamp()`, then return the exact envelope/state.
 
 The CTE locks a physical candidate only for this short transaction. Committing
 the token and expiry creates durable ownership. With one current lease per row,
@@ -239,10 +258,19 @@ timeout must keep that inequality or startup validation rejects the config.
 Every progress statement requires `id`, token, unpublished/not-poison state,
 and the same unexpired current lease:
 
-- `MarkPublished` sets `published_at=clock_timestamp()`, clears lease/error;
+- `MarkPublished` sets `published_at=statement_timestamp()`, clears lease/error;
 - `ScheduleRetry` sets server-clock `available_at + jitter`, error class, clears
   lease;
-- `MarkPoison` sets `poisoned_at=clock_timestamp()`, error class, clears lease.
+- `MarkPoison` sets `poisoned_at=statement_timestamp()`, error class, clears lease.
+
+For an ordered row, `MarkPublished` is one data-modifying CTE statement. Its
+`RETURNING` dependencies first lock the durable head, then apply the token/
+expiry fence with the exact ordering identity, move `current_sequence`, and
+unblock the next retained row. The next-row read depends on the locked head and
+excludes the current sequence, so it does not depend on seeing another CTE's
+heap update through the shared statement snapshot. Unknown outcomes retain the
+same reconciliation and at-least-once duplicate behavior as the unordered
+one-statement update.
 
 Zero affected rows is `ErrLeaseLost`; it never becomes delivery. If the
 published-state commit is ambiguous, the relay reads the row after reconnect:
@@ -263,17 +291,23 @@ duplicate. No statement deletes an unfinished row.
   clear poison/error/lease, reset cycle attempts and availability, increment
   redrive count, and record the latest audit ID/server time. Reuse for another
   event is rejected. There is no HTTP/CLI operator surface in V1.
-- Cleanup selects at most 1,000 rows with `published_at < clock_timestamp()-7d`
+- Cleanup selects at most 1,000 rows with `published_at < statement_timestamp()-7d`
   using `FOR UPDATE SKIP LOCKED`, deletes only those IDs, and commits. Multiple
-  replicas are safe; ordering heads are unrelated and cannot be deleted.
-- Observation is one read-only bounded aggregate over state predicates plus
+  replicas are safe; ordering heads are unrelated and cannot be deleted. An
+  incomplete batch returns to the minute cadence; a full batch schedules the
+  next bounded batch no later than the poll interval, so retention drain is not
+  capped at 1,000 rows/minute.
+- Observation is one linear read-only aggregate over materialized state plus
   `min` timestamps and a separate exact high-water count. Table/index byte
-  values use PostgreSQL size functions. It runs every five seconds under the
-  existing statement/acquire bounds; a failed query preserves the prior sample
-  but advances no observation timestamp, making staleness visible.
+  values include events, ordering heads, and redrive ledger through PostgreSQL
+  size functions. It runs every five seconds under the existing statement/
+  acquire bounds; a failed periodic query preserves the prior sample, advances
+  no observation timestamp, and retries from completion without terminating the
+  otherwise healthy process. Readiness expires after two observation intervals.
 
-Cleanup and observation are separate low-frequency relay tasks. Cleanup runs
-every minute; publication never waits for cleanup or telemetry export.
+Cleanup and observation are separate relay maintenance tasks. Their normal
+cadence is one minute and five seconds respectively; publication never waits
+for telemetry export, and cleanup interleaves one bounded batch with publication.
 
 ## Relay and acknowledgement sequence
 
@@ -346,16 +380,21 @@ sharing broker-specific code:
 3. require `outbox.enabled`, `postgres.enabled`, diagnostics address, and a
    valid lease/timeout/drain budget;
 4. initialize logger, repository telemetry, PostgreSQL pool, and publisher;
-5. verify schema through an initial observation, start diagnostics, publish
+5. verify events, ordering-head, and redrive relations through an initial
+   observation, start diagnostics, publish
    ready, then supervise the relay loop;
 6. on SIGTERM, publish unready, stop claims, allow the one in-flight publish up
    to the 20-second outbox drain budget, then cancel it; the relay gives the
    Publisher its fixed one-second termination allowance and bootstrap joins the
    relay inside a two-second outer bound. Close publisher and pool only when
    the relay reports `cleanupSafe`, then close diagnostics and telemetry within
-   `http.grace_period`; validation reserves every one of those serial bounds.
+   `http.grace_period`; Publisher cleanup is supervised by its own five-second
+   bound and a timeout or panic becomes a process error. Validation reserves
+   every one of those serial bounds.
 
-An empty fresh observation is ready. A transient broker failure after admission
+An empty fresh observation is ready. A successful sample remains fresh for two
+observation intervals, so a valid long-running observation does not make the
+process flap unready. A transient broker failure after admission
 remains ready while retry/backlog signals change. Database/schema/observation
 loss, fatal Publisher panic, relay-loop exit, or drain is unready. Liveness is
 process/diagnostics-loop only. A publisher panic is recovered at the loop
@@ -404,7 +443,8 @@ stores the latest immutable snapshot; callbacks never query PostgreSQL.
 - `outbox.relay.oldest.timestamp{state}` gauge;
 - `outbox.relay.observation.timestamp` and
   `outbox.relay.last_progress.timestamp` gauges;
-- `outbox.relay.ordering_heads` and outbox/high-water table/index byte gauges;
+- `outbox.relay.ordering_heads` and event/high-water/redrive table/index byte
+  gauges;
 - operation counter and duration histogram with bounded `operation`, `outcome`,
   and `error.type` enums;
 - process-local inflight and readiness gauges.
@@ -442,7 +482,8 @@ remain byte-stable and a different choice is rejected.
 For `OUTBOX=none`, the initializer removes:
 
 - `cmd/outbox-relay/` and `internal/infra/postgresoutbox/`;
-- `migrations/000001_postgres_outbox.sql`, the outbox sqlc query, and current
+- both `migrations/000001_postgres_outbox.sql` and
+  `migrations/000002_postgres_outbox_ordering_ready.sql`, the outbox sqlc query, and current
   outbox-derived sqlc output; it removes `migrations/` when empty;
 - the deterministic/real-broker outbox tests and reference transaction proof;
 - the outbox doc and its links;
@@ -453,7 +494,7 @@ The generic `postgres.Pool.InTx` commit-outcome classification is deliberately
 retained under every outbox profile and is excluded from this removal list.
 
 No outbox-specific module dependency is added. The generated sqlc directory is
-outbox-owned in this current first-migration template. Initialization occurs
+outbox-owned in this current outbox-only migration template. Initialization occurs
 before derived features add their own generated queries, so removing it is
 unambiguous. Any future template profile that adds another migration/sqlc owner
 must replace this path deletion with regeneration from retained canonical
@@ -519,7 +560,8 @@ unsafe-cleanup admission without importing its NATS-specific code.
 
 ### Canonical and support surfaces
 
-- migration: `migrations/000001_postgres_outbox.sql`;
+- migrations: immutable `migrations/000001_postgres_outbox.sql` plus additive
+  `migrations/000002_postgres_outbox_ordering_ready.sql`;
 - query source: `internal/infra/postgres/queries/postgres_outbox.sql`;
 - generated: `internal/infra/postgres/sqlcgen/*` via existing `make sqlc`;
 - config: existing `internal/config`, `env/.env.example`;
@@ -537,21 +579,29 @@ scaffolding is added.
 
 ## Rollout, rollback, and compatibility
 
-1. Run the exact built `/migrate` image against the target database and verify
-   source/history/status.
-2. Deploy writers that append the V1 exact-byte envelope. Mixed old writers are
-   safe; they simply do not produce outbox rows for unchanged behavior.
-3. Deploy a relay composition only after its selected adapter's real-broker
+1. For a populated version-1 schema, drain and stop every old relay, quiesce all
+   old writers, wait for their transactions to finish, and require every old
+   process to exit. The version-1 writer/relay is not compatible with the
+   materialized version-2 head state. A fresh database skips this transition.
+2. Run the exact built `/migrate` image against the target database, verify
+   source/history/status, and require the documented ordering-head invariant
+   readback to return zero rows before reopening traffic.
+3. Deploy only version-2 writers that append the exact-byte envelope. Never run
+   a version-1 writer or relay against schema version 2.
+4. Deploy a relay composition only after its selected adapter's real-broker
    event-ID/durable-ack conformance, credentials/topology, and capacity are
    owned externally.
-4. Require fresh observation, bounded backlog age/growth, progress, poison,
+5. Require fresh observation, bounded backlog age/growth, progress, poison,
    relation/index size, vacuum, and database pool evidence before declaring the
    system publication path ready.
 
-The API may precede the relay and backlog. The relay may precede writers and see
-an empty queue. Deploy rollback stops writer behavior and/or relay but preserves
-schema, rows, ordering heads, and already published events. Production never
-runs Down. The V1 envelope remains readable until every unpublished/poison row
+After the version-2 fence, the API may precede the relay and backlog. The relay
+may precede writers and see an empty queue. Deploy rollback stops writer
+behavior and/or relay but preserves schema, rows, ordering heads, and already
+published events. Production does not normally run Down. If newly accepted
+`json` bytes are incompatible with `jsonb`, `000002` Down fails closed rather
+than changing or discarding them; recovery stays on version 2 unless a separate
+data transition is reviewed. The V1 envelope remains readable until every unpublished/poison row
 and the seven-day published retention window are closed. Incompatible envelope
 contraction or ordering-head retirement is a separate migration/release design.
 
