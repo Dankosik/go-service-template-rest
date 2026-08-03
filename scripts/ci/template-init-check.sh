@@ -7,12 +7,18 @@ valid_profiles="all, minimal, postgres, grpc, authn"
 # profile:messaging-nats-jetstream:start
 valid_profiles="${valid_profiles}, messaging"
 # profile:messaging-nats-jetstream:end
+# profile:outbox-postgres:start
+valid_profiles="${valid_profiles}, outbox"
+# profile:outbox-postgres:end
 
 case "${TEMPLATE_INIT_PROFILE}" in
 	all | minimal | postgres | grpc | authn) ;;
 	# profile:messaging-nats-jetstream:start
 	messaging) ;;
 	# profile:messaging-nats-jetstream:end
+	# profile:outbox-postgres:start
+	outbox) ;;
+	# profile:outbox-postgres:end
 	*)
 		echo "TEMPLATE_INIT_PROFILE must be one of: ${valid_profiles}" >&2
 		exit 2
@@ -297,6 +303,18 @@ expect_unchanged_failure "${empty_messaging}" \
 	env CODEOWNER=@acme/platform MESSAGING= bash "${ROOT_DIR}/scripts/init-module.sh"
 # profile:messaging-nats-jetstream:end
 
+# profile:outbox-postgres:start
+malformed_outbox="$(new_fixture malformed-outbox git@github.com:acme/malformed-outbox.git)"
+expect_unchanged_failure "${malformed_outbox}" \
+	env CODEOWNER=@acme/platform OUTBOX=custom bash "${ROOT_DIR}/scripts/init-module.sh"
+empty_outbox="$(new_fixture empty-outbox git@github.com:acme/empty-outbox.git)"
+expect_unchanged_failure "${empty_outbox}" \
+	env CODEOWNER=@acme/platform OUTBOX= bash "${ROOT_DIR}/scripts/init-module.sh"
+invalid_outbox_database="$(new_fixture invalid-outbox-database git@github.com:acme/invalid-outbox-database.git)"
+expect_unchanged_failure "${invalid_outbox_database}" \
+	env CODEOWNER=@acme/platform DATABASE=none OUTBOX=postgres bash "${ROOT_DIR}/scripts/init-module.sh"
+# profile:outbox-postgres:end
+
 minimal_checkout="$(copy_template_checkout full-minimal git@github.com:acme/feature-proof.git)"
 minimal_source_revision="$(git -C "${minimal_checkout}" rev-parse HEAD)"
 minimal_workflow_before="$(workflow_snapshot "${minimal_checkout}")"
@@ -366,6 +384,17 @@ grep -Fq 'unknown_key' "${TEMP_ROOT}/minimal-messaging.log"
 grep -Fq 'messaging.enabled' "${TEMP_ROOT}/minimal-messaging.log"
 grep -Fq 'messaging.urls' "${TEMP_ROOT}/minimal-messaging.log"
 # profile:messaging-nats-jetstream:end
+# profile:outbox-postgres:start
+for removed in \
+	cmd/outbox-relay \
+	docs/postgres-transactional-outbox.md \
+	internal/config/outbox_config_test.go \
+	internal/infra/postgresoutbox \
+	test/postgres_outbox_integration_test.go \
+	test/postgres_outbox_natsjs_integration_test.go; do
+	assert "${removed} must not survive OUTBOX=none initialization" path_absent "${minimal_checkout}/${removed}"
+done
+# profile:outbox-postgres:end
 for removed in \
 	buf.yaml \
 	buf.gen.yaml \
@@ -414,6 +443,9 @@ for removed in \
 	assert "${removed} must not survive MESSAGING=none initialization" path_absent "${minimal_checkout}/${removed}"
 done
 # profile:messaging-nats-jetstream:end
+# profile:outbox-postgres:start
+grep -Fq 'outbox = "none"' "${minimal_checkout}/template.lock"
+# profile:outbox-postgres:end
 for benchmark_surface in \
 	Makefile \
 	scripts/dev/benchmark.sh \
@@ -432,11 +464,28 @@ grep -Fq 'outbound_http = "none"' "${minimal_checkout}/template.lock"
 # profile:messaging-nats-jetstream:start
 grep -Fq 'messaging = "none"' "${minimal_checkout}/template.lock"
 # profile:messaging-nats-jetstream:end
+# profile:outbox-postgres:start
+minimal_outbox_snapshot="$(snapshot "${minimal_checkout}")"
+(
+	cd "${minimal_checkout}"
+	CODEOWNER=@acme/platform DATABASE=none OUTBOX=none bash "${ROOT_DIR}/scripts/init-module.sh"
+)
+assert "explicit OUTBOX=none changed the default-none checkout" \
+	same_text "${minimal_outbox_snapshot}" "$(snapshot "${minimal_checkout}")"
+expect_unchanged_failure "${minimal_checkout}" \
+	env CODEOWNER=@acme/platform DATABASE=postgres OUTBOX=postgres bash "${ROOT_DIR}/scripts/init-module.sh"
+# profile:outbox-postgres:end
 grep -Fqx "source_revision = \"${minimal_source_revision}\"" "${minimal_checkout}/template.lock"
 # profile:messaging-nats-jetstream:start
 expect_unchanged_failure "${minimal_checkout}" \
 	env CODEOWNER=@acme/platform MESSAGING=nats-jetstream bash "${ROOT_DIR}/scripts/init-module.sh"
 # profile:messaging-nats-jetstream:end
+# profile:outbox-postgres:start
+if make -C "${minimal_checkout}" help | grep -Fq 'outbox'; then
+	echo "template initialization contract: OUTBOX=none help retained outbox commands"
+	exit 1
+fi
+# profile:outbox-postgres:end
 # A generated service owns no generator, so the initialization contract check
 # reports that and succeeds instead of failing the first push of every service.
 #
@@ -462,6 +511,23 @@ if make -C "${minimal_checkout}" help | grep -Fq 'worker'; then
 	exit 1
 fi
 # profile:messaging-nats-jetstream:end
+# profile:outbox-postgres:start
+assert "OUTBOX=none retained the relay image binary" grep_absent -Fq \
+	'/out/outbox-relay' "${minimal_checkout}/build/docker/Dockerfile"
+assert "OUTBOX=none retained runtime, documentation, test, config, or CI wiring" grep_absent -R -Eq \
+	'postgresoutbox|outbox-relay|APP__OUTBOX__|OUTBOX_RACE|test-outbox|postgres-transactional-outbox|profile:outbox-postgres' \
+	"${minimal_checkout}/Makefile" \
+	"${minimal_checkout}/README.md" \
+	"${minimal_checkout}/.golangci.yml" \
+	"${minimal_checkout}/.github" \
+	"${minimal_checkout}/build" \
+	"${minimal_checkout}/cmd" \
+	"${minimal_checkout}/docs" \
+	"${minimal_checkout}/env" \
+	"${minimal_checkout}/internal" \
+	"${minimal_checkout}/scripts/ci" \
+	"${minimal_checkout}/test"
+# profile:outbox-postgres:end
 assert "DATABASE=none retained the migration deploy command" grep_absent -Fq \
 	'preDeployCommand = ["/migrate"]' "${minimal_checkout}/railway.toml"
 assert "DATABASE=none retained the migration binary" grep_absent -Fq \
@@ -615,6 +681,129 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "mess
 		same_text "${messaging_full_snapshot}" "$(snapshot "${messaging_full_checkout}")"
 fi
 # profile:messaging-nats-jetstream:end
+
+# profile:outbox-postgres:start
+if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "outbox" ]]; then
+	outbox_none_checkout="$(copy_template_checkout outbox-none-postgres git@github.com:acme/outbox-none-postgres.git)"
+	(
+		cd "${outbox_none_checkout}"
+		CODEOWNER=@acme/platform DATABASE=postgres bash ./scripts/init-module.sh
+		go test -vet=off ./...
+		go build ./cmd/service ./cmd/migrate
+		make sqlc-check migration-check mod-tidy-check project-structure-check
+	)
+	assert "OUTBOX=none removed PostgreSQL" path_present "${outbox_none_checkout}/internal/infra/postgres"
+	for removed in \
+		cmd/outbox-relay \
+		docs/postgres-transactional-outbox.md \
+		internal/config/outbox_config_test.go \
+		internal/infra/postgres/queries/postgres_outbox.sql \
+		internal/infra/postgres/sqlcgen/postgres_outbox.sql.go \
+		internal/infra/postgresoutbox \
+		migrations/000001_postgres_outbox.sql \
+		migrations/000002_postgres_outbox_ordering_ready.sql \
+		test/postgres_outbox_integration_test.go \
+		test/postgres_outbox_natsjs_integration_test.go; do
+		assert "PostgreSQL OUTBOX=none retained ${removed}" path_absent "${outbox_none_checkout}/${removed}"
+	done
+	grep -Fqx 'database = "postgres"' "${outbox_none_checkout}/template.lock"
+	grep -Fqx 'outbox = "none"' "${outbox_none_checkout}/template.lock"
+	outbox_none_snapshot="$(snapshot "${outbox_none_checkout}")"
+	(
+		cd "${outbox_none_checkout}"
+		CODEOWNER=@acme/platform DATABASE=postgres OUTBOX=none bash "${ROOT_DIR}/scripts/init-module.sh"
+	)
+	assert "explicit PostgreSQL OUTBOX=none changed default-none checkout" \
+		same_text "${outbox_none_snapshot}" "$(snapshot "${outbox_none_checkout}")"
+	expect_unchanged_failure "${outbox_none_checkout}" \
+		env CODEOWNER=@acme/platform DATABASE=postgres OUTBOX=postgres bash "${ROOT_DIR}/scripts/init-module.sh"
+
+	outbox_checkout="$(copy_template_checkout full-outbox git@github.com:acme/outbox-service.git)"
+	outbox_revision="$(git -C "${outbox_checkout}" rev-parse HEAD)"
+	(
+		cd "${outbox_checkout}"
+		CODEOWNER=@acme/platform DATABASE=postgres OUTBOX=postgres bash ./scripts/init-module.sh
+		go test -vet=off ./...
+		go build ./cmd/service ./cmd/migrate ./cmd/outbox-relay
+		make sqlc-check migration-check mod-tidy-check project-structure-check
+		if go run ./cmd/outbox-relay >"${TEMP_ROOT}/outbox-missing-publisher.log" 2>&1; then
+			echo "outbox relay accepted a missing production publisher"
+			exit 1
+		fi
+		go list -deps ./cmd/outbox-relay | grep -Fx 'github.com/acme/outbox-service/internal/infra/postgresoutbox'
+	)
+	grep -Fxq 'outbox relay failed: error_class=config' "${TEMP_ROOT}/outbox-missing-publisher.log"
+	assert "outbox relay leaked raw missing-publisher error" \
+		grep_absent -Fq 'outbox publisher builder is not registered' "${TEMP_ROOT}/outbox-missing-publisher.log"
+	for retained in \
+		cmd/outbox-relay \
+		docs/postgres-transactional-outbox.md \
+		internal/config/outbox_config_test.go \
+		internal/infra/postgres/queries/postgres_outbox.sql \
+		internal/infra/postgres/sqlcgen/postgres_outbox.sql.go \
+		internal/infra/postgresoutbox \
+		migrations/000001_postgres_outbox.sql \
+		migrations/000002_postgres_outbox_ordering_ready.sql \
+		test/postgres_outbox_integration_test.go; do
+		assert "OUTBOX=postgres removed ${retained}" path_present "${outbox_checkout}/${retained}"
+	done
+	grep -Fqx 'database = "postgres"' "${outbox_checkout}/template.lock"
+	grep -Fqx 'outbox = "postgres"' "${outbox_checkout}/template.lock"
+	grep -Fqx "source_revision = \"${outbox_revision}\"" "${outbox_checkout}/template.lock"
+	grep -Fq 'APP__OUTBOX__ENABLED=true' "${outbox_checkout}/env/.env.example"
+	grep -Fq 'run-outbox-relay' "${outbox_checkout}/Makefile"
+	grep -Fq '/out/outbox-relay' "${outbox_checkout}/build/docker/Dockerfile"
+	outbox_marker='profile:outbox''-postgres:'
+	assert "selected outbox checkout retained unresolved profile markers" \
+		grep_absent -R -Fq "${outbox_marker}" \
+		"${outbox_checkout}/.github" \
+		"${outbox_checkout}/Makefile" \
+		"${outbox_checkout}/README.md" \
+		"${outbox_checkout}/build" \
+		"${outbox_checkout}/cmd" \
+		"${outbox_checkout}/docs" \
+		"${outbox_checkout}/env" \
+		"${outbox_checkout}/internal" \
+		"${outbox_checkout}/scripts/ci" \
+		"${outbox_checkout}/test"
+	outbox_snapshot="$(snapshot "${outbox_checkout}")"
+	(
+		cd "${outbox_checkout}"
+		CODEOWNER=@acme/platform DATABASE=postgres OUTBOX=postgres bash ./scripts/init-module.sh
+	)
+	assert "repeated OUTBOX=postgres initialization changed the checkout" \
+		same_text "${outbox_snapshot}" "$(snapshot "${outbox_checkout}")"
+	expect_unchanged_failure "${outbox_checkout}" \
+		env CODEOWNER=@acme/platform DATABASE=postgres OUTBOX=none bash "${ROOT_DIR}/scripts/init-module.sh"
+
+	# profile:messaging-nats-jetstream:start
+	outbox_messaging_checkout="$(copy_template_checkout outbox-messaging git@github.com:acme/outbox-messaging-service.git)"
+	(
+		cd "${outbox_messaging_checkout}"
+		CODEOWNER=@acme/platform DATABASE=postgres OUTBOX=postgres MESSAGING=nats-jetstream \
+			bash ./scripts/init-module.sh
+		go test -vet=off ./...
+		go build ./cmd/service ./cmd/migrate ./cmd/worker ./cmd/outbox-relay
+		if go list -deps ./cmd/outbox-relay | grep -Fq '/internal/infra/natsjs'; then
+			echo "outbox relay unexpectedly owns the selected messaging adapter"
+			exit 1
+		fi
+	)
+	assert "combined OUTBOX/MESSAGING profile removed broker conformance proof" \
+		file_present "${outbox_messaging_checkout}/test/postgres_outbox_natsjs_integration_test.go"
+	grep -Fqx 'outbox = "postgres"' "${outbox_messaging_checkout}/template.lock"
+	grep -Fqx 'messaging = "nats-jetstream"' "${outbox_messaging_checkout}/template.lock"
+	outbox_messaging_snapshot="$(snapshot "${outbox_messaging_checkout}")"
+	(
+		cd "${outbox_messaging_checkout}"
+		CODEOWNER=@acme/platform DATABASE=postgres OUTBOX=postgres MESSAGING=nats-jetstream \
+			bash ./scripts/init-module.sh
+	)
+	assert "repeated combined OUTBOX/MESSAGING initialization changed the checkout" \
+		same_text "${outbox_messaging_snapshot}" "$(snapshot "${outbox_messaging_checkout}")"
+	# profile:messaging-nats-jetstream:end
+fi
+# profile:outbox-postgres:end
 
 if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "postgres" ]]; then
 	postgres_checkout="$(copy_template_checkout full-postgres git@github.com:acme/postgres-service.git)"

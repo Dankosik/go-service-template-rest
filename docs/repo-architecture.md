@@ -28,6 +28,10 @@ It does not restate the full tree, every command, or task-local design choices.
 | `internal/infra/telemetry/` | OpenTelemetry tracing/metrics SDK setup and Prometheus export. | Feature semantics, startup logging, or request routing decisions. |
 | `internal/observability/otelconfig/` | Narrow shared OTel config vocabulary, defaults, and pure validation helpers used by config and telemetry. | Config loading, OTel SDK construction, exporter setup, or generic observability helpers. |
 | `migrations/` | SQL schema migration source of truth. | Runtime repository logic or generated Go bindings. |
+<!-- profile:outbox-postgres:start -->
+| `internal/infra/postgresoutbox/` | PostgreSQL outbox envelope, transactional append, claims, retries, poison/redrive, retention, and broker-neutral relay loop. | Domain event selection, a broker adapter, inbox processing, or exactly-once delivery. |
+| `cmd/outbox-relay/` | Separate relay composition, readiness, drain, and dependency cleanup. | API routes or a fallback/noop publisher. |
+<!-- profile:outbox-postgres:end -->
 
 <!-- profile:grpc:start -->
 The gRPC profile adds four boundaries: `api/proto/` owns protobuf contracts,
@@ -173,6 +177,15 @@ and `http.addr` so the effective exposure is visible on every boot.
 The lifecycle baseline is: config and dependency validation happen before accepting traffic, and shutdown is coordinated from the bootstrap layer rather than from handlers or feature services.
 
 ### Background / Async Extension Path
+
+<!-- profile:outbox-postgres:start -->
+The optional PostgreSQL outbox keeps the request path broker-independent:
+feature code appends a domain-selected event through the same `pgx.Tx` as its
+mutation, and `cmd/outbox-relay` later claims and publishes that durable intent.
+The relay owns only a minimal Publisher contract; an initialized service must
+register a real adapter, and the process fails closed if none is registered.
+See [PostgreSQL transactional outbox](postgres-transactional-outbox.md).
+<!-- profile:outbox-postgres:end -->
 
 <!-- profile:messaging-nats-jetstream:start -->
 The optional NATS JetStream profile ships a separate `cmd/worker` composition

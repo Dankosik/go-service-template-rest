@@ -40,7 +40,9 @@ done
 
 while IFS= read -r file; do
 	base="${file##*/}"
-	if [[ "${base}" != "openapi.gen.go" && ! "${base}" =~ ^[a-z0-9]+(_[a-z0-9]+)*(_test)?\.go$ ]]; then
+	if [[ "${base}" != "openapi.gen.go" &&
+		"${file}" != internal/infra/postgres/sqlcgen/*.sql.go &&
+		! "${base}" =~ ^[a-z0-9]+(_[a-z0-9]+)*(_test)?\.go$ ]]; then
 		fail "${file} must use lowercase snake_case Go file naming"
 	fi
 done < <(find cmd internal test -type f -name '*.go' -print 2>/dev/null)
