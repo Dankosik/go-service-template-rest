@@ -1510,7 +1510,7 @@ func TestPostgresOutboxRetryAndPoison(t *testing.T) {
 		var attempts atomic.Int64
 		publisher := testPublisherFunc(func(context.Context, postgresoutbox.Event) error {
 			attempts.Add(1)
-			return errors.New("temporary")
+			return fmt.Errorf("broker rejected: %w", postgresoutbox.ErrPublicationNotAccepted)
 		})
 		config := testRelayConfig()
 		config.MaxAttempts = 3
@@ -1527,6 +1527,44 @@ func TestPostgresOutboxRetryAndPoison(t *testing.T) {
 		}
 		if attempts.Load() != 3 || record.CycleAttemptCount != 3 || record.LastErrorClass != "attempt_exhausted" {
 			t.Fatalf("attempts publisher/db/class = %d/%d/%q, want 3/3/attempt_exhausted", attempts.Load(), record.CycleAttemptCount, record.LastErrorClass)
+		}
+	})
+
+	// An ambiguous failure never proves the broker refused the event, so the
+	// attempt cap must keep retrying instead of poisoning a row that may still
+	// need delivery.
+	t.Run("ambiguous", func(t *testing.T) {
+		ctx, pool, store := newOutboxFixture(t)
+		mustAppendOutbox(t, ctx, pool, store, outboxEvent("ambiguous"))
+		var attempts atomic.Int64
+		var once sync.Once
+		pastThreshold := make(chan struct{})
+		publisher := testPublisherFunc(func(context.Context, postgresoutbox.Event) error {
+			if attempts.Add(1) > 3 {
+				once.Do(func() { close(pastThreshold) })
+			}
+			return errors.New("temporary")
+		})
+		config := testRelayConfig()
+		config.MaxAttempts = 2
+		config.RetryBase = time.Nanosecond
+		config.RetryMax = time.Nanosecond
+		relay := mustNewOutboxRelay(t, store, publisher, nil, config)
+		result := runOutboxRelay(ctx, relay)
+		select {
+		case <-pastThreshold:
+		case <-time.After(10 * time.Second):
+			t.Fatalf("relay stopped retrying an ambiguous failure after %d attempts", attempts.Load())
+		}
+		relay.StartDrain()
+		assertRelayResult(t, result, true, nil)
+		waitForOutboxCount(t, ctx, pool, "poisoned_at IS NOT NULL", 0)
+		record, err := store.Get(ctx, "ambiguous")
+		if err != nil {
+			t.Fatalf("Get(): %v", err)
+		}
+		if !record.PoisonedAt.IsZero() || record.LastErrorClass != "publisher_temporary" {
+			t.Fatalf("ambiguous poisoned=%v class=%q, want unpoisoned publisher_temporary", record.PoisonedAt, record.LastErrorClass)
 		}
 	})
 

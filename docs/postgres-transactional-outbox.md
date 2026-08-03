@@ -89,11 +89,18 @@ idempotent. A crash before acknowledgement, cancellation, or forced shutdown
 also leaves durable work for lease recovery rather than inventing success.
 
 Temporary failures use full-jitter exponential retry from one second to five
-minutes by default. A permanent adapter rejection or the tenth unsuccessful
-attempt moves the row to poison state. Poison rows are never discarded and
-block later work for the same ordering key. Operators redrive one with a unique
-audit ID; the operation is idempotent for that audit ID and retains the original
-event ID and bytes.
+minutes by default. A permanent adapter rejection poisons immediately. The tenth
+adapter-proven `ErrPublicationNotAccepted` failure moves the row to poison
+state. Poison rows are never discarded and block later work for the same
+ordering key. Operators redrive one with a unique audit ID; the operation is
+idempotent for that audit ID and retains the original event ID and bytes.
+
+The attempt threshold is evaluated only when the adapter proves the broker did
+not durably accept the event. An unclassified error, timeout, disconnect, or
+panic remains retryable even at that threshold: the relay never trades possible
+event loss for a strict attempt-count cap. An adapter that cannot distinguish
+refusal from an ambiguous outcome therefore retries indefinitely, and the
+oldest-pending-age signal is what surfaces such a row to operators.
 
 ## Runtime and operations
 
