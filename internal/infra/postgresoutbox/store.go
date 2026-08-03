@@ -56,6 +56,14 @@ type PoisonDirective struct {
 	ErrorClass string
 }
 
+// OrderedDirective finalizes one acknowledged ordered event. Its key and
+// sequence fence the head advance against a lease that was already recovered.
+type OrderedDirective struct {
+	ID               string
+	OrderingKey      string
+	OrderingSequence int64
+}
+
 type Record struct {
 	Event             Event
 	CreatedAt         time.Time
@@ -118,29 +126,30 @@ func (s *Store) Append(ctx context.Context, tx pgx.Tx, event Event) (err error) 
 	}
 
 	queries := sqlcgen.New(tx)
-	var orderingKey *string
-	var orderingSequence *int64
-	orderingReady := false
 	if event.OrderingKey != "" {
-		currentSequence, err := queries.AdvanceOutboxOrderingHead(ctx, sqlcgen.AdvanceOutboxOrderingHeadParams{
-			OrderingKey:      event.OrderingKey,
-			OrderingSequence: event.OrderingSequence,
-		})
-		if err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				return fmt.Errorf("%w: key %q sequence %d is not above the retained high-water mark", ErrOrderingSequence, event.OrderingKey, event.OrderingSequence)
-			}
-			return fmt.Errorf("advance outbox ordering head: %w", err)
-		}
-		if currentSequence == nil {
-			return errors.New("advance outbox ordering head returned no current sequence")
-		}
-		orderingKey = &event.OrderingKey
-		orderingSequence = &event.OrderingSequence
-		orderingReady = *currentSequence == event.OrderingSequence
+		return appendOrdered(ctx, queries, event)
 	}
-
 	if err := queries.InsertOutboxEvent(ctx, sqlcgen.InsertOutboxEventParams{
+		ID:          event.ID,
+		EventType:   event.Type,
+		Source:      event.Source,
+		Destination: event.Destination,
+		SchemaName:  event.Schema,
+		OccurredAt:  timestamptz(event.OccurredAt),
+		Payload:     event.Payload,
+		Metadata:    event.Metadata,
+	}); err != nil {
+		return fmt.Errorf("insert outbox event: %w", err)
+	}
+	return nil
+}
+
+// appendOrdered stores the event and advances its key's retained high-water
+// mark in one statement, so the caller's transaction holds the head row lock
+// for a single round trip. No row was stored exactly when the sequence is at or
+// below that mark, which the ordering authority rejects.
+func appendOrdered(ctx context.Context, queries *sqlcgen.Queries, event Event) error {
+	rows, err := queries.InsertOrderedOutboxEvent(ctx, sqlcgen.InsertOrderedOutboxEventParams{
 		ID:               event.ID,
 		EventType:        event.Type,
 		Source:           event.Source,
@@ -149,11 +158,17 @@ func (s *Store) Append(ctx context.Context, tx pgx.Tx, event Event) (err error) 
 		OccurredAt:       timestamptz(event.OccurredAt),
 		Payload:          event.Payload,
 		Metadata:         event.Metadata,
-		OrderingKey:      orderingKey,
-		OrderingSequence: orderingSequence,
-		OrderingReady:    orderingReady,
-	}); err != nil {
-		return fmt.Errorf("insert outbox event: %w", err)
+		OrderingKey:      &event.OrderingKey,
+		OrderingSequence: &event.OrderingSequence,
+	})
+	if err != nil {
+		return fmt.Errorf("insert ordered outbox event: %w", err)
+	}
+	if rows == 0 {
+		return fmt.Errorf(
+			"%w: key %q sequence %d is not above the retained high-water mark",
+			ErrOrderingSequence, event.OrderingKey, event.OrderingSequence,
+		)
 	}
 	return nil
 }
@@ -217,47 +232,129 @@ func (s *Store) MarkPublished(ctx context.Context, token string, claim ClaimedEv
 		})
 		return progressResult("mark outbox published", rows, err)
 	}
-	if err := validateText("ordering_key", claim.Event.OrderingKey, maxTextBytes); err != nil || claim.Event.OrderingSequence < 1 {
-		return fmt.Errorf("%w: ordered claim identity is invalid", ErrConfig)
-	}
 
-	params := sqlcgen.MarkOrderedOutboxPublishedParams{
+	marked, err := s.markOrderedPublished(ctx, token, []OrderedDirective{{
 		ID:               claim.Event.ID,
-		LeaseToken:       &token,
 		OrderingKey:      claim.Event.OrderingKey,
-		OrderingSequence: &claim.Event.OrderingSequence,
+		OrderingSequence: claim.Event.OrderingSequence,
+	}})
+	if err != nil {
+		return err
 	}
-	for range 2 {
-		result, err := s.queries.MarkOrderedOutboxPublished(ctx, params)
-		if err != nil {
-			return fmt.Errorf("mark ordered outbox published: %w", err)
-		}
-		if result.MarkedCount == 1 && result.AdvancedCount == 1 && result.UnblockedCount <= 1 {
-			return nil
-		}
-		if !result.SnapshotConflict {
-			return ErrLeaseLost
-		}
+	if len(marked) != 1 {
+		return ErrLeaseLost
 	}
-	return ErrLeaseLost
+	return nil
 }
 
 // MarkPublishedBatch finalizes every unordered event of one lease in a single
-// statement and reports how many rows it changed. A short count means at least
-// one lease was lost, which the caller resolves per event.
-func (s *Store) MarkPublishedBatch(ctx context.Context, token string, ids []string) (marked int, err error) {
+// statement and reports the ids it finalized. A missing id means that event's
+// lease was lost, which the caller resolves against durable state.
+func (s *Store) MarkPublishedBatch(ctx context.Context, token string, ids []string) (marked []string, err error) {
 	started := time.Now()
 	defer func() { s.recordOperation(ctx, "mark_published", started, err) }()
 	if err := validateBatchIdentity(token, ids); err != nil {
-		return 0, err
+		return nil, err
 	}
-	rows, err := s.queries.MarkOutboxPublishedBatch(ctx, sqlcgen.MarkOutboxPublishedBatchParams{
+	marked, err = s.queries.MarkOutboxPublishedBatch(ctx, sqlcgen.MarkOutboxPublishedBatchParams{
 		Ids: ids, LeaseToken: &token,
 	})
 	if err != nil {
-		return 0, fmt.Errorf("mark outbox published batch: %w", err)
+		return nil, fmt.Errorf("mark outbox published batch: %w", err)
 	}
-	return int(rows), nil
+	return marked, nil
+}
+
+// MarkOrderedPublishedBatch finalizes every ordered event of one lease in a
+// single statement and reports the ids it finalized. Each one also advances its
+// key's head and unblocks that key's successor. A missing id means the lease no
+// longer owns that event, which the caller resolves against durable state.
+func (s *Store) MarkOrderedPublishedBatch(
+	ctx context.Context,
+	token string,
+	directives []OrderedDirective,
+) (marked []string, err error) {
+	started := time.Now()
+	defer func() { s.recordOperation(ctx, "mark_published", started, err) }()
+	return s.markOrderedPublished(ctx, token, directives)
+}
+
+// markOrderedPublished retries only the directives whose key had a committed
+// successor that the previous statement's snapshot could not yet see. A second
+// statement takes a fresh snapshot, so one retry resolves it.
+func (s *Store) markOrderedPublished(
+	ctx context.Context,
+	token string,
+	directives []OrderedDirective,
+) ([]string, error) {
+	var marked []string
+	for range 2 {
+		rows, err := s.markOrderedPublishedOnce(ctx, token, directives)
+		if err != nil {
+			return marked, err
+		}
+		for _, row := range rows {
+			if row.Marked {
+				marked = append(marked, row.ID)
+			}
+		}
+		directives = conflictedDirectives(directives, rows)
+		if len(directives) == 0 {
+			break
+		}
+	}
+	return marked, nil
+}
+
+func (s *Store) markOrderedPublishedOnce(
+	ctx context.Context,
+	token string,
+	directives []OrderedDirective,
+) ([]sqlcgen.MarkOrderedOutboxPublishedBatchRow, error) {
+	ids := make([]string, len(directives))
+	keys := make([]string, len(directives))
+	sequences := make([]int64, len(directives))
+	for index, directive := range directives {
+		if err := validateText("ordering_key", directive.OrderingKey, maxTextBytes); err != nil ||
+			directive.OrderingSequence < 1 {
+			return nil, fmt.Errorf("%w: ordered claim identity is invalid", ErrConfig)
+		}
+		ids[index] = directive.ID
+		keys[index] = directive.OrderingKey
+		sequences[index] = directive.OrderingSequence
+	}
+	if err := validateBatchIdentity(token, ids); err != nil {
+		return nil, err
+	}
+	rows, err := s.queries.MarkOrderedOutboxPublishedBatch(ctx, sqlcgen.MarkOrderedOutboxPublishedBatchParams{
+		Ids: ids, OrderingKeys: keys, OrderingSequences: sequences, LeaseToken: &token,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("mark ordered outbox published batch: %w", err)
+	}
+	return rows, nil
+}
+
+// conflictedDirectives selects the directives the statement reported as
+// snapshot conflicts. Result rows carry no guaranteed order, so it matches on
+// id rather than position.
+func conflictedDirectives(
+	directives []OrderedDirective,
+	rows []sqlcgen.MarkOrderedOutboxPublishedBatchRow,
+) []OrderedDirective {
+	var retry []OrderedDirective
+	for _, row := range rows {
+		if !row.SnapshotConflict {
+			continue
+		}
+		for _, directive := range directives {
+			if directive.ID == row.ID {
+				retry = append(retry, directive)
+				break
+			}
+		}
+	}
+	return retry
 }
 
 // ScheduleRetryBatch releases every failed event of one lease in a single
@@ -475,6 +572,12 @@ func (s *Store) recordOperation(ctx context.Context, operation string, started t
 	s.telemetry.RecordOperation(ctx, operation, outcome, errorType, time.Since(started))
 }
 
+// eventFromClaimRow adopts the scanned payload and metadata rather than copying
+// them. pgx allocates a fresh slice per row for a bytea scanned into []byte
+// ([pgtype bytea scan]), so these bytes are already private to this event and a
+// second copy would double the per-event allocation of every claimed batch.
+//
+// [pgtype bytea scan]: https://pkg.go.dev/github.com/jackc/pgx/v5/pgtype#ByteaCodec
 func eventFromClaimRow(row sqlcgen.ClaimOutboxEventsRow) Event {
 	event := Event{
 		ID:          row.ID,
@@ -483,8 +586,8 @@ func eventFromClaimRow(row sqlcgen.ClaimOutboxEventsRow) Event {
 		Destination: row.Destination,
 		Schema:      row.SchemaName,
 		OccurredAt:  timeValue(row.OccurredAt),
-		Payload:     append([]byte(nil), row.Payload...),
-		Metadata:    append([]byte(nil), row.Metadata...),
+		Payload:     row.Payload,
+		Metadata:    row.Metadata,
 	}
 	if row.OrderingKey != nil {
 		event.OrderingKey = *row.OrderingKey
@@ -552,8 +655,8 @@ func recordFromRow(row sqlcgen.OutboxEvent) Record {
 		Destination: row.Destination,
 		Schema:      row.SchemaName,
 		OccurredAt:  timeValue(row.OccurredAt),
-		Payload:     append([]byte(nil), row.Payload...),
-		Metadata:    append([]byte(nil), row.Metadata...),
+		Payload:     row.Payload,
+		Metadata:    row.Metadata,
 	}
 	if row.OrderingKey != nil {
 		event.OrderingKey = *row.OrderingKey

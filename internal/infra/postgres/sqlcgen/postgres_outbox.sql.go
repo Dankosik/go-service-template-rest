@@ -11,32 +11,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const advanceOutboxOrderingHead = `-- name: AdvanceOutboxOrderingHead :one
-INSERT INTO outbox_ordering_heads (ordering_key, last_sequence, current_sequence)
-VALUES ($1, $2, $2)
-ON CONFLICT (ordering_key) DO UPDATE
-SET last_sequence = EXCLUDED.last_sequence,
-    current_sequence = coalesce(
-        outbox_ordering_heads.current_sequence,
-        EXCLUDED.current_sequence
-    ),
-    updated_at = clock_timestamp()
-WHERE outbox_ordering_heads.last_sequence < EXCLUDED.last_sequence
-RETURNING current_sequence
-`
-
-type AdvanceOutboxOrderingHeadParams struct {
-	OrderingKey      string
-	OrderingSequence int64
-}
-
-func (q *Queries) AdvanceOutboxOrderingHead(ctx context.Context, arg AdvanceOutboxOrderingHeadParams) (*int64, error) {
-	row := q.db.QueryRow(ctx, advanceOutboxOrderingHead, arg.OrderingKey, arg.OrderingSequence)
-	var current_sequence *int64
-	err := row.Scan(&current_sequence)
-	return current_sequence, err
-}
-
 const claimOutboxEvents = `-- name: ClaimOutboxEvents :many
 WITH candidate AS (
     SELECT event.id,
@@ -60,7 +34,19 @@ SET lease_token = $1,
     last_attempt_at = statement_timestamp()
 FROM candidate
 WHERE event.id = candidate.id
-RETURNING event.id, event.event_type, event.source, event.destination, event.schema_name, event.occurred_at, event.payload, event.metadata, event.ordering_key, event.ordering_sequence, event.created_at, event.available_at, event.cycle_attempt_count, event.total_attempt_count, event.last_attempt_at, event.lease_token, event.lease_expires_at, event.published_at, event.poisoned_at, event.last_error_class, event.redrive_count, event.last_redrive_id, event.last_redriven_at, event.ordering_ready, candidate.recovery_due::boolean AS recovery_due
+RETURNING event.id,
+          event.event_type,
+          event.source,
+          event.destination,
+          event.schema_name,
+          event.occurred_at,
+          event.payload,
+          event.metadata,
+          event.ordering_key,
+          event.ordering_sequence,
+          event.cycle_attempt_count,
+          event.total_attempt_count,
+          candidate.recovery_due::boolean AS recovery_due
 `
 
 type ClaimOutboxEventsParams struct {
@@ -80,20 +66,8 @@ type ClaimOutboxEventsRow struct {
 	Metadata          []byte
 	OrderingKey       *string
 	OrderingSequence  *int64
-	CreatedAt         pgtype.Timestamptz
-	AvailableAt       pgtype.Timestamptz
 	CycleAttemptCount int32
 	TotalAttemptCount int64
-	LastAttemptAt     pgtype.Timestamptz
-	LeaseToken        *string
-	LeaseExpiresAt    pgtype.Timestamptz
-	PublishedAt       pgtype.Timestamptz
-	PoisonedAt        pgtype.Timestamptz
-	LastErrorClass    *string
-	RedriveCount      int32
-	LastRedriveID     *string
-	LastRedrivenAt    pgtype.Timestamptz
-	OrderingReady     bool
 	RecoveryDue       bool
 }
 
@@ -101,6 +75,10 @@ type ClaimOutboxEventsRow struct {
 // index on ready ordered rows keeps at most one claimable event per ordering
 // key, so a batch never holds two events that must stay ordered relative to
 // each other.
+// Projecting the envelope plus the attempt counters keeps decoding proportional
+// to what the relay publishes and fences on. The lease, retry, terminal, and
+// redrive columns it would otherwise decode per event are already known to the
+// caller or belong to operator inspection through GetOutboxEvent.
 func (q *Queries) ClaimOutboxEvents(ctx context.Context, arg ClaimOutboxEventsParams) ([]ClaimOutboxEventsRow, error) {
 	rows, err := q.db.Query(ctx, claimOutboxEvents, arg.LeaseToken, arg.LeaseMilliseconds, arg.BatchSize)
 	if err != nil {
@@ -121,20 +99,8 @@ func (q *Queries) ClaimOutboxEvents(ctx context.Context, arg ClaimOutboxEventsPa
 			&i.Metadata,
 			&i.OrderingKey,
 			&i.OrderingSequence,
-			&i.CreatedAt,
-			&i.AvailableAt,
 			&i.CycleAttemptCount,
 			&i.TotalAttemptCount,
-			&i.LastAttemptAt,
-			&i.LeaseToken,
-			&i.LeaseExpiresAt,
-			&i.PublishedAt,
-			&i.PoisonedAt,
-			&i.LastErrorClass,
-			&i.RedriveCount,
-			&i.LastRedriveID,
-			&i.LastRedrivenAt,
-			&i.OrderingReady,
 			&i.RecoveryDue,
 		); err != nil {
 			return nil, err
@@ -220,6 +186,87 @@ func (q *Queries) GetOutboxEvent(ctx context.Context, id string) (OutboxEvent, e
 		&i.OrderingReady,
 	)
 	return i, err
+}
+
+const insertOrderedOutboxEvent = `-- name: InsertOrderedOutboxEvent :execrows
+WITH head AS (
+    INSERT INTO outbox_ordering_heads (ordering_key, last_sequence, current_sequence)
+    VALUES ($9, $10, $10)
+    ON CONFLICT (ordering_key) DO UPDATE
+    SET last_sequence = EXCLUDED.last_sequence,
+        current_sequence = coalesce(
+            outbox_ordering_heads.current_sequence,
+            EXCLUDED.current_sequence
+        ),
+        updated_at = clock_timestamp()
+    WHERE outbox_ordering_heads.last_sequence < EXCLUDED.last_sequence
+    RETURNING current_sequence
+)
+INSERT INTO outbox_events (
+    id,
+    event_type,
+    source,
+    destination,
+    schema_name,
+    occurred_at,
+    payload,
+    metadata,
+    ordering_key,
+    ordering_sequence,
+    ordering_ready
+)
+SELECT
+    $1,
+    $2,
+    $3,
+    $4,
+    $5,
+    $6,
+    $7,
+    $8,
+    $9,
+    $10,
+    head.current_sequence IS NOT DISTINCT FROM $10
+FROM head
+`
+
+type InsertOrderedOutboxEventParams struct {
+	ID               string
+	EventType        string
+	Source           string
+	Destination      string
+	SchemaName       string
+	OccurredAt       pgtype.Timestamptz
+	Payload          []byte
+	Metadata         []byte
+	OrderingKey      *string
+	OrderingSequence *int64
+}
+
+// An ordered append advances its key's retained high-water mark and stores the
+// event in one statement, so a feature transaction holds the head row lock for
+// a single round trip. The head upsert changes nothing when the sequence is at
+// or below the retained mark; the event insert then selects from an empty
+// result and reports zero rows, which is how the caller recognizes a rejected
+// sequence. `ordering_ready` records whether this event is its key's claimable
+// head, which is true exactly when the head now points at this sequence.
+func (q *Queries) InsertOrderedOutboxEvent(ctx context.Context, arg InsertOrderedOutboxEventParams) (int64, error) {
+	result, err := q.db.Exec(ctx, insertOrderedOutboxEvent,
+		arg.ID,
+		arg.EventType,
+		arg.Source,
+		arg.Destination,
+		arg.SchemaName,
+		arg.OccurredAt,
+		arg.Payload,
+		arg.Metadata,
+		arg.OrderingKey,
+		arg.OrderingSequence,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const insertOutboxEvent = `-- name: InsertOutboxEvent :exec
@@ -333,100 +380,140 @@ func (q *Queries) LockOutboxEventForRedrive(ctx context.Context, id string) (Out
 	return i, err
 }
 
-const markOrderedOutboxPublished = `-- name: MarkOrderedOutboxPublished :one
-WITH locked_head AS MATERIALIZED (
+const markOrderedOutboxPublishedBatch = `-- name: MarkOrderedOutboxPublishedBatch :many
+WITH claim AS (
+    SELECT
+        unnest($1::text[]) AS id,
+        unnest($2::text[]) AS ordering_key,
+        unnest($3::bigint[]) AS ordering_sequence
+), locked_head AS MATERIALIZED (
     SELECT head.ordering_key, head.current_sequence, head.last_sequence
     FROM outbox_ordering_heads AS head
-    WHERE head.ordering_key = $1
-      AND head.current_sequence = $2
+    WHERE head.ordering_key = ANY($2::text[])
+    ORDER BY head.ordering_key
     FOR UPDATE
-), next_event AS MATERIALIZED (
-    SELECT event.id, event.ordering_sequence
-    FROM outbox_events AS event
-    JOIN locked_head AS head ON head.ordering_key = event.ordering_key
-    WHERE event.ordering_sequence > head.current_sequence
-      AND event.published_at IS NULL
-    ORDER BY event.ordering_sequence
-    LIMIT 1
+), successor AS MATERIALIZED (
+    SELECT head.ordering_key, next_event.id, next_event.ordering_sequence
+    FROM locked_head AS head
+    CROSS JOIN LATERAL (
+        SELECT event.id, event.ordering_sequence
+        FROM outbox_events AS event
+        WHERE event.ordering_key = head.ordering_key
+          AND event.ordering_sequence > head.current_sequence
+          AND event.published_at IS NULL
+        ORDER BY event.ordering_sequence
+        LIMIT 1
+    ) AS next_event
+), eligible AS (
+    SELECT claim.id, claim.ordering_key, claim.ordering_sequence
+    FROM claim
+    JOIN locked_head AS head
+      ON head.ordering_key = claim.ordering_key
+     AND head.current_sequence = claim.ordering_sequence
+    WHERE head.current_sequence = head.last_sequence
+       OR EXISTS (
+           SELECT 1 FROM successor
+           WHERE successor.ordering_key = head.ordering_key
+       )
 ), marked AS (
     UPDATE outbox_events AS event
     SET published_at = statement_timestamp(),
         lease_token = NULL,
         lease_expires_at = NULL,
         last_error_class = NULL
-    WHERE event.id = $3
+    FROM eligible
+    WHERE event.id = eligible.id
+      AND event.ordering_key = eligible.ordering_key
+      AND event.ordering_sequence = eligible.ordering_sequence
       AND event.lease_token = $4
-      AND event.ordering_key = $1
-      AND event.ordering_sequence = $2
       AND event.lease_expires_at > statement_timestamp()
       AND event.published_at IS NULL
       AND event.poisoned_at IS NULL
-      AND EXISTS (SELECT 1 FROM locked_head)
-      AND EXISTS (
-          SELECT 1
-          FROM locked_head AS head
-          WHERE head.current_sequence = head.last_sequence
-             OR EXISTS (SELECT 1 FROM next_event)
-      )
-    RETURNING event.id
+    RETURNING event.id, eligible.ordering_key
 ), advanced AS (
     UPDATE outbox_ordering_heads AS head
-    SET current_sequence = (SELECT ordering_sequence FROM next_event),
+    SET current_sequence = (
+            SELECT successor.ordering_sequence
+            FROM successor
+            WHERE successor.ordering_key = head.ordering_key
+        ),
         updated_at = statement_timestamp()
-    WHERE head.ordering_key = $1
-      AND EXISTS (SELECT 1 FROM marked)
-    RETURNING head.current_sequence
+    FROM marked
+    WHERE head.ordering_key = marked.ordering_key
+    RETURNING head.ordering_key
 ), unblocked AS (
     UPDATE outbox_events AS event
     SET ordering_ready = true
-    WHERE event.id = (SELECT id FROM next_event)
-      AND EXISTS (SELECT 1 FROM advanced)
+    FROM successor
+    JOIN advanced ON advanced.ordering_key = successor.ordering_key
+    WHERE event.id = successor.id
     RETURNING event.id
 )
 SELECT
-    (SELECT count(*) FROM marked)::bigint AS marked_count,
-    (SELECT count(*) FROM advanced)::bigint AS advanced_count,
-    (SELECT count(*) FROM unblocked)::bigint AS unblocked_count,
-    (SELECT current_sequence FROM advanced) AS current_sequence,
+    claim.id::text AS id,
+    EXISTS (SELECT 1 FROM marked WHERE marked.id = claim.id) AS marked,
     EXISTS (
         SELECT 1
         FROM locked_head AS head
-        WHERE head.current_sequence < head.last_sequence
-          AND NOT EXISTS (SELECT 1 FROM next_event)
+        WHERE head.ordering_key = claim.ordering_key
+          AND head.current_sequence = claim.ordering_sequence
+          AND head.current_sequence < head.last_sequence
+          AND NOT EXISTS (
+              SELECT 1 FROM successor
+              WHERE successor.ordering_key = head.ordering_key
+          )
     ) AS snapshot_conflict
+FROM claim
 `
 
-type MarkOrderedOutboxPublishedParams struct {
-	OrderingKey      string
-	OrderingSequence *int64
-	ID               string
-	LeaseToken       *string
+type MarkOrderedOutboxPublishedBatchParams struct {
+	Ids               []string
+	OrderingKeys      []string
+	OrderingSequences []int64
+	LeaseToken        *string
 }
 
-type MarkOrderedOutboxPublishedRow struct {
-	MarkedCount      int64
-	AdvancedCount    int64
-	UnblockedCount   int64
-	CurrentSequence  *int64
+type MarkOrderedOutboxPublishedBatchRow struct {
+	ID               string
+	Marked           bool
 	SnapshotConflict bool
 }
 
-func (q *Queries) MarkOrderedOutboxPublished(ctx context.Context, arg MarkOrderedOutboxPublishedParams) (MarkOrderedOutboxPublishedRow, error) {
-	row := q.db.QueryRow(ctx, markOrderedOutboxPublished,
-		arg.OrderingKey,
-		arg.OrderingSequence,
-		arg.ID,
+// Ordered acknowledgements of one lease finalize together. Each one also
+// advances its own key's head and unblocks that key's successor, and those
+// effects are independent across keys, so one statement covers the whole batch.
+// The partial unique index on ready ordered rows means a lease never holds two
+// events for the same key, so every key here has at most one input row and each
+// head is advanced at most once.
+//
+// Heads are locked in key order to keep concurrent relays that recovered
+// overlapping leases from waiting on each other in opposite orders. Every input
+// row reports its own outcome: `marked` finalized it, `snapshot_conflict` means
+// an appended successor is not yet visible in this snapshot and the caller
+// should retry, and neither means the lease no longer owns the event.
+func (q *Queries) MarkOrderedOutboxPublishedBatch(ctx context.Context, arg MarkOrderedOutboxPublishedBatchParams) ([]MarkOrderedOutboxPublishedBatchRow, error) {
+	rows, err := q.db.Query(ctx, markOrderedOutboxPublishedBatch,
+		arg.Ids,
+		arg.OrderingKeys,
+		arg.OrderingSequences,
 		arg.LeaseToken,
 	)
-	var i MarkOrderedOutboxPublishedRow
-	err := row.Scan(
-		&i.MarkedCount,
-		&i.AdvancedCount,
-		&i.UnblockedCount,
-		&i.CurrentSequence,
-		&i.SnapshotConflict,
-	)
-	return i, err
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []MarkOrderedOutboxPublishedBatchRow
+	for rows.Next() {
+		var i MarkOrderedOutboxPublishedBatchRow
+		if err := rows.Scan(&i.ID, &i.Marked, &i.SnapshotConflict); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const markOutboxPoisonedBatch = `-- name: MarkOutboxPoisonedBatch :execrows
@@ -496,7 +583,7 @@ func (q *Queries) MarkOutboxPublished(ctx context.Context, arg MarkOutboxPublish
 	return result.RowsAffected(), nil
 }
 
-const markOutboxPublishedBatch = `-- name: MarkOutboxPublishedBatch :execrows
+const markOutboxPublishedBatch = `-- name: MarkOutboxPublishedBatch :many
 UPDATE outbox_events AS event
 SET published_at = statement_timestamp(),
     lease_token = NULL,
@@ -508,6 +595,7 @@ WHERE event.id = ANY($1::text[])
   AND event.lease_expires_at > statement_timestamp()
   AND event.published_at IS NULL
   AND event.poisoned_at IS NULL
+RETURNING event.id
 `
 
 type MarkOutboxPublishedBatchParams struct {
@@ -516,14 +604,27 @@ type MarkOutboxPublishedBatchParams struct {
 }
 
 // Unordered events finalize together because none of them owns an ordering
-// head. A short row count means at least one lease was lost, which the caller
-// resolves per event against durable state.
-func (q *Queries) MarkOutboxPublishedBatch(ctx context.Context, arg MarkOutboxPublishedBatchParams) (int64, error) {
-	result, err := q.db.Exec(ctx, markOutboxPublishedBatch, arg.Ids, arg.LeaseToken)
+// head. Returning the finalized ids lets the caller resolve only the events
+// this statement could not claim against durable state, instead of re-checking
+// the whole batch because one lease was lost.
+func (q *Queries) MarkOutboxPublishedBatch(ctx context.Context, arg MarkOutboxPublishedBatchParams) ([]string, error) {
+	rows, err := q.db.Query(ctx, markOutboxPublishedBatch, arg.Ids, arg.LeaseToken)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
-	return result.RowsAffected(), nil
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const observeOutbox = `-- name: ObserveOutbox :one

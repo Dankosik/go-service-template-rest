@@ -1,16 +1,3 @@
--- name: AdvanceOutboxOrderingHead :one
-INSERT INTO outbox_ordering_heads (ordering_key, last_sequence, current_sequence)
-VALUES (sqlc.arg(ordering_key), sqlc.arg(ordering_sequence), sqlc.arg(ordering_sequence))
-ON CONFLICT (ordering_key) DO UPDATE
-SET last_sequence = EXCLUDED.last_sequence,
-    current_sequence = coalesce(
-        outbox_ordering_heads.current_sequence,
-        EXCLUDED.current_sequence
-    ),
-    updated_at = clock_timestamp()
-WHERE outbox_ordering_heads.last_sequence < EXCLUDED.last_sequence
-RETURNING current_sequence;
-
 -- name: InsertOutboxEvent :exec
 INSERT INTO outbox_events (
     id,
@@ -37,6 +24,54 @@ INSERT INTO outbox_events (
     sqlc.narg(ordering_sequence),
     sqlc.arg(ordering_ready)
 );
+
+-- An ordered append advances its key's retained high-water mark and stores the
+-- event in one statement, so a feature transaction holds the head row lock for
+-- a single round trip. The head upsert changes nothing when the sequence is at
+-- or below the retained mark; the event insert then selects from an empty
+-- result and reports zero rows, which is how the caller recognizes a rejected
+-- sequence. `ordering_ready` records whether this event is its key's claimable
+-- head, which is true exactly when the head now points at this sequence.
+-- name: InsertOrderedOutboxEvent :execrows
+WITH head AS (
+    INSERT INTO outbox_ordering_heads (ordering_key, last_sequence, current_sequence)
+    VALUES (sqlc.arg(ordering_key), sqlc.arg(ordering_sequence), sqlc.arg(ordering_sequence))
+    ON CONFLICT (ordering_key) DO UPDATE
+    SET last_sequence = EXCLUDED.last_sequence,
+        current_sequence = coalesce(
+            outbox_ordering_heads.current_sequence,
+            EXCLUDED.current_sequence
+        ),
+        updated_at = clock_timestamp()
+    WHERE outbox_ordering_heads.last_sequence < EXCLUDED.last_sequence
+    RETURNING current_sequence
+)
+INSERT INTO outbox_events (
+    id,
+    event_type,
+    source,
+    destination,
+    schema_name,
+    occurred_at,
+    payload,
+    metadata,
+    ordering_key,
+    ordering_sequence,
+    ordering_ready
+)
+SELECT
+    sqlc.arg(id),
+    sqlc.arg(event_type),
+    sqlc.arg(source),
+    sqlc.arg(destination),
+    sqlc.arg(schema_name),
+    sqlc.arg(occurred_at),
+    sqlc.arg(payload),
+    sqlc.arg(metadata),
+    sqlc.arg(ordering_key),
+    sqlc.arg(ordering_sequence),
+    head.current_sequence IS NOT DISTINCT FROM sqlc.arg(ordering_sequence)
+FROM head;
 
 -- One statement leases a whole batch under a single token. The partial unique
 -- index on ready ordered rows keeps at most one claimable event per ordering
@@ -65,7 +100,23 @@ SET lease_token = sqlc.arg(lease_token),
     last_attempt_at = statement_timestamp()
 FROM candidate
 WHERE event.id = candidate.id
-RETURNING event.*, candidate.recovery_due::boolean AS recovery_due;
+-- Projecting the envelope plus the attempt counters keeps decoding proportional
+-- to what the relay publishes and fences on. The lease, retry, terminal, and
+-- redrive columns it would otherwise decode per event are already known to the
+-- caller or belong to operator inspection through GetOutboxEvent.
+RETURNING event.id,
+          event.event_type,
+          event.source,
+          event.destination,
+          event.schema_name,
+          event.occurred_at,
+          event.payload,
+          event.metadata,
+          event.ordering_key,
+          event.ordering_sequence,
+          event.cycle_attempt_count,
+          event.total_attempt_count,
+          candidate.recovery_due::boolean AS recovery_due;
 
 -- name: GetOutboxEvent :one
 SELECT * FROM outbox_events WHERE id = sqlc.arg(id);
@@ -85,9 +136,10 @@ WHERE id = sqlc.arg(id)
   AND poisoned_at IS NULL;
 
 -- Unordered events finalize together because none of them owns an ordering
--- head. A short row count means at least one lease was lost, which the caller
--- resolves per event against durable state.
--- name: MarkOutboxPublishedBatch :execrows
+-- head. Returning the finalized ids lets the caller resolve only the events
+-- this statement could not claim against durable state, instead of re-checking
+-- the whole batch because one lease was lost.
+-- name: MarkOutboxPublishedBatch :many
 UPDATE outbox_events AS event
 SET published_at = statement_timestamp(),
     lease_token = NULL,
@@ -98,69 +150,105 @@ WHERE event.id = ANY(sqlc.arg(ids)::text[])
   AND event.ordering_key IS NULL
   AND event.lease_expires_at > statement_timestamp()
   AND event.published_at IS NULL
-  AND event.poisoned_at IS NULL;
+  AND event.poisoned_at IS NULL
+RETURNING event.id;
 
--- name: MarkOrderedOutboxPublished :one
-WITH locked_head AS MATERIALIZED (
+-- Ordered acknowledgements of one lease finalize together. Each one also
+-- advances its own key's head and unblocks that key's successor, and those
+-- effects are independent across keys, so one statement covers the whole batch.
+-- The partial unique index on ready ordered rows means a lease never holds two
+-- events for the same key, so every key here has at most one input row and each
+-- head is advanced at most once.
+--
+-- Heads are locked in key order to keep concurrent relays that recovered
+-- overlapping leases from waiting on each other in opposite orders. Every input
+-- row reports its own outcome: `marked` finalized it, `snapshot_conflict` means
+-- an appended successor is not yet visible in this snapshot and the caller
+-- should retry, and neither means the lease no longer owns the event.
+-- name: MarkOrderedOutboxPublishedBatch :many
+WITH claim AS (
+    SELECT
+        unnest(sqlc.arg(ids)::text[]) AS id,
+        unnest(sqlc.arg(ordering_keys)::text[]) AS ordering_key,
+        unnest(sqlc.arg(ordering_sequences)::bigint[]) AS ordering_sequence
+), locked_head AS MATERIALIZED (
     SELECT head.ordering_key, head.current_sequence, head.last_sequence
     FROM outbox_ordering_heads AS head
-    WHERE head.ordering_key = sqlc.arg(ordering_key)
-      AND head.current_sequence = sqlc.arg(ordering_sequence)
+    WHERE head.ordering_key = ANY(sqlc.arg(ordering_keys)::text[])
+    ORDER BY head.ordering_key
     FOR UPDATE
-), next_event AS MATERIALIZED (
-    SELECT event.id, event.ordering_sequence
-    FROM outbox_events AS event
-    JOIN locked_head AS head ON head.ordering_key = event.ordering_key
-    WHERE event.ordering_sequence > head.current_sequence
-      AND event.published_at IS NULL
-    ORDER BY event.ordering_sequence
-    LIMIT 1
+), successor AS MATERIALIZED (
+    SELECT head.ordering_key, next_event.id, next_event.ordering_sequence
+    FROM locked_head AS head
+    CROSS JOIN LATERAL (
+        SELECT event.id, event.ordering_sequence
+        FROM outbox_events AS event
+        WHERE event.ordering_key = head.ordering_key
+          AND event.ordering_sequence > head.current_sequence
+          AND event.published_at IS NULL
+        ORDER BY event.ordering_sequence
+        LIMIT 1
+    ) AS next_event
+), eligible AS (
+    SELECT claim.id, claim.ordering_key, claim.ordering_sequence
+    FROM claim
+    JOIN locked_head AS head
+      ON head.ordering_key = claim.ordering_key
+     AND head.current_sequence = claim.ordering_sequence
+    WHERE head.current_sequence = head.last_sequence
+       OR EXISTS (
+           SELECT 1 FROM successor
+           WHERE successor.ordering_key = head.ordering_key
+       )
 ), marked AS (
     UPDATE outbox_events AS event
     SET published_at = statement_timestamp(),
         lease_token = NULL,
         lease_expires_at = NULL,
         last_error_class = NULL
-    WHERE event.id = sqlc.arg(id)
+    FROM eligible
+    WHERE event.id = eligible.id
+      AND event.ordering_key = eligible.ordering_key
+      AND event.ordering_sequence = eligible.ordering_sequence
       AND event.lease_token = sqlc.arg(lease_token)
-      AND event.ordering_key = sqlc.arg(ordering_key)
-      AND event.ordering_sequence = sqlc.arg(ordering_sequence)
       AND event.lease_expires_at > statement_timestamp()
       AND event.published_at IS NULL
       AND event.poisoned_at IS NULL
-      AND EXISTS (SELECT 1 FROM locked_head)
-      AND EXISTS (
-          SELECT 1
-          FROM locked_head AS head
-          WHERE head.current_sequence = head.last_sequence
-             OR EXISTS (SELECT 1 FROM next_event)
-      )
-    RETURNING event.id
+    RETURNING event.id, eligible.ordering_key
 ), advanced AS (
     UPDATE outbox_ordering_heads AS head
-    SET current_sequence = (SELECT ordering_sequence FROM next_event),
+    SET current_sequence = (
+            SELECT successor.ordering_sequence
+            FROM successor
+            WHERE successor.ordering_key = head.ordering_key
+        ),
         updated_at = statement_timestamp()
-    WHERE head.ordering_key = sqlc.arg(ordering_key)
-      AND EXISTS (SELECT 1 FROM marked)
-    RETURNING head.current_sequence
+    FROM marked
+    WHERE head.ordering_key = marked.ordering_key
+    RETURNING head.ordering_key
 ), unblocked AS (
     UPDATE outbox_events AS event
     SET ordering_ready = true
-    WHERE event.id = (SELECT id FROM next_event)
-      AND EXISTS (SELECT 1 FROM advanced)
+    FROM successor
+    JOIN advanced ON advanced.ordering_key = successor.ordering_key
+    WHERE event.id = successor.id
     RETURNING event.id
 )
 SELECT
-    (SELECT count(*) FROM marked)::bigint AS marked_count,
-    (SELECT count(*) FROM advanced)::bigint AS advanced_count,
-    (SELECT count(*) FROM unblocked)::bigint AS unblocked_count,
-    (SELECT current_sequence FROM advanced) AS current_sequence,
+    claim.id::text AS id,
+    EXISTS (SELECT 1 FROM marked WHERE marked.id = claim.id) AS marked,
     EXISTS (
         SELECT 1
         FROM locked_head AS head
-        WHERE head.current_sequence < head.last_sequence
-          AND NOT EXISTS (SELECT 1 FROM next_event)
-    ) AS snapshot_conflict;
+        WHERE head.ordering_key = claim.ordering_key
+          AND head.current_sequence = claim.ordering_sequence
+          AND head.current_sequence < head.last_sequence
+          AND NOT EXISTS (
+              SELECT 1 FROM successor
+              WHERE successor.ordering_key = head.ordering_key
+          )
+    ) AS snapshot_conflict
+FROM claim;
 
 -- Each failed event carries its own jittered delay and error class, so one
 -- statement releases the whole failing part of a batch.

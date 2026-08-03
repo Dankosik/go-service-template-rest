@@ -3,6 +3,7 @@ package postgresoutbox
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -17,14 +18,15 @@ func (publish publisherFunc) Publish(ctx context.Context, event Event) error {
 }
 
 type relayStoreStub struct {
-	claim              func(context.Context, time.Duration, int) (ClaimedBatch, error)
-	markPublished      func(context.Context, string, ClaimedEvent) error
-	markPublishedBatch func(context.Context, string, []string) (int, error)
-	scheduleRetryBatch func(context.Context, string, []RetryDirective) error
-	markPoisonedBatch  func(context.Context, string, []PoisonDirective) error
-	get                func(context.Context, string) (Record, error)
-	cleanup            func(context.Context, time.Duration, int) (int, error)
-	observe            func(context.Context) (StateObservation, error)
+	claim                     func(context.Context, time.Duration, int) (ClaimedBatch, error)
+	markPublished             func(context.Context, string, ClaimedEvent) error
+	markPublishedBatch        func(context.Context, string, []string) ([]string, error)
+	markOrderedPublishedBatch func(context.Context, string, []OrderedDirective) ([]string, error)
+	scheduleRetryBatch        func(context.Context, string, []RetryDirective) error
+	markPoisonedBatch         func(context.Context, string, []PoisonDirective) error
+	get                       func(context.Context, string) (Record, error)
+	cleanup                   func(context.Context, time.Duration, int) (int, error)
+	observe                   func(context.Context) (StateObservation, error)
 }
 
 func (s *relayStoreStub) Claim(ctx context.Context, lease time.Duration, batchSize int) (ClaimedBatch, error) {
@@ -41,11 +43,26 @@ func (s *relayStoreStub) MarkPublished(ctx context.Context, token string, claim 
 	return s.markPublished(ctx, token, claim)
 }
 
-func (s *relayStoreStub) MarkPublishedBatch(ctx context.Context, token string, ids []string) (int, error) {
+func (s *relayStoreStub) MarkPublishedBatch(ctx context.Context, token string, ids []string) ([]string, error) {
 	if s.markPublishedBatch == nil {
-		return len(ids), nil
+		return ids, nil
 	}
 	return s.markPublishedBatch(ctx, token, ids)
+}
+
+func (s *relayStoreStub) MarkOrderedPublishedBatch(
+	ctx context.Context,
+	token string,
+	directives []OrderedDirective,
+) ([]string, error) {
+	if s.markOrderedPublishedBatch == nil {
+		ids := make([]string, len(directives))
+		for index, directive := range directives {
+			ids[index] = directive.ID
+		}
+		return ids, nil
+	}
+	return s.markOrderedPublishedBatch(ctx, token, directives)
 }
 
 func (s *relayStoreStub) ScheduleRetryBatch(ctx context.Context, token string, retries []RetryDirective) error {
@@ -125,13 +142,13 @@ func TestRelayCancellation(t *testing.T) {
 		}))
 		relay.config.PublishTimeout = time.Hour
 		ctx, cancel := context.WithCancel(context.Background())
-		result := make(chan attempt, 1)
-		go func() { result <- relay.publishOne(ctx, unitClaim(1)) }()
+		result := make(chan error, 1)
+		go func() { result <- relay.publishOne(ctx, unitClaim(1).Event) }()
 		<-started
 		cancel()
 		synctest.Wait()
-		if got := <-result; !errors.Is(got.err, context.Canceled) {
-			t.Fatalf("publishOne() = %+v, want context cancellation", got)
+		if got := <-result; !errors.Is(got, context.Canceled) {
+			t.Fatalf("publishOne() = %v, want context cancellation", got)
 		}
 	})
 }
@@ -142,9 +159,9 @@ func TestRelayTimeoutRejectsNilCompletion(t *testing.T) {
 			<-ctx.Done()
 			return nil
 		}))
-		got := relay.publishOne(context.Background(), unitClaim(1))
-		if !errors.Is(got.err, context.DeadlineExceeded) {
-			t.Fatalf("publishOne() = %+v, want deadline failure after nil completion", got)
+		got := relay.publishOne(context.Background(), unitClaim(1).Event)
+		if !errors.Is(got, context.DeadlineExceeded) {
+			t.Fatalf("publishOne() = %v, want deadline failure after nil completion", got)
 		}
 	})
 }
@@ -154,11 +171,11 @@ func TestRelayPublisherPanic(t *testing.T) {
 
 	relay := newUnitRelay(&relayStoreStub{},
 		publisherFunc(func(context.Context, Event) error { panic("publisher secret") }))
-	got := relay.publishOne(t.Context(), unitClaim(1))
-	if !errors.Is(got.err, ErrPublisherPanic) {
-		t.Fatalf("publishOne() = %+v, want ErrPublisherPanic", got)
+	got := relay.publishOne(t.Context(), unitClaim(1).Event)
+	if !errors.Is(got, ErrPublisherPanic) {
+		t.Fatalf("publishOne() = %v, want ErrPublisherPanic", got)
 	}
-	if class := publicationErrorClass(got.err); class != "panic" {
+	if class := publicationErrorClass(got); class != "panic" {
 		t.Fatalf("panic class = %q, want panic", class)
 	}
 }
@@ -175,15 +192,15 @@ func TestRelayPublisherStuck(t *testing.T) {
 		relay.config.PublishTimeout = time.Millisecond
 
 		type outcome struct {
-			attempts    []attempt
+			failures    []error
 			cleanupSafe bool
 		}
 		result := make(chan outcome, 1)
 		startedAt := time.Now()
 		go func() {
-			attempts, cleanupSafe := relay.publishAll(
+			failures, cleanupSafe := relay.publishAll(
 				context.Background(), unitBatch(1), time.Now().Add(time.Hour))
-			result <- outcome{attempts: attempts, cleanupSafe: cleanupSafe}
+			result <- outcome{failures: failures, cleanupSafe: cleanupSafe}
 		}()
 		<-started
 		got := <-result
@@ -192,8 +209,8 @@ func TestRelayPublisherStuck(t *testing.T) {
 		}
 		close(release)
 		synctest.Wait()
-		if got.cleanupSafe || got.attempts != nil {
-			t.Fatalf("publishAll() = %+v, want cleanup-unsafe with no attempts", got)
+		if got.cleanupSafe || got.failures != nil {
+			t.Fatalf("publishAll() = %+v, want cleanup-unsafe with no outcomes", got)
 		}
 	})
 }
@@ -210,9 +227,9 @@ func TestRelayPublishStopsBeforeLeaseExpiry(t *testing.T) {
 		relay.config.PublishTimeout = time.Hour
 		startedAt := time.Now()
 		leaseExpiry := startedAt.Add(3 * publisherJoinTimeout)
-		attempts, cleanupSafe := relay.publishAll(context.Background(), unitBatch(1), leaseExpiry)
-		if !cleanupSafe || len(attempts) != 1 || !errors.Is(attempts[0].err, context.DeadlineExceeded) {
-			t.Fatalf("publishAll() = %+v cleanupSafe=%t, want lease-bounded deadline", attempts, cleanupSafe)
+		failures, cleanupSafe := relay.publishAll(context.Background(), unitBatch(1), leaseExpiry)
+		if !cleanupSafe || len(failures) != 1 || !errors.Is(failures[0], context.DeadlineExceeded) {
+			t.Fatalf("publishAll() = %v cleanupSafe=%t, want lease-bounded deadline", failures, cleanupSafe)
 		}
 		if elapsed := time.Since(startedAt); elapsed != 2*publisherJoinTimeout {
 			t.Fatalf("lease-bounded elapsed = %s, want %s", elapsed, 2*publisherJoinTimeout)
@@ -254,9 +271,10 @@ func TestRelayPublishConcurrencyBound(t *testing.T) {
 	}))
 	relay.config.PublishConcurrency = concurrency
 
-	attempts, cleanupSafe := relay.publishAll(t.Context(), unitBatch(events), time.Now().Add(time.Hour))
-	if !cleanupSafe || len(attempts) != events {
-		t.Fatalf("publishAll() attempts = %d cleanupSafe=%t, want %d/true", len(attempts), cleanupSafe, events)
+	batch := unitBatch(events)
+	failures, cleanupSafe := relay.publishAll(t.Context(), batch, time.Now().Add(time.Hour))
+	if !cleanupSafe || len(failures) != events {
+		t.Fatalf("publishAll() outcomes = %d cleanupSafe=%t, want %d/true", len(failures), cleanupSafe, events)
 	}
 	if got := total.Load(); got != events {
 		t.Fatalf("published %d events, want %d", got, events)
@@ -264,9 +282,9 @@ func TestRelayPublishConcurrencyBound(t *testing.T) {
 	if peak > concurrency || peak == 0 {
 		t.Fatalf("peak concurrency = %d, want (0,%d]", peak, concurrency)
 	}
-	for index, current := range attempts {
-		if current.err != nil || current.claim.Event.ID != unitClaim(index+1).Event.ID {
-			t.Fatalf("attempt %d = %+v, want the matching claim published", index, current)
+	for index, failure := range failures {
+		if failure != nil || batch.Events[index].Event.ID != unitClaim(index+1).Event.ID {
+			t.Fatalf("outcome %d = %v, want the matching claim published", index, failure)
 		}
 	}
 }
@@ -351,9 +369,9 @@ func TestRelayRunPublishesAndDrains(t *testing.T) {
 		published.Add(1)
 		return nil
 	}))
-	store.markPublishedBatch = func(_ context.Context, _ string, ids []string) (int, error) {
+	store.markPublishedBatch = func(_ context.Context, _ string, ids []string) ([]string, error) {
 		relay.StartDrain() //nolint:contextcheck // Drain has no context-bearing variant.
-		return len(ids), nil
+		return ids, nil
 	}
 
 	result := relay.Run(t.Context())
@@ -521,9 +539,9 @@ func TestRelayFinalizesMixedBatchInOneCallPerDisposition(t *testing.T) {
 	var retried []RetryDirective
 	var poisoned []PoisonDirective
 	store := &relayStoreStub{
-		markPublishedBatch: func(_ context.Context, _ string, ids []string) (int, error) {
+		markPublishedBatch: func(_ context.Context, _ string, ids []string) ([]string, error) {
 			publishCalls++
-			return len(ids), nil
+			return ids, nil
 		},
 		scheduleRetryBatch: func(_ context.Context, _ string, retries []RetryDirective) error {
 			retryCalls++
@@ -538,14 +556,9 @@ func TestRelayFinalizesMixedBatchInOneCallPerDisposition(t *testing.T) {
 	}
 	relay := newUnitRelay(store, publisherFunc(func(context.Context, Event) error { return nil }))
 
-	attempts := []attempt{
-		{claim: unitClaim(1)},
-		{claim: unitClaim(2)},
-		{claim: unitClaim(3), err: errors.New("temporary")},
-		{claim: unitClaim(4), err: errors.New("temporary")},
-		{claim: unitClaim(5), err: ErrPermanentPublication},
-	}
-	if err := relay.finalize(t.Context(), "lease", attempts); err != nil {
+	batch := unitBatch(5)
+	failures := []error{nil, nil, errors.New("temporary"), errors.New("temporary"), ErrPermanentPublication}
+	if err := relay.finalize(t.Context(), batch, failures); err != nil {
 		t.Fatalf("finalize() error = %v", err)
 	}
 	if publishCalls != 1 || retryCalls != 1 || poisonCalls != 1 {
@@ -556,53 +569,83 @@ func TestRelayFinalizesMixedBatchInOneCallPerDisposition(t *testing.T) {
 	}
 }
 
-// Ordered events cannot finalize together: each one advances its own key head.
-func TestRelayFinalizesOrderedEventsIndividually(t *testing.T) {
+// Ordered events finalize in their own statement, separate from the unordered
+// ones, because each also advances its key head and unblocks that key's
+// successor. Both statements cover the whole batch, and neither falls back to
+// per-event marking while the lease holds.
+func TestRelayFinalizesOrderedEventsInOneStatement(t *testing.T) {
 	t.Parallel()
 
-	batchCalls := 0
-	var marked []string
+	unorderedCalls := 0
+	orderedCalls := 0
+	var ordered []OrderedDirective
+	var individual []string
 	store := &relayStoreStub{
-		markPublishedBatch: func(_ context.Context, _ string, ids []string) (int, error) {
-			batchCalls++
-			return len(ids), nil
+		markPublishedBatch: func(_ context.Context, _ string, ids []string) ([]string, error) {
+			unorderedCalls++
+			return ids, nil
+		},
+		markOrderedPublishedBatch: func(_ context.Context, _ string, directives []OrderedDirective) ([]string, error) {
+			orderedCalls++
+			ordered = directives
+			ids := make([]string, len(directives))
+			for index, directive := range directives {
+				ids[index] = directive.ID
+			}
+			return ids, nil
 		},
 		markPublished: func(_ context.Context, _ string, claim ClaimedEvent) error {
-			marked = append(marked, claim.Event.ID)
+			individual = append(individual, claim.Event.ID)
 			return nil
 		},
 	}
 	relay := newUnitRelay(store, publisherFunc(func(context.Context, Event) error { return nil }))
 
-	ordered := unitClaim(2)
-	ordered.Event.OrderingKey = "key"
-	ordered.Event.OrderingSequence = 1
-	if err := relay.finalize(t.Context(), "lease", []attempt{{claim: unitClaim(1)}, {claim: ordered}}); err != nil {
+	batch := unitBatch(3)
+	for index := 1; index < len(batch.Events); index++ {
+		batch.Events[index].Event.OrderingKey = fmt.Sprintf("key-%d", index)
+		batch.Events[index].Event.OrderingSequence = int64(index)
+	}
+	if err := relay.finalize(t.Context(), batch, make([]error, len(batch.Events))); err != nil {
 		t.Fatalf("finalize() error = %v", err)
 	}
-	if batchCalls != 1 || len(marked) != 1 || marked[0] != ordered.Event.ID {
-		t.Fatalf("batch calls = %d, individually marked = %v, want the ordered event alone", batchCalls, marked)
+	if unorderedCalls != 1 || orderedCalls != 1 || individual != nil {
+		t.Fatalf("calls unordered=%d ordered=%d individual=%v, want 1/1/none",
+			unorderedCalls, orderedCalls, individual)
+	}
+	if len(ordered) != 2 || ordered[0].OrderingKey != "key-1" || ordered[1].OrderingSequence != 2 {
+		t.Fatalf("ordered directives = %+v, want both ordered events with their key identity", ordered)
 	}
 }
 
-// A short batch write is ambiguous, so every event of that batch is resolved
-// against durable state instead of being assumed published or lost.
+// A short batch write is ambiguous only for the events it left out, so exactly
+// those are resolved against durable state instead of being assumed published
+// or lost. The ones the statement reported are already durable.
 func TestRelayReconcilesShortBatchWrite(t *testing.T) {
 	t.Parallel()
 
+	var reconciled []string
 	store := &relayStoreStub{
-		markPublishedBatch: func(_ context.Context, _ string, ids []string) (int, error) {
-			return len(ids) - 1, nil
+		markPublishedBatch: func(_ context.Context, _ string, ids []string) ([]string, error) {
+			return ids[:len(ids)-1], nil
 		},
-		markPublished: func(context.Context, string, ClaimedEvent) error { return ErrLeaseLost },
+		markPublished: func(_ context.Context, _ string, claim ClaimedEvent) error {
+			reconciled = append(reconciled, claim.Event.ID)
+			return ErrLeaseLost
+		},
 		get: func(_ context.Context, id string) (Record, error) {
 			return Record{Event: Event{ID: id}, PublishedAt: time.Now()}, nil
 		},
 	}
 	relay := newUnitRelay(store, publisherFunc(func(context.Context, Event) error { return nil }))
-	if err := relay.markPublished(t.Context(), "lease", []ClaimedEvent{unitClaim(1), unitClaim(2)}); err != nil {
+	claims := []ClaimedEvent{unitClaim(1), unitClaim(2)}
+	if err := relay.markPublished(t.Context(), "lease", claims); err != nil {
 		t.Fatalf("markPublished(short write) error = %v", err)
 	}
+	if len(reconciled) != 1 || reconciled[0] != claims[1].Event.ID {
+		t.Fatalf("reconciled = %v, want only the event the batch left out", reconciled)
+	}
+	reconciled = nil
 
 	store.get = func(context.Context, string) (Record, error) { return Record{LeaseToken: "other"}, nil }
 	if err := relay.markPublished(t.Context(), "lease", []ClaimedEvent{unitClaim(1)}); !errors.Is(err, ErrProgressUnknown) {
@@ -797,9 +840,9 @@ func TestRelayCycleStuckPublisherIsCleanupUnsafe(t *testing.T) {
 		finalized := false
 		store := &relayStoreStub{
 			claim: func(context.Context, time.Duration, int) (ClaimedBatch, error) { return unitBatch(1), nil },
-			markPublishedBatch: func(_ context.Context, _ string, ids []string) (int, error) {
+			markPublishedBatch: func(_ context.Context, _ string, ids []string) ([]string, error) {
 				finalized = true
-				return len(ids), nil
+				return ids, nil
 			},
 		}
 		relay := newUnitRelay(store, publisherFunc(func(context.Context, Event) error {
@@ -921,18 +964,17 @@ func TestRelayFinalizeReportsRetryWriteFailure(t *testing.T) {
 	relay := newUnitRelay(&relayStoreStub{
 		scheduleRetryBatch: func(context.Context, string, []RetryDirective) error { return retryErr },
 	}, publisherFunc(func(context.Context, Event) error { return nil }))
-	attempts := []attempt{{claim: unitClaim(1), err: errors.New("temporary")}}
-	if err := relay.finalize(t.Context(), "lease", attempts); !errors.Is(err, retryErr) {
+	if err := relay.finalize(t.Context(), unitBatch(1), []error{errors.New("temporary")}); !errors.Is(err, retryErr) {
 		t.Fatalf("finalize(retry write failure) error = %v", err)
 	}
 
 	publishErr := errors.New("publish write failed")
 	relay = newUnitRelay(&relayStoreStub{
-		markPublishedBatch: func(context.Context, string, []string) (int, error) { return 0, publishErr },
+		markPublishedBatch: func(context.Context, string, []string) ([]string, error) { return nil, publishErr },
 		markPublished:      func(context.Context, string, ClaimedEvent) error { return ErrLeaseLost },
 		get:                func(context.Context, string) (Record, error) { return Record{}, publishErr },
 	}, publisherFunc(func(context.Context, Event) error { return nil }))
-	if err := relay.finalize(t.Context(), "lease", []attempt{{claim: unitClaim(1)}}); !errors.Is(err, ErrProgressUnknown) {
+	if err := relay.finalize(t.Context(), unitBatch(1), []error{nil}); !errors.Is(err, ErrProgressUnknown) {
 		t.Fatalf("finalize(publish write failure) error = %v", err)
 	}
 }

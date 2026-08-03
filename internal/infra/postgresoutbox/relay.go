@@ -46,7 +46,8 @@ type RelayResult struct {
 type relayStore interface {
 	Claim(ctx context.Context, lease time.Duration, batchSize int) (ClaimedBatch, error)
 	MarkPublished(ctx context.Context, token string, claim ClaimedEvent) error
-	MarkPublishedBatch(ctx context.Context, token string, ids []string) (int, error)
+	MarkPublishedBatch(ctx context.Context, token string, ids []string) ([]string, error)
+	MarkOrderedPublishedBatch(ctx context.Context, token string, directives []OrderedDirective) ([]string, error)
 	ScheduleRetryBatch(ctx context.Context, token string, retries []RetryDirective) error
 	MarkPoisonedBatch(ctx context.Context, token string, poisons []PoisonDirective) error
 	Get(ctx context.Context, id string) (Record, error)
@@ -247,13 +248,6 @@ func (r *Relay) stopped(ctx context.Context) bool {
 	return done(r.drain) || ctx.Err() != nil
 }
 
-// attempt is one event's publication outcome. A nil err means the broker
-// durably acknowledged that exact event.
-type attempt struct {
-	claim ClaimedEvent
-	err   error
-}
-
 // poisonedEvent pairs the parked claim with the class that parked it, so the
 // operator log keeps the attempt count the store type has no use for.
 type poisonedEvent struct {
@@ -278,7 +272,7 @@ func (r *Relay) publishBatch(ctx context.Context, batch ClaimedBatch, leaseExpir
 	}()
 
 	started := time.Now()
-	attempts, cleanupSafe := r.publishAll(ctx, batch, leaseExpiry)
+	failures, cleanupSafe := r.publishAll(ctx, batch, leaseExpiry)
 	if !cleanupSafe {
 		r.recordOperation(ctx, "publish", outcomeError, "stuck", started)
 		if r.telemetry != nil {
@@ -293,28 +287,30 @@ func (r *Relay) publishBatch(ctx context.Context, batch ClaimedBatch, leaseExpir
 	// lease expires. The lease this batch already holds bounds the write.
 	finalizeCtx, cancel := context.WithDeadline(context.WithoutCancel(ctx), leaseExpiry)
 	defer cancel()
-	if err := r.finalize(finalizeCtx, batch.Token, attempts); err != nil {
+	if err := r.finalize(finalizeCtx, batch, failures); err != nil {
 		return RelayResult{CleanupSafe: true, Err: err}, false
 	}
 	if ctx.Err() != nil {
 		return RelayResult{CleanupSafe: true}, false
 	}
-	if err := publisherPanic(attempts); err != nil {
+	if err := publisherPanic(failures); err != nil {
 		return RelayResult{CleanupSafe: true, Err: err}, false
 	}
 	return RelayResult{CleanupSafe: true}, true
 }
 
 // publishAll publishes the batch through at most PublishConcurrency workers and
-// never past the lease it was claimed under. It reports cleanupSafe = false when
-// a publisher ignored cancellation, because its goroutine can still touch the
-// dependencies the process is about to close.
-func (r *Relay) publishAll(ctx context.Context, batch ClaimedBatch, leaseExpiry time.Time) ([]attempt, bool) {
+// never past the lease it was claimed under. The returned slice holds each
+// event's publication error by its index in the batch; a nil entry means the
+// broker durably acknowledged that exact event. It reports cleanupSafe = false
+// when a publisher ignored cancellation, because its goroutine can still touch
+// the dependencies the process is about to close.
+func (r *Relay) publishAll(ctx context.Context, batch ClaimedBatch, leaseExpiry time.Time) ([]error, bool) {
 	deadline := earliest(time.Now().Add(r.config.PublishTimeout), leaseExpiry.Add(-publisherJoinTimeout))
 	batchCtx, cancel := context.WithDeadline(ctx, deadline)
 	defer cancel()
 
-	attempts := make([]attempt, len(batch.Events))
+	failures := make([]error, len(batch.Events))
 	var next atomic.Int64
 	var workers sync.WaitGroup
 	for range min(r.config.PublishConcurrency, len(batch.Events)) {
@@ -324,7 +320,7 @@ func (r *Relay) publishAll(ctx context.Context, batch ClaimedBatch, leaseExpiry 
 				if index >= len(batch.Events) {
 					return
 				}
-				attempts[index] = r.publishOne(batchCtx, batch.Events[index])
+				failures[index] = r.publishOne(batchCtx, batch.Events[index].Event)
 			}
 		})
 	}
@@ -336,81 +332,80 @@ func (r *Relay) publishAll(ctx context.Context, batch ClaimedBatch, leaseExpiry 
 
 	select {
 	case <-finished:
-		return attempts, true
+		return failures, true
 	case <-batchCtx.Done():
 	}
 	join := time.NewTimer(publisherJoinTimeout)
 	defer join.Stop()
 	select {
 	case <-finished:
-		return attempts, true
+		return failures, true
 	case <-join.C:
 		return nil, false
 	}
 }
 
-func (r *Relay) publishOne(ctx context.Context, claim ClaimedEvent) (result attempt) {
-	result.claim = claim
+func (r *Relay) publishOne(ctx context.Context, event Event) (err error) {
 	started := time.Now()
 	defer func() {
 		if recover() != nil {
-			result.err = ErrPublisherPanic
+			err = ErrPublisherPanic
 		}
 		errorClass := "none"
-		if result.err != nil {
-			errorClass = publicationErrorClass(result.err)
+		if err != nil {
+			errorClass = publicationErrorClass(err)
 		}
-		r.recordOperation(ctx, "publish", operationOutcome(result.err), errorClass, started)
+		r.recordOperation(ctx, "publish", operationOutcome(err), errorClass, started)
 	}()
 
 	attemptCtx, cancel := context.WithTimeout(ctx, r.config.PublishTimeout)
 	defer cancel()
-	result.err = r.publisher.Publish(attemptCtx, claim.Event)
-	if result.err == nil {
+	err = r.publisher.Publish(attemptCtx, event)
+	if err == nil {
 		// A publisher that returns nil after its budget expired cannot prove the
 		// broker accepted the event, so the attempt stays retryable.
-		result.err = attemptCtx.Err()
-	}
-	return result
-}
-
-func (r *Relay) finalize(ctx context.Context, token string, attempts []attempt) error {
-	outcomes := r.classify(attempts)
-	if err := r.markPublished(ctx, token, outcomes.published); err != nil {
-		return err
-	}
-	// Ordered events finalize one at a time because each advances its own key
-	// head and unblocks that key's successor.
-	for _, claim := range outcomes.ordered {
-		if err := r.reconcilePublished(ctx, token, claim); err != nil {
-			return err
+		if budget := attemptCtx.Err(); budget != nil {
+			err = fmt.Errorf("publisher reported success after its budget expired: %w", budget)
 		}
 	}
+	return err
+}
+
+func (r *Relay) finalize(ctx context.Context, batch ClaimedBatch, failures []error) error {
+	outcomes := r.classify(batch.Events, failures)
+	if err := r.markPublished(ctx, batch.Token, outcomes.published); err != nil {
+		return err
+	}
+	if err := r.markOrderedPublished(ctx, batch.Token, outcomes.ordered); err != nil {
+		return err
+	}
 	if len(outcomes.retries) > 0 {
-		if err := r.store.ScheduleRetryBatch(ctx, token, outcomes.retries); err != nil {
+		if err := r.store.ScheduleRetryBatch(ctx, batch.Token, outcomes.retries); err != nil {
 			return fmt.Errorf("record outbox publication failure: %w", err)
 		}
 	}
-	return r.markPoisoned(ctx, token, outcomes.poisoned)
+	return r.markPoisoned(ctx, batch.Token, outcomes.poisoned)
 }
 
-func (r *Relay) classify(attempts []attempt) batchOutcomes {
+// classify groups one batch by the durable transition each event needs.
+// failures is indexed by claims, and a nil entry is a durable acknowledgement.
+func (r *Relay) classify(claims []ClaimedEvent, failures []error) batchOutcomes {
 	var outcomes batchOutcomes
-	for _, current := range attempts {
-		claim := current.claim
+	for index, claim := range claims {
+		failure := failures[index]
 		switch {
-		case current.err == nil && claim.Event.OrderingKey == "":
+		case failure == nil && claim.Event.OrderingKey == "":
 			outcomes.published = append(outcomes.published, claim)
-		case current.err == nil:
+		case failure == nil:
 			outcomes.ordered = append(outcomes.ordered, claim)
-		case errors.Is(current.err, ErrPermanentPublication):
+		case errors.Is(failure, ErrPermanentPublication):
 			outcomes.poisoned = append(outcomes.poisoned, poisonedEvent{claim: claim, errorClass: "publisher_permanent"})
-		case errors.Is(current.err, ErrPublicationNotAccepted) && claim.CycleAttemptCount >= r.config.MaxAttempts:
+		case errors.Is(failure, ErrPublicationNotAccepted) && claim.CycleAttemptCount >= r.config.MaxAttempts:
 			outcomes.poisoned = append(outcomes.poisoned, poisonedEvent{claim: claim, errorClass: "attempt_exhausted"})
 		default:
 			outcomes.retries = append(outcomes.retries, RetryDirective{
 				ID:         claim.Event.ID,
-				ErrorClass: publicationErrorClass(current.err),
+				ErrorClass: publicationErrorClass(failure),
 				Delay:      retryDelay(r.config.RetryBase, r.config.RetryMax, claim.CycleAttemptCount, r.jitter),
 			})
 		}
@@ -418,6 +413,8 @@ func (r *Relay) classify(attempts []attempt) batchOutcomes {
 	return outcomes
 }
 
+// markPublished finalizes every unordered acknowledgement of one lease in a
+// single statement.
 func (r *Relay) markPublished(ctx context.Context, token string, claims []ClaimedEvent) error {
 	if len(claims) == 0 {
 		return nil
@@ -427,14 +424,53 @@ func (r *Relay) markPublished(ctx context.Context, token string, claims []Claime
 		ids[index] = claim.Event.ID
 	}
 	marked, err := r.store.MarkPublishedBatch(ctx, token, ids)
-	if err == nil && marked == len(claims) {
-		r.recordProgress(time.Now())
+	return r.reconcileRemainder(ctx, token, claims, marked, err)
+}
+
+// markOrderedPublished finalizes every ordered acknowledgement of one lease in
+// a single statement, which also advances each event's key head and unblocks
+// that key's successor.
+func (r *Relay) markOrderedPublished(ctx context.Context, token string, claims []ClaimedEvent) error {
+	if len(claims) == 0 {
 		return nil
 	}
-	// A short write means a lost lease, or a crash window between broker
-	// acknowledgement and this update. Resolve each event against durable state
-	// rather than assuming either outcome.
+	directives := make([]OrderedDirective, len(claims))
+	for index, claim := range claims {
+		directives[index] = OrderedDirective{
+			ID:               claim.Event.ID,
+			OrderingKey:      claim.Event.OrderingKey,
+			OrderingSequence: claim.Event.OrderingSequence,
+		}
+	}
+	marked, err := r.store.MarkOrderedPublishedBatch(ctx, token, directives)
+	return r.reconcileRemainder(ctx, token, claims, marked, err)
+}
+
+// reconcileRemainder closes out a batch finalization. A short or failed write
+// means a lost lease, or a crash window between broker acknowledgement and this
+// update, so every event the statement did not report as finalized is resolved
+// against durable state rather than assumed either way.
+func (r *Relay) reconcileRemainder(
+	ctx context.Context,
+	token string,
+	claims []ClaimedEvent,
+	marked []string,
+	markErr error,
+) error {
+	if len(marked) > 0 {
+		r.recordProgress(time.Now())
+	}
+	if markErr == nil && len(marked) == len(claims) {
+		return nil
+	}
+	finalized := make(map[string]struct{}, len(marked))
+	for _, id := range marked {
+		finalized[id] = struct{}{}
+	}
 	for _, claim := range claims {
+		if _, ok := finalized[claim.Event.ID]; ok {
+			continue
+		}
 		if err := r.reconcilePublished(ctx, token, claim); err != nil {
 			return err
 		}
@@ -587,10 +623,10 @@ func retryDelay(base, maximum time.Duration, attempt int, jitter func(time.Durat
 	return jitter(limit)
 }
 
-func publisherPanic(attempts []attempt) error {
-	for _, current := range attempts {
-		if errors.Is(current.err, ErrPublisherPanic) {
-			return current.err
+func publisherPanic(failures []error) error {
+	for _, failure := range failures {
+		if errors.Is(failure, ErrPublisherPanic) {
+			return failure
 		}
 	}
 	return nil

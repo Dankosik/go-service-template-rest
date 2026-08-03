@@ -41,6 +41,17 @@ assert() {
 
 path_absent() { [[ ! -e "$1" ]]; }
 path_present() { [[ -e "$1" ]]; }
+# glob_absent fails when any path matches, so a named-file inventory cannot go
+# stale as new files join a profile. It reports the matches it found, because
+# the useful part of the failure is which file was retained.
+glob_absent() {
+	local matches
+	matches="$(compgen -G "$1" || true)"
+	if [[ -n "${matches}" ]]; then
+		echo "retained: ${matches}"
+		return 1
+	fi
+}
 file_present() { [[ -f "$1" ]]; }
 same_text() { [[ "$1" == "$2" ]]; }
 grep_absent() {
@@ -700,14 +711,16 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "outb
 		internal/infra/postgres/queries/postgres_outbox.sql \
 		internal/infra/postgres/sqlcgen/postgres_outbox.sql.go \
 		internal/infra/postgresoutbox \
-		migrations/000001_postgres_outbox.sql \
-		migrations/000002_postgres_outbox_ordering_ready.sql \
-		migrations/000003_postgres_outbox_throughput.sql \
 		test/postgres_outbox_bench_integration_test.go \
 		test/postgres_outbox_integration_test.go \
 		test/postgres_outbox_natsjs_integration_test.go; do
 		assert "PostgreSQL OUTBOX=none retained ${removed}" path_absent "${outbox_none_checkout}/${removed}"
 	done
+	# Every outbox migration, not a named list: one left behind runs against
+	# tables this profile never creates, and only the generated service's own
+	# migration run would notice.
+	assert "PostgreSQL OUTBOX=none retained an outbox migration" \
+		glob_absent "${outbox_none_checkout}/migrations/*_postgres_outbox*.sql"
 	grep -Fqx 'database = "postgres"' "${outbox_none_checkout}/template.lock"
 	grep -Fqx 'outbox = "none"' "${outbox_none_checkout}/template.lock"
 	outbox_none_snapshot="$(snapshot "${outbox_none_checkout}")"
@@ -744,13 +757,15 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "outb
 		internal/infra/postgres/queries/postgres_outbox.sql \
 		internal/infra/postgres/sqlcgen/postgres_outbox.sql.go \
 		internal/infra/postgresoutbox \
-		migrations/000001_postgres_outbox.sql \
-		migrations/000002_postgres_outbox_ordering_ready.sql \
-		migrations/000003_postgres_outbox_throughput.sql \
 		test/postgres_outbox_bench_integration_test.go \
 		test/postgres_outbox_integration_test.go; do
 		assert "OUTBOX=postgres removed ${retained}" path_present "${outbox_checkout}/${retained}"
 	done
+	# Compared against the template's own outbox migrations rather than a named
+	# list, so a migration added later is covered the day it lands.
+	assert "OUTBOX=postgres changed the outbox migration set" same_text \
+		"$(cd "${ROOT_DIR}" && printf '%s\n' migrations/*_postgres_outbox*.sql)" \
+		"$(cd "${outbox_checkout}" && printf '%s\n' migrations/*_postgres_outbox*.sql)"
 	grep -Fqx 'database = "postgres"' "${outbox_checkout}/template.lock"
 	grep -Fqx 'outbox = "postgres"' "${outbox_checkout}/template.lock"
 	grep -Fqx "source_revision = \"${outbox_revision}\"" "${outbox_checkout}/template.lock"
