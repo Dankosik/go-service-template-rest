@@ -11,7 +11,11 @@ import (
 	"time"
 )
 
-const publisherJoinTimeout = time.Second
+const (
+	publisherJoinTimeout  = time.Second
+	maxBatchSize          = 1000
+	maxPublishConcurrency = 256
+)
 
 var (
 	ErrPublisherStuck  = errors.New("outbox publisher did not stop after cancellation")
@@ -21,6 +25,8 @@ var (
 
 type RelayConfig struct {
 	PollInterval        time.Duration
+	BatchSize           int
+	PublishConcurrency  int
 	PublishTimeout      time.Duration
 	LeaseDuration       time.Duration
 	MaxAttempts         int
@@ -38,27 +44,33 @@ type RelayResult struct {
 }
 
 type relayStore interface {
-	Claim(ctx context.Context, lease time.Duration) (ClaimedEvent, error)
-	MarkPublished(ctx context.Context, claim ClaimedEvent) error
-	ScheduleRetry(ctx context.Context, id, token, class string, delay time.Duration) error
-	MarkPoisoned(ctx context.Context, id, token, class string) error
+	Claim(ctx context.Context, lease time.Duration, batchSize int) (ClaimedBatch, error)
+	MarkPublished(ctx context.Context, token string, claim ClaimedEvent) error
+	MarkPublishedBatch(ctx context.Context, token string, ids []string) (int, error)
+	ScheduleRetryBatch(ctx context.Context, token string, retries []RetryDirective) error
+	MarkPoisonedBatch(ctx context.Context, token string, poisons []PoisonDirective) error
 	Get(ctx context.Context, id string) (Record, error)
 	CleanupPublished(ctx context.Context, retention time.Duration, batch int) (int, error)
 	Observe(ctx context.Context) (StateObservation, error)
 }
+
+// listener signals wake whenever PostgreSQL announces a committed append. It
+// returns only when ctx is done.
+type listener func(ctx context.Context, wake chan<- struct{})
 
 type Relay struct {
 	store     relayStore
 	publisher Publisher
 	telemetry *Telemetry
 	config    RelayConfig
+	listen    listener
 	drain     chan struct{}
 	drainOnce sync.Once
 	ready     atomic.Bool
 	observed  atomic.Int64
 	inflight  atomic.Int64
 	jitter    func(time.Duration) time.Duration
-	markEvent func(context.Context, ClaimedEvent) error
+	markEvent func(context.Context, string, ClaimedEvent) error
 	getEvent  func(context.Context, string) (Record, error)
 }
 
@@ -66,7 +78,13 @@ func NewRelay(store *Store, publisher Publisher, telemetry *Telemetry, config Re
 	if store == nil || store.pool == nil {
 		return nil, fmt.Errorf("%w: outbox store is required", ErrConfig)
 	}
-	return newRelay(store.withTelemetry(telemetry), publisher, telemetry, config)
+	owned := store.withTelemetry(telemetry)
+	relay, err := newRelay(owned, publisher, telemetry, config)
+	if err != nil {
+		return nil, err
+	}
+	relay.listen = listenForAppends(owned.listenerConfig(), telemetry)
+	return relay, nil
 }
 
 func newRelay(store relayStore, publisher Publisher, telemetry *Telemetry, config RelayConfig) (*Relay, error) {
@@ -111,8 +129,8 @@ func (r *Relay) StartDrain() {
 	r.observeProcessState()
 }
 
-// Run owns one claim and publication at a time. StartDrain stops new claims but
-// lets the current attempt finish; canceling ctx forces that attempt to stop.
+// Run owns one claimed batch at a time. StartDrain stops new claims but lets the
+// current batch finish; canceling ctx forces its publications to stop.
 func (r *Relay) Run(ctx context.Context) (result RelayResult) {
 	result.CleanupSafe = true
 	if r == nil {
@@ -131,12 +149,34 @@ func (r *Relay) Run(ctx context.Context) (result RelayResult) {
 	if done(r.drain) || ctx.Err() != nil {
 		return result
 	}
+	wake := make(chan struct{}, 1)
+	stopListener := r.startListener(ctx, wake)
+	defer stopListener()
+
 	r.ready.Store(true)
 	r.observeProcessState()
-	return r.runLoop(ctx)
+	return r.runLoop(ctx, wake)
 }
 
-func (r *Relay) runLoop(ctx context.Context) RelayResult {
+// startListener runs the optional append listener and returns the function that
+// stops and joins it.
+func (r *Relay) startListener(ctx context.Context, wake chan<- struct{}) func() {
+	if r.listen == nil {
+		return func() {}
+	}
+	listenCtx, stop := context.WithCancel(ctx)
+	stopped := make(chan struct{})
+	go func() {
+		defer close(stopped)
+		r.listen(listenCtx, wake)
+	}()
+	return func() {
+		stop()
+		<-stopped
+	}
+}
+
+func (r *Relay) runLoop(ctx context.Context, wake <-chan struct{}) RelayResult {
 	result := RelayResult{CleanupSafe: true}
 	nextObservation := time.Now().Add(r.config.ObservationInterval)
 	nextCleanup := time.Now().Add(r.config.CleanupInterval)
@@ -152,8 +192,8 @@ func (r *Relay) runLoop(ctx context.Context) RelayResult {
 		if r.stopped(ctx) {
 			return result
 		}
-		if attemptResult, keepRunning := r.runAttempt(ctx, nextObservation, nextCleanup); !keepRunning {
-			return attemptResult
+		if cycleResult, keepRunning := r.runCycle(ctx, wake, nextObservation, nextCleanup); !keepRunning {
+			return cycleResult
 		}
 	}
 }
@@ -182,50 +222,55 @@ func (r *Relay) maintain(
 	return nil
 }
 
-func (r *Relay) runAttempt(
+func (r *Relay) runCycle(
 	ctx context.Context,
+	wake <-chan struct{},
 	nextObservation time.Time,
 	nextCleanup time.Time,
 ) (RelayResult, bool) {
-	result := RelayResult{CleanupSafe: true}
-	claim, err := r.store.Claim(ctx, r.config.LeaseDuration)
-	if errors.Is(err, ErrNoWork) {
-		keepRunning := r.wait(ctx, minDuration(r.config.PollInterval, time.Until(nextObservation), time.Until(nextCleanup)))
-		return result, keepRunning
-	}
+	// The lease is measured from before the claim on this process's own clock.
+	// PostgreSQL starts it later and by its own clock, so this deadline is the
+	// conservative one under any skew between the two.
+	claimedAt := time.Now()
+	batch, err := r.store.Claim(ctx, r.config.LeaseDuration, r.config.BatchSize)
 	if err != nil {
-		result.Err = fmt.Errorf("claim outbox event: %w", err)
-		return result, false
+		return RelayResult{CleanupSafe: true, Err: fmt.Errorf("claim outbox events: %w", err)}, false
 	}
-	attempt := r.publish(ctx, claim)
-	if !attempt.cleanupSafe {
-		return RelayResult{CleanupSafe: false, Err: attempt.err}, false
+	if len(batch.Events) == 0 {
+		idle := minDuration(r.config.PollInterval, time.Until(nextObservation), time.Until(nextCleanup))
+		return RelayResult{CleanupSafe: true}, r.wait(ctx, wake, idle)
 	}
-	if attempt.err != nil && (errors.Is(attempt.err, ErrPublisherPanic) || errors.Is(attempt.err, ErrProgressUnknown)) {
-		result.Err = attempt.err
-		return result, false
-	}
-	if ctx.Err() != nil {
-		return result, false
-	}
-	if attempt.err != nil {
-		result.Err = attempt.err
-		return result, false
-	}
-	return result, true
+	return r.publishBatch(ctx, batch, claimedAt.Add(r.config.LeaseDuration))
 }
 
 func (r *Relay) stopped(ctx context.Context) bool {
 	return done(r.drain) || ctx.Err() != nil
 }
 
-type publishResult struct {
-	err         error
-	cleanupSafe bool
+// attempt is one event's publication outcome. A nil err means the broker
+// durably acknowledged that exact event.
+type attempt struct {
+	claim ClaimedEvent
+	err   error
 }
 
-func (r *Relay) publish(ctx context.Context, claim ClaimedEvent) publishResult {
-	r.inflight.Store(1)
+// poisonedEvent pairs the parked claim with the class that parked it, so the
+// operator log keeps the attempt count the store type has no use for.
+type poisonedEvent struct {
+	claim      ClaimedEvent
+	errorClass string
+}
+
+// batchOutcomes groups one batch by the durable transition each event needs.
+type batchOutcomes struct {
+	published []ClaimedEvent
+	ordered   []ClaimedEvent
+	retries   []RetryDirective
+	poisoned  []poisonedEvent
+}
+
+func (r *Relay) publishBatch(ctx context.Context, batch ClaimedBatch, leaseExpiry time.Time) (RelayResult, bool) {
+	r.inflight.Store(int64(len(batch.Events)))
 	r.observeProcessState()
 	defer func() {
 		r.inflight.Store(0)
@@ -233,102 +278,192 @@ func (r *Relay) publish(ctx context.Context, claim ClaimedEvent) publishResult {
 	}()
 
 	started := time.Now()
-	published := r.callPublisher(ctx, claim.Event)
-	if !published.cleanupSafe {
-		r.recordOperation(ctx, "publish", "error", "stuck", started)
+	attempts, cleanupSafe := r.publishAll(ctx, batch, leaseExpiry)
+	if !cleanupSafe {
+		r.recordOperation(ctx, "publish", outcomeError, "stuck", started)
 		if r.telemetry != nil {
 			r.telemetry.LogPublisherStuck(ctx)
 		}
-		return published
-	}
-	if errors.Is(published.err, ErrPublisherPanic) {
-		r.recordOperation(ctx, "publish", "error", "panic", started)
-		return published
-	}
-	if published.err == nil {
-		r.recordOperation(ctx, "publish", "success", "none", started)
-		if err := r.markPublished(ctx, claim); err != nil {
-			return publishResult{err: err, cleanupSafe: true}
-		}
-		return publishResult{cleanupSafe: true}
-	}
-	r.recordOperation(ctx, "publish", "error", publicationErrorClass(published.err), started)
-	if ctx.Err() != nil {
-		return publishResult{cleanupSafe: true}
+		return RelayResult{CleanupSafe: false, Err: ErrPublisherStuck}, false
 	}
 
-	errorClass := publicationErrorClass(published.err)
-	poisonClass := ""
-	var err error
-	switch {
-	case errors.Is(published.err, ErrPermanentPublication):
-		poisonClass = "publisher_permanent"
-		err = r.store.MarkPoisoned(ctx, claim.Event.ID, claim.Token, poisonClass)
-	case errors.Is(published.err, ErrPublicationNotAccepted) && claim.CycleAttemptCount >= r.config.MaxAttempts:
-		poisonClass = "attempt_exhausted"
-		err = r.store.MarkPoisoned(ctx, claim.Event.ID, claim.Token, poisonClass)
-	default:
-		delay := retryDelay(r.config.RetryBase, r.config.RetryMax, claim.CycleAttemptCount, r.jitter)
-		err = r.store.ScheduleRetry(ctx, claim.Event.ID, claim.Token, errorClass, delay)
+	// Finalization must reach PostgreSQL even while the process is shutting
+	// down: an acknowledged event left unmarked becomes a duplicate after lease
+	// recovery, and a failed event left leased blocks its ordering key until the
+	// lease expires. The lease this batch already holds bounds the write.
+	finalizeCtx, cancel := context.WithDeadline(context.WithoutCancel(ctx), leaseExpiry)
+	defer cancel()
+	if err := r.finalize(finalizeCtx, batch.Token, attempts); err != nil {
+		return RelayResult{CleanupSafe: true, Err: err}, false
 	}
-	if err != nil {
-		return publishResult{err: fmt.Errorf("record outbox publication failure: %w", err), cleanupSafe: true}
+	if ctx.Err() != nil {
+		return RelayResult{CleanupSafe: true}, false
 	}
-	if poisonClass != "" && r.telemetry != nil {
-		r.telemetry.LogPoison(ctx, claim.Event.ID, poisonClass, claim.CycleAttemptCount)
+	if err := publisherPanic(attempts); err != nil {
+		return RelayResult{CleanupSafe: true, Err: err}, false
 	}
-	return publishResult{cleanupSafe: true}
+	return RelayResult{CleanupSafe: true}, true
 }
 
-func (r *Relay) callPublisher(ctx context.Context, event Event) publishResult {
-	attemptCtx, cancel := context.WithTimeout(ctx, r.config.PublishTimeout)
+// publishAll publishes the batch through at most PublishConcurrency workers and
+// never past the lease it was claimed under. It reports cleanupSafe = false when
+// a publisher ignored cancellation, because its goroutine can still touch the
+// dependencies the process is about to close.
+func (r *Relay) publishAll(ctx context.Context, batch ClaimedBatch, leaseExpiry time.Time) ([]attempt, bool) {
+	deadline := earliest(time.Now().Add(r.config.PublishTimeout), leaseExpiry.Add(-publisherJoinTimeout))
+	batchCtx, cancel := context.WithDeadline(ctx, deadline)
 	defer cancel()
-	type completion struct {
-		err      error
-		panicked bool
-	}
-	done := make(chan completion, 1)
-	go func() {
-		result := completion{}
-		defer func() {
-			if recover() != nil {
-				result.err = ErrPublisherPanic
-				result.panicked = true
+
+	attempts := make([]attempt, len(batch.Events))
+	var next atomic.Int64
+	var workers sync.WaitGroup
+	for range min(r.config.PublishConcurrency, len(batch.Events)) {
+		workers.Go(func() {
+			for {
+				index := int(next.Add(1)) - 1
+				if index >= len(batch.Events) {
+					return
+				}
+				attempts[index] = r.publishOne(batchCtx, batch.Events[index])
 			}
-			done <- result
-		}()
-		result.err = r.publisher.Publish(attemptCtx, event)
+		})
+	}
+	finished := make(chan struct{})
+	go func() {
+		workers.Wait()
+		close(finished)
 	}()
 
 	select {
-	case result := <-done:
-		if result.panicked {
-			return publishResult{err: ErrPublisherPanic, cleanupSafe: true}
-		}
-		if err := attemptCtx.Err(); err != nil {
-			return publishResult{err: err, cleanupSafe: true}
-		}
-		return publishResult{err: result.err, cleanupSafe: true}
-	case <-attemptCtx.Done():
-		cancel()
+	case <-finished:
+		return attempts, true
+	case <-batchCtx.Done():
 	}
-
 	join := time.NewTimer(publisherJoinTimeout)
 	defer join.Stop()
 	select {
-	case result := <-done:
-		if result.panicked {
-			return publishResult{err: ErrPublisherPanic, cleanupSafe: true}
-		}
-		return publishResult{err: attemptCtx.Err(), cleanupSafe: true}
+	case <-finished:
+		return attempts, true
 	case <-join.C:
-		return publishResult{err: ErrPublisherStuck, cleanupSafe: false}
+		return nil, false
 	}
 }
 
-func (r *Relay) markPublished(ctx context.Context, claim ClaimedEvent) error {
+func (r *Relay) publishOne(ctx context.Context, claim ClaimedEvent) (result attempt) {
+	result.claim = claim
+	started := time.Now()
+	defer func() {
+		if recover() != nil {
+			result.err = ErrPublisherPanic
+		}
+		errorClass := "none"
+		if result.err != nil {
+			errorClass = publicationErrorClass(result.err)
+		}
+		r.recordOperation(ctx, "publish", operationOutcome(result.err), errorClass, started)
+	}()
+
+	attemptCtx, cancel := context.WithTimeout(ctx, r.config.PublishTimeout)
+	defer cancel()
+	result.err = r.publisher.Publish(attemptCtx, claim.Event)
+	if result.err == nil {
+		// A publisher that returns nil after its budget expired cannot prove the
+		// broker accepted the event, so the attempt stays retryable.
+		result.err = attemptCtx.Err()
+	}
+	return result
+}
+
+func (r *Relay) finalize(ctx context.Context, token string, attempts []attempt) error {
+	outcomes := r.classify(attempts)
+	if err := r.markPublished(ctx, token, outcomes.published); err != nil {
+		return err
+	}
+	// Ordered events finalize one at a time because each advances its own key
+	// head and unblocks that key's successor.
+	for _, claim := range outcomes.ordered {
+		if err := r.reconcilePublished(ctx, token, claim); err != nil {
+			return err
+		}
+	}
+	if len(outcomes.retries) > 0 {
+		if err := r.store.ScheduleRetryBatch(ctx, token, outcomes.retries); err != nil {
+			return fmt.Errorf("record outbox publication failure: %w", err)
+		}
+	}
+	return r.markPoisoned(ctx, token, outcomes.poisoned)
+}
+
+func (r *Relay) classify(attempts []attempt) batchOutcomes {
+	var outcomes batchOutcomes
+	for _, current := range attempts {
+		claim := current.claim
+		switch {
+		case current.err == nil && claim.Event.OrderingKey == "":
+			outcomes.published = append(outcomes.published, claim)
+		case current.err == nil:
+			outcomes.ordered = append(outcomes.ordered, claim)
+		case errors.Is(current.err, ErrPermanentPublication):
+			outcomes.poisoned = append(outcomes.poisoned, poisonedEvent{claim: claim, errorClass: "publisher_permanent"})
+		case errors.Is(current.err, ErrPublicationNotAccepted) && claim.CycleAttemptCount >= r.config.MaxAttempts:
+			outcomes.poisoned = append(outcomes.poisoned, poisonedEvent{claim: claim, errorClass: "attempt_exhausted"})
+		default:
+			outcomes.retries = append(outcomes.retries, RetryDirective{
+				ID:         claim.Event.ID,
+				ErrorClass: publicationErrorClass(current.err),
+				Delay:      retryDelay(r.config.RetryBase, r.config.RetryMax, claim.CycleAttemptCount, r.jitter),
+			})
+		}
+	}
+	return outcomes
+}
+
+func (r *Relay) markPublished(ctx context.Context, token string, claims []ClaimedEvent) error {
+	if len(claims) == 0 {
+		return nil
+	}
+	ids := make([]string, len(claims))
+	for index, claim := range claims {
+		ids[index] = claim.Event.ID
+	}
+	marked, err := r.store.MarkPublishedBatch(ctx, token, ids)
+	if err == nil && marked == len(claims) {
+		r.recordProgress(time.Now())
+		return nil
+	}
+	// A short write means a lost lease, or a crash window between broker
+	// acknowledgement and this update. Resolve each event against durable state
+	// rather than assuming either outcome.
+	for _, claim := range claims {
+		if err := r.reconcilePublished(ctx, token, claim); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *Relay) markPoisoned(ctx context.Context, token string, poisoned []poisonedEvent) error {
+	if len(poisoned) == 0 {
+		return nil
+	}
+	directives := make([]PoisonDirective, len(poisoned))
+	for index, event := range poisoned {
+		directives[index] = PoisonDirective{ID: event.claim.Event.ID, ErrorClass: event.errorClass}
+	}
+	if err := r.store.MarkPoisonedBatch(ctx, token, directives); err != nil {
+		return fmt.Errorf("record outbox publication failure: %w", err)
+	}
+	if r.telemetry != nil {
+		for _, event := range poisoned {
+			r.telemetry.LogPoison(ctx, event.claim.Event.ID, event.errorClass, event.claim.CycleAttemptCount)
+		}
+	}
+	return nil
+}
+
+func (r *Relay) reconcilePublished(ctx context.Context, token string, claim ClaimedEvent) error {
 	for range 2 {
-		err := r.markEvent(ctx, claim)
+		err := r.markEvent(ctx, token, claim)
 		if err == nil {
 			r.recordProgress(time.Now())
 			return nil
@@ -339,7 +474,7 @@ func (r *Relay) markPublished(ctx context.Context, claim ClaimedEvent) error {
 			r.recordProgress(time.Now())
 			return nil
 		}
-		if getErr != nil || record.LeaseToken != claim.Token {
+		if getErr != nil || record.LeaseToken != token {
 			return fmt.Errorf("%w: reconcile mark: %w", ErrProgressUnknown, errors.Join(err, getErr))
 		}
 	}
@@ -351,12 +486,10 @@ func (r *Relay) observe(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("observe outbox: %w", err)
 	}
+	observedAt := time.Now()
+	r.observed.Store(observedAt.UnixNano())
 	if r.telemetry != nil {
-		observedAt := time.Now()
-		r.observed.Store(observedAt.UnixNano())
 		r.telemetry.RecordObservation(observation, observedAt)
-	} else {
-		r.observed.Store(time.Now().UnixNano())
 	}
 	return nil
 }
@@ -369,7 +502,7 @@ func (r *Relay) cleanup(ctx context.Context) (bool, error) {
 	return deleted == r.config.CleanupBatchSize, nil
 }
 
-func (r *Relay) wait(ctx context.Context, duration time.Duration) bool {
+func (r *Relay) wait(ctx context.Context, wake <-chan struct{}, duration time.Duration) bool {
 	if duration < 0 {
 		duration = 0
 	}
@@ -380,6 +513,8 @@ func (r *Relay) wait(ctx context.Context, duration time.Duration) bool {
 		return false
 	case <-r.drain:
 		return false
+	case <-wake:
+		return true
 	case <-timer.C:
 		return true
 	}
@@ -412,6 +547,12 @@ func validateRelayConfig(config RelayConfig) error {
 	if config.LeaseDuration <= config.PublishTimeout ||
 		config.LeaseDuration-config.PublishTimeout <= publisherJoinTimeout {
 		return fmt.Errorf("%w: lease duration must exceed publish and publisher-join timeouts", ErrConfig)
+	}
+	if config.BatchSize < 1 || config.BatchSize > maxBatchSize {
+		return fmt.Errorf("%w: batch size must be in range [1,%d]", ErrConfig, maxBatchSize)
+	}
+	if config.PublishConcurrency < 1 || config.PublishConcurrency > maxPublishConcurrency {
+		return fmt.Errorf("%w: publish concurrency must be in range [1,%d]", ErrConfig, maxPublishConcurrency)
 	}
 	if config.MaxAttempts < 1 || config.MaxAttempts > 100 {
 		return fmt.Errorf("%w: max attempts must be in range [1,100]", ErrConfig)
@@ -446,8 +587,19 @@ func retryDelay(base, maximum time.Duration, attempt int, jitter func(time.Durat
 	return jitter(limit)
 }
 
+func publisherPanic(attempts []attempt) error {
+	for _, current := range attempts {
+		if errors.Is(current.err, ErrPublisherPanic) {
+			return current.err
+		}
+	}
+	return nil
+}
+
 func publicationErrorClass(err error) string {
 	switch {
+	case errors.Is(err, ErrPublisherPanic):
+		return "panic"
 	case errors.Is(err, ErrPermanentPublication):
 		return "publisher_permanent"
 	case errors.Is(err, ErrPublicationNotAccepted):
@@ -463,9 +615,9 @@ func publicationErrorClass(err error) string {
 
 func operationOutcome(err error) string {
 	if err != nil {
-		return "error"
+		return outcomeError
 	}
-	return "success"
+	return outcomeSuccess
 }
 
 func operationErrorType(err error) string {
@@ -483,6 +635,13 @@ func minDuration(first time.Duration, values ...time.Duration) time.Duration {
 		}
 	}
 	return minimum
+}
+
+func earliest(first, second time.Time) time.Time {
+	if second.Before(first) {
+		return second
+	}
+	return first
 }
 
 func observationStaleAfter(interval time.Duration) time.Duration {

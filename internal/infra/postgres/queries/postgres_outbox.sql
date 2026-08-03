@@ -38,7 +38,11 @@ INSERT INTO outbox_events (
     sqlc.arg(ordering_ready)
 );
 
--- name: ClaimOutboxEvent :one
+-- One statement leases a whole batch under a single token. The partial unique
+-- index on ready ordered rows keeps at most one claimable event per ordering
+-- key, so a batch never holds two events that must stay ordered relative to
+-- each other.
+-- name: ClaimOutboxEvents :many
 WITH candidate AS (
     SELECT event.id,
            event.lease_expires_at IS NOT NULL AS recovery_due
@@ -50,7 +54,7 @@ WITH candidate AS (
       AND (event.lease_expires_at IS NULL OR event.lease_expires_at <= statement_timestamp())
     ORDER BY event.available_at, event.created_at, event.id
     FOR UPDATE OF event SKIP LOCKED
-    LIMIT 1
+    LIMIT sqlc.arg(batch_size)
 )
 UPDATE outbox_events AS event
 SET lease_token = sqlc.arg(lease_token),
@@ -79,6 +83,22 @@ WHERE id = sqlc.arg(id)
   AND lease_expires_at > statement_timestamp()
   AND published_at IS NULL
   AND poisoned_at IS NULL;
+
+-- Unordered events finalize together because none of them owns an ordering
+-- head. A short row count means at least one lease was lost, which the caller
+-- resolves per event against durable state.
+-- name: MarkOutboxPublishedBatch :execrows
+UPDATE outbox_events AS event
+SET published_at = statement_timestamp(),
+    lease_token = NULL,
+    lease_expires_at = NULL,
+    last_error_class = NULL
+WHERE event.id = ANY(sqlc.arg(ids)::text[])
+  AND event.lease_token = sqlc.arg(lease_token)
+  AND event.ordering_key IS NULL
+  AND event.lease_expires_at > statement_timestamp()
+  AND event.published_at IS NULL
+  AND event.poisoned_at IS NULL;
 
 -- name: MarkOrderedOutboxPublished :one
 WITH locked_head AS MATERIALIZED (
@@ -142,30 +162,43 @@ SELECT
           AND NOT EXISTS (SELECT 1 FROM next_event)
     ) AS snapshot_conflict;
 
--- name: ScheduleOutboxRetry :execrows
-UPDATE outbox_events
+-- Each failed event carries its own jittered delay and error class, so one
+-- statement releases the whole failing part of a batch.
+-- name: ScheduleOutboxRetryBatch :execrows
+UPDATE outbox_events AS event
 SET available_at = statement_timestamp()
-        + sqlc.arg(delay_milliseconds)::double precision * interval '1 millisecond',
+        + retry.delay_milliseconds * interval '1 millisecond',
     lease_token = NULL,
     lease_expires_at = NULL,
-    last_error_class = sqlc.arg(error_class)
-WHERE id = sqlc.arg(id)
-  AND lease_token = sqlc.arg(lease_token)
-  AND lease_expires_at > statement_timestamp()
-  AND published_at IS NULL
-  AND poisoned_at IS NULL;
+    last_error_class = retry.error_class
+FROM (
+    SELECT
+        unnest(sqlc.arg(ids)::text[]) AS id,
+        unnest(sqlc.arg(delay_milliseconds)::double precision[]) AS delay_milliseconds,
+        unnest(sqlc.arg(error_classes)::text[]) AS error_class
+) AS retry
+WHERE event.id = retry.id
+  AND event.lease_token = sqlc.arg(lease_token)
+  AND event.lease_expires_at > statement_timestamp()
+  AND event.published_at IS NULL
+  AND event.poisoned_at IS NULL;
 
--- name: MarkOutboxPoisoned :execrows
-UPDATE outbox_events
+-- name: MarkOutboxPoisonedBatch :execrows
+UPDATE outbox_events AS event
 SET poisoned_at = statement_timestamp(),
     lease_token = NULL,
     lease_expires_at = NULL,
-    last_error_class = sqlc.arg(error_class)
-WHERE id = sqlc.arg(id)
-  AND lease_token = sqlc.arg(lease_token)
-  AND lease_expires_at > statement_timestamp()
-  AND published_at IS NULL
-  AND poisoned_at IS NULL;
+    last_error_class = poison.error_class
+FROM (
+    SELECT
+        unnest(sqlc.arg(ids)::text[]) AS id,
+        unnest(sqlc.arg(error_classes)::text[]) AS error_class
+) AS poison
+WHERE event.id = poison.id
+  AND event.lease_token = sqlc.arg(lease_token)
+  AND event.lease_expires_at > statement_timestamp()
+  AND event.published_at IS NULL
+  AND event.poisoned_at IS NULL;
 
 -- name: FindOutboxRedrive :one
 SELECT event_id FROM outbox_redrives WHERE audit_id = sqlc.arg(audit_id);
@@ -192,7 +225,7 @@ WHERE id = sqlc.arg(id)
   AND poisoned_at IS NOT NULL
   AND published_at IS NULL;
 
--- name: CleanupPublishedOutboxEvents :many
+-- name: CleanupPublishedOutboxEvents :execrows
 WITH expired AS (
     SELECT id
     FROM outbox_events
@@ -204,65 +237,87 @@ WITH expired AS (
 )
 DELETE FROM outbox_events AS event
 USING expired
-WHERE event.id = expired.id
-RETURNING event.id;
+WHERE event.id = expired.id;
 
+-- Backlog states are exact and read only unpublished rows through the pending
+-- partial index, so observation cost tracks backlog rather than retention
+-- volume. Retained published rows are reported as the planner's own row
+-- estimate minus that exact pending count, because counting them would scan
+-- the entire retention window on every observation.
 -- name: ObserveOutbox :one
-WITH observation_clock AS (
-    SELECT statement_timestamp() AS observed_at
-), classified AS (
+WITH pending AS (
     SELECT
         event.created_at,
-        event.published_at,
         CASE
-            WHEN event.published_at IS NOT NULL THEN 'published_retained'
             WHEN event.poisoned_at IS NOT NULL THEN 'poison'
-            WHEN event.lease_token IS NOT NULL AND event.lease_expires_at > observation_clock.observed_at THEN 'in_progress'
-            WHEN event.lease_token IS NOT NULL THEN 'recovery_due'
+            WHEN event.lease_expires_at > statement_timestamp() THEN 'in_progress'
+            WHEN event.lease_expires_at IS NOT NULL THEN 'recovery_due'
             WHEN event.ordering_key IS NOT NULL AND NOT event.ordering_ready THEN 'ordering_blocked'
-            WHEN event.available_at > observation_clock.observed_at THEN 'retry_wait'
+            WHEN event.available_at > statement_timestamp() THEN 'retry_wait'
             ELSE 'eligible'
         END AS state
     FROM outbox_events AS event
-    CROSS JOIN observation_clock
+    WHERE event.published_at IS NULL
+), backlog AS (
+    SELECT
+        count(*)::bigint AS pending_count,
+        count(*) FILTER (WHERE state = 'eligible')::bigint AS eligible_count,
+        coalesce(extract(epoch FROM min(created_at) FILTER (
+            WHERE state = 'eligible'
+        )), 0)::double precision AS eligible_oldest_unix,
+        count(*) FILTER (WHERE state = 'in_progress')::bigint AS in_progress_count,
+        coalesce(extract(epoch FROM min(created_at) FILTER (
+            WHERE state = 'in_progress'
+        )), 0)::double precision AS in_progress_oldest_unix,
+        count(*) FILTER (WHERE state = 'retry_wait')::bigint AS retry_wait_count,
+        coalesce(extract(epoch FROM min(created_at) FILTER (
+            WHERE state = 'retry_wait'
+        )), 0)::double precision AS retry_wait_oldest_unix,
+        count(*) FILTER (WHERE state = 'recovery_due')::bigint AS recovery_due_count,
+        coalesce(extract(epoch FROM min(created_at) FILTER (
+            WHERE state = 'recovery_due'
+        )), 0)::double precision AS recovery_due_oldest_unix,
+        count(*) FILTER (WHERE state = 'ordering_blocked')::bigint AS ordering_blocked_count,
+        coalesce(extract(epoch FROM min(created_at) FILTER (
+            WHERE state = 'ordering_blocked'
+        )), 0)::double precision AS ordering_blocked_oldest_unix,
+        count(*) FILTER (WHERE state = 'poison')::bigint AS poison_count,
+        coalesce(extract(epoch FROM min(created_at) FILTER (
+            WHERE state = 'poison'
+        )), 0)::double precision AS poison_oldest_unix
+    FROM pending
 )
 SELECT
-    count(*) FILTER (WHERE state = 'eligible')::bigint AS eligible_count,
-    coalesce(extract(epoch FROM min(created_at) FILTER (
-        WHERE state = 'eligible'
-    )), 0)::double precision AS eligible_oldest_unix,
-    count(*) FILTER (WHERE state = 'in_progress')::bigint AS in_progress_count,
-    coalesce(extract(epoch FROM min(created_at) FILTER (
-        WHERE state = 'in_progress'
-    )), 0)::double precision AS in_progress_oldest_unix,
-    count(*) FILTER (WHERE state = 'retry_wait')::bigint AS retry_wait_count,
-    coalesce(extract(epoch FROM min(created_at) FILTER (
-        WHERE state = 'retry_wait'
-    )), 0)::double precision AS retry_wait_oldest_unix,
-    count(*) FILTER (WHERE state = 'recovery_due')::bigint AS recovery_due_count,
-    coalesce(extract(epoch FROM min(created_at) FILTER (
-        WHERE state = 'recovery_due'
-    )), 0)::double precision AS recovery_due_oldest_unix,
-    count(*) FILTER (WHERE state = 'ordering_blocked')::bigint AS ordering_blocked_count,
-    coalesce(extract(epoch FROM min(created_at) FILTER (
-        WHERE state = 'ordering_blocked'
-    )), 0)::double precision AS ordering_blocked_oldest_unix,
-    count(*) FILTER (WHERE state = 'poison')::bigint AS poison_count,
-    coalesce(extract(epoch FROM min(created_at) FILTER (
-        WHERE state = 'poison'
-    )), 0)::double precision AS poison_oldest_unix,
-    count(*) FILTER (WHERE state = 'published_retained')::bigint AS published_retained_count,
-    coalesce(extract(epoch FROM min(published_at) FILTER (
-        WHERE state = 'published_retained'
-    )), 0)::double precision AS published_retained_oldest_unix
-FROM classified;
-
--- name: ObserveOutboxStorage :one
-SELECT
+    backlog.eligible_count,
+    backlog.eligible_oldest_unix,
+    backlog.in_progress_count,
+    backlog.in_progress_oldest_unix,
+    backlog.retry_wait_count,
+    backlog.retry_wait_oldest_unix,
+    backlog.recovery_due_count,
+    backlog.recovery_due_oldest_unix,
+    backlog.ordering_blocked_count,
+    backlog.ordering_blocked_oldest_unix,
+    backlog.poison_count,
+    backlog.poison_oldest_unix,
+    greatest(
+        coalesce((
+            SELECT nullif(class.reltuples, -1)
+            FROM pg_catalog.pg_class AS class
+            WHERE class.oid = 'outbox_events'::regclass
+        ), 0) - backlog.pending_count,
+        0
+    )::bigint AS published_retained_estimate,
+    coalesce((
+        SELECT extract(epoch FROM min(event.published_at))
+        FROM outbox_events AS event
+        WHERE event.published_at IS NOT NULL
+    ), 0)::double precision AS published_retained_oldest_unix,
     (SELECT count(*)::bigint FROM outbox_ordering_heads) AS ordering_head_count,
     pg_total_relation_size('outbox_events')::bigint AS events_bytes,
     pg_indexes_size('outbox_events')::bigint AS events_index_bytes,
     pg_total_relation_size('outbox_ordering_heads')::bigint AS ordering_heads_bytes,
     pg_indexes_size('outbox_ordering_heads')::bigint AS ordering_heads_index_bytes,
     pg_total_relation_size('outbox_redrives')::bigint AS redrives_bytes,
-    pg_indexes_size('outbox_redrives')::bigint AS redrives_index_bytes;
+    pg_indexes_size('outbox_redrives')::bigint AS redrives_index_bytes
+FROM backlog;

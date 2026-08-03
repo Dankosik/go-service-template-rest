@@ -86,7 +86,7 @@ second OpenAPI contract and a second `main()` to maintain. Pass
 | API contract | OpenAPI 3.0 and `oapi-codegen v2` with generated request bindings and typed responses |
 | Data | No database by default; optional PostgreSQL 17, `pgx v5`, `goose v3`, and `sqlc` profile |
 <!-- profile:outbox-postgres:start -->
-| Transactional outbox | Optional PostgreSQL intent store and separately deployed bounded relay; broker adapter remains service-owned |
+| Transactional outbox | Optional PostgreSQL intent store and separately deployed bounded relay with batched claims, concurrent publication, and notification wake-up; broker adapter remains service-owned |
 <!-- profile:outbox-postgres:end -->
 | Outbound HTTP | Standard library by default; optional fixed-authority transport bounds and response-size protection |
 <!-- profile:messaging-nats-jetstream:start -->

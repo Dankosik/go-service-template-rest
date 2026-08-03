@@ -2,6 +2,10 @@
 
 status: ready
 
+This records the V1 build. Claim, publication, and state-observation
+mechanics were later reworked for throughput; [PostgreSQL Transactional Outbox](../../docs/postgres-transactional-outbox.md)
+owns the current contract.
+
 ## Scope and non-goals
 
 ### In scope

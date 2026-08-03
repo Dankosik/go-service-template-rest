@@ -7,6 +7,11 @@ import (
 
 // Publisher returns nil only after the selected broker durably acknowledges
 // the same Event.ID. Implementations must stop using Event when Publish returns.
+//
+// The relay calls Publish concurrently, up to its configured publish
+// concurrency, so implementations must be safe for concurrent use. Concurrent
+// calls never carry two events that share an ordering key, because the claim
+// query hands out at most one ready event per key.
 type Publisher interface {
 	Publish(ctx context.Context, event Event) error
 }

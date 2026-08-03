@@ -15,7 +15,6 @@ import (
 
 var (
 	ErrConfig           = errors.New("outbox store config")
-	ErrNoWork           = errors.New("outbox has no eligible work")
 	ErrNotFound         = errors.New("outbox event not found")
 	ErrLeaseLost        = errors.New("outbox lease lost")
 	ErrOrderingSequence = errors.New("outbox ordering sequence rejected")
@@ -29,13 +28,32 @@ type Store struct {
 	telemetry *Telemetry
 }
 
+// ClaimedBatch is one lease. Every event in it shares Token, and every
+// finalization compares against that token, so the batch is fenced as a unit
+// against a relay that overran its own lease.
+type ClaimedBatch struct {
+	Token  string
+	Events []ClaimedEvent
+}
+
 type ClaimedEvent struct {
 	Event             Event
-	Token             string
 	CycleAttemptCount int
 	TotalAttemptCount int64
-	LeaseExpiresAt    time.Time
 	Recovered         bool
+}
+
+// RetryDirective releases one leased event for a later attempt.
+type RetryDirective struct {
+	ID         string
+	ErrorClass string
+	Delay      time.Duration
+}
+
+// PoisonDirective parks one leased event for operator redrive.
+type PoisonDirective struct {
+	ID         string
+	ErrorClass string
 }
 
 type Record struct {
@@ -68,7 +86,7 @@ type StateObservation struct {
 	OrderingBlockedOldestAt   time.Time
 	PoisonCount               int64
 	PoisonOldestAt            time.Time
-	PublishedRetainedCount    int64
+	PublishedRetainedEstimate int64
 	PublishedRetainedOldestAt time.Time
 	OrderingHeadCount         int64
 	EventsBytes               int64
@@ -140,51 +158,62 @@ func (s *Store) Append(ctx context.Context, tx pgx.Tx, event Event) (err error) 
 	return nil
 }
 
-func (s *Store) Claim(ctx context.Context, leaseDuration time.Duration) (claimed ClaimedEvent, err error) {
+// Claim leases up to batchSize eligible events under one fresh token. An empty
+// batch means no eligible work, which is an ordinary outcome rather than an
+// error.
+func (s *Store) Claim(ctx context.Context, leaseDuration time.Duration, batchSize int) (batch ClaimedBatch, err error) {
 	started := time.Now()
-	defer func() { s.recordOperation(ctx, "claim", started, err) }()
+	defer func() { s.recordClaim(ctx, batch, started, err) }()
 	if s == nil || s.queries == nil {
-		return ClaimedEvent{}, fmt.Errorf("%w: store is required", ErrConfig)
+		return ClaimedBatch{}, fmt.Errorf("%w: store is required", ErrConfig)
 	}
 	if leaseDuration <= 0 {
-		return ClaimedEvent{}, fmt.Errorf("%w: lease duration must be positive", ErrConfig)
+		return ClaimedBatch{}, fmt.Errorf("%w: lease duration must be positive", ErrConfig)
+	}
+	if batchSize < 1 || batchSize > math.MaxInt32 {
+		return ClaimedBatch{}, fmt.Errorf("%w: claim batch size must be positive", ErrConfig)
 	}
 
 	token := NewID()
-	row, err := s.queries.ClaimOutboxEvent(ctx, sqlcgen.ClaimOutboxEventParams{
+	rows, err := s.queries.ClaimOutboxEvents(ctx, sqlcgen.ClaimOutboxEventsParams{
 		LeaseToken:        &token,
 		LeaseMilliseconds: durationMilliseconds(leaseDuration),
+		BatchSize:         int32(batchSize), // #nosec G115 -- range checked above.
 	})
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return ClaimedEvent{}, ErrNoWork
+		return ClaimedBatch{}, fmt.Errorf("claim outbox events: %w", err)
+	}
+	if len(rows) == 0 {
+		return ClaimedBatch{}, nil
+	}
+	batch = ClaimedBatch{Token: token, Events: make([]ClaimedEvent, 0, len(rows))}
+	for _, row := range rows {
+		batch.Events = append(batch.Events, ClaimedEvent{
+			Event:             eventFromClaimRow(row),
+			CycleAttemptCount: int(row.CycleAttemptCount),
+			TotalAttemptCount: row.TotalAttemptCount,
+			Recovered:         row.RecoveryDue,
+		})
+		if row.RecoveryDue && s.telemetry != nil {
+			s.telemetry.RecordOperation(ctx, "recovery", "success", "none", time.Since(started))
+			s.telemetry.LogRecovery(ctx, row.ID, int(row.CycleAttemptCount))
 		}
-		return ClaimedEvent{}, fmt.Errorf("claim outbox event: %w", err)
 	}
-	claimed = ClaimedEvent{
-		Event:             eventFromClaimRow(row),
-		Token:             token,
-		CycleAttemptCount: int(row.CycleAttemptCount),
-		TotalAttemptCount: row.TotalAttemptCount,
-		LeaseExpiresAt:    timeValue(row.LeaseExpiresAt),
-		Recovered:         row.RecoveryDue,
-	}
-	if row.RecoveryDue && s.telemetry != nil {
-		s.telemetry.RecordOperation(ctx, "recovery", "success", "none", time.Since(started))
-		s.telemetry.LogRecovery(ctx, row.ID, int(row.CycleAttemptCount))
-	}
-	return claimed, nil
+	return batch, nil
 }
 
-func (s *Store) MarkPublished(ctx context.Context, claim ClaimedEvent) (err error) {
+// MarkPublished finalizes one event. Unordered events normally finalize through
+// MarkPublishedBatch; this path also serves the ordered head advance and the
+// per-event reconciliation of a short batch write.
+func (s *Store) MarkPublished(ctx context.Context, token string, claim ClaimedEvent) (err error) {
 	started := time.Now()
 	defer func() { s.recordOperation(ctx, "mark_published", started, err) }()
-	if err := validateProgressIdentity(claim.Event.ID, claim.Token); err != nil {
+	if err := validateProgressIdentity(claim.Event.ID, token); err != nil {
 		return err
 	}
 	if claim.Event.OrderingKey == "" {
 		rows, err := s.queries.MarkOutboxPublished(ctx, sqlcgen.MarkOutboxPublishedParams{
-			ID: claim.Event.ID, LeaseToken: &claim.Token,
+			ID: claim.Event.ID, LeaseToken: &token,
 		})
 		return progressResult("mark outbox published", rows, err)
 	}
@@ -194,7 +223,7 @@ func (s *Store) MarkPublished(ctx context.Context, claim ClaimedEvent) (err erro
 
 	params := sqlcgen.MarkOrderedOutboxPublishedParams{
 		ID:               claim.Event.ID,
-		LeaseToken:       &claim.Token,
+		LeaseToken:       &token,
 		OrderingKey:      claim.Event.OrderingKey,
 		OrderingSequence: &claim.Event.OrderingSequence,
 	}
@@ -213,42 +242,73 @@ func (s *Store) MarkPublished(ctx context.Context, claim ClaimedEvent) (err erro
 	return ErrLeaseLost
 }
 
-func (s *Store) ScheduleRetry(ctx context.Context, id, token, errorClass string, delay time.Duration) (err error) {
+// MarkPublishedBatch finalizes every unordered event of one lease in a single
+// statement and reports how many rows it changed. A short count means at least
+// one lease was lost, which the caller resolves per event.
+func (s *Store) MarkPublishedBatch(ctx context.Context, token string, ids []string) (marked int, err error) {
 	started := time.Now()
-	defer func() { s.recordOperation(ctx, "schedule_retry", started, err) }()
-	if err := validateProgressIdentity(id, token); err != nil {
-		return err
+	defer func() { s.recordOperation(ctx, "mark_published", started, err) }()
+	if err := validateBatchIdentity(token, ids); err != nil {
+		return 0, err
 	}
-	if delay < 0 {
-		return fmt.Errorf("%w: retry delay cannot be negative", ErrConfig)
-	}
-	if err := validateErrorClass(errorClass); err != nil {
-		return err
-	}
-	rows, err := s.queries.ScheduleOutboxRetry(ctx, sqlcgen.ScheduleOutboxRetryParams{
-		DelayMilliseconds: durationMilliseconds(delay),
-		ErrorClass:        &errorClass,
-		ID:                id,
-		LeaseToken:        &token,
+	rows, err := s.queries.MarkOutboxPublishedBatch(ctx, sqlcgen.MarkOutboxPublishedBatchParams{
+		Ids: ids, LeaseToken: &token,
 	})
-	return progressResult("schedule outbox retry", rows, err)
+	if err != nil {
+		return 0, fmt.Errorf("mark outbox published batch: %w", err)
+	}
+	return int(rows), nil
 }
 
-func (s *Store) MarkPoisoned(ctx context.Context, id, token, errorClass string) (err error) {
+// ScheduleRetryBatch releases every failed event of one lease in a single
+// statement, each with its own delay and error class.
+func (s *Store) ScheduleRetryBatch(ctx context.Context, token string, retries []RetryDirective) (err error) {
+	started := time.Now()
+	defer func() { s.recordOperation(ctx, "schedule_retry", started, err) }()
+	ids := make([]string, len(retries))
+	classes := make([]string, len(retries))
+	delays := make([]float64, len(retries))
+	for index, retry := range retries {
+		if err := validateErrorClass(retry.ErrorClass); err != nil {
+			return err
+		}
+		if retry.Delay < 0 {
+			return fmt.Errorf("%w: retry delay cannot be negative", ErrConfig)
+		}
+		ids[index] = retry.ID
+		classes[index] = retry.ErrorClass
+		delays[index] = durationMilliseconds(retry.Delay)
+	}
+	if err := validateBatchIdentity(token, ids); err != nil {
+		return err
+	}
+	rows, err := s.queries.ScheduleOutboxRetryBatch(ctx, sqlcgen.ScheduleOutboxRetryBatchParams{
+		LeaseToken: &token, Ids: ids, DelayMilliseconds: delays, ErrorClasses: classes,
+	})
+	return batchProgressResult("schedule outbox retry batch", rows, len(ids), err)
+}
+
+// MarkPoisonedBatch parks every exhausted or permanently rejected event of one
+// lease in a single statement.
+func (s *Store) MarkPoisonedBatch(ctx context.Context, token string, poisons []PoisonDirective) (err error) {
 	started := time.Now()
 	defer func() { s.recordOperation(ctx, "poison", started, err) }()
-	if err := validateProgressIdentity(id, token); err != nil {
+	ids := make([]string, len(poisons))
+	classes := make([]string, len(poisons))
+	for index, poison := range poisons {
+		if err := validateErrorClass(poison.ErrorClass); err != nil {
+			return err
+		}
+		ids[index] = poison.ID
+		classes[index] = poison.ErrorClass
+	}
+	if err := validateBatchIdentity(token, ids); err != nil {
 		return err
 	}
-	if err := validateErrorClass(errorClass); err != nil {
-		return err
-	}
-	rows, err := s.queries.MarkOutboxPoisoned(ctx, sqlcgen.MarkOutboxPoisonedParams{
-		ErrorClass: &errorClass,
-		ID:         id,
-		LeaseToken: &token,
+	rows, err := s.queries.MarkOutboxPoisonedBatch(ctx, sqlcgen.MarkOutboxPoisonedBatchParams{
+		LeaseToken: &token, Ids: ids, ErrorClasses: classes,
 	})
-	return progressResult("mark outbox poisoned", rows, err)
+	return batchProgressResult("mark outbox poisoned batch", rows, len(ids), err)
 }
 
 func (s *Store) Get(ctx context.Context, id string) (Record, error) {
@@ -330,58 +390,56 @@ func (s *Store) CleanupPublished(ctx context.Context, retention time.Duration, b
 	if retention <= 0 || batchSize < 1 || batchSize > math.MaxInt32 {
 		return 0, fmt.Errorf("%w: cleanup retention and batch size are invalid", ErrConfig)
 	}
-	ids, err := s.queries.CleanupPublishedOutboxEvents(ctx, sqlcgen.CleanupPublishedOutboxEventsParams{
+	rows, err := s.queries.CleanupPublishedOutboxEvents(ctx, sqlcgen.CleanupPublishedOutboxEventsParams{
 		RetentionMilliseconds: durationMilliseconds(retention),
 		BatchSize:             int32(batchSize), // #nosec G115 -- range checked above.
 	})
 	if err != nil {
 		return 0, fmt.Errorf("cleanup published outbox events: %w", err)
 	}
-	return len(ids), nil
+	return int(rows), nil
 }
 
 func (s *Store) Observe(ctx context.Context) (observation StateObservation, err error) {
 	started := time.Now()
 	defer func() { s.recordOperation(ctx, "observe", started, err) }()
-	err = s.pool.InTx(ctx, pgx.TxOptions{AccessMode: pgx.ReadOnly}, func(tx pgx.Tx) error {
-		queries := sqlcgen.New(tx)
-		state, err := queries.ObserveOutbox(ctx)
-		if err != nil {
-			return fmt.Errorf("observe outbox state: %w", err)
-		}
-		storage, err := queries.ObserveOutboxStorage(ctx)
-		if err != nil {
-			return fmt.Errorf("observe outbox storage: %w", err)
-		}
-		observation = StateObservation{
-			EligibleCount:             state.EligibleCount,
-			EligibleOldestAt:          unixTime(state.EligibleOldestUnix),
-			InProgressCount:           state.InProgressCount,
-			InProgressOldestAt:        unixTime(state.InProgressOldestUnix),
-			RetryWaitCount:            state.RetryWaitCount,
-			RetryWaitOldestAt:         unixTime(state.RetryWaitOldestUnix),
-			RecoveryDueCount:          state.RecoveryDueCount,
-			RecoveryDueOldestAt:       unixTime(state.RecoveryDueOldestUnix),
-			OrderingBlockedCount:      state.OrderingBlockedCount,
-			OrderingBlockedOldestAt:   unixTime(state.OrderingBlockedOldestUnix),
-			PoisonCount:               state.PoisonCount,
-			PoisonOldestAt:            unixTime(state.PoisonOldestUnix),
-			PublishedRetainedCount:    state.PublishedRetainedCount,
-			PublishedRetainedOldestAt: unixTime(state.PublishedRetainedOldestUnix),
-			OrderingHeadCount:         storage.OrderingHeadCount,
-			EventsBytes:               storage.EventsBytes,
-			EventsIndexBytes:          storage.EventsIndexBytes,
-			OrderingHeadsBytes:        storage.OrderingHeadsBytes,
-			OrderingHeadsIndexBytes:   storage.OrderingHeadsIndexBytes,
-			RedrivesBytes:             storage.RedrivesBytes,
-			RedrivesIndexBytes:        storage.RedrivesIndexBytes,
-		}
-		return nil
-	})
+	if s == nil || s.queries == nil {
+		return StateObservation{}, fmt.Errorf("%w: store is required", ErrConfig)
+	}
+	state, err := s.queries.ObserveOutbox(ctx)
 	if err != nil {
 		return StateObservation{}, fmt.Errorf("observe outbox state: %w", err)
 	}
-	return observation, nil
+	return StateObservation{
+		EligibleCount:             state.EligibleCount,
+		EligibleOldestAt:          unixTime(state.EligibleOldestUnix),
+		InProgressCount:           state.InProgressCount,
+		InProgressOldestAt:        unixTime(state.InProgressOldestUnix),
+		RetryWaitCount:            state.RetryWaitCount,
+		RetryWaitOldestAt:         unixTime(state.RetryWaitOldestUnix),
+		RecoveryDueCount:          state.RecoveryDueCount,
+		RecoveryDueOldestAt:       unixTime(state.RecoveryDueOldestUnix),
+		OrderingBlockedCount:      state.OrderingBlockedCount,
+		OrderingBlockedOldestAt:   unixTime(state.OrderingBlockedOldestUnix),
+		PoisonCount:               state.PoisonCount,
+		PoisonOldestAt:            unixTime(state.PoisonOldestUnix),
+		PublishedRetainedEstimate: state.PublishedRetainedEstimate,
+		PublishedRetainedOldestAt: unixTime(state.PublishedRetainedOldestUnix),
+		OrderingHeadCount:         state.OrderingHeadCount,
+		EventsBytes:               state.EventsBytes,
+		EventsIndexBytes:          state.EventsIndexBytes,
+		OrderingHeadsBytes:        state.OrderingHeadsBytes,
+		OrderingHeadsIndexBytes:   state.OrderingHeadsIndexBytes,
+		RedrivesBytes:             state.RedrivesBytes,
+		RedrivesIndexBytes:        state.RedrivesIndexBytes,
+	}, nil
+}
+
+// listenerConfig is the connection the append listener opens for itself. It
+// inherits the pool's validated DSN, TLS, and timeouts without ever competing
+// for a pooled connection.
+func (s *Store) listenerConfig() *pgx.ConnConfig {
+	return s.pool.PGX().Config().ConnConfig
 }
 
 func (s *Store) withTelemetry(telemetry *Telemetry) *Store {
@@ -391,16 +449,25 @@ func (s *Store) withTelemetry(telemetry *Telemetry) *Store {
 	return &Store{pool: s.pool, queries: s.queries, telemetry: telemetry}
 }
 
+func (s *Store) recordClaim(ctx context.Context, batch ClaimedBatch, started time.Time, err error) {
+	if s == nil || s.telemetry == nil {
+		return
+	}
+	if err == nil && len(batch.Events) == 0 {
+		s.telemetry.RecordOperation(ctx, "claim", "empty", "none", time.Since(started))
+		return
+	}
+	s.recordOperation(ctx, "claim", started, err)
+}
+
 func (s *Store) recordOperation(ctx context.Context, operation string, started time.Time, err error) {
 	if s == nil || s.telemetry == nil {
 		return
 	}
 	outcome, errorType := operationOutcome(err), operationErrorType(err)
 	switch {
-	case errors.Is(err, ErrNoWork):
-		outcome, errorType = "empty", "none"
 	case errors.Is(err, ErrLeaseLost):
-		outcome, errorType = "error", "lost_lease"
+		outcome, errorType = outcomeError, "lost_lease"
 	case errors.Is(err, ErrInvalidEvent), errors.Is(err, ErrConfig), errors.Is(err, ErrOrderingSequence),
 		errors.Is(err, ErrRedriveRejected), errors.Is(err, ErrRedriveConflict):
 		outcome, errorType = "rejected", "validation"
@@ -408,7 +475,7 @@ func (s *Store) recordOperation(ctx context.Context, operation string, started t
 	s.telemetry.RecordOperation(ctx, operation, outcome, errorType, time.Since(started))
 }
 
-func eventFromClaimRow(row sqlcgen.ClaimOutboxEventRow) Event {
+func eventFromClaimRow(row sqlcgen.ClaimOutboxEventsRow) Event {
 	event := Event{
 		ID:          row.ID,
 		Type:        row.EventType,
@@ -438,6 +505,18 @@ func validateProgressIdentity(id, token string) error {
 	return nil
 }
 
+func validateBatchIdentity(token string, ids []string) error {
+	if len(ids) == 0 {
+		return fmt.Errorf("%w: batch requires at least one event", ErrConfig)
+	}
+	for _, id := range ids {
+		if err := validateProgressIdentity(id, token); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func validateErrorClass(value string) error {
 	if err := validateText("error_class", value, 64); err != nil {
 		return err
@@ -450,6 +529,16 @@ func progressResult(operation string, rows int64, err error) error {
 		return fmt.Errorf("%s: %w", operation, err)
 	}
 	if rows != 1 {
+		return ErrLeaseLost
+	}
+	return nil
+}
+
+func batchProgressResult(operation string, rows int64, expected int, err error) error {
+	if err != nil {
+		return fmt.Errorf("%s: %w", operation, err)
+	}
+	if rows != int64(expected) {
 		return ErrLeaseLost
 	}
 	return nil
