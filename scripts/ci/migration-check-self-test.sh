@@ -47,35 +47,19 @@ MIGRATION_REPO_ROOT="${fixture}" MIGRATION_HISTORY_MODE=exact-base \
 	BASE_REF=0000000000000000000000000000000000000000 \
 	HEAD_REF="${base}" bash "${CHECK}" >/dev/null
 
-# A pre-publication reset is permitted only when the baseline file declares it,
-# and declaring it does not stop being required for the next rewrite.
-printf 'generation: 1\n' >"${fixture}/.migration-baseline"
-git -C "${fixture}" add .migration-baseline
-git -C "${fixture}" commit -qm baseline
-declared_base="$(git -C "${fixture}" rev-parse HEAD)"
-
-rm "${fixture}/migrations/000002_add.sql"
-printf '%s\n' '-- +goose Up' 'SELECT 3;' '-- +goose Down' 'SELECT 3;' \
-	>"${fixture}/migrations/000003_rewritten.sql"
-if MIGRATION_REPO_ROOT="${fixture}" MIGRATION_HISTORY_MODE=worktree bash "${CHECK}" >/dev/null 2>&1; then
-	echo "migration history self-test: undeclared reset passed" >&2
-	exit 1
-fi
-printf 'generation: 2\n' >"${fixture}/.migration-baseline"
+# The fixture so far has no scripts/profiles, so it stands for a generated
+# service and every rewrite above was rejected. A template source checkout
+# authors the target schema in place instead.
+mkdir -p "${fixture}/scripts/profiles"
+printf '%s\n' '-- +goose Up' 'SELECT 9;' '-- +goose Down' 'SELECT 9;' \
+	>"${fixture}/migrations/000002_add.sql"
 MIGRATION_REPO_ROOT="${fixture}" MIGRATION_HISTORY_MODE=worktree bash "${CHECK}" >/dev/null
-git -C "${fixture}" add -A
-git -C "${fixture}" commit -qm reset
-declared_head="$(git -C "${fixture}" rev-parse HEAD)"
-MIGRATION_REPO_ROOT="${fixture}" MIGRATION_HISTORY_MODE=exact-base \
-	BASE_REF="${declared_base}" HEAD_REF="${declared_head}" bash "${CHECK}" >/dev/null
-
-printf '%s\n' '-- +goose Up' 'SELECT 4;' '-- +goose Down' 'SELECT 3;' \
-	>"${fixture}/migrations/000003_rewritten.sql"
+rmdir "${fixture}/scripts/profiles" "${fixture}/scripts"
 if MIGRATION_REPO_ROOT="${fixture}" MIGRATION_HISTORY_MODE=worktree bash "${CHECK}" >/dev/null 2>&1; then
-	echo "migration history self-test: rewrite after a spent declaration passed" >&2
+	echo "migration history self-test: generated service accepted a rewrite" >&2
 	exit 1
 fi
-git -C "${fixture}" restore migrations/000003_rewritten.sql
+git -C "${fixture}" restore migrations/000002_add.sql
 
 source_fixture="${fixture}/source-fixture"
 mkdir -p "${source_fixture}/migrations"

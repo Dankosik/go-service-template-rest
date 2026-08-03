@@ -49,33 +49,30 @@ exact-base)
 	;;
 esac
 
-BASELINE_FILE=".migration-baseline"
+# Append-only belongs to the service, not to the template. A service applies its
+# migrations to a database that keeps running, so rewriting one it already ran
+# leaves that database unmigratable. The template only authors them: its
+# migrations reach nothing but ephemeral test containers and the empty database
+# of a service generated from it, so the target schema is edited in place rather
+# than accumulated as the history of how it was written. scripts/profiles is
+# what initialization removes, so its absence marks a generated service.
+#
+# migration-source-check still holds canonical Goose structure on both sides,
+# and cd.yml still holds published migrations immutable against the runtime
+# image it shipped them in.
+if [[ -d "${ROOT_DIR}/scripts/profiles" ]]; then
+	echo "migration history: template source authors migrations in place (${scope})"
+	exit 0
+fi
 
 changes="$(
 	git diff --name-status --find-renames --find-copies "${diff_args[@]}" -- migrations/ |
 		awk '$1 !~ /^A$/ { print }'
 )"
-if [[ -z "${changes}" ]]; then
-	echo "migration history is append-only (${scope})"
-	exit 0
-fi
-
-# Rewriting a migration a database already ran leaves that database
-# unmigratable, so this check treats every committed migration as applied. That
-# is exact for a service and conservative for a template, whose packs are
-# authored here and only ever copied into a new service at initialization.
-#
-# A pre-publication reset lifts it for one change by updating the baseline file
-# in the same diff. The exception is deliberate, reviewable beside the migration
-# it explains, and records the evidence that nothing had applied the files it
-# rewrites. cd.yml holds the same line against the published runtime image and
-# has no such escape, so a wrong declaration still cannot reach a registry.
-if [[ -z "$(git diff --name-only "${diff_args[@]}" -- "${BASELINE_FILE}")" ]]; then
-	echo "migration history: published migration files are append-only (${scope})" >&2
+if [[ -n "${changes}" ]]; then
+	echo "migration history: applied migration files are append-only (${scope})" >&2
 	printf '%s\n' "${changes}" >&2
-	echo "migration history: declare a pre-publication reset in ${BASELINE_FILE} to rewrite them" >&2
 	exit 1
 fi
 
-echo "migration history: pre-publication reset declared in ${BASELINE_FILE} (${scope})"
-printf '%s\n' "${changes}"
+echo "migration history is append-only (${scope})"

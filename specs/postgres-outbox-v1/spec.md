@@ -286,9 +286,9 @@ Application startup and relay startup never migrate.
 
 Rollout order is migration, writer, then relay. The pack ships its whole schema
 as one migration, so a service has no intermediate version to stop at and no
-mixed-version transition to fence. A pre-publication consolidation of that
-migration set is recorded in `.migration-baseline`; once a version has shipped
-in a runtime image or reached any database it is immutable.
+mixed-version transition to fence. The template authors that schema in place
+because nothing has applied it; in a service generated from the template, every
+migration is append-only from the moment it exists.
 
 The API may run before its relay; committed rows form backlog. The relay may run
 before any writer and observes an empty queue.
