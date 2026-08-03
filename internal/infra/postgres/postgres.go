@@ -302,10 +302,11 @@ func commitTx(ctx context.Context, tx pgx.Tx) error {
 }
 
 func commitDefinitelyFailed(err error) bool {
-	var pgErr *pgconn.PgError
-	return errors.As(err, &pgErr) ||
-		errors.Is(err, pgx.ErrTxCommitRollback) ||
-		pgconn.SafeToRetry(err)
+	if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok {
+		return pgErr.Code != pgerrcode.TransactionResolutionUnknown &&
+			pgErr.Code != pgerrcode.StatementCompletionUnknown
+	}
+	return errors.Is(err, pgx.ErrTxCommitRollback) || pgconn.SafeToRetry(err)
 }
 
 // Retryable reports whether err is a PostgreSQL failure that the same request

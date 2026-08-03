@@ -48,7 +48,7 @@ func Run(args []string, buildPublisher PublisherBuilder) error {
 	return run(signalCtx, args, buildPublisher)
 }
 
-func run(signalCtx context.Context, args []string, buildPublisher PublisherBuilder) error {
+func run(signalCtx context.Context, args []string, buildPublisher PublisherBuilder) (runErr error) {
 	if buildPublisher == nil {
 		return fmt.Errorf("%w: outbox publisher builder is not registered", postgresoutbox.ErrConfig)
 	}
@@ -73,9 +73,7 @@ func run(signalCtx context.Context, args []string, buildPublisher PublisherBuild
 			if !publisherCleanupBeforePool {
 				return
 			}
-			ctx, cancel := context.WithTimeout(context.WithoutCancel(signalCtx), publisherClose)
-			defer cancel()
-			publisherCleanup(ctx)
+			runErr = errors.Join(runErr, closePublisher(signalCtx, publisherCleanup))
 		}()
 	}
 	if err != nil {
@@ -108,7 +106,7 @@ func run(signalCtx context.Context, args []string, buildPublisher PublisherBuild
 	publisherCleanupBeforePool = false
 	cleanupSafe := true
 	defer func() {
-		cleanupRelayDependencies(signalCtx, cleanupSafe, publisherCleanup, pool.Close)
+		runErr = errors.Join(runErr, cleanupRelayDependencies(signalCtx, cleanupSafe, publisherCleanup, pool.Close))
 	}()
 	store, err := postgresoutbox.NewStore(pool, outboxTelemetry)
 	if err != nil {
@@ -128,16 +126,38 @@ func cleanupRelayDependencies(
 	cleanupSafe bool,
 	publisherCleanup func(context.Context),
 	poolClose func(),
-) {
+) error {
 	if !cleanupSafe {
-		return
+		return nil
 	}
-	if publisherCleanup != nil {
-		ctx, cancel := context.WithTimeout(context.WithoutCancel(signalCtx), publisherClose)
-		publisherCleanup(ctx)
-		cancel()
-	}
+	err := closePublisher(signalCtx, publisherCleanup)
 	poolClose()
+	return err
+}
+
+func closePublisher(parent context.Context, cleanup func(context.Context)) error {
+	if cleanup == nil {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(parent), publisherClose)
+	defer cancel()
+	result := make(chan error, 1)
+	go func() {
+		var err error
+		defer func() {
+			if recover() != nil {
+				err = errors.New("outbox publisher cleanup panicked")
+			}
+			result <- err
+		}()
+		cleanup(ctx)
+	}()
+	select {
+	case err := <-result:
+		return err
+	case <-ctx.Done():
+		return fmt.Errorf("close outbox publisher: %w", ctx.Err())
+	}
 }
 
 func runRelayLifecycle(

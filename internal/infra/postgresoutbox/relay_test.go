@@ -16,7 +16,7 @@ func (publish publisherFunc) Publish(ctx context.Context, event Event) error {
 
 type relayStoreStub struct {
 	claim         func(context.Context, time.Duration) (ClaimedEvent, error)
-	markPublished func(context.Context, string, string) error
+	markPublished func(context.Context, ClaimedEvent) error
 	scheduleRetry func(context.Context, string, string, string, time.Duration) error
 	markPoisoned  func(context.Context, string, string, string) error
 	get           func(context.Context, string) (Record, error)
@@ -24,11 +24,11 @@ type relayStoreStub struct {
 	observe       func(context.Context) (StateObservation, error)
 }
 
-func (s *relayStoreStub) MarkPublished(ctx context.Context, id, token string) error {
+func (s *relayStoreStub) MarkPublished(ctx context.Context, claim ClaimedEvent) error {
 	if s.markPublished == nil {
 		return nil
 	}
-	return s.markPublished(ctx, id, token)
+	return s.markPublished(ctx, claim)
 }
 
 func (s *relayStoreStub) Claim(ctx context.Context, lease time.Duration) (ClaimedEvent, error) {
@@ -242,7 +242,11 @@ func TestRelayReadinessRequiresFreshObservation(t *testing.T) {
 	if !relay.Ready() {
 		t.Fatal("Ready() = false after a fresh successful observation")
 	}
-	relay.observed.Store(time.Now().Add(-2 * time.Minute).UnixNano())
+	relay.observed.Store(time.Now().Add(-90 * time.Second).UnixNano())
+	if !relay.Ready() {
+		t.Fatal("Ready() = false within the two-interval freshness window")
+	}
+	relay.observed.Store(time.Now().Add(-3 * time.Minute).UnixNano())
 	if relay.Ready() {
 		t.Fatal("Ready() = true after the observation became stale")
 	}
@@ -250,6 +254,9 @@ func TestRelayReadinessRequiresFreshObservation(t *testing.T) {
 	relay.StartDrain()
 	if relay.Ready() {
 		t.Fatal("Ready() = true while draining")
+	}
+	if got := observationStaleAfter(time.Duration(1<<63 - 1)); got != time.Duration(1<<63-1) {
+		t.Fatalf("observationStaleAfter(max) = %s", got)
 	}
 }
 
@@ -270,7 +277,7 @@ func TestRelayRunPublishesAndDrains(t *testing.T) {
 		published = true
 		return nil
 	}))
-	relay.markEvent = func(_ context.Context, _, _ string) error {
+	relay.markEvent = func(_ context.Context, _ ClaimedEvent) error {
 		relay.StartDrain() //nolint:contextcheck // Drain has no context-bearing variant.
 		return nil
 	}
@@ -437,24 +444,46 @@ func TestRelayHelpersAndValidation(t *testing.T) {
 }
 
 func TestRelayMaintenanceWaitAndProgressFailures(t *testing.T) {
-	t.Parallel()
-
 	observeErr := errors.New("observe")
-	relay := newUnitRelay(&relayStoreStub{
-		observe: func(context.Context) (StateObservation, error) { return StateObservation{}, observeErr },
-	}, publisherFunc(func(context.Context, Event) error { return nil }))
+	synctest.Test(t, func(t *testing.T) {
+		relay := newUnitRelay(&relayStoreStub{
+			observe: func(context.Context) (StateObservation, error) {
+				time.Sleep(2 * time.Second)
+				return StateObservation{}, observeErr
+			},
+		}, publisherFunc(func(context.Context, Event) error { return nil }))
+		relay.config.ObservationInterval = time.Second
+		now := time.Now()
+		nextObservation, nextCleanup := now, now.Add(time.Hour)
+		if err := relay.maintain(t.Context(), now, &nextObservation, &nextCleanup); err != nil {
+			t.Fatalf("maintain(periodic observation failure) error = %v", err)
+		}
+		if elapsed := time.Since(now); elapsed != 2*time.Second {
+			t.Fatalf("observation elapsed = %s, want 2s", elapsed)
+		}
+		if delay := nextObservation.Sub(now); delay != 3*time.Second {
+			t.Fatalf("next observation = %s after start, want 3s", delay)
+		}
+	})
+
 	now := time.Now()
-	nextObservation, nextCleanup := now, now.Add(time.Hour)
-	if err := relay.maintain(t.Context(), now, &nextObservation, &nextCleanup); !errors.Is(err, observeErr) {
-		t.Fatalf("maintain(observe) error = %v", err)
-	}
 	cleanupErr := errors.New("cleanup")
-	relay = newUnitRelay(&relayStoreStub{
+	relay := newUnitRelay(&relayStoreStub{
 		cleanup: func(context.Context, time.Duration, int) (int, error) { return 0, cleanupErr },
 	}, publisherFunc(func(context.Context, Event) error { return nil }))
-	nextObservation, nextCleanup = now.Add(time.Hour), now
+	nextObservation, nextCleanup := now.Add(time.Hour), now
 	if err := relay.maintain(t.Context(), now, &nextObservation, &nextCleanup); !errors.Is(err, cleanupErr) {
 		t.Fatalf("maintain(cleanup) error = %v", err)
+	}
+	relay = newUnitRelay(&relayStoreStub{
+		cleanup: func(context.Context, time.Duration, int) (int, error) { return 100, nil },
+	}, publisherFunc(func(context.Context, Event) error { return nil }))
+	nextObservation, nextCleanup = now.Add(time.Hour), now
+	if err := relay.maintain(t.Context(), now, &nextObservation, &nextCleanup); err != nil {
+		t.Fatalf("maintain(full cleanup batch) error = %v", err)
+	}
+	if delay := time.Until(nextCleanup); delay <= 0 || delay > relay.config.PollInterval {
+		t.Fatalf("full cleanup batch delay = %s, want (0,%s]", delay, relay.config.PollInterval)
 	}
 
 	ctx, cancel := context.WithCancel(t.Context())
@@ -472,7 +501,7 @@ func TestRelayMaintenanceWaitAndProgressFailures(t *testing.T) {
 
 	markErr := errors.New("mark")
 	relay = newUnitRelay(&relayStoreStub{}, publisherFunc(func(context.Context, Event) error { return nil }))
-	relay.markEvent = func(context.Context, string, string) error { return markErr }
+	relay.markEvent = func(context.Context, ClaimedEvent) error { return markErr }
 	relay.getEvent = func(context.Context, string) (Record, error) { return Record{LeaseToken: "lease"}, nil }
 	if err := relay.markPublished(t.Context(), ClaimedEvent{Event: outboxEventForUnit(), Token: "lease"}); !errors.Is(err, ErrProgressUnknown) {
 		t.Fatalf("markPublished(retry exhausted) error = %v", err)

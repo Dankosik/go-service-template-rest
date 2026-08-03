@@ -1,13 +1,12 @@
 # PostgreSQL transactional outbox V1 implementation ledger
 
-status: ready
+status: done
 
-Completion: `OUTBOX=postgres` retains a canonical PostgreSQL outbox and a
-separately runnable fail-closed relay whose fixed local candidate proves atomic
-intent, leases/crash recovery, explicit at-least-once duplicates, bounded
-failure/lifecycle/telemetry, real NATS acknowledgement, and physical
-`OUTBOX=none` purity; the candidate passes independent implementation review,
-claim-scoped final validation, one local commit, and clean task-owned status.
+Completion target: retain the accepted capability while closing every proven
+actionable finding from the fixed-candidate PostgreSQL/performance/architecture
+audit. T1-T6 record the original candidate; T7 owns the remediation and its new
+proof without expanding into CDC, broker ownership, partitioning, or an internal
+worker pool.
 
 Blocked stop: stop without a completion claim if canonical Goose/sqlc authority
 changes, a mandatory real PostgreSQL/NATS/Docker proof input becomes unavailable,
@@ -16,7 +15,7 @@ profile, an independent review remains FAIL, or any required command remains
 red. Record the exact failing command/state and reopen the narrow source owner.
 
 Global constraints: preserve unrelated/sibling work; use the isolated
-`codex/postgres-outbox-v1` worktree; no push/PR/deploy/managed infrastructure or
+`codex/postgres-outbox-v1-audit-fixes` worktree; no push/PR/deploy/managed infrastructure or
 other external write; no broker adapter, inbox, domain-specific event,
 exactly-once claim, runtime migration, noop Publisher, new module dependency,
 CDC scaffolding, internal worker pool, or lease renewal; keep exact event bytes
@@ -65,6 +64,14 @@ and IDs across retries/redrive; serialize Docker and broad Go gates.
   - Depends on: T1, T2, T3, T4, T5 — all accepted outputs and focused proof gates — needed to start.
   - Proof: independent implementation review returns PASS on the fixed tree; then, without overlapping broad gates, run `go test -vet=off -count=1 ./internal/infra/postgres ./internal/infra/postgresoutbox ./internal/config ./cmd/outbox-relay/internal/bootstrap`, `go test -vet=off -race -count=1 ./internal/infra/postgres ./internal/infra/postgresoutbox ./cmd/outbox-relay/internal/bootstrap`, `REQUIRE_DOCKER=1 go test -vet=off -p=1 -count=1 -tags=integration ./test -run '^TestPostgresOutbox'`, `make sqlc-check`, `make migration-check`, `make migration-validate`, `make template-init-check`, `make check-full`, and `git diff --check`; inspect the commit diff/status, create one local commit, and require `git status --short` empty.
 
+- [x] T7: The audit remediation preserves every accepted invariant while removing the measured ordering-query collapse and closing commit classification, JSON, readiness, cleanup, shutdown, and observation gaps.
+  - Source: fixed-candidate audit against `16bba2b152e0772ea978a38f7e5391318fa928a7`; `design/overview.md` ordering, transaction, lifecycle, and observation decisions.
+  - Owner/surface/resources: canonical migration/query/sqlc output; PostgreSQL transaction classifier; outbox store/relay/telemetry; relay bootstrap; focused and real-PostgreSQL tests; operations documentation; isolated local benchmark artifacts only.
+  - Depends on: T6 — the immutable audited candidate and its original proof are the comparison baseline.
+  - Proof: SQLSTATE `08007`/`40003` remain unknown; exact Go-valid JSON edge bytes persist; concurrent ordered append/finalize cannot lose the next head; claims and observations use materialized state and stable statement time; periodic observation, readiness, cleanup catch-up, redrive storage, and Publisher cleanup are bounded; focused/race/integration/sqlc/migration/purity/full gates pass serially; repeated PostgreSQL plans and workload measurements beat or bound the audited failure cases without weakening at-least-once recovery.
+  - Receipt: focused Go and race packages passed; the exact-tree real-PostgreSQL `^TestPostgresOutbox` suite passed; `make sqlc-check`, `make migration-check`, `make migration-validate`, `make template-init-check`, `make check-full`, and `git diff --check` passed serially. The external benchmark manifest records exact candidate/fixed identities, query plans, relay/request/maintenance matrices, three 1M hot-key migration runs, three 1M-key migration runs, and their dispersion. Fresh independent acceptance returned PASS on the frozen diff.
+  - Reopen if: materialized head maintenance can diverge under a demonstrated transaction interleaving, the ordered finalization round trips violate an accepted workload budget, or production observation shows connection, vacuum, or cleanup pressure outside the measured local envelope.
+
 ## Reconciliation
 
 - Profile selection/purity and runtime admission: T4, with cross-profile broker
@@ -76,11 +83,13 @@ and IDs across retries/redrive; serialize Docker and broad Go gates.
 - Publisher acknowledgement, duplicates and broker outage: T3 and T5.
 - Process lifecycle, readiness and no-noop composition: T3 and T4.
 - Migration/sqlc/generated/image/rollout documentation: T2 and T4.
-- Every mandatory proof and completion/local-commit boundary: earliest owning
-  task above, then integrated fixed-candidate closeout T6.
+- Every mandatory proof and original completion/local-commit boundary: earliest
+  owning task above, then fixed-candidate closeout T6 and audit-remediation
+  acceptance T7.
 
 No parallel wave is planned: T2 consumes T1 transaction semantics; T3 consumes
 T2 generated/store APIs; T4 enumerates T3 runtime/config/profile surfaces; T5
 requires the complete retained/removed composition; T6 consumes every accepted
-output. Running them concurrently would create generated, test-fixture,
-initializer, or interface assumption conflicts without a valid handoff.
+output. T7 is a later serialized acceptance unit against the immutable T6
+candidate. Running implementation and generated/test-fixture gates concurrently
+would create ownership conflicts without a valid handoff.

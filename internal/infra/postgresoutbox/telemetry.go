@@ -207,6 +207,10 @@ func (t *Telemetry) observe(_ context.Context, observer metric.Observer) error {
 		metric.WithAttributes(attribute.String("relation", "ordering_heads"), attribute.String("kind", "total")))
 	observer.ObserveInt64(t.storageBytes, snapshot.observation.OrderingHeadsIndexBytes,
 		metric.WithAttributes(attribute.String("relation", "ordering_heads"), attribute.String("kind", "indexes")))
+	observer.ObserveInt64(t.storageBytes, snapshot.observation.RedrivesBytes,
+		metric.WithAttributes(attribute.String("relation", "redrives"), attribute.String("kind", "total")))
+	observer.ObserveInt64(t.storageBytes, snapshot.observation.RedrivesIndexBytes,
+		metric.WithAttributes(attribute.String("relation", "redrives"), attribute.String("kind", "indexes")))
 	observer.ObserveInt64(t.inflight, snapshot.inflight)
 	ready := int64(0)
 	if snapshot.ready && snapshot.staleAfter > 0 && time.Since(snapshot.observedAt) <= snapshot.staleAfter {

@@ -15,10 +15,12 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/fstest"
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	"github.com/example/go-service-template-rest/internal/infra/postgres/pgtest"
+	"github.com/example/go-service-template-rest/internal/infra/postgresmigrate"
 	"github.com/example/go-service-template-rest/internal/infra/postgresoutbox"
 	"github.com/jackc/pgx/v5"
 	"go.opentelemetry.io/otel/attribute"
@@ -49,6 +51,27 @@ func TestPostgresOutboxEnvelope(t *testing.T) {
 	}
 	if !bytes.Equal(again.Event.Payload, payload) {
 		t.Fatal("mutating returned payload changed durable bytes")
+	}
+	for _, test := range []struct {
+		id       string
+		payload  []byte
+		metadata []byte
+	}{
+		{id: "json-large-number", payload: []byte(`1e1000000`), metadata: []byte(`{}`)},
+		{id: "json-null-codepoint-payload", payload: []byte(`"\u0000"`), metadata: []byte(`{}`)},
+		{id: "json-null-codepoint-metadata", payload: []byte(`{}`), metadata: []byte(`{"value":"\u0000"}`)},
+	} {
+		event := outboxEvent(test.id)
+		event.Payload = test.payload
+		event.Metadata = test.metadata
+		mustAppendOutbox(t, ctx, pool, store, event)
+		stored, err := store.Get(ctx, event.ID)
+		if err != nil {
+			t.Fatalf("Get(%s): %v", event.ID, err)
+		}
+		if !bytes.Equal(stored.Event.Payload, test.payload) || !bytes.Equal(stored.Event.Metadata, test.metadata) {
+			t.Fatalf("stored JSON bytes for %s = %q/%q, want %q/%q", event.ID, stored.Event.Payload, stored.Event.Metadata, test.payload, test.metadata)
+		}
 	}
 
 	_, err = pool.PGX().Exec(ctx, `
@@ -266,6 +289,267 @@ func TestPostgresOutboxAtomicity(t *testing.T) {
 	assertAtomicCounts(t, ctx, pool, "success", 1, 1)
 }
 
+func TestPostgresOutboxOrderingReadyMigrationBackfill(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
+	t.Cleanup(cancel)
+	initialMigration, err := os.ReadFile("../migrations/000001_postgres_outbox.sql")
+	if err != nil {
+		t.Fatalf("read initial outbox migration: %v", err)
+	}
+	dsn := pgtest.Migrated(t, fstest.MapFS{
+		"migrations/000001_postgres_outbox.sql": {Data: initialMigration},
+	}, "migrations")
+	pool, err := postgres.New(ctx, postgres.Options{
+		DSN:                dsn,
+		ConnectTimeout:     3 * time.Second,
+		HealthcheckTimeout: 3 * time.Second,
+		MaxOpenConns:       4,
+		AcquireTimeout:     time.Second,
+		ConnMaxLifetime:    time.Hour,
+		StatementTimeout:   10 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("postgres.New(): %v", err)
+	}
+	t.Cleanup(pool.Close)
+	if _, err := pool.PGX().Exec(ctx, `
+		INSERT INTO outbox_ordering_heads (ordering_key, last_sequence)
+		VALUES ('existing-head', 3);
+		INSERT INTO outbox_ordering_heads (ordering_key, last_sequence, updated_at)
+		VALUES
+			('historical-head', 9, '2000-01-01 00:00:00+00'),
+			('published-only-head', 11, '2001-01-01 00:00:00+00');
+		INSERT INTO outbox_events (
+			id, event_type, source, destination, schema_name, occurred_at, payload, metadata,
+			ordering_key, ordering_sequence, published_at, poisoned_at
+		) VALUES
+			('migrated-unordered', 't', 's', 'd', 'v', statement_timestamp(),
+				convert_to('{}', 'UTF8'), convert_to('{}', 'UTF8'), NULL, NULL, NULL, NULL),
+			('migrated-published', 't', 's', 'd', 'v', statement_timestamp(),
+				convert_to('{}', 'UTF8'), convert_to('{}', 'UTF8'), 'existing-head', 1, statement_timestamp(), NULL),
+			('migrated-poison', 't', 's', 'd', 'v', statement_timestamp(),
+				convert_to('{}', 'UTF8'), convert_to('{}', 'UTF8'), 'existing-head', 2, NULL, statement_timestamp()),
+			('migrated-blocked', 't', 's', 'd', 'v', statement_timestamp(),
+				convert_to('{}', 'UTF8'), convert_to('{}', 'UTF8'), 'existing-head', 3, NULL, NULL),
+			('migrated-missing-head', 't', 's', 'd', 'v', statement_timestamp(),
+				convert_to('{}', 'UTF8'), convert_to('{}', 'UTF8'), 'missing-head', 7, NULL, NULL),
+			('migrated-published-only', 't', 's', 'd', 'v', statement_timestamp(),
+				convert_to('{}', 'UTF8'), convert_to('{}', 'UTF8'), 'published-only-head', 11,
+				statement_timestamp(), NULL)`); err != nil {
+		t.Fatalf("seed pre-remediation outbox rows: %v", err)
+	}
+
+	if _, err := postgresmigrate.MigrateUp(ctx, postgresmigrate.MigrationOptions{
+		DSN:              dsn,
+		SourceFS:         os.DirFS(".."),
+		SourcePath:       "migrations",
+		ConnectTimeout:   3 * time.Second,
+		StatementTimeout: time.Minute,
+		LockTimeout:      15 * time.Second,
+		CleanupTimeout:   15 * time.Second,
+	}); err != nil {
+		t.Fatalf("apply ordering-ready migration: %v", err)
+	}
+
+	wantReady := map[string]bool{
+		"migrated-unordered":      false,
+		"migrated-published":      false,
+		"migrated-poison":         true,
+		"migrated-blocked":        false,
+		"migrated-missing-head":   true,
+		"migrated-published-only": false,
+	}
+	rows, err := pool.PGX().Query(ctx, "SELECT id, ordering_ready FROM outbox_events")
+	if err != nil {
+		t.Fatalf("read migrated readiness: %v", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id string
+		var ready bool
+		if err := rows.Scan(&id, &ready); err != nil {
+			t.Fatalf("scan migrated readiness: %v", err)
+		}
+		if want, ok := wantReady[id]; !ok || ready != want {
+			t.Fatalf("migrated readiness %s = %t, want %t", id, ready, want)
+		}
+		delete(wantReady, id)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("iterate migrated readiness: %v", err)
+	}
+	if len(wantReady) != 0 {
+		t.Fatalf("missing migrated readiness rows: %v", wantReady)
+	}
+	for key, want := range map[string]int64{"existing-head": 2, "missing-head": 7} {
+		var current int64
+		if err := pool.PGX().QueryRow(ctx,
+			"SELECT current_sequence FROM outbox_ordering_heads WHERE ordering_key = $1", key,
+		).Scan(&current); err != nil {
+			t.Fatalf("read migrated head %s: %v", key, err)
+		}
+		if current != want {
+			t.Fatalf("migrated head %s = %d, want %d", key, current, want)
+		}
+	}
+	var historicalCurrent *int64
+	var historicalUpdated time.Time
+	if err := pool.PGX().QueryRow(ctx, `
+		SELECT current_sequence, updated_at
+		FROM outbox_ordering_heads
+		WHERE ordering_key = 'historical-head'`).Scan(&historicalCurrent, &historicalUpdated); err != nil {
+		t.Fatalf("read historical head: %v", err)
+	}
+	if historicalCurrent != nil || !historicalUpdated.Equal(time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)) {
+		t.Fatalf("historical head was rewritten: current=%v updated=%s", historicalCurrent, historicalUpdated)
+	}
+	var publishedOnlyCurrent *int64
+	var publishedOnlyUpdated time.Time
+	if err := pool.PGX().QueryRow(ctx, `
+		SELECT current_sequence, updated_at
+		FROM outbox_ordering_heads
+		WHERE ordering_key = 'published-only-head'`).Scan(&publishedOnlyCurrent, &publishedOnlyUpdated); err != nil {
+		t.Fatalf("read published-only head: %v", err)
+	}
+	if publishedOnlyCurrent != nil || !publishedOnlyUpdated.Equal(time.Date(2001, 1, 1, 0, 0, 0, 0, time.UTC)) {
+		t.Fatalf("published-only head was rewritten: current=%v updated=%s", publishedOnlyCurrent, publishedOnlyUpdated)
+	}
+
+	invariantRows, err := pool.PGX().Query(ctx, `
+		WITH expected AS (
+			SELECT event.ordering_key, min(event.ordering_sequence) AS current_sequence
+			FROM outbox_events AS event
+			WHERE event.ordering_key IS NOT NULL AND event.published_at IS NULL
+			GROUP BY event.ordering_key
+		)
+		SELECT coalesce(expected.ordering_key, head.ordering_key) AS ordering_key
+		FROM expected
+		FULL JOIN outbox_ordering_heads AS head
+		  ON head.ordering_key = expected.ordering_key
+		LEFT JOIN outbox_events AS event
+		  ON event.ordering_key = expected.ordering_key
+		 AND event.ordering_sequence = expected.current_sequence
+		 AND event.published_at IS NULL
+		 AND event.ordering_ready
+		WHERE head.current_sequence IS DISTINCT FROM expected.current_sequence
+		   OR (expected.ordering_key IS NOT NULL AND event.id IS NULL)`)
+	if err != nil {
+		t.Fatalf("run ordering-head invariant readback: %v", err)
+	}
+	if invariantRows.Next() {
+		var key string
+		if err := invariantRows.Scan(&key); err != nil {
+			t.Fatalf("scan ordering-head invariant violation: %v", err)
+		}
+		t.Fatalf("ordering-head invariant violation for %q", key)
+	}
+	if err := invariantRows.Err(); err != nil {
+		t.Fatalf("iterate ordering-head invariant readback: %v", err)
+	}
+	invariantRows.Close()
+
+	if _, err := pool.PGX().Exec(ctx, `
+		INSERT INTO outbox_events (
+			id, event_type, source, destination, schema_name, occurred_at, payload, metadata
+		) VALUES (
+			'jsonb-incompatible', 't', 's', 'd', 'v', statement_timestamp(),
+			convert_to('1e1000000', 'UTF8'), convert_to('{"nul":"\u0000"}', 'UTF8')
+		)`); err != nil {
+		t.Fatalf("insert jsonb-incompatible event: %v", err)
+	}
+	if _, err := postgresmigrate.MigrateDown(ctx, postgresmigrate.MigrationOptions{
+		DSN:              dsn,
+		SourceFS:         os.DirFS(".."),
+		SourcePath:       "migrations",
+		ConnectTimeout:   3 * time.Second,
+		StatementTimeout: time.Minute,
+		LockTimeout:      15 * time.Second,
+		CleanupTimeout:   15 * time.Second,
+	}); err == nil || !strings.Contains(err.Error(), "jsonb-incompatible event bytes exist") {
+		t.Fatalf("MigrateDown() error = %v, want jsonb incompatibility fence", err)
+	}
+	var edgeCount int
+	if err := pool.PGX().QueryRow(ctx, `
+		SELECT count(*)
+		FROM outbox_events
+		WHERE id = 'jsonb-incompatible' AND ordering_ready = false`).Scan(&edgeCount); err != nil {
+		t.Fatalf("verify failed Down rollback: %v", err)
+	}
+	if edgeCount != 1 {
+		t.Fatalf("failed Down changed edge rows: count = %d, want 1", edgeCount)
+	}
+}
+
+func TestPostgresOutboxOrderingReadyMigrationHighCardinality(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
+	t.Cleanup(cancel)
+	initialMigration, err := os.ReadFile("../migrations/000001_postgres_outbox.sql")
+	if err != nil {
+		t.Fatalf("read initial outbox migration: %v", err)
+	}
+	dsn := pgtest.Migrated(t, fstest.MapFS{
+		"migrations/000001_postgres_outbox.sql": {Data: initialMigration},
+	}, "migrations")
+	pool, err := postgres.New(ctx, postgres.Options{
+		DSN:                dsn,
+		ConnectTimeout:     3 * time.Second,
+		HealthcheckTimeout: 3 * time.Second,
+		MaxOpenConns:       2,
+		AcquireTimeout:     time.Second,
+		ConnMaxLifetime:    time.Hour,
+		StatementTimeout:   10 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("postgres.New(): %v", err)
+	}
+	t.Cleanup(pool.Close)
+	if _, err := pool.PGX().Exec(ctx, `
+		INSERT INTO outbox_ordering_heads (ordering_key, last_sequence)
+		SELECT 'key-' || sequence, 1
+		FROM generate_series(1, 3) AS sequence;
+		INSERT INTO outbox_events (
+			id, event_type, source, destination, schema_name, occurred_at, payload, metadata,
+			ordering_key, ordering_sequence
+		)
+		SELECT 'event-' || sequence, 't', 's', 'd', 'v', statement_timestamp(),
+			convert_to('{}', 'UTF8'), convert_to('{}', 'UTF8'), 'key-' || sequence, 1
+		FROM generate_series(1, 3) AS sequence`); err != nil {
+		t.Fatalf("seed high-cardinality migration rows: %v", err)
+	}
+
+	if _, err := postgresmigrate.MigrateUp(ctx, postgresmigrate.MigrationOptions{
+		DSN:              dsn,
+		SourceFS:         os.DirFS(".."),
+		SourcePath:       "migrations",
+		ConnectTimeout:   3 * time.Second,
+		StatementTimeout: time.Minute,
+		LockTimeout:      15 * time.Second,
+		CleanupTimeout:   15 * time.Second,
+	}); err != nil {
+		t.Fatalf("apply high-cardinality ordering-ready migration: %v", err)
+	}
+
+	if _, err := pool.PGX().Exec(ctx, `
+		INSERT INTO outbox_events (
+			id, event_type, source, destination, schema_name, occurred_at, payload, metadata
+		) VALUES (
+			'post-migration-default', 't', 's', 'd', 'v', statement_timestamp(),
+			convert_to('{}', 'UTF8'), convert_to('{}', 'UTF8')
+		)`); err != nil {
+		t.Fatalf("insert post-migration default row: %v", err)
+	}
+	var ready, notReady int
+	if err := pool.PGX().QueryRow(ctx, `
+		SELECT count(*) FILTER (WHERE ordering_ready),
+		       count(*) FILTER (WHERE NOT ordering_ready)
+		FROM outbox_events`).Scan(&ready, &notReady); err != nil {
+		t.Fatalf("read high-cardinality readiness: %v", err)
+	}
+	if ready != 3 || notReady != 1 {
+		t.Fatalf("high-cardinality readiness = %d/%d, want 3/1", ready, notReady)
+	}
+}
+
 func TestPostgresOutboxOrderingAuthority(t *testing.T) {
 	ctx, pool, store := newOutboxFixture(t)
 	mustAppendOutbox(t, ctx, pool, store, orderedEvent("ordered-2", "account-1", 2))
@@ -294,7 +578,7 @@ func TestPostgresOutboxOrderingAuthority(t *testing.T) {
 		if claim.Event.ID != wantID {
 			t.Fatalf("claimed %q, want %q", claim.Event.ID, wantID)
 		}
-		if err := store.MarkPublished(ctx, claim.Event.ID, claim.Token); err != nil {
+		if err := store.MarkPublished(ctx, claim); err != nil {
 			t.Fatalf("MarkPublished(%s): %v", wantID, err)
 		}
 	}
@@ -402,6 +686,132 @@ func TestPostgresOutboxConcurrentClaims(t *testing.T) {
 	}
 }
 
+func TestPostgresOutboxOrderingHandoffRace(t *testing.T) {
+	ctx, pool, store := newOutboxFixture(t)
+	const iterations = 24
+	for iteration := range iterations {
+		key := fmt.Sprintf("handoff-%02d", iteration)
+		mustAppendOutbox(t, ctx, pool, store, orderedEvent(key+"-1", key, 1))
+		first := mustClaimOutbox(t, ctx, store)
+
+		start := make(chan struct{})
+		errs := make(chan error, 2)
+		go func() {
+			<-start
+			errs <- pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+				return store.Append(ctx, tx, orderedEvent(key+"-2", key, 2))
+			})
+		}()
+		go func() {
+			<-start
+			errs <- store.MarkPublished(ctx, first)
+		}()
+		close(start)
+		for range 2 {
+			if err := <-errs; err != nil {
+				t.Fatalf("iteration %d concurrent append/mark: %v", iteration, err)
+			}
+		}
+
+		second := mustClaimOutbox(t, ctx, store)
+		if second.Event.ID != key+"-2" {
+			t.Fatalf("iteration %d next claim = %q, want %q", iteration, second.Event.ID, key+"-2")
+		}
+		if err := store.MarkPublished(ctx, second); err != nil {
+			t.Fatalf("iteration %d mark successor: %v", iteration, err)
+		}
+	}
+}
+
+func TestPostgresOutboxOrderingHandoffAfterBlockedSnapshot(t *testing.T) {
+	ctx, pool, store := newOutboxFixture(t)
+	mustAppendOutbox(t, ctx, pool, store, orderedEvent("snapshot-1", "snapshot", 1))
+	first := mustClaimOutbox(t, ctx, store)
+
+	tx, err := pool.PGX().Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin append: %v", err)
+	}
+	defer func() { _ = tx.Rollback(context.WithoutCancel(ctx)) }()
+	var blockerPID int
+	if err := tx.QueryRow(ctx, "SELECT pg_backend_pid()").Scan(&blockerPID); err != nil {
+		t.Fatalf("read append backend PID: %v", err)
+	}
+	if err := store.Append(ctx, tx, orderedEvent("snapshot-2", "snapshot", 2)); err != nil {
+		t.Fatalf("append successor: %v", err)
+	}
+
+	marked := make(chan error, 1)
+	go func() { marked <- store.MarkPublished(ctx, first) }()
+	deadline := time.NewTimer(10 * time.Second)
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer deadline.Stop()
+	defer ticker.Stop()
+	for {
+		var blocked bool
+		if err := pool.PGX().QueryRow(ctx, `
+			SELECT EXISTS (
+				SELECT 1
+				FROM pg_stat_activity AS activity
+				WHERE $1 = ANY(pg_blocking_pids(activity.pid))
+			)`, blockerPID).Scan(&blocked); err != nil {
+			t.Fatalf("observe blocked mark: %v", err)
+		}
+		if blocked {
+			break
+		}
+		select {
+		case err := <-marked:
+			t.Fatalf("mark completed before append commit: %v", err)
+		case <-deadline.C:
+			t.Fatal("mark did not wait for the ordering head lock")
+		case <-ticker.C:
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatalf("commit successor: %v", err)
+	}
+	if err := <-marked; err != nil {
+		if !errors.Is(err, postgresoutbox.ErrLeaseLost) {
+			t.Fatalf("mark after blocked snapshot: %v", err)
+		}
+		if err := store.MarkPublished(ctx, first); err != nil {
+			t.Fatalf("retry mark with fresh snapshot: %v", err)
+		}
+	}
+	second := mustClaimOutbox(t, ctx, store)
+	if second.Event.ID != "snapshot-2" {
+		t.Fatalf("next claim = %q, want snapshot-2", second.Event.ID)
+	}
+}
+
+func TestPostgresOutboxOrderedMarkFencesClaimIdentity(t *testing.T) {
+	ctx, pool, store := newOutboxFixture(t)
+	mustAppendOutbox(t, ctx, pool, store, orderedEvent("identity-a", "identity-a", 1))
+	mustAppendOutbox(t, ctx, pool, store, orderedEvent("identity-b", "identity-b", 1))
+	claim := mustClaimOutbox(t, ctx, store)
+	if claim.Event.ID != "identity-a" {
+		t.Fatalf("first claim = %q, want identity-a", claim.Event.ID)
+	}
+
+	mutated := claim
+	mutated.Event.OrderingKey = "identity-b"
+	if err := store.MarkPublished(ctx, mutated); !errors.Is(err, postgresoutbox.ErrLeaseLost) {
+		t.Fatalf("mutated claim mark = %v, want ErrLeaseLost", err)
+	}
+	record, err := store.Get(ctx, claim.Event.ID)
+	if err != nil {
+		t.Fatalf("Get(%s): %v", claim.Event.ID, err)
+	}
+	if !record.PublishedAt.IsZero() {
+		t.Fatal("mutated ordered claim marked the original event published")
+	}
+	if err := store.MarkPublished(ctx, claim); err != nil {
+		t.Fatalf("mark original claim: %v", err)
+	}
+}
+
 func TestPostgresOutboxOrderingClaims(t *testing.T) {
 	ctx, pool, store := newOutboxFixture(t)
 	mustAppendOutbox(t, ctx, pool, store, orderedEvent("key-1", "key", 1))
@@ -417,10 +827,10 @@ func TestPostgresOutboxOrderingClaims(t *testing.T) {
 	if second.Event.ID != "unordered" {
 		t.Fatalf("claim while key predecessor leased = %q, want unordered", second.Event.ID)
 	}
-	if err := store.MarkPublished(ctx, second.Event.ID, second.Token); err != nil {
+	if err := store.MarkPublished(ctx, second); err != nil {
 		t.Fatalf("publish unordered: %v", err)
 	}
-	if err := store.MarkPublished(ctx, first.Event.ID, first.Token); err != nil {
+	if err := store.MarkPublished(ctx, first); err != nil {
 		t.Fatalf("publish key-1: %v", err)
 	}
 	third := mustClaimOutbox(t, ctx, store)
@@ -502,7 +912,7 @@ func TestPostgresOutboxLeaseExpiryAndFence(t *testing.T) {
 	if second.CycleAttemptCount != 2 || second.TotalAttemptCount != 2 {
 		t.Fatalf("recovery attempts = %d/%d, want 2/2", second.CycleAttemptCount, second.TotalAttemptCount)
 	}
-	if err := store.MarkPublished(ctx, first.Event.ID, first.Token); !errors.Is(err, postgresoutbox.ErrLeaseLost) {
+	if err := store.MarkPublished(ctx, first); !errors.Is(err, postgresoutbox.ErrLeaseLost) {
 		t.Fatalf("stale MarkPublished() = %v, want ErrLeaseLost", err)
 	}
 	if err := store.ScheduleRetry(ctx, first.Event.ID, first.Token, "publisher_temporary", 0); !errors.Is(err, postgresoutbox.ErrLeaseLost) {
@@ -511,7 +921,7 @@ func TestPostgresOutboxLeaseExpiryAndFence(t *testing.T) {
 	if err := store.MarkPoisoned(ctx, first.Event.ID, first.Token, "publisher_permanent"); !errors.Is(err, postgresoutbox.ErrLeaseLost) {
 		t.Fatalf("stale MarkPoisoned() = %v, want ErrLeaseLost", err)
 	}
-	if err := store.MarkPublished(ctx, second.Event.ID, second.Token); err != nil {
+	if err := store.MarkPublished(ctx, second); err != nil {
 		t.Fatalf("current MarkPublished(): %v", err)
 	}
 }
@@ -584,7 +994,7 @@ func TestPostgresOutboxRedrive(t *testing.T) {
 	if other.Event.ID != "poison" {
 		t.Fatalf("next claim = %q, want redriven poison", other.Event.ID)
 	}
-	if err := store.MarkPublished(ctx, other.Event.ID, other.Token); err != nil {
+	if err := store.MarkPublished(ctx, other); err != nil {
 		t.Fatalf("publish redriven event: %v", err)
 	}
 	if err := store.Redrive(ctx, other.Event.ID, "audit-3"); !errors.Is(err, postgresoutbox.ErrRedriveRejected) {
@@ -619,7 +1029,7 @@ func TestPostgresOutboxCleanup(t *testing.T) {
 	mustAppendOutbox(t, ctx, pool, store, outboxEvent("cleanup-recent"))
 	for range 3 {
 		claim := mustClaimOutbox(t, ctx, store)
-		if err := store.MarkPublished(ctx, claim.Event.ID, claim.Token); err != nil {
+		if err := store.MarkPublished(ctx, claim); err != nil {
 			t.Fatalf("MarkPublished(): %v", err)
 		}
 	}
@@ -1077,6 +1487,22 @@ func TestPostgresOutboxDrainDuringInitialObservationNeverBecomesReady(t *testing
 	}
 }
 
+func TestPostgresOutboxStartupRequiresRedriveLedger(t *testing.T) {
+	ctx, pool, store := newOutboxFixture(t)
+	if _, err := pool.PGX().Exec(ctx, "DROP TABLE outbox_redrives"); err != nil {
+		t.Fatalf("drop redrive ledger: %v", err)
+	}
+	var attempts atomic.Int64
+	relay := mustNewOutboxRelay(t, store, testPublisherFunc(func(context.Context, postgresoutbox.Event) error {
+		attempts.Add(1)
+		return nil
+	}), nil, testRelayConfig())
+	result := readRelayResult(t, runOutboxRelay(ctx, relay))
+	if result.Err == nil || !result.CleanupSafe || relay.Ready() || attempts.Load() != 0 {
+		t.Fatalf("startup without redrive ledger result=%+v ready=%t attempts=%d", result, relay.Ready(), attempts.Load())
+	}
+}
+
 func TestPostgresOutboxRetryAndPoison(t *testing.T) {
 	t.Run("exhaustion", func(t *testing.T) {
 		ctx, pool, store := newOutboxFixture(t)
@@ -1176,6 +1602,8 @@ func TestPostgresOutboxObservability(t *testing.T) {
 		"events/indexes":         observation.EventsIndexBytes,
 		"ordering_heads/total":   observation.OrderingHeadsBytes,
 		"ordering_heads/indexes": observation.OrderingHeadsIndexBytes,
+		"redrives/total":         observation.RedrivesBytes,
+		"redrives/indexes":       observation.RedrivesIndexBytes,
 	}) {
 		t.Fatalf("database-global metrics do not match observation: %+v", first)
 	}
@@ -1206,7 +1634,7 @@ func TestPostgresOutboxTelemetryTransitions(t *testing.T) {
 	if recovered.Event.ID != first.Event.ID || !recovered.Recovered {
 		t.Fatalf("recovered claim = id %q recovered %t, want %q/true", recovered.Event.ID, recovered.Recovered, first.Event.ID)
 	}
-	if err := store.MarkPublished(ctx, recovered.Event.ID, recovered.Token); err != nil {
+	if err := store.MarkPublished(ctx, recovered); err != nil {
 		t.Fatalf("mark recovered event published: %v", err)
 	}
 
@@ -1223,7 +1651,7 @@ func TestPostgresOutboxTelemetryTransitions(t *testing.T) {
 		t.Fatalf("redrive telemetry poison: %v", err)
 	}
 	poison = mustClaimOutbox(t, ctx, store)
-	if err := store.MarkPublished(ctx, poison.Event.ID, poison.Token); err != nil {
+	if err := store.MarkPublished(ctx, poison); err != nil {
 		t.Fatalf("mark redriven event published: %v", err)
 	}
 	if _, err := pool.PGX().Exec(ctx, "UPDATE outbox_events SET published_at = clock_timestamp() - interval '2 hours'"); err != nil {
@@ -1708,22 +2136,25 @@ func assertOutboxObservationMatchesSQL(
 		t.Fatalf("published oldest = %v, direct SQL %v", observation.PublishedRetainedOldestAt, publishedAt)
 	}
 
-	var heads, eventsBytes, eventIndexes, headBytes, headIndexes int64
+	var heads, eventsBytes, eventIndexes, headBytes, headIndexes, redriveBytes, redriveIndexes int64
 	if err := pool.PGX().QueryRow(ctx, `SELECT
 		(SELECT count(*) FROM outbox_ordering_heads),
 		pg_total_relation_size('outbox_events'), pg_indexes_size('outbox_events'),
-		pg_total_relation_size('outbox_ordering_heads'), pg_indexes_size('outbox_ordering_heads')`).Scan(
-		&heads, &eventsBytes, &eventIndexes, &headBytes, &headIndexes,
+		pg_total_relation_size('outbox_ordering_heads'), pg_indexes_size('outbox_ordering_heads'),
+		pg_total_relation_size('outbox_redrives'), pg_indexes_size('outbox_redrives')`).Scan(
+		&heads, &eventsBytes, &eventIndexes, &headBytes, &headIndexes, &redriveBytes, &redriveIndexes,
 	); err != nil {
 		t.Fatalf("read direct outbox storage: %v", err)
 	}
-	want := []int64{heads, eventsBytes, eventIndexes, headBytes, headIndexes}
+	want := []int64{heads, eventsBytes, eventIndexes, headBytes, headIndexes, redriveBytes, redriveIndexes}
 	got := []int64{
 		observation.OrderingHeadCount,
 		observation.EventsBytes,
 		observation.EventsIndexBytes,
 		observation.OrderingHeadsBytes,
 		observation.OrderingHeadsIndexBytes,
+		observation.RedrivesBytes,
+		observation.RedrivesIndexBytes,
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("observation storage = %v, direct SQL %v", got, want)

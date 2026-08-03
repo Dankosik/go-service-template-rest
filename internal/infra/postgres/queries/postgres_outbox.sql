@@ -1,11 +1,15 @@
 -- name: AdvanceOutboxOrderingHead :one
-INSERT INTO outbox_ordering_heads (ordering_key, last_sequence)
-VALUES (sqlc.arg(ordering_key), sqlc.arg(ordering_sequence))
+INSERT INTO outbox_ordering_heads (ordering_key, last_sequence, current_sequence)
+VALUES (sqlc.arg(ordering_key), sqlc.arg(ordering_sequence), sqlc.arg(ordering_sequence))
 ON CONFLICT (ordering_key) DO UPDATE
 SET last_sequence = EXCLUDED.last_sequence,
+    current_sequence = coalesce(
+        outbox_ordering_heads.current_sequence,
+        EXCLUDED.current_sequence
+    ),
     updated_at = clock_timestamp()
 WHERE outbox_ordering_heads.last_sequence < EXCLUDED.last_sequence
-RETURNING last_sequence;
+RETURNING current_sequence;
 
 -- name: InsertOutboxEvent :exec
 INSERT INTO outbox_events (
@@ -18,7 +22,8 @@ INSERT INTO outbox_events (
     payload,
     metadata,
     ordering_key,
-    ordering_sequence
+    ordering_sequence,
+    ordering_ready
 ) VALUES (
     sqlc.arg(id),
     sqlc.arg(event_type),
@@ -29,7 +34,8 @@ INSERT INTO outbox_events (
     sqlc.arg(payload),
     sqlc.arg(metadata),
     sqlc.narg(ordering_key),
-    sqlc.narg(ordering_sequence)
+    sqlc.narg(ordering_sequence),
+    sqlc.arg(ordering_ready)
 );
 
 -- name: ClaimOutboxEvent :one
@@ -39,29 +45,20 @@ WITH candidate AS (
     FROM outbox_events AS event
     WHERE event.published_at IS NULL
       AND event.poisoned_at IS NULL
-      AND event.available_at <= clock_timestamp()
-      AND (event.lease_expires_at IS NULL OR event.lease_expires_at <= clock_timestamp())
-      AND (
-          event.ordering_key IS NULL
-          OR NOT EXISTS (
-              SELECT 1
-              FROM outbox_events AS predecessor
-              WHERE predecessor.ordering_key = event.ordering_key
-                AND predecessor.ordering_sequence < event.ordering_sequence
-                AND predecessor.published_at IS NULL
-          )
-      )
+      AND (event.ordering_key IS NULL OR event.ordering_ready)
+      AND event.available_at <= statement_timestamp()
+      AND (event.lease_expires_at IS NULL OR event.lease_expires_at <= statement_timestamp())
     ORDER BY event.available_at, event.created_at, event.id
     FOR UPDATE OF event SKIP LOCKED
     LIMIT 1
 )
 UPDATE outbox_events AS event
 SET lease_token = sqlc.arg(lease_token),
-    lease_expires_at = clock_timestamp()
+    lease_expires_at = statement_timestamp()
         + sqlc.arg(lease_milliseconds)::double precision * interval '1 millisecond',
     cycle_attempt_count = event.cycle_attempt_count + 1,
     total_attempt_count = event.total_attempt_count + 1,
-    last_attempt_at = clock_timestamp()
+    last_attempt_at = statement_timestamp()
 FROM candidate
 WHERE event.id = candidate.id
 RETURNING event.*, candidate.recovery_due::boolean AS recovery_due;
@@ -71,38 +68,102 @@ SELECT * FROM outbox_events WHERE id = sqlc.arg(id);
 
 -- name: MarkOutboxPublished :execrows
 UPDATE outbox_events
-SET published_at = clock_timestamp(),
+SET published_at = statement_timestamp(),
     lease_token = NULL,
     lease_expires_at = NULL,
     last_error_class = NULL
 WHERE id = sqlc.arg(id)
   AND lease_token = sqlc.arg(lease_token)
-  AND lease_expires_at > clock_timestamp()
+  AND ordering_key IS NOT DISTINCT FROM sqlc.narg(ordering_key)
+  AND ordering_sequence IS NOT DISTINCT FROM sqlc.narg(ordering_sequence)
+  AND lease_expires_at > statement_timestamp()
   AND published_at IS NULL
   AND poisoned_at IS NULL;
 
+-- name: MarkOrderedOutboxPublished :one
+WITH locked_head AS MATERIALIZED (
+    SELECT head.ordering_key, head.current_sequence, head.last_sequence
+    FROM outbox_ordering_heads AS head
+    WHERE head.ordering_key = sqlc.arg(ordering_key)
+      AND head.current_sequence = sqlc.arg(ordering_sequence)
+    FOR UPDATE
+), next_event AS MATERIALIZED (
+    SELECT event.id, event.ordering_sequence
+    FROM outbox_events AS event
+    JOIN locked_head AS head ON head.ordering_key = event.ordering_key
+    WHERE event.ordering_sequence > head.current_sequence
+      AND event.published_at IS NULL
+    ORDER BY event.ordering_sequence
+    LIMIT 1
+), marked AS (
+    UPDATE outbox_events AS event
+    SET published_at = statement_timestamp(),
+        lease_token = NULL,
+        lease_expires_at = NULL,
+        last_error_class = NULL
+    WHERE event.id = sqlc.arg(id)
+      AND event.lease_token = sqlc.arg(lease_token)
+      AND event.ordering_key = sqlc.arg(ordering_key)
+      AND event.ordering_sequence = sqlc.arg(ordering_sequence)
+      AND event.lease_expires_at > statement_timestamp()
+      AND event.published_at IS NULL
+      AND event.poisoned_at IS NULL
+      AND EXISTS (SELECT 1 FROM locked_head)
+      AND EXISTS (
+          SELECT 1
+          FROM locked_head AS head
+          WHERE head.current_sequence = head.last_sequence
+             OR EXISTS (SELECT 1 FROM next_event)
+      )
+    RETURNING event.id
+), advanced AS (
+    UPDATE outbox_ordering_heads AS head
+    SET current_sequence = (SELECT ordering_sequence FROM next_event),
+        updated_at = statement_timestamp()
+    WHERE head.ordering_key = sqlc.arg(ordering_key)
+      AND EXISTS (SELECT 1 FROM marked)
+    RETURNING head.current_sequence
+), unblocked AS (
+    UPDATE outbox_events AS event
+    SET ordering_ready = true
+    WHERE event.id = (SELECT id FROM next_event)
+      AND EXISTS (SELECT 1 FROM advanced)
+    RETURNING event.id
+)
+SELECT
+    (SELECT count(*) FROM marked)::bigint AS marked_count,
+    (SELECT count(*) FROM advanced)::bigint AS advanced_count,
+    (SELECT count(*) FROM unblocked)::bigint AS unblocked_count,
+    (SELECT current_sequence FROM advanced) AS current_sequence,
+    EXISTS (
+        SELECT 1
+        FROM locked_head AS head
+        WHERE head.current_sequence < head.last_sequence
+          AND NOT EXISTS (SELECT 1 FROM next_event)
+    ) AS snapshot_conflict;
+
 -- name: ScheduleOutboxRetry :execrows
 UPDATE outbox_events
-SET available_at = clock_timestamp()
+SET available_at = statement_timestamp()
         + sqlc.arg(delay_milliseconds)::double precision * interval '1 millisecond',
     lease_token = NULL,
     lease_expires_at = NULL,
     last_error_class = sqlc.arg(error_class)
 WHERE id = sqlc.arg(id)
   AND lease_token = sqlc.arg(lease_token)
-  AND lease_expires_at > clock_timestamp()
+  AND lease_expires_at > statement_timestamp()
   AND published_at IS NULL
   AND poisoned_at IS NULL;
 
 -- name: MarkOutboxPoisoned :execrows
 UPDATE outbox_events
-SET poisoned_at = clock_timestamp(),
+SET poisoned_at = statement_timestamp(),
     lease_token = NULL,
     lease_expires_at = NULL,
     last_error_class = sqlc.arg(error_class)
 WHERE id = sqlc.arg(id)
   AND lease_token = sqlc.arg(lease_token)
-  AND lease_expires_at > clock_timestamp()
+  AND lease_expires_at > statement_timestamp()
   AND published_at IS NULL
   AND poisoned_at IS NULL;
 
@@ -118,7 +179,7 @@ VALUES (sqlc.arg(audit_id), sqlc.arg(event_id), sqlc.arg(cycle_number));
 
 -- name: RedriveOutboxEvent :execrows
 UPDATE outbox_events
-SET available_at = clock_timestamp(),
+SET available_at = statement_timestamp(),
     cycle_attempt_count = 0,
     lease_token = NULL,
     lease_expires_at = NULL,
@@ -126,7 +187,7 @@ SET available_at = clock_timestamp(),
     last_error_class = NULL,
     redrive_count = redrive_count + 1,
     last_redrive_id = sqlc.arg(audit_id),
-    last_redriven_at = clock_timestamp()
+    last_redriven_at = statement_timestamp()
 WHERE id = sqlc.arg(id)
   AND poisoned_at IS NOT NULL
   AND published_at IS NULL;
@@ -135,7 +196,7 @@ WHERE id = sqlc.arg(id)
 WITH expired AS (
     SELECT id
     FROM outbox_events
-    WHERE published_at < clock_timestamp()
+    WHERE published_at < statement_timestamp()
         - sqlc.arg(retention_milliseconds)::double precision * interval '1 millisecond'
     ORDER BY published_at, id
     FOR UPDATE SKIP LOCKED
@@ -148,7 +209,7 @@ RETURNING event.id;
 
 -- name: ObserveOutbox :one
 WITH observation_clock AS (
-    SELECT clock_timestamp() AS observed_at
+    SELECT statement_timestamp() AS observed_at
 ), classified AS (
     SELECT
         event.created_at,
@@ -158,13 +219,7 @@ WITH observation_clock AS (
             WHEN event.poisoned_at IS NOT NULL THEN 'poison'
             WHEN event.lease_token IS NOT NULL AND event.lease_expires_at > observation_clock.observed_at THEN 'in_progress'
             WHEN event.lease_token IS NOT NULL THEN 'recovery_due'
-            WHEN event.ordering_key IS NOT NULL AND EXISTS (
-                SELECT 1
-                FROM outbox_events AS predecessor
-                WHERE predecessor.ordering_key = event.ordering_key
-                  AND predecessor.ordering_sequence < event.ordering_sequence
-                  AND predecessor.published_at IS NULL
-            ) THEN 'ordering_blocked'
+            WHEN event.ordering_key IS NOT NULL AND NOT event.ordering_ready THEN 'ordering_blocked'
             WHEN event.available_at > observation_clock.observed_at THEN 'retry_wait'
             ELSE 'eligible'
         END AS state
@@ -208,4 +263,6 @@ SELECT
     pg_total_relation_size('outbox_events')::bigint AS events_bytes,
     pg_indexes_size('outbox_events')::bigint AS events_index_bytes,
     pg_total_relation_size('outbox_ordering_heads')::bigint AS ordering_heads_bytes,
-    pg_indexes_size('outbox_ordering_heads')::bigint AS ordering_heads_index_bytes;
+    pg_indexes_size('outbox_ordering_heads')::bigint AS ordering_heads_index_bytes,
+    pg_total_relation_size('outbox_redrives')::bigint AS redrives_bytes,
+    pg_indexes_size('outbox_redrives')::bigint AS redrives_index_bytes;

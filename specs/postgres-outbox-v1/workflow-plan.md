@@ -1,6 +1,6 @@
 # PostgreSQL Transactional Outbox V1
 
-status: ready
+status: accepted
 
 ## Goal
 
@@ -40,7 +40,9 @@ physically removes the pack.
 
 Implementation / Validation / Closeout. Specification, technical design, test
 design, and task readiness have passed their required independent reviews.
-T1-T5 are accepted. T6 is selected; its first whole-candidate review found
+T1-T6 record the accepted original candidate. T7 is selected after its deep
+PostgreSQL/performance/architecture audit found actionable correctness and
+scalability gaps. The earlier T6 review history follows: its first whole-candidate review found
 duration-overflow, deterministic-time-proof, and workflow-state blockers, which
 are repaired. A second review found and this candidate repairs the production
 stderr privacy boundary plus the remaining workflow-state drift. A third review
@@ -66,6 +68,13 @@ checks, migration/image rehearsal, the complete initialization/purity matrix,
 `make check-full`, and `git diff --check`. T1-T6 are closed by the single local
 commit containing this receipt and its clean post-commit status.
 
+T7 now materializes the current ordered head, uses stable per-statement database
+time, preserves SQLSTATE `08007`/`40003` ambiguity, aligns database JSON checks
+with the Go envelope contract, and bounds observation freshness, cleanup catch-up,
+redrive storage telemetry, and Publisher cleanup. The accepted polling topology,
+one in-flight publication per relay, broker-neutral `Publisher`, durable leases,
+and explicit at-least-once duplicate window remain unchanged.
+
 ## Active artifacts
 
 - `research/`: current-state and primary-source evidence.
@@ -85,10 +94,13 @@ commit containing this receipt and its clean post-commit status.
 
 ## Next action
 
-No implementation or external action remains. Preserve the local commit; push,
-PR, merge, deploy, and other external writes remain outside authorization.
+No in-scope implementation action remains. Keep push, PR, merge, deploy, schema
+application, and other external writes outside this local acceptance boundary.
 
 ## Completion proof
 
-The accepted `tasks.md` proof matrix, independent implementation verdict,
-final validation receipts, local commit identity, and clean Git status.
+T7 closes with the updated `tasks.md` receipt, frozen-diff independent PASS,
+focused/race/full real-PostgreSQL proof, canonical sqlc/migration/image checks,
+the complete profile-purity and `check-full` gates, exact candidate/diff identity,
+and final Git status. Benchmark evidence remains a comparative local envelope;
+it does not establish a production SLO or authorize rollout.

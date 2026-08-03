@@ -89,7 +89,7 @@ func TestTelemetryBoundedContract(t *testing.T) {
 		"outbox.relay.observation.timestamp":   1,
 		"outbox.relay.last_progress.timestamp": 1,
 		"outbox.relay.ordering_heads":          1,
-		"outbox.relay.storage.bytes":           4,
+		"outbox.relay.storage.bytes":           6,
 		"outbox.relay.inflight":                1,
 		"outbox.relay.readiness":               1,
 		"outbox.relay.operations":              len(operations),
@@ -163,7 +163,7 @@ func TestRelayMarkPublishedReconciliationRecordsDurableProgress(t *testing.T) {
 
 	relay := &Relay{
 		telemetry: telemetry,
-		markEvent: func(context.Context, string, string) error { return errors.New("ambiguous result") },
+		markEvent: func(context.Context, ClaimedEvent) error { return errors.New("ambiguous result") },
 		getEvent: func(context.Context, string) (Record, error) {
 			return Record{PublishedAt: time.Now()}, nil
 		},

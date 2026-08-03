@@ -39,7 +39,7 @@ type RelayResult struct {
 
 type relayStore interface {
 	Claim(ctx context.Context, lease time.Duration) (ClaimedEvent, error)
-	MarkPublished(ctx context.Context, id, token string) error
+	MarkPublished(ctx context.Context, claim ClaimedEvent) error
 	ScheduleRetry(ctx context.Context, id, token, class string, delay time.Duration) error
 	MarkPoisoned(ctx context.Context, id, token, class string) error
 	Get(ctx context.Context, id string) (Record, error)
@@ -58,7 +58,7 @@ type Relay struct {
 	observed  atomic.Int64
 	inflight  atomic.Int64
 	jitter    func(time.Duration) time.Duration
-	markEvent func(context.Context, string, string) error
+	markEvent func(context.Context, ClaimedEvent) error
 	getEvent  func(context.Context, string) (Record, error)
 }
 
@@ -96,7 +96,7 @@ func (r *Relay) Ready() bool {
 		return false
 	}
 	observedAt := r.observed.Load()
-	return observedAt != 0 && time.Since(time.Unix(0, observedAt)) <= r.config.ObservationInterval
+	return observedAt != 0 && time.Since(time.Unix(0, observedAt)) <= observationStaleAfter(r.config.ObservationInterval)
 }
 
 func (r *Relay) StartDrain() {
@@ -165,16 +165,19 @@ func (r *Relay) maintain(
 	nextCleanup *time.Time,
 ) error {
 	if !now.Before(*nextObservation) {
-		if err := r.observe(ctx); err != nil {
-			return err
-		}
-		*nextObservation = now.Add(r.config.ObservationInterval)
+		_ = r.observe(ctx)
+		*nextObservation = time.Now().Add(r.config.ObservationInterval)
 	}
 	if !now.Before(*nextCleanup) {
-		if err := r.cleanup(ctx); err != nil {
+		fullBatch, err := r.cleanup(ctx)
+		if err != nil {
 			return err
 		}
-		*nextCleanup = now.Add(r.config.CleanupInterval)
+		delay := r.config.CleanupInterval
+		if fullBatch {
+			delay = minDuration(delay, r.config.PollInterval)
+		}
+		*nextCleanup = time.Now().Add(delay)
 	}
 	return nil
 }
@@ -325,7 +328,7 @@ func (r *Relay) callPublisher(ctx context.Context, event Event) publishResult {
 
 func (r *Relay) markPublished(ctx context.Context, claim ClaimedEvent) error {
 	for range 2 {
-		err := r.markEvent(ctx, claim.Event.ID, claim.Token)
+		err := r.markEvent(ctx, claim)
 		if err == nil {
 			r.recordProgress(time.Now())
 			return nil
@@ -358,12 +361,12 @@ func (r *Relay) observe(ctx context.Context) error {
 	return nil
 }
 
-func (r *Relay) cleanup(ctx context.Context) error {
-	_, err := r.store.CleanupPublished(ctx, r.config.PublishedRetention, r.config.CleanupBatchSize)
+func (r *Relay) cleanup(ctx context.Context) (bool, error) {
+	deleted, err := r.store.CleanupPublished(ctx, r.config.PublishedRetention, r.config.CleanupBatchSize)
 	if err != nil {
-		return fmt.Errorf("cleanup outbox: %w", err)
+		return false, fmt.Errorf("cleanup outbox: %w", err)
 	}
-	return nil
+	return deleted == r.config.CleanupBatchSize, nil
 }
 
 func (r *Relay) wait(ctx context.Context, duration time.Duration) bool {
@@ -384,7 +387,7 @@ func (r *Relay) wait(ctx context.Context, duration time.Duration) bool {
 
 func (r *Relay) observeProcessState() {
 	if r.telemetry != nil {
-		r.telemetry.SetProcessState(r.Ready(), r.inflight.Load(), r.config.ObservationInterval)
+		r.telemetry.SetProcessState(r.Ready(), r.inflight.Load(), observationStaleAfter(r.config.ObservationInterval))
 	}
 }
 
@@ -478,6 +481,14 @@ func minDuration(first time.Duration, values ...time.Duration) time.Duration {
 		}
 	}
 	return minimum
+}
+
+func observationStaleAfter(interval time.Duration) time.Duration {
+	const maximum = time.Duration(1<<63 - 1)
+	if interval > maximum/2 {
+		return maximum
+	}
+	return 2 * interval
 }
 
 func done(channel <-chan struct{}) bool {

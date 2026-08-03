@@ -26,7 +26,7 @@ func TestStoreRejectsInvalidUseBeforeDatabaseAccess(t *testing.T) {
 	if _, err := store.Claim(t.Context(), 0); !errors.Is(err, ErrConfig) {
 		t.Fatalf("Claim(0) error = %v", err)
 	}
-	if err := store.MarkPublished(t.Context(), "", "lease"); !errors.Is(err, ErrInvalidEvent) {
+	if err := store.MarkPublished(t.Context(), ClaimedEvent{Token: "lease"}); !errors.Is(err, ErrInvalidEvent) {
 		t.Fatalf("MarkPublished(invalid id) error = %v", err)
 	}
 	if err := store.ScheduleRetry(t.Context(), "event", "", "temporary", time.Second); !errors.Is(err, ErrInvalidEvent) {
@@ -180,7 +180,8 @@ func TestStoreDatabaseResultClassification(t *testing.T) {
 	}
 
 	store.queries = sqlcgen.New(databaseStub{tag: pgconn.NewCommandTag("UPDATE 1")})
-	if err := store.MarkPublished(t.Context(), "event", "lease"); err != nil {
+	claim := ClaimedEvent{Event: Event{ID: "event"}, Token: "lease"}
+	if err := store.MarkPublished(t.Context(), claim); err != nil {
 		t.Fatalf("MarkPublished() error = %v", err)
 	}
 	if err := store.ScheduleRetry(t.Context(), "event", "lease", "temporary", time.Second); err != nil {
@@ -190,8 +191,20 @@ func TestStoreDatabaseResultClassification(t *testing.T) {
 		t.Fatalf("MarkPoisoned() error = %v", err)
 	}
 	store.queries = sqlcgen.New(databaseStub{tag: pgconn.NewCommandTag("UPDATE 0")})
-	if err := store.MarkPublished(t.Context(), "event", "lease"); !errors.Is(err, ErrLeaseLost) {
+	if err := store.MarkPublished(t.Context(), claim); !errors.Is(err, ErrLeaseLost) {
 		t.Fatalf("MarkPublished(lost) error = %v", err)
+	}
+	sequence := &rowSequence{rows: []pgx.Row{
+		orderedMarkRow{snapshotConflict: true},
+		orderedMarkRow{marked: 1, advanced: 1, unblocked: 1},
+	}}
+	store.queries = sqlcgen.New(databaseStub{rows: sequence})
+	claim.Event.OrderingKey, claim.Event.OrderingSequence = "key", 1
+	if err := store.MarkPublished(t.Context(), claim); err != nil {
+		t.Fatalf("MarkPublished(ordered snapshot retry) error = %v", err)
+	}
+	if sequence.next != 2 {
+		t.Fatalf("ordered mark queries = %d, want 2", sequence.next)
 	}
 	store.queries = sqlcgen.New(databaseStub{execErr: databaseErr})
 	if err := store.MarkPoisoned(t.Context(), "event", "lease", "permanent"); !errors.Is(err, databaseErr) {
@@ -230,6 +243,7 @@ type databaseStub struct {
 	execErr  error
 	queryErr error
 	rowErr   error
+	rows     *rowSequence
 }
 
 func (stub databaseStub) Exec(context.Context, string, ...any) (pgconn.CommandTag, error) {
@@ -243,12 +257,46 @@ func (stub databaseStub) Query(context.Context, string, ...any) (pgx.Rows, error
 
 //nolint:ireturn // The pgx DBTX test double must return pgx's interface.
 func (stub databaseStub) QueryRow(context.Context, string, ...any) pgx.Row {
+	if stub.rows != nil {
+		row := stub.rows.rows[stub.rows.next]
+		stub.rows.next++
+		return row
+	}
 	return rowStub{err: stub.rowErr}
 }
 
 type rowStub struct{ err error }
 
 func (row rowStub) Scan(...any) error { return row.err }
+
+type rowSequence struct {
+	rows []pgx.Row
+	next int
+}
+
+type orderedMarkRow struct {
+	marked, advanced, unblocked int64
+	snapshotConflict            bool
+}
+
+func (row orderedMarkRow) Scan(destinations ...any) error {
+	if len(destinations) != 5 {
+		return errors.New("unexpected ordered mark scan destinations")
+	}
+	marked, markedOK := destinations[0].(*int64)
+	advanced, advancedOK := destinations[1].(*int64)
+	unblocked, unblockedOK := destinations[2].(*int64)
+	snapshotConflict, snapshotOK := destinations[4].(*bool)
+	if !markedOK || marked == nil || !advancedOK || advanced == nil ||
+		!unblockedOK || unblocked == nil || !snapshotOK || snapshotConflict == nil {
+		return errors.New("unexpected ordered mark scan destinations")
+	}
+	*marked = row.marked
+	*advanced = row.advanced
+	*unblocked = row.unblocked
+	*snapshotConflict = row.snapshotConflict
+	return nil
+}
 
 type transactionStub struct {
 	pgx.Tx

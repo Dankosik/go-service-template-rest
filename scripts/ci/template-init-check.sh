@@ -701,6 +701,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "outb
 		internal/infra/postgres/sqlcgen/postgres_outbox.sql.go \
 		internal/infra/postgresoutbox \
 		migrations/000001_postgres_outbox.sql \
+		migrations/000002_postgres_outbox_ordering_ready.sql \
 		test/postgres_outbox_integration_test.go \
 		test/postgres_outbox_natsjs_integration_test.go; do
 		assert "PostgreSQL OUTBOX=none retained ${removed}" path_absent "${outbox_none_checkout}/${removed}"
@@ -742,6 +743,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "outb
 		internal/infra/postgres/sqlcgen/postgres_outbox.sql.go \
 		internal/infra/postgresoutbox \
 		migrations/000001_postgres_outbox.sql \
+		migrations/000002_postgres_outbox_ordering_ready.sql \
 		test/postgres_outbox_integration_test.go; do
 		assert "OUTBOX=postgres removed ${retained}" path_present "${outbox_checkout}/${retained}"
 	done
