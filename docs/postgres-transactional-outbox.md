@@ -76,6 +76,13 @@ PostgreSQL materializes that earliest row as `ordering_ready` and serializes
 append/finalization through `outbox_ordering_heads.current_sequence`. Claim and
 observation therefore do not scan every predecessor for a hot ordering key.
 
+An ordered append advances the high-water mark and stores the event in one
+statement, so a feature transaction holds the head row lock for a single round
+trip rather than two. `outbox_ordering_heads.last_sequence` is the authority
+that rejects a reused sequence, and it survives event cleanup, so the event
+table carries one partial unique index over unpublished `(ordering_key,
+ordering_sequence)` instead of that index plus a full-table one.
+
 ## Claim, acknowledgement, and recovery
 
 Relays claim a batch of up to `batch_size` rows in one statement with
@@ -89,11 +96,15 @@ never reorders an ordering key: the partial unique index on ready ordered rows
 means at most one event per key is claimable, so a batch can never hold two
 events of the same key.
 
-Unordered acknowledgements finalize together in one statement. Each ordered
-acknowledgement finalizes on its own, because it also advances its key's head
-and unblocks that key's successor. Retries and poison transitions each take one
-statement for the whole batch. A backlog therefore costs roughly two database
-round trips per batch rather than two per event.
+Every disposition finalizes in one statement for the whole batch. Unordered
+acknowledgements take one, ordered acknowledgements take another — that one also
+advances each event's key head and unblocks each key's successor, which the
+statement can do for the whole lease because a lease never holds two events of
+the same key. Retries and poison transitions take one statement each. A backlog
+therefore costs roughly two database round trips per batch rather than two per
+event, ordered work included. Only an event the statement reports as
+unfinalized, which means a lost lease, falls back to a per-event resolution
+against durable state.
 
 Every publication attempt is bounded by both `publish_timeout` and the lease the
 batch was claimed under, measured on the relay's own clock from before the
@@ -191,6 +202,24 @@ observation, so it is reported as the planner's own row estimate for
 `published_retained` oldest age, which stays exact, rather than on that count;
 the estimate also needs `autovacuum`/`ANALYZE` to have run to be meaningful.
 
+Both queue tables are stored at `fillfactor = 45` with churn-proportional
+autovacuum and analyze thresholds instead of PostgreSQL's size-proportional
+defaults. A batch claim updates most of one heap page at a time and touches no
+indexed column, so reserving just over half of each page lets every claim stay a
+heap-only update: no index entry is written and the previous version is
+reclaimed by ordinary page pruning rather than an index vacuum pass. The reserve
+pays for itself in space as well, because the version sprawl a packed page
+causes is larger than the reserve. On the repository's PostgreSQL 17 fixture,
+inserting, claiming, and publishing 2,000 events moved the cycle's WAL from
+2.12 MB to 0.97 MB with a 30-byte payload and from 6.28 MB to 1.00 MB with a
+1 KiB payload, while the event heap shrank 22% and 33%. Publication itself
+changes indexed columns and remains a normal indexed update.
+
+Reopen this setting if the relay stops claiming consecutive rows in bulk, since
+the reserve is sized for whole-page updates. `fillfactor` applies to newly
+written pages, so an existing deployment reaches the new shape as rows turn
+over, or immediately through a `VACUUM FULL` or `pg_repack` maintenance window.
+
 Published rows are retained for seven days and deleted in bounded concurrent
 batches. Pending, leased, retry, recovery, poison, and ordering-high-water rows
 are not deleted. PostgreSQL is a finite outage buffer: alert on unpublished
@@ -274,6 +303,28 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS outbox_events_pending_idx
     ON outbox_events (created_at)
     WHERE published_at IS NULL;
 ```
+
+Migration `000004` sets the storage parameters above and replaces the two
+`(ordering_key, ordering_sequence)` indexes with one partial unique index over
+unpublished rows. It changes no column and no statement semantics, so it is
+mixed-version safe in both directions and needs no drain fence: an older writer
+and relay keep working against it, and the current binaries work against schema
+version 3. What it does narrow is the uniqueness the database enforces on its
+own, from every row to every unpublished row; the retained high-water mark still
+rejects a reused sequence for anything that goes through `Append`. Its
+`CREATE UNIQUE INDEX` runs inside the migration transaction and holds a `SHARE`
+lock that blocks appends while it builds. On a populated deployment, build it
+out of band first and let the migration find it:
+
+```sql
+CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS outbox_events_ordering_pending_key
+    ON outbox_events (ordering_key, ordering_sequence)
+    WHERE published_at IS NULL AND ordering_key IS NOT NULL;
+```
+
+Its Down section restores the full-table unique index and fails closed when a
+published row and an unpublished row already share an ordering key and sequence,
+which only a writer that bypassed `Append` can create.
 
 `000002` accepts valid JSON bytes that PostgreSQL `jsonb` rejects. Its Down
 section therefore fails closed with an explicit error once such an event

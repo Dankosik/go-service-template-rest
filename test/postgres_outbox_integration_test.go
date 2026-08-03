@@ -1366,6 +1366,58 @@ func TestPostgresOutboxBatchClaimHoldsOneEventPerOrderingKey(t *testing.T) {
 	}
 }
 
+// One statement finalizes every ordered acknowledgement a lease holds: each
+// key's head advances to its own successor and that successor becomes
+// claimable, so a batch of ordered events costs one round trip rather than one
+// per event.
+func TestPostgresOutboxOrderedBatchFinalizationAdvancesEveryKey(t *testing.T) {
+	ctx, pool, store := newOutboxFixture(t)
+	const keys = 3
+	for key := 1; key <= keys; key++ {
+		for sequence := int64(1); sequence <= 2; sequence++ {
+			mustAppendOutbox(t, ctx, pool, store, orderedEvent(
+				fmt.Sprintf("key-%d-seq-%d", key, sequence), fmt.Sprintf("key-%d", key), sequence))
+		}
+	}
+
+	batch, err := store.Claim(ctx, time.Minute, 100)
+	if err != nil {
+		t.Fatalf("Claim(): %v", err)
+	}
+	if len(batch.Events) != keys {
+		t.Fatalf("claimed %d events, want one ordering head per key", len(batch.Events))
+	}
+	directives := make([]postgresoutbox.OrderedDirective, len(batch.Events))
+	for index, claimed := range batch.Events {
+		directives[index] = postgresoutbox.OrderedDirective{
+			ID:               claimed.Event.ID,
+			OrderingKey:      claimed.Event.OrderingKey,
+			OrderingSequence: claimed.Event.OrderingSequence,
+		}
+	}
+	marked, err := store.MarkOrderedPublishedBatch(ctx, batch.Token, directives)
+	if err != nil || len(marked) != keys {
+		t.Fatalf("MarkOrderedPublishedBatch() = %v, %v, want %d finalized", marked, err, keys)
+	}
+
+	successors, err := store.Claim(ctx, time.Minute, 100)
+	if err != nil {
+		t.Fatalf("Claim(successors): %v", err)
+	}
+	sequences := make(map[string]int64, len(successors.Events))
+	for _, claimed := range successors.Events {
+		sequences[claimed.Event.OrderingKey] = claimed.Event.OrderingSequence
+	}
+	if len(successors.Events) != keys {
+		t.Fatalf("claimed %d successors %v, want one per key", len(successors.Events), sequences)
+	}
+	for key := 1; key <= keys; key++ {
+		if sequences[fmt.Sprintf("key-%d", key)] != 2 {
+			t.Fatalf("successor sequences = %v, want sequence 2 for every key", sequences)
+		}
+	}
+}
+
 // A committed append wakes an idle relay through PostgreSQL notification
 // rather than waiting out the poll interval.
 func TestPostgresOutboxRelayWakesOnAppendNotification(t *testing.T) {

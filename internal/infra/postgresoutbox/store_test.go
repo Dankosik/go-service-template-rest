@@ -3,6 +3,7 @@ package postgresoutbox
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -34,6 +35,14 @@ func TestStoreRejectsInvalidUseBeforeDatabaseAccess(t *testing.T) {
 	}
 	if _, err := store.MarkPublishedBatch(t.Context(), "lease", nil); !errors.Is(err, ErrConfig) {
 		t.Fatalf("MarkPublishedBatch(empty) error = %v", err)
+	}
+	if _, err := store.MarkOrderedPublishedBatch(t.Context(), "lease", nil); !errors.Is(err, ErrConfig) {
+		t.Fatalf("MarkOrderedPublishedBatch(empty) error = %v", err)
+	}
+	if _, err := store.MarkOrderedPublishedBatch(t.Context(), "lease", []OrderedDirective{
+		{ID: "event", OrderingKey: "key", OrderingSequence: 0},
+	}); !errors.Is(err, ErrConfig) {
+		t.Fatalf("MarkOrderedPublishedBatch(invalid sequence) error = %v", err)
 	}
 	if err := store.ScheduleRetryBatch(t.Context(), "", []RetryDirective{
 		{ID: "event", ErrorClass: "temporary", Delay: time.Second},
@@ -77,16 +86,17 @@ func TestStoreRowConversionsAndHelpers(t *testing.T) {
 	row := sqlcgen.ClaimOutboxEventsRow{
 		ID: "event", EventType: "type", Source: "source", Destination: "destination", SchemaName: "v1",
 		OccurredAt: stamp, Payload: []byte(`{"id":1}`), Metadata: []byte(`{"trace":"x"}`),
-		OrderingKey: &key, OrderingSequence: &sequence, LeaseToken: &token, LeaseExpiresAt: stamp,
+		OrderingKey: &key, OrderingSequence: &sequence,
 		CycleAttemptCount: 2, TotalAttemptCount: 4,
 	}
 	event := eventFromClaimRow(row)
 	if event.ID != row.ID || event.OrderingKey != key || event.OrderingSequence != sequence || !event.OccurredAt.Equal(now) {
 		t.Fatalf("eventFromClaimRow() = %+v", event)
 	}
-	event.Payload[0] = 'x'
-	if row.Payload[0] == 'x' {
-		t.Fatal("eventFromClaimRow aliased payload")
+	// The scanned bytes are already private to this row, so the event adopts
+	// them instead of paying a second copy per claimed event.
+	if &event.Payload[0] != &row.Payload[0] || &event.Metadata[0] != &row.Metadata[0] {
+		t.Fatal("eventFromClaimRow copied payload or metadata it already owns")
 	}
 
 	record := recordFromRow(sqlcgen.OutboxEvent{
@@ -100,9 +110,8 @@ func TestStoreRowConversionsAndHelpers(t *testing.T) {
 		record.RedriveCount != 3 || !record.PublishedAt.Equal(now) {
 		t.Fatalf("recordFromRow() = %+v", record)
 	}
-	record.Event.Metadata[0] = 'x'
-	if row.Metadata[0] == 'x' {
-		t.Fatal("recordFromRow aliased metadata")
+	if &record.Event.Metadata[0] != &row.Metadata[0] {
+		t.Fatal("recordFromRow copied metadata it already owns")
 	}
 
 	if got := timestamptz(now); !got.Valid || !got.Time.Equal(now) {
@@ -201,13 +210,17 @@ func TestStoreDatabaseResultClassification(t *testing.T) {
 
 	retries := []RetryDirective{{ID: "event", ErrorClass: "temporary", Delay: time.Second}}
 	poisons := []PoisonDirective{{ID: "event", ErrorClass: "permanent"}}
-	store.queries = sqlcgen.New(databaseStub{tag: pgconn.NewCommandTag("UPDATE 1")})
+	store.queries = sqlcgen.New(databaseStub{
+		tag:     pgconn.NewCommandTag("UPDATE 1"),
+		queries: &querySequence{sets: [][]pgx.Row{{publishedIDRow("event")}}},
+	})
 	claim := ClaimedEvent{Event: Event{ID: "event"}}
 	if err := store.MarkPublished(t.Context(), "lease", claim); err != nil {
 		t.Fatalf("MarkPublished() error = %v", err)
 	}
-	if marked, err := store.MarkPublishedBatch(t.Context(), "lease", []string{"event"}); err != nil || marked != 1 {
-		t.Fatalf("MarkPublishedBatch() = %d, %v", marked, err)
+	if marked, err := store.MarkPublishedBatch(t.Context(), "lease", []string{"event"}); err != nil ||
+		len(marked) != 1 || marked[0] != "event" {
+		t.Fatalf("MarkPublishedBatch() = %v, %v", marked, err)
 	}
 	if err := store.ScheduleRetryBatch(t.Context(), "lease", retries); err != nil {
 		t.Fatalf("ScheduleRetryBatch() error = %v", err)
@@ -228,24 +241,42 @@ func TestStoreDatabaseResultClassification(t *testing.T) {
 	if err := store.MarkPoisonedBatch(t.Context(), "lease", poisons); !errors.Is(err, ErrLeaseLost) {
 		t.Fatalf("MarkPoisonedBatch(lost) error = %v", err)
 	}
-	sequence := &rowSequence{rows: []pgx.Row{
-		orderedMarkRow{snapshotConflict: true},
-		orderedMarkRow{marked: 1, advanced: 1, unblocked: 1},
+	// A snapshot conflict retries only the conflicted directive, and the second
+	// statement's fresh snapshot resolves it.
+	sequence := &querySequence{sets: [][]pgx.Row{
+		{orderedMarkRow{id: "event", snapshotConflict: true}},
+		{orderedMarkRow{id: "event", marked: true}},
 	}}
-	store.queries = sqlcgen.New(databaseStub{rows: sequence})
+	store.queries = sqlcgen.New(databaseStub{queries: sequence})
 	claim.Event.OrderingKey, claim.Event.OrderingSequence = "key", 1
 	if err := store.MarkPublished(t.Context(), "lease", claim); err != nil {
 		t.Fatalf("MarkPublished(ordered snapshot retry) error = %v", err)
 	}
-	if sequence.next != 2 {
-		t.Fatalf("ordered mark queries = %d, want 2", sequence.next)
+	if sequence.calls != 2 {
+		t.Fatalf("ordered mark queries = %d, want 2", sequence.calls)
 	}
-	store.queries = sqlcgen.New(databaseStub{execErr: databaseErr})
+	// An empty result set means the batch statement finalized nothing, which the
+	// single-event path reports as a lost lease.
+	store.queries = sqlcgen.New(databaseStub{queries: &querySequence{}})
+	if err := store.MarkPublished(t.Context(), "lease", claim); !errors.Is(err, ErrLeaseLost) {
+		t.Fatalf("MarkPublished(ordered lost) error = %v", err)
+	}
+	if marked, err := store.MarkOrderedPublishedBatch(t.Context(), "lease", []OrderedDirective{
+		{ID: "event", OrderingKey: "key", OrderingSequence: 1},
+	}); err != nil || len(marked) != 0 {
+		t.Fatalf("MarkOrderedPublishedBatch(lost) = %v, %v", marked, err)
+	}
+	store.queries = sqlcgen.New(databaseStub{execErr: databaseErr, queryErr: databaseErr})
 	if err := store.MarkPoisonedBatch(t.Context(), "lease", poisons); !errors.Is(err, databaseErr) {
 		t.Fatalf("MarkPoisonedBatch(database) error = %v", err)
 	}
 	if _, err := store.MarkPublishedBatch(t.Context(), "lease", []string{"event"}); !errors.Is(err, databaseErr) {
 		t.Fatalf("MarkPublishedBatch(database) error = %v", err)
+	}
+	if _, err := store.MarkOrderedPublishedBatch(t.Context(), "lease", []OrderedDirective{
+		{ID: "event", OrderingKey: "key", OrderingSequence: 1},
+	}); !errors.Is(err, databaseErr) {
+		t.Fatalf("MarkOrderedPublishedBatch(database) error = %v", err)
 	}
 	if _, err := store.CleanupPublished(t.Context(), time.Hour, 10); !errors.Is(err, databaseErr) {
 		t.Fatalf("CleanupPublished(database) error = %v", err)
@@ -279,7 +310,7 @@ type databaseStub struct {
 	execErr  error
 	queryErr error
 	rowErr   error
-	rows     *rowSequence
+	queries  *querySequence
 }
 
 func (stub databaseStub) Exec(context.Context, string, ...any) (pgconn.CommandTag, error) {
@@ -288,16 +319,14 @@ func (stub databaseStub) Exec(context.Context, string, ...any) (pgconn.CommandTa
 
 //nolint:ireturn // The pgx DBTX test double must return pgx's interface.
 func (stub databaseStub) Query(context.Context, string, ...any) (pgx.Rows, error) {
-	return nil, stub.queryErr
+	if stub.queryErr != nil {
+		return nil, stub.queryErr
+	}
+	return stub.queries.next(), nil
 }
 
 //nolint:ireturn // The pgx DBTX test double must return pgx's interface.
 func (stub databaseStub) QueryRow(context.Context, string, ...any) pgx.Row {
-	if stub.rows != nil {
-		row := stub.rows.rows[stub.rows.next]
-		stub.rows.next++
-		return row
-	}
 	return rowStub{err: stub.rowErr}
 }
 
@@ -305,33 +334,87 @@ type rowStub struct{ err error }
 
 func (row rowStub) Scan(...any) error { return row.err }
 
-type rowSequence struct {
-	rows []pgx.Row
-	next int
+// querySequence replays one result set per Query call, so a test can drive the
+// batch statements that report an outcome per event. Calls past the end see an
+// empty result set, which is what a wholly lost lease looks like.
+type querySequence struct {
+	sets  [][]pgx.Row
+	calls int
+}
+
+//nolint:ireturn // The pgx DBTX test double must return pgx's interface.
+func (sequence *querySequence) next() pgx.Rows {
+	if sequence == nil || sequence.calls >= len(sequence.sets) {
+		return &rowsStub{}
+	}
+	sequence.calls++
+	return &rowsStub{rows: sequence.sets[sequence.calls-1]}
+}
+
+type rowsStub struct {
+	pgx.Rows
+
+	rows  []pgx.Row
+	index int
+}
+
+func (rows *rowsStub) Close() {}
+
+func (rows *rowsStub) Err() error { return nil }
+
+func (rows *rowsStub) Next() bool {
+	if rows.index >= len(rows.rows) {
+		return false
+	}
+	rows.index++
+	return true
+}
+
+func (rows *rowsStub) Scan(destinations ...any) error {
+	if err := rows.rows[rows.index-1].Scan(destinations...); err != nil {
+		return fmt.Errorf("scan stub row %d: %w", rows.index-1, err)
+	}
+	return nil
+}
+
+// publishedIDRow is one finalized id returned by MarkOutboxPublishedBatch.
+type publishedIDRow string
+
+func (row publishedIDRow) Scan(destinations ...any) error {
+	id, ok := singleDestination[string](destinations)
+	if !ok {
+		return errors.New("unexpected published id scan destinations")
+	}
+	*id = string(row)
+	return nil
 }
 
 type orderedMarkRow struct {
-	marked, advanced, unblocked int64
-	snapshotConflict            bool
+	id               string
+	marked           bool
+	snapshotConflict bool
 }
 
 func (row orderedMarkRow) Scan(destinations ...any) error {
-	if len(destinations) != 5 {
+	if len(destinations) != 3 {
 		return errors.New("unexpected ordered mark scan destinations")
 	}
-	marked, markedOK := destinations[0].(*int64)
-	advanced, advancedOK := destinations[1].(*int64)
-	unblocked, unblockedOK := destinations[2].(*int64)
-	snapshotConflict, snapshotOK := destinations[4].(*bool)
-	if !markedOK || marked == nil || !advancedOK || advanced == nil ||
-		!unblockedOK || unblocked == nil || !snapshotOK || snapshotConflict == nil {
+	id, idOK := destinations[0].(*string)
+	marked, markedOK := destinations[1].(*bool)
+	snapshotConflict, snapshotOK := destinations[2].(*bool)
+	if !idOK || id == nil || !markedOK || marked == nil || !snapshotOK || snapshotConflict == nil {
 		return errors.New("unexpected ordered mark scan destinations")
 	}
-	*marked = row.marked
-	*advanced = row.advanced
-	*unblocked = row.unblocked
-	*snapshotConflict = row.snapshotConflict
+	*id, *marked, *snapshotConflict = row.id, row.marked, row.snapshotConflict
 	return nil
+}
+
+func singleDestination[T any](destinations []any) (*T, bool) {
+	if len(destinations) != 1 {
+		return nil, false
+	}
+	value, ok := destinations[0].(*T)
+	return value, ok && value != nil
 }
 
 type transactionStub struct {
