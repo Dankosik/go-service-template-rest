@@ -1,10 +1,19 @@
--- An unordered event owns no ordering head, so it stores the envelope alone and
--- leaves the ordering columns at their defaults.
+-- Every event of one append that owns no ordering head, in one statement.
 --
--- The append path always pipelines, even for a single event: a feature that
--- emits several events in one transaction pays one round trip instead of one
--- per event, and holds its own row locks for that much less time.
--- name: InsertOutboxEvents :batchexec
+-- Each column arrives as one array rather than each event as one statement.
+-- That is what makes a multi-event append cheap: PostgreSQL sets up the
+-- executor once instead of once per event, and setting it up opens this
+-- table's indexes again every time, which costs more than the insert itself.
+-- A feature that emits several events per business transaction therefore pays
+-- one round trip and one executor setup, and holds its own row locks for that
+-- much less time.
+--
+-- A call carrying no ordering key uses this statement rather than the one
+-- below, which is worth a second statement to maintain: the ordering-head
+-- insert and its arbiter index are initialized on every execution even when no
+-- event touches a head, and that setup costs more than a whole single-event
+-- insert. Ordering columns stay at their table defaults here.
+-- name: InsertOutboxEvents :exec
 INSERT INTO outbox_events (
     id,
     event_type,
@@ -14,69 +23,134 @@ INSERT INTO outbox_events (
     occurred_at,
     payload,
     metadata
-) VALUES (
-    sqlc.arg(id),
-    sqlc.arg(event_type),
-    sqlc.arg(source),
-    sqlc.arg(destination),
-    sqlc.arg(schema_name),
-    sqlc.arg(occurred_at),
-    sqlc.arg(payload),
-    sqlc.arg(metadata)
-);
+)
+-- Set-returning functions in one select list advance in lockstep, which is how
+-- the column arrays are zipped back into rows.
+SELECT
+    unnest(sqlc.arg(ids)::text[]),
+    unnest(sqlc.arg(event_types)::text[]),
+    unnest(sqlc.arg(sources)::text[]),
+    unnest(sqlc.arg(destinations)::text[]),
+    unnest(sqlc.arg(schema_names)::text[]),
+    unnest(sqlc.arg(occurred_ats)::timestamptz[]),
+    unnest(sqlc.arg(payloads)::bytea[]),
+    unnest(sqlc.arg(metadatas)::bytea[]);
 
--- An ordered append advances its key's retained high-water mark and stores the
--- event in one statement, so a feature transaction holds the head row lock for
--- a single round trip. The head upsert changes nothing when the sequence is at
--- or below the retained mark; the event insert then selects from an empty
--- result and returns no row, which is how the caller recognizes a rejected
--- sequence. `ordering_ready` records whether this event is its key's claimable
--- head, which is true exactly when the head now points at this sequence.
+-- Every event of one append when at least one of them owns an ordering head.
+-- It stores the ordered and unordered events together and advances the head of
+-- every key the call touches, so a mixed append is still one statement and one
+-- round trip.
 --
--- Pipelined like the unordered insert. Statements in one pipeline still execute
--- in the order they were queued, so two appends to the same key inside one
--- batch see each other's head exactly as two separate round trips would.
--- name: InsertOrderedOutboxEvents :batchone
-WITH head AS (
-    INSERT INTO outbox_ordering_heads (ordering_key, last_sequence, current_sequence)
-    VALUES (sqlc.arg(ordering_key), sqlc.arg(ordering_sequence), sqlc.arg(ordering_sequence))
+-- The ordering columns carry the same zero value the Go event does: an empty
+-- key and a zero sequence mean the event owns no ordering head.
+--
+-- `head` advances each key's retained high-water mark once per key instead of
+-- once per event, so several events for one key take that head's row lock a
+-- single time. `last_sequence` is the retained authority that rejects a
+-- replayed sequence, and cleanup never deletes a head, so the rejection
+-- outlives the events it was derived from. `current_sequence` names the key's
+-- earliest unpublished sequence, and `ordering_ready` marks the one event that
+-- matches it as the key's claimable head.
+--
+-- The guard compares the retained mark against the call's *first* new sequence,
+-- so a call is accepted only when all of its sequences clear that mark. Within
+-- one call the events of a key may arrive in any order; they are stored and
+-- published in sequence order either way.
+--
+-- The statement's own result is the rejection report: one row per key whose
+-- first new sequence did not clear its retained mark, and no rows at all on the
+-- normal path. One rejected key stores nothing, which is the same all-or-
+-- nothing outcome the caller's transaction would produce anyway. A
+-- data-modifying CTE runs to completion whether or not the primary query reads
+-- its output, so returning only rejections skips no work.
+-- name: InsertOutboxEventsWithOrdering :many
+WITH input AS (
+    SELECT
+        unnest(sqlc.arg(ids)::text[]) AS id,
+        unnest(sqlc.arg(event_types)::text[]) AS event_type,
+        unnest(sqlc.arg(sources)::text[]) AS source,
+        unnest(sqlc.arg(destinations)::text[]) AS destination,
+        unnest(sqlc.arg(schema_names)::text[]) AS schema_name,
+        unnest(sqlc.arg(occurred_ats)::timestamptz[]) AS occurred_at,
+        unnest(sqlc.arg(payloads)::bytea[]) AS payload,
+        unnest(sqlc.arg(metadatas)::bytea[]) AS metadata,
+        unnest(sqlc.arg(ordering_keys)::text[]) AS ordering_key,
+        unnest(sqlc.arg(ordering_sequences)::bigint[]) AS ordering_sequence
+), event AS (
+    SELECT
+        input.id,
+        input.event_type,
+        input.source,
+        input.destination,
+        input.schema_name,
+        input.occurred_at,
+        input.payload,
+        input.metadata,
+        nullif(input.ordering_key, '') AS ordering_key,
+        nullif(input.ordering_sequence, 0) AS ordering_sequence
+    FROM input
+), ordered_key AS (
+    SELECT
+        event.ordering_key,
+        min(event.ordering_sequence) AS first_sequence,
+        max(event.ordering_sequence) AS last_sequence
+    FROM event
+    WHERE event.ordering_key IS NOT NULL
+    GROUP BY event.ordering_key
+), head AS (
+    INSERT INTO outbox_ordering_heads AS existing (ordering_key, last_sequence, current_sequence)
+    SELECT ordered_key.ordering_key, ordered_key.last_sequence, ordered_key.first_sequence
+    FROM ordered_key
+    -- Concurrent appends that touch the same keys take their locks in the same
+    -- order, so they queue behind each other instead of deadlocking.
+    ORDER BY ordered_key.ordering_key
     ON CONFLICT (ordering_key) DO UPDATE
     SET last_sequence = EXCLUDED.last_sequence,
-        current_sequence = coalesce(
-            outbox_ordering_heads.current_sequence,
-            EXCLUDED.current_sequence
-        ),
+        current_sequence = coalesce(existing.current_sequence, EXCLUDED.current_sequence),
         updated_at = clock_timestamp()
-    WHERE outbox_ordering_heads.last_sequence < EXCLUDED.last_sequence
-    RETURNING current_sequence
-)
-INSERT INTO outbox_events (
-    id,
-    event_type,
-    source,
-    destination,
-    schema_name,
-    occurred_at,
-    payload,
-    metadata,
-    ordering_key,
-    ordering_sequence,
-    ordering_ready
+    WHERE existing.last_sequence < EXCLUDED.current_sequence
+    RETURNING existing.ordering_key, existing.current_sequence
+), rejected AS (
+    SELECT ordered_key.ordering_key, ordered_key.first_sequence
+    FROM ordered_key
+    WHERE NOT EXISTS (
+        SELECT 1 FROM head WHERE head.ordering_key = ordered_key.ordering_key
+    )
+), stored AS (
+    INSERT INTO outbox_events (
+        id,
+        event_type,
+        source,
+        destination,
+        schema_name,
+        occurred_at,
+        payload,
+        metadata,
+        ordering_key,
+        ordering_sequence,
+        ordering_ready
+    )
+    SELECT
+        event.id,
+        event.event_type,
+        event.source,
+        event.destination,
+        event.schema_name,
+        event.occurred_at,
+        event.payload,
+        event.metadata,
+        event.ordering_key,
+        event.ordering_sequence,
+        event.ordering_key IS NOT NULL AND head.current_sequence = event.ordering_sequence
+    FROM event
+    LEFT JOIN head ON head.ordering_key = event.ordering_key
+    WHERE NOT EXISTS (SELECT 1 FROM rejected)
 )
 SELECT
-    sqlc.arg(id),
-    sqlc.arg(event_type),
-    sqlc.arg(source),
-    sqlc.arg(destination),
-    sqlc.arg(schema_name),
-    sqlc.arg(occurred_at),
-    sqlc.arg(payload),
-    sqlc.arg(metadata),
-    sqlc.arg(ordering_key),
-    sqlc.arg(ordering_sequence),
-    head.current_sequence IS NOT DISTINCT FROM sqlc.arg(ordering_sequence)
-FROM head
-RETURNING outbox_events.id;
+    rejected.ordering_key::text AS ordering_key,
+    rejected.first_sequence::bigint AS first_sequence
+FROM rejected
+ORDER BY rejected.ordering_key;
 
 -- One statement leases a whole batch under a single token. The partial unique
 -- index on ready ordered rows keeps at most one claimable event per ordering

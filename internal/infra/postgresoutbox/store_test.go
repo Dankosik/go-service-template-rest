@@ -288,7 +288,7 @@ func TestStoreAppendValidationAndInsert(t *testing.T) {
 	t.Parallel()
 
 	store := &Store{pool: &postgres.Pool{}}
-	tx := &transactionStub{tag: pgconn.NewCommandTag("INSERT 0 1")}
+	tx := &transactionStub{}
 	if err := store.Append(t.Context(), tx); err != nil {
 		t.Fatalf("Append(no events) error = %v", err)
 	}
@@ -305,39 +305,48 @@ func TestStoreAppendValidationAndInsert(t *testing.T) {
 	if err := store.Append(t.Context(), tx, event, invalid); !errors.Is(err, ErrInvalidEvent) {
 		t.Fatalf("Append(partly invalid) error = %v", err)
 	}
-	if tx.batches != 0 {
-		t.Fatalf("rejected append sent %d batches, want 0", tx.batches)
-	}
-	if err := store.Append(t.Context(), tx, event); err != nil {
-		t.Fatalf("Append() error = %v", err)
+	if tx.statements != 0 {
+		t.Fatalf("rejected append sent %d statements, want 0", tx.statements)
 	}
 
-	// Several unordered events are one pipeline, and an ordered event adds the
-	// second statement shape rather than a round trip per event.
-	tx.batches, tx.queued = 0, 0
+	// A call with no ordering key takes the statement that never touches a
+	// head, which is the one that carries no ordering columns.
 	second := event
 	second.ID = "second"
+	if err := store.Append(t.Context(), tx, event, second); err != nil {
+		t.Fatalf("Append(unordered) error = %v", err)
+	}
+	if tx.statements != 1 || len(tx.arguments) != 8 {
+		t.Fatalf("Append(unordered) sent %d statements with %d column arrays, want 1 and 8",
+			tx.statements, len(tx.arguments))
+	}
+
+	// Ordered and unordered events travel together, so a mixed call is still
+	// one statement however many events it carries.
+	tx.statements = 0
 	ordered := event
 	ordered.ID, ordered.OrderingKey, ordered.OrderingSequence = "ordered", "key", 1
 	if err := store.Append(t.Context(), tx, event, second, ordered); err != nil {
 		t.Fatalf("Append(mixed) error = %v", err)
 	}
-	if tx.batches != 2 || tx.queued != 3 {
-		t.Fatalf("Append(mixed) sent %d batches for %d statements, want 2 and 3", tx.batches, tx.queued)
+	if tx.statements != 1 || len(tx.arguments) != 10 {
+		t.Fatalf("Append(mixed) sent %d statements with %d column arrays, want 1 and 10",
+			tx.statements, len(tx.arguments))
+	}
+	if keys, ok := tx.arguments[8].([]string); !ok || len(keys) != 3 ||
+		keys[0] != "" || keys[1] != "" || keys[2] != "key" {
+		t.Fatalf("Append(mixed) ordering keys = %v", tx.arguments[8])
 	}
 
-	// An ordered statement that stored nothing is a rejected sequence, and the
-	// message names the event that lost, not the first one in the call.
-	tx.rowErr = pgx.ErrNoRows
+	// A returned row is a key whose first sequence did not clear its retained
+	// high-water mark, and the message names that key rather than the call.
+	tx.rejected = []pgx.Row{orderingRejectionRow{key: "key", sequence: 1}}
 	err := store.Append(t.Context(), tx, ordered)
 	rejection := fmt.Sprintf("%v", err)
 	if !errors.Is(err, ErrOrderingSequence) || !strings.Contains(rejection, `key "key" sequence 1`) {
 		t.Fatalf("Append(rejected sequence) error = %v", err)
 	}
-	tx.rowErr = errors.New("ordered insert")
-	if err := store.Append(t.Context(), tx, ordered); !errors.Is(err, tx.rowErr) {
-		t.Fatalf("Append(ordered database) error = %v", err)
-	}
+	tx.rejected = nil
 	tx.err = errors.New("insert")
 	if err := store.Append(t.Context(), tx, event); !errors.Is(err, tx.err) {
 		t.Fatalf("Append(database) error = %v", err)
@@ -367,11 +376,6 @@ func (stub databaseStub) Query(context.Context, string, ...any) (pgx.Rows, error
 //nolint:ireturn // The pgx DBTX test double must return pgx's interface.
 func (stub databaseStub) QueryRow(context.Context, string, ...any) pgx.Row {
 	return rowStub{err: stub.rowErr}
-}
-
-//nolint:ireturn // The pgx DBTX test double must return pgx's interface.
-func (stub databaseStub) SendBatch(context.Context, *pgx.Batch) pgx.BatchResults {
-	return &batchResultsStub{tag: stub.tag, err: stub.execErr, rowErr: stub.rowErr}
 }
 
 type rowStub struct{ err error }
@@ -461,45 +465,52 @@ func singleDestination[T any](destinations []any) (*T, bool) {
 	return value, ok && value != nil
 }
 
+// transactionStub records what the append statement was sent, so a test can
+// assert both the statement count and the column arrays it carried.
 type transactionStub struct {
 	pgx.Tx
 
-	tag     pgconn.CommandTag
-	err     error
-	rowErr  error
-	batches int
-	queued  int
+	err        error
+	rejected   []pgx.Row
+	statements int
+	arguments  []any
 }
 
-func (tx *transactionStub) Exec(context.Context, string, ...any) (pgconn.CommandTag, error) {
-	return tx.tag, tx.err
+func (tx *transactionStub) Exec(_ context.Context, _ string, arguments ...any) (pgconn.CommandTag, error) {
+	tx.record(arguments)
+	return pgconn.CommandTag{}, tx.err
 }
 
 //nolint:ireturn // The pgx transaction test double must return pgx's interface.
-func (tx *transactionStub) SendBatch(_ context.Context, batch *pgx.Batch) pgx.BatchResults {
-	tx.batches++
-	tx.queued += batch.Len()
-	return &batchResultsStub{tag: tx.tag, err: tx.err, rowErr: tx.rowErr}
-}
-
-// batchResultsStub replays the same outcome for every statement in a pipeline,
-// which is enough to drive the append path's result reading and error mapping.
-type batchResultsStub struct {
-	pgx.BatchResults
-
-	tag    pgconn.CommandTag
-	err    error
-	rowErr error
-}
-
-func (results *batchResultsStub) Exec() (pgconn.CommandTag, error) { return results.tag, results.err }
-
-//nolint:ireturn // The pgx batch test double must return pgx's interface.
-func (results *batchResultsStub) QueryRow() pgx.Row {
-	if results.err != nil {
-		return rowStub{err: results.err}
+func (tx *transactionStub) Query(_ context.Context, _ string, arguments ...any) (pgx.Rows, error) {
+	tx.record(arguments)
+	if tx.err != nil {
+		return nil, tx.err
 	}
-	return rowStub{err: results.rowErr}
+	return &rowsStub{rows: tx.rejected}, nil
 }
 
-func (results *batchResultsStub) Close() error { return results.err }
+func (tx *transactionStub) record(arguments []any) {
+	tx.statements++
+	tx.arguments = arguments
+}
+
+// orderingRejectionRow is one key the append statement refused, which is the
+// only row shape that statement ever returns.
+type orderingRejectionRow struct {
+	key      string
+	sequence int64
+}
+
+func (row orderingRejectionRow) Scan(destinations ...any) error {
+	if len(destinations) != 2 {
+		return errors.New("unexpected ordering rejection scan destinations")
+	}
+	key, keyOK := destinations[0].(*string)
+	sequence, sequenceOK := destinations[1].(*int64)
+	if !keyOK || key == nil || !sequenceOK || sequence == nil {
+		return errors.New("unexpected ordering rejection scan destinations")
+	}
+	*key, *sequence = row.key, row.sequence
+	return nil
+}

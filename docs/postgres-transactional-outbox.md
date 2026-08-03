@@ -52,30 +52,44 @@ should pass them in one call:
 return outbox.Append(ctx, tx, shipped, invoiced, notified)
 ```
 
-The events are pipelined, so the call costs one round trip no matter how many
-it carries, and the caller holds its own row locks for that much less time. A
-call mixing ordered and unordered events costs two, one per statement shape.
-Nothing is sent unless every event is valid, and events sharing an ordering key
-are stored in the order they were passed, so a call is never partly applied for
-a reason the caller could have seen up front. One call is one `append`
-operation in telemetry, because that is what the recorded duration measures;
-the backlog gauges report events.
+Each column travels as one array, so the whole call is one statement and one
+round trip however many events it carries and whatever mix of ordered and
+unordered events those are. The caller holds its own row locks for that much
+less time. Nothing is sent unless every event is valid, and one rejected
+ordering sequence stores nothing, so a call is never partly applied for a
+reason the caller could have seen up front. One call is one `append` operation
+in telemetry, because that is what the recorded duration measures; the backlog
+gauges report events.
 
-Measured against appending the same events one call at a time, on a
-CPU-Optimized 4-vCPU Droplet with the repository's PostgreSQL 17 Testcontainers
-fixture, 20 samples per side in alternating batches:
+What this buys is not a round trip — a pipeline of per-event statements already
+costs one. It is executor setup. PostgreSQL sets up an `INSERT` once per
+statement, and setting it up opens every index on this table again, which costs
+more than the insert itself. One statement pays that once for the whole call.
+
+Measured against one statement per event, on a CPU-Optimized 4-vCPU Droplet
+with the repository's PostgreSQL 17 Testcontainers fixture, 20 samples per side
+in alternating batches on one host:
 
 | events per transaction | unordered | ordered |
 | --- | --- | --- |
-| 1 | within noise (±2%) | within noise (±2%) |
-| 4 | −31% | −26% |
-| 16 | −47% | −42% |
+| 1 | within noise (p=0.06) | +11% |
+| 4 | −38% | −38% |
+| 16 | −69% | −72% |
 
-The gain is a round trip per additional event, so it grows with the count and is
-nothing at one. It is paid for in allocations: a one-event call allocates about
-40% more than a direct insert would, and a sixteen-event call holds every
-queued statement's arguments until the pipeline executes. Re-measure before
-assuming either figure survives a different payload size or network path.
+The gain grows with the event count because the per-statement setup it removes
+is per event. The one case that pays is a transaction emitting exactly one
+ordered event: the array form costs about ten more microseconds of parameter
+decoding and aggregation than a scalar single-row statement, and there is no
+second event to amortize it over. Two ordered events already win. A call
+carrying no ordering key at all uses a statement that never touches an ordering
+head, which is what keeps the single unordered append flat.
+
+Allocations move the same way and for the same reason: a one-event call
+allocates about 30% more than the per-event form (78 versus 58 for one
+unordered event) because it builds one slice per column, while a sixteen-event
+call allocates about 34% less. Against a round trip these are noise; they are
+recorded so a later change is measured against something. Re-measure before
+assuming any of it survives a different payload size or network path.
 
 `cmd/outbox-relay` is a separately deployable process. The template deliberately
 registers no publisher: an initialized service must replace the `nil` builder
@@ -111,12 +125,18 @@ PostgreSQL materializes that earliest row as `ordering_ready` and serializes
 append/finalization through `outbox_ordering_heads.current_sequence`. Claim and
 observation therefore do not scan every predecessor for a hot ordering key.
 
-An ordered append advances the high-water mark and stores the event in one
-statement, so a feature transaction holds the head row lock for a single
-statement rather than two. `outbox_ordering_heads.last_sequence` is the authority
-that rejects a reused sequence, and it survives event cleanup, so the event
-table carries one partial unique index over unpublished `(ordering_key,
-ordering_sequence)` instead of that index plus a full-table one.
+An ordered append advances the high-water mark and stores its events in one
+statement, and it advances each key's head once per call rather than once per
+event, so a feature transaction takes a given head's row lock a single time.
+`outbox_ordering_heads.last_sequence` is the authority that rejects a reused
+sequence, and it survives event cleanup, so the event table carries one partial
+unique index over unpublished `(ordering_key, ordering_sequence)` instead of
+that index plus a full-table one.
+
+A call is accepted only when every sequence it carries for a key clears that
+key's retained mark; one rejected key rejects the call. Within a single call the
+events of a key may be passed in any order, because they are stored and
+published in sequence order either way.
 
 ## Claim, acknowledgement, and recovery
 
