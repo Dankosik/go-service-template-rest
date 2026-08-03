@@ -45,6 +45,38 @@ broker and can keep committing while the broker is unavailable, subject to
 PostgreSQL capacity. An outage therefore appears as observable backlog instead
 of request-path dual-write failure.
 
+`Append` is variadic, and a business transaction that emits several events
+should pass them in one call:
+
+```go
+return outbox.Append(ctx, tx, shipped, invoiced, notified)
+```
+
+The events are pipelined, so the call costs one round trip no matter how many
+it carries, and the caller holds its own row locks for that much less time. A
+call mixing ordered and unordered events costs two, one per statement shape.
+Nothing is sent unless every event is valid, and events sharing an ordering key
+are stored in the order they were passed, so a call is never partly applied for
+a reason the caller could have seen up front. One call is one `append`
+operation in telemetry, because that is what the recorded duration measures;
+the backlog gauges report events.
+
+Measured against appending the same events one call at a time, on a
+CPU-Optimized 4-vCPU Droplet with the repository's PostgreSQL 17 Testcontainers
+fixture, 20 samples per side in alternating batches:
+
+| events per transaction | unordered | ordered |
+| --- | --- | --- |
+| 1 | within noise (±2%) | within noise (±2%) |
+| 4 | −31% | −26% |
+| 16 | −47% | −42% |
+
+The gain is a round trip per additional event, so it grows with the count and is
+nothing at one. It is paid for in allocations: a one-event call allocates about
+40% more than a direct insert would, and a sixteen-event call holds every
+queued statement's arguments until the pipeline executes. Re-measure before
+assuming either figure survives a different payload size or network path.
+
 `cmd/outbox-relay` is a separately deployable process. The template deliberately
 registers no publisher: an initialized service must replace the `nil` builder
 in `cmd/outbox-relay/main.go` with its selected messaging adapter. There is no
@@ -61,7 +93,10 @@ ordering key are limited to 256 bytes, payload to 256 KiB, metadata to 32 KiB,
 and the complete stored envelope to 288 KiB.
 
 The database validates the same JSON language as Go while retaining the exact
-bytes. Payloads such as a JSON number outside PostgreSQL `numeric` range and
+bytes, through the SQL/JSON `IS JSON` and `IS JSON OBJECT` predicates. Bytes
+that are not valid UTF-8 are refused as an encoding error rather than a check
+violation, which only a writer bypassing `Append` can reach.
+Payloads such as a JSON number outside PostgreSQL `numeric` range and
 escaped `\u0000` strings are valid; the outbox never normalizes them through
 `jsonb`.
 
@@ -77,8 +112,8 @@ append/finalization through `outbox_ordering_heads.current_sequence`. Claim and
 observation therefore do not scan every predecessor for a hot ordering key.
 
 An ordered append advances the high-water mark and stores the event in one
-statement, so a feature transaction holds the head row lock for a single round
-trip rather than two. `outbox_ordering_heads.last_sequence` is the authority
+statement, so a feature transaction holds the head row lock for a single
+statement rather than two. `outbox_ordering_heads.last_sequence` is the authority
 that rejects a reused sequence, and it survives event cleanup, so the event
 table carries one partial unique index over unpublished `(ordering_key,
 ordering_sequence)` instead of that index plus a full-table one.

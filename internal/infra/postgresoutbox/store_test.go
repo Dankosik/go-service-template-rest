@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -288,6 +289,9 @@ func TestStoreAppendValidationAndInsert(t *testing.T) {
 
 	store := &Store{pool: &postgres.Pool{}}
 	tx := &transactionStub{tag: pgconn.NewCommandTag("INSERT 0 1")}
+	if err := store.Append(t.Context(), tx); err != nil {
+		t.Fatalf("Append(no events) error = %v", err)
+	}
 	invalid := outboxEventForUnit()
 	invalid.ID = ""
 	if err := store.Append(t.Context(), tx, invalid); !errors.Is(err, ErrInvalidEvent) {
@@ -296,8 +300,43 @@ func TestStoreAppendValidationAndInsert(t *testing.T) {
 	event := outboxEventForUnit()
 	event.Type, event.Source, event.Destination, event.Schema = "type", "source", "destination", "v1"
 	event.OccurredAt = time.Unix(1, 0).UTC()
+	// One invalid event keeps the whole call off the wire, so a caller never
+	// commits part of what it asked to append.
+	if err := store.Append(t.Context(), tx, event, invalid); !errors.Is(err, ErrInvalidEvent) {
+		t.Fatalf("Append(partly invalid) error = %v", err)
+	}
+	if tx.batches != 0 {
+		t.Fatalf("rejected append sent %d batches, want 0", tx.batches)
+	}
 	if err := store.Append(t.Context(), tx, event); err != nil {
 		t.Fatalf("Append() error = %v", err)
+	}
+
+	// Several unordered events are one pipeline, and an ordered event adds the
+	// second statement shape rather than a round trip per event.
+	tx.batches, tx.queued = 0, 0
+	second := event
+	second.ID = "second"
+	ordered := event
+	ordered.ID, ordered.OrderingKey, ordered.OrderingSequence = "ordered", "key", 1
+	if err := store.Append(t.Context(), tx, event, second, ordered); err != nil {
+		t.Fatalf("Append(mixed) error = %v", err)
+	}
+	if tx.batches != 2 || tx.queued != 3 {
+		t.Fatalf("Append(mixed) sent %d batches for %d statements, want 2 and 3", tx.batches, tx.queued)
+	}
+
+	// An ordered statement that stored nothing is a rejected sequence, and the
+	// message names the event that lost, not the first one in the call.
+	tx.rowErr = pgx.ErrNoRows
+	err := store.Append(t.Context(), tx, ordered)
+	rejection := fmt.Sprintf("%v", err)
+	if !errors.Is(err, ErrOrderingSequence) || !strings.Contains(rejection, `key "key" sequence 1`) {
+		t.Fatalf("Append(rejected sequence) error = %v", err)
+	}
+	tx.rowErr = errors.New("ordered insert")
+	if err := store.Append(t.Context(), tx, ordered); !errors.Is(err, tx.rowErr) {
+		t.Fatalf("Append(ordered database) error = %v", err)
 	}
 	tx.err = errors.New("insert")
 	if err := store.Append(t.Context(), tx, event); !errors.Is(err, tx.err) {
@@ -328,6 +367,11 @@ func (stub databaseStub) Query(context.Context, string, ...any) (pgx.Rows, error
 //nolint:ireturn // The pgx DBTX test double must return pgx's interface.
 func (stub databaseStub) QueryRow(context.Context, string, ...any) pgx.Row {
 	return rowStub{err: stub.rowErr}
+}
+
+//nolint:ireturn // The pgx DBTX test double must return pgx's interface.
+func (stub databaseStub) SendBatch(context.Context, *pgx.Batch) pgx.BatchResults {
+	return &batchResultsStub{tag: stub.tag, err: stub.execErr, rowErr: stub.rowErr}
 }
 
 type rowStub struct{ err error }
@@ -420,10 +464,42 @@ func singleDestination[T any](destinations []any) (*T, bool) {
 type transactionStub struct {
 	pgx.Tx
 
-	tag pgconn.CommandTag
-	err error
+	tag     pgconn.CommandTag
+	err     error
+	rowErr  error
+	batches int
+	queued  int
 }
 
 func (tx *transactionStub) Exec(context.Context, string, ...any) (pgconn.CommandTag, error) {
 	return tx.tag, tx.err
 }
+
+//nolint:ireturn // The pgx transaction test double must return pgx's interface.
+func (tx *transactionStub) SendBatch(_ context.Context, batch *pgx.Batch) pgx.BatchResults {
+	tx.batches++
+	tx.queued += batch.Len()
+	return &batchResultsStub{tag: tx.tag, err: tx.err, rowErr: tx.rowErr}
+}
+
+// batchResultsStub replays the same outcome for every statement in a pipeline,
+// which is enough to drive the append path's result reading and error mapping.
+type batchResultsStub struct {
+	pgx.BatchResults
+
+	tag    pgconn.CommandTag
+	err    error
+	rowErr error
+}
+
+func (results *batchResultsStub) Exec() (pgconn.CommandTag, error) { return results.tag, results.err }
+
+//nolint:ireturn // The pgx batch test double must return pgx's interface.
+func (results *batchResultsStub) QueryRow() pgx.Row {
+	if results.err != nil {
+		return rowStub{err: results.err}
+	}
+	return rowStub{err: results.rowErr}
+}
+
+func (results *batchResultsStub) Close() error { return results.err }

@@ -112,65 +112,112 @@ func NewStore(pool *postgres.Pool, telemetry *Telemetry) (*Store, error) {
 	return &Store{pool: pool, queries: sqlcgen.New(pool.PGX()), telemetry: telemetry}, nil
 }
 
-// Append participates in the transaction owned by the feature caller. It never
-// begins or commits a transaction itself.
-func (s *Store) Append(ctx context.Context, tx pgx.Tx, event Event) (err error) {
+// Append stores every event in the transaction owned by the feature caller. It
+// never begins or commits a transaction itself.
+//
+// The events are pipelined, so one call costs one network round trip no matter
+// how many events it carries: a feature that emits several events per business
+// transaction pays the latency of one, and holds its own row locks for that
+// much less time. A mixed ordered and unordered call costs two, one per
+// statement shape. Nothing is sent unless every event is valid, and events for
+// the same ordering key are stored in the order they were passed.
+//
+// One call is one append operation in telemetry, because that is what the
+// recorded duration measures; backlog gauges report events.
+func (s *Store) Append(ctx context.Context, tx pgx.Tx, events ...Event) (err error) {
 	started := time.Now()
 	defer func() { s.recordOperation(ctx, "append", started, err) }()
 	if s == nil || s.pool == nil || tx == nil {
 		return fmt.Errorf("%w: store and transaction are required", ErrConfig)
 	}
-	event = event.withDefaults()
-	if err := event.Validate(); err != nil {
-		return err
+	if len(events) == 0 {
+		return nil
+	}
+
+	var unordered []sqlcgen.InsertOutboxEventsParams
+	var ordered []Event
+	for _, event := range events {
+		event = event.withDefaults()
+		if err := event.Validate(); err != nil {
+			return err
+		}
+		if event.OrderingKey != "" {
+			ordered = append(ordered, event)
+			continue
+		}
+		unordered = append(unordered, sqlcgen.InsertOutboxEventsParams{
+			ID:          event.ID,
+			EventType:   event.Type,
+			Source:      event.Source,
+			Destination: event.Destination,
+			SchemaName:  event.Schema,
+			OccurredAt:  timestamptz(event.OccurredAt),
+			Payload:     event.Payload,
+			Metadata:    event.Metadata,
+		})
 	}
 
 	queries := sqlcgen.New(tx)
-	if event.OrderingKey != "" {
-		return appendOrdered(ctx, queries, event)
+	if len(unordered) > 0 {
+		if err := appendUnordered(ctx, queries, unordered); err != nil {
+			return err
+		}
 	}
-	if err := queries.InsertOutboxEvent(ctx, sqlcgen.InsertOutboxEventParams{
-		ID:          event.ID,
-		EventType:   event.Type,
-		Source:      event.Source,
-		Destination: event.Destination,
-		SchemaName:  event.Schema,
-		OccurredAt:  timestamptz(event.OccurredAt),
-		Payload:     event.Payload,
-		Metadata:    event.Metadata,
-	}); err != nil {
-		return fmt.Errorf("insert outbox event: %w", err)
+	if len(ordered) > 0 {
+		return appendOrdered(ctx, queries, ordered)
 	}
 	return nil
 }
 
-// appendOrdered stores the event and advances its key's retained high-water
-// mark in one statement, so the caller's transaction holds the head row lock
-// for a single round trip. No row was stored exactly when the sequence is at or
-// below that mark, which the ordering authority rejects.
-func appendOrdered(ctx context.Context, queries *sqlcgen.Queries, event Event) error {
-	rows, err := queries.InsertOrderedOutboxEvent(ctx, sqlcgen.InsertOrderedOutboxEventParams{
-		ID:               event.ID,
-		EventType:        event.Type,
-		Source:           event.Source,
-		Destination:      event.Destination,
-		SchemaName:       event.Schema,
-		OccurredAt:       timestamptz(event.OccurredAt),
-		Payload:          event.Payload,
-		Metadata:         event.Metadata,
-		OrderingKey:      &event.OrderingKey,
-		OrderingSequence: &event.OrderingSequence,
+// appendUnordered stores envelopes that own no ordering head. Every result is
+// consumed even after a failure, because pgx requires the pipeline to be read
+// out before the connection carries anything else.
+func appendUnordered(ctx context.Context, queries *sqlcgen.Queries, params []sqlcgen.InsertOutboxEventsParams) error {
+	var failure error
+	queries.InsertOutboxEvents(ctx, params).Exec(func(_ int, err error) {
+		if err != nil && failure == nil {
+			failure = fmt.Errorf("insert outbox event: %w", err)
+		}
 	})
-	if err != nil {
-		return fmt.Errorf("insert ordered outbox event: %w", err)
+	return failure
+}
+
+// appendOrdered stores each event and advances its key's retained high-water
+// mark in the same statement, so the caller's transaction holds a head row lock
+// only for the pipeline. A statement that returns no row stored nothing, which
+// happens exactly when the sequence is at or below that mark; the ordering
+// authority rejects it.
+func appendOrdered(ctx context.Context, queries *sqlcgen.Queries, events []Event) error {
+	params := make([]sqlcgen.InsertOrderedOutboxEventsParams, len(events))
+	for index := range events {
+		event := &events[index]
+		params[index] = sqlcgen.InsertOrderedOutboxEventsParams{
+			ID:               event.ID,
+			EventType:        event.Type,
+			Source:           event.Source,
+			Destination:      event.Destination,
+			SchemaName:       event.Schema,
+			OccurredAt:       timestamptz(event.OccurredAt),
+			Payload:          event.Payload,
+			Metadata:         event.Metadata,
+			OrderingKey:      &event.OrderingKey,
+			OrderingSequence: &event.OrderingSequence,
+		}
 	}
-	if rows == 0 {
-		return fmt.Errorf(
-			"%w: key %q sequence %d is not above the retained high-water mark",
-			ErrOrderingSequence, event.OrderingKey, event.OrderingSequence,
-		)
-	}
-	return nil
+	var failure error
+	queries.InsertOrderedOutboxEvents(ctx, params).QueryRow(func(index int, _ string, err error) {
+		switch {
+		case err == nil || failure != nil:
+		case errors.Is(err, pgx.ErrNoRows):
+			failure = fmt.Errorf(
+				"%w: key %q sequence %d is not above the retained high-water mark",
+				ErrOrderingSequence, events[index].OrderingKey, events[index].OrderingSequence,
+			)
+		default:
+			failure = fmt.Errorf("insert ordered outbox event: %w", err)
+		}
+	})
+	return failure
 }
 
 // Claim leases up to batchSize eligible events under one fresh token. An empty

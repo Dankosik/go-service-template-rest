@@ -17,7 +17,7 @@ const (
 	maxMetadataBytes = 32 << 10
 	maxEnvelopeBytes = 288 << 10
 	// jsonWhitespace is the insignificant whitespace RFC 8259 allows before a
-	// JSON value, matching what the stored CHECK constraint trims.
+	// JSON value, which the stored `IS JSON OBJECT` check also skips.
 	jsonWhitespace = " \t\r\n"
 )
 
@@ -129,10 +129,10 @@ func validateJSON(name string, value []byte, minimum, maximum int) error {
 	return nil
 }
 
-// validateMetadata accepts the same bytes the stored CHECK constraint accepts:
-// valid JSON whose first non-whitespace byte opens an object. Deciding it on
-// the leading byte keeps the append path free of a second full parse, and JSON
-// has no other value that can start with '{'.
+// validateMetadata accepts the same bytes the stored `IS JSON OBJECT` check
+// accepts: valid JSON whose first non-whitespace byte opens an object. Deciding
+// it on the leading byte keeps the append path free of a second full parse, and
+// JSON has no other value that can start with '{'.
 func validateMetadata(value []byte) error {
 	if err := validateJSON("metadata", value, 2, maxMetadataBytes); err != nil {
 		return err

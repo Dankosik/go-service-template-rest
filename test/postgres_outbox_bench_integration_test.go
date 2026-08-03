@@ -156,46 +156,54 @@ func BenchmarkOutboxRelayOrderedPublishCycle(b *testing.B) {
 }
 
 // BenchmarkOutboxAppend measures the request-path cost a feature pays to emit
-// one event inside its own transaction: envelope validation plus the insert
-// that commits with the domain mutation. The ordered case also advances its
-// key's retained high-water mark, which is the same statement.
+// events inside its own transaction: envelope validation plus the inserts that
+// commit with the domain mutation. The ordered case also advances each key's
+// retained high-water mark, which is the same statement.
+//
+// The event-count cases are the direct measure of pipelining the append: a
+// business transaction that emits several events pays one round trip for all of
+// them, so the per-event metric falls as the count rises. Every case appends
+// through one key or none, which is the shape that shares the most contention.
 func BenchmarkOutboxAppend(b *testing.B) {
 	for _, ordered := range []bool{false, true} {
-		name := "unordered"
+		shape := "unordered"
 		if ordered {
-			name = "ordered"
+			shape = "ordered"
 		}
-		b.Run(name, func(b *testing.B) {
-			ctx, pool, store := newOutboxBenchmarkFixture(b, 0)
-			event := outboxEvent("append-bench")
-			if ordered {
-				event.OrderingKey = "append-bench-key"
-			}
-			sequence := int64(0)
+		for _, perTransaction := range []int{1, 4, 16} {
+			b.Run(fmt.Sprintf("%s-%d", shape, perTransaction), func(b *testing.B) {
+				ctx, pool, store := newOutboxBenchmarkFixture(b, 0)
+				events := make([]postgresoutbox.Event, perTransaction)
+				sequence := int64(0)
 
-			b.ReportAllocs()
-			for b.Loop() {
-				sequence++
-				event.ID = fmt.Sprintf("append-bench-%d", sequence)
-				if ordered {
-					event.OrderingSequence = sequence
+				b.ReportAllocs()
+				for b.Loop() {
+					for index := range events {
+						sequence++
+						events[index] = outboxEvent(fmt.Sprintf("append-bench-%d", sequence))
+						if ordered {
+							events[index].OrderingKey = "append-bench-key"
+							events[index].OrderingSequence = sequence
+						}
+					}
+					if err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+						return store.Append(ctx, tx, events...)
+					}); err != nil {
+						b.Fatalf("Append(): %v", err)
+					}
 				}
-				if err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
-					return store.Append(ctx, tx, event)
-				}); err != nil {
-					b.Fatalf("Append(): %v", err)
-				}
-			}
-			b.StopTimer()
+				b.StopTimer()
 
-			var stored int64
-			if err := pool.PGX().QueryRow(ctx, "SELECT count(*) FROM outbox_events").Scan(&stored); err != nil {
-				b.Fatalf("count appended events: %v", err)
-			}
-			if stored != sequence {
-				b.Fatalf("stored events = %d, want %d", stored, sequence)
-			}
-		})
+				var stored int64
+				if err := pool.PGX().QueryRow(ctx, "SELECT count(*) FROM outbox_events").Scan(&stored); err != nil {
+					b.Fatalf("count appended events: %v", err)
+				}
+				if stored != sequence {
+					b.Fatalf("stored events = %d, want %d", stored, sequence)
+				}
+				reportOutboxEventCost(b, sequence)
+			})
+		}
 	}
 }
 

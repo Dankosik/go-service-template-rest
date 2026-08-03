@@ -305,6 +305,10 @@ func (r *Relay) publishBatch(ctx context.Context, batch ClaimedBatch, leaseExpir
 // broker durably acknowledged that exact event. It reports cleanupSafe = false
 // when a publisher ignored cancellation, because its goroutine can still touch
 // the dependencies the process is about to close.
+//
+// The deadline computed here is the whole batch's publication budget. Because
+// it starts no later than any single publication does, it is also the budget of
+// each one, which is why publishOne needs no timeout of its own.
 func (r *Relay) publishAll(ctx context.Context, batch ClaimedBatch, leaseExpiry time.Time) ([]error, bool) {
 	deadline := earliest(time.Now().Add(r.config.PublishTimeout), leaseExpiry.Add(-publisherJoinTimeout))
 	batchCtx, cancel := context.WithDeadline(ctx, deadline)
@@ -358,13 +362,11 @@ func (r *Relay) publishOne(ctx context.Context, event Event) (err error) {
 		r.recordOperation(ctx, "publish", operationOutcome(err), errorClass, started)
 	}()
 
-	attemptCtx, cancel := context.WithTimeout(ctx, r.config.PublishTimeout)
-	defer cancel()
-	err = r.publisher.Publish(attemptCtx, event)
+	err = r.publisher.Publish(ctx, event)
 	if err == nil {
 		// A publisher that returns nil after its budget expired cannot prove the
 		// broker accepted the event, so the attempt stays retryable.
-		if budget := attemptCtx.Err(); budget != nil {
+		if budget := ctx.Err(); budget != nil {
 			err = fmt.Errorf("publisher reported success after its budget expired: %w", budget)
 		}
 	}
