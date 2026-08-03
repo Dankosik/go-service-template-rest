@@ -109,17 +109,22 @@ CREATE TABLE outbox_events (
         isfinite(occurred_at)
         AND occurred_at <> TIMESTAMPTZ '0001-01-01 00:00:00+00'
     ),
-    -- json rather than jsonb: the outbox stores and retries the exact bytes it
-    -- was given, and jsonb would reject payloads that are valid JSON, such as a
-    -- number outside PostgreSQL numeric range or a string with an escaped NUL.
+    -- IS JSON holds the stored bytes to the same lenient grammar the json type
+    -- accepts, rather than the jsonb one: the outbox stores and retries the
+    -- exact bytes it was given, and jsonb would reject payloads that are valid
+    -- JSON, such as a number outside PostgreSQL numeric range or a string with
+    -- an escaped NUL. IS JSON OBJECT is also the whole metadata rule, so the
+    -- object requirement no longer needs a second decode and a text pattern
+    -- beside the parse. Bytes that are not valid UTF-8 are rejected as an
+    -- encoding error rather than a check violation; both refuse the row, and
+    -- the append path validates encoding before the statement is sent.
     CONSTRAINT outbox_events_payload_check CHECK (
         octet_length(payload) BETWEEN 1 AND 262144
-        AND convert_from(payload, 'UTF8')::json IS NOT NULL
+        AND payload IS JSON
     ),
     CONSTRAINT outbox_events_metadata_check CHECK (
         octet_length(metadata) BETWEEN 2 AND 32768
-        AND convert_from(metadata, 'UTF8')::json IS NOT NULL
-        AND ltrim(convert_from(metadata, 'UTF8'), E' \t\r\n') LIKE '{%'
+        AND metadata IS JSON OBJECT
     ),
     CONSTRAINT outbox_events_ordering_check CHECK (
         (ordering_key IS NULL AND ordering_sequence IS NULL)

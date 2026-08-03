@@ -154,6 +154,26 @@ func TestPostgresOutboxEnvelope(t *testing.T) {
 	if err == nil {
 		t.Fatal("direct oversized metadata insert succeeded")
 	}
+	// Metadata must be a JSON object, and insignificant leading whitespace does
+	// not change that. Every other JSON value is rejected even though it parses.
+	if _, err := pool.PGX().Exec(ctx, `
+		INSERT INTO outbox_events (
+			id, event_type, source, destination, schema_name, occurred_at, payload, metadata
+		) VALUES ('metadata-leading-whitespace', 't', 's', 'd', 'v', clock_timestamp(),
+			convert_to('{}', 'UTF8'), convert_to(E' \t\r\n{"m":1}', 'UTF8'))`); err != nil {
+		t.Fatalf("insert metadata object behind leading whitespace: %v", err)
+	}
+	for _, metadata := range []string{`[1,2]`, `"text"`, `42`, `null`, `true`} {
+		id := "metadata-not-object-" + metadata
+		if _, err := pool.PGX().Exec(ctx, `
+			INSERT INTO outbox_events (
+				id, event_type, source, destination, schema_name, occurred_at, payload, metadata
+			) VALUES ($1, 't', 's', 'd', 'v', clock_timestamp(),
+				convert_to('{}', 'UTF8'), convert_to($2, 'UTF8'))`, id, metadata); err == nil {
+			t.Fatalf("direct non-object metadata %s insert succeeded", metadata)
+		}
+		assertOutboxCount(t, ctx, pool, id, 0)
+	}
 	for _, statement := range []string{
 		`INSERT INTO outbox_events (id, event_type, source, destination, schema_name, occurred_at, payload, metadata, ordering_key)
 		 VALUES ('pair-key-only', 't', 's', 'd', 'v', clock_timestamp(), convert_to('{}','UTF8'), convert_to('{}','UTF8'), 'k')`,
@@ -360,6 +380,71 @@ func TestPostgresOutboxOrderingAuthority(t *testing.T) {
 	if highWater != 6 {
 		t.Fatalf("concurrent ordering high-water = %d, want 6", highWater)
 	}
+}
+
+// One Append call carries a whole business transaction's events. It pipelines
+// them rather than taking a round trip each, and the events still see the same
+// durable state and report the same outcomes they would one call at a time.
+func TestPostgresOutboxBatchedAppend(t *testing.T) {
+	ctx, pool, store := newOutboxFixture(t)
+
+	// Mixed shapes commit together, and two events for one key inside a single
+	// call advance that key's head in the order they were passed: the first is
+	// claimable and the second waits behind it.
+	if err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+		return store.Append(ctx, tx,
+			outboxEvent("batch-plain-1"),
+			orderedEvent("batch-key-1", "batch-account", 1),
+			outboxEvent("batch-plain-2"),
+			orderedEvent("batch-key-2", "batch-account", 2),
+		)
+	}); err != nil {
+		t.Fatalf("Append(batch): %v", err)
+	}
+	for _, id := range []string{"batch-plain-1", "batch-plain-2", "batch-key-1", "batch-key-2"} {
+		assertOutboxCount(t, ctx, pool, id, 1)
+	}
+	var ready []string
+	rows, err := pool.PGX().Query(ctx,
+		`SELECT id FROM outbox_events WHERE ordering_ready ORDER BY id`)
+	if err != nil {
+		t.Fatalf("read ready ordered events: %v", err)
+	}
+	ready, err = pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		t.Fatalf("collect ready ordered events: %v", err)
+	}
+	if len(ready) != 1 || ready[0] != "batch-key-1" {
+		t.Fatalf("claimable ordered events = %v, want only batch-key-1", ready)
+	}
+
+	// One rejected sequence rejects the whole call, and the message names the
+	// event that lost rather than the first one in it.
+	err = pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+		return store.Append(ctx, tx,
+			outboxEvent("batch-rolled-back"),
+			orderedEvent("batch-key-replay", "batch-account", 1),
+		)
+	})
+	if rejection := fmt.Sprintf("%v", err); !errors.Is(err, postgresoutbox.ErrOrderingSequence) ||
+		!strings.Contains(rejection, `key "batch-account" sequence 1`) {
+		t.Fatalf("Append(batch with replayed sequence) error = %v", err)
+	}
+	assertOutboxCount(t, ctx, pool, "batch-rolled-back", 0)
+	assertOutboxCount(t, ctx, pool, "batch-key-replay", 0)
+
+	// A rejected event keeps its whole call off the wire, so the valid events
+	// beside it are not stored either.
+	invalid := outboxEvent("batch-invalid")
+	invalid.Payload = []byte(`not json`)
+	err = pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+		return store.Append(ctx, tx, outboxEvent("batch-valid-neighbor"), invalid)
+	})
+	if !errors.Is(err, postgresoutbox.ErrInvalidEvent) {
+		t.Fatalf("Append(batch with invalid event) error = %v", err)
+	}
+	assertOutboxCount(t, ctx, pool, "batch-valid-neighbor", 0)
+	assertOutboxCount(t, ctx, pool, "batch-invalid", 0)
 }
 
 func TestPostgresOutboxConcurrentClaims(t *testing.T) {

@@ -1,6 +1,10 @@
 -- An unordered event owns no ordering head, so it stores the envelope alone and
 -- leaves the ordering columns at their defaults.
--- name: InsertOutboxEvent :exec
+--
+-- The append path always pipelines, even for a single event: a feature that
+-- emits several events in one transaction pays one round trip instead of one
+-- per event, and holds its own row locks for that much less time.
+-- name: InsertOutboxEvents :batchexec
 INSERT INTO outbox_events (
     id,
     event_type,
@@ -25,10 +29,14 @@ INSERT INTO outbox_events (
 -- event in one statement, so a feature transaction holds the head row lock for
 -- a single round trip. The head upsert changes nothing when the sequence is at
 -- or below the retained mark; the event insert then selects from an empty
--- result and reports zero rows, which is how the caller recognizes a rejected
+-- result and returns no row, which is how the caller recognizes a rejected
 -- sequence. `ordering_ready` records whether this event is its key's claimable
 -- head, which is true exactly when the head now points at this sequence.
--- name: InsertOrderedOutboxEvent :execrows
+--
+-- Pipelined like the unordered insert. Statements in one pipeline still execute
+-- in the order they were queued, so two appends to the same key inside one
+-- batch see each other's head exactly as two separate round trips would.
+-- name: InsertOrderedOutboxEvents :batchone
 WITH head AS (
     INSERT INTO outbox_ordering_heads (ordering_key, last_sequence, current_sequence)
     VALUES (sqlc.arg(ordering_key), sqlc.arg(ordering_sequence), sqlc.arg(ordering_sequence))
@@ -67,7 +75,8 @@ SELECT
     sqlc.arg(ordering_key),
     sqlc.arg(ordering_sequence),
     head.current_sequence IS NOT DISTINCT FROM sqlc.arg(ordering_sequence)
-FROM head;
+FROM head
+RETURNING outbox_events.id;
 
 -- One statement leases a whole batch under a single token. The partial unique
 -- index on ready ordered rows keeps at most one claimable event per ordering

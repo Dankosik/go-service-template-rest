@@ -153,15 +153,19 @@ func TestRelayCancellation(t *testing.T) {
 	})
 }
 
+// A publisher that reports success once the batch's publication budget is gone
+// has not proven the broker accepted the event, so the attempt stays retryable.
 func TestRelayTimeoutRejectsNilCompletion(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		relay := newUnitRelay(&relayStoreStub{}, publisherFunc(func(ctx context.Context, _ Event) error {
 			<-ctx.Done()
 			return nil
 		}))
-		got := relay.publishOne(context.Background(), unitClaim(1).Event)
-		if !errors.Is(got, context.DeadlineExceeded) {
-			t.Fatalf("publishOne() = %v, want deadline failure after nil completion", got)
+		failures, cleanupSafe := relay.publishAll(
+			context.Background(), unitBatch(1), time.Now().Add(time.Hour))
+		if !cleanupSafe || len(failures) != 1 || !errors.Is(failures[0], context.DeadlineExceeded) {
+			t.Fatalf("publishAll() = %v cleanupSafe=%t, want deadline failure after nil completion",
+				failures, cleanupSafe)
 		}
 	})
 }
