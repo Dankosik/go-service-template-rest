@@ -83,7 +83,7 @@ func NewRelay(store *Store, publisher Publisher, telemetry *Telemetry, config Re
 	if err != nil {
 		return nil, err
 	}
-	relay.listen = listenForAppends(owned.pool, telemetry)
+	relay.listen = listenForAppends(owned.listenerConfig(), telemetry)
 	return relay, nil
 }
 

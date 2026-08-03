@@ -206,7 +206,7 @@ linters:
             # PostgreSQL runtime adapters; the directory is removed when
             # OUTBOX=none. The relay and envelope stay driver-free.
             - "!**/internal/infra/postgresoutbox/store*.go"
-            - "!**/internal/infra/postgresoutbox/notify.go"
+            - "!**/internal/infra/postgresoutbox/notify*.go"
             # profile:outbox-postgres:end
             # pgtest is a PostgreSQL adapter like the two above, scoped to tests:
             # it creates and drops the per-test database, which is driver work.

@@ -1507,7 +1507,12 @@ func TestPostgresOutboxDrainDuringMaintenanceStartsNoClaim(t *testing.T) {
 	t.Cleanup(telemetry.Close)
 	relay := mustNewOutboxRelay(t, store, publisher, telemetry, config)
 	result := runOutboxRelay(ctx, relay)
-	waitForOutboxOperation(t, reader, "claim", "empty")
+	// The append listener signals one wake-up as soon as it subscribes. Let that
+	// wake-up drive a claim to completion first, so the gate below lands while
+	// the relay waits for its next observation rather than mid-claim.
+	waitForOutboxListener(t, ctx, pool)
+	waitForOutboxOperationCount(t, reader, "claim", "empty",
+		outboxOperationCount(t, reader, "claim", "empty")+1)
 
 	lockTx, err := pool.PGX().Begin(ctx)
 	if err != nil {
@@ -2158,6 +2163,74 @@ func waitForOutboxCount(t *testing.T, ctx context.Context, pool *postgres.Pool, 
 		case <-ticker.C:
 		case <-deadline.C:
 			t.Fatalf("outbox count for %q = %d, want %d", predicate, count, want)
+		}
+	}
+}
+
+func waitForOutboxListener(t *testing.T, ctx context.Context, pool *postgres.Pool) {
+	t.Helper()
+	deadline := time.NewTimer(10 * time.Second)
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer deadline.Stop()
+	defer ticker.Stop()
+	for {
+		var subscribed bool
+		if err := pool.PGX().QueryRow(ctx, `
+			SELECT EXISTS (
+				SELECT 1 FROM pg_stat_activity
+				WHERE pid <> pg_backend_pid()
+				  AND query LIKE 'LISTEN %outbox_appended%'
+			)`).Scan(&subscribed); err != nil {
+			t.Fatalf("inspect outbox listener: %v", err)
+		}
+		if subscribed {
+			return
+		}
+		select {
+		case <-ticker.C:
+		case <-deadline.C:
+			t.Fatal("outbox append listener did not subscribe")
+		}
+	}
+}
+
+func outboxOperationCount(t *testing.T, reader *sdkmetric.ManualReader, operation, outcome string) int64 {
+	t.Helper()
+	var collected metricdata.ResourceMetrics
+	if err := reader.Collect(t.Context(), &collected); err != nil {
+		t.Fatalf("collect outbox operations: %v", err)
+	}
+	for _, scope := range collected.ScopeMetrics {
+		for _, measured := range scope.Metrics {
+			if measured.Name != "outbox.relay.operations" {
+				continue
+			}
+			for _, point := range measured.Data.(metricdata.Sum[int64]).DataPoints {
+				if metricAttribute(t, point.Attributes, "operation") == operation &&
+					metricAttribute(t, point.Attributes, "outcome") == outcome {
+					return point.Value
+				}
+			}
+		}
+	}
+	return 0
+}
+
+func waitForOutboxOperationCount(t *testing.T, reader *sdkmetric.ManualReader, operation, outcome string, want int64) {
+	t.Helper()
+	deadline := time.NewTimer(10 * time.Second)
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer deadline.Stop()
+	defer ticker.Stop()
+	for {
+		got := outboxOperationCount(t, reader, operation, outcome)
+		if got >= want {
+			return
+		}
+		select {
+		case <-ticker.C:
+		case <-deadline.C:
+			t.Fatalf("outbox operation %s/%s reached %d, want %d", operation, outcome, got, want)
 		}
 	}
 }

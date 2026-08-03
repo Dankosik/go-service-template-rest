@@ -435,6 +435,13 @@ func (s *Store) Observe(ctx context.Context) (observation StateObservation, err 
 	}, nil
 }
 
+// listenerConfig is the connection the append listener opens for itself. It
+// inherits the pool's validated DSN, TLS, and timeouts without ever competing
+// for a pooled connection.
+func (s *Store) listenerConfig() *pgx.ConnConfig {
+	return s.pool.PGX().Config().ConnConfig
+}
+
 func (s *Store) withTelemetry(telemetry *Telemetry) *Store {
 	if s == nil || telemetry == nil || s.telemetry == telemetry {
 		return s

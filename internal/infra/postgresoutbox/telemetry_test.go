@@ -253,3 +253,20 @@ func metricAttributeSets(t *testing.T, aggregation metricdata.Aggregation) []att
 	}
 	return sets
 }
+
+// Every telemetry entry point is nil-safe, so callers that never built a
+// recorder do not guard each call site.
+func TestTelemetryNilReceiverIsSafe(t *testing.T) {
+	t.Parallel()
+
+	var telemetry *Telemetry
+	telemetry.Close()
+	telemetry.RecordObservation(StateObservation{}, time.Now())
+	telemetry.RecordProgress(time.Now())
+	telemetry.SetProcessState(true, 1, time.Hour)
+	telemetry.RecordOperation(t.Context(), "claim", "success", "none", time.Second)
+	telemetry.LogPoison(t.Context(), "event", "publisher_permanent", 1)
+	telemetry.LogPublisherStuck(t.Context())
+	telemetry.LogRecovery(t.Context(), "event", 1)
+	telemetry.LogListenerRetry(t.Context(), errors.New("listener"))
+}

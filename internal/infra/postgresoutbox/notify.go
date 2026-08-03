@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -26,10 +25,10 @@ const (
 // for its claim and finalization statements, and a blocked listener can never
 // starve them. Every failure here is a latency concern rather than a
 // correctness one, because the relay still claims on its poll timer.
-func listenForAppends(pool *postgres.Pool, telemetry *Telemetry) listener {
+func listenForAppends(connConfig *pgx.ConnConfig, telemetry *Telemetry) listener {
 	return func(ctx context.Context, wake chan<- struct{}) {
 		for ctx.Err() == nil {
-			err := consumeAppends(ctx, pool, wake)
+			err := consumeAppends(ctx, connConfig, wake)
 			if err != nil && ctx.Err() == nil {
 				telemetry.LogListenerRetry(ctx, err)
 				sleep(ctx, listenerRetryDelay)
@@ -38,8 +37,8 @@ func listenForAppends(pool *postgres.Pool, telemetry *Telemetry) listener {
 	}
 }
 
-func consumeAppends(ctx context.Context, pool *postgres.Pool, wake chan<- struct{}) error {
-	conn, err := pgx.ConnectConfig(ctx, pool.PGX().Config().ConnConfig.Copy())
+func consumeAppends(ctx context.Context, connConfig *pgx.ConnConfig, wake chan<- struct{}) error {
+	conn, err := pgx.ConnectConfig(ctx, connConfig.Copy())
 	if err != nil {
 		return fmt.Errorf("connect outbox listener: %w", err)
 	}

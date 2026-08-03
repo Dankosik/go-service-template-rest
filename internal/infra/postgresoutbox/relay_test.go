@@ -789,6 +789,154 @@ func TestRelayCycleFatalAndStateFailures(t *testing.T) {
 	}
 }
 
+// A publisher that ignores cancellation makes cleanup unsafe for the whole
+// cycle: its goroutine can still touch dependencies the process is closing.
+func TestRelayCycleStuckPublisherIsCleanupUnsafe(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		release := make(chan struct{})
+		finalized := false
+		store := &relayStoreStub{
+			claim: func(context.Context, time.Duration, int) (ClaimedBatch, error) { return unitBatch(1), nil },
+			markPublishedBatch: func(_ context.Context, _ string, ids []string) (int, error) {
+				finalized = true
+				return len(ids), nil
+			},
+		}
+		relay := newUnitRelay(store, publisherFunc(func(context.Context, Event) error {
+			<-release
+			return nil
+		}))
+		relay.config.PublishTimeout = time.Millisecond
+
+		result, keepRunning := relay.runCycle(context.Background(), nil, time.Now().Add(time.Hour), time.Now().Add(time.Hour))
+		if keepRunning || result.CleanupSafe || !errors.Is(result.Err, ErrPublisherStuck) {
+			t.Fatalf("runCycle(stuck) = %+v keep=%t", result, keepRunning)
+		}
+		if finalized {
+			t.Fatal("a stuck cycle finalized a claim whose outcome is unknown")
+		}
+		close(release)
+		synctest.Wait()
+	})
+}
+
+// Poisoning reaches the operator log only after the durable write succeeds, and
+// a failed write is reported instead.
+func TestRelayPoisonLoggingFollowsDurableWrite(t *testing.T) {
+	t.Parallel()
+
+	telemetry, err := NewTelemetry(nil, nil)
+	if err != nil {
+		t.Fatalf("NewTelemetry(): %v", err)
+	}
+	t.Cleanup(telemetry.Close)
+
+	poisonErr := errors.New("poison write failed")
+	store := &relayStoreStub{
+		markPoisonedBatch: func(context.Context, string, []PoisonDirective) error { return poisonErr },
+	}
+	relay := newUnitRelay(store, publisherFunc(func(context.Context, Event) error { return nil }))
+	relay.telemetry = telemetry
+	poisoned := []poisonedEvent{{claim: unitClaim(1), errorClass: "publisher_permanent"}}
+	if err := relay.markPoisoned(t.Context(), "lease", poisoned); !errors.Is(err, poisonErr) {
+		t.Fatalf("markPoisoned(write failure) error = %v", err)
+	}
+
+	store.markPoisonedBatch = nil
+	if err := relay.markPoisoned(t.Context(), "lease", poisoned); err != nil {
+		t.Fatalf("markPoisoned() error = %v", err)
+	}
+	if err := relay.markPoisoned(t.Context(), "lease", nil); err != nil {
+		t.Fatalf("markPoisoned(empty) error = %v", err)
+	}
+}
+
+// Maintenance owns the cycle: a failed cleanup stops the relay before it claims,
+// and a drain raised during maintenance starts no claim at all.
+func TestRelayLoopStopsOnMaintenanceFailureAndDrain(t *testing.T) {
+	t.Parallel()
+
+	cleanupErr := errors.New("cleanup failed")
+	claims := 0
+	store := &relayStoreStub{
+		cleanup: func(context.Context, time.Duration, int) (int, error) { return 0, cleanupErr },
+		claim: func(context.Context, time.Duration, int) (ClaimedBatch, error) {
+			claims++
+			return ClaimedBatch{}, nil
+		},
+	}
+	relay := newUnitRelay(store, publisherFunc(func(context.Context, Event) error { return nil }))
+	relay.config.CleanupInterval = 0
+	if result := relay.runLoop(t.Context(), nil); !errors.Is(result.Err, cleanupErr) || !result.CleanupSafe {
+		t.Fatalf("runLoop(cleanup failure) = %+v", result)
+	}
+	if claims != 0 {
+		t.Fatalf("claims after maintenance failure = %d, want 0", claims)
+	}
+
+	store.cleanup = func(context.Context, time.Duration, int) (int, error) { return 0, nil }
+	relay = newUnitRelay(store, publisherFunc(func(context.Context, Event) error { return nil }))
+	relay.config.CleanupInterval = 0
+	relay.markEvent = func(context.Context, string, ClaimedEvent) error { return nil }
+	store.cleanup = func(context.Context, time.Duration, int) (int, error) {
+		relay.StartDrain() //nolint:contextcheck // Drain has no context-bearing variant.
+		return 0, nil
+	}
+	if result := relay.runLoop(t.Context(), nil); result.Err != nil || !result.CleanupSafe {
+		t.Fatalf("runLoop(drain during maintenance) = %+v", result)
+	}
+	if claims != 0 {
+		t.Fatalf("claims after a drain raised during maintenance = %d, want 0", claims)
+	}
+}
+
+// Run and StartDrain stay safe on a nil relay and on a relay already draining,
+// because the process lifecycle calls both without owning that state.
+func TestRelayDrainBeforeRunStartsNoLoop(t *testing.T) {
+	t.Parallel()
+
+	(*Relay)(nil).StartDrain()
+
+	claims := 0
+	relay := newUnitRelay(&relayStoreStub{
+		claim: func(context.Context, time.Duration, int) (ClaimedBatch, error) {
+			claims++
+			return ClaimedBatch{}, nil
+		},
+	}, publisherFunc(func(context.Context, Event) error { return nil }))
+	relay.StartDrain()
+	if result := relay.Run(t.Context()); result.Err != nil || !result.CleanupSafe {
+		t.Fatalf("Run(already draining) = %+v", result)
+	}
+	if claims != 0 || relay.Ready() {
+		t.Fatalf("claims=%d ready=%t after running an already-drained relay", claims, relay.Ready())
+	}
+}
+
+// Finalization failures are reported with the transition that produced them.
+func TestRelayFinalizeReportsRetryWriteFailure(t *testing.T) {
+	t.Parallel()
+
+	retryErr := errors.New("retry write failed")
+	relay := newUnitRelay(&relayStoreStub{
+		scheduleRetryBatch: func(context.Context, string, []RetryDirective) error { return retryErr },
+	}, publisherFunc(func(context.Context, Event) error { return nil }))
+	attempts := []attempt{{claim: unitClaim(1), err: errors.New("temporary")}}
+	if err := relay.finalize(t.Context(), "lease", attempts); !errors.Is(err, retryErr) {
+		t.Fatalf("finalize(retry write failure) error = %v", err)
+	}
+
+	publishErr := errors.New("publish write failed")
+	relay = newUnitRelay(&relayStoreStub{
+		markPublishedBatch: func(context.Context, string, []string) (int, error) { return 0, publishErr },
+		markPublished:      func(context.Context, string, ClaimedEvent) error { return ErrLeaseLost },
+		get:                func(context.Context, string) (Record, error) { return Record{}, publishErr },
+	}, publisherFunc(func(context.Context, Event) error { return nil }))
+	if err := relay.finalize(t.Context(), "lease", []attempt{{claim: unitClaim(1)}}); !errors.Is(err, ErrProgressUnknown) {
+		t.Fatalf("finalize(publish write failure) error = %v", err)
+	}
+}
+
 type pointerPublisher struct{}
 
 func (*pointerPublisher) Publish(context.Context, Event) error { return nil }
