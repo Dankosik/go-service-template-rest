@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -23,6 +24,26 @@ import (
 func TestMessagingCompositionRejectsEmptyHandlerBeforeConfig(t *testing.T) {
 	if err := run(t.Context(), []string{"--config", "/does/not/exist"}, nil); !errors.Is(err, natsjs.ErrRejected) {
 		t.Fatalf("run(nil handler builder) error = %v, want ErrRejected", err)
+	}
+}
+
+func TestMessagingCompositionRejectsDisabledTransportWithRegisteredHandler(t *testing.T) {
+	// profile:authn-oidc-jwt:start
+	t.Setenv("APP__AUTHN__ISSUER", "https://issuer.example.com")
+	t.Setenv("APP__AUTHN__AUDIENCE", "https://api.example.com")
+	t.Setenv("APP__AUTHN__TRUSTED_PROXY_CIDRS", "127.0.0.0/8")
+	// profile:authn-oidc-jwt:end
+	t.Setenv("APP__MESSAGING__ENABLED", "false")
+	built := false
+	err := run(t.Context(), nil, func(context.Context, config.Config, *slog.Logger, *natsjs.Producer) (natsjs.Handler, func(context.Context), error) {
+		built = true
+		return func(context.Context, natsjs.Message) error { return nil }, nil, nil
+	})
+	if !errors.Is(err, natsjs.ErrRejected) || !strings.Contains(err.Error(), "messaging must be enabled for worker") {
+		t.Fatalf("run(disabled messaging) error = %v, want disabled ErrRejected", err)
+	}
+	if built {
+		t.Fatal("worker built the feature handler while messaging was disabled")
 	}
 }
 

@@ -42,7 +42,8 @@ and arbitrary headers are not emitted to telemetry.
 the service bootstrap root with the concrete `*natsjs.Producer`; payload schema
 and event meaning remain feature-owned. A publish is accepted only after a
 JetStream `PubAck`. Validation or a definite API rejection returns
-`natsjs.ErrRejected`; cancellation, timeout, disconnect, or loss before a
+`natsjs.ErrRejected`; cancellation detected before dispatch is rejected too.
+Cancellation, timeout, disconnect, or loss after dispatch but before a
 conclusive acknowledgement returns `natsjs.ErrAmbiguous`. The pack does not
 retry automatically. Retry an ambiguous attempt only with the same
 `PublicationID`.
@@ -58,9 +59,11 @@ per-key ordering.
 Replace the deliberate `nil` passed to `bootstrap.Run` in `cmd/worker/main.go`
 with a binary-local `bootstrap.HandlerBuilder`. The builder receives the loaded
 `config.Config`, logger, and admitted concrete `*natsjs.Producer`, then returns
-one feature-owned, duplicate-safe `natsjs.Handler` and optional
-`func(context.Context)` dependency cleanup. Bootstrap invokes that cleanup on
-startup failure and shutdown; it must honor the supplied deadline.
+one binary-local `natsjs.Handler` adapter that invokes duplicate-safe behavior
+under `internal/<feature>`, plus optional `func(context.Context)` dependency
+cleanup. Feature packages remain transport-agnostic and do not import
+`internal/infra/natsjs`. Bootstrap invokes the cleanup on startup failure and
+shutdown; it must honor the supplied deadline.
 Then run:
 
 ```bash

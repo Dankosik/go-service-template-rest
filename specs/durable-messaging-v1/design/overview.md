@@ -6,9 +6,10 @@ status: complete
 
 The capability is one removable, concrete NATS JetStream pack. It uses
 `github.com/nats-io/nats.go` v1.52.0 and its `jetstream` package directly. The
-real-broker proof pins `nats:2.14.3-alpine`. There is no broker interface,
-framework, outbox, inbox, schema registry, topology reconciler, or feature event
-catalog.
+real-broker proof pins
+`nats:2.14.3-alpine@sha256:c11af972c99ae542de8925e6a7d9c533aa1eb039660420d2074beed6089b3bf0`.
+There is no broker interface, framework, outbox, inbox, schema registry,
+topology reconciler, or feature event catalog.
 
 The two compositions are deliberately different:
 
@@ -17,7 +18,7 @@ cmd/service -> internal/infra/natsjs.Client -> nats.go/JetStream
               producer + readiness only
 
 cmd/worker  -> internal/infra/natsjs.Client -> nats.go/JetStream
-              one durable pull Consumer + one feature Handler
+              one durable pull Consumer + one binary-local Handler adapter
 ```
 
 `cmd/service/internal/bootstrap` owns the HTTP process connection and exposes
@@ -25,8 +26,9 @@ the concrete producer at the composition root for feature handlers. The source
 template has no feature event to publish, so it does not add a fake endpoint or
 an ACK-and-drop handler. `cmd/worker/internal/bootstrap` owns a separate process
 lifecycle. Its `main` passes no handler and fails before connecting until the
-initialized service registers one feature-owned handler. Focused bootstrap
-tests inject a real handler without adding a production example event.
+initialized service registers one binary-local handler adapter that invokes
+feature-owned behavior. Focused bootstrap tests inject a real handler without
+adding a production example event.
 
 Reopen the transport decision only when the target service must use the
 fleet-owned Kafka/Redpanda infrastructure or requires partition-key ordering.
@@ -230,8 +232,6 @@ type DeliveryMetadata struct {
     StreamSequence, ConsumerSequence uint64
     NumDelivered, NumPending         uint64
     StoredAt                          time.Time
-    SourceSubject                     string
-    SourcePublicationID               string
 }
 
 type Handler func(context.Context, Message) error
@@ -241,7 +241,6 @@ type Worker struct { /* one concrete durable pull consumer */ }
 func (w *Worker) Run(context.Context) error
 func (w *Worker) StartDrain()
 func (w *Worker) Shutdown(context.Context) error
-func (w *Worker) ForceClose()
 ```
 
 `NewID` returns `crypto/rand.Text()`. The caller supplies both IDs and a
@@ -309,8 +308,9 @@ reconnect loop and no local publish queue.
 `Producer.Publish` builds one immutable NATS message and calls synchronous
 `jetstream.PublishMsg` under the earlier of the caller deadline and five
 seconds. A server `PubAck` is the only accepted result. Local validation and a
-definite JetStream API rejection are `rejected`; cancellation, deadline,
-disconnect, or loss before a conclusive acknowledgement are `ambiguous`.
+pre-dispatch cancellation or definite JetStream API rejection are `rejected`;
+cancellation, deadline, disconnect, or loss after dispatch without a
+conclusive acknowledgement are `ambiguous`.
 There is no automatic publish retry. A caller may retry an ambiguous operation
 with the same `PublicationID`; a fresh logical publication or redrive must use
 a new one.
@@ -460,11 +460,12 @@ or fatal supervised task performs this sequence inside
 4. drain the NATS connection and wait for its closed callback;
 5. stop diagnostics and flush telemetry last.
 
-If the deadline expires, `ForceClose` cancels handler contexts, closes the NATS
-connection immediately, records a forced-shutdown outcome, and returns a
-non-nil shutdown error. An uncooperative feature handler may run until the
-process exits; its message remains unacknowledged and redelivers elsewhere.
-The transport never reports a clean drain in that state.
+If the deadline expires, `Worker.Shutdown` takes its private forced-close path:
+it cancels handler contexts, closes the NATS connection immediately, records a
+forced-shutdown outcome, and returns a non-nil shutdown error. An uncooperative
+feature handler may run until the process exits; its message remains
+unacknowledged and redelivers elsewhere. The transport never reports a clean
+drain in that state.
 
 ## Package and profile placement
 

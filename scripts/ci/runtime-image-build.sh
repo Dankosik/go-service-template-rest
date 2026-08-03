@@ -24,11 +24,15 @@ build_image() {
 # profile:messaging-nats-jetstream:start
 verify_worker_image() {
 	local output
-	if output="$(docker run --rm --read-only --network none --entrypoint /worker "${IMAGE}" 2>&1)"; then
-		echo "runtime image worker exited successfully without a registered feature handler" >&2
+	if output="$(docker run --rm --read-only --network none --env APP__MESSAGING__ENABLED=false --entrypoint /worker "${IMAGE}" 2>&1)"; then
+		echo "runtime image worker exited successfully under its fail-closed smoke configuration" >&2
 		exit 1
 	fi
-	if ! grep -Fq 'worker feature handler builder is not registered' <<<"${output}"; then
+	# The source template has no handler builder. A derived service with a real
+	# builder crosses that boundary and rejects the explicitly disabled transport.
+	# Both outcomes prove the image contains an executable worker without network I/O.
+	if ! grep -Fq 'worker feature handler builder is not registered' <<<"${output}" &&
+		! grep -Fq 'messaging must be enabled for worker' <<<"${output}"; then
 		echo "runtime image worker did not execute the expected fail-closed binary" >&2
 		echo "${output}" >&2
 		exit 1

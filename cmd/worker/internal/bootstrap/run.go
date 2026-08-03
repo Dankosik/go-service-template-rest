@@ -30,10 +30,11 @@ const (
 	telemetryClose   = 5 * time.Second
 )
 
-// HandlerBuilder constructs the feature-owned handler after messaging topology
-// admission and receives the same concrete producer owned by this worker
-// process. Any returned cleanup normally runs before Run returns, including
-// when the builder returns an invalid result.
+// HandlerBuilder constructs the binary-local transport adapter that invokes
+// feature-owned behavior after messaging topology admission. It receives the
+// same concrete producer owned by this worker process. Any returned cleanup
+// normally runs before Run returns, including when the builder returns an
+// invalid result.
 // If forced shutdown leaves an uncooperative handler running, process exit owns
 // its resources instead of racing that cleanup with the handler.
 type HandlerBuilder func(context.Context, config.Config, *slog.Logger, *natsjs.Producer) (handler natsjs.Handler, cleanup func(context.Context), err error)

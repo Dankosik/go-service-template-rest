@@ -20,7 +20,10 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
-const workerTestMaxDeliveryBytes = 1 << 20
+const (
+	workerNATSImage            = "nats:2.14.3-alpine@sha256:c11af972c99ae542de8925e6a7d9c533aa1eb039660420d2074beed6089b3bf0"
+	workerTestMaxDeliveryBytes = 1 << 20
+)
 
 func workerTestProducerConfig() natsjs.Config {
 	return natsjs.Config{MaxPayloadBytes: 256 << 10, MaxPendingPublishes: 64}
@@ -200,7 +203,7 @@ func workerNATSFixture(t *testing.T) (string, jetstream.JetStream) {
 	t.Helper()
 	container, err := testcontainers.GenericContainer(t.Context(), testcontainers.GenericContainerRequest{
 		ContainerRequest: testcontainers.ContainerRequest{
-			Image: "nats:2.14.3-alpine", ExposedPorts: []string{"4222/tcp"}, Cmd: []string{"-js", "-sd", "/data"},
+			Image: workerNATSImage, ExposedPorts: []string{"4222/tcp"}, Cmd: []string{"-js", "-sd", "/data"},
 			WaitingFor: wait.ForAll(wait.ForListeningPort("4222/tcp"), wait.ForLog("Server is ready")).WithDeadline(time.Minute),
 		},
 		Started: true,
