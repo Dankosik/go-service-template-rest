@@ -130,6 +130,21 @@ remove_postgres_integration_tests() {
 	eval "${previous_nullglob}"
 }
 
+# remove_outbox_migrations deletes every migration that owns outbox schema,
+# discovering them by name rather than listing them. A listed inventory keeps a
+# later addition silently, and the generated service then fails only once its
+# own migration run reaches a file whose tables were never created.
+remove_outbox_migrations() {
+	local previous_nullglob
+	previous_nullglob="$(shopt -p nullglob || true)"
+	shopt -s nullglob
+	local file
+	for file in migrations/[0-9]*_postgres_outbox*.sql; do
+		rm -f -- "${file}"
+	done
+	eval "${previous_nullglob}"
+}
+
 # strip_profile applies one profile decision across every file that carries its
 # markers, discovering them instead of listing them. A file missing from a
 # hand-written list fails silently: the generated service keeps configuration it
@@ -503,13 +518,11 @@ if [[ "${source_checkout}" != true ]]; then
 		rm -f -- \
 			internal/config/outbox_config_test.go \
 			internal/infra/postgres/queries/postgres_outbox.sql \
-			migrations/000001_postgres_outbox.sql \
-			migrations/000002_postgres_outbox_ordering_ready.sql \
-			migrations/000003_postgres_outbox_throughput.sql \
 			test/postgres_outbox_bench_integration_test.go \
 			test/postgres_outbox_integration_test.go \
 			test/postgres_outbox_natsjs_integration_test.go \
 			docs/postgres-transactional-outbox.md
+		remove_outbox_migrations
 		if ! find internal/infra/postgres/queries -type f -name '*.sql' -print -quit 2>/dev/null | grep -q .; then
 			rm -rf -- internal/infra/postgres/queries internal/infra/postgres/sqlcgen
 		else
