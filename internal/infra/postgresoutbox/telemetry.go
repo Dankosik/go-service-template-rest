@@ -14,6 +14,13 @@ import (
 
 const telemetryScope = "service.outbox.postgres"
 
+// The two outcome labels every operation site chooses between. Attribute values
+// are a fixed enum, so they are named rather than repeated.
+const (
+	outcomeSuccess = "success"
+	outcomeError   = "error"
+)
+
 type Telemetry struct {
 	log                  *slog.Logger
 	messages             metric.Int64ObservableGauge
@@ -173,6 +180,14 @@ func (t *Telemetry) LogRecovery(ctx context.Context, id string, attempt int) {
 	}
 }
 
+// LogListenerRetry reports that wake-up notifications are unavailable. Pickup
+// latency falls back to the poll interval until the listener reconnects.
+func (t *Telemetry) LogListenerRetry(ctx context.Context, err error) {
+	if t != nil {
+		t.log.WarnContext(ctx, "outbox_listener_retry", "error.type", "database", "error", err.Error())
+	}
+}
+
 func (t *Telemetry) observe(_ context.Context, observer metric.Observer) error {
 	t.mu.RLock()
 	snapshot := t.snapshot
@@ -189,7 +204,7 @@ func (t *Telemetry) observe(_ context.Context, observer metric.Observer) error {
 		{name: "recovery_due", count: snapshot.observation.RecoveryDueCount, oldest: snapshot.observation.RecoveryDueOldestAt},
 		{name: "ordering_blocked", count: snapshot.observation.OrderingBlockedCount, oldest: snapshot.observation.OrderingBlockedOldestAt},
 		{name: "poison", count: snapshot.observation.PoisonCount, oldest: snapshot.observation.PoisonOldestAt},
-		{name: "published_retained", count: snapshot.observation.PublishedRetainedCount, oldest: snapshot.observation.PublishedRetainedOldestAt},
+		{name: "published_retained", count: snapshot.observation.PublishedRetainedEstimate, oldest: snapshot.observation.PublishedRetainedOldestAt},
 	}
 	for _, state := range states {
 		attributes := metric.WithAttributes(attribute.String("state", state.name))
@@ -238,7 +253,7 @@ func boundedOperation(value string) string {
 
 func boundedOutcome(value string) string {
 	switch value {
-	case "success", "error", "empty", "reconciled", "rejected", "started":
+	case outcomeSuccess, outcomeError, "empty", "reconciled", "rejected", "started":
 		return value
 	default:
 		return "other"
@@ -248,7 +263,8 @@ func boundedOutcome(value string) string {
 func boundedErrorType(value string) string {
 	switch value {
 	case "none", "database", "lost_lease", "validation", "stuck", "panic",
-		"publisher_permanent", "publisher_timeout", "publisher_canceled", "publisher_temporary":
+		"publisher_permanent", "publisher_rejected", "publisher_timeout",
+		"publisher_canceled", "publisher_temporary":
 		return value
 	default:
 		return "other"

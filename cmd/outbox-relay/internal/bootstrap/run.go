@@ -351,7 +351,8 @@ func postgresOptions(cfg config.PostgresConfig) postgres.Options {
 
 func relayConfig(cfg config.OutboxConfig) postgresoutbox.RelayConfig {
 	return postgresoutbox.RelayConfig{
-		PollInterval: cfg.PollInterval, PublishTimeout: cfg.PublishTimeout, LeaseDuration: cfg.LeaseDuration,
+		PollInterval: cfg.PollInterval, BatchSize: cfg.BatchSize, PublishConcurrency: cfg.PublishConcurrency,
+		PublishTimeout: cfg.PublishTimeout, LeaseDuration: cfg.LeaseDuration,
 		MaxAttempts: cfg.MaxAttempts, RetryBase: cfg.RetryBase, RetryMax: cfg.RetryMax,
 		ObservationInterval: cfg.ObservationInterval, CleanupInterval: cfg.CleanupInterval,
 		PublishedRetention: cfg.PublishedRetention, CleanupBatchSize: cfg.CleanupBatchSize,

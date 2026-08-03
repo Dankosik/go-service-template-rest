@@ -588,8 +588,9 @@ func validateOutbox(cfg OutboxConfig, postgres PostgresConfig) error {
 	if cfg.Enabled && !postgres.Enabled {
 		return fmt.Errorf("%w: outbox.enabled requires postgres.enabled", ErrValidate)
 	}
-	// A claim transaction and the publication that follows it need separate
-	// connections; a single-connection pool deadlocks at runtime instead.
+	// Claim, finalization, and periodic maintenance are separate statements that
+	// share the pool with health checks and, in an API process, with request
+	// traffic. A single-connection pool leaves none of them any headroom.
 	if cfg.Enabled && postgres.MaxOpenConns < 2 {
 		return fmt.Errorf("%w: outbox.enabled requires postgres.max_open_conns >= 2", ErrValidate)
 	}
@@ -613,6 +614,12 @@ func validateOutbox(cfg OutboxConfig, postgres PostgresConfig) error {
 	}
 	if cfg.MaxAttempts < 1 || cfg.MaxAttempts > 100 {
 		return fmt.Errorf("%w: outbox.max_attempts must be in range [1,100]", ErrValidate)
+	}
+	if cfg.BatchSize < 1 || cfg.BatchSize > 1000 {
+		return fmt.Errorf("%w: outbox.batch_size must be in range [1,1000]", ErrValidate)
+	}
+	if cfg.PublishConcurrency < 1 || cfg.PublishConcurrency > 256 {
+		return fmt.Errorf("%w: outbox.publish_concurrency must be in range [1,256]", ErrValidate)
 	}
 	if cfg.RetryMax < cfg.RetryBase {
 		return fmt.Errorf("%w: outbox.retry_max must be >= outbox.retry_base", ErrValidate)

@@ -280,6 +280,8 @@ func sentinelConfigSourceValues() map[string]any {
 		// profile:outbox-postgres:start
 		"outbox.enabled":              true,
 		"outbox.poll_interval":        "600ms",
+		"outbox.batch_size":           64,
+		"outbox.publish_concurrency":  8,
 		"outbox.publish_timeout":      "11s",
 		"outbox.lease_duration":       "41s",
 		"outbox.max_attempts":         12,
@@ -397,6 +399,8 @@ func expectedSentinelSnapshotValues() map[string]any {
 		// profile:outbox-postgres:start
 		"outbox.enabled":              true,
 		"outbox.poll_interval":        600 * time.Millisecond,
+		"outbox.batch_size":           64,
+		"outbox.publish_concurrency":  8,
 		"outbox.publish_timeout":      11 * time.Second,
 		"outbox.lease_duration":       41 * time.Second,
 		"outbox.max_attempts":         12,

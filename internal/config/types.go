@@ -288,8 +288,15 @@ type PostgresConfig struct {
 // profile:outbox-postgres:start
 
 type OutboxConfig struct {
-	Enabled             bool          `koanf:"enabled"`
-	PollInterval        time.Duration `koanf:"poll_interval"`
+	Enabled      bool          `koanf:"enabled"`
+	PollInterval time.Duration `koanf:"poll_interval"`
+	// BatchSize is how many events one lease covers. It trades round trips per
+	// event against peak relay memory, which is this many stored envelopes.
+	BatchSize int `koanf:"batch_size"`
+	// PublishConcurrency is how many events of a batch may be in the publisher
+	// at once. The claim query hands out at most one ready event per ordering
+	// key, so concurrency never reorders a key.
+	PublishConcurrency  int           `koanf:"publish_concurrency"`
 	PublishTimeout      time.Duration `koanf:"publish_timeout"`
 	LeaseDuration       time.Duration `koanf:"lease_duration"`
 	MaxAttempts         int           `koanf:"max_attempts"`

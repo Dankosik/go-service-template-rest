@@ -571,14 +571,14 @@ func TestPostgresOutboxOrderingAuthority(t *testing.T) {
 	}
 
 	for _, wantID := range []string{"ordered-2", "ordered-4"} {
-		claim, err := store.Claim(ctx, time.Minute)
+		claim, err := claimOutboxEvent(ctx, store, time.Minute)
 		if err != nil {
 			t.Fatalf("Claim() for %s: %v", wantID, err)
 		}
 		if claim.Event.ID != wantID {
 			t.Fatalf("claimed %q, want %q", claim.Event.ID, wantID)
 		}
-		if err := store.MarkPublished(ctx, claim); err != nil {
+		if err := markOutboxPublished(ctx, store, claim); err != nil {
 			t.Fatalf("MarkPublished(%s): %v", wantID, err)
 		}
 	}
@@ -633,7 +633,7 @@ func TestPostgresOutboxConcurrentClaims(t *testing.T) {
 	}
 
 	start := make(chan struct{})
-	results := make(chan postgresoutbox.ClaimedEvent, eventCount)
+	results := make(chan outboxClaim, eventCount)
 	errs := make(chan error, eventCount)
 	var workers sync.WaitGroup
 	for range eventCount {
@@ -641,7 +641,7 @@ func TestPostgresOutboxConcurrentClaims(t *testing.T) {
 		go func() {
 			defer workers.Done()
 			<-start
-			claim, err := store.Claim(ctx, time.Minute)
+			claim, err := claimOutboxEvent(ctx, store, time.Minute)
 			if err != nil {
 				errs <- err
 				return
@@ -677,7 +677,7 @@ func TestPostgresOutboxConcurrentClaims(t *testing.T) {
 	if _, err := tx.Exec(ctx, "SELECT id FROM outbox_events WHERE id = 'locked-first' FOR UPDATE"); err != nil {
 		t.Fatalf("lock first event: %v", err)
 	}
-	claim, err := store.Claim(ctx, time.Minute)
+	claim, err := claimOutboxEvent(ctx, store, time.Minute)
 	if err != nil {
 		t.Fatalf("Claim() around held lock: %v", err)
 	}
@@ -704,7 +704,7 @@ func TestPostgresOutboxOrderingHandoffRace(t *testing.T) {
 		}()
 		go func() {
 			<-start
-			errs <- store.MarkPublished(ctx, first)
+			errs <- markOutboxPublished(ctx, store, first)
 		}()
 		close(start)
 		for range 2 {
@@ -717,7 +717,7 @@ func TestPostgresOutboxOrderingHandoffRace(t *testing.T) {
 		if second.Event.ID != key+"-2" {
 			t.Fatalf("iteration %d next claim = %q, want %q", iteration, second.Event.ID, key+"-2")
 		}
-		if err := store.MarkPublished(ctx, second); err != nil {
+		if err := markOutboxPublished(ctx, store, second); err != nil {
 			t.Fatalf("iteration %d mark successor: %v", iteration, err)
 		}
 	}
@@ -742,7 +742,7 @@ func TestPostgresOutboxOrderingHandoffAfterBlockedSnapshot(t *testing.T) {
 	}
 
 	marked := make(chan error, 1)
-	go func() { marked <- store.MarkPublished(ctx, first) }()
+	go func() { marked <- markOutboxPublished(ctx, store, first) }()
 	deadline := time.NewTimer(10 * time.Second)
 	ticker := time.NewTicker(10 * time.Millisecond)
 	defer deadline.Stop()
@@ -776,7 +776,7 @@ func TestPostgresOutboxOrderingHandoffAfterBlockedSnapshot(t *testing.T) {
 		if !errors.Is(err, postgresoutbox.ErrLeaseLost) {
 			t.Fatalf("mark after blocked snapshot: %v", err)
 		}
-		if err := store.MarkPublished(ctx, first); err != nil {
+		if err := markOutboxPublished(ctx, store, first); err != nil {
 			t.Fatalf("retry mark with fresh snapshot: %v", err)
 		}
 	}
@@ -797,7 +797,7 @@ func TestPostgresOutboxOrderedMarkFencesClaimIdentity(t *testing.T) {
 
 	mutated := claim
 	mutated.Event.OrderingKey = "identity-b"
-	if err := store.MarkPublished(ctx, mutated); !errors.Is(err, postgresoutbox.ErrLeaseLost) {
+	if err := markOutboxPublished(ctx, store, mutated); !errors.Is(err, postgresoutbox.ErrLeaseLost) {
 		t.Fatalf("mutated claim mark = %v, want ErrLeaseLost", err)
 	}
 	record, err := store.Get(ctx, claim.Event.ID)
@@ -807,7 +807,7 @@ func TestPostgresOutboxOrderedMarkFencesClaimIdentity(t *testing.T) {
 	if !record.PublishedAt.IsZero() {
 		t.Fatal("mutated ordered claim marked the original event published")
 	}
-	if err := store.MarkPublished(ctx, claim); err != nil {
+	if err := markOutboxPublished(ctx, store, claim); err != nil {
 		t.Fatalf("mark original claim: %v", err)
 	}
 }
@@ -827,26 +827,26 @@ func TestPostgresOutboxOrderingClaims(t *testing.T) {
 	if second.Event.ID != "unordered" {
 		t.Fatalf("claim while key predecessor leased = %q, want unordered", second.Event.ID)
 	}
-	if err := store.MarkPublished(ctx, second); err != nil {
+	if err := markOutboxPublished(ctx, store, second); err != nil {
 		t.Fatalf("publish unordered: %v", err)
 	}
-	if err := store.MarkPublished(ctx, first); err != nil {
+	if err := markOutboxPublished(ctx, store, first); err != nil {
 		t.Fatalf("publish key-1: %v", err)
 	}
 	third := mustClaimOutbox(t, ctx, store)
 	if third.Event.ID != "key-2" {
 		t.Fatalf("post-predecessor claim = %q, want key-2", third.Event.ID)
 	}
-	if err := store.ScheduleRetry(ctx, third.Event.ID, third.Token, "publisher_temporary", time.Hour); err != nil {
+	if err := scheduleOutboxRetry(ctx, store, third.Event.ID, third.Token, "publisher_temporary", time.Hour); err != nil {
 		t.Fatalf("schedule key-2 retry: %v", err)
 	}
-	if _, err := store.Claim(ctx, time.Minute); !errors.Is(err, postgresoutbox.ErrNoWork) {
+	if _, err := claimOutboxEvent(ctx, store, time.Minute); !errors.Is(err, errNoOutboxWork) {
 		t.Fatalf("Claim() behind retry-wait predecessor = %v, want ErrNoWork", err)
 	}
 	if _, err := pool.PGX().Exec(ctx, "UPDATE outbox_events SET available_at = clock_timestamp() WHERE id = 'key-2'"); err != nil {
 		t.Fatalf("make key-2 retry eligible: %v", err)
 	}
-	retryClaim, err := store.Claim(ctx, 5*time.Millisecond)
+	retryClaim, err := claimOutboxEvent(ctx, store, 5*time.Millisecond)
 	if err != nil || retryClaim.Event.ID != "key-2" {
 		t.Fatalf("retry claim = %+v, %v; want key-2", retryClaim, err)
 	}
@@ -859,24 +859,24 @@ func TestPostgresOutboxOrderingClaims(t *testing.T) {
 		_ = lockTx.Rollback(context.WithoutCancel(ctx))
 		t.Fatalf("lock recovery predecessor: %v", err)
 	}
-	if _, err := store.Claim(ctx, time.Minute); !errors.Is(err, postgresoutbox.ErrNoWork) {
+	if _, err := claimOutboxEvent(ctx, store, time.Minute); !errors.Is(err, errNoOutboxWork) {
 		_ = lockTx.Rollback(context.WithoutCancel(ctx))
 		t.Fatalf("Claim() around locked recovery predecessor = %v, want ErrNoWork", err)
 	}
 	if err := lockTx.Rollback(ctx); err != nil {
 		t.Fatalf("release recovery predecessor lock: %v", err)
 	}
-	recoveryClaim, err := store.Claim(ctx, time.Minute)
+	recoveryClaim, err := claimOutboxEvent(ctx, store, time.Minute)
 	if err != nil || recoveryClaim.Event.ID != "key-2" {
 		t.Fatalf("recovery claim = %+v, %v; want predecessor key-2", recoveryClaim, err)
 	}
-	if err := store.MarkPoisoned(ctx, retryClaim.Event.ID, retryClaim.Token, "publisher_permanent"); !errors.Is(err, postgresoutbox.ErrLeaseLost) {
+	if err := poisonOutboxEvent(ctx, store, retryClaim.Event.ID, retryClaim.Token, "publisher_permanent"); !errors.Is(err, postgresoutbox.ErrLeaseLost) {
 		t.Fatalf("stale poison fence = %v, want ErrLeaseLost", err)
 	}
-	if err := store.MarkPoisoned(ctx, recoveryClaim.Event.ID, recoveryClaim.Token, "publisher_permanent"); err != nil {
+	if err := poisonOutboxEvent(ctx, store, recoveryClaim.Event.ID, recoveryClaim.Token, "publisher_permanent"); err != nil {
 		t.Fatalf("poison recovered key-2: %v", err)
 	}
-	if _, err := store.Claim(ctx, time.Minute); !errors.Is(err, postgresoutbox.ErrNoWork) {
+	if _, err := claimOutboxEvent(ctx, store, time.Minute); !errors.Is(err, errNoOutboxWork) {
 		t.Fatalf("Claim() behind poison = %v, want ErrNoWork", err)
 	}
 	observation, err := store.Observe(ctx)
@@ -897,12 +897,12 @@ func TestPostgresOutboxOrderingClaims(t *testing.T) {
 func TestPostgresOutboxLeaseExpiryAndFence(t *testing.T) {
 	ctx, pool, store := newOutboxFixture(t)
 	mustAppendOutbox(t, ctx, pool, store, outboxEvent("lease"))
-	first, err := store.Claim(ctx, 5*time.Millisecond)
+	first, err := claimOutboxEvent(ctx, store, 5*time.Millisecond)
 	if err != nil {
 		t.Fatalf("first Claim(): %v", err)
 	}
 	postgresSleep(t, ctx, pool, 0.02)
-	second, err := store.Claim(ctx, time.Minute)
+	second, err := claimOutboxEvent(ctx, store, time.Minute)
 	if err != nil {
 		t.Fatalf("recovery Claim(): %v", err)
 	}
@@ -912,16 +912,16 @@ func TestPostgresOutboxLeaseExpiryAndFence(t *testing.T) {
 	if second.CycleAttemptCount != 2 || second.TotalAttemptCount != 2 {
 		t.Fatalf("recovery attempts = %d/%d, want 2/2", second.CycleAttemptCount, second.TotalAttemptCount)
 	}
-	if err := store.MarkPublished(ctx, first); !errors.Is(err, postgresoutbox.ErrLeaseLost) {
+	if err := markOutboxPublished(ctx, store, first); !errors.Is(err, postgresoutbox.ErrLeaseLost) {
 		t.Fatalf("stale MarkPublished() = %v, want ErrLeaseLost", err)
 	}
-	if err := store.ScheduleRetry(ctx, first.Event.ID, first.Token, "publisher_temporary", 0); !errors.Is(err, postgresoutbox.ErrLeaseLost) {
+	if err := scheduleOutboxRetry(ctx, store, first.Event.ID, first.Token, "publisher_temporary", 0); !errors.Is(err, postgresoutbox.ErrLeaseLost) {
 		t.Fatalf("stale ScheduleRetry() = %v, want ErrLeaseLost", err)
 	}
-	if err := store.MarkPoisoned(ctx, first.Event.ID, first.Token, "publisher_permanent"); !errors.Is(err, postgresoutbox.ErrLeaseLost) {
+	if err := poisonOutboxEvent(ctx, store, first.Event.ID, first.Token, "publisher_permanent"); !errors.Is(err, postgresoutbox.ErrLeaseLost) {
 		t.Fatalf("stale MarkPoisoned() = %v, want ErrLeaseLost", err)
 	}
-	if err := store.MarkPublished(ctx, second); err != nil {
+	if err := markOutboxPublished(ctx, store, second); err != nil {
 		t.Fatalf("current MarkPublished(): %v", err)
 	}
 }
@@ -929,7 +929,7 @@ func TestPostgresOutboxLeaseExpiryAndFence(t *testing.T) {
 func TestPostgresOutboxCrashAfterClaim(t *testing.T) {
 	ctx, pool, store := newOutboxFixture(t)
 	mustAppendOutbox(t, ctx, pool, store, outboxEvent("abandoned"))
-	first, err := store.Claim(ctx, 5*time.Millisecond)
+	first, err := claimOutboxEvent(ctx, store, 5*time.Millisecond)
 	if err != nil {
 		t.Fatalf("Claim(): %v", err)
 	}
@@ -939,7 +939,7 @@ func TestPostgresOutboxCrashAfterClaim(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewStore() after abandoned claim: %v", err)
 	}
-	second, err := restarted.Claim(ctx, time.Minute)
+	second, err := claimOutboxEvent(ctx, restarted, time.Minute)
 	if err != nil {
 		t.Fatalf("Claim() after abandoned claim: %v", err)
 	}
@@ -958,7 +958,7 @@ func TestPostgresOutboxRedrive(t *testing.T) {
 		t.Fatalf("pending Redrive() = %v, want ErrRedriveRejected", err)
 	}
 	claim := mustClaimOutbox(t, ctx, store)
-	if err := store.MarkPoisoned(ctx, claim.Event.ID, claim.Token, "publisher_permanent"); err != nil {
+	if err := poisonOutboxEvent(ctx, store, claim.Event.ID, claim.Token, "publisher_permanent"); err != nil {
 		t.Fatalf("MarkPoisoned(): %v", err)
 	}
 	if err := store.Redrive(ctx, claim.Event.ID, "audit-1"); err != nil {
@@ -982,7 +982,7 @@ func TestPostgresOutboxRedrive(t *testing.T) {
 	if claim.CycleAttemptCount != 1 || claim.TotalAttemptCount != 2 {
 		t.Fatalf("post-redrive attempts = %d/%d, want 1/2", claim.CycleAttemptCount, claim.TotalAttemptCount)
 	}
-	if err := store.MarkPoisoned(ctx, claim.Event.ID, claim.Token, "publisher_permanent"); err != nil {
+	if err := poisonOutboxEvent(ctx, store, claim.Event.ID, claim.Token, "publisher_permanent"); err != nil {
 		t.Fatalf("second MarkPoisoned(): %v", err)
 	}
 	if err := store.Redrive(ctx, claim.Event.ID, "audit-2"); err != nil {
@@ -994,14 +994,14 @@ func TestPostgresOutboxRedrive(t *testing.T) {
 	if other.Event.ID != "poison" {
 		t.Fatalf("next claim = %q, want redriven poison", other.Event.ID)
 	}
-	if err := store.MarkPublished(ctx, other); err != nil {
+	if err := markOutboxPublished(ctx, store, other); err != nil {
 		t.Fatalf("publish redriven event: %v", err)
 	}
 	if err := store.Redrive(ctx, other.Event.ID, "audit-3"); !errors.Is(err, postgresoutbox.ErrRedriveRejected) {
 		t.Fatalf("redrive published event = %v, want ErrRedriveRejected", err)
 	}
 	other = mustClaimOutbox(t, ctx, store)
-	if err := store.MarkPoisoned(ctx, other.Event.ID, other.Token, "publisher_permanent"); err != nil {
+	if err := poisonOutboxEvent(ctx, store, other.Event.ID, other.Token, "publisher_permanent"); err != nil {
 		t.Fatalf("poison other event: %v", err)
 	}
 	if err := store.Redrive(ctx, other.Event.ID, "audit-2"); !errors.Is(err, postgresoutbox.ErrRedriveConflict) {
@@ -1029,7 +1029,7 @@ func TestPostgresOutboxCleanup(t *testing.T) {
 	mustAppendOutbox(t, ctx, pool, store, outboxEvent("cleanup-recent"))
 	for range 3 {
 		claim := mustClaimOutbox(t, ctx, store)
-		if err := store.MarkPublished(ctx, claim); err != nil {
+		if err := markOutboxPublished(ctx, store, claim); err != nil {
 			t.Fatalf("MarkPublished(): %v", err)
 		}
 	}
@@ -1146,7 +1146,7 @@ func TestPostgresOutboxAckCrashDuplicate(t *testing.T) {
 		return nil
 	})
 
-	first, err := store.Claim(ctx, 5*time.Millisecond)
+	first, err := claimOutboxEvent(ctx, store, 5*time.Millisecond)
 	if err != nil {
 		t.Fatalf("first Claim(): %v", err)
 	}
@@ -1294,6 +1294,96 @@ func TestPostgresOutboxRequestContinuesDuringBrokerOutage(t *testing.T) {
 	}
 }
 
+// A backlog drains through batched claims and concurrent publication, so
+// throughput is not one database round trip per event.
+func TestPostgresOutboxRelayPublishesBacklogConcurrently(t *testing.T) {
+	ctx, pool, store := newOutboxFixture(t)
+	const (
+		backlog     = 48
+		concurrency = 8
+	)
+	for index := range backlog {
+		mustAppendOutbox(t, ctx, pool, store, outboxEvent(fmt.Sprintf("backlog-%02d", index)))
+	}
+
+	var mutex sync.Mutex
+	var live, peak int
+	var opened sync.Once
+	release := make(chan struct{})
+	publisher := testPublisherFunc(func(context.Context, postgresoutbox.Event) error {
+		mutex.Lock()
+		live++
+		peak = max(peak, live)
+		saturated := live >= concurrency
+		mutex.Unlock()
+		// A full set of workers must be inside the publisher at once before any
+		// of them returns; that is what proves publication is pipelined.
+		if saturated {
+			opened.Do(func() { close(release) })
+		}
+		<-release
+		mutex.Lock()
+		live--
+		mutex.Unlock()
+		return nil
+	})
+
+	config := testRelayConfig()
+	config.BatchSize = 24
+	config.PublishConcurrency = concurrency
+	relay := mustNewOutboxRelay(t, store, publisher, nil, config)
+	result := runOutboxRelay(ctx, relay)
+	waitForOutboxCount(t, ctx, pool, "published_at IS NOT NULL", backlog)
+	relay.StartDrain()
+	assertRelayResult(t, result, true, nil)
+
+	mutex.Lock()
+	defer mutex.Unlock()
+	if peak != concurrency {
+		t.Fatalf("peak concurrent publications = %d, want %d", peak, concurrency)
+	}
+}
+
+// The claim query hands out at most one ready event per ordering key, which is
+// what makes concurrent publication of a batch safe.
+func TestPostgresOutboxBatchClaimHoldsOneEventPerOrderingKey(t *testing.T) {
+	ctx, pool, store := newOutboxFixture(t)
+	for sequence := int64(1); sequence <= 4; sequence++ {
+		mustAppendOutbox(t, ctx, pool, store, orderedEvent(fmt.Sprintf("ordered-%d", sequence), "one-key", sequence))
+	}
+	mustAppendOutbox(t, ctx, pool, store, outboxEvent("unordered"))
+
+	batch, err := store.Claim(ctx, time.Minute, 100)
+	if err != nil {
+		t.Fatalf("Claim(): %v", err)
+	}
+	keys := make(map[string]int, len(batch.Events))
+	for _, claimed := range batch.Events {
+		keys[claimed.Event.OrderingKey]++
+	}
+	if len(batch.Events) != 2 || keys["one-key"] != 1 || keys[""] != 1 {
+		t.Fatalf("claimed %d events with keys %v, want the ordering head plus the unordered event", len(batch.Events), keys)
+	}
+}
+
+// A committed append wakes an idle relay through PostgreSQL notification
+// rather than waiting out the poll interval.
+func TestPostgresOutboxRelayWakesOnAppendNotification(t *testing.T) {
+	ctx, pool, store := newOutboxFixture(t)
+	publisher := testPublisherFunc(func(context.Context, postgresoutbox.Event) error { return nil })
+	config := testRelayConfig()
+	// Only a notification can deliver this event inside the assertion window.
+	config.PollInterval = time.Minute
+	relay := mustNewOutboxRelay(t, store, publisher, nil, config)
+	result := runOutboxRelay(ctx, relay)
+	waitForOutboxReady(t, relay)
+
+	mustAppendOutbox(t, ctx, pool, store, outboxEvent("notified"))
+	waitForOutboxCount(t, ctx, pool, "published_at IS NOT NULL", 1)
+	relay.StartDrain()
+	assertRelayResult(t, result, true, nil)
+}
+
 func TestPostgresOutboxRelayLifecycleFaults(t *testing.T) {
 	t.Run("process cancellation leaves durable unfinished work", func(t *testing.T) {
 		fixtureCtx, pool, store := newOutboxFixture(t)
@@ -1308,7 +1398,7 @@ func TestPostgresOutboxRelayLifecycleFaults(t *testing.T) {
 			return ctx.Err()
 		})
 		relayCtx, cancel := context.WithCancel(fixtureCtx)
-		relay := mustNewOutboxRelay(t, store, publisher, nil, testRelayConfig())
+		relay := mustNewOutboxRelay(t, store, publisher, nil, singleEventRelayConfig())
 		result := runOutboxRelay(relayCtx, relay)
 		<-started
 		if !relay.Ready() {
@@ -1332,7 +1422,7 @@ func TestPostgresOutboxRelayLifecycleFaults(t *testing.T) {
 			attempts.Add(1)
 			panic("publisher detail must remain supervised")
 		})
-		relay := mustNewOutboxRelay(t, store, publisher, nil, testRelayConfig())
+		relay := mustNewOutboxRelay(t, store, publisher, nil, singleEventRelayConfig())
 		assertRelayResult(t, runOutboxRelay(ctx, relay), true, postgresoutbox.ErrPublisherPanic)
 		if relay.Ready() || attempts.Load() != 1 {
 			t.Fatalf("after panic ready=%t attempts=%d, want false/1", relay.Ready(), attempts.Load())
@@ -1353,7 +1443,7 @@ func TestPostgresOutboxRelayLifecycleFaults(t *testing.T) {
 			<-release
 			return nil
 		})
-		config := testRelayConfig()
+		config := singleEventRelayConfig()
 		config.PublishTimeout = time.Millisecond
 		relay := mustNewOutboxRelay(t, store, publisher, nil, config)
 		result := runOutboxRelay(ctx, relay)
@@ -1379,7 +1469,7 @@ func TestPostgresOutboxRelayLifecycleFaults(t *testing.T) {
 			<-release
 			return nil
 		})
-		relay := mustNewOutboxRelay(t, store, publisher, nil, testRelayConfig())
+		relay := mustNewOutboxRelay(t, store, publisher, nil, singleEventRelayConfig())
 		result := runOutboxRelay(ctx, relay)
 		<-started
 		relay.StartDrain()
@@ -1608,6 +1698,11 @@ func TestPostgresOutboxObservability(t *testing.T) {
 		WHERE id = 'observe-published'`); err != nil {
 		t.Fatalf("place observation fixtures: %v", err)
 	}
+	// The retained-published count is the planner's row estimate minus the exact
+	// pending count, so the fixture needs current statistics to be comparable.
+	if _, err := pool.PGX().Exec(ctx, "ANALYZE outbox_events"); err != nil {
+		t.Fatalf("analyze observation fixtures: %v", err)
+	}
 	observation, err := store.Observe(ctx)
 	if err != nil {
 		t.Fatalf("Observe(): %v", err)
@@ -1619,7 +1714,7 @@ func TestPostgresOutboxObservability(t *testing.T) {
 		observation.RecoveryDueCount,
 		observation.OrderingBlockedCount,
 		observation.PoisonCount,
-		observation.PublishedRetainedCount,
+		observation.PublishedRetainedEstimate,
 	}; !reflect.DeepEqual(counts, []int64{1, 1, 1, 1, 1, 1, 1}) {
 		t.Fatalf("state counts = %v, want seven ones", counts)
 	}
@@ -1663,7 +1758,7 @@ func TestPostgresOutboxTelemetryTransitions(t *testing.T) {
 	}
 
 	mustAppendOutbox(t, ctx, pool, store, outboxEvent("telemetry-recovery"))
-	first, err := store.Claim(ctx, 5*time.Millisecond)
+	first, err := claimOutboxEvent(ctx, store, 5*time.Millisecond)
 	if err != nil {
 		t.Fatalf("claim recovery fixture: %v", err)
 	}
@@ -1672,24 +1767,24 @@ func TestPostgresOutboxTelemetryTransitions(t *testing.T) {
 	if recovered.Event.ID != first.Event.ID || !recovered.Recovered {
 		t.Fatalf("recovered claim = id %q recovered %t, want %q/true", recovered.Event.ID, recovered.Recovered, first.Event.ID)
 	}
-	if err := store.MarkPublished(ctx, recovered); err != nil {
+	if err := markOutboxPublished(ctx, store, recovered); err != nil {
 		t.Fatalf("mark recovered event published: %v", err)
 	}
 
 	mustAppendOutbox(t, ctx, pool, store, outboxEvent("telemetry-poison"))
 	poison := mustClaimOutbox(t, ctx, store)
-	if err := store.ScheduleRetry(ctx, poison.Event.ID, poison.Token, "publisher_temporary", 0); err != nil {
+	if err := scheduleOutboxRetry(ctx, store, poison.Event.ID, poison.Token, "publisher_temporary", 0); err != nil {
 		t.Fatalf("schedule telemetry retry: %v", err)
 	}
 	poison = mustClaimOutbox(t, ctx, store)
-	if err := store.MarkPoisoned(ctx, poison.Event.ID, poison.Token, "publisher_permanent"); err != nil {
+	if err := poisonOutboxEvent(ctx, store, poison.Event.ID, poison.Token, "publisher_permanent"); err != nil {
 		t.Fatalf("mark telemetry poison: %v", err)
 	}
 	if err := store.Redrive(ctx, poison.Event.ID, "telemetry-redrive"); err != nil {
 		t.Fatalf("redrive telemetry poison: %v", err)
 	}
 	poison = mustClaimOutbox(t, ctx, store)
-	if err := store.MarkPublished(ctx, poison); err != nil {
+	if err := markOutboxPublished(ctx, store, poison); err != nil {
 		t.Fatalf("mark redriven event published: %v", err)
 	}
 	if _, err := pool.PGX().Exec(ctx, "UPDATE outbox_events SET published_at = clock_timestamp() - interval '2 hours'"); err != nil {
@@ -1849,13 +1944,71 @@ func mustAppendOutbox(t *testing.T, ctx context.Context, pool *postgres.Pool, st
 	}
 }
 
-func mustClaimOutbox(t *testing.T, ctx context.Context, store *postgresoutbox.Store) postgresoutbox.ClaimedEvent {
+func mustClaimOutbox(t *testing.T, ctx context.Context, store *postgresoutbox.Store) outboxClaim {
 	t.Helper()
-	claim, err := store.Claim(ctx, time.Minute)
+	claim, err := claimOutboxEvent(ctx, store, time.Minute)
 	if err != nil {
 		t.Fatalf("Claim(): %v", err)
 	}
 	return claim
+}
+
+// outboxClaim is one leased event plus the token that fences it. The relay
+// claims a whole batch under one token; these tests assert per-event
+// transitions, so they claim batches of one.
+type outboxClaim struct {
+	Event             postgresoutbox.Event
+	Token             string
+	CycleAttemptCount int
+	TotalAttemptCount int64
+	Recovered         bool
+}
+
+// errNoOutboxWork reports an empty claim, which the store returns as an
+// ordinary empty batch rather than an error.
+var errNoOutboxWork = errors.New("outbox has no eligible work")
+
+func claimOutboxEvent(ctx context.Context, store *postgresoutbox.Store, lease time.Duration) (outboxClaim, error) {
+	batch, err := store.Claim(ctx, lease, 1)
+	if err != nil {
+		return outboxClaim{}, err
+	}
+	if len(batch.Events) == 0 {
+		return outboxClaim{}, errNoOutboxWork
+	}
+	claimed := batch.Events[0]
+	return outboxClaim{
+		Event:             claimed.Event,
+		Token:             batch.Token,
+		CycleAttemptCount: claimed.CycleAttemptCount,
+		TotalAttemptCount: claimed.TotalAttemptCount,
+		Recovered:         claimed.Recovered,
+	}, nil
+}
+
+func markOutboxPublished(ctx context.Context, store *postgresoutbox.Store, claim outboxClaim) error {
+	return store.MarkPublished(ctx, claim.Token, postgresoutbox.ClaimedEvent{
+		Event:             claim.Event,
+		CycleAttemptCount: claim.CycleAttemptCount,
+		TotalAttemptCount: claim.TotalAttemptCount,
+	})
+}
+
+func scheduleOutboxRetry(
+	ctx context.Context,
+	store *postgresoutbox.Store,
+	id, token, errorClass string,
+	delay time.Duration,
+) error {
+	return store.ScheduleRetryBatch(ctx, token, []postgresoutbox.RetryDirective{
+		{ID: id, ErrorClass: errorClass, Delay: delay},
+	})
+}
+
+func poisonOutboxEvent(ctx context.Context, store *postgresoutbox.Store, id, token, errorClass string) error {
+	return store.MarkPoisonedBatch(ctx, token, []postgresoutbox.PoisonDirective{
+		{ID: id, ErrorClass: errorClass},
+	})
 }
 
 func assertAtomicCounts(t *testing.T, ctx context.Context, pool *postgres.Pool, id string, wantDomain, wantOutbox int) {
@@ -1910,6 +2063,8 @@ func (publish testPublisherFunc) Publish(ctx context.Context, event postgresoutb
 func testRelayConfig() postgresoutbox.RelayConfig {
 	return postgresoutbox.RelayConfig{
 		PollInterval:        time.Millisecond,
+		BatchSize:           100,
+		PublishConcurrency:  16,
 		PublishTimeout:      20 * time.Millisecond,
 		LeaseDuration:       2 * time.Second,
 		MaxAttempts:         10,
@@ -1920,6 +2075,14 @@ func testRelayConfig() postgresoutbox.RelayConfig {
 		PublishedRetention:  7 * 24 * time.Hour,
 		CleanupBatchSize:    1000,
 	}
+}
+
+// singleEventRelayConfig keeps one event per claim so a test can distinguish
+// the attempt in flight from the claim that would follow it.
+func singleEventRelayConfig() postgresoutbox.RelayConfig {
+	config := testRelayConfig()
+	config.BatchSize = 1
+	return config
 }
 
 func mustNewOutboxRelay(
@@ -1960,6 +2123,21 @@ func readRelayResult(t *testing.T, result <-chan postgresoutbox.RelayResult) pos
 		t.Fatal("Relay.Run() did not stop")
 	}
 	return postgresoutbox.RelayResult{}
+}
+
+func waitForOutboxReady(t *testing.T, relay *postgresoutbox.Relay) {
+	t.Helper()
+	deadline := time.NewTimer(10 * time.Second)
+	ticker := time.NewTicker(time.Millisecond)
+	defer deadline.Stop()
+	defer ticker.Stop()
+	for !relay.Ready() {
+		select {
+		case <-ticker.C:
+		case <-deadline.C:
+			t.Fatal("relay did not become ready")
+		}
+	}
 }
 
 func waitForOutboxCount(t *testing.T, ctx context.Context, pool *postgres.Pool, predicate string, want int) {

@@ -37,7 +37,7 @@ func (q *Queries) AdvanceOutboxOrderingHead(ctx context.Context, arg AdvanceOutb
 	return current_sequence, err
 }
 
-const claimOutboxEvent = `-- name: ClaimOutboxEvent :one
+const claimOutboxEvents = `-- name: ClaimOutboxEvents :many
 WITH candidate AS (
     SELECT event.id,
            event.lease_expires_at IS NOT NULL AS recovery_due
@@ -49,7 +49,7 @@ WITH candidate AS (
       AND (event.lease_expires_at IS NULL OR event.lease_expires_at <= statement_timestamp())
     ORDER BY event.available_at, event.created_at, event.id
     FOR UPDATE OF event SKIP LOCKED
-    LIMIT 1
+    LIMIT $3
 )
 UPDATE outbox_events AS event
 SET lease_token = $1,
@@ -63,12 +63,13 @@ WHERE event.id = candidate.id
 RETURNING event.id, event.event_type, event.source, event.destination, event.schema_name, event.occurred_at, event.payload, event.metadata, event.ordering_key, event.ordering_sequence, event.created_at, event.available_at, event.cycle_attempt_count, event.total_attempt_count, event.last_attempt_at, event.lease_token, event.lease_expires_at, event.published_at, event.poisoned_at, event.last_error_class, event.redrive_count, event.last_redrive_id, event.last_redriven_at, event.ordering_ready, candidate.recovery_due::boolean AS recovery_due
 `
 
-type ClaimOutboxEventParams struct {
+type ClaimOutboxEventsParams struct {
 	LeaseToken        *string
 	LeaseMilliseconds float64
+	BatchSize         int32
 }
 
-type ClaimOutboxEventRow struct {
+type ClaimOutboxEventsRow struct {
 	ID                string
 	EventType         string
 	Source            string
@@ -96,40 +97,57 @@ type ClaimOutboxEventRow struct {
 	RecoveryDue       bool
 }
 
-func (q *Queries) ClaimOutboxEvent(ctx context.Context, arg ClaimOutboxEventParams) (ClaimOutboxEventRow, error) {
-	row := q.db.QueryRow(ctx, claimOutboxEvent, arg.LeaseToken, arg.LeaseMilliseconds)
-	var i ClaimOutboxEventRow
-	err := row.Scan(
-		&i.ID,
-		&i.EventType,
-		&i.Source,
-		&i.Destination,
-		&i.SchemaName,
-		&i.OccurredAt,
-		&i.Payload,
-		&i.Metadata,
-		&i.OrderingKey,
-		&i.OrderingSequence,
-		&i.CreatedAt,
-		&i.AvailableAt,
-		&i.CycleAttemptCount,
-		&i.TotalAttemptCount,
-		&i.LastAttemptAt,
-		&i.LeaseToken,
-		&i.LeaseExpiresAt,
-		&i.PublishedAt,
-		&i.PoisonedAt,
-		&i.LastErrorClass,
-		&i.RedriveCount,
-		&i.LastRedriveID,
-		&i.LastRedrivenAt,
-		&i.OrderingReady,
-		&i.RecoveryDue,
-	)
-	return i, err
+// One statement leases a whole batch under a single token. The partial unique
+// index on ready ordered rows keeps at most one claimable event per ordering
+// key, so a batch never holds two events that must stay ordered relative to
+// each other.
+func (q *Queries) ClaimOutboxEvents(ctx context.Context, arg ClaimOutboxEventsParams) ([]ClaimOutboxEventsRow, error) {
+	rows, err := q.db.Query(ctx, claimOutboxEvents, arg.LeaseToken, arg.LeaseMilliseconds, arg.BatchSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ClaimOutboxEventsRow
+	for rows.Next() {
+		var i ClaimOutboxEventsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.EventType,
+			&i.Source,
+			&i.Destination,
+			&i.SchemaName,
+			&i.OccurredAt,
+			&i.Payload,
+			&i.Metadata,
+			&i.OrderingKey,
+			&i.OrderingSequence,
+			&i.CreatedAt,
+			&i.AvailableAt,
+			&i.CycleAttemptCount,
+			&i.TotalAttemptCount,
+			&i.LastAttemptAt,
+			&i.LeaseToken,
+			&i.LeaseExpiresAt,
+			&i.PublishedAt,
+			&i.PoisonedAt,
+			&i.LastErrorClass,
+			&i.RedriveCount,
+			&i.LastRedriveID,
+			&i.LastRedrivenAt,
+			&i.OrderingReady,
+			&i.RecoveryDue,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
-const cleanupPublishedOutboxEvents = `-- name: CleanupPublishedOutboxEvents :many
+const cleanupPublishedOutboxEvents = `-- name: CleanupPublishedOutboxEvents :execrows
 WITH expired AS (
     SELECT id
     FROM outbox_events
@@ -142,7 +160,6 @@ WITH expired AS (
 DELETE FROM outbox_events AS event
 USING expired
 WHERE event.id = expired.id
-RETURNING event.id
 `
 
 type CleanupPublishedOutboxEventsParams struct {
@@ -150,24 +167,12 @@ type CleanupPublishedOutboxEventsParams struct {
 	BatchSize             int32
 }
 
-func (q *Queries) CleanupPublishedOutboxEvents(ctx context.Context, arg CleanupPublishedOutboxEventsParams) ([]string, error) {
-	rows, err := q.db.Query(ctx, cleanupPublishedOutboxEvents, arg.RetentionMilliseconds, arg.BatchSize)
+func (q *Queries) CleanupPublishedOutboxEvents(ctx context.Context, arg CleanupPublishedOutboxEventsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, cleanupPublishedOutboxEvents, arg.RetentionMilliseconds, arg.BatchSize)
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
-	defer rows.Close()
-	var items []string
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		items = append(items, id)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
+	return result.RowsAffected(), nil
 }
 
 const findOutboxRedrive = `-- name: FindOutboxRedrive :one
@@ -424,27 +429,32 @@ func (q *Queries) MarkOrderedOutboxPublished(ctx context.Context, arg MarkOrdere
 	return i, err
 }
 
-const markOutboxPoisoned = `-- name: MarkOutboxPoisoned :execrows
-UPDATE outbox_events
+const markOutboxPoisonedBatch = `-- name: MarkOutboxPoisonedBatch :execrows
+UPDATE outbox_events AS event
 SET poisoned_at = statement_timestamp(),
     lease_token = NULL,
     lease_expires_at = NULL,
-    last_error_class = $1
-WHERE id = $2
-  AND lease_token = $3
-  AND lease_expires_at > statement_timestamp()
-  AND published_at IS NULL
-  AND poisoned_at IS NULL
+    last_error_class = poison.error_class
+FROM (
+    SELECT
+        unnest($2::text[]) AS id,
+        unnest($3::text[]) AS error_class
+) AS poison
+WHERE event.id = poison.id
+  AND event.lease_token = $1
+  AND event.lease_expires_at > statement_timestamp()
+  AND event.published_at IS NULL
+  AND event.poisoned_at IS NULL
 `
 
-type MarkOutboxPoisonedParams struct {
-	ErrorClass *string
-	ID         string
-	LeaseToken *string
+type MarkOutboxPoisonedBatchParams struct {
+	LeaseToken   *string
+	Ids          []string
+	ErrorClasses []string
 }
 
-func (q *Queries) MarkOutboxPoisoned(ctx context.Context, arg MarkOutboxPoisonedParams) (int64, error) {
-	result, err := q.db.Exec(ctx, markOutboxPoisoned, arg.ErrorClass, arg.ID, arg.LeaseToken)
+func (q *Queries) MarkOutboxPoisonedBatch(ctx context.Context, arg MarkOutboxPoisonedBatchParams) (int64, error) {
+	result, err := q.db.Exec(ctx, markOutboxPoisonedBatch, arg.LeaseToken, arg.Ids, arg.ErrorClasses)
 	if err != nil {
 		return 0, err
 	}
@@ -486,55 +496,113 @@ func (q *Queries) MarkOutboxPublished(ctx context.Context, arg MarkOutboxPublish
 	return result.RowsAffected(), nil
 }
 
+const markOutboxPublishedBatch = `-- name: MarkOutboxPublishedBatch :execrows
+UPDATE outbox_events AS event
+SET published_at = statement_timestamp(),
+    lease_token = NULL,
+    lease_expires_at = NULL,
+    last_error_class = NULL
+WHERE event.id = ANY($1::text[])
+  AND event.lease_token = $2
+  AND event.ordering_key IS NULL
+  AND event.lease_expires_at > statement_timestamp()
+  AND event.published_at IS NULL
+  AND event.poisoned_at IS NULL
+`
+
+type MarkOutboxPublishedBatchParams struct {
+	Ids        []string
+	LeaseToken *string
+}
+
+// Unordered events finalize together because none of them owns an ordering
+// head. A short row count means at least one lease was lost, which the caller
+// resolves per event against durable state.
+func (q *Queries) MarkOutboxPublishedBatch(ctx context.Context, arg MarkOutboxPublishedBatchParams) (int64, error) {
+	result, err := q.db.Exec(ctx, markOutboxPublishedBatch, arg.Ids, arg.LeaseToken)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const observeOutbox = `-- name: ObserveOutbox :one
-WITH observation_clock AS (
-    SELECT statement_timestamp() AS observed_at
-), classified AS (
+WITH pending AS (
     SELECT
         event.created_at,
-        event.published_at,
         CASE
-            WHEN event.published_at IS NOT NULL THEN 'published_retained'
             WHEN event.poisoned_at IS NOT NULL THEN 'poison'
-            WHEN event.lease_token IS NOT NULL AND event.lease_expires_at > observation_clock.observed_at THEN 'in_progress'
-            WHEN event.lease_token IS NOT NULL THEN 'recovery_due'
+            WHEN event.lease_expires_at > statement_timestamp() THEN 'in_progress'
+            WHEN event.lease_expires_at IS NOT NULL THEN 'recovery_due'
             WHEN event.ordering_key IS NOT NULL AND NOT event.ordering_ready THEN 'ordering_blocked'
-            WHEN event.available_at > observation_clock.observed_at THEN 'retry_wait'
+            WHEN event.available_at > statement_timestamp() THEN 'retry_wait'
             ELSE 'eligible'
         END AS state
     FROM outbox_events AS event
-    CROSS JOIN observation_clock
+    WHERE event.published_at IS NULL
+), backlog AS (
+    SELECT
+        count(*)::bigint AS pending_count,
+        count(*) FILTER (WHERE state = 'eligible')::bigint AS eligible_count,
+        coalesce(extract(epoch FROM min(created_at) FILTER (
+            WHERE state = 'eligible'
+        )), 0)::double precision AS eligible_oldest_unix,
+        count(*) FILTER (WHERE state = 'in_progress')::bigint AS in_progress_count,
+        coalesce(extract(epoch FROM min(created_at) FILTER (
+            WHERE state = 'in_progress'
+        )), 0)::double precision AS in_progress_oldest_unix,
+        count(*) FILTER (WHERE state = 'retry_wait')::bigint AS retry_wait_count,
+        coalesce(extract(epoch FROM min(created_at) FILTER (
+            WHERE state = 'retry_wait'
+        )), 0)::double precision AS retry_wait_oldest_unix,
+        count(*) FILTER (WHERE state = 'recovery_due')::bigint AS recovery_due_count,
+        coalesce(extract(epoch FROM min(created_at) FILTER (
+            WHERE state = 'recovery_due'
+        )), 0)::double precision AS recovery_due_oldest_unix,
+        count(*) FILTER (WHERE state = 'ordering_blocked')::bigint AS ordering_blocked_count,
+        coalesce(extract(epoch FROM min(created_at) FILTER (
+            WHERE state = 'ordering_blocked'
+        )), 0)::double precision AS ordering_blocked_oldest_unix,
+        count(*) FILTER (WHERE state = 'poison')::bigint AS poison_count,
+        coalesce(extract(epoch FROM min(created_at) FILTER (
+            WHERE state = 'poison'
+        )), 0)::double precision AS poison_oldest_unix
+    FROM pending
 )
 SELECT
-    count(*) FILTER (WHERE state = 'eligible')::bigint AS eligible_count,
-    coalesce(extract(epoch FROM min(created_at) FILTER (
-        WHERE state = 'eligible'
-    )), 0)::double precision AS eligible_oldest_unix,
-    count(*) FILTER (WHERE state = 'in_progress')::bigint AS in_progress_count,
-    coalesce(extract(epoch FROM min(created_at) FILTER (
-        WHERE state = 'in_progress'
-    )), 0)::double precision AS in_progress_oldest_unix,
-    count(*) FILTER (WHERE state = 'retry_wait')::bigint AS retry_wait_count,
-    coalesce(extract(epoch FROM min(created_at) FILTER (
-        WHERE state = 'retry_wait'
-    )), 0)::double precision AS retry_wait_oldest_unix,
-    count(*) FILTER (WHERE state = 'recovery_due')::bigint AS recovery_due_count,
-    coalesce(extract(epoch FROM min(created_at) FILTER (
-        WHERE state = 'recovery_due'
-    )), 0)::double precision AS recovery_due_oldest_unix,
-    count(*) FILTER (WHERE state = 'ordering_blocked')::bigint AS ordering_blocked_count,
-    coalesce(extract(epoch FROM min(created_at) FILTER (
-        WHERE state = 'ordering_blocked'
-    )), 0)::double precision AS ordering_blocked_oldest_unix,
-    count(*) FILTER (WHERE state = 'poison')::bigint AS poison_count,
-    coalesce(extract(epoch FROM min(created_at) FILTER (
-        WHERE state = 'poison'
-    )), 0)::double precision AS poison_oldest_unix,
-    count(*) FILTER (WHERE state = 'published_retained')::bigint AS published_retained_count,
-    coalesce(extract(epoch FROM min(published_at) FILTER (
-        WHERE state = 'published_retained'
-    )), 0)::double precision AS published_retained_oldest_unix
-FROM classified
+    backlog.eligible_count,
+    backlog.eligible_oldest_unix,
+    backlog.in_progress_count,
+    backlog.in_progress_oldest_unix,
+    backlog.retry_wait_count,
+    backlog.retry_wait_oldest_unix,
+    backlog.recovery_due_count,
+    backlog.recovery_due_oldest_unix,
+    backlog.ordering_blocked_count,
+    backlog.ordering_blocked_oldest_unix,
+    backlog.poison_count,
+    backlog.poison_oldest_unix,
+    greatest(
+        coalesce((
+            SELECT nullif(class.reltuples, -1)
+            FROM pg_catalog.pg_class AS class
+            WHERE class.oid = 'outbox_events'::regclass
+        ), 0) - backlog.pending_count,
+        0
+    )::bigint AS published_retained_estimate,
+    coalesce((
+        SELECT extract(epoch FROM min(event.published_at))
+        FROM outbox_events AS event
+        WHERE event.published_at IS NOT NULL
+    ), 0)::double precision AS published_retained_oldest_unix,
+    (SELECT count(*)::bigint FROM outbox_ordering_heads) AS ordering_head_count,
+    pg_total_relation_size('outbox_events')::bigint AS events_bytes,
+    pg_indexes_size('outbox_events')::bigint AS events_index_bytes,
+    pg_total_relation_size('outbox_ordering_heads')::bigint AS ordering_heads_bytes,
+    pg_indexes_size('outbox_ordering_heads')::bigint AS ordering_heads_index_bytes,
+    pg_total_relation_size('outbox_redrives')::bigint AS redrives_bytes,
+    pg_indexes_size('outbox_redrives')::bigint AS redrives_index_bytes
+FROM backlog
 `
 
 type ObserveOutboxRow struct {
@@ -550,10 +618,22 @@ type ObserveOutboxRow struct {
 	OrderingBlockedOldestUnix   float64
 	PoisonCount                 int64
 	PoisonOldestUnix            float64
-	PublishedRetainedCount      int64
+	PublishedRetainedEstimate   int64
 	PublishedRetainedOldestUnix float64
+	OrderingHeadCount           int64
+	EventsBytes                 int64
+	EventsIndexBytes            int64
+	OrderingHeadsBytes          int64
+	OrderingHeadsIndexBytes     int64
+	RedrivesBytes               int64
+	RedrivesIndexBytes          int64
 }
 
+// Backlog states are exact and read only unpublished rows through the pending
+// partial index, so observation cost tracks backlog rather than retention
+// volume. Retained published rows are reported as the planner's own row
+// estimate minus that exact pending count, because counting them would scan
+// the entire retention window on every observation.
 func (q *Queries) ObserveOutbox(ctx context.Context) (ObserveOutboxRow, error) {
 	row := q.db.QueryRow(ctx, observeOutbox)
 	var i ObserveOutboxRow
@@ -570,37 +650,8 @@ func (q *Queries) ObserveOutbox(ctx context.Context) (ObserveOutboxRow, error) {
 		&i.OrderingBlockedOldestUnix,
 		&i.PoisonCount,
 		&i.PoisonOldestUnix,
-		&i.PublishedRetainedCount,
+		&i.PublishedRetainedEstimate,
 		&i.PublishedRetainedOldestUnix,
-	)
-	return i, err
-}
-
-const observeOutboxStorage = `-- name: ObserveOutboxStorage :one
-SELECT
-    (SELECT count(*)::bigint FROM outbox_ordering_heads) AS ordering_head_count,
-    pg_total_relation_size('outbox_events')::bigint AS events_bytes,
-    pg_indexes_size('outbox_events')::bigint AS events_index_bytes,
-    pg_total_relation_size('outbox_ordering_heads')::bigint AS ordering_heads_bytes,
-    pg_indexes_size('outbox_ordering_heads')::bigint AS ordering_heads_index_bytes,
-    pg_total_relation_size('outbox_redrives')::bigint AS redrives_bytes,
-    pg_indexes_size('outbox_redrives')::bigint AS redrives_index_bytes
-`
-
-type ObserveOutboxStorageRow struct {
-	OrderingHeadCount       int64
-	EventsBytes             int64
-	EventsIndexBytes        int64
-	OrderingHeadsBytes      int64
-	OrderingHeadsIndexBytes int64
-	RedrivesBytes           int64
-	RedrivesIndexBytes      int64
-}
-
-func (q *Queries) ObserveOutboxStorage(ctx context.Context) (ObserveOutboxStorageRow, error) {
-	row := q.db.QueryRow(ctx, observeOutboxStorage)
-	var i ObserveOutboxStorageRow
-	err := row.Scan(
 		&i.OrderingHeadCount,
 		&i.EventsBytes,
 		&i.EventsIndexBytes,
@@ -641,33 +692,41 @@ func (q *Queries) RedriveOutboxEvent(ctx context.Context, arg RedriveOutboxEvent
 	return result.RowsAffected(), nil
 }
 
-const scheduleOutboxRetry = `-- name: ScheduleOutboxRetry :execrows
-UPDATE outbox_events
+const scheduleOutboxRetryBatch = `-- name: ScheduleOutboxRetryBatch :execrows
+UPDATE outbox_events AS event
 SET available_at = statement_timestamp()
-        + $1::double precision * interval '1 millisecond',
+        + retry.delay_milliseconds * interval '1 millisecond',
     lease_token = NULL,
     lease_expires_at = NULL,
-    last_error_class = $2
-WHERE id = $3
-  AND lease_token = $4
-  AND lease_expires_at > statement_timestamp()
-  AND published_at IS NULL
-  AND poisoned_at IS NULL
+    last_error_class = retry.error_class
+FROM (
+    SELECT
+        unnest($2::text[]) AS id,
+        unnest($3::double precision[]) AS delay_milliseconds,
+        unnest($4::text[]) AS error_class
+) AS retry
+WHERE event.id = retry.id
+  AND event.lease_token = $1
+  AND event.lease_expires_at > statement_timestamp()
+  AND event.published_at IS NULL
+  AND event.poisoned_at IS NULL
 `
 
-type ScheduleOutboxRetryParams struct {
-	DelayMilliseconds float64
-	ErrorClass        *string
-	ID                string
+type ScheduleOutboxRetryBatchParams struct {
 	LeaseToken        *string
+	Ids               []string
+	DelayMilliseconds []float64
+	ErrorClasses      []string
 }
 
-func (q *Queries) ScheduleOutboxRetry(ctx context.Context, arg ScheduleOutboxRetryParams) (int64, error) {
-	result, err := q.db.Exec(ctx, scheduleOutboxRetry,
-		arg.DelayMilliseconds,
-		arg.ErrorClass,
-		arg.ID,
+// Each failed event carries its own jittered delay and error class, so one
+// statement releases the whole failing part of a batch.
+func (q *Queries) ScheduleOutboxRetryBatch(ctx context.Context, arg ScheduleOutboxRetryBatchParams) (int64, error) {
+	result, err := q.db.Exec(ctx, scheduleOutboxRetryBatch,
 		arg.LeaseToken,
+		arg.Ids,
+		arg.DelayMilliseconds,
+		arg.ErrorClasses,
 	)
 	if err != nil {
 		return 0, err

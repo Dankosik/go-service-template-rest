@@ -23,20 +23,32 @@ func TestStoreRejectsInvalidUseBeforeDatabaseAccess(t *testing.T) {
 	if err := store.Append(t.Context(), nil, outboxEventForUnit()); !errors.Is(err, ErrConfig) {
 		t.Fatalf("Append(nil tx) error = %v", err)
 	}
-	if _, err := store.Claim(t.Context(), 0); !errors.Is(err, ErrConfig) {
-		t.Fatalf("Claim(0) error = %v", err)
+	if _, err := store.Claim(t.Context(), 0, 1); !errors.Is(err, ErrConfig) {
+		t.Fatalf("Claim(0 lease) error = %v", err)
 	}
-	if err := store.MarkPublished(t.Context(), ClaimedEvent{Token: "lease"}); !errors.Is(err, ErrInvalidEvent) {
+	if _, err := store.Claim(t.Context(), time.Second, 0); !errors.Is(err, ErrConfig) {
+		t.Fatalf("Claim(0 batch) error = %v", err)
+	}
+	if err := store.MarkPublished(t.Context(), "lease", ClaimedEvent{}); !errors.Is(err, ErrInvalidEvent) {
 		t.Fatalf("MarkPublished(invalid id) error = %v", err)
 	}
-	if err := store.ScheduleRetry(t.Context(), "event", "", "temporary", time.Second); !errors.Is(err, ErrInvalidEvent) {
-		t.Fatalf("ScheduleRetry(invalid token) error = %v", err)
+	if _, err := store.MarkPublishedBatch(t.Context(), "lease", nil); !errors.Is(err, ErrConfig) {
+		t.Fatalf("MarkPublishedBatch(empty) error = %v", err)
 	}
-	if err := store.ScheduleRetry(t.Context(), "event", "lease", "temporary", -1); !errors.Is(err, ErrConfig) {
-		t.Fatalf("ScheduleRetry(negative) error = %v", err)
+	if err := store.ScheduleRetryBatch(t.Context(), "", []RetryDirective{
+		{ID: "event", ErrorClass: "temporary", Delay: time.Second},
+	}); !errors.Is(err, ErrInvalidEvent) {
+		t.Fatalf("ScheduleRetryBatch(invalid token) error = %v", err)
 	}
-	if err := store.MarkPoisoned(t.Context(), "event", "lease", ""); !errors.Is(err, ErrInvalidEvent) {
-		t.Fatalf("MarkPoisoned(invalid class) error = %v", err)
+	if err := store.ScheduleRetryBatch(t.Context(), "lease", []RetryDirective{
+		{ID: "event", ErrorClass: "temporary", Delay: -1},
+	}); !errors.Is(err, ErrConfig) {
+		t.Fatalf("ScheduleRetryBatch(negative delay) error = %v", err)
+	}
+	if err := store.MarkPoisonedBatch(t.Context(), "lease", []PoisonDirective{
+		{ID: "event", ErrorClass: ""},
+	}); !errors.Is(err, ErrInvalidEvent) {
+		t.Fatalf("MarkPoisonedBatch(invalid class) error = %v", err)
 	}
 	if _, err := store.Get(t.Context(), ""); !errors.Is(err, ErrInvalidEvent) {
 		t.Fatalf("Get(invalid id) error = %v", err)
@@ -50,8 +62,8 @@ func TestStoreRejectsInvalidUseBeforeDatabaseAccess(t *testing.T) {
 	if _, err := store.CleanupPublished(t.Context(), 0, 0); !errors.Is(err, ErrConfig) {
 		t.Fatalf("CleanupPublished(invalid) error = %v", err)
 	}
-	if _, err := store.Observe(t.Context()); !errors.Is(err, postgres.ErrConfig) {
-		t.Fatalf("Observe(nil pool) error = %v", err)
+	if _, err := (&Store{}).Observe(t.Context()); !errors.Is(err, ErrConfig) {
+		t.Fatalf("Observe(nil store) error = %v", err)
 	}
 }
 
@@ -62,7 +74,7 @@ func TestStoreRowConversionsAndHelpers(t *testing.T) {
 	stamp := pgtype.Timestamptz{Time: now, Valid: true}
 	key, token, class, redriveID := "key", "lease", "temporary", "audit"
 	sequence := int64(7)
-	row := sqlcgen.ClaimOutboxEventRow{
+	row := sqlcgen.ClaimOutboxEventsRow{
 		ID: "event", EventType: "type", Source: "source", Destination: "destination", SchemaName: "v1",
 		OccurredAt: stamp, Payload: []byte(`{"id":1}`), Metadata: []byte(`{"trace":"x"}`),
 		OrderingKey: &key, OrderingSequence: &sequence, LeaseToken: &token, LeaseExpiresAt: stamp,
@@ -126,6 +138,15 @@ func TestStoreProgressAndTelemetryHelpers(t *testing.T) {
 	if err := progressResult("mark", 0, databaseErr); !errors.Is(err, databaseErr) {
 		t.Fatalf("progressResult(database) = %v", err)
 	}
+	if err := batchProgressResult("mark", 3, 3, nil); err != nil {
+		t.Fatalf("batchProgressResult(success) = %v", err)
+	}
+	if err := batchProgressResult("mark", 2, 3, nil); !errors.Is(err, ErrLeaseLost) {
+		t.Fatalf("batchProgressResult(short) = %v", err)
+	}
+	if err := batchProgressResult("mark", 0, 3, databaseErr); !errors.Is(err, databaseErr) {
+		t.Fatalf("batchProgressResult(database) = %v", err)
+	}
 
 	telemetry := &Telemetry{}
 	store := &Store{}
@@ -148,7 +169,6 @@ func TestStoreProgressAndTelemetryHelpers(t *testing.T) {
 	instrumented := &Store{telemetry: recorder}
 	for _, operationErr := range []error{
 		nil,
-		ErrNoWork,
 		ErrLeaseLost,
 		ErrInvalidEvent,
 		ErrConfig,
@@ -158,6 +178,9 @@ func TestStoreProgressAndTelemetryHelpers(t *testing.T) {
 	} {
 		instrumented.recordOperation(t.Context(), "claim", time.Now(), operationErr)
 	}
+	(*Store)(nil).recordClaim(context.Background(), ClaimedBatch{}, time.Now(), nil)
+	instrumented.recordClaim(t.Context(), ClaimedBatch{}, time.Now(), nil)
+	instrumented.recordClaim(t.Context(), ClaimedBatch{Events: []ClaimedEvent{{}}}, time.Now(), nil)
 }
 
 func TestStoreDatabaseResultClassification(t *testing.T) {
@@ -165,34 +188,45 @@ func TestStoreDatabaseResultClassification(t *testing.T) {
 
 	databaseErr := errors.New("database")
 	store := &Store{queries: sqlcgen.New(databaseStub{rowErr: pgx.ErrNoRows})}
-	if _, err := store.Claim(t.Context(), time.Second); !errors.Is(err, ErrNoWork) {
-		t.Fatalf("Claim(no rows) error = %v", err)
-	}
 	if _, err := store.Get(t.Context(), "event"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("Get(no rows) error = %v", err)
 	}
-	store.queries = sqlcgen.New(databaseStub{rowErr: databaseErr})
-	if _, err := store.Claim(t.Context(), time.Second); !errors.Is(err, databaseErr) {
+	store.queries = sqlcgen.New(databaseStub{rowErr: databaseErr, queryErr: databaseErr})
+	if _, err := store.Claim(t.Context(), time.Second, 10); !errors.Is(err, databaseErr) {
 		t.Fatalf("Claim(database) error = %v", err)
 	}
 	if _, err := store.Get(t.Context(), "event"); !errors.Is(err, databaseErr) {
 		t.Fatalf("Get(database) error = %v", err)
 	}
 
+	retries := []RetryDirective{{ID: "event", ErrorClass: "temporary", Delay: time.Second}}
+	poisons := []PoisonDirective{{ID: "event", ErrorClass: "permanent"}}
 	store.queries = sqlcgen.New(databaseStub{tag: pgconn.NewCommandTag("UPDATE 1")})
-	claim := ClaimedEvent{Event: Event{ID: "event"}, Token: "lease"}
-	if err := store.MarkPublished(t.Context(), claim); err != nil {
+	claim := ClaimedEvent{Event: Event{ID: "event"}}
+	if err := store.MarkPublished(t.Context(), "lease", claim); err != nil {
 		t.Fatalf("MarkPublished() error = %v", err)
 	}
-	if err := store.ScheduleRetry(t.Context(), "event", "lease", "temporary", time.Second); err != nil {
-		t.Fatalf("ScheduleRetry() error = %v", err)
+	if marked, err := store.MarkPublishedBatch(t.Context(), "lease", []string{"event"}); err != nil || marked != 1 {
+		t.Fatalf("MarkPublishedBatch() = %d, %v", marked, err)
 	}
-	if err := store.MarkPoisoned(t.Context(), "event", "lease", "permanent"); err != nil {
-		t.Fatalf("MarkPoisoned() error = %v", err)
+	if err := store.ScheduleRetryBatch(t.Context(), "lease", retries); err != nil {
+		t.Fatalf("ScheduleRetryBatch() error = %v", err)
+	}
+	if err := store.MarkPoisonedBatch(t.Context(), "lease", poisons); err != nil {
+		t.Fatalf("MarkPoisonedBatch() error = %v", err)
+	}
+	if deleted, err := store.CleanupPublished(t.Context(), time.Hour, 10); err != nil || deleted != 1 {
+		t.Fatalf("CleanupPublished() = %d, %v", deleted, err)
 	}
 	store.queries = sqlcgen.New(databaseStub{tag: pgconn.NewCommandTag("UPDATE 0")})
-	if err := store.MarkPublished(t.Context(), claim); !errors.Is(err, ErrLeaseLost) {
+	if err := store.MarkPublished(t.Context(), "lease", claim); !errors.Is(err, ErrLeaseLost) {
 		t.Fatalf("MarkPublished(lost) error = %v", err)
+	}
+	if err := store.ScheduleRetryBatch(t.Context(), "lease", retries); !errors.Is(err, ErrLeaseLost) {
+		t.Fatalf("ScheduleRetryBatch(lost) error = %v", err)
+	}
+	if err := store.MarkPoisonedBatch(t.Context(), "lease", poisons); !errors.Is(err, ErrLeaseLost) {
+		t.Fatalf("MarkPoisonedBatch(lost) error = %v", err)
 	}
 	sequence := &rowSequence{rows: []pgx.Row{
 		orderedMarkRow{snapshotConflict: true},
@@ -200,17 +234,19 @@ func TestStoreDatabaseResultClassification(t *testing.T) {
 	}}
 	store.queries = sqlcgen.New(databaseStub{rows: sequence})
 	claim.Event.OrderingKey, claim.Event.OrderingSequence = "key", 1
-	if err := store.MarkPublished(t.Context(), claim); err != nil {
+	if err := store.MarkPublished(t.Context(), "lease", claim); err != nil {
 		t.Fatalf("MarkPublished(ordered snapshot retry) error = %v", err)
 	}
 	if sequence.next != 2 {
 		t.Fatalf("ordered mark queries = %d, want 2", sequence.next)
 	}
 	store.queries = sqlcgen.New(databaseStub{execErr: databaseErr})
-	if err := store.MarkPoisoned(t.Context(), "event", "lease", "permanent"); !errors.Is(err, databaseErr) {
-		t.Fatalf("MarkPoisoned(database) error = %v", err)
+	if err := store.MarkPoisonedBatch(t.Context(), "lease", poisons); !errors.Is(err, databaseErr) {
+		t.Fatalf("MarkPoisonedBatch(database) error = %v", err)
 	}
-	store.queries = sqlcgen.New(databaseStub{queryErr: databaseErr})
+	if _, err := store.MarkPublishedBatch(t.Context(), "lease", []string{"event"}); !errors.Is(err, databaseErr) {
+		t.Fatalf("MarkPublishedBatch(database) error = %v", err)
+	}
 	if _, err := store.CleanupPublished(t.Context(), time.Hour, 10); !errors.Is(err, databaseErr) {
 		t.Fatalf("CleanupPublished(database) error = %v", err)
 	}

@@ -44,7 +44,7 @@ func TestTelemetryBoundedContract(t *testing.T) {
 		OrderingBlockedOldestAt:   time.Unix(5, 0).UTC(),
 		PoisonCount:               6,
 		PoisonOldestAt:            time.Unix(6, 0).UTC(),
-		PublishedRetainedCount:    7,
+		PublishedRetainedEstimate: 7,
 		PublishedRetainedOldestAt: time.Unix(7, 0).UTC(),
 		OrderingHeadCount:         8,
 		EventsBytes:               9,
@@ -163,13 +163,13 @@ func TestRelayMarkPublishedReconciliationRecordsDurableProgress(t *testing.T) {
 
 	relay := &Relay{
 		telemetry: telemetry,
-		markEvent: func(context.Context, ClaimedEvent) error { return errors.New("ambiguous result") },
+		markEvent: func(context.Context, string, ClaimedEvent) error { return errors.New("ambiguous result") },
 		getEvent: func(context.Context, string) (Record, error) {
 			return Record{PublishedAt: time.Now()}, nil
 		},
 	}
-	if err := relay.markPublished(t.Context(), ClaimedEvent{Event: Event{ID: "event"}, Token: "token"}); err != nil {
-		t.Fatalf("markPublished() error = %v", err)
+	if err := relay.reconcilePublished(t.Context(), "token", ClaimedEvent{Event: Event{ID: "event"}}); err != nil {
+		t.Fatalf("reconcilePublished() error = %v", err)
 	}
 
 	var collected metricdata.ResourceMetrics

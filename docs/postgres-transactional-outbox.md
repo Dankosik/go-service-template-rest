@@ -48,8 +48,9 @@ of request-path dual-write failure.
 `cmd/outbox-relay` is a separately deployable process. The template deliberately
 registers no publisher: an initialized service must replace the `nil` builder
 in `cmd/outbox-relay/main.go` with its selected messaging adapter. There is no
-production noop fallback. The adapter is outside this pack and must return nil
-only after the broker durably acknowledges the same event ID.
+production noop fallback. The adapter is outside this pack, must be safe for
+concurrent `Publish` calls, and must return nil only after the broker durably
+acknowledges the same event ID.
 
 ## Envelope and ordering
 
@@ -77,9 +78,36 @@ observation therefore do not scan every predecessor for a hot ordering key.
 
 ## Claim, acknowledgement, and recovery
 
-Relays claim one row at a time with `FOR UPDATE SKIP LOCKED`, a random lease
-token, and a lease expiry. Token-and-expiry compare-and-set updates fence stale
-owners. Multiple relay replicas can claim unrelated rows safely.
+Relays claim a batch of up to `batch_size` rows in one statement with
+`FOR UPDATE SKIP LOCKED`, a single random lease token, and a lease expiry.
+Token-and-expiry compare-and-set updates fence stale owners, and the whole batch
+is fenced as a unit. Multiple relay replicas can claim unrelated rows safely.
+
+The batch is published through at most `publish_concurrency` concurrent
+`Publish` calls, so an adapter must be safe for concurrent use. Concurrency
+never reorders an ordering key: the partial unique index on ready ordered rows
+means at most one event per key is claimable, so a batch can never hold two
+events of the same key.
+
+Unordered acknowledgements finalize together in one statement. Each ordered
+acknowledgement finalizes on its own, because it also advances its key's head
+and unblocks that key's successor. Retries and poison transitions each take one
+statement for the whole batch. A backlog therefore costs roughly two database
+round trips per batch rather than two per event.
+
+Every publication attempt is bounded by both `publish_timeout` and the lease the
+batch was claimed under, measured on the relay's own clock from before the
+claim. Whatever the batch does not finish inside that window is released for
+retry rather than abandoned until the lease expires, and finalization is
+detached from process cancellation so a shutdown still records acknowledged
+work instead of creating duplicates.
+
+Idle relays wait on a PostgreSQL `LISTEN`/`NOTIFY` channel that a statement-level
+insert trigger signals, so a committed append is normally picked up within a
+round trip instead of within `poll_interval`. The listener owns one connection
+outside the pool and adds no round trip to the appending transaction. It is a
+latency optimization only: a lost notification, a dropped listener connection,
+or a retry becoming due again falls back to the poll timer.
 
 After broker acknowledgement, the relay marks the row published. A crash after
 the acknowledgement but before that PostgreSQL update leaves the row leased;
@@ -108,7 +136,8 @@ The default relay settings are:
 
 | Setting | Default |
 | --- | --- |
-| Poll / observation | 500 ms / 5 s |
+| Poll (notification fallback) / observation | 500 ms / 5 s |
+| Batch size / publish concurrency | 100 / 16 |
 | Publish timeout / lease | 10 s / 30 s |
 | Attempts / retry | 10 / 1 s to 5 min full jitter |
 | Cleanup / retention | 1,000 rows/transaction; one-minute normal cadence, poll-cadence catch-up / 7 days |
@@ -117,6 +146,14 @@ The default relay settings are:
 The lease must exceed the publish timeout, the fixed one-second publisher join
 bound, and PostgreSQL acquire and statement budgets. Configuration validation
 rejects an unsafe combination before publisher or database mutation.
+
+Raise `batch_size` for backlog drain rate and lower it to cap peak relay memory,
+which is that many stored envelopes; the envelope limit makes 100 worth up to
+about 29 MiB and a typical payload far less. Raise `publish_concurrency` when
+broker acknowledgement latency, not the database, bounds throughput. A crash
+mid-batch can redeliver up to `batch_size` events, which at-least-once delivery
+already permits; size the batch against consumer deduplication cost as well as
+memory.
 
 Readiness requires valid configuration, a real publisher, reachable expected
 schema, a running relay loop, and a fresh PostgreSQL state observation. A stale
@@ -145,6 +182,15 @@ redrive-ledger bytes; last durable progress; operations; in-flight work; and
 readiness. Attributes are fixed enums. Payload, metadata, credentials, DSN, ordering keys, broker
 errors, and SQL text are never metric labels or logs.
 
+One statement produces the whole observation, and it reads only unpublished rows
+through the `outbox_events_pending_idx` partial index, so its cost tracks
+backlog rather than retention volume. The `published_retained` count is the one
+exception: counting it exactly would scan the entire retention window on every
+observation, so it is reported as the planner's own row estimate for
+`outbox_events` minus the exact pending count. Alert on
+`published_retained` oldest age, which stays exact, rather than on that count;
+the estimate also needs `autovacuum`/`ANALYZE` to have run to be meaningful.
+
 Published rows are retained for seven days and deleted in bounded concurrent
 batches. Pending, leased, retry, recovery, poison, and ordering-high-water rows
 are not deleted. PostgreSQL is a finite outage buffer: alert on unpublished
@@ -153,14 +199,15 @@ and relation/index growth. Add partitioning only after measured table/vacuum or
 claim-plan evidence shows the bounded cleanup design no longer holds.
 
 Budget PostgreSQL connections across the complete deployment, not one process:
-`sum(API replicas * API max_open_conns) + sum(relay replicas * relay
-max_open_conns) + migration/admin reserve` must stay below the database
-connection budget. The
-relay owns one database operation and one publication at a time, so a pure relay
-can normally set `APP__POSTGRES__MAX_OPEN_CONNS=1` and
-`APP__POSTGRES__MIN_IDLE_CONNS=1`; raise that only when measured acquire wait or
-maintenance overlap proves one connection insufficient. Keep API sizing tied to
-its own request workload rather than copying the relay value.
+`sum(API replicas * API max_open_conns) + sum(relay replicas * (relay
+max_open_conns + 1)) + migration/admin reserve` must stay below the database
+connection budget. The relay runs one database statement at a time, so
+`APP__POSTGRES__MAX_OPEN_CONNS=2` is the validated minimum; the extra `+ 1` is
+the notification listener, which owns its own connection outside the pool so a
+blocked listener can never starve claim or finalization. Raise the pool only
+when measured acquire wait or maintenance overlap proves two connections
+insufficient. Keep API sizing tied to its own request workload rather than
+copying the relay value.
 
 ## Rollout, replay, and rollback
 
@@ -214,6 +261,19 @@ ordering-head heap from 68,272,128 to 144,834,560 bytes while materializing 1M
 heads. This is rollout evidence, not a production lock-time promise. Rehearse
 the actual ordering-key distribution and available DDL lock window before
 applying it to a populated deployment.
+
+Migration `000003` adds the append-notification trigger and the pending-row
+partial index. Both are additive and mixed-version safe: an older relay ignores
+the notification channel and an older writer is unaffected by either object, so
+no drain fence is required. Its `CREATE INDEX` runs inside the migration
+transaction and holds a `SHARE` lock that blocks appends while it builds. On a
+populated deployment, build it out of band first and let the migration find it:
+
+```sql
+CREATE INDEX CONCURRENTLY IF NOT EXISTS outbox_events_pending_idx
+    ON outbox_events (created_at)
+    WHERE published_at IS NULL;
+```
 
 `000002` accepts valid JSON bytes that PostgreSQL `jsonb` rejects. Its Down
 section therefore fails closed with an explicit error once such an event
