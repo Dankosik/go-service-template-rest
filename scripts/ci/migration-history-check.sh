@@ -49,14 +49,33 @@ exact-base)
 	;;
 esac
 
+BASELINE_FILE=".migration-baseline"
+
 changes="$(
 	git diff --name-status --find-renames --find-copies "${diff_args[@]}" -- migrations/ |
 		awk '$1 !~ /^A$/ { print }'
 )"
-if [[ -n "${changes}" ]]; then
+if [[ -z "${changes}" ]]; then
+	echo "migration history is append-only (${scope})"
+	exit 0
+fi
+
+# Rewriting a migration a database already ran leaves that database
+# unmigratable, so this check treats every committed migration as applied. That
+# is exact for a service and conservative for a template, whose packs are
+# authored here and only ever copied into a new service at initialization.
+#
+# A pre-publication reset lifts it for one change by updating the baseline file
+# in the same diff. The exception is deliberate, reviewable beside the migration
+# it explains, and records the evidence that nothing had applied the files it
+# rewrites. cd.yml holds the same line against the published runtime image and
+# has no such escape, so a wrong declaration still cannot reach a registry.
+if [[ -z "$(git diff --name-only "${diff_args[@]}" -- "${BASELINE_FILE}")" ]]; then
 	echo "migration history: published migration files are append-only (${scope})" >&2
 	printf '%s\n' "${changes}" >&2
+	echo "migration history: declare a pre-publication reset in ${BASELINE_FILE} to rewrite them" >&2
 	exit 1
 fi
 
-echo "migration history is append-only (${scope})"
+echo "migration history: pre-publication reset declared in ${BASELINE_FILE} (${scope})"
+printf '%s\n' "${changes}"

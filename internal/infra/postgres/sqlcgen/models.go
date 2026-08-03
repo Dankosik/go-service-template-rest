@@ -19,6 +19,7 @@ type OutboxEvent struct {
 	Metadata          []byte
 	OrderingKey       *string
 	OrderingSequence  *int64
+	OrderingReady     bool
 	CreatedAt         pgtype.Timestamptz
 	AvailableAt       pgtype.Timestamptz
 	CycleAttemptCount int32
@@ -32,14 +33,13 @@ type OutboxEvent struct {
 	RedriveCount      int32
 	LastRedriveID     *string
 	LastRedrivenAt    pgtype.Timestamptz
-	OrderingReady     bool
 }
 
 type OutboxOrderingHead struct {
 	OrderingKey     string
 	LastSequence    int64
-	UpdatedAt       pgtype.Timestamptz
 	CurrentSequence *int64
+	UpdatedAt       pgtype.Timestamptz
 }
 
 type OutboxRedrife struct {

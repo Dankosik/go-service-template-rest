@@ -215,10 +215,11 @@ inserting, claiming, and publishing 2,000 events moved the cycle's WAL from
 1 KiB payload, while the event heap shrank 22% and 33%. Publication itself
 changes indexed columns and remains a normal indexed update.
 
-Reopen this setting if the relay stops claiming consecutive rows in bulk, since
-the reserve is sized for whole-page updates. `fillfactor` applies to newly
-written pages, so an existing deployment reaches the new shape as rows turn
-over, or immediately through a `VACUUM FULL` or `pg_repack` maintenance window.
+Both tables carry these parameters from `CREATE TABLE`, so a service gets the
+shape from its first migration. Reopen the setting if the relay stops claiming
+consecutive rows in bulk, since the reserve is sized for whole-page updates; a
+later change to it applies to newly written pages, reaching existing rows as
+they turn over or immediately through a `VACUUM FULL` or `pg_repack` window.
 
 Published rows are retained for seven days and deleted in bounded concurrent
 batches. Pending, leased, retry, recovery, poison, and ordering-high-water rows
@@ -240,97 +241,15 @@ copying the relay value.
 
 ## Rollout, replay, and rollback
 
-Apply all canonical Goose migrations before starting relay replicas. A fresh
-database has no compatibility transition. Upgrading a populated `000001`
-database is deliberately not mixed-version safe: first drain and stop every old
-relay, then quiesce every old writer and wait for its database transactions to
-finish. Only after all old processes have exited may `000002` run. Before
-reopening traffic, require zero rows from this invariant readback:
+Apply the canonical Goose migration before starting relay replicas. The pack
+ships one migration holding the whole schema, so a new service has no
+compatibility transition to plan and no intermediate version to stop at.
 
-```sql
-WITH expected AS (
-    SELECT event.ordering_key, min(event.ordering_sequence) AS current_sequence
-    FROM outbox_events AS event
-    WHERE event.ordering_key IS NOT NULL AND event.published_at IS NULL
-    GROUP BY event.ordering_key
-)
-SELECT coalesce(expected.ordering_key, head.ordering_key) AS ordering_key
-FROM expected
-FULL JOIN outbox_ordering_heads AS head
-  ON head.ordering_key = expected.ordering_key
-LEFT JOIN outbox_events AS event
-  ON event.ordering_key = expected.ordering_key
- AND event.ordering_sequence = expected.current_sequence
- AND event.published_at IS NULL
- AND event.ordering_ready
-WHERE head.current_sequence IS DISTINCT FROM expected.current_sequence
-   OR (expected.ordering_key IS NOT NULL AND event.id IS NULL);
-```
-
-Deploy only the new writer and relay after that fence. A stopped relay safely
-accumulates rows. Scale replicas only after one replica is healthy and backlog
-signals are visible. Roll back the relay by stopping it; leases expire and rows
-remain. Do not run an old writer or relay against schema version 2, and do not
-roll back the schema while any producer or relay binary can use it.
-
-Migration `000002` scans existing events to rebuild missing or stale ordering
-high-water heads and validate the JSON constraints, and writes one
-`ordering_ready` row per active ordered key. Existing heads already at their
-retained high-water remain untouched when they have no unpublished events. The
-current-head/readiness write cost is therefore proportional to active
-ordering-key cardinality, not total hot-key backlog; missing or stale
-high-water heads add one bounded write per affected key. On the repository's
-local PostgreSQL 17.9 fixture, three exact-current runs over a 1M-row single-key
-backlog took 8.37/9.48/11.60 seconds (9.48-second median), generated
-151,376/164,272/3,810,152 WAL bytes (164,272-byte median), and did not rewrite
-the event heap. Three 1M-key runs took 39.64/75.31/95.52 seconds (75.31-second
-median) and generated 539,791,856/652,874,224/680,541,344 WAL bytes
-(652,874,224-byte median); they left the event heap unchanged but expanded the
-ordering-head heap from 68,272,128 to 144,834,560 bytes while materializing 1M
-heads. This is rollout evidence, not a production lock-time promise. Rehearse
-the actual ordering-key distribution and available DDL lock window before
-applying it to a populated deployment.
-
-Migration `000003` adds the append-notification trigger and the pending-row
-partial index. Both are additive and mixed-version safe: an older relay ignores
-the notification channel and an older writer is unaffected by either object, so
-no drain fence is required. Its `CREATE INDEX` runs inside the migration
-transaction and holds a `SHARE` lock that blocks appends while it builds. On a
-populated deployment, build it out of band first and let the migration find it:
-
-```sql
-CREATE INDEX CONCURRENTLY IF NOT EXISTS outbox_events_pending_idx
-    ON outbox_events (created_at)
-    WHERE published_at IS NULL;
-```
-
-Migration `000004` sets the storage parameters above and replaces the two
-`(ordering_key, ordering_sequence)` indexes with one partial unique index over
-unpublished rows. It changes no column and no statement semantics, so it is
-mixed-version safe in both directions and needs no drain fence: an older writer
-and relay keep working against it, and the current binaries work against schema
-version 3. What it does narrow is the uniqueness the database enforces on its
-own, from every row to every unpublished row; the retained high-water mark still
-rejects a reused sequence for anything that goes through `Append`. Its
-`CREATE UNIQUE INDEX` runs inside the migration transaction and holds a `SHARE`
-lock that blocks appends while it builds. On a populated deployment, build it
-out of band first and let the migration find it:
-
-```sql
-CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS outbox_events_ordering_pending_key
-    ON outbox_events (ordering_key, ordering_sequence)
-    WHERE published_at IS NULL AND ordering_key IS NOT NULL;
-```
-
-Its Down section restores the full-table unique index and fails closed when a
-published row and an unpublished row already share an ordering key and sequence,
-which only a writer that bypassed `Append` can create.
-
-`000002` accepts valid JSON bytes that PostgreSQL `jsonb` rejects. Its Down
-section therefore fails closed with an explicit error once such an event
-exists; it never normalizes or discards the event to force rollback. In that
-state, restore the version-2 binary/schema or use a separately reviewed data
-transition. Production rollout remains forward-only by default.
+A stopped relay safely accumulates rows. Scale replicas only after one replica
+is healthy and backlog signals are visible. Roll back the relay by stopping it;
+leases expire and rows remain. Production rollout is forward-only by default:
+the Down section drops the outbox tables, so it is a development affordance
+rather than a production rollback path.
 
 Replay is explicit poison redrive, or a separately reviewed bounded operator
 procedure for already published rows. Never reset published state casually:

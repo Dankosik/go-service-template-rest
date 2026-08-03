@@ -284,16 +284,14 @@ are normal transactional, logged PostgreSQL migrations with canonical Up and
 disposable-proof Down sections. Published versions remain append-only.
 Application startup and relay startup never migrate.
 
-On a fresh database, rollout order is migration, writer, then relay. On a
-populated `000001` database, `000002` is deliberately not mixed-version safe:
-drain and stop every old relay, quiesce every old writer, wait for its database
-transactions to finish, and require every old process to exit before applying
-the migration. Run the zero-row ordering-head invariant readback defined in the
-operations guide before admitting only the version-2 writer and relay. Never
-run a version-1 process against schema version 2.
+Rollout order is migration, writer, then relay. The pack ships its whole schema
+as one migration, so a service has no intermediate version to stop at and no
+mixed-version transition to fence. A pre-publication consolidation of that
+migration set is recorded in `.migration-baseline`; once a version has shipped
+in a runtime image or reached any database it is immutable.
 
-The version-2 API may run before its relay; committed rows form backlog. The
-version-2 relay may run before any writer and observes an empty queue.
+The API may run before its relay; committed rows form backlog. The relay may run
+before any writer and observes an empty queue.
 
 Rollback stops new writer behavior or the relay but leaves the table and rows
 intact. It does not retract published events, run production Down, or remove

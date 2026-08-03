@@ -153,7 +153,7 @@ func (q *Queries) FindOutboxRedrive(ctx context.Context, auditID string) (string
 }
 
 const getOutboxEvent = `-- name: GetOutboxEvent :one
-SELECT id, event_type, source, destination, schema_name, occurred_at, payload, metadata, ordering_key, ordering_sequence, created_at, available_at, cycle_attempt_count, total_attempt_count, last_attempt_at, lease_token, lease_expires_at, published_at, poisoned_at, last_error_class, redrive_count, last_redrive_id, last_redriven_at, ordering_ready FROM outbox_events WHERE id = $1
+SELECT id, event_type, source, destination, schema_name, occurred_at, payload, metadata, ordering_key, ordering_sequence, ordering_ready, created_at, available_at, cycle_attempt_count, total_attempt_count, last_attempt_at, lease_token, lease_expires_at, published_at, poisoned_at, last_error_class, redrive_count, last_redrive_id, last_redriven_at FROM outbox_events WHERE id = $1
 `
 
 func (q *Queries) GetOutboxEvent(ctx context.Context, id string) (OutboxEvent, error) {
@@ -170,6 +170,7 @@ func (q *Queries) GetOutboxEvent(ctx context.Context, id string) (OutboxEvent, e
 		&i.Metadata,
 		&i.OrderingKey,
 		&i.OrderingSequence,
+		&i.OrderingReady,
 		&i.CreatedAt,
 		&i.AvailableAt,
 		&i.CycleAttemptCount,
@@ -183,7 +184,6 @@ func (q *Queries) GetOutboxEvent(ctx context.Context, id string) (OutboxEvent, e
 		&i.RedriveCount,
 		&i.LastRedriveID,
 		&i.LastRedrivenAt,
-		&i.OrderingReady,
 	)
 	return i, err
 }
@@ -278,10 +278,7 @@ INSERT INTO outbox_events (
     schema_name,
     occurred_at,
     payload,
-    metadata,
-    ordering_key,
-    ordering_sequence,
-    ordering_ready
+    metadata
 ) VALUES (
     $1,
     $2,
@@ -290,27 +287,23 @@ INSERT INTO outbox_events (
     $5,
     $6,
     $7,
-    $8,
-    $9,
-    $10,
-    $11
+    $8
 )
 `
 
 type InsertOutboxEventParams struct {
-	ID               string
-	EventType        string
-	Source           string
-	Destination      string
-	SchemaName       string
-	OccurredAt       pgtype.Timestamptz
-	Payload          []byte
-	Metadata         []byte
-	OrderingKey      *string
-	OrderingSequence *int64
-	OrderingReady    bool
+	ID          string
+	EventType   string
+	Source      string
+	Destination string
+	SchemaName  string
+	OccurredAt  pgtype.Timestamptz
+	Payload     []byte
+	Metadata    []byte
 }
 
+// An unordered event owns no ordering head, so it stores the envelope alone and
+// leaves the ordering columns at their defaults.
 func (q *Queries) InsertOutboxEvent(ctx context.Context, arg InsertOutboxEventParams) error {
 	_, err := q.db.Exec(ctx, insertOutboxEvent,
 		arg.ID,
@@ -321,9 +314,6 @@ func (q *Queries) InsertOutboxEvent(ctx context.Context, arg InsertOutboxEventPa
 		arg.OccurredAt,
 		arg.Payload,
 		arg.Metadata,
-		arg.OrderingKey,
-		arg.OrderingSequence,
-		arg.OrderingReady,
 	)
 	return err
 }
@@ -345,7 +335,7 @@ func (q *Queries) InsertOutboxRedrive(ctx context.Context, arg InsertOutboxRedri
 }
 
 const lockOutboxEventForRedrive = `-- name: LockOutboxEventForRedrive :one
-SELECT id, event_type, source, destination, schema_name, occurred_at, payload, metadata, ordering_key, ordering_sequence, created_at, available_at, cycle_attempt_count, total_attempt_count, last_attempt_at, lease_token, lease_expires_at, published_at, poisoned_at, last_error_class, redrive_count, last_redrive_id, last_redriven_at, ordering_ready FROM outbox_events WHERE id = $1 FOR UPDATE
+SELECT id, event_type, source, destination, schema_name, occurred_at, payload, metadata, ordering_key, ordering_sequence, ordering_ready, created_at, available_at, cycle_attempt_count, total_attempt_count, last_attempt_at, lease_token, lease_expires_at, published_at, poisoned_at, last_error_class, redrive_count, last_redrive_id, last_redriven_at FROM outbox_events WHERE id = $1 FOR UPDATE
 `
 
 func (q *Queries) LockOutboxEventForRedrive(ctx context.Context, id string) (OutboxEvent, error) {
@@ -362,6 +352,7 @@ func (q *Queries) LockOutboxEventForRedrive(ctx context.Context, id string) (Out
 		&i.Metadata,
 		&i.OrderingKey,
 		&i.OrderingSequence,
+		&i.OrderingReady,
 		&i.CreatedAt,
 		&i.AvailableAt,
 		&i.CycleAttemptCount,
@@ -375,7 +366,6 @@ func (q *Queries) LockOutboxEventForRedrive(ctx context.Context, id string) (Out
 		&i.RedriveCount,
 		&i.LastRedriveID,
 		&i.LastRedrivenAt,
-		&i.OrderingReady,
 	)
 	return i, err
 }
