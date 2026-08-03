@@ -254,6 +254,8 @@ func TestServerObservabilitySanitizesValuesAndFiltersUnknownMethods(t *testing.T
 		}
 	}
 
+	finishServerRPCs(t, server)
+
 	assertSanitizedAccessLogs(t, logOutput.Bytes(), secretCanary, 3, 1)
 	assertSanitizedServerSpans(t, spanRecorder.Ended(), secretCanary, map[string]bool{
 		"grpcx.test.PayloadService/Call": true,
@@ -318,6 +320,8 @@ func TestStreamingPolicyObservabilitySanitizesRawError(t *testing.T) {
 		t.Fatalf("stream policy status detail = %q, want sanitized detail", detail)
 	}
 
+	finishServerRPCs(t, server)
+
 	assertSanitizedAccessLogs(t, logOutput.Bytes(), secretCanary, 1, 0)
 	assertSanitizedServerSpans(t, spanRecorder.Ended(), secretCanary, map[string]bool{
 		"grpc.health.v1.Health/Watch": true,
@@ -325,6 +329,19 @@ func TestStreamingPolicyObservabilitySanitizesRawError(t *testing.T) {
 	assertSanitizedServerMetrics(t, metricReader, secretCanary, map[string]bool{
 		"grpc.health.v1.Health/Watch": true,
 	})
+}
+
+// finishServerRPCs blocks until the server has completed every in-flight RPC.
+// A client observes an RPC status as soon as the server sends it, which is
+// strictly earlier than the server recording that RPC in its access log, span
+// processor, and metric instruments. Assertions on server-recorded telemetry
+// synchronize on this completion rather than on the client-observed result.
+func finishServerRPCs(t *testing.T, server *Server) {
+	t.Helper()
+
+	if err := server.Shutdown(t.Context()); err != nil {
+		t.Fatalf("Server.Shutdown() before telemetry assertions = %v", err)
+	}
 }
 
 func assertRPCSpans(t *testing.T, spans []sdktrace.ReadOnlySpan, parentTraceID trace.TraceID) {
