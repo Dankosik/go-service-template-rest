@@ -588,6 +588,11 @@ func validateOutbox(cfg OutboxConfig, postgres PostgresConfig) error {
 	if cfg.Enabled && !postgres.Enabled {
 		return fmt.Errorf("%w: outbox.enabled requires postgres.enabled", ErrValidate)
 	}
+	// A claim transaction and the publication that follows it need separate
+	// connections; a single-connection pool deadlocks at runtime instead.
+	if cfg.Enabled && postgres.MaxOpenConns < 2 {
+		return fmt.Errorf("%w: outbox.enabled requires postgres.max_open_conns >= 2", ErrValidate)
+	}
 	for _, duration := range []struct {
 		name  string
 		value time.Duration

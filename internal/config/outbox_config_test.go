@@ -27,6 +27,15 @@ func TestOutboxConfigDefaultsAndPostgresRequirement(t *testing.T) {
 		t.Fatalf("outbox defaults = %+v", cfg.Outbox)
 	}
 
+	t.Setenv("APP__POSTGRES__MAX_OPEN_CONNS", "1")
+	t.Setenv("APP__POSTGRES__MIN_IDLE_CONNS", "0")
+	_, _, err = LoadDetailed(LoadOptions{})
+	if !errors.Is(err, ErrValidate) || !strings.Contains(err.Error(), "postgres.max_open_conns >= 2") {
+		t.Fatalf("single-connection outbox error = %v", err)
+	}
+	t.Setenv("APP__POSTGRES__MAX_OPEN_CONNS", "25")
+	t.Setenv("APP__POSTGRES__MIN_IDLE_CONNS", "2")
+
 	t.Setenv("APP__POSTGRES__ENABLED", "false")
 	_, _, err = LoadDetailed(LoadOptions{})
 	if !errors.Is(err, ErrValidate) || !strings.Contains(err.Error(), "outbox.enabled requires postgres.enabled") {

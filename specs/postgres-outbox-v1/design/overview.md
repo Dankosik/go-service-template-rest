@@ -284,8 +284,10 @@ duplicate. No statement deletes an unfinished row.
   The relay supplies the chosen interval; PostgreSQL supplies absolute time.
 - `errors.Is(err, ErrPermanentPublication)` poisons immediately. Timeout,
   disconnect, cancellation, and ambiguous acknowledgement are retryable unless
-  process shutdown owns cancellation. Claim 10 ends the delivery cycle as
-  poison. Only bounded class enums are stored/labelled.
+  process shutdown owns cancellation. Claim 10 ends the delivery cycle as poison
+  only when `errors.Is(err, ErrPublicationNotAccepted)` proves the broker
+  refused the event; an unproven failure keeps retrying rather than risking
+  loss at the cap. Only bounded class enums are stored/labelled.
 - `Redrive(ctx, id, auditID)` is one transaction: resolve an existing audit ID
   idempotently, otherwise lock a poison row, insert the retained audit record,
   clear poison/error/lease, reset cycle attempts and availability, increment
@@ -337,7 +339,9 @@ type Publisher interface {
 ```
 
 Nil is valid only after durable broker acknowledgement for `Event.ID`.
-`ErrPermanentPublication` is the one optional classification seam. The pack
+`ErrPermanentPublication` and `ErrPublicationNotAccepted` are the two optional
+classification seams: the first refuses an occurrence outright, the second
+proves a retryable refusal that the attempt cap may poison. The pack
 ships no implementation. `cmd/outbox-relay/main.go` deliberately passes no
 builder; bootstrap rejects it before config/dependency mutation. A derived
 service supplies a builder from its chosen transport package. No noop, logging,
@@ -512,7 +516,7 @@ messaging removal sets so either absent capability physically removes it.
 | Responsibility | File / shape | Dependency and authority |
 | --- | --- | --- |
 | Immutable envelope, validation, ID helper | `event.go` | Concrete `Event`; `NewID` uses `crypto/rand.Text`; no domain event definitions |
-| Consumer boundary | `publisher.go` | One-method `Publisher`; `ErrPermanentPublication`; no implementation |
+| Consumer boundary | `publisher.go` | One-method `Publisher`; `ErrPermanentPublication`; `ErrPublicationNotAccepted`; no implementation |
 | Append/claim/progress/redrive/cleanup/observe | `store.go` | Concrete `Store` over existing `*postgres.Pool`; append accepts `pgx.Tx`; sqlc is generated query authority |
 | One-at-a-time loop, retry/drain/crash handling | `relay.go` | Public composition accepts concrete `*Store` and consumer-owned `Publisher`; an unexported store contract is the deterministic fault seam; no clock/factory interface |
 | Bounded metrics/logging snapshot | `telemetry.go` | Existing OTel meter/slog; callbacks read memory only |

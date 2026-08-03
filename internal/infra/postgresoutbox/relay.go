@@ -264,7 +264,7 @@ func (r *Relay) publish(ctx context.Context, claim ClaimedEvent) publishResult {
 	case errors.Is(published.err, ErrPermanentPublication):
 		poisonClass = "publisher_permanent"
 		err = r.store.MarkPoisoned(ctx, claim.Event.ID, claim.Token, poisonClass)
-	case claim.CycleAttemptCount >= r.config.MaxAttempts:
+	case errors.Is(published.err, ErrPublicationNotAccepted) && claim.CycleAttemptCount >= r.config.MaxAttempts:
 		poisonClass = "attempt_exhausted"
 		err = r.store.MarkPoisoned(ctx, claim.Event.ID, claim.Token, poisonClass)
 	default:
@@ -450,6 +450,8 @@ func publicationErrorClass(err error) string {
 	switch {
 	case errors.Is(err, ErrPermanentPublication):
 		return "publisher_permanent"
+	case errors.Is(err, ErrPublicationNotAccepted):
+		return "publisher_rejected"
 	case errors.Is(err, context.DeadlineExceeded):
 		return "publisher_timeout"
 	case errors.Is(err, context.Canceled):

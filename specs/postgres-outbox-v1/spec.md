@@ -162,9 +162,12 @@ Only the relay retries publication. The default policy is:
   leaves the lease to expire.
 
 Validation/topology/authentication/authorization or adapter-declared permanent
-failures become poison immediately. Other failures retry until the attempt
-limit. Exhaustion becomes durable poison; it is not delivery and is never
-deleted automatically.
+failures become poison immediately. An adapter-proven non-acceptance retries
+until the attempt limit; exhaustion becomes durable poison, which is not
+delivery and is never deleted automatically. A failure the adapter cannot prove
+was a refusal stays ambiguous and remains retryable past that limit, because
+capping attempts on an unknown outcome can drop an event the broker never
+received.
 
 Redrive is an explicit operator-owned transition identified by a required
 unique audit ID. It preserves the event ID and envelope, records redrive count,

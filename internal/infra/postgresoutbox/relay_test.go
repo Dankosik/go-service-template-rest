@@ -358,12 +358,18 @@ func TestRelayPublicationDispositions(t *testing.T) {
 		storeErr     error
 		wantPoison   string
 		wantRetry    string
+		wantDelay    time.Duration
 		wantStateErr bool
 	}{
-		{name: "temporary retry", publishErr: errors.New("temporary"), attempt: 1, wantRetry: "publisher_temporary"},
+		{name: "temporary retry", publishErr: errors.New("temporary"), attempt: 1, wantRetry: "publisher_temporary", wantDelay: time.Second},
 		{name: "permanent poison", publishErr: ErrPermanentPublication, attempt: 1, wantPoison: "publisher_permanent"},
-		{name: "exhausted poison", publishErr: errors.New("temporary"), attempt: 3, wantPoison: "attempt_exhausted"},
-		{name: "state failure", publishErr: errors.New("temporary"), attempt: 1, storeErr: errors.New("write failed"), wantRetry: "publisher_temporary", wantStateErr: true},
+		{name: "rejected retry", publishErr: ErrPublicationNotAccepted, attempt: 1, wantRetry: "publisher_rejected", wantDelay: time.Second},
+		{name: "rejected exhaustion poison", publishErr: ErrPublicationNotAccepted, attempt: 3, wantPoison: "attempt_exhausted"},
+		// An ambiguous failure never proves the broker refused the event, so the
+		// attempt cap must not trade possible loss for a bounded retry count.
+		{name: "ambiguous exhaustion retries", publishErr: errors.New("temporary"), attempt: 3, wantRetry: "publisher_temporary", wantDelay: 4 * time.Second},
+		{name: "timeout exhaustion retries", publishErr: context.DeadlineExceeded, attempt: 3, wantRetry: "publisher_timeout", wantDelay: 4 * time.Second},
+		{name: "state failure", publishErr: errors.New("temporary"), attempt: 1, storeErr: errors.New("write failed"), wantRetry: "publisher_temporary", wantDelay: time.Second, wantStateErr: true},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -377,8 +383,8 @@ func TestRelayPublicationDispositions(t *testing.T) {
 				},
 				scheduleRetry: func(_ context.Context, _, _, class string, delay time.Duration) error {
 					retryClass = class
-					if delay != time.Second {
-						t.Errorf("retry delay = %s, want 1s", delay)
+					if delay != test.wantDelay {
+						t.Errorf("retry delay = %s, want %s", delay, test.wantDelay)
 					}
 					return test.storeErr
 				},
