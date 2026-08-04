@@ -1,15 +1,14 @@
 # Reference Selector
 
-Load at most one reference by default; load more only for independent pressures.
+Load at most one reference by default; load more only for an independent pressure.
 
-| Pressure | Load |
-| --- | --- |
-| Current Go or stdlib may replace a helper, dependency, or old idiom. | [stdlib-first-modern-go.md](stdlib-first-modern-go.md) |
-| Helpers, interfaces, package moves, exports-for-tests, or repeated policy affect ownership. | [helper-extraction-and-package-ownership.md](helper-extraction-and-package-ownership.md) |
-| Decoding, limits, unknown fields, normalization, or validation order changes. | [boundary-decoding-and-validation.md](boundary-decoding-and-validation.md) |
-| Wrapped errors, cancellation, transport mapping, or log-and-return behavior changes. | [errors-context-and-boundary-mapping.md](errors-context-and-boundary-mapping.md) |
-| Bodies, rows, files, transactions, cursor errors, or post-commit effects change. | [resource-lifetime-io-and-transactions.md](resource-lifetime-io-and-transactions.md) |
-| Slices, maps, bytes, snapshots, caches, nil/empty shape, or mutex-bearing values cross owners. | [mutable-state-aliasing.md](mutable-state-aliasing.md) |
-| Goroutines, channels, fan-out, worker pools, shutdown, timers, or tickers change. | [concurrency-and-background-work.md](concurrency-and-background-work.md) |
-| Tests, fuzzing, clocks, randomness, failure messages, or verification shape changes. | [testing-verification-patterns.md](testing-verification-patterns.md) |
-| OpenAPI, sqlc, protobuf, mocks, generated files, config, or mirrors change. | [generated-source-of-truth-and-drift.md](generated-source-of-truth-and-drift.md) |
+| Pressure | Load | Required effect |
+| --- | --- | --- |
+| An OpenAPI, SQL, or protobuf source, its generated output, or a drift-check failure changes. | [generated-source-of-truth-and-drift.md](generated-source-of-truth-and-drift.md) | Edit the canonical source, run that source's `*-generate`, and prove with its `*-check` — instead of hand-editing generated Go or treating the drift check as the generator. |
+| The change adds a file, moves code, or the obvious edit site would need a new import. | [earliest-owner-and-import-direction.md](earliest-owner-and-import-direction.md) | Land the change in the package `depguard` already lets import what it needs — instead of at the file where the symptom appeared. |
+| Adjacent code looks modernizable, or a stdlib call could replace a local helper. | [gates-and-policy-ownership.md](gates-and-policy-ownership.md) | Leave mechanical idiom to `make lint` and `modernize-check`, and check a suggested swap against the policy the old code carried — instead of widening the diff or dropping a semantic. |
+
+Errors, context, nil/zero, receivers, aliasing, and resource lifetime belong to
+`go-idiomatic`; goroutines, channels, and shutdown to `go-concurrency`; test
+shape and oracles to `go-test-implementation`. The phase composes those as review
+lenses over the same diff, so this selector does not restate them.

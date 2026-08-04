@@ -3,10 +3,10 @@
 Review the fixed candidate through one kernel:
 reconstruct -> falsify -> disposition -> verdict.
 
-Apply the shared [Review
-Independence](../shared/subagents-and-handoff.md#review-independence) contract.
-That shared contract owns review triggering, the generic finding envelope,
-verdict semantics, convergence, read-only boundaries, and return routing. This
+Apply the shared [Review Independence](../shared/review-independence.md) trigger
+and [Subagents And Review](../shared/subagents-and-handoff.md) contract. Those
+shared owners provide the generic finding envelope, verdict semantics,
+convergence, read-only boundaries, and return routing. This
 file owns only Specification-specific affected-surface reconstruction,
 falsifiers, evidence anchors, and completion coverage.
 

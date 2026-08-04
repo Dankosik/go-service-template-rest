@@ -1,0 +1,55 @@
+# Proving Layer And Oracle
+
+## Behavior Change Thesis
+When loaded to turn an approved obligation into a Go test, this file makes the
+model choose an oracle it could have written from the behavior statement alone —
+the common defect is an assertion read back off the implementation (the cache key
+it builds, the SQL text it emits, the message it formats), which passes while the
+behavior is wrong and fails when a refactor leaves the behavior intact.
+
+## When To Load
+Symptom: an approved requirement, invariant, review finding, or bug report has to
+become named Go tests, or the layer that should carry the proof is unsettled.
+
+## Decision Rubric
+- Name the observable before the package: returned value, persisted row, response
+  status and body, count of effects performed, wrapped error category, or a
+  goroutine that exited. The observable picks the layer, never the reverse.
+- Two questions disqualify an oracle. Could this assertion have been written from
+  the approved behavior alone, without reading the implementation? If not it is
+  derived, and it restates the code instead of judging it. Can you name a wrong
+  implementation that still passes? If yes it is loose — `err != nil`,
+  `code >= 400`, and a non-empty slice all accept outcomes the contract rejects.
+- Prove duplicate-request semantics through the identity returned and the number
+  of effects performed, not the reservation key, fingerprint, or row the current
+  code happens to use.
+- Put the proof where the behavior is owned. What an engine produces — lock
+  exclusion, `ORDER BY`, constraint violation, mux routing — is invisible through
+  a fake of that engine, so the test passes having proved nothing; see
+  [postgres-integration-proof.md](postgres-integration-proof.md). What Go code
+  owns — mapping, wrapping, validation, suppression — needs no container, and
+  paying for one buys latency rather than evidence.
+- Reach for a fuzz target when the oracle is an invariant over generated input —
+  a parser, decoder, or validator — rather than over cases you can name, as
+  `FuzzParseDuration` and `FuzzStrictToken` already do here.
+- Missing exactness is an escalation, not a blank to fill. A status code, cache
+  key, tenant rule, or retry policy the approved behavior never named stays
+  unasserted; inventing one freezes a decision nobody made.
+- Isolation for `t.Parallel()` is the judgment no gate makes. The mechanical
+  cases fail loudly — `t.Setenv` panics in a parallel test — while a package-level
+  fake, a shared fixture, or a fixed port fails quietly and only under load.
+
+## Reject
+- Whole-struct equality where a few fields are contractual: it breaks on
+  timestamps and added fields, and names none of them as the reason.
+- A name like `TestCreate` over one stating condition and outcome: the failure
+  line then reports which call broke, not which behavior regressed.
+
+## Validation Shape
+- Run the named test with `-count=1 -vet=off`, matching the repository's own test
+  commands and leaving vet to `make lint`.
+- Add the package command when helpers, fixtures, or shared setup changed.
+- A plain `go test` run over a fuzz target executes the seed corpus only, so it
+  proves the seeds and not exploration; `make test-fuzz-smoke` is the bounded run
+  that explores.
+- Report the observable each test rejects. A count of added tests is not evidence.

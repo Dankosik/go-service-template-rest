@@ -1,13 +1,16 @@
 # Reference Selector
 
-State which gRPC-specific decision or violated contract the selected reference
-changes.
+Each row names a pressure where this repository's own wiring overrides the
+obvious gRPC answer. State the expected behavior change before loading.
+
+Server composition, interceptor order, streaming cardinalities and concurrency,
+client channel construction and propagation, health and drain, transport limits,
+and telemetry have no reference here. [docs/grpc.md](../../../../docs/grpc.md) owns
+them with the current code, and `internal/infra/grpc` plus
+`internal/infra/grpcclient` are the authorities it describes. Adding a reference
+back requires a decision it would change.
 
 | Pressure | Load | Required effect |
 | --- | --- | --- |
-| `.proto` authority, Editions/API level, generated Go, Buf format/lint/generate/breaking, or source compatibility | [contracts-and-codegen.md](contracts-and-codegen.md) | Preserve one canonical schema owner and prove both wire and generated-source compatibility. |
-| Unary/stream interceptors, status provenance, auth policy, recovery, metadata, health semantics, or registration | [server-protocol.md](server-protocol.md) | Separate protocol-, policy-, handler-, and unexpected-error ownership on every affected server path. |
-| Target/resolver behavior, credentials, `grpc.NewClient`, connection ownership, retries, `WaitForReady`, or TLS identity | [client-channel.md](client-channel.md) | Make channel construction, connectivity, replay, and security ownership explicit. |
-| Cardinalities, EOF/half-close, cancellation, concurrent read/write, flow control, or aggregate memory | [streaming.md](streaming.md) | Bound application work and prove the exact stream concurrency and termination contract. |
-| Startup, readiness, standard health, admission, drain, `GracefulStop`, `Stop`, or shutdown budget | [lifecycle-and-health.md](lifecycle-and-health.md) | Define one observable lifecycle whose stop API returns within its accepted budget. |
-| Message/metadata/connection limits, OpenTelemetry, cardinality, `bufconn`, loopback TCP, process, or ingress proof | [operability-and-proof.md](operability-and-proof.md) | Match each production claim to a boundary-level falsifier of equal scope. |
+| A new or changed RPC failure path, a status a caller says is wrong, or a claim about the code and detail the client observes | [status-and-error-mapping.md](status-and-error-mapping.md) | Publish the failure through the problem catalog and `DomainErrors()` instead of a handler `status.Error` that collapses to `INTERNAL`. |
+| A `.proto` added, changed, moved, or removed, or a compatibility claim resting on the protobuf gates | [proto-contract-gates.md](proto-contract-gates.md) | Name what `proto-check` and `proto-breaking` actually compared, and hand-argue the rest. |

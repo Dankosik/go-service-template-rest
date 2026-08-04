@@ -19,9 +19,34 @@ Own the falsification strategy for risky accepted behavior before implementation
 
 Run this universal kernel before applying any conditional branch:
 
-1. Reconstruct the material proof-obligation surface independently from the ready spec/design, carried risks, and affected current boundaries. Map every material acceptance claim, invariant, deliberately preserved behavior, and carried risk to its observable results, state transitions, failure/recovery behavior, regressions, and protected side effects. Scan each affected boundary for triggered negative/failure, retry/replay/async, compatibility, concurrency/lifecycle, security/money, data/migration, performance, and rollout obligations; omission from an upstream artifact is not evidence that a lens is untriggered. Close a triggered lens only with an obligation or an inspected current-boundary anchor showing that it contributes none. Record only decision-relevant exclusions. Test names, package boundaries, and implementation structure may locate proof but do not define obligations.
+1. Reconstruct the material proof-obligation surface independently from the
+   ready spec/design, carried risks, and affected current boundaries:
+   - map every material acceptance claim, invariant, deliberately preserved
+     behavior, and carried risk to its observable results, state transitions,
+     failure/recovery behavior, regressions, and protected side effects;
+   - scan each affected boundary for triggered negative/failure,
+     retry/replay/async, compatibility, concurrency/lifecycle, security/money,
+     data/migration, performance, and rollout obligations; omission from an
+     upstream artifact is not evidence that a lens is untriggered;
+   - close a triggered lens only with an obligation or an inspected
+     current-boundary anchor showing that it contributes none, and record only
+     decision-relevant exclusions.
+
+   Test names, package boundaries, and implementation structure may locate
+   proof but do not define obligations.
 2. Give each proof obligation exactly one current disposition: sufficient existing proof; existing proof to strengthen; one or more `TD-*` scenarios; a named non-test falsifier; or explicitly authorized residual-risk acceptance with evidence, owner, and reopen condition. Omission is not disposition.
-3. For every non-residual disposition, satisfy the falsifier contract: name the plausible incorrect observable behavior or regression; control the setup and action or fault trigger; derive the expected result from accepted authority independent of the production path under test; and choose the narrowest complementary proof boundary plus a full runnable command, or an exact non-command procedure when automation cannot establish the oracle. The oracle must change verdict when the named wrong behavior occurs. Treat an internal interaction as the observable only when it is itself the accepted boundary.
+3. For every non-residual disposition, satisfy the **falsifier contract**:
+   - name the plausible incorrect observable behavior or regression;
+   - control the setup and action or fault trigger;
+   - derive the expected result from accepted authority independent of the
+     production path under test;
+   - choose the narrowest complementary proof boundary plus a full runnable
+     command, or an exact non-command procedure when automation cannot establish
+     the oracle.
+
+   The oracle must change verdict when the named wrong behavior occurs. Treat an
+   internal interaction as the observable only when it is itself the accepted
+   boundary.
 
 ### Conditional Branches
 
@@ -69,7 +94,15 @@ When a durable matrix is unnecessary, return a compact inline proof handoff for 
 TD-ID | source claim/risk/preserved behavior/boundary invariant | disposition | plausible wrong observable behavior/regression | controlled setup; action or fault trigger; discriminating oracle, or authorized residual-risk acceptance | narrowest complementary proof boundary/type; full repository-native command that will execute the proof after implementation, or exact non-command procedure and why automation cannot establish the oracle | required fixture/input, canonical source, and status | proof owner; Planning placement constraint; reopen owner
 ```
 
-For every executable disposition, give the full command and name the exercised path and oracle that make its result dispositive. Record every required fixture or proof input as existing from a named source, behavior-significant and derived from approved authority, decision-neutral and specified under the rule below, or unavailable from a named owner; for an unavailable input, record the affected obligation and reopen condition. Add current-proof gaps, scenario classes, fail-before discriminators, non-test proof details, and residual-risk details only when triggered.
+For every executable disposition, record its completed falsifier contract,
+including the full command, exercised path, and oracle that make the result
+dispositive. Record every required fixture or proof input as existing from a
+named source, behavior-significant and derived from approved authority,
+decision-neutral and specified under the rule below, or unavailable from a
+named owner; for an unavailable input, record the affected obligation and
+reopen condition. Add current-proof gaps, scenario classes, fail-before
+discriminators, non-test proof details, and residual-risk details only when
+triggered.
 
 Choose the smallest set of complementary proof boundaries that jointly proves the claim: unit, integration, contract, component/process, e2e smoke, or a repository-specific proof type. Each level owns a distinct observable; broader proof does not merely duplicate narrower proof. Include happy path, material failure/edge/negative paths, and protected-domain branches only when triggered by the accepted change.
 
@@ -97,6 +130,15 @@ When test design owns that review, findings return to the owning root for dispos
 
 Continue to Planning only after a bidirectional closure check: every material acceptance claim, deliberately preserved behavior, carried risk, affected-boundary invariant, and triggered proof lens maps to one final disposition, and every disposition maps back to one of those sources. A lens exclusion requires an inspected current-boundary anchor; upstream omission does not close it.
 
-Every non-residual disposition must satisfy the falsifier contract in Method and record its proof carrier, full command or bounded non-command procedure, fixture/input source and availability, proof owner, Planning placement constraint, and reopen owner. Existing proof counts only after the required path-and-oracle inspection. Residual-risk acceptance records authorization evidence, owner, and reopen condition. Planning may choose order and placement only; it must not invent a plausible wrong behavior, scenario, setup or trigger, oracle, proof boundary or level, command or procedure, fixture or input, or proof or reopen owner. A mandatory proof with an unavailable input is `FAIL`; any triggered review has returned `PASS` or its `CONCERNS` are dispositioned.
+Every non-residual disposition must satisfy the falsifier contract and contain
+every applicable proof-carrier, command or bounded procedure, fixture/input,
+owner, Planning-placement, and reopen field required by Outputs. Existing proof
+counts only after the required path-and-oracle inspection. Residual-risk
+acceptance records authorization evidence, owner, and reopen condition.
+Planning may choose order and placement only; it must not invent a plausible
+wrong behavior, scenario, setup or trigger, oracle, proof boundary or level,
+command or procedure, fixture or input, or proof or reopen owner. A mandatory
+proof with an unavailable input is `FAIL`; any triggered review has returned
+`PASS` or its `CONCERNS` are dispositioned.
 
 Reopen Specification or Design when closure would require deciding behavior, failure policy, ownership, migration or rollout policy, or another accepted upstream rule.

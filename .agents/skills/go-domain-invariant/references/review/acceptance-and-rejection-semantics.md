@@ -1,42 +1,26 @@
 # Acceptance And Rejection Semantics
 
 ## Behavior Change Thesis
-When loaded for symptom "code changed whether a command is accepted, rejected, ignored, or already applied", this file makes the model preserve deterministic business semantics instead of likely mistake "comment on error style or validation placement generically."
-
-## When To Load
-Load this when a review touches command handlers, validation placement, domain errors, no-op behavior, duplicate handling, event consumers, request acceptance, rejection paths, or code that changes whether the system treats input as accepted, rejected, ignored, or already applied.
+When loaded for symptom "the diff changed whether input is accepted, rejected, ignored, or already applied", this file makes the model preserve the exact accepted meaning instead of likely mistake "comment on error style or validation placement while a hard rejection silently becomes a successful no-op."
 
 ## Decision Rubric
-- Acceptance is domain behavior: success must mean the operation was accepted or was already accepted by explicit contract.
-- Report a finding when the diff reports success for a forbidden command, rejects an approved command, converts a hard rejection into a silent no-op, or changes deterministic domain errors in a way that alters business meaning.
-- Separate commands from events: commands may be rejected; events are facts whose local policy may be ignore, quarantine, compensate, or investigate.
-- Escalate when the approved contract does not say whether duplicate or stale input is success, rejection, no-op, or asynchronous handling.
-
-## Imitate
-```text
-[high] [go-domain-invariant] internal/applications/service.go:57
-Issue:
-The approved lifecycle makes `rejected` terminal, but `Approve` now returns `nil` when `StatusRejected` is present. That converts a forbidden approval command into a successful no-op instead of a deterministic rejection.
-Impact:
-Callers and audit logs can record the approval command as successful even though the application remained rejected, hiding failed manual review and breaking downstream obligation tracking.
-Suggested fix:
-Return the existing terminal-state domain error before any success path, and keep duplicate-success behavior only for states the local contract explicitly marks idempotent.
-Reference:
-Local application lifecycle spec or tests for terminal rejection.
-```
-
-Copy the shape: accepted/rejected/ignored classification, changed observable result, caller or audit consequence.
+- Success must mean the operation was accepted, or was already accepted by an explicit contract. A finding exists when the diff reports success for a forbidden command, rejects an approved one, converts a rejection into a silent no-op, or changes a deterministic domain error so callers read a different business result.
+- Commands and events are different: a command may be rejected; an event is a fact whose local policy is ignore, quarantine, compensate, or investigate. Rejecting an event as though it were a command discards a fact that already happened.
+- Vocabulary that separates outcomes is part of the contract. `cancelled` and `expired`, `owner` and `creator`, `authorized` and `captured`, `available` and `reserved` are distinctions a rename can collapse; a finding needs the local rule that reads them differently, not a preference. Readability-only naming goes to `go-language-simplifier`, exported-API naming to `go-idiomatic`.
+- Ask what a caller, an audit reader, or a support workflow would now believe. That reading is the impact; the changed line is only the anchor.
+- Keep a no-op where the accepted behavior makes duplicate commands idempotent success, and keep the local error convention the surrounding code already establishes.
+- Escalate when the accepted contract never says whether duplicate or stale input is success, rejection, no-op, or asynchronous — that is a missing decision, not a review finding.
 
 ## Reject
 ```text
-[low] internal/applications/service.go:57
 This should return a better error.
 ```
+Failure: no acceptance rule named and no business consequence, so nothing distinguishes it from taste.
 
-Failure: this does not name the acceptance rule or why the changed result matters to the business.
+```text
+`ReservedCredit` would be a clearer name than `AvailableCredit`.
+```
+Failure: a naming preference unless a local rule treats reserved credit as unavailable. With that rule cited, the same line becomes a double-spend finding.
 
-## Agent Traps
-- Do not demand exceptions instead of result errors, or result errors instead of exceptions, unless local code already defines that contract.
-- Do not flag a no-op as wrong when the approved behavior says duplicate commands are idempotent success.
-- Do not reject domain events merely because their payload is surprising; review the local event policy.
-- Do not invent a validation rule from field names alone when no local source supports business rejection.
+## Validation Shape
+The finding is complete when it classifies the result as accepted, rejected, ignored, or already applied both before and after the diff, and names the caller or audit consequence of the difference.

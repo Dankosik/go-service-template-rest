@@ -80,16 +80,22 @@ its wording yet differ in a user- or operator-visible result. Resolve every such
 divergence from current authority or evidence, a Specification-owned decision,
 or a bounded assumption with an objective reopen condition.
 
-A material rule is complete when it fixes every interpretation-changing part
-of: actor and context; trigger and input; preconditions; normative rule,
-invariant, and precedence; states and allowed transitions; observable outcome
-and contract delta; applicable normal, rejection, absence, duplication, replay,
-failure, and recovery behavior; side effects required, forbidden, or already
-possible at each observable outcome; deliberately unchanged behavior; and the
-nearest feasible falsifier or proof expectation. Omit a part only when current
-evidence shows it cannot change interpretation. Define decision-changing terms,
-units, bounds, default or no-match behavior, and terminal behavior. Use stable
-rule IDs only when multiple owners or downstream artifacts need them.
+A material rule satisfies the **material-rule contract** only when it fixes
+every interpretation-changing part:
+
+- actor and context, trigger and input, and preconditions;
+- normative rule, invariant, precedence, states, and allowed, invalid,
+  repeated, and terminal transitions;
+- observable outcome and contract delta across applicable normal, boundary,
+  rejection, absence, duplication, replay, failure, recovery, and compatibility
+  behavior;
+- side effects required, forbidden, or already possible at each observable
+  outcome, plus deliberately unchanged behavior;
+- decision-changing terms, units, bounds, and default or no-match behavior;
+- the nearest feasible falsifier or proof expectation.
+
+Omit a part only when current evidence shows it cannot change interpretation.
+Use stable rule IDs only when multiple owners or downstream artifacts need them.
 
 When source-of-truth semantics are triggered, state which fact is authoritative,
 which observations are derived, what absence, currentness, and finality mean,
@@ -131,23 +137,18 @@ realization permitted by the spec is behaviorally equivalent:
 - each accepted intent and decision-changing evidence implication is closed as
   a traceable, falsifiable behavioral rule grounded in accepted intent, current
   evidence or a named authority, or an explicit Specification-owned decision
-  with rationale; otherwise it is an explicit unchanged or non-goal
+  with rationale, and passes the material-rule contract and two-implementation
+  divergence test; otherwise it has an explicit unchanged or non-goal
   disposition, or a blocker owned by the user or a named external owner;
-- every material rule passes the completeness and two-implementation divergence
-  tests in Method, including every triggered normal, boundary, rejection,
-  absence, duplication, replay, failure, recovery, compatibility, and
-  deliberately unchanged outcome;
-- interacting rules define precedence and default or no-match behavior, and
-  lifecycle rules define allowed, invalid, repeated, and terminal transitions;
-- source-of-truth semantics define authoritative and derived facts plus material
-  absence, currentness, finality, and conflict behavior rather than merely
+- triggered source-of-truth semantics satisfy the authority, absence,
+  currentness, finality, and conflict contract in Method rather than merely
   naming a source;
 - changed, removed, compatible, and deliberately unchanged behavior is explicit,
   and non-goals do not hide required target-state work;
 - each success criterion names its observable scope and pass/fail condition;
   numeric targets appear only when supported by accepted authority or evidence;
-- each proof expectation names the nearest feasible falsifier and evidence
-  boundary without selecting an implementation mechanism;
+- each proof expectation names its evidence boundary without selecting an
+  implementation mechanism;
 - each assumption names the affected rule, safe boundary, objective invalidating
   evidence, reopen owner, and reopen condition;
 - every materially triggered lens has the decision, unchanged constraint, or
@@ -174,8 +175,8 @@ section or decision.
 Apply focused root self-review. Run independent [Specification
 Review](specification-review.md) only when the shared review trigger applies.
 
-Use the shared [Review
-Independence](../shared/subagents-and-handoff.md#review-independence) contract for
+Use the shared [Review Independence](../shared/review-independence.md) trigger and
+the loaded Subagents And Review contract for
 disposition, repair, and convergence.
 
 ## Stop Rule

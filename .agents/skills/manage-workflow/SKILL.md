@@ -23,9 +23,12 @@ Select one current owner and read only its instruction:
 - authorized change and proof: [Implementation](../../../docs/spec-first-workflow/phases/implementation-validation-closeout.md)
 
 Load the [Artifact Model](../../../docs/spec-first-workflow/shared/artifact-model.md)
-only for persistence or resume, [Subagents and Handoff](../../../docs/spec-first-workflow/shared/subagents-and-handoff.md)
-only for triggered review, delegation, or handoff, and
-[Agent Harness](../../../docs/agent-harness.md) only for a native control.
+only for persistence or resume, [Subagents and Review](../../../docs/spec-first-workflow/shared/subagents-and-handoff.md)
+only for non-implementation delegation or review, [Review Independence](../../../docs/spec-first-workflow/shared/review-independence.md)
+only to decide a fixed review boundary, [Implementation Review](../../../docs/spec-first-workflow/shared/implementation-review.md)
+only for its fixed-unit branch, [Resume and Handoff](../../../docs/spec-first-workflow/shared/resume-and-handoff.md)
+only for context rollover or a real actor or macro-phase boundary, and [Agent
+Harness](../../../docs/agent-harness.md) only for a native control.
 Apply independently triggered domain skills directly.
 
 The read set is complete only when every file required before the next governed

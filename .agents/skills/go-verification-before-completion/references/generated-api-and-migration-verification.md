@@ -1,42 +1,59 @@
 # Generated API And Migration Verification
 
 ## Behavior Change Thesis
-When loaded for generated-code, API-contract, sqlc, or migration symptoms, this file makes the model add drift or rehearsal proof instead of treating ordinary tests or a successful compile as evidence that generated artifacts and schema transitions are current.
+
+When loaded for a contract or schema claim, this file fixes what the drift and
+rehearsal targets actually cover, so the conclusion neither stops at "handler
+tests pass" nor stretches a green rehearsal into a claim about behavior over the
+new schema.
 
 ## When To Load
-Load this when changes touch OpenAPI specs, generated API code, sqlc output, SQL queries, migration files, migration-backed schema behavior, or runtime API contract tests.
+
+Load this when the claim depends on an OpenAPI spec, generated API or sqlc
+output, a SQL query, or a migration.
 
 ## Decision Rubric
-- Generated artifacts require drift proof because stale generated files can still compile and tests can still pass.
-- OpenAPI contract readiness usually needs `make openapi-check`, not just handler tests.
-- Add `BASE_OPENAPI=/path/to/base.yaml make openapi-breaking` only when compatibility against a base spec is part of the claim.
-- SQL query or migration changes need `make sqlc-check` when generated sqlc output may change.
-- Migration changes need an actual migration rehearsal, or an explicit proof gap when Docker is unavailable.
-- Migration-backed behavior usually needs both rehearsal proof and affected data-access or integration tests.
-- If a drift check modifies files or reports drift, the clean claim is not verified until artifacts are reconciled and the check reruns cleanly.
 
-## Imitate
-| Claim | Choose | Copy this behavior |
-|---|---|---|
-| "OpenAPI generated code is current" | `make openapi-check` | Use the repo composite for generation, drift, runtime contract, lint, and validation. |
-| "Runtime API contract is green" | `make openapi-runtime-contract-check` or `go test ./internal/infra/http -run '^TestOpenAPIRuntimeContract' -count=1` | Use the narrow runtime contract target when only runtime contract wiring is claimed. |
-| "API change is ready" | focused API/handler tests plus `make openapi-check`; add `make openapi-breaking` only when compatibility is in scope | Combine behavior proof with generated-contract proof. |
-| "sqlc output is current" | `make sqlc-check` | Check generated query drift and stale generated query stems. |
-| "Migration rehearsal passed" | `make migration-validate` | Verify that the command created its disposable Compose database and rehearsed `up all -> down all -> up all`. |
+`go-coder`'s generated-source reference owns which file is canonical and which
+command regenerates it, including the fact that a `*-check` target regenerates in
+place and leaves the rewritten files in your tree. What matters for the claim is
+the boundary of each proof:
+
+- `make openapi-check` is drift, reference compile, runtime contract, lint, and
+  validation. It says nothing about **compatibility with the previous spec** —
+  that is `make openapi-breaking BASE_OPENAPI=…`, which errors out without the
+  base, and which `make pr-check BASE_REF=…` supplies by extracting the base spec
+  from git. Add it only when the claim is about not breaking existing clients.
+- `make sqlc-check` catches generated output that no longer matches its queries,
+  including output left behind after its sources were removed. Data-access tests
+  pass over stale generated files, so they cannot stand in for it.
+- The reversal rehearsal is not exclusive to `migration-validate`.
+  `TestPostgresMigrateRepositorySourceRehearsal` in `./test` runs up, up again
+  (asserting the second is a no-op), down to zero, and up again over the live
+  `migrations/` corpus — and `test-integration` runs `./test/...` unfiltered, so a
+  green integration run already covers reversal. What `migration-validate` adds is
+  the production image: it runs that image's `/migrate` entrypoint against a
+  disposable Compose Postgres and requires the container to reach `/health/ready`,
+  report the expected version, and exit 0 on SIGTERM. Cite it for a
+  *deployable-migration* claim, not merely a reversible-schema one.
+- Neither proves that repository and domain code behave correctly over the new
+  schema. That is a separate result from the tests covering the affected surface.
+- The rehearsal skips itself when the repository owns no `migrations/` directory,
+  and `migration-history-check` returns success without comparing anything while
+  `scripts/profiles/` exists (it is authored in place here, so append-only history
+  is a generated-service check). Confirm each one had something to examine before
+  citing it.
 
 ## Reject
-| Plausible bad conclusion | Why it fails |
-|---|---|
-| "OpenAPI is current" after `go test ./internal/openapi` | Unit tests do not prove generated artifact drift, spec lint, spec validation, or runtime contract wiring. |
-| "sqlc is current" after `go test ./internal/infra/postgres/...` | Data-access tests can pass with stale or extra generated files. |
-| "Migration validated" when Docker was unavailable | The destructive rehearsal did not run. |
-| "Migration-backed behavior works" after only migration rehearsal | Rehearsal proves schema transition mechanics, not repository behavior over the new schema. |
 
-## Agent Traps
-- `go generate` is explicit in this repo's make targets. Do not assume `go test` refreshed generated files.
-- `make openapi-check` can fail by producing drift. Treat generated-file modifications as evidence of drift, not success.
-- Docker-backed migration proof is real only when the disposable Compose database was created and the rehearsal actually ran.
-- If command names feel stale, inspect `Makefile` and `docs/build-test-and-development-commands.md`.
+Reject a compile or a passing unit test as evidence about generated artifacts:
+stale generated code compiles and its tests pass, and the linters never see it —
+`.golangci.yml` excludes the generated paths outright. Reject a drift check that
+ended by modifying files as a clean result; the artifacts are reconciled only
+once the check reruns without changing anything.
 
 ## Validation Shape
-Name the generated or migration surface, the drift or rehearsal command, whether drift/skip occurred, and the behavior tests, if any, that prove runtime behavior over that surface.
+
+Name the surface, the drift or rehearsal command and whether it altered files or
+skipped, and — separately — the behavior tests that prove code works over that
+contract or schema. A claim covering both needs both, quoted as two results.

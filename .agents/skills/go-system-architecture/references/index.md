@@ -4,11 +4,18 @@ State which architecture decision the selected reference can change.
 
 | Pressure | Load | Required effect |
 | --- | --- | --- |
-| Boundary/write ownership, shared data, team seams, or package layout is confused with service architecture | [boundary-decomposition-examples.md](boundary-decomposition-examples.md) | Choose invariant and authority boundaries, leaving package placement downstream. |
-| New service-to-service call, internal API, gRPC vs REST/OpenAPI, consumer-class change, or protocol migration | [inter-service-protocol-selection.md](inter-service-protocol-selection.md) | Classify the consumers and choose one canonical protocol; default a new strictly internal synchronous call to gRPC when no accepted requirement or current constraint defeats it. |
-| Modular monolith, separate runtime, or service extraction | [modular-monolith-vs-service-extraction.md](modular-monolith-vs-service-extraction.md) | Apply the complete extraction test. |
-| Request path/queue, saga, orchestration/choreography, or workflow engine | [sync-async-workflow-ownership.md](sync-async-workflow-ownership.md) | Name process owner, pivot, durable state, and completion model before tools. |
-| CQRS, replicas, read service, projection, search, dashboard, export, or aggregator | [read-write-topology-and-projections.md](read-write-topology-and-projections.md) | Preserve write authority and define freshness, bypass, rebuild, and correction. |
-| Provider/webhook vocabulary or ambiguous partner result affects lifecycle | [external-provider-anti-corruption.md](external-provider-anti-corruption.md) | Normalize provider evidence behind a local owner. |
-| Authority move, extraction, mixed versions, canary, shadow, bridge, or rollback boundary | [rollout-and-migration-patterns.md](rollout-and-migration-patterns.md) | Select target authority first and bound transition machinery. |
-| Microservice, distributed-monolith, shared-DB, direct-read, dual-write, retry-storm, fallback, or permanent-shim smell | [architecture-anti-patterns.md](architecture-anti-patterns.md) | Convert the smell into a failure consequence, blocker, risk, or reopen condition. |
+| New service-to-service call, internal API, gRPC vs REST/OpenAPI, consumer-class change, or protocol migration | [inter-service-protocol-selection.md](inter-service-protocol-selection.md) | Classify the consumers, default a new strictly-internal synchronous contract to native gRPC, and decide its Railway exposure and per-neighbor correlation policy. |
+
+Every other architecture pressure has a nearer owner; route to it rather than deciding here.
+
+| Pressure | Owner |
+| --- | --- |
+| Whether a boundary, copy, queue, cell, or region is earned; capacity before topology; the cost a boundary introduces | [capacity-and-topology.md](../../../../docs/universal-disciplines/distributed-system-design/references/capacity-and-topology.md) |
+| Authority, consistency and freshness per operation, outbox, saga, CQRS, partitioning, ordering | [data-and-coordination.md](../../../../docs/universal-disciplines/distributed-system-design/references/data-and-coordination.md) |
+| Deadlines, retry budgets, overload, degradation, failover capacity, retry storms, fallback under load | [resilience-and-load.md](../../../../docs/universal-disciplines/distributed-system-design/references/resilience-and-load.md), then `go-reliability` |
+| Mixed-version coexistence, backfill, cutover, the rollback boundary, temporary writers and their removal condition | [evolution-and-multi-region.md](../../../../docs/universal-disciplines/distributed-system-design/references/evolution-and-multi-region.md); this repository's release window is owned by `go-delivery-platform` and the DDL sequence by [postgres-schema-design](../../../../docs/universal-disciplines/postgres-schema-design/SKILL.md) |
+| External provider, partner webhook, ambiguous third-party outcome, provider vocabulary | [external-api-integration](../../../../docs/universal-disciplines/external-api-integration/SKILL.md) |
+| Which fact is authoritative, projections, exports, search surfaces, retention | `go-data-architecture` |
+| Compensation, pivot, replay, redrive, reconciliation across owners | `go-distributed` |
+| Go package, file, and dependency placement; enforcing a decided boundary in code | `go-implementation-ownership` |
+| This repository's current component boundaries, source-of-truth table, dependency direction, System Neighbors, and extension seams | [repo-architecture.md](../../../../docs/repo-architecture.md) |

@@ -5,6 +5,12 @@ description: "Data architecture: Use for authority, tenant identity, schema evol
 
 # Go Data Architecture
 
+Every datum answers to one **authority**: the single store and writer whose acceptance makes it true, from which every copy, projection, and cache admits being derived.
+
+`authority -> identity and tenancy -> write invariant -> evolution and backfill -> derived surfaces -> retention -> proof`
+
+A derived surface that cannot name its source, lag, and repair path is a second authority waiting to disagree, and retention is a designed lifecycle stage with an owner rather than a response to disk pressure.
+
 Load the [shared specialist contract](../specialist-contract.md). This skill has one decision branch: reconstruct every affected datum, identity, transition, derived surface, and lifecycle from accepted domain meaning, current schemas and stores, writers, readers, and retention paths; trace each to one authority with an enforceable write invariant, evolution path, and physical design. Complete when shared Decision dispositions cover every data authority, forced consequence, and focused proof.
 
-For each pressure that can change the decision, load its [decision selector](references/index.md), then one matching reference by default. Hand business acceptance to `go-domain-invariant`, runtime access/cache behavior to `go-db-cache`, durable recovery to `go-distributed`, and placement to `go-implementation-ownership`.
+[`postgres-schema-design`](../../../docs/universal-disciplines/postgres-schema-design/SKILL.md) owns the modeling itself — invariants into relations, keys and identity, tenant scoping, types, constraints, and the expand-and-contract migration sequence — so load it whenever relations, keys, or constraints must carry the invariant. The [decision selector](references/index.md) holds only what this repository decides differently from that discipline; load one matching reference for a pressure that can change the decision. Hand business acceptance to `go-domain-invariant`, runtime access/cache behavior to `go-db-cache`, durable recovery to `go-distributed`, concurrency mechanism choice to [`concurrency-control`](../../../docs/universal-disciplines/concurrency-control/SKILL.md), and placement to `go-implementation-ownership`.

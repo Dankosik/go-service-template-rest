@@ -1,13 +1,12 @@
 # Reference Selector
 
-Choose references by the domain decision pressure they sharpen.
+Choose the reference by the domain decision pressure it sharpens. Accepted cross-task terms and authority live in `docs/repo-architecture.md#domain-vocabulary` and `#source-of-truth-ownership`; read those before defining a term here.
 
 | Symptom | Load | Decision it sharpens |
 | --- | --- | --- |
-| Terms, actors, authority, or “done” are ambiguous. | [domain-language-and-boundaries.md](domain-language-and-boundaries.md) | Define the local policy boundary before writing rules. |
-| Rules are descriptive or lack ownership and enforcement. | [invariant-register-patterns.md](invariant-register-patterns.md) | Produce falsifiable owner-backed invariants. |
-| Lifecycle, terminal, timeout, or forbidden paths matter. | [state-machine-and-transition-rules.md](state-machine-and-transition-rules.md) | Define legal movement instead of narrating event order. |
-| Acceptance or edge behavior is too vague for proof. | [acceptance-criteria-and-corner-cases.md](acceptance-criteria-and-corner-cases.md) | Make positive, negative, and edge outcomes observable. |
-| A rule lacks behavior for the false case. | [invariant-violation-semantics.md](invariant-violation-semantics.md) | Choose a deterministic violation outcome. |
-| Retry, replay, duplicates, async work, or reconciliation matter. | [idempotency-replay-and-async-domain-rules.md](idempotency-replay-and-async-domain-rules.md) | Define sameness, effect boundaries, and replay policy. |
-| Stable rules need downstream traceability. | [api-data-reliability-test-traceability.md](api-data-reliability-test-traceability.md) | Map invariant IDs to necessary constraints and proof. |
+| Rules read as descriptive prose, or lack an owner, enforcement point, or false case. | [invariant-register-patterns.md](invariant-register-patterns.md) | Write falsifiable owner-backed rows, and choose application ordering or a database constraint by what a concurrent writer can break. |
+| Lifecycle states, terminal states, reopen paths, or invalid moves decide what is legal. | [state-machine-and-transition-rules.md](state-machine-and-transition-rules.md) | Define forbidden movement and terminal policy, not the allowed list alone. |
+| A rule has no stated behavior for its false case. | [invariant-violation-semantics.md](invariant-violation-semantics.md) | Pick one deterministic outcome and fail closed rather than reporting a scoped-empty success. |
+| Retries, duplicates, replay, out-of-order arrival, or effect ordering are in scope. | [idempotency-replay-and-async-domain-rules.md](idempotency-replay-and-async-domain-rules.md) | Define domain sameness and the effect boundary before reaching for a key or dedupe. |
+
+Downstream handoff needs no reference of its own: name the accepted rule, its violation outcome, and its proof, then hand representation to `go-api-contract`, storage authority and constraints to `go-data-architecture`, and durable coordination to `go-distributed`.

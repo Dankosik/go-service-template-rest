@@ -5,10 +5,13 @@ description: "Test strategy: Use for risk scenarios, proof levels, deterministic
 
 # Go Test Strategy
 
-Load the [shared specialist contract](../specialist-contract.md). Reconstruct every accepted proof obligation from approved behavior, design/test handoffs, affected contract, state, trust and lifecycle boundaries, and current proof surfaces. Build one falsifier for each obligation from a scenario, fail-before discriminator, deterministic control and fixtures, independent oracle, proving layer, command, cleanup proof, and reopen condition.
+Proof is designed around **falsifiers**: for every obligation, the scenario that fails on the wrong behavior, the deterministic controls that make it repeatable, and the independent oracle that cannot be fooled by the code under test.
 
-Do not treat source-string presence as behavior; exact text is an oracle only
-when the text itself is the accepted external artifact.
+`risk scenario -> fail-before discriminator -> deterministic controls -> independent oracle -> proving layer -> gate and reopen condition`
+
+A test earns existence through a failure it can catch; determinism is designed with controls and fixtures rather than hoped for; and exact source text is an oracle only when the text itself is the accepted external artifact — string presence otherwise proves nothing about behavior.
+
+Load the [shared specialist contract](../specialist-contract.md). Reconstruct every accepted proof obligation from approved behavior, design/test handoffs, affected contract, state, trust and lifecycle boundaries, and current proof surfaces. Build one falsifier for each obligation from a scenario, fail-before discriminator, deterministic control and fixtures, independent oracle, proving layer, command, cleanup proof, and reopen condition.
 
 ## Choose The Branch
 
