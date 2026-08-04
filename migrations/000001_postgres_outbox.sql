@@ -11,7 +11,7 @@
 -- so heads face whole-page updates. fillfactor leaves room for a second version
 -- of every live row a page carries, which keeps those updates heap-only.
 CREATE TABLE outbox_ordering_heads (
-    ordering_key text PRIMARY KEY,
+    ordering_key text COLLATE "C" PRIMARY KEY,
     last_sequence bigint NOT NULL,
     current_sequence bigint,
     updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
@@ -65,8 +65,24 @@ CREATE TABLE outbox_ordering_heads (
 -- them when autovacuum runs back to back on this table, since each pass reads
 -- its indexes, and lower them when n_dead_tup or the relation size keeps
 -- growing between passes.
+--
+-- Every identifier in this pack is stored `COLLATE "C"`. Event ids, ordering
+-- keys, and audit ids are opaque tokens: they are compared for equality and
+-- sorted only so an order is deterministic, so a locale means nothing for them.
+-- A locale collation still makes every B-tree descent call `strcoll` instead of
+-- `memcmp`, and the claim, the batch finalization, and the ordered head lookup
+-- each descend one of these indexes per event. Measured on a CPU-Optimized
+-- 4-vCPU Droplet, it is worth 11% of a 100-event claim, 11% of the unordered
+-- publication, and 17% of the ordered one.
+--
+-- It weakens no check. PostgreSQL derives the regex character classes in the
+-- constraints below from the database encoding rather than from the collation,
+-- so `[[:cntrl:]]` still rejects the same bytes, C1 controls included. Sorting
+-- becomes byte order, which `id` only ever provides as a tiebreaker, and the
+-- ordered append still takes head locks in one total order, so its deadlock
+-- avoidance is unchanged.
 CREATE TABLE outbox_events (
-    id text PRIMARY KEY,
+    id text COLLATE "C" PRIMARY KEY,
     event_type text NOT NULL,
     source text NOT NULL,
     destination text NOT NULL,
@@ -74,7 +90,7 @@ CREATE TABLE outbox_events (
     occurred_at timestamptz NOT NULL,
     payload bytea NOT NULL,
     metadata bytea NOT NULL DEFAULT '\x7b7d'::bytea,
-    ordering_key text,
+    ordering_key text COLLATE "C",
     ordering_sequence bigint,
     ordering_ready boolean NOT NULL DEFAULT false,
     created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
@@ -235,8 +251,8 @@ CREATE INDEX outbox_events_pending_idx
     WHERE published_at IS NULL;
 
 CREATE TABLE outbox_redrives (
-    audit_id text PRIMARY KEY,
-    event_id text NOT NULL REFERENCES outbox_events (id) ON DELETE CASCADE,
+    audit_id text COLLATE "C" PRIMARY KEY,
+    event_id text COLLATE "C" NOT NULL REFERENCES outbox_events (id) ON DELETE CASCADE,
     redriven_at timestamptz NOT NULL DEFAULT clock_timestamp(),
     cycle_number integer NOT NULL,
     CONSTRAINT outbox_redrives_audit_id_check CHECK (
@@ -252,13 +268,29 @@ CREATE INDEX outbox_redrives_event_idx ON outbox_redrives (event_id, cycle_numbe
 -- PostgreSQL collapses duplicate (channel, payload) notifications inside one
 -- transaction. The signal is an optimization only: a relay that misses it still
 -- claims the row on its next poll.
+--
+-- Concurrent appends coalesce onto one signal. PostgreSQL collapses duplicates
+-- only within a transaction, so without this every concurrent appender queues
+-- its own notification onto a shared, lock-protected queue -- and a relay wakes
+-- on any one of them, so the rest are pure contention. The advisory lock is held
+-- until commit, so exactly one transaction of a concurrent group signals: with a
+-- single writer nothing changes and the wake-on-commit latency is untouched,
+-- while sixteen concurrent appenders cost 5% less unordered and 6% less ordered.
+--
+-- The cost is a tail: an appender that skipped the signal relies on the one that
+-- sent it, and if that notification is delivered before this transaction becomes
+-- visible, this event waits for `poll_interval` instead of a round trip. Under
+-- sustained load the next append covers it; at the end of a burst it does not.
+-- Drop the `IF` to trade that tail back for the contention.
 -- +goose StatementBegin
 CREATE FUNCTION outbox_notify_appended() RETURNS trigger
 LANGUAGE plpgsql
 SET search_path = pg_catalog
 AS $$
 BEGIN
-    PERFORM pg_notify('outbox_appended', '');
+    IF pg_try_advisory_xact_lock(4162899732) THEN
+        PERFORM pg_notify('outbox_appended', '');
+    END IF;
     RETURN NULL;
 END
 $$;

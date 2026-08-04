@@ -190,7 +190,7 @@ func defaultValues() map[string]any {
 		// profile:outbox-postgres:start
 		"outbox.enabled":              false,
 		"outbox.poll_interval":        "500ms",
-		"outbox.batch_size":           100,
+		"outbox.batch_size":           500,
 		"outbox.publish_concurrency":  16,
 		"outbox.publish_timeout":      "10s",
 		"outbox.lease_duration":       "30s",

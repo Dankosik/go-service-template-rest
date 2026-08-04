@@ -279,6 +279,13 @@ PostgreSQL image digest, a fingerprint of `migrations`, and the named
 fixture/workload. The infrastructure check keeps the Testcontainers and
 Compose images identical and digest-pinned.
 
+The Testcontainers PostgreSQL dependency runs with `fsync=off`, which is what
+makes a per-test database affordable. It also means these benchmarks cannot
+measure anything whose cost is a WAL flush: commit durability, `synchronous_commit`,
+`commit_delay`, and group commit all look free here, and every absolute number
+understates a durably configured server. Take such a claim to a server
+configured for durability instead of concluding from this harness.
+
 Use `EXPLAIN (ANALYZE, BUFFERS, WAL, FORMAT JSON)` only as a diagnostic plan
 artifact for a representative query. `EXPLAIN ANALYZE` executes the statement,
 adds measurement overhead, and does not replace the repeated client-visible
