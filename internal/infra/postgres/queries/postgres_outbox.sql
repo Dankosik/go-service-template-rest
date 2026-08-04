@@ -156,9 +156,26 @@ ORDER BY rejected.ordering_key;
 -- index on ready ordered rows keeps at most one claimable event per ordering
 -- key, so a batch never holds two events that must stay ordered relative to
 -- each other.
+--
+-- The update reaches each candidate by the physical address the select already
+-- pinned rather than by its id, which is what keeps a claim proportional to the
+-- batch instead of to the table. Matching on the id leaves the planner to
+-- choose between one index descent per row and a sequential scan of every
+-- retained row, and it takes the scan while the batch is a large enough share
+-- of the estimated rows -- so a claim would cost what the retention window
+-- costs. Measured on 100 claimed events: 4.6 ms against 10,000 retained rows
+-- and 2.3 ms against 210,000, versus 1.6 ms either way here, because a TID scan
+-- reads no index at all and cannot be planned another way.
+--
+-- The address holds only because `FOR UPDATE` holds every candidate row for the
+-- rest of this statement: a locked row cannot be updated or deleted, so it
+-- cannot move. It is valid inside this statement alone, and only while events
+-- live in one table -- partitioning would have to return to the id. The `::tid`
+-- cast is a no-op that lets sqlc, whose catalog carries no system columns,
+-- type the projection.
 -- name: ClaimOutboxEvents :many
 WITH candidate AS (
-    SELECT event.id,
+    SELECT event.ctid::tid AS row_address,
            event.lease_expires_at IS NOT NULL AS recovery_due
     FROM outbox_events AS event
     WHERE event.published_at IS NULL
@@ -178,7 +195,7 @@ SET lease_token = sqlc.arg(lease_token),
     total_attempt_count = event.total_attempt_count + 1,
     last_attempt_at = statement_timestamp()
 FROM candidate
-WHERE event.id = candidate.id
+WHERE event.ctid = candidate.row_address
 -- Projecting the envelope plus the attempt counters keeps decoding proportional
 -- to what the relay publishes and fences on. The lease, retry, terminal, and
 -- redrive columns it would otherwise decode per event are already known to the
@@ -392,9 +409,14 @@ WHERE id = sqlc.arg(id)
   AND poisoned_at IS NOT NULL
   AND published_at IS NULL;
 
+-- Retention deletes reach their rows by the address the locking select pinned,
+-- for the reason the claim does and with the same lock holding it valid. The
+-- batch is a fixed size, while matching on the id costs an index descent per
+-- row against the whole retention window this statement exists to trim: 16.8 ms
+-- against 8.0 ms for 1,000 rows out of 210,000.
 -- name: CleanupPublishedOutboxEvents :execrows
 WITH expired AS (
-    SELECT id
+    SELECT ctid::tid AS row_address
     FROM outbox_events
     WHERE published_at < statement_timestamp()
         - sqlc.arg(retention_milliseconds)::double precision * interval '1 millisecond'
@@ -404,7 +426,7 @@ WITH expired AS (
 )
 DELETE FROM outbox_events AS event
 USING expired
-WHERE event.id = expired.id;
+WHERE event.ctid = expired.row_address;
 
 -- Backlog states are exact and read only unpublished rows through the pending
 -- partial index, so observation cost tracks backlog rather than retention

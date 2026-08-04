@@ -138,6 +138,14 @@ key's retained mark; one rejected key rejects the call. Within a single call the
 events of a key may be passed in any order, because they are stored and
 published in sequence order either way.
 
+Across calls that rule decides who may write a key concurrently: a key's
+sequences must reach PostgreSQL in ascending order, so two unsynchronized
+writers sharing one ordering key is not a supported shape — whichever commits
+second is rejected rather than stored out of order. Take the sequence from the
+aggregate's own revision, under the same lock that serializes the domain
+mutation, and each key has one writer at a time by construction. Distinct keys
+never contend with each other; they take distinct head rows.
+
 ## Claim, acknowledgement, and recovery
 
 Relays claim a batch of up to `batch_size` rows in one statement with
@@ -160,6 +168,25 @@ therefore costs roughly two database round trips per batch rather than two per
 event, ordered work included. Only an event the statement reports as
 unfinalized, which means a lost lease, falls back to a per-event resolution
 against durable state.
+
+A claim costs what its batch costs, not what the table costs. The claim and the
+retention delete both pick their rows under `FOR UPDATE` and then reach them by
+the physical address that lock pins, rather than by id. Matching on the id
+instead leaves PostgreSQL choosing between one index descent per row and a
+sequential scan of every retained row, and it takes the scan while the batch is
+a large enough share of the table's estimated rows — so a claim would cost what
+the retention window costs, over rows that window has nothing to do with. A
+`TID` scan reads no index and cannot be planned another way. Measured on a
+CPU-Optimized 4-vCPU Droplet with the repository's PostgreSQL 17 fixture,
+claiming 100 events took 4.6 ms against 10,000 retained rows and 2.3 ms against
+210,000, against 1.6 ms either way once the address is used. End to end, over 10
+samples per side on one host, the publish cycle fell 9.5% per event against a
+50,000-row retention window and 10.5% against 200,000, and one 1,000-row
+retention batch fell 35% against 200,000 retained rows and 37% against 400,000.
+
+That address is valid only inside the statement holding the lock, and only while
+events live in a single table — partitioning `outbox_events` would have to
+return to the id.
 
 Every publication attempt is bounded by both `publish_timeout` and the lease the
 batch was claimed under, measured on the relay's own clock from before the
@@ -203,7 +230,7 @@ The default relay settings are:
 | Setting | Default |
 | --- | --- |
 | Poll (notification fallback) / observation | 500 ms / 5 s |
-| Batch size / publish concurrency | 100 / 16 |
+| Batch size / publish concurrency | 500 / 16 |
 | Publish timeout / lease | 10 s / 30 s |
 | Attempts / retry | 10 / 1 s to 5 min full jitter |
 | Cleanup / retention | 1,000 rows/transaction; one-minute normal cadence, poll-cadence catch-up / 7 days |
@@ -214,8 +241,15 @@ bound, and PostgreSQL acquire and statement budgets. Configuration validation
 rejects an unsafe combination before publisher or database mutation.
 
 Raise `batch_size` for backlog drain rate and lower it to cap peak relay memory,
-which is that many stored envelopes; the envelope limit makes 100 worth up to
-about 29 MiB and a typical payload far less. Raise `publish_concurrency` when
+which is that many stored envelopes; the envelope limit makes 500 worth up to
+about 144 MiB and a typical payload far less — a 4 KiB event is about 2 MiB.
+
+The default is the measured knee rather than a round number. Per event, one
+claim-and-publish cycle cost 36.1 µs at a batch of 100, 30.1 µs at 250, 28.2 µs
+at 500, and 40.4 µs at 1,000: batching amortizes two round trips and two commits
+until the statements themselves start to dominate, and the validated maximum of
+1,000 is slower than 100. Lower it to 250 to halve worst-case memory for about
+two thirds of the gain. Raise `publish_concurrency` when
 broker acknowledgement latency, not the database, bounds throughput. A crash
 mid-batch can redeliver up to `batch_size` events, which at-least-once delivery
 already permits; size the batch against consumer deduplication cost as well as
@@ -256,6 +290,70 @@ observation, so it is reported as the planner's own row estimate for
 `outbox_events` minus the exact pending count. Alert on
 `published_retained` oldest age, which stays exact, rather than on that count;
 the estimate also needs `autovacuum`/`ANALYZE` to have run to be meaningful.
+
+That cost is roughly half a microsecond per unpublished row: 4.8 ms at a 5,000
+backlog and 50.8 ms at 100,000. Against the five-second default that is a 1%
+duty cycle on one connection at 100,000 pending and around 10% approaching a
+million — and a backlog is largest exactly when the broker is down and the
+signal matters most. Lengthen `observation_interval` before the backlog a given
+deployment must survive makes the observation itself a load problem.
+
+Identifiers are stored `COLLATE "C"`. Event ids, ordering keys, and audit ids
+are opaque tokens compared for equality and sorted only for determinism, but a
+locale collation makes every B-tree descent call `strcoll` instead of `memcmp`,
+and claim, batch finalization, and the ordered head lookup each descend one of
+those indexes per event. It is worth 11% of a 100-event claim or unordered
+publication and 17% of the ordered one. The control-character constraints are
+unaffected, because PostgreSQL derives their regex classes from the database
+encoding rather than the collation.
+
+Payload and metadata use lz4 rather than the `pglz` default. Compression engages
+only past the 2 KiB TOAST target, so small events are untouched; above it lz4
+costs much less to compress at a slightly worse ratio. Appending four 4 KiB
+events fell 19% and four 64 KiB events 58% — paid on the request path, inside
+the caller's transaction — while re-reading a 64 KiB payload on claim rose 44%,
+83 µs against the 1.37 ms the append saved. This needs a PostgreSQL built with
+lz4 (14+, including the pinned image and the major managed providers); drop the
+clause for a service that stores mostly very large payloads and drains far more
+often than it appends.
+
+Identifiers are stored `COLLATE "C"`. Event ids, ordering keys, and audit ids
+are opaque tokens compared for equality and sorted only for determinism, but a
+locale collation makes every B-tree descent call `strcoll` instead of `memcmp`,
+and claim, batch finalization, and the ordered head lookup each descend one of
+those indexes per event. It is worth 11% of a 100-event claim, 11% of the
+unordered publication, and 17% of the ordered one. No check weakens: PostgreSQL
+derives the control-character regex classes from the database encoding rather
+than the collation, so the same bytes are rejected, C1 controls included.
+
+### Optional: lz4 for large payloads
+
+Payload and metadata use PostgreSQL's default compression. A service whose
+events are routinely larger than the 2 KiB TOAST target can declare `lz4`
+instead, which costs far less to compress at a slightly worse ratio:
+
+```sql
+ALTER TABLE outbox_events ALTER COLUMN payload SET COMPRESSION lz4;
+ALTER TABLE outbox_events ALTER COLUMN metadata SET COMPRESSION lz4;
+```
+
+This is deliberately not the default. Compression engages only past the TOAST
+target, so it does nothing for the many services whose events are smaller, while
+it makes the schema require a PostgreSQL built with lz4 (14+, including the
+pinned image and the major managed providers) — where that is missing the
+migration fails outright rather than degrading. The trade is also two-sided.
+Measured on a CPU-Optimized 4-vCPU Droplet:
+
+| payload | append (request path) | claim re-read (relay) |
+| --- | --- | --- |
+| 256 B | unchanged | unchanged |
+| 4 KiB | −19% | −1% |
+| 64 KiB | −58% | +44% |
+
+At 64 KiB the append saves 1.37 ms per event and the relay pays back 83 µs, so
+it is still a net win — but a service that drains far more often than it appends
+should measure its own ratio first. `SET COMPRESSION` applies to newly written
+values; existing rows keep their current compression until rewritten.
 
 Both queue tables are stored at `fillfactor = 45` with churn-proportional
 autovacuum and analyze thresholds instead of PostgreSQL's size-proportional
