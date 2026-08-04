@@ -156,3 +156,27 @@ and model-behavior claims remain explicitly unproven.
 Instruction edits prove only an instruction-level mitigation. Claim changed
 model behavior only after an external live evaluation exercises the relevant
 target model, harness, trigger, and completion case.
+
+### Instruction Ownership
+
+- Keep repository-wide rules in `AGENTS.md` and phase-specific method in
+  `docs/spec-first-workflow/phases/`.
+- Keep template-owned instruction paths free of repository-specific content:
+  service names, module paths, deployment targets, owners, and
+  service-specific invariants belong in the repository-owned records named by
+  [Template Sync](template-sync.md). `template-owned.paths` mirrors its paths
+  verbatim into derived repositories, so portability is part of their contract.
+- [Agent Harness](agent-harness.md) owns harness detection and the mapping from
+  workflow concepts to native Codex App and Claude Code controls: durable
+  execution controls, workers, subagent lanes, model selection, and reasoning
+  effort.
+- An instruction that summarizes an external tool links the vendor contract
+  beside the claim and requires reading it before reliance. Treat only
+  documented behavior as authoritative; omitted vendor clauses remain evidence
+  gaps.
+- [Skill Authoring](skill-authoring.md) owns the lean behavioral-adapter
+  contract.
+- [Artifact Model](spec-first-workflow/shared/artifact-model.md) owns
+  persistence; [Subagents And Handoff](spec-first-workflow/shared/subagents-and-handoff.md)
+  owns built-in subagent delegation, triggered review independence,
+  convergence, and handoff.

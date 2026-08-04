@@ -88,10 +88,10 @@ reopens its narrow upstream decision owner.
 Root-local execution covers direct work and ready acceptance units routed here by
 [Worker Execution](implementation-worker-execution.md). The root edits the
 assigned checkout, performs one coherent self-review of the bounded diff, and
-runs the Validation Matrix's smallest matching proof. The bounded working-tree
-diff is the complete execution record for direct work; ledger work also retains
-its accepted task entry. The root accepts the fixed candidate when the Stop Rule
-passes and any triggered [independent implementation
+runs the [Validation Matrix](#validation-matrix)'s smallest matching proof. The
+bounded working-tree diff is the complete execution record for direct work;
+ledger work also retains its accepted task entry. The root accepts the fixed
+candidate when the Stop Rule passes and any triggered [independent implementation
 review](#independent-implementation-review) has returned a passing verdict.
 Reopen the path only when evidence changes risk, ownership, reversibility, or
 proof.
@@ -139,8 +139,25 @@ Reconcile the accepted outcome in both directions: each accepted changed or
 deliberately unchanged behavior maps to the retained delta or current
 authoritative evidence that no implementation change is required, and to
 current proof or an explicit unverified remainder; every retained change and
-completion claim maps back to an accepted criterion. Use the smallest matching
-[Validation Matrix](../../../AGENTS.md#validation-matrix) proof.
+completion claim maps back to an accepted criterion. Use the
+[Validation Matrix](#validation-matrix)'s smallest matching proof.
+
+### Validation Matrix
+
+| Changed surface | Default proof |
+| --- | --- |
+| Docs or instructions | `git diff --check` |
+| Local Go behavior | Focused package/test proof; changed-code lint when useful |
+| Concurrency/lifecycle | Focused behavior plus race/liveness proof |
+| Performance claim | The matching [benchmark level](../../benchmarking.md), equivalent workload/testbed evidence, and independent correctness proof |
+| OpenAPI, sqlc, migration, generated source | Canonical generation/drift and affected runtime proof |
+| Defect crossing a service, client, or managed-dependency boundary | Correlated evidence from each implicated side: what the caller emitted, what this service observed and returned, and what the next hop recorded for the same correlation id |
+| Security, deployment, cross-service or release | The matching protected-domain and integrated proof |
+| Publication, CI parity, or broad cross-cutting change | `check-full`, `ci-local`, `pr-check`, container, or security suites only when the claim needs them |
+
+`make check` is a broad local baseline rather than the default edit loop. For
+docs-only work, use the matching docs or instruction checks; service tests and
+broad suites run only when the claim requires them.
 
 Apply the [Stop Rule](#stop-rule)'s production-path proof criterion before
 treating implementation evidence as completion.
