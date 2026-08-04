@@ -8,12 +8,12 @@ Repository-wide contract for reliable Go-service changes with the least workflow
 - Reuse the current owner, repository pattern, standard library, and installed dependencies before adding machinery.
 - Keep behavior, failures, cleanup, and proof at their narrowest owner. Prefer concrete types and explicit control flow. Remove replaced code and adjacent stale artifacts unless current compatibility requires them.
 - Treat cancellation, deadlines, partial work, cleanup, shutdown, generated authority, and mutable ownership as first-class only when the change touches them.
-- During iteration, use cached focused checks and keep reusable local dependencies running. Reserve uncached tests, race, coverage, full lint, rebuilds, and teardown for a triggered claim or publication evidence; do not clean caches as a speed technique.
-- Never overlap broad Go or Docker gates on the same host. Continue with focused checks or wait for the active gate; preserve repository-owned aggregate and linter serialization even when `MAKEFLAGS` is inherited.
+- During iteration, use cached focused checks and keep reusable local dependencies and caches. Run uncached tests, race, coverage, full lint, rebuilds, and teardown only for a triggered claim or publication evidence; cache clearing belongs only to diagnosis, disk reclamation, or proof that requires a cold state.
+- Run at most one broad Go or Docker gate on the host. While one runs, use focused checks or wait; preserve repository-owned aggregate and linter serialization even when `MAKEFLAGS` is inherited.
 - Keep tool cache ownership aligned end to end: local scripts inherit canonical tool paths, and CI restores and saves those same paths. A repository-local override requires measured need and matching persistence proof.
 - Let mandatory lint own `govet` for the current repository. Repeated unit, race, coverage, fuzz, flake, and OpenAPI test commands use [`go test -vet=off`](https://pkg.go.dev/cmd/go#hdr-Testing_flags); retain default vet for disposable generated profiles and integration-tag paths not covered by the current-tree lint run.
-- Persist expensive scanner downloads between local runs. The Trivy container uses one shared named cache volume; remove it only for diagnosed corruption or an explicit disk-reclamation decision, never as routine cleanup.
-- Concurrent tests synchronize on owned events, not wall-clock sleeps. Use [`testing/synctest`](https://pkg.go.dev/testing/synctest) when the behavior is time-driven; keep real-time deadlines only as outer failure diagnostics.
+- Persist expensive scanner downloads between local runs. The Trivy container uses one shared named cache volume retained until diagnosed corruption or an explicit disk-reclamation decision requires removal.
+- Concurrent tests synchronize on owned events. Use [`testing/synctest`](https://pkg.go.dev/testing/synctest) when the behavior is time-driven; keep real-time deadlines only as outer failure diagnostics.
 - CI change-scope routing is fail-closed: an empty, unknown, or mixed path set receives the full gate. Docs-only changes may skip runtime and dependency analysis, but repository integrity, secret scanning, and the stable aggregate remain active.
 - Build a production runtime image once per local or CI aggregate and reuse the exact tag for migration and security proof. A second build is justified only when the build inputs or required artifact identity differ.
 - Keep temporary Docker resources owned by their creator: use [`--rm`](https://docs.docker.com/reference/cli/docker/container/run/#rm) for throwaway containers, register [Compose `down -v --remove-orphans`](https://docs.docker.com/reference/cli/docker/compose/down/) before ephemeral work, and register [Testcontainers cleanup](https://golang.testcontainers.org/features/garbage_collector/#terminate-function) immediately after acquisition. A host janitor is recovery only; opt in solely with `codex.cleanup=auto`, `codex.data=ephemeral`, a non-empty `codex.owner`, and a Unix-seconds `codex.expires_at`. Never label persistent data as ephemeral or rely on age, an unused state, or host cleanup as primary lifecycle proof.
@@ -48,11 +48,12 @@ hidden modes or speculative abstractions.
 
 ## Authority And Loading
 
-- Explicit user, system, and developer instructions win.
+- System and developer instructions remain authoritative; explicit user requests override this repository file.
 - This file owns request authorization, the agent/user decision boundary, and repository-wide invariants.
 - Skills provide methods; they neither create work nor override this contract, accepted decisions, or task-local decisions.
 - A Markdown link names an owner; it does not load that owner's instructions. Before the first phase-governed action, load the smallest current read set: every `change`, `build`, or `fix` loads [Implementation / Validation / Closeout](docs/spec-first-workflow/phases/implementation-validation-closeout.md); an open path or phase, or any structured/orchestrated route, first loads the [workflow router](docs/spec-first-workflow.md) and then its current phase. Load the router's conditional owner before its governed action.
-- Instruction loading is a gate, not a receipt: the matching owner must be read before the first edit, durable-artifact mutation, native-control dispatch, or readiness/completion claim it governs. Re-evaluate the read set only when evidence changes the phase, risk, ownership, proof, or harness control; retain only the current phase and triggered conditional owners.
+- Before editing agent instructions, tool descriptions, or skill files, read [Prompt Maintenance](docs/spec-first-workflow.md#prompt-maintenance); skill changes also load [Skill Authoring](docs/skill-authoring.md).
+- Instruction loading is a gate: read the matching owner before the first edit, durable-artifact mutation, native-control dispatch, or readiness/completion claim it governs. Re-evaluate the read set only when evidence changes the phase, risk, ownership, proof, or harness control; retain only the current phase and triggered conditional owners.
 - Task-local artifacts own accepted task decisions. Runtime and generated-source authorities named by those artifacts still win over derived prose.
 
 ## Authorization And Boundaries
@@ -62,8 +63,8 @@ hidden modes or speculative abstractions.
 - An approved external-write or purchase envelope owns its cost, security, and proof bounds. Inside it, choose live-state parameters such as region, equivalent host or size, bounded retry route, and local or remote execution from current evidence; a rejected route is no longer valid. Reopen authorization only to exceed the envelope, weaken required security or proof, or change scope or behavior.
 - Inspection and authorized in-scope edits may leave the assigned checkout. A `change`, `build`, or `fix` request authorizes required local edits in an available neighboring repository when it owns part of the accepted outcome; no separate task or confirmation is required solely because work crosses a repository boundary. Before editing, load the target repository's instructions, inspect its checkout and dirty state, preserve unrelated changes, and validate every changed repository. Treat the neighbor as an external blocker only when it is unavailable, read-only, outside the accepted outcome, or the required action needs authority the request did not grant.
 - Respect explicit `read-only`, `docs-only`, `research only`, and named-phase boundaries.
-- A durable execution control (a Codex Goal in the Codex App; `/goal` plus the task list in Claude Code — see [Agent Harness](docs/agent-harness.md)) is for implementation only. Do not create or continue one during intake, research, specification, technical design, test design, planning, or their review and repair loops, even when those phases edit repository workflow artifacts.
-- For ordinary non-interactive shell calls, avoid shell startup: set `login: false` when supported; otherwise set `shell: "/bin/bash"`. Use a login or interactive shell only when the command materially depends on its initialization or zsh-only syntax.
+- Use a durable execution control (a Codex Goal in the Codex App; `/goal` plus the task list in Claude Code — see [Agent Harness](docs/agent-harness.md)) only from implementation through closeout. Intake, research, specification, technical design, test design, planning, and their review and repair loops remain outside durable execution controls even when they edit repository workflow artifacts.
+- Run ordinary non-interactive shell calls without shell startup: set `login: false` when supported; otherwise set `shell: "/bin/bash"`. Use a login or interactive shell only when the command materially depends on its initialization or zsh-only syntax.
 
 ## Decision Ownership
 
@@ -81,15 +82,15 @@ When one option dominates, choose it and state the choice with its reopen condit
 
 ### Proceeding
 
-Proceeding is not a decision the user owns. Inside the current authorization, never ask whether to begin, continue, or widen inspection, analysis, diagnosis, or research; whether to open a read-only lane; or whether to take the next in-scope task, lane, wave, or phase. Take the action current evidence supports and report the result. A stated intention is not a result: state the next step in the same turn that takes it, and treat a step too vague to name as the missing decision rather than a plan. Exactly two questions may end a turn: the single user-owned escalation above, and the confirmation required before an irreversible external effect.
+Proceeding is the agent's decision. Within current authorization, begin, continue, widen inspection, analysis, diagnosis, or research, open a read-only lane, and take the next in-scope task, lane, wave, or phase autonomously. Take the action current evidence supports and report the result. Name the next step precisely and take it in the same turn; a step too vague to name exposes a missing decision rather than a plan. End a turn with a question only for the single user-owned escalation above or the confirmation required before an irreversible external effect.
 
-Resolve doubt by looking, not by asking. Repository inspection, current external sources, and additional read-only lanes are authorized by every request, so when more evidence could change or strengthen a conclusion, gather it before answering and stop only when another source is unlikely to change the decision. A bounded assumption with its reopen condition, a named blocker, and a progress or scope note are statements that carry the work forward; none of them waits for a reply.
+Every request authorizes resolving uncertainty through repository inspection, current external sources, and additional read-only lanes until another source is unlikely to change the decision. State and continue under a bounded assumption with its reopen condition when that keeps the result honest and useful. A named blocker or progress or scope note reports the current state without waiting for a reply.
 
 ## Routing
 
 `docs/spec-first-workflow.md` owns path selection; choose the smallest path that can close the accepted outcome. Direct work — clear, local, reversible, one owner, bounded proof, and no unresolved protected-domain decision — requires no durable execution control, native worker, worktree, durable artifact, independent review, or workflow opt-out: the root edits the assigned checkout, self-reviews the bounded diff, and runs focused proof. Read the router before choosing any wider path.
 
-Public contracts, persisted data, security, money, performance, concurrency/lifecycle, deployment, and cross-service ownership require explicit relevant decisions and proof. They do not automatically require every artifact, reviewer, worker, or full validation suite. When an accepted outcome spans multiple deployables, repositories, or managed dependencies, apply [System Release Closure](docs/spec-first-workflow/phases/system-integration-design.md#system-release-closure); cover the full affected deployment graph, or narrow the claim and name the external blocker.
+Public contracts, persisted data, security, money, performance, concurrency/lifecycle, deployment, and cross-service ownership require explicit relevant decisions and proof. Select only the artifacts, reviewers, workers, and validation gates justified by those decisions and proof. When an accepted outcome spans multiple deployables, repositories, or managed dependencies, apply [System Release Closure](docs/spec-first-workflow/phases/system-integration-design.md#system-release-closure); cover the full affected deployment graph, or narrow the claim and name the external blocker.
 
 ### Required Spine
 
@@ -103,24 +104,7 @@ Structured and orchestrated work follows the workflow router's [Required Spine](
 
 ## Implementation And Evidence
 
-- During implementation, follow the phase-owned [Acceptance Posture](docs/spec-first-workflow/phases/implementation-validation-closeout.md#acceptance-posture) and its selected execution branch. Implementation / Validation / Closeout owns contract closure, bounded review, claim-scoped proof, acceptance, and integration; skills and execution branches supply methods and carrier-specific mechanics only. A real blocker ends implementation and is reported.
-
-## Validation Matrix
-
-Use the smallest matching check:
-
-| Changed surface | Default proof |
-| --- | --- |
-| Docs or instructions | `git diff --check` |
-| Local Go behavior | Focused package/test proof; changed-code lint when useful |
-| Concurrency/lifecycle | Focused behavior plus race/liveness proof |
-| Performance claim | The matching [benchmark level](docs/benchmarking.md), equivalent workload/testbed evidence, and independent correctness proof |
-| OpenAPI, sqlc, migration, generated source | Canonical generation/drift and affected runtime proof |
-| Defect crossing a service, client, or managed-dependency boundary | Correlated evidence from each implicated side: what the caller emitted, what this service observed and returned, and what the next hop recorded for the same correlation id |
-| Security, deployment, cross-service or release | The matching protected-domain and integrated proof |
-| Publication, CI parity, or broad cross-cutting change | `check-full`, `ci-local`, `pr-check`, container, or security suites only when the claim needs them |
-
-`make check` is a broad local baseline, not the default edit loop. Do not run service tests for docs-only work or broad suites merely because they exist.
+- During implementation, follow the phase-owned [Acceptance Posture](docs/spec-first-workflow/phases/implementation-validation-closeout.md#acceptance-posture) and its selected execution branch. Implementation / Validation / Closeout owns contract closure, bounded review, the Validation Matrix, claim-scoped proof, acceptance, and integration; skills and execution branches supply methods and carrier-specific mechanics only. A real blocker ends implementation and is reported.
 
 ## Go Change Surface
 
@@ -133,14 +117,3 @@ capacity; canonical, generated, or hand-written authority; and repository-native
 proof. Activate only the matching existing Go methods; untriggered categories
 create no work. Close every triggered category with its phase or skill owner, or
 name the owner and condition that must reopen it.
-
-## Instruction Ownership
-
-- Keep global rules here.
-- Never record repository-specific content — service name, module path, deployment target, owner, or service-specific invariant — in a template-owned instruction path. `template-owned.paths` lists those paths and [Template Sync](docs/template-sync.md) mirrors them verbatim into every derived repository, so anything service-specific left there is overwritten on the next sync and meanwhile misleads every other repository. That document names the repository-owned records which receive such content instead.
-- [docs/agent-harness.md](docs/agent-harness.md) owns harness detection and the mapping from workflow concepts to native Codex App and Claude Code controls: durable execution controls, workers, subagent lanes, model selection, and reasoning effort.
-- Where an instruction describes an external tool's behavior, it is a summary of a vendor contract this repository does not own. Link the vendor page beside the claim. Read that page before relying on the claim: a summary that drops a load-bearing clause still reads as complete, so the gap surfaces as an invented workaround rather than as a missing fact. Never infer unstated external behavior from a summary.
-- [Skill authoring](docs/skill-authoring.md) owns the lean behavioral-adapter contract.
-- Keep phase-specific method in `docs/spec-first-workflow/phases/`.
-- `shared/artifact-model.md` owns persistence; `shared/subagents-and-handoff.md` owns built-in subagent delegation, triggered review independence, convergence, and handoff.
-- [Prompt Maintenance](docs/spec-first-workflow.md#prompt-maintenance) owns instruction phrasing, deduplication, and behavior-evaluation boundaries.
