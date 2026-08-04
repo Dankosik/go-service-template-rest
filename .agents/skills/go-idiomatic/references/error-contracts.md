@@ -11,7 +11,7 @@ Load when a Go review touches returned errors, sentinels, `%w` or `%v`, `errors.
 - A sentinel the caller may not import cannot be part of your contract. Where an import boundary forbids the dependency, as depguard does for the database driver outside its adapter, the adapter translates the cause into a package-owned sentinel and wraps the rest for diagnostics.
 - `errorlint` and `nilnil` already gate sentinel `==` comparison and `(nil, nil)`. The shape that survives them is log-and-swallow: `nilerr` flags a bare `return nil` in an error branch, and a log call before that return defeats it. Return the error; the caller owns where it is logged.
 - Keep `context.Canceled` and `context.DeadlineExceeded` inspectable through wrapping wherever drain, retry, or status decisions read them — `internal/background` reports a canceled task as an ordinary stop only because that identity survived.
-- Go 1.26 provides `errors.AsType[E error](err) (E, bool)`; prefer it when the target is an error type and the returned value reads better than an out-parameter.
+- Go 1.26 adds `errors.AsType`, the generic form of `errors.As` returning `(E, bool)`; prefer it when the target is an error type and the returned value reads better than an out-parameter.
 
 ## Imitate
 `fmt.Errorf("load user: %w", pgx.ErrNoRows)` from an exported adapter method — the finding is not wrap-versus-not, it is that the driver's sentinel just became this package's API.

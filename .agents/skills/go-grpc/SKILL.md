@@ -1,6 +1,6 @@
 ---
 name: go-grpc
-description: "gRPC transport: Use for grpc-go composition, interceptors/status, streaming, credentials, Protobuf/Buf, limits, shutdown, or review. Own its path; Skip REST, policy, business meaning, or Go."
+description: "gRPC transport: Use for grpc-go composition, interceptors/status, streaming, credentials, Protobuf/Buf, limits, or shutdown. Own its path; Skip REST, policy, business meaning, or Go."
 ---
 
 # Go gRPC
@@ -16,8 +16,8 @@ Load the [shared specialist contract](../specialist-contract.md). Reconstruct th
 ## Choose The Branch
 
 - **Decision** — select when a gRPC transport contract is absent or changing. Complete when shared Decision dispositions cover every unary, streaming, standard-service, client, lifecycle, and generated-contract path with its forced consequence and focused proof.
-- **Review** — select when changed gRPC code, configuration, schema tooling, or wiring must conform to accepted policy. Complete when the shared finding envelope accounts for every affected RPC path and proof boundary; missing policy returns to the gRPC Decision branch.
+- **Review** — select when changed gRPC code, configuration, schema tooling, or wiring must conform to accepted policy. Complete when the shared finding envelope accounts for every affected RPC path and proof boundary.
 
-Decide against this repository's own gRPC authority: [docs/grpc.md](../../../docs/grpc.md) states the enabled-capability surface, schema and Opaque-API policy, bootstrap registration seam, interceptor order, health and drain behavior, client construction and propagation tiers, transport limits, telemetry scope, the Railway boundary, and the focused-proof commands — with `internal/infra/grpc` and `internal/infra/grpcclient` as the code it describes. The [reference selector](references/index.md) covers only the two pressures where the wiring overrides an answer that document leaves implicit; load one matching reference.
+Decide against this repository's own gRPC authority: [docs/grpc.md](../../../docs/grpc.md) states the enabled-capability surface, schema and Opaque-API policy, bootstrap registration seam, interceptor order, health and drain behavior, client construction and propagation tiers, transport limits, telemetry scope, the Railway boundary, and the focused-proof commands — with `internal/infra/grpc` and `internal/infra/grpcclient` as the code it describes. Load the [reference selector](references/index.md) when an RPC failure path or caller-observed status changes, or a `.proto` change rests its compatibility claim on the protobuf gates.
 
 Hand business-visible RPC meaning to the owning specification/domain method, trust policy to `go-security`, resilience policy to `go-reliability`, telemetry policy to `go-observability`, concurrency mechanics to `go-concurrency`, listener/ingress topology to `go-system-architecture`, profiles and delivery gates to `go-delivery-platform`, and implementation to `go-coder`.

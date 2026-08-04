@@ -8,9 +8,7 @@ Load this when a change adds a readiness probe or dependency check, alters drain
 
 ## Decision Rubric
 
-**Readiness is a cached background verdict.** The routes are `/health/live` and `/health/ready`; there is no startup probe. `internal/health` refreshes on an interval through `Watch` and serves the last result from `Cached`. Per-request evaluation is the design this package exists to prevent: a pooled database ping needs a pool connection, so a saturated pool fails readiness, the orchestrator evicts the instance, its traffic lands on instances already saturated. A new dependency check becomes a `Probe` on that refresher, not a call in the handler.
-
-Three properties of that cache carry the correctness and are easy to drop when extending it. A verdict older than `probeBudget + 3*max(interval, probeBudget)` is refused rather than served, because a refresher that died leaves the reassuring answer standing forever — the last thing a healthy service writes is "healthy". `FailureThreshold` holds the previous verdict through a blip, but only for an instance that was already healthy; one that never came up fails immediately. `probeBudget` is separate from `interval` so a configured probe timeout is not silently clamped to the refresh period.
+**Readiness is a cached background verdict.** The routes are `/health/live` and `/health/ready`; there is no startup probe. [Readiness, drain, and shutdown](../../go-reliability/references/readiness-drain-shutdown.md) owns the mechanism — the background refresher, the staleness bound, and the eviction cascade a per-request dependency check recreates. From this side, a new dependency check becomes a `Probe` on that refresher, not a call in the handler.
 
 **Probe routes are exempt from admission control.** The in-flight limiter passes `/health/live` and `/health/ready` through. Shedding a probe would report the instance unhealthy at exactly the moment it is merely busy, which is the eviction-under-load failure again by another route.
 
@@ -21,7 +19,7 @@ Three properties of that cache carry the correctness and are easy to drop when e
 **Telemetry can be degraded while the service is healthy.** A service exporting no traces still answers every request and reports ready. `RecordTraceExporterState` publishes that state as a gauge precisely so it is alertable; metrics setup succeeds independently of tracing setup so the gauge survives the failure it reports.
 
 ## Reject
-- A dependency call in the probe handler, because the probe then fails for the same saturation it is meant to report and the orchestrator amplifies it.
+- A dependency call in the probe handler — the probe then consumes the capacity it reports on.
 - Serving `http.DefaultServeMux` anywhere in the process, because the pprof `init` has already registered every profile on it.
 
 ## Validation Shape

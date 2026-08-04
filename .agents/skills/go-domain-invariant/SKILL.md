@@ -1,6 +1,6 @@
 ---
 name: go-domain-invariant
-description: "Domain invariants: Use for business terms, transitions, acceptance, violations, replay, effect order, or review. Own domain policy; Skip transport, data/cache mechanics, security, or test structure."
+description: "Domain invariants: Use for business terms, transitions, acceptance, violations, domain replay, or effect order. Own domain policy; Skip transport, data/cache mechanics, security, or test structure."
 ---
 
 # Go Domain Invariant
@@ -16,6 +16,6 @@ Load the [shared specialist contract](../specialist-contract.md). Reconstruct af
 ## Choose The Branch
 
 - **Decision** — select when business policy is absent or changing. Load the [decision selector](references/decision/index.md) for one result-changing pressure. Complete when shared Decision dispositions cover every invariant and transition with rejection, effect boundary, forced consequence, and proof obligation explicit.
-- **Review** — select when changed Go must preserve accepted domain policy. Load the [review selector](references/review/index.md) for the affected accepting path. Follow every affected accepting path into the shared finding envelope, naming any outside boundary or proof blocker with falsifying proof. Missing policy returns to the named Domain Decision owner.
+- **Review** — select when changed Go must preserve accepted domain policy. Load the [review selector](references/review/index.md) for the affected accepting path. Follow every affected accepting path into the shared finding envelope; each finding carries falsifying proof.
 
 This skill owns which rule must hold and what its violation means. `go-data-architecture` owns where truth lives and how a constraint and its migration are shaped, `go-api-contract` owns how the outcome reaches a client, and `go-distributed` owns durable coordination. Choosing a database constraint over an application convention is a domain decision made here; writing it is theirs.

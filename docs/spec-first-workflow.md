@@ -127,7 +127,7 @@ At a true macro-phase boundary, follow [Resume And Macro-Phase Handoff](spec-fir
 
 ## Prompt Maintenance
 
-Current references: Matt Pocock's [Building Great Skills glossary](https://github.com/mattpocock/skills/blob/main/skills/productivity/writing-great-skills/GLOSSARY.md) owns the vocabulary for predictability, information hierarchy, steering, and pruning; OpenAI's [model and prompting guidance for GPT-5.6](https://developers.openai.com/api/docs/guides/latest-model?model=gpt-5.6#prompting-best-practices) owns current Codex model guidance; Anthropic's [Claude Code documentation](https://code.claude.com/docs) and [prompt-engineering guidance](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/overview) own the Claude Code vendor contract. [Agent Harness](agent-harness.md) owns which harness's native controls apply.
+Current references: Matt Pocock's [Building Great Skills glossary](https://github.com/mattpocock/skills/blob/main/skills/productivity/writing-great-skills/GLOSSARY.md) owns the vocabulary for predictability, information hierarchy, steering, and pruning; OpenAI's [model and prompting guidance for GPT-5.6](https://developers.openai.com/api/docs/guides/latest-model?model=gpt-5.6#prompting-best-practices) owns current Codex model guidance; Anthropic's [Claude Code documentation](https://code.claude.com/docs) and [prompt-engineering guidance](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/overview) own the Claude Code vendor contract; Anthropic's account of [removing ~80% of the Claude Code system prompt for the Claude 5 generation](https://x.com/trq212/article/2080710971228918066) owns the rightsizing posture — constraint mass tuned for a prior model generation is re-derived against the current one, not inherited. [Agent Harness](agent-harness.md) owns which harness's native controls apply.
 
 Use the repository [Task Contract](../AGENTS.md#task-contract) as the
 outcome-first prompt schema. State each durable instruction once in its
@@ -159,7 +159,10 @@ model-behavior claims remain explicitly unproven.
 
 Instruction edits prove only an instruction-level mitigation. Claim changed
 model behavior only after an external live evaluation exercises the relevant
-target model, harness, trigger, and completion case.
+target model, harness, trigger, and completion case. A new target model
+generation reopens accepted no-op, constraint, and example decisions: re-run
+the removal-first pass and its representative cases against the new generation
+instead of carrying prior-generation constraint mass forward.
 
 ### Instruction Ownership
 

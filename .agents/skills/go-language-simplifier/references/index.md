@@ -2,8 +2,8 @@
 
 Load one. Neither is needed when the reader's difficulty is nesting, naming, or
 comment density and the change is plainly behavior-preserving — `SKILL.md` and
-the repository's Go Readability contract own that judgment, and mandatory lint
-owns the mechanical half.
+the repository's [Go Readability contract](../../../../AGENTS.md#go-readability)
+own that judgment, and mandatory lint owns the mechanical half.
 
 | Pressure | Load | Required effect |
 | --- | --- | --- |

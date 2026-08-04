@@ -1,6 +1,6 @@
 ---
 name: go-distributed
-description: "Distributed flow: Use for cross-service consistency, sagas, replay, ordering, compensation, redrive, reconciliation, or review. Own recovery; Skip local transactions, synchronization, lifecycle, or topology."
+description: "Distributed flow: Use for cross-service consistency, sagas, durable replay, ordering, compensation, redrive, or reconciliation. Own recovery; Skip local transactions, synchronization, lifecycle, or topology."
 ---
 
 # Go Distributed
@@ -25,6 +25,6 @@ Reuse the pack a durable step already has, and look first for a second publicati
 ## Choose The Branch
 
 - **Decision** — select when durable-flow policy is absent or changing. First prove cross-service coordination is needed. Load [pivot, compensation, and forward recovery](references/decision/pivot-compensation-and-forward-recovery.md) when the flow must undo work another owner already performed. Complete when shared Decision dispositions cover every durable step and replay shows its invariant, compensation, or reconciliation with focused proof.
-- **Review** — select when changed durable behavior must conform to accepted policy. Replay every affected durable step against the pack contract above into the shared finding envelope, naming any outside boundary or proof blocker with the smallest correction and proof. Missing policy returns to the named Durable-flow Decision owner.
+- **Review** — select when changed durable behavior must conform to accepted policy. Replay every affected durable step against the pack contract above into the shared finding envelope.
 
 Hand business identity to `go-domain-invariant` and local DB/cache mechanics to `go-db-cache`. Load [`reliable-messaging`](../../../docs/universal-disciplines/reliable-messaging/SKILL.md) when the broker boundary itself carries the guarantee: it forces each guarantee to name its durable commit, its accepted loss or duplicate window, and its redrive path, instead of inheriting a promise from broker documentation. Load [`distributed-system-design`](../../../docs/universal-disciplines/distributed-system-design/SKILL.md) when several mechanisms must compose into one system contract: it forces each component to be earned by a named force instead of assembled from a pattern catalog.

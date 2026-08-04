@@ -1,17 +1,13 @@
 # Spec-First Handoff Examples
 
 ## Behavior Change Thesis
-When loaded for symptom "the idea-refine pass has converged and needs a handoff," this file makes the model hand off a refined product direction to `spec-first-brainstorming` instead of the likely mistake of smuggling architecture, endpoints, or task plans into the next step.
+When loaded for symptom "the idea-refine pass has converged and needs a handoff," this file makes the model hand off a refined product direction to `spec-first-brainstorming` instead of smuggling architecture, endpoints, or task plans into the next step.
 
 ## When To Load
 Load this only after convergence, when the output needs to become a compact handoff artifact for engineering framing.
 
-## Decision Rubric
-- Hand off a product direction, not architecture or tasks.
-- Include problem, target actor, recommended direction, why, assumptions, MVP scope, `Not Doing`, open questions, and next handoff.
-- Preserve uncertainty instead of inventing answers for the next skill.
-- Include rejected-option context only when it prevents obvious scope re-expansion.
-- Make the next handoff explicit: usually `spec-first-brainstorming`.
+## The Move
+Hand off a product direction, not architecture or tasks: problem, target actor, recommended direction, why, assumptions, MVP scope, `Not Doing`, open questions, and an explicit next handoff — `spec-first-brainstorming` unless the user chose another step. Preserve uncertainty so weak assumptions stay visible for the next skill, and record rejected options only where they prevent obvious scope re-expansion.
 
 ## Imitate
 Input: "Incidents are hard to understand fast. Maybe an incident cockpit with AI summaries, timeline reconstruction, service maps, and Slack integration."
@@ -66,23 +62,10 @@ Copy the move: rejected directions are recorded only to keep scope from re-expan
 
 ## Reject
 ```markdown
-Next Handoff
-Implement the incident cockpit. Create API endpoints for timelines, add Slack integration, use AI summaries, and build the service map UI.
-```
-
-Reject this because it skips `spec-first-brainstorming`, smuggles in implementation decisions, and drops assumptions.
-
-```markdown
 Open Questions
 - What should the architecture be?
 - Which tables should store incidents?
 - Which endpoints should we add?
 ```
 
-Reject this because idea refinement should hand off product uncertainty, not pretend design questions are ready.
-
-## Agent Traps
-- Do not write acceptance criteria, tasks, API shapes, migrations, rollout steps, or validation commands.
-- Do not erase rejected options if they are likely to sneak back in during framing.
-- Do not leave `Next Handoff` as "build it." Name `spec-first-brainstorming` unless the user chose a different next step.
-- Do not make the handoff so polished that weak assumptions disappear.
+Idea refinement hands off product uncertainty; design questions belong to later phases and are not yet ready to ask.

@@ -4,7 +4,7 @@ A skill exists to make a stochastic agent follow a predictable process. Judge ev
 
 ## Invocation
 
-Use a model-invoked skill when the agent or another skill must discover it. Front-load its domain leading word in the description; choose a pretrained word or compact phrase already present in likely prompts or repository language, and give neighboring skills distinguishable anchors rather than one generic workflow noun. Then give one trigger per real branch — a distinct way the skill is invoked, not a topic it mentions — plus the owned outcome and decisive exclusion. Preserve the machine contract `Use when`, `Own`, and `Skip when` in at most two sentences.
+Use a model-invoked skill when the agent or another skill must discover it. Front-load its domain leading word in the description; choose a pretrained word or compact phrase already present in likely prompts or repository language, and give neighboring skills distinguishable anchors rather than one generic workflow noun. Then give one trigger per real branch — a distinct way the skill is invoked, not a topic it mentions — plus the owned outcome and decisive exclusion. Preserve the machine contract — a `Use` trigger clause, `Own`, and `Skip` — in at most two sentences.
 
 Use a user-invoked skill when human judgment should select it and autonomous discovery has no value. A growing user-only catalog may justify one user-invoked index, but model-invoked domain skills should remain independently discoverable instead of hiding behind a router.
 
@@ -57,5 +57,7 @@ Preserve accepted behavior and the realistic examples that explain it when
 changing a skill. If an externally owned live evaluation system exists, change
 its oracle only for an accepted behavior reason, never to make a gate green.
 Otherwise report invocation and no-op claims as unproven. Budgets remain review
-heuristics: 50--150 words for session/index skills, 100--250 for specialists,
-and 250--500 only for a named non-obvious method or failure mode.
+heuristics, not gates, and bind one artifact each: 50--150 words for a session
+or index `SKILL.md` body, 100--250 for a specialist `SKILL.md` body, and
+250--500 for a reference file carrying one named non-obvious method or failure
+mode.

@@ -6,15 +6,14 @@ When loaded after strong questions survive filtering, this file makes the model 
 ## When To Load
 Load this when you already have concrete challenge questions but are unsure whether they block planning, reopen one domain, defer, ask the user, or become an accepted risk.
 
-## Decision Rubric
+## The Move
+Classify by whether the answer changes planning, not by anxiety:
+
 - `blocks_planning`: the answer can change scope, ownership, API contract, data shape, migration order, implementation sequence, or validation proof.
-- `blocks_specific_domain`: the candidate path is mostly stable, but one specialist fact is missing, such as cache invalidation behavior, tenant isolation proof, mixed-version compatibility, rollback guardrail, or idempotency evidence.
-- `non_blocking`: the issue is real but can be carried as design detail, validation detail, or explicit accepted risk without misleading task breakdown.
-- `answer`: use when existing artifacts or repository evidence already contain enough information; do not reopen research as ritual.
-- `re-research`: use when a factual, repository, runtime, or specialist claim must be verified; name the lane and the exact fact needed.
-- `ask_user`: use only for external product, policy, compliance, launch, or risk-appetite choices that repo evidence cannot decide.
-- `defer`: use when the point belongs in downstream design or validation and cannot change implementation order.
-- `accept_risk`: use only when the risk is known, bounded, reversible enough for the task, and paired with a proof obligation.
+- `blocks_specific_domain`: the candidate path is stable except one missing specialist fact — cache invalidation behavior, tenant isolation proof, mixed-version compatibility, rollback guardrail, idempotency evidence.
+- `non_blocking`: real, but carried as design detail, validation detail, or explicit accepted risk without misleading task breakdown.
+
+Then route: `answer` when existing artifacts or repository evidence already decide it — the orchestrator answers before reopening research; `re-research` when a factual claim must be verified, naming the lane and the exact fact; `ask_user` only for product, policy, compliance, launch, or risk-appetite choices repo evidence cannot decide — repository facts and engineering evidence never reach the user; `defer` when the point belongs downstream and cannot change implementation order; `accept_risk` only when the risk is known, bounded, reversible enough for the task, and paired with the invariant at risk and a proof obligation. Rerun challenge only when a material decision changed or a major seam reopened.
 
 ## Imitate
 - "`blocks_planning` + `re-research`: If old clients may still send the previous payload, the API contract and task ordering can change; reopen API/delivery evidence for mixed-version behavior."
@@ -27,21 +26,10 @@ Load this when you already have concrete challenge questions but are unsure whet
   - Copy the requirement to state bounds and proof.
 
 ## Reject
-- "`blocks_planning`: This feels risky."
-  - Fails because severity must be tied to what planning would get wrong.
 - "`re-research`: Look into this more."
-  - Fails because it does not name the missing fact or specialist lane.
-- "`ask_user`: Should Redis fallback be enough?"
-  - Fails when the answer depends first on repository load, SLO, or failure-mode evidence.
+  - Names neither the missing fact nor the specialist lane.
 - "`accept_risk`: This is probably fine for v1."
-  - Fails because accepted risk needs blast radius, reversibility, and validation proof.
-
-## Agent Traps
-- Classifying by anxiety rather than by whether the answer changes planning.
-- Sending every unresolved point to research when the orchestrator can answer from existing artifacts.
-- Asking the user for repository facts or engineering evidence.
-- Accepting risk without naming the invariant at risk and the proof obligation.
-- Rerunning challenge automatically after any research; rerun only if a material decision changed or a major seam reopened.
+  - Accepted risk needs blast radius, reversibility, and validation proof.
 
 ## Validation Shape
-Each final challenge item should make its route auditable: what changes, blocker level, next action, and, for `re-research`, the specialist lane plus the exact fact that would unblock planning.
+Each final challenge item makes its route auditable: what changes, blocker level, next action, and, for `re-research`, the specialist lane plus the exact fact that would unblock planning.
