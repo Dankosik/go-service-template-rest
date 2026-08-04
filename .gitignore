@@ -13,3 +13,4 @@ coverage.out
 .qwen/QWEN.local.md
 .qwen/settings.local.json
 docs/habr-*.md
+.artifacts/reference-research/

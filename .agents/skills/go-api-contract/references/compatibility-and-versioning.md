@@ -1,62 +1,61 @@
 # Compatibility And Versioning
 
 ## When To Load
-Load this when a contract change affects existing clients, status codes, error shapes, pagination defaults, enum values, field nullability, URI versioning, deprecation, sunset, or coexistence between old and new endpoints.
+
+Load this when a change touches an already-published operation: a status, error
+`code`, enum value, default, nullability, pagination behavior, consistency
+guarantee, or a deprecation and removal plan.
+
+## Behavior Change Thesis
+
+Without this file, `make openapi-breaking` is treated as the backstop that
+catches a breaking change. It is a schema differ. Measured against the reference
+contract with the repository's own `--fail-on ERR` setting: a new required
+request property and a decreased `maxLength` fail the gate, while **removing a
+documented `409` response passes**, and adding a `page_size` parameter to a
+previously complete collection passes. Anything whose client impact lives in
+semantics rather than schema must be classified by hand, and a green gate is not
+evidence that it was.
 
 ## Decision Rubric
-- Choose the target contract first. Add coexistence, preview, deprecation, or migration behavior only when existing clients or compatibility policy require it.
-- Classify each change as `additive`, `behavior-change`, or `breaking`, and name the client assumption that makes it so.
-- Treat status codes, problem types, retry/idempotency/precondition behavior, async behavior, pagination, sorting, and consistency as compatibility surface, not cleanup.
-- Keep the major API version in the URI prefix by this skill's default, but preserve an existing header, query, or media-type versioning policy unless the spec explicitly changes it. Do not put minor or patch versions in REST paths unless the API already does.
-- Distinguish OpenAPI document version from API product version. `openapi: 3.1.1` is not `/v2`.
-- Adding response fields is safer only when clients are expected to ignore unknown fields. Strict decoders and generated SDKs can still break.
-- Adding enum values is a compatibility decision. Document unknown-value tolerance or avoid expanding a closed enum in place.
-- Tightening validation, making optional fields required, changing defaults, changing null-vs-omitted behavior, or changing timestamp precision can be breaking.
-- Adding pagination to an unpaginated collection can be breaking because old clients may silently miss data.
-- Deprecation means "discourage new dependence and plan migration"; Sunset means "may become unavailable." Use both only when both meanings are true.
-- `Deprecation` uses an RFC 9745 Structured Field Date such as `@1688169599`; `Sunset` uses an RFC 8594 HTTP-date. Do not normalize them to the same timestamp syntax.
-- When old and new endpoints coexist, define which is authoritative for validation, state transitions, idempotency key scope, `ETag` space, error mapping, and consistency. Include exit criteria, removal/proof tasks, and owner when coexistence is not the target state.
 
-## Imitate
-```http
-HTTP/1.1 200 OK
-Deprecation: @1775001600
-Link: </docs/migrate-orders-v2>; rel="deprecation"; type="text/html"
-Sunset: Tue, 30 Jun 2026 23:59:59 GMT
-Link: </docs/orders-v1-sunset>; rel="sunset"; type="text/html"
-```
-
-Good: lifecycle discouragement and expected unavailability are separate signals with separate documentation links.
-
-```text
-Change: add optional response field `risk_level` to `GET /v1/orders/{id}`.
-Compatibility class: additive with semantic risk.
-Client impact: strict JSON decoders may reject the field; exhaustive enum-like handling may need guidance.
-Decision: add in v1 only if the API policy already requires ignoring unknown response fields; otherwise make preview or v2 the explicit target contract and include migration/removal criteria in the same accepted scope.
-```
-
-Good: "additive" is not treated as automatically safe.
+- Classify each change as `additive`, `behavior-change`, or `breaking`, and name
+  the client assumption that makes it so. "Additive" is a claim about client
+  tolerance, not about the diff: contracts here declare `additionalProperties:
+  false`, and generated SDKs decode strictly.
+- Treat as `breaking` regardless of what the differ reports: introducing
+  pagination on a collection that previously returned everything; changing a
+  default page size, sort order, or retry window; re-mapping a status or an error
+  `code`; narrowing a consistency or freshness guarantee; changing timestamp
+  precision or null-vs-omitted behavior.
+- `response-non-success-status-removed` is `info` in the oasdiff checkset;
+  only `response-success-status-removed` is `error`. Removing or re-mapping an
+  error response is a hand-classified change with no automated guard.
+- The OpenAPI document version is not the API version. Contracts here are
+  `openapi: 3.0.3`, so optionality is `nullable: true`; rewriting it as 3.1's
+  `type: [string, "null"]` is a document-format migration affecting generation,
+  not a product version change.
+- `Deprecation` (RFC 9745) is a Structured Field Date — `Deprecation:
+  @1688169599`. `Sunset` (RFC 8594) is an HTTP-date — `Sunset: Tue, 30 Jun 2026
+  23:59:59 GMT`. They are not interchangeable syntaxes, and RFC 9745 requires the
+  Sunset instant to be no earlier than the Deprecation instant.
+- While an old and a new surface coexist, name which one is authoritative for
+  validation, state transitions, idempotency key scope, and error mapping, and
+  record the removal criteria with the change that introduced the coexistence.
 
 ## Reject
-```text
-Change: GET /v1/orders now returns the first 50 orders by default and a next_cursor.
-Compatibility class: additive because the response only added pagination fields.
-```
 
-Bad: behavior changed from complete result set to partial result set.
+- Listing a check id in `api/openapi/breaking-changes-approvals.txt` to make the
+  gate green: the file silences that check for the whole diff, so it must carry
+  the accepted breaking change and its migration, not the desire to merge.
+- Treating `make check` or `make ci-local` as compatibility proof: neither runs
+  the breaking check. It runs only from `pr-check`, which supplies `BASE_REF` and
+  extracts the base spec with `git show`.
 
-```text
-Change: 409 conflicts now return 422 validation_error.
-Compatibility class: internal cleanup.
-```
+## Validation Shape
 
-Bad: status and problem type are client-visible control flow.
-
-## Agent Traps
-- Changing a field format while keeping it a string is still breaking if clients parse it.
-- Changing default page size, sort order, retry window, idempotency TTL, or freshness guarantee can break clients without a schema diff.
-- Removing or renaming a field is usually remove-and-add, not harmless cleanup.
-- Making a nullable field non-null, or always returning an omitted field as `null`, can break presence-sensitive clients.
-- Sunset dates are hints, not guarantees. Do not imply clients can safely wait until the exact timestamp.
-- A replacement endpoint should not silently diverge on idempotency, `ETag`, or error mapping during coexistence.
-- Do not leave preview, coexistence, or deprecated surfaces as remembered-later cleanup.
+`make pr-check BASE_REF=origin/main`, or `make openapi-breaking
+BASE_OPENAPI=<base spec>` directly. A pass proves no schema-detectable
+regression against that base. For every change in the hand-classified list
+above, the proof is a stated client assumption and a migration or version
+decision, because the gate cannot see it.

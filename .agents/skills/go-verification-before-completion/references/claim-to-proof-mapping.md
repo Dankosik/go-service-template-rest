@@ -1,44 +1,78 @@
 # Claim To Proof Mapping
 
 ## Behavior Change Thesis
-When loaded for an ambiguous completion, readiness, or command-scope claim, this file makes the model bind the claim to an exact proof surface and choose the narrowest sufficient command set instead of either generalizing a focused pass to repo readiness or reflexively running unrelated broad checks.
+
+When loaded for a "fixed", "green", "ready", or "done" claim, this file supplies
+what the aggregate target names do not say — what each gate leaves unproven, and
+which commands in this repository exit 0 without executing the behavior the claim
+depends on.
 
 ## When To Load
-Load this for fuzzy positive claims such as "fixed", "tests pass", "green", "ready", "safe", "done", "builds", "lint clean", race checked, package green, or repository green.
+
+Load this when a positive claim names a gate, a scope ("the package", "the repo"),
+or readiness, and the honest boundary of that evidence is not obvious.
 
 ## Decision Rubric
-- First quote the exact positive claim you are about to make.
-- Bind its nouns to a proof dimension: focused behavior, package behavior, repository tests, build, lint, vet, race detector, or composite readiness.
-- Default to focused changed-surface proof; choose a broad command only when the named claim needs its broader scope.
-- For "ready", "merge", "handoff", or "green" claims, use the union of changed-surface checks. A readiness claim is rarely proven by one command.
-- If the command proves only part of the claim, either run the missing proof or narrow the conclusion.
-- Use `-count=1` only when freshness requires executed test bodies, not merely a cache-valid package result.
 
-## Imitate
-| Claim | Choose | Copy this behavior |
-|---|---|---|
-| "I fixed `TestCreateUser`" | `go test ./internal/user -run '^TestCreateUser$' -count=1` | Match the failing test and force a fresh body execution. |
-| "The parser package is green" | `go test ./internal/parser/...` | Expand from one focused test to the package tree named by the claim. |
-| "Repository tests pass" | `make test` or `go test ./...` with honest cache reporting | Use repository-wide proof for repository-wide wording. |
-| "Build succeeds" | `make build` | Do not let tests stand in for building the command binary. |
-| "Lint is clean" | `make lint` | Use the repo target that verifies golangci-lint config before linting. |
-| "Worker race path is checked" | `go test -race ./internal/worker/...` or `make test-race` | Race proof requires race instrumentation on the relevant executed path. |
-| "Ready for review" | focused fix proof plus triggered repo checks such as `make test`, `make lint`, and any surface-specific checks | Treat readiness as a composite claim. |
+The aggregates are not nested supersets. Each proves its own composition and is
+silent about the rest:
+
+| Gate | Composition | Silent about |
+| --- | --- | --- |
+| `make check` | `project-structure-check fmt-check lint test` | build, `lint-deep`, generated drift, security, anything Docker-backed |
+| `make ci-local` | the host-toolchain CI aggregate: adds `lint-deep`, `test-race`, `test-report` with the coverage floor, `sqlc-check`, `openapi-check`, `proto-check`, `go-security`, `secret-scan` | integration, migration, runtime image, container security — everything needing Docker |
+| `make check-full` | `delivery-quality`, `ci-local`, `REQUIRE_DOCKER=1 test-integration`, runtime image, `migration-validate`, `container-security` | base-relative proof: template init, `mod-verify`, OpenAPI/Protobuf breaking — those are `make pr-check BASE_REF=…` |
+
+`check-full` and `migration-validate` **exit 1 when Docker is unreachable**; they
+never convert a missing runtime into a passing skip, so a green run of either is
+real Docker proof. `make build` is not implied by any test target — tests compile
+the packages under test, not the command binaries. `make lint` is
+`golangci-lint run` alone; `deadcode` and `nilaway` live in `lint-deep`, which
+`make check` does not reach. A security claim maps to `go-security`
+(govulncheck **and** gosec), with `secret-scan` and `container-security` as
+separate surfaces. A performance claim is out of scope here — `docs/benchmarking.md`
+owns its proof level and completion policy.
+
+### Commands that exit 0 without proving anything
+
+Verified on the pinned toolchain (go1.26.5); exit status alone will not tell you:
+
+- A `-run` pattern matching no test prints `ok … [no tests to run]` and exits 0.
+  This is why `openapi-runtime-contract-check` runs `-json` and greps for an actual
+  `"Action":"run"` event rather than trusting the exit code — copy that check
+  whenever a claim rests on one named test.
+- A package with no test files prints `? … [no test files]` and exits 0, so
+  "the package is green" can mean "the package has no tests".
+- Integration tests **skip** when the Docker provider is unhealthy unless
+  `REQUIRE_DOCKER=1` is set (`internal/infra/postgres/pgtest`). Bare
+  `make test-integration` can pass having run nothing.
+
+### What a cached result is still worth
+
+`make test` carries no `-count=1`, so packages return `(cached)`; `-vet=off` does
+not disable the cache. Go re-runs a package when the test binary changes, when a
+cacheable flag changes, or when a file inside the module or an environment
+variable **the test itself read** changes. It does not re-run because the world
+changed around it: a started Docker daemon, a reseeded database, a rebuilt image,
+or an edited file the test never opened all leave the cached PASS in place. A
+cached result therefore supports "this code still passes its tests" and never
+"this just ran against the current environment". `test-integration` pins
+`-count=1` for exactly this reason; add it yourself when the claim is about a
+dependency's current state rather than about the code.
 
 ## Reject
-| Plausible bad conclusion | Why it fails |
-|---|---|
-| "All tests pass" after `go test ./internal/parser/...` | A package pattern does not prove unrelated packages. |
-| "Build is good" after `go test ./...` | Tests compile packages under test, but this repo's build claim maps to `make build`. |
-| "Race safe" after non-race `go test` | Races are only detected in race-instrumented executed paths. |
-| "Ready to merge" after one focused `-run` test | A focused reproducer proves the fix path, not lint, build, generated drift, migrations, or broader regressions. |
 
-## Agent Traps
-- `go test` without `./...` can only prove the current package context.
-- `go test ./...` output may include cached packages. That can support a cache-valid broad test claim, but not a claim that every test body just executed.
-- `make check` proves this repo's broad local fmt, lint, and test baseline. It is not the same as generated API, migration, security, or full CI-like proof.
-- `make check-full` can still print local skip messages for Docker-backed checks when Docker is unavailable. Carry those gaps into the conclusion.
-- If command names feel stale, inspect `Makefile` and `docs/build-test-and-development-commands.md` instead of guessing.
+Reject a scope promotion the command did not earn: a package pattern says nothing
+about unrelated packages, a focused reproducer says nothing about lint, drift, or
+regressions, and race conditions surface only on race-instrumented paths that
+actually executed. Reject `git diff` as behavioral proof, and reject another
+agent's report or a prior session's log as proof of the current tree — a
+worktree-isolated worker's changes are absent from the root checkout's
+`git status` until integration, so re-run the claim-scoped command here.
 
 ## Validation Shape
-Report the command, exit result, key signal, and exact scope it proves. Keep the conclusion no broader than that scope.
+
+Name the command, its exit result, whether the run was cached or fresh, and the
+exact scope it proves. Keep the conclusion no broader than that scope, and when
+the evidence is narrower than the claim, state what is not proven and the single
+command that would close the gap.

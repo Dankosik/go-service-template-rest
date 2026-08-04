@@ -1,9 +1,9 @@
 # Workflow Behavior Evals
 
-Live trace contract for instruction changes that affect orchestration, Worker
-execution, review, proof, or model routing. The target virtue is
-**predictability**: repeatable process and acceptance quality, with lower
-latency, tool traffic, and context load where quality stays equal.
+Live trace contract for instruction changes that affect phase execution,
+orchestration, Worker execution, review, proof, or model routing. The target
+virtue is **predictability**: repeatable process and acceptance quality, with
+lower latency, tool traffic, and context load where quality stays equal.
 
 This file owns eval cases and assertions. It does not pretend to execute an
 agent or judge model behavior. Run the cases in the real target harness and
@@ -24,14 +24,18 @@ event order.
 For each instruction change:
 
 1. run the same representative cases before and after the change;
-2. judge every required outcome and trace assertion;
+2. judge every required outcome and trace assertion against one fixed rubric;
+   blind baseline/candidate identity and randomize their order when the live
+   evaluation system supports it;
 3. compare correctness, completeness, depth, evidence coverage, coherence,
    retained scope, proof quality, root-context pressure, tokens, wall time,
    wait time, calls, turns, retries, and corrections;
 4. treat result quality, evidence coverage, and coherence as acceptance
    criteria; retain cost, token use, and latency as diagnostics only;
-5. keep the instruction only when it changes a measured behavior or protects a
-   hard authorization or safety boundary.
+5. keep the candidate only when every required outcome and assertion remains
+   equal or improves, and the change closes a measured behavior gap, protects a
+   hard authorization or safety boundary, or reduces duplication or context
+   load without a quality loss.
 
 For a change that can affect implementation or Worker behavior, use at least
 one ordinary unit, one high-risk unit, one Worker correction, and one
@@ -39,6 +43,12 @@ multi-Worker wave. For a non-implementation fan-out change, use at least one
 Research case, one Technical Design case, and one dependent or duplicate
 near-miss in a third non-implementation macro phase. A single happy path cannot
 qualify a workflow change.
+
+For a macro-phase semantic change, run its matching case below plus one
+near-miss that must stay outside the phase or leave the current owner blocked.
+When no case matches, define the smallest task-local trigger, near-miss, and
+completion case for the comparison; persist it here only when it protects a
+reusable or regression-critical behavior.
 
 ## Cases
 
@@ -191,14 +201,17 @@ metadata is treated as loaded content, or direct work loads the whole workflow.
 
 ### WBE-12 — Conditional Owner Timing
 
-**Given:** one case that resumes from `tasks.md`, one that dispatches an
-independent review, and one that uses a harness-native durable control or
+**Given:** one case that resumes from `tasks.md`, one that enters a
+non-implementation phase with an eligible lane, one that dispatches a triggered
+implementation review, and one that uses a harness-native durable control or
 Worker.
 
-**Pass:** the trace reads respectively Artifact Model, Subagents And Handoff,
-and Agent Harness before the first governed action. Each case omits unrelated
-conditional owners; a new read appears only when phase movement or evidence
-introduces a new trigger.
+**Pass:** before the first governed action, resume reads Artifact Model and
+Resume And Macro-Phase Handoff; non-implementation fan-out reads Subagents And
+Review; implementation review reads shared Review Independence and Independent
+Implementation Review; and native control reads Agent Harness. Each case omits
+unrelated conditional owners; a new read appears only when phase movement or
+evidence introduces its trigger.
 
 **Fail:** the control or artifact mutation comes first, every shared file loads
 at startup, or an unchanged owner is repeatedly read as a receipt.
@@ -223,7 +236,7 @@ registry or selector.
 question or decision-slot maps each contain several bounded, independently
 checkable questions plus one cross-lane synthesis decision.
 
-**Pass:** Subagents And Handoff is read before substantive phase work; every
+**Pass:** Subagents And Review is read before substantive phase work; every
 lane-eligible question gets one narrow read-only lane with fresh minimal
 context; positively independent lanes run concurrently up to current capacity;
 the root does not repeat their searches, retains the cross-lane decision, and
@@ -336,6 +349,112 @@ aggregate and linter serialization.
 **Fail:** docs-only scope triggers service tests or a broad suite without a
 claim that requires it, or the root overlaps another broad Go or Docker gate on
 the host.
+
+### WBE-21 — Specification Semantic Closure
+
+**Given:** accepted behavior with interacting rules whose precedence and
+default differ between two reasonable implementations, a source-of-truth
+conflict, replay and recovery behavior, and one deliberately unchanged case.
+
+**Pass:** the spec reconstructs every affected case from current authority,
+closes the two-implementation divergence as falsifiable behavior, defines
+source-of-truth conflict semantics, preserves the unchanged case, and leaves
+design only behaviorally equivalent representation and mechanism choices.
+
+**Fail:** a material case is omitted or left as `TBD`, the spec selects a
+runtime mechanism without an accepted external constraint, or design can still
+choose between materially different observable outcomes.
+
+### WBE-22 — Technical Design Selection And Flow Closure
+
+**Given:** a ready spec with one real mechanism decision slot, current machinery
+plus viable delete/reuse, native-platform, and maintained-dependency
+substitutes, and a material flow that crosses a service and durable-state
+boundary before finality.
+
+**Pass:** design derives decision-changing drivers, compares only viable
+same-level substitutes, selects the smallest coherent mechanism from current
+evidence, rejects each surviving alternative with a decision-relevant reason,
+and traces ownership, authority, failure, recovery, and finality across the
+complete material flow while leaving Go placement to its owner.
+
+**Fail:** current architecture becomes the default without comparison, labels
+stand in for mechanisms, a selected component has no driver, the flow cannot be
+traced without inventing a boundary or failure decision, or design changes
+accepted observable behavior.
+
+### WBE-23 — Test Design Falsifier Closure
+
+**Given:** ready behavior with one negative or replay obligation, a plausible
+wrong observable outcome, an existing green test whose oracle would also pass
+for that wrong outcome, and a mandatory proof input that is unavailable.
+
+**Pass:** every material obligation receives one disposition; each executable
+disposition controls its trigger and uses an authority-independent oracle that
+changes verdict for the named wrong behavior; the vacuous existing test is
+strengthened or rejected; and the unavailable mandatory input returns `FAIL`
+to its narrowest accepted owner.
+
+**Fail:** test names, coverage, compilation, or a green command substitute for
+a discriminating oracle; an obligation is omitted; or unavailable mandatory
+proof is silently carried into implementation.
+
+### WBE-24 — Planning Reconciliation And Readiness
+
+**Given:** ready inputs with duplicate and non-equivalent normative statements,
+two independent dependency roots, a broad mechanical contract fan-out, one
+already-satisfied obligation, and one later input that cannot invalidate the
+next result.
+
+**Pass:** Planning normalizes only equivalent obligations, gives each obligation
+one auditable task or no-implementation disposition, link-checks every affected
+surface, derives task boundaries from valid postconditions, records a wave only
+with positive independence evidence, and dry-runs the next unit without
+inventing behavior, mechanism, placement, proof strategy, or rollout policy.
+
+**Fail:** source-document structure creates tasks, a normative conflict is
+merged away, the satisfied obligation disappears without evidence, a generic
+future risk becomes `Reopen if`, or the executor must choose an unrecorded
+decision.
+
+### WBE-25 — Implementation Production-Path Closure
+
+**Given:** a defect reported at one leaf whose reproducer reaches a shared
+causal owner used by sibling callers, plus a production wiring boundary and one
+required environmental proof that cannot run.
+
+**Pass:** implementation traces every affected caller, fixes the narrowest
+shared causal owner, preserves unrelated work, removes superseded surfaces,
+and obtains proof that would fail if either the owner or production wiring were
+wrong. The unavailable required proof closes only as `implementation complete;
+verification incomplete` with the unverified claim and next proof owner.
+
+**Fail:** only the reported leaf is patched, a placeholder or test-only path is
+treated as completion, unrelated broad checks substitute for claim-scoped
+proof, or outcome completion is claimed without production-path verification.
+
+### WBE-26 — Conditional Branch Isolation And Macro-Phase Handoff
+
+**Given:** an ordinary Specification phase with one triggered internal review
+and repair, a direct implementation with no independent-review trigger, a fixed
+high-risk implementation unit that does trigger review, and a true handoff from
+ready Test Design to a new Planning session.
+
+**Pass:** Specification loads Subagents And Review at phase entry and Review
+Independence only when deciding whether to review; it does not load
+implementation-review or resume/handoff guidance, and its
+review/repair/focused re-review loop stays in the same session. After its fixed
+candidate passes mapped validation, direct implementation loads Review
+Independence only and opens no review branch. The high-risk unit then loads
+Independent Implementation Review only when that shared trigger applies. The
+true phase boundary loads Resume And Macro-Phase Handoff and emits every
+action-changing field in its fixed interface without replaying chat.
+
+**Fail:** ordinary phase entry eagerly loads review or handoff owners, internal
+review creates a macro-phase handoff, direct implementation receives a reviewer
+without its trigger, implementation review starts before the candidate is fixed, or the
+new Planning session must reconstruct an accepted source, authority boundary,
+movement proof, next action, or stop/reopen condition from chat.
 
 ## Acceptance
 

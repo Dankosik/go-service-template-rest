@@ -1,14 +1,12 @@
 # Reference Selector
 
-| Pressure | Load |
-| --- | --- |
-| Error wrapping, identity, inspection, cancellation mapping, or hidden success. | [errors-and-contracts-review.md](errors-and-contracts-review.md) |
-| Stored, nil, replaced, omitted, derived, or uncancelled context. | [context-and-lifetime-review.md](context-and-lifetime-review.md) |
-| Receivers, method sets, interface satisfaction, value copies, sync fields, buffers, or pointer-to-container shapes. | [receivers-methodsets-and-copy-safety.md](receivers-methodsets-and-copy-safety.md) |
-| Typed nil, nil containers/channels, constructors, zero values, or nil-versus-empty behavior. | [nil-zero-value-and-typed-nil.md](nil-zero-value-and-typed-nil.md) |
-| Mutable containers, cloning, headers/URL values, aliasing, or map ordering. | [slices-maps-buffers-and-ownership.md](slices-maps-buffers-and-ownership.md) |
-| Close/error probes, files, rows, scanner, body, cancel, timer/ticker, partial reads, or defer scope. | [resource-closure-and-iteration-probes.md](resource-closure-and-iteration-probes.md) |
-| A local helper may duplicate current builtins or stdlib. | [stdlib-first-modern-go-review.md](stdlib-first-modern-go-review.md) |
-| Exported names, docs, packages, constructors, interfaces, options, signatures, or compatibility. | [exported-api-and-interface-shape.md](exported-api-and-interface-shape.md) |
+`make lint` already decides the mechanical half of every row below — `contextcheck`, `containedctx`, `lostcancel`, `bodyclose`, `rowserrcheck`, `errcheck`, `errorlint`, `nilnil`, `nilerr`, `copylocks`, `recvcheck`, `ireturn`, and `modernize` among them. Load a reference for the contract those checks cannot see.
 
-When pressures overlap, choose by the violated contract: context lifetime versus error inspectability, or mutable aliasing versus whether stdlib can replace the helper.
+| Pressure | Load | Required effect |
+| --- | --- | --- |
+| Error identity, wrapping, inspection, a logged-away failure, or cancellation errors callers branch on. | [error-contracts.md](error-contracts.md) | Decide which cause becomes caller-observable API, rather than reading a satisfied `wrapcheck` as a sound contract. |
+| Detached or background work, resources opened in a loop, completion probes, partial reads, or `defer` scope. | [lifetime-and-release.md](lifetime-and-release.md) | Separate release from completion and name the scope that owns each, rather than treating a present `Close` as proof. |
+| Mutable slices, maps, headers, or buffers crossing a boundary; clone depth; observable map order; copied values. | [aliasing-and-ownership.md](aliasing-and-ownership.md) | Trace who can still write through the backing store, rather than reading a clone call as isolation. |
+| Typed nil, zero-value usability, nil-versus-empty at an observer, or interface satisfaction through a stored value. | [nil-zero-and-method-sets.md](nil-zero-and-method-sets.md) | Check what the caller observes at the boundary, rather than what the code says it returns. |
+
+When pressures overlap, choose by the violated contract: error identity versus release scope, or mutation authority versus observable absence.

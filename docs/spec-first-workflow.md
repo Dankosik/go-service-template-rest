@@ -77,9 +77,9 @@ Independent review, when triggered, is an internal method of the artifact-owning
 | Test technical design and ownership readiness. | [Technical Design Review](spec-first-workflow/phases/technical-design-review.md) | Findings and verdict returned to technical design. |
 | Falsify non-obvious scenarios and proof feasibility. | [Test Design](spec-first-workflow/phases/test-design.md#review) | Independent QA findings and verdict returned to test design. |
 | Test whether a ledger is executable. | [Task Review / Readiness](spec-first-workflow/phases/task-review-readiness.md) | Findings and verdict returned to planning. |
-| Independently falsify a fixed high-risk implementation acceptance unit. | [Independent Implementation Review](spec-first-workflow/phases/implementation-validation-closeout.md#independent-implementation-review) | A one-shot `PASS`, `FAIL`, or `BLOCKED` verdict returned to root acceptance. |
+| Independently falsify a fixed high-risk implementation acceptance unit. | [Independent Implementation Review](spec-first-workflow/shared/implementation-review.md) | A one-shot `PASS`, `FAIL`, or `BLOCKED` verdict returned to root acceptance. |
 
-Every independent review follows the shared [Review Independence](spec-first-workflow/shared/subagents-and-handoff.md#review-independence) trigger. A dispositioned `CONCERNS` verdict may move for non-implementation artifacts; `FAIL` may not. Implementation review returns its verdict to the root-owned acceptance contract and is not triggered by a `tasks.md` entry alone.
+Every independent-review decision follows the shared [Review Independence](spec-first-workflow/shared/review-independence.md) trigger. A dispositioned `CONCERNS` verdict may move for non-implementation artifacts; `FAIL` may not. [Implementation Review](spec-first-workflow/shared/implementation-review.md) owns its fixed-unit verdict and return to the root-owned acceptance contract; a `tasks.md` entry alone does not trigger it.
 
 ### Conditional Read Gate
 
@@ -89,7 +89,10 @@ keep it out of context when the trigger is absent:
 | Trigger | Read before |
 | --- | --- |
 | Persist, inspect status/ownership, or resume from task artifacts. | [Artifact Model](spec-first-workflow/shared/artifact-model.md) |
-| Enter a non-implementation macro phase, delegate, open an independent review, resume a lane, or hand off. | [Subagents And Handoff](spec-first-workflow/shared/subagents-and-handoff.md) |
+| Enter a non-implementation macro phase, delegate, or open a non-implementation independent review. | [Subagents And Review](spec-first-workflow/shared/subagents-and-handoff.md) |
+| Decide whether a fixed artifact or implementation acceptance unit requires independent review. | [Review Independence](spec-first-workflow/shared/review-independence.md) |
+| Open a triggered independent implementation review of one fixed acceptance unit. | [Independent Implementation Review](spec-first-workflow/shared/implementation-review.md) |
+| Resume after compaction or interruption, or cross a real actor or macro-phase boundary. | [Resume And Macro-Phase Handoff](spec-first-workflow/shared/resume-and-handoff.md) |
 | Choose or operate a durable control, Worker/subagent carrier, model, or reasoning effort. | [Agent Harness](agent-harness.md) |
 | Design changes repository boundaries or generated-source ownership. | [Repository Architecture](repo-architecture.md) |
 
@@ -114,13 +117,13 @@ A request authorizing end-to-end implementation may continue through the needed 
 
 Absent one of those conditions, movement is automatic: enter the next phase, task, or wave, and report what it produced instead of asking whether to enter it ([Proceeding](../AGENTS.md#proceeding)).
 
-Review, repair, and re-review of non-implementation artifacts stay with the artifact owner until the shared convergence condition is met. Implementation moves only under the [current phase-owned execution, review, correction, acceptance, integration, and closeout contract](spec-first-workflow/phases/implementation-validation-closeout.md). [Subagents And Handoff](spec-first-workflow/shared/subagents-and-handoff.md) owns triggered review independence and handoff mechanics.
+Review, repair, and re-review of non-implementation artifacts stay with the artifact owner until the shared convergence condition is met. Implementation moves only under the [current phase-owned execution, review, correction, acceptance, integration, and closeout contract](spec-first-workflow/phases/implementation-validation-closeout.md). [Review Independence](spec-first-workflow/shared/review-independence.md) owns the shared trigger, [Subagents And Review](spec-first-workflow/shared/subagents-and-handoff.md) owns non-implementation convergence, and [Independent Implementation Review](spec-first-workflow/shared/implementation-review.md) owns the fixed-unit review branch.
 
 ### Phase Lock
 
 Planning readiness on the current `tasks.md` candidate commits the next transition to its first executable acceptance unit or real parallel wave. Status checks and compaction resume from artifacts without changing the phase. Concrete new evidence that invalidates a named accepted input or readiness disposition reopens only its smallest owner and preserves every unaffected disposition.
 
-At a true macro-phase boundary, follow [Handoff](spec-first-workflow/shared/subagents-and-handoff.md#handoff).
+At a true macro-phase boundary, follow [Resume And Macro-Phase Handoff](spec-first-workflow/shared/resume-and-handoff.md#macro-phase-handoff).
 
 ## Prompt Maintenance
 
@@ -147,11 +150,12 @@ Change one instruction group at a time, and prefer removal: when a behavior
 already has an owner, delete the weaker statement instead of adding a
 clarifying one. Retain examples and style guidance only when they encode a
 product requirement or close a measured gap, then review realistic trigger,
-near-miss, and completion cases. Use the disclosed [Workflow Behavior
-Evals](spec-first-workflow/shared/workflow-behavior-evals.md) for orchestration
-changes. This repository owns the cases and trace assertions, not a fake agent
-runner or judge; without an externally owned live evaluation system, invocation
-and model-behavior claims remain explicitly unproven.
+near-miss, and completion cases. Apply the disclosed [Workflow Behavior
+Evals](spec-first-workflow/shared/workflow-behavior-evals.md) Run Contract to
+every agent-instruction change and its matching phase or orchestration cases.
+This repository owns the cases and trace assertions, not a fake agent runner or
+judge; without an externally owned live evaluation system, invocation and
+model-behavior claims remain explicitly unproven.
 
 Instruction edits prove only an instruction-level mitigation. Claim changed
 model behavior only after an external live evaluation exercises the relevant
@@ -177,6 +181,10 @@ target model, harness, trigger, and completion case.
 - [Skill Authoring](skill-authoring.md) owns the lean behavioral-adapter
   contract.
 - [Artifact Model](spec-first-workflow/shared/artifact-model.md) owns
-  persistence; [Subagents And Handoff](spec-first-workflow/shared/subagents-and-handoff.md)
-  owns built-in subagent delegation, triggered review independence,
-  convergence, and handoff.
+  persistence; [Subagents And Review](spec-first-workflow/shared/subagents-and-handoff.md)
+  owns built-in subagent delegation and non-implementation review convergence;
+  [Review Independence](spec-first-workflow/shared/review-independence.md) owns
+  the shared review trigger;
+  [Independent Implementation Review](spec-first-workflow/shared/implementation-review.md)
+  owns its fixed-unit branch; [Resume And Macro-Phase Handoff](spec-first-workflow/shared/resume-and-handoff.md)
+  owns context rollover and chain of custody.

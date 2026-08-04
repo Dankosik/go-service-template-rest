@@ -1,79 +1,83 @@
 # Runtime Forensics For Go Incidents
 
 ## Behavior Change Thesis
-When loaded for a live stalled or leaking Go process, this file makes the model capture the most perishable runtime artifact before restart or edits instead of destroying evidence.
+
+When loaded for a live Go process that is stalled, leaking, or stuck in
+shutdown, this file makes the model capture the perishable artifact through the
+listener this service already ships — instead of proposing a temporary
+`net/http/pprof` endpoint, sending a signal that kills the process it was about
+to inspect, or restarting first and reading stacks that no longer exist.
 
 ## When To Load
-Load when a Go process or test is alive but not making progress, deadlocked, leaking goroutines, growing memory, stuck in shutdown, or producing a panic whose first stack is insufficient.
+
+Load when a Go process or test is alive but not progressing: deadlock, goroutine
+or memory growth, a stuck drain, or a panic whose first stack is insufficient.
+
+Profile *fit* for a measured performance delta is not this file.
+`docs/benchmarking.md` and `go-performance` own which artifact answers which
+question — including the mutex-holder versus block-waiter distinction, and the
+`make bench-profile` route that needs no listener at all.
 
 ## Decision Rubric
-- Capture volatile evidence before restart when operationally safe.
-- Pick the first artifact that matches the wait or growth class; do not collect every profile by habit.
-- Use two time-separated samples when claiming goroutine, heap, or RSS growth.
-- Prefer goroutine dumps for "who is blocked now"; use block/mutex profiles for accumulated wait and contention.
-- Prefer local or protected pprof when the process must stay alive; use `SIGQUIT` only when its default exit-with-stack-dump behavior is acceptable or custom signal handling is confirmed.
-- Use execution trace when ordering and timing relationships matter more than aggregate samples.
-- Remove or close temporary runtime endpoints after capture.
 
-## Fast Artifact Map
+Capture order is the whole discipline: what dies with the process goes first.
+[`production-diagnosis`](../../../../docs/universal-disciplines/production-diagnosis/SKILL.md)
+owns when to stop capturing and mitigate.
 
-| Symptom | Best first artifact | Why |
-|---|---|---|
-| hang, deadlock, stuck shutdown | goroutine dump | shows blocked send, receive, lock, wait, syscall, or shutdown drain |
-| goroutine count grows | goroutine profile over time | distinguishes warmup from leaked owners |
-| memory or RSS grows | heap profile over time | shows retained objects or allocation pressure |
-| high CPU | CPU profile | shows active hot paths |
-| low CPU but high latency | goroutine dump, block profile, or trace | points at waiting, serialization, or scheduler behavior |
-| lock or channel wait | block or mutex profile | shows wait sites and contention |
-| scheduler or wakeup mystery | execution trace | shows timing and goroutine state transitions |
+- **`SIGQUIT` terminates the process.** Go's default `GOTRACEBACK` dumps every
+  goroutine stack and then exits, so it is a capture *and* an outage. Use it only
+  when losing the process is acceptable or custom signal handling is confirmed;
+  otherwise read the dump over HTTP. On a test binary, `GOTRACEBACK=all` widens a
+  panic's stack set without killing anything extra.
 
-## Imitate
+- **The profile handlers exist here, but ship off.**
+  `observability.pprof.enabled` defaults to `false` (`internal/config/types.go`),
+  and validation rejects enabling it with no `observability.metrics.addr` —
+  the diagnostics listener binds every interface so Prometheus can reach it.
+  `/debug/pprof/heap` discloses heap contents and `/debug/pprof/cmdline`
+  discloses process arguments, which makes the gate
+  (`APP__OBSERVABILITY__PPROF__ENABLED`) a deployment decision about audience
+  rather than a debugging step to take unilaterally. Standing up a second,
+  temporary endpoint instead is the same disclosure with none of the review.
 
-```bash
-kill -QUIT <pid>
-docker kill --signal=QUIT <container>
-```
+- **`GET /debug/buildinfo` is ungated and answers "which build is this?"**
+  Nothing else in the process can: the image builds `-buildvcs=false` with `.git`
+  outside the context, so `runtime/debug.ReadBuildInfo` carries no revision, and
+  the OCI label is unreachable from inside the container. Read it alongside every
+  artifact — mid-rollout, "which of these two pods" is the question.
 
-Use this only when terminating the process is acceptable, or when you have confirmed custom signal handling. By default, Go exits with a stack dump on `SIGQUIT`.
+- **A stuck shutdown is still reachable.** The diagnostics listener is
+  deliberately outside the drain
+  (`cmd/service/internal/bootstrap/startup_server.go`) and closes only after
+  `drainAndShutdown` returns, so `/metrics` and — when gated on — the profile
+  handlers stay up for the entire drain window, including the in-flight requests
+  hanging it. That window is the evidence; do not assume it is already gone.
 
-```bash
-curl -o goroutine-1.txt 'http://127.0.0.1:6060/debug/pprof/goroutine?debug=2'
-sleep 30
-curl -o goroutine-2.txt 'http://127.0.0.1:6060/debug/pprof/goroutine?debug=2'
-```
+- **One artifact per hypothesis; two time-separated samples for any growth
+  claim.** `/debug/pprof/goroutine?debug=2` answers "who is blocked right now"; a
+  single heap or goroutine snapshot cannot separate a leak from warm-up.
 
-Use two samples when the claim is "goroutines are leaking" rather than "goroutines are currently blocked."
-
-```bash
-GOTRACEBACK=all go test ./path/to/pkg -run '^TestName$' -count=1 -v
-```
-
-Use this when panic output hides relevant goroutines.
+- **A capture longer than 65s is truncated.** `pprofWriteTimeout` raises the
+  diagnostics write timeout to 65s precisely so a default 30s `?seconds=`
+  completes. A larger `?seconds=` on `/debug/pprof/profile` or `/debug/pprof/trace`
+  outlives the write timeout and returns a truncated artifact that still parses
+  like a whole one.
 
 ## Reject
 
-```bash
-curl -o cpu.pprof .../profile
-curl -o heap.pprof .../heap
-curl -o block.pprof .../block
-curl -o mutex.pprof .../mutex
-curl -o trace.out .../trace
-```
+Reject restarting and then investigating. The blocked stacks that name the owner
+of a deadlock cycle exist only in the live process, and a restart converts a
+solvable incident into an unreproducible one.
 
-This over-collects, adds overhead, and can blur which artifact proved which hypothesis.
-
-```text
-Restarted the stuck service, then started investigating the deadlock.
-```
-
-This destroys the blocked goroutine state that would have shown the owner cycle.
-
-## Agent Traps
-- Using CPU profiles to debug mostly waiting processes.
-- Assuming one heap snapshot proves a leak.
-- Ignoring process identity, commit/version, timestamp, and load condition.
-- Leaving temporary pprof endpoints reachable after the investigation.
-- Checking in `*.pprof`, `trace.out`, or dumps by accident.
+Reject leaving captures where git will find them. `.gitignore` covers
+`.artifacts/test/`, `.artifacts/bench/`, and `coverage.out` — a `.pprof`, a
+`trace.out`, or a goroutine dump written beside the package under investigation
+is not ignored. Write captures under `.artifacts/`, and return the pprof gate to
+its shipped `false` when the investigation ends.
 
 ## Validation Shape
-Record timestamp, process identity, version or commit, load condition, exact capture command, artifact path, repeated blocked stack or profile top summary, elapsed time between samples for growth claims, whether signal capture was expected to terminate the process, and whether runtime endpoints were already protected or temporary.
+
+Record build identity from `/debug/buildinfo`, timestamp and load condition, the
+exact capture command, the elapsed time between samples for any growth claim, and
+whether the pprof gate was already enabled or was turned on for this
+investigation and turned back off.

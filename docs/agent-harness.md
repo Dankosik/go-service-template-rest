@@ -49,7 +49,7 @@ first governed action.
 
 ## Model And Effort Selection
 
-The dispatch policy lives in the [implementation phase](spec-first-workflow/phases/implementation-validation-closeout.md#worker-execution) and in [Subagents And Handoff](spec-first-workflow/shared/subagents-and-handoff.md): the root explicitly and independently selects the best-suited available model and an acceptance-unit-matched reasoning effort for every worker and read-only lane, and never inherits a parent epic's tier when the controls exist. This table owns the per-harness tiers:
+The dispatch policy lives in the [implementation phase](spec-first-workflow/phases/implementation-validation-closeout.md#worker-execution) and in [Subagents And Review](spec-first-workflow/shared/subagents-and-handoff.md): the root explicitly and independently selects the best-suited available model and an acceptance-unit-matched reasoning effort for every worker and read-only lane, and never inherits a parent epic's tier when the controls exist. This table owns the per-harness tiers:
 
 | Task class | Codex App | Claude Code | Qwen Code |
 | --- | --- | --- | --- |
@@ -193,7 +193,7 @@ These worker roles exist only under `.claude/agents/`. They are deliberately not
 
 ### Read-only lanes
 
-Read-only lanes follow [Subagents And Handoff](spec-first-workflow/shared/subagents-and-handoff.md): one distinct decision-changing question per lane, concurrency bounded by current capacity and independence, and read-only boundaries stated in each brief.
+Read-only lanes follow [Subagents And Review](spec-first-workflow/shared/subagents-and-handoff.md): one distinct decision-changing question per lane, concurrency bounded by current capacity and independence, and read-only boundaries stated in each brief.
 
 Start ordinary research, design, challenge, and review lanes with fresh context
 when the harness supports it. In the Codex App, dispatch the selected role with
@@ -204,16 +204,16 @@ new lane of the selected role. Pass only the shared Lane Brief, minimal artifact
 or source pointers, and irreproducible current facts. Return only the shared
 Fan-In envelope rather than replaying the lane transcript.
 
-Triggered independent implementation review opens a new one-shot lane with
-fresh context. Dispatch `task-acceptance-agent` for an ordinary bounded unit.
+Triggered independent implementation review follows its [conditional
+branch](spec-first-workflow/shared/implementation-review.md) and opens a new
+one-shot lane with fresh context. Dispatch `task-acceptance-agent` for an ordinary bounded unit.
 Dispatch `critical-reviewer-agent` only for the highest-consequence boundary
 when current unit-specific evidence justifies the critical tier.
 
 An implementation Worker or transcript-inheriting subtask/fork is not an
-independent reviewer. Pass an implementation reviewer only the `tasks.md` path
-and unit or task IDs, candidate location, and irreproducible external evidence
-allowed by the shared implementation-review independence contract. Never
-resume that reviewer for a different unit.
+independent reviewer. Pass only the inputs and evidence allowed by the
+Independent Implementation Review branch, and never resume that reviewer for a
+different unit.
 
 Harness-native task lists remain execution controls. They do not replace the
 repository `tasks.md` ledger or receive its acceptance receipts.

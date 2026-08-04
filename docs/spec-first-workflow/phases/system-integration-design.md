@@ -18,11 +18,48 @@ Derive the design drivers, synthesize and select the smallest coherent target-st
 
 ## Architecture Synthesis And Selection
 
-Derive explicit design drivers before selecting the target architecture: accepted behavior and invariants; evidence-bounded workload and critical path; hard constraints and authorities; triggered risks, failure/recovery obligations, and cross-cutting pressures required by [Outputs](#outputs); and rollout and proof boundaries. Give each material driver a consequence or threshold that can admit or reject a mechanism.
+1. Derive explicit design drivers before selecting the target architecture:
+   accepted behavior and invariants; evidence-bounded workload and critical
+   path; hard constraints and authorities; triggered risks, failure/recovery
+   obligations, and cross-cutting pressures required by [Outputs](#outputs);
+   and rollout and proof boundaries. Give each material driver a consequence or
+   threshold that can admit or reject a mechanism.
+2. Treat the current architecture as evidence, not as the default target.
+   Inspect it only until the relevant constraints, reusable capabilities,
+   owners, and retained, replaced, or removed surface are known.
+3. For each unresolved architecture decision slot, construct materially
+   distinct viable target-state substitutes at the same decision level only
+   when current evidence leaves a real fork. Consider only applicable live
+   substitutes: delete or simplify current machinery; retain or reuse the
+   current owner, pattern, dependency, or infrastructure; use a native platform
+   capability; use already approved and operated infrastructure; or introduce a
+   maintained dependency, managed capability, or custom mechanism. A viable
+   candidate fixes the relevant boundaries, authority, ordering and finality,
+   failure and recovery, and operational consequences; a pattern, product, or
+   topology label alone does not.
+4. Compare surviving substitutes against the same drivers and current evidence.
+   Select one coherent architecture, record why it dominates and why each viable
+   rejected substitute loses, and name the assumption or reopen condition that
+   could reverse the choice. When evidence leaves one viable mechanism, record
+   what collapses the fork without manufacturing alternatives.
 
-Treat the current architecture as evidence, not as the default target. Inspect it only until the relevant constraints, reusable capabilities, owners, and retained, replaced, or removed surface are known. For each unresolved architecture decision slot, construct materially distinct viable target-state substitutes at the same decision level only when current evidence leaves a real fork. Consider only applicable live substitutes at that decision slot: delete or simplify current machinery; retain or reuse the current owner, pattern, dependency, or infrastructure; use a native platform capability; use already approved and operated infrastructure; or introduce a maintained dependency, managed capability, or custom mechanism. A viable candidate fixes the relevant boundaries, authority, ordering and finality, failure and recovery, and operational consequences; a pattern, product, or topology label alone does not.
+### Selection Criterion
 
-Compare surviving substitutes against the same drivers and current evidence. Select one coherent architecture, record why it dominates and why each viable rejected substitute loses, and name the assumption or reopen condition that could reverse the choice. When evidence leaves one viable mechanism, record what collapses the fork without manufacturing alternatives. Selection is closed only when every material driver, including each triggered cross-cutting pressure, is satisfied or enforced by target decisions; decision-relevant evidence supports the selected architecture's local boundary, ownership, platform, and operational fit or bounds the exact proof gap and reopen checkpoint; every affected component, edge, store, contract, or custom mechanism included in the target is necessary for at least one driver; every real fork is closed by same-level comparison against the same evidence or by evidence that no fork remains; and the combined decisions remain coherent across all material flows. Then trace the selected architecture through Interaction And Data Flow; if that trace exposes an unresolved mechanism or boundary, return to this selection step.
+Selection is closed only when:
+
+- every material driver, including each triggered cross-cutting pressure, is
+  satisfied or enforced by a target decision;
+- decision-relevant evidence supports the selected architecture's local
+  boundary, ownership, platform, and operational fit, or bounds the exact proof
+  gap and reopen checkpoint;
+- every affected component, edge, store, contract, or custom mechanism in the
+  target is necessary for at least one driver;
+- every real fork is closed by same-level comparison against the same evidence,
+  or by evidence that no fork remains;
+- the combined decisions remain coherent across all material flows.
+
+Trace the selected architecture through Interaction And Data Flow. If that
+trace exposes an unresolved mechanism or boundary, return to selection.
 
 ## Interaction And Data Flow
 
@@ -42,7 +79,19 @@ When a durable design artifact is required, add a Mermaid diagram only when comp
 
 When the shared [persistence trigger](../shared/artifact-model.md#when-to-persist) applies, use `design/overview.md` or one focused file. Split contracts, data, sequence, or rollout only when that creates a useful review/ownership boundary.
 
-For each material architecture decision slot, record the applicable drivers and current evidence; the surviving substitutes or evidence that no real fork remains; the selected mechanism and why each viable rejected substitute loses; bounded assumptions; a measurable acceptance boundary; material failure, operational, and rollout consequences; required proof; and the reopen condition. When behavior changes, distinguish observed current state from the target state and name what is retained, replaced, or removed. The material-flow record is the universal coverage check; add only branch-specific decisions whose trigger matches.
+For each material architecture decision slot, record:
+
+- the applicable drivers and current evidence;
+- the surviving substitutes or evidence that no real fork remains;
+- the selected mechanism and why each viable rejected substitute loses;
+- bounded assumptions, a measurable acceptance boundary, material failure,
+  operational, and rollout consequences, required proof, and the reopen
+  condition.
+
+When behavior changes, distinguish observed current state from the target state
+and name what is retained, replaced, or removed. The material-flow record is the
+universal coverage check; add only branch-specific decisions whose trigger
+matches.
 
 For each security or trust, performance or capacity, observability or operability, rollout or rollback, compatibility, or mixed-version pressure triggered by the ready spec, current evidence, or any viable candidate, use it as a design driver during selection; for the selected architecture, record only the architecture-level decision, owner, operational or proof boundary, and reopen condition. Apply the matching specialist method by reference rather than restating it here.
 

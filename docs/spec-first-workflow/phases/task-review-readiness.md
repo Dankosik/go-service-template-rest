@@ -1,6 +1,6 @@
 # Task Review / Readiness
 
-Apply the shared [Review Independence](../shared/subagents-and-handoff.md#review-independence) contract. This file supplies only ledger-specific falsification lenses and verdict consequences; it does not define another workflow phase.
+Apply the shared [Review Independence](../shared/review-independence.md) contract. This file supplies only ledger-specific falsification lenses and verdict consequences; it does not define another workflow phase.
 
 ## Read When
 

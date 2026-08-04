@@ -29,6 +29,7 @@ docs/spec-first-workflow.md
 docs/subagent-brief-template.md
 docs/template-sync.md
 docs/spec-first-workflow/
+docs/universal-disciplines/
 
 .agents/skills/
 .claude/agents/

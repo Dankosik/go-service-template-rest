@@ -1,12 +1,12 @@
-# Subagents And Handoff
+# Subagents And Review
 
-Use built-in subagents and session handoffs only when they reduce a real context, independence, coordination, or resume problem.
+Use built-in subagents only when they reduce a real context, independence, or
+coordination problem.
 
 ## Read When
 
 - Distinguishing a built-in subagent lane from the harness-native implementation Worker.
 - Requiring an independent verdict.
-- Resuming a task or handing it to another session.
 
 ## Inputs
 
@@ -18,15 +18,13 @@ Use built-in subagents and session handoffs only when they reduce a real context
 
 - A local decision or a small lane plan.
 - Evidence and recommendations for root synthesis.
-- A compact handoff only when another session or actor is actually needed.
 
 ## Stop Rule
 
 Do not create a built-in subagent lane for work that is sequential, tightly
 coupled to the root's reasoning, duplicates another lane, lacks an independently
 checkable evidence boundary, or would reduce the coherence of the final
-synthesis. Do not create a session handoff when the current session can safely
-finish.
+synthesis.
 
 ## Delegation Decision
 
@@ -62,9 +60,8 @@ local convenience do not justify skipping an eligible lane. Required
 independent reviews still use a separate read-only reviewer.
 
 Good lanes include independent source research, one specialist design question,
-review of a fixed non-implementation revision, and a triggered [independent
-implementation review](#implementation-review-independence) of a fixed
-acceptance unit.
+and review of a fixed non-implementation revision. Triggered implementation
+review follows its separate [conditional branch](implementation-review.md).
 Bad lanes include broad “review everything,” duplicate lenses, questions
 without an independent evidence boundary, discretionary implementation review,
 implementation specialist analysis, and any implementation or review repair.
@@ -117,15 +114,7 @@ its anchor, impact on the accepted outcome, blocker/concern/non-blocking
 classification, and smallest action or reopen owner. If no finding survives,
 say so and state the evidence boundary; do not pad a clean review.
 
-## Review Independence
-
-Use an independent reviewer when an artifact controls an orchestrated,
-high-impact, hard-to-reverse, protected-domain, cross-owner, or materially
-contested decision that its author cannot credibly falsify alone. Artifact
-or `tasks.md` presence alone does not trigger a reviewer. Other structured
-artifacts and ordinary implementation use root self-review. Apply the same
-trigger to a fixed implementation acceptance unit; an explicit user request for
-independent review also triggers it.
+## Non-Implementation Review Convergence
 
 A triggered non-implementation reviewer:
 
@@ -146,44 +135,6 @@ A triggered review moves on `PASS`. `CONCERNS` also moves once each concern has 
 
 A material mutation after review invalidates only the affected findings and proof. Wording-only edits and recorded concern dispositions do not trigger another review.
 
-## Implementation Review Independence
-
-Each triggered implementation review uses one fresh, one-shot read-only lane
-against one fixed acceptance unit. [Agent
-Harness](../../agent-harness.md#read-only-lanes) chooses the ordinary or
-critical role and harness-native clean-context mechanism. The implementation
-actor and implementation Worker are not eligible reviewers, and a lane used for
-one unit is not resumed for another task ID or unit.
-
-Before accepting the review question, resolve the supplied task IDs against the
-authoritative ledger. A valid dispatch identifies exactly one recorded
-singleton or grouped acceptance unit. Otherwise reject the handoff without a
-phase verdict:
-
-```text
-REVIEW_HANDOFF_INVALID
-received: <task or unit IDs>
-recorded units: <matching singleton or grouped units, or none>
-```
-
-The root corrects the boundary and opens a fresh one-shot lane.
-
-Give the lane the `tasks.md` path and grouped unit IDs or singleton task ID,
-cited accepted sources,
-authoritative candidate location, and irreproducible external evidence. The
-reviewer derives its result from the current contract, candidate, production
-path, dependencies, retained scope, and claim-scoped proof rather than an
-implementation summary. It may run safe non-mutating checks and inspect wider
-candidate context, but returns a verdict only for the resolved unit.
-
-The reviewer keeps the candidate fixed, edits and repairs nothing, and returns
-the [phase-defined verdict and
-evidence](../phases/implementation-validation-closeout.md#independent-implementation-review)
-unchanged. A material candidate or proof-precondition change invalidates that
-verdict; the root routes correction and opens a fresh lane only when the review
-trigger still applies. The reviewer uses existing proof receipts and runs only
-the missing or adversarial falsifier required by its question.
-
 ## Fan-In
 
 For each material lane result, keep only:
@@ -194,37 +145,3 @@ For each material lane result, keep only:
 - destination artifact or owner.
 
 Do not paste raw transcripts into authoritative artifacts.
-
-## Resume
-
-Resume from artifacts, not remembered chat:
-
-1. `tasks.md` for implementation/validation;
-2. otherwise `workflow-plan.md` for multi-session coordination;
-3. then only the spec/design/test/research/rollout artifacts named by the current next action.
-
-If those sources disagree, the task is blocked until the narrowest owner reconciles them.
-
-When compaction or accumulated lane history makes completed coordination larger
-than the live decision state, refresh the ledger's compact `Active wave` block
-and continue from that artifact in a fresh root context when the harness
-supports it. Carry no transcript replay; retain only accepted inputs, unit and
-candidate identities, proof receipts, open causal class, and next action.
-
-## Handoff
-
-Treat handoff as a chain of custody: name the accepted source, movement evidence, next owner, authority boundary, proof obligation, next executable action, and exact stop/reopen owner and condition so the receiver can continue without reconstructing chat.
-
-Emit a handoff prompt only when the current actor or session cannot continue. Name the outcome, minimal read set, non-obvious constraints, current evidence, next action, and stop/reopen owner; otherwise return the phase result without manufacturing another session.
-
-A risk-triggered research-synthesis challenge and triggered specification, technical-design, test-design, and task-readiness reviews are internal checkpoints. The root launches the applicable read-only lane and continues automatically in the same session when possible.
-
-An explicitly user-requested standalone review remains read-only: return the
-complete review result and stop at the requested review boundary. It gains no
-repair, implementation, or workflow-handoff authority unless the user separately
-grants it.
-
-An explicitly requested review of completed implementation may run inside
-implementation when the request makes it an acceptance condition; otherwise it
-begins after implementation/validation/closeout and never retroactively becomes
-an acceptance or closeout gate.

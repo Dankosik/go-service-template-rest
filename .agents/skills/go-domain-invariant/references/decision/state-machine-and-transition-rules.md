@@ -1,71 +1,26 @@
 # State Machine And Transition Rules
 
 ## Behavior Change Thesis
-When loaded for symptom "a feature has lifecycle states, phase boundaries, or invalid transitions", this file makes the model define legal movement, guards, terminal states, and forbidden paths instead of likely mistake "describe event sequence or implementation progress as if that were a state model."
-
-## When To Load
-Load this when lifecycle states, phase boundaries, workflow ownership, terminal states, invalid transitions, stuck-state behavior, transition guards, or reopen rules change the allowed domain behavior.
+When loaded for symptom "a feature has lifecycle states, terminal states, or invalid transitions", this file makes the model define forbidden movement and terminal policy instead of likely mistake "list the allowed transitions only, which leaves every unlisted move silently legal."
 
 ## Decision Rubric
-- Model a lifecycle only when allowed behavior differs by state. A one-step command with no legal-state difference usually belongs in acceptance criteria instead.
-- Separate domain states from implementation statuses. `specification_blocked` can be domain-meaningful in this repo workflow; `file_written` usually is not unless it changes what is legal next.
-- For each transition, name trigger, guard/preconditions, postconditions, allowed next state, forbidden next states, and violation outcome.
-- Name terminal states and whether reopening is legal. If reopening is legal, make it an explicit transition.
-- Include idempotent repeat, duplicate event, timeout, and stuck-state behavior when those can change correctness.
-- Avoid invented states that only mirror an implementation queue, table, or handler unless the business policy depends on that state.
-
-## Imitate
-```text
-Lifecycle: non_trivial_task
-Owner: orchestrator workflow contract
-State: planning
-Trigger: expected `tasks.md` is ready for implementation handoff
-Preconditions:
-- non-trivial `spec.md` has a fresh specification-review PASS
-- any triggered compact or split design review has `PASS` or dispositioned `CONCERNS`, or the owner recorded that technical design was not triggered
-- validation/proof path is explicit
-Allowed next states:
-- implementation when readiness = fresh PASS for the current `tasks.md` revision
-- planning_repair when readiness = CONCERNS so every risk/proof obligation is dispositioned and freshly re-reviewed
-- upstream_reopen when readiness = FAIL
-Forbidden next states:
-- implementation when readiness = CONCERNS
-- implementation when readiness = FAIL
-- implementation when PASS belongs to an older `tasks.md` revision
-- implementation when an unresolved high-impact open question could change correctness or ownership
-Violation outcome: block implementation and route to the named earlier phase
-```
-
-Copy the shape: exact current state, trigger, guard, legal next state, forbidden movement, and consequence.
-
-```text
-| From | Trigger | Guard | To | Violation outcome |
-| --- | --- | --- | --- | --- |
-| `specification` | `spec.md` candidate complete | clarification gate reconciled, or formal gate not expected after recorded shape reclassification plus subagent gate decision | `specification_review` | keep `spec.md` draft or blocked |
-| `implementation` | proof exposes missing required `tasks.md` | none | `planning_reopen` | stop coding; do not invent task ledger mid-code |
-```
-
-Copy the contrast: the table records only transitions that change allowed behavior, not every file edit.
+- Model a lifecycle only where allowed behavior differs by state. A command whose legality never depends on current state belongs in the invariant register instead.
+- Per transition: trigger, guard, allowed next state, **forbidden next states**, and violation outcome. The forbidden set is the part a reader cannot reconstruct from the allowed set, because an unlisted move reads as unspecified rather than rejected.
+- Name terminal states and say what may reopen them — replay, reconciliation, support action, or nothing. A terminal state with no stated reopen policy is the one an admin path quietly reopens later.
+- Say what a repeat, a duplicate event, a timeout, and a stuck state do, where those can change the outcome. `idempotency-replay-and-async-domain-rules.md` owns the sameness rule they depend on.
+- Keep domain states separate from implementation status. A state earns its place by changing what is legal next, not by naming a queue, table, or handler step.
+- A transition guard that a concurrent writer can lose is enforced where the write is serialized, not in the caller — see the enforcement-point criterion in `invariant-register-patterns.md`.
 
 ## Reject
 ```text
-When planning is mostly done, start coding.
-```
-
-Failure: "mostly done" does not say which gate was reached, which questions remain, or which failure path applies.
-
-```text
 States: creating, saving, logging, returning
 ```
+Failure: these are implementation steps. No state grants a different permission or outcome, so the model has no rejecting power.
 
-Failure: these are implementation steps unless the domain gives different permissions or outcomes in each state.
-
-## Agent Traps
-- Do not call a status enum "documented" if forbidden transitions are still missing.
-- Do not hide ambiguous external outcomes behind "retry later"; name pending, ambiguous, reconciliation, manual intervention, or reject.
-- Do not treat `CONCERNS` and `PASS` as synonyms: only `PASS` permits the modeled workflow transition.
-- Do not create terminal states without saying whether support, replay, reconciliation, or admin action can reopen them.
-- Do not convert every downstream async step into a domain state; keep only states that change allowed behavior or proof obligations.
+```text
+Retry later.
+```
+Failure: an unnamed state hiding an ambiguous external outcome. Name pending, ambiguous-commit, reconciliation, manual intervention, or reject.
 
 ## Validation Shape
-For a nontrivial lifecycle, proof should include at least one allowed transition, one forbidden transition, one terminal or reopen case when applicable, and one duplicate/retry/stuck-state case when applicable.
+Proof should cover one allowed transition, one forbidden transition rejected, the terminal or reopen case when one exists, and the duplicate or stuck-state case when replay can reach it.

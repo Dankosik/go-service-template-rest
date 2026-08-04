@@ -92,7 +92,7 @@ runs the [Validation Matrix](#validation-matrix)'s smallest matching proof. The
 bounded working-tree diff is the complete execution record for direct work;
 ledger work also retains its accepted task entry. The root accepts the fixed
 candidate when the Stop Rule passes and any triggered [independent implementation
-review](#independent-implementation-review) has returned a passing verdict.
+review](../shared/implementation-review.md) has returned `PASS`.
 Reopen the path only when evidence changes risk, ownership, reversibility, or
 proof.
 
@@ -177,41 +177,14 @@ and unverified remainder.
 ## Independent Implementation Review
 
 After root-local execution or Worker integration produces a fixed acceptance
-unit that passes bounded root review and mapped validation, invoke one
-independent lane only when the shared [Review
-Independence](../shared/subagents-and-handoff.md#review-independence) trigger
-applies or the user explicitly requested it. The reviewer judges the grouped
-unit IDs or singleton task against the authoritative current checkout and
-evidence. A Worker return remains provisional until root intake freezes it.
-
-The one-shot lane answers one question: may the root accept this fixed unit? It
-returns exactly one verdict:
-
-- `PASS`: every accepted task postcondition and constraint is present on the
-  real path, the retained delta is in scope, and current proof satisfies this
-  phase's Stop Rule.
-- `FAIL`: a candidate-caused regression, accepted criterion violation, missing
-  required surface, or remediable proof gap prevents acceptance. Return
-  anchored findings and the smallest repair or reopen owner.
-- `BLOCKED`: implementation may be complete, but required external or
-  environmental proof is unavailable. Name the unverified claim, narrower
-  evidence, and next proof owner.
-
-The root routes `FAIL` to local repair or the same Worker correction loop and
-records `BLOCKED` as `implementation complete; verification incomplete`. The
-reviewer edits neither candidate nor `tasks.md`; the root owns the acceptance
-decision but cannot treat a triggered `FAIL` or `BLOCKED` as passing. A material
-candidate or proof-precondition change invalidates the verdict and triggers a
-new one-shot lane only for the affected review boundary.
-
-After root acceptance, return to
-[Acceptance-Unit Closure](#acceptance-unit-closure) and apply its persisted
-transition through [Artifact Model](../shared/artifact-model.md#minimal-status).
-When the unit contains the final unchecked task, the root also checks the
-ledger's global `Completion` condition and every required task disposition.
-
-An inline direct outcome with no persisted `tasks.md` has no ledger transition;
-the root closes it only under this phase's Stop Rule and evidence requirements.
+unit that passes bounded root review and mapped validation, load [Review
+Independence](../shared/review-independence.md) to decide whether review is
+triggered. When it applies, load the [Independent Implementation
+Review](../shared/implementation-review.md) conditional branch. The root accepts
+the fixed candidate only on `PASS`; `FAIL` remains in phase-owned correction or
+reopen, and `BLOCKED`
+records `implementation complete; verification incomplete` without accepting
+the unit or claiming outcome completion.
 
 ## Close Out
 
