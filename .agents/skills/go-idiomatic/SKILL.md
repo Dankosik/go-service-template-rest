@@ -13,6 +13,6 @@ An error is handled exactly once and wrapped where the cause belongs in this pac
 
 `make lint` already decides the mechanical half of this domain. A finding worth reporting here is one the configured linters cannot reach.
 
-Load the [shared specialist contract](../specialist-contract.md). This skill has one review branch: reconstruct semantic obligations from changed symbols, callers, context and resource lifetimes, nil/zero states, errors, method sets, and mutable-value aliasing, then inspect Go semantics rather than style. Complete when the shared finding envelope accounts for every obligation; name any outside boundary or proof blocker with its forced consequence and focused proof. Unset behavior returns to the named domain Decision owner.
+Load the [shared specialist contract](../specialist-contract.md). This skill has one review branch: reconstruct semantic obligations from changed symbols, callers, context and resource lifetimes, nil/zero states, errors, method sets, and mutable-value aliasing, then inspect Go semantics rather than style. Complete when the shared finding envelope accounts for every obligation.
 
-Load the [review selector](references/index.md) for one violated contract by default. Hand placement to `go-implementation-ownership` and behavior-preserving readability to `go-language-simplifier`.
+Load the [review selector](references/index.md) when a changed symbol carries a contract the configured linters cannot see — error identity, release scope, aliasing authority, or nil/zero observability. Hand placement to `go-implementation-ownership` and behavior-preserving readability to `go-language-simplifier`.

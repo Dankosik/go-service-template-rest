@@ -40,6 +40,6 @@ gates already prove, then spend findings on what is left.
 ## Choose The Branch
 
 - **Decision** — select when accepted behavior exists but implementation placement is absent or changing. [Project Structure & Module Organization](../../../docs/project-structure-and-module-organization.md) owns the placement rule, its worked results, and the first-feature order; apply it and record the forced consequences rather than restating it. Stop on any unresolved prerequisite; otherwise complete when shared Decision dispositions cover every responsibility and path with forced consequences explicit.
-- **Review** — select when changed Go must conform to accepted placement. Account for every affected owner and competing path through the shared finding envelope, naming any outside boundary or proof blocker with the smallest correction and focused proof. Missing placement returns to the named Ownership Decision owner.
+- **Review** — select when changed Go must conform to accepted placement. Account for every affected owner and competing path through the shared finding envelope.
 
 Hand runtime topology to `go-system-architecture` and behavior policy to its domain skill. On the implementation path, `go-coder` owns import direction against `depguard`, regeneration mechanics for each canonical source, and helper-versus-interface placement.

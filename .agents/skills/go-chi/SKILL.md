@@ -17,9 +17,9 @@ Most of that tree already has an owner here: `internal/infra/http/router.go` bui
 
 ## Choose The Branch
 
-The branch decides what you return; both branches read from the same [reference selector](references/index.md), loading one entry by default and another only for an independent pressure.
+The branch decides what you return. Load the [reference selector](references/index.md) when the diff touches the middleware chain or route tree, a router fallback (`NotFound`, `MethodNotAllowed`, `Allow`, preflight), or a log/metric/span label derived from the request path.
 
 - **Decision** — select when transport policy is absent or changing. Complete when shared Decision dispositions cover every affected route node with its position in the tree, forced consequence, and focused proof.
-- **Review** — select when changed chi code must conform to accepted transport policy. Complete when the shared finding envelope accounts for every affected node; name any outside boundary or proof blocker with the smallest safe correction and proof. Missing policy returns to the named transport Decision owner.
+- **Review** — select when changed chi code must conform to accepted transport policy. Complete when the shared finding envelope accounts for every affected node.
 
 Hand resource or status semantics to `go-api-contract` and system topology to `go-system-architecture`.

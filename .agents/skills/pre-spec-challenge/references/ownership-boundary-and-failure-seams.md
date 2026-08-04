@@ -6,13 +6,8 @@ When loaded for ownership, actor, side-effect, or failure seams, this file makes
 ## When To Load
 Load this when the candidate path touches source-of-truth ownership, actor authority, destructive admin actions, cross-domain side effects, async handoffs, cache/state propagation, or failure semantics that would otherwise be decided during implementation.
 
-## Decision Rubric
-- Name the durable state transition first: created job, deactivated account, cached summary, deleted artifact, emitted side effect.
-- Ask which component or actor owns the transition, recovery, and audit trail after partial success.
-- Challenge actor authority only through a concrete action: deactivate, reactivate, revoke session, retry export, invalidate cache, clean up artifact.
-- For async and side-effect flows, test the gap between "request accepted" and "side effect completed."
-- For caches, test whether source of truth, key shape, invalidation, and staleness bounds survive failed invalidation or tenant collision.
-- Keep the question only if the answer can change ownership, task split, API contract, rollback design, or validation proof.
+## The Move
+Name the durable state transition first — created job, deactivated account, cached summary, deleted artifact, emitted side effect — then ask which component or actor owns the transition, recovery, and audit trail after partial success. Attach actor authority to a concrete privileged action (deactivate, reactivate, revoke session, retry export, invalidate cache, clean up artifact); "internal-only" waives none of auditability, reversibility, or actor boundaries, and UUID secrecy is not tenant authorization. For async and side-effect flows, test the gap between "request accepted" and "side effect completed" — a manual DB fix counts as a recovery owner only with trigger, authority, and proof, and "let downstream integrations fail naturally" is a policy to challenge, not a default. For caches, test whether source of truth, key shape, invalidation, and staleness bounds survive failed invalidation or tenant collision. Keep the question only if the answer can change ownership, task split, API contract, rollback design, or validation proof.
 
 ## Imitate
 - "Which component owns the durable state transition if the handler succeeds but the async side effect fails?"
@@ -26,16 +21,6 @@ Load this when the candidate path touches source-of-truth ownership, actor autho
 
 ## Reject
 - "Who owns this?"
-  - Fails because it does not name the state or failure point being owned.
-- "Is auth okay?"
-  - Fails because actor authority must attach to a specific privileged action.
-- "How do failures work?"
-  - Fails because it asks for a design essay rather than a planning fork.
+  - Does not name the state or failure point being owned.
 - "Add a worker reconciliation loop."
-  - Fails because it answers the design instead of challenging whether recovery ownership is missing.
-
-## Agent Traps
-- Accepting "internal-only" as a reason to skip auditability, reversibility, or actor boundaries.
-- Treating UUID secrecy as tenant authorization.
-- Treating "let downstream integrations fail naturally" as a side-effect policy.
-- Treating a manual DB fix as a recovery owner without trigger, authority, and proof.
+  - Answers the design instead of challenging whether recovery ownership is missing.

@@ -1,6 +1,6 @@
 ---
 name: go-reliability
-description: "Reliability: Use for timeouts, retries, overload, degradation, readiness, startup/drain/shutdown, recovery, rollout, or review. Own service policy; Skip synchronization, durable replay, or context semantics."
+description: "Reliability: Use for timeouts, retries, overload, degradation, readiness, startup/drain/shutdown, recovery, or rollout. Own service policy; Skip synchronization, durable replay, or context semantics."
 ---
 
 # Go Reliability
@@ -17,9 +17,9 @@ Most of that arithmetic already has an owner here, and its numbers are enforced 
 
 ## Choose The Branch
 
-The branch decides what you return; both branches read from the same [reference selector](references/index.md), loading one entry by default and another only for an independent pressure.
+The branch decides what you return. Load the [reference selector](references/index.md) when the change adds an outbound call, pooled acquire, or wait to a request path; adds concurrency, queued work, or a proposed limiter; or touches readiness, drain, or teardown.
 
 - **Decision** — select when resilience policy is absent or changing. Complete when shared Decision dispositions cover every dependency and lifecycle stage with budget, failure, recovery, and rollout consequences explicit.
-- **Review** — select when changed Go must conform to accepted resilience policy. Trace every affected failure path into the shared finding envelope, naming any outside boundary or proof blocker with the smallest correction and focused proof. Missing policy returns to the named Resilience Decision owner.
+- **Review** — select when changed Go must conform to accepted resilience policy. Trace every affected failure path into the shared finding envelope.
 
 Hand concrete synchronization to `go-concurrency`, durable recovery to `go-distributed`, and context API misuse to `go-idiomatic`. Load [`external-api-integration`](../../../docs/universal-disciplines/external-api-integration/SKILL.md) when a dependency call creates or changes state on the other side: it forces one operation identity carried from request through ambiguous outcome to reconciliation, instead of a timeout-and-retry policy that treats an unknown outcome as a failure. Load [`durable-background-jobs`](../../../docs/universal-disciplines/durable-background-jobs/SKILL.md) when work must outlive the request, the worker, or a deploy: it forces claim, lease, and recovery contracts instead of a goroutine with a retry loop.

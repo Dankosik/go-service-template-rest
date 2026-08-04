@@ -24,11 +24,10 @@ cancellation, a shutdown ordering, or a handoff between goroutines.
 - Put `synctest.Wait` between advancing time and asserting. It returns once every
   other bubble goroutine is durably blocked, which turns "the timer has fired by
   now" into an observation instead of a race.
-- Durably blocked means blocked on something only the bubble can unblock: a
-  channel created inside it, a select over such channels, `sync.Cond.Wait`, a
-  `WaitGroup` whose `Add` ran inside, or `time.Sleep`. A goroutine parked on a
-  channel created before the bubble, a real socket, or a syscall never qualifies,
-  and one such goroutine stops the clock for the whole bubble.
+- A goroutine parked on a channel created before the bubble, a real socket, or a
+  syscall is not durably blocked, and one such goroutine stops the clock for the
+  whole bubble; the current `testing/synctest` doc owns the full durably-blocked
+  taxonomy.
 - Read the two stalls differently. All goroutines durably blocked with no wakeup
   left is a deadlock, which `Test` panics on and names. One goroutine blocked
   outside the bubble is a hang: nothing panics until `go test -timeout` fires and
@@ -36,8 +35,6 @@ cancellation, a shutdown ordering, or a handoff between goroutines.
   the offender is the bubble frame missing the `(durable)` marker —
   `[chan receive, synctest bubble 1]` beside healthy neighbours reading
   `[chan receive (durable), synctest bubble 1]`.
-- `T.Run`, `T.Parallel`, and `T.Deadline` must not be called inside the bubble;
-  group subcases outside it. `T.Context` inside is cancelled with the bubble.
 - Goroutine exit needs no separate assertion inside a bubble: `Test` waits for
   every bubble goroutine. Package-wide that job belongs to
   `goleak.VerifyTestMain(m)` in `TestMain`, already run in seven packages here.

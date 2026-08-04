@@ -1,6 +1,6 @@
 ---
 name: go-observability
-description: "Observability: Use for logs, metrics, traces, SLI/SLOs, alerts, diagnostics, privacy, cardinality, sampling, cost, or review. Own policy/operator evidence; Skip reliability, performance, or delivery."
+description: "Observability: Use for logs, metrics, traces, SLI/SLOs, alerts, diagnostics, privacy, cardinality, sampling, or cost. Own policy/operator evidence; Skip reliability, performance, or delivery."
 ---
 
 # Go Observability
@@ -15,10 +15,10 @@ Load the [shared specialist contract](../specialist-contract.md). Reconstruct op
 
 ## Choose The Branch
 
-Both branches read the same [selector](references/index.md); each reference states the accepted policy together with the repository surface that enforces it.
+Load the [selector](references/index.md) when the change adds or widens a metric label, instrument, or resource attribute; carries correlation across a service boundary; adds a log event or proposes payload logging; or touches readiness or a debug surface. Each reference states the accepted policy together with the repository surface that enforces it.
 
 - **Decision** — select when telemetry policy is absent or changing. Complete when shared Decision dispositions cover every operator question and signal with cost/privacy bounds explicit.
-- **Review** — select when changed telemetry must conform to accepted policy. Account for every affected signal through the shared finding envelope, naming any outside boundary or proof blocker with the smallest correction and focused proof. Missing policy returns to the named Telemetry Decision owner.
+- **Review** — select when changed telemetry must conform to accepted policy. Account for every affected signal through the shared finding envelope.
 
 This skill owns telemetry that is specific to Go and to this repository. It does not restate general practice: SLI and error-budget math, burn-rate alerting, and symptom-versus-cause alert design are standard SRE method and need no local rubric.
 
