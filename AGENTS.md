@@ -52,6 +52,11 @@ hidden modes or speculative abstractions.
 - This file owns request authorization, the agent/user decision boundary, and repository-wide invariants.
 - Skills provide methods; they neither create work nor override this contract, accepted decisions, or task-local decisions.
 - A Markdown link names an owner; it does not load that owner's instructions. Before the first phase-governed action, load the smallest current read set: every `change`, `build`, or `fix` loads [Implementation / Validation / Closeout](docs/spec-first-workflow/phases/implementation-validation-closeout.md); an open path or phase, or any structured/orchestrated route, first loads the [workflow router](docs/spec-first-workflow.md) and then its current phase. Load the router's conditional owner before its governed action.
+- Before the first action that changes repository boundaries or generated-source
+  ownership, or adds a contract capability, integration adapter or outbound
+  target, persistence or durable flow, durable schema, or executable surface,
+  read [Repository Architecture](docs/repo-architecture.md); it owns the
+  repository extension seams.
 - Before editing agent instructions, tool descriptions, or skill files, read [Prompt Maintenance](docs/spec-first-workflow.md#prompt-maintenance); skill changes also load [Skill Authoring](docs/skill-authoring.md).
 - Instruction loading is a gate: read the matching owner before the first edit, durable-artifact mutation, native-control dispatch, or readiness/completion claim it governs. Re-evaluate the read set only when evidence changes the phase, risk, ownership, proof, or harness control; retain only the current phase and triggered conditional owners.
 - Task-local artifacts own accepted task decisions. Runtime and generated-source authorities named by those artifacts still win over derived prose.
@@ -100,7 +105,7 @@ Structured and orchestrated work follows the workflow router's [Required Spine](
 
 1. Reconstruct the accepted outcome from current repository facts before acting. Resolve every open decision from current evidence and state the bounded assumption you chose; [Decision Ownership](#decision-ownership) owns which decisions are yours and when to escalate.
 2. State the outcome, non-obvious constraints or authority, matching proof, and stop condition. Omit inherited defaults, empty fields, and discretionary steps; prescribe an order or mechanism only when an accepted decision fixes it.
-3. Match every readiness or completion claim to current evidence of equal scope. Report narrower or unavailable proof honestly and name the next useful check.
+3. Match every readiness or completion claim to current evidence of equal scope. Report narrower or unavailable proof honestly and name the next useful check. State beside the claim any coverage it did not reach — a sampled or top-N review, a skipped surface, a source that could not be read — because an unstated narrowing reads as full coverage.
 
 ## Implementation And Evidence
 
@@ -114,6 +119,9 @@ naming, helper shape, or test diagnostics; method sets, nil/zero, errors, or
 context; resource or transaction lifetime; mutable ownership, aliasing,
 concurrency, or lifecycle; hot-path work amplification, resource cost, or
 capacity; canonical, generated, or hand-written authority; and repository-native
-proof. Activate only the matching existing Go methods; untriggered categories
-create no work. Close every triggered category with its phase or skill owner, or
-name the owner and condition that must reopen it.
+proof. For a second present path, treat behavior as one policy only when it
+shares the same accepted authority, invariant, and policy-level failure
+semantics; similar code shape alone is not evidence. Activate only the matching
+existing Go methods; untriggered categories create no work. Close every
+triggered category with its phase or skill owner, or name the owner and condition
+that must reopen it.
