@@ -7,6 +7,8 @@ description: "Smallest Go change: Use when an authorized outcome is ready. Own p
 
 One authorized outcome becomes one **surgical change**: the smallest diff at the earliest valid owner that makes every accepted criterion true, provable, and clean.
 
+Measure smallest across repository-owned behavior rather than changed lines: when a new case is evidence of the same policy, extend or refactor its existing owner instead of cloning the path.
+
 `accepted criteria -> earliest valid owner -> smallest change -> required tests -> cleanup -> proof -> return`
 
 Read and apply [Implementation / Validation / Closeout](../../../docs/spec-first-workflow/phases/implementation-validation-closeout.md), which owns acceptance and completion.

@@ -94,7 +94,6 @@ keep it out of context when the trigger is absent:
 | Open a triggered independent implementation review of one fixed acceptance unit. | [Independent Implementation Review](spec-first-workflow/shared/implementation-review.md) |
 | Resume after compaction or interruption, or cross a real actor or macro-phase boundary. | [Resume And Macro-Phase Handoff](spec-first-workflow/shared/resume-and-handoff.md) |
 | Choose or operate a durable control, Worker/subagent carrier, model, or reasoning effort. | [Agent Harness](agent-harness.md) |
-| Design changes repository boundaries or generated-source ownership. | [Repository Architecture](repo-architecture.md) |
 
 Re-run this gate when phase movement or current evidence introduces a new row;
 do not reload an unchanged owner merely to produce a routing receipt.

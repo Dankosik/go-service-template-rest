@@ -50,6 +50,21 @@ When no case matches, define the smallest task-local trigger, near-miss, and
 completion case for the comparison; persist it here only when it protects a
 reusable or regression-critical behavior.
 
+For an instruction change intended to improve implementation under evolving
+requirements, also run an evolutionary comparison. Use at least two
+representative Go tasks with three or more checkpoints each. Hide later
+checkpoint specifications, start each checkpoint in a fresh model context with
+only the carried workspace and normally persistent repository sources, and run
+the new checkpoint proof together with every earlier checkpoint proof. Keep the
+model, harness, effort, repository base, and checkpoint inputs fixed between
+baseline and candidate. The runner keeps exact checkpoint prompts and tests
+outside the task workspace and records stable trajectory IDs and content
+digests; a run without those identities is incomplete. Cumulative behavioral
+correctness is the acceptance gate; later-checkpoint change amplification, live
+owners of the same policy, duplicated execution paths, changed files or symbols,
+corrections, clone rate, and complexity are diagnostics. A structural
+improvement cannot offset a behavior, scope, or proof regression.
+
 ## Cases
 
 ### WBE-01 — Accepted Base
@@ -370,18 +385,27 @@ choose between materially different observable outcomes.
 **Given:** a ready spec with one real mechanism decision slot, current machinery
 plus viable delete/reuse, native-platform, and maintained-dependency
 substitutes, and a material flow that crosses a service and durable-state
-boundary before finality.
+boundary before finality. The slot is expensive to reverse, one element of a
+rejected substitute is absorbable by the winner without violating a driver, and
+one further lane would only raise confidence in an already-preferred substitute.
 
 **Pass:** design derives decision-changing drivers, compares only viable
 same-level substitutes, selects the smallest coherent mechanism from current
 evidence, rejects each surviving alternative with a decision-relevant reason,
 and traces ownership, authority, failure, recovery, and finality across the
-complete material flow while leaving Go placement to its owner.
+complete material flow while leaving Go placement to its owner. The substitutes
+are constructed in independent generative lanes rather than authored in sequence
+against an already-preferred one; the absorbable element is recorded as adopted
+rather than discarded with its substitute; and the confidence-only lane is
+omitted.
 
 **Fail:** current architecture becomes the default without comparison, labels
 stand in for mechanisms, a selected component has no driver, the flow cannot be
-traced without inventing a boundary or failure decision, or design changes
-accepted observable behavior.
+traced without inventing a boundary or failure decision, design changes accepted
+observable behavior, every substitute is authored by one actor in sequence when
+the fork is expensive to reverse, a rejected substitute's absorbable element is
+discarded with it, or a lane is opened to raise confidence in one substitute
+instead of constructing a distinct one.
 
 ### WBE-23 — Test Design Falsifier Closure
 
@@ -455,6 +479,57 @@ review creates a macro-phase handoff, direct implementation receives a reviewer
 without its trigger, implementation review starts before the candidate is fixed, or the
 new Planning session must reconstruct an accepted source, authority boundary,
 movement proof, next action, or stop/reopen condition from chat.
+
+### WBE-27 — Evolutionary Change Locality
+
+**Given:** the runner uses fixed private `EVOL-LOCAL-01` and
+`EVOL-EXTENSION-01` trajectories with stable IDs and content digests. The local
+trajectory starts with one caller of a package-owned policy, adds a caller with
+distinct local mapping but the same accepted authority, invariant, and
+policy-level failure semantics, then changes the shared policy. The extension
+trajectory starts from a closed direct repository-extension outcome, adds one
+capability path, adds a path with distinct transport mapping but the same
+feature policy, then changes that policy. Each trajectory has at least three
+hidden checkpoints; every checkpoint starts in a fresh context from the prior
+workspace and persistent repository sources, and its proof includes all earlier
+checkpoint proof.
+
+**Pass:** each first checkpoint adds no speculative extension mechanism. The
+local trajectory loads neither the workflow router nor Repository Architecture;
+the extension trajectory remains direct and reads Repository Architecture from
+the bootstrap contract before its first governed extension action. Each second
+checkpoint preserves real variation while leaving the shared policy at one
+smallest owner, and each third checkpoint changes that policy at that owner
+without editing parallel copies. Every checkpoint passes its cumulative
+behavioral proof, and the candidate keeps or improves baseline behavior, scope,
+and proof quality.
+
+**Fail:** a hypothetical later case creates a framework in the first checkpoint;
+the local trajectory loads an untriggered architecture owner; the extension
+trajectory misses its current extension seam or loads the router only to
+discover the bootstrap trigger; the second checkpoint clones live behavior or
+creates a competing policy owner; the third edits several copies or regresses
+earlier proof; or a better amplification, clone, complexity, token, or latency
+metric substitutes for cumulative correctness.
+
+### WBE-28 — Unchecked Is Not Established
+
+**Given:** a triggered review whose evidence boundary reaches only part of the
+named surface — one candidate blocker whose disproof the reviewer can run and
+which survives it, one candidate blocker whose disproof cannot be run in the
+available boundary, and one class of file the review sampled rather than covered
+in full.
+
+**Pass:** the survivable finding is classified a blocker with its attempted
+disproof and that disproof's result named; the unfalsifiable one is reported as
+a concern with the gap named rather than as a blocker; and the review's own
+claim states the sampled coverage beside it. The correction loop receives only
+the surviving blocker.
+
+**Fail:** a blocker is classified without an attempted disproof, an unrunnable
+disproof is treated as confirmation or as refutation, a sampled review is
+reported in language that reads as full coverage, or an unfalsified finding
+consumes a correction round before its disproof is attempted.
 
 ## Acceptance
 

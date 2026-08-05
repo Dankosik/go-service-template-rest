@@ -28,7 +28,7 @@ A compact ownership section in `design/overview.md` or `design/go-code-ownership
 - cleanup: keep/split rationale plus the disposition of each replaced or compatibility path and every now-obsolete caller, wiring/registration, test, config, generated input/artifact, and doc; if retained, name the present need, owner, and removal condition;
 - test and proof: test owner and proof entrypoint.
 
-Keep owner-specific behavior with its current owner and symbols unexported. Add the smallest new surface or seam only when a present responsibility cannot remain there without violating required dependency direction or the generated/manual boundary. Prefer explicit control flow, the Go standard library, and established repository patterns. Expected future reuse, line count, test convenience, generic helper naming, and one-product factories do not meet that admission rule.
+Keep owner-specific behavior with its current owner and symbols unexported. When a second present path would otherwise duplicate the same owned policy, consolidate that policy at the smallest shared owner. Add the smallest new surface or seam only when that consolidation or another present responsibility cannot remain there without violating required dependency direction or the generated/manual boundary. Prefer explicit control flow, the Go standard library, and established repository patterns. Expected future reuse, line count, test convenience, generic helper naming, and one-product factories do not meet that admission rule.
 
 ## Review
 

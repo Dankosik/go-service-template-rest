@@ -82,6 +82,16 @@ add a duplicate lane for confidence alone. Nested delegation is not a default
 and needs its own independent evidence question. If a lane exposes a new owner
 decision, return it to the root rather than expanding scope.
 
+One open decision slot may instead receive several **generative** lanes, each
+constructing a materially distinct candidate without seeing the others. These
+are not duplicate lanes: they differ in what they produce rather than in the
+question they answer, and their value is precisely that no candidate is authored
+against an already-preferred one. Use them only where a real fork is still open
+and reversing the choice later is expensive. A second lane asked the same
+question against the same evidence boundary, to raise confidence in one answer,
+remains a duplicate lane. The root still owns comparison, selection, and the
+rejected-candidate record.
+
 For read-only subagents, choose the currently available model and reasoning
 effort from task difficulty, evidence volume, and consequence of error, using
 the [harness model map](../../agent-harness.md#model-and-effort-selection).
@@ -113,6 +123,13 @@ Lead with surviving findings in severity order. Each actionable finding names
 its anchor, impact on the accepted outcome, blocker/concern/non-blocking
 classification, and smallest action or reopen owner. If no finding survives,
 say so and state the evidence boundary; do not pad a clean review.
+
+A finding survives its own falsification before it is classified. Before naming
+a finding a blocker, name the observation that would show it is wrong and state
+that observation's current result. A finding whose disproof was not attempted,
+or whose disproof could not be run, is reported as a concern with that gap
+named — never as a blocker. Unchecked is not the same as refuted, and a blocker
+that no one tried to refute costs a correction round to discover.
 
 ## Non-Implementation Review Convergence
 

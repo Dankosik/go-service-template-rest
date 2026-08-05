@@ -36,12 +36,17 @@ Derive the design drivers, synthesize and select the smallest coherent target-st
    maintained dependency, managed capability, or custom mechanism. A viable
    candidate fixes the relevant boundaries, authority, ordering and finality,
    failure and recovery, and operational consequences; a pattern, product, or
-   topology label alone does not.
+   topology label alone does not. When the fork is expensive to reverse,
+   construct the substitutes in independent generative lanes rather than in
+   sequence, so that no candidate is authored against an already-preferred one.
 4. Compare surviving substitutes against the same drivers and current evidence.
    Select one coherent architecture, record why it dominates and why each viable
    rejected substitute loses, and name the assumption or reopen condition that
-   could reverse the choice. When evidence leaves one viable mechanism, record
-   what collapses the fork without manufacturing alternatives.
+   could reverse the choice. A substitute loses as a whole, not in every part:
+   absorb any element of a rejected substitute that the selection can adopt
+   without violating a driver, and record it as adopted rather than rejected.
+   When evidence leaves one viable mechanism, record what collapses the fork
+   without manufacturing alternatives.
 
 ### Selection Criterion
 

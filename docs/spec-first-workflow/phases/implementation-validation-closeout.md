@@ -127,7 +127,8 @@ disposition while tree, preconditions, command, and claim are unchanged.
 Review the bounded diff and resulting production behavior for correctness;
 affected error, context, ownership, concurrency, resource, and lifecycle
 behavior; canonical/generated authority; triggered security, data, and rollout
-risk; unnecessary machinery; stale replacement surfaces; and proof adequacy.
+risk; unnecessary machinery; duplicated ownership of one live policy; stale
+replacement surfaces; and proof adequacy.
 Surrounding and transitive context informs the bounded judgment, while unrelated
 or pre-existing defects, style preferences, and unproven suspicions remain
 observations. Resolve repository-answerable uncertainty before asking another
