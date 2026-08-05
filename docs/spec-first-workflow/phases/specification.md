@@ -13,8 +13,11 @@ completion bar while keeping the spec as small as the decision surface allows.
 
 ## Inputs
 
-- Accepted brief and relevant research.
+- Accepted brief and relevant research, or the user's own request when intake was
+  skipped.
 - Current runtime/generated contracts and source-of-truth evidence.
+- Accepted decisions already recorded by a canonical document in the affected
+  area.
 - Existing spec and review findings for repair work.
 
 ## Outputs
@@ -26,6 +29,7 @@ traceability evidence, not the contract. Use only applicable sections:
 ```markdown
 # <User/operator-visible outcome>
 status: draft | ready | blocked
+Problem: <problem this outcome removes, in user or operator terms>  <!-- when the spec outlives its chat -->
 
 ## Scope and non-goals
 ## Behavior and contract delta
@@ -67,8 +71,11 @@ Derive the affected behavior surface from the accepted brief, relevant
 research, current runtime/generated contracts, and repository or consumer
 surfaces the accepted outcome can affect; do not infer coverage only from what
 an existing spec already mentions. Start with the behavior delta and important
-unchanged invariants. Consider an additional lens only when current evidence
-shows it can change that meaning, constrain it, or alter required proof. For
+unchanged invariants. Sweep the actors a surface inventory alone can miss, such
+as an operator or the owner of a migrating consumer, and give each affected actor
+a behavioral rule or an explicit unchanged or non-goal disposition. Consider an
+additional lens only when current evidence shows it can change that meaning,
+constrain it, or alter required proof. For
 each triggered lens, record the decision, unchanged constraint, proof
 consequence, or named reopen owner. Persist this inventory only when it changes
 an action, verdict, handoff, or resume decision.
@@ -96,6 +103,9 @@ every interpretation-changing part:
 
 Omit a part only when current evidence shows it cannot change interpretation.
 Use stable rule IDs only when multiple owners or downstream artifacts need them.
+Take any decision-changing term already owned by [Domain
+Vocabulary](../../repo-architecture.md#domain-vocabulary) with its recorded
+meaning instead of redefining it.
 
 When source-of-truth semantics are triggered, state which fact is authoritative,
 which observations are derived, what absence, currentness, and finality mean,
@@ -112,16 +122,26 @@ smallest matching representation:
 - a compact state model for lifecycle, invalid or repeated events, and terminal
   behavior;
 - a quality scenario naming source, stimulus, environment, affected surface,
-  response, and response measure for a material non-functional outcome.
+  response, and response measure for a material non-functional outcome;
+- a literal fragment such as a schema or type shape when it fixes the decision
+  more precisely than prose can, kept to the decision-carrying parts rather than
+  a working example.
 
 Keep the representation to the ambiguity it resolves. Leave exhaustive
-scenarios to test design, and omit unaffected concerns and unset targets.
+scenarios to test design, and omit unaffected concerns and unset targets. Name a
+canonical authority when a decision rests on it, but carry no implementation
+path, symbol, or code beyond that fragment; placement and code remain design and
+implementation decisions.
 
 Ground each decision-changing factual claim in current evidence. Resolve each
 normative choice from the accepted outcome, a named authority, or the applicable
 owner under [Decision Ownership](../../../AGENTS.md#decision-ownership), and
-record the chosen rule and rationale. A bounded assumption is valid only when it
-keeps the accepted outcome honest and useful; name its safe boundary and
+record the chosen rule and rationale. Mark any claim the repository cannot
+re-derive, such as a value stated only in the request or a shape taken only from
+a prototype. When a canonical document already records an accepted decision on
+the same question, its recorded reopen condition is the test for contradicting
+it. A bounded assumption is valid only when it keeps the accepted outcome honest
+and useful; name its safe boundary and
 objective reopen condition. Missing user- or external-owner policy blocks that
 owner. Missing support for a Specification-owned choice requires a narrower
 claim or a recorded Specification decision, not deferral to design. Keep raw

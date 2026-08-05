@@ -38,12 +38,15 @@ Otherwise keep the result inline.
 
 ## Artifact Owners
 
+Task-local artifacts live in the task bundle at `specs/<task>/` named by
+[Project Structure](../../project-structure-and-module-organization.md).
+
 | Artifact | Create when | Owns | Does not own |
 | --- | --- | --- | --- |
 | `spec.md` | Required for structured/orchestrated work; direct work uses it only when decisions must survive. | Outcome, behavior delta, invariants, constraints, accepted risks, proof expectations. | Runtime implementation order. |
 | `design/overview.md` or focused `design/*` | Implementation would otherwise choose architecture, contract, data, failure, rollout, or package ownership. | Selected mechanism and ownership decisions. | Task progress. |
 | `test-plan.md` | Proof spans meaningful scenarios or levels. | Scenario obligations, observables, proof levels, residual gaps. | Test implementation. |
-| `tasks.md` | Required for structured/orchestrated work; direct work may keep its plan inline. | Executable order, planned waves, owners, evidence, progress, completion condition. | New product or design decisions. |
+| `tasks.md` (+ `tasks/` task files when [split](../phases/planning.md#ledger-layout)) | Required for structured/orchestrated work; direct work may keep its plan inline. | Executable order, planned waves, owners, evidence, progress, completion condition. Lifecycle state stays in the index even when detail moves to task files. | New product or design decisions. |
 | `research/*.md` | Evidence must be reused, audited, or refreshed. | Findings, source limits, conflicts, decision impact. | Final task decisions. |
 | `rollout.md` | Deployment, migration, backfill, compatibility, or rollback has a non-trivial sequence. | Operational order, gates, rollback/failback, observables. | Product scope. |
 | `workflow-plan.md` | Cross-session or multi-lane coordination cannot be recovered from the main artifacts. | Current goal, phase, active artifacts, blockers, next action, surviving open decisions and fog. | Duplicate spec/design/task content; the decisions themselves, which stay with their phase owner. |
@@ -60,7 +63,7 @@ none. An open decision that stops the next action belongs to the `blocked`
 status and its `Blockers / assumptions` entry instead. The **frontier** is every
 listed decision whose blockers are resolved — what can be worked or dispatched
 now, and the surviving form of the question map the [Delegation
-Decision](subagents-and-handoff.md#delegation-decision) builds at phase entry.
+Decision](subagents-and-handoff.md#delegation-decision) builds and re-derives.
 
 ```markdown
 - <question, stated as the decision it can change> — owner: <agent, named external owner, or user> — blocks: <decision, phase, or task; or nothing> — route: <research lane, design owner, probe, or escalation>
@@ -172,12 +175,13 @@ Use additional fields only when they change an action or verdict.
 
 - Identify the exact artifact revision or diff reviewed when that distinction matters.
 - After a material repair, old findings remain history; the repaired surface needs a fresh check proportionate to the change.
-- Time-sensitive external evidence records its source and date/version.
+- Time-sensitive external evidence carries the claim-level locator and freshness
+  required by [Research](../phases/research.md#outputs).
 - A stale artifact may explain history but cannot override a newer accepted decision or runtime source of truth.
 
 ## Resume Order
 
-1. Inspect current workspace and Git status, then read current `tasks.md` first when implementation or validation is active.
+1. Inspect current workspace and Git status, then read current `tasks.md` first when implementation or validation is active. When the ledger is split, read the index first and then only the task files for the next unit or actual wave.
 2. Otherwise read `workflow-plan.md` when it exists for a real multi-session task.
 3. Then read the decision artifact named there: usually `spec.md`, followed by only the design, test, research, or rollout files needed for the next action.
 4. If artifacts conflict, stop and reopen the narrowest decision owner; do not merge the conflict silently.
@@ -187,11 +191,13 @@ Use additional fields only when they change an action or verdict.
    detect the affected change and broaden only when its result requires it.
 
 Keep only active task bundles. At closeout, remove execution-only state such as
-`tasks.md`, `workflow-plan.md`, and `Active wave`. Retain a completed spec or
+`tasks.md` with any `tasks/` directory, `workflow-plan.md`, and `Active wave`. Retain a completed spec or
 design only when another live authority names it as a durable decision source;
 otherwise delete the completed bundle after moving durable decisions into
-canonical docs or code. Git remains the history, so a completed task ledger is
-never kept as an archive.
+canonical docs or code. A research note whose refresh trigger is still live
+moves to the canonical owner of the decision it supports, or is deleted with the
+bundle. Git remains the history, so a completed task ledger is never kept as an
+archive.
 
 Moving a decision completes only when it reads as a decision at its canonical
 owner: the rule, the stable identity of the change that decided it — merged pull

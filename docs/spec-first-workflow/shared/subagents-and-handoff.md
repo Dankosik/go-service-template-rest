@@ -53,6 +53,16 @@ eligible discovery, challenge, and review questions. Intake keeps user-intent
 and authorization decisions in the root and routes decision-changing evidence
 questions to Research.
 
+Evidence order is discovered, not planned. A finding that changes the frame of an
+unanswered question re-derives the map before the next round, whether it returned
+from a lane or came from the root's own search: state the questions the new
+evidence now makes precise, and take each one that can change a named decision —
+through a lane when it is lane-eligible, in the root otherwise. Deepening applies
+within a question as well as across the set — a round that establishes the
+baseline a question is asked against can make a sharper round on that same
+question eligible. Deepening stops when a round exposes no further question that
+can change a named decision, not when the entry map is exhausted.
+
 Keep in the root any ordered chain whose next decision depends on the previous
 result, cross-lane synthesis, final artifact decisions, correction routing, and
 all acceptance and completion claims. If no question is lane-eligible or the
@@ -163,5 +173,8 @@ For each material lane result, keep only:
 - uncertainty or conflict;
 - consuming disposition: accept, reject, repair, carry as proof/risk, or reopen;
 - destination artifact or owner.
+
+A lane's summary is a secondary source: carry the locator it landed on, not its
+restatement. A conclusion returned without one is an unknown, not a finding.
 
 Do not paste raw transcripts into authoritative artifacts.
