@@ -18,16 +18,21 @@ Research owns discovering, verifying, falsifying, comparing, and synthesizing th
 ## Outputs
 
 - A compact open-item map. For each item, retain the affected decision and owner, its Method classification, downstream disposition, and any carried constraint, assumption, risk, proof obligation, blocker/reopen condition, or objective refresh trigger.
-- For each evidence question, retain one cross-source synthesis organized by decision-changing claim rather than by source. It separates established fact, inference, conflict, authoritative absence, assumption, and unknown; treats an unavailable or unsearched decision-relevant surface as unknown rather than absence; disposes the leading hypothesis and material counter-evidence; attaches claim-level source scope/revision/date and evidence limits; explains how authority, applicability, agreement, conflict, and counter-evidence make the conclusion follow or remain unresolved; states which downstream decision the evidence supports, constrains, eliminates, or leaves open; and records why further relevant source inspection or, when applicable, a safe discriminating probe is unlikely to change that disposition.
+- For each evidence question, retain one cross-source synthesis organized by decision-changing claim rather than by source. It separates established fact, inference, conflict, authoritative absence, assumption, and unknown; treats an unavailable or unsearched decision-relevant surface as unknown rather than absence; disposes the leading hypothesis and material counter-evidence; carries for each claim a locator a later reader can reopen without repeating the search, plus that claim's scope, date, and evidence limits; explains how authority, applicability, agreement, conflict, and counter-evidence make the conclusion follow or remain unresolved; states which downstream decision the evidence supports, constrains, eliminates, or leaves open; and records why further relevant source inspection or, when applicable, a safe discriminating probe is unlikely to change that disposition.
 - For each decision-changing quantity, retain its provenance label.
 - When a solution choice is live, a compact candidate map: the neutral frame; each candidate's decision slot and relationship; materially distinct families at the live decision level and representative implementations only where relevant; scanned rungs; local-fit evidence or rejection reason for excluded viable candidates; any decision-flip condition; and the bounded stop rationale.
-- A compact `research/*.md` note only when reuse or auditability justifies it.
+- A compact `research/*.md` note only when the evidence must be reused, audited,
+  or refreshed.
 
 If persisted, retain only sanitized evidence or a safe pointer, never secrets or restricted data.
 
 ## Method
 
 Scale depth to decision impact, reversibility, uncertainty, and evidence volatility, not source or lane count. Before searching, classify each open item and route it to its smallest owner: research an evidence question; route a target, policy, or risk-tolerance choice to its owner under [Decision Ownership](../../../AGENTS.md#decision-ownership); route a mechanism choice to design; or carry a later proof obligation to test design. Do not substitute missing proof for an unset acceptance target. Label each decision-changing quantity as a measured baseline, external limit or quota, forecast, accepted target, or assumption. Before selecting a branch, derive the evidence lenses from the named decision, its authority path, and every current surface that can independently change the answer. For each plausible lens, record `researched`, `established by current authoritative evidence`, or `not triggered: <current evidence showing why it cannot change the decision>`.
+
+A secondary source is a lead to the owner of a claim, never the carried
+authority: follow every decision-changing claim back to the source that owns it
+before recording it.
 
 ### Question Closure
 

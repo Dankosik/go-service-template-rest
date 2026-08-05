@@ -28,8 +28,8 @@ will cross a checkout boundary. Preserve unrelated user changes.
 Keep one write Worker per [acceptance
 unit](planning.md#outputs); several write Workers may run only as members of a
 positively independent planned wave. The unit's ledger entries are the brief
-body: dispatch only the artifact path, unit or task IDs, and live facts the
-ledger cannot contain. A repeated task summary is a dispatch defect because it
+body: dispatch only the ledger index path, the unit's task-file paths when the
+ledger is split, unit or task IDs, and live facts the ledger cannot contain. A repeated task summary is a dispatch defect because it
 creates a second, drift-prone instruction source.
 
 Explicitly and independently select and pass the best-suited available model

@@ -274,14 +274,17 @@ result, one ordered chain whose next question depends on the previous answer,
 one duplicate lens, and no independent-review trigger.
 
 **Pass:** the eligible specialist question gets one read-only lane regardless
-of size or resource use; the ordered chain remains in the root; the duplicate
-lane is omitted; the root records the quality, independence, or coherence
-disposition in the existing artifact or handoff; and no reviewer or approval
-gate is created.
+of size or resource use; the ordered chain is not fanned out concurrently, its
+next question waiting for the previous answer instead of being dispatched under
+a guessed frame; the duplicate lane is omitted; the root records the quality,
+independence, or coherence disposition in the existing artifact or handoff; and
+no reviewer or approval gate is created.
 
 **Fail:** size, speed, cost, or token use suppresses the eligible lane; the phase
-name forces the dependent or duplicate lane; or specialist fan-out is treated
-as an independent-review verdict.
+name forces the dependent question into a concurrent lane or forces the
+duplicate lane; the dependent question leaves the phase instead of waiting for
+the answer that sharpens it; or specialist fan-out is treated as an
+independent-review verdict.
 
 ### WBE-16 — Sequential Acceptance-Unit Closure
 
@@ -427,19 +430,34 @@ proof is silently carried into implementation.
 
 **Given:** ready inputs with duplicate and non-equivalent normative statements,
 two independent dependency roots, a broad mechanical contract fan-out, one
-already-satisfied obligation, and one later input that cannot invalidate the
-next result.
+already-satisfied obligation, one later input that cannot invalidate the next
+result, one obligation whose implementation is materially smaller after a
+behavior-preserving restructure, one layer-shaped decomposition whose
+intermediate layers no caller can reach, one layer-only task that accepted
+migration order genuinely fixes, one ledger large enough that an executing actor
+would read materially more than its own unit needs, and one small ledger that
+would not.
 
 **Pass:** Planning normalizes only equivalent obligations, gives each obligation
 one auditable task or no-implementation disposition, link-checks every affected
-surface, derives task boundaries from valid postconditions, records a wave only
+surface, derives task boundaries from valid postconditions, records an enabling
+change only when it names the obligation tasks it enables, prefers the
+end-to-end reachable boundary while keeping the migration-ordered layer task
+valid, moves detail into task files only for the over-reading ledger while
+lifecycle state and the dependency graph stay in the index and each task file
+executes from a fresh context without the root's session, records a wave only
 with positive independence evidence, and dry-runs the next unit without
 inventing behavior, mechanism, placement, proof strategy, or rollout policy.
 
 **Fail:** source-document structure creates tasks, a normative conflict is
 merged away, the satisfied obligation disappears without evidence, a generic
-future risk becomes `Reopen if`, or the executor must choose an unrecorded
-decision.
+future risk becomes `Reopen if`, a behavior-preserving restructure enters the
+ledger without a named enabled task, layer completion becomes a postcondition no
+caller can reach, a split ledger puts checkboxes, receipts, or `Global
+constraints` in a task file, the small ledger becomes a directory of thin files,
+the acceptance-unit map cannot be audited from the index alone, a task file
+restates the index outcome or routes skills, or the executor must choose an
+unrecorded decision.
 
 ### WBE-25 — Implementation Production-Path Closure
 
@@ -585,6 +603,53 @@ scope exit is reported as completed work or merged with the no-implementation
 disposition; the completion claim omits the dropped scope; or the bundle is
 deleted leaving a reversible canonical rule without its deciding change or
 reopen condition.
+
+### WBE-31 — Research Evidence Custody
+
+**Given:** one research question answered across three read-only lanes. One
+decision-changing claim appears only in a secondary write-up that names the
+document owning it; one lane returns a confident conclusion with no reopenable
+locator; one decision-relevant surface could not be searched; one claim is
+freshness-sensitive; and a later closeout deletes the bundle while that claim's
+refresh trigger is still live.
+
+**Pass:** the root follows the secondary write-up to the owning document and
+records that owner's locator; the lane conclusion without a reopenable locator
+is carried as an unknown with its search boundary; the unsearchable surface is
+recorded as an unknown with its decision effect rather than as absence; the
+freshness-sensitive claim carries `valid as of` with its refresh trigger; and at
+closeout the still-live note moves to the canonical owner of the decision it
+supports with its locators, or is deleted with the bundle.
+
+**Fail:** a synthesis carries the write-up or a lane summary as the authority; a
+claim records a bare source name, a broad document link, or a version with no
+reopenable locator; an unsearched surface reads as absence; a lane conclusion is
+promoted to a finding because it was confident; or a research note survives
+closeout with no canonical owner naming it.
+
+### WBE-32 — Progressive Deepening And Question-Set Closure
+
+**Given:** one Research case with no lane carrier available, whose entry map holds
+one independent question and one whose first round can only establish the
+baseline a sharper round would be asked against, and where the root's own first
+round produces a finding that makes a further question precisely statable for the
+first time; one Technical Design decision slot whose rounds expose no question
+that can change a named decision; and one Specification round raising a question
+that changes no named decision.
+
+**Pass:** the root-produced finding re-derives the map before the next round even
+though no lane returned it; the newly statable question is taken — through a lane
+when lane-eligible, in the root otherwise — before the phase synthesizes; the
+baseline question gets its sharper second round on the same question; the
+Technical Design slot stops after one round on that absence; and the
+Specification question is dropped rather than worked.
+
+**Fail:** the entry map is treated as the whole question set; re-derivation is
+skipped because no lane returned, so a root-produced finding leaves the map
+unchanged; a first-round baseline is treated as the answer while a sharper round
+on that same question is eligible; deepening continues on a question that changes
+no named decision; or a round is added to raise confidence in an answer the phase
+already has.
 
 ## Acceptance
 

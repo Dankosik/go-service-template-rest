@@ -135,9 +135,10 @@ Vendor authority: [Subagents](https://code.claude.com/docs/en/sub-agents), in pa
 
 - When Worker execution is selected, keep one write worker per ready acceptance unit: one background `Agent` lane with `isolation: "worktree"`. Several write workers may run only as members of a positively independent planned wave. The worktree is the isolation boundary; the root owns candidate intake, acceptance, and integration.
 - Pass `isolation` as a dispatch parameter rather than moving it into the role's frontmatter. A dispatch-parameter worktree branches from the parent's `HEAD`, which is the accepted integrated base the wave needs; frontmatter isolation follows the `--worktree` base rule and branches from the repository's default branch unless [`worktree.baseRef`](https://code.claude.com/docs/en/worktrees#choose-the-base-branch) is `"head"`.
-- Dispatch only after the exact accepted `tasks.md` revision is in the base
-  visible to the worker. Pass its path and acceptance-unit or task IDs plus only
-  live facts absent from the ledger.
+- Dispatch only after the exact accepted ledger revision — `tasks.md` plus any
+  `tasks/` files it links — is in the base visible to the worker. Pass the index
+  path, the unit's task-file paths when the ledger is split, and acceptance-unit
+  or task IDs plus only live facts absent from the ledger.
 - A background worker keeps every MCP tool but a reduced built-in set: `Read`, `Grep`, `Glob`, `Bash`, `PowerShell`, `Edit`, `Write`, `NotebookEdit`, `WebFetch`, `WebSearch`, `TodoWrite`, `Skill`, `ToolSearch`, `EnterWorktree`, `ExitWorktree`, `Monitor`, `TaskStop`, `SendMessage`, and `Artifact`. That covers implementation; do not narrow it further with a `tools` allowlist unless the task genuinely requires less.
 
 ### What crosses into a worker
