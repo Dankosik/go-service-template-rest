@@ -376,7 +376,11 @@ they turn over or immediately through a `VACUUM FULL` or `pg_repack` window.
 
 Published rows are retained for seven days and deleted in bounded concurrent
 batches. Pending, leased, retry, recovery, poison, and ordering-high-water rows
-are not deleted. PostgreSQL is a finite outage buffer: alert on unpublished
+are not deleted. High-water rows carry no automatic cleanup because proving that
+an ordering key can never be reused is domain policy rather than an outbox
+decision; retiring them requires an explicit feature-owned terminal-key
+contract, which is the reopen condition for this rule. PostgreSQL is a finite
+outage buffer: alert on unpublished
 count/oldest age, poison, retry errors, state-observation freshness, drain rate,
 and relation/index growth. Add partitioning only after measured table/vacuum or
 claim-plan evidence shows the bounded cleanup design no longer holds.
