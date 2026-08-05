@@ -46,9 +46,43 @@ Otherwise keep the result inline.
 | `tasks.md` | Required for structured/orchestrated work; direct work may keep its plan inline. | Executable order, planned waves, owners, evidence, progress, completion condition. | New product or design decisions. |
 | `research/*.md` | Evidence must be reused, audited, or refreshed. | Findings, source limits, conflicts, decision impact. | Final task decisions. |
 | `rollout.md` | Deployment, migration, backfill, compatibility, or rollback has a non-trivial sequence. | Operational order, gates, rollback/failback, observables. | Product scope. |
-| `workflow-plan.md` | Cross-session or multi-lane coordination cannot be recovered from the main artifacts. | Current goal, phase, active artifacts, blockers, next action. | Duplicate spec/design/task content. |
+| `workflow-plan.md` | Cross-session or multi-lane coordination cannot be recovered from the main artifacts. | Current goal, phase, active artifacts, blockers, next action, surviving open decisions and fog. | Duplicate spec/design/task content; the decisions themselves, which stay with their phase owner. |
 
 Split an artifact only when the split creates a real owner or makes review materially easier. Do not create a directory of one-line files.
+
+## Open Decisions And Fog
+
+An **open decision** is a question you can already state precisely: what it can
+change, who owns it, and what it blocks. Record one line per open decision in
+`workflow-plan.md` at a real handoff, context rollover, or second-lane dispatch,
+never in anticipation of one; a phase that finishes in its own session writes
+none. An open decision that stops the next action belongs to the `blocked`
+status and its `Blockers / assumptions` entry instead. The **frontier** is every
+listed decision whose blockers are resolved — what can be worked or dispatched
+now, and the surviving form of the question map the [Delegation
+Decision](subagents-and-handoff.md#delegation-decision) builds at phase entry.
+
+```markdown
+- <question, stated as the decision it can change> — owner: <agent, named external owner, or user> — blocks: <decision, phase, or task; or nothing> — route: <research lane, design owner, probe, or escalation>
+```
+
+**Fog** is a decision surface you can see coming but cannot yet phrase
+precisely. The test is whether you can state the question precisely now, not
+whether you can answer it: an already sharp question is an open decision even
+when it is blocked and unworkable. Each `Not yet specified` entry carries both
+parts, and an entry that cannot name its second part is deleted rather than
+carried:
+
+```markdown
+- <suspected area> — sharpens when: <the open decision that resolves it, or the evidence that would let you phrase it>
+```
+
+Fog never appears in a readiness or completion claim, and never closes, defers,
+or softens a decision the current phase's decision bar has triggered. When the
+decision an entry names resolves, that entry graduates into an open decision or
+is deleted in the same edit. Work already ruled beyond the accepted outcome
+follows the scope-exit record in
+[Planning](../phases/planning.md#obligation-reconciliation-contract).
 
 ## Minimal Status
 
@@ -127,6 +161,9 @@ Active artifacts:
 Blockers / assumptions:
 Next action:
 Completion proof:
+
+## Open decisions      <!-- only when a question must survive its phase -->
+## Not yet specified   <!-- only when fog is worth carrying forward -->
 ```
 
 Use additional fields only when they change an action or verdict.
@@ -155,3 +192,10 @@ design only when another live authority names it as a durable decision source;
 otherwise delete the completed bundle after moving durable decisions into
 canonical docs or code. Git remains the history, so a completed task ledger is
 never kept as an archive.
+
+Moving a decision completes only when it reads as a decision at its canonical
+owner: the rule, the stable identity of the change that decided it — merged pull
+request or commit — and the condition that would reopen it. Delete the bundle
+only after that move. Provenance is for a rule a later reader could reverse by
+accident; a rule whose statement already carries its own rationale and reopen
+condition needs no link.
