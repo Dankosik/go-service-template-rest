@@ -31,7 +31,10 @@ synthesis.
 **Fan-out.** Skills define method; subagents provide separate context and
 independence. At the start of each non-implementation macro phase, map the
 current decision-changing questions and their dependencies before substantive
-work. A question is lane-eligible when all are true:
+work; when that map must outlive the phase, carry it as the persisted [open
+decisions and frontier](artifact-model.md#open-decisions-and-fog) rather than
+rebuilding it from chat at the next phase entry. A question is lane-eligible
+when all are true:
 
 - it is concrete and bounded and can change a named decision, criterion, or
   downstream disposition;

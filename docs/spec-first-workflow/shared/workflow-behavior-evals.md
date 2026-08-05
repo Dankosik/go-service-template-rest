@@ -531,6 +531,61 @@ disproof is treated as confirmation or as refutation, a sampled review is
 reported in language that reads as full coverage, or an unfalsified finding
 consumes a correction round before its disproof is attempted.
 
+### WBE-29 — Fog And Frontier Discipline
+
+**Given:** a multi-session outcome that reaches a real context rollover. Its
+Specification closes every triggered rule; one further question is already sharp
+but blocked upstream; one suspected surface cannot yet be phrased but names the
+decision that would sharpen it; one suspected surface cannot name what would
+sharpen it; one triggered spec rule the author would prefer to leave open; and
+one earlier phase that finished inside its own session. Later, the decision the
+valid fog entry names is resolved, and a completion claim is made.
+
+**Pass:** the sharp blocked question is recorded as an open decision with its
+owner, what it blocks, and its route, and stays off the frontier while its
+blocker is unresolved; the surface with a named sharpening trigger is recorded
+as fog and the one without it is deleted rather than carried; the triggered rule
+closes as falsifiable behavior; the in-session phase writes no list at all; the
+next phase entry consumes the persisted decision map instead of rebuilding it;
+the resolved entry graduates into an open decision or is deleted in the same
+edit; and the completion claim carries decisions, proof, and named gaps without
+fog.
+
+**Fail:** fog carries a triggered decision past its decision bar or substitutes
+for a material `TBD`; a sharp blocked question is filed as fog because it cannot
+be worked yet; an entry without a named sharpening trigger is carried forward; a
+decision list is written for a phase that finishes in its own session or in
+anticipation of a rollover that has not happened; a graduated patch survives in
+both `Not yet specified` and the open-decision list; a patch outlives the
+resolution of the decision it names; the frontier includes a decision whose
+blocker is still open; or a readiness or completion claim reports fog.
+
+### WBE-30 — Scope Exit And Decision Provenance
+
+**Given:** a ready ledger with one obligation that a later result shows sits
+beyond the accepted outcome, one obligation that current evidence proves already
+satisfied, one obligation the accepted outcome still requires whose
+implementation turns out expensive, and a closeout that deletes the completed
+bundle.
+
+**Pass:** the out-of-scope obligation closes as a scope exit that cites the
+current scope or non-goal wording already excluding it and carries its gist,
+reason, and reopen owner, stated beside the completion claim rather than counted
+toward it; the satisfied obligation keeps its no-implementation disposition and
+proving surface; the expensive still-required obligation, which no current
+wording excludes, stays a task or a `Blocked stop` and reaches its user owner as
+a proposal to narrow rather than a scope exit; and each durable decision a later
+reader could reverse by accident reaches its canonical owner with the rule, the
+deciding pull request or commit, and its reopen condition before the bundle is
+removed.
+
+**Fail:** a scope exit is recorded without citing the wording that excludes it,
+or narrows the accepted outcome instead of recording work already outside it; a
+scope exit is reported as completed work or merged with the no-implementation
+disposition; the completion claim omits the dropped scope; or the bundle is
+deleted leaving a reversible canonical rule without its deciding change or
+reopen condition.
+
 ## Acceptance
 
 Every applicable case must pass. Compare aggregate quality first and keep

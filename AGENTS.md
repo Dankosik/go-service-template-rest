@@ -45,6 +45,7 @@ hidden modes or speculative abstractions.
 
 - Lead with the conclusion. Separate established facts, inferences, trade-offs, and proof gaps.
 - Challenge a design with concrete consequences and a viable smaller alternative; when choices are comparable, prefer clearer ownership, failure signals, and recovery.
+- Name a task, acceptance unit, decision, or artifact by its postcondition title in anything a person reads; an identifier or path rides inside that name and never replaces it.
 
 ## Authority And Loading
 

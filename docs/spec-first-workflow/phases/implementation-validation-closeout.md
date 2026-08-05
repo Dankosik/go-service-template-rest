@@ -189,7 +189,7 @@ the unit or claiming outcome completion.
 
 ## Close Out
 
-State what changed, the important behavior consequence, proof actually run, and remaining gap or reopen owner. Apply the [Task Contract](../../../AGENTS.md#task-contract) to readiness and completion language.
+State what changed, the important behavior consequence, proof actually run, and remaining gap or reopen owner. Apply the [Task Contract](../../../AGENTS.md#task-contract) to readiness and completion language. Move each durable decision to its canonical owner with the provenance and reopen condition required by [Artifact Model](../shared/artifact-model.md#resume-order) before removing the completed bundle.
 
 ## Stop Rule
 

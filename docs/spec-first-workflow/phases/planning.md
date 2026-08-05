@@ -21,11 +21,24 @@ Direct changes may use an inline plan.
 ### Obligation Reconciliation Contract
 
 1. Build a de-duplicated working set of implementation-changing accepted obligations from the ready inputs. Normalize restatements of the same obligation across specification, design, test, and rollout sources; discard rationale, rejected alternatives, non-normative examples, and future ideas. Treat two statements as one obligation only when their authority, required postcondition, execution-changing constraints, and proof consequence are equivalent. A non-equivalent normative conflict reopens its narrow upstream owner; Planning does not resolve it by normalization.
-2. Give every obligation exactly one reconciliation disposition: one task, several named task deltas with a distinct postcondition and proof for each, or a proved no-implementation disposition. Compile those dispositions into the smallest coherent task outcomes under the task-boundary rule below.
+2. Give every obligation exactly one reconciliation disposition: one task, several named task deltas with a distinct postcondition and proof for each, a proved no-implementation disposition, or a scope exit. Compile those dispositions into the smallest coherent task outcomes under the task-boundary rule below.
 3. Reconcile both directions: every task delta and proof maps to one obligation disposition, every obligation disposition is represented, and task boundaries follow valid postconditions rather than source-document structure.
 4. Link-check the working set against the current repository and accepted deployment topology. For each accepted change to a contract, schema, canonical/generated authority, identifier, composition point, migration, or rollout state, confirm the accepted ownership record against every current producer, consumer, mirror, proof carrier, configuration/documentation surface, and replacement surface within its impact boundary. Give each reached surface one auditable boundary disposition: coupled into the outcome task, assigned to named task deltas whose intermediate states and handoffs satisfy the split rule, or proved unchanged. A required surface without accepted ownership or placement reopens its narrow design owner; Planning does not choose it.
 5. Record a planned wave only when multiple ready acceptance units will actually run concurrently and current evidence establishes their independence.
 6. Prove that the next acceptance unit or real wave is executable from closed inputs; later tasks need owners and dependencies, not prematurely materialized inputs.
+
+A **scope exit** disposes of an obligation or existing task that sits beyond the
+accepted outcome — mis-scoped while planning, or exposed by a later result.
+Record one line: the gist, the current scope or non-goal wording that already
+excludes it, and the owner who could reopen it. When no current wording excludes
+it, this is a proposal to narrow rather than a scope exit; narrowing is
+user-owned under [Decision
+Ownership](../../../AGENTS.md#decision-ownership), so the obligation stays a task
+or a `Blocked stop` until that owner answers. Unlike a proved no-implementation
+disposition, which claims the obligation is already satisfied and cites its
+proving surface, a scope exit is never completion evidence and is stated beside
+any completion claim under the [Task
+Contract](../../../AGENTS.md#task-contract).
 
 The contract is complete when every accepted obligation has one auditable
 disposition, every task delta and proof maps back to one disposition, equivalent
