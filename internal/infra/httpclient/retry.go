@@ -52,8 +52,8 @@ func (p RetryPolicy) enabled() bool {
 //
 // Never past the caller's deadline. The delay and one more attempt have to fit in
 // what remains of the request context, or the retry is skipped and the last result
-// is returned. A retry that outlives the request that asked for it holds a handler
-// goroutine, and its in-flight slot, for work whose answer nobody is waiting for.
+// is returned — a retry that outlives its request holds a handler goroutine, and
+// its in-flight slot, for an answer nobody is waiting for.
 //
 // Retry-After is honored when the server sent one and it is shorter than the
 // deadline. A 429 or 503 with a hint is the server telling the client how long to

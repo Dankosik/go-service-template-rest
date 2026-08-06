@@ -59,14 +59,12 @@ var (
 	// shows it unpublished, so lease recovery will republish it. It stops the
 	// relay, and two paths reach it. The ordinary one is a lost lease that
 	// reconcilePublished could not resolve against durable state. The rare one is
-	// an ordered acknowledgement whose key was still snapshot-conflicted on every
-	// statement it was sent on: orderedPublishSnapshots of them inside
+	// an ordered acknowledgement whose key stayed snapshot-conflicted on every
+	// statement it was sent on: orderedPublishSnapshots inside
 	// Store.MarkOrderedPublishedBatch, then that many again on each of
-	// reconcilePasses passes, because Store.MarkOrderedPublished routes a single
-	// ordered claim back through the same retry. An appended successor stayed invisible to all
-	// of them. This product is the whole worst case, and this is the only place
-	// that states it; both constants point here rather than restating it, and no
-	// comment or test writes the number down.
+	// reconcilePasses passes. This product is the whole worst case, and this is
+	// the only place that states it; both constants point here rather than
+	// restating it, and no comment or test writes the number down.
 	//
 	// Those statements share one deadline, the lease the batch was claimed under
 	// — see publishBatch. Nothing sizes the lease for that worst case, and
@@ -553,18 +551,17 @@ func (r *Relay) publishOne(ctx context.Context, event Event) (err error) {
 // was given — and the two halves answer that differently on purpose:
 //
 //   - An acknowledgement the statement did not report may already be at the
-//     broker. Leaving it unmarked creates a duplicate, so finalizeUnordered and
-//     finalizeOrdered resolve each missing event against durable state instead
-//     of assuming either outcome. That resolution is not free: it costs up to
-//     reconcilePasses statements per leftover event, and for an ordered one
-//     each of those passes is itself worth orderedPublishSnapshots statements
-//     inside the store. [ErrProgressUnknown] owns what that product means for
-//     the lease.
-//   - A retry or poison the statement did not report means this lease no longer
-//     owns that event, so another relay does and will deliver it. There is
-//     nothing to reconcile and nothing at risk, but the lease was overrun, which
-//     is a lease or replica misconfiguration rather than a transient fault:
-//     Store reports ErrLeaseLost and the relay stops so an operator sees it.
+//     broker, and leaving it unmarked creates a duplicate, so finalizeUnordered
+//     and finalizeOrdered resolve each missing event against durable state. That
+//     resolution costs up to reconcilePasses statements per leftover event, and
+//     for an ordered one each pass is itself worth orderedPublishSnapshots
+//     statements inside the store; [ErrProgressUnknown] owns what that product
+//     means for the lease.
+//   - A retry or poison the statement did not report means another relay owns
+//     that event and will deliver it. Nothing is at risk, but the lease was
+//     overrun, which is a lease or replica misconfiguration rather than a
+//     transient fault: Store reports ErrLeaseLost and the relay stops so an
+//     operator sees it.
 //
 // Every error returned here stops the relay. failureClass in
 // cmd/outbox-relay/main.go turns each one into its operator-facing exit class,

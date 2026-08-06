@@ -1,12 +1,11 @@
 // Package grpctest builds hand-written gRPC service descriptors for tests.
 //
 // A test that drives a real RPC through a real server, from a package owning no
-// generated proto of its own, needs a hand-written grpc.ServiceDesc. Written
-// once per package, those descriptors drift the way these did before this
-// package existed: one copy guarded the nil interceptor grpc-go passes when the
-// server chained none, and another did not, so the same test service was safe to
-// serve from a bare grpc.NewServer in one package and a nil-func panic in the
-// next.
+// generated proto of its own, needs a hand-written grpc.ServiceDesc. Written once
+// per package, those descriptors drift the way these did before this package
+// existed: one copy guarded the nil interceptor grpc-go passes when the server
+// chained none and another did not, so the same test service was safe in one
+// package and a nil-func panic in the next.
 //
 // A method is named the way a caller invokes it, so one constant names both the
 // registration and the grpc.ClientConn.Invoke or NewStream that drives it:

@@ -30,8 +30,8 @@ type PrincipalResolver func(context.Context, *openapi3filter.AuthenticationInput
 // openapi3filter.AuthenticationFunc returns only an error, so a service that
 // wires it directly proves the credential and then discards the identity it just
 // proved. What is left is re-reading Authorization inside every handler: two
-// credential paths where the contract declared one, and the second one is the
-// one nobody audits.
+// credential paths where the contract declared one, and the second is the one
+// nobody audits.
 //
 // Publishing is reqctx.SetPrincipal's job; see it for why the request is mutated
 // in place. The test that asserts a handler observes the subject is what fails if

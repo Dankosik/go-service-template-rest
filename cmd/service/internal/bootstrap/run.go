@@ -37,16 +37,14 @@ import (
 //	dependencyCloseTimeout     5s   release pooled dependencies
 //	telemetryShutdownTimeout   5s   span and metric flush, last so it records the above
 //
-// Every one of them is a ceiling, not a reservation, and all of them draw from
-// one process-wide deadline; see shutdownBudget for why that is the only thing
-// that makes the order above worth anything.
+// Every one is a ceiling, not a reservation, and all draw from one process-wide
+// deadline; see shutdownBudget for why that is what makes the order above worth
+// anything.
 //
 // Background work is canceled here rather than on the signal, because the HTTP
 // drain above it is still serving requests that depend on it; see
-// newSupervisedBackground.
-//
-// Dependency-specific budgets live with their dependency stage so a profile that
-// drops the dependency drops them in the same file.
+// newSupervisedBackground. Dependency-specific budgets live with their dependency
+// stage, so a profile that drops the dependency drops them in the same file.
 const (
 	telemetryShutdownTimeout = 5 * time.Second
 	startupBudget            = 30 * time.Second

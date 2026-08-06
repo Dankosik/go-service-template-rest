@@ -5,21 +5,10 @@ package oidcjwt
 // verifier.go and needs none of this — a Verifier answers requests whether or
 // not anyone ever calls Run.
 //
-// Refresh is the one behaviour in this package that no single file holds, so its
-// shape is here. Three owners, and Run below is the only one that sees all of
-// them:
-//
-//   - refresh.go — refresher.begin admits one fetch or joins the in-flight one,
-//     and refuses a token-driven fetch during its cooldown. The goroutine it
-//     starts runs fetchAndInstall, and [Verifier.refresh] beside them is the
-//     waiting route a key miss takes into begin. Run below takes the other.
-//   - verifier.go — keys, the installed set, and install, which carries one
-//     non-blocking nudge per successful replacement. Verify triggers a fetch too.
-//   - this file — [refreshSchedule] below holds the two deadlines one installed
-//     set implies, and Run selects over all of it and is the only publisher of
-//     readiness.
-//
-// Two triggers, one fetch, two ways it reports back:
+// Refresh is the one behaviour no single file holds. refresh.go admits fetches
+// through refresher.begin and runs them; verifier.go owns keys and install; this
+// file owns the two deadlines an installed set implies. Run below is the only
+// owner that sees all three, and the only publisher of readiness.
 //
 //	Run: due fires ───▶ begin(scheduled) ─┐
 //	                                      ├─▶ one fetchAndInstall goroutine
@@ -29,14 +18,12 @@ package oidcjwt
 //	                                                    └─ always: close(call.done)
 //	                                                       ─▶ Run: retryAfter + publish
 //
-// Run reacts to call.done only for a fetch it is holding — the one its own
-// begin returned, which is either a fetch it started or the in-flight one it
-// joined. A key-miss refresh Run never asked for is awaited by its own
-// verification instead, in waitRefresh. So a successful scheduled refresh
-// reaches Run twice, on install and on call.done, while a purely request-driven
-// one reaches it once, on install. That is why the retry cadence lives on the
-// call.done arm — it is the only one a refused or failed fetch reaches — and the
-// case comments in Run own why arriving twice is harmless.
+// Run reacts to call.done only for a fetch its own begin returned; a key-miss
+// refresh it never asked for is awaited by the verification that caused it. So a
+// successful scheduled refresh reaches Run twice, on install and on call.done,
+// while a purely request-driven one reaches it once, on install — which is why
+// the retry cadence lives on the call.done arm, the only one a refused or failed
+// fetch reaches.
 
 import (
 	"context"

@@ -128,14 +128,13 @@ const requestBufferBudgetRatio = 0.25
 // reportRequestBufferBudget relates http.max_in_flight and http.max_body_bytes
 // to the memory limit the GC was just given.
 //
-// Nothing else does. The two settings are validated independently — one must be
-// positive, the other must fit a range — so their product is a number no layer
-// ever computes, and it is the number that decides whether the process survives
-// its own concurrency. The shipped defaults are modest; raising
-// http.max_body_bytes for file uploads is a one-line change that multiplies it
-// by whatever the new limit is, and the first evidence of that is the GC burning
-// CPU against a limit live data has already passed, then an OOM kill. Readiness
-// reports healthy throughout, because a cached dependency probe still succeeds.
+// Nothing else does. The two are validated independently, so their product is a
+// number no layer computes — and it is the number that decides whether the
+// process survives its own concurrency. Raising http.max_body_bytes for file
+// uploads is a one-line change that multiplies it, and the first evidence is the
+// GC burning CPU against a limit live data has already passed, then an OOM kill,
+// with readiness healthy throughout because a cached dependency probe still
+// succeeds.
 //
 // It reports rather than rejects. A service whose handlers stream instead of
 // buffering is legitimately over the estimate, and refusing to start would be

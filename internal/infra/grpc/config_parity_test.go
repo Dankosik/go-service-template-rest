@@ -1,23 +1,18 @@
 // The two owners of this transport's bounds, held to one answer.
 //
-// [validateConfig] and internal/config's validateGRPCConfig both bound the
-// values a gRPC server is built from, and cannot share code: the depguard rule
+// [validateConfig] and internal/config's validateGRPCConfig both bound the values
+// a gRPC server is built from, and cannot share code: the depguard rule
 // config_no_runtime_owners stops internal/config from importing this package, so
-// it restates the rules. Until this file existed the only thing holding them in
-// step was the pair of comments that say so — and those comments also say what
-// happens without it, which is that a rule changed on one side alone breaks
-// nothing anyone runs.
-//
-// The check lives here rather than in internal/config because the import only
-// works in this direction.
+// it restates the rules and a rule changed on one side alone breaks nothing
+// anyone runs. The check lives here because the import only works in this
+// direction.
 //
 // The two owners are not equivalent, and the file is split along that line:
-// internal/config is the tighter one on capacity, so what it accepts must build
-// a server, while the two access-log rules are duplicated term for term and must
-// agree in both directions. What neither test can do is the part worth knowing:
-// each compares only the values its corpus varies, so a bound added to Config
-// and to config.GRPCServerConfig without a case here is one they go on reporting
-// as agreed.
+// internal/config is the tighter one on capacity, so what it accepts must build a
+// server, while the two access-log rules are duplicated term for term and must
+// agree in both directions. Each test compares only the values its corpus varies,
+// so a bound added to Config and to config.GRPCServerConfig without a case here
+// is one they go on reporting as agreed.
 
 package grpcx
 

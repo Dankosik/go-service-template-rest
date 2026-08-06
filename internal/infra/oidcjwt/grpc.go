@@ -104,19 +104,17 @@ func splitAuthorizationMetadata(ctx context.Context) (context.Context, metadata.
 // returns directly, so a policy needs no counterpart of that package's own
 // provenance marker.
 //
-// The arms below are grouped by the answer rather than kept in [Kind]
-// declaration order, which is the order errors.go and metrics.go use. Grouping
-// is what makes the two categories that get their own status visible as the
+// The arms below are grouped by the answer rather than in [Kind] declaration
+// order, which makes the two categories that get their own status visible as the
 // exceptions they are; the exhaustive linter holds the set complete either way.
 //
 // KindUntrustedTransport is named here and cannot arrive here. Only the HTTP
-// adapter produces it, from trustedHTTPRequest. This transport's equivalent is
-// validateGRPCAuthnTransport in internal/config, which refuses to start a
-// service whose gRPC server is not TLS while this profile is on — so an
-// untrusted gRPC transport is a configuration that never runs, rather than an
-// RPC that gets a status. The arm is not dead code, because a Kind may not be
-// omitted from this switch; answering it as a rejected credential is what keeps
-// it exhaustive without inventing a status for a case that cannot reach here.
+// adapter produces it, from trustedHTTPRequest; this transport's equivalent is
+// validateGRPCAuthnTransport in internal/config, which refuses to start a service
+// whose gRPC server is not TLS while this profile is on. The arm is not dead
+// code, because a Kind may not be omitted from this switch — answering it as a
+// rejected credential keeps the switch exhaustive without inventing a status for
+// a case that cannot reach here.
 func grpcAuthenticationError(err error) error {
 	if errors.Is(err, context.Canceled) {
 		return status.Error(codes.Canceled, "authentication canceled")

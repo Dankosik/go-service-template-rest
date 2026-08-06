@@ -5,12 +5,11 @@
 // every layer above and below logs through it.
 //
 // Without it, correlation is something each call site remembers to add. The
-// version this replaced did exactly that in four places — the access log, panic
-// recovery, the validator rejection log, and the startup stage logger — and a
-// service's own handlers had none of it. So an operator reading `request` at 504
-// with a trace_id, and `create order failed` with no ids, had to join the two by
-// timestamp; under any concurrency that guess is wrong, and the trace that shows
-// which dependency was slow is unreachable from the error that reported it.
+// version this replaced did that in four places and left a service's own handlers
+// with none of it, so an operator had to join `request` at 504 with a trace_id to
+// `create order failed` with no ids by timestamp — a guess that is wrong under
+// any concurrency, and the trace showing which dependency was slow is then
+// unreachable from the error that reported it.
 //
 // The one thing a caller must do is pass a context: slog's Info/Error take none
 // and hand the handler context.Background(), which carries no request. That is

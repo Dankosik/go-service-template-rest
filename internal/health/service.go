@@ -128,13 +128,12 @@ func (s *Service) staleness(state *readinessState) error {
 // healthy reports the failure at once.
 //
 // probeBudget bounds one evaluation and is passed separately from interval. The
-// two used to be the same value, which silently clamped every configured probe
-// timeout to the refresh period: with the shipped defaults a 3s
-// postgres.healthcheck_timeout became a 2s budget in steady state while startup
-// admission still granted the full 3s, so the same dependency could pass
-// admission and then flap out of rotation. Configuration cross-validation keeps
-// interval above probeBudget so evaluations cannot pile up behind a slow
-// dependency.
+// two used to be one value, which clamped every configured probe timeout to the
+// refresh period: a 3s postgres.healthcheck_timeout became a 2s budget in steady
+// state while startup admission still granted the full 3s, so the same dependency
+// could pass admission and then flap out of rotation. Configuration
+// cross-validation keeps interval above probeBudget so evaluations cannot pile up
+// behind a slow dependency.
 func (s *Service) Watch(
 	ctx context.Context,
 	interval, probeBudget time.Duration,

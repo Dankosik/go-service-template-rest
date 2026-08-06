@@ -11,23 +11,20 @@ import (
 //
 // The adapter decides which envelope fields reach the broker, and nothing here
 // checks that it forwarded any of them. [Event.Metadata] is the one to decide
-// deliberately: the outbox stores, retries, and size-budgets those bytes, and
-// they are where correlation and trace context ride, but an adapter whose
-// message type has no header carrier for them drops the trace at the outbox
-// boundary — silently, because the bytes are still in PostgreSQL. Either
-// forward Metadata onto broker headers or state in the adapter that it does
-// not, so a feature populating it knows what it is buying.
+// deliberately: correlation and trace context ride in those bytes, so an adapter
+// whose message type has no header carrier for them drops the trace at the outbox
+// boundary — silently, because the bytes are still in PostgreSQL. Either forward
+// Metadata onto broker headers or state in the adapter that it does not.
 //
-// The relay calls Publish concurrently, up to its configured publish
-// concurrency, so implementations must be safe for concurrent use. Concurrent
-// calls never carry two events that share an ordering key, because the claim
-// query hands out at most one ready event per key. PostgreSQL enforces that,
-// not this package: the partial unique index outbox_events_ordering_ready_key
-// in migrations/000001_postgres_outbox.sql admits one ready row per key.
+// The relay calls Publish concurrently, so implementations must be safe for
+// concurrent use. Concurrent calls never carry two events that share an ordering
+// key, and PostgreSQL enforces that rather than this package: the partial unique
+// index outbox_events_ordering_ready_key in
+// migrations/000001_postgres_outbox.sql admits one ready row per key.
 //
 // ctx carries the deadline of the whole claimed batch rather than a per-call
-// timeout: it is the earlier of the configured publish timeout and the batch's
-// lease, so a late event of a large batch sees whatever budget the earlier ones
+// timeout — the earlier of the configured publish timeout and the batch's lease
+// — so a late event of a large batch sees whatever budget the earlier ones
 // left. Returning nil once that deadline has passed is treated as unproven and
 // retried, because a publisher that stopped waiting cannot have observed the
 // acknowledgement. A panic is fatal to the relay process: the event is released

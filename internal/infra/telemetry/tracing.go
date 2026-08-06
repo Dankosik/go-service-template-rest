@@ -131,20 +131,17 @@ func AmbientOTLPExporterEnv() []string {
 // traceExporterEnvConflicts are the standard OpenTelemetry exporter variables
 // this service must not ignore when it configures its own exporter.
 //
-// otlptracehttp applies ambient environment first and explicit options second,
-// so an explicit option wins for everything it covers. WithEndpointURL covers
-// the endpoint, the URL path, and the TLS scheme, which makes an injected
-// ENDPOINT, TRACES_ENDPOINT, or INSECURE harmless. Credential and trust material
-// is different: this service never sets client certificates or a root CA pool,
-// and it sets headers only when observability.otel.exporter.otlp_headers is
-// non-empty, so these variables would silently travel to the collector
-// unverified.
+// otlptracehttp applies ambient environment first and explicit options second, so
+// WithEndpointURL makes an injected ENDPOINT, TRACES_ENDPOINT, or INSECURE
+// harmless. Credential and trust material is different: this service never sets
+// client certificates or a root CA pool, and sets headers only when
+// observability.otel.exporter.otlp_headers is non-empty, so these variables would
+// silently travel to the collector unverified.
 //
 // This applies only when observability.otel.exporter.otlp_endpoint named the
-// destination. When the endpoint itself came from the platform's own variables,
-// the platform owns the whole exporter configuration and its credentials belong
-// to the collector it also named; rejecting them there would refuse the ordinary
-// injected-collector deployment for no gain.
+// destination. When the endpoint came from the platform's own variables, the
+// platform owns the whole exporter configuration; rejecting its credentials would
+// refuse the ordinary injected-collector deployment for no gain.
 //
 // Kept sorted so reported output is stable.
 var traceExporterEnvConflicts = []string{

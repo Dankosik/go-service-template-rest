@@ -45,8 +45,6 @@
 // preserved exactly, because gRPC turns them into the authentication failure
 // the caller sees.
 //
-// See docs/grpc.md for the service-to-service contract — connection ownership,
-// the propagation choice per dependency, and the retry and deadline rules that
-// stay with the caller — and docs/repo-architecture.md for where this sits
-// among the repository's extension seams.
+// See docs/grpc.md for the service-to-service contract and
+// docs/repo-architecture.md for the repository's extension seams.
 package grpcclient

@@ -17,13 +17,11 @@ import (
 // server as x-request-id. A resolver is not part of this client's trust
 // boundary, so its metadata never reaches the wire.
 //
-// The scheme set mirrors grpc-go's own selection rules rather than guessing
-// one: an explicit registered scheme in the target wins, and a bare target,
-// an unregistered scheme, or a relocated global default all fall back to
-// resolver.GetDefaultScheme(). Wrapping the union means whichever builder
-// grpc-go picks is already wrapped; dns is named because it is both the
-// conventional target scheme here and the native fallback. Registering a
-// wrapper for a scheme that ends up unused costs nothing, while missing the
+// The scheme set mirrors grpc-go's own selection rules rather than guessing one:
+// an explicit registered scheme in the target wins, and a bare target, an
+// unregistered scheme, or a relocated global default all fall back to
+// resolver.GetDefaultScheme(). Wrapping the union means whichever builder grpc-go
+// picks is already wrapped — an unused wrapper costs nothing, while missing the
 // selected one silently drops the guard.
 func sanitizingResolverBuilders(target string) []resolver.Builder {
 	schemes := []string{"dns", resolver.GetDefaultScheme()}

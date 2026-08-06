@@ -29,24 +29,20 @@ var (
 // report. Redrive, and Get again, are operator tooling.
 //
 // Get therefore has two callers with different needs: Relay.reconcilePublished
-// branches on both its error and the returned LeaseToken, so its error
-// semantics are relay behavior as well as operator ergonomics.
+// branches on both its error and the returned LeaseToken, so its error semantics
+// are relay behavior as well as operator ergonomics.
 //
-// The Mark family is split by disposition rather than by arity: the relay sorts
-// a batch into ordered and unordered claims once, in Relay.classify, and every
-// method below is reached already knowing which it holds. No method here
+// The Mark family is split by disposition rather than by arity: Relay.classify
+// sorts a batch into ordered and unordered claims once, so no method here
 // re-derives that split from the event it was handed.
 //
-// NewRelay does not mutate the Store it is given. When the relay's telemetry
-// differs from the store's, the relay works through a copy carrying its own
-// recorder, so a service that builds the two with different recorders keeps
-// Append on the store's and the relay's operations on the relay's.
+// NewRelay does not mutate the Store it is given; when their telemetry differs it
+// works through a copy carrying its own recorder.
 //
-// NewStore is the only constructor and it rejects a nil pool, so a store that
-// reached a caller has both fields. The remaining guards exist for the zero
-// value an exported type cannot prevent: every exported method opens with
-// valid(), so a method added later cannot admit a half-built Store, and there
-// is no rule to remember about which ones need it.
+// NewStore is the only constructor and it rejects a nil pool. The remaining
+// guards exist for the zero value an exported type cannot prevent: every exported
+// method opens with valid(), so a method added later cannot admit a half-built
+// Store.
 type Store struct {
 	pool      *postgres.Pool
 	queries   *sqlcgen.Queries

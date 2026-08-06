@@ -51,13 +51,11 @@ func (v *Verifier) ResolveHTTP(
 // than its trusted peer is one where the value is no longer that peer's to make;
 // the fix is the CIDR list, not a laxer reading here.
 //
-// bearerToken applies that same single-reading rule to the credential header and
+// bearerToken applies the same single-reading rule to the credential header and
 // owns the RFC 9110 argument for it. The two differ on surrounding whitespace,
-// and a third forwarded header added here should copy this side rather than
-// average the two: that check compares a fixed token case-insensitively, so a
-// proxy's trailing space changes nothing and trimming it is free, while
-// bearerToken carries opaque bytes onward and refuses a value whose framing was
-// altered at all.
+// and a third forwarded header should copy this side: this check compares a fixed
+// token case-insensitively, so trimming is free, while bearerToken carries opaque
+// bytes onward and refuses a value whose framing was altered at all.
 func (v *Verifier) trustedHTTPRequest(request *http.Request) bool {
 	host, _, err := net.SplitHostPort(request.RemoteAddr)
 	if err != nil {
