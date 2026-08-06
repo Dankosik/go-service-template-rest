@@ -106,17 +106,14 @@ func (r MetricsResult) PushConfigured() bool {
 //
 // Both readers, not one. The Prometheus endpoint answers a scraper that can reach
 // this pod's diagnostics listener; the OTLP reader answers the deployment shape
-// where nothing can — a collector the platform names through
-// OTEL_EXPORTER_OTLP_ENDPOINT and that this service pushes to. Traces already
-// honored that variable. Metrics that did not meant a service could export every
-// span while exporting no metric at all, on a port the container image does not
-// publish, and look correctly instrumented while doing it.
+// where nothing can. Traces already honored OTEL_EXPORTER_OTLP_ENDPOINT, so
+// metrics that did not meant a service could export every span while exporting no
+// metric at all, and look correctly instrumented doing it.
 //
 // An unusable OTLP destination degrades the push path and nothing else. The
-// version this replaced failed the whole setup, which took the meter provider
-// with it — so a scheme-less OTEL_EXPORTER_OTLP_ENDPOINT, the form most hand
-// written manifests use, left the service with no metrics of any kind and no way
-// to record the gauge that reports the degradation.
+// version this replaced failed the whole setup, taking the meter provider with it
+// — so a scheme-less endpoint, the form most hand-written manifests use, left the
+// service with no metrics at all and no way to record the gauge reporting that.
 func SetupMetrics(ctx context.Context, metrics *Metrics, cfg MetricsConfig) (MetricsResult, error) {
 	if metrics == nil || metrics.registry == nil {
 		return MetricsResult{}, fmt.Errorf("setup metrics: registry is required")

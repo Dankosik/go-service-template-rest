@@ -54,11 +54,10 @@ func failure(kind Kind) error {
 // code has no reason to call it — a Verifier returns these categories itself.
 //
 // A Kind outside the declared set is not screened here, and screening one would
-// break a caller. Every consumer already answers its own default arm with a
-// fail-closed category, so a screen would add a second copy of the Kind list to
-// keep in step with the first — and TestDocumentedMetricReasonsMatchTheGuide
-// depends on the unscreened behaviour outright, walking Kind values until
-// [Error.Error] reaches its default arm to find the end of the declared run.
+// break a caller: every consumer already answers its own default arm with a
+// fail-closed category, and TestDocumentedMetricReasonsMatchTheGuide depends on
+// the unscreened behaviour outright, walking Kind values until [Error.Error]
+// reaches its default arm to find the end of the declared run.
 func Failure(kind Kind) error {
 	return failure(kind)
 }

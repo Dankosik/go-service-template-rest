@@ -50,11 +50,10 @@ type RateLimitKeyFunc func(*http.Request) string
 // digest identifies the same caller and discloses nothing.
 //
 // The client address is deliberately not offered. Behind any proxy, RemoteAddr is
-// the proxy, so limiting by it throttles the whole fleet as one caller; and
+// the proxy, so limiting by it throttles the whole fleet as one caller, and
 // X-Forwarded-For is attacker-controlled unless the trusted proxy topology is
-// known, which a template cannot know. Guessing either way produces a limiter
-// that is silently useless or trivially bypassed. A service that does know its
-// edge writes the four-line key function for it.
+// known — which a template cannot know. A service that does know its edge writes
+// the four-line key function for it.
 func HeaderRateLimitKey(name string) RateLimitKeyFunc {
 	return func(r *http.Request) string {
 		if r == nil {
@@ -118,12 +117,11 @@ func retryAfterSeconds(delay time.Duration) int {
 // KeyedRateLimiter is one token bucket per key, held in a bounded map.
 //
 // It is per instance, not per fleet, and that is the property to understand
-// before using it: N replicas admit up to N times the configured rate. Sizing it
-// as limit/replicas is wrong under a rolling deploy, when the replica count
-// changes. It is the right shape when the limit exists to stop one caller
-// monopolizing one instance — which is the failure MaxInFlight leaves open — and
-// the wrong shape for a contractual quota, which needs shared state and belongs
-// behind this same RateLimiter interface.
+// before using it: N replicas admit up to N times the configured rate, and sizing
+// it as limit/replicas breaks under a rolling deploy. It is the right shape when
+// the limit exists to stop one caller monopolizing one instance — the failure
+// MaxInFlight leaves open — and the wrong shape for a contractual quota, which
+// needs shared state behind this same RateLimiter interface.
 //
 // The key map is bounded because keys are caller-controlled: an unbounded
 // map[string]*rate.Limiter keyed on anything an attacker can vary is a memory

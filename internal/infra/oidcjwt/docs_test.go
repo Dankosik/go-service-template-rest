@@ -49,17 +49,15 @@ func TestDocumentedTokenExample(t *testing.T) {
 // TestDocumentedMetricReasonsMatchTheGuide holds every authn.reason label this
 // package can emit to the closed set docs/authentication.md publishes.
 //
-// This closes the one obligation doc.go named as having no automated owner. The
-// exhaustive linter makes a new [Kind] fail every switch in the package,
-// verificationReason included, but nothing made it reach the operator guide — so
-// a category added here and not there left operators reading a list that no
-// longer described the service.
+// The exhaustive linter makes a new [Kind] fail every switch in the package, but
+// nothing made it reach the operator guide — so a category added here and not
+// there left operators reading a list that no longer described the service.
 //
 // The corpus is walked rather than listed, so there is no second enumeration of
 // Kind to keep in step. Kind values are a contiguous iota run and [Error.Error]
 // answers the default arm for anything outside it, which makes the first unnamed
-// value the end of the run. That relies on every declared Kind having its own
-// message, which is exactly what the exhaustive linter already holds Error to.
+// value the end of the run — which relies on every declared Kind having its own
+// message, exactly what the exhaustive linter already holds Error to.
 func TestDocumentedMetricReasonsMatchTheGuide(t *testing.T) {
 	guide := readAuthenticationGuide(t)
 	unnamed := Failure(0).Error()

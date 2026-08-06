@@ -2237,18 +2237,15 @@ func waitForOutboxOperationCount(t *testing.T, reader *sdkmetric.ManualReader, o
 // observationStatementProbe identifies the state observation inside
 // pg_stat_activity.query, which is the statement text PostgreSQL echoes back.
 //
-// It has to match the sqlc header rather than anything the statement does,
-// because pg_stat_activity.query is truncated at track_activity_query_size —
-// 1024 bytes by default, and ObserveOutbox is far longer than that. sqlc keeps
-// the `-- name: X :type` header as the literal first line of each generated
-// query constant, which makes it the only anchor guaranteed inside the window;
-// the first pg_total_relation_size call, for instance, sits about 3 KiB in and
-// is never visible here.
+// It matches the sqlc header rather than anything the statement does, because
+// pg_stat_activity.query is truncated at track_activity_query_size — 1024 bytes
+// by default, and ObserveOutbox is far longer. sqlc keeps the `-- name: X :type`
+// header as the literal first line of each generated query constant, which makes
+// it the only anchor guaranteed inside that window.
 //
-// So this stays coupled to the query's sqlc name. Renaming ObserveOutbox, or
+// So this stays coupled to the query's sqlc name: renaming ObserveOutbox, or
 // configuring sqlc to drop those headers, stops it matching — which is why the
-// timeout message below tells the two failures apart instead of leaving a
-// maintainer with an unexplained ten-second wait. Keep this in step with
+// timeout message below tells the two failures apart. Keep it in step with
 // internal/infra/postgres/queries/postgres_outbox.sql.
 const observationStatementProbe = "query LIKE '%name: ObserveOutbox :one%'"
 

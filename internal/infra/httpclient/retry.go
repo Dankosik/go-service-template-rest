@@ -272,13 +272,11 @@ const maxDrainBytes = 64 << 10
 // drainResponse consumes and closes a response that is about to be replaced, so
 // its connection returns to the pool instead of being torn down.
 //
-// The read is the part that matters, and closing alone does not do it. net/http
-// hands back a body whose Close reports to the transport's read loop whether the
-// body reached EOF; a close before EOF marks the connection unusable and it is
-// discarded rather than pooled. So the version that only closed made every retry
-// pay a fresh TCP and TLS handshake — against a dependency that had just
-// answered 429 or 503, which is exactly when adding connection load is worst,
-// and inside the remaining budget of a caller that is already one attempt down.
+// The read is the part that matters, and closing alone does not do it: net/http
+// discards a connection whose body was closed before EOF rather than pooling it.
+// So the version that only closed made every retry pay a fresh TCP and TLS
+// handshake — against a dependency that had just answered 429 or 503, which is
+// exactly when adding connection load is worst.
 //
 // The body is bounded twice over: responseLimitTransport has already capped it,
 // and the limit below caps what is read of that.

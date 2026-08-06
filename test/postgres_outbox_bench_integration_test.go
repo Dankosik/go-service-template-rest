@@ -344,11 +344,9 @@ func runOutboxCleanupCycle(
 // Finalizing an ordered event also looks up that key's successor, advances the
 // head, and marks the successor claimable — and that last update is not
 // heap-only, because `ordering_ready` sits in two partial index predicates. Both
-// cases here publish the same number of events in the same batch size through
-// the same statement; they differ only in whether a successor exists. A key one
-// event deep has none, so the lookup finds nothing and the readiness update
-// touches no row. The difference is therefore the whole cost of the baton, and
-// the upper bound on what a claim redesign that removed it could win.
+// cases publish the same events in the same batch size through the same
+// statement and differ only in whether a successor exists, so the difference is
+// the whole cost of the baton and the upper bound on what removing it could win.
 func BenchmarkOutboxOrderedSuccessorCost(b *testing.B) {
 	const (
 		events    = 5000
@@ -722,13 +720,12 @@ func BenchmarkOutboxRelayPublishCyclePayload(b *testing.B) {
 // once, and that is where heap pages, the primary key, the append notification,
 // and the ordering heads are actually contended.
 //
-// Only two shapes are valid, and the missing third one is the point. Several
-// unsynchronized writers sharing one ordering key is not a supported shape: a
-// key's sequences must reach PostgreSQL in order, and the retained high-water
-// mark rejects one that does not, so such a call fails rather than storing a
-// reordered event. A caller that needs ordering takes the sequence from its
-// aggregate's own revision, under the same lock that serializes the domain
-// mutation — which is one writer per key, the shape measured here.
+// Only two shapes are valid, and the missing third is the point: several
+// unsynchronized writers sharing one ordering key is unsupported, because a key's
+// sequences must reach PostgreSQL in order and the retained high-water mark
+// rejects one that does not. A caller that needs ordering takes the sequence from
+// its aggregate's own revision, under the same lock that serializes the domain
+// mutation — one writer per key, the shape measured here.
 func BenchmarkOutboxAppendConcurrent(b *testing.B) {
 	const writers = 16
 

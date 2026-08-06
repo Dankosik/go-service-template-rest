@@ -65,12 +65,10 @@ func AccessLog(log *slog.Logger, logHealthProbes bool, next http.Handler) http.H
 		// that decorator loses them, which is what the wiring test in
 		// cmd/service/internal/bootstrap exists to catch.
 		//
-		// problem_code is what separates the several failures that share a status.
-		// A 503 is load shedding, a saturated connection pool, or a draining
-		// instance; a 409 is a domain conflict.
-		// Status alone cannot tell them apart, and during an incident that
-		// distinction is the whole question. Its cardinality is bounded by the
-		// problem catalog.
+		// problem_code separates the failures that share a status: a 503 is load
+		// shedding, a saturated connection pool, or a draining instance, and during
+		// an incident that distinction is the whole question. Its cardinality is
+		// bounded by the problem catalog.
 		attrs := []any{
 			"method", r.Method,
 			"route", route,

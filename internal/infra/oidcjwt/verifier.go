@@ -179,12 +179,11 @@ func (v *Verifier) Verify(
 	// recovery; a refresh the cooldown refused or the provider failed leaves
 	// the installed set in place, so the retry below still answers from it.
 	//
-	// Age is checked before the signature on this path, and the categories
-	// differ because the question does. Against a current set, "no key signs
-	// this" is a complete answer and the credential is invalid. Against a set
-	// we could not replace, it is not an answer at all — the key that would
-	// have matched may be in the set the refresh failed to fetch — so the
-	// honest report is that trust is unavailable.
+	// Age is checked before the signature here, and the categories differ
+	// because the question does: against a current set, "no key signs this" is
+	// a complete answer and the credential is invalid, while against a set we
+	// could not replace the matching key may be in the one the refresh failed
+	// to fetch — so the honest report is that trust is unavailable.
 	refreshErr := v.refresh(ctx)
 	if errors.Is(refreshErr, context.Canceled) || errors.Is(refreshErr, context.DeadlineExceeded) {
 		return reqctx.Principal{}, refreshErr

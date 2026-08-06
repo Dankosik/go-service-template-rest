@@ -149,9 +149,8 @@ func registerUnaryTestService[Request any, RequestPtr interface {
 //
 // Teardown stays with the caller because one call site needs it to:
 // correlation_service_test.go consumes serveDone itself while asserting the
-// shutdown sequence, so a helper that owned cleanup unconditionally would race
-// it for that channel. A caller with no such assertion passes the three values
-// to closeAfterTest and is done, which is what telemetry_test.go does.
+// shutdown sequence, so a helper owning cleanup unconditionally would race it for
+// that channel. Any other caller passes the three values to closeAfterTest.
 //
 // clientOptions.TransportCredentials defaults to insecure because the listener
 // is loopback; a test proving transport trust passes its own.

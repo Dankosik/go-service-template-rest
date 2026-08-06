@@ -96,14 +96,12 @@ func TestOutboxLeaseBudgetSpendsTheRelayJoinTimeout(t *testing.T) {
 //
 // The mirror claim — that internal/config rejects the same field — belongs to
 // TestOutboxConfigValidatesEveryField in that package, which walks the same
-// struct. Asserting it here too would mean two reflective walks, two
-// type-to-zero mappers, and two skip lists keyed differently, all describing
-// one rule. Together the two tests still cover both sides of every field.
+// struct. Together the two cover both sides of every field.
 //
 // It walks config.OutboxConfig rather than listing fields, so a setting added
 // later is covered without editing this test. The shipped defaults are loaded
-// first, which is what makes the per-field mutations meaningful: each one
-// starts from a configuration both sides accept.
+// first, which is what makes the per-field mutations meaningful: each one starts
+// from a configuration both sides accept.
 func TestRelayRejectsEveryOutboxBudget(t *testing.T) {
 	// Enabled is a switch, and DrainTimeout belongs to the process lifecycle
 	// that validateRuntimeConfig owns rather than to the relay's own budget —

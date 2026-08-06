@@ -22,12 +22,9 @@ import (
 // be built, and a publisher that was never registered — and they reach it
 // through different sentinels.
 //
-// postgresoutbox's remaining exported errors — ErrNotFound, ErrInvalidEvent,
-// ErrOrderingSequence, ErrRedriveRejected, ErrRedriveConflict,
-// ErrPermanentPublication, and ErrPublicationNotAccepted — belong to Append,
-// Get, Redrive, or a single publication attempt, so none of them ends the
-// process and none needs a class. A new sentinel that can stop the relay needs
-// a case here and in failureClass.
+// postgresoutbox's remaining exported errors belong to Append, Get, Redrive, or a
+// single publication attempt, so none ends the process and none needs a class. A
+// new sentinel that can stop the relay needs a case here and in failureClass.
 func TestReportFailureIsBoundedAndSanitized(t *testing.T) {
 	const canary = "postgres://user:secret@db/app SELECT payload FROM outbox broker-detail"
 	tests := []struct {

@@ -1,11 +1,10 @@
 // Package reqctx owns the request-scoped values a handler reads and the
 // transport adapter writes.
 //
-// It is a leaf on purpose. internal/infra/http produces these values while
-// serving a request and a feature package consumes them while handling one, and
-// the repository's depguard contract forbids a feature package from importing a
-// concrete infra adapter — so neither may import the other and both need the
-// same answer. internal/observability/otelconfig is a leaf for the same reason.
+// It is a leaf on purpose. internal/infra/http produces these values while serving
+// a request and a feature package consumes them while handling one, and depguard
+// forbids a feature package from importing a concrete infra adapter — so neither
+// may import the other and both need the same answer.
 //
 // Nothing here performs I/O or holds a dependency. A carrier is all a feature
 // package needs; deciding what a credential proves stays with whoever validates
@@ -89,15 +88,13 @@ func PrincipalFromContext(ctx context.Context) (Principal, bool) {
 // SetPrincipal publishes principal to every later reader of r, mutating r in
 // place.
 //
-// The mutation is deliberate and is the only thing that works at this seam. The
+// The mutation is deliberate and is the only thing that works at this seam: the
 // OpenAPI request validator builds its validation input around the same
 // *http.Request it later hands to the next handler, so a returned copy would be
 // discarded and the principal with it. internal/infra/http/middleware_timeout.go
-// mutates the same request for the same class of reason.
-//
-// This lives here, rather than beside the validator wiring, so it is written
-// once. An authenticator that reimplements it is how a service ends up with a
-// version that silently returns a copy.
+// mutates the same request for the same class of reason. This lives here so it is
+// written once — an authenticator that reimplements it is how a service ends up
+// with a version that silently returns a copy.
 func SetPrincipal(r *http.Request, principal Principal) {
 	if r == nil {
 		return

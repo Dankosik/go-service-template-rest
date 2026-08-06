@@ -3,12 +3,11 @@
 // re-run this binary as a child process, and the resolver stub both resolver
 // proofs need.
 //
-// A test needing a server to dial composes these rather than hand-rolling
-// another listen/serve/teardown block. Most reach for
-// startMetadataCaptureServer, since what this package guards is which metadata
-// crosses the boundary; startTestServer is the plain half for a test that only
-// needs some RPC to succeed. The peers that are not gRPC servers — the raw
-// HTTP/2 peer in transparent_retry_test.go and the proxy in
+// A test needing a server to dial composes these rather than hand-rolling another
+// listen/serve/teardown block. Most reach for startMetadataCaptureServer, since
+// what this package guards is which metadata crosses the boundary;
+// startTestServer is the plain half. The peers that are not gRPC servers — the
+// raw HTTP/2 peer in transparent_retry_test.go and the proxy in
 // resolver_live_test.go — share only listenLoopback, because what they serve is
 // the thing under proof.
 //

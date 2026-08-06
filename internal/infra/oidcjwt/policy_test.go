@@ -19,11 +19,10 @@ import (
 // .golangci.yml — the build goes green and the next added field reaches
 // production as a zero value at an authentication boundary.
 //
-// The assertion is one live, anchored line rather than a substring of the file.
-// A substring survives every way this entry actually breaks: commented out
-// during a lint triage, or left in place with the pattern widened past the type
-// it is supposed to pin. The trailing anchor is matched for the same reason. The
-// module path is not, because a generated service rewrites it.
+// The assertion is one live, anchored line rather than a substring of the file: a
+// substring survives every way this entry actually breaks — commented out during
+// a lint triage, or left in place with the pattern widened past the type it pins.
+// The module path is not anchored, because a generated service rewrites it.
 func TestPolicyInputIsHeldToExhaustruct(t *testing.T) {
 	const required = `oidcjwt\.PolicyInput$`
 	config, err := os.ReadFile(filepath.Join("..", "..", "..", ".golangci.yml"))

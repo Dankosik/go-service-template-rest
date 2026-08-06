@@ -76,15 +76,11 @@ func newGRPCRuntime(
 // configuration leaves no bound behind, which a test asserting individual fields
 // goes on reporting as fine once a tenth one is added.
 //
-// The mapping lives here, in the composition root, rather than in
-// internal/infra/grpc, because that adapter depends on internal/problem and
-// internal/reqctx only — docs/repo-architecture.md owns that direction, and a
-// transport adapter that knew this repository's configuration shape could not be
-// reused by a service that restructured it. internal/config cannot own it
-// either: the depguard rule config_no_runtime_owners stops it importing runtime
-// adapters. Two other composition roots perform the same crossing for their own
-// bounds, each with its own literal — examples/grpc-reference-service's
-// benchmark server and its service test.
+// The mapping lives here rather than in internal/infra/grpc because that adapter
+// depends on internal/problem and internal/reqctx only, and a transport adapter
+// that knew this repository's configuration shape could not be reused by a
+// service that restructured it. internal/config cannot own it either: the
+// depguard rule config_no_runtime_owners stops it importing runtime adapters.
 func grpcServerConfig(server config.GRPCServerConfig) grpcx.Config {
 	return grpcx.Config{
 		MaxConcurrentRPCs:          server.MaxConcurrentRPCs,

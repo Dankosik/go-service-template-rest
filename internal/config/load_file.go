@@ -22,9 +22,8 @@ import (
 // here. The path arrives on argv, chosen by whoever chose the binary and the
 // entrypoint, so a policy at this boundary defends against an attacker who could
 // already run a different program — while breaking the only two ways Kubernetes
-// supplies a config file: a ConfigMap or Secret volume is materialized as a
-// symlink into a timestamped directory, which the refusal rejected outright and
-// the resolved-path comparison rejected again.
+// supplies a config file, both of which are symlinks into a timestamped
+// directory.
 const maxConfigFileSizeBytes = int64(1 << 20)
 
 func validateLoadOptions(opts LoadOptions) error {

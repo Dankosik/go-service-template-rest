@@ -321,11 +321,9 @@ func (s *Store) Claim(ctx context.Context, leaseDuration time.Duration, batchSiz
 // outbox.relay.operations sample. Reconciliation is exactly where an operator
 // needs to see a lost lease, because the relay is about to stop over it.
 //
-// They are two methods rather than one that branches on the ordering key,
-// because the relay has already sorted the batch into ordered and unordered
-// claims before either can be reached — see Relay.classify. Re-deriving that
-// split here would be a second copy of the same predicate, and a relay that
-// ever routed on anything else would silently reach the wrong statement.
+// They are two methods rather than one that branches on the ordering key, because
+// Relay.classify has already sorted the batch before either can be reached.
+// Re-deriving that split here would be a second copy of the same predicate.
 
 // MarkUnorderedPublished finalizes one unordered event of a lease.
 func (s *Store) MarkUnorderedPublished(ctx context.Context, token, id string) (err error) {

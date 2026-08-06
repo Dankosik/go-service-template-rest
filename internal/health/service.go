@@ -85,12 +85,11 @@ func New(probes ...Probe) *Service {
 // next request rather than after the next refresh interval.
 //
 // A verdict older than the refresher's cadence is refused rather than served.
-// Without that bound, a refresher that stopped — cancelled, panicked, or wedged
-// on a dependency that never returns — leaves whatever verdict it last wrote
-// standing forever, and the instance keeps reporting ready while nothing has
-// checked anything. That failure is silent by construction: the last thing a
-// healthy service writes is "healthy", so the frozen answer is the reassuring
-// one. This is the check that turns it into an eviction.
+// Without that bound, a refresher that stopped — cancelled, panicked, or wedged on
+// a dependency that never returns — leaves its last verdict standing forever while
+// nothing checks anything. The failure is silent by construction, because the last
+// thing a healthy service writes is "healthy", so the frozen answer is the
+// reassuring one. This check turns it into an eviction.
 func (s *Service) Cached() error {
 	if s.draining.Load() {
 		return ErrDraining

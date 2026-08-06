@@ -26,12 +26,11 @@ type telemetryStage struct {
 // bootstrapTelemetryStage installs both signals, independently.
 //
 // Independence is the point. The version this replaced returned on the first
-// metrics failure, so SetupTracing never ran: one unusable OTLP metrics endpoint
-// left the tracer provider unset, which cost traces, cost the meter provider that
-// records whether traces are being exported at all, and silently stopped every log
-// record carrying trace_id and span_id — logctx reads those off the span context
-// the provider produces. The service started anyway and reported healthy, so the
-// only artifact was one warning at boot.
+// metrics failure, so one unusable OTLP metrics endpoint left the tracer provider
+// unset — costing traces, the meter provider that reports whether traces are
+// exported at all, and every log record's trace_id and span_id, which logctx
+// reads off the span context that provider produces. The service started anyway
+// and reported healthy, so the only artifact was one warning at boot.
 //
 // Neither failure is fatal. A service that cannot export telemetry still serves
 // its contract, and taking it down for that would trade an observability outage

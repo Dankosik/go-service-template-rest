@@ -127,11 +127,9 @@ func run(signalCtx context.Context, args []string, buildPublisher PublisherBuild
 // last-moment durable write would need.
 //
 // unsafe is the relay's own report that a publisher goroutine outlived
-// cancellation. That goroutine can still reach both the adapter and the pool,
-// so nothing is released and process exit owns them instead.
-//
-// Every method runs on the goroutine that deferred it, so released needs no
-// synchronization.
+// cancellation. That goroutine can still reach both the adapter and the pool, so
+// nothing is released and process exit owns them instead. Every method runs on
+// the goroutine that deferred it, so released needs no synchronization.
 type relayTeardown struct {
 	publisher func(context.Context)
 	pool      func()

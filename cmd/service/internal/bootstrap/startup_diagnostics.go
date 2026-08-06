@@ -24,14 +24,12 @@ const pprofWriteTimeout = 65 * time.Second
 // newDiagnosticsServer builds the private listener: metrics always, and the
 // runtime profile handlers when they are enabled.
 //
-// Importing net/http/pprof also registers every profile on
-// http.DefaultServeMux — that happens in the package's init and cannot be opted
-// out of. What keeps that harmless is that this service never serves
-// DefaultServeMux: both http.Server values are constructed with an explicit
-// Handler, so the only way to reach a profile is the mux built here, gated by
-// observability.pprof.enabled. Handlers are still referenced explicitly rather
-// than through a blank import so that gate is visible in the code that applies
-// it.
+// Importing net/http/pprof also registers every profile on http.DefaultServeMux,
+// in that package's init, and cannot be opted out of. What keeps it harmless is
+// that this service never serves DefaultServeMux: both http.Server values are
+// constructed with an explicit Handler, so the only way to reach a profile is the
+// mux built here, gated by observability.pprof.enabled. Handlers are referenced
+// explicitly rather than through a blank import so that gate stays visible.
 func newDiagnosticsServer(cfg config.Config, metrics *telemetry.Metrics, errorLog *log.Logger) *http.Server {
 	mux := http.NewServeMux()
 	mux.Handle("GET /metrics", metrics.Handler())

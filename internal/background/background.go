@@ -1,12 +1,11 @@
 // Package background supervises non-HTTP work for the lifetime of the process.
 //
-// Without a seam here, the first scheduled job a service adds gets started with
-// a bare `go` against context.Background(). Two things follow. On SIGTERM the
-// HTTP server drains correctly and the job is killed mid-iteration by process
-// exit, so a job that writes to a database leaves a partial batch with no
-// compensating record. And a panic inside it takes the whole process down —
-// Recover is HTTP middleware and never sees it — during a window that may carry
-// no HTTP traffic at all, so the only artifact is a restart.
+// Without a seam here, the first scheduled job a service adds gets started with a
+// bare `go` against context.Background(). Two things follow: on SIGTERM the HTTP
+// server drains correctly while the job is killed mid-iteration by process exit,
+// leaving a partial batch with no compensating record; and a panic inside it
+// takes the whole process down, because Recover is HTTP middleware and never sees
+// it, so the only artifact is a restart.
 //
 // This is a supervisor, not a job framework. It owns cancellation, panic
 // containment, the join, and reporting a task that failed; schedules, retries,
@@ -56,13 +55,12 @@ type Supervisor struct {
 	// taskCtx is the context handed to every task, and is canceled only by New's
 	// parent or by Shutdown.
 	//
-	// It is deliberately not an errgroup.WithContext context. That context is
+	// It is deliberately not an errgroup.WithContext context. That one is
 	// canceled the first time any task returns an error, so one failing worker
-	// stopped every other supervised task in the process — including the
-	// readiness refresher, which returns nil on cancellation and therefore
-	// exited through the ordinary stopped path. Keeping sibling cancellation under
-	// Shutdown preserves the ordered drain after the failure reaches the process
-	// lifecycle owner.
+	// stopped every other supervised task — including the readiness refresher,
+	// which returns nil on cancellation and so exited through the ordinary
+	// stopped path. Keeping sibling cancellation under Shutdown preserves the
+	// ordered drain.
 	//nolint:containedctx // A supervisor's whole job is owning the lifetime it hands out.
 	taskCtx   context.Context
 	cancel    context.CancelFunc

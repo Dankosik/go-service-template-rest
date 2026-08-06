@@ -80,13 +80,12 @@ func TestOutboxConfigRejectsIncoherentBudgets(t *testing.T) {
 // relay unvalidated: nothing rejects it at load time, and ValidateRelayConfig
 // only covers the fields it happens to range over.
 //
-// Deriving the field set by reflection rather than listing it is the whole
-// point. Two tests in cmd/outbox-relay walk the same struct for the halves this
-// one cannot reach — depguard keeps postgresoutbox out of this package, tests
-// included: TestRelayConfigMapsEveryOutboxField guards the mapper, and
-// TestRelayRejectsEveryOutboxBudget guards the relay's own validator. This one
-// owns the config side alone, and the three together cover every field end to
-// end.
+// Deriving the field set by reflection rather than listing it is the whole point.
+// Two tests in cmd/outbox-relay walk the same struct for the halves this one
+// cannot reach, because depguard keeps postgresoutbox out of this package:
+// TestRelayConfigMapsEveryOutboxField guards the mapper and
+// TestRelayRejectsEveryOutboxBudget the relay's own validator. The three together
+// cover every field end to end.
 func TestOutboxConfigValidatesEveryField(t *testing.T) {
 	// The only field with no unusable value: it is the switch that turns the
 	// rest on, and TestOutboxConfigDefaultsAndPostgresRequirement covers what it

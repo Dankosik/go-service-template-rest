@@ -594,11 +594,10 @@ func validatePostgres(cfg PostgresConfig) error {
 
 // profile:outbox-postgres:start
 
-// Copies of the outbox ceilings, restated so an operator is rejected at load
-// time instead of at relay startup. postgresoutbox owns the values and the
-// reasoning; see the ceiling block in internal/infra/postgresoutbox/relay.go
-// for why depguard makes this a copy rather than an import, and
-// cmd/outbox-relay/internal/bootstrap for the tests that hold the two sides
+// Copies of the outbox ceilings, restated so an operator is rejected at load time
+// instead of at relay startup. postgresoutbox owns the values and the reasoning;
+// its ceiling block in relay.go says why depguard makes this a copy rather than
+// an import, and cmd/outbox-relay/internal/bootstrap holds the two sides
 // together.
 //
 // A relay budget added to validateOutbox below must be added to

@@ -231,13 +231,10 @@ func (p *Pool) Close() {
 // rolling back otherwise.
 //
 // This is the seam that keeps a service from reaching for PGX to compose two
-// repository calls atomically. fn receives a pgx.Tx, which satisfies Querier — so
-// a repository method written against Querier works both inside and outside a
-// transaction without knowing which it is in.
-//
-// The connection is taken through Acquire, so opening a transaction is subject to
-// the same acquire budget as any other database work rather than waiting out the
-// caller's whole request budget.
+// repository calls atomically. fn receives a pgx.Tx, which satisfies Querier, so a
+// repository method written against Querier works both inside and outside a
+// transaction. The connection is taken through Acquire, so opening a transaction
+// is subject to the same acquire budget as any other database work.
 func (p *Pool) InTx(ctx context.Context, opts pgx.TxOptions, fn func(pgx.Tx) error) error {
 	if p == nil {
 		return fmt.Errorf("%w: postgres pool is nil", ErrConfig)

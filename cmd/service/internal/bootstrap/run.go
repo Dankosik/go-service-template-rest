@@ -80,13 +80,12 @@ const (
 
 // shutdownBudget is the one deadline every teardown stage draws from.
 //
-// Without it the stages were four independent ceilings that happened to run in
-// sequence, so the worst case was their sum: 30s of drain plus 17s of teardown
-// against a platform that had promised 45s, and against the 30s Kubernetes grants
-// by default. The stage that lost was always the same one — the telemetry flush
-// runs last precisely so it can record what the others did, which makes it the
-// first thing a SIGKILL takes. Every rolling deploy that actually used its drain
-// threw away the evidence of how the drain went.
+// Without it the stages were four independent ceilings running in sequence, so
+// the worst case was their sum: 30s of drain plus 17s of teardown against the 30s
+// Kubernetes grants by default. The stage that lost was always the same one — the
+// telemetry flush runs last precisely so it can record what the others did, which
+// makes it the first thing a SIGKILL takes, so every rolling deploy that used its
+// drain threw away the evidence of how the drain went.
 //
 // The clock starts when teardown begins rather than at startup, because that is
 // when the platform's grace period starts. All uses are on the goroutine running
@@ -547,14 +546,12 @@ func logReadinessTransition(ctx context.Context, log *slog.Logger, err error) {
 // deliberately detached from the signal context so that Shutdown is the only
 // thing that stops it.
 //
-// Deriving it from signalCtx would cancel every task the instant SIGTERM
-// arrived, while the HTTP drain keeps serving for up to
-// readiness_propagation_delay plus the remaining shutdown_timeout — 30s with the
-// shipped defaults. Every request admitted in that window would run without the
-// work it depends on: an outbox publisher, a write batcher, a token refresher,
-// or a lease renewer would already be gone. Nothing would report it either, so
-// the only artifact is one INFO line saying the task was canceled, in the middle
-// of a shutdown that otherwise looks orderly.
+// Deriving it from signalCtx would cancel every task the instant SIGTERM arrived,
+// while the HTTP drain keeps serving for up to readiness_propagation_delay plus
+// the remaining shutdown_timeout — 30s with the shipped defaults. Every request
+// admitted in that window would run without the work it depends on, and the only
+// artifact would be one INFO line saying the task was canceled, in the middle of
+// a shutdown that otherwise looks orderly.
 func newSupervisedBackground(signalCtx context.Context, log *slog.Logger) *background.Supervisor {
 	return background.New(context.WithoutCancel(signalCtx), log)
 }

@@ -34,11 +34,10 @@ import (
 // cmd/service/internal/bootstrap, which is internal to another binary and cannot
 // be imported from here at all.
 //
-// So this is an independent oracle, not a second guard on production: a rename
-// already stops the production mapping compiling on its own, and a bound this
-// copy drops is invisible to the service. That copy has its own target-side
-// proof, TestGRPCServerConfigFillsEveryTransportBound in that package. What this
-// one buys is the corpus below being able to ask what NewServer does with a
+// So this is an independent oracle, not a second guard on production: a bound
+// this copy drops is invisible to the service, and the production mapping has its
+// own target-side proof, TestGRPCServerConfigFillsEveryTransportBound. What this
+// buys is the corpus below being able to ask what NewServer does with a
 // configuration the loader accepted, which needs some crossing in this package.
 func serverConfigFromRuntime(server config.GRPCServerConfig) Config {
 	return Config{
@@ -184,11 +183,9 @@ func TestAccessLogRulesMatchConfigValidation(t *testing.T) {
 //
 // It asks the question from the target side, which is what makes it survive a
 // field nobody remembered to name here. Every [Config] field is a bound filled
-// from configuration — transport credentials are on [Options], because the
-// composition root builds them rather than copying a bound — so one still at its
-// zero value after mapping a corpus that sets every knob means either
-// serverConfigFromRuntime dropped it or this corpus never set its source, and
-// both need the same look.
+// from configuration, so one still at its zero value after mapping a corpus that
+// sets every knob means either serverConfigFromRuntime dropped it or this corpus
+// never set its source, and both need the same look.
 //
 // The subject is this file's oracle, which the two corpora above run every case
 // through. The production mapping is a different owner with its own copy of this

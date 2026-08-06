@@ -69,10 +69,10 @@ func TestConsumeAppendsReportsConnectFailure(t *testing.T) {
 // retrying, because pickup falls back to the poll interval rather than
 // stopping. It returns only when its context is done.
 //
-// The report names the failing stage and carries no DSN material. pgx formats
-// the user, database, and host into its connect error, so logging that error
-// would break the package's own promise — the assertion below is what would
-// fail if LogListenerRetry ever took an error again.
+// The report names the failing stage and carries no DSN material: pgx formats the
+// user, database, and host into its connect error, so logging that error would
+// break the package's own promise, and the assertion below is what fails if
+// LogListenerRetry ever takes an error again.
 //
 // Under synctest the retry sleep is the bubble's only durable block point, so
 // synctest.Wait is an owned event rather than a polled wall-clock bound.

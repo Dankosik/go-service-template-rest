@@ -14,13 +14,11 @@ import (
 // envelope, and that type is the trust values inside it.
 //
 // These are deliberately constants rather than configuration: a provider that
-// could widen the accepted algorithm, the size caps, or the staleness limit
-// could weaken authentication from outside the service. They are collected here,
-// rather than beside each consumer, so the whole trust envelope can be read in
-// one place; docs/authentication.md publishes the same values to operators. The
-// consumers are elsewhere — the timing values below are read by lifecycle.go and
-// refresh.go, the size caps by token.go, keyset.go, and provider.go — so a
-// change to one is read against its consumer rather than its neighbours here.
+// could widen the accepted algorithm, the size caps, or the staleness limit could
+// weaken authentication from outside the service. They are collected here so the
+// whole trust envelope reads in one place, and docs/authentication.md publishes
+// the same values to operators. The consumers are elsewhere — timing in
+// lifecycle.go and refresh.go, size caps in token.go, keyset.go, and provider.go.
 const (
 	// MaxTokenBytes bounds the credential before any parsing. Access tokens with
 	// ordinary claim sets are well under 2 KiB, so this leaves room for large
@@ -78,12 +76,10 @@ type Policy struct {
 // It is a struct rather than positional parameters because every field is a
 // string, so the pair most worth protecting — issuer and audience — would
 // transpose and still compile. The exhaustruct include entry for this type in
-// .golangci.yml is what preserves the one property positional parameters gave
-// for free: a field added here fails lint at every production call site that
-// does not set it, which today is the composition root in cmd/service and is the
-// one that decides what a deployment actually runs with. Remove this type from
-// that entry and a forgotten call site becomes a zero value at an authentication
-// boundary instead of a failed build.
+// .golangci.yml preserves the one property positional parameters gave for free: a
+// field added here fails lint at every production call site that does not set it.
+// Remove this type from that entry and a forgotten call site becomes a zero value
+// at an authentication boundary instead of a failed build.
 //
 // Test call sites are exempt, because that config excludes exhaustruct from
 // _test.go repository-wide. That is the right trade here: a test that omits a

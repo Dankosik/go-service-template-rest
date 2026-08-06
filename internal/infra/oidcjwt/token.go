@@ -120,11 +120,10 @@ type parsedToken struct {
 // One value, no surrounding space, no comma, no whitespace inside the token: a
 // credential this boundary acts on may have exactly one reading. RFC 9110 lets a
 // field repeat and lets one line carry a comma-separated list, so a request
-// offering two credentials has to be refused rather than resolved — choosing
-// among them is how one intermediary's reading comes to differ from this
-// service's. Refusal is KindMalformed, which the HTTP adapter reports as 400
-// rather than 401: the framing was wrong, so re-presenting the same pair against
-// a challenge would fail identically.
+// offering two credentials is refused rather than resolved — choosing among them
+// is how one intermediary's reading comes to differ from this service's. Refusal
+// is KindMalformed, reported as 400 rather than 401: the framing was wrong, so
+// re-presenting the same pair against a challenge would fail identically.
 func bearerToken(values []string) (string, error) {
 	if len(values) == 0 {
 		return "", failure(KindMissing)

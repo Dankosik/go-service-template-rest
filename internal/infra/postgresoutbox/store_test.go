@@ -155,11 +155,10 @@ func stubbedStore(driver sqlcgen.DBTX) *Store {
 // half-built shapes that would otherwise pass whichever single field that
 // method happens to read.
 //
-// The list below is every exported method, not a chosen subset. A method with
-// arguments valid enough to reach past its own checks — CleanupPublished is
-// the one that used to have none — otherwise panics on a nil *Queries, and the
-// count assertion at the end is what fails when a new method is added and left
-// out of both the guard and this table.
+// The list below is every exported method, not a chosen subset: one with
+// arguments valid enough to reach past its own checks otherwise panics on a nil
+// *Queries, and the count assertion at the end is what fails when a new method is
+// added and left out of both the guard and this table.
 func TestZeroValueStoreRejectsEveryExportedMethod(t *testing.T) {
 	t.Parallel()
 
