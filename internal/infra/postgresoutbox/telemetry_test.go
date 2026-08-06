@@ -295,9 +295,8 @@ func gaugePoints(t *testing.T, reader *sdkmetric.ManualReader, name string) map[
 // assert on operator log records too, or nil when only metrics matter —
 // NewTelemetry already reads nil as slog.Default().
 //
-// telemetrytest owns the reader and every metricdata accessor below, so this
-// package and the container-backed outbox suite read a scrape the same way. It
-// is only the *Telemetry construction that belongs here.
+// telemetrytest owns the reader and every metricdata accessor below, so only the
+// *Telemetry construction belongs here.
 func newTestTelemetry(t *testing.T, logger *slog.Logger) (*sdkmetric.ManualReader, *Telemetry) {
 	t.Helper()
 	reader, meter := telemetrytest.NewManualMeter(t, TelemetryScope)

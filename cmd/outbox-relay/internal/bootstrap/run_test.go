@@ -25,10 +25,9 @@ import (
 // other. The postgresoutbox ceiling block owns why the values are restated at
 // all; the three tests here own which part each of them pins.
 //
-// This one pins the four numeric ceilings: each must be accepted and one past
-// it rejected. A ceiling raised in one place and not the other would otherwise
-// surface only as an operator rejected at load time by a bound the relay no
-// longer enforces.
+// This one pins the four numeric ceilings: each must be accepted and one past it
+// rejected. A ceiling raised in one place and not the other would otherwise
+// surface only as an operator rejected by a bound the relay no longer enforces.
 func TestOutboxConfigBoundsMatchRelayCeilings(t *testing.T) {
 	for _, bound := range []struct {
 		key     string

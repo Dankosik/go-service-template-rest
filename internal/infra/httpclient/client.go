@@ -117,11 +117,10 @@ type Config struct {
 	// is the bulkhead between one slow provider and the rest of the service.
 	//
 	// Nothing else provides it. net/http leaves this unlimited, so a provider
-	// that goes slow is answered by every in-flight request opening its own
-	// connection and holding it for the whole request budget — the service's
-	// entire http.max_in_flight allowance spent waiting on one dependency, with
-	// requests that never touch it shed for the capacity. Excess callers wait
-	// here instead, bounded by the request budget they already carry.
+	// that goes slow has every in-flight request open its own connection and
+	// hold it for the whole request budget — the service's entire
+	// http.max_in_flight allowance spent on one dependency, with requests that
+	// never touch it shed for the capacity. Excess callers wait here instead.
 	MaxConnsPerHost int
 	// MaxIdleConnsPerHost is how many connections survive between bursts. Empty
 	// follows MaxConnsPerHost, which is the right answer for a client pinned to

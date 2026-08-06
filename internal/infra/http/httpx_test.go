@@ -134,12 +134,11 @@ func assertProblemCode(t *testing.T, resp *httptest.ResponseRecorder, wantCode p
 // unimplementedAPI satisfies the generated server interface without implementing
 // any operation.
 //
-// Embedding leaves every method nil, which is exactly what a test that only
-// exercises the platform probes or the fallback policy needs. It exists so that
-// adding the first real operation to the contract does not break every inherited
-// router test: those tests are not about that operation, and requiring them all
-// to grow a stub would be friction the template inflicted on day one. A test that
-// does exercise an operation passes a real implementation instead.
+// Embedding leaves every method nil, which is what a test exercising only the
+// platform probes or the fallback policy needs. It exists so adding the first real
+// operation to the contract does not break every inherited router test — those
+// tests are not about that operation. A test that does exercise one passes a real
+// implementation instead.
 type unimplementedAPI struct {
 	openapi.StrictServerInterface
 }

@@ -11,13 +11,10 @@ import (
 
 // setupTelemetry installs both signals independently and returns the flush.
 //
-// Neither failure is fatal, and neither blocks the other. A relay that cannot
-// export telemetry still drains its backlog durably, and refusing to start for
-// that would trade an observability outage for a publication one — the same
-// reasoning, and the same shape, as bootstrapTelemetryStage in
-// cmd/service/internal/bootstrap/startup_telemetry.go. Metrics fall back to the
-// no-op provider [telemetry.Metrics.MeterProvider] already returns, so the
-// outbox instruments built from it record into nothing rather than panicking.
+// Neither failure is fatal, and neither blocks the other — the same reasoning and
+// shape as bootstrapTelemetryStage in cmd/service/internal/bootstrap. Metrics fall
+// back to the no-op provider [telemetry.Metrics.MeterProvider] already returns, so
+// the outbox instruments built from it record into nothing rather than panicking.
 func setupTelemetry(
 	ctx context.Context,
 	cfg config.Config,

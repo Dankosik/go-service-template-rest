@@ -1,13 +1,11 @@
 // Package configtest owns the environment isolation a parity test needs.
 //
 // The rules internal/config enforces are restated by the runtime owners that
-// consume them, because the depguard rule config_no_runtime_owners stops this
-// package's parent from importing them and each restatement has to be held to
-// the same answer. Those parity tests live with the runtime owner, which is the
-// direction the import works, so more than one package needs to run the real
-// configuration loader against one corpus entry at a time. This is that step,
-// owned once: without it the next parity test copies it, and a helper that
-// exists three times is the shape those tests were written to prevent.
+// consume them, because the depguard rule config_no_runtime_owners stops its
+// parent from importing them. Each parity test therefore lives with its runtime
+// owner — the direction the import works — so more than one package needs to run
+// the real loader against one corpus entry at a time. This is that step, owned
+// once: a helper that exists three times is the shape those tests prevent.
 package configtest
 
 import (

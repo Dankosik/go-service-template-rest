@@ -34,12 +34,11 @@ type RateLimiter interface {
 // RateLimitKeyFunc reports which bucket a request is charged against. An empty
 // key means the request is not limited.
 //
-// It runs in the root middleware chain, ahead of the OpenAPI request validator,
-// because limiting a caller after their body has been schema-validated means the
-// expensive half of the request was already done for them. That placement is also
-// why the authenticated principal is not available here: the validator is what
-// resolves it. A service that would rather limit per resolved identity installs
-// RateLimit inside its own chain and keys on reqctx.PrincipalFromContext.
+// It runs ahead of the OpenAPI request validator, because limiting a caller after
+// their body has been schema-validated means the expensive half of the request
+// was already done for them. That placement is also why the authenticated
+// principal is not available here — the validator resolves it. A service that
+// would rather limit per identity installs RateLimit inside its own chain.
 type RateLimitKeyFunc func(*http.Request) string
 
 // HeaderRateLimitKey charges a request to the value of one header, hashed.

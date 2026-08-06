@@ -50,12 +50,11 @@ func (n *numericDate) UnmarshalJSON(data []byte) error {
 // audienceClaim is the aud claim in either RFC 7519 spelling, scalar or array.
 //
 // It owns half of the audience decision and only half: whether the claim is well
-// formed at all — a legal spelling, no empty entry, no repeat — is settled here,
-// while whether this service is named in it is a term in
-// parseAccessTokenClaims. The split is what keeps a malformed claim from
-// reaching the membership test, where an empty or duplicated entry would decide
-// the answer. An added claim that needs the same treatment belongs in a type
-// like this one; one that only needs a value belongs in the conjunction there.
+// formed — a legal spelling, no empty entry, no repeat — is settled here, while
+// whether this service is named in it is a term in parseAccessTokenClaims. The
+// split keeps a malformed claim from reaching the membership test, where an empty
+// or duplicated entry would decide the answer. An added claim needing the same
+// treatment belongs in a type like this one.
 type audienceClaim struct {
 	values  []string
 	present bool

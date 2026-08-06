@@ -58,12 +58,10 @@ func (p *readinessPublisher) observe(current bool) {
 // refreshSchedule holds the two deadlines one key set implies: due is when the
 // service should have replaced the set, stale is when verification and readiness
 // must start failing closed. Both derive from the same fetchedAt and are always
-// armed together, which is what this type exists to make hard to get wrong —
-// arming one and forgetting the other is silent, and the symptom is a set that
-// goes stale under requests or a cadence that never fires again.
-//
-// The type owns timer policy only. [Verifier.Run] is its sole user and owns when
-// each deadline is restated.
+// armed together, which is what this type makes hard to get wrong — arming one
+// and forgetting the other is silent, and the symptom is a set that goes stale
+// under requests or a cadence that never fires again. [Verifier.Run] is its sole
+// user and owns when each deadline is restated.
 type refreshSchedule struct {
 	due   *time.Timer
 	stale *time.Timer

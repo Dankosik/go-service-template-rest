@@ -944,10 +944,9 @@ func seedOutboxIdentifiers(
 //
 // The randomness is the point. PostgreSQL compresses a value only once the row
 // passes its TOAST target, and a filler of one repeated byte compresses to
-// nothing — which would measure a best case no real event reaches and would hide
-// whatever compression actually costs. Hex halves under the default compressor,
-// which is close to what a business payload does. The seed is fixed so every
-// case and every side of a comparison stores identical bytes.
+// nothing, measuring a best case no real event reaches. Hex halves under the
+// default compressor, close to what a business payload does. The seed is fixed so
+// every case and every side of a comparison stores identical bytes.
 func outboxBenchmarkPayload(size int) []byte {
 	const envelope = `{"data":""}`
 	if size <= len(envelope) {

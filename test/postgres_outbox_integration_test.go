@@ -1788,12 +1788,9 @@ func TestPostgresOutboxFailedObservationStaysStaleAndUnready(t *testing.T) {
 
 // newOutboxTelemetry builds outbox telemetry over a manual reader, so a test can
 // collect what a scrape would see. The scope is postgresoutbox's own, matching
-// production — the collectors below read every scope, so an ad-hoc name works
-// too and then reads as if it mattered.
-//
-// The reader and every metricdata accessor come from telemetrytest, so this
-// suite and postgresoutbox's own unit tests read a scrape the same way. Only
-// the *Telemetry construction belongs here.
+// production — the collectors below read every scope, so an ad-hoc name works too
+// and then reads as if it mattered. The reader and every metricdata accessor come
+// from telemetrytest, so only the *Telemetry construction belongs here.
 func newOutboxTelemetry(t *testing.T) (*sdkmetric.ManualReader, *postgresoutbox.Telemetry) {
 	t.Helper()
 	reader, meter := telemetrytest.NewManualMeter(t, postgresoutbox.TelemetryScope)
@@ -2030,11 +2027,10 @@ func singleEventRelayConfig() postgresoutbox.RelayConfig {
 // started closes as the call begins, and the call returns once the test closes
 // release.
 //
-// It publishes exactly once. started is a close, not a send, so a second
-// concurrent call panics — the relay recovers that as ErrPublisherPanic, which
-// would surface as a confusing publisher_panic rather than a clear failure.
-// Pair it with singleEventRelayConfig and one appended event, or with a test
-// that stops the relay before it can claim again.
+// It publishes exactly once: started is a close, not a send, so a second
+// concurrent call panics and surfaces as a confusing publisher_panic. Pair it
+// with singleEventRelayConfig and one appended event, or with a test that stops
+// the relay before it can claim again.
 func gatingPublisher() (publisher testPublisherFunc, started <-chan struct{}, release chan<- struct{}, attempts *atomic.Int64) {
 	begun := make(chan struct{})
 	gate := make(chan struct{})

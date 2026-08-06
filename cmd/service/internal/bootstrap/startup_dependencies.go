@@ -88,13 +88,11 @@ const postgresSaturationRetryAfter = time.Second
 // DomainErrors classifies the dependency failures a handler can surface but
 // should not each have to translate.
 //
-// postgres.ErrSaturated is the one this profile owns, and the pool package has
-// documented this exact mapping since it was written without anything
-// implementing it. It is the database failure that is not the database's fault:
-// every connection is busy serving, so the caller should back off and retry.
-// Answering 500 instead told a client library not to retry the one failure that
-// retrying fixes, and buried a moment of capacity pressure in the same error rate
-// as a genuine bug.
+// postgres.ErrSaturated is the one this profile owns. It is the database failure
+// that is not the database's fault: every connection is busy serving, so the
+// caller should back off and retry. Answering 500 instead told a client library
+// not to retry the one failure retrying fixes, and buried capacity pressure in the
+// same error rate as a genuine bug.
 func (d runtimeDependencies) DomainErrors() []problem.Mapper {
 	return []problem.Mapper{classifyPostgresDomainError}
 }

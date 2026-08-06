@@ -49,11 +49,9 @@ func telemetryInitFailureReason(err error) string {
 // The logctx decorator is the reason this is one function rather than two
 // literals: it publishes request and trace correlation from the context a record
 // was logged with, so a service's own handlers get it without adding the
-// attributes themselves. A logger built without it looks identical and silently
-// drops the only keys that join an application error to its trace.
-//
-// The writer is a parameter so a test can prove the decorator is installed.
-// Nothing in production varies it.
+// attributes. A logger built without it looks identical and silently drops the
+// only keys that join an application error to its trace. The writer is a
+// parameter so a test can prove the decorator is installed.
 func newProcessLogger(out io.Writer, level slog.Level) *slog.Logger {
 	return slog.New(logctx.New(slog.NewJSONHandler(out, &slog.HandlerOptions{Level: level})))
 }

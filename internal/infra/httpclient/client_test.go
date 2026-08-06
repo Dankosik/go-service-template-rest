@@ -522,11 +522,10 @@ func TestNewAcceptsCustomPrivateHostSuffix(t *testing.T) {
 // package exists to override.
 //
 // A transport cloned from http.DefaultTransport keeps DefaultMaxIdleConnsPerHost
-// idle connections, which is 2. That is right for a client spread across many
-// hosts and wrong for one pinned to a single authority: each burst opened a
-// connection per concurrent call and kept two, so the next burst paid a TCP and
-// TLS handshake for every connection beyond the second — inside the request
-// budget of the caller that triggered it.
+// idle connections, which is 2 — right for a client spread across many hosts and
+// wrong for one pinned to a single authority: each burst kept two, so the next
+// paid a TCP and TLS handshake for every connection beyond the second, inside the
+// request budget of the caller that triggered it.
 func TestClientReusesConnectionsAcrossBursts(t *testing.T) {
 	t.Parallel()
 
