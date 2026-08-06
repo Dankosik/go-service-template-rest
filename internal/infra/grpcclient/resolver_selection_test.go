@@ -1,3 +1,14 @@
+// Resolver guard, selection: of the builders sanitizingResolverBuilders
+// wraps, is the one grpc-go actually selects for a target always a wrapped one?
+//
+// Each case runs in a child process because the answer depends on process-global
+// state — the resolver registry and resolver.GetDefaultScheme() — that a test
+// cannot mutate without changing every other test in the binary. The child
+// reports what it observed as a JSON record on stdout; see runResolverSelectionChild.
+//
+// resolver_internal_test.go covers the wrapper's own behavior, and
+// resolver_live_test.go covers the guard over a real TLS connection.
+
 package grpcclient_test
 
 import (
@@ -5,7 +16,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -200,21 +210,11 @@ func resolverSelectionFixture(
 func runResolverSelectionChild(t *testing.T, scenario string) resolverSelectionRecord {
 	t.Helper()
 
-	executable, err := os.Executable()
-	if err != nil {
-		t.Fatalf("os.Executable() error = %v", err)
-	}
-	command := exec.CommandContext(
-		t.Context(),
-		executable,
-		"-test.run=^TestResolverSelectionChild$",
-		"-test.count=1",
+	output := runTestBinaryChild(
+		t,
+		"TestResolverSelectionChild",
+		resolverSelectionScenarioEnv+"="+scenario,
 	)
-	command.Env = append(os.Environ(), resolverSelectionScenarioEnv+"="+scenario)
-	output, err := command.CombinedOutput()
-	if err != nil {
-		t.Fatalf("resolver selection child %q failed: %v\n%s", scenario, err, output)
-	}
 
 	for line := range strings.SplitSeq(string(output), "\n") {
 		raw, ok := strings.CutPrefix(line, resolverSelectionRecordPrefix)
@@ -283,17 +283,12 @@ func (b *selectionResolverBuilder) Build( //nolint:ireturn // Implements resolve
 	}); err != nil {
 		return nil, fmt.Errorf("publish resolver selection state: %w", err)
 	}
-	return selectionNopResolver{}, nil
+	return nopResolver{}, nil
 }
 
 func (b *selectionResolverBuilder) Scheme() string {
 	return b.scheme
 }
-
-type selectionNopResolver struct{}
-
-func (selectionNopResolver) ResolveNow(resolver.ResolveNowOptions) {}
-func (selectionNopResolver) Close()                                {}
 
 func firstMetadataValue(values metadata.MD, key string) string {
 	entries := values.Get(key)

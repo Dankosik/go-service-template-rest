@@ -131,24 +131,7 @@ func BenchmarkOutboxCleanup(b *testing.B) {
 			seed := func() { seedOutboxRetained(b, ctx, pool, retained) }
 			seed()
 			analyzeOutboxFixture(b, ctx, pool)
-			var events int64
-
-			b.ReportAllocs()
-			for b.Loop() {
-				deleted, err := store.CleanupPublished(ctx, time.Minute, batchSize)
-				if err != nil {
-					b.Fatalf("CleanupPublished(): %v", err)
-				}
-				if deleted < batchSize {
-					b.StopTimer()
-					refillOutboxBacklog(b, ctx, pool, seed)
-					b.StartTimer()
-					continue
-				}
-				events += int64(deleted)
-			}
-			b.StopTimer()
-			reportOutboxEventCost(b, events)
+			runOutboxCleanupCycle(b, ctx, pool, store, batchSize, seed)
 		})
 	}
 }
@@ -189,24 +172,7 @@ func BenchmarkOutboxCleanupBatch(b *testing.B) {
 			seed := func() { seedOutboxRetained(b, ctx, pool, retained) }
 			seed()
 			analyzeOutboxFixture(b, ctx, pool)
-			var events int64
-
-			b.ReportAllocs()
-			for b.Loop() {
-				deleted, err := store.CleanupPublished(ctx, time.Minute, batchSize)
-				if err != nil {
-					b.Fatalf("CleanupPublished(): %v", err)
-				}
-				if deleted < batchSize {
-					b.StopTimer()
-					refillOutboxBacklog(b, ctx, pool, seed)
-					b.StartTimer()
-					continue
-				}
-				events += int64(deleted)
-			}
-			b.StopTimer()
-			reportOutboxEventCost(b, events)
+			runOutboxCleanupCycle(b, ctx, pool, store, batchSize, seed)
 		})
 	}
 }
@@ -329,6 +295,39 @@ func runOutboxPublishCycle(
 			b.Fatalf("MarkPublishedBatch() = %d of %d, %v", len(marked), len(ids), err)
 		}
 		events += int64(len(batch.Events))
+	}
+	b.StopTimer()
+	reportOutboxEventCost(b, events)
+}
+
+// runOutboxCleanupCycle is the measured loop shared by the retention cases:
+// delete one full batch of retained published rows. A short delete means the
+// case drained its backlog, so the fixture is restored outside the timed
+// interval, exactly as runOutboxPublishCycle does for a short claim.
+func runOutboxCleanupCycle(
+	b *testing.B,
+	ctx context.Context,
+	pool *postgres.Pool,
+	store *postgresoutbox.Store,
+	batchSize int,
+	seed func(),
+) {
+	b.Helper()
+	var events int64
+
+	b.ReportAllocs()
+	for b.Loop() {
+		deleted, err := store.CleanupPublished(ctx, time.Minute, batchSize)
+		if err != nil {
+			b.Fatalf("CleanupPublished(): %v", err)
+		}
+		if deleted < batchSize {
+			b.StopTimer()
+			refillOutboxBacklog(b, ctx, pool, seed)
+			b.StartTimer()
+			continue
+		}
+		events += int64(deleted)
 	}
 	b.StopTimer()
 	reportOutboxEventCost(b, events)
@@ -880,24 +879,7 @@ func BenchmarkOutboxIdentifierShape(b *testing.B) {
 			seed := func() { seedOutboxIdentifiers(b, ctx, pool, existing, nextID, true) }
 			seed()
 			analyzeOutboxFixture(b, ctx, pool)
-			var deleted int64
-
-			b.ReportAllocs()
-			for b.Loop() {
-				removed, err := store.CleanupPublished(ctx, time.Minute, batchSize)
-				if err != nil {
-					b.Fatalf("CleanupPublished(): %v", err)
-				}
-				if removed < batchSize {
-					b.StopTimer()
-					refillOutboxBacklog(b, ctx, pool, seed)
-					b.StartTimer()
-					continue
-				}
-				deleted += int64(removed)
-			}
-			b.StopTimer()
-			reportOutboxEventCost(b, deleted)
+			runOutboxCleanupCycle(b, ctx, pool, store, batchSize, seed)
 		})
 	}
 }

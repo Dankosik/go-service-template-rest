@@ -1,5 +1,9 @@
 package oidcjwt
 
+// Proof that grpc.go's interceptors hold the same boundary over a real TLS
+// connection that grpc_test.go proves against them directly: a served RPC, a
+// real credential, and the statuses a caller actually receives.
+
 import (
 	"context"
 	"crypto/rand"
@@ -16,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/example/go-service-template-rest/internal/infra/grpc/grpctest"
 	"github.com/example/go-service-template-rest/internal/reqctx"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -31,9 +36,9 @@ const (
 )
 
 func TestGRPCAuthnBoundaryOverTLS(t *testing.T) {
-	now := time.Unix(1_900_000_000, 0)
-	signingKey := loadTestRSAKey(t, "test-key-1.pem")
-	verifier := newTestVerifier(t, now, signingKey)
+	now := testNow
+	signingKey := loadTestRSAKey(t, testSigningKey)
+	verifier := newTestVerifier(t, signingKey)
 	serverTLS, clientTLS := testGRPCTLSConfigs(t, signingKey)
 	var unaryCalls atomic.Int64
 	var streamCalls atomic.Int64
@@ -43,16 +48,17 @@ func TestGRPCAuthnBoundaryOverTLS(t *testing.T) {
 		grpc.ChainUnaryInterceptor(verifier.UnaryInterceptor()),
 		grpc.ChainStreamInterceptor(verifier.StreamInterceptor()),
 	)
-	registerTLSAuthnService(server, tlsAuthnService{
-		unary: func(ctx context.Context) {
+	registerTLSAuthnService(
+		server,
+		func(ctx context.Context) {
 			unaryCalls.Add(1)
 			assertAuthenticatedRPCContext(ctx, t)
 		},
-		stream: func(ctx context.Context) {
+		func(ctx context.Context) {
 			streamCalls.Add(1)
 			assertAuthenticatedRPCContext(ctx, t)
 		},
-	})
+	)
 	healthServer := health.NewServer()
 	healthServer.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
 	healthpb.RegisterHealthServer(server, healthServer)
@@ -132,77 +138,35 @@ func assertAuthenticatedRPCContext(ctx context.Context, t *testing.T) {
 	}
 }
 
-type tlsAuthnService struct {
-	unary  func(context.Context)
-	stream func(context.Context)
-}
-
-type tlsAuthnServiceServer interface {
-	Unary(ctx context.Context, request *emptypb.Empty) (*emptypb.Empty, error)
-	Watch(request *emptypb.Empty, stream grpc.ServerStream) error
-}
-
-func (s tlsAuthnService) Unary(ctx context.Context, _ *emptypb.Empty) (*emptypb.Empty, error) {
-	s.unary(ctx)
-	return &emptypb.Empty{}, nil
-}
-
-func (s tlsAuthnService) Watch(_ *emptypb.Empty, stream grpc.ServerStream) error {
-	s.stream(stream.Context())
-	if err := stream.SendMsg(&emptypb.Empty{}); err != nil {
-		return fmt.Errorf("send TLS authn test response: %w", err)
-	}
-	return nil
-}
-
-func registerTLSAuthnService(registrar grpc.ServiceRegistrar, service tlsAuthnServiceServer) {
-	registrar.RegisterService(&grpc.ServiceDesc{
-		ServiceName: "oidcjwt.test.Authn",
-		HandlerType: (*tlsAuthnServiceServer)(nil),
-		Methods: []grpc.MethodDesc{{
-			MethodName: "Unary",
-			Handler: func(
-				implementation any,
-				ctx context.Context,
-				decode func(any) error,
-				interceptor grpc.UnaryServerInterceptor,
-			) (any, error) {
-				request := new(emptypb.Empty)
-				if err := decode(request); err != nil {
-					return nil, err
-				}
-				handler := func(ctx context.Context, decoded any) (any, error) {
-					service, ok := implementation.(tlsAuthnServiceServer)
-					if !ok {
-						return nil, errors.New("TLS authn test service has unexpected type")
-					}
-					request, ok := decoded.(*emptypb.Empty)
-					if !ok {
-						return nil, errors.New("TLS authn test request has unexpected type")
-					}
-					return service.Unary(ctx, request)
-				}
-				return interceptor(ctx, request, &grpc.UnaryServerInfo{
-					Server: implementation, FullMethod: tlsAuthnUnaryMethod,
-				}, handler)
+// registerTLSAuthnService registers the one unary and one streaming method this
+// file serves over a real connection, handing each the RPC context its
+// interceptor produced.
+func registerTLSAuthnService(
+	registrar grpc.ServiceRegistrar,
+	unary func(context.Context),
+	stream func(context.Context),
+) {
+	grpctest.Register(
+		registrar,
+		grpctest.Unary(
+			tlsAuthnUnaryMethod,
+			func(ctx context.Context, _ *emptypb.Empty) (*emptypb.Empty, error) {
+				unary(ctx)
+				return &emptypb.Empty{}, nil
 			},
-		}},
-		Streams: []grpc.StreamDesc{{
-			StreamName:    "Watch",
-			ServerStreams: true,
-			Handler: func(implementation any, stream grpc.ServerStream) error {
-				request := new(emptypb.Empty)
-				if err := stream.RecvMsg(request); err != nil {
-					return fmt.Errorf("receive TLS authn test request: %w", err)
-				}
-				service, ok := implementation.(tlsAuthnServiceServer)
-				if !ok {
-					return errors.New("TLS authn test service has unexpected type")
-				}
-				return service.Watch(request, stream)
-			},
-		}},
-	}, service)
+		),
+		grpctest.ServerStream(tlsAuthnStreamMethod, func(serverStream grpc.ServerStream) error {
+			var request emptypb.Empty
+			if err := serverStream.RecvMsg(&request); err != nil {
+				return fmt.Errorf("receive TLS authn test request: %w", err)
+			}
+			stream(serverStream.Context())
+			if err := serverStream.SendMsg(&emptypb.Empty{}); err != nil {
+				return fmt.Errorf("send TLS authn test response: %w", err)
+			}
+			return nil
+		}),
+	)
 }
 
 func testGRPCTLSConfigs(t *testing.T, key *rsa.PrivateKey) (*tls.Config, *tls.Config) {

@@ -1,22 +1,27 @@
 package oidcjwt
 
+// Proof for grpc.go at the interceptor level: identity parity with the HTTP
+// boundary, credential removal from the handler-visible context, and the exact
+// health allowlist. The same boundary over a real TLS connection is in
+// grpc_tls_test.go.
+
 import (
 	"context"
 	"errors"
 	"testing"
-	"time"
 
 	"github.com/example/go-service-template-rest/internal/reqctx"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
 func TestGRPCIdentityParityAndMetadataRemoval(t *testing.T) {
-	now := time.Unix(1_900_000_000, 0)
-	key := loadTestRSAKey(t, "test-key-1.pem")
-	verifier := newTestVerifier(t, now, key)
+	now := testNow
+	key := loadTestRSAKey(t, testSigningKey)
+	verifier := newTestVerifier(t, key)
 	token := signToken(t, key, "key-1", "at+jwt", validClaims(now))
 	ctx := metadata.NewIncomingContext(t.Context(), metadata.Pairs("authorization", "Bearer "+token))
 
@@ -51,15 +56,14 @@ func TestGRPCIdentityParityAndMetadataRemoval(t *testing.T) {
 			return "unexpected", nil
 		},
 	)
-	if status.Code(err).String() != "Unauthenticated" {
+	if status.Code(err) != codes.Unauthenticated {
 		t.Fatalf("missing credential status = %v, want Unauthenticated", status.Code(err))
 	}
 }
 
 func TestGRPCHealthIsPublicAndCredentialIsRemoved(t *testing.T) {
-	now := time.Unix(1_900_000_000, 0)
-	key := loadTestRSAKey(t, "test-key-1.pem")
-	verifier := newTestVerifier(t, now, key)
+	key := loadTestRSAKey(t, testSigningKey)
+	verifier := newTestVerifier(t, key)
 	ctx := metadata.NewIncomingContext(t.Context(), metadata.Pairs("authorization", "not-a-token"))
 
 	called := false
@@ -83,7 +87,7 @@ func TestGRPCHealthIsPublicAndCredentialIsRemoved(t *testing.T) {
 	streamCalled := false
 	err = verifier.StreamInterceptor()(
 		nil,
-		testServerStream{ctx: ctx},
+		serverStreamWithContext{ctx: ctx},
 		&grpc.StreamServerInfo{FullMethod: healthpb.Health_Watch_FullMethodName},
 		func(_ any, stream grpc.ServerStream) error {
 			streamCalled = true
@@ -100,9 +104,8 @@ func TestGRPCHealthIsPublicAndCredentialIsRemoved(t *testing.T) {
 }
 
 func TestGRPCAuthnBoundaryExactHealthAllowlist(t *testing.T) {
-	now := time.Unix(1_900_000_000, 0)
-	key := loadTestRSAKey(t, "test-key-1.pem")
-	verifier := newTestVerifier(t, now, key)
+	key := loadTestRSAKey(t, testSigningKey)
+	verifier := newTestVerifier(t, key)
 	const futureHealthMethod = "/grpc.health.v1.Health/Future"
 
 	var unaryCalls int
@@ -115,7 +118,7 @@ func TestGRPCAuthnBoundaryExactHealthAllowlist(t *testing.T) {
 			return nil, errors.New("unexpected future health handler call")
 		},
 	)
-	if status.Code(err).String() != "Unauthenticated" {
+	if status.Code(err) != codes.Unauthenticated {
 		t.Fatalf("future health unary status = %v, want Unauthenticated", status.Code(err))
 	}
 	if unaryCalls != 0 {
@@ -125,14 +128,14 @@ func TestGRPCAuthnBoundaryExactHealthAllowlist(t *testing.T) {
 	var streamCalls int
 	err = verifier.StreamInterceptor()(
 		nil,
-		testServerStream{ctx: t.Context()},
+		serverStreamWithContext{ctx: t.Context()},
 		&grpc.StreamServerInfo{FullMethod: futureHealthMethod},
 		func(any, grpc.ServerStream) error {
 			streamCalls++
 			return nil
 		},
 	)
-	if status.Code(err).String() != "Unauthenticated" {
+	if status.Code(err) != codes.Unauthenticated {
 		t.Fatalf("future health stream status = %v, want Unauthenticated", status.Code(err))
 	}
 	if streamCalls != 0 {
@@ -141,16 +144,16 @@ func TestGRPCAuthnBoundaryExactHealthAllowlist(t *testing.T) {
 }
 
 func TestGRPCStreamIdentityParityAndMetadataRemoval(t *testing.T) {
-	now := time.Unix(1_900_000_000, 0)
-	key := loadTestRSAKey(t, "test-key-1.pem")
-	verifier := newTestVerifier(t, now, key)
+	now := testNow
+	key := loadTestRSAKey(t, testSigningKey)
+	verifier := newTestVerifier(t, key)
 	token := signToken(t, key, "key-1", "at+jwt", validClaims(now))
 	source := metadata.NewIncomingContext(t.Context(), metadata.Pairs("authorization", "Bearer "+token))
 
 	called := false
 	err := verifier.StreamInterceptor()(
 		nil,
-		testServerStream{ctx: source},
+		serverStreamWithContext{ctx: source},
 		&grpc.StreamServerInfo{FullMethod: "/example.Service/Watch"},
 		func(_ any, stream grpc.ServerStream) error {
 			called = true
@@ -171,24 +174,14 @@ func TestGRPCStreamIdentityParityAndMetadataRemoval(t *testing.T) {
 
 	err = verifier.StreamInterceptor()(
 		nil,
-		testServerStream{ctx: t.Context()},
+		serverStreamWithContext{ctx: t.Context()},
 		&grpc.StreamServerInfo{FullMethod: "/example.Service/Watch"},
 		func(any, grpc.ServerStream) error {
 			t.Fatal("stream handler ran without a credential")
 			return nil
 		},
 	)
-	if status.Code(err).String() != "Unauthenticated" {
+	if status.Code(err) != codes.Unauthenticated {
 		t.Fatalf("missing credential status = %v, want Unauthenticated", status.Code(err))
 	}
-}
-
-type testServerStream struct {
-	grpc.ServerStream
-
-	ctx context.Context //nolint:containedctx // grpc.ServerStream requires Context to expose the fixed test RPC context.
-}
-
-func (s testServerStream) Context() context.Context {
-	return s.ctx
 }

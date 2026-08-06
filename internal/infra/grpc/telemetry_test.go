@@ -1,3 +1,10 @@
+// What an operator sees: spans, metrics, and access-log records for real RPCs,
+// and the guarantee that none of them carries a value from the request.
+//
+// The secret canary travels through metadata, a handler error, and a panic, so a
+// disclosure fails here rather than in production. This file also owns the proof
+// that the telemetry filter drops unregistered methods.
+
 package grpcx
 
 import (
@@ -7,7 +14,6 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
-	"net"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -22,7 +28,6 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials/insecure"
 	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -31,23 +36,7 @@ import (
 )
 
 func TestOTelStatsHandlersTraceAndMeasureUnaryAndStreamingRPCs(t *testing.T) {
-	spanRecorder := tracetest.NewSpanRecorder()
-	tracerProvider := sdktrace.NewTracerProvider(
-		sdktrace.WithSampler(sdktrace.AlwaysSample()),
-		sdktrace.WithSpanProcessor(spanRecorder),
-	)
-	t.Cleanup(func() {
-		if err := tracerProvider.Shutdown(context.Background()); err != nil {
-			t.Errorf("TracerProvider.Shutdown() error = %v", err)
-		}
-	})
-	metricReader := sdkmetric.NewManualReader()
-	meterProvider := sdkmetric.NewMeterProvider(sdkmetric.WithReader(metricReader))
-	t.Cleanup(func() {
-		if err := meterProvider.Shutdown(context.Background()); err != nil {
-			t.Errorf("MeterProvider.Shutdown() error = %v", err)
-		}
-	})
+	spanRecorder, tracerProvider, metricReader, meterProvider := newRecordingTelemetry(t)
 
 	cfg := testServerConfig()
 	cfg.TelemetryHealthChecks = true
@@ -61,38 +50,12 @@ func TestOTelStatsHandlersTraceAndMeasureUnaryAndStreamingRPCs(t *testing.T) {
 	}
 	server.MarkServing()
 
-	listener, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("net.Listen() error = %v", err)
-	}
-	serveDone := make(chan error, 1)
-	go func() { serveDone <- server.Serve(listener) }()
-	t.Cleanup(func() {
-		if err := server.Close(); err != nil {
-			t.Errorf("Server.Close() error = %v", err)
-		}
-		if err := <-serveDone; err != nil {
-			t.Errorf("Server.Serve() error = %v", err)
-		}
+	connection, serveDone := serveOverTCP(t, server, grpcclient.Options{
+		MeterProvider:  meterProvider,
+		TracerProvider: tracerProvider,
+		Propagation:    grpcclient.PropagationTraceContext,
 	})
-
-	connection, err := grpcclient.New(
-		grpcclient.DefaultConfig("passthrough:///"+listener.Addr().String()),
-		grpcclient.Options{
-			TransportCredentials: insecure.NewCredentials(),
-			MeterProvider:        meterProvider,
-			TracerProvider:       tracerProvider,
-			Propagation:          grpcclient.PropagationTraceContext,
-		},
-	)
-	if err != nil {
-		t.Fatalf("grpcclient.New() error = %v", err)
-	}
-	t.Cleanup(func() {
-		if err := connection.Close(); err != nil {
-			t.Errorf("ClientConn.Close() error = %v", err)
-		}
-	})
+	closeAfterTest(t, server, connection, serveDone)
 
 	parentCtx, parent := tracerProvider.Tracer("grpcx-test").Start(t.Context(), "parent")
 	parentTraceID := parent.SpanContext().TraceID()
@@ -127,29 +90,13 @@ func TestServerObservabilitySanitizesValuesAndFiltersUnknownMethods(t *testing.T
 
 	const secretCanary = "credential=grpc-observability-secret"
 
-	spanRecorder := tracetest.NewSpanRecorder()
-	tracerProvider := sdktrace.NewTracerProvider(
-		sdktrace.WithSampler(sdktrace.AlwaysSample()),
-		sdktrace.WithSpanProcessor(spanRecorder),
-	)
-	t.Cleanup(func() {
-		if err := tracerProvider.Shutdown(context.Background()); err != nil {
-			t.Errorf("TracerProvider.Shutdown() error = %v", err)
-		}
-	})
-	metricReader := sdkmetric.NewManualReader()
-	meterProvider := sdkmetric.NewMeterProvider(sdkmetric.WithReader(metricReader))
-	t.Cleanup(func() {
-		if err := meterProvider.Shutdown(context.Background()); err != nil {
-			t.Errorf("MeterProvider.Shutdown() error = %v", err)
-		}
-	})
+	spanRecorder, tracerProvider, metricReader, meterProvider := newRecordingTelemetry(t)
 
 	var logOutput bytes.Buffer
 	var handlerCalls atomic.Int64
 	register := func(registrar grpc.ServiceRegistrar) {
-		registerPayloadService(registrar, payloadService{
-			call: func(
+		registerUnaryTestService(registrar, testPayloadFullMethod,
+			func(
 				_ context.Context,
 				request *wrapperspb.BytesValue,
 			) (*wrapperspb.BytesValue, error) {
@@ -158,10 +105,9 @@ func TestServerObservabilitySanitizesValuesAndFiltersUnknownMethods(t *testing.T
 					panic(secretCanary)
 				}
 				return nil, errors.New(secretCanary)
-			},
-		})
+			})
 	}
-	unaryPolicy := func(
+	rejectOnDemandPolicy := func(
 		ctx context.Context,
 		request any,
 		_ *grpc.UnaryServerInfo,
@@ -182,7 +128,7 @@ func TestServerObservabilitySanitizesValuesAndFiltersUnknownMethods(t *testing.T
 			MeterProvider:  meterProvider,
 			TracerProvider: tracerProvider,
 			Propagators:    propagation.TraceContext{},
-			UnaryPolicy:    []grpc.UnaryServerInterceptor{unaryPolicy},
+			UnaryPolicy:    []grpc.UnaryServerInterceptor{rejectOnDemandPolicy},
 		},
 	)
 	server.MarkServing()
@@ -270,23 +216,7 @@ func TestStreamingPolicyObservabilitySanitizesRawError(t *testing.T) {
 
 	const secretCanary = "credential=grpc-stream-policy-secret"
 
-	spanRecorder := tracetest.NewSpanRecorder()
-	tracerProvider := sdktrace.NewTracerProvider(
-		sdktrace.WithSampler(sdktrace.AlwaysSample()),
-		sdktrace.WithSpanProcessor(spanRecorder),
-	)
-	t.Cleanup(func() {
-		if err := tracerProvider.Shutdown(context.Background()); err != nil {
-			t.Errorf("TracerProvider.Shutdown() error = %v", err)
-		}
-	})
-	metricReader := sdkmetric.NewManualReader()
-	meterProvider := sdkmetric.NewMeterProvider(sdkmetric.WithReader(metricReader))
-	t.Cleanup(func() {
-		if err := meterProvider.Shutdown(context.Background()); err != nil {
-			t.Errorf("MeterProvider.Shutdown() error = %v", err)
-		}
-	})
+	spanRecorder, tracerProvider, metricReader, meterProvider := newRecordingTelemetry(t)
 
 	var logOutput bytes.Buffer
 	cfg := testServerConfig()
@@ -297,7 +227,7 @@ func TestStreamingPolicyObservabilitySanitizesRawError(t *testing.T) {
 		MeterProvider:  meterProvider,
 		TracerProvider: tracerProvider,
 		Propagators:    propagation.TraceContext{},
-		StreamingPolicy: []grpc.StreamServerInterceptor{
+		StreamPolicy: []grpc.StreamServerInterceptor{
 			func(any, grpc.ServerStream, *grpc.StreamServerInfo, grpc.StreamHandler) error {
 				return errors.New(secretCanary)
 			},
@@ -342,6 +272,43 @@ func finishServerRPCs(t *testing.T, server *Server) {
 	if err := server.Shutdown(t.Context()); err != nil {
 		t.Fatalf("Server.Shutdown() before telemetry assertions = %v", err)
 	}
+}
+
+// newRecordingTelemetry returns in-memory tracing and metric providers that shut
+// down with the test.
+//
+// They are local values passed explicitly into Options rather than the
+// process-wide providers telemetrytest installs: these tests assert what the
+// explicit wiring produces, and a local provider keeps them independent of
+// global state and safe to run alongside anything else.
+func newRecordingTelemetry(t *testing.T) (
+	*tracetest.SpanRecorder,
+	*sdktrace.TracerProvider,
+	*sdkmetric.ManualReader,
+	*sdkmetric.MeterProvider,
+) {
+	t.Helper()
+
+	spanRecorder := tracetest.NewSpanRecorder()
+	tracerProvider := sdktrace.NewTracerProvider(
+		sdktrace.WithSampler(sdktrace.AlwaysSample()),
+		sdktrace.WithSpanProcessor(spanRecorder),
+	)
+	t.Cleanup(func() {
+		if err := tracerProvider.Shutdown(context.Background()); err != nil {
+			t.Errorf("TracerProvider.Shutdown() error = %v", err)
+		}
+	})
+
+	metricReader := sdkmetric.NewManualReader()
+	meterProvider := sdkmetric.NewMeterProvider(sdkmetric.WithReader(metricReader))
+	t.Cleanup(func() {
+		if err := meterProvider.Shutdown(context.Background()); err != nil {
+			t.Errorf("MeterProvider.Shutdown() error = %v", err)
+		}
+	})
+
+	return spanRecorder, tracerProvider, metricReader, meterProvider
 }
 
 func assertRPCSpans(t *testing.T, spans []sdktrace.ReadOnlySpan, parentTraceID trace.TraceID) {

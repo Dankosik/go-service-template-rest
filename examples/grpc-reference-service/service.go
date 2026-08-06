@@ -9,14 +9,42 @@ import (
 	"io"
 
 	referencev1 "github.com/example/go-service-template-rest/examples/grpc-reference-service/internal/gen/proto/reference/v1"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
+	"github.com/example/go-service-template-rest/internal/problem"
 )
 
 const (
 	maxReferenceStreamMessages = 1024
 	maxClientStreamValueBytes  = 1 << 20
 )
+
+// ErrStreamLimit reports that a stream exceeded this example's bounded
+// aggregation.
+//
+// It is a domain identity, not a transport status: returning
+// status.Error(codes.ResourceExhausted, …) here would reach the caller as
+// INTERNAL instead, because the shared transport sanitizes any handler error it
+// did not build itself. Classification belongs to DomainErrors below, which is
+// the same seam a production service uses.
+var ErrStreamLimit = errors.New("stream exceeds the reference aggregation limit")
+
+// DomainErrors classifies this example's domain identities for the shared gRPC
+// transport. A composition root passes the result as grpcx.Options.DomainErrors;
+// see docs/grpc.md for the equivalent step in a production service.
+func DomainErrors() []problem.Mapper {
+	return []problem.Mapper{
+		func(err error) (problem.Mapped, bool) {
+			if !errors.Is(err, ErrStreamLimit) {
+				return problem.Mapped{}, false
+			}
+			// Detail is the service's own wording; the wrapped error text never
+			// reaches the caller.
+			return problem.Mapped{
+				Code:   problem.CodeRequestEntityTooLarge,
+				Detail: "stream exceeds the reference aggregation limit",
+			}, true
+		},
+	}
+}
 
 // Service implements the generated reference contract without hiding it behind
 // a template-specific interface.
@@ -34,8 +62,7 @@ func (Service) ServerStream(
 ) error {
 	count := request.GetCount()
 	if count > maxReferenceStreamMessages {
-		//nolint:wrapcheck // This canonical status and safe detail are the public RPC contract.
-		return status.Error(codes.ResourceExhausted, "server stream exceeds the reference message limit")
+		return fmt.Errorf("server stream requested %d messages: %w", count, ErrStreamLimit)
 	}
 	for index := range count {
 		sequence := index + 1
@@ -43,10 +70,7 @@ func (Service) ServerStream(
 			Value:    new(request.GetValue()),
 			Sequence: new(sequence),
 		}.Build()); err != nil {
-			if ctxErr := stream.Context().Err(); ctxErr != nil {
-				return fmt.Errorf("send server-stream response: %w", ctxErr)
-			}
-			return fmt.Errorf("send server-stream response: %w", err)
+			return streamFailure(stream.Context(), "send server-stream response", err)
 		}
 	}
 	return nil
@@ -59,24 +83,22 @@ func (Service) ClientStream(stream referencev1.EchoService_ClientStreamServer) e
 		request, err := stream.Recv()
 		if errors.Is(err, io.EOF) {
 			if err := stream.SendAndClose(referencev1.ClientStreamResponse_builder{Values: values}.Build()); err != nil {
-				if ctxErr := stream.Context().Err(); ctxErr != nil {
-					return fmt.Errorf("close canceled client stream: %w", ctxErr)
-				}
-				return fmt.Errorf("close client stream: %w", err)
+				return streamFailure(stream.Context(), "close client stream", err)
 			}
 			return nil
 		}
 		if err != nil {
-			if ctxErr := stream.Context().Err(); ctxErr != nil {
-				return fmt.Errorf("receive canceled client stream: %w", ctxErr)
-			}
-			return fmt.Errorf("receive client-stream request: %w", err)
+			return streamFailure(stream.Context(), "receive client-stream request", err)
 		}
 		value := request.GetValue()
 		if len(values) >= maxReferenceStreamMessages ||
 			len(value) > maxClientStreamValueBytes-totalValueBytes {
-			//nolint:wrapcheck // This canonical status and safe detail are the public RPC contract.
-			return status.Error(codes.ResourceExhausted, "client stream exceeds the reference aggregation limit")
+			return fmt.Errorf(
+				"client stream reached %d messages and %d bytes: %w",
+				len(values),
+				totalValueBytes,
+				ErrStreamLimit,
+			)
 		}
 		values = append(values, value)
 		totalValueBytes += len(value)
@@ -90,18 +112,28 @@ func (Service) BidiStream(stream referencev1.EchoService_BidiStreamServer) error
 			return nil
 		}
 		if err != nil {
-			if ctxErr := stream.Context().Err(); ctxErr != nil {
-				return fmt.Errorf("receive canceled bidi stream: %w", ctxErr)
-			}
-			return fmt.Errorf("receive bidi-stream request: %w", err)
+			return streamFailure(stream.Context(), "receive bidi-stream request", err)
 		}
 		if err := stream.Send(referencev1.BidiStreamResponse_builder{
 			Value: new(request.GetValue()),
 		}.Build()); err != nil {
-			if ctxErr := stream.Context().Err(); ctxErr != nil {
-				return fmt.Errorf("send canceled bidi stream: %w", ctxErr)
-			}
-			return fmt.Errorf("send bidi-stream response: %w", err)
+			return streamFailure(stream.Context(), "send bidi-stream response", err)
 		}
 	}
+}
+
+// streamFailure reports why a stream operation failed, preferring the stream's
+// context error: a Send or Recv that failed only because the caller went away
+// should name that rather than the transport symptom it produced.
+//
+// One action string covers both, because the wrapped error already says which
+// happened — "receive bidi-stream request: context canceled" needs no second
+// word for "canceled". None of this text reaches the client; the shared
+// transport sanitizes any error it did not build itself, so this wording is for
+// the server's own logs.
+func streamFailure(ctx context.Context, action string, err error) error {
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return fmt.Errorf("%s: %w", action, ctxErr)
+	}
+	return fmt.Errorf("%s: %w", action, err)
 }

@@ -23,6 +23,21 @@ import (
 // MaxRequestIDLength is the shared wire limit for a correlation identifier.
 const MaxRequestIDLength = 128
 
+// RequestIDHeader and RequestIDMetadataKey are the wire name of the correlation
+// identifier on each transport. They are one name in two required spellings:
+// net/http canonicalizes header keys, while gRPC requires lowercase metadata
+// keys, so neither transport can use the other's form.
+//
+// This package owns both because every transport adapter — inbound and outbound,
+// on each transport a build profile retains — must agree on them, and none of
+// them may import another. A name restated per adapter agrees until someone
+// edits one copy; the two here are proven equal by
+// TestRequestIDWireNamesAreOneName.
+const (
+	RequestIDHeader      = "X-Request-ID"
+	RequestIDMetadataKey = "x-request-id"
+)
+
 // Principal is the authenticated caller of the current request.
 //
 // It carries the two things an authorization decision needs and nothing else: a

@@ -18,26 +18,46 @@ func (v *Verifier) ResolveHTTP(
 ) (reqctx.Principal, error) {
 	request := authenticatedRequest(input)
 	if request == nil {
-		err := failure(KindMalformed)
-		v.metrics.recordVerification(ctx, TransportHTTP, err)
-		return reqctx.Principal{}, err
+		return reqctx.Principal{}, v.recordRejection(ctx, TransportHTTP, failure(KindMalformed))
 	}
 	if !v.trustedHTTPRequest(request) {
-		err := failure(KindUntrustedTransport)
-		v.metrics.recordVerification(ctx, TransportHTTP, err)
-		return reqctx.Principal{}, err
+		return reqctx.Principal{}, v.recordRejection(ctx, TransportHTTP, failure(KindUntrustedTransport))
 	}
 
+	// The credential is taken off the request as soon as this boundary owns it,
+	// so no handler, logger, or downstream client can reach it. The untrusted
+	// transport check above returns before this point on purpose: that request
+	// never became ours to authenticate, and rewriting a rejected caller's
+	// headers would hide from them what was actually sent.
 	values := request.Header.Values("Authorization")
 	request.Header.Del("Authorization")
-	token, err := bearerToken(values)
-	if err != nil {
-		v.metrics.recordVerification(ctx, TransportHTTP, err)
-		return reqctx.Principal{}, err
-	}
-	return v.Verify(ctx, token, TransportHTTP)
+	return v.verifyCredential(ctx, values, TransportHTTP)
 }
 
+// trustedHTTPRequest reports whether this request reached the service the way
+// the deployment says it must: through a proxy named in trusted_proxy_cidrs, and
+// over TLS as that proxy reports it.
+//
+// Both terms are needed and neither substitutes for the other. The peer check is
+// what makes the forwarded header worth reading at all — anyone can send
+// X-Forwarded-Proto, so only a peer the operator listed gets to state it. The
+// header check is what stops a trusted proxy's plaintext port from carrying
+// credentials.
+//
+// Exactly one value, with no comma inside it, is the strict reading on purpose. A
+// repeated or comma-joined header is a chain's accumulated claim, not the
+// immediate peer's, and picking one entry out of it would be this boundary
+// guessing which hop to believe. A deployment that terminates TLS further out
+// than its trusted peer is one where the value is no longer that peer's to make;
+// the fix is the CIDR list, not a laxer reading here.
+//
+// bearerToken applies that same single-reading rule to the credential header and
+// owns the RFC 9110 argument for it. The two differ on surrounding whitespace,
+// and a third forwarded header added here should copy this side rather than
+// average the two: that check compares a fixed token case-insensitively, so a
+// proxy's trailing space changes nothing and trimming it is free, while
+// bearerToken carries opaque bytes onward and refuses a value whose framing was
+// altered at all.
 func (v *Verifier) trustedHTTPRequest(request *http.Request) bool {
 	host, _, err := net.SplitHostPort(request.RemoteAddr)
 	if err != nil {
@@ -51,30 +71,6 @@ func (v *Verifier) trustedHTTPRequest(request *http.Request) bool {
 	return len(forwardedProto) == 1 &&
 		!strings.Contains(forwardedProto[0], ",") &&
 		strings.EqualFold(strings.TrimSpace(forwardedProto[0]), "https")
-}
-
-func bearerToken(values []string) (string, error) {
-	if len(values) == 0 {
-		return "", failure(KindMissing)
-	}
-	if len(values) != 1 {
-		return "", failure(KindMalformed)
-	}
-	value := values[0]
-	if strings.TrimSpace(value) != value || strings.Contains(value, ",") {
-		return "", failure(KindMalformed)
-	}
-	scheme, token, found := strings.Cut(value, " ")
-	if !found ||
-		!strings.EqualFold(scheme, "Bearer") ||
-		token == "" ||
-		strings.ContainsAny(token, " \t\r\n") {
-		return "", failure(KindMalformed)
-	}
-	if len(token) > MaxTokenBytes {
-		return "", failure(KindOversize)
-	}
-	return token, nil
 }
 
 func authenticatedRequest(input *openapi3filter.AuthenticationInput) *http.Request {

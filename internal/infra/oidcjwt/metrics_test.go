@@ -1,13 +1,24 @@
 package oidcjwt
 
+// Proof for metrics.go: the bounded attribute sets authn.verifications and
+// authn.jwks.refreshes carry, the reason label every failure category maps to,
+// and that a meter which cannot serve an instrument degrades telemetry rather
+// than authentication. That those labels also reach operators is proven in
+// docs_test.go.
+
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
+	"net/http"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/getkin/kin-openapi/openapi3filter"
 	"go.opentelemetry.io/otel/metric"
 	metricnoop "go.opentelemetry.io/otel/metric/noop"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
@@ -24,21 +35,26 @@ func TestAuthnMetrics(t *testing.T) {
 			}
 		})
 
-		now := time.Unix(1_900_000_000, 0)
-		warning := newAuthnMetricWarning(slog.New(slog.DiscardHandler))
-		metrics := newAuthnMetrics(provider, warning)
+		now := testNow
+		reportDegraded := newDegradedWarning(slog.New(slog.DiscardHandler))
+		metrics := newAuthnMetrics(provider, reportDegraded)
 		unregister := registerKeyAgeGauge(
 			provider,
 			func() *keySet { return &keySet{fetchedAt: now.Add(-10 * time.Second)} },
 			func() time.Time { return now },
-			warning,
+			reportDegraded,
 		)
 		t.Cleanup(unregister)
 
+		// The constants are the inputs and the literals are the assertions, both
+		// here and below: that is what ties a rename of one of these identifiers to
+		// the label docs/authentication.md publishes, instead of letting the two
+		// drift with every test still green.
 		metrics.recordVerification(t.Context(), TransportHTTP, nil)
 		metrics.recordVerification(t.Context(), TransportGRPC, failure(KindUntrustedTransport))
-		metrics.recordRefresh(t.Context(), "startup", nil)
-		metrics.recordRefresh(t.Context(), "scheduled", errors.New("poison provider detail"))
+		metrics.recordRefresh(t.Context(), triggerStartup, nil)
+		metrics.recordRefresh(t.Context(), triggerKeyMiss, nil)
+		metrics.recordRefresh(t.Context(), triggerScheduled, errors.New("poison provider detail"))
 
 		var collected metricdata.ResourceMetrics
 		if err := reader.Collect(t.Context(), &collected); err != nil {
@@ -56,16 +72,17 @@ func TestAuthnMetrics(t *testing.T) {
 		}
 		requireMetricAttributes(t, verificationSum.DataPoints, []map[string]string{
 			{"authn.transport": "http", "authn.result": "success"},
-			{"authn.transport": "grpc", "authn.result": "failure", "authn.reason": "malformed"},
+			{"authn.transport": "grpc", "authn.result": "failure", "authn.reason": "untrusted_transport"},
 		})
 
 		refreshes := requireMetric(t, got, "authn.jwks.refreshes", "{refresh}")
 		refreshSum, ok := refreshes.Data.(metricdata.Sum[int64])
-		if !ok || len(refreshSum.DataPoints) != 2 {
-			t.Fatalf("refresh data = %#v, want two int64 sums", refreshes.Data)
+		if !ok || len(refreshSum.DataPoints) != 3 {
+			t.Fatalf("refresh data = %#v, want three int64 sums", refreshes.Data)
 		}
 		requireMetricAttributes(t, refreshSum.DataPoints, []map[string]string{
 			{"authn.refresh.trigger": "startup", "authn.result": "success"},
+			{"authn.refresh.trigger": "key_miss", "authn.result": "success"},
 			{"authn.refresh.trigger": "scheduled", "authn.result": "failure"},
 		})
 
@@ -80,6 +97,88 @@ func TestAuthnMetrics(t *testing.T) {
 		if ageGauge.DataPoints[0].Attributes.Len() != 0 {
 			t.Fatalf("key age attributes = %v, want none", ageGauge.DataPoints[0].Attributes)
 		}
+	})
+
+	// Both cases here reach the counter without ever running a signature check,
+	// which is where the count is easiest to lose: the HTTP boundary turns a
+	// credential away before Verify, and a caller hangs up while a key-miss
+	// refresh is still in flight. The first would go uncounted if an adapter
+	// stopped routing through recordRejection; the second was counted as "invalid"
+	// until verificationReason stopped reading a missing Kind as a bad credential.
+	t.Run("pre-verification rejection and caller cancellation", func(t *testing.T) {
+		reader := sdkmetric.NewManualReader()
+		provider := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
+		t.Cleanup(func() {
+			if err := provider.Shutdown(t.Context()); err != nil {
+				t.Errorf("shutdown metric provider: %v", err)
+			}
+		})
+
+		now := testNow
+		first := loadTestRSAKey(t, testSigningKey)
+		second := loadTestRSAKey(t, testRotatedKey)
+		release := make(chan struct{})
+		started := make(chan struct{})
+		client := &scriptedClient{responses: append(initialResponses(t, first), scriptedResponse{
+			status:  http.StatusOK,
+			body:    jwksDocument(t, second, "key-2"),
+			wait:    release,
+			started: started,
+		})}
+		verifier := requireTestVerifier(t, testVerifierOptions{
+			now:      newTestClock(now).now,
+			client:   client,
+			provider: provider,
+		})
+
+		request, err := http.NewRequestWithContext(
+			t.Context(),
+			http.MethodGet,
+			"https://service.example/protected",
+			nil,
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		request.RemoteAddr = "127.0.0.1:1234"
+		request.Header.Set("X-Forwarded-Proto", "https")
+		_, err = verifier.ResolveHTTP(t.Context(), &openapi3filter.AuthenticationInput{
+			RequestValidationInput: &openapi3filter.RequestValidationInput{Request: request},
+		})
+		requireKind(t, err, KindMissing)
+
+		// An unknown key id starts a refresh the scripted provider holds open, so
+		// the cancellation lands while Verify is waiting on it.
+		ctx, cancel := context.WithCancel(context.Background())
+		result := make(chan error, 1)
+		go func() {
+			_, verifyErr := verifier.Verify(
+				ctx,
+				signToken(t, second, "key-2", "at+jwt", validClaims(now)),
+				TransportGRPC,
+			)
+			result <- verifyErr
+		}()
+		<-started
+		cancel()
+		if err := <-result; !errors.Is(err, context.Canceled) {
+			t.Fatalf("Verify() error = %v, want cancellation", err)
+		}
+		close(release)
+
+		var collected metricdata.ResourceMetrics
+		if err := reader.Collect(t.Context(), &collected); err != nil {
+			t.Fatalf("collect authn metrics: %v", err)
+		}
+		verifications := requireMetric(t, authnMetricSet(t, collected), "authn.verifications", "{verification}")
+		verificationSum, ok := verifications.Data.(metricdata.Sum[int64])
+		if !ok {
+			t.Fatalf("verification data = %#v, want int64 sums", verifications.Data)
+		}
+		requireMetricAttributes(t, verificationSum.DataPoints, []map[string]string{
+			{"authn.transport": "http", "authn.result": "failure", "authn.reason": "missing"},
+			{"authn.transport": "grpc", "authn.result": "failure", "authn.reason": "canceled"},
+		})
 	})
 
 	for _, testCase := range []struct {
@@ -99,23 +198,13 @@ func TestAuthnMetrics(t *testing.T) {
 				failInstruments: testCase.failInstruments,
 				failCallback:    testCase.failCallback,
 			}
-			now := time.Unix(1_900_000_000, 0)
-			key := loadTestRSAKey(t, "test-key-1.pem")
-			client := &scriptedClient{responses: initialResponses(t, key)}
-			verifier, err := newVerifier(
-				t.Context(),
-				testPolicy(t),
-				func(string) (providerClient, error) {
-					return providerClient{request: client, close: func() {}}, nil
-				},
-				func() time.Time { return now },
-				provider,
-				log,
-			)
-			if err != nil {
-				t.Fatalf("newVerifier() with failing metrics error = %v", err)
-			}
-			t.Cleanup(verifier.Close)
+			now := testNow
+			key := loadTestRSAKey(t, testSigningKey)
+			verifier := requireTestVerifier(t, testVerifierOptions{
+				client:   &scriptedClient{responses: initialResponses(t, key)},
+				provider: provider,
+				log:      log,
+			})
 
 			token := signToken(t, key, "key-1", "at+jwt", validClaims(now))
 			principal, err := verifier.Verify(t.Context(), token, TransportHTTP)
@@ -243,16 +332,15 @@ func requireMetricAttributes(
 	want []map[string]string,
 ) {
 	t.Helper()
-	remaining := make([]map[string]string, len(want))
-	copy(remaining, want)
+	remaining := slices.Clone(want)
 	for _, point := range points {
 		got := make(map[string]string)
 		for _, value := range point.Attributes.ToSlice() {
 			got[string(value.Key)] = value.Value.AsString()
 		}
 		for index, candidate := range remaining {
-			if mapsEqual(got, candidate) {
-				remaining = append(remaining[:index], remaining[index+1:]...)
+			if maps.Equal(got, candidate) {
+				remaining = slices.Delete(remaining, index, index+1)
 				break
 			}
 		}
@@ -260,18 +348,6 @@ func requireMetricAttributes(
 	if len(remaining) != 0 {
 		t.Fatalf("metric attributes did not contain %#v", remaining)
 	}
-}
-
-func mapsEqual(left, right map[string]string) bool {
-	if len(left) != len(right) {
-		return false
-	}
-	for key, value := range left {
-		if right[key] != value {
-			return false
-		}
-	}
-	return true
 }
 
 var _ metric.MeterProvider = failingMetricProvider{}

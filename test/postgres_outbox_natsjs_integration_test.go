@@ -17,6 +17,11 @@ type natsOutboxPublisher struct {
 	producer *natsjs.Producer
 }
 
+// Publish forwards every envelope field natsjs.Event can carry. It does not
+// forward Event.Metadata or Event.Source, because natsjs.Event has no field for
+// either: correlation and trace context written into Metadata stay in
+// PostgreSQL under this adapter. A service that needs them at the broker adds a
+// header carrier to the transport first — see the Publisher contract.
 func (publisher natsOutboxPublisher) Publish(ctx context.Context, event postgresoutbox.Event) error {
 	_, err := publisher.producer.Publish(ctx, natsjs.Event{
 		Subject:       event.Destination,
@@ -58,7 +63,7 @@ func TestPostgresOutboxNATSConformance(t *testing.T) {
 	waitForOutboxCount(t, ctx, pool, "published_at IS NOT NULL", 1)
 	message := receive(t, received, 10*time.Second, "durable outbox JetStream message")
 	relay.StartDrain()
-	assertRelayResult(t, result, true, nil)
+	assertRelayResult(t, result, nil)
 	if message.MessageID() != event.ID || message.PublicationID() != event.ID ||
 		message.Subject() != event.Destination || message.Type() != event.Type ||
 		message.Schema() != event.Schema || message.OrderingKey() != event.OrderingKey ||
@@ -75,7 +80,7 @@ func TestPostgresOutboxNATSConformance(t *testing.T) {
 	result = runOutboxRelay(ctx, relay)
 	waitForOutboxCount(t, ctx, pool, "poisoned_at IS NOT NULL", 1)
 	relay.StartDrain()
-	assertRelayResult(t, result, true, nil)
+	assertRelayResult(t, result, nil)
 	record, err := store.Get(ctx, rejected.ID)
 	if err != nil {
 		t.Fatalf("Get(rejected): %v", err)

@@ -1,13 +1,20 @@
+// One request ID across a real client and server, on unary and streaming RPCs:
+// is the accepted identifier the one that reaches the handler, the response
+// metadata, the logs, and the spans?
+//
+// This file owns the single streaming service in the package, because it is the
+// only test that needs one, and it consumes Serve's result itself while
+// asserting the shutdown sequence.
+
 package grpcx
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"net"
 	"testing"
 	"time"
 
+	"github.com/example/go-service-template-rest/internal/infra/grpc/grpctest"
 	"github.com/example/go-service-template-rest/internal/infra/grpcclient"
 	"github.com/example/go-service-template-rest/internal/reqctx"
 	"go.opentelemetry.io/otel/propagation"
@@ -16,7 +23,6 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials/insecure"
 	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -44,8 +50,9 @@ func TestServiceToServiceGRPCCorrelationAndCancellation(t *testing.T) {
 	streamEntered := make(chan struct{})
 	streamDone := make(chan struct{})
 	register := func(registrar grpc.ServiceRegistrar) {
-		registerCorrelationStreamService(registrar, correlationStreamService{
-			wait: func(stream grpc.ServerStream) error {
+		grpctest.Register(registrar, grpctest.ServerStream(
+			correlationStreamFullMethod,
+			func(stream grpc.ServerStream) error {
 				var request emptypb.Empty
 				if err := stream.RecvMsg(&request); err != nil {
 					return fmt.Errorf("receive correlation stream request: %w", err)
@@ -59,7 +66,7 @@ func TestServiceToServiceGRPCCorrelationAndCancellation(t *testing.T) {
 				close(streamDone)
 				return stream.Context().Err()
 			},
-		})
+		))
 	}
 	cfg := testServerConfig()
 	cfg.TelemetryHealthChecks = true
@@ -86,20 +93,19 @@ func TestServiceToServiceGRPCCorrelationAndCancellation(t *testing.T) {
 	}
 	server.MarkServing()
 
-	listener, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("net.Listen() error = %v", err)
-	}
-	serveDone := make(chan error, 1)
-	go func() {
-		serveDone <- server.Serve(listener)
-	}()
+	connection, serveDone := serveOverTCP(t, server, grpcclient.Options{
+		TracerProvider: tracerProvider,
+		Propagation:    grpcclient.PropagationTrustedService,
+	})
 
-	var connection *grpc.ClientConn
+	// This test asserts the shutdown sequence itself at the end, consuming
+	// serveDone and closing the connection there. Cleanup therefore only covers
+	// the paths that return before reaching it, which is why it is guarded rather
+	// than unconditional.
 	serverStopped := false
 	connectionClosed := false
 	t.Cleanup(func() {
-		if connection != nil && !connectionClosed {
+		if !connectionClosed {
 			if err := connection.Close(); err != nil {
 				t.Errorf("ClientConn.Close() error = %v", err)
 			}
@@ -118,18 +124,6 @@ func TestServiceToServiceGRPCCorrelationAndCancellation(t *testing.T) {
 			}
 		}
 	})
-
-	connection, err = grpcclient.New(
-		grpcclient.DefaultConfig("passthrough:///"+listener.Addr().String()),
-		grpcclient.Options{
-			TransportCredentials: insecure.NewCredentials(),
-			TracerProvider:       tracerProvider,
-			Propagation:          grpcclient.PropagationTrustedService,
-		},
-	)
-	if err != nil {
-		t.Fatalf("grpcclient.New() error = %v", err)
-	}
 
 	callCtx, parent := tracerProvider.Tracer("grpcx-correlation-test").Start(
 		reqctx.ContextWithRequestID(t.Context(), requestID),
@@ -365,42 +359,4 @@ func (r *correlationSpanRecorder) waitForEnded(t *testing.T, count int) {
 
 const correlationStreamFullMethod = "/grpcx.test.CorrelationService/Wait"
 
-type correlationStreamServiceServer interface {
-	Wait(stream grpc.ServerStream) error
-}
-
-type correlationStreamService struct {
-	wait func(grpc.ServerStream) error
-}
-
-func (s correlationStreamService) Wait(stream grpc.ServerStream) error {
-	return s.wait(stream)
-}
-
-func registerCorrelationStreamService(
-	registrar grpc.ServiceRegistrar,
-	service correlationStreamServiceServer,
-) {
-	registrar.RegisterService(&grpc.ServiceDesc{
-		ServiceName: "grpcx.test.CorrelationService",
-		HandlerType: (*correlationStreamServiceServer)(nil),
-		Streams: []grpc.StreamDesc{
-			{
-				StreamName:    "Wait",
-				ServerStreams: true,
-				Handler: func(implementation any, stream grpc.ServerStream) error {
-					typed, ok := implementation.(correlationStreamServiceServer)
-					if !ok {
-						return errors.New("correlation stream service implementation has unexpected type")
-					}
-					return typed.Wait(stream)
-				},
-			},
-		},
-	}, service)
-}
-
-var (
-	_ sdktrace.SpanProcessor         = (*correlationSpanRecorder)(nil)
-	_ correlationStreamServiceServer = correlationStreamService{}
-)
+var _ sdktrace.SpanProcessor = (*correlationSpanRecorder)(nil)

@@ -7,10 +7,8 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"net/http"
 	"os"
 	"os/signal"
-	"reflect"
 	"strings"
 	"syscall"
 	"time"
@@ -67,33 +65,29 @@ func run(signalCtx context.Context, args []string, buildPublisher PublisherBuild
 	}
 	log := newLogger(os.Stdout, cfg)
 	publisher, publisherCleanup, err := buildPublisher(startupCtx, cfg, log)
-	publisherCleanupBeforePool := true
-	if publisherCleanup != nil {
-		defer func() {
-			if !publisherCleanupBeforePool {
-				return
-			}
-			runErr = errors.Join(runErr, closePublisher(signalCtx, publisherCleanup))
-		}()
-	}
+	// Registered here so a startup failure before the pool exists still closes
+	// the publisher. It stays registered for the rest of the function, so it is
+	// the backstop rather than the normal path — see the second registration
+	// after the pool, which is what actually runs.
+	var teardown relayTeardown
+	teardown.publisher = publisherCleanup
+	defer func() { runErr = errors.Join(runErr, teardown.release(signalCtx)) }()
 	if err != nil {
 		return fmt.Errorf("build outbox publisher: %w", err)
 	}
-	if publisherMissing(publisher) {
-		return fmt.Errorf("%w: outbox publisher is not registered", postgresoutbox.ErrConfig)
+	if err := postgresoutbox.ValidatePublisher(publisher); err != nil {
+		return fmt.Errorf("admit outbox publisher: %w", err)
 	}
 
 	metrics := telemetry.New()
-	telemetryCleanup, err := setupTelemetry(startupCtx, cfg, metrics, log)
-	if err != nil {
-		return err
-	}
+	telemetryCleanup := setupTelemetry(startupCtx, cfg, metrics, log)
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.WithoutCancel(signalCtx), telemetryClose)
 		defer cancel()
 		telemetryCleanup(ctx)
 	}()
-	outboxTelemetry, err := postgresoutbox.NewTelemetry(metrics.MeterProvider().Meter("service.outbox.postgres"), log)
+	outboxTelemetry, err := postgresoutbox.NewTelemetry(
+		metrics.MeterProvider().Meter(postgresoutbox.TelemetryScope), log)
 	if err != nil {
 		return fmt.Errorf("initialize outbox telemetry: %w", err)
 	}
@@ -103,11 +97,14 @@ func run(signalCtx context.Context, args []string, buildPublisher PublisherBuild
 	if err != nil {
 		return fmt.Errorf("initialize outbox postgres: %w", err)
 	}
-	publisherCleanupBeforePool = false
-	cleanupSafe := true
-	defer func() {
-		runErr = errors.Join(runErr, cleanupRelayDependencies(signalCtx, cleanupSafe, publisherCleanup, pool.Close))
-	}()
+	// The same teardown again, and this registration is the load-bearing one.
+	// Defers run last-registered-first, so this one runs before the telemetry
+	// defers above it and the publisher and pool are released while telemetry
+	// can still export what their cleanup records. The earlier registration
+	// then finds released set and does nothing. Ordering is the only reason
+	// this exists; releasing twice is already prevented by the latch.
+	teardown.pool = pool.Close
+	defer func() { runErr = errors.Join(runErr, teardown.release(signalCtx)) }()
 	store, err := postgresoutbox.NewStore(pool, outboxTelemetry)
 	if err != nil {
 		return fmt.Errorf("initialize outbox store: %w", err)
@@ -117,21 +114,40 @@ func run(signalCtx context.Context, args []string, buildPublisher PublisherBuild
 		return fmt.Errorf("initialize outbox relay: %w", err)
 	}
 	result := runRelayLifecycle(signalCtx, startupCtx, cfg, metrics, relay)
-	cleanupSafe = result.CleanupSafe
+	teardown.unsafe = result.CleanupUnsafe
 	return result.Err
 }
 
-func cleanupRelayDependencies(
-	signalCtx context.Context,
-	cleanupSafe bool,
-	publisherCleanup func(context.Context),
-	poolClose func(),
-) error {
-	if !cleanupSafe {
+// relayTeardown releases the publisher and then the pool, once, and only while
+// releasing them is safe. Its fields are filled in as each dependency appears,
+// so a startup failure releases exactly what had been built by then.
+//
+// Publisher before pool is deliberate and is not reverse construction order:
+// adapter cleanup can still be draining sends, and the pool is what a
+// last-moment durable write would need.
+//
+// unsafe is the relay's own report that a publisher goroutine outlived
+// cancellation. That goroutine can still reach both the adapter and the pool,
+// so nothing is released and process exit owns them instead.
+//
+// Every method runs on the goroutine that deferred it, so released needs no
+// synchronization.
+type relayTeardown struct {
+	publisher func(context.Context)
+	pool      func()
+	unsafe    bool
+	released  bool
+}
+
+func (t *relayTeardown) release(signalCtx context.Context) error {
+	if t.unsafe || t.released {
 		return nil
 	}
-	err := closePublisher(signalCtx, publisherCleanup)
-	poolClose()
+	t.released = true
+	err := closePublisher(signalCtx, t.publisher)
+	if t.pool != nil {
+		t.pool()
+	}
 	return err
 }
 
@@ -167,88 +183,62 @@ func runRelayLifecycle(
 	metrics *telemetry.Metrics,
 	relay relayRunner,
 ) postgresoutbox.RelayResult {
-	listener, err := listenDiagnostics(startupCtx, cfg.Observability.Metrics.Addr)
+	served, err := startDiagnostics(startupCtx, cfg.Observability.Metrics.Addr, relay.Ready, metrics)
 	if err != nil {
-		return postgresoutbox.RelayResult{CleanupSafe: true, Err: err}
+		return postgresoutbox.RelayResult{Err: err}
 	}
-	diagnostics := newDiagnosticsServer(cfg.Observability.Metrics.Addr, relay.Ready, metrics)
 	runtimeCtx, runtimeCancel := context.WithCancel(context.WithoutCancel(signalCtx))
 	defer runtimeCancel()
 	relayResult := make(chan postgresoutbox.RelayResult, 1)
 	go func() { relayResult <- relay.Run(runtimeCtx) }()
-	diagnosticsResult := make(chan error, 1)
-	go func() {
-		err := diagnostics.Serve(listener)
-		if errors.Is(err, http.ErrServerClosed) {
-			err = nil
-		}
-		diagnosticsResult <- err
-	}()
 
-	result := postgresoutbox.RelayResult{CleanupSafe: true}
+	// Three ways out, and only the signal is an ordinary one. A relay or a
+	// diagnostics server that returned by itself is a fault, so each supplies
+	// the reason the other two would otherwise leave unexplained.
+	var result postgresoutbox.RelayResult
 	var triggerErr error
-	relayRead := false
-	diagnosticsRead := false
+	relayStopped := false
 	select {
 	case <-signalCtx.Done():
 	case result = <-relayResult:
-		relayRead = true
+		relayStopped = true
 		if result.Err == nil {
 			result.Err = errors.New("outbox relay stopped unexpectedly")
 		}
-	case err := <-diagnosticsResult:
-		diagnosticsRead = true
-		triggerErr = err
-		if triggerErr == nil {
-			triggerErr = errors.New("outbox diagnostics stopped unexpectedly")
-		}
+	case <-served.watch():
+		// served.stop below carries whatever Serve reported.
+		triggerErr = errors.New("outbox diagnostics stopped unexpectedly")
 	}
 
 	processCtx, processCancel := context.WithTimeout(context.WithoutCancel(signalCtx), cfg.HTTP.GracePeriod)
 	defer processCancel()
-	result, _ = drainRelay(
-		processCtx,
-		cfg.Outbox.DrainTimeout,
-		runtimeCancel,
-		relay,
-		relayResult,
-		result,
-		relayRead,
-	)
-
-	diagnosticsCtx, diagnosticsCancel := context.WithTimeout(processCtx, diagnosticsClose)
-	diagnosticsErr := diagnostics.Shutdown(diagnosticsCtx)
-	if !diagnosticsRead {
-		select {
-		case err := <-diagnosticsResult:
-			diagnosticsErr = errors.Join(diagnosticsErr, err)
-		case <-diagnosticsCtx.Done():
-			diagnosticsErr = errors.Join(diagnosticsErr, fmt.Errorf("join outbox diagnostics: %w", diagnosticsCtx.Err()))
-		}
+	relay.StartDrain()
+	if !relayStopped {
+		result = drainRelay(processCtx, cfg.Outbox.DrainTimeout, runtimeCancel, relayResult)
 	}
-	diagnosticsCancel()
-	result.Err = errors.Join(triggerErr, result.Err, diagnosticsErr)
+	result.Err = errors.Join(triggerErr, result.Err, served.stop(processCtx))
 	return result
 }
 
+// drainRelay waits out a relay that has not reported yet and returns its
+// result. It escalates in two steps: the drain budget lets the current batch
+// finish, then cancellation forces its publications to stop. Only the final
+// step can fail to produce a result, and the one it synthesizes reports cleanup
+// as unsafe because the relay goroutine is still running.
+//
+// The caller owns StartDrain and the already-reported case, so this is only
+// ever entered with a result still outstanding.
 func drainRelay(
 	processCtx context.Context,
 	drainTimeout time.Duration,
 	runtimeCancel context.CancelFunc,
-	relay relayRunner,
 	relayResult <-chan postgresoutbox.RelayResult,
-	result postgresoutbox.RelayResult,
-	relayRead bool,
-) (postgresoutbox.RelayResult, bool) {
-	relay.StartDrain()
-	if relayRead {
-		return result, true
-	}
+) postgresoutbox.RelayResult {
 	drainCtx, drainCancel := context.WithTimeout(processCtx, drainTimeout)
 	defer drainCancel()
 	select {
-	case result = <-relayResult:
-		return result, true
+	case result := <-relayResult:
+		return result
 	case <-drainCtx.Done():
 	}
 
@@ -256,13 +246,13 @@ func drainRelay(
 	joinCtx, joinCancel := context.WithTimeout(processCtx, forcedJoin)
 	defer joinCancel()
 	select {
-	case result = <-relayResult:
-		return result, true
+	case result := <-relayResult:
+		return result
 	case <-joinCtx.Done():
 		return postgresoutbox.RelayResult{
-			CleanupSafe: false,
-			Err:         fmt.Errorf("join outbox relay: %w", joinCtx.Err()),
-		}, false
+			CleanupUnsafe: true,
+			Err:           fmt.Errorf("join outbox relay: %w", joinCtx.Err()),
+		}
 	}
 }
 
@@ -287,20 +277,6 @@ func validateRuntimeConfig(cfg config.Config) error {
 		)
 	}
 	return nil
-}
-
-func publisherMissing(publisher postgresoutbox.Publisher) bool {
-	if publisher == nil {
-		return true
-	}
-	value := reflect.ValueOf(publisher)
-	//nolint:exhaustive // Only kinds that can contain a typed nil are relevant.
-	switch value.Kind() {
-	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
-		return value.IsNil()
-	default:
-		return false
-	}
 }
 
 func parseLoadOptions(args []string) (config.LoadOptions, error) {

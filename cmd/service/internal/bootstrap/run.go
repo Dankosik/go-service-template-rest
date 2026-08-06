@@ -20,12 +20,6 @@ import (
 	"github.com/example/go-service-template-rest/internal/health"
 	httpx "github.com/example/go-service-template-rest/internal/infra/http"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
-
-	// profile:grpc:start
-	// profile:authn-oidc-jwt:start
-	"google.golang.org/grpc"
-	// profile:authn-oidc-jwt:end
-	// profile:grpc:end
 )
 
 // Budgets owned by every profile. How they nest, outermost first:
@@ -375,7 +369,8 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 			LogHealthProbes: bootstrap.cfg.HTTP.AccessLogHealthProbes,
 			// The active profile's dependency failures, classified once here
 			// rather than in every operation. A service appends its own domain
-			// mappers to this slice; see httpx.DomainErrorMapper.
+			// mappers at runtimeDependencies.DomainErrors; see problem.Mapper
+			// for why the seam exists.
 			DomainErrors: domainErrors,
 			// profile:authn-oidc-jwt:start
 			Authenticate:          httpx.Authenticated(authnVerifier.ResolveHTTP),
@@ -414,20 +409,32 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 	// profile:grpc:start
 	var grpcSrv grpcRuntimeServer
 	if bootstrap.cfg.GRPC.Server.Enabled {
+		// The first owned gRPC service and its authentication or authorization
+		// policy are composed here; generated handlers stay outside grpcx. This
+		// is a named value rather than a literal in the call below so that
+		// adding either is a one-line change.
+		//
+		// Assigning Services is correct — nothing else fills it. A policy is
+		// appended instead: a build profile may have filled the policy slices
+		// already, and an assignment compiles, passes every check, and silently
+		// drops what it replaced.
+		bindings := grpcRuntimeBindings{
+			// Register an owned service here, as
+			// func(registrar grpc.ServiceRegistrar) { foov1.RegisterFooServer(registrar, impl) }.
+			// See docs/grpc.md, "Register it in bootstrap".
+			Services: nil,
+		}
+		// profile:authn-oidc-jwt:start
+		bindings.UnaryPolicy = append(bindings.UnaryPolicy, authnVerifier.UnaryInterceptor())
+		bindings.StreamPolicy = append(bindings.StreamPolicy, authnVerifier.StreamInterceptor())
+		// profile:authn-oidc-jwt:end
+
 		builtGRPC, buildErr := newGRPCRuntime(
 			bootstrap.cfg,
 			bootstrap.log,
 			metrics,
 			domainErrors,
-			grpcRuntimeBindings{
-				// profile:authn-oidc-jwt:start
-				UnaryPolicy:     []grpc.UnaryServerInterceptor{authnVerifier.UnaryInterceptor()},
-				StreamingPolicy: []grpc.StreamServerInterceptor{authnVerifier.StreamInterceptor()},
-				// profile:authn-oidc-jwt:end
-				// The first owned gRPC service and its authentication or
-				// authorization policy are composed here. Generated handlers
-				// stay outside grpcx.
-			},
+			bindings,
 		)
 		if buildErr != nil {
 			return buildErr

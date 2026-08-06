@@ -1,3 +1,10 @@
+// The interceptor policies as units: access-log decisions, admission accounting,
+// panic recovery, and the two error boundaries' trust rules.
+//
+// These drive the policies directly rather than through a server, so a failure
+// names the rule that broke. server_test.go and telemetry_test.go cover the same
+// rules as a caller and an operator see them.
+
 package grpcx
 
 import (
@@ -20,36 +27,6 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
-
-func TestAccessLogPolicyPreservesErrorAndSlowVisibility(t *testing.T) {
-	policy := accessLogPolicy{
-		successSampleRate: 0,
-		slowThreshold:     time.Second,
-	}
-
-	for _, testCase := range []struct {
-		name             string
-		missingRequestID bool
-		code             codes.Code
-		elapsed          time.Duration
-		want             bool
-	}{
-		{name: "fast success sampled out", code: codes.OK, elapsed: time.Second - 1, want: false},
-		{name: "threshold success retained", code: codes.OK, elapsed: time.Second, want: true},
-		{name: "error retained", code: codes.Internal, want: true},
-		{name: "missing correlation fails open", missingRequestID: true, code: codes.OK, want: true},
-	} {
-		t.Run(testCase.name, func(t *testing.T) {
-			ctx := t.Context()
-			if !testCase.missingRequestID {
-				ctx = reqctx.ContextWithRequestID(ctx, "stable-request")
-			}
-			if got := policy.shouldLog(ctx, testCase.code, testCase.elapsed); got != testCase.want {
-				t.Fatalf("shouldLog() = %t, want %t", got, testCase.want)
-			}
-		})
-	}
-}
 
 func TestAccessLogSuccessSamplingIsDeterministicAndBounded(t *testing.T) {
 	if sampleRequestID("request", 0) {
@@ -86,7 +63,7 @@ func TestAccessLogInterceptorsApplyHealthAndSuccessPolicy(t *testing.T) {
 	ctx := reqctx.ContextWithRequestID(t.Context(), "sampled-out-success")
 
 	handlerCalls := 0
-	if _, err := accessLogUnaryInterceptor(log, policy)(
+	if _, err := unaryPolicy(accessLogAround(log, policy))(
 		ctx,
 		nil,
 		&grpc.UnaryServerInfo{FullMethod: testUnaryFullMethod},
@@ -97,7 +74,7 @@ func TestAccessLogInterceptorsApplyHealthAndSuccessPolicy(t *testing.T) {
 	); err != nil {
 		t.Fatalf("successful unary interceptor error = %v", err)
 	}
-	if _, err := accessLogUnaryInterceptor(log, policy)(
+	if _, err := unaryPolicy(accessLogAround(log, policy))(
 		ctx,
 		nil,
 		&grpc.UnaryServerInfo{FullMethod: healthMethodPrefix + "Check"},
@@ -110,10 +87,10 @@ func TestAccessLogInterceptorsApplyHealthAndSuccessPolicy(t *testing.T) {
 	}
 
 	streamErr := status.Error(codes.ResourceExhausted, "busy")
-	if err := accessLogStreamInterceptor(log, policy)(
+	if err := streamPolicy(accessLogAround(log, policy))(
 		nil,
 		testServerStream{context: func() context.Context { return ctx }},
-		&grpc.StreamServerInfo{FullMethod: "/grpcx.test.Service/Stream"},
+		&grpc.StreamServerInfo{FullMethod: testStreamFullMethod},
 		func(any, grpc.ServerStream) error {
 			handlerCalls++
 			return fmt.Errorf("stream handler: %w", streamErr)
@@ -130,12 +107,20 @@ func TestAccessLogInterceptorsApplyHealthAndSuccessPolicy(t *testing.T) {
 		t.Fatalf("access-log records = %d, want only the business error; logs = %s", lines, encoded)
 	}
 	if !strings.Contains(encoded, `"rpc.status":"ResourceExhausted"`) ||
-		!strings.Contains(encoded, `"/grpcx.test.Service/Stream"`) {
+		!strings.Contains(encoded, strconv.Quote(testStreamFullMethod)) {
 		t.Fatalf("access log = %s, want business stream error", encoded)
 	}
 }
 
-func TestAccessLogStreamInterceptorMatchesUnaryPolicy(t *testing.T) {
+// The access-log policy is one function shared by both chains, so this owns its
+// whole decision matrix as a streaming RPC reaches them: health exclusion, both
+// sides of the slow threshold, sampling, and failing open without a request ID.
+//
+// It drives accessLogAround rather than shouldLog, which is one shim lower than
+// a server and still names the rule that broke — and unlike a predicate-level
+// twin it also proves the decision is consulted. A new rule belongs in this
+// table, not in a second one beside shouldLog.
+func TestAccessLogPolicyAppliesToStreamingRPCs(t *testing.T) {
 	for _, testCase := range []struct {
 		name             string
 		missingRequestID bool
@@ -154,14 +139,14 @@ func TestAccessLogStreamInterceptorMatchesUnaryPolicy(t *testing.T) {
 		},
 		{
 			name:       "business error retained",
-			method:     "/grpcx.test.Service/Stream",
+			method:     testStreamFullMethod,
 			policy:     accessLogPolicy{successSampleRate: 0},
 			handlerErr: status.Error(codes.ResourceExhausted, "busy"),
 			wantLog:    true,
 		},
 		{
 			name:   "slow success retained before sampling",
-			method: "/grpcx.test.Service/Stream",
+			method: testStreamFullMethod,
 			policy: accessLogPolicy{
 				successSampleRate: 0,
 				slowThreshold:     time.Second,
@@ -171,14 +156,28 @@ func TestAccessLogStreamInterceptorMatchesUnaryPolicy(t *testing.T) {
 		},
 		{
 			name:    "fast success sampled out",
-			method:  "/grpcx.test.Service/Stream",
+			method:  testStreamFullMethod,
 			policy:  accessLogPolicy{successSampleRate: 0},
 			wantLog: false,
 		},
 		{
+			// The boundary of elapsed >= slowThreshold, from below: an RPC that
+			// finishes one tick short of the threshold is left to sampling, which
+			// is what makes the case above it a threshold decision rather than a
+			// coincidence.
+			name:   "success below the threshold is still sampled out",
+			method: testStreamFullMethod,
+			policy: accessLogPolicy{
+				successSampleRate: 0,
+				slowThreshold:     time.Second,
+			},
+			handlerDelay: time.Second - time.Nanosecond,
+			wantLog:      false,
+		},
+		{
 			name:             "missing correlation fails open",
 			missingRequestID: true,
-			method:           "/grpcx.test.Service/Stream",
+			method:           testStreamFullMethod,
 			policy:           accessLogPolicy{successSampleRate: 0},
 			wantLog:          true,
 		},
@@ -193,7 +192,7 @@ func TestAccessLogStreamInterceptorMatchesUnaryPolicy(t *testing.T) {
 				log := slog.New(slog.NewJSONHandler(&output, nil))
 				handlerCalled := false
 
-				err := accessLogStreamInterceptor(log, testCase.policy)(
+				err := streamPolicy(accessLogAround(log, testCase.policy))(
 					nil,
 					testServerStream{context: func() context.Context { return ctx }},
 					&grpc.StreamServerInfo{FullMethod: testCase.method},
@@ -229,7 +228,7 @@ func TestAccessLogSkipsAllWorkWhenInfoIsDisabled(t *testing.T) {
 	log := slog.New(slog.NewJSONHandler(&output, &slog.HandlerOptions{Level: slog.LevelWarn}))
 	unaryCalled := false
 
-	_, err := accessLogUnaryInterceptor(log, accessLogPolicy{successSampleRate: 1})(
+	_, err := unaryPolicy(accessLogAround(log, accessLogPolicy{successSampleRate: 1}))(
 		t.Context(),
 		nil,
 		&grpc.UnaryServerInfo{FullMethod: testUnaryFullMethod},
@@ -243,10 +242,10 @@ func TestAccessLogSkipsAllWorkWhenInfoIsDisabled(t *testing.T) {
 	}
 
 	streamCalled := false
-	err = accessLogStreamInterceptor(log, accessLogPolicy{successSampleRate: 1})(
+	err = streamPolicy(accessLogAround(log, accessLogPolicy{successSampleRate: 1}))(
 		nil,
 		testServerStream{context: t.Context},
-		&grpc.StreamServerInfo{FullMethod: "/grpcx.test.Service/Stream"},
+		&grpc.StreamServerInfo{FullMethod: testStreamFullMethod},
 		func(any, grpc.ServerStream) error {
 			streamCalled = true
 			return status.Error(codes.Internal, "failure")
@@ -263,8 +262,8 @@ func TestAccessLogSkipsAllWorkWhenInfoIsDisabled(t *testing.T) {
 func TestAdmissionLimitIsSharedAcrossUnaryAndStreamingRPCs(t *testing.T) {
 	load := &recordingLoad{}
 	limiter := newAdmissionLimiter(1, load)
-	unary := admissionUnaryInterceptor(limiter)
-	streaming := admissionStreamInterceptor(limiter)
+	unary := unaryPolicy(limiter.around)
+	streaming := streamPolicy(limiter.around)
 
 	entered := make(chan struct{})
 	release := make(chan struct{})
@@ -288,7 +287,7 @@ func TestAdmissionLimitIsSharedAcrossUnaryAndStreamingRPCs(t *testing.T) {
 	err := streaming(
 		nil,
 		testServerStream{context: t.Context},
-		&grpc.StreamServerInfo{FullMethod: "/grpcx.test.Service/Stream"},
+		&grpc.StreamServerInfo{FullMethod: testStreamFullMethod},
 		func(any, grpc.ServerStream) error {
 			streamHandlerCalled = true
 			return nil
@@ -317,7 +316,67 @@ func TestAdmissionLimitIsSharedAcrossUnaryAndStreamingRPCs(t *testing.T) {
 	}
 }
 
-func TestMapErrorUsesOwnedProvenanceAndSanitizesUnknownStatus(t *testing.T) {
+// TestHealthPrefixExemptsMethodsGRPCGoAddsLater pins the over-matching half of a
+// deliberate pair. isHealthMethod matches the whole standard health service by
+// prefix, so a method grpc-go adds to it later is exempt from admission with no
+// edit here; failing to exempt one costs the service its admission budget under
+// probe load.
+//
+// oidcjwt's TestGRPCAuthnBoundaryExactHealthAllowlist pins the other half — that
+// same future method must still be authenticated, because over-matching a trust
+// boundary publishes an RPC nobody meant to publish. Both drive the method name
+// below, so the two halves stay about one hypothetical method.
+func TestHealthPrefixExemptsMethodsGRPCGoAddsLater(t *testing.T) {
+	const futureHealthMethod = healthMethodPrefix + "Future"
+
+	load := &recordingLoad{}
+	limiter := newAdmissionLimiter(1, load)
+	unary := unaryPolicy(limiter.around)
+
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	occupied := make(chan error, 1)
+	go func() {
+		_, err := unary(
+			t.Context(),
+			nil,
+			&grpc.UnaryServerInfo{FullMethod: testUnaryFullMethod},
+			func(context.Context, any) (any, error) {
+				close(entered)
+				<-release
+				return struct{}{}, nil
+			},
+		)
+		occupied <- err
+	}()
+	<-entered
+
+	handlerCalled := false
+	if _, err := unary(
+		t.Context(),
+		nil,
+		&grpc.UnaryServerInfo{FullMethod: futureHealthMethod},
+		func(context.Context, any) (any, error) {
+			handlerCalled = true
+			return struct{}{}, nil
+		},
+	); err != nil {
+		t.Fatalf("future health method %q was shed against a full budget: %v", futureHealthMethod, err)
+	}
+	if !handlerCalled {
+		t.Fatalf("future health method %q did not reach its handler", futureHealthMethod)
+	}
+
+	close(release)
+	if err := <-occupied; err != nil {
+		t.Fatalf("admitted unary RPC error = %v", err)
+	}
+	if _, shed := load.snapshot(); shed != 0 {
+		t.Fatalf("shed = %d, want 0; a health-service method must not consume the budget", shed)
+	}
+}
+
+func TestMapErrorAppliesEachBoundarysTrustRule(t *testing.T) {
 	sentinel := errors.New("domain sentinel")
 	mapper := func(err error) (problem.Mapped, bool) {
 		if !errors.Is(err, sentinel) {
@@ -329,6 +388,7 @@ func TestMapErrorUsesOwnedProvenanceAndSanitizesUnknownStatus(t *testing.T) {
 	for _, testCase := range []struct {
 		name       string
 		err        error
+		trusted    trustedStatus
 		mappers    []problem.Mapper
 		wantCode   codes.Code
 		wantDetail string
@@ -365,9 +425,40 @@ func TestMapErrorUsesOwnedProvenanceAndSanitizesUnknownStatus(t *testing.T) {
 			wantCode:   codes.Internal,
 			wantDetail: "request failed",
 		},
+		{
+			// The policy boundary must keep trusting a status it did not build:
+			// a policy in another package cannot construct this package's marker
+			// type, so collapsing anyServiceStatus into ownedStatusOnly would
+			// turn every policy rejection into INTERNAL.
+			name:       "policy status is service-owned output",
+			err:        status.Error(codes.Unauthenticated, "credential is missing or invalid"),
+			trusted:    anyServiceStatus,
+			wantCode:   codes.Unauthenticated,
+			wantDetail: "credential is missing or invalid",
+		},
+		{
+			// Only a status the policy returned directly is its own output; a
+			// status it merely wrapped came from somewhere it does not own.
+			name:       "policy wrapped status is not",
+			err:        fmt.Errorf("call dependency: %w", status.Error(codes.PermissionDenied, "dependency secret")),
+			trusted:    anyServiceStatus,
+			wantCode:   codes.Internal,
+			wantDetail: "request failed",
+		},
+		{
+			name:       "policy raw error",
+			err:        errors.New("authentication dependency credential=secret"),
+			trusted:    anyServiceStatus,
+			wantCode:   codes.Internal,
+			wantDetail: "request failed",
+		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-			got := mapError(testCase.err, testCase.mappers)
+			trusted := testCase.trusted
+			if trusted == nil {
+				trusted = ownedStatusOnly
+			}
+			got := mapError(testCase.err, trusted, testCase.mappers)
 			if code := status.Code(got); code != testCase.wantCode {
 				t.Fatalf("code = %s, want %s", code, testCase.wantCode)
 			}
@@ -378,16 +469,44 @@ func TestMapErrorUsesOwnedProvenanceAndSanitizesUnknownStatus(t *testing.T) {
 	}
 }
 
+// Recovery is one policy, but a panic has to unwind through a different shim for
+// each RPC kind, so both are driven here. A shim that let the panic escape would
+// take down the process instead of failing this test politely.
 func TestRecoveryReturnsSanitizedOwnedStatus(t *testing.T) {
-	interceptor := recoveryUnaryInterceptor(slog.New(slog.DiscardHandler))
-	_, err := interceptor(
-		t.Context(),
-		nil,
-		&grpc.UnaryServerInfo{FullMethod: testUnaryFullMethod},
-		func(context.Context, any) (any, error) {
-			panic("credential=secret")
-		},
-	)
+	const panicValue = "credential=secret"
+	log := slog.New(slog.DiscardHandler)
+
+	t.Run("unary", func(t *testing.T) {
+		response, err := unaryPolicy(recoveryAround(log))(
+			t.Context(),
+			nil,
+			&grpc.UnaryServerInfo{FullMethod: testUnaryFullMethod},
+			func(context.Context, any) (any, error) {
+				panic(panicValue)
+			},
+		)
+		if response != nil {
+			t.Fatalf("panic response = %v, want nil", response)
+		}
+		assertRecoveredPanicStatus(t, err)
+	})
+
+	t.Run("streaming", func(t *testing.T) {
+		err := streamPolicy(recoveryAround(log))(
+			nil,
+			testServerStream{context: t.Context},
+			&grpc.StreamServerInfo{FullMethod: testStreamFullMethod},
+			func(any, grpc.ServerStream) error {
+				panic(panicValue)
+			},
+		)
+		assertRecoveredPanicStatus(t, err)
+	})
+}
+
+func assertRecoveredPanicStatus(t *testing.T, err error) {
+	t.Helper()
+
 	assertStatusCode(t, err, codes.Internal)
 	if detail := status.Convert(err).Message(); detail != "request failed" {
 		t.Fatalf("panic status detail = %q, want sanitized detail", detail)
@@ -397,6 +516,9 @@ func TestRecoveryReturnsSanitizedOwnedStatus(t *testing.T) {
 	}
 }
 
+// recordingLoad records admission decisions for the unit tests above, which read
+// an exact snapshot after the RPCs they drive have finished. performance_test.go
+// declares a second LoadRecorder rather than reusing this one; it says why.
 type recordingLoad struct {
 	mu     sync.Mutex
 	active int

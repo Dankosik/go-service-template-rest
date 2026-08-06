@@ -1,10 +1,8 @@
 package oidcjwt
 
 import (
-	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
 	"sync"
 	"sync/atomic"
@@ -14,47 +12,48 @@ import (
 	"go.opentelemetry.io/otel/metric"
 )
 
-const (
-	TransportHTTP = "http"
-	TransportGRPC = "grpc"
-)
-
-type lifecycleState uint8
-
-const (
-	lifecycleNew lifecycleState = iota
-	lifecycleRunning
-	lifecycleJoined
-	lifecycleClosed
-)
-
-type refreshCall struct {
-	done chan struct{}
-	err  error
-}
-
 // Verifier owns one issuer's immutable keys, refresh lifecycle, and both
 // transport adapters.
+//
+// Each field group below names the regime that guards it, and refresh admission
+// is one more that [refresher] owns outright. Mixing them is what a change here
+// has to avoid.
 type Verifier struct {
+	// Fixed for the Verifier's whole life; safe to read without synchronization.
 	policy        Policy
 	jwksURI       string
 	client        providerClient
 	now           func() time.Time
 	log           *slog.Logger
 	metrics       authnMetrics
-	keys          atomic.Pointer[keySet]
-	install       chan struct{}
 	unregisterAge func()
+	admission     *refresher
 
-	refreshMu    sync.Mutex
-	active       *refreshCall
-	cooldownTill time.Time
+	// keys is replaced wholesale, never mutated, so every verification reads one
+	// consistent set without blocking a refresh. It is non-nil from newVerifier
+	// onward and nothing ever stores nil over it, which is why Run reads fetchedAt
+	// straight off it. install carries one non-blocking nudge per successful
+	// replacement to whatever Run is scheduling.
+	keys    atomic.Pointer[keySet]
+	install chan struct{}
 
+	// Fixed for the Verifier's whole life as well, and grouped apart because it
+	// is the lifetime rather than a value: baseCtx is the Verifier's own lifetime
+	// expressed as a context. Close cancels it, and that cancellation is the stop
+	// signal for Run and for any refresh in flight. [refresher] holds the same
+	// context and says what a fetch needs from it.
 	baseCtx context.Context //nolint:containedctx // Verifier owns this lifecycle context and cancels it in Close.
 	cancel  context.CancelFunc
 
+	// lifecycleMu guards the two questions Run and Close ask each other: has Run
+	// started, and has this Verifier been retired. Between them they admit at
+	// most one Run and one shutdown. runDone reports that Run has left, and
+	// closeOnce both releases the owned client and gauge exactly once and holds a
+	// second Close until the first has finished. lifecycle.go owns this group; it
+	// is the only file that reads or writes any of it.
 	lifecycleMu sync.Mutex
-	state       lifecycleState
+	runStarted  bool
+	retired     bool
 	runDone     chan struct{}
 	closeOnce   sync.Once
 }
@@ -90,33 +89,61 @@ func newVerifier(
 	if log == nil {
 		log = slog.Default()
 	}
-	keys, jwksURI, client, err := bootstrapTrust(ctx, policy, factory, now, log)
+	trust, err := bootstrapTrust(ctx, policy, factory, now, log)
 	if err != nil {
 		return nil, err
 	}
 	baseCtx, cancel := context.WithCancel(context.Background())
-	metricWarning := newAuthnMetricWarning(log)
+	reportDegraded := newDegradedWarning(log)
 	verifier := &Verifier{
 		policy:  policy,
-		jwksURI: jwksURI,
-		client:  client,
+		jwksURI: trust.jwksURI,
+		client:  trust.client,
 		now:     now,
 		log:     log,
-		metrics: newAuthnMetrics(meterProvider, metricWarning),
+		metrics: newAuthnMetrics(meterProvider, reportDegraded),
 		install: make(chan struct{}, 1),
 		baseCtx: baseCtx,
 		cancel:  cancel,
-		state:   lifecycleNew,
 		runDone: make(chan struct{}),
 	}
-	verifier.keys.Store(keys)
-	verifier.unregisterAge = registerKeyAgeGauge(meterProvider, verifier.keys.Load, now, metricWarning)
-	verifier.metrics.recordRefresh(ctx, "startup", nil)
+	verifier.keys.Store(trust.keys)
+	// admission and unregisterAge both close over the verifier being built, so
+	// neither can move into the literal above.
+	verifier.admission = &refresher{
+		baseCtx: baseCtx,
+		now:     now,
+		fetch:   verifier.fetchAndInstall,
+		record:  verifier.metrics.recordRefresh,
+	}
+	verifier.unregisterAge = registerKeyAgeGauge(meterProvider, verifier.keys.Load, now, reportDegraded)
+	verifier.metrics.recordRefresh(ctx, triggerStartup, nil)
 	return verifier, nil
 }
 
-// Verify validates compact and trust policy and returns only the opaque subject.
-func (v *Verifier) Verify(ctx context.Context, compact, transport string) (principal reqctx.Principal, err error) {
+// Verify checks the compact token against trust policy and returns only the
+// opaque subject.
+//
+// Two error shapes leave here and an adapter has to answer both. Almost every
+// failure is an [Error] carrying a [Kind], and the mandatory exhaustive linter
+// holds every switch on one to the full set. The exception carries no Kind at
+// all: the caller's own cancellation or deadline is returned wrapped and
+// otherwise unchanged, so each transport can report the caller's status rather
+// than an authentication outcome. [KindOf] answers false for it, which means a
+// switch on the Kind alone takes it through the default arm — test for the
+// context errors first.
+// profile:grpc:start
+// grpcAuthenticationError is the worked example.
+// profile:grpc:end
+// No linter names that obligation, because it is not a member of any enum.
+//
+// The results are named so the deferred recovery can replace a panic with a
+// sanitized failure and so one metric record covers every exit.
+func (v *Verifier) Verify(
+	ctx context.Context,
+	compact string,
+	transport Transport,
+) (principal reqctx.Principal, err error) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
 			principal = reqctx.Principal{}
@@ -129,264 +156,97 @@ func (v *Verifier) Verify(ctx context.Context, compact, transport string) (princ
 	if err != nil {
 		return reqctx.Principal{}, err
 	}
-	snapshot := v.keys.Load()
-	if snapshot == nil {
-		return reqctx.Principal{}, failure(KindUnavailable)
-	}
-	key := snapshot.keys[parsed.keyID]
-	if key != nil {
-		payload, verifyErr := parsed.signed.Verify(key)
-		if verifyErr == nil && bytes.Equal(payload, parsed.payload) {
-			if !v.keysCurrent(snapshot) {
-				return reqctx.Principal{}, failure(KindUnavailable)
-			}
-			return parsed.principal, nil
-		}
-	}
 
-	if err := v.refresh(ctx, "key_miss", true); err != nil {
-		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-			return reqctx.Principal{}, err
-		}
-		if v.currentKeys() == nil {
+	// A signature the installed set matches answers immediately, but only while
+	// that set is current: a match from a set past MaxKeySetAge is reported
+	// unavailable rather than accepted, because a key revoked at the provider
+	// can no longer be observed here.
+	//
+	// The signature is tested before currentness on purpose. A stale set whose
+	// keys do not sign this token has to reach the refresh below, so refusing on
+	// age alone here would answer unavailable before the recovery could run. The
+	// test that fails is TestStaleUnknownKIDPerformsRequestDrivenRecovery.
+	snapshot := v.keys.Load()
+	if snapshot.verifies(parsed) {
+		if !v.keysCurrent(snapshot) {
 			return reqctx.Principal{}, failure(KindUnavailable)
 		}
+		return parsed.principal, nil
 	}
-	current := v.currentKeys()
-	if current == nil {
+
+	// No installed key signs this token, which is what a provider rotation
+	// looks like from here. One coalesced, cooldown-limited refresh is the
+	// recovery; a refresh the cooldown refused or the provider failed leaves
+	// the installed set in place, so the retry below still answers from it.
+	//
+	// Age is checked before the signature on this path, and the categories
+	// differ because the question does. Against a current set, "no key signs
+	// this" is a complete answer and the credential is invalid. Against a set
+	// we could not replace, it is not an answer at all — the key that would
+	// have matched may be in the set the refresh failed to fetch — so the
+	// honest report is that trust is unavailable.
+	refreshErr := v.refresh(ctx)
+	if errors.Is(refreshErr, context.Canceled) || errors.Is(refreshErr, context.DeadlineExceeded) {
+		return reqctx.Principal{}, refreshErr
+	}
+	current := v.keys.Load()
+	if !v.keysCurrent(current) {
 		return reqctx.Principal{}, failure(KindUnavailable)
 	}
-	key = current.keys[parsed.keyID]
-	if key == nil {
-		return reqctx.Principal{}, failure(KindInvalid)
-	}
-	payload, err := parsed.signed.Verify(key)
-	if err != nil || !bytes.Equal(payload, parsed.payload) {
+	if !current.verifies(parsed) {
 		return reqctx.Principal{}, failure(KindInvalid)
 	}
 	return parsed.principal, nil
 }
 
+// verifyCredential extracts the bearer credential one transport carried and
+// verifies it.
+//
+// Both adapters reach [Verifier.Verify] through here, and that is what keeps
+// authn.verifications the complete count of what this boundary answered. Verify
+// counts every one of its own exits from a single deferred record, so a
+// credential rejected before it — a missing, duplicated, or oversized header —
+// would otherwise go uncounted. Routing the extraction and the count through one
+// function means an adapter cannot forget the second.
+func (v *Verifier) verifyCredential(
+	ctx context.Context,
+	values []string,
+	transport Transport,
+) (reqctx.Principal, error) {
+	token, err := bearerToken(values)
+	if err != nil {
+		return reqctx.Principal{}, v.recordRejection(ctx, transport, err)
+	}
+	return v.Verify(ctx, token, transport)
+}
+
+// recordRejection counts a refusal [Verifier.Verify] never saw, and returns that
+// same error.
+//
+// There are exactly two, and both reach it. One is verifyCredential's own, just
+// above: bearerToken refused the header, so Verify — and the deferred record that
+// counts every one of its exits — never ran. The other belongs to an adapter
+// alone, which is the only party that can know a request never arrived in a shape
+// this boundary may authenticate; the HTTP adapter is today's only such caller,
+// for a request it cannot reach and for a peer the deployment does not trust.
+func (v *Verifier) recordRejection(ctx context.Context, transport Transport, err error) error {
+	v.metrics.recordVerification(ctx, transport, err)
+	return err
+}
+
 // CheckReady reports whether a completely validated key set is still current.
 func (v *Verifier) CheckReady() error {
-	if v == nil || v.currentKeys() == nil {
+	if v == nil || !v.keysCurrent(v.keys.Load()) {
 		return failure(KindUnavailable)
 	}
 	return nil
 }
 
-func (v *Verifier) currentKeys() *keySet {
-	keys := v.keys.Load()
-	if !v.keysCurrent(keys) {
-		return nil
-	}
-	return keys
-}
-
+// keysCurrent is the single staleness policy every caller asks: a set past
+// MaxKeySetAge is refused even though it is still installed and would still
+// verify signatures, because a key revoked at the provider can no longer be
+// observed here. A nil set is not current either, so callers need no separate
+// guard.
 func (v *Verifier) keysCurrent(keys *keySet) bool {
 	return keys != nil && v.now().Before(keys.fetchedAt.Add(MaxKeySetAge))
-}
-
-func (v *Verifier) beginRefresh(trigger string, miss bool) *refreshCall {
-	now := v.now()
-	v.refreshMu.Lock()
-	if v.active != nil {
-		call := v.active
-		v.refreshMu.Unlock()
-		return call
-	}
-	if miss && now.Before(v.cooldownTill) {
-		v.refreshMu.Unlock()
-		return nil
-	}
-	call := &refreshCall{done: make(chan struct{})}
-	v.active = call
-	if miss {
-		v.cooldownTill = now.Add(RefreshCooldown)
-	}
-	v.refreshMu.Unlock()
-
-	go func(refreshCtx context.Context) {
-		call.err = v.fetchAndInstall(refreshCtx)
-		v.metrics.recordRefresh(context.WithoutCancel(refreshCtx), trigger, call.err)
-		v.refreshMu.Lock()
-		if v.active == call {
-			v.active = nil
-		}
-		close(call.done)
-		v.refreshMu.Unlock()
-	}(v.baseCtx)
-	return call
-}
-
-func (v *Verifier) refresh(ctx context.Context, trigger string, miss bool) error {
-	call := v.beginRefresh(trigger, miss)
-	if call == nil {
-		return nil
-	}
-	return waitRefresh(ctx, call)
-}
-
-func waitRefresh(ctx context.Context, call *refreshCall) error {
-	select {
-	case <-ctx.Done():
-		return fmt.Errorf("wait for JWKS refresh: %w", ctx.Err())
-	case <-call.done:
-		return call.err
-	}
-}
-
-func (v *Verifier) fetchAndInstall(ctx context.Context) (err error) {
-	defer func() {
-		if recover() != nil {
-			err = errors.New("JWKS refresh failed")
-		}
-	}()
-	body, err := fetchDocument(ctx, v.client.request, v.jwksURI)
-	if err != nil {
-		return errors.New("JWKS refresh failed")
-	}
-	candidate, err := parseKeySet(body, v.now())
-	if err != nil {
-		return errors.New("JWKS refresh failed")
-	}
-	v.keys.Store(candidate)
-	select {
-	case v.install <- struct{}{}:
-	default:
-	}
-	return nil
-}
-
-// Run owns scheduled refresh and exact trust-current readiness transitions.
-func (v *Verifier) Run(ctx context.Context, onTrustCurrent func(bool)) error {
-	v.lifecycleMu.Lock()
-	if v.state != lifecycleNew {
-		v.lifecycleMu.Unlock()
-		return errors.New("OIDC verifier lifecycle is invalid")
-	}
-	v.state = lifecycleRunning
-	v.lifecycleMu.Unlock()
-	defer func() {
-		v.cancel()
-		v.waitForActiveRefresh()
-		v.lifecycleMu.Lock()
-		if v.state == lifecycleRunning {
-			v.state = lifecycleJoined
-		}
-		close(v.runDone)
-		v.lifecycleMu.Unlock()
-	}()
-
-	var (
-		published   bool
-		lastCurrent bool
-	)
-	publishCurrent := func() {
-		current := v.CheckReady() == nil
-		if onTrustCurrent != nil && (!published || current != lastCurrent) {
-			onTrustCurrent(current)
-		}
-		published = true
-		lastCurrent = current
-	}
-	publishCurrent()
-
-	refreshDue := v.keys.Load().fetchedAt.Add(RefreshInterval)
-	refreshTimer := time.NewTimer(until(v.now(), refreshDue))
-	staleTimer := time.NewTimer(until(v.now(), v.keys.Load().fetchedAt.Add(MaxKeySetAge)))
-	var (
-		scheduled     *refreshCall
-		scheduledDone <-chan struct{}
-	)
-	defer refreshTimer.Stop()
-	defer staleTimer.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			v.cancel()
-			return fmt.Errorf("run OIDC verifier: %w", ctx.Err())
-		case <-v.baseCtx.Done():
-			return context.Canceled
-		case <-v.install:
-			keys := v.keys.Load()
-			refreshTimer.Reset(until(v.now(), keys.fetchedAt.Add(RefreshInterval)))
-			staleTimer.Reset(until(v.now(), keys.fetchedAt.Add(MaxKeySetAge)))
-			publishCurrent()
-		case <-refreshTimer.C:
-			scheduled = v.beginRefresh("scheduled", false)
-			if scheduled == nil {
-				refreshTimer.Reset(RefreshCooldown)
-				continue
-			}
-			scheduledDone = scheduled.done
-		case <-scheduledDone:
-			if scheduled == nil {
-				scheduledDone = nil
-				refreshTimer.Reset(RefreshCooldown)
-				continue
-			}
-			next := RefreshCooldown
-			if scheduled.err == nil {
-				next = RefreshInterval
-			}
-			scheduled = nil
-			scheduledDone = nil
-			refreshTimer.Reset(next)
-			publishCurrent()
-		case <-staleTimer.C:
-			publishCurrent()
-		}
-	}
-}
-
-func until(now, future time.Time) time.Duration {
-	if !future.After(now) {
-		return 0
-	}
-	return future.Sub(now)
-}
-
-func (v *Verifier) waitForActiveRefresh() {
-	v.refreshMu.Lock()
-	call := v.active
-	v.refreshMu.Unlock()
-	if call != nil {
-		<-call.done
-	}
-}
-
-// Close cancels and joins owned work and releases the JWKS connection pool.
-func (v *Verifier) Close() {
-	if v == nil {
-		return
-	}
-	v.lifecycleMu.Lock()
-	state := v.state
-	if state == lifecycleClosed {
-		v.lifecycleMu.Unlock()
-		return
-	}
-	if state == lifecycleNew {
-		v.state = lifecycleClosed
-	}
-	done := v.runDone
-	v.lifecycleMu.Unlock()
-
-	v.cancel()
-	if state == lifecycleRunning {
-		<-done
-	} else {
-		v.waitForActiveRefresh()
-	}
-	v.closeOnce.Do(func() {
-		v.client.close()
-		if v.unregisterAge != nil {
-			v.unregisterAge()
-		}
-	})
-	v.lifecycleMu.Lock()
-	v.state = lifecycleClosed
-	v.lifecycleMu.Unlock()
 }

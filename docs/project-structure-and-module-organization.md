@@ -79,6 +79,7 @@ packages. There is no reserved empty `api/proto/`, `migrations/`, `queries/`, or
 | `internal/infra/http/` (`package httpx`) | HTTP mapping, router, middleware, Problem responses | SQL, database repositories, business decisions |
 | `internal/infra/httpclient/` (`OUTBOUND_HTTP=bounded`) | outbound fixed-authority transport safety, correlation enforcement, retry mechanism, and lifecycle | provider auth, concrete trust selection, retry eligibility, error mapping, or business policy |
 | `internal/infra/grpcclient/` (`GRPC=enabled`) | bounded shared connections, correlation-policy enforcement, resolver metadata sanitization, and connection lifecycle seam | provider auth, concrete trust selection, operation deadlines or retries, generated-client ownership, or readiness policy |
+| `internal/infra/oidcjwt/` (`AUTHN=oidc-jwt`) | inbound caller identity: OIDC trust bootstrap, JWKS lifecycle, token admission, and the HTTP and gRPC authentication adapters | authorization, roles, tenant policy, sessions, user provisioning, or any decision past who the caller is |
 | `internal/infra/postgres/` | pool, concrete repositories, query mapping | HTTP behavior, migration execution, and business policy |
 | `internal/infra/postgresmigrate/` | Goose lifecycle, source/state admission, lock, and migration result metadata | service startup, domain policy, and production rollback commands |
 | `internal/infra/telemetry/` | OpenTelemetry/Prometheus SDK setup and exporters | feature policy |
@@ -277,7 +278,7 @@ observed.
 | order Postgres adapter | `internal/infra/postgres/orders_repository.go` |
 | create orders table | `migrations/000001_orders_create.sql` with Goose `Up` and `Down` sections |
 | order sqlc operations | `internal/infra/postgres/queries/orders.sql` |
-| request authentication middleware | `internal/infra/http/middleware_authentication.go` |
+| service-owned request middleware | `internal/infra/http/middleware_<name>.go` (with `AUTHN=oidc-jwt`, caller authentication is already owned by `internal/infra/oidcjwt/`) |
 | Stripe outbound client | `internal/infra/stripe/client.go` |
 | order DB integration proof | `test/orders_integration_test.go` |
 | order-processing worker | `cmd/order-worker/main.go` |

@@ -1,3 +1,22 @@
+// The crossing from configuration to transport: does newGRPCRuntime hand grpcx
+// what the configuration actually says, and does it thread through what the
+// composition root owns?
+//
+// Four cases are TLS, because loading a certificate pair is the one step here
+// that can fail at startup rather than at build. The rest drive a real server
+// over bufconn, since the observability policy and the service and policy
+// bindings are only observable in what an RPC produces — a mapped field asserted
+// against the struct would pass while the value reached nothing.
+//
+// One case is the exception and asserts against the struct on purpose.
+// Behavioral cases can only see a bound they vary, so none of them notices a
+// bound dropped from the mapping altogether; that is what
+// TestGRPCServerConfigFillsEveryTransportBound asks, from the target side.
+//
+// internal/infra/grpc owns whether each transport policy behaves; this file owns
+// only whether bootstrap selected it. That the two owners of the bounds agree on
+// which values are legal is internal/infra/grpc/config_parity_test.go.
+
 package bootstrap
 
 import (
@@ -13,6 +32,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -118,7 +138,7 @@ func TestNewGRPCRuntimeMapsObservabilityPolicy(t *testing.T) {
 
 			var output bytes.Buffer
 			log := slog.New(slog.NewJSONHandler(&output, nil))
-			connection, server := startGRPCRuntimeConnection(t, cfg, log)
+			connection, server := startGRPCRuntimeConnection(t, cfg, log, grpcRuntimeBindings{})
 			healthClient := healthgrpc.NewHealthClient(connection)
 			spansBefore := len(spanRecorder.Ended())
 
@@ -150,6 +170,36 @@ func TestNewGRPCRuntimeMapsObservabilityPolicy(t *testing.T) {
 				)
 			}
 		})
+	}
+}
+
+// TestGRPCServerConfigFillsEveryTransportBound asks the mapping question from
+// the target side, which is what makes it survive a bound nobody remembered to
+// name here. Every [grpcx.Config] field is filled from configuration, so one
+// still at its zero value after mapping a section that sets every knob means
+// either grpcServerConfig dropped it or this test's source never set its origin
+// — and both need the same look.
+//
+// Naming each field instead would go on passing the day a tenth bound is added.
+// internal/infra/grpc/config_parity_test.go asks the neighbouring question,
+// whether the values internal/config accepts are ones grpcx will still build.
+func TestGRPCServerConfigFillsEveryTransportBound(t *testing.T) {
+	t.Parallel()
+
+	source := grpcRuntimeTestConfig().GRPC.Server
+	source.AccessLogHealthChecks = true
+	source.AccessLogSlowThreshold = 250 * time.Millisecond
+	source.TelemetryHealthChecks = true
+
+	mapped := reflect.ValueOf(grpcServerConfig(source))
+	for index := range mapped.NumField() {
+		if mapped.Field(index).IsZero() {
+			t.Errorf(
+				"grpcx.Config.%s is zero after mapping: either grpcServerConfig does "+
+					"not set it, or this test's source does not set its origin",
+				mapped.Type().Field(index).Name,
+			)
+		}
 	}
 }
 
@@ -240,14 +290,14 @@ func TestNewGRPCRuntimeRejectsUint32OverflowingTransportBounds(t *testing.T) {
 	}{
 		{
 			name:  "concurrent streams",
-			field: "grpc.server.max_concurrent_streams",
+			field: "max concurrent streams",
 			mutate: func(cfg *config.Config) {
 				cfg.GRPC.Server.MaxConcurrentStreams = overflow
 			},
 		},
 		{
 			name:  "header list bytes",
-			field: "grpc.server.max_header_list_bytes",
+			field: "max header list bytes",
 			mutate: func(cfg *config.Config) {
 				cfg.GRPC.Server.MaxHeaderListBytes = overflow
 			},
@@ -286,11 +336,10 @@ func TestNewGRPCRuntimeThreadsServicePolicyBindings(t *testing.T) {
 	cfg.GRPC.Server.TransportSecurity = "plaintext"
 	cfg.GRPC.Server.AllowPlaintext = true
 	var policyCalled atomic.Bool
-	server, err := newGRPCRuntime(
+	connection, _ := startGRPCRuntimeConnection(
+		t,
 		cfg,
 		slog.New(slog.DiscardHandler),
-		telemetry.New(),
-		nil,
 		grpcRuntimeBindings{
 			UnaryPolicy: []grpc.UnaryServerInterceptor{
 				func(
@@ -305,33 +354,10 @@ func TestNewGRPCRuntimeThreadsServicePolicyBindings(t *testing.T) {
 			},
 		},
 	)
-	if err != nil {
-		t.Fatalf("newGRPCRuntime() error = %v", err)
-	}
 
-	listener := bufconn.Listen(1 << 20)
-	serveDone := make(chan error, 1)
-	go func() { serveDone <- server.Serve(listener) }()
-	connection, err := grpc.NewClient(
-		"passthrough:///bootstrap-policy-test",
-		grpc.WithContextDialer(func(context.Context, string) (net.Conn, error) {
-			return listener.Dial()
-		}),
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-	)
-	if err != nil {
-		_ = server.Close()
-		t.Fatalf("grpc.NewClient() error = %v", err)
-	}
-	t.Cleanup(func() {
-		_ = connection.Close()
-		_ = server.Close()
-		if err := <-serveDone; err != nil {
-			t.Errorf("Server.Serve() error = %v", err)
-		}
-	})
-
-	_, err = healthgrpc.NewHealthClient(connection).Check(
+	// The policy answers before the health handler, so the served health status
+	// the harness publishes is not what this asserts.
+	_, err := healthgrpc.NewHealthClient(connection).Check(
 		t.Context(),
 		&healthgrpc.HealthCheckRequest{},
 	)
@@ -391,14 +417,20 @@ func writeTestTLSFile(t *testing.T, name string, contents []byte) string {
 	return path
 }
 
+// startGRPCRuntimeConnection builds the runtime from cfg and bindings, serves it
+// over bufconn, and registers teardown. It is the only place in this file that
+// stands a bootstrap-built server up; a test that needs an RPC to observe what
+// bootstrap selected composes this rather than retyping the listen/dial/cleanup
+// block.
 func startGRPCRuntimeConnection(
 	t *testing.T,
 	cfg config.Config,
 	log *slog.Logger,
+	bindings grpcRuntimeBindings,
 ) (*grpc.ClientConn, *grpcx.Server) {
 	t.Helper()
 
-	server, err := newGRPCRuntime(cfg, log, telemetry.New(), nil, grpcRuntimeBindings{})
+	server, err := newGRPCRuntime(cfg, log, telemetry.New(), nil, bindings)
 	if err != nil {
 		t.Fatalf("newGRPCRuntime() error = %v", err)
 	}
@@ -408,7 +440,7 @@ func startGRPCRuntimeConnection(
 	serveDone := make(chan error, 1)
 	go func() { serveDone <- server.Serve(listener) }()
 	connection, err := grpc.NewClient(
-		"passthrough:///bootstrap-observability-test",
+		"passthrough:///bootstrap-grpc-test",
 		grpc.WithContextDialer(func(context.Context, string) (net.Conn, error) {
 			return listener.Dial()
 		}),

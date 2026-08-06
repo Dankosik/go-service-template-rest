@@ -1,13 +1,19 @@
+// Correlation trust boundary, wire half: of the sources that can put a reserved
+// key on an outgoing RPC, does only what PropagationPolicy selected actually
+// arrive at the server?
+//
+// It runs real RPCs against a metadata-capture server, so it asserts what
+// crossed the boundary rather than which strip seam removed it.
+//
+// propagation_internal_test.go drives those seams directly, and the third
+// source — resolver-supplied address metadata — has its own three files
+// starting at resolver_internal_test.go.
+
 package grpcclient_test
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"errors"
-	"net"
-	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -20,9 +26,7 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/health"
 	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/metadata"
 )
@@ -102,14 +106,12 @@ func TestPropagationPoliciesApplyToUnaryAndStreamingRPCs(t *testing.T) {
 				parent.End()
 				t.Fatalf("Health.Check() error = %v", err)
 			}
-			assertWireCorrelation(
-				t,
-				<-unaryMetadata,
-				parentTraceID,
-				testCase.requestID,
-				testCase.wantTrace,
-				testCase.wantRequestID,
-			)
+			assertWireCorrelation(t, "unary", <-unaryMetadata, wireCorrelation{
+				traceID:       parentTraceID,
+				requestID:     testCase.requestID,
+				wantTrace:     testCase.wantTrace,
+				wantRequestID: testCase.wantRequestID,
+			})
 			if got := len(recorder.Ended()); got <= endedBefore {
 				parent.End()
 				t.Fatalf("ended spans after unary call = %d, want more than %d", got, endedBefore)
@@ -127,14 +129,12 @@ func TestPropagationPoliciesApplyToUnaryAndStreamingRPCs(t *testing.T) {
 				parent.End()
 				t.Fatalf("Health.Watch().Recv() error = %v", err)
 			}
-			assertWireCorrelation(
-				t,
-				<-streamMetadata,
-				parentTraceID,
-				testCase.requestID,
-				testCase.wantTrace,
-				testCase.wantRequestID,
-			)
+			assertWireCorrelation(t, "stream", <-streamMetadata, wireCorrelation{
+				traceID:       parentTraceID,
+				requestID:     testCase.requestID,
+				wantTrace:     testCase.wantTrace,
+				wantRequestID: testCase.wantRequestID,
+			})
 			cancelWatch()
 			parent.End()
 
@@ -197,7 +197,7 @@ func TestPropagationMetricAttributesExcludeCorrelationValues(t *testing.T) {
 }
 
 func TestPerRPCCredentialsCannotOverrideCorrelationMetadata(t *testing.T) {
-	serverCredentials, clientCredentials := grpcTestTLSCredentials(t)
+	serverCredentials, clientCredentials := testTLSCredentials(t)
 	unaryMetadata, streamMetadata, target := startMetadataCaptureServer(
 		t,
 		grpc.Creds(serverCredentials),
@@ -246,7 +246,13 @@ func TestPerRPCCredentialsCannotOverrideCorrelationMetadata(t *testing.T) {
 		parent.End()
 		t.Fatalf("Health.Check() error = %v", err)
 	}
-	assertWireCorrelation(t, <-unaryMetadata, traceID, requestID, true, true)
+	credentialCorrelation := wireCorrelation{
+		traceID:       traceID,
+		requestID:     requestID,
+		wantTrace:     true,
+		wantRequestID: true,
+	}
+	assertWireCorrelation(t, "credential unary", <-unaryMetadata, credentialCorrelation)
 
 	watchCtx, cancelWatch := context.WithCancel(ctx)
 	watch, err := client.Watch(
@@ -264,7 +270,7 @@ func TestPerRPCCredentialsCannotOverrideCorrelationMetadata(t *testing.T) {
 		parent.End()
 		t.Fatalf("Health.Watch().Recv() error = %v", err)
 	}
-	assertWireCorrelation(t, <-streamMetadata, traceID, requestID, true, true)
+	assertWireCorrelation(t, "credential stream", <-streamMetadata, credentialCorrelation)
 	cancelWatch()
 	parent.End()
 
@@ -329,92 +335,66 @@ func TestPerRPCCredentialsSecurityAndErrorFailuresReachNoHandler(t *testing.T) {
 	}
 }
 
+// wireCorrelation is what one RPC's metadata should carry once it reaches the
+// server: the caller's trace, its accepted request ID, or neither.
+type wireCorrelation struct {
+	traceID       string
+	requestID     string
+	wantTrace     bool
+	wantRequestID bool
+}
+
+// assertWireCorrelation owns the whole rule for what may cross this client's
+// trust boundary — the selected trace and request ID present, tracestate and
+// baggage always absent, and an unrelated header untouched — and returns the
+// traceparent it accepted.
+//
+// It is the only copy of that rule, so a fourth reserved key is one edit rather
+// than one per proof. label names the RPC for a caller driving more than one:
+// transparent_retry_test.go passes an attempt number and parses the returned
+// traceparent for the per-attempt span identity only it asks about.
 func assertWireCorrelation(
 	t *testing.T,
+	label string,
 	values metadata.MD,
-	traceID string,
-	requestID string,
-	wantTrace bool,
-	wantRequestID bool,
-) {
+	want wireCorrelation,
+) string {
 	t.Helper()
 
 	traceparents := values.Get("traceparent")
-	if (len(traceparents) == 1) != wantTrace {
-		t.Fatalf("traceparent = %v, want present %v", traceparents, wantTrace)
+	if (len(traceparents) == 1) != want.wantTrace {
+		t.Fatalf("%s traceparent = %v, want present %v", label, traceparents, want.wantTrace)
 	}
-	if wantTrace && len(traceparents[0]) < len(traceID) ||
-		wantTrace && traceparents[0][3:3+len(traceID)] != traceID {
-		t.Fatalf("traceparent = %v, want trace ID %s", traceparents, traceID)
+	traceparent := ""
+	if want.wantTrace {
+		traceparent = traceparents[0]
+		if !strings.Contains(traceparent, want.traceID) {
+			t.Fatalf("%s traceparent = %q, want trace ID %s", label, traceparent, want.traceID)
+		}
 	}
 	requestIDs := values.Get("x-request-id")
-	if (len(requestIDs) == 1) != wantRequestID {
-		t.Fatalf("x-request-id = %v, want present %v", requestIDs, wantRequestID)
+	if (len(requestIDs) == 1) != want.wantRequestID {
+		t.Fatalf("%s x-request-id = %v, want present %v", label, requestIDs, want.wantRequestID)
 	}
-	if wantRequestID && requestIDs[0] != requestID {
-		t.Fatalf("x-request-id = %v, want %q", requestIDs, requestID)
+	if want.wantRequestID && requestIDs[0] != want.requestID {
+		t.Fatalf("%s x-request-id = %v, want %q", label, requestIDs, want.requestID)
 	}
 	for _, forbidden := range []string{"tracestate", "baggage"} {
 		if got := values.Get(forbidden); len(got) != 0 {
-			t.Fatalf("%s = %v, want absent", forbidden, got)
+			t.Fatalf("%s %s = %v, want absent", label, forbidden, got)
 		}
 	}
 	if got := values.Get("authorization"); len(got) != 1 || got[0] != "Bearer retained" {
-		t.Fatalf("authorization = %v, want retained", got)
+		t.Fatalf("%s authorization = %v, want retained", label, got)
 	}
+	return traceparent
 }
 
-func startMetadataCaptureServer(
-	t *testing.T,
-	serverOptions ...grpc.ServerOption,
-) (<-chan metadata.MD, <-chan metadata.MD, string) {
-	t.Helper()
-
-	unaryMetadata := make(chan metadata.MD, 1)
-	streamMetadata := make(chan metadata.MD, 1)
-	serverOptions = append(serverOptions,
-		grpc.UnaryInterceptor(func(
-			ctx context.Context,
-			request any,
-			_ *grpc.UnaryServerInfo,
-			handler grpc.UnaryHandler,
-		) (any, error) {
-			incoming, _ := metadata.FromIncomingContext(ctx)
-			unaryMetadata <- incoming.Copy()
-			return handler(ctx, request)
-		}),
-		grpc.StreamInterceptor(func(
-			service any,
-			stream grpc.ServerStream,
-			_ *grpc.StreamServerInfo,
-			handler grpc.StreamHandler,
-		) error {
-			incoming, _ := metadata.FromIncomingContext(stream.Context())
-			streamMetadata <- incoming.Copy()
-			return handler(service, stream)
-		}),
-	)
-	server := grpc.NewServer(serverOptions...)
-	healthServer := health.NewServer()
-	healthServer.SetServingStatus("", healthgrpc.HealthCheckResponse_SERVING)
-	healthgrpc.RegisterHealthServer(server, healthServer)
-
-	listener, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("net.Listen() error = %v", err)
-	}
-	serveDone := make(chan error, 1)
-	go func() { serveDone <- server.Serve(listener) }()
-	t.Cleanup(func() {
-		server.Stop()
-		if err := <-serveDone; err != nil && !errors.Is(err, grpc.ErrServerStopped) {
-			t.Errorf("Server.Serve() error = %v", err)
-		}
-	})
-
-	return unaryMetadata, streamMetadata, "passthrough:///" + listener.Addr().String()
-}
-
+// livePerRPCCredentials is field for field the staticPerRPCCredentials that
+// propagation_internal_test.go declares. Neither is a variant of the other: that
+// file is package grpcclient and this one is grpcclient_test, so an unexported
+// type cannot cross between them. The names differ only to say which side of the
+// boundary each drives — this one reaches a real server, that one a seam.
 type livePerRPCCredentials struct {
 	values          map[string]string
 	err             error
@@ -430,28 +410,6 @@ func (c livePerRPCCredentials) GetRequestMetadata(
 
 func (c livePerRPCCredentials) RequireTransportSecurity() bool {
 	return c.requireSecurity
-}
-
-func grpcTestTLSCredentials( //nolint:ireturn // grpc-go exposes transport credentials as an interface.
-	t *testing.T,
-) (credentials.TransportCredentials, credentials.TransportCredentials) {
-	t.Helper()
-
-	certificateSource := httptest.NewTLSServer(http.NotFoundHandler())
-	serverCertificate := certificateSource.TLS.Certificates[0]
-	leafCertificate := certificateSource.Certificate()
-	certificateSource.Close()
-
-	roots := x509.NewCertPool()
-	roots.AddCert(leafCertificate)
-	return credentials.NewTLS(&tls.Config{
-			Certificates: []tls.Certificate{serverCertificate},
-			MinVersion:   tls.VersionTLS12,
-		}), credentials.NewTLS(&tls.Config{
-			RootCAs:    roots,
-			ServerName: "example.com",
-			MinVersion: tls.VersionTLS12,
-		})
 }
 
 func assertGRPCMetricsDoNotContain(

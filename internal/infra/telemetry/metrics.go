@@ -19,13 +19,26 @@ type Metrics struct {
 const (
 	// serverMeterName owns the instruments the HTTP chain records itself, as
 	// opposed to the ones otelhttp derives from the request.
-	serverMeterName     = "service.http.server"
-	grpcServerMeterName = "service.grpc.server"
+	serverMeterName = "service.http.server"
 
 	activeRequestsInstrument = "http.server.active_requests"
 	shedRequestsInstrument   = "http.server.shed_requests"
-	activeRPCsInstrument     = "rpc.server.active_requests"
-	shedRPCsInstrument       = "rpc.server.shed_requests"
+)
+
+// The gRPC admission signals are exported because two other builds emit or
+// assert on the same series and must not spell them again: the local benchmark
+// server in examples/grpc-reference-service, which stands in for this package,
+// and internal/infra/grpc's benchmark composition proof. A renamed series is a
+// broken dashboard, and a copy renamed on one side alone is one nobody notices.
+const (
+	GRPCServerMeterName = "service.grpc.server"
+
+	ActiveRPCsInstrument = "rpc.server.active_requests"
+	ShedRPCsInstrument   = "rpc.server.shed_requests"
+
+	ActiveRPCsDescription = "RPCs currently executing a handler, against the grpc.server.max_concurrent_rpcs limit."
+	ShedRPCsDescription   = "RPCs rejected before running a handler because the process RPC limit was reached."
+	RPCsUnit              = "{rpc}"
 )
 
 // ServerLoad is what the request path records about its own admission control.
@@ -60,12 +73,12 @@ func (m *Metrics) ServerLoad() ServerLoad {
 // GRPCServerLoad builds the admission-control instruments for business RPCs.
 func (m *Metrics) GRPCServerLoad() ServerLoad {
 	return m.serverLoad(
-		grpcServerMeterName,
-		activeRPCsInstrument,
-		shedRPCsInstrument,
-		"RPCs currently executing a handler, against the grpc.server.max_concurrent_rpcs limit.",
-		"RPCs rejected before running a handler because the process RPC limit was reached.",
-		"{rpc}",
+		GRPCServerMeterName,
+		ActiveRPCsInstrument,
+		ShedRPCsInstrument,
+		ActiveRPCsDescription,
+		ShedRPCsDescription,
+		RPCsUnit,
 	)
 }
 

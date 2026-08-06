@@ -88,13 +88,13 @@ func TestWorkerWaitForHandlersPreservesTerminalError(t *testing.T) {
 
 func TestWorkerDrainRejectsMessageAlreadyReturnedByFetch(t *testing.T) {
 	consumer := &gatedConsumer{fetchStarted: make(chan struct{}), batch: make(chan jetstream.MessageBatch, 1)}
-	sig, err := newSignals(Observability{}, RoleWorker, func() bool { return false })
+	sig, err := newTelemetry(Observability{}, RoleWorker, func() bool { return false })
 	if err != nil {
-		t.Fatalf("newSignals() error = %v", err)
+		t.Fatalf("newTelemetry() error = %v", err)
 	}
 	t.Cleanup(sig.close)
 	w := &Worker{
-		client:   &Client{signals: sig},
+		client:   &Client{telemetry: sig},
 		cfg:      WorkerConfig{MaxConcurrency: 1},
 		consumer: consumer,
 		handler: func(context.Context, Message) error {

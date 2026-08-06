@@ -1,5 +1,3 @@
-// Package grpcclient owns construction of bounded, instrumented native gRPC
-// client connections.
 package grpcclient
 
 import (
@@ -23,6 +21,13 @@ const (
 )
 
 // Config contains the fixed target and finite per-call transport bounds.
+//
+// MaxHeaderListBytes is the uint32 grpc-go asks for, where the server adapter in
+// internal/infra/grpc takes the same bound as an int. The difference follows the
+// caller: that Config is filled from a configuration file, so it takes the int
+// the file parses to and proves the conversion once on the way in, while these
+// bounds come from [DefaultConfig] in Go source, where the narrower type is the
+// check.
 type Config struct {
 	Target                 string
 	MaxHeaderListBytes     uint32
@@ -54,23 +59,8 @@ type Options struct {
 // semantics.
 func New(cfg Config, options Options) (*grpc.ClientConn, error) {
 	target := strings.TrimSpace(cfg.Target)
-	if target == "" {
-		return nil, errors.New("build gRPC client: target is required")
-	}
-	if options.TransportCredentials == nil {
-		return nil, errors.New("build gRPC client: transport credentials are required")
-	}
-	if cfg.MaxHeaderListBytes == 0 {
-		return nil, errors.New("build gRPC client: max header list bytes must be positive")
-	}
-	if cfg.MaxReceiveMessageBytes <= 0 {
-		return nil, errors.New("build gRPC client: max receive message bytes must be positive")
-	}
-	if cfg.MaxSendMessageBytes <= 0 {
-		return nil, errors.New("build gRPC client: max send message bytes must be positive")
-	}
-	if !options.Propagation.valid() {
-		return nil, errors.New("build gRPC client: propagation policy is invalid")
+	if err := validateConfig(target, cfg, options); err != nil {
+		return nil, err
 	}
 
 	meterProvider := options.MeterProvider
@@ -106,4 +96,29 @@ func New(cfg Config, options Options) (*grpc.ClientConn, error) {
 		return nil, fmt.Errorf("build gRPC client connection: %w", err)
 	}
 	return connection, nil
+}
+
+// validateConfig proves the trust and bounds New is about to hand grpc-go, so
+// the construction below reads as one uninterrupted sequence. target arrives
+// already trimmed because New dials that value rather than cfg.Target.
+func validateConfig(target string, cfg Config, options Options) error {
+	if target == "" {
+		return errors.New("build gRPC client: target is required")
+	}
+	if options.TransportCredentials == nil {
+		return errors.New("build gRPC client: transport credentials are required")
+	}
+	if cfg.MaxHeaderListBytes == 0 {
+		return errors.New("build gRPC client: max header list bytes must be positive")
+	}
+	if cfg.MaxReceiveMessageBytes <= 0 {
+		return errors.New("build gRPC client: max receive message bytes must be positive")
+	}
+	if cfg.MaxSendMessageBytes <= 0 {
+		return errors.New("build gRPC client: max send message bytes must be positive")
+	}
+	if !options.Propagation.valid() {
+		return errors.New("build gRPC client: propagation policy is invalid")
+	}
+	return nil
 }

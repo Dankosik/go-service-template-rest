@@ -1,10 +1,18 @@
+// Server lifecycle and the error boundaries around it: does health follow
+// admission and drain, does Shutdown give up on a handler that ignores
+// cancellation, and does each boundary trust exactly the errors it should?
+//
+// The trust rules are proven twice on purpose — as units in interceptors_test.go
+// and here through a real server, because only the second shows what a caller
+// actually receives.
+
 package grpcx
 
 import (
 	"context"
 	"errors"
 	"math"
-	"net"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -12,11 +20,9 @@ import (
 	"github.com/example/go-service-template-rest/internal/reqctx"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials/insecure"
 	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
-	"google.golang.org/grpc/test/bufconn"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -45,134 +51,119 @@ func TestServerHealthPreservesStandardUnknownServiceStatus(t *testing.T) {
 	assertStatusCode(t, err, codes.NotFound)
 }
 
-func TestServerPolicyStatusBypassesHandlerErrorSanitization(t *testing.T) {
-	handlerCalled := false
-	register := func(registrar grpc.ServiceRegistrar) {
-		registerTestUnaryService(registrar, testUnaryService{
-			call: func(context.Context, *emptypb.Empty) (*emptypb.Empty, error) {
-				handlerCalled = true
-				return &emptypb.Empty{}, nil
-			},
+// policyBoundaryCase is the contrast the policy error boundary exists to draw:
+// a status the policy chose reaches the caller intact, and anything else becomes
+// a sanitized INTERNAL. Both RPC kinds run the same two rows, because the
+// boundary is one rule and the kinds differ only in how the caller drives them.
+type policyBoundaryCase struct {
+	name       string
+	policyErr  error
+	wantCode   codes.Code
+	wantDetail string
+}
+
+func TestServerPolicyErrorBoundary(t *testing.T) {
+	for _, testCase := range []policyBoundaryCase{
+		{
+			name:       "chosen status is service-owned output",
+			policyErr:  status.Error(codes.Unauthenticated, "authentication required"),
+			wantCode:   codes.Unauthenticated,
+			wantDetail: "authentication required",
+		},
+		{
+			name:       "raw error is sanitized",
+			policyErr:  errors.New("authentication dependency credential=secret"),
+			wantCode:   codes.Internal,
+			wantDetail: "request failed",
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			handlerCalled := false
+			register := func(registrar grpc.ServiceRegistrar) {
+				registerUnaryTestService(registrar, testUnaryFullMethod,
+					func(context.Context, *emptypb.Empty) (*emptypb.Empty, error) {
+						handlerCalled = true
+						return &emptypb.Empty{}, nil
+					})
+			}
+			_, connection := startTestServerWithOptions(t, testServerConfig(), register, Options{
+				UnaryPolicy: []grpc.UnaryServerInterceptor{
+					func(
+						context.Context,
+						any,
+						*grpc.UnaryServerInfo,
+						grpc.UnaryHandler,
+					) (any, error) {
+						return nil, testCase.policyErr
+					},
+				},
+			})
+
+			err := connection.Invoke(
+				t.Context(),
+				testUnaryFullMethod,
+				&emptypb.Empty{},
+				&emptypb.Empty{},
+			)
+			assertStatusCode(t, err, testCase.wantCode)
+			if detail := status.Convert(err).Message(); detail != testCase.wantDetail {
+				t.Fatalf("policy error detail = %q, want %q", detail, testCase.wantDetail)
+			}
+			if handlerCalled {
+				t.Fatal("rejecting policy entered the business handler")
+			}
 		})
 	}
-	_, connection := startTestServerWithOptions(t, testServerConfig(), register, Options{
-		UnaryPolicy: []grpc.UnaryServerInterceptor{
-			func(
-				context.Context,
-				any,
-				*grpc.UnaryServerInfo,
-				grpc.UnaryHandler,
-			) (any, error) {
-				return nil, status.Error(codes.Unauthenticated, "authentication required")
-			},
-		},
-	})
-
-	err := connection.Invoke(
-		t.Context(),
-		testUnaryFullMethod,
-		&emptypb.Empty{},
-		&emptypb.Empty{},
-	)
-	assertStatusCode(t, err, codes.Unauthenticated)
-	if detail := status.Convert(err).Message(); detail != "authentication required" {
-		t.Fatalf("policy status detail = %q, want authentication required", detail)
-	}
-	if handlerCalled {
-		t.Fatal("authentication policy entered the business handler")
-	}
 }
 
-func TestServerStreamingPolicyStatusBypassesHandlerErrorSanitization(t *testing.T) {
-	_, connection := startTestServerWithOptions(t, testServerConfig(), nil, Options{
-		StreamingPolicy: []grpc.StreamServerInterceptor{
-			func(
-				any,
-				grpc.ServerStream,
-				*grpc.StreamServerInfo,
-				grpc.StreamHandler,
-			) error {
-				return status.Error(codes.PermissionDenied, "stream access denied")
-			},
+func TestServerStreamingPolicyErrorBoundary(t *testing.T) {
+	for _, testCase := range []policyBoundaryCase{
+		{
+			name:       "chosen status is service-owned output",
+			policyErr:  status.Error(codes.PermissionDenied, "stream access denied"),
+			wantCode:   codes.PermissionDenied,
+			wantDetail: "stream access denied",
 		},
-	})
-	healthClient := healthgrpc.NewHealthClient(connection)
+		{
+			name:       "raw error is sanitized",
+			policyErr:  errors.New("authorization dependency credential=secret"),
+			wantCode:   codes.Internal,
+			wantDetail: "request failed",
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			_, connection := startTestServerWithOptions(t, testServerConfig(), nil, Options{
+				StreamPolicy: []grpc.StreamServerInterceptor{
+					func(
+						any,
+						grpc.ServerStream,
+						*grpc.StreamServerInfo,
+						grpc.StreamHandler,
+					) error {
+						return testCase.policyErr
+					},
+				},
+			})
+			healthClient := healthgrpc.NewHealthClient(connection)
 
-	stream, err := healthClient.Watch(t.Context(), &healthgrpc.HealthCheckRequest{})
-	if err == nil {
-		_, err = stream.Recv()
-	}
-	assertStatusCode(t, err, codes.PermissionDenied)
-	if detail := status.Convert(err).Message(); detail != "stream access denied" {
-		t.Fatalf("streaming policy status detail = %q, want stream access denied", detail)
-	}
-}
-
-func TestServerSanitizesRawPolicyErrors(t *testing.T) {
-	register := func(registrar grpc.ServiceRegistrar) {
-		registerTestUnaryService(registrar, testUnaryService{
-			call: func(context.Context, *emptypb.Empty) (*emptypb.Empty, error) {
-				return &emptypb.Empty{}, nil
-			},
+			stream, err := healthClient.Watch(t.Context(), &healthgrpc.HealthCheckRequest{})
+			if err == nil {
+				_, err = stream.Recv()
+			}
+			assertStatusCode(t, err, testCase.wantCode)
+			if detail := status.Convert(err).Message(); detail != testCase.wantDetail {
+				t.Fatalf("streaming policy error detail = %q, want %q", detail, testCase.wantDetail)
+			}
 		})
-	}
-	_, connection := startTestServerWithOptions(t, testServerConfig(), register, Options{
-		UnaryPolicy: []grpc.UnaryServerInterceptor{
-			func(
-				context.Context,
-				any,
-				*grpc.UnaryServerInfo,
-				grpc.UnaryHandler,
-			) (any, error) {
-				return nil, errors.New("authentication dependency credential=secret")
-			},
-		},
-	})
-
-	err := connection.Invoke(
-		t.Context(),
-		testUnaryFullMethod,
-		&emptypb.Empty{},
-		&emptypb.Empty{},
-	)
-	assertStatusCode(t, err, codes.Internal)
-	if detail := status.Convert(err).Message(); detail != "request failed" {
-		t.Fatalf("policy error detail = %q, want sanitized detail", detail)
-	}
-}
-
-func TestServerSanitizesRawStreamingPolicyErrors(t *testing.T) {
-	_, connection := startTestServerWithOptions(t, testServerConfig(), nil, Options{
-		StreamingPolicy: []grpc.StreamServerInterceptor{
-			func(
-				any,
-				grpc.ServerStream,
-				*grpc.StreamServerInfo,
-				grpc.StreamHandler,
-			) error {
-				return errors.New("authorization dependency credential=secret")
-			},
-		},
-	})
-	healthClient := healthgrpc.NewHealthClient(connection)
-
-	stream, err := healthClient.Watch(t.Context(), &healthgrpc.HealthCheckRequest{})
-	if err == nil {
-		_, err = stream.Recv()
-	}
-	assertStatusCode(t, err, codes.Internal)
-	if detail := status.Convert(err).Message(); detail != "request failed" {
-		t.Fatalf("streaming policy error detail = %q, want sanitized detail", detail)
 	}
 }
 
 func TestServerSanitizesUntrustedHandlerStatus(t *testing.T) {
 	register := func(registrar grpc.ServiceRegistrar) {
-		registerTestUnaryService(registrar, testUnaryService{
-			call: func(context.Context, *emptypb.Empty) (*emptypb.Empty, error) {
+		registerUnaryTestService(registrar, testUnaryFullMethod,
+			func(context.Context, *emptypb.Empty) (*emptypb.Empty, error) {
 				return nil, status.Error(codes.PermissionDenied, "dependency credential=secret")
-			},
-		})
+			})
 	}
 	_, connection := startTestServer(t, testServerConfig(), register)
 
@@ -191,27 +182,37 @@ func TestServerSanitizesUntrustedHandlerStatus(t *testing.T) {
 func TestServerCorrelationReturnsAcceptedRequestID(t *testing.T) {
 	observed := make(chan string, 2)
 	register := func(registrar grpc.ServiceRegistrar) {
-		registerTestUnaryService(registrar, testUnaryService{
-			call: func(ctx context.Context, _ *emptypb.Empty) (*emptypb.Empty, error) {
+		registerUnaryTestService(registrar, testUnaryFullMethod,
+			func(ctx context.Context, _ *emptypb.Empty) (*emptypb.Empty, error) {
 				observed <- reqctx.RequestID(ctx)
 				return &emptypb.Empty{}, nil
-			},
-		})
+			})
 	}
 	_, connection := startTestServer(t, testServerConfig(), register)
 
 	for _, testCase := range []struct {
-		name      string
-		candidate string
-		want      string
+		name       string
+		candidates []string
+		want       string
 	}{
-		{name: "accepted", candidate: "request_123", want: "request_123"},
-		{name: "replaced", candidate: "user@example.com"},
+		{name: "accepted", candidates: []string{"request_123"}, want: "request_123"},
+		{name: "replaced", candidates: []string{"user@example.com"}},
+		{name: "absent"},
+		{
+			// Two values would make the accepted identifier depend on an
+			// ordering the caller controls, so neither is a candidate.
+			name:       "duplicated",
+			candidates: []string{"request_123", "request_456"},
+		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
+			pairs := make([]string, 0, 2*len(testCase.candidates))
+			for _, candidate := range testCase.candidates {
+				pairs = append(pairs, requestIDMetadataKey, candidate)
+			}
 			ctx := metadata.NewOutgoingContext(
 				t.Context(),
-				metadata.Pairs(requestIDMetadataKey, testCase.candidate),
+				metadata.Pairs(pairs...),
 			)
 			var header metadata.MD
 			if err := connection.Invoke(
@@ -233,8 +234,8 @@ func TestServerCorrelationReturnsAcceptedRequestID(t *testing.T) {
 			if testCase.want != "" && got[0] != testCase.want {
 				t.Fatalf("response request ID = %q, want %q", got[0], testCase.want)
 			}
-			if testCase.want == "" && got[0] == testCase.candidate {
-				t.Fatalf("invalid request ID %q was echoed", got[0])
+			if testCase.want == "" && slices.Contains(testCase.candidates, got[0]) {
+				t.Fatalf("unaccepted request ID %q was echoed", got[0])
 			}
 			if handlerRequestID := <-observed; handlerRequestID != got[0] {
 				t.Fatalf("handler request ID = %q, want %q", handlerRequestID, got[0])
@@ -248,14 +249,13 @@ func TestServerShutdownForcesBlockedRPCOnCanceledBudget(t *testing.T) {
 	handlerDone := make(chan struct{})
 	var enteredOnce sync.Once
 	register := func(registrar grpc.ServiceRegistrar) {
-		registerTestUnaryService(registrar, testUnaryService{
-			call: func(ctx context.Context, _ *emptypb.Empty) (*emptypb.Empty, error) {
+		registerUnaryTestService(registrar, testUnaryFullMethod,
+			func(ctx context.Context, _ *emptypb.Empty) (*emptypb.Empty, error) {
 				enteredOnce.Do(func() { close(entered) })
 				<-ctx.Done()
 				close(handlerDone)
 				return nil, ctx.Err()
-			},
-		})
+			})
 	}
 	server, connection := startTestServer(t, testServerConfig(), register)
 
@@ -292,14 +292,13 @@ func TestServerShutdownReturnsWhenHandlerIgnoresCancellation(t *testing.T) {
 	defer releaseHandler()
 
 	register := func(registrar grpc.ServiceRegistrar) {
-		registerTestUnaryService(registrar, testUnaryService{
-			call: func(context.Context, *emptypb.Empty) (*emptypb.Empty, error) {
+		registerUnaryTestService(registrar, testUnaryFullMethod,
+			func(context.Context, *emptypb.Empty) (*emptypb.Empty, error) {
 				close(entered)
 				<-release
 				close(handlerDone)
 				return &emptypb.Empty{}, nil
-			},
-		})
+			})
 	}
 	server, connection := startTestServer(t, testServerConfig(), register)
 
@@ -385,144 +384,5 @@ func assertHealthStatus(
 	}
 	if got := response.GetStatus(); got != want {
 		t.Fatalf("Health.Check() status = %s, want %s", got, want)
-	}
-}
-
-func testServerConfig() Config {
-	return Config{
-		MaxConcurrentRPCs:          4,
-		MaxConcurrentStreams:       4,
-		MaxHeaderListBytes:         16 << 10,
-		MaxReceiveMessageBytes:     4 << 20,
-		MaxSendMessageBytes:        4 << 20,
-		AccessLogSuccessSampleRate: 1,
-	}
-}
-
-func startTestServer(
-	t *testing.T,
-	cfg Config,
-	register RegisterService,
-) (*Server, *grpc.ClientConn) {
-	t.Helper()
-
-	return startTestServerWithOptions(t, cfg, register, Options{})
-}
-
-func startTestServerWithOptions(
-	t *testing.T,
-	cfg Config,
-	register RegisterService,
-	options Options,
-) (*Server, *grpc.ClientConn) {
-	t.Helper()
-
-	services := append([]RegisterService(nil), options.Services...)
-	if register != nil {
-		services = append(services, register)
-	}
-	options.Services = services
-	server, err := NewServer(cfg, options)
-	if err != nil {
-		t.Fatalf("NewServer() error = %v", err)
-	}
-	listener := bufconn.Listen(1 << 20)
-	serveDone := make(chan error, 1)
-	go func() {
-		serveDone <- server.Serve(listener)
-	}()
-
-	connection, err := grpc.NewClient(
-		"passthrough:///grpcx-test",
-		grpc.WithContextDialer(func(context.Context, string) (net.Conn, error) {
-			return listener.Dial()
-		}),
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-	)
-	if err != nil {
-		if closeErr := server.Close(); closeErr != nil {
-			t.Errorf("Server.Close() after client setup failure = %v", closeErr)
-		}
-		_ = listener.Close()
-		t.Fatalf("grpc.NewClient() error = %v", err)
-	}
-
-	t.Cleanup(func() {
-		if err := connection.Close(); err != nil {
-			t.Errorf("ClientConn.Close() error = %v", err)
-		}
-		if err := server.Close(); err != nil {
-			t.Errorf("Server.Close() error = %v", err)
-		}
-		if err := <-serveDone; err != nil {
-			t.Errorf("Server.Serve() error = %v", err)
-		}
-	})
-
-	return server, connection
-}
-
-const testUnaryFullMethod = "/grpcx.test.Service/Call"
-
-type testUnaryServiceServer interface {
-	Call(ctx context.Context, request *emptypb.Empty) (*emptypb.Empty, error)
-}
-
-type testUnaryService struct {
-	call func(context.Context, *emptypb.Empty) (*emptypb.Empty, error)
-}
-
-func (s testUnaryService) Call(ctx context.Context, request *emptypb.Empty) (*emptypb.Empty, error) {
-	return s.call(ctx, request)
-}
-
-func registerTestUnaryService( //nolint:dupl // Manual descriptors intentionally mirror generated unary handlers.
-	registrar grpc.ServiceRegistrar,
-	service testUnaryServiceServer,
-) {
-	registrar.RegisterService(&grpc.ServiceDesc{
-		ServiceName: "grpcx.test.Service",
-		HandlerType: (*testUnaryServiceServer)(nil),
-		Methods: []grpc.MethodDesc{
-			{
-				MethodName: "Call",
-				Handler: func(
-					implementation any,
-					ctx context.Context,
-					decode func(any) error,
-					interceptor grpc.UnaryServerInterceptor,
-				) (any, error) {
-					request := new(emptypb.Empty)
-					if err := decode(request); err != nil {
-						return nil, err
-					}
-					service, ok := implementation.(testUnaryServiceServer)
-					if !ok {
-						return nil, errors.New("test service implementation has unexpected type")
-					}
-					handler := func(ctx context.Context, decoded any) (any, error) {
-						typedRequest, ok := decoded.(*emptypb.Empty)
-						if !ok {
-							return nil, errors.New("test request has unexpected type")
-						}
-						return service.Call(ctx, typedRequest)
-					}
-					if interceptor == nil {
-						return handler(ctx, request)
-					}
-					return interceptor(ctx, request, &grpc.UnaryServerInfo{
-						Server:     implementation,
-						FullMethod: testUnaryFullMethod,
-					}, handler)
-				},
-			},
-		},
-	}, service)
-}
-
-func assertStatusCode(t *testing.T, err error, want codes.Code) {
-	t.Helper()
-	if got := status.Code(err); got != want {
-		t.Fatalf("status code = %s, want %s (error %v)", got, want, err)
 	}
 }

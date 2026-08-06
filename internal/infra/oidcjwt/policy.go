@@ -3,22 +3,66 @@ package oidcjwt
 import (
 	"errors"
 	"net/netip"
-	"net/url"
 	"slices"
 	"strings"
 	"time"
 )
 
+// Fixed capability policy — the half of this file that a deployment cannot
+// change, as against [Policy] below, which is entirely what a deployment
+// supplies. Two things named policy live here for that reason: this block is the
+// envelope, and that type is the trust values inside it.
+//
+// These are deliberately constants rather than configuration: a provider that
+// could widen the accepted algorithm, the size caps, or the staleness limit
+// could weaken authentication from outside the service. They are collected here,
+// rather than beside each consumer, so the whole trust envelope can be read in
+// one place; docs/authentication.md publishes the same values to operators. The
+// consumers are elsewhere — the timing values below are read by lifecycle.go and
+// refresh.go, the size caps by token.go, keyset.go, and provider.go — so a
+// change to one is read against its consumer rather than its neighbours here.
 const (
-	MaxTokenBytes       = 8 << 10
-	MaxProviderBody     = 1 << 20
-	MaxJWKEntries       = 100
-	AllowedAlgorithm    = "RS256"
-	ClockSkew           = 30 * time.Second
-	ProviderTimeout     = 5 * time.Second
-	RefreshInterval     = 5 * time.Minute
-	MaxKeySetAge        = 15 * time.Minute
-	RefreshCooldown     = 30 * time.Second
+	// MaxTokenBytes bounds the credential before any parsing. Access tokens with
+	// ordinary claim sets are well under 2 KiB, so this leaves room for large
+	// provider claims while keeping an oversized header cheap to reject.
+	MaxTokenBytes = 8 << 10
+	// MaxProviderBody bounds a Discovery or JWKS response body. It is enforced
+	// both by the HTTP client and again after reading, so a provider that
+	// ignores the transport limit still cannot grow the parse.
+	MaxProviderBody = 1 << 20
+	// MaxJWKEntries bounds how many JWK entries one key set may declare, which
+	// bounds the RSA parsing a single refresh can be made to do.
+	MaxJWKEntries = 100
+	// AllowedAlgorithm is the only accepted signature algorithm, in the protected
+	// header and in JWK metadata alike. A single value is the point: with nothing
+	// to negotiate there is no algorithm substitution to defend against.
+	AllowedAlgorithm = "RS256"
+	// ClockSkew is the allowance applied to exp, iat, and nbf in both directions.
+	// It absorbs ordinary drift between the provider's clock and this host
+	// without extending a token's life in any way an operator would notice.
+	ClockSkew = 30 * time.Second
+	// ProviderTimeout bounds one Discovery or JWKS request, both as the response
+	// header timeout and as the whole-request budget. Startup spends at most two
+	// of these before failing closed.
+	ProviderTimeout = 5 * time.Second
+	// RefreshInterval is the scheduled refresh cadence on the success path. It is
+	// deliberately one third of MaxKeySetAge, so a healthy provider replaces the
+	// set three times over before it could go stale and a single missed refresh
+	// never reaches requests. Changing either value without the other changes
+	// how much provider outage the service absorbs.
+	RefreshInterval = 5 * time.Minute
+	// MaxKeySetAge is how long a completely validated key set stays usable
+	// without replacement. Past it, verification and readiness both fail closed,
+	// because a key revoked at the provider can no longer be observed here.
+	MaxKeySetAge = 15 * time.Minute
+	// RefreshCooldown rate-limits the token-driven refresh, so a stream of
+	// unknown key ids from an attacker cannot turn into provider load. It doubles
+	// as the retry backoff after a failed scheduled refresh: recovery is retried
+	// at this cadence rather than waiting out another RefreshInterval, which is
+	// what lets a short outage heal well inside MaxKeySetAge.
+	RefreshCooldown = 30 * time.Second
+	// providerHeaderLimit bounds response headers from the provider. It is
+	// unexported because no caller outside the provider client can act on it.
 	providerHeaderLimit = 32 << 10
 )
 
@@ -29,28 +73,49 @@ type Policy struct {
 	trustedProxies []netip.Prefix
 }
 
+// PolicyInput carries the configured trust values one deployment holds.
+//
+// It is a struct rather than positional parameters because every field is a
+// string, so the pair most worth protecting — issuer and audience — would
+// transpose and still compile. The exhaustruct include entry for this type in
+// .golangci.yml is what preserves the one property positional parameters gave
+// for free: a field added here fails lint at every production call site that
+// does not set it, which today is the composition root in cmd/service and is the
+// one that decides what a deployment actually runs with. Remove this type from
+// that entry and a forgotten call site becomes a zero value at an authentication
+// boundary instead of a failed build.
+//
+// Test call sites are exempt, because that config excludes exhaustruct from
+// _test.go repository-wide. That is the right trade here: a test that omits a
+// new field is stating it does not vary that value, while a composition root
+// that omits one is shipping it unset.
+type PolicyInput struct {
+	Issuer            string
+	Audience          string
+	TrustedProxyCIDRs string
+}
+
 // NewPolicy validates and copies the complete trust policy.
-func NewPolicy(issuer, audience, trustedProxyCIDRs string) (Policy, error) {
-	issuer = strings.TrimSpace(issuer)
-	audience = strings.TrimSpace(audience)
-	parsedIssuer, err := url.Parse(issuer)
-	if err != nil ||
-		!parsedIssuer.IsAbs() ||
-		!strings.EqualFold(parsedIssuer.Scheme, "https") ||
-		parsedIssuer.Host == "" ||
-		parsedIssuer.Hostname() == "" ||
-		parsedIssuer.Opaque != "" ||
-		parsedIssuer.User != nil ||
-		parsedIssuer.RawQuery != "" ||
-		parsedIssuer.ForceQuery ||
-		parsedIssuer.Fragment != "" {
+//
+// The issuer is held to validProviderURL, the same shape every URL this package
+// will fetch from must have. One owner for that shape inside this package is
+// deliberate: the issuer and the discovered JWKS URI are both provider-supplied
+// endpoints, so a constraint added for one is a constraint the other needs too.
+//
+// internal/config's validateAuthnConfig restates these rules so a bad value
+// fails at configuration load instead of at authn startup. validProviderURL owns
+// why that copy cannot be removed and what holds the two sides to one answer.
+func NewPolicy(input PolicyInput) (Policy, error) {
+	issuer := strings.TrimSpace(input.Issuer)
+	audience := strings.TrimSpace(input.Audience)
+	if !validProviderURL(issuer) {
 		return Policy{}, errors.New("authn issuer must be an absolute HTTPS URL without user info, query, or fragment")
 	}
 	if audience == "" {
 		return Policy{}, errors.New("authn audience cannot be empty")
 	}
 
-	parts := strings.Split(trustedProxyCIDRs, ",")
+	parts := strings.Split(input.TrustedProxyCIDRs, ",")
 	trusted := make([]netip.Prefix, 0, len(parts))
 	seen := make(map[netip.Prefix]struct{})
 	for _, part := range parts {

@@ -14,6 +14,12 @@ const (
 	ResidentDeliveryLimit = 64 << 20
 
 	operationTimeout = 5 * time.Second
+	// maxHeaderValueBytes bounds every identity carried in a message header, so
+	// the encoded envelope stays inside HeaderLimitBytes.
+	maxHeaderValueBytes = 256
+	// maxRetryDelays keeps the configured delay sequence, and so a message's
+	// attempt budget, small enough to stay operator-legible.
+	maxRetryDelays = 9
 )
 
 var (
@@ -95,28 +101,45 @@ func ValidateWorkerConfig(cfg WorkerConfig, maxPayloadBytes int) error {
 	if subjectMatches(cfg.FilterSubject, cfg.DeadLetterSubject) {
 		return fmt.Errorf("%w: source filter and dead-letter subject overlap", ErrRejected)
 	}
-	if cfg.MaxConcurrency <= 0 || cfg.MaxDeliveryBytes <= 0 {
-		return fmt.Errorf("%w: worker concurrency and delivery bytes must be positive", ErrRejected)
+	if cfg.MaxConcurrency <= 0 {
+		return fmt.Errorf("%w: max concurrency must be positive, got %d", ErrRejected, cfg.MaxConcurrency)
+	}
+	if cfg.MaxDeliveryBytes <= 0 {
+		return fmt.Errorf("%w: max delivery bytes must be positive, got %d", ErrRejected, cfg.MaxDeliveryBytes)
 	}
 	if cfg.MaxDeliveryBytes < maxPayloadBytes+HeaderLimitBytes {
-		return fmt.Errorf("%w: delivery bound cannot contain the configured envelope", ErrRejected)
+		return fmt.Errorf(
+			"%w: max delivery bytes (%d) cannot contain the configured envelope (%d payload + %d header)",
+			ErrRejected, cfg.MaxDeliveryBytes, maxPayloadBytes, HeaderLimitBytes,
+		)
 	}
+	// Every concurrent handler can hold one whole delivery, so the worker's peak
+	// resident wire data is the product of the two.
 	if cfg.MaxConcurrency > ResidentDeliveryLimit/cfg.MaxDeliveryBytes {
-		return fmt.Errorf("%w: worker resident delivery bound exceeds %d bytes", ErrRejected, ResidentDeliveryLimit)
+		return fmt.Errorf(
+			"%w: max concurrency (%d) times max delivery bytes (%d) exceeds the %d byte resident limit",
+			ErrRejected, cfg.MaxConcurrency, cfg.MaxDeliveryBytes, ResidentDeliveryLimit,
+		)
 	}
 	if cfg.HandlerTimeout <= 0 {
-		return fmt.Errorf("%w: handler timeout must be positive", ErrRejected)
+		return fmt.Errorf("%w: handler timeout must be positive, got %s", ErrRejected, cfg.HandlerTimeout)
 	}
-	if len(cfg.RetryDelays) < 1 || len(cfg.RetryDelays) > 9 {
-		return fmt.Errorf("%w: retry delays must contain one to nine values", ErrRejected)
+	if len(cfg.RetryDelays) < 1 || len(cfg.RetryDelays) > maxRetryDelays {
+		return fmt.Errorf(
+			"%w: retry delays must contain one to %d values, got %d",
+			ErrRejected, maxRetryDelays, len(cfg.RetryDelays),
+		)
 	}
-	for _, delay := range cfg.RetryDelays {
+	for index, delay := range cfg.RetryDelays {
 		if delay <= 0 {
-			return fmt.Errorf("%w: retry delays must be positive", ErrRejected)
+			return fmt.Errorf("%w: retry delay %d must be positive, got %s", ErrRejected, index, delay)
 		}
 	}
 	if cfg.DeadLetterRetryDelay <= 0 {
-		return fmt.Errorf("%w: dead-letter retry delay must be positive", ErrRejected)
+		return fmt.Errorf(
+			"%w: dead-letter retry delay must be positive, got %s",
+			ErrRejected, cfg.DeadLetterRetryDelay,
+		)
 	}
 	return nil
 }

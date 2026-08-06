@@ -8,6 +8,30 @@ import (
 	"github.com/example/go-service-template-rest/internal/reqctx"
 )
 
+// TestRequestIDWireNamesAreOneName holds the invariant that lets four transport
+// adapters derive their spelling from this package instead of restating it: the
+// HTTP and gRPC forms must stay the same name, each in the casing its protocol
+// requires.
+func TestRequestIDWireNamesAreOneName(t *testing.T) {
+	t.Parallel()
+
+	if !strings.EqualFold(reqctx.RequestIDHeader, reqctx.RequestIDMetadataKey) {
+		t.Fatalf(
+			"RequestIDHeader = %q and RequestIDMetadataKey = %q are different names, want the same name in two casings",
+			reqctx.RequestIDHeader,
+			reqctx.RequestIDMetadataKey,
+		)
+	}
+	// gRPC lowercases metadata keys on the wire and matches them lowercased, so
+	// a key in any other casing silently fails to match. HTTP needs no
+	// equivalent check: net/http canonicalizes on both Get and Set, which is why
+	// RequestIDHeader may keep the "X-Request-ID" spelling the OpenAPI contract
+	// documents rather than Go's "X-Request-Id" canonical form.
+	if got := strings.ToLower(reqctx.RequestIDMetadataKey); got != reqctx.RequestIDMetadataKey {
+		t.Fatalf("RequestIDMetadataKey = %q, want lowercase %q for gRPC metadata", reqctx.RequestIDMetadataKey, got)
+	}
+}
+
 func TestContextWithAcceptedRequestID(t *testing.T) {
 	t.Parallel()
 

@@ -193,7 +193,7 @@ func runWorkerLifecycle(
 	}
 	if signalCtx.Err() == nil {
 		if triggerErr == nil {
-			triggerErr = fmt.Errorf("worker runtime stopped unexpectedly")
+			triggerErr = errors.New("worker runtime stopped unexpectedly")
 		}
 	}
 	healthSvc.StartDrain()
@@ -256,14 +256,14 @@ func parseLoadOptions(args []string) (config.LoadOptions, error) {
 	flags.Func("config", "path to base config file", func(value string) error {
 		configPath = strings.TrimSpace(value)
 		if configPath == "" {
-			return fmt.Errorf("config path cannot be empty")
+			return errors.New("config path cannot be empty")
 		}
 		return nil
 	})
 	flags.Func("config-overlay", "path to config overlay file (repeatable)", func(value string) error {
 		value = strings.TrimSpace(value)
 		if value == "" {
-			return fmt.Errorf("config overlay path cannot be empty")
+			return errors.New("config overlay path cannot be empty")
 		}
 		overlays = append(overlays, value)
 		return nil
@@ -272,7 +272,7 @@ func parseLoadOptions(args []string) (config.LoadOptions, error) {
 		return config.LoadOptions{}, fmt.Errorf("parse flags: %w", err)
 	}
 	if len(flags.Args()) != 0 {
-		return config.LoadOptions{}, fmt.Errorf("parse flags: unexpected positional arguments")
+		return config.LoadOptions{}, errors.New("parse flags: unexpected positional arguments")
 	}
 	return config.LoadOptions{ConfigPath: configPath, ConfigOverlays: overlays}, nil
 }

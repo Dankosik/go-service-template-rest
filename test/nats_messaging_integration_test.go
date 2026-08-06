@@ -1539,9 +1539,14 @@ func TestNATSWorkerMainRejectsEmptyHandler(t *testing.T) {
 	run := exec.CommandContext(t.Context(), binary)
 	run.Env = append(cleanMessagingEnvironment(os.Environ()),
 		"APP__APP__ENV=integration",
+		// profile:authn-oidc-jwt:start
+		// Trust configuration has no default, and config rejects both an unknown
+		// key and a missing required one, so the worker reaches its own handler
+		// assertion below only when these match the compiled-in profile exactly.
 		"APP__AUTHN__ISSUER=https://issuer.example.com",
 		"APP__AUTHN__AUDIENCE=https://api.example.com",
 		"APP__AUTHN__TRUSTED_PROXY_CIDRS=127.0.0.0/8",
+		// profile:authn-oidc-jwt:end
 		"APP__MESSAGING__ENABLED=true",
 		"APP__MESSAGING__URLS=nats://"+listener.Addr().String(),
 		"APP__MESSAGING__ALLOW_PLAINTEXT=true",

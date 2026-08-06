@@ -1,3 +1,10 @@
+// Transparent retry: when grpc-go replays an attempt without telling the caller,
+// does each attempt carry freshly injected correlation metadata rather than the
+// first attempt's copy?
+//
+// The peer is a hand-written HTTP/2 server because the retry has to be provoked
+// by a stream refusal that a grpc.Server will not produce on demand.
+
 package grpcclient_test
 
 import (
@@ -156,60 +163,39 @@ func assertTransparentRetryCorrelation(
 		t.Fatalf("distinct attempt span IDs = %d, want 2", len(spanIDs))
 	}
 
+	// What every attempt must carry is the same rule every other proof here
+	// checks, so assertWireCorrelation owns it; what only this proof asks is
+	// whether the two attempts named different parent spans, which needs the
+	// traceparent it accepted.
 	wireSpanIDs := make(map[trace.SpanID]struct{}, len(attempts))
 	for index, attempt := range attempts {
-		traceparents := attempt.Get("traceparent")
-		if (len(traceparents) == 1) != wantTrace {
-			t.Fatalf(
-				"attempt %d traceparent = %v, want present %v",
-				index+1,
-				traceparents,
-				wantTrace,
-			)
-		}
-		if wantTrace {
-			carrier := propagation.MapCarrier{"traceparent": traceparents[0]}
-			remote := trace.SpanContextFromContext(
-				propagation.TraceContext{}.Extract(context.Background(), carrier),
-			)
-			if remote.TraceID() != parentTraceID {
-				t.Fatalf(
-					"attempt %d propagated trace ID = %s, want %s",
-					index+1,
-					remote.TraceID(),
-					parentTraceID,
-				)
-			}
-			if _, ok := spanIDs[remote.SpanID()]; !ok {
-				t.Fatalf(
-					"attempt %d propagated parent span ID = %s, want a recorded attempt span",
-					index+1,
-					remote.SpanID(),
-				)
-			}
-			wireSpanIDs[remote.SpanID()] = struct{}{}
+		traceparent := assertWireCorrelation(
+			t,
+			fmt.Sprintf("attempt %d", index+1),
+			attempt,
+			wireCorrelation{
+				traceID:       parentTraceID.String(),
+				requestID:     requestID,
+				wantTrace:     wantTrace,
+				wantRequestID: wantRequestID,
+			},
+		)
+		if !wantTrace {
+			continue
 		}
 
-		requestIDs := attempt.Get("x-request-id")
-		if (len(requestIDs) == 1) != wantRequestID {
+		remote := trace.SpanContextFromContext(propagation.TraceContext{}.Extract(
+			context.Background(),
+			propagation.MapCarrier{"traceparent": traceparent},
+		))
+		if _, ok := spanIDs[remote.SpanID()]; !ok {
 			t.Fatalf(
-				"attempt %d x-request-id = %v, want present %v",
+				"attempt %d propagated parent span ID = %s, want a recorded attempt span",
 				index+1,
-				requestIDs,
-				wantRequestID,
+				remote.SpanID(),
 			)
 		}
-		if wantRequestID && requestIDs[0] != requestID {
-			t.Fatalf("attempt %d x-request-id = %v, want %q", index+1, requestIDs, requestID)
-		}
-		for _, forbidden := range []string{"tracestate", "baggage"} {
-			if got := attempt.Get(forbidden); len(got) != 0 {
-				t.Fatalf("attempt %d %s = %v, want absent", index+1, forbidden, got)
-			}
-		}
-		if got := attempt.Get("authorization"); len(got) != 1 || got[0] != "Bearer retained" {
-			t.Fatalf("attempt %d authorization = %v, want retained", index+1, got)
-		}
+		wireSpanIDs[remote.SpanID()] = struct{}{}
 	}
 	if wantTrace && len(wireSpanIDs) != 2 {
 		t.Fatalf("distinct propagated attempt parents = %d, want 2", len(wireSpanIDs))
@@ -237,10 +223,7 @@ type transparentRetryPeer struct {
 func startTransparentRetryPeer(t *testing.T) *transparentRetryPeer {
 	t.Helper()
 
-	listener, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("transparent retry peer Listen() error = %v", err)
-	}
+	listener := listenLoopback(t)
 	attempts := make(chan []metadata.MD, 1)
 	done := make(chan error, 1)
 	go func() {

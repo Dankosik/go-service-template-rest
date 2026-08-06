@@ -342,9 +342,9 @@ func (s *recordingJetStream) PublishMsg(_ context.Context, msg *nats.Msg, _ ...j
 
 func unitClient(t *testing.T, broker jetstream.JetStream, role Role) *Client {
 	t.Helper()
-	sig, err := newSignals(Observability{Logger: slog.New(slog.DiscardHandler)}, role, func() bool { return false })
+	sig, err := newTelemetry(Observability{Logger: slog.New(slog.DiscardHandler)}, role, func() bool { return false })
 	if err != nil {
-		t.Fatalf("newSignals() error = %v", err)
+		t.Fatalf("newTelemetry() error = %v", err)
 	}
 	t.Cleanup(sig.close)
 	cfg := testConfig()
@@ -352,7 +352,7 @@ func unitClient(t *testing.T, broker jetstream.JetStream, role Role) *Client {
 	client := &Client{
 		cfg:         cfg,
 		js:          broker,
-		signals:     sig,
+		telemetry:   sig,
 		events:      make(chan connectionEvent, 1),
 		reconnected: make(chan struct{}, 1),
 		terminal:    make(chan error, 1),

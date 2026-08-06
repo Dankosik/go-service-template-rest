@@ -1,25 +1,27 @@
+// What New builds: a connection with finite per-call bounds that performs no
+// network I/O, refuses missing trust, and verifies the server's hostname.
+//
+// The correlation trust boundary is the other half of this package and starts at
+// propagation_test.go.
+
 package grpcclient_test
 
 import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"errors"
 	"fmt"
-	"net"
-	"net/http"
-	"net/http/httptest"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/example/go-service-template-rest/internal/infra/grpc/grpctest"
 	"github.com/example/go-service-template-rest/internal/infra/grpcclient"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/health"
 	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -240,35 +242,15 @@ func TestClientEnforcesReceivedMetadataLimit(t *testing.T) {
 }
 
 func TestClientTLSVerifiesServerHostname(t *testing.T) {
-	certificateSource := httptest.NewTLSServer(http.NotFoundHandler())
-	serverCertificate := certificateSource.TLS.Certificates[0]
-	leafCertificate := certificateSource.Certificate()
-	certificateSource.Close()
-
+	serverCertificate, leafCertificate := testTLSMaterial(t)
 	serverCredentials := credentials.NewTLS(&tls.Config{
 		Certificates: []tls.Certificate{serverCertificate},
 		MinVersion:   tls.VersionTLS12,
 	})
-	listener, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("net.Listen() error = %v", err)
-	}
-	server := grpc.NewServer(grpc.Creds(serverCredentials))
-	healthServer := health.NewServer()
-	healthServer.SetServingStatus("", healthgrpc.HealthCheckResponse_SERVING)
-	healthgrpc.RegisterHealthServer(server, healthServer)
-	serveDone := make(chan error, 1)
-	go func() { serveDone <- server.Serve(listener) }()
-	t.Cleanup(func() {
-		server.Stop()
-		if err := <-serveDone; err != nil && !errors.Is(err, grpc.ErrServerStopped) {
-			t.Errorf("Server.Serve() error = %v", err)
-		}
-	})
+	target := startTestServer(t, registerServingHealth, grpc.Creds(serverCredentials))
 
 	roots := x509.NewCertPool()
 	roots.AddCert(leafCertificate)
-	target := "passthrough:///" + listener.Addr().String()
 
 	validConnection, err := grpcclient.New(
 		grpcclient.DefaultConfig(target),
@@ -314,79 +296,16 @@ func TestClientTLSVerifiesServerHostname(t *testing.T) {
 
 const testPayloadFullMethod = "/grpcclient.test.PayloadService/Call"
 
-type payloadServiceServer interface {
-	Call(ctx context.Context, request *wrapperspb.BytesValue) (*wrapperspb.BytesValue, error)
-}
-
-type payloadServiceFunc func(
-	context.Context,
-	*wrapperspb.BytesValue,
-) (*wrapperspb.BytesValue, error)
-
-func (f payloadServiceFunc) Call(
-	ctx context.Context,
-	request *wrapperspb.BytesValue,
-) (*wrapperspb.BytesValue, error) {
-	return f(ctx, request)
-}
-
+// startPayloadServer serves one unary method carrying a bytes payload, which is
+// what the per-call size and metadata bounds above need in order to be exceeded.
 func startPayloadServer(
 	t *testing.T,
-	call payloadServiceFunc,
+	call func(context.Context, *wrapperspb.BytesValue) (*wrapperspb.BytesValue, error),
 	serverOptions ...grpc.ServerOption,
 ) string {
 	t.Helper()
 
-	listener, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("net.Listen() error = %v", err)
-	}
-	server := grpc.NewServer(serverOptions...)
-	server.RegisterService(&grpc.ServiceDesc{
-		ServiceName: "grpcclient.test.PayloadService",
-		HandlerType: (*payloadServiceServer)(nil),
-		Methods: []grpc.MethodDesc{
-			{
-				MethodName: "Call",
-				Handler: func(
-					implementation any,
-					ctx context.Context,
-					decode func(any) error,
-					interceptor grpc.UnaryServerInterceptor,
-				) (any, error) {
-					request := new(wrapperspb.BytesValue)
-					if err := decode(request); err != nil {
-						return nil, err
-					}
-					service, ok := implementation.(payloadServiceServer)
-					if !ok {
-						return nil, errors.New("test payload service implementation has unexpected type")
-					}
-					handler := func(ctx context.Context, decoded any) (any, error) {
-						typedRequest, ok := decoded.(*wrapperspb.BytesValue)
-						if !ok {
-							return nil, errors.New("test payload request has unexpected type")
-						}
-						return service.Call(ctx, typedRequest)
-					}
-					if interceptor == nil {
-						return handler(ctx, request)
-					}
-					return interceptor(ctx, request, &grpc.UnaryServerInfo{
-						Server:     implementation,
-						FullMethod: testPayloadFullMethod,
-					}, handler)
-				},
-			},
-		},
-	}, call)
-	serveDone := make(chan error, 1)
-	go func() { serveDone <- server.Serve(listener) }()
-	t.Cleanup(func() {
-		server.Stop()
-		if err := <-serveDone; err != nil && !errors.Is(err, grpc.ErrServerStopped) {
-			t.Errorf("Server.Serve() error = %v", err)
-		}
-	})
-	return "passthrough:///" + listener.Addr().String()
+	return startTestServer(t, func(server *grpc.Server) {
+		grpctest.Register(server, grpctest.Unary(testPayloadFullMethod, call))
+	}, serverOptions...)
 }

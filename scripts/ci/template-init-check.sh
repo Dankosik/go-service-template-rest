@@ -936,6 +936,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "grpc
 	)
 assert "gRPC enabled initialization removed server adapter" path_present "${grpc_checkout}/internal/infra/grpc"
 assert "gRPC enabled initialization removed client adapter" path_present "${grpc_checkout}/internal/infra/grpcclient"
+assert "gRPC enabled initialization removed test descriptors" path_present "${grpc_checkout}/internal/infra/grpc/grpctest"
 assert "gRPC enabled initialization removed Buf config" file_present "${grpc_checkout}/buf.yaml"
 assert "gRPC enabled initialization removed protobuf workflow" file_present "${grpc_checkout}/scripts/proto.sh"
 assert "gRPC enabled initialization removed bootstrap wiring" file_present "${grpc_checkout}/cmd/service/internal/bootstrap/startup_grpc.go"

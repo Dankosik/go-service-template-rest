@@ -25,16 +25,48 @@ var ErrInvalidEvent = errors.New("invalid outbox event")
 
 // Event is an immutable broker-neutral publication occurrence. Payload and
 // Metadata are stored and retried as these exact bytes.
+//
+// Every text field is required, must be valid UTF-8 without control
+// characters, and is limited to maxTextBytes; Payload is limited to
+// maxPayloadBytes, Metadata to maxMetadataBytes, and the whole stored envelope
+// to maxEnvelopeBytes. [Store.Append] rejects a violation with [ErrInvalidEvent]
+// before sending anything, and the stored CHECK constraints mirror the same
+// rules.
 type Event struct {
-	ID               string
-	Type             string
-	Source           string
-	Destination      string
-	Schema           string
-	OccurredAt       time.Time
-	Payload          json.RawMessage
-	Metadata         json.RawMessage
-	OrderingKey      string
+	// ID is the publication identity the broker and its consumers deduplicate
+	// on. It survives retry and redrive unchanged. Use [NewID] unless the
+	// feature already owns an identity with the same guarantee.
+	ID string
+	// Type names the occurrence for consumers, such as "order.updated".
+	Type string
+	// Source names the emitting service or bounded context.
+	Source string
+	// Destination is the broker address the adapter routes on — a NATS subject,
+	// a Kafka topic, an exchange. This package never interprets it; the
+	// [Publisher] implementation decides what it means.
+	Destination string
+	// Schema versions Payload's shape for consumers, such as "v1". The outbox
+	// neither parses nor validates Payload against it.
+	Schema string
+	// OccurredAt is when the domain event happened, not when it was published.
+	// It must be non-zero and UTC.
+	OccurredAt time.Time
+	// Payload is the exact JSON bytes to publish. They are stored and retried
+	// byte for byte and are never normalized through jsonb.
+	Payload json.RawMessage
+	// Metadata is exact JSON-object bytes travelling beside Payload, for
+	// correlation and trace context. Empty defaults to {}.
+	Metadata json.RawMessage
+	// OrderingKey groups events that must publish in sequence order, typically
+	// the aggregate id. Only the earliest unpublished sequence for a key is
+	// claimable, so a key's events never publish out of order. It must be set
+	// together with OrderingSequence, and an empty key opts out of ordering.
+	OrderingKey string
+	// OrderingSequence is this event's position within OrderingKey and must be
+	// positive and strictly above the key's retained high-water mark — take it
+	// from the aggregate's own revision, under the lock that serializes the
+	// domain mutation. A key therefore supports one writer at a time; a lower
+	// or equal sequence is rejected with [ErrOrderingSequence].
 	OrderingSequence int64
 }
 
@@ -55,7 +87,7 @@ func (e Event) Validate() error {
 		{name: "destination", value: e.Destination},
 		{name: "schema", value: e.Schema},
 	} {
-		if err := validateText(field.name, field.value, maxTextBytes); err != nil {
+		if err := validateText(ErrInvalidEvent, field.name, field.value, maxTextBytes); err != nil {
 			return err
 		}
 	}
@@ -78,7 +110,7 @@ func (e Event) Validate() error {
 		return fmt.Errorf("%w: ordering key and sequence must be present together", ErrInvalidEvent)
 	}
 	if hasOrderingKey {
-		if err := validateText("ordering_key", e.OrderingKey, maxTextBytes); err != nil {
+		if err := validateText(ErrInvalidEvent, "ordering_key", e.OrderingKey, maxTextBytes); err != nil {
 			return err
 		}
 		if e.OrderingSequence < 1 {
@@ -101,19 +133,25 @@ func (e Event) withDefaults() Event {
 	return e
 }
 
-func validateText(name, value string, limit int) error {
+// validateText applies one text rule set under the sentinel its caller owns.
+// [Event.Validate] passes [ErrInvalidEvent], because the fault is in an
+// envelope being stored; the [Store] identity checks pass [ErrConfig], because
+// the fault is in the call rather than in any event. Keeping those apart is
+// what lets a caller tell a rejected event from a bad id, lease token, or error
+// class — ErrInvalidEvent means one Event failed Validate, and nothing else.
+func validateText(sentinel error, name, value string, limit int) error {
 	if value == "" {
-		return fmt.Errorf("%w: %s is required", ErrInvalidEvent, name)
+		return fmt.Errorf("%w: %s is required", sentinel, name)
 	}
 	if !utf8.ValidString(value) {
-		return fmt.Errorf("%w: %s must be valid UTF-8", ErrInvalidEvent, name)
+		return fmt.Errorf("%w: %s must be valid UTF-8", sentinel, name)
 	}
 	if len(value) > limit {
-		return fmt.Errorf("%w: %s is %d bytes, limit is %d", ErrInvalidEvent, name, len(value), limit)
+		return fmt.Errorf("%w: %s is %d bytes, limit is %d", sentinel, name, len(value), limit)
 	}
 	for _, r := range value {
 		if unicode.IsControl(r) {
-			return fmt.Errorf("%w: %s contains a control character", ErrInvalidEvent, name)
+			return fmt.Errorf("%w: %s contains a control character", sentinel, name)
 		}
 	}
 	return nil

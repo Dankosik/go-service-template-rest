@@ -22,6 +22,31 @@ var (
 	ErrRedriveConflict  = errors.New("outbox redrive audit conflict")
 )
 
+// Store owns every outbox statement, for three audiences. Feature code calls
+// only Append, inside the transaction that owns its domain mutation. The relay
+// owns Claim, the Mark and ScheduleRetry family, CleanupPublished, and Observe,
+// plus Get, which it uses to resolve a finalization the batch statement did not
+// report. Redrive, and Get again, are operator tooling.
+//
+// Get therefore has two callers with different needs: Relay.reconcilePublished
+// branches on both its error and the returned LeaseToken, so its error
+// semantics are relay behavior as well as operator ergonomics.
+//
+// The Mark family is split by disposition rather than by arity: the relay sorts
+// a batch into ordered and unordered claims once, in Relay.classify, and every
+// method below is reached already knowing which it holds. No method here
+// re-derives that split from the event it was handed.
+//
+// NewRelay does not mutate the Store it is given. When the relay's telemetry
+// differs from the store's, the relay works through a copy carrying its own
+// recorder, so a service that builds the two with different recorders keeps
+// Append on the store's and the relay's operations on the relay's.
+//
+// NewStore is the only constructor and it rejects a nil pool, so a store that
+// reached a caller has both fields. The remaining guards exist for the zero
+// value an exported type cannot prevent: every exported method opens with
+// valid(), so a method added later cannot admit a half-built Store, and there
+// is no rule to remember about which ones need it.
 type Store struct {
 	pool      *postgres.Pool
 	queries   *sqlcgen.Queries
@@ -112,6 +137,20 @@ func NewStore(pool *postgres.Pool, telemetry *Telemetry) (*Store, error) {
 	return &Store{pool: pool, queries: sqlcgen.New(pool.PGX()), telemetry: telemetry}, nil
 }
 
+// valid reports whether this Store came from NewStore. It is the one predicate
+// every exported method uses, so a method added later cannot accidentally admit
+// a half-built Store by testing only the field it happens to read.
+func (s *Store) valid() bool {
+	return s != nil && s.pool != nil && s.queries != nil
+}
+
+// errStoreRequired is what every exported method returns for a Store that never
+// came from NewStore. One message, so the guard reads the same everywhere and a
+// new method copies a line rather than inventing wording.
+func errStoreRequired() error {
+	return fmt.Errorf("%w: store is required", ErrConfig)
+}
+
 // Append stores every event in the transaction owned by the feature caller. It
 // never begins or commits a transaction itself.
 //
@@ -127,8 +166,11 @@ func NewStore(pool *postgres.Pool, telemetry *Telemetry) (*Store, error) {
 func (s *Store) Append(ctx context.Context, tx pgx.Tx, events ...Event) (err error) {
 	started := time.Now()
 	defer func() { s.recordOperation(ctx, "append", started, err) }()
-	if s == nil || s.pool == nil || tx == nil {
-		return fmt.Errorf("%w: store and transaction are required", ErrConfig)
+	if !s.valid() {
+		return errStoreRequired()
+	}
+	if tx == nil {
+		return fmt.Errorf("%w: transaction is required", ErrConfig)
 	}
 	if len(events) == 0 {
 		return nil
@@ -233,8 +275,8 @@ func newAppendColumns(events []Event) (appendColumns, error) {
 func (s *Store) Claim(ctx context.Context, leaseDuration time.Duration, batchSize int) (batch ClaimedBatch, err error) {
 	started := time.Now()
 	defer func() { s.recordClaim(ctx, batch, started, err) }()
-	if s == nil || s.queries == nil {
-		return ClaimedBatch{}, fmt.Errorf("%w: store is required", ErrConfig)
+	if !s.valid() {
+		return ClaimedBatch{}, errStoreRequired()
 	}
 	if leaseDuration <= 0 {
 		return ClaimedBatch{}, fmt.Errorf("%w: lease duration must be positive", ErrConfig)
@@ -263,35 +305,58 @@ func (s *Store) Claim(ctx context.Context, leaseDuration time.Duration, batchSiz
 			TotalAttemptCount: row.TotalAttemptCount,
 			Recovered:         row.RecoveryDue,
 		})
-		if row.RecoveryDue && s.telemetry != nil {
-			s.telemetry.RecordOperation(ctx, "recovery", "success", "none", time.Since(started))
+		if row.RecoveryDue {
+			// One recovered event, counted inside the claim that found it. The
+			// claim already owns the only duration either of them has.
+			s.telemetry.CountOperation(ctx, "recovery", outcomeSuccess, classNone)
 			s.telemetry.LogRecovery(ctx, row.ID, int(row.CycleAttemptCount))
 		}
 	}
 	return batch, nil
 }
 
-// MarkPublished finalizes one event. Unordered events normally finalize through
-// MarkPublishedBatch; this path also serves the ordered head advance and the
-// per-event reconciliation of a short batch write.
-func (s *Store) MarkPublished(ctx context.Context, token string, claim ClaimedEvent) (err error) {
+// The two single-event finalizations below exist for one caller,
+// Relay.reconcilePublished, resolving an event a batch statement did not
+// report. They look like one-event wrappers over the batch statements, and
+// deleting them as such would lose the signal they exist for: a batch statement
+// reports a missing id by omitting it from its result and returns a nil error,
+// so recordOperation classes the call a success. These return ErrLeaseLost
+// instead, which is what puts error.type="lost_lease" on the reconciliation's
+// outbox.relay.operations sample. Reconciliation is exactly where an operator
+// needs to see a lost lease, because the relay is about to stop over it.
+//
+// They are two methods rather than one that branches on the ordering key,
+// because the relay has already sorted the batch into ordered and unordered
+// claims before either can be reached — see Relay.classify. Re-deriving that
+// split here would be a second copy of the same predicate, and a relay that
+// ever routed on anything else would silently reach the wrong statement.
+
+// MarkUnorderedPublished finalizes one unordered event of a lease.
+func (s *Store) MarkUnorderedPublished(ctx context.Context, token, id string) (err error) {
 	started := time.Now()
 	defer func() { s.recordOperation(ctx, "mark_published", started, err) }()
-	if err := validateProgressIdentity(claim.Event.ID, token); err != nil {
+	if !s.valid() {
+		return errStoreRequired()
+	}
+	if err := validateProgressIdentity(id, token); err != nil {
 		return err
 	}
-	if claim.Event.OrderingKey == "" {
-		rows, err := s.queries.MarkOutboxPublished(ctx, sqlcgen.MarkOutboxPublishedParams{
-			ID: claim.Event.ID, LeaseToken: &token,
-		})
-		return progressResult("mark outbox published", rows, err)
-	}
+	rows, err := s.queries.MarkOutboxPublished(ctx, sqlcgen.MarkOutboxPublishedParams{
+		ID: id, LeaseToken: &token,
+	})
+	return progressResult("mark outbox published", rows, err)
+}
 
-	marked, err := s.markOrderedPublished(ctx, token, []OrderedDirective{{
-		ID:               claim.Event.ID,
-		OrderingKey:      claim.Event.OrderingKey,
-		OrderingSequence: claim.Event.OrderingSequence,
-	}})
+// MarkOrderedPublished finalizes one ordered event of a lease, advancing its
+// key's head. It routes through the same snapshot retry the batch statement
+// uses, so one directive costs up to orderedPublishSnapshots statements.
+func (s *Store) MarkOrderedPublished(ctx context.Context, token string, directive OrderedDirective) (err error) {
+	started := time.Now()
+	defer func() { s.recordOperation(ctx, "mark_published", started, err) }()
+	if !s.valid() {
+		return errStoreRequired()
+	}
+	marked, err := s.retryOrderedSnapshotConflicts(ctx, token, []OrderedDirective{directive})
 	if err != nil {
 		return err
 	}
@@ -307,6 +372,9 @@ func (s *Store) MarkPublished(ctx context.Context, token string, claim ClaimedEv
 func (s *Store) MarkPublishedBatch(ctx context.Context, token string, ids []string) (marked []string, err error) {
 	started := time.Now()
 	defer func() { s.recordOperation(ctx, "mark_published", started, err) }()
+	if !s.valid() {
+		return nil, errStoreRequired()
+	}
 	if err := validateBatchIdentity(token, ids); err != nil {
 		return nil, err
 	}
@@ -321,8 +389,12 @@ func (s *Store) MarkPublishedBatch(ctx context.Context, token string, ids []stri
 
 // MarkOrderedPublishedBatch finalizes every ordered event of one lease in a
 // single statement and reports the ids it finalized. Each one also advances its
-// key's head and unblocks that key's successor. A missing id means the lease no
-// longer owns that event, which the caller resolves against durable state.
+// key's head and unblocks that key's successor.
+//
+// A missing id means either that the lease no longer owns that event or that
+// its key was still snapshot-conflicted after the retry below. Both leave the
+// event's durable state unresolved here, so the caller resolves it per event
+// against durable state rather than assuming either outcome.
 func (s *Store) MarkOrderedPublishedBatch(
 	ctx context.Context,
 	token string,
@@ -330,20 +402,32 @@ func (s *Store) MarkOrderedPublishedBatch(
 ) (marked []string, err error) {
 	started := time.Now()
 	defer func() { s.recordOperation(ctx, "mark_published", started, err) }()
-	return s.markOrderedPublished(ctx, token, directives)
+	if !s.valid() {
+		return nil, errStoreRequired()
+	}
+	return s.retryOrderedSnapshotConflicts(ctx, token, directives)
 }
 
-// markOrderedPublished retries only the directives whose key had a committed
-// successor that the previous statement's snapshot could not yet see. A second
-// statement takes a fresh snapshot, so one retry resolves it.
-func (s *Store) markOrderedPublished(
+// orderedPublishSnapshots is how many snapshots the ordered finalization gets.
+// Each statement takes a fresh one, so a successor that was committed but still
+// invisible to the first is visible to the second, and one retry resolves it.
+//
+// Raising it raises the finalization budget the lease has to cover.
+// [ErrProgressUnknown] derives that worst case from this count and
+// reconcilePasses, and owns the derivation; state it there, not here.
+const orderedPublishSnapshots = 2
+
+// retryOrderedSnapshotConflicts sends the ordered finalization, then resends
+// only the directives whose key had a committed successor that the previous
+// statement's snapshot could not yet see.
+func (s *Store) retryOrderedSnapshotConflicts(
 	ctx context.Context,
 	token string,
 	directives []OrderedDirective,
 ) ([]string, error) {
 	var marked []string
-	for range 2 {
-		rows, err := s.markOrderedPublishedOnce(ctx, token, directives)
+	for range orderedPublishSnapshots {
+		rows, err := s.sendOrderedPublishBatch(ctx, token, directives)
 		if err != nil {
 			return marked, err
 		}
@@ -357,10 +441,16 @@ func (s *Store) markOrderedPublished(
 			break
 		}
 	}
+	// A directive still conflicted after both statements simply stays out of
+	// marked. The caller cannot tell it apart from a lost lease and resolves it
+	// per event against durable state, which ends in ErrProgressUnknown when
+	// that resolution also fails.
 	return marked, nil
 }
 
-func (s *Store) markOrderedPublishedOnce(
+// sendOrderedPublishBatch transposes the directives into the statement's column
+// arrays and runs it once, reporting each input's own outcome.
+func (s *Store) sendOrderedPublishBatch(
 	ctx context.Context,
 	token string,
 	directives []OrderedDirective,
@@ -369,9 +459,11 @@ func (s *Store) markOrderedPublishedOnce(
 	keys := make([]string, len(directives))
 	sequences := make([]int64, len(directives))
 	for index, directive := range directives {
-		if err := validateText("ordering_key", directive.OrderingKey, maxTextBytes); err != nil ||
-			directive.OrderingSequence < 1 {
-			return nil, fmt.Errorf("%w: ordered claim identity is invalid", ErrConfig)
+		if err := validateText(ErrConfig, "ordering_key", directive.OrderingKey, maxTextBytes); err != nil {
+			return nil, err
+		}
+		if directive.OrderingSequence < 1 {
+			return nil, fmt.Errorf("%w: ordering_sequence must be positive", ErrConfig)
 		}
 		ids[index] = directive.ID
 		keys[index] = directive.OrderingKey
@@ -416,6 +508,9 @@ func conflictedDirectives(
 func (s *Store) ScheduleRetryBatch(ctx context.Context, token string, retries []RetryDirective) (err error) {
 	started := time.Now()
 	defer func() { s.recordOperation(ctx, "schedule_retry", started, err) }()
+	if !s.valid() {
+		return errStoreRequired()
+	}
 	ids := make([]string, len(retries))
 	classes := make([]string, len(retries))
 	delays := make([]float64, len(retries))
@@ -444,6 +539,9 @@ func (s *Store) ScheduleRetryBatch(ctx context.Context, token string, retries []
 func (s *Store) MarkPoisonedBatch(ctx context.Context, token string, poisons []PoisonDirective) (err error) {
 	started := time.Now()
 	defer func() { s.recordOperation(ctx, "poison", started, err) }()
+	if !s.valid() {
+		return errStoreRequired()
+	}
 	ids := make([]string, len(poisons))
 	classes := make([]string, len(poisons))
 	for index, poison := range poisons {
@@ -463,7 +561,10 @@ func (s *Store) MarkPoisonedBatch(ctx context.Context, token string, poisons []P
 }
 
 func (s *Store) Get(ctx context.Context, id string) (Record, error) {
-	if err := validateText("id", id, maxTextBytes); err != nil {
+	if !s.valid() {
+		return Record{}, errStoreRequired()
+	}
+	if err := validateText(ErrConfig, "id", id, maxTextBytes); err != nil {
 		return Record{}, err
 	}
 	row, err := s.queries.GetOutboxEvent(ctx, id)
@@ -476,13 +577,22 @@ func (s *Store) Get(ctx context.Context, id string) (Record, error) {
 	return recordFromRow(row), nil
 }
 
+// Redrive releases one poisoned event for another delivery cycle, recording
+// auditID so a repeated call for the same audit id is idempotent.
+//
+// Unlike Append it owns its transaction, so its locking and audit-conflict
+// rules cannot be proven against a stubbed driver; TestPostgresOutboxRedrive in
+// test/postgres_outbox_integration_test.go is where its contract is exercised.
 func (s *Store) Redrive(ctx context.Context, id, auditID string) (err error) {
 	started := time.Now()
 	defer func() { s.recordOperation(ctx, "redrive", started, err) }()
-	if err := validateText("id", id, maxTextBytes); err != nil {
+	if !s.valid() {
+		return errStoreRequired()
+	}
+	if err := validateText(ErrConfig, "id", id, maxTextBytes); err != nil {
 		return err
 	}
-	if err := validateText("audit_id", auditID, maxTextBytes); err != nil {
+	if err := validateText(ErrConfig, "audit_id", auditID, maxTextBytes); err != nil {
 		return err
 	}
 
@@ -538,6 +648,9 @@ func (s *Store) Redrive(ctx context.Context, id, auditID string) (err error) {
 func (s *Store) CleanupPublished(ctx context.Context, retention time.Duration, batchSize int) (deleted int, err error) {
 	started := time.Now()
 	defer func() { s.recordOperation(ctx, "cleanup", started, err) }()
+	if !s.valid() {
+		return 0, errStoreRequired()
+	}
 	if retention <= 0 || batchSize < 1 || batchSize > math.MaxInt32 {
 		return 0, fmt.Errorf("%w: cleanup retention and batch size are invalid", ErrConfig)
 	}
@@ -554,8 +667,8 @@ func (s *Store) CleanupPublished(ctx context.Context, retention time.Duration, b
 func (s *Store) Observe(ctx context.Context) (observation StateObservation, err error) {
 	started := time.Now()
 	defer func() { s.recordOperation(ctx, "observe", started, err) }()
-	if s == nil || s.queries == nil {
-		return StateObservation{}, fmt.Errorf("%w: store is required", ErrConfig)
+	if !s.valid() {
+		return StateObservation{}, errStoreRequired()
 	}
 	state, err := s.queries.ObserveOutbox(ctx)
 	if err != nil {
@@ -600,63 +713,117 @@ func (s *Store) withTelemetry(telemetry *Telemetry) *Store {
 	return &Store{pool: s.pool, queries: s.queries, telemetry: telemetry}
 }
 
+// The nil check here and in recordOperation is for the receiver, not for the
+// recorder: a nil *Telemetry is already a working no-op, but these run from
+// deferred calls that a zero-value Store can reach before its entry-point guard
+// returns.
 func (s *Store) recordClaim(ctx context.Context, batch ClaimedBatch, started time.Time, err error) {
-	if s == nil || s.telemetry == nil {
+	if s == nil {
 		return
 	}
 	if err == nil && len(batch.Events) == 0 {
-		s.telemetry.RecordOperation(ctx, "claim", "empty", "none", time.Since(started))
+		s.telemetry.RecordOperation(ctx, "claim", "empty", classNone, time.Since(started))
 		return
 	}
 	s.recordOperation(ctx, "claim", started, err)
 }
 
-func (s *Store) recordOperation(ctx context.Context, operation string, started time.Time, err error) {
-	if s == nil || s.telemetry == nil {
-		return
-	}
-	outcome, errorType := operationOutcome(err), operationErrorType(err)
+// storeOutcome classes one store failure into the outcome and error class its
+// metric sample carries. It is the only producer of the lost-lease, validation,
+// and database classes, so TestErrorClassVocabularyIsBounded drives it rather
+// than restating those literals.
+//
+// Every statement in this file reaches PostgreSQL, so anything this switch does
+// not recognize is a database error. A new sentinel the store can distinguish
+// belongs here and in [boundedErrorType].
+func storeOutcome(err error) (outcome, errorClass string) {
 	switch {
+	case err == nil:
+		return outcomeSuccess, classNone
 	case errors.Is(err, ErrLeaseLost):
-		outcome, errorType = outcomeError, "lost_lease"
+		return outcomeError, classLostLease
 	case errors.Is(err, ErrInvalidEvent), errors.Is(err, ErrConfig), errors.Is(err, ErrOrderingSequence),
 		errors.Is(err, ErrRedriveRejected), errors.Is(err, ErrRedriveConflict):
-		outcome, errorType = "rejected", "validation"
+		return outcomeRejected, classValidation
+	default:
+		return outcomeError, classDatabase
 	}
-	s.telemetry.RecordOperation(ctx, operation, outcome, errorType, time.Since(started))
 }
 
-// eventFromClaimRow adopts the scanned payload and metadata rather than copying
-// them. pgx allocates a fresh slice per row for a bytea scanned into []byte
-// ([pgtype bytea scan]), so these bytes are already private to this event and a
-// second copy would double the per-event allocation of every claimed batch.
+func (s *Store) recordOperation(ctx context.Context, operation string, started time.Time, err error) {
+	if s == nil {
+		return
+	}
+	outcome, errorClass := storeOutcome(err)
+	s.telemetry.RecordOperation(ctx, operation, outcome, errorClass, time.Since(started))
+}
+
+// envelopeColumns is the set of columns every outbox row carries. It is a
+// struct rather than a parameter list because five of them are adjacent
+// strings: transposing source and destination at a call site would compile, and
+// only a test that asserts on those two exact values would notice.
+type envelopeColumns struct {
+	ID               string
+	Type             string
+	Source           string
+	Destination      string
+	Schema           string
+	OccurredAt       pgtype.Timestamptz
+	Payload          []byte
+	Metadata         []byte
+	OrderingKey      *string
+	OrderingSequence *int64
+}
+
+// storedEvent maps those columns into an Event. The claim projection and the
+// full row are separate generated types with the same columns, so this is the
+// one place that knows the mapping: an added Event field costs a field here and
+// one line at each call site instead of a second transposition block that can
+// silently drift from the first.
+//
+// It adopts the scanned payload and metadata rather than copying them. pgx
+// allocates a fresh slice per row for a bytea scanned into []byte ([pgtype
+// bytea scan]), so these bytes are already private to this event and a second
+// copy would double the per-event allocation of every claimed batch.
 //
 // [pgtype bytea scan]: https://pkg.go.dev/github.com/jackc/pgx/v5/pgtype#ByteaCodec
-func eventFromClaimRow(row sqlcgen.ClaimOutboxEventsRow) Event {
+func storedEvent(columns envelopeColumns) Event {
 	event := Event{
-		ID:          row.ID,
-		Type:        row.EventType,
-		Source:      row.Source,
-		Destination: row.Destination,
-		Schema:      row.SchemaName,
-		OccurredAt:  timeValue(row.OccurredAt),
-		Payload:     row.Payload,
-		Metadata:    row.Metadata,
+		ID:          columns.ID,
+		Type:        columns.Type,
+		Source:      columns.Source,
+		Destination: columns.Destination,
+		Schema:      columns.Schema,
+		OccurredAt:  timeValue(columns.OccurredAt),
+		Payload:     columns.Payload,
+		Metadata:    columns.Metadata,
 	}
-	if row.OrderingKey != nil {
-		event.OrderingKey = *row.OrderingKey
+	if columns.OrderingKey != nil {
+		event.OrderingKey = *columns.OrderingKey
 	}
-	if row.OrderingSequence != nil {
-		event.OrderingSequence = *row.OrderingSequence
+	if columns.OrderingSequence != nil {
+		event.OrderingSequence = *columns.OrderingSequence
 	}
 	return event
 }
 
+func eventFromClaimRow(row sqlcgen.ClaimOutboxEventsRow) Event {
+	return storedEvent(envelopeColumns{
+		ID: row.ID, Type: row.EventType, Source: row.Source, Destination: row.Destination,
+		Schema: row.SchemaName, OccurredAt: row.OccurredAt, Payload: row.Payload,
+		Metadata: row.Metadata, OrderingKey: row.OrderingKey, OrderingSequence: row.OrderingSequence,
+	})
+}
+
+// The identity checks below report [ErrConfig], not [ErrInvalidEvent]: an
+// empty id, lease token, or error class is a fault in the call rather than in
+// an envelope, and it is the caller — the relay or an operator tool — that has
+// to fix it. validateText owns the shared rules; see its comment for the split.
 func validateProgressIdentity(id, token string) error {
-	if err := validateText("id", id, maxTextBytes); err != nil {
+	if err := validateText(ErrConfig, "id", id, maxTextBytes); err != nil {
 		return err
 	}
-	if err := validateText("lease_token", token, maxTextBytes); err != nil {
+	if err := validateText(ErrConfig, "lease_token", token, maxTextBytes); err != nil {
 		return err
 	}
 	return nil
@@ -674,11 +841,13 @@ func validateBatchIdentity(token string, ids []string) error {
 	return nil
 }
 
+// maxErrorClassBytes bounds the stored error class. It is far below the general
+// text limit because the class is a metric label as well as a column, and its
+// values come from this package's own closed set.
+const maxErrorClassBytes = 64
+
 func validateErrorClass(value string) error {
-	if err := validateText("error_class", value, 64); err != nil {
-		return err
-	}
-	return nil
+	return validateText(ErrConfig, "error_class", value, maxErrorClassBytes)
 }
 
 func progressResult(operation string, rows int64, err error) error {
@@ -702,24 +871,12 @@ func batchProgressResult(operation string, rows int64, expected int, err error) 
 }
 
 func recordFromRow(row sqlcgen.OutboxEvent) Record {
-	event := Event{
-		ID:          row.ID,
-		Type:        row.EventType,
-		Source:      row.Source,
-		Destination: row.Destination,
-		Schema:      row.SchemaName,
-		OccurredAt:  timeValue(row.OccurredAt),
-		Payload:     row.Payload,
-		Metadata:    row.Metadata,
-	}
-	if row.OrderingKey != nil {
-		event.OrderingKey = *row.OrderingKey
-	}
-	if row.OrderingSequence != nil {
-		event.OrderingSequence = *row.OrderingSequence
-	}
 	record := Record{
-		Event:             event,
+		Event: storedEvent(envelopeColumns{
+			ID: row.ID, Type: row.EventType, Source: row.Source, Destination: row.Destination,
+			Schema: row.SchemaName, OccurredAt: row.OccurredAt, Payload: row.Payload,
+			Metadata: row.Metadata, OrderingKey: row.OrderingKey, OrderingSequence: row.OrderingSequence,
+		}),
 		CreatedAt:         timeValue(row.CreatedAt),
 		AvailableAt:       timeValue(row.AvailableAt),
 		CycleAttemptCount: int(row.CycleAttemptCount),

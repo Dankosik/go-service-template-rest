@@ -1,5 +1,19 @@
 //go:build integration
 
+// The gRPC transport as a shipped process: a generated service built from the
+// template, started, dialed over a real port, and stopped with SIGTERM.
+//
+// Everything here is proven in-process somewhere else. What only this file can
+// answer is whether the pieces still hold once they are separated by a binary
+// boundary and driven by environment variables: that the generated service turns
+// APP__GRPC__* into an endpoint reporting SERVING, that a request ID sent by
+// grpcclient.PropagationTrustedService comes back in the response metadata of a
+// real hop, and that SIGTERM ends the process through graceful shutdown rather
+// than the deadline.
+//
+// It is behind the integration tag because it compiles a service and needs a
+// database, so it does not belong in the edit loop.
+
 package integration_test
 
 import (

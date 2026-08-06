@@ -25,6 +25,12 @@ func reportFailure(stderr io.Writer, err error) {
 	_, _ = fmt.Fprintf(stderr, "outbox relay failed: error_class=%s\n", failureClass(err))
 }
 
+// failureClass is the complete operator-facing vocabulary for why this process
+// exited, and the only enumeration of it anywhere. Every error Relay.Run can
+// return has a case here; anything unmatched exits as "runtime", which is honest
+// but tells an operator nothing. A stop reason added to postgresoutbox therefore
+// belongs in this switch, in TestReportFailureIsBoundedAndSanitized, and in the
+// exit-class table in docs/postgres-transactional-outbox.md.
 func failureClass(err error) string {
 	switch {
 	case config.ErrorType(err) != config.ErrorTypeUnknown:
@@ -39,6 +45,12 @@ func failureClass(err error) string {
 		return "publisher_panic"
 	case errors.Is(err, postgresoutbox.ErrProgressUnknown):
 		return "progress_unknown"
+	// A lost lease stops the relay, and it is the ordinary way a lease that is
+	// too short or a second replica shows up. It reports the same class the
+	// outbox.relay.operations metric uses, so the exit line and the dashboard
+	// name one condition rather than two.
+	case errors.Is(err, postgresoutbox.ErrLeaseLost):
+		return "lost_lease"
 	default:
 		return "runtime"
 	}

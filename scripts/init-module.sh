@@ -644,6 +644,14 @@ if [[ "${source_checkout}" != true ]]; then
 		strip_profile grpc-reference-benchmark remove
 	fi
 
+	# internal/config/configtest exists for the parity tests that hold a runtime
+	# owner and internal/config to one answer. Both of those owners are
+	# removable, so with neither retained the package would ship with no importer
+	# at all.
+	if [[ "${grpc}" == "none" && "${authn}" == "none" ]]; then
+		rm -rf -- internal/config/configtest
+	fi
+
 	# Profile sources are the generator's own inputs. Every profile has consumed
 	# what it needs by now, so no generated service keeps them.
 	rm -rf -- scripts/profiles

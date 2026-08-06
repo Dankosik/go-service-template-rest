@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"math"
 	"net"
 	"os"
 	"os/signal"
@@ -17,6 +16,7 @@ import (
 	referencev1 "github.com/example/go-service-template-rest/examples/grpc-reference-service/internal/gen/proto/reference/v1"
 	"github.com/example/go-service-template-rest/internal/config"
 	grpcx "github.com/example/go-service-template-rest/internal/infra/grpc"
+	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/propagation"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
@@ -35,7 +35,7 @@ type benchmarkServerSettings struct {
 	maxConnections int
 }
 
-type benchmarkLoadRecorder struct {
+type otelLoadRecorder struct {
 	active metric.Int64UpDownCounter
 	shed   metric.Int64Counter
 }
@@ -80,7 +80,7 @@ func run(ctx context.Context, ready io.Writer) error {
 	tracerProvider := sdktrace.NewTracerProvider(sdktrace.WithSampler(sdktrace.NeverSample()))
 	defer shutdownProviders(ctx, meterProvider, tracerProvider)
 
-	load, err := newBenchmarkLoadRecorder(meterProvider)
+	load, err := newOTelLoadRecorder(meterProvider)
 	if err != nil {
 		return err
 	}
@@ -92,6 +92,9 @@ func run(ctx context.Context, ready io.Writer) error {
 			TracerProvider: tracerProvider,
 			Propagators:    propagation.TraceContext{},
 			Load:           load,
+			// Without these mappers the reference service's own limit errors
+			// reach the caller as INTERNAL; grpcreference.ErrStreamLimit owns why.
+			DomainErrors: grpcreference.DomainErrors(),
 			Services: []grpcx.RegisterService{
 				func(registrar grpc.ServiceRegistrar) {
 					referencev1.RegisterEchoServiceServer(registrar, grpcreference.Service{})
@@ -151,19 +154,13 @@ func settingsFromDefaults(defaults config.GRPCServerConfig) (benchmarkServerSett
 	if defaults.MaxConnections <= 0 {
 		return benchmarkServerSettings{}, errors.New("build gRPC benchmark server: max connections must be positive")
 	}
-	maxConcurrentStreams, err := positiveUint32("max concurrent streams", defaults.MaxConcurrentStreams)
-	if err != nil {
-		return benchmarkServerSettings{}, err
-	}
-	maxHeaderListBytes, err := positiveUint32("max header list bytes", defaults.MaxHeaderListBytes)
-	if err != nil {
-		return benchmarkServerSettings{}, err
-	}
+	// The remaining transport bounds are proven by grpcx.NewServer, which owns
+	// the one range check every composition root would otherwise repeat.
 	return benchmarkServerSettings{
 		transport: grpcx.Config{
 			MaxConcurrentRPCs:          defaults.MaxConcurrentRPCs,
-			MaxConcurrentStreams:       maxConcurrentStreams,
-			MaxHeaderListBytes:         maxHeaderListBytes,
+			MaxConcurrentStreams:       defaults.MaxConcurrentStreams,
+			MaxHeaderListBytes:         defaults.MaxHeaderListBytes,
 			MaxReceiveMessageBytes:     defaults.MaxReceiveMessageBytes,
 			MaxSendMessageBytes:        defaults.MaxSendMessageBytes,
 			LogHealthChecks:            defaults.AccessLogHealthChecks,
@@ -175,44 +172,37 @@ func settingsFromDefaults(defaults config.GRPCServerConfig) (benchmarkServerSett
 	}, nil
 }
 
-func positiveUint32(name string, value int) (uint32, error) {
-	if value <= 0 || uint64(value) > math.MaxUint32 {
-		return 0, fmt.Errorf(
-			"build gRPC benchmark server: %s must be in range [1,%d]",
-			name,
-			uint64(math.MaxUint32),
-		)
-	}
-	return uint32(value), nil // #nosec G115 -- range checked immediately above.
-}
-
-func newBenchmarkLoadRecorder(provider metric.MeterProvider) (benchmarkLoadRecorder, error) {
-	meter := provider.Meter("service.grpc.server")
+// newOTelLoadRecorder stands in for internal/infra/telemetry, which this
+// example does not build. It emits that package's series under that package's
+// names so the benchmark carries the instrumentation cost a real service pays;
+// only the descriptions differ, to say where the numbers came from.
+func newOTelLoadRecorder(provider metric.MeterProvider) (otelLoadRecorder, error) {
+	meter := provider.Meter(telemetry.GRPCServerMeterName)
 	active, err := meter.Int64UpDownCounter(
-		"rpc.server.active_requests",
+		telemetry.ActiveRPCsInstrument,
 		metric.WithDescription("RPCs currently executing a handler during the local gRPC benchmark."),
-		metric.WithUnit("{rpc}"),
+		metric.WithUnit(telemetry.RPCsUnit),
 	)
 	if err != nil {
-		return benchmarkLoadRecorder{}, fmt.Errorf("build active-RPC benchmark instrument: %w", err)
+		return otelLoadRecorder{}, fmt.Errorf("build active-RPC benchmark instrument: %w", err)
 	}
 	shed, err := meter.Int64Counter(
-		"rpc.server.shed_requests",
+		telemetry.ShedRPCsInstrument,
 		metric.WithDescription("RPCs rejected by admission during the local gRPC benchmark."),
-		metric.WithUnit("{rpc}"),
+		metric.WithUnit(telemetry.RPCsUnit),
 	)
 	if err != nil {
-		return benchmarkLoadRecorder{}, fmt.Errorf("build shed-RPC benchmark instrument: %w", err)
+		return otelLoadRecorder{}, fmt.Errorf("build shed-RPC benchmark instrument: %w", err)
 	}
-	return benchmarkLoadRecorder{active: active, shed: shed}, nil
+	return otelLoadRecorder{active: active, shed: shed}, nil
 }
 
-func (r benchmarkLoadRecorder) Admitted(ctx context.Context) func() {
+func (r otelLoadRecorder) Admitted(ctx context.Context) func() {
 	r.active.Add(ctx, 1)
 	return func() { r.active.Add(ctx, -1) }
 }
 
-func (r benchmarkLoadRecorder) Shed(ctx context.Context) {
+func (r otelLoadRecorder) Shed(ctx context.Context) {
 	r.shed.Add(ctx, 1)
 }
 
