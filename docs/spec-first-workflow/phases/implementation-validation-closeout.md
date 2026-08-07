@@ -67,10 +67,19 @@ replaced, remove its superseded code, wiring, tests, configuration, generated
 output, and documentation unless a named compatibility requirement still
 exercises them.
 
-Treat task paths and symbols as navigation anchors; current canonical source
-determines placement. Adapt local placement drift while accepted behavior,
-ownership, proof, and risk stay unchanged. If one changes, reopen only its
-narrowest decision owner.
+Treat task paths, symbols, and an accepted Go Ownership file map as
+evidence-backed starting points, not immutable prescriptions; current canonical
+source and the code being written determine final placement. When the real code
+gives one file independently changing responsibilities, obscures an ownership
+or lifecycle transition, or exposes a materially clearer smaller placement,
+revise the file map and make the smallest behavior-preserving move, split,
+merge, or deletion in this acceptance unit. File length is a signal to inspect
+those pressures, not a split criterion. Keep that adaptation in Implementation
+when accepted behavior, semantic owner, dependency direction, generated/manual
+authority, exported surface, proof strategy, and risk stay unchanged. If one
+changes, reopen only its narrowest decision owner. Do not retain a known-poor
+shape merely because it matches the pre-code plan, and do not use adaptation to
+widen into unrelated cleanup.
 
 Accepted behavior is complete only on the real production path; a placeholder,
 temporary hardcoding, TODO, mock success, or undeclared `v1` is a blocker unless
@@ -129,6 +138,16 @@ affected error, context, ownership, concurrency, resource, and lifecycle
 behavior; canonical/generated authority; triggered security, data, and rollout
 risk; unnecessary machinery; duplicated ownership of one live policy; stale
 replacement surfaces; and proof adequacy.
+For a substantial Go change, compare every added or materially changed file
+with its design's inverse file map and the repository's [file-granularity
+contract](../../project-structure-and-module-organization.md#4-file-naming-and-granularity),
+then re-evaluate that map against the actual code. A justified local adaptation
+becomes the candidate's effective file map; literal conformity to a stale plan
+is not the goal, while an unexplained deviation remains a finding.
+Mixed file ownership, duplicated live policy without its required parity proof,
+shared fixtures at the wrong owner, and hidden temporal coupling are ownership
+or readability findings, not style preferences; passing functional checks does
+not close them. File length alone remains an observation.
 Surrounding and transitive context informs the bounded judgment, while unrelated
 or pre-existing defects, style preferences, and unproven suspicions remain
 observations. Resolve repository-answerable uncertainty before asking another

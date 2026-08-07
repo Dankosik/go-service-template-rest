@@ -43,10 +43,11 @@ bounded candidate are the complete review boundary.
 
 The reviewer derives its result from the current contract, candidate,
 production path, dependencies, retained scope, and claim-scoped proof rather
-than an implementation summary. It may inspect wider candidate context and run
-safe non-mutating checks, but returns a verdict only for the resolved unit. It
-reuses existing proof receipts and runs only the missing or adversarial
-falsifier required by its question.
+than an implementation summary, and applies the implementation phase's
+[Review](../phases/implementation-validation-closeout.md#review) contract. It
+may inspect wider candidate context and run safe non-mutating checks, but
+returns a verdict only for the resolved unit. It reuses existing proof receipts
+and runs only the missing or adversarial falsifier required by its question.
 
 ## Verdict And Disposition
 

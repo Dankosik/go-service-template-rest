@@ -12,6 +12,8 @@ Load this when a change adds or widens a metric label, introduces an instrument,
 
 Exceeding it does not reject the new series and logs nothing. Every attribute set past the limit is merged into one stream carrying only `otel.metric.overflow=true`, so the instrument keeps reporting and its numbers stop meaning anything — a `rate()` over the overflow stream sums an arbitrary mix of label combinations. Size a new label as `existing series x new values` against 1999, and treat `otel.metric.overflow` as a series worth alerting on.
 
+**A finite label is a closed vocabulary, not merely a cardinality bound.** Keep the accepted values and one fallback beside the code that bounds the label. Every current producer must select from that vocabulary, and one test must enumerate or drive those producers through a shared corpus so an unknown value proves it collapses to the fallback. Capping arbitrary strings without proving their semantic mapping leaves the instrument bounded but unreadable.
+
 **The exported name is not the name you wrote.** Metrics reach a Prometheus registry through `otlptranslator.UnderscoreEscapingWithSuffixes`, so the instrument name is transformed: dots become underscores, the unit is appended (`s` -> `_seconds`, `By` -> `_bytes`), and counters gain `_total`. Two units are traps: unit `1` appends `_ratio` to gauges, which misnames a boolean state; a unit in braces (`{request}`, `{rpc}`) appends nothing and is how this repo spells "count of things". Pick the unit for the name it produces.
 
 **Resource identity is set once, in one place.** `newResource` in `internal/infra/telemetry/resource.go` publishes `service.name`, `service.version`, `vcs.revision`, `service.instance.id`, and `deployment.environment.name` — the renamed convention, not the older `deployment.environment`. `service.instance.id` comes from `ResolveInstanceID` and must be resolved once per process, because traces and metrics resolving separately attribute one replica to two instances. Ambient `OTEL_RESOURCE_ATTRIBUTES` merges underneath these and is deliberately preserved. Resource attributes are already on every series; copying them into instrument labels multiplies the product for nothing.
@@ -27,5 +29,6 @@ Exceeding it does not reject the new series and logs nothing. Every attribute se
 
 ## Validation Shape
 - State each new label's value source and the resulting series count against 1999 for that instrument.
+- Name the closed vocabulary, fallback, current producers, and the test that proves their mapping.
 - State the exported Prometheus name the chosen unit produces.
 - Confirm a deployment reached only through the OTLP collector still gets the signal: the Prometheus **process** collector is scrape-only, while Go runtime metrics are registered on the meter provider and reach both readers.
