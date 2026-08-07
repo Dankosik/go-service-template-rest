@@ -197,10 +197,23 @@ Forbidden names:
 - `test_helpers_test.go`;
 - production `*_helpers.go`, `util.go`, `common.go`, or `misc.go`.
 
-Split a file when its declarations have different owners named by this table.
-Do not split merely to hit a line-count target. `network_policy.go`,
-`network_policy_parsing.go`, and `network_policy_enforcement.go` are separate
-because state, parsing, and enforcement are independent policies.
+Give each Go file one present reason to exist: its declarations change for the
+same reason and are normally read together on one execution or proof path. A
+shared package or receiver is not enough. Split declarations whose lifecycle
+stage, audience, authority, or operator flow changes independently; when those
+pressures coexist in one file, record why co-location makes the path easier to
+trace. Treat line count only as a signal to inspect ownership, never as a split
+criterion. `network_policy.go`, `network_policy_parsing.go`, and
+`network_policy_enforcement.go` are separate because state, parsing, and
+enforcement are independent policies.
+
+Add `doc.go` when a package has multiple reader audiences, lifecycle stages,
+extension paths, or a deliberately absent seam that a maintainer could
+reasonably expect. State that package contract and the non-obvious constraint;
+omit `doc.go` when exported APIs and filenames already make both apparent.
+Package documentation supplements the structure: when it is the only way to
+discover which file owns ordinary behavior, or it compensates for unclear names
+or placement, repair the file map instead.
 
 Bootstrap is intentionally one package because its declarations jointly build
 one process. Its production files are:

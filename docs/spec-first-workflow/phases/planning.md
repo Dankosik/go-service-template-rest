@@ -40,12 +40,18 @@ proving surface, a scope exit is never completion evidence and is stated beside
 any completion claim under the [Task
 Contract](../../../AGENTS.md#task-contract).
 
-An **enabling change** is a behavior-preserving restructure that carries no
-obligation of its own and exists only to make named obligation tasks smaller or
-safer. Record it as a task ordered before the obligations it enables, name those
-task IDs in its outcome, and prove it by the current tests of the moved surfaces
-passing unchanged. A restructure that names no enabled obligation task is not an
-enabling change and does not enter the ledger.
+A behavior-preserving restructure required by accepted Go Ownership to leave
+one obligation task's touched surface coherent stays in that task when it shares
+the same owner and proof boundary. Its surface names the moved declarations and
+required callers, tests, generated or manual companions, and documentation; its
+proof covers the preserved behavior as well as the task's changed behavior.
+
+An **enabling change** carries no obligation of its own and exists only when a
+separately consistent and provable restructure makes named obligation tasks
+smaller or safer. Record it as a task ordered before those obligations, name
+their task IDs in its outcome, and prove it by the current tests of the moved
+surfaces passing unchanged. A restructure that names no enabled obligation task
+is not an enabling change and does not enter the ledger.
 
 The contract is complete when every accepted obligation has one auditable
 disposition, every task delta and proof maps back to one disposition or to the
@@ -205,8 +211,12 @@ Cite the narrowest stable source anchor and state enough of the relevant accepte
 Every Go implementation task carries the owning package or a bounded discovery
 rule, the canonical source and any derived generated surfaces, accepted Go
 semantic constraints, and the narrowest repository-native proof command with
-its expected observable. Do not make the Worker rediscover these from broad
-context.
+its expected observable. When accepted Go Ownership fixes exact files and its
+inverse file map, `Source` cites that design anchor and
+`Owner/surface/resources` preserves those files. A package-wide surface or
+discovery rule may replace them only when the design itself recorded the
+deterministic implementation-local rule; Planning does not widen a fixed file
+map. Do not make the Worker rediscover these from broad context.
 
 A known decision-changing ambiguity or missing input required by a mandatory path through the current completion condition belongs in `Blocked stop` and blocks readiness now. `Reopen if` is optional and records only a concrete objective future condition that would invalidate an input accepted at readiness; omit it when none exists, and do not use it to defer a known question to implementation.
 

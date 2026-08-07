@@ -478,25 +478,40 @@ proof, or outcome completion is claimed without production-path verification.
 ### WBE-26 — Conditional Branch Isolation And Macro-Phase Handoff
 
 **Given:** an ordinary Specification phase with one triggered internal review
-and repair, a direct implementation with no independent-review trigger, a fixed
-high-risk implementation unit that does trigger review, and a true handoff from
-ready Test Design to a new Planning session.
+and repair, a direct implementation with no independent-review trigger, and a
+fixed high-risk implementation unit that does trigger review. The end-to-end
+request requires Technical Design next; completed research and Specification
+support an escrow-style hold as the leading architecture hypothesis with a
+named falsifier, while a plausible direct-charge alternative has no supporting
+evidence.
 
-**Pass:** Specification loads Subagents And Review at phase entry and Review
-Independence only when deciding whether to review; it does not load
+**Pass:** bootstrapped Proceeding stays automatic inside the active macro phase
+and defers its boundary to the workflow router. Specification loads Subagents
+And Review at phase entry and Review Independence only when deciding whether to
+review; it does not load
 implementation-review or resume/handoff guidance, and its
 review/repair/focused re-review loop stays in the same session. After its fixed
 candidate passes mapped validation, direct implementation loads Review
 Independence only and opens no review branch. The high-risk unit then loads
 Independent Implementation Review only when that shared trigger applies. The
 true phase boundary loads Resume And Macro-Phase Handoff and emits every
-action-changing field in its fixed interface without replaying chat.
+action-changing fact in a short standalone prompt without replaying chat; the
+current session reports the Specification result and stops before any Technical
+Design action, while the fresh Technical Design session starts from the named
+durable sources. The prompt makes the escrow-style hold the leading hypothesis,
+states why and how to falsify it, and tells Technical Design to keep, revise, or
+reject it from current evidence rather than treating it as settled. It neither
+drops that decision implication nor promotes the unsupported alternative.
 
 **Fail:** ordinary phase entry eagerly loads review or handoff owners, internal
 review creates a macro-phase handoff, direct implementation receives a reviewer
-without its trigger, implementation review starts before the candidate is fixed, or the
-new Planning session must reconstruct an accepted source, authority boundary,
-movement proof, next action, or stop/reopen condition from chat.
+without its trigger, implementation review starts before the candidate is fixed,
+the Specification session enters Technical Design because the request is
+end-to-end, or the new Technical Design session must reconstruct an accepted
+source, authority boundary, movement proof, candidate direction, rationale,
+falsifier, next action, or stop/reopen condition from chat. The case also fails
+when the prompt is neutral despite a supported direction, treats the direction
+as accepted authority, or steers toward an unsupported alternative.
 
 ### WBE-27 — Evolutionary Change Locality
 
@@ -650,6 +665,151 @@ unchanged; a first-round baseline is treated as the answer while a sharper round
 on that same question is eligible; deepening continues on a question that changes
 no named decision; or a round is added to raise confidence in an answer the phase
 already has.
+
+### WBE-33 — Go File Cohesion And Package Contract
+
+**Given:** one outbox change spans admission, persistence, relay, and recovery;
+one NATS adapter change spans admission and delivery; both candidates pass their
+functional tests but initially place the stages in mixed-responsibility files.
+The accepted outbox behavior change must edit the mixed relay file, while a
+different large file in the package is outside every required move and caller.
+One accepted file map initially places a cohesive responsibility in one file,
+but the real implementation then exposes independently changing admission and
+recovery responsibilities and makes that file substantially larger.
+The fixed Go Ownership candidate also reaches review under a policy that would
+otherwise use one whole-artifact reviewer.
+The comparison also includes a cohesive 400-line lifecycle file, a larger
+benchmark file with one proof owner, one package with multiple reader audiences
+and a non-obvious absent extension seam, and one package whose API and filenames
+already state its contract. In each change the package owner appears obvious,
+and Planning would otherwise authorize an abstract package or a filename without
+the concrete edit rehearsal that fixes its repository-relative directory,
+package, file responsibility, and lifecycle ownership.
+
+**Pass:** the objective multi-path trigger enters Go Ownership despite the
+obvious package. Its responsibility and inverse file maps reconcile in both
+directions and remain required by the Stop Rule. Independently changing
+lifecycle stages, audiences, authorities, and operator flows are split, or their
+present co-location has a path-tracing rationale; the cohesive lifecycle and
+benchmark files stay whole despite their length. `doc.go` records the
+non-obvious multi-audience package contract, supplements rather than explains
+the file layout, and is omitted from the self-explanatory package. The
+complementary Go Ownership panel falsifies both maps; a separately triggered
+broader Technical Design Review consumes its receipts and checks only missing
+or cross-domain coherence. The file map gives every materially changed file one
+reason to exist plus its exact repository-relative path,
+placement-relevant declarations and visibility, call-path role, material
+state/resource/cancellation/lifecycle/error ownership, allowed dependencies,
+and forbidden responsibilities. The design mentally rehearses the concrete edit
+from composition root through caller, owner, wiring, and proof, but contains no
+pseudocode or function bodies. Planning carries that accepted placement and
+exact files while Implementation writes the code. The smallest
+behavior-preserving relay split stays in the obligation task with its moved
+companions and preserved-behavior proof. The unrelated large file remains an
+observation; a separate enabling task appears only when the restructure is
+independently consistent and provably makes named tasks smaller
+or safer. During Implementation, the larger file triggers a fresh ownership
+inspection rather than an automatic split. The independently changing
+responsibilities invalidate the original file map, so the same acceptance unit
+performs the smallest behavior-preserving refactor and treats the result as its
+effective file map. It stays local while behavior, semantic owner, dependency
+direction, generated/manual authority, exported surface, proof strategy, and
+risk remain unchanged; otherwise the narrowest design owner reopens.
+Implementation review keeps the functionally green mixed-file
+candidates open until their ownership finding is repaired or the accepted
+co-location rationale is recorded.
+
+The fixed design dispatches three fresh-context read-only lanes over disjoint
+boundaries: responsibility/execution-path ownership, package/dependency
+architecture, and file cohesion/naming. The first two use separate architecture
+lanes and the third uses a quality lane; each brief states the other two
+boundaries as exclusions. They inspect the same fixed candidate, return current
+anchored lane verdicts, and the root checks compatibility. The Go Ownership
+boundary moves only after all three recommend `PASS`; `CONCERNS` and `FAIL`
+remain in repair or reopen. A material repair re-runs only affected lanes in
+fresh context, reusing unaffected `PASS` receipts. No whole-artifact reviewer is
+stacked over the same ownership questions; any separately triggered broader
+Technical Design Review consumes the panel receipts and tests only missing or
+cross-domain coherence.
+
+**Fail:** an obvious package bypasses Go Ownership; package or receiver
+membership substitutes for a file reason; the design says only “add a service,”
+“add an adapter,” or “put it in the feature package”; the agent writes code or
+pseudocode instead of fixing placement, or names files without rehearsing the
+real caller/wiring/proof path; the design leaves directory, package, file
+responsibility, a new seam, or lifecycle ownership for Implementation to choose;
+Outputs contain the inverse map but the Stop Rule or technical review can ignore
+it; Planning widens exact files to package scope; a required edit leaves its
+mixed file untouched because the refactor was not
+separately requested; the refactor expands into unrelated package cleanup or
+always becomes a separate task; Implementation follows a stale file map despite
+contradicting code evidence, treats every deviation as an upstream reopen, or
+changes a design-owned boundary without reopening it; line count alone forces a
+split; package documentation compensates for unclear layout; or passing
+behavior proof is treated as maintainability closure while unrelated change
+reasons remain hidden in one file.
+
+The review also fails when one broad prompt is copied to several reviewers; any
+lane re-inventories or adjudicates another lane's boundary; a required lane is
+omitted or unavailable but the phase moves; the root converts mixed verdicts to
+approval; a reviewer edits the candidate or approves its own repair; an
+unchanged candidate receives duplicate review for confidence; a material repair
+reuses a stale affected receipt; or a whole-artifact reviewer repeats the
+completed panel.
+
+### WBE-34 — Forced Policy Restatement
+
+**Given:** depguard prevents a config package and an adapter package from
+importing each other, yet both must represent one accepted mode policy. The
+accepted direction says config-admitted modes must be contained by the modes the
+adapter supports, and bootstrap is the lowest package permitted to import both.
+
+**Pass:** Go Ownership first attempts one shared owner, then records why the
+dependency boundary forces two live representations, names the semantic owner
+and both copies, preserves the accepted containment direction, and places one
+shared-corpus parity test at bootstrap. Its current-delta replay finds one
+semantic edit site plus the forced copies. A new mode changes the semantic owner
+and causes that proof to fail until every required representation is aligned.
+
+**Fail:** similar constants and prose are accepted as parity; each package tests
+only its own list; the test lives where one representation cannot be observed;
+or a new shared package is introduced despite a smaller boundary-respecting
+proof owner.
+
+### WBE-35 — Shared Test Fixture Ownership
+
+**Given:** a realistic protocol fixture begins in one test file, a later test in
+the same package needs the same setup, and a separate near-miss merely resembles
+the fixture without sharing its authority or oracle.
+
+**Pass:** the first consumer keeps the fixture local. The second current consumer
+moves only the genuinely shared setup to the package's unexported
+`harness_test.go`; a standalone local change remains direct, while an already
+triggered Go Ownership design names its proof owner and gives the harness one
+present reason to exist. Each test retains its own behavior and oracle, and the
+near-miss stays local. Review reports a shared fixture left under one consumer or
+a helper extracted before the second consumer as an ownership finding.
+
+**Fail:** the first use creates a speculative harness; the second consumer alone
+forces a durable design phase; duplication survives after the second equivalent
+consumer; different behavior is hidden behind one generic helper; or test
+convenience alone exports a production or cross-package surface.
+
+### WBE-36 — Finite Telemetry Vocabulary
+
+**Given:** a change adds a bounded outcome label produced by several branches,
+including one unknown input, while the metric remains below the numeric
+cardinality limit.
+
+**Pass:** the accepted values and fallback live beside the label bounder; every
+current producer is named or driven by one test corpus; the unknown input maps to
+the fallback; and the review remains open if a producer can emit an unregistered
+semantic value even though the numeric series limit and functional tests pass.
+
+**Fail:** a maximum length, truncation, hash, or current low value count is
+treated as a closed vocabulary; producers restate strings independently; the
+unknown path is unproved; or cardinality arithmetic substitutes for semantic
+readability.
 
 ## Acceptance
 

@@ -19,6 +19,10 @@ request for independent review also triggers it.
 
 ## Route
 
+- A required complementary panel explicitly owned by a phase is selected by
+  that phase rather than by this trigger. Apply this trigger only to any
+  remaining broader artifact boundary after consuming the panel's current
+  receipts.
 - When the trigger does not apply, continue with root self-review and do not
   load a review-specific branch.
 - For a triggered non-implementation review, continue through the current

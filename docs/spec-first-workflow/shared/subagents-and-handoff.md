@@ -156,6 +156,15 @@ A triggered non-implementation reviewer:
 
 When independent review is triggered, one whole-artifact reviewer is the default. Run a specialist first only for one concrete high-impact question the root cannot credibly cover locally. If the reviewer discovers such a question, run one bounded specialist follow-up and return only that disposition; do not repeat an unchanged whole candidate. A domain label or desire for more confidence does not justify another reviewer.
 
+A phase may instead define one required complementary review panel when its
+contract partitions one fixed artifact into disjoint, jointly exhaustive
+evidence boundaries and names the overlap exclusions, synthesis owner, verdict
+threshold, and focused re-review rule. The panel is one phase-owned review
+branch and replaces the default whole-artifact reviewer for that same boundary;
+do not stack either another broad reviewer or duplicate specialist lanes merely
+to collect confidence. Each lane remains read-only and the root retains
+acceptance.
+
 For each triggered non-implementation boundary, review convergence is: fixed
 candidate -> independent findings and verdict -> disposition. Repair and
 focused fresh review apply only to `FAIL` or to a material candidate change

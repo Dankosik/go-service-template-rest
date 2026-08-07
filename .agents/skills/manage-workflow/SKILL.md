@@ -36,7 +36,8 @@ action has actually been read; a link or remembered summary does not close it.
 Re-evaluate it when evidence changes the phase, risk, ownership, proof, or
 harness control.
 
-Finish only at the phase stop rule. Move when authorized inputs are closed;
-otherwise return the blocker or named boundary. New evidence reopens the
-smallest owner. Report the outcome, proof or gap, and next owner without a
-routing receipt.
+Finish only at the current phase stop rule. Apply the router's macro-phase
+session boundary before movement: continue automatically only inside the active
+macro phase; at its boundary return the result and handoff, then stop. Otherwise
+return the blocker or named boundary. New evidence reopens the smallest owner.
+Report the outcome, proof or gap, and next owner without a routing receipt.
