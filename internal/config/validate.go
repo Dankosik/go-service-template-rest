@@ -4,17 +4,14 @@ import (
 	"fmt"
 	"math"
 	"net"
-
-	// profile:authn-oidc-jwt:start
-	"net/netip"
-	"net/url"
-
-	// profile:authn-oidc-jwt:end
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
+	// profile:authn-oidc-jwt:start
+	"github.com/example/go-service-template-rest/internal/authntrust"
+	// profile:authn-oidc-jwt:end
 	"github.com/example/go-service-template-rest/internal/observability/otelconfig"
 )
 
@@ -73,24 +70,22 @@ func validateConfig(cfg *Config, unknownKeys []string) error {
 
 // profile:authn-oidc-jwt:start
 
-// validateAuthnConfig restates the trust rules that oidcjwt.NewPolicy enforces,
-// so a bad issuer, audience, or proxy CIDR stops configuration load instead of
-// surfacing at authn startup. The duplication is forced rather than chosen:
-// oidcjwt's validProviderURL owns why it cannot be removed, and
-// TestPolicyRulesMatchConfigValidation is what fails the build when a rule
-// tightened on one side is not tightened on the other.
+// validateAuthnConfig applies the shared trust rules at configuration load, so a
+// bad issuer, audience, or proxy CIDR stops the process instead of surfacing at
+// authn startup. internal/authntrust owns the rules and why they live in a leaf
+// package: this one may not import the verifier that applies them too.
 //
 // It also rewrites what it accepts, which is more than the trimming the other
 // validators here do: trusted_proxy_cidrs is stored back in masked canonical
 // form, so 10.0.0.5/8 is held as 10.0.0.0/8. That rewritten string is the one
-// startup_authn.go hands NewPolicy, which masks again and so agrees; a reader
-// changing either side is changing a value the other one parses.
+// startup_authn.go hands oidcjwt.NewPolicy, which runs it through the same
+// parse and so cannot reach a different set of peers.
 func validateAuthnConfig(cfg *AuthnConfig) error {
 	cfg.Issuer = strings.TrimSpace(cfg.Issuer)
 	cfg.Audience = strings.TrimSpace(cfg.Audience)
 	cfg.TrustedProxyCIDRs = strings.TrimSpace(cfg.TrustedProxyCIDRs)
 
-	if !validAuthnIssuerURL(cfg.Issuer) {
+	if !authntrust.ValidProviderURL(cfg.Issuer) {
 		return fmt.Errorf(
 			"%w: authn.issuer must be an absolute HTTPS URL without user info, query, or fragment",
 			ErrValidate,
@@ -100,47 +95,16 @@ func validateAuthnConfig(cfg *AuthnConfig) error {
 		return fmt.Errorf("%w: authn.audience cannot be empty", ErrValidate)
 	}
 
-	canonical := make([]string, 0)
-	seen := make(map[netip.Prefix]struct{})
-	for value := range strings.SplitSeq(cfg.TrustedProxyCIDRs, ",") {
-		value = strings.TrimSpace(value)
-		if value == "" {
-			continue
-		}
-		prefix, err := netip.ParsePrefix(value)
-		if err != nil {
-			return fmt.Errorf("%w: authn.trusted_proxy_cidrs contains an invalid CIDR", ErrValidate)
-		}
-		prefix = prefix.Masked()
-		if _, exists := seen[prefix]; exists {
-			return fmt.Errorf("%w: authn.trusted_proxy_cidrs contains a duplicate CIDR", ErrValidate)
-		}
-		seen[prefix] = struct{}{}
-		canonical = append(canonical, prefix.String())
+	trusted, err := authntrust.ParseProxyCIDRs(cfg.TrustedProxyCIDRs)
+	if err != nil {
+		return fmt.Errorf("%w: authn.%w", ErrValidate, err)
 	}
-	if len(canonical) == 0 {
-		return fmt.Errorf("%w: authn.trusted_proxy_cidrs must contain at least one CIDR", ErrValidate)
+	canonical := make([]string, 0, len(trusted))
+	for _, prefix := range trusted {
+		canonical = append(canonical, prefix.String())
 	}
 	cfg.TrustedProxyCIDRs = strings.Join(canonical, ",")
 	return nil
-}
-
-// validAuthnIssuerURL is the copy of oidcjwt's validProviderURL this package is
-// forced to hold, kept term for term and in the same order so the two can be read
-// against each other line by line. Tighten one and you must tighten the other.
-func validAuthnIssuerURL(raw string) bool {
-	parsed, err := url.Parse(strings.TrimSpace(raw))
-	return err == nil &&
-		parsed != nil &&
-		parsed.IsAbs() &&
-		strings.EqualFold(parsed.Scheme, "https") &&
-		parsed.Host != "" &&
-		parsed.Hostname() != "" &&
-		parsed.Opaque == "" &&
-		parsed.User == nil &&
-		parsed.RawQuery == "" &&
-		!parsed.ForceQuery &&
-		parsed.Fragment == ""
 }
 
 // profile:authn-oidc-jwt:end
@@ -473,6 +437,62 @@ func validateGRPCCapacityBounds(cfg GRPCServerConfig) error {
 			"%w: grpc.server.max_concurrent_rpcs must be <= max_connections * max_concurrent_streams (%d)",
 			ErrValidate,
 			connectionCapacity,
+		)
+	}
+	return validateGRPCLifetimeBounds(cfg)
+}
+
+// validateGRPCLifetimeBounds restates the rules grpcx.validateLifetimeBounds
+// enforces, for the reason config_parity_test.go records: this package cannot
+// import that adapter, so a rule tightened on one side alone breaks nothing
+// anyone runs until that test compares the two.
+//
+// The conditional rules exist only when rotation is on. A negative duration is
+// refused everywhere rather than treated as a third meaning: grpc-go normalizes
+// only zero to infinity, so a negative age would rotate every connection at once.
+func validateGRPCLifetimeBounds(cfg GRPCServerConfig) error {
+	nonNegative := map[string]time.Duration{
+		"unary_timeout":            cfg.UnaryTimeout,
+		"stream_timeout":           cfg.StreamTimeout,
+		"max_connection_age":       cfg.MaxConnectionAge,
+		"max_connection_age_grace": cfg.MaxConnectionAgeGrace,
+	}
+	for key, value := range nonNegative {
+		if value < 0 {
+			return fmt.Errorf("%w: grpc.server.%s must be non-negative", ErrValidate, key)
+		}
+	}
+	positive := map[string]time.Duration{
+		"max_connection_idle":      cfg.MaxConnectionIdle,
+		"server_ping_interval":     cfg.ServerPingInterval,
+		"server_ping_timeout":      cfg.ServerPingTimeout,
+		"min_client_ping_interval": cfg.MinClientPingInterval,
+	}
+	for key, value := range positive {
+		if value <= 0 {
+			return fmt.Errorf("%w: grpc.server.%s must be positive", ErrValidate, key)
+		}
+	}
+
+	if cfg.MaxConnectionAge == 0 {
+		return nil
+	}
+	if cfg.MaxConnectionAgeGrace <= 0 {
+		return fmt.Errorf(
+			"%w: grpc.server.max_connection_age_grace must be positive when max_connection_age is set",
+			ErrValidate,
+		)
+	}
+	if cfg.MaxConnectionAgeGrace < cfg.UnaryTimeout {
+		return fmt.Errorf(
+			"%w: grpc.server.max_connection_age_grace must be at least grpc.server.unary_timeout",
+			ErrValidate,
+		)
+	}
+	if cfg.StreamTimeout > 0 && cfg.StreamTimeout >= cfg.MaxConnectionAge {
+		return fmt.Errorf(
+			"%w: grpc.server.stream_timeout must be below grpc.server.max_connection_age",
+			ErrValidate,
 		)
 	}
 	return nil

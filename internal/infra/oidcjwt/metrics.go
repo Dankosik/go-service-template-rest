@@ -16,6 +16,77 @@ const meterName = "service.authn"
 type authnMetrics struct {
 	verifications metric.Int64Counter
 	refreshes     metric.Int64Counter
+
+	// byTransport holds the prebuilt verification attribute sets, one group per
+	// carrier. verificationSets owns why they are built once.
+	byTransport map[Transport]verificationSets
+}
+
+// verificationSets holds one prebuilt measurement option per series
+// recordVerification can emit for a single carrier.
+//
+// This is the one hot path in the package: every authenticated request records
+// exactly once. Building the attribute set there costs a slice, a sort, and the
+// set itself on every call, and the space is closed and tiny — one success plus
+// one per label verificationReason returns — so it is built at construction
+// instead. Measured on the failure path, that is 6 allocations and 624 B per
+// verification against 2 and 24 B.
+//
+// The labels come from verificationReason rather than from a list beside it,
+// which is what keeps that function the only table over [Kind]: the walk below
+// covers every declared category, and the labels no Kind produces are asked for
+// by the errors that produce them.
+type verificationSets struct {
+	transport Transport
+	success   metric.MeasurementOption
+	failures  map[string]metric.MeasurementOption
+}
+
+func newVerificationSets(transport Transport) verificationSets {
+	failures := make(map[string]metric.MeasurementOption, int(lastKind)+1)
+	for kind := Kind(1); kind <= lastKind; kind++ {
+		reason := verificationReason(failure(kind))
+		failures[reason] = failureOption(transport, reason)
+	}
+	for _, unkinded := range []error{context.Canceled, context.DeadlineExceeded, errUnclassified} {
+		reason := verificationReason(unkinded)
+		failures[reason] = failureOption(transport, reason)
+	}
+	return verificationSets{
+		transport: transport,
+		success: metric.WithAttributeSet(attribute.NewSet(
+			attribute.String("authn.transport", string(transport)),
+			attribute.String("authn.result", "success"),
+		)),
+		failures: failures,
+	}
+}
+
+//nolint:ireturn // metric.MeasurementOption is the option interface the OTel API takes.
+func failureOption(transport Transport, reason string) metric.MeasurementOption {
+	return metric.WithAttributeSet(attribute.NewSet(
+		attribute.String("authn.transport", string(transport)),
+		attribute.String("authn.result", "failure"),
+		attribute.String("authn.reason", reason),
+	))
+}
+
+// option returns the prebuilt series err belongs to.
+//
+//nolint:ireturn // metric.MeasurementOption is the option interface the OTel API takes.
+func (s verificationSets) option(err error) metric.MeasurementOption {
+	if err == nil {
+		return s.success
+	}
+	reason := verificationReason(err)
+	if option, ok := s.failures[reason]; ok {
+		return option
+	}
+	// Unreachable while newVerificationSets covers every label
+	// verificationReason returns, which is what lastKind keeps true. Building one
+	// here makes a label it somehow missed cost allocations rather than a lost
+	// count.
+	return failureOption(s.transport, reason)
 }
 
 // newDegradedWarning returns the report function newAuthnMetrics and
@@ -41,6 +112,14 @@ func newAuthnMetrics(provider metric.MeterProvider, reportDegraded func()) authn
 	}
 	meter := provider.Meter(meterName)
 	fallback := metricnoop.NewMeterProvider().Meter(meterName)
+	// Both declared carriers get their sets up front. A [Transport] added in
+	// verifier.go and not added here still records — recordVerification builds
+	// its group per call instead — so the omission costs allocations rather than
+	// a series.
+	byTransport := make(map[Transport]verificationSets, 2)
+	for _, transport := range []Transport{TransportHTTP, TransportGRPC} {
+		byTransport[transport] = newVerificationSets(transport)
+	}
 	return authnMetrics{
 		verifications: counterOrNoop(
 			meter, fallback, reportDegraded,
@@ -50,6 +129,7 @@ func newAuthnMetrics(provider metric.MeterProvider, reportDegraded func()) authn
 			meter, fallback, reportDegraded,
 			"authn.jwks.refreshes", "{refresh}", "OIDC JWKS refresh outcomes.",
 		),
+		byTransport: byTransport,
 	}
 }
 
@@ -115,19 +195,11 @@ func registerKeyAgeGauge(
 }
 
 func (m authnMetrics) recordVerification(ctx context.Context, transport Transport, err error) {
-	attributes := []attribute.KeyValue{
-		attribute.String("authn.transport", string(transport)),
+	sets, prebuilt := m.byTransport[transport]
+	if !prebuilt {
+		sets = newVerificationSets(transport)
 	}
-	if err == nil {
-		attributes = append(attributes, attribute.String("authn.result", "success"))
-	} else {
-		attributes = append(
-			attributes,
-			attribute.String("authn.result", "failure"),
-			attribute.String("authn.reason", verificationReason(err)),
-		)
-	}
-	m.verifications.Add(ctx, 1, metric.WithAttributes(attributes...))
+	m.verifications.Add(ctx, 1, sets.option(err))
 }
 
 func (m authnMetrics) recordRefresh(ctx context.Context, trigger refreshTrigger, err error) {

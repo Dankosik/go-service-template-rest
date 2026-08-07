@@ -30,7 +30,9 @@ const requestIDMetadataKey = reqctx.RequestIDMetadataKey
 // Removing any one of them widens the trust boundary without changing a single
 // call site; the propagation and resolver-selection tests are what fail.
 // client.go's WithNoProxy and WithDisableServiceConfig close the two remaining
-// routes by which a peer could introduce a fourth.
+// routes by which a peer could introduce a fourth. The latter refuses only
+// resolver-supplied service config; the client's own default service config,
+// which carries the address-selection policy, is not a route a peer controls.
 var reservedCorrelationMetadataKeys = [...]string{
 	"traceparent",
 	"tracestate",

@@ -48,20 +48,28 @@ const (
 	classAttemptExhausted   = "attempt_exhausted"
 )
 
+// publishOperationName is the one operation label that reaches three surfaces
+// rather than one: the operation attribute below, the messaging.operation.name
+// span attribute, and the span's own name. It is named so those three cannot
+// drift into describing the same work under two words.
+const publishOperationName = "publish"
+
 // boundedOperation is the closed vocabulary for the operation attribute. The
 // unit differs by operation, and the duration histogram is only meaningful per
 // operation because of it:
 //
-//   - append, claim, mark_published, schedule_retry, poison, redrive, cleanup,
-//     and observe are one statement each, and carry that statement's duration.
+//   - append, claim, mark_published, schedule_retry, poison, redrive,
+//     retire_ordering_key, cleanup, and observe are one statement each, and
+//     carry that statement's duration.
 //   - publish is one event, not one batch.
-//   - recovery and drain, and the reconciled outcome of mark_published, are
-//     counted through CountOperation and carry no duration.
+//   - recovery, drain, and trace_capture, and the reconciled outcome of
+//     mark_published, are counted through CountOperation and carry no duration.
 //
 // A new operation states its unit here and picks the matching recorder.
 func boundedOperation(value string) string {
 	switch value {
-	case "append", "claim", "recovery", "publish", "mark_published", "schedule_retry", "poison", "redrive", "cleanup", "observe", "drain":
+	case "append", "claim", "recovery", "publish", "mark_published", "schedule_retry", "poison", "redrive",
+		"retire_ordering_key", "trace_capture", "cleanup", "observe", "drain":
 		return value
 	default:
 		return boundedOther

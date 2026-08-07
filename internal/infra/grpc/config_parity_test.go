@@ -54,6 +54,15 @@ func serverConfigFromRuntime(server config.GRPCServerConfig) Config {
 		AccessLogSuccessSampleRate: server.AccessLogSuccessSampleRate,
 		AccessLogSlowThreshold:     server.AccessLogSlowThreshold,
 		TelemetryHealthChecks:      server.TelemetryHealthChecks,
+		UnaryTimeout:               server.UnaryTimeout,
+		StreamTimeout:              server.StreamTimeout,
+		MaxConnectionIdle:          server.MaxConnectionIdle,
+		ServerPingInterval:         server.ServerPingInterval,
+		ServerPingTimeout:          server.ServerPingTimeout,
+		MinClientPingInterval:      server.MinClientPingInterval,
+		PermitPingWithoutStream:    server.PermitPingWithoutStream,
+		MaxConnectionAge:           server.MaxConnectionAge,
+		MaxConnectionAgeGrace:      server.MaxConnectionAgeGrace,
 	}
 }
 
@@ -206,6 +215,18 @@ func TestServerConfigMappingFillsEveryTransportBound(t *testing.T) {
 		"ACCESS_LOG_SUCCESS_SAMPLE_RATE": "0.5",
 		"ACCESS_LOG_SLOW_THRESHOLD":      "250ms",
 		"TELEMETRY_HEALTH_CHECKS":        "true",
+		// The two bounds the template ships disabled are set here anyway: this
+		// corpus proves the mapping, not the default, and a field left at its
+		// shipped zero would make the check below vacuous for it.
+		"UNARY_TIMEOUT":              "8s",
+		"STREAM_TIMEOUT":             "30s",
+		"MAX_CONNECTION_IDLE":        "15m",
+		"SERVER_PING_INTERVAL":       "1m",
+		"SERVER_PING_TIMEOUT":        "20s",
+		"MIN_CLIENT_PING_INTERVAL":   "10s",
+		"PERMIT_PING_WITHOUT_STREAM": "true",
+		"MAX_CONNECTION_AGE":         "60s",
+		"MAX_CONNECTION_AGE_GRACE":   "10s",
 	})
 	if err != nil {
 		t.Fatalf("configuration load rejected the mapping corpus: %v", err)

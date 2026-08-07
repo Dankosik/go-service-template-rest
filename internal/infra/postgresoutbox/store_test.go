@@ -184,6 +184,9 @@ func TestZeroValueStoreRejectsEveryExportedMethod(t *testing.T) {
 			_, err := s.CleanupPublished(t.Context(), time.Hour, 10)
 			return err
 		},
+		"RetireOrderingKeys": func(s *Store) error {
+			return s.RetireOrderingKeys(t.Context(), &transactionStub{}, "key")
+		},
 	}
 	if got, want := len(calls), reflect.TypeFor[*Store]().NumMethod(); got != want {
 		t.Fatalf("this table drives %d exported methods, Store has %d; add the new one here and give it a valid() guard", got, want)

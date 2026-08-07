@@ -9,7 +9,10 @@ import (
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/metric"
+	semconv "go.opentelemetry.io/otel/semconv/v1.37.0"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // TelemetryScope names this package's instrumentation. Callers that build the
@@ -29,6 +32,7 @@ const TelemetryScope = "service.outbox.postgres"
 // carries the same guard.
 type Telemetry struct {
 	log                  *slog.Logger
+	tracer               trace.Tracer
 	messages             metric.Int64ObservableGauge
 	oldestTimestamp      metric.Float64ObservableGauge
 	observationTimestamp metric.Float64ObservableGauge
@@ -61,7 +65,13 @@ func NewTelemetry(meter metric.Meter, logger *slog.Logger) (*Telemetry, error) {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	telemetry := &Telemetry{log: logger}
+	// The tracer comes from the global provider rather than a parameter, because
+	// the only process that publishes — cmd/outbox-relay — already installs one
+	// and the global W3C propagator during bootstrap. A second constructor
+	// argument would let a caller wire a meter and forget the tracer, and there
+	// is no composition in this repository that wants them from different
+	// providers.
+	telemetry := &Telemetry{log: logger, tracer: otel.GetTracerProvider().Tracer(TelemetryScope)}
 	var err error
 	if telemetry.messages, err = meter.Int64ObservableGauge("outbox.relay.messages"); err != nil {
 		return nil, fmt.Errorf("create outbox messages metric: %w", err)
@@ -189,6 +199,66 @@ func operationAttributes(operation, outcome, errorType string) metric.Measuremen
 		attribute.String("outcome", boundedOutcome(outcome)),
 		attribute.String("error.type", boundedErrorType(errorType)),
 	)
+}
+
+// StartPublish opens the span covering one publication attempt and returns the
+// context the adapter is called with, so an adapter's own spans nest under it.
+//
+// The span is a new root linked to the event's creation context rather than a
+// child of it, which is the one decision here worth stating. A publication can
+// happen long after its append — after a backlog drains, or after an operator
+// redrives days later — and parenting would hold the producing request's trace
+// open for that whole horizon, past the assembly window of every backend that
+// has one. The link carries the same join without that lifetime coupling, and it
+// is what the OpenTelemetry messaging convention prescribes for a send that has
+// a separate creation context.
+//
+// messaging.system is deliberately absent: this package is broker-neutral and
+// only the adapter knows the system. The ordering key is absent for the reason
+// it is absent everywhere else in this package.
+// The span is returned rather than ended here: StartPublish and EndPublish are
+// one pair around the adapter call, so that the publication's outcome — which
+// only the caller learns — reaches the span it belongs to.
+//
+//nolint:ireturn,spancheck // trace.Span is OTel's own interface, and EndPublish is this span's end.
+func (t *Telemetry) StartPublish(ctx context.Context, event Event) (context.Context, trace.Span) {
+	if t == nil || t.tracer == nil {
+		return ctx, trace.SpanFromContext(ctx)
+	}
+	options := []trace.SpanStartOption{
+		trace.WithNewRoot(),
+		trace.WithSpanKind(trace.SpanKindProducer),
+		trace.WithAttributes(
+			semconv.MessagingOperationName(publishOperationName),
+			semconv.MessagingDestinationName(event.Destination),
+			semconv.MessagingMessageID(event.ID),
+		),
+	}
+	// Extracted from a blank context on purpose. Extracting into ctx would leave
+	// whatever span the relay is already inside in place when the carrier is
+	// empty, and this span would then link to itself rather than to nothing.
+	creation := trace.SpanContextFromContext(
+		otel.GetTextMapPropagator().Extract(context.Background(), event.CreationContext()),
+	)
+	if creation.IsValid() {
+		options = append(options, trace.WithLinks(trace.Link{SpanContext: creation}))
+	}
+	return t.tracer.Start(ctx, publishOperationName+" "+event.Destination, options...)
+}
+
+// EndPublish closes a publication span with the same bounded class the publish
+// metric carries, so a trace and a dashboard name one condition. The broker's
+// own error text never reaches it, for the reason LogListenerRetry states.
+func (t *Telemetry) EndPublish(span trace.Span, err error, errorClass string) {
+	if t == nil || span == nil {
+		return
+	}
+	if err != nil {
+		bounded := boundedErrorType(errorClass)
+		span.SetAttributes(attribute.String("error.type", bounded))
+		span.SetStatus(codes.Error, bounded)
+	}
+	span.End()
 }
 
 func (t *Telemetry) LogPoison(ctx context.Context, id, errorClass string, attempt int) {

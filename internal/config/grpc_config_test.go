@@ -296,3 +296,94 @@ func TestGRPCProcessAdmissionCannotExceedConnectionCapacity(t *testing.T) {
 		t.Fatalf("LoadDetailed() error = %v, want connection capacity policy", err)
 	}
 }
+
+// Every relation the gRPC lifetime bounds state, driven from the outside so a
+// rule that exists only in prose fails here.
+//
+// The conditional rules are the point: three of these configurations are refused
+// only because rotation is on, and the same values with no age are accepted.
+func TestGRPCLifetimeBoundValidation(t *testing.T) {
+	for _, testCase := range []struct {
+		name        string
+		env         map[string]string
+		wantErrPart string
+	}{
+		{
+			name:        "negative unary timeout",
+			env:         map[string]string{"APP__GRPC__SERVER__UNARY_TIMEOUT": "-1s"},
+			wantErrPart: "unary_timeout",
+		},
+		{
+			// grpc-go normalizes only zero to infinity, so a negative age arms
+			// its timer immediately and rotates every connection at once.
+			name:        "negative connection age",
+			env:         map[string]string{"APP__GRPC__SERVER__MAX_CONNECTION_AGE": "-1s"},
+			wantErrPart: "max_connection_age",
+		},
+		{
+			name:        "zero idle bound",
+			env:         map[string]string{"APP__GRPC__SERVER__MAX_CONNECTION_IDLE": "0s"},
+			wantErrPart: "max_connection_idle",
+		},
+		{
+			name:        "zero client ping minimum",
+			env:         map[string]string{"APP__GRPC__SERVER__MIN_CLIENT_PING_INTERVAL": "0s"},
+			wantErrPart: "min_client_ping_interval",
+		},
+		{
+			// A zero grace is read as infinity, so the connection would drain
+			// and never close.
+			name: "rotation with a zero grace",
+			env: map[string]string{
+				"APP__GRPC__SERVER__MAX_CONNECTION_AGE":       "30s",
+				"APP__GRPC__SERVER__MAX_CONNECTION_AGE_GRACE": "0s",
+			},
+			wantErrPart: "max_connection_age_grace",
+		},
+		{
+			name: "grace below the unary timeout",
+			env: map[string]string{
+				"APP__GRPC__SERVER__MAX_CONNECTION_AGE":       "30s",
+				"APP__GRPC__SERVER__MAX_CONNECTION_AGE_GRACE": "1s",
+				"APP__GRPC__SERVER__UNARY_TIMEOUT":            "8s",
+			},
+			wantErrPart: "max_connection_age_grace",
+		},
+		{
+			name: "stream timeout at or above the rotation age",
+			env: map[string]string{
+				"APP__GRPC__SERVER__MAX_CONNECTION_AGE": "30s",
+				"APP__GRPC__SERVER__STREAM_TIMEOUT":     "30s",
+			},
+			wantErrPart: "stream_timeout",
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			resetConfigEnv(t)
+			for key, value := range testCase.env {
+				t.Setenv(key, value)
+			}
+
+			_, _, err := LoadDetailed(LoadOptions{})
+			if !errors.Is(err, ErrValidate) {
+				t.Fatalf("LoadDetailed() error = %v, want ErrValidate", err)
+			}
+			if !strings.Contains(err.Error(), testCase.wantErrPart) {
+				t.Fatalf("LoadDetailed() error = %v, want %q", err, testCase.wantErrPart)
+			}
+		})
+	}
+}
+
+// The same values the conditional rules refuse are accepted with rotation off,
+// which is what makes them conditional rather than flat bounds.
+func TestGRPCLifetimeBoundsAcceptTheShippedShapeWithoutRotation(t *testing.T) {
+	resetConfigEnv(t)
+	t.Setenv("APP__GRPC__SERVER__MAX_CONNECTION_AGE_GRACE", "1s")
+	t.Setenv("APP__GRPC__SERVER__UNARY_TIMEOUT", "8s")
+	t.Setenv("APP__GRPC__SERVER__STREAM_TIMEOUT", "30s")
+
+	if _, _, err := LoadDetailed(LoadOptions{}); err != nil {
+		t.Fatalf("LoadDetailed() with rotation off error = %v", err)
+	}
+}

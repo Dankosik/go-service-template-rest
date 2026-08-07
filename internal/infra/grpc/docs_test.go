@@ -51,7 +51,7 @@ func TestDocumentedProblemCodeTableMatchesStatusMapping(t *testing.T) {
 			continue
 		}
 		delete(documented, name)
-		if got := status.Code(mappedStatus(problem.Mapped{Code: definition.Code})); got.String() != want {
+		if got := status.Code(mappedStatus(problem.Mapped{Code: definition.Code}, "")); got.String() != want {
 			t.Errorf("mappedStatus(%s) = %s, but docs/grpc.md publishes %s", name, got, want)
 		}
 	}

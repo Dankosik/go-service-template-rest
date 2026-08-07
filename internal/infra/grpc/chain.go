@@ -3,16 +3,23 @@ package grpcx
 import (
 	"context"
 	"log/slog"
+	"time"
 
 	"google.golang.org/grpc"
 )
 
-// aroundRPC is one server policy, written once for both RPC kinds. It observes
-// or replaces the result of the work below it and may decline to run that work
-// at all. [asUnaryInterceptor] and [asStreamInterceptor] adapt it to grpc-go's two separate
-// interceptor types; the package doc owns why a policy is written this way
-// rather than against those types directly.
-type aroundRPC func(ctx context.Context, fullMethod string, call func() error) error
+// aroundRPC is one server policy, written once for both RPC kinds. It wraps the
+// work below it: it may observe or replace that work's result, decline to run it
+// at all, and choose the context it runs under. [asUnaryInterceptor] and
+// [asStreamInterceptor] adapt it to grpc-go's two separate interceptor types;
+// the package doc owns why a policy is written this way rather than against
+// those types directly.
+//
+// A policy that only observes passes down the context it received. Deriving one
+// is what lets a policy bound the work below it, which is the whole of what
+// [deadlineAround] needs and the reason this shape takes the context rather than
+// closing over it.
+type aroundRPC func(ctx context.Context, fullMethod string, call func(context.Context) error) error
 
 // asUnaryInterceptor adapts one policy to the unary interceptor type.
 //
@@ -28,9 +35,9 @@ func asUnaryInterceptor(around aroundRPC) grpc.UnaryServerInterceptor {
 		handler grpc.UnaryHandler,
 	) (any, error) {
 		var response any
-		err := around(ctx, info.FullMethod, func() error {
+		err := around(ctx, info.FullMethod, func(callCtx context.Context) error {
 			var callErr error
-			response, callErr = handler(ctx, request)
+			response, callErr = handler(callCtx, request)
 			return callErr
 		})
 		return response, err
@@ -38,6 +45,12 @@ func asUnaryInterceptor(around aroundRPC) grpc.UnaryServerInterceptor {
 }
 
 // asStreamInterceptor adapts one policy to the streaming interceptor type.
+//
+// A streaming handler reads its context from the stream, so a policy that
+// derived one is only visible through a replacement stream. The identity check
+// keeps that allocation on the policies that actually derive: an observing
+// policy hands back the context it received, and the handler sees the original
+// stream.
 func asStreamInterceptor(around aroundRPC) grpc.StreamServerInterceptor {
 	return func(
 		server any,
@@ -45,8 +58,12 @@ func asStreamInterceptor(around aroundRPC) grpc.StreamServerInterceptor {
 		info *grpc.StreamServerInfo,
 		handler grpc.StreamHandler,
 	) error {
-		return around(stream.Context(), info.FullMethod, func() error {
-			return handler(server, stream)
+		ctx := stream.Context()
+		return around(ctx, info.FullMethod, func(callCtx context.Context) error {
+			if callCtx == ctx {
+				return handler(server, stream)
+			}
+			return handler(server, serverStreamWithContext{ServerStream: stream, ctx: callCtx})
 		})
 	}
 }
@@ -56,6 +73,7 @@ func asStreamInterceptor(around aroundRPC) grpc.StreamServerInterceptor {
 // the chain.
 const (
 	builtinAccessLog           = "access_log"
+	builtinDeadline            = "deadline"
 	builtinRecovery            = "recovery"
 	builtinAdmission           = "admission"
 	builtinPolicyErrorBoundary = "policy_error_boundary"
@@ -77,13 +95,20 @@ type builtinPolicy struct {
 // not sit next to each other: correlation is outermost and is the one policy
 // still written per RPC kind, while the handler boundary must land inside the
 // supplied policy.
+//
+// timeout is the one value that differs between the two chains, which is why
+// NewServer calls this once per chain rather than sharing one list. Producing
+// both lists from this function is what still makes it impossible for a policy
+// to reach unary RPCs and miss streaming ones.
 func builtinPolicies(
 	log *slog.Logger,
 	accessLogs accessLogPolicy,
 	admission *admissionLimiter,
+	timeout time.Duration,
 ) []builtinPolicy {
 	return []builtinPolicy{
 		{name: builtinAccessLog, around: accessLogAround(log, accessLogs)},
+		{name: builtinDeadline, around: deadlineAround(timeout)},
 		{name: builtinRecovery, around: recoveryAround(log)},
 		{name: builtinAdmission, around: admission.around},
 		{name: builtinPolicyErrorBoundary, around: policyErrorBoundary},

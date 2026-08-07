@@ -190,6 +190,11 @@ func TestGRPCServerConfigFillsEveryTransportBound(t *testing.T) {
 	source.AccessLogHealthChecks = true
 	source.AccessLogSlowThreshold = 250 * time.Millisecond
 	source.TelemetryHealthChecks = true
+	// The two bounds the template ships disabled are set here anyway: this test
+	// proves the mapping, not the default, and a field left at its shipped zero
+	// would make the walk below vacuous for it.
+	source.StreamTimeout = 30 * time.Second
+	source.MaxConnectionAge = time.Minute
 
 	mapped := reflect.ValueOf(grpcServerConfig(source))
 	for index := range mapped.NumField() {
@@ -473,6 +478,13 @@ func grpcRuntimeTestConfig() config.Config {
 				MaxReceiveMessageBytes:     4 << 20,
 				MaxSendMessageBytes:        4 << 20,
 				AccessLogSuccessSampleRate: 1,
+				UnaryTimeout:               8 * time.Second,
+				MaxConnectionIdle:          15 * time.Minute,
+				ServerPingInterval:         time.Minute,
+				ServerPingTimeout:          20 * time.Second,
+				MinClientPingInterval:      10 * time.Second,
+				PermitPingWithoutStream:    true,
+				MaxConnectionAgeGrace:      10 * time.Second,
 			},
 		},
 	}

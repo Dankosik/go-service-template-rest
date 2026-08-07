@@ -3,6 +3,9 @@ package oidcjwt
 import (
 	"context"
 	"errors"
+	"fmt"
+	"log/slog"
+	"runtime/debug"
 )
 
 // Kind is the finite, sanitized authentication failure taxonomy.
@@ -16,6 +19,23 @@ const (
 	KindUnavailable
 	KindUntrustedTransport
 )
+
+// lastKind ends the declared run. metrics.go walks to it to build one attribute
+// set per category from verificationReason, which is what keeps that function
+// the only table over [Kind] rather than one of several.
+//
+// It names the last category rather than riding the iota above, because the
+// iotamixing linter does not allow a constant with a right-hand side to share
+// that block. So this is the one thing here that a new Kind does not update on
+// its own, and TestVerificationSetsCoverEveryReason is what fails when it is
+// left behind: that test finds the end of the run independently, through
+// [Error.Error]'s default arm.
+const lastKind = KindUntrustedTransport
+
+// errUnclassified stands for any error reaching this boundary without a [Kind].
+// It is never returned: metrics.go passes it to verificationReason to learn the
+// label such an error records under, so that label is prebuilt like the rest.
+var errUnclassified = errors.New("unclassified authentication failure")
 
 // Error contains no parser, token, key, endpoint, or dependency text.
 type Error struct {
@@ -104,6 +124,36 @@ func verificationReason(err error) string {
 
 func failure(kind Kind) error {
 	return &Error{kind: kind}
+}
+
+// logRecoveredPanic reports a panic this package converted into a sanitized
+// failure. Both converters call it: [Verifier.Verify] and fetchAndInstall.
+//
+// It exists because the conversion is otherwise invisible. A panic in this
+// package's own code leaves verification answering KindUnavailable and a refresh
+// answering errRefreshFailed — exactly what a provider outage produces, in
+// exactly the counters an operator is told to expect outage noise in. So the one
+// failure worth waking someone for reads as the one they were told to ignore.
+//
+// Only the panic's type is published, never its value: a panic raised while
+// parsing a token or a provider document can carry either in its message, and
+// the redaction rule errProviderFetchFailed owns covers logs as much as errors.
+// The stack is safe by the same reading — it names functions and files, not
+// values — and it is the only record of where the panic came from, because both
+// converters answer before any transport recovery could see it.
+// internal/infra/grpc logs a recovered panic the same way.
+func logRecoveredPanic(ctx context.Context, log *slog.Logger, operation string, recovered any) {
+	if log == nil {
+		log = slog.Default()
+	}
+	log.ErrorContext(
+		ctx,
+		"authn_panic_recovered",
+		"component", "authn",
+		"authn.operation", operation,
+		"panic.type", fmt.Sprintf("%T", recovered),
+		"stack", string(debug.Stack()),
+	)
 }
 
 // NewError builds one sanitized authentication category.

@@ -90,6 +90,18 @@ CREATE TABLE outbox_events (
     occurred_at timestamptz NOT NULL,
     payload bytea NOT NULL,
     metadata bytea NOT NULL DEFAULT '\x7b7d'::bytea,
+    -- The trace context active when the event was appended, in the configured
+    -- propagator's own carrier shape: a flat JSON object of header name to
+    -- value. It is envelope state rather than delivery state -- captured once at
+    -- append and never rewritten, so every retry, lease recovery, and operator
+    -- redrive of one event reports the same origin. `{}` means the append had no
+    -- propagatable context, which is ordinary rather than an error.
+    --
+    -- It is deliberately separate from `metadata`: metadata is the caller's
+    -- bytes, stored and retried exactly as given, and merging an outbox-owned
+    -- key into them would break that and collide with a caller that carries its
+    -- own `traceparent`.
+    trace_context bytea NOT NULL DEFAULT '\x7b7d'::bytea,
     ordering_key text COLLATE "C",
     ordering_sequence bigint,
     ordering_ready boolean NOT NULL DEFAULT false,
@@ -127,8 +139,9 @@ CREATE TABLE outbox_events (
     ),
     -- Every size below mirrors a Go constant in internal/infra/postgresoutbox,
     -- which rejects the same value before the statement is sent: 262144 is
-    -- maxPayloadBytes, 32768 maxMetadataBytes, 294912 maxEnvelopeBytes, 256
-    -- maxTextBytes, and 64 maxErrorClassBytes (store_rows.go). Change event.go
+    -- maxPayloadBytes, 32768 maxMetadataBytes, 294912 maxEnvelopeBytes, 1024
+    -- maxTraceContextBytes, 256 maxTextBytes, and 64 maxErrorClassBytes
+    -- (store_rows.go). Change event.go
     -- first, then here: TestEnvelopeLimitsMatchMigrationChecks reads this file
     -- and fails on a limit only one side learned about, because raising one
     -- alone turns a rejected envelope into a check violation at append time.
@@ -150,6 +163,10 @@ CREATE TABLE outbox_events (
         octet_length(metadata) BETWEEN 2 AND 32768
         AND metadata IS JSON OBJECT
     ),
+    CONSTRAINT outbox_events_trace_context_check CHECK (
+        octet_length(trace_context) BETWEEN 2 AND 1024
+        AND trace_context IS JSON OBJECT
+    ),
     CONSTRAINT outbox_events_ordering_check CHECK (
         (ordering_key IS NULL AND ordering_sequence IS NULL)
         OR (
@@ -160,6 +177,11 @@ CREATE TABLE outbox_events (
             AND ordering_sequence > 0
         )
     ),
+    -- trace_context is deliberately absent from this total. The budget bounds
+    -- what a caller must keep under, and charging an outbox-owned field against
+    -- it would start rejecting events a service appends successfully today. The
+    -- stored row therefore exceeds this figure by at most the trace-context
+    -- allowance above.
     CONSTRAINT outbox_events_envelope_size_check CHECK (
         octet_length(id)
         + octet_length(event_type)

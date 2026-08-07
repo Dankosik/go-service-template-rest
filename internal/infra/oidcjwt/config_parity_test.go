@@ -1,8 +1,9 @@
 package oidcjwt
 
 // Proof that the two owners of the authn trust rules agree on which deployments
-// they admit. What each owns alone is in policy_test.go and internal/config's
-// own validation tests.
+// they admit. The rules themselves belong to internal/authntrust and are tested
+// there; what each owner does with them alone is in policy_test.go and
+// internal/config's own validation tests.
 
 import (
 	"fmt"
@@ -27,12 +28,16 @@ type authnConfigCase struct {
 // TestPolicyRulesMatchConfigValidation holds [NewPolicy] and internal/config's
 // validateAuthnConfig to a single answer over one corpus.
 //
-// The two enforce the same rules — the issuer URL shape validProviderURL owns, a
-// non-empty audience, and a non-empty list of unique CIDRs — and cannot share
-// code; validProviderURL owns why. Until this test existed the only thing
-// holding them in step was prose, and a rule tightened on one side let a
-// deployment hold a value its verifier would then refuse — at startup, in
-// production.
+// Both now call internal/authntrust rather than each carrying a predicate, so
+// this no longer guards two copies against drifting apart. It guards the half
+// that sharing cannot fix: that each owner still asks. A validateAuthnConfig
+// that stopped running the shared CIDR parse, or a [NewPolicy] that stopped
+// checking the issuer, would let a deployment hold a value the other refuses —
+// at startup, in production — and no compiler or linter says otherwise.
+//
+// loadAuthnConfig runs the real loader rather than validateAuthnConfig directly,
+// so a rule that is applied but never reached from a configuration load fails
+// here as well.
 //
 // The check lives here rather than in internal/config because the import only
 // works in this direction: feature_packages_no_adapters exempts internal/infra,
@@ -54,8 +59,8 @@ func TestPolicyRulesMatchConfigValidation(t *testing.T) {
 		{name: "issuer with port", issuer: "https://issuer.example.com:8443", audience: goodAudience, cidrs: goodCIDRs, acceptable: true},
 		{name: "single CIDR", issuer: goodIssuer, audience: goodAudience, cidrs: "10.0.0.0/8", acceptable: true},
 
-		// One entry per term in validProviderURL, so tightening or loosening any
-		// of them on one side alone fails here.
+		// One entry per term in ValidProviderURL, so an owner that stops applying
+		// the shared predicate fails here rather than at a deployment's startup.
 		{name: "http issuer", issuer: "http://issuer.example.com", audience: goodAudience, cidrs: goodCIDRs},
 		{name: "relative issuer", issuer: "/realms/main", audience: goodAudience, cidrs: goodCIDRs},
 		{name: "opaque issuer", issuer: "https:issuer.example.com", audience: goodAudience, cidrs: goodCIDRs},

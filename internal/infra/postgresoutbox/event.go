@@ -8,6 +8,8 @@ import (
 	"time"
 	"unicode"
 	"unicode/utf8"
+
+	"go.opentelemetry.io/otel/propagation"
 )
 
 // The envelope's size limits. migrations/000001_postgres_outbox.sql restates
@@ -57,12 +59,19 @@ type Event struct {
 	// byte for byte and are never normalized through jsonb.
 	Payload json.RawMessage
 	// Metadata is exact JSON-object bytes travelling beside Payload, for
-	// correlation and trace context. Empty defaults to {}.
+	// whatever correlation the feature owns. Empty defaults to {}. Trace context
+	// is not carried here — the outbox captures and stores its own; see
+	// [Event.CreationContext].
 	Metadata json.RawMessage
 	// OrderingKey groups events that must publish in sequence order, typically
 	// the aggregate id. Only the earliest unpublished sequence for a key is
 	// claimable, so a key's events never publish out of order. It must be set
 	// together with OrderingSequence, and an empty key opts out of ordering.
+	//
+	// The guarantee ends at [Publisher]. Whether the broker and its consumers
+	// keep a key in order is theirs, and the adapter worked in
+	// test/postgres_outbox_natsjs_integration_test.go does not — see
+	// docs/postgres-transactional-outbox.md.
 	OrderingKey string
 	// OrderingSequence is this event's position within OrderingKey and must be
 	// positive and strictly above the key's retained high-water mark — take it
@@ -70,6 +79,32 @@ type Event struct {
 	// domain mutation. A key therefore supports one writer at a time; a lower
 	// or equal sequence is rejected with [ErrOrderingSequence].
 	OrderingSequence int64
+	// traceContext is the trace context that was active when this event was
+	// appended. It is unexported because the outbox owns it rather than the
+	// caller: [Store.Append] captures it from its own context, so no caller can
+	// set or forge one, and [Store.Claim] restores it. Read it through
+	// [Event.CreationContext]. tracecontext.go owns both directions.
+	traceContext propagation.MapCarrier
+}
+
+// CreationContext is the trace context that was active when this event was
+// appended, in the carrier an OpenTelemetry propagator consumes directly:
+//
+//	ctx = otel.GetTextMapPropagator().Extract(ctx, event.CreationContext())
+//
+// A [Publisher] forwards these entries onto its broker's headers so a consumer
+// joins the same origin. Nothing here checks that it did — the same posture
+// [Event.Metadata] already has.
+//
+// It is empty for an event appended outside a trace, and for one whose context
+// could not be stored. Both extract to an unset context rather than failing,
+// because a trace context never decides whether an event is delivered.
+//
+// The returned carrier is the event's own map rather than a copy, for the
+// reason [net/http.Header] is one: every consumer only reads it, and copying
+// would allocate once per claimed event. Do not write to it.
+func (e Event) CreationContext() propagation.MapCarrier {
+	return e.traceContext
 }
 
 // NewID mints one opaque token. A feature uses it for [Event.ID], the identity

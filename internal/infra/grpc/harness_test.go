@@ -1,13 +1,13 @@
 // Shared test harness for package grpcx: the bounded default config, the two
-// ways to stand a real server up, and the one way to register a unary service on
-// it. A test needing an RPC through the full server composes these rather than
-// hand-rolling another descriptor. The single streaming service stays in
-// correlation_service_test.go beside its only caller.
+// ways to stand a real server up, and the one way each to register a unary and a
+// streaming service on it. A test needing an RPC through the full server composes
+// these rather than hand-rolling another descriptor.
 //
 // Pick startTestServer for anything that only needs an RPC to reach a handler:
 // it is bufconn-backed, owns teardown, and touches no port. Pick serveOverTCP
 // when the client has to be grpcclient.New — it takes a target string and
-// exposes no dialer, so it cannot reach a bufconn.
+// exposes no dialer, so it cannot reach a bufconn. Both carry every connection
+// bound, so keepalive_test.go proves rotation over the bufconn path.
 
 package grpcx
 
@@ -15,6 +15,7 @@ import (
 	"context"
 	"net"
 	"testing"
+	"time"
 
 	"github.com/example/go-service-template-rest/internal/infra/grpc/grpctest"
 	"github.com/example/go-service-template-rest/internal/infra/grpcclient"
@@ -36,6 +37,13 @@ const (
 	testPayloadFullMethod = "/grpcx.test.PayloadService/Call"
 )
 
+// testServerConfig is the bounded default every test starts from. Its liveness
+// bounds are far enough out that none of them fires during a test, and rotation
+// and both RPC timeouts are left off, so a test that cares about one sets it
+// rather than inheriting a cut it did not ask for.
+//
+// The liveness values are not decoration: config_parity_test.go runs this
+// fixture through validateConfig, which refuses a zero there.
 func testServerConfig() Config {
 	return Config{
 		MaxConcurrentRPCs:          4,
@@ -44,6 +52,11 @@ func testServerConfig() Config {
 		MaxReceiveMessageBytes:     4 << 20,
 		MaxSendMessageBytes:        4 << 20,
 		AccessLogSuccessSampleRate: 1,
+		MaxConnectionIdle:          time.Minute,
+		ServerPingInterval:         time.Minute,
+		ServerPingTimeout:          20 * time.Second,
+		MinClientPingInterval:      10 * time.Second,
+		PermitPingWithoutStream:    true,
 	}
 }
 
@@ -141,6 +154,20 @@ func registerUnaryTestService[Request any, RequestPtr interface {
 	call func(context.Context, RequestPtr) (RequestPtr, error),
 ) {
 	grpctest.Register(registrar, grpctest.Unary[Request, RequestPtr](fullMethod, call))
+}
+
+// registerStreamTestService registers one streaming method named by fullMethod
+// and backed by call, for the same reason registerUnaryTestService exists.
+//
+// Every caller supplies its own handler and its own method name: the handlers
+// close over the channels their test observes, so what is shared here is the
+// registration, not the service.
+func registerStreamTestService(
+	registrar grpc.ServiceRegistrar,
+	fullMethod string,
+	call func(grpc.ServerStream) error,
+) {
+	grpctest.Register(registrar, grpctest.ServerStream(fullMethod, call))
 }
 
 // serveOverTCP serves an already-built server on a loopback listener and dials

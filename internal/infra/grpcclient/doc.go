@@ -20,12 +20,21 @@
 // applied before OpenTelemetry injects the selected allowlist. propagation.go
 // owns the first two and the reserved key set; resolver.go owns the third.
 // [New] closes the two remaining routes by which a peer could introduce a
-// fourth, refusing both proxies and server-supplied service config.
+// fourth, refusing both proxies and resolver-supplied service config. It still
+// supplies a default service config of its own, carrying the
+// [LoadBalancingPolicy]; that is this client's decision rather than a peer's,
+// which is why the two compose.
 //
 // # Extending it
 //
-// Selecting the policy is the one decision most callers make, once per
-// dependency rather than per call. [PropagationNone] is the zero value on
+// [Config.LoadBalancing] selects how RPCs spread across the addresses a target
+// resolves to. Round robin is the zero value, so a connection nobody configured
+// distributes rather than pins; its own doc owns why. [Config] also carries the
+// keepalive interval and timeout that keep one long-lived connection usable
+// through an idle intermediary.
+//
+// Selecting the propagation policy is the one decision most callers make, once
+// per dependency rather than per call. [PropagationNone] is the zero value on
 // purpose: a client nobody configured emits no remote correlation metadata at
 // all, while still recording local client spans and metrics.
 // [PropagationTraceContext] adds the W3C trace context, and

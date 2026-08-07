@@ -9,8 +9,11 @@
 // PostgreSQL update republishes the same event ID and bytes after the lease
 // expires, so consumers deduplicate whatever is not naturally idempotent.
 //
-// Three audiences share one [Store]. A feature calls only [Store.Append], inside
-// the transaction that owns its mutation. The relay process owns [Store.Claim],
+// Three audiences share one [Store]. The write path calls only [Store.Append],
+// inside the transaction that owns its mutation — that path is a PostgreSQL
+// repository adapter rather than a feature package, because depguard denies a
+// feature package both internal/infra and pgx; see the ownership split in
+// docs/postgres-transactional-outbox.md. The relay process owns [Store.Claim],
 // the mark and retry family, [Store.CleanupPublished], and [Store.Observe].
 // [Store.Redrive] is operator tooling, and so is [Store.Get] — but the relay
 // reads it too, to resolve a finalization its batch statement did not report, so
@@ -53,16 +56,44 @@
 // the closed metric and log vocabularies with the functions that bound them, and
 // telemetry.go the instruments, the snapshot, and the scrape callback.
 //
+// # Trace continuity
+//
+// An event carries the trace context that was active when it was appended, so a
+// publication minutes or days later can still name the operation that produced
+// it. tracecontext.go owns both directions: [Store.Append] captures it, and
+// [Store.Claim] restores it into [Event.CreationContext] for the adapter to put
+// on broker headers.
+//
+// It is stored in its own column rather than in [Event.Metadata], because
+// metadata is the caller's bytes and merging into them would break that. The
+// relay's publish span links to the restored context instead of descending from
+// it — see Telemetry.StartPublish for why a child would be wrong.
+//
+// Nothing about it can fail a delivery. A context that cannot be captured is
+// stored as absent and counted; one that cannot be decoded reads as absent. A
+// telemetry field must never be the reason a business event is rejected or a
+// publication fails.
+//
+// # Ordering-key lifetime
+//
+// outbox_ordering_heads keeps one row per ordering key ever appended, and
+// cleanup never removes one: the retained high-water mark is what rejects a
+// replayed sequence, so it has to outlive the events it came from.
+// store_retire.go is the only way a row leaves — [Store.RetireOrderingKeys], an
+// assertion by the feature that owns the aggregate that its key is terminal.
+// Nothing infers that from idleness, because a quiet key is not a finished one.
+//
 // # Extending it
 //
 // Three extensions are expected. The first two do not require reading the relay
 // loop; the third is the relay loop, and its cost is stated last.
 //
-// To emit a new event type, build an [Event] and pass it to [Store.Append] inside
-// the transaction that owns the mutation. The relay side ships composed and the
-// append side does not: no [Store] exists in cmd/service, because the template
-// has no feature that emits events, so the first feature that does also builds
-// one over the API process's pool and threads it in — see the worked wiring in
+// To emit a new event type, build an [Event] in the repository adapter that owns
+// the mutation's transaction and pass it to [Store.Append] inside that
+// transaction. The relay side ships composed and the append side does not: no
+// [Store] exists in cmd/service, because the template has no feature that emits
+// events, so the first service that does builds one over the API process's pool
+// and threads it in — see the worked wiring in
 // docs/postgres-transactional-outbox.md. Append never begins or commits a
 // transaction, so returning its error rolls back the mutation and the event
 // together. Pass every event of one business transaction in a single variadic
@@ -117,7 +148,8 @@
 // notify*.go from the first, because those are the PostgreSQL adapters; the relay
 // loop and the envelope stay driver-free. That glob is why the statements split
 // as store_append.go, store_claim.go, store_finalize.go, store_maintenance.go,
-// store_operator.go, and store_rows.go: a file named anything else moves pgx and
+// store_operator.go, store_retire.go, and store_rows.go: a file named anything
+// else moves pgx and
 // the generated types outside the exemption, and depguard then reports the import
 // rather than the rename that caused it. Keep the prefix, or move the exemption
 // with the code. The same holds for the test files that hold the driver doubles,

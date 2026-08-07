@@ -145,13 +145,15 @@ var siblingFile = regexp.MustCompile(`\b[a-z][a-z_]*\.go\b`)
 // declaration this repository owns. Anything else that lands here is an
 // identifier, and a new entry should be viewed with suspicion.
 var docProseWords = map[string]struct{}{
-	"OpenAPI":       {},
-	"gRPC":          {},
-	"KiB":           {},
-	"MeterProvider": {},
-	"NumericDate":   {},
-	"ServerStream":  {},
-	"UseNumber":     {},
+	"CloseIdleConnections": {},
+	"OpenAPI":              {},
+	"gRPC":                 {},
+	"KiB":                  {},
+	"MeasurementOption":    {},
+	"MeterProvider":        {},
+	"NumericDate":          {},
+	"ServerStream":         {},
+	"UseNumber":            {},
 }
 
 // commentedNameSources are the other packages whose declarations this package's
@@ -162,6 +164,7 @@ var docProseWords = map[string]struct{}{
 // package's gRPC adapter together, so the comments naming its declarations are
 // removed with them by the same profile markers.
 var commentedNameSources = []string{
+	filepath.Join("..", "..", "authntrust"),
 	filepath.Join("..", "..", "config"),
 	filepath.Join("..", "..", "infra", "grpc"),
 	filepath.Join("..", "..", "infra", "http"),

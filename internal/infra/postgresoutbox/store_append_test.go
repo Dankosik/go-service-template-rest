@@ -45,9 +45,22 @@ func TestStoreAppendValidationAndInsert(t *testing.T) {
 	if err := store.Append(t.Context(), tx, event, second); err != nil {
 		t.Fatalf("Append(unordered) error = %v", err)
 	}
-	if tx.statements != 1 || len(tx.arguments) != 8 {
-		t.Fatalf("Append(unordered) sent %d statements with %d column arrays, want 1 and 8",
+	if tx.statements != 1 || len(tx.arguments) != 9 {
+		t.Fatalf("Append(unordered) sent %d statements with %d column arrays, want 1 and 9",
 			tx.statements, len(tx.arguments))
+	}
+	// One creation context per event, and the same one for every event of the
+	// call: they share the caller's context, so a second encoding would be a
+	// second copy of one value.
+	contexts, ok := tx.arguments[8].([][]byte)
+	if !ok || len(contexts) != 2 {
+		t.Fatalf("Append(unordered) trace contexts = %v", tx.arguments[8])
+	}
+	// Appending outside a trace stores the empty object rather than failing.
+	for index, stored := range contexts {
+		if string(stored) != "{}" {
+			t.Fatalf("Append(unordered) trace context %d = %q, want the empty object", index, stored)
+		}
 	}
 
 	// Ordered and unordered events travel together, so a mixed call is still
@@ -58,13 +71,13 @@ func TestStoreAppendValidationAndInsert(t *testing.T) {
 	if err := store.Append(t.Context(), tx, event, second, ordered); err != nil {
 		t.Fatalf("Append(mixed) error = %v", err)
 	}
-	if tx.statements != 1 || len(tx.arguments) != 10 {
-		t.Fatalf("Append(mixed) sent %d statements with %d column arrays, want 1 and 10",
+	if tx.statements != 1 || len(tx.arguments) != 11 {
+		t.Fatalf("Append(mixed) sent %d statements with %d column arrays, want 1 and 11",
 			tx.statements, len(tx.arguments))
 	}
-	if keys, ok := tx.arguments[8].([]string); !ok || len(keys) != 3 ||
+	if keys, ok := tx.arguments[9].([]string); !ok || len(keys) != 3 ||
 		keys[0] != "" || keys[1] != "" || keys[2] != "key" {
-		t.Fatalf("Append(mixed) ordering keys = %v", tx.arguments[8])
+		t.Fatalf("Append(mixed) ordering keys = %v", tx.arguments[9])
 	}
 
 	// A returned row is a key whose first sequence did not clear its retained

@@ -518,9 +518,7 @@ if [[ "${source_checkout}" != true ]]; then
 		rm -f -- \
 			internal/config/outbox_config_test.go \
 			internal/infra/postgres/queries/postgres_outbox.sql \
-			test/postgres_outbox_bench_integration_test.go \
-			test/postgres_outbox_integration_test.go \
-			test/postgres_outbox_natsjs_integration_test.go \
+			test/postgres_outbox_*_test.go \
 			docs/postgres-transactional-outbox.md
 		remove_outbox_migrations
 		if ! find internal/infra/postgres/queries -type f -name '*.sql' -print -quit 2>/dev/null | grep -q .; then
@@ -570,7 +568,10 @@ if [[ "${source_checkout}" != true ]]; then
 	fi
 
 	if [[ "${authn}" == "none" ]]; then
-		rm -rf -- internal/infra/oidcjwt
+		# authntrust exists only to be shared by the verifier and internal/config's
+		# authn validation. With the profile off it has no caller at all, so it
+		# leaves with them rather than becoming an unreferenced leaf.
+		rm -rf -- internal/infra/oidcjwt internal/authntrust
 		rm -f -- \
 			cmd/service/internal/bootstrap/authn_bootstrap_test.go \
 			cmd/service/internal/bootstrap/authn_readiness_test.go \

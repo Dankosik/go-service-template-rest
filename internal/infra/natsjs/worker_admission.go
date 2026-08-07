@@ -190,11 +190,20 @@ func desiredConsumerConfig(cfg WorkerConfig) jetstream.ConsumerConfig {
 		// A canceled pull can remain broker-side until its five-second expiry.
 		// Two slots let the one local fetch loop recover without treating that
 		// bounded stale request as a terminal MaxWaiting failure.
-		MaxWaiting:         2,
-		MaxAckPending:      cfg.MaxConcurrency,
-		MaxRequestBatch:    1,
+		MaxWaiting:    2,
+		MaxAckPending: cfg.MaxConcurrency,
+		// The broker's copy of the worker's own two bounds: a pull may ask for
+		// at most one message per handler slot, and the batch it returns stays
+		// inside the resident wire data ValidateWorkerConfig already caps at
+		// MaxConcurrency times MaxDeliveryBytes.
+		//
+		// Both have to be stated. MaxRequestMaxBytes constrains the batch
+		// rather than only rejecting a request that asks for more, so leaving
+		// it at one message's size would cut every batch back to one message
+		// and undo the batching MaxRequestBatch just allowed.
+		MaxRequestBatch:    cfg.MaxConcurrency,
 		MaxRequestExpires:  operationTimeout,
-		MaxRequestMaxBytes: cfg.MaxDeliveryBytes,
+		MaxRequestMaxBytes: cfg.MaxConcurrency * cfg.MaxDeliveryBytes,
 		FilterSubject:      cfg.FilterSubject,
 	}
 }

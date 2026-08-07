@@ -43,6 +43,10 @@ func TestEnvelopeLimitsMatchMigrationChecks(t *testing.T) {
 		{column: "lease_token", want: fmt.Sprintf("octet_length(lease_token) BETWEEN 1 AND %d", maxTextBytes)},
 		{column: "payload", want: fmt.Sprintf("octet_length(payload) BETWEEN 1 AND %d", maxPayloadBytes)},
 		{column: "metadata", want: fmt.Sprintf("octet_length(metadata) BETWEEN 2 AND %d", maxMetadataBytes)},
+		{
+			column: "trace_context",
+			want:   fmt.Sprintf("octet_length(trace_context) BETWEEN 2 AND %d", maxTraceContextBytes),
+		},
 		{column: "envelope total", want: fmt.Sprintf("octet_length(metadata) <= %d", maxEnvelopeBytes)},
 		{
 			column: "last_error_class",

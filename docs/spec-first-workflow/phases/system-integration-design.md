@@ -141,11 +141,36 @@ Design against an external platform or service requires current official contrac
 
 ## System Release Closure
 
-When the accepted outcome spans multiple deployables, repositories, or managed dependencies, derive the smallest affected deployment graph and its integrated release proof from the documented material flows. Close that graph as one system rather than treating each repository as independently complete. Keep the result inline unless the shared persistence trigger requires a durable design artifact.
+Before treating release impact as untriggered, disposition it whenever a change
+can affect a runtime deployable, worker or job, public or shared contract,
+persisted state or migration, runtime configuration or trust material, or a
+managed dependency. Record `no deployment impact` only from current evidence
+that no deployed node, edge, state, or operator path can change. Otherwise
+derive the smallest affected deployment graph and its integrated release proof
+from the documented material flows. Close that graph as one system rather than
+treating each repository as independently complete. Keep the result inline
+unless the shared persistence trigger requires a durable design artifact.
 
-- Inventory only the APIs, workers, jobs, producers, consumers, data stores, brokers, and other managed dependencies whose state or interaction can change the accepted outcome. For each affected node or edge, name its owner, canonical contract or configuration source, target environment, placement or region, and required network path.
+- Inventory only the APIs, workers, jobs, producers, consumers, data stores,
+  brokers, and other managed dependencies whose state or interaction can change
+  the accepted outcome. For each affected node or edge, name its owner,
+  relevant current-to-target state, canonical contract or configuration source,
+  target environment, placement or region, and required network path. Include
+  a legacy reader, writer, process, data shape, or alternate configuration form
+  only when it can change compatibility, order, recovery, or proof.
 - For every changed API, event, shared schema, or material configuration, identify affected producers and consumers plus the mixed-version window. Each affected owner must be updated, proven compatible from current evidence, or recorded as an external blocker; a producer-only green build is not contract closure.
-- Close the required deployment inputs, dependency order, rollback boundary, and integrated proof. Include only triggered infrastructure such as migrations, topics, schemas, consumer groups, access policy, service discovery, environment-variable presence, capacity, and latency budgets. Proof must exercise the material service call or message path through its required durable effect and target-environment readiness or post-cutover signals; provider deployment status or one component's health is insufficient.
+- Close the required deployment inputs, dependency order, irreversible and
+  rollback or roll-forward boundaries, and integrated proof. For every release
+  gate, name its prerequisite, action, distinct success and safe failure
+  signals, evidence-bounded duration or behavior-changing time horizon, recovery
+  consequence, and proving surface. Include only triggered infrastructure such
+  as migrations, topics, schemas, consumer groups, access policy, service
+  discovery, environment-variable semantics, capacity, and latency budgets.
+  Persist a non-trivial sequence under the compact `rollout.md` contract in
+  [Artifact Model](../shared/artifact-model.md#rollout-record). Proof must
+  exercise the material service call or message path through its required
+  durable effect and target-environment readiness or post-cutover signals;
+  provider deployment status or one component's health is insufficient.
 
 An unverified cross-region or otherwise remote latency-sensitive path is a blocker unless current evidence shows that the accepted end-to-end and per-hop budgets hold. Do not assume either co-location or multi-region safety from platform defaults. If a required node, edge, configuration, or proof is outside current authority, assign its owner and earliest checkpoint and narrow the completion claim instead of declaring the system ready, deployed, or complete.
 

@@ -127,6 +127,10 @@ func (r *Relay) publishAll(
 
 func (r *Relay) publishOne(ctx context.Context, event Event) (err error) {
 	started := time.Now()
+	// The adapter is called with the span's context, so whatever spans it opens
+	// for its own broker call nest under this publication rather than floating
+	// as roots of their own.
+	ctx, span := r.telemetry.StartPublish(ctx, event)
 	defer func() {
 		if recover() != nil {
 			err = ErrPublisherPanic
@@ -135,7 +139,8 @@ func (r *Relay) publishOne(ctx context.Context, event Event) (err error) {
 		if err != nil {
 			errorClass = publicationErrorClass(err)
 		}
-		r.telemetry.RecordOperation(ctx, "publish", operationOutcome(err), errorClass, time.Since(started))
+		r.telemetry.EndPublish(span, err, errorClass)
+		r.telemetry.RecordOperation(ctx, publishOperationName, operationOutcome(err), errorClass, time.Since(started))
 	}()
 
 	err = r.publisher.Publish(ctx, event)

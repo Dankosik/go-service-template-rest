@@ -154,6 +154,21 @@ than as anything the caller sent; it is deliberately not counted as `invalid`,
 because a client that hung up is not a client with a bad credential. `invalid`
 and `missing` are ordinary client outcomes and are expected to be non-zero.
 
+`key_miss` counts every refresh a verification asked for, which is wider than an
+absent key id: a key rotated in place, under a name the service already holds,
+also fails to verify and is recovered by the same fetch. Read it as "the
+installed key set could not answer", and expect a burst of it around a provider
+rotation. It is the one trigger a caller can drive, so it is rate-limited to one
+fetch per 30 seconds; a sustained rate with no rotation behind it means requests
+are arriving with key ids this service has never held. Those requests wait on
+the fetch, so tune it together with `http.max_in_flight`, which caps how many
+can be waiting at once.
+
+A recovered panic is reported as `authn_panic_recovered` with its Go type and
+stack and never its value. It is a defect in the service rather than a provider
+problem, even though the request and the refresh answer in the same categories a
+provider outage answers in — which is why the log record exists.
+
 No metric, log message, trace attribute, returned error, or panic recovery
 contains a token, JWT segment, claim value, subject, issuer URL, JWKS URL, or
 provider response body. Provider failures are intentionally stage-specific but

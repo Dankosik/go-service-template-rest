@@ -232,6 +232,15 @@ func sentinelConfigSourceValues() map[string]any {
 		"grpc.server.access_log_success_sample_rate": 0.25,
 		"grpc.server.access_log_slow_threshold":      "750ms",
 		"grpc.server.telemetry_health_checks":        true,
+		"grpc.server.unary_timeout":                  "9s",
+		"grpc.server.stream_timeout":                 "45s",
+		"grpc.server.max_connection_idle":            "16m",
+		"grpc.server.server_ping_interval":           "2m",
+		"grpc.server.server_ping_timeout":            "21s",
+		"grpc.server.min_client_ping_interval":       "11s",
+		"grpc.server.permit_ping_without_stream":     true,
+		"grpc.server.max_connection_age":             "50s",
+		"grpc.server.max_connection_age_grace":       "12s",
 		// profile:grpc:end
 
 		"health.refresh_interval":  "3s",
@@ -351,6 +360,15 @@ func expectedSentinelSnapshotValues() map[string]any {
 		"grpc.server.access_log_success_sample_rate": 0.25,
 		"grpc.server.access_log_slow_threshold":      750 * time.Millisecond,
 		"grpc.server.telemetry_health_checks":        true,
+		"grpc.server.unary_timeout":                  9 * time.Second,
+		"grpc.server.stream_timeout":                 45 * time.Second,
+		"grpc.server.max_connection_idle":            16 * time.Minute,
+		"grpc.server.server_ping_interval":           2 * time.Minute,
+		"grpc.server.server_ping_timeout":            21 * time.Second,
+		"grpc.server.min_client_ping_interval":       11 * time.Second,
+		"grpc.server.permit_ping_without_stream":     true,
+		"grpc.server.max_connection_age":             50 * time.Second,
+		"grpc.server.max_connection_age_grace":       12 * time.Second,
 		// profile:grpc:end
 
 		"health.refresh_interval":  3 * time.Second,

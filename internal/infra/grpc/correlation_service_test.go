@@ -2,9 +2,9 @@
 // is the accepted identifier the one that reaches the handler, the response
 // metadata, the logs, and the spans?
 //
-// This file owns the single streaming service in the package, because it is the
-// only test that needs one, and it consumes Serve's result itself while
-// asserting the shutdown sequence.
+// The streaming handler stays here with the channels it observes, and the
+// registration comes from harness_test.go, which other files now also use. This
+// file consumes Serve's result itself while asserting the shutdown sequence.
 
 package grpcx
 
@@ -14,7 +14,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/example/go-service-template-rest/internal/infra/grpc/grpctest"
 	"github.com/example/go-service-template-rest/internal/infra/grpcclient"
 	"github.com/example/go-service-template-rest/internal/reqctx"
 	"go.opentelemetry.io/otel/propagation"
@@ -29,9 +28,10 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-// The streaming method this file drives. It stays here rather than in
-// harness_test.go because no other file registers it, and at the head rather
-// than the tail for the reason harness_test.go gives for its own constants.
+// The streaming method this file drives. Each file registering a stream names
+// its own method, so this stays here rather than in harness_test.go, and at the
+// head rather than the tail for the reason harness_test.go gives for its own
+// constants.
 const correlationStreamFullMethod = "/grpcx.test.CorrelationService/Wait"
 
 func TestServiceToServiceGRPCCorrelationAndCancellation(t *testing.T) {
@@ -55,7 +55,8 @@ func TestServiceToServiceGRPCCorrelationAndCancellation(t *testing.T) {
 	streamEntered := make(chan struct{})
 	streamDone := make(chan struct{})
 	register := func(registrar grpc.ServiceRegistrar) {
-		grpctest.Register(registrar, grpctest.ServerStream(
+		registerStreamTestService(
+			registrar,
 			correlationStreamFullMethod,
 			func(stream grpc.ServerStream) error {
 				var request emptypb.Empty
@@ -71,7 +72,7 @@ func TestServiceToServiceGRPCCorrelationAndCancellation(t *testing.T) {
 				close(streamDone)
 				return stream.Context().Err()
 			},
-		))
+		)
 	}
 	cfg := testServerConfig()
 	cfg.TelemetryHealthChecks = true

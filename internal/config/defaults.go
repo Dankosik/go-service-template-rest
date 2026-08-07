@@ -1,6 +1,12 @@
 package config
 
-import "github.com/example/go-service-template-rest/internal/observability/otelconfig"
+import (
+	// profile:grpc:start
+	"time"
+	// profile:grpc:end
+
+	"github.com/example/go-service-template-rest/internal/observability/otelconfig"
+)
 
 // buildVersion is set by the production Docker build and remains "dev" for local builds.
 var buildVersion = "dev"
@@ -41,6 +47,29 @@ func DefaultGRPCServerConfig() GRPCServerConfig {
 		AccessLogSuccessSampleRate: 1,
 		AccessLogSlowThreshold:     0,
 		TelemetryHealthChecks:      false,
+		// unary_timeout matches http.request_timeout so one service answers on
+		// one budget over both transports; stream_timeout is off because a
+		// long-lived stream's duration policy belongs to its feature.
+		UnaryTimeout:  8 * time.Second,
+		StreamTimeout: 0,
+		// The liveness bounds detect a vanished peer within roughly the ping
+		// interval plus its timeout, well under grpc-go's 2h default, and
+		// reclaim a connection nobody is using. min_client_ping_interval is
+		// below the client half's 30s ping interval, and permitting a ping with
+		// no active stream is what lets that client keep an idle connection
+		// through a NAT or balancer idle timeout.
+		MaxConnectionIdle:       15 * time.Minute,
+		ServerPingInterval:      time.Minute,
+		ServerPingTimeout:       20 * time.Second,
+		MinClientPingInterval:   10 * time.Second,
+		PermitPingWithoutStream: true,
+		// Rotation is off: it is the only bound here that ends work in progress.
+		// The grace is still 10s rather than zero, so enabling rotation by
+		// setting an age alone is a working configuration rather than a startup
+		// refusal — and 10s exceeds unary_timeout, which is the relation
+		// validateGRPCLifetimeBounds enforces.
+		MaxConnectionAge:      0,
+		MaxConnectionAgeGrace: 10 * time.Second,
 	}
 }
 
@@ -127,6 +156,15 @@ func defaultValues() map[string]any {
 		"grpc.server.access_log_success_sample_rate": grpcServer.AccessLogSuccessSampleRate,
 		"grpc.server.access_log_slow_threshold":      grpcServer.AccessLogSlowThreshold.String(),
 		"grpc.server.telemetry_health_checks":        grpcServer.TelemetryHealthChecks,
+		"grpc.server.unary_timeout":                  grpcServer.UnaryTimeout.String(),
+		"grpc.server.stream_timeout":                 grpcServer.StreamTimeout.String(),
+		"grpc.server.max_connection_idle":            grpcServer.MaxConnectionIdle.String(),
+		"grpc.server.server_ping_interval":           grpcServer.ServerPingInterval.String(),
+		"grpc.server.server_ping_timeout":            grpcServer.ServerPingTimeout.String(),
+		"grpc.server.min_client_ping_interval":       grpcServer.MinClientPingInterval.String(),
+		"grpc.server.permit_ping_without_stream":     grpcServer.PermitPingWithoutStream,
+		"grpc.server.max_connection_age":             grpcServer.MaxConnectionAge.String(),
+		"grpc.server.max_connection_age_grace":       grpcServer.MaxConnectionAgeGrace.String(),
 		// profile:grpc:end
 
 		"health.refresh_interval":  "2s",
