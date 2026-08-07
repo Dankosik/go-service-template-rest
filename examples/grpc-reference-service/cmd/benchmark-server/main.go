@@ -30,24 +30,6 @@ const (
 	shutdownTimeout = 5 * time.Second
 )
 
-type benchmarkServerSettings struct {
-	transport      grpcx.Config
-	maxConnections int
-}
-
-type otelLoadRecorder struct {
-	active metric.Int64UpDownCounter
-	shed   metric.Int64Counter
-}
-
-// benchmarkJSONSink keeps JSON encoding in the measured server path while
-// discarding only the final encoded bytes.
-type benchmarkJSONSink struct{}
-
-func (benchmarkJSONSink) Write(data []byte) (int, error) {
-	return len(data), nil
-}
-
 func main() {
 	os.Exit(mainExitCode())
 }
@@ -128,28 +110,58 @@ func run(ctx context.Context, ready io.Writer) error {
 	}
 
 	server.StartDrain()
-	shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), shutdownTimeout)
+	return stopServer(ctx, server, serveDone)
+}
+
+// stopServer waits out the shutdown budget, forces whatever is left, and reports
+// every failure the stop produced rather than the first.
+//
+// Each step contributes to one list because none of them cancels the next: a
+// graceful stop that ran out of budget still has to be forced, and Serve's own
+// result still has to be collected either way.
+func stopServer(parent context.Context, server *grpcx.Server, serveDone <-chan error) error {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(parent), shutdownTimeout)
 	defer cancel()
 
-	shutdownErr := server.Shutdown(shutdownCtx)
-	if shutdownErr != nil {
-		shutdownErr = errors.Join(shutdownErr, server.Close())
+	var stopErrors []error
+	if err := server.Shutdown(ctx); err != nil {
+		stopErrors = append(stopErrors, err, server.Close())
 	}
-
 	select {
 	case serveErr := <-serveDone:
-		if serveErr != nil {
-			shutdownErr = errors.Join(shutdownErr, serveErr)
-		}
-	case <-shutdownCtx.Done():
-		shutdownErr = errors.Join(shutdownErr, shutdownCtx.Err(), server.Close())
+		stopErrors = append(stopErrors, serveErr)
+	case <-ctx.Done():
+		stopErrors = append(stopErrors, ctx.Err(), server.Close())
 	}
-	if shutdownErr != nil {
-		return fmt.Errorf("stop gRPC benchmark server: %w", shutdownErr)
+
+	if err := errors.Join(stopErrors...); err != nil {
+		return fmt.Errorf("stop gRPC benchmark server: %w", err)
 	}
 	return nil
 }
 
+// benchmarkJSONSink keeps JSON encoding in the measured server path while
+// discarding only the final encoded bytes.
+type benchmarkJSONSink struct{}
+
+func (benchmarkJSONSink) Write(data []byte) (int, error) {
+	return len(data), nil
+}
+
+type benchmarkServerSettings struct {
+	transport      grpcx.Config
+	maxConnections int
+}
+
+// settingsFromDefaults is this example's crossing from loaded configuration to
+// the transport adapter's bounds, and the third place that crossing is written
+// out: cmd/service/internal/bootstrap.grpcServerConfig is the production one and
+// serverConfigFromRuntime in internal/infra/grpc/config_parity_test.go is that
+// package's oracle. Neither is importable from here — one is internal to another
+// binary, the other is a test — so a bound added to grpcx.Config has to be added
+// in all three. TestBenchmarkServerProcessLifecycle asks the target-side
+// question that makes a bound missed here fail rather than quietly change what
+// the benchmark measures.
 func settingsFromDefaults(defaults config.GRPCServerConfig) (benchmarkServerSettings, error) {
 	if defaults.MaxConnections <= 0 {
 		return benchmarkServerSettings{}, errors.New("build gRPC benchmark server: max connections must be positive")
@@ -163,13 +175,18 @@ func settingsFromDefaults(defaults config.GRPCServerConfig) (benchmarkServerSett
 			MaxHeaderListBytes:         defaults.MaxHeaderListBytes,
 			MaxReceiveMessageBytes:     defaults.MaxReceiveMessageBytes,
 			MaxSendMessageBytes:        defaults.MaxSendMessageBytes,
-			LogHealthChecks:            defaults.AccessLogHealthChecks,
+			AccessLogHealthChecks:      defaults.AccessLogHealthChecks,
 			AccessLogSuccessSampleRate: defaults.AccessLogSuccessSampleRate,
 			AccessLogSlowThreshold:     defaults.AccessLogSlowThreshold,
 			TelemetryHealthChecks:      defaults.TelemetryHealthChecks,
 		},
 		maxConnections: defaults.MaxConnections,
 	}, nil
+}
+
+type otelLoadRecorder struct {
+	active metric.Int64UpDownCounter
+	shed   metric.Int64Counter
 }
 
 // newOTelLoadRecorder stands in for internal/infra/telemetry, which this

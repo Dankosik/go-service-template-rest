@@ -91,12 +91,18 @@ func (Service) ClientStream(stream referencev1.EchoService_ClientStreamServer) e
 			return streamFailure(stream.Context(), "receive client-stream request", err)
 		}
 		value := request.GetValue()
-		if len(values) >= maxReferenceStreamMessages ||
-			len(value) > maxClientStreamValueBytes-totalValueBytes {
+		if len(values) >= maxReferenceStreamMessages {
 			return fmt.Errorf(
-				"client stream reached %d messages and %d bytes: %w",
-				len(values),
-				totalValueBytes,
+				"client stream reached the %d-message limit: %w",
+				maxReferenceStreamMessages,
+				ErrStreamLimit,
+			)
+		}
+		if totalValueBytes+len(value) > maxClientStreamValueBytes {
+			return fmt.Errorf(
+				"client stream reached the %d-byte limit at %d bytes: %w",
+				maxClientStreamValueBytes,
+				totalValueBytes+len(value),
 				ErrStreamLimit,
 			)
 		}

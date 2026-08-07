@@ -3,10 +3,57 @@ package postgresoutbox
 import (
 	"bytes"
 	"errors"
+	"fmt"
+	"os"
 	"strings"
 	"testing"
 	"time"
 )
+
+// Every size this package rejects an envelope on is restated in the migration as
+// a CHECK literal, because PostgreSQL is what stops a writer that bypasses
+// Append. Nothing else compares the two, and raising a Go constant alone would
+// turn a rejection this package owns — returned before any statement is sent —
+// into a check violation inside the feature's own transaction, rolling back the
+// mutation the event was appended with.
+//
+// The table is every column each constant governs, including maxErrorClassBytes
+// from store_rows.go: the claim is that the schema and this package describe one
+// set of limits, and splitting it across two test files would prove neither half.
+// Matching on the rendered CHECK text means reformatting the migration fails this
+// test; the wanted string is in the failure, so the repair is mechanical.
+func TestEnvelopeLimitsMatchMigrationChecks(t *testing.T) {
+	t.Parallel()
+
+	const migrationPath = "../../../migrations/000001_postgres_outbox.sql"
+	schema, err := os.ReadFile(migrationPath)
+	if err != nil {
+		t.Fatalf("read %s: %v", migrationPath, err)
+	}
+	for _, check := range []struct {
+		column string
+		want   string
+	}{
+		{column: "id", want: fmt.Sprintf("octet_length(id) BETWEEN 1 AND %d", maxTextBytes)},
+		{column: "event_type", want: fmt.Sprintf("octet_length(event_type) BETWEEN 1 AND %d", maxTextBytes)},
+		{column: "source", want: fmt.Sprintf("octet_length(source) BETWEEN 1 AND %d", maxTextBytes)},
+		{column: "destination", want: fmt.Sprintf("octet_length(destination) BETWEEN 1 AND %d", maxTextBytes)},
+		{column: "schema_name", want: fmt.Sprintf("octet_length(schema_name) BETWEEN 1 AND %d", maxTextBytes)},
+		{column: "ordering_key", want: fmt.Sprintf("octet_length(ordering_key) BETWEEN 1 AND %d", maxTextBytes)},
+		{column: "lease_token", want: fmt.Sprintf("octet_length(lease_token) BETWEEN 1 AND %d", maxTextBytes)},
+		{column: "payload", want: fmt.Sprintf("octet_length(payload) BETWEEN 1 AND %d", maxPayloadBytes)},
+		{column: "metadata", want: fmt.Sprintf("octet_length(metadata) BETWEEN 2 AND %d", maxMetadataBytes)},
+		{column: "envelope total", want: fmt.Sprintf("octet_length(metadata) <= %d", maxEnvelopeBytes)},
+		{
+			column: "last_error_class",
+			want:   fmt.Sprintf("octet_length(last_error_class) BETWEEN 1 AND %d", maxErrorClassBytes),
+		},
+	} {
+		if !bytes.Contains(schema, []byte(check.want)) {
+			t.Errorf("migration does not bound %s as this package does: want %q", check.column, check.want)
+		}
+	}
+}
 
 func TestEventValidation(t *testing.T) {
 	t.Parallel()

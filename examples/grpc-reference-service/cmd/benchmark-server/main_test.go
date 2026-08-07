@@ -15,6 +15,7 @@ import (
 	"net"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"syscall"
 	"testing"
@@ -36,29 +37,7 @@ func TestBenchmarkServerProcessLifecycle(t *testing.T) {
 	if settings.maxConnections != defaults.MaxConnections {
 		t.Fatalf("max connections = %d, want canonical %d", settings.maxConnections, defaults.MaxConnections)
 	}
-	// One value rather than a conjunction of fields, because the fields a
-	// conjunction leaves out are invisible: the three observability bounds below
-	// were unchecked, and those are the ones whose silent divergence a benchmark
-	// run reports as a real number. grpcx.Config is comparable, so a bound added
-	// to it is unchecked here only while it is unset on both sides.
-	wantTransport := grpcx.Config{
-		MaxConcurrentRPCs:          defaults.MaxConcurrentRPCs,
-		MaxConcurrentStreams:       defaults.MaxConcurrentStreams,
-		MaxHeaderListBytes:         defaults.MaxHeaderListBytes,
-		MaxReceiveMessageBytes:     defaults.MaxReceiveMessageBytes,
-		MaxSendMessageBytes:        defaults.MaxSendMessageBytes,
-		LogHealthChecks:            defaults.AccessLogHealthChecks,
-		AccessLogSuccessSampleRate: defaults.AccessLogSuccessSampleRate,
-		AccessLogSlowThreshold:     defaults.AccessLogSlowThreshold,
-		TelemetryHealthChecks:      defaults.TelemetryHealthChecks,
-	}
-	if settings.transport != wantTransport {
-		t.Fatalf(
-			"transport settings = %+v, want canonical gRPC defaults %+v",
-			settings.transport,
-			wantTransport,
-		)
-	}
+	assertTransportMirrorsDefaults(t, defaults, settings.transport)
 
 	binary := filepath.Join(t.TempDir(), "grpc-benchmark-server")
 	build := exec.CommandContext(t.Context(), "go", "build", "-o", binary, ".")
@@ -180,4 +159,39 @@ func TestBenchmarkServerProcessLifecycle(t *testing.T) {
 	}
 
 	t.Logf("benchmark server lifecycle closed on %s", address)
+}
+
+// assertTransportMirrorsDefaults holds every [grpcx.Config] bound to the
+// identically named field of the canonical gRPC defaults.
+//
+// It walks the target type rather than naming the fields, because a listed
+// conjunction goes on passing the day a tenth bound is added — and the number a
+// benchmark reports for a server with one bound quietly left at its zero value
+// describes no template. Asking from the target side is also what catches a
+// field added to grpcx.Config with no source to fill it.
+//
+// This mapping is written out twice more, in cmd/service/internal/bootstrap and
+// in internal/infra/grpc's parity oracle, because neither is importable from
+// here; each carries this same question as its own test.
+func assertTransportMirrorsDefaults(t *testing.T, defaults config.GRPCServerConfig, mapped grpcx.Config) {
+	t.Helper()
+
+	source := reflect.ValueOf(defaults)
+	target := reflect.ValueOf(mapped)
+	for index := range target.NumField() {
+		name := target.Type().Field(index).Name
+		origin := source.FieldByName(name)
+		if !origin.IsValid() {
+			t.Errorf("grpcx.Config.%s has no config.GRPCServerConfig field to carry", name)
+			continue
+		}
+		if !origin.Equal(target.Field(index)) {
+			t.Errorf(
+				"transport bound %s = %v, want canonical default %v",
+				name,
+				target.Field(index),
+				origin,
+			)
+		}
+	}
 }

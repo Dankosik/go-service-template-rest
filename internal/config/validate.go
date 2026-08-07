@@ -79,22 +79,18 @@ func validateConfig(cfg *Config, unknownKeys []string) error {
 // oidcjwt's validProviderURL owns why it cannot be removed, and
 // TestPolicyRulesMatchConfigValidation is what fails the build when a rule
 // tightened on one side is not tightened on the other.
+//
+// It also rewrites what it accepts, which is more than the trimming the other
+// validators here do: trusted_proxy_cidrs is stored back in masked canonical
+// form, so 10.0.0.5/8 is held as 10.0.0.0/8. That rewritten string is the one
+// startup_authn.go hands NewPolicy, which masks again and so agrees; a reader
+// changing either side is changing a value the other one parses.
 func validateAuthnConfig(cfg *AuthnConfig) error {
 	cfg.Issuer = strings.TrimSpace(cfg.Issuer)
 	cfg.Audience = strings.TrimSpace(cfg.Audience)
 	cfg.TrustedProxyCIDRs = strings.TrimSpace(cfg.TrustedProxyCIDRs)
 
-	issuer, err := url.Parse(cfg.Issuer)
-	if err != nil ||
-		!issuer.IsAbs() ||
-		!strings.EqualFold(issuer.Scheme, "https") ||
-		issuer.Host == "" ||
-		issuer.Hostname() == "" ||
-		issuer.Opaque != "" ||
-		issuer.User != nil ||
-		issuer.RawQuery != "" ||
-		issuer.ForceQuery ||
-		issuer.Fragment != "" {
+	if !validAuthnIssuerURL(cfg.Issuer) {
 		return fmt.Errorf(
 			"%w: authn.issuer must be an absolute HTTPS URL without user info, query, or fragment",
 			ErrValidate,
@@ -127,6 +123,24 @@ func validateAuthnConfig(cfg *AuthnConfig) error {
 	}
 	cfg.TrustedProxyCIDRs = strings.Join(canonical, ",")
 	return nil
+}
+
+// validAuthnIssuerURL is the copy of oidcjwt's validProviderURL this package is
+// forced to hold, kept term for term and in the same order so the two can be read
+// against each other line by line. Tighten one and you must tighten the other.
+func validAuthnIssuerURL(raw string) bool {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	return err == nil &&
+		parsed != nil &&
+		parsed.IsAbs() &&
+		strings.EqualFold(parsed.Scheme, "https") &&
+		parsed.Host != "" &&
+		parsed.Hostname() != "" &&
+		parsed.Opaque == "" &&
+		parsed.User == nil &&
+		parsed.RawQuery == "" &&
+		!parsed.ForceQuery &&
+		parsed.Fragment == ""
 }
 
 // profile:authn-oidc-jwt:end
@@ -596,8 +610,8 @@ func validatePostgres(cfg PostgresConfig) error {
 
 // Copies of the outbox ceilings, restated so an operator is rejected at load time
 // instead of at relay startup. postgresoutbox owns the values and the reasoning;
-// its ceiling block in relay.go says why depguard makes this a copy rather than
-// an import, and cmd/outbox-relay/internal/bootstrap holds the two sides
+// its ceiling block in relay_config.go says why depguard makes this a copy rather
+// than an import, and cmd/outbox-relay/internal/bootstrap holds the two sides
 // together.
 //
 // A relay budget added to validateOutbox below must be added to

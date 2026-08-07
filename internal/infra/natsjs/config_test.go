@@ -32,8 +32,8 @@ func TestConfigValidation(t *testing.T) {
 	valid.URLs = []string{"tls://nats.example:4222"}
 	valid.CredentialsFile = "/run/secrets/nats.creds"
 	valid.Stream = "EVENTS"
-	if err := validateConfig(valid); err != nil {
-		t.Fatalf("validateConfig(valid) error = %v", err)
+	if err := ValidateConfig(valid); err != nil {
+		t.Fatalf("ValidateConfig(valid) error = %v", err)
 	}
 
 	cases := map[string]func(*Config){
@@ -49,8 +49,8 @@ func TestConfigValidation(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			cfg := valid
 			mutate(&cfg)
-			if err := validateConfig(cfg); !errors.Is(err, ErrRejected) {
-				t.Fatalf("validateConfig() error = %v, want ErrRejected", err)
+			if err := ValidateConfig(cfg); !errors.Is(err, ErrRejected) {
+				t.Fatalf("ValidateConfig() error = %v, want ErrRejected", err)
 			}
 		})
 	}
@@ -60,8 +60,8 @@ func TestConfigValidation(t *testing.T) {
 	plaintext.CredentialsFile = ""
 	plaintext.AllowPlaintext = true
 	plaintext.AllowUnauthenticated = true
-	if err := validateConfig(plaintext); err != nil {
-		t.Fatalf("validateConfig(explicit local escape hatches) error = %v", err)
+	if err := ValidateConfig(plaintext); err != nil {
+		t.Fatalf("ValidateConfig(explicit local escape hatches) error = %v", err)
 	}
 }
 

@@ -2,13 +2,18 @@ package grpcx
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log/slog"
+	"math"
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/problem"
 	"go.opentelemetry.io/otel/metric"
+	metricnoop "go.opentelemetry.io/otel/metric/noop"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
+	tracenoop "go.opentelemetry.io/otel/trace/noop"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
@@ -34,12 +39,12 @@ type Config struct {
 	MaxReceiveMessageBytes int
 	MaxSendMessageBytes    int
 
-	// LogHealthChecks admits standard health RPCs to the access log, and
+	// AccessLogHealthChecks admits standard health RPCs to the access log, and
 	// TelemetryHealthChecks is the same decision for spans and metrics. Both
 	// are off by default because a liveness probe otherwise dominates each
 	// signal; they are separate fields because operators usually want neither,
 	// occasionally want telemetry alone, and rarely want the log.
-	LogHealthChecks       bool
+	AccessLogHealthChecks bool
 	TelemetryHealthChecks bool
 
 	// AccessLogSuccessSampleRate is the fraction of successful RPCs that reach
@@ -54,6 +59,54 @@ type Config struct {
 	// AccessLogSlowThreshold always logs a successful RPC at or above this
 	// duration, whatever the sample rate. Zero disables the exemption.
 	AccessLogSlowThreshold time.Duration
+}
+
+// validateConfig proves the bounds NewServer is about to hand grpc-go.
+//
+// internal/config.validateGRPCConfig restates the same access-log rules for the
+// service's own configuration file, so a new access-log bound needs a rule in
+// both places. config_parity_test.go owns why there are two owners and holds
+// them to one answer.
+func validateConfig(cfg Config) error {
+	if cfg.MaxConcurrentRPCs <= 0 {
+		return errors.New("build gRPC server: max concurrent RPCs must be positive")
+	}
+	if err := validateUint32Bound("max concurrent streams", cfg.MaxConcurrentStreams); err != nil {
+		return err
+	}
+	if err := validateUint32Bound("max header list bytes", cfg.MaxHeaderListBytes); err != nil {
+		return err
+	}
+	if cfg.MaxReceiveMessageBytes <= 0 {
+		return errors.New("build gRPC server: max receive message bytes must be positive")
+	}
+	if cfg.MaxSendMessageBytes <= 0 {
+		return errors.New("build gRPC server: max send message bytes must be positive")
+	}
+	if math.IsNaN(cfg.AccessLogSuccessSampleRate) ||
+		math.IsInf(cfg.AccessLogSuccessSampleRate, 0) ||
+		cfg.AccessLogSuccessSampleRate < 0 ||
+		cfg.AccessLogSuccessSampleRate > 1 {
+		return errors.New("build gRPC server: access-log success sample rate must be finite and in range [0,1]")
+	}
+	if cfg.AccessLogSlowThreshold < 0 {
+		return errors.New("build gRPC server: access-log slow threshold must be non-negative")
+	}
+	return nil
+}
+
+// validateUint32Bound owns the one place a caller-supplied transport bound is
+// proven to fit the uint32 grpc-go asks for; [Config] owns why those fields are
+// int.
+func validateUint32Bound(name string, value int) error {
+	if value <= 0 || uint64(value) > math.MaxUint32 {
+		return fmt.Errorf(
+			"build gRPC server: %s must be in range [1,%d]",
+			name,
+			uint64(math.MaxUint32),
+		)
+	}
+	return nil
 }
 
 // RegisterService attaches one generated service implementation to a
@@ -102,6 +155,28 @@ type Options struct {
 	StreamPolicy []grpc.StreamServerInterceptor
 }
 
+// withOptionDefaults fills the collaborators [Options] documents as optional, so
+// the composition in NewServer reads as one uninterrupted sequence and every
+// later reader of options sees a non-nil value.
+func withOptionDefaults(options Options) Options {
+	if options.Logger == nil {
+		options.Logger = slog.Default()
+	}
+	if options.MeterProvider == nil {
+		options.MeterProvider = metricnoop.NewMeterProvider()
+	}
+	if options.TracerProvider == nil {
+		options.TracerProvider = tracenoop.NewTracerProvider()
+	}
+	if options.Propagators == nil {
+		options.Propagators = propagation.TraceContext{}
+	}
+	if options.Load == nil {
+		options.Load = noopLoadRecorder{}
+	}
+	return options
+}
+
 // LoadRecorder observes the process-wide admission decision. Admitted returns
 // the release function for one admitted RPC; Shed reports one rejected by a
 // full admission budget.
@@ -109,3 +184,13 @@ type LoadRecorder interface {
 	Admitted(ctx context.Context) func()
 	Shed(ctx context.Context)
 }
+
+// noopLoadRecorder is the [Options.Load] default, so the admission policy always
+// has a recorder to call and never guards the field.
+type noopLoadRecorder struct{}
+
+func (noopLoadRecorder) Admitted(context.Context) func() {
+	return func() {}
+}
+
+func (noopLoadRecorder) Shed(context.Context) {}

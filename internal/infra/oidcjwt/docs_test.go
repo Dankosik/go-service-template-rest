@@ -60,11 +60,11 @@ func TestDocumentedTokenExample(t *testing.T) {
 // message, exactly what the exhaustive linter already holds Error to.
 func TestDocumentedMetricReasonsMatchTheGuide(t *testing.T) {
 	guide := readAuthenticationGuide(t)
-	unnamed := Failure(0).Error()
+	unnamed := NewError(0).Error()
 
 	labels := []string{verificationReason(context.Canceled)}
 	for kind := Kind(1); ; kind++ {
-		failure := Failure(kind)
+		failure := NewError(kind)
 		if failure.Error() == unnamed {
 			break
 		}
@@ -73,7 +73,7 @@ func TestDocumentedMetricReasonsMatchTheGuide(t *testing.T) {
 	// A walk that stopped early would pass the loop below while covering nothing,
 	// so it has to be shown to have reached the end of the declared run. The last
 	// declared Kind is the cheapest witness for that.
-	if !slices.Contains(labels, verificationReason(Failure(KindUntrustedTransport))) {
+	if !slices.Contains(labels, verificationReason(NewError(KindUntrustedTransport))) {
 		t.Fatalf("the Kind walk collected %v and never reached the last declared category", labels)
 	}
 
@@ -171,7 +171,7 @@ var commentedNameSources = []string{
 // to the code they navigate to.
 //
 // doc.go is the extension manual, but it is not what a reader meets first:
-// arriving from a call site means opening verifier.go or refresh.go, and the
+// arriving from a call site means opening verifier.go or lifecycle.go, and the
 // comments outside doc.go carry roughly six times its prose while naming tests,
 // sibling files, and declarations in other packages just as freely. Nothing in
 // the Go toolchain checks any of it — the [Symbol] doc-link syntax is not
@@ -187,8 +187,14 @@ func TestCommentNamesResolve(t *testing.T) {
 		}
 	}
 	files := packageFiles(t, ".")
+	comments := packageComments(t, ".")
+	// The walk answers empty for a directory that is not there, so a walk that
+	// collected nothing would pass every check below while covering nothing.
+	if len(comments) == 0 {
+		t.Fatal("the comment walk collected nothing, and this package is not commentless")
+	}
 
-	for _, comment := range packageComments(t, ".") {
+	for _, comment := range comments {
 		for _, name := range docIdentifier.FindAllString(comment.text, -1) {
 			if _, prose := docProseWords[name]; prose {
 				continue
@@ -262,33 +268,50 @@ func documentedPaths(doc string) []string {
 	return slices.Compact(paths)
 }
 
-// packageDeclarations returns every name one package directory declares, test
-// files included, so a comment may name the test that owns an extension's
-// accepting and rejecting cases. Struct fields are collected alongside top-level
-// names because the field comments on [Verifier] and refresher name their own
-// fields — baseCtx, runDone, fetchedAt — as the regimes they describe.
+// eachGoFile parses every Go file in dir, test files included, and hands each to
+// visit. mode selects what the parse retains: comment positions, or nothing
+// beyond the declarations.
 //
 // A directory that does not exist yields nothing rather than failing, which is
-// what lets an inactive profile remove a package this one's comments name.
-func packageDeclarations(t *testing.T, dir string) map[string]struct{} {
+// what lets an inactive profile remove a package this one's comments name. That
+// makes an empty walk indistinguishable from a walk that found nothing to
+// object to, so each test below names its own witness that the walk ran.
+func eachGoFile(
+	t *testing.T,
+	dir string,
+	mode parser.Mode,
+	visit func(fileName string, parsed *ast.File, fileSet *token.FileSet),
+) {
 	t.Helper()
 	entries, err := os.ReadDir(dir)
 	if errors.Is(err, os.ErrNotExist) {
-		return map[string]struct{}{}
+		return
 	}
 	if err != nil {
 		t.Fatalf("read package directory %s: %v", dir, err)
 	}
-	declared := make(map[string]struct{})
 	fileSet := token.NewFileSet()
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") {
 			continue
 		}
-		parsed, err := parser.ParseFile(fileSet, filepath.Join(dir, entry.Name()), nil, parser.SkipObjectResolution)
+		parsed, err := parser.ParseFile(fileSet, filepath.Join(dir, entry.Name()), nil, mode)
 		if err != nil {
 			t.Fatalf("parse %s: %v", entry.Name(), err)
 		}
+		visit(entry.Name(), parsed, fileSet)
+	}
+}
+
+// packageDeclarations returns every name one package directory declares, test
+// files included, so a comment may name the test that owns an extension's
+// accepting and rejecting cases. Struct fields are collected alongside top-level
+// names because the field comments on [Verifier] and refreshAdmission name their
+// own fields — baseCtx, runDone, fetchedAt — as the regimes they describe.
+func packageDeclarations(t *testing.T, dir string) map[string]struct{} {
+	t.Helper()
+	declared := make(map[string]struct{})
+	eachGoFile(t, dir, parser.SkipObjectResolution, func(_ string, parsed *ast.File, _ *token.FileSet) {
 		ast.Inspect(parsed, func(node ast.Node) bool {
 			switch named := node.(type) {
 			case *ast.FuncDecl:
@@ -306,7 +329,7 @@ func packageDeclarations(t *testing.T, dir string) map[string]struct{} {
 			}
 			return true
 		})
-	}
+	})
 	return declared
 }
 
@@ -315,20 +338,8 @@ func packageDeclarations(t *testing.T, dir string) map[string]struct{} {
 // checks a published vocabulary from holding a second copy of it.
 func declaredConstants(t *testing.T, dir, typeName string) []string {
 	t.Helper()
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		t.Fatalf("read package directory %s: %v", dir, err)
-	}
 	values := make([]string, 0)
-	fileSet := token.NewFileSet()
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") {
-			continue
-		}
-		parsed, err := parser.ParseFile(fileSet, filepath.Join(dir, entry.Name()), nil, parser.SkipObjectResolution)
-		if err != nil {
-			t.Fatalf("parse %s: %v", entry.Name(), err)
-		}
+	eachGoFile(t, dir, parser.SkipObjectResolution, func(fileName string, parsed *ast.File, _ *token.FileSet) {
 		ast.Inspect(parsed, func(node ast.Node) bool {
 			spec, isValue := node.(*ast.ValueSpec)
 			if !isValue {
@@ -347,13 +358,13 @@ func declaredConstants(t *testing.T, dir, typeName string) []string {
 				}
 				unquoted, err := strconv.Unquote(literal.Value)
 				if err != nil {
-					t.Fatalf("unquote %s in %s: %v", literal.Value, entry.Name(), err)
+					t.Fatalf("unquote %s in %s: %v", literal.Value, fileName, err)
 				}
 				values = append(values, unquoted)
 			}
 			return true
 		})
-	}
+	})
 	slices.Sort(values)
 	return slices.Compact(values)
 }
@@ -368,33 +379,23 @@ type packageComment struct {
 
 func packageComments(t *testing.T, dir string) []packageComment {
 	t.Helper()
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		t.Fatalf("read package directory %s: %v", dir, err)
-	}
 	comments := make([]packageComment, 0)
-	fileSet := token.NewFileSet()
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") {
-			continue
-		}
-		parsed, err := parser.ParseFile(fileSet, filepath.Join(dir, entry.Name()), nil, parser.ParseComments)
-		if err != nil {
-			t.Fatalf("parse %s: %v", entry.Name(), err)
-		}
+	eachGoFile(t, dir, parser.ParseComments, func(fileName string, parsed *ast.File, fileSet *token.FileSet) {
 		for _, group := range parsed.Comments {
 			for _, line := range group.List {
 				comments = append(comments, packageComment{
-					file: entry.Name(),
+					file: fileName,
 					line: fileSet.Position(line.Slash).Line,
 					text: line.Text,
 				})
 			}
 		}
-	}
+	})
 	return comments
 }
 
+// packageFiles lists one directory's files. It does not parse, so it keeps its
+// own walk rather than paying eachGoFile's parse to learn a name.
 func packageFiles(t *testing.T, dir string) map[string]struct{} {
 	t.Helper()
 	entries, err := os.ReadDir(dir)

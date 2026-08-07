@@ -1,12 +1,12 @@
 package oidcjwt
 
-// Proof for Run and Close together with the two types they drive, refresh.go's
-// refresher and lifecycle.go's own refreshSchedule. Neither has a test file of
-// its own, for different reasons. refreshSchedule has no caller but Run, so the
-// cadence and the readiness transitions are only observable here. refresher is
-// also driven from the verification side, by Verify through Verifier.refresh —
-// so its coalescing and its cooldown are proved there, in verifier_test.go, and
-// what this file owns is the scheduled trigger reaching the same admission.
+// Proof for Run and Close together with the two types they drive,
+// refreshAdmission and refreshSchedule. Neither has a test file of its own, for
+// different reasons. refreshSchedule has no caller but Run, so the cadence and
+// the readiness transitions are only observable here. refreshAdmission is also
+// driven from the verification side, by Verify through Verifier.refresh — so its
+// coalescing and its cooldown are proved there, in verifier_test.go, and what
+// this file owns is the scheduled trigger reaching the same admission.
 //
 // Every verifier here runs on time.Now so that testing/synctest owns the passage
 // of time. A movable testClock would defeat that: synctest already advances the
@@ -17,6 +17,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"testing/synctest"
@@ -144,6 +145,38 @@ func TestVerifierLifecycleClosesExactlyOnce(t *testing.T) {
 	}
 	if err := verifier.Run(t.Context(), nil); err == nil {
 		t.Fatal("Run() after Close error = nil")
+	}
+}
+
+// TestCloseRetiresARunningRun covers the Run exit no other case reaches: Close
+// cancelling the Verifier's own lifetime while Run is still in its select.
+//
+// The caller's context is never cancelled here, so the error can only have come
+// from the baseCtx arm. Asserting on the message and not only on errors.Is is
+// the point of the case: both arms are one cancellation to errors.Is, so the
+// message is the only thing that tells an operator whether Run ended because
+// the process was draining or because this Verifier was retired under it.
+func TestCloseRetiresARunningRun(t *testing.T) {
+	verifier := newTestVerifier(t, loadTestRSAKey(t, testSigningKey))
+
+	runResult := make(chan error, 1)
+	current := make(chan bool, 16)
+	go func() {
+		runResult <- verifier.Run(context.Background(), func(ready bool) { current <- ready })
+	}()
+	// Run publishes readiness only once it has been admitted, so waiting for the
+	// first event is what puts Close below on a Run that is already looping
+	// rather than on one the lifecycle guard would refuse.
+	requireBoolEvent(t, current, true)
+
+	verifier.Close()
+
+	err := requireErrorEvent(t, runResult)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Run() error = %v, want cancellation", err)
+	}
+	if !strings.Contains(err.Error(), "retire") {
+		t.Fatalf("Run() error = %q, want it to name retirement rather than the caller", err)
 	}
 }
 

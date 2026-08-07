@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
 	"reflect"
 	"strings"
 	"testing"
@@ -16,10 +17,72 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/metric"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 )
+
+// The outcome attribute is shared by four counters and the connection event by
+// one, and only boundedOutcome and boundedConnectionEvent bound them. A value a
+// call site invents but those lists forgot would report "other" on the metric
+// while the operator log beside it carries the real string, so the two could
+// not be correlated. This drives the real producers rather than restating the
+// lists, so a classifier that gains a case fails here until the case is named.
+func TestDeliveryVocabularyIsBounded(t *testing.T) {
+	t.Parallel()
+
+	outcomes := map[string]string{
+		"publish broker rejection": outcomeOf(classifyPublishError(nats.ErrNoResponders)),
+		"publish api error":        outcomeOf(classifyPublishError(&jetstream.APIError{ErrorCode: 1})),
+		"publish no ack":           outcomeOf(classifyPublishError(errors.New("broker detail"))),
+		"handler timeout": handlerOutcome(
+			handlerResult{contextErr: context.DeadlineExceeded, err: context.DeadlineExceeded}, false),
+		"handler canceled":  handlerOutcome(handlerResult{err: context.Canceled}, false),
+		"handler retryable": handlerOutcome(handlerResult{err: errors.New("handler detail")}, false),
+		"handler exhausted": handlerOutcome(handlerResult{err: context.Canceled}, true),
+	}
+	// The outcomes no classifier produces: each is named directly at its one
+	// settlement or drain site, so the constant is the producer.
+	maps.Copy(outcomes, map[string]string{
+		"publish accepted":     outcomeAccepted,
+		"handler success":      outcomeSuccess,
+		"handler panic":        outcomeTerminal,
+		"handler shutdown":     outcomeCanceled,
+		"handler permanent":    outcomePermanent,
+		"dead-letter accepted": outcomeAccepted,
+		"dead-letter rejected": outcomeRejected,
+		"drain graceful":       outcomeGraceful,
+		"drain forced":         outcomeForced,
+		"drain failed":         outcomeFailed,
+	})
+	for source, outcome := range outcomes {
+		if bounded := boundedOutcome(outcome); bounded != outcome {
+			t.Errorf("boundedOutcome(%q) from %s = %q, want the outcome unchanged", outcome, source, bounded)
+		}
+	}
+
+	for source, event := range map[string]string{
+		"disconnect handler": connectionDisconnected,
+		"reconnect handler":  connectionReconnected,
+		"closed handler":     connectionClosed,
+		"async error":        connectionAsyncError,
+	} {
+		if bounded := boundedConnectionEvent(event); bounded != event {
+			t.Errorf("boundedConnectionEvent(%q) from %s = %q, want the event unchanged", event, source, bounded)
+		}
+	}
+
+	// An unrecognized value must collapse rather than mint a time series.
+	if got := boundedOutcome("invented"); got != boundedOther {
+		t.Errorf("boundedOutcome(invented) = %q, want %q", got, boundedOther)
+	}
+	if got := boundedConnectionEvent("invented"); got != boundedOther {
+		t.Errorf("boundedConnectionEvent(invented) = %q, want %q", got, boundedOther)
+	}
+}
+
+// outcomeOf keeps classifyPublishError's other two results out of the table
+// above, which is only about the attribute it produces.
+func outcomeOf(outcome, _ string, _ error) string { return outcome }
 
 func TestMessagingTelemetryContract(t *testing.T) {
 	const (
@@ -53,20 +116,23 @@ func TestMessagingTelemetryContract(t *testing.T) {
 		eventType: eventTypeCanary, schema: headerCanary, payload: []byte(payloadCanary),
 		metadata: DeliveryMetadata{Consumer: "events-worker", NumDelivered: 2},
 	}
-	sig.publish(ctx, event, "accepted", "none", time.Now())
-	sig.connection(ctx, "disconnected")
+	// Every counter that carries an outcome goes through its recorder rather
+	// than through the instrument, so this exercises the bounding the
+	// production path applies instead of a hand-built attribute set.
+	sig.recordPublish(ctx, event, outcomeAccepted, reasonNone, time.Now())
+	sig.recordConnection(ctx, connectionDisconnected)
 	sig.fetchMessages.Add(ctx, 1)
 	sig.fetchBytes.Add(ctx, 64)
 	sig.consumeActive.Add(ctx, 1)
-	sig.handler(ctx, msg, "retryable", "handler_retry", time.Now())
-	sig.terminal(ctx, msg.Subject(), &jetstream.MsgMetadata{
+	sig.recordHandler(ctx, msg, outcomeRetryable, reasonHandlerRetry, time.Now())
+	sig.logTerminalDelivery(ctx, msg.Subject(), &jetstream.MsgMetadata{
 		Stream: "EVENTS", Consumer: "events-worker", NumDelivered: 2,
 		Sequence: jetstream.SequencePair{Stream: 3, Consumer: 2},
-	}, "handler_panic", []string{"featureHandler handler_test.go:42"})
+	}, reasonHandlerPanic, []string{"featureHandler handler_test.go:42"})
 	sig.redeliveries.Add(ctx, 1)
 	sig.retries.Add(ctx, 1)
-	sig.dlqTransfers.Add(ctx, 1, metric.WithAttributes(attribute.String("outcome", "accepted")))
-	sig.drainOperations.Add(ctx, 1, metric.WithAttributes(attribute.String("outcome", "graceful")))
+	sig.recordDeadLetterTransfer(ctx, outcomeAccepted)
+	sig.recordDrain(ctx, outcomeGraceful)
 	sig.forcedShutdowns.Add(ctx, 1)
 
 	var collected metricdata.ResourceMetrics
@@ -145,7 +211,7 @@ func TestAsyncConnectionErrorIsClassifiedWithoutRawBrokerText(t *testing.T) {
 		t.Fatalf("newTelemetry() error = %v", err)
 	}
 	t.Cleanup(sig.close)
-	sig.asyncError(t.Context(), fmt.Errorf("%s: %w", brokerCanary, nats.ErrPermissionViolation))
+	sig.recordAsyncError(t.Context(), fmt.Errorf("%s: %w", brokerCanary, nats.ErrPermissionViolation))
 	if strings.Contains(logs.String(), brokerCanary) {
 		t.Fatalf("async connection log leaked raw broker error: %s", logs.String())
 	}

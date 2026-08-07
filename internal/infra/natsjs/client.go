@@ -19,6 +19,19 @@ const (
 	eventReconnect connectionEvent = iota + 1
 )
 
+// Client is one connection to the broker and everything that outlives a single
+// publish or delivery: the reconnect state machine, the readiness probe, and the
+// telemetry both roles share. [Connect] is the only constructor.
+//
+// One client serves one role. A producer client publishes through
+// [Client.Producer]; a worker client additionally admits one [Worker] through
+// [Client.NewWorker], and registering that worker widens [Client.Check] to probe
+// the durable consumer as well as the stream.
+//
+// Its state is three separate flags rather than one, because they answer
+// different questions: ready is what the probe reports, draining is set once
+// shutdown starts and never clears, and intentional distinguishes a close this
+// process asked for from reconnect exhaustion — only the latter is terminal.
 type Client struct {
 	cfg Config
 	nc  *nats.Conn
@@ -42,7 +55,7 @@ type Client struct {
 }
 
 func Connect(ctx context.Context, cfg Config, role Role, obs Observability) (*Client, error) {
-	if err := validateConfig(cfg); err != nil {
+	if err := ValidateConfig(cfg); err != nil {
 		return nil, err
 	}
 	if err := ctx.Err(); err != nil {
@@ -60,6 +73,37 @@ func Connect(ctx context.Context, cfg Config, role Role, obs Observability) (*Cl
 		return nil, fmt.Errorf("create messaging telemetry: %w", err)
 	}
 	c.telemetry = telemetry
+	// Every failure from here on releases through Close, which guards each field
+	// it touches and so is correct at any point in this construction. One
+	// spelling means a resource added to Client is released on all of them.
+	nc, err := nats.Connect(strings.Join(cfg.URLs, ","), c.connectOptions(ctx, cfg)...)
+	if err != nil {
+		c.Close()
+		return nil, fmt.Errorf("%w: messaging connection failed", ErrRejected)
+	}
+	c.nc = nc
+	c.js, err = jetstream.New(nc)
+	if err != nil {
+		c.Close()
+		return nil, fmt.Errorf("%w: messaging protocol initialization failed", ErrRejected)
+	}
+	c.producer = newProducer(c, cfg.MaxPendingPublishes, cfg.MaxPayloadBytes)
+	if err := c.Check(ctx); err != nil {
+		c.Close()
+		return nil, err
+	}
+	return c, nil
+}
+
+// connectOptions is the connection policy and the four asynchronous handlers
+// that maintain client state behind it. They are collected here rather than
+// inline in Connect because each one carries its own rule about what a
+// connection event means, and only the ClosedHandler can end the process.
+//
+// Every handler records against context.WithoutCancel(ctx): they fire long
+// after Connect returns, and the caller's startup context is usually already
+// cancelled by then.
+func (c *Client) connectOptions(ctx context.Context, cfg Config) []nats.Option {
 	options := []nats.Option{
 		nats.Name("service-messaging"),
 		nats.Timeout(boundedTimeout(ctx)),
@@ -72,11 +116,14 @@ func Connect(ctx context.Context, cfg Config, role Role, obs Observability) (*Cl
 		nats.ReconnectBufSize(-1),
 		nats.DisconnectErrHandler(func(_ *nats.Conn, _ error) {
 			c.ready.Store(false)
-			c.telemetry.connection(context.WithoutCancel(ctx), "disconnected")
+			c.telemetry.recordConnection(context.WithoutCancel(ctx), connectionDisconnected)
 		}),
+		// A reconnect clears readiness rather than restoring it: the connection is
+		// back, but nothing has re-probed the stream or the consumer yet. The
+		// event sent here is what makes Client.Run do that.
 		nats.ReconnectHandler(func(_ *nats.Conn) {
 			c.ready.Store(false)
-			c.telemetry.connection(context.WithoutCancel(ctx), "reconnected")
+			c.telemetry.recordConnection(context.WithoutCancel(ctx), connectionReconnected)
 			select {
 			case c.events <- eventReconnect:
 			default:
@@ -87,11 +134,14 @@ func Connect(ctx context.Context, cfg Config, role Role, obs Observability) (*Cl
 			}
 		}),
 		nats.ErrorHandler(func(_ *nats.Conn, _ *nats.Subscription, err error) {
-			c.telemetry.asyncError(context.WithoutCancel(ctx), err)
+			c.telemetry.recordAsyncError(context.WithoutCancel(ctx), err)
 		}),
+		// The one handler that can stop the process. A close this process asked
+		// for already set intentional; anything else means reconnect exhaustion,
+		// which no amount of waiting recovers from.
 		nats.ClosedHandler(func(_ *nats.Conn) {
 			c.ready.Store(false)
-			c.telemetry.connection(context.WithoutCancel(ctx), "closed")
+			c.telemetry.recordConnection(context.WithoutCancel(ctx), connectionClosed)
 			c.closedOnce.Do(func() { close(c.closed) })
 			if !c.intentional.Load() {
 				c.signalTerminal(fmt.Errorf("%w: connection closed after reconnect exhaustion", ErrTerminal))
@@ -104,25 +154,7 @@ func Connect(ctx context.Context, cfg Config, role Role, obs Observability) (*Cl
 	if cfg.RootCAFile != "" {
 		options = append(options, nats.RootCAs(cfg.RootCAFile))
 	}
-	nc, err := nats.Connect(strings.Join(cfg.URLs, ","), options...)
-	if err != nil {
-		c.telemetry.close()
-		return nil, fmt.Errorf("%w: messaging connection failed", ErrRejected)
-	}
-	c.nc = nc
-	c.js, err = jetstream.New(nc)
-	if err != nil {
-		c.intentional.Store(true)
-		nc.Close()
-		c.telemetry.close()
-		return nil, fmt.Errorf("%w: messaging protocol initialization failed", ErrRejected)
-	}
-	c.producer = newProducer(c, cfg.MaxPendingPublishes, cfg.MaxPayloadBytes)
-	if err := c.Check(ctx); err != nil {
-		c.Close()
-		return nil, err
-	}
-	return c, nil
+	return options
 }
 
 func (c *Client) Producer() *Producer { return c.producer }
@@ -237,6 +269,16 @@ func (c *Client) signalTerminal(err error) {
 	}
 }
 
+// waitForReconnect reports whether err is an outage this client can ride out,
+// having waited for the connection to come back if so. A false result is what
+// turns a failed pull terminal, so the error set below is the whole difference
+// between a blip and a stopped worker.
+//
+// Those four errors are the ones nats.go raises for a connection that is gone
+// but recoverable; IsReconnecting covers the case where the library noticed
+// first and the call failed for some downstream reason. Anything else — a
+// permission fault, a deleted stream, a malformed request — is a condition
+// waiting cannot fix, so it must not land here.
 func (c *Client) waitForReconnect(ctx context.Context, err error) bool {
 	if c == nil || c.nc == nil {
 		return false

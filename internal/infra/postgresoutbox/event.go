@@ -4,13 +4,17 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"time"
 	"unicode"
 	"unicode/utf8"
 )
 
+// The envelope's size limits. migrations/000001_postgres_outbox.sql restates
+// every one of them as a CHECK literal, because PostgreSQL is what stops a
+// writer that bypasses Append. Change these first, then the schema:
+// TestEnvelopeLimitsMatchMigrationChecks compares the two and fails on a limit
+// only one side learned about.
 const (
 	maxTextBytes     = 256
 	maxPayloadBytes  = 256 << 10
@@ -20,8 +24,6 @@ const (
 	// JSON value, which the stored `IS JSON OBJECT` check also skips.
 	jsonWhitespace = " \t\r\n"
 )
-
-var ErrInvalidEvent = errors.New("invalid outbox event")
 
 // Event is an immutable broker-neutral publication occurrence. Payload and
 // Metadata are stored and retried as these exact bytes.
@@ -70,6 +72,11 @@ type Event struct {
 	OrderingSequence int64
 }
 
+// NewID mints one opaque token. A feature uses it for [Event.ID], the identity
+// consumers deduplicate on; [Store.Claim] uses it for the lease token that
+// fences one batch against another relay replica. Neither is derived from the
+// other, and nothing reads structure out of either — both only need to be
+// unique and unguessable.
 func NewID() string {
 	return rand.Text()
 }

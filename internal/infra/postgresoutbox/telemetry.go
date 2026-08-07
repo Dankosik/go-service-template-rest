@@ -17,36 +17,9 @@ import (
 // uses it for the global-provider fallback.
 const TelemetryScope = "service.outbox.postgres"
 
-// The outcome labels every operation site chooses between. Attribute values are
-// a fixed enum, so they are named rather than repeated.
-const (
-	outcomeSuccess  = "success"
-	outcomeError    = "error"
-	outcomeRejected = "rejected"
-	// boundedOther is what every closed vocabulary in this package collapses an
-	// unrecognized value to, so an unexpected string cannot mint a time series.
-	boundedOther = "other"
-)
-
-// The closed error.type vocabulary. Every class this package produces is named
-// here and used at its producing site, so the producer and boundedErrorType
-// below reference one identifier rather than two literals that can drift apart.
-// A class added at a call site without a constant here is what
-// TestErrorClassVocabularyIsBounded fails on.
-const (
-	classNone               = "none"
-	classDatabase           = "database"
-	classLostLease          = "lost_lease"
-	classValidation         = "validation"
-	classStuck              = "stuck"
-	classPanic              = "panic"
-	classPublisherPermanent = "publisher_permanent"
-	classPublisherRejected  = "publisher_rejected"
-	classPublisherTimeout   = "publisher_timeout"
-	classPublisherCanceled  = "publisher_canceled"
-	classPublisherTemporary = "publisher_temporary"
-	classAttemptExhausted   = "attempt_exhausted"
-)
+// This file owns the instruments, the snapshot the scrape callback reads, and
+// the recorders that write it. The closed vocabularies every attribute here is
+// bounded through are vocabulary.go.
 
 // Telemetry records this package's metrics and operator logs. A nil *Telemetry
 // is a working no-op: every method below returns on a nil receiver, because
@@ -120,7 +93,7 @@ func NewTelemetry(meter metric.Meter, logger *slog.Logger) (*Telemetry, error) {
 	if telemetry.duration, err = meter.Float64Histogram("outbox.relay.operation.duration", metric.WithUnit("s")); err != nil {
 		return nil, fmt.Errorf("create outbox operation duration metric: %w", err)
 	}
-	telemetry.registration, err = meter.RegisterCallback(telemetry.observe,
+	telemetry.registration, err = meter.RegisterCallback(telemetry.collect,
 		telemetry.messages,
 		telemetry.oldestTimestamp,
 		telemetry.observationTimestamp,
@@ -251,7 +224,11 @@ func (t *Telemetry) LogListenerRetry(ctx context.Context, stage string) {
 	}
 }
 
-func (t *Telemetry) observe(_ context.Context, observer metric.Observer) error {
+// collect answers one scrape from the published snapshot. It is the callback
+// registered in NewTelemetry, and OTel's own term for that role — the two verbs
+// nearby belong elsewhere: Store.Observe runs the observation statement and
+// Relay.sampleState runs it and records the result.
+func (t *Telemetry) collect(_ context.Context, observer metric.Observer) error {
 	t.mu.RLock()
 	snapshot := t.snapshot
 	t.mu.RUnlock()
@@ -272,10 +249,10 @@ func (t *Telemetry) observe(_ context.Context, observer metric.Observer) error {
 	for _, state := range states {
 		attributes := metric.WithAttributes(attribute.String("state", state.name))
 		observer.ObserveInt64(t.messages, state.count, attributes)
-		observer.ObserveFloat64(t.oldestTimestamp, unixSeconds(state.oldest), attributes)
+		observer.ObserveFloat64(t.oldestTimestamp, unixSecondsFromTime(state.oldest), attributes)
 	}
-	observer.ObserveFloat64(t.observationTimestamp, unixSeconds(snapshot.observedAt))
-	observer.ObserveFloat64(t.lastProgress, unixSeconds(snapshot.lastProgress))
+	observer.ObserveFloat64(t.observationTimestamp, unixSecondsFromTime(snapshot.observedAt))
+	observer.ObserveFloat64(t.lastProgress, unixSecondsFromTime(snapshot.lastProgress))
 	observer.ObserveInt64(t.orderingHeads, snapshot.observation.OrderingHeadCount)
 
 	for _, relation := range []struct {
@@ -311,57 +288,11 @@ func (t *Telemetry) observe(_ context.Context, observer metric.Observer) error {
 	return nil
 }
 
-func unixSeconds(value time.Time) float64 {
+// unixSecondsFromTime is the inverse of timeFromUnixSeconds in store_rows.go,
+// which reads the same values off the observation statement.
+func unixSecondsFromTime(value time.Time) float64 {
 	if value.IsZero() {
 		return 0
 	}
 	return float64(value.UnixNano()) / float64(time.Second)
-}
-
-// boundedOperation is the closed vocabulary for the operation attribute. The
-// unit differs by operation, and the duration histogram is only meaningful per
-// operation because of it:
-//
-//   - append, claim, mark_published, schedule_retry, poison, redrive, cleanup,
-//     and observe are one statement each, and carry that statement's duration.
-//   - publish is one event, not one batch.
-//   - recovery and drain, and the reconciled outcome of mark_published, are
-//     counted through CountOperation and carry no duration.
-//
-// A new operation states its unit here and picks the matching recorder.
-func boundedOperation(value string) string {
-	switch value {
-	case "append", "claim", "recovery", "publish", "mark_published", "schedule_retry", "poison", "redrive", "cleanup", "observe", "drain":
-		return value
-	default:
-		return boundedOther
-	}
-}
-
-func boundedOutcome(value string) string {
-	switch value {
-	case outcomeSuccess, outcomeError, outcomeRejected, "empty", "reconciled", "started":
-		return value
-	default:
-		return boundedOther
-	}
-}
-
-// boundedErrorType is the closed vocabulary for error.type. One class describes
-// a failure in three places — this metric attribute, the error.type field of
-// LogPoison, and the stored last_error_class column — and only this function
-// bounds it, because the column's CHECK constraint bounds length alone. Any
-// class the package produces must therefore appear here, or the metric silently
-// reports "other" while the log and the row report the real value.
-// TestErrorClassVocabularyIsBounded drives the producers and fails on a class
-// this list forgot.
-func boundedErrorType(value string) string {
-	switch value {
-	case classNone, classDatabase, classLostLease, classValidation, classStuck, classPanic,
-		classPublisherPermanent, classPublisherRejected, classPublisherTimeout,
-		classPublisherCanceled, classPublisherTemporary, classAttemptExhausted:
-		return value
-	default:
-		return boundedOther
-	}
 }

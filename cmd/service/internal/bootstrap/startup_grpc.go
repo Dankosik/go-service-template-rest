@@ -81,6 +81,13 @@ func newGRPCRuntime(
 // that knew this repository's configuration shape could not be reused by a
 // service that restructured it. internal/config cannot own it either: the
 // depguard rule config_no_runtime_owners stops it importing runtime adapters.
+//
+// That is also why the crossing exists twice more, each unreachable from the
+// others: serverConfigFromRuntime in internal/infra/grpc/config_parity_test.go
+// is that package's oracle, and settingsFromDefaults in the benchmark server
+// under examples/grpc-reference-service builds the same bounds for a measured
+// run. A bound added to grpcx.Config belongs in all three; each has its own
+// target-side test so a missed one fails there rather than here.
 func grpcServerConfig(server config.GRPCServerConfig) grpcx.Config {
 	return grpcx.Config{
 		MaxConcurrentRPCs:          server.MaxConcurrentRPCs,
@@ -88,7 +95,7 @@ func grpcServerConfig(server config.GRPCServerConfig) grpcx.Config {
 		MaxHeaderListBytes:         server.MaxHeaderListBytes,
 		MaxReceiveMessageBytes:     server.MaxReceiveMessageBytes,
 		MaxSendMessageBytes:        server.MaxSendMessageBytes,
-		LogHealthChecks:            server.AccessLogHealthChecks,
+		AccessLogHealthChecks:      server.AccessLogHealthChecks,
 		AccessLogSuccessSampleRate: server.AccessLogSuccessSampleRate,
 		AccessLogSlowThreshold:     server.AccessLogSlowThreshold,
 		TelemetryHealthChecks:      server.TelemetryHealthChecks,

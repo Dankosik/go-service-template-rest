@@ -42,30 +42,84 @@ import (
 
 const benchmarkUnaryFullMethod = "/grpcx.benchmark.Service/Unary"
 
-type benchmarkVariant string
+// benchmarkShape is the server a variant stands up, and the only thing
+// newBenchmarkFixture branches on. Everything else a variant changes is a value
+// on its row below, so a new variant on an existing shape adds no control flow.
+type benchmarkShape string
 
 const (
-	benchmarkBare            benchmarkVariant = "bare"
-	benchmarkOTel            benchmarkVariant = "otel"
-	benchmarkPolicy          benchmarkVariant = "policy"
-	benchmarkFullLogDisabled benchmarkVariant = "full_log_disabled"
-	benchmarkFullUnsampled   benchmarkVariant = "full_success_unsampled"
-	benchmarkFullJSON        benchmarkVariant = "full_json"
-	benchmarkFullHandlerWork benchmarkVariant = "full_handler_work"
+	shapeBare   benchmarkShape = "bare"   // grpc.NewServer with nothing attached
+	shapeOTel   benchmarkShape = "otel"   // plus the OpenTelemetry stats handler
+	shapePolicy benchmarkShape = "policy" // plus the repository chain, less policyVariantExcludes
+	shapeFull   benchmarkShape = "full"   // NewServer itself
 )
 
-var benchmarkVariants = []benchmarkVariant{
-	benchmarkBare,
-	benchmarkOTel,
-	benchmarkPolicy,
-	benchmarkFullLogDisabled,
-	benchmarkFullUnsampled,
-	benchmarkFullJSON,
-	benchmarkFullHandlerWork,
+// benchmarkVariant is one measured composition: the server it stands up, the
+// settings that server is built with, and what one RPC through it must show.
+//
+// One row answers both what a variant measures and what proves it measured that.
+// The alternative — a bare name whose meaning is reassembled from arms of the
+// fixture switch and arms of the assertion switch — is how a variant ends up
+// measuring something other than what its name claims with nothing to say so.
+//
+// name reaches recorded benchmark output, so changing one orphans every number
+// filed under it; docs/grpc.md names full_json in its profiling example.
+type benchmarkVariant struct {
+	name  string
+	shape benchmarkShape
+
+	// logLevel and sampleRate are the access-log settings the server is built
+	// with. Only shapeFull reads them, because no other shape builds a Config.
+	logLevel   slog.Level
+	sampleRate float64
+
+	// handlerWork makes the handler checksum its payload, so the chain can be
+	// measured against a handler that does something rather than one that
+	// returns immediately.
+	handlerWork bool
+
+	// wantAccessLogRecord is whether one successful RPC must reach the access
+	// log. False covers both ways a full-shape server suppresses the record —
+	// the level rejects it, or sampling drops it — which is the pair
+	// full_log_disabled and full_success_unsampled exist to separate.
+	wantAccessLogRecord bool
 }
 
-// policyVariantExcludes names the builtins the policy variant leaves out, so
-// that what it measures is a decision rather than an omission. access_log and
+var benchmarkVariants = []benchmarkVariant{
+	{name: "bare", shape: shapeBare},
+	{name: "otel", shape: shapeOTel},
+	{name: "policy", shape: shapePolicy},
+	{
+		name:       "full_log_disabled",
+		shape:      shapeFull,
+		logLevel:   slog.LevelError,
+		sampleRate: 1,
+	},
+	{
+		name:       "full_success_unsampled",
+		shape:      shapeFull,
+		logLevel:   slog.LevelInfo,
+		sampleRate: 0,
+	},
+	{
+		name:                "full_json",
+		shape:               shapeFull,
+		logLevel:            slog.LevelInfo,
+		sampleRate:          1,
+		wantAccessLogRecord: true,
+	},
+	{
+		name:                "full_handler_work",
+		shape:               shapeFull,
+		logLevel:            slog.LevelInfo,
+		sampleRate:          1,
+		handlerWork:         true,
+		wantAccessLogRecord: true,
+	},
+}
+
+// policyVariantExcludes names the builtins the policy shape leaves out, so that
+// what it measures is a decision rather than an omission. access_log and
 // recovery are excluded because BenchmarkGRPCAccessLog and the full_* variants
 // isolate their cost.
 var policyVariantExcludes = []string{builtinAccessLog, builtinRecovery}
@@ -112,10 +166,10 @@ func TestBenchmarkVariantsCoverEveryBuiltinPolicy(t *testing.T) {
 
 func TestGRPCBenchmarkVariantsComposeExpectedLayers(t *testing.T) {
 	for _, variant := range benchmarkVariants {
-		t.Run(string(variant), func(t *testing.T) {
+		t.Run(variant.name, func(t *testing.T) {
 			fixture, err := newBenchmarkFixture(variant)
 			if err != nil {
-				t.Fatalf("newBenchmarkFixture(%q) error = %v", variant, err)
+				t.Fatalf("newBenchmarkFixture(%q) error = %v", variant.name, err)
 			}
 			t.Cleanup(func() {
 				if err := fixture.close(); err != nil {
@@ -126,13 +180,13 @@ func TestGRPCBenchmarkVariantsComposeExpectedLayers(t *testing.T) {
 			payload := []byte("composition-probe")
 			response, header, err := fixture.invoke(t.Context(), payload, true)
 			if err != nil {
-				t.Fatalf("invoke(%q) error = %v", variant, err)
+				t.Fatalf("invoke(%q) error = %v", variant.name, err)
 			}
 			if !bytes.Equal(response, payload) {
-				t.Fatalf("invoke(%q) response = %q, want %q", variant, response, payload)
+				t.Fatalf("invoke(%q) response = %q, want %q", variant.name, response, payload)
 			}
 			if err := fixture.finishRPCs(t.Context()); err != nil {
-				t.Fatalf("finish benchmark RPCs for %q: %v", variant, err)
+				t.Fatalf("finish benchmark RPCs for %q: %v", variant.name, err)
 			}
 			fixture.assertComposition(t, variant, header)
 		})
@@ -151,12 +205,12 @@ func BenchmarkGRPCUnary(b *testing.B) {
 	}
 
 	for _, variant := range benchmarkVariants {
-		b.Run(string(variant), func(b *testing.B) {
+		b.Run(variant.name, func(b *testing.B) {
 			for _, payloadCase := range payloads {
 				b.Run(payloadCase.name, func(b *testing.B) {
 					fixture, err := newBenchmarkFixture(variant)
 					if err != nil {
-						b.Fatalf("newBenchmarkFixture(%q) error = %v", variant, err)
+						b.Fatalf("newBenchmarkFixture(%q) error = %v", variant.name, err)
 					}
 					b.Cleanup(func() {
 						if err := fixture.close(); err != nil {
@@ -167,10 +221,10 @@ func BenchmarkGRPCUnary(b *testing.B) {
 					payload := bytes.Repeat([]byte{'x'}, payloadCase.size)
 					response, _, err := fixture.invoke(b.Context(), payload, false)
 					if err != nil {
-						b.Fatalf("untimed invoke(%q) error = %v", variant, err)
+						b.Fatalf("untimed invoke(%q) error = %v", variant.name, err)
 					}
 					if !bytes.Equal(response, payload) {
-						b.Fatalf("untimed invoke(%q) returned the wrong payload", variant)
+						b.Fatalf("untimed invoke(%q) returned the wrong payload", variant.name)
 					}
 
 					b.ReportAllocs()
@@ -179,10 +233,10 @@ func BenchmarkGRPCUnary(b *testing.B) {
 					for b.Loop() {
 						response, _, err := fixture.invoke(b.Context(), payload, false)
 						if err != nil {
-							b.Fatalf("invoke(%q) error = %v", variant, err)
+							b.Fatalf("invoke(%q) error = %v", variant.name, err)
 						}
 						if !bytes.Equal(response, payload) {
-							b.Fatalf("invoke(%q) returned the wrong payload", variant)
+							b.Fatalf("invoke(%q) returned the wrong payload", variant.name)
 						}
 					}
 				})
@@ -233,7 +287,7 @@ func BenchmarkGRPCAccessLog(b *testing.B) {
 				benchmarkDiscardWriter{},
 				&slog.HandlerOptions{Level: testCase.level},
 			))
-			interceptor := unaryPolicy(accessLogAround(log, testCase.policy))
+			interceptor := asUnaryInterceptor(accessLogAround(log, testCase.policy))
 			info := &grpc.UnaryServerInfo{FullMethod: testCase.method}
 
 			b.ReportAllocs()
@@ -296,7 +350,7 @@ func newBenchmarkFixture(variant benchmarkVariant) (*benchmarkFixture, error) {
 	signals := &benchmarkSignals{}
 	handler := benchmarkUnaryHandler{
 		signals: signals,
-		work:    variant == benchmarkFullHandlerWork,
+		work:    variant.handlerWork,
 	}
 	register := func(registrar grpc.ServiceRegistrar) {
 		registerUnaryTestService(registrar, benchmarkUnaryFullMethod, handler.Unary)
@@ -308,12 +362,12 @@ func newBenchmarkFixture(variant benchmarkVariant) (*benchmarkFixture, error) {
 		tracerProvider *sdktrace.TracerProvider
 	)
 
-	switch variant {
-	case benchmarkBare:
+	switch variant.shape {
+	case shapeBare:
 		native := grpc.NewServer()
 		register(native)
 		server = nativeBenchmarkServer{Server: native}
-	case benchmarkOTel:
+	case shapeOTel:
 		meterProvider, tracerProvider = signals.newOTelProviders()
 		registeredMethods := map[string]struct{}{benchmarkUnaryFullMethod: {}}
 		native := grpc.NewServer(grpc.StatsHandler(otelgrpc.NewServerHandler(
@@ -327,11 +381,11 @@ func newBenchmarkFixture(variant benchmarkVariant) (*benchmarkFixture, error) {
 		)))
 		register(native)
 		server = nativeBenchmarkServer{Server: native}
-	case benchmarkPolicy:
+	case shapePolicy:
 		// The repository policy chain without the two builtins whose cost the
 		// full_* variants isolate. The builtins come from builtinPolicies and the
 		// surrounding order from unaryChain — the same two owners NewServer uses —
-		// so this variant measures production's chain rather than a copy of it.
+		// so this shape measures production's chain rather than a copy of it.
 		// The only way to leave a builtin out is to name it in
 		// policyVariantExcludes.
 		admission := newAdmissionLimiter(256, &signals.load)
@@ -349,21 +403,15 @@ func newBenchmarkFixture(variant benchmarkVariant) (*benchmarkFixture, error) {
 		native := grpc.NewServer(grpc.ChainUnaryInterceptor(unaryChain(
 			measured,
 			[]grpc.UnaryServerInterceptor{signals.policyInterceptor()},
-			errorMappingAround(nil),
+			handlerErrorBoundary(nil),
 		)...))
 		register(native)
 		server = nativeBenchmarkServer{Server: native}
-	case benchmarkFullLogDisabled, benchmarkFullUnsampled, benchmarkFullJSON, benchmarkFullHandlerWork:
+	case shapeFull:
 		meterProvider, tracerProvider = signals.newOTelProviders()
-		level := slog.LevelInfo
-		if variant == benchmarkFullLogDisabled {
-			level = slog.LevelError
-		}
-		log := slog.New(slog.NewJSONHandler(&signals.log, &slog.HandlerOptions{Level: level}))
+		log := slog.New(slog.NewJSONHandler(&signals.log, &slog.HandlerOptions{Level: variant.logLevel}))
 		serverConfig := testServerConfig()
-		if variant == benchmarkFullUnsampled {
-			serverConfig.AccessLogSuccessSampleRate = 0
-		}
+		serverConfig.AccessLogSuccessSampleRate = variant.sampleRate
 		fullServer, err := NewServer(
 			serverConfig,
 			Options{
@@ -381,7 +429,7 @@ func newBenchmarkFixture(variant benchmarkVariant) (*benchmarkFixture, error) {
 		}
 		server = fullServer
 	default:
-		return nil, fmt.Errorf("unknown benchmark variant %q", variant)
+		return nil, fmt.Errorf("unknown benchmark shape %q", variant.shape)
 	}
 
 	listener := bufconn.Listen(2 << 20)
@@ -389,6 +437,19 @@ func newBenchmarkFixture(variant benchmarkVariant) (*benchmarkFixture, error) {
 	go func() {
 		serveDone <- server.Serve(listener)
 	}()
+
+	// Everything acquired above belongs to the fixture from here, so a failed
+	// dial unwinds through the same close() a finished fixture uses. A second
+	// unwind written out here is the copy that stops releasing whatever the next
+	// field to be added needs releasing.
+	fixture := &benchmarkFixture{
+		listener:       listener,
+		server:         server,
+		serveDone:      serveDone,
+		signals:        signals,
+		meterProvider:  meterProvider,
+		tracerProvider: tracerProvider,
+	}
 
 	connection, err := grpc.NewClient(
 		"passthrough:///grpcx-benchmark",
@@ -398,27 +459,11 @@ func newBenchmarkFixture(variant benchmarkVariant) (*benchmarkFixture, error) {
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 	if err != nil {
-		_ = server.Close()
-		<-serveDone
-		_ = listener.Close()
-		if meterProvider != nil {
-			_ = meterProvider.Shutdown(context.Background())
-		}
-		if tracerProvider != nil {
-			_ = tracerProvider.Shutdown(context.Background())
-		}
-		return nil, fmt.Errorf("build benchmark client: %w", err)
+		return nil, errors.Join(fmt.Errorf("build benchmark client: %w", err), fixture.close())
 	}
 
-	return &benchmarkFixture{
-		connection:     connection,
-		listener:       listener,
-		server:         server,
-		serveDone:      serveDone,
-		signals:        signals,
-		meterProvider:  meterProvider,
-		tracerProvider: tracerProvider,
-	}, nil
+	fixture.connection = connection
+	return fixture, nil
 }
 
 func (f *benchmarkFixture) invoke(
@@ -441,8 +486,11 @@ func (f *benchmarkFixture) invoke(
 
 func (f *benchmarkFixture) close() error {
 	var closeErrors []error
-	if err := f.connection.Close(); err != nil {
-		closeErrors = append(closeErrors, fmt.Errorf("close benchmark client: %w", err))
+	// nil while newBenchmarkFixture is unwinding a dial that never returned one.
+	if f.connection != nil {
+		if err := f.connection.Close(); err != nil {
+			closeErrors = append(closeErrors, fmt.Errorf("close benchmark client: %w", err))
+		}
 	}
 	if err := f.stop(context.Background(), false); err != nil {
 		closeErrors = append(closeErrors, err)
@@ -493,59 +541,79 @@ func (f *benchmarkFixture) waitServe() error {
 	return f.serveErr
 }
 
+// assertComposition proves the RPC just made actually ran the layers variant
+// claims. Each branch below is the shape's own question; everything a single
+// variant decides is read from its row rather than named here.
 func (f *benchmarkFixture) assertComposition(t *testing.T, variant benchmarkVariant, header metadata.MD) {
 	t.Helper()
 
-	switch variant {
-	case benchmarkBare:
+	switch variant.shape {
+	case shapeBare:
 		if got := f.signals.load.admitted.Load(); got != 0 {
 			t.Fatalf("bare admission count = %d, want 0", got)
 		}
-	case benchmarkOTel:
+	case shapeOTel:
 		f.signals.assertRPCMetric(t)
-	case benchmarkPolicy, benchmarkFullLogDisabled, benchmarkFullUnsampled, benchmarkFullJSON, benchmarkFullHandlerWork:
-		requestIDs := header.Get(requestIDMetadataKey)
-		if len(requestIDs) != 1 || requestIDs[0] == "" {
-			t.Fatalf("%s response request IDs = %v, want one non-empty ID", variant, requestIDs)
-		}
-		if got := f.signals.load.admitted.Load(); got != 1 {
-			t.Fatalf("%s admitted count = %d, want 1", variant, got)
-		}
-		if got := f.signals.load.released.Load(); got != 1 {
-			t.Fatalf("%s released count = %d, want 1", variant, got)
-		}
-		if got := f.signals.policyCalls.Load(); got != 1 {
-			t.Fatalf("%s policy count = %d, want 1", variant, got)
-		}
-		if variant != benchmarkPolicy {
-			f.signals.assertRPCMetric(t)
-			f.signals.assertAdmissionMetric(t)
-		}
+	case shapePolicy:
+		f.assertRepositoryChainRan(t, variant.name, header)
+	case shapeFull:
+		f.assertRepositoryChainRan(t, variant.name, header)
+		f.signals.assertRPCMetric(t)
+		f.signals.assertAdmissionMetric(t)
+		f.assertAccessLog(t, variant)
 	}
 
-	switch variant {
-	case benchmarkBare, benchmarkOTel, benchmarkPolicy:
-	case benchmarkFullLogDisabled, benchmarkFullUnsampled:
-		if got := f.signals.log.writeCount(); got != 0 {
-			t.Fatalf("%s successful access-log writes = %d, want 0", variant, got)
-		}
-	case benchmarkFullJSON, benchmarkFullHandlerWork:
-		var record map[string]any
-		if err := json.Unmarshal(f.signals.log.firstRecord(), &record); err != nil {
-			t.Fatalf("decode production JSON access record: %v", err)
-		}
-		if got := record["msg"]; got != "grpc_request" {
-			t.Fatalf("JSON access record msg = %v, want grpc_request", got)
-		}
-		if got := record["rpc.method"]; got != benchmarkUnaryFullMethod {
-			t.Fatalf("JSON access record rpc.method = %v, want %s", got, benchmarkUnaryFullMethod)
-		}
-	}
-	if variant == benchmarkFullHandlerWork {
+	if variant.handlerWork {
 		const wantChecksum = 15811
 		if got := f.signals.handlerChecksum.Load(); got != wantChecksum {
-			t.Fatalf("full_handler_work checksum = %d, want %d", got, wantChecksum)
+			t.Fatalf("%s handler checksum = %d, want %d", variant.name, got, wantChecksum)
 		}
+	}
+}
+
+// assertRepositoryChainRan proves the layers every shape carrying the repository
+// chain must run: correlation published one ID, admission took and released one
+// slot, and the supplied policy interceptor was reached.
+func (f *benchmarkFixture) assertRepositoryChainRan(t *testing.T, name string, header metadata.MD) {
+	t.Helper()
+
+	requestIDs := header.Get(requestIDMetadataKey)
+	if len(requestIDs) != 1 || requestIDs[0] == "" {
+		t.Fatalf("%s response request IDs = %v, want one non-empty ID", name, requestIDs)
+	}
+	if got := f.signals.load.admitted.Load(); got != 1 {
+		t.Fatalf("%s admitted count = %d, want 1", name, got)
+	}
+	if got := f.signals.load.released.Load(); got != 1 {
+		t.Fatalf("%s released count = %d, want 1", name, got)
+	}
+	if got := f.signals.policyCalls.Load(); got != 1 {
+		t.Fatalf("%s policy count = %d, want 1", name, got)
+	}
+}
+
+// assertAccessLog holds a full-shape variant to the record its row claims: one
+// decodable production record, or none at all when the level or the sample rate
+// was set to suppress it.
+func (f *benchmarkFixture) assertAccessLog(t *testing.T, variant benchmarkVariant) {
+	t.Helper()
+
+	if !variant.wantAccessLogRecord {
+		if got := f.signals.log.writeCount(); got != 0 {
+			t.Fatalf("%s successful access-log writes = %d, want 0", variant.name, got)
+		}
+		return
+	}
+
+	var record map[string]any
+	if err := json.Unmarshal(f.signals.log.firstRecord(), &record); err != nil {
+		t.Fatalf("decode %s JSON access record: %v", variant.name, err)
+	}
+	if got := record["msg"]; got != "grpc_request" {
+		t.Fatalf("%s access record msg = %v, want grpc_request", variant.name, got)
+	}
+	if got := record["rpc.method"]; got != benchmarkUnaryFullMethod {
+		t.Fatalf("%s access record rpc.method = %v, want %s", variant.name, got, benchmarkUnaryFullMethod)
 	}
 }
 

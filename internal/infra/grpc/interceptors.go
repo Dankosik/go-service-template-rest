@@ -2,14 +2,12 @@ package grpcx
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"runtime/debug"
 	"strings"
 	"time"
 
-	"github.com/example/go-service-template-rest/internal/problem"
 	"github.com/example/go-service-template-rest/internal/reqctx"
 	"golang.org/x/sync/semaphore"
 	"google.golang.org/grpc"
@@ -84,50 +82,6 @@ func (s serverStreamWithContext) Context() context.Context {
 	return s.ctx
 }
 
-// aroundRPC is one server policy, written once for both RPC kinds. It observes
-// or replaces the result of the work below it and may decline to run that work
-// at all. [unaryPolicy] and [streamPolicy] adapt it to grpc-go's two separate
-// interceptor types; the package doc owns why a policy is written this way
-// rather than against those types directly.
-type aroundRPC func(ctx context.Context, fullMethod string, call func() error) error
-
-// unaryPolicy adapts one policy to the unary interceptor type.
-//
-// The response is returned even alongside a non-nil error, as the hand-written
-// interceptors this replaced did: grpc-go discards it, and an outer interceptor
-// that inspects it sees what it saw before. When the handler panics, the
-// assignment below never runs, so recovery still answers with a nil response.
-func unaryPolicy(around aroundRPC) grpc.UnaryServerInterceptor {
-	return func(
-		ctx context.Context,
-		request any,
-		info *grpc.UnaryServerInfo,
-		handler grpc.UnaryHandler,
-	) (any, error) {
-		var response any
-		err := around(ctx, info.FullMethod, func() error {
-			var callErr error
-			response, callErr = handler(ctx, request)
-			return callErr
-		})
-		return response, err
-	}
-}
-
-// streamPolicy adapts one policy to the streaming interceptor type.
-func streamPolicy(around aroundRPC) grpc.StreamServerInterceptor {
-	return func(
-		server any,
-		stream grpc.ServerStream,
-		info *grpc.StreamServerInfo,
-		handler grpc.StreamHandler,
-	) error {
-		return around(stream.Context(), info.FullMethod, func() error {
-			return handler(server, stream)
-		})
-	}
-}
-
 type accessLogPolicy struct {
 	logHealthChecks   bool
 	successSampleRate float64
@@ -136,7 +90,7 @@ type accessLogPolicy struct {
 
 func accessLogAround(log *slog.Logger, policy accessLogPolicy) aroundRPC {
 	return func(ctx context.Context, fullMethod string, call func() error) error {
-		if !policy.enabled(ctx, log, fullMethod) {
+		if !policy.logsMethod(fullMethod) || !log.Enabled(ctx, slog.LevelInfo) {
 			return call()
 		}
 		started := time.Now()
@@ -157,9 +111,12 @@ func accessLogAround(log *slog.Logger, policy accessLogPolicy) aroundRPC {
 	}
 }
 
-func (p accessLogPolicy) enabled(ctx context.Context, log *slog.Logger, fullMethod string) bool {
-	return (p.logHealthChecks || !isHealthMethod(fullMethod)) &&
-		log.Enabled(ctx, slog.LevelInfo)
+// logsMethod reports whether this policy admits fullMethod to the access log at
+// all; [accessLogPolicy.shouldLog] then decides on the RPC's outcome. Whether
+// the logger would emit the record is the caller's question rather than the
+// policy's, which is why both predicates read from policy state alone.
+func (p accessLogPolicy) logsMethod(fullMethod string) bool {
+	return p.logHealthChecks || !isHealthMethod(fullMethod)
 }
 
 func (p accessLogPolicy) shouldLog(ctx context.Context, code codes.Code, elapsed time.Duration) bool {
@@ -199,116 +156,6 @@ func sampleRequestID(requestID string, rate float64) bool {
 	const sampleBuckets = uint64(1_000_000_000)
 	bucket := hash % sampleBuckets
 	return float64(bucket)/float64(sampleBuckets) < rate
-}
-
-func errorMappingAround(mappers []problem.Mapper) aroundRPC {
-	return func(_ context.Context, fullMethod string, call func() error) error {
-		err := call()
-		if isHealthMethod(fullMethod) {
-			return err
-		}
-		return mapError(err, ownedStatusOnly, mappers)
-	}
-}
-
-func policyErrorBoundaryAround() aroundRPC {
-	return func(_ context.Context, _ string, call func() error) error {
-		return mapError(call(), anyServiceStatus, nil)
-	}
-}
-
-// trustedStatus reports whether one error boundary may hand err's gRPC status
-// to the caller unchanged, and yields the status error to return. Reporting
-// false sanitizes the error into a generic INTERNAL. The two implementations
-// below are the only difference between this transport's two error boundaries.
-type trustedStatus func(err error) (error, bool)
-
-// ownedStatusOnly trusts only a status this package built from repository
-// policy, so a generated handler's own status.Error cannot make a dependency's
-// code and detail the client's answer by accident.
-func ownedStatusOnly(err error) (error, bool) {
-	if owned, ok := errors.AsType[*ownedStatusError](err); ok {
-		return owned, true
-	}
-	return nil, false
-}
-
-// anyServiceStatus trusts any status the error itself carries. The boundary
-// using it wraps the policy interceptors supplied through Options.UnaryPolicy
-// and Options.StreamPolicy, which live in other packages and therefore cannot
-// construct an ownedStatusError; an ordinary status.Error already carries a
-// status, which is the whole of what this boundary asks for, and
-// TestServerPolicyErrorBoundary returns exactly that from a policy. It
-// deliberately does not unwrap: only a status a policy chose to return directly
-// is its own output.
-func anyServiceStatus(err error) (error, bool) {
-	if statusErr, ok := err.(interface{ GRPCStatus() *status.Status }); ok && statusErr.GRPCStatus() != nil {
-		return err, true
-	}
-	return nil, false
-}
-
-// mapError converts a handler or policy failure into the status this transport
-// returns. Cancellation and deadlines answer first at every boundary because
-// they are the caller's own signal rather than a service outcome; trusted then
-// decides how much of the remaining error is already deliberate output.
-func mapError(err error, trusted trustedStatus, mappers []problem.Mapper) error {
-	if err == nil {
-		return nil
-	}
-	if errors.Is(err, context.Canceled) {
-		return ownedStatus(codes.Canceled, "request canceled")
-	}
-	if errors.Is(err, context.DeadlineExceeded) {
-		return ownedStatus(codes.DeadlineExceeded, "request deadline exceeded")
-	}
-	if owned, ok := trusted(err); ok {
-		return owned
-	}
-	if mapped, ok := problem.Classify(err, mappers); ok {
-		return mappedStatus(mapped)
-	}
-	return ownedStatus(codes.Internal, "request failed")
-}
-
-func mappedStatus(mapped problem.Mapped) error {
-	code := codes.Internal
-	switch mapped.Code {
-	case problem.CodeBadRequest, problem.CodeUnprocessableContent:
-		code = codes.InvalidArgument
-	case problem.CodeUnauthorized:
-		code = codes.Unauthenticated
-	case problem.CodeForbidden:
-		code = codes.PermissionDenied
-	case problem.CodeNotFound:
-		code = codes.NotFound
-	case problem.CodeMethodNotAllowed:
-		code = codes.Unimplemented
-	case problem.CodeConflict:
-		code = codes.Aborted
-	case problem.CodeRequestEntityTooLarge, problem.CodeTooManyRequests:
-		code = codes.ResourceExhausted
-	// profile:authn-oidc-jwt:start
-	case problem.CodeRequestHeaderFieldsTooLarge:
-		code = codes.ResourceExhausted
-	// profile:authn-oidc-jwt:end
-	case problem.CodeServiceUnavailable:
-		code = codes.Unavailable
-	case problem.CodeGatewayTimeout:
-		code = codes.DeadlineExceeded
-	case problem.CodeInternalError:
-		code = codes.Internal
-	}
-
-	detail := strings.TrimSpace(mapped.Detail)
-	if detail == "" {
-		if definition, ok := problem.ForCode(mapped.Code); ok {
-			detail = definition.Title
-		} else {
-			detail = "request failed"
-		}
-	}
-	return ownedStatus(code, detail)
 }
 
 func recoveryAround(log *slog.Logger) aroundRPC {
@@ -377,23 +224,4 @@ func (l *admissionLimiter) around(ctx context.Context, fullMethod string, call f
 // profile:authn-oidc-jwt:end
 func isHealthMethod(fullMethod string) bool {
 	return strings.HasPrefix(fullMethod, healthMethodPrefix)
-}
-
-// ownedStatusError is the provenance marker for a status this adapter created
-// from repository-owned policy. A handler's ordinary status.Error does not
-// carry this marker and is therefore sanitized by ownedStatusOnly.
-type ownedStatusError struct {
-	status *status.Status
-}
-
-func ownedStatus(code codes.Code, detail string) error {
-	return &ownedStatusError{status: status.New(code, detail)}
-}
-
-func (e *ownedStatusError) Error() string {
-	return e.status.Err().Error()
-}
-
-func (e *ownedStatusError) GRPCStatus() *status.Status {
-	return e.status
 }

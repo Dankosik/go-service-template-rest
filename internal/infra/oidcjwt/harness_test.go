@@ -1,10 +1,10 @@
 package oidcjwt
 
-// Fixtures shared by every test in this package: the scripted provider, the
-// movable clock, the verifier constructors, and the token and JWKS builders.
-// They live here rather than beside one suite because nearly every test file
-// depends on them, and a reader opening any one of them should not have to know
-// which other file owns the verifier under test.
+// Shared test harness for package oidcjwt: the scripted provider, the movable
+// clock, the verifier constructors, and the token and JWKS builders. They live
+// here rather than beside one suite because nearly every test file depends on
+// them, and a reader opening any one of them should not have to know which
+// other file owns the verifier under test.
 
 import (
 	"bytes"
@@ -440,6 +440,9 @@ func signPayloadWithOptions(
 	return compact
 }
 
+// requireKind asserts the sanitized category err carries. The zero Kind means no
+// error at all, which is why the declared run starts at iota + 1 in errors.go: a
+// table row that omits wantKind is stating that the case must succeed.
 func requireKind(t *testing.T, err error, want Kind) {
 	t.Helper()
 	if want == 0 {

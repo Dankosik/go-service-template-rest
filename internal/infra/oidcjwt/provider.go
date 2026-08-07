@@ -61,9 +61,7 @@ func providerHTTPConfig(baseURL string) httpclient.Config {
 // establishedTrust is what a successful startup hands the Verifier: the first
 // completely validated key set, the endpoint to refresh it from, and the client
 // that owns the connection to that endpoint. They travel as one value because the
-// Verifier cannot use any of them without the other two, and because bootstrap
-// fails closed at every step below — a tuple would restate three zero values at
-// each one, and a step added later would have to get their order right.
+// Verifier cannot use any of them without the other two.
 type establishedTrust struct {
 	keys    *keySet
 	jwksURI string
@@ -111,9 +109,7 @@ func bootstrapTrust(
 	if err != nil {
 		return establishedTrust{}, errors.New("OIDC startup failed at JWKS validation")
 	}
-	if log != nil {
-		log.InfoContext(ctx, "authn_trust_initialized", "component", "authn", "result", "success")
-	}
+	log.InfoContext(ctx, "authn_trust_initialized", "component", "authn", "result", "success")
 	handedOver = true
 	return establishedTrust{keys: keys, jwksURI: jwksURI, client: jwksClient}, nil
 }
@@ -203,10 +199,12 @@ func fetchDocument(ctx context.Context, client requestClient, target string) ([]
 // provider-supplied endpoint from carrying credentials or redirect parameters
 // into a request this service makes on its own behalf.
 //
-// internal/config carries a second copy of this predicate, in validateAuthnConfig,
+// internal/config carries a second copy of this predicate, validAuthnIssuerURL,
 // so a bad authn.issuer fails at configuration load rather than at authn startup.
 // That copy is forced: the depguard rule config_no_runtime_owners stops
 // internal/config from importing anything under internal/, so it cannot call this.
+// It is written in this same shape, term for term and in the same order, so the
+// two can be read against each other line by line.
 // A constraint tightened here has to be tightened there too, or the two answers
 // disagree about which issuer values a deployment may hold.
 // TestPolicyRulesMatchConfigValidation makes that disagreement fail a build

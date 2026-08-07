@@ -21,7 +21,7 @@ func (v *Verifier) UnaryInterceptor() grpc.UnaryServerInterceptor {
 		handler grpc.UnaryHandler,
 	) (any, error) {
 		clean, incoming := splitAuthorizationMetadata(ctx)
-		if info != nil && publicHealthMethod(info.FullMethod) {
+		if publicHealthMethod(info.FullMethod) {
 			return handler(clean, request)
 		}
 		authenticated, err := v.authenticateRPC(clean, incoming)
@@ -42,7 +42,7 @@ func (v *Verifier) StreamInterceptor() grpc.StreamServerInterceptor {
 		handler grpc.StreamHandler,
 	) error {
 		clean, incoming := splitAuthorizationMetadata(stream.Context())
-		if info != nil && publicHealthMethod(info.FullMethod) {
+		if publicHealthMethod(info.FullMethod) {
 			return handler(server, serverStreamWithContext{ServerStream: stream, ctx: clean})
 		}
 		authenticated, err := v.authenticateRPC(clean, incoming)

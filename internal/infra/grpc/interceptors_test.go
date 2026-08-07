@@ -56,14 +56,20 @@ func TestAccessLogSuccessSamplingIsDeterministicAndBounded(t *testing.T) {
 	}
 }
 
-func TestAccessLogInterceptorsApplyHealthAndSuccessPolicy(t *testing.T) {
+// One accessLogPolicy reaches both RPC kinds through their own adapter, so this
+// drives all three of that policy's answers — sampled-out success, health
+// exclusion, business error — once per adapter and counts the records they
+// produced together. What it owns is the sharing; the decision matrix itself
+// belongs to TestAccessLogPolicyAppliesToStreamingRPCs below, which is where a
+// new rule goes.
+func TestAccessLogPolicyIsSharedByUnaryAndStreamAdapters(t *testing.T) {
 	var output bytes.Buffer
 	log := slog.New(slog.NewJSONHandler(&output, nil))
 	policy := accessLogPolicy{successSampleRate: 0}
 	ctx := reqctx.ContextWithRequestID(t.Context(), "sampled-out-success")
 
 	handlerCalls := 0
-	if _, err := unaryPolicy(accessLogAround(log, policy))(
+	if _, err := asUnaryInterceptor(accessLogAround(log, policy))(
 		ctx,
 		nil,
 		&grpc.UnaryServerInfo{FullMethod: testUnaryFullMethod},
@@ -74,7 +80,7 @@ func TestAccessLogInterceptorsApplyHealthAndSuccessPolicy(t *testing.T) {
 	); err != nil {
 		t.Fatalf("successful unary interceptor error = %v", err)
 	}
-	if _, err := unaryPolicy(accessLogAround(log, policy))(
+	if _, err := asUnaryInterceptor(accessLogAround(log, policy))(
 		ctx,
 		nil,
 		&grpc.UnaryServerInfo{FullMethod: healthMethodPrefix + "Check"},
@@ -87,9 +93,9 @@ func TestAccessLogInterceptorsApplyHealthAndSuccessPolicy(t *testing.T) {
 	}
 
 	streamErr := status.Error(codes.ResourceExhausted, "busy")
-	if err := streamPolicy(accessLogAround(log, policy))(
+	if err := asStreamInterceptor(accessLogAround(log, policy))(
 		nil,
-		testServerStream{context: func() context.Context { return ctx }},
+		testServerStream{ctx: ctx},
 		&grpc.StreamServerInfo{FullMethod: testStreamFullMethod},
 		func(any, grpc.ServerStream) error {
 			handlerCalls++
@@ -192,9 +198,9 @@ func TestAccessLogPolicyAppliesToStreamingRPCs(t *testing.T) {
 				log := slog.New(slog.NewJSONHandler(&output, nil))
 				handlerCalled := false
 
-				err := streamPolicy(accessLogAround(log, testCase.policy))(
+				err := asStreamInterceptor(accessLogAround(log, testCase.policy))(
 					nil,
-					testServerStream{context: func() context.Context { return ctx }},
+					testServerStream{ctx: ctx},
 					&grpc.StreamServerInfo{FullMethod: testCase.method},
 					func(any, grpc.ServerStream) error {
 						handlerCalled = true
@@ -228,7 +234,7 @@ func TestAccessLogSkipsAllWorkWhenInfoIsDisabled(t *testing.T) {
 	log := slog.New(slog.NewJSONHandler(&output, &slog.HandlerOptions{Level: slog.LevelWarn}))
 	unaryCalled := false
 
-	_, err := unaryPolicy(accessLogAround(log, accessLogPolicy{successSampleRate: 1}))(
+	_, err := asUnaryInterceptor(accessLogAround(log, accessLogPolicy{successSampleRate: 1}))(
 		t.Context(),
 		nil,
 		&grpc.UnaryServerInfo{FullMethod: testUnaryFullMethod},
@@ -242,9 +248,9 @@ func TestAccessLogSkipsAllWorkWhenInfoIsDisabled(t *testing.T) {
 	}
 
 	streamCalled := false
-	err = streamPolicy(accessLogAround(log, accessLogPolicy{successSampleRate: 1}))(
+	err = asStreamInterceptor(accessLogAround(log, accessLogPolicy{successSampleRate: 1}))(
 		nil,
-		testServerStream{context: t.Context},
+		testServerStream{ctx: t.Context()},
 		&grpc.StreamServerInfo{FullMethod: testStreamFullMethod},
 		func(any, grpc.ServerStream) error {
 			streamCalled = true
@@ -262,31 +268,15 @@ func TestAccessLogSkipsAllWorkWhenInfoIsDisabled(t *testing.T) {
 func TestAdmissionLimitIsSharedAcrossUnaryAndStreamingRPCs(t *testing.T) {
 	load := &recordingLoad{}
 	limiter := newAdmissionLimiter(1, load)
-	unary := unaryPolicy(limiter.around)
-	streaming := streamPolicy(limiter.around)
+	unary := asUnaryInterceptor(limiter.around)
+	streaming := asStreamInterceptor(limiter.around)
 
-	entered := make(chan struct{})
-	release := make(chan struct{})
-	firstDone := make(chan error, 1)
-	go func() {
-		_, err := unary(
-			t.Context(),
-			nil,
-			&grpc.UnaryServerInfo{FullMethod: testUnaryFullMethod},
-			func(context.Context, any) (any, error) {
-				close(entered)
-				<-release
-				return struct{}{}, nil
-			},
-		)
-		firstDone <- err
-	}()
-	<-entered
+	release, firstDone := occupyAdmissionSlot(t, unary)
 
 	streamHandlerCalled := false
 	err := streaming(
 		nil,
-		testServerStream{context: t.Context},
+		testServerStream{ctx: t.Context()},
 		&grpc.StreamServerInfo{FullMethod: testStreamFullMethod},
 		func(any, grpc.ServerStream) error {
 			streamHandlerCalled = true
@@ -331,25 +321,9 @@ func TestHealthPrefixExemptsMethodsGRPCGoAddsLater(t *testing.T) {
 
 	load := &recordingLoad{}
 	limiter := newAdmissionLimiter(1, load)
-	unary := unaryPolicy(limiter.around)
+	unary := asUnaryInterceptor(limiter.around)
 
-	entered := make(chan struct{})
-	release := make(chan struct{})
-	occupied := make(chan error, 1)
-	go func() {
-		_, err := unary(
-			t.Context(),
-			nil,
-			&grpc.UnaryServerInfo{FullMethod: testUnaryFullMethod},
-			func(context.Context, any) (any, error) {
-				close(entered)
-				<-release
-				return struct{}{}, nil
-			},
-		)
-		occupied <- err
-	}()
-	<-entered
+	release, occupied := occupyAdmissionSlot(t, unary)
 
 	handlerCalled := false
 	if _, err := unary(
@@ -374,6 +348,33 @@ func TestHealthPrefixExemptsMethodsGRPCGoAddsLater(t *testing.T) {
 	if _, shed := load.snapshot(); shed != 0 {
 		t.Fatalf("shed = %d, want 0; a health-service method must not consume the budget", shed)
 	}
+}
+
+// occupyAdmissionSlot parks a unary RPC inside its handler, so the limiter the
+// interceptor was built from is full when the caller drives its own RPC. Close
+// the returned channel to let that RPC finish, then read its result.
+func occupyAdmissionSlot(t *testing.T, unary grpc.UnaryServerInterceptor) (chan struct{}, <-chan error) {
+	t.Helper()
+
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	occupied := make(chan error, 1)
+	go func() {
+		_, err := unary(
+			t.Context(),
+			nil,
+			&grpc.UnaryServerInfo{FullMethod: testUnaryFullMethod},
+			func(context.Context, any) (any, error) {
+				close(entered)
+				<-release
+				return struct{}{}, nil
+			},
+		)
+		occupied <- err
+	}()
+	<-entered
+
+	return release, occupied
 }
 
 func TestMapErrorAppliesEachBoundarysTrustRule(t *testing.T) {
@@ -477,7 +478,7 @@ func TestRecoveryReturnsSanitizedOwnedStatus(t *testing.T) {
 	log := slog.New(slog.DiscardHandler)
 
 	t.Run("unary", func(t *testing.T) {
-		response, err := unaryPolicy(recoveryAround(log))(
+		response, err := asUnaryInterceptor(recoveryAround(log))(
 			t.Context(),
 			nil,
 			&grpc.UnaryServerInfo{FullMethod: testUnaryFullMethod},
@@ -492,9 +493,9 @@ func TestRecoveryReturnsSanitizedOwnedStatus(t *testing.T) {
 	})
 
 	t.Run("streaming", func(t *testing.T) {
-		err := streamPolicy(recoveryAround(log))(
+		err := asStreamInterceptor(recoveryAround(log))(
 			nil,
-			testServerStream{context: t.Context},
+			testServerStream{ctx: t.Context()},
 			&grpc.StreamServerInfo{FullMethod: testStreamFullMethod},
 			func(any, grpc.ServerStream) error {
 				panic(panicValue)
@@ -549,12 +550,12 @@ func (l *recordingLoad) snapshot() (int, int) {
 }
 
 type testServerStream struct {
-	context func() context.Context
+	ctx context.Context //nolint:containedctx // grpc.ServerStream requires Context to return the RPC context.
 }
 
 func (s testServerStream) SetHeader(metadata.MD) error  { return nil }
 func (s testServerStream) SendHeader(metadata.MD) error { return nil }
 func (s testServerStream) SetTrailer(metadata.MD)       {}
-func (s testServerStream) Context() context.Context     { return s.context() }
+func (s testServerStream) Context() context.Context     { return s.ctx }
 func (s testServerStream) SendMsg(any) error            { return nil }
 func (s testServerStream) RecvMsg(any) error            { return nil }

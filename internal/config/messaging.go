@@ -6,6 +6,25 @@ import (
 	"strings"
 )
 
+// validateMessagingConfig restates the rules natsjs.validateConfig applies, so
+// an operator's settings are rejected at load time instead of at connect. That
+// copy is not a shortcut and cannot be removed by importing the adapter:
+// depguard's config_no_runtime_owners rule forbids internal/config from
+// importing any repository runtime package, so that loading configuration does
+// not link a broker client into every binary that merely reads it.
+//
+// The copy survives only because the composition root — cmd/worker/internal/
+// bootstrap, the one package that wires both — pins it from outside;
+// TestMessagingConfigRulesMatchAdapter there feeds the same values through both
+// validators and fails when they disagree. The same arrangement, for the same
+// reason, holds the outbox ceilings: see the block above RelayConfig in
+// internal/infra/postgresoutbox/relay_config.go.
+//
+// The two sides deliberately differ in one direction only: this one also
+// canonicalizes — it trims, rejects duplicate URLs, and rewrites cfg.URLs — so
+// it is strictly the stricter of the two. A rule added here that rejects
+// something natsjs accepts is fine; one that accepts something natsjs rejects
+// moves a startup failure to connect time.
 func validateMessagingConfig(cfg *MessagingConfig) error {
 	cfg.URLs = strings.TrimSpace(cfg.URLs)
 	cfg.CredentialsFile = strings.TrimSpace(cfg.CredentialsFile)
@@ -53,12 +72,15 @@ func validateMessagingConfig(cfg *MessagingConfig) error {
 	if !cfg.AllowUnauthenticated && cfg.CredentialsFile == "" {
 		return fmt.Errorf("%w: messaging.credentials_file is required", ErrValidate)
 	}
-	if !validMessagingName(cfg.Stream) {
+	if !validMessagingStreamName(cfg.Stream) {
 		return fmt.Errorf("%w: messaging.stream is invalid", ErrValidate)
 	}
 	return nil
 }
 
-func validMessagingName(value string) bool {
+// validMessagingStreamName is the same rule as natsjs.validConsumerName, which
+// the adapter applies to both the stream and the durable consumer. Keep the two
+// in step; see the comment above validateMessagingConfig for why there are two.
+func validMessagingStreamName(value string) bool {
 	return value != "" && !strings.ContainsAny(value, " .*\\/>\t\r\n")
 }

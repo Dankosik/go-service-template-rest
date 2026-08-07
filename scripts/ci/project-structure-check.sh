@@ -25,7 +25,7 @@ while IFS= read -r file; do
 done < <(find cmd internal test -type f -name '*_part[0-9]*_test.go' -print 2>/dev/null)
 
 while IFS= read -r file; do
-	[[ -n "${file}" ]] && fail "${file} must use <package>_test.go for shared package test helpers"
+	[[ -n "${file}" ]] && fail "${file} must use harness_test.go for shared package test helpers"
 done < <(find cmd internal test -type f -name 'test_helpers_test.go' -print 2>/dev/null)
 
 while IFS= read -r file; do

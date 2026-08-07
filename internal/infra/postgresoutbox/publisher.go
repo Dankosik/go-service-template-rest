@@ -2,8 +2,8 @@ package postgresoutbox
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"reflect"
 )
 
 // Publisher returns nil only after the selected broker durably acknowledges
@@ -30,6 +30,25 @@ import (
 // acknowledgement. A panic is fatal to the relay process: the event is released
 // for retry, the rest of the batch finalizes, and the process exits, because a
 // panicking adapter is a deployment fault rather than a transient one.
+//
+// An adapter that returns a sentinel of its own — one this package does not
+// already produce — owes it two edits outside the adapter, because no
+// vocabulary here is derived from the error. It needs a case in
+// publicationErrorClass in relay_publish.go, the only producer of the class
+// that this event's metric sample, its operator log, and its stored
+// last_error_class column all carry, and the matching constant in
+// boundedErrorType in vocabulary.go. Skipping the first is the expensive one:
+// the sentinel falls into that switch's default, so all three surfaces agree on
+// publisher_temporary — a class the adapter never meant — and the event opts out
+// of the attempt cap, which only [ErrPublicationNotAccepted] trips.
+// TestErrorClassVocabularyIsBounded cannot catch this for you: it drives this
+// package's own producers, and an adapter is by definition outside them.
+//
+// None of that reaches failureClass in cmd/outbox-relay/main.go. Every Publish
+// error becomes a durable transition — retried or poisoned — and never stops the
+// relay, so it is never a process exit class. The exit classes an adapter does
+// own are its builder's; see the table in
+// docs/postgres-transactional-outbox.md.
 // profile:messaging-nats-jetstream:start
 //
 // natsOutboxPublisher in test/postgres_outbox_natsjs_integration_test.go is a
@@ -45,21 +64,26 @@ type Publisher interface {
 // never registered an adapter fails before the process builds telemetry and a
 // PostgreSQL pool for a relay that cannot run.
 func ValidatePublisher(publisher Publisher) error {
-	if publisher == nil || nilInterface(publisher) {
+	if publisher == nil || holdsTypedNil(publisher) {
 		return fmt.Errorf("%w: outbox publisher is not registered", ErrConfig)
 	}
 	return nil
 }
 
-// ErrPermanentPublication lets an adapter reject an occurrence without using
-// transport-specific error types in the relay. It poisons the event on the
-// first occurrence: the row is never retried, it blocks later work for its
-// ordering key, and only an operator redrive releases it. Return it only for a
-// rejection that retrying the same bytes cannot fix.
-var ErrPermanentPublication = errors.New("permanent outbox publication failure")
+// holdsTypedNil reports an interface value holding a typed nil, which `== nil`
+// does not. [ValidatePublisher] and newRelay both need it, for the same reason:
+// each takes an interface a composition root may have left unset.
+func holdsTypedNil(value any) bool {
+	reflected := reflect.ValueOf(value)
+	//nolint:exhaustive // Only kinds that can contain a typed nil are relevant.
+	switch reflected.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		return reflected.IsNil()
+	default:
+		return false
+	}
+}
 
-// ErrPublicationNotAccepted lets an adapter prove that the broker did not
-// durably accept an occurrence. It remains retryable and is the only failure
-// the attempt threshold poisons on; unclassified errors stay ambiguous and
-// keep retrying rather than risking loss at a strict attempt cap.
-var ErrPublicationNotAccepted = errors.New("outbox publication was not accepted")
+// The two sentinels an adapter returns — [ErrPermanentPublication] and
+// [ErrPublicationNotAccepted] — are declared with the rest of the package's set
+// in errors.go. The contract that decides which one to return is above.

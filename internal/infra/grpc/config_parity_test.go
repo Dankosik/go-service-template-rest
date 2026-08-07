@@ -39,6 +39,10 @@ import (
 // own target-side proof, TestGRPCServerConfigFillsEveryTransportBound. What this
 // buys is the corpus below being able to ask what NewServer does with a
 // configuration the loader accepted, which needs some crossing in this package.
+//
+// The benchmark server under examples/grpc-reference-service writes the crossing
+// out a third time, for the same unreachability reason, and guards it the same
+// target-side way. A bound added to [Config] belongs in all three.
 func serverConfigFromRuntime(server config.GRPCServerConfig) Config {
 	return Config{
 		MaxConcurrentRPCs:          server.MaxConcurrentRPCs,
@@ -46,7 +50,7 @@ func serverConfigFromRuntime(server config.GRPCServerConfig) Config {
 		MaxHeaderListBytes:         server.MaxHeaderListBytes,
 		MaxReceiveMessageBytes:     server.MaxReceiveMessageBytes,
 		MaxSendMessageBytes:        server.MaxSendMessageBytes,
-		LogHealthChecks:            server.AccessLogHealthChecks,
+		AccessLogHealthChecks:      server.AccessLogHealthChecks,
 		AccessLogSuccessSampleRate: server.AccessLogSuccessSampleRate,
 		AccessLogSlowThreshold:     server.AccessLogSlowThreshold,
 		TelemetryHealthChecks:      server.TelemetryHealthChecks,

@@ -41,9 +41,9 @@
 // profile:authn-oidc-jwt:end
 //
 // To add a policy to this package's own chain, write one aroundRPC and add it to
-// the list the builtinPolicies function returns. That list is the only place the
-// order below is decided, and both chains are built from it, so a policy cannot
-// reach unary RPCs and miss streaming ones. It is a function rather than a
+// the list the builtinPolicies function in chain.go returns. That list is the
+// only place the order below is decided, and both chains are built from it, so a
+// policy cannot reach unary RPCs and miss streaming ones. It is a function rather than a
 // literal inside [NewServer] because performance_test.go builds a subset of the
 // same chain from it, and TestBenchmarkVariantsCoverEveryBuiltinPolicy fails
 // until that file decides whether the new policy should be measured.
@@ -64,8 +64,8 @@
 //
 //   - correlation — accepts or mints the request ID and publishes it in response
 //     metadata, so everything below it and the handler agree on one identifier.
-//   - access log — times the whole RPC, and sits outside error mapping so it
-//     records the status the caller actually receives.
+//   - access log — times the whole RPC, and sits outside both error boundaries
+//     so it records the status the caller actually receives.
 //   - recovery — turns a panic below it into INTERNAL, which is also what lets
 //     the access log record the RPC instead of losing it with the goroutine.
 //   - admission — holds the concurrency semaphore for the work below it, outside
@@ -73,22 +73,25 @@
 //   - policy error boundary — sanitizes what the policy interceptors return.
 //   - [Options.UnaryPolicy] and [Options.StreamPolicy] — supplied by the
 //     composition root.
-//   - error mapping — sanitizes what the handler returns.
+//   - handler error boundary — sanitizes what the handler returns.
 //
-// The two error boundaries differ only in how much of an error they already
-// trust, and the ordering follows from that: a policy interceptor is
-// service-owned code that may choose its own status, and a handler's error is
-// not. One consequence is worth knowing before writing a policy: error mapping is
-// innermost, so a policy observes an already-mapped status and never the
-// handler's raw domain error.
+// This package doc is the one prose owner of that order; docs/grpc.md describes
+// what the chain guarantees a caller and points here for the positions.
+//
+// The two error boundaries are the same mechanism and differ only in how much of
+// an error they already trust, which is what fixes their order: a policy
+// interceptor is service-owned code that may choose its own status, and a
+// handler's error is not. One consequence is worth knowing before writing a
+// policy: the handler error boundary is innermost, so a policy observes an
+// already-mapped status and never the handler's raw domain error.
 //
 // # One policy, both RPC kinds
 //
 // grpc-go types unary and streaming interceptors separately, so a policy written
 // against those types exists twice and the two copies drift silently: adding one
 // half compiles, lints, and passes any test that does not specifically drive
-// streaming. A policy here is one aroundRPC instead, and unaryPolicy and
-// streamPolicy adapt it to both types.
+// streaming. A policy here is one aroundRPC instead, and asUnaryInterceptor and
+// asStreamInterceptor adapt it to both types.
 //
 // Correlation is the exception and is still written twice, because the unary and
 // streaming halves genuinely differ: one publishes response metadata through
