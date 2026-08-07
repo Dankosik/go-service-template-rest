@@ -27,6 +27,9 @@ It does not restate the full tree, every command, or task-local design choices.
 | `internal/infra/postgresmigrate/` | Optional migration execution used by `cmd/migrate`. | Runtime pool ownership or application startup. |
 | `internal/infra/telemetry/` | OpenTelemetry tracing/metrics SDK setup and Prometheus export. | Feature semantics, startup logging, or request routing decisions. |
 | `internal/observability/otelconfig/` | Narrow shared OTel config vocabulary, defaults, and pure validation helpers used by config and telemetry. | Config loading, OTel SDK construction, exporter setup, or generic observability helpers. |
+<!-- profile:authn-oidc-jwt:start -->
+| `internal/authntrust/` | The two deployment trust rules an authentication boundary is configured with — which provider URLs may be fetched, which peers may state a request's transport — as pure predicates shared by `internal/config` and `internal/infra/oidcjwt`. | Config loading, credential verification, policy objects, or any configured value of its own. |
+<!-- profile:authn-oidc-jwt:end -->
 | `migrations/` | SQL schema migration source of truth. | Runtime repository logic or generated Go bindings. |
 <!-- profile:outbox-postgres:start -->
 | `internal/infra/postgresoutbox/` | PostgreSQL outbox envelope, transactional append, claims, retries, poison/redrive, retention, and broker-neutral relay loop. | Domain event selection, a broker adapter, inbox processing, or exactly-once delivery. |
@@ -105,6 +108,15 @@ internal/config, internal/infra/telemetry
   -> internal/observability/otelconfig
 ```
 
+<!-- profile:authn-oidc-jwt:start -->
+The authentication profile adds one more shared leaf, for the same reason:
+
+```text
+internal/config, internal/infra/oidcjwt
+  -> internal/authntrust
+```
+<!-- profile:authn-oidc-jwt:end -->
+
 <!-- profile:grpc:start -->
 The optional transport adds:
 
@@ -125,6 +137,9 @@ Stable direction rules:
 - Shared contracts start beside the consuming `internal/<feature>` package and should move only when real reuse exists.
 - `cmd/service/internal/bootstrap` is allowed to know concrete adapters because it is the composition root.
 - `internal/observability/otelconfig` is a vocabulary package only; it must not import config, infra adapters, or OpenTelemetry SDK packages.
+<!-- profile:authn-oidc-jwt:start -->
+- `internal/authntrust` is a rule leaf only; it must not import config, infra adapters, or transport libraries. A rule that only one owner applies stays with that owner rather than moving here.
+<!-- profile:authn-oidc-jwt:end -->
 
 ## Primary Runtime Flows
 
@@ -179,9 +194,10 @@ The lifecycle baseline is: config and dependency validation happen before accept
 ### Background / Async Extension Path
 
 <!-- profile:outbox-postgres:start -->
-The optional PostgreSQL outbox keeps the request path broker-independent:
-feature code appends a domain-selected event through the same `pgx.Tx` as its
-mutation, and `cmd/outbox-relay` later claims and publishes that durable intent.
+The optional PostgreSQL outbox keeps the request path broker-independent: the
+PostgreSQL repository adapter appends a feature-selected event through the same
+`pgx.Tx` as its mutation, and `cmd/outbox-relay` later claims and publishes that
+durable intent.
 The relay owns only a minimal Publisher contract; an initialized service must
 register a real adapter, and the process fails closed if none is registered.
 See [PostgreSQL transactional outbox](postgres-transactional-outbox.md).
@@ -227,10 +243,10 @@ Use these seams when extending the repository:
 - New HTTP capability: first consume the approved `spec.md` behavior/contract delta plus any needed system/integration contract decisions; then update `api/openapi/service.yaml`, regenerate `internal/openapi`, add use-case logic in `internal/<feature>`, and wire handlers/routes in `internal/infra/http`. Do not use OpenAPI edits, generated code, handlers, or tests to invent resource, status, error, retry, async, freshness, or compatibility semantics.
 <!-- profile:grpc:start -->
 - New gRPC capability: define the accepted RPC and compatibility behavior first; add an Edition 2023 Opaque schema under `api/proto`, regenerate `internal/gen/proto`, implement a thin feature-facing adapter, and register it in `cmd/service/internal/bootstrap/startup_grpc.go`. Generated handlers, raw statuses, streaming mechanics, and tests do not own domain semantics, deadlines, retry safety, authentication, or stream-duration policy.
-- New outbound gRPC dependency: construct one bootstrap-owned `grpcclient` connection, explicitly select `PropagationNone`, `PropagationTraceContext`, or `PropagationTrustedService` at that neighbor's trust boundary, pass it to the provider-generated client, and close it during shutdown and partial-startup cleanup. The zero policy emits no remote correlation; trusted service adds only a valid context request ID to W3C Trace Context; baggage is always omitted. Generated standard health and provider clients consume the same `grpc.ClientConnInterface` seam. Environment proxies and resolver-provided service configs are deliberately disabled; a dependency that requires either needs its own design instead of weakening the shared connection.
+- New outbound gRPC dependency: construct one bootstrap-owned `grpcclient` connection, explicitly select `PropagationNone`, `PropagationTraceContext`, or `PropagationTrustedService` at that neighbor's trust boundary, pass it to the provider-generated client, and close it during shutdown and partial-startup cleanup. The zero policy emits no remote correlation; trusted service adds only a valid context request ID to W3C Trace Context; baggage is always omitted. Generated standard health and provider clients consume the same `grpc.ClientConnInterface` seam. Also select the address-selection policy for that neighbor: round robin is the zero value and reaches every resolved address, and first-address selection is the alternative when one subchannel per backend is not wanted. The connection pings when idle so a NAT or balancer idle timeout cannot discard it silently. Environment proxies and resolver-provided service configs are deliberately disabled — the client still supplies its own default service config, which is what carries the selection policy — and a dependency that requires a proxy or a resolver-provided config needs its own design instead of weakening the shared connection.
 <!-- profile:grpc:end -->
 <!-- profile:authn-oidc-jwt:start -->
-- New rule about who may call this service — `internal/infra/oidcjwt` has no registration point, so an extra claim requirement, a different audience rule, or propagating more than the opaque subject is an edit inside that package — `parseAccessTokenClaims` for claim rules, and the `reqctx.Principal` construction in `parseToken` for what reaches handlers. A new configured value is the one that leaves the package: it needs a field on `config.AuthnConfig` with its koanf key and validation in `internal/config` as well as the value in `Policy`/`NewPolicy`, because `internal/config` cannot import runtime adapters and therefore restates those rules instead of calling them. Its package documentation names each site. Treat such an edit as a deliberate fork of the template's copy: a later template sync reports it as a conflict, which is what keeps a change to who may call this service visible in review. Anything past identity — roles, tenant policy, per-operation permission — is feature-owned and does not belong in this package.
+- New rule about who may call this service — `internal/infra/oidcjwt` has no registration point, so an extra claim requirement, a different audience rule, or propagating more than the opaque subject is an edit inside that package — `parseAccessTokenClaims` for claim rules, and the `reqctx.Principal` construction in `parseToken` for what reaches handlers. A new configured value is the one that leaves the package: it needs a field on `config.AuthnConfig` with its koanf key and validation in `internal/config` as well as the value in `Policy`/`NewPolicy`, because both owners must refuse a bad value — the loader so the process stops, the verifier so a policy built any other way still fails closed. `internal/config` cannot import runtime adapters, so a rule the two share belongs in `internal/authntrust` and is called from each side; a rule only the verifier applies stays in the verifier. Its package documentation names each site. Treat such an edit as a deliberate fork of the template's copy: a later template sync reports it as a conflict, which is what keeps a change to who may call this service visible in review. Anything past identity — roles, tenant policy, per-operation permission — is feature-owned and does not belong in this package.
 <!-- profile:authn-oidc-jwt:end -->
 - New persistence flow: add one canonical transactional Goose file under `migrations`, add SQLC query sources under `internal/infra/postgres/queries`, regenerate `internal/infra/postgres/sqlcgen`, add a hand-written Postgres repository that maps generated rows into feature-facing types, add a feature-owned port only if needed, then wire the concrete adapter in `cmd/service/internal/bootstrap`.
 - New integration adapter: add it under `internal/infra/<integration>`; add a feature-owned contract only if `internal/<feature>` needs inversion over the concrete adapter; wire concrete dependencies in `cmd/service/internal/bootstrap`. For ordinary provider-specific clients, start with `net/http`. When the repository was initialized with `OUTBOUND_HTTP=bounded`, reuse `internal/infra/httpclient` for fixed-authority transport safety and explicitly select `PropagationNone`, `PropagationTraceContext`, or `PropagationTrustedService` per dependency; zero emits no remote correlation. Keep authentication, operation budgets, retry eligibility, provider errors, and generated clients in the provider adapter. Credentials belong in headers; query-string authentication requires a separate telemetry-disclosure design. When the adapter calls another microservice, first verify the provider's current contract from its repository, generated contract, published spec, or live contract endpoint, then record the source used in the owning spec/design/tasks proof. Before enabling a runtime dependency, define config keys and secret-source policy, platform egress policy, criticality, retry and timeout budget, readiness participation, cleanup on partial initialization, low-cardinality metrics labels, and bootstrap tests.

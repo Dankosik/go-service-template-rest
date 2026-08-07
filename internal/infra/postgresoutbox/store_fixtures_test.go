@@ -132,15 +132,19 @@ func (rows *rowsStub) Scan(destinations ...any) error {
 	return nil
 }
 
-// publishedIDRow is one finalized id returned by MarkOutboxPublishedBatch.
-type publishedIDRow string
+// singleTextRow is a result row of one text column. It is named for that shape
+// rather than for a meaning, because two statements return it and mean
+// different things by it: a finalized id from MarkOutboxPublishedBatch, and a
+// still-active ordering key from RetireOutboxOrderingKeys. The meaning stays at
+// the call site.
+type singleTextRow string
 
-func (row publishedIDRow) Scan(destinations ...any) error {
-	id, ok := singleDestination[string](destinations)
+func (row singleTextRow) Scan(destinations ...any) error {
+	value, ok := singleDestination[string](destinations)
 	if !ok {
-		return errors.New("unexpected published id scan destinations")
+		return errors.New("unexpected single-text scan destinations")
 	}
-	*id = string(row)
+	*value = string(row)
 	return nil
 }
 

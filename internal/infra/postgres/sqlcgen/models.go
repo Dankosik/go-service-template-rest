@@ -17,6 +17,7 @@ type OutboxEvent struct {
 	OccurredAt        pgtype.Timestamptz
 	Payload           []byte
 	Metadata          []byte
+	TraceContext      []byte
 	OrderingKey       *string
 	OrderingSequence  *int64
 	OrderingReady     bool

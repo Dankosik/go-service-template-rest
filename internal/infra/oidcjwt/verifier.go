@@ -151,6 +151,9 @@ func (v *Verifier) Verify(
 		if recovered := recover(); recovered != nil {
 			principal = reqctx.Principal{}
 			err = failure(KindUnavailable)
+			// The category is the honest answer to the caller and says nothing to
+			// whoever has to fix it; logRecoveredPanic owns that split.
+			logRecoveredPanic(ctx, v.log, "verify", recovered)
 		}
 		v.metrics.recordVerification(ctx, transport, err)
 	}()

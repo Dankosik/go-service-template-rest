@@ -20,7 +20,7 @@ func TestStoreFinalizationSucceedsWhenTheLeaseStillOwnsTheRow(t *testing.T) {
 	affected := func() databaseStub {
 		return databaseStub{
 			tag:     pgconn.NewCommandTag("UPDATE 1"),
-			queries: &querySequence{sets: [][]pgx.Row{{publishedIDRow("event")}}},
+			queries: &querySequence{sets: [][]pgx.Row{{singleTextRow("event")}}},
 		}
 	}
 	if err := stubbedStore(affected()).MarkUnorderedPublished(t.Context(), "lease", "event"); err != nil {

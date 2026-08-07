@@ -180,6 +180,37 @@ func TestCloseRetiresARunningRun(t *testing.T) {
 	}
 }
 
+// TestCloseStopsAdmittingFetches pins the half of Close that releasing the
+// provider client depends on: once Close has returned, a verification that would
+// otherwise be owed a refresh reaches no provider at all.
+//
+// The subject is a token a refresh would have recovered — the rotated key is in
+// the response the script still holds — so a verifier that kept admitting would
+// both accept it and spend a provider call. Refusing it and leaving the script
+// untouched is what says admission is closed rather than merely quiet.
+// refreshAdmission.retire owns why the release would otherwise be racing a fetch
+// it cannot see.
+func TestCloseStopsAdmittingFetches(t *testing.T) {
+	first := loadTestRSAKey(t, testSigningKey)
+	rotated := loadTestRSAKey(t, testRotatedKey)
+	client := &scriptedClient{responses: append(initialResponses(t, first), scriptedResponse{
+		status: http.StatusOK,
+		body:   jwksDocument(t, rotated, "key-2"),
+	})}
+	verifier := requireTestVerifier(t, testVerifierOptions{
+		now:    newTestClock(testNow).now,
+		client: client,
+	})
+
+	verifier.Close()
+
+	unknown := signToken(t, rotated, "key-2", "at+jwt", validClaims(testNow))
+	if _, err := verifier.Verify(t.Context(), unknown, TransportHTTP); err == nil {
+		t.Fatal("Verify(recoverable unknown kid after Close) error = nil, want a refusal from the installed set")
+	}
+	requireProviderCalls(t, client, 0, "after Close retired admission")
+}
+
 func requireSignal(t *testing.T, signal <-chan struct{}) {
 	t.Helper()
 	select {

@@ -23,6 +23,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 	"github.com/example/go-service-template-rest/internal/reqctx"
@@ -133,10 +134,17 @@ var policyVariantExcludes = []string{builtinAccessLog, builtinRecovery}
 // numbers rather than a red test.
 var knownBuiltinPolicies = []string{
 	builtinAccessLog,
+	builtinDeadline,
 	builtinRecovery,
 	builtinAdmission,
 	builtinPolicyErrorBoundary,
 }
+
+// benchmarkUnaryTimeout is the unary bound the measured shapes run under. It is
+// the production default rather than a benchmark number, because the deadline
+// policy costs a timer per RPC only when it is enabled — measuring it disabled
+// would record a chain no deployment runs.
+const benchmarkUnaryTimeout = 8 * time.Second
 
 func TestBenchmarkVariantsCoverEveryBuiltinPolicy(t *testing.T) {
 	names := make([]string, 0, len(knownBuiltinPolicies))
@@ -144,6 +152,7 @@ func TestBenchmarkVariantsCoverEveryBuiltinPolicy(t *testing.T) {
 		slog.New(slog.DiscardHandler),
 		accessLogPolicy{},
 		newAdmissionLimiter(1, noopLoadRecorder{}),
+		benchmarkUnaryTimeout,
 	) {
 		names = append(names, policy.name)
 	}
@@ -394,6 +403,7 @@ func newBenchmarkFixture(variant benchmarkVariant) (*benchmarkFixture, error) {
 			slog.New(slog.DiscardHandler),
 			accessLogPolicy{},
 			admission,
+			benchmarkUnaryTimeout,
 		) {
 			if slices.Contains(policyVariantExcludes, policy.name) {
 				continue
@@ -403,7 +413,7 @@ func newBenchmarkFixture(variant benchmarkVariant) (*benchmarkFixture, error) {
 		native := grpc.NewServer(grpc.ChainUnaryInterceptor(unaryChain(
 			measured,
 			[]grpc.UnaryServerInterceptor{signals.policyInterceptor()},
-			handlerErrorBoundary(nil),
+			handlerErrorBoundary(errorRendering{}),
 		)...))
 		register(native)
 		server = nativeBenchmarkServer{Server: native}
@@ -412,6 +422,7 @@ func newBenchmarkFixture(variant benchmarkVariant) (*benchmarkFixture, error) {
 		log := slog.New(slog.NewJSONHandler(&signals.log, &slog.HandlerOptions{Level: variant.logLevel}))
 		serverConfig := testServerConfig()
 		serverConfig.AccessLogSuccessSampleRate = variant.sampleRate
+		serverConfig.UnaryTimeout = benchmarkUnaryTimeout
 		fullServer, err := NewServer(
 			serverConfig,
 			Options{

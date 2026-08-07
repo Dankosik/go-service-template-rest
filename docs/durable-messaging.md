@@ -52,7 +52,31 @@ At most `MAX_PENDING_PUBLISHES` synchronous calls are admitted. Each event has
 a required logical `MessageID`, publication/deduplication ID, type, schema,
 non-zero UTC creation time, and opaque bounded payload. `OrderingKey` is
 metadata only: JetStream stream sequence and concurrent handlers do not promise
-per-key ordering.
+per-key ordering. `TestNATSOrderingKeyDoesNotSerialize` pins that as behavior
+rather than an omission, so a later change that starts serializing a key has to
+argue with a test.
+
+### Ordering does not compose with the outbox
+
+The [PostgreSQL transactional outbox](postgres-transactional-outbox.md) does
+guarantee claim order per ordering key, and that guarantee ends at this pack.
+The worked adapter in `test/postgres_outbox_natsjs_integration_test.go` forwards
+`Event.OrderingKey` onto the JetStream envelope, so the key survives as data a
+handler can read — but the relay hands one key's events to the broker in order
+and nothing after that keeps them in it: JetStream assigns its own stream
+sequence, and a worker with `MAX_CONCURRENCY` above one runs handlers for the
+same key concurrently.
+
+A service that needs per-key order end to end owns the last hop and has two
+shapes to choose between, neither of which this pack decides:
+
+- run the worker at `MAX_CONCURRENCY=1` per key space — one worker process per
+  key partition, which trades throughput for order;
+- or keep the concurrency and re-sequence in the handler, using the key and a
+  sequence the publisher put in the payload, against state the handler owns.
+
+Until one of those exists, treat the composed guarantee as at-least-once
+delivery of correctly ordered *publications*, not ordered *processing*.
 
 ## Worker
 
@@ -75,9 +99,29 @@ The production image includes `/worker`; run it with an entrypoint override or
 a separate workload definition. It exposes `/health/live`, `/health/ready`, and
 `/metrics` on the configured diagnostics listener and owns no HTTP API routes.
 
-The worker uses one-message pulls, caps active handlers at
-`MAX_CONCURRENCY`, and rejects a configuration whose resident wire-data bound
-exceeds 64 MiB. Success is confirmed with `DoubleAck`. Retryable failures use
+The worker pulls up to one message per free handler slot, caps active handlers
+at `MAX_CONCURRENCY`, and rejects a configuration whose resident wire-data bound
+exceeds 64 MiB. Success is confirmed with `DoubleAck`.
+
+`MAX_CONCURRENCY` is therefore both the handler ceiling and the acquisition
+batch. A pull costs one broker round trip whatever it returns, so a worker that
+asked for one message per pull was capped at one message per round trip however
+large its concurrency was; asking for every free slot makes a round trip cover a
+batch. The resident bound is unchanged, because a pull never asks for a slot a
+running handler holds — `TestFetchBatchShrinksToFreeSlots` pins that. What
+remains is one round trip per batch, and a handler faster than that round trip
+is still acquisition-bound; raise `MAX_CONCURRENCY` to widen the batch, within
+the 64 MiB resident limit.
+
+The durable consumer states the same two bounds as `MaxRequestBatch` and
+`MaxRequestMaxBytes`, and startup rejects an existing consumer that does not
+match. **Upgrading a running deployment past this change therefore fails
+startup against the consumer the previous version created.** Delete the durable
+consumer and let the worker recreate it, or update it in place to
+`max_batch = MAX_CONCURRENCY` and
+`max_bytes = MAX_CONCURRENCY * MAX_DELIVERY_BYTES`, before rolling the new
+binary out. Unacknowledged messages are unaffected: they are stream state, not
+consumer state, and are redelivered to the recreated consumer. Retryable failures use
 the configured delayed NAK sequence. A permanent error
 (`natsjs.Permanent(err)`), malformed message, or exhausted attempt budget is
 copied to the DLQ and the source is acknowledged only after a DLQ `PubAck`.

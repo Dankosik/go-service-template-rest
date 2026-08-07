@@ -350,4 +350,55 @@ func requireMetricAttributes(
 	}
 }
 
+// TestVerificationSetsCoverEveryReason holds the prebuilt attribute sets to the
+// full label set verificationReason can produce.
+//
+// [verificationSets] prebuilds one per category by walking to lastKind, and
+// lastKind is the one constant a new category does not update on its own. Left
+// behind, it would leave the new category's series unbuilt, and option's
+// on-the-fly fallback would turn that into a silently slower hot path rather
+// than a visibly wrong one. The walk below finds the end of the declared run
+// independently, the way [TestDocumentedMetricReasonsMatchTheGuide] does.
+func TestVerificationSetsCoverEveryReason(t *testing.T) {
+	unnamed := NewError(0).Error()
+	reasons := []string{
+		verificationReason(context.Canceled),
+		verificationReason(context.DeadlineExceeded),
+		verificationReason(errUnclassified),
+	}
+	declared := Kind(0)
+	for kind := Kind(1); NewError(kind).Error() != unnamed; kind++ {
+		declared = kind
+		reasons = append(reasons, verificationReason(NewError(kind)))
+	}
+	if declared != lastKind {
+		t.Fatalf(
+			"the declared Kind run ends at %d but lastKind is %d; metrics.go prebuilds "+
+				"one attribute set per category by walking to lastKind, so the two must agree",
+			declared, lastKind,
+		)
+	}
+
+	sets := newVerificationSets(TransportHTTP)
+	// Several errors share one label on purpose — a deadline and a cancellation
+	// both record as canceled, and an unclassified error records as unavailable
+	// like the Kind of that name — so the series are the distinct labels rather
+	// than the errors that reach them. verificationReason owns each of those
+	// collapses.
+	distinct := make(map[string]struct{}, len(reasons))
+	for _, reason := range reasons {
+		distinct[reason] = struct{}{}
+		if _, prebuilt := sets.failures[reason]; !prebuilt {
+			t.Errorf(
+				"the %q series is not prebuilt, so every verification recording it "+
+					"builds its attribute set on the request path",
+				reason,
+			)
+		}
+	}
+	if got := len(sets.failures); got != len(distinct) {
+		t.Errorf("prebuilt %d failure series for %d distinct reachable labels", got, len(distinct))
+	}
+}
+
 var _ metric.MeterProvider = failingMetricProvider{}

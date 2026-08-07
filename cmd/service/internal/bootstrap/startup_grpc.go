@@ -57,6 +57,13 @@ func newGRPCRuntime(
 			// The same slice the HTTP router receives. A service appends its
 			// mappers at runtimeDependencies.DomainErrors, never here.
 			DomainErrors: domainErrors,
+			// The service's own identity, scoping the machine-readable reason a
+			// classified error carries. It comes from the telemetry service name
+			// because that is this repository's only configured service identity,
+			// and sharing it means an ErrorInfo domain and a trace's service
+			// attribute name the same thing. Renaming it for telemetry reasons
+			// therefore changes a value remote callers match on.
+			ErrorDomain:  cfg.Observability.OTel.ServiceName,
 			Load:         metrics.GRPCServerLoad(),
 			Services:     bindings.Services,
 			UnaryPolicy:  bindings.UnaryPolicy,
@@ -99,5 +106,14 @@ func grpcServerConfig(server config.GRPCServerConfig) grpcx.Config {
 		AccessLogSuccessSampleRate: server.AccessLogSuccessSampleRate,
 		AccessLogSlowThreshold:     server.AccessLogSlowThreshold,
 		TelemetryHealthChecks:      server.TelemetryHealthChecks,
+		UnaryTimeout:               server.UnaryTimeout,
+		StreamTimeout:              server.StreamTimeout,
+		MaxConnectionIdle:          server.MaxConnectionIdle,
+		ServerPingInterval:         server.ServerPingInterval,
+		ServerPingTimeout:          server.ServerPingTimeout,
+		MinClientPingInterval:      server.MinClientPingInterval,
+		PermitPingWithoutStream:    server.PermitPingWithoutStream,
+		MaxConnectionAge:           server.MaxConnectionAge,
+		MaxConnectionAgeGrace:      server.MaxConnectionAgeGrace,
 	}
 }

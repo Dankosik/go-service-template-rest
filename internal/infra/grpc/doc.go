@@ -41,9 +41,13 @@
 // profile:authn-oidc-jwt:end
 //
 // To add a policy to this package's own chain, write one aroundRPC and add it to
-// the list the builtinPolicies function in chain.go returns. That list is the
-// only place the order below is decided, and both chains are built from it, so a
-// policy cannot reach unary RPCs and miss streaming ones. It is a function rather than a
+// the list the builtinPolicies function in chain.go returns. That function is
+// the only place the order below is decided, and it produces both chains, so a
+// policy cannot reach unary RPCs and miss streaming ones. [NewServer] calls it
+// once per chain rather than sharing one list, because the deadline is
+// configured separately for each — which also means the admission limiter is
+// built once and handed to both, and TestAdmissionBudgetIsProcessWide is what
+// proves the server still does that. builtinPolicies is a function rather than a
 // literal inside [NewServer] because performance_test.go builds a subset of the
 // same chain from it, and TestBenchmarkVariantsCoverEveryBuiltinPolicy fails
 // until that file decides whether the new policy should be measured.
@@ -66,6 +70,12 @@
 //     metadata, so everything below it and the handler agree on one identifier.
 //   - access log — times the whole RPC, and sits outside both error boundaries
 //     so it records the status the caller actually receives.
+//   - deadline — bounds how long everything below it may run, which is why it is
+//     the outermost policy that can. Its two configured values are the one thing
+//     that differs between the chains. What stays outside it: unary message
+//     decode, which runs before the chain and is bounded by the receive-message
+//     limit, and the response send, which runs after the chain unwinds and is
+//     bounded by the stream and connection limits.
 //   - recovery — turns a panic below it into INTERNAL, which is also what lets
 //     the access log record the RPC instead of losing it with the goroutine.
 //   - admission — holds the concurrency semaphore for the work below it, outside
@@ -93,10 +103,16 @@
 // streaming. A policy here is one aroundRPC instead, and asUnaryInterceptor and
 // asStreamInterceptor adapt it to both types.
 //
+// A policy wraps the work below it rather than only observing it: it receives
+// the RPC context and passes down whichever context that work should run under.
+// A policy that only observes hands back what it received, and the streaming
+// adapter then leaves the original stream alone; one that derives a context —
+// the deadline is the only one — gets a replacement stream, because that is the
+// only way a streaming handler can see it.
+//
 // Correlation is the exception and is still written twice, because the unary and
-// streaming halves genuinely differ: one publishes response metadata through
-// grpc.SetHeader, the other through the stream and must also replace the context
-// the handler observes.
+// streaming halves genuinely differ in how they publish response metadata: one
+// through grpc.SetHeader, the other through the stream.
 //
 // See docs/grpc.md for the service author's contract — the proto and generation
 // workflow, the full problem.Code to gRPC code table, and the bootstrap

@@ -811,6 +811,36 @@ treated as a closed vocabulary; producers restate strings independently; the
 unknown path is unproved; or cardinality arithmetic substitutes for semantic
 readability.
 
+### WBE-37 — Pre-implementation Release Closure
+
+**Given:** a production outcome affects an API, a separately deployed worker,
+and a managed dependency. Current state includes one legacy writer or consumer,
+two materially different runtime-configuration forms, a remote trust or cache
+refresh horizon, an artifact whose deployed identity can differ from source,
+and a production data or workload class absent from the small development
+fixture. One near-miss is a local reversible change with current evidence of no
+deployment impact.
+
+**Pass:** before Implementation, the affected case receives a current-to-target
+deployment graph with every affected owner, mixed-version or legacy boundary,
+configuration form, representative input envelope, immutable artifact identity,
+and behavior-changing time horizon dispositioned. Its compact rollout record
+gives every critical-path gate an authoritative prerequisite, action, distinct
+success and safe failure signal, duration or horizon, recovery boundary, and
+exact proof. Every gate maps to a Test Design falsifier that exercises the
+material path and durable effect; deployment status and component health remain
+supporting signals only. A failed gate invalidates only dependent proof, while
+unchanged green gates are reused. The near-miss records `no deployment impact`
+from current evidence, stays direct, and creates no rollout artifact.
+
+**Fail:** a single repository or green build makes release impact implicitly
+untriggered; `deploy and monitor`, `all green`, component health, or provider
+status substitutes for a discriminating gate; production is the first place a
+legacy state, configuration form, refresh horizon, artifact mismatch, or
+representative input is exercised; one failure restarts every unchanged gate;
+or the near-miss is forced through rollout ceremony without an affected runtime
+boundary.
+
 ## Acceptance
 
 Every applicable case must pass. Compare aggregate quality first and keep

@@ -1,9 +1,11 @@
-// The interceptor policies as units: access-log decisions, admission accounting,
-// panic recovery, and the two error boundaries' trust rules.
+// The interceptor policies as units: access-log decisions, the RPC deadline,
+// admission accounting, panic recovery, and the two error boundaries' trust
+// rules.
 //
 // These drive the policies directly rather than through a server, so a failure
 // names the rule that broke. server_test.go and telemetry_test.go cover the same
-// rules as a caller and an operator see them.
+// rules as a caller and an operator see them, and deadline_test.go and
+// admission_test.go cover what only a composed server can show.
 
 package grpcx
 
@@ -265,7 +267,7 @@ func TestAccessLogSkipsAllWorkWhenInfoIsDisabled(t *testing.T) {
 	}
 }
 
-func TestAdmissionLimitIsSharedAcrossUnaryAndStreamingRPCs(t *testing.T) {
+func TestOneLimiterServesBothInterceptorTypes(t *testing.T) {
 	load := &recordingLoad{}
 	limiter := newAdmissionLimiter(1, load)
 	unary := asUnaryInterceptor(limiter.around)
@@ -459,7 +461,7 @@ func TestMapErrorAppliesEachBoundarysTrustRule(t *testing.T) {
 			if trusted == nil {
 				trusted = ownedStatusOnly
 			}
-			got := mapError(testCase.err, trusted, testCase.mappers)
+			got := mapError(testCase.err, trusted, errorRendering{mappers: testCase.mappers})
 			if code := status.Code(got); code != testCase.wantCode {
 				t.Fatalf("code = %s, want %s", code, testCase.wantCode)
 			}
@@ -559,3 +561,67 @@ func (s testServerStream) SetTrailer(metadata.MD)       {}
 func (s testServerStream) Context() context.Context     { return s.ctx }
 func (s testServerStream) SendMsg(any) error            { return nil }
 func (s testServerStream) RecvMsg(any) error            { return nil }
+
+func TestDeadlineAroundCapsWithoutExtending(t *testing.T) {
+	t.Run("derives a deadline when none exists", func(t *testing.T) {
+		var observed time.Duration
+		err := deadlineAround(time.Minute)(
+			t.Context(),
+			testUnaryFullMethod,
+			func(ctx context.Context) error {
+				deadline, ok := ctx.Deadline()
+				if !ok {
+					t.Fatal("policy passed down a context with no deadline")
+				}
+				observed = time.Until(deadline)
+				return nil
+			},
+		)
+		if err != nil {
+			t.Fatalf("deadlineAround() error = %v", err)
+		}
+		if observed <= 0 || observed > time.Minute {
+			t.Fatalf("derived deadline %s away, want within the minute bound", observed)
+		}
+	})
+
+	t.Run("never extends an earlier caller deadline", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(t.Context(), time.Millisecond)
+		defer cancel()
+
+		var observed time.Duration
+		if err := deadlineAround(time.Hour)(ctx, testUnaryFullMethod, func(ctx context.Context) error {
+			deadline, _ := ctx.Deadline()
+			observed = time.Until(deadline)
+			return nil
+		}); err != nil {
+			t.Fatalf("deadlineAround() error = %v", err)
+		}
+		if observed > time.Second {
+			t.Fatalf("derived deadline %s away, want the caller's millisecond", observed)
+		}
+	})
+
+	t.Run("non-positive disables the cap", func(t *testing.T) {
+		if err := deadlineAround(0)(t.Context(), testUnaryFullMethod, func(ctx context.Context) error {
+			if _, ok := ctx.Deadline(); ok {
+				t.Fatal("disabled policy still derived a deadline")
+			}
+			return nil
+		}); err != nil {
+			t.Fatalf("deadlineAround() error = %v", err)
+		}
+	})
+
+	t.Run("health RPCs are exempt", func(t *testing.T) {
+		health := healthMethodPrefix + "Check"
+		if err := deadlineAround(time.Minute)(t.Context(), health, func(ctx context.Context) error {
+			if _, ok := ctx.Deadline(); ok {
+				t.Fatal("a probe was given a business budget")
+			}
+			return nil
+		}); err != nil {
+			t.Fatalf("deadlineAround() error = %v", err)
+		}
+	})
+}

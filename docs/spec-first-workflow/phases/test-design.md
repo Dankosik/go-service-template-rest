@@ -83,8 +83,15 @@ observes authoritative final state and external effects. For rollout
 obligations, design a procedure that exercises the accepted deployment
 transition and observes the named client-visible behavior and runtime signal at
 the pre-cutover, post-cutover, rollback, or recovery checkpoint that carries the
-claim. Scanners, acknowledgements, migration or deployment status, and dashboard
-availability establish only the fact they directly observe.
+claim. Map every release gate to a completed falsifier contract or a named
+unavailable input; `all gates green` is not a disposition. Use the
+production-equivalent form of material configuration and a representative data
+or workload envelope, and cross or deterministically simulate every cache,
+token, lease, drain, retry, or other behavior-changing time horizon. The failure
+oracle must distinguish the repair owner without exposing secrets or requiring
+another deployment merely to classify the cause. Scanners, acknowledgements,
+migration or deployment status, and dashboard availability establish only the
+fact they directly observe.
 
 ## Outputs
 

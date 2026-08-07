@@ -17,9 +17,11 @@
 //
 // [Worker.Run] repeats one cycle, and each step has one owner:
 //
-//   - fetch (worker.go) — one message at a time from the durable consumer, up to
-//     MaxConcurrency handlers in flight. The pull is bounded by operationTimeout
-//     and an expired pull that delivered nothing is ordinary, not a failure.
+//   - fetch (worker.go) — up to one message per free handler slot from the
+//     durable consumer, so a round trip covers a batch rather than a message,
+//     with at most MaxConcurrency handlers in flight either way. The pull is
+//     bounded by operationTimeout and an expired pull that delivered nothing is
+//     ordinary, not a failure.
 //   - admit (worker_delivery.go) — the delivery bounds this worker was configured
 //     with, envelope decoding, and the attempt budget. A message that fails any of
 //     them is dead-lettered without the handler ever seeing it.

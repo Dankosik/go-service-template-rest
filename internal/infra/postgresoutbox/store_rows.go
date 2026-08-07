@@ -21,6 +21,7 @@ type envelopeColumns struct {
 	OccurredAt       pgtype.Timestamptz
 	Payload          []byte
 	Metadata         []byte
+	TraceContext     []byte
 	OrderingKey      *string
 	OrderingSequence *int64
 }
@@ -47,6 +48,10 @@ func storedEvent(columns envelopeColumns) Event {
 		OccurredAt:  timeValue(columns.OccurredAt),
 		Payload:     columns.Payload,
 		Metadata:    columns.Metadata,
+		// Decoded rather than adopted like the two byte slices above: the carrier
+		// is a map an adapter reads by key, and the ordinary stored value is the
+		// empty object, which decodes to no map at all.
+		traceContext: creationContextFromStored(columns.TraceContext),
 	}
 	if columns.OrderingKey != nil {
 		event.OrderingKey = *columns.OrderingKey
@@ -61,7 +66,8 @@ func eventFromClaimRow(row sqlcgen.ClaimOutboxEventsRow) Event {
 	return storedEvent(envelopeColumns{
 		ID: row.ID, Type: row.EventType, Source: row.Source, Destination: row.Destination,
 		Schema: row.SchemaName, OccurredAt: row.OccurredAt, Payload: row.Payload,
-		Metadata: row.Metadata, OrderingKey: row.OrderingKey, OrderingSequence: row.OrderingSequence,
+		Metadata: row.Metadata, TraceContext: row.TraceContext,
+		OrderingKey: row.OrderingKey, OrderingSequence: row.OrderingSequence,
 	})
 }
 
@@ -70,7 +76,8 @@ func recordFromRow(row sqlcgen.OutboxEvent) Record {
 		Event: storedEvent(envelopeColumns{
 			ID: row.ID, Type: row.EventType, Source: row.Source, Destination: row.Destination,
 			Schema: row.SchemaName, OccurredAt: row.OccurredAt, Payload: row.Payload,
-			Metadata: row.Metadata, OrderingKey: row.OrderingKey, OrderingSequence: row.OrderingSequence,
+			Metadata: row.Metadata, TraceContext: row.TraceContext,
+			OrderingKey: row.OrderingKey, OrderingSequence: row.OrderingSequence,
 		}),
 		CreatedAt:         timeValue(row.CreatedAt),
 		AvailableAt:       timeValue(row.AvailableAt),

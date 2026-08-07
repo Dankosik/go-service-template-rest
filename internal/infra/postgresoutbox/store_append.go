@@ -35,9 +35,16 @@ func (s *Store) Append(ctx context.Context, tx pgx.Tx, events ...Event) (err err
 		return nil
 	}
 
-	columns, err := newAppendColumns(events)
+	columns, err := newAppendColumns(ctx, events)
 	if err != nil {
 		return err
+	}
+	if columns.traceContextDegraded {
+		// Counted rather than logged: this is a property of the propagator the
+		// process is configured with, so it holds for every append until an
+		// operator changes it, and a log line per append would say the same thing
+		// at the rate of the write path.
+		s.telemetry.CountOperation(ctx, "trace_capture", outcomeRejected, classValidation)
 	}
 	queries := sqlcgen.New(tx)
 	if !columns.ordered {
@@ -71,15 +78,20 @@ type appendColumns struct {
 	occurredAt        []pgtype.Timestamptz
 	payloads          [][]byte
 	metadatas         [][]byte
+	traceContexts     [][]byte
 	orderingKeys      []string
 	orderingSequences []int64
 	ordered           bool
+	// traceContextDegraded reports that this call had a trace context that could
+	// not be stored, so every event in it carries an absent one.
+	traceContextDegraded bool
 }
 
 func (c appendColumns) withoutOrdering() sqlcgen.InsertOutboxEventsParams {
 	return sqlcgen.InsertOutboxEventsParams{
 		Ids: c.ids, EventTypes: c.types, Sources: c.sources, Destinations: c.destinations,
 		SchemaNames: c.schemas, OccurredAts: c.occurredAt, Payloads: c.payloads, Metadatas: c.metadatas,
+		TraceContexts: c.traceContexts,
 	}
 }
 
@@ -87,7 +99,8 @@ func (c appendColumns) withOrdering() sqlcgen.InsertOutboxEventsWithOrderingPara
 	return sqlcgen.InsertOutboxEventsWithOrderingParams{
 		Ids: c.ids, EventTypes: c.types, Sources: c.sources, Destinations: c.destinations,
 		SchemaNames: c.schemas, OccurredAts: c.occurredAt, Payloads: c.payloads, Metadatas: c.metadatas,
-		OrderingKeys: c.orderingKeys, OrderingSequences: c.orderingSequences,
+		TraceContexts: c.traceContexts,
+		OrderingKeys:  c.orderingKeys, OrderingSequences: c.orderingSequences,
 	}
 }
 
@@ -95,20 +108,27 @@ func (c appendColumns) withOrdering() sqlcgen.InsertOutboxEventsWithOrderingPara
 // arrays. An event that owns no ordering head keeps the zero key and sequence
 // it already has in Go, which is what the ordered statement reads as an absent
 // head; a call where every event is like that skips that statement entirely.
-func newAppendColumns(events []Event) (appendColumns, error) {
+func newAppendColumns(ctx context.Context, events []Event) (appendColumns, error) {
+	// One capture for the whole call. Every event of one Append shares the
+	// caller's context, so they share its creation context too — and the column
+	// array then holds one slice repeated rather than one encoding per event.
+	traceContext, degraded := captureCreationContext(ctx)
 	columns := appendColumns{
-		ids:               make([]string, len(events)),
-		types:             make([]string, len(events)),
-		sources:           make([]string, len(events)),
-		destinations:      make([]string, len(events)),
-		schemas:           make([]string, len(events)),
-		occurredAt:        make([]pgtype.Timestamptz, len(events)),
-		payloads:          make([][]byte, len(events)),
-		metadatas:         make([][]byte, len(events)),
-		orderingKeys:      make([]string, len(events)),
-		orderingSequences: make([]int64, len(events)),
+		ids:                  make([]string, len(events)),
+		types:                make([]string, len(events)),
+		sources:              make([]string, len(events)),
+		destinations:         make([]string, len(events)),
+		schemas:              make([]string, len(events)),
+		occurredAt:           make([]pgtype.Timestamptz, len(events)),
+		payloads:             make([][]byte, len(events)),
+		metadatas:            make([][]byte, len(events)),
+		traceContexts:        make([][]byte, len(events)),
+		orderingKeys:         make([]string, len(events)),
+		orderingSequences:    make([]int64, len(events)),
+		traceContextDegraded: degraded,
 	}
 	for index, event := range events {
+		columns.traceContexts[index] = traceContext
 		event = event.withDefaults()
 		if err := event.Validate(); err != nil {
 			return appendColumns{}, err

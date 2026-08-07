@@ -570,7 +570,10 @@ if [[ "${source_checkout}" != true ]]; then
 	fi
 
 	if [[ "${authn}" == "none" ]]; then
-		rm -rf -- internal/infra/oidcjwt
+		# authntrust exists only to be shared by the verifier and internal/config's
+		# authn validation. With the profile off it has no caller at all, so it
+		# leaves with them rather than becoming an unreferenced leaf.
+		rm -rf -- internal/infra/oidcjwt internal/authntrust
 		rm -f -- \
 			cmd/service/internal/bootstrap/authn_bootstrap_test.go \
 			cmd/service/internal/bootstrap/authn_readiness_test.go \

@@ -39,6 +39,48 @@ type Config struct {
 	MaxReceiveMessageBytes int
 	MaxSendMessageBytes    int
 
+	// UnaryTimeout and StreamTimeout cap how long one RPC may occupy a handler.
+	// The cap derives the RPC context's deadline, so a caller deadline that is
+	// already earlier wins and neither value can extend one. Non-positive
+	// disables the cap for that RPC kind.
+	//
+	// Cancellation is the protection, not the response: a handler that ignores
+	// its context keeps its goroutine and its admission slot, exactly as
+	// internal/infra/http records for its own request budget. StreamTimeout is
+	// disabled by default because a long-lived stream's duration policy belongs
+	// to the feature that owns the stream.
+	UnaryTimeout  time.Duration
+	StreamTimeout time.Duration
+
+	// The liveness bounds. None of them can end an RPC in progress: the idle
+	// clock only runs while nothing is outstanding, and the ping bound closes
+	// only when a ping goes unanswered, which means the peer is gone. That is
+	// what makes them safe to leave on while rotation stays off.
+	//
+	// MinClientPingInterval and PermitPingWithoutStream are the enforcement
+	// policy rather than this server's own behavior: they bound what a client
+	// may do. grpc-go's defaults reject a ping more often than every five
+	// minutes and any ping with no active stream, which would disconnect this
+	// repository's own client half.
+	MaxConnectionIdle       time.Duration
+	ServerPingInterval      time.Duration
+	ServerPingTimeout       time.Duration
+	MinClientPingInterval   time.Duration
+	PermitPingWithoutStream bool
+
+	// MaxConnectionAge rotates connections, and is the only bound here that ends
+	// work in progress: at this age the connection is drained with GOAWAY and
+	// force-closed once MaxConnectionAgeGrace expires, cutting every RPC and
+	// stream still running. grpc-go adds ±10% jitter to spread connection
+	// storms, and reads zero as infinity, which is how rotation is disabled.
+	//
+	// Enable it behind an L4 balancer or any hop that pins a caller to one
+	// replica for the life of a connection. The grace must then be positive and
+	// at least UnaryTimeout, so a unary RPC still inside its own budget is not
+	// cut by the force-close.
+	MaxConnectionAge      time.Duration
+	MaxConnectionAgeGrace time.Duration
+
 	// AccessLogHealthChecks admits standard health RPCs to the access log, and
 	// TelemetryHealthChecks is the same decision for spans and metrics. Both
 	// are off by default because a liveness probe otherwise dominates each
@@ -63,8 +105,8 @@ type Config struct {
 
 // validateConfig proves the bounds NewServer is about to hand grpc-go.
 //
-// internal/config.validateGRPCConfig restates the same access-log rules for the
-// service's own configuration file, so a new access-log bound needs a rule in
+// internal/config.validateGRPCConfig restates the same access-log and lifetime
+// rules for the service's own configuration file, so a new bound needs a rule in
 // both places. config_parity_test.go owns why there are two owners and holds
 // them to one answer.
 func validateConfig(cfg Config) error {
@@ -91,6 +133,60 @@ func validateConfig(cfg Config) error {
 	}
 	if cfg.AccessLogSlowThreshold < 0 {
 		return errors.New("build gRPC server: access-log slow threshold must be non-negative")
+	}
+	return validateLifetimeBounds(cfg)
+}
+
+// validateLifetimeBounds proves the time bounds NewServer is about to hand
+// grpc-go and the relations between them.
+//
+// Every duration is non-negative because a negative one is not a third meaning:
+// grpc-go normalizes only zero to infinity, so a negative maximum age arms its
+// timer immediately and rotates every connection at once — the opposite of the
+// off-by-default this repository chose. The two conditional rules exist only
+// when rotation is on, which is why they are checked here rather than as flat
+// bounds.
+func validateLifetimeBounds(cfg Config) error {
+	nonNegative := map[string]time.Duration{
+		"unary timeout":            cfg.UnaryTimeout,
+		"stream timeout":           cfg.StreamTimeout,
+		"max connection age":       cfg.MaxConnectionAge,
+		"max connection age grace": cfg.MaxConnectionAgeGrace,
+	}
+	for name, value := range nonNegative {
+		if value < 0 {
+			return fmt.Errorf("build gRPC server: %s must be non-negative", name)
+		}
+	}
+	positive := map[string]time.Duration{
+		"max connection idle":      cfg.MaxConnectionIdle,
+		"server ping interval":     cfg.ServerPingInterval,
+		"server ping timeout":      cfg.ServerPingTimeout,
+		"min client ping interval": cfg.MinClientPingInterval,
+	}
+	for name, value := range positive {
+		if value <= 0 {
+			return fmt.Errorf("build gRPC server: %s must be positive", name)
+		}
+	}
+
+	if cfg.MaxConnectionAge == 0 {
+		return nil
+	}
+	if cfg.MaxConnectionAgeGrace <= 0 {
+		return errors.New(
+			"build gRPC server: max connection age grace must be positive when max connection age is set",
+		)
+	}
+	if cfg.MaxConnectionAgeGrace < cfg.UnaryTimeout {
+		return errors.New(
+			"build gRPC server: max connection age grace must be at least the unary timeout",
+		)
+	}
+	if cfg.StreamTimeout > 0 && cfg.StreamTimeout >= cfg.MaxConnectionAge {
+		return errors.New(
+			"build gRPC server: stream timeout must be below max connection age, or rotation decides first",
+		)
 	}
 	return nil
 }
@@ -138,6 +234,16 @@ type Options struct {
 	// receives, so one domain identity answers consistently on both. An error
 	// no mapper claims is sanitized, text included.
 	DomainErrors []problem.Mapper
+
+	// ErrorDomain scopes the machine-readable reason a classified error carries,
+	// so two services' reasons cannot collide. It is the service's own identity,
+	// which is why the composition root supplies it rather than this package
+	// inventing one; empty omits the detail entirely.
+	//
+	// A configured value on this struct reaches nothing on its own, so
+	// .golangci.yml lists Options for exhaustruct: a composition that forgets
+	// this field fails lint rather than silently publishing statuses without it.
+	ErrorDomain string
 
 	// Load observes the admission decision for process-wide capacity signals.
 	// It defaults to a recorder that does nothing.

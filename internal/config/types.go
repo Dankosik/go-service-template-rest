@@ -170,6 +170,46 @@ type GRPCServerConfig struct {
 	// TelemetryHealthChecks re-enables server-side OTel spans and duration
 	// metrics for routine standard health polling.
 	TelemetryHealthChecks bool `koanf:"telemetry_health_checks"`
+
+	// UnaryTimeout caps how long one unary RPC may occupy a handler, and
+	// StreamTimeout does the same for a stream. Both derive the RPC context's
+	// deadline, so a caller deadline that is already earlier wins. Non-positive
+	// disables the cap for that kind.
+	//
+	// UnaryTimeout defaults to http.request_timeout's value so one service
+	// answers on one budget over both transports out of the box; it is a
+	// separate key so a deployment can still move the two apart. StreamTimeout
+	// is off by default because a long-lived stream's duration policy belongs to
+	// the feature that owns the stream.
+	UnaryTimeout  time.Duration `koanf:"unary_timeout"`
+	StreamTimeout time.Duration `koanf:"stream_timeout"`
+
+	// The liveness bounds, always on. None can end an RPC in progress: the idle
+	// clock runs only while nothing is outstanding, and the ping bound closes
+	// only when a ping goes unanswered, which means the peer is gone. Without
+	// them a dead peer holds a listener slot for grpc-go's two-hour default.
+	//
+	// MinClientPingInterval and PermitPingWithoutStream bound what a client may
+	// do rather than what this server does. grpc-go's defaults reject a ping
+	// more often than every five minutes and any ping with no active stream,
+	// which would disconnect this repository's own client half.
+	MaxConnectionIdle       time.Duration `koanf:"max_connection_idle"`
+	ServerPingInterval      time.Duration `koanf:"server_ping_interval"`
+	ServerPingTimeout       time.Duration `koanf:"server_ping_timeout"`
+	MinClientPingInterval   time.Duration `koanf:"min_client_ping_interval"`
+	PermitPingWithoutStream bool          `koanf:"permit_ping_without_stream"`
+
+	// MaxConnectionAge rotates connections and is off by default, because it is
+	// the only bound here that ends work in progress: at this age the connection
+	// is drained with GOAWAY and force-closed once the grace expires, cutting
+	// every RPC and stream still running. Enable it behind an L4 balancer or any
+	// hop that pins a caller to one replica for a connection's lifetime, and
+	// accept that a stream outliving the age ends with UNAVAILABLE.
+	//
+	// The grace must be positive whenever an age is set: grpc-go reads a zero
+	// grace as infinity, which would drain the connection and never close it.
+	MaxConnectionAge      time.Duration `koanf:"max_connection_age"`
+	MaxConnectionAgeGrace time.Duration `koanf:"max_connection_age_grace"`
 }
 
 type GRPCTLSConfig struct {

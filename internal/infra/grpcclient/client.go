@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/otel/metric"
@@ -12,6 +13,7 @@ import (
 	tracenoop "go.opentelemetry.io/otel/trace/noop"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/keepalive"
 )
 
 // Config contains the fixed target and finite per-call transport bounds.
@@ -27,6 +29,24 @@ type Config struct {
 	MaxHeaderListBytes     uint32
 	MaxReceiveMessageBytes int
 	MaxSendMessageBytes    int
+
+	// LoadBalancing selects how RPCs spread across the addresses Target
+	// resolves to. Its own doc owns why it is a Config field.
+	LoadBalancing LoadBalancingPolicy
+
+	// KeepalivePingInterval and KeepalivePingTimeout keep a long-lived
+	// connection usable through an idle intermediary. The documented shape here
+	// is one connection per dependency built at startup, so without pings a NAT
+	// or load balancer idle timeout discards it silently and the failure
+	// surfaces as the next RPC's error rather than as a reconnect.
+	//
+	// Pings are sent with no active RPC, which is what makes them reach an idle
+	// connection at all. That requires the peer to permit it: this repository's
+	// server half does, and keepalive_parity_test.go holds the two defaults to
+	// an interval the server accepts. grpc-go raises an interval below ten
+	// seconds to ten.
+	KeepalivePingInterval time.Duration
+	KeepalivePingTimeout  time.Duration
 }
 
 // DefaultConfig returns the template's conservative transport constraints for
@@ -37,6 +57,11 @@ func DefaultConfig(target string) Config {
 		MaxHeaderListBytes:     16 << 10,
 		MaxReceiveMessageBytes: 4 << 20,
 		MaxSendMessageBytes:    4 << 20,
+		LoadBalancing:          LoadBalancingRoundRobin,
+		// Above grpc-go's ten-second floor, and above the ten seconds this
+		// repository's server half accepts as a minimum.
+		KeepalivePingInterval: 30 * time.Second,
+		KeepalivePingTimeout:  10 * time.Second,
 	}
 }
 
@@ -77,6 +102,18 @@ func New(cfg Config, options Options) (*grpc.ClientConn, error) {
 		cfg.Target,
 		grpc.WithTransportCredentials(options.TransportCredentials),
 		grpc.WithDisableServiceConfig(),
+		// This client's own default service config, which the option above does
+		// not refuse: it rejects only what a resolver supplies. The policy's own
+		// doc owns why that leaves the trust boundary unchanged.
+		grpc.WithDefaultServiceConfig(cfg.LoadBalancing.serviceConfig()),
+		grpc.WithKeepaliveParams(keepalive.ClientParameters{
+			Time:    cfg.KeepalivePingInterval,
+			Timeout: cfg.KeepalivePingTimeout,
+			// Fixed rather than configured: reaching an idle connection is the
+			// whole point of pinging one, and a caller that turned this off
+			// would keep the fields while losing the behavior they exist for.
+			PermitWithoutStream: true,
+		}),
 		grpc.WithNoProxy(),
 		grpc.WithResolvers(sanitizingResolverBuilders(cfg.Target)...),
 		grpc.WithChainUnaryInterceptor(propagationUnaryInterceptor),
@@ -133,6 +170,15 @@ func validateConfig(cfg Config, options Options) error {
 	}
 	if !options.Propagation.valid() {
 		return errors.New("build gRPC client: propagation policy is invalid")
+	}
+	if !cfg.LoadBalancing.valid() {
+		return errors.New("build gRPC client: load-balancing policy is invalid")
+	}
+	if cfg.KeepalivePingInterval <= 0 {
+		return errors.New("build gRPC client: keepalive ping interval must be positive")
+	}
+	if cfg.KeepalivePingTimeout <= 0 {
+		return errors.New("build gRPC client: keepalive ping timeout must be positive")
 	}
 	return nil
 }

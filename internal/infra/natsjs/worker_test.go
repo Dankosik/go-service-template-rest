@@ -10,11 +10,11 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 )
 
-func TestSingleMessageFetch(t *testing.T) {
+func TestFetchAsksForEveryFreeSlot(t *testing.T) {
 	consumer := &recordingConsumer{fetchErr: errors.New("stop")}
 	w := &Worker{
 		client:   &Client{},
-		cfg:      WorkerConfig{MaxConcurrency: 1},
+		cfg:      WorkerConfig{MaxConcurrency: testMaxConcurrency},
 		consumer: consumer,
 		fatal:    make(chan error, 1),
 		runDone:  make(chan struct{}),
@@ -23,8 +23,61 @@ func TestSingleMessageFetch(t *testing.T) {
 	if !errors.Is(err, ErrTerminal) {
 		t.Fatalf("Run() error = %v, want ErrTerminal", err)
 	}
-	if consumer.batch != 1 {
-		t.Fatalf("Fetch batch = %d, want 1", consumer.batch)
+	if consumer.batch != testMaxConcurrency {
+		t.Fatalf("Fetch batch = %d, want every free handler slot (%d)", consumer.batch, testMaxConcurrency)
+	}
+}
+
+// TestFetchBatchShrinksToFreeSlots pins the bound that keeps batching from
+// widening concurrency: a pull never asks for a slot a running handler holds,
+// so the resident wire data stays inside MaxConcurrency deliveries however
+// large a batch the broker could return.
+func TestFetchBatchShrinksToFreeSlots(t *testing.T) {
+	const occupied = 5
+
+	sources := make([]jetstream.Msg, occupied)
+	for index := range sources {
+		sources[index] = unitSource(t, 1)
+	}
+	release := make(chan struct{})
+	consumer := &slotConsumer{sources: sources, requested: make(chan int, 4)}
+	worker := unitWorker(t, &recordingJetStream{}, func(context.Context, Message) error {
+		<-release
+		return nil
+	})
+	worker.cfg.MaxConcurrency = testMaxConcurrency
+	worker.consumer = consumer
+
+	ctx, cancel := context.WithCancel(t.Context())
+	runErr := make(chan error, 1)
+	go func() { runErr <- worker.Run(ctx) }()
+
+	if got := <-consumer.requested; got != testMaxConcurrency {
+		t.Fatalf("first pull asked for %d, want every free slot (%d)", got, testMaxConcurrency)
+	}
+	if got, want := <-consumer.requested, testMaxConcurrency-occupied; got != want {
+		t.Fatalf("second pull asked for %d, want the %d slots the first batch left", got, want)
+	}
+	close(release)
+	cancel()
+	if err := <-runErr; !errors.Is(err, context.Canceled) {
+		t.Fatalf("Run() error = %v, want context.Canceled", err)
+	}
+}
+
+func TestDrainedHandlersReclaimsEveryFinishedSlot(t *testing.T) {
+	completion := make(chan struct{}, 4)
+	if got := drainedHandlers(completion); got != 0 {
+		t.Fatalf("drainedHandlers(none finished) = %d, want 0", got)
+	}
+	for range 3 {
+		completion <- struct{}{}
+	}
+	if got := drainedHandlers(completion); got != 3 {
+		t.Fatalf("drainedHandlers(three finished) = %d, want 3", got)
+	}
+	if got := drainedHandlers(completion); got != 0 {
+		t.Fatalf("drainedHandlers(already reclaimed) = %d, want 0", got)
 	}
 }
 
@@ -72,6 +125,33 @@ func TestWorkerDrainRejectsMessageAlreadyReturnedByFetch(t *testing.T) {
 type recordingConsumer struct {
 	batch    int
 	fetchErr error
+}
+
+// slotConsumer hands out a fixed set of messages on its first pull and empty
+// batches after that, recording what each pull asked for. The record never
+// blocks the fetch loop: the pulls worth asserting on are the first two, and a
+// full channel must not stop the loop from reaching cancellation.
+type slotConsumer struct {
+	sources   []jetstream.Msg
+	requested chan int
+}
+
+func (c *slotConsumer) Fetch(batch int, _ ...jetstream.FetchOpt) (jetstream.MessageBatch, error) { //nolint:ireturn // The test double implements jetstream's interface-returning contract.
+	select {
+	case c.requested <- batch:
+	default:
+	}
+	messages := make(chan jetstream.Msg, batch)
+	for _, source := range c.sources[:min(batch, len(c.sources))] {
+		messages <- source
+	}
+	c.sources = nil
+	close(messages)
+	return messageBatch{messages: messages}, nil
+}
+
+func (c *slotConsumer) Info(context.Context) (*jetstream.ConsumerInfo, error) {
+	return &jetstream.ConsumerInfo{}, nil
 }
 
 type gatedConsumer struct {

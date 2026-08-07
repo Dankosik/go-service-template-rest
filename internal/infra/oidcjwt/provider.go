@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/example/go-service-template-rest/internal/authntrust"
 	"github.com/example/go-service-template-rest/internal/infra/httpclient"
 	"go.opentelemetry.io/otel/metric"
 )
@@ -141,9 +142,12 @@ func discoverJWKSURI(ctx context.Context, policy Policy, factory clientFactory) 
 		return "", errors.New("OIDC startup failed at discovery")
 	}
 	var document discoveryDocument
+	// The JWKS URI is held to the same rule as the configured issuer. It is
+	// provider-supplied and this service is about to fetch from it, which is the
+	// case authntrust.ValidProviderURL exists for.
 	if err := strictUnmarshal(documentBytes, &document); err != nil ||
 		document.Issuer != policy.issuer ||
-		!validProviderURL(document.JWKSURI) {
+		!authntrust.ValidProviderURL(document.JWKSURI) {
 		return "", errors.New("OIDC startup failed at discovery validation")
 	}
 	return document.JWKSURI, nil
@@ -190,38 +194,4 @@ func fetchDocument(ctx context.Context, client requestClient, target string) ([]
 		return nil, errProviderFetchFailed
 	}
 	return body, nil
-}
-
-// validProviderURL reports whether raw is a URL this package may fetch from. It
-// owns that shape for the package, applied to the configured issuer by
-// [NewPolicy] and to the JWKS URI the provider's own Discovery document names.
-// Requiring absolute HTTPS with no user info, query, or fragment keeps a
-// provider-supplied endpoint from carrying credentials or redirect parameters
-// into a request this service makes on its own behalf.
-//
-// internal/config carries a second copy of this predicate, validAuthnIssuerURL,
-// so a bad authn.issuer fails at configuration load rather than at authn startup.
-// That copy is forced: the depguard rule config_no_runtime_owners stops
-// internal/config from importing anything under internal/, so it cannot call this.
-// It is written in this same shape, term for term and in the same order, so the
-// two can be read against each other line by line.
-// A constraint tightened here has to be tightened there too, or the two answers
-// disagree about which issuer values a deployment may hold.
-// TestPolicyRulesMatchConfigValidation makes that disagreement fail a build
-// rather than a deployment, and owns what it can and cannot compare. This comment
-// is the code-side owner of that arrangement; the other sites point here rather
-// than restating it.
-func validProviderURL(raw string) bool {
-	parsed, err := url.Parse(strings.TrimSpace(raw))
-	return err == nil &&
-		parsed != nil &&
-		parsed.IsAbs() &&
-		strings.EqualFold(parsed.Scheme, "https") &&
-		parsed.Host != "" &&
-		parsed.Hostname() != "" &&
-		parsed.Opaque == "" &&
-		parsed.User == nil &&
-		parsed.RawQuery == "" &&
-		!parsed.ForceQuery &&
-		parsed.Fragment == ""
 }

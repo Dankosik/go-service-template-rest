@@ -89,12 +89,12 @@ type accessLogPolicy struct {
 }
 
 func accessLogAround(log *slog.Logger, policy accessLogPolicy) aroundRPC {
-	return func(ctx context.Context, fullMethod string, call func() error) error {
+	return func(ctx context.Context, fullMethod string, call func(context.Context) error) error {
 		if !policy.logsMethod(fullMethod) || !log.Enabled(ctx, slog.LevelInfo) {
-			return call()
+			return call(ctx)
 		}
 		started := time.Now()
-		err := call()
+		err := call(ctx)
 
 		elapsed := time.Since(started)
 		if code := status.Code(err); policy.shouldLog(ctx, code, elapsed) {
@@ -158,15 +158,36 @@ func sampleRequestID(requestID string, rate float64) bool {
 	return float64(bucket)/float64(sampleBuckets) < rate
 }
 
+// deadlineAround caps how long the work below it may occupy a handler.
+//
+// It derives the RPC context's deadline rather than replacing it, so a caller
+// deadline that is already earlier still wins: context.WithTimeout never extends
+// a parent's. That makes this a cap by construction rather than by a comparison
+// anyone has to write.
+//
+// A non-positive timeout disables the cap, which is how the stream bound ships.
+// Health RPCs are exempt for the reason isHealthMethod records: a probe must not
+// be cut by a business budget, just as it does not consume the admission one.
+func deadlineAround(timeout time.Duration) aroundRPC {
+	return func(ctx context.Context, fullMethod string, call func(context.Context) error) error {
+		if timeout <= 0 || isHealthMethod(fullMethod) {
+			return call(ctx)
+		}
+		bounded, cancel := context.WithTimeout(ctx, timeout)
+		defer cancel()
+		return call(bounded)
+	}
+}
+
 func recoveryAround(log *slog.Logger) aroundRPC {
-	return func(ctx context.Context, fullMethod string, call func() error) (err error) {
+	return func(ctx context.Context, fullMethod string, call func(context.Context) error) (err error) {
 		defer func() {
 			if recovered := recover(); recovered != nil {
 				logRecoveredPanic(ctx, log, fullMethod, recovered)
 				err = ownedStatus(codes.Internal, "request failed")
 			}
 		}()
-		return call()
+		return call(ctx)
 	}
 }
 
@@ -194,11 +215,13 @@ func newAdmissionLimiter(limit int, load LoadRecorder) *admissionLimiter {
 
 // around holds one admission slot for the work below it. One limiter value backs
 // both chains, which is what makes the budget process-wide rather than per RPC
-// kind; TestAdmissionLimitIsSharedAcrossUnaryAndStreamingRPCs proves it end to
-// end.
-func (l *admissionLimiter) around(ctx context.Context, fullMethod string, call func() error) error {
+// kind. Since NewServer builds the two policy lists separately, that sharing is
+// its composition rather than a structural guarantee:
+// TestOneLimiterServesBothInterceptorTypes proves this method is shareable, and
+// TestAdmissionBudgetIsProcessWide proves the server actually shares it.
+func (l *admissionLimiter) around(ctx context.Context, fullMethod string, call func(context.Context) error) error {
 	if isHealthMethod(fullMethod) {
-		return call()
+		return call(ctx)
 	}
 	if !l.sem.TryAcquire(1) {
 		l.load.Shed(ctx)
@@ -207,7 +230,7 @@ func (l *admissionLimiter) around(ctx context.Context, fullMethod string, call f
 	defer l.sem.Release(1)
 	release := l.load.Admitted(ctx)
 	defer release()
-	return call()
+	return call(ctx)
 }
 
 // isHealthMethod matches the whole standard health service by prefix, so a

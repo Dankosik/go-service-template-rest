@@ -22,7 +22,8 @@ INSERT INTO outbox_events (
     schema_name,
     occurred_at,
     payload,
-    metadata
+    metadata,
+    trace_context
 )
 -- Set-returning functions in one select list advance in lockstep, which is how
 -- the column arrays are zipped back into rows.
@@ -34,7 +35,8 @@ SELECT
     unnest(sqlc.arg(schema_names)::text[]),
     unnest(sqlc.arg(occurred_ats)::timestamptz[]),
     unnest(sqlc.arg(payloads)::bytea[]),
-    unnest(sqlc.arg(metadatas)::bytea[]);
+    unnest(sqlc.arg(metadatas)::bytea[]),
+    unnest(sqlc.arg(trace_contexts)::bytea[]);
 
 -- Every event of one append when at least one of them owns an ordering head.
 -- It stores the ordered and unordered events together and advances the head of
@@ -74,6 +76,7 @@ WITH input AS (
         unnest(sqlc.arg(occurred_ats)::timestamptz[]) AS occurred_at,
         unnest(sqlc.arg(payloads)::bytea[]) AS payload,
         unnest(sqlc.arg(metadatas)::bytea[]) AS metadata,
+        unnest(sqlc.arg(trace_contexts)::bytea[]) AS trace_context,
         unnest(sqlc.arg(ordering_keys)::text[]) AS ordering_key,
         unnest(sqlc.arg(ordering_sequences)::bigint[]) AS ordering_sequence
 ), event AS (
@@ -86,6 +89,7 @@ WITH input AS (
         input.occurred_at,
         input.payload,
         input.metadata,
+        input.trace_context,
         nullif(input.ordering_key, '') AS ordering_key,
         nullif(input.ordering_sequence, 0) AS ordering_sequence
     FROM input
@@ -126,6 +130,7 @@ WITH input AS (
         occurred_at,
         payload,
         metadata,
+        trace_context,
         ordering_key,
         ordering_sequence,
         ordering_ready
@@ -139,6 +144,7 @@ WITH input AS (
         event.occurred_at,
         event.payload,
         event.metadata,
+        event.trace_context,
         event.ordering_key,
         event.ordering_sequence,
         event.ordering_key IS NOT NULL AND head.current_sequence = event.ordering_sequence
@@ -151,6 +157,55 @@ SELECT
     rejected.first_sequence::bigint AS first_sequence
 FROM rejected
 ORDER BY rejected.ordering_key;
+
+-- Retire the retained high-water mark of every terminal ordering key a call
+-- names, in one statement, inside the caller's own transaction.
+--
+-- Heads are locked in key order, the same rows in the same order the ordered
+-- append takes, which is the whole concurrency argument: an append for one of
+-- these keys serializes either before this statement -- and then its unpublished
+-- event puts the key in `active`, so the mark stays -- or after it, and then it
+-- establishes a fresh mark from its own sequence. Neither can interleave with
+-- the check.
+--
+-- A key with no head is neither locked, refused, nor deleted, which is what
+-- makes a repeated or unknown retirement a no-op rather than an error.
+--
+-- The result is the rejection report, the shape the ordered append already uses:
+-- one row per key that still owns unpublished events, and no rows on the normal
+-- path. `retired` is unreferenced on purpose -- a data-modifying CTE runs to
+-- completion whether or not the primary query reads its output.
+--
+-- The EXISTS lookup rides outbox_events_ordering_pending_key, which already
+-- indexes exactly the unpublished ordered rows it asks about.
+-- name: RetireOutboxOrderingKeys :many
+WITH locked AS MATERIALIZED (
+    SELECT head.ordering_key
+    FROM outbox_ordering_heads AS head
+    WHERE head.ordering_key = ANY(sqlc.arg(ordering_keys)::text[])
+    ORDER BY head.ordering_key
+    FOR UPDATE
+), active AS MATERIALIZED (
+    SELECT locked.ordering_key
+    FROM locked
+    WHERE EXISTS (
+        SELECT 1
+        FROM outbox_events AS event
+        WHERE event.ordering_key = locked.ordering_key
+          AND event.published_at IS NULL
+    )
+), retired AS (
+    DELETE FROM outbox_ordering_heads AS head
+    USING locked
+    WHERE head.ordering_key = locked.ordering_key
+      AND NOT EXISTS (
+          SELECT 1 FROM active WHERE active.ordering_key = head.ordering_key
+      )
+    RETURNING head.ordering_key
+)
+SELECT active.ordering_key::text AS ordering_key
+FROM active
+ORDER BY active.ordering_key;
 
 -- One statement leases a whole batch under a single token. The partial unique
 -- index on ready ordered rows keeps at most one claimable event per ordering
@@ -197,7 +252,9 @@ SET lease_token = sqlc.arg(lease_token),
 FROM candidate
 WHERE event.ctid = candidate.row_address
 -- Projecting the envelope plus the attempt counters keeps decoding proportional
--- to what the relay publishes and fences on. The lease, retry, terminal, and
+-- to what the relay publishes and fences on. trace_context belongs to that set:
+-- the adapter is handed it to put on broker headers, and the relay links its
+-- publish span to it. The lease, retry, terminal, and
 -- redrive columns it would otherwise decode per event are already known to the
 -- caller or belong to operator inspection through GetOutboxEvent.
 RETURNING event.id,
@@ -208,6 +265,7 @@ RETURNING event.id,
           event.occurred_at,
           event.payload,
           event.metadata,
+          event.trace_context,
           event.ordering_key,
           event.ordering_sequence,
           event.cycle_attempt_count,

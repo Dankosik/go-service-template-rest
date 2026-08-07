@@ -23,7 +23,13 @@ import (
 type refreshTrigger string
 
 const (
-	triggerStartup   refreshTrigger = "startup"
+	triggerStartup refreshTrigger = "startup"
+	// triggerKeyMiss is every verification a refresh is owed, which is wider than
+	// its name: keySet.verifies answers one question — does an installed key sign
+	// this token — and a token naming an unknown key id and a token whose key id
+	// was rotated under the same name are both a no. Both are recovered by the
+	// same fetch, so both belong to this trigger; what an operator reads it as is
+	// "the installed set could not answer", not "the id was absent".
 	triggerKeyMiss   refreshTrigger = "key_miss"
 	triggerScheduled refreshTrigger = "scheduled"
 )
@@ -80,18 +86,25 @@ type refreshAdmission struct {
 	mu           sync.Mutex
 	active       *refreshCall
 	cooldownTill time.Time
+	retired      bool
 }
 
-// begin joins the in-flight JWKS fetch or starts one. It reports false in
-// exactly one case: triggerKeyMiss arriving while its cooldown is still active.
-// Every other trigger always gets a call to wait on.
+// begin joins the in-flight JWKS fetch or starts one. It reports false in two
+// cases: triggerKeyMiss arriving while its cooldown is still active, and any
+// trigger arriving after retire. Otherwise the caller gets a call to wait on.
 func (r *refreshAdmission) begin(trigger refreshTrigger) (*refreshCall, bool) {
 	now := r.owner.now()
 	rateLimited := trigger.rateLimited()
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	// Joining a fetch already in flight is admitted even after retire: it is
+	// running either way, retire is waiting for exactly it, and refusing here
+	// would discard an answer the caller is about to need.
 	if r.active != nil {
 		return r.active, true
+	}
+	if r.retired {
+		return nil, false
 	}
 	if rateLimited && now.Before(r.cooldownTill) {
 		return nil, false
@@ -113,13 +126,13 @@ func (r *refreshAdmission) begin(trigger refreshTrigger) (*refreshCall, bool) {
 	go func(refreshCtx context.Context) {
 		call.err = r.owner.fetchAndInstall(refreshCtx)
 		r.owner.metrics.recordRefresh(context.WithoutCancel(refreshCtx), trigger, call.err)
-		// Retiring the call and closing it are one step under the lock, and the
-		// close belongs inside rather than after: join reads active under this same
-		// lock and waits only on what it found there. Closing after the unlock would
-		// leave a window where join sees no active call and returns while this
-		// goroutine has not finished, so "join returned" would stop meaning "the
-		// fetch goroutine is done" — which is what Close relies on before releasing
-		// the provider client.
+		// Clearing the call and closing it are one step under the lock, and the
+		// close belongs inside rather than after: join and retire both read active
+		// under this same lock and wait only on what they found there. Closing
+		// after the unlock would leave a window where either sees no active call
+		// and returns while this goroutine has not finished, so "the wait returned"
+		// would stop meaning "the fetch goroutine is done" — which is what Close
+		// relies on before releasing the provider client.
 		r.mu.Lock()
 		if r.active == call {
 			r.active = nil
@@ -130,11 +143,33 @@ func (r *refreshAdmission) begin(trigger refreshTrigger) (*refreshCall, bool) {
 	return call, true
 }
 
-// join waits for an admitted fetch to finish, if one is in flight. It is the
-// shutdown half of admission: no new call is started, and the goroutine begin
-// launched is given until baseCtx cancellation to return.
+// join waits for an admitted fetch to finish, if one is in flight. [Verifier.Run]
+// uses it on the way out to leave nothing of its own running; a later
+// verification may still admit a fetch, which is why this does not close
+// admission.
 func (r *refreshAdmission) join() {
 	r.mu.Lock()
+	call := r.active
+	r.mu.Unlock()
+	if call != nil {
+		<-call.done
+	}
+}
+
+// retire closes admission and waits for the fetch already in flight, if any.
+//
+// It is what makes [Verifier.Close] safe to release the provider client after:
+// once it returns, no fetch is running and none can start, so nothing can reach
+// that client again. join alone could not promise the second half — a
+// verification racing Close could admit a fetch in the window between the wait
+// and the release, and the only thing making that harmless today is that the
+// client's release happens to be CloseIdleConnections, which is safe to call
+// beside a request in flight. Making admission answer instead means a release
+// that ever becomes a real teardown does not turn into a use-after-close on the
+// one path only a shutdown under load reaches.
+func (r *refreshAdmission) retire() {
+	r.mu.Lock()
+	r.retired = true
 	call := r.active
 	r.mu.Unlock()
 	if call != nil {
@@ -147,11 +182,13 @@ func (r *refreshAdmission) join() {
 //
 // A panic is converted rather than propagated because the goroutine begin
 // launched has no caller to recover it, and one malformed provider response must
-// not take the process down.
+// not take the process down. logRecoveredPanic owns why converting it silently
+// would be worse than not converting it at all.
 func (v *Verifier) fetchAndInstall(ctx context.Context) (err error) {
 	defer func() {
-		if recover() != nil {
+		if recovered := recover(); recovered != nil {
 			err = errRefreshFailed
+			logRecoveredPanic(ctx, v.log, "jwks_refresh", recovered)
 		}
 	}()
 	body, err := fetchDocument(ctx, v.client.request, v.jwksURI)
@@ -189,6 +226,18 @@ func waitRefresh(ctx context.Context, call *refreshCall) error {
 // It is the blocking route into begin. Run takes the other: it selects on the
 // call it got back, because it has readiness and its own deadlines to serve
 // while a fetch runs.
+//
+// Waiting here puts a provider call on the request path, and the trigger is
+// reachable without a credential: parseToken has accepted the claims by this
+// point but nothing has checked a signature, so an unsigned token carrying the
+// configured issuer and audience, an unexpired exp, and an unknown key id gets
+// this far. RefreshCooldown bounds what that costs the provider — one fetch per
+// cooldown whatever the request rate. It does not bound what it costs latency:
+// every key-miss verification arriving during a fetch coalesces onto it and
+// waits up to ProviderTimeout. That is bounded by the caller's own context, and
+// above it by http.max_in_flight, which is where the number of requests that can
+// be waiting at once is actually set — so the two settings are read together
+// when either is tuned.
 func (v *Verifier) refresh(ctx context.Context) error {
 	call, admitted := v.admission.begin(triggerKeyMiss)
 	if !admitted {
@@ -378,10 +427,11 @@ func (v *Verifier) Close() {
 		if runStarted {
 			<-v.runDone
 		}
-		// Run's defer joins the fetches it saw, and this covers the rest: the
-		// ones a verification admitted, whether or not Run ever ran, including
-		// one admitted after Run left.
-		v.admission.join()
+		// Run's defer joins the fetches it saw. This covers the rest — the ones a
+		// verification admitted, whether or not Run ever ran — and then closes
+		// admission, so the release below cannot race a fetch admitted after the
+		// wait. retire owns why that second half matters.
+		v.admission.retire()
 		v.client.close()
 		if v.unregisterAge != nil {
 			v.unregisterAge()

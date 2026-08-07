@@ -28,6 +28,10 @@ import (
 const (
 	readyPrefix     = "GRPC_BENCH_READY="
 	shutdownTimeout = 5 * time.Second
+	// The service identity scoping this command's error reasons. A production
+	// composition reads its own from configuration; this one has none to read
+	// and names itself, so the measured error path is shaped like production's.
+	benchmarkErrorDomain = "grpc-reference-benchmark"
 )
 
 func main() {
@@ -69,19 +73,30 @@ func run(ctx context.Context, ready io.Writer) error {
 	server, err := grpcx.NewServer( //nolint:contextcheck // Construction precedes RPC contexts; grpcx passes each stream context to its interceptors.
 		settings.transport,
 		grpcx.Options{
-			Logger:         slog.New(slog.NewJSONHandler(benchmarkJSONSink{}, nil)),
-			MeterProvider:  meterProvider,
-			TracerProvider: tracerProvider,
-			Propagators:    propagation.TraceContext{},
-			Load:           load,
+			// The listener binds loopback only, so this command is the one place
+			// plaintext is not a deployment decision.
+			TransportCredentials: nil,
+			Logger:               slog.New(slog.NewJSONHandler(benchmarkJSONSink{}, nil)),
+			MeterProvider:        meterProvider,
+			TracerProvider:       tracerProvider,
+			Propagators:          propagation.TraceContext{},
+			Load:                 load,
 			// Without these mappers the reference service's own limit errors
 			// reach the caller as INTERNAL; grpcreference.ErrStreamLimit owns why.
 			DomainErrors: grpcreference.DomainErrors(),
+			// Named so the measured error path carries the same details a
+			// production one does; an empty domain would silently drop ErrorInfo
+			// from every error this command measures.
+			ErrorDomain: benchmarkErrorDomain,
 			Services: []grpcx.RegisterService{
 				func(registrar grpc.ServiceRegistrar) {
 					referencev1.RegisterEchoServiceServer(registrar, grpcreference.Service{})
 				},
 			},
+			// This command measures the transport, so it adds no policy of its
+			// own beyond what NewServer composes.
+			UnaryPolicy:  nil,
+			StreamPolicy: nil,
 		},
 	)
 	if err != nil {
@@ -179,6 +194,15 @@ func settingsFromDefaults(defaults config.GRPCServerConfig) (benchmarkServerSett
 			AccessLogSuccessSampleRate: defaults.AccessLogSuccessSampleRate,
 			AccessLogSlowThreshold:     defaults.AccessLogSlowThreshold,
 			TelemetryHealthChecks:      defaults.TelemetryHealthChecks,
+			UnaryTimeout:               defaults.UnaryTimeout,
+			StreamTimeout:              defaults.StreamTimeout,
+			MaxConnectionIdle:          defaults.MaxConnectionIdle,
+			ServerPingInterval:         defaults.ServerPingInterval,
+			ServerPingTimeout:          defaults.ServerPingTimeout,
+			MinClientPingInterval:      defaults.MinClientPingInterval,
+			PermitPingWithoutStream:    defaults.PermitPingWithoutStream,
+			MaxConnectionAge:           defaults.MaxConnectionAge,
+			MaxConnectionAgeGrace:      defaults.MaxConnectionAgeGrace,
 		},
 		maxConnections: defaults.MaxConnections,
 	}, nil

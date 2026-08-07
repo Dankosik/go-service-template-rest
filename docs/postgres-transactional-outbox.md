@@ -27,9 +27,8 @@ Build one `*postgresoutbox.Store` over the pool that
 in `cmd/service/internal/bootstrap/run.go`, and pass it into whatever implements
 `openapi.StrictServerInterface` — the `Handlers.API` seam. Its meter comes from
 the same `telemetry.Metrics` the rest of that composition uses. Both arguments to
-`NewTelemetry` may be nil, and so may the store's telemetry. Feature code then
-chooses the event and appends it through the same `pgx.Tx` that owns the domain
-mutation:
+`NewTelemetry` may be nil, and so may the store's telemetry. The event is then
+appended through the same `pgx.Tx` that owns the domain mutation:
 
 ```go
 // Composition root, once.
@@ -42,7 +41,7 @@ if err != nil {
 	return err
 }
 
-// Feature code, per business transaction.
+// PostgreSQL repository adapter, per business transaction.
 err = pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
 	if err := repository.Update(ctx, tx, change); err != nil {
 		return err
@@ -62,11 +61,24 @@ err = pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
 })
 ```
 
-`Store` serves three audiences: a feature calls only `Append`, the relay process
-owns claim, finalization, cleanup, and observation, and `Get` and `Redrive` are
-operator tooling. The relay reads `Get` too, to resolve a finalization its batch
-statement did not report. `cmd/outbox-relay/internal/bootstrap/run.go` is the
-worked composition for the relay side.
+`Store` serves three audiences: the write path calls only `Append`, the relay
+process owns claim, finalization, cleanup, and observation, and `Get` and
+`Redrive` are operator tooling. The relay reads `Get` too, to resolve a
+finalization its batch statement did not report.
+`cmd/outbox-relay/internal/bootstrap/run.go` is the worked composition for the
+relay side.
+
+That write path is not `internal/<feature>`, and the block above says
+`repository adapter` rather than `feature` for a reason a linter enforces:
+depguard's `feature_packages_no_adapters` rule denies a feature package both
+`internal/infra` and `github.com/jackc/pgx/v5`, so a feature package can neither
+name `postgresoutbox.Event` nor hold a `pgx.Tx`. The split that leaves is the
+one the rest of this repository already uses. The feature owns which occurrence
+happened and what its payload means, and returns that as its own type. The
+PostgreSQL repository adapter under `internal/infra/postgres` owns the
+transaction, translates the feature's result into a `postgresoutbox.Event`, and
+makes both calls inside one `InTx`. The composition root owns building the
+`Store` and handing it to that adapter.
 
 `Get` and `Redrive` are Go methods, not a shipped operator interface. Deciding
 who may redrive is an authorization question this pack does not answer, so a
@@ -191,13 +203,55 @@ case as `ErrPublicationNotAccepted` instead, so a temporary topology gap costs
 attempts rather than an operator redrive.
 
 <!-- profile:messaging-nats-jetstream:end -->
+## Trace continuity
+
+An outbox breaks a trace by construction: the request that produced an event has
+long returned by the time the relay publishes it. This pack keeps the join.
+
+`Append` captures the W3C trace context active on its own context and stores it
+with the event, in its own column rather than in `Metadata` — metadata is the
+caller's bytes, stored and retried exactly as given, and merging into them would
+break that and collide with a caller carrying its own `traceparent`. A caller
+cannot set or forge the stored context; it comes from the ambient context only.
+
+The relay emits one span per publication attempt, `publish {destination}`,
+**linked** to that stored context rather than descending from it. The link is
+deliberate: a publication can happen minutes after the append, or days after an
+operator redrive, and a child span would hold the producing request's trace open
+for that whole horizon — past the assembly window of every backend that has one.
+The link carries the same join without that lifetime coupling, which is also
+what the OpenTelemetry messaging convention prescribes for a send with a
+separate creation context.
+
+The adapter is handed the same context on `Event.CreationContext()` and should
+put it on its broker's headers, which is what gives the *consumer* its half of
+the join. The relay's own link works whether or not the adapter does this.
+
+Nothing about the trace context can fail a delivery. A context too large for its
+1 KiB bound, or one the propagator cannot encode, is stored as absent and
+counted on `outbox.relay.operations` as `operation=trace_capture`,
+`outcome=rejected` — the append still succeeds. A stored context that cannot be
+decoded reads as absent and the event still publishes. The reasoning is the
+point of the pattern: an outbox exists so that infrastructure faults become
+backlog instead of failed requests, so a field this pack added must never be the
+one fault that fails a request.
+
+`messaging.system` is deliberately absent from the span — the relay is
+broker-neutral and only the adapter knows the system. Ordering keys never reach
+a span, matching the rule for every other telemetry surface here.
+
 ## Envelope and ordering
 
 Each immutable row carries event ID, type, source, destination, schema,
 occurrence time, exact JSON payload bytes, exact JSON-object metadata bytes,
-and an optional ordering key plus positive sequence. Text fields and the
+the captured trace context, and an optional ordering key plus positive
+sequence. Text fields and the
 ordering key are limited to 256 bytes, payload to 256 KiB, metadata to 32 KiB,
-and the complete stored envelope to 288 KiB.
+and the complete stored envelope to 288 KiB. The trace context is bounded
+separately at 1 KiB and is deliberately *not* charged against that 288 KiB: it
+is the outbox's field rather than the caller's, and charging it would start
+rejecting events a service appends successfully today. The stored row therefore
+exceeds the caller-facing budget by at most that allowance.
 
 The database validates the same JSON language as Go while retaining the exact
 bytes, through the SQL/JSON `IS JSON` and `IS JSON OBJECT` predicates. Bytes
@@ -213,6 +267,15 @@ unpublished sequence for a key is claimable; retry, lease, and poison state
 block later rows for that key. This is an outbox claim-order guarantee, not an
 end-to-end broker ordering claim. The selected adapter and consumer must also
 preserve the key.
+
+The one adapter this repository ships worked does not. `natsOutboxPublisher` in
+`test/postgres_outbox_natsjs_integration_test.go` forwards the ordering key onto
+the JetStream envelope as data, but JetStream assigns its own stream sequence
+and a worker above `MAX_CONCURRENCY=1` runs one key's handlers concurrently —
+see [Ordering does not compose with the
+outbox](durable-messaging.md#ordering-does-not-compose-with-the-outbox) for the
+two shapes that close it. Read the claim here as ordered publication, and decide
+ordered processing at the consumer.
 
 PostgreSQL materializes that earliest row as `ordering_ready` and serializes
 append/finalization through `outbox_ordering_heads.current_sequence`. Claim and
@@ -527,10 +590,34 @@ they turn over or immediately through a `VACUUM FULL` or `pg_repack` window.
 
 Published rows are retained for seven days and deleted in bounded concurrent
 batches. Pending, leased, retry, recovery, poison, and ordering-high-water rows
-are not deleted. High-water rows carry no automatic cleanup because proving that
-an ordering key can never be reused is domain policy rather than an outbox
-decision; retiring them requires an explicit feature-owned terminal-key
-contract, which is the reopen condition for this rule. PostgreSQL is a finite
+are not deleted. High-water rows carry no *automatic* cleanup because proving
+that an ordering key can never be reused is domain policy rather than an outbox
+decision. `Store.RetireOrderingKeys` is that terminal-key contract, and it is
+the only way a high-water row is removed:
+
+```go
+// In the same transaction that closes the aggregate.
+return outbox.RetireOrderingKeys(ctx, tx, orderID)
+```
+
+It runs in the caller's transaction, so the assertion commits atomically with
+whatever domain write makes the key terminal. A key that still owns unpublished
+events is refused with `ErrOrderingKeyActive` and nothing is retired — not that
+key and not the rest of the call. A key that is unknown or already retired
+succeeds and changes nothing, so a repeated call is idempotent. Retirement and a
+concurrent append for the same key take the same head lock in the same order, so
+the append is either visible as pending work that refuses the retirement, or
+lands after it and establishes a fresh mark.
+
+After retirement the key's sequence space restarts: a later append is accepted
+at any positive sequence, including one already used. That is the protection the
+caller trades away by asserting terminality, and it is why the outbox never
+infers it. Nothing is time-based — an idle key is not a terminal key, and a
+quiet aggregate that wakes up must still have replayed sequences rejected. Watch
+`outbox.relay.ordering_heads` to decide whether a service needs the contract at
+all: a bounded key space never does.
+
+PostgreSQL is a finite
 outage buffer: alert on unpublished
 count/oldest age, poison, retry errors, state-observation freshness, drain rate,
 and relation/index growth. Add partitioning only after measured table/vacuum or

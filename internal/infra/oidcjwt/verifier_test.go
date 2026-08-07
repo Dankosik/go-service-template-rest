@@ -292,4 +292,19 @@ func TestAuthnRedactionCoversRefreshPanicAndTelemetry(t *testing.T) {
 	if encoded := fmt.Sprintf("%#v", metrics); strings.Contains(encoded, poison) {
 		t.Fatalf("authn metrics contain poison marker: %s", encoded)
 	}
+
+	// Redaction is half the contract; the other half is that the conversion is
+	// reported at all. Both panics above answered in the categories a provider
+	// outage answers in, so without these records a defect in this package is
+	// indistinguishable from the outage operators are told to expect.
+	// logRecoveredPanic owns that argument.
+	logged := output.String()
+	if !strings.Contains(logged, "authn_panic_recovered") {
+		t.Errorf("no recovered panic was reported: %s", logged)
+	}
+	for _, operation := range []string{"jwks_refresh", "verify"} {
+		if !strings.Contains(logged, operation) {
+			t.Errorf("the recovered panic in %q was converted silently: %s", operation, logged)
+		}
+	}
 }

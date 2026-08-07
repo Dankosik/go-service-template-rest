@@ -11,8 +11,9 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Store owns every outbox statement, for three audiences. Feature code calls
-// only Append, inside the transaction that owns its domain mutation. The relay
+// Store owns every outbox statement, for three audiences. The write path calls
+// only Append, inside the transaction that owns its domain mutation; doc.go
+// names which package that is and why it is not a feature package. The relay
 // owns Claim, the Mark and ScheduleRetry family, CleanupPublished, and Observe,
 // plus Get, which it uses to resolve a finalization the batch statement did not
 // report. Redrive, and Get again, are operator tooling.
@@ -117,6 +118,7 @@ func storeOutcome(err error) (outcome, errorClass string) {
 	case errors.Is(err, ErrLeaseLost):
 		return outcomeError, classLostLease
 	case errors.Is(err, ErrInvalidEvent), errors.Is(err, ErrConfig), errors.Is(err, ErrOrderingSequence),
+		errors.Is(err, ErrOrderingKeyActive),
 		errors.Is(err, ErrRedriveRejected), errors.Is(err, ErrRedriveConflict):
 		return outcomeRejected, classValidation
 	default:

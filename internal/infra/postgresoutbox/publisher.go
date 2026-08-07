@@ -10,11 +10,19 @@ import (
 // the same Event.ID. Implementations must stop using Event when Publish returns.
 //
 // The adapter decides which envelope fields reach the broker, and nothing here
-// checks that it forwarded any of them. [Event.Metadata] is the one to decide
-// deliberately: correlation and trace context ride in those bytes, so an adapter
-// whose message type has no header carrier for them drops the trace at the outbox
-// boundary — silently, because the bytes are still in PostgreSQL. Either forward
-// Metadata onto broker headers or state in the adapter that it does not.
+// checks that it forwarded any of them. Two are worth deciding deliberately,
+// because both are carried for a consumer this package cannot see:
+// [Event.Metadata] holds whatever correlation the feature owns, and
+// [Event.CreationContext] holds the trace context of the operation that
+// appended the event:
+//
+//	ctx = otel.GetTextMapPropagator().Inject(ctx, header)  // onto broker headers
+//
+// An adapter whose message type has no header carrier drops the consumer's half
+// of the trace at the outbox boundary — silently, because the bytes are still in
+// PostgreSQL and the relay's own publish span still links to the producer.
+// Either forward both onto broker headers or state in the adapter that it does
+// not.
 //
 // The relay calls Publish concurrently, so implementations must be safe for
 // concurrent use. Concurrent calls never carry two events that share an ordering

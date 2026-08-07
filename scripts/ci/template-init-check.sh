@@ -1052,6 +1052,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "auth
 			cmd/service/internal/bootstrap/authn_readiness_test.go \
 			cmd/service/internal/bootstrap/startup_authn.go \
 			docs/authentication.md \
+			internal/authntrust \
 			internal/config/authn_config_test.go \
 			internal/infra/grpc/authn_health_test.go \
 			internal/infra/http/authn_router_test.go \

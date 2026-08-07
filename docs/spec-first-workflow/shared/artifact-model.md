@@ -53,6 +53,33 @@ Task-local artifacts live in the task bundle at `specs/<task>/` named by
 
 Split an artifact only when the split creates a real owner or makes review materially easier. Do not create a directory of one-line files.
 
+### Rollout Record
+
+When `rollout.md` is triggered, keep only the affected deployment graph and its
+critical path in this compact shape:
+
+```markdown
+# Rollout
+status: draft | ready | blocked | done
+Affected graph: <affected nodes and edges; current -> target state>
+Irreversible boundary: <last rollback-safe state and first new-only effect>
+
+| Gate | Owner; node or edge | Prerequisite | Action | Success and distinct safe failure signal | Duration or behavior-changing horizon | Rollback or roll-forward | Proof |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+
+Completion: <user-visible path, durable effect, and target-environment signals>
+```
+
+Each gate names its authoritative readback and required proving surface during
+System Design. Before the record is ready for Planning, it cites the exact Test
+Design scenario, command, or bounded procedure plus the relevant environment or
+fixture. Use an evidence-based bound when one exists; otherwise record the
+signal that ends the step and the owner of the missing estimate. A generic
+`deploy and monitor`, component health, deployment status, or `all green`
+cannot close a gate. Reuse a passing gate while its candidate, inputs,
+preconditions, and risk surface remain unchanged; after a failure, repeat only
+the invalidated or still-uncovered gates.
+
 ## Open Decisions And Fog
 
 An **open decision** is a question you can already state precisely: what it can
@@ -189,6 +216,10 @@ Use additional fields only when they change an action or verdict.
    preconditions with the workspace. Reuse the receipt when they match; when they
    drift or the receipt is unavailable, run the smallest ledger proof that can
    detect the affected change and broaden only when its result requires it.
+6. When a ready artifact's review predates a material change to its owning phase
+   contract, recheck only the affected next unit or release gate against the
+   current Stop Rule. Retain unaffected decisions and proof whose preconditions
+   still match.
 
 Keep only active task bundles. At closeout, remove execution-only state such as
 `tasks.md` with any `tasks/` directory, `workflow-plan.md`, and `Active wave`. Retain a completed spec or

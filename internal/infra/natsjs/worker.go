@@ -10,10 +10,10 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 )
 
-// Worker consumes one durable pull consumer: it fetches one message at a time,
-// runs at most MaxConcurrency feature handlers over them, and settles each with
-// the broker. [Client.NewWorker] is the only constructor, and a client owns at
-// most one Worker.
+// Worker consumes one durable pull consumer: it fetches up to as many messages
+// as it has free handler slots, runs at most MaxConcurrency feature handlers
+// over them, and settles each with the broker. [Client.NewWorker] is the only
+// constructor, and a client owns at most one Worker.
 //
 // This file owns the run and drain lifecycle. The two halves either side of it
 // live apart: worker_admission.go proves the broker topology before a Worker
@@ -63,6 +63,14 @@ func (w *Worker) Run(ctx context.Context) error {
 // fetchLoop acquires messages until drain, cancellation, or a fault. It owns
 // the concurrency ceiling and the count of handlers still running; pullOnce
 // owns everything about a single pull.
+//
+// The free slot count is what each pull asks for, and that is the whole reason
+// this loop is not acquisition-bound. A pull is one round trip to the broker
+// whatever it returns, so asking for one message made sustained throughput
+// 1/RTT no matter how large MaxConcurrency was. Asking for every free slot
+// makes a round trip cover up to MaxConcurrency messages, and the resident
+// bound is unchanged because free never exceeds what the ceiling already
+// allows.
 func (w *Worker) fetchLoop(ctx, fetchCtx, handlerRoot context.Context, completion chan struct{}) (int, error) {
 	active := 0
 	for !w.draining.Load() {
@@ -73,10 +81,14 @@ func (w *Worker) fetchLoop(ctx, fetchCtx, handlerRoot context.Context, completio
 			if err := w.waitForHandler(ctx, completion); err != nil {
 				return active, err
 			}
-			active--
+			// Reclaim every slot that is already free, not only the one just
+			// waited for. Handlers of one batch tend to finish together, and
+			// returning to the pull with a single slot would spend a whole
+			// round trip on each of the others.
+			active -= 1 + drainedHandlers(completion)
 			continue
 		}
-		started, stop, err := w.pullOnce(fetchCtx, handlerRoot, completion)
+		started, stop, err := w.pullOnce(fetchCtx, handlerRoot, completion, w.cfg.MaxConcurrency-active)
 		active += started
 		if stop || err != nil {
 			return active, err
@@ -85,12 +97,35 @@ func (w *Worker) fetchLoop(ctx, fetchCtx, handlerRoot context.Context, completio
 	return active, nil
 }
 
-// pullOnce runs one pull and starts a handler for whatever it delivered.
+// drainedHandlers reports how many further handlers had already finished,
+// without blocking. Every send on completion is one handler that has returned,
+// so consuming the queued ones is only reading a count that was already true.
+func drainedHandlers(completion <-chan struct{}) int {
+	count := 0
+	for {
+		select {
+		case <-completion:
+			count++
+		default:
+			return count
+		}
+	}
+}
+
+// pullOnce runs one pull for up to free messages and starts a handler for each
+// one it delivered.
 //
 // It owns the pull's context for the whole life of the batch, which is why the
 // release is a single defer here rather than a call on each of the paths out:
 // the batch's messages and its error are only valid while that context lives,
 // so the release has to outlast draining them, and every exit has to make it.
+//
+// A pull that asks for more than one message costs no extra latency for the
+// first: jetstream fills the batch channel as each message arrives rather than
+// on completion, so the loop below starts a handler at the moment the message
+// lands. What a partly filled batch does cost is the pull's own expiry before
+// this returns, which is why free slots are reclaimed before the next pull
+// rather than during this one.
 //
 // started is how many handlers it launched. stop reports that acquisition is
 // over — a cancelled fetch context, or a fault this client cannot ride out, and
@@ -99,11 +134,12 @@ func (w *Worker) fetchLoop(ctx, fetchCtx, handlerRoot context.Context, completio
 func (w *Worker) pullOnce(
 	fetchCtx, handlerRoot context.Context,
 	completion chan<- struct{},
+	free int,
 ) (started int, stop bool, err error) {
 	pullCtx, cancel := context.WithTimeout(fetchCtx, operationTimeout)
 	defer cancel()
 
-	batch, fetchErr := w.consumer.Fetch(1, jetstream.FetchContext(pullCtx))
+	batch, fetchErr := w.consumer.Fetch(free, jetstream.FetchContext(pullCtx))
 	if fetchErr != nil {
 		if fetchCtx.Err() != nil {
 			// Pull cancellation stops acquisition; active handler errors still

@@ -58,8 +58,9 @@
 //     TestPolicyRulesMatchConfigValidation;
 //  2. its validation in validateAuthnConfig —
 //     TestPolicyRulesMatchConfigValidation. internal/config cannot import this
-//     package, so it restates the rules rather than calling them;
-//     validProviderURL in provider.go owns why;
+//     package, so a rule both apply belongs in internal/authntrust and is called
+//     from each side; that package owns why it is a leaf. A rule only this
+//     boundary applies stays here;
 //  3. a field on [PolicyInput] — exhaustruct;
 //  4. the value on [Policy], with the rule that admits it in [NewPolicy] —
 //     TestPolicyRulesMatchConfigValidation;
@@ -72,8 +73,9 @@
 //
 // So only items 6 and 7 leave a build green. Being caught matters most for item
 // 2: without it a mistyped key fails at authn startup instead of at
-// configuration load, and moving that failure left is the whole reason the
-// validation is duplicated.
+// configuration load, and moving that failure left is the whole reason both
+// owners validate. Sharing the rule removes the risk that they disagree, not the
+// risk that one forgets to ask — which is what item 2's test still covers.
 //
 // # A second issuer
 //

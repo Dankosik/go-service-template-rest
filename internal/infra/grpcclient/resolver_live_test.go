@@ -1,5 +1,5 @@
 // Resolver guard, live: over a real TLS connection, do New's three closures
-// hold together — no server-supplied service config, no proxy, and no
+// hold together — no resolver-supplied service config, no proxy, and no
 // resolver-supplied metadata on the wire?
 //
 // It runs in a child process because the proxy route is only reachable through

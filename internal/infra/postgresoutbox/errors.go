@@ -33,6 +33,14 @@ var (
 	// back from the append statement rather than from validation, and the call
 	// stores nothing.
 	ErrOrderingSequence = errors.New("outbox ordering sequence rejected")
+	// ErrOrderingKeyActive means [Store.RetireOrderingKeys] was asked to retire a
+	// key that still owns unpublished events, so its retained high-water mark is
+	// still protecting them. It is an ordinary domain outcome rather than a
+	// fault: a caller may absorb it and retire the key later. It is a distinct
+	// sentinel for exactly that reason — "this aggregate is not finished
+	// draining" must be distinguishable from a database or configuration
+	// failure, which a caller cannot absorb.
+	ErrOrderingKeyActive = errors.New("outbox ordering key still has unpublished events")
 )
 
 // The relay's stop reasons. Each one ends [Relay.Run] and has a case in

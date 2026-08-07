@@ -175,6 +175,13 @@ linters:
           files:
             - "**/internal/config/**/*.go"
           allow:
+            # profile:authn-oidc-jwt:start
+            # The authn trust rules are a leaf for the same reason otelconfig is:
+            # this package must refuse a bad value at load, and the verifier must
+            # enforce the same rule at startup and at runtime. Allowing the leaf
+            # is what keeps one rule from being written twice.
+            - github.com/example/go-service-template-rest/internal/authntrust
+            # profile:authn-oidc-jwt:end
             - github.com/example/go-service-template-rest/internal/observability/otelconfig
           deny:
             - pkg: github.com/example/go-service-template-rest/internal
@@ -206,6 +213,37 @@ linters:
               desc: otelconfig is pure OpenTelemetry policy and must not depend on repository runtime packages.
             - pkg: go.opentelemetry.io/otel/sdk
               desc: SDK construction belongs in internal/infra/telemetry.
+        # profile:authn-oidc-jwt:start
+        authntrust_is_pure_policy:
+          list-mode: lax
+          files:
+            - "**/internal/authntrust/**/*.go"
+          deny:
+            - pkg: github.com/example/go-service-template-rest/internal
+              desc: authntrust is a pure trust-rule leaf shared by internal/config and the verifier; a dependency here would put it back out of reach of one of them.
+            - pkg: github.com/example/go-service-template-rest/cmd
+              desc: authntrust must not depend on composition roots.
+        # The verifier core answers both transports and must stay buildable
+        # without either. Only its two adapter files may name a transport
+        # library, so the split survives an edit that scripts/init-module.sh
+        # cannot see.
+        oidcjwt_core_is_transport_neutral:
+          list-mode: lax
+          files:
+            - "**/internal/infra/oidcjwt/*.go"
+            - "!**/internal/infra/oidcjwt/http.go"
+            # profile:grpc:start
+            - "!**/internal/infra/oidcjwt/grpc.go"
+            # profile:grpc:end
+            - "!**/internal/infra/oidcjwt/*_test.go"
+          deny:
+            - pkg: github.com/getkin/kin-openapi
+              desc: the OpenAPI security-requirement seam belongs in oidcjwt's http.go adapter.
+            - pkg: github.com/go-chi/chi/v5
+              desc: the verifier answers a resolver seam and never routes; chi belongs in internal/infra/http.
+            - pkg: google.golang.org/grpc
+              desc: gRPC interceptors, metadata, and status belong in oidcjwt's grpc.go adapter.
+        # profile:authn-oidc-jwt:end
         postgres_driver_boundary:
           list-mode: lax
           files:
@@ -286,6 +324,12 @@ linters:
         - '^github\.com/example/go-service-template-rest/internal/config\.(Config|AppConfig|HTTPConfig|LogConfig|ObservabilityConfig|OTelConfig|OTelExporterConfig|PostgresConfig)$'
         # profile:grpc:start
         - '^github\.com/example/go-service-template-rest/internal/config\.(GRPCConfig|GRPCServerConfig|GRPCTLSConfig)$'
+        # ErrorDomain is a configured value that must reach the composition root,
+        # or a service publishes classified statuses with no machine-readable
+        # reason — the same enforcement, for the same reason, as PolicyInput
+        # below. The pattern matches the import path, so it names the directory
+        # rather than the grpcx package alias.
+        - '^github\.com/example/go-service-template-rest/internal/infra/grpc\.Options$'
         # profile:grpc:end
         # profile:authn-oidc-jwt:start
         # A configured trust value added to PolicyInput must reach the composition

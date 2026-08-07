@@ -2,8 +2,11 @@ package oidcjwt
 
 import (
 	"errors"
+	"fmt"
 	"net/netip"
 	"strings"
+
+	"github.com/example/go-service-template-rest/internal/authntrust"
 )
 
 // Policy is the immutable trust configuration shared by both transports. The
@@ -35,45 +38,27 @@ type PolicyInput struct {
 
 // NewPolicy validates and copies the complete trust policy.
 //
-// The issuer is held to validProviderURL, the same shape every URL this package
-// will fetch from must have. One owner for that shape inside this package is
-// deliberate: the issuer and the discovered JWKS URI are both provider-supplied
-// endpoints, so a constraint added for one is a constraint the other needs too.
+// The rules are internal/authntrust's, and the configuration loader applies the
+// same ones earlier: a deployment value refused here should already have stopped
+// the process at configuration load, so reaching an error from this function
+// means the input came from somewhere other than a loaded snapshot. That package
+// owns why the rules cannot live in either caller.
 //
-// internal/config's validateAuthnConfig restates these rules so a bad value
-// fails at configuration load instead of at authn startup. validProviderURL owns
-// why that copy cannot be removed and what holds the two sides to one answer.
+// The issuer and the JWKS URI the provider's Discovery document later names are
+// held to one predicate. Both are provider-supplied endpoints this service
+// fetches from, so a constraint added for one is a constraint the other needs.
 func NewPolicy(input PolicyInput) (Policy, error) {
 	issuer := strings.TrimSpace(input.Issuer)
 	audience := strings.TrimSpace(input.Audience)
-	if !validProviderURL(issuer) {
+	if !authntrust.ValidProviderURL(issuer) {
 		return Policy{}, errors.New("authn issuer must be an absolute HTTPS URL without user info, query, or fragment")
 	}
 	if audience == "" {
 		return Policy{}, errors.New("authn audience cannot be empty")
 	}
-
-	parts := strings.Split(input.TrustedProxyCIDRs, ",")
-	trusted := make([]netip.Prefix, 0, len(parts))
-	seen := make(map[netip.Prefix]struct{})
-	for _, part := range parts {
-		value := strings.TrimSpace(part)
-		if value == "" {
-			continue
-		}
-		prefix, parseErr := netip.ParsePrefix(value)
-		if parseErr != nil {
-			return Policy{}, errors.New("authn trusted_proxy_cidrs contains an invalid CIDR")
-		}
-		prefix = prefix.Masked()
-		if _, exists := seen[prefix]; exists {
-			return Policy{}, errors.New("authn trusted_proxy_cidrs contains a duplicate CIDR")
-		}
-		seen[prefix] = struct{}{}
-		trusted = append(trusted, prefix)
-	}
-	if len(trusted) == 0 {
-		return Policy{}, errors.New("authn trusted_proxy_cidrs must contain at least one CIDR")
+	trusted, err := authntrust.ParseProxyCIDRs(input.TrustedProxyCIDRs)
+	if err != nil {
+		return Policy{}, fmt.Errorf("authn %w", err)
 	}
 
 	return Policy{

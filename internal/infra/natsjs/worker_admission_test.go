@@ -15,8 +15,17 @@ func TestExplicitAckPolicy(t *testing.T) {
 	if desired.AckPolicy != jetstream.AckExplicitPolicy {
 		t.Fatalf("AckPolicy = %v, want AckExplicitPolicy", desired.AckPolicy)
 	}
-	if desired.MaxDeliver != -1 || desired.MaxRequestBatch != 1 || desired.MaxWaiting != 2 {
-		t.Fatalf("consumer bounds = MaxDeliver %d, MaxRequestBatch %d, MaxWaiting %d", desired.MaxDeliver, desired.MaxRequestBatch, desired.MaxWaiting)
+	if desired.MaxDeliver != -1 || desired.MaxWaiting != 2 {
+		t.Fatalf("consumer bounds = MaxDeliver %d, MaxWaiting %d", desired.MaxDeliver, desired.MaxWaiting)
+	}
+	// The broker's copy of the worker's own bounds. Stating them apart from the
+	// block above is what catches a request cap that would silently cut every
+	// batch back to one message.
+	if desired.MaxRequestBatch != cfg.MaxConcurrency {
+		t.Fatalf("MaxRequestBatch = %d, want one message per handler slot (%d)", desired.MaxRequestBatch, cfg.MaxConcurrency)
+	}
+	if want := cfg.MaxConcurrency * cfg.MaxDeliveryBytes; desired.MaxRequestMaxBytes != want {
+		t.Fatalf("MaxRequestMaxBytes = %d, want the resident wire-data bound %d", desired.MaxRequestMaxBytes, want)
 	}
 	if want := cfg.HandlerTimeout + 2*operationTimeout + time.Second; desired.AckWait != want {
 		t.Fatalf("AckWait = %v, want handler timeout plus settlement budget %v", desired.AckWait, want)

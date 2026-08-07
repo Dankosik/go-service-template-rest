@@ -335,9 +335,12 @@ _ = healthClient // Provider-generated clients use the same grpc.ClientConnInter
 
 Pass the operation context unchanged to the generated method. The shared
 connection deliberately ignores environment proxies and resolver-provided
-service configurations, so a proxy, resolver-selected balancer, or configured
-retry cannot silently bypass its metadata policy. A dependency that requires
-one of those mechanisms needs a separate design. grpc-go's native transparent
+service configurations, so a proxy, a resolver-selected balancer, or a
+configured retry cannot silently bypass its metadata policy. It does carry its
+own address-selection policy — round robin by default, reaching every resolved
+address — and pings when idle so the connection survives a NAT or balancer idle
+timeout. A dependency that requires a proxy or a resolver-provided service
+config needs a separate design. grpc-go's native transparent
 retry may still occur before commitment; application retry remains an explicit
 per-operation adapter decision.
 <!-- profile:grpc:end -->

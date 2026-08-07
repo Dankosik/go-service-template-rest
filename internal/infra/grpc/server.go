@@ -11,6 +11,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
 	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
+	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/stats"
 )
 
@@ -65,10 +66,21 @@ func NewServer(cfg Config, options Options) (*Server, error) {
 	// from every RPC goroutine safe.
 	registeredMethods := make(methodSet)
 
-	// One list value serves both chains, so a policy cannot reach unary RPCs and
-	// miss streaming ones, and the order cannot drift between them.
-	builtins := builtinPolicies(options.Logger, accessLogs, admission)
-	handlerErrors := handlerErrorBoundary(options.DomainErrors)
+	// One builder produces both lists, so a policy cannot reach unary RPCs and
+	// miss streaming ones, and the order cannot drift between them. Only the
+	// timeout differs, which is why this is two calls rather than one shared
+	// value.
+	//
+	// The admission limiter is built once above and handed to both, because that
+	// is what makes the concurrency budget process-wide rather than per RPC kind.
+	// Nothing structural enforces it now that the list is built twice, so
+	// TestAdmissionBudgetIsProcessWide drives a real server to prove it.
+	unaryBuiltins := builtinPolicies(options.Logger, accessLogs, admission, cfg.UnaryTimeout)
+	streamBuiltins := builtinPolicies(options.Logger, accessLogs, admission, cfg.StreamTimeout)
+	handlerErrors := handlerErrorBoundary(errorRendering{
+		mappers: options.DomainErrors,
+		domain:  options.ErrorDomain,
+	})
 
 	// #nosec G115 -- config.go's validateConfig, called at the top of this
 	// function, bounds both to [1,math.MaxUint32].
@@ -87,8 +99,22 @@ func NewServer(cfg Config, options Options) (*Server, error) {
 				return ok && (cfg.TelemetryHealthChecks || !isHealthMethod(info.FullMethodName))
 			}),
 		)),
-		grpc.ChainUnaryInterceptor(unaryChain(builtins, options.UnaryPolicy, handlerErrors)...),
-		grpc.ChainStreamInterceptor(streamChain(builtins, options.StreamPolicy, handlerErrors)...),
+		grpc.ChainUnaryInterceptor(unaryChain(unaryBuiltins, options.UnaryPolicy, handlerErrors)...),
+		grpc.ChainStreamInterceptor(streamChain(streamBuiltins, options.StreamPolicy, handlerErrors)...),
+		// A zero MaxConnectionAge is how rotation stays off: grpc-go reads it as
+		// infinity. Every other value here is validated positive, so this is the
+		// one field whose zero is a decision rather than a defect.
+		grpc.KeepaliveParams(keepalive.ServerParameters{
+			MaxConnectionIdle:     cfg.MaxConnectionIdle,
+			MaxConnectionAge:      cfg.MaxConnectionAge,
+			MaxConnectionAgeGrace: cfg.MaxConnectionAgeGrace,
+			Time:                  cfg.ServerPingInterval,
+			Timeout:               cfg.ServerPingTimeout,
+		}),
+		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
+			MinTime:             cfg.MinClientPingInterval,
+			PermitWithoutStream: cfg.PermitPingWithoutStream,
+		}),
 	}
 	if options.TransportCredentials != nil {
 		serverOptions = append(serverOptions, grpc.Creds(options.TransportCredentials))
@@ -98,7 +124,10 @@ func NewServer(cfg Config, options Options) (*Server, error) {
 	healthServer := health.NewServer()
 	healthServer.SetServingStatus("", healthgrpc.HealthCheckResponse_NOT_SERVING)
 	healthgrpc.RegisterHealthServer(nativeServer, healthServer)
-	registerServices(nativeServer, options.Services, registeredMethods)
+	if err := registerServices(nativeServer, options.Services, registeredMethods); err != nil {
+		nativeServer.Stop()
+		return nil, err
+	}
 
 	return &Server{
 		server: nativeServer,
@@ -117,17 +146,24 @@ func NewServer(cfg Config, options Options) (*Server, error) {
 // Filling the set here keeps the write adjacent to the registration it reads,
 // which is the ordering NewServer's telemetry filter depends on: the set is
 // written once, before Serve, and only read afterwards.
-func registerServices(server *grpc.Server, services []RegisterService, methods methodSet) {
-	for _, register := range services {
-		if register != nil {
-			register(server)
+//
+// A nil entry is refused rather than skipped. Skipping it produces a server that
+// starts and serves without a method its composition meant to publish — a
+// failure no probe and no test of the remaining services can see, and the same
+// class of unchecked programming error [Server] declines to absorb elsewhere.
+func registerServices(server *grpc.Server, services []RegisterService, methods methodSet) error {
+	for index, register := range services {
+		if register == nil {
+			return fmt.Errorf("build gRPC server: service registration at index %d is nil", index)
 		}
+		register(server)
 	}
 	for serviceName, service := range server.GetServiceInfo() {
 		for _, method := range service.Methods {
 			methods["/"+serviceName+"/"+method.Name] = struct{}{}
 		}
 	}
+	return nil
 }
 
 // methodSet holds the full RPC method names of every registered service.

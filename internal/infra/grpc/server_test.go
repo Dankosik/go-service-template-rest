@@ -386,3 +386,18 @@ func assertHealthStatus(
 		t.Fatalf("Health.Check() status = %s, want %s", got, want)
 	}
 }
+
+// A nil service registration is a composition defect, and skipping it would
+// produce a server that starts and serves without the method it was meant to
+// publish — which no probe and no test of the other services can see.
+func TestNewServerRejectsNilServiceRegistration(t *testing.T) {
+	server, err := NewServer(testServerConfig(), Options{
+		Services: []RegisterService{nil},
+	})
+	if err == nil {
+		t.Fatal("NewServer() accepted a nil service registration")
+	}
+	if server != nil {
+		t.Fatal("NewServer() returned a server alongside its error")
+	}
+}

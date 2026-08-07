@@ -202,6 +202,25 @@ reachable vocabulary:
 | `CodeGatewayTimeout` | `DeadlineExceeded` |
 | `CodeInternalError`, unclassified | `Internal` |
 
+A classified error additionally carries structured details, so a caller reads its
+class and its retry hint as data rather than parsing prose:
+
+- `google.rpc.ErrorInfo` — `Reason` is the `problem.Code` upper-snake-cased
+  (`CodeNotFound` reaches a caller as `NOT_FOUND`), and `Domain` is the service's
+  own identity, taken from `APP__OBSERVABILITY__OTEL__SERVICE_NAME`. Renaming
+  that key for telemetry reasons therefore changes a value remote callers match
+  on. The reason matters because the gRPC code space is coarser than
+  `problem.Code`: `InvalidArgument` answers for both `CodeBadRequest` and
+  `CodeUnprocessableContent`, and `ResourceExhausted` for three more.
+- `google.rpc.RetryInfo` — the mapper's own `RetryAfter`, exactly, when it is
+  positive. HTTP renders the same value as a `Retry-After` header rounded up to
+  whole seconds, which is that header's own granularity; neither transport ever
+  advertises a delay shorter than the mapper's.
+
+Both carry repository-owned values only. Cancellation, expiry, an unclassified
+error, and a sanitized handler status carry no details at all, for the same
+reason they carry no handler text.
+
 A canceled or expired RPC context answers `CANCELED` or `DEADLINE_EXCEEDED`
 before classification runs, because that is the caller's own signal rather than a
 service outcome. `FailedPrecondition`, `AlreadyExists`, `OutOfRange`, and
@@ -369,16 +388,34 @@ response, err := client.GetOrder(
 
 The shared client rejects proxy delegation and resolver-supplied service
 configuration so neither can bypass its final resolver-metadata guard or add a
-hidden retry/balancer policy. It does not opt into `WaitForReady` and sets no
-universal deadline. grpc-go may still perform a transparent retry before an
+retry policy the client did not choose. It does supply a default service config
+of its own, carrying the address-selection policy below; grpc-go refuses the
+resolver's and keeps the client's, so that is a decision this client makes
+rather than one a peer introduces. It does not opt into `WaitForReady` and sets
+no universal deadline.
+
+Address selection is `round_robin` by default, so a target resolving to several
+addresses reaches all of them. gRPC's own default sends every RPC to the first
+address that connects, which behind a headless DNS name is one backend wearing
+N addresses; against a single-address target the two are equivalent, so the
+distributing default costs nothing there. Set `LoadBalancingPickFirst` on the
+connection's `Config` when the fan-out of one subchannel per backend is not
+wanted.
+
+The client pings an idle connection every 30s with a 10s timeout, and sends
+those pings with no active RPC — which is the only way a ping reaches an idle
+connection, and what keeps one alive through a NAT or balancer idle timeout.
+The interval clears both gRPC's own 10s floor and the 10s minimum this
+repository's server half accepts. grpc-go may still perform a transparent retry before an
 RPC is committed to the server; the correlation allowlist is applied to every
 such attempt. Any application retry policy remains a per-method business
 decision: enable it only when replay is safe, bound attempts/backoff inside
 the caller's deadline, and monitor attempts. A dependency that genuinely
 requires a proxy or resolver service config needs a separate design that
-preserves the same final metadata boundary. Long-lived streams need an
-explicit idle/duration policy owned by the feature; the server does not apply
-the HTTP request timeout to them.
+preserves the same final metadata boundary. Long-lived streams need an explicit
+idle/duration policy owned by the feature; the server ships no stream bound, and
+its unary bound is a separate key from the HTTP one. See
+[RPC and connection lifetime](#rpc-and-connection-lifetime).
 
 Client defaults are 16 KiB received metadata and 4 MiB sent/received messages.
 The server also has finite connection, process-RPC, per-connection-stream,
@@ -399,6 +436,9 @@ a caller:
   values all mint a fresh identifier, which is stricter than the HTTP listener's
   first-of-several header read.
 - Panics never reach the caller and never disclose the panic value.
+- Every RPC runs under a deadline no later than its configured bound, so a
+  caller that set none still cannot hold a handler indefinitely. The bound wraps
+  the supplied policy interceptors and the handler alike.
 - Admission is one non-blocking process-wide RPC semaphore; an RPC over the
   limit is shed as `RESOURCE_EXHAUSTED` rather than queued.
 - Service-supplied policy interceptors and generated handlers each answer
@@ -455,9 +495,56 @@ and dependencies still have headroom. Raising either limit without the
 matching concurrent payload-memory measurement is not a performance
 optimization.
 
-Reflection, keepalive tuning, a registry, grpc-gateway, Connect, and gRPC-Web
-are absent by design. Add one only for a concrete contract, security, or
-measured reliability requirement.
+Reflection, a registry, grpc-gateway, Connect, and gRPC-Web are absent by
+design. Add one only for a concrete contract, security, or measured reliability
+requirement.
+
+## RPC and connection lifetime
+
+`APP__GRPC__SERVER__UNARY_TIMEOUT` caps how long one unary RPC may occupy a
+handler, and `STREAM_TIMEOUT` does the same for a stream. Both derive the RPC
+context's deadline, so a caller deadline that is already earlier still wins and
+neither can extend one. `0s` disables the cap for that kind.
+
+| Key | Default | Why |
+| --- | --- | --- |
+| `UNARY_TIMEOUT` | `8s` | The value `HTTP__REQUEST_TIMEOUT` carries, so one service answers on one budget over both transports. A separate key, so a deployment can still move the two apart. |
+| `STREAM_TIMEOUT` | `0s` | A long-lived stream's duration policy belongs to the feature that owns the stream. |
+
+Cancellation is the protection, not the response. A handler that ignores its
+context keeps its goroutine and its admission slot; this is the same accepted
+limitation `internal/infra/http` records for its own request budget.
+
+The liveness bounds are on by default and cannot end an RPC in progress: the
+idle clock only runs while nothing is outstanding, and the ping bound closes
+only when a ping goes unanswered, which means the peer is gone.
+
+| Key | Default | Why |
+| --- | --- | --- |
+| `MAX_CONNECTION_IDLE` | `15m` | Reclaims a connection nobody is using. |
+| `SERVER_PING_INTERVAL` | `1m` | Detects a vanished peer within roughly this plus the timeout, against gRPC's 2h default. |
+| `SERVER_PING_TIMEOUT` | `20s` | gRPC's own default. |
+| `MIN_CLIENT_PING_INTERVAL` | `10s` | The minimum a caller may ping. gRPC's own default rejects anything under five minutes, which would disconnect this repository's client half. |
+| `PERMIT_PING_WITHOUT_STREAM` | `true` | Lets a caller keep an idle connection alive through a NAT or balancer idle timeout. |
+
+Connection rotation is **off by default**, because it is the only bound here
+that ends work in progress: at `MAX_CONNECTION_AGE` the connection is drained
+with GOAWAY and force-closed once `MAX_CONNECTION_AGE_GRACE` expires, cutting
+every RPC and stream still running. gRPC adds ±10% jitter to spread connection
+storms, and reads a zero age as infinity.
+
+Enable it behind an L4 balancer or any hop that pins a caller to one replica for
+a connection's lifetime — without it, no existing caller discovers a new
+replica. Accept in exchange that a stream outliving the age ends with
+`UNAVAILABLE`: gRPC does not transparently resume a stream that has already
+delivered a message, so the feature owning that stream handles it.
+
+Startup refuses a negative value for any of these, an age with a non-positive
+grace or a grace below the unary timeout, and a stream timeout at or above a
+configured age. That last relation only refuses a budget that could never
+decide; it does not promise the budget wins, because the two clocks start at
+different moments — the stream's when the stream starts, rotation's when the
+connection was accepted.
 
 ## Profile-guided optimization
 
