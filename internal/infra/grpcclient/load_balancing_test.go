@@ -74,6 +74,7 @@ func TestLoadBalancingPolicyDecidesHowManyBackendsAreReached(t *testing.T) {
 					t.Errorf("ClientConn.Close() error = %v", err)
 				}
 			})
+			connection.Connect()
 
 			for range testCase.probesToAttempt {
 				if err := connection.Invoke(

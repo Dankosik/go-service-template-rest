@@ -69,6 +69,9 @@ func TestStoreRetireOrderingKeysOutcomes(t *testing.T) {
 	// finished draining" is an ordinary outcome, unlike a database failure.
 	active := &transactionStub{rejected: []pgx.Row{singleTextRow("busy"), singleTextRow("also-busy")}}
 	err := store.RetireOrderingKeys(t.Context(), active, "busy", "also-busy")
+	if err == nil {
+		t.Fatal("RetireOrderingKeys(active) error = nil, want ErrOrderingKeyActive")
+	}
 	if !errors.Is(err, ErrOrderingKeyActive) {
 		t.Fatalf("RetireOrderingKeys(active) error = %v, want ErrOrderingKeyActive", err)
 	}

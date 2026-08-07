@@ -140,5 +140,5 @@ func spanNamed(tb testing.TB, recorder *tracetest.SpanRecorder, name string) sdk
 		}
 	}
 	tb.Fatalf("no span named %q was recorded", name)
-	return nil
+	return tracetest.SpanStub{}.Snapshot()
 }
