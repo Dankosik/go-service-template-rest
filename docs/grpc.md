@@ -387,19 +387,27 @@ concurrency, and memory measurement.
 
 ## Runtime behavior
 
-The interceptor order is identical for unary and streaming RPCs:
+Every RPC passes through the same interceptor chain, identical for unary and
+streaming. The package doc on `internal/infra/grpc` is the single owner of the
+order and of what each position buys a policy author — read it with
+`go doc ./internal/infra/grpc`, and `builtinPolicies` in
+`internal/infra/grpc/chain.go` is the executable copy. What the chain guarantees
+a caller:
 
-1. validate or create `x-request-id` and return it in response metadata. A
-   single valid value is accepted; zero values, an invalid value, or two or
-   more values all mint a fresh identifier, which is stricter than the HTTP
-   listener's first-of-several header read;
-2. emit a sanitized completion log;
-3. recover panics without disclosing panic values;
-4. admit against one non-blocking process-wide RPC semaphore;
-5. run service-supplied policy interceptors inside a raw-error sanitization
-   boundary;
-6. map generated-handler domain errors to a sanitized gRPC status;
-7. invoke the generated handler.
+- `x-request-id` is validated or created and returned in response metadata. A
+  single valid value is accepted; zero values, an invalid value, or two or more
+  values all mint a fresh identifier, which is stricter than the HTTP listener's
+  first-of-several header read.
+- Panics never reach the caller and never disclose the panic value.
+- Admission is one non-blocking process-wide RPC semaphore; an RPC over the
+  limit is shed as `RESOURCE_EXHAUSTED` rather than queued.
+- Service-supplied policy interceptors and generated handlers each answer
+  through a sanitizing error boundary. A policy that means to choose its own
+  status returns a plain `status.Error`; a handler classifies its domain error
+  through `DomainErrors`. Anything else reaches the caller as `INTERNAL`, text
+  included.
+- Completion is logged once, outside error mapping, so the record carries the
+  status the caller actually received.
 
 Health RPCs bypass application admission and are excluded from routine access
 logs by default. The standard `grpc.health.v1.Health` service starts

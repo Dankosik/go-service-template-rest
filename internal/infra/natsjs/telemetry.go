@@ -18,6 +18,29 @@ import (
 
 const instrumentationScope = "service.messaging.nats"
 
+// The span attributes, which are OpenTelemetry's messaging convention rather
+// than names this package chose. They are named beside the two functions below
+// that write them, because a publish span and a consume span must carry the
+// same keys to be comparable, and two call sites spelling them out separately
+// is how one gains a key the other never learns about.
+//
+// The metric and log label vocabulary is vocabulary.go; the dead-letter reasons
+// that travel on the wire are message_wire.go.
+const (
+	attributeSystem        = "messaging.system"
+	attributeOperationType = "messaging.operation.type"
+	attributeDestination   = "messaging.destination.name"
+	attributeMessageID     = "messaging.message.id"
+	attributeOutcome       = "messaging.operation.outcome"
+
+	systemNATS           = "nats"
+	operationTypePublish = "publish"
+	operationTypeProcess = "process"
+
+	spanNamePublish = "messaging publish"
+	spanNameConsume = "messaging consume"
+)
+
 type Role string
 
 const (
@@ -137,9 +160,59 @@ func (s *telemetry) close() {
 	}
 }
 
-func (s *telemetry) publish(ctx context.Context, event Event, outcome, reason string, started time.Time) {
+// outcomeAttribute is the only producer of the outcome attribute. Every
+// counter that carries one goes through it, so no call site can skip the
+// bounding by building its own metric.WithAttributes.
+//
+//nolint:ireturn // metric.WithAttributes returns OTel's own option interface.
+func outcomeAttribute(outcome string) metric.MeasurementOption {
+	return metric.WithAttributes(attribute.String("outcome", boundedOutcome(outcome)))
+}
+
+// publishSpanOptions and consumeSpanOptions own the attributes of the two spans
+// this package opens. They return the options rather than the started span on
+// purpose: tracer.Start stays at the call site, where spancheck can still prove
+// the span is ended, while the attribute set — the part that has to agree
+// between a publish and a consume to be comparable — is written once here.
+//
+// They are spelled out separately rather than sharing a constructor because the
+// values that differ are adjacent strings, and a helper taking them as
+// parameters would let a call site transpose the destination and the message id
+// without the compiler noticing.
+func publishSpanOptions(event Event) []trace.SpanStartOption {
+	return []trace.SpanStartOption{
+		trace.WithSpanKind(trace.SpanKindProducer),
+		trace.WithAttributes(
+			attribute.String(attributeSystem, systemNATS),
+			attribute.String(attributeOperationType, operationTypePublish),
+			attribute.String(attributeDestination, event.Subject),
+			attribute.String(attributeMessageID, event.MessageID),
+		),
+	}
+}
+
+func consumeSpanOptions(msg Message) []trace.SpanStartOption {
+	return []trace.SpanStartOption{
+		trace.WithSpanKind(trace.SpanKindConsumer),
+		trace.WithAttributes(
+			attribute.String(attributeSystem, systemNATS),
+			attribute.String(attributeOperationType, operationTypeProcess),
+			attribute.String(attributeDestination, msg.Subject()),
+			attribute.String(attributeMessageID, msg.MessageID()),
+		),
+	}
+}
+
+// setSpanOutcome records how one operation ended. It bounds the value through
+// the same vocabulary the outcome metric attribute uses, so a span and the
+// counter that recorded the same operation cannot disagree about its name.
+func setSpanOutcome(span trace.Span, outcome string) {
+	span.SetAttributes(attribute.String(attributeOutcome, boundedOutcome(outcome)))
+}
+
+func (s *telemetry) recordPublish(ctx context.Context, event Event, outcome, reason string, started time.Time) {
 	duration := time.Since(started).Seconds()
-	attrs := metric.WithAttributes(attribute.String("outcome", outcome))
+	attrs := outcomeAttribute(outcome)
 	s.publishOperations.Add(ctx, 1, attrs)
 	s.publishDuration.Record(ctx, duration, attrs)
 	s.log.InfoContext(ctx, "messaging_publish",
@@ -148,38 +221,52 @@ func (s *telemetry) publish(ctx context.Context, event Event, outcome, reason st
 	)
 }
 
-func (s *telemetry) connection(ctx context.Context, event string) {
-	s.connectionEvents.Add(ctx, 1, metric.WithAttributes(attribute.String("event", event)))
+func (s *telemetry) recordDeadLetterTransfer(ctx context.Context, outcome string) {
+	s.dlqTransfers.Add(ctx, 1, outcomeAttribute(outcome))
+}
+
+func (s *telemetry) recordDrain(ctx context.Context, outcome string) {
+	s.drainOperations.Add(ctx, 1, outcomeAttribute(outcome))
+}
+
+// countConnectionEvent is the only producer of the event attribute; the two
+// recorders below differ in log level and fields, not in what they count.
+func (s *telemetry) countConnectionEvent(ctx context.Context, event string) {
+	s.connectionEvents.Add(ctx, 1, metric.WithAttributes(attribute.String("event", boundedConnectionEvent(event))))
+}
+
+func (s *telemetry) recordConnection(ctx context.Context, event string) {
+	s.countConnectionEvent(ctx, event)
 	s.log.InfoContext(ctx, "messaging_connection", "operation", "connection", "outcome", event)
 }
 
-func (s *telemetry) asyncError(ctx context.Context, err error) {
-	s.connectionEvents.Add(ctx, 1, metric.WithAttributes(attribute.String("event", "async_error")))
+func (s *telemetry) recordAsyncError(ctx context.Context, err error) {
+	s.countConnectionEvent(ctx, connectionAsyncError)
 	s.log.WarnContext(ctx, "messaging_connection",
-		"operation", "connection", "outcome", "async_error", "reason", asyncErrorReason(err),
+		"operation", "connection", "outcome", connectionAsyncError, "reason", asyncErrorReason(err),
 	)
 }
 
 func asyncErrorReason(err error) string {
 	switch {
 	case errors.Is(err, nats.ErrSlowConsumer):
-		return "slow_consumer"
+		return reasonSlowConsumer
 	case errors.Is(err, nats.ErrAuthorization), errors.Is(err, nats.ErrAuthExpired), errors.Is(err, nats.ErrAuthRevoked):
-		return "authentication"
+		return reasonAuthentication
 	case errors.Is(err, nats.ErrPermissionViolation):
-		return "permission"
+		return reasonPermission
 	case errors.Is(err, nats.ErrMaxPayload):
-		return "message_bound"
+		return reasonMessageBound
 	case errors.Is(err, nats.ErrConnectionClosed), errors.Is(err, nats.ErrDisconnected), errors.Is(err, nats.ErrStaleConnection):
-		return "connection"
+		return reasonConnection
 	default:
-		return "other"
+		return boundedOther
 	}
 }
 
-func (s *telemetry) handler(ctx context.Context, msg Message, outcome, reason string, started time.Time) {
+func (s *telemetry) recordHandler(ctx context.Context, msg Message, outcome, reason string, started time.Time) {
 	duration := time.Since(started).Seconds()
-	attrs := metric.WithAttributes(attribute.String("outcome", outcome))
+	attrs := outcomeAttribute(outcome)
 	s.handlerOperations.Add(ctx, 1, attrs)
 	s.handlerDuration.Record(ctx, duration, attrs)
 	s.log.InfoContext(ctx, "messaging_delivery",
@@ -189,8 +276,8 @@ func (s *telemetry) handler(ctx context.Context, msg Message, outcome, reason st
 	)
 }
 
-func (s *telemetry) terminal(ctx context.Context, subject string, metadata *jetstream.MsgMetadata, reason string, handlerFrames []string) {
-	args := []any{"operation", "consume", "subject", subject, "outcome", "terminal", "reason", reason}
+func (s *telemetry) logTerminalDelivery(ctx context.Context, subject string, metadata *jetstream.MsgMetadata, reason string, handlerFrames []string) {
+	args := []any{"operation", "consume", "subject", subject, "outcome", outcomeTerminal, "reason", reason}
 	if metadata != nil {
 		args = append(args,
 			"stream", metadata.Stream,

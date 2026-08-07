@@ -58,6 +58,9 @@ func parseKeySet(data []byte, fetchedAt time.Time) (*keySet, error) {
 
 	keys := make(map[string]*rsa.PublicKey)
 	for _, encoded := range raw.Keys {
+		// One entry, decoded twice on purpose. jose parses the key material but
+		// keeps neither the raw n and e strings canonicalRSAParameters must see nor
+		// the optional alg, use, and key_ops compatibleRSAKey narrows on.
 		var metadata rawJWKMetadata
 		if err := strictUnmarshal(encoded, &metadata); err != nil {
 			return nil, errors.New("invalid JWKS")

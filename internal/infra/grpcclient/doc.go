@@ -5,7 +5,9 @@
 // connection per dependency built at startup is the intended shape. The caller
 // owns Close, and each call owns its own deadline and retry policy — this
 // package sets neither. [DefaultConfig] supplies conservative per-call transport
-// bounds that a feature raises only with matching workload and memory evidence.
+// bounds that a feature raises only with matching workload and memory evidence,
+// and [Options] carries the one dependency [New] refuses to invent: an explicit
+// transport-credentials choice, plaintext included.
 //
 // # The trust boundary
 //

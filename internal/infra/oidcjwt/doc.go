@@ -20,7 +20,7 @@
 //     A claim whose encoding needs policing first — several legal spellings, an
 //     entry that may not repeat — also needs a type; audienceClaim and
 //     numericDate are the worked examples. Accepting and rejecting cases go in
-//     TestVerify_Claims, and the term is added to validClaims in oidcjwt_test.go
+//     TestVerify_Claims, and the term is added to validClaims in harness_test.go
 //     once rather than per test;
 //   - propagating more than the subject means filling more of
 //     [reqctx.Principal] where parseToken builds it. Scopes is an authorization
@@ -31,15 +31,15 @@
 //     TestDocumentedMetricReasonsMatchTheGuide closes that. A category an
 //     adapter decides on its own, before any credential is read, is the one
 //     that must still call recordRejection;
-//   - a reason to fetch the key set is a refreshTrigger in refresh.go.
+//   - a reason to fetch the key set is a refreshTrigger in lifecycle.go.
 //     rateLimited must classify it, which is the decision of whether an attacker
 //     can drive the fetch, and TestDocumentedTriggersMatchTheGuide holds it to
 //     docs/authentication.md;
 //   - a carrier is a value of [Transport], published verbatim as the
 //     authn.transport attribute and therefore its own metric series, declared in
-//     metrics.go beside recordVerification. The larger obligation is transport
-//     trust, and nothing here will ask for it: trustedHTTPRequest in http.go
-//     answers that per request, for HTTP;
+//     verifier.go beside the method that carries it. The larger obligation is
+//     transport trust, and nothing here will ask for it: trustedHTTPRequest in
+//     http.go answers that per request, for HTTP;
 //   - a configured trust value lands in this package and internal/config
 //     together. The list is below.
 //
@@ -52,26 +52,28 @@
 // # Adding a configured trust value
 //
 // One added only here is never parsed; one added only in internal/config is
-// never enforced:
+// never enforced. Each item below names what fails while it is missing:
 //
-//  1. a field on config.AuthnConfig with its koanf key;
-//  2. its validation in validateAuthnConfig. internal/config cannot import this
+//  1. a field on config.AuthnConfig with its koanf key —
+//     TestPolicyRulesMatchConfigValidation;
+//  2. its validation in validateAuthnConfig —
+//     TestPolicyRulesMatchConfigValidation. internal/config cannot import this
 //     package, so it restates the rules rather than calling them;
 //     validProviderURL in provider.go owns why;
-//  3. a field on [PolicyInput];
-//  4. the value on [Policy], with the rule that admits it in [NewPolicy];
+//  3. a field on [PolicyInput] — exhaustruct;
+//  4. the value on [Policy], with the rule that admits it in [NewPolicy] —
+//     TestPolicyRulesMatchConfigValidation;
 //  5. its population at the composition root, in
-//     cmd/service/internal/bootstrap/startup_authn.go;
-//  6. the key in env/.env.example;
-//  7. the operator description in docs/authentication.md;
-//  8. a refused case in TestPolicyRulesMatchConfigValidation.
+//     cmd/service/internal/bootstrap/startup_authn.go — exhaustruct;
+//  6. the key in env/.env.example — nothing;
+//  7. the operator description in docs/authentication.md — nothing;
+//  8. a refused case in TestPolicyRulesMatchConfigValidation —
+//     requireRejectedCasePerPolicyInputField.
 //
-// Tools cover all but two: exhaustruct fails lint at every call site that does
-// not set the new field, and TestPolicyRulesMatchConfigValidation runs both
-// owners over one corpus, so it stays red until internal/config refuses the
-// value too. Item 2 is the expensive one to skip — without it a mistyped key
-// fails at authn startup instead of at configuration load, which is the whole
-// reason the validation is duplicated. Items 6 and 7 leave a build green.
+// So only items 6 and 7 leave a build green. Being caught matters most for item
+// 2: without it a mistyped key fails at authn startup instead of at
+// configuration load, and moving that failure left is the whole reason the
+// validation is duplicated.
 //
 // # A second issuer
 //

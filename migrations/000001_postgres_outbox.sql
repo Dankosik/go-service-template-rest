@@ -125,6 +125,14 @@ CREATE TABLE outbox_events (
         isfinite(occurred_at)
         AND occurred_at <> TIMESTAMPTZ '0001-01-01 00:00:00+00'
     ),
+    -- Every size below mirrors a Go constant in internal/infra/postgresoutbox,
+    -- which rejects the same value before the statement is sent: 262144 is
+    -- maxPayloadBytes, 32768 maxMetadataBytes, 294912 maxEnvelopeBytes, 256
+    -- maxTextBytes, and 64 maxErrorClassBytes (store_rows.go). Change event.go
+    -- first, then here: TestEnvelopeLimitsMatchMigrationChecks reads this file
+    -- and fails on a limit only one side learned about, because raising one
+    -- alone turns a rejected envelope into a check violation at append time.
+    --
     -- IS JSON holds the stored bytes to the same lenient grammar the json type
     -- accepts, rather than the jsonb one: the outbox stores and retries the
     -- exact bytes it was given, and jsonb would reject payloads that are valid

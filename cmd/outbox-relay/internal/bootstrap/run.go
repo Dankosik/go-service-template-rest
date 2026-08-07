@@ -64,21 +64,10 @@ func run(signalCtx context.Context, args []string, buildPublisher PublisherBuild
 		return err
 	}
 	log := newLogger(os.Stdout, cfg)
-	publisher, publisherCleanup, err := buildPublisher(startupCtx, cfg, log)
-	// Registered here so a startup failure before the pool exists still closes
-	// the publisher. It stays registered for the rest of the function, so it is
-	// the backstop rather than the normal path — see the second registration
-	// after the pool, which is what actually runs.
-	var teardown relayTeardown
-	teardown.publisher = publisherCleanup
-	defer func() { runErr = errors.Join(runErr, teardown.release(signalCtx)) }()
-	if err != nil {
-		return fmt.Errorf("build outbox publisher: %w", err)
-	}
-	if err := postgresoutbox.ValidatePublisher(publisher); err != nil {
-		return fmt.Errorf("admit outbox publisher: %w", err)
-	}
 
+	// Telemetry is installed before any dependency it has to outlive. Defers run
+	// last-registered-first, so everything registered below this point releases
+	// while telemetry can still export what that cleanup records.
 	metrics := telemetry.New()
 	telemetryCleanup := setupTelemetry(startupCtx, cfg, metrics, log)
 	defer func() {
@@ -93,18 +82,25 @@ func run(signalCtx context.Context, args []string, buildPublisher PublisherBuild
 	}
 	defer outboxTelemetry.Close()
 
+	publisher, publisherCleanup, err := buildPublisher(startupCtx, cfg, log)
+	// One registration, covering every exit from here on. teardown's fields fill
+	// in as each dependency appears, so a startup failure releases exactly what
+	// had been built by then.
+	var teardown relayTeardown
+	teardown.publisher = publisherCleanup
+	defer func() { runErr = errors.Join(runErr, teardown.release(signalCtx)) }()
+	if err != nil {
+		return fmt.Errorf("build outbox publisher: %w", err)
+	}
+	if err := postgresoutbox.ValidatePublisher(publisher); err != nil {
+		return fmt.Errorf("admit outbox publisher: %w", err)
+	}
+
 	pool, err := postgres.New(startupCtx, postgresOptions(cfg.Postgres))
 	if err != nil {
 		return fmt.Errorf("initialize outbox postgres: %w", err)
 	}
-	// The same teardown again, and this registration is the load-bearing one.
-	// Defers run last-registered-first, so this one runs before the telemetry
-	// defers above it and the publisher and pool are released while telemetry
-	// can still export what their cleanup records. The earlier registration
-	// then finds released set and does nothing. Ordering is the only reason
-	// this exists; releasing twice is already prevented by the latch.
 	teardown.pool = pool.Close
-	defer func() { runErr = errors.Join(runErr, teardown.release(signalCtx)) }()
 	store, err := postgresoutbox.NewStore(pool, outboxTelemetry)
 	if err != nil {
 		return fmt.Errorf("initialize outbox store: %w", err)
@@ -118,7 +114,7 @@ func run(signalCtx context.Context, args []string, buildPublisher PublisherBuild
 	return result.Err
 }
 
-// relayTeardown releases the publisher and then the pool, once, and only while
+// relayTeardown releases the publisher and then the pool, and only while
 // releasing them is safe. Its fields are filled in as each dependency appears,
 // so a startup failure releases exactly what had been built by then.
 //
@@ -128,20 +124,22 @@ func run(signalCtx context.Context, args []string, buildPublisher PublisherBuild
 //
 // unsafe is the relay's own report that a publisher goroutine outlived
 // cancellation. That goroutine can still reach both the adapter and the pool, so
-// nothing is released and process exit owns them instead. Every method runs on
-// the goroutine that deferred it, so released needs no synchronization.
+// nothing is released and process exit owns them instead.
+//
+// release carries no idempotence latch because run defers it exactly once, on
+// the goroutine that registered it. A second call site would need one: the
+// cleanup half belongs to the adapter, and PublisherBuilder does not promise it
+// tolerates being called twice.
 type relayTeardown struct {
 	publisher func(context.Context)
 	pool      func()
 	unsafe    bool
-	released  bool
 }
 
 func (t *relayTeardown) release(signalCtx context.Context) error {
-	if t.unsafe || t.released {
+	if t.unsafe {
 		return nil
 	}
-	t.released = true
 	err := closePublisher(signalCtx, t.publisher)
 	if t.pool != nil {
 		t.pool()
@@ -181,7 +179,7 @@ func runRelayLifecycle(
 	metrics *telemetry.Metrics,
 	relay relayRunner,
 ) postgresoutbox.RelayResult {
-	served, err := startDiagnostics(startupCtx, cfg.Observability.Metrics.Addr, relay.Ready, metrics)
+	diag, err := startDiagnostics(startupCtx, cfg.Observability.Metrics.Addr, relay.Ready, metrics)
 	if err != nil {
 		return postgresoutbox.RelayResult{Err: err}
 	}
@@ -203,8 +201,8 @@ func runRelayLifecycle(
 		if result.Err == nil {
 			result.Err = errors.New("outbox relay stopped unexpectedly")
 		}
-	case <-served.watch():
-		// served.stop below carries whatever Serve reported.
+	case <-diag.watch():
+		// diag.stop below carries whatever Serve reported.
 		triggerErr = errors.New("outbox diagnostics stopped unexpectedly")
 	}
 
@@ -214,7 +212,7 @@ func runRelayLifecycle(
 	if !relayStopped {
 		result = drainRelay(processCtx, cfg.Outbox.DrainTimeout, runtimeCancel, relayResult)
 	}
-	result.Err = errors.Join(triggerErr, result.Err, served.stop(processCtx))
+	result.Err = errors.Join(triggerErr, result.Err, diag.stop(processCtx))
 	return result
 }
 

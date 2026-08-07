@@ -54,11 +54,13 @@ second denies every caller — `internal/infra/oidcjwt` fills only
 
 ## Validation Shape
 
-`internal/infra/oidcjwt/verifier_test.go` is the deny-path matrix — tampered
-header and payload, duplicate members, wrong issuer and audience, expiry and
-skew, unknown `kid`, stale key set. Extend that table rather than re-proving a
-verifier control at the handler; add a `middleware_auth_test.go` case only for
-what the transport seam itself decides.
+The deny-path matrix spans two files: `internal/infra/oidcjwt/token_test.go`
+holds what one token can be wrong about — tampered header and payload,
+duplicate members, wrong issuer and audience, expiry and skew — and
+`verifier_test.go` holds what needs a live key set, unknown `kid` and a stale
+set. Extend those tables rather than re-proving a verifier control at the
+handler; add a `middleware_auth_test.go` case only for what the transport seam
+itself decides.
 
 Credential lifecycle, permission-model shape, tenant partitioning, and the
 revocation window belong to

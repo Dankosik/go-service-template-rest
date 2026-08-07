@@ -1,11 +1,9 @@
 package oidcjwt
 
-// The two decoders every parse in this package goes through: unpadded base64url
-// that must be the only encoding of its bytes, and JSON that refuses a repeated
-// member. They live together because they answer the same question — whether the
-// input has exactly one legal reading — and neither is safe to replace with its
-// lenient standard-library equivalent, which takes the last value for a repeated
-// key instead of rejecting it.
+// Both decoders here answer one question — whether the input has exactly one
+// legal reading — and neither is safe to replace with its lenient
+// standard-library equivalent, which takes the last value for a repeated key
+// instead of rejecting it.
 //
 // Unknown members are accepted, and have to be: a provider may put any claim it
 // likes in an access token. So a member this package must refuse is one it

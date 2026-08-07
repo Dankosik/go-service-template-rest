@@ -3,41 +3,18 @@ package natsjs
 import (
 	"context"
 	"crypto/rand"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
-	"fmt"
 	"slices"
-	"strconv"
-	"strings"
 	"time"
-
-	"github.com/example/go-service-template-rest/internal/reqctx"
-	"github.com/nats-io/nats.go"
-	"github.com/nats-io/nats.go/jetstream"
-	"go.opentelemetry.io/otel/propagation"
-	"go.opentelemetry.io/otel/trace"
 )
 
-const (
-	headerMessageID             = "Message-Id"
-	headerPublicationID         = "Publication-Id"
-	headerEventType             = "Event-Type"
-	headerEventSchema           = "Event-Schema"
-	headerOrderingKey           = "Ordering-Key"
-	headerCreatedAt             = "Created-At"
-	headerCorrelationID         = "Correlation-Id"
-	headerOriginalSubject       = "Original-Subject"
-	headerOriginalStream        = "Original-Stream"
-	headerOriginalConsumer      = "Original-Consumer"
-	headerOriginalStreamSeq     = "Original-Stream-Sequence"
-	headerOriginalConsumerSeq   = "Original-Consumer-Sequence"
-	headerOriginalNumDelivered  = "Original-Num-Delivered"
-	headerOriginalStoredAt      = "Original-Stored-At"
-	headerOriginalPublicationID = "Original-Publication-Id"
-	headerDeadLetterReason      = "Dead-Letter-Reason"
-)
+// This file is the surface a feature author writes against: the [Event] handed
+// to [Producer.Publish], the [Message] a [Handler] receives, and [Permanent] for
+// rejecting one. How any of it is encoded onto NATS is message_wire.go's
+// business and nothing here depends on it.
 
+// Event is one occurrence to publish. Every identity field is required and
+// bounded by maxHeaderValueBytes, because each travels as a message header.
 type Event struct {
 	Subject       string
 	MessageID     string
@@ -49,12 +26,17 @@ type Event struct {
 	Payload       []byte
 }
 
+// PublishResult is where the broker stored an accepted event. Duplicate means
+// the broker recognized PublicationID and stored nothing new, which is the
+// success case for a retried publish rather than an error.
 type PublishResult struct {
 	Stream    string
 	Sequence  uint64
 	Duplicate bool
 }
 
+// DeliveryMetadata is the broker's own account of one delivery, as opposed to
+// anything the publisher put in the envelope.
 type DeliveryMetadata struct {
 	Stream, Consumer                 string
 	StreamSequence, ConsumerSequence uint64
@@ -62,6 +44,9 @@ type DeliveryMetadata struct {
 	StoredAt                         time.Time
 }
 
+// Message is one delivered event. Its fields are unexported and read through
+// the accessors below so a handler cannot mutate what a redelivery would
+// re-decode.
 type Message struct {
 	subject       string
 	messageID     string
@@ -90,6 +75,12 @@ func (m Message) CorrelationID() string      { return m.correlationID }
 func (m Message) CreatedAt() time.Time       { return m.createdAt }
 func (m Message) Metadata() DeliveryMetadata { return m.metadata }
 
+// Handler is the feature-owned behavior one delivery invokes. Returning nil
+// acknowledges the message; returning an error retries it after the configured
+// delay, until the attempt budget — the first delivery plus one per configured
+// retry delay — sends it to the dead-letter stream. Wrap with [Permanent] to
+// skip that budget. A handler runs under its own timeout and must tolerate
+// duplicates, because delivery is at-least-once.
 type Handler func(context.Context, Message) error
 
 type permanentError struct{ err error }
@@ -97,6 +88,9 @@ type permanentError struct{ err error }
 func (e permanentError) Error() string { return e.err.Error() }
 func (e permanentError) Unwrap() error { return e.err }
 
+// Permanent marks a handler failure that retrying the same bytes cannot fix, so
+// the message goes to the dead-letter stream on this attempt rather than after
+// its budget runs out.
 func Permanent(err error) error {
 	if err == nil {
 		return nil
@@ -104,230 +98,9 @@ func Permanent(err error) error {
 	return permanentError{err: err}
 }
 
-func NewID() string { return rand.Text() }
-
-func validateEvent(event Event, maxPayloadBytes int) error {
-	if !validSubject(event.Subject, false) {
-		return fmt.Errorf("%w: invalid event subject", ErrRejected)
-	}
-	if err := validateRequiredValue("message ID", event.MessageID); err != nil {
-		return err
-	}
-	if err := validateRequiredValue("publication ID", event.PublicationID); err != nil {
-		return err
-	}
-	if err := validateRequiredValue("event type", event.Type); err != nil {
-		return err
-	}
-	if err := validateRequiredValue("event schema", event.Schema); err != nil {
-		return err
-	}
-	if err := validateOptionalValue("ordering key", event.OrderingKey); err != nil {
-		return err
-	}
-	if event.CreatedAt.IsZero() || event.CreatedAt.Location() != time.UTC {
-		return fmt.Errorf("%w: creation time must be non-zero UTC", ErrRejected)
-	}
-	if len(event.Payload) > maxPayloadBytes {
-		return fmt.Errorf("%w: payload exceeds configured maximum", ErrRejected)
-	}
-	return nil
-}
-
-func validateRequiredValue(name, value string) error {
-	if value == "" {
-		return fmt.Errorf("%w: %s is required", ErrRejected, name)
-	}
-	return validateOptionalValue(name, value)
-}
-
-func validateOptionalValue(name, value string) error {
-	if len(value) > maxHeaderValueBytes {
-		return fmt.Errorf("%w: %s exceeds %d bytes", ErrRejected, name, maxHeaderValueBytes)
-	}
-	for _, character := range value {
-		if character < 0x20 || character == 0x7f {
-			return fmt.Errorf("%w: %s contains a control character", ErrRejected, name)
-		}
-	}
-	return nil
-}
-
-func buildNATSMessage(ctx context.Context, event Event, maxPayloadBytes int) (*nats.Msg, error) {
-	if err := validateEvent(event, maxPayloadBytes); err != nil {
-		return nil, err
-	}
-	header := make(nats.Header)
-	header.Set(headerMessageID, event.MessageID)
-	header.Set(headerPublicationID, event.PublicationID)
-	header.Set(headerEventType, event.Type)
-	header.Set(headerEventSchema, event.Schema)
-	header.Set(headerCreatedAt, event.CreatedAt.Format(time.RFC3339Nano))
-	if event.OrderingKey != "" {
-		header.Set(headerOrderingKey, event.OrderingKey)
-	}
-	if correlationID := reqctx.RequestID(ctx); reqctx.ValidRequestID(correlationID) {
-		header.Set(headerCorrelationID, correlationID)
-	}
-	propagation.TraceContext{}.Inject(ctx, headerCarrier(header))
-	msg := &nats.Msg{Subject: event.Subject, Header: header, Data: slices.Clone(event.Payload)}
-	if err := validateEncodedMessage(msg, maxPayloadBytes); err != nil {
-		return nil, err
-	}
-	return msg, nil
-}
-
-func validateEncodedMessage(msg *nats.Msg, maxPayloadBytes int) error {
-	if len(msg.Data) > maxPayloadBytes {
-		return fmt.Errorf("%w: payload exceeds configured maximum", ErrRejected)
-	}
-	headerBytes := encodedHeaderBytes(msg.Header)
-	if headerBytes > HeaderLimitBytes {
-		return fmt.Errorf("%w: encoded headers exceed %d bytes", ErrRejected, HeaderLimitBytes)
-	}
-	if msg.Size() > maxPayloadBytes+HeaderLimitBytes {
-		return fmt.Errorf("%w: encoded message exceeds configured maximum", ErrRejected)
-	}
-	return nil
-}
-
-func encodedHeaderBytes(header nats.Header) int {
-	if len(header) == 0 {
-		return 0
-	}
-	size := len("NATS/1.0\r\n\r\n")
-	for key, values := range header {
-		for _, value := range values {
-			size += len(key) + 2 + len(value) + 2
-		}
-	}
-	return size
-}
-
-// remoteContext is the caller's context exactly as it arrived in the headers:
-// the W3C trace parent and the correlation id, extracted but not yet attached
-// to any local context. Keeping it as data means a rejected message needs no
-// stand-in context to return.
-type remoteContext struct {
-	span          trace.SpanContext
-	correlationID string
-}
-
-func decodeMessage(msg jetstream.Msg, metadata *jetstream.MsgMetadata) (Message, remoteContext, error) {
-	header := msg.Headers()
-	createdAt, err := time.Parse(time.RFC3339Nano, header.Get(headerCreatedAt))
-	if err != nil || createdAt.IsZero() {
-		return Message{}, remoteContext{}, fmt.Errorf("%w: invalid creation time", ErrRejected)
-	}
-	values := []struct {
-		name  string
-		value string
-	}{
-		{headerMessageID, header.Get(headerMessageID)},
-		{headerPublicationID, header.Get(headerPublicationID)},
-		{headerEventType, header.Get(headerEventType)},
-		{headerEventSchema, header.Get(headerEventSchema)},
-	}
-	for _, field := range values {
-		if err := validateRequiredValue(field.name, field.value); err != nil {
-			return Message{}, remoteContext{}, err
-		}
-	}
-	if err := validateOptionalValue(headerOrderingKey, header.Get(headerOrderingKey)); err != nil {
-		return Message{}, remoteContext{}, err
-	}
-	correlationID := header.Get(headerCorrelationID)
-	if correlationID != "" && !reqctx.ValidRequestID(correlationID) {
-		return Message{}, remoteContext{}, fmt.Errorf("%w: invalid correlation ID", ErrRejected)
-	}
-	extracted := propagation.TraceContext{}.Extract(context.Background(), headerCarrier(header))
-	remote := remoteContext{span: trace.SpanContextFromContext(extracted), correlationID: correlationID}
-	return Message{
-		subject:       msg.Subject(),
-		messageID:     header.Get(headerMessageID),
-		publicationID: header.Get(headerPublicationID),
-		eventType:     header.Get(headerEventType),
-		schema:        header.Get(headerEventSchema),
-		orderingKey:   header.Get(headerOrderingKey),
-		correlationID: correlationID,
-		createdAt:     createdAt.UTC(),
-		payload:       slices.Clone(msg.Data()),
-		metadata: DeliveryMetadata{
-			Stream:           metadata.Stream,
-			Consumer:         metadata.Consumer,
-			StreamSequence:   metadata.Sequence.Stream,
-			ConsumerSequence: metadata.Sequence.Consumer,
-			NumDelivered:     metadata.NumDelivered,
-			NumPending:       metadata.NumPending,
-			StoredAt:         metadata.Timestamp.UTC(),
-		},
-	}, remote, nil
-}
-
-// contextWithRemoteParent attaches the message's origin to the handler's local
-// context: the remote span becomes the parent of the consume span, and the
-// correlation id joins every record the handler emits.
-func contextWithRemoteParent(base context.Context, remote remoteContext) context.Context {
-	if remote.span.IsValid() {
-		base = trace.ContextWithRemoteSpanContext(base, remote.span)
-	}
-	if remote.correlationID != "" {
-		base = reqctx.ContextWithRequestID(base, remote.correlationID)
-	}
-	return base
-}
-
-func deadLetterMessage(source jetstream.Msg, metadata *jetstream.MsgMetadata, decoded Message, reason string) (*nats.Msg, string) {
-	header := make(nats.Header)
-	for _, name := range []string{
-		headerMessageID, headerPublicationID, headerEventType, headerEventSchema,
-		headerOrderingKey, headerCreatedAt, headerCorrelationID,
-		"traceparent", "tracestate",
-	} {
-		if value := source.Headers().Get(name); value != "" {
-			header.Set(name, value)
-		}
-	}
-	header.Set(headerOriginalSubject, source.Subject())
-	header.Set(headerOriginalStream, metadata.Stream)
-	header.Set(headerOriginalConsumer, metadata.Consumer)
-	header.Set(headerOriginalStreamSeq, strconv.FormatUint(metadata.Sequence.Stream, 10))
-	header.Set(headerOriginalConsumerSeq, strconv.FormatUint(metadata.Sequence.Consumer, 10))
-	header.Set(headerOriginalNumDelivered, strconv.FormatUint(metadata.NumDelivered, 10))
-	header.Set(headerOriginalStoredAt, metadata.Timestamp.UTC().Format(time.RFC3339Nano))
-	header.Set(headerOriginalPublicationID, source.Headers().Get(headerPublicationID))
-	header.Set(headerDeadLetterReason, reason)
-	identity := strings.Join([]string{
-		metadata.Stream,
-		strconv.FormatUint(metadata.Sequence.Stream, 10),
-		metadata.Timestamp.UTC().Format(time.RFC3339Nano),
-		source.Headers().Get(headerPublicationID),
-	}, "\x00")
-	digest := sha256.Sum256([]byte(identity))
-	transferID := "dlq-" + hex.EncodeToString(digest[:])
-	header.Set(headerPublicationID, transferID)
-	if header.Get(headerMessageID) == "" {
-		header.Set(headerMessageID, transferID)
-	}
-	if decoded.messageID != "" {
-		header.Set(headerMessageID, decoded.messageID)
-	}
-	return &nats.Msg{Header: header, Data: slices.Clone(source.Data())}, transferID
-}
-
 func isPermanent(err error) bool {
 	var target permanentError
 	return errors.As(err, &target)
 }
 
-type headerCarrier nats.Header
-
-func (h headerCarrier) Get(key string) string { return nats.Header(h).Get(key) }
-func (h headerCarrier) Set(key, value string) { nats.Header(h).Set(key, value) }
-func (h headerCarrier) Keys() []string {
-	keys := make([]string, 0, len(h))
-	for key := range h {
-		keys = append(keys, key)
-	}
-	return keys
-}
+func NewID() string { return rand.Text() }

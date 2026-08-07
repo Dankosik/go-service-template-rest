@@ -290,9 +290,9 @@ func runOutboxPublishCycle(
 		for index, claimed := range batch.Events {
 			ids[index] = claimed.Event.ID
 		}
-		marked, err := store.MarkPublishedBatch(ctx, batch.Token, ids)
+		marked, err := store.MarkUnorderedPublishedBatch(ctx, batch.Token, ids)
 		if err != nil || len(marked) != len(ids) {
-			b.Fatalf("MarkPublishedBatch() = %d of %d, %v", len(marked), len(ids), err)
+			b.Fatalf("MarkUnorderedPublishedBatch() = %d of %d, %v", len(marked), len(ids), err)
 		}
 		events += int64(len(batch.Events))
 	}
@@ -501,8 +501,8 @@ func BenchmarkOutboxHeapGrowth(b *testing.B) {
 		for index, claimed := range batch.Events {
 			ids[index] = claimed.Event.ID
 		}
-		if _, err := store.MarkPublishedBatch(ctx, batch.Token, ids); err != nil {
-			b.Fatalf("MarkPublishedBatch(): %v", err)
+		if _, err := store.MarkUnorderedPublishedBatch(ctx, batch.Token, ids); err != nil {
+			b.Fatalf("MarkUnorderedPublishedBatch(): %v", err)
 		}
 		events += int64(len(batch.Events))
 	}

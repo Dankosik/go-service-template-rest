@@ -56,6 +56,7 @@ migrations/                                schema migration source
 internal/infra/postgres/queries/            sqlc query source
 internal/infra/postgres/sqlcgen/            generated sqlc output
 internal/infra/<outbound-system>/            outbound adapter
+internal/infra/grpc/                         native gRPC server transport
 internal/infra/grpcclient/                   bounded shared gRPC client connection
 cmd/<worker>/                               additional process
 api/proto/                                  protobuf source
@@ -78,6 +79,7 @@ packages. There is no reserved empty `api/proto/`, `migrations/`, `queries/`, or
 | `internal/openapi/` | generated Go bindings and generation config | hand-written handlers or business logic |
 | `internal/infra/http/` (`package httpx`) | HTTP mapping, router, middleware, Problem responses | SQL, database repositories, business decisions |
 | `internal/infra/httpclient/` (`OUTBOUND_HTTP=bounded`) | outbound fixed-authority transport safety, correlation enforcement, retry mechanism, and lifecycle | provider auth, concrete trust selection, retry eligibility, error mapping, or business policy |
+| `internal/infra/grpc/` (`package grpcx`, `GRPC=enabled`) | native gRPC server composition, standard health, the interceptor policy chain, transport bounds, and status mapping | feature packages, generated handlers, domain policy, authentication decisions, or this repository's configuration shape |
 | `internal/infra/grpcclient/` (`GRPC=enabled`) | bounded shared connections, correlation-policy enforcement, resolver metadata sanitization, and connection lifecycle seam | provider auth, concrete trust selection, operation deadlines or retries, generated-client ownership, or readiness policy |
 | `internal/infra/oidcjwt/` (`AUTHN=oidc-jwt`) | inbound caller identity: OIDC trust bootstrap, JWKS lifecycle, token admission, and the HTTP and gRPC authentication adapters | authorization, roles, tenant policy, sessions, user provisioning, or any decision past who the caller is |
 | `internal/infra/postgres/` | pool, concrete repositories, query mapping | HTTP behavior, migration execution, and business policy |
@@ -86,13 +88,16 @@ packages. There is no reserved empty `api/proto/`, `migrations/`, `queries/`, or
 | `internal/observability/otelconfig/` | pure sampler/exporter policy values | SDK construction and repository runtime imports |
 | `api/openapi/` | client-visible REST source of truth | generated Go or runtime handlers |
 | `examples/reference-service/` | isolated runnable feature-slice example and its own generated contract | production service routes or shared runtime ownership |
+| `examples/grpc-reference-service/` (`GRPC=enabled`) | isolated runnable example of the four gRPC method cardinalities, its own generated contract, and the benchmark server | production service registration, shared runtime ownership, or transport policy |
 | `migrations/` | ordered schema changes | query logic and sample placeholder schema |
 | `test/` | container/external-process integration proof | ordinary package unit tests |
 | `.agents/skills/<skill>/` | canonical agent skill | harness-specific copies |
 | `.claude/`, `.codex/`, and `.qwen/` | harness adapters to canonical skills | independent skill authority |
 
-`package httpx` intentionally differs from directory `http`: callers can import
-it as `httpx` without colliding with the standard library `net/http`.
+`package httpx` intentionally differs from directory `http`, and `package grpcx`
+from directory `grpc`, for the same reason: callers import each without colliding
+with the library every file in it is written against — `net/http` and
+`google.golang.org/grpc`.
 
 ## 3. Deterministic placement algorithm
 
@@ -147,7 +152,9 @@ Use the first matching rule.
     - container/external process: `test/<feature>_integration_test.go` with
       `//go:build integration` and `package integration_test`;
     - fake used by one test file: keep it in that file;
-    - fake shared within one package: keep it unexported in `<package>_test.go`;
+    - fake or harness shared within one package: keep it unexported in
+      `harness_test.go`, which does not collide with the `<owner>_test.go` of a
+      same-named production file the way `<package>_test.go` would;
     - non-trivial test support used by two or more current packages:
       `<owner-package>/<owner-name>test/`, as in
       `internal/infra/telemetry/telemetrytest/`; production code must not import it;
@@ -178,7 +185,7 @@ chronology or editing history.
 | Postgres repository | `<feature>_repository.go` |
 | normal unit test | `<owner>_test.go` |
 | executable boundary contract | `<owner>_contract_test.go` |
-| package-wide test helpers | `<package>_test.go` |
+| package-wide test helpers or fakes | `harness_test.go` |
 | cross-package test support | `<owner-name>test/` under its owning package |
 | package-wide goroutine leak gate | `goleak_test.go` |
 | integration test | `<feature>_integration_test.go` |

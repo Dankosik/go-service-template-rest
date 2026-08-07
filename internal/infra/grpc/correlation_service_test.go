@@ -29,6 +29,11 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
+// The streaming method this file drives. It stays here rather than in
+// harness_test.go because no other file registers it, and at the head rather
+// than the tail for the reason harness_test.go gives for its own constants.
+const correlationStreamFullMethod = "/grpcx.test.CorrelationService/Wait"
+
 func TestServiceToServiceGRPCCorrelationAndCancellation(t *testing.T) {
 	const requestID = "request_123"
 
@@ -329,6 +334,8 @@ type correlationSpanRecorder struct {
 	ended chan struct{}
 }
 
+var _ sdktrace.SpanProcessor = (*correlationSpanRecorder)(nil)
+
 func newCorrelationSpanRecorder() *correlationSpanRecorder {
 	return &correlationSpanRecorder{
 		SpanRecorder: tracetest.NewSpanRecorder(),
@@ -356,7 +363,3 @@ func (r *correlationSpanRecorder) waitForEnded(t *testing.T, count int) {
 		}
 	}
 }
-
-const correlationStreamFullMethod = "/grpcx.test.CorrelationService/Wait"
-
-var _ sdktrace.SpanProcessor = (*correlationSpanRecorder)(nil)

@@ -1,8 +1,6 @@
-// Package natsjs provides the concrete NATS JetStream durable-messaging pack.
 package natsjs
 
 import (
-	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -20,14 +18,6 @@ const (
 	// maxRetryDelays keeps the configured delay sequence, and so a message's
 	// attempt budget, small enough to stay operator-legible.
 	maxRetryDelays = 9
-)
-
-var (
-	ErrRejected  = errors.New("messaging operation rejected")
-	ErrAmbiguous = errors.New("messaging operation outcome ambiguous")
-	ErrCapacity  = errors.New("messaging producer capacity exhausted")
-	ErrDraining  = errors.New("messaging runtime draining")
-	ErrTerminal  = errors.New("messaging runtime terminal failure")
 )
 
 type Config struct {
@@ -52,7 +42,16 @@ type WorkerConfig struct {
 	DeadLetterRetryDelay time.Duration
 }
 
-func validateConfig(cfg Config) error {
+// ValidateConfig rejects a client configuration this package cannot connect
+// under. [Connect] applies it before touching the network, so a settings fault
+// never reaches the broker.
+//
+// It is exported for the same reason [ValidateWorkerConfig] is: internal/config
+// restates these rules and cannot import this package, so the composition root
+// is the only place that can hold both and prove they still describe the same
+// configuration. See the comment above validateMessagingConfig in
+// internal/config/messaging.go for that arrangement and the test that pins it.
+func ValidateConfig(cfg Config) error {
 	if len(cfg.URLs) == 0 {
 		return fmt.Errorf("%w: messaging URLs are required", ErrRejected)
 	}
@@ -144,6 +143,11 @@ func ValidateWorkerConfig(cfg WorkerConfig, maxPayloadBytes int) error {
 	return nil
 }
 
+// validConsumerName bounds a stream or durable-consumer name to what NATS
+// accepts as one token: no subject separators, wildcards, path characters, or
+// whitespace. internal/config restates this rule as validMessagingStreamName —
+// see the comment above validateMessagingConfig there for why it must, and for
+// the test that keeps the two in step.
 func validConsumerName(value string) bool {
 	if value == "" {
 		return false
@@ -179,6 +183,12 @@ func validSubject(value string, wildcards bool) bool {
 	return true
 }
 
+// subjectMatches reports whether subject falls inside filter under NATS subject
+// wildcards, which is why it is not a string comparison: "*" matches exactly one
+// token and ">" matches every remaining one, so "orders.*" and "orders.>" both
+// cover "orders.created". [ValidateWorkerConfig] uses it to reject a
+// dead-letter subject the worker's own filter would consume, which would make
+// every dead-lettered message a delivery to itself.
 func subjectMatches(filter, subject string) bool {
 	filterParts := strings.Split(filter, ".")
 	subjectParts := strings.Split(subject, ".")

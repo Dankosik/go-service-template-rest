@@ -36,13 +36,13 @@ import (
 )
 
 func TestOTelStatsHandlersTraceAndMeasureUnaryAndStreamingRPCs(t *testing.T) {
-	spanRecorder, tracerProvider, metricReader, meterProvider := newRecordingTelemetry(t)
+	recording := newRecordingTelemetry(t)
 
 	cfg := testServerConfig()
 	cfg.TelemetryHealthChecks = true
 	server, err := NewServer(cfg, Options{
-		MeterProvider:  meterProvider,
-		TracerProvider: tracerProvider,
+		MeterProvider:  recording.meterProvider,
+		TracerProvider: recording.tracerProvider,
 		Propagators:    propagation.TraceContext{},
 	})
 	if err != nil {
@@ -51,13 +51,13 @@ func TestOTelStatsHandlersTraceAndMeasureUnaryAndStreamingRPCs(t *testing.T) {
 	server.MarkServing()
 
 	connection, serveDone := serveOverTCP(t, server, grpcclient.Options{
-		MeterProvider:  meterProvider,
-		TracerProvider: tracerProvider,
+		MeterProvider:  recording.meterProvider,
+		TracerProvider: recording.tracerProvider,
 		Propagation:    grpcclient.PropagationTraceContext,
 	})
 	closeAfterTest(t, server, connection, serveDone)
 
-	parentCtx, parent := tracerProvider.Tracer("grpcx-test").Start(t.Context(), "parent")
+	parentCtx, parent := recording.tracerProvider.Tracer("grpcx-test").Start(t.Context(), "parent")
 	parentTraceID := parent.SpanContext().TraceID()
 	healthClient := healthgrpc.NewHealthClient(connection)
 	if _, err := healthClient.Check(parentCtx, &healthgrpc.HealthCheckRequest{}); err != nil {
@@ -81,8 +81,8 @@ func TestOTelStatsHandlersTraceAndMeasureUnaryAndStreamingRPCs(t *testing.T) {
 	}
 	parent.End()
 
-	assertRPCSpans(t, spanRecorder.Ended(), parentTraceID)
-	assertRPCMetrics(t, metricReader)
+	assertRPCSpans(t, recording.spanRecorder.Ended(), parentTraceID)
+	assertRPCMetrics(t, recording.metricReader)
 }
 
 func TestServerObservabilitySanitizesValuesAndFiltersUnknownMethods(t *testing.T) {
@@ -90,7 +90,7 @@ func TestServerObservabilitySanitizesValuesAndFiltersUnknownMethods(t *testing.T
 
 	const secretCanary = "credential=grpc-observability-secret"
 
-	spanRecorder, tracerProvider, metricReader, meterProvider := newRecordingTelemetry(t)
+	recording := newRecordingTelemetry(t)
 
 	var logOutput bytes.Buffer
 	var handlerCalls atomic.Int64
@@ -125,8 +125,8 @@ func TestServerObservabilitySanitizesValuesAndFiltersUnknownMethods(t *testing.T
 		register,
 		Options{
 			Logger:         slogJSONLogger(&logOutput),
-			MeterProvider:  meterProvider,
-			TracerProvider: tracerProvider,
+			MeterProvider:  recording.meterProvider,
+			TracerProvider: recording.tracerProvider,
 			Propagators:    propagation.TraceContext{},
 			UnaryPolicy:    []grpc.UnaryServerInterceptor{rejectOnDemandPolicy},
 		},
@@ -202,11 +202,11 @@ func TestServerObservabilitySanitizesValuesAndFiltersUnknownMethods(t *testing.T
 
 	finishServerRPCs(t, server)
 
-	assertSanitizedAccessLogs(t, logOutput.Bytes(), secretCanary, 3, 1)
-	assertSanitizedServerSpans(t, spanRecorder.Ended(), secretCanary, map[string]bool{
+	assertSanitizedAccessLogs(t, logOutput.Bytes(), secretCanary, accessLogRecordCounts{requests: 3, panics: 1})
+	assertSanitizedServerSpans(t, recording.spanRecorder.Ended(), secretCanary, map[string]bool{
 		"grpcx.test.PayloadService/Call": true,
 	})
-	assertSanitizedServerMetrics(t, metricReader, secretCanary, map[string]bool{
+	assertSanitizedServerMetrics(t, recording.metricReader, secretCanary, map[string]bool{
 		"grpcx.test.PayloadService/Call": true,
 	})
 }
@@ -216,16 +216,16 @@ func TestStreamingPolicyObservabilitySanitizesRawError(t *testing.T) {
 
 	const secretCanary = "credential=grpc-stream-policy-secret"
 
-	spanRecorder, tracerProvider, metricReader, meterProvider := newRecordingTelemetry(t)
+	recording := newRecordingTelemetry(t)
 
 	var logOutput bytes.Buffer
 	cfg := testServerConfig()
-	cfg.LogHealthChecks = true
+	cfg.AccessLogHealthChecks = true
 	cfg.TelemetryHealthChecks = true
 	server, connection := startTestServerWithOptions(t, cfg, nil, Options{
 		Logger:         slogJSONLogger(&logOutput),
-		MeterProvider:  meterProvider,
-		TracerProvider: tracerProvider,
+		MeterProvider:  recording.meterProvider,
+		TracerProvider: recording.tracerProvider,
 		Propagators:    propagation.TraceContext{},
 		StreamPolicy: []grpc.StreamServerInterceptor{
 			func(any, grpc.ServerStream, *grpc.StreamServerInfo, grpc.StreamHandler) error {
@@ -252,11 +252,11 @@ func TestStreamingPolicyObservabilitySanitizesRawError(t *testing.T) {
 
 	finishServerRPCs(t, server)
 
-	assertSanitizedAccessLogs(t, logOutput.Bytes(), secretCanary, 1, 0)
-	assertSanitizedServerSpans(t, spanRecorder.Ended(), secretCanary, map[string]bool{
+	assertSanitizedAccessLogs(t, logOutput.Bytes(), secretCanary, accessLogRecordCounts{requests: 1})
+	assertSanitizedServerSpans(t, recording.spanRecorder.Ended(), secretCanary, map[string]bool{
 		"grpc.health.v1.Health/Watch": true,
 	})
-	assertSanitizedServerMetrics(t, metricReader, secretCanary, map[string]bool{
+	assertSanitizedServerMetrics(t, recording.metricReader, secretCanary, map[string]bool{
 		"grpc.health.v1.Health/Watch": true,
 	})
 }
@@ -281,12 +281,17 @@ func finishServerRPCs(t *testing.T, server *Server) {
 // process-wide providers telemetrytest installs: these tests assert what the
 // explicit wiring produces, and a local provider keeps them independent of
 // global state and safe to run alongside anything else.
-func newRecordingTelemetry(t *testing.T) (
-	*tracetest.SpanRecorder,
-	*sdktrace.TracerProvider,
-	*sdkmetric.ManualReader,
-	*sdkmetric.MeterProvider,
-) {
+// recordingTelemetry pairs each provider with the recorder that reads it, so a
+// caller passes the provider into Options and asserts against its own sink
+// without four positional results deciding which is which.
+type recordingTelemetry struct {
+	spanRecorder   *tracetest.SpanRecorder
+	tracerProvider *sdktrace.TracerProvider
+	metricReader   *sdkmetric.ManualReader
+	meterProvider  *sdkmetric.MeterProvider
+}
+
+func newRecordingTelemetry(t *testing.T) recordingTelemetry {
 	t.Helper()
 
 	spanRecorder := tracetest.NewSpanRecorder()
@@ -308,7 +313,12 @@ func newRecordingTelemetry(t *testing.T) (
 		}
 	})
 
-	return spanRecorder, tracerProvider, metricReader, meterProvider
+	return recordingTelemetry{
+		spanRecorder:   spanRecorder,
+		tracerProvider: tracerProvider,
+		metricReader:   metricReader,
+		meterProvider:  meterProvider,
+	}
 }
 
 func assertRPCSpans(t *testing.T, spans []sdktrace.ReadOnlySpan, parentTraceID trace.TraceID) {
@@ -363,13 +373,15 @@ func assertMetadataDoesNotContain(t *testing.T, values metadata.MD, secret strin
 	}
 }
 
-func assertSanitizedAccessLogs(
-	t *testing.T,
-	encoded []byte,
-	secret string,
-	wantRequests int,
-	wantPanics int,
-) {
+// accessLogRecordCounts is what a sanitized access log must hold. It is a named
+// value rather than two trailing parameters, because the call sites otherwise
+// end in a pair of bare integers whose meaning is only in this signature.
+type accessLogRecordCounts struct {
+	requests int
+	panics   int
+}
+
+func assertSanitizedAccessLogs(t *testing.T, encoded []byte, secret string, want accessLogRecordCounts) {
 	t.Helper()
 
 	if strings.Contains(string(encoded), secret) {
@@ -399,14 +411,14 @@ func assertSanitizedAccessLogs(
 	if err := scanner.Err(); err != nil {
 		t.Fatalf("scan gRPC log records: %v", err)
 	}
-	if requests != wantRequests {
-		t.Fatalf("grpc_request records = %d, want %d; logs = %s", requests, wantRequests, encoded)
+	if requests != want.requests {
+		t.Fatalf("grpc_request records = %d, want %d; logs = %s", requests, want.requests, encoded)
 	}
-	if panics != wantPanics {
+	if panics != want.panics {
 		t.Fatalf(
 			"grpc_panic_recovered records = %d, want %d; logs = %s",
 			panics,
-			wantPanics,
+			want.panics,
 			encoded,
 		)
 	}

@@ -48,7 +48,9 @@ func listenForAppends(connConfig *pgx.ConnConfig, telemetry *Telemetry) listener
 }
 
 // listenerStage names which step of a listener cycle failed. It is a closed
-// vocabulary for the same reason the error classes in telemetry.go are.
+// vocabulary for the same reason the error classes in vocabulary.go are. It
+// stays here rather than joining them because its values label one log field of
+// one function and never reach a metric attribute.
 func listenerStage(err error) string {
 	switch {
 	case errors.Is(err, errListenerConnect):

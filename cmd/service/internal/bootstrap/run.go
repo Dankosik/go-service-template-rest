@@ -303,8 +303,8 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 		return err
 	}
 	defer messaging.Close()
-	if messaging.client != nil {
-		supervisor.Go(background.Task{Name: "messaging_connection", Run: messaging.client.Run})
+	if connectionRun := messaging.ConnectionRun(); connectionRun != nil {
+		supervisor.Go(background.Task{Name: "messaging_connection", Run: connectionRun})
 	}
 	// profile:messaging-nats-jetstream:end
 

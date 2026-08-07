@@ -1,5 +1,9 @@
 package oidcjwt
 
+// Proof that the two owners of the authn trust rules agree on which deployments
+// they admit. What each owns alone is in policy_test.go and internal/config's
+// own validation tests.
+
 import (
 	"fmt"
 	"reflect"

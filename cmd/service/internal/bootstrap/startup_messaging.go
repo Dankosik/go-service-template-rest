@@ -43,11 +43,27 @@ func splitMessagingURLs(value string) []string {
 	return values
 }
 
+// Producer is the seam a feature takes to publish from the API process. The
+// template wires no publisher, so nothing here calls it yet — the same gap
+// postgresoutbox states for its own append side, where cmd/service builds no
+// Store at all. Deleting it as unused would remove the one accessor a feature
+// needs; the worked wiring is in docs/durable-messaging.md.
 func (m messagingRuntime) Producer() *natsjs.Producer {
 	if m.client == nil {
 		return nil
 	}
 	return m.client.Producer()
+}
+
+// ConnectionRun is the client's connection supervisor loop, or nil when
+// messaging is disabled. It exists so the composition root reaches the client
+// through this type's accessors like every other caller, rather than testing
+// m.client itself and then calling straight through it.
+func (m messagingRuntime) ConnectionRun() func(context.Context) error {
+	if m.client == nil {
+		return nil
+	}
+	return m.client.Run
 }
 
 func (m messagingRuntime) Ready() bool {

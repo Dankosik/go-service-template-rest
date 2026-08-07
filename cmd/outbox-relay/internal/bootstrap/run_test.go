@@ -378,7 +378,7 @@ func TestOutboxRelayOuterJoinTimeout(t *testing.T) {
 	})
 }
 
-func TestOutboxRelayTeardownReleasesOnceAndSkipsWhenUnsafe(t *testing.T) {
+func TestOutboxRelayTeardownReleasesInOrderAndSkipsWhenUnsafe(t *testing.T) {
 	var order []string
 	teardown := relayTeardown{
 		publisher: func(context.Context) { order = append(order, "publisher") },
@@ -387,15 +387,9 @@ func TestOutboxRelayTeardownReleasesOnceAndSkipsWhenUnsafe(t *testing.T) {
 	if err := teardown.release(t.Context()); err != nil {
 		t.Fatalf("safe release error = %v", err)
 	}
+	// Publisher before pool: adapter cleanup can still need a durable write.
 	if got := strings.Join(order, ","); got != "publisher,postgres" {
 		t.Fatalf("safe release order = %q, want publisher,postgres", got)
-	}
-	// run defers release twice; the second call must find nothing owed.
-	if err := teardown.release(t.Context()); err != nil {
-		t.Fatalf("repeat release error = %v", err)
-	}
-	if got := strings.Join(order, ","); got != "publisher,postgres" {
-		t.Fatalf("release ran twice: %q", got)
 	}
 
 	unsafe := relayTeardown{

@@ -18,32 +18,52 @@
 //
 // # The relay cycle
 //
-// [Relay.Run] repeats one cycle, and each step has one owner in this package:
+// [Relay.Run] repeats one cycle in relay.go, and each step has one owner in this
+// package — one file on each side of the store boundary, so a step can be read
+// end to end without the rest of the cycle:
 //
-//   - claim — [Store.Claim] leases up to BatchSize eligible rows under one fresh
-//     token; that token fences the batch against another relay replica for the
-//     whole cycle, and expiry is what recovers a crashed relay's work.
-//   - publish — the batch goes to [Publisher] through at most PublishConcurrency
-//     concurrent calls sharing one deadline, derived in publishAll from the
-//     earlier of PublishTimeout and the lease. At most one event per ordering key
-//     is ever claimable, so concurrency cannot reorder a key.
-//   - classify — classify in relay.go turns each outcome into exactly one durable
-//     transition: published, retried under full-jitter backoff, or poisoned for
-//     operator redrive. It is the single place the delivery policy lives.
-//   - finalize — one statement per transition covers the whole lease, so a backlog
-//     costs round trips per batch rather than per event. Finalization is detached
-//     from process cancellation, because an acknowledged event left unmarked
-//     becomes a duplicate.
-//   - maintain — periodic [Store.Observe] feeds readiness and the backlog gauges;
-//     periodic [Store.CleanupPublished] deletes retained published rows in bounded
-//     batches.
+//   - claim (relay.go, store_claim.go) — [Store.Claim] leases up to BatchSize
+//     eligible rows under one fresh token; that token fences the batch against
+//     another relay replica for the whole cycle, and expiry is what recovers a
+//     crashed relay's work.
+//   - publish (relay_publish.go) — the batch goes to [Publisher] through at most
+//     PublishConcurrency concurrent calls sharing one deadline, derived in
+//     publishAll from the earlier of PublishTimeout and the lease. At most one
+//     event per ordering key is ever claimable, so concurrency cannot reorder a
+//     key.
+//   - classify (relay_finalize.go) — classify turns each outcome into exactly one
+//     durable transition: published, retried under full-jitter backoff, or
+//     poisoned for operator redrive. It is the single place the delivery policy
+//     lives.
+//   - finalize (relay_finalize.go, store_finalize.go) — one statement per
+//     transition covers the whole lease, so a backlog costs round trips per batch
+//     rather than per event. Finalization is detached from process cancellation,
+//     because an acknowledged event left unmarked becomes a duplicate.
+//   - maintain (relay_maintain.go, store_maintenance.go) — periodic
+//     [Store.Observe] feeds readiness and the backlog gauges; periodic
+//     [Store.CleanupPublished] deletes retained published rows in bounded batches.
+//
+// The budget every step reads is relay_config.go, and store_operator.go holds
+// what runs outside the cycle: [Store.Get] and [Store.Redrive].
+//
+// Beside the cycle: event.go owns the [Event] envelope and its size limits,
+// publisher.go the broker contract, notify.go the append listener that turns a
+// commit into a wake-up, relay_ready.go the readiness policy the diagnostics
+// probe and the metric callback share, errors.go the sentinel set, vocabulary.go
+// the closed metric and log vocabularies with the functions that bound them, and
+// telemetry.go the instruments, the snapshot, and the scrape callback.
 //
 // # Extending it
 //
-// Two extensions are expected, and neither requires reading the relay loop.
+// Three extensions are expected. The first two do not require reading the relay
+// loop; the third is the relay loop, and its cost is stated last.
 //
 // To emit a new event type, build an [Event] and pass it to [Store.Append] inside
-// the transaction that owns the mutation. Append never begins or commits a
+// the transaction that owns the mutation. The relay side ships composed and the
+// append side does not: no [Store] exists in cmd/service, because the template
+// has no feature that emits events, so the first feature that does also builds
+// one over the API process's pool and threads it in — see the worked wiring in
+// docs/postgres-transactional-outbox.md. Append never begins or commits a
 // transaction, so returning its error rolls back the mutation and the event
 // together. Pass every event of one business transaction in a single variadic
 // call: each column travels as one array, so the call costs one statement
@@ -58,6 +78,31 @@
 // there is no production noop fallback. [Publisher] documents the whole
 // acceptance contract, including concurrency safety, the shared batch deadline,
 // and when to return [ErrPermanentPublication] versus [ErrPublicationNotAccepted].
+// Read its last two paragraphs before returning a sentinel of your own: one
+// costs two edits outside the adapter, and skipping the first misclassifies the
+// event on every surface rather than failing anything.
+//
+// To add a stage to the cycle itself — a verification step, a second publish
+// attempt, an audit write — expect to edit relay.go's runLoop or runCycle, the
+// new stage's own relay_*.go file, boundedOperation in vocabulary.go, doc.go's
+// cycle list above, and, if the stage can stop the relay, both errors.go and
+// failureClass in cmd/outbox-relay/main.go. Three rules are not visible from the
+// place a stage is added, and each is owned somewhere else:
+//
+//   - Stop-reason precedence. A cancelled batch reports an ordinary drain even
+//     when something else also failed in it. A reason added below that check in
+//     publishBatch inherits that precedence; one that must outrank a shutdown in
+//     progress goes above it. relay_publish.go owns this.
+//   - Which deadline applies. Everything after publication runs under the lease
+//     the batch was claimed under, on a context detached from process
+//     cancellation, because an acknowledged event left unmarked becomes a
+//     duplicate. A stage that writes durable state belongs on that side of
+//     publishBatch, not before it.
+//   - Whether the stage carries a duration. boundedOperation in vocabulary.go
+//     states the unit of every operation label; a stage measuring one span end to
+//     end uses Telemetry.RecordOperation, and one reporting a verdict reached
+//     partway through uses CountOperation. An operation missing from that switch
+//     reports "other" rather than failing.
 //
 // The schema, the claim and finalization statements, and this package's Go code
 // are one unit: a change to delivery state belongs in
@@ -70,10 +115,14 @@
 // File names here are a lint contract, not a matter of taste. .golangci.yml
 // exempts store*.go from the postgres_driver_boundary and sqlc_boundary rules and
 // notify*.go from the first, because those are the PostgreSQL adapters; the relay
-// loop and the envelope stay driver-free. Splitting store.go into a file named
-// anything else moves pgx and the generated types outside the exemption, and
-// depguard then reports the import rather than the rename that caused it. Keep
-// the prefix, or move the exemption with the code.
+// loop and the envelope stay driver-free. That glob is why the statements split
+// as store_append.go, store_claim.go, store_finalize.go, store_maintenance.go,
+// store_operator.go, and store_rows.go: a file named anything else moves pgx and
+// the generated types outside the exemption, and depguard then reports the import
+// rather than the rename that caused it. Keep the prefix, or move the exemption
+// with the code. The same holds for the test files that hold the driver doubles,
+// which is why they are store_fixtures_test.go and store_*_test.go rather than a
+// plain fixtures_test.go.
 //
 // The contract binds this package only. `make lint` passes no build tags, so
 // files behind `//go:build integration` — including the outbox suite in test/,

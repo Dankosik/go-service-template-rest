@@ -10,8 +10,8 @@ about which code and detail the client observes.
 
 Without this file, a handler publishes its failure the way every gRPC codebase
 does: `return nil, status.Error(codes.NotFound, "widget not found")`. The client
-observes `INTERNAL` with detail `request failed`. `errorMappingAround` is the
-innermost policy in `internal/infra/grpc/interceptors.go`, and only
+observes `INTERNAL` with detail `request failed`. `handlerErrorBoundary` is the
+innermost policy in `internal/infra/grpc/status.go`, and only
 four inputs escape its collapse: `context.Canceled`, `context.DeadlineExceeded`,
 an `*ownedStatusError` (unexported, so no handler can construct one), and an
 error some registered `problem.Mapper` classifies. Everything else becomes

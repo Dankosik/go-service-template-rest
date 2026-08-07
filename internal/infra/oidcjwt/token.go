@@ -167,10 +167,8 @@ func parseToken(compact string, policy Policy, now time.Time) (parsedToken, erro
 		return parsedToken{}, failure(KindInvalid)
 	}
 	// The signature segment is decoded only to be held to one encoding; the bytes
-	// are jose's to check. Dropping this would let the same token be rewritten
-	// into several compact forms that all verify, which is what
-	// decodeCanonicalSegment exists to prevent and what any downstream identity or
-	// replay decision keyed on the compact text depends on.
+	// are jose's to check. decodeCanonicalSegment owns what dropping this would
+	// cost.
 	if _, err := decodeCanonicalSegment(parts[2]); err != nil {
 		return parsedToken{}, failure(KindInvalid)
 	}

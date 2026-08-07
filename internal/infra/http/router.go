@@ -315,9 +315,8 @@ func handleGeneratedRequestError(log *slog.Logger, challenge string) func(http.R
 		// profile:authn-oidc-jwt:start
 		if kind, ok := oidcjwt.KindOf(err); ok {
 			logStrictRequestError(log, r, err)
-			// In oidcjwt.Kind declaration order, as that package's errors.go and
-			// metrics.go are, so a category added there lands in one obvious place
-			// here.
+			// In oidcjwt.Kind declaration order, as that package's errors.go is, so
+			// a category added there lands in one obvious place here.
 			switch kind {
 			case oidcjwt.KindMissing:
 				w.Header().Set("WWW-Authenticate", "Bearer")

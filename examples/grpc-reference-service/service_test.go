@@ -277,7 +277,7 @@ func newConnectionWithService(t *testing.T, service referencev1.EchoServiceServe
 			MaxHeaderListBytes:         defaults.MaxHeaderListBytes,
 			MaxReceiveMessageBytes:     defaults.MaxReceiveMessageBytes,
 			MaxSendMessageBytes:        defaults.MaxSendMessageBytes,
-			LogHealthChecks:            defaults.AccessLogHealthChecks,
+			AccessLogHealthChecks:      defaults.AccessLogHealthChecks,
 			AccessLogSuccessSampleRate: defaults.AccessLogSuccessSampleRate,
 			AccessLogSlowThreshold:     defaults.AccessLogSlowThreshold,
 			TelemetryHealthChecks:      defaults.TelemetryHealthChecks,

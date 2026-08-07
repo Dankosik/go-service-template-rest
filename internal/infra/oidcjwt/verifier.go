@@ -2,7 +2,6 @@ package oidcjwt
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"sync"
 	"sync/atomic"
@@ -16,8 +15,8 @@ import (
 // transport adapters.
 //
 // Each field group below names the regime that guards it, and refresh admission
-// is one more that [refresher] owns outright. Mixing them is what a change here
-// has to avoid.
+// is one more that [refreshAdmission] owns outright. Mixing them is what a
+// change here has to avoid.
 type Verifier struct {
 	// Fixed for the Verifier's whole life; safe to read without synchronization.
 	policy        Policy
@@ -27,21 +26,21 @@ type Verifier struct {
 	log           *slog.Logger
 	metrics       authnMetrics
 	unregisterAge func()
-	admission     *refresher
+	admission     *refreshAdmission
 
 	// keys is replaced wholesale, never mutated, so every verification reads one
 	// consistent set without blocking a refresh. It is non-nil from newVerifier
 	// onward and nothing ever stores nil over it, which is why Run reads fetchedAt
-	// straight off it. install carries one non-blocking nudge per successful
+	// straight off it. installed carries one non-blocking nudge per successful
 	// replacement to whatever Run is scheduling.
-	keys    atomic.Pointer[keySet]
-	install chan struct{}
+	keys      atomic.Pointer[keySet]
+	installed chan struct{}
 
 	// Fixed for the Verifier's whole life as well, and grouped apart because it
 	// is the lifetime rather than a value: baseCtx is the Verifier's own lifetime
 	// expressed as a context. Close cancels it, and that cancellation is the stop
-	// signal for Run and for any refresh in flight. [refresher] holds the same
-	// context and says what a fetch needs from it.
+	// signal for Run and for any refresh in flight. refreshAdmission.begin hands
+	// it to each fetch it launches and says what a fetch needs from it.
 	baseCtx context.Context //nolint:containedctx // Verifier owns this lifecycle context and cancels it in Close.
 	cancel  context.CancelFunc
 
@@ -96,42 +95,46 @@ func newVerifier(
 	baseCtx, cancel := context.WithCancel(context.Background())
 	reportDegraded := newDegradedWarning(log)
 	verifier := &Verifier{
-		policy:  policy,
-		jwksURI: trust.jwksURI,
-		client:  trust.client,
-		now:     now,
-		log:     log,
-		metrics: newAuthnMetrics(meterProvider, reportDegraded),
-		install: make(chan struct{}, 1),
-		baseCtx: baseCtx,
-		cancel:  cancel,
-		runDone: make(chan struct{}),
+		policy:    policy,
+		jwksURI:   trust.jwksURI,
+		client:    trust.client,
+		now:       now,
+		log:       log,
+		metrics:   newAuthnMetrics(meterProvider, reportDegraded),
+		installed: make(chan struct{}, 1),
+		baseCtx:   baseCtx,
+		cancel:    cancel,
+		runDone:   make(chan struct{}),
 	}
 	verifier.keys.Store(trust.keys)
-	// admission and unregisterAge both close over the verifier being built, so
+	// admission and unregisterAge both refer to the verifier being built, so
 	// neither can move into the literal above.
-	verifier.admission = &refresher{
-		baseCtx: baseCtx,
-		now:     now,
-		fetch:   verifier.fetchAndInstall,
-		record:  verifier.metrics.recordRefresh,
-	}
+	verifier.admission = &refreshAdmission{owner: verifier}
 	verifier.unregisterAge = registerKeyAgeGauge(meterProvider, verifier.keys.Load, now, reportDegraded)
 	verifier.metrics.recordRefresh(ctx, triggerStartup, nil)
 	return verifier, nil
 }
+
+// Transport names the carrier a verification arrived on. It is a named type
+// rather than a plain string so the accepted set is closed by the compiler, and
+// each value is published verbatim as the authn.transport metric attribute, so a
+// third is a third metric series rather than a label. Adding one is an extension
+// the package documentation owns.
+type Transport string
+
+const (
+	TransportHTTP Transport = "http"
+	TransportGRPC Transport = "grpc"
+)
 
 // Verify checks the compact token against trust policy and returns only the
 // opaque subject.
 //
 // Two error shapes leave here and an adapter has to answer both. Almost every
 // failure is an [Error] carrying a [Kind], and the mandatory exhaustive linter
-// holds every switch on one to the full set. The exception carries no Kind at
-// all: the caller's own cancellation or deadline is returned wrapped and
-// otherwise unchanged, so each transport can report the caller's status rather
-// than an authentication outcome. [KindOf] answers false for it, which means a
-// switch on the Kind alone takes it through the default arm — test for the
-// context errors first.
+// holds every switch on one to the full set. The exception is callerAborted,
+// which carries no Kind and so takes a switch on the Kind alone through its
+// default arm; that predicate owns why, and an adapter tests it first.
 // profile:grpc:start
 // grpcAuthenticationError is the worked example.
 // profile:grpc:end
@@ -157,42 +160,35 @@ func (v *Verifier) Verify(
 		return reqctx.Principal{}, err
 	}
 
-	// A signature the installed set matches answers immediately, but only while
-	// that set is current: a match from a set past MaxKeySetAge is reported
-	// unavailable rather than accepted, because a key revoked at the provider
-	// can no longer be observed here.
+	// Two facts decide every answer below: whether an installed key signs this
+	// token, and whether the set holding it is still current.
 	//
-	// The signature is tested before currentness on purpose. A stale set whose
-	// keys do not sign this token has to reach the refresh below, so refusing on
-	// age alone here would answer unavailable before the recovery could run. The
-	// test that fails is TestStaleUnknownKIDPerformsRequestDrivenRecovery.
+	// Only a key miss is worth a refresh. It is what a provider rotation looks
+	// like from here, and one coalesced, cooldown-limited fetch is the recovery;
+	// a refresh the cooldown refused or the provider failed leaves the installed
+	// set in place, so the decision below still answers from it. Staleness gets
+	// no second attempt: this token already matched, so only a replacement the
+	// scheduled cadence owns can clear the age.
 	snapshot := v.keys.Load()
-	if snapshot.verifies(parsed) {
-		if !v.keysCurrent(snapshot) {
-			return reqctx.Principal{}, failure(KindUnavailable)
+	signed := snapshot.verifies(parsed)
+	if !signed {
+		refreshErr := v.refresh(ctx)
+		if callerAborted(refreshErr) {
+			return reqctx.Principal{}, refreshErr
 		}
-		return parsed.principal, nil
+		snapshot = v.keys.Load()
+		signed = snapshot.verifies(parsed)
 	}
 
-	// No installed key signs this token, which is what a provider rotation
-	// looks like from here. One coalesced, cooldown-limited refresh is the
-	// recovery; a refresh the cooldown refused or the provider failed leaves
-	// the installed set in place, so the retry below still answers from it.
-	//
-	// Age is checked before the signature here, and the categories differ
-	// because the question does: against a current set, "no key signs this" is
-	// a complete answer and the credential is invalid, while against a set we
-	// could not replace the matching key may be in the one the refresh failed
-	// to fetch — so the honest report is that trust is unavailable.
-	refreshErr := v.refresh(ctx)
-	if errors.Is(refreshErr, context.Canceled) || errors.Is(refreshErr, context.DeadlineExceeded) {
-		return reqctx.Principal{}, refreshErr
-	}
-	current := v.keys.Load()
-	if !v.keysCurrent(current) {
+	// Age answers before the signature, and the categories differ because the
+	// question does: against a current set, "no key signs this" is a complete
+	// answer and the credential is invalid, while against a set we could not
+	// replace the matching key may be in the one the refresh failed to fetch —
+	// so the honest report is that trust is unavailable.
+	if !v.keysCurrent(snapshot) {
 		return reqctx.Principal{}, failure(KindUnavailable)
 	}
-	if !current.verifies(parsed) {
+	if !signed {
 		return reqctx.Principal{}, failure(KindInvalid)
 	}
 	return parsed.principal, nil
@@ -235,7 +231,7 @@ func (v *Verifier) recordRejection(ctx context.Context, transport Transport, err
 
 // CheckReady reports whether a completely validated key set is still current.
 func (v *Verifier) CheckReady() error {
-	if v == nil || !v.keysCurrent(v.keys.Load()) {
+	if !v.keysCurrent(v.keys.Load()) {
 		return failure(KindUnavailable)
 	}
 	return nil
@@ -243,9 +239,8 @@ func (v *Verifier) CheckReady() error {
 
 // keysCurrent is the single staleness policy every caller asks: a set past
 // MaxKeySetAge is refused even though it is still installed and would still
-// verify signatures, because a key revoked at the provider can no longer be
-// observed here. A nil set is not current either, so callers need no separate
-// guard.
+// verify signatures. MaxKeySetAge owns why. A nil set is not current either, so
+// callers need no separate guard.
 func (v *Verifier) keysCurrent(keys *keySet) bool {
 	return keys != nil && v.now().Before(keys.fetchedAt.Add(MaxKeySetAge))
 }

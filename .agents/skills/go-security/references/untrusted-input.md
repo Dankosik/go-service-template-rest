@@ -17,10 +17,10 @@ what a symlink resolves to.
 ## Decision Rubric
 
 - Where a duplicate member could change a security decision, decode with a
-  strict decoder instead of `encoding/json`. `internal/infra/oidcjwt/strict.go`
+  strict decoder instead of `encoding/json`. `internal/infra/oidcjwt/decode.go`
   routes every header, claim, and JWKS decode through go-jose's `json` package
   for exactly that reason: it errors on a duplicate key, and
-  `verifier_test.go` carries the duplicate-header and duplicate-payload cases.
+  `token_test.go` carries the duplicate-header and duplicate-payload cases.
   `encoding/json/v2` ships in the toolchain but is not enabled for this module,
   so v1 semantics are what apply. Reject unknown members explicitly where
   ignoring one would silently drop caller intent — and treat strict decoding as

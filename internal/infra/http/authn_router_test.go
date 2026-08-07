@@ -148,7 +148,7 @@ func TestHTTPAuthnBoundary(t *testing.T) {
 				if testCase.kind != 0 {
 					return reqctx.Principal{}, fmt.Errorf(
 						"poison parser/provider detail: %w",
-						oidcjwt.Failure(testCase.kind),
+						oidcjwt.NewError(testCase.kind),
 					)
 				}
 				return reqctx.Principal{Subject: "opaque-subject"}, nil
