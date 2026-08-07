@@ -1,7 +1,9 @@
 package config
 
 import (
+	// profile:grpc:start
 	"time"
+	// profile:grpc:end
 
 	"github.com/example/go-service-template-rest/internal/observability/otelconfig"
 )
