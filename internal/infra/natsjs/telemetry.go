@@ -31,7 +31,7 @@ type Observability struct {
 	Tracer trace.Tracer
 }
 
-type signals struct {
+type telemetry struct {
 	log                   *slog.Logger
 	tracer                trace.Tracer
 	publishOperations     metric.Int64Counter
@@ -52,7 +52,7 @@ type signals struct {
 	closeOnce             sync.Once
 }
 
-func newSignals(obs Observability, role Role, readiness func() bool) (*signals, error) {
+func newTelemetry(obs Observability, role Role, readiness func() bool) (*telemetry, error) {
 	if role != RoleProducer && role != RoleWorker {
 		return nil, fmt.Errorf("%w: invalid messaging role", ErrRejected)
 	}
@@ -65,7 +65,7 @@ func newSignals(obs Observability, role Role, readiness func() bool) (*signals, 
 	if obs.Tracer == nil {
 		obs.Tracer = otel.GetTracerProvider().Tracer(instrumentationScope)
 	}
-	s := &signals{log: obs.Logger, tracer: obs.Tracer}
+	s := &telemetry{log: obs.Logger, tracer: obs.Tracer}
 	if err := s.registerMetrics(obs.Meter); err != nil {
 		return nil, err
 	}
@@ -84,7 +84,7 @@ func newSignals(obs Observability, role Role, readiness func() bool) (*signals, 
 	return s, nil
 }
 
-func (s *signals) registerMetrics(meter metric.Meter) error {
+func (s *telemetry) registerMetrics(meter metric.Meter) error {
 	var err error
 	if s.publishOperations, err = meter.Int64Counter("messaging.publish.operations"); err != nil {
 		return fmt.Errorf("create messaging publish operations metric: %w", err)
@@ -131,13 +131,13 @@ func (s *signals) registerMetrics(meter metric.Meter) error {
 	return nil
 }
 
-func (s *signals) close() {
+func (s *telemetry) close() {
 	if s != nil && s.readinessRegistration != nil {
 		s.closeOnce.Do(func() { _ = s.readinessRegistration.Unregister() })
 	}
 }
 
-func (s *signals) publish(ctx context.Context, event Event, outcome, reason string, started time.Time) {
+func (s *telemetry) publish(ctx context.Context, event Event, outcome, reason string, started time.Time) {
 	duration := time.Since(started).Seconds()
 	attrs := metric.WithAttributes(attribute.String("outcome", outcome))
 	s.publishOperations.Add(ctx, 1, attrs)
@@ -148,12 +148,12 @@ func (s *signals) publish(ctx context.Context, event Event, outcome, reason stri
 	)
 }
 
-func (s *signals) connection(ctx context.Context, event string) {
+func (s *telemetry) connection(ctx context.Context, event string) {
 	s.connectionEvents.Add(ctx, 1, metric.WithAttributes(attribute.String("event", event)))
 	s.log.InfoContext(ctx, "messaging_connection", "operation", "connection", "outcome", event)
 }
 
-func (s *signals) asyncError(ctx context.Context, err error) {
+func (s *telemetry) asyncError(ctx context.Context, err error) {
 	s.connectionEvents.Add(ctx, 1, metric.WithAttributes(attribute.String("event", "async_error")))
 	s.log.WarnContext(ctx, "messaging_connection",
 		"operation", "connection", "outcome", "async_error", "reason", asyncErrorReason(err),
@@ -177,7 +177,7 @@ func asyncErrorReason(err error) string {
 	}
 }
 
-func (s *signals) handler(ctx context.Context, msg Message, outcome, reason string, started time.Time) {
+func (s *telemetry) handler(ctx context.Context, msg Message, outcome, reason string, started time.Time) {
 	duration := time.Since(started).Seconds()
 	attrs := metric.WithAttributes(attribute.String("outcome", outcome))
 	s.handlerOperations.Add(ctx, 1, attrs)
@@ -189,7 +189,7 @@ func (s *signals) handler(ctx context.Context, msg Message, outcome, reason stri
 	)
 }
 
-func (s *signals) terminal(ctx context.Context, subject string, metadata *jetstream.MsgMetadata, reason string, handlerFrames []string) {
+func (s *telemetry) terminal(ctx context.Context, subject string, metadata *jetstream.MsgMetadata, reason string, handlerFrames []string) {
 	args := []any{"operation", "consume", "subject", subject, "outcome", "terminal", "reason", reason}
 	if metadata != nil {
 		args = append(args,

@@ -20,12 +20,6 @@ import (
 	"github.com/example/go-service-template-rest/internal/health"
 	httpx "github.com/example/go-service-template-rest/internal/infra/http"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
-
-	// profile:grpc:start
-	// profile:authn-oidc-jwt:start
-	"google.golang.org/grpc"
-	// profile:authn-oidc-jwt:end
-	// profile:grpc:end
 )
 
 // Budgets owned by every profile. How they nest, outermost first:
@@ -43,16 +37,14 @@ import (
 //	dependencyCloseTimeout     5s   release pooled dependencies
 //	telemetryShutdownTimeout   5s   span and metric flush, last so it records the above
 //
-// Every one of them is a ceiling, not a reservation, and all of them draw from
-// one process-wide deadline; see shutdownBudget for why that is the only thing
-// that makes the order above worth anything.
+// Every one is a ceiling, not a reservation, and all draw from one process-wide
+// deadline; see shutdownBudget for why that is what makes the order above worth
+// anything.
 //
 // Background work is canceled here rather than on the signal, because the HTTP
 // drain above it is still serving requests that depend on it; see
-// newSupervisedBackground.
-//
-// Dependency-specific budgets live with their dependency stage so a profile that
-// drops the dependency drops them in the same file.
+// newSupervisedBackground. Dependency-specific budgets live with their dependency
+// stage, so a profile that drops the dependency drops them in the same file.
 const (
 	telemetryShutdownTimeout = 5 * time.Second
 	startupBudget            = 30 * time.Second
@@ -88,13 +80,12 @@ const (
 
 // shutdownBudget is the one deadline every teardown stage draws from.
 //
-// Without it the stages were four independent ceilings that happened to run in
-// sequence, so the worst case was their sum: 30s of drain plus 17s of teardown
-// against a platform that had promised 45s, and against the 30s Kubernetes grants
-// by default. The stage that lost was always the same one — the telemetry flush
-// runs last precisely so it can record what the others did, which makes it the
-// first thing a SIGKILL takes. Every rolling deploy that actually used its drain
-// threw away the evidence of how the drain went.
+// Without it the stages were four independent ceilings running in sequence, so
+// the worst case was their sum: 30s of drain plus 17s of teardown against the 30s
+// Kubernetes grants by default. The stage that lost was always the same one — the
+// telemetry flush runs last precisely so it can record what the others did, which
+// makes it the first thing a SIGKILL takes, so every rolling deploy that used its
+// drain threw away the evidence of how the drain went.
 //
 // The clock starts when teardown begins rather than at startup, because that is
 // when the platform's grace period starts. All uses are on the goroutine running
@@ -375,7 +366,8 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 			LogHealthProbes: bootstrap.cfg.HTTP.AccessLogHealthProbes,
 			// The active profile's dependency failures, classified once here
 			// rather than in every operation. A service appends its own domain
-			// mappers to this slice; see httpx.DomainErrorMapper.
+			// mappers at runtimeDependencies.DomainErrors; see problem.Mapper
+			// for why the seam exists.
 			DomainErrors: domainErrors,
 			// profile:authn-oidc-jwt:start
 			Authenticate:          httpx.Authenticated(authnVerifier.ResolveHTTP),
@@ -414,20 +406,32 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 	// profile:grpc:start
 	var grpcSrv grpcRuntimeServer
 	if bootstrap.cfg.GRPC.Server.Enabled {
+		// The first owned gRPC service and its authentication or authorization
+		// policy are composed here; generated handlers stay outside grpcx. This
+		// is a named value rather than a literal in the call below so that
+		// adding either is a one-line change.
+		//
+		// Assigning Services is correct — nothing else fills it. A policy is
+		// appended instead: a build profile may have filled the policy slices
+		// already, and an assignment compiles, passes every check, and silently
+		// drops what it replaced.
+		bindings := grpcRuntimeBindings{
+			// Register an owned service here, as
+			// func(registrar grpc.ServiceRegistrar) { foov1.RegisterFooServer(registrar, impl) }.
+			// See docs/grpc.md, "Register it in bootstrap".
+			Services: nil,
+		}
+		// profile:authn-oidc-jwt:start
+		bindings.UnaryPolicy = append(bindings.UnaryPolicy, authnVerifier.UnaryInterceptor())
+		bindings.StreamPolicy = append(bindings.StreamPolicy, authnVerifier.StreamInterceptor())
+		// profile:authn-oidc-jwt:end
+
 		builtGRPC, buildErr := newGRPCRuntime(
 			bootstrap.cfg,
 			bootstrap.log,
 			metrics,
 			domainErrors,
-			grpcRuntimeBindings{
-				// profile:authn-oidc-jwt:start
-				UnaryPolicy:     []grpc.UnaryServerInterceptor{authnVerifier.UnaryInterceptor()},
-				StreamingPolicy: []grpc.StreamServerInterceptor{authnVerifier.StreamInterceptor()},
-				// profile:authn-oidc-jwt:end
-				// The first owned gRPC service and its authentication or
-				// authorization policy are composed here. Generated handlers
-				// stay outside grpcx.
-			},
+			bindings,
 		)
 		if buildErr != nil {
 			return buildErr
@@ -542,14 +546,12 @@ func logReadinessTransition(ctx context.Context, log *slog.Logger, err error) {
 // deliberately detached from the signal context so that Shutdown is the only
 // thing that stops it.
 //
-// Deriving it from signalCtx would cancel every task the instant SIGTERM
-// arrived, while the HTTP drain keeps serving for up to
-// readiness_propagation_delay plus the remaining shutdown_timeout — 30s with the
-// shipped defaults. Every request admitted in that window would run without the
-// work it depends on: an outbox publisher, a write batcher, a token refresher,
-// or a lease renewer would already be gone. Nothing would report it either, so
-// the only artifact is one INFO line saying the task was canceled, in the middle
-// of a shutdown that otherwise looks orderly.
+// Deriving it from signalCtx would cancel every task the instant SIGTERM arrived,
+// while the HTTP drain keeps serving for up to readiness_propagation_delay plus
+// the remaining shutdown_timeout — 30s with the shipped defaults. Every request
+// admitted in that window would run without the work it depends on, and the only
+// artifact would be one INFO line saying the task was canceled, in the middle of
+// a shutdown that otherwise looks orderly.
 func newSupervisedBackground(signalCtx context.Context, log *slog.Logger) *background.Supervisor {
 	return background.New(context.WithoutCancel(signalCtx), log)
 }

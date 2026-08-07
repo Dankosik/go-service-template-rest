@@ -2,17 +2,16 @@
 // stable code, title, and type URI for every HTTP status any layer of a service
 // answers with.
 //
-// It is a leaf on purpose, for the same reason internal/reqctx and
-// internal/observability/otelconfig are. The transport adapter needs it to write
-// the runtime's own fallback responses, and a feature package needs it to fill a
-// generated Problem value for a status only the domain can produce — and the
-// repository's depguard contract forbids a feature package from importing a
-// concrete infra adapter, so neither may own the table both read.
+// It is a leaf on purpose: the transport adapter needs it for the runtime's own
+// fallback responses, a feature package needs it to fill a generated Problem
+// value for a status only the domain can produce, and depguard forbids a feature
+// package from importing a concrete infra adapter — so neither may own the table
+// both read.
 //
-// A copy of this table is what the reference example used to carry, and the copy
-// drifted: a 409 fell through to the internal-error type, so a slug conflict
-// advertised itself as a server fault while carrying status 409. That is exactly
-// what a client keying its retry policy off `type` acts on.
+// The reference example used to carry a copy, and the copy drifted: a 409 fell
+// through to the internal-error type, so a slug conflict advertised itself as a
+// server fault while carrying status 409 — exactly what a client keying its retry
+// policy off `type` acts on.
 //
 // Nothing here performs I/O or depends on a wire contract. Each service maps
 // these three strings onto its own generated Problem type; the correlation

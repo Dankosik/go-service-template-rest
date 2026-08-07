@@ -1,3 +1,15 @@
+// The gRPC section as an operator supplies it: which values load, which are
+// refused, and what an unconfigured deployment gets.
+//
+// Every case goes through the real loader rather than calling a validator, so it
+// covers the env decoding and normalization a deployment actually depends on —
+// " PlainText " arriving as plaintext is the rule, not an accident.
+//
+// This file owns whether a value is accepted. Whether the accepted set still
+// matches what the transport adapter will build is a separate question with a
+// second owner, and it is proven in internal/infra/grpc/config_parity_test.go —
+// the import only works in that direction.
+
 package config
 
 import (
@@ -100,7 +112,7 @@ func TestGRPCObservabilityPolicyValidation(t *testing.T) {
 }
 
 func TestGRPCEnabledTransportSecurity(t *testing.T) {
-	for _, tc := range []struct {
+	for _, testCase := range []struct {
 		name        string
 		env         map[string]string
 		wantErrPart string
@@ -175,16 +187,16 @@ func TestGRPCEnabledTransportSecurity(t *testing.T) {
 			wantErrPart: "allow_plaintext must be false",
 		},
 	} {
-		t.Run(tc.name, func(t *testing.T) {
+		t.Run(testCase.name, func(t *testing.T) {
 			resetConfigEnv(t)
-			for key, value := range tc.env {
+			for key, value := range testCase.env {
 				t.Setenv(key, value)
 			}
 
 			cfg, _, err := LoadDetailed(LoadOptions{})
-			wantErrPart := tc.wantErrPart
+			wantErrPart := testCase.wantErrPart
 			// profile:authn-oidc-jwt:start
-			if tc.name == "explicit plaintext" {
+			if testCase.name == "explicit plaintext" {
 				wantErrPart = "authn OIDC profile requires"
 			}
 			// profile:authn-oidc-jwt:end
@@ -208,7 +220,7 @@ func TestGRPCEnabledTransportSecurity(t *testing.T) {
 }
 
 func TestGRPCAddressAndCapacityValidation(t *testing.T) {
-	for _, tc := range []struct {
+	for _, testCase := range []struct {
 		name        string
 		key         string
 		value       string
@@ -251,20 +263,20 @@ func TestGRPCAddressAndCapacityValidation(t *testing.T) {
 			wantErrPart: "max_receive_message_bytes must be in range",
 		},
 	} {
-		t.Run(tc.name, func(t *testing.T) {
+		t.Run(testCase.name, func(t *testing.T) {
 			resetConfigEnv(t)
 			t.Setenv("APP__GRPC__SERVER__ENABLED", "true")
 			t.Setenv("APP__GRPC__SERVER__ADDR", ":9091")
 			t.Setenv("APP__GRPC__SERVER__TRANSPORT_SECURITY", "plaintext")
 			t.Setenv("APP__GRPC__SERVER__ALLOW_PLAINTEXT", "true")
-			t.Setenv(tc.key, tc.value)
+			t.Setenv(testCase.key, testCase.value)
 
 			_, _, err := LoadDetailed(LoadOptions{})
 			if !errors.Is(err, ErrValidate) {
 				t.Fatalf("LoadDetailed() error = %v, want ErrValidate", err)
 			}
-			if !strings.Contains(err.Error(), tc.wantErrPart) {
-				t.Fatalf("LoadDetailed() error = %v, want %q", err, tc.wantErrPart)
+			if !strings.Contains(err.Error(), testCase.wantErrPart) {
+				t.Fatalf("LoadDetailed() error = %v, want %q", err, testCase.wantErrPart)
 			}
 		})
 	}

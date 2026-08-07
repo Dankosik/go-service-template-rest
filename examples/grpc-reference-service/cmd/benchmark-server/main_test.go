@@ -1,3 +1,11 @@
+// The benchmark server as the harness that drives it sees it: does it start,
+// publish the address it bound, serve an RPC, and stop on SIGTERM?
+//
+// It checks first that settingsFromDefaults carried the canonical gRPC defaults
+// through unchanged. A benchmark run against a server with its own quietly
+// diverged bounds produces numbers that do not describe this template, and
+// nothing else in the run would say so.
+
 package main
 
 import (
@@ -14,6 +22,7 @@ import (
 
 	referencev1 "github.com/example/go-service-template-rest/examples/grpc-reference-service/internal/gen/proto/reference/v1"
 	"github.com/example/go-service-template-rest/internal/config"
+	grpcx "github.com/example/go-service-template-rest/internal/infra/grpc"
 	grpcclient "github.com/example/go-service-template-rest/internal/infra/grpcclient"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -27,13 +36,28 @@ func TestBenchmarkServerProcessLifecycle(t *testing.T) {
 	if settings.maxConnections != defaults.MaxConnections {
 		t.Fatalf("max connections = %d, want canonical %d", settings.maxConnections, defaults.MaxConnections)
 	}
-	if settings.transport.MaxConcurrentRPCs != defaults.MaxConcurrentRPCs ||
-		settings.transport.MaxConcurrentStreams != uint32(defaults.MaxConcurrentStreams) ||
-		settings.transport.MaxHeaderListBytes != uint32(defaults.MaxHeaderListBytes) ||
-		settings.transport.MaxReceiveMessageBytes != defaults.MaxReceiveMessageBytes ||
-		settings.transport.MaxSendMessageBytes != defaults.MaxSendMessageBytes ||
-		settings.transport.LogHealthChecks != defaults.AccessLogHealthChecks {
-		t.Fatalf("transport settings = %+v, want canonical gRPC defaults %+v", settings.transport, defaults)
+	// One value rather than a conjunction of fields, because the fields a
+	// conjunction leaves out are invisible: the three observability bounds below
+	// were unchecked, and those are the ones whose silent divergence a benchmark
+	// run reports as a real number. grpcx.Config is comparable, so a bound added
+	// to it is unchecked here only while it is unset on both sides.
+	wantTransport := grpcx.Config{
+		MaxConcurrentRPCs:          defaults.MaxConcurrentRPCs,
+		MaxConcurrentStreams:       defaults.MaxConcurrentStreams,
+		MaxHeaderListBytes:         defaults.MaxHeaderListBytes,
+		MaxReceiveMessageBytes:     defaults.MaxReceiveMessageBytes,
+		MaxSendMessageBytes:        defaults.MaxSendMessageBytes,
+		LogHealthChecks:            defaults.AccessLogHealthChecks,
+		AccessLogSuccessSampleRate: defaults.AccessLogSuccessSampleRate,
+		AccessLogSlowThreshold:     defaults.AccessLogSlowThreshold,
+		TelemetryHealthChecks:      defaults.TelemetryHealthChecks,
+	}
+	if settings.transport != wantTransport {
+		t.Fatalf(
+			"transport settings = %+v, want canonical gRPC defaults %+v",
+			settings.transport,
+			wantTransport,
+		)
 	}
 
 	binary := filepath.Join(t.TempDir(), "grpc-benchmark-server")

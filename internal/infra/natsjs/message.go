@@ -75,6 +75,11 @@ type Message struct {
 	metadata      DeliveryMetadata
 }
 
+// Payload returns a copy, so the handler may keep or modify it after returning
+// and a redelivery still sees the original bytes. Each call copies, so a
+// handler that needs the payload more than once should hold the first result.
+func (m Message) Payload() []byte { return slices.Clone(m.payload) }
+
 func (m Message) Subject() string            { return m.subject }
 func (m Message) MessageID() string          { return m.messageID }
 func (m Message) PublicationID() string      { return m.publicationID }
@@ -83,7 +88,6 @@ func (m Message) Schema() string             { return m.schema }
 func (m Message) OrderingKey() string        { return m.orderingKey }
 func (m Message) CorrelationID() string      { return m.correlationID }
 func (m Message) CreatedAt() time.Time       { return m.createdAt }
-func (m Message) Payload() []byte            { return slices.Clone(m.payload) }
 func (m Message) Metadata() DeliveryMetadata { return m.metadata }
 
 type Handler func(context.Context, Message) error
@@ -138,8 +142,8 @@ func validateRequiredValue(name, value string) error {
 }
 
 func validateOptionalValue(name, value string) error {
-	if len(value) > 256 {
-		return fmt.Errorf("%w: %s exceeds 256 bytes", ErrRejected, name)
+	if len(value) > maxHeaderValueBytes {
+		return fmt.Errorf("%w: %s exceeds %d bytes", ErrRejected, name, maxHeaderValueBytes)
 	}
 	for _, character := range value {
 		if character < 0x20 || character == 0x7f {
@@ -200,11 +204,20 @@ func encodedHeaderBytes(header nats.Header) int {
 	return size
 }
 
-func decodeMessage(msg jetstream.Msg, metadata *jetstream.MsgMetadata) (context.Context, Message, error) {
+// remoteContext is the caller's context exactly as it arrived in the headers:
+// the W3C trace parent and the correlation id, extracted but not yet attached
+// to any local context. Keeping it as data means a rejected message needs no
+// stand-in context to return.
+type remoteContext struct {
+	span          trace.SpanContext
+	correlationID string
+}
+
+func decodeMessage(msg jetstream.Msg, metadata *jetstream.MsgMetadata) (Message, remoteContext, error) {
 	header := msg.Headers()
 	createdAt, err := time.Parse(time.RFC3339Nano, header.Get(headerCreatedAt))
 	if err != nil || createdAt.IsZero() {
-		return context.Background(), Message{}, fmt.Errorf("invalid creation time")
+		return Message{}, remoteContext{}, fmt.Errorf("%w: invalid creation time", ErrRejected)
 	}
 	values := []struct {
 		name  string
@@ -217,21 +230,19 @@ func decodeMessage(msg jetstream.Msg, metadata *jetstream.MsgMetadata) (context.
 	}
 	for _, field := range values {
 		if err := validateRequiredValue(field.name, field.value); err != nil {
-			return context.Background(), Message{}, err
+			return Message{}, remoteContext{}, err
 		}
 	}
 	if err := validateOptionalValue(headerOrderingKey, header.Get(headerOrderingKey)); err != nil {
-		return context.Background(), Message{}, err
+		return Message{}, remoteContext{}, err
 	}
 	correlationID := header.Get(headerCorrelationID)
 	if correlationID != "" && !reqctx.ValidRequestID(correlationID) {
-		return context.Background(), Message{}, fmt.Errorf("invalid correlation ID")
+		return Message{}, remoteContext{}, fmt.Errorf("%w: invalid correlation ID", ErrRejected)
 	}
-	ctx := propagation.TraceContext{}.Extract(context.Background(), headerCarrier(header))
-	if correlationID != "" {
-		ctx = reqctx.ContextWithRequestID(ctx, correlationID)
-	}
-	return ctx, Message{
+	extracted := propagation.TraceContext{}.Extract(context.Background(), headerCarrier(header))
+	remote := remoteContext{span: trace.SpanContextFromContext(extracted), correlationID: correlationID}
+	return Message{
 		subject:       msg.Subject(),
 		messageID:     header.Get(headerMessageID),
 		publicationID: header.Get(headerPublicationID),
@@ -250,16 +261,18 @@ func decodeMessage(msg jetstream.Msg, metadata *jetstream.MsgMetadata) (context.
 			NumPending:       metadata.NumPending,
 			StoredAt:         metadata.Timestamp.UTC(),
 		},
-	}, nil
+	}, remote, nil
 }
 
-func contextWithRemoteParent(base, extracted context.Context) context.Context {
-	spanContext := trace.SpanContextFromContext(extracted)
-	if spanContext.IsValid() {
-		base = trace.ContextWithRemoteSpanContext(base, spanContext)
+// contextWithRemoteParent attaches the message's origin to the handler's local
+// context: the remote span becomes the parent of the consume span, and the
+// correlation id joins every record the handler emits.
+func contextWithRemoteParent(base context.Context, remote remoteContext) context.Context {
+	if remote.span.IsValid() {
+		base = trace.ContextWithRemoteSpanContext(base, remote.span)
 	}
-	if correlationID := reqctx.RequestID(extracted); correlationID != "" {
-		base = reqctx.ContextWithRequestID(base, correlationID)
+	if remote.correlationID != "" {
+		base = reqctx.ContextWithRequestID(base, remote.correlationID)
 	}
 	return base
 }

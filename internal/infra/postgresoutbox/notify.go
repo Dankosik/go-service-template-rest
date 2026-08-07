@@ -2,6 +2,7 @@ package postgresoutbox
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -18,6 +19,15 @@ const (
 	listenerCloseTimeout = time.Second
 )
 
+// The three stages a listener cycle can fail at. They are sentinels rather than
+// plain wrap text because listenerStage classifies on them, and a stage is the
+// only thing the operator log is allowed to carry — see LogListenerRetry.
+var (
+	errListenerConnect   = errors.New("connect outbox listener")
+	errListenerSubscribe = errors.New("listen for outbox appends")
+	errListenerWait      = errors.New("wait for outbox append")
+)
+
 // listenForAppends turns committed appends into relay wake-ups, so pickup
 // latency is a round trip rather than a poll interval.
 //
@@ -30,17 +40,32 @@ func listenForAppends(connConfig *pgx.ConnConfig, telemetry *Telemetry) listener
 		for ctx.Err() == nil {
 			err := consumeAppends(ctx, connConfig, wake)
 			if err != nil && ctx.Err() == nil {
-				telemetry.LogListenerRetry(ctx, err)
+				telemetry.LogListenerRetry(ctx, listenerStage(err))
 				sleep(ctx, listenerRetryDelay)
 			}
 		}
 	}
 }
 
+// listenerStage names which step of a listener cycle failed. It is a closed
+// vocabulary for the same reason the error classes in telemetry.go are.
+func listenerStage(err error) string {
+	switch {
+	case errors.Is(err, errListenerConnect):
+		return "connect"
+	case errors.Is(err, errListenerSubscribe):
+		return "subscribe"
+	case errors.Is(err, errListenerWait):
+		return "wait"
+	default:
+		return boundedOther
+	}
+}
+
 func consumeAppends(ctx context.Context, connConfig *pgx.ConnConfig, wake chan<- struct{}) error {
 	conn, err := pgx.ConnectConfig(ctx, connConfig.Copy())
 	if err != nil {
-		return fmt.Errorf("connect outbox listener: %w", err)
+		return fmt.Errorf("%w: %w", errListenerConnect, err)
 	}
 	defer func() {
 		closeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), listenerCloseTimeout)
@@ -49,7 +74,7 @@ func consumeAppends(ctx context.Context, connConfig *pgx.ConnConfig, wake chan<-
 	}()
 
 	if _, err := conn.Exec(ctx, "LISTEN "+pgx.Identifier{appendChannel}.Sanitize()); err != nil {
-		return fmt.Errorf("listen for outbox appends: %w", err)
+		return fmt.Errorf("%w: %w", errListenerSubscribe, err)
 	}
 	// Appends committed while no listener was subscribed produced no signal, so
 	// re-check the backlog once the subscription exists.
@@ -57,7 +82,7 @@ func consumeAppends(ctx context.Context, connConfig *pgx.ConnConfig, wake chan<-
 
 	for {
 		if _, err := conn.WaitForNotification(ctx); err != nil {
-			return fmt.Errorf("wait for outbox append: %w", err)
+			return fmt.Errorf("%w: %w", errListenerWait, err)
 		}
 		signal(wake)
 	}

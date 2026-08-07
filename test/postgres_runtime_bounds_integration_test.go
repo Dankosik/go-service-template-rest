@@ -178,13 +178,12 @@ func mustOpenBoundedPool(t *testing.T, ctx context.Context, statementTimeout tim
 // TestPostgresAcquireShedsInsteadOfQueueing is the behavior the config rule is
 // written for and the one a unit test cannot show.
 //
-// Without the budget, a caller waiting on a saturated pool waits out whatever
-// remains of its request budget. Every waiter holds an in-flight slot for that
-// whole time, so a slow database fills the shedding limiter with connection
-// waiters and the service starts rejecting requests that never touch it. This
-// pins the two properties that prevent it: the wait ends at the acquire budget
-// rather than at the caller's deadline, and it ends with a distinct retryable
-// identity rather than the timeout an exhausted request budget produces.
+// Without the budget, a caller waiting on a saturated pool waits out its whole
+// request budget while holding an in-flight slot, so a slow database fills the
+// shedding limiter with connection waiters and the service starts rejecting
+// requests that never touch it. This pins the two properties that prevent it: the
+// wait ends at the acquire budget rather than the caller's deadline, and it ends
+// with a distinct retryable identity rather than a timeout.
 func TestPostgresAcquireShedsInsteadOfQueueing(t *testing.T) {
 	const acquireTimeout = 250 * time.Millisecond
 

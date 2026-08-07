@@ -73,6 +73,12 @@ func validateConfig(cfg *Config, unknownKeys []string) error {
 
 // profile:authn-oidc-jwt:start
 
+// validateAuthnConfig restates the trust rules that oidcjwt.NewPolicy enforces,
+// so a bad issuer, audience, or proxy CIDR stops configuration load instead of
+// surfacing at authn startup. The duplication is forced rather than chosen:
+// oidcjwt's validProviderURL owns why it cannot be removed, and
+// TestPolicyRulesMatchConfigValidation is what fails the build when a rule
+// tightened on one side is not tightened on the other.
 func validateAuthnConfig(cfg *AuthnConfig) error {
 	cfg.Issuer = strings.TrimSpace(cfg.Issuer)
 	cfg.Audience = strings.TrimSpace(cfg.Audience)
@@ -320,6 +326,10 @@ func validateGRPCConfig(cfg *GRPCConfig) error {
 	if err := validateGRPCCapacityBounds(*server); err != nil {
 		return err
 	}
+	// grpcx.validateConfig re-proves this rate and this threshold when the server
+	// is built, so a direct package user cannot recover an unbounded default.
+	// Changing either rule here means changing it there too;
+	// internal/infra/grpc/config_parity_test.go holds the two to one answer.
 	if math.IsNaN(server.AccessLogSuccessSampleRate) ||
 		math.IsInf(server.AccessLogSuccessSampleRate, 0) ||
 		server.AccessLogSuccessSampleRate < 0 ||
@@ -584,6 +594,27 @@ func validatePostgres(cfg PostgresConfig) error {
 
 // profile:outbox-postgres:start
 
+// Copies of the outbox ceilings, restated so an operator is rejected at load time
+// instead of at relay startup. postgresoutbox owns the values and the reasoning;
+// its ceiling block in relay.go says why depguard makes this a copy rather than
+// an import, and cmd/outbox-relay/internal/bootstrap holds the two sides
+// together.
+//
+// A relay budget added to validateOutbox below must be added to
+// ValidateRelayConfig too. Nothing here can check that; the composition root's
+// walk over OutboxConfig is what fails when only one side learns about it.
+//
+// The lease relation below is this package's own, not a copy: it also charges
+// the acquire and statement budgets a RelayConfig never carries, so it stays
+// the stricter of the two by design and is pinned to nothing.
+const (
+	outboxPublisherJoinTimeout  = time.Second
+	outboxMaxBatchSize          = 1000
+	outboxMaxPublishConcurrency = 256
+	outboxMaxAttempts           = 100
+	outboxMaxCleanupBatchSize   = 10_000
+)
+
 func validateOutbox(cfg OutboxConfig, postgres PostgresConfig) error {
 	if cfg.Enabled && !postgres.Enabled {
 		return fmt.Errorf("%w: outbox.enabled requires postgres.enabled", ErrValidate)
@@ -612,25 +643,27 @@ func validateOutbox(cfg OutboxConfig, postgres PostgresConfig) error {
 			return fmt.Errorf("%w: %s must be positive", ErrValidate, duration.name)
 		}
 	}
-	if cfg.MaxAttempts < 1 || cfg.MaxAttempts > 100 {
-		return fmt.Errorf("%w: outbox.max_attempts must be in range [1,100]", ErrValidate)
-	}
-	if cfg.BatchSize < 1 || cfg.BatchSize > 1000 {
-		return fmt.Errorf("%w: outbox.batch_size must be in range [1,1000]", ErrValidate)
-	}
-	if cfg.PublishConcurrency < 1 || cfg.PublishConcurrency > 256 {
-		return fmt.Errorf("%w: outbox.publish_concurrency must be in range [1,256]", ErrValidate)
+	for _, bound := range []struct {
+		name string
+		value,
+		high int
+	}{
+		{name: "outbox.max_attempts", value: cfg.MaxAttempts, high: outboxMaxAttempts},
+		{name: "outbox.batch_size", value: cfg.BatchSize, high: outboxMaxBatchSize},
+		{name: "outbox.publish_concurrency", value: cfg.PublishConcurrency, high: outboxMaxPublishConcurrency},
+		{name: "outbox.cleanup_batch_size", value: cfg.CleanupBatchSize, high: outboxMaxCleanupBatchSize},
+	} {
+		if bound.value < 1 || bound.value > bound.high {
+			return fmt.Errorf("%w: %s must be in range [1,%d]", ErrValidate, bound.name, bound.high)
+		}
 	}
 	if cfg.RetryMax < cfg.RetryBase {
 		return fmt.Errorf("%w: outbox.retry_max must be >= outbox.retry_base", ErrValidate)
 	}
-	if cfg.CleanupBatchSize < 1 || cfg.CleanupBatchSize > 10_000 {
-		return fmt.Errorf("%w: outbox.cleanup_batch_size must be in range [1,10000]", ErrValidate)
-	}
 	if !durationExceedsSum(
 		cfg.LeaseDuration,
 		cfg.PublishTimeout,
-		time.Second,
+		outboxPublisherJoinTimeout,
 		postgres.AcquireTimeout,
 		postgres.StatementTimeout,
 	) {

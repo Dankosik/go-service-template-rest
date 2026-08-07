@@ -38,11 +38,11 @@ func newProducer(client *Client, capacity, maxPayloadBytes int) *Producer {
 func (p *Producer) Publish(ctx context.Context, event Event) (PublishResult, error) {
 	started := time.Now()
 	if err := validateEvent(event, p.maxPayloadBytes); err != nil {
-		p.client.signals.publish(ctx, event, "rejected", "invalid_message", started)
+		p.client.telemetry.publish(ctx, event, "rejected", "invalid_message", started)
 		return PublishResult{}, err
 	}
 	if err := ctx.Err(); err != nil {
-		p.client.signals.publish(ctx, event, "rejected", "context_done_before_dispatch", started)
+		p.client.telemetry.publish(ctx, event, "rejected", "context_done_before_dispatch", started)
 		return PublishResult{}, fmt.Errorf("%w: publish context before dispatch: %w", ErrRejected, err)
 	}
 	if err := p.begin(); err != nil {
@@ -50,12 +50,12 @@ func (p *Producer) Publish(ctx context.Context, event Event) (PublishResult, err
 		if errors.Is(err, ErrDraining) {
 			reason = "draining"
 		}
-		p.client.signals.publish(ctx, event, "rejected", reason, started)
+		p.client.telemetry.publish(ctx, event, "rejected", reason, started)
 		return PublishResult{}, err
 	}
 	defer p.end()
 
-	ctx, span := p.client.signals.tracer.Start(ctx, "messaging publish",
+	ctx, span := p.client.telemetry.tracer.Start(ctx, "messaging publish",
 		trace.WithSpanKind(trace.SpanKindProducer),
 		trace.WithAttributes(
 			attribute.String("messaging.system", "nats"),
@@ -68,7 +68,7 @@ func (p *Producer) Publish(ctx context.Context, event Event) (PublishResult, err
 	msg, err := buildNATSMessage(ctx, event, p.maxPayloadBytes)
 	if err != nil {
 		span.SetAttributes(attribute.String("messaging.operation.outcome", "rejected"))
-		p.client.signals.publish(ctx, event, "rejected", "invalid_message", started)
+		p.client.telemetry.publish(ctx, event, "rejected", "invalid_message", started)
 		return PublishResult{}, err
 	}
 	publishCtx, cancel := context.WithTimeout(ctx, boundedTimeout(ctx))
@@ -83,12 +83,12 @@ func (p *Producer) Publish(ctx context.Context, event Event) (PublishResult, err
 	if err != nil {
 		outcome, reason, wrapped := classifyPublishError(err)
 		span.SetAttributes(attribute.String("messaging.operation.outcome", outcome))
-		p.client.signals.publish(ctx, event, outcome, reason, started)
+		p.client.telemetry.publish(ctx, event, outcome, reason, started)
 		return PublishResult{}, wrapped
 	}
 	result := PublishResult{Stream: ack.Stream, Sequence: ack.Sequence, Duplicate: ack.Duplicate}
 	span.SetAttributes(attribute.String("messaging.operation.outcome", "accepted"))
-	p.client.signals.publish(ctx, event, "accepted", "none", started)
+	p.client.telemetry.publish(ctx, event, "accepted", "none", started)
 	return result, nil
 }
 

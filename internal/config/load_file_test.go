@@ -10,14 +10,13 @@ import (
 // TestLoadsAKubernetesProjectedConfigFile is the deployment the deleted path
 // policy made impossible.
 //
-// kubelet does not write a ConfigMap or Secret volume as plain files. It writes a
+// kubelet does not write a ConfigMap or Secret volume as plain files: it writes a
 // timestamped directory, a `..data` symlink pointing at it, and one symlink per
-// key pointing through `..data` — which is how an update is atomic. The policy
-// refused the key symlink outright outside app.env=local, and refused it again by
-// comparing the resolved path against the requested one, so the only two ways
-// Kubernetes supplies a config file both failed at boot with a message about
-// symlinks. The path arrives on this process's own argv, at the same trust level
-// as the binary, so there was nothing on the other side of that trade.
+// key pointing through `..data`, which is how an update stays atomic. The policy
+// refused those symlinks twice over, so the only two ways Kubernetes supplies a
+// config file both failed at boot. The path arrives on this process's own argv, at
+// the same trust level as the binary, so there was nothing on the other side of
+// that trade.
 func TestLoadsAKubernetesProjectedConfigFile(t *testing.T) {
 	resetConfigEnv(t)
 	// Anything other than local is what used to switch the hardened policy on.

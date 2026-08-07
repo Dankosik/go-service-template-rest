@@ -1,5 +1,18 @@
 package oidcjwt
 
+// Proof for Run and Close together with the two types they drive, refresh.go's
+// refresher and lifecycle.go's own refreshSchedule. Neither has a test file of
+// its own, for different reasons. refreshSchedule has no caller but Run, so the
+// cadence and the readiness transitions are only observable here. refresher is
+// also driven from the verification side, by Verify through Verifier.refresh —
+// so its coalescing and its cooldown are proved there, in verifier_test.go, and
+// what this file owns is the scheduled trigger reaching the same admission.
+//
+// Every verifier here runs on time.Now so that testing/synctest owns the passage
+// of time. A movable testClock would defeat that: synctest already advances the
+// clock the runtime hands time.Now, and a case that also moved its own would be
+// stating the time twice.
+
 import (
 	"context"
 	"errors"
@@ -11,8 +24,8 @@ import (
 )
 
 func TestScheduledRecoveryCadenceResetsFromSuccessfulInstall(t *testing.T) {
-	first := loadTestRSAKey(t, "test-key-1.pem")
-	second := loadTestRSAKey(t, "test-key-2.pem")
+	first := loadTestRSAKey(t, testSigningKey)
+	second := loadTestRSAKey(t, testRotatedKey)
 	synctest.Test(t, func(t *testing.T) {
 		failedOne := make(chan struct{})
 		failedTwo := make(chan struct{})
@@ -24,7 +37,7 @@ func TestScheduledRecoveryCadenceResetsFromSuccessfulInstall(t *testing.T) {
 			scriptedResponse{status: http.StatusOK, body: jwksDocument(t, second, "key-2"), started: succeeded},
 			scriptedResponse{err: errors.New("next scheduled outage"), started: nextScheduled},
 		)}
-		verifier := newTestVerifierWithRuntime(t, client)
+		verifier := requireTestVerifier(t, testVerifierOptions{now: time.Now, client: client})
 
 		runCtx, cancel := context.WithCancel(context.Background())
 		runResult := make(chan error, 1)
@@ -38,9 +51,7 @@ func TestScheduledRecoveryCadenceResetsFromSuccessfulInstall(t *testing.T) {
 		requireSignal(t, failedOne)
 		synctest.Wait()
 		time.Sleep(RefreshCooldown - time.Second)
-		if client.callCount() != 3 {
-			t.Fatalf("provider calls before cooldown = %d, want 3", client.callCount())
-		}
+		requireProviderCalls(t, client, 1, "one second before the failure cooldown expires")
 		time.Sleep(time.Second)
 		requireSignal(t, failedTwo)
 		synctest.Wait()
@@ -49,9 +60,7 @@ func TestScheduledRecoveryCadenceResetsFromSuccessfulInstall(t *testing.T) {
 		requireSignal(t, succeeded)
 		synctest.Wait()
 		time.Sleep(RefreshInterval - time.Second)
-		if client.callCount() != 5 {
-			t.Fatalf("provider calls before post-install interval = %d, want 5", client.callCount())
-		}
+		requireProviderCalls(t, client, 3, "one second before the post-install interval expires")
 		time.Sleep(time.Second)
 		requireSignal(t, nextScheduled)
 
@@ -63,8 +72,8 @@ func TestScheduledRecoveryCadenceResetsFromSuccessfulInstall(t *testing.T) {
 }
 
 func TestTrustCurrentness(t *testing.T) {
-	first := loadTestRSAKey(t, "test-key-1.pem")
-	second := loadTestRSAKey(t, "test-key-2.pem")
+	first := loadTestRSAKey(t, testSigningKey)
+	second := loadTestRSAKey(t, testRotatedKey)
 	synctest.Test(t, func(t *testing.T) {
 		refreshStarted := make(chan struct{})
 		releaseFailure := make(chan struct{})
@@ -81,7 +90,7 @@ func TestTrustCurrentness(t *testing.T) {
 				started: recoveryStarted,
 			},
 		)}
-		verifier := newTestVerifierWithRuntime(t, client)
+		verifier := requireTestVerifier(t, testVerifierOptions{now: time.Now, client: client})
 		keys := *verifier.keys.Load()
 		keys.fetchedAt = time.Now().Add(-MaxKeySetAge + time.Second)
 		verifier.keys.Store(&keys)
@@ -116,24 +125,12 @@ func TestTrustCurrentness(t *testing.T) {
 }
 
 func TestVerifierLifecycleClosesExactlyOnce(t *testing.T) {
-	now := time.Unix(1_900_000_000, 0)
-	key := loadTestRSAKey(t, "test-key-1.pem")
-	client := &scriptedClient{responses: initialResponses(t, key)}
+	client := &scriptedClient{responses: initialResponses(t, loadTestRSAKey(t, testSigningKey))}
 	var closes atomic.Int64
-	policy := testPolicy(t)
-	verifier, err := newVerifier(
-		t.Context(),
-		policy,
-		func(string) (providerClient, error) {
-			return providerClient{
-				request: client,
-				close:   func() { closes.Add(1) },
-			}, nil
-		},
-		func() time.Time { return now },
-		nil,
-		nil,
-	)
+	verifier, err := buildTestVerifier(t, testVerifierOptions{
+		client:  client,
+		onClose: func() { closes.Add(1) },
+	})
 	if err != nil {
 		t.Fatalf("newVerifier() error = %v", err)
 	}
@@ -148,25 +145,6 @@ func TestVerifierLifecycleClosesExactlyOnce(t *testing.T) {
 	if err := verifier.Run(t.Context(), nil); err == nil {
 		t.Fatal("Run() after Close error = nil")
 	}
-}
-
-func newTestVerifierWithRuntime(t *testing.T, client *scriptedClient) *Verifier {
-	t.Helper()
-	verifier, err := newVerifier(
-		t.Context(),
-		testPolicy(t),
-		func(string) (providerClient, error) {
-			return providerClient{request: client, close: func() {}}, nil
-		},
-		time.Now,
-		nil,
-		nil,
-	)
-	if err != nil {
-		t.Fatalf("newVerifier() error = %v", err)
-	}
-	t.Cleanup(verifier.Close)
-	return verifier
 }
 
 func requireSignal(t *testing.T, signal <-chan struct{}) {

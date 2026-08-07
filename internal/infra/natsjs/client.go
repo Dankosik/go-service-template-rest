@@ -24,8 +24,8 @@ type Client struct {
 	nc  *nats.Conn
 	js  jetstream.JetStream
 
-	producer *Producer
-	signals  *signals
+	producer  *Producer
+	telemetry *telemetry
 
 	ready       atomic.Bool
 	draining    atomic.Bool
@@ -55,11 +55,11 @@ func Connect(ctx context.Context, cfg Config, role Role, obs Observability) (*Cl
 		terminal:    make(chan error, 1),
 		closed:      make(chan struct{}),
 	}
-	sig, err := newSignals(obs, role, c.Ready)
+	telemetry, err := newTelemetry(obs, role, c.Ready)
 	if err != nil {
 		return nil, fmt.Errorf("create messaging telemetry: %w", err)
 	}
-	c.signals = sig
+	c.telemetry = telemetry
 	options := []nats.Option{
 		nats.Name("service-messaging"),
 		nats.Timeout(boundedTimeout(ctx)),
@@ -72,11 +72,11 @@ func Connect(ctx context.Context, cfg Config, role Role, obs Observability) (*Cl
 		nats.ReconnectBufSize(-1),
 		nats.DisconnectErrHandler(func(_ *nats.Conn, _ error) {
 			c.ready.Store(false)
-			c.signals.connection(context.WithoutCancel(ctx), "disconnected")
+			c.telemetry.connection(context.WithoutCancel(ctx), "disconnected")
 		}),
 		nats.ReconnectHandler(func(_ *nats.Conn) {
 			c.ready.Store(false)
-			c.signals.connection(context.WithoutCancel(ctx), "reconnected")
+			c.telemetry.connection(context.WithoutCancel(ctx), "reconnected")
 			select {
 			case c.events <- eventReconnect:
 			default:
@@ -87,16 +87,15 @@ func Connect(ctx context.Context, cfg Config, role Role, obs Observability) (*Cl
 			}
 		}),
 		nats.ErrorHandler(func(_ *nats.Conn, _ *nats.Subscription, err error) {
-			c.signals.asyncError(context.WithoutCancel(ctx), err)
+			c.telemetry.asyncError(context.WithoutCancel(ctx), err)
 		}),
-		nats.ClosedHandler(func(nc *nats.Conn) {
+		nats.ClosedHandler(func(_ *nats.Conn) {
 			c.ready.Store(false)
-			c.signals.connection(context.WithoutCancel(ctx), "closed")
+			c.telemetry.connection(context.WithoutCancel(ctx), "closed")
 			c.closedOnce.Do(func() { close(c.closed) })
 			if !c.intentional.Load() {
 				c.signalTerminal(fmt.Errorf("%w: connection closed after reconnect exhaustion", ErrTerminal))
 			}
-			_ = nc
 		}),
 	}
 	if cfg.CredentialsFile != "" {
@@ -107,7 +106,7 @@ func Connect(ctx context.Context, cfg Config, role Role, obs Observability) (*Cl
 	}
 	nc, err := nats.Connect(strings.Join(cfg.URLs, ","), options...)
 	if err != nil {
-		c.signals.close()
+		c.telemetry.close()
 		return nil, fmt.Errorf("%w: messaging connection failed", ErrRejected)
 	}
 	c.nc = nc
@@ -115,7 +114,7 @@ func Connect(ctx context.Context, cfg Config, role Role, obs Observability) (*Cl
 	if err != nil {
 		c.intentional.Store(true)
 		nc.Close()
-		c.signals.close()
+		c.telemetry.close()
 		return nil, fmt.Errorf("%w: messaging protocol initialization failed", ErrRejected)
 	}
 	c.producer = newProducer(c, cfg.MaxPendingPublishes, cfg.MaxPayloadBytes)
@@ -204,7 +203,7 @@ func (c *Client) Shutdown(ctx context.Context) error {
 	}
 	select {
 	case <-c.closed:
-		c.signals.close()
+		c.telemetry.close()
 		return nil
 	case <-ctx.Done():
 		c.Close()
@@ -225,8 +224,8 @@ func (c *Client) Close() {
 	if c.nc != nil {
 		c.nc.Close()
 	}
-	if c.signals != nil {
-		c.signals.close()
+	if c.telemetry != nil {
+		c.telemetry.close()
 	}
 }
 

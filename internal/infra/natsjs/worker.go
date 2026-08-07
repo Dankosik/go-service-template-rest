@@ -214,12 +214,10 @@ func (w *Worker) fetchLoop(ctx, fetchCtx, handlerRoot context.Context, completio
 			if fetchCtx.Err() != nil {
 				return active, nil //nolint:nilerr // Pull cancellation stops acquisition; active handler errors still win during drain.
 			}
-			if w.client.waitForReconnect(fetchCtx, err) {
-				continue
+			if runErr := w.recoverFetch(fetchCtx, err); runErr != nil {
+				return active, runErr
 			}
-			runErr := fmt.Errorf("%w: fetch source message", ErrTerminal)
-			w.fail(runErr)
-			return active, runErr
+			continue
 		}
 		for msg := range batch.Messages() {
 			if !w.startHandler(ctx, handlerRoot, msg, completion) {
@@ -229,24 +227,47 @@ func (w *Worker) fetchLoop(ctx, fetchCtx, handlerRoot context.Context, completio
 		}
 		batchErr := batch.Error()
 		cancel()
-		if batchErr != nil && fetchCtx.Err() == nil && !errors.Is(batchErr, jetstream.ErrNoMessages) && !errors.Is(batchErr, context.DeadlineExceeded) {
-			if w.client.waitForReconnect(fetchCtx, batchErr) {
-				continue
+		if batchErr != nil && !pullExhausted(batchErr) && fetchCtx.Err() == nil {
+			if runErr := w.recoverFetch(fetchCtx, batchErr); runErr != nil {
+				return active, runErr
 			}
-			runErr := fmt.Errorf("%w: fetch source message", ErrTerminal)
-			w.fail(runErr)
-			return active, runErr
 		}
 	}
 	return active, nil
 }
 
+// recoverFetch decides what a failed pull means. It returns nil to pull again,
+// having waited for the connection to come back, and a terminal error when the
+// failure is not a reconnect this client can ride out.
+func (w *Worker) recoverFetch(fetchCtx context.Context, err error) error {
+	if w.client.waitForReconnect(fetchCtx, err) {
+		return nil
+	}
+	runErr := fmt.Errorf("%w: fetch source message", ErrTerminal)
+	w.fail(runErr)
+	return runErr
+}
+
+// pullExhausted is the ordinary end of a pull that delivered nothing: no
+// message arrived within the request's own expiry.
+func pullExhausted(err error) bool {
+	return errors.Is(err, jetstream.ErrNoMessages) || errors.Is(err, context.DeadlineExceeded)
+}
+
+// startHandler launches one handler goroutine and reports whether it did.
+//
+// The check and the launch share one critical section because StartDrain sets
+// draining under the same lock: that is what stops a handler from starting
+// after drain began. A handler started later would not be counted in fetchLoop's
+// active total, so Run would return without ever joining it.
 func (w *Worker) startHandler(ctx, handlerRoot context.Context, msg jetstream.Msg, completion chan<- struct{}) bool {
 	w.mu.Lock()
 	if w.draining.Load() {
 		w.mu.Unlock()
 		return false
 	}
+	// Only past the drain check is msg known to be a real message: a batch that
+	// was already in flight when drain began can still yield a nil one.
 	messageBytes := wireSize(msg)
 	go func() {
 		defer func() { completion <- struct{}{} }()
@@ -255,8 +276,8 @@ func (w *Worker) startHandler(ctx, handlerRoot context.Context, msg jetstream.Ms
 		}
 	}()
 	w.mu.Unlock()
-	w.client.signals.fetchMessages.Add(ctx, 1)
-	w.client.signals.fetchBytes.Add(ctx, int64(messageBytes))
+	w.client.telemetry.fetchMessages.Add(ctx, 1)
+	w.client.telemetry.fetchBytes.Add(ctx, int64(messageBytes))
 	return true
 }
 
@@ -328,16 +349,16 @@ func (w *Worker) Shutdown(ctx context.Context) error {
 	select {
 	case <-w.runDone:
 		if err := w.client.Shutdown(ctx); err != nil {
-			w.client.signals.drainOperations.Add(ctx, 1, metric.WithAttributes(attribute.String("outcome", "failed")))
+			w.client.telemetry.drainOperations.Add(ctx, 1, metric.WithAttributes(attribute.String("outcome", "failed")))
 			return err
 		}
-		w.client.signals.drainOperations.Add(ctx, 1, metric.WithAttributes(attribute.String("outcome", "graceful")))
+		w.client.telemetry.drainOperations.Add(ctx, 1, metric.WithAttributes(attribute.String("outcome", "graceful")))
 		return nil
 	case <-ctx.Done():
 		w.forceClose()
 		metricCtx := context.WithoutCancel(ctx)
-		w.client.signals.drainOperations.Add(metricCtx, 1, metric.WithAttributes(attribute.String("outcome", "forced")))
-		w.client.signals.forcedShutdowns.Add(metricCtx, 1)
+		w.client.telemetry.drainOperations.Add(metricCtx, 1, metric.WithAttributes(attribute.String("outcome", "forced")))
+		w.client.telemetry.forcedShutdowns.Add(metricCtx, 1)
 		return fmt.Errorf("forced messaging shutdown: %w", ctx.Err())
 	}
 }
@@ -352,32 +373,42 @@ func (w *Worker) forceClose() {
 	w.client.Close()
 }
 
+// delivery is one message as this worker sees it: the broker's view, its
+// delivery metadata, and — once admitted — the decoded envelope handed to the
+// feature handler.
+type delivery struct {
+	source   jetstream.Msg
+	metadata *jetstream.MsgMetadata
+	message  Message
+}
+
+// handlerResult is one feature-handler invocation: the frames if it panicked,
+// what it returned, whether its own timeout fired, and when it started.
+type handlerResult struct {
+	panicFrames []string
+	err         error
+	contextErr  error
+	started     time.Time
+}
+
+// handle runs one delivery end to end: admit it, invoke the feature handler
+// under its own span and timeout, then settle the source message with the
+// broker. A returned error stops the worker; an ordinary retry, dead-letter, or
+// shutdown cancellation returns nil.
 func (w *Worker) handle(handlerRoot context.Context, source jetstream.Msg) error {
 	metadata, err := source.Metadata()
 	if err != nil {
-		w.client.signals.terminal(handlerRoot, source.Subject(), nil, "metadata_unavailable", nil)
+		w.client.telemetry.terminal(handlerRoot, source.Subject(), nil, "metadata_unavailable", nil)
 		return fmt.Errorf("%w: source metadata unavailable", ErrTerminal)
 	}
-	if wireSize(source) > w.cfg.MaxDeliveryBytes || len(source.Data()) > w.client.cfg.MaxPayloadBytes {
-		w.client.signals.terminal(handlerRoot, source.Subject(), metadata, "delivery_bound", nil)
-		return fmt.Errorf("%w: retained source exceeds admitted message bound", ErrTerminal)
+	current := delivery{source: source, metadata: metadata}
+	decoded, base, proceed, err := w.admit(handlerRoot, current)
+	if !proceed {
+		return err
 	}
-	if encodedHeaderBytes(source.Headers()) > HeaderLimitBytes {
-		return w.deadLetter(handlerRoot, source, metadata, Message{}, "malformed")
-	}
-	if metadata.NumDelivered > 1 {
-		w.client.signals.redeliveries.Add(handlerRoot, 1)
-	}
-	extracted, decoded, decodeErr := decodeMessage(source, metadata)
-	if decodeErr != nil {
-		return w.deadLetter(handlerRoot, source, metadata, Message{}, "malformed")
-	}
-	attemptLimit := uint64(1 + len(w.cfg.RetryDelays))
-	if metadata.NumDelivered > attemptLimit {
-		return w.deadLetter(handlerRoot, source, metadata, decoded, "exhausted")
-	}
-	base := contextWithRemoteParent(handlerRoot, extracted)
-	ctx, span := w.client.signals.tracer.Start(base, "messaging consume",
+	current.message = decoded
+
+	ctx, span := w.client.telemetry.tracer.Start(base, "messaging consume",
 		trace.WithSpanKind(trace.SpanKindConsumer),
 		trace.WithAttributes(
 			attribute.String("messaging.system", "nats"),
@@ -388,53 +419,125 @@ func (w *Worker) handle(handlerRoot context.Context, source jetstream.Msg) error
 	)
 	defer span.End()
 	handlerCtx, cancel := context.WithTimeout(ctx, w.cfg.HandlerTimeout)
-	started := time.Now()
-	w.client.signals.consumeActive.Add(ctx, 1)
-	panicFrames, handlerErr := w.invokeHandler(handlerCtx, decoded)
-	handlerContextErr := handlerCtx.Err()
-	w.client.signals.consumeActive.Add(ctx, -1)
+	result := handlerResult{started: time.Now()}
+	w.client.telemetry.consumeActive.Add(ctx, 1)
+	result.panicFrames, result.err = w.invokeHandler(handlerCtx, decoded)
+	result.contextErr = handlerCtx.Err()
+	w.client.telemetry.consumeActive.Add(ctx, -1)
 	cancel()
-	if len(panicFrames) != 0 {
-		w.client.signals.handler(ctx, decoded, "terminal", "handler_panic", started)
-		w.client.signals.terminal(ctx, decoded.Subject(), metadata, "handler_panic", panicFrames)
+
+	return w.settle(ctx, handlerRoot, current, result)
+}
+
+// admit runs every gate that applies before the feature handler sees a message:
+// the delivery bounds this worker was configured with, envelope decoding, and
+// the attempt budget. proceed is false once admit has already settled the
+// delivery, and err is then the whole outcome — nil when the message went to
+// the dead-letter stream, terminal when the worker must stop.
+func (w *Worker) admit(
+	handlerRoot context.Context,
+	current delivery,
+) (decoded Message, base context.Context, proceed bool, err error) {
+	source, metadata := current.source, current.metadata
+	if wireSize(source) > w.cfg.MaxDeliveryBytes || len(source.Data()) > w.client.cfg.MaxPayloadBytes {
+		w.client.telemetry.terminal(handlerRoot, source.Subject(), metadata, "delivery_bound", nil)
+		return Message{}, nil, false, fmt.Errorf("%w: retained source exceeds admitted message bound", ErrTerminal)
+	}
+	if encodedHeaderBytes(source.Headers()) > HeaderLimitBytes {
+		return Message{}, nil, false, w.deadLetter(handlerRoot, source, metadata, Message{}, "malformed")
+	}
+	if metadata.NumDelivered > 1 {
+		w.client.telemetry.redeliveries.Add(handlerRoot, 1)
+	}
+	decoded, remote, decodeErr := decodeMessage(source, metadata)
+	if decodeErr != nil {
+		return Message{}, nil, false, w.deadLetter(handlerRoot, source, metadata, Message{}, "malformed")
+	}
+	if metadata.NumDelivered > w.attemptLimit() {
+		return Message{}, nil, false, w.deadLetter(handlerRoot, source, metadata, decoded, "exhausted")
+	}
+	return decoded, contextWithRemoteParent(handlerRoot, remote), true, nil
+}
+
+// settle records the delivery's outcome and gives the broker its instruction:
+// acknowledge, dead-letter, or request a delayed redelivery. Only a fault that
+// must stop the whole worker returns an error.
+func (w *Worker) settle(ctx, handlerRoot context.Context, current delivery, result handlerResult) error {
+	telemetry := w.client.telemetry
+	if len(result.panicFrames) != 0 {
+		telemetry.handler(ctx, current.message, "terminal", "handler_panic", result.started)
+		telemetry.terminal(ctx, current.message.Subject(), current.metadata, "handler_panic", result.panicFrames)
 		return fmt.Errorf("%w: feature handler panicked", ErrTerminal)
 	}
-	if handlerErr == nil {
-		ackCtx, ackCancel := context.WithTimeout(handlerRoot, operationTimeout)
-		ackErr := source.DoubleAck(ackCtx)
-		ackCancel()
-		if ackErr != nil {
-			w.client.signals.handler(ctx, decoded, "success", "ack_ambiguous", started)
-			return nil
-		}
-		w.client.signals.handler(ctx, decoded, "success", "none", started)
-		return nil
+	if result.err == nil {
+		return w.acknowledge(ctx, handlerRoot, current, result.started)
 	}
 	if handlerRoot.Err() != nil {
-		w.client.signals.handler(ctx, decoded, "canceled", "shutdown", started)
-		return nil
+		// Shutdown cancelled the handler. The source stays unacknowledged, so
+		// the broker redelivers it rather than this process retrying it.
+		telemetry.handler(ctx, current.message, "canceled", "shutdown", result.started)
+		return nil //nolint:nilerr // Shutdown is not a worker fault; the message is left for redelivery.
 	}
-	if isPermanent(handlerErr) {
-		w.client.signals.handler(ctx, decoded, "permanent", "handler_permanent", started)
-		return w.deadLetter(handlerRoot, source, metadata, decoded, "permanent")
+	if isPermanent(result.err) {
+		telemetry.handler(ctx, current.message, "permanent", "handler_permanent", result.started)
+		return w.deadLetter(handlerRoot, current.source, current.metadata, current.message, "permanent")
 	}
-	if metadata.NumDelivered >= attemptLimit {
-		outcome := "retryable"
-		if errors.Is(handlerContextErr, context.DeadlineExceeded) {
-			outcome = "timeout"
-		}
-		w.client.signals.handler(ctx, decoded, outcome, "handler_exhausted", started)
-		return w.deadLetter(handlerRoot, source, metadata, decoded, "exhausted")
+	exhausted := current.metadata.NumDelivered >= w.attemptLimit()
+	outcome := handlerOutcome(result, exhausted)
+	if exhausted {
+		telemetry.handler(ctx, current.message, outcome, "handler_exhausted", result.started)
+		return w.deadLetter(handlerRoot, current.source, current.metadata, current.message, "exhausted")
 	}
-	outcome := "retryable"
-	if errors.Is(handlerContextErr, context.DeadlineExceeded) {
-		outcome = "timeout"
-	} else if errors.Is(handlerErr, context.Canceled) {
-		outcome = "canceled"
+	telemetry.handler(ctx, current.message, outcome, "handler_retry", result.started)
+	telemetry.retries.Add(ctx, 1)
+	return w.requestRedelivery(
+		ctx, current.source, current.metadata,
+		w.retryDelayFor(current.metadata.NumDelivered), "handler_redelivery",
+	)
+}
+
+// acknowledge confirms the delivery with the broker. A lost acknowledgement is
+// not a failure of the handler's work: it already succeeded, and the redelivery
+// that follows is the duplicate every handler here must already tolerate.
+func (w *Worker) acknowledge(ctx, handlerRoot context.Context, current delivery, started time.Time) error {
+	ackCtx, cancel := context.WithTimeout(handlerRoot, operationTimeout)
+	err := current.source.DoubleAck(ackCtx)
+	cancel()
+	reason := "none"
+	if err != nil {
+		reason = "ack_ambiguous"
 	}
-	w.client.signals.handler(ctx, decoded, outcome, "handler_retry", started)
-	w.client.signals.retries.Add(ctx, 1)
-	return w.requestRedelivery(ctx, source, metadata, w.cfg.RetryDelays[metadata.NumDelivered-1], "handler_redelivery")
+	w.client.telemetry.handler(ctx, current.message, "success", reason, started)
+	return nil
+}
+
+// handlerOutcome labels one failed invocation for telemetry. A handler that
+// outran its own timeout is a timeout. A handler that returned a cancellation
+// of its own is reported as such only while the message still has attempts
+// left: an exhausted message goes to the dead-letter stream whatever ended it,
+// so that path keeps the plain retryable label.
+func handlerOutcome(result handlerResult, exhausted bool) string {
+	switch {
+	case errors.Is(result.contextErr, context.DeadlineExceeded):
+		return "timeout"
+	case !exhausted && errors.Is(result.err, context.Canceled):
+		return "canceled"
+	default:
+		return "retryable"
+	}
+}
+
+// attemptLimit is how many deliveries a message gets before the dead-letter
+// stream: the first, plus one per configured retry delay.
+func (w *Worker) attemptLimit() uint64 {
+	return uint64(1 + len(w.cfg.RetryDelays))
+}
+
+// retryDelayFor selects the delay before the redelivery that follows attempt
+// numDelivered. settle calls it only below attemptLimit, which is exactly the
+// range RetryDelays covers.
+func (w *Worker) retryDelayFor(numDelivered uint64) time.Duration {
+	return w.cfg.RetryDelays[numDelivered-1]
 }
 
 func (w *Worker) invokeHandler(ctx context.Context, msg Message) (panicFrames []string, err error) {
@@ -468,8 +571,8 @@ func (w *Worker) deadLetter(ctx context.Context, source jetstream.Msg, metadata 
 	msg, transferID := deadLetterMessage(source, metadata, decoded, reason)
 	msg.Subject = w.cfg.DeadLetterSubject
 	if err := validateEncodedMessage(msg, w.client.cfg.MaxPayloadBytes); err != nil {
-		w.client.signals.dlqTransfers.Add(ctx, 1, metric.WithAttributes(attribute.String("outcome", "rejected")))
-		w.client.signals.terminal(ctx, source.Subject(), metadata, "dlq_envelope", nil)
+		w.client.telemetry.dlqTransfers.Add(ctx, 1, metric.WithAttributes(attribute.String("outcome", "rejected")))
+		w.client.telemetry.terminal(ctx, source.Subject(), metadata, "dlq_envelope", nil)
 		return fmt.Errorf("%w: retained source cannot fit dead-letter envelope", ErrTerminal)
 	}
 	publishCtx, cancel := context.WithTimeout(ctx, operationTimeout)
@@ -483,14 +586,14 @@ func (w *Worker) deadLetter(ctx context.Context, source jetstream.Msg, metadata 
 	cancel()
 	if err != nil {
 		outcome, _, wrapped := classifyPublishError(err)
-		w.client.signals.dlqTransfers.Add(ctx, 1, metric.WithAttributes(attribute.String("outcome", outcome)))
+		w.client.telemetry.dlqTransfers.Add(ctx, 1, metric.WithAttributes(attribute.String("outcome", outcome)))
 		if errors.Is(wrapped, ErrAmbiguous) {
 			return w.requestRedelivery(ctx, source, metadata, w.cfg.DeadLetterRetryDelay, "dlq_redelivery")
 		}
-		w.client.signals.terminal(ctx, source.Subject(), metadata, "dlq_rejected", nil)
+		w.client.telemetry.terminal(ctx, source.Subject(), metadata, "dlq_rejected", nil)
 		return fmt.Errorf("%w: dead-letter publish rejected", ErrTerminal)
 	}
-	w.client.signals.dlqTransfers.Add(ctx, 1, metric.WithAttributes(attribute.String("outcome", "accepted")))
+	w.client.telemetry.dlqTransfers.Add(ctx, 1, metric.WithAttributes(attribute.String("outcome", "accepted")))
 	ackCtx, ackCancel := context.WithTimeout(ctx, operationTimeout)
 	err = source.DoubleAck(ackCtx)
 	ackCancel()
@@ -502,7 +605,7 @@ func (w *Worker) deadLetter(ctx context.Context, source jetstream.Msg, metadata 
 
 func (w *Worker) requestRedelivery(ctx context.Context, source jetstream.Msg, metadata *jetstream.MsgMetadata, delay time.Duration, reason string) error {
 	if err := source.NakWithDelay(delay); err != nil {
-		w.client.signals.terminal(ctx, source.Subject(), metadata, reason+"_rejected", nil)
+		w.client.telemetry.terminal(ctx, source.Subject(), metadata, reason+"_rejected", nil)
 		return fmt.Errorf("%w: request delayed source redelivery", ErrTerminal)
 	}
 	return nil

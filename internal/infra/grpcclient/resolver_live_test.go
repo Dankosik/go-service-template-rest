@@ -1,3 +1,15 @@
+// Resolver guard, live: over a real TLS connection, do New's three closures
+// hold together — no server-supplied service config, no proxy, and no
+// resolver-supplied metadata on the wire?
+//
+// It runs in a child process because the proxy route is only reachable through
+// process-global environment variables, which the parent sets for the child
+// alone. The parent owns the TLS server and the recording proxy and asserts what
+// each observed; the child owns the client and asserts what it could reach.
+//
+// resolver_internal_test.go covers the wrapper's own behavior, and
+// resolver_selection_test.go covers which builder grpc-go selects.
+
 package grpcclient_test
 
 import (
@@ -10,10 +22,8 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"net/http/httptest"
 	"net/url"
 	"os"
-	"os/exec"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -32,11 +42,7 @@ import (
 const resolverLiveChildEnv = "GRPCCLIENT_RESOLVER_LIVE_CHILD"
 
 func TestResolverServiceConfigProxyTLSAreClosedByClientPolicy(t *testing.T) {
-	certificateSource := httptest.NewTLSServer(http.NotFoundHandler())
-	serverCertificate := certificateSource.TLS.Certificates[0]
-	leafCertificate := certificateSource.Certificate()
-	certificateSource.Close()
-
+	serverCertificate, leafCertificate := testTLSMaterial(t)
 	var handlerCalls atomic.Int64
 	serverAddress := startLiveTLSHealthServer(
 		t,
@@ -48,18 +54,9 @@ func TestResolverServiceConfigProxyTLSAreClosedByClientPolicy(t *testing.T) {
 	)
 	proxy := startRecordingProxy(t)
 
-	executable, err := os.Executable()
-	if err != nil {
-		t.Fatalf("os.Executable() error = %v", err)
-	}
-	command := exec.CommandContext(
-		t.Context(),
-		executable,
-		"-test.run=^TestResolverServiceConfigProxyTLSChild$",
-		"-test.count=1",
-	)
-	command.Env = append(
-		os.Environ(),
+	runTestBinaryChild(
+		t,
+		"TestResolverServiceConfigProxyTLSChild",
 		resolverLiveChildEnv+"=1",
 		"GRPCCLIENT_RESOLVER_LIVE_SERVER="+serverAddress,
 		"GRPCCLIENT_RESOLVER_LIVE_ROOT="+base64.StdEncoding.EncodeToString(leafCertificate.Raw),
@@ -70,9 +67,6 @@ func TestResolverServiceConfigProxyTLSAreClosedByClientPolicy(t *testing.T) {
 		"NO_PROXY=",
 		"no_proxy=",
 	)
-	if output, err := command.CombinedOutput(); err != nil {
-		t.Fatalf("live resolver child failed: %v\n%s", err, output)
-	}
 	if accepts := proxy.accepts.Load(); accepts != 1 {
 		t.Fatalf("fake proxy accepts = %d, want exactly the native control connection", accepts)
 	}
@@ -229,28 +223,26 @@ func startLiveTLSHealthServer(
 ) string {
 	t.Helper()
 
-	host := nonLoopbackIPv4(t)
 	listener, err := (&net.ListenConfig{}).Listen(
 		t.Context(),
 		"tcp",
-		net.JoinHostPort(host, "0"),
+		net.JoinHostPort(nonLoopbackIPv4(t), "0"),
 	)
 	if err != nil {
 		t.Fatalf("live TLS server Listen() error = %v", err)
 	}
-	server := grpc.NewServer(grpc.Creds(serverCredentials))
-	healthgrpc.RegisterHealthServer(server, committedUnavailableHealthServer{
-		handlerCalls: handlerCalls,
-	})
-	serveDone := make(chan error, 1)
-	go func() { serveDone <- server.Serve(listener) }()
-	t.Cleanup(func() {
-		server.Stop()
-		if err := <-serveDone; err != nil && !errors.Is(err, grpc.ErrServerStopped) {
-			t.Errorf("live TLS server Serve() error = %v", err)
-		}
-	})
-	return listener.Addr().String()
+	// The bare address, not a passthrough target: this proof dials through the
+	// resolver under test.
+	return serveTestServer(
+		t,
+		listener,
+		func(server *grpc.Server) {
+			healthgrpc.RegisterHealthServer(server, committedUnavailableHealthServer{
+				handlerCalls: handlerCalls,
+			})
+		},
+		grpc.Creds(serverCredentials),
+	)
 }
 
 func nonLoopbackIPv4(t *testing.T) string {
@@ -319,17 +311,12 @@ func (b *liveResolverBuilder) Build( //nolint:ireturn // Implements resolver.Bui
 	if err := connection.UpdateState(state); err != nil {
 		return nil, fmt.Errorf("publish live resolver state: %w", err)
 	}
-	return liveNopResolver{}, nil
+	return nopResolver{}, nil
 }
 
 func (b *liveResolverBuilder) Scheme() string {
 	return b.scheme
 }
-
-type liveNopResolver struct{}
-
-func (liveNopResolver) ResolveNow(resolver.ResolveNowOptions) {}
-func (liveNopResolver) Close()                                {}
 
 type recordingProxy struct {
 	address string
@@ -339,10 +326,7 @@ type recordingProxy struct {
 func startRecordingProxy(t *testing.T) *recordingProxy {
 	t.Helper()
 
-	listener, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("proxy net.Listen() error = %v", err)
-	}
+	listener := listenLoopback(t)
 	proxy := &recordingProxy{
 		address: listener.Addr().String(),
 	}

@@ -1,3 +1,10 @@
+// A generated client stub over a connection from New: does composing the two the
+// way a service actually does still carry the selected correlation metadata and
+// one client span per call?
+//
+// The other files here drive the connection directly, which would not catch a
+// stub bypassing the interceptors this package installs.
+
 package grpcclient_test
 
 import (
@@ -59,14 +66,12 @@ func TestGeneratedClientCompositionUsesSharedConnection(t *testing.T) {
 		t.Fatalf("Health.Check() status = %s, want %s", got, healthgrpc.HealthCheckResponse_SERVING)
 	}
 
-	assertWireCorrelation(
-		t,
-		<-unaryMetadata,
-		parent.SpanContext().TraceID().String(),
-		requestID,
-		true,
-		true,
-	)
+	assertWireCorrelation(t, "generated unary", <-unaryMetadata, wireCorrelation{
+		traceID:       parent.SpanContext().TraceID().String(),
+		requestID:     requestID,
+		wantTrace:     true,
+		wantRequestID: true,
+	})
 	if got := len(recorder.Ended()); got == 0 {
 		t.Fatal("generated Health.Check() recorded no client span")
 	}

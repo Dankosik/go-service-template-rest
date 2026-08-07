@@ -566,11 +566,10 @@ func TestServeHTTPRuntimeReturnsPendingServeFailureBeforeMarkingAdmissionReady(t
 // keeps the drain measurable.
 //
 // The version this replaced passed the diagnostics server into the same
-// drainAndShutdown call as the API, so /metrics closed at the instant the drain
-// began — and with the shipped scrape-only configuration the readiness propagation
-// delay and the whole in-flight drain went uncollected. The assertion is on order
-// because the failure mode is invisible in behavior: everything still shuts down,
-// and the metrics for the last window of the pod's life simply do not exist.
+// drainAndShutdown call as the API, so /metrics closed the instant the drain
+// began and the whole in-flight drain went uncollected. The assertion is on order
+// because the failure is invisible in behavior: everything still shuts down, and
+// the metrics for the last window of the pod's life simply do not exist.
 // profile:grpc:start
 func TestServeRuntimeCoordinatesGRPCReadinessAndDrain(t *testing.T) {
 	t.Parallel()

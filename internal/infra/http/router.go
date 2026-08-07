@@ -313,15 +313,15 @@ func handleMalformedGeneratedRequest(log *slog.Logger, w http.ResponseWriter, r 
 func handleGeneratedRequestError(log *slog.Logger, challenge string) func(http.ResponseWriter, *http.Request, error) {
 	return func(w http.ResponseWriter, r *http.Request, err error) {
 		// profile:authn-oidc-jwt:start
-		if authnError, ok := errors.AsType[*oidcjwt.Error](err); ok {
+		if kind, ok := oidcjwt.KindOf(err); ok {
 			logStrictRequestError(log, r, err)
-			switch kind, _ := oidcjwt.KindOf(authnError); kind {
+			// In oidcjwt.Kind declaration order, as that package's errors.go and
+			// metrics.go are, so a category added there lands in one obvious place
+			// here.
+			switch kind {
 			case oidcjwt.KindMissing:
 				w.Header().Set("WWW-Authenticate", "Bearer")
 				writeProblem(w, r, problemResponse{code: problem.CodeUnauthorized, detail: "credentials are missing"})
-			case oidcjwt.KindInvalid:
-				w.Header().Set("WWW-Authenticate", `Bearer error="invalid_token"`)
-				writeProblem(w, r, problemResponse{code: problem.CodeUnauthorized, detail: "credentials are invalid"})
 			case oidcjwt.KindMalformed:
 				w.Header().Set("WWW-Authenticate", `Bearer error="invalid_request"`)
 				writeProblem(w, r, problemResponse{code: problem.CodeBadRequest, detail: "authentication credential is malformed"})
@@ -330,6 +330,9 @@ func handleGeneratedRequestError(log *slog.Logger, challenge string) func(http.R
 					code:   problem.CodeRequestHeaderFieldsTooLarge,
 					detail: "authentication credential is too large",
 				})
+			case oidcjwt.KindInvalid:
+				w.Header().Set("WWW-Authenticate", `Bearer error="invalid_token"`)
+				writeProblem(w, r, problemResponse{code: problem.CodeUnauthorized, detail: "credentials are invalid"})
 			case oidcjwt.KindUnavailable:
 				w.Header().Set("Retry-After", "30")
 				writeProblem(w, r, problemResponse{code: problem.CodeServiceUnavailable, detail: "authentication trust is unavailable"})

@@ -328,13 +328,11 @@ func shutdownDiagnostics(base context.Context, log *slog.Logger, budget *shutdow
 // boundedAPIListener caps how many connections the API accepts at once.
 //
 // It covers the half of overload the middleware chain cannot see. MaxInFlight
-// sheds past its limit and records that it did, but shedding happens inside a
-// handler — so every connection beyond the limit has already cost a goroutine,
-// a read buffer, a write buffer, and a header parse up to http.max_header_bytes
-// by the time it is rejected. A connection flood, or one client fleet with a
-// misconfigured pool, therefore grows the heap without bound behind a load
-// shedder that reports the service is coping. Excess callers wait in the kernel
-// accept queue instead, which costs this process nothing.
+// sheds inside a handler, so every connection beyond the limit has already cost a
+// goroutine, two buffers, and a header parse up to http.max_header_bytes by the
+// time it is rejected — a connection flood therefore grows the heap without bound
+// behind a load shedder reporting that the service copes. Excess callers wait in
+// the kernel accept queue instead, which costs this process nothing.
 //
 // The diagnostics listener is deliberately not capped: it serves a scraper, and
 // a metrics endpoint that blocks during an incident is the wrong trade.

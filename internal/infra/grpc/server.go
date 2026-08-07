@@ -24,10 +24,11 @@ type Server struct {
 	server *grpc.Server
 	health *health.Server
 
+	// Health inputs, all guarded by healthMu and combined by publishHealthLocked.
 	healthMu sync.Mutex
 	draining bool
+	admitted bool
 	// profile:authn-oidc-jwt:start
-	admitted   bool
 	authnReady bool
 	// profile:authn-oidc-jwt:end
 
@@ -44,27 +45,8 @@ func NewServer(cfg Config, options Options) (*Server, error) {
 		return nil, err
 	}
 
-	log := options.Logger
-	if log == nil {
-		log = slog.Default()
-	}
-	meterProvider := options.MeterProvider
-	if meterProvider == nil {
-		meterProvider = metricnoop.NewMeterProvider()
-	}
-	tracerProvider := options.TracerProvider
-	if tracerProvider == nil {
-		tracerProvider = tracenoop.NewTracerProvider()
-	}
-	propagators := options.Propagators
-	if propagators == nil {
-		propagators = propagation.TraceContext{}
-	}
-	load := options.Load
-	if load == nil {
-		load = noopLoadRecorder{}
-	}
-	admission := newAdmissionLimiter(cfg.MaxConcurrentRPCs, load)
+	options = withOptionDefaults(options)
+	admission := newAdmissionLimiter(cfg.MaxConcurrentRPCs, options.Load)
 	accessLogs := accessLogPolicy{
 		logHealthChecks:   cfg.LogHealthChecks,
 		successSampleRate: cfg.AccessLogSuccessSampleRate,
@@ -73,63 +55,46 @@ func NewServer(cfg Config, options Options) (*Server, error) {
 	// otelgrpc derives rpc.method from the peer-supplied HTTP/2 path before
 	// dispatch. Keep its server signals descriptor-backed so unknown paths cannot
 	// create unbounded metric series or span names.
-	registeredMethods := make(map[string]struct{})
+	//
+	// The filter closure below captures this set while it is still empty;
+	// registerServices fills it after registration and before Serve, and it is
+	// never written again. That ordering is what makes the unsynchronized reads
+	// from every RPC goroutine safe.
+	registeredMethods := make(methodSet)
 
-	unaryInterceptors := []grpc.UnaryServerInterceptor{
-		correlationUnaryInterceptor(),
-		accessLogUnaryInterceptor(log, accessLogs),
-		recoveryUnaryInterceptor(log),
-		admissionUnaryInterceptor(admission),
-		policyErrorBoundaryUnaryInterceptor(),
-	}
-	unaryInterceptors = append(unaryInterceptors, options.UnaryPolicy...)
-	unaryInterceptors = append(unaryInterceptors, errorMappingUnaryInterceptor(options.DomainErrors))
+	// One list value serves both chains, so a policy cannot reach unary RPCs and
+	// miss streaming ones, and the order cannot drift between them.
+	builtins := builtinPolicies(options.Logger, accessLogs, admission)
+	errorMapping := errorMappingAround(options.DomainErrors)
 
-	streamInterceptors := []grpc.StreamServerInterceptor{
-		correlationStreamInterceptor(),
-		accessLogStreamInterceptor(log, accessLogs),
-		recoveryStreamInterceptor(log),
-		admissionStreamInterceptor(admission),
-		policyErrorBoundaryStreamInterceptor(),
-	}
-	streamInterceptors = append(streamInterceptors, options.StreamingPolicy...)
-	streamInterceptors = append(streamInterceptors, errorMappingStreamInterceptor(options.DomainErrors))
-
+	// #nosec G115 -- validateConfig bounds both to [1,math.MaxUint32] above.
+	maxStreams, maxHeaderBytes := uint32(cfg.MaxConcurrentStreams), uint32(cfg.MaxHeaderListBytes)
 	serverOptions := []grpc.ServerOption{
-		grpc.MaxConcurrentStreams(cfg.MaxConcurrentStreams),
-		grpc.MaxHeaderListSize(cfg.MaxHeaderListBytes),
+		grpc.MaxConcurrentStreams(maxStreams),
+		grpc.MaxHeaderListSize(maxHeaderBytes),
 		grpc.MaxRecvMsgSize(cfg.MaxReceiveMessageBytes),
 		grpc.MaxSendMsgSize(cfg.MaxSendMessageBytes),
 		grpc.StatsHandler(otelgrpc.NewServerHandler(
-			otelgrpc.WithMeterProvider(meterProvider),
-			otelgrpc.WithTracerProvider(tracerProvider),
-			otelgrpc.WithPropagators(propagators),
+			otelgrpc.WithMeterProvider(options.MeterProvider),
+			otelgrpc.WithTracerProvider(options.TracerProvider),
+			otelgrpc.WithPropagators(options.Propagators),
 			otelgrpc.WithFilter(func(info *stats.RPCTagInfo) bool {
 				_, ok := registeredMethods[info.FullMethodName]
 				return ok && (cfg.TelemetryHealthChecks || !isHealthMethod(info.FullMethodName))
 			}),
 		)),
-		grpc.ChainUnaryInterceptor(unaryInterceptors...),
-		grpc.ChainStreamInterceptor(streamInterceptors...),
+		grpc.ChainUnaryInterceptor(unaryChain(builtins, options.UnaryPolicy, errorMapping)...),
+		grpc.ChainStreamInterceptor(streamChain(builtins, options.StreamPolicy, errorMapping)...),
 	}
-	if cfg.TransportCredentials != nil {
-		serverOptions = append(serverOptions, grpc.Creds(cfg.TransportCredentials))
+	if options.TransportCredentials != nil {
+		serverOptions = append(serverOptions, grpc.Creds(options.TransportCredentials))
 	}
 
 	nativeServer := grpc.NewServer(serverOptions...)
 	healthServer := health.NewServer()
 	healthServer.SetServingStatus("", healthgrpc.HealthCheckResponse_NOT_SERVING)
 	healthgrpc.RegisterHealthServer(nativeServer, healthServer)
-	for _, register := range options.Services {
-		if register != nil {
-			register(nativeServer)
-		}
-	}
-	for serviceName, service := range nativeServer.GetServiceInfo() {
-		for _, method := range service.Methods {
-			registeredMethods["/"+serviceName+"/"+method.Name] = struct{}{}
-		}
-	}
+	registerServices(nativeServer, options.Services, registeredMethods)
 
 	return &Server{
 		server: nativeServer,
@@ -142,15 +107,131 @@ func NewServer(cfg Config, options Options) (*Server, error) {
 	}, nil
 }
 
+// Names for the built-in policies, used by [builtinPolicies] and by the
+// benchmark variants in performance_test.go that measure a deliberate subset of
+// the chain.
+const (
+	builtinAccessLog           = "access_log"
+	builtinRecovery            = "recovery"
+	builtinAdmission           = "admission"
+	builtinPolicyErrorBoundary = "policy_error_boundary"
+)
+
+// builtinPolicy is one entry in this package's own policy chain, carrying the
+// name the benchmark refers to it by.
+type builtinPolicy struct {
+	name   string
+	around aroundRPC
+}
+
+// builtinPolicies returns this package's own policies, outermost first. Every
+// position is load-bearing, and the package doc owns the order, what each one
+// buys, and why this is a function rather than a literal — read it before
+// reordering this list.
+//
+// Correlation and error mapping are not in the list because they do not sit next
+// to each other: correlation is outermost and is the one policy still written
+// per RPC kind, while error mapping must land inside the supplied policy.
+func builtinPolicies(
+	log *slog.Logger,
+	accessLogs accessLogPolicy,
+	admission *admissionLimiter,
+) []builtinPolicy {
+	return []builtinPolicy{
+		{name: builtinAccessLog, around: accessLogAround(log, accessLogs)},
+		{name: builtinRecovery, around: recoveryAround(log)},
+		{name: builtinAdmission, around: admission.around},
+		{name: builtinPolicyErrorBoundary, around: policyErrorBoundaryAround()},
+	}
+}
+
+// unaryChain and streamChain assemble the one interceptor order this transport
+// serves, outermost first: correlation, the builtins, the supplied policy, then
+// error mapping. Both RPC kinds and the benchmark variants in
+// performance_test.go build their chains here, so a position cannot drift
+// between them; the package doc owns what each position buys.
+func unaryChain(
+	builtins []builtinPolicy,
+	supplied []grpc.UnaryServerInterceptor,
+	errorMapping aroundRPC,
+) []grpc.UnaryServerInterceptor {
+	chain := []grpc.UnaryServerInterceptor{correlationUnaryInterceptor()}
+	for _, policy := range builtins {
+		chain = append(chain, unaryPolicy(policy.around))
+	}
+	chain = append(chain, supplied...)
+	return append(chain, unaryPolicy(errorMapping))
+}
+
+func streamChain(
+	builtins []builtinPolicy,
+	supplied []grpc.StreamServerInterceptor,
+	errorMapping aroundRPC,
+) []grpc.StreamServerInterceptor {
+	chain := []grpc.StreamServerInterceptor{correlationStreamInterceptor()}
+	for _, policy := range builtins {
+		chain = append(chain, streamPolicy(policy.around))
+	}
+	chain = append(chain, supplied...)
+	return append(chain, streamPolicy(errorMapping))
+}
+
+// withOptionDefaults fills the collaborators [Options] documents as optional, so
+// the composition in NewServer reads as one uninterrupted sequence and every
+// later reader of options sees a non-nil value.
+func withOptionDefaults(options Options) Options {
+	if options.Logger == nil {
+		options.Logger = slog.Default()
+	}
+	if options.MeterProvider == nil {
+		options.MeterProvider = metricnoop.NewMeterProvider()
+	}
+	if options.TracerProvider == nil {
+		options.TracerProvider = tracenoop.NewTracerProvider()
+	}
+	if options.Propagators == nil {
+		options.Propagators = propagation.TraceContext{}
+	}
+	if options.Load == nil {
+		options.Load = noopLoadRecorder{}
+	}
+	return options
+}
+
+// registerServices attaches every supplied service to server and records the
+// full method name of everything now registered, health included, into methods.
+//
+// Filling the set here keeps the write adjacent to the registration it reads,
+// which is the ordering NewServer's telemetry filter depends on: the set is
+// written once, before Serve, and only read afterwards.
+func registerServices(server *grpc.Server, services []RegisterService, methods methodSet) {
+	for _, register := range services {
+		if register != nil {
+			register(server)
+		}
+	}
+	for serviceName, service := range server.GetServiceInfo() {
+		for _, method := range service.Methods {
+			methods["/"+serviceName+"/"+method.Name] = struct{}{}
+		}
+	}
+}
+
+// validateConfig proves the bounds NewServer is about to hand grpc-go.
+//
+// internal/config.validateGRPCConfig restates the same access-log rules for the
+// service's own configuration file, so a new access-log bound needs a rule in
+// both places. config_parity_test.go owns why there are two owners and holds
+// them to one answer.
 func validateConfig(cfg Config) error {
 	if cfg.MaxConcurrentRPCs <= 0 {
 		return errors.New("build gRPC server: max concurrent RPCs must be positive")
 	}
-	if cfg.MaxConcurrentStreams == 0 {
-		return errors.New("build gRPC server: max concurrent streams must be positive")
+	if err := uint32Bound("max concurrent streams", cfg.MaxConcurrentStreams); err != nil {
+		return err
 	}
-	if cfg.MaxHeaderListBytes == 0 {
-		return errors.New("build gRPC server: max header list bytes must be positive")
+	if err := uint32Bound("max header list bytes", cfg.MaxHeaderListBytes); err != nil {
+		return err
 	}
 	if cfg.MaxReceiveMessageBytes <= 0 {
 		return errors.New("build gRPC server: max receive message bytes must be positive")
@@ -170,6 +251,43 @@ func validateConfig(cfg Config) error {
 	return nil
 }
 
+// uint32Bound owns the one place a caller-supplied transport bound is proven to
+// fit the uint32 grpc-go asks for; [Config] owns why those fields are int.
+func uint32Bound(name string, value int) error {
+	if value <= 0 || uint64(value) > math.MaxUint32 {
+		return fmt.Errorf(
+			"build gRPC server: %s must be in range [1,%d]",
+			name,
+			uint64(math.MaxUint32),
+		)
+	}
+	return nil
+}
+
+// methodSet holds the full RPC method names of every registered service.
+type methodSet map[string]struct{}
+
+// publishHealthLocked republishes standard health from the current inputs. It
+// owns the whole rule so each caller below only records its own input:
+//
+//	SERVING iff startup admitted the process and authentication trust is
+//	current. Drain is terminal and is published by StartDrain instead, so a
+//	later input can never make a draining server serving again.
+//
+// Adding a readiness input means adding a field and one term here, not another
+// copy of the composite in a third method.
+func (s *Server) publishHealthLocked() {
+	serving := s.admitted
+	// profile:authn-oidc-jwt:start
+	serving = serving && s.authnReady
+	// profile:authn-oidc-jwt:end
+	status := healthgrpc.HealthCheckResponse_NOT_SERVING
+	if serving {
+		status = healthgrpc.HealthCheckResponse_SERVING
+	}
+	s.health.SetServingStatus("", status)
+}
+
 // MarkServing publishes the shared startup admission result to gRPC health.
 func (s *Server) MarkServing() {
 	if s == nil {
@@ -180,19 +298,17 @@ func (s *Server) MarkServing() {
 	if s.draining {
 		return
 	}
-	// profile:authn-oidc-jwt:start
 	s.admitted = true
-	if !s.authnReady {
-		s.health.SetServingStatus("", healthgrpc.HealthCheckResponse_NOT_SERVING)
-		return
-	}
-	// profile:authn-oidc-jwt:end
-	s.health.SetServingStatus("", healthgrpc.HealthCheckResponse_SERVING)
+	s.publishHealthLocked()
 }
 
 // profile:authn-oidc-jwt:start
 
 // SetAuthnReady composes current authentication trust into standard health.
+//
+// Its proof lives in authn_health_test.go rather than server_test.go, because
+// this method and that file are both removed when a service is generated with
+// AUTHN=none.
 func (s *Server) SetAuthnReady(ready bool) {
 	if s == nil {
 		return
@@ -203,11 +319,7 @@ func (s *Server) SetAuthnReady(ready bool) {
 		return
 	}
 	s.authnReady = ready
-	status := healthgrpc.HealthCheckResponse_NOT_SERVING
-	if s.admitted && ready {
-		status = healthgrpc.HealthCheckResponse_SERVING
-	}
-	s.health.SetServingStatus("", status)
+	s.publishHealthLocked()
 }
 
 // profile:authn-oidc-jwt:end
@@ -288,14 +400,3 @@ func (noopLoadRecorder) Admitted(context.Context) func() {
 }
 
 func (noopLoadRecorder) Shed(context.Context) {}
-
-var _ interface {
-	Serve(listener net.Listener) error
-	Shutdown(ctx context.Context) error
-	Close() error
-} = (*Server)(nil)
-
-var _ interface {
-	MarkServing()
-	StartDrain()
-} = (*Server)(nil)

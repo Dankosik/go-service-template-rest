@@ -11,30 +11,21 @@ import (
 
 // RequestTimeout bounds how long one request may occupy a handler.
 //
-// The net/http server timeouts do not cover this. ReadTimeout and WriteTimeout
-// are connection deadlines, and Go documents WriteTimeout as one that "does not
-// let Handlers make decisions on a per-request basis" — neither cancels
-// r.Context(). Without this budget a handler blocked on a slow dependency keeps
-// its goroutine, its pooled database connection, and its memory long after the
-// client is gone, and a drain then waits http.shutdown_timeout for work nobody
-// is receiving.
+// The net/http server timeouts do not cover this: ReadTimeout and WriteTimeout
+// are connection deadlines and neither cancels r.Context(), so a handler blocked
+// on a slow dependency keeps its goroutine, its pooled connection, and its memory
+// long after the client is gone.
 //
-// The cancellation is the protection. Every adapter in this repository takes a
-// context, so an expired budget unwinds the outbound call, the query, and the
-// handler with it. A handler that ignores its context cannot be stopped from
-// here — running it on another goroutine, as http.TimeoutHandler does, would
-// return early while leaking that goroutine anyway, and would buffer every
-// response to do it.
+// The cancellation is the protection, not the response. A handler that ignores
+// its context cannot be stopped from here — running it on another goroutine, as
+// http.TimeoutHandler does, would return early while leaking that goroutine
+// anyway. The response is a fallback, written only when the handler returned
+// without committing one; a generated strict-server operation commits its own
+// first, and generatedStrictServerOptions maps that path to the same problem.
 //
-// The response here is a fallback: it is written only when the handler returned
-// without committing one. A generated strict-server operation that returns its
-// expired context commits a response of its own first, so that path is mapped to
-// the same problem in generatedStrictServerOptions.
-//
-// Expiry maps to 504 rather than the 503 that http.TimeoutHandler uses, because
-// this service already answers 503 for "not ready" — keeping the two apart lets
-// an operator tell a draining or unhealthy instance from one whose dependencies
-// went slow.
+// Expiry maps to 504 rather than http.TimeoutHandler's 503, because this service
+// already answers 503 for "not ready" — keeping the two apart lets an operator
+// tell a draining instance from one whose dependencies went slow.
 func RequestTimeout(timeout time.Duration, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if timeout <= 0 {

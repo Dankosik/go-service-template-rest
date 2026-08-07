@@ -181,6 +181,34 @@ feature/domain errors rather than raw `status.Error`: the shared transport
 maps known domain identities to sanitized gRPC codes and converts unknown
 errors to `INTERNAL` without exposing their text.
 
+A handler therefore does not choose its own `codes.Code`. It chooses a
+`problem.Code`, and the transport renders it. That indirection is what keeps one
+domain error answering consistently over both HTTP and gRPC, and it fixes the
+reachable vocabulary:
+
+| `problem.Code` | gRPC code |
+| --- | --- |
+| `CodeBadRequest`, `CodeUnprocessableContent` | `InvalidArgument` |
+| `CodeUnauthorized` | `Unauthenticated` |
+| `CodeForbidden` | `PermissionDenied` |
+| `CodeNotFound` | `NotFound` |
+| `CodeMethodNotAllowed` | `Unimplemented` |
+| `CodeConflict` | `Aborted` |
+| `CodeRequestEntityTooLarge`, `CodeTooManyRequests` | `ResourceExhausted` |
+<!-- profile:authn-oidc-jwt:start -->
+| `CodeRequestHeaderFieldsTooLarge` | `ResourceExhausted` |
+<!-- profile:authn-oidc-jwt:end -->
+| `CodeServiceUnavailable` | `Unavailable` |
+| `CodeGatewayTimeout` | `DeadlineExceeded` |
+| `CodeInternalError`, unclassified | `Internal` |
+
+A canceled or expired RPC context answers `CANCELED` or `DEADLINE_EXCEEDED`
+before classification runs, because that is the caller's own signal rather than a
+service outcome. `FailedPrecondition`, `AlreadyExists`, `OutOfRange`, and
+`DataLoss` are not reachable through this table; needing one is a contract
+decision that extends `problem` and `mappedStatus` together, not a local
+`status.Error` in a handler.
+
 Current generated streaming APIs are generic:
 
 ```go
@@ -224,51 +252,62 @@ The complete, isolated four-cardinality example is
 `examples/grpc-reference-service`. Its client-streaming collector caps both
 message count and aggregate value bytes before appending; transport flow
 control and per-message limits do not bound total application memory for a
-long-lived stream.
+long-lived stream. It also demonstrates the error rule above: its limit
+failures are a domain sentinel classified by an exported `DomainErrors()`, and
+its tests compose the real `grpcx.NewServer` so the client-visible status they
+assert is the one the shared transport actually produces.
 
 ### 4. Register it in bootstrap
 
 `cmd/service/internal/bootstrap/run.go` is the composition owner. Build the
-feature and its transport adapter there, then fill `grpcRuntimeBindings`
-without making the transport package import a feature:
+feature and its transport adapter there, then fill `Services` on the existing
+`bindings` value, without making the transport package import a feature:
 
 ```go
 ordersService := orders.New(/* feature dependencies */)
 ordersServer := ordersgrpc.NewServer(ordersService)
-bindings := grpcRuntimeBindings{
-    Services: []grpcx.RegisterService{
-        func(registrar grpc.ServiceRegistrar) {
-            ordersv1.RegisterOrdersServiceServer(registrar, ordersServer)
-        },
-    },
-    UnaryPolicy: []grpc.UnaryServerInterceptor{
-        authenticateUnary,
-        authorizeUnary,
-    },
-    StreamingPolicy: []grpc.StreamServerInterceptor{
-        authenticateStream,
-        authorizeStream,
+
+bindings.Services = []grpcx.RegisterService{
+    func(registrar grpc.ServiceRegistrar) {
+        ordersv1.RegisterOrdersServiceServer(registrar, ordersServer)
     },
 }
-
-grpcServer, err := newGRPCRuntime(
-    cfg,
-    log,
-    metrics,
-    domainErrors,
-    bindings,
-)
 ```
 
-Authentication and authorization are not invented by the template. When the
-contract requires them, supply unary and streaming policy interceptors through
-the same bootstrap binding. They run after correlation, sanitized logging,
-panic recovery, and process admission, but before handler-error mapping and the
-generated handler. A policy's direct gRPC status is treated as deliberate
-service-owned output, so its detail must already be safe for the caller; raw
-internal errors are converted to a generic `INTERNAL` status by the surrounding
-policy boundary. Policies also receive standard health methods unless the
-service explicitly exempts them.
+Domain errors are already wired: `newGRPCRuntime` receives the same
+`domainErrors` slice as the HTTP router, so a handler returns its feature error
+and the shared transport classifies it once. Return feature/domain errors rather
+than a raw `status.Error`; see step 3.
+
+A new domain identity is classified once, for both transports, by appending its
+`problem.Mapper` at `runtimeDependencies.DomainErrors` in
+`cmd/service/internal/bootstrap/startup_dependencies.go`. There is deliberately
+no gRPC-only mapper seam: one error answering `404` over HTTP and `Internal` over
+gRPC is the failure this shared slice exists to prevent.
+
+`UnaryPolicy` and `StreamPolicy` carry the authentication and authorization
+the contract requires; the template invents neither, so supply them through the
+same binding.
+<!-- profile:authn-oidc-jwt:start -->
+
+The `AUTHN=oidc-jwt` profile has already filled both slices with the verifier's
+interceptors, so append rather than assign. An assignment compiles, passes every
+check, and silently removes gRPC authentication:
+
+```go
+bindings.UnaryPolicy = append(bindings.UnaryPolicy, authorizeUnary)
+bindings.StreamPolicy = append(bindings.StreamPolicy, authorizeStream)
+```
+<!-- profile:authn-oidc-jwt:end -->
+
+Policy interceptors run after correlation, sanitized logging, panic recovery,
+and process admission, but before handler-error mapping and the generated
+handler. A policy's direct gRPC status is treated as deliberate service-owned
+output, so its detail must already be safe for the caller; raw internal errors,
+and a status the policy merely wrapped rather than returned itself, are
+converted to a generic `INTERNAL` status by the surrounding policy boundary.
+Policies also receive standard health methods unless the service explicitly
+exempts them.
 
 ## Build a client
 
@@ -350,7 +389,10 @@ concurrency, and memory measurement.
 
 The interceptor order is identical for unary and streaming RPCs:
 
-1. validate or create `x-request-id` and return it in response metadata;
+1. validate or create `x-request-id` and return it in response metadata. A
+   single valid value is accepted; zero values, an invalid value, or two or
+   more values all mint a fresh identifier, which is stricter than the HTTP
+   listener's first-of-several header read;
 2. emit a sanitized completion log;
 3. recover panics without disclosing panic values;
 4. admit against one non-blocking process-wide RPC semaphore;

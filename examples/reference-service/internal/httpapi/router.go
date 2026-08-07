@@ -39,13 +39,11 @@ type Options struct {
 // NewAPIHandler wires the generated contract to the reference feature.
 //
 // It returns the API handler only — not a server-ready router. The middleware
-// chain that makes it safe to expose (correlation, tracing, access logging, body
-// limits, the request budget, load shedding, panic recovery) is applied by the
-// composition root through httpx.Harden, because a feature package must not
-// import concrete infra adapters. The important part is that the chain is applied
-// by the shared code rather than rebuilt here: a second hand-built chain is how a
-// service ends up with none of those protections while believing it inherited all
-// of them.
+// chain that makes it safe to expose is applied by the composition root through
+// httpx.Harden, because a feature package must not import concrete infra
+// adapters. That the chain comes from shared code rather than being rebuilt here
+// is the point: a second hand-built chain is how a service ends up with none of
+// those protections while believing it inherited all of them.
 func NewAPIHandler(articles *article.Service, opts Options) (http.Handler, error) {
 	if articles == nil {
 		return nil, errors.New("reference api: article service is required")

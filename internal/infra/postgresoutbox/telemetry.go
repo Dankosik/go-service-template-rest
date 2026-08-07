@@ -12,15 +12,48 @@ import (
 	"go.opentelemetry.io/otel/metric"
 )
 
-const telemetryScope = "service.outbox.postgres"
+// TelemetryScope names this package's instrumentation. Callers that build the
+// meter themselves pass it to Meter so the scope stays one string; NewTelemetry
+// uses it for the global-provider fallback.
+const TelemetryScope = "service.outbox.postgres"
 
-// The two outcome labels every operation site chooses between. Attribute values
-// are a fixed enum, so they are named rather than repeated.
+// The outcome labels every operation site chooses between. Attribute values are
+// a fixed enum, so they are named rather than repeated.
 const (
-	outcomeSuccess = "success"
-	outcomeError   = "error"
+	outcomeSuccess  = "success"
+	outcomeError    = "error"
+	outcomeRejected = "rejected"
+	// boundedOther is what every closed vocabulary in this package collapses an
+	// unrecognized value to, so an unexpected string cannot mint a time series.
+	boundedOther = "other"
 )
 
+// The closed error.type vocabulary. Every class this package produces is named
+// here and used at its producing site, so the producer and boundedErrorType
+// below reference one identifier rather than two literals that can drift apart.
+// A class added at a call site without a constant here is what
+// TestErrorClassVocabularyIsBounded fails on.
+const (
+	classNone               = "none"
+	classDatabase           = "database"
+	classLostLease          = "lost_lease"
+	classValidation         = "validation"
+	classStuck              = "stuck"
+	classPanic              = "panic"
+	classPublisherPermanent = "publisher_permanent"
+	classPublisherRejected  = "publisher_rejected"
+	classPublisherTimeout   = "publisher_timeout"
+	classPublisherCanceled  = "publisher_canceled"
+	classPublisherTemporary = "publisher_temporary"
+	classAttemptExhausted   = "attempt_exhausted"
+)
+
+// Telemetry records this package's metrics and operator logs. A nil *Telemetry
+// is a working no-op: every method below returns on a nil receiver, because
+// telemetry is optional at both NewStore and NewRelay. Call these methods
+// directly rather than guarding at the call site — a second nil check reads as
+// if one of the two were load-bearing, and neither is. A method added here
+// carries the same guard.
 type Telemetry struct {
 	log                  *slog.Logger
 	messages             metric.Int64ObservableGauge
@@ -43,14 +76,14 @@ type telemetrySnapshot struct {
 	observation  StateObservation
 	observedAt   time.Time
 	lastProgress time.Time
-	ready        bool
+	running      bool
 	inflight     int64
 	staleAfter   time.Duration
 }
 
 func NewTelemetry(meter metric.Meter, logger *slog.Logger) (*Telemetry, error) {
 	if meter == nil {
-		meter = otel.GetMeterProvider().Meter(telemetryScope)
+		meter = otel.GetMeterProvider().Meter(TelemetryScope)
 	}
 	if logger == nil {
 		logger = slog.Default()
@@ -129,17 +162,25 @@ func (t *Telemetry) RecordProgress(at time.Time) {
 	t.mu.Unlock()
 }
 
-func (t *Telemetry) SetProcessState(ready bool, inflight int64, staleAfter time.Duration) {
+// SetProcessState publishes the relay's lifecycle state for the metric
+// callback. running is the lifecycle half of readiness, not the whole verdict:
+// the callback combines it with observation freshness on every scrape, because
+// the relay only calls this at lifecycle edges and an idle relay can go stale
+// between two of them.
+func (t *Telemetry) SetProcessState(running bool, inflight int64, staleAfter time.Duration) {
 	if t == nil {
 		return
 	}
 	t.mu.Lock()
-	t.snapshot.ready = ready
+	t.snapshot.running = running
 	t.snapshot.inflight = inflight
 	t.snapshot.staleAfter = staleAfter
 	t.mu.Unlock()
 }
 
+// RecordOperation counts one operation and records how long it took. Use it
+// only where duration measures the labeled operation end to end; anything
+// counted without a span of its own belongs in CountOperation.
 func (t *Telemetry) RecordOperation(
 	ctx context.Context,
 	operation string,
@@ -150,16 +191,31 @@ func (t *Telemetry) RecordOperation(
 	if t == nil {
 		return
 	}
-	operation = boundedOperation(operation)
-	outcome = boundedOutcome(outcome)
-	errorType = boundedErrorType(errorType)
-	attributes := metric.WithAttributes(
-		attribute.String("operation", operation),
-		attribute.String("outcome", outcome),
-		attribute.String("error.type", errorType),
-	)
+	attributes := operationAttributes(operation, outcome, errorType)
 	t.operations.Add(ctx, 1, attributes)
 	t.duration.Record(ctx, duration.Seconds(), attributes)
+}
+
+// CountOperation counts one operation that has no duration of its own: a state
+// transition, or a verdict reached partway through a longer operation. Such a
+// site has nothing honest to pass as a duration, and the placeholders it would
+// otherwise pass — a zero span, or the enclosing operation's elapsed time —
+// land in the same histogram as the real measurements and make it unreadable.
+// They only ever reach the counter.
+func (t *Telemetry) CountOperation(ctx context.Context, operation, outcome, errorType string) {
+	if t == nil {
+		return
+	}
+	t.operations.Add(ctx, 1, operationAttributes(operation, outcome, errorType))
+}
+
+//nolint:ireturn // metric.WithAttributes returns OTel's own option interface.
+func operationAttributes(operation, outcome, errorType string) metric.MeasurementOption {
+	return metric.WithAttributes(
+		attribute.String("operation", boundedOperation(operation)),
+		attribute.String("outcome", boundedOutcome(outcome)),
+		attribute.String("error.type", boundedErrorType(errorType)),
+	)
 }
 
 func (t *Telemetry) LogPoison(ctx context.Context, id, errorClass string, attempt int) {
@@ -170,7 +226,7 @@ func (t *Telemetry) LogPoison(ctx context.Context, id, errorClass string, attemp
 
 func (t *Telemetry) LogPublisherStuck(ctx context.Context) {
 	if t != nil {
-		t.log.ErrorContext(ctx, "outbox_publisher_stuck", "error.type", "stuck")
+		t.log.ErrorContext(ctx, "outbox_publisher_stuck", "error.type", classStuck)
 	}
 }
 
@@ -182,9 +238,16 @@ func (t *Telemetry) LogRecovery(ctx context.Context, id string, attempt int) {
 
 // LogListenerRetry reports that wake-up notifications are unavailable. Pickup
 // latency falls back to the poll interval until the listener reconnects.
-func (t *Telemetry) LogListenerRetry(ctx context.Context, err error) {
+//
+// stage is a bounded class from listenerStage, never the driver's error text.
+// A pgx connect failure formats the DSN's user, database, and host into its
+// message, and this package promises never to log DSN material. Losing that
+// detail costs little: the listener shares the pool's DSN, so a real
+// connectivity fault also fails the pool, and that path exits the process with
+// a postgres_unavailable class instead of degrading quietly.
+func (t *Telemetry) LogListenerRetry(ctx context.Context, stage string) {
 	if t != nil {
-		t.log.WarnContext(ctx, "outbox_listener_retry", "error.type", "database", "error", err.Error())
+		t.log.WarnContext(ctx, "outbox_listener_retry", "error.type", classDatabase, "stage", stage)
 	}
 }
 
@@ -214,21 +277,34 @@ func (t *Telemetry) observe(_ context.Context, observer metric.Observer) error {
 	observer.ObserveFloat64(t.observationTimestamp, unixSeconds(snapshot.observedAt))
 	observer.ObserveFloat64(t.lastProgress, unixSeconds(snapshot.lastProgress))
 	observer.ObserveInt64(t.orderingHeads, snapshot.observation.OrderingHeadCount)
-	observer.ObserveInt64(t.storageBytes, snapshot.observation.EventsBytes,
-		metric.WithAttributes(attribute.String("relation", "events"), attribute.String("kind", "total")))
-	observer.ObserveInt64(t.storageBytes, snapshot.observation.EventsIndexBytes,
-		metric.WithAttributes(attribute.String("relation", "events"), attribute.String("kind", "indexes")))
-	observer.ObserveInt64(t.storageBytes, snapshot.observation.OrderingHeadsBytes,
-		metric.WithAttributes(attribute.String("relation", "ordering_heads"), attribute.String("kind", "total")))
-	observer.ObserveInt64(t.storageBytes, snapshot.observation.OrderingHeadsIndexBytes,
-		metric.WithAttributes(attribute.String("relation", "ordering_heads"), attribute.String("kind", "indexes")))
-	observer.ObserveInt64(t.storageBytes, snapshot.observation.RedrivesBytes,
-		metric.WithAttributes(attribute.String("relation", "redrives"), attribute.String("kind", "total")))
-	observer.ObserveInt64(t.storageBytes, snapshot.observation.RedrivesIndexBytes,
-		metric.WithAttributes(attribute.String("relation", "redrives"), attribute.String("kind", "indexes")))
+
+	for _, relation := range []struct {
+		name         string
+		total, index int64
+	}{
+		{name: "events", total: snapshot.observation.EventsBytes, index: snapshot.observation.EventsIndexBytes},
+		{
+			name:  "ordering_heads",
+			total: snapshot.observation.OrderingHeadsBytes,
+			index: snapshot.observation.OrderingHeadsIndexBytes,
+		},
+		{name: "redrives", total: snapshot.observation.RedrivesBytes, index: snapshot.observation.RedrivesIndexBytes},
+	} {
+		name := attribute.String("relation", relation.name)
+		observer.ObserveInt64(t.storageBytes, relation.total,
+			metric.WithAttributes(name, attribute.String("kind", "total")))
+		observer.ObserveInt64(t.storageBytes, relation.index,
+			metric.WithAttributes(name, attribute.String("kind", "indexes")))
+	}
+
 	observer.ObserveInt64(t.inflight, snapshot.inflight)
+	// The snapshot carries the relay's lifecycle state as of its last
+	// SetProcessState, which only happens at lifecycle edges. This callback runs
+	// on scrape, so it asks the shared readiness predicate again against the
+	// current clock; without that, a relay that stopped observing between two
+	// edges would keep reporting ready=1 until its next edge.
 	ready := int64(0)
-	if snapshot.ready && snapshot.staleAfter > 0 && time.Since(snapshot.observedAt) <= snapshot.staleAfter {
+	if readyWithFreshObservation(snapshot.running, snapshot.observedAt, snapshot.staleAfter) {
 		ready = 1
 	}
 	observer.ObserveInt64(t.readiness, ready)
@@ -242,31 +318,50 @@ func unixSeconds(value time.Time) float64 {
 	return float64(value.UnixNano()) / float64(time.Second)
 }
 
+// boundedOperation is the closed vocabulary for the operation attribute. The
+// unit differs by operation, and the duration histogram is only meaningful per
+// operation because of it:
+//
+//   - append, claim, mark_published, schedule_retry, poison, redrive, cleanup,
+//     and observe are one statement each, and carry that statement's duration.
+//   - publish is one event, not one batch.
+//   - recovery and drain, and the reconciled outcome of mark_published, are
+//     counted through CountOperation and carry no duration.
+//
+// A new operation states its unit here and picks the matching recorder.
 func boundedOperation(value string) string {
 	switch value {
 	case "append", "claim", "recovery", "publish", "mark_published", "schedule_retry", "poison", "redrive", "cleanup", "observe", "drain":
 		return value
 	default:
-		return "other"
+		return boundedOther
 	}
 }
 
 func boundedOutcome(value string) string {
 	switch value {
-	case outcomeSuccess, outcomeError, "empty", "reconciled", "rejected", "started":
+	case outcomeSuccess, outcomeError, outcomeRejected, "empty", "reconciled", "started":
 		return value
 	default:
-		return "other"
+		return boundedOther
 	}
 }
 
+// boundedErrorType is the closed vocabulary for error.type. One class describes
+// a failure in three places — this metric attribute, the error.type field of
+// LogPoison, and the stored last_error_class column — and only this function
+// bounds it, because the column's CHECK constraint bounds length alone. Any
+// class the package produces must therefore appear here, or the metric silently
+// reports "other" while the log and the row report the real value.
+// TestErrorClassVocabularyIsBounded drives the producers and fails on a class
+// this list forgot.
 func boundedErrorType(value string) string {
 	switch value {
-	case "none", "database", "lost_lease", "validation", "stuck", "panic",
-		"publisher_permanent", "publisher_rejected", "publisher_timeout",
-		"publisher_canceled", "publisher_temporary":
+	case classNone, classDatabase, classLostLease, classValidation, classStuck, classPanic,
+		classPublisherPermanent, classPublisherRejected, classPublisherTimeout,
+		classPublisherCanceled, classPublisherTemporary, classAttemptExhausted:
 		return value
 	default:
-		return "other"
+		return boundedOther
 	}
 }

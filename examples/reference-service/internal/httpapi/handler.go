@@ -28,13 +28,12 @@ type handler struct {
 // status. The use case never sees an HTTP type and this transport never invents a
 // business rule.
 //
-// The authorization check is why the identity seam exists. The contract's
-// security requirement already proved a credential before this ran, and
-// reqctx.PrincipalFromContext reports who it proved — so this handler decides
-// what that caller may do without reading the Authorization header a second
-// time. An absent principal on an operation that declares `security:` is a
-// wiring defect rather than an anonymous caller, so it is refused rather than
-// challenged.
+// The authorization check is why the identity seam exists: the contract's
+// security requirement already proved a credential, and
+// reqctx.PrincipalFromContext reports who it proved, so this handler decides what
+// that caller may do without reading the Authorization header a second time. An
+// absent principal on an operation declaring `security:` is a wiring defect
+// rather than an anonymous caller, so it is refused rather than challenged.
 func (h *handler) CreateArticle(ctx context.Context, request openapi.CreateArticleRequestObject) (openapi.CreateArticleResponseObject, error) {
 	principal, authenticated := reqctx.PrincipalFromContext(ctx)
 	if !authenticated {

@@ -16,28 +16,68 @@ command, configuration, tests, documentation, image binary, and Make targets.
 This pack provides at-least-once durable publication with explicit duplicate
 behavior. It does not provide exactly-once delivery.
 
-Feature code chooses the event and appends it through the same `pgx.Tx` that
-owns the domain mutation:
+This pack ships the relay side composed and the append side unwired, because the
+template has no feature that emits events — a `Store` built for nobody would be
+a dependency with no consumer. Wiring it is the first thing an adopting service
+does.
+
+Build one `*postgresoutbox.Store` over the pool that
+`cmd/service/internal/bootstrap/startup_dependencies.go` already opens
+(`runtimeDependencies.postgres`), beside the other profile-guarded dependencies
+in `cmd/service/internal/bootstrap/run.go`, and pass it into whatever implements
+`openapi.StrictServerInterface` — the `Handlers.API` seam. Its meter comes from
+the same `telemetry.Metrics` the rest of that composition uses. Both arguments to
+`NewTelemetry` may be nil, and so may the store's telemetry. Feature code then
+chooses the event and appends it through the same `pgx.Tx` that owns the domain
+mutation:
 
 ```go
-err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+// Composition root, once.
+outboxTelemetry, err := postgresoutbox.NewTelemetry(meter, log)
+if err != nil {
+	return err
+}
+outbox, err := postgresoutbox.NewStore(pool, outboxTelemetry)
+if err != nil {
+	return err
+}
+
+// Feature code, per business transaction.
+err = pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
 	if err := repository.Update(ctx, tx, change); err != nil {
 		return err
 	}
 	return outbox.Append(ctx, tx, postgresoutbox.Event{
-		ID:          postgresoutbox.NewID(),
-		Type:        "order.updated",
-		Source:      "orders",
-		Destination: "orders.events",
-		Schema:      "v1",
-		OccurredAt:  time.Now().UTC(),
-		Payload:     payload,
-		Metadata:    metadata,
-		OrderingKey: orderID,
+		ID:               postgresoutbox.NewID(),
+		Type:             "order.updated",
+		Source:           "orders",
+		Destination:      "orders.events",
+		Schema:           "v1",
+		OccurredAt:       time.Now().UTC(),
+		Payload:          payload,
+		Metadata:         metadata,
+		OrderingKey:      orderID,
 		OrderingSequence: revision,
 	})
 })
 ```
+
+`Store` serves three audiences: a feature calls only `Append`, the relay process
+owns claim, finalization, cleanup, and observation, and `Get` and `Redrive` are
+operator tooling. The relay reads `Get` too, to resolve a finalization its batch
+statement did not report. `cmd/outbox-relay/internal/bootstrap/run.go` is the
+worked composition for the relay side.
+
+`Get` and `Redrive` are Go methods, not a shipped operator interface. Deciding
+who may redrive is an authorization question this pack does not answer, so a
+service exposes them the way it exposes anything else — an admin endpoint, a
+maintenance command, a support tool — before an operator can use the redrive
+procedure below.
+
+A rejected event returns `ErrInvalidEvent` before any statement is sent. A
+sequence at or below its key's retained high-water mark returns
+`ErrOrderingSequence`, which only PostgreSQL can decide: the append statement
+goes out and reports the offending key back, having stored nothing.
 
 `Append` neither begins nor commits a transaction. Returning an error rolls
 back both the domain mutation and outbox row. The API process never calls a
@@ -96,8 +136,61 @@ registers no publisher: an initialized service must replace the `nil` builder
 in `cmd/outbox-relay/main.go` with its selected messaging adapter. There is no
 production noop fallback. The adapter is outside this pack, must be safe for
 concurrent `Publish` calls, and must return nil only after the broker durably
-acknowledges the same event ID.
+acknowledges the same event ID. The `Publisher` interface documents the whole
+acceptance contract.
 
+The builder is `bootstrap.PublisherBuilder`. It receives the loaded config and
+logger, and returns the adapter plus optional cleanup that bootstrap runs on
+startup failure and on shutdown, inside a five-second budget:
+
+```go
+func main() {
+	if err := bootstrap.Run(os.Args[1:], buildPublisher); err != nil {
+		reportFailure(os.Stderr, err)
+		os.Exit(1)
+	}
+}
+
+func buildPublisher(
+	ctx context.Context,
+	cfg config.Config,
+	log *slog.Logger,
+) (postgresoutbox.Publisher, func(context.Context), error) {
+	client, err := broker.Dial(ctx, cfg /* ... */)
+	if err != nil {
+		return nil, nil, fmt.Errorf("dial broker: %w", err)
+	}
+	return brokerPublisher{client: client}, func(context.Context) { client.Close() }, nil
+}
+```
+
+### Classifying a publication failure
+
+What the adapter returns decides whether an event is retried, counted against
+`max_attempts`, or parked for an operator. Only the adapter can tell these
+apart, because only it knows what its broker's errors prove:
+
+| The adapter can prove | Return | Relay behavior |
+| --- | --- | --- |
+| Retrying these exact bytes can never succeed — the broker refused the payload, subject, or size | `ErrPermanentPublication` | Poisoned on the first occurrence; blocks its ordering key until an operator redrive |
+| The broker definitely did not accept it, but the same bytes could succeed later — no stream, no responder, a definite API rejection | `ErrPublicationNotAccepted` | Retried with backoff, and poisoned once `max_attempts` is reached |
+| Nothing — a timeout, cancellation, disconnect, or a lost acknowledgement | any other error | Retried with backoff, forever; never poisoned by the attempt cap |
+
+The third row is the default on purpose. An attempt cap may only park an event
+that is provably still unpublished, so an adapter that cannot distinguish its
+failures should return plain errors and let the backlog become visible instead
+of risking loss at a cap.
+
+<!-- profile:messaging-nats-jetstream:start -->
+`natsOutboxPublisher` in `test/postgres_outbox_natsjs_integration_test.go` is a
+worked adapter against that contract, including the broker-rejection mapping
+onto `ErrPermanentPublication`. It maps every `natsjs.ErrRejected` that way,
+which suits a fixed topology where a rejection means the envelope is wrong. A
+service whose stream can be absent while the relay runs should classify that
+case as `ErrPublicationNotAccepted` instead, so a temporary topology gap costs
+attempts rather than an operator redrive.
+
+<!-- profile:messaging-nats-jetstream:end -->
 ## Envelope and ordering
 
 Each immutable row carries event ID, type, source, destination, schema,
@@ -165,9 +258,32 @@ advances each event's key head and unblocks each key's successor, which the
 statement can do for the whole lease because a lease never holds two events of
 the same key. Retries and poison transitions take one statement each. A backlog
 therefore costs roughly two database round trips per batch rather than two per
-event, ordered work included. Only an event the statement reports as
-unfinalized, which means a lost lease, falls back to a per-event resolution
-against durable state.
+event, ordered work included.
+
+The ordered statement has one built-in second attempt. A key whose successor
+was committed but not yet visible to that statement's snapshot comes back marked
+as a conflict, and resending only those keys takes a fresh snapshot, which
+resolves it. `orderedPublishSnapshots` in the package is that count.
+
+An acknowledgement neither statement reported falls back to a per-event
+resolution against durable state. That normally means a lost lease; for an
+ordered event it can instead mean the snapshot conflict outlasted the retry, and
+the two are indistinguishable from the outside — which is why the fallback
+resolves the row rather than assuming either. A retry or poison the statement
+did not report is treated differently: it means this relay held the batch past
+its own lease, so another relay already owns the event and will deliver it.
+Nothing is at risk and nothing is reconciled, but the overrun is a lease or
+replica misconfiguration, so the relay stops instead of continuing quietly.
+
+That fallback is the one part of finalization whose cost is not per batch. Each
+leftover event is resolved over two passes, and for an ordered event every pass
+is itself worth the ordered statement's two snapshots — so a batch that comes
+back short costs statements per leftover event on top of its two round trips.
+Nothing sizes `lease_duration` for that worst case, deliberately: a
+finalization that runs out of lease stops the relay with `progress_unknown`
+rather than claiming a publication it cannot prove. Size the lease for the
+ordinary batch and treat `progress_unknown` as the signal, not as something to
+outrun. `ErrProgressUnknown` in the package owns the derivation.
 
 A claim costs what its batch costs, not what the table costs. The claim and the
 retention delete both pick their rows under `FOR UPDATE` and then reach them by
@@ -188,12 +304,18 @@ That address is valid only inside the statement holding the lock, and only while
 events live in a single table — partitioning `outbox_events` would have to
 return to the id.
 
-Every publication attempt is bounded by both `publish_timeout` and the lease the
-batch was claimed under, measured on the relay's own clock from before the
-claim. Whatever the batch does not finish inside that window is released for
-retry rather than abandoned until the lease expires, and finalization is
-detached from process cancellation so a shutdown still records acknowledged
-work instead of creating duplicates.
+A batch gets one publication deadline, not one per event: the earlier of
+`publish_timeout` from the start of the batch and the lease it was claimed
+under, less the one-second publisher join bound. The lease is measured on the
+relay's own clock from before the claim, so it is the conservative side under
+any skew against PostgreSQL. Subtracting the join bound is what leaves a stuck
+adapter time to stop while the lease still covers finalization, so the budget an
+adapter actually sees is a second shorter than `lease_duration`. Every `Publish`
+call in that batch shares it, so an adapter sees the batch's remaining budget
+rather than a fresh timeout. Whatever the batch does not finish inside that
+window is released for retry rather than abandoned until the lease expires, and
+finalization is detached from process cancellation so a shutdown still records
+acknowledged work instead of creating duplicates.
 
 Idle relays wait on a PostgreSQL `LISTEN`/`NOTIFY` channel that a statement-level
 insert trigger signals, so a committed append is normally picked up within a
@@ -223,6 +345,41 @@ event loss for a strict attempt-count cap. An adapter that cannot distinguish
 refusal from an ambiguous outcome therefore retries indefinitely, and the
 oldest-pending-age signal is what surfaces such a row to operators.
 
+Two adapter behaviors are fatal to the process rather than to one event. A panic
+releases its own event for retry, finalizes the rest of the batch, and then
+stops the relay with `publisher_panic`, because a broken adapter is a deployment
+fault rather than a transient one. The one exception is a panic in a batch that
+was already being cancelled: shutdown is checked first, so the relay reports an
+ordinary drain and the panic surfaces in the publish metric rather than in the
+exit class. Finalization still runs either way. Returning nil after the batch deadline has
+passed is treated as unproven and retried: a publisher that stopped waiting
+cannot have observed the broker's acknowledgement.
+
+### What stops the relay
+
+The adapter is not the only source. `failureClass` in
+`cmd/outbox-relay/main.go` is the complete set, because it is what names the
+process exit line, and a new stop reason belongs in that switch:
+
+| Exit class | Cause |
+| --- | --- |
+| `config` | Invalid configuration, an unregistered or unusable publisher, or a store or relay that could not be built |
+| `postgres_unavailable` | The pool could not connect, health-check, or acquire |
+| `publisher_stuck` | An adapter goroutine outlived cancellation past the join bound; cleanup is unsafe |
+| `publisher_panic` | An adapter panicked |
+| `progress_unknown` | A publication could be neither recorded nor disproven |
+| `lost_lease` | A retry or poison statement finalized fewer rows than it was given — the batch outlived its lease |
+| `runtime` | Anything else: a failed claim, retention delete, or startup observation; a diagnostics address that could not be bound, or a diagnostics server that stopped or would not join; a publisher builder that failed; and publisher cleanup that timed out or panicked |
+
+The classes are matched on sentinel errors, so a builder decides its own. `config`
+covers a builder that returns `postgresoutbox.ErrConfig` — the right answer for a
+missing or malformed adapter setting. Every other builder failure, including the
+`dial broker` example above, is `runtime`: wrap `ErrConfig` when the operator's
+fix is in configuration, and leave it unwrapped when it is not.
+
+A transient broker outage is in none of these: it produces retries and poison
+transitions, which are durable progress rather than a stop.
+
 ## Runtime and operations
 
 The default relay settings are:
@@ -242,7 +399,7 @@ rejects an unsafe combination before publisher or database mutation.
 
 Raise `batch_size` for backlog drain rate and lower it to cap peak relay memory,
 which is that many stored envelopes; the envelope limit makes 500 worth up to
-about 144 MiB and a typical payload far less — a 4 KiB event is about 2 MiB.
+about 141 MiB and a typical payload far less — a 4 KiB event is about 2 MiB.
 
 The default is the measured knee rather than a round number. Per event, one
 claim-and-publish cycle cost 36.1 µs at a batch of 100, 30.1 µs at 250, 28.2 µs
@@ -270,17 +427,30 @@ On shutdown the process flips readiness false, stops new claims, and lets the
 current attempt finish within the drain window. Expiry cancels the attempt. A
 publisher that ignores cancellation beyond the one-second join bound makes
 cleanup unsafe, so the process does not close dependencies still reachable by
-that goroutine. The process grace period also reserves the relay's two-second
-outer join plus bounded diagnostics, publisher, and telemetry cleanup after the
-drain window. A separate Publisher cleanup callback is supervised for five
+that goroutine. The outer budget is `http.grace_period` — the relay has no HTTP
+server of its own beyond diagnostics, but it shares the process-wide shutdown
+setting rather than defining a second one. It must cover `outbox.drain_timeout`
+plus the relay's two-second outer join and the bounded diagnostics, publisher,
+and telemetry cleanup that follow the drain window; startup rejects a
+combination that does not, naming `http.grace_period`. A separate Publisher cleanup callback is supervised for five
 seconds; timeout or panic is reported instead of hanging process termination.
 
 Metrics expose mutually exclusive counts and oldest timestamps for eligible,
 in-progress, retry-wait, recovery-due, ordering-blocked, poison, and retained
 published rows; table/index bytes; ordering-head count; observation freshness;
-redrive-ledger bytes; last durable progress; operations; in-flight work; and
-readiness. Attributes are fixed enums. Payload, metadata, credentials, DSN, ordering keys, broker
-errors, and SQL text are never metric labels or logs.
+redrive-ledger bytes; last durable progress; an operation counter and a separate
+operation-duration histogram; the size of the claimed
+batch; and readiness. The two operation instruments do not carry the same set:
+an operation with no span of its own — `recovery`, `drain`, and the
+`reconciled` outcome of `mark_published` — reaches the counter only, so the
+histogram stays a latency signal instead of absorbing placeholder durations. `outbox.relay.inflight` is that batch, not the events
+inside `Publish` right now — it reports how much durable work one lease holds,
+which is what a crash would redeliver; `publish_concurrency` is what bounds the
+adapter. Attributes are fixed enums. Payload, metadata, credentials, DSN, ordering keys, broker
+errors, and SQL text are never metric labels or logs. That holds for driver
+error text too, which is why the listener-retry log records only which stage
+failed — `connect`, `subscribe`, or `wait`: pgx formats the DSN's user,
+database, and host into its connect error.
 
 One statement produces the whole observation, and it reads only unpublished rows
 through the `outbox_events_pending_idx` partial index, so its cost tracks
@@ -297,25 +467,6 @@ duty cycle on one connection at 100,000 pending and around 10% approaching a
 million — and a backlog is largest exactly when the broker is down and the
 signal matters most. Lengthen `observation_interval` before the backlog a given
 deployment must survive makes the observation itself a load problem.
-
-Identifiers are stored `COLLATE "C"`. Event ids, ordering keys, and audit ids
-are opaque tokens compared for equality and sorted only for determinism, but a
-locale collation makes every B-tree descent call `strcoll` instead of `memcmp`,
-and claim, batch finalization, and the ordered head lookup each descend one of
-those indexes per event. It is worth 11% of a 100-event claim or unordered
-publication and 17% of the ordered one. The control-character constraints are
-unaffected, because PostgreSQL derives their regex classes from the database
-encoding rather than the collation.
-
-Payload and metadata use lz4 rather than the `pglz` default. Compression engages
-only past the 2 KiB TOAST target, so small events are untouched; above it lz4
-costs much less to compress at a slightly worse ratio. Appending four 4 KiB
-events fell 19% and four 64 KiB events 58% — paid on the request path, inside
-the caller's transaction — while re-reading a 64 KiB payload on claim rose 44%,
-83 µs against the 1.37 ms the append saved. This needs a PostgreSQL built with
-lz4 (14+, including the pinned image and the major managed providers); drop the
-clause for a service that stores mostly very large payloads and drains far more
-often than it appends.
 
 Identifiers are stored `COLLATE "C"`. Event ids, ordering keys, and audit ids
 are opaque tokens compared for equality and sorted only for determinism, but a

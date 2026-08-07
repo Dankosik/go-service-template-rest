@@ -1,5 +1,3 @@
-// Package oidcjwt authenticates strict OIDC JWT access tokens for the service
-// transport adapters.
 package oidcjwt
 
 import "errors"
@@ -36,6 +34,9 @@ func (e *Error) Error() string {
 	case KindUntrustedTransport:
 		return "authentication transport is untrusted"
 	default:
+		// Also the sentinel TestDocumentedMetricReasonsMatchTheGuide walks to. It
+		// enumerates Kind values until one answers here, and that is how the
+		// operator guide is held to the full set without a second list of them.
 		return "authentication failed"
 	}
 }
@@ -44,21 +45,21 @@ func failure(kind Kind) error {
 	return &Error{kind: kind}
 }
 
-// Failure reports one sanitized authentication category to a transport
-// boundary. It exists so the HTTP adapter can prove every finite mapping
-// without reproducing parser or provider internals.
+// Failure builds one sanitized authentication category.
+//
+// It is exported for the transport adapters' own tests: proving that the HTTP
+// adapter maps every Kind to the right status and challenge needs each Kind
+// constructible from outside this package, and the alternative is for those
+// tests to mint real tokens and provider outages to reach a category. Production
+// code has no reason to call it — a Verifier returns these categories itself.
+//
+// A Kind outside the declared set is not screened here, and screening one would
+// break a caller: every consumer already answers its own default arm with a
+// fail-closed category, and TestDocumentedMetricReasonsMatchTheGuide depends on
+// the unscreened behaviour outright, walking Kind values until [Error.Error]
+// reaches its default arm to find the end of the declared run.
 func Failure(kind Kind) error {
-	switch kind {
-	case KindMissing,
-		KindMalformed,
-		KindOversize,
-		KindInvalid,
-		KindUnavailable,
-		KindUntrustedTransport:
-		return failure(kind)
-	default:
-		return failure(KindInvalid)
-	}
+	return failure(kind)
 }
 
 // KindOf reports the sanitized category carried by err.

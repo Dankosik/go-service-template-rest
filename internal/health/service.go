@@ -85,12 +85,11 @@ func New(probes ...Probe) *Service {
 // next request rather than after the next refresh interval.
 //
 // A verdict older than the refresher's cadence is refused rather than served.
-// Without that bound, a refresher that stopped — cancelled, panicked, or wedged
-// on a dependency that never returns — leaves whatever verdict it last wrote
-// standing forever, and the instance keeps reporting ready while nothing has
-// checked anything. That failure is silent by construction: the last thing a
-// healthy service writes is "healthy", so the frozen answer is the reassuring
-// one. This is the check that turns it into an eviction.
+// Without that bound, a refresher that stopped — cancelled, panicked, or wedged on
+// a dependency that never returns — leaves its last verdict standing forever while
+// nothing checks anything. The failure is silent by construction, because the last
+// thing a healthy service writes is "healthy", so the frozen answer is the
+// reassuring one. This check turns it into an eviction.
 func (s *Service) Cached() error {
 	if s.draining.Load() {
 		return ErrDraining
@@ -128,13 +127,12 @@ func (s *Service) staleness(state *readinessState) error {
 // healthy reports the failure at once.
 //
 // probeBudget bounds one evaluation and is passed separately from interval. The
-// two used to be the same value, which silently clamped every configured probe
-// timeout to the refresh period: with the shipped defaults a 3s
-// postgres.healthcheck_timeout became a 2s budget in steady state while startup
-// admission still granted the full 3s, so the same dependency could pass
-// admission and then flap out of rotation. Configuration cross-validation keeps
-// interval above probeBudget so evaluations cannot pile up behind a slow
-// dependency.
+// two used to be one value, which clamped every configured probe timeout to the
+// refresh period: a 3s postgres.healthcheck_timeout became a 2s budget in steady
+// state while startup admission still granted the full 3s, so the same dependency
+// could pass admission and then flap out of rotation. Configuration
+// cross-validation keeps interval above probeBudget so evaluations cannot pile up
+// behind a slow dependency.
 func (s *Service) Watch(
 	ctx context.Context,
 	interval, probeBudget time.Duration,

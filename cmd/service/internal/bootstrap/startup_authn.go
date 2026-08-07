@@ -46,11 +46,11 @@ func initAuthn(
 	metrics *telemetry.Metrics,
 	log *slog.Logger,
 ) (*oidcjwt.Verifier, error) {
-	policy, err := oidcjwt.NewPolicy(
-		cfg.Authn.Issuer,
-		cfg.Authn.Audience,
-		cfg.Authn.TrustedProxyCIDRs,
-	)
+	policy, err := oidcjwt.NewPolicy(oidcjwt.PolicyInput{
+		Issuer:            cfg.Authn.Issuer,
+		Audience:          cfg.Authn.Audience,
+		TrustedProxyCIDRs: cfg.Authn.TrustedProxyCIDRs,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("initialize authentication policy: %w", err)
 	}

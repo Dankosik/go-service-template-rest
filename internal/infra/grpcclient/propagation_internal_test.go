@@ -1,9 +1,22 @@
-//nolint:staticcheck // This file proves grpc-go's deprecated but live resolver metadata path is sanitized.
+// Correlation trust boundary, white-box half: does each seam in propagation.go
+// hold on its own — policyPropagator emitting and declaring exactly the selected
+// fields, and the two sanitizers stripping reserved keys without mutating the
+// caller's own metadata or call options?
+//
+// It drives the unexported seams directly, so it needs no server and can reach
+// what the wire half cannot distinguish, such as the pointer form of a per-RPC
+// credential call option.
+//
+// propagation_test.go asserts what actually reaches a server, and the resolver
+// half of the same boundary starts at resolver_internal_test.go.
+
 package grpcclient
 
 import (
 	"context"
 	"errors"
+	"maps"
+	"slices"
 	"strings"
 	"testing"
 
@@ -11,11 +24,8 @@ import (
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/resolver"
-	"google.golang.org/grpc/serviceconfig"
 )
 
 func TestPolicyPropagatorOwnsRemoteCorrelationFields(t *testing.T) {
@@ -50,15 +60,7 @@ func TestPolicyPropagatorOwnsRemoteCorrelationFields(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
 
-			carrier := propagation.MapCarrier{
-				"traceparent":  "stale",
-				"tracestate":   "stale",
-				"baggage":      "secret=value",
-				"x-request-id": "stale",
-			}
-			for key := range carrier {
-				delete(carrier, key)
-			}
+			carrier := propagation.MapCarrier{}
 			policyPropagator{policy: testCase.policy}.Inject(ctx, carrier)
 
 			if got := carrier.Get("traceparent"); (got != "") != testCase.wantTrace {
@@ -71,6 +73,72 @@ func TestPolicyPropagatorOwnsRemoteCorrelationFields(t *testing.T) {
 			}
 			if got := carrier.Get("baggage"); got != "" {
 				t.Fatalf("baggage = %q, want absent", got)
+			}
+		})
+	}
+}
+
+// TestPolicyPropagatorFieldsMatchWhatInjectEmits holds the three-place invariant
+// the package doc states and nothing else checked: a correlation value is
+// claimed in reservedCorrelationMetadataKeys, emitted by Inject under its
+// policy, and declared by Fields, and any two without the third is a defect.
+//
+// Claiming without emitting silently drops a caller's value; emitting without
+// claiming lets a caller forge one; emitting without declaring leaves an
+// injecting carrier free to size itself without room for the key. The test above
+// names three keys it expects, so it cannot see a fourth added to two places of
+// the three — this one compares the sets themselves and needs no edit to cover
+// the next key.
+func TestPolicyPropagatorFieldsMatchWhatInjectEmits(t *testing.T) {
+	t.Parallel()
+
+	// A non-empty trace state is what makes the comparison below an equality
+	// rather than a containment: W3C trace context declares both traceparent and
+	// tracestate, but only emits the second when the span carries one.
+	traceState, err := trace.ParseTraceState("vendor=value")
+	if err != nil {
+		t.Fatalf("trace.ParseTraceState() error = %v", err)
+	}
+	ctx := trace.ContextWithSpanContext(t.Context(), trace.NewSpanContext(trace.SpanContextConfig{
+		TraceID:    trace.TraceID{1},
+		SpanID:     trace.SpanID{2},
+		TraceFlags: trace.FlagsSampled,
+		TraceState: traceState,
+	}))
+	ctx = reqctx.ContextWithRequestID(ctx, "fields_request_123")
+
+	for _, testCase := range []struct {
+		name   string
+		policy PropagationPolicy
+	}{
+		{name: "none", policy: PropagationNone},
+		{name: "trace context", policy: PropagationTraceContext},
+		{name: "trusted service", policy: PropagationTrustedService},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			propagator := policyPropagator{policy: testCase.policy}
+			carrier := propagation.MapCarrier{}
+			propagator.Inject(ctx, carrier)
+
+			emitted := slices.Sorted(maps.Keys(carrier))
+			declared := slices.Sorted(slices.Values(propagator.Fields()))
+			if !slices.Equal(emitted, declared) {
+				t.Fatalf(
+					"Inject emitted %v but Fields declares %v; a correlation value belongs in both",
+					emitted,
+					declared,
+				)
+			}
+			for _, key := range emitted {
+				if !reservedCorrelationMetadataKey(key) {
+					t.Fatalf(
+						"Inject emits %q, which reservedCorrelationMetadataKeys does not claim; "+
+							"an unclaimed key is one a caller can forge",
+						key,
+					)
+				}
 			}
 		})
 	}
@@ -225,202 +293,6 @@ func TestCallOptionSanitizationClonesValueAndPointerCredentials(t *testing.T) {
 	}
 }
 
-func TestResolverWrapperSanitizesEveryAddressAndPreservesLifecycle(t *testing.T) {
-	t.Parallel()
-
-	baseResolver := &recordingResolver{}
-	baseBuilder := &recordingResolverBuilder{
-		scheme:   "recording",
-		resolver: baseResolver,
-	}
-	downstream := &recordingResolverClientConn{}
-	wrapped := wrapResolverBuilder(baseBuilder)
-
-	gotResolver, err := wrapped.Build(resolver.Target{}, downstream, resolver.BuildOptions{})
-	if err != nil {
-		t.Fatalf("Build() error = %v", err)
-	}
-	if gotResolver != baseResolver {
-		t.Fatalf("Build() resolver = %T, want original resolver", gotResolver)
-	}
-
-	addressAttributes := attributes.New("address", "top")
-	balancerAttributes := attributes.New("balancer", "top")
-	endpointAttributes := attributes.New("endpoint", "one")
-	endpointAddressAttributes := attributes.New("address", "endpoint")
-	endpointBalancerAttributes := attributes.New("balancer", "endpoint")
-	stateAttributes := attributes.New("state", "retained")
-	serviceConfig := &serviceconfig.ParseResult{Err: errors.New("opaque parsed service config")}
-	state := resolver.State{
-		Addresses: []resolver.Address{{
-			Addr:               "127.0.0.1:9000",
-			ServerName:         "service.internal",
-			Attributes:         addressAttributes,
-			BalancerAttributes: balancerAttributes,
-			Metadata:           map[string]string{"traceparent": "stale"},
-		}},
-		Endpoints: []resolver.Endpoint{{
-			Attributes: endpointAttributes,
-			Addresses: []resolver.Address{{
-				Addr:               "127.0.0.1:9001",
-				ServerName:         "endpoint.service.internal",
-				Attributes:         endpointAddressAttributes,
-				BalancerAttributes: endpointBalancerAttributes,
-				Metadata:           map[string]string{"x-request-id": "stale"},
-			}},
-		}},
-		ServiceConfig: serviceConfig,
-		Attributes:    stateAttributes,
-	}
-	if err := baseBuilder.connection.UpdateState(state); err != nil {
-		t.Fatalf("UpdateState() error = %v", err)
-	}
-	baseBuilder.connection.NewAddress(state.Addresses)
-
-	assertResolverMetadataRemoved(t, downstream.state.Addresses)
-	assertResolverMetadataRemoved(t, downstream.state.Endpoints[0].Addresses)
-	assertResolverMetadataRemoved(t, downstream.addresses)
-	if state.Addresses[0].Metadata == nil || state.Endpoints[0].Addresses[0].Metadata == nil {
-		t.Fatal("caller-owned resolver state was mutated")
-	}
-	if downstream.updateCalls != 1 || downstream.newAddressCalls != 1 {
-		t.Fatalf(
-			"resolver callbacks = UpdateState %d NewAddress %d, want 1 each",
-			downstream.updateCalls,
-			downstream.newAddressCalls,
-		)
-	}
-	if downstream.state.Addresses[0].Addr != state.Addresses[0].Addr ||
-		downstream.state.Addresses[0].ServerName != state.Addresses[0].ServerName ||
-		downstream.state.Addresses[0].Attributes != addressAttributes ||
-		downstream.state.Addresses[0].BalancerAttributes != balancerAttributes {
-		t.Fatalf("top-level address fields were not preserved: %+v", downstream.state.Addresses[0])
-	}
-	if downstream.state.Endpoints[0].Attributes != endpointAttributes ||
-		downstream.state.Endpoints[0].Addresses[0].Addr !=
-			state.Endpoints[0].Addresses[0].Addr ||
-		downstream.state.Endpoints[0].Addresses[0].ServerName !=
-			state.Endpoints[0].Addresses[0].ServerName ||
-		downstream.state.Endpoints[0].Addresses[0].Attributes != endpointAddressAttributes ||
-		downstream.state.Endpoints[0].Addresses[0].BalancerAttributes !=
-			endpointBalancerAttributes {
-		t.Fatalf("endpoint fields were not preserved: %+v", downstream.state.Endpoints[0])
-	}
-	if downstream.state.ServiceConfig != serviceConfig || downstream.state.Attributes != stateAttributes {
-		t.Fatalf("state-owned fields were not preserved: %+v", downstream.state)
-	}
-	if downstream.addresses[0].Addr != state.Addresses[0].Addr ||
-		downstream.addresses[0].ServerName != state.Addresses[0].ServerName ||
-		downstream.addresses[0].Attributes != addressAttributes ||
-		downstream.addresses[0].BalancerAttributes != balancerAttributes {
-		t.Fatalf("NewAddress fields were not preserved: %+v", downstream.addresses[0])
-	}
-	downstream.state.Addresses[0].Addr = "changed"
-	if state.Addresses[0].Addr != "127.0.0.1:9000" {
-		t.Fatal("resolver address slices still alias caller state")
-	}
-	downstream.state.Endpoints[0].Addresses[0].Addr = "changed"
-	if state.Endpoints[0].Addresses[0].Addr != "127.0.0.1:9001" {
-		t.Fatal("resolver endpoint address slices still alias caller state")
-	}
-	downstream.addresses[0].Addr = "changed"
-	if state.Addresses[0].Addr != "127.0.0.1:9000" {
-		t.Fatal("deprecated NewAddress slice still aliases caller state")
-	}
-
-	updateErr := errors.New("resolver state rejected")
-	downstream.updateErr = updateErr
-	if err := baseBuilder.connection.UpdateState(state); !errors.Is(err, updateErr) {
-		t.Fatalf("UpdateState() error = %v, want sentinel", err)
-	}
-	if downstream.updateCalls != 2 {
-		t.Fatalf("UpdateState() calls = %d, want 2", downstream.updateCalls)
-	}
-
-	reportErr := errors.New("resolver lookup failed")
-	baseBuilder.connection.ReportError(reportErr)
-	if downstream.reportCalls != 1 || !errors.Is(downstream.reportErr, reportErr) {
-		t.Fatalf(
-			"ReportError() = calls %d error %v, want one sentinel callback",
-			downstream.reportCalls,
-			downstream.reportErr,
-		)
-	}
-
-	parseResult := &serviceconfig.ParseResult{Err: errors.New("parsed config sentinel")}
-	downstream.parseResult = parseResult
-	if got := baseBuilder.connection.ParseServiceConfig(`{"loadBalancingConfig":[]}`); got != parseResult {
-		t.Fatalf("ParseServiceConfig() = %p, want %p", got, parseResult)
-	}
-	if downstream.parseCalls != 1 ||
-		downstream.parseInput != `{"loadBalancingConfig":[]}` {
-		t.Fatalf(
-			"ParseServiceConfig() callback = calls %d input %q",
-			downstream.parseCalls,
-			downstream.parseInput,
-		)
-	}
-
-	gotResolver.ResolveNow(resolver.ResolveNowOptions{})
-	gotResolver.Close()
-	if baseResolver.resolveNowCalls != 1 || baseResolver.closeCalls != 1 {
-		t.Fatalf(
-			"resolver lifecycle calls = resolve %d close %d, want 1 each",
-			baseResolver.resolveNowCalls,
-			baseResolver.closeCalls,
-		)
-	}
-}
-
-func TestResolverWrapperPreservesOptionalAuthorityOverride(t *testing.T) {
-	t.Parallel()
-
-	base := &authorityResolverBuilder{
-		recordingResolverBuilder: recordingResolverBuilder{
-			scheme:   "authority",
-			resolver: &recordingResolver{},
-		},
-		authority: "service.internal",
-	}
-	wrapped := wrapResolverBuilder(base)
-	authority, ok := wrapped.(resolver.AuthorityOverrider)
-	if !ok {
-		t.Fatal("wrapped resolver lost AuthorityOverrider")
-	}
-	if got := authority.OverrideAuthority(resolver.Target{}); got != base.authority {
-		t.Fatalf("OverrideAuthority() = %q, want %q", got, base.authority)
-	}
-
-	ordinary := &recordingResolverBuilder{
-		scheme:   "ordinary",
-		resolver: &recordingResolver{},
-	}
-	if _, ok := wrapResolverBuilder(ordinary).(resolver.AuthorityOverrider); ok {
-		t.Fatal("ordinary resolver unexpectedly gained AuthorityOverrider")
-	}
-}
-
-func TestResolverWrapperPreservesBuildError(t *testing.T) {
-	t.Parallel()
-
-	buildErr := errors.New("resolver build failed")
-	base := &recordingResolverBuilder{
-		scheme:   "failing",
-		buildErr: buildErr,
-	}
-	wrapped := wrapResolverBuilder(base)
-	if _, err := wrapped.Build(
-		resolver.Target{},
-		&recordingResolverClientConn{},
-		resolver.BuildOptions{},
-	); !errors.Is(err, buildErr) {
-		t.Fatalf("Build() error = %v, want sentinel", err)
-	}
-	if base.buildCalls != 1 {
-		t.Fatalf("Build() calls = %d, want 1", base.buildCalls)
-	}
-}
-
 func assertSanitizedOutgoingMetadata(ctx context.Context, t *testing.T) {
 	t.Helper()
 
@@ -456,6 +328,9 @@ func credentialValueEqualFold(values map[string]string, wanted string) string {
 	return ""
 }
 
+// staticPerRPCCredentials is field for field the livePerRPCCredentials that
+// propagation_test.go declares; that file names the boundary the two sit on and
+// why one cannot be shared.
 type staticPerRPCCredentials struct {
 	values          map[string]string
 	err             error
@@ -474,95 +349,3 @@ func (c staticPerRPCCredentials) RequireTransportSecurity() bool {
 }
 
 var _ credentials.PerRPCCredentials = staticPerRPCCredentials{}
-
-type recordingResolver struct {
-	resolveNowCalls int
-	closeCalls      int
-}
-
-func (r *recordingResolver) ResolveNow(resolver.ResolveNowOptions) {
-	r.resolveNowCalls++
-}
-
-func (r *recordingResolver) Close() {
-	r.closeCalls++
-}
-
-type recordingResolverBuilder struct {
-	scheme     string
-	resolver   resolver.Resolver
-	connection resolver.ClientConn
-	buildErr   error
-	buildCalls int
-}
-
-func (b *recordingResolverBuilder) Build( //nolint:ireturn // Implements resolver.Builder for delegation proof.
-	_ resolver.Target,
-	connection resolver.ClientConn,
-	_ resolver.BuildOptions,
-) (resolver.Resolver, error) {
-	b.buildCalls++
-	b.connection = connection
-	return b.resolver, b.buildErr
-}
-
-func (b *recordingResolverBuilder) Scheme() string {
-	return b.scheme
-}
-
-type authorityResolverBuilder struct {
-	recordingResolverBuilder
-
-	authority string
-}
-
-func (b authorityResolverBuilder) OverrideAuthority(resolver.Target) string {
-	return b.authority
-}
-
-type recordingResolverClientConn struct {
-	state           resolver.State
-	addresses       []resolver.Address
-	updateErr       error
-	reportErr       error
-	parseResult     *serviceconfig.ParseResult
-	parseInput      string
-	updateCalls     int
-	reportCalls     int
-	newAddressCalls int
-	parseCalls      int
-}
-
-func (c *recordingResolverClientConn) UpdateState(state resolver.State) error {
-	c.updateCalls++
-	c.state = state
-	return c.updateErr
-}
-
-func (c *recordingResolverClientConn) ReportError(err error) {
-	c.reportCalls++
-	c.reportErr = err
-}
-
-func (c *recordingResolverClientConn) NewAddress(addresses []resolver.Address) {
-	c.newAddressCalls++
-	c.addresses = addresses
-}
-
-func (c *recordingResolverClientConn) ParseServiceConfig(
-	serviceConfig string,
-) *serviceconfig.ParseResult {
-	c.parseCalls++
-	c.parseInput = serviceConfig
-	return c.parseResult
-}
-
-func assertResolverMetadataRemoved(t *testing.T, addresses []resolver.Address) {
-	t.Helper()
-
-	for _, address := range addresses {
-		if address.Metadata != nil {
-			t.Fatalf("resolver address %q metadata = %v, want nil", address.Addr, address.Metadata)
-		}
-	}
-}

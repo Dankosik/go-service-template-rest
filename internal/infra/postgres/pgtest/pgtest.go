@@ -1,14 +1,10 @@
 // Package pgtest gives a test an isolated, migrated PostgreSQL database.
 //
-// It exists because the alternative is what every service writes on its first
-// repository test: one container, one database, and TRUNCATE between cases. That
-// works until two packages run in parallel — which is the default — and then it
-// produces failures that only reproduce under load and get "fixed" with -p 1,
-// trading the whole suite's wall clock for the isolation a CREATE DATABASE per
-// test would have given for free.
-//
-// The container is shared per test binary and the database is per test: container
-// startup is paid once, and cases still cannot see each other's rows.
+// It exists because the alternative — one container, one database, TRUNCATE
+// between cases — works until two packages run in parallel, which is the default,
+// and then produces failures that only reproduce under load and get "fixed" with
+// -p 1. The container is shared per test binary and the database is per test, so
+// startup is paid once and cases still cannot see each other's rows.
 //
 // Usage from any package that owns a repository:
 //

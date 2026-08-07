@@ -34,12 +34,12 @@ func TestMessagingTelemetryContract(t *testing.T) {
 	provider := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
 	t.Cleanup(func() { _ = provider.Shutdown(context.Background()) })
 	var logs bytes.Buffer
-	sig, err := newSignals(Observability{
+	sig, err := newTelemetry(Observability{
 		Logger: slog.New(slog.NewJSONHandler(&logs, nil)),
 		Meter:  provider.Meter(instrumentationScope),
 	}, RoleWorker, func() bool { return true })
 	if err != nil {
-		t.Fatalf("newSignals() error = %v", err)
+		t.Fatalf("newTelemetry() error = %v", err)
 	}
 	t.Cleanup(sig.close)
 
@@ -140,9 +140,9 @@ func TestMessagingTelemetryContract(t *testing.T) {
 func TestAsyncConnectionErrorIsClassifiedWithoutRawBrokerText(t *testing.T) {
 	const brokerCanary = "BROKER_ERROR_CANARY"
 	var logs bytes.Buffer
-	sig, err := newSignals(Observability{Logger: slog.New(slog.NewJSONHandler(&logs, nil))}, RoleWorker, func() bool { return false })
+	sig, err := newTelemetry(Observability{Logger: slog.New(slog.NewJSONHandler(&logs, nil))}, RoleWorker, func() bool { return false })
 	if err != nil {
-		t.Fatalf("newSignals() error = %v", err)
+		t.Fatalf("newTelemetry() error = %v", err)
 	}
 	t.Cleanup(sig.close)
 	sig.asyncError(t.Context(), fmt.Errorf("%s: %w", brokerCanary, nats.ErrPermissionViolation))

@@ -19,17 +19,13 @@ const shedRetryAfter = time.Second
 // MaxInFlight bounds how many requests may execute a handler concurrently, and
 // rejects the rest immediately.
 //
-// RequestTimeout is not backpressure. It bounds how long one request may run,
-// not how many may run, so an arrival spike past the capacity of a finite
-// downstream resource does not get rejected — it queues. Every queued request
-// holds a goroutine and waits, so latency for requests that would have been
-// served in milliseconds rises to the full budget and the endpoint returns 504
-// across the board instead of serving the subset it has capacity for. Worse, the
-// instance now looks unhealthy, so it gets evicted mid-spike.
-//
-// Shedding at the door is what keeps admitted requests fast: a request that
-// cannot get capacity now is better told so in a millisecond than told so after
-// the whole budget has been spent waiting.
+// RequestTimeout is not backpressure: it bounds how long one request may run, not
+// how many, so an arrival spike past a finite downstream resource queues instead
+// of being rejected. Every queued request holds a goroutine, so latency rises to
+// the full budget and the endpoint returns 504 across the board instead of
+// serving the subset it has capacity for — and the instance then looks unhealthy
+// and gets evicted mid-spike. Shedding at the door is what keeps admitted
+// requests fast.
 //
 // load records what the limiter did. Without it the limit is unobservable: a shed
 // request is one more 503 on a route that also answers 503 when the connection

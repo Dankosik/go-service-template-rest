@@ -1,3 +1,10 @@
+// The finite transport bounds: does a server built by NewServer actually refuse
+// an oversized message, oversized incoming metadata, and more concurrent streams
+// than it allows?
+//
+// Every case drives a real connection, because these limits are enforced by
+// grpc-go from the values Config hands it and not by any code in this package.
+
 package grpcx
 
 import (
@@ -22,15 +29,14 @@ func TestServerEnforcesReceiveAndSendMessageLimits(t *testing.T) {
 		cfg.MaxReceiveMessageBytes = 64
 		handlerCalled := false
 		register := func(registrar grpc.ServiceRegistrar) {
-			registerPayloadService(registrar, payloadService{
-				call: func(
+			registerUnaryTestService(registrar, testPayloadFullMethod,
+				func(
 					context.Context,
 					*wrapperspb.BytesValue,
 				) (*wrapperspb.BytesValue, error) {
 					handlerCalled = true
 					return &wrapperspb.BytesValue{}, nil
-				},
-			})
+				})
 		}
 		_, connection := startTestServer(t, cfg, register)
 
@@ -51,15 +57,14 @@ func TestServerEnforcesReceiveAndSendMessageLimits(t *testing.T) {
 		cfg.MaxSendMessageBytes = 64
 		handlerCalled := false
 		register := func(registrar grpc.ServiceRegistrar) {
-			registerPayloadService(registrar, payloadService{
-				call: func(
+			registerUnaryTestService(registrar, testPayloadFullMethod,
+				func(
 					context.Context,
 					*wrapperspb.BytesValue,
 				) (*wrapperspb.BytesValue, error) {
 					handlerCalled = true
 					return &wrapperspb.BytesValue{Value: make([]byte, 1024)}, nil
-				},
-			})
+				})
 		}
 		_, connection := startTestServer(t, cfg, register)
 
@@ -81,15 +86,14 @@ func TestServerRejectsOversizedIncomingMetadataBeforeHandler(t *testing.T) {
 	cfg.MaxHeaderListBytes = 512
 	var handlerCalls atomic.Int64
 	register := func(registrar grpc.ServiceRegistrar) {
-		registerPayloadService(registrar, payloadService{
-			call: func(
+		registerUnaryTestService(registrar, testPayloadFullMethod,
+			func(
 				context.Context,
 				*wrapperspb.BytesValue,
 			) (*wrapperspb.BytesValue, error) {
 				handlerCalls.Add(1)
 				return &wrapperspb.BytesValue{}, nil
-			},
-		})
+			})
 	}
 	_, connection := startTestServer(t, cfg, register)
 
@@ -159,65 +163,4 @@ func TestServerMaxConcurrentStreamsQueuesAdditionalStreams(t *testing.T) {
 	if _, err := third.Recv(); err != nil {
 		t.Fatalf("third Health.Watch().Recv() after release = %v", err)
 	}
-}
-
-const testPayloadFullMethod = "/grpcx.test.PayloadService/Call"
-
-type payloadServiceServer interface {
-	Call(ctx context.Context, request *wrapperspb.BytesValue) (*wrapperspb.BytesValue, error)
-}
-
-type payloadService struct {
-	call func(context.Context, *wrapperspb.BytesValue) (*wrapperspb.BytesValue, error)
-}
-
-func (s payloadService) Call(
-	ctx context.Context,
-	request *wrapperspb.BytesValue,
-) (*wrapperspb.BytesValue, error) {
-	return s.call(ctx, request)
-}
-
-func registerPayloadService( //nolint:dupl // Manual descriptors intentionally mirror generated unary handlers.
-	registrar grpc.ServiceRegistrar,
-	service payloadServiceServer,
-) {
-	registrar.RegisterService(&grpc.ServiceDesc{
-		ServiceName: "grpcx.test.PayloadService",
-		HandlerType: (*payloadServiceServer)(nil),
-		Methods: []grpc.MethodDesc{
-			{
-				MethodName: "Call",
-				Handler: func(
-					implementation any,
-					ctx context.Context,
-					decode func(any) error,
-					interceptor grpc.UnaryServerInterceptor,
-				) (any, error) {
-					request := new(wrapperspb.BytesValue)
-					if err := decode(request); err != nil {
-						return nil, err
-					}
-					service, ok := implementation.(payloadServiceServer)
-					if !ok {
-						return nil, errors.New("test payload service implementation has unexpected type")
-					}
-					handler := func(ctx context.Context, decoded any) (any, error) {
-						typedRequest, ok := decoded.(*wrapperspb.BytesValue)
-						if !ok {
-							return nil, errors.New("test payload request has unexpected type")
-						}
-						return service.Call(ctx, typedRequest)
-					}
-					if interceptor == nil {
-						return handler(ctx, request)
-					}
-					return interceptor(ctx, request, &grpc.UnaryServerInfo{
-						Server:     implementation,
-						FullMethod: testPayloadFullMethod,
-					}, handler)
-				},
-			},
-		},
-	}, service)
 }

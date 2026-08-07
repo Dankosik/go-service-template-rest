@@ -1,3 +1,14 @@
+// The cost of each composition layer, and the proof that the benchmarked servers
+// are the ones they claim to be.
+//
+// A benchmark measuring a chain it did not build reports a number that means
+// nothing, so the variants that claim to be the repository chain do not rebuild
+// it: they call unaryChain, which is what NewServer calls. What remains for a
+// test to catch is the set of builtins reaching it, which
+// TestBenchmarkVariantsCoverEveryBuiltinPolicy holds, and that each variant's
+// layers actually run, which TestGRPCBenchmarkVariantsComposeExpectedLayers
+// drives every variant through.
+
 package grpcx
 
 import (
@@ -8,10 +19,12 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"testing"
 
+	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 	"github.com/example/go-service-template-rest/internal/reqctx"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/otel/metric"
@@ -49,6 +62,52 @@ var benchmarkVariants = []benchmarkVariant{
 	benchmarkFullUnsampled,
 	benchmarkFullJSON,
 	benchmarkFullHandlerWork,
+}
+
+// policyVariantExcludes names the builtins the policy variant leaves out, so
+// that what it measures is a decision rather than an omission. access_log and
+// recovery are excluded because BenchmarkGRPCAccessLog and the full_* variants
+// isolate their cost.
+var policyVariantExcludes = []string{builtinAccessLog, builtinRecovery}
+
+// knownBuiltinPolicies is the builtin set this file was written against.
+//
+// unaryChain owns the order surrounding these, so what this guards is the set
+// itself: a policy added to builtinPolicies would otherwise join the full_*
+// variants and the policy variant silently, and every recorded number would
+// compare against a chain that no longer exists — a quiet regression in the
+// numbers rather than a red test.
+var knownBuiltinPolicies = []string{
+	builtinAccessLog,
+	builtinRecovery,
+	builtinAdmission,
+	builtinPolicyErrorBoundary,
+}
+
+func TestBenchmarkVariantsCoverEveryBuiltinPolicy(t *testing.T) {
+	names := make([]string, 0, len(knownBuiltinPolicies))
+	for _, policy := range builtinPolicies(
+		slog.New(slog.DiscardHandler),
+		accessLogPolicy{},
+		newAdmissionLimiter(1, noopLoadRecorder{}),
+	) {
+		names = append(names, policy.name)
+	}
+
+	if !slices.Equal(names, knownBuiltinPolicies) {
+		t.Fatalf(
+			"builtinPolicies() = %v, want %v; decide whether the benchmark variants should "+
+				"measure the change, then update knownBuiltinPolicies, policyVariantExcludes, "+
+				"and the interceptor order doc.go publishes",
+			names,
+			knownBuiltinPolicies,
+		)
+	}
+	for _, excluded := range policyVariantExcludes {
+		if !slices.Contains(names, excluded) {
+			t.Fatalf("policyVariantExcludes names %q, which builtinPolicies no longer returns", excluded)
+		}
+	}
 }
 
 func TestGRPCBenchmarkVariantsComposeExpectedLayers(t *testing.T) {
@@ -174,7 +233,7 @@ func BenchmarkGRPCAccessLog(b *testing.B) {
 				benchmarkDiscardWriter{},
 				&slog.HandlerOptions{Level: testCase.level},
 			))
-			interceptor := accessLogUnaryInterceptor(log, testCase.policy)
+			interceptor := unaryPolicy(accessLogAround(log, testCase.policy))
 			info := &grpc.UnaryServerInfo{FullMethod: testCase.method}
 
 			b.ReportAllocs()
@@ -188,6 +247,11 @@ func BenchmarkGRPCAccessLog(b *testing.B) {
 }
 
 // benchmarkDiscardWriter retains JSON encoding work while excluding sink I/O.
+//
+// firstRecordWriter below does the same and is not reused here, because it also
+// takes a lock to retain the first record for the composition assertions. This
+// benchmark measures the access-log policy itself, so the only lock in the
+// measured path should be one production also pays.
 type benchmarkDiscardWriter struct{}
 
 func (benchmarkDiscardWriter) Write(payload []byte) (int, error) {
@@ -235,7 +299,7 @@ func newBenchmarkFixture(variant benchmarkVariant) (*benchmarkFixture, error) {
 		work:    variant == benchmarkFullHandlerWork,
 	}
 	register := func(registrar grpc.ServiceRegistrar) {
-		registrar.RegisterService(&benchmarkUnaryServiceDesc, handler)
+		registerUnaryTestService(registrar, benchmarkUnaryFullMethod, handler.Unary)
 	}
 
 	var (
@@ -264,14 +328,29 @@ func newBenchmarkFixture(variant benchmarkVariant) (*benchmarkFixture, error) {
 		register(native)
 		server = nativeBenchmarkServer{Server: native}
 	case benchmarkPolicy:
+		// The repository policy chain without the two builtins whose cost the
+		// full_* variants isolate. The builtins come from builtinPolicies and the
+		// surrounding order from unaryChain — the same two owners NewServer uses —
+		// so this variant measures production's chain rather than a copy of it.
+		// The only way to leave a builtin out is to name it in
+		// policyVariantExcludes.
 		admission := newAdmissionLimiter(256, &signals.load)
-		native := grpc.NewServer(grpc.ChainUnaryInterceptor(
-			correlationUnaryInterceptor(),
-			admissionUnaryInterceptor(admission),
-			policyErrorBoundaryUnaryInterceptor(),
-			signals.policyInterceptor(),
-			errorMappingUnaryInterceptor(nil),
-		))
+		measured := make([]builtinPolicy, 0, len(knownBuiltinPolicies))
+		for _, policy := range builtinPolicies(
+			slog.New(slog.DiscardHandler),
+			accessLogPolicy{},
+			admission,
+		) {
+			if slices.Contains(policyVariantExcludes, policy.name) {
+				continue
+			}
+			measured = append(measured, policy)
+		}
+		native := grpc.NewServer(grpc.ChainUnaryInterceptor(unaryChain(
+			measured,
+			[]grpc.UnaryServerInterceptor{signals.policyInterceptor()},
+			errorMappingAround(nil),
+		)...))
 		register(native)
 		server = nativeBenchmarkServer{Server: native}
 	case benchmarkFullLogDisabled, benchmarkFullUnsampled, benchmarkFullJSON, benchmarkFullHandlerWork:
@@ -522,16 +601,20 @@ func (s *benchmarkSignals) assertAdmissionMetric(t *testing.T) {
 		t.Fatalf("collect benchmark admission metrics: %v", err)
 	}
 	for _, scopeMetrics := range resourceMetrics.ScopeMetrics {
-		if scopeMetrics.Scope.Name != "service.grpc.server" {
+		if scopeMetrics.Scope.Name != telemetry.GRPCServerMeterName {
 			continue
 		}
 		for _, metric := range scopeMetrics.Metrics {
-			if metric.Name == "rpc.server.active_requests" && metricHasDataPoints(metric.Data) {
+			if metric.Name == telemetry.ActiveRPCsInstrument && metricHasDataPoints(metric.Data) {
 				return
 			}
 		}
 	}
-	t.Fatal("full benchmark variant recorded no service.grpc.server/rpc.server.active_requests data point")
+	t.Fatalf(
+		"full benchmark variant recorded no %s/%s data point",
+		telemetry.GRPCServerMeterName,
+		telemetry.ActiveRPCsInstrument,
+	)
 }
 
 func metricHasDataPoints(data metricdata.Aggregation) bool {
@@ -549,6 +632,15 @@ func metricHasDataPoints(data metricdata.Aggregation) bool {
 	}
 }
 
+// benchmarkLoadRecorder counts admission decisions with atomics rather than
+// reusing recordingLoad from interceptors_test.go, which counts the same things
+// under a mutex.
+//
+// The difference is the point: this recorder sits in the measured path of every
+// full_* variant, where a lock production does not hold would be charged to the
+// interceptor chain, and at higher parallelism would be measured as contention
+// the service does not have. recordingLoad is driven by unit tests that need an
+// exact snapshot instead, which is what the mutex buys there.
 type benchmarkLoadRecorder struct {
 	admitted       atomic.Int64
 	released       atomic.Int64
@@ -557,21 +649,20 @@ type benchmarkLoadRecorder struct {
 	shedInstrument metric.Int64Counter
 }
 
+// init emits the same series internal/infra/telemetry gives a real service, so
+// the full_* variants measure the instrumentation cost production pays rather
+// than a cheaper stand-in.
 func (r *benchmarkLoadRecorder) init(provider metric.MeterProvider) {
-	meter := provider.Meter("service.grpc.server")
+	meter := provider.Meter(telemetry.GRPCServerMeterName)
 	r.active, _ = meter.Int64UpDownCounter(
-		"rpc.server.active_requests",
-		metric.WithDescription(
-			"RPCs currently executing a handler, against the grpc.server.max_concurrent_rpcs limit.",
-		),
-		metric.WithUnit("{rpc}"),
+		telemetry.ActiveRPCsInstrument,
+		metric.WithDescription(telemetry.ActiveRPCsDescription),
+		metric.WithUnit(telemetry.RPCsUnit),
 	)
 	r.shedInstrument, _ = meter.Int64Counter(
-		"rpc.server.shed_requests",
-		metric.WithDescription(
-			"RPCs rejected before running a handler because the process RPC limit was reached.",
-		),
-		metric.WithUnit("{rpc}"),
+		telemetry.ShedRPCsInstrument,
+		metric.WithDescription(telemetry.ShedRPCsDescription),
+		metric.WithUnit(telemetry.RPCsUnit),
 	)
 }
 
@@ -595,6 +686,9 @@ func (r *benchmarkLoadRecorder) Shed(ctx context.Context) {
 	}
 }
 
+// firstRecordWriter counts access-log writes and keeps the first one, which is
+// what lets assertComposition tell a sampled-out variant from a logging one and
+// decode the record a logging variant produced.
 type firstRecordWriter struct {
 	mu     sync.Mutex
 	writes int
@@ -623,10 +717,6 @@ func (w *firstRecordWriter) firstRecord() []byte {
 	return append([]byte(nil), w.first...)
 }
 
-type benchmarkUnaryService interface {
-	Unary(ctx context.Context, request *wrapperspb.BytesValue) (*wrapperspb.BytesValue, error)
-}
-
 type benchmarkUnaryHandler struct {
 	signals *benchmarkSignals
 	work    bool
@@ -644,54 +734,4 @@ func (h benchmarkUnaryHandler) Unary(
 		h.signals.handlerChecksum.Store(checksum)
 	}
 	return wrapperspb.Bytes(request.GetValue()), nil
-}
-
-func benchmarkUnaryMethodHandler(
-	service any,
-	ctx context.Context, //nolint:revive // grpc.MethodDesc requires the service argument before context.
-	decode func(any) error,
-	interceptor grpc.UnaryServerInterceptor,
-) (any, error) {
-	request := new(wrapperspb.BytesValue)
-	if err := decode(request); err != nil {
-		return nil, err
-	}
-	typedService, ok := service.(benchmarkUnaryService)
-	if !ok {
-		return nil, errors.New("benchmark unary service has unexpected type")
-	}
-	if interceptor == nil {
-		response, err := typedService.Unary(ctx, request)
-		if err != nil {
-			return nil, fmt.Errorf("run benchmark unary service: %w", err)
-		}
-		return response, nil
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     service,
-		FullMethod: benchmarkUnaryFullMethod,
-	}
-	handler := func(ctx context.Context, request any) (any, error) {
-		typedRequest, ok := request.(*wrapperspb.BytesValue)
-		if !ok {
-			return nil, errors.New("benchmark unary request has unexpected type")
-		}
-		response, err := typedService.Unary(ctx, typedRequest)
-		if err != nil {
-			return nil, fmt.Errorf("run intercepted benchmark unary service: %w", err)
-		}
-		return response, nil
-	}
-	return interceptor(ctx, request, info, handler)
-}
-
-var benchmarkUnaryServiceDesc = grpc.ServiceDesc{
-	ServiceName: "grpcx.benchmark.Service",
-	HandlerType: (*benchmarkUnaryService)(nil),
-	Methods: []grpc.MethodDesc{
-		{
-			MethodName: "Unary",
-			Handler:    benchmarkUnaryMethodHandler,
-		},
-	},
 }

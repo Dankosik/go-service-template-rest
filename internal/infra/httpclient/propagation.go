@@ -9,7 +9,7 @@ import (
 	"go.opentelemetry.io/otel/propagation"
 )
 
-const requestIDHeader = "X-Request-ID"
+const requestIDHeader = reqctx.RequestIDHeader
 
 var reservedPropagationHeaders = [...]string{
 	"traceparent",

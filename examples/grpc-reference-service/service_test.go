@@ -1,3 +1,16 @@
+// All four method cardinalities, and the bound each streaming one refuses to
+// cross.
+//
+// Every case dials a server built by grpcx.NewServer rather than a bare
+// grpc.NewServer, which is what makes the status assertions mean anything: a
+// handler here returns a domain error and the transport renders the code, so
+// against a bare server the ResourceExhausted expectations below would read as
+// satisfied while a composed service answered INTERNAL.
+//
+// This is the example a service author copies, so it doubles as the worked proof
+// that a handler never picks its own codes.Code — see DomainErrors in service.go
+// and docs/grpc.md.
+
 package grpcreference_test
 
 import (
@@ -5,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"math"
 	"net"
 	"testing"
@@ -12,6 +26,8 @@ import (
 
 	grpcreference "github.com/example/go-service-template-rest/examples/grpc-reference-service"
 	referencev1 "github.com/example/go-service-template-rest/examples/grpc-reference-service/internal/gen/proto/reference/v1"
+	"github.com/example/go-service-template-rest/internal/config"
+	grpcx "github.com/example/go-service-template-rest/internal/infra/grpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -246,8 +262,40 @@ func newConnectionWithService(t *testing.T, service referencev1.EchoServiceServe
 	t.Helper()
 
 	listener := bufconn.Listen(1 << 20)
-	server := grpc.NewServer()
-	referencev1.RegisterEchoServiceServer(server, service)
+	// Compose through the production adapter rather than a bare grpc.NewServer.
+	// Every client-visible status asserted below is produced by that interceptor
+	// chain, not by the handler alone: against a bare server the assertions would
+	// still pass while the composed service returned INTERNAL.
+	// Every bound comes from the canonical defaults, the same crossing
+	// cmd/benchmark-server/main.go performs, so this example shows a composition
+	// root exactly one way to fill Config rather than two.
+	defaults := config.DefaultGRPCServerConfig()
+	server, err := grpcx.NewServer(
+		grpcx.Config{
+			MaxConcurrentRPCs:          defaults.MaxConcurrentRPCs,
+			MaxConcurrentStreams:       defaults.MaxConcurrentStreams,
+			MaxHeaderListBytes:         defaults.MaxHeaderListBytes,
+			MaxReceiveMessageBytes:     defaults.MaxReceiveMessageBytes,
+			MaxSendMessageBytes:        defaults.MaxSendMessageBytes,
+			LogHealthChecks:            defaults.AccessLogHealthChecks,
+			AccessLogSuccessSampleRate: defaults.AccessLogSuccessSampleRate,
+			AccessLogSlowThreshold:     defaults.AccessLogSlowThreshold,
+			TelemetryHealthChecks:      defaults.TelemetryHealthChecks,
+		},
+		grpcx.Options{
+			Logger:       slog.New(slog.DiscardHandler),
+			DomainErrors: grpcreference.DomainErrors(),
+			Services: []grpcx.RegisterService{
+				func(registrar grpc.ServiceRegistrar) {
+					referencev1.RegisterEchoServiceServer(registrar, service)
+				},
+			},
+		},
+	)
+	if err != nil {
+		_ = listener.Close()
+		t.Fatalf("grpcx.NewServer() error = %v", err)
+	}
 	serveDone := make(chan error, 1)
 	go func() {
 		serveDone <- server.Serve(listener)
@@ -261,7 +309,7 @@ func newConnectionWithService(t *testing.T, service referencev1.EchoServiceServe
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 	if err != nil {
-		server.Stop()
+		_ = server.Close()
 		_ = listener.Close()
 		t.Fatalf("grpc.NewClient() error = %v", err)
 	}
@@ -270,12 +318,18 @@ func newConnectionWithService(t *testing.T, service referencev1.EchoServiceServe
 		if err := connection.Close(); err != nil {
 			t.Errorf("ClientConn.Close() error = %v", err)
 		}
-		server.Stop()
+		// Close only starts the transport stop, which is what closes the
+		// listener. Joining Serve first is what makes the shutdown deterministic:
+		// closing the listener from here instead would race that stop and surface
+		// as an Accept failure rather than a clean stop.
+		if err := server.Close(); err != nil {
+			t.Errorf("Server.Close() error = %v", err)
+		}
+		if err := <-serveDone; err != nil {
+			t.Errorf("Server.Serve() error = %v", err)
+		}
 		if err := listener.Close(); err != nil {
 			t.Errorf("bufconn.Listener.Close() error = %v", err)
-		}
-		if err := <-serveDone; err != nil && !errors.Is(err, grpc.ErrServerStopped) {
-			t.Errorf("Server.Serve() error = %v", err)
 		}
 	})
 

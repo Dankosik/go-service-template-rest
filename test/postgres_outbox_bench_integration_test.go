@@ -131,24 +131,7 @@ func BenchmarkOutboxCleanup(b *testing.B) {
 			seed := func() { seedOutboxRetained(b, ctx, pool, retained) }
 			seed()
 			analyzeOutboxFixture(b, ctx, pool)
-			var events int64
-
-			b.ReportAllocs()
-			for b.Loop() {
-				deleted, err := store.CleanupPublished(ctx, time.Minute, batchSize)
-				if err != nil {
-					b.Fatalf("CleanupPublished(): %v", err)
-				}
-				if deleted < batchSize {
-					b.StopTimer()
-					refillOutboxBacklog(b, ctx, pool, seed)
-					b.StartTimer()
-					continue
-				}
-				events += int64(deleted)
-			}
-			b.StopTimer()
-			reportOutboxEventCost(b, events)
+			runOutboxCleanupCycle(b, ctx, pool, store, batchSize, seed)
 		})
 	}
 }
@@ -189,24 +172,7 @@ func BenchmarkOutboxCleanupBatch(b *testing.B) {
 			seed := func() { seedOutboxRetained(b, ctx, pool, retained) }
 			seed()
 			analyzeOutboxFixture(b, ctx, pool)
-			var events int64
-
-			b.ReportAllocs()
-			for b.Loop() {
-				deleted, err := store.CleanupPublished(ctx, time.Minute, batchSize)
-				if err != nil {
-					b.Fatalf("CleanupPublished(): %v", err)
-				}
-				if deleted < batchSize {
-					b.StopTimer()
-					refillOutboxBacklog(b, ctx, pool, seed)
-					b.StartTimer()
-					continue
-				}
-				events += int64(deleted)
-			}
-			b.StopTimer()
-			reportOutboxEventCost(b, events)
+			runOutboxCleanupCycle(b, ctx, pool, store, batchSize, seed)
 		})
 	}
 }
@@ -334,6 +300,39 @@ func runOutboxPublishCycle(
 	reportOutboxEventCost(b, events)
 }
 
+// runOutboxCleanupCycle is the measured loop shared by the retention cases:
+// delete one full batch of retained published rows. A short delete means the
+// case drained its backlog, so the fixture is restored outside the timed
+// interval, exactly as runOutboxPublishCycle does for a short claim.
+func runOutboxCleanupCycle(
+	b *testing.B,
+	ctx context.Context,
+	pool *postgres.Pool,
+	store *postgresoutbox.Store,
+	batchSize int,
+	seed func(),
+) {
+	b.Helper()
+	var events int64
+
+	b.ReportAllocs()
+	for b.Loop() {
+		deleted, err := store.CleanupPublished(ctx, time.Minute, batchSize)
+		if err != nil {
+			b.Fatalf("CleanupPublished(): %v", err)
+		}
+		if deleted < batchSize {
+			b.StopTimer()
+			refillOutboxBacklog(b, ctx, pool, seed)
+			b.StartTimer()
+			continue
+		}
+		events += int64(deleted)
+	}
+	b.StopTimer()
+	reportOutboxEventCost(b, events)
+}
+
 // BenchmarkOutboxRelayOrderedPublishCycle measures the same cycle for ordered
 // events, where finalizing also advances each key's head and unblocks that
 // key's successor. Every case drains the same backlog through a different
@@ -345,11 +344,9 @@ func runOutboxPublishCycle(
 // Finalizing an ordered event also looks up that key's successor, advances the
 // head, and marks the successor claimable — and that last update is not
 // heap-only, because `ordering_ready` sits in two partial index predicates. Both
-// cases here publish the same number of events in the same batch size through
-// the same statement; they differ only in whether a successor exists. A key one
-// event deep has none, so the lookup finds nothing and the readiness update
-// touches no row. The difference is therefore the whole cost of the baton, and
-// the upper bound on what a claim redesign that removed it could win.
+// cases publish the same events in the same batch size through the same
+// statement and differ only in whether a successor exists, so the difference is
+// the whole cost of the baton and the upper bound on what removing it could win.
 func BenchmarkOutboxOrderedSuccessorCost(b *testing.B) {
 	const (
 		events    = 5000
@@ -723,13 +720,12 @@ func BenchmarkOutboxRelayPublishCyclePayload(b *testing.B) {
 // once, and that is where heap pages, the primary key, the append notification,
 // and the ordering heads are actually contended.
 //
-// Only two shapes are valid, and the missing third one is the point. Several
-// unsynchronized writers sharing one ordering key is not a supported shape: a
-// key's sequences must reach PostgreSQL in order, and the retained high-water
-// mark rejects one that does not, so such a call fails rather than storing a
-// reordered event. A caller that needs ordering takes the sequence from its
-// aggregate's own revision, under the same lock that serializes the domain
-// mutation — which is one writer per key, the shape measured here.
+// Only two shapes are valid, and the missing third is the point: several
+// unsynchronized writers sharing one ordering key is unsupported, because a key's
+// sequences must reach PostgreSQL in order and the retained high-water mark
+// rejects one that does not. A caller that needs ordering takes the sequence from
+// its aggregate's own revision, under the same lock that serializes the domain
+// mutation — one writer per key, the shape measured here.
 func BenchmarkOutboxAppendConcurrent(b *testing.B) {
 	const writers = 16
 
@@ -880,24 +876,7 @@ func BenchmarkOutboxIdentifierShape(b *testing.B) {
 			seed := func() { seedOutboxIdentifiers(b, ctx, pool, existing, nextID, true) }
 			seed()
 			analyzeOutboxFixture(b, ctx, pool)
-			var deleted int64
-
-			b.ReportAllocs()
-			for b.Loop() {
-				removed, err := store.CleanupPublished(ctx, time.Minute, batchSize)
-				if err != nil {
-					b.Fatalf("CleanupPublished(): %v", err)
-				}
-				if removed < batchSize {
-					b.StopTimer()
-					refillOutboxBacklog(b, ctx, pool, seed)
-					b.StartTimer()
-					continue
-				}
-				deleted += int64(removed)
-			}
-			b.StopTimer()
-			reportOutboxEventCost(b, deleted)
+			runOutboxCleanupCycle(b, ctx, pool, store, batchSize, seed)
 		})
 	}
 }
@@ -965,10 +944,9 @@ func seedOutboxIdentifiers(
 //
 // The randomness is the point. PostgreSQL compresses a value only once the row
 // passes its TOAST target, and a filler of one repeated byte compresses to
-// nothing — which would measure a best case no real event reaches and would hide
-// whatever compression actually costs. Hex halves under the default compressor,
-// which is close to what a business payload does. The seed is fixed so every
-// case and every side of a comparison stores identical bytes.
+// nothing, measuring a best case no real event reaches. Hex halves under the
+// default compressor, close to what a business payload does. The seed is fixed so
+// every case and every side of a comparison stores identical bytes.
 func outboxBenchmarkPayload(size int) []byte {
 	const envelope = `{"data":""}`
 	if size <= len(envelope) {

@@ -2,7 +2,6 @@ package grpcclient
 
 import (
 	"context"
-	"net/url"
 	"slices"
 	"strings"
 
@@ -11,11 +10,27 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/resolver"
 )
 
-const requestIDMetadataKey = "x-request-id"
+const requestIDMetadataKey = reqctx.RequestIDMetadataKey
 
+// reservedCorrelationMetadataKeys are the keys this client alone may set on an
+// outgoing RPC.
+//
+// The invariant the rest of this file exists to hold: policyPropagator is the
+// only permitted source of these keys, so what crosses the trust boundary is
+// exactly what PropagationPolicy selected. Three separate paths can otherwise
+// put a value under one of these keys on the wire, and each has its own strip
+// seam in this package, applied before OpenTelemetry injects the allowlist:
+//
+//	caller-supplied outgoing metadata   -> sanitizeOutgoingContext
+//	credential-supplied metadata        -> sanitizingPerRPCCredentials
+//	resolver-supplied address metadata  -> sanitizeResolverAddresses, resolver.go
+//
+// Removing any one of them widens the trust boundary without changing a single
+// call site; the propagation and resolver-selection tests are what fail.
+// client.go's WithNoProxy and WithDisableServiceConfig close the two remaining
+// routes by which a peer could introduce a fourth.
 var reservedCorrelationMetadataKeys = [...]string{
 	"traceparent",
 	"tracestate",
@@ -122,6 +137,16 @@ func sanitizeOutgoingContext(ctx context.Context) context.Context {
 	return metadata.NewOutgoingContext(ctx, sanitized)
 }
 
+// sanitizeCallOptions rewraps any per-RPC credential so the metadata it returns
+// passes the same strip seam as everything else bound for the wire.
+//
+// Both forms of the option are reachable, which is why the switch has two arms
+// that look redundant. grpc.PerRPCCredentials returns the value form, but
+// grpc.CallOption is satisfied by a pointer to it as well, so a caller that
+// builds the option as a composite literal and takes its address produces the
+// pointer form. Each arm writes a copy into the cloned slice rather than
+// mutating in place: rewriting through the pointer would change the caller's
+// own option value.
 func sanitizeCallOptions(options []grpc.CallOption) []grpc.CallOption {
 	sanitized := slices.Clone(options)
 	for index, option := range sanitized {
@@ -196,101 +221,4 @@ func reservedCorrelationMetadataKey(key string) bool {
 		}
 	}
 	return false
-}
-
-func sanitizingResolverBuilders(target string) []resolver.Builder {
-	schemes := []string{"dns", resolver.GetDefaultScheme()}
-	if parsed, err := url.Parse(target); err == nil {
-		schemes = append(schemes, parsed.Scheme)
-	}
-
-	seen := make(map[string]struct{}, len(schemes))
-	builders := make([]resolver.Builder, 0, len(schemes))
-	for _, scheme := range schemes {
-		base := resolver.Get(scheme)
-		if base == nil {
-			continue
-		}
-		if _, ok := seen[base.Scheme()]; ok {
-			continue
-		}
-		seen[base.Scheme()] = struct{}{}
-		builders = append(builders, wrapResolverBuilder(base))
-	}
-	return builders
-}
-
-func wrapResolverBuilder( //nolint:ireturn // Optional AuthorityOverrider support requires two concrete wrappers.
-	base resolver.Builder,
-) resolver.Builder {
-	wrapped := sanitizingResolverBuilder{base: base}
-	authority, ok := base.(resolver.AuthorityOverrider)
-	if !ok {
-		return wrapped
-	}
-	return sanitizingAuthorityResolverBuilder{
-		sanitizingResolverBuilder: wrapped,
-		authority:                 authority,
-	}
-}
-
-type sanitizingResolverBuilder struct {
-	base resolver.Builder
-}
-
-func (b sanitizingResolverBuilder) Build( //nolint:ireturn // Implements resolver.Builder.
-	target resolver.Target,
-	connection resolver.ClientConn,
-	options resolver.BuildOptions,
-) (resolver.Resolver, error) {
-	//nolint:wrapcheck // Preserve the selected resolver's exact build failure.
-	return b.base.Build(target, sanitizingResolverClientConn{ClientConn: connection}, options)
-}
-
-func (b sanitizingResolverBuilder) Scheme() string {
-	return b.base.Scheme()
-}
-
-type sanitizingAuthorityResolverBuilder struct {
-	sanitizingResolverBuilder
-
-	authority resolver.AuthorityOverrider
-}
-
-func (b sanitizingAuthorityResolverBuilder) OverrideAuthority(target resolver.Target) string {
-	return b.authority.OverrideAuthority(target)
-}
-
-type sanitizingResolverClientConn struct {
-	resolver.ClientConn
-}
-
-func (c sanitizingResolverClientConn) UpdateState(state resolver.State) error {
-	// The resolver contract requires returning the downstream ClientConn error
-	// unchanged; callers may use its identity for recovery.
-	//nolint:wrapcheck // Preserve resolver.ClientConn recovery semantics and error identity.
-	return c.ClientConn.UpdateState(sanitizeResolverState(state))
-}
-
-func (c sanitizingResolverClientConn) NewAddress(addresses []resolver.Address) {
-	c.ClientConn.NewAddress( //nolint:staticcheck // Compatibility path required by resolver.ClientConn.
-		sanitizeResolverAddresses(addresses),
-	)
-}
-
-func sanitizeResolverState(state resolver.State) resolver.State {
-	state.Addresses = sanitizeResolverAddresses(state.Addresses)
-	state.Endpoints = slices.Clone(state.Endpoints)
-	for index := range state.Endpoints {
-		state.Endpoints[index].Addresses = sanitizeResolverAddresses(state.Endpoints[index].Addresses)
-	}
-	return state
-}
-
-func sanitizeResolverAddresses(addresses []resolver.Address) []resolver.Address {
-	sanitized := slices.Clone(addresses)
-	for index := range sanitized {
-		sanitized[index].Metadata = nil //nolint:staticcheck // Deprecated Metadata remains a live grpc-go disclosure path.
-	}
-	return sanitized
 }

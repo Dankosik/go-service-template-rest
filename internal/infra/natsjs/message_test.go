@@ -82,7 +82,7 @@ func TestMessageIsImmutable(t *testing.T) {
 			Consumer:     "events-worker",
 		},
 	}
-	_, decoded, err := decodeMessage(msg, msg.metadata)
+	decoded, _, err := decodeMessage(msg, msg.metadata)
 	if err != nil {
 		t.Fatalf("decodeMessage() error = %v", err)
 	}

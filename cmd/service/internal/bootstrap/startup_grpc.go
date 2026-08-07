@@ -3,7 +3,6 @@ package bootstrap
 import (
 	"fmt"
 	"log/slog"
-	"math"
 
 	"github.com/example/go-service-template-rest/internal/config"
 	grpcx "github.com/example/go-service-template-rest/internal/infra/grpc"
@@ -16,9 +15,9 @@ import (
 )
 
 type grpcRuntimeBindings struct {
-	Services        []grpcx.RegisterService
-	UnaryPolicy     []grpc.UnaryServerInterceptor
-	StreamingPolicy []grpc.StreamServerInterceptor
+	Services     []grpcx.RegisterService
+	UnaryPolicy  []grpc.UnaryServerInterceptor
+	StreamPolicy []grpc.StreamServerInterceptor
 }
 
 func newGRPCRuntime(
@@ -28,21 +27,12 @@ func newGRPCRuntime(
 	domainErrors []problem.Mapper,
 	bindings grpcRuntimeBindings,
 ) (*grpcx.Server, error) {
-	maxConcurrentStreams, err := grpcUint32Bound(
-		"grpc.server.max_concurrent_streams",
-		cfg.GRPC.Server.MaxConcurrentStreams,
-	)
-	if err != nil {
-		return nil, err
-	}
-	maxHeaderListBytes, err := grpcUint32Bound(
-		"grpc.server.max_header_list_bytes",
-		cfg.GRPC.Server.MaxHeaderListBytes,
-	)
-	if err != nil {
-		return nil, err
-	}
-
+	// internal/config owns which values this field may hold and refuses every
+	// other one before startup reaches here, so the else branch below is
+	// plaintext by proof rather than by fallback. A third mode is a change there
+	// first: the accepted set, the rules that come with it, and the logged value
+	// in startup_logging.go all belong to that owner, and this switch only turns
+	// an already-proven value into credentials.
 	var transportCredentials credentials.TransportCredentials
 	if cfg.GRPC.Server.TransportSecurity == "tls" {
 		loaded, err := credentials.NewServerTLSFromFile(
@@ -56,43 +46,51 @@ func newGRPCRuntime(
 	}
 
 	server, err := grpcx.NewServer(
-		grpcx.Config{
-			MaxConcurrentRPCs:          cfg.GRPC.Server.MaxConcurrentRPCs,
-			MaxConcurrentStreams:       maxConcurrentStreams,
-			MaxHeaderListBytes:         maxHeaderListBytes,
-			MaxReceiveMessageBytes:     cfg.GRPC.Server.MaxReceiveMessageBytes,
-			MaxSendMessageBytes:        cfg.GRPC.Server.MaxSendMessageBytes,
-			LogHealthChecks:            cfg.GRPC.Server.AccessLogHealthChecks,
-			AccessLogSuccessSampleRate: cfg.GRPC.Server.AccessLogSuccessSampleRate,
-			AccessLogSlowThreshold:     cfg.GRPC.Server.AccessLogSlowThreshold,
-			TelemetryHealthChecks:      cfg.GRPC.Server.TelemetryHealthChecks,
-			TransportCredentials:       transportCredentials,
-		},
+		grpcServerConfig(cfg.GRPC.Server),
 		grpcx.Options{
-			Logger:          log,
-			MeterProvider:   metrics.MeterProvider(),
-			TracerProvider:  otel.GetTracerProvider(),
-			Propagators:     propagation.TraceContext{},
-			DomainErrors:    domainErrors,
-			Load:            metrics.GRPCServerLoad(),
-			Services:        bindings.Services,
-			UnaryPolicy:     bindings.UnaryPolicy,
-			StreamingPolicy: bindings.StreamingPolicy,
+			TransportCredentials: transportCredentials,
+
+			Logger:         log,
+			MeterProvider:  metrics.MeterProvider(),
+			TracerProvider: otel.GetTracerProvider(),
+			Propagators:    propagation.TraceContext{},
+			// The same slice the HTTP router receives. A service appends its
+			// mappers at runtimeDependencies.DomainErrors, never here.
+			DomainErrors: domainErrors,
+			Load:         metrics.GRPCServerLoad(),
+			Services:     bindings.Services,
+			UnaryPolicy:  bindings.UnaryPolicy,
+			StreamPolicy: bindings.StreamPolicy,
 		},
 	)
 	if err != nil {
-		return nil, fmt.Errorf("build gRPC server: %w", err)
+		return nil, fmt.Errorf("build gRPC runtime: %w", err)
 	}
 	return server, nil
 }
 
-func grpcUint32Bound(name string, value int) (uint32, error) {
-	if value <= 0 || uint64(value) > math.MaxUint32 {
-		return 0, fmt.Errorf(
-			"build gRPC server: %s must be in range [1,%d]",
-			name,
-			uint64(math.MaxUint32),
-		)
+// grpcServerConfig is this service's one crossing from loaded configuration to
+// the transport adapter's bounds. It is a named function rather than a literal
+// inside newGRPCRuntime so that the crossing has an owner a test can drive
+// directly: TestGRPCServerConfigFillsEveryTransportBound proves a populated
+// configuration leaves no bound behind, which a test asserting individual fields
+// goes on reporting as fine once a tenth one is added.
+//
+// The mapping lives here rather than in internal/infra/grpc because that adapter
+// depends on internal/problem and internal/reqctx only, and a transport adapter
+// that knew this repository's configuration shape could not be reused by a
+// service that restructured it. internal/config cannot own it either: the
+// depguard rule config_no_runtime_owners stops it importing runtime adapters.
+func grpcServerConfig(server config.GRPCServerConfig) grpcx.Config {
+	return grpcx.Config{
+		MaxConcurrentRPCs:          server.MaxConcurrentRPCs,
+		MaxConcurrentStreams:       server.MaxConcurrentStreams,
+		MaxHeaderListBytes:         server.MaxHeaderListBytes,
+		MaxReceiveMessageBytes:     server.MaxReceiveMessageBytes,
+		MaxSendMessageBytes:        server.MaxSendMessageBytes,
+		LogHealthChecks:            server.AccessLogHealthChecks,
+		AccessLogSuccessSampleRate: server.AccessLogSuccessSampleRate,
+		AccessLogSlowThreshold:     server.AccessLogSlowThreshold,
+		TelemetryHealthChecks:      server.TelemetryHealthChecks,
 	}
-	return uint32(value), nil // #nosec G115 -- range checked immediately above.
 }

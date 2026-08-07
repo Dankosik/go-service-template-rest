@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -61,28 +62,9 @@ func TestOutboxConfigRejectsIncoherentBudgets(t *testing.T) {
 			value: time.Duration(1<<63 - 1).String(), want: "outbox.lease_duration",
 		},
 	}
-	for _, key := range []string{
-		"POLL_INTERVAL", "PUBLISH_TIMEOUT", "LEASE_DURATION", "RETRY_BASE", "RETRY_MAX",
-		"OBSERVATION_INTERVAL", "CLEANUP_INTERVAL", "PUBLISHED_RETENTION", "DRAIN_TIMEOUT",
-	} {
-		tests = append(tests, struct {
-			name  string
-			key   string
-			value string
-			want  string
-		}{
-			name:  "positive " + strings.ToLower(key),
-			key:   "APP__OUTBOX__" + key,
-			value: "0s",
-			want:  "outbox." + strings.ToLower(key),
-		})
-	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			resetConfigEnv(t)
-			t.Setenv("APP__POSTGRES__ENABLED", "true")
-			t.Setenv("APP__POSTGRES__DSN", "postgres://app:secret@localhost/app")
-			t.Setenv("APP__OUTBOX__ENABLED", "true")
+			enableOutbox(t)
 			t.Setenv(test.key, test.value)
 			_, _, err := LoadDetailed(LoadOptions{})
 			if !errors.Is(err, ErrValidate) || !strings.Contains(err.Error(), test.want) {
@@ -90,4 +72,62 @@ func TestOutboxConfigRejectsIncoherentBudgets(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Every OutboxConfig field must be rejected when it carries an unusable value.
+// validateOutbox checks fields by listing them, so a field added to the struct
+// and to bootstrap's relayConfig mapper but forgotten in those lists reaches the
+// relay unvalidated: nothing rejects it at load time, and ValidateRelayConfig
+// only covers the fields it happens to range over.
+//
+// Deriving the field set by reflection rather than listing it is the whole point.
+// Two tests in cmd/outbox-relay walk the same struct for the halves this one
+// cannot reach, because depguard keeps postgresoutbox out of this package:
+// TestRelayConfigMapsEveryOutboxField guards the mapper and
+// TestRelayRejectsEveryOutboxBudget the relay's own validator. The three together
+// cover every field end to end.
+func TestOutboxConfigValidatesEveryField(t *testing.T) {
+	// The only field with no unusable value: it is the switch that turns the
+	// rest on, and TestOutboxConfigDefaultsAndPostgresRequirement covers what it
+	// gates. Anything else added here needs a reason.
+	unvalidatable := map[string]string{"enabled": "a switch has no invalid value"}
+
+	for _, field := range reflect.VisibleFields(reflect.TypeFor[OutboxConfig]()) {
+		key := field.Tag.Get("koanf")
+		if key == "" {
+			t.Fatalf("OutboxConfig.%s has no koanf tag, so no operator can set it", field.Name)
+		}
+		if _, skipped := unvalidatable[key]; skipped {
+			continue
+		}
+		var unusable string
+		switch field.Type {
+		case reflect.TypeFor[time.Duration]():
+			unusable = "0s"
+		case reflect.TypeFor[int]():
+			unusable = "0"
+		default:
+			t.Fatalf("OutboxConfig.%s is a %s; teach this test an unusable value for it", field.Name, field.Type)
+		}
+
+		t.Run(key, func(t *testing.T) {
+			enableOutbox(t)
+			t.Setenv("APP__OUTBOX__"+strings.ToUpper(key), unusable)
+			_, _, err := LoadDetailed(LoadOptions{})
+			if !errors.Is(err, ErrValidate) || !strings.Contains(err.Error(), "outbox."+key) {
+				t.Fatalf("LoadDetailed(outbox.%s=%s) error = %v, want an outbox.%s validation failure",
+					key, unusable, err, key)
+			}
+		})
+	}
+}
+
+// enableOutbox resets the environment to the smallest configuration the outbox
+// loads under, so each case only has to set the one value it is testing.
+func enableOutbox(t *testing.T) {
+	t.Helper()
+	resetConfigEnv(t)
+	t.Setenv("APP__POSTGRES__ENABLED", "true")
+	t.Setenv("APP__POSTGRES__DSN", "postgres://app:secret@localhost/app")
+	t.Setenv("APP__OUTBOX__ENABLED", "true")
 }

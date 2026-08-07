@@ -2,14 +2,10 @@
 // wires one feature onto its generated contract and through the shared hardened
 // middleware chain.
 //
-// It deliberately owns no process lifecycle. The version this replaced had its
-// own main, listener, signal handling, and graceful shutdown — about a hundred
-// lines that duplicated cmd/service/internal/bootstrap and got it worse: no
-// readiness drain, no propagation delay, no background join, no dependency
-// release, no telemetry flush, and a bare five-second shutdown constant. It sat
-// in the file a reader opens first to learn how to compose a feature, so what
-// they copied was a lifecycle that drops connections on every deploy, from a
-// repository that had solved that one directory over.
+// It deliberately owns no process lifecycle. The version this replaced carried
+// its own main, listener, signal handling, and shutdown — a hundred lines that
+// duplicated cmd/service/internal/bootstrap and got it worse, in the file a
+// reader opens first to learn how to compose a feature.
 //
 // What is worth copying is below: a feature package that knows nothing about
 // HTTP, an httpapi package that maps it onto the generated contract, one

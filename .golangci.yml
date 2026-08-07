@@ -101,6 +101,16 @@ linters:
         linters:
           - unparam
   settings:
+    wrapcheck:
+      # A gRPC status is a transport answer, not an error to be annotated: the
+      # code and message are the whole payload, and wrapping one hides it from
+      # status.Code at the boundary that reads it. Without this, a policy
+      # interceptor returning status.Error has to declare a local error type
+      # that carries the status and nothing else — lint bookkeeping the reader
+      # then has to tell apart from internal/infra/grpc's ownedStatusError,
+      # which looks identical and is a real provenance marker.
+      ignore-sig-regexps:
+        - google\.golang\.org/grpc/status\.Error(f)?\(
     staticcheck:
       checks:
         - all
@@ -277,6 +287,12 @@ linters:
         # profile:grpc:start
         - '^github\.com/example/go-service-template-rest/internal/config\.(GRPCConfig|GRPCServerConfig|GRPCTLSConfig)$'
         # profile:grpc:end
+        # profile:authn-oidc-jwt:start
+        # A configured trust value added to PolicyInput must reach the composition
+        # root, or a deployment runs with it unset; oidcjwt.PolicyInput says why
+        # this entry is what enforces that.
+        - '^github\.com/example/go-service-template-rest/internal/infra/oidcjwt\.PolicyInput$'
+        # profile:authn-oidc-jwt:end
     forbidigo:
       analyze-types: true
       forbid:

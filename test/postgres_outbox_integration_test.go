@@ -20,8 +20,8 @@ import (
 	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	"github.com/example/go-service-template-rest/internal/infra/postgres/pgtest"
 	"github.com/example/go-service-template-rest/internal/infra/postgresoutbox"
+	"github.com/example/go-service-template-rest/internal/infra/telemetry/telemetrytest"
 	"github.com/jackc/pgx/v5"
-	"go.opentelemetry.io/otel/attribute"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 )
@@ -388,15 +388,19 @@ func TestPostgresOutboxOrderingAuthority(t *testing.T) {
 func TestPostgresOutboxBatchedAppend(t *testing.T) {
 	ctx, pool, store := newOutboxFixture(t)
 
-	// Mixed shapes commit together, and two events for one key inside a single
-	// call advance that key's head in the order they were passed: the first is
-	// claimable and the second waits behind it.
+	// Mixed shapes commit together, and a key's events are ordered by their own
+	// sequence rather than by their position in the call. The ordered pair below
+	// is passed highest sequence first on purpose: the head still opens at
+	// sequence 1, so batch-key-1 is the claimable one and batch-key-2 waits
+	// behind it. Passing them in ascending order would leave the two rules
+	// indistinguishable, and the ordering contract a feature relies on is that
+	// argument order does not matter.
 	if err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
 		return store.Append(ctx, tx,
 			outboxEvent("batch-plain-1"),
-			orderedEvent("batch-key-1", "batch-account", 1),
-			outboxEvent("batch-plain-2"),
 			orderedEvent("batch-key-2", "batch-account", 2),
+			outboxEvent("batch-plain-2"),
+			orderedEvent("batch-key-1", "batch-account", 1),
 		)
 	}); err != nil {
 		t.Fatalf("Append(batch): %v", err)
@@ -565,31 +569,18 @@ func TestPostgresOutboxOrderingHandoffAfterBlockedSnapshot(t *testing.T) {
 
 	marked := make(chan error, 1)
 	go func() { marked <- markOutboxPublished(ctx, store, first) }()
-	deadline := time.NewTimer(10 * time.Second)
-	ticker := time.NewTicker(10 * time.Millisecond)
-	defer deadline.Stop()
-	defer ticker.Stop()
-	for {
-		var blocked bool
-		if err := pool.PGX().QueryRow(ctx, `
-			SELECT EXISTS (
-				SELECT 1
-				FROM pg_stat_activity AS activity
-				WHERE $1 = ANY(pg_blocking_pids(activity.pid))
-			)`, blockerPID).Scan(&blocked); err != nil {
-			t.Fatalf("observe blocked mark: %v", err)
-		}
-		if blocked {
-			break
-		}
-		select {
-		case err := <-marked:
-			t.Fatalf("mark completed before append commit: %v", err)
-		case <-deadline.C:
-			t.Fatal("mark did not wait for the ordering head lock")
-		case <-ticker.C:
-		}
-	}
+	waitForOutbox(t,
+		func() string { return "mark did not wait for the ordering head lock" },
+		func() bool {
+			// Finishing before the append commits would mean the mark never took
+			// the head lock, which is the opposite of what this proves.
+			select {
+			case err := <-marked:
+				t.Fatalf("mark completed before append commit: %v", err)
+			default:
+			}
+			return outboxBlockedBy(t, ctx, pool, blockerPID)
+		})
 
 	if err := tx.Commit(ctx); err != nil {
 		t.Fatalf("commit successor: %v", err)
@@ -634,6 +625,10 @@ func TestPostgresOutboxOrderedMarkFencesClaimIdentity(t *testing.T) {
 	}
 }
 
+// One ordering key walks the whole set of states that can block its successor:
+// a live lease, retry-wait, lease recovery behind a foreign row lock, and
+// poison until redrive. Each phase below builds on the durable state the
+// previous one left, so the comments mark where one ends and the next begins.
 func TestPostgresOutboxOrderingClaims(t *testing.T) {
 	ctx, pool, store := newOutboxFixture(t)
 	mustAppendOutbox(t, ctx, pool, store, orderedEvent("key-1", "key", 1))
@@ -641,6 +636,8 @@ func TestPostgresOutboxOrderingClaims(t *testing.T) {
 	mustAppendOutbox(t, ctx, pool, store, orderedEvent("key-3", "key", 3))
 	mustAppendOutbox(t, ctx, pool, store, outboxEvent("unordered"))
 
+	// Only the earliest unpublished sequence of a key is claimable, and an
+	// unordered event is never blocked by one.
 	first := mustClaimOutbox(t, ctx, store)
 	if first.Event.ID != "key-1" {
 		t.Fatalf("first claim = %q, want key-1", first.Event.ID)
@@ -659,6 +656,9 @@ func TestPostgresOutboxOrderingClaims(t *testing.T) {
 	if third.Event.ID != "key-2" {
 		t.Fatalf("post-predecessor claim = %q, want key-2", third.Event.ID)
 	}
+	// Retry-wait blocks the key just as a lease does: key-3 stays unclaimable
+	// while key-2 waits out its backoff, and becomes claimable only after
+	// key-2 itself is claimed again.
 	if err := scheduleOutboxRetry(ctx, store, third.Event.ID, third.Token, "publisher_temporary", time.Hour); err != nil {
 		t.Fatalf("schedule key-2 retry: %v", err)
 	}
@@ -668,11 +668,16 @@ func TestPostgresOutboxOrderingClaims(t *testing.T) {
 	if _, err := pool.PGX().Exec(ctx, "UPDATE outbox_events SET available_at = clock_timestamp() WHERE id = 'key-2'"); err != nil {
 		t.Fatalf("make key-2 retry eligible: %v", err)
 	}
-	retryClaim, err := claimOutboxEvent(ctx, store, 5*time.Millisecond)
+	retryClaim, err := claimOutboxEvent(ctx, store, shortOutboxLease)
 	if err != nil || retryClaim.Event.ID != "key-2" {
 		t.Fatalf("retry claim = %+v, %v; want key-2", retryClaim, err)
 	}
-	postgresSleep(t, ctx, pool, 0.02)
+	// Lease recovery must reach a predecessor whose row another transaction
+	// holds. The claim skips it while the lock is held rather than blocking or
+	// jumping ahead to key-3, and picks it up once the lock is released. The
+	// explicit FOR UPDATE is what makes that a proven wait rather than a
+	// timing assumption.
+	expireOutboxLease(t, ctx, pool)
 	lockTx, err := pool.PGX().Begin(ctx)
 	if err != nil {
 		t.Fatalf("begin recovery predecessor lock: %v", err)
@@ -692,6 +697,9 @@ func TestPostgresOutboxOrderingClaims(t *testing.T) {
 	if err != nil || recoveryClaim.Event.ID != "key-2" {
 		t.Fatalf("recovery claim = %+v, %v; want predecessor key-2", recoveryClaim, err)
 	}
+	// The recovered claim fenced the earlier one: the stale token can no longer
+	// poison the row, and only the current lease can. Poison then blocks the key
+	// until an operator redrive re-admits it.
 	if err := poisonOutboxEvent(ctx, store, retryClaim.Event.ID, retryClaim.Token, "publisher_permanent"); !errors.Is(err, postgresoutbox.ErrLeaseLost) {
 		t.Fatalf("stale poison fence = %v, want ErrLeaseLost", err)
 	}
@@ -719,11 +727,11 @@ func TestPostgresOutboxOrderingClaims(t *testing.T) {
 func TestPostgresOutboxLeaseExpiryAndFence(t *testing.T) {
 	ctx, pool, store := newOutboxFixture(t)
 	mustAppendOutbox(t, ctx, pool, store, outboxEvent("lease"))
-	first, err := claimOutboxEvent(ctx, store, 5*time.Millisecond)
+	first, err := claimOutboxEvent(ctx, store, shortOutboxLease)
 	if err != nil {
 		t.Fatalf("first Claim(): %v", err)
 	}
-	postgresSleep(t, ctx, pool, 0.02)
+	expireOutboxLease(t, ctx, pool)
 	second, err := claimOutboxEvent(ctx, store, time.Minute)
 	if err != nil {
 		t.Fatalf("recovery Claim(): %v", err)
@@ -751,12 +759,12 @@ func TestPostgresOutboxLeaseExpiryAndFence(t *testing.T) {
 func TestPostgresOutboxCrashAfterClaim(t *testing.T) {
 	ctx, pool, store := newOutboxFixture(t)
 	mustAppendOutbox(t, ctx, pool, store, outboxEvent("abandoned"))
-	first, err := claimOutboxEvent(ctx, store, 5*time.Millisecond)
+	first, err := claimOutboxEvent(ctx, store, shortOutboxLease)
 	if err != nil {
 		t.Fatalf("Claim(): %v", err)
 	}
 	store = nil
-	postgresSleep(t, ctx, pool, 0.02)
+	expireOutboxLease(t, ctx, pool)
 	restarted, err := postgresoutbox.NewStore(pool, nil)
 	if err != nil {
 		t.Fatalf("NewStore() after abandoned claim: %v", err)
@@ -767,6 +775,56 @@ func TestPostgresOutboxCrashAfterClaim(t *testing.T) {
 	}
 	if second.Event.ID != first.Event.ID || second.Token == first.Token {
 		t.Fatalf("restarted claim id/token = %q/%q, first %q/%q", second.Event.ID, second.Token, first.Event.ID, first.Token)
+	}
+}
+
+// Redrive's SELECT ... FOR UPDATE and its read-then-write of the audit ledger
+// exist for this case, not for the sequential one: two operators submitting the
+// same audit id at once. The loser blocks on the row lock, then re-reads the
+// ledger on a snapshot that can see the winner's insert, and returns nil rather
+// than starting a second delivery cycle.
+//
+// Sequential idempotence cannot catch a regression here — a Redrive that dropped
+// the lock would still pass it, because the second call reads a committed row.
+func TestPostgresOutboxConcurrentRedriveIsIdempotent(t *testing.T) {
+	ctx, pool, store := newOutboxFixture(t)
+	const racers = 4
+	mustAppendOutbox(t, ctx, pool, store, outboxEvent("race-poison"))
+	claim := mustClaimOutbox(t, ctx, store)
+	if err := poisonOutboxEvent(ctx, store, claim.Event.ID, claim.Token, "publisher_permanent"); err != nil {
+		t.Fatalf("MarkPoisoned(): %v", err)
+	}
+
+	start := make(chan struct{})
+	errs := make(chan error, racers)
+	for range racers {
+		go func() {
+			<-start
+			errs <- store.Redrive(ctx, claim.Event.ID, "race-audit")
+		}()
+	}
+	close(start)
+	for range racers {
+		if err := <-errs; err != nil {
+			t.Fatalf("concurrent Redrive(): %v", err)
+		}
+	}
+
+	record, err := store.Get(ctx, claim.Event.ID)
+	if err != nil {
+		t.Fatalf("Get(): %v", err)
+	}
+	if record.RedriveCount != 1 || record.LastRedriveID != "race-audit" || !record.PoisonedAt.IsZero() {
+		t.Fatalf("after %d concurrent redrives count=%d audit=%q poisoned=%v, want one cycle",
+			racers, record.RedriveCount, record.LastRedriveID, record.PoisonedAt)
+	}
+	var ledgerRows int
+	if err := pool.PGX().QueryRow(ctx,
+		"SELECT count(*) FROM outbox_redrives WHERE event_id = $1", claim.Event.ID).Scan(&ledgerRows); err != nil {
+		t.Fatalf("count redrive ledger: %v", err)
+	}
+	if ledgerRows != 1 {
+		t.Fatalf("redrive ledger rows = %d, want 1", ledgerRows)
 	}
 }
 
@@ -907,6 +965,9 @@ func TestPostgresOutboxPublishFailure(t *testing.T) {
 	}{
 		{name: "temporary before acknowledgement", publisherResult: errors.New("broker unavailable"), wantClass: "publisher_temporary"},
 		{name: "timeout before acknowledgement", waitForTimeout: true, wantClass: "publisher_timeout"},
+		// A permanent rejection poisons on its first occurrence, which the
+		// attempt assertion below is what proves: the row is parked without the
+		// relay ever handing the same bytes to the adapter a second time.
 		{name: "permanent rejection", publisherResult: postgresoutbox.ErrPermanentPublication, wantClass: "publisher_permanent", wantPoison: true},
 	}
 	for _, test := range tests {
@@ -915,7 +976,9 @@ func TestPostgresOutboxPublishFailure(t *testing.T) {
 			mustAppendOutbox(t, ctx, pool, store, outboxEvent("publish-failure"))
 			entered := make(chan struct{})
 			release := make(chan struct{})
+			var attempts atomic.Int64
 			publisher := testPublisherFunc(func(publishCtx context.Context, _ postgresoutbox.Event) error {
+				attempts.Add(1)
 				close(entered)
 				if test.waitForTimeout {
 					<-publishCtx.Done()
@@ -929,7 +992,7 @@ func TestPostgresOutboxPublishFailure(t *testing.T) {
 			<-entered
 			relay.StartDrain()
 			close(release)
-			assertRelayResult(t, result, true, nil)
+			assertRelayResult(t, result, nil)
 
 			record, err := store.Get(ctx, "publish-failure")
 			if err != nil {
@@ -943,6 +1006,9 @@ func TestPostgresOutboxPublishFailure(t *testing.T) {
 			}
 			if !record.PublishedAt.IsZero() {
 				t.Fatal("failed publication was marked published")
+			}
+			if got := attempts.Load(); got != 1 {
+				t.Fatalf("publisher attempts = %d, want 1 before the drain stopped the cycle", got)
 			}
 		})
 	}
@@ -968,7 +1034,7 @@ func TestPostgresOutboxAckCrashDuplicate(t *testing.T) {
 		return nil
 	})
 
-	first, err := claimOutboxEvent(ctx, store, 5*time.Millisecond)
+	first, err := claimOutboxEvent(ctx, store, shortOutboxLease)
 	if err != nil {
 		t.Fatalf("first Claim(): %v", err)
 	}
@@ -976,14 +1042,14 @@ func TestPostgresOutboxAckCrashDuplicate(t *testing.T) {
 		t.Fatalf("first durable publish: %v", err)
 	}
 	firstAttempt := <-attempts
-	postgresSleep(t, ctx, pool, 0.02)
+	expireOutboxLease(t, ctx, pool)
 
 	relay := mustNewOutboxRelay(t, store, publisher, nil, testRelayConfig())
 	result := runOutboxRelay(ctx, relay)
 	secondAttempt := <-attempts
 	relay.StartDrain()
 	close(releaseSecond)
-	assertRelayResult(t, result, true, nil)
+	assertRelayResult(t, result, nil)
 	if !reflect.DeepEqual(firstAttempt, secondAttempt) {
 		t.Fatalf("duplicate envelopes differ:\nfirst  %+v\nsecond %+v", firstAttempt, secondAttempt)
 	}
@@ -1017,7 +1083,7 @@ func TestPostgresOutboxRelayReplicas(t *testing.T) {
 		results = append(results, runOutboxRelay(ctx, relay))
 	}
 	seen := make(map[string]struct{}, eventCount)
-	deadline := time.NewTimer(10 * time.Second)
+	deadline := time.NewTimer(outboxWaitTimeout)
 	defer deadline.Stop()
 	for len(seen) < eventCount {
 		select {
@@ -1035,7 +1101,7 @@ func TestPostgresOutboxRelayReplicas(t *testing.T) {
 		relay.StartDrain()
 	}
 	for _, result := range results {
-		assertRelayResult(t, result, true, nil)
+		assertRelayResult(t, result, nil)
 	}
 }
 
@@ -1092,7 +1158,7 @@ func TestPostgresOutboxRequestContinuesDuringBrokerOutage(t *testing.T) {
 	}
 	waitForOutboxCount(t, ctx, pool, "last_error_class = 'publisher_temporary'", requestCount)
 	relay.StartDrain()
-	assertRelayResult(t, relayResult, true, nil)
+	assertRelayResult(t, relayResult, nil)
 
 	var domainRows, outboxRows, publishedRows int
 	if err := pool.PGX().QueryRow(ctx, `SELECT
@@ -1157,7 +1223,7 @@ func TestPostgresOutboxRelayPublishesBacklogConcurrently(t *testing.T) {
 	result := runOutboxRelay(ctx, relay)
 	waitForOutboxCount(t, ctx, pool, "published_at IS NOT NULL", backlog)
 	relay.StartDrain()
-	assertRelayResult(t, result, true, nil)
+	assertRelayResult(t, result, nil)
 
 	mutex.Lock()
 	defer mutex.Unlock()
@@ -1255,9 +1321,16 @@ func TestPostgresOutboxRelayWakesOnAppendNotification(t *testing.T) {
 	mustAppendOutbox(t, ctx, pool, store, outboxEvent("notified"))
 	waitForOutboxCount(t, ctx, pool, "published_at IS NOT NULL", 1)
 	relay.StartDrain()
-	assertRelayResult(t, result, true, nil)
+	assertRelayResult(t, result, nil)
 }
 
+// Each case here has a synctest twin in internal/infra/postgresoutbox that
+// drives the same fault against a stubbed store. The twin owns the relay's
+// decision — which store call it makes, and whether it starts another cycle. The
+// cases below own the durable consequence: what a real PostgreSQL row looks like
+// once the process has stopped, which is what an operator inspects after a
+// crash. Both are kept deliberately; a change to the decision belongs in the
+// twin, a change to the resulting row state belongs here.
 func TestPostgresOutboxRelayLifecycleFaults(t *testing.T) {
 	t.Run("process cancellation leaves durable unfinished work", func(t *testing.T) {
 		fixtureCtx, pool, store := newOutboxFixture(t)
@@ -1279,7 +1352,7 @@ func TestPostgresOutboxRelayLifecycleFaults(t *testing.T) {
 			t.Fatal("relay not ready during a joined publication attempt")
 		}
 		cancel()
-		assertRelayResult(t, result, true, nil)
+		assertRelayResult(t, result, nil)
 		if relay.Ready() || attempts.Load() != 1 {
 			t.Fatalf("after cancellation ready=%t attempts=%d, want false/1", relay.Ready(), attempts.Load())
 		}
@@ -1297,7 +1370,7 @@ func TestPostgresOutboxRelayLifecycleFaults(t *testing.T) {
 			panic("publisher detail must remain supervised")
 		})
 		relay := mustNewOutboxRelay(t, store, publisher, nil, singleEventRelayConfig())
-		assertRelayResult(t, runOutboxRelay(ctx, relay), true, postgresoutbox.ErrPublisherPanic)
+		assertRelayResult(t, runOutboxRelay(ctx, relay), postgresoutbox.ErrPublisherPanic)
 		if relay.Ready() || attempts.Load() != 1 {
 			t.Fatalf("after panic ready=%t attempts=%d, want false/1", relay.Ready(), attempts.Load())
 		}
@@ -1308,21 +1381,13 @@ func TestPostgresOutboxRelayLifecycleFaults(t *testing.T) {
 		ctx, pool, store := newOutboxFixture(t)
 		mustAppendOutbox(t, ctx, pool, store, outboxEvent("stuck-current"))
 		mustAppendOutbox(t, ctx, pool, store, outboxEvent("stuck-next"))
-		started := make(chan struct{})
-		release := make(chan struct{})
-		var attempts atomic.Int64
-		publisher := testPublisherFunc(func(context.Context, postgresoutbox.Event) error {
-			attempts.Add(1)
-			close(started)
-			<-release
-			return nil
-		})
+		publisher, started, release, attempts := gatingPublisher()
 		config := singleEventRelayConfig()
 		config.PublishTimeout = time.Millisecond
 		relay := mustNewOutboxRelay(t, store, publisher, nil, config)
 		result := runOutboxRelay(ctx, relay)
 		<-started
-		assertRelayResult(t, result, false, postgresoutbox.ErrPublisherStuck)
+		assertRelayStuckResult(t, result, postgresoutbox.ErrPublisherStuck)
 		close(release)
 		if relay.Ready() || attempts.Load() != 1 {
 			t.Fatalf("after stuck publisher ready=%t attempts=%d, want false/1", relay.Ready(), attempts.Load())
@@ -1334,21 +1399,13 @@ func TestPostgresOutboxRelayLifecycleFaults(t *testing.T) {
 		ctx, pool, store := newOutboxFixture(t)
 		mustAppendOutbox(t, ctx, pool, store, outboxEvent("drain-current"))
 		mustAppendOutbox(t, ctx, pool, store, outboxEvent("drain-next"))
-		started := make(chan struct{})
-		release := make(chan struct{})
-		var attempts atomic.Int64
-		publisher := testPublisherFunc(func(context.Context, postgresoutbox.Event) error {
-			attempts.Add(1)
-			close(started)
-			<-release
-			return nil
-		})
+		publisher, started, release, attempts := gatingPublisher()
 		relay := mustNewOutboxRelay(t, store, publisher, nil, singleEventRelayConfig())
 		result := runOutboxRelay(ctx, relay)
 		<-started
 		relay.StartDrain()
 		close(release)
-		assertRelayResult(t, result, true, nil)
+		assertRelayResult(t, result, nil)
 		if relay.Ready() || attempts.Load() != 1 {
 			t.Fatalf("after drain ready=%t attempts=%d, want false/1", relay.Ready(), attempts.Load())
 		}
@@ -1371,14 +1428,7 @@ func TestPostgresOutboxDrainDuringMaintenanceStartsNoClaim(t *testing.T) {
 	config := testRelayConfig()
 	config.PollInterval = time.Hour
 	config.ObservationInterval = 500 * time.Millisecond
-	reader := sdkmetric.NewManualReader()
-	provider := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
-	t.Cleanup(func() { _ = provider.Shutdown(context.Background()) })
-	telemetry, err := postgresoutbox.NewTelemetry(provider.Meter("maintenance-drain"), nil)
-	if err != nil {
-		t.Fatalf("NewTelemetry(): %v", err)
-	}
-	t.Cleanup(telemetry.Close)
+	reader, telemetry := newOutboxTelemetry(t)
 	relay := mustNewOutboxRelay(t, store, publisher, telemetry, config)
 	result := runOutboxRelay(ctx, relay)
 	// The append listener signals one wake-up as soon as it subscribes. Let that
@@ -1405,7 +1455,7 @@ func TestPostgresOutboxDrainDuringMaintenanceStartsNoClaim(t *testing.T) {
 	if err := lockTx.Commit(ctx); err != nil {
 		t.Fatalf("release maintenance gate: %v", err)
 	}
-	assertRelayResult(t, result, true, nil)
+	assertRelayResult(t, result, nil)
 	if attempts.Load() != 0 {
 		t.Fatalf("publisher attempts after drain during maintenance = %d, want 0", attempts.Load())
 	}
@@ -1423,14 +1473,7 @@ func TestPostgresOutboxDrainDuringInitialObservationNeverBecomesReady(t *testing
 		t.Fatalf("lock outbox table: %v", err)
 	}
 
-	reader := sdkmetric.NewManualReader()
-	provider := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
-	t.Cleanup(func() { _ = provider.Shutdown(context.Background()) })
-	telemetry, err := postgresoutbox.NewTelemetry(provider.Meter("startup-drain"), nil)
-	if err != nil {
-		t.Fatalf("NewTelemetry(): %v", err)
-	}
-	t.Cleanup(telemetry.Close)
+	reader, telemetry := newOutboxTelemetry(t)
 	var attempts atomic.Int64
 	relay := mustNewOutboxRelay(t, store, testPublisherFunc(func(context.Context, postgresoutbox.Event) error {
 		attempts.Add(1)
@@ -1446,7 +1489,7 @@ func TestPostgresOutboxDrainDuringInitialObservationNeverBecomesReady(t *testing
 	if err := lockTx.Commit(ctx); err != nil {
 		t.Fatalf("release startup observation gate: %v", err)
 	}
-	assertRelayResult(t, result, true, nil)
+	assertRelayResult(t, result, nil)
 	if relay.Ready() || attempts.Load() != 0 {
 		t.Fatalf("startup drain ready=%t attempts=%d, want false/0", relay.Ready(), attempts.Load())
 	}
@@ -1456,6 +1499,11 @@ func TestPostgresOutboxDrainDuringInitialObservationNeverBecomesReady(t *testing
 	}
 }
 
+// The relay fails closed when any relation it owns is missing, and the gate is
+// the startup observation: ObserveOutbox is the one statement that touches all
+// three tables. It reaches outbox_redrives only through that relation's
+// storage-bytes column, so dropping the column drops the gate — this test is
+// what fails, and it says so.
 func TestPostgresOutboxStartupRequiresRedriveLedger(t *testing.T) {
 	ctx, pool, store := newOutboxFixture(t)
 	if _, err := pool.PGX().Exec(ctx, "DROP TABLE outbox_redrives"); err != nil {
@@ -1467,8 +1515,17 @@ func TestPostgresOutboxStartupRequiresRedriveLedger(t *testing.T) {
 		return nil
 	}), nil, testRelayConfig())
 	result := readRelayResult(t, runOutboxRelay(ctx, relay))
-	if result.Err == nil || !result.CleanupSafe || relay.Ready() || attempts.Load() != 0 {
-		t.Fatalf("startup without redrive ledger result=%+v ready=%t attempts=%d", result, relay.Ready(), attempts.Load())
+	if result.Err == nil {
+		t.Error("Run() started without outbox_redrives; the startup observation no longer reads that relation")
+	}
+	if result.CleanupUnsafe {
+		t.Errorf("Run() = %+v, want cleanup to stay safe after a startup failure", result)
+	}
+	if relay.Ready() {
+		t.Error("Ready() = true after a failed startup observation")
+	}
+	if got := attempts.Load(); got != 0 {
+		t.Errorf("publisher attempts = %d, want 0 before the schema gate passes", got)
 	}
 }
 
@@ -1489,7 +1546,7 @@ func TestPostgresOutboxRetryAndPoison(t *testing.T) {
 		result := runOutboxRelay(ctx, relay)
 		waitForOutboxCount(t, ctx, pool, "poisoned_at IS NOT NULL", 1)
 		relay.StartDrain()
-		assertRelayResult(t, result, true, nil)
+		assertRelayResult(t, result, nil)
 		record, err := store.Get(ctx, "exhaustion")
 		if err != nil {
 			t.Fatalf("Get(): %v", err)
@@ -1505,28 +1562,31 @@ func TestPostgresOutboxRetryAndPoison(t *testing.T) {
 	t.Run("ambiguous", func(t *testing.T) {
 		ctx, pool, store := newOutboxFixture(t)
 		mustAppendOutbox(t, ctx, pool, store, outboxEvent("ambiguous"))
-		var attempts atomic.Int64
-		var once sync.Once
-		pastThreshold := make(chan struct{})
-		publisher := testPublisherFunc(func(context.Context, postgresoutbox.Event) error {
-			if attempts.Add(1) > 3 {
-				once.Do(func() { close(pastThreshold) })
-			}
-			return errors.New("temporary")
-		})
 		config := testRelayConfig()
 		config.MaxAttempts = 2
 		config.RetryBase = time.Nanosecond
 		config.RetryMax = time.Nanosecond
+
+		var attempts atomic.Int64
+		var once sync.Once
+		pastThreshold := make(chan struct{})
+		publisher := testPublisherFunc(func(context.Context, postgresoutbox.Event) error {
+			// Past the cap, not a number that happens to exceed it: an ambiguous
+			// failure must keep retrying however the cap is configured.
+			if attempts.Add(1) > int64(config.MaxAttempts) {
+				once.Do(func() { close(pastThreshold) })
+			}
+			return errors.New("temporary")
+		})
 		relay := mustNewOutboxRelay(t, store, publisher, nil, config)
 		result := runOutboxRelay(ctx, relay)
 		select {
 		case <-pastThreshold:
-		case <-time.After(10 * time.Second):
+		case <-time.After(outboxWaitTimeout):
 			t.Fatalf("relay stopped retrying an ambiguous failure after %d attempts", attempts.Load())
 		}
 		relay.StartDrain()
-		assertRelayResult(t, result, true, nil)
+		assertRelayResult(t, result, nil)
 		waitForOutboxCount(t, ctx, pool, "poisoned_at IS NOT NULL", 0)
 		record, err := store.Get(ctx, "ambiguous")
 		if err != nil {
@@ -1537,23 +1597,10 @@ func TestPostgresOutboxRetryAndPoison(t *testing.T) {
 		}
 	})
 
-	t.Run("permanent", func(t *testing.T) {
-		ctx, pool, store := newOutboxFixture(t)
-		mustAppendOutbox(t, ctx, pool, store, outboxEvent("permanent"))
-		var attempts atomic.Int64
-		publisher := testPublisherFunc(func(context.Context, postgresoutbox.Event) error {
-			attempts.Add(1)
-			return postgresoutbox.ErrPermanentPublication
-		})
-		relay := mustNewOutboxRelay(t, store, publisher, nil, testRelayConfig())
-		result := runOutboxRelay(ctx, relay)
-		waitForOutboxCount(t, ctx, pool, "poisoned_at IS NOT NULL", 1)
-		relay.StartDrain()
-		assertRelayResult(t, result, true, nil)
-		if attempts.Load() != 1 {
-			t.Fatalf("permanent attempts = %d, want 1", attempts.Load())
-		}
-	})
+	// A permanent rejection has no loop dynamic to observe, so it belongs with
+	// the other single-cycle dispositions in TestPostgresOutboxPublishFailure
+	// rather than here. Both subtests above turn on how many cycles the relay
+	// runs, which is the thing this test exists to prove.
 }
 
 func TestPostgresOutboxObservability(t *testing.T) {
@@ -1622,26 +1669,14 @@ func TestPostgresOutboxObservability(t *testing.T) {
 }
 
 func TestPostgresOutboxTelemetryTransitions(t *testing.T) {
-	ctx, pool, _ := newOutboxFixture(t)
-	reader := sdkmetric.NewManualReader()
-	provider := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
-	t.Cleanup(func() { _ = provider.Shutdown(context.Background()) })
-	telemetry, err := postgresoutbox.NewTelemetry(provider.Meter("outbox-transitions"), nil)
-	if err != nil {
-		t.Fatalf("NewTelemetry(): %v", err)
-	}
-	t.Cleanup(telemetry.Close)
-	store, err := postgresoutbox.NewStore(pool, telemetry)
-	if err != nil {
-		t.Fatalf("NewStore(): %v", err)
-	}
+	ctx, pool, store, reader, telemetry := newInstrumentedOutboxFixture(t)
 
 	mustAppendOutbox(t, ctx, pool, store, outboxEvent("telemetry-recovery"))
-	first, err := claimOutboxEvent(ctx, store, 5*time.Millisecond)
+	first, err := claimOutboxEvent(ctx, store, shortOutboxLease)
 	if err != nil {
 		t.Fatalf("claim recovery fixture: %v", err)
 	}
-	postgresSleep(t, ctx, pool, 0.02)
+	expireOutboxLease(t, ctx, pool)
 	recovered := mustClaimOutbox(t, ctx, store)
 	if recovered.Event.ID != first.Event.ID || !recovered.Recovered {
 		t.Fatalf("recovered claim = id %q recovered %t, want %q/true", recovered.Event.ID, recovered.Recovered, first.Event.ID)
@@ -1674,13 +1709,7 @@ func TestPostgresOutboxTelemetryTransitions(t *testing.T) {
 	}
 
 	mustAppendOutbox(t, ctx, pool, store, outboxEvent("telemetry-relay"))
-	publishStarted := make(chan struct{})
-	publishRelease := make(chan struct{})
-	publisher := testPublisherFunc(func(context.Context, postgresoutbox.Event) error {
-		close(publishStarted)
-		<-publishRelease
-		return nil
-	})
+	publisher, publishStarted, publishRelease, _ := gatingPublisher()
 	relay := mustNewOutboxRelay(t, store, publisher, telemetry, testRelayConfig())
 	result := runOutboxRelay(ctx, relay)
 	<-publishStarted
@@ -1691,7 +1720,7 @@ func TestPostgresOutboxTelemetryTransitions(t *testing.T) {
 	close(publishRelease)
 	waitForOutboxCount(t, ctx, pool, "published_at IS NOT NULL", 1)
 	relay.StartDrain()
-	assertRelayResult(t, result, true, nil)
+	assertRelayResult(t, result, nil)
 	after := collectOutboxProcessMetrics(t, reader)
 	if after.ready != 0 || after.inflight != 0 || after.lastProgress == 0 {
 		t.Fatalf("after durable mark ready/inflight/progress = %d/%d/%f, want 0/0/>0", after.ready, after.inflight, after.lastProgress)
@@ -1703,46 +1732,35 @@ func TestPostgresOutboxTelemetryTransitions(t *testing.T) {
 	}
 	telemetry.RecordObservation(observation, time.Now())
 	operations, durations := collectOutboxOperationMetrics(t, reader)
-	wantOperations := []string{
-		"append", "claim", "recovery", "publish", "mark_published", "schedule_retry",
-		"poison", "redrive", "cleanup", "observe", "drain",
-	}
-	for _, operation := range wantOperations {
+	// A timed operation measures one statement or one event end to end. A
+	// counted one has no span of its own and must stay out of the duration
+	// histogram, or the placeholder it would record lands beside the real
+	// measurements. mark_published is both: the store times its statement and
+	// the relay counts a reconciled verdict under the same label.
+	for _, operation := range []string{
+		"append", "claim", "publish", "mark_published", "schedule_retry",
+		"poison", "redrive", "cleanup", "observe",
+	} {
 		if !operations[operation] || !durations[operation] {
-			t.Fatalf("operation %q counter/duration present = %t/%t", operation, operations[operation], durations[operation])
+			t.Errorf("timed operation %q counter/duration present = %t/%t, want true/true",
+				operation, operations[operation], durations[operation])
+		}
+	}
+	for _, operation := range []string{"recovery", "drain"} {
+		if !operations[operation] || durations[operation] {
+			t.Errorf("counted operation %q counter/duration present = %t/%t, want true/false",
+				operation, operations[operation], durations[operation])
 		}
 	}
 
-	secondReader := sdkmetric.NewManualReader()
-	secondProvider := sdkmetric.NewMeterProvider(sdkmetric.WithReader(secondReader))
-	t.Cleanup(func() { _ = secondProvider.Shutdown(context.Background()) })
-	secondTelemetry, err := postgresoutbox.NewTelemetry(secondProvider.Meter("outbox-second-replica"), nil)
-	if err != nil {
-		t.Fatalf("second NewTelemetry(): %v", err)
-	}
-	t.Cleanup(secondTelemetry.Close)
-	secondTelemetry.RecordObservation(observation, time.Now())
-	firstDatabase := collectOutboxDatabaseMetrics(t, reader)
-	secondDatabase := collectOutboxDatabaseMetrics(t, secondReader)
-	if !reflect.DeepEqual(firstDatabase, secondDatabase) {
-		t.Fatalf("replica database metrics differ: %+v vs %+v", firstDatabase, secondDatabase)
-	}
-	secondOperations, secondDurations := collectOutboxOperationMetrics(t, secondReader)
-	if len(secondOperations) != 0 || len(secondDurations) != 0 {
-		t.Fatalf("second replica inherited process operations: %v %v", secondOperations, secondDurations)
-	}
+	// What a second replica would report from this same observation is a property
+	// of Telemetry rather than of PostgreSQL, and is proven without a container by
+	// TestTelemetryReplicasShareTheObservationButNotOperations.
 }
 
 func TestPostgresOutboxFailedObservationStaysStaleAndUnready(t *testing.T) {
 	ctx, pool, store := newOutboxFixture(t)
-	reader := sdkmetric.NewManualReader()
-	provider := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
-	t.Cleanup(func() { _ = provider.Shutdown(context.Background()) })
-	telemetry, err := postgresoutbox.NewTelemetry(provider.Meter("outbox-stale"), nil)
-	if err != nil {
-		t.Fatalf("NewTelemetry(): %v", err)
-	}
-	t.Cleanup(telemetry.Close)
+	reader, telemetry := newOutboxTelemetry(t)
 	config := testRelayConfig()
 	config.PollInterval = time.Hour
 	config.ObservationInterval = 50 * time.Millisecond
@@ -1750,7 +1768,7 @@ func TestPostgresOutboxFailedObservationStaysStaleAndUnready(t *testing.T) {
 		return nil
 	}), telemetry, config)
 	result := runOutboxRelay(ctx, relay)
-	waitForOutboxOperation(t, reader, "claim", "empty")
+	waitForOutboxOperationCount(t, reader, "claim", "empty", 1)
 	before := collectOutboxProcessMetrics(t, reader)
 	if before.ready != 1 || before.observedAt == 0 {
 		t.Fatalf("initial ready/observation = %d/%f, want 1/>0", before.ready, before.observedAt)
@@ -1759,13 +1777,45 @@ func TestPostgresOutboxFailedObservationStaysStaleAndUnready(t *testing.T) {
 		t.Fatalf("remove schema for fatal observation: %v", err)
 	}
 	failed := readRelayResult(t, result)
-	if failed.Err == nil || !failed.CleanupSafe || relay.Ready() {
+	if failed.Err == nil || failed.CleanupUnsafe || relay.Ready() {
 		t.Fatalf("failed observation result=%+v ready=%t", failed, relay.Ready())
 	}
 	after := collectOutboxProcessMetrics(t, reader)
 	if after.ready != 0 || after.observedAt != before.observedAt {
 		t.Fatalf("failed observation ready/timestamp = %d/%f, want 0/%f", after.ready, after.observedAt, before.observedAt)
 	}
+}
+
+// newOutboxTelemetry builds outbox telemetry over a manual reader, so a test can
+// collect what a scrape would see. The scope is postgresoutbox's own, matching
+// production — the collectors below read every scope, so an ad-hoc name works too
+// and then reads as if it mattered. The reader and every metricdata accessor come
+// from telemetrytest, so only the *Telemetry construction belongs here.
+func newOutboxTelemetry(t *testing.T) (*sdkmetric.ManualReader, *postgresoutbox.Telemetry) {
+	t.Helper()
+	reader, meter := telemetrytest.NewManualMeter(t, postgresoutbox.TelemetryScope)
+	telemetry, err := postgresoutbox.NewTelemetry(meter, nil)
+	if err != nil {
+		t.Fatalf("NewTelemetry(): %v", err)
+	}
+	t.Cleanup(telemetry.Close)
+	return reader, telemetry
+}
+
+// newInstrumentedOutboxFixture is newOutboxFixture whose store records into the
+// returned reader, for the tests that assert on store operations rather than
+// only on relay ones.
+func newInstrumentedOutboxFixture(
+	t *testing.T,
+) (context.Context, *postgres.Pool, *postgresoutbox.Store, *sdkmetric.ManualReader, *postgresoutbox.Telemetry) {
+	t.Helper()
+	ctx, pool, _ := newOutboxFixture(t)
+	reader, telemetry := newOutboxTelemetry(t)
+	store, err := postgresoutbox.NewStore(pool, telemetry)
+	if err != nil {
+		t.Fatalf("NewStore(): %v", err)
+	}
+	return ctx, pool, store, reader, telemetry
 }
 
 func newOutboxFixture(t *testing.T) (context.Context, *postgres.Pool, *postgresoutbox.Store) {
@@ -1865,11 +1915,20 @@ func claimOutboxEvent(ctx context.Context, store *postgresoutbox.Store, lease ti
 	}, nil
 }
 
+// markOutboxPublished finalizes one claimed event through the statement its
+// disposition owns. In production the relay picks that statement from the
+// bucket Relay.classify sorted the event into, and never from the event itself;
+// these tests claim one event at a time and built it, so branching on the key
+// here is reading back what the test already decided rather than re-deriving a
+// routing rule.
 func markOutboxPublished(ctx context.Context, store *postgresoutbox.Store, claim outboxClaim) error {
-	return store.MarkPublished(ctx, claim.Token, postgresoutbox.ClaimedEvent{
-		Event:             claim.Event,
-		CycleAttemptCount: claim.CycleAttemptCount,
-		TotalAttemptCount: claim.TotalAttemptCount,
+	if claim.Event.OrderingKey == "" {
+		return store.MarkUnorderedPublished(ctx, claim.Token, claim.Event.ID)
+	}
+	return store.MarkOrderedPublished(ctx, claim.Token, postgresoutbox.OrderedDirective{
+		ID:               claim.Event.ID,
+		OrderingKey:      claim.Event.OrderingKey,
+		OrderingSequence: claim.Event.OrderingSequence,
 	})
 }
 
@@ -1964,6 +2023,26 @@ func singleEventRelayConfig() postgresoutbox.RelayConfig {
 	return config
 }
 
+// gatingPublisher hands the test control of when one publication completes:
+// started closes as the call begins, and the call returns once the test closes
+// release.
+//
+// It publishes exactly once: started is a close, not a send, so a second
+// concurrent call panics and surfaces as a confusing publisher_panic. Pair it
+// with singleEventRelayConfig and one appended event, or with a test that stops
+// the relay before it can claim again.
+func gatingPublisher() (publisher testPublisherFunc, started <-chan struct{}, release chan<- struct{}, attempts *atomic.Int64) {
+	begun := make(chan struct{})
+	gate := make(chan struct{})
+	var calls atomic.Int64
+	return testPublisherFunc(func(context.Context, postgresoutbox.Event) error {
+		calls.Add(1)
+		close(begun)
+		<-gate
+		return nil
+	}), begun, gate, &calls
+}
+
 func mustNewOutboxRelay(
 	t *testing.T,
 	store *postgresoutbox.Store,
@@ -1985,11 +2064,28 @@ func runOutboxRelay(ctx context.Context, relay *postgresoutbox.Relay) <-chan pos
 	return result
 }
 
-func assertRelayResult(t *testing.T, result <-chan postgresoutbox.RelayResult, wantCleanupSafe bool, wantErr error) {
+// assertRelayResult is the ordinary stop: whatever the relay reported, its
+// dependencies are still safe to close. Only a stuck publisher says otherwise,
+// which assertRelayStuckResult asserts instead.
+func assertRelayResult(t *testing.T, result <-chan postgresoutbox.RelayResult, wantErr error) {
 	t.Helper()
 	got := readRelayResult(t, result)
-	if got.CleanupSafe != wantCleanupSafe || !errors.Is(got.Err, wantErr) {
-		t.Fatalf("Relay.Run() = %+v, want cleanupSafe=%t error=%v", got, wantCleanupSafe, wantErr)
+	if got.CleanupUnsafe {
+		t.Fatalf("Relay.Run() = %+v, want cleanup to stay safe", got)
+	}
+	if !errors.Is(got.Err, wantErr) {
+		t.Fatalf("Relay.Run() error = %v, want %v", got.Err, wantErr)
+	}
+}
+
+func assertRelayStuckResult(t *testing.T, result <-chan postgresoutbox.RelayResult, wantErr error) {
+	t.Helper()
+	got := readRelayResult(t, result)
+	if !got.CleanupUnsafe {
+		t.Fatalf("Relay.Run() = %+v, want cleanup reported unsafe", got)
+	}
+	if !errors.Is(got.Err, wantErr) {
+		t.Fatalf("Relay.Run() error = %v, want %v", got.Err, wantErr)
 	}
 }
 
@@ -1998,175 +2094,176 @@ func readRelayResult(t *testing.T, result <-chan postgresoutbox.RelayResult) pos
 	select {
 	case got := <-result:
 		return got
-	case <-time.After(10 * time.Second):
+	case <-time.After(outboxWaitTimeout):
 		t.Fatal("Relay.Run() did not stop")
 	}
 	return postgresoutbox.RelayResult{}
 }
 
-func waitForOutboxReady(t *testing.T, relay *postgresoutbox.Relay) {
+// outboxWaitTimeout and outboxPollInterval are the one cadence every wait in
+// this file uses — including the two selects that wait on a channel rather than
+// poll. A literal duration here is drift: it once reached six copies, one of
+// them ticking at 1ms.
+//
+// The timeout is an outer failure diagnostic, not a synchronization mechanism.
+// Every wait is on an owned event or a durable state change; this only bounds
+// how long a broken one hangs.
+const (
+	outboxWaitTimeout  = 10 * time.Second
+	outboxPollInterval = 10 * time.Millisecond
+)
+
+// shortOutboxLease is the lease a recovery test claims under, and
+// expireOutboxLease is how it lets that lease lapse. Kept together because the
+// sleep must outlast the lease and the two are otherwise unrelated numbers in
+// unrelated units — one a Duration, one a float of PostgreSQL seconds.
+const shortOutboxLease = 5 * time.Millisecond
+
+func expireOutboxLease(t *testing.T, ctx context.Context, pool *postgres.Pool) {
 	t.Helper()
-	deadline := time.NewTimer(10 * time.Second)
-	ticker := time.NewTicker(time.Millisecond)
+	postgresSleep(t, ctx, pool, 4*shortOutboxLease.Seconds())
+}
+
+// waitForOutbox polls condition until it holds. describe is called only at the
+// deadline, so a failure can report the value that was actually last observed
+// rather than restating what was wanted.
+func waitForOutbox(t *testing.T, describe func() string, condition func() bool) {
+	t.Helper()
+	deadline := time.NewTimer(outboxWaitTimeout)
+	ticker := time.NewTicker(outboxPollInterval)
 	defer deadline.Stop()
 	defer ticker.Stop()
-	for !relay.Ready() {
+	for {
+		if condition() {
+			return
+		}
 		select {
 		case <-ticker.C:
 		case <-deadline.C:
-			t.Fatal("relay did not become ready")
+			t.Fatal(describe())
 		}
 	}
+}
+
+// outboxBlockedBy reports whether any backend is waiting on a lock that the
+// given backend holds.
+func outboxBlockedBy(t *testing.T, ctx context.Context, pool *postgres.Pool, blockerPID int) bool {
+	t.Helper()
+	var blocked bool
+	if err := pool.PGX().QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1
+			FROM pg_stat_activity AS activity
+			WHERE $1 = ANY(pg_blocking_pids(activity.pid))
+		)`, blockerPID).Scan(&blocked); err != nil {
+		t.Fatalf("observe blocked mark: %v", err)
+	}
+	return blocked
+}
+
+// outboxBackendExists asks pg_stat_activity about the relay's own connections,
+// which are always a different backend from the one running the query.
+func outboxBackendExists(t *testing.T, ctx context.Context, pool *postgres.Pool, predicate string) bool {
+	t.Helper()
+	var found bool
+	query := "SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE pid <> pg_backend_pid() AND " + predicate + ")"
+	if err := pool.PGX().QueryRow(ctx, query).Scan(&found); err != nil {
+		t.Fatalf("inspect pg_stat_activity for %s: %v", predicate, err)
+	}
+	return found
+}
+
+func waitForOutboxReady(t *testing.T, relay *postgresoutbox.Relay) {
+	t.Helper()
+	waitForOutbox(t, func() string { return "relay did not become ready" }, relay.Ready)
 }
 
 func waitForOutboxCount(t *testing.T, ctx context.Context, pool *postgres.Pool, predicate string, want int) {
 	t.Helper()
-	deadline := time.NewTimer(10 * time.Second)
-	ticker := time.NewTicker(10 * time.Millisecond)
-	defer deadline.Stop()
-	defer ticker.Stop()
-	for {
-		var count int
-		if err := pool.PGX().QueryRow(ctx, "SELECT count(*) FROM outbox_events WHERE "+predicate).Scan(&count); err != nil {
-			t.Fatalf("count outbox state: %v", err)
-		}
-		if count == want {
-			return
-		}
-		select {
-		case <-ticker.C:
-		case <-deadline.C:
-			t.Fatalf("outbox count for %q = %d, want %d", predicate, count, want)
-		}
-	}
+	var count int
+	waitForOutbox(t,
+		func() string { return fmt.Sprintf("outbox count for %q = %d, want %d", predicate, count, want) },
+		func() bool {
+			if err := pool.PGX().QueryRow(ctx, "SELECT count(*) FROM outbox_events WHERE "+predicate).Scan(&count); err != nil {
+				t.Fatalf("count outbox state: %v", err)
+			}
+			return count == want
+		})
 }
 
 func waitForOutboxListener(t *testing.T, ctx context.Context, pool *postgres.Pool) {
 	t.Helper()
-	deadline := time.NewTimer(10 * time.Second)
-	ticker := time.NewTicker(10 * time.Millisecond)
-	defer deadline.Stop()
-	defer ticker.Stop()
-	for {
-		var subscribed bool
-		if err := pool.PGX().QueryRow(ctx, `
-			SELECT EXISTS (
-				SELECT 1 FROM pg_stat_activity
-				WHERE pid <> pg_backend_pid()
-				  AND query LIKE 'LISTEN %outbox_appended%'
-			)`).Scan(&subscribed); err != nil {
-			t.Fatalf("inspect outbox listener: %v", err)
-		}
-		if subscribed {
-			return
-		}
-		select {
-		case <-ticker.C:
-		case <-deadline.C:
-			t.Fatal("outbox append listener did not subscribe")
-		}
-	}
+	waitForOutbox(t,
+		func() string { return "outbox append listener did not subscribe" },
+		func() bool {
+			return outboxBackendExists(t, ctx, pool, "query LIKE 'LISTEN %outbox_appended%'")
+		})
 }
 
 func outboxOperationCount(t *testing.T, reader *sdkmetric.ManualReader, operation, outcome string) int64 {
 	t.Helper()
-	var collected metricdata.ResourceMetrics
-	if err := reader.Collect(t.Context(), &collected); err != nil {
-		t.Fatalf("collect outbox operations: %v", err)
-	}
-	for _, scope := range collected.ScopeMetrics {
-		for _, measured := range scope.Metrics {
-			if measured.Name != "outbox.relay.operations" {
-				continue
-			}
-			for _, point := range measured.Data.(metricdata.Sum[int64]).DataPoints {
-				if metricAttribute(t, point.Attributes, "operation") == operation &&
-					metricAttribute(t, point.Attributes, "outcome") == outcome {
-					return point.Value
-				}
+	var count int64
+	telemetrytest.ForEachMetric(t, reader, func(measured metricdata.Metrics) {
+		if measured.Name != "outbox.relay.operations" {
+			return
+		}
+		for _, point := range telemetrytest.Int64Sum(t, measured).DataPoints {
+			if telemetrytest.Attribute(t, point.Attributes, "operation") == operation &&
+				telemetrytest.Attribute(t, point.Attributes, "outcome") == outcome {
+				count = point.Value
 			}
 		}
-	}
-	return 0
+	})
+	return count
 }
 
 func waitForOutboxOperationCount(t *testing.T, reader *sdkmetric.ManualReader, operation, outcome string, want int64) {
 	t.Helper()
-	deadline := time.NewTimer(10 * time.Second)
-	ticker := time.NewTicker(10 * time.Millisecond)
-	defer deadline.Stop()
-	defer ticker.Stop()
-	for {
-		got := outboxOperationCount(t, reader, operation, outcome)
-		if got >= want {
-			return
-		}
-		select {
-		case <-ticker.C:
-		case <-deadline.C:
-			t.Fatalf("outbox operation %s/%s reached %d, want %d", operation, outcome, got, want)
-		}
-	}
+	var got int64
+	waitForOutbox(t,
+		func() string {
+			return fmt.Sprintf("outbox operation %s/%s reached %d, want %d", operation, outcome, got, want)
+		},
+		func() bool {
+			got = outboxOperationCount(t, reader, operation, outcome)
+			return got >= want
+		})
 }
 
-func waitForOutboxOperation(t *testing.T, reader *sdkmetric.ManualReader, operation, outcome string) {
-	t.Helper()
-	deadline := time.NewTimer(10 * time.Second)
-	ticker := time.NewTicker(10 * time.Millisecond)
-	defer deadline.Stop()
-	defer ticker.Stop()
-	for {
-		var collected metricdata.ResourceMetrics
-		if err := reader.Collect(t.Context(), &collected); err != nil {
-			t.Fatalf("collect outbox operations: %v", err)
-		}
-		for _, scope := range collected.ScopeMetrics {
-			for _, measured := range scope.Metrics {
-				if measured.Name != "outbox.relay.operations" {
-					continue
-				}
-				for _, point := range measured.Data.(metricdata.Sum[int64]).DataPoints {
-					if metricAttribute(t, point.Attributes, "operation") == operation &&
-						metricAttribute(t, point.Attributes, "outcome") == outcome && point.Value > 0 {
-						return
-					}
-				}
-			}
-		}
-		select {
-		case <-ticker.C:
-		case <-deadline.C:
-			t.Fatalf("outbox operation %s/%s was not recorded", operation, outcome)
-		}
-	}
-}
+// observationStatementProbe identifies the state observation inside
+// pg_stat_activity.query, which is the statement text PostgreSQL echoes back.
+//
+// It matches the sqlc header rather than anything the statement does, because
+// pg_stat_activity.query is truncated at track_activity_query_size — 1024 bytes
+// by default, and ObserveOutbox is far longer. sqlc keeps the `-- name: X :type`
+// header as the literal first line of each generated query constant, which makes
+// it the only anchor guaranteed inside that window.
+//
+// So this stays coupled to the query's sqlc name: renaming ObserveOutbox, or
+// configuring sqlc to drop those headers, stops it matching — which is why the
+// timeout message below tells the two failures apart. Keep it in step with
+// internal/infra/postgres/queries/postgres_outbox.sql.
+const observationStatementProbe = "query LIKE '%name: ObserveOutbox :one%'"
 
+// waitForBlockedOutboxObservation waits until the relay's observation is parked
+// on a lock.
 func waitForBlockedOutboxObservation(t *testing.T, ctx context.Context, pool *postgres.Pool) {
 	t.Helper()
-	deadline := time.NewTimer(10 * time.Second)
-	ticker := time.NewTicker(10 * time.Millisecond)
-	defer deadline.Stop()
-	defer ticker.Stop()
-	for {
-		var blocked bool
-		if err := pool.PGX().QueryRow(ctx, `
-			SELECT EXISTS (
-				SELECT 1 FROM pg_stat_activity
-				WHERE pid <> pg_backend_pid()
-				  AND wait_event_type = 'Lock'
-				  AND query LIKE '%name: ObserveOutbox :one%'
-			)`).Scan(&blocked); err != nil {
-			t.Fatalf("inspect blocked observation: %v", err)
-		}
-		if blocked {
-			return
-		}
-		select {
-		case <-ticker.C:
-		case <-deadline.C:
-			t.Fatal("relay observation did not block behind the maintenance gate")
-		}
-	}
+	waitForOutbox(t,
+		func() string {
+			// Evaluated only at the deadline. If nothing anywhere matches the
+			// probe, the observation is not what failed to block — the probe no
+			// longer names it.
+			if !outboxBackendExists(t, ctx, pool, observationStatementProbe) {
+				return "no backend is running a statement matching " + observationStatementProbe +
+					"; the ObserveOutbox query was probably renamed, so this probe no longer finds it"
+			}
+			return "relay observation did not block behind the maintenance gate"
+		},
+		func() bool {
+			return outboxBackendExists(t, ctx, pool,
+				"wait_event_type = 'Lock' AND "+observationStatementProbe)
+		})
 }
 
 type outboxProcessMetrics struct {
@@ -2176,25 +2273,36 @@ type outboxProcessMetrics struct {
 	lastProgress float64
 }
 
+// collectOutboxProcessMetrics reads the four gauges that describe the relay
+// process itself. It requires all four rather than returning the zero value for
+// a missing one: callers assert ready=0 and inflight=0 to mean the relay
+// reported itself stopped and idle, and a gauge that was never published would
+// satisfy exactly those assertions while proving nothing.
 func collectOutboxProcessMetrics(t *testing.T, reader *sdkmetric.ManualReader) outboxProcessMetrics {
 	t.Helper()
-	var collected metricdata.ResourceMetrics
-	if err := reader.Collect(t.Context(), &collected); err != nil {
-		t.Fatalf("Collect(): %v", err)
-	}
 	var result outboxProcessMetrics
-	for _, scope := range collected.ScopeMetrics {
-		for _, measured := range scope.Metrics {
-			switch measured.Name {
-			case "outbox.relay.readiness":
-				result.ready = measured.Data.(metricdata.Gauge[int64]).DataPoints[0].Value
-			case "outbox.relay.inflight":
-				result.inflight = measured.Data.(metricdata.Gauge[int64]).DataPoints[0].Value
-			case "outbox.relay.observation.timestamp":
-				result.observedAt = measured.Data.(metricdata.Gauge[float64]).DataPoints[0].Value
-			case "outbox.relay.last_progress.timestamp":
-				result.lastProgress = measured.Data.(metricdata.Gauge[float64]).DataPoints[0].Value
-			}
+	seen := map[string]bool{}
+	telemetrytest.ForEachMetric(t, reader, func(measured metricdata.Metrics) {
+		switch measured.Name {
+		case "outbox.relay.readiness":
+			result.ready = telemetrytest.SinglePoint(t, measured.Name, telemetrytest.Int64Gauge(t, measured).DataPoints)
+		case "outbox.relay.inflight":
+			result.inflight = telemetrytest.SinglePoint(t, measured.Name, telemetrytest.Int64Gauge(t, measured).DataPoints)
+		case "outbox.relay.observation.timestamp":
+			result.observedAt = telemetrytest.SinglePoint(t, measured.Name, telemetrytest.Float64Gauge(t, measured).DataPoints)
+		case "outbox.relay.last_progress.timestamp":
+			result.lastProgress = telemetrytest.SinglePoint(t, measured.Name, telemetrytest.Float64Gauge(t, measured).DataPoints)
+		default:
+			return
+		}
+		seen[measured.Name] = true
+	})
+	for _, required := range []string{
+		"outbox.relay.readiness", "outbox.relay.inflight",
+		"outbox.relay.observation.timestamp", "outbox.relay.last_progress.timestamp",
+	} {
+		if !seen[required] {
+			t.Fatalf("process metric %s was not collected; a zero here would read as a real value", required)
 		}
 	}
 	return result
@@ -2202,65 +2310,53 @@ func collectOutboxProcessMetrics(t *testing.T, reader *sdkmetric.ManualReader) o
 
 func collectOutboxOperationMetrics(t *testing.T, reader *sdkmetric.ManualReader) (map[string]bool, map[string]bool) {
 	t.Helper()
-	var collected metricdata.ResourceMetrics
-	if err := reader.Collect(t.Context(), &collected); err != nil {
-		t.Fatalf("Collect(): %v", err)
-	}
 	operations := make(map[string]bool)
 	durations := make(map[string]bool)
-	for _, scope := range collected.ScopeMetrics {
-		for _, measured := range scope.Metrics {
-			switch measured.Name {
-			case "outbox.relay.operations":
-				for _, point := range measured.Data.(metricdata.Sum[int64]).DataPoints {
-					if point.Value > 0 {
-						operations[metricAttribute(t, point.Attributes, "operation")] = true
-					}
+	telemetrytest.ForEachMetric(t, reader, func(measured metricdata.Metrics) {
+		switch measured.Name {
+		case "outbox.relay.operations":
+			for _, point := range telemetrytest.Int64Sum(t, measured).DataPoints {
+				if point.Value > 0 {
+					operations[telemetrytest.Attribute(t, point.Attributes, "operation")] = true
 				}
-			case "outbox.relay.operation.duration":
-				for _, point := range measured.Data.(metricdata.Histogram[float64]).DataPoints {
-					if point.Count > 0 {
-						durations[metricAttribute(t, point.Attributes, "operation")] = true
-					}
+			}
+		case "outbox.relay.operation.duration":
+			for _, point := range telemetrytest.Float64Histogram(t, measured).DataPoints {
+				if point.Count > 0 {
+					durations[telemetrytest.Attribute(t, point.Attributes, "operation")] = true
 				}
 			}
 		}
-	}
+	})
 	return operations, durations
 }
 
 func collectOutboxDatabaseMetrics(t *testing.T, reader *sdkmetric.ManualReader) outboxMetricSnapshot {
 	t.Helper()
-	var collected metricdata.ResourceMetrics
-	if err := reader.Collect(t.Context(), &collected); err != nil {
-		t.Fatalf("Collect(): %v", err)
-	}
 	result := outboxMetricSnapshot{
 		counts:  make(map[string]int64),
 		oldest:  make(map[string]float64),
 		storage: make(map[string]int64),
 	}
-	for _, scope := range collected.ScopeMetrics {
-		for _, measured := range scope.Metrics {
-			switch measured.Name {
-			case "outbox.relay.messages":
-				for _, point := range measured.Data.(metricdata.Gauge[int64]).DataPoints {
-					result.counts[metricAttribute(t, point.Attributes, "state")] = point.Value
-				}
-			case "outbox.relay.oldest.timestamp":
-				for _, point := range measured.Data.(metricdata.Gauge[float64]).DataPoints {
-					result.oldest[metricAttribute(t, point.Attributes, "state")] = point.Value
-				}
-			case "outbox.relay.ordering_heads":
-				result.orderingHeads = measured.Data.(metricdata.Gauge[int64]).DataPoints[0].Value
-			case "outbox.relay.storage.bytes":
-				for _, point := range measured.Data.(metricdata.Gauge[int64]).DataPoints {
-					key := metricAttribute(t, point.Attributes, "relation") + "/" + metricAttribute(t, point.Attributes, "kind")
-					result.storage[key] = point.Value
-				}
+	telemetrytest.ForEachMetric(t, reader, func(measured metricdata.Metrics) {
+		switch measured.Name {
+		case "outbox.relay.messages":
+			for _, point := range telemetrytest.Int64Gauge(t, measured).DataPoints {
+				result.counts[telemetrytest.Attribute(t, point.Attributes, "state")] = point.Value
+			}
+		case "outbox.relay.oldest.timestamp":
+			for _, point := range telemetrytest.Float64Gauge(t, measured).DataPoints {
+				result.oldest[telemetrytest.Attribute(t, point.Attributes, "state")] = point.Value
+			}
+		case "outbox.relay.ordering_heads":
+			result.orderingHeads = telemetrytest.SinglePoint(t, measured.Name, telemetrytest.Int64Gauge(t, measured).DataPoints)
+		case "outbox.relay.storage.bytes":
+			for _, point := range telemetrytest.Int64Gauge(t, measured).DataPoints {
+				key := telemetrytest.Attribute(t, point.Attributes, "relation") + "/" + telemetrytest.Attribute(t, point.Attributes, "kind")
+				result.storage[key] = point.Value
 			}
 		}
-	}
+	})
 	return result
 }
 
@@ -2333,48 +2429,12 @@ type outboxMetricSnapshot struct {
 
 func collectOutboxStateMetrics(t *testing.T, observation postgresoutbox.StateObservation) outboxMetricSnapshot {
 	t.Helper()
-	reader := sdkmetric.NewManualReader()
-	provider := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
-	t.Cleanup(func() { _ = provider.Shutdown(context.Background()) })
-	telemetry, err := postgresoutbox.NewTelemetry(provider.Meter("outbox-integration"), nil)
-	if err != nil {
-		t.Fatalf("NewTelemetry(): %v", err)
-	}
-	t.Cleanup(telemetry.Close)
+	reader, telemetry := newOutboxTelemetry(t)
 	telemetry.RecordObservation(observation, time.Now())
-	var collected metricdata.ResourceMetrics
-	if err := reader.Collect(t.Context(), &collected); err != nil {
-		t.Fatalf("Collect(): %v", err)
-	}
-	result := outboxMetricSnapshot{
-		counts:  make(map[string]int64),
-		oldest:  make(map[string]float64),
-		storage: make(map[string]int64),
-	}
-	for _, scope := range collected.ScopeMetrics {
-		for _, measured := range scope.Metrics {
-			switch measured.Name {
-			case "outbox.relay.messages":
-				gauge := measured.Data.(metricdata.Gauge[int64])
-				for _, point := range gauge.DataPoints {
-					result.counts[metricAttribute(t, point.Attributes, "state")] = point.Value
-				}
-			case "outbox.relay.oldest.timestamp":
-				gauge := measured.Data.(metricdata.Gauge[float64])
-				for _, point := range gauge.DataPoints {
-					result.oldest[metricAttribute(t, point.Attributes, "state")] = point.Value
-				}
-			case "outbox.relay.ordering_heads":
-				result.orderingHeads = measured.Data.(metricdata.Gauge[int64]).DataPoints[0].Value
-			case "outbox.relay.storage.bytes":
-				gauge := measured.Data.(metricdata.Gauge[int64])
-				for _, point := range gauge.DataPoints {
-					key := metricAttribute(t, point.Attributes, "relation") + "/" + metricAttribute(t, point.Attributes, "kind")
-					result.storage[key] = point.Value
-				}
-			}
-		}
-	}
+	// The gauges are read the same way whichever recorder produced them, so the
+	// extraction is collectOutboxDatabaseMetrics's; what is specific here is the
+	// throwaway recorder above and the timestamp check below.
+	result := collectOutboxDatabaseMetrics(t, reader)
 	wantOldest := map[string]time.Time{
 		"eligible":           observation.EligibleOldestAt,
 		"in_progress":        observation.InProgressOldestAt,
@@ -2391,13 +2451,4 @@ func collectOutboxStateMetrics(t *testing.T, observation postgresoutbox.StateObs
 		}
 	}
 	return result
-}
-
-func metricAttribute(t *testing.T, attributes attribute.Set, name string) string {
-	t.Helper()
-	value, present := attributes.Value(attribute.Key(name))
-	if !present {
-		t.Fatalf("metric point has no %s attribute", name)
-	}
-	return value.AsString()
 }

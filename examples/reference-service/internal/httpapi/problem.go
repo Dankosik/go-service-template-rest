@@ -16,9 +16,9 @@ import (
 //
 // It lives beside the operations rather than in the composition root so it is
 // tested with them: the router tests below drive a real request through a real
-// use case and assert the status, which is the only thing that catches a mapping
-// that drifted. The root installs it — see the reference binary — because the
-// transport that consumes it is an adapter this package must not import.
+// use case and assert the status, which is the only thing that catches a drifted
+// mapping. The root installs it, because the transport that consumes it is an
+// adapter this package must not import.
 //
 // The details are this service's own wording. Passing err.Error() through would
 // put use-case internals, and eventually a dependency's message, in a response
@@ -43,13 +43,11 @@ func ClassifyError(err error) (problem.Mapped, bool) {
 // shared catalog.
 //
 // Two things are worth copying. The code, title, and type URI come from
-// internal/problem rather than from a table in this package: the local table
-// this replaced fell through to the 500 type URI for a 409, so a slug conflict
-// advertised itself as an internal error — and no test noticed, because the
-// status in the body was still 409. And the body carries the request identifier,
-// so a domain error is as traceable as the transport rejections the template's
-// own middleware writes; a hand-filled Problem that omits it is how half a
-// service's error responses become unsearchable.
+// internal/problem rather than a local table: the one this replaced fell through
+// to the 500 type URI for a 409, and no test noticed because the status in the
+// body was still 409. And the body carries the request identifier, so a domain
+// error is as traceable as the transport rejections the template's own middleware
+// writes.
 func newProblem(ctx context.Context, status int, detail string) openapi.Problem {
 	definition, ok := problem.For(status)
 	if !ok {

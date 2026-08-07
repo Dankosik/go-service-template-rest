@@ -10,8 +10,8 @@ about which code and detail the client observes.
 
 Without this file, a handler publishes its failure the way every gRPC codebase
 does: `return nil, status.Error(codes.NotFound, "widget not found")`. The client
-observes `INTERNAL` with detail `request failed`. `errorMappingUnaryInterceptor`
-is the innermost interceptor in `internal/infra/grpc/interceptors.go`, and only
+observes `INTERNAL` with detail `request failed`. `errorMappingAround` is the
+innermost policy in `internal/infra/grpc/interceptors.go`, and only
 four inputs escape its collapse: `context.Canceled`, `context.DeadlineExceeded`,
 an `*ownedStatusError` (unexported, so no handler can construct one), and an
 error some registered `problem.Mapper` classifies. Everything else becomes
@@ -36,7 +36,7 @@ came back cannot see the collapse.
   `GatewayTimeout` → `DeadlineExceeded`. A mapper that leaves `Detail` empty
   publishes the catalog `Title`. A failure needing a code this table cannot
   produce is a problem-catalog decision, not a handler decision.
-- Interceptors supplied through `Options.UnaryPolicy` / `Options.StreamingPolicy`
+- Interceptors supplied through `Options.UnaryPolicy` / `Options.StreamPolicy`
   sit outside `mapError` and inside `policyErrorBoundary`, which preserves any
   error implementing `GRPCStatus()`. An authentication or authorization
   interceptor's `status.Error(codes.PermissionDenied, …)` therefore does reach

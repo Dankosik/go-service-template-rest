@@ -321,12 +321,11 @@ func TestBootstrapReportStageLogsTelemetryFailureCause(t *testing.T) {
 // regression anchor for a cascade that cost all three signals at once.
 //
 // The stage used to return on the first metrics failure, so SetupTracing never
-// ran and the global tracer provider stayed the no-op one. The trigger is
-// ordinary: OTEL_EXPORTER_OTLP_ENDPOINT without a scheme is what most hand
-// written manifests carry, and the endpoint parser rejects it fail-closed. The
-// service then started, reported healthy, and exported no metric and no span —
-// while every log record silently lost trace_id and span_id, because logctx reads
-// them off the span context a real provider produces.
+// ran and the tracer provider stayed the no-op one. The trigger is ordinary:
+// OTEL_EXPORTER_OTLP_ENDPOINT without a scheme, which the parser rejects
+// fail-closed. The service then started, reported healthy, and exported no metric
+// and no span — while every log record lost trace_id and span_id, because logctx
+// reads them off the span context a real provider produces.
 func TestBootstrapTelemetryStageInstallsTracingWhenMetricsExportFails(t *testing.T) {
 	telemetrytest.ClearAmbientExporterEnv(t)
 	telemetrytest.RestoreGlobals(t)
