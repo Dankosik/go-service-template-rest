@@ -1937,7 +1937,6 @@ func TestPostgresOutboxRetryAndPoison(t *testing.T) {
 			t.Fatalf("attempts publisher/db/class = %d/%d/%q, want 3/3/attempt_exhausted", attempts.Load(), record.CycleAttemptCount, record.LastErrorClass)
 		}
 	})
-
 }
 
 func TestPostgresOutboxStickyAtLimitQuarantinesWithoutPublish(t *testing.T) {
@@ -3101,8 +3100,10 @@ func assertOutboxObservationMatchesSQL(
 	); err != nil {
 		t.Fatalf("read direct outbox storage: %v", err)
 	}
-	want := []int64{heads, eventsBytes, eventIndexes, headBytes, headIndexes, redriveBytes, redriveIndexes,
-		receiptBytes, receiptIndexes}
+	want := []int64{
+		heads, eventsBytes, eventIndexes, headBytes, headIndexes, redriveBytes, redriveIndexes,
+		receiptBytes, receiptIndexes,
+	}
 	got := []int64{
 		observation.OrderingHeadCount,
 		observation.EventsBytes,

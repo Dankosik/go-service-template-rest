@@ -8,6 +8,7 @@ import (
 
 	"github.com/example/go-service-template-rest/cmd/outbox-relay/internal/bootstrap"
 	"github.com/example/go-service-template-rest/internal/config"
+
 	// profile:messaging-nats-jetstream:start
 	"github.com/example/go-service-template-rest/internal/infra/natsjs"
 	// profile:messaging-nats-jetstream:end
