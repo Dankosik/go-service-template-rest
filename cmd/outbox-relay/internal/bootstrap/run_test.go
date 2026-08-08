@@ -710,6 +710,9 @@ func TestLegacyUncertaintyClassificationMode(t *testing.T) {
 func TestOutboxRelayStartupDoesNotClaimWithoutPublisher(t *testing.T) {
 	t.Setenv("APP__POSTGRES__DSN", "postgres://must-not-connect@127.0.0.1:1/outbox")
 	err := run(t.Context(), nil, nil)
+	if err == nil {
+		t.Fatal("run(nil publisher) returned nil, want fail-closed admission before postgres")
+	}
 	if !errors.Is(err, postgresoutbox.ErrConfig) || strings.Contains(err.Error(), "connect") {
 		t.Fatalf("run(nil publisher) = %v, want fail-closed admission before postgres", err)
 	}
