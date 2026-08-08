@@ -86,7 +86,7 @@ func commitReceiptFingerprint(event Event) ([sha256.Size]byte, error) {
 	write(event.Payload)
 	write(event.Metadata)
 	write([]byte(event.OrderingKey))
-	binary.BigEndian.PutUint64(integer[:], uint64(event.OrderingSequence))
+	binary.BigEndian.PutUint64(integer[:], uint64(event.OrderingSequence)) // #nosec G115 -- Validate rejects negative non-zero sequences; zero is the unordered sentinel.
 	write(integer[:])
 
 	var fingerprint [sha256.Size]byte
