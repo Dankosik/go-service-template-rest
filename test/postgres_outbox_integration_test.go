@@ -307,6 +307,177 @@ func TestPostgresOutboxAtomicity(t *testing.T) {
 	assertAtomicCounts(t, ctx, pool, "success", 1, 1)
 }
 
+func TestPostgresOutboxCommitReceiptAtomicityAndLifetime(t *testing.T) {
+	ctx, pool, store := newOutboxFixture(t)
+	counts := func(id string) (events, receipts int) {
+		t.Helper()
+		if err := pool.PGX().QueryRow(ctx, `
+			SELECT
+				(SELECT count(*) FROM outbox_events WHERE id = $1),
+				(SELECT count(*) FROM outbox_commit_receipts WHERE event_id = $1)`,
+			id,
+		).Scan(&events, &receipts); err != nil {
+			t.Fatalf("count event and receipt %q: %v", id, err)
+		}
+		return events, receipts
+	}
+	assertCounts := func(id string, wantEvents, wantReceipts int) {
+		t.Helper()
+		events, receipts := counts(id)
+		if events != wantEvents || receipts != wantReceipts {
+			t.Fatalf("event/receipt counts for %q = %d/%d, want %d/%d", id, events, receipts, wantEvents, wantReceipts)
+		}
+	}
+
+	plain := outboxEvent("receipt-plain")
+	mustAppendOutbox(t, ctx, pool, store, plain)
+	ordered := orderedEvent("receipt-ordered", "receipt-key", 2)
+	mustAppendOutbox(t, ctx, pool, store, ordered)
+	for _, id := range []string{plain.ID, ordered.ID} {
+		assertCounts(id, 1, 1)
+		var version int16
+		var size int
+		if err := pool.PGX().QueryRow(ctx, `
+			SELECT fingerprint_version, octet_length(envelope_fingerprint)
+			FROM outbox_commit_receipts WHERE event_id = $1`, id,
+		).Scan(&version, &size); err != nil {
+			t.Fatalf("read receipt %q: %v", id, err)
+		}
+		if version != 1 || size != 32 {
+			t.Fatalf("receipt %q version/size = %d/%d, want 1/32", id, version, size)
+		}
+	}
+
+	rollback := outboxEvent("receipt-rollback")
+	rollbackErr := errors.New("rollback receipt transaction")
+	err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+		if err := store.Append(ctx, tx, rollback); err != nil {
+			return err
+		}
+		return rollbackErr
+	})
+	if !errors.Is(err, rollbackErr) {
+		t.Fatalf("receipt rollback error = %v, want %v", err, rollbackErr)
+	}
+	assertCounts(rollback.ID, 0, 0)
+
+	rejected := orderedEvent("receipt-rejected", "receipt-key", 1)
+	err = pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+		return store.Append(ctx, tx, rejected)
+	})
+	if !errors.Is(err, postgresoutbox.ErrOrderingSequence) {
+		t.Fatalf("rejected ordered append error = %v, want ErrOrderingSequence", err)
+	}
+	assertCounts(rejected.ID, 0, 0)
+
+	conflict := plain
+	conflict.Payload = []byte(`{"id":"different"}`)
+	outcome, err := store.ReconcileCommit(ctx, conflict)
+	if outcome != postgresoutbox.CommitStillUnknown || !errors.Is(err, postgresoutbox.ErrReceiptConflict) {
+		t.Fatalf("conflicting receipt reconciliation = %v, %v", outcome, err)
+	}
+
+	unsupported := outboxEvent("receipt-unsupported-version")
+	if _, err := pool.PGX().Exec(ctx, `
+		INSERT INTO outbox_commit_receipts (event_id, fingerprint_version, envelope_fingerprint)
+		VALUES ($1, 2, $2)`, unsupported.ID, bytes.Repeat([]byte{1}, 32)); err != nil {
+		t.Fatalf("seed unsupported receipt: %v", err)
+	}
+	outcome, err = store.ReconcileCommit(ctx, unsupported)
+	if outcome != postgresoutbox.CommitStillUnknown || err == nil {
+		t.Fatalf("unsupported receipt reconciliation = %v, %v", outcome, err)
+	}
+
+	cleanup := outboxEvent("receipt-survives-cleanup")
+	mustAppendOutbox(t, ctx, pool, store, cleanup)
+	if _, err := pool.PGX().Exec(ctx, `
+		UPDATE outbox_events
+		SET published_at = clock_timestamp() - interval '2 hours'
+		WHERE id = $1`, cleanup.ID); err != nil {
+		t.Fatalf("make receipt event cleanup-eligible: %v", err)
+	}
+	if deleted, err := store.CleanupPublished(ctx, time.Hour, 10); err != nil || deleted != 1 {
+		t.Fatalf("CleanupPublished() = %d, %v; want 1, nil", deleted, err)
+	}
+	assertCounts(cleanup.ID, 0, 1)
+}
+
+func TestPostgresOutboxCommitReconciliationAuthority(t *testing.T) {
+	ctx, pool, store := newOutboxFixture(t)
+
+	applied := outboxEvent("reconcile-applied")
+	mustAppendOutbox(t, ctx, pool, store, applied)
+	outcome, err := store.ReconcileCommit(ctx, applied)
+	if outcome != postgresoutbox.CommitApplied || err != nil {
+		t.Fatalf("ReconcileCommit(applied) = %v, %v", outcome, err)
+	}
+
+	notApplied := outboxEvent("reconcile-not-applied")
+	outcome, err = store.ReconcileCommit(ctx, notApplied)
+	if outcome != postgresoutbox.CommitNotApplied || err != nil {
+		t.Fatalf("ReconcileCommit(not applied) = %v, %v", outcome, err)
+	}
+
+	canceled, cancel := context.WithCancel(ctx)
+	cancel()
+	outcome, err = store.ReconcileCommit(canceled, outboxEvent("reconcile-canceled"))
+	if outcome != postgresoutbox.CommitStillUnknown || !errors.Is(err, context.Canceled) {
+		t.Fatalf("ReconcileCommit(canceled) = %v, %v", outcome, err)
+	}
+
+	admin, err := pool.Acquire(ctx)
+	if err != nil {
+		t.Fatalf("acquire authority fixture connection: %v", err)
+	}
+	var database string
+	if err := admin.QueryRow(ctx, "SELECT current_database()").Scan(&database); err != nil {
+		admin.Release()
+		t.Fatalf("read fixture database: %v", err)
+	}
+	readOnlyStatement := fmt.Sprintf(
+		"ALTER DATABASE %s SET default_transaction_read_only = on",
+		pgx.Identifier{database}.Sanitize(),
+	)
+	writableStatement := fmt.Sprintf(
+		"ALTER DATABASE %s RESET default_transaction_read_only",
+		pgx.Identifier{database}.Sanitize(),
+	)
+	if _, err := admin.Exec(ctx, readOnlyStatement); err != nil {
+		admin.Release()
+		t.Fatalf("make new fixture sessions read only: %v", err)
+	}
+	restored := false
+	t.Cleanup(func() {
+		if restored {
+			return
+		}
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cleanupCancel()
+		if _, cleanupErr := admin.Exec(cleanupCtx, writableStatement); cleanupErr != nil {
+			t.Errorf("restore fixture writer authority: %v", cleanupErr)
+		}
+		admin.Release()
+		pool.PGX().Reset()
+	})
+	pool.PGX().Reset()
+	outcome, err = store.ReconcileCommit(ctx, outboxEvent("reconcile-read-only"))
+	if outcome != postgresoutbox.CommitStillUnknown || err == nil {
+		t.Fatalf("ReconcileCommit(read only absence) = %v, %v", outcome, err)
+	}
+	if _, err := admin.Exec(ctx, writableStatement); err != nil {
+		t.Fatalf("restore fixture writer authority: %v", err)
+	}
+	admin.Release()
+	pool.PGX().Reset()
+	restored = true
+
+	pool.Close()
+	outcome, err = store.ReconcileCommit(ctx, outboxEvent("reconcile-unavailable"))
+	if outcome != postgresoutbox.CommitStillUnknown || err == nil {
+		t.Fatalf("ReconcileCommit(unavailable) = %v, %v", outcome, err)
+	}
+}
+
 func TestPostgresOutboxOrderingAuthority(t *testing.T) {
 	ctx, pool, store := newOutboxFixture(t)
 	mustAppendOutbox(t, ctx, pool, store, orderedEvent("ordered-2", "account-1", 2))
@@ -897,8 +1068,202 @@ func TestPostgresOutboxRedrive(t *testing.T) {
 	if err := pool.PGX().QueryRow(ctx, "SELECT count(*) FROM outbox_redrives WHERE event_id = 'poison'").Scan(&auditRows); err != nil {
 		t.Fatalf("count cascaded redrive rows: %v", err)
 	}
-	if auditRows != 0 {
-		t.Fatalf("redrive audit rows after event cleanup = %d, want 0", auditRows)
+	if auditRows != 2 {
+		t.Fatalf("redrive audit rows after event cleanup = %d, want 2 retained audit records", auditRows)
+	}
+}
+
+func TestPostgresOutboxAuditedUnknownRecovery(t *testing.T) {
+	ctx, pool, store := newOutboxFixture(t)
+	mustAppendOutbox(t, ctx, pool, store, outboxEvent("operator-ready"))
+	if err := store.RedriveUnknown(ctx, "operator-ready", "invalid-ready-redrive"); !errors.Is(err, postgresoutbox.ErrOperatorStateConflict) {
+		t.Fatalf("RedriveUnknown(ready) = %v, want state conflict", err)
+	}
+	if err := store.ConfirmAccepted(ctx, "operator-ready", "invalid-ready-confirm"); !errors.Is(err, postgresoutbox.ErrOperatorStateConflict) {
+		t.Fatalf("ConfirmAccepted(ready) = %v, want state conflict", err)
+	}
+	if err := store.ConfirmAccepted(ctx, "missing-operator-event", "missing-confirm"); !errors.Is(err, postgresoutbox.ErrNotFound) {
+		t.Fatalf("ConfirmAccepted(missing) = %v, want not found", err)
+	}
+	ready := mustClaimOutbox(t, ctx, store)
+	if err := poisonOutboxEvent(ctx, store, ready.Event.ID, ready.Token, "publisher_permanent"); err != nil {
+		t.Fatalf("mark deterministic operator poison: %v", err)
+	}
+	if err := store.RedriveUnknown(ctx, ready.Event.ID, "invalid-poison-redrive"); !errors.Is(err, postgresoutbox.ErrOperatorStateConflict) {
+		t.Fatalf("RedriveUnknown(deterministic poison) = %v, want state conflict", err)
+	}
+	if err := store.Redrive(ctx, ready.Event.ID, "deterministic-redrive"); err != nil {
+		t.Fatalf("Redrive(deterministic poison): %v", err)
+	}
+	ready = mustClaimOutbox(t, ctx, store)
+	if err := markOutboxPublished(ctx, store, ready); err != nil {
+		t.Fatalf("publish redriven deterministic event: %v", err)
+	}
+
+	mustAppendOutbox(t, ctx, pool, store, outboxEvent("unknown-recovery"))
+	claim := mustClaimOutbox(t, ctx, store)
+	poisonOutcomeUnknown(t, ctx, store, claim)
+
+	if err := store.RedriveUnknown(ctx, claim.Event.ID, "unknown-redrive"); err != nil {
+		t.Fatalf("RedriveUnknown(): %v", err)
+	}
+	if err := store.RedriveUnknown(ctx, claim.Event.ID, "unknown-redrive"); err != nil {
+		t.Fatalf("RedriveUnknown(replay): %v", err)
+	}
+	if err := store.ConfirmAccepted(ctx, claim.Event.ID, "unknown-redrive"); !errors.Is(err, postgresoutbox.ErrOperatorAuditConflict) {
+		t.Fatalf("cross-action audit reuse = %v, want audit conflict", err)
+	}
+	record, err := store.Get(ctx, claim.Event.ID)
+	if err != nil || record.RedriveCount != 1 || record.TotalAttemptCount != 1 ||
+		!record.PublicationUncertain || !record.PoisonedAt.IsZero() {
+		t.Fatalf("redriven unknown = %+v, %v", record, err)
+	}
+	claim = mustClaimOutbox(t, ctx, store)
+	poisonOutcomeUnknown(t, ctx, store, claim)
+	if err := store.ConfirmAccepted(ctx, claim.Event.ID, "unknown-confirm"); err != nil {
+		t.Fatalf("ConfirmAccepted(): %v", err)
+	}
+	if err := store.RedriveUnknown(ctx, claim.Event.ID, "unknown-confirm"); !errors.Is(err, postgresoutbox.ErrOperatorAuditConflict) {
+		t.Fatalf("confirmation audit reused for redrive = %v, want audit conflict", err)
+	}
+	if err := store.ConfirmAccepted(ctx, claim.Event.ID, "unknown-confirm"); err != nil {
+		t.Fatalf("ConfirmAccepted(replay): %v", err)
+	}
+	record, err = store.Get(ctx, claim.Event.ID)
+	if err != nil || record.PublishedAt.IsZero() || !record.PublicationUncertain || !record.PoisonedAt.IsZero() {
+		t.Fatalf("confirmed unknown = %+v, %v", record, err)
+	}
+
+	if _, err := pool.PGX().Exec(ctx,
+		"UPDATE outbox_events SET published_at = clock_timestamp() - interval '2 hours' WHERE id = $1",
+		claim.Event.ID,
+	); err != nil {
+		t.Fatalf("age confirmed event: %v", err)
+	}
+	if deleted, err := store.CleanupPublished(ctx, time.Hour, 1); err != nil || deleted != 1 {
+		t.Fatalf("CleanupPublished() = %d, %v", deleted, err)
+	}
+	if err := store.ConfirmAccepted(ctx, claim.Event.ID, "unknown-confirm"); err != nil {
+		t.Fatalf("ConfirmAccepted(replay after cleanup): %v", err)
+	}
+
+	mustAppendOutbox(t, ctx, pool, store, orderedEvent("unknown-ordered-1", "unknown-order", 1))
+	mustAppendOutbox(t, ctx, pool, store, orderedEvent("unknown-ordered-2", "unknown-order", 2))
+	ordered := mustClaimOutbox(t, ctx, store)
+	poisonOutcomeUnknown(t, ctx, store, ordered)
+	if err := store.ConfirmAccepted(ctx, ordered.Event.ID, "ordered-confirm"); err != nil {
+		t.Fatalf("ConfirmAccepted(ordered): %v", err)
+	}
+	if successor := mustClaimOutbox(t, ctx, store); successor.Event.ID != "unknown-ordered-2" {
+		t.Fatalf("ordered successor = %q, want unknown-ordered-2", successor.Event.ID)
+	}
+
+	var action, eventID string
+	var cycle *int32
+	if err := pool.PGX().QueryRow(ctx, `
+		SELECT action_kind, event_id, cycle_number
+		FROM outbox_redrives WHERE audit_id = 'unknown-confirm'
+	`).Scan(&action, &eventID, &cycle); err != nil {
+		t.Fatalf("read retained confirmation audit: %v", err)
+	}
+	if action != "confirm_accepted" || eventID != "unknown-recovery" || cycle != nil {
+		t.Fatalf("confirmation audit = %q/%q/%v", action, eventID, cycle)
+	}
+}
+
+func TestPostgresOutboxConcurrentUnknownActions(t *testing.T) {
+	ctx, pool, store := newOutboxFixture(t)
+	mustAppendOutbox(t, ctx, pool, store, outboxEvent("unknown-race"))
+	claim := mustClaimOutbox(t, ctx, store)
+	poisonOutcomeUnknown(t, ctx, store, claim)
+	lockTx, err := pool.PGX().Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin operator action gate: %v", err)
+	}
+	t.Cleanup(func() { _ = lockTx.Rollback(context.Background()) })
+	var blockerPID int
+	if err := lockTx.QueryRow(ctx, `
+		SELECT pg_backend_pid() FROM outbox_events WHERE id = $1 FOR UPDATE
+	`, claim.Event.ID).Scan(&blockerPID); err != nil {
+		t.Fatalf("lock unknown event: %v", err)
+	}
+
+	start := make(chan struct{})
+	errs := make(chan error, 2)
+	go func() {
+		<-start
+		errs <- store.RedriveUnknown(ctx, claim.Event.ID, "race-redrive")
+	}()
+	go func() {
+		<-start
+		errs <- store.ConfirmAccepted(ctx, claim.Event.ID, "race-confirm")
+	}()
+	close(start)
+	waitForOutbox(t,
+		func() string { return "concurrent unknown actions did not both wait for the event lock" },
+		func() bool {
+			return outboxBackendCount(t, ctx, pool,
+				"wait_event_type = 'Lock' AND query LIKE '%name: LockOutboxEventForAction :one%'") == 2
+		},
+	)
+	if err := lockTx.Rollback(ctx); err != nil {
+		t.Fatalf("release operator action gate: %v", err)
+	}
+
+	succeeded := 0
+	conflicted := 0
+	for range 2 {
+		err := <-errs
+		switch {
+		case err == nil:
+			succeeded++
+		case errors.Is(err, postgresoutbox.ErrOperatorStateConflict),
+			errors.Is(err, postgresoutbox.ErrOperatorAuditConflict):
+			conflicted++
+		default:
+			t.Fatalf("operator race error = %v", err)
+		}
+	}
+	if succeeded != 1 || conflicted != 1 {
+		t.Fatalf("operator race success/conflict = %d/%d, want 1/1", succeeded, conflicted)
+	}
+	var audits int
+	if err := pool.PGX().QueryRow(ctx,
+		"SELECT count(*) FROM outbox_redrives WHERE event_id = $1", claim.Event.ID,
+	).Scan(&audits); err != nil || audits != 1 {
+		t.Fatalf("operator race audits = %d, %v; want 1", audits, err)
+	}
+
+	mustAppendOutbox(t, ctx, pool, store, outboxEvent("unknown-race-replay"))
+	replayClaim := mustClaimOutbox(t, ctx, store)
+	if replayClaim.Event.ID != "unknown-race-replay" {
+		if err := markOutboxPublished(ctx, store, replayClaim); err != nil {
+			t.Fatalf("finish winning redrive before replay race: %v", err)
+		}
+		replayClaim = mustClaimOutbox(t, ctx, store)
+	}
+	if replayClaim.Event.ID != "unknown-race-replay" {
+		t.Fatalf("replay race claim = %q, want unknown-race-replay", replayClaim.Event.ID)
+	}
+	poisonOutcomeUnknown(t, ctx, store, replayClaim)
+	const replayRacers = 4
+	replayStart := make(chan struct{})
+	replayErrors := make(chan error, replayRacers)
+	for range replayRacers {
+		go func() {
+			<-replayStart
+			replayErrors <- store.RedriveUnknown(ctx, replayClaim.Event.ID, "same-unknown-action")
+		}()
+	}
+	close(replayStart)
+	for range replayRacers {
+		if err := <-replayErrors; err != nil {
+			t.Fatalf("same audited action race: %v", err)
+		}
+	}
+	replayed, err := store.Get(ctx, replayClaim.Event.ID)
+	if err != nil || replayed.RedriveCount != 1 {
+		t.Fatalf("same audited action replay = %+v, %v", replayed, err)
 	}
 }
 
@@ -1241,7 +1606,7 @@ func TestPostgresOutboxBatchClaimHoldsOneEventPerOrderingKey(t *testing.T) {
 	}
 	mustAppendOutbox(t, ctx, pool, store, outboxEvent("unordered"))
 
-	batch, err := store.Claim(ctx, time.Minute, 100)
+	batch, err := store.Claim(ctx, time.Minute, 100, 5)
 	if err != nil {
 		t.Fatalf("Claim(): %v", err)
 	}
@@ -1268,7 +1633,7 @@ func TestPostgresOutboxOrderedBatchFinalizationAdvancesEveryKey(t *testing.T) {
 		}
 	}
 
-	batch, err := store.Claim(ctx, time.Minute, 100)
+	batch, err := store.Claim(ctx, time.Minute, 100, 5)
 	if err != nil {
 		t.Fatalf("Claim(): %v", err)
 	}
@@ -1288,7 +1653,7 @@ func TestPostgresOutboxOrderedBatchFinalizationAdvancesEveryKey(t *testing.T) {
 		t.Fatalf("MarkOrderedPublishedBatch() = %v, %v, want %d finalized", marked, err, keys)
 	}
 
-	successors, err := store.Claim(ctx, time.Minute, 100)
+	successors, err := store.Claim(ctx, time.Minute, 100, 5)
 	if err != nil {
 		t.Fatalf("Claim(successors): %v", err)
 	}
@@ -1501,8 +1866,8 @@ func TestPostgresOutboxDrainDuringInitialObservationNeverBecomesReady(t *testing
 
 // The relay fails closed when any relation it owns is missing, and the gate is
 // the startup observation: ObserveOutbox is the one statement that touches all
-// three tables. It reaches outbox_redrives only through that relation's
-// storage-bytes column, so dropping the column drops the gate — this test is
+// four tables. It reaches outbox_redrives only through that relation's
+// storage-bytes column, so dropping the column drops that share of the gate — this test is
 // what fails, and it says so.
 func TestPostgresOutboxStartupRequiresRedriveLedger(t *testing.T) {
 	ctx, pool, store := newOutboxFixture(t)
@@ -1526,6 +1891,23 @@ func TestPostgresOutboxStartupRequiresRedriveLedger(t *testing.T) {
 	}
 	if got := attempts.Load(); got != 0 {
 		t.Errorf("publisher attempts = %d, want 0 before the schema gate passes", got)
+	}
+}
+
+func TestPostgresOutboxStartupRequiresReceiptLedger(t *testing.T) {
+	ctx, pool, store := newOutboxFixture(t)
+	if _, err := pool.PGX().Exec(ctx, "DROP TABLE outbox_commit_receipts"); err != nil {
+		t.Fatalf("drop commit receipt ledger: %v", err)
+	}
+	var attempts atomic.Int64
+	relay := mustNewOutboxRelay(t, store, testPublisherFunc(func(context.Context, postgresoutbox.Event) error {
+		attempts.Add(1)
+		return nil
+	}), nil, testRelayConfig())
+	result := readRelayResult(t, runOutboxRelay(ctx, relay))
+	if result.Err == nil || result.CleanupUnsafe || relay.Ready() || attempts.Load() != 0 {
+		t.Fatalf("Run() without receipt ledger = %+v ready=%t attempts=%d",
+			result, relay.Ready(), attempts.Load())
 	}
 }
 
@@ -1555,52 +1937,341 @@ func TestPostgresOutboxRetryAndPoison(t *testing.T) {
 			t.Fatalf("attempts publisher/db/class = %d/%d/%q, want 3/3/attempt_exhausted", attempts.Load(), record.CycleAttemptCount, record.LastErrorClass)
 		}
 	})
+}
 
-	// An ambiguous failure never proves the broker refused the event, so the
-	// attempt cap must keep retrying instead of poisoning a row that may still
-	// need delivery.
-	t.Run("ambiguous", func(t *testing.T) {
-		ctx, pool, store := newOutboxFixture(t)
-		mustAppendOutbox(t, ctx, pool, store, outboxEvent("ambiguous"))
-		config := testRelayConfig()
-		config.MaxAttempts = 2
-		config.RetryBase = time.Nanosecond
-		config.RetryMax = time.Nanosecond
+func TestPostgresOutboxStickyAtLimitQuarantinesWithoutPublish(t *testing.T) {
+	ctx, pool, store := newOutboxFixture(t)
+	mustAppendOutbox(t, ctx, pool, store, outboxEvent("ambiguous-limit"))
+	config := testRelayConfig()
+	config.MaxAttempts = 2
+	config.RetryBase = time.Nanosecond
+	config.RetryMax = time.Nanosecond
 
-		var attempts atomic.Int64
-		var once sync.Once
-		pastThreshold := make(chan struct{})
-		publisher := testPublisherFunc(func(context.Context, postgresoutbox.Event) error {
-			// Past the cap, not a number that happens to exceed it: an ambiguous
-			// failure must keep retrying however the cap is configured.
-			if attempts.Add(1) > int64(config.MaxAttempts) {
-				once.Do(func() { close(pastThreshold) })
-			}
-			return errors.New("temporary")
-		})
-		relay := mustNewOutboxRelay(t, store, publisher, nil, config)
-		result := runOutboxRelay(ctx, relay)
-		select {
-		case <-pastThreshold:
-		case <-time.After(outboxWaitTimeout):
-			t.Fatalf("relay stopped retrying an ambiguous failure after %d attempts", attempts.Load())
+	var attempts atomic.Int64
+	relay := mustNewOutboxRelay(t, store, testPublisherFunc(func(context.Context, postgresoutbox.Event) error {
+		attempts.Add(1)
+		return errors.New("ambiguous publication")
+	}), nil, config)
+	result := runOutboxRelay(ctx, relay)
+	waitForOutboxCount(t, ctx, pool, "last_error_class = 'outcome_unknown'", 1)
+	relay.StartDrain()
+	assertRelayResult(t, result, nil)
+
+	record, err := store.Get(ctx, "ambiguous-limit")
+	if err != nil {
+		t.Fatalf("Get(): %v", err)
+	}
+	if attempts.Load() != 2 || record.CycleAttemptCount != 2 ||
+		!record.PublicationUncertain || record.PoisonedAt.IsZero() || record.LastErrorClass != "outcome_unknown" {
+		t.Fatalf("unknown state attempts=%d cycle=%d sticky=%t poisoned=%v class=%q",
+			attempts.Load(), record.CycleAttemptCount, record.PublicationUncertain,
+			record.PoisonedAt, record.LastErrorClass)
+	}
+	mustAppendOutbox(t, ctx, pool, store, outboxEvent("preclaim-limit"))
+	if _, err := pool.PGX().Exec(ctx, `
+		UPDATE outbox_events
+		SET cycle_attempt_count = 2, total_attempt_count = 2,
+			publication_uncertain = true, last_error_class = 'publisher_temporary'
+		WHERE id = 'preclaim-limit'
+	`); err != nil {
+		t.Fatalf("seed sticky at-limit row: %v", err)
+	}
+	batch, err := store.Claim(ctx, time.Minute, 1, config.MaxAttempts)
+	if err != nil || len(batch.Events) != 0 {
+		t.Fatalf("Claim(at limit) = %+v, %v; want no republish", batch, err)
+	}
+	observation, err := store.Observe(ctx)
+	if err != nil || observation.OutcomeUnknownCount != 2 || observation.PoisonCount != 0 {
+		t.Fatalf("Observe() = %+v, %v; want two outcome_unknown and no deterministic poison", observation, err)
+	}
+	if deleted, err := store.CleanupPublished(ctx, time.Nanosecond, 10); err != nil || deleted != 0 {
+		t.Fatalf("CleanupPublished(unknown) = %d, %v; want retained", deleted, err)
+	}
+	restarted, err := postgresoutbox.NewStore(pool, nil)
+	if err != nil {
+		t.Fatalf("NewStore(restart): %v", err)
+	}
+	mustAppendOutbox(t, ctx, pool, restarted, outboxEvent("crash-at-limit"))
+	crashed, err := restarted.Claim(ctx, shortOutboxLease, 1, 1)
+	if err != nil || len(crashed.Events) != 1 || crashed.Events[0].PublicationUncertain {
+		t.Fatalf("initial crash claim = %+v, %v", crashed, err)
+	}
+	expireOutboxLease(t, ctx, pool)
+	restarted, err = postgresoutbox.NewStore(pool, nil)
+	if err != nil {
+		t.Fatalf("NewStore(after crash): %v", err)
+	}
+	recovered, err := restarted.Claim(ctx, time.Minute, 1, 1)
+	if err != nil || len(recovered.Events) != 0 {
+		t.Fatalf("recovery claim at limit = %+v, %v; want quarantine without publish", recovered, err)
+	}
+	crashRecord, err := restarted.Get(ctx, "crash-at-limit")
+	if err != nil || !crashRecord.PublicationUncertain || crashRecord.PoisonedAt.IsZero() ||
+		crashRecord.LastErrorClass != "outcome_unknown" {
+		t.Fatalf("crash recovery state = %+v, %v", crashRecord, err)
+	}
+
+	mustAppendOutbox(t, ctx, pool, restarted, orderedEvent("sticky-ordered-1", "sticky-order", 1))
+	mustAppendOutbox(t, ctx, pool, restarted, orderedEvent("sticky-ordered-2", "sticky-order", 2))
+	mustAppendOutbox(t, ctx, pool, restarted, outboxEvent("sticky-unrelated"))
+	var callsMu sync.Mutex
+	calls := map[string]int{}
+	publisher := testPublisherFunc(func(_ context.Context, event postgresoutbox.Event) error {
+		callsMu.Lock()
+		calls[event.ID]++
+		callsMu.Unlock()
+		if event.ID == "sticky-ordered-1" {
+			return errors.New("ambiguous ordered publication")
 		}
-		relay.StartDrain()
-		assertRelayResult(t, result, nil)
-		waitForOutboxCount(t, ctx, pool, "poisoned_at IS NOT NULL", 0)
-		record, err := store.Get(ctx, "ambiguous")
-		if err != nil {
-			t.Fatalf("Get(): %v", err)
-		}
-		if !record.PoisonedAt.IsZero() || record.LastErrorClass != "publisher_temporary" {
-			t.Fatalf("ambiguous poisoned=%v class=%q, want unpoisoned publisher_temporary", record.PoisonedAt, record.LastErrorClass)
-		}
+		return nil
 	})
+	relay = mustNewOutboxRelay(t, restarted, publisher, nil, config)
+	result = runOutboxRelay(ctx, relay)
+	waitForOutboxCount(t, ctx, pool,
+		"id = 'sticky-ordered-1' AND last_error_class = 'outcome_unknown'", 1)
+	waitForOutboxCount(t, ctx, pool,
+		"id = 'sticky-unrelated' AND published_at IS NOT NULL", 1)
+	relay.StartDrain()
+	assertRelayResult(t, result, nil)
+	callsMu.Lock()
+	orderedCalls, successorCalls, unrelatedCalls := calls["sticky-ordered-1"], calls["sticky-ordered-2"], calls["sticky-unrelated"]
+	callsMu.Unlock()
+	if orderedCalls != 2 || successorCalls != 0 || unrelatedCalls != 1 {
+		t.Fatalf("ordered/successor/unrelated calls = %d/%d/%d, want 2/0/1",
+			orderedCalls, successorCalls, unrelatedCalls)
+	}
 
-	// A permanent rejection has no loop dynamic to observe, so it belongs with
-	// the other single-cycle dispositions in TestPostgresOutboxPublishFailure
-	// rather than here. Both subtests above turn on how many cycles the relay
-	// runs, which is the thing this test exists to prove.
+	mustAppendOutbox(t, ctx, pool, restarted, orderedEvent("sticky-ack-1", "sticky-ack", 1))
+	mustAppendOutbox(t, ctx, pool, restarted, orderedEvent("sticky-ack-2", "sticky-ack", 2))
+	ackAttempts := atomic.Int64{}
+	relay = mustNewOutboxRelay(t, restarted, testPublisherFunc(func(_ context.Context, event postgresoutbox.Event) error {
+		if event.ID == "sticky-ack-1" && ackAttempts.Add(1) == 1 {
+			return errors.New("ambiguous before acknowledgement")
+		}
+		return nil
+	}), nil, config)
+	result = runOutboxRelay(ctx, relay)
+	waitForOutboxCount(t, ctx, pool,
+		"id IN ('sticky-ack-1', 'sticky-ack-2') AND published_at IS NOT NULL", 2)
+	relay.StartDrain()
+	assertRelayResult(t, result, nil)
+	ack, err := restarted.Get(ctx, "sticky-ack-1")
+	if err != nil || !ack.PublicationUncertain || ack.PublishedAt.IsZero() {
+		t.Fatalf("ack after uncertainty = %+v, %v", ack, err)
+	}
+}
+
+func TestPostgresOutboxLegacyUncertaintyClassification(t *testing.T) {
+	ctx, pool, store := newOutboxFixture(t)
+	for _, id := range []string{
+		"legacy-unattempted", "legacy-published", "legacy-retry",
+		"legacy-leased", "legacy-poison", "legacy-at-limit",
+	} {
+		mustAppendOutbox(t, ctx, pool, store, outboxEvent(id))
+	}
+	if _, err := pool.PGX().Exec(ctx, `
+		UPDATE outbox_events SET publication_uncertain = NULL;
+		UPDATE outbox_events SET published_at = clock_timestamp(), cycle_attempt_count = 1,
+			total_attempt_count = 1 WHERE id = 'legacy-published';
+		UPDATE outbox_events SET cycle_attempt_count = 1, total_attempt_count = 1,
+			available_at = clock_timestamp() + interval '1 hour', last_error_class = 'publisher_temporary'
+			WHERE id = 'legacy-retry';
+		UPDATE outbox_events SET cycle_attempt_count = 1, total_attempt_count = 1,
+			lease_token = 'legacy-lease', lease_expires_at = clock_timestamp() + interval '1 hour'
+			WHERE id = 'legacy-leased';
+		UPDATE outbox_events SET cycle_attempt_count = 1, total_attempt_count = 1,
+			poisoned_at = clock_timestamp(), last_error_class = 'publisher_permanent'
+			WHERE id = 'legacy-poison';
+		UPDATE outbox_events SET cycle_attempt_count = 3, total_attempt_count = 3,
+			last_error_class = 'publisher_temporary' WHERE id = 'legacy-at-limit'
+	`); err != nil {
+		t.Fatalf("prepare legacy rows: %v", err)
+	}
+	var receiptsBefore, headsBefore int
+	if err := pool.PGX().QueryRow(ctx, `SELECT
+		(SELECT count(*) FROM outbox_commit_receipts),
+		(SELECT count(*) FROM outbox_ordering_heads)
+	`).Scan(&receiptsBefore, &headsBefore); err != nil {
+		t.Fatalf("read classification authority counts: %v", err)
+	}
+
+	var batches []int
+	for {
+		classified, err := store.ClassifyLegacyUncertainty(ctx, 3, 2)
+		if err != nil {
+			t.Fatalf("ClassifyLegacyUncertainty(): %v", err)
+		}
+		batches = append(batches, classified)
+		if classified == 0 {
+			break
+		}
+	}
+	if !reflect.DeepEqual(batches, []int{2, 2, 2, 0}) {
+		t.Fatalf("classification batches = %v, want [2 2 2 0]", batches)
+	}
+	mustAppendOutbox(t, ctx, pool, store, outboxEvent("legacy-locked"))
+	if _, err := pool.PGX().Exec(ctx, `
+		UPDATE outbox_events SET publication_uncertain = NULL,
+			cycle_attempt_count = 1, total_attempt_count = 1
+		WHERE id = 'legacy-locked'
+	`); err != nil {
+		t.Fatalf("prepare locked legacy row: %v", err)
+	}
+	lockTx, err := pool.PGX().Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin legacy classification lock: %v", err)
+	}
+	t.Cleanup(func() { _ = lockTx.Rollback(context.Background()) })
+	var blockerPID int
+	if err := lockTx.QueryRow(ctx, `
+		SELECT pg_backend_pid() FROM outbox_events
+		WHERE id = 'legacy-locked' FOR UPDATE
+	`).Scan(&blockerPID); err != nil {
+		t.Fatalf("lock legacy classification row: %v", err)
+	}
+	classifyCtx, cancelClassification := context.WithCancel(ctx)
+	classificationResult := make(chan error, 1)
+	go func() {
+		_, err := store.ClassifyLegacyUncertainty(classifyCtx, 3, 2)
+		classificationResult <- err
+	}()
+	waitForOutbox(t,
+		func() string { return "legacy classification did not wait for the locked candidate" },
+		func() bool { return outboxBlockedBy(t, ctx, pool, blockerPID) },
+	)
+	cancelClassification()
+	if err := <-classificationResult; !errors.Is(err, context.Canceled) {
+		t.Fatalf("locked classification error = %v, want cancellation instead of false zero", err)
+	}
+	if err := lockTx.Rollback(ctx); err != nil {
+		t.Fatalf("release legacy classification lock: %v", err)
+	}
+	if classified, err := store.ClassifyLegacyUncertainty(ctx, 3, 2); err != nil || classified < 0 || classified > 1 {
+		t.Fatalf("resume classification = %d, %v; want zero or one monotonic row", classified, err)
+	}
+	if classified, err := store.ClassifyLegacyUncertainty(ctx, 3, 2); err != nil || classified != 0 {
+		t.Fatalf("authoritative final classification = %d, %v; want zero", classified, err)
+	}
+	var receiptsAfter, headsAfter int
+	if err := pool.PGX().QueryRow(ctx, `SELECT
+		(SELECT count(*) FROM outbox_commit_receipts),
+		(SELECT count(*) FROM outbox_ordering_heads)
+	`).Scan(&receiptsAfter, &headsAfter); err != nil {
+		t.Fatalf("read post-classification authority counts: %v", err)
+	}
+	if receiptsAfter != receiptsBefore+1 || headsAfter != headsBefore {
+		t.Fatalf("classification changed receipts/heads = %d/%d, want append-only %d/%d",
+			receiptsAfter, headsAfter, receiptsBefore+1, headsBefore)
+	}
+
+	for _, test := range []struct {
+		id        string
+		uncertain bool
+		unknown   bool
+		leased    bool
+	}{
+		{id: "legacy-unattempted"},
+		{id: "legacy-published"},
+		{id: "legacy-retry", uncertain: true},
+		{id: "legacy-leased", uncertain: true, leased: true},
+		{id: "legacy-poison", uncertain: true, unknown: true},
+		{id: "legacy-at-limit", uncertain: true, unknown: true},
+	} {
+		record, err := store.Get(ctx, test.id)
+		if err != nil {
+			t.Fatalf("Get(%s): %v", test.id, err)
+		}
+		if record.PublicationUncertain != test.uncertain || (!record.LeaseExpiresAt.IsZero()) != test.leased ||
+			(record.LastErrorClass == "outcome_unknown") != test.unknown || (!record.PoisonedAt.IsZero()) != test.unknown {
+			t.Errorf("classified %s = sticky=%t leased=%t poisoned=%t class=%q",
+				test.id, record.PublicationUncertain, !record.LeaseExpiresAt.IsZero(),
+				!record.PoisonedAt.IsZero(), record.LastErrorClass)
+		}
+	}
+}
+
+func TestPostgresOutboxUnknownObservationAndDiscovery(t *testing.T) {
+	ctx, pool, store := newOutboxFixture(t)
+	for index := 1; index <= 3; index++ {
+		mustAppendOutbox(t, ctx, pool, store, outboxEvent(fmt.Sprintf("unknown-observe-%d", index)))
+		unknown := mustClaimOutbox(t, ctx, store)
+		poisonOutcomeUnknown(t, ctx, store, unknown)
+	}
+	mustAppendOutbox(t, ctx, pool, store, outboxEvent("poison-observe"))
+	poison := mustClaimOutbox(t, ctx, store)
+	if err := poisonOutboxEvent(ctx, store, poison.Event.ID, poison.Token, "publisher_permanent"); err != nil {
+		t.Fatalf("mark deterministic poison: %v", err)
+	}
+
+	observation, err := store.Observe(ctx)
+	if err != nil {
+		t.Fatalf("Observe(): %v", err)
+	}
+	if observation.OutcomeUnknownCount != 3 || observation.PoisonCount != 1 ||
+		observation.ReceiptsBytes == 0 || observation.ReceiptsIndexBytes == 0 {
+		t.Fatalf("unknown observation = %+v", observation)
+	}
+	const discovery = `
+		SELECT id, destination, event_type, schema_name, cycle_attempt_count,
+			total_attempt_count, last_attempt_at, poisoned_at, last_error_class,
+			publication_uncertain
+		FROM outbox_events
+		WHERE published_at IS NULL
+		  AND poisoned_at IS NOT NULL
+		  AND publication_uncertain IS TRUE
+		  AND last_error_class = 'outcome_unknown'
+		  AND (poisoned_at, id) > ($1, $2)
+		ORDER BY poisoned_at, id
+		LIMIT 2
+	`
+	rows, err := pool.PGX().Query(ctx, discovery, time.Unix(0, 0).UTC(), "")
+	if err != nil {
+		t.Fatalf("outcome-unknown discovery: %v", err)
+	}
+	var columns []string
+	for _, field := range rows.FieldDescriptions() {
+		columns = append(columns, field.Name)
+	}
+	wantColumns := []string{
+		"id", "destination", "event_type", "schema_name", "cycle_attempt_count",
+		"total_attempt_count", "last_attempt_at", "poisoned_at", "last_error_class",
+		"publication_uncertain",
+	}
+	var discovered []string
+	var cursorAt time.Time
+	var cursorID string
+	for rows.Next() {
+		values, err := rows.Values()
+		if err != nil {
+			t.Fatalf("read discovery page: %v", err)
+		}
+		cursorID = values[0].(string)
+		cursorAt = values[7].(time.Time)
+		discovered = append(discovered, cursorID)
+	}
+	rows.Close()
+	if !reflect.DeepEqual(columns, wantColumns) || len(discovered) != 2 {
+		t.Fatalf("discovery columns/first page = %v/%v, want %v/two rows", columns, discovered, wantColumns)
+	}
+	rows, err = pool.PGX().Query(ctx, discovery, cursorAt, cursorID)
+	if err != nil {
+		t.Fatalf("outcome-unknown second discovery page: %v", err)
+	}
+	for rows.Next() {
+		values, err := rows.Values()
+		if err != nil {
+			t.Fatalf("read second discovery page: %v", err)
+		}
+		discovered = append(discovered, values[0].(string))
+	}
+	rows.Close()
+	seen := map[string]bool{}
+	for _, id := range discovered {
+		seen[id] = true
+	}
+	if len(discovered) != 3 || len(seen) != 3 {
+		t.Fatalf("discovery pages = %v, want three unique outcome-unknown events", discovered)
+	}
 }
 
 func TestPostgresOutboxObservability(t *testing.T) {
@@ -1663,6 +2334,8 @@ func TestPostgresOutboxObservability(t *testing.T) {
 		"ordering_heads/indexes": observation.OrderingHeadsIndexBytes,
 		"redrives/total":         observation.RedrivesBytes,
 		"redrives/indexes":       observation.RedrivesIndexBytes,
+		"receipts/total":         observation.ReceiptsBytes,
+		"receipts/indexes":       observation.ReceiptsIndexBytes,
 	}) {
 		t.Fatalf("database-global metrics do not match observation: %+v", first)
 	}
@@ -1898,7 +2571,7 @@ type outboxClaim struct {
 var errNoOutboxWork = errors.New("outbox has no eligible work")
 
 func claimOutboxEvent(ctx context.Context, store *postgresoutbox.Store, lease time.Duration) (outboxClaim, error) {
-	batch, err := store.Claim(ctx, lease, 1)
+	batch, err := store.Claim(ctx, lease, 1, 5)
 	if err != nil {
 		return outboxClaim{}, err
 	}
@@ -1947,6 +2620,15 @@ func poisonOutboxEvent(ctx context.Context, store *postgresoutbox.Store, id, tok
 	return store.MarkPoisonedBatch(ctx, token, []postgresoutbox.PoisonDirective{
 		{ID: id, ErrorClass: errorClass},
 	})
+}
+
+func poisonOutcomeUnknown(t *testing.T, ctx context.Context, store *postgresoutbox.Store, claim outboxClaim) {
+	t.Helper()
+	if err := store.MarkPoisonedBatch(ctx, claim.Token, []postgresoutbox.PoisonDirective{{
+		ID: claim.Event.ID, ErrorClass: "outcome_unknown", PublicationUncertain: true,
+	}}); err != nil {
+		t.Fatalf("mark outcome unknown: %v", err)
+	}
 }
 
 func assertAtomicCounts(t *testing.T, ctx context.Context, pool *postgres.Pool, id string, wantDomain, wantOutbox int) {
@@ -2159,6 +2841,16 @@ func outboxBlockedBy(t *testing.T, ctx context.Context, pool *postgres.Pool, blo
 		t.Fatalf("observe blocked mark: %v", err)
 	}
 	return blocked
+}
+
+func outboxBackendCount(t *testing.T, ctx context.Context, pool *postgres.Pool, predicate string) int {
+	t.Helper()
+	var count int
+	query := "SELECT count(*) FROM pg_stat_activity WHERE pid <> pg_backend_pid() AND " + predicate
+	if err := pool.PGX().QueryRow(ctx, query).Scan(&count); err != nil {
+		t.Fatalf("count outbox backends for %s: %v", predicate, err)
+	}
+	return count
 }
 
 // outboxBackendExists asks pg_stat_activity about the relay's own connections,
@@ -2395,17 +3087,23 @@ func assertOutboxObservationMatchesSQL(
 		t.Fatalf("published oldest = %v, direct SQL %v", observation.PublishedRetainedOldestAt, publishedAt)
 	}
 
-	var heads, eventsBytes, eventIndexes, headBytes, headIndexes, redriveBytes, redriveIndexes int64
+	var heads, eventsBytes, eventIndexes, headBytes, headIndexes, redriveBytes, redriveIndexes,
+		receiptBytes, receiptIndexes int64
 	if err := pool.PGX().QueryRow(ctx, `SELECT
 		(SELECT count(*) FROM outbox_ordering_heads),
 		pg_total_relation_size('outbox_events'), pg_indexes_size('outbox_events'),
 		pg_total_relation_size('outbox_ordering_heads'), pg_indexes_size('outbox_ordering_heads'),
-		pg_total_relation_size('outbox_redrives'), pg_indexes_size('outbox_redrives')`).Scan(
+		pg_total_relation_size('outbox_redrives'), pg_indexes_size('outbox_redrives'),
+		pg_total_relation_size('outbox_commit_receipts'), pg_indexes_size('outbox_commit_receipts')`).Scan(
 		&heads, &eventsBytes, &eventIndexes, &headBytes, &headIndexes, &redriveBytes, &redriveIndexes,
+		&receiptBytes, &receiptIndexes,
 	); err != nil {
 		t.Fatalf("read direct outbox storage: %v", err)
 	}
-	want := []int64{heads, eventsBytes, eventIndexes, headBytes, headIndexes, redriveBytes, redriveIndexes}
+	want := []int64{
+		heads, eventsBytes, eventIndexes, headBytes, headIndexes, redriveBytes, redriveIndexes,
+		receiptBytes, receiptIndexes,
+	}
 	got := []int64{
 		observation.OrderingHeadCount,
 		observation.EventsBytes,
@@ -2414,6 +3112,8 @@ func assertOutboxObservationMatchesSQL(
 		observation.OrderingHeadsIndexBytes,
 		observation.RedrivesBytes,
 		observation.RedrivesIndexBytes,
+		observation.ReceiptsBytes,
+		observation.ReceiptsIndexBytes,
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("observation storage = %v, direct SQL %v", got, want)

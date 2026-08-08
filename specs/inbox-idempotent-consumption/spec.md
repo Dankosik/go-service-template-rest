@@ -152,51 +152,38 @@ claim before either commits; exactly one effect exists afterwards, and neither
 delivery reports a fault. Repeat with the winner rolling back and assert the
 loser applies the effect.
 
-### R4 — Recognition outlives every redelivery the packs can produce
+### R4 — Recognition has no automatic expiry
 
-Actor: an operator sizing retention.
+Actor: a service processing a message whose claim already committed.
 
-Trigger: claims accumulate, and a store that only grows is not operable.
+Trigger: the same logical message is delivered again, however long after the
+first effect committed.
 
-Rule: claims are retained for a bounded window and then deleted. The window must
-exceed the longest interval over which the transports can still present the same
-message again by their own mechanisms; deleting a claim earlier reintroduces the
-double application this outcome exists to remove.
-
-Authority for the horizon: it is derivable from configuration already validated
-at startup — the consumer's attempt budget, its acknowledgement wait, and its
-configured retry delays together bound how long ordinary redelivery can
-continue. The relationship between that horizon and the retention window is
-therefore checkable rather than advisory, and startup is where an unsafe
-combination must be refused, for the same reason the relay refuses a lease
-shorter than its publish timeout: a window discovered to be too short after the
-fact has already lost the guarantee, silently.
+Rule: the committed claim continues to suppress that delivery. The pack has no
+TTL, retention window, or automatic cleanup path. This is required because the
+transport's handler attempt budget is finite but broker delivery remains
+unlimited until dead-letter handoff is acknowledged, and operator redrive is
+unbounded in time. No finite window covers every duplicate the repository can
+produce.
 
 Outcomes:
 
-- Retention window above the horizon → accepted.
-- Retention window at or below the horizon → refused at startup, naming both
-  values, because the operator reading it holds a config file rather than this
-  spec.
+- Claim present, regardless of age → skipped and acknowledged under R1.
+- Claim absent because an external owner explicitly deleted or migrated it →
+  the delivery is new to this pack and may apply the effect.
+- Storage growth alone → does not silently weaken recognition. A future
+  compaction must retain an equivalent durable identity or explicitly replace
+  this guarantee in Specification.
 
-Explicitly outside the horizon: an operator redrive of a dead-lettered message
-after its claim was deleted applies the effect again. Redrive is unbounded in
-time by design, so no finite window covers it. This is stated as a known
-consequence of redriving old messages rather than defended against; an operator
-redriving beyond the retention window is asserting they want the message
-processed.
+Bound: one compact claim is retained per consumer identity and logical message
+identity. Audit payloads and delivery history are not retained by this pack.
 
-Bounds: deletion is batched and bounded, so retention never takes an unbounded
-lock or an unbounded transaction, and a backlog of expired claims drains over
-several passes instead of one.
+Contract delta: new durable state, with no retention configuration or periodic
+cleanup duty.
 
-Contract delta: new operator-visible configuration and a new periodic duty in
-whichever process owns it.
-
-Falsifier: configure a retention window below the derived horizon and assert
-startup refuses it, naming both values. Configure one above it and assert a
-claim older than the window is gone while a claim inside it still suppresses a
-redelivery.
+Falsifier: commit a claim, advance every controllable clock beyond the
+transport's configured retry delays, and deliver the message again; the effect
+is still skipped. No runtime-owned operation deletes the claim.
 
 ### R5 — The guarantee's boundary is stated where a handler author reads it
 
@@ -275,10 +262,10 @@ Unchanged and load-bearing — this outcome must not weaken any of them:
   attribute.
 
 Edge cases each rule must answer, resolved above: a message with no usable
-identity (R2), two concurrent deliveries (R3), a redelivery after its claim
-expired (R4, and the redrive case named as outside the horizon), an effect that
-escaped the transaction before rollback (R5), a handler whose effect targets a
-different datastore (non-goals, and R1's precondition).
+identity (R2), two concurrent deliveries (R3), a redelivery long after its
+claim committed (R4), an effect that escaped the transaction before rollback
+(R5), and a handler whose effect targets a different datastore (non-goals, and
+R1's precondition).
 
 One further case, resolved by R1's table rather than a rule of its own: a
 delivery that skips must still acknowledge. Reporting a skip as a failure would
@@ -302,12 +289,13 @@ dead-letter stream, turning the protection into a poison generator.
   reaches several consumers, and a global key would let the first consumer
   suppress the others. Reopen never on scale grounds; the scope is a correctness
   property, not an index-size trade.
-- **D4 — Retention is time-bounded and its floor is derived and enforced, not
-  advised.** A documented "make sure it is long enough" is the failure mode this
-  spec is trying to remove, since the symptom of getting it wrong is a silent
-  double application. Reopen if a transport's horizon stops being derivable from
-  validated configuration, in which case the floor becomes an explicit operator
-  input with the same startup check.
+- **D4 — Claims do not expire automatically.** The worker's configured handler
+  attempts do not bound broker redelivery: delivery continues until dead-letter
+  handoff is acknowledged, and operator redrive has no time limit. A finite
+  default would therefore turn storage tuning into a silent correctness loss.
+  Reopen on measured storage pressure or a service-owned retention requirement;
+  the replacement must either retain a permanent compact identity or state the
+  narrower duplicate-recognition window as a changed guarantee.
 - **D5 — Deduplication is not domain policy.** The feature decides what the
   effect is; whether this delivery is a repeat is a property of the transport
   and of prior state, and a use case that branches on it has absorbed an
@@ -319,10 +307,10 @@ dead-letter stream, turning the protection into a poison generator.
   the producer-side spec that defers the inbox to its own outcome. Reopen only
   by changing that recorded boundary.
 - **Constraint — the composing pieces already exist.** A transaction helper that
-  yields a driver handle, a bounded periodic-duty shape with drain, a closed
-  telemetry vocabulary pattern, and a per-test database harness are all present
-  and in use by the outbox pack. This outcome adds a store and a schema to an
-  existing shape rather than introducing a new runtime concern.
+  yields a driver handle, a closed telemetry vocabulary pattern, and a per-test
+  database harness are present and in use by the outbox pack. This outcome adds
+  a store and schema to an existing shape rather than introducing a new runtime
+  concern.
 
 ## Success criteria and proof expectations
 
@@ -339,26 +327,23 @@ dead-letter stream, turning the protection into a poison generator.
    simultaneously, against a real PostgreSQL, because the resolution is the
    database's and cannot be proven against a stubbed driver. Pass: one effect,
    no fault reported by either.
-4. A retention window at or below the derived redelivery horizon is refused at
-   startup, naming both values. Scope: configuration validation. Pass: refused
-   with both values in the message.
-5. A claim older than the window is deleted and a claim inside it still
-   suppresses a redelivery. Scope: integration, with retention driven
-   explicitly rather than by waiting.
-6. Two consumers each apply the same message once. Scope: integration. Pass: two
+4. Recognition has no automatic expiry. Scope: integration with a committed
+   claim older than every configured retry delay. Pass: a later delivery still
+   skips the effect, and no runtime cleanup path removes the claim.
+5. Two consumers each apply the same message once. Scope: integration. Pass: two
    effects, one per consumer identity, and a second delivery to either applies
    nothing.
-7. Telemetry vocabularies remain closed with the new operations present, and no
+6. Telemetry vocabularies remain closed with the new operations present, and no
    message identifier or consumer-supplied string reaches a metric attribute.
    Scope: the existing bounded-vocabulary proof shape.
-8. The documented handler shape passes the repository's dependency lint in the
+7. The documented handler shape passes the repository's dependency lint in the
    layer the document places it in.
-9. Every existing messaging proof still passes unchanged, including the
+8. Every existing messaging proof still passes unchanged, including the
    transport's redelivery, dead-letter, drain, and race suites, and the outbox's
    ordering and lease suites.
 
-Proof expectations name evidence boundaries, not mechanisms: R1, R3, and R4's
-deletion behavior have their authority in PostgreSQL and need a real one; R2's
+Proof expectations name evidence boundaries, not mechanisms: R1, R3, and R4
+have their authority in PostgreSQL and need a real one; R2's
 identity claim needs an actual dead-letter and redrive rather than a constructed
 message; R6 needs the repository's own lint rather than a reading.
 
@@ -387,43 +372,26 @@ message; R6 needs the repository's own lint rather than a reading.
   thinking about the external calls it cannot cover. Mitigated by R5 putting the
   boundary in the pack's own documentation rather than only here; not mitigated
   against a handler that ignores it, which is stated as the trade.
-- **Risk — retention deletes compete with claims on the same table.** Mitigated
-  by R4's bounded batching; residual exposure is a tuning question the same
-  shape already answers in the outbox's retention duty.
-- **Assumption — no adopting service needs a claim to outlive its retention
-  window for audit.** Affected rule: R4. Safe boundary: the claim records that a
-  message was processed, which the effect itself also records in domain terms.
-  Invalidating evidence: a compliance requirement to prove non-reprocessing over
-  a longer horizon than operational safety needs. Reopen owner: this spec.
-  Reopen condition: retention gains an audit window distinct from the safety
-  floor; the floor itself never moves down.
+- **Risk — claims grow with processed identities.** R4 chooses correctness over
+  speculative cleanup and stores no delivery history or payload. Invalidating
+  evidence: measured table/index growth that breaches a service-owned capacity
+  budget. Reopen owner: this spec. Reopen condition: design a compact permanent
+  identity or explicitly narrow the recognition guarantee before adding any
+  deletion path.
 
-## Proof gaps
+## Review result
 
-The [Review Independence](../../docs/spec-first-workflow/shared/review-independence.md)
-trigger applies: this spec fixes a durable schema, a persisted-data guarantee,
-and a concurrency rule whose failure mode is silent. An independent
-specification review was **not** run, and the reason is specific rather than
-procedural: this spec was authored while a concurrent session held uncommitted
-changes to `internal/config`, `migrations/`, the shared sqlc sources, and their
-generated output — the same surfaces this outcome extends. The tree did not
-compile during authoring, so no reviewer could have validated a claim against
-it. The spec carries focused root self-review only, which found and closed three
-defects: R1 did not say a skip must be acknowledged (an unacknowledged skip
-turns the protection into a poison generator), R4 stated retention as guidance
-rather than an enforced floor, and R2 originally keyed on the publication
-identifier, which a dead-letter transfer replaces.
+Current source confirms the load-bearing transport facts: dead-letter transfer
+preserves the logical identifier while minting a new publication identifier,
+and broker delivery remains unlimited until the dead-letter handoff is
+acknowledged. Those facts invalidated the earlier finite retention-horizon rule
+and are why R4 now has no automatic expiry.
 
-Two claims here are read from current source and documentation rather than
-executed, because the tree did not build: that a dead-letter transfer preserves
-the logical identifier while minting a new publication identifier, and that the
-redelivery horizon is derivable from already-validated worker configuration.
-Both are cheap to confirm once the tree is green and both are load-bearing for
-R2 and R4.
-
-Next useful check, in order of value: confirm those two claims against a
-building tree; then an independent reviewer falsifying R3's concurrency rule and
-R4's derived floor. Reopen owner: Specification.
+Independent whole-bundle review returned no inbox finding after that repair.
+R1's atomic claim/effect, R2's logical identity, R3's concurrent duplicate
+resolution, and R4's no-expiry rule are ready for Technical Design. Their
+real-PostgreSQL and transport evidence remains downstream proof under the
+success criteria above.
 
 ## Sequencing
 

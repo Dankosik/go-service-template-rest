@@ -114,6 +114,7 @@ CREATE TABLE outbox_events (
     lease_expires_at timestamptz,
     published_at timestamptz,
     poisoned_at timestamptz,
+    publication_uncertain boolean DEFAULT false,
     last_error_class text,
     redrive_count integer NOT NULL DEFAULT 0,
     last_redrive_id text,
@@ -210,6 +211,14 @@ CREATE TABLE outbox_events (
         AND (published_at IS NULL OR lease_token IS NULL)
         AND (poisoned_at IS NULL OR lease_token IS NULL)
     ),
+    CONSTRAINT outbox_events_publication_uncertainty_check CHECK (
+        publication_uncertain IS NULL
+        OR (last_error_class IS NOT DISTINCT FROM 'outcome_unknown') = (
+            published_at IS NULL
+            AND poisoned_at IS NOT NULL
+            AND publication_uncertain
+        )
+    ),
     CONSTRAINT outbox_events_error_class_check CHECK (
         last_error_class IS NULL
         OR (
@@ -280,15 +289,40 @@ CREATE INDEX outbox_events_pending_idx
     ON outbox_events (created_at)
     WHERE published_at IS NULL;
 
+-- A compact receipt outlives normal event cleanup so a writer can reconcile an
+-- ambiguous commit without retaining the full envelope. It intentionally has
+-- no foreign key or cleanup path: event_id is the immutable operation identity.
+CREATE TABLE outbox_commit_receipts (
+    event_id text COLLATE "C" PRIMARY KEY,
+    fingerprint_version smallint NOT NULL,
+    envelope_fingerprint bytea NOT NULL,
+    CONSTRAINT outbox_commit_receipts_event_id_check CHECK (
+        octet_length(event_id) BETWEEN 1 AND 256 AND event_id !~ '[[:cntrl:]]'
+    ),
+    CONSTRAINT outbox_commit_receipts_fingerprint_check CHECK (
+        octet_length(envelope_fingerprint) = 32
+    )
+);
+
 CREATE TABLE outbox_redrives (
     audit_id text COLLATE "C" PRIMARY KEY,
-    event_id text COLLATE "C" NOT NULL REFERENCES outbox_events (id) ON DELETE CASCADE,
+    event_id text COLLATE "C" NOT NULL,
+    action_kind text NOT NULL,
     redriven_at timestamptz NOT NULL DEFAULT clock_timestamp(),
-    cycle_number integer NOT NULL,
+    cycle_number integer,
     CONSTRAINT outbox_redrives_audit_id_check CHECK (
         octet_length(audit_id) BETWEEN 1 AND 256 AND audit_id !~ '[[:cntrl:]]'
     ),
-    CONSTRAINT outbox_redrives_cycle_check CHECK (cycle_number > 0)
+    CONSTRAINT outbox_redrives_event_id_check CHECK (
+        octet_length(event_id) BETWEEN 1 AND 256 AND event_id !~ '[[:cntrl:]]'
+    ),
+    CONSTRAINT outbox_redrives_action_check CHECK (
+        action_kind IN ('redrive_poison', 'redrive_unknown', 'confirm_accepted')
+    ),
+    CONSTRAINT outbox_redrives_cycle_check CHECK (
+        (action_kind = 'confirm_accepted') = (cycle_number IS NULL)
+        AND (cycle_number IS NULL OR cycle_number > 0)
+    )
 );
 
 CREATE INDEX outbox_redrives_event_idx ON outbox_redrives (event_id, cycle_number);
@@ -336,5 +370,6 @@ CREATE TRIGGER outbox_events_notify_appended
 DROP TRIGGER outbox_events_notify_appended ON outbox_events;
 DROP FUNCTION outbox_notify_appended();
 DROP TABLE outbox_redrives;
+DROP TABLE outbox_commit_receipts;
 DROP TABLE outbox_events;
 DROP TABLE outbox_ordering_heads;

@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestDocumentedTokenExample(t *testing.T) {
@@ -28,6 +29,17 @@ func TestDocumentedTokenExample(t *testing.T) {
 		"APP__AUTHN__AUDIENCE=",
 		"APP__AUTHN__TRUSTED_PROXY_CIDRS=",
 		"RS256 access token",
+		"non-empty `sub`, `client_id`, and `jti`",
+		"Integer, fractional, and exponent notation",
+		"`reqctx.Principal{Issuer, Subject,\nClientID}`",
+		strconv.Itoa(int(MaxTokenLifetime/time.Minute)) + "-minute maximum issued lifetime",
+		"`Health/Check` remains public",
+		"protected streams receive a\ndeadline no later than the token's `exp`",
+		"one-or-more ASCII spaces after the Bearer scheme",
+		"bounded ±10% jitter",
+		"## Bearer replay and revocation",
+		"Sender-constrained access tokens",
+		"provider-owned query is allowed on\n`jwks_uri`",
 		"native gRPC is enabled with this profile, its server transport must be TLS",
 		"There is no bypass, fake principal mode, or accept-all switch",
 	} {
@@ -40,9 +52,12 @@ func TestDocumentedTokenExample(t *testing.T) {
 	key := loadTestRSAKey(t, testSigningKey)
 	verifier := newTestVerifier(t, key)
 	token := signToken(t, key, "key-1", "at+jwt", validClaims(now))
-	principal, err := verifier.Verify(t.Context(), token, TransportHTTP)
-	if err != nil || principal.Subject != "opaque-subject" {
-		t.Fatalf("documented signed-token flow = (%+v, %v), want valid opaque principal", principal, err)
+	principal, err := verifier.verify(t.Context(), token, transportHTTP)
+	if err != nil ||
+		principal.Issuer != testIssuer ||
+		principal.Subject != "opaque-subject" ||
+		principal.ClientID != "client-1" {
+		t.Fatalf("documented signed-token flow = (%+v, %v), want verified issuer, subject, and client ID", principal, err)
 	}
 }
 
@@ -116,6 +131,19 @@ func TestDocumentedTriggersMatchTheGuide(t *testing.T) {
 					"add it to the authn.refresh.trigger set operators are told to expect",
 				trigger,
 			)
+		}
+	}
+}
+
+func TestDocumentedProviderFailureReasonsMatchTheGuide(t *testing.T) {
+	guide := readAuthenticationGuide(t)
+	reasons := append(declaredConstants(t, ".", "providerError"), "unknown")
+	if !slices.Contains(reasons, string(errProviderTransport)) {
+		t.Fatalf("the providerError walk collected %v and never reached transport", reasons)
+	}
+	for _, reason := range reasons {
+		if !strings.Contains(guide, "`"+reason+"`") {
+			t.Errorf("authentication guide does not publish the %q provider failure reason", reason)
 		}
 	}
 }

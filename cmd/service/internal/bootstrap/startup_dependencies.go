@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/config"
+	"github.com/example/go-service-template-rest/internal/failure"
 	"github.com/example/go-service-template-rest/internal/health"
 	"github.com/example/go-service-template-rest/internal/infra/postgres"
-	"github.com/example/go-service-template-rest/internal/problem"
 )
 
 const (
@@ -93,16 +93,16 @@ const postgresSaturationRetryAfter = time.Second
 // caller should back off and retry. Answering 500 instead told a client library
 // not to retry the one failure retrying fixes, and buried capacity pressure in the
 // same error rate as a genuine bug.
-func (d runtimeDependencies) DomainErrors() []problem.Mapper {
-	return []problem.Mapper{classifyPostgresDomainError}
+func (d runtimeDependencies) DomainErrors() []failure.Mapper {
+	return []failure.Mapper{classifyPostgresDomainError}
 }
 
-func classifyPostgresDomainError(err error) (problem.Mapped, bool) {
+func classifyPostgresDomainError(err error) (failure.Classification, bool) {
 	if !errors.Is(err, postgres.ErrSaturated) {
-		return problem.Mapped{}, false
+		return failure.Classification{}, false
 	}
-	return problem.Mapped{
-		Code:       problem.CodeServiceUnavailable,
+	return failure.Classification{
+		Code:       failure.CodeServiceUnavailable,
 		Detail:     "the service is temporarily at capacity",
 		RetryAfter: postgresSaturationRetryAfter,
 	}, true

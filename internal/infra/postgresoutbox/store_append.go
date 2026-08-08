@@ -70,18 +70,19 @@ func (s *Store) Append(ctx context.Context, tx pgx.Tx, events ...Event) (err err
 // appendColumns is one append laid out the way its statement reads it: one
 // array per column instead of one struct per event.
 type appendColumns struct {
-	ids               []string
-	types             []string
-	sources           []string
-	destinations      []string
-	schemas           []string
-	occurredAt        []pgtype.Timestamptz
-	payloads          [][]byte
-	metadatas         [][]byte
-	traceContexts     [][]byte
-	orderingKeys      []string
-	orderingSequences []int64
-	ordered           bool
+	ids                  []string
+	types                []string
+	sources              []string
+	destinations         []string
+	schemas              []string
+	occurredAt           []pgtype.Timestamptz
+	payloads             [][]byte
+	metadatas            [][]byte
+	traceContexts        [][]byte
+	envelopeFingerprints [][]byte
+	orderingKeys         []string
+	orderingSequences    []int64
+	ordered              bool
 	// traceContextDegraded reports that this call had a trace context that could
 	// not be stored, so every event in it carries an absent one.
 	traceContextDegraded bool
@@ -91,7 +92,7 @@ func (c appendColumns) withoutOrdering() sqlcgen.InsertOutboxEventsParams {
 	return sqlcgen.InsertOutboxEventsParams{
 		Ids: c.ids, EventTypes: c.types, Sources: c.sources, Destinations: c.destinations,
 		SchemaNames: c.schemas, OccurredAts: c.occurredAt, Payloads: c.payloads, Metadatas: c.metadatas,
-		TraceContexts: c.traceContexts,
+		TraceContexts: c.traceContexts, EnvelopeFingerprints: c.envelopeFingerprints,
 	}
 }
 
@@ -99,8 +100,8 @@ func (c appendColumns) withOrdering() sqlcgen.InsertOutboxEventsWithOrderingPara
 	return sqlcgen.InsertOutboxEventsWithOrderingParams{
 		Ids: c.ids, EventTypes: c.types, Sources: c.sources, Destinations: c.destinations,
 		SchemaNames: c.schemas, OccurredAts: c.occurredAt, Payloads: c.payloads, Metadatas: c.metadatas,
-		TraceContexts: c.traceContexts,
-		OrderingKeys:  c.orderingKeys, OrderingSequences: c.orderingSequences,
+		TraceContexts: c.traceContexts, EnvelopeFingerprints: c.envelopeFingerprints,
+		OrderingKeys: c.orderingKeys, OrderingSequences: c.orderingSequences,
 	}
 }
 
@@ -123,6 +124,7 @@ func newAppendColumns(ctx context.Context, events []Event) (appendColumns, error
 		payloads:             make([][]byte, len(events)),
 		metadatas:            make([][]byte, len(events)),
 		traceContexts:        make([][]byte, len(events)),
+		envelopeFingerprints: make([][]byte, len(events)),
 		orderingKeys:         make([]string, len(events)),
 		orderingSequences:    make([]int64, len(events)),
 		traceContextDegraded: degraded,
@@ -130,7 +132,8 @@ func newAppendColumns(ctx context.Context, events []Event) (appendColumns, error
 	for index, event := range events {
 		columns.traceContexts[index] = traceContext
 		event = event.withDefaults()
-		if err := event.Validate(); err != nil {
+		fingerprint, err := commitReceiptFingerprint(event)
+		if err != nil {
 			return appendColumns{}, err
 		}
 		columns.ids[index] = event.ID
@@ -141,6 +144,7 @@ func newAppendColumns(ctx context.Context, events []Event) (appendColumns, error
 		columns.occurredAt[index] = timestamptz(event.OccurredAt)
 		columns.payloads[index] = event.Payload
 		columns.metadatas[index] = event.Metadata
+		columns.envelopeFingerprints[index] = fingerprint[:]
 		columns.orderingKeys[index] = event.OrderingKey
 		columns.orderingSequences[index] = event.OrderingSequence
 		columns.ordered = columns.ordered || event.OrderingKey != ""

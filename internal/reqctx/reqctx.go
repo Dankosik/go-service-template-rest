@@ -39,15 +39,18 @@ const (
 
 // Principal is the authenticated caller of the current request.
 //
-// It carries the two things an authorization decision needs and nothing else: a
-// stable subject to attribute the action to, and the scopes the presented
-// credential was granted. A service whose credential proves more attaches its
-// own type under its own context key; this is the shape that must not be
-// reinvented once per handler.
+// Issuer and Subject form the caller's stable identity. ClientID identifies the
+// OAuth client that obtained the credential; Scopes are reserved for a verifier
+// that actually proves them. A service whose credential proves more attaches
+// its own type under its own context key rather than re-reading the credential.
 type Principal struct {
-	// Subject identifies the caller. It is safe to log and to attribute an
-	// action to, and it must never be the credential itself.
+	// Issuer is the verified namespace in which Subject is unique.
+	Issuer string
+	// Subject identifies the caller within Issuer. It is correlatable identity
+	// data, not a credential and not automatically safe to log.
 	Subject string
+	// ClientID identifies the OAuth client to which the credential was issued.
+	ClientID string
 	// Scopes are the permissions the presented credential was granted.
 	Scopes []string
 }

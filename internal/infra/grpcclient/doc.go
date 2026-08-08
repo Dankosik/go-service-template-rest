@@ -22,16 +22,18 @@
 // [New] closes the two remaining routes by which a peer could introduce a
 // fourth, refusing both proxies and resolver-supplied service config. It still
 // supplies a default service config of its own, carrying the
-// [LoadBalancingPolicy]; that is this client's decision rather than a peer's,
-// which is why the two compose.
+// [LoadBalancingPolicy] and optional standard health policy; that is this
+// client's decision rather than a peer's, which is why the two compose.
 //
 // # Extending it
 //
 // [Config.LoadBalancing] selects how RPCs spread across the addresses a target
 // resolves to. Round robin is the zero value, so a connection nobody configured
-// distributes rather than pins; its own doc owns why. [Config] also carries the
-// keepalive interval and timeout that keep one long-lived connection usable
-// through an idle intermediary.
+// distributes rather than pins; its own doc owns why. [DefaultConfig] enables
+// standard health for round-robin backends, while [Config.HealthCheck] can turn
+// it off for a dependency that does not publish whole-process health. [Config]
+// also carries the complete interval/timeout pair that explicitly opts into
+// keepalive pings on an idle connection; the default sends none.
 //
 // Selecting the propagation policy is the one decision most callers make, once
 // per dependency rather than per call. [PropagationNone] is the zero value on
@@ -50,7 +52,9 @@
 // reserves room. Claiming without emitting silently drops a caller's value;
 // emitting without claiming lets a caller forge one.
 //
-// Per-RPC credentials are supported and pass through unchanged apart from the
+// Per-RPC credentials can be attached to the whole connection through
+// [Options.PerRPCCredentials], which also reaches grpc-go control streams, or
+// to one application call. Both forms pass through unchanged apart from the
 // reserved keys, which are removed from whatever the credential returns. The
 // credential's own errors and its RequireTransportSecurity answer are
 // preserved exactly, because gRPC turns them into the authentication failure

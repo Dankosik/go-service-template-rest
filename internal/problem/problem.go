@@ -1,12 +1,9 @@
-// Package problem owns the problem envelope this repository publishes: the
+// Package problem owns the HTTP problem envelope this repository publishes: the
 // stable code, title, and type URI for every HTTP status any layer of a service
 // answers with.
 //
-// It is a leaf on purpose: the transport adapter needs it for the runtime's own
-// fallback responses, a feature package needs it to fill a generated Problem
-// value for a status only the domain can produce, and depguard forbids a feature
-// package from importing a concrete infra adapter — so neither may own the table
-// both read.
+// Feature packages classify their errors with internal/failure; this package
+// adds the HTTP-only status, title, and type URI used to render that identity.
 //
 // The reference example used to carry a copy, and the copy drifted: a 409 fell
 // through to the internal-error type, so a slug conflict advertised itself as a
@@ -21,27 +18,30 @@ package problem
 import (
 	"net/http"
 	"slices"
+
+	"github.com/example/go-service-template-rest/internal/failure"
 )
 
 // Code is the stable machine-readable error code a client matches on.
 type Code string
 
 const (
-	CodeBadRequest            Code = "bad_request"
-	CodeUnauthorized          Code = "unauthorized"
-	CodeForbidden             Code = "forbidden"
-	CodeNotFound              Code = "not_found"
-	CodeMethodNotAllowed      Code = "method_not_allowed"
+	CodeBadRequest            Code = Code(failure.CodeBadRequest)
+	CodeUnauthorized          Code = Code(failure.CodeUnauthorized)
+	CodeForbidden             Code = Code(failure.CodeForbidden)
+	CodeNotFound              Code = Code(failure.CodeNotFound)
+	CodeMethodNotAllowed      Code = Code(failure.CodeMethodNotAllowed)
 	CodeConflict              Code = "conflict"
-	CodeRequestEntityTooLarge Code = "request_entity_too_large"
+	CodeAlreadyExists         Code = Code(failure.CodeAlreadyExists)
+	CodeRequestEntityTooLarge Code = Code(failure.CodeRequestEntityTooLarge)
 	// profile:authn-oidc-jwt:start
-	CodeRequestHeaderFieldsTooLarge Code = "request_header_fields_too_large"
+	CodeRequestHeaderFieldsTooLarge Code = Code(failure.CodeRequestHeaderFieldsTooLarge)
 	// profile:authn-oidc-jwt:end
-	CodeUnprocessableContent Code = "unprocessable_content"
-	CodeTooManyRequests      Code = "too_many_requests"
-	CodeInternalError        Code = "internal_error"
-	CodeServiceUnavailable   Code = "service_unavailable"
-	CodeGatewayTimeout       Code = "gateway_timeout"
+	CodeUnprocessableContent Code = Code(failure.CodeUnprocessableContent)
+	CodeTooManyRequests      Code = Code(failure.CodeTooManyRequests)
+	CodeInternalError        Code = Code(failure.CodeInternalError)
+	CodeServiceUnavailable   Code = Code(failure.CodeServiceUnavailable)
+	CodeGatewayTimeout       Code = Code(failure.CodeGatewayTimeout)
 )
 
 // Definition is one published problem class.
@@ -97,6 +97,12 @@ var catalog = []Definition{
 	},
 	{
 		Code:    CodeConflict,
+		Status:  http.StatusConflict,
+		Title:   "conflict",
+		TypeURI: "https://www.rfc-editor.org/rfc/rfc9110#section-15.5.10",
+	},
+	{
+		Code:    CodeAlreadyExists,
 		Status:  http.StatusConflict,
 		Title:   "conflict",
 		TypeURI: "https://www.rfc-editor.org/rfc/rfc9110#section-15.5.10",

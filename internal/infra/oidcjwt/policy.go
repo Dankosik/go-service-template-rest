@@ -43,14 +43,10 @@ type PolicyInput struct {
 // the process at configuration load, so reaching an error from this function
 // means the input came from somewhere other than a loaded snapshot. That package
 // owns why the rules cannot live in either caller.
-//
-// The issuer and the JWKS URI the provider's Discovery document later names are
-// held to one predicate. Both are provider-supplied endpoints this service
-// fetches from, so a constraint added for one is a constraint the other needs.
 func NewPolicy(input PolicyInput) (Policy, error) {
 	issuer := strings.TrimSpace(input.Issuer)
 	audience := strings.TrimSpace(input.Audience)
-	if !authntrust.ValidProviderURL(issuer) {
+	if !authntrust.ValidIssuerURL(issuer) {
 		return Policy{}, errors.New("authn issuer must be an absolute HTTPS URL without user info, query, or fragment")
 	}
 	if audience == "" {

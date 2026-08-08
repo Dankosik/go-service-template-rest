@@ -89,11 +89,11 @@ func TestRejectedJWKSIsAtomic(t *testing.T) {
 		})}
 		verifier := requireTestVerifier(t, testVerifierOptions{now: newTestClock(now).now, client: client})
 		unknown := signToken(t, second, "key-2", "at+jwt", validClaims(now))
-		_, err := verifier.Verify(t.Context(), unknown, TransportHTTP)
+		_, err := verifier.verify(t.Context(), unknown, transportHTTP)
 		requireKind(t, err, KindInvalid)
 
 		known := signToken(t, first, "key-1", "at+jwt", validClaims(now))
-		principal, err := verifier.Verify(t.Context(), known, TransportHTTP)
+		principal, err := verifier.verify(t.Context(), known, transportHTTP)
 		if err != nil || principal.Subject == "" {
 			t.Fatalf("Verify(known token after invalid refresh) = (%+v, %v), want success", principal, err)
 		}

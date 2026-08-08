@@ -67,23 +67,34 @@ The verifier accepts only compact, signed JWT access tokens with:
   `typ=at+jwt` or `typ=application/at+jwt`;
 - no `crit`, `b64`, `jku`, `x5u`, or embedded `jwk` header;
 - an exact issuer, an audience array or string containing the configured
-  audience, and non-empty `sub`;
-- integral `exp` and `iat` NumericDate values, optional integral `nbf`, and a
-  fixed 30-second clock-skew allowance.
+  audience, and non-empty `sub`, `client_id`, and `jti`;
+- JSON-number `exp` and `iat` NumericDate values with `exp` after `iat`, optional
+  `nbf` before `exp`, a fixed 15-minute maximum issued lifetime, and a fixed
+  30-second clock-skew allowance. Integer, fractional, and exponent notation are
+  accepted and compared at nanosecond resolution.
 
 Unsigned tokens, algorithm substitution, tokens signed by an untrusted key,
-unknown claims encodings, missing subjects, and incomplete trust configuration
-are rejected. The only published identity is
-`reqctx.Principal{Subject: <opaque sub>}`. Token scopes, roles, client IDs, and
-other provider claims are deliberately not converted into authorization.
+unknown claims encodings, missing required claims, and incomplete trust configuration
+are rejected. The published identity is `reqctx.Principal{Issuer, Subject,
+ClientID}`. `(Issuer, Subject)` is the stable caller identity; `ClientID` names
+the OAuth client to which the token was issued. All three values are
+correlatable identity data; this pack does not put them in logs or telemetry.
+Token scopes, roles, tenant IDs, `jti`, and other provider claims are
+deliberately not converted into authorization.
 
 HTTP operations use OpenAPI Bearer security. `/health/live` and `/health/ready`
 remain public. Missing or invalid credentials return `401` with a Bearer
 challenge; malformed or duplicated headers return `400`; oversized credentials
 return `431`; unavailable current trust returns `503`. This pack never owns
-`403`.
+`403`. A canceled or expired authentication check returns `504` rather than
+being misclassified as a bad credential. The shared HTTP/gRPC parser accepts
+RFC 6750's one-or-more ASCII spaces after the Bearer scheme and rejects other
+surrounding or internal whitespace.
 
-Native gRPC health remains public. Other RPCs map the corresponding failures to
+Native gRPC `Health/Check` remains public for platform probes. `Health/Watch`
+and every application RPC require a credential; protected streams receive a
+deadline no later than the token's `exp` plus the 30-second skew and consume the
+process-wide RPC admission budget. Authentication failures map to
 `Unauthenticated`, `ResourceExhausted`, or `Unavailable`. Both transports remove
 the credential before invoking application handlers and publish the principal
 through `internal/reqctx`.
@@ -92,21 +103,55 @@ through `internal/reqctx`.
 
 Startup performs OIDC Discovery, requires the discovered issuer to match
 exactly, validates an HTTPS `jwks_uri`, and must install a completely valid JWKS
-before either listener is admitted. Discovery and JWKS requests have a
-five-second timeout, a 1 MiB response limit, bounded connections, and no ambient
-redirect or authority widening.
+before either listener is admitted. A provider-owned query is allowed on
+`jwks_uri`; user information, fragments, redirects, and authority widening are
+not. Discovery and JWKS requests have a five-second timeout, a 1 MiB response
+limit, and bounded connections.
 
 The verifier accepts at most 100 JWK entries and only public RSA signing keys of
 at least 2048 bits whose metadata is compatible with RS256 verification. It
-refreshes every five minutes, coalesces concurrent refreshes, and rate-limits
-unknown-key refreshes for 30 seconds. A failed refresh may continue using the
-last completely validated set until its fixed 15-minute age limit. Once that
-limit is reached, authentication and readiness fail closed until a full
-replacement set is installed. Partial or malformed key sets never replace the
-current set.
+refreshes on a five-minute cadence, coalesces concurrent refreshes, and
+rate-limits caller-driven unknown-key refreshes for a fixed 30 seconds. The
+scheduled cadence and its 30-second failure retry receive bounded ±10% jitter so
+replicas do not synchronize provider load; the fixed 15-minute key-set age limit
+is never jittered. A failed refresh may continue using the last completely
+validated set until that limit. Once it is reached, authentication and readiness
+fail closed until a full replacement set is installed. Partial or malformed key
+sets never replace the current set.
 
 Shutdown cancels and joins any in-flight refresh before closing the owned HTTP
-connection pool.
+connection pool. If the shared background-shutdown budget expires first, the
+process reports the timeout and proceeds to telemetry flush instead of starting
+a second unbounded join.
+
+## Bearer replay and revocation
+
+Access tokens are bearer credentials: anyone who obtains one can replay it
+against its configured audience until verification stops accepting it. This
+pack has no introspection call or per-token denylist, so issuer logout, account
+disablement, and credential revocation do not invalidate an already issued
+token immediately. An already-open protected gRPC stream is canceled at the
+same `exp` plus skew boundary rather than retaining the startup identity
+indefinitely.
+
+| Event | What stops old access | Maximum delay |
+| --- | --- | --- |
+| Logout | Access-token expiry | 15 minutes 30 seconds from issue |
+| Credential compromise | Access-token expiry, or removal of its signing key after JWKS refresh | 15 minutes 30 seconds from issue when the signing key remains valid |
+| Role or scope downgrade | Not consumed by this pack; any future token-cached authorization waits for access-token expiry | 15 minutes 30 seconds from issue if such claims are added |
+| Tenant or membership removal | Not consumed by this pack; a feature must re-read its authority or accept token staleness | Feature-owned; at most 15 minutes 30 seconds if encoded into this token |
+
+A healthy signing-key removal is normally observed at the next five-minute JWKS
+refresh; provider failure makes the verifier fail closed once the installed key
+set reaches 15 minutes. Features needing a shorter user, permission, or tenant
+revocation window must add an authoritative decision-time lookup or an accepted
+deny event rather than copying more claims into `Principal`.
+
+Sender-constrained access tokens such as DPoP or mutual-TLS tokens are not
+implemented. Add that as a separate IdP, ingress, client, and service protocol
+design when replay of a stolen bearer token is outside the accepted threat
+model; enabling it inside this verifier alone would not constrain the other
+hops.
 
 ## Local development and tests
 
@@ -139,7 +184,9 @@ The pack emits bounded-cardinality metrics:
   `missing`, `malformed`, `untrusted_transport`, `oversize`, `invalid`,
   `unavailable`, or `canceled`;
 - `authn.jwks.refreshes`, labelled `authn.refresh.trigger` (`startup`,
-  `scheduled`, `key_miss`) and `authn.result`;
+  `scheduled`, `key_miss`), `authn.result`, and on failure `authn.reason`, one
+  of `request`, `transport`, `status`, `body`, `oversize`, `invalid_document`,
+  `panic`, or `unknown`;
 - `authn.jwks.age` in seconds, unlabelled.
 
 The reasons are separate because they call for different responses.
@@ -166,11 +213,12 @@ can be waiting at once.
 
 A recovered panic is reported as `authn_panic_recovered` with its Go type and
 stack and never its value. It is a defect in the service rather than a provider
-problem, even though the request and the refresh answer in the same categories a
-provider outage answers in — which is why the log record exists.
+problem; the refresh metric records the closed `panic` reason and the log
+locates it.
 
 No metric, log message, trace attribute, returned error, or panic recovery
 contains a token, JWT segment, claim value, subject, issuer URL, JWKS URL, or
-provider response body. Provider failures are intentionally stage-specific but
-sanitized. Investigate availability with the stage, refresh result, key age, and
-provider-side request logs rather than enabling credential logging.
+provider response body. Provider failures retain only the closed phase above;
+status codes, bodies, URLs, and transport error text remain redacted. Investigate
+availability with the startup stage or refresh reason, key age, and provider-side
+request logs rather than enabling credential logging.

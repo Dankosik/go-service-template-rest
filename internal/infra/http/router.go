@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/example/go-service-template-rest/internal/failure"
 	// profile:authn-oidc-jwt:start
 	"github.com/example/go-service-template-rest/internal/infra/oidcjwt"
 	// profile:authn-oidc-jwt:end
@@ -49,9 +50,8 @@ type RouterConfig struct {
 	// key. Defaults to Bearer.
 	AuthenticateChallenge string
 	// DomainErrors classify the errors a generated operation returns instead of a
-	// typed response. See problem.Mapper for why the seam exists and why the type
-	// lives in a leaf package rather than here.
-	DomainErrors []problem.Mapper
+	// typed response. The neutral type lets the same classification feed gRPC.
+	DomainErrors []failure.Mapper
 	// RateLimit rejects a caller that is over its budget with 429. Nil leaves the
 	// middleware out of the chain, which is the shipped default; see RateLimiter
 	// for why the limit and the identity it charges are the service's decision,
@@ -239,7 +239,7 @@ func otelServerName(configured string) string {
 
 func generatedStrictServerOptions(
 	rejectRequest func(http.ResponseWriter, *http.Request, error),
-	domainErrors []problem.Mapper,
+	domainErrors []failure.Mapper,
 ) openapi.StrictHTTPServerOptions {
 	return openapi.StrictHTTPServerOptions{
 		RequestErrorHandlerFunc:  rejectRequest,
@@ -254,7 +254,7 @@ func generatedStrictServerOptions(
 // transport fact rather than a domain one: a mapper that classified it would have
 // to repeat this rule, and one that forgot would hide every slow dependency
 // inside the 5xx rate.
-func handleGeneratedResponseError(domainErrors []problem.Mapper) func(http.ResponseWriter, *http.Request, error) {
+func handleGeneratedResponseError(domainErrors []failure.Mapper) func(http.ResponseWriter, *http.Request, error) {
 	return func(w http.ResponseWriter, r *http.Request, err error) {
 		// A handler that returns its expired context is reporting a spent
 		// request budget, not an internal fault, and this is the path most
@@ -269,11 +269,11 @@ func handleGeneratedResponseError(domainErrors []problem.Mapper) func(http.Respo
 			return
 		}
 
-		if mapped, ok := problem.Classify(err, domainErrors); ok {
+		if mapped, ok := failure.Classify(err, domainErrors); ok {
 			if mapped.RetryAfter > 0 {
 				w.Header().Set("Retry-After", strconv.Itoa(retryAfterSeconds(mapped.RetryAfter)))
 			}
-			writeProblem(w, r, problemResponse{code: mapped.Code, detail: mapped.Detail})
+			writeProblem(w, r, problemResponse{code: problem.Code(mapped.Code), detail: mapped.Detail})
 			return
 		}
 
@@ -346,6 +346,18 @@ func handleGeneratedRequestError(log *slog.Logger, challenge string) func(http.R
 		// profile:authn-oidc-jwt:end
 		if _, ok := errors.AsType[*openapi3filter.SecurityRequirementsError](err); ok {
 			logStrictRequestError(log, r, err)
+			// SecurityRequirementsError wraps resolver failures. Preserve a
+			// canceled trust check as a transport failure instead of misreporting
+			// it as a bad credential. HTTP has no portable client-canceled status,
+			// so both caller cancellation and an expired request budget use the
+			// existing 504 class.
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				writeProblem(w, r, problemResponse{
+					code:   problem.CodeGatewayTimeout,
+					detail: "authentication verification did not complete",
+				})
+				return
+			}
 			// The challenge names an HTTP authentication scheme, which is not the
 			// same vocabulary as the contract's securityScheme names: a contract
 			// key like "bearerAuth" is not a legal challenge under RFC 9110. Only
@@ -484,8 +496,8 @@ func isCORSPreflightRequest(r *http.Request) bool {
 // A service wiring its own generated strict server needs this, or every slow
 // dependency hides inside its 5xx error rate. Passing mappers is what lets its
 // handlers return a domain error instead of hand-building a typed problem
-// response per operation; see problem.Mapper.
-func RejectResponse(domainErrors ...problem.Mapper) func(http.ResponseWriter, *http.Request, error) {
+// response per operation; see failure.Mapper.
+func RejectResponse(domainErrors ...failure.Mapper) func(http.ResponseWriter, *http.Request, error) {
 	return handleGeneratedResponseError(domainErrors)
 }
 

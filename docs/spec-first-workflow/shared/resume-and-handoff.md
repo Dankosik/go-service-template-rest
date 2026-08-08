@@ -24,7 +24,12 @@ open causal class, and next action.
 ## Macro-Phase Handoff
 
 Treat handoff as a chain of custody. At a ready macro-phase boundary, return the
-phase result and a short standalone prompt, then stop. The result tells the user
+phase result and a short standalone `Next Session Prompt`, then stop. Emit that
+prompt only when the current macro phase is complete, every triggered review has
+a movement-allowing disposition, and a different macro phase is the next owner.
+An incomplete or blocked phase, same-phase reopen, or context rollover preserves
+or reports resume state without a user-visible prompt unless the user explicitly
+asks for one. The result tells the user
 what was completed, the decisions and authority that now hold, the movement
 evidence, and any open proof or risk. The prompt carries only the facts and
 evidence-backed direction needed to start the target macro phase from durable
@@ -44,7 +49,10 @@ A risk-triggered research-synthesis challenge and triggered specification,
 technical-design, test-design, and task-readiness reviews are internal
 checkpoints. The root launches the applicable read-only lane and continues the
 review, repair, and focused re-review loop in the same session when possible.
-They do not create a macro-phase handoff.
+They do not create a macro-phase handoff. When current-phase evidence invalidates
+a narrow upstream artifact, the root suspends the active phase, closes that
+upstream repair and its triggered fresh review, and resumes the active phase in
+the same session.
 
 An explicitly requested standalone review remains read-only: return its complete
 result and stop at that review boundary. It gains no repair, implementation, or

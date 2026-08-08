@@ -33,6 +33,12 @@ INTEGRATION_PACKAGES := ./test/...
 # profile:messaging-nats-jetstream:start
 INTEGRATION_PACKAGES += ./internal/infra/natsjs ./cmd/worker/internal/bootstrap
 MESSAGING_RACE_PACKAGES := ./internal/infra/natsjs ./cmd/worker/internal/bootstrap ./test/...
+# profile:inbox-postgres:start
+MESSAGING_RACE_INBOX_TEST := |TestPostgresInboxNATSLogicalIdentityAndAcknowledgement
+# profile:inbox-postgres:end
+# profile:outbox-postgres:start
+MESSAGING_RACE_PACKAGES += ./cmd/outbox-relay/internal/bootstrap
+# profile:outbox-postgres:end
 # profile:messaging-nats-jetstream:end
 # profile:outbox-postgres:start
 OUTBOX_RACE_PACKAGES := ./internal/infra/postgres ./internal/infra/postgresoutbox ./cmd/outbox-relay/internal/bootstrap ./test/...
@@ -328,7 +334,7 @@ test-race:
 
 # profile:messaging-nats-jetstream:start
 test-messaging-race:
-	go test -vet=off -p=1 -count=1 -race -tags=integration $(MESSAGING_RACE_PACKAGES) -run '^(TestNATSWorkerRegistrationIsSingleton|TestNATSReconnectProbeStopsWithRunContext|TestNATSPublishDispatchCancellationAndNoRetry|TestNATSWorkerComposition|TestNATSWorkerForcedShutdownDoesNotRaceHandlerCleanup|TestNATSWorkerConnectionLossAndReconnect|TestNATSConsumerSaturation|TestNATSForcedShutdownRedelivers|TestNATSGracefulDrain)$$'
+	go test -vet=off -p=1 -count=1 -race -tags=integration $(MESSAGING_RACE_PACKAGES) -run '^(TestOutboxPublisher|TestOutboxRelayPublisherRuntime|TestNATSWorkerRegistrationIsSingleton|TestNATSReconnectProbeStopsWithRunContext|TestNATSPublishDispatchCancellationAndNoRetry|TestNATSWorkerComposition|TestNATSWorkerForcedShutdownDoesNotRaceHandlerCleanup|TestNATSWorkerConnectionLossAndReconnect|TestNATSConsumerSaturation|TestNATSForcedShutdownRedelivers|TestNATSGracefulDrain$(MESSAGING_RACE_INBOX_TEST))$$'
 # profile:messaging-nats-jetstream:end
 
 # profile:outbox-postgres:start

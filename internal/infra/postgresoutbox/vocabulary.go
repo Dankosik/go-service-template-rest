@@ -46,6 +46,7 @@ const (
 	classPublisherCanceled  = "publisher_canceled"
 	classPublisherTemporary = "publisher_temporary"
 	classAttemptExhausted   = "attempt_exhausted"
+	classOutcomeUnknown     = "outcome_unknown"
 )
 
 // publishOperationName is the one operation label that reaches three surfaces
@@ -69,6 +70,7 @@ const publishOperationName = "publish"
 func boundedOperation(value string) string {
 	switch value {
 	case "append", "claim", "recovery", "publish", "mark_published", "schedule_retry", "poison", "redrive",
+		"redrive_unknown", "confirm_accepted", "classify_legacy", "reconcile_commit",
 		"retire_ordering_key", "trace_capture", "cleanup", "observe", "drain":
 		return value
 	default:
@@ -97,7 +99,7 @@ func boundedErrorType(value string) string {
 	switch value {
 	case classNone, classDatabase, classLostLease, classValidation, classStuck, classPanic,
 		classPublisherPermanent, classPublisherRejected, classPublisherTimeout,
-		classPublisherCanceled, classPublisherTemporary, classAttemptExhausted:
+		classPublisherCanceled, classPublisherTemporary, classAttemptExhausted, classOutcomeUnknown:
 		return value
 	default:
 		return boundedOther

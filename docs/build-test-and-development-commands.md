@@ -97,6 +97,7 @@ make template-init \
   CODEOWNER=@acme/backend \
   DATABASE=none \
   OUTBOX=none \
+  INBOX=none \
   GRPC=none \
   MESSAGING=none
 make template-init-check
@@ -117,6 +118,13 @@ relay command, configuration, tests, docs, image binary, and Make targets.
 does not choose a broker adapter. The relay command fails closed until the
 service registers one. See [PostgreSQL transactional outbox](./postgres-transactional-outbox.md).
 <!-- profile:outbox-postgres:end -->
+<!-- profile:inbox-postgres:start -->
+`INBOX=none` removes the inbox migration, SQLC source/output, runtime package,
+reference adapter, integration proof, and documentation. `INBOX=postgres`
+requires `DATABASE=postgres`, but is independent of `OUTBOX` and `MESSAGING`.
+When messaging is also selected, the joined NATS/PostgreSQL identity proof is
+retained. See [PostgreSQL idempotent inbox](./postgres-idempotent-inbox.md).
+<!-- profile:inbox-postgres:end -->
 <!-- profile:grpc:start -->
 `GRPC=none` removes the native gRPC runtime, protobuf workflow, generated
 reference, gRPC-specific docs/tests/config, and their module dependencies.
@@ -141,7 +149,7 @@ provide a real module path and an owner in `@user` or `@org/team` form.
 | --- | --- |
 | `make project-structure-check` | Placement, naming, command, integration-test, canonical migration filename, and no-empty-placeholder contract |
 <!-- profile:outbox-postgres:start -->
-| `make run-outbox-relay` / `make build-outbox-relay` | Run or build the separately deployed outbox relay; a missing publisher fails closed |
+| `make run-outbox-relay` / `make build-outbox-relay` | Run or build the separately deployed relay; combined outbox+NATS builds the selected publisher, while outbox-only fails closed |
 | `make test-outbox-race` | Serialized real-PostgreSQL relay, crash-window, lifecycle, and race proof |
 <!-- profile:outbox-postgres:end -->
 | `make claude-skills-check` | Every `.agents/skills/` entry is exposed to Claude Code by a matching `.claude/skills/` symlink, and no link outlives its skill |

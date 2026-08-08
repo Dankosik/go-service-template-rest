@@ -12,6 +12,7 @@ import (
 	"golang.org/x/sync/semaphore"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
@@ -166,8 +167,9 @@ func sampleRequestID(requestID string, rate float64) bool {
 // anyone has to write.
 //
 // A non-positive timeout disables the cap, which is how the stream bound ships.
-// Health RPCs are exempt for the reason isHealthMethod records: a probe must not
-// be cut by a business budget, just as it does not consume the admission one.
+// Health RPCs are exempt from a business budget; only Check is also exempt from
+// admission, while a long-lived Watch consumes the process budget like any
+// other stream.
 func deadlineAround(timeout time.Duration) aroundRPC {
 	return func(ctx context.Context, fullMethod string, call func(context.Context) error) error {
 		if timeout <= 0 || isHealthMethod(fullMethod) {
@@ -220,7 +222,7 @@ func newAdmissionLimiter(limit int, load LoadRecorder) *admissionLimiter {
 // TestOneLimiterServesBothInterceptorTypes proves this method is shareable, and
 // TestAdmissionBudgetIsProcessWide proves the server actually shares it.
 func (l *admissionLimiter) around(ctx context.Context, fullMethod string, call func(context.Context) error) error {
-	if isHealthMethod(fullMethod) {
+	if isHealthCheck(fullMethod) {
 		return call(ctx)
 	}
 	if !l.sem.TryAcquire(1) {
@@ -233,17 +235,20 @@ func (l *admissionLimiter) around(ctx context.Context, fullMethod string, call f
 	return call(ctx)
 }
 
+func isHealthCheck(fullMethod string) bool {
+	return fullMethod == healthpb.Health_Check_FullMethodName
+}
+
 // isHealthMethod matches the whole standard health service by prefix, so a
-// method grpc-go adds to it later is exempted from admission, routine access
-// logs, and protocol telemetry without an edit here. Exempting one probe too
-// many costs an operator a metric series; failing to exempt one costs the
-// service its admission budget under probe load.
+// method grpc-go adds to it later is exempted from routine access logs and
+// protocol telemetry without an edit here. Over-matching those operator signals
+// costs a metric series rather than publishing or admitting work.
 //
 // A policy deciding which RPCs are public must not share this definition: that
 // is a trust decision, and over-matching there publishes an RPC nobody meant to
 // publish.
 // profile:authn-oidc-jwt:start
-// internal/infra/oidcjwt/grpc.go names Check and Watch exactly for that reason.
+// internal/infra/oidcjwt/grpc.go names Check exactly for that reason.
 // profile:authn-oidc-jwt:end
 func isHealthMethod(fullMethod string) bool {
 	return strings.HasPrefix(fullMethod, healthMethodPrefix)

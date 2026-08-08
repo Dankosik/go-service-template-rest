@@ -181,19 +181,20 @@ feature/domain errors rather than raw `status.Error`: the shared transport
 maps known domain identities to sanitized gRPC codes and converts unknown
 errors to `INTERNAL` without exposing their text.
 
-A handler therefore does not choose its own `codes.Code`. It chooses a
-`problem.Code`, and the transport renders it. That indirection is what keeps one
+A handler therefore does not choose its own `codes.Code`. Its feature returns a
+domain error classified as a transport-neutral `failure.Code`, and the transport
+renders it. That indirection is what keeps one
 domain error answering consistently over both HTTP and gRPC, and it fixes the
 reachable vocabulary:
 
-| `problem.Code` | gRPC code |
+| `failure.Code` | gRPC code |
 | --- | --- |
 | `CodeBadRequest`, `CodeUnprocessableContent` | `InvalidArgument` |
 | `CodeUnauthorized` | `Unauthenticated` |
 | `CodeForbidden` | `PermissionDenied` |
 | `CodeNotFound` | `NotFound` |
 | `CodeMethodNotAllowed` | `Unimplemented` |
-| `CodeConflict` | `Aborted` |
+| `CodeAlreadyExists` | `AlreadyExists` |
 | `CodeRequestEntityTooLarge`, `CodeTooManyRequests` | `ResourceExhausted` |
 <!-- profile:authn-oidc-jwt:start -->
 | `CodeRequestHeaderFieldsTooLarge` | `ResourceExhausted` |
@@ -205,12 +206,12 @@ reachable vocabulary:
 A classified error additionally carries structured details, so a caller reads its
 class and its retry hint as data rather than parsing prose:
 
-- `google.rpc.ErrorInfo` — `Reason` is the `problem.Code` upper-snake-cased
+- `google.rpc.ErrorInfo` — `Reason` is the `failure.Code` upper-snake-cased
   (`CodeNotFound` reaches a caller as `NOT_FOUND`), and `Domain` is the service's
   own identity, taken from `APP__OBSERVABILITY__OTEL__SERVICE_NAME`. Renaming
   that key for telemetry reasons therefore changes a value remote callers match
   on. The reason matters because the gRPC code space is coarser than
-  `problem.Code`: `InvalidArgument` answers for both `CodeBadRequest` and
+  `failure.Code`: `InvalidArgument` answers for both `CodeBadRequest` and
   `CodeUnprocessableContent`, and `ResourceExhausted` for three more.
 - `google.rpc.RetryInfo` — the mapper's own `RetryAfter`, exactly, when it is
   positive. HTTP renders the same value as a `Retry-After` header rounded up to
@@ -220,6 +221,10 @@ class and its retry hint as data rather than parsing prose:
 Both carry repository-owned values only. Cancellation, expiry, an unclassified
 error, and a sanitized handler status carry no details at all, for the same
 reason they carry no handler text.
+
+HTTP retains its transport-only `conflict` fallback for a generic 409 response.
+It is not a domain classification and therefore cannot enter the gRPC mapping;
+a known creation collision is `already_exists` on both transports.
 
 A canceled or expired RPC context answers `CANCELED` or `DEADLINE_EXCEEDED`
 before classification runs, because that is the caller's own signal rather than a
@@ -298,8 +303,9 @@ Domain errors are already wired: `newGRPCRuntime` receives the same
 and the shared transport classifies it once. Return feature/domain errors rather
 than a raw `status.Error`; see step 3.
 
-A new domain identity is classified once, for both transports, by appending its
-`problem.Mapper` at `runtimeDependencies.DomainErrors` in
+A new domain identity is classified once, for both transports, with a
+`failure.Mapper` owned beside the feature's error identities and appended at
+`runtimeDependencies.DomainErrors` in
 `cmd/service/internal/bootstrap/startup_dependencies.go`. There is deliberately
 no gRPC-only mapper seam: one error answering `404` over HTTP and `Internal` over
 gRPC is the failure this shared slice exists to prevent.
@@ -338,8 +344,9 @@ tlsCredentials := credentials.NewTLS(&tls.Config{
     MinVersion: tls.VersionTLS13,
     ServerName: "orders.internal.example",
 })
+clientConfig := grpcclient.DefaultConfig("dns:///orders.internal.example:9091")
 conn, err := grpcclient.New(
-    grpcclient.DefaultConfig("dns:///orders.internal.example:9091"),
+    clientConfig,
     grpcclient.Options{
         TransportCredentials: tlsCredentials,
         MeterProvider:        metrics.MeterProvider(),
@@ -374,6 +381,14 @@ Choose `TrustedService` only when the named neighbor is allowed to receive the
 diagnostic request ID; TLS or private-network placement alone does not imply
 that trust. Unknown policy values fail during construction.
 
+When the dependency protects standard `Health/Watch`, pass its dynamic bearer
+credential through `Options.PerRPCCredentials`. The connection credential
+reaches both grpc-go's health stream and application RPCs, and the same reserved
+metadata removal applies to it. A per-call credential reaches only that call and
+cannot make an otherwise unauthenticated backend health-eligible. Disabling
+health is valid only when the dependency does not publish the whole-process
+health contract; it is not an authentication bypass.
+
 Each operation owns its realistic deadline:
 
 ```go
@@ -402,20 +417,30 @@ distributing default costs nothing there. Set `LoadBalancingPickFirst` on the
 connection's `Config` when the fan-out of one subchannel per backend is not
 wanted.
 
-The client pings an idle connection every 30s with a 10s timeout, and sends
-those pings with no active RPC — which is the only way a ping reaches an idle
-connection, and what keeps one alive through a NAT or balancer idle timeout.
-The interval clears both gRPC's own 10s floor and the 10s minimum this
-repository's server half accepts. grpc-go may still perform a transparent retry before an
-RPC is committed to the server; the correlation allowlist is applied to every
-such attempt. Any application retry policy remains a per-method business
-decision: enable it only when replay is safe, bound attempts/backoff inside
-the caller's deadline, and monitor attempts. A dependency that genuinely
-requires a proxy or resolver service config needs a separate design that
-preserves the same final metadata boundary. Long-lived streams need an explicit
-idle/duration policy owned by the feature; the server ships no stream bound, and
-its unary bound is a separate key from the HTTP one. See
-[RPC and connection lifetime](#rpc-and-connection-lifetime).
+Round robin also watches the standard health service for the empty service name
+by default. A backend receives new RPCs only while it reports `SERVING`;
+`NOT_SERVING` removes it from new picks without canceling work already in flight.
+An `UNIMPLEMENTED` Watch falls back to connectivity for that peer. Set
+`clientConfig.HealthCheck = false` only for a dependency that does not publish
+whole-process health under the empty service name. Direct `pick_first` remains
+connectivity-owned in the pinned grpc-go version even when health is configured.
+
+Idle keepalive is disabled by default. A dependency with a named intermediary
+idle timeout may opt in by setting both `KeepalivePingInterval` and
+`KeepalivePingTimeout` to positive values accepted by that peer; a partial or
+negative pair is rejected before connection construction. Enabled pings run
+without an active RPC, and grpc-go retains authority over its interval floor and
+recovery after a peer rejects excessive pings.
+
+grpc-go may still perform a transparent retry before an RPC is committed to the
+server; the correlation allowlist is applied to every such attempt. Any
+application retry policy remains a per-method business decision: enable it only
+when replay is safe, bound attempts/backoff inside the caller's deadline, and
+monitor attempts. A dependency that genuinely requires a proxy or resolver
+service config needs a separate design that preserves the same final metadata
+boundary. Long-lived streams need an explicit idle/duration policy owned by the
+feature; the server ships no stream bound, and its unary bound is a separate key
+from the HTTP one. See [RPC and connection lifetime](#rpc-and-connection-lifetime).
 
 Client defaults are 16 KiB received metadata and 4 MiB sent/received messages.
 The server also has finite connection, process-RPC, per-connection-stream,
@@ -436,9 +461,9 @@ a caller:
   values all mint a fresh identifier, which is stricter than the HTTP listener's
   first-of-several header read.
 - Panics never reach the caller and never disclose the panic value.
-- Every RPC runs under a deadline no later than its configured bound, so a
-  caller that set none still cannot hold a handler indefinitely. The bound wraps
-  the supplied policy interceptors and the handler alike.
+- Every business RPC runs under a deadline no later than its configured bound,
+  so a caller that set none still cannot hold a handler indefinitely. The bound
+  wraps the supplied policy interceptors and the handler alike.
 - Admission is one non-blocking process-wide RPC semaphore; an RPC over the
   limit is shed as `RESOURCE_EXHAUSTED` rather than queued.
 - Service-supplied policy interceptors and generated handlers each answer
@@ -449,12 +474,14 @@ a caller:
 - Completion is logged once, outside error mapping, so the record carries the
   status the caller actually received.
 
-Health RPCs bypass application admission and are excluded from routine access
-logs by default. The standard `grpc.health.v1.Health` service starts
-`NOT_SERVING`, becomes `SERVING` only after the same dependency admission as
-HTTP readiness, and returns to `NOT_SERVING` before drain. Its standard status
-semantics bypass business-handler error mapping, so an unknown service remains
-`NOT_FOUND`.
+`grpc.health.v1.Health/Check` bypasses application admission so a saturated
+instance remains probeable. `Health/Watch` and any later health-service method
+consume the process-wide RPC budget; with the OIDC/JWT profile, they also require
+a credential while Check remains public. Standard health methods are excluded
+from routine access logs by default. The health service starts `NOT_SERVING`,
+becomes `SERVING` only after the same dependency admission as HTTP readiness,
+and returns to `NOT_SERVING` before drain. Its standard status semantics bypass
+business-handler error mapping, so an unknown service remains `NOT_FOUND`.
 
 Successful business access logs are compatible and complete by default:
 `APP__GRPC__SERVER__ACCESS_LOG_SUCCESS_SAMPLE_RATE=1`. For a measured

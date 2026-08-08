@@ -10,15 +10,17 @@ import (
 
 // RetryDirective releases one leased event for a later attempt.
 type RetryDirective struct {
-	ID         string
-	ErrorClass string
-	Delay      time.Duration
+	ID                   string
+	ErrorClass           string
+	Delay                time.Duration
+	PublicationUncertain bool
 }
 
 // PoisonDirective parks one leased event for operator redrive.
 type PoisonDirective struct {
-	ID         string
-	ErrorClass string
+	ID                   string
+	ErrorClass           string
+	PublicationUncertain bool
 }
 
 // OrderedDirective finalizes one acknowledged ordered event. Its key and
@@ -226,6 +228,7 @@ func (s *Store) ScheduleRetryBatch(ctx context.Context, token string, retries []
 	ids := make([]string, len(retries))
 	classes := make([]string, len(retries))
 	delays := make([]float64, len(retries))
+	uncertain := make([]bool, len(retries))
 	for index, retry := range retries {
 		if err := validateErrorClass(retry.ErrorClass); err != nil {
 			return err
@@ -236,12 +239,14 @@ func (s *Store) ScheduleRetryBatch(ctx context.Context, token string, retries []
 		ids[index] = retry.ID
 		classes[index] = retry.ErrorClass
 		delays[index] = durationMilliseconds(retry.Delay)
+		uncertain[index] = retry.PublicationUncertain
 	}
 	if err := validateBatchIdentity(token, ids); err != nil {
 		return err
 	}
 	rows, err := s.queries.ScheduleOutboxRetryBatch(ctx, sqlcgen.ScheduleOutboxRetryBatchParams{
 		LeaseToken: &token, Ids: ids, DelayMilliseconds: delays, ErrorClasses: classes,
+		PublicationUncertain: uncertain,
 	})
 	return leaseProgressError("schedule outbox retry batch", rows, len(ids), err)
 }
@@ -256,18 +261,20 @@ func (s *Store) MarkPoisonedBatch(ctx context.Context, token string, poisons []P
 	}
 	ids := make([]string, len(poisons))
 	classes := make([]string, len(poisons))
+	uncertain := make([]bool, len(poisons))
 	for index, poison := range poisons {
 		if err := validateErrorClass(poison.ErrorClass); err != nil {
 			return err
 		}
 		ids[index] = poison.ID
 		classes[index] = poison.ErrorClass
+		uncertain[index] = poison.PublicationUncertain
 	}
 	if err := validateBatchIdentity(token, ids); err != nil {
 		return err
 	}
 	rows, err := s.queries.MarkOutboxPoisonedBatch(ctx, sqlcgen.MarkOutboxPoisonedBatchParams{
-		LeaseToken: &token, Ids: ids, ErrorClasses: classes,
+		LeaseToken: &token, Ids: ids, ErrorClasses: classes, PublicationUncertain: uncertain,
 	})
 	return leaseProgressError("mark outbox poisoned batch", rows, len(ids), err)
 }

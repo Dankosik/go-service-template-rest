@@ -59,7 +59,7 @@ func TestPolicyRulesMatchConfigValidation(t *testing.T) {
 		{name: "issuer with port", issuer: "https://issuer.example.com:8443", audience: goodAudience, cidrs: goodCIDRs, acceptable: true},
 		{name: "single CIDR", issuer: goodIssuer, audience: goodAudience, cidrs: "10.0.0.0/8", acceptable: true},
 
-		// One entry per term in ValidProviderURL, so an owner that stops applying
+		// One entry per term in ValidIssuerURL, so an owner that stops applying
 		// the shared predicate fails here rather than at a deployment's startup.
 		{name: "http issuer", issuer: "http://issuer.example.com", audience: goodAudience, cidrs: goodCIDRs},
 		{name: "relative issuer", issuer: "/realms/main", audience: goodAudience, cidrs: goodCIDRs},

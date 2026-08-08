@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/infra/grpc/grpctest"
+	"github.com/example/go-service-template-rest/internal/infra/grpcclient"
 	"github.com/example/go-service-template-rest/internal/reqctx"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -42,11 +43,27 @@ func TestGRPCAuthnBoundaryOverTLS(t *testing.T) {
 	serverTLS, clientTLS := testGRPCTLSConfigs(t, signingKey)
 	var unaryCalls atomic.Int64
 	var streamCalls atomic.Int64
+	unauthenticatedWatch := make(chan struct{}, 1)
+	observeUnauthenticatedWatch := func(
+		service any,
+		stream grpc.ServerStream,
+		info *grpc.StreamServerInfo,
+		handler grpc.StreamHandler,
+	) error {
+		incoming, _ := metadata.FromIncomingContext(stream.Context())
+		if info.FullMethod == healthpb.Health_Watch_FullMethodName && len(incoming.Get("authorization")) == 0 {
+			select {
+			case unauthenticatedWatch <- struct{}{}:
+			default:
+			}
+		}
+		return handler(service, stream)
+	}
 
 	server := grpc.NewServer(
 		grpc.Creds(credentials.NewTLS(serverTLS)),
 		grpc.ChainUnaryInterceptor(verifier.UnaryInterceptor()),
-		grpc.ChainStreamInterceptor(verifier.StreamInterceptor()),
+		grpc.ChainStreamInterceptor(observeUnauthenticatedWatch, verifier.StreamInterceptor()),
 	)
 	registerTLSAuthnService(
 		server,
@@ -61,7 +78,11 @@ func TestGRPCAuthnBoundaryOverTLS(t *testing.T) {
 	)
 	healthServer := health.NewServer()
 	healthServer.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
-	healthpb.RegisterHealthServer(server, healthServer)
+	watchObservations := make(chan tlsWatchObservation, 1)
+	healthpb.RegisterHealthServer(server, &observedTLSHealthServer{
+		HealthServer: healthServer,
+		observations: watchObservations,
+	})
 
 	listener, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
 	if err != nil {
@@ -123,6 +144,126 @@ func TestGRPCAuthnBoundaryOverTLS(t *testing.T) {
 	}
 	if unaryCalls.Load() != 1 || streamCalls.Load() != 1 {
 		t.Fatalf("application calls = (unary %d, stream %d), want one authenticated call each", unaryCalls.Load(), streamCalls.Load())
+	}
+
+	clientConfig := grpcclient.DefaultConfig("dns:///" + listener.Addr().String())
+	unauthenticatedConnection, err := grpcclient.New(
+		clientConfig,
+		grpcclient.Options{TransportCredentials: credentials.NewTLS(clientTLS)},
+	)
+	if err != nil {
+		t.Fatalf("build unauthenticated health-aware client: %v", err)
+	}
+	t.Cleanup(func() { _ = unauthenticatedConnection.Close() })
+	unauthenticatedConnection.Connect()
+	waitForTLSContractEvent(t, unauthenticatedWatch, "unauthenticated standard health Watch")
+
+	callCtx, cancelCall := context.WithTimeout(t.Context(), time.Second)
+	err = unauthenticatedConnection.Invoke(
+		callCtx,
+		tlsAuthnUnaryMethod,
+		&emptypb.Empty{},
+		&emptypb.Empty{},
+		grpc.PerRPCCredentials(staticBearerCredential(token)),
+	)
+	cancelCall()
+	if err == nil {
+		t.Fatal("call-scoped credential made an unauthenticated health backend eligible")
+	}
+	if got := unaryCalls.Load(); got != 1 {
+		t.Fatalf("application unary calls after ineligible client = %d, want 1", got)
+	}
+
+	authenticatedConnection, err := grpcclient.New(
+		clientConfig,
+		grpcclient.Options{
+			TransportCredentials: credentials.NewTLS(clientTLS),
+			PerRPCCredentials:    staticBearerCredential(token),
+		},
+	)
+	if err != nil {
+		t.Fatalf("build authenticated health-aware client: %v", err)
+	}
+	t.Cleanup(func() { _ = authenticatedConnection.Close() })
+	authenticatedConnection.Connect()
+	observation := waitForTLSContractEvent(t, watchObservations, "authenticated standard health Watch")
+	if observation.subject != "opaque-subject" {
+		t.Fatalf("health Watch principal subject = %q, want opaque-subject", observation.subject)
+	}
+	if observation.hasReservedMetadata {
+		t.Fatal("health Watch received credential-supplied reserved metadata")
+	}
+
+	callCtx, cancelCall = context.WithTimeout(t.Context(), time.Second)
+	err = authenticatedConnection.Invoke(callCtx, tlsAuthnUnaryMethod, &emptypb.Empty{}, &emptypb.Empty{})
+	cancelCall()
+	if err != nil {
+		t.Fatalf("connection-credential application call error = %v", err)
+	}
+	if got := unaryCalls.Load(); got != 2 {
+		t.Fatalf("application unary calls after authenticated client = %d, want 2", got)
+	}
+}
+
+type staticBearerCredential string
+
+func (credential staticBearerCredential) GetRequestMetadata(
+	context.Context,
+	...string,
+) (map[string]string, error) {
+	return map[string]string{
+		"authorization": "Bearer " + string(credential),
+		"baggage":       "forged=value",
+		"traceparent":   "forged",
+		"tracestate":    "forged",
+		"x-request-id":  "forged",
+	}, nil
+}
+
+func (staticBearerCredential) RequireTransportSecurity() bool { return true }
+
+type tlsWatchObservation struct {
+	subject             string
+	hasReservedMetadata bool
+}
+
+type observedTLSHealthServer struct {
+	healthpb.HealthServer
+
+	observations chan<- tlsWatchObservation
+}
+
+func (s *observedTLSHealthServer) Watch(
+	request *healthpb.HealthCheckRequest,
+	stream grpc.ServerStreamingServer[healthpb.HealthCheckResponse],
+) error {
+	observation := tlsWatchObservation{}
+	if principal, ok := reqctx.PrincipalFromContext(stream.Context()); ok {
+		observation.subject = principal.Subject
+	}
+	incoming, _ := metadata.FromIncomingContext(stream.Context())
+	for _, key := range []string{"baggage", "traceparent", "tracestate", "x-request-id"} {
+		observation.hasReservedMetadata = observation.hasReservedMetadata || len(incoming.Get(key)) > 0
+	}
+	select {
+	case s.observations <- observation:
+	default:
+	}
+	//nolint:wrapcheck // The test adapter preserves grpc-go's health result.
+	return s.HealthServer.Watch(request, stream)
+}
+
+func waitForTLSContractEvent[T any](t *testing.T, events <-chan T, name string) T {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+	defer cancel()
+	select {
+	case event := <-events:
+		return event
+	case <-ctx.Done():
+		t.Fatalf("%s did not occur: %v", name, ctx.Err())
+		var zero T
+		return zero
 	}
 }
 

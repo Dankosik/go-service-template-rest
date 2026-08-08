@@ -16,7 +16,8 @@ import (
 // names which package that is and why it is not a feature package. The relay
 // owns Claim, the Mark and ScheduleRetry family, CleanupPublished, and Observe,
 // plus Get, which it uses to resolve a finalization the batch statement did not
-// report. Redrive, and Get again, are operator tooling.
+// report. Redrive, RedriveUnknown, ConfirmAccepted, and Get again are operator
+// tooling. ClassifyLegacyUncertainty is the pre-relay upgrade path.
 //
 // Those audiences are the file layout, one file per step of the cycle doc.go
 // describes: store_append.go, store_claim.go, store_finalize.go,
@@ -118,7 +119,7 @@ func storeOutcome(err error) (outcome, errorClass string) {
 	case errors.Is(err, ErrLeaseLost):
 		return outcomeError, classLostLease
 	case errors.Is(err, ErrInvalidEvent), errors.Is(err, ErrConfig), errors.Is(err, ErrOrderingSequence),
-		errors.Is(err, ErrOrderingKeyActive),
+		errors.Is(err, ErrOrderingKeyActive), errors.Is(err, ErrReceiptConflict),
 		errors.Is(err, ErrRedriveRejected), errors.Is(err, ErrRedriveConflict):
 		return outcomeRejected, classValidation
 	default:

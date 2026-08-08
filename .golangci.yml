@@ -197,6 +197,19 @@ linters:
               desc: health behavior receives probes and must not depend on config, adapters, generated contracts, or other features.
             - pkg: github.com/example/go-service-template-rest/cmd
               desc: health behavior must not depend on composition roots.
+        failure_is_transport_neutral:
+          list-mode: lax
+          files:
+            - "**/internal/failure/**/*.go"
+          deny:
+            - pkg: net/http
+              desc: failure identities are transport-neutral; HTTP rendering belongs in internal/problem and internal/infra/http.
+            - pkg: google.golang.org/grpc
+              desc: failure identities are transport-neutral; gRPC status rendering belongs in internal/infra/grpc.
+            - pkg: github.com/example/go-service-template-rest/internal
+              desc: failure is a leaf shared by features and transports and must not depend on repository runtime owners.
+            - pkg: github.com/example/go-service-template-rest/cmd
+              desc: failure must not depend on composition roots.
         http_no_postgres:
           list-mode: lax
           files:
@@ -256,6 +269,10 @@ linters:
             - "!**/internal/infra/postgresoutbox/store*.go"
             - "!**/internal/infra/postgresoutbox/notify*.go"
             # profile:outbox-postgres:end
+            # profile:inbox-postgres:start
+            # The inbox claim binds generated SQL to its caller-owned pgx.Tx.
+            - "!**/internal/infra/postgresinbox/*.go"
+            # profile:inbox-postgres:end
             # pgtest is a PostgreSQL adapter like the two above, scoped to tests:
             # it creates and drops the per-test database, which is driver work.
             - "!**/internal/infra/postgres/pgtest/*.go"
@@ -277,6 +294,9 @@ linters:
             # profile:outbox-postgres:start
             - "!**/internal/infra/postgresoutbox/store*.go"
             # profile:outbox-postgres:end
+            # profile:inbox-postgres:start
+            - "!**/internal/infra/postgresinbox/*.go"
+            # profile:inbox-postgres:end
           deny:
             - pkg: github.com/example/go-service-template-rest/internal/infra/postgres/sqlcgen
               desc: generated sqlc types stay behind the hand-written internal/infra/postgres adapter.
