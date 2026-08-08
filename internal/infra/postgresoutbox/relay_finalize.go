@@ -10,8 +10,9 @@ import (
 // poisonedEvent pairs the parked claim with the class that parked it, so the
 // operator log keeps the attempt count the store type has no use for.
 type poisonedEvent struct {
-	claim      ClaimedEvent
-	errorClass string
+	claim                ClaimedEvent
+	errorClass           string
+	publicationUncertain bool
 }
 
 // batchOutcomes groups one batch by the durable transition each event needs.
@@ -68,27 +69,39 @@ func (r *Relay) classify(claims []ClaimedEvent, publications []error) batchOutco
 	var outcomes batchOutcomes
 	for index, claim := range claims {
 		publication := publications[index]
+		atLimit := claim.CycleAttemptCount >= r.config.MaxAttempts
+		permanent := errors.Is(publication, ErrPermanentPublication)
+		notAccepted := errors.Is(publication, ErrPublicationNotAccepted)
 		switch {
 		case publication == nil && claim.Event.OrderingKey == "":
 			outcomes.published = append(outcomes.published, claim)
 		case publication == nil:
 			outcomes.ordered = append(outcomes.ordered, claim)
-		case errors.Is(publication, ErrPermanentPublication):
+		case claim.PublicationUncertain && (permanent || atLimit):
+			outcomes.poisoned = append(outcomes.poisoned, poisonedEvent{
+				claim: claim, errorClass: classOutcomeUnknown, publicationUncertain: true,
+			})
+		case permanent:
 			// The adapter's own class, so a poisoned row and the publish metric
 			// that recorded the same failure agree without a second literal.
 			outcomes.poisoned = append(
 				outcomes.poisoned,
 				poisonedEvent{claim: claim, errorClass: publicationErrorClass(publication)},
 			)
-		case errors.Is(publication, ErrPublicationNotAccepted) && claim.CycleAttemptCount >= r.config.MaxAttempts:
+		case notAccepted && atLimit:
 			// Exhaustion is this package's policy rather than the adapter's
 			// verdict, so it is the one class publicationErrorClass cannot name.
 			outcomes.poisoned = append(outcomes.poisoned, poisonedEvent{claim: claim, errorClass: classAttemptExhausted})
+		case atLimit:
+			outcomes.poisoned = append(outcomes.poisoned, poisonedEvent{
+				claim: claim, errorClass: classOutcomeUnknown, publicationUncertain: true,
+			})
 		default:
 			outcomes.retries = append(outcomes.retries, RetryDirective{
-				ID:         claim.Event.ID,
-				ErrorClass: publicationErrorClass(publication),
-				Delay:      retryDelay(r.config.RetryBase, r.config.RetryMax, claim.CycleAttemptCount, r.jitter),
+				ID:                   claim.Event.ID,
+				ErrorClass:           publicationErrorClass(publication),
+				Delay:                retryDelay(r.config.RetryBase, r.config.RetryMax, claim.CycleAttemptCount, r.jitter),
+				PublicationUncertain: claim.PublicationUncertain || !notAccepted,
 			})
 		}
 	}
@@ -192,13 +205,16 @@ func (r *Relay) finalizePoisoned(ctx context.Context, token string, poisoned []p
 	}
 	directives := make([]PoisonDirective, len(poisoned))
 	for index, event := range poisoned {
-		directives[index] = PoisonDirective{ID: event.claim.Event.ID, ErrorClass: event.errorClass}
+		directives[index] = PoisonDirective{
+			ID: event.claim.Event.ID, ErrorClass: event.errorClass,
+			PublicationUncertain: event.publicationUncertain,
+		}
 	}
 	if err := r.store.MarkPoisonedBatch(ctx, token, directives); err != nil {
 		return fmt.Errorf("poison outbox events: %w", err)
 	}
 	for _, event := range poisoned {
-		r.telemetry.LogPoison(ctx, event.claim.Event.ID, event.errorClass, event.claim.CycleAttemptCount)
+		r.telemetry.LogPoison(ctx, event.errorClass, event.claim.CycleAttemptCount)
 	}
 	return nil
 }

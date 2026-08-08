@@ -37,6 +37,73 @@ func TestInitialTrustOutageFailsClosed(t *testing.T) {
 	if err == nil || strings.Contains(err.Error(), "poison") {
 		t.Fatalf("newVerifier() error = %v, want sanitized startup failure", err)
 	}
+	if reason := providerFailureReason(err); reason != "transport" {
+		t.Fatalf("startup provider failure reason = %q, want transport", reason)
+	}
+}
+
+func TestProviderFetchFailureCategories(t *testing.T) {
+	for _, testCase := range []struct {
+		name   string
+		target string
+		client *scriptedClient
+		want   string
+	}{
+		{
+			name:   "request",
+			target: "\x7f",
+			client: &scriptedClient{},
+			want:   "request",
+		},
+		{
+			name:   "transport",
+			target: testJWKSURI,
+			client: &scriptedClient{responses: []scriptedResponse{{err: errors.New("poison transport")}}},
+			want:   "transport",
+		},
+		{
+			name:   "status",
+			target: testJWKSURI,
+			client: &scriptedClient{responses: []scriptedResponse{{status: http.StatusBadGateway}}},
+			want:   "status",
+		},
+		{
+			name:   "oversize",
+			target: testJWKSURI,
+			client: &scriptedClient{responses: []scriptedResponse{{
+				status: http.StatusOK,
+				body:   []byte(strings.Repeat("x", MaxProviderBody+1)),
+			}}},
+			want: "oversize",
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			_, err := fetchDocument(t.Context(), testCase.client, testCase.target)
+			if reason := providerFailureReason(err); reason != testCase.want {
+				t.Fatalf("provider failure reason = %q, want %q; error = %v", reason, testCase.want, err)
+			}
+		})
+	}
+}
+
+func TestInitialTrustAcceptsDiscoveredJWKSQuery(t *testing.T) {
+	const jwksURI = "https://keys.example.net/jwks?tenant=main"
+	key := loadTestRSAKey(t, testSigningKey)
+	client := &scriptedClient{responses: []scriptedResponse{
+		{
+			status: http.StatusOK,
+			body:   []byte(`{"issuer":"https://issuer.example.com","jwks_uri":"` + jwksURI + `"}`),
+		},
+		{status: http.StatusOK, body: jwksDocument(t, key, "key-1")},
+	}}
+	verifier, err := buildTestVerifier(t, testVerifierOptions{client: client})
+	if err != nil {
+		t.Fatalf("newVerifier() error = %v, want discovered JWKS query accepted", err)
+	}
+	t.Cleanup(verifier.Close)
+	if verifier.jwksURI != jwksURI {
+		t.Fatalf("JWKS URI = %q, want %q", verifier.jwksURI, jwksURI)
+	}
 }
 
 func TestInitialTrustHonorsCancellationAndDeadline(t *testing.T) {

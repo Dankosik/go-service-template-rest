@@ -23,6 +23,7 @@ type Verifier struct {
 	jwksURI       string
 	client        providerClient
 	now           func() time.Time
+	jitter        func(time.Duration) time.Duration
 	log           *slog.Logger
 	metrics       authnMetrics
 	unregisterAge func()
@@ -99,6 +100,7 @@ func newVerifier(
 		jwksURI:   trust.jwksURI,
 		client:    trust.client,
 		now:       now,
+		jitter:    refreshJitter,
 		log:       log,
 		metrics:   newAuthnMetrics(meterProvider, reportDegraded),
 		installed: make(chan struct{}, 1),
@@ -115,20 +117,31 @@ func newVerifier(
 	return verifier, nil
 }
 
-// Transport names the carrier a verification arrived on. It is a named type
-// rather than a plain string so the accepted set is closed by the compiler, and
-// each value is published verbatim as the authn.transport metric attribute, so a
-// third is a third metric series rather than a label. Adding one is an extension
-// the package documentation owns.
-type Transport string
+// transport names the adapter a verification arrived through. Keeping it
+// private prevents package consumers from bypassing the adapter's credential
+// stripping and transport-trust checks while choosing arbitrary metric labels.
+type transport string
 
 const (
-	TransportHTTP Transport = "http"
-	TransportGRPC Transport = "grpc"
+	transportHTTP transport = "http"
+	transportGRPC transport = "grpc"
 )
 
-// Verify checks the compact token against trust policy and returns only the
-// opaque subject.
+// verify checks the compact token against trust policy and returns its issuer,
+// opaque subject, and OAuth client ID. It is the principal-only view used by
+// package tests; transport adapters use verifyToken because streaming also needs
+// the verified expiry.
+func (v *Verifier) verify(
+	ctx context.Context,
+	compact string,
+	transport transport,
+) (reqctx.Principal, error) {
+	verified, err := v.verifyToken(ctx, compact, transport)
+	return verified.principal, err
+}
+
+// verifyToken returns the parsed token only after its signature and current
+// trust have both been verified.
 //
 // Two error shapes leave here and an adapter has to answer both. Almost every
 // failure is an [Error] carrying a [Kind], and the mandatory exhaustive linter
@@ -142,14 +155,14 @@ const (
 //
 // The results are named so the deferred recovery can replace a panic with a
 // sanitized failure and so one metric record covers every exit.
-func (v *Verifier) Verify(
+func (v *Verifier) verifyToken(
 	ctx context.Context,
 	compact string,
-	transport Transport,
-) (principal reqctx.Principal, err error) {
+	transport transport,
+) (verified parsedToken, err error) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
-			principal = reqctx.Principal{}
+			verified = parsedToken{}
 			err = failure(KindUnavailable)
 			// The category is the honest answer to the caller and says nothing to
 			// whoever has to fix it; logRecoveredPanic owns that split.
@@ -160,7 +173,7 @@ func (v *Verifier) Verify(
 
 	parsed, err := parseToken(compact, v.policy, v.now())
 	if err != nil {
-		return reqctx.Principal{}, err
+		return parsedToken{}, err
 	}
 
 	// Two facts decide every answer below: whether an installed key signs this
@@ -177,7 +190,7 @@ func (v *Verifier) Verify(
 	if !signed {
 		refreshErr := v.refresh(ctx)
 		if callerAborted(refreshErr) {
-			return reqctx.Principal{}, refreshErr
+			return parsedToken{}, refreshErr
 		}
 		snapshot = v.keys.Load()
 		signed = snapshot.verifies(parsed)
@@ -189,45 +202,45 @@ func (v *Verifier) Verify(
 	// replace the matching key may be in the one the refresh failed to fetch —
 	// so the honest report is that trust is unavailable.
 	if !v.keysCurrent(snapshot) {
-		return reqctx.Principal{}, failure(KindUnavailable)
+		return parsedToken{}, failure(KindUnavailable)
 	}
 	if !signed {
-		return reqctx.Principal{}, failure(KindInvalid)
+		return parsedToken{}, failure(KindInvalid)
 	}
-	return parsed.principal, nil
+	return parsed, nil
 }
 
 // verifyCredential extracts the bearer credential one transport carried and
 // verifies it.
 //
-// Both adapters reach [Verifier.Verify] through here, and that is what keeps
-// authn.verifications the complete count of what this boundary answered. Verify
-// counts every one of its own exits from a single deferred record, so a
-// credential rejected before it — a missing, duplicated, or oversized header —
+// Both adapters reach verifyToken through here, and that is what keeps
+// authn.verifications the complete count of what this boundary answered.
+// verifyToken counts every one of its own exits from a single deferred record,
+// so a credential rejected before it — a missing, duplicated, or oversized header —
 // would otherwise go uncounted. Routing the extraction and the count through one
 // function means an adapter cannot forget the second.
 func (v *Verifier) verifyCredential(
 	ctx context.Context,
 	values []string,
-	transport Transport,
-) (reqctx.Principal, error) {
+	transport transport,
+) (parsedToken, error) {
 	token, err := bearerToken(values)
 	if err != nil {
-		return reqctx.Principal{}, v.recordRejection(ctx, transport, err)
+		return parsedToken{}, v.recordRejection(ctx, transport, err)
 	}
-	return v.Verify(ctx, token, transport)
+	return v.verifyToken(ctx, token, transport)
 }
 
-// recordRejection counts a refusal [Verifier.Verify] never saw, and returns that
+// recordRejection counts a refusal verify never saw, and returns that
 // same error.
 //
 // There are exactly two, and both reach it. One is verifyCredential's own, just
-// above: bearerToken refused the header, so Verify — and the deferred record that
-// counts every one of its exits — never ran. The other belongs to an adapter
+// above: bearerToken refused the header, so verifyToken — and the deferred record
+// that counts every one of its exits — never ran. The other belongs to an adapter
 // alone, which is the only party that can know a request never arrived in a shape
 // this boundary may authenticate; the HTTP adapter is today's only such caller,
 // for a request it cannot reach and for a peer the deployment does not trust.
-func (v *Verifier) recordRejection(ctx context.Context, transport Transport, err error) error {
+func (v *Verifier) recordRejection(ctx context.Context, transport transport, err error) error {
 	v.metrics.recordVerification(ctx, transport, err)
 	return err
 }

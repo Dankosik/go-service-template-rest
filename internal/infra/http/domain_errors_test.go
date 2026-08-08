@@ -10,33 +10,37 @@ import (
 	"testing"
 	"time"
 
+	"github.com/example/go-service-template-rest/internal/failure"
 	"github.com/example/go-service-template-rest/internal/problem"
 )
 
 var (
 	errArticleMissing = errors.New("article not found")
+	errArticleExists  = errors.New("article already exists")
 	errPoolSaturated  = errors.New("pool saturated")
 	errPoolBackedUp   = errors.New("pool backed up")
 )
 
-func classifyTestDomainError(err error) (problem.Mapped, bool) {
+func classifyTestDomainError(err error) (failure.Classification, bool) {
 	switch {
 	case errors.Is(err, errArticleMissing):
-		return problem.Mapped{Code: problem.CodeNotFound, Detail: "article was not found"}, true
+		return failure.Classification{Code: failure.CodeNotFound, Detail: "article was not found"}, true
+	case errors.Is(err, errArticleExists):
+		return failure.Classification{Code: failure.CodeAlreadyExists, Detail: "article already exists"}, true
 	case errors.Is(err, errPoolSaturated):
-		return problem.Mapped{
-			Code:       problem.CodeServiceUnavailable,
+		return failure.Classification{
+			Code:       failure.CodeServiceUnavailable,
 			Detail:     "the service is temporarily at capacity",
 			RetryAfter: 100 * time.Millisecond,
 		}, true
 	case errors.Is(err, errPoolBackedUp):
-		return problem.Mapped{
-			Code:       problem.CodeServiceUnavailable,
+		return failure.Classification{
+			Code:       failure.CodeServiceUnavailable,
 			Detail:     "the service is temporarily at capacity",
 			RetryAfter: 1100 * time.Millisecond,
 		}, true
 	default:
-		return problem.Mapped{}, false
+		return failure.Classification{}, false
 	}
 }
 
@@ -56,6 +60,13 @@ func TestRejectResponseClassifiesDomainErrors(t *testing.T) {
 		wantDetail     string
 		wantRetryAfter string
 	}{
+		{
+			name:       "classified already exists",
+			err:        fmt.Errorf("create article: %w", errArticleExists),
+			wantStatus: http.StatusConflict,
+			wantCode:   problem.CodeAlreadyExists,
+			wantDetail: "article already exists",
+		},
 		{
 			name:       "classified sentinel",
 			err:        fmt.Errorf("get article: %w", errArticleMissing),
@@ -151,11 +162,11 @@ func TestRejectResponseClassifiesDomainErrors(t *testing.T) {
 func TestRejectResponseUsesTheFirstMatchingMapper(t *testing.T) {
 	t.Parallel()
 
-	specific := func(error) (problem.Mapped, bool) {
-		return problem.Mapped{Code: problem.CodeConflict, Detail: "specific"}, true
+	specific := func(error) (failure.Classification, bool) {
+		return failure.Classification{Code: failure.CodeAlreadyExists, Detail: "specific"}, true
 	}
-	broad := func(error) (problem.Mapped, bool) {
-		return problem.Mapped{Code: problem.CodeBadRequest, Detail: "broad"}, true
+	broad := func(error) (failure.Classification, bool) {
+		return failure.Classification{Code: failure.CodeBadRequest, Detail: "broad"}, true
 	}
 
 	response := httptest.NewRecorder()

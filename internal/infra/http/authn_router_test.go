@@ -55,6 +55,7 @@ func TestHTTPAuthnBoundary(t *testing.T) {
 	tests := []struct {
 		name          string
 		kind          oidcjwt.Kind
+		err           error
 		headers       []string
 		remoteAddr    string
 		wantStatus    int
@@ -131,6 +132,22 @@ func TestHTTPAuthnBoundary(t *testing.T) {
 			wantCode:   problem.CodeBadRequest,
 			wantDetail: "authentication transport is untrusted",
 		},
+		{
+			name:       "authentication deadline",
+			err:        fmt.Errorf("wait for JWKS refresh: %w", context.DeadlineExceeded),
+			headers:    []string{"Bearer opaque-token"},
+			wantStatus: http.StatusGatewayTimeout,
+			wantCode:   problem.CodeGatewayTimeout,
+			wantDetail: "authentication verification did not complete",
+		},
+		{
+			name:       "authentication canceled",
+			err:        fmt.Errorf("wait for JWKS refresh: %w", context.Canceled),
+			headers:    []string{"Bearer opaque-token"},
+			wantStatus: http.StatusGatewayTimeout,
+			wantCode:   problem.CodeGatewayTimeout,
+			wantDetail: "authentication verification did not complete",
+		},
 	}
 
 	for _, testCase := range tests {
@@ -145,6 +162,9 @@ func TestHTTPAuthnBoundary(t *testing.T) {
 					t.Fatal("authentication input has no request")
 				}
 				request.Header.Del("Authorization")
+				if testCase.err != nil {
+					return reqctx.Principal{}, testCase.err
+				}
 				if testCase.kind != 0 {
 					return reqctx.Principal{}, fmt.Errorf(
 						"poison parser/provider detail: %w",

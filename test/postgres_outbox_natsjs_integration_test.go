@@ -4,49 +4,29 @@ package integration_test
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"testing"
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/infra/natsjs"
-	"github.com/example/go-service-template-rest/internal/infra/postgresoutbox"
+	"github.com/example/go-service-template-rest/internal/infra/telemetry/telemetrytest"
+	"github.com/jackc/pgx/v5"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 )
 
-type natsOutboxPublisher struct {
-	producer *natsjs.Producer
-}
-
-// Publish forwards every envelope field natsjs.Event can carry. It does not
-// forward Event.Metadata or Event.Source, because natsjs.Event has no field for
-// either: correlation and trace context written into Metadata stay in
-// PostgreSQL under this adapter. A service that needs them at the broker adds a
-// header carrier to the transport first — see the Publisher contract.
-func (publisher natsOutboxPublisher) Publish(ctx context.Context, event postgresoutbox.Event) error {
-	_, err := publisher.producer.Publish(ctx, natsjs.Event{
-		Subject:       event.Destination,
-		MessageID:     event.ID,
-		PublicationID: event.ID,
-		Type:          event.Type,
-		Schema:        event.Schema,
-		OrderingKey:   event.OrderingKey,
-		CreatedAt:     event.OccurredAt,
-		Payload:       event.Payload,
-	})
-	if errors.Is(err, natsjs.ErrRejected) {
-		return fmt.Errorf("%w: %v", postgresoutbox.ErrPermanentPublication, err)
-	}
-	return err
-}
-
 func TestPostgresOutboxNATSConformance(t *testing.T) {
+	telemetrytest.InstallSpanRecorder(t)
 	fixture := newNATSFixture(t)
-	publisher := natsOutboxPublisher{producer: fixture.client(t, natsjs.RoleProducer).Producer()}
+	publisher := natsjs.NewOutboxPublisher(fixture.client(t, natsjs.RoleProducer).Producer())
 	ctx, pool, store := newOutboxFixture(t)
 
-	received := make(chan natsjs.Message, 1)
-	_, _, _ = fixture.worker(t, func(_ context.Context, message natsjs.Message) error {
-		received <- message
+	type delivery struct {
+		message natsjs.Message
+		traceID trace.TraceID
+	}
+	received := make(chan delivery, 1)
+	_, _, _ = fixture.worker(t, func(ctx context.Context, message natsjs.Message) error {
+		received <- delivery{message: message, traceID: trace.SpanContextFromContext(ctx).TraceID()}
 		return nil
 	}, func(config *natsjs.WorkerConfig) {
 		config.Consumer = "outbox-conformance"
@@ -57,11 +37,19 @@ func TestPostgresOutboxNATSConformance(t *testing.T) {
 	event.Payload = []byte(`{"broker":"durable"}`)
 	event.OrderingKey = "account-42"
 	event.OrderingSequence = 7
-	mustAppendOutbox(t, ctx, pool, store, event)
+	producing, span := otel.GetTracerProvider().Tracer("integration").Start(ctx, "create outbox event")
+	origin := trace.SpanContextFromContext(producing)
+	if err := pool.InTx(producing, pgx.TxOptions{}, func(tx pgx.Tx) error {
+		return store.Append(producing, tx, event)
+	}); err != nil {
+		t.Fatalf("append traced outbox event: %v", err)
+	}
+	span.End()
 	relay := mustNewOutboxRelay(t, store, publisher, nil, testRelayConfig())
 	result := runOutboxRelay(ctx, relay)
 	waitForOutboxCount(t, ctx, pool, "published_at IS NOT NULL", 1)
-	message := receive(t, received, 10*time.Second, "durable outbox JetStream message")
+	delivered := receive(t, received, 10*time.Second, "durable outbox JetStream message")
+	message := delivered.message
 	relay.StartDrain()
 	assertRelayResult(t, result, nil)
 	if message.MessageID() != event.ID || message.PublicationID() != event.ID ||
@@ -71,6 +59,9 @@ func TestPostgresOutboxNATSConformance(t *testing.T) {
 		t.Fatalf("JetStream message = id %q publication %q subject %q type %q schema %q key %q payload %q, want outbox event %+v",
 			message.MessageID(), message.PublicationID(), message.Subject(), message.Type(), message.Schema(),
 			message.OrderingKey(), message.Payload(), event)
+	}
+	if delivered.traceID != origin.TraceID() {
+		t.Fatalf("worker trace = %s, want producing trace %s", delivered.traceID, origin.TraceID())
 	}
 
 	rejected := outboxEvent("outbox-nats-rejected")

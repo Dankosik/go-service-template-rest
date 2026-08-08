@@ -5,10 +5,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
 
 	"github.com/example/go-service-template-rest/examples/reference-service/internal/article"
 	"github.com/example/go-service-template-rest/examples/reference-service/internal/openapi"
+	"github.com/example/go-service-template-rest/internal/problem"
 	"github.com/example/go-service-template-rest/internal/reqctx"
 )
 
@@ -42,7 +42,7 @@ func (h *handler) CreateArticle(ctx context.Context, request openapi.CreateArtic
 	if !principal.HasScope(ArticleWriteScope) {
 		return openapi.CreateArticle403ApplicationProblemPlusJSONResponse{
 			ForbiddenApplicationProblemPlusJSONResponse: openapi.ForbiddenApplicationProblemPlusJSONResponse(
-				newProblem(ctx, http.StatusForbidden, "credentials do not permit this operation"),
+				newProblem(ctx, problem.CodeForbidden, "credentials do not permit this operation"),
 			),
 		}, nil
 	}
@@ -50,7 +50,7 @@ func (h *handler) CreateArticle(ctx context.Context, request openapi.CreateArtic
 	if request.Body == nil {
 		return openapi.CreateArticle400ApplicationProblemPlusJSONResponse{
 			BadRequestApplicationProblemPlusJSONResponse: openapi.BadRequestApplicationProblemPlusJSONResponse(
-				newProblem(ctx, http.StatusBadRequest, "request body is required"),
+				newProblem(ctx, problem.CodeBadRequest, "request body is required"),
 			),
 		}, nil
 	}
@@ -62,7 +62,7 @@ func (h *handler) CreateArticle(ctx context.Context, request openapi.CreateArtic
 	})
 	if err != nil {
 		// Returned rather than mapped here. The composition root installs
-		// ClassifyError once for the whole feature, so the switch that used to
+		// article.ClassifyError once for the whole feature, so the switch that used to
 		// live in every operation exists in one place. Wrapping adds the
 		// operation while preserving the sentinel identity errors.Is matches on;
 		// an error the table does not recognize stays a 500, which is the honest

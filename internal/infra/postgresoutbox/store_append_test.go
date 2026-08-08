@@ -1,6 +1,7 @@
 package postgresoutbox
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"strings"
@@ -45,8 +46,8 @@ func TestStoreAppendValidationAndInsert(t *testing.T) {
 	if err := store.Append(t.Context(), tx, event, second); err != nil {
 		t.Fatalf("Append(unordered) error = %v", err)
 	}
-	if tx.statements != 1 || len(tx.arguments) != 9 {
-		t.Fatalf("Append(unordered) sent %d statements with %d column arrays, want 1 and 9",
+	if tx.statements != 1 || len(tx.arguments) != 10 {
+		t.Fatalf("Append(unordered) sent %d statements with %d column arrays, want 1 and 10",
 			tx.statements, len(tx.arguments))
 	}
 	// One creation context per event, and the same one for every event of the
@@ -62,6 +63,13 @@ func TestStoreAppendValidationAndInsert(t *testing.T) {
 			t.Fatalf("Append(unordered) trace context %d = %q, want the empty object", index, stored)
 		}
 	}
+	fingerprints, ok := tx.arguments[9].([][]byte)
+	if !ok || len(fingerprints) != 2 || len(fingerprints[0]) != 32 || len(fingerprints[1]) != 32 {
+		t.Fatalf("Append(unordered) receipt fingerprints = %v", tx.arguments[9])
+	}
+	if bytes.Equal(fingerprints[0], fingerprints[1]) {
+		t.Fatal("Append(unordered) reused one receipt fingerprint for different events")
+	}
 
 	// Ordered and unordered events travel together, so a mixed call is still
 	// one statement however many events it carries.
@@ -71,13 +79,13 @@ func TestStoreAppendValidationAndInsert(t *testing.T) {
 	if err := store.Append(t.Context(), tx, event, second, ordered); err != nil {
 		t.Fatalf("Append(mixed) error = %v", err)
 	}
-	if tx.statements != 1 || len(tx.arguments) != 11 {
-		t.Fatalf("Append(mixed) sent %d statements with %d column arrays, want 1 and 11",
+	if tx.statements != 1 || len(tx.arguments) != 12 {
+		t.Fatalf("Append(mixed) sent %d statements with %d column arrays, want 1 and 12",
 			tx.statements, len(tx.arguments))
 	}
-	if keys, ok := tx.arguments[9].([]string); !ok || len(keys) != 3 ||
+	if keys, ok := tx.arguments[10].([]string); !ok || len(keys) != 3 ||
 		keys[0] != "" || keys[1] != "" || keys[2] != "key" {
-		t.Fatalf("Append(mixed) ordering keys = %v", tx.arguments[9])
+		t.Fatalf("Append(mixed) ordering keys = %v", tx.arguments[10])
 	}
 
 	// A returned row is a key whose first sequence did not clear its retained

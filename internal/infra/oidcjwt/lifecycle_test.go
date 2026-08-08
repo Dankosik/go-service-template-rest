@@ -17,12 +17,40 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"testing/synctest"
 	"time"
 )
+
+func TestRefreshScheduleJittersOnlyProviderAttempts(t *testing.T) {
+	var calls []time.Duration
+	jitter := func(delay time.Duration) time.Duration {
+		calls = append(calls, delay)
+		return delay
+	}
+	schedule := newRefreshSchedule(testNow, testNow, jitter)
+	schedule.rearm(testNow, testNow)
+	schedule.retryAfter(RefreshCooldown)
+	schedule.stop()
+
+	want := []time.Duration{RefreshInterval, RefreshInterval, RefreshCooldown}
+	if !slices.Equal(calls, want) {
+		t.Fatalf("jitter calls = %v, want provider deadlines %v", calls, want)
+	}
+}
+
+func TestRefreshJitterIsBounded(t *testing.T) {
+	const delay = time.Minute
+	for range 100 {
+		got := refreshJitter(delay)
+		if got < 9*delay/10 || got > 11*delay/10 {
+			t.Fatalf("refreshJitter(%v) = %v, want within ten percent", delay, got)
+		}
+	}
+}
 
 func TestScheduledRecoveryCadenceResetsFromSuccessfulInstall(t *testing.T) {
 	first := loadTestRSAKey(t, testSigningKey)
@@ -205,7 +233,7 @@ func TestCloseStopsAdmittingFetches(t *testing.T) {
 	verifier.Close()
 
 	unknown := signToken(t, rotated, "key-2", "at+jwt", validClaims(testNow))
-	if _, err := verifier.Verify(t.Context(), unknown, TransportHTTP); err == nil {
+	if _, err := verifier.verify(t.Context(), unknown, transportHTTP); err == nil {
 		t.Fatal("Verify(recoverable unknown kid after Close) error = nil, want a refusal from the installed set")
 	}
 	requireProviderCalls(t, client, 0, "after Close retired admission")

@@ -16,20 +16,21 @@ import (
 // PublishedAt and LeaseToken — to resolve a finalization a batch statement did
 // not report, so those two are relay behavior as well.
 type Record struct {
-	Event             Event
-	CreatedAt         time.Time
-	AvailableAt       time.Time
-	CycleAttemptCount int
-	TotalAttemptCount int64
-	LastAttemptAt     time.Time
-	LeaseToken        string
-	LeaseExpiresAt    time.Time
-	PublishedAt       time.Time
-	PoisonedAt        time.Time
-	LastErrorClass    string
-	RedriveCount      int
-	LastRedriveID     string
-	LastRedrivenAt    time.Time
+	Event                Event
+	CreatedAt            time.Time
+	AvailableAt          time.Time
+	CycleAttemptCount    int
+	TotalAttemptCount    int64
+	LastAttemptAt        time.Time
+	LeaseToken           string
+	LeaseExpiresAt       time.Time
+	PublishedAt          time.Time
+	PoisonedAt           time.Time
+	PublicationUncertain bool
+	LastErrorClass       string
+	RedriveCount         int
+	LastRedriveID        string
+	LastRedrivenAt       time.Time
 }
 
 func (s *Store) Get(ctx context.Context, id string) (Record, error) {
@@ -49,15 +50,32 @@ func (s *Store) Get(ctx context.Context, id string) (Record, error) {
 	return recordFromRow(row), nil
 }
 
-// Redrive releases one poisoned event for another delivery cycle, recording
-// auditID so a repeated call for the same audit id is idempotent.
-//
-// Unlike Append it owns its transaction, so its locking and audit-conflict
-// rules cannot be proven against a stubbed driver; TestPostgresOutboxRedrive in
-// test/postgres_outbox_integration_test.go is where its contract is exercised.
-func (s *Store) Redrive(ctx context.Context, id, auditID string) (err error) {
+const (
+	actionRedrivePoison   = "redrive_poison"
+	actionRedriveUnknown  = "redrive_unknown"
+	actionConfirmAccepted = "confirm_accepted"
+)
+
+// Redrive releases one deterministic poison for another delivery cycle.
+func (s *Store) Redrive(ctx context.Context, id, auditID string) error {
+	return s.runOperatorAction(ctx, "redrive", actionRedrivePoison, id, auditID)
+}
+
+// RedriveUnknown releases an outcome-unknown event while preserving its sticky
+// publication uncertainty.
+func (s *Store) RedriveUnknown(ctx context.Context, id, auditID string) error {
+	return s.runOperatorAction(ctx, "redrive_unknown", actionRedriveUnknown, id, auditID)
+}
+
+// ConfirmAccepted marks an outcome-unknown event as published without touching
+// the broker. Ordered events advance their existing outbox head.
+func (s *Store) ConfirmAccepted(ctx context.Context, id, auditID string) error {
+	return s.runOperatorAction(ctx, "confirm_accepted", actionConfirmAccepted, id, auditID)
+}
+
+func (s *Store) runOperatorAction(ctx context.Context, operation, action, id, auditID string) (err error) {
 	started := time.Now()
-	defer func() { s.recordOperation(ctx, "redrive", started, err) }()
+	defer func() { s.recordOperation(ctx, operation, started, err) }()
 	if !s.valid() {
 		return errStoreRequired()
 	}
@@ -67,71 +85,150 @@ func (s *Store) Redrive(ctx context.Context, id, auditID string) (err error) {
 	if err := validateText(ErrConfig, "audit_id", auditID, maxTextBytes); err != nil {
 		return err
 	}
-
 	err = s.pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
-		return redriveInTx(ctx, sqlcgen.New(tx), id, auditID)
+		return operatorActionInTx(ctx, sqlcgen.New(tx), action, id, auditID)
 	})
 	if err != nil {
-		return fmt.Errorf("redrive outbox event: %w", err)
+		return fmt.Errorf("%s outbox event: %w", operation, err)
 	}
 	return nil
 }
 
-// redriveInTx is the whole redrive under one transaction: take the row's lock
-// first so a concurrent redrive of the same event serializes behind it, settle
-// the audit id, then release the row for another cycle.
-func redriveInTx(ctx context.Context, queries *sqlcgen.Queries, id, auditID string) error {
-	row, err := queries.LockOutboxEventForRedrive(ctx, id)
+func operatorActionInTx(ctx context.Context, queries *sqlcgen.Queries, action, id, auditID string) error {
+	replayed, err := operatorAuditSpent(ctx, queries, action, id, auditID)
+	if err != nil || replayed {
+		return err
+	}
+	row, err := queries.LockOutboxEventForAction(ctx, id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrNotFound
 		}
-		return fmt.Errorf("lock outbox event for redrive: %w", err)
+		return fmt.Errorf("lock outbox event for operator action: %w", err)
 	}
-
-	replayed, err := auditIDAlreadySpent(ctx, queries, id, auditID)
+	replayed, err = operatorAuditSpent(ctx, queries, action, id, auditID)
 	if err != nil || replayed {
 		return err
 	}
 
-	if !row.PoisonedAt.Valid || row.PublishedAt.Valid {
-		return ErrRedriveRejected
-	}
-	if row.RedriveCount == math.MaxInt32 {
-		return fmt.Errorf("%w: redrive count exhausted", ErrRedriveRejected)
-	}
-	if err := queries.InsertOutboxRedrive(ctx, sqlcgen.InsertOutboxRedriveParams{
-		AuditID:     auditID,
-		EventID:     id,
-		CycleNumber: row.RedriveCount + 1,
-	}); err != nil {
-		return fmt.Errorf("insert outbox redrive: %w", err)
-	}
-	rows, err := queries.RedriveOutboxEvent(ctx, sqlcgen.RedriveOutboxEventParams{AuditID: &auditID, ID: id})
+	cycle, hasCycle, err := operatorActionCycle(action, row)
 	if err != nil {
-		return fmt.Errorf("redrive outbox event: %w", err)
+		return err
 	}
-	if rows != 1 {
-		return ErrRedriveRejected
+	var cycleNumber *int32
+	if hasCycle {
+		cycleNumber = &cycle
 	}
-	return nil
+
+	inserted, err := queries.InsertOutboxAction(ctx, sqlcgen.InsertOutboxActionParams{
+		AuditID: auditID, EventID: id, ActionKind: action, CycleNumber: cycleNumber,
+	})
+	if err != nil {
+		return fmt.Errorf("insert outbox operator audit: %w", err)
+	}
+	if inserted == 0 {
+		replayed, err = operatorAuditSpent(ctx, queries, action, id, auditID)
+		if err != nil || replayed {
+			return err
+		}
+		return ErrOperatorAuditConflict
+	}
+
+	return applyOperatorAction(ctx, queries, action, id, auditID, row.OrderingKey != nil)
 }
 
-// auditIDAlreadySpent is what makes a repeated call idempotent. The audit id is
-// the caller's own key for one redrive decision, so the three outcomes are
-// distinct: this event already spent it, which is the retry the caller meant
-// and does nothing; another event spent it, which is a caller fault rather than
-// a race; or it is unspent and this redrive may claim it.
-func auditIDAlreadySpent(ctx context.Context, queries *sqlcgen.Queries, id, auditID string) (bool, error) {
-	earlierEventID, err := queries.FindOutboxRedrive(ctx, auditID)
+func operatorActionCycle(action string, row sqlcgen.OutboxEvent) (int32, bool, error) {
+	switch action {
+	case actionRedrivePoison:
+		if !row.PoisonedAt.Valid || row.PublishedAt.Valid || row.PublicationUncertain == nil || *row.PublicationUncertain {
+			return 0, false, ErrOperatorStateConflict
+		}
+	case actionRedriveUnknown, actionConfirmAccepted:
+		if !outcomeUnknown(row) {
+			return 0, false, ErrOperatorStateConflict
+		}
+	default:
+		return 0, false, fmt.Errorf("%w: unknown operator action", ErrConfig)
+	}
+	if action == actionConfirmAccepted {
+		return 0, false, nil
+	}
+	if row.RedriveCount == math.MaxInt32 {
+		return 0, false, fmt.Errorf("%w: redrive count exhausted", ErrOperatorStateConflict)
+	}
+	return row.RedriveCount + 1, true, nil
+}
+
+func applyOperatorAction(
+	ctx context.Context,
+	queries *sqlcgen.Queries,
+	action, id, auditID string,
+	ordered bool,
+) error {
+	switch action {
+	case actionRedrivePoison:
+		rows, err := queries.RedrivePoisonedOutboxEvent(
+			ctx, sqlcgen.RedrivePoisonedOutboxEventParams{AuditID: &auditID, ID: id},
+		)
+		return operatorRows("redrive poisoned outbox event", rows, err)
+	case actionRedriveUnknown:
+		rows, err := queries.RedriveUnknownOutboxEvent(
+			ctx, sqlcgen.RedriveUnknownOutboxEventParams{AuditID: &auditID, ID: id},
+		)
+		return operatorRows("redrive unknown outbox event", rows, err)
+	case actionConfirmAccepted:
+		return confirmAccepted(ctx, queries, id, ordered)
+	default:
+		return fmt.Errorf("%w: unknown operator action", ErrConfig)
+	}
+}
+
+func confirmAccepted(ctx context.Context, queries *sqlcgen.Queries, id string, ordered bool) error {
+	if !ordered {
+		rows, err := queries.ConfirmUnorderedOutboxAccepted(ctx, id)
+		return operatorRows("confirm unordered outbox event", rows, err)
+	}
+	for range orderedPublishSnapshots {
+		result, err := queries.ConfirmOrderedOutboxAccepted(ctx, id)
+		if err != nil {
+			return fmt.Errorf("confirm ordered outbox event: %w", err)
+		}
+		if result.Marked {
+			return nil
+		}
+		if !result.SnapshotConflict {
+			break
+		}
+	}
+	return ErrOperatorStateConflict
+}
+
+func operatorAuditSpent(ctx context.Context, queries *sqlcgen.Queries, action, id, auditID string) (bool, error) {
+	earlier, err := queries.FindOutboxAction(ctx, auditID)
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
 		return false, nil
 	case err != nil:
-		return false, fmt.Errorf("find outbox redrive: %w", err)
-	case earlierEventID == id:
+		return false, fmt.Errorf("find outbox operator audit: %w", err)
+	case earlier.EventID == id && earlier.ActionKind == action:
 		return true, nil
 	default:
-		return false, fmt.Errorf("%w: audit id belongs to another event", ErrRedriveConflict)
+		return false, fmt.Errorf("%w: audit id belongs to another event or action", ErrOperatorAuditConflict)
 	}
+}
+
+func outcomeUnknown(row sqlcgen.OutboxEvent) bool {
+	return !row.PublishedAt.Valid && row.PoisonedAt.Valid &&
+		row.PublicationUncertain != nil && *row.PublicationUncertain &&
+		row.LastErrorClass != nil && *row.LastErrorClass == classOutcomeUnknown
+}
+
+func operatorRows(operation string, rows int64, err error) error {
+	if err != nil {
+		return fmt.Errorf("%s: %w", operation, err)
+	}
+	if rows != 1 {
+		return ErrOperatorStateConflict
+	}
+	return nil
 }

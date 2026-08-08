@@ -8,6 +8,9 @@ import (
 	"testing"
 
 	"github.com/example/go-service-template-rest/internal/config"
+	// profile:messaging-nats-jetstream:start
+	"github.com/example/go-service-template-rest/internal/infra/natsjs"
+	// profile:messaging-nats-jetstream:end
 	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	"github.com/example/go-service-template-rest/internal/infra/postgresoutbox"
 )
@@ -47,6 +50,9 @@ func TestReportFailureIsBoundedAndSanitized(t *testing.T) {
 		{name: "publisher stuck", err: errors.Join(postgresoutbox.ErrPublisherStuck, errors.New(canary)), class: "publisher_stuck"},
 		{name: "publisher panic", err: fmt.Errorf("%w: %s", postgresoutbox.ErrPublisherPanic, canary), class: "publisher_panic"},
 		{name: "progress unknown", err: fmt.Errorf("%w: %s", postgresoutbox.ErrProgressUnknown, canary), class: "progress_unknown"},
+		// profile:messaging-nats-jetstream:start
+		{name: "messaging terminal", err: fmt.Errorf("%w: %s", natsjs.ErrTerminal, canary), class: "messaging_terminal"},
+		// profile:messaging-nats-jetstream:end
 		{name: "lost lease", err: fmt.Errorf("schedule outbox retry: %w", postgresoutbox.ErrLeaseLost), class: "lost_lease"},
 		{name: "unknown adapter", err: errors.New(canary), class: "runtime"},
 	}

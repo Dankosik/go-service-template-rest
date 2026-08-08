@@ -7,44 +7,39 @@ import (
 	"github.com/example/go-service-template-rest/internal/problem"
 )
 
-// TestForResolvesEveryPublishedStatus is the regression anchor for the defect
-// that made this package worth extracting: a second, hand-maintained table meant
-// a status the catalog published resolved to the internal-error type, so a 409
-// advertised itself as a server fault while carrying status 409.
-func TestForResolvesEveryPublishedStatus(t *testing.T) {
+func TestEveryPublishedCodeResolves(t *testing.T) {
 	t.Parallel()
 
-	internalError, ok := problem.ForCode(problem.CodeInternalError)
-	if !ok {
-		t.Fatal("catalog is missing the internal-error entry every fallback path depends on")
-	}
-
 	for _, definition := range problem.All() {
-		resolved, ok := problem.For(definition.Status)
+		resolved, ok := problem.ForCode(definition.Code)
 		if !ok {
-			t.Fatalf("For(%d) reported no definition for published code %q", definition.Status, definition.Code)
+			t.Fatalf("ForCode(%q) reported no definition", definition.Code)
 		}
 		if resolved != definition {
-			t.Fatalf("For(%d) = %+v, want %+v", definition.Status, resolved, definition)
-		}
-		if definition.Status != http.StatusInternalServerError && resolved.TypeURI == internalError.TypeURI {
-			t.Fatalf("For(%d) returned the internal-error type for code %q", definition.Status, definition.Code)
+			t.Fatalf("ForCode(%q) = %+v, want %+v", definition.Code, resolved, definition)
 		}
 	}
 }
 
-// TestStatusesAreUnique keeps the reverse lookup deterministic. Two entries
-// sharing a status would make For answer whichever the scan reached first, which
-// is a wrong answer that looks right.
-func TestStatusesAreUnique(t *testing.T) {
+func TestConflictAndAlreadyExistsShareTheHTTP409Envelope(t *testing.T) {
 	t.Parallel()
 
-	seen := make(map[int]problem.Code)
-	for _, definition := range problem.All() {
-		if existing, duplicate := seen[definition.Status]; duplicate {
-			t.Fatalf("status %d is published by both %q and %q", definition.Status, existing, definition.Code)
-		}
-		seen[definition.Status] = definition.Code
+	conflict, ok := problem.ForCode(problem.CodeConflict)
+	if !ok {
+		t.Fatal("conflict is missing")
+	}
+	alreadyExists, ok := problem.ForCode(problem.CodeAlreadyExists)
+	if !ok {
+		t.Fatal("already_exists is missing")
+	}
+	if conflict.Status != http.StatusConflict || alreadyExists.Status != http.StatusConflict ||
+		conflict.Title != "conflict" || alreadyExists.Title != conflict.Title ||
+		alreadyExists.TypeURI != conflict.TypeURI {
+		t.Fatalf("409 definitions differ: conflict=%+v already_exists=%+v", conflict, alreadyExists)
+	}
+	byStatus, ok := problem.For(http.StatusConflict)
+	if !ok || byStatus.Code != problem.CodeConflict {
+		t.Fatalf("For(409) = (%+v, %t), want conflict", byStatus, ok)
 	}
 }
 
@@ -97,6 +92,7 @@ func TestCatalogCoversDomainStatuses(t *testing.T) {
 		status int
 	}{
 		{code: problem.CodeConflict, status: http.StatusConflict},
+		{code: problem.CodeAlreadyExists, status: http.StatusConflict},
 		{code: problem.CodeUnprocessableContent, status: http.StatusUnprocessableEntity},
 		{code: problem.CodeTooManyRequests, status: http.StatusTooManyRequests},
 	} {

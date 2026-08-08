@@ -88,6 +88,16 @@ func TestVerify_Claims(t *testing.T) {
 			mutate:   func(c *tokenClaims) { c.Subject = "" },
 			wantKind: KindInvalid,
 		},
+		{
+			name:     "blank client ID",
+			mutate:   func(c *tokenClaims) { c.ClientID = "" },
+			wantKind: KindInvalid,
+		},
+		{
+			name:     "blank JWT ID",
+			mutate:   func(c *tokenClaims) { c.JWTID = "" },
+			wantKind: KindInvalid,
+		},
 	}
 
 	for _, testCase := range tests {
@@ -107,11 +117,14 @@ func TestVerify_Claims(t *testing.T) {
 
 			verifier := newTestVerifier(t, key)
 			token := signToken(t, signingKey, "key-1", typ, claims)
-			principal, err := verifier.Verify(t.Context(), token, TransportHTTP)
+			principal, err := verifier.verify(t.Context(), token, transportHTTP)
 			requireKind(t, err, testCase.wantKind)
 			if testCase.wantKind == 0 {
-				if principal.Subject != claims.Subject || len(principal.Scopes) != 0 {
-					t.Fatalf("principal = %+v, want opaque subject and no scopes", principal)
+				if principal.Issuer != claims.Issuer ||
+					principal.Subject != claims.Subject ||
+					principal.ClientID != claims.ClientID ||
+					len(principal.Scopes) != 0 {
+					t.Fatalf("principal = %+v, want issuer, subject, client ID, and no scopes", principal)
 				}
 			}
 		})
@@ -147,6 +160,18 @@ func TestVerify_Serialization(t *testing.T) {
 		map[jose.HeaderKey]any{"typ": "at+jwt", "kid": "key-1", "jku": "https://attacker.example/jwks"},
 		validClaims(now),
 	)
+	missingClientID := claimsMap(t, validClaims(now))
+	delete(missingClientID, "client_id")
+	missingClientIDPayload, err := json.Marshal(missingClientID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	missingJWTID := claimsMap(t, validClaims(now))
+	delete(missingJWTID, "jti")
+	missingJWTIDPayload, err := json.Marshal(missingJWTID)
+	if err != nil {
+		t.Fatal(err)
+	}
 	tests := map[string]string{
 		"malformed":             "not-a-token",
 		"two segments":          parts[0] + "." + parts[1],
@@ -169,11 +194,13 @@ func TestVerify_Serialization(t *testing.T) {
 		"critical header":       criticalHeaderToken,
 		"remote jwk header":     remoteJWKToken,
 		"duplicate payload":     signPayload(t, key, []byte(`{"iss":"`+testIssuer+`","iss":"`+testIssuer+`"}`)),
+		"missing client ID":     signPayload(t, key, missingClientIDPayload),
+		"missing JWT ID":        signPayload(t, key, missingJWTIDPayload),
 		"trailing payload data": signPayload(t, key, append(validPayload, []byte(`{}`)...)),
 	}
 	for name, token := range tests {
 		t.Run(name, func(t *testing.T) {
-			_, err := verifier.Verify(t.Context(), token, TransportHTTP)
+			_, err := verifier.verify(t.Context(), token, transportHTTP)
 			requireKind(t, err, KindInvalid)
 			requireProviderCalls(t, client, 0, "after a locally invalid token")
 		})
@@ -191,7 +218,7 @@ func TestVerifyRejectsExplicitNullNotBefore(t *testing.T) {
 	}
 
 	verifier := newTestVerifier(t, key)
-	_, err = verifier.Verify(t.Context(), signPayload(t, key, payload), TransportHTTP)
+	_, err = verifier.verify(t.Context(), signPayload(t, key, payload), transportHTTP)
 	requireKind(t, err, KindInvalid)
 }
 
@@ -207,12 +234,14 @@ func TestVerify_TimePolicy(t *testing.T) {
 		{
 			name: "expiration just inside skew is accepted",
 			mutate: func(claims map[string]any) {
+				claims["iat"] = now.Add(-time.Minute).Unix()
 				claims["exp"] = now.Add(-ClockSkew + time.Second).Unix()
 			},
 		},
 		{
 			name: "expiration at skew boundary is rejected",
 			mutate: func(claims map[string]any) {
+				claims["iat"] = now.Add(-time.Minute).Unix()
 				claims["exp"] = now.Add(-ClockSkew).Unix()
 			},
 			wantKind: KindInvalid,
@@ -244,16 +273,61 @@ func TestVerify_TimePolicy(t *testing.T) {
 			wantKind: KindInvalid,
 		},
 		{
-			name: "fractional expiration is rejected",
+			name: "maximum token lifetime is accepted",
+			mutate: func(claims map[string]any) {
+				claims["iat"] = now.Unix()
+				claims["exp"] = now.Add(MaxTokenLifetime).Unix()
+			},
+		},
+		{
+			name: "token lifetime beyond maximum is rejected",
+			mutate: func(claims map[string]any) {
+				claims["iat"] = now.Unix()
+				claims["exp"] = now.Add(MaxTokenLifetime + time.Second).Unix()
+			},
+			wantKind: KindInvalid,
+		},
+		{
+			name: "expiration must follow issued-at",
+			mutate: func(claims map[string]any) {
+				claims["iat"] = now.Add(ClockSkew).Unix()
+				claims["exp"] = now.Add(ClockSkew).Unix()
+			},
+			wantKind: KindInvalid,
+		},
+		{
+			name: "not-before must precede expiration",
+			mutate: func(claims map[string]any) {
+				claims["iat"] = now.Add(-time.Minute).Unix()
+				claims["exp"] = now.Add(20 * time.Second).Unix()
+				claims["nbf"] = now.Add(20 * time.Second).Unix()
+			},
+			wantKind: KindInvalid,
+		},
+		{
+			name: "fractional expiration is accepted",
 			mutate: func(claims map[string]any) {
 				claims["exp"] = json.Number("1900000000.5")
 			},
-			wantKind: KindInvalid,
+		},
+		{
+			name: "exponent expiration is accepted",
+			mutate: func(claims map[string]any) {
+				claims["exp"] = json.Number("1.9000003e9")
+			},
 		},
 		{
 			name: "overflowing expiration is rejected",
 			mutate: func(claims map[string]any) {
 				claims["exp"] = json.Number("9223372036854775808")
+			},
+			wantKind: KindInvalid,
+		},
+		{
+			name: "extreme numeric dates cannot overflow the lifetime check",
+			mutate: func(claims map[string]any) {
+				claims["iat"] = json.Number("-9223372036854775808")
+				claims["exp"] = json.Number("9223372036854775807")
 			},
 			wantKind: KindInvalid,
 		},
@@ -271,6 +345,20 @@ func TestVerify_TimePolicy(t *testing.T) {
 			},
 			wantKind: KindInvalid,
 		},
+		{
+			name: "missing issued-at is rejected",
+			mutate: func(claims map[string]any) {
+				delete(claims, "iat")
+			},
+			wantKind: KindInvalid,
+		},
+		{
+			name: "blank issued-at is rejected",
+			mutate: func(claims map[string]any) {
+				claims["iat"] = ""
+			},
+			wantKind: KindInvalid,
+		},
 	}
 
 	for _, testCase := range tests {
@@ -283,10 +371,10 @@ func TestVerify_TimePolicy(t *testing.T) {
 				t.Fatalf("marshal claims: %v", err)
 			}
 			verifier := newTestVerifier(t, key)
-			principal, err := verifier.Verify(
+			principal, err := verifier.verify(
 				t.Context(),
 				signPayload(t, key, payload),
-				TransportHTTP,
+				transportHTTP,
 			)
 			requireKind(t, err, testCase.wantKind)
 			if testCase.wantKind == 0 && principal.Subject != "opaque-subject" {
@@ -307,7 +395,10 @@ func TestBearerCredential(t *testing.T) {
 		{name: "missing", wantKind: KindMissing},
 		{name: "duplicate", values: []string{"Bearer a", "Bearer b"}, wantKind: KindMalformed},
 		{name: "alternate", values: []string{"Basic abc"}, wantKind: KindMalformed},
-		{name: "extra whitespace", values: []string{"Bearer  abc"}, wantKind: KindMalformed},
+		{name: "multiple scheme spaces", values: []string{"Bearer  abc"}, want: "abc"},
+		{name: "tab separator", values: []string{"Bearer\tabc"}, wantKind: KindMalformed},
+		{name: "leading whitespace", values: []string{" Bearer abc"}, wantKind: KindMalformed},
+		{name: "trailing whitespace", values: []string{"Bearer abc "}, wantKind: KindMalformed},
 		{name: "comma joined", values: []string{"Bearer a,Bearer b"}, wantKind: KindMalformed},
 		{name: "oversized", values: []string{"Bearer " + strings.Repeat("a", MaxTokenBytes+1)}, wantKind: KindOversize},
 	}

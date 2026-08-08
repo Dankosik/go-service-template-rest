@@ -17,8 +17,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/example/go-service-template-rest/internal/failure"
 	httpx "github.com/example/go-service-template-rest/internal/infra/http"
-	"github.com/example/go-service-template-rest/internal/problem"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -32,13 +32,13 @@ var errSaturated = errors.New("dependency is saturated")
 
 // saturatedMapper classifies errSaturated with a retry hint, which is the one
 // mapper value the two transports render differently.
-func saturatedMapper(delay time.Duration) problem.Mapper {
-	return func(err error) (problem.Mapped, bool) {
+func saturatedMapper(delay time.Duration) failure.Mapper {
+	return func(err error) (failure.Classification, bool) {
 		if !errors.Is(err, errSaturated) {
-			return problem.Mapped{}, false
+			return failure.Classification{}, false
 		}
-		return problem.Mapped{
-			Code:       problem.CodeServiceUnavailable,
+		return failure.Classification{
+			Code:       failure.CodeServiceUnavailable,
 			Detail:     "dependency is saturated",
 			RetryAfter: delay,
 		}, true
@@ -59,7 +59,7 @@ func TestRetryHintReachesBothTransports(t *testing.T) {
 		{delay: 1500 * time.Millisecond, wantRetryAfter: 2, wantGRPCSeconds: 1.5},
 	} {
 		t.Run(testCase.delay.String(), func(t *testing.T) {
-			mappers := []problem.Mapper{saturatedMapper(testCase.delay)}
+			mappers := []failure.Mapper{saturatedMapper(testCase.delay)}
 
 			retryInfo, _ := classifiedDetailsFromServer(t, mappers, testErrorDomain)
 			if retryInfo == nil {
@@ -88,17 +88,17 @@ func TestRetryHintReachesBothTransports(t *testing.T) {
 	}
 }
 
-// The gRPC code space is coarser than problem.Code: InvalidArgument answers for
+// The gRPC code space is coarser than failure.Code: InvalidArgument answers for
 // both CodeBadRequest and CodeUnprocessableContent. The reason is what lets a
 // caller tell them apart.
 func TestErrorInfoDistinguishesCodesSharingOneGRPCCode(t *testing.T) {
-	reasons := make(map[problem.Code]string, 2)
-	for _, code := range []problem.Code{problem.CodeBadRequest, problem.CodeUnprocessableContent} {
-		mappers := []problem.Mapper{func(err error) (problem.Mapped, bool) {
+	reasons := make(map[failure.Code]string, 2)
+	for _, code := range []failure.Code{failure.CodeBadRequest, failure.CodeUnprocessableContent} {
+		mappers := []failure.Mapper{func(err error) (failure.Classification, bool) {
 			if !errors.Is(err, errSaturated) {
-				return problem.Mapped{}, false
+				return failure.Classification{}, false
 			}
-			return problem.Mapped{Code: code, Detail: "rejected"}, true
+			return failure.Classification{Code: code, Detail: "rejected"}, true
 		}}
 
 		_, errorInfo := classifiedDetailsFromServer(t, mappers, testErrorDomain)
@@ -111,10 +111,10 @@ func TestErrorInfoDistinguishesCodesSharingOneGRPCCode(t *testing.T) {
 		reasons[code] = errorInfo.GetReason()
 	}
 
-	if reasons[problem.CodeBadRequest] == reasons[problem.CodeUnprocessableContent] {
+	if reasons[failure.CodeBadRequest] == reasons[failure.CodeUnprocessableContent] {
 		t.Fatalf(
 			"both codes rendered reason %q, so a caller cannot tell them apart",
-			reasons[problem.CodeBadRequest],
+			reasons[failure.CodeBadRequest],
 		)
 	}
 }
@@ -123,11 +123,11 @@ func TestErrorInfoDistinguishesCodesSharingOneGRPCCode(t *testing.T) {
 // [A-Z][A-Z0-9_]+[A-Z0-9]. A code added later that does not render to one is a
 // defect in that code, caught here over the whole catalog rather than per call
 // site.
-func TestEveryProblemCodeRendersAConformingReason(t *testing.T) {
-	for _, definition := range problem.All() {
-		reason := reasonFor(t, definition.Code)
+func TestEveryFailureCodeRendersAConformingReason(t *testing.T) {
+	for code := range failureCodeConstantNames(t) {
+		reason := reasonFor(t, code)
 		if len(reason) < 3 || len(reason) > 63 {
-			t.Errorf("%s renders reason %q, whose length is outside [3,63]", definition.Code, reason)
+			t.Errorf("%s renders reason %q, whose length is outside [3,63]", code, reason)
 			continue
 		}
 		for index, char := range reason {
@@ -137,7 +137,7 @@ func TestEveryProblemCodeRendersAConformingReason(t *testing.T) {
 			if isUpper || (isDigit && !edge) || (char == '_' && !edge) {
 				continue
 			}
-			t.Errorf("%s renders reason %q, which is not UPPER_SNAKE_CASE", definition.Code, reason)
+			t.Errorf("%s renders reason %q, which is not UPPER_SNAKE_CASE", code, reason)
 			break
 		}
 	}
@@ -170,7 +170,7 @@ func TestUnclassifiedErrorCarriesNoDetailsAndNoHandlerText(t *testing.T) {
 }
 
 func TestErrorInfoIsOmittedWithoutADomainAndRetryInfoIsNot(t *testing.T) {
-	mappers := []problem.Mapper{saturatedMapper(time.Second)}
+	mappers := []failure.Mapper{saturatedMapper(time.Second)}
 
 	retryInfo, errorInfo := classifiedDetailsFromServer(t, mappers, "")
 	if errorInfo != nil {
@@ -181,11 +181,23 @@ func TestErrorInfoIsOmittedWithoutADomainAndRetryInfoIsNot(t *testing.T) {
 	}
 }
 
+func TestClassifiedEmptyDetailUsesGRPCOwnedFallback(t *testing.T) {
+	t.Parallel()
+
+	err := mappedStatus(failure.Classification{Code: failure.CodeAlreadyExists}, "")
+	if code := status.Code(err); code != codes.AlreadyExists {
+		t.Fatalf("code = %s, want %s", code, codes.AlreadyExists)
+	}
+	if detail := status.Convert(err).Message(); detail != "request failed" {
+		t.Fatalf("detail = %q, want gRPC-owned fallback", detail)
+	}
+}
+
 // classifiedDetailsFromServer drives one classified error through a real server
 // and returns whichever of the two details the caller received.
 func classifiedDetailsFromServer(
 	t *testing.T,
-	mappers []problem.Mapper,
+	mappers []failure.Mapper,
 	domain string,
 ) (*errdetails.RetryInfo, *errdetails.ErrorInfo) {
 	t.Helper()
@@ -221,11 +233,11 @@ func classifiedDetailsFromServer(
 	return retryInfo, errorInfo
 }
 
-func reasonFor(t *testing.T, code problem.Code) string {
+func reasonFor(t *testing.T, code failure.Code) string {
 	t.Helper()
 
 	for _, detail := range status.Convert(
-		mappedStatus(problem.Mapped{Code: code}, testErrorDomain),
+		mappedStatus(failure.Classification{Code: code}, testErrorDomain),
 	).Details() {
 		if info, ok := detail.(*errdetails.ErrorInfo); ok {
 			return info.GetReason()
@@ -237,7 +249,7 @@ func reasonFor(t *testing.T, code problem.Code) string {
 
 // httpRetryAfter renders the same mapper through the HTTP transport's own
 // response path and returns the header a caller receives.
-func httpRetryAfter(t *testing.T, mappers []problem.Mapper) string {
+func httpRetryAfter(t *testing.T, mappers []failure.Mapper) string {
 	t.Helper()
 
 	recorder := httptest.NewRecorder()

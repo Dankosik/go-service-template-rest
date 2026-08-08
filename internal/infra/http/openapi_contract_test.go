@@ -282,7 +282,7 @@ func TestOpenAPIRuntimeContractOperationsDeclareSecurityDecisions(t *testing.T) 
 					if !operationHasRealSecurity(swagger, operation) {
 						t.Fatalf("%s operation is protected but has no real OpenAPI security requirement", operation.OperationID)
 					}
-					for _, status := range []string{"401", "403"} {
+					for _, status := range []string{"400", "401", "403", "431", "503", "504"} {
 						if !operationHasProblemResponse(swagger, operation, status) {
 							t.Fatalf("%s operation is protected but lacks %s application/problem+json response", operation.OperationID, status)
 						}

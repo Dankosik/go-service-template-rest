@@ -1,9 +1,9 @@
 package oidcjwt
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
+	"math/big"
 	"slices"
 	"strings"
 	"time"
@@ -23,28 +23,40 @@ type protectedHeader struct {
 	JWK       json.RawMessage `json:"jwk"`
 }
 
-// numericDate is a JWT NumericDate held to integer seconds, with presence
-// recorded separately so validTimes can tell an absent claim from a zero one.
-//
-// A fractional or exponent-notation value is refused rather than truncated: the
-// two spellings would compare differently against ClockSkew while naming the same
-// instant, and a claim this boundary acts on may have only one reading.
+// numericDate is a JWT NumericDate held at time.Time's nanosecond resolution,
+// with presence recorded separately so validTimes can tell an absent claim from
+// a zero one. Values finer than a nanosecond are rounded down, so accepted trust
+// never lasts longer than the instant the token names.
 type numericDate struct {
-	value   int64
-	present bool
+	nanoseconds int64
+	present     bool
 }
 
 func (n *numericDate) UnmarshalJSON(data []byte) error {
-	if bytes.ContainsAny(data, ".eE") || bytes.Equal(data, []byte("null")) {
-		return errors.New("NumericDate must be an integer")
+	var number json.Number
+	if err := json.Unmarshal(data, &number); err != nil {
+		return errors.New("NumericDate must be a number")
 	}
-	var value int64
-	if err := strictUnmarshal(data, &value); err != nil {
-		return errors.New("NumericDate must be an integer")
+	value, ok := new(big.Rat).SetString(number.String())
+	if !ok {
+		return errors.New("NumericDate must be a number")
 	}
-	n.value = value
+	scaled := new(big.Rat).Mul(value, big.NewRat(int64(time.Second), 1))
+	whole, remainder := new(big.Int), new(big.Int)
+	whole.QuoRem(scaled.Num(), scaled.Denom(), remainder)
+	if scaled.Sign() < 0 && remainder.Sign() != 0 {
+		whole.Sub(whole, big.NewInt(1))
+	}
+	if !whole.IsInt64() {
+		return errors.New("NumericDate is outside supported time range")
+	}
+	n.nanoseconds = whole.Int64()
 	n.present = true
 	return nil
+}
+
+func (n *numericDate) time() time.Time {
+	return time.Unix(0, n.nanoseconds)
 }
 
 // audienceClaim is the aud claim in either RFC 7519 spelling, scalar or array.
@@ -106,6 +118,7 @@ type parsedToken struct {
 	keyID     string
 	payload   []byte
 	principal reqctx.Principal
+	expiresAt time.Time
 }
 
 // bearerToken extracts the compact token from the credential header values.
@@ -116,9 +129,10 @@ type parsedToken struct {
 // entry meaning the same thing, so a client cannot reach a laxer reading by
 // switching protocol.
 //
-// One value, no surrounding space, no comma, no whitespace inside the token: a
-// credential this boundary acts on may have exactly one reading. RFC 9110 lets a
-// field repeat and lets one line carry a comma-separated list, so a request
+// One value, no surrounding space, no comma, and only RFC 6750's one-or-more
+// ASCII spaces between the scheme and token: a credential this boundary acts on
+// may have exactly one reading. RFC 9110 lets a field repeat and lets one line
+// carry a comma-separated list, so a request
 // offering two credentials is refused rather than resolved — choosing among them
 // is how one intermediary's reading comes to differ from this service's. Refusal
 // is KindMalformed, reported as 400 rather than 401: the framing was wrong, so
@@ -135,6 +149,7 @@ func bearerToken(values []string) (string, error) {
 		return "", failure(KindMalformed)
 	}
 	scheme, token, found := strings.Cut(value, " ")
+	token = strings.TrimLeft(token, " ")
 	if !found ||
 		!strings.EqualFold(scheme, "Bearer") ||
 		token == "" ||
@@ -149,8 +164,8 @@ func bearerToken(values []string) (string, error) {
 
 func parseToken(compact string, policy Policy, now time.Time) (parsedToken, error) {
 	// bearerToken already bounds everything the adapters pass. This repeats the
-	// cap for [Verifier.Verify], which is exported and reachable with a token that
-	// never came through a credential header.
+	// cap for verify as a local invariant, even though adapters already checked
+	// the credential before reaching it.
 	if len(compact) > MaxTokenBytes {
 		return parsedToken{}, failure(KindOversize)
 	}
@@ -182,10 +197,15 @@ func parseToken(compact string, policy Policy, now time.Time) (parsedToken, erro
 		return parsedToken{}, failure(KindInvalid)
 	}
 	return parsedToken{
-		signed:    signed,
-		keyID:     header.KeyID,
-		payload:   payload,
-		principal: reqctx.Principal{Subject: claims.Subject},
+		signed:  signed,
+		keyID:   header.KeyID,
+		payload: payload,
+		principal: reqctx.Principal{
+			Issuer:   claims.Issuer,
+			Subject:  claims.Subject,
+			ClientID: claims.ClientID,
+		},
+		expiresAt: claims.Expires.time(),
 	}, nil
 }
 
@@ -243,13 +263,20 @@ func validTimes(claims accessTokenClaims, now time.Time) bool {
 	if !claims.Expires.present || !claims.IssuedAt.present {
 		return false
 	}
-	nowSeconds := now.Unix()
-	skewSeconds := int64(ClockSkew / time.Second)
-	if claims.Expires.value <= nowSeconds-skewSeconds {
+	issuedAt := claims.IssuedAt.time()
+	expires := claims.Expires.time()
+	if !expires.After(issuedAt) || expires.Sub(issuedAt) > MaxTokenLifetime {
 		return false
 	}
-	if claims.IssuedAt.value > nowSeconds+skewSeconds {
+	if !expires.After(now.Add(-ClockSkew)) {
 		return false
 	}
-	return !claims.NotBefore.present || claims.NotBefore.value <= nowSeconds+skewSeconds
+	if issuedAt.After(now.Add(ClockSkew)) {
+		return false
+	}
+	if !claims.NotBefore.present {
+		return true
+	}
+	notBefore := claims.NotBefore.time()
+	return notBefore.Before(expires) && !notBefore.After(now.Add(ClockSkew))
 }

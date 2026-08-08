@@ -348,17 +348,11 @@ internal state; R5 needs the repository's own lint rather than a reading.
   gain a configuration gate only on that evidence; adding one up front would
   ship a switch with no demonstrated user.
 
-## Proof gaps
+## Review result
 
-The [Review Independence](../../docs/spec-first-workflow/shared/review-independence.md)
-trigger applies to this spec: it fixes a public envelope contract, a durable
-schema change, and — in R4 — a deliberate, hard-to-reverse trade of a stated
-safety property. An independent specification review was **not** run, because
-subagent dispatch is disabled in the authoring session. The spec carries focused
-root self-review only, which found and closed two defects: R4 had no concurrency
-rule against a racing append for the same key, and the rejection outcome did not
-say it must be distinguishable from a fault.
-
-Next useful check, in order of value: an independent reviewer falsifying R4's
-concurrency rule and its post-retirement sequence-replay trade, then R1's
-envelope-budget assumption. Reopen owner: Specification.
+Independent whole-bundle review returned no finding against the trace-context
+or ordering-key lifecycle rules. The current runtime already realizes the
+stored context, linked publication span, and explicit transactional key
+retirement, while R3's selected-adapter forwarding remains implementation work
+owned by the production-closure outcome. Its real-PostgreSQL, telemetry, and
+adapter evidence remains downstream proof under the success criteria above.

@@ -67,7 +67,7 @@ func (e *Error) Error() string {
 // callerAborted reports whether err is the caller's own cancellation or deadline
 // rather than an outcome this boundary decided.
 //
-// It is the one failure this package returns without a [Kind]: [Verifier.Verify]
+// It is the one failure this package returns without a [Kind]: verify
 // passes it back wrapped and otherwise unchanged, so each transport can report
 // the caller's status instead of an authentication result. [KindOf] answers
 // false for it, which is the same answer it gives an unclassified error, so
@@ -87,7 +87,7 @@ func callerAborted(err error) bool {
 // matches the real peer and every request is failing, not that one client sent
 // a bad header.
 //
-// canceled is the one label with no Kind behind it. [Verifier.Verify] returns
+// canceled is the one label with no Kind behind it. verify returns
 // the caller's own cancellation or deadline unchanged so each transport can
 // answer with the caller's status rather than an authentication outcome, and
 // that error carries no Kind. Counting it as invalid would report a client that
@@ -127,17 +127,15 @@ func failure(kind Kind) error {
 }
 
 // logRecoveredPanic reports a panic this package converted into a sanitized
-// failure. Both converters call it: [Verifier.Verify] and fetchAndInstall.
+// failure. Both converters call it: verify and fetchAndInstall.
 //
-// It exists because the conversion is otherwise invisible. A panic in this
-// package's own code leaves verification answering KindUnavailable and a refresh
-// answering errRefreshFailed — exactly what a provider outage produces, in
-// exactly the counters an operator is told to expect outage noise in. So the one
-// failure worth waking someone for reads as the one they were told to ignore.
+// It exists because the conversion otherwise reports only a closed failure
+// category. The metric says a panic occurred; this record says where the service
+// defect occurred without exposing the recovered value.
 //
 // Only the panic's type is published, never its value: a panic raised while
 // parsing a token or a provider document can carry either in its message, and
-// the redaction rule errProviderFetchFailed owns covers logs as much as errors.
+// providerError's redaction rule covers logs as much as errors.
 // The stack is safe by the same reading — it names functions and files, not
 // values — and it is the only record of where the panic came from, because both
 // converters answer before any transport recovery could see it.

@@ -5,7 +5,7 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/example/go-service-template-rest/internal/problem"
+	"github.com/example/go-service-template-rest/internal/failure"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -35,7 +35,7 @@ func handlerErrorBoundary(rendering errorRendering) aroundRPC {
 // caller matches on. The two travel together because every signature between the
 // boundary and the status would otherwise carry an unnamed pair.
 type errorRendering struct {
-	mappers []problem.Mapper
+	mappers []failure.Mapper
 	// domain scopes ErrorInfo.Reason, so two services' reasons cannot collide.
 	// Empty omits the detail rather than publishing an unscoped reason; the
 	// composition root always supplies one, and exhaustruct on [Options] is what
@@ -100,48 +100,44 @@ func mapError(err error, trusted trustedStatus, rendering errorRendering) error 
 	if owned, ok := trusted(err); ok {
 		return owned
 	}
-	if mapped, ok := problem.Classify(err, rendering.mappers); ok {
+	if mapped, ok := failure.Classify(err, rendering.mappers); ok {
 		return mappedStatus(mapped, rendering.domain)
 	}
 	return ownedStatus(codes.Internal, "request failed")
 }
 
-func mappedStatus(mapped problem.Mapped, domain string) error {
+func mappedStatus(mapped failure.Classification, domain string) error {
 	code := codes.Internal
 	switch mapped.Code {
-	case problem.CodeBadRequest, problem.CodeUnprocessableContent:
+	case failure.CodeBadRequest, failure.CodeUnprocessableContent:
 		code = codes.InvalidArgument
-	case problem.CodeUnauthorized:
+	case failure.CodeUnauthorized:
 		code = codes.Unauthenticated
-	case problem.CodeForbidden:
+	case failure.CodeForbidden:
 		code = codes.PermissionDenied
-	case problem.CodeNotFound:
+	case failure.CodeNotFound:
 		code = codes.NotFound
-	case problem.CodeMethodNotAllowed:
+	case failure.CodeMethodNotAllowed:
 		code = codes.Unimplemented
-	case problem.CodeConflict:
-		code = codes.Aborted
-	case problem.CodeRequestEntityTooLarge, problem.CodeTooManyRequests:
+	case failure.CodeAlreadyExists:
+		code = codes.AlreadyExists
+	case failure.CodeRequestEntityTooLarge, failure.CodeTooManyRequests:
 		code = codes.ResourceExhausted
 	// profile:authn-oidc-jwt:start
-	case problem.CodeRequestHeaderFieldsTooLarge:
+	case failure.CodeRequestHeaderFieldsTooLarge:
 		code = codes.ResourceExhausted
 	// profile:authn-oidc-jwt:end
-	case problem.CodeServiceUnavailable:
+	case failure.CodeServiceUnavailable:
 		code = codes.Unavailable
-	case problem.CodeGatewayTimeout:
+	case failure.CodeGatewayTimeout:
 		code = codes.DeadlineExceeded
-	case problem.CodeInternalError:
+	case failure.CodeInternalError:
 		code = codes.Internal
 	}
 
 	detail := strings.TrimSpace(mapped.Detail)
 	if detail == "" {
-		if definition, ok := problem.ForCode(mapped.Code); ok {
-			detail = definition.Title
-		} else {
-			detail = "request failed"
-		}
+		detail = "request failed"
 	}
 
 	rendered := status.New(code, detail)
@@ -161,15 +157,15 @@ func mappedStatus(mapped problem.Mapped, domain string) error {
 // should read as data rather than prose.
 //
 // Both carry repository-owned values only: the mapper's own delay, and the
-// problem code. No handler text, dependency identity, or peer-supplied value
+// failure code. No handler text, dependency identity, or peer-supplied value
 // becomes a detail.
 //
 // The reason is the code upper-snake-cased because google.rpc.ErrorInfo
 // documents Reason as at most 63 characters matching [A-Z][A-Z0-9_]+[A-Z0-9].
 // Every catalog code is lower snake case ASCII, so the rendering is total and
-// injective; TestEveryProblemCodeRendersAConformingReason holds the whole
-// catalog to it. problem.Code remains the only stored identity.
-func classifiedDetails(mapped problem.Mapped, domain string) []protoadapt.MessageV1 {
+// injective; TestEveryFailureCodeRendersAConformingReason holds the whole
+// catalog to it. failure.Code remains the only stored identity.
+func classifiedDetails(mapped failure.Classification, domain string) []protoadapt.MessageV1 {
 	details := make([]protoadapt.MessageV1, 0, 2)
 	if mapped.RetryAfter > 0 {
 		details = append(details, &errdetails.RetryInfo{

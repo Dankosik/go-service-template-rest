@@ -282,8 +282,10 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 	}
 	wiring.authnStage(authnStageTrustEstablished)
 	// Close is the pre-Run partial-start safety net and is idempotent after the
-	// supervised runtime has joined.
-	defer authnVerifier.Close()
+	// supervised runtime has joined. Once the background budget expires, process
+	// exit owns cleanup instead of a second unbounded join delaying telemetry.
+	authnCloseAllowed := true
+	defer func() { closeAuthnWithinBudget(authnVerifier, authnCloseAllowed) }()
 	// profile:authn-oidc-jwt:end
 
 	startupAdmission := newStartupAdmissionController()
@@ -293,8 +295,20 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 	// the early returns between here and there: with cancellation detached from
 	// the signal, a return that skipped Shutdown would leave supervised
 	// goroutines running past Run.
+	// profile:authn-oidc-jwt:start
+	backgroundShutdownDone := false
+	// profile:authn-oidc-jwt:end
 	defer func() {
-		_ = supervisor.Shutdown(shutdown.stage(signalCtx, backgroundShutdownTimeout))
+		// profile:authn-oidc-jwt:start
+		if backgroundShutdownDone {
+			return
+		}
+		// profile:authn-oidc-jwt:end
+		backgroundCtx := shutdown.stage(signalCtx, backgroundShutdownTimeout)
+		_ = supervisor.Shutdown(backgroundCtx)
+		// profile:authn-oidc-jwt:start
+		authnCloseAllowed = backgroundCtx.Err() == nil
+		// profile:authn-oidc-jwt:end
 	}()
 
 	// profile:messaging-nats-jetstream:start
@@ -366,7 +380,7 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 			LogHealthProbes: bootstrap.cfg.HTTP.AccessLogHealthProbes,
 			// The active profile's dependency failures, classified once here
 			// rather than in every operation. A service appends its own domain
-			// mappers at runtimeDependencies.DomainErrors; see problem.Mapper
+			// mappers at runtimeDependencies.DomainErrors; see failure.Mapper
 			// for why the seam exists.
 			DomainErrors: domainErrors,
 			// profile:authn-oidc-jwt:start
@@ -509,6 +523,10 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 	messagingErr := messaging.Shutdown(backgroundCtx)
 	// profile:messaging-nats-jetstream:end
 	backgroundErr := supervisor.Shutdown(backgroundCtx)
+	// profile:authn-oidc-jwt:start
+	backgroundShutdownDone = true
+	authnCloseAllowed = backgroundCtx.Err() == nil
+	// profile:authn-oidc-jwt:end
 
 	dependencies.Close(shutdown.stage(signalCtx, dependencyCloseTimeout))
 
@@ -520,6 +538,18 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 		backgroundErr,
 	)
 }
+
+// profile:authn-oidc-jwt:start
+func closeAuthnWithinBudget(authn authnRuntime, allowed bool) {
+	if !allowed {
+		// ponytail: process exit owns cleanup after the shared budget expires; add
+		// context-aware verifier retirement only if Run must return without exiting.
+		return
+	}
+	authn.Close()
+}
+
+// profile:authn-oidc-jwt:end
 
 func logReadinessTransition(ctx context.Context, log *slog.Logger, err error) {
 	if err != nil {

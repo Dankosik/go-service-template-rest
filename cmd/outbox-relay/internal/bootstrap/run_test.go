@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -205,10 +206,10 @@ func (relay *fakeRelay) Run(ctx context.Context) postgresoutbox.RelayResult {
 }
 
 func TestOutboxRelayComposition(t *testing.T) {
-	t.Run("nil builder wins before flags or config", func(t *testing.T) {
+	t.Run("invalid flags reject before nil builder", func(t *testing.T) {
 		err := run(t.Context(), []string{"--not-a-real-flag"}, nil)
-		if !errors.Is(err, postgresoutbox.ErrConfig) {
-			t.Fatalf("run() error = %v, want ErrConfig", err)
+		if err == nil || !strings.Contains(err.Error(), "parse flags") {
+			t.Fatalf("run() error = %v, want flag rejection", err)
 		}
 	})
 
@@ -216,9 +217,9 @@ func TestOutboxRelayComposition(t *testing.T) {
 		setOutboxBootstrapEnvironment(t, true)
 		built := false
 		cleaned := false
-		err := run(t.Context(), nil, func(context.Context, config.Config, *slog.Logger) (postgresoutbox.Publisher, func(context.Context), error) {
+		err := run(t.Context(), nil, func(context.Context, config.Config, *slog.Logger) (PublisherRuntime, error) {
 			built = true
-			return nil, func(context.Context) { cleaned = true }, nil
+			return PublisherRuntime{run: blockingPublisherRun, ready: func() bool { return true }, shutdown: func(context.Context) error { cleaned = true; return nil }}, nil
 		})
 		if !errors.Is(err, postgresoutbox.ErrConfig) || !built || !cleaned {
 			t.Fatalf("run() = %v built=%t cleaned=%t, want nil-publisher rejection with builder cleanup", err, built, cleaned)
@@ -232,8 +233,8 @@ func TestOutboxRelayComposition(t *testing.T) {
 		setOutboxBootstrapEnvironment(t, true)
 		cleaned := false
 		var publisher *pointerTestPublisher
-		err := run(t.Context(), nil, func(context.Context, config.Config, *slog.Logger) (postgresoutbox.Publisher, func(context.Context), error) {
-			return publisher, func(context.Context) { cleaned = true }, nil
+		err := run(t.Context(), nil, func(context.Context, config.Config, *slog.Logger) (PublisherRuntime, error) {
+			return PublisherRuntime{publisher: publisher, run: blockingPublisherRun, ready: func() bool { return true }, shutdown: func(context.Context) error { cleaned = true; return nil }}, nil
 		})
 		if !errors.Is(err, postgresoutbox.ErrConfig) || !cleaned {
 			t.Fatalf("run() = %v cleaned=%t, want typed-nil rejection with builder cleanup", err, cleaned)
@@ -246,9 +247,9 @@ func TestOutboxRelayComposition(t *testing.T) {
 	t.Run("invalid database combination rejects before builder", func(t *testing.T) {
 		setOutboxBootstrapEnvironment(t, false)
 		built := false
-		err := run(t.Context(), nil, func(context.Context, config.Config, *slog.Logger) (postgresoutbox.Publisher, func(context.Context), error) {
+		err := run(t.Context(), nil, func(context.Context, config.Config, *slog.Logger) (PublisherRuntime, error) {
 			built = true
-			return testPublisher{}, nil, nil
+			return testPublisherRuntime(nil), nil
 		})
 		if !errors.Is(err, config.ErrValidate) || built {
 			t.Fatalf("run() = %v built=%t, want config rejection before builder", err, built)
@@ -257,11 +258,11 @@ func TestOutboxRelayComposition(t *testing.T) {
 
 	t.Run("invalid drain budget rejects before builder", func(t *testing.T) {
 		setOutboxBootstrapEnvironment(t, true)
-		t.Setenv("APP__HTTP__GRACE_PERIOD", "33s")
+		t.Setenv("APP__HTTP__GRACE_PERIOD", "35s")
 		built := false
-		err := run(t.Context(), nil, func(context.Context, config.Config, *slog.Logger) (postgresoutbox.Publisher, func(context.Context), error) {
+		err := run(t.Context(), nil, func(context.Context, config.Config, *slog.Logger) (PublisherRuntime, error) {
 			built = true
-			return testPublisher{}, nil, nil
+			return testPublisherRuntime(nil), nil
 		})
 		if !errors.Is(err, config.ErrValidate) || built || !strings.Contains(err.Error(), "post-drain cleanup") {
 			t.Fatalf("run() = %v built=%t, want drain-budget rejection before builder", err, built)
@@ -270,12 +271,12 @@ func TestOutboxRelayComposition(t *testing.T) {
 
 	t.Run("complete drain budget reaches builder before postgres", func(t *testing.T) {
 		setOutboxBootstrapEnvironment(t, true)
-		t.Setenv("APP__HTTP__GRACE_PERIOD", "34s")
+		t.Setenv("APP__HTTP__GRACE_PERIOD", "36s")
 		builderErr := errors.New("builder admission canary")
 		built := false
-		err := run(t.Context(), nil, func(context.Context, config.Config, *slog.Logger) (postgresoutbox.Publisher, func(context.Context), error) {
+		err := run(t.Context(), nil, func(context.Context, config.Config, *slog.Logger) (PublisherRuntime, error) {
 			built = true
-			return nil, nil, builderErr
+			return PublisherRuntime{}, builderErr
 		})
 		if !built || !errors.Is(err, builderErr) {
 			t.Fatalf("run() = %v built=%t, want accepted shutdown budget and builder canary", err, built)
@@ -289,14 +290,41 @@ func TestOutboxRelayComposition(t *testing.T) {
 		setOutboxBootstrapEnvironment(t, true)
 		t.Setenv("APP__OUTBOX__DRAIN_TIMEOUT", time.Duration(1<<63-1).String())
 		built := false
-		err := run(t.Context(), nil, func(context.Context, config.Config, *slog.Logger) (postgresoutbox.Publisher, func(context.Context), error) {
+		err := run(t.Context(), nil, func(context.Context, config.Config, *slog.Logger) (PublisherRuntime, error) {
 			built = true
-			return testPublisher{}, nil, nil
+			return testPublisherRuntime(nil), nil
 		})
 		if !errors.Is(err, config.ErrValidate) || built {
 			t.Fatalf("run() = %v built=%t, want overflow-safe drain rejection before builder", err, built)
 		}
 	})
+}
+
+func TestPublisherRuntimeValidation(t *testing.T) {
+	run := func(context.Context) error { return nil }
+	ready := func() bool { return true }
+	shutdown := func(context.Context) error { return nil }
+	for _, test := range []struct {
+		name      string
+		publisher postgresoutbox.Publisher
+		run       func(context.Context) error
+		ready     func() bool
+		shutdown  func(context.Context) error
+		wantErr   bool
+	}{
+		{name: "complete", publisher: testPublisher{}, run: run, ready: ready, shutdown: shutdown},
+		{name: "nil publisher", run: run, ready: ready, shutdown: shutdown, wantErr: true},
+		{name: "nil run", publisher: testPublisher{}, ready: ready, shutdown: shutdown, wantErr: true},
+		{name: "nil ready", publisher: testPublisher{}, run: run, shutdown: shutdown, wantErr: true},
+		{name: "nil shutdown", publisher: testPublisher{}, run: run, ready: ready, wantErr: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := NewPublisherRuntime(test.publisher, test.run, test.ready, test.shutdown)
+			if (err != nil) != test.wantErr || test.wantErr && !errors.Is(err, postgresoutbox.ErrConfig) {
+				t.Fatalf("NewPublisherRuntime() error = %v, want config error=%t", err, test.wantErr)
+			}
+		})
+	}
 }
 
 func TestOutboxRelayGracefulDrain(t *testing.T) {
@@ -380,8 +408,9 @@ func TestOutboxRelayOuterJoinTimeout(t *testing.T) {
 
 func TestOutboxRelayTeardownReleasesInOrderAndSkipsWhenUnsafe(t *testing.T) {
 	var order []string
+	publisher := testPublisherRuntime(func(context.Context) error { order = append(order, "publisher"); return nil })
 	teardown := relayTeardown{
-		publisher: func(context.Context) { order = append(order, "publisher") },
+		publisher: &publisher,
 		pool:      func() { order = append(order, "postgres") },
 	}
 	if err := teardown.release(t.Context()); err != nil {
@@ -392,8 +421,9 @@ func TestOutboxRelayTeardownReleasesInOrderAndSkipsWhenUnsafe(t *testing.T) {
 		t.Fatalf("safe release order = %q, want publisher,postgres", got)
 	}
 
+	unsafePublisher := testPublisherRuntime(func(context.Context) error { order = append(order, "unsafe-publisher"); return nil })
 	unsafe := relayTeardown{
-		publisher: func(context.Context) { order = append(order, "unsafe-publisher") },
+		publisher: &unsafePublisher,
 		pool:      func() { order = append(order, "unsafe-postgres") },
 		unsafe:    true,
 	}
@@ -408,7 +438,8 @@ func TestOutboxRelayTeardownReleasesInOrderAndSkipsWhenUnsafe(t *testing.T) {
 // A startup failure before the pool exists releases only the publisher.
 func TestOutboxRelayTeardownWithoutPoolReleasesPublisher(t *testing.T) {
 	closed := false
-	teardown := relayTeardown{publisher: func(context.Context) { closed = true }}
+	publisher := testPublisherRuntime(func(context.Context) error { closed = true; return nil })
+	teardown := relayTeardown{publisher: &publisher}
 	if err := teardown.release(t.Context()); err != nil {
 		t.Fatalf("release error = %v", err)
 	}
@@ -423,10 +454,12 @@ func TestOutboxRelayPublisherCleanupIsBounded(t *testing.T) {
 		release := make(chan struct{})
 		result := make(chan error, 1)
 		go func() {
-			result <- closePublisher(context.Background(), func(context.Context) {
+			err, _ := closePublisher(context.Background(), func(context.Context) error {
 				close(started)
 				<-release
+				return nil
 			})
+			result <- err
 		}()
 		<-started
 		err := <-result
@@ -437,7 +470,8 @@ func TestOutboxRelayPublisherCleanupIsBounded(t *testing.T) {
 		synctest.Wait()
 	})
 
-	if err := closePublisher(t.Context(), func(context.Context) { panic("secret") }); err == nil ||
+	err, _ := closePublisher(t.Context(), func(context.Context) error { panic("secret") })
+	if err == nil ||
 		!strings.Contains(err.Error(), "panicked") || strings.Contains(err.Error(), "secret") {
 		t.Fatalf("closePublisher(panic) error = %v, want redacted panic", err)
 	}
@@ -447,7 +481,8 @@ func TestOutboxRelayPublisherPanic(t *testing.T) {
 	relay := newFakeRelay(func(context.Context, <-chan struct{}) postgresoutbox.RelayResult {
 		return postgresoutbox.RelayResult{Err: postgresoutbox.ErrPublisherPanic}
 	})
-	got := runRelayLifecycle(t.Context(), t.Context(), lifecycleConfig(), telemetry.New(), relay)
+	publisher := testPublisherRuntime(nil)
+	got := runRelayLifecycle(t.Context(), t.Context(), lifecycleConfig(), telemetry.New(), relay, &publisher)
 	if got.CleanupUnsafe || !errors.Is(got.Err, postgresoutbox.ErrPublisherPanic) || relay.Ready() {
 		t.Fatalf("runRelayLifecycle() = %+v ready=%t, want cleanup-safe fatal panic", got, relay.Ready())
 	}
@@ -458,9 +493,73 @@ func TestOutboxRelayPublisherPanic(t *testing.T) {
 	}
 }
 
+func TestOutboxRelayPublisherRuntime(t *testing.T) {
+	t.Run("terminal supervisor drains and shuts down", func(t *testing.T) {
+		terminalErr := errors.New("publisher supervisor terminated")
+		started := make(chan struct{})
+		terminal := make(chan struct{})
+		var shutdowns atomic.Int32
+		publisher := testPublisherRuntime(func(context.Context) error { shutdowns.Add(1); return nil })
+		publisher.run = func(context.Context) error {
+			close(started)
+			<-terminal
+			return terminalErr
+		}
+		relay := newFakeRelay(func(_ context.Context, drain <-chan struct{}) postgresoutbox.RelayResult {
+			<-drain
+			return postgresoutbox.RelayResult{}
+		})
+		result := make(chan postgresoutbox.RelayResult, 1)
+		go func() {
+			result <- runRelayLifecycle(t.Context(), t.Context(), lifecycleConfig(), telemetry.New(), relay, &publisher)
+		}()
+		<-relay.started
+		<-started
+		close(terminal)
+		got := <-result
+		if got.CleanupUnsafe || !errors.Is(got.Err, terminalErr) || shutdowns.Load() != 1 || publisher.shutdown != nil {
+			t.Fatalf("terminal lifecycle = %+v shutdowns=%d retained_shutdown=%t", got, shutdowns.Load(), publisher.shutdown != nil)
+		}
+	})
+
+	t.Run("shutdown error joins process result", func(t *testing.T) {
+		shutdownErr := errors.New("shutdown failed")
+		publisher := testPublisherRuntime(func(context.Context) error { return shutdownErr })
+		relay := newFakeRelay(func(_ context.Context, drain <-chan struct{}) postgresoutbox.RelayResult {
+			<-drain
+			return postgresoutbox.RelayResult{}
+		})
+		signalCtx, cancel := context.WithCancel(t.Context())
+		result := make(chan postgresoutbox.RelayResult, 1)
+		go func() {
+			result <- runRelayLifecycle(signalCtx, t.Context(), lifecycleConfig(), telemetry.New(), relay, &publisher)
+		}()
+		<-relay.started
+		cancel()
+		got := <-result
+		if got.CleanupUnsafe || !errors.Is(got.Err, shutdownErr) || publisher.shutdown != nil {
+			t.Fatalf("shutdown-error lifecycle = %+v retained_shutdown=%t", got, publisher.shutdown != nil)
+		}
+	})
+
+	t.Run("unjoined supervisor makes cleanup unsafe", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			processCtx, processCancel := context.WithTimeout(context.Background(), time.Hour)
+			defer processCancel()
+			result := make(chan error)
+			startedAt := time.Now()
+			err, unsafe := stopPublisherSupervisor(processCtx, func() {}, result, false)
+			if !unsafe || !strings.Contains(err.Error(), "join outbox publisher supervisor") || time.Since(startedAt) != forcedJoin {
+				t.Fatalf("stuck-supervisor join = %v unsafe=%t elapsed=%s", err, unsafe, time.Since(startedAt))
+			}
+		})
+	})
+}
+
 func TestOutboxRelayReadinessAndLiveness(t *testing.T) {
-	ready := atomic.Bool{}
-	server := newDiagnosticsServer(ready.Load, telemetry.New())
+	relayReady := atomic.Bool{}
+	publisherReady := atomic.Bool{}
+	server := newDiagnosticsServer(func() bool { return relayReady.Load() && publisherReady.Load() }, telemetry.New())
 	for _, test := range []struct {
 		path string
 		code int
@@ -474,8 +573,14 @@ func TestOutboxRelayReadinessAndLiveness(t *testing.T) {
 			t.Fatalf("GET %s status = %d, want %d", test.path, recorder.Code, test.code)
 		}
 	}
-	ready.Store(true)
+	relayReady.Store(true)
 	recorder := httptest.NewRecorder()
+	server.Handler.ServeHTTP(recorder, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/health/ready", nil))
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("GET /health/ready with publisher unready status = %d, want %d", recorder.Code, http.StatusServiceUnavailable)
+	}
+	publisherReady.Store(true)
+	recorder = httptest.NewRecorder()
 	server.Handler.ServeHTTP(recorder, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/health/ready", nil))
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("ready status = %d, want 200", recorder.Code)
@@ -485,8 +590,8 @@ func TestOutboxRelayReadinessAndLiveness(t *testing.T) {
 func TestOutboxRelayFlagAndConfigMapping(t *testing.T) {
 	t.Parallel()
 
-	options, err := parseLoadOptions([]string{"--config", "base.yaml", "--config-overlay", "one.yaml", "--config-overlay=two.yaml"})
-	if err != nil || options.ConfigPath != "base.yaml" || strings.Join(options.ConfigOverlays, ",") != "one.yaml,two.yaml" {
+	options, classify, err := parseLoadOptions([]string{"--config", "base.yaml", "--config-overlay", "one.yaml", "--config-overlay=two.yaml"})
+	if err != nil || classify || options.ConfigPath != "base.yaml" || strings.Join(options.ConfigOverlays, ",") != "one.yaml,two.yaml" {
 		t.Fatalf("parseLoadOptions() = %+v, %v", options, err)
 	}
 	for _, args := range [][]string{
@@ -495,7 +600,7 @@ func TestOutboxRelayFlagAndConfigMapping(t *testing.T) {
 		{"--config-overlay", " "},
 		{"positional"},
 	} {
-		if _, err := parseLoadOptions(args); err == nil {
+		if _, _, err := parseLoadOptions(args); err == nil {
 			t.Errorf("parseLoadOptions(%q) succeeded", args)
 		}
 	}
@@ -524,7 +629,7 @@ func TestOutboxRelayFlagAndConfigMapping(t *testing.T) {
 	if err := postgresoutbox.ValidatePublisher(testPublisher{}); err != nil {
 		t.Fatalf("ValidatePublisher(concrete publisher) error = %v", err)
 	}
-	if err := Run([]string{"--unknown"}, nil); !errors.Is(err, postgresoutbox.ErrConfig) {
+	if err := Run([]string{"--unknown"}, nil); err == nil || !strings.Contains(err.Error(), "parse flags") {
 		t.Fatalf("Run(nil builder) error = %v", err)
 	}
 	validRuntime := config.Config{
@@ -553,6 +658,60 @@ func TestOutboxRelayFlagAndConfigMapping(t *testing.T) {
 		if err := validateRuntimeConfig(invalidRuntime.config); err == nil {
 			t.Errorf("validateRuntimeConfig(%s) succeeded", invalidRuntime.name)
 		}
+	}
+}
+
+func TestLegacyUncertaintyClassificationMode(t *testing.T) {
+	options, classify, err := parseLoadOptions([]string{
+		"--classify-legacy-uncertainty", "--config", "base.yaml",
+	})
+	if err != nil || !classify || options.ConfigPath != "base.yaml" {
+		t.Fatalf("parseLoadOptions(classification) = %+v classify=%t err=%v", options, classify, err)
+	}
+	cfg := config.Config{
+		Postgres: config.PostgresConfig{Enabled: true},
+		Outbox:   config.OutboxConfig{Enabled: true},
+	}
+	if err := validateClassificationConfig(cfg); err != nil {
+		t.Fatalf("validateClassificationConfig() error = %v", err)
+	}
+	if err := validateRuntimeConfig(cfg); err == nil {
+		t.Fatal("normal relay admission unexpectedly accepted classification-only config")
+	}
+
+	results := []int{2, 1, 0}
+	calls := 0
+	err = classifyLegacyUntilZero(t.Context(), 3, 2, slog.New(slog.DiscardHandler),
+		func(_ context.Context, maxAttempts, batchSize int) (int, error) {
+			if maxAttempts != 3 || batchSize != 2 {
+				t.Fatalf("classification budgets = %d/%d, want 3/2", maxAttempts, batchSize)
+			}
+			result := results[calls]
+			calls++
+			return result, nil
+		})
+	if err != nil || calls != len(results) {
+		t.Fatalf("classifyLegacyUntilZero() calls/error = %d/%v", calls, err)
+	}
+
+	setOutboxBootstrapEnvironment(t, true)
+	t.Setenv("APP__POSTGRES__DSN", "://invalid")
+	built := false
+	err = run(t.Context(), []string{"--classify-legacy-uncertainty"},
+		func(context.Context, config.Config, *slog.Logger) (PublisherRuntime, error) {
+			built = true
+			return testPublisherRuntime(nil), nil
+		})
+	if err == nil || built || !strings.Contains(err.Error(), "legacy classification") {
+		t.Fatalf("classification route error=%v publisher_built=%t", err, built)
+	}
+}
+
+func TestOutboxRelayStartupDoesNotClaimWithoutPublisher(t *testing.T) {
+	t.Setenv("APP__POSTGRES__DSN", "postgres://must-not-connect@127.0.0.1:1/outbox")
+	err := run(t.Context(), nil, nil)
+	if !errors.Is(err, postgresoutbox.ErrConfig) || strings.Contains(err.Error(), "connect") {
+		t.Fatalf("run(nil publisher) = %v, want fail-closed admission before postgres", err)
 	}
 }
 
@@ -603,6 +762,23 @@ func TestOutboxRelayTelemetrySetupDegradesInsteadOfFailing(t *testing.T) {
 type testPublisher struct{}
 
 func (testPublisher) Publish(context.Context, postgresoutbox.Event) error { return nil }
+
+func testPublisherRuntime(shutdown func(context.Context) error) PublisherRuntime {
+	if shutdown == nil {
+		shutdown = func(context.Context) error { return nil }
+	}
+	return PublisherRuntime{
+		publisher: testPublisher{},
+		run:       blockingPublisherRun,
+		ready:     func() bool { return true },
+		shutdown:  shutdown,
+	}
+}
+
+func blockingPublisherRun(ctx context.Context) error {
+	<-ctx.Done()
+	return fmt.Errorf("publisher stopped: %w", ctx.Err())
+}
 
 type pointerTestPublisher struct{}
 

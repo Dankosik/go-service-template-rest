@@ -462,28 +462,44 @@ unrecorded decision.
 ### WBE-25 — Implementation Production-Path Closure
 
 **Given:** a defect reported at one leaf whose reproducer reaches a shared
-causal owner used by sibling callers, plus a production wiring boundary and one
-required environmental proof that cannot run.
+causal owner used by sibling callers, plus a production wiring boundary for an
+accepted capability whose provider-supported configuration is executable only
+in a managed environment, so its required environmental proof cannot run in the
+local substitute.
 
 **Pass:** implementation traces every affected caller, fixes the narrowest
 shared causal owner, preserves unrelated work, removes superseded surfaces,
-and obtains proof that would fail if either the owner or production wiring were
-wrong. The unavailable required proof closes only as `implementation complete;
-verification incomplete` with the unverified claim and next proof owner.
+retains the accepted production capability, and obtains proof that would fail
+if either the owner or production wiring were wrong. It runs every proof the
+local substitute can faithfully exercise, isolates the unsupported obligation,
+then exercises it on the actual deployed path in the target production
+environment as the next action. It performs an already-authorized deployment or
+production mutation without an extra proceed question; otherwise it stops
+immediately before that external effect with the exact authority and action
+needed and reports `implementation complete; verification incomplete` with the
+unverified claim.
 
 **Fail:** only the reported leaf is patched, a placeholder or test-only path is
-treated as completion, unrelated broad checks substitute for claim-scoped
-proof, or outcome completion is claimed without production-path verification.
+treated as completion, the local substitute's limitation is used to delete,
+disable, replace with a mock, or otherwise substitute the accepted production
+path, production configuration is changed solely to fit the local harness,
+the local harness is extended solely to emulate the target-only capability,
+the agent keeps iterating locally after isolating the unsupported obligation,
+an authorized production check is deferred behind a proceed question,
+unrelated broad checks substitute for claim-scoped proof, or outcome completion
+is claimed without production-path verification.
 
 ### WBE-26 — Conditional Branch Isolation And Macro-Phase Handoff
 
 **Given:** an ordinary Specification phase with one triggered internal review
-and repair, a direct implementation with no independent-review trigger, and a
-fixed high-risk implementation unit that does trigger review. The end-to-end
-request requires Technical Design next; completed research and Specification
-support an escrow-style hold as the leading architecture hypothesis with a
-named falsifier, while a plausible direct-charge alternative has no supporting
-evidence.
+and repair; a later Technical Design review that invalidates one
+Specification-owned rule; a direct implementation with no independent-review
+trigger; and a fixed high-risk implementation unit that does trigger review.
+The end-to-end request requires Technical Design next; completed research and
+Specification support an escrow-style hold as the leading architecture
+hypothesis with a named falsifier, while a plausible direct-charge alternative
+has no supporting evidence. A near-miss phase is blocked on a required external
+decision.
 
 **Pass:** bootstrapped Proceeding stays automatic inside the active macro phase
 and defers its boundary to the workflow router. Specification loads Subagents
@@ -493,25 +509,31 @@ implementation-review or resume/handoff guidance, and its
 review/repair/focused re-review loop stays in the same session. After its fixed
 candidate passes mapped validation, direct implementation loads Review
 Independence only and opens no review branch. The high-risk unit then loads
-Independent Implementation Review only when that shared trigger applies. The
-true phase boundary loads Resume And Macro-Phase Handoff and emits every
+Independent Implementation Review only when that shared trigger applies. In
+the later Technical Design session, the root handles that finding by
+suspending the active phase, repairing the smallest Specification-owned rule,
+obtaining any required fresh Specification review, and resuming Technical
+Design without a user-visible handoff. The blocked near-miss reports its blocker
+and persists resume state without a `Next Session Prompt`. Only a true,
+review-cleared phase boundary loads Resume And Macro-Phase Handoff and emits every
 action-changing fact in a short standalone prompt without replaying chat; the
-current session reports the Specification result and stops before any Technical
-Design action, while the fresh Technical Design session starts from the named
+Specification session reports its result and stops before any Technical Design
+action, while the fresh Technical Design session starts from the named
 durable sources. The prompt makes the escrow-style hold the leading hypothesis,
 states why and how to falsify it, and tells Technical Design to keep, revise, or
 reject it from current evidence rather than treating it as settled. It neither
 drops that decision implication nor promotes the unsupported alternative.
 
-**Fail:** ordinary phase entry eagerly loads review or handoff owners, internal
-review creates a macro-phase handoff, direct implementation receives a reviewer
-without its trigger, implementation review starts before the candidate is fixed,
-the Specification session enters Technical Design because the request is
-end-to-end, or the new Technical Design session must reconstruct an accepted
-source, authority boundary, movement proof, candidate direction, rationale,
-falsifier, next action, or stop/reopen condition from chat. The case also fails
-when the prompt is neutral despite a supported direction, treats the direction
-as accepted authority, or steers toward an unsupported alternative.
+**Fail:** ordinary phase entry eagerly loads review or handoff owners; internal
+review, upstream repair, a blocker, or same-phase resume creates a user-visible
+next-session prompt; direct implementation receives a reviewer without its
+trigger; implementation review starts before the candidate is fixed; the
+Specification session enters Technical Design because the request is end-to-end;
+or the new Technical Design session must reconstruct an accepted source,
+authority boundary, movement proof, candidate direction, rationale, falsifier,
+next action, or stop/reopen condition from chat. The case also fails when the
+prompt is neutral despite a supported direction, treats the direction as
+accepted authority, or steers toward an unsupported alternative.
 
 ### WBE-27 — Evolutionary Change Locality
 

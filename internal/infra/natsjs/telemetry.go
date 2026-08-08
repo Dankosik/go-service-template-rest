@@ -30,7 +30,6 @@ const (
 	attributeSystem        = "messaging.system"
 	attributeOperationType = "messaging.operation.type"
 	attributeDestination   = "messaging.destination.name"
-	attributeMessageID     = "messaging.message.id"
 	attributeOutcome       = "messaging.operation.outcome"
 
 	systemNATS           = "nats"
@@ -186,7 +185,6 @@ func publishSpanOptions(event Event) []trace.SpanStartOption {
 			attribute.String(attributeSystem, systemNATS),
 			attribute.String(attributeOperationType, operationTypePublish),
 			attribute.String(attributeDestination, event.Subject),
-			attribute.String(attributeMessageID, event.MessageID),
 		),
 	}
 }
@@ -198,7 +196,6 @@ func consumeSpanOptions(msg Message) []trace.SpanStartOption {
 			attribute.String(attributeSystem, systemNATS),
 			attribute.String(attributeOperationType, operationTypeProcess),
 			attribute.String(attributeDestination, msg.Subject()),
-			attribute.String(attributeMessageID, msg.MessageID()),
 		),
 	}
 }
@@ -216,7 +213,7 @@ func (s *telemetry) recordPublish(ctx context.Context, event Event, outcome, rea
 	s.publishOperations.Add(ctx, 1, attrs)
 	s.publishDuration.Record(ctx, duration, attrs)
 	s.log.InfoContext(ctx, "messaging_publish",
-		"operation", "publish", "message_id", event.MessageID, "subject", event.Subject,
+		"operation", "publish", "subject", event.Subject,
 		"outcome", outcome, "duration_seconds", duration, "reason", reason,
 	)
 }
@@ -270,8 +267,7 @@ func (s *telemetry) recordHandler(ctx context.Context, msg Message, outcome, rea
 	s.handlerOperations.Add(ctx, 1, attrs)
 	s.handlerDuration.Record(ctx, duration, attrs)
 	s.log.InfoContext(ctx, "messaging_delivery",
-		"operation", "consume", "message_id", msg.MessageID(), "subject", msg.Subject(),
-		"consumer", msg.Metadata().Consumer, "attempt", msg.Metadata().NumDelivered,
+		"operation", "consume", "subject", msg.Subject(), "attempt", msg.Metadata().NumDelivered,
 		"outcome", outcome, "duration_seconds", duration, "reason", reason,
 	)
 }
@@ -279,12 +275,7 @@ func (s *telemetry) recordHandler(ctx context.Context, msg Message, outcome, rea
 func (s *telemetry) logTerminalDelivery(ctx context.Context, subject string, metadata *jetstream.MsgMetadata, reason string, handlerFrames []string) {
 	args := []any{"operation", "consume", "subject", subject, "outcome", outcomeTerminal, "reason", reason}
 	if metadata != nil {
-		args = append(args,
-			"stream", metadata.Stream,
-			"consumer", metadata.Consumer,
-			"stream_sequence", metadata.Sequence.Stream,
-			"attempt", metadata.NumDelivered,
-		)
+		args = append(args, "attempt", metadata.NumDelivered)
 	}
 	if len(handlerFrames) != 0 {
 		args = append(args, "handler_frames", handlerFrames)

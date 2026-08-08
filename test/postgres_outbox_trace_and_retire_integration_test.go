@@ -3,8 +3,11 @@
 package integration_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"maps"
+	"strings"
 	"testing"
 
 	"github.com/example/go-service-template-rest/internal/infra/postgres"
@@ -128,33 +131,135 @@ func TestPostgresOutboxRetireOrderingKey(t *testing.T) {
 // precondition: both take the same head lock, so the append is either visible
 // as pending work that refuses the retirement, or lands after it.
 func TestPostgresOutboxRetireSerializesWithAppend(t *testing.T) {
-	ctx, pool, store := newOutboxFixture(t)
-	const key = "aggregate-2"
-	mustAppendOutbox(t, ctx, pool, store, orderedEvent("racer-1", key, 1))
+	t.Run("append before retirement", func(t *testing.T) {
+		ctx, pool, store := newOutboxFixture(t)
+		const key = "append-first"
+		mustAppendOutbox(t, ctx, pool, store, orderedEvent("append-first-1", key, 1))
+		claim := mustClaimOutbox(t, ctx, store)
+		if err := markOutboxPublished(ctx, store, claim); err != nil {
+			t.Fatalf("drain ordering key: %v", err)
+		}
 
-	// An uncommitted append holds the head lock. The retirement below must wait
-	// for it rather than reading around it.
-	appendTx, err := pool.PGX().Begin(ctx)
-	if err != nil {
-		t.Fatalf("begin append transaction: %v", err)
-	}
-	defer func() { _ = appendTx.Rollback(ctx) }()
-	if err := store.Append(ctx, appendTx, orderedEvent("racer-2", key, 2)); err != nil {
-		t.Fatalf("append inside the racing transaction: %v", err)
-	}
+		appendTx, err := pool.PGX().Begin(ctx)
+		if err != nil {
+			t.Fatalf("begin append transaction: %v", err)
+		}
+		defer func() { _ = appendTx.Rollback(context.WithoutCancel(ctx)) }()
+		var appendPID int
+		if err := appendTx.QueryRow(ctx, "SELECT pg_backend_pid()").Scan(&appendPID); err != nil {
+			t.Fatalf("read append backend PID: %v", err)
+		}
+		if err := store.Append(ctx, appendTx, orderedEvent("append-first-2", key, 2)); err != nil {
+			t.Fatalf("append inside the racing transaction: %v", err)
+		}
 
-	retired := make(chan error, 1)
-	go func() { retired <- retireOrderingKeys(ctx, pool, store, key) }()
+		retired := make(chan error, 1)
+		go func() { retired <- retireOrderingKeys(ctx, pool, store, key) }()
+		waitForOutbox(t,
+			func() string { return "retirement did not block behind the append head lock" },
+			func() bool { return outboxBlockedBy(t, ctx, pool, appendPID) },
+		)
 
-	if err := appendTx.Commit(ctx); err != nil {
-		t.Fatalf("commit the racing append: %v", err)
-	}
-	if err := <-retired; !errors.Is(err, postgresoutbox.ErrOrderingKeyActive) {
-		t.Fatalf("retirement racing an append = %v, want ErrOrderingKeyActive", err)
-	}
-	if heads := countOrderingHeads(t, ctx, pool); heads != 1 {
-		t.Fatalf("ordering heads after the race = %d, want the mark intact", heads)
-	}
+		if err := appendTx.Commit(ctx); err != nil {
+			t.Fatalf("commit the racing append: %v", err)
+		}
+		if err := <-retired; !errors.Is(err, postgresoutbox.ErrOrderingKeyActive) {
+			t.Fatalf("retirement after committed append = %v, want ErrOrderingKeyActive", err)
+		}
+		if heads := countOrderingHeads(t, ctx, pool); heads != 1 {
+			t.Fatalf("ordering heads after append-first serialization = %d, want the mark intact", heads)
+		}
+	})
+
+	t.Run("retirement before append", func(t *testing.T) {
+		ctx, pool, store := newOutboxFixture(t)
+		const key = "retire-first"
+		mustAppendOutbox(t, ctx, pool, store, orderedEvent("retire-first-9", key, 9))
+		claim := mustClaimOutbox(t, ctx, store)
+		if err := markOutboxPublished(ctx, store, claim); err != nil {
+			t.Fatalf("drain ordering key: %v", err)
+		}
+
+		retireTx, err := pool.PGX().Begin(ctx)
+		if err != nil {
+			t.Fatalf("begin retirement transaction: %v", err)
+		}
+		defer func() { _ = retireTx.Rollback(context.WithoutCancel(ctx)) }()
+		var retirePID int
+		if err := retireTx.QueryRow(ctx, "SELECT pg_backend_pid()").Scan(&retirePID); err != nil {
+			t.Fatalf("read retirement backend PID: %v", err)
+		}
+		if err := store.RetireOrderingKeys(ctx, retireTx, key); err != nil {
+			t.Fatalf("retire ordering key: %v", err)
+		}
+
+		appended := make(chan error, 1)
+		go func() {
+			appended <- pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+				return store.Append(ctx, tx, orderedEvent("retire-first-1", key, 1))
+			})
+		}()
+		waitForOutbox(t,
+			func() string { return "append did not block behind the retirement head lock" },
+			func() bool { return outboxBlockedBy(t, ctx, pool, retirePID) },
+		)
+
+		if err := retireTx.Commit(ctx); err != nil {
+			t.Fatalf("commit retirement: %v", err)
+		}
+		if err := <-appended; err != nil {
+			t.Fatalf("append after committed retirement: %v", err)
+		}
+		if heads := countOrderingHeads(t, ctx, pool); heads != 1 {
+			t.Fatalf("ordering heads after retire-first serialization = %d, want one fresh mark", heads)
+		}
+	})
+
+	t.Run("simultaneous retirements", func(t *testing.T) {
+		ctx, pool, store := newOutboxFixture(t)
+		const key = "double-retire"
+		mustAppendOutbox(t, ctx, pool, store, orderedEvent("double-retire-1", key, 1))
+		claim := mustClaimOutbox(t, ctx, store)
+		if err := markOutboxPublished(ctx, store, claim); err != nil {
+			t.Fatalf("drain ordering key: %v", err)
+		}
+
+		firstTx, err := pool.PGX().Begin(ctx)
+		if err != nil {
+			t.Fatalf("begin first retirement: %v", err)
+		}
+		defer func() { _ = firstTx.Rollback(context.WithoutCancel(ctx)) }()
+		var firstPID int
+		if err := firstTx.QueryRow(ctx, "SELECT pg_backend_pid()").Scan(&firstPID); err != nil {
+			t.Fatalf("read first retirement backend PID: %v", err)
+		}
+		if err := store.RetireOrderingKeys(ctx, firstTx, key); err != nil {
+			t.Fatalf("first retirement: %v", err)
+		}
+		var headsInsideFirst int
+		if err := firstTx.QueryRow(ctx, "SELECT count(*) FROM outbox_ordering_heads").Scan(&headsInsideFirst); err != nil {
+			t.Fatalf("count heads inside first retirement: %v", err)
+		}
+		if headsInsideFirst != 0 {
+			t.Fatalf("heads inside first retirement = %d, want its one deletion visible", headsInsideFirst)
+		}
+
+		second := make(chan error, 1)
+		go func() { second <- retireOrderingKeys(ctx, pool, store, key) }()
+		waitForOutbox(t,
+			func() string { return "second retirement did not block behind the first" },
+			func() bool { return outboxBlockedBy(t, ctx, pool, firstPID) },
+		)
+		if err := firstTx.Commit(ctx); err != nil {
+			t.Fatalf("commit first retirement: %v", err)
+		}
+		if err := <-second; err != nil {
+			t.Fatalf("second idempotent retirement: %v", err)
+		}
+		if heads := countOrderingHeads(t, ctx, pool); heads != 0 {
+			t.Fatalf("ordering heads after simultaneous retirements = %d, want exactly one deletion", heads)
+		}
+	})
 }
 
 // An event appended outside any trace still stores and publishes. The stored
@@ -169,6 +274,171 @@ func TestPostgresOutboxAppendWithoutTraceContext(t *testing.T) {
 	}
 	if carrier := record.Event.CreationContext(); len(carrier) != 0 {
 		t.Errorf("untraced event carries %v, want no creation context", carrier)
+	}
+}
+
+// The outbox-owned creation context has its own allowance: it neither mutates
+// caller metadata nor consumes the caller's 288 KiB envelope budget.
+func TestPostgresOutboxTraceContextAllowance(t *testing.T) {
+	telemetrytest.InstallSpanRecorder(t)
+	ctx, pool, store := newOutboxFixture(t)
+
+	producing, span := otel.GetTracerProvider().Tracer("integration").Start(ctx, "POST /orders")
+	origin := trace.SpanContextFromContext(producing)
+
+	const (
+		maxTextBytes     = 256
+		maxPayloadBytes  = 256 << 10
+		maxEnvelopeBytes = 288 << 10
+	)
+	event := postgresoutbox.Event{
+		ID:               strings.Repeat("i", maxTextBytes),
+		Type:             strings.Repeat("t", maxTextBytes),
+		Source:           strings.Repeat("s", maxTextBytes),
+		Destination:      strings.Repeat("d", maxTextBytes),
+		Schema:           strings.Repeat("v", maxTextBytes),
+		OccurredAt:       outboxEvent("allowance").OccurredAt,
+		Payload:          []byte(`"` + strings.Repeat("p", maxPayloadBytes-2) + `"`),
+		OrderingKey:      strings.Repeat("k", maxTextBytes),
+		OrderingSequence: 1,
+	}
+	metadataPrefix := `{"traceparent":"caller-owned","padding":"`
+	metadataSuffix := `"}`
+	metadataBytes := maxEnvelopeBytes - 6*maxTextBytes - maxPayloadBytes
+	event.Metadata = []byte(metadataPrefix + strings.Repeat("m", metadataBytes-len(metadataPrefix)-len(metadataSuffix)) + metadataSuffix)
+	if got := len(event.ID) + len(event.Type) + len(event.Source) + len(event.Destination) +
+		len(event.Schema) + len(event.OrderingKey) + len(event.Payload) + len(event.Metadata); got != maxEnvelopeBytes {
+		t.Fatalf("test envelope = %d bytes, want %d", got, maxEnvelopeBytes)
+	}
+
+	if err := pool.InTx(producing, pgx.TxOptions{}, func(tx pgx.Tx) error {
+		return store.Append(producing, tx, event)
+	}); err != nil {
+		t.Fatalf("append traced event at caller envelope limit: %v", err)
+	}
+	span.End()
+
+	record, err := store.Get(ctx, event.ID)
+	if err != nil {
+		t.Fatalf("Get(): %v", err)
+	}
+	if !bytes.Equal(record.Event.Metadata, event.Metadata) {
+		t.Fatal("stored creation context mutated caller metadata")
+	}
+	carried := trace.SpanContextFromContext(
+		otel.GetTextMapPropagator().Extract(context.Background(), record.Event.CreationContext()),
+	)
+	if carried.TraceID() != origin.TraceID() || carried.SpanID() != origin.SpanID() {
+		t.Fatalf("stored creation context = %s/%s, want %s/%s", carried.TraceID(), carried.SpanID(), origin.TraceID(), origin.SpanID())
+	}
+}
+
+// Retry, lease recovery, reconstruction, and redrive all reuse the immutable
+// creation carrier captured by the original append.
+func TestPostgresOutboxCreationContextSurvivesRecovery(t *testing.T) {
+	recorder := telemetrytest.InstallSpanRecorder(t)
+	ctx, pool, store := newOutboxFixture(t)
+
+	producing, producingSpan := otel.GetTracerProvider().Tracer("integration").Start(ctx, "POST /orders")
+	origin := trace.SpanContextFromContext(producing)
+	if err := pool.InTx(producing, pgx.TxOptions{}, func(tx pgx.Tx) error {
+		return store.Append(producing, tx, outboxEvent("recover-trace"))
+	}); err != nil {
+		t.Fatalf("append inside the producing trace: %v", err)
+	}
+	producingSpan.End()
+
+	first := mustClaimOutbox(t, ctx, store)
+	wantCarrier := maps.Clone(first.Event.CreationContext())
+	assertCarrier := func(stage string, event postgresoutbox.Event) {
+		t.Helper()
+		if event.ID != first.Event.ID {
+			t.Fatalf("%s event = %q, want %q", stage, event.ID, first.Event.ID)
+		}
+		if !maps.Equal(event.CreationContext(), wantCarrier) {
+			t.Fatalf("%s creation carrier = %v, want %v", stage, event.CreationContext(), wantCarrier)
+		}
+		carried := trace.SpanContextFromContext(
+			otel.GetTextMapPropagator().Extract(context.Background(), event.CreationContext()),
+		)
+		if carried.TraceID() != origin.TraceID() || carried.SpanID() != origin.SpanID() {
+			t.Fatalf("%s creation context = %s/%s, want %s/%s", stage, carried.TraceID(), carried.SpanID(), origin.TraceID(), origin.SpanID())
+		}
+	}
+	assertCarrier("first claim", first.Event)
+	if err := scheduleOutboxRetry(ctx, store, first.Event.ID, first.Token, "publisher_temporary", 0); err != nil {
+		t.Fatalf("ScheduleRetryBatch(): %v", err)
+	}
+
+	abandoned, err := claimOutboxEvent(ctx, store, shortOutboxLease)
+	if err != nil {
+		t.Fatalf("retry Claim(): %v", err)
+	}
+	assertCarrier("retry claim", abandoned.Event)
+	expireOutboxLease(t, ctx, pool)
+
+	restarted, err := postgresoutbox.NewStore(pool, nil)
+	if err != nil {
+		t.Fatalf("NewStore() after abandoned claim: %v", err)
+	}
+	published := make(chan postgresoutbox.Event, 1)
+	release := make(chan struct{})
+	publisher := testPublisherFunc(func(_ context.Context, event postgresoutbox.Event) error {
+		published <- event
+		<-release
+		return postgresoutbox.ErrPermanentPublication
+	})
+	_, telemetry := newOutboxTelemetry(t)
+	relay := mustNewOutboxRelay(t, restarted, publisher, telemetry, testRelayConfig())
+	recoveryCtx, recoverySpan := otel.GetTracerProvider().Tracer("integration").Start(ctx, "recovery process")
+	recoveryTrace := trace.SpanContextFromContext(recoveryCtx).TraceID()
+	result := runOutboxRelay(recoveryCtx, relay)
+	assertCarrier("recovered publication", <-published)
+	relay.StartDrain()
+	close(release)
+	assertRelayResult(t, result, nil)
+	recoverySpan.End()
+	waitForOutboxCount(t, ctx, pool, "poisoned_at IS NOT NULL", 1)
+
+	if err := restarted.RedriveUnknown(ctx, first.Event.ID, "trace-recovery-audit"); err != nil {
+		t.Fatalf("RedriveUnknown(): %v", err)
+	}
+	restarted, err = postgresoutbox.NewStore(pool, nil)
+	if err != nil {
+		t.Fatalf("NewStore() after redrive: %v", err)
+	}
+	published = make(chan postgresoutbox.Event, 1)
+	publisher = testPublisherFunc(func(_ context.Context, event postgresoutbox.Event) error {
+		published <- event
+		return nil
+	})
+	_, telemetry = newOutboxTelemetry(t)
+	relay = mustNewOutboxRelay(t, restarted, publisher, telemetry, testRelayConfig())
+	redriveCtx, redriveSpan := otel.GetTracerProvider().Tracer("integration").Start(ctx, "redrive process")
+	redriveTrace := trace.SpanContextFromContext(redriveCtx).TraceID()
+	result = runOutboxRelay(redriveCtx, relay)
+	assertCarrier("redriven publication", <-published)
+	waitForOutboxCount(t, ctx, pool, "published_at IS NOT NULL", 1)
+	relay.StartDrain()
+	assertRelayResult(t, result, nil)
+	redriveSpan.End()
+
+	var publishSpans []sdktrace.ReadOnlySpan
+	for _, span := range recorder.Ended() {
+		if span.Name() == "publish events" {
+			publishSpans = append(publishSpans, span)
+		}
+	}
+	if len(publishSpans) != 2 {
+		t.Fatalf("publish spans = %d, want one recovered and one redriven attempt", len(publishSpans))
+	}
+	for index, span := range publishSpans {
+		if len(span.Links()) != 1 || span.Links()[0].SpanContext.TraceID() != origin.TraceID() {
+			t.Fatalf("publish span %d links = %v, want only the producing trace %s", index, span.Links(), origin.TraceID())
+		}
+		if got := span.SpanContext().TraceID(); got == origin.TraceID() || got == recoveryTrace || got == redriveTrace {
+			t.Fatalf("publish span %d trace = %s, want a new linked root", index, got)
+		}
 	}
 }
 

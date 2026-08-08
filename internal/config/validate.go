@@ -85,7 +85,7 @@ func validateAuthnConfig(cfg *AuthnConfig) error {
 	cfg.Audience = strings.TrimSpace(cfg.Audience)
 	cfg.TrustedProxyCIDRs = strings.TrimSpace(cfg.TrustedProxyCIDRs)
 
-	if !authntrust.ValidProviderURL(cfg.Issuer) {
+	if !authntrust.ValidIssuerURL(cfg.Issuer) {
 		return fmt.Errorf(
 			"%w: authn.issuer must be an absolute HTTPS URL without user info, query, or fragment",
 			ErrValidate,

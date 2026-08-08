@@ -35,6 +35,7 @@ shared technical adapters:
 │   └── reference-service/
 ├── internal/
 │   ├── config/
+│   ├── failure/
 │   ├── health/
 │   ├── infra/
 │   │   ├── http/
@@ -76,13 +77,17 @@ packages. There is no reserved empty `api/proto/`, `migrations/`, `queries/`, or
 | `internal/<feature>/` | business types, use cases, ports, invariants, domain errors | generated OpenAPI types, runtime config, concrete adapters |
 | `internal/health/` | service readiness/drain behavior and probe interface | HTTP responses, Postgres construction, config loading |
 | `internal/config/` | config schema, defaults, loading, parsing, validation, immutable snapshot | feature behavior and adapter construction |
+| `internal/failure/` | transport-neutral failure codes, safe classification, and mapper ordering | HTTP status catalogs, gRPC status codes, feature error identities, or I/O |
 | `internal/openapi/` | generated Go bindings and generation config | hand-written handlers or business logic |
 | `internal/infra/http/` (`package httpx`) | HTTP mapping, router, middleware, Problem responses | SQL, database repositories, business decisions |
 | `internal/infra/httpclient/` (`OUTBOUND_HTTP=bounded`) | outbound fixed-authority transport safety, correlation enforcement, retry mechanism, and lifecycle | provider auth, concrete trust selection, retry eligibility, error mapping, or business policy |
 | `internal/infra/grpc/` (`package grpcx`, `GRPC=enabled`) | native gRPC server composition, standard health, the interceptor policy chain, transport bounds, and status mapping | feature packages, generated handlers, domain policy, authentication decisions, or this repository's configuration shape |
-| `internal/infra/grpcclient/` (`GRPC=enabled`) | bounded shared connections, correlation-policy enforcement, resolver metadata sanitization, address-selection policy, connection liveness, and connection lifecycle seam | provider auth, concrete trust selection, operation deadlines or retries, generated-client ownership, or readiness policy |
+| `internal/infra/grpcclient/` (`GRPC=enabled`) | bounded shared connections, correlation-policy enforcement, resolver metadata sanitization, address selection, standard-health eligibility, opt-in idle keepalive, and the connection lifecycle seam | provider auth, concrete trust selection, operation deadlines or application retries, generated-client ownership, or dependency readiness policy |
 | `internal/infra/oidcjwt/` (`AUTHN=oidc-jwt`) | inbound caller identity: OIDC trust bootstrap, JWKS lifecycle, token admission, and the HTTP and gRPC authentication adapters | authorization, roles, tenant policy, sessions, user provisioning, or any decision past who the caller is |
 | `internal/infra/postgres/` | pool, concrete repositories, query mapping | HTTP behavior, migration execution, and business policy |
+<!-- profile:inbox-postgres:start -->
+| `internal/infra/postgresinbox/` (`INBOX=postgres`) | validate and insert one `(consumer identity, logical message ID)` claim through a caller-owned `pgx.Tx` | transaction lifecycle, feature effects, transport configuration, expiry, cleanup, telemetry, or ordering |
+<!-- profile:inbox-postgres:end -->
 | `internal/infra/postgresmigrate/` | Goose lifecycle, source/state admission, lock, and migration result metadata | service startup, domain policy, and production rollback commands |
 | `internal/infra/telemetry/` | OpenTelemetry/Prometheus SDK setup and exporters | feature policy |
 | `internal/observability/otelconfig/` | pure sampler/exporter policy values | SDK construction and repository runtime imports |
@@ -111,7 +116,7 @@ Use the first matching rule.
    Put it in `internal/<feature>/`.
    - command/use case: `<verb>_<noun>.go`;
    - business types and invariants: `model.go`;
-   - domain errors: `errors.go`;
+   - domain errors and their transport-neutral classifier: `errors.go`;
    - consumer-owned persistence/outbound interface: `repository.go` or
      `client.go`.
 3. Is it HTTP transport mapping?
@@ -126,6 +131,10 @@ Use the first matching rule.
      `Down` section;
    - sqlc source: `internal/infra/postgres/queries/<feature>.sql`;
    - generated result: `internal/infra/postgres/sqlcgen/`.
+   <!-- profile:inbox-postgres:start -->
+   - transport-neutral inbox claim bound to the caller's transaction:
+     `internal/infra/postgresinbox/`.
+   <!-- profile:inbox-postgres:end -->
 5. Is it another outbound system?
    Put the concrete adapter in
    `internal/infra/<outbound-system>/client.go`; add
@@ -328,7 +337,13 @@ until it names a concrete owner.
    generated client and selects `PropagationNone`, `PropagationTraceContext`,
    or `PropagationTrustedService` from the accepted trust boundary. No policy
    propagates baggage, and the shared connection deliberately supports neither
-   environment proxies nor resolver-provided service configs.
+   environment proxies nor resolver-provided service configs. Round robin
+   follows standard whole-process health by default; disable it only for a
+   dependency that lacks that contract. If the dependency protects
+   `Health/Watch`, supply its provider-owned credential through the connection;
+   a per-call credential cannot authenticate that control stream. Enable idle keepalive only with a
+   named intermediary timeout and a complete peer-compatible interval/timeout
+   pair.
 7. Add sibling unit/contract tests and `test/<feature>_integration_test.go` only
    when real infrastructure is part of the claim.
 8. Run the matching generators, `make project-structure-check`, focused tests,
