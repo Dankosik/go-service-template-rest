@@ -71,7 +71,10 @@ The verifier accepts only compact, signed JWT access tokens with:
 - JSON-number `exp` and `iat` NumericDate values with `exp` after `iat`, optional
   `nbf` before `exp`, a fixed 15-minute maximum issued lifetime, and a fixed
   30-second clock-skew allowance. Integer, fractional, and exponent notation are
-  accepted and compared at nanosecond resolution.
+  accepted and compared at nanosecond resolution, within a 40-character literal
+  and an exponent between -30 and 30. A date outside that range names no instant
+  this service can act on, and expanding one is work an unsigned credential must
+  not be able to buy: claims are parsed before any signature is checked.
 
 Unsigned tokens, algorithm substitution, tokens signed by an untrusted key,
 unknown claims encodings, missing required claims, and incomplete trust configuration
@@ -80,7 +83,10 @@ ClientID}`. `(Issuer, Subject)` is the stable caller identity; `ClientID` names
 the OAuth client to which the token was issued. All three values are
 correlatable identity data; this pack does not put them in logs or telemetry.
 Token scopes, roles, tenant IDs, `jti`, and other provider claims are
-deliberately not converted into authorization.
+deliberately not converted into authorization. A scope named in the contract's
+own security requirement — `security: [{bearerAuth: [admin]}]` — is not enforced
+here either: this pack proves who the caller is and nothing about what they may
+do, so such a list documents intent and the operation still has to check it.
 
 HTTP operations use OpenAPI Bearer security. `/health/live` and `/health/ready`
 remain public. Missing or invalid credentials return `401` with a Bearer
@@ -107,6 +113,16 @@ before either listener is admitted. A provider-owned query is allowed on
 `jwks_uri`; user information, fragments, redirects, and authority widening are
 not. Discovery and JWKS requests have a five-second timeout, a 1 MiB response
 limit, and bounded connections.
+
+Initial trust is established once and is not retried in process. Startup spends
+at most two five-second provider requests — one Discovery, one JWKS — and a
+failure of either aborts startup with a phase-named error rather than admitting
+a listener without trust. A provider blip during a rollout therefore surfaces as
+a failed start, and restart backoff is the orchestrator's: on Kubernetes that is
+`CrashLoopBackOff`, and the readiness gate never opens in the meantime. Size the
+deployment's `initialDelaySeconds` and restart policy against the provider's own
+availability, not against this service's start time. Once trust is established,
+the refresh cadence below absorbs provider outages for the full key-set age.
 
 The verifier accepts at most 100 JWK entries and only public RSA signing keys of
 at least 2048 bits whose metadata is compatible with RS256 verification. It
@@ -182,7 +198,7 @@ The pack emits bounded-cardinality metrics:
 - `authn.verifications`, labelled `authn.transport` (`http`, `grpc`),
   `authn.result` (`success`, `failure`), and on failure `authn.reason`, one of
   `missing`, `malformed`, `untrusted_transport`, `oversize`, `invalid`,
-  `unavailable`, or `canceled`;
+  `lifetime`, `unavailable`, or `canceled`;
 - `authn.jwks.refreshes`, labelled `authn.refresh.trigger` (`startup`,
   `scheduled`, `key_miss`), `authn.result`, and on failure `authn.reason`, one
   of `request`, `transport`, `status`, `body`, `oversize`, `invalid_document`,
@@ -200,6 +216,18 @@ answer it, so read it against `authn.jwks.refreshes` and provider latency rather
 than as anything the caller sent; it is deliberately not counted as `invalid`,
 because a client that hung up is not a client with a bad credential. `invalid`
 and `missing` are ordinary client outcomes and are expected to be non-zero.
+
+`lifetime` means the issuer is minting access tokens that live longer than the
+15-minute maximum above. The token is otherwise well formed, correctly signed,
+and current: nothing is wrong with the credential, and no client can fix it.
+Expect it to be every request or none, and expect it on first integration,
+because it is the one part of the accepted token contract an issuer's default
+configuration commonly violates. The fix is at the identity provider — shorten
+the access-token lifetime for this audience — and every major provider allows a
+value at or below 15 minutes. It is reported to callers exactly as `invalid`, so
+this metric is the only place the two are distinguishable; a first integration
+answering 401 for every request is worth checking here before signatures and
+keys.
 
 `key_miss` counts every refresh a verification asked for, which is wider than an
 absent key id: a key rotated in place, under a name the service already holds,

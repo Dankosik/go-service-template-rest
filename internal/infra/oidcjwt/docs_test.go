@@ -51,8 +51,8 @@ func TestDocumentedTokenExample(t *testing.T) {
 	now := testNow
 	key := loadTestRSAKey(t, testSigningKey)
 	verifier := newTestVerifier(t, key)
-	token := signToken(t, key, "key-1", "at+jwt", validClaims(now))
-	principal, err := verifier.verify(t.Context(), token, transportHTTP)
+	signed := signToken(t, key, "key-1", "at+jwt", validClaims(now))
+	principal, err := verifier.verify(t.Context(), signed, transportHTTP)
 	if err != nil ||
 		principal.Issuer != testIssuer ||
 		principal.Subject != "opaque-subject" ||
@@ -178,8 +178,10 @@ var docProseWords = map[string]struct{}{
 	"gRPC":                 {},
 	"KiB":                  {},
 	"MeasurementOption":    {},
+	"MiB":                  {},
 	"MeterProvider":        {},
 	"NumericDate":          {},
+	"OpenTelemetry":        {},
 	"ServerStream":         {},
 	"UseNumber":            {},
 }

@@ -3,6 +3,7 @@ package postgresmigrate
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"math"
 	"strconv"
@@ -20,7 +21,7 @@ func openMigrationDB(opts MigrationOptions) (*sql.DB, error) {
 	}
 	config, err := pgx.ParseConfig(normalizedDSN)
 	if err != nil {
-		return nil, fmt.Errorf("parse postgres migration dsn: invalid value redacted")
+		return nil, errors.New("parse postgres migration dsn: invalid value redacted")
 	}
 	config.ConnectTimeout = opts.ConnectTimeout
 	if config.RuntimeParams == nil {
@@ -54,7 +55,7 @@ func executionContext(ctx context.Context, reserve time.Duration) (context.Conte
 	}
 	executionDeadline := deadline.Add(-reserve)
 	if !executionDeadline.After(time.Now()) {
-		return nil, nil, fmt.Errorf("migration deadline leaves no execution budget after cleanup reserve")
+		return nil, nil, errors.New("migration deadline leaves no execution budget after cleanup reserve")
 	}
 	executionCtx, cancel := context.WithDeadline(ctx, executionDeadline)
 	return executionCtx, cancel, nil

@@ -215,6 +215,17 @@ type GRPCServerConfig struct {
 type GRPCTLSConfig struct {
 	CertFile string `koanf:"cert_file"`
 	KeyFile  string `koanf:"key_file"`
+
+	// ClientCAFile turns the listener into a mutual-TLS boundary: the
+	// authorities in this file are the only ones a client certificate may chain
+	// to, and a caller presenting none is refused during the handshake. Empty
+	// leaves client certificates unrequested, which is the shipped default —
+	// mutual TLS is a deployment's trust decision, not a transport default.
+	//
+	// Unlike the pair above it is read once, at startup. A leaf certificate
+	// rotates on its issuer's schedule and is reloaded per handshake; a trust
+	// root changes on a deployment's, which already restarts the process.
+	ClientCAFile string `koanf:"client_ca_file"`
 }
 
 // profile:grpc:end

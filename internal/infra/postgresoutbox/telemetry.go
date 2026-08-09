@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	infratelemetry "github.com/example/go-service-template-rest/internal/infra/telemetry"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -72,38 +73,22 @@ func NewTelemetry(meter metric.Meter, logger *slog.Logger) (*Telemetry, error) {
 	// is no composition in this repository that wants them from different
 	// providers.
 	telemetry := &Telemetry{log: logger, tracer: otel.GetTracerProvider().Tracer(TelemetryScope)}
-	var err error
-	if telemetry.messages, err = meter.Int64ObservableGauge("outbox.relay.messages"); err != nil {
-		return nil, fmt.Errorf("create outbox messages metric: %w", err)
+	set := infratelemetry.NewInstrumentSet(meter)
+	set.Int64ObservableGauge(&telemetry.messages, "outbox.relay.messages")
+	set.Float64ObservableGauge(&telemetry.oldestTimestamp, "outbox.relay.oldest.timestamp", metric.WithUnit("s"))
+	set.Float64ObservableGauge(&telemetry.observationTimestamp, "outbox.relay.observation.timestamp", metric.WithUnit("s"))
+	set.Float64ObservableGauge(&telemetry.lastProgress, "outbox.relay.last_progress.timestamp", metric.WithUnit("s"))
+	set.Int64ObservableGauge(&telemetry.orderingHeads, "outbox.relay.ordering_heads")
+	set.Int64ObservableGauge(&telemetry.storageBytes, "outbox.relay.storage.bytes", metric.WithUnit("By"))
+	set.Int64ObservableGauge(&telemetry.inflight, "outbox.relay.inflight")
+	set.Int64ObservableGauge(&telemetry.readiness, "outbox.relay.readiness")
+	set.Int64Counter(&telemetry.operations, "outbox.relay.operations")
+	set.Float64Histogram(&telemetry.duration, "outbox.relay.operation.duration", metric.WithUnit("s"))
+	if err := set.Err(); err != nil {
+		return nil, err
 	}
-	if telemetry.oldestTimestamp, err = meter.Float64ObservableGauge("outbox.relay.oldest.timestamp", metric.WithUnit("s")); err != nil {
-		return nil, fmt.Errorf("create outbox oldest timestamp metric: %w", err)
-	}
-	if telemetry.observationTimestamp, err = meter.Float64ObservableGauge("outbox.relay.observation.timestamp", metric.WithUnit("s")); err != nil {
-		return nil, fmt.Errorf("create outbox observation timestamp metric: %w", err)
-	}
-	if telemetry.lastProgress, err = meter.Float64ObservableGauge("outbox.relay.last_progress.timestamp", metric.WithUnit("s")); err != nil {
-		return nil, fmt.Errorf("create outbox last progress metric: %w", err)
-	}
-	if telemetry.orderingHeads, err = meter.Int64ObservableGauge("outbox.relay.ordering_heads"); err != nil {
-		return nil, fmt.Errorf("create outbox ordering heads metric: %w", err)
-	}
-	if telemetry.storageBytes, err = meter.Int64ObservableGauge("outbox.relay.storage.bytes", metric.WithUnit("By")); err != nil {
-		return nil, fmt.Errorf("create outbox storage metric: %w", err)
-	}
-	if telemetry.inflight, err = meter.Int64ObservableGauge("outbox.relay.inflight"); err != nil {
-		return nil, fmt.Errorf("create outbox inflight metric: %w", err)
-	}
-	if telemetry.readiness, err = meter.Int64ObservableGauge("outbox.relay.readiness"); err != nil {
-		return nil, fmt.Errorf("create outbox readiness metric: %w", err)
-	}
-	if telemetry.operations, err = meter.Int64Counter("outbox.relay.operations"); err != nil {
-		return nil, fmt.Errorf("create outbox operations metric: %w", err)
-	}
-	if telemetry.duration, err = meter.Float64Histogram("outbox.relay.operation.duration", metric.WithUnit("s")); err != nil {
-		return nil, fmt.Errorf("create outbox operation duration metric: %w", err)
-	}
-	telemetry.registration, err = meter.RegisterCallback(telemetry.collect,
+
+	registration, err := meter.RegisterCallback(telemetry.collect,
 		telemetry.messages,
 		telemetry.oldestTimestamp,
 		telemetry.observationTimestamp,
@@ -116,6 +101,7 @@ func NewTelemetry(meter metric.Meter, logger *slog.Logger) (*Telemetry, error) {
 	if err != nil {
 		return nil, fmt.Errorf("register outbox metrics callback: %w", err)
 	}
+	telemetry.registration = registration
 	return telemetry, nil
 }
 
@@ -269,6 +255,24 @@ func (t *Telemetry) LogPoison(ctx context.Context, errorClass string, attempt in
 func (t *Telemetry) LogPublisherStuck(ctx context.Context) {
 	if t != nil {
 		t.log.ErrorContext(ctx, "outbox_publisher_stuck", "error.type", classStuck)
+	}
+}
+
+// LogPublisherPanic reports an adapter panic with the description the recover
+// consumed. It is the one place in this package that logs an unbounded string,
+// and it is deliberate: the process is exiting over a deployment fault, and the
+// class alone — publisher_panic on the exit line and the publish metric — names
+// the category without naming the line of code. LogListenerRetry's rule still
+// holds either way, because a panic value comes from the adapter rather than
+// from a driver that formats DSN material into it.
+//
+// The event is not named. A panicking adapter is reproducible from its stack,
+// while an event id on an ERROR line is the identity this package keeps off
+// telemetry everywhere else.
+func (t *Telemetry) LogPublisherPanic(ctx context.Context, value any, stack []byte) {
+	if t != nil {
+		t.log.ErrorContext(ctx, "outbox_publisher_panic",
+			"error.type", classPanic, "panic", fmt.Sprint(value), "stack", string(stack))
 	}
 }
 

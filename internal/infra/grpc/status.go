@@ -3,6 +3,7 @@ package grpcx
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"strings"
 
 	"github.com/example/go-service-template-rest/internal/failure"
@@ -13,6 +14,16 @@ import (
 	"google.golang.org/protobuf/types/known/durationpb"
 )
 
+// sanitizedFailureDetail is the caller-visible message for every failure this
+// transport refused to describe: an unclassified handler error, a policy error,
+// a recovered panic, and a classified answer whose mapper supplied no detail.
+//
+// One constant because the four must stay indistinguishable to a caller. A
+// detail that separated them would report which internal path broke, which is
+// exactly what the sanitization withholds; internal/infra/http answers with the
+// same text for the same reason.
+const sanitizedFailureDetail = "request failed"
+
 // handlerErrorBoundary and [policyErrorBoundary] are this transport's two error
 // boundaries. They are the same mechanism — [mapError] — and differ only in the
 // [trustedStatus] each passes it; the package doc owns why they sit where they
@@ -20,13 +31,17 @@ import (
 //
 // This one is innermost and sanitizes what a generated handler returns. Standard
 // health RPCs pass through untouched so their own status semantics survive.
-func handlerErrorBoundary(rendering errorRendering) aroundRPC {
+func handlerErrorBoundary(log *slog.Logger, rendering errorRendering) aroundRPC {
 	return func(ctx context.Context, fullMethod string, call func(context.Context) error) error {
 		err := call(ctx)
 		if isHealthMethod(fullMethod) {
 			return err
 		}
-		return mapError(err, ownedStatusOnly, rendering)
+		mapped, sanitized := mapError(err, ownedStatusOnly, rendering)
+		if sanitized {
+			recordUnhandledFailure(ctx, log, fullMethod, err)
+		}
+		return mapped
 	}
 }
 
@@ -45,11 +60,19 @@ type errorRendering struct {
 
 // policyErrorBoundary sanitizes what a supplied policy interceptor returns.
 //
-// It is an [aroundRPC] directly rather than a constructor returning one, because
-// it captures nothing: its siblings in [builtinPolicies] each close over a
-// collaborator, and this one has none to close over.
-func policyErrorBoundary(ctx context.Context, _ string, call func(context.Context) error) error {
-	return mapError(call(ctx), anyServiceStatus, errorRendering{})
+// It closes over the logger for the same reason its siblings in
+// [builtinPolicies] close over their collaborators: a policy failure this
+// boundary refuses to hand the caller is discarded unless something writes it
+// down, and this is the only position that still holds it.
+func policyErrorBoundary(log *slog.Logger) aroundRPC {
+	return func(ctx context.Context, fullMethod string, call func(context.Context) error) error {
+		err := call(ctx)
+		mapped, sanitized := mapError(err, anyServiceStatus, errorRendering{})
+		if sanitized {
+			recordUnhandledFailure(ctx, log, fullMethod, err)
+		}
+		return mapped
+	}
 }
 
 // trustedStatus reports whether one error boundary may hand err's gRPC status
@@ -87,23 +110,61 @@ func anyServiceStatus(err error) (error, bool) {
 // returns. Cancellation and deadlines answer first at every boundary because
 // they are the caller's own signal rather than a service outcome; trusted then
 // decides how much of the remaining error is already deliberate output.
-func mapError(err error, trusted trustedStatus, rendering errorRendering) error {
+//
+// The second result reports that err reached the caller as a generic INTERNAL
+// carrying none of what actually failed. That is the one outcome worth a record,
+// and it is returned rather than logged here so this function stays a pure
+// mapping: the context and method a record needs live at the boundary, not in
+// the mapping.
+func mapError(err error, trusted trustedStatus, rendering errorRendering) (error, bool) {
 	if err == nil {
-		return nil
+		return nil, false
 	}
 	if errors.Is(err, context.Canceled) {
-		return ownedStatus(codes.Canceled, "request canceled")
+		return ownedStatus(codes.Canceled, "request canceled"), false
 	}
 	if errors.Is(err, context.DeadlineExceeded) {
-		return ownedStatus(codes.DeadlineExceeded, "request deadline exceeded")
+		return ownedStatus(codes.DeadlineExceeded, "request deadline exceeded"), false
 	}
 	if owned, ok := trusted(err); ok {
-		return owned
+		return owned, false
 	}
 	if mapped, ok := failure.Classify(err, rendering.mappers); ok {
-		return mappedStatus(mapped, rendering.domain)
+		return mappedStatus(mapped, rendering.domain), false
 	}
-	return ownedStatus(codes.Internal, "request failed")
+	return ownedStatus(codes.Internal, sanitizedFailureDetail), true
+}
+
+// recordUnhandledFailure writes down the failure behind a generic INTERNAL.
+//
+// It is the only place the error a handler or policy actually returned is
+// recorded. The status carries no detail on purpose — see the package doc on why
+// a dependency's own text is not the caller's business — and the access log
+// carries only the code, so without this the whole %w chain a service built is
+// discarded at the boundary and an INTERNAL is undiagnosable without reproducing
+// the call.
+//
+// Correlation is not assembled here; internal/observability/logctx publishes
+// request_id, trace_id, and span_id from the context the record is logged with.
+//
+// What it records is the class chain, never the message. The error's text is
+// exactly what this boundary refused to give the caller, and a log is not a
+// safer place to put a credential than a status:
+// TestServerObservabilitySanitizesValuesAndFiltersUnknownMethods drives a
+// handler returning a secret and asserts none of it reaches here. See
+// failure.ClassChain for what that buys and what it costs.
+//
+// The span is deliberately untouched. RecordError would publish the same text as
+// exception.message, and the bounded error.type this package could set instead is
+// already derivable from the status otelgrpc reports.
+func recordUnhandledFailure(ctx context.Context, log *slog.Logger, method string, err error) {
+	log.LogAttrs(
+		ctx,
+		slog.LevelError,
+		"grpc_unhandled_failure",
+		slog.String("rpc.method", method),
+		slog.String("error_chain", failure.ClassChain(err)),
+	)
 }
 
 func mappedStatus(mapped failure.Classification, domain string) error {
@@ -137,7 +198,7 @@ func mappedStatus(mapped failure.Classification, domain string) error {
 
 	detail := strings.TrimSpace(mapped.Detail)
 	if detail == "" {
-		detail = "request failed"
+		detail = sanitizedFailureDetail
 	}
 
 	rendered := status.New(code, detail)

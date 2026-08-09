@@ -4,10 +4,24 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime/debug"
 	"sync"
 	"sync/atomic"
 	"time"
 )
+
+// errPublicationNotAttempted marks an event of a claimed batch that the relay
+// never handed to [Publisher], because the batch's shared budget was already
+// spent when its turn came. It stays unexported and never leaves this package:
+// Relay.publishAll is its only producer and Relay.classify its only consumer,
+// which is the same reason notify.go keeps its stage sentinels beside the
+// failures they name.
+//
+// It is not a publication failure. classify turns it into an ordinary retry
+// that adds no uncertainty and gives back the attempt the claim charged, so a
+// broker slow enough to leave every batch with a tail costs throughput rather
+// than a growing quarantine of events nobody tried to publish.
+var errPublicationNotAttempted = errors.New("outbox publication was not attempted")
 
 // publishBatch publishes one claimed batch and finalizes every event in it.
 // stop is true for a stuck publisher, a finalization failure, an observed
@@ -100,6 +114,19 @@ func (r *Relay) publishAll(
 				if index >= len(batch.Events) {
 					return
 				}
+				if batchCtx.Err() != nil {
+					// The budget belongs to the whole batch, so its tail can find
+					// it already spent — by an earlier event, or by the shutdown
+					// that cancelled ctx. Handing the publisher a dead context
+					// would come back as a timeout, and a timeout is an ambiguous
+					// publication: it would set sticky uncertainty and charge an
+					// attempt for a call that never left this process. Reporting
+					// the non-attempt as itself is what keeps the attempt cap
+					// measured against attempts actually made.
+					written[index] = errPublicationNotAttempted
+					r.telemetry.CountOperation(ctx, publishOperationName, outcomeSkipped, classPublisherNotAttempted)
+					continue
+				}
 				written[index] = r.publishOne(batchCtx, batch.Events[index].Event)
 			}
 		})
@@ -132,8 +159,16 @@ func (r *Relay) publishOne(ctx context.Context, event Event) (err error) {
 	// as roots of their own.
 	ctx, span := r.telemetry.StartPublish(ctx, event)
 	defer func() {
-		if recover() != nil {
+		if value := recover(); value != nil {
 			err = ErrPublisherPanic
+			// Taken here rather than left to the runtime: recovering the panic is
+			// what keeps the rest of the batch finalizing, and it also throws away
+			// the only description of the fault. The process is about to exit over
+			// a deployment fault, so the stack an operator needs to fix it has to
+			// be logged before the value goes out of scope. debug.Stack inside a
+			// deferred call still reaches the panicking frames, because the stack
+			// is not unwound until this returns.
+			r.telemetry.LogPublisherPanic(ctx, value, debug.Stack())
 		}
 		errorClass := classNone
 		if err != nil {
@@ -165,6 +200,8 @@ func firstPublisherPanic(publications []error) error {
 
 func publicationErrorClass(err error) string {
 	switch {
+	case errors.Is(err, errPublicationNotAttempted):
+		return classPublisherNotAttempted
 	case errors.Is(err, ErrPublisherPanic):
 		return classPanic
 	case errors.Is(err, ErrPermanentPublication):

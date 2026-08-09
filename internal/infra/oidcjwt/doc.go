@@ -17,12 +17,24 @@
 // with configurable claim rules turns a mistake into a configuration change
 // instead of a code review. Extending the package means editing it:
 //
+//   - a second signature algorithm is not one edit. AllowedAlgorithm in
+//     trust_envelope.go is a single untyped constant, read by
+//     parseProtectedHeader, by parseToken's jose parse, and by compatibleRSAKey,
+//     so those three cannot disagree. Widening it means making that constant a
+//     set and making key admission per-family, because compatibleRSAKey asserts
+//     one key type and canonicalRSAParameters encodes one integer pair. Doing
+//     half of it fails closed: the header and the key set stop agreeing and every
+//     token is refused, so the cost is an outage rather than a bypass;
 //   - a claim requirement joins the checks in parseAccessTokenClaims, token.go.
 //     A claim whose encoding needs policing first — several legal spellings, an
 //     entry that may not repeat — also needs a type; audienceClaim and
 //     numericDate are the worked examples. Accepting and rejecting cases go in
 //     TestVerify_Claims, and the term is added to validClaims in harness_test.go
-//     once rather than per test;
+//     once rather than per test. That code runs on an unauthenticated
+//     credential: parseToken decides every claim before jose checks a signature,
+//     so a decoder there must cost what its input costs. numericDate is the
+//     worked example of that too — boundedExponent exists because an exponent
+//     nothing bounds turns a nine-byte literal into a million digits;
 //   - propagating more than issuer, subject, and client ID means filling more of
 //     [reqctx.Principal] where parseToken builds it. Scopes is an authorization
 //     input, so anything put there becomes an access decision;
@@ -41,6 +53,14 @@
 //     beside the method that carries it. The larger obligation is
 //     transport trust, and nothing here will ask for it: trustedHTTPRequest in
 //     http.go answers that per request, for HTTP;
+//   - a second HTTP security scheme is not an edit here. [Verifier.ResolveHTTP]
+//     answers one scheme and consumes the credential doing it, while the
+//     validator calls the resolver once per declared scheme until a requirement
+//     is met. So a contract declaring two wires its own httpx.PrincipalResolver
+//     to dispatch on the scheme the validator names, and calls this one for the
+//     bearer arm. bearerSecurityScheme in http.go is what makes the unwired case
+//     fail closed rather than proving another scheme's requirement with an
+//     access token;
 //   - a configured trust value lands in this package and internal/config
 //     together. The list is below.
 //

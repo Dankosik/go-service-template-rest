@@ -71,17 +71,13 @@ index 9a1993f..2f2d827 100644
 diff --git a/cmd/service/internal/bootstrap/run.go b/cmd/service/internal/bootstrap/run.go
 --- a/cmd/service/internal/bootstrap/run.go
 +++ b/cmd/service/internal/bootstrap/run.go
-@@ -14,9 +14,11 @@ import (
- 	"syscall"
- 	"time"
- 
+@@ -13,5 +13,7 @@ import (
 +	"github.com/acme/postgres-service/internal/article"
  	"github.com/acme/postgres-service/internal/background"
- 	"github.com/acme/postgres-service/internal/config"
- 	"github.com/acme/postgres-service/internal/health"
  	httpx "github.com/acme/postgres-service/internal/infra/http"
 +	"github.com/acme/postgres-service/internal/infra/postgres"
  	"github.com/acme/postgres-service/internal/infra/telemetry"
+ 	"github.com/acme/postgres-service/internal/observability/logctx"
  )
  
 @@ -277,6 +279,11 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
@@ -98,12 +94,16 @@ diff --git a/cmd/service/internal/bootstrap/run.go b/cmd/service/internal/bootst
  
  	supervisor := newSupervisedBackground(signalCtx, bootstrap.log)
 @@ -325,6 +332,7 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
- 	handler, err := httpx.NewRouter(
+ 	handler, err := newHTTPHandler(
+ 		bootstrap.cfg,
  		bootstrap.log,
- 		httpx.Handlers{
-+			API:           httpx.NewArticleAPI(articles),
- 			Health: healthSvc,
- 			ReadinessGate: func(ctx context.Context) error {
+ 		metrics,
+ 		domainErrors,
+ 		httpRuntimeBindings{
+ 			Handlers: httpx.Handlers{
++				API:    httpx.NewArticleAPI(articles),
+ 				Health: healthSvc,
+ 				ReadinessGate: func(ctx context.Context) error {
 diff --git a/internal/article/article.go b/internal/article/article.go
 new file mode 100644
 index 0000000..e04617b

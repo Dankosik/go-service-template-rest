@@ -4,27 +4,39 @@
 // internal/observability/otelconfig are: the composition root installs it, and
 // every layer above and below logs through it.
 //
-// Without it, correlation is something each call site remembers to add. The
-// version this replaced did that in four places and left a service's own handlers
-// with none of it, so an operator had to join `request` at 504 with a trace_id to
-// `create order failed` with no ids by timestamp — a guess that is wrong under
-// any concurrency, and the trace showing which dependency was slow is then
-// unreachable from the error that reported it.
+// Without it, correlation is something each call site remembers to add, and a
+// record missing the ids cannot be joined to the trace that explains it except by
+// timestamp — a guess that is wrong under any concurrency.
 //
 // The one thing a caller must do is pass a context: slog's Info/Error take none
-// and hand the handler context.Background(), which carries no request. That is
-// what the repository's sloglint `context: scope` setting enforces, rather than
-// leaving it to reviewers.
+// and hand the handler context.Background(), which carries no request. The
+// repository's sloglint `context: scope` setting enforces that.
 package logctx
 
 import (
 	"context"
+	"io"
 	"log/slog"
 	"slices"
 
 	"github.com/example/go-service-template-rest/internal/reqctx"
 	"go.opentelemetry.io/otel/trace"
 )
+
+// NewProcessLogger builds the JSON logger every binary in this repository writes
+// through: slog's JSON handler wrapped in this package's correlating handler.
+//
+// Correlation is the whole reason it is one constructor. A logger built without
+// New here still logs, and silently drops request_id, trace_id, and span_id from
+// every record for the life of the process — a loss no test of the surrounding
+// code would notice.
+//
+// Service identity is deliberately not attached here. The bootstrap logger a
+// binary uses before its configuration loads must state that it does not know the
+// version yet, so the With call belongs at each composition root.
+func NewProcessLogger(out io.Writer, level slog.Level) *slog.Logger {
+	return slog.New(New(slog.NewJSONHandler(out, &slog.HandlerOptions{Level: level})))
+}
 
 // Attribute keys published on every record that has them available. They match
 // the keys the access log already used, so existing log queries keep working.
@@ -94,12 +106,11 @@ func (h handler) Handle(ctx context.Context, record slog.Record) error {
 		return h.derived.Handle(ctx, record)
 
 	default:
-		// A group is open, so attributes added to the record would be nested
-		// inside it — `db.request_id` for a logger derived with WithGroup("db"),
-		// which leaves half a service's records unfindable by the query that
-		// matches the other half. Applying the correlation to the ungrouped base
-		// and replaying the caller's own operations on top is what keeps the keys
-		// where every log query expects them.
+		// A group is open, so added attributes would nest inside it —
+		// `db.request_id` for a logger derived with WithGroup("db"), which no log
+		// query matching `request_id` would find. Applying the correlation to the
+		// ungrouped base and replaying the caller's operations on top keeps the
+		// keys where every query expects them.
 		//nolint:wrapcheck // As above.
 		return h.replay(attrs).Handle(ctx, record)
 	}

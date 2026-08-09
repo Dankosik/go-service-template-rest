@@ -50,7 +50,7 @@ func NewServer(cfg Config, options Options) (*Server, error) {
 	}
 
 	options = withOptionDefaults(options)
-	admission := newAdmissionLimiter(cfg.MaxConcurrentRPCs, options.Load)
+	admission := newAdmissionPolicy(cfg.MaxConcurrentRPCs, cfg.MaxConcurrentHealthRPCs, options.Load)
 	accessLogs := accessLogPolicy{
 		logHealthChecks:   cfg.AccessLogHealthChecks,
 		successSampleRate: cfg.AccessLogSuccessSampleRate,
@@ -71,13 +71,13 @@ func NewServer(cfg Config, options Options) (*Server, error) {
 	// timeout differs, which is why this is two calls rather than one shared
 	// value.
 	//
-	// The admission limiter is built once above and handed to both, because that
-	// is what makes the concurrency budget process-wide rather than per RPC kind.
-	// Nothing structural enforces it now that the list is built twice, so
+	// The admission policy is built once above and handed to both, because that
+	// is what makes each concurrency budget process-wide rather than per RPC
+	// kind. Nothing structural enforces it now that the list is built twice, so
 	// TestAdmissionBudgetIsProcessWide drives a real server to prove it.
 	unaryBuiltins := builtinPolicies(options.Logger, accessLogs, admission, cfg.UnaryTimeout)
 	streamBuiltins := builtinPolicies(options.Logger, accessLogs, admission, cfg.StreamTimeout)
-	handlerErrors := handlerErrorBoundary(errorRendering{
+	handlerErrors := handlerErrorBoundary(options.Logger, errorRendering{
 		mappers: options.DomainErrors,
 		domain:  options.ErrorDomain,
 	})
@@ -99,8 +99,12 @@ func NewServer(cfg Config, options Options) (*Server, error) {
 				return ok && (cfg.TelemetryHealthChecks || !isHealthMethod(info.FullMethodName))
 			}),
 		)),
-		grpc.ChainUnaryInterceptor(unaryChain(unaryBuiltins, options.UnaryPolicy, handlerErrors)...),
-		grpc.ChainStreamInterceptor(streamChain(streamBuiltins, options.StreamPolicy, handlerErrors)...),
+		grpc.ChainUnaryInterceptor(
+			unaryChain(options.Logger, unaryBuiltins, options.UnaryPolicy, handlerErrors)...,
+		),
+		grpc.ChainStreamInterceptor(
+			streamChain(options.Logger, streamBuiltins, options.StreamPolicy, handlerErrors)...,
+		),
 		// A zero MaxConnectionAge is how rotation stays off: grpc-go reads it as
 		// infinity. Every other value here is validated positive, so this is the
 		// one field whose zero is a decision rather than a defect.

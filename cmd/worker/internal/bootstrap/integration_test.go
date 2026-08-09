@@ -14,16 +14,11 @@ import (
 
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/infra/natsjs"
-	"github.com/nats-io/nats.go"
+	"github.com/example/go-service-template-rest/internal/infra/natsjs/natsjstest"
 	"github.com/nats-io/nats.go/jetstream"
-	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/wait"
 )
 
-const (
-	workerNATSImage            = "nats:2.14.3-alpine@sha256:c11af972c99ae542de8925e6a7d9c533aa1eb039660420d2074beed6089b3bf0"
-	workerTestMaxDeliveryBytes = 1 << 20
-)
+const workerTestMaxDeliveryBytes = 1 << 20
 
 func workerTestProducerConfig() natsjs.Config {
 	return natsjs.Config{MaxPayloadBytes: 256 << 10, MaxPendingPublishes: 64}
@@ -201,46 +196,17 @@ func TestNATSWorkerHandlerPanicIsSupervised(t *testing.T) {
 
 func workerNATSFixture(t *testing.T) (string, jetstream.JetStream) {
 	t.Helper()
-	container, err := testcontainers.GenericContainer(t.Context(), testcontainers.GenericContainerRequest{
-		ContainerRequest: testcontainers.ContainerRequest{
-			Image: workerNATSImage, ExposedPorts: []string{"4222/tcp"}, Cmd: []string{"-js", "-sd", "/data"},
-			WaitingFor: wait.ForAll(wait.ForListeningPort("4222/tcp"), wait.ForLog("Server is ready")).WithDeadline(time.Minute),
+	server := natsjstest.Start(t, natsjstest.WithStreams(
+		jetstream.StreamConfig{
+			Name: "EVENTS", Subjects: []string{"events.>"},
+			Storage: jetstream.FileStorage, MaxMsgSize: workerTestMaxDeliveryBytes,
 		},
-		Started: true,
-	})
-	if err != nil {
-		t.Fatalf("start NATS: %v", err)
-	}
-	t.Cleanup(func() {
-		cleanupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		if err := container.Terminate(cleanupCtx); err != nil {
-			t.Errorf("terminate NATS: %v", err)
-		}
-	})
-	endpoint, err := container.Endpoint(t.Context(), "")
-	if err != nil {
-		t.Fatalf("resolve NATS endpoint: %v", err)
-	}
-	url := "nats://" + endpoint
-	connection, err := nats.Connect(url, nats.Timeout(5*time.Second))
-	if err != nil {
-		t.Fatalf("connect fixture: %v", err)
-	}
-	t.Cleanup(connection.Close)
-	js, err := jetstream.New(connection)
-	if err != nil {
-		t.Fatalf("create JetStream fixture: %v", err)
-	}
-	for _, stream := range []jetstream.StreamConfig{
-		{Name: "EVENTS", Subjects: []string{"events.>"}, Storage: jetstream.FileStorage, MaxMsgSize: workerTestMaxDeliveryBytes},
-		{Name: "EVENTS_DLQ", Subjects: []string{"dead.>"}, Storage: jetstream.FileStorage, MaxMsgSize: 2 * workerTestMaxDeliveryBytes},
-	} {
-		if _, err := js.CreateStream(t.Context(), stream); err != nil {
-			t.Fatalf("create stream %s: %v", stream.Name, err)
-		}
-	}
-	return url, js
+		jetstream.StreamConfig{
+			Name: "EVENTS_DLQ", Subjects: []string{"dead.>"},
+			Storage: jetstream.FileStorage, MaxMsgSize: 2 * workerTestMaxDeliveryBytes,
+		},
+	))
+	return server.URL, server.JS
 }
 
 func setWorkerEnvironment(t *testing.T, url, consumer, diagnosticsAddress string) {

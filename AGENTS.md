@@ -24,9 +24,8 @@ Repository-wide contract for reliable Go-service changes with the least workflow
 ## Go Readability
 
 For behaviorally equivalent Go choices, optimize for the next maintainer. Make
-what the code does and why it does it apparent through names, ordinary control
-flow, and comments that record non-obvious rationale, constraints, or public
-contracts.
+what the code does apparent through names and ordinary control flow, and keep
+what only a comment can carry under [Comments](#comments).
 
 Resolve style trade-offs in this order: clarity, simplicity, concision,
 maintainability, then local consistency. Prefer the least mechanism that
@@ -40,6 +39,21 @@ Let formatters and linters own mechanical style, and keep style edits
 change-scoped. Changed Go is readable when its normal path, error path,
 ownership or lifetime, and non-obvious policy are clear without reconstructing
 hidden modes or speculative abstractions.
+
+### Comments
+
+Write a comment only where a competent reader of the final code would still
+reach a wrong conclusion: a rationale or constraint the code cannot show, an
+alternative that looks correct and is not, an external or generated contract, or
+a machine-read directive. Anything a name, a type, or ordinary control flow can
+carry is a rename or a restructure, not a comment.
+
+A justified comment records that fact once, in the words needed to act on it.
+Delete one that restates its identifier, its signature, or the next line;
+narrates the normal path; repeats what another owner already states; argues for
+code that is already accepted; or supplies background a reader does not need in
+order to change this file. Deleting a comment that fails this test belongs to
+whatever change is already editing that code, not to a separate cleanup.
 
 ## Collaboration
 

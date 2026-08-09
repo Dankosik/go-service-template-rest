@@ -8,37 +8,59 @@ import (
 	"sync"
 	"time"
 
+	// infratelemetry is aliased because this package declares its own telemetry
+	// type, which an unaliased import would collide with.
+	infratelemetry "github.com/example/go-service-template-rest/internal/infra/telemetry"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
+	semconv "go.opentelemetry.io/otel/semconv/v1.37.0"
 	"go.opentelemetry.io/otel/trace"
 )
 
 const instrumentationScope = "service.messaging.nats"
 
-// The span attributes, which are OpenTelemetry's messaging convention rather
-// than names this package chose. They are named beside the two functions below
-// that write them, because a publish span and a consume span must carry the
-// same keys to be comparable, and two call sites spelling them out separately
-// is how one gains a key the other never learns about.
+// Span attributes come from semconv rather than from string literals of this
+// package's own, for the reason the literals they replaced did not survive: the
+// convention renamed the producer's messaging.operation.type from "publish" to
+// "send", and a hardcoded key or value cannot be carried across that by the
+// version bump that performs it. postgresoutbox pins the same semconv version,
+// so the two packs describe one publication in one vocabulary.
 //
 // The metric and log label vocabulary is vocabulary.go; the dead-letter reasons
 // that travel on the wire are message_wire.go.
 const (
-	attributeSystem        = "messaging.system"
-	attributeOperationType = "messaging.operation.type"
-	attributeDestination   = "messaging.destination.name"
-	attributeOutcome       = "messaging.operation.outcome"
+	// attributeOutcome has no semconv equivalent at the pinned version. It stays
+	// a literal because it is this repository's own attribute, bounded by
+	// boundedOutcome, and naming it beside the semconv calls is what keeps that
+	// distinction visible.
+	attributeOutcome = "messaging.operation.outcome"
 
-	systemNATS           = "nats"
-	operationTypePublish = "publish"
-	operationTypeProcess = "process"
+	// systemNATS is a literal because messaging.system is an open enum and the
+	// pinned semconv ships no NATS member; "nats" is the value NATS
+	// instrumentations already publish.
+	systemNATS = "nats"
 
-	spanNamePublish = "messaging publish"
-	spanNameConsume = "messaging consume"
+	// The messaging.operation.name values. They are the broker's own verbs
+	// rather than the normalized messaging.operation.type enum, and each is also
+	// the first word of its span name — semconv names a messaging span
+	// "{operation name} {destination}".
+	operationNamePublish = "publish"
+	operationNameProcess = "process"
 )
+
+// publishSpanName and consumeSpanName build the two span names.
+//
+// The publish name carries the concrete subject, which is the publisher's own
+// choice and matches what postgresoutbox names a publication. The consume name
+// carries the worker's configured filter rather than the delivered subject:
+// semconv asks for the destination template when a subscription has one, and a
+// filter with a wildcard is exactly the case where the delivered subject would
+// put an unbounded value in the one field a tracing backend groups on.
+func publishSpanName(subject string) string { return operationNamePublish + " " + subject }
+func consumeSpanName(filter string) string  { return operationNameProcess + " " + filter }
 
 type Role string
 
@@ -107,50 +129,22 @@ func newTelemetry(obs Observability, role Role, readiness func() bool) (*telemet
 }
 
 func (s *telemetry) registerMetrics(meter metric.Meter) error {
-	var err error
-	if s.publishOperations, err = meter.Int64Counter("messaging.publish.operations"); err != nil {
-		return fmt.Errorf("create messaging publish operations metric: %w", err)
-	}
-	if s.publishDuration, err = meter.Float64Histogram("messaging.publish.duration", metric.WithUnit("s")); err != nil {
-		return fmt.Errorf("create messaging publish duration metric: %w", err)
-	}
-	if s.connectionEvents, err = meter.Int64Counter("messaging.connection.events"); err != nil {
-		return fmt.Errorf("create messaging connection events metric: %w", err)
-	}
-	if s.readiness, err = meter.Int64ObservableGauge("messaging.readiness"); err != nil {
-		return fmt.Errorf("create messaging readiness metric: %w", err)
-	}
-	if s.fetchMessages, err = meter.Int64Counter("messaging.fetch.messages"); err != nil {
-		return fmt.Errorf("create messaging fetch messages metric: %w", err)
-	}
-	if s.fetchBytes, err = meter.Int64Counter("messaging.fetch.bytes", metric.WithUnit("By")); err != nil {
-		return fmt.Errorf("create messaging fetch bytes metric: %w", err)
-	}
-	if s.consumeActive, err = meter.Int64UpDownCounter("messaging.consume.active"); err != nil {
-		return fmt.Errorf("create messaging active consumers metric: %w", err)
-	}
-	if s.handlerOperations, err = meter.Int64Counter("messaging.handler.operations"); err != nil {
-		return fmt.Errorf("create messaging handler operations metric: %w", err)
-	}
-	if s.handlerDuration, err = meter.Float64Histogram("messaging.handler.duration", metric.WithUnit("s")); err != nil {
-		return fmt.Errorf("create messaging handler duration metric: %w", err)
-	}
-	if s.redeliveries, err = meter.Int64Counter("messaging.redeliveries"); err != nil {
-		return fmt.Errorf("create messaging redeliveries metric: %w", err)
-	}
-	if s.retries, err = meter.Int64Counter("messaging.retries"); err != nil {
-		return fmt.Errorf("create messaging retries metric: %w", err)
-	}
-	if s.dlqTransfers, err = meter.Int64Counter("messaging.dlq.transfers"); err != nil {
-		return fmt.Errorf("create messaging dead-letter transfers metric: %w", err)
-	}
-	if s.drainOperations, err = meter.Int64Counter("messaging.drain.operations"); err != nil {
-		return fmt.Errorf("create messaging drain operations metric: %w", err)
-	}
-	if s.forcedShutdowns, err = meter.Int64Counter("messaging.forced_shutdowns"); err != nil {
-		return fmt.Errorf("create messaging forced shutdowns metric: %w", err)
-	}
-	return nil
+	set := infratelemetry.NewInstrumentSet(meter)
+	set.Int64Counter(&s.publishOperations, "messaging.publish.operations")
+	set.Float64Histogram(&s.publishDuration, "messaging.publish.duration", metric.WithUnit("s"))
+	set.Int64Counter(&s.connectionEvents, "messaging.connection.events")
+	set.Int64ObservableGauge(&s.readiness, "messaging.readiness")
+	set.Int64Counter(&s.fetchMessages, "messaging.fetch.messages")
+	set.Int64Counter(&s.fetchBytes, "messaging.fetch.bytes", metric.WithUnit("By"))
+	set.Int64UpDownCounter(&s.consumeActive, "messaging.consume.active")
+	set.Int64Counter(&s.handlerOperations, "messaging.handler.operations")
+	set.Float64Histogram(&s.handlerDuration, "messaging.handler.duration", metric.WithUnit("s"))
+	set.Int64Counter(&s.redeliveries, "messaging.redeliveries")
+	set.Int64Counter(&s.retries, "messaging.retries")
+	set.Int64Counter(&s.dlqTransfers, "messaging.dlq.transfers")
+	set.Int64Counter(&s.drainOperations, "messaging.drain.operations")
+	set.Int64Counter(&s.forcedShutdowns, "messaging.forced_shutdowns")
+	return set.Err()
 }
 
 func (s *telemetry) close() {
@@ -168,34 +162,39 @@ func outcomeAttribute(outcome string) metric.MeasurementOption {
 	return metric.WithAttributes(attribute.String("outcome", boundedOutcome(outcome)))
 }
 
-// publishSpanOptions and consumeSpanOptions own the attributes of the two spans
-// this package opens. They return the options rather than the started span on
-// purpose: tracer.Start stays at the call site, where spancheck can still prove
-// the span is ended, while the attribute set — the part that has to agree
-// between a publish and a consume to be comparable — is written once here.
+// publishSpanOptions and consumeSpanOptions return options rather than a started
+// span so tracer.Start stays at the call site, where spancheck can still prove
+// the span is ended.
 //
 // They are spelled out separately rather than sharing a constructor because the
-// values that differ are adjacent strings, and a helper taking them as
-// parameters would let a call site transpose the destination and the message id
-// without the compiler noticing.
+// values that differ are adjacent strings, and a helper taking them as parameters
+// would let a call site transpose the destination and the message id without the
+// compiler noticing.
 func publishSpanOptions(event Event) []trace.SpanStartOption {
 	return []trace.SpanStartOption{
 		trace.WithSpanKind(trace.SpanKindProducer),
 		trace.WithAttributes(
-			attribute.String(attributeSystem, systemNATS),
-			attribute.String(attributeOperationType, operationTypePublish),
-			attribute.String(attributeDestination, event.Subject),
+			semconv.MessagingSystemKey.String(systemNATS),
+			semconv.MessagingOperationTypeSend,
+			semconv.MessagingOperationName(operationNamePublish),
+			semconv.MessagingDestinationName(event.Subject),
 		),
 	}
 }
 
-func consumeSpanOptions(msg Message) []trace.SpanStartOption {
+// consumeSpanOptions takes the worker's configured filter beside the message
+// because the two answer different questions: the delivered subject is what
+// arrived, and the filter is what this consumer subscribes to. Both are
+// recorded, and only the filter reaches the span name.
+func consumeSpanOptions(msg Message, filter string) []trace.SpanStartOption {
 	return []trace.SpanStartOption{
 		trace.WithSpanKind(trace.SpanKindConsumer),
 		trace.WithAttributes(
-			attribute.String(attributeSystem, systemNATS),
-			attribute.String(attributeOperationType, operationTypeProcess),
-			attribute.String(attributeDestination, msg.Subject()),
+			semconv.MessagingSystemKey.String(systemNATS),
+			semconv.MessagingOperationTypeProcess,
+			semconv.MessagingOperationName(operationNameProcess),
+			semconv.MessagingDestinationName(msg.Subject()),
+			semconv.MessagingDestinationTemplate(filter),
 		),
 	}
 }

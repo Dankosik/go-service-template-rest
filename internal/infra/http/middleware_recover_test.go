@@ -7,37 +7,11 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/example/go-service-template-rest/internal/problem"
 )
-
-func TestPanicClassClassifiesRecoveredValues(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name string
-		rec  any
-		want string
-	}{
-		{name: "runtime error", rec: &runtime.TypeAssertionError{}, want: "runtime_error"},
-		{name: "error", rec: errors.New("boom"), want: "error"},
-		{name: "string", rec: "boom", want: "string"},
-		{name: "value", rec: 42, want: "value"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			if got := panicClass(tt.rec); got != tt.want {
-				t.Fatalf("panicClass(%v) = %q, want %q", tt.rec, got, tt.want)
-			}
-		})
-	}
-}
 
 func TestRecoverLogsPanicClassWithoutRawValue(t *testing.T) {
 	t.Parallel()
@@ -70,11 +44,11 @@ func TestRecoverLogsPanicClassWithoutRawValue(t *testing.T) {
 	if !strings.Contains(out.String(), `"route":"GET /users/{id}"`) {
 		t.Fatalf("panic log = %q, want bounded route template", out.String())
 	}
-	if !strings.Contains(out.String(), `"panic_class":"string"`) {
-		t.Fatalf("panic log = %q, want panic_class", out.String())
+	if !strings.Contains(out.String(), `"panic.class":"string"`) {
+		t.Fatalf("panic log = %q, want panic.class", out.String())
 	}
-	if !strings.Contains(out.String(), `"panic_type":"string"`) {
-		t.Fatalf("panic log = %q, want panic_type", out.String())
+	if !strings.Contains(out.String(), `"panic.type":"string"`) {
+		t.Fatalf("panic log = %q, want panic.type", out.String())
 	}
 	if !strings.Contains(out.String(), `"request_id":"req-panic-123"`) {
 		t.Fatalf("panic log = %q, want request_id", out.String())

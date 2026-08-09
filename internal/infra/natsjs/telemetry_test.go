@@ -128,7 +128,7 @@ func TestMessagingTelemetryContract(t *testing.T) {
 	sig.recordPublish(ctx, event, outcomeAccepted, reasonNone, time.Now())
 	_, publishSpan := sig.tracer.Start(ctx, "publish", publishSpanOptions(event)...)
 	publishSpan.End()
-	_, consumeSpan := sig.tracer.Start(ctx, "consume", consumeSpanOptions(msg)...)
+	_, consumeSpan := sig.tracer.Start(ctx, "consume", consumeSpanOptions(msg, "events.>")...)
 	consumeSpan.End()
 	sig.recordConnection(ctx, connectionDisconnected)
 	sig.fetchMessages.Add(ctx, 1)
@@ -216,6 +216,62 @@ func TestMessagingTelemetryContract(t *testing.T) {
 	_, err = Connect(connectCtx, cfg, RoleProducer, Observability{})
 	if err == nil || strings.Contains(err.Error(), credentialCanary) {
 		t.Fatalf("Connect() error = %v, want sanitized failure", err)
+	}
+}
+
+// The span names and their semconv attributes, pinned here because the real
+// broker suite cannot see the distinction that matters: it configures one
+// worker whose filter equals the subject it publishes to, so a consume span
+// named after the delivered subject and one named after the filter are the
+// same string there. A wildcard filter separates them, and separating them is
+// the point — the delivered subject of a wildcard subscription is what would
+// put an unbounded value in a span name.
+func TestMessagingSpanNamesFollowSemanticConventions(t *testing.T) {
+	t.Parallel()
+
+	const filter = "events.>"
+	recorder := tracetest.NewSpanRecorder()
+	provider := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder))
+	t.Cleanup(func() { _ = provider.Shutdown(context.Background()) })
+	tracer := provider.Tracer(instrumentationScope)
+
+	event := Event{Subject: "events.created", MessageID: "message-1", PublicationID: "publication-1"}
+	msg := Message{subject: "events.created", messageID: "message-1"}
+	_, publishSpan := tracer.Start(t.Context(), publishSpanName(event.Subject), publishSpanOptions(event)...)
+	publishSpan.End()
+	_, consumeSpan := tracer.Start(t.Context(), consumeSpanName(filter), consumeSpanOptions(msg, filter)...)
+	consumeSpan.End()
+
+	// Keyed by span name, so the names are asserted by the comparison itself
+	// rather than by a lookup that would have to report a miss of its own.
+	got := make(map[string]map[attribute.Key]string)
+	for _, span := range recorder.Ended() {
+		attrs := make(map[attribute.Key]string, len(span.Attributes()))
+		for _, attr := range span.Attributes() {
+			attrs[attr.Key] = attr.Value.AsString()
+		}
+		got[span.Name()] = attrs
+	}
+	want := map[string]map[attribute.Key]string{
+		"publish events.created": {
+			"messaging.system":         "nats",
+			"messaging.operation.type": "send",
+			"messaging.operation.name": "publish",
+			// The producer's own subject; there is no template to prefer.
+			"messaging.destination.name": "events.created",
+		},
+		"process events.>": {
+			"messaging.system":         "nats",
+			"messaging.operation.type": "process",
+			"messaging.operation.name": "process",
+			// What arrived, beside what this consumer subscribes to. Only the
+			// second reaches the span name above.
+			"messaging.destination.name":     "events.created",
+			"messaging.destination.template": filter,
+		},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("messaging spans = %#v, want %#v", got, want)
 	}
 }
 

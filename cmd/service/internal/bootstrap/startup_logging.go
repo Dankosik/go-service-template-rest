@@ -2,20 +2,13 @@ package bootstrap
 
 import (
 	"context"
-	"errors"
-	"io"
 	"log/slog"
 	"os"
 
+	"github.com/example/go-service-template-rest/cmd/internal/runtimeopts"
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 	"github.com/example/go-service-template-rest/internal/observability/logctx"
-)
-
-const (
-	telemetryFailureReasonSetupError       = "setup_error"
-	telemetryFailureReasonDeadlineExceeded = "deadline_exceeded"
-	telemetryFailureReasonCanceled         = "canceled"
 )
 
 // startupLogArgs builds the stage attributes every startup and shutdown record
@@ -33,35 +26,27 @@ func startupLogArgs(component, operation, outcome string, extra ...any) []any {
 	return append(args, extra...)
 }
 
-func telemetryInitFailureReason(err error) string {
-	switch {
-	case errors.Is(err, context.DeadlineExceeded):
-		return telemetryFailureReasonDeadlineExceeded
-	case errors.Is(err, context.Canceled):
-		return telemetryFailureReasonCanceled
-	default:
-		return telemetryFailureReasonSetupError
+// logProcessExit writes the last record of the process, through the default
+// logger rather than a captured one: it runs after the deferred teardown that
+// may have replaced what the bootstrap logger wrote to.
+func logProcessExit(ctx context.Context, runErr error) {
+	if runErr != nil {
+		slog.ErrorContext(
+			ctx,
+			"process_exit",
+			startupLogArgs("lifecycle", "process_exit", "error", "err", runErr)...,
+		)
+		return
 	}
-}
-
-// newProcessLogger builds the logger every record in this process goes through.
-//
-// The logctx decorator is the reason this is one function rather than two
-// literals: it publishes request and trace correlation from the context a record
-// was logged with, so a service's own handlers get it without adding the
-// attributes. A logger built without it looks identical and silently drops the
-// only keys that join an application error to its trace. The writer is a
-// parameter so a test can prove the decorator is installed.
-func newProcessLogger(out io.Writer, level slog.Level) *slog.Logger {
-	return slog.New(logctx.New(slog.NewJSONHandler(out, &slog.HandlerOptions{Level: level})))
+	slog.InfoContext(
+		ctx,
+		"process_exit",
+		startupLogArgs("lifecycle", "process_exit", "success")...,
+	)
 }
 
 func bootstrapLoggerStage(cfg config.Config) *slog.Logger {
-	log := newProcessLogger(os.Stdout, cfg.Log.Level).With(
-		"service.name", cfg.Observability.OTel.ServiceName,
-		"service.version", cfg.App.Version,
-		"deployment.environment.name", cfg.App.Env,
-	)
+	log := logctx.NewProcessLogger(os.Stdout, cfg.Log.Level).With(runtimeopts.LoggerFields(cfg)...)
 	slog.SetDefault(log)
 	return log
 }
@@ -100,7 +85,7 @@ func bootstrapReportStage(
 				"degraded",
 				"dependency", startupDependencyTelemetry,
 				"mode", startupDependencyModeFeatureOff,
-				"reason", telemetryInitFailureReason(telemetryInitErr),
+				"reason", telemetry.FailureReason(telemetryInitErr),
 				"err", telemetryInitErr,
 			)...,
 		)

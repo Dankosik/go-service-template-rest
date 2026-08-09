@@ -111,7 +111,11 @@ func (s *Store) recordOperation(ctx context.Context, operation string, started t
 //
 // Every statement in this package reaches PostgreSQL, so anything this switch
 // does not recognize is a database error. A new sentinel the store can
-// distinguish belongs here and in [boundedErrorType].
+// distinguish belongs here and in [boundedErrorType]; one left out is reported
+// to an operator as a database failure. [ErrNotFound] is named for that reason —
+// an audited operator action against an id that does not exist is a rejected
+// call, and leaving it in the default arm reports a mistyped id to an operator
+// as an outage.
 func storeOutcome(err error) (outcome, errorClass string) {
 	switch {
 	case err == nil:
@@ -119,8 +123,8 @@ func storeOutcome(err error) (outcome, errorClass string) {
 	case errors.Is(err, ErrLeaseLost):
 		return outcomeError, classLostLease
 	case errors.Is(err, ErrInvalidEvent), errors.Is(err, ErrConfig), errors.Is(err, ErrOrderingSequence),
-		errors.Is(err, ErrOrderingKeyActive), errors.Is(err, ErrReceiptConflict),
-		errors.Is(err, ErrRedriveRejected), errors.Is(err, ErrRedriveConflict):
+		errors.Is(err, ErrOrderingKeyActive), errors.Is(err, ErrReceiptConflict), errors.Is(err, ErrNotFound),
+		errors.Is(err, ErrOperatorStateConflict), errors.Is(err, ErrOperatorAuditConflict):
 		return outcomeRejected, classValidation
 	default:
 		return outcomeError, classDatabase

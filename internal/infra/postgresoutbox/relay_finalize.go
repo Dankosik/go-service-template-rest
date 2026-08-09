@@ -37,12 +37,13 @@ type batchOutcomes struct {
 //   - A retry or poison the statement did not report means another relay owns
 //     that event and will deliver it. Nothing is at risk, but the lease was
 //     overrun, which is a lease or replica misconfiguration rather than a
-//     transient fault: Store reports ErrLeaseLost and the relay stops so an
-//     operator sees it.
+//     transient fault: Store reports ErrLeaseLost, which the loop surfaces to an
+//     operator through [finalizationFaultTolerance].
 //
-// Every error returned here stops the relay. failureClass in
-// cmd/outbox-relay/main.go turns each one into its operator-facing exit class,
-// so a new stop reason belongs in that switch too.
+// Every error returned here ends the current cycle, and the two finalization
+// faults below end the relay once they repeat. failureClass in
+// cmd/outbox-relay/main.go turns each stop reason into its operator-facing exit
+// class, so a new one belongs in that switch too.
 func (r *Relay) finalize(ctx context.Context, batch ClaimedBatch, publications []error) error {
 	outcomes := r.classify(batch.Events, publications)
 	if err := r.finalizeUnordered(ctx, batch.Token, outcomes.published); err != nil {
@@ -77,6 +78,21 @@ func (r *Relay) classify(claims []ClaimedEvent, publications []error) batchOutco
 			outcomes.published = append(outcomes.published, claim)
 		case publication == nil:
 			outcomes.ordered = append(outcomes.ordered, claim)
+		case errors.Is(publication, errPublicationNotAttempted):
+			// Above every failure arm on purpose: this event was never handed to
+			// the publisher, so neither the attempt cap nor sticky uncertainty may
+			// act on it — including for an event that arrived already uncertain,
+			// which the arm below would otherwise poison.
+			//
+			// No delay, because nothing failed and nothing is being spared. The
+			// event becomes eligible immediately, and the claim order puts it ahead
+			// of whatever is retried for a real failure on the next cycle.
+			outcomes.retries = append(outcomes.retries, RetryDirective{
+				ID:                   claim.Event.ID,
+				ErrorClass:           classPublisherNotAttempted,
+				PublicationUncertain: claim.PublicationUncertain,
+				NotAttempted:         true,
+			})
 		case claim.PublicationUncertain && (permanent || atLimit):
 			outcomes.poisoned = append(outcomes.poisoned, poisonedEvent{
 				claim: claim, errorClass: classOutcomeUnknown, publicationUncertain: true,
@@ -217,6 +233,61 @@ func (r *Relay) finalizePoisoned(ctx context.Context, token string, poisoned []p
 		r.telemetry.LogPoison(ctx, event.errorClass, event.claim.CycleAttemptCount)
 	}
 	return nil
+}
+
+// finalizationFaultTolerance is how many consecutive cycles may end in a
+// finalization fault before the relay stops over it.
+//
+// Neither fault is a correctness problem the stop prevents. [ErrLeaseLost] means
+// another relay already owns those events, and [ErrProgressUnknown] means lease
+// recovery will republish one — a duplicate this package's delivery contract
+// already permits. Stopping only makes an operator look, and stopping on the
+// first occurrence makes them look at a crash loop: a single ambiguous event
+// costs a whole process restart, and a lease that is persistently too short
+// halts delivery entirely instead of degrading its throughput.
+//
+// A tolerance keeps both properties. Repetition is what distinguishes a
+// misconfigured lease from a lost race, so a fault that repeats this many times
+// in a row still exits with its own class, while an isolated one costs one
+// poll interval and a counted sample. The count resets on any cycle that
+// finalized cleanly, so the exit means consecutive faults rather than a total
+// reached over an uptime.
+//
+// Three is the smallest count that can distinguish the two. Raising it raises
+// how long a real misconfiguration keeps republishing before an operator is
+// told; the duplicate rate it can produce meanwhile is bounded by this count
+// times one batch.
+const finalizationFaultTolerance = 3
+
+// toleratesFinalizationFault reports whether a cycle's stop reason is one the
+// relay absorbs and continues from, counting the ones it does. consecutive is
+// how many cycles in a row have now ended in a fault, this one included.
+//
+// Only the two finalization faults are tolerable. Everything else that stops a
+// cycle — a failed claim, a stuck publisher, a panicking adapter, a retention
+// delete that failed — is either unsafe to continue under or not a fault at all,
+// and reaches its caller unchanged.
+func (r *Relay) toleratesFinalizationFault(ctx context.Context, err error, consecutive int) bool {
+	class := finalizationFaultClass(err)
+	if class == boundedOther || consecutive >= finalizationFaultTolerance {
+		return false
+	}
+	r.telemetry.CountOperation(ctx, "finalize", "tolerated", class)
+	return true
+}
+
+// finalizationFaultClass names the tolerable finalization faults for telemetry,
+// and answers boundedOther for everything else — which is also how the caller
+// above asks "is this one of them" without a second predicate.
+func finalizationFaultClass(err error) string {
+	switch {
+	case errors.Is(err, ErrLeaseLost):
+		return classLostLease
+	case errors.Is(err, ErrProgressUnknown):
+		return classProgressUnknown
+	default:
+		return boundedOther
+	}
 }
 
 // reconcilePasses is how many times reconcilePublished re-resolves one event

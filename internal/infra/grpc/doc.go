@@ -45,7 +45,7 @@
 // the only place the order below is decided, and it produces both chains, so a
 // policy cannot reach unary RPCs and miss streaming ones. [NewServer] calls it
 // once per chain rather than sharing one list, because the deadline is
-// configured separately for each — which also means the admission limiter is
+// configured separately for each — which also means the admission policy is
 // built once and handed to both, and TestAdmissionBudgetIsProcessWide is what
 // proves the server still does that. builtinPolicies is a function rather than a
 // literal inside [NewServer] because performance_test.go builds a subset of the
@@ -68,6 +68,8 @@
 //
 //   - correlation — accepts or mints the request ID and publishes it in response
 //     metadata, so everything below it and the handler agree on one identifier.
+//     It is the one policy that can refuse an RPC without the access log seeing
+//     it, which is why it logs that refusal itself.
 //   - access log — times the whole RPC, and sits outside both error boundaries
 //     so it records the status the caller actually receives.
 //   - deadline — bounds how long everything below it may run, which is why it is
@@ -78,8 +80,10 @@
 //     bounded by the stream and connection limits.
 //   - recovery — turns a panic below it into INTERNAL, which is also what lets
 //     the access log record the RPC instead of losing it with the goroutine.
-//   - admission — holds the concurrency semaphore for the work below it, outside
+//   - admission — holds a concurrency semaphore for the work below it, outside
 //     the policy slot, so an RPC occupies a slot before any supplied policy runs.
+//     Business RPCs and the standard health service hold separate budgets, and
+//     health Check holds neither; Config owns why.
 //   - policy error boundary — sanitizes what the policy interceptors return.
 //   - [Options.UnaryPolicy] and [Options.StreamPolicy] — supplied by the
 //     composition root.

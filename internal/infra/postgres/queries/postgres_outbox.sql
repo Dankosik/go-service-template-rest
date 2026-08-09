@@ -498,6 +498,22 @@ FROM claim;
 
 -- Each failed event carries its own jittered delay and error class, so one
 -- statement releases the whole failing part of a batch.
+--
+-- `not_attempted` returns the attempt the claim charged. A claim counts an
+-- attempt up front because a relay that dies mid-publication must still be seen
+-- to have tried, but an event the relay never handed to the publisher — its
+-- batch budget was already spent on earlier events — was not tried at all.
+-- Leaving that attempt charged makes a slow broker walk such an event to
+-- `max_attempts` and quarantine it as `outcome_unknown` without one publication
+-- ever having been attempted, so the counter is given back and the attempt cap
+-- keeps meaning attempts actually made. `greatest(...,0)` only guards the
+-- counters' own CHECK; the claim that produced this lease always incremented
+-- both.
+--
+-- `last_attempt_at` deliberately keeps the timestamp the claim wrote. Its
+-- previous value is gone by the time this statement runs, and an operator
+-- reading it wants to know when this row was last picked up, which is exactly
+-- what it still reports.
 -- name: ScheduleOutboxRetryBatch :execrows
 UPDATE outbox_events AS event
 SET available_at = statement_timestamp()
@@ -506,13 +522,22 @@ SET available_at = statement_timestamp()
     lease_expires_at = NULL,
     publication_uncertain = event.publication_uncertain IS TRUE
         OR retry.publication_uncertain,
+    cycle_attempt_count = CASE
+        WHEN retry.not_attempted THEN greatest(event.cycle_attempt_count - 1, 0)
+        ELSE event.cycle_attempt_count
+    END,
+    total_attempt_count = CASE
+        WHEN retry.not_attempted THEN greatest(event.total_attempt_count - 1, 0)
+        ELSE event.total_attempt_count
+    END,
     last_error_class = retry.error_class
 FROM (
     SELECT
         unnest(sqlc.arg(ids)::text[]) AS id,
         unnest(sqlc.arg(delay_milliseconds)::double precision[]) AS delay_milliseconds,
         unnest(sqlc.arg(error_classes)::text[]) AS error_class,
-        unnest(sqlc.arg(publication_uncertain)::boolean[]) AS publication_uncertain
+        unnest(sqlc.arg(publication_uncertain)::boolean[]) AS publication_uncertain,
+        unnest(sqlc.arg(not_attempted)::boolean[]) AS not_attempted
 ) AS retry
 WHERE event.id = retry.id
   AND event.lease_token = sqlc.arg(lease_token)

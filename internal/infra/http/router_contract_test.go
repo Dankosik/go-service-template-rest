@@ -181,9 +181,9 @@ func TestGeneratedStrictRequestErrorDetailsAreSanitized(t *testing.T) {
 	log := newTestServiceLogger(&out)
 	const attackerDetail = `invalid "token": secret-value`
 
-	options := generatedStrictServerOptions(handleGeneratedRequestError(log, defaultAuthenticateChallenge), nil)
+	options := generatedStrictServerOptions(log, handleGeneratedRequestError(log, defaultAuthenticateChallenge), nil)
 	if options.RequestErrorHandlerFunc == nil {
-		t.Fatalf("generatedStrictServerOptions() RequestErrorHandlerFunc = nil")
+		t.Fatal("generatedStrictServerOptions() RequestErrorHandlerFunc = nil")
 	}
 
 	handler := RequestCorrelation(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -216,8 +216,8 @@ func TestGeneratedStrictRequestErrorDetailsAreSanitized(t *testing.T) {
 	if strings.Contains(logLine, attackerDetail) {
 		t.Fatalf("log line leaks raw parser detail: %q", logLine)
 	}
-	if !strings.Contains(logLine, `"error_class"`) {
-		t.Fatalf("log line = %q, want sanitized error_class", logLine)
+	if !strings.Contains(logLine, `"error_chain"`) {
+		t.Fatalf("log line = %q, want sanitized error_chain", logLine)
 	}
 	if !strings.Contains(logLine, `"request_id":"req-123"`) {
 		t.Fatalf("log line = %q, want request_id", logLine)
@@ -239,7 +239,7 @@ func TestGeneratedChiRequestErrorDetailsAreSanitized(t *testing.T) {
 
 	options := generatedChiServerOptions(handleGeneratedRequestError(log, defaultAuthenticateChallenge))
 	if options.ErrorHandlerFunc == nil {
-		t.Fatalf("generatedChiServerOptions() ErrorHandlerFunc = nil")
+		t.Fatal("generatedChiServerOptions() ErrorHandlerFunc = nil")
 	}
 
 	handler := RequestCorrelation(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -273,8 +273,8 @@ func TestGeneratedChiRequestErrorDetailsAreSanitized(t *testing.T) {
 	if strings.Contains(logLine, attackerDetail) {
 		t.Fatalf("log line leaks raw parser detail: %q", logLine)
 	}
-	if !strings.Contains(logLine, `"error_class"`) {
-		t.Fatalf("log line = %q, want sanitized error_class", logLine)
+	if !strings.Contains(logLine, `"error_chain"`) {
+		t.Fatalf("log line = %q, want sanitized error_chain", logLine)
 	}
 	if !strings.Contains(logLine, `"request_id":"req-chi-123"`) {
 		t.Fatalf("log line = %q, want request_id", logLine)
@@ -311,7 +311,7 @@ func TestOpenAPIRuntimeContractAccessLogIncludesRouteLabel(t *testing.T) {
 
 	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
 	if len(lines) == 0 || lines[0] == "" {
-		t.Fatalf("expected access log line")
+		t.Fatal("expected access log line")
 	}
 
 	var event map[string]any
@@ -369,13 +369,13 @@ func TestOpenAPIRuntimeContractMetricsExposeRouteLabels(t *testing.T) {
 
 	body := metricsResp.Body.String()
 	if !strings.Contains(body, "http_server_request_duration_seconds_bucket") {
-		t.Fatalf("metrics output does not contain duration histogram buckets")
+		t.Fatal("metrics output does not contain duration histogram buckets")
 	}
 	if !strings.Contains(body, `http_request_method="GET"`) ||
 		!strings.Contains(body, `http_response_status_code="200"`) ||
 		!strings.Contains(body, `http_route="/health/live"`) ||
 		!strings.Contains(body, `server_address="router-test"`) {
-		t.Fatalf("metrics output does not contain expected duration histogram labels for liveness endpoint")
+		t.Fatal("metrics output does not contain expected duration histogram labels for liveness endpoint")
 	}
 	if strings.Contains(body, "attacker-controlled.example") || strings.Contains(body, `server_port="65535"`) {
 		t.Fatal("metrics output contains attacker-controlled authority labels")
@@ -483,7 +483,7 @@ func TestOpenAPIRuntimeContractRouteTemplateUsedForOTelSpanName(t *testing.T) {
 
 	spans := recorder.Ended()
 	if len(spans) == 0 {
-		t.Fatalf("expected ended spans")
+		t.Fatal("expected ended spans")
 	}
 
 	wantSpanNames := map[string]bool{

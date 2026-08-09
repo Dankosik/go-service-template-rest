@@ -163,7 +163,7 @@ func TestAccessLogPreservesFlusherInterface(t *testing.T) {
 		t.Fatalf("ResponseController.Flush() error = %v, want nil", flushErr)
 	}
 	if !resp.Flushed {
-		t.Fatalf("ResponseRecorder.Flushed = false, want true")
+		t.Fatal("ResponseRecorder.Flushed = false, want true")
 	}
 }
 

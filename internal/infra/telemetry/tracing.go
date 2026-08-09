@@ -132,16 +132,14 @@ func AmbientOTLPExporterEnv() []string {
 // this service must not ignore when it configures its own exporter.
 //
 // otlptracehttp applies ambient environment first and explicit options second, so
-// WithEndpointURL makes an injected ENDPOINT, TRACES_ENDPOINT, or INSECURE
-// harmless. Credential and trust material is different: this service never sets
-// client certificates or a root CA pool, and sets headers only when
-// observability.otel.exporter.otlp_headers is non-empty, so these variables would
-// silently travel to the collector unverified.
+// WithEndpointURL already makes an injected ENDPOINT or INSECURE harmless.
+// Credential and trust material is different: this service sets no client
+// certificate and no root CA pool, so these would travel to the collector
+// unverified.
 //
 // This applies only when observability.otel.exporter.otlp_endpoint named the
-// destination. When the endpoint came from the platform's own variables, the
-// platform owns the whole exporter configuration; rejecting its credentials would
-// refuse the ordinary injected-collector deployment for no gain.
+// destination. When the platform's own variables supplied it, the platform owns
+// the whole exporter configuration.
 //
 // Kept sorted so reported output is stable.
 var traceExporterEnvConflicts = []string{
@@ -231,13 +229,12 @@ func buildTraceExporterOptions(cfg TraceExporterConfig) ([]otlptracehttp.Option,
 //
 // observability.otel.exporter.otlp_endpoint is this service's own setting and
 // wins. When it names nothing, the standard OpenTelemetry endpoint variables are
-// honored: they are what a platform collector injects, and a service that
-// ignored them would report healthy, answer every request, and export no trace.
+// honored: they are what a platform collector injects, and ignoring them would
+// leave a service reporting healthy while exporting no trace.
 //
-// Configured headers are a credential, so they pin the destination. When this
-// service names headers but no endpoint there is no fallback, because sending
-// the service's own credentials to an endpoint it never named is the one
-// outcome this resolution must not create.
+// Configured headers are a credential, so they pin the destination: headers
+// without an endpoint get no fallback, because sending the service's own
+// credentials somewhere it never named is what this must not create.
 func ResolveTraceExporterEndpoint(cfg TraceExporterConfig) (TraceExporterEndpoint, error) {
 	if raw := strings.TrimSpace(cfg.OTLPEndpoint); raw != "" {
 		endpoint, err := parseSignalOTLPEndpoint(raw, otlpTracesPath)

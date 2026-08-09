@@ -20,7 +20,13 @@ type Event struct {
 	MessageID     string
 	PublicationID string
 	Type          string
-	Schema        string
+	// Schema versions Payload's shape for consumers. Nothing here parses it, and
+	// no repository gate checks it the way OpenAPI and Buf check this service's
+	// other published contracts — the emitting feature owns event compatibility
+	// on its own. A stream retains what it was given and a dead-letter record can
+	// be redriven long after, so a consumer must keep reading every version still
+	// present, not only the one being published today.
+	Schema string
 	// OrderingKey travels to the consumer as data and nothing here acts on it.
 	// This package does not serialize a key: the broker assigns its own stream
 	// sequence and a worker above MaxConcurrency=1 runs one key's handlers
@@ -105,8 +111,8 @@ func Permanent(err error) error {
 }
 
 func isPermanent(err error) bool {
-	var target permanentError
-	return errors.As(err, &target)
+	_, ok := errors.AsType[permanentError](err)
+	return ok
 }
 
 func NewID() string { return rand.Text() }

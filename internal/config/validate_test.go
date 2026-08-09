@@ -15,7 +15,7 @@ func TestPostgresDurationBounds(t *testing.T) {
 
 	_, _, err := LoadDetailed(LoadOptions{})
 	if err == nil {
-		t.Fatalf("LoadDetailed() expected validation error for connect timeout")
+		t.Fatal("LoadDetailed() expected validation error for connect timeout")
 	}
 	if !errors.Is(err, ErrValidate) {
 		t.Fatalf("error = %v, want ErrValidate", err)
@@ -60,7 +60,7 @@ func TestPostgresMaxOpenConnsMustStayWithinRange(t *testing.T) {
 
 	_, _, err := LoadDetailed(LoadOptions{})
 	if err == nil {
-		t.Fatalf("LoadDetailed() expected validation error for postgres max open conns")
+		t.Fatal("LoadDetailed() expected validation error for postgres max open conns")
 	}
 	if !errors.Is(err, ErrValidate) {
 		t.Fatalf("error = %v, want ErrValidate", err)
@@ -97,7 +97,7 @@ func TestShutdownTimeoutMustStayWithinRange(t *testing.T) {
 
 	_, _, err := LoadDetailed(LoadOptions{})
 	if err == nil {
-		t.Fatalf("LoadDetailed() expected validation error for shutdown timeout range")
+		t.Fatal("LoadDetailed() expected validation error for shutdown timeout range")
 	}
 	if !errors.Is(err, ErrValidate) {
 		t.Fatalf("error = %v, want ErrValidate", err)
@@ -115,7 +115,7 @@ func TestHTTPShutdownBudgetMustLeaveWriteDrainTime(t *testing.T) {
 
 	_, _, err := LoadDetailed(LoadOptions{})
 	if err == nil {
-		t.Fatalf("LoadDetailed() expected validation error for write timeout beyond drain budget")
+		t.Fatal("LoadDetailed() expected validation error for write timeout beyond drain budget")
 	}
 	if !errors.Is(err, ErrValidate) {
 		t.Fatalf("error = %v, want ErrValidate", err)
@@ -134,7 +134,7 @@ func TestReadinessTimeoutMustNotExceedWriteTimeout(t *testing.T) {
 
 		_, _, err := LoadDetailed(LoadOptions{})
 		if err == nil {
-			t.Fatalf("LoadDetailed() expected validation error for readiness timeout beyond write timeout")
+			t.Fatal("LoadDetailed() expected validation error for readiness timeout beyond write timeout")
 		}
 		if !errors.Is(err, ErrValidate) {
 			t.Fatalf("error = %v, want ErrValidate", err)
@@ -256,7 +256,7 @@ func TestRequestTimeoutMustNotExceedWriteTimeout(t *testing.T) {
 
 		_, _, err := LoadDetailed(LoadOptions{})
 		if err == nil {
-			t.Fatalf("LoadDetailed() expected validation error for request timeout beyond write timeout")
+			t.Fatal("LoadDetailed() expected validation error for request timeout beyond write timeout")
 		}
 		if !errors.Is(err, ErrValidate) {
 			t.Fatalf("error = %v, want ErrValidate", err)

@@ -31,9 +31,19 @@ func TestErrorClassVocabularyIsBounded(t *testing.T) {
 		"publisher panic":     publicationErrorClass(ErrPublisherPanic),
 		"permanent rejection": publicationErrorClass(fmtPermanent()),
 		"not accepted":        publicationErrorClass(ErrPublicationNotAccepted),
+		"not attempted":       publicationErrorClass(errPublicationNotAttempted),
 		"publish deadline":    publicationErrorClass(context.DeadlineExceeded),
 		"publish canceled":    publicationErrorClass(context.Canceled),
 		"unclassified":        publicationErrorClass(errors.New("adapter detail")),
+		// The two faults the loop absorbs carry their class on a counted sample
+		// rather than through either producer above.
+		"tolerated lost lease":       finalizationFaultClass(ErrLeaseLost),
+		"tolerated progress unknown": finalizationFaultClass(ErrProgressUnknown),
+	}
+	// The unattempted publication is the one site that reports work the relay
+	// decided not to do, so its outcome has no other producer to drive.
+	if bounded := boundedOutcome(outcomeSkipped); bounded != outcomeSkipped {
+		t.Errorf("boundedOutcome(%q) = %q, want the outcome unchanged", outcomeSkipped, bounded)
 	}
 	// storeOutcome is the only producer of the store's four classes, so drive it
 	// rather than restating them. Its outcome half must also stay inside
@@ -482,6 +492,56 @@ func TestCountOperationLeavesTheDurationHistogramAlone(t *testing.T) {
 	}
 }
 
+// A batch whose budget ran out before its tail is the operator's signal that the
+// relay is claiming more than it can publish, and the only place that signal
+// exists is this sample: an unattempted event opens no span, records no duration,
+// and its retry statement carries no per-event class. It also has to stay off the
+// error series, because nothing failed.
+func TestRelayCountsUnattemptedPublicationsAsSkipped(t *testing.T) {
+	reader, telemetry := newTestTelemetry(t, slog.New(slog.DiscardHandler))
+	relay, err := newRelay(&relayStoreStub{}, publisherFunc(func(ctx context.Context, _ Event) error {
+		<-ctx.Done()
+		return ctx.Err()
+	}), telemetry, unitRelayConfig())
+	if err != nil {
+		t.Fatalf("newRelay() error = %v", err)
+	}
+	relay.config.PublishConcurrency = 1
+	relay.config.PublishTimeout = time.Millisecond
+
+	publications, cleanupSafe := relay.publishAll(t.Context(), unitBatch(3), time.Now().Add(time.Hour))
+	if !cleanupSafe || len(publications) != 3 {
+		t.Fatalf("publishAll() = %v cleanupSafe=%t", publications, cleanupSafe)
+	}
+
+	skipped := int64(0)
+	telemetrytest.ForEachMetric(t, reader, func(measured metricdata.Metrics) {
+		switch measured.Name {
+		case "outbox.relay.operations":
+			for _, point := range telemetrytest.Int64Sum(t, measured).DataPoints {
+				if telemetrytest.Attribute(t, point.Attributes, "outcome") == outcomeSkipped {
+					if operation := telemetrytest.Attribute(t, point.Attributes, "operation"); operation != publishOperationName {
+						t.Errorf("skipped sample operation = %q, want %q", operation, publishOperationName)
+					}
+					if class := telemetrytest.Attribute(t, point.Attributes, "error.type"); class != classPublisherNotAttempted {
+						t.Errorf("skipped sample error.type = %q, want %q", class, classPublisherNotAttempted)
+					}
+					skipped = point.Value
+				}
+			}
+		case "outbox.relay.operation.duration":
+			for _, point := range telemetrytest.Float64Histogram(t, measured).DataPoints {
+				if telemetrytest.Attribute(t, point.Attributes, "outcome") == outcomeSkipped {
+					t.Errorf("an unattempted publication recorded %d durations, want none", point.Count)
+				}
+			}
+		}
+	})
+	if skipped != 2 {
+		t.Errorf("skipped publications = %d, want the two events behind the one that held the budget", skipped)
+	}
+}
+
 // Every telemetry entry point is nil-safe, so callers that never built a
 // recorder do not guard each call site.
 func TestTelemetryNilReceiverIsSafe(t *testing.T) {
@@ -496,6 +556,7 @@ func TestTelemetryNilReceiverIsSafe(t *testing.T) {
 	telemetry.CountOperation(t.Context(), "drain", "started", "none")
 	telemetry.LogPoison(t.Context(), "publisher_permanent", 1)
 	telemetry.LogPublisherStuck(t.Context())
+	telemetry.LogPublisherPanic(t.Context(), "value", []byte("stack"))
 	telemetry.LogRecovery(t.Context(), 1)
 	telemetry.LogListenerRetry(t.Context(), "connect")
 }

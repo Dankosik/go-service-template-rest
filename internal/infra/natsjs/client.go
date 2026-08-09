@@ -28,10 +28,10 @@ const (
 // [Client.NewWorker], and registering that worker widens [Client.Check] to probe
 // the durable consumer as well as the stream.
 //
-// Its state is three separate flags rather than one, because they answer
-// different questions: ready is what the probe reports, draining is set once
-// shutdown starts and never clears, and intentional distinguishes a close this
-// process asked for from reconnect exhaustion — only the latter is terminal.
+// Its state is three flags rather than one because they answer different
+// questions: ready is what the probe reports, draining is set once shutdown
+// starts and never clears, and intentional separates a close this process asked
+// for from reconnect exhaustion — only the latter is terminal.
 type Client struct {
 	cfg Config
 	nc  *nats.Conn
@@ -96,13 +96,11 @@ func Connect(ctx context.Context, cfg Config, role Role, obs Observability) (*Cl
 }
 
 // connectOptions is the connection policy and the four asynchronous handlers
-// that maintain client state behind it. They are collected here rather than
-// inline in Connect because each one carries its own rule about what a
-// connection event means, and only the ClosedHandler can end the process.
+// that maintain client state behind it. Only the ClosedHandler can end the
+// process.
 //
-// Every handler records against context.WithoutCancel(ctx): they fire long
-// after Connect returns, and the caller's startup context is usually already
-// cancelled by then.
+// Every handler records against context.WithoutCancel(ctx): they fire long after
+// Connect returns, when the caller's startup context is usually cancelled.
 func (c *Client) connectOptions(ctx context.Context, cfg Config) []nats.Option {
 	options := []nats.Option{
 		nats.Name("service-messaging"),
@@ -170,7 +168,7 @@ func (c *Client) Check(ctx context.Context) error {
 		if c != nil {
 			c.ready.Store(false)
 		}
-		return fmt.Errorf("messaging connection is not ready")
+		return errors.New("messaging connection is not ready")
 	}
 	probeCtx, cancel := context.WithTimeout(ctx, boundedTimeout(ctx))
 	defer cancel()
@@ -189,7 +187,7 @@ func (c *Client) Check(ctx context.Context) error {
 	}
 	if !c.nc.IsConnected() {
 		c.ready.Store(false)
-		return fmt.Errorf("messaging connection changed during readiness probe")
+		return errors.New("messaging connection changed during readiness probe")
 	}
 	c.ready.Store(true)
 	return nil
@@ -274,11 +272,10 @@ func (c *Client) signalTerminal(err error) {
 // turns a failed pull terminal, so the error set below is the whole difference
 // between a blip and a stopped worker.
 //
-// Those four errors are the ones nats.go raises for a connection that is gone
-// but recoverable; IsReconnecting covers the case where the library noticed
-// first and the call failed for some downstream reason. Anything else — a
-// permission fault, a deleted stream, a malformed request — is a condition
-// waiting cannot fix, so it must not land here.
+// Those four errors are the ones nats.go raises for a connection that is gone but
+// recoverable; IsReconnecting covers the case where the library noticed first.
+// Anything else — a permission fault, a deleted stream, a malformed request — is
+// a condition waiting cannot fix, so it must not land here.
 func (c *Client) waitForReconnect(ctx context.Context, err error) bool {
 	if c == nil || c.nc == nil {
 		return false

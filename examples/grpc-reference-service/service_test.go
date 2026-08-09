@@ -273,6 +273,7 @@ func newConnectionWithService(t *testing.T, service referencev1.EchoServiceServe
 	server, err := grpcx.NewServer(
 		grpcx.Config{
 			MaxConcurrentRPCs:          defaults.MaxConcurrentRPCs,
+			MaxConcurrentHealthRPCs:    defaults.MaxConnections,
 			MaxConcurrentStreams:       defaults.MaxConcurrentStreams,
 			MaxHeaderListBytes:         defaults.MaxHeaderListBytes,
 			MaxReceiveMessageBytes:     defaults.MaxReceiveMessageBytes,

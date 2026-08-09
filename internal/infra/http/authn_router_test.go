@@ -89,6 +89,18 @@ func TestHTTPAuthnBoundary(t *testing.T) {
 			wantDetail:    "credentials are invalid",
 		},
 		{
+			// The same answer as an invalid token, deliberately: the category
+			// exists for the authn.reason metric an operator reads, and a caller
+			// can do nothing with the distinction.
+			name:          "token issued for longer than the service accepts",
+			kind:          oidcjwt.KindLifetime,
+			headers:       []string{"Bearer over-long-token"},
+			wantStatus:    http.StatusUnauthorized,
+			wantChallenge: `Bearer error="invalid_token"`,
+			wantCode:      problem.CodeUnauthorized,
+			wantDetail:    "credentials are invalid",
+		},
+		{
 			name:          "malformed credential",
 			kind:          oidcjwt.KindMalformed,
 			headers:       []string{"Basic opaque-token"},

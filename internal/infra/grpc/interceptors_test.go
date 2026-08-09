@@ -12,9 +12,11 @@ package grpcx
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"strconv"
 	"strings"
 	"sync"
@@ -267,13 +269,13 @@ func TestAccessLogSkipsAllWorkWhenInfoIsDisabled(t *testing.T) {
 	}
 }
 
-func TestOneLimiterServesBothInterceptorTypes(t *testing.T) {
+func TestOneAdmissionPolicyServesBothInterceptorTypes(t *testing.T) {
 	load := &recordingLoad{}
-	limiter := newAdmissionLimiter(1, load)
-	unary := asUnaryInterceptor(limiter.around)
-	streaming := asStreamInterceptor(limiter.around)
+	policy := newAdmissionPolicy(1, 1, load)
+	unary := asUnaryInterceptor(policy.around)
+	streaming := asStreamInterceptor(policy.around)
 
-	release, firstDone := occupyAdmissionSlot(t, unary)
+	release, firstDone := occupyAdmissionSlot(t, unary, testUnaryFullMethod)
 
 	streamHandlerCalled := false
 	err := streaming(
@@ -308,64 +310,100 @@ func TestOneLimiterServesBothInterceptorTypes(t *testing.T) {
 	}
 }
 
-// TestOnlyHealthCheckExemptsAdmission pins the one public probe that must remain
-// observable under business saturation. Watch and any later health-service
-// method are streams or unknown work, so both consume the process budget.
-func TestOnlyHealthCheckExemptsAdmission(t *testing.T) {
-	const futureHealthMethod = healthMethodPrefix + "Future"
+// TestHealthServiceHoldsItsOwnAdmissionBudget drives the separation in both
+// directions, because either one failing alone reproduces a different outage.
+//
+// Business saturation must not shed a health watch: a caller whose watch is
+// refused stops selecting the backend entirely, so a partial overload would
+// become a total one. Health saturation must not shed business work: a hostile
+// peer opening watches would otherwise decide what the service may serve.
+//
+// Check answers under both, because the platform probe is what tells an operator
+// the instance is alive while either budget is full.
+func TestHealthServiceHoldsItsOwnAdmissionBudget(t *testing.T) {
+	const (
+		checkMethod        = healthMethodPrefix + "Check"
+		watchMethod        = healthMethodPrefix + "Watch"
+		futureHealthMethod = healthMethodPrefix + "Future"
+	)
 
 	load := &recordingLoad{}
-	limiter := newAdmissionLimiter(1, load)
-	unary := asUnaryInterceptor(limiter.around)
+	unary := asUnaryInterceptor(newAdmissionPolicy(1, 1, load).around)
 
-	release, occupied := occupyAdmissionSlot(t, unary)
+	releaseBusiness, business := occupyAdmissionSlot(t, unary, testUnaryFullMethod)
+	assertAdmitted(t, unary, checkMethod)
+	assertAdmitted(t, unary, watchMethod)
+	assertShed(t, unary, testUnaryFullMethod)
 
-	checkCalled := false
-	if _, err := unary(
-		t.Context(),
-		nil,
-		&grpc.UnaryServerInfo{FullMethod: healthMethodPrefix + "Check"},
-		func(context.Context, any) (any, error) {
-			checkCalled = true
-			return struct{}{}, nil
-		},
-	); err != nil {
-		t.Fatalf("health Check was shed against a full budget: %v", err)
+	releaseHealth, health := occupyAdmissionSlot(t, unary, watchMethod)
+	assertAdmitted(t, unary, checkMethod)
+	assertShed(t, unary, futureHealthMethod)
+
+	close(releaseBusiness)
+	if err := <-business; err != nil {
+		t.Fatalf("admitted business RPC error = %v", err)
 	}
-	if !checkCalled {
-		t.Fatal("health Check did not reach its handler")
-	}
+	assertAdmitted(t, unary, testUnaryFullMethod)
 
-	for _, method := range []string{healthMethodPrefix + "Watch", futureHealthMethod} {
-		handlerCalled := false
-		_, err := unary(
-			t.Context(),
-			nil,
-			&grpc.UnaryServerInfo{FullMethod: method},
-			func(context.Context, any) (any, error) {
-				handlerCalled = true
-				return struct{}{}, nil
-			},
-		)
-		assertStatusCode(t, err, codes.ResourceExhausted)
-		if handlerCalled {
-			t.Fatalf("health method %q bypassed admission", method)
-		}
+	close(releaseHealth)
+	if err := <-health; err != nil {
+		t.Fatalf("admitted health RPC error = %v", err)
 	}
 
-	close(release)
-	if err := <-occupied; err != nil {
-		t.Fatalf("admitted unary RPC error = %v", err)
-	}
-	if _, shed := load.snapshot(); shed != 2 {
-		t.Fatalf("shed = %d, want 2 protected health-service methods", shed)
+	// Only the business shed is recorded: active and shed are the capacity signal
+	// MaxConcurrentRPCs is sized from, and a health-service decision is not one.
+	if _, shed := load.snapshot(); shed != 1 {
+		t.Fatalf("shed = %d, want only the business RPC refused by its own budget", shed)
 	}
 }
 
-// occupyAdmissionSlot parks a unary RPC inside its handler, so the limiter the
-// interceptor was built from is full when the caller drives its own RPC. Close
+func assertAdmitted(t *testing.T, unary grpc.UnaryServerInterceptor, fullMethod string) {
+	t.Helper()
+
+	handlerCalled := false
+	if _, err := unary(
+		t.Context(),
+		nil,
+		&grpc.UnaryServerInfo{FullMethod: fullMethod},
+		func(context.Context, any) (any, error) {
+			handlerCalled = true
+			return struct{}{}, nil
+		},
+	); err != nil {
+		t.Fatalf("%s was refused: %v", fullMethod, err)
+	}
+	if !handlerCalled {
+		t.Fatalf("%s did not reach its handler", fullMethod)
+	}
+}
+
+func assertShed(t *testing.T, unary grpc.UnaryServerInterceptor, fullMethod string) {
+	t.Helper()
+
+	handlerCalled := false
+	_, err := unary(
+		t.Context(),
+		nil,
+		&grpc.UnaryServerInfo{FullMethod: fullMethod},
+		func(context.Context, any) (any, error) {
+			handlerCalled = true
+			return struct{}{}, nil
+		},
+	)
+	assertStatusCode(t, err, codes.ResourceExhausted)
+	if handlerCalled {
+		t.Fatalf("%s bypassed a full admission budget", fullMethod)
+	}
+}
+
+// occupyAdmissionSlot parks a unary RPC on fullMethod inside its handler, so the
+// budget owning that method is full when the caller drives its own RPC. Close
 // the returned channel to let that RPC finish, then read its result.
-func occupyAdmissionSlot(t *testing.T, unary grpc.UnaryServerInterceptor) (chan struct{}, <-chan error) {
+func occupyAdmissionSlot(
+	t *testing.T,
+	unary grpc.UnaryServerInterceptor,
+	fullMethod string,
+) (chan struct{}, <-chan error) {
 	t.Helper()
 
 	entered := make(chan struct{})
@@ -375,7 +413,7 @@ func occupyAdmissionSlot(t *testing.T, unary grpc.UnaryServerInterceptor) (chan 
 		_, err := unary(
 			t.Context(),
 			nil,
-			&grpc.UnaryServerInfo{FullMethod: testUnaryFullMethod},
+			&grpc.UnaryServerInfo{FullMethod: fullMethod},
 			func(context.Context, any) (any, error) {
 				close(entered)
 				<-release
@@ -401,13 +439,19 @@ func TestMapErrorAppliesEachBoundarysTrustRule(t *testing.T) {
 		return failure.Classification{Code: failure.CodeAlreadyExists, Detail: "classified"}, true
 	}
 
+	// wantRecorded is the second result: the error reached the caller as a
+	// generic INTERNAL carrying nothing about what failed, so the boundary owes
+	// it a record. It is stated per case rather than derived from the status,
+	// because a mapper that classifies its error as failure.CodeInternalError
+	// produces the same code and detail while being a deliberate answer.
 	for _, testCase := range []struct {
-		name       string
-		err        error
-		trusted    trustedStatus
-		mappers    []failure.Mapper
-		wantCode   codes.Code
-		wantDetail string
+		name         string
+		err          error
+		trusted      trustedStatus
+		mappers      []failure.Mapper
+		wantCode     codes.Code
+		wantDetail   string
+		wantRecorded bool
 	}{
 		{name: "canceled", err: context.Canceled, mappers: []failure.Mapper{broadMapper}, wantCode: codes.Canceled, wantDetail: "request canceled"},
 		{
@@ -431,16 +475,18 @@ func TestMapErrorAppliesEachBoundarysTrustRule(t *testing.T) {
 			wantDetail: "service draining",
 		},
 		{
-			name:       "unmarked downstream",
-			err:        status.Error(codes.PermissionDenied, "dependency secret"),
-			wantCode:   codes.Internal,
-			wantDetail: "request failed",
+			name:         "unmarked downstream",
+			err:          status.Error(codes.PermissionDenied, "dependency secret"),
+			wantCode:     codes.Internal,
+			wantDetail:   "request failed",
+			wantRecorded: true,
 		},
 		{
-			name:       "raw",
-			err:        errors.New("password=secret"),
-			wantCode:   codes.Internal,
-			wantDetail: "request failed",
+			name:         "raw",
+			err:          errors.New("password=secret"),
+			wantCode:     codes.Internal,
+			wantDetail:   "request failed",
+			wantRecorded: true,
 		},
 		{
 			// The policy boundary must keep trusting a status it did not build:
@@ -456,18 +502,20 @@ func TestMapErrorAppliesEachBoundarysTrustRule(t *testing.T) {
 		{
 			// Only a status the policy returned directly is its own output; a
 			// status it merely wrapped came from somewhere it does not own.
-			name:       "policy wrapped status is not",
-			err:        fmt.Errorf("call dependency: %w", status.Error(codes.PermissionDenied, "dependency secret")),
-			trusted:    anyServiceStatus,
-			wantCode:   codes.Internal,
-			wantDetail: "request failed",
+			name:         "policy wrapped status is not",
+			err:          fmt.Errorf("call dependency: %w", status.Error(codes.PermissionDenied, "dependency secret")),
+			trusted:      anyServiceStatus,
+			wantCode:     codes.Internal,
+			wantDetail:   "request failed",
+			wantRecorded: true,
 		},
 		{
-			name:       "policy raw error",
-			err:        errors.New("authentication dependency credential=secret"),
-			trusted:    anyServiceStatus,
-			wantCode:   codes.Internal,
-			wantDetail: "request failed",
+			name:         "policy raw error",
+			err:          errors.New("authentication dependency credential=secret"),
+			trusted:      anyServiceStatus,
+			wantCode:     codes.Internal,
+			wantDetail:   "request failed",
+			wantRecorded: true,
 		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -475,12 +523,93 @@ func TestMapErrorAppliesEachBoundarysTrustRule(t *testing.T) {
 			if trusted == nil {
 				trusted = ownedStatusOnly
 			}
-			got := mapError(testCase.err, trusted, errorRendering{mappers: testCase.mappers})
+			got, recorded := mapError(testCase.err, trusted, errorRendering{mappers: testCase.mappers})
+			if recorded != testCase.wantRecorded {
+				t.Fatalf("sanitized = %t, want %t", recorded, testCase.wantRecorded)
+			}
 			if code := status.Code(got); code != testCase.wantCode {
 				t.Fatalf("code = %s, want %s", code, testCase.wantCode)
 			}
 			if detail := status.Convert(got).Message(); detail != testCase.wantDetail {
 				t.Fatalf("detail = %q, want %q", detail, testCase.wantDetail)
+			}
+		})
+	}
+}
+
+// TestHandlerErrorBoundaryRecordsTheUnclassifiedFailure is the counterpart to
+// the canary tests in telemetry_test.go. Those prove the record leaks nothing;
+// this proves there is a record at all, which is what an INTERNAL that carries
+// no detail depends on to be diagnosable.
+func TestHandlerErrorBoundaryRecordsTheUnclassifiedFailure(t *testing.T) {
+	const secretCanary = "password=handler-boundary-secret"
+
+	var logged bytes.Buffer
+	boundary := handlerErrorBoundary(slogJSONLogger(&logged), errorRendering{})
+
+	err := boundary(t.Context(), testPayloadFullMethod, func(context.Context) error {
+		return fmt.Errorf("store order: %w", &net.OpError{Err: errors.New(secretCanary)})
+	})
+
+	if code := status.Code(err); code != codes.Internal {
+		t.Fatalf("code = %s, want %s", code, codes.Internal)
+	}
+	if strings.Contains(logged.String(), secretCanary) {
+		t.Fatalf("record discloses the error's own text: %s", logged.String())
+	}
+
+	// Decoded as a map for the reason telemetry_test.go does: the attribute keys
+	// are the OpenTelemetry dotted names an operator queries on, and a struct tag
+	// carrying one is not the snake_case the repository's tagliatelle rule wants.
+	var record map[string]any
+	if err := json.Unmarshal(logged.Bytes(), &record); err != nil {
+		t.Fatalf("decode record %q: %v", logged.String(), err)
+	}
+	if got := record["level"]; got != slog.LevelError.String() {
+		t.Errorf("level = %v, want %s", got, slog.LevelError)
+	}
+	if got := record["rpc.method"]; got != testPayloadFullMethod {
+		t.Errorf("rpc.method = %v, want %q", got, testPayloadFullMethod)
+	}
+	if chain := asString(record["error_chain"]); !strings.Contains(chain, "*net.OpError") {
+		t.Errorf("error_chain = %q, want the wrapped dependency type", chain)
+	}
+}
+
+// TestHandlerErrorBoundaryDoesNotRecordADeliberateStatus keeps the error stream
+// usable: a classified domain failure and a status the service chose are answers,
+// not faults, and repeating them at ERROR is how an error rate stops meaning
+// anything.
+func TestHandlerErrorBoundaryDoesNotRecordADeliberateStatus(t *testing.T) {
+	sentinel := errors.New("record not found")
+	classify := func(err error) (failure.Classification, bool) {
+		if !errors.Is(err, sentinel) {
+			return failure.Classification{}, false
+		}
+		return failure.Classification{Code: failure.CodeNotFound, Detail: "record not found"}, true
+	}
+
+	for _, testCase := range []struct {
+		name string
+		err  error
+	}{
+		{name: "classified domain failure", err: fmt.Errorf("load order: %w", sentinel)},
+		{name: "owned status", err: ownedStatus(codes.Unavailable, "service draining")},
+		{name: "caller cancellation", err: context.Canceled},
+		{name: "spent deadline", err: context.DeadlineExceeded},
+		{name: "success", err: nil},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			var logged bytes.Buffer
+			boundary := handlerErrorBoundary(
+				slogJSONLogger(&logged),
+				errorRendering{mappers: []failure.Mapper{classify}},
+			)
+
+			_ = boundary(t.Context(), testPayloadFullMethod, func(context.Context) error { return testCase.err })
+
+			if logged.Len() != 0 {
+				t.Fatalf("wrote %q, want no record", logged.String())
 			}
 		})
 	}
@@ -567,14 +696,81 @@ func (l *recordingLoad) snapshot() (int, int) {
 
 type testServerStream struct {
 	ctx context.Context //nolint:containedctx // grpc.ServerStream requires Context to return the RPC context.
+	// setHeaderErr drives the one branch a real stream reaches only once it is
+	// already dead, which is why it is a field rather than a second fake.
+	setHeaderErr error
 }
 
-func (s testServerStream) SetHeader(metadata.MD) error  { return nil }
+func (s testServerStream) SetHeader(metadata.MD) error  { return s.setHeaderErr }
 func (s testServerStream) SendHeader(metadata.MD) error { return nil }
 func (s testServerStream) SetTrailer(metadata.MD)       {}
 func (s testServerStream) Context() context.Context     { return s.ctx }
 func (s testServerStream) SendMsg(any) error            { return nil }
 func (s testServerStream) RecvMsg(any) error            { return nil }
+
+// TestCorrelationFailureIsAnsweredAndRecorded covers the one RPC this transport
+// answers without an access-log record.
+//
+// Correlation is the outermost interceptor, so an RPC it refuses never reaches
+// the access log below it and would otherwise leave the server with no trace of
+// a status it returned. The unary half drives the real branch: grpc.SetHeader
+// refuses a context carrying no server transport stream.
+func TestCorrelationFailureIsAnsweredAndRecorded(t *testing.T) {
+	for _, testCase := range []struct {
+		name   string
+		method string
+		drive  func(*slog.Logger, *bool) error
+	}{
+		{
+			name:   "unary",
+			method: testUnaryFullMethod,
+			drive: func(log *slog.Logger, handlerCalled *bool) error {
+				_, err := correlationUnaryInterceptor(log)(
+					t.Context(),
+					nil,
+					&grpc.UnaryServerInfo{FullMethod: testUnaryFullMethod},
+					func(context.Context, any) (any, error) {
+						*handlerCalled = true
+						return struct{}{}, nil
+					},
+				)
+				return err
+			},
+		},
+		{
+			name:   "stream",
+			method: testStreamFullMethod,
+			drive: func(log *slog.Logger, handlerCalled *bool) error {
+				return correlationStreamInterceptor(log)(
+					nil,
+					testServerStream{ctx: t.Context(), setHeaderErr: errors.New("stream is done")},
+					&grpc.StreamServerInfo{FullMethod: testStreamFullMethod},
+					func(any, grpc.ServerStream) error {
+						*handlerCalled = true
+						return nil
+					},
+				)
+			},
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			var output bytes.Buffer
+			handlerCalled := false
+
+			err := testCase.drive(slog.New(slog.NewJSONHandler(&output, nil)), &handlerCalled)
+
+			assertStatusCode(t, err, codes.Internal)
+			if handlerCalled {
+				t.Fatal("handler ran for an RPC whose response metadata was refused")
+			}
+			recorded := output.String()
+			if !strings.Contains(recorded, `"msg":"grpc_correlation_failed"`) ||
+				!strings.Contains(recorded, strconv.Quote(testCase.method)) {
+				t.Fatalf("correlation failure log = %q, want the refusal and its method", recorded)
+			}
+		})
+	}
+}
 
 func TestDeadlineAroundCapsWithoutExtending(t *testing.T) {
 	t.Run("derives a deadline when none exists", func(t *testing.T) {

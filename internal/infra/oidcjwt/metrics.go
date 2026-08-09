@@ -29,8 +29,9 @@ type authnMetrics struct {
 // exactly once. Building the attribute set there costs a slice, a sort, and the
 // set itself on every call, and the space is closed and tiny — one success plus
 // one per label verificationReason returns — so it is built at construction
-// instead. Measured on the failure path, that is 6 allocations and 624 B per
-// verification against 2 and 24 B.
+// instead. TestPrebuiltAttributeSetsBeatPerCallConstruction holds that trade,
+// and BenchmarkRecordVerificationFailure reports what the path costs; neither
+// number belongs in this comment, where it would rot unread.
 //
 // The labels come from verificationReason rather than from a list beside it,
 // which is what keeps that function the only table over [Kind]: the walk below

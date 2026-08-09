@@ -183,7 +183,7 @@ func assertCollectorPath(t *testing.T, paths <-chan string, want string) {
 			t.Fatalf("collector path = %q, want %q", got, want)
 		}
 	case <-time.After(time.Second):
-		t.Fatalf("collector path was not requested")
+		t.Fatal("collector path was not requested")
 	}
 }
 

@@ -227,8 +227,7 @@ func TestBoundedAPIListenerCapsAcceptedConnections(t *testing.T) {
 		client := &http.Client{Timeout: 5 * time.Second}
 		for range limit * 3 {
 			wg.Go(func() {
-				request, reqErr := http.NewRequestWithContext(
-					context.Background(), http.MethodGet, "http://"+base.Addr().String()+"/", nil)
+				request, reqErr := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://"+base.Addr().String()+"/", http.NoBody)
 				if reqErr != nil {
 					t.Errorf("NewRequestWithContext() error = %v", reqErr)
 					return

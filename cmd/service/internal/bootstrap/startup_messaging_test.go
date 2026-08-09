@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"testing"
 
+	"github.com/example/go-service-template-rest/cmd/internal/runtimeopts"
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/infra/natsjs"
 )
@@ -32,8 +33,8 @@ func TestMessagingCompositionReadinessUsesImmediateClientState(t *testing.T) {
 }
 
 func TestMessagingCompositionSplitsCanonicalURLs(t *testing.T) {
-	got := splitMessagingURLs("tls://one.example:4222,tls://two.example:4222")
+	got := runtimeopts.Messaging(config.MessagingConfig{URLs: "tls://one.example:4222,tls://two.example:4222"}).URLs
 	if len(got) != 2 || got[0] != "tls://one.example:4222" || got[1] != "tls://two.example:4222" {
-		t.Fatalf("splitMessagingURLs() = %v", got)
+		t.Fatalf("runtimeopts.Messaging().URLs = %v", got)
 	}
 }

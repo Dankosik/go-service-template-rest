@@ -4,7 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"fmt"
+	"errors"
 	"math"
 	"net/http"
 	"strconv"
@@ -18,15 +18,12 @@ import (
 
 // RateLimiter decides whether one caller may proceed right now.
 //
-// It is a seam rather than a policy. MaxInFlight bounds how many requests run at
-// once, which protects the process but not its other callers: one client opening
-// three hundred concurrent connections takes every in-flight slot, and every
-// other tenant is shed for capacity that one caller took. Telling them apart
-// needs an identity, and which identity — API key, tenant header, source network
-// — is a decision only the service can make.
+// It is a seam rather than a policy. MaxInFlight protects the process but not its
+// other callers: one client opening three hundred concurrent connections takes
+// every in-flight slot. Telling callers apart needs an identity, and which one —
+// API key, tenant header, source network — only the service can decide.
 //
-// retryAfter is what the caller is told to wait, and is only meaningful when
-// allowed is false.
+// retryAfter is only meaningful when allowed is false.
 type RateLimiter interface {
 	Allow(ctx context.Context, key string) (allowed bool, retryAfter time.Duration)
 }
@@ -34,25 +31,22 @@ type RateLimiter interface {
 // RateLimitKeyFunc reports which bucket a request is charged against. An empty
 // key means the request is not limited.
 //
-// It runs ahead of the OpenAPI request validator, because limiting a caller after
-// their body has been schema-validated means the expensive half of the request
-// was already done for them. That placement is also why the authenticated
-// principal is not available here — the validator resolves it. A service that
-// would rather limit per identity installs RateLimit inside its own chain.
+// It runs ahead of the OpenAPI request validator, so a limited caller does not
+// get the expensive half of the request done for them. That placement is also why
+// the authenticated principal is not available here — the validator resolves it.
+// A service that would rather limit per identity installs RateLimit inside its
+// own chain.
 type RateLimitKeyFunc func(*http.Request) string
 
 // HeaderRateLimitKey charges a request to the value of one header, hashed.
 //
-// The hash is not decoration. The header that identifies a caller before
-// authentication is usually the credential itself, and a credential used as a map
-// key is a credential one heap dump or one debug log away from disclosure. A
-// digest identifies the same caller and discloses nothing.
+// The header identifying a caller before authentication is usually the credential
+// itself, and a credential used as a map key is one heap dump away from
+// disclosure; a digest identifies the same caller and discloses nothing.
 //
-// The client address is deliberately not offered. Behind any proxy, RemoteAddr is
-// the proxy, so limiting by it throttles the whole fleet as one caller, and
-// X-Forwarded-For is attacker-controlled unless the trusted proxy topology is
-// known — which a template cannot know. A service that does know its edge writes
-// the four-line key function for it.
+// The client address is deliberately not offered: behind a proxy RemoteAddr
+// throttles the whole fleet as one caller, and X-Forwarded-For is
+// attacker-controlled unless the trusted proxy topology is known.
 func HeaderRateLimitKey(name string) RateLimitKeyFunc {
 	return func(r *http.Request) string {
 		if r == nil {
@@ -70,8 +64,7 @@ func HeaderRateLimitKey(name string) RateLimitKeyFunc {
 // RateLimit rejects a caller that is over its budget with 429 and a Retry-After.
 //
 // A nil limiter leaves the middleware out of the chain entirely, which is the
-// shipped default: the limit that suits one deployment is wrong for the next, and
-// a template that picked one would have every generated service inherit it.
+// shipped default: the limit that suits one deployment is wrong for the next.
 //
 // Platform probe routes are exempt for the same reason they are exempt from
 // shedding: rate limiting a readiness probe evicts the instance.
@@ -104,10 +97,8 @@ func RateLimit(limiter RateLimiter, key RateLimitKeyFunc, next http.Handler) htt
 	})
 }
 
-// retryAfterSeconds rounds a delay up to whole seconds, which is the only form
-// this repository sends. A sub-second budget must not be advertised as "retry
-// immediately": that is how a client that thinks it is being polite gets limited
-// harder.
+// retryAfterSeconds rounds up: a sub-second budget must not be advertised as
+// "retry immediately".
 func retryAfterSeconds(delay time.Duration) int {
 	seconds := int(math.Ceil(delay.Seconds()))
 	return max(seconds, 1)
@@ -115,16 +106,14 @@ func retryAfterSeconds(delay time.Duration) int {
 
 // KeyedRateLimiter is one token bucket per key, held in a bounded map.
 //
-// It is per instance, not per fleet, and that is the property to understand
-// before using it: N replicas admit up to N times the configured rate, and sizing
-// it as limit/replicas breaks under a rolling deploy. It is the right shape when
-// the limit exists to stop one caller monopolizing one instance — the failure
-// MaxInFlight leaves open — and the wrong shape for a contractual quota, which
-// needs shared state behind this same RateLimiter interface.
+// It is per instance, not per fleet: N replicas admit up to N times the
+// configured rate, and sizing it as limit/replicas breaks under a rolling deploy.
+// It is the wrong shape for a contractual quota, which needs shared state behind
+// this same RateLimiter interface.
 //
 // The key map is bounded because keys are caller-controlled: an unbounded
 // map[string]*rate.Limiter keyed on anything an attacker can vary is a memory
-// leak with a rate limiter attached, and that is the version most services write.
+// leak with a rate limiter attached.
 type KeyedRateLimiter struct {
 	limit rate.Limit
 	burst int
@@ -133,19 +122,15 @@ type KeyedRateLimiter struct {
 	maxKeys int
 
 	mu sync.Mutex
-	// current and previous are generations rather than an LRU. When current
-	// fills, it becomes previous and a fresh map takes over, so eviction is one
+	// current and previous are generations rather than an LRU: eviction is one
 	// pointer swap instead of per-entry bookkeeping on the hot path. A key still
-	// in use is promoted out of previous on its next request, so an active caller
-	// keeps its bucket; an idle one is dropped a generation later.
+	// in use is promoted out of previous on its next request; an idle one is
+	// dropped a generation later.
 	current  map[string]*rate.Limiter
 	previous map[string]*rate.Limiter
 }
 
 const (
-	// defaultRateLimitMaxKeys bounds the tracked callers when none is named. It
-	// is large enough not to evict an ordinary tenant set and small enough that
-	// two generations of it stay a rounding error against a service's heap.
 	defaultRateLimitMaxKeys = 8192
 
 	// rateLimitInitialKeys caps the preallocation, so a large maxKeys does not
@@ -157,19 +142,17 @@ const (
 // with room for burst of them arriving at once, tracking at most maxKeys callers
 // per generation. A non-positive maxKeys uses defaultRateLimitMaxKeys.
 //
-// Unusable settings are an error rather than a nil limiter. Returning nil here
-// looked convenient — the caller could pass the result straight into
-// RouterConfig.RateLimit and get no middleware — but a nil *KeyedRateLimiter
-// stored in a RateLimiter interface is a non-nil interface holding a nil pointer,
-// so the middleware would install itself and dereference nothing on the first
-// request that carried a key. A service that wants no limiting leaves the
+// Unusable settings are an error rather than a nil limiter: a nil
+// *KeyedRateLimiter stored in a RateLimiter interface is a non-nil interface
+// holding a nil pointer, so the middleware would install itself and panic on the
+// first request that carried a key. A service that wants no limiting leaves the
 // field unset.
 func NewKeyedRateLimiter(perSecond float64, burst, maxKeys int) (*KeyedRateLimiter, error) {
 	if perSecond <= 0 {
-		return nil, fmt.Errorf("keyed rate limiter: requests per second must be > 0")
+		return nil, errors.New("keyed rate limiter: requests per second must be > 0")
 	}
 	if burst <= 0 {
-		return nil, fmt.Errorf("keyed rate limiter: burst must be > 0")
+		return nil, errors.New("keyed rate limiter: burst must be > 0")
 	}
 	if maxKeys <= 0 {
 		maxKeys = defaultRateLimitMaxKeys
@@ -183,7 +166,6 @@ func NewKeyedRateLimiter(perSecond float64, burst, maxKeys int) (*KeyedRateLimit
 	}, nil
 }
 
-// Allow charges one request to key.
 func (l *KeyedRateLimiter) Allow(_ context.Context, key string) (bool, time.Duration) {
 	limiter := l.bucket(key)
 

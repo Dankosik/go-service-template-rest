@@ -265,12 +265,18 @@ Existing redrive error compatibility remains through aliases to the generalized
 operator state-conflict and audit-conflict sentinels. No public generic action
 type is added.
 
+> Superseded: the aliases were removed. They held the same two error values as
+> the generalized sentinels, so `errors.Is` could not separate them and every
+> caller had to be warned not to switch on both. This is a template, so the
+> compatibility surface had no adopter to keep: nothing outside the repository
+> consumed the old names. `ErrOperatorStateConflict` and
+> `ErrOperatorAuditConflict` are the only names now.
+> Reopen if a released, externally consumed build ever ships the old names.
+
 The exact additions are
 `RedriveUnknown(context.Context, string, string) error` and
 `ConfirmAccepted(context.Context, string, string) error` on `*Store`, plus
-`ErrOperatorStateConflict` and `ErrOperatorAuditConflict`. Existing
-`ErrRedriveRejected` is the same error value as `ErrOperatorStateConflict`, and
-`ErrRedriveConflict` is the same value as `ErrOperatorAuditConflict`.
+`ErrOperatorStateConflict` and `ErrOperatorAuditConflict`.
 
 ## NATS publication and trace flow
 

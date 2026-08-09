@@ -103,7 +103,7 @@ type builtinPolicy struct {
 func builtinPolicies(
 	log *slog.Logger,
 	accessLogs accessLogPolicy,
-	admission *admissionLimiter,
+	admission admissionPolicy,
 	timeout time.Duration,
 ) []builtinPolicy {
 	return []builtinPolicy{
@@ -111,7 +111,7 @@ func builtinPolicies(
 		{name: builtinDeadline, around: deadlineAround(timeout)},
 		{name: builtinRecovery, around: recoveryAround(log)},
 		{name: builtinAdmission, around: admission.around},
-		{name: builtinPolicyErrorBoundary, around: policyErrorBoundary},
+		{name: builtinPolicyErrorBoundary, around: policyErrorBoundary(log)},
 	}
 }
 
@@ -120,12 +120,17 @@ func builtinPolicies(
 // the handler error boundary. Both RPC kinds and the benchmark variants in
 // performance_test.go build their chains here, so a position cannot drift
 // between them; the package doc owns what each position buys.
+//
+// log reaches correlation only. Every policy below it takes the logger it needs
+// through builtins, and correlation is not one of them because it is the one
+// policy still written per RPC kind.
 func unaryChain(
+	log *slog.Logger,
 	builtins []builtinPolicy,
 	supplied []grpc.UnaryServerInterceptor,
 	handlerErrors aroundRPC,
 ) []grpc.UnaryServerInterceptor {
-	chain := []grpc.UnaryServerInterceptor{correlationUnaryInterceptor()}
+	chain := []grpc.UnaryServerInterceptor{correlationUnaryInterceptor(log)}
 	for _, policy := range builtins {
 		chain = append(chain, asUnaryInterceptor(policy.around))
 	}
@@ -134,11 +139,12 @@ func unaryChain(
 }
 
 func streamChain(
+	log *slog.Logger,
 	builtins []builtinPolicy,
 	supplied []grpc.StreamServerInterceptor,
 	handlerErrors aroundRPC,
 ) []grpc.StreamServerInterceptor {
-	chain := []grpc.StreamServerInterceptor{correlationStreamInterceptor()}
+	chain := []grpc.StreamServerInterceptor{correlationStreamInterceptor(log)}
 	for _, policy := range builtins {
 		chain = append(chain, asStreamInterceptor(policy.around))
 	}

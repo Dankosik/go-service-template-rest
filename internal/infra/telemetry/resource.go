@@ -13,17 +13,14 @@ import (
 
 // resourceIdentity is what every exported span and metric is attributed to.
 //
-// service.instance.id is not optional here, and the OpenTelemetry Go SDK does not
-// supply one: its detector is behind the experimental OTEL_GO_X_RESOURCE flag, and
-// resource.New with WithAttributes runs no detectors at all. Without it, every
-// replica pushes an identical resource — so a collector keying series by resource
-// sees one logical stream fed by N monotonic counters with independent start
-// times, and every replica restart reads as a counter reset that makes rate()
-// wrong. On traces it makes "is this one instance or all of them" unanswerable,
-// which is the first question in every latency incident.
+// service.instance.id must be supplied here: the OpenTelemetry Go SDK's detector
+// is behind the experimental OTEL_GO_X_RESOURCE flag, and resource.New with
+// WithAttributes runs no detectors at all. Without it every replica pushes an
+// identical resource, so N monotonic counters collapse into one series and every
+// replica restart reads as a counter reset.
 //
-// On the Prometheus scrape path the scraper supplies an `instance` label, which is
-// why this was invisible until a service pushed over OTLP.
+// The Prometheus scrape path supplies its own `instance` label, which is why this
+// only shows up once a service pushes over OTLP.
 type resourceIdentity struct {
 	serviceName    string
 	serviceVersion string
@@ -44,10 +41,9 @@ const instanceIDBytes = 8
 // for traces and for metrics would attribute the two signals of one replica to two
 // different instances.
 //
-// A configured value wins. Otherwise the hostname is used, which is the pod name
-// on Kubernetes and the container id on most other platforms — the identifier an
-// operator already has in hand. A random value is the last resort, because an
-// empty instance id is the failure this exists to prevent.
+// A configured value wins, then the hostname — the pod name on Kubernetes, the
+// container id on most other platforms. A random value is the last resort,
+// because an empty instance id is the failure this exists to prevent.
 func ResolveInstanceID(configured string) string {
 	if trimmed := strings.TrimSpace(configured); trimmed != "" {
 		return trimmed
@@ -63,12 +59,9 @@ func ResolveInstanceID(configured string) string {
 // newResource builds the resource for one signal.
 //
 // The ambient OTEL_RESOURCE_ATTRIBUTES is deliberately not suppressed. The SDK
-// merges it under these attributes — sdktrace.WithResource and its metric
-// equivalent call resource.Merge(resource.Environment(), r), and Merge is
-// last-value-wins on r — so nothing a platform injects can override what this
-// service configured, while k8s.pod.name, container.id, and the rest survive.
-// The version this replaced unset the variable around provider construction,
-// which protected nothing and discarded exactly those attributes.
+// calls resource.Merge(resource.Environment(), r) and Merge is last-value-wins on
+// r, so nothing a platform injects can override what this service configured
+// while k8s.pod.name, container.id, and the rest survive.
 func newResource(ctx context.Context, identity resourceIdentity) (*resource.Resource, error) {
 	res, err := resource.New(
 		ctx,

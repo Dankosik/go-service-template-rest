@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/example/go-service-template-rest/cmd/internal/runtimeopts"
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/config/configtest"
 	"github.com/example/go-service-template-rest/internal/infra/natsjs"
@@ -32,7 +33,7 @@ func TestNATSPublisherConfigParity(t *testing.T) {
 			if err != nil {
 				t.Fatalf("config load error = %v", err)
 			}
-			if err := natsjs.ValidateConfig(natsPublisherConfig(cfg.Messaging)); err != nil {
+			if err := natsjs.ValidateConfig(runtimeopts.Messaging(cfg.Messaging)); err != nil {
 				t.Fatalf("internal/config admitted a NATS publisher config the adapter rejects: %v", err)
 			}
 		})

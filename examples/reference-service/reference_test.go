@@ -14,6 +14,7 @@ import (
 	"github.com/example/go-service-template-rest/examples/reference-service/internal/httpapi"
 	httpx "github.com/example/go-service-template-rest/internal/infra/http"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
+	"github.com/example/go-service-template-rest/internal/problem"
 )
 
 const testWriteToken = "reference-write-token"
@@ -39,7 +40,7 @@ func TestReferenceServiceServesOverHTTP(t *testing.T) {
 	server := httptest.NewServer(mustNewHandler(t))
 	t.Cleanup(server.Close)
 
-	request, err := http.NewRequestWithContext(t.Context(), http.MethodGet, server.URL+"/api/v1/articles/clear-owners", nil)
+	request, err := http.NewRequestWithContext(t.Context(), http.MethodGet, server.URL+"/api/v1/articles/clear-owners", http.NoBody)
 	if err != nil {
 		t.Fatalf("build request error = %v", err)
 	}
@@ -204,6 +205,82 @@ func readArticleStatus(handler http.Handler, authorization string) int {
 	return response.Code
 }
 
+// TestReferenceServiceNamesTheInvalidFieldOverHTTP drives the real router so the
+// contract, the generated validator, and the problem writer all have to be
+// present for it to pass.
+//
+// It pins both halves of what a validation rejection may say. The caller learns
+// which member failed and which constraint it broke, because a 400 that says
+// only "invalid" makes them diff their payload against the spec by hand. And the
+// value they sent appears nowhere: kin-openapi keeps it in SchemaError.Value,
+// and the canary below is what fails if a future edit reaches for that field or
+// for the error's own text.
+func TestReferenceServiceNamesTheInvalidFieldOverHTTP(t *testing.T) {
+	t.Parallel()
+
+	// Violates the contract's `^[a-z][a-z0-9-]*$`, and stands in for a payload
+	// value that must not be echoed.
+	const rejectedSlug = "NOT_A_SLUG_secret_value"
+
+	handler := mustNewHandler(t)
+	request := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/v1/articles", strings.NewReader(
+		`{"slug":"`+rejectedSlug+`","title":"Title","summary":"Summary."}`,
+	))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", "Bearer "+testWriteToken)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusBadRequest, response.Body.String())
+	}
+	if strings.Contains(response.Body.String(), rejectedSlug) {
+		t.Fatalf("problem body echoes the submitted value: %s", response.Body.String())
+	}
+
+	var body struct {
+		Code          string `json:"code"`
+		InvalidParams []struct {
+			Name   string `json:"name"`
+			Reason string `json:"reason"`
+		} `json:"invalid_params"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode problem: %v; body = %s", err, response.Body.String())
+	}
+	if body.Code != string(problem.CodeBadRequest) {
+		t.Fatalf("code = %q, want %q", body.Code, problem.CodeBadRequest)
+	}
+	if len(body.InvalidParams) != 1 {
+		t.Fatalf("invalid_params = %+v, want exactly the one member that failed", body.InvalidParams)
+	}
+	if body.InvalidParams[0].Name != "/slug" {
+		t.Errorf("invalid_params[0].name = %q, want the RFC 6901 pointer %q", body.InvalidParams[0].Name, "/slug")
+	}
+	if body.InvalidParams[0].Reason == "" {
+		t.Error("invalid_params[0].reason is empty, want the constraint that failed")
+	}
+}
+
+// TestReferenceServiceOmitsInvalidParamsForANonValidationProblem keeps the
+// extension member from becoming noise on every problem: a domain 404 has no
+// field to point at, and an empty array would read as one that was checked.
+func TestReferenceServiceOmitsInvalidParamsForANonValidationProblem(t *testing.T) {
+	t.Parallel()
+
+	handler := mustNewHandler(t)
+	request := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/v1/articles/no-such-article", nil)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusNotFound, response.Body.String())
+	}
+	if strings.Contains(response.Body.String(), "invalid_params") {
+		t.Fatalf("problem body carries invalid_params for a domain failure: %s", response.Body.String())
+	}
+}
+
 func mustNewHandler(tb testing.TB) http.Handler {
 	tb.Helper()
 
@@ -231,7 +308,7 @@ func mustBuildReferenceRouter(tb testing.TB, bodyLimit int64, repository article
 	apiHandler, err := httpapi.NewAPIHandler(service, httpapi.Options{
 		Authenticate:   httpx.Authenticated(resolveWriter(testWriteToken)),
 		RejectRequest:  httpx.RejectRequest(log, authenticateChallenge),
-		RejectResponse: httpx.RejectResponse(article.ClassifyError),
+		RejectResponse: httpx.RejectResponse(log, article.ClassifyError),
 	})
 	if err != nil {
 		tb.Fatalf("NewAPIHandler() error = %v", err)

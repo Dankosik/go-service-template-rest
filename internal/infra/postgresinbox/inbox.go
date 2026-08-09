@@ -54,7 +54,7 @@ func Claim(ctx context.Context, tx pgx.Tx, consumerIdentity, messageID string) (
 }
 
 func validateIdentity(name, value string, limit int) error {
-	if len(value) == 0 || len(value) > limit || !utf8.ValidString(value) {
+	if value == "" || len(value) > limit || !utf8.ValidString(value) {
 		return fmt.Errorf("%w: %s must be valid UTF-8 between 1 and %d bytes", errInvalidInput, name, limit)
 	}
 	for _, character := range value {

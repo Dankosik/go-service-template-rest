@@ -2,6 +2,7 @@ package httpx
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 
@@ -36,10 +37,10 @@ type strictHandlers struct {
 
 func newStrictHandlers(h Handlers) (strictHandlers, error) {
 	if h.Health == nil {
-		return strictHandlers{}, fmt.Errorf("http router: health service is required")
+		return strictHandlers{}, errors.New("http router: health service is required")
 	}
 	if h.ReadinessGate == nil {
-		return strictHandlers{}, fmt.Errorf("http router: readiness gate is required")
+		return strictHandlers{}, errors.New("http router: readiness gate is required")
 	}
 	if declared := reflect.TypeFor[openapi.StrictServerInterface]().NumMethod(); h.API == nil && declared > probeOperationCount {
 		return strictHandlers{}, fmt.Errorf(

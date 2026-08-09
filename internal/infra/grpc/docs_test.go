@@ -1,11 +1,12 @@
-// Proof for the one claim docs/grpc.md makes about this package's code: the
-// failure.Code to gRPC code table it publishes to service authors.
+// Proof for the two claims docs/grpc.md makes about this package's code: the
+// failure.Code to gRPC code table it publishes to service authors, and the list
+// of gRPC codes it tells them that table cannot produce.
 //
-// That table and [mappedStatus] are two owners of one caller-visible mapping,
-// and nothing in the toolchain relates them, so a new arm, a changed code, or a
-// retired failure.Code would leave the published contract describing a transport
-// that no longer answers that way. config_parity_test.go holds this package's
-// other pair of owners to one answer for the same reason.
+// Each is one half of a pair with [mappedStatus], and nothing in the toolchain
+// relates them, so a new arm, a changed code, or a retired failure.Code would
+// leave the published contract describing a transport that no longer answers
+// that way. config_parity_test.go holds this package's other pair of owners to
+// one answer for the same reason.
 //
 // The document's left column is read as Go identifiers taken from
 // internal/failure's own source rather than as prose, so a renamed constant
@@ -14,6 +15,7 @@
 package grpcx
 
 import (
+	"context"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -62,14 +64,9 @@ func TestDocumentedFailureCodeTableMatchesStatusMapping(t *testing.T) {
 func documentedProblemCodes(t *testing.T) map[string]string {
 	t.Helper()
 
-	document, err := os.ReadFile(filepath.Join("..", "..", "..", "docs", "grpc.md"))
-	if err != nil {
-		t.Fatalf("read gRPC guide: %v", err)
-	}
-
 	documented := make(map[string]string)
 	inTable := false
-	for line := range strings.SplitSeq(string(document), "\n") {
+	for line := range strings.SplitSeq(grpcGuide(t), "\n") {
 		trimmed := strings.TrimSpace(line)
 		if trimmed == documentedTableHeader {
 			inTable = true
@@ -113,6 +110,90 @@ func parseDocumentedRow(line string) ([]string, string, bool) {
 		return nil, "", false
 	}
 	return names, grpcCode, true
+}
+
+// documentedUnreachableHeader is the line the published unreachable-code list
+// starts at. The scan runs from there to the blank line after the list, the same
+// shape [documentedTableHeader] uses.
+const documentedUnreachableHeader = "The gRPC codes this table cannot produce:"
+
+// TestDocumentedUnreachableCodesAreActuallyUnreachable holds the guide's second
+// claim about this mapping to the same source the table is held to.
+//
+// It is a claim a reader acts on — it is what sends a service author to extend
+// internal/failure rather than reach for status.Error — and it had already
+// drifted once, naming AlreadyExists while the table two paragraphs above mapped
+// CodeAlreadyExists to exactly that.
+//
+// Only this direction is checked. A code that becomes unreachable and is left
+// off the list costs a reader nothing; one that becomes reachable and stays on
+// it sends them to write a contract change they no longer need.
+func TestDocumentedUnreachableCodesAreActuallyUnreachable(t *testing.T) {
+	documented := documentedUnreachableCodes(t)
+	if len(documented) == 0 {
+		t.Fatalf("docs/grpc.md has no entries under %q", documentedUnreachableHeader)
+	}
+
+	answered := make(map[string]struct{})
+	for code := range failureCodeConstantNames(t) {
+		answered[status.Code(mappedStatus(failure.Classification{Code: code}, "")).String()] = struct{}{}
+	}
+	// The two the guide's own precedence paragraph publishes. They answer inside
+	// [mapError] before any mapper runs, so no classification reaches them.
+	for _, caller := range []error{context.Canceled, context.DeadlineExceeded} {
+		mapped, _ := mapError(caller, ownedStatusOnly, errorRendering{})
+		answered[status.Code(mapped).String()] = struct{}{}
+	}
+
+	for _, name := range documented {
+		if _, reachable := answered[name]; reachable {
+			t.Errorf("docs/grpc.md lists %s as unreachable, but this transport answers with it", name)
+		}
+	}
+}
+
+// documentedUnreachableCodes reads the published list as gRPC code names.
+//
+// The leading blank line between the header and the first item is skipped
+// rather than ending the scan, which is the one way this list's shape differs
+// from the table's.
+func documentedUnreachableCodes(t *testing.T) []string {
+	t.Helper()
+
+	names := make([]string, 0, 4)
+	inList := false
+	for line := range strings.SplitSeq(grpcGuide(t), "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == documentedUnreachableHeader {
+			inList = true
+			continue
+		}
+		if !inList {
+			continue
+		}
+		if trimmed == "" {
+			if len(names) > 0 {
+				break
+			}
+			continue
+		}
+		item, isItem := strings.CutPrefix(trimmed, "- ")
+		if !isItem {
+			break
+		}
+		names = append(names, strings.Trim(strings.TrimSpace(item), "`"))
+	}
+	return names
+}
+
+func grpcGuide(t *testing.T) string {
+	t.Helper()
+
+	document, err := os.ReadFile(filepath.Join("..", "..", "..", "docs", "grpc.md"))
+	if err != nil {
+		t.Fatalf("read gRPC guide: %v", err)
+	}
+	return string(document)
 }
 
 // failureCodeConstantNames returns the constant name internal/failure declares

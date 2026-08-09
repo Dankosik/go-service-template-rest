@@ -28,6 +28,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/example/go-service-template-rest/internal/reqctx"
+	"github.com/getkin/kin-openapi/openapi3"
+	"github.com/getkin/kin-openapi/openapi3filter"
 	jose "github.com/go-jose/go-jose/v4"
 	"go.opentelemetry.io/otel/metric"
 )
@@ -248,6 +251,32 @@ func requireProviderCalls(t *testing.T, client *scriptedClient, refreshes int, w
 	}
 }
 
+// bearerAuthInput is what the OpenAPI validator hands a resolver for the HTTP
+// Bearer requirement this repository's contract declares.
+//
+// It is built in one place so every case asks [Verifier.ResolveHTTP] the
+// question production asks. An input carrying no declared scheme is a shape the
+// validator never produces, and bearerSecurityScheme refuses it — so a test
+// leaving it out would prove that refusal rather than whatever it meant to
+// prove.
+func bearerAuthInput(request *http.Request) *openapi3filter.AuthenticationInput {
+	return &openapi3filter.AuthenticationInput{
+		RequestValidationInput: &openapi3filter.RequestValidationInput{Request: request},
+		SecuritySchemeName:     "bearerAuth",
+		SecurityScheme:         &openapi3.SecurityScheme{Type: "http", Scheme: "bearer"},
+	}
+}
+
+// otherSchemeAuthInput is the same input for a security requirement this
+// Verifier does not implement. The validator asks about every scheme a contract
+// declares, so this is the shape a second one arrives in.
+func otherSchemeAuthInput(request *http.Request) *openapi3filter.AuthenticationInput {
+	input := bearerAuthInput(request)
+	input.SecuritySchemeName = "apiKeyAuth"
+	input.SecurityScheme = &openapi3.SecurityScheme{Type: "apiKey", In: "header", Name: "X-API-Key"}
+	return input
+}
+
 func testPolicy(t *testing.T) Policy {
 	t.Helper()
 	policy, err := NewPolicy(PolicyInput{
@@ -446,6 +475,30 @@ func signPayloadWithOptions(
 		t.Fatalf("CompactSerialize() error = %v", err)
 	}
 	return compact
+}
+
+// ageInstalledKeys rewinds the installed set's fetch time in place, without
+// announcing a replacement. It reaches past [trustStore.install] deliberately:
+// what it stages is a set that aged where it stands, which is the one way a
+// Verifier reaches staleness and the one thing install cannot express.
+func ageInstalledKeys(verifier *Verifier, fetchedAt time.Time) {
+	aged := *verifier.trust.current()
+	aged.fetchedAt = fetchedAt
+	verifier.trust.keys.Store(&aged)
+}
+
+// verify is the principal-only view of verifyToken, and exists for the tests
+// that assert on a principal rather than on a stream's expiry. It is a method so
+// that those tests read as calls on the verifier under test, and it lives here
+// because production has no caller for it: both transport adapters need the
+// expiry, so both reach verifyToken through verifyCredential.
+func (v *Verifier) verify(
+	ctx context.Context,
+	compact string,
+	transport transport,
+) (reqctx.Principal, error) {
+	verified, err := v.verifyToken(ctx, compact, transport)
+	return verified.principal, err
 }
 
 // requireKind asserts the sanitized category err carries. The zero Kind means no

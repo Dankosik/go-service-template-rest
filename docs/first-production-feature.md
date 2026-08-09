@@ -60,6 +60,20 @@ return those errors for the composition root's shared HTTP/gRPC mapping, or a
 generated typed Problem response when the operation itself owns the rejection.
 Framework-level transport failures continue to use the shared hand-written
 Problem catalog.
+
+Wrap with `failure.Op("store row", err)` rather than `fmt.Errorf` wherever a use
+case has several steps that fail the same way. Both preserve the sentinel
+identity `errors.Is` matches on, but only `Op` reaches the record a transport
+writes for an unclassified failure: that record prints the class chain and no
+message text, so a plain `fmt.Errorf` layer renders as `*fmt.wrapError` and an
+operator cannot tell which step broke. Pass a literal — an interpolated
+identifier puts request data in the one record the boundary sanitized.
+
+A request the OpenAPI validator rejects answers 400 with `invalid_params`, which
+names each failed member and the constraint it broke. That comes from the
+contract and never carries the submitted value, so a feature adds nothing to get
+it; see `requestViolations` in `internal/infra/http` for the rule that governs
+what may appear there.
 Extend `httpx.Handlers` and wire the concrete feature in
 `cmd/service/internal/bootstrap`; do not register a parallel manual API route.
 

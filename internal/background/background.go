@@ -1,11 +1,8 @@
 // Package background supervises non-HTTP work for the lifetime of the process.
 //
-// Without a seam here, the first scheduled job a service adds gets started with a
-// bare `go` against context.Background(). Two things follow: on SIGTERM the HTTP
-// server drains correctly while the job is killed mid-iteration by process exit,
-// leaving a partial batch with no compensating record; and a panic inside it
-// takes the whole process down, because Recover is HTTP middleware and never sees
-// it, so the only artifact is a restart.
+// It exists because a bare `go` against context.Background() is killed
+// mid-iteration by process exit on SIGTERM, and a panic inside it takes the
+// process down — Recover is HTTP middleware and never sees it.
 //
 // This is a supervisor, not a job framework. It owns cancellation, panic
 // containment, the join, and reporting a task that failed; schedules, retries,
@@ -21,6 +18,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/example/go-service-template-rest/internal/failure"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -29,12 +27,9 @@ var (
 	// a returned error, so a caller can tell a bug from an expected failure.
 	ErrPanic = errors.New("background task panicked")
 
-	// ErrTaskFailed reports that a supervised task ended with an error while the
-	// process was still meant to be serving.
 	ErrTaskFailed = errors.New("background task failed")
 
-	// ErrTaskStopped reports a long-running supervised task that returned without
-	// shutdown asking it to stop.
+	// ErrTaskStopped reports a task that returned without shutdown asking it to.
 	ErrTaskStopped = errors.New("background task stopped unexpectedly")
 )
 
@@ -52,15 +47,14 @@ type Supervisor struct {
 	// group joins the tasks and keeps the first error for Shutdown. It is a bare
 	// errgroup.Group rather than errgroup.WithContext on purpose; see taskCtx.
 	group *errgroup.Group
-	// taskCtx is the context handed to every task, and is canceled only by New's
-	// parent or by Shutdown.
+	// taskCtx is canceled only by New's parent or by Shutdown.
 	//
-	// It is deliberately not an errgroup.WithContext context. That one is
+	// It is deliberately not an errgroup.WithContext context: that one is
 	// canceled the first time any task returns an error, so one failing worker
-	// stopped every other supervised task — including the readiness refresher,
-	// which returns nil on cancellation and so exited through the ordinary
-	// stopped path. Keeping sibling cancellation under Shutdown preserves the
-	// ordered drain.
+	// stops every other supervised task — including the readiness refresher,
+	// which returns nil on cancellation and exits through the ordinary stopped
+	// path. Keeping sibling cancellation under Shutdown preserves the ordered
+	// drain.
 	//nolint:containedctx // A supervisor's whole job is owning the lifetime it hands out.
 	taskCtx   context.Context
 	cancel    context.CancelFunc
@@ -72,9 +66,9 @@ type Supervisor struct {
 	// is an ordinary stop rather than something readiness has to report.
 	stopping atomic.Bool
 	// failure holds the first task that ended with an error while the process was
-	// still serving. It is what Check reports.
+	// still serving.
 	failure atomic.Pointer[taskFailure]
-	// failures delivers the same first failure to the process lifecycle owner.
+	// failures delivers that same first failure to the process lifecycle owner.
 	// It is buffered because the failing task must never wait for that owner.
 	failures chan error
 }
@@ -126,20 +120,20 @@ func (s *Supervisor) Go(task Task) {
 	})
 }
 
-// runTask executes one task and normalizes how it ended.
 func (s *Supervisor) runTask(name string, run func(context.Context) error) (runErr error) {
 	defer func() {
 		recovered := recover()
 		if recovered == nil {
 			return
 		}
-		// The stack is captured here, inside the deferred function, because it is
-		// the only place the panicking goroutine's frames still exist.
+		// Captured here, inside the deferred function: the only place the
+		// panicking goroutine's frames still exist.
 		s.log.Error(
 			"background_task_panic",
 			"component", "background",
 			"task", name,
-			"panic_type", fmt.Sprintf("%T", recovered),
+			"panic.class", failure.PanicClass(recovered),
+			"panic.type", fmt.Sprintf("%T", recovered),
 			"stack", string(debug.Stack()),
 		)
 		runErr = fmt.Errorf("%w: %s", ErrPanic, name)
@@ -164,48 +158,41 @@ func (s *Supervisor) runTask(name string, run func(context.Context) error) (runE
 	return err
 }
 
-// recordStop publishes a task that failed while the process was still serving, so
-// Check can report it.
-//
-// A task that ends during the drain is an ordinary stop. Any other return means
-// the process is still running without work it was built to do.
+// recordStop publishes a task that failed while the process was still serving.
+// A task ending during the drain is an ordinary stop; any other return means the
+// process is running without work it was built to do.
 func (s *Supervisor) recordStop(name string, err error) {
 	if err == nil || s.stopping.Load() || s.taskCtx.Err() != nil {
 		return
 	}
-	failure := &taskFailure{task: name, err: err}
-	if s.failure.CompareAndSwap(nil, failure) {
-		s.failures <- taskFailureError(failure)
+	recorded := &taskFailure{task: name, err: err}
+	if s.failure.CompareAndSwap(nil, recorded) {
+		s.failures <- taskFailureError(recorded)
 	}
 }
 
-// Failures reports the first task failure to the process lifecycle owner.
 func (s *Supervisor) Failures() <-chan error {
 	return s.failures
 }
 
-// Name identifies this supervisor as a readiness probe.
 func (s *Supervisor) Name() string {
 	return "background"
 }
 
-// Check reports the first supervised task that failed while the process was still
-// serving, and makes that failure visible to readiness while the lifecycle owner
-// begins the drain.
-//
-// Tasks are not restarted here. Whether a failure is recoverable depends on what
-// the task already did, so the honest signal is to stop taking traffic and let the
-// platform's restart policy start a clean process.
+// Check makes the first failure visible to readiness. Tasks are not restarted
+// here: whether a failure is recoverable depends on what the task already did, so
+// the honest signal is to stop taking traffic and let the platform's restart
+// policy start a clean process.
 func (s *Supervisor) Check(context.Context) error {
-	failure := s.failure.Load()
-	if failure == nil {
+	recorded := s.failure.Load()
+	if recorded == nil {
 		return nil
 	}
-	return taskFailureError(failure)
+	return taskFailureError(recorded)
 }
 
-func taskFailureError(failure *taskFailure) error {
-	return fmt.Errorf("%w: %s: %w", ErrTaskFailed, failure.task, failure.err)
+func taskFailureError(recorded *taskFailure) error {
+	return fmt.Errorf("%w: %s: %w", ErrTaskFailed, recorded.task, recorded.err)
 }
 
 // Shutdown cancels every task and waits for them to return, bounded by ctx.

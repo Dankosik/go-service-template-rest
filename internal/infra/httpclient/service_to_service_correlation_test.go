@@ -151,12 +151,7 @@ func TestServiceToServiceHTTPCorrelationAndCancellation(t *testing.T) {
 	spanStart := len(recorder.Ended())
 	rootCtx, root := otel.Tracer("service-to-service-http-test").Start(t.Context(), "root")
 	rootSpanContext := root.SpanContext()
-	request, err := http.NewRequestWithContext(
-		rootCtx,
-		http.MethodGet,
-		"http://"+serviceAAddress+"/call",
-		nil,
-	)
+	request, err := http.NewRequestWithContext(rootCtx, http.MethodGet, "http://"+serviceAAddress+"/call", http.NoBody)
 	if err != nil {
 		root.End()
 		t.Fatalf("http.NewRequestWithContext() error = %v", err)
@@ -184,12 +179,7 @@ func TestServiceToServiceHTTPCorrelationAndCancellation(t *testing.T) {
 
 	cancelCtx, cancel := context.WithCancel(t.Context())
 	cancelCtx, cancelRoot := otel.Tracer("service-to-service-http-test").Start(cancelCtx, "cancel-root")
-	cancelRequest, err := http.NewRequestWithContext(
-		cancelCtx,
-		http.MethodPost,
-		"http://"+serviceAAddress+"/cancel",
-		nil,
-	)
+	cancelRequest, err := http.NewRequestWithContext(cancelCtx, http.MethodPost, "http://"+serviceAAddress+"/cancel", http.NoBody)
 	if err != nil {
 		cancel()
 		cancelRoot.End()
@@ -253,7 +243,7 @@ func callDownstream(
 	method string,
 	path string,
 ) (*http.Response, error) {
-	request, err := http.NewRequestWithContext(ctx, method, client.BaseURL()+path, nil)
+	request, err := http.NewRequestWithContext(ctx, method, client.BaseURL()+path, http.NoBody)
 	if err != nil {
 		return nil, fmt.Errorf("build downstream request: %w", err)
 	}

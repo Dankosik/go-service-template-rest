@@ -151,7 +151,7 @@ func TestBenchmarkVariantsCoverEveryBuiltinPolicy(t *testing.T) {
 	for _, policy := range builtinPolicies(
 		slog.New(slog.DiscardHandler),
 		accessLogPolicy{},
-		newAdmissionLimiter(1, noopLoadRecorder{}),
+		newAdmissionPolicy(1, 1, noopLoadRecorder{}),
 		benchmarkUnaryTimeout,
 	) {
 		names = append(names, policy.name)
@@ -397,7 +397,7 @@ func newBenchmarkFixture(variant benchmarkVariant) (*benchmarkFixture, error) {
 		// so this shape measures production's chain rather than a copy of it.
 		// The only way to leave a builtin out is to name it in
 		// policyVariantExcludes.
-		admission := newAdmissionLimiter(256, &signals.load)
+		admission := newAdmissionPolicy(256, 256, &signals.load)
 		measured := make([]builtinPolicy, 0, len(knownBuiltinPolicies))
 		for _, policy := range builtinPolicies(
 			slog.New(slog.DiscardHandler),
@@ -411,9 +411,10 @@ func newBenchmarkFixture(variant benchmarkVariant) (*benchmarkFixture, error) {
 			measured = append(measured, policy)
 		}
 		native := grpc.NewServer(grpc.ChainUnaryInterceptor(unaryChain(
+			slog.New(slog.DiscardHandler),
 			measured,
 			[]grpc.UnaryServerInterceptor{signals.policyInterceptor()},
-			handlerErrorBoundary(errorRendering{}),
+			handlerErrorBoundary(slog.New(slog.DiscardHandler), errorRendering{}),
 		)...))
 		register(native)
 		server = nativeBenchmarkServer{Server: native}
@@ -663,8 +664,8 @@ func (s *benchmarkSignals) assertRPCMetric(t *testing.T) {
 		t.Fatalf("collect benchmark OTel metrics: %v", err)
 	}
 	for _, scopeMetrics := range resourceMetrics.ScopeMetrics {
-		for _, metric := range scopeMetrics.Metrics {
-			if metricHasDataPoints(metric.Data) {
+		for _, recorded := range scopeMetrics.Metrics {
+			if metricHasDataPoints(recorded.Data) {
 				return
 			}
 		}
@@ -683,8 +684,8 @@ func (s *benchmarkSignals) assertAdmissionMetric(t *testing.T) {
 		if scopeMetrics.Scope.Name != telemetry.GRPCServerMeterName {
 			continue
 		}
-		for _, metric := range scopeMetrics.Metrics {
-			if metric.Name == telemetry.ActiveRPCsInstrument && metricHasDataPoints(metric.Data) {
+		for _, recorded := range scopeMetrics.Metrics {
+			if recorded.Name == telemetry.ActiveRPCsInstrument && metricHasDataPoints(recorded.Data) {
 				return
 			}
 		}

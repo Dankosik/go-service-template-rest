@@ -13,7 +13,7 @@ func TestGeneratedClientComposition(t *testing.T) {
 	if err != nil {
 		t.Fatalf("os.Getwd() error = %v", err)
 	}
-	repositoryRoot := filepath.Clean(filepath.Join(packageDirectory, "../../.."))
+	repositoryRoot := filepath.Clean(filepath.Join(packageDirectory, "..", "..", ".."))
 	// The child package must stay below the module root so Go internal-package
 	// visibility and the generated import path match a real consumer.
 	generatedDirectory, err := os.MkdirTemp( //nolint:usetesting // t.TempDir cannot select an in-module parent.
@@ -33,7 +33,7 @@ func TestGeneratedClientComposition(t *testing.T) {
 	generate := exec.CommandContext(
 		t.Context(),
 		"bash",
-		filepath.Join(repositoryRoot, "scripts/run-go-tool.sh"),
+		filepath.Join(repositoryRoot, "scripts", "run-go-tool.sh"),
 		"oapi-codegen",
 		"-generate",
 		"types,client",
@@ -41,7 +41,7 @@ func TestGeneratedClientComposition(t *testing.T) {
 		"generatedclient",
 		"-o",
 		generatedPath,
-		filepath.Join(packageDirectory, "testdata/generated-client.yaml"),
+		filepath.Join(packageDirectory, "testdata", "generated-client.yaml"),
 	)
 	generate.Dir = repositoryRoot
 	if output, err := generate.CombinedOutput(); err != nil {

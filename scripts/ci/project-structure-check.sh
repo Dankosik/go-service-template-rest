@@ -47,8 +47,12 @@ while IFS= read -r file; do
 	fi
 done < <(find cmd internal test -type f -name '*.go' -print 2>/dev/null)
 
+# Every directory under cmd/ is a binary, except cmd/internal/, which holds the
+# composition support more than one of them shares. Go's own internal rule is
+# what keeps that support out of reach of feature packages.
 for command_dir in cmd/*; do
 	[[ -d "${command_dir}" ]] || continue
+	[[ "${command_dir}" == "cmd/internal" ]] && continue
 	[[ -f "${command_dir}/main.go" ]] || fail "${command_dir}/ must contain main.go"
 done
 

@@ -2,6 +2,7 @@ package telemetry
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -9,7 +10,7 @@ import (
 	"github.com/prometheus/otlptranslator"
 	otelruntime "go.opentelemetry.io/contrib/instrumentation/runtime"
 	"go.opentelemetry.io/otel"
-	otlpmetrichttp "go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
+	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
 	otelprometheus "go.opentelemetry.io/otel/exporters/prometheus"
 	"go.opentelemetry.io/otel/metric"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
@@ -61,12 +62,8 @@ type MetricExporterConfig struct {
 }
 
 // metricExporterEnvConflicts are the ambient credential and trust variables a
-// configured metrics exporter must not silently honor, for the same reason
-// traceExporterEnvConflicts exists: this service sets no client certificate and
-// no root CA pool, so injected material would travel to a collector this service
-// named with nothing having verified it.
-//
-// Kept sorted so reported output is stable.
+// configured metrics exporter must not silently honor; see
+// traceExporterEnvConflicts. Kept sorted so reported output is stable.
 var metricExporterEnvConflicts = []string{
 	"OTEL_EXPORTER_OTLP_CERTIFICATE",
 	"OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE",
@@ -80,8 +77,7 @@ var metricExporterEnvConflicts = []string{
 
 // MetricsResult reports what metrics setup achieved.
 //
-// ExportErr is separate from the error SetupMetrics returns because the two mean
-// different things. A returned error means no meter provider exists at all;
+// A returned error from SetupMetrics means no meter provider exists at all;
 // ExportErr means only the OTLP push path could not be built, and the provider
 // is installed and serving the Prometheus registry.
 type MetricsResult struct {
@@ -106,17 +102,14 @@ func (r MetricsResult) PushConfigured() bool {
 //
 // Both readers, not one. The Prometheus endpoint answers a scraper that can reach
 // this pod's diagnostics listener; the OTLP reader answers the deployment shape
-// where nothing can. Traces already honored OTEL_EXPORTER_OTLP_ENDPOINT, so
-// metrics that did not meant a service could export every span while exporting no
-// metric at all, and look correctly instrumented doing it.
+// where nothing can.
 //
-// An unusable OTLP destination degrades the push path and nothing else. The
-// version this replaced failed the whole setup, taking the meter provider with it
-// — so a scheme-less endpoint, the form most hand-written manifests use, left the
-// service with no metrics at all and no way to record the gauge reporting that.
+// An unusable OTLP destination degrades the push path and nothing else: failing
+// the whole setup would take the meter provider with it, leaving no metrics at
+// all and no way to record the gauge reporting that.
 func SetupMetrics(ctx context.Context, metrics *Metrics, cfg MetricsConfig) (MetricsResult, error) {
 	if metrics == nil || metrics.registry == nil {
-		return MetricsResult{}, fmt.Errorf("setup metrics: registry is required")
+		return MetricsResult{}, errors.New("setup metrics: registry is required")
 	}
 
 	res, err := newResource(ctx, resourceIdentity{
@@ -163,16 +156,10 @@ func SetupMetrics(ctx context.Context, metrics *Metrics, cfg MetricsConfig) (Met
 	// last interval is exported rather than dropped on exit.
 	provider := newMeterProvider(options...)
 
-	// Runtime metrics are registered on the provider rather than on the Prometheus
-	// registry, so they reach both readers.
-	//
-	// The version this replaced used the Prometheus client's Go collector, which
-	// only the /metrics handler reads. A service that pushes to a collector — the
-	// deployment this file's OTLP reader exists for, on a port the container image
-	// does not publish — therefore exported request and pool metrics and no
-	// goroutine, heap, or GC series at all. The first symptom of a leaked goroutine
-	// was the OOM kill, and pprof is off by default, so the evidence was gone by
-	// the time anyone could look.
+	// Registered on the provider rather than on the Prometheus registry, so they
+	// reach both readers. The Prometheus client's Go collector would reach only
+	// the /metrics handler, leaving a pushing deployment with no goroutine, heap,
+	// or GC series at all.
 	//
 	// This registers observable instruments and a callback; it starts no goroutine
 	// and no timer, which is what keeps the package's goleak check meaningful.
@@ -227,10 +214,9 @@ func newOTLPMetricReader(
 // collector root is what an operator means by it. Once that value carries a path
 // it is an endpoint for one signal, and metrics need their own.
 //
-// Configured headers are a credential, so they pin the destination. Past the
-// settings this service owns, the endpoint would come from ambient environment
-// this service never named, and sending its credentials there is the one outcome
-// this resolution must not create.
+// Configured headers are a credential, so they pin the destination: past the
+// settings this service owns the endpoint would come from ambient environment,
+// and sending credentials there is what this resolution must not create.
 func ResolveMetricExporterEndpoint(cfg MetricExporterConfig) (ExporterEndpoint, error) {
 	if raw := strings.TrimSpace(cfg.OTLPEndpoint); raw != "" {
 		endpoint, err := parseSignalOTLPEndpoint(raw, otlpMetricsPath)

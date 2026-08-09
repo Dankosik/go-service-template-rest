@@ -39,7 +39,7 @@ func TestLoadDefaults(t *testing.T) {
 	}
 	// profile:database-postgres:start
 	if cfg.Postgres.Enabled {
-		t.Fatalf("Postgres.Enabled = true, want false")
+		t.Fatal("Postgres.Enabled = true, want false")
 	}
 	if cfg.Postgres.DSN != "" {
 		t.Fatalf("Postgres.DSN = %q, want empty", cfg.Postgres.DSN)
@@ -99,7 +99,7 @@ func TestEmptyNamespaceEnvOverridesRequiredDefault(t *testing.T) {
 
 	_, _, err := LoadDetailed(LoadOptions{})
 	if err == nil {
-		t.Fatalf("LoadDetailed() expected validation error for empty env override")
+		t.Fatal("LoadDetailed() expected validation error for empty env override")
 	}
 	if !errors.Is(err, ErrValidate) {
 		t.Fatalf("error = %v, want ErrValidate", err)

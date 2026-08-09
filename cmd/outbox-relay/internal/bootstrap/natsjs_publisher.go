@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"strings"
 
+	"github.com/example/go-service-template-rest/cmd/internal/runtimeopts"
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/infra/natsjs"
 	"github.com/example/go-service-template-rest/internal/infra/postgresoutbox"
@@ -15,7 +15,7 @@ func BuildNATSPublisher(ctx context.Context, cfg config.Config, log *slog.Logger
 	if !cfg.Messaging.Enabled {
 		return PublisherRuntime{}, fmt.Errorf("%w: messaging must be enabled for the NATS outbox publisher", postgresoutbox.ErrConfig)
 	}
-	client, err := natsjs.Connect(ctx, natsPublisherConfig(cfg.Messaging), natsjs.RoleProducer, natsjs.Observability{Logger: log})
+	client, err := natsjs.Connect(ctx, runtimeopts.Messaging(cfg.Messaging), natsjs.RoleProducer, natsjs.Observability{Logger: log})
 	if err != nil {
 		return PublisherRuntime{}, fmt.Errorf("connect NATS outbox publisher: %w", err)
 	}
@@ -25,21 +25,4 @@ func BuildNATSPublisher(ctx context.Context, cfg config.Config, log *slog.Logger
 		return PublisherRuntime{}, err
 	}
 	return runtime, nil
-}
-
-func natsPublisherConfig(cfg config.MessagingConfig) natsjs.Config {
-	urls := make([]string, 0)
-	for value := range strings.SplitSeq(cfg.URLs, ",") {
-		urls = append(urls, strings.TrimSpace(value))
-	}
-	return natsjs.Config{
-		URLs:                 urls,
-		CredentialsFile:      cfg.CredentialsFile,
-		RootCAFile:           cfg.RootCAFile,
-		AllowPlaintext:       cfg.AllowPlaintext,
-		AllowUnauthenticated: cfg.AllowUnauthenticated,
-		Stream:               cfg.Stream,
-		MaxPayloadBytes:      cfg.MaxPayloadBytes,
-		MaxPendingPublishes:  cfg.MaxPendingPublishes,
-	}
 }

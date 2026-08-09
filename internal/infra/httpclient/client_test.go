@@ -149,7 +149,7 @@ func TestAuthorityTransportAllowsOnlyConfiguredAuthority(t *testing.T) {
 		authority: "api.example.com",
 	}
 
-	allowed, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://api.example.com/v1/items", nil)
+	allowed, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://api.example.com/v1/items", http.NoBody)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,7 +164,7 @@ func TestAuthorityTransportAllowsOnlyConfiguredAuthority(t *testing.T) {
 		"https://other.example.com/v1/items",
 		"https://user@api.example.com/v1/items",
 	} {
-		request, requestErr := http.NewRequestWithContext(context.Background(), http.MethodGet, target, nil)
+		request, requestErr := http.NewRequestWithContext(context.Background(), http.MethodGet, target, http.NoBody)
 		if requestErr != nil {
 			t.Fatal(requestErr)
 		}
@@ -226,7 +226,7 @@ func TestResponseLimitTransportBoundsDecodedBody(t *testing.T) {
 				limit: tt.limit,
 			}
 
-			request, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://example.com", nil)
+			request, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://example.com", http.NoBody)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -332,7 +332,7 @@ func TestExternalClientRejectsPrivateDNSResolutionBeforeConnect(t *testing.T) {
 		t.Fatalf("New() error = %v", err)
 	}
 
-	request, err := http.NewRequestWithContext(context.Background(), http.MethodGet, client.BaseURL(), nil)
+	request, err := http.NewRequestWithContext(context.Background(), http.MethodGet, client.BaseURL(), http.NoBody)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -406,7 +406,7 @@ func TestClientEnforcesDecodedLimitPropagatesTraceAndRejectsRedirect(t *testing.
 		TraceFlags: trace.FlagsSampled,
 	})
 	ctx := trace.ContextWithSpanContext(context.Background(), spanContext)
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, client.BaseURL()+"/gzip", nil)
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, client.BaseURL()+"/gzip", http.NoBody)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -429,7 +429,7 @@ func TestClientEnforcesDecodedLimitPropagatesTraceAndRejectsRedirect(t *testing.
 		t.Fatal("traceparent header is empty")
 	}
 
-	redirectRequest, err := http.NewRequestWithContext(context.Background(), http.MethodGet, client.BaseURL()+"/redirect", nil)
+	redirectRequest, err := http.NewRequestWithContext(context.Background(), http.MethodGet, client.BaseURL()+"/redirect", http.NoBody)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -568,8 +568,7 @@ func TestClientReusesConnectionsAcrossBursts(t *testing.T) {
 		var wg sync.WaitGroup
 		for range burstSize {
 			wg.Go(func() {
-				request, reqErr := http.NewRequestWithContext(
-					context.Background(), http.MethodGet, "http://provider.internal/", nil)
+				request, reqErr := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://provider.internal/", http.NoBody)
 				if reqErr != nil {
 					return
 				}
@@ -636,7 +635,7 @@ func TestRetryReusesTheConnectionItAbandons(t *testing.T) {
 		return dialer.DialContext(ctx, network, strings.TrimPrefix(server.URL, "http://"))
 	}
 
-	request, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://provider.internal/", nil)
+	request, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://provider.internal/", http.NoBody)
 	if err != nil {
 		t.Fatalf("NewRequestWithContext() error = %v, want nil", err)
 	}

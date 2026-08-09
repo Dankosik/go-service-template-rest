@@ -65,6 +65,31 @@ func TestGRPCIdentityParityAndMetadataRemoval(t *testing.T) {
 	}
 }
 
+// TestGRPCLifetimeIsIndistinguishableFromAnInvalidCredential holds the half of
+// [KindLifetime] that must not leak.
+//
+// The category exists so an operator can tell a provider configured for
+// long-lived tokens from a signature that did not verify. A caller gets no such
+// distinction: it learns that its credential was not accepted and nothing about
+// which check said so, exactly as it would for KindInvalid. The HTTP side of the
+// same property is a case in TestHTTPAuthnBoundary.
+func TestGRPCLifetimeIsIndistinguishableFromAnInvalidCredential(t *testing.T) {
+	lifetime := status.Convert(grpcAuthenticationError(failure(KindLifetime)))
+	invalid := status.Convert(grpcAuthenticationError(failure(KindInvalid)))
+	if lifetime.Code() != invalid.Code() || lifetime.Message() != invalid.Message() {
+		t.Fatalf(
+			"lifetime status = (%v, %q), want the invalid-credential status (%v, %q)",
+			lifetime.Code(),
+			lifetime.Message(),
+			invalid.Code(),
+			invalid.Message(),
+		)
+	}
+	if lifetime.Code() != codes.Unauthenticated {
+		t.Fatalf("lifetime status code = %v, want %v", lifetime.Code(), codes.Unauthenticated)
+	}
+}
+
 func TestGRPCHealthCheckIsPublicAndWatchIsProtected(t *testing.T) {
 	key := loadTestRSAKey(t, testSigningKey)
 	verifier := newTestVerifier(t, key)

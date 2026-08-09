@@ -59,6 +59,31 @@ There is no implicit plaintext mode. TLS files are loaded and the
 certificate/key pair is checked before any listener is opened or readiness is
 published.
 
+The listener floors at **TLS 1.3**. It is not configurable: every gRPC runtime
+this service can serve has supported 1.3 for years, and a knob would exist only
+to lower it. A peer that genuinely cannot reach 1.3 is a contract decision, not
+a setting.
+
+The certificate pair is **re-read per handshake**, so a renewal that lands while
+the process is running is served to the next caller without a restart. The pair
+is compared by size and modification time before being read, and the last usable
+pair keeps serving whenever the files on disk are not currently a valid pair —
+which is what a rotation looks like between writing the certificate and writing
+the key. A pair that never becomes valid is visible as one
+`grpc_tls_certificate_rejected` record, not one per connection.
+
+Mutual TLS is off unless a trust root is named:
+
+```dotenv
+APP__GRPC__SERVER__TLS__CLIENT_CA_FILE=/run/secrets/clients.pem
+```
+
+Naming it requires every caller to present a certificate chaining to that file;
+there is no request-and-ignore mode. Unlike the pair above it is read once at
+startup, because a trust root changes on a deployment's schedule rather than an
+issuer's. A file holding no certificate stops the process instead of becoming an
+empty pool that rejects every caller at handshake time.
+
 ## Add a service
 
 ### 1. Define the contract
@@ -228,10 +253,26 @@ a known creation collision is `already_exists` on both transports.
 
 A canceled or expired RPC context answers `CANCELED` or `DEADLINE_EXCEEDED`
 before classification runs, because that is the caller's own signal rather than a
-service outcome. `FailedPrecondition`, `AlreadyExists`, `OutOfRange`, and
-`DataLoss` are not reachable through this table; needing one is a contract
-decision that extends `problem` and `mappedStatus` together, not a local
-`status.Error` in a handler.
+service outcome. That precedence is total here, so a mapper cannot reclassify an
+error that still wraps `context.Canceled` or `context.DeadlineExceeded` — a
+dependency failure meant to reach the caller as `UNAVAILABLE` must not carry one
+of those in its chain. Report the dependency's own identity instead of wrapping
+the context error. HTTP applies the same precedence to an expired context, on
+the reason its own owner records, so a mapper written against either transport
+already has to obey it.
+
+The gRPC codes this table cannot produce:
+
+- `FailedPrecondition`
+- `Aborted`
+- `OutOfRange`
+- `DataLoss`
+
+Needing one is a contract decision that extends `internal/failure`, `problem`,
+and `mappedStatus` together, not a local `status.Error` in a handler — which the
+handler error boundary sanitizes anyway. This repository publishes no code
+without a producer, so the identity arrives with the first feature that requires
+a state change or a transaction retry rather than ahead of it.
 
 Current generated streaming APIs are generic:
 
@@ -464,8 +505,9 @@ a caller:
 - Every business RPC runs under a deadline no later than its configured bound,
   so a caller that set none still cannot hold a handler indefinitely. The bound
   wraps the supplied policy interceptors and the handler alike.
-- Admission is one non-blocking process-wide RPC semaphore; an RPC over the
-  limit is shed as `RESOURCE_EXHAUSTED` rather than queued.
+- Admission is a non-blocking process-wide RPC semaphore; an RPC over the limit
+  is shed as `RESOURCE_EXHAUSTED` rather than queued. Business RPCs and the
+  standard health service hold separate budgets, so neither can starve the other.
 - Service-supplied policy interceptors and generated handlers each answer
   through a sanitizing error boundary. A policy that means to choose its own
   status returns a plain `status.Error`; a handler classifies its domain error
@@ -473,11 +515,42 @@ a caller:
   included.
 - Completion is logged once, outside error mapping, so the record carries the
   status the caller actually received.
+- An RPC sanitized into `INTERNAL` also emits `grpc_unhandled_failure` at ERROR
+  with `rpc.method` and `error_chain`. The chain is the unwrap chain rendered as
+  Go types — `*fmt.wrapError -> *pgconn.PgError` — and never the error's message,
+  which is the same text the boundary just refused to give the caller. Without
+  that record an `INTERNAL` carries no detail, the access log carries only the
+  code, and the failure is diagnosable solely by reproducing it. A dependency
+  whose faults must survive this rendering publishes typed errors or sentinels
+  rather than `errors.New`, which renders as `*errors.errorString` and names
+  nothing.
+- A step a service wants named in that chain wraps with `failure.Op` instead of
+  `fmt.Errorf` — `create article -> store row -> *pgconn.PgError`. It is the only
+  text the chain prints, because the name is a literal in the repository rather
+  than anything the error carries; a handler with several writes that all fail
+  the same way is what it exists for.
 
-`grpc.health.v1.Health/Check` bypasses application admission so a saturated
+`grpc.health.v1.Health/Check` holds no admission slot at all, so a saturated
 instance remains probeable. `Health/Watch` and any later health-service method
-consume the process-wide RPC budget; with the OIDC/JWT profile, they also require
-a credential while Check remains public. Standard health methods are excluded
+hold a slot in the health service's own budget, sized from
+`MAX_CONNECTIONS` rather than `MAX_CONCURRENT_RPCS`. That separation is
+load-bearing in both directions: grpc-go's client-side health checker keeps one
+`Watch` open per subchannel for the connection's whole life, so counted as
+business work every connected peer would permanently occupy a business slot, and
+a shed `Watch` costs that caller the whole backend rather than one RPC — its
+balancer stops selecting a peer whose watch failed with anything but
+`UNIMPLEMENTED`. In the other direction, a peer opening watches cannot decide
+what the service may serve. One watch per connection is the legitimate shape, so
+the connection limit admits every well-behaved peer while still bounding a
+hostile one.
+
+A health budget under pressure is therefore a hostile-peer signal rather than a
+capacity one, and it is deliberately absent from the active/shed RPC instruments
+so those keep describing business capacity alone. Set
+`APP__GRPC__SERVER__ACCESS_LOG_HEALTH_CHECKS=true` to see the refusals.
+
+With the OIDC/JWT profile, health-service methods other than Check also require a
+credential while Check remains public. Standard health methods are excluded
 from routine access logs by default. The health service starts `NOT_SERVING`,
 becomes `SERVING` only after the same dependency admission as HTTP readiness,
 and returns to `NOT_SERVING` before drain. Its standard status semantics bypass
@@ -521,6 +594,32 @@ per-connection stream ceiling while process admission, CPU, memory, network,
 and dependencies still have headroom. Raising either limit without the
 matching concurrent payload-memory measurement is not a performance
 optimization.
+
+A business stream holds its admission slot for its entire life, so
+`MAX_CONCURRENT_RPCS` is the peak of concurrent unary RPCs *plus* concurrent
+streams, not of unary RPCs alone. A service publishing long-lived subscriptions
+therefore sizes it from expected subscribers first and gives those streams a
+duration or idle policy of their own; the template ships neither, because a
+stream's lifetime belongs to the feature that owns it. Standard health watches
+are the exception and are already excluded, on the budget above.
+
+Admission is a concurrency budget, not a rate. It bounds how much work runs at
+once, so a method that returns quickly can be called as often as a caller likes
+without ever filling it, and one caller can hold the whole budget. Telling
+callers apart needs an identity only the service can choose, which is why no
+limiter ships here — the same reason `internal/infra/http` ships its rate-limit
+seam unwired.
+
+A per-caller limit is a supplied policy, installed at
+`grpcx.Options.UnaryPolicy` and `StreamPolicy` like any other cross-cutting rule.
+Three things it must get right, all of which the HTTP middleware in
+`internal/infra/http/middleware_ratelimit.go` already records: exempt
+`grpc.health.v1.Health/Check`, or a limited platform evicts the instance;
+bound the key map, because a key derived from caller-controlled metadata is a
+memory leak with a limiter attached; and hash the key when it is derived from a
+credential. `httpx.KeyedRateLimiter` is that bucket. A service needing one
+identity limited across both transports promotes it to a shared leaf package
+first rather than importing the HTTP adapter from a gRPC policy.
 
 Reflection, a registry, grpc-gateway, Connect, and gRPC-Web are absent by
 design. Add one only for a concrete contract, security, or measured reliability

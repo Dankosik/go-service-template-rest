@@ -7,6 +7,7 @@ import (
 	"errors"
 	"math/big"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	jose "github.com/go-jose/go-jose/v4"
@@ -32,6 +33,45 @@ func (s *keySet) verifies(parsed parsedToken) bool {
 	}
 	payload, err := parsed.signed.Verify(key)
 	return err == nil && bytes.Equal(payload, parsed.payload)
+}
+
+// trustStore holds the key set a [Verifier] currently trusts and announces each
+// replacement.
+//
+// A set is replaced wholesale and never mutated, so a verification reads one
+// consistent set without blocking a refresh. Making install the only writer is
+// what lets every reader treat current as non-nil, and what keeps a replacement
+// from being installed without being announced — arming one and forgetting the
+// other is silent, and the symptom is a refresh cadence still measured against
+// the set it just replaced. [refreshSchedule] exists against the same hazard.
+type trustStore struct {
+	keys    atomic.Pointer[keySet]
+	changed chan struct{}
+}
+
+func newTrustStore(initial *keySet) *trustStore {
+	store := &trustStore{changed: make(chan struct{}, 1)}
+	store.keys.Store(initial)
+	return store
+}
+
+func (s *trustStore) current() *keySet {
+	return s.keys.Load()
+}
+
+func (s *trustStore) install(keys *keySet) {
+	s.keys.Store(keys)
+	select {
+	case s.changed <- struct{}{}:
+	default:
+	}
+}
+
+// replaced carries one nudge per install, and drops a nudge nobody has collected
+// yet rather than blocking the installer. A reader that wakes late is not owed
+// one wake per replacement: it reads the newest set from current.
+func (s *trustStore) replaced() <-chan struct{} {
+	return s.changed
 }
 
 type rawJWKSet struct {

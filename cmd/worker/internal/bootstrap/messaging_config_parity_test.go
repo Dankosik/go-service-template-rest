@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/example/go-service-template-rest/cmd/internal/runtimeopts"
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/config/configtest"
 	"github.com/example/go-service-template-rest/internal/infra/natsjs"
@@ -37,7 +38,7 @@ func TestMessagingConfigRulesMatchAdapter(t *testing.T) {
 				// change what anyone observes.
 				return
 			}
-			if err := natsjs.ValidateConfig(messagingClientConfig(*cfg)); err != nil {
+			if err := natsjs.ValidateConfig(runtimeopts.Messaging(*cfg)); err != nil {
 				t.Fatalf("internal/config accepted a configuration natsjs.ValidateConfig refuses: %v\n"+
 					"This is the direction that must never diverge: the fault now surfaces at connect "+
 					"instead of at config load. Fix internal/config/messaging.go to match, or relax natsjs.",

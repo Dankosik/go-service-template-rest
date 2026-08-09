@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/example/go-service-template-rest/cmd/internal/runtimeopts"
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/health"
 	"github.com/example/go-service-template-rest/internal/infra/natsjs"
@@ -125,23 +126,6 @@ func TestWorkerLoggerCorrelatesRecords(t *testing.T) {
 	}
 }
 
-func TestWorkerTelemetryFailureReason(t *testing.T) {
-	t.Parallel()
-
-	for _, tc := range []struct {
-		err  error
-		want string
-	}{
-		{err: context.DeadlineExceeded, want: "deadline_exceeded"},
-		{err: context.Canceled, want: "canceled"},
-		{err: errors.New("exporter unavailable"), want: "setup_error"},
-	} {
-		if got := workerTelemetryFailureReason(tc.err); got != tc.want {
-			t.Fatalf("workerTelemetryFailureReason(%v) = %q, want %q", tc.err, got, tc.want)
-		}
-	}
-}
-
 //nolint:paralleltest // Telemetry setup installs process-wide providers.
 func TestWorkerTelemetrySetupCanBeCleanedWithinCallerBudget(t *testing.T) {
 	telemetrytest.RestoreGlobals(t)
@@ -187,14 +171,14 @@ func TestWorkerCompositionHelpers(t *testing.T) {
 		}
 	}
 
-	clientCfg := messagingClientConfig(config.MessagingConfig{
+	clientCfg := runtimeopts.Messaging(config.MessagingConfig{
 		URLs: " nats://one:4222, nats://two:4222 ", Stream: "EVENTS", MaxPayloadBytes: 1024,
 	})
 	if len(clientCfg.URLs) != 2 || clientCfg.URLs[0] != "nats://one:4222" || clientCfg.URLs[1] != "nats://two:4222" {
-		t.Fatalf("messagingClientConfig() URLs = %q", clientCfg.URLs)
+		t.Fatalf("runtimeopts.Messaging() URLs = %q", clientCfg.URLs)
 	}
 	if clientCfg.Stream != "EVENTS" || clientCfg.MaxPayloadBytes != 1024 {
-		t.Fatalf("messagingClientConfig() = %+v", clientCfg)
+		t.Fatalf("runtimeopts.Messaging() = %+v", clientCfg)
 	}
 }
 

@@ -24,7 +24,7 @@ import (
 	referencev1 "github.com/example/go-service-template-rest/examples/grpc-reference-service/internal/gen/proto/reference/v1"
 	"github.com/example/go-service-template-rest/internal/config"
 	grpcx "github.com/example/go-service-template-rest/internal/infra/grpc"
-	grpcclient "github.com/example/go-service-template-rest/internal/infra/grpcclient"
+	"github.com/example/go-service-template-rest/internal/infra/grpcclient"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
@@ -180,18 +180,34 @@ func assertTransportMirrorsDefaults(t *testing.T, defaults config.GRPCServerConf
 	target := reflect.ValueOf(mapped)
 	for index := range target.NumField() {
 		name := target.Type().Field(index).Name
-		origin := source.FieldByName(name)
+		originName := name
+		if derived, ok := derivedTransportBounds[name]; ok {
+			originName = derived
+		}
+		origin := source.FieldByName(originName)
 		if !origin.IsValid() {
 			t.Errorf("grpcx.Config.%s has no config.GRPCServerConfig field to carry", name)
 			continue
 		}
 		if !origin.Equal(target.Field(index)) {
 			t.Errorf(
-				"transport bound %s = %v, want canonical default %v",
+				"transport bound %s = %v, want canonical default %s = %v",
 				name,
 				target.Field(index),
+				originName,
 				origin,
 			)
 		}
 	}
+}
+
+// derivedTransportBounds names every [grpcx.Config] bound whose source is not the
+// identically named default, so the walk above stays target-side and each
+// exception is a line someone had to write.
+//
+// The standard health service's budget is the connection limit because one
+// Health/Watch per connection is what a health-checking client opens; grpcx.Config
+// owns that relation.
+var derivedTransportBounds = map[string]string{
+	"MaxConcurrentHealthRPCs": "MaxConnections",
 }

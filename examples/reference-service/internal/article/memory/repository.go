@@ -3,6 +3,7 @@ package memory
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"slices"
@@ -29,7 +30,7 @@ func New(articles []article.Article) (*Repository, error) {
 	bySlug := make(map[string]article.Article, len(articles))
 	for _, item := range articles {
 		if item.Slug == "" {
-			return nil, fmt.Errorf("memory article repository: slug is required")
+			return nil, errors.New("memory article repository: slug is required")
 		}
 		if _, exists := bySlug[item.Slug]; exists {
 			return nil, fmt.Errorf("memory article repository: duplicate slug %q", item.Slug)

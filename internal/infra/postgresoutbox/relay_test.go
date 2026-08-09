@@ -3,10 +3,14 @@ package postgresoutbox
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"sync/atomic"
 	"testing"
 	"testing/synctest"
 	"time"
+
+	"github.com/example/go-service-template-rest/internal/infra/telemetry/telemetrytest"
+	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 )
 
 func TestRelayCancellation(t *testing.T) {
@@ -329,6 +333,77 @@ func TestRelayLoopStopsOnMaintenanceFailureAndDrain(t *testing.T) {
 	}
 	if claims != 0 {
 		t.Fatalf("claims after a drain raised during maintenance = %d, want 0", claims)
+	}
+}
+
+// A finalization fault is absorbed until it repeats. Neither fault it covers is
+// something the stop prevents — another relay owns those events, or lease
+// recovery republishes one — so stopping on the first occurrence spends a whole
+// process restart on one ambiguous event and turns a lease that is persistently
+// too short into a halt instead of slower delivery. Repetition is the signal, so
+// the count has to reset on a cycle that finalized cleanly.
+//
+// The tolerated sample is asserted here rather than in telemetry_test.go: it is
+// the operator-visible half of this one behavior, and proving it from a second
+// copy of this loop setup would only let the two drift.
+func TestRelayToleratesFinalizationFaultsUntilTheyRepeat(t *testing.T) {
+	t.Parallel()
+
+	reader, telemetry := newTestTelemetry(t, slog.New(slog.DiscardHandler))
+	claims := 0
+	// One fault short of the tolerance, then a cycle that finalizes cleanly. Those
+	// faults must not count toward the run that follows, so the relay stops on the
+	// last cycle of a full tolerance after the clean one.
+	const (
+		absorbedBeforeClean = finalizationFaultTolerance - 1
+		cleanCycle          = absorbedBeforeClean + 1
+	)
+	store := &relayStoreStub{
+		claim: func(context.Context, time.Duration, int) (ClaimedBatch, error) {
+			claims++
+			return unitBatch(1), nil
+		},
+		scheduleRetryBatch: func(context.Context, string, []RetryDirective) error {
+			if claims == cleanCycle {
+				return nil
+			}
+			return ErrLeaseLost
+		},
+	}
+	relay, err := newRelay(store,
+		publisherFunc(func(context.Context, Event) error { return ErrPublicationNotAccepted }),
+		telemetry, unitRelayConfig())
+	if err != nil {
+		t.Fatalf("newRelay() error = %v", err)
+	}
+	relay.config.PollInterval = time.Millisecond
+
+	result := relay.runLoop(t.Context(), nil)
+	if !errors.Is(result.Err, ErrLeaseLost) || result.CleanupUnsafe {
+		t.Fatalf("runLoop(repeated lease loss) = %+v, want a lost-lease stop", result)
+	}
+	wantClaims := cleanCycle + finalizationFaultTolerance
+	if claims != wantClaims {
+		t.Fatalf("claims = %d, want %d: absorbed faults, one clean cycle, then a full tolerance",
+			claims, wantClaims)
+	}
+
+	tolerated := int64(0)
+	telemetrytest.ForEachMetric(t, reader, func(measured metricdata.Metrics) {
+		if measured.Name != "outbox.relay.operations" {
+			return
+		}
+		for _, point := range telemetrytest.Int64Sum(t, measured).DataPoints {
+			if telemetrytest.Attribute(t, point.Attributes, "operation") == "finalize" &&
+				telemetrytest.Attribute(t, point.Attributes, "outcome") == "tolerated" &&
+				telemetrytest.Attribute(t, point.Attributes, "error.type") == classLostLease {
+				tolerated = point.Value
+			}
+		}
+	})
+	if want := int64(absorbedBeforeClean + finalizationFaultTolerance - 1); tolerated != want {
+		t.Errorf("tolerated finalize samples = %d, want %d: every fault but the one that stopped the relay",
+			tolerated, want)
 	}
 }
 

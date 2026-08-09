@@ -9,12 +9,13 @@ import (
 	"testing"
 
 	"github.com/example/go-service-template-rest/internal/infra/telemetry/telemetrytest"
+	"github.com/example/go-service-template-rest/internal/observability/logctx"
 	"go.opentelemetry.io/otel"
 )
 
 // TestProcessLoggerCorrelatesRecords proves the wiring rather than the decorator,
 // which internal/observability/logctx already covers on its own. What can regress
-// here is newProcessLogger being rebuilt from a bare JSONHandler: the records look
+// here is logctx.NewProcessLogger being rebuilt from a bare JSONHandler: the records look
 // identical minus the two keys that join a startup failure to its span, and no
 // other test would notice.
 //
@@ -23,7 +24,7 @@ func TestProcessLoggerCorrelatesRecords(t *testing.T) {
 	telemetrytest.InstallSpanRecorder(t)
 
 	var out bytes.Buffer
-	log := newProcessLogger(&out, slog.LevelInfo)
+	log := logctx.NewProcessLogger(&out, slog.LevelInfo)
 
 	ctx, span := otel.Tracer("test").Start(context.Background(), "startup-log-test")
 	log.InfoContext(ctx, "startup_stage", startupLogArgs("c", "o", "ok", "k", "v")...)
@@ -70,7 +71,7 @@ func TestReadinessTransitionLogCarriesStateAndCause(t *testing.T) {
 	t.Parallel()
 
 	var out bytes.Buffer
-	log := newProcessLogger(&out, slog.LevelInfo)
+	log := logctx.NewProcessLogger(&out, slog.LevelInfo)
 	logReadinessTransition(context.Background(), log, errors.New("db probe failed"))
 	logReadinessTransition(context.Background(), log, nil)
 

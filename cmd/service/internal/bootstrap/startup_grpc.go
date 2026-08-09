@@ -20,6 +20,30 @@ type grpcRuntimeBindings struct {
 	StreamPolicy []grpc.StreamServerInterceptor
 }
 
+// serviceGRPCBindings is where this service composes its own gRPC surface;
+// generated handlers stay outside grpcx.
+//
+// Assigning Services is correct — nothing else fills it. A policy is appended
+// instead: a build profile may have filled the policy slices already, and an
+// assignment compiles, passes every check, and silently drops what it replaced.
+func serviceGRPCBindings(
+	// profile:authn-oidc-jwt:start
+	authn authnRuntime,
+	// profile:authn-oidc-jwt:end
+) grpcRuntimeBindings {
+	bindings := grpcRuntimeBindings{
+		// Register an owned service here, as
+		// func(registrar grpc.ServiceRegistrar) { foov1.RegisterFooServer(registrar, impl) }.
+		// See docs/grpc.md, "Register it in bootstrap".
+		Services: nil,
+	}
+	// profile:authn-oidc-jwt:start
+	bindings.UnaryPolicy = append(bindings.UnaryPolicy, authn.UnaryInterceptor())
+	bindings.StreamPolicy = append(bindings.StreamPolicy, authn.StreamInterceptor())
+	// profile:authn-oidc-jwt:end
+	return bindings
+}
+
 func newGRPCRuntime(
 	cfg config.Config,
 	log *slog.Logger,
@@ -35,14 +59,14 @@ func newGRPCRuntime(
 	// an already-proven value into credentials.
 	var transportCredentials credentials.TransportCredentials
 	if cfg.GRPC.Server.TransportSecurity == "tls" {
-		loaded, err := credentials.NewServerTLSFromFile(
-			cfg.GRPC.Server.TLS.CertFile,
-			cfg.GRPC.Server.TLS.KeyFile,
-		)
+		// startup_grpc_tls.go owns the settings themselves: the version floor,
+		// per-handshake certificate reload, and optional client-certificate
+		// verification.
+		settings, err := grpcServerTLS(cfg.GRPC.Server.TLS, log)
 		if err != nil {
 			return nil, fmt.Errorf("load gRPC server TLS credentials: %w", err)
 		}
-		transportCredentials = loaded
+		transportCredentials = credentials.NewTLS(settings)
 	}
 
 	server, err := grpcx.NewServer(
@@ -97,7 +121,13 @@ func newGRPCRuntime(
 // target-side test so a missed one fails there rather than here.
 func grpcServerConfig(server config.GRPCServerConfig) grpcx.Config {
 	return grpcx.Config{
-		MaxConcurrentRPCs:          server.MaxConcurrentRPCs,
+		MaxConcurrentRPCs: server.MaxConcurrentRPCs,
+		// The standard health service's budget is the connection limit, because
+		// one Health/Watch per connection is what grpc-go's client-side health
+		// checker opens and what this repository's own client enables by default.
+		// Sizing it from anything smaller would shed a well-behaved peer's watch,
+		// which costs that caller the whole backend rather than one RPC.
+		MaxConcurrentHealthRPCs:    server.MaxConnections,
 		MaxConcurrentStreams:       server.MaxConcurrentStreams,
 		MaxHeaderListBytes:         server.MaxHeaderListBytes,
 		MaxReceiveMessageBytes:     server.MaxReceiveMessageBytes,

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"math/big"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -24,9 +25,9 @@ type protectedHeader struct {
 }
 
 // numericDate is a JWT NumericDate held at time.Time's nanosecond resolution,
-// with presence recorded separately so validTimes can tell an absent claim from
-// a zero one. Values finer than a nanosecond are rounded down, so accepted trust
-// never lasts longer than the instant the token names.
+// with presence recorded separately so tokenTimeFailure can tell an absent claim
+// from a zero one. Values finer than a nanosecond are rounded down, so accepted
+// trust never lasts longer than the instant the token names.
 type numericDate struct {
 	nanoseconds int64
 	present     bool
@@ -37,7 +38,11 @@ func (n *numericDate) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &number); err != nil {
 		return errors.New("NumericDate must be a number")
 	}
-	value, ok := new(big.Rat).SetString(number.String())
+	literal := number.String()
+	if len(literal) > maxNumericDateLiteral || !boundedExponent(literal) {
+		return errors.New("NumericDate is outside supported time range")
+	}
+	value, ok := new(big.Rat).SetString(literal)
 	if !ok {
 		return errors.New("NumericDate must be a number")
 	}
@@ -57,6 +62,27 @@ func (n *numericDate) UnmarshalJSON(data []byte) error {
 
 func (n *numericDate) time() time.Time {
 	return time.Unix(0, n.nanoseconds)
+}
+
+// boundedExponent reports whether a JSON number's exponent is small enough to be
+// worth expanding. It answers before [big.Rat] rather than after, because the
+// expansion is where the cost is and refusing the result would mean it had
+// already been paid. maxNumericDateExponent owns what that cost is and why an
+// unsigned caller can ask for it.
+//
+// A JSON number carries at most one exponent marker, so finding either spelling
+// finds the whole exponent. Anything strconv cannot read as an int — an empty
+// exponent, or one too large for the machine word — is refused rather than
+// clamped: a NumericDate this service can act on has no such spelling.
+func boundedExponent(literal string) bool {
+	marker := strings.IndexAny(literal, "eE")
+	if marker < 0 {
+		return true
+	}
+	exponent, err := strconv.Atoi(literal[marker+1:])
+	return err == nil &&
+		-maxNumericDateExponent <= exponent &&
+		exponent <= maxNumericDateExponent
 }
 
 // audienceClaim is the aud claim in either RFC 7519 spelling, scalar or array.
@@ -192,7 +218,9 @@ func parseToken(compact string, policy Policy, now time.Time) (parsedToken, erro
 		return parsedToken{}, err
 	}
 
-	signed, err := jose.ParseSignedCompact(compact, []jose.SignatureAlgorithm{jose.RS256})
+	// AllowedAlgorithm is untyped, so it is the same constant the header check
+	// above and keyset.go compare against rather than a second spelling of it.
+	signed, err := jose.ParseSignedCompact(compact, []jose.SignatureAlgorithm{AllowedAlgorithm})
 	if err != nil || len(signed.Signatures) != 1 {
 		return parsedToken{}, failure(KindInvalid)
 	}
@@ -248,9 +276,15 @@ func parseAccessTokenClaims(payload []byte, policy Policy, now time.Time) (acces
 		strings.TrimSpace(claims.ClientID) == "" ||
 		strings.TrimSpace(claims.JWTID) == "" ||
 		!claims.Audience.present ||
-		!slices.Contains(claims.Audience.values, policy.audience) ||
-		!validTimes(claims, now) {
+		!slices.Contains(claims.Audience.values, policy.audience) {
 		return accessTokenClaims{}, failure(KindInvalid)
+	}
+	// The time policy answers separately because one of its terms is not equally
+	// fatal to the same reader: every other refusal here says the credential is
+	// wrong, while an over-long lifetime says the issuer is configured for longer
+	// tokens than this service accepts. tokenTimeFailure owns that split.
+	if err := tokenTimeFailure(claims, now); err != nil {
+		return accessTokenClaims{}, err
 	}
 	return claims, nil
 }
@@ -259,24 +293,41 @@ func validAccessTokenType(value string) bool {
 	return strings.EqualFold(value, "at+jwt") || strings.EqualFold(value, "application/at+jwt")
 }
 
-func validTimes(claims accessTokenClaims, now time.Time) bool {
+// tokenTimeFailure reports the category the token's time claims fall into, or
+// nil when this service accepts them.
+//
+// Every term but one is KindInvalid, and the exception is the lifetime: a token
+// whose exp is too far past its iat is well formed, correctly signed, and
+// current, and refusing it is this service's policy rather than a defect in the
+// credential. [KindLifetime] owns who that distinction is for.
+//
+// Order matters between the two. exp must follow iat before the interval between
+// them means anything, so an inverted pair stays KindInvalid instead of being
+// reported as a lifetime an issuer could shorten.
+func tokenTimeFailure(claims accessTokenClaims, now time.Time) error {
 	if !claims.Expires.present || !claims.IssuedAt.present {
-		return false
+		return failure(KindInvalid)
 	}
 	issuedAt := claims.IssuedAt.time()
 	expires := claims.Expires.time()
-	if !expires.After(issuedAt) || expires.Sub(issuedAt) > MaxTokenLifetime {
-		return false
+	if !expires.After(issuedAt) {
+		return failure(KindInvalid)
+	}
+	if expires.Sub(issuedAt) > MaxTokenLifetime {
+		return failure(KindLifetime)
 	}
 	if !expires.After(now.Add(-ClockSkew)) {
-		return false
+		return failure(KindInvalid)
 	}
 	if issuedAt.After(now.Add(ClockSkew)) {
-		return false
+		return failure(KindInvalid)
 	}
 	if !claims.NotBefore.present {
-		return true
+		return nil
 	}
 	notBefore := claims.NotBefore.time()
-	return notBefore.Before(expires) && !notBefore.After(now.Add(ClockSkew))
+	if !notBefore.Before(expires) || notBefore.After(now.Add(ClockSkew)) {
+		return failure(KindInvalid)
+	}
+	return nil
 }

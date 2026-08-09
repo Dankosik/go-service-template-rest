@@ -290,14 +290,36 @@ func setOriginHeaders(header nats.Header, source jetstream.Msg, metadata *jetstr
 // copies. The inputs are what identify one source delivery: the stream and
 // sequence that stored it, its store timestamp, and the publisher's own id.
 func deadLetterTransferID(source jetstream.Msg, metadata *jetstream.MsgMetadata) string {
-	identity := strings.Join([]string{
+	return streamRecordID(
+		deadLetterTransferPrefix,
 		metadata.Stream,
-		strconv.FormatUint(metadata.Sequence.Stream, 10),
-		metadata.Timestamp.UTC().Format(time.RFC3339Nano),
+		metadata.Sequence.Stream,
+		metadata.Timestamp,
 		source.Headers().Get(headerPublicationID),
+	)
+}
+
+// The two prefixes streamRecordID is called with. They only make the derived
+// id legible to whoever reads it off a message; nothing parses one back.
+const (
+	deadLetterTransferPrefix = "dlq-"
+	redrivePublicationPrefix = "redrive-"
+)
+
+// streamRecordID derives a publication id from one stored record's own place in
+// a stream, so re-deriving it from that same record yields the same id and the
+// broker deduplicates a retried publication instead of storing a second copy.
+// Both directions of the dead-letter path need that property: the transfer into
+// the stream and the redrive back out of it.
+func streamRecordID(prefix, stream string, sequence uint64, storedAt time.Time, publicationID string) string {
+	identity := strings.Join([]string{
+		stream,
+		strconv.FormatUint(sequence, 10),
+		storedAt.UTC().Format(time.RFC3339Nano),
+		publicationID,
 	}, "\x00")
 	digest := sha256.Sum256([]byte(identity))
-	return "dlq-" + hex.EncodeToString(digest[:])
+	return prefix + hex.EncodeToString(digest[:])
 }
 
 // wireSize is what one message costs on the wire, which is the bound

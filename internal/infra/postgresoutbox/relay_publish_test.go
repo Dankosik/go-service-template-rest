@@ -1,8 +1,11 @@
 package postgresoutbox
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -39,6 +42,106 @@ func TestRelayPublisherPanic(t *testing.T) {
 	if class := publicationErrorClass(got); class != "panic" {
 		t.Fatalf("panic class = %q, want panic", class)
 	}
+}
+
+// Recovering the panic is what lets the rest of the batch finalize, and it is
+// also the only chance anyone gets to describe the fault: the runtime prints
+// nothing for a panic that was recovered, so without this line the process exits
+// as publisher_panic with no way to find the adapter that caused it. The stack
+// has to name the panicking frame rather than the recover, which is why the
+// assertion is on this file.
+func TestRelayPublisherPanicIsDiagnosable(t *testing.T) {
+	t.Parallel()
+
+	var logs bytes.Buffer
+	_, telemetry := newTestTelemetry(t, slog.New(slog.NewJSONHandler(&logs, nil)))
+	relay, err := newRelay(
+		&relayStoreStub{},
+		publisherFunc(func(context.Context, Event) error { panic("adapter fault") }),
+		telemetry,
+		unitRelayConfig(),
+	)
+	if err != nil {
+		t.Fatalf("newRelay() error = %v", err)
+	}
+
+	if got := relay.publishOne(t.Context(), unitClaim(1).Event); !errors.Is(got, ErrPublisherPanic) {
+		t.Fatalf("publishOne() = %v, want ErrPublisherPanic", got)
+	}
+	for _, required := range []string{"outbox_publisher_panic", "adapter fault", "relay_publish_test.go"} {
+		if !strings.Contains(logs.String(), required) {
+			t.Errorf("panic log does not carry %q: %s", required, logs.String())
+		}
+	}
+}
+
+// The publication budget belongs to the whole batch, so a batch large enough or
+// a broker slow enough leaves its tail with none of it. Such an event never
+// reached the publisher, and reporting it as a timeout would be wrong twice: a
+// timeout is an ambiguous publication, so it sets sticky uncertainty, and it
+// spends the attempt the claim charged. Repeating that walks an event nobody
+// tried to publish to the attempt cap and quarantines it as outcome-unknown,
+// which is an operator action per event for a broker that was merely slow.
+func TestRelayReturnsTheAttemptForAnUnattemptedPublication(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		var retries []RetryDirective
+		poisoned := 0
+		store := &relayStoreStub{
+			scheduleRetryBatch: func(_ context.Context, _ string, directives []RetryDirective) error {
+				retries = directives
+				return nil
+			},
+			markPoisonedBatch: func(_ context.Context, _ string, poisons []PoisonDirective) error {
+				poisoned = len(poisons)
+				return nil
+			},
+		}
+		relay := newUnitRelay(store, publisherFunc(func(ctx context.Context, _ Event) error {
+			<-ctx.Done()
+			return ctx.Err()
+		}))
+		// One worker, so the first event holds the whole budget and the two behind
+		// it find it spent. Both are at the attempt cap, which is where the old
+		// classification poisoned them.
+		relay.config.PublishConcurrency = 1
+		relay.config.PublishTimeout = time.Millisecond
+		attempted, unattempted, stickyUnattempted := unitClaim(1), unitClaim(2), unitClaim(3)
+		unattempted.CycleAttemptCount = relay.config.MaxAttempts
+		stickyUnattempted.CycleAttemptCount = relay.config.MaxAttempts
+		stickyUnattempted.PublicationUncertain = true
+		batch := ClaimedBatch{
+			Token:  unitLeaseToken,
+			Events: []ClaimedEvent{attempted, unattempted, stickyUnattempted},
+		}
+
+		result, stop := relay.publishBatch(context.Background(), batch, time.Now().Add(time.Hour))
+		if result.Err != nil || stop || result.CleanupUnsafe {
+			t.Fatalf("publishBatch() = %+v stop=%t, want an ordinary cycle", result, stop)
+		}
+		if poisoned != 0 {
+			t.Fatalf("poisoned %d events, want none: an unattempted publication cannot exhaust its attempts", poisoned)
+		}
+		if len(retries) != 3 {
+			t.Fatalf("retries = %+v, want one per event", retries)
+		}
+		// The attempted event is the control: a real timeout still costs its attempt
+		// and still sets uncertainty, because the broker may have accepted it.
+		if retries[0].ErrorClass != classPublisherTimeout || !retries[0].PublicationUncertain ||
+			retries[0].NotAttempted {
+			t.Errorf("attempted event retry = %+v, want a timeout that keeps its attempt", retries[0])
+		}
+		for _, retry := range retries[1:] {
+			if retry.ErrorClass != classPublisherNotAttempted || !retry.NotAttempted || retry.Delay != 0 {
+				t.Errorf("unattempted event retry = %+v, want an undelayed non-attempt", retry)
+			}
+		}
+		// Uncertainty is preserved, never added: the second event arrived certain
+		// and stays so, the third arrived sticky and cannot be cleared.
+		if retries[1].PublicationUncertain || !retries[2].PublicationUncertain {
+			t.Errorf("unattempted uncertainty = %t/%t, want false/true",
+				retries[1].PublicationUncertain, retries[2].PublicationUncertain)
+		}
+	})
 }
 
 func TestRelayPublisherStuck(t *testing.T) {

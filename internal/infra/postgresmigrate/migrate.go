@@ -192,16 +192,16 @@ func acquireMigrationLock(
 
 func validateMigrationOptions(opts MigrationOptions) error {
 	if opts.ConnectTimeout <= 0 {
-		return fmt.Errorf("postgres migration connect timeout must be > 0")
+		return errors.New("postgres migration connect timeout must be > 0")
 	}
 	if opts.StatementTimeout <= 0 {
-		return fmt.Errorf("postgres migration statement timeout must be > 0")
+		return errors.New("postgres migration statement timeout must be > 0")
 	}
 	if opts.LockTimeout <= 0 {
-		return fmt.Errorf("postgres migration lock timeout must be > 0")
+		return errors.New("postgres migration lock timeout must be > 0")
 	}
 	if opts.CleanupTimeout <= 0 {
-		return fmt.Errorf("postgres migration cleanup timeout must be > 0")
+		return errors.New("postgres migration cleanup timeout must be > 0")
 	}
 	return nil
 }

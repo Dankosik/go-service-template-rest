@@ -1,14 +1,10 @@
 // Package reqctx owns the request-scoped values a handler reads and the
 // transport adapter writes.
 //
-// It is a leaf on purpose. internal/infra/http produces these values while serving
-// a request and a feature package consumes them while handling one, and depguard
-// forbids a feature package from importing a concrete infra adapter — so neither
-// may import the other and both need the same answer.
-//
-// Nothing here performs I/O or holds a dependency. A carrier is all a feature
-// package needs; deciding what a credential proves stays with whoever validates
-// it.
+// It is a leaf on purpose. internal/infra/http produces these values while
+// serving a request and a feature package consumes them while handling one, and
+// depguard forbids a feature package from importing a concrete infra adapter —
+// so neither may import the other and both need the same answer.
 package reqctx
 
 import (
@@ -22,16 +18,11 @@ import (
 // MaxRequestIDLength is the shared wire limit for a correlation identifier.
 const MaxRequestIDLength = 128
 
-// RequestIDHeader and RequestIDMetadataKey are the wire name of the correlation
-// identifier on each transport. They are one name in two required spellings:
-// net/http canonicalizes header keys, while gRPC requires lowercase metadata
-// keys, so neither transport can use the other's form.
-//
-// This package owns both because every transport adapter — inbound and outbound,
-// on each transport a build profile retains — must agree on them, and none of
-// them may import another. A name restated per adapter agrees until someone
-// edits one copy; the two here are proven equal by
-// TestRequestIDWireNamesAreOneName.
+// RequestIDHeader and RequestIDMetadataKey are one wire name in the two
+// spellings the transports require: net/http canonicalizes header keys, gRPC
+// requires lowercase metadata keys. This package owns both because every
+// transport adapter must agree on them and none may import another;
+// TestRequestIDWireNamesAreOneName proves the two equal.
 const (
 	RequestIDHeader      = "X-Request-ID"
 	RequestIDMetadataKey = "x-request-id"
@@ -39,23 +30,20 @@ const (
 
 // Principal is the authenticated caller of the current request.
 //
-// Issuer and Subject form the caller's stable identity. ClientID identifies the
-// OAuth client that obtained the credential; Scopes are reserved for a verifier
-// that actually proves them. A service whose credential proves more attaches
-// its own type under its own context key rather than re-reading the credential.
+// Issuer and Subject form the caller's stable identity. Scopes are reserved for
+// a verifier that actually proves them. A service whose credential proves more
+// attaches its own type under its own context key rather than re-reading the
+// credential.
 type Principal struct {
 	// Issuer is the verified namespace in which Subject is unique.
 	Issuer string
-	// Subject identifies the caller within Issuer. It is correlatable identity
-	// data, not a credential and not automatically safe to log.
-	Subject string
-	// ClientID identifies the OAuth client to which the credential was issued.
+	// Subject is correlatable identity data, not a credential and not
+	// automatically safe to log.
+	Subject  string
 	ClientID string
-	// Scopes are the permissions the presented credential was granted.
-	Scopes []string
+	Scopes   []string
 }
 
-// HasScope reports whether the presented credential was granted scope.
 func (p Principal) HasScope(scope string) bool {
 	return slices.Contains(p.Scopes, scope)
 }
@@ -66,8 +54,7 @@ type principalContextKey struct{}
 //
 // Scopes are cloned because the value is shared with every handler that reads
 // the context: without the copy, a handler that sorted or appended to the slice
-// would edit the authorization decision every other reader sees. One small
-// allocation per authenticated request costs nothing next to decoding its body.
+// would edit the authorization decision every other reader sees.
 func ContextWithPrincipal(ctx context.Context, principal Principal) context.Context {
 	principal.Scopes = slices.Clone(principal.Scopes)
 	return context.WithValue(ctx, principalContextKey{}, principal)
@@ -91,13 +78,11 @@ func PrincipalFromContext(ctx context.Context) (Principal, bool) {
 // SetPrincipal publishes principal to every later reader of r, mutating r in
 // place.
 //
-// The mutation is deliberate and is the only thing that works at this seam: the
-// OpenAPI request validator builds its validation input around the same
-// *http.Request it later hands to the next handler, so a returned copy would be
-// discarded and the principal with it. internal/infra/http/middleware_timeout.go
-// mutates the same request for the same class of reason. This lives here so it is
-// written once — an authenticator that reimplements it is how a service ends up
-// with a version that silently returns a copy.
+// The mutation is the only thing that works at this seam: the OpenAPI request
+// validator builds its validation input around the same *http.Request it later
+// hands to the next handler, so a returned copy would be discarded and the
+// principal with it. internal/infra/http/middleware_timeout.go mutates the same
+// request for the same reason.
 func SetPrincipal(r *http.Request, principal Principal) {
 	if r == nil {
 		return
@@ -113,22 +98,15 @@ func ContextWithRequestID(ctx context.Context, requestID string) context.Context
 	return context.WithValue(ctx, requestIDContextKey{}, requestID)
 }
 
-// RequestID returns the correlation identifier for the current request, or the
-// empty string when the request did not travel through the correlation
-// middleware.
-//
-// A handler needs this to put its own records beside the access log line for the
-// same request, and to propagate correlation to a dependency. The trace and span
-// identifiers are already reachable through go.opentelemetry.io/otel/trace; this
-// is the one correlation value that is not.
+// RequestID returns the correlation identifier, or the empty string when the
+// request did not travel through the correlation middleware. Trace and span
+// identifiers are reachable through go.opentelemetry.io/otel/trace; this is the
+// one correlation value that is not.
 func RequestID(ctx context.Context) string {
 	requestID, _ := ctx.Value(requestIDContextKey{}).(string)
 	return requestID
 }
 
-// ContextWithAcceptedRequestID validates a transport candidate, generates a
-// replacement when needed, and returns both the enriched context and the value
-// that may be sent back to the caller.
 func ContextWithAcceptedRequestID(ctx context.Context, candidate string) (context.Context, string) {
 	requestID := strings.TrimSpace(candidate)
 	if !ValidRequestID(requestID) {
@@ -138,10 +116,10 @@ func ContextWithAcceptedRequestID(ctx context.Context, candidate string) (contex
 }
 
 // ValidRequestID reports whether value is safe to carry in logs and response
-// metadata. The alphabet is intentionally transport-neutral and unchanged from
-// the original HTTP contract.
+// metadata. The alphabet is transport-neutral and unchanged from the original
+// HTTP contract.
 func ValidRequestID(value string) bool {
-	if len(value) == 0 || len(value) > MaxRequestIDLength {
+	if value == "" || len(value) > MaxRequestIDLength {
 		return false
 	}
 	for index := range len(value) {

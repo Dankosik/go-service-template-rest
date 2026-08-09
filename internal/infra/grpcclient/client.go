@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/example/go-service-template-rest/internal/observability/correlationpolicy"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/otel/metric"
 	metricnoop "go.opentelemetry.io/otel/metric/noop"
@@ -20,11 +21,9 @@ import (
 // Config contains the fixed target and finite per-call transport bounds.
 //
 // MaxHeaderListBytes is the uint32 grpc-go asks for, where the server adapter in
-// internal/infra/grpc takes the same bound as an int. The difference follows the
-// caller: that Config is filled from a configuration file, so it takes the int
-// the file parses to and proves the conversion once on the way in, while these
-// bounds come from [DefaultConfig] in Go source, where the narrower type is the
-// check.
+// internal/infra/grpc takes the same bound as an int: that Config is filled from
+// a configuration file and proves the conversion on the way in, while these come
+// from [DefaultConfig] in Go source, where the narrower type is the check.
 type Config struct {
 	Target                 string
 	MaxHeaderListBytes     uint32
@@ -64,11 +63,10 @@ func DefaultConfig(target string) Config {
 type Options struct {
 	// TransportCredentials is required, and [New] refuses a nil value. Plaintext
 	// is spelled insecure.NewCredentials() so that dialing without transport
-	// security is a visible decision, which is also grpc-go's own rule for
-	// grpc.NewClient. The server adapter in internal/infra/grpc takes a field of
-	// the same name as optional, where nil means plaintext; that half binds a
-	// listener whose exposure the deployment owns, while this one chooses how
-	// much to trust a peer it is about to send credentials to.
+	// security is a visible decision, as grpc.NewClient itself requires. The
+	// server adapter's field of the same name is optional because it binds a
+	// listener the deployment owns; this one chooses how far to trust a peer it
+	// is about to send credentials to.
 	TransportCredentials credentials.TransportCredentials
 	// PerRPCCredentials optionally supplies one connection credential for both
 	// application RPCs and grpc-go control streams such as standard health Watch.
@@ -116,7 +114,7 @@ func New(cfg Config, options Options) (*grpc.ClientConn, error) {
 		grpc.WithStatsHandler(otelgrpc.NewClientHandler(
 			otelgrpc.WithMeterProvider(options.MeterProvider),
 			otelgrpc.WithTracerProvider(options.TracerProvider),
-			otelgrpc.WithPropagators(policyPropagator{policy: options.Propagation}),
+			otelgrpc.WithPropagators(correlationpolicy.NewPropagator(options.Propagation, requestIDMetadataKey)),
 		)),
 	}
 	if options.PerRPCCredentials != nil {
@@ -173,7 +171,7 @@ func validateConfig(cfg Config, options Options) error {
 	if cfg.MaxSendMessageBytes <= 0 {
 		return errors.New("build gRPC client: max send message bytes must be positive")
 	}
-	if !options.Propagation.valid() {
+	if !options.Propagation.Valid() {
 		return errors.New("build gRPC client: propagation policy is invalid")
 	}
 	if !cfg.LoadBalancing.valid() {

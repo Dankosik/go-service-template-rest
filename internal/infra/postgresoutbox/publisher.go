@@ -90,7 +90,3 @@ func holdsTypedNil(value any) bool {
 		return false
 	}
 }
-
-// The two sentinels an adapter returns — [ErrPermanentPublication] and
-// [ErrPublicationNotAccepted] — are declared with the rest of the package's set
-// in errors.go. The contract that decides which one to return is above.

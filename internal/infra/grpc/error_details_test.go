@@ -11,6 +11,7 @@ package grpcx
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -254,7 +255,7 @@ func httpRetryAfter(t *testing.T, mappers []failure.Mapper) string {
 
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/probe", nil)
-	httpx.RejectResponse(mappers...)(recorder, request, errSaturated)
+	httpx.RejectResponse(slog.New(slog.DiscardHandler), mappers...)(recorder, request, errSaturated)
 
 	return recorder.Header().Get("Retry-After")
 }

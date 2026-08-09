@@ -28,6 +28,7 @@ func TestArticleAlreadyExistsMapsThroughGRPCTransport(t *testing.T) {
 	listener := bufconn.Listen(1 << 20)
 	server, err := grpcx.NewServer(grpcx.Config{
 		MaxConcurrentRPCs:          4,
+		MaxConcurrentHealthRPCs:    4,
 		MaxConcurrentStreams:       4,
 		MaxHeaderListBytes:         16 << 10,
 		MaxReceiveMessageBytes:     4 << 20,

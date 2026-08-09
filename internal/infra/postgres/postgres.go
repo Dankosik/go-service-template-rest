@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/exaring/otelpgx"
-	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -30,21 +29,19 @@ var (
 	ErrCommitUnknown = errors.New("postgres commit outcome unknown")
 
 	// ErrSaturated reports that every pooled connection stayed busy for the whole
-	// acquire budget. It is a distinct identity because it is the one database
-	// failure that is not the database's fault and that the caller should retry:
-	// the server is momentarily past capacity, so a repository maps it onto its
-	// own "temporarily unavailable" domain error and the transport answers 503
-	// with a Retry-After, rather than the 504 an exhausted request budget earns.
+	// acquire budget. It has its own identity because it is the one database
+	// failure the caller should retry: a repository maps it onto "temporarily
+	// unavailable" and the transport answers 503, not the 504 an exhausted
+	// request budget earns.
 	ErrSaturated = errors.New("postgres pool saturated")
 )
 
 // Querier is the surface shared by a pooled connection and a transaction, so one
 // repository method serves both without knowing which it is running in.
 //
-// This is the type Acquire and InTx hand out. Without it, a repository takes
-// *pgxpool.Pool concretely and therefore cannot be composed into a transaction —
-// which is the reach for PGX that InTx exists to prevent. sqlc generates the same
-// shape as DBTX, so generated queriers accept these values unchanged.
+// Without it a repository takes *pgxpool.Pool concretely and cannot be composed
+// into a transaction — the reach for PGX that InTx exists to prevent. sqlc
+// generates the same shape as DBTX, so generated queriers accept these unchanged.
 type Querier interface {
 	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
 	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
@@ -53,7 +50,7 @@ type Querier interface {
 
 var (
 	_ Querier = (*pgxpool.Conn)(nil)
-	_ Querier = (pgx.Tx)(nil)
+	_ Querier = pgx.Tx(nil)
 )
 
 type Options struct {
@@ -68,20 +65,17 @@ type Options struct {
 	MinIdleConns int
 	// AcquireTimeout bounds how long one caller waits for a pooled connection.
 	//
-	// Nothing else does. pgxpool.Acquire waits until a connection frees or the
-	// context is done, and the only deadline on that context is the request
-	// budget — so a slow database does not shed, it queues: each waiting request
-	// holds an in-flight slot for its whole remaining budget until every slot is
-	// held by a connection waiter, and requests that touch no database at all are
-	// shed for capacity the database took.
+	// Nothing else does: pgxpool.Acquire waits until a connection frees or the
+	// context is done, so without this a slow database queues rather than sheds —
+	// every in-flight slot ends up held by a connection waiter, and requests that
+	// touch no database at all are shed for capacity the database took.
 	AcquireTimeout  time.Duration
 	ConnMaxLifetime time.Duration
-	// StatementTimeout bounds every statement server-side, and bounds how long a
-	// session may sit idle inside a transaction. The request budget only cancels
-	// client-side, and pgx delivers that cancellation as a separate CancelRequest
-	// on a separate connection — so when the network is the thing that went
-	// wrong, which is the common case for a slow dependency, the cancel is
-	// exactly what fails to arrive and the abandoned query keeps its locks.
+	// StatementTimeout bounds every statement server-side, and how long a session
+	// may sit idle inside a transaction. It is needed because pgx delivers the
+	// request budget's cancellation as a separate CancelRequest on a separate
+	// connection: when the network is what went wrong, that cancel is exactly what
+	// fails to arrive and the abandoned query keeps its locks.
 	StatementTimeout time.Duration
 }
 
@@ -168,12 +162,8 @@ func New(ctx context.Context, opts Options) (*Pool, error) {
 // whatever is left of the caller's request budget, and returns ErrSaturated when
 // the budget runs out.
 //
-// This is how a repository gets a Querier outside a transaction. The budget is
-// the reason it exists: an unbounded acquire turns a slow database into a
-// service-wide outage, because every waiting request keeps its in-flight slot
-// until the whole request budget is spent and the shedding limiter then rejects
-// traffic that never needed the database. Failing one caller in a second, with a
-// retryable identity, keeps the rest of the service serving.
+// This is how a repository gets a Querier outside a transaction; see
+// PoolConfig.AcquireTimeout for why the budget is separate from the request's.
 //
 // The returned connection must be released. Callers that want the pool's own
 // unbudgeted convenience methods use PGX.
@@ -202,10 +192,9 @@ func (p *Pool) Acquire(ctx context.Context) (*pgxpool.Conn, error) {
 // pooled connection.
 //
 // These are startup parameters rather than a per-query SET, so they apply to
-// connections the pool opens later without any query path having to remember.
-// idle_in_transaction_session_timeout covers the case statement_timeout cannot:
-// a transaction that was opened, ran a fast statement, and then lost its client
-// holds its locks indefinitely while no statement is running at all.
+// connections the pool opens later. idle_in_transaction_session_timeout covers
+// what statement_timeout cannot: a transaction that ran a fast statement and then
+// lost its client holds its locks while no statement is running at all.
 func applyStatementTimeouts(connConfig *pgx.ConnConfig, statementTimeout time.Duration) {
 	if connConfig == nil {
 		return
@@ -227,106 +216,6 @@ func (p *Pool) Close() {
 	p.pool.Close()
 }
 
-// InTx runs fn inside one transaction, committing when it returns nil and
-// rolling back otherwise.
-//
-// This is the seam that keeps a service from reaching for PGX to compose two
-// repository calls atomically. fn receives a pgx.Tx, which satisfies Querier, so a
-// repository method written against Querier works both inside and outside a
-// transaction. The connection is taken through Acquire, so opening a transaction
-// is subject to the same acquire budget as any other database work.
-func (p *Pool) InTx(ctx context.Context, opts pgx.TxOptions, fn func(pgx.Tx) error) error {
-	if p == nil {
-		return fmt.Errorf("%w: postgres pool is nil", ErrConfig)
-	}
-	if fn == nil {
-		return fmt.Errorf("%w: transaction function is required", ErrConfig)
-	}
-
-	conn, err := p.Acquire(ctx)
-	if err != nil {
-		return err
-	}
-	defer conn.Release()
-
-	tx, err := conn.BeginTx(ctx, opts)
-	if err != nil {
-		return fmt.Errorf("%w: %w", ErrTransaction, err)
-	}
-
-	commit := p.commitTx
-	if commit == nil {
-		commit = commitTx
-	}
-	if err := runInTx(ctx, tx, fn, commit); err != nil {
-		return fmt.Errorf("%w: %w", ErrTransaction, err)
-	}
-	return nil
-}
-
-func runInTx(
-	ctx context.Context,
-	tx pgx.Tx,
-	fn func(pgx.Tx) error,
-	commit func(context.Context, pgx.Tx) error,
-) (err error) {
-	defer func() {
-		rollbackErr := tx.Rollback(ctx)
-		if rollbackErr != nil && !errors.Is(rollbackErr, pgx.ErrTxClosed) {
-			err = rollbackErr
-		}
-	}()
-
-	if err := fn(tx); err != nil {
-		_ = tx.Rollback(ctx)
-		return err
-	}
-
-	if err := commit(ctx, tx); err != nil {
-		if commitDefinitelyFailed(err) {
-			return err
-		}
-		return fmt.Errorf("%w: %w", ErrCommitUnknown, err)
-	}
-	return nil
-}
-
-func commitTx(ctx context.Context, tx pgx.Tx) error {
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("commit transaction: %w", err)
-	}
-	return nil
-}
-
-func commitDefinitelyFailed(err error) bool {
-	if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok {
-		return pgErr.Code != pgerrcode.TransactionResolutionUnknown &&
-			pgErr.Code != pgerrcode.StatementCompletionUnknown
-	}
-	return errors.Is(err, pgx.ErrTxCommitRollback) || pgconn.SafeToRetry(err)
-}
-
-// Retryable reports whether err is a PostgreSQL failure that the same request
-// could succeed at if it ran again.
-//
-// There is deliberately no retry loop here. Whether a retry is safe depends on
-// what the caller already did — a serialization failure inside a read-only query
-// is free to retry, the same failure after an outbound side effect is not — and
-// how many attempts fit the request's remaining budget. Classification is the
-// part every service needs and gets wrong; the policy is the part that differs.
-func Retryable(err error) bool {
-	var pgErr *pgconn.PgError
-	if !errors.As(err, &pgErr) {
-		return false
-	}
-	switch pgErr.Code {
-	case pgerrcode.SerializationFailure, pgerrcode.DeadlockDetected:
-		return true
-	default:
-		return false
-	}
-}
-
 // PGX returns the concrete pool for sqlc and transaction wiring at composition.
 func (p *Pool) PGX() *pgxpool.Pool {
 	if p == nil {
@@ -343,16 +232,9 @@ func (p *Pool) Name() string {
 // report whether the pool is busy.
 //
 // A saturated pool is evidence that the database is answering — every connection
-// is in use serving it. Treating that as a readiness failure is how a slow
-// dependency becomes a fleet-wide outage: the refresher's own ping queues behind
-// the traffic, readiness flips, the orchestrator evicts the instance, and its
-// traffic moves to instances that are already saturated. This package's readiness
-// is served from cache for exactly that reason, and the cache is worth nothing if
-// what fills it is itself a pool waiter.
-//
-// The masking window is bounded and worth it. A pool that is saturated because
-// the database died drains within one statement timeout: in-flight queries fail,
-// their connections are destroyed, an acquire then succeeds, and the ping reports
+// is in use serving it — so reporting it as unready would evict the instance for
+// being busy. The masking window is bounded: a pool saturated because the
+// database died drains within one statement timeout, and the ping then reports
 // the truth.
 func (p *Pool) Check(ctx context.Context) error {
 	if p == nil || p.pool == nil {

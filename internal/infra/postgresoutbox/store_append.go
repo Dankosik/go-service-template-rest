@@ -10,6 +10,25 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+// Appender is the write path's whole view of this package: one call, inside the
+// transaction that already owns a domain mutation. *[Store] is its only
+// implementation here.
+//
+// It exists because the consumer that would otherwise declare it lives in an
+// adopting service rather than in this repository — the PostgreSQL repository
+// adapter doc.go names. Taking this type instead of *Store keeps the operator
+// tooling and the whole relay half of Store out of reach of the request path,
+// and the compiler rather than a comment is then what says the write path only
+// appends.
+type Appender interface {
+	Append(ctx context.Context, tx pgx.Tx, events ...Event) error
+}
+
+// The one in-package use of the type above, and the reason it needs no other: a
+// signature change to Append that leaves the interface behind fails to compile
+// here rather than at the composition root of an adopting service.
+var _ Appender = (*Store)(nil)
+
 // Append stores every event in the transaction owned by the feature caller. It
 // never begins or commits a transaction itself.
 //

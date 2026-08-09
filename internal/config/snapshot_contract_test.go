@@ -4,7 +4,7 @@ import (
 	"log/slog"
 	"maps"
 	"reflect"
-	"sort"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -18,7 +18,7 @@ func TestBuildSnapshotMapsEveryKnownConfigLeafKey(t *testing.T) {
 
 	sourceValues := sentinelConfigSourceValues()
 	knownKeys := configLeafKeysFromType(t, reflect.TypeFor[Config](), "")
-	sort.Strings(knownKeys)
+	slices.Sort(knownKeys)
 	sourceKeys := sortedStringSetKeys(sourceValues)
 	if !reflect.DeepEqual(sourceKeys, knownKeys) {
 		t.Fatalf("sentinel source keys = %v, want known config keys %v", sourceKeys, knownKeys)
@@ -59,7 +59,7 @@ func TestKnownConfigSectionsMatchSnapshotTags(t *testing.T) {
 	knownSections := sortedStringSetKeys(knownConfigSections())
 
 	tagSections := configSectionKeysFromType(t, reflect.TypeFor[Config](), "")
-	sort.Strings(tagSections)
+	slices.Sort(tagSections)
 	if !reflect.DeepEqual(knownSections, tagSections) {
 		t.Fatalf("knownConfigSections() = %v, want Config koanf section keys %v", knownSections, tagSections)
 	}
@@ -222,6 +222,7 @@ func sentinelConfigSourceValues() map[string]any {
 		"grpc.server.allow_plaintext":                false,
 		"grpc.server.tls.cert_file":                  "/run/secrets/snapshot.crt",
 		"grpc.server.tls.key_file":                   "/run/secrets/snapshot.key",
+		"grpc.server.tls.client_ca_file":             "/run/secrets/snapshot-clients.pem",
 		"grpc.server.max_connections":                2048,
 		"grpc.server.max_concurrent_rpcs":            384,
 		"grpc.server.max_concurrent_streams":         128,
@@ -350,6 +351,7 @@ func expectedSentinelSnapshotValues() map[string]any {
 		"grpc.server.allow_plaintext":                false,
 		"grpc.server.tls.cert_file":                  "/run/secrets/snapshot.crt",
 		"grpc.server.tls.key_file":                   "/run/secrets/snapshot.key",
+		"grpc.server.tls.client_ca_file":             "/run/secrets/snapshot-clients.pem",
 		"grpc.server.max_connections":                2048,
 		"grpc.server.max_concurrent_rpcs":            384,
 		"grpc.server.max_concurrent_streams":         128,
@@ -447,6 +449,6 @@ func sortedStringSetKeys[V any](values map[string]V) []string {
 	for key := range values {
 		keys = append(keys, key)
 	}
-	sort.Strings(keys)
+	slices.Sort(keys)
 	return keys
 }

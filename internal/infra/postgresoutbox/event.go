@@ -50,7 +50,12 @@ type Event struct {
 	// [Publisher] implementation decides what it means.
 	Destination string
 	// Schema versions Payload's shape for consumers, such as "v1". The outbox
-	// neither parses nor validates Payload against it.
+	// neither parses nor validates Payload against it, and no repository gate
+	// checks it the way OpenAPI and Buf check this service's other published
+	// contracts — the emitting feature owns event compatibility on its own.
+	// A stored event is retried and redriven as the exact bytes it was appended
+	// with, so a consumer must keep reading every version still present in the
+	// table, not only the one being written today.
 	Schema string
 	// OccurredAt is when the domain event happened, not when it was published.
 	// It must be non-zero and UTC.

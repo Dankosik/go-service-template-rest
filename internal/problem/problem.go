@@ -4,15 +4,11 @@
 //
 // Feature packages classify their errors with internal/failure; this package
 // adds the HTTP-only status, title, and type URI used to render that identity.
+// It is the single copy on purpose: a second one drifts, and a status advertising
+// the wrong type URI is what a client keys its retry policy off.
 //
-// The reference example used to carry a copy, and the copy drifted: a 409 fell
-// through to the internal-error type, so a slug conflict advertised itself as a
-// server fault while carrying status 409 — exactly what a client keying its retry
-// policy off `type` acts on.
-//
-// Nothing here performs I/O or depends on a wire contract. Each service maps
-// these three strings onto its own generated Problem type; the correlation
-// identifier for the body comes from internal/reqctx.
+// Each service maps these three strings onto its own generated Problem type; the
+// correlation identifier for the body comes from internal/reqctx.
 package problem
 
 import (
@@ -55,14 +51,12 @@ type Definition struct {
 // catalog is the single source of the envelope, and both lookups below resolve
 // against it.
 //
-// It is a slice rather than a map so the reverse lookup is deterministic without
-// depending on a uniqueness invariant a reader has to trust: two entries sharing
-// a status would make a map-based For answer whichever iteration reached first,
-// which is a wrong answer that looks right.
+// It is a slice rather than a map so the reverse lookup stays deterministic: two
+// entries sharing a status would make a map-based For answer whichever iteration
+// reached first, which is a wrong answer that looks right.
 //
-// 409, 422, and 429 are here because a domain layer produces them and the
-// runtime cannot: no fallback path in internal/infra/http emits them, so they
-// exist for an operation that declares them. A code with no matching
+// 409, 422, and 429 are here because a domain layer produces them and no fallback
+// path in internal/infra/http does. A code with no matching
 // `components/responses` entry in a service's contract is unreachable, not wrong.
 var catalog = []Definition{
 	{
@@ -157,10 +151,9 @@ var catalog = []Definition{
 // For returns the definition published for status, and false for a status this
 // repository describes no problem class for.
 //
-// The boolean is the point. A lookup whose failure mode is a plausible wrong
-// answer — the internal-error type returned for an uncatalogued status — is
-// worse than one that refuses: the caller has a status this repository does not
-// describe, and must publish its own type for it.
+// The boolean is the point: returning the internal-error type for an
+// uncatalogued status is a plausible wrong answer. A caller holding a status this
+// repository does not describe must publish its own type for it.
 func For(status int) (Definition, bool) {
 	for _, definition := range catalog {
 		if definition.Status == status {
@@ -182,12 +175,11 @@ func ForCode(code Code) (Definition, bool) {
 }
 
 // All returns every published definition, so a caller can render the catalog
-// rather than restate it — a contract document, a client's error table, or the
-// tests here that assert the catalog is internally consistent.
+// rather than restate it.
 //
-// The copy is not defensive habit. catalog is package state read by every
-// problem response the service writes, so handing out the backing array would let
-// one caller's sort or append change what every later response reports.
+// catalog is package state read by every problem response the service writes, so
+// handing out the backing array would let one caller's sort or append change what
+// every later response reports.
 func All() []Definition {
 	return slices.Clone(catalog)
 }

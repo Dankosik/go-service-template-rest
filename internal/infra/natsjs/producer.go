@@ -61,7 +61,7 @@ func (p *Producer) Publish(ctx context.Context, event Event) (PublishResult, err
 	}
 	defer p.end()
 
-	ctx, span := p.client.telemetry.tracer.Start(ctx, spanNamePublish, publishSpanOptions(event)...)
+	ctx, span := p.client.telemetry.tracer.Start(ctx, publishSpanName(event.Subject), publishSpanOptions(event)...)
 	defer span.End()
 	msg, err := buildNATSMessage(ctx, event, p.maxPayloadBytes)
 	if err != nil {

@@ -120,9 +120,7 @@ func TestTrustCurrentness(t *testing.T) {
 			},
 		)}
 		verifier := requireTestVerifier(t, testVerifierOptions{now: time.Now, client: client})
-		keys := *verifier.keys.Load()
-		keys.fetchedAt = time.Now().Add(-MaxKeySetAge + time.Second)
-		verifier.keys.Store(&keys)
+		ageInstalledKeys(verifier, time.Now().Add(-MaxKeySetAge+time.Second))
 
 		runCtx, cancel := context.WithCancel(context.Background())
 		runResult := make(chan error, 1)

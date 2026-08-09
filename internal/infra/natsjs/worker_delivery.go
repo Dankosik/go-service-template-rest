@@ -50,7 +50,9 @@ func (w *Worker) handle(handlerRoot context.Context, source jetstream.Msg) error
 	}
 	current.message = decoded
 
-	ctx, span := w.client.telemetry.tracer.Start(base, spanNameConsume, consumeSpanOptions(decoded)...)
+	ctx, span := w.client.telemetry.tracer.Start(
+		base, consumeSpanName(w.cfg.FilterSubject), consumeSpanOptions(decoded, w.cfg.FilterSubject)...,
+	)
 	defer span.End()
 	handlerCtx, cancel := context.WithTimeout(ctx, w.cfg.HandlerTimeout)
 	result := handlerResult{started: time.Now()}

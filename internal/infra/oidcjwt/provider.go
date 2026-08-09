@@ -192,7 +192,7 @@ func providerFailureReason(err error) string {
 func fetchDocument(ctx context.Context, client requestClient, target string) ([]byte, error) {
 	requestCtx, cancel := context.WithTimeout(ctx, ProviderTimeout)
 	defer cancel()
-	request, err := http.NewRequestWithContext(requestCtx, http.MethodGet, target, nil)
+	request, err := http.NewRequestWithContext(requestCtx, http.MethodGet, target, http.NoBody)
 	if err != nil {
 		return nil, errProviderRequest
 	}
