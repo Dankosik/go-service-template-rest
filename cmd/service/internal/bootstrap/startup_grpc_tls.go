@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"sync"
 
 	"github.com/example/go-service-template-rest/internal/config"
@@ -206,7 +207,13 @@ func stampFile(name string) (fileStamp, error) {
 // to. A file holding no certificate is refused rather than accepted as an empty
 // pool, which would reject every caller at handshake time instead of at startup.
 func clientCertificateAuthorities(name string) (*x509.CertPool, error) {
-	encoded, err := os.ReadFile(name)
+	root, err := os.OpenRoot(filepath.Dir(name))
+	if err != nil {
+		return nil, fmt.Errorf("open gRPC client CA directory: %w", err)
+	}
+	defer func() { _ = root.Close() }()
+
+	encoded, err := root.ReadFile(filepath.Base(name))
 	if err != nil {
 		return nil, fmt.Errorf("read gRPC client CA file: %w", err)
 	}

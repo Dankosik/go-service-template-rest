@@ -59,15 +59,14 @@ func TestParseLoadOptionsRefusesWhatWouldStartTheWrongProcess(t *testing.T) {
 	}
 }
 
-// TestParseLoadOptionsRegistersBinaryLocalFlags covers the one caller that has
-// its own flag: cmd/outbox-relay. Registering on the shared set is what makes an
-// unknown flag one rejection rather than two flag sets disagreeing about which
-// flags exist.
+// TestParseLoadOptionsRegistersBinaryLocalFlags covers a caller with its own
+// flag. Registering on the shared set is what makes an unknown flag one
+// rejection rather than two flag sets disagreeing about which flags exist.
 func TestParseLoadOptionsRegistersBinaryLocalFlags(t *testing.T) {
 	t.Parallel()
 
 	var local bool
-	options, err := ParseLoadOptions("outbox-relay", []string{"--local", "--config", "base.yaml"},
+	options, err := ParseLoadOptions("service-helper", []string{"--local", "--config", "base.yaml"},
 		func(flags *flag.FlagSet) { flags.BoolVar(&local, "local", false, "binary-local flag") })
 	if err != nil {
 		t.Fatalf("ParseLoadOptions() error = %v", err)
@@ -79,7 +78,7 @@ func TestParseLoadOptionsRegistersBinaryLocalFlags(t *testing.T) {
 		t.Errorf("ConfigPath = %q, want base.yaml", options.ConfigPath)
 	}
 
-	if _, err := ParseLoadOptions("outbox-relay", []string{"--local=maybe"},
+	if _, err := ParseLoadOptions("service-helper", []string{"--local=maybe"},
 		func(flags *flag.FlagSet) { flags.BoolVar(&local, "local", false, "binary-local flag") },
 	); err == nil {
 		t.Fatal("ParseLoadOptions(invalid binary-local value) error = nil, want a rejection")

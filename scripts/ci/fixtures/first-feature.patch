@@ -59,12 +59,12 @@ diff --git a/cmd/service/internal/bootstrap/run.go b/cmd/service/internal/bootst
 index ab02bed..e3b3cdc 100644
 --- a/cmd/service/internal/bootstrap/run.go
 +++ b/cmd/service/internal/bootstrap/run.go
-@@ -16,6 +16,7 @@ import (
- 
+@@ -13,5 +13,6 @@ import (
  	"github.com/acme/feature-proof/internal/background"
 +	"github.com/acme/feature-proof/internal/greeting"
  	httpx "github.com/acme/feature-proof/internal/infra/http"
  	"github.com/acme/feature-proof/internal/infra/telemetry"
+ 	"github.com/acme/feature-proof/internal/observability/logctx"
  )
 @@ -280,6 +281,7 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
  	domainErrors := dependencies.DomainErrors()

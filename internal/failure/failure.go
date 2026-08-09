@@ -122,8 +122,7 @@ func (e *opError) Unwrap() error { return e.err }
 // and the canary tests in internal/infra/grpc assert that none of it reaches a
 // log, span, or metric. The cost is real and worth stating: a chain built from
 // errors.New renders as "*errors.errorString" and identifies nothing. A package
-// whose failures must stay diagnosable publishes typed errors or sentinels —
-// which is what internal/infra/postgres, postgresoutbox, and oidcjwt already do,
+// whose failures must stay diagnosable publishes typed errors or sentinels,
 // and why their faults survive this rendering. [Op] is what covers the rest.
 //
 // Joined errors are not expanded. errors.Join reports one type for the group,

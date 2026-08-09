@@ -134,13 +134,15 @@ func validateGRPCCapacityBounds(cfg GRPCServerConfig) error {
 		return err
 	}
 
-	connectionCapacity := uint64(cfg.MaxConnections) * uint64(cfg.MaxConcurrentStreams)
-	if uint64(cfg.MaxConcurrentRPCs) > connectionCapacity {
-		return fmt.Errorf(
-			"%w: grpc.server.max_concurrent_rpcs must be <= max_connections * max_concurrent_streams (%d)",
-			ErrValidate,
-			connectionCapacity,
-		)
+	if cfg.MaxConnections <= math.MaxInt/cfg.MaxConcurrentStreams {
+		connectionCapacity := cfg.MaxConnections * cfg.MaxConcurrentStreams
+		if cfg.MaxConcurrentRPCs > connectionCapacity {
+			return fmt.Errorf(
+				"%w: grpc.server.max_concurrent_rpcs must be <= max_connections * max_concurrent_streams (%d)",
+				ErrValidate,
+				connectionCapacity,
+			)
+		}
 	}
 	return validateGRPCLifetimeBounds(cfg)
 }

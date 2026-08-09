@@ -1,8 +1,8 @@
 // Package runtimeopts maps one loaded configuration onto the adapter options
 // more than one composition root builds from it.
 //
-// Only mappings a second binary already needs live here. `cmd/service`,
-// `cmd/worker`, and `cmd/outbox-relay` each own their own startup flow, their own
+// Only mappings a second binary already needs live here. Each binary owns its
+// own startup flow, its own
 // readiness and drain, and every option only they build; what they cannot own
 // separately is the meaning of a configured value, because a field added to an
 // adapter and to only two of three call sites is a binary that quietly runs
