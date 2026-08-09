@@ -77,18 +77,21 @@ func UntilFunc(tb testing.TB, timeout time.Duration, predicate func() bool, desc
 func Receive[T any](tb testing.TB, values <-chan T, timeout time.Duration, description string) T {
 	tb.Helper()
 
+	var value T
+	received := false
 	select {
-	case value := <-values:
-		return value
+	case value = <-values:
+		received = true
 	case <-time.After(timeout):
+	}
+	// The failure is reported outside the select, and behind a condition, so
+	// that the function keeps one reachable exit. Fatalf ends the goroutine, so
+	// any statement written after it — in the timeout case or after the select —
+	// is dead code that go/unreachable-statement reports.
+	if !received {
 		tb.Fatalf("timed out waiting for %s", description)
 	}
-	// Fatalf ends the goroutine, so this return exists for the compiler rather
-	// than for a caller. It sits after the select because a return placed in the
-	// timeout case would be dead code the moment Fatalf is recognized as
-	// terminating, which is what CodeQL reports.
-	var zero T
-	return zero
+	return value
 }
 
 // ReceiveSignal waits for one send on a close-only channel. It exists so a
