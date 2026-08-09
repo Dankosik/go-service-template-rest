@@ -226,17 +226,15 @@ EOF
 #
 # 70.0 leaves roughly two hundred and forty statements of runway while still
 # failing on wholesale untested code. Raise it as the service's own tests land.
+#
+# The Makefile declares the floor and the workflows read it from there, so this
+# one substitution moves the gate everywhere. An `if` rather than a trailing
+# `&&`: this is the function's last statement, and under `set -e` a missing
+# Makefile would abort initialization instead of skipping the rebase.
 rebase_coverage_floor() {
-	local workflow
-
-	[[ -f Makefile ]] && replace_literal Makefile "COVERAGE_MIN ?= 80.0" "COVERAGE_MIN ?= 70.0"
-
-	# CI passes the floor on the command line, which overrides the Makefile
-	# default, so the workflows carry the same number or the gate does not move.
-	for workflow in .github/workflows/ci.yml .github/workflows/cd.yml; do
-		[[ -f "${workflow}" ]] || continue
-		replace_literal "${workflow}" 'COVERAGE_MIN: "80.0"' 'COVERAGE_MIN: "70.0"'
-	done
+	if [[ -f Makefile ]]; then
+		replace_literal Makefile "COVERAGE_MIN ?= 80.0" "COVERAGE_MIN ?= 70.0"
+	fi
 }
 
 replace_codeowner_rules() {
@@ -564,8 +562,7 @@ if [[ "${source_checkout}" != true ]]; then
 			internal/infra/postgres/queries/postgres_inbox.sql \
 			internal/infra/postgres/sqlcgen/postgres_inbox.sql.go \
 			migrations/000002_postgres_inbox.sql \
-			test/postgres_inbox_integration_test.go \
-			test/postgres_inbox_natsjs_integration_test.go
+			test/postgres_inbox_*_test.go
 		strip_profile inbox-postgres remove
 	else
 		strip_profile inbox-postgres keep
@@ -594,6 +591,7 @@ if [[ "${source_checkout}" != true ]]; then
 			cmd/service/internal/bootstrap/startup_dependencies_test.go \
 			cmd/service/internal/bootstrap/startup_rejections_test.go \
 			internal/config/postgres_config.go \
+			internal/config/postgres_config_test.go \
 			internal/infra/telemetry/telemetrytest/metrics.go \
 			scripts/ci/migration-source-check.sh \
 			scripts/ci/migration-history-check.sh \
@@ -649,10 +647,10 @@ if [[ "${source_checkout}" != true ]]; then
 			cmd/service/internal/bootstrap/startup_messaging.go \
 			cmd/service/internal/bootstrap/startup_messaging_test.go \
 			docs/durable-messaging.md \
-			internal/config/messaging.go \
-			internal/config/messaging_test.go \
+			internal/config/messaging_config.go \
+			internal/config/messaging_config_test.go \
 			internal/config/configtest/messaging.go \
-			test/nats_messaging_integration_test.go \
+			test/nats_messaging_*_test.go \
 			test/postgres_inbox_natsjs_integration_test.go \
 			test/postgres_outbox_natsjs_integration_test.go
 		strip_profile messaging-nats-jetstream remove
@@ -712,6 +710,21 @@ if [[ "${source_checkout}" != true ]]; then
 	if [[ "${grpc}" == "none" && "${authn}" == "none" && "${messaging}" == "none" ]]; then
 		rm -rf -- internal/config/configtest
 	fi
+
+	# internal/packagetest owns the source walk behind the comment and doc proofs
+	# in internal/infra/grpc, internal/infra/grpcclient, and internal/infra/oidcjwt.
+	# Both profiles removing takes every importer with them, so it leaves too
+	# rather than shipping as an unreferenced leaf.
+	if [[ "${grpc}" == "none" && "${authn}" == "none" ]]; then
+		rm -rf -- internal/packagetest
+	fi
+
+	# internal/waittest is deliberately not removed by any profile. It once left
+	# with gRPC and messaging together, because every importer was one of their
+	# integration tests; cmd/internal/runtimeopts' diagnostics test now reserves
+	# its listen address through the same package, and that binary ships in every
+	# profile. A package with an unconditional importer is not an unreferenced
+	# leaf, so removing it would break the minimal service rather than trim it.
 
 	# Profile sources are the generator's own inputs. Every profile has consumed
 	# what it needs by now, so no generated service keeps them.

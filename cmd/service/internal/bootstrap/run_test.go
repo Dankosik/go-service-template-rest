@@ -8,6 +8,7 @@ import (
 	"testing/synctest"
 	"time"
 
+	"github.com/example/go-service-template-rest/cmd/internal/runtimeopts"
 	"github.com/example/go-service-template-rest/internal/config"
 )
 
@@ -167,8 +168,8 @@ func TestShutdownBudgetClampsStagesToTheRemainingGracePeriod(t *testing.T) {
 		// killed either way, and a stage given nothing cannot report that it was
 		// cut short.
 		time.Sleep(2 * time.Second)
-		if got := budget.clamp(4 * time.Second); got != shutdownStageFloor {
-			t.Fatalf("clamp(4s) past the deadline = %s, want the floor %s", got, shutdownStageFloor)
+		if got := budget.clamp(4 * time.Second); got != runtimeopts.TeardownFloor {
+			t.Fatalf("clamp(4s) past the deadline = %s, want the floor %s", got, runtimeopts.TeardownFloor)
 		}
 	})
 }

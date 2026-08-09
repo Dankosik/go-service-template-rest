@@ -23,7 +23,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
-	"google.golang.org/grpc/test/bufconn"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -91,30 +90,11 @@ func startTestServerWithOptions(
 	if err != nil {
 		t.Fatalf("NewServer() error = %v", err)
 	}
-	listener := bufconn.Listen(1 << 20)
-	serveDone := make(chan error, 1)
-	go func() {
-		serveDone <- server.Serve(listener)
-	}()
-
-	connection, err := grpc.NewClient(
-		"passthrough:///grpcx-test",
-		grpc.WithContextDialer(func(context.Context, string) (net.Conn, error) {
-			return listener.Dial()
-		}),
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-	)
-	if err != nil {
-		if closeErr := server.Close(); closeErr != nil {
-			t.Errorf("Server.Close() after client setup failure = %v", closeErr)
-		}
-		_ = listener.Close()
-		t.Fatalf("grpc.NewClient() error = %v", err)
-	}
-
-	closeAfterTest(t, server, connection, serveDone)
-
-	return server, connection
+	// The listener, the dialer, and the teardown order are grpctest.ServeBufconn's,
+	// which this package's tests are meant to use rather than restate: *Server
+	// already satisfies its BufconnServer interface, and its cleanup additionally
+	// joins Serve on the client-setup failure path this one only abandoned.
+	return server, grpctest.ServeBufconn(t, server)
 }
 
 // closeAfterTest registers this package's standard teardown: close the client,

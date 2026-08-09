@@ -155,9 +155,11 @@ func TestSetupMetricsPushesToOTLPCollector(t *testing.T) {
 
 	metrics := New()
 	result, err := SetupMetrics(context.Background(), metrics, MetricsConfig{
-		ServiceName:    "push-service",
-		ServiceVersion: "test-version",
-		DeploymentEnv:  "test-env",
+		Resource: ResourceConfig{
+			ServiceName:    "push-service",
+			ServiceVersion: "test-version",
+			DeploymentEnv:  "test-env",
+		},
 		Exporter: MetricExporterConfig{
 			// A bare root, so this also proves the shared setting reaches metrics.
 			SharedOTLPEndpoint: collector.URL,
@@ -206,9 +208,11 @@ func TestSetupMetricsWithoutEndpointStaysScrapeOnly(t *testing.T) {
 
 	metrics := New()
 	result, err := SetupMetrics(context.Background(), metrics, MetricsConfig{
-		ServiceName:    "scrape-service",
-		ServiceVersion: "test-version",
-		DeploymentEnv:  "test-env",
+		Resource: ResourceConfig{
+			ServiceName:    "scrape-service",
+			ServiceVersion: "test-version",
+			DeploymentEnv:  "test-env",
+		},
 	})
 	if err != nil {
 		t.Fatalf("SetupMetrics() error = %v", err)

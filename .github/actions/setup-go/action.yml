@@ -1,0 +1,31 @@
+name: Setup Go
+description: Install the module's Go toolchain under this repository's one module/build cache key.
+
+# Every Go job in ci.yml installs the toolchain the same way, and the cache key
+# is the part that must not vary: two jobs keyed on different dependency paths
+# hold two cache entries for one dependency graph, so neither warms the other and
+# a tool upgrade invalidates only some of them. The eleven copies this replaced
+# had already split three ways, and one of the three ran gotestsum from
+# tools/go.mod while keying its cache on go.sum alone.
+
+inputs:
+  cache:
+    description: >-
+      Restore and save the module/build cache. Pass the workflow's own
+      GO_CACHE_ENABLED so a dispatch can turn caching off for a cold-start run.
+    required: false
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      with:
+        go-version-file: go.mod
+        cache: ${{ inputs.cache }}
+        # tools/go.sum belongs here even for a job that only runs `go test`:
+        # the key names the graph, not the job, and one shared key is what lets
+        # the fastest job warm the slowest.
+        cache-dependency-path: |
+          go.sum
+          tools/go.sum

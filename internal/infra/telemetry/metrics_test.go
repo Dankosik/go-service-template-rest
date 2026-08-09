@@ -79,7 +79,7 @@ func TestServerLoadIsScrapable(t *testing.T) {
 	telemetrytest.ClearAmbientExporterEnv(t)
 
 	metrics := New()
-	result, err := SetupMetrics(context.Background(), metrics, MetricsConfig{ServiceName: "svc"})
+	result, err := SetupMetrics(context.Background(), metrics, MetricsConfig{Resource: ResourceConfig{ServiceName: "svc"}})
 	if err != nil {
 		t.Fatalf("SetupMetrics() error = %v", err)
 	}

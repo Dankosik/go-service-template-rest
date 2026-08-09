@@ -7,17 +7,12 @@ import (
 
 	"github.com/example/go-service-template-rest/internal/openapi"
 	"github.com/example/go-service-template-rest/internal/problem"
+	"github.com/example/go-service-template-rest/internal/reqctx"
 )
 
 const (
 	problemJSONContentType        = "application/problem+json; charset=utf-8"
 	malformedRequestProblemDetail = "request is malformed or invalid"
-	// sanitizedFailureDetail is the client-visible text for every failure this
-	// transport refused to describe: an unclassified handler error and a
-	// recovered panic. One constant because the two must stay indistinguishable
-	// to a caller — a detail that separated them would report which internal
-	// path broke, which is the whole thing the sanitization withholds.
-	sanitizedFailureDetail = "request failed"
 )
 
 type problemResponse struct {
@@ -27,6 +22,28 @@ type problemResponse struct {
 	// caller leaves it empty, because a failure this service chose to sanitize
 	// has nothing field-shaped to point at.
 	invalidParams []fieldViolation
+}
+
+// notFoundProblem is what an unrouted path answers.
+//
+// Two chi callbacks reach it: NotFound, and MethodNotAllowed for a path that
+// matched no route at all, which chi still routes through the method callback.
+// They answer identically on purpose, and a name says so where two identical
+// composite literals six lines apart only let a reader hope so.
+func notFoundProblem() problemResponse {
+	return problemResponse{code: problem.CodeNotFound, detail: "resource not found"}
+}
+
+// timeBudgetExceededProblem is what a request that outlived its deadline
+// answers.
+//
+// Two layers reach it: the generated strict-server wrapper usually commits the
+// response first, and RequestTimeout is the backstop for a handler chain built
+// on the exported Harden that never goes through one. Which fires depends on how
+// a service is wired rather than on anything the caller did, so the caller must
+// not be able to tell them apart.
+func timeBudgetExceededProblem() problemResponse {
+	return problemResponse{code: problem.CodeGatewayTimeout, detail: "request exceeded its time budget"}
 }
 
 // problemRecord carries the problem code this request was answered with back out
@@ -79,7 +96,7 @@ func writeProblem(w http.ResponseWriter, r *http.Request, response problemRespon
 		Type:          definition.TypeURI,
 	}
 	if r != nil {
-		p.RequestId = optionalProblemString(requestIDFromContext(r.Context()))
+		p.RequestId = optionalProblemString(reqctx.RequestID(r.Context()))
 	}
 
 	w.Header().Set("Content-Type", problemJSONContentType)

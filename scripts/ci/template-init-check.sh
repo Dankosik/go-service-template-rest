@@ -367,7 +367,7 @@ minimal_workflow_before="$(workflow_snapshot "${minimal_checkout}")"
 		{
 			echo "package depguardprobe"
 			echo
-			echo 'import _ "github.com/acme/feature-proof/internal/infra/http"'
+			echo 'import _ "github.com/acme/feature-proof/internal/infra/http" // Prove depguard rejects the feature-to-infra boundary.'
 		} >internal/depguardprobe/forbidden.go
 		if GOLANGCI_LINT_CACHE="${TEMP_ROOT}/golangci-lint-cache" "${LINTER}" run \
 		--allow-serial-runners \
@@ -404,6 +404,9 @@ minimal_workflow_before="$(workflow_snapshot "${minimal_checkout}")"
 )
 assert "agent workflow changed during minimal initialization" same_text "${minimal_workflow_before}" "$(workflow_snapshot "${minimal_checkout}")"
 assert "minimal initialization removed transport-neutral failure policy" path_present "${minimal_checkout}/internal/failure"
+# cmd/internal/runtimeopts ships in every profile and its diagnostics test
+# reserves a listen address through this package, so no profile may take it.
+assert "minimal initialization removed the shared test waits" path_present "${minimal_checkout}/internal/waittest"
 # This profile carries no PostgreSQL configuration at all, so an APP__POSTGRES__*
 # variable is an unknown key rather than a runtime feature check. That is the
 # stronger rejection: it names every key it refused and it happens before any
@@ -425,7 +428,8 @@ for removed in \
 	internal/infra/natsjs/outbox_publisher.go \
 	internal/infra/natsjs/outbox_publisher_test.go \
 	internal/infra/postgresoutbox \
-	test/postgres_outbox_integration_test.go \
+	test/postgres_outbox_store_fixtures_integration_test.go \
+	test/postgres_outbox_store_integration_test.go \
 	test/postgres_outbox_natsjs_integration_test.go; do
 	assert "${removed} must not survive OUTBOX=none initialization" path_absent "${minimal_checkout}/${removed}"
 done
@@ -440,10 +444,35 @@ for removed in \
 	assert "${removed} must not survive INBOX=none initialization" path_absent "${minimal_checkout}/${removed}"
 done
 # profile:inbox-postgres:end
+# A profile's paths are one list, asserted absent when the profile is off and
+# present when it is on. Two lists would let a path be proven removed and never
+# proven kept — which reads as full coverage and is how a path silently stops
+# shipping to the services that selected the profile.
+#
+# These lists deliberately restate what scripts/init-module.sh removes instead of
+# sharing one source with it. This file is the oracle for that script: a list
+# derived from the thing it checks would pass by construction, and the failure
+# worth catching is exactly a path the generator forgot.
+postgres_paths=(
+	cmd/migrate
+	internal/infra/postgres
+	internal/infra/postgresmigrate
+	scripts/ci/migration-source-check.sh
+	scripts/ci/migration-history-check.sh
+	scripts/ci/migration-check-self-test.sh
+	scripts/ci/migration-image-history-check.sh
+	scripts/ci/migration-publication-check.sh
+	env/docker-compose.yml
+)
+bounded_http_paths=(
+	internal/infra/httpclient
+)
+
 for removed in \
+	"${postgres_paths[@]}" \
+	"${bounded_http_paths[@]}" \
 	buf.yaml \
 	buf.gen.yaml \
-	cmd/migrate \
 	cmd/service/internal/bootstrap/startup_grpc.go \
 	cmd/service/internal/bootstrap/startup_grpc_test.go \
 	cmd/service/internal/bootstrap/startup_authn.go \
@@ -452,21 +481,13 @@ for removed in \
 	internal/config/authn_config_test.go \
 	internal/config/grpc_config_test.go \
 	internal/infra/oidcjwt \
-	internal/infra/httpclient \
 	internal/infra/grpc \
 	internal/infra/grpcclient \
-	internal/infra/postgres \
-	internal/infra/postgresmigrate \
-	scripts/ci/migration-source-check.sh \
-	scripts/ci/migration-history-check.sh \
-	scripts/ci/migration-check-self-test.sh \
-	scripts/ci/migration-image-history-check.sh \
-	scripts/ci/migration-publication-check.sh \
+	internal/packagetest \
 	scripts/dev/benchmark-grpc-check.sh \
 	scripts/proto.sh \
 	scripts/run-buf.sh \
 	scripts/ci/proto-check.sh \
-	env/docker-compose.yml \
 	test/grpc_process_integration_test.go \
 	test/performance/grpc \
 	test/postgres_integration_test.go \
@@ -484,10 +505,11 @@ for removed in \
 	cmd/service/internal/bootstrap/startup_messaging.go \
 	cmd/service/internal/bootstrap/startup_messaging_test.go \
 	docs/durable-messaging.md \
-	internal/config/messaging.go \
-	internal/config/messaging_test.go \
+	internal/config/messaging_config.go \
+	internal/config/messaging_config_test.go \
 	internal/config/configtest/messaging.go \
-	test/nats_messaging_integration_test.go; do
+	test/nats_messaging_fixtures_integration_test.go \
+	test/nats_messaging_delivery_integration_test.go; do
 	assert "${removed} must not survive MESSAGING=none initialization" path_absent "${minimal_checkout}/${removed}"
 done
 # profile:messaging-nats-jetstream:end
@@ -687,9 +709,10 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "mess
 		cmd/worker \
 		cmd/service/internal/bootstrap/startup_messaging.go \
 		docs/durable-messaging.md \
-		internal/config/messaging.go \
+		internal/config/messaging_config.go \
 		internal/infra/natsjs \
-		test/nats_messaging_integration_test.go; do
+		test/nats_messaging_fixtures_integration_test.go \
+		test/nats_messaging_delivery_integration_test.go; do
 		assert "MESSAGING=nats-jetstream removed ${retained}" path_present "${messaging_checkout}/${retained}"
 	done
 	grep -Fq 'messaging = "nats-jetstream"' "${messaging_checkout}/template.lock"
@@ -766,16 +789,21 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "outb
 		make sqlc-check migration-check mod-tidy-check project-structure-check
 	)
 	assert "OUTBOX=none removed PostgreSQL" path_present "${outbox_none_checkout}/internal/infra/postgres"
-	for removed in \
-		cmd/outbox-relay \
-		docs/postgres-transactional-outbox.md \
-		internal/config/outbox_config_test.go \
-		internal/infra/postgres/queries/postgres_outbox.sql \
-		internal/infra/postgres/sqlcgen/postgres_outbox.sql.go \
-		internal/infra/postgresoutbox \
-		test/postgres_outbox_bench_integration_test.go \
-		test/postgres_outbox_integration_test.go \
-		test/postgres_outbox_natsjs_integration_test.go; do
+	# One list, asserted absent here and present under OUTBOX=postgres below. The
+	# NATS-bound proof is named separately because it belongs to both this profile
+	# and messaging, and the fixture that keeps the outbox selects no broker.
+	outbox_paths=(
+		cmd/outbox-relay
+		docs/postgres-transactional-outbox.md
+		internal/config/outbox_config_test.go
+		internal/infra/postgres/queries/postgres_outbox.sql
+		internal/infra/postgres/sqlcgen/postgres_outbox.sql.go
+		internal/infra/postgresoutbox
+		test/postgres_outbox_bench_integration_test.go
+		test/postgres_outbox_store_fixtures_integration_test.go
+		test/postgres_outbox_store_integration_test.go
+	)
+	for removed in "${outbox_paths[@]}" test/postgres_outbox_natsjs_integration_test.go; do
 		assert "PostgreSQL OUTBOX=none retained ${removed}" path_absent "${outbox_none_checkout}/${removed}"
 	done
 	assert "outbox-only fixture retained inbox SQLC output" path_absent \
@@ -815,15 +843,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "outb
 	grep -Fxq 'outbox relay failed: error_class=config' "${TEMP_ROOT}/outbox-missing-publisher.log"
 	assert "outbox relay leaked raw missing-publisher error" \
 		grep_absent -Fq 'outbox publisher builder is not registered' "${TEMP_ROOT}/outbox-missing-publisher.log"
-	for retained in \
-		cmd/outbox-relay \
-		docs/postgres-transactional-outbox.md \
-		internal/config/outbox_config_test.go \
-		internal/infra/postgres/queries/postgres_outbox.sql \
-		internal/infra/postgres/sqlcgen/postgres_outbox.sql.go \
-		internal/infra/postgresoutbox \
-		test/postgres_outbox_bench_integration_test.go \
-		test/postgres_outbox_integration_test.go; do
+	for retained in "${outbox_paths[@]}"; do
 		assert "OUTBOX=postgres removed ${retained}" path_present "${outbox_checkout}/${retained}"
 	done
 	assert "outbox-only fixture retained inbox SQLC output" path_absent \
@@ -1064,17 +1084,7 @@ assert "REFERENCE_EXAMPLE=keep did not retain examples/" path_present "${postgre
 assert "agent workflow changed during postgres+bounded initialization" same_text "${postgres_workflow_before}" "$(workflow_snapshot "${postgres_checkout}")"
 assert "specs/ must not survive postgres+bounded initialization" path_absent "${postgres_checkout}/specs"
 assert "scripts/profiles/ must not survive postgres initialization" path_absent "${postgres_checkout}/scripts/profiles"
-for retained in \
-	cmd/migrate \
-	internal/infra/httpclient \
-	internal/infra/postgres \
-	internal/infra/postgresmigrate \
-	scripts/ci/migration-source-check.sh \
-	scripts/ci/migration-history-check.sh \
-	scripts/ci/migration-check-self-test.sh \
-	scripts/ci/migration-image-history-check.sh \
-	scripts/ci/migration-publication-check.sh \
-	env/docker-compose.yml; do
+for retained in "${postgres_paths[@]}" "${bounded_http_paths[@]}"; do
 	assert "${retained} must survive DATABASE=postgres initialization" path_present "${postgres_checkout}/${retained}"
 done
 grep -Fq 'database = "postgres"' "${postgres_checkout}/template.lock"
@@ -1141,6 +1151,15 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "grpc
 assert "gRPC enabled initialization removed server adapter" path_present "${grpc_checkout}/internal/infra/grpc"
 assert "gRPC enabled initialization removed client adapter" path_present "${grpc_checkout}/internal/infra/grpcclient"
 assert "gRPC enabled initialization removed test descriptors" path_present "${grpc_checkout}/internal/infra/grpc/grpctest"
+# The comment and doc proofs in this package and internal/infra/oidcjwt walk
+# their own source through it, so it leaves only when both profiles do — which
+# is why AUTHN=none alone does not remove it here.
+assert "gRPC enabled initialization removed the package source walk" \
+	path_present "${grpc_checkout}/internal/packagetest"
+# Asserted per profile as well as minimally, because the gRPC process suite is
+# this package's heaviest consumer and would notice its loss first.
+assert "gRPC enabled initialization removed the shared test waits" \
+	path_present "${grpc_checkout}/internal/waittest"
 assert "gRPC enabled initialization removed Buf config" file_present "${grpc_checkout}/buf.yaml"
 assert "gRPC enabled initialization removed protobuf workflow" file_present "${grpc_checkout}/scripts/proto.sh"
 assert "gRPC enabled initialization removed bootstrap wiring" file_present "${grpc_checkout}/cmd/service/internal/bootstrap/startup_grpc.go"

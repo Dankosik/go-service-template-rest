@@ -19,6 +19,43 @@ import (
 
 const providerShutdownTimeout = 5 * time.Second
 
+// shutdownAfterTest releases a provider when the test finishes, under a bound so
+// an exporter that cannot drain fails the test instead of hanging the package.
+//
+// Every constructor here routes through it. The copies it replaced were the same
+// six lines with a different noun, and what they disagreed on was the part that
+// matters least visibly: whether a provider that failed to shut down was
+// reported at all.
+func shutdownAfterTest(tb testing.TB, kind string, shutdown func(context.Context) error) {
+	tb.Helper()
+
+	tb.Cleanup(func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), providerShutdownTimeout)
+		defer cancel()
+		if err := shutdown(shutdownCtx); err != nil {
+			tb.Errorf("shutdown test %s provider: %v", kind, err)
+		}
+	})
+}
+
+// NewRecordingTracerProvider returns a tracer provider that samples and records
+// every span, and the recorder holding them.
+//
+// It installs nothing process-wide, so a test that hands the provider to the
+// code under test may run in parallel. Use [InstallSpanRecorder] instead when
+// that code reads the global provider.
+func NewRecordingTracerProvider(tb testing.TB) (*tracetest.SpanRecorder, *sdktrace.TracerProvider) {
+	tb.Helper()
+
+	recorder := tracetest.NewSpanRecorder()
+	provider := sdktrace.NewTracerProvider(
+		sdktrace.WithSampler(sdktrace.AlwaysSample()),
+		sdktrace.WithSpanProcessor(recorder),
+	)
+	shutdownAfterTest(tb, "tracer", provider.Shutdown)
+	return recorder, provider
+}
+
 // RestoreGlobals snapshots the process-wide tracer provider, meter provider,
 // and text-map propagator, and restores them when the test finishes. Use it
 // when production setup code installs global telemetry during the test.
@@ -44,21 +81,15 @@ func InstallSpanRecorder(tb testing.TB) *tracetest.SpanRecorder {
 
 	previousTracerProvider := otel.GetTracerProvider()
 	previousPropagator := otel.GetTextMapPropagator()
-	recorder := tracetest.NewSpanRecorder()
-	provider := sdktrace.NewTracerProvider(
-		sdktrace.WithSampler(sdktrace.AlwaysSample()),
-		sdktrace.WithSpanProcessor(recorder),
-	)
+	recorder, provider := NewRecordingTracerProvider(tb)
 	otel.SetTracerProvider(provider)
 	otel.SetTextMapPropagator(propagation.TraceContext{})
+	// Registered after the shutdown NewRecordingTracerProvider owns, so cleanup
+	// runs in the order the globals require: the process stops pointing at this
+	// provider before it is released.
 	tb.Cleanup(func() {
 		otel.SetTracerProvider(previousTracerProvider)
 		otel.SetTextMapPropagator(previousPropagator)
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), providerShutdownTimeout)
-		defer cancel()
-		if err := provider.Shutdown(shutdownCtx); err != nil {
-			tb.Errorf("shutdown test tracer provider: %v", err)
-		}
 	})
 	return recorder
 }

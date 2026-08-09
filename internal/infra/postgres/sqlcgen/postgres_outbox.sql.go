@@ -971,41 +971,6 @@ func (q *Queries) MarkOutboxPoisonedBatch(ctx context.Context, arg MarkOutboxPoi
 	return result.RowsAffected(), nil
 }
 
-const markOutboxPublished = `-- name: MarkOutboxPublished :execrows
-UPDATE outbox_events
-SET published_at = statement_timestamp(),
-    lease_token = NULL,
-    lease_expires_at = NULL,
-    last_error_class = NULL
-WHERE id = $1
-  AND lease_token = $2
-  AND ordering_key IS NOT DISTINCT FROM $3
-  AND ordering_sequence IS NOT DISTINCT FROM $4
-  AND lease_expires_at > statement_timestamp()
-  AND published_at IS NULL
-  AND poisoned_at IS NULL
-`
-
-type MarkOutboxPublishedParams struct {
-	ID               string
-	LeaseToken       *string
-	OrderingKey      *string
-	OrderingSequence *int64
-}
-
-func (q *Queries) MarkOutboxPublished(ctx context.Context, arg MarkOutboxPublishedParams) (int64, error) {
-	result, err := q.db.Exec(ctx, markOutboxPublished,
-		arg.ID,
-		arg.LeaseToken,
-		arg.OrderingKey,
-		arg.OrderingSequence,
-	)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
 const markOutboxPublishedBatch = `-- name: MarkOutboxPublishedBatch :many
 UPDATE outbox_events AS event
 SET published_at = statement_timestamp(),

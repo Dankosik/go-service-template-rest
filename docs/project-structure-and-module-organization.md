@@ -94,6 +94,7 @@ packages. There is no reserved empty `api/proto/`, `migrations/`, `queries/`, or
 | `internal/infra/telemetry/` | OpenTelemetry/Prometheus SDK setup and exporters | feature policy |
 | `internal/observability/otelconfig/` | pure sampler/exporter policy values | SDK construction and repository runtime imports |
 | `internal/observability/correlationpolicy/` | the outbound correlation policy enum and propagator shared by the HTTP and gRPC clients | carrier-specific stripping, transport construction, or repository runtime imports |
+| `internal/observability/logctx/` | the shared process logger and the handler that attaches request/trace/span ids from context | feature log fields, sinks, or repository runtime imports |
 | `internal/grpclimits/` (`GRPC=enabled`) | pure gRPC access-log and lifetime bound rules shared by config validation and the server adapter | capacity bounds, error wording, or repository runtime imports |
 | `internal/authntrust/` (`AUTHN=oidc-jwt`) | pure trust-rule predicates shared by config validation and the verifier: fetchable provider URLs, trusted proxy prefixes | configured values, policy objects, credential verification, or repository runtime imports |
 | `api/openapi/` | client-visible REST source of truth | generated Go or runtime handlers |
@@ -124,9 +125,14 @@ Use the first matching rule.
    - consumer-owned persistence/outbound interface: `repository.go` or
      `client.go`.
 3. Is it HTTP transport mapping?
-   Put endpoint methods in `internal/infra/http/<feature>_handlers.go`.
-   Put cross-route policy in `middleware_<concern>.go`; router composition stays
-   in `router.go`; Problem mapping stays in `problem.go`.
+   Endpoint methods do not go in this package. `internal/infra/http` is template
+   surface every generated service shares; a service implements
+   `openapi.StrictServerInterface` in its own package and injects it as
+   `httpx.Handlers.API` from `cmd/service/internal/bootstrap`. See
+   `examples/reference-service/internal/httpapi` for the worked pattern, and the
+   `API` field comment in `internal/infra/http/handlers.go` for the seam itself.
+   Only cross-route policy belongs here: `middleware_<concern>.go`; router
+   composition stays in `router.go`; Problem mapping stays in `problem.go`.
 4. Is it Postgres implementation?
    - concrete feature adapter:
      `internal/infra/postgres/<feature>_repository.go`;
@@ -152,14 +158,22 @@ Use the first matching rule.
    rather than duplicating them.
 8. Is it runtime configuration?
    Add the typed field and `koanf` tag to `internal/config/types.go`, its
-   default to `defaults.go` when appropriate, validation in `validate.go`, and
-   the relevant example in `env/config/local.yaml` or `env/.env.example`.
+   default to `defaults.go` when appropriate, validation in the section's own
+   `<section>_config.go`, and the relevant example in `env/config/local.yaml` or
+   `env/.env.example`.
    Snapshot decoding and known-key discovery derive from the tagged type; add
    manual parsing only for a genuinely custom value type.
 9. Is it telemetry?
    SDK/exporter setup belongs in `internal/infra/telemetry/`. Adapter-owned
-   instruments belong in `internal/infra/<adapter>/metrics.go` or `tracing.go`.
-   Feature-owned signals belong in `internal/<feature>/telemetry.go`.
+   instruments belong in `internal/infra/<adapter>/metrics.go` or `tracing.go`,
+   or in one `telemetry.go` when that adapter's metrics, spans, and structured
+   logging are a single type with one constructor and one snapshot, so that one
+   record call moves a counter and closes a span together. An adapter that
+   builds no instruments of its own owns neither name: when it only forwards a
+   caller's `MeterProvider` to an instrumentation library, the delegation is
+   proved in `telemetry_test.go` and no `metrics.go` or `telemetry.go` is
+   created for it. Feature-owned signals belong in
+   `internal/<feature>/telemetry.go`.
 10. Is it a test?
     - package behavior: sibling `<owner>_test.go`;
     - executable boundary contract: sibling `<owner>_contract_test.go`;
@@ -172,6 +186,14 @@ Use the first matching rule.
     - non-trivial test support used by two or more current packages:
       `<owner-package>/<owner-name>test/`, as in
       `internal/infra/telemetry/telemetrytest/`; production code must not import it;
+    - the same support with no single owning package, because three or more
+      unrelated packages need it: `internal/<name>test/`, as in
+      `internal/waittest/`; the `test` suffix keeps the name self-describing the
+      way `httptest` and `iotest` do, and nesting it under one arbitrary
+      consumer would misname the owner;
+    - integration tests under `test/`: every file needs the
+      `_integration_test.go` suffix, including one that holds only fixtures, so
+      name it `<feature>_fixtures_integration_test.go`;
     - package-wide goroutine leak gate: sibling `goleak_test.go` with `TestMain`.
 11. Is it HTTP load proof?
     A single configurable request uses
@@ -195,12 +217,13 @@ chronology or editing history.
 | --- | --- |
 | middleware | `middleware_<concern>.go` and matching `_test.go` |
 | startup policy | `startup_<concern>.go` and matching `_test.go` |
-| feature HTTP handlers | `<feature>_handlers.go` |
+| feature HTTP handlers | `<feature>_handlers.go`, in the service's own package behind `httpx.Handlers.API` — never in `internal/infra/http` |
 | Postgres repository | `<feature>_repository.go` |
 | normal unit test | `<owner>_test.go` |
 | executable boundary contract | `<owner>_contract_test.go` |
 | package-wide test helpers or fakes | `harness_test.go` |
-| cross-package test support | `<owner-name>test/` under its owning package |
+| cross-package test support | `<owner-name>test/` under its owning package, or `internal/<name>test/` when no single package owns it |
+| integration fixtures shared by one `test/` family | `<feature>_fixtures_integration_test.go` |
 | package-wide goroutine leak gate | `goleak_test.go` |
 | integration test | `<feature>_integration_test.go` |
 | package documentation/generation directive | `doc.go` |
@@ -230,7 +253,7 @@ discover which file owns ordinary behavior, or it compensates for unclear names
 or placement, repair the file map instead.
 
 Bootstrap is intentionally one package because its declarations jointly build
-one process. Its production files are:
+one process. `cmd/service/internal/bootstrap`'s production files are:
 
 ```text
 run.go
@@ -261,6 +284,18 @@ behind a helper stops being checkable against the order it must run in. Each
 `startup_<concern>.go` beside it owns one stage's construction, and the two
 transports are deliberately symmetric — `startup_http.go` and `startup_grpc.go`
 each pair a bindings type with the composition that consumes it.
+
+The `startup_` prefix is what this package needs, not a repository-wide rule. It
+earns its place here because `run.go` and `shutdown.go` sit in the same
+directory, so the prefix is what says a file builds the process rather than
+tears it down. A background binary's bootstrap package draws the same
+one-concern-per-file line with bare nouns — `config.go`, `lifecycle.go`,
+`diagnostics.go`, `telemetry.go` — because it has no separate `shutdown.go` to
+disambiguate against: its drain lives in `lifecycle.go` beside the run loop that
+owns it. A bootstrap package that splits startup from teardown across files
+takes the prefix; one that does not names each file for its concern alone.
+Runtime wiring that more than one binary needs belongs in
+`cmd/internal/runtimeopts/` rather than being written once per composition root.
 
 Do not create a bootstrap subpackage unless behavior becomes reusable outside
 that binary; file size alone is not a package boundary.

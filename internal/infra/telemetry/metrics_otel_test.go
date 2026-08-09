@@ -20,10 +20,12 @@ func TestSetupMetricsUsesPrivateRegistryAndConfigResource(t *testing.T) {
 
 	metrics := New()
 	result, err := SetupMetrics(context.Background(), metrics, MetricsConfig{
-		ServiceName:       " test-service ",
-		ServiceVersion:    " test-version ",
-		ServiceInstanceID: " metrics-instance ",
-		DeploymentEnv:     " test-env ",
+		Resource: ResourceConfig{
+			ServiceName:       " test-service ",
+			ServiceVersion:    " test-version ",
+			ServiceInstanceID: " metrics-instance ",
+			DeploymentEnv:     " test-env ",
+		},
 	})
 	if err != nil {
 		t.Fatalf("SetupMetrics() error = %v", err)
@@ -109,9 +111,11 @@ func TestRecordTraceExporterStateIsScrapable(t *testing.T) {
 
 			metrics := New()
 			result, err := SetupMetrics(context.Background(), metrics, MetricsConfig{
-				ServiceName:    "test-service",
-				ServiceVersion: "test-version",
-				DeploymentEnv:  "test-env",
+				Resource: ResourceConfig{
+					ServiceName:    "test-service",
+					ServiceVersion: "test-version",
+					DeploymentEnv:  "test-env",
+				},
 			})
 			if err != nil {
 				t.Fatalf("SetupMetrics() error = %v", err)
@@ -194,9 +198,11 @@ func TestSetupMetricsDegradesToScrapeOnlyForUnusableEndpoint(t *testing.T) {
 
 	metrics := New()
 	result, err := SetupMetrics(context.Background(), metrics, MetricsConfig{
-		ServiceName:    "degraded-service",
-		ServiceVersion: "test-version",
-		DeploymentEnv:  "test-env",
+		Resource: ResourceConfig{
+			ServiceName:    "degraded-service",
+			ServiceVersion: "test-version",
+			DeploymentEnv:  "test-env",
+		},
 		// No scheme, which is what a hand written manifest usually carries and
 		// what the endpoint parser refuses fail-closed.
 		Exporter: MetricExporterConfig{OTLPEndpoint: "collector:4318"},

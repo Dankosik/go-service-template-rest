@@ -60,8 +60,16 @@ func run(signalCtx context.Context, args []string, buildPublisher PublisherBuild
 	// while telemetry can still export what that cleanup records.
 	metrics := telemetry.New()
 	telemetryCleanup := setupTelemetry(startupCtx, cfg, metrics, log)
+	// cleanupDeadline is the one process-wide teardown bound, published by the
+	// lifecycle once it arms the grace period. Telemetry runs last, so without it
+	// this flush is an independent 5s ceiling stacked on whatever the stages
+	// before it already spent — the case validateRuntimeConfig sizes the grace
+	// period against, and the one an overrunning drain would blow through. It
+	// stays zero on every startup-failure path, which is what gives this flush its
+	// whole budget when no process bound was ever armed.
+	var cleanupDeadline time.Time
 	defer func() {
-		ctx, cancel := context.WithTimeout(context.WithoutCancel(signalCtx), telemetryClose)
+		ctx, cancel := runtimeopts.TeardownStage(signalCtx, cleanupDeadline, telemetryClose)
 		defer cancel()
 		telemetryCleanup(ctx)
 	}()
@@ -98,7 +106,8 @@ func run(signalCtx context.Context, args []string, buildPublisher PublisherBuild
 	if err != nil {
 		return fmt.Errorf("initialize outbox relay: %w", err)
 	}
-	result := runRelayLifecycle(signalCtx, startupCtx, cfg, metrics, relay, &publisherRuntime)
+	result, deadline := runRelayLifecycle(signalCtx, startupCtx, cfg, log, metrics, relay, &publisherRuntime)
+	cleanupDeadline = deadline
 	teardown.unsafe = result.CleanupUnsafe
 	return result.Err
 }

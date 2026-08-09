@@ -27,32 +27,6 @@ func collectNamespaceValues(environ []string) map[string]any {
 	return values
 }
 
-func removeSectionScalarOverridesInPlace(values map[string]any) []string {
-	return removeSectionScalarOverridesRecursive(values, "", knownConfigSections())
-}
-
-func removeSectionScalarOverridesRecursive(values map[string]any, prefix string, knownSections map[string]struct{}) []string {
-	sectionScalarOverrideKeys := make([]string, 0)
-	for key, value := range values {
-		fullKey := key
-		if prefix != "" {
-			fullKey = prefix + keyDelimiter + key
-		}
-
-		if _, ok := knownSections[fullKey]; ok && !configSectionValueIsMap(value) {
-			sectionScalarOverrideKeys = append(sectionScalarOverrideKeys, fullKey)
-			delete(values, key)
-			continue
-		}
-		nested, ok := value.(map[string]any)
-		if !ok {
-			continue
-		}
-		sectionScalarOverrideKeys = append(sectionScalarOverrideKeys, removeSectionScalarOverridesRecursive(nested, fullKey, knownSections)...)
-	}
-	return sectionScalarOverrideKeys
-}
-
 func namespaceEnvToKey(envKey string) string {
 	trimmed := strings.TrimPrefix(envKey, namespacePrefix)
 	if trimmed == "" {

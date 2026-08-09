@@ -2,10 +2,10 @@ package httpx
 
 import (
 	"net/http"
-	"slices"
 	"strconv"
 	"time"
 
+	"github.com/example/go-service-template-rest/internal/failure"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 	"github.com/example/go-service-template-rest/internal/problem"
 	"golang.org/x/sync/semaphore"
@@ -54,7 +54,7 @@ func MaxInFlight(limit int, load telemetry.ServerLoad, next http.Handler) http.H
 			w.Header().Set("Retry-After", retryAfter)
 			writeProblem(w, r, problemResponse{
 				code:   problem.CodeServiceUnavailable,
-				detail: "server is at capacity",
+				detail: failure.AtCapacityDetail,
 			})
 			return
 		}
@@ -67,14 +67,4 @@ func MaxInFlight(limit int, load telemetry.ServerLoad, next http.Handler) http.H
 
 		next.ServeHTTP(w, r)
 	})
-}
-
-// isHealthProbeRequest matches probe routes by raw path rather than by routed
-// template, because this middleware runs before the generated router has matched
-// anything. The path set is the same one AccessLog excludes.
-func isHealthProbeRequest(r *http.Request) bool {
-	if r == nil || r.Method != http.MethodGet {
-		return false
-	}
-	return slices.Contains(healthProbeRoutePaths, r.URL.Path)
 }

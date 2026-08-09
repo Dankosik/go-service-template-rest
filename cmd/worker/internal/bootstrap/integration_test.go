@@ -6,7 +6,6 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"net"
 	"net/http"
 	"strings"
 	"testing"
@@ -15,6 +14,7 @@ import (
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/infra/natsjs"
 	"github.com/example/go-service-template-rest/internal/infra/natsjs/natsjstest"
+	"github.com/example/go-service-template-rest/internal/waittest"
 	"github.com/nats-io/nats.go/jetstream"
 )
 
@@ -26,7 +26,7 @@ func workerTestProducerConfig() natsjs.Config {
 
 func TestNATSWorkerComposition(t *testing.T) {
 	url, js := workerNATSFixture(t)
-	diagnosticsAddress := reserveWorkerAddress(t)
+	diagnosticsAddress := waittest.FreeTCPAddr(t, "worker diagnostics")
 
 	setWorkerEnvironment(t, url, "composition-worker", diagnosticsAddress)
 
@@ -47,7 +47,7 @@ func TestNATSWorkerComposition(t *testing.T) {
 			}, func(context.Context) { close(cleaned) }, nil
 		})
 	}()
-	waitWorker(t, 10*time.Second, func() bool {
+	waittest.Until(t, 10*time.Second, func() bool {
 		_, err := js.Consumer(t.Context(), "EVENTS", "composition-worker")
 		return err == nil
 	}, "worker consumer admission")
@@ -99,7 +99,7 @@ func TestNATSWorkerComposition(t *testing.T) {
 
 func TestNATSWorkerForcedShutdownDoesNotRaceHandlerCleanup(t *testing.T) {
 	url, js := workerNATSFixture(t)
-	diagnosticsAddress := reserveWorkerAddress(t)
+	diagnosticsAddress := waittest.FreeTCPAddr(t, "worker diagnostics")
 	setWorkerEnvironment(t, url, "forced-cleanup-worker", diagnosticsAddress)
 	t.Setenv("APP__MESSAGING__WORKER__DRAIN_TIMEOUT", "50ms")
 
@@ -119,7 +119,7 @@ func TestNATSWorkerForcedShutdownDoesNotRaceHandlerCleanup(t *testing.T) {
 			}, func(context.Context) { cleaned <- struct{}{} }, nil
 		})
 	}()
-	waitWorker(t, 10*time.Second, func() bool {
+	waittest.Until(t, 10*time.Second, func() bool {
 		_, err := js.Consumer(t.Context(), "EVENTS", "forced-cleanup-worker")
 		return err == nil
 	}, "forced-cleanup worker admission")
@@ -140,9 +140,9 @@ func TestNATSWorkerForcedShutdownDoesNotRaceHandlerCleanup(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("publish forced-cleanup fixture: %v", err)
 	}
-	receiveWorker(t, entered, 10*time.Second, "forced-cleanup handler entry")
+	waittest.Receive(t, entered, 10*time.Second, "forced-cleanup handler entry")
 	cancelRun()
-	if err := receiveWorker(t, runErr, 5*time.Second, "forced worker shutdown"); !errors.Is(err, context.DeadlineExceeded) {
+	if err := waittest.Receive(t, runErr, 5*time.Second, "forced worker shutdown"); !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("forced worker shutdown error = %v, want deadline exceeded", err)
 	}
 	select {
@@ -151,12 +151,12 @@ func TestNATSWorkerForcedShutdownDoesNotRaceHandlerCleanup(t *testing.T) {
 	default:
 	}
 	close(release)
-	receiveWorker(t, exited, 5*time.Second, "forced handler exit")
+	waittest.Receive(t, exited, 5*time.Second, "forced handler exit")
 }
 
 func TestNATSWorkerHandlerPanicIsSupervised(t *testing.T) {
 	url, js := workerNATSFixture(t)
-	diagnosticsAddress := reserveWorkerAddress(t)
+	diagnosticsAddress := waittest.FreeTCPAddr(t, "worker diagnostics")
 	setWorkerEnvironment(t, url, "panic-composition-worker", diagnosticsAddress)
 	runCtx, cancelRun := context.WithCancel(t.Context())
 	defer cancelRun()
@@ -168,7 +168,7 @@ func TestNATSWorkerHandlerPanicIsSupervised(t *testing.T) {
 			}, nil, nil
 		})
 	}()
-	waitWorker(t, 10*time.Second, func() bool {
+	waittest.Until(t, 10*time.Second, func() bool {
 		_, err := js.Consumer(t.Context(), "EVENTS", "panic-composition-worker")
 		return err == nil
 	}, "panic worker consumer admission")
@@ -188,7 +188,7 @@ func TestNATSWorkerHandlerPanicIsSupervised(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("publish panic fixture: %v", err)
 	}
-	err = receiveWorker(t, runErr, 10*time.Second, "supervised handler panic")
+	err = waittest.Receive(t, runErr, 10*time.Second, "supervised handler panic")
 	if !errors.Is(err, natsjs.ErrTerminal) || strings.Contains(err.Error(), "worker panic canary") {
 		t.Fatalf("worker panic run error = %v, want sanitized ErrTerminal", err)
 	}
@@ -237,23 +237,10 @@ func setWorkerEnvironment(t *testing.T, url, consumer, diagnosticsAddress string
 	}
 }
 
-func reserveWorkerAddress(t *testing.T) string {
-	t.Helper()
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("reserve worker diagnostics address: %v", err)
-	}
-	address := listener.Addr().String()
-	if err := listener.Close(); err != nil {
-		t.Fatalf("release worker diagnostics address: %v", err)
-	}
-	return address
-}
-
 func waitWorkerHTTPStatus(t *testing.T, address, path string, want int) {
 	t.Helper()
 	client := &http.Client{Timeout: 500 * time.Millisecond}
-	waitWorker(t, 5*time.Second, func() bool {
+	waittest.Until(t, 5*time.Second, func() bool {
 		response, err := client.Get("http://" + address + path)
 		if err != nil {
 			return false
@@ -261,34 +248,4 @@ func waitWorkerHTTPStatus(t *testing.T, address, path string, want int) {
 		_ = response.Body.Close()
 		return response.StatusCode == want
 	}, path)
-}
-
-func receiveWorker[T any](t *testing.T, values <-chan T, timeout time.Duration, description string) T {
-	t.Helper()
-	select {
-	case value := <-values:
-		return value
-	case <-time.After(timeout):
-		var zero T
-		t.Fatalf("timed out waiting for %s", description)
-		return zero
-	}
-}
-
-func waitWorker(t *testing.T, timeout time.Duration, predicate func() bool, description string) {
-	t.Helper()
-	ctx, cancel := context.WithTimeout(t.Context(), timeout)
-	defer cancel()
-	ticker := time.NewTicker(20 * time.Millisecond)
-	defer ticker.Stop()
-	for {
-		if predicate() {
-			return
-		}
-		select {
-		case <-ticker.C:
-		case <-ctx.Done():
-			t.Fatalf("timed out waiting for %s", description)
-		}
-	}
 }

@@ -3,6 +3,7 @@ package grpcx
 import (
 	"context"
 
+	"github.com/example/go-service-template-rest/internal/failure"
 	"golang.org/x/sync/semaphore"
 	"google.golang.org/grpc/codes"
 )
@@ -68,7 +69,7 @@ func newAdmissionLimiter(limit int, load LoadRecorder) *admissionLimiter {
 func (l *admissionLimiter) around(ctx context.Context, call func(context.Context) error) error {
 	if !l.sem.TryAcquire(1) {
 		l.load.Shed(ctx)
-		return ownedStatus(codes.ResourceExhausted, "server is at capacity")
+		return ownedStatus(codes.ResourceExhausted, failure.AtCapacityDetail)
 	}
 	defer l.sem.Release(1)
 	release := l.load.Admitted(ctx)

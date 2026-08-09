@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"strconv"
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/infra/postgres"
@@ -27,9 +26,9 @@ func openMigrationDB(opts MigrationOptions) (*sql.DB, error) {
 	if config.RuntimeParams == nil {
 		config.RuntimeParams = make(map[string]string)
 	}
-	config.RuntimeParams["statement_timeout"] = postgresDuration(opts.StatementTimeout)
-	config.RuntimeParams["idle_in_transaction_session_timeout"] = postgresDuration(opts.StatementTimeout)
-	config.RuntimeParams["lock_timeout"] = postgresDuration(opts.LockTimeout)
+	config.RuntimeParams["statement_timeout"] = postgres.RuntimeParamMilliseconds(opts.StatementTimeout)
+	config.RuntimeParams["idle_in_transaction_session_timeout"] = postgres.RuntimeParamMilliseconds(opts.StatementTimeout)
+	config.RuntimeParams["lock_timeout"] = postgres.RuntimeParamMilliseconds(opts.LockTimeout)
 	config.RuntimeParams["application_name"] = "goose-migrate"
 
 	db := stdlib.OpenDB(*config)
@@ -40,11 +39,6 @@ func openMigrationDB(opts MigrationOptions) (*sql.DB, error) {
 
 func secondsCeiling(duration time.Duration) uint64 {
 	return uint64(math.Max(1, math.Ceil(duration.Seconds())))
-}
-
-func postgresDuration(duration time.Duration) string {
-	milliseconds := math.Ceil(float64(duration) / float64(time.Millisecond))
-	return strconv.FormatInt(int64(milliseconds), 10) + "ms"
 }
 
 func executionContext(ctx context.Context, reserve time.Duration) (context.Context, context.CancelFunc, error) {

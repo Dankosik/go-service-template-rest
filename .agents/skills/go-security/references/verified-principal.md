@@ -59,7 +59,7 @@ holds what one token can be wrong about — tampered header and payload,
 duplicate members, wrong issuer and audience, expiry and skew — and
 `verifier_test.go` holds what needs a live key set, unknown `kid` and a stale
 set. Extend those tables rather than re-proving a verifier control at the
-handler; add a `middleware_auth_test.go` case only for what the transport seam
+handler; add a `request_errors_test.go` case only for what the transport seam
 itself decides.
 
 Credential lifecycle, permission-model shape, tenant partitioning, and the

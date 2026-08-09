@@ -60,9 +60,7 @@ type telemetrySnapshot struct {
 }
 
 func NewTelemetry(meter metric.Meter, logger *slog.Logger) (*Telemetry, error) {
-	if meter == nil {
-		meter = otel.GetMeterProvider().Meter(TelemetryScope)
-	}
+	meter = infratelemetry.MeterOrGlobal(meter, TelemetryScope)
 	if logger == nil {
 		logger = slog.Default()
 	}

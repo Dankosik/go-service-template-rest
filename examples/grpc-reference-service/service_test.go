@@ -20,7 +20,6 @@ import (
 	"io"
 	"log/slog"
 	"math"
-	"net"
 	"testing"
 	"time"
 
@@ -28,11 +27,10 @@ import (
 	referencev1 "github.com/example/go-service-template-rest/examples/grpc-reference-service/internal/gen/proto/reference/v1"
 	"github.com/example/go-service-template-rest/internal/config"
 	grpcx "github.com/example/go-service-template-rest/internal/infra/grpc"
+	"github.com/example/go-service-template-rest/internal/infra/grpc/grpctest"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
-	"google.golang.org/grpc/test/bufconn"
 )
 
 func TestReferenceServiceSupportsAllCardinalities(t *testing.T) {
@@ -261,7 +259,6 @@ func newConnection(t *testing.T) *grpc.ClientConn {
 func newConnectionWithService(t *testing.T, service referencev1.EchoServiceServer) *grpc.ClientConn {
 	t.Helper()
 
-	listener := bufconn.Listen(1 << 20)
 	// Compose through the production adapter rather than a bare grpc.NewServer.
 	// Every client-visible status asserted below is produced by that interceptor
 	// chain, not by the handler alone: against a bare server the assertions would
@@ -303,47 +300,10 @@ func newConnectionWithService(t *testing.T, service referencev1.EchoServiceServe
 		},
 	)
 	if err != nil {
-		_ = listener.Close()
 		t.Fatalf("grpcx.NewServer() error = %v", err)
 	}
-	serveDone := make(chan error, 1)
-	go func() {
-		serveDone <- server.Serve(listener)
-	}()
 
-	connection, err := grpc.NewClient(
-		"passthrough:///reference",
-		grpc.WithContextDialer(func(context.Context, string) (net.Conn, error) {
-			return listener.Dial()
-		}),
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-	)
-	if err != nil {
-		_ = server.Close()
-		_ = listener.Close()
-		t.Fatalf("grpc.NewClient() error = %v", err)
-	}
-
-	t.Cleanup(func() {
-		if err := connection.Close(); err != nil {
-			t.Errorf("ClientConn.Close() error = %v", err)
-		}
-		// Close only starts the transport stop, which is what closes the
-		// listener. Joining Serve first is what makes the shutdown deterministic:
-		// closing the listener from here instead would race that stop and surface
-		// as an Accept failure rather than a clean stop.
-		if err := server.Close(); err != nil {
-			t.Errorf("Server.Close() error = %v", err)
-		}
-		if err := <-serveDone; err != nil {
-			t.Errorf("Server.Serve() error = %v", err)
-		}
-		if err := listener.Close(); err != nil {
-			t.Errorf("bufconn.Listener.Close() error = %v", err)
-		}
-	})
-
-	return connection
+	return grpctest.ServeBufconn(t, server)
 }
 
 type cancellationService struct {

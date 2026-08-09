@@ -11,12 +11,14 @@
 //
 // Stripping what a caller supplied is deliberately not here. A carrier is
 // http.Header or metadata.MD, and each adapter must remove the fields from its
-// own type at its own seam; [ReservedFields] is what keeps the two seams removing
-// one list.
+// own type at its own seam; [ReservedFields] and [Reserved] are what keep the two
+// seams removing one list under one matching rule.
 package correlationpolicy
 
 import (
 	"context"
+	"slices"
+	"strings"
 
 	"github.com/example/go-service-template-rest/internal/reqctx"
 	"go.opentelemetry.io/otel/propagation"
@@ -54,6 +56,25 @@ func (p Policy) Valid() bool {
 // to a target this service chose the correlation for.
 func ReservedFields(requestIDKey string) []string {
 	return []string{"traceparent", "tracestate", "baggage", requestIDKey}
+}
+
+// Reserved reports whether key names one of [ReservedFields]. Each adapter holds
+// one of these and asks it per field of every outbound call.
+//
+// The match is case-insensitive because the two carriers spell one field
+// differently: http.Header canonicalizes "traceparent" to "Traceparent", and
+// metadata.MD is lowercase by convention rather than by construction. Each seam
+// wrote that comparison out for itself before, which left the list shared and
+// the rule for reading it duplicated — so an entry whose matching is not a plain
+// comparison would have had to be added to the list here and to two loops
+// elsewhere, and the loop that was missed would have gone on stripping nothing.
+func Reserved(requestIDKey string) func(key string) bool {
+	fields := ReservedFields(requestIDKey)
+	return func(key string) bool {
+		return slices.ContainsFunc(fields, func(reserved string) bool {
+			return strings.EqualFold(key, reserved)
+		})
+	}
 }
 
 // Propagator injects exactly what its policy selects. It is a

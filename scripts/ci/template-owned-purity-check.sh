@@ -15,14 +15,9 @@ fail() {
 	exit 1
 }
 
-paths=()
-while IFS= read -r line; do
-	line="${line%%#*}"
-	line="${line#"${line%%[![:space:]]*}"}"
-	line="${line%"${line##*[![:space:]]}"}"
-	[[ -n "${line}" ]] || continue
-	paths+=("${line}")
-done <"${manifest}"
+# shellcheck source=scripts/lib/manifest.sh
+source "$(dirname -- "${BASH_SOURCE[0]}")/../lib/manifest.sh"
+manifest_paths "${manifest}"
 
 ((${#paths[@]} > 0)) || fail "${manifest} lists no paths"
 
@@ -35,13 +30,6 @@ contains_path() {
 	done
 	return 1
 }
-
-# A path outside the repository would let a sync write anywhere on the machine.
-for entry in "${paths[@]}"; do
-	case "${entry}" in
-	/* | */../* | ../* | */..) fail "${manifest} path escapes the repository: ${entry}" ;;
-	esac
-done
 
 # Every listed path must exist, or a sync would fail midway through a target. An
 # empty owned directory is worse than missing: `rsync --delete` from an empty
@@ -90,6 +78,8 @@ for required in \
 	scripts/template-sync.sh \
 	scripts/claude-skills-sync.sh \
 	scripts/codex-agents-sync.sh \
+	scripts/lib/manifest.sh \
+	scripts/lib/sync-cli.sh \
 	scripts/ci/claude-skills-check.sh \
 	scripts/ci/template-owned-purity-check.sh; do
 	contains_path "${required}" ||
@@ -180,6 +170,7 @@ template_sync_behavior_check() (
 		"${template}/.agents/skills/fixture-one" \
 		"${template}/.codex/agents" \
 		"${template}/scripts/ci" \
+		"${template}/scripts/lib" \
 		"${outside}"
 	printf '%s\n' \
 		'owned/' \
@@ -187,6 +178,7 @@ template_sync_behavior_check() (
 		'.codex/agents/' \
 		'scripts/claude-skills-sync.sh' \
 		'scripts/codex-agents-sync.sh' \
+		'scripts/lib/sync-cli.sh' \
 		'scripts/ci/claude-skills-check.sh' \
 		>"${template}/template-owned.paths"
 	printf 'v1\n' >"${template}/owned/version"
@@ -198,6 +190,9 @@ template_sync_behavior_check() (
 		>"${template}/.codex/config.toml"
 	cp scripts/claude-skills-sync.sh "${template}/scripts/claude-skills-sync.sh"
 	cp scripts/codex-agents-sync.sh "${template}/scripts/codex-agents-sync.sh"
+	# The synced sync scripts are executed from the target below, so the library
+	# they source has to travel with them exactly as the manifest makes it.
+	cp scripts/lib/sync-cli.sh "${template}/scripts/lib/sync-cli.sh"
 	cp scripts/ci/claude-skills-check.sh "${template}/scripts/ci/claude-skills-check.sh"
 	git -C "${template}" init -q
 	git -C "${template}" add \
@@ -208,6 +203,7 @@ template_sync_behavior_check() (
 		.codex/config.toml \
 		scripts/claude-skills-sync.sh \
 		scripts/codex-agents-sync.sh \
+		scripts/lib/sync-cli.sh \
 		scripts/ci/claude-skills-check.sh
 	git -C "${template}" -c user.name=template-sync-check -c user.email=template-sync-check@example.invalid commit -qm v1
 	git clone -q "${template}" "${target}"

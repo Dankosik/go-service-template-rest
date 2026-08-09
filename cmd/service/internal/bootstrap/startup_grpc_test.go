@@ -29,7 +29,6 @@ import (
 	"log/slog"
 	"math"
 	"math/big"
-	"net"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -41,15 +40,14 @@ import (
 
 	"github.com/example/go-service-template-rest/internal/config"
 	grpcx "github.com/example/go-service-template-rest/internal/infra/grpc"
+	"github.com/example/go-service-template-rest/internal/infra/grpc/grpctest"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry/telemetrytest"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials/insecure"
 	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/status"
-	"google.golang.org/grpc/test/bufconn"
 )
 
 func TestNewGRPCRuntimeBuildsExplicitPlaintextServer(t *testing.T) {
@@ -441,28 +439,7 @@ func startGRPCRuntimeConnection(
 	}
 	server.MarkServing()
 
-	listener := bufconn.Listen(1 << 20)
-	serveDone := make(chan error, 1)
-	go func() { serveDone <- server.Serve(listener) }()
-	connection, err := grpc.NewClient(
-		"passthrough:///bootstrap-grpc-test",
-		grpc.WithContextDialer(func(context.Context, string) (net.Conn, error) {
-			return listener.Dial()
-		}),
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-	)
-	if err != nil {
-		_ = server.Close()
-		t.Fatalf("grpc.NewClient() error = %v", err)
-	}
-	t.Cleanup(func() {
-		_ = connection.Close()
-		_ = server.Close()
-		if err := <-serveDone; err != nil {
-			t.Errorf("Server.Serve() error = %v", err)
-		}
-	})
-	return connection, server
+	return grpctest.ServeBufconn(t, server), server
 }
 
 func grpcRuntimeTestConfig() config.Config {

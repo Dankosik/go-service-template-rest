@@ -1,8 +1,8 @@
 package httpclient
 
 import (
+	"maps"
 	"net/http"
-	"strings"
 
 	"github.com/example/go-service-template-rest/internal/observability/correlationpolicy"
 	"github.com/example/go-service-template-rest/internal/reqctx"
@@ -10,10 +10,10 @@ import (
 
 const requestIDHeader = reqctx.RequestIDHeader
 
-// reservedPropagationHeaders is built once because RoundTrip walks it per header
-// of every request. correlationpolicy owns the list; this file owns removing it
-// from an http.Header.
-var reservedPropagationHeaders = correlationpolicy.ReservedFields(requestIDHeader)
+// reservedPropagationHeader is built once because RoundTrip asks it per header
+// of every request. correlationpolicy owns which fields are reserved and how a
+// key is matched against them; this file owns removing them from an http.Header.
+var reservedPropagationHeader = correlationpolicy.Reserved(requestIDHeader)
 
 // PropagationPolicy selects which correlation fields one fixed target may
 // receive. The zero value is deliberately fail-closed.
@@ -53,12 +53,7 @@ func (t propagationSanitizer) RoundTrip(request *http.Request) (*http.Response, 
 }
 
 func removeReservedHeaders(header http.Header) {
-	for name := range header {
-		for _, reserved := range reservedPropagationHeaders {
-			if strings.EqualFold(name, reserved) {
-				delete(header, name)
-				break
-			}
-		}
-	}
+	maps.DeleteFunc(header, func(name string, _ []string) bool {
+		return reservedPropagationHeader(name)
+	})
 }

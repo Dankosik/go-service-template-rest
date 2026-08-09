@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"slices"
 	"strings"
 
 	"github.com/prometheus/otlptranslator"
@@ -32,16 +31,10 @@ const (
 // MetricsConfig defines the service resource attached to metric instruments and
 // where those instruments are exported.
 type MetricsConfig struct {
-	ServiceName    string
-	ServiceVersion string
-	// ServiceCommit is the source revision the binary was built from, published
-	// as vcs.revision so a series names the build that produced it.
-	ServiceCommit string
-	// ServiceInstanceID identifies this replica, and must be the same value
-	// SetupTracing was given; see resourceIdentity.
-	ServiceInstanceID string
-	DeploymentEnv     string
-	Exporter          MetricExporterConfig
+	// Resource is the identity every exported series is attributed to, and must
+	// be the same value SetupTracing was given; see ResourceConfig.
+	Resource ResourceConfig
+	Exporter MetricExporterConfig
 }
 
 // MetricExporterConfig names where metrics are pushed, in addition to the
@@ -112,13 +105,7 @@ func SetupMetrics(ctx context.Context, metrics *Metrics, cfg MetricsConfig) (Met
 		return MetricsResult{}, errors.New("setup metrics: registry is required")
 	}
 
-	res, err := newResource(ctx, resourceIdentity{
-		serviceName:    cfg.ServiceName,
-		serviceVersion: cfg.ServiceVersion,
-		serviceCommit:  cfg.ServiceCommit,
-		instanceID:     cfg.ServiceInstanceID,
-		deploymentEnv:  cfg.DeploymentEnv,
-	})
+	res, err := newResource(ctx, cfg.Resource)
 	if err != nil {
 		return MetricsResult{}, err
 	}
@@ -182,11 +169,8 @@ func newOTLPMetricReader(
 	// variables named it, the platform owns the whole exporter configuration and
 	// its credentials belong to the collector it also named.
 	if endpoint.Source == MetricExporterConfigKey {
-		if names := ConflictingMetricExporterEnv(); len(names) > 0 {
-			return nil, fmt.Errorf(
-				"unsupported ambient otel exporter environment (%s): injected credentials and trust material are not verifiable here; configure observability.otel.exporter.* instead",
-				strings.Join(names, ", "),
-			)
+		if err := rejectConflictingAmbientEnv(metricExporterEnvConflicts); err != nil {
+			return nil, err
 		}
 	}
 
@@ -209,62 +193,31 @@ func newOTLPMetricReader(
 // ResolveMetricExporterEndpoint reports which OTLP metrics endpoint the exporter
 // will use, and which setting supplied it.
 //
-// The order mirrors trace resolution, with one addition: a bare
+// The order mirrors trace resolution — [resolveOTLPEndpoint] owns what it means —
+// with one addition metrics alone have: a bare
 // observability.otel.exporter.otlp_endpoint serves both signals, because naming a
-// collector root is what an operator means by it. Once that value carries a path
-// it is an endpoint for one signal, and metrics need their own.
-//
-// Configured headers are a credential, so they pin the destination: past the
-// settings this service owns the endpoint would come from ambient environment,
-// and sending credentials there is what this resolution must not create.
+// collector root is what an operator means by it.
 func ResolveMetricExporterEndpoint(cfg MetricExporterConfig) (ExporterEndpoint, error) {
-	if raw := strings.TrimSpace(cfg.OTLPEndpoint); raw != "" {
-		endpoint, err := parseSignalOTLPEndpoint(raw, otlpMetricsPath)
-		if err != nil {
-			return ExporterEndpoint{}, err
-		}
-		return ExporterEndpoint{URL: endpoint.endpointURL, Source: MetricExporterConfigKey}, nil
-	}
-	if raw := strings.TrimSpace(cfg.SharedOTLPEndpoint); raw != "" && namesOTLPRoot(raw) {
-		endpoint, err := parseBaseOTLPEndpoint(raw, otlpMetricsPath)
-		if err != nil {
-			return ExporterEndpoint{}, err
-		}
-		return ExporterEndpoint{URL: endpoint.endpointURL, Source: TraceExporterConfigKey}, nil
-	}
-	if strings.TrimSpace(cfg.OTLPHeaders) != "" {
-		return ExporterEndpoint{}, nil
+	owned := []otlpCandidate{{source: MetricExporterConfigKey, raw: cfg.OTLPEndpoint}}
+	// A root only. Once the shared value carries a path it is an endpoint for one
+	// signal and says nothing about where the other one goes, so metrics fall
+	// through to their own settings instead of borrowing the traces route.
+	if shared := strings.TrimSpace(cfg.SharedOTLPEndpoint); namesOTLPRoot(shared) {
+		owned = append(owned, otlpCandidate{source: TraceExporterConfigKey, raw: shared, base: true})
 	}
 
-	if raw, ok := nonEmptyEnv(otelExporterMetricsEndpointEnv); ok {
-		endpoint, err := parseSignalOTLPEndpoint(raw, otlpMetricsPath)
-		if err != nil {
-			return ExporterEndpoint{}, fmt.Errorf("%s: %w", otelExporterMetricsEndpointEnv, err)
-		}
-		return ExporterEndpoint{URL: endpoint.endpointURL, Source: otelExporterMetricsEndpointEnv}, nil
-	}
-	if raw, ok := nonEmptyEnv(otelExporterEndpointEnv); ok {
-		endpoint, err := parseBaseOTLPEndpoint(raw, otlpMetricsPath)
-		if err != nil {
-			return ExporterEndpoint{}, fmt.Errorf("%s: %w", otelExporterEndpointEnv, err)
-		}
-		return ExporterEndpoint{URL: endpoint.endpointURL, Source: otelExporterEndpointEnv}, nil
-	}
-
-	return ExporterEndpoint{}, nil
+	return resolveOTLPEndpoint(
+		otlpMetricsPath,
+		cfg.OTLPHeaders,
+		owned,
+		ambientOTLPCandidates(otelExporterMetricsEndpointEnv),
+	)
 }
 
 // ConflictingMetricExporterEnv returns the non-empty ambient exporter variables a
 // configured metrics exporter cannot safely ignore.
 func ConflictingMetricExporterEnv() []string {
-	names := make([]string, 0, len(metricExporterEnvConflicts))
-	for _, name := range metricExporterEnvConflicts {
-		if _, ok := nonEmptyEnv(name); ok {
-			names = append(names, name)
-		}
-	}
-	slices.Sort(names)
-	return names
+	return conflictingEnv(metricExporterEnvConflicts)
 }
 
 func newMeterProvider(options ...sdkmetric.Option) *sdkmetric.MeterProvider {

@@ -49,6 +49,13 @@ the evidence, advances the verified `migration-history` marker, and only then
 promotes `main`, version, or `latest` tags. Main and release publication share
 one non-cancelling concurrency group, so they cannot race the history marker.
 
+That sequence is `.github/actions/publish-image`, run by both publication jobs,
+so the two cannot verify a release under different rules. It is a composite
+action rather than a reusable workflow because a reusable workflow becomes the
+`job_workflow_ref` in the Fulcio certificate: moving these steps into one would
+change the keyless signing identity of every published image, and consumers
+verify against `.../workflows/cd.yml@<ref>`.
+
 The workflow writes the immutable `image@sha256:...` reference to the job
 summary. Deploy that digest rather than resolving a mutable tag later.
 

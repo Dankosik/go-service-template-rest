@@ -9,6 +9,7 @@ import (
 
 	"github.com/example/go-service-template-rest/internal/infra/natsjs"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry/telemetrytest"
+	"github.com/example/go-service-template-rest/internal/waittest"
 	"github.com/jackc/pgx/v5"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
@@ -48,7 +49,7 @@ func TestPostgresOutboxNATSConformance(t *testing.T) {
 	relay := mustNewOutboxRelay(t, store, publisher, nil, testRelayConfig())
 	result := runOutboxRelay(ctx, relay)
 	waitForOutboxCount(t, ctx, pool, "published_at IS NOT NULL", 1)
-	delivered := receive(t, received, 10*time.Second, "durable outbox JetStream message")
+	delivered := waittest.Receive(t, received, 10*time.Second, "durable outbox JetStream message")
 	message := delivered.message
 	relay.StartDrain()
 	assertRelayResult(t, result, nil)

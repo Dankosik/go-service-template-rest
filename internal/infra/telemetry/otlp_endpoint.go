@@ -6,8 +6,40 @@ import (
 	"net/url"
 	"os"
 	pathpkg "path"
+	"slices"
 	"strings"
 )
+
+// conflictingEnv returns the non-empty variables among names, sorted so reported
+// output is stable.
+func conflictingEnv(names []string) []string {
+	conflicting := make([]string, 0, len(names))
+	for _, name := range names {
+		if _, ok := nonEmptyEnv(name); ok {
+			conflicting = append(conflicting, name)
+		}
+	}
+	slices.Sort(conflicting)
+	return conflicting
+}
+
+// rejectConflictingAmbientEnv refuses a configured exporter that would otherwise
+// silently honor injected credentials or trust material.
+//
+// Both signals reject on the same terms, and the wording is the part worth
+// owning here: an operator matching on this message should not have to discover
+// that traces and metrics phrase the same refusal differently. Which variables
+// count is still each signal's own list.
+func rejectConflictingAmbientEnv(names []string) error {
+	conflicting := conflictingEnv(names)
+	if len(conflicting) == 0 {
+		return nil
+	}
+	return fmt.Errorf(
+		"unsupported ambient otel exporter environment (%s): injected credentials and trust material are not verifiable here; configure observability.otel.exporter.* instead",
+		strings.Join(conflicting, ", "),
+	)
+}
 
 // The standard OpenTelemetry endpoint variables. A signal-specific one is
 // already a complete endpoint for that signal; the signal-agnostic one is a root
@@ -72,6 +104,90 @@ func parseBaseOTLPEndpoint(raw, signalPath string) (otlpEndpoint, error) {
 	parsedURL.RawPath = ""
 
 	return otlpEndpoint{endpointURL: parsedURL.String()}, nil
+}
+
+// otlpCandidate is one step of the ordered search for a signal's exporter
+// endpoint: a value and the setting that supplied it.
+type otlpCandidate struct {
+	// source names the configuration key or environment variable, and is what a
+	// resolved [ExporterEndpoint] reports as its Source.
+	source string
+	// raw is what that setting holds. Blank skips this step.
+	raw string
+	// base marks a signal-agnostic collector root, which gets the signal's OTLP
+	// path appended. The zero value is a complete endpoint for one signal.
+	base bool
+}
+
+// resolveOTLPEndpoint walks the settings this service owns and then the ambient
+// ones, returning the first that names an endpoint. Both signals resolve through
+// it, so neither can answer this differently from the other.
+//
+// The two lists are separate rather than one because headers are a collector
+// credential, and a configured one pins the destination to a setting this
+// service owns: past owned the endpoint would come from ambient environment, and
+// sending the service's own credentials somewhere it never named is what this
+// must not create. Without configured headers the ambient variables are honored,
+// because they are what a platform collector injects and ignoring them would
+// leave a service reporting healthy while exporting nothing.
+//
+// Only an ambient parse failure names its source. An operator did not write that
+// value in this service's configuration and has to be told which injected
+// variable to fix, while a rejected owned setting is already reported by the
+// configuration key that carries it.
+func resolveOTLPEndpoint(signalPath, headers string, owned, ambient []otlpCandidate) (ExporterEndpoint, error) {
+	for _, candidate := range owned {
+		endpoint, ok, err := candidate.resolve(signalPath)
+		if err != nil {
+			return ExporterEndpoint{}, err
+		}
+		if ok {
+			return endpoint, nil
+		}
+	}
+	if strings.TrimSpace(headers) != "" {
+		return ExporterEndpoint{}, nil
+	}
+
+	for _, candidate := range ambient {
+		endpoint, ok, err := candidate.resolve(signalPath)
+		if err != nil {
+			return ExporterEndpoint{}, fmt.Errorf("%s: %w", candidate.source, err)
+		}
+		if ok {
+			return endpoint, nil
+		}
+	}
+
+	return ExporterEndpoint{}, nil
+}
+
+// resolve reports this step's endpoint, or ok=false when its setting holds
+// nothing.
+func (c otlpCandidate) resolve(signalPath string) (ExporterEndpoint, bool, error) {
+	raw := strings.TrimSpace(c.raw)
+	if raw == "" {
+		return ExporterEndpoint{}, false, nil
+	}
+	parse := parseSignalOTLPEndpoint
+	if c.base {
+		parse = parseBaseOTLPEndpoint
+	}
+	endpoint, err := parse(raw, signalPath)
+	if err != nil {
+		return ExporterEndpoint{}, false, err
+	}
+	return ExporterEndpoint{URL: endpoint.endpointURL, Source: c.source}, true, nil
+}
+
+// ambientOTLPCandidates are the standard OpenTelemetry endpoint variables in the
+// order OTLP resolves them: the signal's own variable, then the root each signal
+// derives its path from. Only signalEnv differs per signal.
+func ambientOTLPCandidates(signalEnv string) []otlpCandidate {
+	return []otlpCandidate{
+		{source: signalEnv, raw: os.Getenv(signalEnv)},
+		{source: otelExporterEndpointEnv, raw: os.Getenv(otelExporterEndpointEnv), base: true},
+	}
 }
 
 // namesOTLPRoot reports whether raw is a bare collector root rather than an

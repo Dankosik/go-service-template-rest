@@ -12,7 +12,8 @@ import (
 )
 
 // Store owns every outbox statement, for three audiences. The write path calls
-// only Append, inside the transaction that owns its domain mutation; doc.go
+// Append, inside the transaction that owns its domain mutation, and
+// ReconcileCommit afterward when that commit's own result was lost; doc.go
 // names which package that is and why it is not a feature package. The relay
 // owns Claim, the Mark and ScheduleRetry family, CleanupPublished, and Observe,
 // plus Get, which it uses to resolve a finalization the batch statement did not
@@ -21,8 +22,9 @@ import (
 //
 // Those audiences are the file layout, one file per step of the cycle doc.go
 // describes: store_append.go, store_claim.go, store_finalize.go,
-// store_maintenance.go, and store_operator.go, over the row mapping and
-// identity checks in store_rows.go. This file owns only what all of them share.
+// store_maintenance.go, and store_operator.go, with store_receipt.go beside
+// Append for the lost-commit answer, over the row mapping and identity checks in
+// store_rows.go. This file owns only what all of them share.
 // The store prefix is load-bearing — see doc.go.
 //
 // Get therefore has two callers with different needs: Relay.reconcilePublished

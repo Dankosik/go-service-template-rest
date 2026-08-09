@@ -15,6 +15,7 @@ import (
 
 	"github.com/example/go-service-template-rest/internal/infra/postgres/pgtest"
 	"github.com/example/go-service-template-rest/internal/infra/postgresmigrate"
+	"github.com/example/go-service-template-rest/internal/waittest"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	gooselock "github.com/pressly/goose/v3/lock"
@@ -445,9 +446,10 @@ func waitForMigrationQuery(
 ) {
 	t.Helper()
 
-	ticker := time.NewTicker(10 * time.Millisecond)
-	defer ticker.Stop()
-	for {
+	// ctx still bounds the observation itself: when the caller's deadline passes
+	// first, the query below fails and names that, rather than this wait running
+	// on past the test that owns it.
+	waittest.Until(t, migrationQueryWait, func() bool {
 		var count int
 		err := pool.QueryRow(
 			ctx,
@@ -462,16 +464,14 @@ func waitForMigrationQuery(
 		if err != nil {
 			t.Fatalf("observe migration query: %v", err)
 		}
-		if count > 0 {
-			return
-		}
-		select {
-		case <-ctx.Done():
-			t.Fatalf("wait for migration query: %v", ctx.Err())
-		case <-ticker.C:
-		}
-	}
+		return count > 0
+	}, "an active migration query matching "+queryFragment)
 }
+
+// migrationQueryWait bounds the wait above. It sits under the 20s budget each
+// caller gives its context, so a broken wait fails here with what it was looking
+// for rather than as an expired context somewhere further along.
+const migrationQueryWait = 10 * time.Second
 
 func TestPostgresMigrateFailureDoesNotCreateDirtyState(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)

@@ -20,18 +20,13 @@ import (
 
 	"go.opentelemetry.io/otel/metric"
 	metricnoop "go.opentelemetry.io/otel/metric/noop"
-	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
+
+	"github.com/example/go-service-template-rest/internal/infra/telemetry/telemetrytest"
 )
 
 func TestAuthnMetricAttributesAreBounded(t *testing.T) {
-	reader := sdkmetric.NewManualReader()
-	provider := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
-	t.Cleanup(func() {
-		if err := provider.Shutdown(t.Context()); err != nil {
-			t.Errorf("shutdown metric provider: %v", err)
-		}
-	})
+	reader, provider := telemetrytest.NewManualMeterProvider(t)
 
 	now := testNow
 	reportDegraded := newDegradedWarning(slog.New(slog.DiscardHandler))
@@ -104,13 +99,7 @@ func TestAuthnMetricAttributesAreBounded(t *testing.T) {
 // stopped routing through recordRejection; the second was counted as "invalid"
 // until verificationReason stopped reading a missing Kind as a bad credential.
 func TestAuthnMetricsCountRejectionsVerifyNeverSaw(t *testing.T) {
-	reader := sdkmetric.NewManualReader()
-	provider := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
-	t.Cleanup(func() {
-		if err := provider.Shutdown(t.Context()); err != nil {
-			t.Errorf("shutdown metric provider: %v", err)
-		}
-	})
+	reader, provider := telemetrytest.NewManualMeterProvider(t)
 
 	now := testNow
 	first := loadTestRSAKey(t, testSigningKey)

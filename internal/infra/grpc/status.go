@@ -14,16 +14,6 @@ import (
 	"google.golang.org/protobuf/types/known/durationpb"
 )
 
-// sanitizedFailureDetail is the caller-visible message for every failure this
-// transport refused to describe: an unclassified handler error, a policy error,
-// a recovered panic, and a classified answer whose mapper supplied no detail.
-//
-// One constant because the four must stay indistinguishable to a caller. A
-// detail that separated them would report which internal path broke, which is
-// exactly what the sanitization withholds; internal/infra/http answers with the
-// same text for the same reason.
-const sanitizedFailureDetail = "request failed"
-
 // handlerErrorBoundary and [policyErrorBoundary] are this transport's two error
 // boundaries. They are the same mechanism — [mapError] — and differ only in the
 // [trustedStatus] each passes it; the package doc owns why they sit where they
@@ -132,7 +122,7 @@ func mapError(err error, trusted trustedStatus, rendering errorRendering) (error
 	if mapped, ok := failure.Classify(err, rendering.mappers); ok {
 		return mappedStatus(mapped, rendering.domain), false
 	}
-	return ownedStatus(codes.Internal, sanitizedFailureDetail), true
+	return ownedStatus(codes.Internal, failure.SanitizedDetail), true
 }
 
 // recordUnhandledFailure writes down the failure behind a generic INTERNAL.
@@ -198,7 +188,7 @@ func mappedStatus(mapped failure.Classification, domain string) error {
 
 	detail := strings.TrimSpace(mapped.Detail)
 	if detail == "" {
-		detail = sanitizedFailureDetail
+		detail = failure.SanitizedDetail
 	}
 
 	rendered := status.New(code, detail)

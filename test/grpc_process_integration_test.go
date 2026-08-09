@@ -18,7 +18,6 @@ package integration_test
 import (
 	"bytes"
 	"context"
-	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -32,6 +31,7 @@ import (
 	"github.com/example/go-service-template-rest/internal/infra/grpcclient"
 	"github.com/example/go-service-template-rest/internal/infra/postgres/pgtest"
 	"github.com/example/go-service-template-rest/internal/reqctx"
+	"github.com/example/go-service-template-rest/internal/waittest"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -57,8 +57,8 @@ func TestGRPCProcessLifecycle(t *testing.T) {
 		t.Fatalf("build service: %v\n%s", buildErr, output)
 	}
 
-	httpAddr := freeTCPAddress(t)
-	grpcAddr := freeTCPAddress(t)
+	httpAddr := waittest.FreeTCPAddr(t, "service HTTP")
+	grpcAddr := waittest.FreeTCPAddr(t, "service gRPC")
 	postgresDSN := pgtest.DSN(t)
 	var output bytes.Buffer
 	process := exec.Command(binaryPath)
@@ -219,20 +219,6 @@ func initializedProcessServiceRoot(t *testing.T, repositoryRoot string) string {
 		t.Fatalf("initialize process-test service: %v\n%s", err, output)
 	}
 	return serviceRoot
-}
-
-func freeTCPAddress(t *testing.T) string {
-	t.Helper()
-
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("reserve TCP address: %v", err)
-	}
-	addr := listener.Addr().String()
-	if err := listener.Close(); err != nil {
-		t.Fatalf("release TCP address %s: %v", addr, err)
-	}
-	return addr
 }
 
 func cleanServiceEnvironment(environment []string) []string {

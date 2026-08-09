@@ -40,5 +40,7 @@ template-owned.paths
 scripts/template-sync.sh
 scripts/claude-skills-sync.sh
 scripts/codex-agents-sync.sh
+scripts/lib/manifest.sh
+scripts/lib/sync-cli.sh
 scripts/ci/claude-skills-check.sh
 scripts/ci/template-owned-purity-check.sh

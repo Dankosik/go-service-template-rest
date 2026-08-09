@@ -367,20 +367,6 @@ WHERE NOT candidate.terminalize;
 -- name: GetOutboxEvent :one
 SELECT * FROM outbox_events WHERE id = sqlc.arg(id);
 
--- name: MarkOutboxPublished :execrows
-UPDATE outbox_events
-SET published_at = statement_timestamp(),
-    lease_token = NULL,
-    lease_expires_at = NULL,
-    last_error_class = NULL
-WHERE id = sqlc.arg(id)
-  AND lease_token = sqlc.arg(lease_token)
-  AND ordering_key IS NOT DISTINCT FROM sqlc.narg(ordering_key)
-  AND ordering_sequence IS NOT DISTINCT FROM sqlc.narg(ordering_sequence)
-  AND lease_expires_at > statement_timestamp()
-  AND published_at IS NULL
-  AND poisoned_at IS NULL;
-
 -- Unordered events finalize together because none of them owns an ordering
 -- head. Returning the finalized ids lets the caller resolve only the events
 -- this statement could not claim against durable state, instead of re-checking

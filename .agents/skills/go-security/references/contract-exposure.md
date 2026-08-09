@@ -57,6 +57,6 @@ ships an unauthenticated endpoint that the diff shows as two characters.
 
 `make openapi-check` runs the contract tests, including the security-decision
 sweep above. The runtime side is `authn_router_test.go`
-(`TestHTTPAuthnBoundary`) and `middleware_auth_test.go`, which already assert an
+(`TestHTTPAuthnBoundary`) and `request_errors_test.go`, which already assert an
 unwired resolver answers 401 and that rejection details stay sanitized — a new
 exposure decision extends those rather than proving reachability by hand.

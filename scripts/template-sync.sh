@@ -104,20 +104,9 @@ if ((${#targets[@]} == 0)); then
 	targets+=("${explicit_repo:-$PWD}")
 fi
 
-# Manifest entries, comments and blanks removed. A manifest path must stay inside
-# the repository: an absolute path or a parent traversal would let a sync write
-# anywhere on the machine.
-paths=()
-while IFS= read -r line; do
-	line="${line%%#*}"
-	line="${line#"${line%%[![:space:]]*}"}"
-	line="${line%"${line##*[![:space:]]}"}"
-	[[ -n "${line}" ]] || continue
-	case "${line}" in
-	/* | */../* | ../* | */..) fail "manifest path escapes the repository: ${line}" ;;
-	esac
-	paths+=("${line}")
-done <"${manifest}"
+# shellcheck source=scripts/lib/manifest.sh
+source "$(dirname -- "${BASH_SOURCE[0]}")/lib/manifest.sh"
+manifest_paths "${manifest}"
 ((${#paths[@]} > 0)) || fail "manifest lists no paths"
 
 template_pathspecs=()

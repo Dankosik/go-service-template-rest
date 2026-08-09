@@ -29,7 +29,7 @@ concurrent claims, tenant isolation, or a cache whose backend behavior matters.
   changing the fixture.
 - Prove exclusion by holding the row. Open a second transaction, `SELECT ... FOR
   UPDATE` the contended row, then assert the claim under test skips to the next
-  one — the pattern in `test/postgres_outbox_integration_test.go`. Two goroutines
+  one — the pattern in `test/postgres_outbox_claim_integration_test.go`. Two goroutines
   racing for the same claim proves timing, not the lock.
 - Prove tenant isolation and cache freshness through behavior — a value that
   cannot cross tenants, a read that does not observe stale state — never through

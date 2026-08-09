@@ -1,0 +1,343 @@
+name: Publish runtime image
+description: >-
+  Build, prove, scan, push, sign, attest, verify, and only then promote the
+  runtime image tags anyone deploys from.
+
+# The one publication path, used by both cd.yml jobs. It exists because those two
+# jobs previously spelled this sequence out separately: ninety lines of migration,
+# cosign, and attestation steps duplicated across a main publication and a release
+# publication is a supply chain that can disagree with itself, and the
+# disagreement would first be visible at a release — a tag verified under rules
+# main had already moved past.
+#
+# It is a composite action rather than a reusable workflow on purpose. A reusable
+# workflow becomes the job_workflow_ref in the Fulcio certificate, so moving these
+# steps into one would silently change the keyless signing identity of every
+# published image and break every consumer verifying against
+# `.../workflows/cd.yml@<ref>`. A composite action runs inside the calling job and
+# leaves that identity untouched.
+#
+# The two publications genuinely differ in what they name, so the metadata step is
+# the only place they branch. Everything after it is one sequence.
+
+inputs:
+  mode:
+    description: >-
+      Which publication this is. "main" builds an immutable sha- tag and promotes
+      `main`; "release" builds a run-scoped candidate tag and promotes the version
+      tag plus `latest`.
+    required: true
+  candidate_sha:
+    description: >-
+      The commit being published. It is the candidate the migration publication
+      mode is resolved against, so a caller passes the commit it actually
+      verified rather than a branch name.
+    required: true
+  github_token:
+    description: GITHUB_TOKEN for the GHCR login and the gh attestation queries.
+    required: true
+  migration_bootstrap_sha:
+    description: >-
+      vars.MIGRATION_HISTORY_BOOTSTRAP_SHA. Empty once the package holds a
+      published history; the check refuses a stale value.
+    required: false
+    default: ""
+  cosign_version:
+    description: Pinned cosign release used to sign and to verify.
+    required: false
+    default: v2.6.2
+  trivy_db_repository:
+    description: Vulnerability database source for both Trivy steps.
+    required: false
+    default: ghcr.io/aquasecurity/trivy-db:2
+
+runs:
+  using: composite
+  steps:
+    # The only step that knows which publication this is. version, the candidate
+    # tag, the tags promoted after verification, and the signing identity this
+    # run is verified against are all named here, so every step below reads one
+    # set of outputs.
+    - name: Prepare image metadata
+      id: meta
+      shell: bash
+      env:
+        MODE: ${{ inputs.mode }}
+        DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+      run: |
+        IMAGE_REPO="ghcr.io/${GITHUB_REPOSITORY,,}"
+        case "${MODE}" in
+        main)
+          SHORT_SHA="${GITHUB_SHA:0:12}"
+          VERSION="sha-${SHORT_SHA}"
+          PRIMARY_TAG="sha-${SHORT_SHA}"
+          PROMOTE_TAGS="main"
+          ARTIFACT_NAME="sbom-main-${SHORT_SHA}"
+          IDENTITY="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/cd.yml@refs/heads/${DEFAULT_BRANCH}"
+          ;;
+        release)
+          VERSION="${GITHUB_REF_NAME}"
+          # Run-scoped rather than the version tag: the candidate is pushed
+          # before it has been verified, and a re-run must not be able to
+          # overwrite a tag a deployment already resolved.
+          PRIMARY_TAG="build-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          PROMOTE_TAGS="${GITHUB_REF_NAME} latest"
+          ARTIFACT_NAME="sbom-${GITHUB_REF_NAME}"
+          IDENTITY="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/cd.yml@${GITHUB_REF}"
+          ;;
+        *)
+          echo "publish-image: unsupported mode '${MODE}'" >&2
+          exit 1
+          ;;
+        esac
+
+        {
+          echo "image_repo=${IMAGE_REPO}"
+          echo "primary_image=${IMAGE_REPO}:${PRIMARY_TAG}"
+          echo "version=${VERSION}"
+          echo "promote_tags=${PROMOTE_TAGS}"
+          echo "artifact_name=${ARTIFACT_NAME}"
+          echo "identity=${IDENTITY}"
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Login to GHCR
+      shell: bash
+      env:
+        GHCR_TOKEN: ${{ inputs.github_token }}
+        GHCR_USER: ${{ github.actor }}
+      run: |
+        printf '%s' "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USER}" --password-stdin
+
+    # profile:database-postgres:start
+    - name: Resolve migration publication mode
+      id: migration_history
+      shell: bash
+      env:
+        CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+        GH_TOKEN: ${{ inputs.github_token }}
+        GITHUB_REPOSITORY_NAME: ${{ github.event.repository.name }}
+        GITHUB_REPOSITORY_OWNER_TYPE: ${{ github.event.repository.owner.type }}
+        MIGRATION_HISTORY_BOOTSTRAP_SHA: ${{ inputs.migration_bootstrap_sha }}
+      run: |
+        mode="$(bash ./scripts/ci/migration-image-history-check.sh package-mode)"
+        echo "mode=${mode}" >> "$GITHUB_OUTPUT"
+    # profile:database-postgres:end
+
+    - name: Install cosign
+      uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      with:
+        cosign-release: ${{ inputs.cosign_version }}
+
+    # profile:database-postgres:start
+    - name: Load trusted migration history image
+      if: steps.migration_history.outputs.mode == 'history'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github_token }}
+        IMAGE_REPO: ${{ steps.meta.outputs.image_repo }}
+      run: |
+        marker="${IMAGE_REPO}:migration-history"
+        digest="$(
+          docker buildx imagetools inspect \
+            --format '{{.Manifest.Digest}}' \
+            "${marker}"
+        )"
+        test -n "${digest}"
+        image="${IMAGE_REPO}@${digest}"
+        escaped_repository="${GITHUB_REPOSITORY//./\\.}"
+        identity="^https://github\\.com/${escaped_repository}/\\.github/workflows/cd\\.yml@refs/(heads/.+|tags/v.+)$"
+        cosign verify \
+          --certificate-identity-regexp "${identity}" \
+          --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+          "${image}"
+        gh attestation verify "oci://${image}" --repo "${GITHUB_REPOSITORY}"
+        docker pull "${image}"
+        container="$(docker create "${image}")"
+        trap 'docker rm -f "${container}" >/dev/null 2>&1 || true' EXIT
+        mkdir -p .artifacts/migration-history
+        docker cp "${container}:/migrations/." .artifacts/migration-history/
+        docker rm -f "${container}" >/dev/null
+        trap - EXIT
+    # profile:database-postgres:end
+
+    - name: Build image
+      shell: bash
+      env:
+        APP_VERSION: ${{ steps.meta.outputs.version }}
+        PRIMARY_IMAGE: ${{ steps.meta.outputs.primary_image }}
+      run: |
+        VCS_REF="${GITHUB_SHA}" \
+          SOURCE_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
+          make runtime-image-build RUNTIME_IMAGE="${PRIMARY_IMAGE}"
+
+    # profile:database-postgres:start
+    - name: Verify candidate preserves published migrations
+      if: steps.migration_history.outputs.mode == 'history'
+      shell: bash
+      env:
+        PRIMARY_IMAGE: ${{ steps.meta.outputs.primary_image }}
+      run: |
+        container="$(docker create "${PRIMARY_IMAGE}")"
+        trap 'docker rm -f "${container}" >/dev/null 2>&1 || true' EXIT
+        mkdir -p .artifacts/migration-candidate
+        docker cp "${container}:/migrations/." .artifacts/migration-candidate/
+        docker rm -f "${container}" >/dev/null
+        trap - EXIT
+        bash ./scripts/ci/migration-image-history-check.sh compare \
+          .artifacts/migration-history \
+          .artifacts/migration-candidate
+
+    - name: Validate migrations and runtime image
+      shell: bash
+      env:
+        PRIMARY_IMAGE: ${{ steps.meta.outputs.primary_image }}
+        EXPECTED_VERSION: ${{ steps.meta.outputs.version }}
+      run: |
+        make migration-validate \
+          RUNTIME_IMAGE="${PRIMARY_IMAGE}" \
+          RUNTIME_EXPECTED_VERSION="${EXPECTED_VERSION}"
+    # profile:database-postgres:end
+
+    - name: Scan image with Trivy
+      uses: aquasecurity/trivy-action@2736533278103862a861f4a35ebac3e97854d956 # 0.34.2
+      env:
+        TRIVY_DB_REPOSITORY: ${{ inputs.trivy_db_repository }}
+      with:
+        image-ref: ${{ steps.meta.outputs.primary_image }}
+        format: table
+        exit-code: "1"
+        ignore-unfixed: true
+        severity: CRITICAL,HIGH
+
+    - name: Generate SBOM (CycloneDX)
+      uses: aquasecurity/trivy-action@2736533278103862a861f4a35ebac3e97854d956 # 0.34.2
+      env:
+        TRIVY_DB_REPOSITORY: ${{ inputs.trivy_db_repository }}
+      with:
+        image-ref: ${{ steps.meta.outputs.primary_image }}
+        format: cyclonedx
+        output: sbom.cdx.json
+        skip-setup-trivy: true
+
+    - name: Push candidate image
+      shell: bash
+      env:
+        PRIMARY_IMAGE: ${{ steps.meta.outputs.primary_image }}
+      run: |
+        docker push "${PRIMARY_IMAGE}"
+
+    - name: Resolve pushed digest
+      id: digest
+      shell: bash
+      env:
+        PRIMARY_IMAGE: ${{ steps.meta.outputs.primary_image }}
+      run: |
+        DIGEST="$(docker image inspect "${PRIMARY_IMAGE}" --format '{{index .RepoDigests 0}}' | cut -d'@' -f2)"
+        test -n "${DIGEST}"
+        echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
+
+    - name: Sign container image (keyless)
+      shell: bash
+      env:
+        COSIGN_YES: "true"
+        IMAGE_REPO: ${{ steps.meta.outputs.image_repo }}
+        DIGEST: ${{ steps.digest.outputs.digest }}
+      run: |
+        cosign sign "${IMAGE_REPO}@${DIGEST}"
+
+    - name: Attest build provenance
+      uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+      with:
+        subject-name: ${{ steps.meta.outputs.image_repo }}
+        subject-digest: ${{ steps.digest.outputs.digest }}
+        push-to-registry: true
+        create-storage-record: false
+
+    - name: Attest SBOM
+      uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+      with:
+        subject-name: ${{ steps.meta.outputs.image_repo }}
+        subject-digest: ${{ steps.digest.outputs.digest }}
+        sbom-path: sbom.cdx.json
+        push-to-registry: true
+        create-storage-record: false
+
+    # The gate every promotion below depends on: what was just signed and
+    # attested is verified back out of the registry before any tag moves.
+    - name: Verify release trust
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github_token }}
+        IMAGE_REPO: ${{ steps.meta.outputs.image_repo }}
+        DIGEST: ${{ steps.digest.outputs.digest }}
+        IDENTITY: ${{ steps.meta.outputs.identity }}
+      run: |
+        IMAGE="${IMAGE_REPO}@${DIGEST}"
+
+        cosign verify \
+          --certificate-identity "${IDENTITY}" \
+          --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+          "${IMAGE}"
+        gh attestation verify "oci://${IMAGE}" --repo "${GITHUB_REPOSITORY}"
+        gh attestation verify "oci://${IMAGE}" \
+          --repo "${GITHUB_REPOSITORY}" \
+          --predicate-type "https://cyclonedx.org/bom"
+
+    # profile:database-postgres:start
+    - name: Advance verified migration history marker
+      shell: bash
+      env:
+        IMAGE_REPO: ${{ steps.meta.outputs.image_repo }}
+        PRIMARY_IMAGE: ${{ steps.meta.outputs.primary_image }}
+        DIGEST: ${{ steps.digest.outputs.digest }}
+      run: |
+        docker tag "${PRIMARY_IMAGE}" "${IMAGE_REPO}:migration-history"
+        docker push "${IMAGE_REPO}:migration-history"
+        test "$(
+          docker buildx imagetools inspect \
+            --format '{{.Manifest.Digest}}' \
+            "${IMAGE_REPO}:migration-history"
+        )" = "${DIGEST}"
+    # profile:database-postgres:end
+
+    # Each promoted tag is re-resolved after its push, so a tag that landed on
+    # another digest fails the publication instead of being deployed.
+    - name: Promote verified tags
+      shell: bash
+      env:
+        IMAGE_REPO: ${{ steps.meta.outputs.image_repo }}
+        PRIMARY_IMAGE: ${{ steps.meta.outputs.primary_image }}
+        DIGEST: ${{ steps.digest.outputs.digest }}
+        PROMOTE_TAGS: ${{ steps.meta.outputs.promote_tags }}
+      run: |
+        read -ra tags <<<"${PROMOTE_TAGS}"
+        for tag in "${tags[@]}"; do
+          docker tag "${PRIMARY_IMAGE}" "${IMAGE_REPO}:${tag}"
+          docker push "${IMAGE_REPO}:${tag}"
+          test "$(
+            docker buildx imagetools inspect \
+              --format '{{.Manifest.Digest}}' \
+              "${IMAGE_REPO}:${tag}"
+          )" = "${DIGEST}"
+        done
+
+    - name: Publish immutable image reference
+      shell: bash
+      env:
+        IMAGE_REPO: ${{ steps.meta.outputs.image_repo }}
+        DIGEST: ${{ steps.digest.outputs.digest }}
+      run: |
+        {
+          echo "### Published image"
+          echo
+          # Markdown backticks are intentionally literal.
+          # shellcheck disable=SC2016
+          printf '`%s`\n' "${IMAGE_REPO}@${DIGEST}"
+        } >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Upload SBOM artifact
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: ${{ steps.meta.outputs.artifact_name }}
+        path: sbom.cdx.json
+        if-no-files-found: error

@@ -356,26 +356,13 @@ profile_benchmark() {
 }
 
 ensure_docker() {
-	command -v docker >/dev/null 2>&1 || {
-		echo "Docker is required for HTTP load benchmarks"
-		exit 1
-	}
-	docker info >/dev/null 2>&1 || {
-		echo "Docker daemon is not reachable"
-		exit 1
-	}
+	bash "${ROOT_DIR}/scripts/lib/require-docker.sh" "HTTP load benchmarks"
 }
 
 # profile:grpc-reference-benchmark:start
 ensure_grpc_docker() {
-	command -v "${GRPC_BENCH_DOCKER_BIN}" >/dev/null 2>&1 || {
-		echo "Docker is required for gRPC load benchmarks"
-		exit 1
-	}
-	"${GRPC_BENCH_DOCKER_BIN}" info >/dev/null 2>&1 || {
-		echo "Docker daemon is not reachable"
-		exit 1
-	}
+	DOCKER_BIN="${GRPC_BENCH_DOCKER_BIN}" \
+		bash "${ROOT_DIR}/scripts/lib/require-docker.sh" "gRPC load benchmarks"
 }
 # profile:grpc-reference-benchmark:end
 

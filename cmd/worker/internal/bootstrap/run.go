@@ -2,11 +2,8 @@ package bootstrap
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"io"
 	"log/slog"
-	"net/http"
 	"os"
 	"os/signal"
 	"strings"
@@ -14,21 +11,12 @@ import (
 	"time"
 
 	"github.com/example/go-service-template-rest/cmd/internal/runtimeopts"
-	"github.com/example/go-service-template-rest/internal/background"
 	"github.com/example/go-service-template-rest/internal/config"
-	"github.com/example/go-service-template-rest/internal/health"
 	"github.com/example/go-service-template-rest/internal/infra/natsjs"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
-	"github.com/example/go-service-template-rest/internal/observability/logctx"
 )
 
-const (
-	startupTimeout   = 30 * time.Second
-	diagnosticsClose = 2 * time.Second
-	backgroundClose  = 5 * time.Second
-	handlerClose     = 5 * time.Second
-	telemetryClose   = 5 * time.Second
-)
+const startupTimeout = 30 * time.Second
 
 // HandlerBuilder constructs the binary-local transport adapter that invokes
 // feature-owned behavior after messaging topology admission. It receives the
@@ -74,16 +62,24 @@ func run(signalCtx context.Context, args []string, buildHandler HandlerBuilder) 
 	}
 	log := newWorkerLogger(os.Stdout, cfg)
 	metrics := telemetry.New()
-	telemetryCleanup, err := setupTelemetry(startupCtx, cfg, metrics, log)
-	if err != nil {
-		return err
-	}
+	// A metrics provider that could not be built stops this binary, which is this
+	// composition root's own answer rather than InstallTelemetry's: a worker with
+	// no meter cannot report what it consumed, so nothing would notice it stopped
+	// consuming, while a worker with no exporter for spans still records every
+	// count an alert is built on.
+	telemetryCleanup, err := runtimeopts.InstallTelemetry(startupCtx, cfg, metrics, log, "worker")
 	var cleanupDeadline time.Time
+	// Registered before the error is read, because tracing is installed whether
+	// or not metrics were: a worker that refuses to start over its meter still
+	// owes the span exporter the flush that lets its goroutine end.
 	defer func() {
-		cleanupCtx, cleanupCancel := workerCleanupContext(signalCtx, cleanupDeadline, telemetryClose)
+		cleanupCtx, cleanupCancel := runtimeopts.TeardownStage(signalCtx, cleanupDeadline, telemetryClose)
 		defer cleanupCancel()
 		telemetryCleanup(cleanupCtx)
 	}()
+	if err != nil {
+		return err
+	}
 	client, err := natsjs.Connect(startupCtx, runtimeopts.Messaging(cfg.Messaging), natsjs.RoleWorker, natsjs.Observability{Logger: log})
 	if err != nil {
 		return fmt.Errorf("initialize worker messaging: %w", err)
@@ -92,7 +88,7 @@ func run(signalCtx context.Context, args []string, buildHandler HandlerBuilder) 
 	handler, handlerCleanup, err := buildHandler(startupCtx, cfg, log, client.Producer())
 	defer func() {
 		if handlerCleanup != nil {
-			cleanupCtx, cleanupCancel := workerCleanupContext(signalCtx, cleanupDeadline, handlerClose)
+			cleanupCtx, cleanupCancel := runtimeopts.TeardownStage(signalCtx, cleanupDeadline, handlerClose)
 			defer cleanupCancel()
 			handlerCleanup(cleanupCtx)
 		}
@@ -113,180 +109,4 @@ func run(signalCtx context.Context, args []string, buildHandler HandlerBuilder) 
 		handlerCleanup = nil
 	}
 	return err
-}
-
-func newWorkerLogger(out io.Writer, cfg config.Config) *slog.Logger {
-	return logctx.NewProcessLogger(out, cfg.Log.Level).With(runtimeopts.LoggerFields(cfg)...)
-}
-
-func workerCleanupContext(base context.Context, deadline time.Time, limit time.Duration) (context.Context, context.CancelFunc) {
-	base = context.WithoutCancel(base)
-	if deadline.IsZero() {
-		return context.WithTimeout(base, limit)
-	}
-	deadlineCtx, deadlineCancel := context.WithDeadline(base, deadline)
-	stageCtx, stageCancel := context.WithTimeout(deadlineCtx, limit)
-	return stageCtx, func() {
-		stageCancel()
-		deadlineCancel()
-	}
-}
-
-func runWorkerLifecycle(
-	signalCtx context.Context,
-	startupCtx context.Context,
-	cfg config.Config,
-	log *slog.Logger,
-	metrics *telemetry.Metrics,
-	client *natsjs.Client,
-	worker *natsjs.Worker,
-) (bool, time.Time, error) {
-	healthSvc := health.New(client)
-	if err := healthSvc.Refresh(startupCtx, cfg.HTTP.ReadinessTimeout, cfg.Health.FailureThreshold); err != nil {
-		return true, time.Time{}, fmt.Errorf("admit worker readiness: %w", err)
-	}
-	diagnostics := newDiagnosticsServer(cfg.Observability.Metrics.Addr, healthSvc, client.Ready, metrics)
-	listener, err := listenDiagnostics(startupCtx, cfg.Observability.Metrics.Addr)
-	if err != nil {
-		return true, time.Time{}, err
-	}
-	defer func() { _ = listener.Close() }()
-
-	runtimeCtx := context.WithoutCancel(signalCtx)
-	supervisor := background.New(runtimeCtx, log)
-	supervisor.Go(background.Task{Name: "messaging_connection", Run: client.Run})
-	supervisor.Go(background.Task{
-		Name: "messaging_readiness",
-		Run: func(ctx context.Context) error {
-			return healthSvc.Watch(ctx, cfg.Health.RefreshInterval, cfg.HTTP.ReadinessTimeout, cfg.Health.FailureThreshold, nil)
-		},
-	})
-	workerResult := make(chan error, 1)
-	workerDone := make(chan struct{})
-	go func() {
-		defer close(workerDone)
-		workerResult <- worker.Run(runtimeCtx)
-	}()
-	diagnosticsResult := make(chan error, 1)
-	go func() {
-		err := diagnostics.Serve(listener)
-		if errors.Is(err, http.ErrServerClosed) {
-			err = nil
-		}
-		diagnosticsResult <- err
-	}()
-
-	var triggerErr error
-	workerResultRead := false
-	diagnosticsResultRead := false
-	select {
-	case <-signalCtx.Done():
-	case triggerErr = <-supervisor.Failures():
-	case triggerErr = <-workerResult:
-		workerResultRead = true
-	case triggerErr = <-diagnosticsResult:
-		diagnosticsResultRead = true
-	}
-	if signalCtx.Err() == nil {
-		if triggerErr == nil {
-			triggerErr = errors.New("worker runtime stopped unexpectedly")
-		}
-	}
-	healthSvc.StartDrain()
-	worker.StartDrain()
-	shutdownBase := context.WithoutCancel(signalCtx)
-	processCtx, processCancel := context.WithTimeout(shutdownBase, cfg.HTTP.GracePeriod)
-	shutdownDeadline, _ := processCtx.Deadline()
-	defer processCancel()
-	workerCtx, workerCancel := context.WithTimeout(processCtx, cfg.Messaging.Worker.DrainTimeout)
-	workerErr := worker.Shutdown(workerCtx)
-	workerCancel()
-	diagnosticsCtx, diagnosticsCancel := context.WithTimeout(processCtx, diagnosticsClose)
-	diagnosticsErr := diagnostics.Shutdown(diagnosticsCtx)
-	diagnosticsErr = errors.Join(diagnosticsErr, diagnostics.Close())
-	if !diagnosticsResultRead {
-		select {
-		case runErr := <-diagnosticsResult:
-			diagnosticsErr = errors.Join(diagnosticsErr, runErr)
-		case <-diagnosticsCtx.Done():
-			diagnosticsErr = errors.Join(diagnosticsErr, fmt.Errorf("join worker diagnostics: %w", diagnosticsCtx.Err()))
-		}
-	}
-	diagnosticsCancel()
-	backgroundCtx, backgroundCancel := context.WithTimeout(processCtx, backgroundClose)
-	backgroundErr := supervisor.Shutdown(backgroundCtx)
-	backgroundCancel()
-	cleanupSafe := handlerStoppedBeforeReturn(workerErr, workerDone)
-	if !workerResultRead {
-		select {
-		case runErr := <-workerResult:
-			if triggerErr == nil {
-				triggerErr = runErr
-			}
-		default:
-		}
-	}
-	return cleanupSafe, shutdownDeadline, errors.Join(triggerErr, diagnosticsErr, workerErr, backgroundErr)
-}
-
-func handlerStoppedBeforeReturn(workerErr error, workerDone <-chan struct{}) bool {
-	if workerErr == nil {
-		<-workerDone
-		return true
-	}
-	select {
-	case <-workerDone:
-		return true
-	default:
-		// A handler that ignored forced cancellation may still use its
-		// dependencies. Process exit owns their cleanup in this path.
-		return false
-	}
-}
-
-func parseLoadOptions(args []string) (config.LoadOptions, error) {
-	return config.ParseLoadOptions("worker", args, nil)
-}
-
-func messagingWorkerConfig(cfg config.MessagingConfig) (natsjs.WorkerConfig, error) {
-	delays := make([]time.Duration, 0)
-	for value := range strings.SplitSeq(cfg.Worker.RetryDelays, ",") {
-		delay, err := time.ParseDuration(strings.TrimSpace(value))
-		if err != nil {
-			return natsjs.WorkerConfig{}, fmt.Errorf("%w: invalid messaging worker retry delay", natsjs.ErrRejected)
-		}
-		delays = append(delays, delay)
-	}
-	result := natsjs.WorkerConfig{
-		Consumer:             strings.TrimSpace(cfg.Worker.Consumer),
-		FilterSubject:        strings.TrimSpace(cfg.Worker.FilterSubject),
-		DeadLetterSubject:    strings.TrimSpace(cfg.Worker.DeadLetterSubject),
-		MaxConcurrency:       cfg.Worker.MaxConcurrency,
-		MaxDeliveryBytes:     cfg.Worker.MaxDeliveryBytes,
-		HandlerTimeout:       cfg.Worker.HandlerTimeout,
-		RetryDelays:          delays,
-		DeadLetterRetryDelay: cfg.Worker.DeadLetterRetryDelay,
-	}
-	if cfg.Worker.DrainTimeout <= 0 {
-		return natsjs.WorkerConfig{}, fmt.Errorf("%w: messaging worker drain timeout must be positive", natsjs.ErrRejected)
-	}
-	if err := natsjs.ValidateWorkerConfig(result, cfg.MaxPayloadBytes); err != nil {
-		return natsjs.WorkerConfig{}, fmt.Errorf("validate messaging worker config: %w", err)
-	}
-	return result, nil
-}
-
-func validateWorkerShutdownBudget(gracePeriod, drainTimeout time.Duration) error {
-	cleanupReserve := diagnosticsClose + backgroundClose + handlerClose + telemetryClose
-	required := drainTimeout + cleanupReserve
-	if gracePeriod >= required {
-		return nil
-	}
-	return fmt.Errorf(
-		"%w: http.grace_period must be >= messaging worker drain timeout plus the post-drain teardown budget (%s + %s = %s)",
-		config.ErrValidate,
-		drainTimeout,
-		cleanupReserve,
-		required,
-	)
 }

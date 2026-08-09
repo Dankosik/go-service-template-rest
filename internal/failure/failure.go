@@ -61,6 +61,52 @@ func AllCodes() []Code {
 	}
 }
 
+// SanitizedDetail is the caller-visible text for every failure a transport
+// refused to describe: an unclassified handler error, a policy error, a
+// recovered panic, and a classified answer whose mapper supplied no detail.
+//
+// One constant because those must stay indistinguishable to a caller. Text that
+// separated them would report which internal path broke, which is exactly what
+// the sanitization withholds. It is owned here rather than per transport for the
+// same reason one transport owns one string: a caller that can reach both HTTP
+// and gRPC would learn the distinction from the difference between them.
+const SanitizedDetail = "request failed"
+
+// AtCapacityDetail is the caller-visible text a transport's admission control
+// answers with when a concurrency budget is exhausted.
+//
+// Only the explanation is shared. Each transport still chooses its own status —
+// HTTP answers 503, gRPC answers RESOURCE_EXHAUSTED rather than UNAVAILABLE,
+// which it reserves for a health-derived down state — because those vocabularies
+// are not interchangeable and the shed reason is.
+const AtCapacityDetail = "server is at capacity"
+
+// PanicAttrs returns the log attributes describing a recovered panic: its class,
+// its concrete type, and the stack it came from.
+//
+// Four packages recover panics — a background task, both transports, and the
+// authn converters — and each answered its caller differently but described the
+// panic identically, except that one of them silently omitted the class. One
+// constructor is what makes that impossible: a site cannot forget an attribute
+// it does not spell.
+//
+// stack is a parameter rather than a [runtime/debug.Stack] call made here
+// because where it is taken is what makes it worth anything. Only a deferred
+// function still holds the panicking goroutine's frames, and a helper that
+// captured the stack on its caller's behalf would let a site that recovered
+// earlier log an unrelated stack that still looks correct.
+//
+// Only the panic's type is published, never its value. A panic raised while
+// parsing a token, a provider document, or a request body carries that input in
+// its message, and a log is not a safer place for it than a response is.
+func PanicAttrs(recovered any, stack []byte) []any {
+	return []any{
+		"panic.class", PanicClass(recovered),
+		"panic.type", fmt.Sprintf("%T", recovered),
+		"stack", string(stack),
+	}
+}
+
 // classChainDepth bounds how far ClassChain walks. A chain this long is already
 // past the point where another name helps, and the bound is what keeps a cyclic
 // or pathological Unwrap from deciding the size of a log record.

@@ -66,10 +66,38 @@ for malformed in '{}' 'null' '[[{"name":"other"}],null]'; do
 	fi
 done
 
+# The publication sequence lives in one composite action, so the ordering rule is
+# asserted once against that file. What stays per job is what a job owns and can
+# still get wrong on its own: the shared concurrency group, and actually running
+# the action rather than an open-coded copy of it.
+PUBLISH_ACTION="${ROOT_DIR}/.github/actions/publish-image/action.yml"
+
 assert_publication_order() {
+	local marker_line promotion_line
+
+	[[ -f "${PUBLISH_ACTION}" ]] || {
+		echo "migration publication self-test: the publish-image action is missing" >&2
+		exit 1
+	}
+	marker_line="$(
+		grep -n -F -- '- name: Advance verified migration history marker' "${PUBLISH_ACTION}" |
+			cut -d: -f1
+	)"
+	promotion_line="$(
+		grep -n -F -- '- name: Promote verified tags' "${PUBLISH_ACTION}" |
+			cut -d: -f1
+	)"
+	if [[ ! "${marker_line}" =~ ^[0-9]+$ ]] ||
+		[[ ! "${promotion_line}" =~ ^[0-9]+$ ]] ||
+		((marker_line >= promotion_line)); then
+		echo "migration publication self-test: a public alias is promoted before the history marker" >&2
+		exit 1
+	fi
+}
+
+assert_publication_job() {
 	local job="$1"
-	local promotion="$2"
-	local section marker_line promotion_line
+	local section
 
 	section="$(
 		awk -v heading="  ${job}:" '
@@ -88,24 +116,15 @@ assert_publication_order() {
 		echo "migration publication self-test: ${job} lacks shared publication concurrency" >&2
 		exit 1
 	}
-	marker_line="$(
-		grep -n -F -- '- name: Advance verified migration history marker' <<<"${section}" |
-			cut -d: -f1
-	)"
-	promotion_line="$(
-		grep -n -F -- "- name: ${promotion}" <<<"${section}" |
-			cut -d: -f1
-	)"
-	if [[ ! "${marker_line}" =~ ^[0-9]+$ ]] ||
-		[[ ! "${promotion_line}" =~ ^[0-9]+$ ]] ||
-		((marker_line >= promotion_line)); then
-		echo "migration publication self-test: ${job} promotes a public alias before the history marker" >&2
+	grep -Fq 'uses: ./.github/actions/publish-image' <<<"${section}" || {
+		echo "migration publication self-test: ${job} does not publish through the shared action" >&2
 		exit 1
-	fi
+	}
 }
 
-assert_publication_order publish-main "Promote verified main tag"
-assert_publication_order publish-release "Promote verified release tags"
+assert_publication_order
+assert_publication_job publish-main
+assert_publication_job publish-release
 
 publish_main_guard="$(
 	awk '

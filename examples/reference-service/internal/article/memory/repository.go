@@ -87,21 +87,37 @@ func (s *staged) FindBySlug(ctx context.Context, slug string) (article.Article, 
 	if err := ctx.Err(); err != nil {
 		return article.Article{}, fmt.Errorf("find article: %w", err)
 	}
-	found, ok := s.bySlug[slug]
-	if !ok {
-		return article.Article{}, article.ErrNotFound
-	}
-	return found, nil
+	return slugLookup(s.bySlug, slug)
 }
 
 func (s *staged) Create(ctx context.Context, created article.Article) error {
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf("create article: %w", err)
 	}
-	if _, exists := s.bySlug[created.Slug]; exists {
+	return slugInsert(s.bySlug, created)
+}
+
+// slugLookup and slugInsert are the slug rule both views answer with. The staged
+// view is the one production traffic reaches, through Do; *Repository implements
+// the same port directly, so the rule was written twice and only the staged copy
+// was exercised.
+//
+// They take the map rather than a receiver because that is the whole of what they
+// need, and each caller keeps its own context check and its own lock — which is
+// the part that genuinely differs between the two views.
+func slugLookup(bySlug map[string]article.Article, slug string) (article.Article, error) {
+	found, ok := bySlug[slug]
+	if !ok {
+		return article.Article{}, article.ErrNotFound
+	}
+	return found, nil
+}
+
+func slugInsert(bySlug map[string]article.Article, created article.Article) error {
+	if _, exists := bySlug[created.Slug]; exists {
 		return article.ErrAlreadyExists
 	}
-	s.bySlug[created.Slug] = created
+	bySlug[created.Slug] = created
 	return nil
 }
 
@@ -120,11 +136,7 @@ func (r *Repository) FindBySlug(ctx context.Context, slug string) (article.Artic
 
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	found, ok := r.bySlug[slug]
-	if !ok {
-		return article.Article{}, article.ErrNotFound
-	}
-	return found, nil
+	return slugLookup(r.bySlug, slug)
 }
 
 // Create inserts the article if its slug is free. A real datastore adapter
@@ -137,11 +149,7 @@ func (r *Repository) Create(ctx context.Context, created article.Article) error 
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if _, exists := r.bySlug[created.Slug]; exists {
-		return article.ErrAlreadyExists
-	}
-	r.bySlug[created.Slug] = created
-	return nil
+	return slugInsert(r.bySlug, created)
 }
 
 // AppendEvent records an event outside any unit of work. The use case writes

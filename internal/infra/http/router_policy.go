@@ -14,13 +14,13 @@ import (
 // beside its Allow header.
 func applyHTTPPolicy(root chi.Router) {
 	root.NotFound(func(w http.ResponseWriter, r *http.Request) {
-		writeProblem(w, r, problemResponse{code: problem.CodeNotFound, detail: "resource not found"})
+		writeProblem(w, r, notFoundProblem())
 	})
 
 	root.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
 		allowMethods := allowedMethodsForPath(root, r.URL.Path)
 		if len(allowMethods) == 0 {
-			writeProblem(w, r, problemResponse{code: problem.CodeNotFound, detail: "resource not found"})
+			writeProblem(w, r, notFoundProblem())
 			return
 		}
 		allowMethods = ensureMethodAllowed(allowMethods, http.MethodOptions)

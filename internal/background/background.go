@@ -130,11 +130,10 @@ func (s *Supervisor) runTask(name string, run func(context.Context) error) (runE
 		// panicking goroutine's frames still exist.
 		s.log.Error(
 			"background_task_panic",
-			"component", "background",
-			"task", name,
-			"panic.class", failure.PanicClass(recovered),
-			"panic.type", fmt.Sprintf("%T", recovered),
-			"stack", string(debug.Stack()),
+			append(
+				[]any{"component", "background", "task", name},
+				failure.PanicAttrs(recovered, debug.Stack())...,
+			)...,
 		)
 		runErr = fmt.Errorf("%w: %s", ErrPanic, name)
 	}()

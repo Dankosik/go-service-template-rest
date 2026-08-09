@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/infra/natsjs/natsjstest"
+	"github.com/example/go-service-template-rest/internal/waittest"
 	dockerclient "github.com/moby/moby/client"
 	"github.com/nats-io/nats.go/jetstream"
 )
@@ -111,9 +112,9 @@ func TestNATSReconnectProbeStopsWithRunContext(t *testing.T) {
 	client.events <- eventReconnect
 	go func() { runErr <- client.Run(runCtx) }()
 
-	receivePackage(t, probeEntered, 5*time.Second, "reconnect probe")
+	waittest.Receive(t, probeEntered, 5*time.Second, "reconnect probe")
 	cancelRun()
-	if err := receivePackage(t, runErr, time.Second, "messaging client cancellation"); !errors.Is(err, context.Canceled) {
+	if err := waittest.Receive(t, runErr, time.Second, "messaging client cancellation"); !errors.Is(err, context.Canceled) {
 		t.Fatalf("Run() error = %v, want context.Canceled", err)
 	}
 }
@@ -174,7 +175,7 @@ func TestNATSPublishDispatchCancellationAndNoRetry(t *testing.T) {
 		_, err := client.Producer().Publish(deadlineCtx, deadlineEvent)
 		deadlineErr <- err
 	}()
-	waitPackage(t, 3*time.Second, func() bool { return client.nc.Stats().OutMsgs >= dispatchedBefore+2 }, "publish dispatches")
+	waittest.Until(t, 3*time.Second, func() bool { return client.nc.Stats().OutMsgs >= dispatchedBefore+2 }, "publish dispatches")
 	if _, err := client.Producer().Publish(t.Context(), Event{
 		Subject: "events.test", MessageID: NewID(), PublicationID: NewID(),
 		Type: "test", Schema: "v1", CreatedAt: time.Now().UTC(), Payload: []byte("over capacity"),
@@ -248,10 +249,10 @@ func TestNATSHandlerAckAmbiguityRedelivers(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("Publish() error = %v", err)
 	}
-	if first := receivePackage(t, deliveries, 5*time.Second, "first delivery"); first != 1 {
+	if first := waittest.Receive(t, deliveries, 5*time.Second, "first delivery"); first != 1 {
 		t.Fatalf("first NumDelivered = %d, want 1", first)
 	}
-	if second := receivePackage(t, deliveries, 15*time.Second, "duplicate delivery"); second != 2 {
+	if second := waittest.Receive(t, deliveries, 15*time.Second, "duplicate delivery"); second != 2 {
 		t.Fatalf("second NumDelivered = %d, want 2", second)
 	}
 }
@@ -284,14 +285,14 @@ func TestNATSDLQSourceAckAmbiguityDeduplicates(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("Publish() error = %v", err)
 	}
-	if first := receivePackage(t, deliveries, 5*time.Second, "first DLQ delivery"); first != 1 {
+	if first := waittest.Receive(t, deliveries, 5*time.Second, "first DLQ delivery"); first != 1 {
 		t.Fatalf("first NumDelivered = %d, want 1", first)
 	}
-	if second := receivePackage(t, deliveries, 15*time.Second, "DLQ source-ack redelivery"); second != 2 {
+	if second := waittest.Receive(t, deliveries, 15*time.Second, "DLQ source-ack redelivery"); second != 2 {
 		t.Fatalf("second NumDelivered = %d, want 2", second)
 	}
-	receivePackage(t, doubleAcks, 5*time.Second, "first DLQ source ACK attempt")
-	receivePackage(t, doubleAcks, 5*time.Second, "second DLQ source ACK attempt")
+	waittest.Receive(t, doubleAcks, 5*time.Second, "first DLQ source ACK attempt")
+	waittest.Receive(t, doubleAcks, 5*time.Second, "second DLQ source ACK attempt")
 	dlq, err := f.JS.Stream(t.Context(), "EVENTS_DLQ")
 	if err != nil {
 		t.Fatalf("lookup DLQ stream: %v", err)
@@ -358,33 +359,3 @@ type staticBatch struct {
 
 func (b staticBatch) Messages() <-chan jetstream.Msg { return b.messages }
 func (b staticBatch) Error() error                   { return b.err }
-
-func waitPackage(t *testing.T, timeout time.Duration, predicate func() bool, description string) {
-	t.Helper()
-	ctx, cancel := context.WithTimeout(t.Context(), timeout)
-	defer cancel()
-	ticker := time.NewTicker(10 * time.Millisecond)
-	defer ticker.Stop()
-	for {
-		if predicate() {
-			return
-		}
-		select {
-		case <-ticker.C:
-		case <-ctx.Done():
-			t.Fatalf("timed out waiting for %s", description)
-		}
-	}
-}
-
-func receivePackage[T any](t *testing.T, ch <-chan T, timeout time.Duration, description string) T {
-	t.Helper()
-	select {
-	case value := <-ch:
-		return value
-	case <-time.After(timeout):
-		var zero T
-		t.Fatalf("timed out waiting for %s", description)
-		return zero
-	}
-}

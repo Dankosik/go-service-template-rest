@@ -68,10 +68,7 @@ func handleGeneratedResponseError(log *slog.Logger, domainErrors []failure.Mappe
 		// here, so RequestTimeout never sees an uncommitted one. Reporting
 		// it as 500 would hide every slow dependency inside the error rate.
 		if errors.Is(err, context.DeadlineExceeded) {
-			writeProblem(w, r, problemResponse{
-				code:   problem.CodeGatewayTimeout,
-				detail: "request exceeded its time budget",
-			})
+			writeProblem(w, r, timeBudgetExceededProblem())
 			return
 		}
 
@@ -107,7 +104,7 @@ func handleGeneratedResponseError(log *slog.Logger, domainErrors []failure.Mappe
 		// bug starts reading as a client mistake. Recording it here is what keeps
 		// that sanitized answer diagnosable.
 		recordUnhandledResponseError(log, r, err)
-		writeProblem(w, r, problemResponse{code: problem.CodeInternalError, detail: sanitizedFailureDetail})
+		writeProblem(w, r, problemResponse{code: problem.CodeInternalError, detail: failure.SanitizedDetail})
 	}
 }
 

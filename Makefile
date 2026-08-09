@@ -132,7 +132,7 @@ BENCHMARK_REMOTE_SCRIPT := bash ./scripts/dev/benchmark-remote.sh
 .NOTPARALLEL: check mod-check lint-deep go-security openapi-check proto-check delivery-quality ci-local
 
 .PHONY: help template-init template-init-check project-structure-check ci-change-scope-check check check-gentle check-full check-full-gentle pr-check \
-	tidy fmt mod-check mod-tidy-check mod-verify fmt-check test test-watch test-race test-cover test-report coverage-effective-total coverage-summary coverage-check test-fuzz-smoke test-flake-smoke test-integration \
+	tidy fmt mod-check mod-tidy-check mod-verify fmt-check test test-watch test-race test-cover test-report coverage-min coverage-effective-total coverage-summary coverage-check test-fuzz-smoke test-flake-smoke test-integration \
 	bench bench-baseline bench-compare bench-profile bench-http bench-http-inspect benchmark-infra-check benchmark-remote-check benchmark-remote-image \
 	lint lint-deep lint-fast deadcode nilaway modernize-check test-parallelism-check govulncheck gosec go-security secret-scan secret-scan-history secret-scan-check ci-local ci-local-gentle \
 	actionlint zizmor shellcheck dockerfile-check delivery-quality \
@@ -257,8 +257,7 @@ ci-local-gentle:
 	nice -n $(GENTLE_NICE) env GOMAXPROCS=$(GENTLE_GOMAXPROCS) $(MAKE) ci-local
 
 check-full:
-	@command -v docker >/dev/null 2>&1 || { echo "Docker is required for make check-full"; exit 1; }
-	@docker info >/dev/null 2>&1 || { echo "Docker daemon is not reachable"; exit 1; }
+	@bash ./scripts/lib/require-docker.sh "make check-full"
 	$(MAKE) delivery-quality
 	$(MAKE) ci-local
 	REQUIRE_DOCKER=1 $(MAKE) test-integration
@@ -351,6 +350,11 @@ test-report:
 	GOTOOLCHAIN=$(COVERAGE_GOTOOLCHAIN) GOCOVERDIR= $(GO_TOOL) gotestsum --format=pkgname-and-test-fails --junitfile=$(TEST_JUNIT_FILE) --jsonfile=$(TEST_JSON_FILE) -- -vet=off -covermode=set -coverprofile=coverage.out ./...
 	$(MAKE) coverage-summary
 	$(MAKE) coverage-check COVERAGE_MIN=$(COVERAGE_MIN)
+
+# Reported rather than restated, so a workflow that prints the floor and the gate
+# that enforces it cannot disagree.
+coverage-min:
+	@printf '%s\n' "$(COVERAGE_MIN)"
 
 coverage-effective-total:
 	@test -f coverage.out || { echo "coverage.out not found; run 'make test-cover' or 'make test-report'"; exit 1; }
@@ -486,16 +490,14 @@ test-parallelism-check:
 	$(GOLANGCI_LINT) run --allow-serial-runners --concurrency=$(LINT_CONCURRENCY) --enable-only=paralleltest,tparallel --timeout=3m --max-issues-per-linter=0 --max-same-issues=0
 
 actionlint:
-	@command -v docker >/dev/null 2>&1 || { echo "Docker is required for actionlint"; exit 1; }
-	@docker info >/dev/null 2>&1 || { echo "Docker daemon is not reachable"; exit 1; }
+	@bash ./scripts/lib/require-docker.sh actionlint
 	docker run --rm --read-only --network none \
 		-v "$(CURDIR):/src:ro" \
 		-w /src \
 		"$(ACTIONLINT_IMAGE)"
 
 zizmor:
-	@command -v docker >/dev/null 2>&1 || { echo "Docker is required for zizmor"; exit 1; }
-	@docker info >/dev/null 2>&1 || { echo "Docker daemon is not reachable"; exit 1; }
+	@bash ./scripts/lib/require-docker.sh zizmor
 	docker run --rm --read-only --network none \
 		-v "$(CURDIR):/src:ro" \
 		-w /src \
@@ -511,18 +513,17 @@ zizmor:
 		.
 
 shellcheck:
-	@command -v docker >/dev/null 2>&1 || { echo "Docker is required for ShellCheck"; exit 1; }
-	@docker info >/dev/null 2>&1 || { echo "Docker daemon is not reachable"; exit 1; }
+	@bash ./scripts/lib/require-docker.sh ShellCheck
 	@test -n "$(SHELL_FILES)" || { echo "no shell scripts found; skipping ShellCheck"; exit 0; }
 	docker run --rm --read-only --network none \
 		-v "$(CURDIR):/src:ro" \
 		-w /src \
 		"$(SHELLCHECK_IMAGE)" \
+		-x \
 		-- $(SHELL_FILES)
 
 dockerfile-check:
-	@command -v docker >/dev/null 2>&1 || { echo "Docker is required for Dockerfile checks"; exit 1; }
-	@docker info >/dev/null 2>&1 || { echo "Docker daemon is not reachable"; exit 1; }
+	@bash ./scripts/lib/require-docker.sh "Dockerfile checks"
 	docker buildx build --check -f build/docker/Dockerfile .
 
 delivery-quality: actionlint zizmor shellcheck dockerfile-check
@@ -640,8 +641,7 @@ proto-check: proto-format-check proto-lint proto-drift-check
 
 # profile:database-postgres:start
 migration-validate:
-	@command -v docker >/dev/null 2>&1 || { echo "Docker is required"; exit 1; }; \
-	docker info >/dev/null 2>&1 || { echo "Docker daemon is not reachable"; exit 1; }; \
+	@bash ./scripts/lib/require-docker.sh "make migration-validate"; \
 	project="service-migration-$$(date +%s)-$$$$"; \
 	runtime=""; \
 	compose() { POSTGRES_PORT=0 docker compose -p "$$project" -f env/docker-compose.yml "$$@"; }; \
@@ -701,8 +701,7 @@ migration-validate:
 # profile:database-postgres:end
 
 container-security:
-	@command -v docker >/dev/null 2>&1 || { echo "Docker is required"; exit 1; }
-	@docker info >/dev/null 2>&1 || { echo "Docker daemon is not reachable"; exit 1; }
+	@bash ./scripts/lib/require-docker.sh "make container-security"
 	@image="$(CONTAINER_IMAGE)"; \
 	if [ -z "$$image" ]; then image="$(SERVICE_NAME):ci"; docker build -f build/docker/Dockerfile -t "$$image" .; fi; \
 	docker run --rm \

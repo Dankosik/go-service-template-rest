@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"net"
 	"strings"
 	"testing"
 	"time"
@@ -16,16 +15,13 @@ import (
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
-	"google.golang.org/grpc/test/bufconn"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 const articleCreateFullMethod = "/reference.test.Article/Create"
 
 func TestArticleAlreadyExistsMapsThroughGRPCTransport(t *testing.T) {
-	listener := bufconn.Listen(1 << 20)
 	server, err := grpcx.NewServer(grpcx.Config{
 		MaxConcurrentRPCs:          4,
 		MaxConcurrentHealthRPCs:    4,
@@ -52,34 +48,9 @@ func TestArticleAlreadyExistsMapsThroughGRPCTransport(t *testing.T) {
 		}},
 	})
 	if err != nil {
-		_ = listener.Close()
 		t.Fatalf("grpcx.NewServer() error = %v", err)
 	}
-	serveDone := make(chan error, 1)
-	go func() { serveDone <- server.Serve(listener) }()
-
-	connection, err := grpc.NewClient("passthrough:///reference", grpc.WithContextDialer(
-		func(context.Context, string) (net.Conn, error) { return listener.Dial() },
-	), grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		_ = server.Close()
-		_ = listener.Close()
-		t.Fatalf("grpc.NewClient() error = %v", err)
-	}
-	t.Cleanup(func() {
-		if err := connection.Close(); err != nil {
-			t.Errorf("ClientConn.Close() error = %v", err)
-		}
-		if err := server.Close(); err != nil {
-			t.Errorf("Server.Close() error = %v", err)
-		}
-		if err := <-serveDone; err != nil {
-			t.Errorf("Server.Serve() error = %v", err)
-		}
-		if err := listener.Close(); err != nil {
-			t.Errorf("bufconn.Listener.Close() error = %v", err)
-		}
-	})
+	connection := grpctest.ServeBufconn(t, server)
 
 	err = connection.Invoke(t.Context(), articleCreateFullMethod, &emptypb.Empty{}, &emptypb.Empty{})
 	converted := status.Convert(err)

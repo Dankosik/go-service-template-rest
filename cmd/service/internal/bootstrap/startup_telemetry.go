@@ -56,7 +56,7 @@ func bootstrapTelemetryStage(
 	telemetryCancel()
 	// Reporting follows setup because only setup knows which setting supplied
 	// the endpoint, and "ignored" must not name the variable that was honored.
-	reportIgnoredAmbientOTLPEnv(startupCtx, log, traceEndpoint)
+	reportIgnoredAmbientOTLPEnv(startupCtx, log, traceEndpoint, metricsResult.Endpoint)
 	recordTraceExporterState(startupCtx, log, metrics, traceEndpoint, tracingErr)
 
 	return telemetryStage{
@@ -158,23 +158,35 @@ func newTelemetryCleanup(log *slog.Logger, shutdowns ...func(context.Context) er
 // named the endpoint: that case fails exporter setup and is already reported as
 // degraded telemetry, so listing it here as merely "ignored" would contradict
 // that record.
-func reportIgnoredAmbientOTLPEnv(ctx context.Context, log *slog.Logger, endpoint telemetry.TraceExporterEndpoint) {
-	ignored := telemetry.AmbientOTLPExporterEnv()
-	ignored = slices.DeleteFunc(ignored, func(name string) bool {
-		return name == endpoint.Source
+//
+// Both signals are taken because the claim is about the process rather than
+// about traces. A variable that supplied the metrics endpoint changed something,
+// and reporting it here while reportMetricExporterState names it as the active
+// endpoint_source would put two contradicting lines in one startup log. Two
+// per-signal records would each be true and reproduce the same contradiction,
+// so there is one record and it excludes what either signal honored.
+func reportIgnoredAmbientOTLPEnv(
+	ctx context.Context,
+	log *slog.Logger,
+	traceEndpoint telemetry.TraceExporterEndpoint,
+	metricsEndpoint telemetry.ExporterEndpoint,
+) {
+	honored := []string{traceEndpoint.Source, metricsEndpoint.Source}
+	ignored := slices.DeleteFunc(telemetry.AmbientOTLPExporterEnv(), func(name string) bool {
+		return slices.Contains(honored, name)
 	})
-	if endpoint.Source == telemetry.TraceExporterConfigKey {
-		conflicting := telemetry.ConflictingTraceExporterEnv()
-		ignored = slices.DeleteFunc(ignored, func(name string) bool {
-			return slices.Contains(conflicting, name)
-		})
-	}
+	ignored = withoutConflicting(
+		ignored, traceEndpoint.Source, telemetry.TraceExporterConfigKey, telemetry.ConflictingTraceExporterEnv,
+	)
+	ignored = withoutConflicting(
+		ignored, metricsEndpoint.Source, telemetry.MetricExporterConfigKey, telemetry.ConflictingMetricExporterEnv,
+	)
 	if len(ignored) == 0 {
 		return
 	}
 
 	mode := startupDependencyModeFeatureOff
-	if endpoint.Configured() {
+	if traceEndpoint.Configured() || metricsEndpoint.Configured() {
 		mode = startupDependencyModeConfigured
 	}
 
@@ -189,9 +201,26 @@ func reportIgnoredAmbientOTLPEnv(ctx context.Context, log *slog.Logger, endpoint
 			"mode", mode,
 			"reason", "ambient_exporter_env_ignored",
 			"env.ignored", strings.Join(ignored, ", "),
+			// The shared exporter root, which is what an operator sets to own
+			// both destinations rather than one signal's override.
 			"config.key", telemetry.TraceExporterConfigKey,
 		)...,
 	)
+}
+
+// withoutConflicting drops the variables a signal rejects rather than ignores.
+//
+// A conflict only exists when this service named that signal's endpoint itself;
+// when the platform named it, the platform owns the credentials with it and
+// nothing was refused.
+func withoutConflicting(ignored []string, source, configKey string, conflicting func() []string) []string {
+	if source != configKey {
+		return ignored
+	}
+	rejected := conflicting()
+	return slices.DeleteFunc(ignored, func(name string) bool {
+		return slices.Contains(rejected, name)
+	})
 }
 
 // reportMetricExporterState names the metric-export destination in the startup

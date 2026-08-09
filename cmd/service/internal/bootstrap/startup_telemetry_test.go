@@ -108,6 +108,7 @@ func TestReportIgnoredAmbientOTLPEnvWarnsWhenExporterUnconfigured(t *testing.T) 
 		context.Background(),
 		slog.New(slog.NewJSONHandler(&buf, nil)),
 		telemetry.TraceExporterEndpoint{},
+		telemetry.ExporterEndpoint{},
 	)
 
 	logged := buf.String()
@@ -142,6 +143,7 @@ func TestReportIgnoredAmbientOTLPEnvWarnsOnOverriddenEndpointWhenConfigured(t *t
 		context.Background(),
 		slog.New(slog.NewJSONHandler(&buf, nil)),
 		configuredTestTraceEndpoint(),
+		telemetry.ExporterEndpoint{},
 	)
 
 	logged := buf.String()
@@ -173,6 +175,7 @@ func TestReportIgnoredAmbientOTLPEnvSkipsTheHonoredEndpointVariable(t *testing.T
 			URL:    "http://injected-collector.example:4318/v1/traces",
 			Source: "OTEL_EXPORTER_OTLP_ENDPOINT",
 		},
+		telemetry.ExporterEndpoint{},
 	)
 
 	logged := buf.String()
@@ -181,6 +184,60 @@ func TestReportIgnoredAmbientOTLPEnvSkipsTheHonoredEndpointVariable(t *testing.T
 	}
 	if strings.Contains(logged, "OTEL_EXPORTER_OTLP_ENDPOINT") {
 		t.Fatalf("log = %q, must not report the honored endpoint variable", logged)
+	}
+}
+
+// Metrics resolve their own endpoint, and a variable that supplied it was
+// honored exactly as the trace one would be. Reporting it as ignored while
+// reportMetricExporterState names the same variable as the active
+// endpoint_source puts two contradicting lines in one startup log, and an
+// operator has no way to tell which is right.
+func TestReportIgnoredAmbientOTLPEnvSkipsTheHonoredMetricsEndpointVariable(t *testing.T) {
+	telemetrytest.ClearAmbientExporterEnv(t)
+	t.Setenv("OTEL_EXPORTER_OTLP_METRICS_ENDPOINT", "http://injected-collector.example:4318/v1/metrics")
+	t.Setenv("OTEL_EXPORTER_OTLP_TIMEOUT", "15000")
+
+	var buf bytes.Buffer
+	reportIgnoredAmbientOTLPEnv(
+		context.Background(),
+		slog.New(slog.NewJSONHandler(&buf, nil)),
+		telemetry.TraceExporterEndpoint{},
+		telemetry.ExporterEndpoint{
+			URL:    "http://injected-collector.example:4318/v1/metrics",
+			Source: "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT",
+		},
+	)
+
+	logged := buf.String()
+	if !strings.Contains(logged, "OTEL_EXPORTER_OTLP_TIMEOUT") {
+		t.Fatalf("log = %q, want the genuinely ignored variable", logged)
+	}
+	if strings.Contains(logged, "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT") {
+		t.Fatalf("log = %q, must not report the honored metrics endpoint variable", logged)
+	}
+}
+
+// The metrics half of the conflict rule. A credential this service refused is
+// reported as degraded telemetry by the metrics exporter itself, so listing it
+// here as merely ignored contradicts that record for the same reason the trace
+// case does.
+func TestReportIgnoredAmbientOTLPEnvSilentOnMetricsConflictWhenConfigured(t *testing.T) {
+	telemetrytest.ClearAmbientExporterEnv(t)
+	t.Setenv("OTEL_EXPORTER_OTLP_METRICS_HEADERS", "authorization=Bearer secret-value")
+
+	var buf bytes.Buffer
+	reportIgnoredAmbientOTLPEnv(
+		context.Background(),
+		slog.New(slog.NewJSONHandler(&buf, nil)),
+		telemetry.TraceExporterEndpoint{},
+		telemetry.ExporterEndpoint{
+			URL:    "https://collector.example/v1/metrics",
+			Source: telemetry.MetricExporterConfigKey,
+		},
+	)
+
+	if buf.Len() != 0 {
+		t.Fatalf("log = %q, want no warning for a variable that fails metrics exporter setup", buf.String())
 	}
 }
 
@@ -196,6 +253,7 @@ func TestReportIgnoredAmbientOTLPEnvSilentOnConflictWhenConfigured(t *testing.T)
 		context.Background(),
 		slog.New(slog.NewJSONHandler(&buf, nil)),
 		configuredTestTraceEndpoint(),
+		telemetry.ExporterEndpoint{},
 	)
 
 	if buf.Len() != 0 {
@@ -211,6 +269,7 @@ func TestReportIgnoredAmbientOTLPEnvSilentWithoutAmbientEnv(t *testing.T) {
 		context.Background(),
 		slog.New(slog.NewJSONHandler(&buf, nil)),
 		telemetry.TraceExporterEndpoint{},
+		telemetry.ExporterEndpoint{},
 	)
 
 	if buf.Len() != 0 {

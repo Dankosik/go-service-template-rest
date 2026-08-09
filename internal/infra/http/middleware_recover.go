@@ -3,7 +3,6 @@ package httpx
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"runtime/debug"
@@ -38,19 +37,20 @@ func Recover(log *slog.Logger, next http.Handler) http.Handler {
 			if route == "" {
 				route = "<unmatched>"
 			}
+			// debug.Stack is taken here, inside the deferred recovery, because
+			// that is the only point the panicking frames still exist.
 			log.ErrorContext(
 				ctx,
 				"http_panic_recovered",
-				"panic.class", failure.PanicClass(rec),
-				"panic.type", fmt.Sprintf("%T", rec),
-				"method", request.Method,
-				"route", route,
-				"stack", string(debug.Stack()),
+				append(
+					[]any{"method", request.Method, "route", route},
+					failure.PanicAttrs(rec, debug.Stack())...,
+				)...,
 			)
 			if committed() {
 				return
 			}
-			writeProblem(w, r, problemResponse{code: problem.CodeInternalError, detail: sanitizedFailureDetail})
+			writeProblem(w, r, problemResponse{code: problem.CodeInternalError, detail: failure.SanitizedDetail})
 		}(r.Context(), r)
 		next.ServeHTTP(trackedWriter, r)
 	})

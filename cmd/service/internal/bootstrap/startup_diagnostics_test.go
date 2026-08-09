@@ -1,12 +1,17 @@
 package bootstrap
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"runtime"
+	"strings"
+	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/config"
@@ -182,4 +187,45 @@ func serveDiagnostics(srv *http.Server, path string) *httptest.ResponseRecorder 
 	resp := httptest.NewRecorder()
 	srv.Handler.ServeHTTP(resp, req)
 	return resp
+}
+
+// TestShutdownDiagnosticsForcesCloseOnBudgetExhaustion pins the bound on the
+// diagnostics stop. It runs after the API drain, so without a budget of its own a
+// scrape that never completes would park the process here and take the telemetry
+// flush with it — the same failure the dependency close is bounded against.
+func TestShutdownDiagnosticsForcesCloseOnBudgetExhaustion(t *testing.T) {
+	t.Parallel()
+
+	synctest.Test(t, func(t *testing.T) {
+		var closed atomic.Bool
+		server := newFakeRuntimeServer()
+		server.onShutdown = func(ctx context.Context) error {
+			<-ctx.Done()
+			return ctx.Err()
+		}
+		server.onClose = func() error {
+			closed.Store(true)
+			return nil
+		}
+
+		var logged bytes.Buffer
+		err := shutdownDiagnostics(context.Background(), slog.New(slog.NewJSONHandler(&logged, nil)), testShutdownBudget(), server)
+		if err != nil {
+			t.Fatalf("shutdownDiagnostics() error = %v, want the abandoned scrape reported as degraded, not failed", err)
+		}
+		if !closed.Load() {
+			t.Fatal("shutdownDiagnostics() did not force the listener closed after its budget expired")
+		}
+		if !strings.Contains(logged.String(), "diagnostics_forced") {
+			t.Fatalf("log = %q, want the forced close recorded", logged.String())
+		}
+	})
+}
+
+func TestShutdownDiagnosticsIgnoresAbsentServer(t *testing.T) {
+	t.Parallel()
+
+	if err := shutdownDiagnostics(context.Background(), slog.New(slog.DiscardHandler), testShutdownBudget(), nil); err != nil {
+		t.Fatalf("shutdownDiagnostics(nil) error = %v, want nil", err)
+	}
 }

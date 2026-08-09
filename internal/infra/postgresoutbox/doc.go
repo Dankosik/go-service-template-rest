@@ -9,8 +9,9 @@
 // PostgreSQL update republishes the same event ID and bytes after the lease
 // expires, so consumers deduplicate whatever is not naturally idempotent.
 //
-// Three audiences share one [Store]. The write path calls only [Store.Append],
-// inside the transaction that owns its mutation — that path is a PostgreSQL
+// Three audiences share one [Store]. The write path calls [Store.Append],
+// inside the transaction that owns its mutation, and [Store.ReconcileCommit]
+// afterward when that commit's own result was lost — that path is a PostgreSQL
 // repository adapter rather than a feature package, because depguard denies a
 // feature package both internal/infra and pgx; see the ownership split in
 // docs/postgres-transactional-outbox.md. The relay process owns [Store.Claim],
@@ -54,10 +55,12 @@
 //
 // Beside the cycle: event.go owns the [Event] envelope and its size limits,
 // publisher.go the broker contract, notify.go the append listener that turns a
-// commit into a wake-up, relay_ready.go the readiness policy the diagnostics
-// probe and the metric callback share, errors.go the sentinel set, vocabulary.go
-// the closed metric and log vocabularies with the functions that bound them, and
-// telemetry.go the instruments, the snapshot, and the scrape callback.
+// commit into a wake-up, store_receipt.go the append receipt and the
+// [Store.ReconcileCommit] answer a writer needs when its own commit response was
+// lost, relay_ready.go the readiness policy the diagnostics probe and the metric
+// callback share, errors.go the sentinel set, vocabulary.go the closed metric
+// and log vocabularies with the functions that bound them, and telemetry.go the
+// instruments, the snapshot, and the scrape callback.
 //
 // # Trace continuity
 //

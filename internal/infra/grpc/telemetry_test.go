@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	"github.com/example/go-service-template-rest/internal/infra/grpcclient"
+	"github.com/example/go-service-template-rest/internal/infra/telemetry/telemetrytest"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/propagation"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
@@ -294,24 +295,8 @@ type recordingTelemetry struct {
 func newRecordingTelemetry(t *testing.T) recordingTelemetry {
 	t.Helper()
 
-	spanRecorder := tracetest.NewSpanRecorder()
-	tracerProvider := sdktrace.NewTracerProvider(
-		sdktrace.WithSampler(sdktrace.AlwaysSample()),
-		sdktrace.WithSpanProcessor(spanRecorder),
-	)
-	t.Cleanup(func() {
-		if err := tracerProvider.Shutdown(context.Background()); err != nil {
-			t.Errorf("TracerProvider.Shutdown() error = %v", err)
-		}
-	})
-
-	metricReader := sdkmetric.NewManualReader()
-	meterProvider := sdkmetric.NewMeterProvider(sdkmetric.WithReader(metricReader))
-	t.Cleanup(func() {
-		if err := meterProvider.Shutdown(context.Background()); err != nil {
-			t.Errorf("MeterProvider.Shutdown() error = %v", err)
-		}
-	})
+	spanRecorder, tracerProvider := telemetrytest.NewRecordingTracerProvider(t)
+	metricReader, meterProvider := telemetrytest.NewManualMeterProvider(t)
 
 	return recordingTelemetry{
 		spanRecorder:   spanRecorder,

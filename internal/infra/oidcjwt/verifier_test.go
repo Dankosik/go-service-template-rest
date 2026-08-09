@@ -17,8 +17,9 @@ import (
 	"testing"
 	"time"
 
-	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
+
+	"github.com/example/go-service-template-rest/internal/infra/telemetry/telemetrytest"
 )
 
 func TestKeyMissRefresh(t *testing.T) {
@@ -245,13 +246,7 @@ func TestAuthnRedactionCoversRefreshPanicAndTelemetry(t *testing.T) {
 	now := testNow
 	first := loadTestRSAKey(t, testSigningKey)
 	second := loadTestRSAKey(t, testRotatedKey)
-	reader := sdkmetric.NewManualReader()
-	provider := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
-	t.Cleanup(func() {
-		if err := provider.Shutdown(t.Context()); err != nil {
-			t.Errorf("shutdown metric provider: %v", err)
-		}
-	})
+	reader, provider := telemetrytest.NewManualMeterProvider(t)
 	var output strings.Builder
 	client := &scriptedClient{responses: append(initialResponses(t, first), scriptedResponse{panic: poison})}
 	clock := newTestClock(now)
@@ -304,6 +299,15 @@ func TestAuthnRedactionCoversRefreshPanicAndTelemetry(t *testing.T) {
 	for _, operation := range []string{"jwks_refresh", "verify"} {
 		if !strings.Contains(logged, operation) {
 			t.Errorf("the recovered panic in %q was converted silently: %s", operation, logged)
+		}
+	}
+	// panic.class is the bounded label an operator alerts on, and this converter
+	// published only the unbounded type until failure.PanicAttrs became the one
+	// constructor for the set. Asserting the whole set is what keeps the three
+	// arriving together here as they already do at the other recovery sites.
+	for _, attribute := range []string{`"panic.class":"string"`, `"panic.type":"string"`, `"stack":`} {
+		if !strings.Contains(logged, attribute) {
+			t.Errorf("recovered panic record is missing %s: %s", attribute, logged)
 		}
 	}
 }

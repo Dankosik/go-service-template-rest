@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/example/go-service-template-rest/cmd/internal/runtimeopts"
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/failure"
 	"github.com/example/go-service-template-rest/internal/health"
@@ -171,16 +172,7 @@ func initRuntimeDependencies(
 // the process is the platform's job, and every supported deployment target
 // already has a restart policy for it.
 func initPostgres(ctx context.Context, cfg config.PostgresConfig) (*postgres.Pool, error) {
-	pg, err := postgres.New(ctx, postgres.Options{
-		DSN:                cfg.DSN,
-		ConnectTimeout:     cfg.ConnectTimeout,
-		HealthcheckTimeout: cfg.HealthcheckTimeout,
-		MaxOpenConns:       cfg.MaxOpenConns,
-		MinIdleConns:       cfg.MinIdleConns,
-		AcquireTimeout:     cfg.AcquireTimeout,
-		ConnMaxLifetime:    cfg.ConnMaxLifetime,
-		StatementTimeout:   cfg.StatementTimeout,
-	})
+	pg, err := postgres.New(ctx, runtimeopts.Postgres(cfg))
 	if err != nil {
 		return nil, fmt.Errorf("%w: postgres init failed: %w", errDependencyInit, err)
 	}

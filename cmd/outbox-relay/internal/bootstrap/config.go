@@ -8,7 +8,6 @@ import (
 	"github.com/example/go-service-template-rest/cmd/internal/runtimeopts"
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/infra/postgresoutbox"
-	"github.com/example/go-service-template-rest/internal/observability/logctx"
 )
 
 func parseLoadOptions(args []string) (config.LoadOptions, bool, error) {
@@ -24,9 +23,7 @@ func parseLoadOptions(args []string) (config.LoadOptions, bool, error) {
 }
 
 func newLogger(out io.Writer, cfg config.Config) *slog.Logger {
-	return logctx.NewProcessLogger(out, cfg.Log.Level).With(
-		append(runtimeopts.LoggerFields(cfg), "component", "outbox_relay")...,
-	)
+	return runtimeopts.Logger(out, cfg, "component", "outbox_relay")
 }
 
 func relayConfig(cfg config.OutboxConfig) postgresoutbox.RelayConfig {

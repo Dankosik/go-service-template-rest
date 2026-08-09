@@ -13,6 +13,7 @@ import (
 	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	"github.com/example/go-service-template-rest/internal/infra/postgres/pgtest"
 	"github.com/example/go-service-template-rest/internal/infra/postgresinbox"
+	"github.com/example/go-service-template-rest/internal/waittest"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -378,13 +379,15 @@ func rollbackInboxThenReport(
 	return reported
 }
 
+// waitForInboxBlock waits until the duplicate claim is parked behind the winner.
+//
+// The statement is the outbox suite's outboxBlockedBy verbatim, and stays a copy
+// on purpose: OUTBOX=none removes that file while INBOX=postgres keeps this one,
+// so neither suite can declare the shared helper the other would need. Only the
+// wait itself is shared, through internal/waittest.
 func waitForInboxBlock(t *testing.T, ctx context.Context, pool *postgres.Pool, blockerPID int) {
 	t.Helper()
-	deadline := time.NewTimer(10 * time.Second)
-	ticker := time.NewTicker(10 * time.Millisecond)
-	defer deadline.Stop()
-	defer ticker.Stop()
-	for {
+	waittest.Until(t, 10*time.Second, func() bool {
 		var blocked bool
 		if err := pool.PGX().QueryRow(ctx, `
 			SELECT EXISTS (
@@ -394,15 +397,8 @@ func waitForInboxBlock(t *testing.T, ctx context.Context, pool *postgres.Pool, b
 			)`, blockerPID).Scan(&blocked); err != nil {
 			t.Fatalf("observe inbox claim lock: %v", err)
 		}
-		if blocked {
-			return
-		}
-		select {
-		case <-ticker.C:
-		case <-deadline.C:
-			t.Fatal("duplicate inbox claim did not wait on the winner transaction")
-		}
-	}
+		return blocked
+	}, "the duplicate inbox claim to wait on the winner transaction")
 }
 
 func assertInboxCounts(t *testing.T, ctx context.Context, pool *postgres.Pool, claims, effects int) {

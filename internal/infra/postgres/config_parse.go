@@ -112,15 +112,6 @@ func NormalizeDSN(rawDSN string) (string, error) {
 	return preflightPostgresDSN(rawDSN)
 }
 
-// ProbeAddress extracts a probe-ready host:port from a PostgreSQL DSN.
-func ProbeAddress(rawDSN string) (string, error) {
-	pgxCfg, err := parsePoolConfig(rawDSN)
-	if err != nil {
-		return "", err
-	}
-	return postgresProbeAddressFromPoolConfig(pgxCfg)
-}
-
 func preflightPostgresDSN(rawDSN string) (string, error) {
 	dsn := strings.TrimSpace(rawDSN)
 	if dsn == "" {

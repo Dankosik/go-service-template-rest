@@ -19,12 +19,8 @@ import (
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/infra/grpcclient"
+	"github.com/example/go-service-template-rest/internal/infra/telemetry/telemetrytest"
 	"github.com/example/go-service-template-rest/internal/reqctx"
-	"go.opentelemetry.io/otel/attribute"
-	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
-	"go.opentelemetry.io/otel/sdk/metric/metricdata"
-	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
@@ -33,16 +29,7 @@ import (
 
 func TestPropagationPoliciesApplyToUnaryAndStreamingRPCs(t *testing.T) {
 	unaryMetadata, streamMetadata, target := startMetadataCaptureServer(t)
-	recorder := tracetest.NewSpanRecorder()
-	tracerProvider := sdktrace.NewTracerProvider(
-		sdktrace.WithSampler(sdktrace.AlwaysSample()),
-		sdktrace.WithSpanProcessor(recorder),
-	)
-	t.Cleanup(func() {
-		if err := tracerProvider.Shutdown(context.Background()); err != nil {
-			t.Errorf("TracerProvider.Shutdown() error = %v", err)
-		}
-	})
+	recorder, tracerProvider := telemetrytest.NewRecordingTracerProvider(t)
 
 	for _, testCase := range []struct {
 		name          string
@@ -153,19 +140,8 @@ func TestPropagationPoliciesApplyToUnaryAndStreamingRPCs(t *testing.T) {
 
 func TestPropagationMetricAttributesExcludeCorrelationValues(t *testing.T) {
 	unaryMetadata, _, target := startMetadataCaptureServer(t)
-	reader := sdkmetric.NewManualReader()
-	meterProvider := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
-	t.Cleanup(func() {
-		if err := meterProvider.Shutdown(context.Background()); err != nil {
-			t.Errorf("MeterProvider.Shutdown() error = %v", err)
-		}
-	})
-	tracerProvider := sdktrace.NewTracerProvider(sdktrace.WithSampler(sdktrace.AlwaysSample()))
-	t.Cleanup(func() {
-		if err := tracerProvider.Shutdown(context.Background()); err != nil {
-			t.Errorf("TracerProvider.Shutdown() error = %v", err)
-		}
-	})
+	reader, meterProvider := telemetrytest.NewManualMeterProvider(t)
+	_, tracerProvider := telemetrytest.NewRecordingTracerProvider(t)
 
 	cfg := grpcclient.DefaultConfig(target)
 	cfg.HealthCheck = false
@@ -197,7 +173,7 @@ func TestPropagationMetricAttributesExcludeCorrelationValues(t *testing.T) {
 	parent.End()
 	<-unaryMetadata
 
-	assertGRPCMetricsDoNotContain(t, reader, requestID, traceID, "metric-private-parent")
+	telemetrytest.AssertNoAttributeContains(t, reader, requestID, traceID, "metric-private-parent")
 }
 
 func TestPerRPCCredentialsCannotOverrideCorrelationMetadata(t *testing.T) {
@@ -206,12 +182,7 @@ func TestPerRPCCredentialsCannotOverrideCorrelationMetadata(t *testing.T) {
 		t,
 		grpc.Creds(serverCredentials),
 	)
-	tracerProvider := sdktrace.NewTracerProvider(sdktrace.WithSampler(sdktrace.AlwaysSample()))
-	t.Cleanup(func() {
-		if err := tracerProvider.Shutdown(context.Background()); err != nil {
-			t.Errorf("TracerProvider.Shutdown() error = %v", err)
-		}
-	})
+	_, tracerProvider := telemetrytest.NewRecordingTracerProvider(t)
 	cfg := grpcclient.DefaultConfig(target)
 	cfg.HealthCheck = false
 	connection, err := grpcclient.New(
@@ -418,65 +389,4 @@ func (c livePerRPCCredentials) GetRequestMetadata(
 
 func (c livePerRPCCredentials) RequireTransportSecurity() bool {
 	return c.requireSecurity
-}
-
-func assertGRPCMetricsDoNotContain(
-	t *testing.T,
-	reader *sdkmetric.ManualReader,
-	forbidden ...string,
-) {
-	t.Helper()
-
-	var resourceMetrics metricdata.ResourceMetrics
-	if err := reader.Collect(t.Context(), &resourceMetrics); err != nil {
-		t.Fatalf("ManualReader.Collect() error = %v", err)
-	}
-	points := 0
-	for _, scope := range resourceMetrics.ScopeMetrics {
-		for _, metricValue := range scope.Metrics {
-			switch data := metricValue.Data.(type) {
-			case metricdata.Histogram[float64]:
-				for _, point := range data.DataPoints {
-					points++
-					assertGRPCAttributesDoNotContain(t, point.Attributes.ToSlice(), forbidden)
-				}
-			case metricdata.Histogram[int64]:
-				for _, point := range data.DataPoints {
-					points++
-					assertGRPCAttributesDoNotContain(t, point.Attributes.ToSlice(), forbidden)
-				}
-			case metricdata.Sum[int64]:
-				for _, point := range data.DataPoints {
-					points++
-					assertGRPCAttributesDoNotContain(t, point.Attributes.ToSlice(), forbidden)
-				}
-			}
-		}
-	}
-	if points == 0 {
-		t.Fatal("gRPC client metric data points = 0, want recorded metrics")
-	}
-}
-
-func assertGRPCAttributesDoNotContain(
-	t *testing.T,
-	attributes []attribute.KeyValue,
-	forbidden []string,
-) {
-	t.Helper()
-
-	for _, attr := range attributes {
-		for _, candidate := range forbidden {
-			if candidate != "" &&
-				(strings.Contains(string(attr.Key), candidate) ||
-					strings.Contains(attr.Value.String(), candidate)) {
-				t.Fatalf(
-					"metric attribute %s=%q contains forbidden correlation value %q",
-					attr.Key,
-					attr.Value.String(),
-					candidate,
-				)
-			}
-		}
-	}
 }
