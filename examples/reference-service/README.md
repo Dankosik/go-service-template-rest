@@ -50,6 +50,17 @@ The important boundaries are visible in the directory layout:
 - `internal/httpapi/` maps feature results to contract responses;
 - `main.go` only composes owners and manages the example process lifecycle.
 
+Inside `internal/article/` the types, the ports, and both use cases share one
+`article.go`, which is the one place this example deliberately stops short of
+the layout [Project Structure And Module
+Organization](../../docs/project-structure-and-module-organization.md#4-file-naming-and-granularity)
+prescribes. That document's `model.go` / `repository.go` / `<verb>_<noun>.go`
+split earns its place when a slice has enough use cases that a reader has to
+search for one; at two, splitting costs more navigation than it saves. Copy this
+file as a starting point, and split it the documented way as soon as a third use
+case arrives — the boundaries above are the ones worth preserving from the
+start, not this one.
+
 `getArticle` is public by design: it returns read-only example content with no
 actor or private data. `createArticle` is protected because it changes stored
 content, so it declares a security scheme and documents `401` and `403`.

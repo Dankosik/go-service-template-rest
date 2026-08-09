@@ -52,6 +52,9 @@
 //
 // The budget every step reads is relay_config.go, and store_operator.go holds
 // what runs outside the cycle: [Store.Get] and [Store.Redrive].
+// store_legacy_classification.go holds the other thing outside it,
+// [Store.ClassifyLegacyUncertainty], which a service runs once at bootstrap to
+// resolve rows an older schema left unclassified.
 //
 // Beside the cycle: event.go owns the [Event] envelope and its size limits,
 // publisher.go the broker contract, notify.go the append listener that turns a
@@ -160,8 +163,9 @@
 // exempts store*.go from the postgres_driver_boundary and sqlc_boundary rules and
 // notify*.go from the first, because those are the PostgreSQL adapters; the relay
 // loop and the envelope stay driver-free. That glob is why the statements split
-// as store_append.go, store_claim.go, store_finalize.go, store_maintenance.go,
-// store_operator.go, store_retire.go, and store_rows.go: a file named anything
+// as store_append.go, store_claim.go, store_finalize.go,
+// store_legacy_classification.go, store_maintenance.go, store_operator.go,
+// store_retire.go, and store_rows.go: a file named anything
 // else moves pgx and
 // the generated types outside the exemption, and depguard then reports the import
 // rather than the rename that caused it. Keep the prefix, or move the exemption

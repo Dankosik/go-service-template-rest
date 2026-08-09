@@ -81,10 +81,14 @@ func Receive[T any](tb testing.TB, values <-chan T, timeout time.Duration, descr
 	case value := <-values:
 		return value
 	case <-time.After(timeout):
-		var zero T
 		tb.Fatalf("timed out waiting for %s", description)
-		return zero
 	}
+	// Fatalf ends the goroutine, so this return exists for the compiler rather
+	// than for a caller. It sits after the select because a return placed in the
+	// timeout case would be dead code the moment Fatalf is recognized as
+	// terminating, which is what CodeQL reports.
+	var zero T
+	return zero
 }
 
 // ReceiveSignal waits for one send on a close-only channel. It exists so a

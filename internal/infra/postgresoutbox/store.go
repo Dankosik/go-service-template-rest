@@ -24,7 +24,9 @@ import (
 // describes: store_append.go, store_claim.go, store_finalize.go,
 // store_maintenance.go, and store_operator.go, with store_receipt.go beside
 // Append for the lost-commit answer, over the row mapping and identity checks in
-// store_rows.go. This file owns only what all of them share.
+// store_rows.go. store_legacy_classification.go sits outside that cycle, because
+// the upgrade path runs once at bootstrap rather than on the maintenance timer.
+// This file owns only what all of them share.
 // The store prefix is load-bearing — see doc.go.
 //
 // Get therefore has two callers with different needs: Relay.reconcilePublished

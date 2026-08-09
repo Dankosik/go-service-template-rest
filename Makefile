@@ -49,7 +49,18 @@ OUTBOX_RACE_PACKAGES := ./internal/infra/postgres ./internal/infra/postgresoutbo
 # land. See rebase_coverage_floor in scripts/init-module.sh.
 COVERAGE_MIN ?= 80.0
 COVERAGE_GOTOOLCHAIN ?= go$(GO_REQUIRED_VERSION)
-COVERAGE_EXCLUDE_REGEX ?= (^|/)internal/openapi/openapi\.gen\.go:|(^|/)internal/infra/postgres/sqlcgen/|(^|/)internal/infra/postgres/pgtest/|(^|/)internal/infra/telemetry/telemetrytest/|(^|/)internal/gen/proto/|(^|/)examples/grpc-reference-service/cmd/benchmark-server/main\.go:|(^|/)cmd/service/main\.go:|(^|/)cmd/migrate/main\.go:
+# Cross-package test support is excluded wherever it lives: those packages exist
+# to be called by tests and are exercised through the tests that call them, so
+# counting their own statements measures nothing and drops the effective total
+# by roughly two points. Keep every <owner>test/ package listed here, or the
+# floor moves whenever one of them grows.
+COVERAGE_EXCLUDE_REGEX ?= (^|/)internal/openapi/openapi\.gen\.go:|(^|/)internal/infra/postgres/sqlcgen/|(^|/)internal/infra/postgres/pgtest/|(^|/)internal/infra/telemetry/telemetrytest/|(^|/)internal/config/configtest/|(^|/)internal/waittest/|(^|/)internal/gen/proto/|(^|/)examples/grpc-reference-service/cmd/benchmark-server/|(^|/)cmd/service/main\.go:|(^|/)cmd/migrate/main\.go:
+# profile:grpc:start
+COVERAGE_EXCLUDE_REGEX := $(COVERAGE_EXCLUDE_REGEX)|(^|/)internal/infra/grpc/grpctest/
+# profile:grpc:end
+# profile:messaging-nats-jetstream:start
+COVERAGE_EXCLUDE_REGEX := $(COVERAGE_EXCLUDE_REGEX)|(^|/)internal/infra/natsjs/natsjstest/
+# profile:messaging-nats-jetstream:end
 # profile:outbox-postgres:start
 COVERAGE_EXCLUDE_REGEX := $(COVERAGE_EXCLUDE_REGEX)|(^|/)cmd/outbox-relay/main\.go:
 # profile:outbox-postgres:end

@@ -164,9 +164,10 @@ var versionedFileExtensions = []string{".go", ".md", ".proto", ".sh", ".sql", ".
 func DocumentedPaths(document, repositoryRoot, packageDir string) []string {
 	paths := make([]string, 0)
 	nested := make(map[string]struct{})
+	rootDirs := repositoryRootDirs(repositoryRoot)
 	for _, path := range documentedSlashedPath.FindAllString(document, -1) {
 		path = strings.TrimRight(path, ".,;:")
-		if !namesRepositoryPath(path, repositoryRoot) {
+		if !namesRepositoryPath(path, rootDirs) {
 			continue
 		}
 		nested[filepath.Base(path)] = struct{}{}
@@ -181,6 +182,29 @@ func DocumentedPaths(document, repositoryRoot, packageDir string) []string {
 	return slices.Compact(paths)
 }
 
+// repositoryRootDirs names the directories at the top of the repository, which
+// is the set a documented path's first segment has to belong to.
+//
+// It is a membership test rather than a stat of repositoryRoot joined with that
+// segment, because the segment is read out of prose: ".." joins to a directory
+// above the repository and would answer a question this check never asked. A
+// name can only match a directory that is actually there, so no token reaches
+// outside. An unreadable root yields the empty set, which reports no paths
+// rather than every path.
+func repositoryRootDirs(repositoryRoot string) map[string]struct{} {
+	dirs := make(map[string]struct{})
+	entries, err := os.ReadDir(repositoryRoot)
+	if err != nil {
+		return dirs
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			dirs[entry.Name()] = struct{}{}
+		}
+	}
+	return dirs
+}
+
 // namesRepositoryPath separates a repository path from the slashes ordinary
 // prose produces — "I/O", "interval/timeout", an import path like
 // google.golang.org/grpc — without keeping a list of the prose.
@@ -189,14 +213,11 @@ func DocumentedPaths(document, repositoryRoot, packageDir string) []string {
 // that exists at the repository root. A token failing both is skipped, so a
 // mistyped first segment is not reported; that is the price of not maintaining
 // the prose list, and the rename this check exists for changes a later segment.
-func namesRepositoryPath(path, repositoryRoot string) bool {
+func namesRepositoryPath(path string, rootDirs map[string]struct{}) bool {
 	if slices.Contains(versionedFileExtensions, filepath.Ext(path)) {
 		return true
 	}
 	root, _, _ := strings.Cut(path, "/")
-	info, err := os.Stat(filepath.Join(repositoryRoot, root))
-	if err != nil {
-		return false
-	}
-	return info.IsDir()
+	_, atRoot := rootDirs[root]
+	return atRoot
 }
