@@ -18,7 +18,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/getkin/kin-openapi/openapi3filter"
 	"go.opentelemetry.io/otel/metric"
 	metricnoop "go.opentelemetry.io/otel/metric/noop"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
@@ -130,21 +129,24 @@ func TestAuthnMetricsCountRejectionsVerifyNeverSaw(t *testing.T) {
 		provider: provider,
 	})
 
-	request, err := http.NewRequestWithContext(
-		t.Context(),
-		http.MethodGet,
-		"https://service.example/protected",
-		nil,
-	)
+	request, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "https://service.example/protected", http.NoBody)
 	if err != nil {
 		t.Fatal(err)
 	}
 	request.RemoteAddr = "127.0.0.1:1234"
 	request.Header.Set("X-Forwarded-Proto", "https")
-	_, err = verifier.ResolveHTTP(t.Context(), &openapi3filter.AuthenticationInput{
-		RequestValidationInput: &openapi3filter.RequestValidationInput{Request: request},
-	})
+	_, err = verifier.ResolveHTTP(t.Context(), bearerAuthInput(request))
 	requireKind(t, err, KindMissing)
+
+	// A requirement this boundary declines is not a verification outcome, so it
+	// must not land beside the two that are. The series count below is what
+	// proves that, because requireMetricAttributes only proves the wanted series
+	// are present.
+	if _, err := verifier.ResolveHTTP(t.Context(), otherSchemeAuthInput(request)); !errors.Is(
+		err, errUnsupportedSecurityScheme,
+	) {
+		t.Fatalf("ResolveHTTP() error = %v, want an unsupported security scheme", err)
+	}
 
 	// An unknown key id starts a refresh the scripted provider holds open, so
 	// the cancellation lands while Verify is waiting on it.
@@ -178,6 +180,12 @@ func TestAuthnMetricsCountRejectionsVerifyNeverSaw(t *testing.T) {
 		{"authn.transport": "http", "authn.result": "failure", "authn.reason": "missing"},
 		{"authn.transport": "grpc", "authn.result": "failure", "authn.reason": "canceled"},
 	})
+	if len(verificationSum.DataPoints) != 2 {
+		t.Fatalf(
+			"verification series = %d, want exactly the two rejections this boundary answered",
+			len(verificationSum.DataPoints),
+		)
+	}
 }
 
 func TestFailingMeterDegradesTelemetryNotAuthentication(t *testing.T) {

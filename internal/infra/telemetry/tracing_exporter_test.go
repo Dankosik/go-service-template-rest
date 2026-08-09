@@ -63,7 +63,7 @@ func TestBuildTraceExporterOptions(t *testing.T) {
 			t.Fatalf("endpoint source = %q, want %q", endpoint.Source, TraceExporterConfigKey)
 		}
 		if len(options) == 0 {
-			t.Fatalf("options len = 0, want > 0")
+			t.Fatal("options len = 0, want > 0")
 		}
 	})
 
@@ -212,7 +212,7 @@ func TestParseOTLPHeaders(t *testing.T) {
 
 	_, err = parseOTLPHeaders("malformed")
 	if err == nil {
-		t.Fatalf("parseOTLPHeaders() error = nil, want non-nil")
+		t.Fatal("parseOTLPHeaders() error = nil, want non-nil")
 	}
 }
 
@@ -251,7 +251,7 @@ func TestParseOTLPHeadersMalformedEntriesDoNotLeakRawValues(t *testing.T) {
 
 			_, err := parseOTLPHeaders(tt.raw)
 			if err == nil {
-				t.Fatalf("parseOTLPHeaders() error = nil, want non-nil")
+				t.Fatal("parseOTLPHeaders() error = nil, want non-nil")
 			}
 			for _, leaked := range []string{"secret-value", "Bearer"} {
 				if strings.Contains(err.Error(), leaked) {

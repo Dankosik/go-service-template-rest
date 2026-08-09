@@ -1,6 +1,7 @@
 package telemetry
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -95,24 +96,24 @@ func namesOTLPRoot(raw string) bool {
 func parseOTLPURL(raw string) (*url.URL, error) {
 	parsedURL, err := url.Parse(raw)
 	if err != nil {
-		return nil, fmt.Errorf("parse otlp endpoint: invalid endpoint")
+		return nil, errors.New("parse otlp endpoint: invalid endpoint")
 	}
 
 	scheme := strings.ToLower(parsedURL.Scheme)
 	if scheme != "http" && scheme != "https" {
-		return nil, fmt.Errorf("parse otlp endpoint: unsupported scheme")
+		return nil, errors.New("parse otlp endpoint: unsupported scheme")
 	}
 	if parsedURL.User != nil {
-		return nil, fmt.Errorf("parse otlp endpoint: userinfo is not supported")
+		return nil, errors.New("parse otlp endpoint: userinfo is not supported")
 	}
 	if strings.TrimSpace(parsedURL.Hostname()) == "" {
-		return nil, fmt.Errorf("parse otlp endpoint: empty host")
+		return nil, errors.New("parse otlp endpoint: empty host")
 	}
 	if parsedURL.RawQuery != "" {
-		return nil, fmt.Errorf("parse otlp endpoint: query is not supported")
+		return nil, errors.New("parse otlp endpoint: query is not supported")
 	}
 	if parsedURL.Fragment != "" {
-		return nil, fmt.Errorf("parse otlp endpoint: fragment is not supported")
+		return nil, errors.New("parse otlp endpoint: fragment is not supported")
 	}
 
 	return parsedURL, nil
@@ -146,7 +147,7 @@ func parseOTLPHeaders(raw string) (map[string]string, error) {
 	}
 
 	if len(headers) == 0 {
-		return nil, fmt.Errorf("parse otlp headers: no valid header pairs")
+		return nil, errors.New("parse otlp headers: no valid header pairs")
 	}
 	return headers, nil
 }

@@ -10,7 +10,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"net/netip"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -24,15 +23,13 @@ import (
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/infra/natsjs"
+	"github.com/example/go-service-template-rest/internal/infra/natsjs/natsjstest"
 	"github.com/example/go-service-template-rest/internal/reqctx"
-	containerapi "github.com/moby/moby/api/types/container"
-	networkapi "github.com/moby/moby/api/types/network"
 	"github.com/nats-io/jwt/v2"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/nats-io/nkeys"
 	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/wait"
 	"go.opentelemetry.io/otel/baggage"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
@@ -40,7 +37,6 @@ import (
 )
 
 const (
-	natsImage            = "nats:2.14.3-alpine@sha256:c11af972c99ae542de8925e6a7d9c533aa1eb039660420d2074beed6089b3bf0"
 	sourceStream         = "EVENTS"
 	deadLetterStream     = "EVENTS_DLQ"
 	sourceSubject        = "events.test"
@@ -114,28 +110,24 @@ jetstream {
   store_dir: /data
 }
 `, operatorClaim, systemAccount.public, systemAccount.claim, account.public, account.claim)
+	// The broker request is the shared one with its server configuration replaced,
+	// so this fixture still runs the pinned image on the shared ready budget.
+	request := natsjstest.Request()
+	request.Cmd = []string{"-c", "/etc/nats/auth.conf"}
+	request.Files = []testcontainers.ContainerFile{{
+		Reader: strings.NewReader(serverConfig), ContainerFilePath: "/etc/nats/auth.conf", FileMode: 0o644,
+	}}
 	container, err := testcontainers.GenericContainer(t.Context(), testcontainers.GenericContainerRequest{
-		ContainerRequest: testcontainers.ContainerRequest{
-			Image:        natsImage,
-			ExposedPorts: []string{"4222/tcp"},
-			Cmd:          []string{"-c", "/etc/nats/auth.conf"},
-			Files: []testcontainers.ContainerFile{{
-				Reader: strings.NewReader(serverConfig), ContainerFilePath: "/etc/nats/auth.conf", FileMode: 0o644,
-			}},
-			WaitingFor: wait.ForAll(wait.ForListeningPort("4222/tcp"), wait.ForLog("Server is ready")).WithDeadline(time.Minute),
-		},
+		ContainerRequest: request,
+		// Started separately, because a configuration this fixture generated is
+		// the likely cause of a failed start and the server log is the only place
+		// that says which line it refused.
 		Started: false,
 	})
 	if err != nil {
 		t.Fatalf("create authenticated NATS container: %v", err)
 	}
-	t.Cleanup(func() {
-		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cleanupCancel()
-		if err := container.Terminate(cleanupCtx); err != nil {
-			t.Errorf("terminate authenticated NATS container: %v", err)
-		}
-	})
+	natsjstest.Terminate(t, container)
 	if err := container.Start(t.Context()); err != nil {
 		logs, logsErr := container.Logs(t.Context())
 		if logsErr != nil {
@@ -162,20 +154,10 @@ jetstream {
 		t.Fatalf("write invalid NATS credentials: %v", err)
 	}
 	url := "nats://" + endpoint
-	raw, err := nats.Connect(url, nats.UserCredentials(credentialsFile), nats.Timeout(5*time.Second))
-	if err != nil {
-		t.Fatalf("connect authenticated NATS fixture: %v", err)
-	}
-	t.Cleanup(raw.Close)
-	js, err := jetstream.New(raw)
-	if err != nil {
-		t.Fatalf("create authenticated JetStream fixture: %v", err)
-	}
-	if _, err := js.CreateStream(t.Context(), jetstream.StreamConfig{
+	client := natsjstest.Connect(t, url, nats.UserCredentials(credentialsFile))
+	natsjstest.CreateStreams(t, client.JS, jetstream.StreamConfig{
 		Name: sourceStream, Subjects: []string{"events.>"}, Storage: jetstream.FileStorage, MaxMsgSize: testMaxDeliveryBytes,
-	}); err != nil {
-		t.Fatalf("create authenticated source stream: %v", err)
-	}
+	})
 	return &authenticatedNATSFixture{url: url, credentialsFile: credentialsFile, invalidCredentialsFile: invalidCredentialsFile}
 }
 
@@ -224,78 +206,23 @@ func newTestNATSAccount(t *testing.T, operatorKey nkeys.KeyPair, enableJetStream
 
 func newNATSFixture(t *testing.T) *natsFixture {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
-	defer cancel()
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("reserve NATS test port: %v", err)
-	}
-	hostPort := listener.Addr().(*net.TCPAddr).Port
-	if err := listener.Close(); err != nil {
-		t.Fatalf("release NATS test port reservation: %v", err)
-	}
-	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
-		ContainerRequest: testcontainers.ContainerRequest{
-			Image:        natsImage,
-			ExposedPorts: []string{"4222/tcp"},
-			Cmd:          []string{"-js", "-sd", "/data"},
-			// A fixed binding is required because reconnect tests stop and restart
-			// this exact container while clients retain the admitted URL.
-			HostConfigModifier: func(hostConfig *containerapi.HostConfig) {
-				hostConfig.PortBindings = networkapi.PortMap{
-					networkapi.MustParsePort("4222/tcp"): {
-						{HostIP: netip.MustParseAddr("127.0.0.1"), HostPort: fmt.Sprint(hostPort)},
-					},
-				}
-			},
-			WaitingFor: wait.ForAll(
-				wait.ForListeningPort("4222/tcp"),
-				wait.ForLog("Server is ready"),
-			).WithDeadline(time.Minute),
+	// The fixed host port is required because reconnect cases stop and restart
+	// this exact container while clients retain the admitted URL.
+	server := natsjstest.Start(t, natsjstest.WithFixedHostPort(), natsjstest.WithStreams(
+		jetstream.StreamConfig{
+			Name:       sourceStream,
+			Subjects:   []string{"events.>"},
+			Storage:    jetstream.FileStorage,
+			MaxMsgSize: testMaxDeliveryBytes,
 		},
-		Started: true,
-	})
-	if err != nil {
-		t.Fatalf("start NATS container: %v", err)
-	}
-	t.Cleanup(func() {
-		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cleanupCancel()
-		if err := container.Terminate(cleanupCtx); err != nil {
-			t.Errorf("terminate NATS container: %v", err)
-		}
-	})
-	endpoint, err := container.Endpoint(ctx, "")
-	if err != nil {
-		t.Fatalf("resolve NATS endpoint: %v", err)
-	}
-	url := "nats://" + endpoint
-	raw, err := nats.Connect(url, nats.Timeout(5*time.Second))
-	if err != nil {
-		t.Fatalf("connect fixture NATS client: %v", err)
-	}
-	t.Cleanup(raw.Close)
-	js, err := jetstream.New(raw)
-	if err != nil {
-		t.Fatalf("create fixture JetStream client: %v", err)
-	}
-	if _, err := js.CreateStream(ctx, jetstream.StreamConfig{
-		Name:       sourceStream,
-		Subjects:   []string{"events.>"},
-		Storage:    jetstream.FileStorage,
-		MaxMsgSize: testMaxDeliveryBytes,
-	}); err != nil {
-		t.Fatalf("create source stream: %v", err)
-	}
-	if _, err := js.CreateStream(ctx, jetstream.StreamConfig{
-		Name:       deadLetterStream,
-		Subjects:   []string{"dead.>"},
-		Storage:    jetstream.FileStorage,
-		MaxMsgSize: 2 * testMaxDeliveryBytes,
-	}); err != nil {
-		t.Fatalf("create dead-letter stream: %v", err)
-	}
-	return &natsFixture{container: container, url: url, raw: raw, js: js}
+		jetstream.StreamConfig{
+			Name:       deadLetterStream,
+			Subjects:   []string{"dead.>"},
+			Storage:    jetstream.FileStorage,
+			MaxMsgSize: 2 * testMaxDeliveryBytes,
+		},
+	))
+	return &natsFixture{container: server.Container, url: server.URL, raw: server.Conn, js: server.JS}
 }
 
 func (f *natsFixture) client(t *testing.T, role natsjs.Role, configure ...func(*natsjs.Config)) *natsjs.Client {
@@ -1266,11 +1193,15 @@ func TestNATSTraceCorrelation(t *testing.T) {
 		}
 		spansByName[span.Name()] = span
 	}
-	publishSpan, publishOK := spansByName["messaging publish"]
-	consumeSpan, consumeOK := spansByName["messaging consume"]
+	// semconv names a messaging span "{operation name} {destination}". The
+	// consume span carries the worker's filter rather than the delivered
+	// subject; both are sourceSubject here, so this fixture cannot tell them
+	// apart — TestMessagingSpanNamesFollowSemanticConventions does.
+	publishSpan, publishOK := spansByName["publish "+sourceSubject]
+	consumeSpan, consumeOK := spansByName["process "+sourceSubject]
 	parentSpan, parentOK := spansByName["parent"]
 	if len(spansByName) != 3 || !publishOK || !consumeOK || !parentOK {
-		t.Fatalf("ended spans = %#v, want exactly parent, messaging publish, and messaging consume", spansByName)
+		t.Fatalf("ended spans = %#v, want exactly parent, publish, and process spans", spansByName)
 	}
 	if publishSpan.SpanKind() != trace.SpanKindProducer || consumeSpan.SpanKind() != trace.SpanKindConsumer {
 		t.Fatalf("messaging span kinds = publish:%s consume:%s, want Producer/Consumer", publishSpan.SpanKind(), consumeSpan.SpanKind())

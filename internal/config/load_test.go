@@ -55,7 +55,7 @@ func TestFlatPostgresDSNIsIgnored(t *testing.T) {
 		t.Fatalf("LoadDetailed() error = %v", err)
 	}
 	if cfg.Postgres.Enabled {
-		t.Fatalf("Postgres.Enabled = true, want false when only flat key is set")
+		t.Fatal("Postgres.Enabled = true, want false when only flat key is set")
 	}
 	if cfg.Postgres.DSN != "" {
 		t.Fatalf("Postgres.DSN = %q, want empty when only flat key is set", cfg.Postgres.DSN)
@@ -99,7 +99,7 @@ func TestLoadDetailedWithContextCanceled(t *testing.T) {
 
 	_, _, err := LoadDetailedWithContext(ctx, LoadOptions{})
 	if err == nil {
-		t.Fatalf("LoadDetailedWithContext() expected context cancellation error")
+		t.Fatal("LoadDetailedWithContext() expected context cancellation error")
 	}
 	if !errors.Is(err, ErrLoad) {
 		t.Fatalf("error = %v, want ErrLoad", err)
@@ -116,7 +116,7 @@ func TestLoadDetailedFailedStageReporting(t *testing.T) {
 
 		_, report, err := LoadDetailed(LoadOptions{})
 		if err == nil {
-			t.Fatalf("LoadDetailed() expected parse error")
+			t.Fatal("LoadDetailed() expected parse error")
 		}
 		if !errors.Is(err, ErrParse) {
 			t.Fatalf("error = %v, want ErrParse", err)
@@ -136,7 +136,7 @@ unknown:
 
 		_, report, err := LoadDetailed(LoadOptions{ConfigPath: configPath})
 		if err == nil {
-			t.Fatalf("LoadDetailed() expected unknown key error")
+			t.Fatal("LoadDetailed() expected unknown key error")
 		}
 		if !errors.Is(err, ErrUnknownKey) {
 			t.Fatalf("error = %v, want ErrUnknownKey", err)
@@ -153,7 +153,7 @@ unknown:
 
 		_, report, err := LoadDetailed(LoadOptions{ConfigPath: "/nonexistent/config.yaml"})
 		if err == nil {
-			t.Fatalf("LoadDetailed() expected load error")
+			t.Fatal("LoadDetailed() expected load error")
 		}
 		if !errors.Is(err, ErrLoad) && !errors.Is(err, ErrSecretPolicy) {
 			t.Fatalf("error = %v, want ErrLoad or ErrSecretPolicy", err)

@@ -28,7 +28,13 @@ in `cmd/service/internal/bootstrap/run.go`, and pass it into whatever implements
 `openapi.StrictServerInterface` — the `Handlers.API` seam. Its meter comes from
 the same `telemetry.Metrics` the rest of that composition uses. Both arguments to
 `NewTelemetry` may be nil, and so may the store's telemetry. The event is then
-appended through the same `pgx.Tx` that owns the domain mutation:
+appended through the same `pgx.Tx` that owns the domain mutation.
+
+The adapter holds the store as `postgresoutbox.Appender`, not as the concrete
+`*Store`. `Store` serves three audiences and the request path is only one of
+them; narrowing it there is what keeps the relay's claim and finalization
+statements and the operator redrive methods out of reach of a request, and makes
+the compiler rather than this document say so.
 
 ```go
 // Composition root, once.
@@ -40,6 +46,7 @@ outbox, err := postgresoutbox.NewStore(pool, outboxTelemetry)
 if err != nil {
 	return err
 }
+adapter := newArticleRepository(pool, outbox) // takes a postgresoutbox.Appender
 
 // PostgreSQL repository adapter, before entering the business transaction.
 event := postgresoutbox.Event{
@@ -226,6 +233,21 @@ redrive. Once sticky, a permanent failure or any failure at `max_attempts`
 parks the row as `outcome_unknown`; an acknowledgement still wins and marks it
 published. Fresh permanent and exhausted not-accepted results remain ordinary
 deterministic poison with the sticky bit false.
+
+One outcome in the table has no adapter behind it. `publish_timeout` budgets the
+whole claimed batch rather than one event, so a broker slow enough — or a batch
+large enough — leaves the tail of a batch with no budget at all. Those events
+are never handed to the adapter, and they are not classified by the third row:
+they are released for immediate retry as `publisher_not_attempted`, they add no
+uncertainty, and the attempt the claim charged is given back, so the attempt cap
+keeps counting attempts actually made. Without that, a slow broker would walk
+events nobody tried to publish to `max_attempts` and quarantine them as
+`outcome_unknown`, turning a throughput problem into an operator action per
+event. Alert on
+`outbox.relay.operations{operation="publish",outcome="skipped"}`: a sustained
+rate means the relay is claiming more per batch than its budget can publish, and
+the fix is a smaller `batch_size`, a higher `publish_concurrency`, or a longer
+`publish_timeout`.
 
 <!-- profile:messaging-nats-jetstream:start -->
 `natsjs.NewOutboxPublisher` is the selected adapter. It pre-validates the
@@ -477,8 +499,12 @@ broker acceptance without publishing again. Ordered confirmation advances the
 existing outbox head and unblocks its successor. Both require a unique audit
 ID; replaying the same action/event/audit succeeds, while reuse for another
 action or event returns `ErrOperatorAuditConflict`. A wrong source state returns
-`ErrOperatorStateConflict`. Audit rows have no event foreign key and survive
-event cleanup. Ordinary `Redrive` remains valid only for deterministic poison.
+`ErrOperatorStateConflict`, and an id naming no stored event returns
+`ErrNotFound`. All three are `outcome=rejected` with `error.type=validation` on
+`outbox.relay.operations`, not database failures: a mistyped id is a refused
+call and must not read as an outage. Audit rows have no event foreign key and
+survive event cleanup. Ordinary `Redrive` remains valid only for deterministic
+poison.
 
 Two adapter behaviors are fatal to the process rather than to one event. A panic
 releases its own event for retry, finalizes the rest of the batch, and then
@@ -514,6 +540,21 @@ covers a builder that returns `postgresoutbox.ErrConfig` — the right answer fo
 missing or malformed adapter setting. Every other builder failure, including the
 `dial broker` example above, is `runtime`: wrap `ErrConfig` when the operator's
 fix is in configuration, and leave it unwrapped when it is not.
+
+Two of these classes are reached only after they repeat. `lost_lease` and
+`progress_unknown` end the current cycle, but neither is a problem the stop
+prevents: a lost lease means another relay already owns those events, and
+unknown progress means lease recovery will republish one — a duplicate the
+delivery contract above already permits. Stopping on the first occurrence would
+spend a whole process restart on one ambiguous event, and a lease that is
+persistently too short would halt delivery instead of slowing it. So the relay
+absorbs up to two consecutive faults, waits one poll interval, and counts each on
+`outbox.relay.operations{operation="finalize",outcome="tolerated"}`; the third in
+a row exits with the class above. Any cycle that finalizes cleanly resets the
+count, so the exit means consecutive faults rather than a total reached over an
+uptime. Alert on the tolerated counter — it is the signal that arrives before the
+exit, and a steady rate of it is a lease or replica misconfiguration whether or
+not three ever land in a row.
 
 A transient broker outage is in none of these: it produces retries and bounded
 `outcome_unknown` quarantine, which are durable progress rather than a stop.
@@ -580,7 +621,8 @@ ordering-head count; observation freshness; audit-ledger and commit-receipt
 bytes; last durable progress; an operation counter and a separate
 operation-duration histogram; the size of the claimed
 batch; and readiness. The two operation instruments do not carry the same set:
-an operation with no span of its own — `recovery`, `drain`, and the
+an operation with no span of its own — `recovery`, `drain`, `finalize`, the
+`skipped` outcome of `publish`, and the
 `reconciled` outcome of `mark_published` — reaches the counter only, so the
 histogram stays a latency signal instead of absorbing placeholder durations. `outbox.relay.inflight` is that batch, not the events
 inside `Publish` right now — it reports how much durable work one lease holds,

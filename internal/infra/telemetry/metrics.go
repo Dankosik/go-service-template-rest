@@ -43,13 +43,10 @@ const (
 
 // ServerLoad is what the request path records about its own admission control.
 //
-// otelhttp supplies none of this. Its instruments are http.server.request.duration
-// and the two body-size histograms, all keyed on the request — so a shed request
-// appears only as one more 503, indistinguishable from a saturated connection pool
-// answering 503 on the same route. Neither tells an operator how close the service
-// is running to its concurrency limit, which is the number http.max_in_flight has
-// to be tuned against. Shipping a load shedder without them means the limit is set
-// once, from a guess, and never revisited.
+// otelhttp supplies none of this: its instruments are all keyed on the request,
+// so a shed request appears only as one more 503, indistinguishable from a
+// saturated connection pool answering 503 on the same route — and none of them
+// report how close the service runs to the limit http.max_in_flight sets.
 type ServerLoad struct {
 	active metric.Int64UpDownCounter
 	shed   metric.Int64Counter
@@ -130,11 +127,10 @@ func (l ServerLoad) Shed(ctx context.Context) {
 // reach the OTLP reader as well as this registry. Registering both would publish
 // the same runtime facts twice under two naming schemes.
 //
-// The process collector stays, and is the one signal that remains scrape-only:
-// open file descriptors, resident memory, and process CPU seconds come from the
-// operating system rather than the Go runtime, and no OpenTelemetry instrument
-// here supplies them. A deployment that reaches this service only through a
-// collector does not get them — named here rather than left to be discovered.
+// The process collector stays and is the one scrape-only signal: open file
+// descriptors, resident memory, and process CPU seconds come from the operating
+// system, and no OpenTelemetry instrument here supplies them, so a
+// collector-only deployment does not get them.
 func New() *Metrics {
 	registry := prometheus.NewRegistry()
 	registry.MustRegister(

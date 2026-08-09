@@ -12,11 +12,21 @@ import (
 const (
 	problemJSONContentType        = "application/problem+json; charset=utf-8"
 	malformedRequestProblemDetail = "request is malformed or invalid"
+	// sanitizedFailureDetail is the client-visible text for every failure this
+	// transport refused to describe: an unclassified handler error and a
+	// recovered panic. One constant because the two must stay indistinguishable
+	// to a caller — a detail that separated them would report which internal
+	// path broke, which is the whole thing the sanitization withholds.
+	sanitizedFailureDetail = "request failed"
 )
 
 type problemResponse struct {
 	code   problem.Code
 	detail string
+	// invalidParams is set only by the validator-rejection path. Every other
+	// caller leaves it empty, because a failure this service chose to sanitize
+	// has nothing field-shaped to point at.
+	invalidParams []fieldViolation
 }
 
 // problemRecord carries the problem code this request was answered with back out
@@ -59,13 +69,14 @@ func writeProblem(w http.ResponseWriter, r *http.Request, response problemRespon
 		recordProblemCode(r.Context(), definition.Code)
 	}
 	p := openapi.Problem{
-		Code:      string(definition.Code),
-		Detail:    optionalProblemString(response.detail),
-		Instance:  nil,
-		RequestId: nil,
-		Status:    int32(definition.Status), // #nosec G115 -- catalog entries are fixed HTTP status constants.
-		Title:     definition.Title,
-		Type:      definition.TypeURI,
+		Code:          string(definition.Code),
+		Detail:        optionalProblemString(response.detail),
+		Instance:      nil,
+		InvalidParams: optionalInvalidParams(response.invalidParams),
+		RequestId:     nil,
+		Status:        int32(definition.Status), // #nosec G115 -- catalog entries are fixed HTTP status constants.
+		Title:         definition.Title,
+		Type:          definition.TypeURI,
 	}
 	if r != nil {
 		p.RequestId = optionalProblemString(requestIDFromContext(r.Context()))
@@ -79,11 +90,23 @@ func writeProblem(w http.ResponseWriter, r *http.Request, response problemRespon
 	}
 }
 
-func writeMalformedRequestProblem(w http.ResponseWriter, r *http.Request) {
+func writeMalformedRequestProblem(w http.ResponseWriter, r *http.Request, violations []fieldViolation) {
 	writeProblem(w, r, problemResponse{
-		code:   problem.CodeBadRequest,
-		detail: malformedRequestProblemDetail,
+		code:          problem.CodeBadRequest,
+		detail:        malformedRequestProblemDetail,
+		invalidParams: violations,
 	})
+}
+
+func optionalInvalidParams(violations []fieldViolation) *[]openapi.InvalidParam {
+	if len(violations) == 0 {
+		return nil
+	}
+	params := make([]openapi.InvalidParam, 0, len(violations))
+	for _, violation := range violations {
+		params = append(params, openapi.InvalidParam{Name: violation.Field, Reason: violation.Reason})
+	}
+	return &params
 }
 
 // problemDefinitionFor resolves a code against the shared catalog, substituting

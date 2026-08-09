@@ -47,10 +47,12 @@
 // Sending a further correlation value to a trusted service is a change in three
 // places, and any two of them without the third is a defect rather than a
 // partial feature: reservedCorrelationMetadataKeys claims the key so no other
-// source may set it, policyPropagator.Inject emits it under the selected
-// policy, and policyPropagator.Fields declares it so the injecting carrier
-// reserves room. Claiming without emitting silently drops a caller's value;
-// emitting without claiming lets a caller forge one.
+// source may set it, the propagator's Inject emits it under the selected policy,
+// and its Fields declares it so the injecting carrier reserves room. Claiming
+// without emitting silently drops a caller's value; emitting without claiming
+// lets a caller forge one. All three now live in
+// internal/observability/correlationpolicy, which is what keeps this client and
+// the HTTP one answering the same question the same way.
 //
 // Per-RPC credentials can be attached to the whole connection through
 // [Options.PerRPCCredentials], which also reaches grpc-go control streams, or

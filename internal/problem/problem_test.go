@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/example/go-service-template-rest/internal/failure"
 	"github.com/example/go-service-template-rest/internal/problem"
 )
 
@@ -102,6 +103,31 @@ func TestCatalogCoversDomainStatuses(t *testing.T) {
 		}
 		if definition.Status != tt.status {
 			t.Fatalf("%q status = %d, want %d", tt.code, definition.Status, tt.status)
+		}
+	}
+}
+
+// TestEveryFailureCodeHasAnHTTPEnvelope closes the one direction the catalog
+// could not refuse loudly.
+//
+// internal/infra/http converts a classified failure.Code to problem.Code with a
+// string conversion, which always succeeds. A code with no catalog entry
+// therefore reaches problemDefinitionFor, which substitutes the internal-error
+// definition — so a domain that classified its error as 429 answers 503-shaped
+// traffic with a 500, and nothing reports it. gRPC has no matching gap: the
+// exhaustive linter holds mappedStatus to the whole set. This test is the HTTP
+// side of that guarantee.
+func TestEveryFailureCodeHasAnHTTPEnvelope(t *testing.T) {
+	t.Parallel()
+
+	for _, code := range failure.AllCodes() {
+		definition, ok := problem.ForCode(problem.Code(code))
+		if !ok {
+			t.Errorf("failure code %q has no HTTP problem definition", code)
+			continue
+		}
+		if definition.Status < http.StatusBadRequest {
+			t.Errorf("failure code %q resolves to status %d, which is not a failure", code, definition.Status)
 		}
 	}
 }

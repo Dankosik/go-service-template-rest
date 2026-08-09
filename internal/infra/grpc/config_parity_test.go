@@ -1,18 +1,15 @@
 // The two owners of this transport's bounds, held to one answer.
 //
 // [validateConfig] and internal/config's validateGRPCConfig both bound the values
-// a gRPC server is built from, and cannot share code: the depguard rule
-// config_no_runtime_owners stops internal/config from importing this package, so
-// it restates the rules and a rule changed on one side alone breaks nothing
-// anyone runs. The check lives here because the import only works in this
-// direction.
+// a gRPC server is built from. The rules they share — access log and connection
+// lifetime — are internal/grpclimits, so neither can be tightened alone any more.
+// What is left is the difference this file exists for: internal/config is the
+// tighter owner on capacity, so what it accepts must still build a server, and
+// nothing structural proves that. Each test compares only the values its corpus
+// varies, so a bound added to Config and to config.GRPCServerConfig without a
+// case here is one they go on reporting as agreed.
 //
-// The two owners are not equivalent, and the file is split along that line:
-// internal/config is the tighter one on capacity, so what it accepts must build a
-// server, while the two access-log rules are duplicated term for term and must
-// agree in both directions. Each test compares only the values its corpus varies,
-// so a bound added to Config and to config.GRPCServerConfig without a case here
-// is one they go on reporting as agreed.
+// The check lives here because the import only works in this direction.
 
 package grpcx
 
@@ -46,6 +43,7 @@ import (
 func serverConfigFromRuntime(server config.GRPCServerConfig) Config {
 	return Config{
 		MaxConcurrentRPCs:          server.MaxConcurrentRPCs,
+		MaxConcurrentHealthRPCs:    server.MaxConnections,
 		MaxConcurrentStreams:       server.MaxConcurrentStreams,
 		MaxHeaderListBytes:         server.MaxHeaderListBytes,
 		MaxReceiveMessageBytes:     server.MaxReceiveMessageBytes,
@@ -128,13 +126,15 @@ func TestConfigAcceptedBoundsAlwaysBuildAServer(t *testing.T) {
 	}
 }
 
-// TestAccessLogRulesMatchConfigValidation holds the two rules both owners spell
-// out to a single answer over one corpus.
+// TestAccessLogRulesMatchConfigValidation holds both owners to a single answer
+// over one corpus.
 //
-// These are the rules the comments on [validateConfig] and validateGRPCConfig
-// name, and the only ones where the two ranges are meant to be identical rather
-// than nested — so unlike the capacity bounds above, disagreement in either
-// direction is the defect.
+// internal/grpclimits now owns the rules, so this no longer compares two
+// spellings of them. What it still proves is that both owners apply the shared
+// rule to the same field: an owner that stopped calling it, or called it with a
+// value it does not bound, disagrees here and nowhere else. Unlike the capacity
+// bounds above, the two ranges are identical rather than nested, so disagreement
+// in either direction is the defect.
 func TestAccessLogRulesMatchConfigValidation(t *testing.T) {
 	for _, testCase := range []struct {
 		name       string

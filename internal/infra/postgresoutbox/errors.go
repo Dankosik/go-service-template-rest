@@ -48,7 +48,9 @@ var (
 )
 
 // The relay's stop reasons. Each one ends [Relay.Run] and has a case in
-// failureClass in cmd/outbox-relay/main.go.
+// failureClass in cmd/outbox-relay/main.go. The first two end it only once they
+// repeat — see [finalizationFaultTolerance] for why those two are absorbed and
+// the rest are not.
 var (
 	// ErrLeaseLost means a finalization reached fewer rows than the lease still
 	// owned, so this relay no longer owns them. It is the ordinary way a lease
@@ -56,8 +58,8 @@ var (
 	ErrLeaseLost = errors.New("outbox lease lost")
 	// ErrProgressUnknown means the relay could neither record nor disprove a
 	// publication: the event may already be at the broker while PostgreSQL still
-	// shows it unpublished, so lease recovery will republish it. It stops the
-	// relay, and two paths reach it. The ordinary one is a lost lease that
+	// shows it unpublished, so lease recovery will republish it. Two paths reach
+	// it. The ordinary one is a lost lease that
 	// reconcilePublished could not resolve against durable state. The rare one is
 	// an ordered acknowledgement whose key stayed snapshot-conflicted on every
 	// statement it was sent on: orderedPublishSnapshots inside
@@ -100,16 +102,14 @@ var (
 
 // Operator redrive. Neither reaches the relay: [Store.Redrive] is tooling.
 var (
-	// ErrOperatorStateConflict means the event is not in the state required by
-	// the requested audited operator action.
+	// ErrOperatorStateConflict means the event is not in the state the requested
+	// audited action requires: for [Store.Redrive] a row that is not poisoned, is
+	// already published, or is out of redrive count; for [Store.RedriveUnknown]
+	// and [Store.ConfirmAccepted] a row that is not in outcome-unknown
+	// quarantine. store_operator.go is the only producer.
 	ErrOperatorStateConflict = errors.New("outbox operator state conflict")
-	// ErrOperatorAuditConflict means an audit id already names a different
-	// event or action.
+	// ErrOperatorAuditConflict means an audit id already names a different event
+	// or action, which is a caller fault rather than a race. See
+	// operatorAuditSpent.
 	ErrOperatorAuditConflict = errors.New("outbox operator audit conflict")
-	// ErrRedriveRejected means the row is not in a state a redrive may release —
-	// not poisoned, already published, or out of redrive count.
-	ErrRedriveRejected = ErrOperatorStateConflict
-	// ErrRedriveConflict means the audit id already belongs to another event,
-	// which is a caller fault rather than a race. See auditIDAlreadySpent.
-	ErrRedriveConflict = ErrOperatorAuditConflict
 )

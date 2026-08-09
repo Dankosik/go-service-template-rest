@@ -1374,13 +1374,22 @@ SET available_at = statement_timestamp()
     lease_expires_at = NULL,
     publication_uncertain = event.publication_uncertain IS TRUE
         OR retry.publication_uncertain,
+    cycle_attempt_count = CASE
+        WHEN retry.not_attempted THEN greatest(event.cycle_attempt_count - 1, 0)
+        ELSE event.cycle_attempt_count
+    END,
+    total_attempt_count = CASE
+        WHEN retry.not_attempted THEN greatest(event.total_attempt_count - 1, 0)
+        ELSE event.total_attempt_count
+    END,
     last_error_class = retry.error_class
 FROM (
     SELECT
         unnest($2::text[]) AS id,
         unnest($3::double precision[]) AS delay_milliseconds,
         unnest($4::text[]) AS error_class,
-        unnest($5::boolean[]) AS publication_uncertain
+        unnest($5::boolean[]) AS publication_uncertain,
+        unnest($6::boolean[]) AS not_attempted
 ) AS retry
 WHERE event.id = retry.id
   AND event.lease_token = $1
@@ -1395,10 +1404,27 @@ type ScheduleOutboxRetryBatchParams struct {
 	DelayMilliseconds    []float64
 	ErrorClasses         []string
 	PublicationUncertain []bool
+	NotAttempted         []bool
 }
 
 // Each failed event carries its own jittered delay and error class, so one
 // statement releases the whole failing part of a batch.
+//
+// `not_attempted` returns the attempt the claim charged. A claim counts an
+// attempt up front because a relay that dies mid-publication must still be seen
+// to have tried, but an event the relay never handed to the publisher — its
+// batch budget was already spent on earlier events — was not tried at all.
+// Leaving that attempt charged makes a slow broker walk such an event to
+// `max_attempts` and quarantine it as `outcome_unknown` without one publication
+// ever having been attempted, so the counter is given back and the attempt cap
+// keeps meaning attempts actually made. `greatest(...,0)` only guards the
+// counters' own CHECK; the claim that produced this lease always incremented
+// both.
+//
+// `last_attempt_at` deliberately keeps the timestamp the claim wrote. Its
+// previous value is gone by the time this statement runs, and an operator
+// reading it wants to know when this row was last picked up, which is exactly
+// what it still reports.
 func (q *Queries) ScheduleOutboxRetryBatch(ctx context.Context, arg ScheduleOutboxRetryBatchParams) (int64, error) {
 	result, err := q.db.Exec(ctx, scheduleOutboxRetryBatch,
 		arg.LeaseToken,
@@ -1406,6 +1432,7 @@ func (q *Queries) ScheduleOutboxRetryBatch(ctx context.Context, arg ScheduleOutb
 		arg.DelayMilliseconds,
 		arg.ErrorClasses,
 		arg.PublicationUncertain,
+		arg.NotAttempted,
 	)
 	if err != nil {
 		return 0, err

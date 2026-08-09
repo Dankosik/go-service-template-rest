@@ -46,6 +46,7 @@ first governed action.
 | Per-lane model selection | Per-worker/subagent model control in the App | `model` parameter on the `Agent` tool call (dispatch-time override) over `model` frontmatter in `.claude/agents/*.md` (role default) | `model` frontmatter in `.qwen/agents/*.md` (`inherit`, `fast`, a model ID, or `authType:modelId`); exact model IDs are provider-specific |
 | Per-lane reasoning effort | Per-worker/subagent effort control in the App | `effort` frontmatter in the agent definition (`low`, `medium`, `high`, `xhigh`, `max`); no per-dispatch parameter — unset inherits the session effort | Not yet available in agent frontmatter; a lane inherits the session effort |
 | Worker completion signalling | Native completion and status events | Background-task completion notifications; continue an existing worker with `SendMessage` | Background-task completion notifications; continue an existing worker with `send_message` |
+| Reach an independent session this one did not spawn | — | `/list-agents` to discover, `SendMessage` by name ([Cross-Session Messaging](#cross-session-messaging)) | — |
 
 ## Model And Effort Selection
 
@@ -171,10 +172,10 @@ This is the loop that makes the root an orchestrator rather than a dispatcher.
 - While the worker is active, message only a safety stop or an accepted-input
   invalidation. Review findings wait for its returned frozen candidate.
 - Spawning a **new** worker instead of correcting the existing one is a defect, not a shortcut: it discards the context that makes the second attempt cheaper than the first. Replace a worker only for an execution stall that produces no new turn, or for an invalidated base, and then continue the same exact brief from the frozen candidate.
-- Address by agent ID, not by name. If a re-spawned worker has taken a name, `SendMessage` refuses the send rather than delivering to the wrong lane, and reports which agent the name now reaches.
+- Address a worker by agent ID, not by name. If a re-spawned worker has taken a name, `SendMessage` refuses the send rather than delivering to the wrong lane, and reports which agent the name now reaches. Peer sessions are the exception: they carry no agent ID here and are addressed by name ([Cross-Session Messaging](#cross-session-messaging)).
 - A worker the **user** stopped does not auto-resume; `SendMessage` returns a refusal. That one needs a human to type into its transcript.
 - `Explore` and `Plan` are one-shot and return no agent ID, so they can never be corrected or resumed. They are never write lanes.
-- A message from any agent is task direction only. It never approves a pending permission prompt and never changes a worker's permission settings, `CLAUDE.md`, or configuration.
+- A message from any agent is task direction only; Claude Code itself blocks it from approving a pending permission prompt or changing permission settings, `CLAUDE.md`, or configuration ([how a session treats an incoming message](https://code.claude.com/docs/en/cross-session-messaging#how-a-session-treats-an-incoming-message)).
 
 ### Role and effort selection
 
@@ -195,6 +196,8 @@ These worker roles exist only under `.claude/agents/`. They are deliberately not
 ### Read-only lanes
 
 Read-only lanes follow [Subagents And Review](spec-first-workflow/shared/subagents-and-handoff.md): one distinct decision-changing question per lane, concurrency bounded by current capacity and independence, and read-only boundaries stated in each brief.
+
+Claude Code caps concurrent subagents at 20 by default and permits nesting to depth 3; there is no per-session cap on total spawns. These are ceilings, not targets: lane eligibility still decides how many lanes exist, and a lane that cannot state an independent evidence boundary does not become eligible because capacity is free.
 
 Start ordinary research, design, challenge, and review lanes with fresh context
 when the harness supports it. In the Codex App, dispatch the selected role with
@@ -218,6 +221,34 @@ different unit.
 
 Harness-native task lists remain execution controls. They do not replace the
 repository `tasks.md` ledger or receive its acceptance receipts.
+
+## Cross-Session Messaging
+
+Vendor authority: [Message your other Claude Code sessions](https://code.claude.com/docs/en/cross-session-messaging). Requires Claude Code v2.1.224 or later on macOS or Linux, and is unavailable on Bedrock, Claude Platform on AWS, Google Cloud's Agent Platform, and Microsoft Foundry. `/list-agents` (alias `/peers`) confirms a session has the feature; `/status` reports the session's own `Peer address`.
+
+`ListAgents` discovers the sessions this one can reach and `SendMessage` delivers plain text to one of them by name — never conversation history, files, or a structured result. Same-machine delivery travels over a per-session socket. A session on another machine or on the web is reply-only: answer one, never address it first.
+
+### What a peer message is worth
+
+A peer session is not a lane and its message is not a lane result. Treat an arrived message the way [Fan-In](spec-first-workflow/shared/subagents-and-handoff.md#fan-in) treats one: carry the locator or live fact it names, disposition it in the root, and drop the rest. It is never acceptance, never a proof receipt, and never a substitute for the accepted `tasks.md` revision — a claim that arrives by message still owes the evidence its own claim scope requires.
+
+The mechanism holds that boundary without extra configuration. A worker lane here is an `Agent`-tool subagent, and [a subagent a session spawns is not listed or addressable from outside that session](https://code.claude.com/docs/en/agent-view), so a peer message always lands on a root and never inside a running write lane. The [mid-flight message rule](spec-first-workflow/phases/implementation-worker-execution.md#observe-and-freeze) therefore still has exactly one sender: the dispatching root. A backgrounded *session* (`claude --bg`, `/bg`) is an addressable peer; a background worker lane is not.
+
+### Detect a second writer before dispatch
+
+Run `/list-agents` before opening a write lane in a checkout this session did not create. It names each reachable local session with its working directory, which is the cheapest way to see that another session is already writing the tree — a clean `git status` proves nothing here, because an uncommitted concurrent edit and an idle tree look identical. This is the harness-native half of the checkout inspection [Worker dispatch](spec-first-workflow/phases/implementation-worker-execution.md) already requires: a detected second writer routes the unit to its own worktree or to that session, never to a silent shared write.
+
+Name any session meant to be reachable with `--name` or `/rename`. An unnamed interactive session takes a name derived from its working directory's folder, which collides across worktrees and across sibling checkouts of one template; `ListAgents` addresses by name and separates collisions only by a short identifier and the working directory.
+
+### Keep the correction channel open
+
+`SendMessage` serves worker lanes, agent-team teammates, and peer sessions under one tool name. A `permissions.deny` entry naming `SendMessage` removes all three at once, so [worker correction](#return-work-for-rework) stops resuming lanes and returns a refusal — a failure that reads as a stuck worker rather than as the policy it is. To drop peer traffic while keeping worker correction, deny `ListAgents` alone and set the inbound half with `crossSessionInbound`.
+
+`crossSessionInbound` (`accept`, `hold`, `refuse`) selects what arrives. Managed settings, `--settings`, then user settings are read in that order; a project or local value applies only when it is stricter on the `accept` < `hold` < `refuse` ladder. A committed project value can therefore tighten every clone's default and can never loosen a user's, which is exactly the condition under [Repository Wiring](#repository-wiring) for committing shared Claude Code policy at all.
+
+### Agent teams are not adopted
+
+[Agent teams](https://code.claude.com/docs/en/agent-teams) are experimental and inactive unless `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` is set. They are not this workflow's Worker mechanism, and enabling them changes no rule in this document: teammates message each other directly and self-claim from a harness-owned shared task list, which is a second acceptance path beside the root and a second ledger beside `tasks.md`. **Reopen when a team can run with the lead retaining acceptance and integration and `tasks.md` remaining the only ledger.** The coordination shape is the reason, not the experimental flag — a stable release that still self-claims does not satisfy the reopen condition.
 
 ## Repository Wiring
 

@@ -16,7 +16,7 @@ unknown:
 
 	_, _, err := LoadDetailed(LoadOptions{ConfigPath: configPath})
 	if err == nil {
-		t.Fatalf("LoadDetailed() expected unknown key error")
+		t.Fatal("LoadDetailed() expected unknown key error")
 	}
 	if !errors.Is(err, ErrUnknownKey) {
 		t.Fatalf("error = %v, want ErrUnknownKey", err)
@@ -38,7 +38,7 @@ unknown:
 		ConfigOverlays: []string{overlayPath},
 	})
 	if err == nil {
-		t.Fatalf("LoadDetailed() expected unknown overlay key error")
+		t.Fatal("LoadDetailed() expected unknown overlay key error")
 	}
 	if !errors.Is(err, ErrUnknownKey) {
 		t.Fatalf("error = %v, want ErrUnknownKey", err)
@@ -60,7 +60,7 @@ func TestUnknownKeyRejectsScalarSectionKeys(t *testing.T) {
 
 			_, report, err := LoadDetailed(LoadOptions{})
 			if err == nil {
-				t.Fatalf("LoadDetailed() expected unknown key error")
+				t.Fatal("LoadDetailed() expected unknown key error")
 			}
 			if !errors.Is(err, ErrUnknownKey) {
 				t.Fatalf("error = %v, want ErrUnknownKey", err)
@@ -108,7 +108,7 @@ observability:
 
 	_, _, err := LoadDetailed(LoadOptions{ConfigPath: configPath})
 	if err == nil {
-		t.Fatalf("LoadDetailed() expected unknown key error")
+		t.Fatal("LoadDetailed() expected unknown key error")
 	}
 	if !errors.Is(err, ErrUnknownKey) {
 		t.Fatalf("error = %v, want ErrUnknownKey", err)
@@ -123,7 +123,7 @@ func TestRequiredIfEnabledPostgresSecretPolicy(t *testing.T) {
 
 	_, _, err := LoadDetailed(LoadOptions{})
 	if err == nil {
-		t.Fatalf("LoadDetailed() expected secret policy error")
+		t.Fatal("LoadDetailed() expected secret policy error")
 	}
 	if !errors.Is(err, ErrSecretPolicy) {
 		t.Fatalf("error = %v, want ErrSecretPolicy", err)
@@ -140,7 +140,7 @@ func TestTST003RequiredIfEnabledContracts(t *testing.T) {
 
 		_, _, err := LoadDetailed(LoadOptions{})
 		if err == nil {
-			t.Fatalf("LoadDetailed() expected secret policy error")
+			t.Fatal("LoadDetailed() expected secret policy error")
 		}
 		if !errors.Is(err, ErrSecretPolicy) {
 			t.Fatalf("error = %v, want ErrSecretPolicy", err)
@@ -158,7 +158,7 @@ func TestTST003RequiredIfEnabledContracts(t *testing.T) {
 			t.Fatalf("LoadDetailed() error = %v", err)
 		}
 		if !cfg.Postgres.Enabled {
-			t.Fatalf("Postgres.Enabled = false, want true")
+			t.Fatal("Postgres.Enabled = false, want true")
 		}
 		if cfg.Postgres.DSN != dsn {
 			t.Fatalf("Postgres.DSN = %q, want %q", cfg.Postgres.DSN, dsn)

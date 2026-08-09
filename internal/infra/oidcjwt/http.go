@@ -2,6 +2,7 @@ package oidcjwt
 
 import (
 	"context"
+	"errors"
 	"net"
 	"net/http"
 	"net/netip"
@@ -11,11 +12,28 @@ import (
 	"github.com/getkin/kin-openapi/openapi3filter"
 )
 
+// errUnsupportedSecurityScheme reports a security requirement this boundary does
+// not implement. It carries no [Kind] and is not counted: no credential was
+// read, and the requirement was never this Verifier's to answer, so it is not a
+// verification outcome. The validator treats it as an unmet requirement, which
+// is the right answer under either OpenAPI reading — it fails an AND and moves
+// on from an OR.
+var errUnsupportedSecurityScheme = errors.New("authentication security scheme is not supported")
+
 // ResolveHTTP is the concrete PrincipalResolver used by httpx.Authenticated.
 func (v *Verifier) ResolveHTTP(
 	ctx context.Context,
 	input *openapi3filter.AuthenticationInput,
 ) (reqctx.Principal, error) {
+	// The scheme is checked first because this function consumes the credential,
+	// and the validator calls it once per scheme in every security requirement
+	// until one is met. Answering a scheme this Verifier does not implement would
+	// therefore do two things at once: accept a bearer access token as proof of
+	// some other scheme's credential, and strip the header before the requirement
+	// that actually wanted it is asked.
+	if !bearerSecurityScheme(input) {
+		return reqctx.Principal{}, errUnsupportedSecurityScheme
+	}
 	request := authenticatedRequest(input)
 	if request == nil {
 		return reqctx.Principal{}, v.recordRejection(ctx, transportHTTP, failure(KindMalformed))
@@ -50,13 +68,10 @@ func (v *Verifier) ResolveHTTP(
 // immediate peer's, and picking one entry out of it would be this boundary
 // guessing which hop to believe. A deployment that terminates TLS further out
 // than its trusted peer is one where the value is no longer that peer's to make;
-// the fix is the CIDR list, not a laxer reading here.
-//
-// bearerToken applies the same single-reading rule to the credential header and
-// owns the RFC 9110 argument for it. The two differ on surrounding whitespace,
-// and a third forwarded header should copy this side: this check compares a fixed
-// token case-insensitively, so trimming is free, while bearerToken carries opaque
-// bytes onward and refuses a value whose framing was altered at all.
+// the fix is the CIDR list, not a laxer reading here. bearerToken owns the same
+// single-reading rule for the credential header, and the RFC 9110 argument for
+// it; trimming is free here only because this compares a fixed token rather than
+// carrying opaque bytes onward.
 func (v *Verifier) trustedHTTPRequest(request *http.Request) bool {
 	host, _, err := net.SplitHostPort(request.RemoteAddr)
 	if err != nil {
@@ -70,6 +85,20 @@ func (v *Verifier) trustedHTTPRequest(request *http.Request) bool {
 	return len(forwardedProto) == 1 &&
 		!strings.Contains(forwardedProto[0], ",") &&
 		strings.EqualFold(strings.TrimSpace(forwardedProto[0]), "https")
+}
+
+// bearerSecurityScheme reports whether the requirement being validated is the
+// HTTP Bearer scheme this Verifier implements.
+//
+// It asks what the scheme is rather than what the contract named it, because the
+// name is the service's to choose and carries no meaning here. The declaration
+// is the validator's own view of the contract, so a request cannot influence it.
+func bearerSecurityScheme(input *openapi3filter.AuthenticationInput) bool {
+	if input == nil || input.SecurityScheme == nil {
+		return false
+	}
+	return strings.EqualFold(input.SecurityScheme.Type, "http") &&
+		strings.EqualFold(input.SecurityScheme.Scheme, "bearer")
 }
 
 func authenticatedRequest(input *openapi3filter.AuthenticationInput) *http.Request {

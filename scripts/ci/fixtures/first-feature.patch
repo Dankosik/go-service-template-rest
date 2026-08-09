@@ -62,20 +62,22 @@ index ab02bed..e3b3cdc 100644
 @@ -16,6 +16,7 @@ import (
  
  	"github.com/acme/feature-proof/internal/background"
- 	"github.com/acme/feature-proof/internal/config"
 +	"github.com/acme/feature-proof/internal/greeting"
- 	"github.com/acme/feature-proof/internal/health"
  	httpx "github.com/acme/feature-proof/internal/infra/http"
  	"github.com/acme/feature-proof/internal/infra/telemetry"
  )
-@@ -280,6 +281,7 @@ func Run(args []string) (runErr error) {
+@@ -280,6 +281,7 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
  	domainErrors := dependencies.DomainErrors()
- 	handler, err := httpx.NewRouter(
+ 	handler, err := newHTTPHandler(
+ 		bootstrap.cfg,
  		bootstrap.log,
- 		httpx.Handlers{
-+			API:    httpx.NewGreetingAPI(greeting.Service{}),
- 			Health: healthSvc,
- 			ReadinessGate: func(ctx context.Context) error {
+ 		metrics,
+ 		domainErrors,
+ 		httpRuntimeBindings{
+ 			Handlers: httpx.Handlers{
++				API:    httpx.NewGreetingAPI(greeting.Service{}),
+ 				Health: healthSvc,
+ 				ReadinessGate: func(ctx context.Context) error {
 diff --git a/internal/greeting/service.go b/internal/greeting/service.go
 new file mode 100644
 index 0000000..2df4efd

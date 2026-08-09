@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"runtime"
 	"runtime/debug"
 
+	"github.com/example/go-service-template-rest/internal/failure"
 	"github.com/example/go-service-template-rest/internal/problem"
 )
 
@@ -40,9 +40,9 @@ func Recover(log *slog.Logger, next http.Handler) http.Handler {
 			}
 			log.ErrorContext(
 				ctx,
-				"panic recovered",
-				"panic_class", panicClass(rec),
-				"panic_type", fmt.Sprintf("%T", rec),
+				"http_panic_recovered",
+				"panic.class", failure.PanicClass(rec),
+				"panic.type", fmt.Sprintf("%T", rec),
 				"method", request.Method,
 				"route", route,
 				"stack", string(debug.Stack()),
@@ -50,21 +50,8 @@ func Recover(log *slog.Logger, next http.Handler) http.Handler {
 			if committed() {
 				return
 			}
-			writeProblem(w, r, problemResponse{code: problem.CodeInternalError, detail: "request failed"})
+			writeProblem(w, r, problemResponse{code: problem.CodeInternalError, detail: sanitizedFailureDetail})
 		}(r.Context(), r)
 		next.ServeHTTP(trackedWriter, r)
 	})
-}
-
-func panicClass(rec any) string {
-	switch rec.(type) {
-	case runtime.Error:
-		return "runtime_error"
-	case error:
-		return "error"
-	case string:
-		return "string"
-	default:
-		return "value"
-	}
 }

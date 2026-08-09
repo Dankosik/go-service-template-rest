@@ -29,7 +29,7 @@ var errMigrationSourceMissing = errors.New("migration source directory does not 
 func run(args []string, stdout io.Writer) error {
 	logger := slog.New(slog.NewJSONHandler(stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	if len(args) > 0 {
-		err := fmt.Errorf("usage: migrate (no arguments)")
+		err := errors.New("usage: migrate (no arguments)")
 		logMigrationTerminal(logger, postgresmigrate.RunResult{}, err, postgresmigrate.FailureConfig)
 		return err
 	}

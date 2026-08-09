@@ -2,10 +2,7 @@ package grpcx
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"log/slog"
-	"math"
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/failure"
@@ -26,11 +23,29 @@ import (
 // composition root passes its configuration straight through and NewServer owns
 // the single range check that proves the conversion.
 type Config struct {
-	// MaxConcurrentRPCs bounds the RPCs executing a handler at once across the
-	// whole process. Standard health RPCs are exempt, so probe load cannot
-	// consume the budget; anything over the limit is shed as ResourceExhausted
-	// rather than queued.
+	// MaxConcurrentRPCs bounds the business RPCs executing a handler at once
+	// across the whole process. Anything over the limit is shed as
+	// ResourceExhausted rather than queued. The standard health service holds
+	// MaxConcurrentHealthRPCs instead, so no amount of probe or watch traffic can
+	// consume this budget.
 	MaxConcurrentRPCs int
+
+	// MaxConcurrentHealthRPCs bounds the standard health service's concurrent
+	// RPCs, excluding Check, which holds no slot at all so a saturated instance
+	// stays probeable.
+	//
+	// It exists because grpc-go's client-side health checker keeps one
+	// Health/Watch stream open per subchannel for the connection's whole life,
+	// and this repository's own client enables it by default. Counted against
+	// MaxConcurrentRPCs, every connected peer would permanently hold a business
+	// slot, and shedding a watch would make each round-robin caller drop the
+	// backend entirely rather than lose only the excess.
+	//
+	// One watch per connection is the legitimate shape, so a composition root
+	// fills this from its connection limit. That admits every well-behaved peer
+	// while still bounding a hostile one, which could otherwise open
+	// MaxConcurrentStreams watches on every connection it holds.
+	MaxConcurrentHealthRPCs int
 
 	// The four native transport bounds, passed to grpc.MaxConcurrentStreams,
 	// grpc.MaxHeaderListSize, grpc.MaxRecvMsgSize, and grpc.MaxSendMsgSize.
@@ -101,108 +116,6 @@ type Config struct {
 	// AccessLogSlowThreshold always logs a successful RPC at or above this
 	// duration, whatever the sample rate. Zero disables the exemption.
 	AccessLogSlowThreshold time.Duration
-}
-
-// validateConfig proves the bounds NewServer is about to hand grpc-go.
-//
-// internal/config.validateGRPCConfig restates the same access-log and lifetime
-// rules for the service's own configuration file, so a new bound needs a rule in
-// both places. config_parity_test.go owns why there are two owners and holds
-// them to one answer.
-func validateConfig(cfg Config) error {
-	if cfg.MaxConcurrentRPCs <= 0 {
-		return errors.New("build gRPC server: max concurrent RPCs must be positive")
-	}
-	if err := validateUint32Bound("max concurrent streams", cfg.MaxConcurrentStreams); err != nil {
-		return err
-	}
-	if err := validateUint32Bound("max header list bytes", cfg.MaxHeaderListBytes); err != nil {
-		return err
-	}
-	if cfg.MaxReceiveMessageBytes <= 0 {
-		return errors.New("build gRPC server: max receive message bytes must be positive")
-	}
-	if cfg.MaxSendMessageBytes <= 0 {
-		return errors.New("build gRPC server: max send message bytes must be positive")
-	}
-	if math.IsNaN(cfg.AccessLogSuccessSampleRate) ||
-		math.IsInf(cfg.AccessLogSuccessSampleRate, 0) ||
-		cfg.AccessLogSuccessSampleRate < 0 ||
-		cfg.AccessLogSuccessSampleRate > 1 {
-		return errors.New("build gRPC server: access-log success sample rate must be finite and in range [0,1]")
-	}
-	if cfg.AccessLogSlowThreshold < 0 {
-		return errors.New("build gRPC server: access-log slow threshold must be non-negative")
-	}
-	return validateLifetimeBounds(cfg)
-}
-
-// validateLifetimeBounds proves the time bounds NewServer is about to hand
-// grpc-go and the relations between them.
-//
-// Every duration is non-negative because a negative one is not a third meaning:
-// grpc-go normalizes only zero to infinity, so a negative maximum age arms its
-// timer immediately and rotates every connection at once — the opposite of the
-// off-by-default this repository chose. The two conditional rules exist only
-// when rotation is on, which is why they are checked here rather than as flat
-// bounds.
-func validateLifetimeBounds(cfg Config) error {
-	nonNegative := map[string]time.Duration{
-		"unary timeout":            cfg.UnaryTimeout,
-		"stream timeout":           cfg.StreamTimeout,
-		"max connection age":       cfg.MaxConnectionAge,
-		"max connection age grace": cfg.MaxConnectionAgeGrace,
-	}
-	for name, value := range nonNegative {
-		if value < 0 {
-			return fmt.Errorf("build gRPC server: %s must be non-negative", name)
-		}
-	}
-	positive := map[string]time.Duration{
-		"max connection idle":      cfg.MaxConnectionIdle,
-		"server ping interval":     cfg.ServerPingInterval,
-		"server ping timeout":      cfg.ServerPingTimeout,
-		"min client ping interval": cfg.MinClientPingInterval,
-	}
-	for name, value := range positive {
-		if value <= 0 {
-			return fmt.Errorf("build gRPC server: %s must be positive", name)
-		}
-	}
-
-	if cfg.MaxConnectionAge == 0 {
-		return nil
-	}
-	if cfg.MaxConnectionAgeGrace <= 0 {
-		return errors.New(
-			"build gRPC server: max connection age grace must be positive when max connection age is set",
-		)
-	}
-	if cfg.MaxConnectionAgeGrace < cfg.UnaryTimeout {
-		return errors.New(
-			"build gRPC server: max connection age grace must be at least the unary timeout",
-		)
-	}
-	if cfg.StreamTimeout > 0 && cfg.StreamTimeout >= cfg.MaxConnectionAge {
-		return errors.New(
-			"build gRPC server: stream timeout must be below max connection age, or rotation decides first",
-		)
-	}
-	return nil
-}
-
-// validateUint32Bound owns the one place a caller-supplied transport bound is
-// proven to fit the uint32 grpc-go asks for; [Config] owns why those fields are
-// int.
-func validateUint32Bound(name string, value int) error {
-	if value <= 0 || uint64(value) > math.MaxUint32 {
-		return fmt.Errorf(
-			"build gRPC server: %s must be in range [1,%d]",
-			name,
-			uint64(math.MaxUint32),
-		)
-	}
-	return nil
 }
 
 // RegisterService attaches one generated service implementation to a

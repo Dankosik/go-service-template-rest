@@ -179,9 +179,15 @@ func (r *Relay) startListener(ctx context.Context, wake chan<- struct{}) func() 
 	}
 }
 
+// runLoop repeats the cycle until something stops it. A cycle that ends in a
+// tolerable finalization fault does not: relay_finalize.go owns which faults
+// those are and how many in a row the relay absorbs, and the poll interval below
+// is what keeps an absorbed fault from becoming a tight loop against whatever
+// caused it.
 func (r *Relay) runLoop(ctx context.Context, wake <-chan struct{}) RelayResult {
 	var result RelayResult
 	due := newSchedule(r.config)
+	consecutiveFaults := 0
 	for {
 		if r.loopMustStop(ctx) {
 			return result
@@ -195,8 +201,17 @@ func (r *Relay) runLoop(ctx context.Context, wake <-chan struct{}) RelayResult {
 		if r.loopMustStop(ctx) {
 			return result
 		}
-		if cycleResult, stop := r.runCycle(ctx, wake, due); stop {
+		cycleResult, stop := r.runCycle(ctx, wake, due)
+		if !stop {
+			consecutiveFaults = 0
+			continue
+		}
+		consecutiveFaults++
+		if !r.toleratesFinalizationFault(ctx, cycleResult.Err, consecutiveFaults) {
 			return cycleResult
+		}
+		if r.wait(ctx, wake, r.config.PollInterval) {
+			return RelayResult{}
 		}
 	}
 }

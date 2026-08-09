@@ -180,6 +180,33 @@ components:
           type: string
           description: Correlation identifier echoed from X-Request-ID.
           example: 9ccecdfd92c94665a46406f8ba73cd77
+        invalid_params:
+          type: array
+          description: >-
+            Which parts of the request failed validation, following the
+            RFC 9457 extension-member example. Present only on a validation
+            rejection, and never carrying the submitted value.
+          items:
+            $ref: "#/components/schemas/InvalidParam"
+    InvalidParam:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - reason
+      properties:
+        name:
+          type: string
+          description: >-
+            An RFC 6901 JSON pointer for a request-body member, or a
+            `location.name` pair such as `query.limit` for a parameter.
+          example: /slug
+        reason:
+          type: string
+          description: >-
+            Why the contract rejected it. Names the constraint that failed and
+            never echoes the submitted value.
+          example: maximum string length is 64
   responses:
     BadRequest:
       description: request is malformed or invalid

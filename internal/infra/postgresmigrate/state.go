@@ -3,6 +3,7 @@ package postgresmigrate
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"slices"
 
@@ -55,7 +56,7 @@ func validateMigrationState(
 		return migrationState{Target: target}, nil
 	}
 	if len(newestFirst) == 0 {
-		return migrationState{}, fmt.Errorf("goose version table exists without bootstrap row")
+		return migrationState{}, errors.New("goose version table exists without bootstrap row")
 	}
 
 	applied, err := validateAppliedVersions(newestFirst)
@@ -63,7 +64,7 @@ func validateMigrationState(
 		return migrationState{}, err
 	}
 	if len(applied) > len(source) {
-		return migrationState{}, fmt.Errorf("database migration history is ahead of the source")
+		return migrationState{}, errors.New("database migration history is ahead of the source")
 	}
 	for i, version := range applied {
 		if source[i].Version != version {
@@ -85,12 +86,12 @@ func validateAppliedVersions(newestFirst []*database.ListMigrationsResult) ([]in
 	bootstrapCount := 0
 	for i, row := range newestFirst {
 		if row == nil {
-			return nil, fmt.Errorf("goose migration history contains a nil row")
+			return nil, errors.New("goose migration history contains a nil row")
 		}
 		if row.Version == 0 {
 			bootstrapCount++
 			if i != len(newestFirst)-1 || !row.IsApplied {
-				return nil, fmt.Errorf("goose bootstrap version must be the oldest applied row")
+				return nil, errors.New("goose bootstrap version must be the oldest applied row")
 			}
 			continue
 		}
@@ -99,7 +100,7 @@ func validateAppliedVersions(newestFirst []*database.ListMigrationsResult) ([]in
 		}
 	}
 	if bootstrapCount != 1 {
-		return nil, fmt.Errorf("goose migration history must contain exactly one bootstrap row")
+		return nil, errors.New("goose migration history must contain exactly one bootstrap row")
 	}
 
 	applied := make([]int64, 0, len(newestFirst)-1)
@@ -116,7 +117,7 @@ func validateAppliedVersions(newestFirst []*database.ListMigrationsResult) ([]in
 			return 0
 		}
 	}) {
-		return nil, fmt.Errorf("goose migration history is not ascending by application order")
+		return nil, errors.New("goose migration history is not ascending by application order")
 	}
 	for i := 1; i < len(applied); i++ {
 		if applied[i-1] == applied[i] {

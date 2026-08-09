@@ -8,76 +8,29 @@ import (
 	"testing"
 	"time"
 
+	"github.com/example/go-service-template-rest/internal/infra/natsjs/natsjstest"
 	dockerclient "github.com/moby/moby/client"
-	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
-	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/wait"
 )
 
-type packageNATSFixture struct {
-	container testcontainers.Container
-	url       string
-	js        jetstream.JetStream
-}
-
-const packageNATSImage = "nats:2.14.3-alpine@sha256:c11af972c99ae542de8925e6a7d9c533aa1eb039660420d2074beed6089b3bf0"
-
-func newPackageNATSFixture(t *testing.T) *packageNATSFixture {
+func newPackageNATSFixture(t *testing.T) *natsjstest.Server {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
-	defer cancel()
-	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
-		ContainerRequest: testcontainers.ContainerRequest{
-			Image:        packageNATSImage,
-			ExposedPorts: []string{"4222/tcp"},
-			Cmd:          []string{"-js", "-sd", "/data"},
-			WaitingFor: wait.ForAll(
-				wait.ForListeningPort("4222/tcp"),
-				wait.ForLog("Server is ready"),
-			).WithDeadline(time.Minute),
+	return natsjstest.Start(t, natsjstest.WithStreams(
+		jetstream.StreamConfig{
+			Name: "EVENTS", Subjects: []string{"events.>"},
+			Storage: jetstream.FileStorage, MaxMsgSize: testMaxDeliveryBytes,
 		},
-		Started: true,
-	})
-	if err != nil {
-		t.Fatalf("start NATS container: %v", err)
-	}
-	t.Cleanup(func() {
-		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cleanupCancel()
-		if err := container.Terminate(cleanupCtx); err != nil {
-			t.Errorf("terminate NATS container: %v", err)
-		}
-	})
-	endpoint, err := container.Endpoint(ctx, "")
-	if err != nil {
-		t.Fatalf("resolve NATS endpoint: %v", err)
-	}
-	url := "nats://" + endpoint
-	raw, err := nats.Connect(url, nats.Timeout(5*time.Second))
-	if err != nil {
-		t.Fatalf("connect fixture client: %v", err)
-	}
-	t.Cleanup(raw.Close)
-	js, err := jetstream.New(raw)
-	if err != nil {
-		t.Fatalf("create fixture JetStream client: %v", err)
-	}
-	for _, cfg := range []jetstream.StreamConfig{
-		{Name: "EVENTS", Subjects: []string{"events.>"}, Storage: jetstream.FileStorage, MaxMsgSize: testMaxDeliveryBytes},
-		{Name: "EVENTS_DLQ", Subjects: []string{"dead.>"}, Storage: jetstream.FileStorage, MaxMsgSize: 2 * testMaxDeliveryBytes},
-	} {
-		if _, err := js.CreateStream(ctx, cfg); err != nil {
-			t.Fatalf("create stream %s: %v", cfg.Name, err)
-		}
-	}
-	return &packageNATSFixture{container: container, url: url, js: js}
+		jetstream.StreamConfig{
+			Name: "EVENTS_DLQ", Subjects: []string{"dead.>"},
+			Storage: jetstream.FileStorage, MaxMsgSize: 2 * testMaxDeliveryBytes,
+		},
+	))
 }
 
-func (f *packageNATSFixture) client(t *testing.T, pending int) *Client {
+func packageClient(t *testing.T, f *natsjstest.Server, pending int) *Client {
 	t.Helper()
 	cfg := testConfig()
-	cfg.URLs = []string{f.url}
+	cfg.URLs = []string{f.URL}
 	cfg.AllowPlaintext = true
 	cfg.AllowUnauthenticated = true
 	cfg.Stream = "EVENTS"
@@ -92,7 +45,7 @@ func (f *packageNATSFixture) client(t *testing.T, pending int) *Client {
 
 func TestNATSWorkerRegistrationIsSingleton(t *testing.T) {
 	f := newPackageNATSFixture(t)
-	client := f.client(t, testMaxPending)
+	client := packageClient(t, f, testMaxPending)
 	cfg := testWorkerConfig()
 	cfg.Consumer = "singleton-first"
 	cfg.FilterSubject = "events.test"
@@ -105,11 +58,11 @@ func TestNATSWorkerRegistrationIsSingleton(t *testing.T) {
 	if worker, err := client.NewWorker(t.Context(), second, func(context.Context, Message) error { return nil }); worker != nil || !errors.Is(err, ErrRejected) {
 		t.Fatalf("NewWorker(second) = %#v, %v, want ErrRejected", worker, err)
 	}
-	if _, err := f.js.Consumer(t.Context(), "EVENTS", second.Consumer); !errors.Is(err, jetstream.ErrConsumerNotFound) {
+	if _, err := f.JS.Consumer(t.Context(), "EVENTS", second.Consumer); !errors.Is(err, jetstream.ErrConsumerNotFound) {
 		t.Fatalf("second consumer lookup error = %v, want no broker mutation", err)
 	}
 
-	concurrentClient := f.client(t, testMaxPending)
+	concurrentClient := packageClient(t, f, testMaxPending)
 	concurrent := cfg
 	concurrent.Consumer = "singleton-concurrent"
 	start := make(chan struct{})
@@ -140,7 +93,7 @@ func TestNATSWorkerRegistrationIsSingleton(t *testing.T) {
 
 func TestNATSConnectedTopologyErrorDoesNotEnterReconnect(t *testing.T) {
 	f := newPackageNATSFixture(t)
-	client := f.client(t, testMaxPending)
+	client := packageClient(t, f, testMaxPending)
 	client.ready.Store(false)
 	if client.waitForReconnect(t.Context(), jetstream.ErrConsumerDeleted) {
 		t.Fatal("connected topology error entered reconnect recovery")
@@ -149,7 +102,7 @@ func TestNATSConnectedTopologyErrorDoesNotEnterReconnect(t *testing.T) {
 
 func TestNATSReconnectProbeStopsWithRunContext(t *testing.T) {
 	f := newPackageNATSFixture(t)
-	client := f.client(t, testMaxPending)
+	client := packageClient(t, f, testMaxPending)
 	probeEntered := make(chan struct{}, 1)
 	client.js = blockingStreamLookup{JetStream: client.js, entered: probeEntered}
 
@@ -167,7 +120,7 @@ func TestNATSReconnectProbeStopsWithRunContext(t *testing.T) {
 
 func TestNATSPublishDispatchCancellationAndNoRetry(t *testing.T) {
 	f := newPackageNATSFixture(t)
-	client := f.client(t, 2)
+	client := packageClient(t, f, 2)
 
 	before := client.nc.Stats().OutMsgs
 	if _, err := client.Producer().Publish(t.Context(), Event{
@@ -185,7 +138,7 @@ func TestNATSPublishDispatchCancellationAndNoRetry(t *testing.T) {
 		t.Fatalf("create Docker client: %v", err)
 	}
 	t.Cleanup(func() { _ = docker.Close() })
-	source, err := f.js.Stream(t.Context(), "EVENTS")
+	source, err := f.JS.Stream(t.Context(), "EVENTS")
 	if err != nil {
 		t.Fatalf("lookup source stream: %v", err)
 	}
@@ -193,11 +146,11 @@ func TestNATSPublishDispatchCancellationAndNoRetry(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read source state before ambiguous publishes: %v", err)
 	}
-	if _, err := docker.ContainerPause(t.Context(), f.container.GetContainerID(), dockerclient.ContainerPauseOptions{}); err != nil {
+	if _, err := docker.ContainerPause(t.Context(), f.Container.GetContainerID(), dockerclient.ContainerPauseOptions{}); err != nil {
 		t.Fatalf("pause NATS: %v", err)
 	}
 	t.Cleanup(func() {
-		_, _ = docker.ContainerUnpause(context.Background(), f.container.GetContainerID(), dockerclient.ContainerUnpauseOptions{})
+		_, _ = docker.ContainerUnpause(context.Background(), f.Container.GetContainerID(), dockerclient.ContainerUnpauseOptions{})
 	})
 	dispatchedBefore := client.nc.Stats().OutMsgs
 	canceledEvent := Event{
@@ -241,7 +194,7 @@ func TestNATSPublishDispatchCancellationAndNoRetry(t *testing.T) {
 	if got := len(client.Producer().tokens); got != 0 {
 		t.Fatalf("producer capacity tokens after ambiguous completion = %d, want 0", got)
 	}
-	if _, err := docker.ContainerUnpause(t.Context(), f.container.GetContainerID(), dockerclient.ContainerUnpauseOptions{}); err != nil {
+	if _, err := docker.ContainerUnpause(t.Context(), f.Container.GetContainerID(), dockerclient.ContainerUnpauseOptions{}); err != nil {
 		t.Fatalf("resume NATS: %v", err)
 	}
 	fresh := Event{
@@ -271,7 +224,7 @@ func TestNATSPublishDispatchCancellationAndNoRetry(t *testing.T) {
 
 func TestNATSHandlerAckAmbiguityRedelivers(t *testing.T) {
 	f := newPackageNATSFixture(t)
-	client := f.client(t, testMaxPending)
+	client := packageClient(t, f, testMaxPending)
 	cfg := testWorkerConfig()
 	cfg.Consumer = "ack-ambiguity"
 	cfg.FilterSubject = "events.test"
@@ -305,7 +258,7 @@ func TestNATSHandlerAckAmbiguityRedelivers(t *testing.T) {
 
 func TestNATSDLQSourceAckAmbiguityDeduplicates(t *testing.T) {
 	f := newPackageNATSFixture(t)
-	client := f.client(t, testMaxPending)
+	client := packageClient(t, f, testMaxPending)
 	cfg := testWorkerConfig()
 	cfg.Consumer = "dlq-ack-ambiguity"
 	cfg.FilterSubject = "events.test"
@@ -339,7 +292,7 @@ func TestNATSDLQSourceAckAmbiguityDeduplicates(t *testing.T) {
 	}
 	receivePackage(t, doubleAcks, 5*time.Second, "first DLQ source ACK attempt")
 	receivePackage(t, doubleAcks, 5*time.Second, "second DLQ source ACK attempt")
-	dlq, err := f.js.Stream(t.Context(), "EVENTS_DLQ")
+	dlq, err := f.JS.Stream(t.Context(), "EVENTS_DLQ")
 	if err != nil {
 		t.Fatalf("lookup DLQ stream: %v", err)
 	}

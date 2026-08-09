@@ -15,16 +15,14 @@ import (
 // over them, and settles each with the broker. [Client.NewWorker] is the only
 // constructor, and a client owns at most one Worker.
 //
-// This file owns the run and drain lifecycle. The two halves either side of it
-// live apart: worker_admission.go proves the broker topology before a Worker
-// exists, and worker_delivery.go takes one message from admission through to
-// settlement.
+// This file owns the run and drain lifecycle: worker_admission.go proves the
+// broker topology before a Worker exists, and worker_delivery.go takes one
+// message from admission through to settlement.
 //
-// Three contexts run at different lengths, which is the thing to hold on to
-// when reading Run. fetchCtx stops acquisition the moment drain begins;
-// handlerRoot is detached from it so handlers already running may finish, and
-// only forceClose cancels it; ctx is the caller's, and observing it stops the
-// loop with an error.
+// Three contexts run at different lengths. fetchCtx stops acquisition the moment
+// drain begins; handlerRoot is detached from it so handlers already running may
+// finish, and only forceClose cancels it; ctx is the caller's, and observing it
+// stops the loop with an error.
 type Worker struct {
 	client    *Client
 	cfg       WorkerConfig
@@ -64,13 +62,10 @@ func (w *Worker) Run(ctx context.Context) error {
 // the concurrency ceiling and the count of handlers still running; pullOnce
 // owns everything about a single pull.
 //
-// The free slot count is what each pull asks for, and that is the whole reason
-// this loop is not acquisition-bound. A pull is one round trip to the broker
-// whatever it returns, so asking for one message made sustained throughput
-// 1/RTT no matter how large MaxConcurrency was. Asking for every free slot
-// makes a round trip cover up to MaxConcurrency messages, and the resident
-// bound is unchanged because free never exceeds what the ceiling already
-// allows.
+// Each pull asks for the free slot count, not one message: a pull is one round
+// trip whatever it returns, so asking for one would cap sustained throughput at
+// 1/RTT however large MaxConcurrency is. The resident bound is unchanged,
+// because free never exceeds what the ceiling already allows.
 func (w *Worker) fetchLoop(ctx, fetchCtx, handlerRoot context.Context, completion chan struct{}) (int, error) {
 	active := 0
 	for !w.draining.Load() {
@@ -115,22 +110,18 @@ func drainedHandlers(completion <-chan struct{}) int {
 // pullOnce runs one pull for up to free messages and starts a handler for each
 // one it delivered.
 //
-// It owns the pull's context for the whole life of the batch, which is why the
-// release is a single defer here rather than a call on each of the paths out:
-// the batch's messages and its error are only valid while that context lives,
-// so the release has to outlast draining them, and every exit has to make it.
+// The pull's context is released by a single defer rather than on each path out:
+// the batch's messages and its error are only valid while that context lives, so
+// the release has to outlast draining them.
 //
-// A pull that asks for more than one message costs no extra latency for the
-// first: jetstream fills the batch channel as each message arrives rather than
-// on completion, so the loop below starts a handler at the moment the message
-// lands. What a partly filled batch does cost is the pull's own expiry before
-// this returns, which is why free slots are reclaimed before the next pull
-// rather than during this one.
+// Asking for more than one message costs no extra latency for the first —
+// jetstream fills the batch channel as each message arrives — but a partly filled
+// batch waits for the pull's own expiry, which is why free slots are reclaimed
+// before the next pull rather than during this one.
 //
-// started is how many handlers it launched. stop reports that acquisition is
-// over — a cancelled fetch context, or a fault this client cannot ride out, and
-// only the fault carries an err. An expired pull that delivered nothing is
-// ordinary and stops nothing.
+// stop reports that acquisition is over: a cancelled fetch context, or a fault
+// this client cannot ride out, and only the fault carries an err. An expired pull
+// that delivered nothing is ordinary and stops nothing.
 func (w *Worker) pullOnce(
 	fetchCtx, handlerRoot context.Context,
 	completion chan<- struct{},
@@ -181,14 +172,12 @@ func pullExhausted(err error) bool {
 // startHandler launches one handler goroutine and reports whether it did.
 //
 // The check and the launch share one critical section because StartDrain sets
-// draining under the same lock: that is what stops a handler from starting
-// after drain began. A handler started later would not be counted in fetchLoop's
-// active total, so Run would return without ever joining it.
+// draining under the same lock. A handler started after drain began would not be
+// counted in fetchLoop's active total, so Run would return without joining it.
 //
-// handlerRoot is also what the two fetch counters below are recorded against,
-// rather than the caller's context: it is a context.WithoutCancel of that
-// context, so it carries the same values, and a counter increment observes no
-// deadline.
+// The fetch counters are recorded against handlerRoot rather than the caller's
+// context: it is a context.WithoutCancel of that context, so it carries the same
+// values and a counter increment observes no deadline.
 func (w *Worker) startHandler(handlerRoot context.Context, msg jetstream.Msg, completion chan<- struct{}) bool {
 	w.mu.Lock()
 	if w.draining.Load() {

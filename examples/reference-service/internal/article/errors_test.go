@@ -18,7 +18,10 @@ func TestClassifyErrorUsesStableFailureIdentity(t *testing.T) {
 	}{
 		{err: ErrNotFound, wantCode: failure.CodeNotFound, wantText: "article was not found"},
 		{err: ErrAlreadyExists, wantCode: failure.CodeAlreadyExists, wantText: "an article with this slug already exists"},
-		{err: ErrInvalid, wantCode: failure.CodeBadRequest, wantText: "request is malformed or invalid"},
+		// Deliberately not the transport's own framing message: this rejection is
+		// the domain refusing a draft, and a caller that cannot tell it from a
+		// malformed body has no way to know which one to fix.
+		{err: ErrInvalid, wantCode: failure.CodeBadRequest, wantText: "article draft is invalid"},
 	} {
 		got, ok := ClassifyError(fmt.Errorf("operation failed: %w", testCase.err))
 		if !ok || got.Code != testCase.wantCode || got.Detail != testCase.wantText {

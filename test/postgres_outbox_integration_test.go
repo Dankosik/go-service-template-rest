@@ -1005,8 +1005,8 @@ func TestPostgresOutboxRedrive(t *testing.T) {
 	event.Payload = []byte(" {\n \"redrive\" : true\n} ")
 	event.Metadata = []byte(`{"b":2,"a":1}`)
 	mustAppendOutbox(t, ctx, pool, store, event)
-	if err := store.Redrive(ctx, event.ID, "pending-audit"); !errors.Is(err, postgresoutbox.ErrRedriveRejected) {
-		t.Fatalf("pending Redrive() = %v, want ErrRedriveRejected", err)
+	if err := store.Redrive(ctx, event.ID, "pending-audit"); !errors.Is(err, postgresoutbox.ErrOperatorStateConflict) {
+		t.Fatalf("pending Redrive() = %v, want ErrOperatorStateConflict", err)
 	}
 	claim := mustClaimOutbox(t, ctx, store)
 	if err := poisonOutboxEvent(ctx, store, claim.Event.ID, claim.Token, "publisher_permanent"); err != nil {
@@ -1048,15 +1048,15 @@ func TestPostgresOutboxRedrive(t *testing.T) {
 	if err := markOutboxPublished(ctx, store, other); err != nil {
 		t.Fatalf("publish redriven event: %v", err)
 	}
-	if err := store.Redrive(ctx, other.Event.ID, "audit-3"); !errors.Is(err, postgresoutbox.ErrRedriveRejected) {
-		t.Fatalf("redrive published event = %v, want ErrRedriveRejected", err)
+	if err := store.Redrive(ctx, other.Event.ID, "audit-3"); !errors.Is(err, postgresoutbox.ErrOperatorStateConflict) {
+		t.Fatalf("redrive published event = %v, want ErrOperatorStateConflict", err)
 	}
 	other = mustClaimOutbox(t, ctx, store)
 	if err := poisonOutboxEvent(ctx, store, other.Event.ID, other.Token, "publisher_permanent"); err != nil {
 		t.Fatalf("poison other event: %v", err)
 	}
-	if err := store.Redrive(ctx, other.Event.ID, "audit-2"); !errors.Is(err, postgresoutbox.ErrRedriveConflict) {
-		t.Fatalf("cross-event audit reuse = %v, want ErrRedriveConflict", err)
+	if err := store.Redrive(ctx, other.Event.ID, "audit-2"); !errors.Is(err, postgresoutbox.ErrOperatorAuditConflict) {
+		t.Fatalf("cross-event audit reuse = %v, want ErrOperatorAuditConflict", err)
 	}
 	if _, err := pool.PGX().Exec(ctx, "UPDATE outbox_events SET published_at = clock_timestamp() - interval '2 hours' WHERE id = 'poison'"); err != nil {
 		t.Fatalf("backdate redriven published event: %v", err)
@@ -1376,6 +1376,64 @@ func TestPostgresOutboxPublishFailure(t *testing.T) {
 				t.Fatalf("publisher attempts = %d, want 1 before the drain stopped the cycle", got)
 			}
 		})
+	}
+}
+
+// A retry that reports its publication was never attempted gives the claim's
+// attempt back, and only PostgreSQL can prove it: the two counters are the
+// attempt cap's whole authority, and the claim statement is what turns an
+// uncertain event that reaches the cap into outcome-unknown quarantine. Without
+// the refund, a broker slow enough to leave every batch with a tail would walk
+// those events to max_attempts and quarantine them having never attempted one
+// publication — an operator action per event for a throughput problem.
+func TestPostgresOutboxUnattemptedRetryReturnsTheAttempt(t *testing.T) {
+	ctx, pool, store := newOutboxFixture(t)
+	mustAppendOutbox(t, ctx, pool, store, outboxEvent("unattempted"))
+
+	// One more cycle than the max-attempts argument claimOutboxEvent passes, so a
+	// refund that failed to land would exhaust the cap inside this loop.
+	const cycles = 6
+	for cycle := range cycles {
+		claim := mustClaimOutbox(t, ctx, store)
+		if claim.CycleAttemptCount != 1 || claim.TotalAttemptCount != 1 {
+			t.Fatalf("cycle %d claimed attempts = %d/%d, want 1/1: the refund did not land",
+				cycle, claim.CycleAttemptCount, claim.TotalAttemptCount)
+		}
+		if err := store.ScheduleRetryBatch(ctx, claim.Token, []postgresoutbox.RetryDirective{{
+			ID: claim.Event.ID, ErrorClass: "publisher_not_attempted", NotAttempted: true,
+		}}); err != nil {
+			t.Fatalf("cycle %d ScheduleRetryBatch(not attempted): %v", cycle, err)
+		}
+
+		record, err := store.Get(ctx, claim.Event.ID)
+		if err != nil {
+			t.Fatalf("cycle %d Get(): %v", cycle, err)
+		}
+		if record.CycleAttemptCount != 0 || record.TotalAttemptCount != 0 {
+			t.Fatalf("cycle %d refunded attempts = %d/%d, want 0/0",
+				cycle, record.CycleAttemptCount, record.TotalAttemptCount)
+		}
+		if record.PublicationUncertain {
+			t.Fatalf("cycle %d set publication uncertainty for a publication that never happened", cycle)
+		}
+		if record.LastErrorClass != "publisher_not_attempted" || !record.PoisonedAt.IsZero() {
+			t.Fatalf("cycle %d record = class %q poisoned %v", cycle, record.LastErrorClass, record.PoisonedAt)
+		}
+	}
+
+	// The refund is not a general reset: a real failure still costs its attempt,
+	// which is what keeps the cap meaning attempts actually made.
+	claim := mustClaimOutbox(t, ctx, store)
+	if err := scheduleOutboxRetry(ctx, store, claim.Event.ID, claim.Token, "publisher_temporary", 0); err != nil {
+		t.Fatalf("ScheduleRetryBatch(temporary): %v", err)
+	}
+	record, err := store.Get(ctx, claim.Event.ID)
+	if err != nil {
+		t.Fatalf("Get(): %v", err)
+	}
+	if record.CycleAttemptCount != 1 || record.TotalAttemptCount != 1 {
+		t.Fatalf("attempted failure attempts = %d/%d, want 1/1",
+			record.CycleAttemptCount, record.TotalAttemptCount)
 	}
 }
 

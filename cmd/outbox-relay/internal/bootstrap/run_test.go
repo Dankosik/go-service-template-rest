@@ -16,6 +16,7 @@ import (
 	"testing/synctest"
 	"time"
 
+	"github.com/example/go-service-template-rest/cmd/internal/runtimeopts"
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/infra/postgresoutbox"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
@@ -610,10 +611,10 @@ func TestOutboxRelayFlagAndConfigMapping(t *testing.T) {
 		MaxOpenConns: 3, MinIdleConns: 1, AcquireTimeout: 4 * time.Second,
 		ConnMaxLifetime: 5 * time.Second, StatementTimeout: 6 * time.Second,
 	}
-	postgresMapped := postgresOptions(postgresConfig)
+	postgresMapped := runtimeopts.Postgres(postgresConfig)
 	if postgresMapped.DSN != postgresConfig.DSN || postgresMapped.MaxOpenConns != postgresConfig.MaxOpenConns ||
 		postgresMapped.StatementTimeout != postgresConfig.StatementTimeout {
-		t.Fatalf("postgresOptions() = %+v", postgresMapped)
+		t.Fatalf("runtimeopts.Postgres() = %+v", postgresMapped)
 	}
 	outboxConfig := config.OutboxConfig{
 		PollInterval: time.Second, PublishTimeout: 2 * time.Second, LeaseDuration: 4 * time.Second,
@@ -728,20 +729,6 @@ func TestOutboxRelayTelemetrySetupAndFailureClasses(t *testing.T) {
 		}},
 	}
 	setupTelemetry(t.Context(), cfg, telemetry.New(), slog.Default())(t.Context())
-
-	for _, class := range []struct {
-		name string
-		err  error
-		want string
-	}{
-		{name: "deadline", err: context.DeadlineExceeded, want: "deadline_exceeded"},
-		{name: "canceled", err: context.Canceled, want: "canceled"},
-		{name: "other", err: errors.New("setup"), want: "setup_error"},
-	} {
-		if got := telemetryFailureReason(class.err); got != class.want {
-			t.Errorf("telemetryFailureReason(%s) = %q, want %q", class.name, got, class.want)
-		}
-	}
 }
 
 // A relay that cannot install telemetry still publishes, so setup degrades

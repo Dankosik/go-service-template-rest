@@ -23,6 +23,12 @@ const (
 	outcomeSuccess  = "success"
 	outcomeError    = "error"
 	outcomeRejected = "rejected"
+	// outcomeSkipped reports work the relay decided not to do rather than work
+	// that failed. Only the unattempted publication uses it, and it is kept apart
+	// from outcomeError because the two answer different operator questions: how
+	// often the broker rejects us, and how often a batch runs out of budget
+	// before its own tail.
+	outcomeSkipped = "skipped"
 	// boundedOther is what every closed vocabulary in this package collapses an
 	// unrecognized value to, so an unexpected string cannot mint a time series.
 	boundedOther = "other"
@@ -45,8 +51,17 @@ const (
 	classPublisherTimeout   = "publisher_timeout"
 	classPublisherCanceled  = "publisher_canceled"
 	classPublisherTemporary = "publisher_temporary"
-	classAttemptExhausted   = "attempt_exhausted"
-	classOutcomeUnknown     = "outcome_unknown"
+	// classPublisherNotAttempted marks an event the relay never handed to the
+	// publisher because its batch's budget was already spent. It is not a
+	// publication failure and never sets uncertainty — see Relay.classify.
+	classPublisherNotAttempted = "publisher_not_attempted"
+	classAttemptExhausted      = "attempt_exhausted"
+	classOutcomeUnknown        = "outcome_unknown"
+	// classProgressUnknown labels a finalization the relay could neither record
+	// nor disprove. It is the metric half of [ErrProgressUnknown], reported when
+	// the relay tolerates one and continues; the same condition names the process
+	// exit class when the tolerance runs out.
+	classProgressUnknown = "progress_unknown"
 )
 
 // publishOperationName is the one operation label that reaches three surfaces
@@ -63,13 +78,17 @@ const publishOperationName = "publish"
 //     retire_ordering_key, cleanup, and observe are one statement each, and
 //     carry that statement's duration.
 //   - publish is one event, not one batch.
-//   - recovery, drain, and trace_capture, and the reconciled outcome of
-//     mark_published, are counted through CountOperation and carry no duration.
+//   - recovery, drain, trace_capture, and finalize, and the reconciled outcome
+//     of mark_published, are counted through CountOperation and carry no
+//     duration. finalize is the batch-level verdict only: each statement inside
+//     it already carries its own duration under mark_published, schedule_retry,
+//     or poison.
 //
 // A new operation states its unit here and picks the matching recorder.
 func boundedOperation(value string) string {
 	switch value {
 	case "append", "claim", "recovery", "publish", "mark_published", "schedule_retry", "poison", "redrive",
+		"finalize",
 		"redrive_unknown", "confirm_accepted", "classify_legacy", "reconcile_commit",
 		"retire_ordering_key", "trace_capture", "cleanup", "observe", "drain":
 		return value
@@ -80,7 +99,7 @@ func boundedOperation(value string) string {
 
 func boundedOutcome(value string) string {
 	switch value {
-	case outcomeSuccess, outcomeError, outcomeRejected, "empty", "reconciled", "started":
+	case outcomeSuccess, outcomeError, outcomeRejected, outcomeSkipped, "empty", "reconciled", "started", "tolerated":
 		return value
 	default:
 		return boundedOther
@@ -99,7 +118,8 @@ func boundedErrorType(value string) string {
 	switch value {
 	case classNone, classDatabase, classLostLease, classValidation, classStuck, classPanic,
 		classPublisherPermanent, classPublisherRejected, classPublisherTimeout,
-		classPublisherCanceled, classPublisherTemporary, classAttemptExhausted, classOutcomeUnknown:
+		classPublisherCanceled, classPublisherTemporary, classPublisherNotAttempted,
+		classAttemptExhausted, classOutcomeUnknown, classProgressUnknown:
 		return value
 	default:
 		return boundedOther

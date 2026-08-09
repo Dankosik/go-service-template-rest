@@ -60,6 +60,7 @@ internal/infra/<outbound-system>/            outbound adapter
 internal/infra/grpc/                         native gRPC server transport
 internal/infra/grpcclient/                   bounded shared gRPC client connection
 cmd/<worker>/                               additional process
+cmd/internal/runtimeopts/                   adapter options more than one binary maps
 api/proto/                                  protobuf source
 test/performance/http/<feature>.js           multi-step k6 scenario
 ```
@@ -73,6 +74,7 @@ packages. There is no reserved empty `api/proto/`, `migrations/`, `queries/`, or
 | Path | Owns | Must not own |
 | --- | --- | --- |
 | `cmd/<binary>/` | process entry point; `main.go` plus binary-local orchestration | reusable business or adapter behavior |
+| `cmd/internal/runtimeopts/` | the mapping from one loaded configuration onto the adapter options more than one composition root builds | startup flow, readiness, drain, or any option a single binary builds alone |
 | `cmd/service/internal/bootstrap/` | composition, startup, admission, shutdown, dependency wiring | domain policy, HTTP mapping, persistence queries |
 | `internal/<feature>/` | business types, use cases, ports, invariants, domain errors | generated OpenAPI types, runtime config, concrete adapters |
 | `internal/health/` | service readiness/drain behavior and probe interface | HTTP responses, Postgres construction, config loading |
@@ -91,6 +93,8 @@ packages. There is no reserved empty `api/proto/`, `migrations/`, `queries/`, or
 | `internal/infra/postgresmigrate/` | Goose lifecycle, source/state admission, lock, and migration result metadata | service startup, domain policy, and production rollback commands |
 | `internal/infra/telemetry/` | OpenTelemetry/Prometheus SDK setup and exporters | feature policy |
 | `internal/observability/otelconfig/` | pure sampler/exporter policy values | SDK construction and repository runtime imports |
+| `internal/observability/correlationpolicy/` | the outbound correlation policy enum and propagator shared by the HTTP and gRPC clients | carrier-specific stripping, transport construction, or repository runtime imports |
+| `internal/grpclimits/` (`GRPC=enabled`) | pure gRPC access-log and lifetime bound rules shared by config validation and the server adapter | capacity bounds, error wording, or repository runtime imports |
 | `internal/authntrust/` (`AUTHN=oidc-jwt`) | pure trust-rule predicates shared by config validation and the verifier: fetchable provider URLs, trusted proxy prefixes | configured values, policy objects, credential verification, or repository runtime imports |
 | `api/openapi/` | client-visible REST source of truth | generated Go or runtime handlers |
 | `examples/reference-service/` | isolated runnable feature-slice example and its own generated contract | production service routes or shared runtime ownership |
@@ -229,22 +233,34 @@ Bootstrap is intentionally one package because its declarations jointly build
 one process. Its production files are:
 
 ```text
-network_policy.go
-network_policy_enforcement.go
-network_policy_parsing.go
 run.go
+runtime_limits.go
 shutdown.go
 startup.go
 startup_admission.go
+startup_authn.go
 startup_config.go
+startup_contract.go
 startup_dependencies.go
+startup_diagnostics.go
+startup_grpc.go
+startup_grpc_tls.go
+startup_http.go
 startup_logging.go
-startup_rejections.go
+startup_messaging.go
+startup_readiness.go
 startup_server.go
-startup_span.go
 startup_telemetry.go
 startup_timing.go
 ```
+
+Several of those files belong to one build profile and leave with it, so a
+generated service holds a subset. `run.go` keeps the startup order and the
+defer-ordered teardown, because that sequence is the behavior: a stage moved
+behind a helper stops being checkable against the order it must run in. Each
+`startup_<concern>.go` beside it owns one stage's construction, and the two
+transports are deliberately symmetric — `startup_http.go` and `startup_grpc.go`
+each pair a bindings type with the composition that consumes it.
 
 Do not create a bootstrap subpackage unless behavior becomes reusable outside
 that binary; file size alone is not a package boundary.

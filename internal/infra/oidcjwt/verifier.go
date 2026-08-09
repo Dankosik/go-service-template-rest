@@ -4,21 +4,19 @@ import (
 	"context"
 	"log/slog"
 	"sync"
-	"sync/atomic"
 	"time"
 
-	"github.com/example/go-service-template-rest/internal/reqctx"
 	"go.opentelemetry.io/otel/metric"
 )
 
-// Verifier owns one issuer's immutable keys, refresh lifecycle, and both
-// transport adapters.
+// Verifier owns one issuer's trusted keys, refresh lifecycle, and both transport
+// adapters.
 //
-// Each field group below names the regime that guards it, and refresh admission
-// is one more that [refreshAdmission] owns outright. Mixing them is what a
-// change here has to avoid.
+// Its state is split across four owners, and each guards itself: the fields
+// below are immutable, [trustStore] owns the installed keys, [refreshAdmission]
+// owns which fetches run, and the lifecycle group owns Run and Close. Mixing
+// them is what a change here has to avoid.
 type Verifier struct {
-	// Fixed for the Verifier's whole life; safe to read without synchronization.
 	policy        Policy
 	jwksURI       string
 	client        providerClient
@@ -27,21 +25,13 @@ type Verifier struct {
 	log           *slog.Logger
 	metrics       authnMetrics
 	unregisterAge func()
+	trust         *trustStore
 	admission     *refreshAdmission
 
-	// keys is replaced wholesale, never mutated, so every verification reads one
-	// consistent set without blocking a refresh. It is non-nil from newVerifier
-	// onward and nothing ever stores nil over it, which is why Run reads fetchedAt
-	// straight off it. installed carries one non-blocking nudge per successful
-	// replacement to whatever Run is scheduling.
-	keys      atomic.Pointer[keySet]
-	installed chan struct{}
-
-	// Fixed for the Verifier's whole life as well, and grouped apart because it
-	// is the lifetime rather than a value: baseCtx is the Verifier's own lifetime
-	// expressed as a context. Close cancels it, and that cancellation is the stop
-	// signal for Run and for any refresh in flight. refreshAdmission.begin hands
-	// it to each fetch it launches and says what a fetch needs from it.
+	// baseCtx is the Verifier's own lifetime expressed as a context, which is
+	// what a fetch outliving the request that triggered it runs under. Close
+	// cancels it, and that cancellation is the stop signal for Run and for any
+	// refresh in flight.
 	baseCtx context.Context //nolint:containedctx // Verifier owns this lifecycle context and cancels it in Close.
 	cancel  context.CancelFunc
 
@@ -49,8 +39,8 @@ type Verifier struct {
 	// started, and has this Verifier been retired. Between them they admit at
 	// most one Run and one shutdown. runDone reports that Run has left, and
 	// closeOnce both releases the owned client and gauge exactly once and holds a
-	// second Close until the first has finished. lifecycle.go owns this group; it
-	// is the only file that reads or writes any of it.
+	// second Close until the first has finished. lifecycle.go is the only file
+	// that reads or writes any of it.
 	lifecycleMu sync.Mutex
 	runStarted  bool
 	retired     bool
@@ -95,24 +85,24 @@ func newVerifier(
 	}
 	baseCtx, cancel := context.WithCancel(context.Background())
 	reportDegraded := newDegradedWarning(log)
+	store := newTrustStore(trust.keys)
 	verifier := &Verifier{
-		policy:    policy,
-		jwksURI:   trust.jwksURI,
-		client:    trust.client,
-		now:       now,
-		jitter:    refreshJitter,
-		log:       log,
-		metrics:   newAuthnMetrics(meterProvider, reportDegraded),
-		installed: make(chan struct{}, 1),
-		baseCtx:   baseCtx,
-		cancel:    cancel,
-		runDone:   make(chan struct{}),
+		policy:        policy,
+		jwksURI:       trust.jwksURI,
+		client:        trust.client,
+		now:           now,
+		jitter:        refreshJitter,
+		log:           log,
+		metrics:       newAuthnMetrics(meterProvider, reportDegraded),
+		unregisterAge: registerKeyAgeGauge(meterProvider, store.current, now, reportDegraded),
+		trust:         store,
+		baseCtx:       baseCtx,
+		cancel:        cancel,
+		runDone:       make(chan struct{}),
 	}
-	verifier.keys.Store(trust.keys)
-	// admission and unregisterAge both refer to the verifier being built, so
-	// neither can move into the literal above.
+	// admission refers to the verifier being built, so it cannot move into the
+	// literal above.
 	verifier.admission = &refreshAdmission{owner: verifier}
-	verifier.unregisterAge = registerKeyAgeGauge(meterProvider, verifier.keys.Load, now, reportDegraded)
 	verifier.metrics.recordRefresh(ctx, triggerStartup, nil)
 	return verifier, nil
 }
@@ -126,19 +116,6 @@ const (
 	transportHTTP transport = "http"
 	transportGRPC transport = "grpc"
 )
-
-// verify checks the compact token against trust policy and returns its issuer,
-// opaque subject, and OAuth client ID. It is the principal-only view used by
-// package tests; transport adapters use verifyToken because streaming also needs
-// the verified expiry.
-func (v *Verifier) verify(
-	ctx context.Context,
-	compact string,
-	transport transport,
-) (reqctx.Principal, error) {
-	verified, err := v.verifyToken(ctx, compact, transport)
-	return verified.principal, err
-}
 
 // verifyToken returns the parsed token only after its signature and current
 // trust have both been verified.
@@ -154,7 +131,7 @@ func (v *Verifier) verify(
 // No linter names that obligation, because it is not a member of any enum.
 //
 // The results are named so the deferred recovery can replace a panic with a
-// sanitized failure and so one metric record covers every exit.
+// sanitized failure, and so one metric record covers every exit.
 func (v *Verifier) verifyToken(
 	ctx context.Context,
 	compact string,
@@ -164,8 +141,6 @@ func (v *Verifier) verifyToken(
 		if recovered := recover(); recovered != nil {
 			verified = parsedToken{}
 			err = failure(KindUnavailable)
-			// The category is the honest answer to the caller and says nothing to
-			// whoever has to fix it; logRecoveredPanic owns that split.
 			logRecoveredPanic(ctx, v.log, "verify", recovered)
 		}
 		v.metrics.recordVerification(ctx, transport, err)
@@ -176,23 +151,20 @@ func (v *Verifier) verifyToken(
 		return parsedToken{}, err
 	}
 
-	// Two facts decide every answer below: whether an installed key signs this
-	// token, and whether the set holding it is still current.
-	//
-	// Only a key miss is worth a refresh. It is what a provider rotation looks
-	// like from here, and one coalesced, cooldown-limited fetch is the recovery;
-	// a refresh the cooldown refused or the provider failed leaves the installed
-	// set in place, so the decision below still answers from it. Staleness gets
-	// no second attempt: this token already matched, so only a replacement the
+	// Only a key miss is worth a refresh: it is what a provider rotation looks
+	// like from here, and one coalesced, cooldown-limited fetch is the recovery. A
+	// refresh the cooldown refused or the provider failed leaves the installed set
+	// in place, so the decision below still answers from it. Staleness gets no
+	// second attempt — this token already matched, so only a replacement the
 	// scheduled cadence owns can clear the age.
-	snapshot := v.keys.Load()
+	snapshot := v.trust.current()
 	signed := snapshot.verifies(parsed)
 	if !signed {
 		refreshErr := v.refresh(ctx)
 		if callerAborted(refreshErr) {
 			return parsedToken{}, refreshErr
 		}
-		snapshot = v.keys.Load()
+		snapshot = v.trust.current()
 		signed = snapshot.verifies(parsed)
 	}
 
@@ -213,12 +185,12 @@ func (v *Verifier) verifyToken(
 // verifyCredential extracts the bearer credential one transport carried and
 // verifies it.
 //
-// Both adapters reach verifyToken through here, and that is what keeps
-// authn.verifications the complete count of what this boundary answered.
-// verifyToken counts every one of its own exits from a single deferred record,
-// so a credential rejected before it — a missing, duplicated, or oversized header —
-// would otherwise go uncounted. Routing the extraction and the count through one
-// function means an adapter cannot forget the second.
+// Both adapters reach verifyToken through here, which is what keeps
+// authn.verifications the complete count of what this boundary answered:
+// verifyToken counts its own exits, but a header refused before it — missing,
+// duplicated, or oversized — would otherwise go uncounted. Pairing the
+// extraction with the count in one function means an adapter cannot take the
+// first without the second.
 func (v *Verifier) verifyCredential(
 	ctx context.Context,
 	values []string,
@@ -231,15 +203,15 @@ func (v *Verifier) verifyCredential(
 	return v.verifyToken(ctx, token, transport)
 }
 
-// recordRejection counts a refusal verify never saw, and returns that
-// same error.
+// recordRejection counts a refusal verifyToken never saw, and returns that same
+// error. An adapter calls it directly for what only an adapter can know: that a
+// request never arrived in a shape this boundary may authenticate at all.
 //
-// There are exactly two, and both reach it. One is verifyCredential's own, just
-// above: bearerToken refused the header, so verifyToken — and the deferred record
-// that counts every one of its exits — never ran. The other belongs to an adapter
-// alone, which is the only party that can know a request never arrived in a shape
-// this boundary may authenticate; the HTTP adapter is today's only such caller,
-// for a request it cannot reach and for a peer the deployment does not trust.
+// One refusal deliberately does not reach it, and naming that here is what keeps
+// the count meaning something: errUnsupportedSecurityScheme is a requirement
+// this boundary declined to answer rather than a credential it judged, so
+// counting it would inflate the very series that reports how often callers are
+// refused. Its declaration in http.go owns the rest of why.
 func (v *Verifier) recordRejection(ctx context.Context, transport transport, err error) error {
 	v.metrics.recordVerification(ctx, transport, err)
 	return err
@@ -247,7 +219,7 @@ func (v *Verifier) recordRejection(ctx context.Context, transport transport, err
 
 // CheckReady reports whether a completely validated key set is still current.
 func (v *Verifier) CheckReady() error {
-	if !v.keysCurrent(v.keys.Load()) {
+	if !v.keysCurrent(v.trust.current()) {
 		return failure(KindUnavailable)
 	}
 	return nil
@@ -255,8 +227,9 @@ func (v *Verifier) CheckReady() error {
 
 // keysCurrent is the single staleness policy every caller asks: a set past
 // MaxKeySetAge is refused even though it is still installed and would still
-// verify signatures. MaxKeySetAge owns why. A nil set is not current either, so
-// callers need no separate guard.
+// verify signatures. MaxKeySetAge owns why. The nil arm is unreachable through
+// [trustStore] and answers fail-closed anyway, which is also what the deep lint
+// gate's nil analysis requires of a dereference behind a pointer parameter.
 func (v *Verifier) keysCurrent(keys *keySet) bool {
 	return keys != nil && v.now().Before(keys.fetchedAt.Add(MaxKeySetAge))
 }

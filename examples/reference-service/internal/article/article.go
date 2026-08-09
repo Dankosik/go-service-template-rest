@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	"github.com/example/go-service-template-rest/internal/failure"
 )
 
 var slugPattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,63}$`)
@@ -114,19 +116,22 @@ func (s *Service) Create(ctx context.Context, draft Draft) (Article, error) {
 		return Article{}, err
 	}
 
-	// Wrapping preserves the sentinel identity for errors.Is while still adding
-	// the operation that failed.
+	// failure.Op rather than fmt.Errorf, because this unit of work has two writes
+	// that fail the same way. Both preserve the sentinel identity errors.Is matches
+	// on; only Op survives into the record a transport writes for an unclassified
+	// failure, and without it an operator sees one chain of *fmt.wrapError and
+	// cannot tell which of the two broke.
 	err := s.atomically.Do(ctx, func(repository Repository) error {
 		if createErr := repository.Create(ctx, created); createErr != nil {
-			return fmt.Errorf("store article: %w", createErr)
+			return failure.Op("store article", createErr)
 		}
 		if appendErr := repository.AppendEvent(ctx, Event{Slug: created.Slug, Kind: EventArticleCreated}); appendErr != nil {
-			return fmt.Errorf("append %s event: %w", EventArticleCreated, appendErr)
+			return failure.Op("append event", appendErr)
 		}
 		return nil
 	})
 	if err != nil {
-		return Article{}, fmt.Errorf("create article: %w", err)
+		return Article{}, failure.Op("create article", err)
 	}
 	return created, nil
 }
@@ -147,7 +152,7 @@ func validateDraft(candidate Article) error {
 func (s *Service) Get(ctx context.Context, slug string) (Article, error) {
 	found, err := s.repository.FindBySlug(ctx, slug)
 	if err != nil {
-		return Article{}, fmt.Errorf("get article: %w", err)
+		return Article{}, failure.Op("get article", err)
 	}
 	if !found.Published {
 		return Article{}, ErrNotFound

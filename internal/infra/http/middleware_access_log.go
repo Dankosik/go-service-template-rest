@@ -78,7 +78,7 @@ func AccessLog(log *slog.Logger, logHealthProbes bool, next http.Handler) http.H
 		if code := problemCodeForRequest(r); code != "" {
 			attrs = append(attrs, "problem_code", code)
 		}
-		log.InfoContext(r.Context(), "request", attrs...)
+		log.InfoContext(r.Context(), "http_request", attrs...)
 	})
 }
 

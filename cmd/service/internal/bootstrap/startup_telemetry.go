@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/example/go-service-template-rest/cmd/internal/runtimeopts"
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 )
@@ -46,29 +47,12 @@ func bootstrapTelemetryStage(
 	instanceID := telemetry.ResolveInstanceID(cfg.App.InstanceID)
 
 	metricsCtx, metricsCancel := withStageBudget(startupCtx, startupTelemetryBudget)
-	metricsResult, metricsErr := telemetry.SetupMetrics(metricsCtx, metrics, telemetry.MetricsConfig{
-		ServiceName:       cfg.Observability.OTel.ServiceName,
-		ServiceVersion:    cfg.App.Version,
-		ServiceCommit:     cfg.App.Commit,
-		ServiceInstanceID: instanceID,
-		DeploymentEnv:     cfg.App.Env,
-		Exporter:          metricExporterConfig(cfg),
-	})
+	metricsResult, metricsErr := telemetry.SetupMetrics(metricsCtx, metrics, runtimeopts.Metrics(cfg, instanceID))
 	metricsCancel()
 	reportMetricExporterState(startupCtx, log, metricsResult, metricsErr)
 
-	exporterCfg := traceExporterConfig(cfg)
 	telemetryCtx, telemetryCancel := withStageBudget(startupCtx, startupTelemetryBudget)
-	traceEndpoint, tracingShutdown, tracingErr := telemetry.SetupTracing(telemetryCtx, telemetry.TracingConfig{
-		ServiceName:       cfg.Observability.OTel.ServiceName,
-		ServiceVersion:    cfg.App.Version,
-		ServiceCommit:     cfg.App.Commit,
-		ServiceInstanceID: instanceID,
-		DeploymentEnv:     cfg.App.Env,
-		TracesSampler:     cfg.Observability.OTel.TracesSampler,
-		TracesSamplerArg:  cfg.Observability.OTel.TracesSamplerArg,
-		Exporter:          exporterCfg,
-	})
+	traceEndpoint, tracingShutdown, tracingErr := telemetry.SetupTracing(telemetryCtx, runtimeopts.Tracing(cfg, instanceID))
 	telemetryCancel()
 	// Reporting follows setup because only setup knows which setting supplied
 	// the endpoint, and "ignored" must not name the variable that was honored.
@@ -210,21 +194,6 @@ func reportIgnoredAmbientOTLPEnv(ctx context.Context, log *slog.Logger, endpoint
 	)
 }
 
-func traceExporterConfig(cfg config.Config) telemetry.TraceExporterConfig {
-	return telemetry.TraceExporterConfig{
-		OTLPEndpoint: cfg.Observability.OTel.Exporter.OTLPEndpoint,
-		OTLPHeaders:  cfg.Observability.OTel.Exporter.OTLPHeaders,
-	}
-}
-
-func metricExporterConfig(cfg config.Config) telemetry.MetricExporterConfig {
-	return telemetry.MetricExporterConfig{
-		OTLPEndpoint:       cfg.Observability.OTel.Exporter.OTLPMetricsEndpoint,
-		SharedOTLPEndpoint: cfg.Observability.OTel.Exporter.OTLPEndpoint,
-		OTLPHeaders:        cfg.Observability.OTel.Exporter.OTLPHeaders,
-	}
-}
-
 // reportMetricExporterState names the metric-export destination in the startup
 // log, because the Prometheus endpoint always exists and therefore proves
 // nothing: a service reachable only by a collector needs the operator to see
@@ -251,7 +220,7 @@ func reportMetricExporterState(
 				"error",
 				"dependency", startupDependencyTelemetry,
 				"metrics.export", "none",
-				"reason", telemetryInitFailureReason(setupErr),
+				"reason", telemetry.FailureReason(setupErr),
 				"err", setupErr,
 			)...,
 		)
@@ -267,7 +236,7 @@ func reportMetricExporterState(
 				// Scrape survives an unusable collector, and saying so is what
 				// keeps an operator from chasing a total metrics outage.
 				"metrics.export", "scrape_only",
-				"reason", telemetryInitFailureReason(result.ExportErr),
+				"reason", telemetry.FailureReason(result.ExportErr),
 				"err", result.ExportErr,
 			)...,
 		)

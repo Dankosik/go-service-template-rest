@@ -46,7 +46,7 @@ func TestParseInt(t *testing.T) {
 		t.Parallel()
 
 		if _, err := parseInt(1.25); err == nil {
-			t.Fatalf("parseInt() expected non-integer error")
+			t.Fatal("parseInt() expected non-integer error")
 		}
 	})
 
@@ -54,10 +54,10 @@ func TestParseInt(t *testing.T) {
 		t.Parallel()
 
 		if _, err := parseInt(math.NaN()); err == nil {
-			t.Fatalf("parseInt() expected non-finite error for NaN")
+			t.Fatal("parseInt() expected non-finite error for NaN")
 		}
 		if _, err := parseInt(math.Inf(1)); err == nil {
-			t.Fatalf("parseInt() expected non-finite error for +Inf")
+			t.Fatal("parseInt() expected non-finite error for +Inf")
 		}
 	})
 
@@ -65,7 +65,7 @@ func TestParseInt(t *testing.T) {
 		t.Parallel()
 
 		if _, err := parseInt(math.Ldexp(1, strconv.IntSize-1)); err == nil {
-			t.Fatalf("parseInt() expected overflow error at first unsafe upper bound")
+			t.Fatal("parseInt() expected overflow error at first unsafe upper bound")
 		}
 	})
 
@@ -76,7 +76,7 @@ func TestParseInt(t *testing.T) {
 			t.Skip("parseInt target range is already narrower than float64 exact integer range")
 		}
 		if _, err := parseInt(math.Ldexp(1, 53) + 2); err == nil {
-			t.Fatalf("parseInt() expected unsafe float integer error")
+			t.Fatal("parseInt() expected unsafe float integer error")
 		}
 	})
 
@@ -85,10 +85,10 @@ func TestParseInt(t *testing.T) {
 
 		overflow := uint64(math.MaxInt) + 1
 		if _, err := parseInt(overflow); err == nil {
-			t.Fatalf("parseInt() expected overflow error for uint value")
+			t.Fatal("parseInt() expected overflow error for uint value")
 		}
 		if _, err := parseInt(uint64(math.MaxUint64)); err == nil {
-			t.Fatalf("parseInt() expected overflow error for uint64 value")
+			t.Fatal("parseInt() expected overflow error for uint64 value")
 		}
 	})
 }
@@ -126,7 +126,7 @@ func TestParseInt64(t *testing.T) {
 		t.Parallel()
 
 		if _, err := parseInt64(float64(2.5)); err == nil {
-			t.Fatalf("parseInt64() expected non-integer error")
+			t.Fatal("parseInt64() expected non-integer error")
 		}
 	})
 
@@ -134,10 +134,10 @@ func TestParseInt64(t *testing.T) {
 		t.Parallel()
 
 		if _, err := parseInt64(math.NaN()); err == nil {
-			t.Fatalf("parseInt64() expected non-finite error for NaN")
+			t.Fatal("parseInt64() expected non-finite error for NaN")
 		}
 		if _, err := parseInt64(math.Inf(-1)); err == nil {
-			t.Fatalf("parseInt64() expected non-finite error for -Inf")
+			t.Fatal("parseInt64() expected non-finite error for -Inf")
 		}
 	})
 
@@ -145,7 +145,7 @@ func TestParseInt64(t *testing.T) {
 		t.Parallel()
 
 		if _, err := parseInt64(math.Ldexp(1, 63)); err == nil {
-			t.Fatalf("parseInt64() expected overflow error at first unsafe upper bound")
+			t.Fatal("parseInt64() expected overflow error at first unsafe upper bound")
 		}
 	})
 
@@ -153,7 +153,7 @@ func TestParseInt64(t *testing.T) {
 		t.Parallel()
 
 		if _, err := parseInt64(math.Ldexp(1, 53) + 2); err == nil {
-			t.Fatalf("parseInt64() expected unsafe float integer error")
+			t.Fatal("parseInt64() expected unsafe float integer error")
 		}
 	})
 
@@ -161,7 +161,7 @@ func TestParseInt64(t *testing.T) {
 		t.Parallel()
 
 		if _, err := parseInt64(uint64(math.MaxUint64)); err == nil {
-			t.Fatalf("parseInt64() expected overflow error")
+			t.Fatal("parseInt64() expected overflow error")
 		}
 	})
 }
@@ -174,11 +174,11 @@ func TestParseBool(t *testing.T) {
 		t.Fatalf("parseBool(true) error = %v", err)
 	}
 	if !value {
-		t.Fatalf("parseBool(true) = false, want true")
+		t.Fatal("parseBool(true) = false, want true")
 	}
 
 	if _, err := parseBool(1); err == nil {
-		t.Fatalf("parseBool() expected unsupported type error")
+		t.Fatal("parseBool() expected unsupported type error")
 	}
 }
 
@@ -201,7 +201,7 @@ func TestValidateRangeHelpers(t *testing.T) {
 
 		err := validateDurationRange("http.read_timeout", 11*time.Second, time.Second, 10*time.Second)
 		if err == nil {
-			t.Fatalf("validateDurationRange() expected error")
+			t.Fatal("validateDurationRange() expected error")
 		}
 		if !errors.Is(err, ErrValidate) {
 			t.Fatalf("error = %v, want ErrValidate", err)

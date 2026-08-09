@@ -542,6 +542,7 @@ if [[ "${source_checkout}" != true ]]; then
 		rm -rf -- cmd/outbox-relay internal/infra/postgresoutbox
 		rm -f -- \
 			examples/reference-service/postgres_outbox_reconciliation_integration_test.go \
+			internal/config/outbox_config.go \
 			internal/config/outbox_config_test.go \
 			internal/infra/natsjs/outbox_publisher.go \
 			internal/infra/natsjs/outbox_publisher_test.go \
@@ -588,9 +589,11 @@ if [[ "${source_checkout}" != true ]]; then
 		# surfaces as Go trying to resolve the generated module from the network.
 		remove_postgres_integration_tests
 		rm -f -- \
+			cmd/internal/runtimeopts/postgres.go \
 			cmd/service/internal/bootstrap/startup_dependencies.go \
 			cmd/service/internal/bootstrap/startup_dependencies_test.go \
 			cmd/service/internal/bootstrap/startup_rejections_test.go \
+			internal/config/postgres_config.go \
 			internal/infra/telemetry/telemetrytest/metrics.go \
 			scripts/ci/migration-source-check.sh \
 			scripts/ci/migration-history-check.sh \
@@ -623,6 +626,7 @@ if [[ "${source_checkout}" != true ]]; then
 			cmd/service/internal/bootstrap/authn_bootstrap_test.go \
 			cmd/service/internal/bootstrap/authn_readiness_test.go \
 			cmd/service/internal/bootstrap/startup_authn.go \
+			internal/config/authn_config.go \
 			internal/config/authn_config_test.go \
 			internal/infra/grpc/authn_health_test.go \
 			internal/infra/http/authn_router_test.go \
@@ -639,6 +643,7 @@ if [[ "${source_checkout}" != true ]]; then
 	if [[ "${messaging}" == "none" ]]; then
 		rm -rf -- cmd/worker internal/infra/natsjs
 		rm -f -- \
+			cmd/internal/runtimeopts/messaging.go \
 			cmd/outbox-relay/internal/bootstrap/natsjs_publisher.go \
 			cmd/outbox-relay/internal/bootstrap/natsjs_publisher_test.go \
 			cmd/service/internal/bootstrap/startup_messaging.go \
@@ -659,6 +664,7 @@ if [[ "${source_checkout}" != true ]]; then
 	if [[ "${grpc}" == "none" ]]; then
 		rm -rf -- \
 			internal/gen/proto \
+			internal/grpclimits \
 			internal/infra/grpc \
 			internal/infra/grpcclient \
 			examples/grpc-reference-service
@@ -669,7 +675,10 @@ if [[ "${source_checkout}" != true ]]; then
 			cmd/service/internal/bootstrap/authn_readiness_test.go \
 			cmd/service/internal/bootstrap/startup_grpc.go \
 			cmd/service/internal/bootstrap/startup_grpc_test.go \
+			cmd/service/internal/bootstrap/startup_grpc_tls.go \
+			cmd/service/internal/bootstrap/startup_grpc_tls_test.go \
 			docs/grpc.md \
+			internal/config/grpc_config.go \
 			internal/config/grpc_config_test.go \
 			internal/infra/oidcjwt/grpc.go \
 			internal/infra/oidcjwt/grpc_test.go \

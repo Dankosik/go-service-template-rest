@@ -1,12 +1,16 @@
 package httpx
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -50,7 +54,9 @@ func classifyTestDomainError(err error) (failure.Classification, bool) {
 func TestRejectResponseClassifiesDomainErrors(t *testing.T) {
 	t.Parallel()
 
-	reject := RejectResponse(classifyTestDomainError)
+	// Discarded here: what this table pins is the response, and the record the
+	// unclassified case writes has its own test below.
+	reject := RejectResponse(slog.New(slog.DiscardHandler), classifyTestDomainError)
 
 	for _, tc := range []struct {
 		name           string
@@ -113,6 +119,16 @@ func TestRejectResponseClassifiesDomainErrors(t *testing.T) {
 			wantCode:   problem.CodeGatewayTimeout,
 			wantDetail: "request exceeded its time budget",
 		},
+		{
+			// Same reason as the budget above, for the condition that reaches this
+			// handler far more often: a caller that hung up. Answering it as an
+			// unclassified 500 puts every abandoned request in the error rate.
+			name:       "caller cancellation",
+			err:        fmt.Errorf("query articles: %w", context.Canceled),
+			wantStatus: http.StatusGatewayTimeout,
+			wantCode:   problem.CodeGatewayTimeout,
+			wantDetail: "request was canceled by the caller",
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -170,9 +186,9 @@ func TestRejectResponseUsesTheFirstMatchingMapper(t *testing.T) {
 	}
 
 	response := httptest.NewRecorder()
-	// The nil is deliberate: a profile that supplies no mapper must not have to
-	// be filtered out by the caller.
-	RejectResponse(nil, specific, broad)(
+	// The nil mapper after the logger is deliberate: a profile that supplies no
+	// mapper must not have to be filtered out by the caller.
+	RejectResponse(slog.New(slog.DiscardHandler), nil, specific, broad)(
 		response,
 		httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/articles", nil),
 		errors.New("boom"),
@@ -189,9 +205,121 @@ func TestRejectResponseWithoutMappersKeepsTheTransportFallback(t *testing.T) {
 	t.Parallel()
 
 	response := httptest.NewRecorder()
-	RejectResponse()(response, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/articles/x", nil), errors.New("boom"))
+	RejectResponse(slog.New(slog.DiscardHandler))(response, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/articles/x", nil), errors.New("boom"))
 
 	if response.Code != http.StatusInternalServerError {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusInternalServerError)
+	}
+}
+
+// TestRejectResponseRecordsTheUnclassifiedFailure is the test that fails if the
+// 500 path ever goes quiet again.
+//
+// The client-visible half of this behavior — a detail-free "request failed" — is
+// deliberate and already pinned above. The cost of that sanitization is that the
+// response is evidence of nothing, so this record is what stands between an
+// operator and reproducing the request to find out what broke.
+//
+// It asserts both halves of the bargain: the chain names the dependency that
+// failed, and the error's own text never appears. The secret here stands in for
+// what a real handler's error carries — a DSN with a password, a token, a row.
+func TestRejectResponseRecordsTheUnclassifiedFailure(t *testing.T) {
+	t.Parallel()
+
+	const secretCanary = "password=response-path-secret"
+
+	var logged bytes.Buffer
+	cause := fmt.Errorf("create article: %w", &net.OpError{
+		Op:  "dial",
+		Net: "tcp",
+		Err: errors.New(secretCanary),
+	})
+
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/articles", nil)
+	request.Pattern = "POST /api/v1/articles"
+	RejectResponse(newTestServiceLogger(&logged), classifyTestDomainError)(httptest.NewRecorder(), request, cause)
+
+	if strings.Contains(logged.String(), secretCanary) {
+		t.Fatalf("record discloses the error's own text: %s", logged.String())
+	}
+
+	var record struct {
+		Level      string `json:"level"`
+		Message    string `json:"msg"`
+		Route      string `json:"route"`
+		ErrorChain string `json:"error_chain"`
+	}
+	if err := json.Unmarshal(logged.Bytes(), &record); err != nil {
+		t.Fatalf("decode record %q: %v", logged.String(), err)
+	}
+	if record.Level != slog.LevelError.String() {
+		t.Errorf("level = %q, want %q: an unanticipated fault is not routine traffic", record.Level, slog.LevelError)
+	}
+	// The wrapper alone is what a %T record would have said, and it is the same
+	// for every failure in the repository. Naming the type underneath is the
+	// whole point of the chain.
+	if !strings.Contains(record.ErrorChain, "*net.OpError") {
+		t.Errorf("error_chain = %q, want the wrapped dependency type", record.ErrorChain)
+	}
+	if record.Route != "POST /api/v1/articles" {
+		t.Errorf("route = %q, want the matched template", record.Route)
+	}
+	if record.Message == "" {
+		t.Error("record has no message")
+	}
+}
+
+// TestRejectResponseDoesNotRecordAClassifiedFailure keeps the error stream
+// usable. A 404 is an answer this service chose, and the access log already
+// carries its problem code; repeating it at ERROR is how an error rate stops
+// meaning anything.
+func TestRejectResponseDoesNotRecordAClassifiedFailure(t *testing.T) {
+	t.Parallel()
+
+	var logged bytes.Buffer
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/articles/x", nil)
+	RejectResponse(newTestServiceLogger(&logged), classifyTestDomainError)(
+		httptest.NewRecorder(),
+		request,
+		fmt.Errorf("get article: %w", errArticleMissing),
+	)
+
+	if logged.Len() != 0 {
+		t.Fatalf("classified failure wrote %q, want no record", logged.String())
+	}
+}
+
+// TestRejectResponseDoesNotRecordACallerAbort is the other half of the
+// cancellation fix, and the half that actually costs an operator something.
+//
+// The status was the visible symptom; this is the one that fires during an
+// incident. A caller hanging up is not a fault this service can act on, so it
+// must not spend an ERROR record — at the volume a disconnecting client
+// produces, that record is what makes the error stream unreadable exactly when
+// it is being read.
+func TestRejectResponseDoesNotRecordACallerAbort(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name string
+		err  error
+	}{
+		{name: "caller cancellation", err: fmt.Errorf("query articles: %w", context.Canceled)},
+		{name: "spent request budget", err: fmt.Errorf("query articles: %w", context.DeadlineExceeded)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			var logged bytes.Buffer
+			RejectResponse(newTestServiceLogger(&logged), classifyTestDomainError)(
+				httptest.NewRecorder(),
+				httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/articles/x", nil),
+				tc.err,
+			)
+
+			if logged.Len() != 0 {
+				t.Fatalf("caller-owned outcome wrote %q, want no record", logged.String())
+			}
+		})
 	}
 }

@@ -16,6 +16,13 @@ const (
 	KindMalformed
 	KindOversize
 	KindInvalid
+	// KindLifetime is a token this service refuses for how long it was issued
+	// for, not for anything wrong with it. It sits beside KindInvalid because a
+	// caller cannot tell the two apart and must not: both transports answer it
+	// exactly as they answer KindInvalid. It exists for the operator, who
+	// otherwise reads a provider configured to mint hour-long access tokens as a
+	// signature failure. MaxTokenLifetime owns what the limit buys.
+	KindLifetime
 	KindUnavailable
 	KindUntrustedTransport
 )
@@ -52,6 +59,8 @@ func (e *Error) Error() string {
 		return "authentication credential is too large"
 	case KindInvalid:
 		return "authentication credential is invalid"
+	case KindLifetime:
+		return "authentication credential was issued for longer than this service accepts"
 	case KindUnavailable:
 		return "authentication trust is unavailable"
 	case KindUntrustedTransport:
@@ -67,12 +76,10 @@ func (e *Error) Error() string {
 // callerAborted reports whether err is the caller's own cancellation or deadline
 // rather than an outcome this boundary decided.
 //
-// It is the one failure this package returns without a [Kind]: verify
-// passes it back wrapped and otherwise unchanged, so each transport can report
-// the caller's status instead of an authentication result. [KindOf] answers
-// false for it, which is the same answer it gives an unclassified error, so
-// every consumer that has to tell the caller apart from the credential asks this
-// first.
+// It is the one failure this package returns without a [Kind], so each transport
+// can report the caller's status instead of an authentication result. [KindOf]
+// answers false for it and for an unclassified error alike, which is why every
+// consumer that has to tell the caller apart from the credential asks this first.
 func callerAborted(err error) bool {
 	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
 }
@@ -81,20 +88,19 @@ func callerAborted(err error) bool {
 // is the second table over [Kind], so it lives beside the first rather than
 // beside recordVerification, its only caller.
 //
-// The returned set is closed and one label per Kind, which keeps cardinality
-// fixed while leaving each cause separately alertable — untrusted_transport in
-// particular, because it means the deployment's trusted_proxy_cidrs no longer
-// matches the real peer and every request is failing, not that one client sent
-// a bad header.
+// One label per Kind keeps cardinality fixed while leaving each cause separately
+// alertable, and two of them earn their separation by naming a deployment rather
+// than a caller: untrusted_transport means trusted_proxy_cidrs no longer matches
+// the real peer, and lifetime means the issuer mints access tokens longer-lived
+// than MaxTokenLifetime. Both fail every request at once, so folding either into
+// invalid would send an operator looking at signatures and keys.
 //
-// canceled is the one label with no Kind behind it. verify returns
-// the caller's own cancellation or deadline unchanged so each transport can
-// answer with the caller's status rather than an authentication outcome, and
-// that error carries no Kind. Counting it as invalid would report a client that
-// hung up mid-refresh as a client that presented a bad credential, in the one
-// series operators are told to expect noise in. Anything else arriving without a
-// Kind is unclassified, and unavailable is the answer that does not blame the
-// caller for it.
+// canceled is the one label with no Kind behind it, because verifyToken passes a
+// caller's own cancellation back unchanged. Counting that as invalid would report
+// a client that hung up mid-refresh as one that presented a bad credential, in
+// the series operators are told to expect noise in. Anything else arriving
+// without a Kind is unclassified, and unavailable is the answer that does not
+// blame the caller for it.
 func verificationReason(err error) string {
 	kind, ok := KindOf(err)
 	if !ok {
@@ -113,6 +119,8 @@ func verificationReason(err error) string {
 		return "oversize"
 	case KindInvalid:
 		return "invalid"
+	case KindLifetime:
+		return "lifetime"
 	case KindUnavailable:
 		return "unavailable"
 	case KindUntrustedTransport:
@@ -127,19 +135,15 @@ func failure(kind Kind) error {
 }
 
 // logRecoveredPanic reports a panic this package converted into a sanitized
-// failure. Both converters call it: verify and fetchAndInstall.
-//
-// It exists because the conversion otherwise reports only a closed failure
-// category. The metric says a panic occurred; this record says where the service
-// defect occurred without exposing the recovered value.
+// failure, which the metric alone cannot locate: it says a panic occurred, and
+// this says where the service defect is.
 //
 // Only the panic's type is published, never its value: a panic raised while
 // parsing a token or a provider document can carry either in its message, and
-// providerError's redaction rule covers logs as much as errors.
-// The stack is safe by the same reading — it names functions and files, not
-// values — and it is the only record of where the panic came from, because both
-// converters answer before any transport recovery could see it.
-// internal/infra/grpc logs a recovered panic the same way.
+// providerError's redaction rule covers logs as much as errors. The stack is
+// safe by the same reading — it names functions and files, not values — and it
+// is the only record of where the panic came from, because both converters
+// answer before any transport recovery could see it.
 func logRecoveredPanic(ctx context.Context, log *slog.Logger, operation string, recovered any) {
 	if log == nil {
 		log = slog.Default()
@@ -156,18 +160,15 @@ func logRecoveredPanic(ctx context.Context, log *slog.Logger, operation string, 
 
 // NewError builds one sanitized authentication category.
 //
-// It is exported for the transport adapters' own tests: proving that the HTTP
-// adapter maps every Kind to the right status and challenge needs each Kind
-// constructible from outside this package, and the alternative is for those
-// tests to mint real tokens and provider outages to reach a category. Production
-// code has no reason to call it — a Verifier returns these categories itself,
-// through the unexported failure above.
+// It is exported for the transport adapters' own tests, which otherwise have to
+// mint real tokens and provider outages to reach every Kind their status mapping
+// must answer. Production code has no reason to call it: a Verifier returns
+// these categories itself, through the unexported failure above.
 //
-// A Kind outside the declared set is not screened here, and screening one would
-// break a caller: every consumer already answers its own default arm with a
-// fail-closed category, and TestDocumentedMetricReasonsMatchTheGuide depends on
-// the unscreened behaviour outright, walking Kind values until [Error.Error]
-// reaches its default arm to find the end of the declared run.
+// A Kind outside the declared set is deliberately not screened.
+// TestDocumentedMetricReasonsMatchTheGuide depends on that, walking Kind values
+// until [Error.Error] reaches its default arm to find the end of the declared
+// run, and every consumer already answers its own default arm fail-closed.
 func NewError(kind Kind) error {
 	return failure(kind)
 }

@@ -66,7 +66,7 @@ func TestRetryRepeatsRetryableStatus(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusOK)
 	}), RetryPolicy{MaxAttempts: retryTestMaxAttempts, BaseDelay: retryTestBaseDelay})
-	request, err := http.NewRequestWithContext(context.Background(), http.MethodGet, client.BaseURL(), nil)
+	request, err := http.NewRequestWithContext(context.Background(), http.MethodGet, client.BaseURL(), http.NoBody)
 	if err != nil {
 		t.Fatalf("build request: %v", err)
 	}
@@ -225,7 +225,7 @@ func TestRetryStopsAtMaxAttempts(t *testing.T) {
 		attempts.Add(1)
 		w.WriteHeader(http.StatusServiceUnavailable)
 	}), RetryPolicy{MaxAttempts: retryTestMaxAttempts, BaseDelay: retryTestBaseDelay})
-	request, err := http.NewRequestWithContext(context.Background(), http.MethodGet, client.BaseURL(), nil)
+	request, err := http.NewRequestWithContext(context.Background(), http.MethodGet, client.BaseURL(), http.NoBody)
 	if err != nil {
 		t.Fatalf("build request: %v", err)
 	}
@@ -248,7 +248,7 @@ func TestRetryCancellationNeverReturnsADrainedResponse(t *testing.T) {
 	t.Parallel()
 
 	ctx, cancel := context.WithCancel(context.Background())
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://provider.example", nil)
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://provider.example", http.NoBody)
 	if err != nil {
 		t.Fatalf("build request: %v", err)
 	}
@@ -288,7 +288,7 @@ func TestRetryRecordsOneClientSpanPerAttempt(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusOK)
 	}), RetryPolicy{MaxAttempts: 2, BaseDelay: retryTestBaseDelay})
-	request, err := http.NewRequestWithContext(context.Background(), http.MethodGet, client.BaseURL(), nil)
+	request, err := http.NewRequestWithContext(context.Background(), http.MethodGet, client.BaseURL(), http.NoBody)
 	if err != nil {
 		t.Fatalf("build request: %v", err)
 	}
@@ -326,7 +326,7 @@ func TestRetryDoesNotOutliveTheRequestBudget(t *testing.T) {
 	}), RetryPolicy{MaxAttempts: retryTestMaxAttempts, BaseDelay: time.Minute})
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, client.BaseURL(), nil)
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, client.BaseURL(), http.NoBody)
 	if err != nil {
 		t.Fatalf("build request: %v", err)
 	}

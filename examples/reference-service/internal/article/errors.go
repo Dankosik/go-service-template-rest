@@ -20,7 +20,7 @@ func ClassifyError(err error) (failure.Classification, bool) {
 	case errors.Is(err, ErrAlreadyExists):
 		return failure.Classification{Code: failure.CodeAlreadyExists, Detail: "an article with this slug already exists"}, true
 	case errors.Is(err, ErrInvalid):
-		return failure.Classification{Code: failure.CodeBadRequest, Detail: "request is malformed or invalid"}, true
+		return failure.Classification{Code: failure.CodeBadRequest, Detail: "article draft is invalid"}, true
 	default:
 		return failure.Classification{}, false
 	}

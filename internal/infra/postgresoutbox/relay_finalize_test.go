@@ -281,7 +281,7 @@ func TestRelayPoisonLoggingFollowsDurableWrite(t *testing.T) {
 	store := &relayStoreStub{
 		markPoisonedBatch: func(context.Context, string, []PoisonDirective) error { return poisonErr },
 	}
-	// Telemetry stays nil: this asserts markPoisoned's write-then-log ordering
+	// Telemetry stays nil: this asserts finalizePoisoned's write-then-log ordering
 	// through its return value, and a nil *Telemetry is a working no-op. What
 	// the log line actually contains is TestTelemetryBoundedContract's claim.
 	relay := newUnitRelay(store, publisherFunc(func(context.Context, Event) error { return nil }))

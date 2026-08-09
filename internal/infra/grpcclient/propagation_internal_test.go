@@ -1,5 +1,5 @@
 // Correlation trust boundary, white-box half: does each seam in propagation.go
-// hold on its own — policyPropagator emitting and declaring exactly the selected
+// hold on its own — the correlationpolicy propagator emitting and declaring exactly the selected
 // fields, and the two sanitizers stripping reserved keys without mutating the
 // caller's own metadata or call options?
 //
@@ -20,6 +20,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/example/go-service-template-rest/internal/observability/correlationpolicy"
 	"github.com/example/go-service-template-rest/internal/reqctx"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
@@ -61,7 +62,7 @@ func TestPolicyPropagatorOwnsRemoteCorrelationFields(t *testing.T) {
 			t.Parallel()
 
 			carrier := propagation.MapCarrier{}
-			policyPropagator{policy: testCase.policy}.Inject(ctx, carrier)
+			correlationpolicy.NewPropagator(testCase.policy, requestIDMetadataKey).Inject(ctx, carrier)
 
 			if got := carrier.Get("traceparent"); (got != "") != testCase.wantTrace {
 				t.Fatalf("traceparent = %q, want present %v", got, testCase.wantTrace)
@@ -118,7 +119,7 @@ func TestPolicyPropagatorFieldsMatchWhatInjectEmits(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
 
-			propagator := policyPropagator{policy: testCase.policy}
+			propagator := correlationpolicy.NewPropagator(testCase.policy, requestIDMetadataKey)
 			carrier := propagation.MapCarrier{}
 			propagator.Inject(ctx, carrier)
 
@@ -149,7 +150,7 @@ func TestPolicyPropagatorOmitsInvalidContextRequestID(t *testing.T) {
 
 	ctx := reqctx.ContextWithRequestID(t.Context(), "contains spaces")
 	carrier := propagation.MapCarrier{}
-	policyPropagator{policy: PropagationTrustedService}.Inject(ctx, carrier)
+	correlationpolicy.NewPropagator(PropagationTrustedService, requestIDMetadataKey).Inject(ctx, carrier)
 	if got := carrier.Get(requestIDMetadataKey); got != "" {
 		t.Fatalf("x-request-id = %q, want invalid value omitted", got)
 	}

@@ -1,10 +1,7 @@
 // Package pgtest gives a test an isolated, migrated PostgreSQL database.
 //
-// It exists because the alternative — one container, one database, TRUNCATE
-// between cases — works until two packages run in parallel, which is the default,
-// and then produces failures that only reproduce under load and get "fixed" with
-// -p 1. The container is shared per test binary and the database is per test, so
-// startup is paid once and cases still cannot see each other's rows.
+// The container is shared per test binary and the database is per test, so
+// startup is paid once and parallel cases still cannot see each other's rows.
 //
 // Usage from any package that owns a repository:
 //
@@ -145,11 +142,10 @@ func DSN(tb testing.TB) string {
 // Migrated returns a DSN for an isolated database with the repository's
 // migrations already applied.
 //
-// This is what a repository test actually needs, and applying migrations by hand
-// is the step every service reimplements. source and path name the migrations
-// directory relative to the calling package, for example os.DirFS("../../..") and
-// "migrations" — explicit, because the depth differs per package and a guess here
-// would fail as "no migrations found" rather than as a compile error.
+// source and path name the migrations directory relative to the calling package,
+// for example os.DirFS("../../..") and "migrations". They are explicit because
+// the depth differs per package, and a guess would fail as "no migrations found"
+// rather than as a compile error.
 func Migrated(tb testing.TB, source fs.FS, path string) string {
 	tb.Helper()
 

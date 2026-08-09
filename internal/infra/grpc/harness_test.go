@@ -46,7 +46,11 @@ const (
 // fixture through validateConfig, which refuses a zero there.
 func testServerConfig() Config {
 	return Config{
-		MaxConcurrentRPCs:          4,
+		MaxConcurrentRPCs: 4,
+		// Larger than the business budget on purpose: a test that saturates
+		// business admission must not also be shedding the health service, which
+		// is the separation admission_test.go proves.
+		MaxConcurrentHealthRPCs:    8,
 		MaxConcurrentStreams:       4,
 		MaxHeaderListBytes:         16 << 10,
 		MaxReceiveMessageBytes:     4 << 20,

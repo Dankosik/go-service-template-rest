@@ -33,11 +33,14 @@
 //     PublishConcurrency concurrent calls sharing one deadline, derived in
 //     publishAll from the earlier of PublishTimeout and the lease. At most one
 //     event per ordering key is ever claimable, so concurrency cannot reorder a
-//     key.
+//     key. Because that budget belongs to the batch, its tail can find it spent;
+//     such an event is reported as errPublicationNotAttempted rather than handed
+//     a dead context.
 //   - classify (relay_finalize.go) — classify turns each outcome into exactly one
-//     durable transition: published, retried under full-jitter backoff, or
-//     poisoned for operator redrive. It is the single place the delivery policy
-//     lives.
+//     durable transition: published, retried under full-jitter backoff, poisoned
+//     for operator redrive, or — for the events publication never reached —
+//     released immediately with the claim's attempt given back. It is the single
+//     place the delivery policy lives.
 //   - finalize (relay_finalize.go, store_finalize.go) — one statement per
 //     transition covers the whole lease, so a backlog costs round trips per batch
 //     rather than per event. Finalization is detached from process cancellation,
@@ -90,7 +93,9 @@
 //
 // To emit a new event type, build an [Event] in the repository adapter that owns
 // the mutation's transaction and pass it to [Store.Append] inside that
-// transaction. The relay side ships composed and the append side does not: no
+// transaction. That adapter holds an [Appender] rather than the whole [Store],
+// so a request path cannot reach the relay's statements or the operator actions.
+// The relay side ships composed and the append side does not: no
 // [Store] exists in cmd/service, because the template has no feature that emits
 // events, so the first service that does builds one over the API process's pool
 // and threads it in — see the worked wiring in
@@ -119,7 +124,7 @@
 // attempt, an audit write — expect to edit relay.go's runLoop or runCycle, the
 // new stage's own relay_*.go file, boundedOperation in vocabulary.go, doc.go's
 // cycle list above, and, if the stage can stop the relay, both errors.go and
-// failureClass in cmd/outbox-relay/main.go. Three rules are not visible from the
+// failureClass in cmd/outbox-relay/main.go. Four rules are not visible from the
 // place a stage is added, and each is owned somewhere else:
 //
 //   - Stop-reason precedence. A cancelled batch reports an ordinary drain even
@@ -136,6 +141,9 @@
 //     end uses Telemetry.RecordOperation, and one reporting a verdict reached
 //     partway through uses CountOperation. An operation missing from that switch
 //     reports "other" rather than failing.
+//   - Whether its failure stops the process. Returning an error from a stage ends
+//     the cycle; only the two faults finalizationFaultTolerance names are absorbed
+//     and retried, and relay_finalize.go owns why those two and no others.
 //
 // The schema, the claim and finalization statements, and this package's Go code
 // are one unit: a change to delivery state belongs in

@@ -3,7 +3,6 @@ package bootstrap
 import (
 	"context"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"log/slog"
@@ -14,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/example/go-service-template-rest/cmd/internal/runtimeopts"
 	"github.com/example/go-service-template-rest/internal/background"
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/health"
@@ -84,7 +84,7 @@ func run(signalCtx context.Context, args []string, buildHandler HandlerBuilder) 
 		defer cleanupCancel()
 		telemetryCleanup(cleanupCtx)
 	}()
-	client, err := natsjs.Connect(startupCtx, messagingClientConfig(cfg.Messaging), natsjs.RoleWorker, natsjs.Observability{Logger: log})
+	client, err := natsjs.Connect(startupCtx, runtimeopts.Messaging(cfg.Messaging), natsjs.RoleWorker, natsjs.Observability{Logger: log})
 	if err != nil {
 		return fmt.Errorf("initialize worker messaging: %w", err)
 	}
@@ -116,11 +116,7 @@ func run(signalCtx context.Context, args []string, buildHandler HandlerBuilder) 
 }
 
 func newWorkerLogger(out io.Writer, cfg config.Config) *slog.Logger {
-	return slog.New(logctx.New(slog.NewJSONHandler(out, &slog.HandlerOptions{Level: cfg.Log.Level}))).With(
-		"service.name", cfg.Observability.OTel.ServiceName,
-		"service.version", cfg.App.Version,
-		"deployment.environment.name", cfg.App.Env,
-	)
+	return logctx.NewProcessLogger(out, cfg.Log.Level).With(runtimeopts.LoggerFields(cfg)...)
 }
 
 func workerCleanupContext(base context.Context, deadline time.Time, limit time.Duration) (context.Context, context.CancelFunc) {
@@ -249,49 +245,7 @@ func handlerStoppedBeforeReturn(workerErr error, workerDone <-chan struct{}) boo
 }
 
 func parseLoadOptions(args []string) (config.LoadOptions, error) {
-	var configPath string
-	var overlays []string
-	flags := flag.NewFlagSet("worker", flag.ContinueOnError)
-	flags.SetOutput(io.Discard)
-	flags.Func("config", "path to base config file", func(value string) error {
-		configPath = strings.TrimSpace(value)
-		if configPath == "" {
-			return errors.New("config path cannot be empty")
-		}
-		return nil
-	})
-	flags.Func("config-overlay", "path to config overlay file (repeatable)", func(value string) error {
-		value = strings.TrimSpace(value)
-		if value == "" {
-			return errors.New("config overlay path cannot be empty")
-		}
-		overlays = append(overlays, value)
-		return nil
-	})
-	if err := flags.Parse(args); err != nil {
-		return config.LoadOptions{}, fmt.Errorf("parse flags: %w", err)
-	}
-	if len(flags.Args()) != 0 {
-		return config.LoadOptions{}, errors.New("parse flags: unexpected positional arguments")
-	}
-	return config.LoadOptions{ConfigPath: configPath, ConfigOverlays: overlays}, nil
-}
-
-func messagingClientConfig(cfg config.MessagingConfig) natsjs.Config {
-	urls := make([]string, 0)
-	for value := range strings.SplitSeq(cfg.URLs, ",") {
-		urls = append(urls, strings.TrimSpace(value))
-	}
-	return natsjs.Config{
-		URLs:                 urls,
-		CredentialsFile:      cfg.CredentialsFile,
-		RootCAFile:           cfg.RootCAFile,
-		AllowPlaintext:       cfg.AllowPlaintext,
-		AllowUnauthenticated: cfg.AllowUnauthenticated,
-		Stream:               cfg.Stream,
-		MaxPayloadBytes:      cfg.MaxPayloadBytes,
-		MaxPendingPublishes:  cfg.MaxPendingPublishes,
-	}
+	return config.ParseLoadOptions("worker", args, nil)
 }
 
 func messagingWorkerConfig(cfg config.MessagingConfig) (natsjs.WorkerConfig, error) {

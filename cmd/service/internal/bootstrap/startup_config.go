@@ -83,3 +83,7 @@ func bootstrapConfigStage(
 // because every rule it enforces relates a configured dependency budget to the
 // startup stage that runs it. A profile with no dependencies has nothing to
 // check. See startup_dependencies.go.
+
+func parseLoadOptions(args []string) (config.LoadOptions, error) {
+	return config.ParseLoadOptions("service", args, nil)
+}

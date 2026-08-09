@@ -20,6 +20,7 @@ linters:
     - depguard
     - dogsled
     - dupl
+    - dupword
     - durationcheck
     - embeddedstructfieldcheck
     - errchkjson
@@ -27,6 +28,7 @@ linters:
     - errorlint
     - exhaustive
     - exhaustruct
+    - exptostd
     - fatcontext
     - forbidigo
     - forcetypeassert
@@ -58,8 +60,10 @@ linters:
     - noctx
     - nolintlint
     - nosprintfhostport
+    - perfsprint
     - predeclared
     - promlinter
+    - protogetter
     - reassign
     - recvcheck
     - revive
@@ -111,6 +115,24 @@ linters:
       # which looks identical and is a real provenance marker.
       ignore-sig-regexps:
         - google\.golang\.org/grpc/status\.Error(f)?\(
+        # config.ParseLoadOptions already returns the operator-facing rejection:
+        # every error it produces is prefixed "parse flags:" and names the flag
+        # that was wrong. A composition root that wrapped it again would print
+        # that prefix twice, and has nothing to add — it has not reached a stage
+        # to name yet.
+        - internal/config\.ParseLoadOptions\(
+        # failure.Op is a wrapper — it is the repository's own alternative to
+        # fmt.Errorf, and the error it returns implements Unwrap. wrapcheck reads
+        # it as an unwrapped error from another package because the wrapping
+        # happens inside that package rather than at the call site. The path
+        # fragment is deliberately module-relative: scripts/init-module.sh
+        # rewrites the module path in a derived repository.
+        - internal/failure\.Op\(
+        # InstrumentSet.Err reports the failure the set already wrapped with the
+        # metric name that could not be created. A call-site wrap would add a
+        # second, less specific prefix to the only registration error the
+        # constructor can produce. Same module-relative fragment rule as above.
+        - internal/infra/telemetry\.InstrumentSet\)\.Err\(
     staticcheck:
       checks:
         - all
@@ -182,6 +204,13 @@ linters:
             # is what keeps one rule from being written twice.
             - github.com/example/go-service-template-rest/internal/authntrust
             # profile:authn-oidc-jwt:end
+            # profile:grpc:start
+            # The gRPC access-log and lifetime bounds are a leaf for the same
+            # reason: this package must refuse a bad value at load and
+            # internal/infra/grpc must refuse it again at server construction.
+            # Restating the rules is what let one side be tightened alone.
+            - github.com/example/go-service-template-rest/internal/grpclimits
+            # profile:grpc:end
             - github.com/example/go-service-template-rest/internal/observability/otelconfig
           deny:
             - pkg: github.com/example/go-service-template-rest/internal
@@ -197,6 +226,19 @@ linters:
               desc: health behavior receives probes and must not depend on config, adapters, generated contracts, or other features.
             - pkg: github.com/example/go-service-template-rest/cmd
               desc: health behavior must not depend on composition roots.
+        # profile:grpc:start
+        grpclimits_is_pure_policy:
+          list-mode: lax
+          files:
+            - "**/internal/grpclimits/**/*.go"
+          deny:
+            - pkg: github.com/example/go-service-template-rest/internal
+              desc: grpclimits is a pure bound-rule leaf shared by internal/config and internal/infra/grpc; a dependency here would put it back out of reach of one of them.
+            - pkg: github.com/example/go-service-template-rest/cmd
+              desc: grpclimits must not depend on composition roots.
+            - pkg: google.golang.org/grpc
+              desc: the rules bound values a server is built from and must stay buildable without the gRPC runtime.
+        # profile:grpc:end
         failure_is_transport_neutral:
           list-mode: lax
           files:
@@ -371,10 +413,45 @@ linters:
     nolintlint:
       require-explanation: true
       require-specific: true
+    gocritic:
+      # The default check set is already clean here, so the value is entirely in
+      # the tags golangci-lint leaves off. Each check below is disabled against a
+      # measured result on this tree, not a preference.
+      enabled-tags:
+        - diagnostic
+        - style
+        - performance
+        - opinionated
+        - experimental
+      disabled-checks:
+        # Both want a pointer wherever a struct is copied. The repository passes
+        # config and option structs by value on purpose so a callee cannot mutate
+        # a caller's value, and no benchmark has claimed either copy as a cost.
+        - hugeParam
+        - rangeValCopy
+        # Signature shape the call site settles: a result is named when a defer
+        # writes it, and parameter types stay split where the names read better
+        # apart. Neither has one answer this repository can pin.
+        - unnamedResult
+        - paramTypeCombine
+        # nolintlint already requires an explanation on every directive.
+        - whyNoLint
+        # revive's import-shadowing owns this rule below; one policy, one owner.
+        - importShadow
+        # Misreads an out-parameter: telemetry.InstrumentSet's Int64Counter and
+        # siblings take *metric.Int64Counter precisely to write through it.
+        - ptrToRefParam
     revive:
       rules:
         - name: context-as-argument
         - name: unused-parameter
+        # A local named after an imported package makes the package unreachable
+        # for the rest of that scope, so the next call added there fails to
+        # compile for a reason the name does not show.
+        - name: import-shadowing
+        - name: redundant-import-alias
+        - name: unnecessary-format
+        - name: use-slices-sort
     tagliatelle:
       case:
         rules:

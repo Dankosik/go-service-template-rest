@@ -149,8 +149,54 @@ leaves unacknowledged messages for redelivery. Startup rejects a worker whose
 drain plus diagnostics, background join, feature cleanup, and telemetry flush
 cannot fit inside `HTTP__GRACE_PERIOD`; every shutdown stage draws from that
 single process deadline. Use the low-cardinality `messaging.*` metrics and
-correlated logs/traces for diagnosis. Redrive preserves the logical message ID
-and original subject but uses a new publication ID.
+correlated logs/traces for diagnosis.
+
+Spans follow the OpenTelemetry messaging convention, so they are named
+`publish {subject}` and `process {filter subject}` — the same shape the outbox
+relay's `publish {destination}` uses. The consume span is named after the
+worker's configured filter rather than the delivered subject, because a
+wildcard filter would otherwise put an unbounded value in the field a tracing
+backend groups on; the delivered subject is still on the span as
+`messaging.destination.name`. A trace query or dashboard keyed on the previous
+static `messaging publish` / `messaging consume` names must be updated.
+
+### Redriving a dead-letter record
+
+A dead-letter record keeps the original payload byte for byte plus the headers
+needed to rebuild the publication it came from, so the way back is a republish
+rather than a hand-written message. `natsjs.RestoreDeadLetter` is that inverse:
+give it a message read from the dead-letter stream and it returns the
+`natsjs.Event` to hand to `Producer.Publish`.
+
+```go
+reason := natsjs.DeadLetterReason(record)   // "malformed" | "exhausted" | "permanent"
+event, err := natsjs.RestoreDeadLetter(record)
+if err != nil {
+    return err                              // not restorable; inspect it by hand
+}
+_, err = producer.Publish(ctx, event)
+```
+
+Two identities move differently, and both are deliberate. The logical
+`MessageID` is preserved, so a consumer deduplicating on it — through the
+[PostgreSQL inbox](postgres-idempotent-inbox.md) or its own key — treats the
+redrive as the delivery it already refused. The publication ID is replaced,
+because reusing it would have the broker recognize a duplicate and store
+nothing. Its replacement is derived from the dead-letter record's own stream and
+sequence rather than minted fresh, so restoring one record twice yields one
+publication: a redrive retried after an ambiguous publish deduplicates instead
+of delivering the same work twice.
+
+`DeadLetterReason` decides whether a redrive is worth attempting at all. Only
+`exhausted` describes a failure a later attempt may survive unchanged.
+`permanent` was the handler's own verdict and `malformed` never decoded — the
+latter returns `natsjs.ErrRejected` from `RestoreDeadLetter`, because the
+envelope that failed to decode is exactly the identity a restore would need.
+Address the cause before republishing either.
+
+This pack ships no redrive binary. Which records deserve one, and when, is a
+service decision; the transformation is here so it is not re-derived from header
+names against every operator's memory.
 
 Real broker validation is part of the profile:
 

@@ -72,7 +72,7 @@ func (row rowStub) Scan(...any) error { return row.err }
 // event and then assert what a follow-up statement carried. Calls past the end
 // see an empty result set, which is what a wholly lost lease looks like.
 type querySequence struct {
-	sets []([]pgx.Row)
+	sets [][]pgx.Row
 	// sent is one entry per statement, holding that statement's bind arguments.
 	// Its length is how many statements ran.
 	sent [][]any

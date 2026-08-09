@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"strings"
 
+	"github.com/example/go-service-template-rest/cmd/internal/runtimeopts"
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/health"
 	"github.com/example/go-service-template-rest/internal/infra/natsjs"
@@ -19,28 +19,16 @@ func initMessagingRuntime(ctx context.Context, cfg config.MessagingConfig, log *
 	if !cfg.Enabled {
 		return messagingRuntime{}, nil
 	}
-	client, err := natsjs.Connect(ctx, natsjs.Config{
-		URLs:                 splitMessagingURLs(cfg.URLs),
-		CredentialsFile:      cfg.CredentialsFile,
-		RootCAFile:           cfg.RootCAFile,
-		AllowPlaintext:       cfg.AllowPlaintext,
-		AllowUnauthenticated: cfg.AllowUnauthenticated,
-		Stream:               cfg.Stream,
-		MaxPayloadBytes:      cfg.MaxPayloadBytes,
-		MaxPendingPublishes:  cfg.MaxPendingPublishes,
-	}, natsjs.RoleProducer, natsjs.Observability{Logger: log})
+	client, err := natsjs.Connect(
+		ctx,
+		runtimeopts.Messaging(cfg),
+		natsjs.RoleProducer,
+		natsjs.Observability{Logger: log},
+	)
 	if err != nil {
 		return messagingRuntime{}, fmt.Errorf("initialize producer messaging: %w", err)
 	}
 	return messagingRuntime{client: client}, nil
-}
-
-func splitMessagingURLs(value string) []string {
-	values := make([]string, 0)
-	for item := range strings.SplitSeq(value, ",") {
-		values = append(values, strings.TrimSpace(item))
-	}
-	return values
 }
 
 // Producer is the seam a feature takes to publish from the API process. The

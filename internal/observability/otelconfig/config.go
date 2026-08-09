@@ -7,7 +7,7 @@
 package otelconfig
 
 import (
-	"fmt"
+	"errors"
 	"math"
 	"strings"
 )
@@ -52,13 +52,13 @@ func ValidateTraceSampler(name string, arg float64) error {
 	switch TraceSamplerOrDefault(name) {
 	case SamplerAlwaysOn, SamplerAlwaysOff, SamplerTraceIDRatio, SamplerParentBasedTraceIDRatio:
 	default:
-		return fmt.Errorf("traces_sampler is unsupported")
+		return errors.New("traces_sampler is unsupported")
 	}
 	if math.IsNaN(arg) || math.IsInf(arg, 0) {
-		return fmt.Errorf("traces_sampler_arg must be finite")
+		return errors.New("traces_sampler_arg must be finite")
 	}
 	if arg < 0 || arg > 1 {
-		return fmt.Errorf("traces_sampler_arg must be in range [0,1]")
+		return errors.New("traces_sampler_arg must be in range [0,1]")
 	}
 	return nil
 }

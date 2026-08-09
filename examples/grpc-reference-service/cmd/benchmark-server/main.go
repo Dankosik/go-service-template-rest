@@ -186,6 +186,7 @@ func settingsFromDefaults(defaults config.GRPCServerConfig) (benchmarkServerSett
 	return benchmarkServerSettings{
 		transport: grpcx.Config{
 			MaxConcurrentRPCs:          defaults.MaxConcurrentRPCs,
+			MaxConcurrentHealthRPCs:    defaults.MaxConnections,
 			MaxConcurrentStreams:       defaults.MaxConcurrentStreams,
 			MaxHeaderListBytes:         defaults.MaxHeaderListBytes,
 			MaxReceiveMessageBytes:     defaults.MaxReceiveMessageBytes,

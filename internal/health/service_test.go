@@ -32,7 +32,7 @@ func TestServiceRefreshFail(t *testing.T) {
 
 	err := svc.Refresh(context.Background(), testProbeBudget, 1)
 	if err == nil {
-		t.Fatalf("Refresh() expected error")
+		t.Fatal("Refresh() expected error")
 	}
 
 	if !errors.Is(err, downErr) {

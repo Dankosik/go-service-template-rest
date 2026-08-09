@@ -280,12 +280,16 @@ func TestVerify_TimePolicy(t *testing.T) {
 			},
 		},
 		{
-			name: "token lifetime beyond maximum is rejected",
+			// Its own category, because it names an issuer configured for longer
+			// tokens rather than a credential a caller got wrong. KindLifetime owns
+			// why, and TestHTTPAuthnBoundary holds it to the same answer a caller
+			// receives for KindInvalid.
+			name: "token lifetime beyond maximum is its own category",
 			mutate: func(claims map[string]any) {
 				claims["iat"] = now.Unix()
 				claims["exp"] = now.Add(MaxTokenLifetime + time.Second).Unix()
 			},
-			wantKind: KindInvalid,
+			wantKind: KindLifetime,
 		},
 		{
 			name: "expiration must follow issued-at",
@@ -315,6 +319,34 @@ func TestVerify_TimePolicy(t *testing.T) {
 			mutate: func(claims map[string]any) {
 				claims["exp"] = json.Number("1.9000003e9")
 			},
+		},
+		{
+			name: "expanding exponent is rejected",
+			mutate: func(claims map[string]any) {
+				claims["exp"] = json.Number("1e1000000")
+			},
+			wantKind: KindInvalid,
+		},
+		{
+			name: "collapsing exponent is rejected",
+			mutate: func(claims map[string]any) {
+				claims["exp"] = json.Number("1e-1000000")
+			},
+			wantKind: KindInvalid,
+		},
+		{
+			name: "unreadable exponent is rejected",
+			mutate: func(claims map[string]any) {
+				claims["exp"] = json.Number("1e99999999999999999999")
+			},
+			wantKind: KindInvalid,
+		},
+		{
+			name: "over-long numeric date literal is rejected",
+			mutate: func(claims map[string]any) {
+				claims["exp"] = json.Number("1900000000." + strings.Repeat("5", maxNumericDateLiteral))
+			},
+			wantKind: KindInvalid,
 		},
 		{
 			name: "overflowing expiration is rejected",
@@ -381,6 +413,55 @@ func TestVerify_TimePolicy(t *testing.T) {
 				t.Fatalf("principal = %+v, want opaque subject", principal)
 			}
 		})
+	}
+}
+
+// TestNumericDateBudgetSurvivesAnExpandingExponent is the regression for a
+// refusal that used to arrive after the cost.
+//
+// Every claim is decided before jose checks a signature, so what one costs to
+// parse is what an unauthenticated caller can make this service spend. math/big
+// accepts a base-10 exponent up to a million, so "1e1000000" — nine bytes, in a
+// token anyone can mint precisely because nothing has verified it yet — used to
+// expand into a million-digit number and only then be refused for naming no
+// representable instant, at several MiB and tens of milliseconds for each of
+// exp, iat, and nbf.
+//
+// The refusal is not the property under test, because the old code refused it
+// too and the table above already covers the answer. The budget is, so this
+// measures what parsing allocated.
+func TestNumericDateBudgetSurvivesAnExpandingExponent(t *testing.T) {
+	// Far above the honest cost of parsing a token this size and far below one
+	// expansion, so neither has to be tracked precisely for this to stay true.
+	const budgetBytes = 64 << 10
+
+	key := loadTestRSAKey(t, testSigningKey)
+	claims := claimsMap(t, validClaims(testNow))
+	for _, claim := range []string{"exp", "iat", "nbf"} {
+		claims[claim] = json.Number("1e1000000")
+	}
+	payload, err := json.Marshal(claims)
+	if err != nil {
+		t.Fatalf("marshal claims: %v", err)
+	}
+	poisoned := signPayload(t, key, payload)
+	policy := testPolicy(t)
+
+	measured := testing.Benchmark(func(b *testing.B) {
+		b.Helper()
+		b.ReportAllocs()
+		for b.Loop() {
+			if _, parseErr := parseToken(poisoned, policy, testNow); parseErr == nil {
+				b.Fatal("a token whose NumericDate claims name no instant parsed successfully")
+			}
+		}
+	})
+	if allocated := measured.AllocedBytesPerOp(); allocated > budgetBytes {
+		t.Fatalf(
+			"parseToken allocated %d bytes for an unsigned token carrying three expanding exponents, want at most %d",
+			allocated,
+			budgetBytes,
+		)
 	}
 }
 

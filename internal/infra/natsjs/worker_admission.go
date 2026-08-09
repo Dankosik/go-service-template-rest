@@ -25,8 +25,8 @@ const settlementSchedulingSlack = time.Second
 // startup rather than consume against a stream it cannot settle messages on.
 //
 // A client owns at most one worker. The claim below is held for the whole
-// admission rather than only around the final registration, because admission is
-// several round trips long and a second caller must not interleave with them.
+// admission, not just the final registration: admission is several round trips
+// long and a second caller must not interleave with them.
 func (c *Client) NewWorker(ctx context.Context, cfg WorkerConfig, handler Handler) (*Worker, error) {
 	if handler == nil {
 		return nil, fmt.Errorf("%w: messaging handler is required", ErrRejected)
@@ -192,15 +192,10 @@ func desiredConsumerConfig(cfg WorkerConfig) jetstream.ConsumerConfig {
 		// bounded stale request as a terminal MaxWaiting failure.
 		MaxWaiting:    2,
 		MaxAckPending: cfg.MaxConcurrency,
-		// The broker's copy of the worker's own two bounds: a pull may ask for
-		// at most one message per handler slot, and the batch it returns stays
-		// inside the resident wire data ValidateWorkerConfig already caps at
-		// MaxConcurrency times MaxDeliveryBytes.
-		//
-		// Both have to be stated. MaxRequestMaxBytes constrains the batch
-		// rather than only rejecting a request that asks for more, so leaving
-		// it at one message's size would cut every batch back to one message
-		// and undo the batching MaxRequestBatch just allowed.
+		// The broker's copy of the worker's own two bounds. Both have to be
+		// stated: MaxRequestMaxBytes constrains the batch rather than only
+		// rejecting a request that asks for more, so leaving it at one message's
+		// size would undo the batching MaxRequestBatch just allowed.
 		MaxRequestBatch:    cfg.MaxConcurrency,
 		MaxRequestExpires:  operationTimeout,
 		MaxRequestMaxBytes: cfg.MaxConcurrency * cfg.MaxDeliveryBytes,

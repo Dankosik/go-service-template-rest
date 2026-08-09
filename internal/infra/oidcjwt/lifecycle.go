@@ -4,7 +4,8 @@ package oidcjwt
 // installed key set implies, the one Run that drives both and publishes
 // readiness, and the Close that retires them. Verification itself is in
 // verifier.go and needs none of this — a Verifier answers requests whether or
-// not anyone ever calls Run.
+// not anyone ever calls Run. The installed set itself belongs to [trustStore],
+// in keyset.go.
 
 import (
 	"context"
@@ -121,13 +122,12 @@ func (r *refreshAdmission) begin(trigger refreshTrigger) (*refreshCall, bool) {
 	go func(refreshCtx context.Context) {
 		call.err = r.owner.fetchAndInstall(refreshCtx)
 		r.owner.metrics.recordRefresh(context.WithoutCancel(refreshCtx), trigger, call.err)
-		// Clearing the call and closing it are one step under the lock, and the
-		// close belongs inside rather than after: join and retire both read active
-		// under this same lock and wait only on what they found there. Closing
-		// after the unlock would leave a window where either sees no active call
-		// and returns while this goroutine has not finished, so "the wait returned"
-		// would stop meaning "the fetch goroutine is done" — which is what Close
-		// relies on before releasing the provider client.
+		// Clearing the call and closing it are one step under the lock. join and
+		// retire both read active under this same lock and wait only on what they
+		// found there, so closing after the unlock would leave a window where
+		// either sees no active call and returns while this goroutine is still
+		// running — and "the wait returned" would stop meaning "the fetch is
+		// done", which is what Close relies on before releasing the client.
 		r.mu.Lock()
 		if r.active == call {
 			r.active = nil
@@ -194,11 +194,7 @@ func (v *Verifier) fetchAndInstall(ctx context.Context) (err error) {
 	if err != nil {
 		return errProviderInvalidDocument
 	}
-	v.keys.Store(candidate)
-	select {
-	case v.installed <- struct{}{}:
-	default:
-	}
+	v.trust.install(candidate)
 	return nil
 }
 
@@ -220,21 +216,19 @@ func waitRefresh(ctx context.Context, call *refreshCall) error {
 //
 // It is the blocking route into begin. Run takes the other: it selects on the
 // call it got back, because it has readiness and its own deadlines to serve
-// while a fetch runs. Successful installs rearm through installed alone; the
-// completion arm only schedules a retry after failure, so one success cannot
-// draw two competing jitter values.
+// while a fetch runs. Successful installs rearm Run's cadence through
+// [trustStore.replaced] alone; its completion arm only schedules a retry after
+// failure, so one success cannot draw two competing jitter values.
 //
 // Waiting here puts a provider call on the request path, and the trigger is
 // reachable without a credential: parseToken has accepted the claims by this
 // point but nothing has checked a signature, so an unsigned token carrying the
 // configured issuer and audience, an unexpired exp, and an unknown key id gets
 // this far. RefreshCooldown bounds what that costs the provider — one fetch per
-// cooldown whatever the request rate. It does not bound what it costs latency:
-// every key-miss verification arriving during a fetch coalesces onto it and
-// waits up to ProviderTimeout. That is bounded by the caller's own context, and
-// above it by http.max_in_flight, which is where the number of requests that can
-// be waiting at once is actually set — so the two settings are read together
-// when either is tuned.
+// cooldown whatever the request rate — but not what it costs latency: every
+// key-miss verification arriving during a fetch coalesces onto it and waits up
+// to ProviderTimeout. How many can be waiting at once is set by
+// http.max_in_flight rather than here, so the two are tuned together.
 func (v *Verifier) refresh(ctx context.Context) error {
 	call, admitted := v.admission.begin(triggerKeyMiss)
 	if !admitted {
@@ -255,9 +249,8 @@ type readinessPublisher struct {
 	last    bool
 }
 
-// observe publishes current when it is the first answer or a change from the
-// last one. A nil publish function makes this a no-op, which is what lets Run be
-// driven without a readiness consumer.
+// observe publishes only first answers and changes. A nil publish function makes
+// it a no-op, which is what lets Run be driven without a readiness consumer.
 func (p *readinessPublisher) observe(current bool) {
 	if p.publish != nil && (!p.started || current != p.last) {
 		p.publish(current)
@@ -290,7 +283,6 @@ func newRefreshSchedule(
 	}
 }
 
-// rearm restates both deadlines against a newly installed set.
 func (s refreshSchedule) rearm(now, fetchedAt time.Time) {
 	s.due.Reset(until(now, fetchedAt.Add(s.jitter(RefreshInterval))))
 	s.stale.Reset(until(now, fetchedAt.Add(MaxKeySetAge)))
@@ -342,10 +334,10 @@ func pendingDone(call *refreshCall) <-chan struct{} {
 //
 // Run reacts to call.done only for a fetch its own begin returned; a key-miss
 // refresh it never asked for is awaited by the verification that caused it. So a
-// successful scheduled refresh reaches Run twice, on installed and on call.done,
-// while a purely request-driven one reaches it once, on installed. The installed
-// arm owns the next normal cadence; call.done only schedules the shorter failure
-// retry.
+// successful scheduled refresh reaches Run twice, on [trustStore.replaced] and
+// on call.done, while a purely request-driven one reaches it once. The
+// replacement arm owns the next normal cadence; call.done only schedules the
+// shorter failure retry.
 func (v *Verifier) Run(ctx context.Context, onTrustCurrent func(bool)) error {
 	v.lifecycleMu.Lock()
 	if v.runStarted || v.retired {
@@ -366,8 +358,7 @@ func (v *Verifier) Run(ctx context.Context, onTrustCurrent func(bool)) error {
 	publishCurrent := func() { readiness.observe(v.CheckReady() == nil) }
 	publishCurrent()
 
-	// The [Verifier] field comment owns why keys is non-nil here and below.
-	schedule := newRefreshSchedule(v.now(), v.keys.Load().fetchedAt, v.jitter)
+	schedule := newRefreshSchedule(v.now(), v.trust.current().fetchedAt, v.jitter)
 	defer schedule.stop()
 	var scheduled *refreshCall
 
@@ -384,8 +375,8 @@ func (v *Verifier) Run(ctx context.Context, onTrustCurrent func(bool)) error {
 			return fmt.Errorf("retire OIDC verifier: %w", v.baseCtx.Err())
 			// Every installed set re-arms the cadence, whoever fetched it: a
 			// request-driven refresh that lands here is as good as a scheduled one.
-		case <-v.installed:
-			schedule.rearm(v.now(), v.keys.Load().fetchedAt)
+		case <-v.trust.replaced():
+			schedule.rearm(v.now(), v.trust.current().fetchedAt)
 			publishCurrent()
 		case <-schedule.due.C:
 			call, admitted := v.admission.begin(triggerScheduled)

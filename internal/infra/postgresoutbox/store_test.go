@@ -269,13 +269,20 @@ func TestStoreProgressAndTelemetryHelpers(t *testing.T) {
 }
 
 // A missing row is an absent event rather than a database failure, so only Get
-// collapses it into ErrNotFound.
+// collapses it into ErrNotFound — and the operation metric has to agree, because
+// an audited operator action carries that same sentinel out through
+// recordOperation when the id it was handed does not exist.
 func TestStoreMapsMissingRowToNotFound(t *testing.T) {
 	t.Parallel()
 
 	store := stubbedStore(databaseStub{rowErr: pgx.ErrNoRows})
 	if _, err := store.Get(t.Context(), "event"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("Get(no rows) error = %v, want ErrNotFound", err)
+	}
+	outcome, errorClass := storeOutcome(ErrNotFound)
+	if outcome != outcomeRejected || errorClass != classValidation {
+		t.Errorf("storeOutcome(ErrNotFound) = %s/%s, want %s/%s",
+			outcome, errorClass, outcomeRejected, classValidation)
 	}
 }
 

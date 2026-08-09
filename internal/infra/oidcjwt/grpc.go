@@ -67,11 +67,10 @@ func publicHealthMethod(fullMethod string) bool {
 // authenticateRPC returns ctx carrying the principal proven by incoming and the
 // expiry that bounds a streaming RPC.
 //
-// The credential arrives as metadata rather than as a second context so that it
-// cannot be swapped with ctx: ctx is the handler-visible context, whose
-// authorization metadata has already been removed, so reading the credential
-// from it would find nothing. The compiler now rejects the mistake that this
-// signature previously had to describe.
+// The credential arrives as metadata rather than as a second context so that the
+// two cannot be swapped: ctx is the handler-visible context, whose authorization
+// metadata has already been removed, so reading the credential from it would
+// find nothing.
 func (v *Verifier) authenticateRPC(
 	ctx context.Context,
 	incoming metadata.MD,
@@ -101,21 +100,20 @@ func splitAuthorizationMetadata(ctx context.Context) (context.Context, metadata.
 // caller receives.
 //
 // A plain status.Error is the whole of what this owes the transport: the policy
-// boundary in internal/infra/grpc trusts any status a policy interceptor
-// returns directly, so a policy needs no counterpart of that package's own
-// provenance marker.
+// boundary in internal/infra/grpc trusts any status a policy interceptor returns
+// directly, so a policy needs no counterpart of that package's own provenance
+// marker.
 //
-// The arms below are grouped by the answer rather than in [Kind] declaration
-// order, which makes the two categories that get their own status visible as the
+// The arms are grouped by the answer rather than in [Kind] declaration order,
+// which makes the two categories that get their own status visible as the
 // exceptions they are; the exhaustive linter holds the set complete either way.
 //
-// KindUntrustedTransport is named here and cannot arrive here. Only the HTTP
-// adapter produces it, from trustedHTTPRequest; this transport's equivalent is
-// validateGRPCAuthnTransport in internal/config, which refuses to start a service
-// whose gRPC server is not TLS while this profile is on. The arm is not dead
-// code, because a Kind may not be omitted from this switch — answering it as a
-// rejected credential keeps the switch exhaustive without inventing a status for
-// a case that cannot reach here.
+// KindUntrustedTransport is named here and cannot arrive here: only the HTTP
+// adapter produces it, and this transport's equivalent is
+// validateGRPCAuthnTransport in internal/config, which refuses to start a
+// service whose gRPC server is not TLS while this profile is on. The arm is not
+// dead code — a Kind may not be omitted from this switch — and answering it as a
+// rejected credential keeps the set complete without inventing a status.
 func grpcAuthenticationError(err error) error {
 	if errors.Is(err, context.Canceled) {
 		return status.Error(codes.Canceled, "authentication canceled")
@@ -129,7 +127,7 @@ func grpcAuthenticationError(err error) error {
 		return status.Error(codes.ResourceExhausted, "authentication credential is too large")
 	case KindUnavailable:
 		return status.Error(codes.Unavailable, "authentication trust is unavailable")
-	case KindMissing, KindMalformed, KindInvalid, KindUntrustedTransport:
+	case KindMissing, KindMalformed, KindInvalid, KindLifetime, KindUntrustedTransport:
 		return unauthenticatedCredential()
 	default:
 		// Unreachable for a declared Kind, because the mandatory exhaustive linter

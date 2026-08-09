@@ -2,7 +2,7 @@ package config
 
 import (
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/knadh/koanf/v2"
@@ -10,7 +10,7 @@ import (
 
 func enforceSecretSourcePolicy(k *koanf.Koanf, path string) error {
 	keys := k.Keys()
-	sort.Strings(keys)
+	slices.Sort(keys)
 	for _, key := range keys {
 		if !isSecretLikeConfigKey(key) {
 			continue

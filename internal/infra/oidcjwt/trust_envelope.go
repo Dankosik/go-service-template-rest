@@ -17,6 +17,18 @@ const (
 	// ordinary claim sets are well under 2 KiB, so this leaves room for large
 	// provider claims while keeping an oversized header cheap to reject.
 	MaxTokenBytes = 8 << 10
+	// maxNumericDateLiteral and maxNumericDateExponent bound one NumericDate
+	// claim before math/big is asked to expand it, which MaxTokenBytes cannot do
+	// on its own: an exponent is a handful of bytes that names an arbitrarily
+	// large number. math/big refuses only a base-10 exponent above a million, so
+	// without these the nine-byte literal 1e1000000 buys a million-digit
+	// exponentiation — and parseAccessTokenClaims runs before any signature has
+	// been checked, so that is work an unauthenticated caller can ask for. A date
+	// this service can act on names a second within int64 nanoseconds of the
+	// epoch, which no legal spelling needs more room than this to express. They
+	// are unexported because no caller outside token.go can act on them.
+	maxNumericDateLiteral  = 40
+	maxNumericDateExponent = 30
 	// MaxProviderBody bounds a Discovery or JWKS response body. It is enforced
 	// both by the HTTP client and again after reading, so a provider that
 	// ignores the transport limit still cannot grow the parse.
@@ -24,9 +36,12 @@ const (
 	// MaxJWKEntries bounds how many JWK entries one key set may declare, which
 	// bounds the RSA parsing a single refresh can be made to do.
 	MaxJWKEntries = 100
-	// AllowedAlgorithm is the only accepted signature algorithm, in the protected
-	// header and in JWK metadata alike. A single value is the point: with nothing
-	// to negotiate there is no algorithm substitution to defend against.
+	// AllowedAlgorithm is the only accepted signature algorithm, and the only
+	// spelling of it: parseProtectedHeader, parseToken's jose parse, and
+	// compatibleRSAKey all compare against this constant, which is untyped so the
+	// jose one needs no conversion. A single value is the point — with nothing to
+	// negotiate there is no algorithm substitution to defend against. doc.go's
+	// "Extending it" owns what a second algorithm costs.
 	AllowedAlgorithm = "RS256"
 	// ClockSkew is the allowance applied to exp, iat, and nbf in both directions.
 	// It absorbs ordinary drift between the provider's clock and this host

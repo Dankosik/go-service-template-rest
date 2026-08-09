@@ -14,6 +14,11 @@ type RetryDirective struct {
 	ErrorClass           string
 	Delay                time.Duration
 	PublicationUncertain bool
+	// NotAttempted gives back the attempt the claim charged, for an event the
+	// relay never handed to [Publisher]. It is stated negatively so the zero value
+	// is the ordinary one: a directive that says nothing keeps its attempt, which
+	// is what every real publication failure needs.
+	NotAttempted bool
 }
 
 // PoisonDirective parks one leased event for operator redrive.
@@ -229,6 +234,7 @@ func (s *Store) ScheduleRetryBatch(ctx context.Context, token string, retries []
 	classes := make([]string, len(retries))
 	delays := make([]float64, len(retries))
 	uncertain := make([]bool, len(retries))
+	notAttempted := make([]bool, len(retries))
 	for index, retry := range retries {
 		if err := validateErrorClass(retry.ErrorClass); err != nil {
 			return err
@@ -240,13 +246,14 @@ func (s *Store) ScheduleRetryBatch(ctx context.Context, token string, retries []
 		classes[index] = retry.ErrorClass
 		delays[index] = durationMilliseconds(retry.Delay)
 		uncertain[index] = retry.PublicationUncertain
+		notAttempted[index] = retry.NotAttempted
 	}
 	if err := validateBatchIdentity(token, ids); err != nil {
 		return err
 	}
 	rows, err := s.queries.ScheduleOutboxRetryBatch(ctx, sqlcgen.ScheduleOutboxRetryBatchParams{
 		LeaseToken: &token, Ids: ids, DelayMilliseconds: delays, ErrorClasses: classes,
-		PublicationUncertain: uncertain,
+		PublicationUncertain: uncertain, NotAttempted: notAttempted,
 	})
 	return leaseProgressError("schedule outbox retry batch", rows, len(ids), err)
 }

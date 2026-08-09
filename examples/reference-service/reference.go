@@ -107,7 +107,7 @@ func NewHandler(log *slog.Logger, opts Options) (http.Handler, error) {
 		// operation does not mean copying a switch — which is how the local
 		// status table this replaced drifted and answered a 409 with the
 		// internal-error type.
-		RejectResponse: httpx.RejectResponse(article.ClassifyError),
+		RejectResponse: httpx.RejectResponse(log, article.ClassifyError),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("build reference api handler: %w", err)

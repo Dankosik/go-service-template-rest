@@ -1,6 +1,7 @@
 package postgresmigrate
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -11,7 +12,7 @@ import (
 	"strings"
 )
 
-var migrationFilenamePattern = regexp.MustCompile(`^([0-9]{6})_[a-z][a-z0-9]*(_[a-z0-9]+)*\.sql$`)
+var migrationFilenamePattern = regexp.MustCompile(`^(\d{6})_[a-z][a-z0-9]*(_[a-z0-9]+)*\.sql$`)
 
 type sourceMigration struct {
 	Version  int64
@@ -82,7 +83,7 @@ func admitSource(sourceFS fs.FS, sourcePath string) (admittedSource, error) {
 	})
 	for i := 1; i < len(migrations); i++ {
 		if migrations[i-1].Version >= migrations[i].Version {
-			return admittedSource{}, fmt.Errorf("migration versions are not strictly increasing by filename")
+			return admittedSource{}, errors.New("migration versions are not strictly increasing by filename")
 		}
 	}
 	return admittedSource{FS: rooted, Migrations: migrations}, nil
@@ -132,7 +133,7 @@ func validateMigrationFile(source fs.FS, filename string) error {
 func normalizeMigrationSourcePath(raw string) (string, error) {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {
-		return "", fmt.Errorf("migration source path is empty")
+		return "", errors.New("migration source path is empty")
 	}
 
 	normalized := pathpkg.Clean(trimmed)
@@ -142,7 +143,7 @@ func normalizeMigrationSourcePath(raw string) (string, error) {
 		return "", fmt.Errorf("migration source path %q escapes its filesystem root", raw)
 	}
 	if normalized == "." || normalized == "" {
-		return "", fmt.Errorf("migration source path is empty")
+		return "", errors.New("migration source path is empty")
 	}
 	if !fs.ValidPath(normalized) {
 		return "", fmt.Errorf("migration source path %q is invalid", raw)

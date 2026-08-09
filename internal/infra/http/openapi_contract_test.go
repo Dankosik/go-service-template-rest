@@ -419,7 +419,7 @@ type openAPISecurityDecision struct {
 
 func operationSecurityDecision(operation *openapi3.Operation) (openAPISecurityDecision, error) {
 	if operation == nil {
-		return openAPISecurityDecision{}, fmt.Errorf("operation is nil")
+		return openAPISecurityDecision{}, errors.New("operation is nil")
 	}
 
 	raw, ok := operation.Extensions[securityDecisionExtension]
