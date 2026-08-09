@@ -1,14 +1,14 @@
 // Proof for the one claim docs/grpc.md makes about this package's code: the
-// problem.Code to gRPC code table it publishes to service authors.
+// failure.Code to gRPC code table it publishes to service authors.
 //
 // That table and [mappedStatus] are two owners of one caller-visible mapping,
 // and nothing in the toolchain relates them, so a new arm, a changed code, or a
-// retired problem.Code would leave the published contract describing a transport
+// retired failure.Code would leave the published contract describing a transport
 // that no longer answers that way. config_parity_test.go holds this package's
 // other pair of owners to one answer for the same reason.
 //
 // The document's left column is read as Go identifiers taken from
-// internal/problem's own source rather than as prose, so a renamed constant
+// internal/failure's own source rather than as prose, so a renamed constant
 // fails here instead of matching a string this file also had to spell.
 
 package grpcx
@@ -23,41 +23,36 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/example/go-service-template-rest/internal/problem"
+	"github.com/example/go-service-template-rest/internal/failure"
 	"google.golang.org/grpc/status"
 )
 
 // documentedTableHeader is the row the published mapping table starts at. The
 // scan runs from there to the first blank line, so the profile-marked row inside
 // the table is read like any other and is removed with its profile.
-const documentedTableHeader = "| `problem.Code` | gRPC code |"
+const documentedTableHeader = "| `failure.Code` | gRPC code |"
 
-func TestDocumentedProblemCodeTableMatchesStatusMapping(t *testing.T) {
+func TestDocumentedFailureCodeTableMatchesStatusMapping(t *testing.T) {
 	documented := documentedProblemCodes(t)
 	if len(documented) == 0 {
 		t.Fatalf("docs/grpc.md has no rows under %q", documentedTableHeader)
 	}
-	constantNames := problemCodeConstantNames(t)
+	constantNames := failureCodeConstantNames(t)
 
-	for _, definition := range problem.All() {
-		name, declared := constantNames[definition.Code]
-		if !declared {
-			t.Errorf("problem.Code %q is in the catalog but declares no constant", definition.Code)
-			continue
-		}
+	for code, name := range constantNames {
 		want, published := documented[name]
 		if !published {
 			t.Errorf("docs/grpc.md publishes no gRPC code for %s", name)
 			continue
 		}
 		delete(documented, name)
-		if got := status.Code(mappedStatus(problem.Mapped{Code: definition.Code}, "")); got.String() != want {
+		if got := status.Code(mappedStatus(failure.Classification{Code: code}, "")); got.String() != want {
 			t.Errorf("mappedStatus(%s) = %s, but docs/grpc.md publishes %s", name, got, want)
 		}
 	}
 
 	for name, grpcCode := range documented {
-		t.Errorf("docs/grpc.md maps %s to %s, which internal/problem no longer publishes", name, grpcCode)
+		t.Errorf("docs/grpc.md maps %s to %s, which internal/failure no longer publishes", name, grpcCode)
 	}
 }
 
@@ -97,7 +92,7 @@ func documentedProblemCodes(t *testing.T) map[string]string {
 	return documented
 }
 
-// parseDocumentedRow splits one table row into the problem.Code constants it
+// parseDocumentedRow splits one table row into the failure.Code constants it
 // names and the gRPC code they answer with. The column separator, a profile
 // marker, and a row naming no constant are all reported as not a row.
 func parseDocumentedRow(line string) ([]string, string, bool) {
@@ -120,23 +115,23 @@ func parseDocumentedRow(line string) ([]string, string, bool) {
 	return names, grpcCode, true
 }
 
-// problemCodeConstantNames returns the constant name internal/problem declares
+// failureCodeConstantNames returns the constant name internal/failure declares
 // for each published code, read out of that package's source.
 //
 // The join has to come from the source. The document publishes identifiers and
-// problem.All() publishes values, so a rule this file invented to turn one into
+// failure constants publish values, so a rule this file invented to turn one into
 // the other would be a third owner of the same naming decision — and it would
 // keep agreeing right up until someone renamed a constant.
-func problemCodeConstantNames(t *testing.T) map[problem.Code]string {
+func failureCodeConstantNames(t *testing.T) map[failure.Code]string {
 	t.Helper()
 
-	directory := filepath.Join("..", "..", "problem")
+	directory := filepath.Join("..", "..", "failure")
 	entries, err := os.ReadDir(directory)
 	if err != nil {
-		t.Fatalf("read internal/problem: %v", err)
+		t.Fatalf("read internal/failure: %v", err)
 	}
 
-	names := make(map[problem.Code]string)
+	names := make(map[failure.Code]string)
 	fileSet := token.NewFileSet()
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
@@ -171,7 +166,7 @@ func problemCodeConstantNames(t *testing.T) map[problem.Code]string {
 				if err != nil {
 					t.Fatalf("unquote %s in %s: %v", literal.Value, entry.Name(), err)
 				}
-				names[problem.Code(unquoted)] = spec.Names[index].Name
+				names[failure.Code(unquoted)] = spec.Names[index].Name
 			}
 			return true
 		})

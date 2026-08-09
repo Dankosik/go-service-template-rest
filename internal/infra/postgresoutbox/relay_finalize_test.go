@@ -12,37 +12,50 @@ func TestRelayPublicationDispositions(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name         string
-		publishErr   error
-		attempt      int
-		storeErr     error
-		wantPoison   string
-		wantRetry    string
-		wantDelay    time.Duration
-		wantStateErr bool
+		name          string
+		publishErr    error
+		attempt       int
+		storeErr      error
+		uncertain     bool
+		wantPoison    string
+		wantRetry     string
+		wantUncertain bool
+		wantDelay     time.Duration
+		wantPublished bool
+		wantStateErr  bool
 	}{
-		{name: "temporary retry", publishErr: errors.New("temporary"), attempt: 1, wantRetry: "publisher_temporary", wantDelay: time.Second},
+		{name: "ack", wantPublished: true},
+		{name: "sticky ack", uncertain: true, wantPublished: true},
+		{name: "temporary retry", publishErr: errors.New("temporary"), attempt: 1, wantRetry: "publisher_temporary", wantDelay: time.Second, wantUncertain: true},
 		{name: "permanent poison", publishErr: ErrPermanentPublication, attempt: 1, wantPoison: "publisher_permanent"},
 		{name: "rejected retry", publishErr: ErrPublicationNotAccepted, attempt: 1, wantRetry: "publisher_rejected", wantDelay: time.Second},
 		{name: "rejected exhaustion poison", publishErr: ErrPublicationNotAccepted, attempt: 3, wantPoison: "attempt_exhausted"},
-		// An ambiguous failure never proves the broker refused the event, so the
-		// attempt cap must not trade possible loss for a bounded retry count.
-		{name: "ambiguous exhaustion retries", publishErr: errors.New("temporary"), attempt: 3, wantRetry: "publisher_temporary", wantDelay: 4 * time.Second},
-		{name: "timeout exhaustion retries", publishErr: context.DeadlineExceeded, attempt: 3, wantRetry: "publisher_timeout", wantDelay: 4 * time.Second},
-		{name: "state failure", publishErr: errors.New("temporary"), attempt: 1, storeErr: errors.New("write failed"), wantRetry: "publisher_temporary", wantDelay: time.Second, wantStateErr: true},
+		{name: "ambiguous exhaustion is unknown", publishErr: errors.New("temporary"), attempt: 3, wantPoison: classOutcomeUnknown, wantUncertain: true},
+		{name: "timeout exhaustion is unknown", publishErr: context.DeadlineExceeded, attempt: 3, wantPoison: classOutcomeUnknown, wantUncertain: true},
+		{name: "sticky rejection retries", publishErr: ErrPublicationNotAccepted, attempt: 1, uncertain: true, wantRetry: classPublisherRejected, wantDelay: time.Second, wantUncertain: true},
+		{name: "sticky permanent failure is unknown", publishErr: ErrPermanentPublication, attempt: 1, uncertain: true, wantPoison: classOutcomeUnknown, wantUncertain: true},
+		{name: "state failure", publishErr: errors.New("temporary"), attempt: 1, storeErr: errors.New("write failed"), wantRetry: "publisher_temporary", wantDelay: time.Second, wantUncertain: true, wantStateErr: true},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 			poisonClass := ""
 			retryClass := ""
+			publicationUncertain := false
+			published := false
 			store := &relayStoreStub{
+				markUnorderedPublishedBatch: func(_ context.Context, _ string, ids []string) ([]string, error) {
+					published = true
+					return ids, nil
+				},
 				markPoisonedBatch: func(_ context.Context, _ string, poisons []PoisonDirective) error {
 					poisonClass = poisons[0].ErrorClass
+					publicationUncertain = poisons[0].PublicationUncertain
 					return test.storeErr
 				},
 				scheduleRetryBatch: func(_ context.Context, _ string, retries []RetryDirective) error {
 					retryClass = retries[0].ErrorClass
+					publicationUncertain = retries[0].PublicationUncertain
 					if retries[0].Delay != test.wantDelay {
 						t.Errorf("retry delay = %s, want %s", retries[0].Delay, test.wantDelay)
 					}
@@ -52,6 +65,7 @@ func TestRelayPublicationDispositions(t *testing.T) {
 			relay := newUnitRelay(store, publisherFunc(func(context.Context, Event) error { return test.publishErr }))
 			claim := unitClaim(1)
 			claim.CycleAttemptCount = test.attempt
+			claim.PublicationUncertain = test.uncertain
 			batch := ClaimedBatch{Token: unitLeaseToken, Events: []ClaimedEvent{claim}}
 
 			result, stop := relay.publishBatch(t.Context(), batch, time.Now().Add(time.Hour))
@@ -60,6 +74,12 @@ func TestRelayPublicationDispositions(t *testing.T) {
 			}
 			if poisonClass != test.wantPoison || retryClass != test.wantRetry {
 				t.Fatalf("poison=%q retry=%q, want %q/%q", poisonClass, retryClass, test.wantPoison, test.wantRetry)
+			}
+			if publicationUncertain != test.wantUncertain {
+				t.Fatalf("publication_uncertain=%t, want %t", publicationUncertain, test.wantUncertain)
+			}
+			if published != test.wantPublished {
+				t.Fatalf("published=%t, want %t", published, test.wantPublished)
 			}
 		})
 	}

@@ -29,6 +29,9 @@ type ClaimedEvent struct {
 	// TotalAttemptCount counts every attempt this event has ever had, across
 	// redrives. It is the one attempt figure a reset cannot hide.
 	TotalAttemptCount int64
+	// PublicationUncertain is sticky once a publish result could have been
+	// accepted by the broker without a PostgreSQL acknowledgement.
+	PublicationUncertain bool
 	// Recovered means this claim picked the event up from an expired lease
 	// rather than from ordinary eligibility — a crashed or overrun relay's work
 	// coming back. Claim already counts and logs it; the field is what lets a
@@ -39,7 +42,11 @@ type ClaimedEvent struct {
 // Claim leases up to batchSize eligible events under one fresh token. An empty
 // batch means no eligible work, which is an ordinary outcome rather than an
 // error.
-func (s *Store) Claim(ctx context.Context, leaseDuration time.Duration, batchSize int) (batch ClaimedBatch, err error) {
+func (s *Store) Claim(
+	ctx context.Context,
+	leaseDuration time.Duration,
+	batchSize, maxAttempts int,
+) (batch ClaimedBatch, err error) {
 	started := time.Now()
 	defer func() { s.recordClaim(ctx, batch, started, err) }()
 	if !s.valid() {
@@ -51,9 +58,13 @@ func (s *Store) Claim(ctx context.Context, leaseDuration time.Duration, batchSiz
 	if batchSize < 1 || batchSize > math.MaxInt32 {
 		return ClaimedBatch{}, fmt.Errorf("%w: claim batch size must be positive", ErrConfig)
 	}
+	if maxAttempts < 1 || maxAttempts > math.MaxInt32 {
+		return ClaimedBatch{}, fmt.Errorf("%w: max attempts must be positive", ErrConfig)
+	}
 
 	token := NewID()
 	rows, err := s.queries.ClaimOutboxEvents(ctx, sqlcgen.ClaimOutboxEventsParams{
+		MaxAttempts:       int32(maxAttempts), // #nosec G115 -- range checked above.
 		LeaseToken:        &token,
 		LeaseMilliseconds: durationMilliseconds(leaseDuration),
 		BatchSize:         int32(batchSize), // #nosec G115 -- range checked above.
@@ -67,16 +78,17 @@ func (s *Store) Claim(ctx context.Context, leaseDuration time.Duration, batchSiz
 	batch = ClaimedBatch{Token: token, Events: make([]ClaimedEvent, 0, len(rows))}
 	for _, row := range rows {
 		batch.Events = append(batch.Events, ClaimedEvent{
-			Event:             eventFromClaimRow(row),
-			CycleAttemptCount: int(row.CycleAttemptCount),
-			TotalAttemptCount: row.TotalAttemptCount,
-			Recovered:         row.RecoveryDue,
+			Event:                eventFromClaimRow(row),
+			CycleAttemptCount:    int(row.CycleAttemptCount),
+			TotalAttemptCount:    row.TotalAttemptCount,
+			PublicationUncertain: row.PublicationUncertain != nil && *row.PublicationUncertain,
+			Recovered:            row.RecoveryDue,
 		})
 		if row.RecoveryDue {
 			// One recovered event, counted inside the claim that found it. The
 			// claim already owns the only duration either of them has.
 			s.telemetry.CountOperation(ctx, "recovery", outcomeSuccess, classNone)
-			s.telemetry.LogRecovery(ctx, row.ID, int(row.CycleAttemptCount))
+			s.telemetry.LogRecovery(ctx, int(row.CycleAttemptCount))
 		}
 	}
 	return batch, nil

@@ -207,28 +207,29 @@ func testAuthenticate(scopes ...string) openapi3filter.AuthenticationFunc {
 func testRejectRequest(w http.ResponseWriter, r *http.Request, err error) {
 	if _, ok := errors.AsType[*openapi3filter.SecurityRequirementsError](err); ok {
 		w.Header().Set("WWW-Authenticate", "Bearer")
-		writeTestProblem(w, newProblem(r.Context(), http.StatusUnauthorized, "credentials are missing or invalid"))
+		writeTestProblem(w, newProblem(r.Context(), problem.CodeUnauthorized, "credentials are missing or invalid"))
 		return
 	}
-	writeTestProblem(w, newProblem(r.Context(), http.StatusBadRequest, "request is malformed or invalid"))
+	writeTestProblem(w, newProblem(r.Context(), problem.CodeBadRequest, "request is malformed or invalid"))
 }
 
-// testRejectResponse mirrors what httpx.RejectResponse(ClassifyError) does in the
+// testRejectResponse mirrors what httpx.RejectResponse(article.ClassifyError) does in the
 // binary. A feature package must not import that adapter, so the half this package
 // owns — the classification, which is the half that drifts — is driven directly and
 // the router tests above assert the status a real request comes back with.
 func testRejectResponse(w http.ResponseWriter, r *http.Request, err error) {
-	mapped, ok := ClassifyError(err)
+	mapped, ok := article.ClassifyError(err)
 	if !ok {
-		writeTestProblem(w, newProblem(r.Context(), http.StatusInternalServerError, "request failed"))
+		writeTestProblem(w, newProblem(r.Context(), problem.CodeInternalError, "request failed"))
 		return
 	}
-	definition, published := problem.ForCode(mapped.Code)
+	code := problem.Code(mapped.Code)
+	_, published := problem.ForCode(code)
 	if !published {
-		writeTestProblem(w, newProblem(r.Context(), http.StatusInternalServerError, "request failed"))
+		writeTestProblem(w, newProblem(r.Context(), problem.CodeInternalError, "request failed"))
 		return
 	}
-	writeTestProblem(w, newProblem(r.Context(), definition.Status, mapped.Detail))
+	writeTestProblem(w, newProblem(r.Context(), code, mapped.Detail))
 }
 
 func writeTestProblem(w http.ResponseWriter, body openapi.Problem) {
@@ -317,7 +318,7 @@ func TestRouterCreateArticleRequiresCredentials(t *testing.T) {
 	}
 }
 
-func TestRouterCreateArticleRejectsDuplicateSlugWithConflict(t *testing.T) {
+func TestRouterCreateArticleRejectsDuplicateSlugWithAlreadyExists(t *testing.T) {
 	t.Parallel()
 
 	router := newTestRouter(t, article.Article{
@@ -329,12 +330,18 @@ func TestRouterCreateArticleRejectsDuplicateSlugWithConflict(t *testing.T) {
 	if response.Code != http.StatusConflict {
 		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusConflict, response.Body.String())
 	}
+	if retryAfter := response.Header().Get("Retry-After"); retryAfter != "" {
+		t.Fatalf("Retry-After = %q, want empty", retryAfter)
+	}
 	var body openapi.Problem
 	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if body.Code != "conflict" || body.Status != http.StatusConflict {
-		t.Fatalf("body = %+v, want conflict Problem", body)
+	if body.Code != "already_exists" || body.Status != http.StatusConflict ||
+		body.Title != "conflict" || body.Type != "https://www.rfc-editor.org/rfc/rfc9110#section-15.5.10" ||
+		body.Detail == nil || *body.Detail != "an article with this slug already exists" ||
+		strings.Contains(response.Body.String(), "create article") {
+		t.Fatalf("body = %+v, want exact already_exists Problem", body)
 	}
 }
 

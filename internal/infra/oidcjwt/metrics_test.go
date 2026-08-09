@@ -49,11 +49,11 @@ func TestAuthnMetricAttributesAreBounded(t *testing.T) {
 	// here and below: that is what ties a rename of one of these identifiers to
 	// the label docs/authentication.md publishes, instead of letting the two
 	// drift with every test still green.
-	metrics.recordVerification(t.Context(), TransportHTTP, nil)
-	metrics.recordVerification(t.Context(), TransportGRPC, failure(KindUntrustedTransport))
+	metrics.recordVerification(t.Context(), transportHTTP, nil)
+	metrics.recordVerification(t.Context(), transportGRPC, failure(KindUntrustedTransport))
 	metrics.recordRefresh(t.Context(), triggerStartup, nil)
 	metrics.recordRefresh(t.Context(), triggerKeyMiss, nil)
-	metrics.recordRefresh(t.Context(), triggerScheduled, errors.New("poison provider detail"))
+	metrics.recordRefresh(t.Context(), triggerScheduled, errProviderTransport)
 
 	var collected metricdata.ResourceMetrics
 	if err := reader.Collect(t.Context(), &collected); err != nil {
@@ -82,7 +82,7 @@ func TestAuthnMetricAttributesAreBounded(t *testing.T) {
 	requireMetricAttributes(t, refreshSum.DataPoints, []map[string]string{
 		{"authn.refresh.trigger": "startup", "authn.result": "success"},
 		{"authn.refresh.trigger": "key_miss", "authn.result": "success"},
-		{"authn.refresh.trigger": "scheduled", "authn.result": "failure"},
+		{"authn.refresh.trigger": "scheduled", "authn.result": "failure", "authn.reason": "transport"},
 	})
 
 	age := requireMetric(t, got, "authn.jwks.age", "s")
@@ -151,10 +151,10 @@ func TestAuthnMetricsCountRejectionsVerifyNeverSaw(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	result := make(chan error, 1)
 	go func() {
-		_, verifyErr := verifier.Verify(
+		_, verifyErr := verifier.verify(
 			ctx,
 			signToken(t, second, "key-2", "at+jwt", validClaims(now)),
-			TransportGRPC,
+			transportGRPC,
 		)
 		result <- verifyErr
 	}()
@@ -207,7 +207,7 @@ func TestFailingMeterDegradesTelemetryNotAuthentication(t *testing.T) {
 			})
 
 			token := signToken(t, key, "key-1", "at+jwt", validClaims(now))
-			principal, err := verifier.Verify(t.Context(), token, TransportHTTP)
+			principal, err := verifier.verify(t.Context(), token, transportHTTP)
 			if err != nil || principal.Subject != "opaque-subject" {
 				t.Fatalf("authentication with failing metrics = (%+v, %v), want success", principal, err)
 			}
@@ -379,7 +379,7 @@ func TestVerificationSetsCoverEveryReason(t *testing.T) {
 		)
 	}
 
-	sets := newVerificationSets(TransportHTTP)
+	sets := newVerificationSets(transportHTTP)
 	// Several errors share one label on purpose — a deadline and a cancellation
 	// both record as canceled, and an unclassified error records as unavailable
 	// like the Kind of that name — so the series are the distinct labels rather

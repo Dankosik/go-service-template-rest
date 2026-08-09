@@ -11,12 +11,6 @@ import (
 
 var slugPattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,63}$`)
 
-var (
-	ErrNotFound      = errors.New("article not found")
-	ErrAlreadyExists = errors.New("article already exists")
-	ErrInvalid       = errors.New("article is invalid")
-)
-
 const (
 	maxTitleLength   = 200
 	maxSummaryLength = 500

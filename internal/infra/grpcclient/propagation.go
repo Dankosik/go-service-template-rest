@@ -168,7 +168,7 @@ func sanitizeCallOptions(options []grpc.CallOption) []grpc.CallOption {
 	return sanitized
 }
 
-func wrapPerRPCCredentials( //nolint:ireturn // The gRPC call option owns this interface contract.
+func wrapPerRPCCredentials( //nolint:ireturn // gRPC credential options own this interface contract.
 	base credentials.PerRPCCredentials,
 ) credentials.PerRPCCredentials {
 	if base == nil {

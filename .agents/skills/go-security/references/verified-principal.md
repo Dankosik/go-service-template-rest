@@ -11,8 +11,8 @@ Without this file, an identity requirement is written as if this service had
 none: a fresh JWT policy naming issuer, audience, and an algorithm allowlist,
 and a `Principal.HasScope` check to authorize on. Both are defects here. The
 first is a second credential path beside the one that already runs, and the
-second denies every caller — `internal/infra/oidcjwt` fills only
-`Principal.Subject` and leaves `Scopes` empty.
+second denies every caller — `internal/infra/oidcjwt` fills the verified issuer,
+subject, and OAuth client ID but leaves `Scopes` empty.
 
 ## Decision Rubric
 

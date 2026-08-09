@@ -14,6 +14,17 @@
 -- event touches a head, and that setup costs more than a whole single-event
 -- insert. Ordering columns stay at their table defaults here.
 -- name: InsertOutboxEvents :exec
+WITH receipt AS (
+    INSERT INTO outbox_commit_receipts (
+        event_id,
+        fingerprint_version,
+        envelope_fingerprint
+    )
+    SELECT
+        unnest(sqlc.arg(ids)::text[]),
+        1,
+        unnest(sqlc.arg(envelope_fingerprints)::bytea[])
+)
 INSERT INTO outbox_events (
     id,
     event_type,
@@ -77,6 +88,7 @@ WITH input AS (
         unnest(sqlc.arg(payloads)::bytea[]) AS payload,
         unnest(sqlc.arg(metadatas)::bytea[]) AS metadata,
         unnest(sqlc.arg(trace_contexts)::bytea[]) AS trace_context,
+        unnest(sqlc.arg(envelope_fingerprints)::bytea[]) AS envelope_fingerprint,
         unnest(sqlc.arg(ordering_keys)::text[]) AS ordering_key,
         unnest(sqlc.arg(ordering_sequences)::bigint[]) AS ordering_sequence
 ), event AS (
@@ -90,6 +102,7 @@ WITH input AS (
         input.payload,
         input.metadata,
         input.trace_context,
+        input.envelope_fingerprint,
         nullif(input.ordering_key, '') AS ordering_key,
         nullif(input.ordering_sequence, 0) AS ordering_sequence
     FROM input
@@ -120,6 +133,15 @@ WITH input AS (
     WHERE NOT EXISTS (
         SELECT 1 FROM head WHERE head.ordering_key = ordered_key.ordering_key
     )
+), receipt AS (
+    INSERT INTO outbox_commit_receipts (
+        event_id,
+        fingerprint_version,
+        envelope_fingerprint
+    )
+    SELECT event.id, 1, event.envelope_fingerprint
+    FROM event
+    WHERE NOT EXISTS (SELECT 1 FROM rejected)
 ), stored AS (
     INSERT INTO outbox_events (
         id,
@@ -158,6 +180,19 @@ SELECT
 FROM rejected
 ORDER BY rejected.ordering_key;
 
+-- One writer-pool read distinguishes durable evidence from an authoritative
+-- absence. A missing receipt authorizes retry only when this same statement is
+-- running on a writable PostgreSQL primary.
+-- name: ReconcileOutboxCommit :one
+SELECT
+    (receipt.event_id IS NOT NULL)::boolean AS receipt_exists,
+    coalesce(receipt.fingerprint_version, 0)::smallint AS fingerprint_version,
+    coalesce(receipt.envelope_fingerprint, '\x'::bytea) AS envelope_fingerprint,
+    (NOT pg_is_in_recovery()
+        AND current_setting('transaction_read_only') = 'off')::boolean AS writer_primary
+FROM (SELECT sqlc.arg(event_id)::text AS event_id) AS input
+LEFT JOIN outbox_commit_receipts AS receipt USING (event_id);
+
 -- Retire the retained high-water mark of every terminal ordering key a call
 -- names, in one statement, inside the caller's own transaction.
 --
@@ -166,7 +201,10 @@ ORDER BY rejected.ordering_key;
 -- these keys serializes either before this statement -- and then its unpublished
 -- event puts the key in `active`, so the mark stays -- or after it, and then it
 -- establishes a fresh mark from its own sequence. Neither can interleave with
--- the check.
+-- the check. The locked head's current_sequence is the pending-work authority:
+-- after waiting for a concurrent append, PostgreSQL refreshes that locked row
+-- to the committed version. A second-table lookup would remain on the
+-- statement's older READ COMMITTED snapshot and could miss the appended event.
 --
 -- A key with no head is neither locked, refused, nor deleted, which is what
 -- makes a repeated or unknown retirement a no-op rather than an error.
@@ -176,11 +214,9 @@ ORDER BY rejected.ordering_key;
 -- path. `retired` is unreferenced on purpose -- a data-modifying CTE runs to
 -- completion whether or not the primary query reads its output.
 --
--- The EXISTS lookup rides outbox_events_ordering_pending_key, which already
--- indexes exactly the unpublished ordered rows it asks about.
 -- name: RetireOutboxOrderingKeys :many
 WITH locked AS MATERIALIZED (
-    SELECT head.ordering_key
+    SELECT head.ordering_key, head.current_sequence
     FROM outbox_ordering_heads AS head
     WHERE head.ordering_key = ANY(sqlc.arg(ordering_keys)::text[])
     ORDER BY head.ordering_key
@@ -188,12 +224,7 @@ WITH locked AS MATERIALIZED (
 ), active AS MATERIALIZED (
     SELECT locked.ordering_key
     FROM locked
-    WHERE EXISTS (
-        SELECT 1
-        FROM outbox_events AS event
-        WHERE event.ordering_key = locked.ordering_key
-          AND event.published_at IS NULL
-    )
+    WHERE locked.current_sequence IS NOT NULL
 ), retired AS (
     DELETE FROM outbox_ordering_heads AS head
     USING locked
@@ -230,8 +261,25 @@ ORDER BY active.ordering_key;
 -- type the projection.
 -- name: ClaimOutboxEvents :many
 WITH candidate AS (
-    SELECT event.ctid::tid AS row_address,
-           event.lease_expires_at IS NOT NULL AS recovery_due
+    SELECT event.id,
+           event.ctid::tid AS row_address,
+           event.lease_expires_at IS NOT NULL AS recovery_due,
+           event.publication_uncertain IS TRUE
+               OR event.lease_token IS NOT NULL
+               OR (
+                   event.publication_uncertain IS NULL
+                   AND event.total_attempt_count > 0
+               ) AS publication_uncertain,
+           (
+               event.publication_uncertain IS TRUE
+               OR event.lease_token IS NOT NULL
+               OR (
+                   event.publication_uncertain IS NULL
+                   AND event.total_attempt_count > 0
+               )
+           )
+               AND event.cycle_attempt_count >= sqlc.arg(max_attempts)::integer
+               AS terminalize
     FROM outbox_events AS event
     WHERE event.published_at IS NULL
       AND event.poisoned_at IS NULL
@@ -241,23 +289,47 @@ WITH candidate AS (
     ORDER BY event.available_at, event.created_at, event.id
     FOR UPDATE OF event SKIP LOCKED
     LIMIT sqlc.arg(batch_size)
-)
-UPDATE outbox_events AS event
-SET lease_token = sqlc.arg(lease_token),
-    lease_expires_at = statement_timestamp()
-        + sqlc.arg(lease_milliseconds)::double precision * interval '1 millisecond',
-    cycle_attempt_count = event.cycle_attempt_count + 1,
-    total_attempt_count = event.total_attempt_count + 1,
-    last_attempt_at = statement_timestamp()
-FROM candidate
-WHERE event.ctid = candidate.row_address
+), transitioned AS (
+    UPDATE outbox_events AS event
+    SET publication_uncertain = candidate.publication_uncertain,
+        lease_token = CASE
+            WHEN candidate.terminalize THEN NULL
+            ELSE sqlc.arg(lease_token)
+        END,
+        lease_expires_at = CASE
+            WHEN candidate.terminalize THEN NULL
+            ELSE statement_timestamp()
+                + sqlc.arg(lease_milliseconds)::double precision * interval '1 millisecond'
+        END,
+        cycle_attempt_count = CASE
+            WHEN candidate.terminalize THEN event.cycle_attempt_count
+            ELSE event.cycle_attempt_count + 1
+        END,
+        total_attempt_count = CASE
+            WHEN candidate.terminalize THEN event.total_attempt_count
+            ELSE event.total_attempt_count + 1
+        END,
+        last_attempt_at = CASE
+            WHEN candidate.terminalize THEN event.last_attempt_at
+            ELSE statement_timestamp()
+        END,
+        poisoned_at = CASE
+            WHEN candidate.terminalize THEN statement_timestamp()
+            ELSE event.poisoned_at
+        END,
+        last_error_class = CASE
+            WHEN candidate.terminalize THEN 'outcome_unknown'
+            ELSE event.last_error_class
+        END
+    FROM candidate
+    WHERE event.ctid = candidate.row_address
 -- Projecting the envelope plus the attempt counters keeps decoding proportional
 -- to what the relay publishes and fences on. trace_context belongs to that set:
 -- the adapter is handed it to put on broker headers, and the relay links its
 -- publish span to it. The lease, retry, terminal, and
 -- redrive columns it would otherwise decode per event are already known to the
 -- caller or belong to operator inspection through GetOutboxEvent.
-RETURNING event.id,
+    RETURNING event.id,
           event.event_type,
           event.source,
           event.destination,
@@ -270,7 +342,27 @@ RETURNING event.id,
           event.ordering_sequence,
           event.cycle_attempt_count,
           event.total_attempt_count,
-          candidate.recovery_due::boolean AS recovery_due;
+          event.publication_uncertain
+)
+SELECT
+    transitioned.id,
+    transitioned.event_type,
+    transitioned.source,
+    transitioned.destination,
+    transitioned.schema_name,
+    transitioned.occurred_at,
+    transitioned.payload,
+    transitioned.metadata,
+    transitioned.trace_context,
+    transitioned.ordering_key,
+    transitioned.ordering_sequence,
+    transitioned.cycle_attempt_count,
+    transitioned.total_attempt_count,
+    candidate.recovery_due::boolean AS recovery_due,
+    transitioned.publication_uncertain
+FROM transitioned
+JOIN candidate USING (id)
+WHERE NOT candidate.terminalize;
 
 -- name: GetOutboxEvent :one
 SELECT * FROM outbox_events WHERE id = sqlc.arg(id);
@@ -412,12 +504,15 @@ SET available_at = statement_timestamp()
         + retry.delay_milliseconds * interval '1 millisecond',
     lease_token = NULL,
     lease_expires_at = NULL,
+    publication_uncertain = event.publication_uncertain IS TRUE
+        OR retry.publication_uncertain,
     last_error_class = retry.error_class
 FROM (
     SELECT
         unnest(sqlc.arg(ids)::text[]) AS id,
         unnest(sqlc.arg(delay_milliseconds)::double precision[]) AS delay_milliseconds,
-        unnest(sqlc.arg(error_classes)::text[]) AS error_class
+        unnest(sqlc.arg(error_classes)::text[]) AS error_class,
+        unnest(sqlc.arg(publication_uncertain)::boolean[]) AS publication_uncertain
 ) AS retry
 WHERE event.id = retry.id
   AND event.lease_token = sqlc.arg(lease_token)
@@ -430,11 +525,13 @@ UPDATE outbox_events AS event
 SET poisoned_at = statement_timestamp(),
     lease_token = NULL,
     lease_expires_at = NULL,
+    publication_uncertain = poison.publication_uncertain,
     last_error_class = poison.error_class
 FROM (
     SELECT
         unnest(sqlc.arg(ids)::text[]) AS id,
-        unnest(sqlc.arg(error_classes)::text[]) AS error_class
+        unnest(sqlc.arg(error_classes)::text[]) AS error_class,
+        unnest(sqlc.arg(publication_uncertain)::boolean[]) AS publication_uncertain
 ) AS poison
 WHERE event.id = poison.id
   AND event.lease_token = sqlc.arg(lease_token)
@@ -442,17 +539,25 @@ WHERE event.id = poison.id
   AND event.published_at IS NULL
   AND event.poisoned_at IS NULL;
 
--- name: FindOutboxRedrive :one
-SELECT event_id FROM outbox_redrives WHERE audit_id = sqlc.arg(audit_id);
+-- name: FindOutboxAction :one
+SELECT event_id, action_kind
+FROM outbox_redrives
+WHERE audit_id = sqlc.arg(audit_id);
 
--- name: LockOutboxEventForRedrive :one
+-- name: LockOutboxEventForAction :one
 SELECT * FROM outbox_events WHERE id = sqlc.arg(id) FOR UPDATE;
 
--- name: InsertOutboxRedrive :exec
-INSERT INTO outbox_redrives (audit_id, event_id, cycle_number)
-VALUES (sqlc.arg(audit_id), sqlc.arg(event_id), sqlc.arg(cycle_number));
+-- name: InsertOutboxAction :execrows
+INSERT INTO outbox_redrives (audit_id, event_id, action_kind, cycle_number)
+VALUES (
+    sqlc.arg(audit_id),
+    sqlc.arg(event_id),
+    sqlc.arg(action_kind),
+    sqlc.narg(cycle_number)
+)
+ON CONFLICT (audit_id) DO NOTHING;
 
--- name: RedriveOutboxEvent :execrows
+-- name: RedrivePoisonedOutboxEvent :execrows
 UPDATE outbox_events
 SET available_at = statement_timestamp(),
     cycle_attempt_count = 0,
@@ -465,7 +570,157 @@ SET available_at = statement_timestamp(),
     last_redriven_at = statement_timestamp()
 WHERE id = sqlc.arg(id)
   AND poisoned_at IS NOT NULL
-  AND published_at IS NULL;
+  AND published_at IS NULL
+  AND publication_uncertain IS FALSE;
+
+-- name: RedriveUnknownOutboxEvent :execrows
+UPDATE outbox_events
+SET available_at = statement_timestamp(),
+    cycle_attempt_count = 0,
+    lease_token = NULL,
+    lease_expires_at = NULL,
+    poisoned_at = NULL,
+    last_error_class = NULL,
+    redrive_count = redrive_count + 1,
+    last_redrive_id = sqlc.arg(audit_id),
+    last_redriven_at = statement_timestamp()
+WHERE id = sqlc.arg(id)
+  AND published_at IS NULL
+  AND poisoned_at IS NOT NULL
+  AND publication_uncertain IS TRUE
+  AND last_error_class = 'outcome_unknown';
+
+-- name: ConfirmUnorderedOutboxAccepted :execrows
+UPDATE outbox_events
+SET published_at = statement_timestamp(),
+    poisoned_at = NULL,
+    lease_token = NULL,
+    lease_expires_at = NULL,
+    last_error_class = NULL
+WHERE id = sqlc.arg(id)
+  AND ordering_key IS NULL
+  AND published_at IS NULL
+  AND poisoned_at IS NOT NULL
+  AND publication_uncertain IS TRUE
+  AND last_error_class = 'outcome_unknown';
+
+-- name: ConfirmOrderedOutboxAccepted :one
+WITH locked_head AS MATERIALIZED (
+    SELECT head.ordering_key, head.current_sequence, head.last_sequence
+    FROM outbox_ordering_heads AS head
+    JOIN outbox_events AS event
+      ON event.id = sqlc.arg(id)
+     AND event.ordering_key = head.ordering_key
+     AND event.ordering_sequence = head.current_sequence
+    WHERE event.published_at IS NULL
+      AND event.poisoned_at IS NOT NULL
+      AND event.publication_uncertain IS TRUE
+      AND event.last_error_class = 'outcome_unknown'
+    FOR UPDATE OF head
+), successor AS MATERIALIZED (
+    SELECT next_event.id, next_event.ordering_sequence
+    FROM locked_head AS head
+    CROSS JOIN LATERAL (
+        SELECT event.id, event.ordering_sequence
+        FROM outbox_events AS event
+        WHERE event.ordering_key = head.ordering_key
+          AND event.ordering_sequence > head.current_sequence
+          AND event.published_at IS NULL
+        ORDER BY event.ordering_sequence
+        LIMIT 1
+    ) AS next_event
+), eligible AS (
+    SELECT head.ordering_key
+    FROM locked_head AS head
+    WHERE head.current_sequence = head.last_sequence
+       OR EXISTS (SELECT 1 FROM successor)
+), marked AS (
+    UPDATE outbox_events AS event
+    SET published_at = statement_timestamp(),
+        poisoned_at = NULL,
+        lease_token = NULL,
+        lease_expires_at = NULL,
+        last_error_class = NULL
+    FROM eligible
+    WHERE event.id = sqlc.arg(id)
+      AND event.ordering_key = eligible.ordering_key
+      AND event.published_at IS NULL
+      AND event.poisoned_at IS NOT NULL
+      AND event.publication_uncertain IS TRUE
+      AND event.last_error_class = 'outcome_unknown'
+    RETURNING event.id, eligible.ordering_key
+), advanced AS (
+    UPDATE outbox_ordering_heads AS head
+    SET current_sequence = (SELECT ordering_sequence FROM successor),
+        updated_at = statement_timestamp()
+    FROM marked
+    WHERE head.ordering_key = marked.ordering_key
+    RETURNING head.ordering_key
+), unblocked AS (
+    UPDATE outbox_events AS event
+    SET ordering_ready = true
+    FROM successor, advanced
+    WHERE event.id = successor.id
+    RETURNING event.id
+)
+SELECT
+    EXISTS (SELECT 1 FROM marked) AS marked,
+    EXISTS (
+        SELECT 1
+        FROM locked_head AS head
+        WHERE head.current_sequence < head.last_sequence
+          AND NOT EXISTS (SELECT 1 FROM successor)
+    ) AS snapshot_conflict;
+
+-- name: ClassifyLegacyOutboxUncertainty :one
+WITH candidate AS MATERIALIZED (
+    SELECT event.ctid::tid AS row_address,
+           event.published_at IS NULL
+               AND (
+                   event.total_attempt_count > 0
+                   OR event.lease_token IS NOT NULL
+                   OR event.poisoned_at IS NOT NULL
+               ) AS publication_uncertain,
+           event.published_at IS NULL
+               AND (
+                   event.total_attempt_count > 0
+                   OR event.lease_token IS NOT NULL
+                   OR event.poisoned_at IS NOT NULL
+               )
+               AND (
+                   event.poisoned_at IS NOT NULL
+                   OR event.cycle_attempt_count >= sqlc.arg(max_attempts)::integer
+               ) AS terminalize
+    FROM outbox_events AS event
+    WHERE event.publication_uncertain IS NULL
+    ORDER BY event.created_at, event.id
+    FOR UPDATE OF event
+    LIMIT sqlc.arg(batch_size)
+), classified AS (
+    UPDATE outbox_events AS event
+    SET publication_uncertain = candidate.publication_uncertain,
+        poisoned_at = CASE
+            WHEN candidate.terminalize
+            THEN coalesce(event.poisoned_at, statement_timestamp())
+            ELSE event.poisoned_at
+        END,
+        lease_token = CASE
+            WHEN candidate.terminalize THEN NULL
+            ELSE event.lease_token
+        END,
+        lease_expires_at = CASE
+            WHEN candidate.terminalize THEN NULL
+            ELSE event.lease_expires_at
+        END,
+        last_error_class = CASE
+            WHEN candidate.terminalize THEN 'outcome_unknown'
+            ELSE event.last_error_class
+        END
+    FROM candidate
+    WHERE event.ctid = candidate.row_address
+    RETURNING 1
+)
+SELECT count(*)::integer AS classified_count FROM classified;
 
 -- Retention deletes reach their rows by the address the locking select pinned,
 -- for the reason the claim does and with the same lock holding it valid. The
@@ -496,6 +751,10 @@ WITH pending AS (
     SELECT
         event.created_at,
         CASE
+            WHEN event.poisoned_at IS NOT NULL
+                 AND event.publication_uncertain IS TRUE
+                 AND event.last_error_class = 'outcome_unknown'
+            THEN 'outcome_unknown'
             WHEN event.poisoned_at IS NOT NULL THEN 'poison'
             WHEN event.lease_expires_at > statement_timestamp() THEN 'in_progress'
             WHEN event.lease_expires_at IS NOT NULL THEN 'recovery_due'
@@ -531,7 +790,11 @@ WITH pending AS (
         count(*) FILTER (WHERE state = 'poison')::bigint AS poison_count,
         coalesce(extract(epoch FROM min(created_at) FILTER (
             WHERE state = 'poison'
-        )), 0)::double precision AS poison_oldest_unix
+        )), 0)::double precision AS poison_oldest_unix,
+        count(*) FILTER (WHERE state = 'outcome_unknown')::bigint AS outcome_unknown_count,
+        coalesce(extract(epoch FROM min(created_at) FILTER (
+            WHERE state = 'outcome_unknown'
+        )), 0)::double precision AS outcome_unknown_oldest_unix
     FROM pending
 )
 SELECT
@@ -547,6 +810,8 @@ SELECT
     backlog.ordering_blocked_oldest_unix,
     backlog.poison_count,
     backlog.poison_oldest_unix,
+    backlog.outcome_unknown_count,
+    backlog.outcome_unknown_oldest_unix,
     greatest(
         coalesce((
             SELECT nullif(class.reltuples, -1)
@@ -566,5 +831,7 @@ SELECT
     pg_total_relation_size('outbox_ordering_heads')::bigint AS ordering_heads_bytes,
     pg_indexes_size('outbox_ordering_heads')::bigint AS ordering_heads_index_bytes,
     pg_total_relation_size('outbox_redrives')::bigint AS redrives_bytes,
-    pg_indexes_size('outbox_redrives')::bigint AS redrives_index_bytes
+    pg_indexes_size('outbox_redrives')::bigint AS redrives_index_bytes,
+    pg_total_relation_size('outbox_commit_receipts')::bigint AS receipts_bytes,
+    pg_indexes_size('outbox_commit_receipts')::bigint AS receipts_index_bytes
 FROM backlog;

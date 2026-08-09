@@ -32,6 +32,10 @@ const (
 	// It absorbs ordinary drift between the provider's clock and this host
 	// without extending a token's life in any way an operator would notice.
 	ClockSkew = 30 * time.Second
+	// MaxTokenLifetime bounds how long an issued access token may remain valid.
+	// Without it, a provider mistake could turn one signed token into a credential
+	// that outlives every key-refresh and revocation signal this service observes.
+	MaxTokenLifetime = 15 * time.Minute
 	// ProviderTimeout bounds one Discovery or JWKS request, both as the response
 	// header timeout and as the whole-request budget. Startup spends at most two
 	// of these before failing closed.

@@ -19,7 +19,7 @@ type authnMetrics struct {
 
 	// byTransport holds the prebuilt verification attribute sets, one group per
 	// carrier. verificationSets owns why they are built once.
-	byTransport map[Transport]verificationSets
+	byTransport map[transport]verificationSets
 }
 
 // verificationSets holds one prebuilt measurement option per series
@@ -37,12 +37,12 @@ type authnMetrics struct {
 // covers every declared category, and the labels no Kind produces are asked for
 // by the errors that produce them.
 type verificationSets struct {
-	transport Transport
+	transport transport
 	success   metric.MeasurementOption
 	failures  map[string]metric.MeasurementOption
 }
 
-func newVerificationSets(transport Transport) verificationSets {
+func newVerificationSets(transport transport) verificationSets {
 	failures := make(map[string]metric.MeasurementOption, int(lastKind)+1)
 	for kind := Kind(1); kind <= lastKind; kind++ {
 		reason := verificationReason(failure(kind))
@@ -63,7 +63,7 @@ func newVerificationSets(transport Transport) verificationSets {
 }
 
 //nolint:ireturn // metric.MeasurementOption is the option interface the OTel API takes.
-func failureOption(transport Transport, reason string) metric.MeasurementOption {
+func failureOption(transport transport, reason string) metric.MeasurementOption {
 	return metric.WithAttributeSet(attribute.NewSet(
 		attribute.String("authn.transport", string(transport)),
 		attribute.String("authn.result", "failure"),
@@ -112,12 +112,12 @@ func newAuthnMetrics(provider metric.MeterProvider, reportDegraded func()) authn
 	}
 	meter := provider.Meter(meterName)
 	fallback := metricnoop.NewMeterProvider().Meter(meterName)
-	// Both declared carriers get their sets up front. A [Transport] added in
+	// Both declared carriers get their sets up front. A transport added in
 	// verifier.go and not added here still records — recordVerification builds
 	// its group per call instead — so the omission costs allocations rather than
 	// a series.
-	byTransport := make(map[Transport]verificationSets, 2)
-	for _, transport := range []Transport{TransportHTTP, TransportGRPC} {
+	byTransport := make(map[transport]verificationSets, 2)
+	for _, transport := range []transport{transportHTTP, transportGRPC} {
 		byTransport[transport] = newVerificationSets(transport)
 	}
 	return authnMetrics{
@@ -194,7 +194,7 @@ func registerKeyAgeGauge(
 	}
 }
 
-func (m authnMetrics) recordVerification(ctx context.Context, transport Transport, err error) {
+func (m authnMetrics) recordVerification(ctx context.Context, transport transport, err error) {
 	sets, prebuilt := m.byTransport[transport]
 	if !prebuilt {
 		sets = newVerificationSets(transport)
@@ -204,13 +204,15 @@ func (m authnMetrics) recordVerification(ctx context.Context, transport Transpor
 
 func (m authnMetrics) recordRefresh(ctx context.Context, trigger refreshTrigger, err error) {
 	result := "success"
+	attributes := []attribute.KeyValue{
+		attribute.String("authn.refresh.trigger", string(trigger)),
+	}
 	if err != nil {
 		result = "failure"
+		attributes = append(attributes, attribute.String("authn.reason", providerFailureReason(err)))
 	}
-	m.refreshes.Add(ctx, 1, metric.WithAttributes(
-		attribute.String("authn.refresh.trigger", string(trigger)),
-		attribute.String("authn.result", result),
-	))
+	attributes = append(attributes, attribute.String("authn.result", result))
+	m.refreshes.Add(ctx, 1, metric.WithAttributes(attributes...))
 }
 
 func keyAge(now, fetchedAt time.Time) float64 {

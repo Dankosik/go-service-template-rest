@@ -8,7 +8,7 @@ import (
 	"math"
 	"time"
 
-	"github.com/example/go-service-template-rest/internal/problem"
+	"github.com/example/go-service-template-rest/internal/failure"
 	"go.opentelemetry.io/otel/metric"
 	metricnoop "go.opentelemetry.io/otel/metric/noop"
 	"go.opentelemetry.io/otel/propagation"
@@ -233,7 +233,7 @@ type Options struct {
 	// as something other than INTERNAL. It is the same slice the HTTP router
 	// receives, so one domain identity answers consistently on both. An error
 	// no mapper claims is sanitized, text included.
-	DomainErrors []problem.Mapper
+	DomainErrors []failure.Mapper
 
 	// ErrorDomain scopes the machine-readable reason a classified error carries,
 	// so two services' reasons cannot collide. It is the service's own identity,

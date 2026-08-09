@@ -8,32 +8,39 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type OutboxCommitReceipt struct {
+	EventID             string
+	FingerprintVersion  int16
+	EnvelopeFingerprint []byte
+}
+
 type OutboxEvent struct {
-	ID                string
-	EventType         string
-	Source            string
-	Destination       string
-	SchemaName        string
-	OccurredAt        pgtype.Timestamptz
-	Payload           []byte
-	Metadata          []byte
-	TraceContext      []byte
-	OrderingKey       *string
-	OrderingSequence  *int64
-	OrderingReady     bool
-	CreatedAt         pgtype.Timestamptz
-	AvailableAt       pgtype.Timestamptz
-	CycleAttemptCount int32
-	TotalAttemptCount int64
-	LastAttemptAt     pgtype.Timestamptz
-	LeaseToken        *string
-	LeaseExpiresAt    pgtype.Timestamptz
-	PublishedAt       pgtype.Timestamptz
-	PoisonedAt        pgtype.Timestamptz
-	LastErrorClass    *string
-	RedriveCount      int32
-	LastRedriveID     *string
-	LastRedrivenAt    pgtype.Timestamptz
+	ID                   string
+	EventType            string
+	Source               string
+	Destination          string
+	SchemaName           string
+	OccurredAt           pgtype.Timestamptz
+	Payload              []byte
+	Metadata             []byte
+	TraceContext         []byte
+	OrderingKey          *string
+	OrderingSequence     *int64
+	OrderingReady        bool
+	CreatedAt            pgtype.Timestamptz
+	AvailableAt          pgtype.Timestamptz
+	CycleAttemptCount    int32
+	TotalAttemptCount    int64
+	LastAttemptAt        pgtype.Timestamptz
+	LeaseToken           *string
+	LeaseExpiresAt       pgtype.Timestamptz
+	PublishedAt          pgtype.Timestamptz
+	PoisonedAt           pgtype.Timestamptz
+	PublicationUncertain *bool
+	LastErrorClass       *string
+	RedriveCount         int32
+	LastRedriveID        *string
+	LastRedrivenAt       pgtype.Timestamptz
 }
 
 type OutboxOrderingHead struct {
@@ -46,6 +53,12 @@ type OutboxOrderingHead struct {
 type OutboxRedrife struct {
 	AuditID     string
 	EventID     string
+	ActionKind  string
 	RedrivenAt  pgtype.Timestamptz
-	CycleNumber int32
+	CycleNumber *int32
+}
+
+type PostgresInboxClaim struct {
+	ConsumerIdentity string
+	MessageID        string
 }

@@ -18,10 +18,10 @@ func (v *Verifier) ResolveHTTP(
 ) (reqctx.Principal, error) {
 	request := authenticatedRequest(input)
 	if request == nil {
-		return reqctx.Principal{}, v.recordRejection(ctx, TransportHTTP, failure(KindMalformed))
+		return reqctx.Principal{}, v.recordRejection(ctx, transportHTTP, failure(KindMalformed))
 	}
 	if !v.trustedHTTPRequest(request) {
-		return reqctx.Principal{}, v.recordRejection(ctx, TransportHTTP, failure(KindUntrustedTransport))
+		return reqctx.Principal{}, v.recordRejection(ctx, transportHTTP, failure(KindUntrustedTransport))
 	}
 
 	// The credential is taken off the request as soon as this boundary owns it,
@@ -31,7 +31,8 @@ func (v *Verifier) ResolveHTTP(
 	// headers would hide from them what was actually sent.
 	values := request.Header.Values("Authorization")
 	request.Header.Del("Authorization")
-	return v.verifyCredential(ctx, values, TransportHTTP)
+	verified, err := v.verifyCredential(ctx, values, transportHTTP)
+	return verified.principal, err
 }
 
 // trustedHTTPRequest reports whether this request reached the service the way

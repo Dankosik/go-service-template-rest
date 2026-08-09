@@ -59,8 +59,7 @@ import (
 // docs/postgres-transactional-outbox.md.
 // profile:messaging-nats-jetstream:start
 //
-// natsOutboxPublisher in test/postgres_outbox_natsjs_integration_test.go is a
-// worked adapter against this contract.
+// natsjs.NewOutboxPublisher is the selected adapter for this template.
 // profile:messaging-nats-jetstream:end
 type Publisher interface {
 	Publish(ctx context.Context, event Event) error

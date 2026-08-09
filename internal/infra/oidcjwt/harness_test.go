@@ -159,6 +159,7 @@ type testVerifierOptions struct {
 	// bootstrap runs under t.Context().
 	bootstrapCtx func() context.Context
 	now          func() time.Time
+	jitter       func(time.Duration) time.Duration
 	client       *scriptedClient
 	provider     metric.MeterProvider
 	log          *slog.Logger
@@ -190,7 +191,7 @@ func buildTestVerifier(t *testing.T, opts testVerifierOptions) (*Verifier, error
 	if onClose == nil {
 		onClose = func() {}
 	}
-	return newVerifier(
+	verifier, err := newVerifier(
 		bootstrapCtx(),
 		testPolicy(t),
 		func(string) (providerClient, error) {
@@ -200,6 +201,13 @@ func buildTestVerifier(t *testing.T, opts testVerifierOptions) (*Verifier, error
 		opts.provider,
 		opts.log,
 	)
+	if verifier != nil {
+		verifier.jitter = opts.jitter
+		if verifier.jitter == nil {
+			verifier.jitter = func(delay time.Duration) time.Duration { return delay }
+		}
+	}
+	return verifier, err
 }
 
 // requireTestVerifier builds a verifier whose trust is established and closes

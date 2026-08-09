@@ -32,7 +32,7 @@ func TestKeyMissRefresh(t *testing.T) {
 	})}
 	verifier := requireTestVerifier(t, testVerifierOptions{now: newTestClock(now).now, client: client})
 	token := signToken(t, second, "key-2", "at+jwt", validClaims(now))
-	principal, err := verifier.Verify(t.Context(), token, TransportHTTP)
+	principal, err := verifier.verify(t.Context(), token, transportHTTP)
 	if err != nil || principal.Subject == "" {
 		t.Fatalf("Verify(rotated token) = (%+v, %v), want success", principal, err)
 	}
@@ -43,10 +43,10 @@ func TestKeyMissRefresh(t *testing.T) {
 	})}
 	outageVerifier := requireTestVerifier(t, testVerifierOptions{now: newTestClock(now).now, client: outage})
 	unknown := signToken(t, second, "unknown", "at+jwt", validClaims(now))
-	_, err = outageVerifier.Verify(t.Context(), unknown, TransportHTTP)
+	_, err = outageVerifier.verify(t.Context(), unknown, transportHTTP)
 	requireKind(t, err, KindInvalid)
 	valid := signToken(t, first, "key-1", "at+jwt", validClaims(now))
-	principal, err = outageVerifier.Verify(t.Context(), valid, TransportHTTP)
+	principal, err = outageVerifier.verify(t.Context(), valid, transportHTTP)
 	if err != nil || principal.Subject == "" {
 		t.Fatalf("Verify(cached valid token after outage) = (%+v, %v), want success", principal, err)
 	}
@@ -65,22 +65,22 @@ func TestSameKIDRotation(t *testing.T) {
 	verifier := requireTestVerifier(t, testVerifierOptions{now: clock.now, client: client})
 
 	rotated := signToken(t, second, "key-1", "at+jwt", validClaims(now))
-	if principal, verifyErr := verifier.Verify(t.Context(), rotated, TransportHTTP); verifyErr != nil ||
+	if principal, verifyErr := verifier.verify(t.Context(), rotated, transportHTTP); verifyErr != nil ||
 		principal.Subject == "" {
 		t.Fatalf("Verify(same-kid rotation) = (%+v, %v), want success", principal, verifyErr)
 	}
 	requireProviderCalls(t, client, 1, "after same-kid rotation")
 
 	unknown := signToken(t, first, "unknown", "at+jwt", validClaims(now))
-	_, err := verifier.Verify(t.Context(), unknown, TransportHTTP)
+	_, err := verifier.verify(t.Context(), unknown, transportHTTP)
 	requireKind(t, err, KindInvalid)
 	requireProviderCalls(t, client, 1, "during rotation cooldown")
 
 	clock.advance(RefreshCooldown)
-	_, err = verifier.Verify(t.Context(), unknown, TransportHTTP)
+	_, err = verifier.verify(t.Context(), unknown, transportHTTP)
 	requireKind(t, err, KindInvalid)
 	requireProviderCalls(t, client, 2, "at the cooldown boundary")
-	_, err = verifier.Verify(t.Context(), unknown, TransportHTTP)
+	_, err = verifier.verify(t.Context(), unknown, transportHTTP)
 	requireKind(t, err, KindInvalid)
 	requireProviderCalls(t, client, 2, "inside the next cooldown")
 }
@@ -98,7 +98,7 @@ func TestStaleUnknownKIDPerformsRequestDrivenRecovery(t *testing.T) {
 	clock.advance(MaxKeySetAge)
 
 	token := signToken(t, second, "key-2", "at+jwt", validClaims(clock.now()))
-	principal, err := verifier.Verify(t.Context(), token, TransportHTTP)
+	principal, err := verifier.verify(t.Context(), token, transportHTTP)
 	if err != nil || principal.Subject == "" {
 		t.Fatalf("Verify(stale unknown-kid recovery) = (%+v, %v), want success", principal, err)
 	}
@@ -131,7 +131,7 @@ func TestUnknownKIDCategoryDependsOnTrustCurrentness(t *testing.T) {
 			}
 
 			unknown := signToken(t, second, "unknown", "at+jwt", validClaims(clock.now()))
-			_, err := verifier.Verify(t.Context(), unknown, TransportHTTP)
+			_, err := verifier.verify(t.Context(), unknown, transportHTTP)
 			requireKind(t, err, testCase.wantKind)
 			requireProviderCalls(t, client, 1, "after a refresh the provider failed")
 		})
@@ -157,7 +157,7 @@ func TestRefreshCoalescing(t *testing.T) {
 	var wait sync.WaitGroup
 	for range 20 {
 		wait.Go(func() {
-			if _, err := verifier.Verify(context.Background(), token, TransportHTTP); err == nil {
+			if _, err := verifier.verify(context.Background(), token, transportHTTP); err == nil {
 				successful.Add(1)
 			}
 		})
@@ -188,7 +188,7 @@ func TestRefreshCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	result := make(chan error, 1)
 	go func() {
-		_, err := verifier.Verify(ctx, token, TransportHTTP)
+		_, err := verifier.verify(ctx, token, transportHTTP)
 		result <- err
 	}()
 	<-started
@@ -209,7 +209,7 @@ func TestStaleKeySetFailsReadinessAndVerificationClosed(t *testing.T) {
 
 	requireKind(t, verifier.CheckReady(), KindUnavailable)
 	token := signToken(t, key, "key-1", "at+jwt", validClaims(clock.now()))
-	_, err := verifier.Verify(t.Context(), token, TransportHTTP)
+	_, err := verifier.verify(t.Context(), token, transportHTTP)
 	requireKind(t, err, KindUnavailable)
 }
 
@@ -234,7 +234,7 @@ func TestErrorsAndLogsRedactCredentialAndProviderContent(t *testing.T) {
 	}
 
 	verifier := newTestVerifier(t, loadTestRSAKey(t, testSigningKey))
-	_, err = verifier.Verify(t.Context(), sensitive, TransportHTTP)
+	_, err = verifier.verify(t.Context(), sensitive, transportHTTP)
 	if err == nil || strings.Contains(err.Error(), sensitive) {
 		t.Fatalf("credential escaped through verification error: %v", err)
 	}
@@ -266,7 +266,7 @@ func TestAuthnRedactionCoversRefreshPanicAndTelemetry(t *testing.T) {
 	claims.Subject = poison
 	claims.JWTID = poison
 	token := signToken(t, second, poison, "at+jwt", claims)
-	_, err := verifier.Verify(t.Context(), token, TransportHTTP)
+	_, err := verifier.verify(t.Context(), token, transportHTTP)
 	requireKind(t, err, KindInvalid)
 	// Rendered rather than dereferenced: requireKind has already proved this
 	// error non-nil, and formatting keeps that proof out of the nil checker's way.
@@ -275,7 +275,7 @@ func TestAuthnRedactionCoversRefreshPanicAndTelemetry(t *testing.T) {
 	}
 
 	clock.setFunc(func() time.Time { panic(poison) })
-	_, err = verifier.Verify(t.Context(), token, TransportHTTP)
+	_, err = verifier.verify(t.Context(), token, transportHTTP)
 	// The key-age gauge reads the same clock, and this case is about a panic
 	// inside verification rather than inside telemetry, so the failure is scoped
 	// to the call above before the collection below.
@@ -294,9 +294,8 @@ func TestAuthnRedactionCoversRefreshPanicAndTelemetry(t *testing.T) {
 	}
 
 	// Redaction is half the contract; the other half is that the conversion is
-	// reported at all. Both panics above answered in the categories a provider
-	// outage answers in, so without these records a defect in this package is
-	// indistinguishable from the outage operators are told to expect.
+	// reported at all. The closed categories keep telemetry safe, while the log
+	// is the evidence that locates the service defect.
 	// logRecoveredPanic owns that argument.
 	logged := output.String()
 	if !strings.Contains(logged, "authn_panic_recovered") {

@@ -86,3 +86,31 @@ func TestSupervisedBackgroundShutdownIsBoundedByItsOwnBudget(t *testing.T) {
 		}
 	})
 }
+
+// profile:authn-oidc-jwt:start
+func TestAuthnCloseDoesNotOutliveTheBackgroundBudget(t *testing.T) {
+	authn := &countingAuthnRuntime{}
+	closeAuthnWithinBudget(authn, true)
+	if authn.closes != 1 {
+		t.Fatalf("Close calls with budget remaining = %d, want 1", authn.closes)
+	}
+
+	expired, cancel := context.WithCancel(context.Background())
+	cancel()
+	closeAuthnWithinBudget(authn, expired.Err() == nil)
+	if authn.closes != 1 {
+		t.Fatalf("Close calls after budget expiration = %d, want still 1", authn.closes)
+	}
+}
+
+type countingAuthnRuntime struct {
+	fakeAuthnRuntime
+
+	closes int
+}
+
+func (a *countingAuthnRuntime) Close() {
+	a.closes++
+}
+
+// profile:authn-oidc-jwt:end

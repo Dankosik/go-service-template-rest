@@ -27,6 +27,8 @@ type StateObservation struct {
 	OrderingBlockedOldestAt   time.Time
 	PoisonCount               int64
 	PoisonOldestAt            time.Time
+	OutcomeUnknownCount       int64
+	OutcomeUnknownOldestAt    time.Time
 	PublishedRetainedEstimate int64
 	PublishedRetainedOldestAt time.Time
 	OrderingHeadCount         int64
@@ -36,6 +38,29 @@ type StateObservation struct {
 	OrderingHeadsIndexBytes   int64
 	RedrivesBytes             int64
 	RedrivesIndexBytes        int64
+	ReceiptsBytes             int64
+	ReceiptsIndexBytes        int64
+}
+
+// ClassifyLegacyUncertainty converts one bounded batch of pre-upgrade NULL
+// rows into the authoritative sticky/non-sticky state before relay startup.
+func (s *Store) ClassifyLegacyUncertainty(ctx context.Context, maxAttempts, batchSize int) (classified int, err error) {
+	started := time.Now()
+	defer func() { s.recordOperation(ctx, "classify_legacy", started, err) }()
+	if !s.valid() {
+		return 0, errStoreRequired()
+	}
+	if maxAttempts < 1 || maxAttempts > math.MaxInt32 || batchSize < 1 || batchSize > math.MaxInt32 {
+		return 0, fmt.Errorf("%w: max attempts and classification batch size must be positive", ErrConfig)
+	}
+	count, err := s.queries.ClassifyLegacyOutboxUncertainty(ctx, sqlcgen.ClassifyLegacyOutboxUncertaintyParams{
+		MaxAttempts: int32(maxAttempts), // #nosec G115 -- range checked above.
+		BatchSize:   int32(batchSize),   // #nosec G115 -- range checked above.
+	})
+	if err != nil {
+		return 0, fmt.Errorf("classify legacy outbox uncertainty: %w", err)
+	}
+	return int(count), nil
 }
 
 func (s *Store) CleanupPublished(ctx context.Context, retention time.Duration, batchSize int) (deleted int, err error) {
@@ -80,6 +105,8 @@ func (s *Store) Observe(ctx context.Context) (observation StateObservation, err 
 		OrderingBlockedOldestAt:   timeFromUnixSeconds(state.OrderingBlockedOldestUnix),
 		PoisonCount:               state.PoisonCount,
 		PoisonOldestAt:            timeFromUnixSeconds(state.PoisonOldestUnix),
+		OutcomeUnknownCount:       state.OutcomeUnknownCount,
+		OutcomeUnknownOldestAt:    timeFromUnixSeconds(state.OutcomeUnknownOldestUnix),
 		PublishedRetainedEstimate: state.PublishedRetainedEstimate,
 		PublishedRetainedOldestAt: timeFromUnixSeconds(state.PublishedRetainedOldestUnix),
 		OrderingHeadCount:         state.OrderingHeadCount,
@@ -89,5 +116,7 @@ func (s *Store) Observe(ctx context.Context) (observation StateObservation, err 
 		OrderingHeadsIndexBytes:   state.OrderingHeadsIndexBytes,
 		RedrivesBytes:             state.RedrivesBytes,
 		RedrivesIndexBytes:        state.RedrivesIndexBytes,
+		ReceiptsBytes:             state.ReceiptsBytes,
+		ReceiptsIndexBytes:        state.ReceiptsIndexBytes,
 	}, nil
 }

@@ -44,7 +44,7 @@ type relayStoreStub struct {
 	observe                     func(context.Context) (StateObservation, error)
 }
 
-func (s *relayStoreStub) Claim(ctx context.Context, lease time.Duration, batchSize int) (ClaimedBatch, error) {
+func (s *relayStoreStub) Claim(ctx context.Context, lease time.Duration, batchSize, _ int) (ClaimedBatch, error) {
 	if s.claim == nil {
 		return ClaimedBatch{}, nil
 	}

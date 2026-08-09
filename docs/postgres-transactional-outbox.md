@@ -41,29 +41,31 @@ if err != nil {
 	return err
 }
 
-// PostgreSQL repository adapter, per business transaction.
+// PostgreSQL repository adapter, before entering the business transaction.
+event := postgresoutbox.Event{
+	ID:               postgresoutbox.NewID(),
+	Type:             "order.updated",
+	Source:           "orders",
+	Destination:      "orders.events",
+	Schema:           "v1",
+	OccurredAt:       time.Now().UTC(),
+	Payload:          payload,
+	Metadata:         metadata,
+	OrderingKey:      orderID,
+	OrderingSequence: revision,
+}
 err = pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
 	if err := repository.Update(ctx, tx, change); err != nil {
 		return err
 	}
-	return outbox.Append(ctx, tx, postgresoutbox.Event{
-		ID:               postgresoutbox.NewID(),
-		Type:             "order.updated",
-		Source:           "orders",
-		Destination:      "orders.events",
-		Schema:           "v1",
-		OccurredAt:       time.Now().UTC(),
-		Payload:          payload,
-		Metadata:         metadata,
-		OrderingKey:      orderID,
-		OrderingSequence: revision,
-	})
+	return outbox.Append(ctx, tx, event)
 })
 ```
 
 `Store` serves three audiences: the write path calls only `Append`, the relay
-process owns claim, finalization, cleanup, and observation, and `Get` and
-`Redrive` are operator tooling. The relay reads `Get` too, to resolve a
+process owns claim, finalization, cleanup, and observation, and `Get`,
+`Redrive`, `RedriveUnknown`, and `ConfirmAccepted` are operator tooling.
+`ClassifyLegacyUncertainty` belongs only to the pre-relay upgrade command. The relay reads `Get` too, to resolve a
 finalization its batch statement did not report.
 `cmd/outbox-relay/internal/bootstrap/run.go` is the worked composition for the
 relay side.
@@ -80,8 +82,8 @@ transaction, translates the feature's result into a `postgresoutbox.Event`, and
 makes both calls inside one `InTx`. The composition root owns building the
 `Store` and handing it to that adapter.
 
-`Get` and `Redrive` are Go methods, not a shipped operator interface. Deciding
-who may redrive is an authorization question this pack does not answer, so a
+These operator actions are Go methods, not a shipped operator interface. Deciding
+who may act is an authorization question this pack does not answer, so a
 service exposes them the way it exposes anything else — an admin endpoint, a
 maintenance command, a support tool — before an operator can use the redrive
 procedure below.
@@ -96,6 +98,34 @@ back both the domain mutation and outbox row. The API process never calls a
 broker and can keep committing while the broker is unavailable, subject to
 PostgreSQL capacity. An outage therefore appears as observable backlog instead
 of request-path dual-write failure.
+
+### Reconciling a lost commit response
+
+Each append statement stores the event and a compact immutable commit receipt
+atomically. The receipt is keyed by `Event.ID` and holds only version 1 plus a
+SHA-256 fingerprint of the caller-owned envelope. It excludes the outbox-owned
+trace context, has no foreign key to `outbox_events`, and is never removed by
+published-event cleanup. That lifetime is what keeps reconciliation possible
+after the full event has expired.
+
+The repository adapter must build and retain the stable `Event` before entering
+`Pool.InTx`, as in the example above. When `InTx` wraps
+`postgres.ErrCommitUnknown`, call `Store.ReconcileCommit` with that same event
+on the same configured writer pool:
+
+| Result | Repository action |
+| --- | --- |
+| `CommitApplied` | Return the original operation as successful; do not rerun the mutation |
+| `CommitNotApplied` | Retry the mutation with the same event; this result is possible only after the same read proves the receipt absent on a writable current primary |
+| `ErrReceiptConflict` | Fail permanently; the event ID already names different immutable evidence |
+| `CommitStillUnknown` plus error | Retry reconciliation only within the caller's budget; never rerun the mutation or mint another event ID |
+
+`examples/reference-service/postgres_outbox_reconciliation_integration_test.go`
+shows the concrete adapter loop and its real-PostgreSQL lost-response proof. It
+is intentionally repository-owned rather than a generic transaction retry
+helper: only that adapter knows which mutation and original success result it
+is reconciling. Do not use this path for pre-cutover writes that could not have
+created a receipt, and do not synthesize receipts for historical events.
 
 `Append` is variadic, and a business transaction that emits several events
 should pass them in one call:
@@ -143,17 +173,17 @@ call allocates about 34% less. Against a round trip these are noise; they are
 recorded so a later change is measured against something. Re-measure before
 assuming any of it survives a different payload size or network path.
 
-`cmd/outbox-relay` is a separately deployable process. The template deliberately
-registers no publisher: an initialized service must replace the `nil` builder
-in `cmd/outbox-relay/main.go` with its selected messaging adapter. There is no
-production noop fallback. The adapter is outside this pack, must be safe for
-concurrent `Publish` calls, and must return nil only after the broker durably
-acknowledges the same event ID. The `Publisher` interface documents the whole
-acceptance contract.
+`cmd/outbox-relay` is a separately deployable process. Selecting both the
+PostgreSQL outbox and NATS profiles registers `bootstrap.BuildNATSPublisher` in
+`main.go`; selecting outbox without messaging leaves the builder nil and fails
+before telemetry, PostgreSQL, or a claim is started. There is no noop fallback.
 
-The builder is `bootstrap.PublisherBuilder`. It receives the loaded config and
-logger, and returns the adapter plus optional cleanup that bootstrap runs on
-startup failure and on shutdown, inside a five-second budget:
+The builder returns a validated `bootstrap.PublisherRuntime`: the one
+`postgresoutbox.Publisher` plus its `Run`, `Ready`, and error-returning
+`Shutdown` lifecycle. The relay reports ready only while both the relay and
+publisher are ready, supervises a terminal NATS client return, drains claims,
+joins the supervisor, stops diagnostics, and then shuts the client down before
+closing PostgreSQL. A custom outbox-only adapter uses the same constructor:
 
 ```go
 func main() {
@@ -167,12 +197,14 @@ func buildPublisher(
 	ctx context.Context,
 	cfg config.Config,
 	log *slog.Logger,
-) (postgresoutbox.Publisher, func(context.Context), error) {
+) (bootstrap.PublisherRuntime, error) {
 	client, err := broker.Dial(ctx, cfg /* ... */)
 	if err != nil {
-		return nil, nil, fmt.Errorf("dial broker: %w", err)
+		return bootstrap.PublisherRuntime{}, fmt.Errorf("dial broker: %w", err)
 	}
-	return brokerPublisher{client: client}, func(context.Context) { client.Close() }, nil
+	return bootstrap.NewPublisherRuntime(
+		brokerPublisher{client: client}, client.Run, client.Ready, client.Shutdown,
+	)
 }
 ```
 
@@ -186,21 +218,22 @@ apart, because only it knows what its broker's errors prove:
 | --- | --- | --- |
 | Retrying these exact bytes can never succeed — the broker refused the payload, subject, or size | `ErrPermanentPublication` | Poisoned on the first occurrence; blocks its ordering key until an operator redrive |
 | The broker definitely did not accept it, but the same bytes could succeed later — no stream, no responder, a definite API rejection | `ErrPublicationNotAccepted` | Retried with backoff, and poisoned once `max_attempts` is reached |
-| Nothing — a timeout, cancellation, disconnect, or a lost acknowledgement | any other error | Retried with backoff, forever; never poisoned by the attempt cap |
+| Nothing — a timeout, cancellation, disconnect, or a lost acknowledgement | any other error | Marks publication uncertainty sticky; retries below `max_attempts`, then parks as `outcome_unknown` |
 
-The third row is the default on purpose. An attempt cap may only park an event
-that is provably still unpublished, so an adapter that cannot distinguish its
-failures should return plain errors and let the backlog become visible instead
-of risking loss at a cap.
+The third row is the default on purpose. It never asserts that the event was
+unpublished: the sticky bit survives retry, lease recovery, restart, and
+redrive. Once sticky, a permanent failure or any failure at `max_attempts`
+parks the row as `outcome_unknown`; an acknowledgement still wins and marks it
+published. Fresh permanent and exhausted not-accepted results remain ordinary
+deterministic poison with the sticky bit false.
 
 <!-- profile:messaging-nats-jetstream:start -->
-`natsOutboxPublisher` in `test/postgres_outbox_natsjs_integration_test.go` is a
-worked adapter against that contract, including the broker-rejection mapping
-onto `ErrPermanentPublication`. It maps every `natsjs.ErrRejected` that way,
-which suits a fixed topology where a rejection means the envelope is wrong. A
-service whose stream can be absent while the relay runs should classify that
-case as `ErrPublicationNotAccepted` instead, so a temporary topology gap costs
-attempts rather than an operator redrive.
+`natsjs.NewOutboxPublisher` is the selected adapter. It pre-validates the
+immutable NATS envelope as permanent, maps later definite NATS rejection onto
+`ErrPublicationNotAccepted`, leaves ambiguous/unknown errors ambiguous, and
+returns nil only for a JetStream `PubAck`. Event ID is both logical and
+publication identity; source and caller metadata do not widen the NATS wire
+contract.
 
 <!-- profile:messaging-nats-jetstream:end -->
 ## Trace continuity
@@ -223,9 +256,11 @@ The link carries the same join without that lifetime coupling, which is also
 what the OpenTelemetry messaging convention prescribes for a send with a
 separate creation context.
 
-The adapter is handed the same context on `Event.CreationContext()` and should
-put it on its broker's headers, which is what gives the *consumer* its half of
-the join. The relay's own link works whether or not the adapter does this.
+The selected NATS adapter removes the relay-attempt span while preserving the
+batch cancellation/deadline, extracts `Event.CreationContext()`, and lets the
+NATS producer span descend from that stored origin before injecting W3C headers.
+The worker therefore sees the producing trace. Empty or invalid stored context
+starts an unrelated producer root and never rejects publication.
 
 Nothing about the trace context can fail a delivery. A context too large for its
 1 KiB bound, or one the propagator cannot encode, is stored as absent and
@@ -237,8 +272,9 @@ backlog instead of failed requests, so a field this pack added must never be the
 one fault that fails a request.
 
 `messaging.system` is deliberately absent from the span — the relay is
-broker-neutral and only the adapter knows the system. Ordering keys never reach
-a span, matching the rule for every other telemetry surface here.
+broker-neutral and only the adapter knows the system. Event IDs and ordering
+keys never reach relay spans or logs. W3C trace links remain the correlation
+mechanism without exposing stored identities.
 
 ## Envelope and ordering
 
@@ -395,18 +431,54 @@ idempotent. A crash before acknowledgement, cancellation, or forced shutdown
 also leaves durable work for lease recovery rather than inventing success.
 
 Temporary failures use full-jitter exponential retry from one second to five
-minutes by default. A permanent adapter rejection poisons immediately. The tenth
-adapter-proven `ErrPublicationNotAccepted` failure moves the row to poison
-state. Poison rows are never discarded and block later work for the same
-ordering key. Operators redrive one with a unique audit ID; the operation is
-idempotent for that audit ID and retains the original event ID and bytes.
+minutes by default. A fresh permanent adapter rejection poisons immediately,
+and the tenth adapter-proven `ErrPublicationNotAccepted` failure becomes
+deterministic poison. An ambiguous result sets sticky publication uncertainty;
+the claim statement quarantines a sticky row already at the attempt limit
+without leasing or publishing it again. Both poison classes block later work
+for the same ordering key and are retained for operator action.
 
-The attempt threshold is evaluated only when the adapter proves the broker did
-not durably accept the event. An unclassified error, timeout, disconnect, or
-panic remains retryable even at that threshold: the relay never trades possible
-event loss for a strict attempt-count cap. An adapter that cannot distinguish
-refusal from an ambiguous outcome therefore retries indefinitely, and the
-oldest-pending-age signal is what surfaces such a row to operators.
+### Legacy classification and outcome-unknown recovery
+
+After the schema expansion and before any new relay starts, classify every
+legacy NULL through the DB-only bootstrap route:
+
+```sh
+outbox-relay --classify-legacy-uncertainty
+```
+
+It loads normal outbox/PostgreSQL configuration, opens only the writer pool and
+store, processes `cleanup_batch_size` rows per transaction using
+`max_attempts`, and exits only after a batch returns zero. It does not build a
+publisher, start diagnostics, claim, or report readiness. Normal relay startup
+still fails closed when no publisher is registered.
+
+Authorized discovery uses a writer-primary read, a limit no larger than 100,
+and the `(poisoned_at, id)` cursor. Do not add payload, metadata, trace context,
+credentials, or ordering keys:
+
+```sql
+SELECT id, destination, event_type, schema_name, cycle_attempt_count,
+       total_attempt_count, last_attempt_at, poisoned_at, last_error_class,
+       publication_uncertain
+FROM outbox_events
+WHERE published_at IS NULL
+  AND poisoned_at IS NOT NULL
+  AND publication_uncertain IS TRUE
+  AND last_error_class = 'outcome_unknown'
+  AND (poisoned_at, id) > ($1, $2)
+ORDER BY poisoned_at, id
+LIMIT 100;
+```
+
+After broker-side evidence is checked, call `RedriveUnknown` to retry the same
+event identity while preserving stickiness, or `ConfirmAccepted` to record
+broker acceptance without publishing again. Ordered confirmation advances the
+existing outbox head and unblocks its successor. Both require a unique audit
+ID; replaying the same action/event/audit succeeds, while reuse for another
+action or event returns `ErrOperatorAuditConflict`. A wrong source state returns
+`ErrOperatorStateConflict`. Audit rows have no event foreign key and survive
+event cleanup. Ordinary `Redrive` remains valid only for deterministic poison.
 
 Two adapter behaviors are fatal to the process rather than to one event. A panic
 releases its own event for retry, finalizes the rest of the batch, and then
@@ -431,6 +503,9 @@ process exit line, and a new stop reason belongs in that switch:
 | `publisher_stuck` | An adapter goroutine outlived cancellation past the join bound; cleanup is unsafe |
 | `publisher_panic` | An adapter panicked |
 | `progress_unknown` | A publication could be neither recorded nor disproven |
+<!-- profile:messaging-nats-jetstream:start -->
+| `messaging_terminal` | The supervised NATS client stopped after reconnect exhaustion or another terminal lifecycle fault |
+<!-- profile:messaging-nats-jetstream:end -->
 | `lost_lease` | A retry or poison statement finalized fewer rows than it was given — the batch outlived its lease |
 | `runtime` | Anything else: a failed claim, retention delete, or startup observation; a diagnostics address that could not be bound, or a diagnostics server that stopped or would not join; a publisher builder that failed; and publisher cleanup that timed out or panicked |
 
@@ -440,8 +515,8 @@ missing or malformed adapter setting. Every other builder failure, including the
 `dial broker` example above, is `runtime`: wrap `ErrConfig` when the operator's
 fix is in configuration, and leave it unwrapped when it is not.
 
-A transient broker outage is in none of these: it produces retries and poison
-transitions, which are durable progress rather than a stop.
+A transient broker outage is in none of these: it produces retries and bounded
+`outcome_unknown` quarantine, which are durable progress rather than a stop.
 
 ## Runtime and operations
 
@@ -479,12 +554,12 @@ Readiness requires valid configuration, a real publisher, reachable expected
 schema, a running relay loop, and a fresh PostgreSQL state observation. A stale
 observation, database/schema loss, fatal publisher failure, or drain makes it
 false. A transient broker outage does not: the relay remains capable of durable
-retry/poison progress. Liveness remains process-only.
+retry/quarantine progress. Liveness remains process-only.
 
 A sample is fresh for two configured observation intervals. A failed periodic
 observation retains the last sample and retries; readiness turns false only when
 that sample crosses the freshness bound. Startup still fails closed if any of
-the events, ordering-head, or redrive relations is unavailable.
+the events, ordering-head, audit, or commit-receipt relations is unavailable.
 
 On shutdown the process flips readiness false, stops new claims, and lets the
 current attempt finish within the drain window. Expiry cancels the attempt. A
@@ -499,9 +574,10 @@ combination that does not, naming `http.grace_period`. A separate Publisher clea
 seconds; timeout or panic is reported instead of hanging process termination.
 
 Metrics expose mutually exclusive counts and oldest timestamps for eligible,
-in-progress, retry-wait, recovery-due, ordering-blocked, poison, and retained
-published rows; table/index bytes; ordering-head count; observation freshness;
-redrive-ledger bytes; last durable progress; an operation counter and a separate
+in-progress, retry-wait, recovery-due, ordering-blocked, deterministic poison,
+`outcome_unknown`, and retained published rows; table/index bytes;
+ordering-head count; observation freshness; audit-ledger and commit-receipt
+bytes; last durable progress; an operation counter and a separate
 operation-duration histogram; the size of the claimed
 batch; and readiness. The two operation instruments do not carry the same set:
 an operation with no span of its own — `recovery`, `drain`, and the
@@ -509,7 +585,8 @@ an operation with no span of its own — `recovery`, `drain`, and the
 histogram stays a latency signal instead of absorbing placeholder durations. `outbox.relay.inflight` is that batch, not the events
 inside `Publish` right now — it reports how much durable work one lease holds,
 which is what a crash would redeliver; `publish_concurrency` is what bounds the
-adapter. Attributes are fixed enums. Payload, metadata, credentials, DSN, ordering keys, broker
+adapter. Attributes are fixed enums. Payload, metadata, credentials, DSN,
+event IDs, ordering keys, broker
 errors, and SQL text are never metric labels or logs. That holds for driver
 error text too, which is why the listener-retry log records only which stage
 failed — `connect`, `subscribe`, or `wait`: pgx formats the DSN's user,
@@ -589,8 +666,10 @@ later change to it applies to newly written pages, reaching existing rows as
 they turn over or immediately through a `VACUUM FULL` or `pg_repack` window.
 
 Published rows are retained for seven days and deleted in bounded concurrent
-batches. Pending, leased, retry, recovery, poison, and ordering-high-water rows
-are not deleted. High-water rows carry no *automatic* cleanup because proving
+batches. Their compact commit receipts and operator audit rows remain
+indefinitely. Pending, leased, retry, recovery, deterministic poison,
+`outcome_unknown`, and ordering-high-water rows are not deleted.
+High-water rows carry no *automatic* cleanup because proving
 that an ordering key can never be reused is domain policy rather than an outbox
 decision. `Store.RetireOrderingKeys` is that terminal-key contract, and it is
 the only way a high-water row is removed:
@@ -619,8 +698,8 @@ all: a bounded key space never does.
 
 PostgreSQL is a finite
 outage buffer: alert on unpublished
-count/oldest age, poison, retry errors, state-observation freshness, drain rate,
-and relation/index growth. Add partitioning only after measured table/vacuum or
+count/oldest age, deterministic poison, `outcome_unknown`, retry errors,
+state-observation freshness, drain rate, and relation/index growth. Add partitioning only after measured table/vacuum or
 claim-plan evidence shows the bounded cleanup design no longer holds.
 
 Budget PostgreSQL connections across the complete deployment, not one process:

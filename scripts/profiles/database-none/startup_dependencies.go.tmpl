@@ -5,8 +5,8 @@ import (
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/config"
+	"github.com/example/go-service-template-rest/internal/failure"
 	"github.com/example/go-service-template-rest/internal/health"
-	"github.com/example/go-service-template-rest/internal/problem"
 )
 
 // runtimeDependencies is the DATABASE=none profile's dependency set. Readiness
@@ -26,7 +26,7 @@ func (runtimeDependencies) ReadinessProbes() []health.Probe { return nil }
 // DomainErrors mirrors the PostgreSQL profile's accessor. This profile holds no
 // dependency whose failures the transport has to classify, so a handler's own
 // errors are the only ones a service maps here.
-func (runtimeDependencies) DomainErrors() []problem.Mapper { return nil }
+func (runtimeDependencies) DomainErrors() []failure.Mapper { return nil }
 
 // readinessProbeBudget mirrors the PostgreSQL profile's accessor. This profile
 // probes no dependency, so the evaluation only has to fit inside the budget the

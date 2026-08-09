@@ -44,6 +44,19 @@ func TestDefaultConfigIsFinite(t *testing.T) {
 	if cfg.MaxSendMessageBytes != 4<<20 {
 		t.Fatalf("MaxSendMessageBytes = %d, want %d", cfg.MaxSendMessageBytes, 4<<20)
 	}
+	if cfg.LoadBalancing != grpcclient.LoadBalancingRoundRobin {
+		t.Fatalf("LoadBalancing = %v, want round robin", cfg.LoadBalancing)
+	}
+	if !cfg.HealthCheck {
+		t.Fatal("HealthCheck = false, want true")
+	}
+	if cfg.KeepalivePingInterval != 0 || cfg.KeepalivePingTimeout != 0 {
+		t.Fatalf(
+			"idle keepalive = (%s, %s), want disabled",
+			cfg.KeepalivePingInterval,
+			cfg.KeepalivePingTimeout,
+		)
+	}
 }
 
 func TestNewPerformsNoNetworkIOAndReturnsOwnedConnection(t *testing.T) {
@@ -99,6 +112,36 @@ func TestNewRejectsMissingTrustAndBounds(t *testing.T) {
 		},
 		{
 			name:        "unknown propagation policy",
+			credentials: true,
+		},
+		{
+			name: "keepalive interval only",
+			mutate: func(cfg *grpcclient.Config) {
+				cfg.KeepalivePingInterval = 10 * time.Second
+			},
+			credentials: true,
+		},
+		{
+			name: "keepalive timeout only",
+			mutate: func(cfg *grpcclient.Config) {
+				cfg.KeepalivePingTimeout = time.Second
+			},
+			credentials: true,
+		},
+		{
+			name: "negative keepalive interval",
+			mutate: func(cfg *grpcclient.Config) {
+				cfg.KeepalivePingInterval = -time.Nanosecond
+				cfg.KeepalivePingTimeout = time.Second
+			},
+			credentials: true,
+		},
+		{
+			name: "negative keepalive timeout",
+			mutate: func(cfg *grpcclient.Config) {
+				cfg.KeepalivePingInterval = 10 * time.Second
+				cfg.KeepalivePingTimeout = -time.Nanosecond
+			},
 			credentials: true,
 		},
 	} {

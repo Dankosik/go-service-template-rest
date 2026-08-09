@@ -13,8 +13,25 @@ import (
 
 const claimOutboxEvents = `-- name: ClaimOutboxEvents :many
 WITH candidate AS (
-    SELECT event.ctid::tid AS row_address,
-           event.lease_expires_at IS NOT NULL AS recovery_due
+    SELECT event.id,
+           event.ctid::tid AS row_address,
+           event.lease_expires_at IS NOT NULL AS recovery_due,
+           event.publication_uncertain IS TRUE
+               OR event.lease_token IS NOT NULL
+               OR (
+                   event.publication_uncertain IS NULL
+                   AND event.total_attempt_count > 0
+               ) AS publication_uncertain,
+           (
+               event.publication_uncertain IS TRUE
+               OR event.lease_token IS NOT NULL
+               OR (
+                   event.publication_uncertain IS NULL
+                   AND event.total_attempt_count > 0
+               )
+           )
+               AND event.cycle_attempt_count >= $1::integer
+               AS terminalize
     FROM outbox_events AS event
     WHERE event.published_at IS NULL
       AND event.poisoned_at IS NULL
@@ -23,18 +40,42 @@ WITH candidate AS (
       AND (event.lease_expires_at IS NULL OR event.lease_expires_at <= statement_timestamp())
     ORDER BY event.available_at, event.created_at, event.id
     FOR UPDATE OF event SKIP LOCKED
-    LIMIT $3
-)
-UPDATE outbox_events AS event
-SET lease_token = $1,
-    lease_expires_at = statement_timestamp()
-        + $2::double precision * interval '1 millisecond',
-    cycle_attempt_count = event.cycle_attempt_count + 1,
-    total_attempt_count = event.total_attempt_count + 1,
-    last_attempt_at = statement_timestamp()
-FROM candidate
-WHERE event.ctid = candidate.row_address
-RETURNING event.id,
+    LIMIT $2
+), transitioned AS (
+    UPDATE outbox_events AS event
+    SET publication_uncertain = candidate.publication_uncertain,
+        lease_token = CASE
+            WHEN candidate.terminalize THEN NULL
+            ELSE $3
+        END,
+        lease_expires_at = CASE
+            WHEN candidate.terminalize THEN NULL
+            ELSE statement_timestamp()
+                + $4::double precision * interval '1 millisecond'
+        END,
+        cycle_attempt_count = CASE
+            WHEN candidate.terminalize THEN event.cycle_attempt_count
+            ELSE event.cycle_attempt_count + 1
+        END,
+        total_attempt_count = CASE
+            WHEN candidate.terminalize THEN event.total_attempt_count
+            ELSE event.total_attempt_count + 1
+        END,
+        last_attempt_at = CASE
+            WHEN candidate.terminalize THEN event.last_attempt_at
+            ELSE statement_timestamp()
+        END,
+        poisoned_at = CASE
+            WHEN candidate.terminalize THEN statement_timestamp()
+            ELSE event.poisoned_at
+        END,
+        last_error_class = CASE
+            WHEN candidate.terminalize THEN 'outcome_unknown'
+            ELSE event.last_error_class
+        END
+    FROM candidate
+    WHERE event.ctid = candidate.row_address
+    RETURNING event.id,
           event.event_type,
           event.source,
           event.destination,
@@ -47,30 +88,52 @@ RETURNING event.id,
           event.ordering_sequence,
           event.cycle_attempt_count,
           event.total_attempt_count,
-          candidate.recovery_due::boolean AS recovery_due
+          event.publication_uncertain
+)
+SELECT
+    transitioned.id,
+    transitioned.event_type,
+    transitioned.source,
+    transitioned.destination,
+    transitioned.schema_name,
+    transitioned.occurred_at,
+    transitioned.payload,
+    transitioned.metadata,
+    transitioned.trace_context,
+    transitioned.ordering_key,
+    transitioned.ordering_sequence,
+    transitioned.cycle_attempt_count,
+    transitioned.total_attempt_count,
+    candidate.recovery_due::boolean AS recovery_due,
+    transitioned.publication_uncertain
+FROM transitioned
+JOIN candidate USING (id)
+WHERE NOT candidate.terminalize
 `
 
 type ClaimOutboxEventsParams struct {
+	MaxAttempts       int32
+	BatchSize         int32
 	LeaseToken        *string
 	LeaseMilliseconds float64
-	BatchSize         int32
 }
 
 type ClaimOutboxEventsRow struct {
-	ID                string
-	EventType         string
-	Source            string
-	Destination       string
-	SchemaName        string
-	OccurredAt        pgtype.Timestamptz
-	Payload           []byte
-	Metadata          []byte
-	TraceContext      []byte
-	OrderingKey       *string
-	OrderingSequence  *int64
-	CycleAttemptCount int32
-	TotalAttemptCount int64
-	RecoveryDue       bool
+	ID                   string
+	EventType            string
+	Source               string
+	Destination          string
+	SchemaName           string
+	OccurredAt           pgtype.Timestamptz
+	Payload              []byte
+	Metadata             []byte
+	TraceContext         []byte
+	OrderingKey          *string
+	OrderingSequence     *int64
+	CycleAttemptCount    int32
+	TotalAttemptCount    int64
+	RecoveryDue          bool
+	PublicationUncertain *bool
 }
 
 // One statement leases a whole batch under a single token. The partial unique
@@ -101,7 +164,12 @@ type ClaimOutboxEventsRow struct {
 // redrive columns it would otherwise decode per event are already known to the
 // caller or belong to operator inspection through GetOutboxEvent.
 func (q *Queries) ClaimOutboxEvents(ctx context.Context, arg ClaimOutboxEventsParams) ([]ClaimOutboxEventsRow, error) {
-	rows, err := q.db.Query(ctx, claimOutboxEvents, arg.LeaseToken, arg.LeaseMilliseconds, arg.BatchSize)
+	rows, err := q.db.Query(ctx, claimOutboxEvents,
+		arg.MaxAttempts,
+		arg.BatchSize,
+		arg.LeaseToken,
+		arg.LeaseMilliseconds,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -124,6 +192,7 @@ func (q *Queries) ClaimOutboxEvents(ctx context.Context, arg ClaimOutboxEventsPa
 			&i.CycleAttemptCount,
 			&i.TotalAttemptCount,
 			&i.RecoveryDue,
+			&i.PublicationUncertain,
 		); err != nil {
 			return nil, err
 		}
@@ -133,6 +202,69 @@ func (q *Queries) ClaimOutboxEvents(ctx context.Context, arg ClaimOutboxEventsPa
 		return nil, err
 	}
 	return items, nil
+}
+
+const classifyLegacyOutboxUncertainty = `-- name: ClassifyLegacyOutboxUncertainty :one
+WITH candidate AS MATERIALIZED (
+    SELECT event.ctid::tid AS row_address,
+           event.published_at IS NULL
+               AND (
+                   event.total_attempt_count > 0
+                   OR event.lease_token IS NOT NULL
+                   OR event.poisoned_at IS NOT NULL
+               ) AS publication_uncertain,
+           event.published_at IS NULL
+               AND (
+                   event.total_attempt_count > 0
+                   OR event.lease_token IS NOT NULL
+                   OR event.poisoned_at IS NOT NULL
+               )
+               AND (
+                   event.poisoned_at IS NOT NULL
+                   OR event.cycle_attempt_count >= $1::integer
+               ) AS terminalize
+    FROM outbox_events AS event
+    WHERE event.publication_uncertain IS NULL
+    ORDER BY event.created_at, event.id
+    FOR UPDATE OF event
+    LIMIT $2
+), classified AS (
+    UPDATE outbox_events AS event
+    SET publication_uncertain = candidate.publication_uncertain,
+        poisoned_at = CASE
+            WHEN candidate.terminalize
+            THEN coalesce(event.poisoned_at, statement_timestamp())
+            ELSE event.poisoned_at
+        END,
+        lease_token = CASE
+            WHEN candidate.terminalize THEN NULL
+            ELSE event.lease_token
+        END,
+        lease_expires_at = CASE
+            WHEN candidate.terminalize THEN NULL
+            ELSE event.lease_expires_at
+        END,
+        last_error_class = CASE
+            WHEN candidate.terminalize THEN 'outcome_unknown'
+            ELSE event.last_error_class
+        END
+    FROM candidate
+    WHERE event.ctid = candidate.row_address
+    RETURNING 1
+)
+SELECT count(*)::integer AS classified_count FROM classified
+`
+
+type ClassifyLegacyOutboxUncertaintyParams struct {
+	MaxAttempts int32
+	BatchSize   int32
+}
+
+func (q *Queries) ClassifyLegacyOutboxUncertainty(ctx context.Context, arg ClassifyLegacyOutboxUncertaintyParams) (int32, error) {
+	row := q.db.QueryRow(ctx, classifyLegacyOutboxUncertainty, arg.MaxAttempts, arg.BatchSize)
+	var classified_count int32
+	err := row.Scan(&classified_count)
+	return classified_count, err
 }
 
 const cleanupPublishedOutboxEvents = `-- name: CleanupPublishedOutboxEvents :execrows
@@ -168,19 +300,130 @@ func (q *Queries) CleanupPublishedOutboxEvents(ctx context.Context, arg CleanupP
 	return result.RowsAffected(), nil
 }
 
-const findOutboxRedrive = `-- name: FindOutboxRedrive :one
-SELECT event_id FROM outbox_redrives WHERE audit_id = $1
+const confirmOrderedOutboxAccepted = `-- name: ConfirmOrderedOutboxAccepted :one
+WITH locked_head AS MATERIALIZED (
+    SELECT head.ordering_key, head.current_sequence, head.last_sequence
+    FROM outbox_ordering_heads AS head
+    JOIN outbox_events AS event
+      ON event.id = $1
+     AND event.ordering_key = head.ordering_key
+     AND event.ordering_sequence = head.current_sequence
+    WHERE event.published_at IS NULL
+      AND event.poisoned_at IS NOT NULL
+      AND event.publication_uncertain IS TRUE
+      AND event.last_error_class = 'outcome_unknown'
+    FOR UPDATE OF head
+), successor AS MATERIALIZED (
+    SELECT next_event.id, next_event.ordering_sequence
+    FROM locked_head AS head
+    CROSS JOIN LATERAL (
+        SELECT event.id, event.ordering_sequence
+        FROM outbox_events AS event
+        WHERE event.ordering_key = head.ordering_key
+          AND event.ordering_sequence > head.current_sequence
+          AND event.published_at IS NULL
+        ORDER BY event.ordering_sequence
+        LIMIT 1
+    ) AS next_event
+), eligible AS (
+    SELECT head.ordering_key
+    FROM locked_head AS head
+    WHERE head.current_sequence = head.last_sequence
+       OR EXISTS (SELECT 1 FROM successor)
+), marked AS (
+    UPDATE outbox_events AS event
+    SET published_at = statement_timestamp(),
+        poisoned_at = NULL,
+        lease_token = NULL,
+        lease_expires_at = NULL,
+        last_error_class = NULL
+    FROM eligible
+    WHERE event.id = $1
+      AND event.ordering_key = eligible.ordering_key
+      AND event.published_at IS NULL
+      AND event.poisoned_at IS NOT NULL
+      AND event.publication_uncertain IS TRUE
+      AND event.last_error_class = 'outcome_unknown'
+    RETURNING event.id, eligible.ordering_key
+), advanced AS (
+    UPDATE outbox_ordering_heads AS head
+    SET current_sequence = (SELECT ordering_sequence FROM successor),
+        updated_at = statement_timestamp()
+    FROM marked
+    WHERE head.ordering_key = marked.ordering_key
+    RETURNING head.ordering_key
+), unblocked AS (
+    UPDATE outbox_events AS event
+    SET ordering_ready = true
+    FROM successor, advanced
+    WHERE event.id = successor.id
+    RETURNING event.id
+)
+SELECT
+    EXISTS (SELECT 1 FROM marked) AS marked,
+    EXISTS (
+        SELECT 1
+        FROM locked_head AS head
+        WHERE head.current_sequence < head.last_sequence
+          AND NOT EXISTS (SELECT 1 FROM successor)
+    ) AS snapshot_conflict
 `
 
-func (q *Queries) FindOutboxRedrive(ctx context.Context, auditID string) (string, error) {
-	row := q.db.QueryRow(ctx, findOutboxRedrive, auditID)
-	var event_id string
-	err := row.Scan(&event_id)
-	return event_id, err
+type ConfirmOrderedOutboxAcceptedRow struct {
+	Marked           bool
+	SnapshotConflict bool
+}
+
+func (q *Queries) ConfirmOrderedOutboxAccepted(ctx context.Context, id string) (ConfirmOrderedOutboxAcceptedRow, error) {
+	row := q.db.QueryRow(ctx, confirmOrderedOutboxAccepted, id)
+	var i ConfirmOrderedOutboxAcceptedRow
+	err := row.Scan(&i.Marked, &i.SnapshotConflict)
+	return i, err
+}
+
+const confirmUnorderedOutboxAccepted = `-- name: ConfirmUnorderedOutboxAccepted :execrows
+UPDATE outbox_events
+SET published_at = statement_timestamp(),
+    poisoned_at = NULL,
+    lease_token = NULL,
+    lease_expires_at = NULL,
+    last_error_class = NULL
+WHERE id = $1
+  AND ordering_key IS NULL
+  AND published_at IS NULL
+  AND poisoned_at IS NOT NULL
+  AND publication_uncertain IS TRUE
+  AND last_error_class = 'outcome_unknown'
+`
+
+func (q *Queries) ConfirmUnorderedOutboxAccepted(ctx context.Context, id string) (int64, error) {
+	result, err := q.db.Exec(ctx, confirmUnorderedOutboxAccepted, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const findOutboxAction = `-- name: FindOutboxAction :one
+SELECT event_id, action_kind
+FROM outbox_redrives
+WHERE audit_id = $1
+`
+
+type FindOutboxActionRow struct {
+	EventID    string
+	ActionKind string
+}
+
+func (q *Queries) FindOutboxAction(ctx context.Context, auditID string) (FindOutboxActionRow, error) {
+	row := q.db.QueryRow(ctx, findOutboxAction, auditID)
+	var i FindOutboxActionRow
+	err := row.Scan(&i.EventID, &i.ActionKind)
+	return i, err
 }
 
 const getOutboxEvent = `-- name: GetOutboxEvent :one
-SELECT id, event_type, source, destination, schema_name, occurred_at, payload, metadata, trace_context, ordering_key, ordering_sequence, ordering_ready, created_at, available_at, cycle_attempt_count, total_attempt_count, last_attempt_at, lease_token, lease_expires_at, published_at, poisoned_at, last_error_class, redrive_count, last_redrive_id, last_redriven_at FROM outbox_events WHERE id = $1
+SELECT id, event_type, source, destination, schema_name, occurred_at, payload, metadata, trace_context, ordering_key, ordering_sequence, ordering_ready, created_at, available_at, cycle_attempt_count, total_attempt_count, last_attempt_at, lease_token, lease_expires_at, published_at, poisoned_at, publication_uncertain, last_error_class, redrive_count, last_redrive_id, last_redriven_at FROM outbox_events WHERE id = $1
 `
 
 func (q *Queries) GetOutboxEvent(ctx context.Context, id string) (OutboxEvent, error) {
@@ -208,6 +451,7 @@ func (q *Queries) GetOutboxEvent(ctx context.Context, id string) (OutboxEvent, e
 		&i.LeaseExpiresAt,
 		&i.PublishedAt,
 		&i.PoisonedAt,
+		&i.PublicationUncertain,
 		&i.LastErrorClass,
 		&i.RedriveCount,
 		&i.LastRedriveID,
@@ -216,7 +460,49 @@ func (q *Queries) GetOutboxEvent(ctx context.Context, id string) (OutboxEvent, e
 	return i, err
 }
 
+const insertOutboxAction = `-- name: InsertOutboxAction :execrows
+INSERT INTO outbox_redrives (audit_id, event_id, action_kind, cycle_number)
+VALUES (
+    $1,
+    $2,
+    $3,
+    $4
+)
+ON CONFLICT (audit_id) DO NOTHING
+`
+
+type InsertOutboxActionParams struct {
+	AuditID     string
+	EventID     string
+	ActionKind  string
+	CycleNumber *int32
+}
+
+func (q *Queries) InsertOutboxAction(ctx context.Context, arg InsertOutboxActionParams) (int64, error) {
+	result, err := q.db.Exec(ctx, insertOutboxAction,
+		arg.AuditID,
+		arg.EventID,
+		arg.ActionKind,
+		arg.CycleNumber,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const insertOutboxEvents = `-- name: InsertOutboxEvents :exec
+WITH receipt AS (
+    INSERT INTO outbox_commit_receipts (
+        event_id,
+        fingerprint_version,
+        envelope_fingerprint
+    )
+    SELECT
+        unnest($1::text[]),
+        1,
+        unnest($10::bytea[])
+)
 INSERT INTO outbox_events (
     id,
     event_type,
@@ -241,15 +527,16 @@ SELECT
 `
 
 type InsertOutboxEventsParams struct {
-	Ids           []string
-	EventTypes    []string
-	Sources       []string
-	Destinations  []string
-	SchemaNames   []string
-	OccurredAts   []pgtype.Timestamptz
-	Payloads      [][]byte
-	Metadatas     [][]byte
-	TraceContexts [][]byte
+	Ids                  []string
+	EventTypes           []string
+	Sources              []string
+	Destinations         []string
+	SchemaNames          []string
+	OccurredAts          []pgtype.Timestamptz
+	Payloads             [][]byte
+	Metadatas            [][]byte
+	TraceContexts        [][]byte
+	EnvelopeFingerprints [][]byte
 }
 
 // Every event of one append that owns no ordering head, in one statement.
@@ -280,6 +567,7 @@ func (q *Queries) InsertOutboxEvents(ctx context.Context, arg InsertOutboxEvents
 		arg.Payloads,
 		arg.Metadatas,
 		arg.TraceContexts,
+		arg.EnvelopeFingerprints,
 	)
 	return err
 }
@@ -296,8 +584,9 @@ WITH input AS (
         unnest($7::bytea[]) AS payload,
         unnest($8::bytea[]) AS metadata,
         unnest($9::bytea[]) AS trace_context,
-        unnest($10::text[]) AS ordering_key,
-        unnest($11::bigint[]) AS ordering_sequence
+        unnest($10::bytea[]) AS envelope_fingerprint,
+        unnest($11::text[]) AS ordering_key,
+        unnest($12::bigint[]) AS ordering_sequence
 ), event AS (
     SELECT
         input.id,
@@ -309,6 +598,7 @@ WITH input AS (
         input.payload,
         input.metadata,
         input.trace_context,
+        input.envelope_fingerprint,
         nullif(input.ordering_key, '') AS ordering_key,
         nullif(input.ordering_sequence, 0) AS ordering_sequence
     FROM input
@@ -339,6 +629,15 @@ WITH input AS (
     WHERE NOT EXISTS (
         SELECT 1 FROM head WHERE head.ordering_key = ordered_key.ordering_key
     )
+), receipt AS (
+    INSERT INTO outbox_commit_receipts (
+        event_id,
+        fingerprint_version,
+        envelope_fingerprint
+    )
+    SELECT event.id, 1, event.envelope_fingerprint
+    FROM event
+    WHERE NOT EXISTS (SELECT 1 FROM rejected)
 ), stored AS (
     INSERT INTO outbox_events (
         id,
@@ -379,17 +678,18 @@ ORDER BY rejected.ordering_key
 `
 
 type InsertOutboxEventsWithOrderingParams struct {
-	Ids               []string
-	EventTypes        []string
-	Sources           []string
-	Destinations      []string
-	SchemaNames       []string
-	OccurredAts       []pgtype.Timestamptz
-	Payloads          [][]byte
-	Metadatas         [][]byte
-	TraceContexts     [][]byte
-	OrderingKeys      []string
-	OrderingSequences []int64
+	Ids                  []string
+	EventTypes           []string
+	Sources              []string
+	Destinations         []string
+	SchemaNames          []string
+	OccurredAts          []pgtype.Timestamptz
+	Payloads             [][]byte
+	Metadatas            [][]byte
+	TraceContexts        [][]byte
+	EnvelopeFingerprints [][]byte
+	OrderingKeys         []string
+	OrderingSequences    []int64
 }
 
 type InsertOutboxEventsWithOrderingRow struct {
@@ -435,6 +735,7 @@ func (q *Queries) InsertOutboxEventsWithOrdering(ctx context.Context, arg Insert
 		arg.Payloads,
 		arg.Metadatas,
 		arg.TraceContexts,
+		arg.EnvelopeFingerprints,
 		arg.OrderingKeys,
 		arg.OrderingSequences,
 	)
@@ -456,28 +757,12 @@ func (q *Queries) InsertOutboxEventsWithOrdering(ctx context.Context, arg Insert
 	return items, nil
 }
 
-const insertOutboxRedrive = `-- name: InsertOutboxRedrive :exec
-INSERT INTO outbox_redrives (audit_id, event_id, cycle_number)
-VALUES ($1, $2, $3)
+const lockOutboxEventForAction = `-- name: LockOutboxEventForAction :one
+SELECT id, event_type, source, destination, schema_name, occurred_at, payload, metadata, trace_context, ordering_key, ordering_sequence, ordering_ready, created_at, available_at, cycle_attempt_count, total_attempt_count, last_attempt_at, lease_token, lease_expires_at, published_at, poisoned_at, publication_uncertain, last_error_class, redrive_count, last_redrive_id, last_redriven_at FROM outbox_events WHERE id = $1 FOR UPDATE
 `
 
-type InsertOutboxRedriveParams struct {
-	AuditID     string
-	EventID     string
-	CycleNumber int32
-}
-
-func (q *Queries) InsertOutboxRedrive(ctx context.Context, arg InsertOutboxRedriveParams) error {
-	_, err := q.db.Exec(ctx, insertOutboxRedrive, arg.AuditID, arg.EventID, arg.CycleNumber)
-	return err
-}
-
-const lockOutboxEventForRedrive = `-- name: LockOutboxEventForRedrive :one
-SELECT id, event_type, source, destination, schema_name, occurred_at, payload, metadata, trace_context, ordering_key, ordering_sequence, ordering_ready, created_at, available_at, cycle_attempt_count, total_attempt_count, last_attempt_at, lease_token, lease_expires_at, published_at, poisoned_at, last_error_class, redrive_count, last_redrive_id, last_redriven_at FROM outbox_events WHERE id = $1 FOR UPDATE
-`
-
-func (q *Queries) LockOutboxEventForRedrive(ctx context.Context, id string) (OutboxEvent, error) {
-	row := q.db.QueryRow(ctx, lockOutboxEventForRedrive, id)
+func (q *Queries) LockOutboxEventForAction(ctx context.Context, id string) (OutboxEvent, error) {
+	row := q.db.QueryRow(ctx, lockOutboxEventForAction, id)
 	var i OutboxEvent
 	err := row.Scan(
 		&i.ID,
@@ -501,6 +786,7 @@ func (q *Queries) LockOutboxEventForRedrive(ctx context.Context, id string) (Out
 		&i.LeaseExpiresAt,
 		&i.PublishedAt,
 		&i.PoisonedAt,
+		&i.PublicationUncertain,
 		&i.LastErrorClass,
 		&i.RedriveCount,
 		&i.LastRedriveID,
@@ -650,11 +936,13 @@ UPDATE outbox_events AS event
 SET poisoned_at = statement_timestamp(),
     lease_token = NULL,
     lease_expires_at = NULL,
+    publication_uncertain = poison.publication_uncertain,
     last_error_class = poison.error_class
 FROM (
     SELECT
         unnest($2::text[]) AS id,
-        unnest($3::text[]) AS error_class
+        unnest($3::text[]) AS error_class,
+        unnest($4::boolean[]) AS publication_uncertain
 ) AS poison
 WHERE event.id = poison.id
   AND event.lease_token = $1
@@ -664,13 +952,19 @@ WHERE event.id = poison.id
 `
 
 type MarkOutboxPoisonedBatchParams struct {
-	LeaseToken   *string
-	Ids          []string
-	ErrorClasses []string
+	LeaseToken           *string
+	Ids                  []string
+	ErrorClasses         []string
+	PublicationUncertain []bool
 }
 
 func (q *Queries) MarkOutboxPoisonedBatch(ctx context.Context, arg MarkOutboxPoisonedBatchParams) (int64, error) {
-	result, err := q.db.Exec(ctx, markOutboxPoisonedBatch, arg.LeaseToken, arg.Ids, arg.ErrorClasses)
+	result, err := q.db.Exec(ctx, markOutboxPoisonedBatch,
+		arg.LeaseToken,
+		arg.Ids,
+		arg.ErrorClasses,
+		arg.PublicationUncertain,
+	)
 	if err != nil {
 		return 0, err
 	}
@@ -761,6 +1055,10 @@ WITH pending AS (
     SELECT
         event.created_at,
         CASE
+            WHEN event.poisoned_at IS NOT NULL
+                 AND event.publication_uncertain IS TRUE
+                 AND event.last_error_class = 'outcome_unknown'
+            THEN 'outcome_unknown'
             WHEN event.poisoned_at IS NOT NULL THEN 'poison'
             WHEN event.lease_expires_at > statement_timestamp() THEN 'in_progress'
             WHEN event.lease_expires_at IS NOT NULL THEN 'recovery_due'
@@ -796,7 +1094,11 @@ WITH pending AS (
         count(*) FILTER (WHERE state = 'poison')::bigint AS poison_count,
         coalesce(extract(epoch FROM min(created_at) FILTER (
             WHERE state = 'poison'
-        )), 0)::double precision AS poison_oldest_unix
+        )), 0)::double precision AS poison_oldest_unix,
+        count(*) FILTER (WHERE state = 'outcome_unknown')::bigint AS outcome_unknown_count,
+        coalesce(extract(epoch FROM min(created_at) FILTER (
+            WHERE state = 'outcome_unknown'
+        )), 0)::double precision AS outcome_unknown_oldest_unix
     FROM pending
 )
 SELECT
@@ -812,6 +1114,8 @@ SELECT
     backlog.ordering_blocked_oldest_unix,
     backlog.poison_count,
     backlog.poison_oldest_unix,
+    backlog.outcome_unknown_count,
+    backlog.outcome_unknown_oldest_unix,
     greatest(
         coalesce((
             SELECT nullif(class.reltuples, -1)
@@ -831,7 +1135,9 @@ SELECT
     pg_total_relation_size('outbox_ordering_heads')::bigint AS ordering_heads_bytes,
     pg_indexes_size('outbox_ordering_heads')::bigint AS ordering_heads_index_bytes,
     pg_total_relation_size('outbox_redrives')::bigint AS redrives_bytes,
-    pg_indexes_size('outbox_redrives')::bigint AS redrives_index_bytes
+    pg_indexes_size('outbox_redrives')::bigint AS redrives_index_bytes,
+    pg_total_relation_size('outbox_commit_receipts')::bigint AS receipts_bytes,
+    pg_indexes_size('outbox_commit_receipts')::bigint AS receipts_index_bytes
 FROM backlog
 `
 
@@ -848,6 +1154,8 @@ type ObserveOutboxRow struct {
 	OrderingBlockedOldestUnix   float64
 	PoisonCount                 int64
 	PoisonOldestUnix            float64
+	OutcomeUnknownCount         int64
+	OutcomeUnknownOldestUnix    float64
 	PublishedRetainedEstimate   int64
 	PublishedRetainedOldestUnix float64
 	OrderingHeadCount           int64
@@ -857,6 +1165,8 @@ type ObserveOutboxRow struct {
 	OrderingHeadsIndexBytes     int64
 	RedrivesBytes               int64
 	RedrivesIndexBytes          int64
+	ReceiptsBytes               int64
+	ReceiptsIndexBytes          int64
 }
 
 // Backlog states are exact and read only unpublished rows through the pending
@@ -880,6 +1190,8 @@ func (q *Queries) ObserveOutbox(ctx context.Context) (ObserveOutboxRow, error) {
 		&i.OrderingBlockedOldestUnix,
 		&i.PoisonCount,
 		&i.PoisonOldestUnix,
+		&i.OutcomeUnknownCount,
+		&i.OutcomeUnknownOldestUnix,
 		&i.PublishedRetainedEstimate,
 		&i.PublishedRetainedOldestUnix,
 		&i.OrderingHeadCount,
@@ -889,11 +1201,46 @@ func (q *Queries) ObserveOutbox(ctx context.Context) (ObserveOutboxRow, error) {
 		&i.OrderingHeadsIndexBytes,
 		&i.RedrivesBytes,
 		&i.RedrivesIndexBytes,
+		&i.ReceiptsBytes,
+		&i.ReceiptsIndexBytes,
 	)
 	return i, err
 }
 
-const redriveOutboxEvent = `-- name: RedriveOutboxEvent :execrows
+const reconcileOutboxCommit = `-- name: ReconcileOutboxCommit :one
+SELECT
+    (receipt.event_id IS NOT NULL)::boolean AS receipt_exists,
+    coalesce(receipt.fingerprint_version, 0)::smallint AS fingerprint_version,
+    coalesce(receipt.envelope_fingerprint, '\x'::bytea) AS envelope_fingerprint,
+    (NOT pg_is_in_recovery()
+        AND current_setting('transaction_read_only') = 'off')::boolean AS writer_primary
+FROM (SELECT $1::text AS event_id) AS input
+LEFT JOIN outbox_commit_receipts AS receipt USING (event_id)
+`
+
+type ReconcileOutboxCommitRow struct {
+	ReceiptExists       bool
+	FingerprintVersion  int16
+	EnvelopeFingerprint []byte
+	WriterPrimary       bool
+}
+
+// One writer-pool read distinguishes durable evidence from an authoritative
+// absence. A missing receipt authorizes retry only when this same statement is
+// running on a writable PostgreSQL primary.
+func (q *Queries) ReconcileOutboxCommit(ctx context.Context, eventID string) (ReconcileOutboxCommitRow, error) {
+	row := q.db.QueryRow(ctx, reconcileOutboxCommit, eventID)
+	var i ReconcileOutboxCommitRow
+	err := row.Scan(
+		&i.ReceiptExists,
+		&i.FingerprintVersion,
+		&i.EnvelopeFingerprint,
+		&i.WriterPrimary,
+	)
+	return i, err
+}
+
+const redrivePoisonedOutboxEvent = `-- name: RedrivePoisonedOutboxEvent :execrows
 UPDATE outbox_events
 SET available_at = statement_timestamp(),
     cycle_attempt_count = 0,
@@ -907,15 +1254,47 @@ SET available_at = statement_timestamp(),
 WHERE id = $2
   AND poisoned_at IS NOT NULL
   AND published_at IS NULL
+  AND publication_uncertain IS FALSE
 `
 
-type RedriveOutboxEventParams struct {
+type RedrivePoisonedOutboxEventParams struct {
 	AuditID *string
 	ID      string
 }
 
-func (q *Queries) RedriveOutboxEvent(ctx context.Context, arg RedriveOutboxEventParams) (int64, error) {
-	result, err := q.db.Exec(ctx, redriveOutboxEvent, arg.AuditID, arg.ID)
+func (q *Queries) RedrivePoisonedOutboxEvent(ctx context.Context, arg RedrivePoisonedOutboxEventParams) (int64, error) {
+	result, err := q.db.Exec(ctx, redrivePoisonedOutboxEvent, arg.AuditID, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const redriveUnknownOutboxEvent = `-- name: RedriveUnknownOutboxEvent :execrows
+UPDATE outbox_events
+SET available_at = statement_timestamp(),
+    cycle_attempt_count = 0,
+    lease_token = NULL,
+    lease_expires_at = NULL,
+    poisoned_at = NULL,
+    last_error_class = NULL,
+    redrive_count = redrive_count + 1,
+    last_redrive_id = $1,
+    last_redriven_at = statement_timestamp()
+WHERE id = $2
+  AND published_at IS NULL
+  AND poisoned_at IS NOT NULL
+  AND publication_uncertain IS TRUE
+  AND last_error_class = 'outcome_unknown'
+`
+
+type RedriveUnknownOutboxEventParams struct {
+	AuditID *string
+	ID      string
+}
+
+func (q *Queries) RedriveUnknownOutboxEvent(ctx context.Context, arg RedriveUnknownOutboxEventParams) (int64, error) {
+	result, err := q.db.Exec(ctx, redriveUnknownOutboxEvent, arg.AuditID, arg.ID)
 	if err != nil {
 		return 0, err
 	}
@@ -924,7 +1303,7 @@ func (q *Queries) RedriveOutboxEvent(ctx context.Context, arg RedriveOutboxEvent
 
 const retireOutboxOrderingKeys = `-- name: RetireOutboxOrderingKeys :many
 WITH locked AS MATERIALIZED (
-    SELECT head.ordering_key
+    SELECT head.ordering_key, head.current_sequence
     FROM outbox_ordering_heads AS head
     WHERE head.ordering_key = ANY($1::text[])
     ORDER BY head.ordering_key
@@ -932,12 +1311,7 @@ WITH locked AS MATERIALIZED (
 ), active AS MATERIALIZED (
     SELECT locked.ordering_key
     FROM locked
-    WHERE EXISTS (
-        SELECT 1
-        FROM outbox_events AS event
-        WHERE event.ordering_key = locked.ordering_key
-          AND event.published_at IS NULL
-    )
+    WHERE locked.current_sequence IS NOT NULL
 ), retired AS (
     DELETE FROM outbox_ordering_heads AS head
     USING locked
@@ -960,7 +1334,10 @@ ORDER BY active.ordering_key
 // these keys serializes either before this statement -- and then its unpublished
 // event puts the key in `active`, so the mark stays -- or after it, and then it
 // establishes a fresh mark from its own sequence. Neither can interleave with
-// the check.
+// the check. The locked head's current_sequence is the pending-work authority:
+// after waiting for a concurrent append, PostgreSQL refreshes that locked row
+// to the committed version. A second-table lookup would remain on the
+// statement's older READ COMMITTED snapshot and could miss the appended event.
 //
 // A key with no head is neither locked, refused, nor deleted, which is what
 // makes a repeated or unknown retirement a no-op rather than an error.
@@ -969,9 +1346,6 @@ ORDER BY active.ordering_key
 // one row per key that still owns unpublished events, and no rows on the normal
 // path. `retired` is unreferenced on purpose -- a data-modifying CTE runs to
 // completion whether or not the primary query reads its output.
-//
-// The EXISTS lookup rides outbox_events_ordering_pending_key, which already
-// indexes exactly the unpublished ordered rows it asks about.
 func (q *Queries) RetireOutboxOrderingKeys(ctx context.Context, orderingKeys []string) ([]string, error) {
 	rows, err := q.db.Query(ctx, retireOutboxOrderingKeys, orderingKeys)
 	if err != nil {
@@ -998,12 +1372,15 @@ SET available_at = statement_timestamp()
         + retry.delay_milliseconds * interval '1 millisecond',
     lease_token = NULL,
     lease_expires_at = NULL,
+    publication_uncertain = event.publication_uncertain IS TRUE
+        OR retry.publication_uncertain,
     last_error_class = retry.error_class
 FROM (
     SELECT
         unnest($2::text[]) AS id,
         unnest($3::double precision[]) AS delay_milliseconds,
-        unnest($4::text[]) AS error_class
+        unnest($4::text[]) AS error_class,
+        unnest($5::boolean[]) AS publication_uncertain
 ) AS retry
 WHERE event.id = retry.id
   AND event.lease_token = $1
@@ -1013,10 +1390,11 @@ WHERE event.id = retry.id
 `
 
 type ScheduleOutboxRetryBatchParams struct {
-	LeaseToken        *string
-	Ids               []string
-	DelayMilliseconds []float64
-	ErrorClasses      []string
+	LeaseToken           *string
+	Ids                  []string
+	DelayMilliseconds    []float64
+	ErrorClasses         []string
+	PublicationUncertain []bool
 }
 
 // Each failed event carries its own jittered delay and error class, so one
@@ -1027,6 +1405,7 @@ func (q *Queries) ScheduleOutboxRetryBatch(ctx context.Context, arg ScheduleOutb
 		arg.Ids,
 		arg.DelayMilliseconds,
 		arg.ErrorClasses,
+		arg.PublicationUncertain,
 	)
 	if err != nil {
 		return 0, err

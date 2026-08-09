@@ -7,7 +7,7 @@ TEMPLATE_OWNER="@Dankosik"
 TEMPLATE_API_TITLE="go-service-template-rest"
 
 usage() {
-	echo "usage: CODEOWNER=@user-or-org/team DATABASE=none|postgres OUTBOX=none|postgres GRPC=none|enabled AUTHN=none|oidc-jwt OUTBOUND_HTTP=none|bounded MESSAGING=none|nats-jetstream REFERENCE_EXAMPLE=remove|keep $0 [module-path]"
+	echo "usage: CODEOWNER=@user-or-org/team DATABASE=none|postgres OUTBOX=none|postgres INBOX=none|postgres GRPC=none|enabled AUTHN=none|oidc-jwt OUTBOUND_HTTP=none|bounded MESSAGING=none|nats-jetstream REFERENCE_EXAMPLE=remove|keep $0 [module-path]"
 	echo "module-path is derived from git remote origin when omitted"
 }
 
@@ -182,11 +182,12 @@ strip_profile() {
 write_template_lock() {
 	local database="$1"
 	local outbox="$2"
-	local grpc="$3"
-	local authn="$4"
-	local outbound_http="$5"
-	local messaging="$6"
-	local reference_example="$7"
+	local inbox="$3"
+	local grpc="$4"
+	local authn="$5"
+	local outbound_http="$6"
+	local messaging="$7"
+	local reference_example="$8"
 	local source_revision
 
 	source_revision="$(git rev-parse HEAD 2>/dev/null || true)"
@@ -203,6 +204,7 @@ source = "${TEMPLATE_SOURCE}"
 source_revision = "${source_revision}"
 database = "${database}"
 outbox = "${outbox}"
+inbox = "${inbox}"
 grpc = "${grpc}"
 authn = "${authn}"
 outbound_http = "${outbound_http}"
@@ -288,6 +290,10 @@ This service includes the PostgreSQL transactional outbox and its separately
 deployed bounded relay. Publication is at-least-once and consumers must tolerate
 duplicate event IDs; see \`docs/postgres-transactional-outbox.md\`.
 <!-- profile:outbox-postgres:end -->
+<!-- profile:inbox-postgres:start -->
+This service includes the PostgreSQL idempotent inbox. Keep each claim and its
+feature effect in the same transaction; see \`docs/postgres-idempotent-inbox.md\`.
+<!-- profile:inbox-postgres:end -->
 EOF
 }
 
@@ -319,6 +325,23 @@ none | postgres) ;;
 esac
 if [[ "${outbox}" == "postgres" && "${database}" != "postgres" ]]; then
 	echo "OUTBOX=postgres requires DATABASE=postgres"
+	exit 1
+fi
+
+if [[ "${INBOX+x}" == "x" && -z "${INBOX-}" ]]; then
+	echo "INBOX must be one of: none, postgres"
+	exit 1
+fi
+inbox="${INBOX:-none}"
+case "${inbox}" in
+none | postgres) ;;
+*)
+	echo "INBOX must be one of: none, postgres"
+	exit 1
+	;;
+esac
+if [[ "${inbox}" == "postgres" && "${database}" != "postgres" ]]; then
+	echo "INBOX=postgres requires DATABASE=postgres"
 	exit 1
 fi
 
@@ -442,6 +465,7 @@ if [[ -f template.lock ]]; then
 	for expected in \
 		"database = \"${database}\"" \
 		"outbox = \"${outbox}\"" \
+		"inbox = \"${inbox}\"" \
 		"grpc = \"${grpc}\"" \
 		"authn = \"${authn}\"" \
 		"outbound_http = \"${outbound_http}\"" \
@@ -456,6 +480,7 @@ if [[ -f template.lock ]]; then
 	echo "  module: ${new_module}"
 	echo "  database: ${database}"
 	echo "  outbox: ${outbox}"
+	echo "  inbox: ${inbox}"
 	echo "  gRPC: ${grpc}"
 	echo "  authentication: ${authn}"
 	echo "  outbound HTTP: ${outbound_http}"
@@ -516,21 +541,43 @@ if [[ "${source_checkout}" != true ]]; then
 	if [[ "${outbox}" == "none" ]]; then
 		rm -rf -- cmd/outbox-relay internal/infra/postgresoutbox
 		rm -f -- \
+			examples/reference-service/postgres_outbox_reconciliation_integration_test.go \
 			internal/config/outbox_config_test.go \
+			internal/infra/natsjs/outbox_publisher.go \
+			internal/infra/natsjs/outbox_publisher_test.go \
 			internal/infra/postgres/queries/postgres_outbox.sql \
+			internal/infra/postgres/sqlcgen/postgres_outbox.sql.go \
 			test/postgres_outbox_*_test.go \
 			docs/postgres-transactional-outbox.md
 		remove_outbox_migrations
-		if ! find internal/infra/postgres/queries -type f -name '*.sql' -print -quit 2>/dev/null | grep -q .; then
-			rm -rf -- internal/infra/postgres/queries internal/infra/postgres/sqlcgen
-		else
-			make sqlc-generate
-		fi
-		rmdir migrations 2>/dev/null || true
 		strip_profile outbox-postgres remove
 	else
 		strip_profile outbox-postgres keep
 	fi
+
+	if [[ "${inbox}" == "none" ]]; then
+		rm -rf -- internal/infra/postgresinbox
+		rm -f -- \
+			docs/postgres-idempotent-inbox.md \
+			examples/reference-service/postgres_inbox_integration_test.go \
+			internal/infra/postgres/queries/postgres_inbox.sql \
+			internal/infra/postgres/sqlcgen/postgres_inbox.sql.go \
+			migrations/000002_postgres_inbox.sql \
+			test/postgres_inbox_integration_test.go \
+			test/postgres_inbox_natsjs_integration_test.go
+		strip_profile inbox-postgres remove
+	else
+		strip_profile inbox-postgres keep
+	fi
+
+	# Both persistence profiles derive from the same SQLC package. Resolve both
+	# source sets before one regeneration so either sibling can remain alone.
+	if ! find internal/infra/postgres/queries -type f -name '*.sql' -print -quit 2>/dev/null | grep -q .; then
+		rm -rf -- internal/infra/postgres/queries internal/infra/postgres/sqlcgen
+	else
+		make sqlc-generate
+	fi
+	rmdir migrations 2>/dev/null || true
 
 	if [[ "${database}" == "none" ]]; then
 		# The migration runner and directory belong to the PostgreSQL profile.
@@ -592,12 +639,16 @@ if [[ "${source_checkout}" != true ]]; then
 	if [[ "${messaging}" == "none" ]]; then
 		rm -rf -- cmd/worker internal/infra/natsjs
 		rm -f -- \
+			cmd/outbox-relay/internal/bootstrap/natsjs_publisher.go \
+			cmd/outbox-relay/internal/bootstrap/natsjs_publisher_test.go \
 			cmd/service/internal/bootstrap/startup_messaging.go \
 			cmd/service/internal/bootstrap/startup_messaging_test.go \
 			docs/durable-messaging.md \
 			internal/config/messaging.go \
 			internal/config/messaging_test.go \
+			internal/config/configtest/messaging.go \
 			test/nats_messaging_integration_test.go \
+			test/postgres_inbox_natsjs_integration_test.go \
 			test/postgres_outbox_natsjs_integration_test.go
 		strip_profile messaging-nats-jetstream remove
 		go mod tidy
@@ -614,6 +665,7 @@ if [[ "${source_checkout}" != true ]]; then
 		rm -f -- \
 			buf.yaml \
 			buf.gen.yaml \
+			examples/reference-service/grpc_failure_mapping_contract_test.go \
 			cmd/service/internal/bootstrap/authn_readiness_test.go \
 			cmd/service/internal/bootstrap/startup_grpc.go \
 			cmd/service/internal/bootstrap/startup_grpc_test.go \
@@ -621,7 +673,7 @@ if [[ "${source_checkout}" != true ]]; then
 			internal/config/grpc_config_test.go \
 			internal/infra/oidcjwt/grpc.go \
 			internal/infra/oidcjwt/grpc_test.go \
-			internal/infra/oidcjwt/grpc_tls_test.go \
+			internal/infra/oidcjwt/grpc_tls_contract_test.go \
 			test/grpc_process_integration_test.go \
 			scripts/proto.sh \
 			scripts/run-buf.sh \
@@ -645,11 +697,10 @@ if [[ "${source_checkout}" != true ]]; then
 		strip_profile grpc-reference-benchmark remove
 	fi
 
-	# internal/config/configtest exists for the parity tests that hold a runtime
-	# owner and internal/config to one answer. Both of those owners are
-	# removable, so with neither retained the package would ship with no importer
-	# at all.
-	if [[ "${grpc}" == "none" && "${authn}" == "none" ]]; then
+	# internal/config/configtest exists for parity tests that hold runtime owners
+	# and internal/config to one answer. All current importers are removable, so
+	# the package leaves only when gRPC, authn, and messaging all leave.
+	if [[ "${grpc}" == "none" && "${authn}" == "none" && "${messaging}" == "none" ]]; then
 		rm -rf -- internal/config/configtest
 	fi
 
@@ -685,7 +736,7 @@ if [[ "${source_checkout}" != true ]]; then
 		go generate ./internal/openapi
 	fi
 
-	write_template_lock "${database}" "${outbox}" "${grpc}" "${authn}" "${outbound_http}" "${messaging}" "${reference_example}"
+	write_template_lock "${database}" "${outbox}" "${inbox}" "${grpc}" "${authn}" "${outbound_http}" "${messaging}" "${reference_example}"
 
 fi
 
@@ -701,6 +752,7 @@ echo "template initialization complete"
 echo "  module: ${new_module}"
 echo "  database: ${database}"
 echo "  outbox: ${outbox}"
+echo "  inbox: ${inbox}"
 echo "  gRPC: ${grpc}"
 echo "  authentication: ${authn}"
 echo "  outbound HTTP: ${outbound_http}"

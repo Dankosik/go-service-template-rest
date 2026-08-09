@@ -10,6 +10,9 @@ valid_profiles="${valid_profiles}, messaging"
 # profile:outbox-postgres:start
 valid_profiles="${valid_profiles}, outbox"
 # profile:outbox-postgres:end
+# profile:inbox-postgres:start
+valid_profiles="${valid_profiles}, inbox"
+# profile:inbox-postgres:end
 
 case "${TEMPLATE_INIT_PROFILE}" in
 	all | minimal | postgres | grpc | authn) ;;
@@ -19,6 +22,9 @@ case "${TEMPLATE_INIT_PROFILE}" in
 	# profile:outbox-postgres:start
 	outbox) ;;
 	# profile:outbox-postgres:end
+	# profile:inbox-postgres:start
+	inbox) ;;
+	# profile:inbox-postgres:end
 	*)
 		echo "TEMPLATE_INIT_PROFILE must be one of: ${valid_profiles}" >&2
 		exit 2
@@ -101,6 +107,7 @@ new_fixture() {
 		"${root}/env" \
 		"${root}/internal/config" \
 		"${root}/internal/example" \
+		"${root}/internal/failure" \
 		"${root}/internal/health" \
 		"${root}/internal/infra/example" \
 		"${root}/internal/infra/http" \
@@ -136,8 +143,9 @@ new_fixture() {
 	# "Repository not found".
 	printf 'package httpx\n' \
 		>"${root}/internal/infra/http/http.go"
-	printf 'package problem\n\ntype Mapped struct{ Code string }\n\ntype Mapper func(error) (Mapped, bool)\n' \
-		>"${root}/internal/problem/problem.go"
+	printf 'package failure\n\ntype Mapper func(error) (struct{}, bool)\n' \
+		>"${root}/internal/failure/failure.go"
+	printf 'package problem\n' >"${root}/internal/problem/problem.go"
 	cp \
 		"${ROOT_DIR}/scripts/profiles/database-none/startup_dependencies.go.tmpl" \
 		"${root}/scripts/profiles/database-none/startup_dependencies.go.tmpl"
@@ -326,6 +334,18 @@ expect_unchanged_failure "${invalid_outbox_database}" \
 	env CODEOWNER=@acme/platform DATABASE=none OUTBOX=postgres bash "${ROOT_DIR}/scripts/init-module.sh"
 # profile:outbox-postgres:end
 
+# profile:inbox-postgres:start
+malformed_inbox="$(new_fixture malformed-inbox git@github.com:acme/malformed-inbox.git)"
+expect_unchanged_failure "${malformed_inbox}" \
+	env CODEOWNER=@acme/platform INBOX=custom bash "${ROOT_DIR}/scripts/init-module.sh"
+empty_inbox="$(new_fixture empty-inbox git@github.com:acme/empty-inbox.git)"
+expect_unchanged_failure "${empty_inbox}" \
+	env CODEOWNER=@acme/platform INBOX= bash "${ROOT_DIR}/scripts/init-module.sh"
+invalid_inbox_database="$(new_fixture invalid-inbox-database git@github.com:acme/invalid-inbox-database.git)"
+expect_unchanged_failure "${invalid_inbox_database}" \
+	env CODEOWNER=@acme/platform DATABASE=none INBOX=postgres bash "${ROOT_DIR}/scripts/init-module.sh"
+# profile:inbox-postgres:end
+
 minimal_checkout="$(copy_template_checkout full-minimal git@github.com:acme/feature-proof.git)"
 minimal_source_revision="$(git -C "${minimal_checkout}" rev-parse HEAD)"
 minimal_workflow_before="$(workflow_snapshot "${minimal_checkout}")"
@@ -383,6 +403,7 @@ minimal_workflow_before="$(workflow_snapshot "${minimal_checkout}")"
 	# profile:messaging-nats-jetstream:end
 )
 assert "agent workflow changed during minimal initialization" same_text "${minimal_workflow_before}" "$(workflow_snapshot "${minimal_checkout}")"
+assert "minimal initialization removed transport-neutral failure policy" path_present "${minimal_checkout}/internal/failure"
 # This profile carries no PostgreSQL configuration at all, so an APP__POSTGRES__*
 # variable is an unknown key rather than a runtime feature check. That is the
 # stronger rejection: it names every key it refused and it happens before any
@@ -399,13 +420,26 @@ grep -Fq 'messaging.urls' "${TEMP_ROOT}/minimal-messaging.log"
 for removed in \
 	cmd/outbox-relay \
 	docs/postgres-transactional-outbox.md \
+	examples/reference-service/postgres_outbox_reconciliation_integration_test.go \
 	internal/config/outbox_config_test.go \
+	internal/infra/natsjs/outbox_publisher.go \
+	internal/infra/natsjs/outbox_publisher_test.go \
 	internal/infra/postgresoutbox \
 	test/postgres_outbox_integration_test.go \
 	test/postgres_outbox_natsjs_integration_test.go; do
 	assert "${removed} must not survive OUTBOX=none initialization" path_absent "${minimal_checkout}/${removed}"
 done
 # profile:outbox-postgres:end
+# profile:inbox-postgres:start
+for removed in \
+	docs/postgres-idempotent-inbox.md \
+	examples/reference-service/postgres_inbox_integration_test.go \
+	internal/infra/postgresinbox \
+	test/postgres_inbox_integration_test.go \
+	test/postgres_inbox_natsjs_integration_test.go; do
+	assert "${removed} must not survive INBOX=none initialization" path_absent "${minimal_checkout}/${removed}"
+done
+# profile:inbox-postgres:end
 for removed in \
 	buf.yaml \
 	buf.gen.yaml \
@@ -445,11 +479,14 @@ done
 for removed in \
 	internal/infra/natsjs \
 	cmd/worker \
+	cmd/outbox-relay/internal/bootstrap/natsjs_publisher.go \
+	cmd/outbox-relay/internal/bootstrap/natsjs_publisher_test.go \
 	cmd/service/internal/bootstrap/startup_messaging.go \
 	cmd/service/internal/bootstrap/startup_messaging_test.go \
 	docs/durable-messaging.md \
 	internal/config/messaging.go \
 	internal/config/messaging_test.go \
+	internal/config/configtest/messaging.go \
 	test/nats_messaging_integration_test.go; do
 	assert "${removed} must not survive MESSAGING=none initialization" path_absent "${minimal_checkout}/${removed}"
 done
@@ -457,6 +494,9 @@ done
 # profile:outbox-postgres:start
 grep -Fq 'outbox = "none"' "${minimal_checkout}/template.lock"
 # profile:outbox-postgres:end
+# profile:inbox-postgres:start
+grep -Fq 'inbox = "none"' "${minimal_checkout}/template.lock"
+# profile:inbox-postgres:end
 for benchmark_surface in \
 	Makefile \
 	scripts/dev/benchmark.sh \
@@ -486,6 +526,17 @@ assert "explicit OUTBOX=none changed the default-none checkout" \
 expect_unchanged_failure "${minimal_checkout}" \
 	env CODEOWNER=@acme/platform DATABASE=postgres OUTBOX=postgres bash "${ROOT_DIR}/scripts/init-module.sh"
 # profile:outbox-postgres:end
+# profile:inbox-postgres:start
+minimal_inbox_snapshot="$(snapshot "${minimal_checkout}")"
+(
+	cd "${minimal_checkout}"
+	CODEOWNER=@acme/platform DATABASE=none INBOX=none bash "${ROOT_DIR}/scripts/init-module.sh"
+)
+assert "explicit INBOX=none changed the default-none checkout" \
+	same_text "${minimal_inbox_snapshot}" "$(snapshot "${minimal_checkout}")"
+expect_unchanged_failure "${minimal_checkout}" \
+	env CODEOWNER=@acme/platform DATABASE=postgres INBOX=postgres bash "${ROOT_DIR}/scripts/init-module.sh"
+# profile:inbox-postgres:end
 grep -Fqx "source_revision = \"${minimal_source_revision}\"" "${minimal_checkout}/template.lock"
 # profile:messaging-nats-jetstream:start
 expect_unchanged_failure "${minimal_checkout}" \
@@ -497,6 +548,17 @@ if make -C "${minimal_checkout}" help | grep -Fq 'outbox'; then
 	exit 1
 fi
 # profile:outbox-postgres:end
+
+# profile:inbox-postgres:start
+assert "INBOX=none retained inbox runtime, documentation, test, SQL, or profile wiring" grep_absent -R -E \
+	'postgresinbox|postgres_inbox|postgres-idempotent-inbox|profile:inbox-postgres' \
+	"${minimal_checkout}/Makefile" \
+	"${minimal_checkout}/README.md" \
+	"${minimal_checkout}/.golangci.yml" \
+	"${minimal_checkout}/docs" \
+	"${minimal_checkout}/internal" \
+	"${minimal_checkout}/scripts/ci"
+# profile:inbox-postgres:end
 # A generated service owns no generator, so the initialization contract check
 # reports that and succeeds instead of failing the first push of every service.
 #
@@ -716,6 +778,8 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "outb
 		test/postgres_outbox_natsjs_integration_test.go; do
 		assert "PostgreSQL OUTBOX=none retained ${removed}" path_absent "${outbox_none_checkout}/${removed}"
 	done
+	assert "outbox-only fixture retained inbox SQLC output" path_absent \
+		"${outbox_none_checkout}/internal/infra/postgres/sqlcgen/postgres_inbox.sql.go"
 	# Every outbox migration, not a named list: one left behind runs against
 	# tables this profile never creates, and only the generated service's own
 	# migration run would notice.
@@ -723,6 +787,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "outb
 		glob_absent "${outbox_none_checkout}/migrations/*_postgres_outbox*.sql"
 	grep -Fqx 'database = "postgres"' "${outbox_none_checkout}/template.lock"
 	grep -Fqx 'outbox = "none"' "${outbox_none_checkout}/template.lock"
+	grep -Fqx 'inbox = "none"' "${outbox_none_checkout}/template.lock"
 	outbox_none_snapshot="$(snapshot "${outbox_none_checkout}")"
 	(
 		cd "${outbox_none_checkout}"
@@ -761,6 +826,40 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "outb
 		test/postgres_outbox_integration_test.go; do
 		assert "OUTBOX=postgres removed ${retained}" path_present "${outbox_checkout}/${retained}"
 	done
+	assert "outbox-only fixture retained inbox SQLC output" path_absent \
+		"${outbox_checkout}/internal/infra/postgres/sqlcgen/postgres_inbox.sql.go"
+	assert "outbox-only fixture retained inbox runtime" path_absent \
+		"${outbox_checkout}/internal/infra/postgresinbox"
+
+	combined_checkout="$(copy_template_checkout combined-outbox-messaging git@github.com:acme/combined-service.git)"
+	(
+		cd "${combined_checkout}"
+		CODEOWNER=@acme/platform DATABASE=postgres OUTBOX=postgres MESSAGING=nats-jetstream \
+			bash ./scripts/init-module.sh
+		go test -vet=off ./cmd/outbox-relay/... ./internal/infra/natsjs ./internal/infra/postgresoutbox
+		go build ./cmd/outbox-relay
+		go list -deps ./cmd/outbox-relay | grep -Fx 'github.com/acme/combined-service/internal/infra/natsjs'
+		go list -deps ./cmd/outbox-relay | grep -Fx 'github.com/acme/combined-service/internal/infra/postgresoutbox'
+		make sqlc-check mod-tidy-check project-structure-check
+	)
+	for retained in \
+		cmd/outbox-relay/internal/bootstrap/natsjs_publisher.go \
+		internal/config/configtest/messaging.go \
+		internal/infra/natsjs/outbox_publisher.go \
+		test/postgres_outbox_natsjs_integration_test.go; do
+		assert "combined outbox+messaging removed ${retained}" path_present "${combined_checkout}/${retained}"
+	done
+	assert "combined outbox+messaging retained the unselected inbox proof" path_absent \
+		"${combined_checkout}/test/postgres_inbox_natsjs_integration_test.go"
+	combined_snapshot="$(snapshot "${combined_checkout}")"
+	(
+		cd "${combined_checkout}"
+		CODEOWNER=@acme/platform DATABASE=postgres OUTBOX=postgres MESSAGING=nats-jetstream \
+			bash "${ROOT_DIR}/scripts/init-module.sh"
+	)
+	assert "repeated combined initialization changed the checkout" \
+		same_text "${combined_snapshot}" "$(snapshot "${combined_checkout}")"
+
 	# Compared against the template's own outbox migrations rather than a named
 	# list, so a migration added later is covered the day it lands.
 	assert "OUTBOX=postgres changed the outbox migration set" same_text \
@@ -788,6 +887,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "outb
 	)
 	grep -Fqx 'database = "postgres"' "${outbox_checkout}/template.lock"
 	grep -Fqx 'outbox = "postgres"' "${outbox_checkout}/template.lock"
+	grep -Fqx 'inbox = "none"' "${outbox_checkout}/template.lock"
 	grep -Fqx "source_revision = \"${outbox_revision}\"" "${outbox_checkout}/template.lock"
 	grep -Fq 'APP__OUTBOX__ENABLED=true' "${outbox_checkout}/env/.env.example"
 	grep -Fq 'run-outbox-relay' "${outbox_checkout}/Makefile"
@@ -823,10 +923,6 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "outb
 			bash ./scripts/init-module.sh
 		go test -vet=off ./...
 		go build ./cmd/service ./cmd/migrate ./cmd/worker ./cmd/outbox-relay
-		if go list -deps ./cmd/outbox-relay | grep -Fq '/internal/infra/natsjs'; then
-			echo "outbox relay unexpectedly owns the selected messaging adapter"
-			exit 1
-		fi
 	)
 	assert "combined OUTBOX/MESSAGING profile removed broker conformance proof" \
 		file_present "${outbox_messaging_checkout}/test/postgres_outbox_natsjs_integration_test.go"
@@ -843,6 +939,114 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "outb
 	# profile:messaging-nats-jetstream:end
 fi
 # profile:outbox-postgres:end
+
+# profile:inbox-postgres:start
+if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "inbox" ]]; then
+	inbox_checkout="$(copy_template_checkout full-inbox git@github.com:acme/inbox-service.git)"
+	inbox_revision="$(git -C "${inbox_checkout}" rev-parse HEAD)"
+	(
+		cd "${inbox_checkout}"
+		CODEOWNER=@acme/platform DATABASE=postgres INBOX=postgres bash ./scripts/init-module.sh
+		go test -vet=off ./internal/infra/postgresinbox
+		go test -vet=off -tags=integration ./test -run '^$'
+		go build ./cmd/service ./cmd/migrate
+		make sqlc-check migration-check mod-tidy-check project-structure-check
+		mkdir -p "${TEMP_ROOT}/inbox-lint-cache"
+		GOLANGCI_LINT_CACHE="${TEMP_ROOT}/inbox-lint-cache" make lint
+	)
+	for retained in \
+		docs/postgres-idempotent-inbox.md \
+		internal/infra/postgres/queries/postgres_inbox.sql \
+		internal/infra/postgres/sqlcgen/postgres_inbox.sql.go \
+		internal/infra/postgresinbox \
+		migrations/000002_postgres_inbox.sql \
+		test/postgres_inbox_integration_test.go; do
+		assert "INBOX=postgres removed ${retained}" path_present "${inbox_checkout}/${retained}"
+	done
+	for removed in \
+		cmd/outbox-relay \
+		internal/infra/postgresoutbox \
+		internal/infra/postgres/queries/postgres_outbox.sql \
+		internal/infra/postgres/sqlcgen/postgres_outbox.sql.go \
+		test/postgres_inbox_natsjs_integration_test.go; do
+		assert "inbox-only fixture retained ${removed}" path_absent "${inbox_checkout}/${removed}"
+	done
+	grep -Fqx 'database = "postgres"' "${inbox_checkout}/template.lock"
+	grep -Fqx 'outbox = "none"' "${inbox_checkout}/template.lock"
+	grep -Fqx 'inbox = "postgres"' "${inbox_checkout}/template.lock"
+	grep -Fqx 'messaging = "none"' "${inbox_checkout}/template.lock"
+	grep -Fqx "source_revision = \"${inbox_revision}\"" "${inbox_checkout}/template.lock"
+	inbox_marker='profile:inbox''-postgres:'
+	assert "selected inbox checkout retained unresolved profile markers" \
+		grep_absent -R -Fq "${inbox_marker}" \
+		"${inbox_checkout}/.golangci.yml" \
+		"${inbox_checkout}/Makefile" \
+		"${inbox_checkout}/README.md" \
+		"${inbox_checkout}/docs" \
+		"${inbox_checkout}/internal" \
+		"${inbox_checkout}/scripts/ci" \
+		"${inbox_checkout}/test"
+	inbox_snapshot="$(snapshot "${inbox_checkout}")"
+	(
+		cd "${inbox_checkout}"
+		CODEOWNER=@acme/platform DATABASE=postgres INBOX=postgres bash ./scripts/init-module.sh
+	)
+	assert "repeated INBOX=postgres initialization changed the checkout" \
+		same_text "${inbox_snapshot}" "$(snapshot "${inbox_checkout}")"
+	expect_unchanged_failure "${inbox_checkout}" \
+		env CODEOWNER=@acme/platform DATABASE=postgres INBOX=none bash "${ROOT_DIR}/scripts/init-module.sh"
+
+	inbox_messaging_checkout="$(copy_template_checkout inbox-messaging git@github.com:acme/inbox-messaging-service.git)"
+	(
+		cd "${inbox_messaging_checkout}"
+		CODEOWNER=@acme/platform DATABASE=postgres INBOX=postgres MESSAGING=nats-jetstream \
+			bash ./scripts/init-module.sh
+		go test -vet=off ./internal/infra/postgresinbox ./internal/infra/natsjs
+		go test -vet=off -tags=integration ./test -run '^$'
+		go build ./cmd/service ./cmd/migrate ./cmd/worker
+		make sqlc-check mod-tidy-check project-structure-check
+	)
+	assert "combined inbox+messaging removed joined proof" path_present \
+		"${inbox_messaging_checkout}/test/postgres_inbox_natsjs_integration_test.go"
+	assert "inbox+messaging retained outbox runtime" path_absent \
+		"${inbox_messaging_checkout}/internal/infra/postgresoutbox"
+	inbox_messaging_snapshot="$(snapshot "${inbox_messaging_checkout}")"
+	(
+		cd "${inbox_messaging_checkout}"
+		CODEOWNER=@acme/platform DATABASE=postgres INBOX=postgres MESSAGING=nats-jetstream \
+			bash ./scripts/init-module.sh
+	)
+	assert "repeated inbox+messaging initialization changed the checkout" \
+		same_text "${inbox_messaging_snapshot}" "$(snapshot "${inbox_messaging_checkout}")"
+
+	inbox_combined_checkout="$(copy_template_checkout inbox-outbox-messaging git@github.com:acme/inbox-outbox-service.git)"
+	(
+		cd "${inbox_combined_checkout}"
+		CODEOWNER=@acme/platform DATABASE=postgres OUTBOX=postgres INBOX=postgres MESSAGING=nats-jetstream \
+			bash ./scripts/init-module.sh
+		go test -vet=off ./internal/infra/postgresinbox ./internal/infra/postgresoutbox ./internal/infra/natsjs
+		go test -vet=off -tags=integration ./test -run '^$'
+		go build ./cmd/service ./cmd/migrate ./cmd/worker ./cmd/outbox-relay
+		make sqlc-check mod-tidy-check project-structure-check
+	)
+	for retained in \
+		internal/infra/postgres/sqlcgen/postgres_inbox.sql.go \
+		internal/infra/postgres/sqlcgen/postgres_outbox.sql.go \
+		test/postgres_inbox_natsjs_integration_test.go \
+		test/postgres_outbox_natsjs_integration_test.go; do
+		assert "combined inbox+outbox+messaging removed ${retained}" path_present \
+			"${inbox_combined_checkout}/${retained}"
+	done
+	inbox_combined_snapshot="$(snapshot "${inbox_combined_checkout}")"
+	(
+		cd "${inbox_combined_checkout}"
+		CODEOWNER=@acme/platform DATABASE=postgres OUTBOX=postgres INBOX=postgres MESSAGING=nats-jetstream \
+			bash ./scripts/init-module.sh
+	)
+	assert "repeated inbox+outbox+messaging initialization changed the checkout" \
+		same_text "${inbox_combined_snapshot}" "$(snapshot "${inbox_combined_checkout}")"
+fi
+# profile:inbox-postgres:end
 
 if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "postgres" ]]; then
 	postgres_checkout="$(copy_template_checkout full-postgres git@github.com:acme/postgres-service.git)"
@@ -942,6 +1146,8 @@ assert "gRPC enabled initialization removed protobuf workflow" file_present "${g
 assert "gRPC enabled initialization removed bootstrap wiring" file_present "${grpc_checkout}/cmd/service/internal/bootstrap/startup_grpc.go"
 assert "gRPC enabled initialization removed guide" file_present "${grpc_checkout}/docs/grpc.md"
 assert "gRPC enabled initialization removed reference" path_present "${grpc_checkout}/examples/grpc-reference-service"
+assert "gRPC enabled initialization removed transport-neutral failure policy" path_present "${grpc_checkout}/internal/failure"
+assert "gRPC enabled initialization removed composed failure contract" file_present "${grpc_checkout}/examples/reference-service/grpc_failure_mapping_contract_test.go"
 assert "gRPC reference profile removed benchmark lifecycle proof" file_present "${grpc_checkout}/scripts/dev/benchmark-grpc-check.sh"
 assert "gRPC reference profile removed k6 scenario" file_present "${grpc_checkout}/test/performance/grpc/all-cardinalities.js"
 grep -Fq 'bench-grpc-smoke' "${grpc_checkout}/Makefile"
@@ -996,6 +1202,22 @@ grpc_default_snapshot="$(snapshot "${grpc_default_checkout}")"
 )
 assert "repeated default gRPC initialization changed the checkout" \
 	same_text "${grpc_default_snapshot}" "$(snapshot "${grpc_default_checkout}")"
+
+grpc_http_checkout="$(copy_template_checkout grpc-http-reference git@github.com:acme/grpc-http-reference.git)"
+(
+	cd "${grpc_http_checkout}"
+	CODEOWNER=@acme/platform DATABASE=none GRPC=none REFERENCE_EXAMPLE=keep \
+		bash ./scripts/init-module.sh
+	go test ./...
+	go build ./cmd/service
+)
+assert "GRPC=none removed the retained HTTP reference" path_present "${grpc_http_checkout}/examples/reference-service"
+assert "GRPC=none removed transport-neutral failure policy" path_present "${grpc_http_checkout}/internal/failure"
+assert "GRPC=none removed HTTP already_exists proof" file_present "${grpc_http_checkout}/examples/reference-service/internal/article/errors_test.go"
+assert "GRPC=none retained composed gRPC failure proof" path_absent "${grpc_http_checkout}/examples/reference-service/grpc_failure_mapping_contract_test.go"
+assert "GRPC=none retained gRPC reference" path_absent "${grpc_http_checkout}/examples/grpc-reference-service"
+assert "GRPC=none retained server adapter" path_absent "${grpc_http_checkout}/internal/infra/grpc"
+assert "GRPC=none retained client adapter" path_absent "${grpc_http_checkout}/internal/infra/grpcclient"
 fi
 
 if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "authn" ]]; then
@@ -1060,6 +1282,10 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "auth
 			internal/infra/oidcjwt; do
 			assert "${fixture_name} retained ${removed}" path_absent "${checkout}/${removed}"
 		done
+		assert "${fixture_name} retained the old OIDC gRPC TLS proof path" \
+			path_absent "${checkout}/internal/infra/oidcjwt/grpc_tls_test.go"
+		assert "${fixture_name} retained the OIDC gRPC TLS contract proof" \
+			path_absent "${checkout}/internal/infra/oidcjwt/grpc_tls_contract_test.go"
 		assert "${fixture_name} retained bearer security" \
 			grep_absent -Fq 'bearerAuth' "${checkout}/api/openapi/service.yaml"
 		assert "${fixture_name} retained authentication environment" \
@@ -1128,6 +1354,10 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "auth
 		path_absent "${authn_http_checkout}/internal/infra/oidcjwt/grpc.go"
 	assert "GRPC=none retained the OIDC gRPC proof" \
 		path_absent "${authn_http_checkout}/internal/infra/oidcjwt/grpc_test.go"
+	assert "GRPC=none retained the old OIDC gRPC TLS proof path" \
+		path_absent "${authn_http_checkout}/internal/infra/oidcjwt/grpc_tls_test.go"
+	assert "GRPC=none retained the OIDC gRPC TLS contract proof" \
+		path_absent "${authn_http_checkout}/internal/infra/oidcjwt/grpc_tls_contract_test.go"
 	assert "AUTHN=oidc-jwt retained unresolved profile markers" \
 		grep_absent -R -Fq 'profile:authn-oidc-jwt:' \
 		"${authn_http_checkout}/README.md" \
@@ -1168,6 +1398,10 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "auth
 		path_present "${authn_http_bounded_checkout}/internal/infra/httpclient"
 	assert "AUTHN=oidc-jwt HTTP bounded profile retained the gRPC adapter" \
 		path_absent "${authn_http_bounded_checkout}/internal/infra/oidcjwt/grpc.go"
+	assert "AUTHN=oidc-jwt HTTP bounded profile retained the old gRPC TLS proof path" \
+		path_absent "${authn_http_bounded_checkout}/internal/infra/oidcjwt/grpc_tls_test.go"
+	assert "AUTHN=oidc-jwt HTTP bounded profile retained the gRPC TLS contract proof" \
+		path_absent "${authn_http_bounded_checkout}/internal/infra/oidcjwt/grpc_tls_contract_test.go"
 	grep -Fq 'authn = "oidc-jwt"' "${authn_http_bounded_checkout}/template.lock"
 	grep -Fq 'outbound_http = "bounded"' "${authn_http_bounded_checkout}/template.lock"
 	authn_http_bounded_snapshot="$(snapshot "${authn_http_bounded_checkout}")"
@@ -1192,6 +1426,10 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "auth
 		file_present "${authn_grpc_checkout}/internal/infra/oidcjwt/grpc.go"
 	assert "AUTHN=oidc-jwt with GRPC=enabled removed gRPC parity proof" \
 		file_present "${authn_grpc_checkout}/internal/infra/oidcjwt/grpc_test.go"
+	assert "AUTHN=oidc-jwt with GRPC=enabled removed the gRPC TLS contract proof" \
+		file_present "${authn_grpc_checkout}/internal/infra/oidcjwt/grpc_tls_contract_test.go"
+	assert "AUTHN=oidc-jwt with GRPC=enabled retained the old gRPC TLS proof path" \
+		path_absent "${authn_grpc_checkout}/internal/infra/oidcjwt/grpc_tls_test.go"
 	grep -Fq 'authn = "oidc-jwt"' "${authn_grpc_checkout}/template.lock"
 	grep -Fq 'grpc = "enabled"' "${authn_grpc_checkout}/template.lock"
 	authn_grpc_snapshot="$(snapshot "${authn_grpc_checkout}")"
@@ -1216,6 +1454,10 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "auth
 		path_present "${authn_grpc_bounded_checkout}/internal/infra/httpclient"
 	assert "AUTHN=oidc-jwt gRPC bounded profile removed gRPC adapter" \
 		file_present "${authn_grpc_bounded_checkout}/internal/infra/oidcjwt/grpc.go"
+	assert "AUTHN=oidc-jwt gRPC bounded profile removed the gRPC TLS contract proof" \
+		file_present "${authn_grpc_bounded_checkout}/internal/infra/oidcjwt/grpc_tls_contract_test.go"
+	assert "AUTHN=oidc-jwt gRPC bounded profile retained the old gRPC TLS proof path" \
+		path_absent "${authn_grpc_bounded_checkout}/internal/infra/oidcjwt/grpc_tls_test.go"
 	grep -Fq 'authn = "oidc-jwt"' "${authn_grpc_bounded_checkout}/template.lock"
 	grep -Fq 'grpc = "enabled"' "${authn_grpc_bounded_checkout}/template.lock"
 	grep -Fq 'outbound_http = "bounded"' "${authn_grpc_bounded_checkout}/template.lock"

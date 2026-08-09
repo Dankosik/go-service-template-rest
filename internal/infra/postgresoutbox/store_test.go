@@ -26,10 +26,10 @@ func TestStoreRejectsInvalidUseBeforeDatabaseAccess(t *testing.T) {
 	if err := store.Append(t.Context(), nil, outboxEventForUnit()); !errors.Is(err, ErrConfig) {
 		t.Fatalf("Append(nil tx) error = %v", err)
 	}
-	if _, err := store.Claim(t.Context(), 0, 1); !errors.Is(err, ErrConfig) {
+	if _, err := store.Claim(t.Context(), 0, 1, 1); !errors.Is(err, ErrConfig) {
 		t.Fatalf("Claim(0 lease) error = %v", err)
 	}
-	if _, err := store.Claim(t.Context(), time.Second, 0); !errors.Is(err, ErrConfig) {
+	if _, err := store.Claim(t.Context(), time.Second, 0, 1); !errors.Is(err, ErrConfig) {
 		t.Fatalf("Claim(0 batch) error = %v", err)
 	}
 	if err := store.MarkUnorderedPublished(t.Context(), "lease", ""); !errors.Is(err, ErrConfig) {
@@ -156,10 +156,20 @@ func TestZeroValueStoreRejectsEveryExportedMethod(t *testing.T) {
 		"Append": func(s *Store) error {
 			return s.Append(t.Context(), &transactionStub{}, outboxEventForUnit())
 		},
-		"Claim":   func(s *Store) error { _, err := s.Claim(t.Context(), time.Second, 1); return err },
-		"Get":     func(s *Store) error { _, err := s.Get(t.Context(), "event"); return err },
-		"Observe": func(s *Store) error { _, err := s.Observe(t.Context()); return err },
-		"Redrive": func(s *Store) error { return s.Redrive(t.Context(), "event", "audit") },
+		"Claim":           func(s *Store) error { _, err := s.Claim(t.Context(), time.Second, 1, 1); return err },
+		"Get":             func(s *Store) error { _, err := s.Get(t.Context(), "event"); return err },
+		"Observe":         func(s *Store) error { _, err := s.Observe(t.Context()); return err },
+		"Redrive":         func(s *Store) error { return s.Redrive(t.Context(), "event", "audit") },
+		"RedriveUnknown":  func(s *Store) error { return s.RedriveUnknown(t.Context(), "event", "audit") },
+		"ConfirmAccepted": func(s *Store) error { return s.ConfirmAccepted(t.Context(), "event", "audit") },
+		"ClassifyLegacyUncertainty": func(s *Store) error {
+			_, err := s.ClassifyLegacyUncertainty(t.Context(), 3, 10)
+			return err
+		},
+		"ReconcileCommit": func(s *Store) error {
+			_, err := s.ReconcileCommit(t.Context(), outboxEventForUnit())
+			return err
+		},
 		"MarkUnorderedPublished": func(s *Store) error {
 			return s.MarkUnorderedPublished(t.Context(), "lease", "event")
 		},
@@ -278,7 +288,7 @@ func TestStorePropagatesDatabaseFailures(t *testing.T) {
 
 	databaseErr := errors.New("database")
 	reads := stubbedStore(databaseStub{rowErr: databaseErr, queryErr: databaseErr})
-	if _, err := reads.Claim(t.Context(), time.Second, 10); !errors.Is(err, databaseErr) {
+	if _, err := reads.Claim(t.Context(), time.Second, 10, 5); !errors.Is(err, databaseErr) {
 		t.Errorf("Claim(database) error = %v, want the driver failure", err)
 	}
 	if _, err := reads.Get(t.Context(), "event"); !errors.Is(err, databaseErr) {

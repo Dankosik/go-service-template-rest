@@ -3,12 +3,13 @@ package oidcjwt
 // Proof for grpc.go at the interceptor level: identity parity with the HTTP
 // boundary, credential removal from the handler-visible context, and the exact
 // health allowlist. The same boundary over a real TLS connection is in
-// grpc_tls_test.go.
+// grpc_tls_contract_test.go.
 
 import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/example/go-service-template-rest/internal/reqctx"
 	"google.golang.org/grpc"
@@ -33,8 +34,11 @@ func TestGRPCIdentityParityAndMetadataRemoval(t *testing.T) {
 		func(ctx context.Context, _ any) (any, error) {
 			handlerCalled = true
 			principal, ok := reqctx.PrincipalFromContext(ctx)
-			if !ok || principal.Subject != "opaque-subject" {
-				t.Fatalf("principal = (%+v, %v), want opaque subject", principal, ok)
+			if !ok ||
+				principal.Issuer != testIssuer ||
+				principal.Subject != "opaque-subject" ||
+				principal.ClientID != "client-1" {
+				t.Fatalf("principal = (%+v, %v), want verified issuer, subject, and client ID", principal, ok)
 			}
 			incoming, _ := metadata.FromIncomingContext(ctx)
 			if len(incoming.Get("authorization")) != 0 {
@@ -61,7 +65,7 @@ func TestGRPCIdentityParityAndMetadataRemoval(t *testing.T) {
 	}
 }
 
-func TestGRPCHealthIsPublicAndCredentialIsRemoved(t *testing.T) {
+func TestGRPCHealthCheckIsPublicAndWatchIsProtected(t *testing.T) {
 	key := loadTestRSAKey(t, testSigningKey)
 	verifier := newTestVerifier(t, key)
 	ctx := metadata.NewIncomingContext(t.Context(), metadata.Pairs("authorization", "not-a-token"))
@@ -89,17 +93,13 @@ func TestGRPCHealthIsPublicAndCredentialIsRemoved(t *testing.T) {
 		nil,
 		serverStreamWithContext{ctx: ctx},
 		&grpc.StreamServerInfo{FullMethod: healthpb.Health_Watch_FullMethodName},
-		func(_ any, stream grpc.ServerStream) error {
+		func(_ any, _ grpc.ServerStream) error {
 			streamCalled = true
-			incoming, _ := metadata.FromIncomingContext(stream.Context())
-			if len(incoming.Get("authorization")) != 0 {
-				t.Fatal("health stream handler-visible authorization metadata was retained")
-			}
 			return nil
 		},
 	)
-	if err != nil || !streamCalled {
-		t.Fatalf("health stream interception = (%v, %v), want public handler", streamCalled, err)
+	if status.Code(err) != codes.Unauthenticated || streamCalled {
+		t.Fatalf("health Watch interception = (called %v, status %v), want protected stream", streamCalled, status.Code(err))
 	}
 }
 
@@ -147,7 +147,8 @@ func TestGRPCStreamIdentityParityAndMetadataRemoval(t *testing.T) {
 	now := testNow
 	key := loadTestRSAKey(t, testSigningKey)
 	verifier := newTestVerifier(t, key)
-	token := signToken(t, key, "key-1", "at+jwt", validClaims(now))
+	claims := validClaims(now)
+	token := signToken(t, key, "key-1", "at+jwt", claims)
 	source := metadata.NewIncomingContext(t.Context(), metadata.Pairs("authorization", "Bearer "+token))
 
 	called := false
@@ -157,6 +158,11 @@ func TestGRPCStreamIdentityParityAndMetadataRemoval(t *testing.T) {
 		&grpc.StreamServerInfo{FullMethod: "/example.Service/Watch"},
 		func(_ any, stream grpc.ServerStream) error {
 			called = true
+			deadline, ok := stream.Context().Deadline()
+			wantDeadline := time.Unix(claims.Expires, 0).Add(ClockSkew)
+			if !ok || !deadline.Equal(wantDeadline) {
+				t.Fatalf("stream deadline = (%v, %v), want token expiry %v", deadline, ok, wantDeadline)
+			}
 			principal, ok := reqctx.PrincipalFromContext(stream.Context())
 			if !ok || principal.Subject != "opaque-subject" {
 				t.Fatalf("principal = (%+v, %v), want opaque subject", principal, ok)

@@ -29,7 +29,8 @@ func (p LoadBalancingPolicy) valid() bool {
 	return p <= LoadBalancingPickFirst
 }
 
-// serviceConfig renders the policy as this client's own default service config.
+// serviceConfig renders address selection and optional standard health as this
+// client's own default service config.
 //
 // Supplying it through grpc.WithDefaultServiceConfig composes with the
 // grpc.WithDisableServiceConfig [New] already sets: that option refuses only
@@ -40,9 +41,13 @@ func (p LoadBalancingPolicy) valid() bool {
 //
 // Both arms are spelled out rather than leaving one to grpc-go's default, so the
 // selected policy is visible in the same shape either way.
-func (p LoadBalancingPolicy) serviceConfig() string {
-	if p == LoadBalancingPickFirst {
-		return `{"loadBalancingConfig":[{"pick_first":{}}]}`
+func (p LoadBalancingPolicy) serviceConfig(healthCheck bool) string {
+	healthConfig := ""
+	if healthCheck {
+		healthConfig = `,"healthCheckConfig":{"serviceName":""}`
 	}
-	return `{"loadBalancingConfig":[{"round_robin":{}}]}`
+	if p == LoadBalancingPickFirst {
+		return `{"loadBalancingConfig":[{"pick_first":{}}]` + healthConfig + `}`
+	}
+	return `{"loadBalancingConfig":[{"round_robin":{}}]` + healthConfig + `}`
 }

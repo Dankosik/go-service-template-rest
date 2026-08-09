@@ -26,7 +26,7 @@ type RelayResult struct {
 // implementation. The interface exists so the whole cycle — claim, finalize,
 // reconcile, cleanup, observe — is unit-testable without PostgreSQL.
 type relayStore interface {
-	Claim(ctx context.Context, lease time.Duration, batchSize int) (ClaimedBatch, error)
+	Claim(ctx context.Context, lease time.Duration, batchSize, maxAttempts int) (ClaimedBatch, error)
 	MarkUnorderedPublished(ctx context.Context, token, id string) error
 	MarkOrderedPublished(ctx context.Context, token string, directive OrderedDirective) error
 	MarkUnorderedPublishedBatch(ctx context.Context, token string, ids []string) ([]string, error)
@@ -139,7 +139,8 @@ func (r *Relay) Run(ctx context.Context) (result RelayResult) {
 	}()
 
 	// This first observation is also the schema gate: one statement reads
-	// outbox_events, counts outbox_ordering_heads, and sizes outbox_redrives,
+	// outbox_events, counts outbox_ordering_heads, and sizes the audit and commit
+	// receipt relations,
 	// so a missing relation fails startup here rather than at the first claim
 	// or the first operator redrive. Dropping a column from ObserveOutbox drops
 	// that relation's share of the gate with it — see
@@ -213,7 +214,7 @@ func (r *Relay) runCycle(
 	// PostgreSQL starts it later and by its own clock, so this deadline is the
 	// conservative one under any skew between the two.
 	claimedAt := time.Now()
-	batch, err := r.store.Claim(ctx, r.config.LeaseDuration, r.config.BatchSize)
+	batch, err := r.store.Claim(ctx, r.config.LeaseDuration, r.config.BatchSize, r.config.MaxAttempts)
 	if err != nil {
 		return RelayResult{Err: fmt.Errorf("claim outbox events: %w", err)}, true
 	}
