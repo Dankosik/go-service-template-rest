@@ -2,6 +2,7 @@ package telemetrytest
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -20,6 +21,22 @@ import (
 // Unlike InstallManualReader these touch no process-wide state, so a test using
 // them may run in parallel.
 
+// NewManualMeterProvider returns a meter provider whose series a test collects
+// on demand through the returned reader.
+//
+// It installs nothing process-wide, so a test that hands the provider to the
+// code under test may run in parallel. Use [InstallManualReader] instead when
+// that code reads the global provider, and [NewManualMeter] when it takes a
+// meter rather than a provider.
+func NewManualMeterProvider(tb testing.TB) (*sdkmetric.ManualReader, *sdkmetric.MeterProvider) {
+	tb.Helper()
+
+	reader := sdkmetric.NewManualReader()
+	provider := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
+	shutdownAfterTest(tb, "meter", provider.Shutdown)
+	return reader, provider
+}
+
 // NewManualMeter returns a manual reader and a meter recording into it, scoped
 // to the instrumentation scope the package under test uses in production.
 // Passing the production scope keeps a collected metric identified the way an
@@ -29,15 +46,7 @@ import (
 func NewManualMeter(tb testing.TB, scope string) (*sdkmetric.ManualReader, metric.Meter) {
 	tb.Helper()
 
-	reader := sdkmetric.NewManualReader()
-	provider := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
-	tb.Cleanup(func() {
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), providerShutdownTimeout)
-		defer cancel()
-		if err := provider.Shutdown(shutdownCtx); err != nil {
-			tb.Errorf("shutdown test meter provider: %v", err)
-		}
-	})
+	reader, provider := NewManualMeterProvider(tb)
 	return reader, provider.Meter(scope)
 }
 
@@ -148,6 +157,14 @@ func AttributeSets(tb testing.TB, aggregation metricdata.Aggregation) []attribut
 		for _, point := range data.DataPoints {
 			sets = append(sets, point.Attributes)
 		}
+	case metricdata.Sum[float64]:
+		for _, point := range data.DataPoints {
+			sets = append(sets, point.Attributes)
+		}
+	case metricdata.Histogram[int64]:
+		for _, point := range data.DataPoints {
+			sets = append(sets, point.Attributes)
+		}
 	case metricdata.Histogram[float64]:
 		for _, point := range data.DataPoints {
 			sets = append(sets, point.Attributes)
@@ -156,6 +173,54 @@ func AttributeSets(tb testing.TB, aggregation metricdata.Aggregation) []attribut
 		tb.Fatalf("unexpected metric aggregation %T", aggregation)
 	}
 	return sets
+}
+
+// AssertNoAttributeContains fails when any collected metric attribute — key or
+// value — contains one of the forbidden substrings. An empty candidate matches
+// everything and is skipped, so a caller may pass a correlation value that the
+// case under test left absent.
+//
+// This is a trust-boundary assertion rather than a metrics one. The client
+// adapters may label a series with the target and the outcome; a request ID or
+// a trace ID reaching a label is both an unbounded-cardinality series and the
+// correlation value the propagation policy decided not to emit.
+//
+// A collection that produced no points fails here. The walk would otherwise pass
+// every check below while covering nothing, which is exactly how this assertion
+// would keep reporting success after the instruments it guards stopped
+// recording. Fail-closed on the aggregation too: AttributeSets refuses one it
+// does not know rather than skipping the points it cannot read, because the two
+// per-package copies this replaced each skipped a different aggregation and the
+// HTTP one therefore never inspected a counter label at all.
+func AssertNoAttributeContains(tb testing.TB, reader *sdkmetric.ManualReader, forbidden ...string) {
+	tb.Helper()
+
+	points := 0
+	ForEachMetric(tb, reader, func(measured metricdata.Metrics) {
+		for _, set := range AttributeSets(tb, measured.Data) {
+			points++
+			for _, labelled := range set.ToSlice() {
+				value := labelled.Value.String()
+				for _, candidate := range forbidden {
+					if candidate == "" {
+						continue
+					}
+					if strings.Contains(string(labelled.Key), candidate) || strings.Contains(value, candidate) {
+						tb.Fatalf(
+							"%s attribute %s=%q contains forbidden correlation value %q",
+							measured.Name,
+							labelled.Key,
+							value,
+							candidate,
+						)
+					}
+				}
+			}
+		}
+	})
+	if points == 0 {
+		tb.Fatal("collected metric data points = 0, want recorded metrics")
+	}
 }
 
 // Attribute is one attribute of a point, failing when it is absent rather than

@@ -116,9 +116,11 @@ func setupTracingForEnvPolicyTest(t *testing.T, exporter TraceExporterConfig) er
 
 func envPolicyTracingConfig(exporter TraceExporterConfig) TracingConfig {
 	return TracingConfig{
-		ServiceName:      "test-service",
-		ServiceVersion:   "test",
-		DeploymentEnv:    "local",
+		Resource: ResourceConfig{
+			ServiceName:    "test-service",
+			ServiceVersion: "test",
+			DeploymentEnv:  "local",
+		},
 		TracesSampler:    "always_off",
 		TracesSamplerArg: 0,
 		Exporter:         exporter,

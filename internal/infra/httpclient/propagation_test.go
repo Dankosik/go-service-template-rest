@@ -13,13 +13,11 @@ import (
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/infra/telemetry/telemetrytest"
+	"github.com/example/go-service-template-rest/internal/observability/correlationpolicy"
 	"github.com/example/go-service-template-rest/internal/reqctx"
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/propagation"
-	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
-	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -63,15 +61,7 @@ func TestHTTPPropagationPolicy(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			reader := sdkmetric.NewManualReader()
-			meterProvider := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
-			t.Cleanup(func() {
-				shutdownCtx, cancel := context.WithTimeout(context.Background(), time.Second)
-				defer cancel()
-				if err := meterProvider.Shutdown(shutdownCtx); err != nil {
-					t.Errorf("shutdown metric provider: %v", err)
-				}
-			})
+			reader, meterProvider := telemetrytest.NewManualMeterProvider(t)
 
 			observations := make(chan propagationWireObservation, 1)
 			client := newPropagationTestClient(
@@ -145,7 +135,7 @@ func TestHTTPPropagationPolicy(t *testing.T) {
 					t.Fatalf("wire parent span ID = %s, want client attempt %s", got, want)
 				}
 			}
-			assertHTTPMetricsDoNotContain(
+			telemetrytest.AssertNoAttributeContains(
 				t,
 				reader,
 				append(
@@ -367,7 +357,7 @@ func assertHTTPPolicyHeader(t *testing.T, header http.Header, wantTrace bool, wa
 func assertNoHTTPPropagationFields(t *testing.T, values http.Header) {
 	t.Helper()
 
-	for _, reserved := range reservedPropagationHeaders {
+	for _, reserved := range correlationpolicy.ReservedFields(requestIDHeader) {
 		if got := headerValueEqualFold(values, reserved); got != "" {
 			t.Fatalf("wire trailer %s = %q, want absent", reserved, got)
 		}
@@ -417,55 +407,4 @@ func clientSpansSince(
 		}
 	}
 	return spans
-}
-
-func assertHTTPMetricsDoNotContain(
-	t *testing.T,
-	reader *sdkmetric.ManualReader,
-	forbidden ...string,
-) {
-	t.Helper()
-
-	var resourceMetrics metricdata.ResourceMetrics
-	if err := reader.Collect(t.Context(), &resourceMetrics); err != nil {
-		t.Fatalf("ManualReader.Collect() error = %v", err)
-	}
-	points := 0
-	for _, scope := range resourceMetrics.ScopeMetrics {
-		for _, metricValue := range scope.Metrics {
-			switch data := metricValue.Data.(type) {
-			case metricdata.Histogram[float64]:
-				for _, point := range data.DataPoints {
-					points++
-					assertAttributesDoNotContain(t, point.Attributes.ToSlice(), forbidden)
-				}
-			case metricdata.Histogram[int64]:
-				for _, point := range data.DataPoints {
-					points++
-					assertAttributesDoNotContain(t, point.Attributes.ToSlice(), forbidden)
-				}
-			}
-		}
-	}
-	if points == 0 {
-		t.Fatal("HTTP client metric data points = 0, want recorded metrics")
-	}
-}
-
-func assertAttributesDoNotContain(t *testing.T, attributes []attribute.KeyValue, forbidden []string) {
-	t.Helper()
-
-	for _, attr := range attributes {
-		value := attr.Value.String()
-		for _, candidate := range forbidden {
-			if candidate != "" && (strings.Contains(string(attr.Key), candidate) || strings.Contains(value, candidate)) {
-				t.Fatalf(
-					"metric attribute %s=%q contains forbidden correlation value %q",
-					attr.Key,
-					value,
-					candidate,
-				)
-			}
-		}
-	}
 }

@@ -30,13 +30,15 @@ func TestSetupTracingMergesAmbientResourceUnderConfig(t *testing.T) {
 	telemetrytest.RestoreGlobals(t)
 
 	_, shutdown, err := SetupTracing(context.Background(), TracingConfig{
-		ServiceName:       " config-service ",
-		ServiceVersion:    " config-version ",
-		ServiceInstanceID: " config-instance ",
-		DeploymentEnv:     " config-env ",
-		TracesSampler:     "always_on",
-		TracesSamplerArg:  0.1,
-		Exporter:          testTraceExporter(t),
+		Resource: ResourceConfig{
+			ServiceName:       " config-service ",
+			ServiceVersion:    " config-version ",
+			ServiceInstanceID: " config-instance ",
+			DeploymentEnv:     " config-env ",
+		},
+		TracesSampler:    "always_on",
+		TracesSamplerArg: 0.1,
+		Exporter:         testTraceExporter(t),
 	})
 	if err != nil {
 		t.Fatalf("SetupTracing() error = %v", err)
@@ -93,9 +95,11 @@ func TestSetupTracingWithoutExporterDoesNotRecord(t *testing.T) {
 	telemetrytest.RestoreGlobals(t)
 
 	_, shutdown, err := SetupTracing(t.Context(), TracingConfig{
-		ServiceName:      "test-service",
-		ServiceVersion:   "test",
-		DeploymentEnv:    "test",
+		Resource: ResourceConfig{
+			ServiceName:    "test-service",
+			ServiceVersion: "test",
+			DeploymentEnv:  "test",
+		},
 		TracesSampler:    "always_on",
 		TracesSamplerArg: 1,
 	})
@@ -128,9 +132,11 @@ func BenchmarkTracingWithoutExporter(b *testing.B) {
 	})
 
 	_, shutdown, err := SetupTracing(b.Context(), TracingConfig{
-		ServiceName:      "benchmark-service",
-		ServiceVersion:   "benchmark",
-		DeploymentEnv:    "benchmark",
+		Resource: ResourceConfig{
+			ServiceName:    "benchmark-service",
+			ServiceVersion: "benchmark",
+			DeploymentEnv:  "benchmark",
+		},
 		TracesSampler:    "parentbased_traceidratio",
 		TracesSamplerArg: 0.10,
 	})
@@ -234,9 +240,11 @@ func TestSetupTracingIsSafeUnderConcurrentSetup(t *testing.T) {
 	for i := range setupCount {
 		wg.Go(func() {
 			_, shutdown, err := SetupTracing(context.Background(), TracingConfig{
-				ServiceName:      fmt.Sprintf("config-service-%d", i),
-				ServiceVersion:   "config-version",
-				DeploymentEnv:    "config-env",
+				Resource: ResourceConfig{
+					ServiceName:    fmt.Sprintf("config-service-%d", i),
+					ServiceVersion: "config-version",
+					DeploymentEnv:  "config-env",
+				},
 				TracesSampler:    "always_off",
 				TracesSamplerArg: 0,
 			})
@@ -613,9 +621,11 @@ func setupRecordingTracing(t *testing.T, exporter TraceExporterConfig) (TraceExp
 	t.Helper()
 
 	endpoint, shutdown, err := SetupTracing(context.Background(), TracingConfig{
-		ServiceName:      "test-service",
-		ServiceVersion:   "test",
-		DeploymentEnv:    "local",
+		Resource: ResourceConfig{
+			ServiceName:    "test-service",
+			ServiceVersion: "test",
+			DeploymentEnv:  "local",
+		},
 		TracesSampler:    "always_on",
 		TracesSamplerArg: 1,
 		Exporter:         exporter,

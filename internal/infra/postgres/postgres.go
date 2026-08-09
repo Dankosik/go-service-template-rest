@@ -203,10 +203,26 @@ func applyStatementTimeouts(connConfig *pgx.ConnConfig, statementTimeout time.Du
 		connConfig.RuntimeParams = make(map[string]string, 2)
 	}
 
-	// PostgreSQL reads a bare integer for these settings as milliseconds.
-	milliseconds := strconv.FormatInt(statementTimeout.Milliseconds(), 10)
+	milliseconds := RuntimeParamMilliseconds(statementTimeout)
 	connConfig.RuntimeParams["statement_timeout"] = milliseconds
 	connConfig.RuntimeParams["idle_in_transaction_session_timeout"] = milliseconds
+}
+
+// RuntimeParamMilliseconds renders a duration as a PostgreSQL runtime-parameter
+// value. internal/infra/postgresmigrate publishes its own timeouts through it.
+//
+// Rounded up rather than truncated, because these carry timeouts: a duration
+// with a sub-millisecond remainder — 100500us is inside what configuration
+// accepts — would otherwise be published as less time than the operator asked
+// for. One millisecond more cannot fail a statement that would have succeeded;
+// one millisecond less can cancel one.
+//
+// The unit is written out because PostgreSQL reads a bare integer against each
+// setting's own default unit, which is milliseconds for these three and not for
+// every setting a caller might add next.
+func RuntimeParamMilliseconds(duration time.Duration) string {
+	milliseconds := math.Ceil(float64(duration) / float64(time.Millisecond))
+	return strconv.FormatInt(int64(milliseconds), 10) + "ms"
 }
 
 func (p *Pool) Close() {

@@ -12,7 +12,8 @@ import (
 // what it makes of the statement's rejection report. The precondition itself —
 // that a key with unpublished events keeps its mark, and that a racing append
 // serializes against the head lock — is PostgreSQL's, and is proven in
-// test/postgres_outbox_integration_test.go rather than against a stub.
+// test/postgres_outbox_trace_and_retire_integration_test.go rather than against
+// a stub.
 func TestStoreRetireOrderingKeysValidation(t *testing.T) {
 	t.Parallel()
 

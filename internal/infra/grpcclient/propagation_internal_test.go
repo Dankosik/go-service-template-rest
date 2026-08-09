@@ -81,7 +81,7 @@ func TestPolicyPropagatorOwnsRemoteCorrelationFields(t *testing.T) {
 
 // TestPolicyPropagatorFieldsMatchWhatInjectEmits holds the three-place invariant
 // the package doc states and nothing else checked: a correlation value is
-// claimed in reservedCorrelationMetadataKeys, emitted by Inject under its
+// claimed by reservedCorrelationMetadataKey, emitted by Inject under its
 // policy, and declared by Fields, and any two without the third is a defect.
 //
 // Claiming without emitting silently drops a caller's value; emitting without
@@ -135,7 +135,7 @@ func TestPolicyPropagatorFieldsMatchWhatInjectEmits(t *testing.T) {
 			for _, key := range emitted {
 				if !reservedCorrelationMetadataKey(key) {
 					t.Fatalf(
-						"Inject emits %q, which reservedCorrelationMetadataKeys does not claim; "+
+						"Inject emits %q, which reservedCorrelationMetadataKey does not claim; "+
 							"an unclaimed key is one a caller can forge",
 						key,
 					)
@@ -244,7 +244,7 @@ func TestSanitizingPerRPCCredentialsPreserveAuthSecurityAndErrors(t *testing.T) 
 	if got["authorization"] != "Bearer retained" {
 		t.Fatalf("authorization = %q, want retained", got["authorization"])
 	}
-	for _, key := range reservedCorrelationMetadataKeys {
+	for _, key := range correlationpolicy.ReservedFields(requestIDMetadataKey) {
 		if value := credentialValueEqualFold(got, key); value != "" {
 			t.Fatalf("%s = %q, want removed", key, value)
 		}
@@ -304,7 +304,7 @@ func assertSanitizedOutgoingMetadata(ctx context.Context, t *testing.T) {
 	if got := values.Get("authorization"); len(got) != 1 || got[0] != "Bearer retained" {
 		t.Fatalf("authorization = %v, want retained", got)
 	}
-	for _, key := range reservedCorrelationMetadataKeys {
+	for _, key := range correlationpolicy.ReservedFields(requestIDMetadataKey) {
 		if value := metadataFirstEqualFold(values, key); value != "" {
 			t.Fatalf("%s = %q, want removed", key, value)
 		}

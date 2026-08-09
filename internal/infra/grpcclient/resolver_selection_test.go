@@ -238,7 +238,7 @@ func writeResolverSelectionRecord(t *testing.T, record resolverSelectionRecord) 
 	if err != nil {
 		t.Fatalf("encode resolver selection record: %v", err)
 	}
-	fmt.Printf("%s%s\n", resolverSelectionRecordPrefix, encoded)
+	fmt.Printf("%s%s\n", resolverSelectionRecordPrefix, encoded) //nolint:forbidigo // Child process emits its framed test record on stdout.
 }
 
 func errorString(err error) string {

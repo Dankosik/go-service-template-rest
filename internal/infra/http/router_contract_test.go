@@ -338,9 +338,11 @@ func TestOpenAPIRuntimeContractMetricsExposeRouteLabels(t *testing.T) {
 	metrics := telemetry.New()
 	telemetrytest.RestoreGlobals(t)
 	result, err := telemetry.SetupMetrics(context.Background(), metrics, telemetry.MetricsConfig{
-		ServiceName:    "router-test",
-		ServiceVersion: "test",
-		DeploymentEnv:  "test",
+		Resource: telemetry.ResourceConfig{
+			ServiceName:    "router-test",
+			ServiceVersion: "test",
+			DeploymentEnv:  "test",
+		},
 	})
 	if err != nil {
 		t.Fatalf("SetupMetrics() error = %v", err)

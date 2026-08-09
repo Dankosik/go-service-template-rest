@@ -8,13 +8,11 @@
 package grpcclient_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/example/go-service-template-rest/internal/infra/grpcclient"
+	"github.com/example/go-service-template-rest/internal/infra/telemetry/telemetrytest"
 	"github.com/example/go-service-template-rest/internal/reqctx"
-	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"google.golang.org/grpc/credentials/insecure"
 	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/metadata"
@@ -22,16 +20,7 @@ import (
 
 func TestGeneratedClientCompositionUsesSharedConnection(t *testing.T) {
 	unaryMetadata, _, target := startMetadataCaptureServer(t)
-	recorder := tracetest.NewSpanRecorder()
-	tracerProvider := sdktrace.NewTracerProvider(
-		sdktrace.WithSampler(sdktrace.AlwaysSample()),
-		sdktrace.WithSpanProcessor(recorder),
-	)
-	t.Cleanup(func() {
-		if err := tracerProvider.Shutdown(context.Background()); err != nil {
-			t.Errorf("TracerProvider.Shutdown() error = %v", err)
-		}
-	})
+	recorder, tracerProvider := telemetrytest.NewRecordingTracerProvider(t)
 
 	connection, err := grpcclient.New(
 		grpcclient.DefaultConfig(target),

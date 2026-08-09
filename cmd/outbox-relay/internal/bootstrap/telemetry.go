@@ -9,36 +9,24 @@ import (
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 )
 
-// setupTelemetry installs both signals independently and returns the flush.
+// setupTelemetry installs both signals and applies this binary's answer to the
+// one outcome the two background binaries answer differently.
 //
-// Neither failure is fatal, and neither blocks the other — the same reasoning and
-// shape as bootstrapTelemetryStage in cmd/service/internal/bootstrap. Metrics fall
-// back to the no-op provider [telemetry.Metrics.MeterProvider] already returns, so
-// the outbox instruments built from it record into nothing rather than panicking.
+// A metrics provider that could not be built degrades the relay instead of
+// stopping it, which is the opposite of cmd/worker: the outbox instruments fall
+// back to the no-op provider [telemetry.Metrics.MeterProvider] already returns
+// and record into nothing rather than panicking, and a relay that stopped
+// publishing for it would turn an observability outage into a delivery one.
+// runtimeopts.InstallTelemetry owns everything above that choice.
 func setupTelemetry(
 	ctx context.Context,
 	cfg config.Config,
 	metrics *telemetry.Metrics,
 	log *slog.Logger,
-) func(context.Context) {
-	instanceID := telemetry.ResolveInstanceID(cfg.App.InstanceID)
-	metricsResult, metricsErr := telemetry.SetupMetrics(ctx, metrics, runtimeopts.Metrics(cfg, instanceID))
+) runtimeopts.TelemetryFlush {
+	flush, metricsErr := runtimeopts.InstallTelemetry(ctx, cfg, metrics, log, "outbox")
 	if metricsErr != nil {
 		log.WarnContext(ctx, "outbox_metrics_degraded", "reason", telemetry.FailureReason(metricsErr))
 	}
-	_, tracingShutdown, tracingErr := telemetry.SetupTracing(ctx, runtimeopts.Tracing(cfg, instanceID))
-	if tracingErr != nil {
-		log.WarnContext(ctx, "outbox_tracing_degraded", "reason", telemetry.FailureReason(tracingErr))
-	}
-	if metricsResult.ExportErr != nil {
-		log.WarnContext(ctx, "outbox_metrics_export_degraded", "reason", telemetry.FailureReason(metricsResult.ExportErr))
-	}
-	return func(shutdownCtx context.Context) {
-		if tracingShutdown != nil {
-			_ = tracingShutdown(shutdownCtx)
-		}
-		if metricsResult.Shutdown != nil {
-			_ = metricsResult.Shutdown(shutdownCtx)
-		}
-	}
+	return flush
 }

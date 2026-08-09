@@ -4,19 +4,11 @@ import (
 	"log/slog"
 	"net/http"
 	"slices"
-	"strings"
 
 	"github.com/felixge/httpsnoop"
-	"github.com/go-chi/chi/v5"
 	semconv "go.opentelemetry.io/otel/semconv/v1.37.0"
 	"go.opentelemetry.io/otel/trace"
 )
-
-// healthProbeRoutePaths are the platform probe routes owned by this template's
-// OpenAPI contract. Orchestrators poll them every few seconds for the life of
-// the pod, so logging them produces steady no-signal volume that is billed by
-// every log backend.
-var healthProbeRoutePaths = []string{"/health/live", "/health/ready"}
 
 // AccessLog records one structured line per request. When logHealthProbes is
 // false, matched health probe routes are served without a log line; span route
@@ -102,50 +94,6 @@ func skipHealthProbeLog(r *http.Request, routePathTemplate string, logHealthProb
 		return false
 	}
 	return slices.Contains(healthProbeRoutePaths, routePathTemplate)
-}
-
-func routePathTemplateForRequest(r *http.Request) string {
-	if r == nil {
-		return ""
-	}
-
-	if routeContext := chi.RouteContext(r.Context()); routeContext != nil {
-		if pattern := normalizeRoutePathTemplate(r.Method, routeContext.RoutePattern()); pattern != "" {
-			return pattern
-		}
-	}
-
-	return normalizeRoutePathTemplate(r.Method, r.Pattern)
-}
-
-func normalizeRoutePathTemplate(method, pattern string) string {
-	pattern = strings.TrimSpace(pattern)
-	method = strings.TrimSpace(method)
-	if method != "" && strings.HasPrefix(pattern, method+" ") {
-		pattern = strings.TrimSpace(strings.TrimPrefix(pattern, method+" "))
-	}
-	// "/" and "/*" are the root mount's own patterns, reported when nothing
-	// matched or the path matched under a different method. Neither is a route
-	// template: OpenTelemetry expects http.route to carry the matched route or
-	// be absent, and collapsing 404s and 405s into per-method wildcards hides
-	// which path was actually asked for.
-	if pattern == "/" || pattern == "/*" {
-		return ""
-	}
-	return pattern
-}
-
-func joinMethodAndPattern(method, pattern string) string {
-	pattern = strings.TrimSpace(pattern)
-	if pattern == "" {
-		return ""
-	}
-
-	method = strings.TrimSpace(method)
-	if method == "" {
-		return pattern
-	}
-	return method + " " + pattern
 }
 
 // Reading trace identifiers off the context is deliberately absent from this

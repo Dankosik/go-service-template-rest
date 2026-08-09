@@ -1,43 +1,19 @@
 package bootstrap
 
 import (
-	"context"
-	"fmt"
-	"net"
-	"net/http"
-	"time"
-
 	"github.com/example/go-service-template-rest/internal/health"
-	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 )
 
-func newDiagnosticsServer(addr string, healthSvc *health.Service, messagingReady func() bool, metrics *telemetry.Metrics) *http.Server {
-	if addr == "" {
-		return nil
+// workerReady is this binary's readiness verdict, which runtimeopts.DiagnosticsServer
+// serves as one answer.
+//
+// The two conditions are separate facts and both have to hold. The broker state
+// is read live rather than through a probe, because a consumer that lost its
+// connection is not ready now and waiting for the next refresh would keep it in
+// rotation for up to one interval. The cached verdict covers everything else the
+// process probes.
+func workerReady(messagingReady func() bool, healthSvc *health.Service) func() bool {
+	return func() bool {
+		return messagingReady() && healthSvc.Cached() == nil
 	}
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /health/live", func(writer http.ResponseWriter, _ *http.Request) {
-		writer.WriteHeader(http.StatusOK)
-	})
-	mux.HandleFunc("GET /health/ready", func(writer http.ResponseWriter, _ *http.Request) {
-		if !messagingReady() {
-			http.Error(writer, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
-			return
-		}
-		if err := healthSvc.Cached(); err != nil {
-			http.Error(writer, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
-			return
-		}
-		writer.WriteHeader(http.StatusOK)
-	})
-	mux.Handle("GET /metrics", metrics.Handler())
-	return &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 5 * time.Second}
-}
-
-func listenDiagnostics(ctx context.Context, addr string) (net.Listener, error) {
-	listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", addr)
-	if err != nil {
-		return nil, fmt.Errorf("listen for worker diagnostics: %w", err)
-	}
-	return listener, nil
 }

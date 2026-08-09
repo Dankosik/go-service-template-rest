@@ -2,8 +2,8 @@ package grpcclient
 
 import (
 	"context"
+	"maps"
 	"slices"
-	"strings"
 
 	"github.com/example/go-service-template-rest/internal/observability/correlationpolicy"
 	"github.com/example/go-service-template-rest/internal/reqctx"
@@ -14,8 +14,9 @@ import (
 
 const requestIDMetadataKey = reqctx.RequestIDMetadataKey
 
-// reservedCorrelationMetadataKeys are the keys this client alone may set on an
-// outgoing RPC.
+// reservedCorrelationMetadataKey reports a key this client alone may set on an
+// outgoing RPC. correlationpolicy owns which keys those are and how one is
+// matched, so this client and the HTTP one cannot read one list two ways.
 //
 // The invariant this file holds: the correlationpolicy propagator is the only
 // permitted source of these keys, so what crosses the trust boundary is exactly
@@ -32,7 +33,7 @@ const requestIDMetadataKey = reqctx.RequestIDMetadataKey
 // WithNoProxy and WithDisableServiceConfig close the two remaining routes a peer
 // could use. The latter refuses only resolver-supplied service config; the
 // client's own default is not a route a peer controls.
-var reservedCorrelationMetadataKeys = correlationpolicy.ReservedFields(requestIDMetadataKey)
+var reservedCorrelationMetadataKey = correlationpolicy.Reserved(requestIDMetadataKey)
 
 // PropagationPolicy controls which locally owned correlation values may cross
 // this client's trust boundary.
@@ -166,18 +167,7 @@ func (c sanitizingPerRPCCredentials) RequireTransportSecurity() bool {
 }
 
 func deleteReservedMetadata(values metadata.MD) {
-	for key := range values {
-		if reservedCorrelationMetadataKey(key) {
-			delete(values, key)
-		}
-	}
-}
-
-func reservedCorrelationMetadataKey(key string) bool {
-	for _, reserved := range reservedCorrelationMetadataKeys {
-		if strings.EqualFold(key, reserved) {
-			return true
-		}
-	}
-	return false
+	maps.DeleteFunc(values, func(key string, _ []string) bool {
+		return reservedCorrelationMetadataKey(key)
+	})
 }

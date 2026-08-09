@@ -5,8 +5,6 @@ import (
 	"errors"
 	"net/http"
 	"time"
-
-	"github.com/example/go-service-template-rest/internal/problem"
 )
 
 // RequestTimeout bounds how long one request may occupy a handler.
@@ -52,9 +50,6 @@ func RequestTimeout(timeout time.Duration, next http.Handler) http.Handler {
 		if committed() || !errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			return
 		}
-		writeProblem(w, r, problemResponse{
-			code:   problem.CodeGatewayTimeout,
-			detail: "request exceeded its time budget",
-		})
+		writeProblem(w, r, timeBudgetExceededProblem())
 	})
 }

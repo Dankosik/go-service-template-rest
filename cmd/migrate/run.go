@@ -13,8 +13,10 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/example/go-service-template-rest/cmd/internal/runtimeopts"
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/infra/postgresmigrate"
+	"github.com/example/go-service-template-rest/internal/observability/logctx"
 )
 
 const (
@@ -27,7 +29,9 @@ const (
 var errMigrationSourceMissing = errors.New("migration source directory does not exist")
 
 func run(args []string, stdout io.Writer) error {
-	logger := slog.New(slog.NewJSONHandler(stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	// Configuration is not loaded yet, so this carries no service identity; the
+	// records before the load below are the only ones that cannot.
+	logger := logctx.NewProcessLogger(stdout, slog.LevelInfo)
 	if len(args) > 0 {
 		err := errors.New("usage: migrate (no arguments)")
 		logMigrationTerminal(logger, postgresmigrate.RunResult{}, err, postgresmigrate.FailureConfig)
@@ -43,6 +47,10 @@ func run(args []string, stdout io.Writer) error {
 		logMigrationTerminal(logger, postgresmigrate.RunResult{}, wrapped, postgresmigrate.FailureConfig)
 		return wrapped
 	}
+	// Rebuilt now that the identity is known, so a migration run is attributable
+	// to the same service, version, and environment as the three long-running
+	// binaries rather than being the one job whose records carry none of them.
+	logger = runtimeopts.Logger(stdout, cfg)
 	if !cfg.Postgres.Enabled {
 		err := errors.New("postgres is required by the DATABASE=postgres profile")
 		logMigrationTerminal(logger, postgresmigrate.RunResult{}, err, postgresmigrate.FailureConfig)

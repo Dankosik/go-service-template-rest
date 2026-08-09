@@ -1,7 +1,6 @@
 package telemetrytest
 
 import (
-	"context"
 	"testing"
 
 	"go.opentelemetry.io/otel"
@@ -19,16 +18,10 @@ func InstallManualReader(tb testing.TB) *sdkmetric.ManualReader {
 	tb.Helper()
 
 	previousMeterProvider := otel.GetMeterProvider()
-	reader := sdkmetric.NewManualReader()
-	provider := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
+	reader, provider := NewManualMeterProvider(tb)
 	otel.SetMeterProvider(provider)
-	tb.Cleanup(func() {
-		otel.SetMeterProvider(previousMeterProvider)
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), providerShutdownTimeout)
-		defer cancel()
-		if err := provider.Shutdown(shutdownCtx); err != nil {
-			tb.Errorf("shutdown test meter provider: %v", err)
-		}
-	})
+	// Registered after the shutdown NewManualMeterProvider owns, so the process
+	// stops pointing at this provider before it is released.
+	tb.Cleanup(func() { otel.SetMeterProvider(previousMeterProvider) })
 	return reader
 }

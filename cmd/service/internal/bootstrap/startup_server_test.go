@@ -1,7 +1,6 @@
 package bootstrap
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"log/slog"
@@ -9,7 +8,6 @@ import (
 	"slices"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -111,46 +109,6 @@ func (f *fakeGRPCRuntimeServer) StartDrain() {
 }
 
 // profile:grpc:end
-
-func newTestStartupAdmissionController() *startupAdmissionController {
-	return newStartupAdmissionController()
-}
-
-func TestStartupAdmissionControllerCheckReady(t *testing.T) {
-	t.Parallel()
-
-	admission := newTestStartupAdmissionController()
-
-	err := admission.CheckReady(context.Background())
-	if !errors.Is(err, errStartupAdmissionPending) {
-		t.Fatalf("CheckReady() error = %v, want %v", err, errStartupAdmissionPending)
-	}
-
-	admission.MarkReady()
-	if err := admission.CheckReady(context.Background()); err != nil {
-		t.Fatalf("CheckReady() after MarkReady error = %v, want nil", err)
-	}
-}
-
-func TestStartStartupAdmissionRejectsCanceledReadinessContextAfterSuccessfulCheck(t *testing.T) {
-	t.Parallel()
-
-	synctest.Test(t, func(t *testing.T) {
-		bootstrapCtx, cancel := context.WithCancel(t.Context())
-		defer cancel()
-
-		resultCh := startStartupAdmission(bootstrapCtx, func(ctx context.Context) error {
-			cancel()
-			<-ctx.Done()
-			return nil
-		}, time.Second)
-
-		err := <-resultCh
-		if !errors.Is(err, context.Canceled) {
-			t.Fatalf("startStartupAdmission() error = %v, want wrapped %v", err, context.Canceled)
-		}
-	})
-}
 
 func TestServeHTTPRuntimeListenError(t *testing.T) {
 	t.Parallel()
@@ -726,46 +684,5 @@ func TestServeHTTPRuntimeStopsDiagnosticsAfterTheDrain(t *testing.T) {
 	want := []string{"api_drained", "diagnostics_stopped"}
 	if !slices.Equal(order, want) {
 		t.Fatalf("shutdown order = %v, want %v", order, want)
-	}
-}
-
-// TestShutdownDiagnosticsForcesCloseOnBudgetExhaustion pins the bound on the
-// diagnostics stop. It runs after the API drain, so without a budget of its own a
-// scrape that never completes would park the process here and take the telemetry
-// flush with it — the same failure the dependency close is bounded against.
-func TestShutdownDiagnosticsForcesCloseOnBudgetExhaustion(t *testing.T) {
-	t.Parallel()
-
-	synctest.Test(t, func(t *testing.T) {
-		var closed atomic.Bool
-		server := newFakeRuntimeServer()
-		server.onShutdown = func(ctx context.Context) error {
-			<-ctx.Done()
-			return ctx.Err()
-		}
-		server.onClose = func() error {
-			closed.Store(true)
-			return nil
-		}
-
-		var logged bytes.Buffer
-		err := shutdownDiagnostics(context.Background(), slog.New(slog.NewJSONHandler(&logged, nil)), testShutdownBudget(), server)
-		if err != nil {
-			t.Fatalf("shutdownDiagnostics() error = %v, want the abandoned scrape reported as degraded, not failed", err)
-		}
-		if !closed.Load() {
-			t.Fatal("shutdownDiagnostics() did not force the listener closed after its budget expired")
-		}
-		if !strings.Contains(logged.String(), "diagnostics_forced") {
-			t.Fatalf("log = %q, want the forced close recorded", logged.String())
-		}
-	})
-}
-
-func TestShutdownDiagnosticsIgnoresAbsentServer(t *testing.T) {
-	t.Parallel()
-
-	if err := shutdownDiagnostics(context.Background(), slog.New(slog.DiscardHandler), testShutdownBudget(), nil); err != nil {
-		t.Fatalf("shutdownDiagnostics(nil) error = %v, want nil", err)
 	}
 }

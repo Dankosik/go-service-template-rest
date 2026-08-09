@@ -2,7 +2,6 @@ package grpcx
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"runtime/debug"
 
@@ -15,7 +14,7 @@ func recoveryAround(log *slog.Logger) aroundRPC {
 		defer func() {
 			if recovered := recover(); recovered != nil {
 				logRecoveredPanic(ctx, log, fullMethod, recovered)
-				err = ownedStatus(codes.Internal, sanitizedFailureDetail)
+				err = ownedStatus(codes.Internal, failure.SanitizedDetail)
 			}
 		}()
 		return call(ctx)
@@ -23,12 +22,11 @@ func recoveryAround(log *slog.Logger) aroundRPC {
 }
 
 func logRecoveredPanic(ctx context.Context, log *slog.Logger, method string, recovered any) {
+	// debug.Stack is taken here, inside the deferred recovery, because that is
+	// the only point the panicking frames still exist.
 	log.ErrorContext(
 		ctx,
 		"grpc_panic_recovered",
-		"rpc.method", method,
-		"panic.class", failure.PanicClass(recovered),
-		"panic.type", fmt.Sprintf("%T", recovered),
-		"stack", string(debug.Stack()),
+		append([]any{"rpc.method", method}, failure.PanicAttrs(recovered, debug.Stack())...)...,
 	)
 }

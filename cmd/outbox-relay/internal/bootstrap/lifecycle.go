@@ -4,12 +4,28 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
+	"runtime/debug"
 	"strings"
 	"time"
 
+	"github.com/example/go-service-template-rest/cmd/internal/runtimeopts"
 	"github.com/example/go-service-template-rest/internal/config"
+	"github.com/example/go-service-template-rest/internal/failure"
 	"github.com/example/go-service-template-rest/internal/infra/postgresoutbox"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
+)
+
+// errRelayPanic and errPublisherPanic report a run loop that ended in a
+// recovered panic.
+//
+// They gate cleanup rather than only explaining the exit. A loop that panicked
+// cannot account for the goroutines it started, so the publisher adapter and the
+// pool stay owned by process exit — which is what relayTeardown's unsafe path
+// already exists to do for a publisher goroutine that outlived cancellation.
+var (
+	errRelayPanic     = errors.New("outbox relay panicked")
+	errPublisherPanic = errors.New("outbox publisher supervisor panicked")
 )
 
 // The post-drain budgets, kept together because validateRuntimeConfig charges
@@ -34,17 +50,12 @@ func validateRuntimeConfig(cfg config.Config) error {
 	}
 	// Relay and publisher supervisors have distinct joins and can both consume
 	// their bound before dependency shutdown begins.
-	cleanupReserve := 2*forcedJoin + diagnosticsClose + publisherClose + telemetryClose
-	if cfg.HTTP.GracePeriod < cfg.Outbox.DrainTimeout ||
-		cfg.HTTP.GracePeriod-cfg.Outbox.DrainTimeout < cleanupReserve {
-		return fmt.Errorf(
-			"%w: http.grace_period must fit outbox drain and post-drain cleanup (%s + %s)",
-			config.ErrValidate,
-			cfg.Outbox.DrainTimeout,
-			cleanupReserve,
-		)
-	}
-	return nil
+	return runtimeopts.ValidateGracePeriod(
+		cfg.HTTP.GracePeriod,
+		"outbox.drain_timeout",
+		cfg.Outbox.DrainTimeout,
+		2*forcedJoin+diagnosticsClose+publisherClose+telemetryClose,
+	)
 }
 
 // relayTeardown releases the publisher and then the pool, and only while
@@ -91,13 +102,11 @@ func closePublisher(parent context.Context, cleanup func(context.Context) error)
 	if cleanup == nil {
 		return nil, false
 	}
-	base := context.WithoutCancel(parent)
-	if deadline, ok := parent.Deadline(); ok {
-		var cancelDeadline context.CancelFunc
-		base, cancelDeadline = context.WithDeadline(base, deadline)
-		defer cancelDeadline()
-	}
-	ctx, cancel := context.WithTimeout(base, publisherClose)
+	// The zero deadline a parent without one yields is what runtimeopts reads as
+	// an unarmed process budget, which is the startup-failure path: this cleanup
+	// runs from run's defer against the signal context and gets its whole bound.
+	deadline, _ := parent.Deadline()
+	ctx, cancel := runtimeopts.TeardownStage(parent, deadline, publisherClose)
 	defer cancel()
 	result := make(chan error, 1)
 	go func() {
@@ -118,27 +127,40 @@ func closePublisher(parent context.Context, cleanup func(context.Context) error)
 	}
 }
 
+// runRelayLifecycle also reports the process-wide teardown deadline it armed, so
+// the telemetry flush run defers takes its bound from the same grace period the
+// stages here spend rather than from a fresh ceiling of its own. The zero time it
+// returns before that deadline exists means no bound was armed.
 func runRelayLifecycle(
 	signalCtx context.Context,
 	startupCtx context.Context,
 	cfg config.Config,
+	log *slog.Logger,
 	metrics *telemetry.Metrics,
 	relay relayRunner,
 	publisher *PublisherRuntime,
-) postgresoutbox.RelayResult {
+) (postgresoutbox.RelayResult, time.Time) {
 	ready := func() bool { return relay.Ready() && publisher.ready() }
-	diag, err := startDiagnostics(startupCtx, cfg.Observability.Metrics.Addr, ready, metrics)
+	diag, err := runtimeopts.ListenDiagnostics(startupCtx, cfg.Observability.Metrics.Addr, "outbox", ready, metrics)
 	if err != nil {
-		return postgresoutbox.RelayResult{Err: err}
+		return postgresoutbox.RelayResult{Err: err}, time.Time{}
 	}
 	relayCtx, relayCancel := context.WithCancel(context.WithoutCancel(signalCtx))
 	defer relayCancel()
 	publisherCtx, publisherCancel := context.WithCancel(context.WithoutCancel(signalCtx))
 	defer publisherCancel()
+	// Both loops run under superviseRunLoop rather than bare. cmd/worker and
+	// cmd/service run their equivalents through internal/background.Supervisor,
+	// which recovers for them; neither loop here fits its Task signature, and an
+	// unrecovered panic in either would take the process down without the ordered
+	// drain below or the telemetry flush that records it.
 	relayResult := make(chan postgresoutbox.RelayResult, 1)
-	go func() { relayResult <- relay.Run(relayCtx) }()
+	go superviseRunLoop(
+		relayCtx, log, "relay", relayResult,
+		postgresoutbox.RelayResult{Err: errRelayPanic, CleanupUnsafe: true}, relay.Run,
+	)
 	publisherResult := make(chan error, 1)
-	go func() { publisherResult <- publisher.run(publisherCtx) }()
+	go superviseRunLoop(publisherCtx, log, "publisher", publisherResult, errPublisherPanic, publisher.run)
 
 	// Three ways out, and only the signal is an ordinary one. A relay or a
 	// diagnostics server that returned by itself is a fault, so each supplies
@@ -154,8 +176,8 @@ func runRelayLifecycle(
 		if result.Err == nil {
 			result.Err = errors.New("outbox relay stopped unexpectedly")
 		}
-	case <-diag.watch():
-		// diag.stop below carries whatever Serve reported.
+	case <-diag.Stopped():
+		// diag.Stop below carries whatever Serve reported.
 		triggerErr = errors.New("outbox diagnostics stopped unexpectedly")
 	case triggerErr = <-publisherResult:
 		publisherStopped = true
@@ -164,7 +186,7 @@ func runRelayLifecycle(
 		}
 	}
 
-	processCtx, processCancel := context.WithTimeout(context.WithoutCancel(signalCtx), cfg.HTTP.GracePeriod)
+	processCtx, processCancel, shutdownDeadline := runtimeopts.ArmTeardown(signalCtx, cfg.HTTP.GracePeriod)
 	defer processCancel()
 	relay.StartDrain()
 	if !relayStopped {
@@ -175,9 +197,18 @@ func runRelayLifecycle(
 		processCtx, publisherCancel, publisherResult, publisherStopped,
 	)
 	result.Err = errors.Join(result.Err, publisherErr)
-	result.CleanupUnsafe = result.CleanupUnsafe || publisherUnsafe
+	// A publisher that panicked is unsafe for the same reason one that outlived
+	// cancellation is: neither can account for what it left running, and the
+	// adapter cleanup below would run underneath it.
+	//
+	// Both arrival paths are checked because the select above takes whichever
+	// exit came first: a panic can reach this either as the trigger or as the
+	// joined result. It is also read after drainRelay, which replaces result
+	// wholesale and would otherwise discard a flag set before it.
+	result.CleanupUnsafe = result.CleanupUnsafe || publisherUnsafe ||
+		errors.Is(triggerErr, errPublisherPanic) || errors.Is(publisherErr, errPublisherPanic)
 
-	diagnosticsErr := diag.stop(processCtx)
+	diagnosticsErr := diag.Stop(processCtx, diagnosticsClose)
 	var shutdownErr error
 	if !result.CleanupUnsafe {
 		var unsafe bool
@@ -189,7 +220,55 @@ func runRelayLifecycle(
 		}
 	}
 	result.Err = errors.Join(triggerErr, result.Err, diagnosticsErr, shutdownErr)
-	return result
+	return result, shutdownDeadline
+}
+
+// superviseRunLoop runs one relay run loop and reports its outcome exactly once,
+// substituting onPanic when the loop panicked.
+//
+// The result is assigned and then sent from the deferred call, the shape
+// closePublisher above already uses: sending on the normal path and again from
+// the recovery would deliver twice, and the second delivery would be read as a
+// second exit by a select that has already acted on the first.
+//
+// It is generic because the two loops answer with different types — the relay
+// with a [postgresoutbox.RelayResult] the drain reads fields from, the publisher
+// with a plain error — and only the type differs. Two copies is how the recovery
+// ends up on one of them and not the other.
+func superviseRunLoop[T any](
+	ctx context.Context,
+	log *slog.Logger,
+	loop string,
+	results chan<- T,
+	onPanic T,
+	run func(context.Context) T,
+) {
+	var result T
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			logRunLoopPanic(ctx, log, loop, recovered)
+			result = onPanic
+		}
+		results <- result
+	}()
+	result = run(ctx)
+}
+
+// logRunLoopPanic records where a recovered run-loop panic came from.
+//
+// The sentinel the loop reports names only that a panic happened. This is the
+// only record of the defect behind it, and it is written from inside the
+// deferred recovery because that is the one point the panicking frames still
+// exist.
+func logRunLoopPanic(ctx context.Context, log *slog.Logger, loop string, recovered any) {
+	log.ErrorContext(
+		ctx,
+		"outbox_run_loop_panic",
+		append(
+			[]any{"component", "outbox_relay", "loop", loop},
+			failure.PanicAttrs(recovered, debug.Stack())...,
+		)...,
+	)
 }
 
 func stopPublisherSupervisor(

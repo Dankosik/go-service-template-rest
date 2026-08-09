@@ -11,7 +11,13 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 )
 
-// resourceIdentity is what every exported span and metric is attributed to.
+// ResourceConfig is what every exported span and metric is attributed to.
+//
+// It is one type carried by both [TracingConfig] and [MetricsConfig] rather than
+// five fields on each, because the two have to agree: the signals of one replica
+// attributed to two identities cannot be correlated, and that is a mistake five
+// separately spelled fields invite. [ResolveInstanceID] is resolved once per
+// process for the same reason.
 //
 // service.instance.id must be supplied here: the OpenTelemetry Go SDK's detector
 // is behind the experimental OTEL_GO_X_RESOURCE flag, and resource.New with
@@ -21,15 +27,18 @@ import (
 //
 // The Prometheus scrape path supplies its own `instance` label, which is why this
 // only shows up once a service pushes over OTLP.
-type resourceIdentity struct {
-	serviceName    string
-	serviceVersion string
-	// serviceCommit is the source revision the binary was built from. A version
-	// alone is often a branch or a tag that moves, so it does not answer "which
-	// build is this" during a rollout; the revision does.
-	serviceCommit string
-	instanceID    string
-	deploymentEnv string
+type ResourceConfig struct {
+	ServiceName    string
+	ServiceVersion string
+	// ServiceCommit is the source revision the binary was built from, published
+	// as vcs.revision. A version alone is often a branch or a tag that moves, so
+	// it does not answer "which build is this" during a rollout; the revision
+	// does.
+	ServiceCommit string
+	// ServiceInstanceID identifies this replica. Resolve it once per process
+	// with ResolveInstanceID.
+	ServiceInstanceID string
+	DeploymentEnv     string
 }
 
 // instanceIDBytes is the entropy of the last-resort instance identifier. It only
@@ -62,15 +71,15 @@ func ResolveInstanceID(configured string) string {
 // calls resource.Merge(resource.Environment(), r) and Merge is last-value-wins on
 // r, so nothing a platform injects can override what this service configured
 // while k8s.pod.name, container.id, and the rest survive.
-func newResource(ctx context.Context, identity resourceIdentity) (*resource.Resource, error) {
+func newResource(ctx context.Context, identity ResourceConfig) (*resource.Resource, error) {
 	res, err := resource.New(
 		ctx,
 		resource.WithAttributes(
-			attribute.String("service.name", strings.TrimSpace(identity.serviceName)),
-			attribute.String("service.version", strings.TrimSpace(identity.serviceVersion)),
-			attribute.String("vcs.revision", strings.TrimSpace(identity.serviceCommit)),
-			attribute.String("service.instance.id", ResolveInstanceID(identity.instanceID)),
-			attribute.String("deployment.environment.name", strings.TrimSpace(identity.deploymentEnv)),
+			attribute.String("service.name", strings.TrimSpace(identity.ServiceName)),
+			attribute.String("service.version", strings.TrimSpace(identity.ServiceVersion)),
+			attribute.String("vcs.revision", strings.TrimSpace(identity.ServiceCommit)),
+			attribute.String("service.instance.id", ResolveInstanceID(identity.ServiceInstanceID)),
+			attribute.String("deployment.environment.name", strings.TrimSpace(identity.DeploymentEnv)),
 		),
 	)
 	if err != nil {

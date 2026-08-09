@@ -11,11 +11,10 @@ package oidcjwt
 // both sides.
 
 import (
-	"context"
 	"log/slog"
 	"testing"
 
-	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
+	"github.com/example/go-service-template-rest/internal/infra/telemetry/telemetrytest"
 )
 
 // TestPrebuiltAttributeSetsBeatPerCallConstruction holds the trade
@@ -52,12 +51,7 @@ func TestPrebuiltAttributeSetsBeatPerCallConstruction(t *testing.T) {
 
 func verificationCostFixture(tb testing.TB) authnMetrics {
 	tb.Helper()
-	provider := sdkmetric.NewMeterProvider(sdkmetric.WithReader(sdkmetric.NewManualReader()))
-	tb.Cleanup(func() {
-		if err := provider.Shutdown(context.Background()); err != nil {
-			tb.Errorf("shutdown metric provider: %v", err)
-		}
-	})
+	_, provider := telemetrytest.NewManualMeterProvider(tb)
 	return newAuthnMetrics(provider, newDegradedWarning(slog.New(slog.DiscardHandler)))
 }
 

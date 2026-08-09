@@ -10,7 +10,7 @@ const requestIDHeader = reqctx.RequestIDHeader
 
 func RequestCorrelation(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx, requestID := contextWithRequestID(r.Context(), r.Header.Get(requestIDHeader))
+		ctx, requestID := reqctx.ContextWithAcceptedRequestID(r.Context(), r.Header.Get(requestIDHeader))
 		// Installed outermost so every layer below can report the problem it
 		// answered with, including the ones inside the generated router that serve
 		// a request struct this one never sees. AccessLog reads it back.

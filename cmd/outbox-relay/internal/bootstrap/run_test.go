@@ -265,7 +265,7 @@ func TestOutboxRelayComposition(t *testing.T) {
 			built = true
 			return testPublisherRuntime(nil), nil
 		})
-		if !errors.Is(err, config.ErrValidate) || built || !strings.Contains(err.Error(), "post-drain cleanup") {
+		if !errors.Is(err, config.ErrValidate) || built || !strings.Contains(err.Error(), "post-drain teardown budget") {
 			t.Fatalf("run() = %v built=%t, want drain-budget rejection before builder", err, built)
 		}
 	})
@@ -483,14 +483,105 @@ func TestOutboxRelayPublisherPanic(t *testing.T) {
 		return postgresoutbox.RelayResult{Err: postgresoutbox.ErrPublisherPanic}
 	})
 	publisher := testPublisherRuntime(nil)
-	got := runRelayLifecycle(t.Context(), t.Context(), lifecycleConfig(), telemetry.New(), relay, &publisher)
+	got, deadline := runRelayLifecycle(t.Context(), t.Context(), lifecycleConfig(), slog.New(slog.DiscardHandler), telemetry.New(), relay, &publisher)
 	if got.CleanupUnsafe || !errors.Is(got.Err, postgresoutbox.ErrPublisherPanic) || relay.Ready() {
 		t.Fatalf("runRelayLifecycle() = %+v ready=%t, want cleanup-safe fatal panic", got, relay.Ready())
+	}
+	// The telemetry flush run defers is bounded by this deadline. A zero one is
+	// the unarmed-budget path, which would hand that flush a fresh ceiling on top
+	// of a grace period this lifecycle has already spent.
+	if deadline.IsZero() {
+		t.Fatal("runRelayLifecycle() returned no teardown deadline after arming the grace period")
 	}
 	select {
 	case <-relay.drain:
 	default:
 		t.Fatal("publisher panic did not start relay drain")
+	}
+}
+
+// TestOutboxRelayRunLoopPanicIsRecovered covers the one exit neither run loop
+// used to have. cmd/worker and cmd/service route their equivalent loops through
+// internal/background.Supervisor, which recovers for them; these two ran bare, so
+// a panic in the claim bookkeeping or the publisher connection took the process
+// down before the drain, the adapter cleanup, and the telemetry flush below.
+//
+// Cleanup is refused rather than attempted, in both cases. A loop that panicked
+// cannot account for the goroutines it started, and releasing the adapter or the
+// pool underneath one of them is what relayTeardown's unsafe path exists to
+// avoid; process exit owns them instead.
+func TestOutboxRelayRunLoopPanicIsRecovered(t *testing.T) {
+	const poison = "outbox-panic-marker-4f19"
+
+	for _, testCase := range []struct {
+		name     string
+		loop     string
+		sentinel error
+		build    func() (*fakeRelay, PublisherRuntime)
+	}{
+		{
+			name:     "relay",
+			loop:     "relay",
+			sentinel: errRelayPanic,
+			build: func() (*fakeRelay, PublisherRuntime) {
+				relay := newFakeRelay(func(context.Context, <-chan struct{}) postgresoutbox.RelayResult {
+					panic(poison)
+				})
+				return relay, testPublisherRuntime(nil)
+			},
+		},
+		{
+			name:     "publisher",
+			loop:     "publisher",
+			sentinel: errPublisherPanic,
+			build: func() (*fakeRelay, PublisherRuntime) {
+				relay := newFakeRelay(func(ctx context.Context, _ <-chan struct{}) postgresoutbox.RelayResult {
+					<-ctx.Done()
+					return postgresoutbox.RelayResult{}
+				})
+				publisher := testPublisherRuntime(nil)
+				publisher.run = func(context.Context) error { panic(poison) }
+				return relay, publisher
+			},
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			relay, publisher := testCase.build()
+			var records strings.Builder
+			log := slog.New(slog.NewJSONHandler(&records, nil))
+
+			got, deadline := runRelayLifecycle(
+				t.Context(), t.Context(), lifecycleConfig(), log, telemetry.New(), relay, &publisher,
+			)
+
+			if !errors.Is(got.Err, testCase.sentinel) {
+				t.Fatalf("runRelayLifecycle() err = %v, want %v", got.Err, testCase.sentinel)
+			}
+			if !got.CleanupUnsafe {
+				t.Fatalf("runRelayLifecycle() = %+v, want cleanup refused after a panicking run loop", got)
+			}
+			if deadline.IsZero() {
+				t.Fatal("runRelayLifecycle() returned no teardown deadline after a recovered panic")
+			}
+			// The panic's value reaches neither the returned error nor the record:
+			// only its type, its class, and the stack do. failure.PanicAttrs owns
+			// that argument.
+			logged := records.String()
+			if strings.Contains(got.Err.Error(), poison) || strings.Contains(logged, poison) {
+				t.Fatalf("panic value escaped: err=%v logs=%s", got.Err, logged)
+			}
+			for _, want := range []string{
+				`"outbox_run_loop_panic"`,
+				`"loop":"` + testCase.loop + `"`,
+				`"panic.class":"string"`,
+				`"panic.type":"string"`,
+				`"stack":`,
+			} {
+				if !strings.Contains(logged, want) {
+					t.Errorf("panic record is missing %s: %s", want, logged)
+				}
+			}
+		})
 	}
 }
 
@@ -512,7 +603,8 @@ func TestOutboxRelayPublisherRuntime(t *testing.T) {
 		})
 		result := make(chan postgresoutbox.RelayResult, 1)
 		go func() {
-			result <- runRelayLifecycle(t.Context(), t.Context(), lifecycleConfig(), telemetry.New(), relay, &publisher)
+			lifecycleResult, _ := runRelayLifecycle(t.Context(), t.Context(), lifecycleConfig(), slog.New(slog.DiscardHandler), telemetry.New(), relay, &publisher)
+			result <- lifecycleResult
 		}()
 		<-relay.started
 		<-started
@@ -533,7 +625,8 @@ func TestOutboxRelayPublisherRuntime(t *testing.T) {
 		signalCtx, cancel := context.WithCancel(t.Context())
 		result := make(chan postgresoutbox.RelayResult, 1)
 		go func() {
-			result <- runRelayLifecycle(signalCtx, t.Context(), lifecycleConfig(), telemetry.New(), relay, &publisher)
+			lifecycleResult, _ := runRelayLifecycle(signalCtx, t.Context(), lifecycleConfig(), slog.New(slog.DiscardHandler), telemetry.New(), relay, &publisher)
+			result <- lifecycleResult
 		}()
 		<-relay.started
 		cancel()
@@ -560,7 +653,7 @@ func TestOutboxRelayPublisherRuntime(t *testing.T) {
 func TestOutboxRelayReadinessAndLiveness(t *testing.T) {
 	relayReady := atomic.Bool{}
 	publisherReady := atomic.Bool{}
-	server := newDiagnosticsServer(func() bool { return relayReady.Load() && publisherReady.Load() }, telemetry.New())
+	server := runtimeopts.DiagnosticsServer(func() bool { return relayReady.Load() && publisherReady.Load() }, telemetry.New())
 	for _, test := range []struct {
 		path string
 		code int

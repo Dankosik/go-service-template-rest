@@ -508,7 +508,7 @@ reopen that decision.
 | `cmd/outbox-relay/internal/bootstrap/run_test.go` | Runtime-constructor validation, custom-builder usability, combined readiness, terminal supervisor drain/exit, join safety, and shutdown-error propagation |
 | `cmd/outbox-relay/internal/bootstrap/legacy_classification_test.go` (add) | Flag exclusivity, no-publisher branch, loop-to-zero, cancellation/non-zero exit, bounded logging, and pool cleanup |
 | `cmd/worker/internal/bootstrap/messaging_config_parity_test.go` | Consume the same table-only mapping corpus as the new relay test |
-| `test/postgres_outbox_integration_test.go` | Schema/state/audit/receipt/cleanup/ordering transitions against real PostgreSQL |
+| `test/postgres_outbox_*_integration_test.go` | Schema/state/audit/receipt/cleanup/ordering transitions against real PostgreSQL |
 | `test/postgres_outbox_natsjs_integration_test.go` | Delete local `natsOutboxPublisher`; construct the production adapter and prove joined identity/trace/failure semantics |
 | `examples/reference-service/postgres_outbox_reconciliation_integration_test.go` (add) | Repository-adapter lost-commit caller route |
 

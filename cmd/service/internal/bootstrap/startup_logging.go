@@ -8,7 +8,6 @@ import (
 	"github.com/example/go-service-template-rest/cmd/internal/runtimeopts"
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
-	"github.com/example/go-service-template-rest/internal/observability/logctx"
 )
 
 // startupLogArgs builds the stage attributes every startup and shutdown record
@@ -46,7 +45,7 @@ func logProcessExit(ctx context.Context, runErr error) {
 }
 
 func bootstrapLoggerStage(cfg config.Config) *slog.Logger {
-	log := logctx.NewProcessLogger(os.Stdout, cfg.Log.Level).With(runtimeopts.LoggerFields(cfg)...)
+	log := runtimeopts.Logger(os.Stdout, cfg)
 	slog.SetDefault(log)
 	return log
 }

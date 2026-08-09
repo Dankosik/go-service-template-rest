@@ -14,7 +14,6 @@ import (
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/getkin/kin-openapi/routers/gorillamux"
-	oapimiddleware "github.com/oapi-codegen/nethttp-middleware"
 )
 
 // securedSpec is a minimal contract that declares a security requirement. The
@@ -199,10 +198,11 @@ func securedHandlerWithLog(
 	}))
 }
 
-// securedHandlerWithTerminal assembles the validator against securedSpec exactly
-// the way openAPIRequestValidator does, so the mapping under test is the one the
-// router installs. The terminal handler is a parameter because the identity seam
-// can only be proved by a handler that inspects the request it was given.
+// securedHandlerWithTerminal runs securedSpec through the same requestValidator
+// openAPIRequestValidator installs, so the mapping under test cannot drift from
+// the one the router serves. The terminal handler is a parameter because the
+// identity seam can only be proved by a handler that inspects the request it was
+// given.
 func securedHandlerWithTerminal(
 	tb testing.TB,
 	authenticate openapi3filter.AuthenticationFunc,
@@ -224,20 +224,7 @@ func securedHandlerWithTerminal(
 		tb.Fatalf("build secured router: %v", err)
 	}
 
-	reject := handleGeneratedRequestError(log, challenge)
-	validator := oapimiddleware.OapiRequestValidatorWithOptions(spec, &oapimiddleware.Options{
-		DoNotValidateServers: true,
-		Options:              openapi3filter.Options{AuthenticationFunc: authenticate},
-		ErrorHandlerWithOpts: func(
-			_ context.Context,
-			err error,
-			w http.ResponseWriter,
-			r *http.Request,
-			_ oapimiddleware.ErrorHandlerOpts,
-		) {
-			reject(w, r, err)
-		},
-	})
+	validator := requestValidator(spec, authenticate, handleGeneratedRequestError(log, challenge))
 
 	return RequestCorrelation(validator(terminal))
 }

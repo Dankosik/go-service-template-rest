@@ -115,12 +115,33 @@ func builtinPolicies(
 	}
 }
 
-// unaryChain and streamChain assemble the one interceptor order this transport
-// serves, outermost first: correlation, the builtins, the supplied policy, then
-// the handler error boundary. Both RPC kinds and the benchmark variants in
-// performance_test.go build their chains here, so a position cannot drift
-// between them; the package doc owns what each position buys.
+// assembleChain is the one interceptor order this transport serves, outermost
+// first: correlation, the builtins, the supplied policy, then the handler error
+// boundary. Both RPC kinds and the benchmark variants in performance_test.go
+// build their chains through it, so a position cannot drift between them; the
+// package doc owns what each position buys.
 //
+// The order is written once rather than per RPC kind. The two callers below
+// supply the only things that differ — grpc-go's separate interceptor type, the
+// correlation interceptor for that type, and the adapter from [aroundRPC] to it —
+// so the guarantee that unary and streaming run the same positions is a property
+// of this function rather than of whoever compares two bodies.
+func assembleChain[Interceptor any](
+	correlation Interceptor,
+	builtins []builtinPolicy,
+	supplied []Interceptor,
+	handlerErrors aroundRPC,
+	adapt func(aroundRPC) Interceptor,
+) []Interceptor {
+	chain := make([]Interceptor, 0, len(builtins)+len(supplied)+2)
+	chain = append(chain, correlation)
+	for _, policy := range builtins {
+		chain = append(chain, adapt(policy.around))
+	}
+	chain = append(chain, supplied...)
+	return append(chain, adapt(handlerErrors))
+}
+
 // log reaches correlation only. Every policy below it takes the logger it needs
 // through builtins, and correlation is not one of them because it is the one
 // policy still written per RPC kind.
@@ -130,12 +151,7 @@ func unaryChain(
 	supplied []grpc.UnaryServerInterceptor,
 	handlerErrors aroundRPC,
 ) []grpc.UnaryServerInterceptor {
-	chain := []grpc.UnaryServerInterceptor{correlationUnaryInterceptor(log)}
-	for _, policy := range builtins {
-		chain = append(chain, asUnaryInterceptor(policy.around))
-	}
-	chain = append(chain, supplied...)
-	return append(chain, asUnaryInterceptor(handlerErrors))
+	return assembleChain(correlationUnaryInterceptor(log), builtins, supplied, handlerErrors, asUnaryInterceptor)
 }
 
 func streamChain(
@@ -144,10 +160,5 @@ func streamChain(
 	supplied []grpc.StreamServerInterceptor,
 	handlerErrors aroundRPC,
 ) []grpc.StreamServerInterceptor {
-	chain := []grpc.StreamServerInterceptor{correlationStreamInterceptor(log)}
-	for _, policy := range builtins {
-		chain = append(chain, asStreamInterceptor(policy.around))
-	}
-	chain = append(chain, supplied...)
-	return append(chain, asStreamInterceptor(handlerErrors))
+	return assembleChain(correlationStreamInterceptor(log), builtins, supplied, handlerErrors, asStreamInterceptor)
 }

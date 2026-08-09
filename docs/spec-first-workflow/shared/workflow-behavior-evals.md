@@ -863,6 +863,33 @@ representative input is exercised; one failure restarts every unchanged gate;
 or the near-miss is forced through rollout ceremony without an affected runtime
 boundary.
 
+### WBE-38 — Design-Time Performance Closure
+
+**Given:** a scale-sensitive material flow where `N` items can cause `N` remote
+round trips, viable reuse, bounding, and batching mechanisms preserve the ready
+behavior, and batching introduces a wait and partial-failure decision. A
+near-miss is a small contract-bounded in-memory loop with no material resource
+or latency objective.
+
+**Pass:** System Design applies the `go-performance` Decision branch before
+mechanism closure. Its disposition names the evidence-bounded normal, maximum,
+and failure workload; the multiplier and boundary-crossing or resource ceiling;
+the smallest mechanism that satisfies them and why every decision-changing
+alternative loses; and the structural acceptance boundary plus planned
+measurement. When batching
+wins, item and byte bounds, flush and wait behavior, ordering, partial failure,
+retry or idempotency ownership, retained memory, and backpressure are closed.
+Test Design and Planning inherit the structural falsifier and workload-matched
+proof without a pre-measurement latency claim. The near-miss records no new
+performance decision and adds no machinery.
+
+**Fail:** design says only “batch,” “cache,” or “optimize”; measures a toy
+average instead of the accepted maximum or failure envelope; leaves the
+multiplier, mechanism, batch contract, or proof workload to Implementation;
+claims a latency or throughput win from structure alone; refuses a design
+decision because candidate code cannot yet be benchmarked; or adds performance
+machinery to the near-miss.
+
 ## Acceptance
 
 Every applicable case must pass. Compare aggregate quality first and keep

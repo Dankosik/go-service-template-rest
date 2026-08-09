@@ -25,8 +25,30 @@ func TestApplyStatementTimeoutsPublishesSessionDefaults(t *testing.T) {
 	applyStatementTimeouts(poolConfig.ConnConfig, 8*time.Second)
 
 	for _, name := range []string{"statement_timeout", "idle_in_transaction_session_timeout"} {
-		if got := poolConfig.ConnConfig.RuntimeParams[name]; got != "8000" {
-			t.Fatalf("RuntimeParams[%q] = %q, want %q milliseconds", name, got, "8000")
+		if got := poolConfig.ConnConfig.RuntimeParams[name]; got != "8000ms" {
+			t.Fatalf("RuntimeParams[%q] = %q, want %q", name, got, "8000ms")
+		}
+	}
+}
+
+// TestRuntimeParamMillisecondsRoundsUp pins the rounding direction rather than
+// the arithmetic. A configured timeout with a sub-millisecond remainder is
+// reachable — postgres.statement_timeout is floored at 100ms, and 100500us is
+// above that floor — and truncating it would publish less time to PostgreSQL
+// than the operator configured.
+func TestRuntimeParamMillisecondsRoundsUp(t *testing.T) {
+	t.Parallel()
+
+	for _, testCase := range []struct {
+		duration time.Duration
+		want     string
+	}{
+		{duration: 8 * time.Second, want: "8000ms"},
+		{duration: 100500 * time.Microsecond, want: "101ms"},
+		{duration: 100 * time.Millisecond, want: "100ms"},
+	} {
+		if got := RuntimeParamMilliseconds(testCase.duration); got != testCase.want {
+			t.Errorf("RuntimeParamMilliseconds(%s) = %q, want %q", testCase.duration, got, testCase.want)
 		}
 	}
 }

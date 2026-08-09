@@ -3,9 +3,13 @@ package oidcjwt
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
 	"runtime/debug"
+
+	// Aliased because this package's own failure(Kind) constructor owns the
+	// name: these are the repository's neutral failure identities, not this
+	// package's sanitized authentication categories.
+	sharedfailure "github.com/example/go-service-template-rest/internal/failure"
 )
 
 // Kind is the finite, sanitized authentication failure taxonomy.
@@ -138,23 +142,24 @@ func failure(kind Kind) error {
 // failure, which the metric alone cannot locate: it says a panic occurred, and
 // this says where the service defect is.
 //
-// Only the panic's type is published, never its value: a panic raised while
-// parsing a token or a provider document can carry either in its message, and
-// providerError's redaction rule covers logs as much as errors. The stack is
-// safe by the same reading — it names functions and files, not values — and it
-// is the only record of where the panic came from, because both converters
-// answer before any transport recovery could see it.
+// It is the only record of where such a panic came from, because both
+// converters answer before any transport recovery could see it. What the record
+// may carry is [sharedfailure.PanicAttrs]'s decision: providerError's redaction
+// rule reaches logs as much as errors, and that constructor already withholds
+// the panic's value while publishing its type, class, and stack.
 func logRecoveredPanic(ctx context.Context, log *slog.Logger, operation string, recovered any) {
 	if log == nil {
 		log = slog.Default()
 	}
+	// debug.Stack is taken here, inside the caller's deferred recovery, because
+	// that is the only point the panicking frames still exist.
 	log.ErrorContext(
 		ctx,
 		"authn_panic_recovered",
-		"component", "authn",
-		"authn.operation", operation,
-		"panic.type", fmt.Sprintf("%T", recovered),
-		"stack", string(debug.Stack()),
+		append(
+			[]any{"component", "authn", "authn.operation", operation},
+			sharedfailure.PanicAttrs(recovered, debug.Stack())...,
+		)...,
 	)
 }
 

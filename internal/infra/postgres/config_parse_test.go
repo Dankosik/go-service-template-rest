@@ -199,38 +199,32 @@ func TestParsePoolConfigRejectsFallbackProducingDSNs(t *testing.T) {
 	}
 }
 
-func TestProbeAddress(t *testing.T) {
+// TestParsePoolConfigRejectsUnprobeableTargets holds the two rejections that
+// were reachable only through the exported ProbeAddress, which nothing called.
+//
+// They are not ProbeAddress's behaviour and never were: parsePoolConfig runs the
+// same probe-target extraction on every pool it builds, so this is the path
+// postgres.New actually takes for both of them.
+func TestParsePoolConfigRejectsUnprobeableTargets(t *testing.T) {
 	t.Parallel()
-
-	t.Run("valid dsn", func(t *testing.T) {
-		t.Parallel()
-
-		address, err := ProbeAddress("postgres://user:pass@localhost:5432/app?sslmode=disable")
-		if err != nil {
-			t.Fatalf("ProbeAddress() error = %v", err)
-		}
-		if address != "localhost:5432" {
-			t.Fatalf("ProbeAddress() = %q, want localhost:5432", address)
-		}
-	})
 
 	t.Run("invalid dsn is redacted", func(t *testing.T) {
 		t.Parallel()
 
 		rawDSN := "postgres://user:top-secret%@localhost:5432/app"
-		_, err := ProbeAddress(rawDSN)
+		_, err := parsePoolConfig(rawDSN)
 		if err == nil {
-			t.Fatal("ProbeAddress() error = nil, want non-nil")
+			t.Fatal("parsePoolConfig() error = nil, want non-nil")
 		}
 		if !errors.Is(err, ErrConfig) {
-			t.Fatalf("ProbeAddress() error = %v, want ErrConfig", err)
+			t.Fatalf("parsePoolConfig() error = %v, want ErrConfig", err)
 		}
 		if !strings.Contains(err.Error(), "parse postgres dsn") || !strings.Contains(err.Error(), "redacted") {
-			t.Fatalf("ProbeAddress() error = %v, want redacted parse context", err)
+			t.Fatalf("parsePoolConfig() error = %v, want redacted parse context", err)
 		}
 		for _, leaked := range []string{rawDSN, "top-secret", "user"} {
 			if strings.Contains(err.Error(), leaked) {
-				t.Fatalf("ProbeAddress() error = %v, leaked %q", err, leaked)
+				t.Fatalf("parsePoolConfig() error = %v, leaked %q", err, leaked)
 			}
 		}
 	})
@@ -238,15 +232,34 @@ func TestProbeAddress(t *testing.T) {
 	t.Run("invalid probe target shape", func(t *testing.T) {
 		t.Parallel()
 
-		_, err := ProbeAddress("postgres://user:pass@localhost:5432/app?host=/var/run/postgresql&port=5432&sslmode=disable")
+		_, err := parsePoolConfig("postgres://user:pass@localhost:5432/app?host=/var/run/postgresql&port=5432&sslmode=disable")
 		if err == nil {
-			t.Fatal("ProbeAddress() error = nil, want non-nil")
+			t.Fatal("parsePoolConfig() error = nil, want non-nil")
 		}
 		if !errors.Is(err, ErrConfig) {
-			t.Fatalf("ProbeAddress() error = %v, want ErrConfig", err)
+			t.Fatalf("parsePoolConfig() error = %v, want ErrConfig", err)
 		}
 		if !strings.Contains(err.Error(), "postgres dsn requires valid single tcp host and port") {
-			t.Fatalf("ProbeAddress() error = %v, want invalid target context", err)
+			t.Fatalf("parsePoolConfig() error = %v, want invalid target context", err)
 		}
 	})
+}
+
+// TestProbeAddressFromPoolConfigExtractsTheSingleTarget keeps the positive case:
+// the host:port a readiness probe dials, which is what the rejections above
+// exist to guarantee is unambiguous.
+func TestProbeAddressFromPoolConfigExtractsTheSingleTarget(t *testing.T) {
+	t.Parallel()
+
+	config, err := parsePoolConfig("postgres://user:pass@localhost:5432/app?sslmode=disable")
+	if err != nil {
+		t.Fatalf("parsePoolConfig() error = %v", err)
+	}
+	address, err := postgresProbeAddressFromPoolConfig(config)
+	if err != nil {
+		t.Fatalf("postgresProbeAddressFromPoolConfig() error = %v", err)
+	}
+	if address != "localhost:5432" {
+		t.Fatalf("postgresProbeAddressFromPoolConfig() = %q, want localhost:5432", address)
+	}
 }

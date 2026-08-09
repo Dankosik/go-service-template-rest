@@ -20,10 +20,10 @@ import (
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/infra/grpcclient"
+	"github.com/example/go-service-template-rest/internal/infra/telemetry/telemetrytest"
 	"github.com/example/go-service-template-rest/internal/reqctx"
 	"go.opentelemetry.io/otel/propagation"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
@@ -52,16 +52,7 @@ func TestTransparentRetryReappliesClosedPropagationPerAttempt(t *testing.T) {
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			peer := startTransparentRetryPeer(t)
-			recorder := tracetest.NewSpanRecorder()
-			tracerProvider := sdktrace.NewTracerProvider(
-				sdktrace.WithSampler(sdktrace.AlwaysSample()),
-				sdktrace.WithSpanProcessor(recorder),
-			)
-			t.Cleanup(func() {
-				if err := tracerProvider.Shutdown(context.Background()); err != nil {
-					t.Errorf("TracerProvider.Shutdown() error = %v", err)
-				}
-			})
+			recorder, tracerProvider := telemetrytest.NewRecordingTracerProvider(t)
 
 			cfg := grpcclient.DefaultConfig("passthrough:///" + peer.address)
 			cfg.HealthCheck = false

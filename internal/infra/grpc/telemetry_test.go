@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	"github.com/example/go-service-template-rest/internal/infra/grpcclient"
+	"github.com/example/go-service-template-rest/internal/infra/telemetry/telemetrytest"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/propagation"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
@@ -294,24 +295,8 @@ type recordingTelemetry struct {
 func newRecordingTelemetry(t *testing.T) recordingTelemetry {
 	t.Helper()
 
-	spanRecorder := tracetest.NewSpanRecorder()
-	tracerProvider := sdktrace.NewTracerProvider(
-		sdktrace.WithSampler(sdktrace.AlwaysSample()),
-		sdktrace.WithSpanProcessor(spanRecorder),
-	)
-	t.Cleanup(func() {
-		if err := tracerProvider.Shutdown(context.Background()); err != nil {
-			t.Errorf("TracerProvider.Shutdown() error = %v", err)
-		}
-	})
-
-	metricReader := sdkmetric.NewManualReader()
-	meterProvider := sdkmetric.NewMeterProvider(sdkmetric.WithReader(metricReader))
-	t.Cleanup(func() {
-		if err := meterProvider.Shutdown(context.Background()); err != nil {
-			t.Errorf("MeterProvider.Shutdown() error = %v", err)
-		}
-	})
+	spanRecorder, tracerProvider := telemetrytest.NewRecordingTracerProvider(t)
+	metricReader, meterProvider := telemetrytest.NewManualMeterProvider(t)
 
 	return recordingTelemetry{
 		spanRecorder:   spanRecorder,
@@ -335,20 +320,27 @@ func assertRPCSpans(t *testing.T, spans []sdktrace.ReadOnlySpan, parentTraceID t
 				if span.Name() != method || span.SpanKind() != kind {
 					continue
 				}
+				// The client keeps its own Health/Watch open for load-balancer
+				// health checking, begun from no caller context, so the recorder
+				// legitimately holds Watch spans on a second trace. Which of the
+				// two ends first is a race between this test's stream
+				// cancellation and the server shutdown that closes the client's,
+				// so the propagated span is searched for rather than required to
+				// be the first one recorded.
 				if span.SpanContext().TraceID() != parentTraceID {
-					t.Fatalf(
-						"%s %s span trace ID = %s, want propagated %s",
-						kind,
-						method,
-						span.SpanContext().TraceID(),
-						parentTraceID,
-					)
+					continue
 				}
 				found = true
 				break
 			}
 			if !found {
-				t.Fatalf("missing %s span for %s; spans = %v", kind, method, spanNames(spans))
+				t.Fatalf(
+					"no %s span for %s on propagated trace %s; spans = %v",
+					kind,
+					method,
+					parentTraceID,
+					spanNames(spans),
+				)
 			}
 		}
 	}

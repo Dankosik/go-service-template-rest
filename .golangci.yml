@@ -1,10 +1,14 @@
 version: "2"
 
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
 run:
   timeout: 3m
 
 linters:
-  default: standard
+  default: none
   enable:
     - asasalint
     - asciicheck
@@ -41,6 +45,7 @@ linters:
     - gocritic
     - gocognit
     - iface
+    - ineffassign
     - inamedparam
     - interfacebloat
     - intrange
@@ -77,34 +82,30 @@ linters:
     - unconvert
     - unqueryvet
     - unparam
+    - unused
     - usetesting
     - usestdlibvars
     - wastedassign
     - wrapcheck
   exclusions:
     generated: strict
-    paths:
-      - internal/openapi/openapi\.gen\.go
-      - internal/infra/postgres/sqlcgen/.*
+    warn-unused: true
     rules:
       # Complexity gates are production-focused for now; table-heavy tests stay review-visible
       # without forcing artificial helper extraction.
       - path: _test\.go
         linters:
           - cyclop
-          - forbidigo
           - exhaustruct
           - gocognit
           - nestif
-      # recordStartupRejection's errorType varies by database profile: the
-      # PostgreSQL startup stage records "dependency_init", and DATABASE=none has
-      # no dependency stage, so a generated service passes one value. A nolint
-      # directive cannot express that — it would itself be unused in the profile
-      # where the parameter does vary.
-      - path: cmd/service/internal/bootstrap/startup_rejections\.go
-        linters:
-          - unparam
   settings:
+    embeddedstructfieldcheck:
+      forbid-mutex: true
+    exhaustive:
+      check:
+        - switch
+        - map
     wrapcheck:
       # A gRPC status is a transport answer, not an error to be annotated: the
       # code and message are the whole payload, and wrapping one hides it from
@@ -133,6 +134,20 @@ linters:
         # second, less specific prefix to the only registration error the
         # constructor can produce. Same module-relative fragment rule as above.
         - internal/infra/telemetry\.InstrumentSet\)\.Err\(
+        # InstallTelemetry already returns the operator-facing rejection, named
+        # for the binary that asked for it — "initialize worker metrics: ...".
+        # The composition root that receives it decides whether that is fatal;
+        # it has nothing to add to the wording, and wrapping would print the
+        # binary's own name twice. Same module-relative fragment rule as above.
+        - cmd/internal/runtimeopts\.InstallTelemetry\(
+        # ValidateGracePeriod and ListenDiagnostics are the same case: each
+        # already returns the whole operator-facing rejection — the configuration
+        # leaf to edit, or the component whose diagnostics address was taken. The
+        # composition root that receives one has not reached a stage to name and
+        # would only print the binary's own name twice. Same module-relative
+        # fragment rule as above.
+        - cmd/internal/runtimeopts\.ValidateGracePeriod\(
+        - cmd/internal/runtimeopts\.ListenDiagnostics\(
     staticcheck:
       checks:
         - all
@@ -154,11 +169,17 @@ linters:
       ignore-tests: true
       min-occurrences: 4
     govet:
-      enable:
-        - deepequalerrors
-        - reflectvaluecompare
-        - sortslice
-        - unusedwrite
+      enable-all: true
+      disable:
+        # Reordering fields for padding is a measured performance decision, not
+        # a default readability rule.
+        - fieldalignment
+        # findcall needs a repository-owned target; enabled without one it does
+        # not express a stable policy.
+        - findcall
+        # The analyzer is intentionally outside the default vet suite because it
+        # reports too many benign shadows to serve as a repository gate.
+        - shadow
     ireturn:
       allow:
         - anon
@@ -195,7 +216,9 @@ linters:
         config_no_runtime_owners:
           list-mode: lax
           files:
+            - "**/internal/config/*.go"
             - "**/internal/config/**/*.go"
+            - "!**/internal/config/*_test.go"
           allow:
             # profile:authn-oidc-jwt:start
             # The authn trust rules are a leaf for the same reason otelconfig is:
@@ -220,7 +243,9 @@ linters:
         health_no_runtime_adapters:
           list-mode: lax
           files:
+            - "**/internal/health/*.go"
             - "**/internal/health/**/*.go"
+            - "!**/internal/health/*_test.go"
           deny:
             - pkg: github.com/example/go-service-template-rest/internal
               desc: health behavior receives probes and must not depend on config, adapters, generated contracts, or other features.
@@ -230,7 +255,9 @@ linters:
         grpclimits_is_pure_policy:
           list-mode: lax
           files:
+            - "**/internal/grpclimits/*.go"
             - "**/internal/grpclimits/**/*.go"
+            - "!**/internal/grpclimits/*_test.go"
           deny:
             - pkg: github.com/example/go-service-template-rest/internal
               desc: grpclimits is a pure bound-rule leaf shared by internal/config and internal/infra/grpc; a dependency here would put it back out of reach of one of them.
@@ -242,7 +269,9 @@ linters:
         failure_is_transport_neutral:
           list-mode: lax
           files:
+            - "**/internal/failure/*.go"
             - "**/internal/failure/**/*.go"
+            - "!**/internal/failure/*_test.go"
           deny:
             - pkg: net/http
               desc: failure identities are transport-neutral; HTTP rendering belongs in internal/problem and internal/infra/http.
@@ -252,17 +281,36 @@ linters:
               desc: failure is a leaf shared by features and transports and must not depend on repository runtime owners.
             - pkg: github.com/example/go-service-template-rest/cmd
               desc: failure must not depend on composition roots.
+        problem_is_a_catalog_leaf:
+          list-mode: lax
+          # Both globs are required: "**" matches at least one path segment here,
+          # so "**/internal/problem/**/*.go" alone covers subdirectories and
+          # silently skips the package's own files.
+          files:
+            - "**/internal/problem/*.go"
+            - "**/internal/problem/**/*.go"
+          deny:
+            - pkg: google.golang.org/grpc
+              desc: the Problem catalog is the HTTP rendering of a failure; gRPC status rendering belongs in internal/infra/grpc.
+            - pkg: github.com/example/go-service-template-rest/internal/infra
+              desc: problem is a leaf shared by the HTTP adapter and by feature packages that may not import an adapter; it must not depend on one itself.
+            - pkg: github.com/example/go-service-template-rest/cmd
+              desc: problem must not depend on composition roots.
         http_no_postgres:
           list-mode: lax
           files:
+            - "**/internal/infra/http/*.go"
             - "**/internal/infra/http/**/*.go"
+            - "!**/internal/infra/http/*_test.go"
           deny:
             - pkg: github.com/example/go-service-template-rest/internal/infra/postgres
               desc: HTTP maps feature behavior and must not call the database adapter directly.
         otelconfig_is_pure_policy:
           list-mode: lax
           files:
+            - "**/internal/observability/otelconfig/*.go"
             - "**/internal/observability/otelconfig/**/*.go"
+            - "!**/internal/observability/otelconfig/*_test.go"
           deny:
             - pkg: github.com/example/go-service-template-rest/internal
               desc: otelconfig is pure OpenTelemetry policy and must not depend on repository runtime packages.
@@ -272,7 +320,9 @@ linters:
         authntrust_is_pure_policy:
           list-mode: lax
           files:
+            - "**/internal/authntrust/*.go"
             - "**/internal/authntrust/**/*.go"
+            - "!**/internal/authntrust/*_test.go"
           deny:
             - pkg: github.com/example/go-service-template-rest/internal
               desc: authntrust is a pure trust-rule leaf shared by internal/config and the verifier; a dependency here would put it back out of reach of one of them.
@@ -442,7 +492,18 @@ linters:
         # siblings take *metric.Int64Counter precisely to write through it.
         - ptrToRefParam
     revive:
+      enable-default-rules: true
       rules:
+        # Exported/package boilerplate conflicts with the repository comment
+        # policy: comments must carry information the declaration cannot.
+        - name: exported
+          disabled: true
+        - name: package-comments
+          disabled: true
+        # A classified error is the value in the repository's (error, bool)
+        # value/ok pairs; moving it last would make those predicates less clear.
+        - name: error-return
+          disabled: true
         - name: context-as-argument
         - name: unused-parameter
         # A local named after an imported package makes the package unreachable

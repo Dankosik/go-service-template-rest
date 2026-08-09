@@ -20,6 +20,15 @@ func TestEventValidation(t *testing.T) {
 		"schema":         func(event *Event) { event.Schema = "" },
 		"creation time":  func(event *Event) { event.CreatedAt = time.Now() },
 		"payload":        func(event *Event) { event.Payload = append(event.Payload, 0) },
+		// Ranging a string yields U+FFFD per invalid byte, and U+FFFD is not a
+		// control character, so the control scan alone accepted a header value
+		// that is not text — leaving the consumer that decodes it to fail
+		// instead. The sibling durable-identity validators reject both of these
+		// at their own boundary.
+		"invalid UTF-8 message ID": func(event *Event) { event.MessageID = "id-\xff\xfe" },
+		// C0 was refused and C1 was not. Both are equally unreadable wherever a
+		// header is printed rather than parsed.
+		"C1 control in publication ID": func(event *Event) { event.PublicationID = "pub-\u0085-id" },
 	}
 	for name, mutate := range cases {
 		t.Run(name, func(t *testing.T) {

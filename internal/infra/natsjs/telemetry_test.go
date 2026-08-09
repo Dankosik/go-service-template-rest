@@ -17,10 +17,9 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	"go.opentelemetry.io/otel/attribute"
-	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
-	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+
+	"github.com/example/go-service-template-rest/internal/infra/telemetry/telemetrytest"
 )
 
 // The outcome attribute is shared by four counters and the connection event by
@@ -95,12 +94,8 @@ func TestMessagingTelemetryContract(t *testing.T) {
 		headerCanary     = "HEADER_CANARY"
 	)
 
-	reader := sdkmetric.NewManualReader()
-	provider := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
-	t.Cleanup(func() { _ = provider.Shutdown(context.Background()) })
-	spanRecorder := tracetest.NewSpanRecorder()
-	traceProvider := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(spanRecorder))
-	t.Cleanup(func() { _ = traceProvider.Shutdown(context.Background()) })
+	reader, provider := telemetrytest.NewManualMeterProvider(t)
+	spanRecorder, traceProvider := telemetrytest.NewRecordingTracerProvider(t)
 	var logs bytes.Buffer
 	sig, err := newTelemetry(Observability{
 		Logger: slog.New(slog.NewJSONHandler(&logs, nil)),
@@ -230,9 +225,7 @@ func TestMessagingSpanNamesFollowSemanticConventions(t *testing.T) {
 	t.Parallel()
 
 	const filter = "events.>"
-	recorder := tracetest.NewSpanRecorder()
-	provider := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder))
-	t.Cleanup(func() { _ = provider.Shutdown(context.Background()) })
+	recorder, provider := telemetrytest.NewRecordingTracerProvider(t)
 	tracer := provider.Tracer(instrumentationScope)
 
 	event := Event{Subject: "events.created", MessageID: "message-1", PublicationID: "publication-1"}

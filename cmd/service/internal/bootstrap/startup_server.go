@@ -285,46 +285,6 @@ func waitForRuntimeStop(
 	return serverErr, terminalErr
 }
 
-// shutdownDiagnostics closes the private listener under its own budget, and is
-// safe to call twice.
-//
-// It needs a bound of its own: an in-flight scrape holds the connection, and
-// http.Server.Shutdown waits for active requests indefinitely — so without one a
-// stalled scraper would park the process here and take the telemetry flush with it,
-// which is the same failure the dependency close is bounded against.
-func shutdownDiagnostics(base context.Context, log *slog.Logger, budget *shutdownBudget, server runtimeServer) error {
-	if server == nil {
-		return nil
-	}
-
-	err := server.Shutdown(budget.stage(base, diagnosticsShutdownTimeout))
-	switch {
-	case err == nil, errors.Is(err, http.ErrServerClosed):
-		log.InfoContext(base, "diagnostics_stopped", startupLogArgs(startupLogComponentShutdown, "diagnostics", "success")...)
-		return nil
-	case errors.Is(err, context.DeadlineExceeded):
-		// A scrape outlived the budget. Closing abandons it, which is the same
-		// trade the API drain makes, and leaves the flush below able to run.
-		closeErr := server.Close()
-		log.WarnContext(
-			base,
-			"diagnostics_forced",
-			startupLogArgs(
-				startupLogComponentShutdown,
-				"diagnostics",
-				"degraded",
-				"reason", "scrape_outlived_shutdown_budget",
-			)...,
-		)
-		if closeErr != nil && !errors.Is(closeErr, http.ErrServerClosed) {
-			return fmt.Errorf("close diagnostics server: %w", closeErr)
-		}
-		return nil
-	default:
-		return fmt.Errorf("shutdown diagnostics server: %w", err)
-	}
-}
-
 // boundedAPIListener caps how many connections the API accepts at once.
 //
 // It covers the half of overload the middleware chain cannot see. MaxInFlight
@@ -350,123 +310,12 @@ func normalizeServeError(err error) error {
 	return err
 }
 
-func waitForStartupAdmission(
-	signalCtx context.Context,
-	bootstrapCtx context.Context,
-	args serveRuntimeArgs,
-	admissionErrCh <-chan error,
-	runErrCh <-chan serverResult,
-) (ready bool, stopRequested bool, terminalErr error) {
-	select {
-	case err := <-admissionErrCh:
-		if err != nil {
-			return false, false, rejectHTTPStartup(
-				bootstrapCtx,
-				args.log,
-				"startup.readiness",
-				fmt.Errorf("startup readiness check failed: %w", err),
-			)
-		}
-		select {
-		case result := <-runErrCh:
-			return false, false, serverStoppedBeforeReadiness(bootstrapCtx, args, result)
-		case err := <-args.backgroundFailures:
-			return false, false, rejectHTTPStartup(
-				bootstrapCtx,
-				args.log,
-				"startup.background",
-				fmt.Errorf("background task failed before readiness: %w", err),
-			)
-		default:
-			// profile:grpc:start
-			if args.grpcSrv != nil {
-				args.grpcSrv.MarkServing()
-			}
-			// profile:grpc:end
-			args.admission.MarkReady()
-			return true, false, nil
-		}
-	case <-signalCtx.Done():
-		args.log.InfoContext(signalCtx, "shutdown signal received")
-		return false, true, nil
-	case <-bootstrapCtx.Done():
-		select {
-		case <-signalCtx.Done():
-			args.log.InfoContext(signalCtx, "shutdown signal received")
-			return false, true, nil
-		default:
-		}
-		err := fmt.Errorf("startup budget exhausted before readiness: %w", bootstrapCtx.Err())
-		args.log.ErrorContext(bootstrapCtx, "startup budget exhausted before readiness", "err", err)
-		return false, false, err
-	case result := <-runErrCh:
-		return false, false, serverStoppedBeforeReadiness(bootstrapCtx, args, result)
-	case err := <-args.backgroundFailures:
-		return false, false, rejectHTTPStartup(
-			bootstrapCtx,
-			args.log,
-			"startup.background",
-			fmt.Errorf("background task failed before readiness: %w", err),
-		)
-	}
-}
-
-func serverStoppedBeforeReadiness(ctx context.Context, args serveRuntimeArgs, result serverResult) error {
-	err := fmt.Errorf("%s server stopped before readiness", result.name)
-	if result.err != nil {
-		err = fmt.Errorf("%s server stopped before readiness: %w", result.name, result.err)
-	}
-	args.log.ErrorContext(
-		ctx,
-		"startup_blocked",
-		startupLogArgs(
-			startupLogComponentStartupProbes,
-			result.name+"_serve",
-			"error",
-			"error.type", "startup_error",
-			"err", err,
-		)...,
-	)
-	return err
-}
-
 func serverStoppedAfterReadiness(log *slog.Logger, result serverResult) error {
 	if result.err == nil {
 		return fmt.Errorf("%s server stopped unexpectedly", result.name)
 	}
 	log.Error(result.name+" server stopped with error", "err", result.err)
 	return fmt.Errorf("%s server stopped with error: %w", result.name, result.err)
-}
-
-func startStartupAdmission(
-	bootstrapCtx context.Context,
-	readinessCheck func(context.Context) error,
-	readinessTimeout time.Duration,
-) <-chan error {
-	resultCh := make(chan error, 1)
-
-	go func() {
-		readyCtx, cancel := withStageBudget(bootstrapCtx, readinessTimeout)
-		defer cancel()
-
-		if err := readyCtx.Err(); err != nil {
-			resultCh <- fmt.Errorf("startup admission context: %w", err)
-			return
-		}
-		if readinessCheck != nil {
-			if err := readinessCheck(readyCtx); err != nil {
-				resultCh <- err
-				return
-			}
-		}
-		if err := readyCtx.Err(); err != nil {
-			resultCh <- fmt.Errorf("startup admission context: %w", err)
-			return
-		}
-		resultCh <- nil
-	}()
-
-	return resultCh
 }
 
 func startupRuntimeContextErr(signalCtx context.Context, bootstrapCtx context.Context) error {

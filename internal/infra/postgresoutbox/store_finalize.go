@@ -60,10 +60,18 @@ func (s *Store) MarkUnorderedPublished(ctx context.Context, token, id string) (e
 	if err := validateProgressIdentity(id, token); err != nil {
 		return err
 	}
-	rows, err := s.queries.MarkOutboxPublished(ctx, sqlcgen.MarkOutboxPublishedParams{
-		ID: id, LeaseToken: &token,
+	// The batch statement covers this event exactly. Its ordering_key IS NULL is
+	// the whole of what the retired single-row statement asked for: that one also
+	// required ordering_sequence to be NULL, and outbox_events_ordering_check
+	// already guarantees a NULL key carries a NULL sequence.
+	//
+	// s.queries rather than MarkUnorderedPublishedBatch, because that method
+	// records its own mark_published sample and this call is already recording
+	// one.
+	marked, err := s.queries.MarkOutboxPublishedBatch(ctx, sqlcgen.MarkOutboxPublishedBatchParams{
+		Ids: []string{id}, LeaseToken: &token,
 	})
-	return leaseProgressError("mark outbox published", rows, 1, err)
+	return leaseProgressError("mark outbox published", int64(len(marked)), 1, err)
 }
 
 // MarkOrderedPublished finalizes one ordered event of a lease, advancing its

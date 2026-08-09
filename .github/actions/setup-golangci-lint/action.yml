@@ -1,0 +1,33 @@
+name: Setup golangci-lint
+description: Install the golangci-lint version this module pins in tools/go.mod.
+
+# Resolving the pin and installing it are one step because splitting them is how
+# they come apart. Three jobs carried both halves, and a job that reads the pin
+# one way still succeeds — it just lints on a version the repository does not
+# use, which is a difference no run reports and only a reviewer chasing a
+# disagreeing finding would ever find.
+#
+# tools/go.mod is the pin for the reason that module exists: the linter is a tool
+# dependency, and a version named anywhere else is a second place to update.
+
+outputs:
+  version:
+    description: The golangci-lint version resolved from tools/go.mod.
+    value: ${{ steps.resolve.outputs.version }}
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve version
+      id: resolve
+      shell: bash
+      run: |
+        VERSION="$(awk '$1 == "github.com/golangci/golangci-lint/v2" { print $2 }' tools/go.mod)"
+        test -n "${VERSION}"
+        echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+    - name: Install
+      uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+      with:
+        version: ${{ steps.resolve.outputs.version }}
+        install-only: true

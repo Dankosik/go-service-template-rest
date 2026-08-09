@@ -84,24 +84,6 @@ func TestWorkerShutdownBudgetFitsProcessGrace(t *testing.T) {
 	}
 }
 
-func TestWorkerCleanupContextDoesNotRestartSpentGracePeriod(t *testing.T) {
-	t.Parallel()
-
-	ctx, cancel := workerCleanupContext(context.Background(), time.Now().Add(-time.Second), time.Hour)
-	defer cancel()
-	select {
-	case <-ctx.Done():
-	default:
-		t.Fatal("worker cleanup restarted its stage timeout after the process grace period")
-	}
-
-	fresh, freshCancel := workerCleanupContext(context.Background(), time.Time{}, time.Hour)
-	defer freshCancel()
-	if _, ok := fresh.Deadline(); !ok {
-		t.Fatal("startup cleanup context has no stage deadline")
-	}
-}
-
 //nolint:paralleltest // Installs a process-wide tracer provider for span capture.
 func TestWorkerLoggerCorrelatesRecords(t *testing.T) {
 	telemetrytest.InstallSpanRecorder(t)
@@ -131,16 +113,16 @@ func TestWorkerTelemetrySetupCanBeCleanedWithinCallerBudget(t *testing.T) {
 	telemetrytest.RestoreGlobals(t)
 	telemetrytest.ClearAmbientExporterEnv(t)
 
-	cleanup, err := setupTelemetry(t.Context(), config.Config{
+	cleanup, err := runtimeopts.InstallTelemetry(t.Context(), config.Config{
 		App: config.AppConfig{
 			Env: "test", Version: "v1", Commit: "test-commit", InstanceID: "worker-test",
 		},
 		Observability: config.ObservabilityConfig{OTel: config.OTelConfig{
 			ServiceName: "worker", TracesSampler: "always_off",
 		}},
-	}, telemetry.New(), slog.New(slog.DiscardHandler))
+	}, telemetry.New(), slog.New(slog.DiscardHandler), "worker")
 	if err != nil {
-		t.Fatalf("setupTelemetry() error = %v", err)
+		t.Fatalf("runtimeopts.InstallTelemetry() error = %v", err)
 	}
 	cleanupCtx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
@@ -230,38 +212,20 @@ func TestWorkerDiagnosticsReadinessUsesImmediateMessagingState(t *testing.T) {
 	if err := healthSvc.Refresh(t.Context(), time.Second, 3); err != nil {
 		t.Fatalf("seed healthy readiness: %v", err)
 	}
-	if server := newDiagnosticsServer("", healthSvc, func() bool { return true }, telemetry.New()); server != nil {
-		t.Fatal("newDiagnosticsServer(empty address) != nil")
-	}
-	server := newDiagnosticsServer("127.0.0.1:0", healthSvc, func() bool { return false }, telemetry.New())
-	if server == nil {
-		t.Fatal("newDiagnosticsServer() = nil")
-	}
+	server := runtimeopts.DiagnosticsServer(workerReady(func() bool { return false }, healthSvc), telemetry.New())
 	recorder := httptest.NewRecorder()
 	server.Handler.ServeHTTP(recorder, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/health/ready", nil))
 	if recorder.Code != http.StatusServiceUnavailable {
 		t.Fatalf("GET /health/ready status = %d, want %d", recorder.Code, http.StatusServiceUnavailable)
 	}
 
-	server = newDiagnosticsServer("127.0.0.1:0", healthSvc, func() bool { return true }, telemetry.New())
-	if server == nil {
-		t.Fatal("newDiagnosticsServer(healthy) = nil")
-	}
+	server = runtimeopts.DiagnosticsServer(workerReady(func() bool { return true }, healthSvc), telemetry.New())
 	for path := range map[string]struct{}{"/health/live": {}, "/health/ready": {}, "/metrics": {}} {
 		recorder = httptest.NewRecorder()
 		server.Handler.ServeHTTP(recorder, httptest.NewRequestWithContext(t.Context(), http.MethodGet, path, nil))
 		if recorder.Code != http.StatusOK {
 			t.Fatalf("GET %s status = %d, want %d", path, recorder.Code, http.StatusOK)
 		}
-	}
-
-	listener, err := listenDiagnostics(t.Context(), "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("listenDiagnostics() error = %v", err)
-	}
-	defer func() { _ = listener.Close() }()
-	if _, err := listenDiagnostics(t.Context(), listener.Addr().String()); err == nil {
-		t.Fatal("listenDiagnostics(occupied address) error = nil")
 	}
 }
 

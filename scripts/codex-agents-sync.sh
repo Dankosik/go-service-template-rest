@@ -23,37 +23,12 @@ fail() {
 	exit 1
 }
 
-mode=""
-repo="${PWD}"
-while (($# > 0)); do
-	case "$1" in
-	--apply | --check)
-		[[ -z "${mode}" ]] || fail "choose exactly one mode"
-		mode="${1#--}"
-		shift
-		;;
-	--repo)
-		[[ $# -ge 2 ]] || fail "--repo needs a directory"
-		repo="$2"
-		shift 2
-		;;
-	-h | --help)
-		usage
-		exit 0
-		;;
-	*)
-		fail "unknown argument: $1"
-		;;
-	esac
-done
+# shellcheck source=scripts/lib/sync-cli.sh
+source "$(dirname -- "${BASH_SOURCE[0]}")/lib/sync-cli.sh"
+sync_cli_parse "apply check" "$@"
+mode="${SYNC_MODE}"
+repo="${SYNC_REPO}"
 
-[[ -n "${mode}" ]] || {
-	usage >&2
-	exit 2
-}
-
-repo=$(CDPATH='' cd -- "${repo}" 2>/dev/null && pwd) ||
-	fail "repository directory not found"
 roles_root="${repo}/.codex/agents"
 config="${repo}/.codex/config.toml"
 

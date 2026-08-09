@@ -103,9 +103,7 @@ func newTelemetry(obs Observability, role Role, readiness func() bool) (*telemet
 	if obs.Logger == nil {
 		obs.Logger = slog.Default()
 	}
-	if obs.Meter == nil {
-		obs.Meter = otel.GetMeterProvider().Meter(instrumentationScope)
-	}
+	obs.Meter = infratelemetry.MeterOrGlobal(obs.Meter, instrumentationScope)
 	if obs.Tracer == nil {
 		obs.Tracer = otel.GetTracerProvider().Tracer(instrumentationScope)
 	}

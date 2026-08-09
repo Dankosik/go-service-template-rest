@@ -3,6 +3,7 @@ package telemetry
 import (
 	"fmt"
 
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/metric"
 )
 
@@ -33,22 +34,52 @@ func NewInstrumentSet(meter metric.Meter) *InstrumentSet {
 	return &InstrumentSet{meter: meter}
 }
 
+// MeterOrGlobal returns meter, or one from the global provider named for scope
+// when the caller supplied none.
+//
+// An adapter takes its meter as an option so a test can hand it a manual reader,
+// and falls back to the global provider the composition root installed. Both
+// adapters that do this wrote the fallback themselves, which is one place each
+// for a third to copy it from and name the wrong scope while doing so.
+//
+//nolint:ireturn // metric.Meter is OTel's own interface; a provider returns nothing else.
+func MeterOrGlobal(meter metric.Meter, scope string) metric.Meter {
+	if meter != nil {
+		return meter
+	}
+	return otel.GetMeterProvider().Meter(scope)
+}
+
 // Err reports the first registration that failed, or nil when every instrument
 // was created.
 func (s *InstrumentSet) Err() error {
 	return s.err
 }
 
-func (s *InstrumentSet) Int64Counter(target *metric.Int64Counter, name string, options ...metric.Int64CounterOption) {
-	if s.err != nil {
+// register is the whole of what every method below does. The five kinds differ
+// only in the instrument type and its option type, which is why this is one
+// generic function and not five bodies: a method cannot take type parameters, so
+// each method stays as the typed name a caller reads and delegates here.
+func register[Instrument, Option any](
+	set *InstrumentSet,
+	target *Instrument,
+	name string,
+	create func(string, ...Option) (Instrument, error),
+	options []Option,
+) {
+	if set.err != nil {
 		return
 	}
-	instrument, err := s.meter.Int64Counter(name, options...)
+	instrument, err := create(name, options...)
 	if err != nil {
-		s.err = fmt.Errorf("create %s metric: %w", name, err)
+		set.err = fmt.Errorf("create %s metric: %w", name, err)
 		return
 	}
 	*target = instrument
+}
+
+func (s *InstrumentSet) Int64Counter(target *metric.Int64Counter, name string, options ...metric.Int64CounterOption) {
+	register(s, target, name, s.meter.Int64Counter, options)
 }
 
 func (s *InstrumentSet) Int64UpDownCounter(
@@ -56,15 +87,7 @@ func (s *InstrumentSet) Int64UpDownCounter(
 	name string,
 	options ...metric.Int64UpDownCounterOption,
 ) {
-	if s.err != nil {
-		return
-	}
-	instrument, err := s.meter.Int64UpDownCounter(name, options...)
-	if err != nil {
-		s.err = fmt.Errorf("create %s metric: %w", name, err)
-		return
-	}
-	*target = instrument
+	register(s, target, name, s.meter.Int64UpDownCounter, options)
 }
 
 func (s *InstrumentSet) Int64ObservableGauge(
@@ -72,15 +95,7 @@ func (s *InstrumentSet) Int64ObservableGauge(
 	name string,
 	options ...metric.Int64ObservableGaugeOption,
 ) {
-	if s.err != nil {
-		return
-	}
-	instrument, err := s.meter.Int64ObservableGauge(name, options...)
-	if err != nil {
-		s.err = fmt.Errorf("create %s metric: %w", name, err)
-		return
-	}
-	*target = instrument
+	register(s, target, name, s.meter.Int64ObservableGauge, options)
 }
 
 func (s *InstrumentSet) Float64Histogram(
@@ -88,15 +103,7 @@ func (s *InstrumentSet) Float64Histogram(
 	name string,
 	options ...metric.Float64HistogramOption,
 ) {
-	if s.err != nil {
-		return
-	}
-	instrument, err := s.meter.Float64Histogram(name, options...)
-	if err != nil {
-		s.err = fmt.Errorf("create %s metric: %w", name, err)
-		return
-	}
-	*target = instrument
+	register(s, target, name, s.meter.Float64Histogram, options)
 }
 
 func (s *InstrumentSet) Float64ObservableGauge(
@@ -104,13 +111,5 @@ func (s *InstrumentSet) Float64ObservableGauge(
 	name string,
 	options ...metric.Float64ObservableGaugeOption,
 ) {
-	if s.err != nil {
-		return
-	}
-	instrument, err := s.meter.Float64ObservableGauge(name, options...)
-	if err != nil {
-		s.err = fmt.Errorf("create %s metric: %w", name, err)
-		return
-	}
-	*target = instrument
+	register(s, target, name, s.meter.Float64ObservableGauge, options)
 }

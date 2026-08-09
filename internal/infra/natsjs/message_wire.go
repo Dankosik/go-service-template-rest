@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/example/go-service-template-rest/internal/reqctx"
 	"github.com/nats-io/nats.go"
@@ -86,12 +88,28 @@ func validateRequiredValue(name, value string) error {
 	return validateOptionalValue(name, value)
 }
 
+// validateOptionalValue rejects what must not travel in a NATS header.
+//
+// UTF-8 validity is checked before the scan below rather than left to it.
+// Ranging a string yields U+FFFD for each invalid byte, and U+FFFD is not a
+// control character — so a value that is not text at all would pass the scan and
+// reach the broker, where the consumer that decodes it is the one that fails.
+// The two durable-identity validators in postgresoutbox and postgresinbox reject
+// it at their own boundary for the same reason.
+//
+// Control characters are matched with [unicode.IsControl] rather than an ASCII
+// test, so C1 (U+0080-U+009F) is refused alongside C0. Those bytes are as
+// unreadable in a subscriber's log line as the ASCII ones, and a header is read
+// far more often than it is parsed.
 func validateOptionalValue(name, value string) error {
 	if len(value) > maxHeaderValueBytes {
 		return fmt.Errorf("%w: %s exceeds %d bytes", ErrRejected, name, maxHeaderValueBytes)
 	}
+	if !utf8.ValidString(value) {
+		return fmt.Errorf("%w: %s must be valid UTF-8", ErrRejected, name)
+	}
 	for _, character := range value {
-		if character < 0x20 || character == 0x7f {
+		if unicode.IsControl(character) {
 			return fmt.Errorf("%w: %s contains a control character", ErrRejected, name)
 		}
 	}
