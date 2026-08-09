@@ -3,6 +3,7 @@ package oidcjwt
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -104,11 +105,14 @@ func bootstrapTrust(
 
 	jwksBytes, err := fetchDocument(ctx, jwksClient.request, jwksURI)
 	if err != nil {
-		return establishedTrust{}, errors.New("OIDC startup failed at JWKS")
+		return establishedTrust{}, fmt.Errorf("OIDC startup failed at JWKS: %w", err)
 	}
 	keys, err := parseKeySet(jwksBytes, now())
 	if err != nil {
-		return establishedTrust{}, errors.New("OIDC startup failed at JWKS validation")
+		return establishedTrust{}, fmt.Errorf(
+			"OIDC startup failed at JWKS validation: %w",
+			errProviderInvalidDocument,
+		)
 	}
 	log.InfoContext(ctx, "authn_trust_initialized", "component", "authn", "result", "success")
 	handedOver = true
@@ -139,59 +143,79 @@ func discoverJWKSURI(ctx context.Context, policy Policy, factory clientFactory) 
 	discoveryURL.Path = strings.TrimSuffix(discoveryURL.Path, "/") + "/.well-known/openid-configuration"
 	documentBytes, err := fetchDocument(ctx, discoveryClient.request, discoveryURL.String())
 	if err != nil {
-		return "", errors.New("OIDC startup failed at discovery")
+		return "", fmt.Errorf("OIDC startup failed at discovery: %w", err)
 	}
 	var document discoveryDocument
-	// The JWKS URI is held to the same rule as the configured issuer. It is
-	// provider-supplied and this service is about to fetch from it, which is the
-	// case authntrust.ValidProviderURL exists for.
+	// The JWKS URI is provider-supplied and this service is about to fetch it.
+	// Query parameters are allowed because they may identify the provider's exact
+	// endpoint; authority remains pinned separately by the outbound client.
 	if err := strictUnmarshal(documentBytes, &document); err != nil ||
 		document.Issuer != policy.issuer ||
-		!authntrust.ValidProviderURL(document.JWKSURI) {
-		return "", errors.New("OIDC startup failed at discovery validation")
+		!authntrust.ValidJWKSURL(document.JWKSURI) {
+		return "", fmt.Errorf(
+			"OIDC startup failed at discovery validation: %w",
+			errProviderInvalidDocument,
+		)
 	}
 	return document.JWKSURI, nil
 }
 
-// errProviderFetchFailed is the entire result of a failed provider request:
-// every caller reads it as a boolean and none reads its text. A transport error,
-// a non-200 status, and an oversized body are one answer here — the document was
-// not obtained — and which of them it was may not travel any further.
-//
-// This comment owns that rule for the package. It is a redaction rule rather
-// than an economy. A provider's error string and response body are exactly what
-// must not reach a log or a returned error, so naming the failing step is the
-// caller's to supply from what it already knows: bootstrapTrust and
-// discoverJWKSURI name the startup stage, because an operator reads that instead
-// of a running service, and fetchAndInstall answers with errRefreshFailed.
-// TestErrorsAndLogsRedactCredentialAndProviderContent fails if this leaks, and
-// docs/authentication.md publishes the same promise.
-var errProviderFetchFailed = errors.New("provider document fetch failed")
+// providerError is the closed, sanitized outcome of a provider document
+// attempt. It preserves the failing phase for startup errors and refresh metrics
+// without carrying a URL, status code, response body, or transport error text.
+type providerError string
+
+const (
+	errProviderRequest         providerError = "request"
+	errProviderTransport       providerError = "transport"
+	errProviderStatus          providerError = "status"
+	errProviderBody            providerError = "body"
+	errProviderOversize        providerError = "oversize"
+	errProviderInvalidDocument providerError = "invalid_document"
+	errProviderPanic           providerError = "panic"
+)
+
+func (f providerError) Error() string {
+	return "provider document failure: " + string(f)
+}
+
+func providerFailureReason(err error) string {
+	var failure providerError
+	if !errors.As(err, &failure) {
+		return "unknown"
+	}
+	return string(failure)
+}
 
 // fetchDocument GETs one provider document under a bounded timeout. Its error is
-// a boolean; errProviderFetchFailed owns why, and a failure mode added here
-// wants that same value rather than a message of its own.
+// one of the closed providerError phases above.
 func fetchDocument(ctx context.Context, client requestClient, target string) ([]byte, error) {
 	requestCtx, cancel := context.WithTimeout(ctx, ProviderTimeout)
 	defer cancel()
 	request, err := http.NewRequestWithContext(requestCtx, http.MethodGet, target, nil)
 	if err != nil {
-		return nil, errProviderFetchFailed
+		return nil, errProviderRequest
 	}
 	request.Header.Set("Accept", "application/json")
 	response, err := client.Do(request)
 	if err != nil {
-		return nil, errProviderFetchFailed
+		return nil, errProviderTransport
 	}
 	defer func() {
 		_ = response.Body.Close()
 	}()
 	if response.StatusCode != http.StatusOK {
-		return nil, errProviderFetchFailed
+		return nil, errProviderStatus
 	}
 	body, err := io.ReadAll(response.Body)
-	if err != nil || len(body) > MaxProviderBody {
-		return nil, errProviderFetchFailed
+	if err != nil {
+		if _, ok := errors.AsType[*httpclient.ResponseTooLargeError](err); ok {
+			return nil, errProviderOversize
+		}
+		return nil, errProviderBody
+	}
+	if len(body) > MaxProviderBody {
+		return nil, errProviderOversize
 	}
 	return body, nil
 }

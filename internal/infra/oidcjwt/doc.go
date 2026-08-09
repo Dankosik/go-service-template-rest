@@ -8,7 +8,8 @@
 // [Verifier.UnaryInterceptor] and [Verifier.StreamInterceptor] serve gRPC.
 // profile:grpc:end
 // What it publishes is deliberately minimal: a [reqctx.Principal] holding the
-// opaque subject, and nothing else.
+// verified issuer, opaque subject, and OAuth client ID. It publishes no token
+// identifier or authorization claims.
 //
 // # Extending it
 //
@@ -22,7 +23,7 @@
 //     numericDate are the worked examples. Accepting and rejecting cases go in
 //     TestVerify_Claims, and the term is added to validClaims in harness_test.go
 //     once rather than per test;
-//   - propagating more than the subject means filling more of
+//   - propagating more than issuer, subject, and client ID means filling more of
 //     [reqctx.Principal] where parseToken builds it. Scopes is an authorization
 //     input, so anything put there becomes an access decision;
 //   - a failure category is a Kind in errors.go. The exhaustive linter then
@@ -35,9 +36,9 @@
 //     rateLimited must classify it, which is the decision of whether an attacker
 //     can drive the fetch, and TestDocumentedTriggersMatchTheGuide holds it to
 //     docs/authentication.md;
-//   - a carrier is a value of [Transport], published verbatim as the
-//     authn.transport attribute and therefore its own metric series, declared in
-//     verifier.go beside the method that carries it. The larger obligation is
+//   - a carrier is the private transport value published as the authn.transport
+//     attribute and therefore its own metric series, declared in verifier.go
+//     beside the method that carries it. The larger obligation is
 //     transport trust, and nothing here will ask for it: trustedHTTPRequest in
 //     http.go answers that per request, for HTTP;
 //   - a configured trust value lands in this package and internal/config

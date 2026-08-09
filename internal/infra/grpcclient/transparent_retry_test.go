@@ -63,8 +63,10 @@ func TestTransparentRetryReappliesClosedPropagationPerAttempt(t *testing.T) {
 				}
 			})
 
+			cfg := grpcclient.DefaultConfig("passthrough:///" + peer.address)
+			cfg.HealthCheck = false
 			connection, err := grpcclient.New(
-				grpcclient.DefaultConfig("passthrough:///"+peer.address),
+				cfg,
 				grpcclient.Options{
 					TransportCredentials: insecure.NewCredentials(),
 					TracerProvider:       tracerProvider,

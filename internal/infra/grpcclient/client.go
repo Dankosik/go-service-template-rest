@@ -13,6 +13,7 @@ import (
 	tracenoop "go.opentelemetry.io/otel/trace/noop"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	_ "google.golang.org/grpc/health" // Install grpc-go's standard client health checker.
 	"google.golang.org/grpc/keepalive"
 )
 
@@ -33,18 +34,14 @@ type Config struct {
 	// LoadBalancing selects how RPCs spread across the addresses Target
 	// resolves to. Its own doc owns why it is a Config field.
 	LoadBalancing LoadBalancingPolicy
+	// HealthCheck makes supported round-robin backends eligible only while the
+	// standard health service reports SERVING for the whole process.
+	HealthCheck bool
 
-	// KeepalivePingInterval and KeepalivePingTimeout keep a long-lived
-	// connection usable through an idle intermediary. The documented shape here
-	// is one connection per dependency built at startup, so without pings a NAT
-	// or load balancer idle timeout discards it silently and the failure
-	// surfaces as the next RPC's error rather than as a reconnect.
-	//
-	// Pings are sent with no active RPC, which is what makes them reach an idle
-	// connection at all. That requires the peer to permit it: this repository's
-	// server half does, and keepalive_parity_test.go holds the two defaults to
-	// an interval the server accepts. grpc-go raises an interval below ten
-	// seconds to ten.
+	// KeepalivePingInterval and KeepalivePingTimeout opt into idle keepalive as
+	// one complete positive pair. grpc-go raises an interval below ten seconds to
+	// ten; the dependency owner must choose values its peer and intermediaries
+	// accept.
 	KeepalivePingInterval time.Duration
 	KeepalivePingTimeout  time.Duration
 }
@@ -58,10 +55,7 @@ func DefaultConfig(target string) Config {
 		MaxReceiveMessageBytes: 4 << 20,
 		MaxSendMessageBytes:    4 << 20,
 		LoadBalancing:          LoadBalancingRoundRobin,
-		// Above grpc-go's ten-second floor, and above the ten seconds this
-		// repository's server half accepts as a minimum.
-		KeepalivePingInterval: 30 * time.Second,
-		KeepalivePingTimeout:  10 * time.Second,
+		HealthCheck:            true,
 	}
 }
 
@@ -76,6 +70,11 @@ type Options struct {
 	// listener whose exposure the deployment owns, while this one chooses how
 	// much to trust a peer it is about to send credentials to.
 	TransportCredentials credentials.TransportCredentials
+	// PerRPCCredentials optionally supplies one connection credential for both
+	// application RPCs and grpc-go control streams such as standard health Watch.
+	// The dependency adapter creates and refreshes it; New only removes reserved
+	// correlation metadata before grpc-go sends what remains.
+	PerRPCCredentials credentials.PerRPCCredentials
 
 	// Optional observability collaborators. Both fall back to their no-op
 	// implementations, so a test can leave them unset.
@@ -98,22 +97,13 @@ func New(cfg Config, options Options) (*grpc.ClientConn, error) {
 	}
 	options = withOptionDefaults(options)
 
-	connection, err := grpc.NewClient(
-		cfg.Target,
+	dialOptions := []grpc.DialOption{
 		grpc.WithTransportCredentials(options.TransportCredentials),
 		grpc.WithDisableServiceConfig(),
 		// This client's own default service config, which the option above does
 		// not refuse: it rejects only what a resolver supplies. The policy's own
 		// doc owns why that leaves the trust boundary unchanged.
-		grpc.WithDefaultServiceConfig(cfg.LoadBalancing.serviceConfig()),
-		grpc.WithKeepaliveParams(keepalive.ClientParameters{
-			Time:    cfg.KeepalivePingInterval,
-			Timeout: cfg.KeepalivePingTimeout,
-			// Fixed rather than configured: reaching an idle connection is the
-			// whole point of pinging one, and a caller that turned this off
-			// would keep the fields while losing the behavior they exist for.
-			PermitWithoutStream: true,
-		}),
+		grpc.WithDefaultServiceConfig(cfg.LoadBalancing.serviceConfig(cfg.HealthCheck)),
 		grpc.WithNoProxy(),
 		grpc.WithResolvers(sanitizingResolverBuilders(cfg.Target)...),
 		grpc.WithChainUnaryInterceptor(propagationUnaryInterceptor),
@@ -128,7 +118,22 @@ func New(cfg Config, options Options) (*grpc.ClientConn, error) {
 			otelgrpc.WithTracerProvider(options.TracerProvider),
 			otelgrpc.WithPropagators(policyPropagator{policy: options.Propagation}),
 		)),
-	)
+	}
+	if options.PerRPCCredentials != nil {
+		dialOptions = append(
+			dialOptions,
+			grpc.WithPerRPCCredentials(wrapPerRPCCredentials(options.PerRPCCredentials)),
+		)
+	}
+	if cfg.KeepalivePingInterval > 0 {
+		dialOptions = append(dialOptions, grpc.WithKeepaliveParams(keepalive.ClientParameters{
+			Time:                cfg.KeepalivePingInterval,
+			Timeout:             cfg.KeepalivePingTimeout,
+			PermitWithoutStream: true,
+		}))
+	}
+
+	connection, err := grpc.NewClient(cfg.Target, dialOptions...)
 	if err != nil {
 		return nil, fmt.Errorf("build gRPC client connection: %w", err)
 	}
@@ -149,9 +154,9 @@ func withOptionDefaults(options Options) Options {
 	return options
 }
 
-// validateConfig proves the trust and bounds New is about to hand grpc-go, so
-// the construction above reads as one uninterrupted sequence. cfg.Target is
-// already trimmed, because New dials exactly the value checked here.
+// validateConfig proves the trust and bounds New is about to hand grpc-go.
+// cfg.Target is already trimmed, because New dials exactly the value checked
+// here.
 func validateConfig(cfg Config, options Options) error {
 	if cfg.Target == "" {
 		return errors.New("build gRPC client: target is required")
@@ -174,11 +179,10 @@ func validateConfig(cfg Config, options Options) error {
 	if !cfg.LoadBalancing.valid() {
 		return errors.New("build gRPC client: load-balancing policy is invalid")
 	}
-	if cfg.KeepalivePingInterval <= 0 {
-		return errors.New("build gRPC client: keepalive ping interval must be positive")
-	}
-	if cfg.KeepalivePingTimeout <= 0 {
-		return errors.New("build gRPC client: keepalive ping timeout must be positive")
+	if cfg.KeepalivePingInterval < 0 ||
+		cfg.KeepalivePingTimeout < 0 ||
+		(cfg.KeepalivePingInterval == 0) != (cfg.KeepalivePingTimeout == 0) {
+		return errors.New("build gRPC client: keepalive ping interval and timeout must both be positive or both be zero")
 	}
 	return nil
 }

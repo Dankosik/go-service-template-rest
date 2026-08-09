@@ -104,9 +104,11 @@
 // because only PostgreSQL holds the retained high-water mark. Either way the call
 // stores nothing.
 //
-// To publish through a different broker, implement [Publisher] and register the
-// builder in cmd/outbox-relay/main.go, which ships deliberately unregistered:
-// there is no production noop fallback. [Publisher] documents the whole
+// With the NATS profile selected, cmd/outbox-relay registers the concrete
+// natsjs adapter and supervises its client lifecycle. An outbox-only generated
+// service deliberately keeps the builder nil and fails before claiming work.
+// To publish through a different broker, implement [Publisher] and register a
+// complete runtime in cmd/outbox-relay/main.go. [Publisher] documents the whole
 // acceptance contract, including concurrency safety, the shared batch deadline,
 // and when to return [ErrPermanentPublication] versus [ErrPublicationNotAccepted].
 // Read its last two paragraphs before returning a sentinel of your own: one

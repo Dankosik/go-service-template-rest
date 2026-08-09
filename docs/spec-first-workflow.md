@@ -48,9 +48,13 @@ Scoping down research, design, or test design needs one concrete reason in the c
 
 For review and handoff, the owning macro phases are specification (including any supporting intake and research), technical design (system/integration plus Go ownership), test design, planning, and implementation/validation/closeout. A user-named `research only` boundary makes research the owning macro phase; other supporting-step boundaries stop under their own stop rule without creating an extra review receipt.
 
-One root session owns at most one macro phase. Supporting steps and internal
-review, repair, and focused re-review stay inside that session. When the active
-macro phase is ready to yield to another, report its result, emit the short
+One root session owns at most one active macro phase. Supporting steps, internal
+review, repair, focused re-review, and any narrow upstream reopen caused by
+current-phase evidence stay inside that session. Suspend the active phase,
+close the reopened owner and its triggered review, then resume the active phase;
+this is an internal correction, not a macro-phase handoff. Only after the active
+macro phase satisfies its movement rule and every triggered review has a
+movement-allowing disposition may the root report its result, emit the short
 standalone prompt owned by [Resume And Macro-Phase Handoff](spec-first-workflow/shared/resume-and-handoff.md#macro-phase-handoff),
 and stop without entering the next macro phase. An end-to-end request authorizes
 the later phases but does not waive this session boundary.
@@ -120,12 +124,18 @@ closed. Before that macro phase is ready to hand off, stop only when:
 - the user explicitly named that boundary;
 - a required external decision or input is unavailable from its named owner;
 - the next action requires new authority;
-- current evidence shows that an earlier decision must change;
 - the remaining work needs durable resume or coordination that has not yet been recorded.
+
+Current evidence that invalidates an upstream artifact is not itself a stop:
+reopen its smallest owner inside the current root session, repair or disposition
+it, run any required fresh review, and resume the active macro phase.
 
 Absent one of those conditions, continue the active macro phase instead of
 asking whether to proceed ([Proceeding](../AGENTS.md#proceeding)). Movement to a
-different macro phase always uses a fresh session and the required handoff.
+different macro phase always uses a fresh session and the required handoff. A
+blocker, interruption, or same-phase resume reports or persists the current
+state without emitting a user-visible next-session prompt; only a completed,
+review-cleared macro phase emits that prompt for the next macro phase.
 
 Review, repair, and re-review of non-implementation artifacts stay with the artifact owner until the shared convergence condition is met. Implementation moves only under the [current phase-owned execution, review, correction, acceptance, integration, and closeout contract](spec-first-workflow/phases/implementation-validation-closeout.md). [Review Independence](spec-first-workflow/shared/review-independence.md) owns the shared trigger, [Subagents And Review](spec-first-workflow/shared/subagents-and-handoff.md) owns non-implementation convergence, and [Independent Implementation Review](spec-first-workflow/shared/implementation-review.md) owns the fixed-unit review branch.
 

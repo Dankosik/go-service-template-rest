@@ -28,11 +28,41 @@ const (
 	forcedJoin       = 2 * time.Second
 )
 
-type PublisherBuilder func(
-	context.Context,
-	config.Config,
-	*slog.Logger,
-) (postgresoutbox.Publisher, func(context.Context), error)
+// PublisherRuntime is one publisher and the lifecycle of the client that owns
+// it. Its fields stay private so only the validating constructor can create a
+// value admitted by the relay process. It remains available to outbox-only
+// services after a selected transport builder is removed.
+type PublisherRuntime struct {
+	publisher postgresoutbox.Publisher
+	run       func(context.Context) error
+	ready     func() bool
+	shutdown  func(context.Context) error
+}
+
+func NewPublisherRuntime(
+	publisher postgresoutbox.Publisher,
+	run func(context.Context) error,
+	ready func() bool,
+	shutdown func(context.Context) error,
+) (PublisherRuntime, error) {
+	runtime := PublisherRuntime{publisher: publisher, run: run, ready: ready, shutdown: shutdown}
+	if err := validatePublisherRuntime(runtime); err != nil {
+		return PublisherRuntime{}, err
+	}
+	return runtime, nil
+}
+
+func validatePublisherRuntime(runtime PublisherRuntime) error {
+	if err := postgresoutbox.ValidatePublisher(runtime.publisher); err != nil {
+		return fmt.Errorf("validate publisher: %w", err)
+	}
+	if runtime.run == nil || runtime.ready == nil || runtime.shutdown == nil {
+		return fmt.Errorf("%w: publisher runtime lifecycle is incomplete", postgresoutbox.ErrConfig)
+	}
+	return nil
+}
+
+type PublisherBuilder func(context.Context, config.Config, *slog.Logger) (PublisherRuntime, error)
 
 type relayRunner interface {
 	Ready() bool
@@ -47,18 +77,24 @@ func Run(args []string, buildPublisher PublisherBuilder) error {
 }
 
 func run(signalCtx context.Context, args []string, buildPublisher PublisherBuilder) (runErr error) {
-	if buildPublisher == nil {
-		return fmt.Errorf("%w: outbox publisher builder is not registered", postgresoutbox.ErrConfig)
-	}
-	loadOptions, err := parseLoadOptions(args)
+	loadOptions, classifyLegacy, err := parseLoadOptions(args)
 	if err != nil {
 		return err
+	}
+	if !classifyLegacy && buildPublisher == nil {
+		return fmt.Errorf("%w: outbox publisher builder is not registered", postgresoutbox.ErrConfig)
 	}
 	startupCtx, startupCancel := context.WithTimeout(signalCtx, startupTimeout)
 	defer startupCancel()
 	cfg, _, err := config.LoadDetailedWithContext(startupCtx, loadOptions)
 	if err != nil {
 		return fmt.Errorf("load outbox relay config: %w", err)
+	}
+	if classifyLegacy {
+		if err := validateClassificationConfig(cfg); err != nil {
+			return err
+		}
+		return runLegacyClassification(signalCtx, startupCtx, cfg, newLogger(os.Stdout, cfg))
 	}
 	if err := validateRuntimeConfig(cfg); err != nil {
 		return err
@@ -82,18 +118,17 @@ func run(signalCtx context.Context, args []string, buildPublisher PublisherBuild
 	}
 	defer outboxTelemetry.Close()
 
-	publisher, publisherCleanup, err := buildPublisher(startupCtx, cfg, log)
+	publisherRuntime, err := buildPublisher(startupCtx, cfg, log)
 	// One registration, covering every exit from here on. teardown's fields fill
 	// in as each dependency appears, so a startup failure releases exactly what
 	// had been built by then.
-	var teardown relayTeardown
-	teardown.publisher = publisherCleanup
+	teardown := relayTeardown{publisher: &publisherRuntime}
 	defer func() { runErr = errors.Join(runErr, teardown.release(signalCtx)) }()
 	if err != nil {
 		return fmt.Errorf("build outbox publisher: %w", err)
 	}
-	if err := postgresoutbox.ValidatePublisher(publisher); err != nil {
-		return fmt.Errorf("admit outbox publisher: %w", err)
+	if err := validatePublisherRuntime(publisherRuntime); err != nil {
+		return fmt.Errorf("admit outbox publisher runtime: %w", err)
 	}
 
 	pool, err := postgres.New(startupCtx, postgresOptions(cfg.Postgres))
@@ -105,13 +140,53 @@ func run(signalCtx context.Context, args []string, buildPublisher PublisherBuild
 	if err != nil {
 		return fmt.Errorf("initialize outbox store: %w", err)
 	}
-	relay, err := postgresoutbox.NewRelay(store, publisher, outboxTelemetry, relayConfig(cfg.Outbox))
+	relay, err := postgresoutbox.NewRelay(store, publisherRuntime.publisher, outboxTelemetry, relayConfig(cfg.Outbox))
 	if err != nil {
 		return fmt.Errorf("initialize outbox relay: %w", err)
 	}
-	result := runRelayLifecycle(signalCtx, startupCtx, cfg, metrics, relay)
+	result := runRelayLifecycle(signalCtx, startupCtx, cfg, metrics, relay, &publisherRuntime)
 	teardown.unsafe = result.CleanupUnsafe
 	return result.Err
+}
+
+func runLegacyClassification(
+	ctx context.Context,
+	startupCtx context.Context,
+	cfg config.Config,
+	log *slog.Logger,
+) error {
+	pool, err := postgres.New(startupCtx, postgresOptions(cfg.Postgres))
+	if err != nil {
+		return fmt.Errorf("initialize outbox postgres for legacy classification: %w", err)
+	}
+	defer pool.Close()
+	store, err := postgresoutbox.NewStore(pool, nil)
+	if err != nil {
+		return fmt.Errorf("initialize outbox store for legacy classification: %w", err)
+	}
+	return classifyLegacyUntilZero(
+		ctx, cfg.Outbox.MaxAttempts, cfg.Outbox.CleanupBatchSize, log,
+		store.ClassifyLegacyUncertainty,
+	)
+}
+
+func classifyLegacyUntilZero(
+	ctx context.Context,
+	maxAttempts, batchSize int,
+	log *slog.Logger,
+	classify func(context.Context, int, int) (int, error),
+) error {
+	for {
+		classified, err := classify(ctx, maxAttempts, batchSize)
+		if err != nil {
+			return fmt.Errorf("classify legacy outbox uncertainty: %w", err)
+		}
+		if classified == 0 {
+			log.InfoContext(ctx, "outbox_legacy_uncertainty_classification_complete")
+			return nil
+		}
+		log.InfoContext(ctx, "outbox_legacy_uncertainty_classified", "count", classified)
+	}
 }
 
 // relayTeardown releases the publisher and then the pool, and only while
@@ -131,7 +206,7 @@ func run(signalCtx context.Context, args []string, buildPublisher PublisherBuild
 // cleanup half belongs to the adapter, and PublisherBuilder does not promise it
 // tolerates being called twice.
 type relayTeardown struct {
-	publisher func(context.Context)
+	publisher *PublisherRuntime
 	pool      func()
 	unsafe    bool
 }
@@ -140,35 +215,49 @@ func (t *relayTeardown) release(signalCtx context.Context) error {
 	if t.unsafe {
 		return nil
 	}
-	err := closePublisher(signalCtx, t.publisher)
+	var err error
+	if t.publisher != nil {
+		var unsafe bool
+		err, unsafe = closePublisher(signalCtx, t.publisher.shutdown)
+		if unsafe {
+			return err
+		}
+		t.publisher.shutdown = nil
+	}
 	if t.pool != nil {
 		t.pool()
 	}
 	return err
 }
 
-func closePublisher(parent context.Context, cleanup func(context.Context)) error {
+func closePublisher(parent context.Context, cleanup func(context.Context) error) (error, bool) {
 	if cleanup == nil {
-		return nil
+		return nil, false
 	}
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(parent), publisherClose)
+	base := context.WithoutCancel(parent)
+	if deadline, ok := parent.Deadline(); ok {
+		var cancelDeadline context.CancelFunc
+		base, cancelDeadline = context.WithDeadline(base, deadline)
+		defer cancelDeadline()
+	}
+	ctx, cancel := context.WithTimeout(base, publisherClose)
 	defer cancel()
 	result := make(chan error, 1)
 	go func() {
-		var err error
+		var runErr error
 		defer func() {
 			if recover() != nil {
-				err = errors.New("outbox publisher cleanup panicked")
+				runErr = errors.New("outbox publisher cleanup panicked")
 			}
-			result <- err
+			result <- runErr
 		}()
-		cleanup(ctx)
+		runErr = cleanup(ctx)
 	}()
 	select {
 	case err := <-result:
-		return err
+		return err, false
 	case <-ctx.Done():
-		return fmt.Errorf("close outbox publisher: %w", ctx.Err())
+		return fmt.Errorf("close outbox publisher: %w", ctx.Err()), true
 	}
 }
 
@@ -178,15 +267,21 @@ func runRelayLifecycle(
 	cfg config.Config,
 	metrics *telemetry.Metrics,
 	relay relayRunner,
+	publisher *PublisherRuntime,
 ) postgresoutbox.RelayResult {
-	diag, err := startDiagnostics(startupCtx, cfg.Observability.Metrics.Addr, relay.Ready, metrics)
+	ready := func() bool { return relay.Ready() && publisher.ready() }
+	diag, err := startDiagnostics(startupCtx, cfg.Observability.Metrics.Addr, ready, metrics)
 	if err != nil {
 		return postgresoutbox.RelayResult{Err: err}
 	}
-	runtimeCtx, runtimeCancel := context.WithCancel(context.WithoutCancel(signalCtx))
-	defer runtimeCancel()
+	relayCtx, relayCancel := context.WithCancel(context.WithoutCancel(signalCtx))
+	defer relayCancel()
+	publisherCtx, publisherCancel := context.WithCancel(context.WithoutCancel(signalCtx))
+	defer publisherCancel()
 	relayResult := make(chan postgresoutbox.RelayResult, 1)
-	go func() { relayResult <- relay.Run(runtimeCtx) }()
+	go func() { relayResult <- relay.Run(relayCtx) }()
+	publisherResult := make(chan error, 1)
+	go func() { publisherResult <- publisher.run(publisherCtx) }()
 
 	// Three ways out, and only the signal is an ordinary one. A relay or a
 	// diagnostics server that returned by itself is a fault, so each supplies
@@ -194,6 +289,7 @@ func runRelayLifecycle(
 	var result postgresoutbox.RelayResult
 	var triggerErr error
 	relayStopped := false
+	publisherStopped := false
 	select {
 	case <-signalCtx.Done():
 	case result = <-relayResult:
@@ -204,16 +300,62 @@ func runRelayLifecycle(
 	case <-diag.watch():
 		// diag.stop below carries whatever Serve reported.
 		triggerErr = errors.New("outbox diagnostics stopped unexpectedly")
+	case triggerErr = <-publisherResult:
+		publisherStopped = true
+		if triggerErr == nil {
+			triggerErr = errors.New("outbox publisher supervisor stopped unexpectedly")
+		}
 	}
 
 	processCtx, processCancel := context.WithTimeout(context.WithoutCancel(signalCtx), cfg.HTTP.GracePeriod)
 	defer processCancel()
 	relay.StartDrain()
 	if !relayStopped {
-		result = drainRelay(processCtx, cfg.Outbox.DrainTimeout, runtimeCancel, relayResult)
+		result = drainRelay(processCtx, cfg.Outbox.DrainTimeout, relayCancel, relayResult)
 	}
-	result.Err = errors.Join(triggerErr, result.Err, diag.stop(processCtx))
+
+	publisherErr, publisherUnsafe := stopPublisherSupervisor(
+		processCtx, publisherCancel, publisherResult, publisherStopped,
+	)
+	result.Err = errors.Join(result.Err, publisherErr)
+	result.CleanupUnsafe = result.CleanupUnsafe || publisherUnsafe
+
+	diagnosticsErr := diag.stop(processCtx)
+	var shutdownErr error
+	if !result.CleanupUnsafe {
+		var unsafe bool
+		shutdownErr, unsafe = closePublisher(processCtx, publisher.shutdown)
+		if !unsafe {
+			publisher.shutdown = nil
+		} else {
+			result.CleanupUnsafe = true
+		}
+	}
+	result.Err = errors.Join(triggerErr, result.Err, diagnosticsErr, shutdownErr)
 	return result
+}
+
+func stopPublisherSupervisor(
+	processCtx context.Context,
+	cancel context.CancelFunc,
+	result <-chan error,
+	alreadyStopped bool,
+) (error, bool) {
+	cancel()
+	if alreadyStopped {
+		return nil, false
+	}
+	joinCtx, joinCancel := context.WithTimeout(processCtx, forcedJoin)
+	defer joinCancel()
+	select {
+	case runErr := <-result:
+		if errors.Is(runErr, context.Canceled) {
+			return nil, false
+		}
+		return runErr, false
+	case <-joinCtx.Done():
+		return fmt.Errorf("join outbox publisher supervisor: %w", joinCtx.Err()), true
+	}
 }
 
 // drainRelay waits out a relay that has not reported yet and returns its
@@ -262,7 +404,9 @@ func validateRuntimeConfig(cfg config.Config) error {
 	if strings.TrimSpace(cfg.Observability.Metrics.Addr) == "" {
 		return fmt.Errorf("%w: outbox diagnostics address is required", postgresoutbox.ErrConfig)
 	}
-	cleanupReserve := forcedJoin + diagnosticsClose + publisherClose + telemetryClose
+	// Relay and publisher supervisors have distinct joins and can both consume
+	// their bound before dependency shutdown begins.
+	cleanupReserve := 2*forcedJoin + diagnosticsClose + publisherClose + telemetryClose
 	if cfg.HTTP.GracePeriod < cfg.Outbox.DrainTimeout ||
 		cfg.HTTP.GracePeriod-cfg.Outbox.DrainTimeout < cleanupReserve {
 		return fmt.Errorf(
@@ -275,11 +419,24 @@ func validateRuntimeConfig(cfg config.Config) error {
 	return nil
 }
 
-func parseLoadOptions(args []string) (config.LoadOptions, error) {
+func validateClassificationConfig(cfg config.Config) error {
+	if !cfg.Outbox.Enabled {
+		return fmt.Errorf("%w: outbox must be enabled for legacy classification", postgresoutbox.ErrConfig)
+	}
+	if !cfg.Postgres.Enabled {
+		return fmt.Errorf("%w: postgres must be enabled for legacy classification", postgresoutbox.ErrConfig)
+	}
+	return nil
+}
+
+func parseLoadOptions(args []string) (config.LoadOptions, bool, error) {
 	var configPath string
 	var overlays []string
+	var classifyLegacy bool
 	flags := flag.NewFlagSet("outbox-relay", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
+	flags.BoolVar(&classifyLegacy, "classify-legacy-uncertainty", false,
+		"classify legacy outbox uncertainty and exit")
 	flags.Func("config", "path to base config file", func(value string) error {
 		configPath = strings.TrimSpace(value)
 		if configPath == "" {
@@ -296,12 +453,12 @@ func parseLoadOptions(args []string) (config.LoadOptions, error) {
 		return nil
 	})
 	if err := flags.Parse(args); err != nil {
-		return config.LoadOptions{}, fmt.Errorf("parse flags: %w", err)
+		return config.LoadOptions{}, false, fmt.Errorf("parse flags: %w", err)
 	}
 	if len(flags.Args()) != 0 {
-		return config.LoadOptions{}, errors.New("parse flags: unexpected positional arguments")
+		return config.LoadOptions{}, false, errors.New("parse flags: unexpected positional arguments")
 	}
-	return config.LoadOptions{ConfigPath: configPath, ConfigOverlays: overlays}, nil
+	return config.LoadOptions{ConfigPath: configPath, ConfigOverlays: overlays}, classifyLegacy, nil
 }
 
 func newLogger(out io.Writer, cfg config.Config) *slog.Logger {

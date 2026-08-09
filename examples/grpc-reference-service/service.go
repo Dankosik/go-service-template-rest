@@ -9,7 +9,7 @@ import (
 	"io"
 
 	referencev1 "github.com/example/go-service-template-rest/examples/grpc-reference-service/internal/gen/proto/reference/v1"
-	"github.com/example/go-service-template-rest/internal/problem"
+	"github.com/example/go-service-template-rest/internal/failure"
 )
 
 const (
@@ -30,16 +30,16 @@ var ErrStreamLimit = errors.New("stream exceeds the reference aggregation limit"
 // DomainErrors classifies this example's domain identities for the shared gRPC
 // transport. A composition root passes the result as grpcx.Options.DomainErrors;
 // see docs/grpc.md for the equivalent step in a production service.
-func DomainErrors() []problem.Mapper {
-	return []problem.Mapper{
-		func(err error) (problem.Mapped, bool) {
+func DomainErrors() []failure.Mapper {
+	return []failure.Mapper{
+		func(err error) (failure.Classification, bool) {
 			if !errors.Is(err, ErrStreamLimit) {
-				return problem.Mapped{}, false
+				return failure.Classification{}, false
 			}
 			// Detail is the service's own wording; the wrapped error text never
 			// reaches the caller.
-			return problem.Mapped{
-				Code:   problem.CodeRequestEntityTooLarge,
+			return failure.Classification{
+				Code:   failure.CodeRequestEntityTooLarge,
 				Detail: "stream exceeds the reference aggregation limit",
 			}, true
 		},

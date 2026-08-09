@@ -35,7 +35,7 @@ func BenchmarkRecordVerificationSuccess(b *testing.B) {
 	ctx := b.Context()
 	b.ReportAllocs()
 	for b.Loop() {
-		metrics.recordVerification(ctx, TransportHTTP, nil)
+		metrics.recordVerification(ctx, transportHTTP, nil)
 	}
 }
 
@@ -49,6 +49,6 @@ func BenchmarkRecordVerificationFailure(b *testing.B) {
 	err := failure(KindInvalid)
 	b.ReportAllocs()
 	for b.Loop() {
-		metrics.recordVerification(ctx, TransportHTTP, err)
+		metrics.recordVerification(ctx, transportHTTP, err)
 	}
 }

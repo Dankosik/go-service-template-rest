@@ -2,6 +2,7 @@ package referenceservice
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -53,6 +54,38 @@ func TestReferenceServiceServesOverHTTP(t *testing.T) {
 	}
 	if got := response.Header.Get("X-Request-ID"); got == "" {
 		t.Fatal("X-Request-ID is empty, want correlation applied by the shared chain")
+	}
+}
+
+func TestReferenceServiceMapsAlreadyExistsOverHTTP(t *testing.T) {
+	t.Parallel()
+
+	handler := mustNewHandler(t)
+	request := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/v1/articles", strings.NewReader(
+		`{"slug":"clear-owners","title":"Duplicate","summary":"Already present."}`,
+	))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", "Bearer "+testWriteToken)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusConflict || response.Header().Get("Retry-After") != "" {
+		t.Fatalf("status/Retry-After = %d/%q, want 409/empty; body = %s", response.Code, response.Header().Get("Retry-After"), response.Body.String())
+	}
+	var body struct {
+		Code   string  `json:"code"`
+		Detail *string `json:"detail"`
+		Status int     `json:"status"`
+		Title  string  `json:"title"`
+		Type   string  `json:"type"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode problem: %v", err)
+	}
+	if body.Code != "already_exists" || body.Status != http.StatusConflict || body.Title != "conflict" ||
+		body.Type != "https://www.rfc-editor.org/rfc/rfc9110#section-15.5.10" || body.Detail == nil ||
+		*body.Detail != "an article with this slug already exists" || strings.Contains(response.Body.String(), "create article") {
+		t.Fatalf("problem = %+v, want safe already_exists envelope", body)
 	}
 }
 
@@ -198,7 +231,7 @@ func mustBuildReferenceRouter(tb testing.TB, bodyLimit int64, repository article
 	apiHandler, err := httpapi.NewAPIHandler(service, httpapi.Options{
 		Authenticate:   httpx.Authenticated(resolveWriter(testWriteToken)),
 		RejectRequest:  httpx.RejectRequest(log, authenticateChallenge),
-		RejectResponse: httpx.RejectResponse(httpapi.ClassifyError),
+		RejectResponse: httpx.RejectResponse(article.ClassifyError),
 	})
 	if err != nil {
 		tb.Fatalf("NewAPIHandler() error = %v", err)

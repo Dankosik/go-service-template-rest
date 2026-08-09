@@ -3,6 +3,7 @@ package oidcjwt
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/example/go-service-template-rest/internal/reqctx"
 	"google.golang.org/grpc"
@@ -12,7 +13,8 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// UnaryInterceptor authenticates every non-health unary RPC once.
+// UnaryInterceptor authenticates every unary RPC except the public health
+// Check probe once.
 func (v *Verifier) UnaryInterceptor() grpc.UnaryServerInterceptor {
 	return func(
 		ctx context.Context,
@@ -24,7 +26,7 @@ func (v *Verifier) UnaryInterceptor() grpc.UnaryServerInterceptor {
 		if publicHealthMethod(info.FullMethod) {
 			return handler(clean, request)
 		}
-		authenticated, err := v.authenticateRPC(clean, incoming)
+		authenticated, _, err := v.authenticateRPC(clean, incoming)
 		if err != nil {
 			return nil, grpcAuthenticationError(err)
 		}
@@ -32,39 +34,38 @@ func (v *Verifier) UnaryInterceptor() grpc.UnaryServerInterceptor {
 	}
 }
 
-// StreamInterceptor authenticates every non-health stream once and replaces
-// the handler-visible stream context with the immutable principal context.
+// StreamInterceptor authenticates every stream once and bounds its
+// handler-visible context by the verified token lifetime.
 func (v *Verifier) StreamInterceptor() grpc.StreamServerInterceptor {
 	return func(
 		server any,
 		stream grpc.ServerStream,
-		info *grpc.StreamServerInfo,
+		_ *grpc.StreamServerInfo,
 		handler grpc.StreamHandler,
 	) error {
 		clean, incoming := splitAuthorizationMetadata(stream.Context())
-		if publicHealthMethod(info.FullMethod) {
-			return handler(server, serverStreamWithContext{ServerStream: stream, ctx: clean})
-		}
-		authenticated, err := v.authenticateRPC(clean, incoming)
+		authenticated, expiresAt, err := v.authenticateRPC(clean, incoming)
 		if err != nil {
 			return grpcAuthenticationError(err)
 		}
-		return handler(server, serverStreamWithContext{ServerStream: stream, ctx: authenticated})
+		bounded, cancel := context.WithDeadline(authenticated, expiresAt.Add(ClockSkew))
+		defer cancel()
+		return handler(server, serverStreamWithContext{ServerStream: stream, ctx: bounded})
 	}
 }
 
 // publicHealthMethod is an exact allowlist rather than a prefix match on the
-// health service. This is the boundary that decides which RPCs need no
+// health service. This is the boundary that decides which RPC needs no
 // credential, so a method grpc-go adds to grpc.health.v1.Health later must be
 // authenticated until someone deliberately publishes it. The transport adapter
-// in internal/infra/grpc matches the same service by prefix on purpose: it only
-// governs admission, logging, and telemetry, where over-matching is cheap.
+// in internal/infra/grpc also exempts only Check from admission; its wider
+// health-service prefix governs logging and telemetry alone.
 func publicHealthMethod(fullMethod string) bool {
-	return fullMethod == healthpb.Health_Check_FullMethodName ||
-		fullMethod == healthpb.Health_Watch_FullMethodName
+	return fullMethod == healthpb.Health_Check_FullMethodName
 }
 
-// authenticateRPC returns ctx carrying the principal proven by incoming.
+// authenticateRPC returns ctx carrying the principal proven by incoming and the
+// expiry that bounds a streaming RPC.
 //
 // The credential arrives as metadata rather than as a second context so that it
 // cannot be swapped with ctx: ctx is the handler-visible context, whose
@@ -74,12 +75,12 @@ func publicHealthMethod(fullMethod string) bool {
 func (v *Verifier) authenticateRPC(
 	ctx context.Context,
 	incoming metadata.MD,
-) (context.Context, error) {
-	principal, err := v.verifyCredential(ctx, incoming.Get("authorization"), TransportGRPC)
+) (context.Context, time.Time, error) {
+	verified, err := v.verifyCredential(ctx, incoming.Get("authorization"), transportGRPC)
 	if err != nil {
-		return nil, err
+		return nil, time.Time{}, err
 	}
-	return reqctx.ContextWithPrincipal(ctx, principal), nil
+	return reqctx.ContextWithPrincipal(ctx, verified.principal), verified.expiresAt, nil
 }
 
 // splitAuthorizationMetadata returns the context a handler may see and the

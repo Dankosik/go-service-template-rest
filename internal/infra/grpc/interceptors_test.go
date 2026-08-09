@@ -22,7 +22,7 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/example/go-service-template-rest/internal/problem"
+	"github.com/example/go-service-template-rest/internal/failure"
 	"github.com/example/go-service-template-rest/internal/reqctx"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -308,17 +308,10 @@ func TestOneLimiterServesBothInterceptorTypes(t *testing.T) {
 	}
 }
 
-// TestHealthPrefixExemptsMethodsGRPCGoAddsLater pins the over-matching half of a
-// deliberate pair. isHealthMethod matches the whole standard health service by
-// prefix, so a method grpc-go adds to it later is exempt from admission with no
-// edit here; failing to exempt one costs the service its admission budget under
-// probe load.
-//
-// oidcjwt's TestGRPCAuthnBoundaryExactHealthAllowlist pins the other half — that
-// same future method must still be authenticated, because over-matching a trust
-// boundary publishes an RPC nobody meant to publish. Both drive the method name
-// below, so the two halves stay about one hypothetical method.
-func TestHealthPrefixExemptsMethodsGRPCGoAddsLater(t *testing.T) {
+// TestOnlyHealthCheckExemptsAdmission pins the one public probe that must remain
+// observable under business saturation. Watch and any later health-service
+// method are streams or unknown work, so both consume the process budget.
+func TestOnlyHealthCheckExemptsAdmission(t *testing.T) {
 	const futureHealthMethod = healthMethodPrefix + "Future"
 
 	load := &recordingLoad{}
@@ -327,28 +320,45 @@ func TestHealthPrefixExemptsMethodsGRPCGoAddsLater(t *testing.T) {
 
 	release, occupied := occupyAdmissionSlot(t, unary)
 
-	handlerCalled := false
+	checkCalled := false
 	if _, err := unary(
 		t.Context(),
 		nil,
-		&grpc.UnaryServerInfo{FullMethod: futureHealthMethod},
+		&grpc.UnaryServerInfo{FullMethod: healthMethodPrefix + "Check"},
 		func(context.Context, any) (any, error) {
-			handlerCalled = true
+			checkCalled = true
 			return struct{}{}, nil
 		},
 	); err != nil {
-		t.Fatalf("future health method %q was shed against a full budget: %v", futureHealthMethod, err)
+		t.Fatalf("health Check was shed against a full budget: %v", err)
 	}
-	if !handlerCalled {
-		t.Fatalf("future health method %q did not reach its handler", futureHealthMethod)
+	if !checkCalled {
+		t.Fatal("health Check did not reach its handler")
+	}
+
+	for _, method := range []string{healthMethodPrefix + "Watch", futureHealthMethod} {
+		handlerCalled := false
+		_, err := unary(
+			t.Context(),
+			nil,
+			&grpc.UnaryServerInfo{FullMethod: method},
+			func(context.Context, any) (any, error) {
+				handlerCalled = true
+				return struct{}{}, nil
+			},
+		)
+		assertStatusCode(t, err, codes.ResourceExhausted)
+		if handlerCalled {
+			t.Fatalf("health method %q bypassed admission", method)
+		}
 	}
 
 	close(release)
 	if err := <-occupied; err != nil {
 		t.Fatalf("admitted unary RPC error = %v", err)
 	}
-	if _, shed := load.snapshot(); shed != 0 {
-		t.Fatalf("shed = %d, want 0; a health-service method must not consume the budget", shed)
+	if _, shed := load.snapshot(); shed != 2 {
+		t.Fatalf("shed = %d, want 2 protected health-service methods", shed)
 	}
 }
 
@@ -381,32 +391,36 @@ func occupyAdmissionSlot(t *testing.T, unary grpc.UnaryServerInterceptor) (chan 
 
 func TestMapErrorAppliesEachBoundarysTrustRule(t *testing.T) {
 	sentinel := errors.New("domain sentinel")
-	mapper := func(err error) (problem.Mapped, bool) {
+	mapper := func(err error) (failure.Classification, bool) {
 		if !errors.Is(err, sentinel) {
-			return problem.Mapped{}, false
+			return failure.Classification{}, false
 		}
-		return problem.Mapped{Code: problem.CodeNotFound, Detail: "record not found"}, true
+		return failure.Classification{Code: failure.CodeNotFound, Detail: "record not found"}, true
+	}
+	broadMapper := func(error) (failure.Classification, bool) {
+		return failure.Classification{Code: failure.CodeAlreadyExists, Detail: "classified"}, true
 	}
 
 	for _, testCase := range []struct {
 		name       string
 		err        error
 		trusted    trustedStatus
-		mappers    []problem.Mapper
+		mappers    []failure.Mapper
 		wantCode   codes.Code
 		wantDetail string
 	}{
-		{name: "canceled", err: context.Canceled, wantCode: codes.Canceled, wantDetail: "request canceled"},
+		{name: "canceled", err: context.Canceled, mappers: []failure.Mapper{broadMapper}, wantCode: codes.Canceled, wantDetail: "request canceled"},
 		{
 			name:       "deadline",
 			err:        context.DeadlineExceeded,
+			mappers:    []failure.Mapper{broadMapper},
 			wantCode:   codes.DeadlineExceeded,
 			wantDetail: "request deadline exceeded",
 		},
 		{
 			name:       "domain",
 			err:        sentinel,
-			mappers:    []problem.Mapper{mapper},
+			mappers:    []failure.Mapper{mapper},
 			wantCode:   codes.NotFound,
 			wantDetail: "record not found",
 		},

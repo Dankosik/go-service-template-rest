@@ -5,9 +5,9 @@ import (
 	"log/slog"
 
 	"github.com/example/go-service-template-rest/internal/config"
+	"github.com/example/go-service-template-rest/internal/failure"
 	grpcx "github.com/example/go-service-template-rest/internal/infra/grpc"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
-	"github.com/example/go-service-template-rest/internal/problem"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 	"google.golang.org/grpc"
@@ -24,7 +24,7 @@ func newGRPCRuntime(
 	cfg config.Config,
 	log *slog.Logger,
 	metrics *telemetry.Metrics,
-	domainErrors []problem.Mapper,
+	domainErrors []failure.Mapper,
 	bindings grpcRuntimeBindings,
 ) (*grpcx.Server, error) {
 	// internal/config owns which values this field may hold and refuses every
@@ -84,7 +84,7 @@ func newGRPCRuntime(
 // goes on reporting as fine once a tenth one is added.
 //
 // The mapping lives here rather than in internal/infra/grpc because that adapter
-// depends on internal/problem and internal/reqctx only, and a transport adapter
+// depends on internal/failure and internal/reqctx only, and a transport adapter
 // that knew this repository's configuration shape could not be reused by a
 // service that restructured it. internal/config cannot own it either: the
 // depguard rule config_no_runtime_owners stops it importing runtime adapters.

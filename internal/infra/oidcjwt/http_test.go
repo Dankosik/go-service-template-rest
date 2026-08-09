@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/getkin/kin-openapi/openapi3filter"
 )
@@ -27,8 +26,11 @@ func TestHTTPAuthnBoundaryTransportAndIdentity(t *testing.T) {
 		RequestValidationInput: &openapi3filter.RequestValidationInput{Request: request},
 	}
 	principal, err := verifier.ResolveHTTP(t.Context(), input)
-	if err != nil || principal.Subject != "opaque-subject" {
-		t.Fatalf("ResolveHTTP() = (%+v, %v), want subject", principal, err)
+	if err != nil ||
+		principal.Issuer != testIssuer ||
+		principal.Subject != "opaque-subject" ||
+		principal.ClientID != "client-1" {
+		t.Fatalf("ResolveHTTP() = (%+v, %v), want verified issuer, subject, and client ID", principal, err)
 	}
 	if request.Header.Get("Authorization") != "" {
 		t.Fatal("handler-visible Authorization header was retained")
@@ -46,7 +48,7 @@ func TestHTTPAuthnBoundaryCarrierClasses(t *testing.T) {
 	valid := signToken(t, trustedKey, "key-1", "at+jwt", validClaims(now))
 	invalid := signToken(t, otherKey, "key-1", "at+jwt", validClaims(now))
 	staleClaims := validClaims(now)
-	staleClaims.Expires = now.Add(30 * time.Minute).Unix()
+	staleClaims.Expires = now.Add(MaxTokenLifetime).Unix()
 	validAfterStaleCutoff := signToken(t, trustedKey, "key-1", "at+jwt", staleClaims)
 
 	tests := []struct {

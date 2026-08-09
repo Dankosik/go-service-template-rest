@@ -58,11 +58,11 @@ func TestErrorClassVocabularyIsBounded(t *testing.T) {
 	exhausted := unitClaim(1)
 	exhausted.CycleAttemptCount = relay.config.MaxAttempts
 	outcomes := relay.classify(
-		[]ClaimedEvent{unitClaim(2), exhausted},
-		[]error{fmtPermanent(), ErrPublicationNotAccepted},
+		[]ClaimedEvent{unitClaim(3), exhausted, exhausted},
+		[]error{fmtPermanent(), ErrPublicationNotAccepted, errors.New("ambiguous")},
 	)
-	if len(outcomes.poisoned) != 2 {
-		t.Fatalf("classify() poisoned = %d, want 2", len(outcomes.poisoned))
+	if len(outcomes.poisoned) != 3 {
+		t.Fatalf("classify() poisoned = %d, want 3", len(outcomes.poisoned))
 	}
 	for _, poisoned := range outcomes.poisoned {
 		produced["classify "+poisoned.errorClass] = poisoned.errorClass
@@ -101,13 +101,17 @@ func TestTelemetryBoundedContract(t *testing.T) {
 		OrderingBlockedOldestAt:   time.Unix(5, 0).UTC(),
 		PoisonCount:               6,
 		PoisonOldestAt:            time.Unix(6, 0).UTC(),
-		PublishedRetainedEstimate: 7,
-		PublishedRetainedOldestAt: time.Unix(7, 0).UTC(),
-		OrderingHeadCount:         8,
-		EventsBytes:               9,
-		EventsIndexBytes:          10,
-		OrderingHeadsBytes:        11,
-		OrderingHeadsIndexBytes:   12,
+		OutcomeUnknownCount:       7,
+		OutcomeUnknownOldestAt:    time.Unix(7, 0).UTC(),
+		PublishedRetainedEstimate: 8,
+		PublishedRetainedOldestAt: time.Unix(8, 0).UTC(),
+		OrderingHeadCount:         9,
+		EventsBytes:               10,
+		EventsIndexBytes:          11,
+		OrderingHeadsBytes:        12,
+		OrderingHeadsIndexBytes:   13,
+		ReceiptsBytes:             14,
+		ReceiptsIndexBytes:        15,
 	}, now)
 	telemetry.RecordProgress(now.Add(time.Second))
 	telemetry.SetProcessState(true, 1, time.Hour)
@@ -124,6 +128,10 @@ func TestTelemetryBoundedContract(t *testing.T) {
 		{operation: "schedule_retry", outcome: "success", errorType: "none"},
 		{operation: "poison", outcome: "success", errorType: "publisher_permanent"},
 		{operation: "redrive", outcome: "rejected", errorType: "validation"},
+		{operation: "redrive_unknown", outcome: "success", errorType: "none"},
+		{operation: "confirm_accepted", outcome: "success", errorType: "none"},
+		{operation: "classify_legacy", outcome: "success", errorType: "none"},
+		{operation: "reconcile_commit", outcome: "success", errorType: "none"},
 		{operation: "cleanup", outcome: "success", errorType: "none"},
 		{operation: "observe", outcome: "success", errorType: "none"},
 		{operation: "drain", outcome: "started", errorType: "none"},
@@ -132,17 +140,17 @@ func TestTelemetryBoundedContract(t *testing.T) {
 	for _, operation := range operations {
 		telemetry.RecordOperation(t.Context(), operation.operation, operation.outcome, operation.errorType, time.Millisecond)
 	}
-	telemetry.LogPoison(t.Context(), "event-1", "attempt_exhausted", 10)
+	telemetry.LogPoison(t.Context(), "attempt_exhausted", 10)
 	telemetry.LogPublisherStuck(t.Context())
-	telemetry.LogRecovery(t.Context(), "event-1", 2)
+	telemetry.LogRecovery(t.Context(), 2)
 
 	wantPoints := map[string]int{
-		"outbox.relay.messages":                7,
-		"outbox.relay.oldest.timestamp":        7,
+		"outbox.relay.messages":                8,
+		"outbox.relay.oldest.timestamp":        8,
 		"outbox.relay.observation.timestamp":   1,
 		"outbox.relay.last_progress.timestamp": 1,
 		"outbox.relay.ordering_heads":          1,
-		"outbox.relay.storage.bytes":           6,
+		"outbox.relay.storage.bytes":           8,
 		"outbox.relay.inflight":                1,
 		"outbox.relay.readiness":               1,
 		"outbox.relay.operations":              len(operations),
@@ -175,10 +183,13 @@ func TestTelemetryBoundedContract(t *testing.T) {
 	if len(wantPoints) != 0 {
 		t.Fatalf("missing outbox metrics: %v", wantPoints)
 	}
-	for _, required := range []string{"outbox_event_poisoned", "event-1", "attempt_exhausted"} {
+	for _, required := range []string{"outbox_event_poisoned", "attempt_exhausted"} {
 		if !strings.Contains(logs.String(), required) {
 			t.Fatalf("outbox poison log missing %q: %s", required, logs.String())
 		}
+	}
+	if strings.Contains(logs.String(), "event-1") {
+		t.Fatalf("outbox logs leaked event identity: %s", logs.String())
 	}
 }
 
@@ -399,6 +410,53 @@ func TestTelemetryObservesEveryObservedCount(t *testing.T) {
 	}
 }
 
+func TestOutboxTelemetryRepeatedCollection(t *testing.T) {
+	reader, telemetry := newTestTelemetry(t, nil)
+	observation := StateObservation{
+		OutcomeUnknownCount: 1,
+		ReceiptsBytes:       2,
+		ReceiptsIndexBytes:  3,
+	}
+	for range 10 {
+		telemetry.RecordObservation(observation, time.Now())
+		seenMessages := false
+		seenStorage := false
+		telemetrytest.ForEachMetric(t, reader, func(measured metricdata.Metrics) {
+			switch measured.Name {
+			case "outbox.relay.messages":
+				seenMessages = len(telemetrytest.AttributeSets(t, measured.Data)) == 8
+			case "outbox.relay.storage.bytes":
+				seenStorage = len(telemetrytest.AttributeSets(t, measured.Data)) == 8
+			}
+		})
+		if !seenMessages || !seenStorage {
+			t.Fatalf("repeated collection messages/storage = %t/%t, want both complete", seenMessages, seenStorage)
+		}
+	}
+}
+
+func TestOutboxTelemetryOmitsEventIdentity(t *testing.T) {
+	recorder := telemetrytest.InstallSpanRecorder(t)
+	var logs bytes.Buffer
+	_, telemetry := newTestTelemetry(t, slog.New(slog.NewJSONHandler(&logs, nil)))
+	event := outboxEventForUnit()
+	event.ID = "sensitive-event-identity"
+	event.Destination = "events"
+	_, span := telemetry.StartPublish(t.Context(), event)
+	telemetry.EndPublish(span, nil, classNone)
+	telemetry.LogPoison(t.Context(), classOutcomeUnknown, 3)
+	telemetry.LogRecovery(t.Context(), 2)
+
+	if strings.Contains(logs.String(), event.ID) {
+		t.Fatalf("outbox logs leaked event identity: %s", logs.String())
+	}
+	for _, field := range spanNamed(t, recorder, "publish events").Attributes() {
+		if string(field.Key) == "messaging.message.id" || strings.Contains(field.Value.String(), event.ID) {
+			t.Fatalf("publish span leaked event identity: %s=%s", field.Key, field.Value.String())
+		}
+	}
+}
+
 // An operation with no span of its own reaches the counter and leaves the
 // latency histogram alone. Recording a placeholder duration for it instead —
 // a zero span, or the enclosing operation's elapsed time — is invisible in a
@@ -436,8 +494,8 @@ func TestTelemetryNilReceiverIsSafe(t *testing.T) {
 	telemetry.SetProcessState(true, 1, time.Hour)
 	telemetry.RecordOperation(t.Context(), "claim", "success", "none", time.Second)
 	telemetry.CountOperation(t.Context(), "drain", "started", "none")
-	telemetry.LogPoison(t.Context(), "event", "publisher_permanent", 1)
+	telemetry.LogPoison(t.Context(), "publisher_permanent", 1)
 	telemetry.LogPublisherStuck(t.Context())
-	telemetry.LogRecovery(t.Context(), "event", 1)
+	telemetry.LogRecovery(t.Context(), 1)
 	telemetry.LogListenerRetry(t.Context(), "connect")
 }

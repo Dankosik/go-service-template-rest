@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/config"
+	"github.com/example/go-service-template-rest/internal/failure"
 	"github.com/example/go-service-template-rest/internal/infra/postgres"
-	"github.com/example/go-service-template-rest/internal/problem"
 )
 
 func TestPostgresDependencyInitFailurePreservesWrappedCause(t *testing.T) {
@@ -427,12 +427,12 @@ func TestPostgresDomainErrorsMapSaturationToRetryableUnavailable(t *testing.T) {
 		t.Fatal("DomainErrors() is empty; the pool's own failures reach handlers unclassified")
 	}
 
-	mapped, ok := problem.Classify(fmt.Errorf("load article: %w", postgres.ErrSaturated), mappers)
+	mapped, ok := failure.Classify(fmt.Errorf("load article: %w", postgres.ErrSaturated), mappers)
 	if !ok {
 		t.Fatal("postgres.ErrSaturated is unclassified; it answers 500 instead of a retryable 503")
 	}
-	if mapped.Code != problem.CodeServiceUnavailable {
-		t.Fatalf("code = %q, want %q", mapped.Code, problem.CodeServiceUnavailable)
+	if mapped.Code != failure.CodeServiceUnavailable {
+		t.Fatalf("code = %q, want %q", mapped.Code, failure.CodeServiceUnavailable)
 	}
 	if mapped.RetryAfter <= 0 {
 		t.Fatal("RetryAfter is unset; a 503 with no hint reads as down rather than busy")
@@ -440,7 +440,7 @@ func TestPostgresDomainErrorsMapSaturationToRetryableUnavailable(t *testing.T) {
 
 	// A connect failure is the database's fault and is not retryable in the same
 	// sense, so it must not be dressed up as capacity pressure.
-	if _, ok := problem.Classify(fmt.Errorf("dial: %w", postgres.ErrConnect), mappers); ok {
+	if _, ok := failure.Classify(fmt.Errorf("dial: %w", postgres.ErrConnect), mappers); ok {
 		t.Fatal("postgres.ErrConnect was classified as a client-retryable problem")
 	}
 }

@@ -8,12 +8,15 @@
 package grpcclient_test
 
 import (
+	"context"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/example/go-service-template-rest/internal/infra/grpcclient"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -63,6 +66,7 @@ func TestLoadBalancingPolicyDecidesHowManyBackendsAreReached(t *testing.T) {
 
 			cfg := grpcclient.DefaultConfig(testCase.scheme + ":///backends")
 			cfg.LoadBalancing = testCase.policy
+			cfg.HealthCheck = false
 			connection, err := grpcclient.New(cfg, grpcclient.Options{
 				TransportCredentials: insecure.NewCredentials(),
 			})
@@ -101,6 +105,56 @@ func TestLoadBalancingPolicyDecidesHowManyBackendsAreReached(t *testing.T) {
 					second.Load(),
 					testCase.wantBackends,
 				)
+			}
+		})
+	}
+}
+
+func TestHealthConfigurationCallability(t *testing.T) {
+	backend := startHealthBackend(
+		t,
+		healthgrpc.HealthCheckResponse_NOT_SERVING,
+		nil,
+	)
+
+	for _, testCase := range []struct {
+		name        string
+		policy      grpcclient.LoadBalancingPolicy
+		healthCheck bool
+	}{
+		{name: "round robin with health disabled", healthCheck: false},
+		{
+			name:        "pick first with health disabled",
+			policy:      grpcclient.LoadBalancingPickFirst,
+			healthCheck: false,
+		},
+		{
+			name:        "direct pick first with health configured",
+			policy:      grpcclient.LoadBalancingPickFirst,
+			healthCheck: true,
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			cfg := grpcclient.DefaultConfig("passthrough:///" + backend.address)
+			cfg.LoadBalancing = testCase.policy
+			cfg.HealthCheck = testCase.healthCheck
+			connection, err := grpcclient.New(cfg, grpcclient.Options{
+				TransportCredentials: insecure.NewCredentials(),
+			})
+			if err != nil {
+				t.Fatalf("grpcclient.New() error = %v", err)
+			}
+			t.Cleanup(func() { _ = connection.Close() })
+
+			before := backend.calls.Load()
+			ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+			err = invokeHealthProbe(ctx, connection)
+			cancel()
+			if err != nil {
+				t.Fatalf("ClientConn.Invoke() error = %v", err)
+			}
+			if got := backend.calls.Load() - before; got != 1 {
+				t.Fatalf("backend calls = %d, want 1", got)
 			}
 		})
 	}

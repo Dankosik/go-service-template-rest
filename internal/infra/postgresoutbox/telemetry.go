@@ -231,7 +231,6 @@ func (t *Telemetry) StartPublish(ctx context.Context, event Event) (context.Cont
 		trace.WithAttributes(
 			semconv.MessagingOperationName(publishOperationName),
 			semconv.MessagingDestinationName(event.Destination),
-			semconv.MessagingMessageID(event.ID),
 		),
 	}
 	// Extracted from a blank context on purpose. Extracting into ctx would leave
@@ -261,9 +260,9 @@ func (t *Telemetry) EndPublish(span trace.Span, err error, errorClass string) {
 	span.End()
 }
 
-func (t *Telemetry) LogPoison(ctx context.Context, id, errorClass string, attempt int) {
+func (t *Telemetry) LogPoison(ctx context.Context, errorClass string, attempt int) {
 	if t != nil {
-		t.log.ErrorContext(ctx, "outbox_event_poisoned", "event_id", id, "error.type", errorClass, "attempt", attempt)
+		t.log.ErrorContext(ctx, "outbox_event_poisoned", "error.type", errorClass, "attempt", attempt)
 	}
 }
 
@@ -273,9 +272,9 @@ func (t *Telemetry) LogPublisherStuck(ctx context.Context) {
 	}
 }
 
-func (t *Telemetry) LogRecovery(ctx context.Context, id string, attempt int) {
+func (t *Telemetry) LogRecovery(ctx context.Context, attempt int) {
 	if t != nil {
-		t.log.WarnContext(ctx, "outbox_lease_recovered", "event_id", id, "attempt", attempt)
+		t.log.WarnContext(ctx, "outbox_lease_recovered", "attempt", attempt)
 	}
 }
 
@@ -314,6 +313,7 @@ func (t *Telemetry) collect(_ context.Context, observer metric.Observer) error {
 		{name: "recovery_due", count: snapshot.observation.RecoveryDueCount, oldest: snapshot.observation.RecoveryDueOldestAt},
 		{name: "ordering_blocked", count: snapshot.observation.OrderingBlockedCount, oldest: snapshot.observation.OrderingBlockedOldestAt},
 		{name: "poison", count: snapshot.observation.PoisonCount, oldest: snapshot.observation.PoisonOldestAt},
+		{name: "outcome_unknown", count: snapshot.observation.OutcomeUnknownCount, oldest: snapshot.observation.OutcomeUnknownOldestAt},
 		{name: "published_retained", count: snapshot.observation.PublishedRetainedEstimate, oldest: snapshot.observation.PublishedRetainedOldestAt},
 	}
 	for _, state := range states {
@@ -336,6 +336,7 @@ func (t *Telemetry) collect(_ context.Context, observer metric.Observer) error {
 			index: snapshot.observation.OrderingHeadsIndexBytes,
 		},
 		{name: "redrives", total: snapshot.observation.RedrivesBytes, index: snapshot.observation.RedrivesIndexBytes},
+		{name: "receipts", total: snapshot.observation.ReceiptsBytes, index: snapshot.observation.ReceiptsIndexBytes},
 	} {
 		name := attribute.String("relation", relation.name)
 		observer.ObserveInt64(t.storageBytes, relation.total,

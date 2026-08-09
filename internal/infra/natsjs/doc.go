@@ -8,10 +8,13 @@
 // acknowledgement is lost sees the message again. Handlers must tolerate
 // duplicates.
 //
-// Two audiences share the package. Feature code touches only [Event],
+// Three audiences share the package. Feature code touches only [Event],
 // [Message], [Handler], and [Permanent] — all in message.go. Everything else is
 // the composition root's: [Connect], [Client.Producer], [Client.NewWorker], and
-// the lifecycle methods the two cmd packages drive.
+// the lifecycle methods the two cmd packages drive. The outbox relay uses only
+// [NewOutboxPublisher], which converts the broker-neutral event, forwards its
+// stored W3C creation context, and maps publication evidence onto the outbox's
+// permanent, not-accepted, and ambiguous outcomes.
 //
 // # The delivery cycle
 //

@@ -72,12 +72,14 @@ Shape: one span per publication attempt, `SpanKindProducer`, named
 `publish {destination}`, a root of its own trace, linked to the extracted
 creation context.
 
-Attributes are only the ones this package can honestly own:
-`messaging.operation.name`, `messaging.destination.name`, and
-`messaging.message.id`. `messaging.system` is deliberately absent — the relay is
-broker-neutral and only the adapter knows the system; an adapter that wants it
-sets it on its own span. The ordering key never reaches the span, because this
-package's telemetry rules already forbid it on every surface.
+Attributes are only the bounded ones this package can honestly own:
+`messaging.operation.name` and `messaging.destination.name`.
+`messaging.system` is deliberately absent — the relay is broker-neutral and
+only the adapter knows the system; an adapter that wants it sets it on its own
+span. The event ID and ordering key never reach the span. The stricter identity
+privacy rule in the later ready inbox and production-closure specifications
+supersedes this design's earlier `messaging.message.id` choice without changing
+the trace-parent/link decision.
 
 A failed publication records the error and sets the span status with the same
 bounded error class the publish metric carries, so a trace and a dashboard name

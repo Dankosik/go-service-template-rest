@@ -40,6 +40,7 @@ make template-init \
   CODEOWNER=@your-org/backend \
   DATABASE=none \
   OUTBOX=none \
+  INBOX=none \
   GRPC=none \
   AUTHN=none \
   OUTBOUND_HTTP=none \
@@ -58,6 +59,11 @@ durably record an outbound event for a separately deployed relay. Publication
 is at-least-once, so consumers must tolerate duplicate event IDs; see the
 [PostgreSQL transactional outbox](docs/postgres-transactional-outbox.md).
 <!-- profile:outbox-postgres:end -->
+<!-- profile:inbox-postgres:start -->
+Choose `DATABASE=postgres INBOX=postgres` when a consumer must suppress a
+logical message duplicate in the same PostgreSQL transaction as its feature
+effect; see the [PostgreSQL idempotent inbox](docs/postgres-idempotent-inbox.md).
+<!-- profile:inbox-postgres:end -->
 <!-- profile:authn-oidc-jwt:start -->
 Choose `AUTHN=oidc-jwt` for strict OIDC discovery and signed JWT access-token
 authentication; see [OIDC/JWT authentication](docs/authentication.md).
@@ -70,6 +76,9 @@ when the service publishes or consumes native gRPC; see the
 <!-- profile:messaging-nats-jetstream:start -->
 Choose `MESSAGING=nats-jetstream` for bounded direct JetStream publishing and a
 separate durable pull-consumer worker; see [durable messaging](docs/durable-messaging.md).
+Together with `DATABASE=postgres OUTBOX=postgres`, it also composes the outbox
+relay's production NATS publisher and stored W3C trace continuity. Outbox
+without messaging keeps its fail-closed adapter registration seam.
 <!-- profile:messaging-nats-jetstream:end -->
 
 `examples/reference-service` is a worked feature slice kept in this template for
@@ -86,8 +95,11 @@ second OpenAPI contract and a second `main()` to maintain. Pass
 | API contract | OpenAPI 3.0 and `oapi-codegen v2` with generated request bindings and typed responses |
 | Data | No database by default; optional PostgreSQL 17, `pgx v5`, `goose v3`, and `sqlc` profile |
 <!-- profile:outbox-postgres:start -->
-| Transactional outbox | Optional PostgreSQL intent store and separately deployed bounded relay with batched claims, concurrent publication, and notification wake-up; broker adapter remains service-owned |
+| Transactional outbox | Optional PostgreSQL intent store and separately deployed bounded relay; the NATS profile supplies the selected adapter, while outbox-only stays fail-closed |
 <!-- profile:outbox-postgres:end -->
+<!-- profile:inbox-postgres:start -->
+| Idempotent inbox | Optional permanent per-consumer logical-message claims joined to one same-PostgreSQL feature effect |
+<!-- profile:inbox-postgres:end -->
 | Outbound HTTP | Standard library by default; optional fixed-authority transport bounds and response-size protection |
 <!-- profile:messaging-nats-jetstream:start -->
 | Messaging | Optional direct NATS JetStream producer and separate bounded durable pull-consumer worker |

@@ -73,8 +73,10 @@ func TestPropagationPoliciesApplyToUnaryAndStreamingRPCs(t *testing.T) {
 		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
+			cfg := grpcclient.DefaultConfig(target)
+			cfg.HealthCheck = false
 			connection, err := grpcclient.New(
-				grpcclient.DefaultConfig(target),
+				cfg,
 				grpcclient.Options{
 					TransportCredentials: insecure.NewCredentials(),
 					TracerProvider:       tracerProvider,
@@ -165,8 +167,10 @@ func TestPropagationMetricAttributesExcludeCorrelationValues(t *testing.T) {
 		}
 	})
 
+	cfg := grpcclient.DefaultConfig(target)
+	cfg.HealthCheck = false
 	connection, err := grpcclient.New(
-		grpcclient.DefaultConfig(target),
+		cfg,
 		grpcclient.Options{
 			TransportCredentials: insecure.NewCredentials(),
 			MeterProvider:        meterProvider,
@@ -208,8 +212,10 @@ func TestPerRPCCredentialsCannotOverrideCorrelationMetadata(t *testing.T) {
 			t.Errorf("TracerProvider.Shutdown() error = %v", err)
 		}
 	})
+	cfg := grpcclient.DefaultConfig(target)
+	cfg.HealthCheck = false
 	connection, err := grpcclient.New(
-		grpcclient.DefaultConfig(target),
+		cfg,
 		grpcclient.Options{
 			TransportCredentials: clientCredentials,
 			TracerProvider:       tracerProvider,
@@ -304,8 +310,10 @@ func TestPerRPCCredentialsSecurityAndErrorFailuresReachNoHandler(t *testing.T) {
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			unaryMetadata, _, target := startMetadataCaptureServer(t)
+			cfg := grpcclient.DefaultConfig(target)
+			cfg.HealthCheck = false
 			connection, err := grpcclient.New(
-				grpcclient.DefaultConfig(target),
+				cfg,
 				grpcclient.Options{
 					TransportCredentials: insecure.NewCredentials(),
 					Propagation:          grpcclient.PropagationTrustedService,

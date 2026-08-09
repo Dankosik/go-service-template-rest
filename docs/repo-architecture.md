@@ -21,6 +21,7 @@ It does not restate the full tree, every command, or task-local design choices.
 | `api/openapi/service.yaml` | Source of truth for the REST contract. | Hand-written runtime logic or transport implementation. |
 | `internal/openapi/` | Generated Go bindings derived from the OpenAPI contract. | Manual business logic; hand-editing should not become the source of truth. |
 | `internal/<feature>/` | Feature-owned use cases, business types, ports, invariants, and domain errors. | HTTP details, driver details, runtime config, process lifecycle. |
+| `internal/failure/` | Transport-neutral client-visible failure codes and mapper ordering shared by features and transports. | Feature error identities, HTTP envelopes, gRPC statuses, or I/O. |
 | `internal/infra/http/` | HTTP server, middleware, request/response mapping, route policy, and observability at the transport edge. | Core business rules or config loading. |
 | `internal/infra/httpclient/` (`OUTBOUND_HTTP=bounded`) | Optional shared outbound target validation, transport bounds, explicit correlation-policy enforcement, and idle-pool cleanup. | Provider authentication, concrete trust selection, operation budgets, retries, error mapping, or readiness policy. |
 | `internal/infra/postgres/` | Optional Postgres connection/pool lifecycle and repository code. | Process lifecycle, migrations, HTTP behavior, config precedence rules. |
@@ -35,20 +36,25 @@ It does not restate the full tree, every command, or task-local design choices.
 | `internal/infra/postgresoutbox/` | PostgreSQL outbox envelope, transactional append, claims, retries, poison/redrive, retention, and broker-neutral relay loop. | Domain event selection, a broker adapter, inbox processing, or exactly-once delivery. |
 | `cmd/outbox-relay/` | Separate relay composition, readiness, drain, and dependency cleanup. | API routes or a fallback/noop publisher. |
 <!-- profile:outbox-postgres:end -->
+<!-- profile:inbox-postgres:start -->
+| `internal/infra/postgresinbox/` | Stateless claim binding for one caller-owned PostgreSQL transaction. | Transaction lifecycle, feature effects, transport identity construction, cleanup, or ordering. |
+<!-- profile:inbox-postgres:end -->
 
 <!-- profile:grpc:start -->
 The gRPC profile adds four boundaries: `api/proto/` owns protobuf contracts,
 `internal/gen/proto/` contains derived messages and interfaces,
 `internal/infra/grpc/` owns native server policy and lifecycle, and
 `internal/infra/grpcclient/` constructs bounded shared client connections and
-enforces an explicit outbound correlation policy. Its zero policy retains local
-telemetry but emits no remote correlation; the trace-only and trusted-service
-policies are selected per dependency, and none propagates baggage. The client
-also disables environment proxies and resolver-provided service configs so
-they cannot bypass metadata enforcement. None of these packages owns feature
-semantics, storage schemas, authentication policy, per-operation deadlines,
-retry eligibility, dependency criticality, or the trust decision for a
-concrete neighbor.
+enforces explicit outbound correlation and client-owned routing policy. Its
+zero propagation policy retains local telemetry but emits no remote correlation;
+the trace-only and trusted-service policies are selected per dependency, and
+none propagates baggage. Round robin consumes standard whole-process health by
+default; idle keepalive is an explicit complete interval/timeout pair. The
+client also disables environment proxies and resolver-provided service configs
+so they cannot bypass metadata enforcement or install another routing/retry
+policy. None of these packages owns feature semantics, storage schemas,
+authentication policy, per-operation deadlines, application retry eligibility,
+dependency criticality, or the trust decision for a concrete neighbor.
 <!-- profile:grpc:end -->
 
 ## Domain Vocabulary
@@ -122,13 +128,17 @@ The optional transport adds:
 
 ```text
 internal/infra/grpc
-  -> internal/problem, internal/reqctx
+  -> internal/failure, internal/reqctx
   -> generated handlers registered only by bootstrap
 
 internal/infra/grpcclient
   -> one shared connection per dependency
   -> generated clients owned by that dependency adapter
 ```
+
+Feature-owned error identities are classified through `internal/failure`.
+HTTP adds its status/title/type catalog in `internal/problem`; gRPC maps the
+same neutral code directly to a status and structured details.
 <!-- profile:grpc:end -->
 
 Stable direction rules:
@@ -200,15 +210,30 @@ PostgreSQL repository adapter appends a feature-selected event through the same
 durable intent.
 The relay owns only a minimal Publisher contract; an initialized service must
 register a real adapter, and the process fails closed if none is registered.
+When both outbox and NATS are selected, `internal/infra/natsjs` owns that
+adapter and `cmd/outbox-relay` supervises the NATS client beside the relay.
+Outbox without messaging retains the nil registration and fails before claims.
 See [PostgreSQL transactional outbox](postgres-transactional-outbox.md).
 <!-- profile:outbox-postgres:end -->
+
+<!-- profile:inbox-postgres:start -->
+The optional PostgreSQL inbox is a sibling persistence capability. A concrete
+consumer adapter derives a stable consumer identity and logical message ID,
+then calls `postgresinbox.Claim` in the same caller-owned `pgx.Tx` as one
+feature effect. A committed duplicate returns success without reapplying the
+effect; a rollback or database error remains a handler error. Claims do not
+expire, do not serialize generic consumer work, and do not cover external
+effects. See [PostgreSQL idempotent inbox](postgres-idempotent-inbox.md).
+<!-- profile:inbox-postgres:end -->
 
 <!-- profile:messaging-nats-jetstream:start -->
 The optional NATS JetStream profile ships a separate `cmd/worker` composition
 root and concrete `internal/infra/natsjs` producer/consumer owner. The service
 process remains producer-only; the worker fails before connecting until a
 binary-local handler adapter is registered to invoke duplicate-safe feature
-behavior. See [Durable messaging](./durable-messaging.md).
+behavior. The same package supplies the selected outbox adapter when the outbox
+profile is also retained; it forwards the stored W3C creation context without
+adding generic consumer ordering. See [Durable messaging](./durable-messaging.md).
 <!-- profile:messaging-nats-jetstream:end -->
 
 When a task introduces async work, keep the extension path stable:
@@ -243,12 +268,15 @@ Use these seams when extending the repository:
 - New HTTP capability: first consume the approved `spec.md` behavior/contract delta plus any needed system/integration contract decisions; then update `api/openapi/service.yaml`, regenerate `internal/openapi`, add use-case logic in `internal/<feature>`, and wire handlers/routes in `internal/infra/http`. Do not use OpenAPI edits, generated code, handlers, or tests to invent resource, status, error, retry, async, freshness, or compatibility semantics.
 <!-- profile:grpc:start -->
 - New gRPC capability: define the accepted RPC and compatibility behavior first; add an Edition 2023 Opaque schema under `api/proto`, regenerate `internal/gen/proto`, implement a thin feature-facing adapter, and register it in `cmd/service/internal/bootstrap/startup_grpc.go`. Generated handlers, raw statuses, streaming mechanics, and tests do not own domain semantics, deadlines, retry safety, authentication, or stream-duration policy.
-- New outbound gRPC dependency: construct one bootstrap-owned `grpcclient` connection, explicitly select `PropagationNone`, `PropagationTraceContext`, or `PropagationTrustedService` at that neighbor's trust boundary, pass it to the provider-generated client, and close it during shutdown and partial-startup cleanup. The zero policy emits no remote correlation; trusted service adds only a valid context request ID to W3C Trace Context; baggage is always omitted. Generated standard health and provider clients consume the same `grpc.ClientConnInterface` seam. Also select the address-selection policy for that neighbor: round robin is the zero value and reaches every resolved address, and first-address selection is the alternative when one subchannel per backend is not wanted. The connection pings when idle so a NAT or balancer idle timeout cannot discard it silently. Environment proxies and resolver-provided service configs are deliberately disabled — the client still supplies its own default service config, which is what carries the selection policy — and a dependency that requires a proxy or a resolver-provided config needs its own design instead of weakening the shared connection.
+- New outbound gRPC dependency: construct one bootstrap-owned `grpcclient` connection, explicitly select `PropagationNone`, `PropagationTraceContext`, or `PropagationTrustedService` at that neighbor's trust boundary, pass it to the provider-generated client, and close it during shutdown and partial-startup cleanup. The zero policy emits no remote correlation; trusted service adds only a valid context request ID to W3C Trace Context; baggage is always omitted. Generated standard health and provider clients consume the same `grpc.ClientConnInterface` seam. Also select the address-selection policy for that neighbor: round robin is the zero value, reaches every resolved address, and follows standard health for the empty service name; first-address selection is the alternative when one subchannel per backend is not wanted. Disable `HealthCheck` only when the named dependency does not publish that whole-process status. When it protects `Health/Watch`, pass a provider-owned connection credential through `Options.PerRPCCredentials`; per-call credentials do not authenticate the health stream. Idle keepalive stays off unless the dependency has a concrete intermediary timeout, in which case set both positive keepalive fields to peer-compatible values. Environment proxies and resolver-provided service configs are deliberately disabled — the client still supplies its own default service config, which carries address selection and health without adding application retries — and a dependency that requires a proxy or resolver-provided config needs its own design instead of weakening the shared connection.
 <!-- profile:grpc:end -->
 <!-- profile:authn-oidc-jwt:start -->
-- New rule about who may call this service — `internal/infra/oidcjwt` has no registration point, so an extra claim requirement, a different audience rule, or propagating more than the opaque subject is an edit inside that package — `parseAccessTokenClaims` for claim rules, and the `reqctx.Principal` construction in `parseToken` for what reaches handlers. A new configured value is the one that leaves the package: it needs a field on `config.AuthnConfig` with its koanf key and validation in `internal/config` as well as the value in `Policy`/`NewPolicy`, because both owners must refuse a bad value — the loader so the process stops, the verifier so a policy built any other way still fails closed. `internal/config` cannot import runtime adapters, so a rule the two share belongs in `internal/authntrust` and is called from each side; a rule only the verifier applies stays in the verifier. Its package documentation names each site. Treat such an edit as a deliberate fork of the template's copy: a later template sync reports it as a conflict, which is what keeps a change to who may call this service visible in review. Anything past identity — roles, tenant policy, per-operation permission — is feature-owned and does not belong in this package.
+- New rule about who may call this service — `internal/infra/oidcjwt` has no registration point, so an extra claim requirement, a different audience rule, or propagating more than the verified issuer, opaque subject, and OAuth client ID is an edit inside that package — `parseAccessTokenClaims` for claim rules, and the `reqctx.Principal` construction in `parseToken` for what reaches handlers. A new configured value is the one that leaves the package: it needs a field on `config.AuthnConfig` with its koanf key and validation in `internal/config` as well as the value in `Policy`/`NewPolicy`, because both owners must refuse a bad value — the loader so the process stops, the verifier so a policy built any other way still fails closed. `internal/config` cannot import runtime adapters, so a rule the two share belongs in `internal/authntrust` and is called from each side; a rule only the verifier applies stays in the verifier. Its package documentation names each site. Treat such an edit as a deliberate fork of the template's copy: a later template sync reports it as a conflict, which is what keeps a change to who may call this service visible in review. Anything past identity — roles, tenant policy, per-operation permission — is feature-owned and does not belong in this package.
 <!-- profile:authn-oidc-jwt:end -->
 - New persistence flow: add one canonical transactional Goose file under `migrations`, add SQLC query sources under `internal/infra/postgres/queries`, regenerate `internal/infra/postgres/sqlcgen`, add a hand-written Postgres repository that maps generated rows into feature-facing types, add a feature-owned port only if needed, then wire the concrete adapter in `cmd/service/internal/bootstrap`.
+<!-- profile:inbox-postgres:start -->
+- New idempotent consumer effect: keep `postgresinbox.Claim` and the tx-bound feature repository in the concrete consumer adapter; use the logical message ID plus a stable consumer identity, and return success on a committed duplicate. External effects require their own downstream idempotency or transactional outbox.
+<!-- profile:inbox-postgres:end -->
 - New integration adapter: add it under `internal/infra/<integration>`; add a feature-owned contract only if `internal/<feature>` needs inversion over the concrete adapter; wire concrete dependencies in `cmd/service/internal/bootstrap`. For ordinary provider-specific clients, start with `net/http`. When the repository was initialized with `OUTBOUND_HTTP=bounded`, reuse `internal/infra/httpclient` for fixed-authority transport safety and explicitly select `PropagationNone`, `PropagationTraceContext`, or `PropagationTrustedService` per dependency; zero emits no remote correlation. Keep authentication, operation budgets, retry eligibility, provider errors, and generated clients in the provider adapter. Credentials belong in headers; query-string authentication requires a separate telemetry-disclosure design. When the adapter calls another microservice, first verify the provider's current contract from its repository, generated contract, published spec, or live contract endpoint, then record the source used in the owning spec/design/tasks proof. Before enabling a runtime dependency, define config keys and secret-source policy, platform egress policy, criticality, retry and timeout budget, readiness participation, cleanup on partial initialization, low-cardinality metrics labels, and bootstrap tests.
 <!-- profile:messaging-nats-jetstream:start -->
 - New durable event flow: keep payload/schema semantics in the feature, compose the concrete `natsjs.Producer` or one duplicate-safe worker handler at bootstrap, and use the existing message identity and ACK boundary. Add outbox or inbox persistence only through its separate accepted workflow; do not hide it inside the transport package.

@@ -55,7 +55,9 @@ new import.
 Generated files under `internal/openapi` are derived output. Do not hand-edit
 them. Implement the generated strict-server operation in
 `internal/infra/http/<feature>_handlers.go`, map transport data to feature
-types, and return the generated typed Problem response for domain errors.
+types. Own domain error identities and their `failure.Mapper` beside the feature;
+return those errors for the composition root's shared HTTP/gRPC mapping, or a
+generated typed Problem response when the operation itself owns the rejection.
 Framework-level transport failures continue to use the shared hand-written
 Problem catalog.
 Extend `httpx.Handlers` and wire the concrete feature in
@@ -316,8 +318,9 @@ trusted-service policy. Every policy removes stale `traceparent`,
 is never propagated.
 
 ```go
+clientConfig := grpcclient.DefaultConfig("dns:///orders.railway.internal:9000")
 connection, err := grpcclient.New(
-    grpcclient.DefaultConfig("dns:///orders.railway.internal:9000"),
+    clientConfig,
     grpcclient.Options{
         TransportCredentials: credentials.NewTLS(tlsConfig),
         Propagation:          grpcclient.PropagationTrustedService,
@@ -338,11 +341,16 @@ connection deliberately ignores environment proxies and resolver-provided
 service configurations, so a proxy, a resolver-selected balancer, or a
 configured retry cannot silently bypass its metadata policy. It does carry its
 own address-selection policy — round robin by default, reaching every resolved
-address — and pings when idle so the connection survives a NAT or balancer idle
-timeout. A dependency that requires a proxy or a resolver-provided service
-config needs a separate design. grpc-go's native transparent
-retry may still occur before commitment; application retry remains an explicit
-per-operation adapter decision.
+address and following the standard health state for the empty service name.
+Set `clientConfig.HealthCheck = false` only when the named dependency does not
+publish that whole-process health contract. If it protects `Health/Watch`, pass
+its provider-owned dynamic credential through `Options.PerRPCCredentials`; a
+per-call credential cannot authenticate grpc-go's health stream. Idle keepalive is off by default;
+set both positive keepalive fields only for a concrete intermediary timeout and
+use values the peer accepts. A dependency that requires a proxy or a
+resolver-provided service config needs a separate design. grpc-go's native
+transparent retry may still occur before commitment; application retry remains
+an explicit per-operation adapter decision.
 <!-- profile:grpc:end -->
 
 ## 7. Wire, observe, and prove

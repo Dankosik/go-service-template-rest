@@ -10,13 +10,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand/v2"
 	"sync"
 	"time"
 )
 
 // refreshTrigger names why a JWKS fetch started. It is a named type rather than
-// a plain string for the two reasons [Transport] is: the accepted set is closed
-// by the compiler, and each value is published verbatim as the
+// a plain string for the two reasons transport is: the accepted set is closed by
+// the compiler, and each value is published verbatim as the
 // authn.refresh.trigger metric attribute, so a fourth trigger is a fourth metric
 // series rather than a label. TestDocumentedTriggersMatchTheGuide fails until
 // docs/authentication.md publishes it.
@@ -54,12 +55,6 @@ func (t refreshTrigger) rateLimited() bool {
 		return true
 	}
 }
-
-// errRefreshFailed is the whole result of a failed JWKS refresh, by the
-// redaction rule errProviderFetchFailed in provider.go owns. A failure mode
-// added to fetchAndInstall below — its sole producer — wants this value rather
-// than a message of its own.
-var errRefreshFailed = errors.New("JWKS refresh failed")
 
 // refreshCall is one admitted JWKS fetch and the handle every caller waiting on
 // that fetch shares. err is written before done is closed and read only after,
@@ -187,17 +182,17 @@ func (r *refreshAdmission) retire() {
 func (v *Verifier) fetchAndInstall(ctx context.Context) (err error) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
-			err = errRefreshFailed
+			err = errProviderPanic
 			logRecoveredPanic(ctx, v.log, "jwks_refresh", recovered)
 		}
 	}()
 	body, err := fetchDocument(ctx, v.client.request, v.jwksURI)
 	if err != nil {
-		return errRefreshFailed
+		return err
 	}
 	candidate, err := parseKeySet(body, v.now())
 	if err != nil {
-		return errRefreshFailed
+		return errProviderInvalidDocument
 	}
 	v.keys.Store(candidate)
 	select {
@@ -225,7 +220,9 @@ func waitRefresh(ctx context.Context, call *refreshCall) error {
 //
 // It is the blocking route into begin. Run takes the other: it selects on the
 // call it got back, because it has readiness and its own deadlines to serve
-// while a fetch runs.
+// while a fetch runs. Successful installs rearm through installed alone; the
+// completion arm only schedules a retry after failure, so one success cannot
+// draw two competing jitter values.
 //
 // Waiting here puts a provider call on the request path, and the trigger is
 // reachable without a credential: parseToken has accepted the claims by this
@@ -277,20 +274,25 @@ func (p *readinessPublisher) observe(current bool) {
 // under requests or a cadence that never fires again. [Verifier.Run] is its sole
 // user and owns when each deadline is restated.
 type refreshSchedule struct {
-	due   *time.Timer
-	stale *time.Timer
+	due    *time.Timer
+	stale  *time.Timer
+	jitter func(time.Duration) time.Duration
 }
 
-func newRefreshSchedule(now, fetchedAt time.Time) refreshSchedule {
+func newRefreshSchedule(
+	now, fetchedAt time.Time,
+	jitter func(time.Duration) time.Duration,
+) refreshSchedule {
 	return refreshSchedule{
-		due:   time.NewTimer(until(now, fetchedAt.Add(RefreshInterval))),
-		stale: time.NewTimer(until(now, fetchedAt.Add(MaxKeySetAge))),
+		due:    time.NewTimer(until(now, fetchedAt.Add(jitter(RefreshInterval)))),
+		stale:  time.NewTimer(until(now, fetchedAt.Add(MaxKeySetAge))),
+		jitter: jitter,
 	}
 }
 
 // rearm restates both deadlines against a newly installed set.
 func (s refreshSchedule) rearm(now, fetchedAt time.Time) {
-	s.due.Reset(until(now, fetchedAt.Add(RefreshInterval)))
+	s.due.Reset(until(now, fetchedAt.Add(s.jitter(RefreshInterval))))
 	s.stale.Reset(until(now, fetchedAt.Add(MaxKeySetAge)))
 }
 
@@ -299,7 +301,7 @@ func (s refreshSchedule) rearm(now, fetchedAt time.Time) {
 // next try to replace that set, not how long the set it still holds remains
 // usable.
 func (s refreshSchedule) retryAfter(delay time.Duration) {
-	s.due.Reset(delay)
+	s.due.Reset(s.jitter(delay))
 }
 
 func (s refreshSchedule) stop() {
@@ -312,6 +314,17 @@ func until(now, future time.Time) time.Duration {
 		return 0
 	}
 	return future.Sub(now)
+}
+
+// refreshJitter spreads replica refreshes by ten percent in either direction.
+// The stale deadline is deliberately not passed through it: trust expiry stays
+// exact even while provider load is decorrelated.
+func refreshJitter(delay time.Duration) time.Duration {
+	spread := delay / 10
+	if spread <= 0 {
+		return delay
+	}
+	return delay - spread + time.Duration(rand.Int64N(int64(2*spread+1))) // #nosec G404 -- provider-load jitter is not security randomness.
 }
 
 // pendingDone is the completion channel of the scheduled refresh Run is holding
@@ -330,9 +343,9 @@ func pendingDone(call *refreshCall) <-chan struct{} {
 // Run reacts to call.done only for a fetch its own begin returned; a key-miss
 // refresh it never asked for is awaited by the verification that caused it. So a
 // successful scheduled refresh reaches Run twice, on installed and on call.done,
-// while a purely request-driven one reaches it once, on installed — which is why
-// the retry cadence lives on the call.done arm, the only one a refused or failed
-// fetch reaches.
+// while a purely request-driven one reaches it once, on installed. The installed
+// arm owns the next normal cadence; call.done only schedules the shorter failure
+// retry.
 func (v *Verifier) Run(ctx context.Context, onTrustCurrent func(bool)) error {
 	v.lifecycleMu.Lock()
 	if v.runStarted || v.retired {
@@ -354,7 +367,7 @@ func (v *Verifier) Run(ctx context.Context, onTrustCurrent func(bool)) error {
 	publishCurrent()
 
 	// The [Verifier] field comment owns why keys is non-nil here and below.
-	schedule := newRefreshSchedule(v.now(), v.keys.Load().fetchedAt)
+	schedule := newRefreshSchedule(v.now(), v.keys.Load().fetchedAt, v.jitter)
 	defer schedule.stop()
 	var scheduled *refreshCall
 
@@ -369,12 +382,8 @@ func (v *Verifier) Run(ctx context.Context, onTrustCurrent func(bool)) error {
 		// errors.Is, so the message is all an operator has to tell them apart.
 		case <-v.baseCtx.Done():
 			return fmt.Errorf("retire OIDC verifier: %w", v.baseCtx.Err())
-		// Every installed set re-arms the cadence, whoever fetched it: a
-		// request-driven refresh that lands here is as good as a scheduled one.
-		// A successful scheduled refresh therefore re-arms twice, once here from
-		// the new fetchedAt and once below from now. The two agree to within the
-		// time it took to hand the set over, because a successful install stamps
-		// fetchedAt with the moment it parsed that set.
+			// Every installed set re-arms the cadence, whoever fetched it: a
+			// request-driven refresh that lands here is as good as a scheduled one.
 		case <-v.installed:
 			schedule.rearm(v.now(), v.keys.Load().fetchedAt)
 			publishCurrent()
@@ -395,12 +404,10 @@ func (v *Verifier) Run(ctx context.Context, onTrustCurrent func(bool)) error {
 			if scheduled == nil {
 				continue
 			}
-			next := RefreshCooldown
-			if scheduled.err == nil {
-				next = RefreshInterval
+			if scheduled.err != nil {
+				schedule.retryAfter(RefreshCooldown)
 			}
 			scheduled = nil
-			schedule.retryAfter(next)
 			publishCurrent()
 		case <-schedule.stale.C:
 			publishCurrent()

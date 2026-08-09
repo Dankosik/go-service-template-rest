@@ -54,7 +54,7 @@
 //
 // To make a domain error reach the caller as anything other than INTERNAL,
 // classify it through [Options.DomainErrors]. A handler returns its domain error,
-// problem.Classify maps that to a problem.Code, and this package renders the gRPC
+// failure.Classify maps that to a failure.Code, and this package renders the gRPC
 // code. The same mapper slice feeds the HTTP transport, which is what keeps one
 // domain identity from answering 404 over HTTP and Internal over gRPC; there is
 // deliberately no gRPC-only mapper seam. A raw status.Error returned from a
@@ -115,7 +115,7 @@
 // through grpc.SetHeader, the other through the stream.
 //
 // See docs/grpc.md for the service author's contract — the proto and generation
-// workflow, the full problem.Code to gRPC code table, and the bootstrap
+// workflow, the full failure.Code to gRPC code table, and the bootstrap
 // registration step — and docs/repo-architecture.md for where this sits among the
 // repository's extension seams.
 package grpcx

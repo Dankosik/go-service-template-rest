@@ -41,6 +41,10 @@ var (
 	// draining" must be distinguishable from a database or configuration
 	// failure, which a caller cannot absorb.
 	ErrOrderingKeyActive = errors.New("outbox ordering key still has unpublished events")
+	// ErrReceiptConflict means an event id already has different immutable
+	// commit evidence, so treating the attempted write as applied would hide an
+	// identity reuse bug.
+	ErrReceiptConflict = errors.New("outbox commit receipt conflict")
 )
 
 // The relay's stop reasons. Each one ends [Relay.Run] and has a case in
@@ -89,17 +93,23 @@ var (
 	ErrPermanentPublication = errors.New("permanent outbox publication failure")
 	// ErrPublicationNotAccepted lets an adapter prove that the broker did not
 	// durably accept an occurrence. It remains retryable and is the only failure
-	// the attempt threshold poisons on; unclassified errors stay ambiguous and
-	// keep retrying rather than risking loss at a strict attempt cap.
+	// the attempt threshold turns into deterministic poison; unclassified errors
+	// set sticky uncertainty and become outcome-unknown quarantine at the cap.
 	ErrPublicationNotAccepted = errors.New("outbox publication was not accepted")
 )
 
 // Operator redrive. Neither reaches the relay: [Store.Redrive] is tooling.
 var (
+	// ErrOperatorStateConflict means the event is not in the state required by
+	// the requested audited operator action.
+	ErrOperatorStateConflict = errors.New("outbox operator state conflict")
+	// ErrOperatorAuditConflict means an audit id already names a different
+	// event or action.
+	ErrOperatorAuditConflict = errors.New("outbox operator audit conflict")
 	// ErrRedriveRejected means the row is not in a state a redrive may release —
 	// not poisoned, already published, or out of redrive count.
-	ErrRedriveRejected = errors.New("outbox redrive rejected")
+	ErrRedriveRejected = ErrOperatorStateConflict
 	// ErrRedriveConflict means the audit id already belongs to another event,
 	// which is a caller fault rather than a race. See auditIDAlreadySpent.
-	ErrRedriveConflict = errors.New("outbox redrive audit conflict")
+	ErrRedriveConflict = ErrOperatorAuditConflict
 )

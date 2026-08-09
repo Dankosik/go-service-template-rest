@@ -40,7 +40,7 @@ func BenchmarkOutboxRelayCycle(b *testing.B) {
 
 			b.ReportAllocs()
 			for b.Loop() {
-				batch, err := store.Claim(ctx, time.Minute, batchSize)
+				batch, err := store.Claim(ctx, time.Minute, batchSize, 5)
 				if err != nil {
 					b.Fatalf("Claim(): %v", err)
 				}
@@ -276,7 +276,7 @@ func runOutboxPublishCycle(
 
 	b.ReportAllocs()
 	for b.Loop() {
-		batch, err := store.Claim(ctx, time.Minute, batchSize)
+		batch, err := store.Claim(ctx, time.Minute, batchSize, 5)
 		if err != nil {
 			b.Fatalf("Claim(): %v", err)
 		}
@@ -399,7 +399,7 @@ func BenchmarkOutboxClaimRetryWait(b *testing.B) {
 
 	b.ReportAllocs()
 	for b.Loop() {
-		batch, err := store.Claim(ctx, time.Minute, batchSize)
+		batch, err := store.Claim(ctx, time.Minute, batchSize, 5)
 		if err != nil {
 			b.Fatalf("Claim(): %v", err)
 		}
@@ -487,7 +487,7 @@ func BenchmarkOutboxHeapGrowth(b *testing.B) {
 	var events int64
 
 	for b.Loop() {
-		batch, err := store.Claim(ctx, time.Minute, batchSize)
+		batch, err := store.Claim(ctx, time.Minute, batchSize, 5)
 		if err != nil {
 			b.Fatalf("Claim(): %v", err)
 		}
@@ -537,7 +537,7 @@ func runOutboxOrderedPublishCycle(
 
 	b.ReportAllocs()
 	for b.Loop() {
-		batch, err := store.Claim(ctx, time.Minute, batchSize)
+		batch, err := store.Claim(ctx, time.Minute, batchSize, 5)
 		if err != nil {
 			b.Fatalf("Claim(): %v", err)
 		}
@@ -578,7 +578,7 @@ func BenchmarkOutboxRelayOrderedPublishCycle(b *testing.B) {
 
 			b.ReportAllocs()
 			for b.Loop() {
-				batch, err := store.Claim(ctx, time.Minute, keys)
+				batch, err := store.Claim(ctx, time.Minute, keys, 5)
 				if err != nil {
 					b.Fatalf("Claim(): %v", err)
 				}
@@ -783,7 +783,7 @@ func BenchmarkOutboxClaimConcurrent(b *testing.B) {
 			b.ReportAllocs()
 			b.RunParallel(func(pb *testing.PB) {
 				for pb.Next() {
-					batch, err := store.Claim(ctx, time.Minute, batchSize)
+					batch, err := store.Claim(ctx, time.Minute, batchSize, 5)
 					if err != nil {
 						b.Fatalf("Claim(): %v", err)
 					}

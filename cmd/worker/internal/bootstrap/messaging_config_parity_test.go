@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/example/go-service-template-rest/internal/config"
+	"github.com/example/go-service-template-rest/internal/config/configtest"
 	"github.com/example/go-service-template-rest/internal/infra/natsjs"
 )
 
@@ -23,40 +24,12 @@ import (
 // config-load failure to connect time, where an operator reads it as a broker
 // outage instead of a typo.
 func TestMessagingConfigRulesMatchAdapter(t *testing.T) {
-	cases := []struct {
-		name          string
-		urls          string
-		stream        string
-		plaintext     bool
-		configRejects bool
-	}{
-		{name: "valid plaintext", urls: "nats://broker.example:4222", stream: "EVENTS", plaintext: true},
-		{name: "valid tls", urls: "tls://broker.example:4222", stream: "EVENTS"},
-		{name: "two urls", urls: "tls://a.example:4222,tls://b.example:4222", stream: "EVENTS"},
-
-		{name: "userinfo", urls: "tls://user@broker.example:4222", stream: "EVENTS", configRejects: true},
-		{name: "unsupported scheme", urls: "amqp://broker.example:5672", stream: "EVENTS", configRejects: true},
-		{name: "plaintext without opt-in", urls: "nats://broker.example:4222", stream: "EVENTS", configRejects: true},
-		{name: "no host", urls: "tls://", stream: "EVENTS", configRejects: true},
-		{name: "empty urls", urls: "", stream: "EVENTS", configRejects: true},
-
-		// The stream name rule is the one both sides spell out separately:
-		// natsjs.validConsumerName and config.validMessagingStreamName.
-		{name: "empty stream", urls: "tls://broker.example:4222", stream: "", configRejects: true},
-		{name: "stream with separator", urls: "tls://broker.example:4222", stream: "EV.ENTS", configRejects: true},
-		{name: "stream with wildcard", urls: "tls://broker.example:4222", stream: "EV*NTS", configRejects: true},
-		{name: "stream with full wildcard", urls: "tls://broker.example:4222", stream: "EVENTS>", configRejects: true},
-		{name: "stream with space", urls: "tls://broker.example:4222", stream: "EV ENTS", configRejects: true},
-		{name: "stream with path", urls: "tls://broker.example:4222", stream: "EV/ENTS", configRejects: true},
-		{name: "stream with tab", urls: "tls://broker.example:4222", stream: "EV\tENTS", configRejects: true},
-	}
-
-	for _, testCase := range cases {
-		t.Run(testCase.name, func(t *testing.T) {
-			cfg, loadErr := loadMessagingConfig(t, testCase.urls, testCase.stream, testCase.plaintext)
+	for _, testCase := range configtest.MessagingCases() {
+		t.Run(testCase.Name, func(t *testing.T) {
+			cfg, loadErr := loadMessagingConfig(t, testCase.URLs, testCase.Stream, testCase.Plaintext)
 			configRejected := cfg == nil
-			if configRejected != testCase.configRejects {
-				t.Fatalf("config load rejected = %v, want %v (load error: %v)", configRejected, testCase.configRejects, loadErr)
+			if configRejected != testCase.ConfigRejects {
+				t.Fatalf("config load rejected = %v, want %v (load error: %v)", configRejected, testCase.ConfigRejects, loadErr)
 			}
 			if configRejected {
 				// internal/config already refused it, so the operator sees the

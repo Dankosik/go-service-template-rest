@@ -19,6 +19,8 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
 
 // The outcome attribute is shared by four counters and the connection event by
@@ -96,10 +98,14 @@ func TestMessagingTelemetryContract(t *testing.T) {
 	reader := sdkmetric.NewManualReader()
 	provider := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
 	t.Cleanup(func() { _ = provider.Shutdown(context.Background()) })
+	spanRecorder := tracetest.NewSpanRecorder()
+	traceProvider := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(spanRecorder))
+	t.Cleanup(func() { _ = traceProvider.Shutdown(context.Background()) })
 	var logs bytes.Buffer
 	sig, err := newTelemetry(Observability{
 		Logger: slog.New(slog.NewJSONHandler(&logs, nil)),
 		Meter:  provider.Meter(instrumentationScope),
+		Tracer: traceProvider.Tracer(instrumentationScope),
 	}, RoleWorker, func() bool { return true })
 	if err != nil {
 		t.Fatalf("newTelemetry() error = %v", err)
@@ -120,6 +126,10 @@ func TestMessagingTelemetryContract(t *testing.T) {
 	// than through the instrument, so this exercises the bounding the
 	// production path applies instead of a hand-built attribute set.
 	sig.recordPublish(ctx, event, outcomeAccepted, reasonNone, time.Now())
+	_, publishSpan := sig.tracer.Start(ctx, "publish", publishSpanOptions(event)...)
+	publishSpan.End()
+	_, consumeSpan := sig.tracer.Start(ctx, "consume", consumeSpanOptions(msg)...)
+	consumeSpan.End()
 	sig.recordConnection(ctx, connectionDisconnected)
 	sig.fetchMessages.Add(ctx, 1)
 	sig.fetchBytes.Add(ctx, 64)
@@ -161,27 +171,33 @@ func TestMessagingTelemetryContract(t *testing.T) {
 	}
 
 	serialized := logs.String()
-	for _, forbidden := range []string{payloadCanary, credentialCanary, brokerCanary, eventTypeCanary, headerCanary} {
+	for _, forbidden := range []string{payloadCanary, credentialCanary, brokerCanary, eventTypeCanary, headerCanary, "message-1", "publication-1", "events-worker"} {
 		if strings.Contains(serialized, forbidden) {
 			t.Fatalf("messaging logs contain forbidden value %q: %s", forbidden, serialized)
 		}
 	}
-	for _, required := range []string{"messaging_publish", "messaging_connection", "messaging_delivery", "messaging_terminal_delivery", "message_id", "subject", "outcome", "reason"} {
+	for _, required := range []string{"messaging_publish", "messaging_connection", "messaging_delivery", "messaging_terminal_delivery", "subject", "outcome", "reason"} {
 		if !strings.Contains(serialized, required) {
 			t.Fatalf("messaging logs are missing %q: %s", required, serialized)
 		}
 	}
 	records := decodeMessagingLogs(t, serialized)
 	delivery := messagingLogByMessage(t, records, "messaging_delivery")
-	if delivery["consumer"] != "events-worker" || delivery["attempt"] != float64(2) {
-		t.Fatalf("messaging delivery log = %#v, want consumer and attempt", delivery)
+	if delivery["attempt"] != float64(2) {
+		t.Fatalf("messaging delivery log = %#v, want attempt", delivery)
 	}
 	terminal := messagingLogByMessage(t, records, "messaging_terminal_delivery")
-	if terminal["stream"] != "EVENTS" || terminal["consumer"] != "events-worker" ||
-		terminal["stream_sequence"] != float64(3) || terminal["attempt"] != float64(2) ||
+	if terminal["attempt"] != float64(2) ||
 		terminal["reason"] != "handler_panic" ||
 		!reflect.DeepEqual(terminal["handler_frames"], []any{"featureHandler handler_test.go:42"}) {
-		t.Fatalf("terminal delivery log = %#v, want safe source identity", terminal)
+		t.Fatalf("terminal delivery log = %#v, want bounded diagnostics", terminal)
+	}
+	for _, span := range spanRecorder.Ended() {
+		for _, attr := range span.Attributes() {
+			if attr.Key == "messaging.message.id" || strings.Contains(attr.Value.AsString(), "message-1") || strings.Contains(attr.Value.AsString(), "events-worker") {
+				t.Fatalf("span %q leaked durable identity through %s=%v", span.Name(), attr.Key, attr.Value)
+			}
+		}
 	}
 
 	_, _, classified := classifyPublishError(errors.New(brokerCanary))
