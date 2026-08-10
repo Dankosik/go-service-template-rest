@@ -79,6 +79,36 @@ func TestDefaultValuesAreSubsetOfKnownConfigKeys(t *testing.T) {
 	}
 }
 
+// TestEveryKnownConfigKeyHasADefault holds the direction
+// [TestDefaultValuesAreSubsetOfKnownConfigKeys] does not. That one proves a
+// default names a real leaf; this one proves a leaf was not forgotten.
+//
+// A section wired into Config but never given its maps.Copy in defaultValues
+// loads at the Go zero value, and whether anything notices depends on whether
+// that section's validator happens to reject zero. For a bool, an optional
+// string, or a wide-open numeric range it notices nothing, and the service runs
+// on a value nobody chose.
+func TestEveryKnownConfigKeyHasADefault(t *testing.T) {
+	t.Parallel()
+
+	defaults := defaultValues()
+	missing := make([]string, 0)
+	for _, key := range configLeafKeysFromType(t, reflect.TypeFor[Config](), "") {
+		if _, defaulted := defaults[key]; defaulted {
+			continue
+		}
+		missing = append(missing, key)
+	}
+	slices.Sort(missing)
+	if len(missing) > 0 {
+		t.Fatalf(
+			"these Config leaf keys have no defaultValues() entry: %v; add the section's maps.Copy "+
+				"to defaultValues, or state here why the operator has to supply it",
+			missing,
+		)
+	}
+}
+
 func configLeafKeysFromType(t *testing.T, typ reflect.Type, prefix string) []string {
 	t.Helper()
 

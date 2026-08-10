@@ -83,8 +83,8 @@ without messaging keeps its fail-closed adapter registration seam.
 
 `examples/reference-service` is a worked feature slice kept in this template for
 reference; initialization removes it so a generated service does not inherit a
-second OpenAPI contract and a second `main()` to maintain. Pass
-`REFERENCE_EXAMPLE=keep` to retain it, and read it here or in
+second OpenAPI contract to maintain. Pass `REFERENCE_EXAMPLE=keep` to retain
+it, and read it here or in
 [first production feature](docs/first-production-feature.md) either way.
 
 ## What You Get

@@ -36,7 +36,8 @@ var commentProseWords = map[string]struct{}{
 	"AlreadyExists":     {},
 	"InvalidArgument":   {},
 	"ResourceExhausted": {},
-	// google.golang.org/grpc server options.
+	// google.golang.org/grpc server options, and the type they are.
+	"ServerOption":      {},
 	"MaxHeaderListSize": {},
 	"MaxRecvMsgSize":    {},
 	"MaxSendMsgSize":    {},

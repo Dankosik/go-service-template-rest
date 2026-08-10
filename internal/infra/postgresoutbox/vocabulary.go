@@ -14,8 +14,8 @@ package postgresoutbox
 // labels a single log field of a single function and never reaches a metric, so
 // it stays beside the failures it names.
 //
-// telemetry.go holds the instruments, the snapshot, the recorders, and the
-// scrape callback that put these values on a sample.
+// The telemetry files hold the instruments, snapshot, recorders, and scrape
+// callback; this file holds only their closed label vocabulary.
 
 // The outcome labels every operation site chooses between. Attribute values are
 // a fixed enum, so they are named rather than repeated.

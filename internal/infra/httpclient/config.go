@@ -108,16 +108,5 @@ func validateBounds(cfg Config) error {
 	if cfg.MaxIdleConnsPerHost > cfg.MaxConnsPerHost {
 		return errors.New("build outbound HTTP client: max idle conns per host must be <= max conns per host")
 	}
-	if cfg.Retry.MaxAttempts < 0 {
-		return errors.New("build outbound HTTP client: retry max attempts must be >= 0")
-	}
-	if cfg.Retry.BaseDelay < 0 {
-		return errors.New("build outbound HTTP client: retry base delay must be >= 0")
-	}
-	// A policy that names attempts without a delay would retry immediately, which
-	// is the shape that turns one failure into a burst.
-	if cfg.Retry.MaxAttempts > 1 && cfg.Retry.BaseDelay <= 0 {
-		return errors.New("build outbound HTTP client: retry base delay is required when max attempts is > 1")
-	}
-	return nil
+	return cfg.Retry.validate()
 }

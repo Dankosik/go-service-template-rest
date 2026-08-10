@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
 	"net/netip"
 	"net/url"
 	"strings"
@@ -110,9 +111,40 @@ func validateTarget(baseURL *url.URL, targetClass TargetClass, requiredPrivateSu
 	return nil
 }
 
-// enforceDialAddress is the post-DNS half of the target guarantee: validateTarget
-// can only judge the configured hostname, and this judges what that hostname
-// actually resolved to, on every dial.
+// authorityTransport judges the per-request URL: it refuses any request whose
+// scheme or authority drifted from the one the client was built for, before a
+// dial can happen.
+type authorityTransport struct {
+	base      http.RoundTripper
+	scheme    string
+	authority string
+}
+
+func (t authorityTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if req == nil || req.URL == nil ||
+		req.URL.User != nil ||
+		!strings.EqualFold(req.URL.Scheme, t.scheme) ||
+		!strings.EqualFold(req.URL.Host, t.authority) {
+		return nil, ErrTargetDenied
+	}
+	response, err := t.base.RoundTrip(req)
+	if err != nil {
+		return response, fmt.Errorf("send outbound HTTP request: %w", err)
+	}
+	return response, nil
+}
+
+// The fixed-target guarantee has three checks, none of which alone is enough:
+// validateTarget judges the configured hostname at construction, but a hostname
+// can resolve to a different address at dial time; enforceDialAddress judges the
+// post-DNS address on every dial, but a pooled connection is reused across
+// requests without redialing; and authorityTransport.RoundTrip judges the
+// per-request URL before it reaches a pooled or new connection, but it cannot
+// see what an accepted hostname resolves to.
+
+// enforceDialAddress is the post-DNS check: validateTarget can only judge the
+// configured hostname, and this judges what that hostname actually resolved to,
+// on every dial.
 func enforceDialAddress(targetClass TargetClass, address string) error {
 	host, _, err := net.SplitHostPort(address)
 	if err != nil {

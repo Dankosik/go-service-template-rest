@@ -84,3 +84,17 @@ func TestValidateSamplerAdditionalErrorCoverage(t *testing.T) {
 		})
 	}
 }
+
+func TestPprofRequiresDiagnosticsListener(t *testing.T) {
+	resetConfigEnv(t)
+	t.Setenv("APP__OBSERVABILITY__PPROF__ENABLED", "true")
+	t.Setenv("APP__OBSERVABILITY__METRICS__ADDR", "")
+
+	_, _, err := LoadDetailed(LoadOptions{})
+	if !errors.Is(err, ErrValidate) {
+		t.Fatalf("LoadDetailed() error = %v, want ErrValidate", err)
+	}
+	if !strings.Contains(err.Error(), "observability.metrics.addr") {
+		t.Fatalf("error = %q, want it to name observability.metrics.addr", err.Error())
+	}
+}

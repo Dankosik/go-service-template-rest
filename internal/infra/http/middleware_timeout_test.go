@@ -137,7 +137,7 @@ func TestRouterAppliesRequestTimeoutToHandlers(t *testing.T) {
 			return nil
 		},
 	}, nil, RouterConfig{
-		RequestTimeout: requestBudget,
+		HardenConfig: HardenConfig{RequestTimeout: requestBudget},
 	})
 
 	before := time.Now()

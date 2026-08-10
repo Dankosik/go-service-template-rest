@@ -160,13 +160,11 @@ The baseline Postgres DSN contract is intentionally strict. The DSN must come fr
 
 When a feature needs a new runtime config key:
 
-1. Add the typed field and `koanf` tag in `internal/config/types.go`.
-2. Add the default in `internal/config/defaults.go` when the key has a baseline value.
-3. Add validation in the section's own `internal/config/<section>_config.go` when the key has bounds, mode-specific rules, or security-sensitive behavior. `validate.go` owns only the order the sections run in and the rules that hold between them, so a section a build profile removes leaves with its file.
-4. Add the key to both `sentinelConfigSourceValues` and `expectedSentinelSnapshotValues` in `internal/config/snapshot_contract_test.go`. `TestBuildSnapshotMapsEveryKnownConfigLeafKey` walks the shape by reflection and fails on a leaf that either map is missing, so a key skipped here fails the suite rather than silently going unproven.
-5. Update `env/config/local.yaml` or `env/.env.example` only where the key belongs for non-secret examples or env-driven secrets.
-6. Update docs that explain the feature's config behavior, especially secret-source or runtime-budget rules.
-7. Add or update `internal/config` tests so the tagged field is decoded into the immutable `Config` snapshot and validation rejects invalid values.
+1. Add the typed field and `koanf` tag, its default when the key has a baseline value, and its validation — all three in the section's own `internal/config/<section>_config.go`. One key is one file: the reason a value was chosen sits beside the rule that enforces it, and a section a build profile removes leaves with its file. `types.go` and `defaults.go` hold the `Config` shape, the merge over it, and only the sections a dedicated file would not pay for (`app`, `health`, `log`, `runtime`); `http` and `observability` are always present too and still have their own files, because size rather than removability is what earns one. `validate.go` owns the order the sections run in and the helpers more than one section shares. A rule spanning two sections goes to whichever section depends on the other and takes that other section as a parameter — `validatePostgres` against the request budget, `validateOutbox` against Postgres — so no rule outlives the section it is about.
+2. Add the key to both `sentinelConfigSourceValues` and `expectedSentinelSnapshotValues` in `internal/config/snapshot_contract_test.go`. `TestBuildSnapshotMapsEveryKnownConfigLeafKey` walks the shape by reflection and fails on a leaf that either map is missing, so a key skipped here fails the suite rather than silently going unproven.
+3. Update `env/config/local.yaml` or `env/.env.example` only where the key belongs for non-secret examples or env-driven secrets.
+4. Update docs that explain the feature's config behavior, especially secret-source or runtime-budget rules.
+5. Add or update `internal/config` tests so the tagged field is decoded into the immutable `Config` snapshot and validation rejects invalid values.
 
 `internal/config/snapshot.go` decodes the tagged `Config` shape through Koanf,
 so adding a field does not require a second manual mapping. The source of truth

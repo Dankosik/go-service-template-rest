@@ -11,10 +11,14 @@
 // Four audiences share the package. Feature code touches only [Event],
 // [Message], [Handler], and [Permanent] — all in message.go. Everything else is
 // the composition root's: [Connect], [Client.Producer], [Client.NewWorker], and
-// the lifecycle methods the two cmd packages drive. The outbox relay uses only
+// the lifecycle methods the two cmd packages drive.
+// profile:outbox-postgres:start
+// The outbox relay uses only
 // [NewOutboxPublisher], which converts the broker-neutral event, forwards its
 // stored W3C creation context, and maps publication evidence onto the outbox's
-// permanent, not-accepted, and ambiguous outcomes. Operator tooling uses
+// permanent, not-accepted, and ambiguous outcomes.
+// profile:outbox-postgres:end
+// Operator tooling uses
 // [RestoreDeadLetter] and [DeadLetterReason] to take a record back out of the
 // dead-letter stream; this package ships no binary that calls them, because
 // which records deserve a redrive is a service's decision rather than this
@@ -38,15 +42,15 @@
 //   - settle (worker_delivery.go) — acknowledge, dead-letter, or request a delayed
 //     redelivery. This is the single place the delivery policy lives.
 //
-// Around that cycle: worker_admission.go proves the broker topology before a
+// Around that cycle: worker_topology.go proves the broker topology before a
 // Worker exists, client.go owns the connection and the reconnect state machine,
 // producer.go owns publish admission, message_wire.go owns the header contract
-// — including the dead-letter reasons, which travel on the wire —
-// message_redrive.go owns the way back out of the dead-letter stream, config.go
-// owns the settings and their validation, errors.go holds the five sentinels
-// described below, vocabulary.go holds the metric and log labels with the
-// functions that bound them, and telemetry.go holds the instruments, the
-// recorders, and the two spans.
+// and the ordinary envelope, message_deadletter.go owns the transfer onto the
+// dead-letter stream, the reasons that travel with it, and the way back out,
+// config.go owns connection and producer settings, worker_config.go owns worker
+// topology and delivery admission, errors.go holds the five sentinels described
+// below, vocabulary.go holds the metric and log labels with the functions that
+// bound them, and telemetry.go holds the instruments, recorders, and spans.
 //
 // # Extending it
 //

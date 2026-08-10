@@ -3,7 +3,9 @@ package config
 import (
 	"fmt"
 	"math"
+	"net"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -14,8 +16,16 @@ import (
 //
 // Each section's rules live in its own <section>_config.go beside this one, so a
 // section that a build profile removes leaves with its file. This file keeps the
-// order they run in, the rules that hold between sections, and the helpers more
-// than one of them shares.
+// order they run in and the helpers more than one of them shares. A rule that
+// spans two sections goes to whichever section depends on the other, and takes
+// that section's other half as a parameter — postgres against the request
+// budget, outbox against postgres — so no rule outlives the section it is about.
+//
+// There is deliberately no rule tying health.refresh_interval to
+// http.readiness_timeout. The readiness handler answers from cached state and
+// performs no I/O, so its budget bounds nothing the refresher does; the interval
+// only has to be small relative to the orchestrator's own probe period, which
+// this service cannot see.
 func validateConfig(cfg *Config, unknownKeys []string) error {
 	if unknown := findUnknownKeys(unknownKeys); len(unknown) > 0 {
 		return fmt.Errorf("%w: unknown keys: %s", ErrUnknownKey, strings.Join(unknown, ", "))
@@ -50,7 +60,7 @@ func validateConfig(cfg *Config, unknownKeys []string) error {
 	// profile:messaging-nats-jetstream:end
 
 	// profile:database-postgres:start
-	if err := validatePostgres(cfg.Postgres); err != nil {
+	if err := validatePostgres(cfg.Postgres, cfg.HTTP); err != nil {
 		return err
 	}
 	// profile:database-postgres:end
@@ -60,54 +70,7 @@ func validateConfig(cfg *Config, unknownKeys []string) error {
 	}
 	// profile:outbox-postgres:end
 
-	if err := validateObservabilityConfig(&cfg.Observability); err != nil {
-		return err
-	}
-	return validateCrossSectionBudgets(*cfg)
-}
-
-// validateCrossSectionBudgets rejects settings that are each individually legal
-// but incoherent together. A budget that only holds inside one section is not a
-// budget: it is a number that happens to look like one.
-func validateCrossSectionBudgets(cfg Config) error {
-	// profile:database-postgres:start
-	if cfg.Postgres.Enabled {
-		if cfg.Postgres.StatementTimeout > cfg.HTTP.RequestTimeout {
-			return fmt.Errorf(
-				"%w: postgres.statement_timeout must be <= http.request_timeout (%s)",
-				ErrValidate,
-				cfg.HTTP.RequestTimeout,
-			)
-		}
-		// Strictly less, not at most: a caller that spends the whole request
-		// budget waiting for a connection has nothing left to run a query with,
-		// which makes the wait indistinguishable from the unbounded one this
-		// budget replaced.
-		if cfg.Postgres.AcquireTimeout >= cfg.HTTP.RequestTimeout {
-			return fmt.Errorf(
-				"%w: postgres.acquire_timeout must be < http.request_timeout (%s) so a caller that waited still has budget to query",
-				ErrValidate,
-				cfg.HTTP.RequestTimeout,
-			)
-		}
-	}
-	// profile:database-postgres:end
-
-	// There is deliberately no rule tying health.refresh_interval to
-	// http.readiness_timeout. The readiness handler answers from cached state and
-	// performs no I/O, so its budget bounds nothing the refresher does; the
-	// interval only has to be small relative to the orchestrator's own probe
-	// period, which this service cannot see.
-	if !cfg.Observability.Pprof.Enabled {
-		return nil
-	}
-	if cfg.Observability.Metrics.Addr == "" {
-		return fmt.Errorf(
-			"%w: observability.pprof.enabled requires observability.metrics.addr, which serves the diagnostics listener",
-			ErrValidate,
-		)
-	}
-	return nil
+	return validateObservabilityConfig(&cfg.Observability)
 }
 
 func validateAppConfig(cfg *AppConfig) error {
@@ -179,6 +142,24 @@ func validateDurationRange(name string, value time.Duration, lowerBound time.Dur
 func validateIntRange[T ~int | ~int64](name string, value T, lowerBound T, upperBound T) error {
 	if value < lowerBound || value > upperBound {
 		return fmt.Errorf("%w: %s must be in range [%d,%d]", ErrValidate, name, lowerBound, upperBound)
+	}
+	return nil
+}
+
+// validateHostPortAddr rejects what a listener address cannot be. The numeric
+// port is the rule net.SplitHostPort alone does not enforce: it accepts a
+// service name, which resolves against /etc/services at bind time rather than
+// here, and port 0, which binds an arbitrary port nothing can be told to reach.
+// Whether an empty address is allowed belongs to the section, which knows what
+// leaving the listener unbound means there.
+func validateHostPortAddr(name string, addr string) error {
+	_, rawPort, err := net.SplitHostPort(addr)
+	if err != nil {
+		return fmt.Errorf("%w: %s must be host:port", ErrValidate, name)
+	}
+	port, err := strconv.ParseUint(rawPort, 10, 16)
+	if err != nil || port == 0 {
+		return fmt.Errorf("%w: %s port must be in range [1,65535]", ErrValidate, name)
 	}
 	return nil
 }

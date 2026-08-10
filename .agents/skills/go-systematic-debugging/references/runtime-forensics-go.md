@@ -31,7 +31,7 @@ owns when to stop capturing and mitigate.
   panic's stack set without killing anything extra.
 
 - **The profile handlers exist here, but ship off.**
-  `observability.pprof.enabled` defaults to `false` (`internal/config/types.go`),
+  `observability.pprof.enabled` defaults to `false` (`internal/config/observability_config.go`),
   and validation rejects enabling it with no `observability.metrics.addr` —
   the diagnostics listener binds every interface so Prometheus can reach it.
   `/debug/pprof/heap` discloses heap contents and `/debug/pprof/cmdline`

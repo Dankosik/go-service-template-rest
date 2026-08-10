@@ -11,9 +11,9 @@ import (
 
 	"github.com/example/go-service-template-rest/cmd/internal/runtimeopts"
 	"github.com/example/go-service-template-rest/internal/config"
-	"github.com/example/go-service-template-rest/internal/failure"
 	"github.com/example/go-service-template-rest/internal/infra/postgresoutbox"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
+	"github.com/example/go-service-template-rest/internal/observability/logctx"
 )
 
 // errRelayPanic and errPublisherPanic report a run loop that ended in a
@@ -149,11 +149,12 @@ func runRelayLifecycle(
 	defer relayCancel()
 	publisherCtx, publisherCancel := context.WithCancel(context.WithoutCancel(signalCtx))
 	defer publisherCancel()
-	// Both loops run under superviseRunLoop rather than bare. cmd/worker and
-	// cmd/service run their equivalents through internal/background.Supervisor,
-	// which recovers for them; neither loop here fits its Task signature, and an
-	// unrecovered panic in either would take the process down without the ordered
-	// drain below or the telemetry flush that records it.
+	// Both loops run under superviseRunLoop rather than bare. Neither can be a
+	// background.Supervisor task: the select below reads each exit on its own and
+	// drains it on its own budget, which the supervisor's single aggregated
+	// failure channel cannot express. Left bare, an unrecovered panic in either
+	// would take the process down without the ordered drain below or the
+	// telemetry flush that records it.
 	relayResult := make(chan postgresoutbox.RelayResult, 1)
 	go superviseRunLoop(
 		relayCtx, log, "relay", relayResult,
@@ -266,7 +267,7 @@ func logRunLoopPanic(ctx context.Context, log *slog.Logger, loop string, recover
 		"outbox_run_loop_panic",
 		append(
 			[]any{"component", "outbox_relay", "loop", loop},
-			failure.PanicAttrs(recovered, debug.Stack())...,
+			logctx.PanicAttrs(recovered, debug.Stack())...,
 		)...,
 	)
 }

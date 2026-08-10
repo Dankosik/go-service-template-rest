@@ -89,12 +89,24 @@ type shutdownServer interface {
 	Close() error
 }
 
+func sleepWithContext(ctx context.Context, wait time.Duration) error {
+	if wait <= 0 {
+		return nil
+	}
+	select {
+	case <-ctx.Done():
+		return fmt.Errorf("sleep canceled: %w", ctx.Err())
+	case <-time.After(wait):
+		return nil
+	}
+}
+
 func drainAndShutdown(ctx context.Context, log *slog.Logger, propagationDelay time.Duration, timeout time.Duration, drainer startupDrainer, servers ...shutdownServer) error {
 	log.InfoContext(
 		ctx,
 		"shutdown_started",
 		startupLogArgs(
-			"shutdown",
+			startupLogComponentShutdown,
 			"shutdown",
 			"started",
 		)...,
@@ -103,7 +115,7 @@ func drainAndShutdown(ctx context.Context, log *slog.Logger, propagationDelay ti
 		ctx,
 		"drain_started",
 		startupLogArgs(
-			"shutdown",
+			startupLogComponentShutdown,
 			"drain",
 			"started",
 		)...,
@@ -113,7 +125,7 @@ func drainAndShutdown(ctx context.Context, log *slog.Logger, propagationDelay ti
 		ctx,
 		"readiness_disabled",
 		startupLogArgs(
-			"shutdown",
+			startupLogComponentShutdown,
 			"readiness",
 			"success",
 		)...,
@@ -157,7 +169,7 @@ func drainAndShutdown(ctx context.Context, log *slog.Logger, propagationDelay ti
 				ctx,
 				"shutdown_timeout",
 				startupLogArgs(
-					"shutdown",
+					startupLogComponentShutdown,
 					"drain",
 					"error",
 					"error.type", "deadline_exceeded",
@@ -179,7 +191,7 @@ func drainAndShutdown(ctx context.Context, log *slog.Logger, propagationDelay ti
 		ctx,
 		"drain_completed",
 		startupLogArgs(
-			"shutdown",
+			startupLogComponentShutdown,
 			"drain",
 			"success",
 		)...,
@@ -203,11 +215,51 @@ func forceCloseServers(ctx context.Context, log *slog.Logger, servers ...shutdow
 		ctx,
 		"shutdown_forced",
 		startupLogArgs(
-			"shutdown",
+			startupLogComponentShutdown,
 			"drain",
 			"degraded",
 			"reason", "in_flight_requests_outlived_shutdown_timeout",
 		)...,
 	)
 	return closeErr
+}
+
+// shutdownDiagnostics closes the private listener under its own budget, and is
+// safe to call twice.
+//
+// It needs a bound of its own: an in-flight scrape holds the connection, and
+// http.Server.Shutdown waits for active requests indefinitely — so without one a
+// stalled scraper would park the process here and take the telemetry flush with it,
+// which is the same failure the dependency close is bounded against.
+func shutdownDiagnostics(base context.Context, logger *slog.Logger, budget *shutdownBudget, server runtimeServer) error {
+	if server == nil {
+		return nil
+	}
+
+	err := server.Shutdown(budget.stage(base, diagnosticsShutdownTimeout))
+	switch {
+	case err == nil, errors.Is(err, http.ErrServerClosed):
+		logger.InfoContext(base, "diagnostics_stopped", startupLogArgs(startupLogComponentShutdown, "diagnostics", "success")...)
+		return nil
+	case errors.Is(err, context.DeadlineExceeded):
+		// A scrape outlived the budget. Closing abandons it, which is the same
+		// trade the API drain makes, and leaves the telemetry flush able to run.
+		closeErr := server.Close()
+		logger.WarnContext(
+			base,
+			"diagnostics_forced",
+			startupLogArgs(
+				startupLogComponentShutdown,
+				"diagnostics",
+				"degraded",
+				"reason", "scrape_outlived_shutdown_budget",
+			)...,
+		)
+		if closeErr != nil && !errors.Is(closeErr, http.ErrServerClosed) {
+			return fmt.Errorf("close diagnostics server: %w", closeErr)
+		}
+		return nil
+	default:
+		return fmt.Errorf("shutdown diagnostics server: %w", err)
+	}
 }

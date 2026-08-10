@@ -12,6 +12,15 @@ import (
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 )
 
+const (
+	startupDependencyTelemetry      = "telemetry"
+	startupDependencyModeFeatureOff = "feature_off"
+	startupDependencyModeConfigured = "configured"
+
+	startupOperationTelemetryInit  = "telemetry_init"
+	startupOperationTelemetryFlush = "telemetry_flush"
+)
+
 // telemetryStage is what the startup path needs back from telemetry setup.
 //
 // The tracing error is kept apart from anything metrics reported, because the
@@ -66,10 +75,27 @@ func bootstrapTelemetryStage(
 	}
 }
 
+// traceExporterState names the trace-export outcome in the one line an operator
+// already reads at startup. Without it, "this service exports no traces" is
+// only recoverable by correlating a separate warning that a log filter may drop.
+func traceExporterState(traceEndpoint telemetry.TraceExporterEndpoint, telemetryInitErr error) string {
+	switch {
+	case telemetryInitErr != nil:
+		return "degraded"
+	case !traceEndpoint.Configured():
+		return "disabled"
+	default:
+		return "active"
+	}
+}
+
 // recordTraceExporterState publishes trace-export state as a metric so an
 // operator can alert on it. A startup warning is only visible to whoever reads
 // the boot log; a service that answers every request while exporting no traces
 // needs a signal that survives to a dashboard.
+//
+// active mirrors traceExporterState's "active" case rather than restating the
+// condition, so the startup log line and this metric cannot drift apart.
 func recordTraceExporterState(
 	ctx context.Context,
 	log *slog.Logger,
@@ -77,7 +103,7 @@ func recordTraceExporterState(
 	endpoint telemetry.TraceExporterEndpoint,
 	telemetryInitErr error,
 ) {
-	active := telemetryInitErr == nil && endpoint.Configured()
+	active := traceExporterState(endpoint, telemetryInitErr) == "active"
 	if err := metrics.RecordTraceExporterState(ctx, active); err != nil {
 		log.WarnContext(
 			ctx,

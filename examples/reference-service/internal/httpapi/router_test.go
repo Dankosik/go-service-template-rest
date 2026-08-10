@@ -188,18 +188,20 @@ func mustNewRouter(tb testing.TB, service *article.Service) http.Handler {
 
 // testAuthenticate accepts testWriteToken and grants it scopes. The binary uses
 // httpx.Authenticated for this; a feature package must not import that adapter,
-// so the publishing step it performs is called directly here. Both routes end at
-// reqctx.SetPrincipal, which is the point of that function existing.
+// so this test double publishes the same transport-neutral context value itself.
 func testAuthenticate(scopes ...string) openapi3filter.AuthenticationFunc {
 	return func(_ context.Context, input *openapi3filter.AuthenticationInput) error {
-		presented, ok := strings.CutPrefix(input.RequestValidationInput.Request.Header.Get("Authorization"), "Bearer ")
+		request := input.RequestValidationInput.Request
+		presented, ok := strings.CutPrefix(request.Header.Get("Authorization"), "Bearer ")
 		if !ok || strings.TrimSpace(presented) != testWriteToken {
 			return errors.New("bearer credential is invalid")
 		}
-		reqctx.SetPrincipal(input.RequestValidationInput.Request, reqctx.Principal{
+		principal := reqctx.Principal{
 			Subject: "test-writer",
 			Scopes:  scopes,
-		})
+		}
+		//nolint:contextcheck // ContextWithPrincipal derives from the request's current context.
+		*request = *request.WithContext(reqctx.ContextWithPrincipal(request.Context(), principal))
 		return nil
 	}
 }

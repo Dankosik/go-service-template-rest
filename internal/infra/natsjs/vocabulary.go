@@ -12,8 +12,8 @@ package natsjs
 //
 // The dead-letter reasons are deliberately not here. They travel on the wire to
 // whatever consumes the dead-letter stream, so they are a published contract
-// rather than an internal label, and they live beside the header that carries
-// them in message_wire.go.
+// rather than an internal label, and they live with the transfer that writes
+// them in message_deadletter.go.
 
 // Publication, handler, and drain outcomes.
 const (

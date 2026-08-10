@@ -83,6 +83,47 @@ func TestForCodeRefusesUnpublishedCode(t *testing.T) {
 	}
 }
 
+// TestCatalogPublishesStableEnvelopes pins the strings a client keys off. The
+// other catalog tests hold the shape; these are the literal values, so changing
+// one is a published-contract decision rather than an edit nothing reports.
+func TestCatalogPublishesStableEnvelopes(t *testing.T) {
+	t.Parallel()
+
+	for _, tt := range []struct {
+		code    problem.Code
+		status  int
+		title   string
+		typeURI string
+	}{
+		{code: problem.CodeBadRequest, status: http.StatusBadRequest, title: "bad request", typeURI: "https://www.rfc-editor.org/rfc/rfc9110#section-15.5.1"},
+		{code: problem.CodeNotFound, status: http.StatusNotFound, title: "not found", typeURI: "https://www.rfc-editor.org/rfc/rfc9110#section-15.5.5"},
+		{code: problem.CodeMethodNotAllowed, status: http.StatusMethodNotAllowed, title: "method not allowed", typeURI: "https://www.rfc-editor.org/rfc/rfc9110#section-15.5.6"},
+		{code: problem.CodeRequestEntityTooLarge, status: http.StatusRequestEntityTooLarge, title: "request entity too large", typeURI: "https://www.rfc-editor.org/rfc/rfc9110#section-15.5.14"},
+		{code: problem.CodeInternalError, status: http.StatusInternalServerError, title: "internal server error", typeURI: "https://www.rfc-editor.org/rfc/rfc9110#section-15.6.1"},
+	} {
+		definition := problem.ForCodeOrInternal(tt.code)
+		if definition.Code != tt.code {
+			t.Fatalf("ForCodeOrInternal(%q) code = %q", tt.code, definition.Code)
+		}
+		if definition.Status != tt.status || definition.Title != tt.title || definition.TypeURI != tt.typeURI {
+			t.Fatalf("ForCodeOrInternal(%q) = %+v, want status=%d title=%q type=%q", tt.code, definition, tt.status, tt.title, tt.typeURI)
+		}
+	}
+}
+
+// TestForCodeOrInternalSubstitutesInternalError pins the one substitution this
+// catalog is allowed to make. Its callers pass catalog constants, so an unknown
+// code there is a programming error rather than a caller-supplied status — which
+// is why For refuses for an uncatalogued status and this does not.
+func TestForCodeOrInternalSubstitutesInternalError(t *testing.T) {
+	t.Parallel()
+
+	definition := problem.ForCodeOrInternal("not_a_published_code")
+	if definition.Code != problem.CodeInternalError || definition.Status != http.StatusInternalServerError {
+		t.Fatalf("ForCodeOrInternal(unpublished) = %+v, want the internal-error entry", definition)
+	}
+}
+
 // TestCatalogCoversDomainStatuses names the three a domain layer produces and the
 // runtime cannot, so removing one is a decision rather than an accident.
 func TestCatalogCoversDomainStatuses(t *testing.T) {
@@ -112,7 +153,7 @@ func TestCatalogCoversDomainStatuses(t *testing.T) {
 //
 // internal/infra/http converts a classified failure.Code to problem.Code with a
 // string conversion, which always succeeds. A code with no catalog entry
-// therefore reaches problemDefinitionFor, which substitutes the internal-error
+// therefore reaches ForCodeOrInternal, which substitutes the internal-error
 // definition — so a domain that classified its error as 429 answers 503-shaped
 // traffic with a 500, and nothing reports it. gRPC has no matching gap: the
 // exhaustive linter holds mappedStatus to the whole set. This test is the HTTP

@@ -180,6 +180,68 @@ func TestHandlerCleanupSafetyTracksWorkerExit(t *testing.T) {
 	}
 }
 
+// TestWorkerRunLoopPanicIsRecovered covers the loop this process exists to run.
+// It ran bare, so a panic in the fetch or ack bookkeeping took the process down
+// before the drain, the handler join, and the telemetry flush that records why.
+//
+// Both cases also pin the send-then-close order the drain depends on: it decides
+// cleanup safety from done and only then looks for a result that has not been
+// read, so a done that closed first would let a real exit reason go unreported.
+func TestWorkerRunLoopPanicIsRecovered(t *testing.T) {
+	t.Parallel()
+
+	const poison = "worker-panic-marker-8c23"
+	stopped := errors.New("worker stopped")
+
+	for _, testCase := range []struct {
+		name string
+		run  func(context.Context) error
+		want error
+	}{
+		{name: "panic", run: func(context.Context) error { panic(poison) }, want: errWorkerPanic},
+		{name: "return", run: func(context.Context) error { return stopped }, want: stopped},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			var records strings.Builder
+			result := make(chan error, 1)
+			done := make(chan struct{})
+
+			go superviseWorkerRun(
+				t.Context(), slog.New(slog.NewJSONHandler(&records, nil)), testCase.run, result, done,
+			)
+
+			<-done
+			var got error
+			select {
+			case got = <-result:
+			default:
+				t.Fatal("superviseWorkerRun() closed done before reporting a result")
+			}
+			if !errors.Is(got, testCase.want) {
+				t.Fatalf("superviseWorkerRun() err = %v, want %v", got, testCase.want)
+			}
+			select {
+			case second := <-result:
+				t.Fatalf("superviseWorkerRun() reported a second result %v", second)
+			default:
+			}
+
+			// The panic's value reaches neither the reported error nor the record:
+			// only its type, its class, and the stack do. The shared panic-attribute
+			// constructor owns that argument.
+			logged := records.String()
+			if strings.Contains(got.Error(), poison) || strings.Contains(logged, poison) {
+				t.Fatalf("panic value leaked: err=%v records=%s", got, logged)
+			}
+			if errors.Is(testCase.want, errWorkerPanic) && !strings.Contains(logged, "worker_run_loop_panic") {
+				t.Fatalf("recovered panic was not recorded: %s", logged)
+			}
+		})
+	}
+}
+
 //nolint:paralleltest // Worker setup installs process-wide telemetry providers.
 func TestMessagingCompositionDoesNotBuildHandlerBeforeBrokerAdmission(t *testing.T) {
 	telemetrytest.RestoreGlobals(t)

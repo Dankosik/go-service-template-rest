@@ -10,6 +10,11 @@ import (
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 )
 
+const (
+	startupLogComponentStartupProbes = "startup_probes"
+	startupLogComponentShutdown      = "shutdown"
+)
+
 // startupLogArgs builds the stage attributes every startup and shutdown record
 // carries. Trace correlation is deliberately absent: the logger installed by
 // bootstrapLoggerStage adds it from the context passed to the logging call, so
@@ -117,18 +122,4 @@ func bootstrapReportStage(
 			// profile:database-postgres:end
 		)...,
 	)
-}
-
-// traceExporterState names the trace-export outcome in the one line an operator
-// already reads at startup. Without it, "this service exports no traces" is
-// only recoverable by correlating a separate warning that a log filter may drop.
-func traceExporterState(traceEndpoint telemetry.TraceExporterEndpoint, telemetryInitErr error) string {
-	switch {
-	case telemetryInitErr != nil:
-		return "degraded"
-	case !traceEndpoint.Configured():
-		return "disabled"
-	default:
-		return "active"
-	}
 }

@@ -15,7 +15,7 @@ import (
 // over them, and settles each with the broker. [Client.NewWorker] is the only
 // constructor, and a client owns at most one Worker.
 //
-// This file owns the run and drain lifecycle: worker_admission.go proves the
+// This file owns the run and drain lifecycle: worker_topology.go proves the
 // broker topology before a Worker exists, and worker_delivery.go takes one
 // message from admission through to settlement.
 //
@@ -194,8 +194,7 @@ func (w *Worker) startHandler(handlerRoot context.Context, msg jetstream.Msg, co
 		}
 	}()
 	w.mu.Unlock()
-	w.client.telemetry.fetchMessages.Add(handlerRoot, 1)
-	w.client.telemetry.fetchBytes.Add(handlerRoot, int64(messageBytes))
+	w.client.telemetry.countFetch(handlerRoot, 1, int64(messageBytes))
 	return true
 }
 
@@ -278,7 +277,7 @@ func (w *Worker) Shutdown(ctx context.Context) error {
 		w.forceClose()
 		metricCtx := context.WithoutCancel(ctx)
 		w.client.telemetry.recordDrain(metricCtx, outcomeForced)
-		w.client.telemetry.forcedShutdowns.Add(metricCtx, 1)
+		w.client.telemetry.countForcedShutdown(metricCtx)
 		return fmt.Errorf("forced messaging shutdown: %w", ctx.Err())
 	}
 }

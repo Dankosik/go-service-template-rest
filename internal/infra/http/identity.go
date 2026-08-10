@@ -33,9 +33,10 @@ type PrincipalResolver func(context.Context, *openapi3filter.AuthenticationInput
 // credential paths where the contract declared one, and the second is the one
 // nobody audits.
 //
-// Publishing is reqctx.SetPrincipal's job; see it for why the request is mutated
-// in place. The test that asserts a handler observes the subject is what fails if
-// that ever stops holding, rather than authorization silently going missing.
+// Publishing mutates the request in place because the validator hands the same
+// request to the next handler. The test that asserts a handler observes the
+// subject is what fails if that ever stops holding, rather than authorization
+// silently going missing.
 //
 // A nil resolver returns nil, which leaves the seam unwired and every secured
 // operation answering 401 — the same fail-closed default as setting
@@ -58,9 +59,13 @@ func Authenticated(resolve PrincipalResolver) openapi3filter.AuthenticationFunc 
 		if request == nil {
 			return errUnresolvableAuthenticatedRequest
 		}
-		reqctx.SetPrincipal(request, principal)
+		setPrincipal(request, principal)
 		return nil
 	}
+}
+
+func setPrincipal(r *http.Request, principal reqctx.Principal) {
+	*r = *r.WithContext(reqctx.ContextWithPrincipal(r.Context(), principal))
 }
 
 func authenticatedRequest(input *openapi3filter.AuthenticationInput) *http.Request {

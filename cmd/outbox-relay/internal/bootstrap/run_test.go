@@ -501,10 +501,9 @@ func TestOutboxRelayPublisherPanic(t *testing.T) {
 }
 
 // TestOutboxRelayRunLoopPanicIsRecovered covers the one exit neither run loop
-// used to have. cmd/worker and cmd/service route their equivalent loops through
-// internal/background.Supervisor, which recovers for them; these two ran bare, so
-// a panic in the claim bookkeeping or the publisher connection took the process
-// down before the drain, the adapter cleanup, and the telemetry flush below.
+// used to have. They ran bare, so a panic in the claim bookkeeping or the
+// publisher connection took the process down before the drain, the adapter
+// cleanup, and the telemetry flush below.
 //
 // Cleanup is refused rather than attempted, in both cases. A loop that panicked
 // cannot account for the goroutines it started, and releasing the adapter or the
@@ -564,8 +563,8 @@ func TestOutboxRelayRunLoopPanicIsRecovered(t *testing.T) {
 				t.Fatal("runRelayLifecycle() returned no teardown deadline after a recovered panic")
 			}
 			// The panic's value reaches neither the returned error nor the record:
-			// only its type, its class, and the stack do. failure.PanicAttrs owns
-			// that argument.
+			// only its type, its class, and the stack do. The shared panic-attribute
+			// constructor owns that argument.
 			logged := records.String()
 			if strings.Contains(got.Err.Error(), poison) || strings.Contains(logged, poison) {
 				t.Fatalf("panic value escaped: err=%v logs=%s", got.Err, logged)

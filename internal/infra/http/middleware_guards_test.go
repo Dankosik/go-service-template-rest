@@ -36,7 +36,7 @@ func TestRouterRejectsRequestBodyTooLarge(t *testing.T) {
 	log := slog.New(slog.DiscardHandler)
 	h := mustNewRouter(t, log, Handlers{
 		Health: health.New(),
-	}, telemetry.New(), RouterConfig{MaxBodyBytes: 1})
+	}, telemetry.New(), RouterConfig{HardenConfig: HardenConfig{MaxBodyBytes: 1}})
 
 	t.Run("known content length is rejected before reading", func(t *testing.T) {
 		t.Parallel()

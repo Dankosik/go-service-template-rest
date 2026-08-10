@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go/jetstream"
+
+	"github.com/example/go-service-template-rest/internal/observability/logctx"
 )
 
 // delivery is one message as this worker sees it: the broker's view, its
@@ -21,13 +23,23 @@ type delivery struct {
 	message  Message
 }
 
-// handlerResult is one feature-handler invocation: the frames if it panicked,
-// what it returned, whether its own timeout fired, and when it started.
+// handlerPanic is what a recovered feature-handler panic contributes to its
+// terminal-delivery record: the bounded class an operator alerts on, and the
+// frames naming the defect behind it. Never the recovered value — it carries
+// whatever the handler was working on, and internal/observability/logctx owns
+// that argument.
+type handlerPanic struct {
+	class  string
+	frames []string
+}
+
+// handlerResult is one feature-handler invocation: the panic it raised, what it
+// returned, whether its own timeout fired, and when it started.
 type handlerResult struct {
-	panicFrames []string
-	err         error
-	contextErr  error
-	started     time.Time
+	panicked   *handlerPanic
+	err        error
+	contextErr error
+	started    time.Time
 }
 
 // handle runs one delivery end to end: admit it, invoke the feature handler
@@ -56,10 +68,10 @@ func (w *Worker) handle(handlerRoot context.Context, source jetstream.Msg) error
 	defer span.End()
 	handlerCtx, cancel := context.WithTimeout(ctx, w.cfg.HandlerTimeout)
 	result := handlerResult{started: time.Now()}
-	w.client.telemetry.consumeActive.Add(ctx, 1)
-	result.panicFrames, result.err = w.invokeHandler(handlerCtx, decoded)
+	w.client.telemetry.countConsumeActive(ctx, 1)
+	result.panicked, result.err = w.invokeHandler(handlerCtx, decoded)
 	result.contextErr = handlerCtx.Err()
-	w.client.telemetry.consumeActive.Add(ctx, -1)
+	w.client.telemetry.countConsumeActive(ctx, -1)
 	cancel()
 
 	return w.settle(ctx, handlerRoot, current, result)
@@ -89,7 +101,7 @@ func (w *Worker) admit(handlerRoot context.Context, current delivery) (Message, 
 		return Message{}, nil, settled(w.deadLetter(handlerRoot, source, metadata, Message{}, deadLetterMalformed))
 	}
 	if metadata.NumDelivered > 1 {
-		w.client.telemetry.redeliveries.Add(handlerRoot, 1)
+		w.client.telemetry.countRedelivery(handlerRoot)
 	}
 	decoded, remote, decodeErr := decodeMessage(source, metadata)
 	if decodeErr != nil {
@@ -116,9 +128,9 @@ func settled(deadLetterErr error) error {
 // must stop the whole worker returns an error.
 func (w *Worker) settle(ctx, handlerRoot context.Context, current delivery, result handlerResult) error {
 	telemetry := w.client.telemetry
-	if len(result.panicFrames) != 0 {
+	if result.panicked != nil {
 		telemetry.recordHandler(ctx, current.message, outcomeTerminal, reasonHandlerPanic, result.started)
-		telemetry.logTerminalDelivery(ctx, current.message.Subject(), current.metadata, reasonHandlerPanic, result.panicFrames)
+		telemetry.logTerminalDelivery(ctx, current.message.Subject(), current.metadata, reasonHandlerPanic, result.panicked)
 		return fmt.Errorf("%w: feature handler panicked", ErrTerminal)
 	}
 	if result.err == nil {
@@ -141,7 +153,7 @@ func (w *Worker) settle(ctx, handlerRoot context.Context, current delivery, resu
 		return w.deadLetter(handlerRoot, current.source, current.metadata, current.message, deadLetterExhausted)
 	}
 	telemetry.recordHandler(ctx, current.message, outcome, reasonHandlerRetry, result.started)
-	telemetry.retries.Add(ctx, 1)
+	telemetry.countRetry(ctx)
 	return w.requestRedelivery(
 		ctx, current.source, current.metadata,
 		w.retryDelayFor(current.metadata.NumDelivered), redeliveryHandler,
@@ -192,11 +204,14 @@ func (w *Worker) retryDelayFor(numDelivered uint64) time.Duration {
 	return w.cfg.RetryDelays[numDelivered-1]
 }
 
-func (w *Worker) invokeHandler(ctx context.Context, msg Message) (panicFrames []string, err error) {
+func (w *Worker) invokeHandler(ctx context.Context, msg Message) (panicked *handlerPanic, err error) {
 	defer func() {
-		if recover() != nil {
+		if recovered := recover(); recovered != nil {
 			err = nil
-			panicFrames = captureHandlerPanicFrames()
+			panicked = &handlerPanic{
+				class:  logctx.PanicClass(recovered),
+				frames: captureHandlerPanicFrames(),
+			}
 		}
 	}()
 	return nil, w.handler(ctx, msg)

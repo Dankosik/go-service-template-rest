@@ -131,8 +131,9 @@ Use the first matching rule.
    `httpx.Handlers.API` from `cmd/service/internal/bootstrap`. See
    `examples/reference-service/internal/httpapi` for the worked pattern, and the
    `API` field comment in `internal/infra/http/handlers.go` for the seam itself.
-   Only cross-route policy belongs here: `middleware_<concern>.go`; router
-   composition stays in `router.go`; Problem mapping stays in `problem.go`.
+   Only cross-route policy belongs here: `middleware_<concern>.go`; generated
+   router composition stays in `router.go`, the reusable chain in `harden.go`,
+   and Problem mapping in `problem.go`.
 4. Is it Postgres implementation?
    - concrete feature adapter:
      `internal/infra/postgres/<feature>_repository.go`;
@@ -157,10 +158,15 @@ Use the first matching rule.
    `cmd/<worker>/internal/bootstrap/`. Reuse feature packages and adapters
    rather than duplicating them.
 8. Is it runtime configuration?
-   Add the typed field and `koanf` tag to `internal/config/types.go`, its
-   default to `defaults.go` when appropriate, validation in the section's own
-   `<section>_config.go`, and the relevant example in `env/config/local.yaml` or
-   `env/.env.example`.
+   Add the typed field and `koanf` tag, its default when appropriate, and its
+   validation to the section's own `internal/config/<section>_config.go`, plus
+   the relevant example in `env/config/local.yaml` or `env/.env.example`. One
+   key is one file, so the reason a value was chosen sits beside the rule that
+   enforces it and a section a build profile removes leaves with its file.
+   `types.go` and `defaults.go` hold only the `Config` shape, the merge over it,
+   and the sections every profile keeps (`app`, `health`, `log`, `runtime`);
+   `validate.go` owns only the order sections run in and the rules that hold
+   between them.
    Snapshot decoding and known-key discovery derive from the tagged type; add
    manual parsing only for a genuinely custom value type.
 9. Is it telemetry?
@@ -213,12 +219,34 @@ document plus its enforcement before adding the file.
 All Go filenames use lowercase snake case. Name files after owned behavior, not
 chronology or editing history.
 
+The forms below are in two groups. The first is prescriptive: it names what a
+service built on this template writes, and the template itself carries no
+instance of those rows. The second is descriptive: it names the prefix families
+this repository's own packages already use, so that adding a file to one of them
+has a rule to follow rather than a neighbour to imitate.
+
+Forms a service writes:
+
+| Artifact | Required form |
+| --- | --- |
+| feature HTTP handlers | `<feature>_handlers.go`, in the service's own package behind `httpx.Handlers.API` — never in `internal/infra/http`. The platform's own probe handlers are not feature handlers; `internal/infra/http/health_handlers.go` is the one file of this shape that belongs there |
+| Postgres repository | `<feature>_repository.go` |
+| domain types | `model.go`, or `<feature>.go` when one file already owns the feature's types and behavior — as `examples/reference-service/internal/article/article.go` does |
+
+Forms this repository's own packages use:
+
 | Artifact | Required form |
 | --- | --- |
 | middleware | `middleware_<concern>.go` and matching `_test.go` |
 | startup policy | `startup_<concern>.go` and matching `_test.go` |
-| feature HTTP handlers | `<feature>_handlers.go`, in the service's own package behind `httpx.Handlers.API` — never in `internal/infra/http` |
-| Postgres repository | `<feature>_repository.go` |
+| gRPC interceptor | `interceptor_<concern>.go`, one policy per file; `chain.go` is the single owner of their order |
+| configuration section | `<section>_config.go`, holding that section's type, its defaults, and its validation together — see rule 8 |
+| durable-store access | `store_<stage>.go`. In `internal/infra/postgres*` this prefix is load-bearing, not stylistic: `.golangci.yml` exempts driver and `sqlc` imports by the `store*.go` and `notify*.go` globs, and `docs_test.go` fails if a driver-importing file matches no glob |
+| relay cycle stage | `relay_<stage>.go`, the driver-free half of the same package |
+| broker worker stage | `worker_<stage>.go`, split by lifetime: construction-time topology proof, per-message delivery, and the run loop are separate files |
+| broker wire contract | `message_<aspect>.go`, with the encode/decode pair and every header constant in one file |
+| configuration loader | `load_<source>.go`, one input source per file |
+| closed label vocabulary | `vocabulary.go` — every literal the package puts on a metric attribute or an operator log field, in one place because an unrecognized value mints a time series |
 | normal unit test | `<owner>_test.go` |
 | executable boundary contract | `<owner>_contract_test.go` |
 | package-wide test helpers or fakes | `harness_test.go` |
@@ -257,13 +285,13 @@ one process. `cmd/service/internal/bootstrap`'s production files are:
 
 ```text
 run.go
-runtime_limits.go
+runtime_memory_limit.go
+runtime_request_buffer_budget.go
 shutdown.go
 startup.go
 startup_admission.go
 startup_authn.go
 startup_config.go
-startup_contract.go
 startup_dependencies.go
 startup_diagnostics.go
 startup_grpc.go
@@ -357,7 +385,7 @@ observed.
 | --- | --- |
 | `CreateOrder` use case | `internal/orders/create_order.go` |
 | order domain error | `internal/orders/errors.go` |
-| `POST /orders` handler | `internal/infra/http/orders_handlers.go` |
+| `POST /orders` handler | `internal/httpapi/orders_handlers.go`, injected as `httpx.Handlers.API` — never `internal/infra/http` |
 | order Postgres adapter | `internal/infra/postgres/orders_repository.go` |
 | create orders table | `migrations/000001_orders_create.sql` with Goose `Up` and `Down` sections |
 | order sqlc operations | `internal/infra/postgres/queries/orders.sql` |

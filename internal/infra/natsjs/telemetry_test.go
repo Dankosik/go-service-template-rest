@@ -126,19 +126,18 @@ func TestMessagingTelemetryContract(t *testing.T) {
 	_, consumeSpan := sig.tracer.Start(ctx, "consume", consumeSpanOptions(msg, "events.>")...)
 	consumeSpan.End()
 	sig.recordConnection(ctx, connectionDisconnected)
-	sig.fetchMessages.Add(ctx, 1)
-	sig.fetchBytes.Add(ctx, 64)
-	sig.consumeActive.Add(ctx, 1)
+	sig.countFetch(ctx, 1, 64)
+	sig.countConsumeActive(ctx, 1)
 	sig.recordHandler(ctx, msg, outcomeRetryable, reasonHandlerRetry, time.Now())
 	sig.logTerminalDelivery(ctx, msg.Subject(), &jetstream.MsgMetadata{
 		Stream: "EVENTS", Consumer: "events-worker", NumDelivered: 2,
 		Sequence: jetstream.SequencePair{Stream: 3, Consumer: 2},
-	}, reasonHandlerPanic, []string{"featureHandler handler_test.go:42"})
-	sig.redeliveries.Add(ctx, 1)
-	sig.retries.Add(ctx, 1)
+	}, reasonHandlerPanic, &handlerPanic{class: "string", frames: []string{"featureHandler handler_test.go:42"}})
+	sig.countRedelivery(ctx)
+	sig.countRetry(ctx)
 	sig.recordDeadLetterTransfer(ctx, outcomeAccepted)
 	sig.recordDrain(ctx, outcomeGraceful)
-	sig.forcedShutdowns.Add(ctx, 1)
+	sig.countForcedShutdown(ctx)
 
 	var collected metricdata.ResourceMetrics
 	if err := reader.Collect(ctx, &collected); err != nil {
@@ -184,6 +183,7 @@ func TestMessagingTelemetryContract(t *testing.T) {
 	terminal := messagingLogByMessage(t, records, "messaging_terminal_delivery")
 	if terminal["attempt"] != float64(2) ||
 		terminal["reason"] != "handler_panic" ||
+		terminal["panic.class"] != "string" ||
 		!reflect.DeepEqual(terminal["handler_frames"], []any{"featureHandler handler_test.go:42"}) {
 		t.Fatalf("terminal delivery log = %#v, want bounded diagnostics", terminal)
 	}

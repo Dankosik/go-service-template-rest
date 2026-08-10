@@ -296,7 +296,7 @@ func TestOpenAPIRuntimeContractAccessLogIncludesRouteLabel(t *testing.T) {
 	// about route labelling and correlation fields, so it opts back in.
 	h := mustNewRouter(t, log, Handlers{
 		Health: health.New(),
-	}, nil, RouterConfig{LogHealthProbes: true})
+	}, nil, RouterConfig{HardenConfig: HardenConfig{LogHealthProbes: true}})
 
 	const (
 		requestID = "demo-123"

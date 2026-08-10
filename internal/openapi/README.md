@@ -55,8 +55,8 @@ Protected operations require a real security design before coding. Do not add pl
 2. Put use-case behavior in `internal/<feature>` before adding transport mapping; handlers should call feature behavior instead of owning business logic.
 3. Run `make openapi-generate` or `go generate ./internal/openapi`.
 4. Confirm the generated `openapi.StrictServerInterface` includes the new operation.
-5. Implement the matching `strictHandlers.<Operation>` method in `internal/infra/http/<feature>_handlers.go`.
-6. Wire the handler through the existing `Handlers` construction instead of adding a manual `/api/...` route.
+5. Implement the matching operation in the service's own package as `<feature>_handlers.go`. `internal/infra/http` is shared template surface that adding an operation does not edit; it implements only the two platform health probes.
+6. Inject that implementation as `httpx.Handlers.API` from `cmd/service/internal/bootstrap` instead of adding a manual `/api/...` route.
 7. For protected operations, declare real OpenAPI `security`, provide 401/403 `application/problem+json` responses backed by `#/components/schemas/Problem`, and add scoped generated/strict middleware or an explicitly designed equivalent. Do not add broad root middleware that accidentally protects health or public sample routes. Metrics are not part of the application router.
 8. Map domain-specific failures to Problem responses at the HTTP boundary; do not leak transport status codes into app use-case behavior. Framework-level failures with a `http.ResponseWriter` use the hand-written `writeProblem` catalog in `internal/infra/http/problem.go`. Generated strict handlers return their operation's generated typed Problem response, such as `*ApplicationProblemPlusJSONResponse`, because the strict interface does not expose a response writer.
 9. Add contract/policy tests for status codes, Problem responses, generated-route ownership, security behavior, unauthenticated protected calls, and public-route non-regression.

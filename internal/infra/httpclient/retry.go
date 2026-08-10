@@ -33,6 +33,21 @@ func (p RetryPolicy) enabled() bool {
 	return p.MaxAttempts > 1 && p.BaseDelay > 0
 }
 
+func (p RetryPolicy) validate() error {
+	if p.MaxAttempts < 0 {
+		return errors.New("build outbound HTTP client: retry max attempts must be >= 0")
+	}
+	if p.BaseDelay < 0 {
+		return errors.New("build outbound HTTP client: retry base delay must be >= 0")
+	}
+	// A policy that names attempts without a delay would retry immediately, which
+	// is the shape that turns one failure into a burst.
+	if p.MaxAttempts > 1 && p.BaseDelay <= 0 {
+		return errors.New("build outbound HTTP client: retry base delay is required when max attempts is > 1")
+	}
+	return nil
+}
+
 // retryTransport repeats a request that failed in a way a repeat could fix. Three
 // rules keep that safe, each enforced by the function that owns it:
 // repeatableRequest, fitsRemainingBudget, and retryAfter.
@@ -112,6 +127,9 @@ func repeatableRequest(request *http.Request) bool {
 	return hasUsableIdempotencyKey(request)
 }
 
+// hasBlankIdempotencyKey applies whether or not retry is enabled: a blank key is
+// a caller mistake regardless, and rejecting it early avoids a client that only
+// reveals the mistake once a retry is attempted.
 func hasBlankIdempotencyKey(request *http.Request) bool {
 	if request == nil {
 		return false

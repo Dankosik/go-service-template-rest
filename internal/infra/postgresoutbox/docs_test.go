@@ -83,40 +83,63 @@ func TestCommentedFileNamesResolve(t *testing.T) {
 	}
 }
 
-// TestPackageDocPathsResolve holds the repository paths doc.go navigates by.
+// TestPackageDocPathsResolve holds the repository paths this package's comments
+// navigate by.
 //
-// Only doc.go is walked. It names paths deliberately, as the manual's
-// navigation; elsewhere in the package a slash is usually prose — an import
-// path, an elision, or a pair of names like claim/publish — so widening this
-// would cost an allowlist worth more than the coverage.
+// Every file's comments are walked, not only doc.go's. doc.go names paths
+// deliberately, as the manual's navigation, but an ordinary file's header points
+// across the repository just as often, and a path there is the one that survives
+// a rename longest precisely because nothing reads it.
+//
+// Prose is separated from paths without an allowlist, by three rules. A first
+// segment carrying a dot is a module or domain path rather than a directory this
+// repository has, which keeps an import out even when the module's own name ends
+// in .go. A "..." segment is an elision written for a reader. And the token has
+// to end in a suffix this repository keeps a file under, which is what tells
+// net/http.Header and claim/publish from a path.
 func TestPackageDocPathsResolve(t *testing.T) {
 	t.Parallel()
 
-	document, err := os.ReadFile("doc.go")
-	if err != nil {
-		t.Fatalf("read package documentation: %v", err)
+	comments := packageComments(t)
+	if len(comments) == 0 {
+		t.Fatal("the comment walk collected nothing")
 	}
 	root := filepath.Join("..", "..", "..")
 
-	paths := make([]string, 0)
-	for _, named := range commentedPath.FindAllString(string(document), -1) {
-		named = strings.TrimRight(named, ".,;:")
-		// An import path is not a repository path, and doc.go names a few.
-		if strings.Contains(named, ".com/") || !strings.Contains(named, ".") {
-			continue
-		}
-		paths = append(paths, named)
-	}
-	slices.Sort(paths)
-	paths = slices.Compact(paths)
-	if len(paths) == 0 {
-		t.Fatal("doc.go names no repository paths, and it is the package's navigation")
-	}
-	for _, named := range paths {
-		if _, err := os.Stat(filepath.Join(root, named)); err != nil {
-			t.Errorf("doc.go names the path %q, which does not exist: %v", named, err)
+	seen := make(map[string]struct{})
+	for _, comment := range comments {
+		for _, named := range commentedPath.FindAllString(comment.text, -1) {
+			named = strings.TrimRight(named, ".,;:")
+			if !namesRepositoryFile(named) {
+				continue
+			}
+			if _, repeated := seen[named]; repeated {
+				continue
+			}
+			seen[named] = struct{}{}
+			if _, err := os.Stat(filepath.Join(root, named)); err != nil {
+				t.Errorf("%s:%d names the path %q, which does not exist",
+					comment.file, comment.line, named)
+			}
 		}
 	}
+	if len(seen) == 0 {
+		t.Fatal("this package's comments name no repository paths, and doc.go is its navigation")
+	}
+}
+
+// repositoryFileExtensions are the suffixes this repository keeps a file under,
+// and so the suffixes a slashed token in prose has to carry to be a path.
+var repositoryFileExtensions = []string{".go", ".md", ".proto", ".sh", ".sql", ".yaml", ".yml"}
+
+// namesRepositoryFile reports whether a slashed token out of prose is a path to
+// a file this repository keeps. [TestPackageDocPathsResolve] owns why.
+func namesRepositoryFile(named string) bool {
+	first, _, _ := strings.Cut(named, "/")
+	if strings.Contains(first, ".") || slices.Contains(strings.Split(named, "/"), "...") {
+		return false
+	}
+	return slices.Contains(repositoryFileExtensions, path.Ext(named))
 }
 
 // TestDriverBoundaryExemptionsMatchTheDriverFiles holds the file-name contract

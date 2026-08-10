@@ -38,6 +38,27 @@ func TestDefaultGRPCServerConfigMatchesLoadedDefaults(t *testing.T) {
 	}
 }
 
+// TestDefaultUnaryTimeoutMatchesHTTPRequestTimeout holds the promise
+// GRPCServerConfig.UnaryTimeout's own comment makes: that one service answers on
+// one budget over both transports out of the box.
+//
+// The two are independent literals — 8s in grpc_config.go, "8s" in
+// http_config.go — so nothing but this notices when one of them moves. It
+// asserts the defaults path only, because that comment also allows a deployment
+// to configure the two apart; a validation rule would forbid what it permits.
+func TestDefaultUnaryTimeoutMatchesHTTPRequestTimeout(t *testing.T) {
+	resetConfigEnv(t)
+
+	cfg, _, err := LoadDetailed(LoadOptions{})
+	if err != nil {
+		t.Fatalf("LoadDetailed() error = %v", err)
+	}
+	if cfg.GRPC.Server.UnaryTimeout != cfg.HTTP.RequestTimeout {
+		t.Fatalf("default grpc.server.unary_timeout = %s, want http.request_timeout %s",
+			cfg.GRPC.Server.UnaryTimeout, cfg.HTTP.RequestTimeout)
+	}
+}
+
 func TestGRPCDefaultsAreDisabledAndBounded(t *testing.T) {
 	resetConfigEnv(t)
 

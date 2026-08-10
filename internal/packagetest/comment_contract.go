@@ -4,11 +4,12 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 )
 
-// The checks in this file are the rule three packages hold their own prose to.
+// The checks in this file are the rule four packages hold their own prose to.
 // packagetest.go answers what is in a directory; this file is what a caller does
 // with that answer, which is a second reason to exist and why the two are not
 // one file.
@@ -101,14 +102,20 @@ func CheckCommentNames(tb testing.TB, contract CommentContract) {
 	}
 }
 
-// CheckDocumentedPaths holds the repository paths a package's doc.go navigates
+// CheckDocumentedPaths holds the repository paths a package's comments navigate
 // by.
 //
-// Only doc.go is walked. It names paths deliberately, as the manual's
-// navigation; elsewhere a slash is usually prose — an import path, an elision,
-// or a pair of names like Serve/Shutdown — so widening this check would cost an
-// allowlist worth more than the coverage. [CheckCommentNames] still holds every
-// comment in the package to the sibling files it names.
+// Every file's comments are walked, not only doc.go's. doc.go names paths
+// deliberately, as the manual's navigation, but an ordinary file's header points
+// across the repository just as often, and a path there is the one that survives
+// a rename longest because nothing reads it: natsjs/config.go named
+// internal/config/messaging.go for months after that file became
+// messaging_config.go. Prose is separated from paths by [namesRepositoryPath]
+// rather than by an allowlist.
+//
+// Each file's comments are joined before extraction so that a basename also
+// written as part of a longer path in the same file is looked for once, which is
+// what [DocumentedPaths] uses to tell the two apart.
 //
 // repositoryRoot is the caller's distance from the top of the repository, and
 // packageDir is that package's own repository-relative directory; [DocumentedPaths]
@@ -116,13 +123,27 @@ func CheckCommentNames(tb testing.TB, contract CommentContract) {
 func CheckDocumentedPaths(tb testing.TB, repositoryRoot, packageDir string) {
 	tb.Helper()
 
-	document, err := os.ReadFile("doc.go")
-	if err != nil {
-		tb.Fatalf("read package documentation: %v", err)
+	commentsByFile := make(map[string][]string)
+	files := make([]string, 0)
+	for _, comment := range Comments(tb, ".") {
+		if _, seen := commentsByFile[comment.File]; !seen {
+			files = append(files, comment.File)
+		}
+		commentsByFile[comment.File] = append(commentsByFile[comment.File], comment.Text)
 	}
-	for _, path := range DocumentedPaths(string(document), repositoryRoot, packageDir) {
-		if _, err := os.Stat(filepath.Join(repositoryRoot, path)); err != nil {
-			tb.Errorf("doc.go names the path %q, which does not exist: %v", path, err)
+	// The walk answers empty for a directory that is not there, so a walk that
+	// collected nothing would pass every check below while covering nothing.
+	if len(files) == 0 {
+		tb.Fatal("the comment walk collected nothing, and this package is not commentless")
+	}
+	slices.Sort(files)
+
+	for _, file := range files {
+		document := strings.Join(commentsByFile[file], "\n")
+		for _, path := range DocumentedPaths(document, repositoryRoot, packageDir) {
+			if _, err := os.Stat(filepath.Join(repositoryRoot, path)); err != nil {
+				tb.Errorf("%s names the path %q, which does not exist", file, path)
+			}
 		}
 	}
 }

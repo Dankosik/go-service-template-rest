@@ -236,34 +236,6 @@ func cleanupMigrationResources(
 	return cleanupErr
 }
 
-func setPartialAfter(
-	result *RunResult,
-	direction migrationDirection,
-	source []sourceMigration,
-) {
-	if len(result.Migrations) == 0 {
-		return
-	}
-	switch direction {
-	case directionUp:
-		result.After = result.Migrations[len(result.Migrations)-1].Version
-	case directionDown:
-		beforeIndex := -1
-		for i, migration := range source {
-			if migration.Version == result.Before {
-				beforeIndex = i
-				break
-			}
-		}
-		remainingIndex := beforeIndex - len(result.Migrations)
-		if remainingIndex < 0 {
-			result.After = 0
-			return
-		}
-		result.After = source[remainingIndex].Version
-	}
-}
-
 func logMigrationPlan(
 	ctx context.Context,
 	logger *slog.Logger,

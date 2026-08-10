@@ -333,9 +333,11 @@ index 0000000..a44756c
 +		},
 +		telemetry.New(),
 +		httpx.RouterConfig{
-+			MaxBodyBytes:   1 << 20,
-+			RequestTimeout: 5 * time.Second,
-+			OTelServerName: "postgres-feature-proof",
++			HardenConfig: httpx.HardenConfig{
++				MaxBodyBytes:   1 << 20,
++				RequestTimeout: 5 * time.Second,
++				OTelServerName: "postgres-feature-proof",
++			},
 +		},
 +	)
 +	if err != nil {

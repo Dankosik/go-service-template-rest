@@ -46,7 +46,10 @@ outbox, err := postgresoutbox.NewStore(pool, outboxTelemetry)
 if err != nil {
 	return err
 }
-adapter := newArticleRepository(pool, outbox) // takes a postgresoutbox.Appender
+// newOrdersRepository is the service's own constructor, not a template symbol:
+// this pack ships the append side unwired, so the repository below is the one
+// an adopting service writes. It takes a postgresoutbox.Appender.
+adapter := newOrdersRepository(pool, outbox)
 
 // PostgreSQL repository adapter, before entering the business transaction.
 event := postgresoutbox.Event{
