@@ -50,6 +50,12 @@ same accepted planned wave remain provisional and may continue. When the
 transition cannot occur, the current unit remains selected for the phase-owned
 correction, reopen, or blocker disposition.
 
+When the current session stops at this transition and later implementation work
+remains, apply the shared [Implementation Entry And Continuation
+Handoff](../shared/resume-and-handoff.md#implementation-entry-and-continuation-handoff)
+so the next prompt carries a current serial or shared-lane execution decision
+and the receiving session revalidates it before editing.
+
 ## Implement
 
 Inspect current diff/status and trace the accepted observable through its
@@ -81,6 +87,13 @@ changes, reopen only its narrowest decision owner. Do not retain a known-poor
 shape merely because it matches the pre-code plan, and do not use adaptation to
 widen into unrelated cleanup.
 
+A fixed ledger or file map does not suppress current evidence that invalidates
+its dependency or implementation-source disposition. When the real code or
+current dependency evidence exposes a viable reuse or generated-source option
+that could replace a planned non-trivial custom mechanism, reopen Go Ownership
+instead of preserving the custom implementation merely because Planning pinned
+it.
+
 Accepted behavior is complete only on the real production path; a placeholder,
 temporary hardcoding, TODO, mock success, or undeclared `v1` is a blocker unless
 the accepted outcome explicitly permits it.
@@ -109,10 +122,11 @@ proof.
 
 For ledger work, read
 [Implementation Worker Execution](implementation-worker-execution.md) before
-selecting or operating a Worker. That branch defines the execution-need trigger
-and owns carrier-specific dispatch, dirty-state protection, Scope Lock, planned
-waves, correction continuity, rejected-delta handling, candidate intake, and
-candidate handoff. This phase retains implementation, correction, acceptance,
+selecting or operating a Worker or shared-checkout implementation lane. That
+branch defines the execution-need trigger and owns carrier-specific dispatch,
+lane eligibility, dirty-state protection, Scope Lock, planned waves, correction
+continuity, rejected-delta handling, candidate intake, and candidate handoff.
+This phase retains implementation, correction, acceptance,
 and integration authority.
 
 ### Immutable Evidence

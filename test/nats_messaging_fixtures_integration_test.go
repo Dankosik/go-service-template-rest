@@ -35,7 +35,10 @@ const (
 )
 
 func testClientConfig() natsjs.Config {
-	return natsjs.Config{MaxPayloadBytes: testMaxPayloadBytes, MaxPendingPublishes: testMaxPending}
+	return natsjs.Config{
+		MinStreamReplicas: 1, MinStreamRetention: 24 * time.Hour,
+		MaxPayloadBytes: testMaxPayloadBytes, MaxPendingPublishes: testMaxPending,
+	}
 }
 
 func testWorkerConfig() natsjs.WorkerConfig {

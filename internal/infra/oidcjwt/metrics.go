@@ -14,8 +14,9 @@ import (
 const meterName = "service.authn"
 
 type authnMetrics struct {
-	verifications metric.Int64Counter
-	refreshes     metric.Int64Counter
+	verifications   metric.Int64Counter
+	refreshes       metric.Int64Counter
+	refreshDuration metric.Float64Histogram
 
 	// byTransport holds the prebuilt verification attribute sets, one group per
 	// carrier. verificationSets owns why they are built once.
@@ -32,11 +33,6 @@ type authnMetrics struct {
 // instead. TestPrebuiltAttributeSetsBeatPerCallConstruction holds that trade,
 // and BenchmarkRecordVerificationFailure reports what the path costs; neither
 // number belongs in this comment, where it would rot unread.
-//
-// The labels come from verificationReason rather than from a list beside it,
-// which is what keeps that function the only table over [Kind]: the walk below
-// covers every declared category, and the labels no Kind produces are asked for
-// by the errors that produce them.
 type verificationSets struct {
 	transport transport
 	success   metric.MeasurementOption
@@ -44,10 +40,9 @@ type verificationSets struct {
 }
 
 func newVerificationSets(transport transport) verificationSets {
-	failures := make(map[string]metric.MeasurementOption, int(lastKind)+1)
-	for kind := Kind(1); kind <= lastKind; kind++ {
-		reason := verificationReason(failure(kind))
-		failures[reason] = failureOption(transport, reason)
+	failures := make(map[string]metric.MeasurementOption, len(kindDetails)+1)
+	for _, detail := range kindDetails[1:] {
+		failures[detail.reason] = failureOption(transport, detail.reason)
 	}
 	for _, unkinded := range []error{context.Canceled, context.DeadlineExceeded, errUnclassified} {
 		reason := verificationReason(unkinded)
@@ -83,10 +78,7 @@ func (s verificationSets) option(err error) metric.MeasurementOption {
 	if option, ok := s.failures[reason]; ok {
 		return option
 	}
-	// Unreachable while newVerificationSets covers every label
-	// verificationReason returns, which is what lastKind keeps true. Building one
-	// here makes a label it somehow missed cost allocations rather than a lost
-	// count.
+	// Preserve the count if a future reason misses the prebuilt set.
 	return failureOption(s.transport, reason)
 }
 
@@ -121,6 +113,15 @@ func newAuthnMetrics(provider metric.MeterProvider, reportDegraded func()) authn
 	for _, transport := range []transport{transportHTTP, transportGRPC} {
 		byTransport[transport] = newVerificationSets(transport)
 	}
+	refreshDuration, err := meter.Float64Histogram(
+		"authn.jwks.refresh.duration",
+		metric.WithUnit("s"),
+		metric.WithDescription("OIDC JWKS refresh duration."),
+	)
+	if err != nil || refreshDuration == nil {
+		reportDegraded()
+		refreshDuration, _ = fallback.Float64Histogram("authn.jwks.refresh.duration")
+	}
 	return authnMetrics{
 		verifications: counterOrNoop(
 			meter, fallback, reportDegraded,
@@ -130,7 +131,8 @@ func newAuthnMetrics(provider metric.MeterProvider, reportDegraded func()) authn
 			meter, fallback, reportDegraded,
 			"authn.jwks.refreshes", "{refresh}", "OIDC JWKS refresh outcomes.",
 		),
-		byTransport: byTransport,
+		refreshDuration: refreshDuration,
+		byTransport:     byTransport,
 	}
 }
 
@@ -203,7 +205,12 @@ func (m authnMetrics) recordVerification(ctx context.Context, transport transpor
 	m.verifications.Add(ctx, 1, sets.option(err))
 }
 
-func (m authnMetrics) recordRefresh(ctx context.Context, trigger refreshTrigger, err error) {
+func (m authnMetrics) recordRefresh(
+	ctx context.Context,
+	trigger refreshTrigger,
+	err error,
+	duration time.Duration,
+) {
 	result := "success"
 	attributes := []attribute.KeyValue{
 		attribute.String("authn.refresh.trigger", string(trigger)),
@@ -213,7 +220,9 @@ func (m authnMetrics) recordRefresh(ctx context.Context, trigger refreshTrigger,
 		attributes = append(attributes, attribute.String("authn.reason", providerFailureReason(err)))
 	}
 	attributes = append(attributes, attribute.String("authn.result", result))
-	m.refreshes.Add(ctx, 1, metric.WithAttributes(attributes...))
+	measurement := metric.WithAttributes(attributes...)
+	m.refreshes.Add(ctx, 1, measurement)
+	m.refreshDuration.Record(ctx, max(0, duration.Seconds()), measurement)
 }
 
 func keyAge(now, fetchedAt time.Time) float64 {

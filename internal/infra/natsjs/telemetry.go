@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	// infratelemetry is aliased because this package declares its own telemetry
@@ -92,8 +94,28 @@ type telemetry struct {
 	dlqTransfers          metric.Int64Counter
 	drainOperations       metric.Int64Counter
 	forcedShutdowns       metric.Int64Counter
+	consumerPending       metric.Int64ObservableGauge
+	consumerAckPending    metric.Int64ObservableGauge
+	streamMessages        metric.Int64ObservableGauge
+	streamMessageLimit    metric.Int64ObservableGauge
+	streamStorage         metric.Int64ObservableGauge
+	streamStorageLimit    metric.Int64ObservableGauge
+	streamOldestTimestamp metric.Int64ObservableGauge
+	observationTimestamp  metric.Int64ObservableGauge
+	brokerObservation     atomic.Pointer[brokerObservation]
 	readinessRegistration metric.Registration
 	closeOnce             sync.Once
+}
+
+type brokerObservation struct {
+	consumerPending       int64
+	consumerAckPending    int64
+	streamMessages        int64
+	streamMessageLimit    int64
+	streamStorage         int64
+	streamStorageLimit    int64
+	streamOldestTimestamp int64
+	observationTimestamp  int64
 }
 
 func newTelemetry(obs Observability, role Role, readiness func() bool) (*telemetry, error) {
@@ -111,14 +133,26 @@ func newTelemetry(obs Observability, role Role, readiness func() bool) (*telemet
 	if err := s.registerMetrics(obs.Meter); err != nil {
 		return nil, err
 	}
+	observables := []metric.Observable{s.readiness}
+	if role == RoleWorker {
+		observables = append(observables,
+			s.consumerPending, s.consumerAckPending,
+			s.streamMessages, s.streamMessageLimit,
+			s.streamStorage, s.streamStorageLimit,
+			s.streamOldestTimestamp, s.observationTimestamp,
+		)
+	}
 	registration, err := obs.Meter.RegisterCallback(func(_ context.Context, observer metric.Observer) error {
 		value := int64(0)
 		if readiness() {
 			value = 1
 		}
 		observer.ObserveInt64(s.readiness, value, metric.WithAttributes(attribute.String("role", string(role))))
+		if role == RoleWorker {
+			s.observeBrokerState(observer)
+		}
 		return nil
-	}, s.readiness)
+	}, observables...)
 	if err != nil {
 		return nil, fmt.Errorf("register messaging readiness metric: %w", err)
 	}
@@ -142,7 +176,55 @@ func (s *telemetry) registerMetrics(meter metric.Meter) error {
 	set.Int64Counter(&s.dlqTransfers, "messaging.dlq.transfers")
 	set.Int64Counter(&s.drainOperations, "messaging.drain.operations")
 	set.Int64Counter(&s.forcedShutdowns, "messaging.forced_shutdowns")
+	set.Int64ObservableGauge(&s.consumerPending, "messaging.consumer.pending", metric.WithUnit("{message}"))
+	set.Int64ObservableGauge(&s.consumerAckPending, "messaging.consumer.ack_pending", metric.WithUnit("{message}"))
+	set.Int64ObservableGauge(&s.streamMessages, "messaging.stream.messages", metric.WithUnit("{message}"))
+	set.Int64ObservableGauge(&s.streamMessageLimit, "messaging.stream.messages.limit", metric.WithUnit("{message}"))
+	set.Int64ObservableGauge(&s.streamStorage, "messaging.stream.storage", metric.WithUnit("By"))
+	set.Int64ObservableGauge(&s.streamStorageLimit, "messaging.stream.storage.limit", metric.WithUnit("By"))
+	set.Int64ObservableGauge(&s.streamOldestTimestamp, "messaging.stream.oldest.timestamp", metric.WithUnit("s"))
+	set.Int64ObservableGauge(&s.observationTimestamp, "messaging.observation.timestamp", metric.WithUnit("s"))
 	return set.Err()
+}
+
+func (s *telemetry) recordBrokerObservation(observedAt time.Time, stream *jetstream.StreamInfo, consumer *jetstream.ConsumerInfo) {
+	if s == nil || stream == nil {
+		return
+	}
+	observation := &brokerObservation{
+		streamMessages:       boundedUint64(stream.State.Msgs),
+		streamMessageLimit:   stream.Config.MaxMsgs,
+		streamStorage:        boundedUint64(stream.State.Bytes),
+		streamStorageLimit:   stream.Config.MaxBytes,
+		observationTimestamp: observedAt.UTC().Unix(),
+	}
+	if !stream.State.FirstTime.IsZero() {
+		observation.streamOldestTimestamp = stream.State.FirstTime.UTC().Unix()
+	}
+	if consumer != nil {
+		observation.consumerPending = boundedUint64(consumer.NumPending)
+		observation.consumerAckPending = int64(consumer.NumAckPending)
+	}
+	s.brokerObservation.Store(observation)
+}
+
+func (s *telemetry) observeBrokerState(observer metric.Observer) {
+	observation := s.brokerObservation.Load()
+	if observation == nil {
+		return
+	}
+	observer.ObserveInt64(s.consumerPending, observation.consumerPending)
+	observer.ObserveInt64(s.consumerAckPending, observation.consumerAckPending)
+	observer.ObserveInt64(s.streamMessages, observation.streamMessages)
+	observer.ObserveInt64(s.streamMessageLimit, observation.streamMessageLimit)
+	observer.ObserveInt64(s.streamStorage, observation.streamStorage)
+	observer.ObserveInt64(s.streamStorageLimit, observation.streamStorageLimit)
+	observer.ObserveInt64(s.streamOldestTimestamp, observation.streamOldestTimestamp)
+	observer.ObserveInt64(s.observationTimestamp, observation.observationTimestamp)
+}
+
+func boundedUint64(value uint64) int64 {
+	return int64(min(value, uint64(math.MaxInt64)))
 }
 
 func (s *telemetry) close() {

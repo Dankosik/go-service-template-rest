@@ -12,8 +12,6 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
-	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -139,7 +137,7 @@ func TestUnknownKIDCategoryDependsOnTrustCurrentness(t *testing.T) {
 	}
 }
 
-func TestRefreshCoalescing(t *testing.T) {
+func TestConcurrentKeyMissesBoundRequestWaiters(t *testing.T) {
 	now := testNow
 	first := loadTestRSAKey(t, testSigningKey)
 	second := loadTestRSAKey(t, testRotatedKey)
@@ -154,22 +152,36 @@ func TestRefreshCoalescing(t *testing.T) {
 	verifier := requireTestVerifier(t, testVerifierOptions{now: newTestClock(now).now, client: client})
 	token := signToken(t, second, "key-2", "at+jwt", validClaims(now))
 
-	var successful atomic.Int64
-	var wait sync.WaitGroup
-	for range 20 {
-		wait.Go(func() {
-			if _, err := verifier.verify(context.Background(), token, transportHTTP); err == nil {
-				successful.Add(1)
-			}
-		})
-	}
+	leader := make(chan error, 1)
+	go func() {
+		_, err := verifier.verify(context.Background(), token, transportHTTP)
+		leader <- err
+	}()
 	<-started
-	close(release)
-	wait.Wait()
-	if successful.Load() != 20 {
-		t.Fatalf("successful verifications = %d, want 20", successful.Load())
+
+	const followers = 20
+	results := make(chan error, followers)
+	for range followers {
+		go func() {
+			_, err := verifier.verify(context.Background(), token, transportHTTP)
+			results <- err
+		}()
 	}
-	requireProviderCalls(t, client, 1, "after 20 concurrent key misses")
+	for range followers {
+		select {
+		case err := <-results:
+			requireKind(t, err, KindUnavailable)
+		case <-time.After(2 * time.Second):
+			close(release)
+			t.Fatal("concurrent key misses did not fail fast")
+		}
+	}
+	requireProviderCalls(t, client, 1, "while concurrent key misses fail fast")
+
+	close(release)
+	if err := <-leader; err != nil {
+		t.Fatalf("verification that started the refresh error = %v, want success", err)
+	}
 }
 
 func TestRefreshCancellation(t *testing.T) {
@@ -198,6 +210,23 @@ func TestRefreshCancellation(t *testing.T) {
 		t.Fatalf("Verify() error = %v, want context cancellation", err)
 	}
 	close(release)
+}
+
+func TestProviderTimeoutDuringKeyMissIsUnavailable(t *testing.T) {
+	now := testNow
+	first := loadTestRSAKey(t, testSigningKey)
+	second := loadTestRSAKey(t, testRotatedKey)
+	client := &scriptedClient{responses: append(initialResponses(t, first), scriptedResponse{
+		err: context.DeadlineExceeded,
+	})}
+	verifier := requireTestVerifier(t, testVerifierOptions{now: newTestClock(now).now, client: client})
+	unknown := signToken(t, second, "key-2", "at+jwt", validClaims(now))
+
+	_, err := verifier.verify(t.Context(), unknown, transportHTTP)
+	requireKind(t, err, KindUnavailable)
+	if errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Verify() error = %v, provider timeout escaped as caller deadline", err)
+	}
 }
 
 func TestStaleKeySetFailsReadinessAndVerificationClosed(t *testing.T) {

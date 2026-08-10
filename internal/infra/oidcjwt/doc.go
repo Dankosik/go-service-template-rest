@@ -38,12 +38,12 @@
 //   - propagating more than issuer, subject, and client ID means filling more of
 //     [reqctx.Principal] where parseToken builds it. Scopes is an authorization
 //     input, so anything put there becomes an access decision;
-//   - a failure category is a Kind in errors.go. The exhaustive linter then
-//     names every switch that must answer it, so none is forgotten silently.
-//     Only the operator guide is unchecked by the compiler, and
-//     TestDocumentedMetricReasonsMatchTheGuide closes that. A category an
-//     adapter decides on its own, before any credential is read, is the one
-//     that must still call recordRejection;
+//   - a failure category is a Kind and matching kindDetails entry in errors.go.
+//     The table also drives metrics and documentation proof;
+//     TestKindDetailsHaveNoGaps rejects a gap, and
+//     TestDocumentedMetricReasonsMatchTheGuide closes the operator guide. A
+//     category an adapter decides on its own, before any credential is read, is
+//     the one that must still call recordRejection;
 //   - a reason to fetch the key set is a refreshTrigger in lifecycle.go.
 //     rateLimited must classify it, which is the decision of whether an attacker
 //     can drive the fetch, and TestDocumentedTriggersMatchTheGuide holds it to

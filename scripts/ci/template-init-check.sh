@@ -404,6 +404,8 @@ minimal_workflow_before="$(workflow_snapshot "${minimal_checkout}")"
 	# profile:messaging-nats-jetstream:start
 	if APP__MESSAGING__ENABLED=true \
 		APP__MESSAGING__URLS='nats://127.0.0.1:4222' \
+		APP__MESSAGING__MIN_STREAM_REPLICAS=1 \
+		APP__MESSAGING__MIN_STREAM_RETENTION=24h \
 		go run ./cmd/service >"${TEMP_ROOT}/minimal-messaging.log" 2>&1; then
 		echo "messaging-none service accepted messaging configuration"
 		exit 1

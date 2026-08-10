@@ -180,7 +180,13 @@ func TestMaxInFlightBounds(t *testing.T) {
 		wantErr bool
 	}{
 		{name: "default accepted"},
-		{name: "zero disables shedding", value: "0"},
+		{
+			name:  "zero disables shedding",
+			value: "0",
+			// profile:authn-oidc-jwt:start
+			wantErr: true,
+			// profile:authn-oidc-jwt:end
+		},
 		{name: "negative", value: "-1", wantErr: true},
 		{name: "above ceiling", value: "100001", wantErr: true},
 	} {

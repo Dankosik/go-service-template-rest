@@ -1,41 +1,96 @@
 # Implementation Worker Execution
 
 Choose the execution carrier from the acceptance unit's execution need, not its
-workflow label. Use one harness-native implementation Worker for a ready
-acceptance unit only
-when the user explicitly requests a Worker, root-local execution would
-materially risk unrelated dirty state and an isolated checkout is the narrowest
-safe boundary, the root must continue coordinating another owner while this
-closed unit executes in a bounded separate context, or the unit belongs to a
-positively independent planned wave. Otherwise execute the closed acceptance unit
-root-locally under [Local
+workflow label. Use one isolated harness-native implementation Worker for a
+ready acceptance unit only when the user explicitly requests an isolated Worker
+or Worktree, root-local execution would materially risk unrelated dirty state
+and an isolated checkout is the narrowest safe boundary, the root must continue
+coordinating another owner while this closed unit executes in a bounded separate
+context, or the unit belongs to a positively independent planned wave. Otherwise
+execute the closed acceptance unit root-locally under [Local
 Execution](implementation-validation-closeout.md#local-execution) and the same
 acceptance contract.
 
-When a required native Worker control is unavailable, execute the same closed
-acceptance unit root-locally and state the missing control; this changes the
-carrier, not the workflow path or acceptance contract. Create one harness-native root
+When a required native Worker or shared-lane control is unavailable, execute
+the same closed acceptance unit root-locally and state the missing control; this
+changes the carrier, not the workflow path or acceptance contract. Create one harness-native root
 durable execution control only for a genuinely multi-step or resumable outcome;
 [Agent Harness](../../agent-harness.md#goal-mechanics) owns the mechanism.
 
-Before Worker dispatch, put the exact accepted `tasks.md` revision and every
-cited durable authority in the accepted integration base visible to the
+Before isolated Worker dispatch, put the exact accepted `tasks.md` revision and
+every cited durable authority in the accepted integration base visible to the
 Worker. An untracked or working-tree-only ledger routes to root-local execution
 until that input becomes part of the base. Inspect the source checkout,
 authorized paths, and current diff/status; record the base because the candidate
 will cross a checkout boundary. Preserve unrelated user changes.
 
-Keep one write Worker per [acceptance
-unit](planning.md#outputs); several write Workers may run only as members of a
-positively independent planned wave. The unit's ledger entries are the brief
-body: dispatch only the ledger index path, the unit's task-file paths when the
-ledger is split, unit or task IDs, and live facts the ledger cannot contain. A repeated task summary is a dispatch defect because it
+Keep one isolated write Worker per [acceptance
+unit](planning.md#outputs); several isolated write Workers may run only as
+members of a positively independent planned wave. One fixed acceptance unit may
+instead use the shared-checkout implementation lanes below; those lanes do not
+split its ledger, review, proof, receipt, or transition. The unit's ledger
+entries are the brief body: dispatch only the ledger index path, the unit's
+task-file paths when the ledger is split, unit or task IDs, and live facts the
+ledger cannot contain. A repeated task summary is a dispatch defect because it
 creates a second, drift-prone instruction source.
 
 Explicitly and independently select and pass the best-suited available model
 and unit-matched reasoning effort for every Worker. [Agent
 Harness](../../agent-harness.md#model-and-effort-selection) owns tier mappings,
 stronger-model conditions, and supported controls.
+
+## Shared-Checkout Implementation Lanes
+
+At selection of a ready acceptance unit, inspect its current code, exact
+writable paths, dependency direction, generated/manual authority, mutable
+resources, and proof preconditions. Use concurrent shared-checkout
+implementation lanes only when all of these hold:
+
+- two or more useful implementation slices can start immediately from the same
+  fixed accepted contract and current checkout;
+- every writable path is exact and pairwise disjoint, with one active writer
+  per file;
+- no lane must choose or revise an interface, schema, generated authority,
+  behavior, ownership, or proof precondition consumed by another lane;
+- every cross-lane, integration, ledger, generated, formatting, aggregate-proof,
+  review, and receipt surface is reserved to the root; and
+- focused lane checks can run without a shared mutable resource or a broad Go
+  or Docker gate.
+
+Do not create lanes merely to fill available capacity. Coupled files stay with
+one writer; dependent acceptance units remain dependency-ordered even when
+parts of their future code could be written early. Lane count is the number of
+eligible useful slices, capped by current harness and focused-proof capacity.
+
+Dispatch every eligible lane concurrently through the current harness's shared-
+checkout implementation carrier. Each brief names the acceptance unit, the
+lane-specific postcondition, exact writable paths, root-reserved paths, fixed
+contract sources, allowed focused proof, stop condition, and return shape.
+Workers may inspect repository sources but write only their owned paths. Every
+brief includes these constraints:
+
+- preserve all existing and unrelated dirt;
+- do not edit the task ledger, commit, rebase, stash, deploy, or otherwise
+  mutate Git state;
+- do not edit another lane's or the root's paths; and
+- stop and return the issue to the root when another owner's file, a shared
+  mutable resource, an unrecorded contract choice, or a scope expansion becomes
+  necessary.
+
+Every lane returns `DONE` or `BLOCKED`, its changed paths, focused commands and
+results, unresolved issue, and `provisional edits: present|none`. Shared-checkout
+edits remain provisional until root intake. A blocked lane leaves any partial
+edits in its owned paths and never resets, checks out, or stashes them. The root
+preserves that diff; it may return a lane-local correction to the same idle lane
+but owns cross-lane reconciliation only after all writers stop.
+
+While lanes run, the root writes only root-reserved paths and waits to inspect
+or reconcile lane-owned content until the relevant lane returns. A local
+correction returns to that same lane. After every lane returns, keep all lanes
+stopped while the root verifies path scope, reconciles the combined change,
+formats it, runs focused checks, and then runs the unit's exact broad or Docker
+proof serially. The root alone owns final review, any triggered independent
+review, acceptance, receipt, and the persisted ledger transition.
 
 ## Execution-Ready Dispatch
 

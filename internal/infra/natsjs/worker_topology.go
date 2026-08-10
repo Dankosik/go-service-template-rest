@@ -64,10 +64,14 @@ func (c *Client) NewWorker(ctx context.Context, cfg WorkerConfig, handler Handle
 	// probing a consumer no worker owns.
 	c.probeMu.Lock()
 	c.consumer = consumer
+	c.deadLetterStream = dlqStream
+	c.maxDeliveryBytes = cfg.MaxDeliveryBytes
 	c.probeMu.Unlock()
 	if err := c.Check(ctx); err != nil {
 		c.probeMu.Lock()
 		c.consumer = nil
+		c.deadLetterStream = ""
+		c.maxDeliveryBytes = 0
 		c.probeMu.Unlock()
 		return nil, err
 	}
@@ -109,13 +113,9 @@ func (c *Client) admitStreams(probeCtx context.Context, cfg WorkerConfig) (strin
 // is willing to receive. An unbounded stream is rejected too: without a stated
 // maximum, nothing keeps a delivery inside the worker's own bound.
 func (c *Client) admitSourceStream(probeCtx context.Context, cfg WorkerConfig) error {
-	source, err := c.js.Stream(probeCtx, c.cfg.Stream)
+	info, err := c.inspectStream(probeCtx, c.cfg.Stream, "source")
 	if err != nil {
-		return fmt.Errorf("%w: source stream is unavailable", ErrRejected)
-	}
-	info, err := source.Info(probeCtx)
-	if err != nil {
-		return fmt.Errorf("%w: source stream configuration is unavailable", ErrRejected)
+		return err
 	}
 	if info.Config.MaxMsgSize <= 0 || int(info.Config.MaxMsgSize) > cfg.MaxDeliveryBytes {
 		return fmt.Errorf("%w: source stream max message size is unbounded or exceeds worker delivery bound", ErrRejected)
@@ -135,19 +135,68 @@ func (c *Client) admitDeadLetterStream(probeCtx context.Context, cfg WorkerConfi
 	if name == c.cfg.Stream {
 		return "", fmt.Errorf("%w: source and dead-letter streams must differ", ErrRejected)
 	}
-	dlq, err := c.js.Stream(probeCtx, name)
-	if err != nil {
-		return "", fmt.Errorf("%w: dead-letter stream is unavailable", ErrRejected)
+	if err := c.inspectDeadLetterStream(probeCtx, name); err != nil {
+		return "", err
 	}
-	info, err := dlq.Info(probeCtx)
+	return name, nil
+}
+
+func (c *Client) inspectDeadLetterStream(ctx context.Context, name string) error {
+	info, err := c.inspectStream(ctx, name, "dead-letter")
 	if err != nil {
-		return "", fmt.Errorf("%w: dead-letter stream configuration is unavailable", ErrRejected)
+		return err
 	}
 	minimumSize := c.cfg.MaxPayloadBytes + HeaderLimitBytes
 	if info.Config.MaxMsgSize > 0 && int(info.Config.MaxMsgSize) < minimumSize {
-		return "", fmt.Errorf("%w: dead-letter stream cannot contain the configured envelope", ErrRejected)
+		return fmt.Errorf("%w: dead-letter stream cannot contain the configured envelope", ErrRejected)
 	}
-	return name, nil
+	return nil
+}
+
+// inspectStream reads operator-owned topology without mutating it and rejects
+// configurations whose accepted messages can disappear before the declared
+// recovery window. Numeric capacity stays operator-owned: a finite count or
+// byte limit is safe only with discard-new behavior, so exhaustion rejects
+// publication instead of evicting older unconsumed work.
+func (c *Client) inspectStream(ctx context.Context, name, kind string) (*jetstream.StreamInfo, error) {
+	stream, err := c.js.Stream(ctx, name)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %s stream is unavailable", ErrRejected, kind)
+	}
+	info, err := stream.Info(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %s stream configuration is unavailable", ErrRejected, kind)
+	}
+	if err := validateStreamContract(info.Config, c.cfg); err != nil {
+		return nil, fmt.Errorf("%s stream: %w", kind, err)
+	}
+	return info, nil
+}
+
+func validateStreamContract(stream jetstream.StreamConfig, cfg Config) error {
+	switch {
+	case stream.Storage != jetstream.FileStorage:
+		return fmt.Errorf("%w: stream must use file storage", ErrRejected)
+	case stream.Replicas < cfg.MinStreamReplicas:
+		return fmt.Errorf("%w: stream has fewer replicas than configured", ErrRejected)
+	case stream.Retention == jetstream.InterestPolicy:
+		return fmt.Errorf("%w: interest retention can delete work before a consumer exists", ErrRejected)
+	case stream.Discard != jetstream.DiscardNew &&
+		(stream.MaxMsgs > 0 || stream.MaxBytes > 0 || stream.MaxMsgsPerSubject > 0):
+		return fmt.Errorf("%w: finite stream capacity must reject new messages instead of evicting old ones", ErrRejected)
+	case stream.MaxAge > 0 && stream.MaxAge < cfg.MinStreamRetention:
+		return fmt.Errorf("%w: stream retention is shorter than configured", ErrRejected)
+	case stream.NoAck:
+		return fmt.Errorf("%w: stream must acknowledge accepted publications", ErrRejected)
+	case stream.Duplicates <= 0:
+		return fmt.Errorf("%w: stream duplicate window must be positive", ErrRejected)
+	case stream.AllowMsgTTL:
+		return fmt.Errorf("%w: per-message TTL can bypass the stream retention contract", ErrRejected)
+	case stream.Sealed:
+		return fmt.Errorf("%w: sealed stream cannot accept publications", ErrRejected)
+	default:
+		return nil
+	}
 }
 
 // admitConsumer finds or creates the durable consumer and proves an existing one

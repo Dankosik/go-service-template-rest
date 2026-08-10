@@ -56,6 +56,8 @@ func TestNATSServiceProducerOnlyProcess(t *testing.T) {
 			"APP__MESSAGING__ALLOW_PLAINTEXT=true",
 			"APP__MESSAGING__ALLOW_UNAUTHENTICATED=true",
 			"APP__MESSAGING__STREAM="+sourceStream,
+			"APP__MESSAGING__MIN_STREAM_REPLICAS=1",
+			"APP__MESSAGING__MIN_STREAM_RETENTION=24h",
 		)
 		process.Stdout = output
 		process.Stderr = output
@@ -157,6 +159,8 @@ func TestNATSWorkerMainRejectsEmptyHandler(t *testing.T) {
 		"APP__MESSAGING__ALLOW_PLAINTEXT=true",
 		"APP__MESSAGING__ALLOW_UNAUTHENTICATED=true",
 		"APP__MESSAGING__STREAM=EVENTS",
+		"APP__MESSAGING__MIN_STREAM_REPLICAS=1",
+		"APP__MESSAGING__MIN_STREAM_RETENTION=24h",
 		"APP__MESSAGING__WORKER__CONSUMER=unregistered-worker",
 		"APP__MESSAGING__WORKER__FILTER_SUBJECT=events.test",
 		"APP__MESSAGING__WORKER__DEAD_LETTER_SUBJECT=dead.events.test",

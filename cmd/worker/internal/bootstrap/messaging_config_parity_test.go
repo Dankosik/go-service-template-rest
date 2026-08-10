@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/example/go-service-template-rest/cmd/internal/runtimeopts"
 	"github.com/example/go-service-template-rest/internal/config"
@@ -77,6 +78,7 @@ func TestMessagingSchemeVocabularyMatchesAdapter(t *testing.T) {
 		cfg := natsjs.Config{
 			URLs: []string{scheme + "://broker.example:4222"}, Stream: "EVENTS",
 			AllowPlaintext: true, AllowUnauthenticated: true,
+			MinStreamReplicas: 1, MinStreamRetention: time.Hour,
 			MaxPayloadBytes: 1 << 10, MaxPendingPublishes: 1,
 		}
 		if err := natsjs.ValidateConfig(cfg); err != nil {
@@ -87,6 +89,7 @@ func TestMessagingSchemeVocabularyMatchesAdapter(t *testing.T) {
 		cfg := natsjs.Config{
 			URLs: []string{scheme + "://broker.example:4222"}, Stream: "EVENTS",
 			AllowPlaintext: true, AllowUnauthenticated: true,
+			MinStreamReplicas: 1, MinStreamRetention: time.Hour,
 			MaxPayloadBytes: 1 << 10, MaxPendingPublishes: 1,
 		}
 		if err := natsjs.ValidateConfig(cfg); !errors.Is(err, natsjs.ErrRejected) {
@@ -97,7 +100,9 @@ func TestMessagingSchemeVocabularyMatchesAdapter(t *testing.T) {
 	for _, scheme := range []string{"nats", "ws"} {
 		cfg := natsjs.Config{
 			URLs: []string{scheme + "://broker.example:4222"}, Stream: "EVENTS",
-			AllowUnauthenticated: true, MaxPayloadBytes: 1 << 10, MaxPendingPublishes: 1,
+			AllowUnauthenticated: true,
+			MinStreamReplicas:    1, MinStreamRetention: time.Hour,
+			MaxPayloadBytes: 1 << 10, MaxPendingPublishes: 1,
 		}
 		err := natsjs.ValidateConfig(cfg)
 		if err == nil || !errors.Is(err, natsjs.ErrRejected) || !strings.Contains(err.Error(), "plaintext") {

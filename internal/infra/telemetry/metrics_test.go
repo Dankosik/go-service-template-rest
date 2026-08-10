@@ -69,11 +69,8 @@ func collectMetricsText(t *testing.T, metrics *Metrics) string {
 	return resp.Body.String()
 }
 
-// TestServerLoadIsScrapable is what makes http.max_in_flight tunable. otelhttp
-// derives its instruments from the request and supplies neither of these, so
-// without them a shed request is one more 503 on a route that also answers 503
-// when the connection pool saturates, and nothing reports how close the service
-// runs to its limit.
+// TestServerLoadIsScrapable pins the admission signals the generic protocol
+// instrumentation cannot distinguish from other failures.
 func TestServerLoadIsScrapable(t *testing.T) {
 	telemetrytest.RestoreGlobals(t)
 	telemetrytest.ClearAmbientExporterEnv(t)
@@ -103,6 +100,11 @@ func TestServerLoadIsScrapable(t *testing.T) {
 	release()
 	if got := scrapedSeriesValue(t, collectMetricsText(t, metrics), "http_server_active_requests"); got != "0" {
 		t.Fatalf("http_server_active_requests = %s, want 0 after release", got)
+	}
+
+	metrics.GRPCServerLoad().HealthShed(context.Background())
+	if got := scrapedSeriesValue(t, collectMetricsText(t, metrics), "rpc_server_health_shed_requests_total"); got != "1" {
+		t.Fatalf("rpc_server_health_shed_requests_total = %s, want 1", got)
 	}
 }
 
@@ -134,9 +136,11 @@ func TestServerLoadToleratesNoopProvider(t *testing.T) {
 
 	load := New().ServerLoad()
 	load.Shed(context.Background())
+	load.HealthShed(context.Background())
 	load.Admitted(context.Background())()
 
 	var zero ServerLoad
 	zero.Shed(context.Background())
+	zero.HealthShed(context.Background())
 	zero.Admitted(context.Background())()
 }

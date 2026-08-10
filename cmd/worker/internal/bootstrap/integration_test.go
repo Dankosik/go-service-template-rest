@@ -21,7 +21,10 @@ import (
 const workerTestMaxDeliveryBytes = 1 << 20
 
 func workerTestProducerConfig() natsjs.Config {
-	return natsjs.Config{MaxPayloadBytes: 256 << 10, MaxPendingPublishes: 64}
+	return natsjs.Config{
+		MinStreamReplicas: 1, MinStreamRetention: 24 * time.Hour,
+		MaxPayloadBytes: 256 << 10, MaxPendingPublishes: 64,
+	}
 }
 
 func TestNATSWorkerComposition(t *testing.T) {
@@ -36,10 +39,7 @@ func TestNATSWorkerComposition(t *testing.T) {
 	runCtx, cancelRun := context.WithCancel(t.Context())
 	runErr := make(chan error, 1)
 	go func() {
-		runErr <- run(runCtx, nil, func(_ context.Context, _ config.Config, _ *slog.Logger, producer *natsjs.Producer) (natsjs.Handler, func(context.Context), error) {
-			if producer == nil {
-				return nil, nil, errors.New("worker producer is nil")
-			}
+		runErr <- run(runCtx, nil, func(_ context.Context, _ config.Config, _ *slog.Logger) (natsjs.Handler, func(context.Context), error) {
 			return func(_ context.Context, msg natsjs.Message) error {
 				entered <- msg
 				<-release
@@ -110,7 +110,7 @@ func TestNATSWorkerForcedShutdownDoesNotRaceHandlerCleanup(t *testing.T) {
 	runCtx, cancelRun := context.WithCancel(t.Context())
 	runErr := make(chan error, 1)
 	go func() {
-		runErr <- run(runCtx, nil, func(context.Context, config.Config, *slog.Logger, *natsjs.Producer) (natsjs.Handler, func(context.Context), error) {
+		runErr <- run(runCtx, nil, func(context.Context, config.Config, *slog.Logger) (natsjs.Handler, func(context.Context), error) {
 			return func(context.Context, natsjs.Message) error {
 				close(entered)
 				<-release
@@ -162,7 +162,7 @@ func TestNATSWorkerHandlerPanicIsSupervised(t *testing.T) {
 	defer cancelRun()
 	runErr := make(chan error, 1)
 	go func() {
-		runErr <- run(runCtx, nil, func(context.Context, config.Config, *slog.Logger, *natsjs.Producer) (natsjs.Handler, func(context.Context), error) {
+		runErr <- run(runCtx, nil, func(context.Context, config.Config, *slog.Logger) (natsjs.Handler, func(context.Context), error) {
 			return func(context.Context, natsjs.Message) error {
 				panic("worker panic canary")
 			}, nil, nil
@@ -223,6 +223,8 @@ func setWorkerEnvironment(t *testing.T, url, consumer, diagnosticsAddress string
 		"APP__MESSAGING__ALLOW_PLAINTEXT":                   "true",
 		"APP__MESSAGING__ALLOW_UNAUTHENTICATED":             "true",
 		"APP__MESSAGING__STREAM":                            "EVENTS",
+		"APP__MESSAGING__MIN_STREAM_REPLICAS":               "1",
+		"APP__MESSAGING__MIN_STREAM_RETENTION":              "24h",
 		"APP__MESSAGING__WORKER__CONSUMER":                  consumer,
 		"APP__MESSAGING__WORKER__FILTER_SUBJECT":            "events.test",
 		"APP__MESSAGING__WORKER__DEAD_LETTER_SUBJECT":       "dead.events.test",

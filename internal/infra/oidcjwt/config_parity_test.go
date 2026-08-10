@@ -131,8 +131,16 @@ func requireRejectedCasePerPolicyInputField(t *testing.T, cases []authnConfigCas
 	canonical := reflect.ValueOf(policyInputOf(cases[0]))
 	for index := range canonical.NumField() {
 		rejected := slices.ContainsFunc(cases, func(testCase authnConfigCase) bool {
-			field := reflect.ValueOf(policyInputOf(testCase)).Field(index)
-			return !testCase.acceptable && !field.Equal(canonical.Field(index))
+			candidate := reflect.ValueOf(policyInputOf(testCase))
+			differences := 0
+			for fieldIndex := range canonical.NumField() {
+				if !candidate.Field(fieldIndex).Equal(canonical.Field(fieldIndex)) {
+					differences++
+				}
+			}
+			return !testCase.acceptable &&
+				differences == 1 &&
+				!candidate.Field(index).Equal(canonical.Field(index))
 		})
 		if !rejected {
 			t.Errorf(

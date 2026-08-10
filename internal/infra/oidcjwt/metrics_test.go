@@ -45,17 +45,17 @@ func TestAuthnMetricAttributesAreBounded(t *testing.T) {
 	// drift with every test still green.
 	metrics.recordVerification(t.Context(), transportHTTP, nil)
 	metrics.recordVerification(t.Context(), transportGRPC, failure(KindUntrustedTransport))
-	metrics.recordRefresh(t.Context(), triggerStartup, nil)
-	metrics.recordRefresh(t.Context(), triggerKeyMiss, nil)
-	metrics.recordRefresh(t.Context(), triggerScheduled, errProviderTransport)
+	metrics.recordRefresh(t.Context(), triggerStartup, nil, time.Second)
+	metrics.recordRefresh(t.Context(), triggerKeyMiss, nil, 2*time.Second)
+	metrics.recordRefresh(t.Context(), triggerScheduled, errProviderTransport, 3*time.Second)
 
 	var collected metricdata.ResourceMetrics
 	if err := reader.Collect(t.Context(), &collected); err != nil {
 		t.Fatalf("collect authn metrics: %v", err)
 	}
 	got := authnMetricSet(t, collected)
-	if len(got) != 3 {
-		t.Fatalf("authn metric count = %d, want 3: %#v", len(got), got)
+	if len(got) != 4 {
+		t.Fatalf("authn metric count = %d, want 4: %#v", len(got), got)
 	}
 
 	verifications := requireMetric(t, got, "authn.verifications", "{verification}")
@@ -79,6 +79,26 @@ func TestAuthnMetricAttributesAreBounded(t *testing.T) {
 		{"authn.refresh.trigger": "scheduled", "authn.result": "failure", "authn.reason": "transport"},
 	})
 
+	refreshDuration := requireMetric(t, got, "authn.jwks.refresh.duration", "s")
+	durationHistogram, ok := refreshDuration.Data.(metricdata.Histogram[float64])
+	if !ok || len(durationHistogram.DataPoints) != 3 {
+		t.Fatalf("refresh duration data = %#v, want three float64 histograms", refreshDuration.Data)
+	}
+	requireHistogramMetricAttributes(t, durationHistogram.DataPoints, []map[string]string{
+		{"authn.refresh.trigger": "startup", "authn.result": "success"},
+		{"authn.refresh.trigger": "key_miss", "authn.result": "success"},
+		{"authn.refresh.trigger": "scheduled", "authn.result": "failure", "authn.reason": "transport"},
+	})
+	var durationCount uint64
+	var durationSum float64
+	for _, point := range durationHistogram.DataPoints {
+		durationCount += point.Count
+		durationSum += point.Sum
+	}
+	if durationCount != 3 || durationSum != 6 {
+		t.Fatalf("refresh duration = (count %d, sum %v), want (3, 6)", durationCount, durationSum)
+	}
+
 	age := requireMetric(t, got, "authn.jwks.age", "s")
 	ageGauge, ok := age.Data.(metricdata.Gauge[float64])
 	if !ok || len(ageGauge.DataPoints) != 1 {
@@ -92,12 +112,12 @@ func TestAuthnMetricAttributesAreBounded(t *testing.T) {
 	}
 }
 
-// Both cases here reach the counter without ever running a signature check,
-// which is where the count is easiest to lose: the HTTP boundary turns a
-// credential away before Verify, and a caller hangs up while a key-miss
-// refresh is still in flight. The first would go uncounted if an adapter
-// stopped routing through recordRejection; the second was counted as "invalid"
-// until verificationReason stopped reading a missing Kind as a bad credential.
+// Both cases here reach production metric wiring where it is easiest to lose:
+// the HTTP boundary turns a credential away before Verify, while a caller hangs
+// up during a key-miss refresh that still has to record its own outcome and
+// duration. The first would go uncounted if an adapter stopped routing through
+// recordRejection; the second was counted as "invalid" until verificationReason
+// stopped reading a missing Kind as a bad credential.
 func TestAuthnMetricsCountRejectionsVerifyNeverSaw(t *testing.T) {
 	reader, provider := telemetrytest.NewManualMeterProvider(t)
 
@@ -155,12 +175,14 @@ func TestAuthnMetricsCountRejectionsVerifyNeverSaw(t *testing.T) {
 		t.Fatalf("Verify() error = %v, want cancellation", err)
 	}
 	close(release)
+	verifier.admission.join()
 
 	var collected metricdata.ResourceMetrics
 	if err := reader.Collect(t.Context(), &collected); err != nil {
 		t.Fatalf("collect authn metrics: %v", err)
 	}
-	verifications := requireMetric(t, authnMetricSet(t, collected), "authn.verifications", "{verification}")
+	got := authnMetricSet(t, collected)
+	verifications := requireMetric(t, got, "authn.verifications", "{verification}")
 	verificationSum, ok := verifications.Data.(metricdata.Sum[int64])
 	if !ok {
 		t.Fatalf("verification data = %#v, want int64 sums", verifications.Data)
@@ -175,6 +197,16 @@ func TestAuthnMetricsCountRejectionsVerifyNeverSaw(t *testing.T) {
 			len(verificationSum.DataPoints),
 		)
 	}
+
+	refreshDuration := requireMetric(t, got, "authn.jwks.refresh.duration", "s")
+	durationHistogram, ok := refreshDuration.Data.(metricdata.Histogram[float64])
+	if !ok || len(durationHistogram.DataPoints) != 2 {
+		t.Fatalf("refresh duration data = %#v, want startup and key-miss histograms", refreshDuration.Data)
+	}
+	requireHistogramMetricAttributes(t, durationHistogram.DataPoints, []map[string]string{
+		{"authn.refresh.trigger": "startup", "authn.result": "success"},
+		{"authn.refresh.trigger": "key_miss", "authn.result": "success"},
+	})
 }
 
 func TestFailingMeterDegradesTelemetryNotAuthentication(t *testing.T) {
@@ -255,6 +287,21 @@ func (m failingMetricMeter) Int64Counter(
 	}
 	if err != nil {
 		return instrument, fmt.Errorf("create base test counter: %w", err)
+	}
+	return instrument, nil
+}
+
+//nolint:ireturn // The test double implements metric.Meter's interface-returning method.
+func (m failingMetricMeter) Float64Histogram(
+	name string,
+	options ...metric.Float64HistogramOption,
+) (metric.Float64Histogram, error) {
+	instrument, err := m.Meter.Float64Histogram(name, options...)
+	if m.failInstruments {
+		return instrument, errors.New("poison metric construction")
+	}
+	if err != nil {
+		return instrument, fmt.Errorf("create base test histogram: %w", err)
 	}
 	return instrument, nil
 }
@@ -347,54 +394,44 @@ func requireMetricAttributes(
 	}
 }
 
-// TestVerificationSetsCoverEveryReason holds the prebuilt attribute sets to the
-// full label set verificationReason can produce.
-//
-// [verificationSets] prebuilds one per category by walking to lastKind, and
-// lastKind is the one constant a new category does not update on its own. Left
-// behind, it would leave the new category's series unbuilt, and option's
-// on-the-fly fallback would turn that into a silently slower hot path rather
-// than a visibly wrong one. The walk below finds the end of the declared run
-// independently, the way [TestDocumentedMetricReasonsMatchTheGuide] does.
-func TestVerificationSetsCoverEveryReason(t *testing.T) {
-	unnamed := NewError(0).Error()
-	reasons := []string{
-		verificationReason(context.Canceled),
-		verificationReason(context.DeadlineExceeded),
-		verificationReason(errUnclassified),
-	}
-	declared := Kind(0)
-	for kind := Kind(1); NewError(kind).Error() != unnamed; kind++ {
-		declared = kind
-		reasons = append(reasons, verificationReason(NewError(kind)))
-	}
-	if declared != lastKind {
-		t.Fatalf(
-			"the declared Kind run ends at %d but lastKind is %d; metrics.go prebuilds "+
-				"one attribute set per category by walking to lastKind, so the two must agree",
-			declared, lastKind,
-		)
-	}
-
-	sets := newVerificationSets(transportHTTP)
-	// Several errors share one label on purpose — a deadline and a cancellation
-	// both record as canceled, and an unclassified error records as unavailable
-	// like the Kind of that name — so the series are the distinct labels rather
-	// than the errors that reach them. verificationReason owns each of those
-	// collapses.
-	distinct := make(map[string]struct{}, len(reasons))
-	for _, reason := range reasons {
-		distinct[reason] = struct{}{}
-		if _, prebuilt := sets.failures[reason]; !prebuilt {
-			t.Errorf(
-				"the %q series is not prebuilt, so every verification recording it "+
-					"builds its attribute set on the request path",
-				reason,
-			)
+func requireHistogramMetricAttributes(
+	t *testing.T,
+	points []metricdata.HistogramDataPoint[float64],
+	want []map[string]string,
+) {
+	t.Helper()
+	remaining := slices.Clone(want)
+	for _, point := range points {
+		got := make(map[string]string)
+		for _, value := range point.Attributes.ToSlice() {
+			got[string(value.Key)] = value.Value.AsString()
+		}
+		for index, candidate := range remaining {
+			if maps.Equal(got, candidate) {
+				remaining = slices.Delete(remaining, index, index+1)
+				break
+			}
 		}
 	}
-	if got := len(sets.failures); got != len(distinct) {
-		t.Errorf("prebuilt %d failure series for %d distinct reachable labels", got, len(distinct))
+	if len(remaining) != 0 {
+		t.Fatalf("metric attributes did not contain %#v", remaining)
+	}
+}
+
+func TestKindDetailsHaveNoGaps(t *testing.T) {
+	for index := range kindDetails[1:] {
+		kind := Kind(index + 1)
+		if _, ok := detailFor(kind); !ok {
+			t.Errorf("Kind %d has no message or metric reason", kind)
+		}
+	}
+	for _, kind := range []Kind{0, Kind(len(kindDetails))} {
+		err := NewError(kind)
+		message := err.Error()
+		reason := verificationReason(err)
+		if message != "authentication failed" || reason != "unavailable" {
+			t.Errorf("unknown Kind %d = (%q, %q), want fail-closed defaults", kind, message, reason)
+		}
 	}
 }
 

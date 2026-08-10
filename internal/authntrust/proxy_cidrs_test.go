@@ -55,6 +55,8 @@ func TestParseProxyCIDRsRejects(t *testing.T) {
 		{name: "bare address", raw: "127.0.0.1"},
 		{name: "not an address", raw: "not-a-cidr/8"},
 		{name: "prefix length out of range", raw: "10.0.0.0/33"},
+		{name: "IPv4 wildcard", raw: "0.0.0.0/0"},
+		{name: "IPv6 wildcard", raw: "::/0"},
 		{name: "duplicate", raw: "10.0.0.0/8,10.0.0.0/8"},
 		// Masking is what makes these one entry rather than two, so the duplicate
 		// is only visible after it.

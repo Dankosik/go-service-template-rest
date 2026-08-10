@@ -79,10 +79,11 @@ func (r *Relay) publishBatch(
 
 // publishAll publishes the batch through at most PublishConcurrency workers and
 // never past the lease it was claimed under. The returned slice holds one entry
-// per event, by its index in the batch: the publication's error, or nil once the
-// broker durably acknowledged that exact event. It reports cleanupSafe = false
-// when a publisher ignored cancellation, because its goroutine can still touch
-// the dependencies the process is about to close.
+// per event, by its index in the batch: the publication's error, or nil once
+// the broker acknowledged that exact event under the publisher's configured
+// durability contract. It reports cleanupSafe = false when a publisher ignored
+// cancellation, because its goroutine can still touch the dependencies the
+// process is about to close.
 //
 // The deadline computed here is the whole batch's publication budget. Because
 // it starts no later than any single publication does, it is also the budget of

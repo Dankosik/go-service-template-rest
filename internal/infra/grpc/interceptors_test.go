@@ -305,8 +305,8 @@ func TestOneAdmissionPolicyServesBothInterceptorTypes(t *testing.T) {
 	if err := <-firstDone; err != nil {
 		t.Fatalf("admitted unary RPC error = %v", err)
 	}
-	if active, shed := load.snapshot(); active != 0 || shed != 1 {
-		t.Fatalf("load = (active %d, shed %d), want (0, 1)", active, shed)
+	if active, shed, healthShed := load.snapshot(); active != 0 || shed != 1 || healthShed != 0 {
+		t.Fatalf("load = (active %d, shed %d, health shed %d), want (0, 1, 0)", active, shed, healthShed)
 	}
 }
 
@@ -345,15 +345,16 @@ func TestHealthServiceHoldsItsOwnAdmissionBudget(t *testing.T) {
 	}
 	assertAdmitted(t, unary, testUnaryFullMethod)
 
+	// The two refusals remain separate signals: business shed describes capacity,
+	// Health/Watch is still holding its slot here; it must not count as active
+	// business load.
+	if active, shed, healthShed := load.snapshot(); active != 0 || shed != 1 || healthShed != 1 {
+		t.Fatalf("load = (active %d, business shed %d, health shed %d), want (0, 1, 1)", active, shed, healthShed)
+	}
+
 	close(releaseHealth)
 	if err := <-health; err != nil {
 		t.Fatalf("admitted health RPC error = %v", err)
-	}
-
-	// Only the business shed is recorded: active and shed are the capacity signal
-	// MaxConcurrentRPCs is sized from, and a health-service decision is not one.
-	if _, shed := load.snapshot(); shed != 1 {
-		t.Fatalf("shed = %d, want only the business RPC refused by its own budget", shed)
 	}
 }
 
@@ -666,9 +667,10 @@ func assertRecoveredPanicStatus(t *testing.T, err error) {
 // an exact snapshot after the RPCs they drive have finished. performance_test.go
 // declares a second LoadRecorder rather than reusing this one; it says why.
 type recordingLoad struct {
-	mu     sync.Mutex
-	active int
-	shed   int
+	mu         sync.Mutex
+	active     int
+	shed       int
+	healthShed int
 }
 
 func (l *recordingLoad) Admitted(context.Context) func() {
@@ -688,10 +690,16 @@ func (l *recordingLoad) Shed(context.Context) {
 	l.mu.Unlock()
 }
 
-func (l *recordingLoad) snapshot() (int, int) {
+func (l *recordingLoad) HealthShed(context.Context) {
+	l.mu.Lock()
+	l.healthShed++
+	l.mu.Unlock()
+}
+
+func (l *recordingLoad) snapshot() (int, int, int) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	return l.active, l.shed
+	return l.active, l.shed, l.healthShed
 }
 
 type testServerStream struct {

@@ -19,13 +19,12 @@ import (
 const startupTimeout = 30 * time.Second
 
 // HandlerBuilder constructs the binary-local transport adapter that invokes
-// feature-owned behavior after messaging topology admission. It receives the
-// same concrete producer owned by this worker process. Any returned cleanup
-// normally runs before Run returns, including when the builder returns an
-// invalid result.
+// feature-owned behavior after messaging topology admission. Any returned
+// cleanup normally runs before Run returns, including when the builder returns
+// an invalid result.
 // If forced shutdown leaves an uncooperative handler running, process exit owns
 // its resources instead of racing that cleanup with the handler.
-type HandlerBuilder func(context.Context, config.Config, *slog.Logger, *natsjs.Producer) (handler natsjs.Handler, cleanup func(context.Context), err error)
+type HandlerBuilder func(context.Context, config.Config, *slog.Logger) (handler natsjs.Handler, cleanup func(context.Context), err error)
 
 func Run(args []string, buildHandler HandlerBuilder) error {
 	signalCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -85,7 +84,7 @@ func run(signalCtx context.Context, args []string, buildHandler HandlerBuilder) 
 		return fmt.Errorf("initialize worker messaging: %w", err)
 	}
 	defer client.Close()
-	handler, handlerCleanup, err := buildHandler(startupCtx, cfg, log, client.Producer())
+	handler, handlerCleanup, err := buildHandler(startupCtx, cfg, log)
 	defer func() {
 		if handlerCleanup != nil {
 			cleanupCtx, cleanupCancel := runtimeopts.TeardownStage(signalCtx, cleanupDeadline, handlerClose)

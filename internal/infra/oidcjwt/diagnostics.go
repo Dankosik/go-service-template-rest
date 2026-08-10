@@ -13,8 +13,8 @@ import (
 // this says where the service defect is.
 //
 // It is the only record of where such a panic came from, because both
-// converters answer before any transport recovery could see it. What the record
-// The shared panic-attribute policy withholds the panic's value while
+// converters answer before any transport recovery could see it. The shared
+// panic-attribute policy withholds the panic's value while
 // publishing its type, class, and stack, so providerError's redaction rule
 // reaches logs as much as errors.
 func logRecoveredPanic(ctx context.Context, log *slog.Logger, operation string, recovered any) {

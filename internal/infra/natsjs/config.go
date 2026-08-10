@@ -23,6 +23,8 @@ type Config struct {
 	AllowPlaintext       bool
 	AllowUnauthenticated bool
 	Stream               string
+	MinStreamReplicas    int
+	MinStreamRetention   time.Duration
 	MaxPayloadBytes      int
 	MaxPendingPublishes  int
 }
@@ -63,6 +65,12 @@ func ValidateConfig(cfg Config) error {
 	}
 	if !validConsumerName(cfg.Stream) {
 		return fmt.Errorf("%w: invalid source stream", ErrRejected)
+	}
+	if cfg.MinStreamReplicas < 1 || cfg.MinStreamReplicas > 5 {
+		return fmt.Errorf("%w: minimum stream replicas must be in range [1,5]", ErrRejected)
+	}
+	if cfg.MinStreamRetention <= 0 {
+		return fmt.Errorf("%w: minimum stream retention must be positive", ErrRejected)
 	}
 	if cfg.MaxPayloadBytes <= 0 {
 		return fmt.Errorf("%w: max payload bytes must be positive", ErrRejected)

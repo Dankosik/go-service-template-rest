@@ -6,29 +6,30 @@ import (
 	"reflect"
 )
 
-// Publisher returns nil only after the selected broker durably acknowledges
-// the same Event.ID. Implementations must stop using Event when Publish returns.
+// Publisher returns nil only after the selected broker acknowledges the same
+// Event.ID under the adapter's configured durability contract. Publish may be
+// called concurrently.
 //
-// The adapter decides which envelope fields reach the broker, and nothing here
-// checks that it forwarded any of them. Two are worth deciding deliberately,
-// because both are carried for a consumer this package cannot see:
-// [Event.Metadata] holds whatever correlation the feature owns, and
-// [Event.CreationContext] holds the trace context of the operation that
-// appended the event:
+// Implementations must treat Event and all data it references as read-only and
+// stop using them before Publish returns. In particular, they must neither
+// mutate nor retain Payload, Metadata, or the map returned by CreationContext.
 //
-//	ctx = otel.GetTextMapPropagator().Inject(ctx, header)  // onto broker headers
+// The result vocabulary is closed:
 //
-// An adapter whose message type has no header carrier drops the consumer's half
-// of the trace at the outbox boundary — silently, because the bytes are still in
-// PostgreSQL and the relay's own publish span still links to the producer.
-// Either forward both onto broker headers or state in the adapter that it does
-// not.
+//   - nil means the broker acknowledged this Event.ID under that contract;
+//   - [ErrPermanentPublication] means retrying the same bytes cannot succeed;
+//   - [ErrPublicationNotAccepted] means the broker definitely did not accept
+//     the event;
+//   - every other error is an ambiguous, retryable publication failure.
 //
-// The relay calls Publish concurrently, so implementations must be safe for
-// concurrent use. Concurrent calls never carry two events that share an ordering
-// key, and PostgreSQL enforces that rather than this package: the partial unique
-// index outbox_events_ordering_ready_key in
-// migrations/000001_postgres_outbox.sql admits one ready row per key.
+// Relay-owned sentinels, including [ErrPublisherPanic], are reserved for the
+// relay and must not be returned by an adapter.
+//
+// The adapter decides which envelope fields reach the broker. Nothing here
+// verifies that it forwards [Event.Metadata] or [Event.CreationContext], so the
+// adapter must either forward each one deliberately or document that it drops
+// it. Concurrent calls never carry two events with the same ordering key;
+// PostgreSQL enforces that invariant.
 //
 // ctx carries the deadline of the whole claimed batch rather than a per-call
 // timeout — the earlier of the configured publish timeout and the batch's lease
@@ -38,25 +39,6 @@ import (
 // acknowledgement. A panic is fatal to the relay process: the event is released
 // for retry, the rest of the batch finalizes, and the process exits, because a
 // panicking adapter is a deployment fault rather than a transient one.
-//
-// An adapter that returns a sentinel of its own — one this package does not
-// already produce — owes it two edits outside the adapter, because no
-// vocabulary here is derived from the error. It needs a case in
-// publicationErrorClass in relay_publish.go, the only producer of the class
-// that this event's metric sample, its operator log, and its stored
-// last_error_class column all carry, and the matching constant in
-// boundedErrorType in vocabulary.go. Skipping the first is the expensive one:
-// the sentinel falls into that switch's default, so all three surfaces agree on
-// publisher_temporary — a class the adapter never meant — and the event opts out
-// of the attempt cap, which only [ErrPublicationNotAccepted] trips.
-// TestErrorClassVocabularyIsBounded cannot catch this for you: it drives this
-// package's own producers, and an adapter is by definition outside them.
-//
-// None of that reaches failureClass in cmd/outbox-relay/main.go. Every Publish
-// error becomes a durable transition — retried or poisoned — and never stops the
-// relay, so it is never a process exit class. The exit classes an adapter does
-// own are its builder's; see the table in
-// docs/postgres-transactional-outbox.md.
 // profile:messaging-nats-jetstream:start
 //
 // natsjs.NewOutboxPublisher is the selected adapter for this template.

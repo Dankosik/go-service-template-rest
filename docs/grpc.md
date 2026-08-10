@@ -545,9 +545,11 @@ the connection limit admits every well-behaved peer while still bounding a
 hostile one.
 
 A health budget under pressure is therefore a hostile-peer signal rather than a
-capacity one, and it is deliberately absent from the active/shed RPC instruments
-so those keep describing business capacity alone. Set
-`APP__GRPC__SERVER__ACCESS_LOG_HEALTH_CHECKS=true` to see the refusals.
+capacity one. It is absent from the business active/shed instruments so those
+keep describing business capacity alone; the no-label
+`rpc.server.health.shed_requests` counter records health admission refusals.
+Set `APP__GRPC__SERVER__ACCESS_LOG_HEALTH_CHECKS=true` only when per-RPC refusal
+details are needed.
 
 With the OIDC/JWT profile, health-service methods other than Check also require a
 credential while Check remains public. Standard health methods are excluded
@@ -577,13 +579,13 @@ handler must release feature work and dependencies on cancellation.
 
 OpenTelemetry client/server `StatsHandler`s cover unary and streaming protocol
 spans and metrics. Repository interceptors add only request identity, access
-status, and low-cardinality active/shed RPC instruments. Request messages,
-metadata values, peer-controlled names, and raw error text are not metric
-labels. Server protocol telemetry is limited to methods present in the
-registered service descriptors; unknown peer-supplied method paths are omitted
-instead of becoming unbounded span names or `rpc.method` series. Routine server
-health spans and duration samples are also omitted by default because probe
-frequency is not business traffic. Set
+status, low-cardinality business active/shed instruments, and the no-label health
+shed counter. Request messages, metadata values, peer-controlled names, and raw
+error text are not metric labels. Server protocol telemetry is limited to
+methods present in the registered service descriptors; unknown peer-supplied
+method paths are omitted instead of becoming unbounded span names or
+`rpc.method` series. Routine server health spans and duration samples are also
+omitted by default because probe frequency is not business traffic. Set
 `APP__GRPC__SERVER__TELEMETRY_HEALTH_CHECKS=true` for focused diagnosis; health
 handling and client-side telemetry are unchanged either way.
 

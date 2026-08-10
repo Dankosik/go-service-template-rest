@@ -49,9 +49,11 @@ type Client struct {
 	closed      chan struct{}
 	closedOnce  sync.Once
 
-	probeMu       sync.RWMutex
-	consumer      pullConsumer
-	workerClaimed bool
+	probeMu          sync.RWMutex
+	consumer         pullConsumer
+	deadLetterStream string
+	maxDeliveryBytes int
+	workerClaimed    bool
 }
 
 func Connect(ctx context.Context, cfg Config, role Role, obs Observability) (*Client, error) {
@@ -173,15 +175,31 @@ func (c *Client) Check(ctx context.Context) error {
 	}
 	probeCtx, cancel := context.WithTimeout(ctx, boundedTimeout(ctx))
 	defer cancel()
-	if _, err := c.js.Stream(probeCtx, c.cfg.Stream); err != nil {
+	sourceInfo, err := c.inspectStream(probeCtx, c.cfg.Stream, "source")
+	if err != nil {
 		c.ready.Store(false)
-		return fmt.Errorf("%w: source stream is unavailable", ErrRejected)
+		return err
 	}
 	c.probeMu.RLock()
 	consumer := c.consumer
+	deadLetterStream := c.deadLetterStream
+	maxDeliveryBytes := c.maxDeliveryBytes
 	c.probeMu.RUnlock()
+	if maxDeliveryBytes > 0 &&
+		(sourceInfo.Config.MaxMsgSize <= 0 || int(sourceInfo.Config.MaxMsgSize) > maxDeliveryBytes) {
+		c.ready.Store(false)
+		return fmt.Errorf("%w: source stream max message size is unbounded or exceeds worker delivery bound", ErrRejected)
+	}
+	if deadLetterStream != "" {
+		if err := c.inspectDeadLetterStream(probeCtx, deadLetterStream); err != nil {
+			c.ready.Store(false)
+			return err
+		}
+	}
+	var consumerInfo *jetstream.ConsumerInfo
 	if consumer != nil {
-		if _, err := consumer.Info(probeCtx); err != nil {
+		consumerInfo, err = consumer.Info(probeCtx)
+		if err != nil {
 			c.ready.Store(false)
 			return fmt.Errorf("%w: durable consumer is unavailable", ErrRejected)
 		}
@@ -190,6 +208,7 @@ func (c *Client) Check(ctx context.Context) error {
 		c.ready.Store(false)
 		return fmt.Errorf("%w: connection changed during readiness probe", ErrRejected)
 	}
+	c.telemetry.recordBrokerObservation(time.Now(), sourceInfo, consumerInfo)
 	c.ready.Store(true)
 	return nil
 }

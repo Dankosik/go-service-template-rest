@@ -2,6 +2,7 @@ package oidcjwt
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"sync"
 	"time"
@@ -79,12 +80,15 @@ func newVerifier(
 	if log == nil {
 		log = slog.Default()
 	}
+	reportDegraded := newDegradedWarning(log)
+	metrics := newAuthnMetrics(meterProvider, reportDegraded)
+	startedAt := time.Now()
 	trust, err := bootstrapTrust(ctx, policy, factory, now, log)
+	metrics.recordRefresh(ctx, triggerStartup, err, time.Since(startedAt))
 	if err != nil {
 		return nil, err
 	}
 	baseCtx, cancel := context.WithCancel(context.Background())
-	reportDegraded := newDegradedWarning(log)
 	store := newTrustStore(trust.keys)
 	verifier := &Verifier{
 		policy:        policy,
@@ -93,7 +97,7 @@ func newVerifier(
 		now:           now,
 		jitter:        refreshJitter,
 		log:           log,
-		metrics:       newAuthnMetrics(meterProvider, reportDegraded),
+		metrics:       metrics,
 		unregisterAge: registerKeyAgeGauge(meterProvider, store.current, now, reportDegraded),
 		trust:         store,
 		baseCtx:       baseCtx,
@@ -103,7 +107,6 @@ func newVerifier(
 	// admission refers to the verifier being built, so it cannot move into the
 	// literal above.
 	verifier.admission = &refreshAdmission{owner: verifier}
-	verifier.metrics.recordRefresh(ctx, triggerStartup, nil)
 	return verifier, nil
 }
 
@@ -161,8 +164,16 @@ func (v *Verifier) verifyToken(
 	signed := snapshot.verifies(parsed)
 	if !signed {
 		refreshErr := v.refresh(ctx)
-		if callerAborted(refreshErr) {
+		// A context identity is the caller's only when the caller's own context
+		// carries it. ProviderTimeout also uses context internally, but that budget
+		// is an unavailable trust dependency rather than a client cancellation.
+		if ctxErr := ctx.Err(); ctxErr != nil && errors.Is(refreshErr, ctxErr) {
 			return parsedToken{}, refreshErr
+		}
+		if errors.Is(refreshErr, errRefreshInProgress) ||
+			errors.Is(refreshErr, errProviderCanceled) ||
+			errors.Is(refreshErr, errProviderTimeout) {
+			return parsedToken{}, failure(KindUnavailable)
 		}
 		snapshot = v.trust.current()
 		signed = snapshot.verifies(parsed)
