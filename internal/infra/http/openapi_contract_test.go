@@ -285,12 +285,12 @@ func TestOpenAPIRuntimeContractOperationsDeclareSecurityDecisions(t *testing.T) 
 
 				switch decision.exposure {
 				case securityExposurePublic:
-					if operationHasRealSecurity(swagger, operation) {
-						t.Fatalf("%s operation declares real security while marked %q", operation.OperationID, decision.exposure)
+					if !operationIsPublic(swagger, operation) {
+						t.Fatalf("%s operation inherits or declares security while marked %q", operation.OperationID, decision.exposure)
 					}
 				case securityExposureProtected:
-					if !operationHasRealSecurity(swagger, operation) {
-						t.Fatalf("%s operation is protected but has no real OpenAPI security requirement", operation.OperationID)
+					if !operationUsesBearerSecurityOnly(swagger, operation) {
+						t.Fatalf("%s operation is protected but every OpenAPI security alternative is not the wired bearer scheme without scopes", operation.OperationID)
 					}
 					for _, status := range []string{"400", "401", "403", "431", "503", "504"} {
 						if !operationHasProblemResponse(swagger, operation, status) {
@@ -303,6 +303,77 @@ func TestOpenAPIRuntimeContractOperationsDeclareSecurityDecisions(t *testing.T) 
 				}
 			})
 		}
+	}
+}
+
+func TestOpenAPIBearerSecurityAlternativesFailClosed(t *testing.T) {
+	t.Parallel()
+
+	bearer := &openapi3.SecuritySchemeRef{Value: &openapi3.SecurityScheme{Type: "http", Scheme: "bearer"}}
+	apiKey := &openapi3.SecuritySchemeRef{Value: &openapi3.SecurityScheme{Type: "apiKey", In: "header", Name: "X-API-Key"}}
+	swagger := &openapi3.T{
+		Components: &openapi3.Components{SecuritySchemes: openapi3.SecuritySchemes{
+			"bearerAuth": bearer,
+			"apiKeyAuth": apiKey,
+		}},
+		Security: openapi3.SecurityRequirements{{"bearerAuth": {}}},
+	}
+	security := func(requirements ...openapi3.SecurityRequirement) *openapi3.SecurityRequirements {
+		value := openapi3.SecurityRequirements(requirements)
+		return &value
+	}
+
+	tests := []struct {
+		name          string
+		operation     *openapi3.Operation
+		wantPublic    bool
+		wantProtected bool
+	}{
+		{name: "inherited bearer", operation: &openapi3.Operation{}, wantProtected: true},
+		{
+			name:          "explicit bearer",
+			operation:     &openapi3.Operation{Security: security(openapi3.SecurityRequirement{"bearerAuth": {}})},
+			wantProtected: true,
+		},
+		{name: "explicit public", operation: &openapi3.Operation{Security: security()}, wantPublic: true},
+		{
+			name: "anonymous alternative",
+			operation: &openapi3.Operation{Security: security(
+				openapi3.SecurityRequirement{"bearerAuth": {}},
+				openapi3.SecurityRequirement{},
+			)},
+		},
+		{
+			name:      "bearer scopes are not authorized",
+			operation: &openapi3.Operation{Security: security(openapi3.SecurityRequirement{"bearerAuth": {"admin"}})},
+		},
+		{
+			name:      "unknown scheme",
+			operation: &openapi3.Operation{Security: security(openapi3.SecurityRequirement{"missingAuth": {}})},
+		},
+		{
+			name:      "unsupported alternative",
+			operation: &openapi3.Operation{Security: security(openapi3.SecurityRequirement{"apiKeyAuth": {}})},
+		},
+		{
+			name: "unsupported AND requirement",
+			operation: &openapi3.Operation{Security: security(openapi3.SecurityRequirement{
+				"bearerAuth": {},
+				"apiKeyAuth": {},
+			})},
+		},
+	}
+
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+			if got := operationIsPublic(swagger, testCase.operation); got != testCase.wantPublic {
+				t.Errorf("operationIsPublic() = %v, want %v", got, testCase.wantPublic)
+			}
+			if got := operationUsesBearerSecurityOnly(swagger, testCase.operation); got != testCase.wantProtected {
+				t.Errorf("operationUsesBearerSecurityOnly() = %v, want %v", got, testCase.wantProtected)
+			}
+		})
 	}
 }
 
@@ -459,18 +530,47 @@ func operationSecurityDecision(operation *openapi3.Operation) (openAPISecurityDe
 	return decision, nil
 }
 
-func operationHasRealSecurity(swagger *openapi3.T, operation *openapi3.Operation) bool {
-	if swagger == nil || swagger.Components == nil || operation == nil || operation.Security == nil {
+func operationSecurityRequirements(swagger *openapi3.T, operation *openapi3.Operation) openapi3.SecurityRequirements {
+	if operation == nil {
+		return nil
+	}
+	if operation.Security != nil {
+		return *operation.Security
+	}
+	if swagger == nil {
+		return nil
+	}
+	return swagger.Security
+}
+
+func operationIsPublic(swagger *openapi3.T, operation *openapi3.Operation) bool {
+	return len(operationSecurityRequirements(swagger, operation)) == 0
+}
+
+func operationUsesBearerSecurityOnly(swagger *openapi3.T, operation *openapi3.Operation) bool {
+	if swagger == nil || swagger.Components == nil {
 		return false
 	}
-	for _, requirement := range *operation.Security {
-		for name := range requirement {
-			if _, ok := swagger.Components.SecuritySchemes[name]; ok {
-				return true
+	requirements := operationSecurityRequirements(swagger, operation)
+	if len(requirements) == 0 {
+		return false
+	}
+	for _, requirement := range requirements {
+		if len(requirement) != 1 {
+			return false
+		}
+		for name, scopes := range requirement {
+			declaration, ok := swagger.Components.SecuritySchemes[name]
+			if !ok || declaration == nil || declaration.Value == nil || len(scopes) != 0 {
+				return false
+			}
+			scheme := declaration.Value
+			if !strings.EqualFold(scheme.Type, "http") || !strings.EqualFold(scheme.Scheme, "bearer") {
+				return false
 			}
 		}
 	}
-	return false
+	return true
 }
 
 func operationHasProblemResponse(swagger *openapi3.T, operation *openapi3.Operation, status string) bool {

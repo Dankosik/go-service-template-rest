@@ -3,6 +3,7 @@ package natsjs
 import (
 	"errors"
 	"testing"
+	"time"
 )
 
 const (
@@ -11,7 +12,10 @@ const (
 )
 
 func testConfig() Config {
-	return Config{MaxPayloadBytes: testMaxPayloadBytes, MaxPendingPublishes: testMaxPending}
+	return Config{
+		MinStreamReplicas: 1, MinStreamRetention: 24 * time.Hour,
+		MaxPayloadBytes: testMaxPayloadBytes, MaxPendingPublishes: testMaxPending,
+	}
 }
 
 func TestConfigValidation(t *testing.T) {
@@ -29,6 +33,9 @@ func TestConfigValidation(t *testing.T) {
 		"plaintext":           func(cfg *Config) { cfg.URLs = []string{"nats://nats.example:4222"} },
 		"missing credentials": func(cfg *Config) { cfg.CredentialsFile = "" },
 		"invalid stream":      func(cfg *Config) { cfg.Stream = "EVENTS.BAD" },
+		"zero replicas":       func(cfg *Config) { cfg.MinStreamReplicas = 0 },
+		"too many replicas":   func(cfg *Config) { cfg.MinStreamReplicas = 6 },
+		"zero retention":      func(cfg *Config) { cfg.MinStreamRetention = 0 },
 		"zero payload":        func(cfg *Config) { cfg.MaxPayloadBytes = 0 },
 		"zero pending":        func(cfg *Config) { cfg.MaxPendingPublishes = 0 },
 	}

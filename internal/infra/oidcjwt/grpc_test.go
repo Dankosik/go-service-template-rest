@@ -216,3 +216,97 @@ func TestGRPCStreamIdentityParityAndMetadataRemoval(t *testing.T) {
 		t.Fatalf("missing credential status = %v, want Unauthenticated", status.Code(err))
 	}
 }
+
+func TestGRPCStreamMessageOperationsHonorAuthenticatedContext(t *testing.T) {
+	expired, cancelExpired := context.WithDeadline(t.Context(), time.Now().Add(-time.Second))
+	defer cancelExpired()
+	var recvCalls, sendCalls int
+	underlying := &scriptedServerStream{
+		ctx: t.Context(),
+		recv: func(any) error {
+			recvCalls++
+			return nil
+		},
+		send: func(any) error {
+			sendCalls++
+			return nil
+		},
+	}
+	stream := serverStreamWithContext{ServerStream: underlying, ctx: expired}
+	if err := stream.RecvMsg(new(any)); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("RecvMsg() error = %v, want authenticated-context deadline", err)
+	}
+	if err := stream.SendMsg("message"); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("SendMsg() error = %v, want authenticated-context deadline", err)
+	}
+	if recvCalls != 0 || sendCalls != 0 {
+		t.Fatalf("underlying message calls = (recv %d, send %d), want zero after expiry", recvCalls, sendCalls)
+	}
+
+	active, cancelActive := context.WithTimeout(t.Context(), 10*time.Millisecond)
+	defer cancelActive()
+	started := make(chan struct{})
+	release := make(chan struct{})
+	underlying.recv = func(any) error {
+		recvCalls++
+		close(started)
+		<-release
+		return nil
+	}
+	stream.ctx = active
+	result := make(chan error, 1)
+	go func() {
+		result <- stream.RecvMsg(new(any))
+	}()
+	<-started
+	<-active.Done()
+	close(release)
+	if err := <-result; !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("RecvMsg() crossing deadline = %v, want authenticated-context deadline", err)
+	}
+}
+
+func TestGRPCProviderTimeoutIsUnavailable(t *testing.T) {
+	now := testNow
+	first := loadTestRSAKey(t, testSigningKey)
+	second := loadTestRSAKey(t, testRotatedKey)
+	client := &scriptedClient{responses: append(initialResponses(t, first), scriptedResponse{
+		err: context.DeadlineExceeded,
+	})}
+	verifier := requireTestVerifier(t, testVerifierOptions{now: newTestClock(now).now, client: client})
+	token := signToken(t, second, "key-2", "at+jwt", validClaims(now))
+	ctx := metadata.NewIncomingContext(t.Context(), metadata.Pairs("authorization", "Bearer "+token))
+
+	_, err := verifier.UnaryInterceptor()(
+		ctx,
+		nil,
+		&grpc.UnaryServerInfo{FullMethod: "/example.Service/Get"},
+		func(context.Context, any) (any, error) {
+			t.Fatal("handler ran without current authentication trust")
+			return nil, errors.New("handler should not run")
+		},
+	)
+	if code := status.Code(err); code != codes.Unavailable {
+		t.Fatalf("provider timeout status = %v, want Unavailable; error = %v", code, err)
+	}
+}
+
+type scriptedServerStream struct {
+	grpc.ServerStream
+
+	ctx  context.Context //nolint:containedctx // grpc.ServerStream's test double must return the source stream context.
+	recv func(any) error
+	send func(any) error
+}
+
+func (s *scriptedServerStream) Context() context.Context {
+	return s.ctx
+}
+
+func (s *scriptedServerStream) RecvMsg(message any) error {
+	return s.recv(message)
+}
+
+func (s *scriptedServerStream) SendMsg(message any) error {
+	return s.send(message)
+}

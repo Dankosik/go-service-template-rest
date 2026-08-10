@@ -98,34 +98,18 @@
 // Three extensions are expected. The first two do not require reading the relay
 // loop; the third is the relay loop, and its cost is stated last.
 //
-// To emit a new event type, build an [Event] in the repository adapter that owns
-// the mutation's transaction and pass it to [Store.Append] inside that
-// transaction. That adapter holds an [Appender] rather than the whole [Store],
-// so a request path cannot reach the relay's statements or the operator actions.
-// The relay side ships composed and the append side does not: no
-// [Store] exists in cmd/service, because the template has no feature that emits
-// events, so the first service that does builds one over the API process's pool
-// and threads it in — see the worked wiring in
-// docs/postgres-transactional-outbox.md. Append never begins or commits a
-// transaction, so returning its error rolls back the mutation and the event
-// together. Pass every event of one business transaction in a single variadic
-// call: each column travels as one array, so the call costs one statement
-// whatever mix of ordered and unordered events it carries. A rejected field
-// returns [ErrInvalidEvent] before any statement is sent; a replayed ordering
-// sequence returns [ErrOrderingSequence] from the append statement itself,
-// because only PostgreSQL holds the retained high-water mark. Either way the call
-// stores nothing.
+// To emit a new event type, the repository adapter declares the narrow local
+// interface it consumes — normally just [Store.Append] — and accepts *[Store]
+// through that interface. It appends inside the transaction that owns the
+// mutation, so an append error rolls back both. The worked wiring and batching
+// guidance live in docs/postgres-transactional-outbox.md.
 //
 // With the NATS profile selected, cmd/outbox-relay registers the concrete
 // natsjs adapter and supervises its client lifecycle. An outbox-only generated
 // service deliberately keeps the builder nil and fails before claiming work.
 // To publish through a different broker, implement [Publisher] and register a
-// complete runtime in cmd/outbox-relay/main.go. [Publisher] documents the whole
-// acceptance contract, including concurrency safety, the shared batch deadline,
-// and when to return [ErrPermanentPublication] versus [ErrPublicationNotAccepted].
-// Read its last two paragraphs before returning a sentinel of your own: one
-// costs two edits outside the adapter, and skipping the first misclassifies the
-// event on every surface rather than failing anything.
+// complete runtime in cmd/outbox-relay/main.go. [Publisher] owns the closed
+// result vocabulary, concurrency contract, and shared batch deadline.
 //
 // To add a stage to the cycle itself — a verification step, a second publish
 // attempt, an audit write — expect to edit relay.go's runLoop or runCycle, the

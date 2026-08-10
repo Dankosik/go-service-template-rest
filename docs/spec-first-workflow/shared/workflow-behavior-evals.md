@@ -890,6 +890,83 @@ claims a latency or throughput win from structure alone; refuses a design
 decision because candidate code cannot yet be benchmarked; or adds performance
 machinery to the near-miss.
 
+### WBE-39 — Go Implementation-Source Discovery
+
+**Given:** a ready System Design requires a deterministic standard stemming
+algorithm inside one Go responsibility. A retained branch contains a handwritten
+implementation, while current evidence also exposes a maintained Go dependency
+and an upstream-generated implementation that could preserve the accepted
+mechanism. A near-miss is a trivial owner-local predicate already covered by
+current repository code or the standard library. In a second run, Planning has
+already pinned the handwritten source before Implementation receives the new
+candidate evidence.
+
+**Pass:** after making the responsibility concrete, Go Ownership invokes
+Research's Solution Discovery Evidence as a supporting step inside Technical
+Design and scans only the relevant reuse rungs. Research supplies candidate
+evidence without selecting package placement; Go Ownership records the selected
+implementation source, exact dependency/version or upstream identity, local
+behavior and parity proof, viable rejected source, and upgrade or reopen
+condition. Its package/dependency review falsifies that disposition as well as
+the import graph before Planning carries it unchanged. The near-miss reuses its
+current owner without external search or a new artifact. When the candidate
+appears during Implementation, the fixed task reopens only Go Ownership's
+dependency/source decision and resumes after that correction.
+
+**Fail:** a retained branch, copied algorithm, or preference for no new
+dependency closes the choice; custom code is accepted before the relevant reuse
+rungs are inspected; the supporting search becomes a new macro phase or lets
+Research select Go placement; review checks only imports and acyclicity; the
+near-miss receives library-research ceremony; or Implementation merely adds
+tests to the pinned custom copy after current evidence invalidates its source
+decision.
+
+### WBE-40 — Shared-Checkout Implementation Fan-Out
+
+**Given:** one run enters Implementation from ready Planning and another has a
+persisted `T2` acceptance receipt; in both, `T3` is the next ready acceptance
+unit. Current code and its fixed accepted contract expose three useful
+implementation slices with exact pairwise-disjoint paths, while one integration
+test, formatting, aggregate Docker proof, review, and receipt must remain
+root-owned. `T4` depends on `T3`, and `T5` intersects both. Existing unrelated
+dirt is present. Before one receiving session starts, a relevant owned path or
+ledger revision changes. During execution one lane discovers that it needs a
+root-owned file after leaving partial edits in its owned path. A near-miss unit
+has two files but one must revise a generated or interface authority consumed
+by the other.
+
+**Pass:** both implementation handoffs keep `T3` as one acceptance unit, leave
+the task ledger unchanged, and emit a copy-pastable next-session prompt with the
+accepted handoff basis, independence basis, excluded dependent work, three
+shared-checkout lanes, lane-specific outcomes, exact path ownership,
+root-reserved surfaces, focused proof, stop conditions, and a
+`DONE|BLOCKED` return envelope covering changed paths, proof results,
+unresolved issue, and whether provisional edits remain. The receiving session revalidates the
+handoff basis before editing: unchanged input dispatches all three lanes
+immediately, while the changed input recomputes the carrier and does not launch
+the stale map. One active writer per file and dirty-state preservation hold;
+workers make no commit, rebase, stash, deploy, or other Git-state mutation. The
+root does not write lane-owned paths while they run. The lane needing the
+root-owned file returns `BLOCKED` instead of crossing ownership, marks its
+partial diff provisional, and leaves it intact. After every lane returns, the
+root preserves and dispositions that diff without reset, checkout, or stash,
+then alone reconciles and formats the combined change, runs focused checks,
+executes the exact broad or Docker proof serially, performs any triggered
+independent review, and writes the one `T3` receipt. Neither `T4` nor `T5`
+starts or gains acceptance. The near-miss receives one serial writer and names
+the concrete coupling.
+
+**Fail:** Planning-to-Implementation omits the carrier analysis; file count or
+free capacity alone creates lanes; a prompt omits the handoff or independence
+basis, lane outcome, or return envelope; changed input still dispatches the
+stale map; two active writers touch one file; a lane edits the ledger, another
+owner's path, or Git state; root and lane edit the same path concurrently; a
+lane chooses a cross-lane contract or runs an aggregate gate; a blocked partial
+diff is discarded or left without a disposition; fan-in begins before all
+writers stop; the carrier choice splits `T3` in the ledger; later dependent work
+starts early; or the next session must rediscover the eligible lane map from
+chat.
+
 ## Acceptance
 
 Every applicable case must pass. Compare aggregate quality first and keep

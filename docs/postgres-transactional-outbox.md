@@ -30,11 +30,19 @@ the same `telemetry.Metrics` the rest of that composition uses. Both arguments t
 `NewTelemetry` may be nil, and so may the store's telemetry. The event is then
 appended through the same `pgx.Tx` that owns the domain mutation.
 
-The adapter holds the store as `postgresoutbox.Appender`, not as the concrete
-`*Store`. `Store` serves three audiences and the request path is only one of
-them; narrowing it there is what keeps the relay's claim and finalization
-statements and the operator redrive methods out of reach of a request, and makes
-the compiler rather than this document say so.
+The adapter declares the narrow interface it consumes instead of depending on
+the concrete `*postgresoutbox.Store`. Interfaces belong to their consumers, so
+the template does not export one for a feature that does not exist yet:
+
+```go
+type outboxAppender interface {
+	Append(context.Context, pgx.Tx, ...postgresoutbox.Event) error
+}
+```
+
+`*postgresoutbox.Store` satisfies that interface implicitly. Keeping the
+interface in the adapter prevents the request path from reaching claim,
+finalization, and operator methods without adding a provider-owned abstraction.
 
 ```go
 // Composition root, once.
@@ -48,7 +56,7 @@ if err != nil {
 }
 // newOrdersRepository is the service's own constructor, not a template symbol:
 // this pack ships the append side unwired, so the repository below is the one
-// an adopting service writes. It takes a postgresoutbox.Appender.
+// an adopting service writes. It takes the local outboxAppender interface.
 adapter := newOrdersRepository(pool, outbox)
 
 // PostgreSQL repository adapter, before entering the business transaction.

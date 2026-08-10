@@ -62,8 +62,9 @@ type RelayConfig struct {
 	// It also caps the publication budget, so it must exceed PublishTimeout plus
 	// the publisher join bound.
 	LeaseDuration time.Duration
-	// MaxAttempts is the cycle attempt count at which an adapter-proven
-	// rejection poisons. Ambiguous failures ignore it and keep retrying.
+	// MaxAttempts bounds retryable publication cycles. At the limit, unambiguous
+	// non-acceptance becomes attempt_exhausted; sticky or current ambiguity
+	// becomes outcome_unknown.
 	MaxAttempts int
 	// RetryBase and RetryMax bound full-jitter exponential backoff.
 	RetryBase time.Duration

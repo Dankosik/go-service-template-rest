@@ -1,11 +1,60 @@
 package natsjs
 
 import (
+	"errors"
 	"testing"
 	"time"
 
 	"github.com/nats-io/nats.go/jetstream"
 )
+
+func TestStreamContract(t *testing.T) {
+	cfg := testConfig()
+	valid := jetstream.StreamConfig{
+		Storage: jetstream.FileStorage, Replicas: 1,
+		Retention: jetstream.LimitsPolicy, Discard: jetstream.DiscardNew,
+		MaxAge: 24 * time.Hour, Duplicates: 2 * time.Minute,
+	}
+	if err := validateStreamContract(valid, cfg); err != nil {
+		t.Fatalf("validateStreamContract(valid) error = %v", err)
+	}
+
+	unlimited := valid
+	unlimited.MaxAge = 0
+	unlimited.Discard = jetstream.DiscardOld
+	if err := validateStreamContract(unlimited, cfg); err != nil {
+		t.Fatalf("validateStreamContract(unlimited) error = %v", err)
+	}
+
+	cases := map[string]func(*jetstream.StreamConfig){
+		"memory storage":     func(stream *jetstream.StreamConfig) { stream.Storage = jetstream.MemoryStorage },
+		"too few replicas":   func(stream *jetstream.StreamConfig) { stream.Replicas = 0 },
+		"interest retention": func(stream *jetstream.StreamConfig) { stream.Retention = jetstream.InterestPolicy },
+		"evict on bytes": func(stream *jetstream.StreamConfig) {
+			stream.Discard = jetstream.DiscardOld
+			stream.MaxBytes = 1
+		},
+		"evict on messages": func(stream *jetstream.StreamConfig) {
+			stream.Discard = jetstream.DiscardOld
+			stream.MaxMsgs = 1
+		},
+		"short retention": func(stream *jetstream.StreamConfig) { stream.MaxAge = time.Hour },
+		"no publish ack":  func(stream *jetstream.StreamConfig) { stream.NoAck = true },
+		"no dedup window": func(stream *jetstream.StreamConfig) { stream.Duplicates = 0 },
+		"per-message TTL": func(stream *jetstream.StreamConfig) { stream.AllowMsgTTL = true },
+		"sealed":          func(stream *jetstream.StreamConfig) { stream.Sealed = true },
+	}
+	for name, mutate := range cases {
+		t.Run(name, func(t *testing.T) {
+			stream := valid
+			caseCfg := cfg
+			mutate(&stream)
+			if err := validateStreamContract(stream, caseCfg); !errors.Is(err, ErrRejected) {
+				t.Fatalf("validateStreamContract() error = %v, want ErrRejected", err)
+			}
+		})
+	}
+}
 
 func TestExplicitAckPolicy(t *testing.T) {
 	cfg := testWorkerConfig()

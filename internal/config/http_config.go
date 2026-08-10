@@ -169,6 +169,11 @@ func validateHTTPCapacityBounds(cfg HTTPConfig) error {
 	if err := validateIntRange("http.max_in_flight", cfg.MaxInFlight, 0, 100_000); err != nil {
 		return err
 	}
+	// profile:authn-oidc-jwt:start
+	if cfg.MaxInFlight == 0 {
+		return fmt.Errorf("%w: authn OIDC profile requires http.max_in_flight > 0", ErrValidate)
+	}
+	// profile:authn-oidc-jwt:end
 	if err := validateIntRange("http.max_connections", cfg.MaxConnections, 0, 1_000_000); err != nil {
 		return err
 	}

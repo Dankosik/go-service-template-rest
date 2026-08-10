@@ -19,6 +19,8 @@ func TestAuthnConfigRequiresCompleteSafePolicy(t *testing.T) {
 		{name: "missing audience", key: "APP__AUTHN__AUDIENCE", value: "", want: "authn.audience"},
 		{name: "missing proxies", key: "APP__AUTHN__TRUSTED_PROXY_CIDRS", value: "", want: "trusted_proxy_cidrs"},
 		{name: "invalid proxy", key: "APP__AUTHN__TRUSTED_PROXY_CIDRS", value: "not-a-cidr", want: "trusted_proxy_cidrs"},
+		{name: "IPv4 wildcard proxy", key: "APP__AUTHN__TRUSTED_PROXY_CIDRS", value: "0.0.0.0/0", want: "wildcard CIDR"},
+		{name: "IPv6 wildcard proxy", key: "APP__AUTHN__TRUSTED_PROXY_CIDRS", value: "::/0", want: "wildcard CIDR"},
 		{name: "duplicate proxy", key: "APP__AUTHN__TRUSTED_PROXY_CIDRS", value: "127.0.0.0/8,127.0.0.1/8", want: "duplicate CIDR"},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {

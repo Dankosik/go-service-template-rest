@@ -54,6 +54,32 @@ func TestNATSStartupAdmission(t *testing.T) {
 	if _, err := natsjs.Connect(t.Context(), missing, natsjs.RoleProducer, natsjs.Observability{}); !errors.Is(err, natsjs.ErrRejected) {
 		t.Fatalf("Connect(missing stream) error = %v, want ErrRejected", err)
 	}
+	unsafeStreams := map[string]jetstream.StreamConfig{
+		"memory storage": {
+			Name: "MEMORY", Subjects: []string{"memory.>"}, Storage: jetstream.MemoryStorage,
+		},
+		"short retention": {
+			Name: "SHORT", Subjects: []string{"short.>"}, Storage: jetstream.FileStorage, MaxAge: time.Hour,
+		},
+		"evicting capacity": {
+			Name: "EVICT", Subjects: []string{"evict.>"}, Storage: jetstream.FileStorage, MaxMsgs: 1,
+		},
+	}
+	for name, streamConfig := range unsafeStreams {
+		t.Run(name, func(t *testing.T) {
+			if _, err := f.js.CreateStream(t.Context(), streamConfig); err != nil {
+				t.Fatalf("create unsafe stream: %v", err)
+			}
+			cfg := testClientConfig()
+			cfg.URLs = []string{f.url}
+			cfg.AllowPlaintext = true
+			cfg.AllowUnauthenticated = true
+			cfg.Stream = streamConfig.Name
+			if _, err := natsjs.Connect(t.Context(), cfg, natsjs.RoleProducer, natsjs.Observability{}); !errors.Is(err, natsjs.ErrRejected) {
+				t.Fatalf("Connect(%s) error = %v, want ErrRejected", name, err)
+			}
+		})
+	}
 
 	client := f.client(t, natsjs.RoleWorker)
 	workerCfg := testWorkerConfig()
@@ -143,6 +169,44 @@ func TestNATSStartupAdmission(t *testing.T) {
 	}
 	if handlerCalls.Load() != 0 {
 		t.Fatalf("handler calls during failed admission = %d, want 0", handlerCalls.Load())
+	}
+}
+
+func TestNATSReadinessRejectsStreamContractDrift(t *testing.T) {
+	f := newNATSFixture(t)
+	client := f.client(t, natsjs.RoleWorker)
+	workerCfg := testWorkerConfig()
+	workerCfg.Consumer = "contract-drift"
+	workerCfg.FilterSubject = sourceSubject
+	workerCfg.DeadLetterSubject = deadLetterSubject
+	if _, err := client.NewWorker(t.Context(), workerCfg, func(context.Context, natsjs.Message) error { return nil }); err != nil {
+		t.Fatalf("NewWorker() error = %v", err)
+	}
+
+	if _, err := f.js.UpdateStream(t.Context(), jetstream.StreamConfig{
+		Name: sourceStream, Subjects: []string{"events.>"}, Storage: jetstream.FileStorage,
+		MaxAge: time.Hour, MaxMsgSize: testMaxDeliveryBytes,
+	}); err != nil {
+		t.Fatalf("shorten source retention: %v", err)
+	}
+	if err := client.Check(t.Context()); !errors.Is(err, natsjs.ErrRejected) || client.Ready() {
+		t.Fatalf("Check(source drift) error/ready = %v/%t, want ErrRejected/false", err, client.Ready())
+	}
+
+	if _, err := f.js.UpdateStream(t.Context(), jetstream.StreamConfig{
+		Name: sourceStream, Subjects: []string{"events.>"}, Storage: jetstream.FileStorage,
+		MaxMsgSize: testMaxDeliveryBytes,
+	}); err != nil {
+		t.Fatalf("restore source retention: %v", err)
+	}
+	if _, err := f.js.UpdateStream(t.Context(), jetstream.StreamConfig{
+		Name: deadLetterStream, Subjects: []string{"dead.>"}, Storage: jetstream.FileStorage,
+		MaxAge: time.Hour, MaxMsgSize: 2 * testMaxDeliveryBytes,
+	}); err != nil {
+		t.Fatalf("shorten DLQ retention: %v", err)
+	}
+	if err := client.Check(t.Context()); !errors.Is(err, natsjs.ErrRejected) || client.Ready() {
+		t.Fatalf("Check(DLQ drift) error/ready = %v/%t, want ErrRejected/false", err, client.Ready())
 	}
 }
 

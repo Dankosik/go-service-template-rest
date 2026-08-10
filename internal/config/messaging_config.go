@@ -15,6 +15,8 @@ type MessagingConfig struct {
 	AllowPlaintext       bool                  `koanf:"allow_plaintext"`
 	AllowUnauthenticated bool                  `koanf:"allow_unauthenticated"`
 	Stream               string                `koanf:"stream"`
+	MinStreamReplicas    int                   `koanf:"min_stream_replicas"`
+	MinStreamRetention   time.Duration         `koanf:"min_stream_retention"`
 	MaxPayloadBytes      int                   `koanf:"max_payload_bytes"`
 	MaxPendingPublishes  int                   `koanf:"max_pending_publishes"`
 	Worker               MessagingWorkerConfig `koanf:"worker"`
@@ -41,6 +43,8 @@ func messagingDefaults() map[string]any {
 		"messaging.allow_plaintext":                false,
 		"messaging.allow_unauthenticated":          false,
 		"messaging.stream":                         "",
+		"messaging.min_stream_replicas":            0,
+		"messaging.min_stream_retention":           "0s",
 		"messaging.max_payload_bytes":              256 << 10,
 		"messaging.max_pending_publishes":          64,
 		"messaging.worker.consumer":                "",
@@ -91,40 +95,54 @@ func validateMessagingConfig(cfg *MessagingConfig) error {
 	if cfg.URLs == "" {
 		return fmt.Errorf("%w: messaging.urls cannot be empty when messaging is enabled", ErrValidate)
 	}
-	canonical := make([]string, 0)
-	seen := make(map[string]struct{})
-	for value := range strings.SplitSeq(cfg.URLs, ",") {
-		value = strings.TrimSpace(value)
-		parsed, err := url.Parse(value)
-		if err != nil || parsed.Host == "" || parsed.User != nil {
-			return fmt.Errorf("%w: messaging.urls contains an invalid URL or userinfo", ErrValidate)
-		}
-		switch parsed.Scheme {
-		case secureTransportTLS, "wss":
-		case "nats", "ws":
-			if !cfg.AllowPlaintext {
-				return fmt.Errorf("%w: plaintext messaging URL requires messaging.allow_plaintext", ErrValidate)
-			}
-		default:
-			return fmt.Errorf("%w: messaging.urls contains an unsupported scheme", ErrValidate)
-		}
-		if _, duplicate := seen[value]; duplicate {
-			return fmt.Errorf("%w: messaging.urls contains a duplicate URL", ErrValidate)
-		}
-		seen[value] = struct{}{}
-		canonical = append(canonical, value)
+	canonicalURLs, err := canonicalizeMessagingURLs(cfg.URLs, cfg.AllowPlaintext)
+	if err != nil {
+		return err
 	}
-	if len(canonical) == 0 {
-		return fmt.Errorf("%w: messaging.urls cannot be empty when messaging is enabled", ErrValidate)
-	}
-	cfg.URLs = strings.Join(canonical, ",")
+	cfg.URLs = canonicalURLs
 	if !cfg.AllowUnauthenticated && cfg.CredentialsFile == "" {
 		return fmt.Errorf("%w: messaging.credentials_file is required", ErrValidate)
 	}
 	if !validMessagingStreamName(cfg.Stream) {
 		return fmt.Errorf("%w: messaging.stream is invalid", ErrValidate)
 	}
+	if cfg.MinStreamReplicas < 1 || cfg.MinStreamReplicas > 5 {
+		return fmt.Errorf("%w: messaging.min_stream_replicas must be in range [1,5]", ErrValidate)
+	}
+	if cfg.MinStreamRetention <= 0 {
+		return fmt.Errorf("%w: messaging.min_stream_retention must be positive", ErrValidate)
+	}
 	return nil
+}
+
+func canonicalizeMessagingURLs(values string, allowPlaintext bool) (string, error) {
+	canonical := make([]string, 0)
+	seen := make(map[string]struct{})
+	for value := range strings.SplitSeq(values, ",") {
+		value = strings.TrimSpace(value)
+		parsed, err := url.Parse(value)
+		if err != nil || parsed.Host == "" || parsed.User != nil {
+			return "", fmt.Errorf("%w: messaging.urls contains an invalid URL or userinfo", ErrValidate)
+		}
+		switch parsed.Scheme {
+		case secureTransportTLS, "wss":
+		case "nats", "ws":
+			if !allowPlaintext {
+				return "", fmt.Errorf("%w: plaintext messaging URL requires messaging.allow_plaintext", ErrValidate)
+			}
+		default:
+			return "", fmt.Errorf("%w: messaging.urls contains an unsupported scheme", ErrValidate)
+		}
+		if _, duplicate := seen[value]; duplicate {
+			return "", fmt.Errorf("%w: messaging.urls contains a duplicate URL", ErrValidate)
+		}
+		seen[value] = struct{}{}
+		canonical = append(canonical, value)
+	}
+	if len(canonical) == 0 {
+		return "", fmt.Errorf("%w: messaging.urls cannot be empty when messaging is enabled", ErrValidate)
+	}
+	return strings.Join(canonical, ","), nil
 }
 
 // validMessagingStreamName is the same rule as natsjs.validConsumerName, which

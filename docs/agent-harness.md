@@ -12,8 +12,18 @@ The workflow instructions in this repository are harness-neutral. This document 
 
 - Identify the current harness from the session environment before dispatching any harness control: the Codex App or Codex CLI runs the Codex-native path; Claude Code (CLI, desktop, web, or IDE) runs the Anthropic-native path; Qwen Code (CLI or IDE) runs the Qwen-native path.
 - Use only the current harness's native controls. Do not emulate another harness's controls, shell out to its CLI, or mix the two control planes within one outcome.
-- In the Codex App, this repository's term **implementation Worker** means a separate top-level App task/chat started in **Worktree** mode through the App's native task/thread control, so it owns a Codex-managed worktree ([OpenAI Worktrees](https://learn.chatgpt.com/docs/environments/git-worktrees.md)). A user request to use `Workers` for implementation is an explicit request for those separate App tasks; it is not a request for a nested agent whose role happens to be named `worker`.
-- Treat every Codex App `collaboration.spawn_agent` lane as a built-in read-only subagent, including one dispatched with `agent_type: "worker"`; never use it for an implementation write lane or as a substitute for the separate App task above ([OpenAI Subagents](https://learn.chatgpt.com/docs/agent-configuration/subagents.md)).
+- In the Codex App, this repository's term **isolated implementation Worker**
+  means a separate top-level App task/chat started in **Worktree** mode through
+  the App's native task/thread control, so it owns a Codex-managed worktree
+  ([OpenAI
+  Worktrees](https://learn.chatgpt.com/docs/environments/git-worktrees.md)). A
+  request for an isolated Worker or Worktree maps to that control; a request for
+  shared-checkout implementation maps to the next bullet.
+- In the Codex App, `collaboration.spawn_agent` remains the built-in subagent
+  carrier. Use its `worker` role for a phase-approved shared-checkout
+  implementation lane and a read-only role for research, challenge, or review;
+  it never substitutes for the isolated implementation Worker above ([OpenAI
+  Subagents](https://learn.chatgpt.com/docs/agent-configuration/subagents.md)).
 - When the current session lacks the needed native control, do the work root-locally under the owning phase's local-execution rules and state the missing control; do not invent a substitute.
 
 ## Instruction Loading Map
@@ -41,6 +51,7 @@ first governed action.
 | --- | --- | --- | --- |
 | Durable execution control (implementation only) | `/goal <objective>` behind the `features.goals` flag; the evaluator inspects real files, tests, logs and artifacts. One root control spans the outcome | `/goal <condition>` carries the outcome's completion condition and the evaluator sees only the transcript; the task list (`TaskCreate`/`TaskUpdate`) is its step ledger. One root control spans the outcome | Task list (`todo_write`, or team `task_create`/`task_update`); one root task tree spans the outcome |
 | Implementation worker with isolated worktree | Separate top-level App task/chat started in Worktree mode; never `collaboration.spawn_agent` | Background subagent: `Agent` tool with `run_in_background: true`, `isolation: "worktree"`, and `subagent_type` set to a `worker-*` role that fixes the lane's effort | Background subagent: `Agent` tool with `run_in_background: true` and `isolation: "worktree"` |
+| Implementation lane in the shared checkout | `collaboration.spawn_agent` with the `worker` role | Background `Agent` with no worktree isolation and `subagent_type` set to a `worker-*` role | Background `Agent` with no worktree isolation |
 | Correct a worker without losing its context | Message the same top-level App task/chat | `SendMessage` addressed to the worker's **agent ID**; a completed worker auto-resumes with full history | `SendMessage` to the same agent |
 | Read-only research/challenge/review lane | Project subagents in `.codex/agents/*.toml` | `Agent` tool lane: built-in `Explore`, `Plan`, or `general-purpose`, or a project agent in `.claude/agents/*.md` | `Agent` tool lane: built-in `Explore` or `general-purpose`, or a project agent in `.qwen/agents/*.md` |
 | Per-lane model selection | Per-worker/subagent model control in the App | `model` parameter on the `Agent` tool call (dispatch-time override) over `model` frontmatter in `.claude/agents/*.md` (role default) | `model` frontmatter in `.qwen/agents/*.md` (`inherit`, `fast`, a model ID, or `authType:modelId`); exact model IDs are provider-specific |
@@ -135,6 +146,10 @@ Vendor authority: [Subagents](https://code.claude.com/docs/en/sub-agents), in pa
 ### Dispatch
 
 - When Worker execution is selected, keep one write worker per ready acceptance unit: one background `Agent` lane with `isolation: "worktree"`. Several write workers may run only as members of a positively independent planned wave. The worktree is the isolation boundary; the root owns candidate intake, acceptance, and integration.
+- When the implementation phase selects shared-checkout lanes inside one
+  acceptance unit, dispatch background `Agent` lanes without `isolation` and
+  keep their exact writable paths disjoint. The phase owns their stricter
+  no-Git-mutation, one-writer, stop, and serial fan-in contract.
 - Pass `isolation` as a dispatch parameter rather than moving it into the role's frontmatter. A dispatch-parameter worktree branches from the parent's `HEAD`, which is the accepted integrated base the wave needs; frontmatter isolation follows the `--worktree` base rule and branches from the repository's default branch unless [`worktree.baseRef`](https://code.claude.com/docs/en/worktrees#choose-the-base-branch) is `"head"`.
 - Dispatch only after the exact accepted ledger revision — `tasks.md` plus any
   `tasks/` files it links — is in the base visible to the worker. Pass the index
@@ -189,7 +204,11 @@ Because the axes are independent, the three roles cover the whole grid: `worker-
 
 The role files therefore carry **no behavior**. Everything a Worker must do already lives in `AGENTS.md` and the implementation phase; a role that restates it creates a second place to keep in sync. Each worker definition is frontmatter plus a pointer to the contract, and nothing more.
 
-These worker roles exist only under `.claude/agents/`. They are deliberately not mirrored to `.codex/agents/` or `.qwen/agents/`: a Codex subagent is `sandbox_mode = "read-only"` by construction and can never be a write lane, and the Codex Worker is a native App control with no definition file. Mirroring them would advertise a lane that harness cannot run.
+These worker roles exist only under `.claude/agents/`. They are deliberately not
+mirrored to `.codex/agents/` or `.qwen/agents/`: Codex supplies its built-in
+`worker` for a shared-checkout lane and a native App task for an isolated
+Worker, while Qwen uses its native background implementation agent. Mirroring
+Claude's effort-carrier roles would duplicate harness-specific configuration.
 
 **Reopen when Claude Code gains an `effort` parameter on the `Agent` call.** These three definitions exist for one reason: effort has no dispatch channel. Give it one — [several open requests ask for exactly that](https://github.com/anthropics/claude-code/issues/39220) — and the files carry nothing a task-class table in this document could not state directly, and should be deleted rather than kept because they exist. Check this whenever the harness version moves: a definition that outlives its only justification is the kind of thing nobody removes, because removing it is nobody's task.
 

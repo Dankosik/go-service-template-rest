@@ -105,12 +105,14 @@ func withOptionDefaults(options Options) Options {
 	return options
 }
 
-// LoadRecorder observes the process-wide admission decision. Admitted returns
-// the release function for one admitted RPC; Shed reports one rejected by a
-// full admission budget.
+// LoadRecorder observes process-wide admission decisions. Admitted returns the
+// release function for one admitted business RPC; Shed reports business work
+// rejected by its full budget, and HealthShed reports a health RPC rejected by
+// its separate budget.
 type LoadRecorder interface {
 	Admitted(ctx context.Context) func()
 	Shed(ctx context.Context)
+	HealthShed(ctx context.Context)
 }
 
 // noopLoadRecorder is the [Options.Load] default, so the admission policy always
@@ -122,6 +124,8 @@ func (noopLoadRecorder) Admitted(context.Context) func() {
 }
 
 func (noopLoadRecorder) Shed(context.Context) {}
+
+func (noopLoadRecorder) HealthShed(context.Context) {}
 
 // NewServer builds a native gRPC server with standard health, OpenTelemetry,
 // finite bounds, and the repository interceptor policies.

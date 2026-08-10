@@ -5,7 +5,8 @@ coordination problem.
 
 ## Read When
 
-- Distinguishing a built-in subagent lane from the harness-native implementation Worker.
+- Distinguishing a read-only subagent lane from the harness-native isolated
+  Worker or shared-checkout implementation lane.
 - Requiring an independent verdict.
 
 ## Inputs
@@ -81,12 +82,12 @@ implementation specialist analysis, and any implementation or review repair.
 
 The root owns scope, lane choice, synthesis, correction routing, integration,
 acceptance, completion claims, and mechanical ledger updates. Built-in
-subagents are read-only research, challenge, or review lanes; they never
-implement or repair code, config, docs, or tests.
-In the Codex App a lane is a project subagent; in Claude Code it is an `Agent`
-tool lane ([Agent Harness](../../agent-harness.md#control-map)). The
-harness-native implementation Worker is outside this contract and follows the
-[implementation
+subagents under this non-implementation contract are read-only research,
+challenge, or review lanes; they never implement or repair code, config, docs,
+or tests. In the Codex App a lane is a project subagent; in Claude Code it is an
+`Agent` tool lane ([Agent Harness](../../agent-harness.md#control-map)). The
+harness-native isolated Worker and shared-checkout implementation lane are
+outside this contract and follow the [implementation
 phase](../phases/implementation-validation-closeout.md#worker-execution).
 
 Run one lane per distinct decision-changing question. Current harness capacity,

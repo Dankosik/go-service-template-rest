@@ -24,8 +24,22 @@ operator must provide:
   `WORKER__MAX_DELIVERY_BYTES`;
 - a different stream covering `WORKER__DEAD_LETTER_SUBJECT`, large enough for
   `MAX_PAYLOAD_BYTES` plus the fixed 8 KiB envelope ceiling;
-- credentials allowed to publish to the source and dead-letter subjects and to
-  read/create the one named durable consumer.
+- `APP__MESSAGING__MIN_STREAM_REPLICAS` and
+  `APP__MESSAGING__MIN_STREAM_RETENTION`, chosen from the deployment's failure,
+  detection, repair, and catch-up budgets rather than left at their rejecting
+  zero defaults;
+- credentials allowed to publish to the source and dead-letter subjects, read
+  both streams' configuration and state, and read/create the one named durable
+  consumer.
+
+Both streams use file storage, meet the configured replica and retention
+minimums, acknowledge JetStream publications, and have a positive duplicate
+window. `InterestPolicy`, sealed streams, and per-message TTL are rejected.
+Finite message, byte, or per-subject limits must use `DiscardNew`: capacity
+exhaustion then rejects a new publish so a durable outbox can retry it, rather
+than silently evicting older work. `MaxAge=0` is unlimited; a finite `MaxAge`
+must cover `MIN_STREAM_RETENTION`. The application reads and validates this
+operator-owned topology at startup and readiness but never reconciles it.
 
 The worker creates the named consumer only when absent. An existing consumer
 must match the pack's complete explicit-ack, pull, delivery, and capacity
@@ -46,7 +60,9 @@ JetStream `PubAck`. Validation or a definite API rejection returns
 Cancellation, timeout, disconnect, or loss after dispatch but before a
 conclusive acknowledgement returns `natsjs.ErrAmbiguous`. The pack does not
 retry automatically. Retry an ambiguous attempt only with the same
-`PublicationID`.
+`PublicationID`. Broker deduplication applies only inside the stream's configured
+duplicate window; consumer idempotency still owns retries, replay, and redrive
+beyond it.
 
 At most `MAX_PENDING_PUBLISHES` synchronous calls are admitted. Each event has
 a required logical `MessageID`, publication/deduplication ID, type, schema,
@@ -55,6 +71,12 @@ metadata only: JetStream stream sequence and concurrent handlers do not promise
 per-key ordering. `TestNATSOrderingKeyDoesNotSerialize` pins that as behavior
 rather than an omission, so a later change that starts serializing a key has to
 argue with a test.
+
+When the PostgreSQL outbox relay uses this producer,
+`OUTBOX__PUBLISH_CONCURRENCY` must not exceed `MAX_PENDING_PUBLISHES`; startup
+rejects the composition before opening a broker connection. That keeps local
+admission pressure from spending durable event attempts while the broker is
+healthy.
 
 ### Ordering does not compose with the outbox
 
@@ -82,12 +104,12 @@ delivery of correctly ordered *publications*, not ordered *processing*.
 
 Replace the deliberate `nil` passed to `bootstrap.Run` in `cmd/worker/main.go`
 with a binary-local `bootstrap.HandlerBuilder`. The builder receives the loaded
-`config.Config`, logger, and admitted concrete `*natsjs.Producer`, then returns
-one binary-local `natsjs.Handler` adapter that invokes duplicate-safe behavior
-under `internal/<feature>`, plus optional `func(context.Context)` dependency
-cleanup. Feature packages remain transport-agnostic and do not import
-`internal/infra/natsjs`. Bootstrap invokes the cleanup on startup failure and
-shutdown; it must honor the supplied deadline.
+`config.Config` and logger, then returns one binary-local `natsjs.Handler`
+adapter that invokes duplicate-safe behavior under `internal/<feature>`, plus
+optional `func(context.Context)` dependency cleanup. Feature packages remain
+transport-agnostic and do not import `internal/infra/natsjs`. Bootstrap invokes
+the cleanup on startup failure and shutdown; it must honor the supplied
+deadline.
 Then run:
 
 ```bash
@@ -150,6 +172,18 @@ drain plus diagnostics, background join, feature cleanup, and telemetry flush
 cannot fit inside `HTTP__GRACE_PERIOD`; every shutdown stage draws from that
 single process deadline. Use the low-cardinality `messaging.*` metrics and
 correlated logs/traces for diagnosis.
+
+The worker's successful readiness probe caches one attribute-free broker
+observation for metrics collection; metric callbacks perform no broker I/O.
+`messaging.consumer.pending` and `messaging.consumer.ack_pending` expose queued
+and unfinished deliveries. `messaging.stream.messages` / `.messages.limit` and
+`messaging.stream.storage` / `.storage.limit` expose capacity and headroom; a
+limit of `-1` is unlimited. `messaging.stream.oldest.timestamp` and
+`messaging.observation.timestamp` are Unix timestamps, so an operator can
+distinguish old retained data from a stalled observer. Readiness becomes false
+on topology drift while the last successful observation remains available for
+diagnosis. The metrics have no stream, consumer, subject, tenant, or message
+labels.
 
 Spans follow the OpenTelemetry messaging convention, so they are named
 `publish {subject}` and `process {filter subject}` — the same shape the outbox

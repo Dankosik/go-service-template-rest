@@ -65,7 +65,8 @@ func (r *Relay) finalize(ctx context.Context, batch ClaimedBatch, publications [
 
 // classify groups one batch by the durable transition each event needs.
 // publications is indexed by claims: each entry is that event's publication
-// error, or nil once the broker durably acknowledged it.
+// error, or nil once the broker acknowledged it under the publisher's
+// configured durability contract.
 func (r *Relay) classify(claims []ClaimedEvent, publications []error) batchOutcomes {
 	var outcomes batchOutcomes
 	for index, claim := range claims {

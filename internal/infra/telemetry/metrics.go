@@ -38,12 +38,14 @@ const (
 const (
 	GRPCServerMeterName = "service.grpc.server"
 
-	ActiveRPCsInstrument = "rpc.server.active_requests"
-	ShedRPCsInstrument   = "rpc.server.shed_requests"
+	ActiveRPCsInstrument     = "rpc.server.active_requests"
+	ShedRPCsInstrument       = "rpc.server.shed_requests"
+	HealthShedRPCsInstrument = "rpc.server.health.shed_requests"
 
-	ActiveRPCsDescription = "RPCs currently executing a handler, against the grpc.server.max_concurrent_rpcs limit."
-	ShedRPCsDescription   = "RPCs rejected before running a handler because the process RPC limit was reached."
-	RPCsUnit              = "{rpc}"
+	ActiveRPCsDescription     = "RPCs currently executing a handler, against the grpc.server.max_concurrent_rpcs limit."
+	ShedRPCsDescription       = "RPCs rejected before running a handler because the process RPC limit was reached."
+	HealthShedRPCsDescription = "Standard health RPCs rejected before running a handler because the health admission limit was reached."
+	RPCsUnit                  = "{rpc}"
 )
 
 // ServerLoad is what the request path records about its own admission control.
@@ -53,8 +55,9 @@ const (
 // saturated connection pool answering 503 on the same route — and none of them
 // report how close the service runs to the limit http.max_in_flight sets.
 type ServerLoad struct {
-	active metric.Int64UpDownCounter
-	shed   metric.Int64Counter
+	active     metric.Int64UpDownCounter
+	shed       metric.Int64Counter
+	healthShed metric.Int64Counter
 }
 
 // ServerLoad builds the admission-control instruments. Errors are folded into
@@ -74,7 +77,7 @@ func (m *Metrics) ServerLoad() ServerLoad {
 
 // GRPCServerLoad builds the admission-control instruments for business RPCs.
 func (m *Metrics) GRPCServerLoad() ServerLoad {
-	return m.serverLoad(
+	load := m.serverLoad(
 		GRPCServerMeterName,
 		ActiveRPCsInstrument,
 		ShedRPCsInstrument,
@@ -82,6 +85,12 @@ func (m *Metrics) GRPCServerLoad() ServerLoad {
 		ShedRPCsDescription,
 		RPCsUnit,
 	)
+	load.healthShed, _ = m.MeterProvider().Meter(GRPCServerMeterName).Int64Counter(
+		HealthShedRPCsInstrument,
+		metric.WithDescription(HealthShedRPCsDescription),
+		metric.WithUnit(RPCsUnit),
+	)
+	return load
 }
 
 func (m *Metrics) serverLoad(
@@ -123,6 +132,14 @@ func (l ServerLoad) Shed(ctx context.Context) {
 		return
 	}
 	l.shed.Add(ctx, 1)
+}
+
+// HealthShed reports a standard health RPC rejected by its own admission limit.
+func (l ServerLoad) HealthShed(ctx context.Context) {
+	if l.healthShed == nil {
+		return
+	}
+	l.healthShed.Add(ctx, 1)
 }
 
 // RecordTraceExporterState publishes whether the trace exporter is exporting.

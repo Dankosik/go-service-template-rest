@@ -36,7 +36,7 @@ func TestMessagingCompositionRejectsDisabledTransportWithRegisteredHandler(t *te
 	// profile:authn-oidc-jwt:end
 	t.Setenv("APP__MESSAGING__ENABLED", "false")
 	built := false
-	err := run(t.Context(), nil, func(context.Context, config.Config, *slog.Logger, *natsjs.Producer) (natsjs.Handler, func(context.Context), error) {
+	err := run(t.Context(), nil, func(context.Context, config.Config, *slog.Logger) (natsjs.Handler, func(context.Context), error) {
 		built = true
 		return func(context.Context, natsjs.Message) error { return nil }, nil, nil
 	})
@@ -257,7 +257,7 @@ func TestMessagingCompositionDoesNotBuildHandlerBeforeBrokerAdmission(t *testing
 	}
 	setWorkerTestEnvironment(t, url, "127.0.0.1:0")
 	built := false
-	err = run(t.Context(), nil, func(context.Context, config.Config, *slog.Logger, *natsjs.Producer) (natsjs.Handler, func(context.Context), error) {
+	err = run(t.Context(), nil, func(context.Context, config.Config, *slog.Logger) (natsjs.Handler, func(context.Context), error) {
 		built = true
 		return func(context.Context, natsjs.Message) error { return nil }, nil, nil
 	})
@@ -307,7 +307,7 @@ func TestMessagingCompositionRejectsMissingDiagnosticsBeforeConnection(t *testin
 		}
 	}()
 	setWorkerTestEnvironment(t, "nats://"+listener.Addr().String(), "")
-	err = run(t.Context(), nil, func(context.Context, config.Config, *slog.Logger, *natsjs.Producer) (natsjs.Handler, func(context.Context), error) {
+	err = run(t.Context(), nil, func(context.Context, config.Config, *slog.Logger) (natsjs.Handler, func(context.Context), error) {
 		return func(context.Context, natsjs.Message) error { return nil }, nil, nil
 	})
 	if !errors.Is(err, natsjs.ErrRejected) {
@@ -337,6 +337,8 @@ func setWorkerTestEnvironment(t *testing.T, messagingURL, diagnosticsAddr string
 		"APP__MESSAGING__ALLOW_PLAINTEXT":                 "true",
 		"APP__MESSAGING__ALLOW_UNAUTHENTICATED":           "true",
 		"APP__MESSAGING__STREAM":                          "EVENTS",
+		"APP__MESSAGING__MIN_STREAM_REPLICAS":             "1",
+		"APP__MESSAGING__MIN_STREAM_RETENTION":            "24h",
 		"APP__MESSAGING__WORKER__CONSUMER":                "missing-diagnostics-worker",
 		"APP__MESSAGING__WORKER__FILTER_SUBJECT":          "events.test",
 		"APP__MESSAGING__WORKER__DEAD_LETTER_SUBJECT":     "dead.events.test",

@@ -725,6 +725,7 @@ type benchmarkLoadRecorder struct {
 	admitted       atomic.Int64
 	released       atomic.Int64
 	shed           atomic.Int64
+	healthShed     atomic.Int64
 	active         metric.Int64UpDownCounter
 	shedInstrument metric.Int64Counter
 }
@@ -764,6 +765,10 @@ func (r *benchmarkLoadRecorder) Shed(ctx context.Context) {
 	if r.shedInstrument != nil {
 		r.shedInstrument.Add(ctx, 1)
 	}
+}
+
+func (r *benchmarkLoadRecorder) HealthShed(context.Context) {
+	r.healthShed.Add(1)
 }
 
 // firstRecordWriter counts access-log writes and keeps the first one, which is

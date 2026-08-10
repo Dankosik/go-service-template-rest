@@ -31,6 +31,9 @@ func ParseProxyCIDRs(raw string) ([]netip.Prefix, error) {
 		if err != nil {
 			return nil, errors.New("trusted_proxy_cidrs contains an invalid CIDR")
 		}
+		if prefix.Bits() == 0 {
+			return nil, errors.New("trusted_proxy_cidrs contains a wildcard CIDR")
+		}
 		prefix = prefix.Masked()
 		if _, exists := seen[prefix]; exists {
 			return nil, errors.New("trusted_proxy_cidrs contains a duplicate CIDR")

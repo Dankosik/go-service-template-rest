@@ -22,18 +22,24 @@ type admissionPolicy struct {
 	health   *admissionLimiter
 }
 
-// newAdmissionPolicy builds both budgets. Only the business one reports to load:
-// active and shed are the capacity signal an operator sizes MaxConcurrentRPCs
-// from, and a standing health watch per connected peer would turn active into a
-// count of peers instead. A health budget under pressure is a hostile-peer
-// signal rather than a capacity one, and AccessLogHealthChecks is the switch
-// that surfaces it.
+// newAdmissionPolicy builds both budgets. Only business admissions contribute
+// to active load: a standing health watch per connected peer would turn active
+// into a peer count. Health refusals still use their dedicated signal because a
+// failed watch makes a health-aware client stop selecting the backend.
 func newAdmissionPolicy(businessLimit, healthLimit int, load LoadRecorder) admissionPolicy {
 	return admissionPolicy{
 		business: newAdmissionLimiter(businessLimit, load),
-		health:   newAdmissionLimiter(healthLimit, noopLoadRecorder{}),
+		health:   newAdmissionLimiter(healthLimit, healthShedRecorder{LoadRecorder: load}),
 	}
 }
+
+type healthShedRecorder struct {
+	LoadRecorder
+}
+
+func (healthShedRecorder) Admitted(context.Context) func() { return func() {} }
+
+func (r healthShedRecorder) Shed(ctx context.Context) { r.HealthShed(ctx) }
 
 // around holds one slot from the owning budget for the work below it. One policy
 // value backs both chains, which is what makes each budget process-wide rather

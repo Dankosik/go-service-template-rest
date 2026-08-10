@@ -3,6 +3,7 @@ package oidcjwt
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/reqctx"
@@ -35,7 +36,7 @@ func (v *Verifier) UnaryInterceptor() grpc.UnaryServerInterceptor {
 }
 
 // StreamInterceptor authenticates every stream once and bounds its
-// handler-visible context by the verified token lifetime.
+// handler-visible context and message operations by the verified token lifetime.
 func (v *Verifier) StreamInterceptor() grpc.StreamServerInterceptor {
 	return func(
 		server any,
@@ -148,10 +149,10 @@ func unauthenticatedCredential() error {
 
 // serverStreamWithContext replaces the context a streaming handler observes.
 //
-// internal/infra/grpc declares an identical type for the same reason. Sharing
-// one would make this package import that transport adapter, which is the
-// dependency direction its Options seam exists to avoid, so the duplication is
-// deliberate.
+// internal/infra/grpc declares the same context-override shape for its own
+// policies. Sharing one would make this package import that transport adapter,
+// which is the dependency direction its Options seam exists to avoid, so the
+// small duplication is deliberate.
 type serverStreamWithContext struct {
 	grpc.ServerStream
 
@@ -160,4 +161,30 @@ type serverStreamWithContext struct {
 
 func (s serverStreamWithContext) Context() context.Context {
 	return s.ctx
+}
+
+func (s serverStreamWithContext) RecvMsg(message any) error {
+	if err := s.ctx.Err(); err != nil {
+		return fmt.Errorf("receive authenticated gRPC message: %w", err)
+	}
+	if err := s.ServerStream.RecvMsg(message); err != nil {
+		return fmt.Errorf("receive gRPC message: %w", err)
+	}
+	// grpc-go receives through the embedded transport stream, whose context this
+	// wrapper cannot replace. Check again so a message that unblocked after token
+	// expiry is not reported to the handler as a successful authenticated receive.
+	if err := s.ctx.Err(); err != nil {
+		return fmt.Errorf("receive authenticated gRPC message: %w", err)
+	}
+	return nil
+}
+
+func (s serverStreamWithContext) SendMsg(message any) error {
+	if err := s.ctx.Err(); err != nil {
+		return fmt.Errorf("send authenticated gRPC message: %w", err)
+	}
+	if err := s.ServerStream.SendMsg(message); err != nil {
+		return fmt.Errorf("send gRPC message: %w", err)
+	}
+	return nil
 }

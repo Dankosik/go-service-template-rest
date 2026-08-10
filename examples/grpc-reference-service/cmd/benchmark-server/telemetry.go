@@ -21,8 +21,9 @@ func (benchmarkJSONSink) Write(data []byte) (int, error) {
 }
 
 type otelLoadRecorder struct {
-	active metric.Int64UpDownCounter
-	shed   metric.Int64Counter
+	active     metric.Int64UpDownCounter
+	shed       metric.Int64Counter
+	healthShed metric.Int64Counter
 }
 
 // newOTelLoadRecorder stands in for internal/infra/telemetry, which this
@@ -47,7 +48,15 @@ func newOTelLoadRecorder(provider metric.MeterProvider) (otelLoadRecorder, error
 	if err != nil {
 		return otelLoadRecorder{}, fmt.Errorf("build shed-RPC benchmark instrument: %w", err)
 	}
-	return otelLoadRecorder{active: active, shed: shed}, nil
+	healthShed, err := meter.Int64Counter(
+		telemetry.HealthShedRPCsInstrument,
+		metric.WithDescription(telemetry.HealthShedRPCsDescription),
+		metric.WithUnit(telemetry.RPCsUnit),
+	)
+	if err != nil {
+		return otelLoadRecorder{}, fmt.Errorf("build health-shed RPC benchmark instrument: %w", err)
+	}
+	return otelLoadRecorder{active: active, shed: shed, healthShed: healthShed}, nil
 }
 
 func (r otelLoadRecorder) Admitted(ctx context.Context) func() {
@@ -57,6 +66,10 @@ func (r otelLoadRecorder) Admitted(ctx context.Context) func() {
 
 func (r otelLoadRecorder) Shed(ctx context.Context) {
 	r.shed.Add(ctx, 1)
+}
+
+func (r otelLoadRecorder) HealthShed(ctx context.Context) {
+	r.healthShed.Add(ctx, 1)
 }
 
 func shutdownProviders(

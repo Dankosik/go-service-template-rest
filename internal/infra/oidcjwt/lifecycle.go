@@ -16,6 +16,8 @@ import (
 	"time"
 )
 
+var errRefreshInProgress = errors.New("JWKS refresh is already in progress")
+
 // refreshTrigger names why a JWKS fetch started. It is a named type rather than
 // a plain string for the two reasons transport is: the accepted set is closed by
 // the compiler, and each value is published verbatim as the
@@ -57,12 +59,13 @@ func (t refreshTrigger) rateLimited() bool {
 	}
 }
 
-// refreshCall is one admitted JWKS fetch and the handle every caller waiting on
-// that fetch shares. err is written before done is closed and read only after,
-// so the channel is what publishes it.
+// refreshCall is one admitted JWKS fetch and the handle its request owner and
+// lifecycle observers use. err is written before done is closed and read only
+// after, so the channel is what publishes it.
 type refreshCall struct {
-	done chan struct{}
-	err  error
+	done      chan struct{}
+	startedAt time.Time
+	err       error
 }
 
 // refreshAdmission decides which JWKS fetches actually run: it coalesces
@@ -85,10 +88,10 @@ type refreshAdmission struct {
 	retired      bool
 }
 
-// begin joins the in-flight JWKS fetch or starts one. It reports false in two
-// cases: triggerKeyMiss arriving while its cooldown is still active, and any
-// trigger arriving after retire. Otherwise the caller gets a call to wait on.
-func (r *refreshAdmission) begin(trigger refreshTrigger) (*refreshCall, bool) {
+// begin joins the in-flight JWKS fetch or starts one. admitted is false when a
+// key miss is cooling down or the Verifier is retired; started distinguishes the
+// owner of a new fetch from a caller that found one already running.
+func (r *refreshAdmission) begin(trigger refreshTrigger) (call *refreshCall, admitted, started bool) {
 	now := r.owner.now()
 	rateLimited := trigger.rateLimited()
 	r.mu.Lock()
@@ -97,15 +100,15 @@ func (r *refreshAdmission) begin(trigger refreshTrigger) (*refreshCall, bool) {
 	// running either way, retire is waiting for exactly it, and refusing here
 	// would discard an answer the caller is about to need.
 	if r.active != nil {
-		return r.active, true
+		return r.active, true, false
 	}
 	if r.retired {
-		return nil, false
+		return nil, false, false
 	}
 	if rateLimited && now.Before(r.cooldownTill) {
-		return nil, false
+		return nil, false, false
 	}
-	call := &refreshCall{done: make(chan struct{})}
+	call = &refreshCall{done: make(chan struct{}), startedAt: time.Now()}
 	r.active = call
 	if rateLimited {
 		r.cooldownTill = now.Add(RefreshCooldown)
@@ -117,11 +120,17 @@ func (r *refreshAdmission) begin(trigger refreshTrigger) (*refreshCall, bool) {
 	//
 	// It runs under the Verifier's own lifetime and deliberately not any caller's:
 	// a refresh has to outlive the verification that triggered it, or one client
-	// hanging up would cancel the fetch every other waiter is blocked on. Close
-	// cancels that context, which is the stop signal for a fetch still in flight.
+	// hanging up would prevent the completed trust replacement every later request
+	// needs. Close cancels that context, which is the stop signal for a fetch still
+	// in flight.
 	go func(refreshCtx context.Context) {
 		call.err = r.owner.fetchAndInstall(refreshCtx)
-		r.owner.metrics.recordRefresh(context.WithoutCancel(refreshCtx), trigger, call.err)
+		r.owner.metrics.recordRefresh(
+			context.WithoutCancel(refreshCtx),
+			trigger,
+			call.err,
+			time.Since(call.startedAt),
+		)
 		// Clearing the call and closing it are one step under the lock. join and
 		// retire both read active under this same lock and wait only on what they
 		// found there, so closing after the unlock would leave a window where
@@ -135,7 +144,7 @@ func (r *refreshAdmission) begin(trigger refreshTrigger) (*refreshCall, bool) {
 		close(call.done)
 		r.mu.Unlock()
 	}(r.owner.baseCtx)
-	return call, true
+	return call, true, true
 }
 
 // join waits for an admitted fetch to finish, if one is in flight. [Verifier.Run]
@@ -210,9 +219,11 @@ func waitRefresh(ctx context.Context, call *refreshCall) error {
 	}
 }
 
-// refresh starts or joins the one JWKS fetch a key miss is owed and waits for
-// it. A refusal by the cooldown is reported as success, not as an error: no
-// fetch was owed, and the caller answers from the set it already has.
+// refresh starts the one JWKS fetch a key miss is owed and waits for it. A
+// refusal by the cooldown is reported as success, not as an error: no fetch was
+// owed, and the caller answers from the set it already has. A concurrent miss
+// does not wait behind the fetch: it fails retryably, bounding request-path
+// waiters without changing the one provider call already in flight.
 //
 // It is the blocking route into begin. Run takes the other: it selects on the
 // call it got back, because it has readiness and its own deadlines to serve
@@ -225,14 +236,16 @@ func waitRefresh(ctx context.Context, call *refreshCall) error {
 // point but nothing has checked a signature, so an unsigned token carrying the
 // configured issuer and audience, an unexpired exp, and an unknown key id gets
 // this far. RefreshCooldown bounds what that costs the provider — one fetch per
-// cooldown whatever the request rate — but not what it costs latency: every
-// key-miss verification arriving during a fetch coalesces onto it and waits up
-// to ProviderTimeout. How many can be waiting at once is set by
-// http.max_in_flight rather than here, so the two are tuned together.
+// cooldown whatever the request rate — and only the request that starts it
+// waits up to ProviderTimeout. Concurrent misses return unavailable immediately
+// instead of occupying the service's shared admission capacity.
 func (v *Verifier) refresh(ctx context.Context) error {
-	call, admitted := v.admission.begin(triggerKeyMiss)
+	call, admitted, started := v.admission.begin(triggerKeyMiss)
 	if !admitted {
 		return nil
+	}
+	if !started {
+		return errRefreshInProgress
 	}
 	return waitRefresh(ctx, call)
 }
@@ -379,7 +392,7 @@ func (v *Verifier) Run(ctx context.Context, onTrustCurrent func(bool)) error {
 			schedule.rearm(v.now(), v.trust.current().fetchedAt)
 			publishCurrent()
 		case <-schedule.due.C:
-			call, admitted := v.admission.begin(triggerScheduled)
+			call, admitted, _ := v.admission.begin(triggerScheduled)
 			if !admitted {
 				// Unreachable today: the scheduled trigger is not rate limited.
 				// Retrying keeps that a local property of begin rather than

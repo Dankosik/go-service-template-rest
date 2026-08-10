@@ -161,14 +161,20 @@ func discoverJWKSURI(ctx context.Context, policy Policy, factory clientFactory) 
 }
 
 // providerError is the closed, sanitized outcome of a provider document
-// attempt. It preserves the failing phase for startup errors and refresh metrics
-// without carrying a URL, status code, response body, or transport error text.
+// attempt. It preserves the failing phase or bounded HTTP status class for
+// startup errors and refresh metrics without carrying a URL, exact status code,
+// response body, or transport error text.
 type providerError string
 
 const (
 	errProviderRequest         providerError = "request"
+	errProviderCanceled        providerError = "canceled"
+	errProviderTimeout         providerError = "timeout"
 	errProviderTransport       providerError = "transport"
 	errProviderStatus          providerError = "status"
+	errProviderStatus4xx       providerError = "status_4xx"
+	errProviderRateLimited     providerError = "rate_limited"
+	errProviderStatus5xx       providerError = "status_5xx"
 	errProviderBody            providerError = "body"
 	errProviderOversize        providerError = "oversize"
 	errProviderInvalidDocument providerError = "invalid_document"
@@ -187,6 +193,27 @@ func providerFailureReason(err error) string {
 	return string(failure)
 }
 
+func classifyProviderError(ctx context.Context, err error, fallback providerError) error {
+	// Only the parent context's cause belongs to our caller. The request also has
+	// ProviderTimeout, and publishing that internal deadline through errors.Is
+	// makes transports report a provider outage as if the caller's budget expired.
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		switch {
+		case errors.Is(ctxErr, context.Canceled):
+			return fmt.Errorf("%w: %w", errProviderCanceled, ctxErr)
+		case errors.Is(ctxErr, context.DeadlineExceeded):
+			return fmt.Errorf("%w: %w", errProviderTimeout, ctxErr)
+		}
+	}
+	if errors.Is(err, context.Canceled) {
+		return errProviderCanceled
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return errProviderTimeout
+	}
+	return fallback
+}
+
 // fetchDocument GETs one provider document under a bounded timeout. Its error is
 // one of the closed providerError phases above.
 func fetchDocument(ctx context.Context, client requestClient, target string) ([]byte, error) {
@@ -199,20 +226,29 @@ func fetchDocument(ctx context.Context, client requestClient, target string) ([]
 	request.Header.Set("Accept", "application/json")
 	response, err := client.Do(request)
 	if err != nil {
-		return nil, errProviderTransport
+		return nil, classifyProviderError(ctx, err, errProviderTransport)
 	}
 	defer func() {
 		_ = response.Body.Close()
 	}()
 	if response.StatusCode != http.StatusOK {
-		return nil, errProviderStatus
+		switch {
+		case response.StatusCode == http.StatusTooManyRequests:
+			return nil, errProviderRateLimited
+		case response.StatusCode >= http.StatusBadRequest && response.StatusCode < http.StatusInternalServerError:
+			return nil, errProviderStatus4xx
+		case response.StatusCode >= http.StatusInternalServerError && response.StatusCode < 600:
+			return nil, errProviderStatus5xx
+		default:
+			return nil, errProviderStatus
+		}
 	}
 	body, err := io.ReadAll(response.Body)
 	if err != nil {
 		if _, ok := errors.AsType[*httpclient.ResponseTooLargeError](err); ok {
 			return nil, errProviderOversize
 		}
-		return nil, errProviderBody
+		return nil, classifyProviderError(ctx, err, errProviderBody)
 	}
 	if len(body) > MaxProviderBody {
 		return nil, errProviderOversize

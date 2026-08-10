@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"testing"
+	"time"
 )
 
 func TestValidateMessagingConfig(t *testing.T) {
@@ -11,6 +12,8 @@ func TestValidateMessagingConfig(t *testing.T) {
 		URLs:                " tls://one.example:4222 , tls://two.example:4222 ",
 		CredentialsFile:     " /run/secrets/nats.creds ",
 		Stream:              " EVENTS ",
+		MinStreamReplicas:   3,
+		MinStreamRetention:  24 * time.Hour,
 		MaxPayloadBytes:     256 << 10,
 		MaxPendingPublishes: 64,
 	}
@@ -28,6 +31,9 @@ func TestValidateMessagingConfig(t *testing.T) {
 		"duplicate URL":       func(cfg *MessagingConfig) { cfg.URLs = "tls://one.example:4222,tls://one.example:4222" },
 		"missing credentials": func(cfg *MessagingConfig) { cfg.CredentialsFile = "" },
 		"invalid stream":      func(cfg *MessagingConfig) { cfg.Stream = "EVENTS.BAD" },
+		"missing replicas":    func(cfg *MessagingConfig) { cfg.MinStreamReplicas = 0 },
+		"too many replicas":   func(cfg *MessagingConfig) { cfg.MinStreamReplicas = 6 },
+		"missing retention":   func(cfg *MessagingConfig) { cfg.MinStreamRetention = 0 },
 	}
 	for name, mutate := range cases {
 		t.Run(name, func(t *testing.T) {

@@ -138,30 +138,57 @@ func TestMessagingTelemetryContract(t *testing.T) {
 	sig.recordDeadLetterTransfer(ctx, outcomeAccepted)
 	sig.recordDrain(ctx, outcomeGraceful)
 	sig.countForcedShutdown(ctx)
+	sig.recordBrokerObservation(time.Unix(500, 0), &jetstream.StreamInfo{
+		Config: jetstream.StreamConfig{MaxMsgs: 100, MaxBytes: 1000},
+		State: jetstream.StreamState{
+			Msgs: 4, Bytes: 200, FirstTime: time.Unix(100, 0),
+		},
+	}, &jetstream.ConsumerInfo{NumPending: 3, NumAckPending: 2})
 
 	var collected metricdata.ResourceMetrics
 	if err := reader.Collect(ctx, &collected); err != nil {
 		t.Fatalf("Collect() error = %v", err)
 	}
 	want := map[string]map[string]string{
-		"messaging.publish.operations": {"outcome": "accepted"},
-		"messaging.publish.duration":   {"outcome": "accepted"},
-		"messaging.connection.events":  {"event": "disconnected"},
-		"messaging.readiness":          {"role": "worker"},
-		"messaging.fetch.messages":     {},
-		"messaging.fetch.bytes":        {},
-		"messaging.consume.active":     {},
-		"messaging.handler.operations": {"outcome": "retryable"},
-		"messaging.handler.duration":   {"outcome": "retryable"},
-		"messaging.redeliveries":       {},
-		"messaging.retries":            {},
-		"messaging.dlq.transfers":      {"outcome": "accepted"},
-		"messaging.drain.operations":   {"outcome": "graceful"},
-		"messaging.forced_shutdowns":   {},
+		"messaging.publish.operations":      {"outcome": "accepted"},
+		"messaging.publish.duration":        {"outcome": "accepted"},
+		"messaging.connection.events":       {"event": "disconnected"},
+		"messaging.readiness":               {"role": "worker"},
+		"messaging.fetch.messages":          {},
+		"messaging.fetch.bytes":             {},
+		"messaging.consume.active":          {},
+		"messaging.handler.operations":      {"outcome": "retryable"},
+		"messaging.handler.duration":        {"outcome": "retryable"},
+		"messaging.redeliveries":            {},
+		"messaging.retries":                 {},
+		"messaging.dlq.transfers":           {"outcome": "accepted"},
+		"messaging.drain.operations":        {"outcome": "graceful"},
+		"messaging.forced_shutdowns":        {},
+		"messaging.consumer.pending":        {},
+		"messaging.consumer.ack_pending":    {},
+		"messaging.stream.messages":         {},
+		"messaging.stream.messages.limit":   {},
+		"messaging.stream.storage":          {},
+		"messaging.stream.storage.limit":    {},
+		"messaging.stream.oldest.timestamp": {},
+		"messaging.observation.timestamp":   {},
 	}
 	got := messagingMetricAttributes(t, collected)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("metric attributes = %#v, want %#v", got, want)
+	}
+	wantGauges := map[string]int64{
+		"messaging.consumer.pending":        3,
+		"messaging.consumer.ack_pending":    2,
+		"messaging.stream.messages":         4,
+		"messaging.stream.messages.limit":   100,
+		"messaging.stream.storage":          200,
+		"messaging.stream.storage.limit":    1000,
+		"messaging.stream.oldest.timestamp": 100,
+		"messaging.observation.timestamp":   500,
+	}
+	if got := messagingGaugeValues(t, collected); !reflect.DeepEqual(got, wantGauges) {
+		t.Fatalf("broker gauge values = %#v, want %#v", got, wantGauges)
 	}
 
 	serialized := logs.String()
@@ -380,6 +407,29 @@ func aggregationAttributeSets(t *testing.T, aggregation metricdata.Aggregation) 
 			values[string(value.Key)] = value.Value.AsString()
 		}
 		result = append(result, values)
+	}
+	return result
+}
+
+func messagingGaugeValues(t *testing.T, collected metricdata.ResourceMetrics) map[string]int64 {
+	t.Helper()
+	result := make(map[string]int64)
+	for _, scope := range collected.ScopeMetrics {
+		if scope.Scope.Name != instrumentationScope {
+			continue
+		}
+		for _, measured := range scope.Metrics {
+			if !strings.HasPrefix(measured.Name, "messaging.consumer.") &&
+				!strings.HasPrefix(measured.Name, "messaging.stream.") &&
+				measured.Name != "messaging.observation.timestamp" {
+				continue
+			}
+			gauge, ok := measured.Data.(metricdata.Gauge[int64])
+			if !ok || len(gauge.DataPoints) != 1 {
+				t.Fatalf("%s aggregation = %T with %d points, want one int64 gauge", measured.Name, measured.Data, len(gauge.DataPoints))
+			}
+			result[measured.Name] = gauge.DataPoints[0].Value
+		}
 	}
 	return result
 }

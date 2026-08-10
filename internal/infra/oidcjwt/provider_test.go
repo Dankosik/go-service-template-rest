@@ -7,9 +7,11 @@ package oidcjwt
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
+	"testing/iotest"
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/infra/httpclient"
@@ -32,10 +34,14 @@ func TestAuthnExternalHTTPSPolicyConstruction(t *testing.T) {
 }
 
 func TestInitialTrustOutageFailsClosed(t *testing.T) {
-	client := &scriptedClient{responses: []scriptedResponse{{err: errors.New("poison outage")}}}
+	transportErr := errors.New("poison outage")
+	client := &scriptedClient{responses: []scriptedResponse{{err: transportErr}}}
 	_, err := buildTestVerifier(t, testVerifierOptions{now: time.Now, client: client})
 	if err == nil || strings.Contains(err.Error(), "poison") {
 		t.Fatalf("newVerifier() error = %v, want sanitized startup failure", err)
+	}
+	if errors.Is(err, transportErr) {
+		t.Fatalf("newVerifier() error = %v, want transport details to remain opaque", err)
 	}
 	if reason := providerFailureReason(err); reason != "transport" {
 		t.Fatalf("startup provider failure reason = %q, want transport", reason)
@@ -46,7 +52,7 @@ func TestProviderFetchFailureCategories(t *testing.T) {
 	for _, testCase := range []struct {
 		name   string
 		target string
-		client *scriptedClient
+		client requestClient
 		want   string
 	}{
 		{
@@ -62,9 +68,51 @@ func TestProviderFetchFailureCategories(t *testing.T) {
 			want:   "transport",
 		},
 		{
-			name:   "status",
+			name:   "canceled",
+			target: testJWKSURI,
+			client: &scriptedClient{responses: []scriptedResponse{{err: context.Canceled}}},
+			want:   "canceled",
+		},
+		{
+			name:   "timeout",
+			target: testJWKSURI,
+			client: &scriptedClient{responses: []scriptedResponse{{err: context.DeadlineExceeded}}},
+			want:   "timeout",
+		},
+		{
+			name:   "body canceled",
+			target: testJWKSURI,
+			client: bodyErrorClient{err: errors.Join(errors.New("poison body"), context.Canceled)},
+			want:   "canceled",
+		},
+		{
+			name:   "body timeout",
+			target: testJWKSURI,
+			client: bodyErrorClient{err: errors.Join(errors.New("poison body"), context.DeadlineExceeded)},
+			want:   "timeout",
+		},
+		{
+			name:   "client status",
+			target: testJWKSURI,
+			client: &scriptedClient{responses: []scriptedResponse{{status: http.StatusBadRequest}}},
+			want:   "status_4xx",
+		},
+		{
+			name:   "rate limited status",
+			target: testJWKSURI,
+			client: &scriptedClient{responses: []scriptedResponse{{status: http.StatusTooManyRequests}}},
+			want:   "rate_limited",
+		},
+		{
+			name:   "server status",
 			target: testJWKSURI,
 			client: &scriptedClient{responses: []scriptedResponse{{status: http.StatusBadGateway}}},
+			want:   "status_5xx",
+		},
+		{
+			name:   "other status",
+			target: testJWKSURI,
+			client: &scriptedClient{responses: []scriptedResponse{{status: http.StatusNotModified}}},
 			want:   "status",
 		},
 		{
@@ -79,11 +127,31 @@ func TestProviderFetchFailureCategories(t *testing.T) {
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			_, err := fetchDocument(t.Context(), testCase.client, testCase.target)
+			if err == nil {
+				t.Fatal("fetchDocument() error = nil")
+			}
+			if strings.Contains(err.Error(), "poison") {
+				t.Fatalf("fetchDocument() error = %v, want provider details redacted", err)
+			}
 			if reason := providerFailureReason(err); reason != testCase.want {
 				t.Fatalf("provider failure reason = %q, want %q; error = %v", reason, testCase.want, err)
 			}
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				t.Fatalf("fetchDocument() error = %v, want provider-owned context cause opaque", err)
+			}
 		})
 	}
+}
+
+type bodyErrorClient struct {
+	err error
+}
+
+func (c bodyErrorClient) Do(*http.Request) (*http.Response, error) {
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       io.NopCloser(iotest.ErrReader(c.err)),
+	}, nil
 }
 
 func TestInitialTrustAcceptsDiscoveredJWKSQuery(t *testing.T) {
@@ -110,6 +178,7 @@ func TestInitialTrustHonorsCancellationAndDeadline(t *testing.T) {
 	for _, testCase := range []struct {
 		name string
 		ctx  func() (context.Context, context.CancelFunc)
+		want error
 	}{
 		{
 			name: "canceled",
@@ -118,12 +187,14 @@ func TestInitialTrustHonorsCancellationAndDeadline(t *testing.T) {
 				cancel()
 				return ctx, func() {}
 			},
+			want: context.Canceled,
 		},
 		{
 			name: "deadline",
 			ctx: func() (context.Context, context.CancelFunc) {
 				return context.WithDeadline(context.Background(), time.Unix(1, 0))
 			},
+			want: context.DeadlineExceeded,
 		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -137,6 +208,9 @@ func TestInitialTrustHonorsCancellationAndDeadline(t *testing.T) {
 			})
 			if err == nil || strings.Contains(err.Error(), testIssuer) {
 				t.Fatalf("newVerifier() error = %v, want sanitized fail-closed cancellation", err)
+			}
+			if !errors.Is(err, testCase.want) {
+				t.Fatalf("newVerifier() error = %v, want wrapped %v", err, testCase.want)
 			}
 		})
 	}

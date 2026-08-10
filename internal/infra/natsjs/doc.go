@@ -3,10 +3,10 @@
 // that runs feature handlers and settles each message with the broker.
 //
 // Delivery is at-least-once in both directions. A publish whose acknowledgement
-// is lost returns [ErrAmbiguous] and is safe to retry, because the broker
-// deduplicates on Event.PublicationID; a handler that runs but whose
-// acknowledgement is lost sees the message again. Handlers must tolerate
-// duplicates.
+// is lost returns [ErrAmbiguous] and is safe to retry with the same
+// Event.PublicationID; the broker deduplicates it only inside the stream's
+// configured duplicate window. A handler that runs but whose acknowledgement
+// is lost sees the message again. Handlers must tolerate duplicates.
 //
 // Four audiences share the package. Feature code touches only [Event],
 // [Message], [Handler], and [Permanent] — all in message.go. Everything else is

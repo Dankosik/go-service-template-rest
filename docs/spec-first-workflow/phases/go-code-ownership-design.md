@@ -27,6 +27,20 @@ or proof location. Make every affected execution path reviewer-traceable.
 
 Start from every selected system decision that enters Go. Decompose its Go manifestations — component responsibility, boundary adapter, transformation, lifecycle or sequence edge, failure/recovery path, operator path, composition point, authority change, and proof carrier — into the complete changed-responsibility set. Add each required responsibility exactly once and give it one owner; one system decision may produce several responsibilities. Reconcile that set against current files and symbols, callers, siblings, composition roots, generated sources, tests, and replaced or compatibility paths.
 
+After that set is concrete, identify each non-trivial capability whose
+implementation source is not mechanically fixed by accepted System Design or
+current repository authority. When repository reuse, the standard library, a
+native capability, an existing or external dependency, generated source, and a
+custom implementation remain materially different ways to realize the same
+accepted mechanism, suspend ownership synthesis and apply Research's [Solution
+Discovery Evidence](research-branches.md#solution-discovery-evidence) as a
+supporting step. Resume here with its candidate evidence and select the
+implementation source only when behavior and the system mechanism remain
+unchanged; otherwise reopen System Design. A retained branch, copied algorithm,
+or preference for no new dependency is evidence to inspect, not closure. Admit
+custom code only after current evidence eliminates the relevant higher reuse
+rungs.
+
 Reconcile the design in both directions. The responsibility map proves that every changed responsibility has one owner and placement; the inverse file map proves that every added or materially changed Go file has one present reason to exist. Follow each in-scope normal, failure/recovery, and operator path from composition through owner to proof so file boundaries keep owner transitions traceable. Replay each accepted policy change against the proposed owners: it has one semantic edit site plus only boundary-forced representations with executable parity proof. Validate both maps against the actual Go import graph, `internal` visibility, generated/manual boundary, and acyclicity.
 
 Rehearse the edit from composition root through caller, owner, wiring, and proof.
@@ -55,7 +69,7 @@ restructure with its obligation task or route a valid enabling change.
 
 A compact ownership section in `design/overview.md` or `design/go-code-ownership.md` containing two reconciled maps:
 
-- responsibility map — for each changed responsibility, including its affected execution paths: current file/symbol evidence; selected owner, why it stays or changes, and exact repository-relative directory/package/file action (`keep`, `add`, `move`, or `remove`); dependency direction, composition boundary, and the owner and minimum required shape of each cross-package type, error, mapping, constructor, or exported symbol; generated source of truth and its hand-written change or regeneration point; replacement cleanup; and test/proof owner, entrypoint, and fixture or corpus placement. When a real placement fork exists, name each viable alternative and why it loses. Only when exact file selection depends on implementation-local facts, give the owning surface, deterministic placement rule, and inspection bounds instead;
+- responsibility map — for each changed responsibility, including its affected execution paths: current file/symbol evidence; selected owner, why it stays or changes, and exact repository-relative directory/package/file action (`keep`, `add`, `move`, or `remove`); dependency direction, composition boundary, and the owner and minimum required shape of each cross-package type, error, mapping, constructor, or exported symbol; for each non-mechanical implementation-source choice, its selected reuse rung and evidence locator, exact dependency/version or upstream generation identity, each viable rejected source and why it loses, behavior/parity proof owner, and upgrade or reopen condition; generated source of truth and its hand-written change or regeneration point; replacement cleanup; and test/proof owner, entrypoint, and fixture or corpus placement. When a real placement fork exists, name each viable alternative and why it loses. Only when exact file selection depends on implementation-local facts, give the owning surface, deterministic placement rule, and inspection bounds instead;
 - file map — for every added or materially changed Go file: its repository-relative path, changed responsibilities, and one present reason to exist under [File naming and granularity](../../project-structure-and-module-organization.md#4-file-naming-and-granularity); the placement-relevant declaration actions and visibility; its role in each affected call path; material state, resource, cancellation, lifecycle, and error ownership; allowed dependencies and forbidden responsibilities; and any required co-location rationale or `doc.go` decision.
 
 The maps describe the smallest coherent target ownership and placement, not a
@@ -92,8 +106,10 @@ capacity permits and sequentially otherwise:
    accepts the responsibility map as fixed and verifies exact directory/package
    placement, import direction and acyclicity, `internal` visibility,
    composition-root wiring, consumer-owned interfaces and exported surfaces,
-   repository extension seams, and generated/manual containment. It treats
-   filenames only as locators and does not judge file cohesion or naming.
+   repository extension seams, the evidence-backed implementation-source
+   disposition and exact dependency or generation pin, and generated/manual
+   containment. It treats filenames only as locators and does not judge file
+   cohesion or naming.
 3. **File cohesion and naming** — a `quality-agent` accepts the fixed
    responsibility ownership and package-placement decisions and verifies each
    exact production and test file's
@@ -124,4 +140,4 @@ During synthesis, reconcile both maps and reject an abstract layer or package na
 
 ## Stop Rule
 
-This phase completes Technical Design when the fixed System / Integration Design still satisfies its Stop Rule; accepted behavior is preserved; the responsibility and inverse file maps are complete, consistent, and supported by current evidence; no Review falsifier survives; and all three required panel lanes recommend `PASS` on the same fixed candidate with compatible current evidence. Every downstream mechanism, boundary, authority, failure policy, and Go owner is fixed. The resulting import graph is acyclic; Planning can preserve the exact repository-relative directory/package/file plan or its recorded deterministic implementation-local rule without choosing placement, dependency/composition, generated/manual authority, cleanup, proof ownership, lifecycle ownership, or exported surface; the plan names the implementation evidence that would invalidate it rather than using uncertainty to defer a current decision; Implementation can start from those fixed locations and is left only the actual code plus behaviorally equivalent local Go choices under the repository's [Go Readability](../../../AGENTS.md#go-readability) contract; and any broader triggered technical-design review has returned `PASS` or dispositioned `CONCERNS`. Reopen system design only when placement cannot preserve the selected mechanism, runtime behavior, or source of truth; reopen specification only when placement cannot preserve scope or contract.
+This phase completes Technical Design when the fixed System / Integration Design still satisfies its Stop Rule; accepted behavior is preserved; the responsibility and inverse file maps are complete, consistent, and supported by current evidence; every non-mechanical implementation-source choice has an evidence-backed disposition and exact authority or pin; no Review falsifier survives; and all three required panel lanes recommend `PASS` on the same fixed candidate with compatible current evidence. Every downstream mechanism, boundary, authority, failure policy, and Go owner is fixed. The resulting import graph is acyclic; Planning can preserve the exact repository-relative directory/package/file plan or its recorded deterministic implementation-local rule without choosing placement, dependency/composition, generated/manual authority, cleanup, proof ownership, lifecycle ownership, or exported surface; the plan names the implementation evidence that would invalidate it rather than using uncertainty to defer a current decision; Implementation can start from those fixed locations and is left only the actual code plus behaviorally equivalent local Go choices under the repository's [Go Readability](../../../AGENTS.md#go-readability) contract; and any broader triggered technical-design review has returned `PASS` or dispositioned `CONCERNS`. Reopen system design only when placement cannot preserve the selected mechanism, runtime behavior, or source of truth; reopen specification only when placement cannot preserve scope or contract.
