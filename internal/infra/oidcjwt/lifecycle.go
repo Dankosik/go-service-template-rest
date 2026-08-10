@@ -244,6 +244,11 @@ func (v *Verifier) refresh(ctx context.Context) error {
 	if !admitted {
 		return nil
 	}
+	// begin owns the invariant that an admitted refresh has a call; keep the
+	// pointer guard explicit because nilaway cannot derive it from the flag.
+	if call == nil {
+		return nil
+	}
 	if !started {
 		return errRefreshInProgress
 	}
