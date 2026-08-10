@@ -107,9 +107,10 @@ func (c *Client) connectOptions(ctx context.Context, cfg Config) []nats.Option {
 		nats.Timeout(boundedTimeout(ctx)),
 		nats.ReconnectWait(time.Second),
 		nats.ReconnectJitter(50*time.Millisecond, 50*time.Millisecond),
-		// nats.go applies MaxReconnects to each server URL, not to the pool as
-		// a whole. Keep the concrete policy here and document its multi-URL
-		// exhaustion behavior instead of exposing speculative tuning knobs.
+		// The nats client library applies MaxReconnects to each server URL, not
+		// to the pool as a whole. Keep the concrete policy here and document its
+		// multi-URL exhaustion behavior instead of exposing speculative tuning
+		// knobs.
 		nats.MaxReconnects(60),
 		nats.ReconnectBufSize(-1),
 		nats.DisconnectErrHandler(func(_ *nats.Conn, _ error) {
@@ -168,7 +169,7 @@ func (c *Client) Check(ctx context.Context) error {
 		if c != nil {
 			c.ready.Store(false)
 		}
-		return errors.New("messaging connection is not ready")
+		return fmt.Errorf("%w: connection is not ready", ErrRejected)
 	}
 	probeCtx, cancel := context.WithTimeout(ctx, boundedTimeout(ctx))
 	defer cancel()
@@ -187,7 +188,7 @@ func (c *Client) Check(ctx context.Context) error {
 	}
 	if !c.nc.IsConnected() {
 		c.ready.Store(false)
-		return errors.New("messaging connection changed during readiness probe")
+		return fmt.Errorf("%w: connection changed during readiness probe", ErrRejected)
 	}
 	c.ready.Store(true)
 	return nil
@@ -272,8 +273,9 @@ func (c *Client) signalTerminal(err error) {
 // turns a failed pull terminal, so the error set below is the whole difference
 // between a blip and a stopped worker.
 //
-// Those four errors are the ones nats.go raises for a connection that is gone but
-// recoverable; IsReconnecting covers the case where the library noticed first.
+// Those four errors are the ones the nats client library raises for a
+// connection that is gone but recoverable; IsReconnecting covers the case
+// where the library noticed first.
 // Anything else — a permission fault, a deleted stream, a malformed request — is
 // a condition waiting cannot fix, so it must not land here.
 func (c *Client) waitForReconnect(ctx context.Context, err error) bool {

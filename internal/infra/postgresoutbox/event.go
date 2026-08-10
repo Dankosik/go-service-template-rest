@@ -74,9 +74,11 @@ type Event struct {
 	// together with OrderingSequence, and an empty key opts out of ordering.
 	//
 	// The guarantee ends at [Publisher]. Whether the broker and its consumers
-	// keep a key in order is theirs, and the adapter worked in
-	// test/postgres_outbox_natsjs_integration_test.go does not — see
-	// docs/postgres-transactional-outbox.md.
+	// keep a key in order is theirs — see docs/postgres-transactional-outbox.md.
+	// profile:messaging-nats-jetstream:start
+	// The adapter worked in test/postgres_outbox_natsjs_integration_test.go does
+	// not.
+	// profile:messaging-nats-jetstream:end
 	OrderingKey string
 	// OrderingSequence is this event's position within OrderingKey and must be
 	// positive and strictly above the key's retained high-water mark — take it

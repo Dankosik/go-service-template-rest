@@ -30,7 +30,8 @@ layer computes at runtime except a startup warning.
   `reason`. Whether the GC has a limit is a log line to read, not a guess.
 - `GOGC` is never set by this service. Changing it is a new decision trading CPU
   for memory against a limit the GC already has; state which one is scarce.
-- The admission constants are ordered on purpose in `internal/config/defaults.go`:
+- The admission constants are ordered on purpose across `internal/config/http_config.go`
+  and `internal/config/postgres_config.go`, each stating the relation from its own side:
   `http.max_in_flight` (256) sits **above** `postgres.max_open_conns` (25) so
   shedding engages after the pool saturates rather than before it is used, and
   `http.max_connections` (4096) sits above both so the informative `503` stays

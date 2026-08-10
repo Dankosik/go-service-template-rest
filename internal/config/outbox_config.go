@@ -28,6 +28,47 @@ const (
 	outboxMaxCleanupBatchSize   = 10_000
 )
 
+type OutboxConfig struct {
+	Enabled      bool          `koanf:"enabled"`
+	PollInterval time.Duration `koanf:"poll_interval"`
+	// BatchSize is how many events one lease covers. It trades round trips per
+	// event against peak relay memory, which is this many stored envelopes.
+	BatchSize int `koanf:"batch_size"`
+	// PublishConcurrency is how many events of a batch may be in the publisher
+	// at once. The claim query hands out at most one ready event per ordering
+	// key, so concurrency never reorders a key.
+	PublishConcurrency  int           `koanf:"publish_concurrency"`
+	PublishTimeout      time.Duration `koanf:"publish_timeout"`
+	LeaseDuration       time.Duration `koanf:"lease_duration"`
+	MaxAttempts         int           `koanf:"max_attempts"`
+	RetryBase           time.Duration `koanf:"retry_base"`
+	RetryMax            time.Duration `koanf:"retry_max"`
+	ObservationInterval time.Duration `koanf:"observation_interval"`
+	CleanupInterval     time.Duration `koanf:"cleanup_interval"`
+	PublishedRetention  time.Duration `koanf:"published_retention"`
+	CleanupBatchSize    int           `koanf:"cleanup_batch_size"`
+	DrainTimeout        time.Duration `koanf:"drain_timeout"`
+}
+
+func outboxDefaults() map[string]any {
+	return map[string]any{
+		"outbox.enabled":              false,
+		"outbox.poll_interval":        "500ms",
+		"outbox.batch_size":           500,
+		"outbox.publish_concurrency":  16,
+		"outbox.publish_timeout":      "10s",
+		"outbox.lease_duration":       "30s",
+		"outbox.max_attempts":         10,
+		"outbox.retry_base":           "1s",
+		"outbox.retry_max":            "5m",
+		"outbox.observation_interval": "5s",
+		"outbox.cleanup_interval":     "1m",
+		"outbox.published_retention":  "168h",
+		"outbox.cleanup_batch_size":   1000,
+		"outbox.drain_timeout":        "20s",
+	}
+}
+
 func validateOutbox(cfg OutboxConfig, postgres PostgresConfig) error {
 	if cfg.Enabled && !postgres.Enabled {
 		return fmt.Errorf("%w: outbox.enabled requires postgres.enabled", ErrValidate)
@@ -66,8 +107,8 @@ func validateOutbox(cfg OutboxConfig, postgres PostgresConfig) error {
 		{name: "outbox.publish_concurrency", value: cfg.PublishConcurrency, high: outboxMaxPublishConcurrency},
 		{name: "outbox.cleanup_batch_size", value: cfg.CleanupBatchSize, high: outboxMaxCleanupBatchSize},
 	} {
-		if bound.value < 1 || bound.value > bound.high {
-			return fmt.Errorf("%w: %s must be in range [1,%d]", ErrValidate, bound.name, bound.high)
+		if err := validateIntRange(bound.name, bound.value, 1, bound.high); err != nil {
+			return err
 		}
 	}
 	if cfg.RetryMax < cfg.RetryBase {

@@ -174,6 +174,23 @@ func ForCode(code Code) (Definition, bool) {
 	return Definition{}, false
 }
 
+// ForCodeOrInternal returns the definition published for code, substituting the
+// internal-error entry for a code this repository does not publish.
+//
+// This is the lookup for a caller passing a constant from this catalog, where an
+// unpublished code is a defect in that caller rather than a runtime condition.
+// The internal-error envelope is then the only honest answer left: it must not
+// claim a code nothing describes. A caller resolving a status it was handed uses
+// For, which refuses instead — see its documentation for why a plausible wrong
+// answer is the worse failure.
+func ForCodeOrInternal(code Code) Definition {
+	if definition, ok := ForCode(code); ok {
+		return definition
+	}
+	internalError, _ := ForCode(CodeInternalError)
+	return internalError
+}
+
 // All returns every published definition, so a caller can render the catalog
 // rather than restate it.
 //

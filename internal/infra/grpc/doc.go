@@ -1,8 +1,8 @@
 // Package grpcx owns the native gRPC server transport adapter.
 //
-// The package name does not match its directory on purpose: every file here also
-// imports google.golang.org/grpc, so importers alias this one as grpcx rather
-// than shadow the library everything in it is written against.
+// The package name does not match its directory on purpose. Declaring it grpcx
+// rather than grpc is what lets a caller import both this package and
+// google.golang.org/grpc in one file without aliasing either.
 //
 // [NewServer] returns a [Server] that already carries standard health,
 // OpenTelemetry server instrumentation, finite transport bounds, and this

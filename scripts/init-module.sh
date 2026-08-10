@@ -64,6 +64,58 @@ replace_literal() {
 	rm -f "${temporary}"
 }
 
+# replace_required_literal is replace_literal for a rewrite whose absence is a
+# defect rather than an ordinary miss. The module-path pass legitimately visits
+# files that never mention the old value, so replace_literal cannot fail on a
+# miss; the call sites below rewrite the template's own identity, where a miss
+# means the derived service silently keeps it. awk reports nothing either way,
+# so the check has to live here.
+replace_required_literal() {
+	local file="$1"
+	local old="$2"
+	local new="$3"
+
+	if ! grep -qF -- "${old}" "${file}"; then
+		printf 'init-module: %s no longer contains "%s"; that rewrite would be a silent no-op\n' \
+			"${file}" "${old}" >&2
+		return 1
+	fi
+	replace_literal "${file}" "${old}" "${new}"
+}
+
+# replace_go_map_value rewrites one key's value in a Go map literal without
+# encoding the gofmt column between them. That column widens whenever a longer
+# key joins the block, which is exactly how the service_name rewrite became a
+# silent no-op in 6bf6ac52. strip_profile's gofmt pass restores alignment after
+# the new value changes the width.
+replace_go_map_value() {
+	local file="$1"
+	local key="$2"
+	local new="$3"
+	local temporary
+
+	if ! grep -qF -- "\"${key}\":" "${file}"; then
+		printf 'init-module: %s no longer declares "%s"; that rewrite would be a silent no-op\n' \
+			"${file}" "${key}" >&2
+		return 1
+	fi
+
+	temporary="$(mktemp)"
+	awk -v key="\"${key}\":" -v new="\"${new}\"" '
+		!replaced && index($0, key) {
+			cut = index($0, key) + length(key)
+			head = substr($0, 1, cut - 1)
+			tail = substr($0, cut)
+			sub(/"[^"]*"/, new, tail)
+			$0 = head tail
+			replaced = 1
+		}
+		{ print }
+	' "${file}" >"${temporary}"
+	cat "${temporary}" >"${file}"
+	rm -f "${temporary}"
+}
+
 remove_profile_blocks() {
 	local file="$1"
 	local profile="$2"
@@ -511,25 +563,25 @@ if [[ "${source_checkout}" != true ]]; then
 	replace_codeowner_rules "${codeowner}"
 	service_name="${new_module##*/}"
 	if [[ -f Makefile ]]; then
-		replace_literal Makefile "SERVICE_NAME := service" "SERVICE_NAME := ${service_name}"
+		replace_required_literal Makefile "SERVICE_NAME := service" "SERVICE_NAME := ${service_name}"
 	fi
-	if [[ -f internal/config/defaults.go ]]; then
-		replace_literal \
-			internal/config/defaults.go \
-			"\"observability.otel.service_name\":           \"service\"" \
-			"\"observability.otel.service_name\":           \"${service_name}\""
+	if [[ -f internal/config/observability_config.go ]]; then
+		replace_go_map_value \
+			internal/config/observability_config.go \
+			"observability.otel.service_name" \
+			"${service_name}"
 	fi
 	if [[ -f cmd/service/internal/bootstrap/run.go ]]; then
-		replace_literal \
+		replace_required_literal \
 			cmd/service/internal/bootstrap/run.go \
 			"\"service.name\", \"service\"" \
 			"\"service.name\", \"${service_name}\""
 	fi
-	replace_literal \
+	replace_required_literal \
 		env/.env.example \
 		"APP__OBSERVABILITY__OTEL__SERVICE_NAME=service" \
 		"APP__OBSERVABILITY__OTEL__SERVICE_NAME=${service_name}"
-	replace_literal \
+	replace_required_literal \
 		api/openapi/service.yaml \
 		"title: \"${TEMPLATE_API_TITLE}\"" \
 		"title: \"${service_name}\""
@@ -712,10 +764,10 @@ if [[ "${source_checkout}" != true ]]; then
 	fi
 
 	# internal/packagetest owns the source walk behind the comment and doc proofs
-	# in internal/infra/grpc, internal/infra/grpcclient, and internal/infra/oidcjwt.
-	# Both profiles removing takes every importer with them, so it leaves too
-	# rather than shipping as an unreferenced leaf.
-	if [[ "${grpc}" == "none" && "${authn}" == "none" ]]; then
+	# in internal/infra/grpc, internal/infra/grpcclient, internal/infra/oidcjwt,
+	# and internal/infra/natsjs. All three profiles removing takes every importer
+	# with them, so it leaves too rather than shipping as an unreferenced leaf.
+	if [[ "${grpc}" == "none" && "${authn}" == "none" && "${messaging}" == "none" ]]; then
 		rm -rf -- internal/packagetest
 	fi
 

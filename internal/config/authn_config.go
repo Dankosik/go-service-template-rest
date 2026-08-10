@@ -9,6 +9,25 @@ import (
 	"github.com/example/go-service-template-rest/internal/authntrust"
 )
 
+// AuthnConfig names the immutable issuer boundary. Cryptographic, cache, size,
+// and time policy is fixed by the capability rather than provider-controlled
+// configuration.
+type AuthnConfig struct {
+	Issuer            string `koanf:"issuer"`
+	Audience          string `koanf:"audience"`
+	TrustedProxyCIDRs string `koanf:"trusted_proxy_cidrs"`
+}
+
+func authnDefaults() map[string]any {
+	// Trust policy has no executable placeholder. OIDC profiles fail config
+	// validation until deployment supplies every required value.
+	return map[string]any{
+		"authn.issuer":              "",
+		"authn.audience":            "",
+		"authn.trusted_proxy_cidrs": "",
+	}
+}
+
 // validateAuthnConfig applies the shared trust rules at configuration load, so a
 // bad issuer, audience, or proxy CIDR stops the process instead of surfacing at
 // authn startup. internal/authntrust owns the rules and why they live in a leaf

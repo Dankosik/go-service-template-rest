@@ -1,6 +1,8 @@
-// Package logctx attaches request correlation to every log record.
+// Package logctx owns shared structured-logging policy.
 //
-// It is a leaf for the same reason internal/reqctx and
+// It builds the process logger, attaches request correlation to every log
+// record, and supplies the safe attribute schema every recovered-panic record
+// uses. It is a leaf for the same reason internal/reqctx and
 // internal/observability/otelconfig are: the composition root installs it, and
 // every layer above and below logs through it.
 //

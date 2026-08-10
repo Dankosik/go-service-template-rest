@@ -7,13 +7,16 @@ import (
 	"net"
 	"sync"
 
-	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
 	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
-	"google.golang.org/grpc/keepalive"
-	"google.golang.org/grpc/stats"
 )
+
+// What a built [Server] does for the rest of its life: publish health, serve,
+// drain, and stop. Health and lifecycle are one owner rather than two, because
+// draining is a health transition before it is a stop — StartDrain publishes
+// NOT_SERVING and only then does Shutdown wait on RPCs. Construction lives in
+// options.go.
 
 // Server adapts grpc.Server to the process runtime's bounded lifecycle.
 //
@@ -41,137 +44,6 @@ type Server struct {
 	gracefulDone chan struct{}
 	forceStarted chan struct{}
 }
-
-// NewServer builds a native gRPC server with standard health, OpenTelemetry,
-// finite bounds, and the repository interceptor policies.
-func NewServer(cfg Config, options Options) (*Server, error) {
-	if err := validateConfig(cfg); err != nil {
-		return nil, err
-	}
-
-	options = withOptionDefaults(options)
-	admission := newAdmissionPolicy(cfg.MaxConcurrentRPCs, cfg.MaxConcurrentHealthRPCs, options.Load)
-	accessLogs := accessLogPolicy{
-		logHealthChecks:   cfg.AccessLogHealthChecks,
-		successSampleRate: cfg.AccessLogSuccessSampleRate,
-		slowThreshold:     cfg.AccessLogSlowThreshold,
-	}
-	// otelgrpc derives rpc.method from the peer-supplied HTTP/2 path before
-	// dispatch. Keep its server signals descriptor-backed so unknown paths cannot
-	// create unbounded metric series or span names.
-	//
-	// The filter closure below captures this set while it is still empty;
-	// registerServices fills it after registration and before Serve, and it is
-	// never written again. That ordering is what makes the unsynchronized reads
-	// from every RPC goroutine safe.
-	registeredMethods := make(methodSet)
-
-	// One builder produces both lists, so a policy cannot reach unary RPCs and
-	// miss streaming ones, and the order cannot drift between them. Only the
-	// timeout differs, which is why this is two calls rather than one shared
-	// value.
-	//
-	// The admission policy is built once above and handed to both, because that
-	// is what makes each concurrency budget process-wide rather than per RPC
-	// kind. Nothing structural enforces it now that the list is built twice, so
-	// TestAdmissionBudgetIsProcessWide drives a real server to prove it.
-	unaryBuiltins := builtinPolicies(options.Logger, accessLogs, admission, cfg.UnaryTimeout)
-	streamBuiltins := builtinPolicies(options.Logger, accessLogs, admission, cfg.StreamTimeout)
-	handlerErrors := handlerErrorBoundary(options.Logger, errorRendering{
-		mappers: options.DomainErrors,
-		domain:  options.ErrorDomain,
-	})
-
-	// #nosec G115 -- config.go's validateConfig, called at the top of this
-	// function, bounds both to [1,math.MaxUint32].
-	maxStreams, maxHeaderBytes := uint32(cfg.MaxConcurrentStreams), uint32(cfg.MaxHeaderListBytes)
-	serverOptions := []grpc.ServerOption{
-		grpc.MaxConcurrentStreams(maxStreams),
-		grpc.MaxHeaderListSize(maxHeaderBytes),
-		grpc.MaxRecvMsgSize(cfg.MaxReceiveMessageBytes),
-		grpc.MaxSendMsgSize(cfg.MaxSendMessageBytes),
-		grpc.StatsHandler(otelgrpc.NewServerHandler(
-			otelgrpc.WithMeterProvider(options.MeterProvider),
-			otelgrpc.WithTracerProvider(options.TracerProvider),
-			otelgrpc.WithPropagators(options.Propagators),
-			otelgrpc.WithFilter(func(info *stats.RPCTagInfo) bool {
-				_, ok := registeredMethods[info.FullMethodName]
-				return ok && (cfg.TelemetryHealthChecks || !isHealthMethod(info.FullMethodName))
-			}),
-		)),
-		grpc.ChainUnaryInterceptor(
-			unaryChain(options.Logger, unaryBuiltins, options.UnaryPolicy, handlerErrors)...,
-		),
-		grpc.ChainStreamInterceptor(
-			streamChain(options.Logger, streamBuiltins, options.StreamPolicy, handlerErrors)...,
-		),
-		// A zero MaxConnectionAge is how rotation stays off: grpc-go reads it as
-		// infinity. Every other value here is validated positive, so this is the
-		// one field whose zero is a decision rather than a defect.
-		grpc.KeepaliveParams(keepalive.ServerParameters{
-			MaxConnectionIdle:     cfg.MaxConnectionIdle,
-			MaxConnectionAge:      cfg.MaxConnectionAge,
-			MaxConnectionAgeGrace: cfg.MaxConnectionAgeGrace,
-			Time:                  cfg.ServerPingInterval,
-			Timeout:               cfg.ServerPingTimeout,
-		}),
-		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
-			MinTime:             cfg.MinClientPingInterval,
-			PermitWithoutStream: cfg.PermitPingWithoutStream,
-		}),
-	}
-	if options.TransportCredentials != nil {
-		serverOptions = append(serverOptions, grpc.Creds(options.TransportCredentials))
-	}
-
-	nativeServer := grpc.NewServer(serverOptions...)
-	healthServer := health.NewServer()
-	healthServer.SetServingStatus("", healthgrpc.HealthCheckResponse_NOT_SERVING)
-	healthgrpc.RegisterHealthServer(nativeServer, healthServer)
-	if err := registerServices(nativeServer, options.Services, registeredMethods); err != nil {
-		nativeServer.Stop()
-		return nil, err
-	}
-
-	return &Server{
-		server: nativeServer,
-		health: healthServer,
-		// profile:authn-oidc-jwt:start
-		authnReady: true,
-		// profile:authn-oidc-jwt:end
-		gracefulDone: make(chan struct{}),
-		forceStarted: make(chan struct{}),
-	}, nil
-}
-
-// registerServices attaches every supplied service to server and records the
-// full method name of everything now registered, health included, into methods.
-//
-// Filling the set here keeps the write adjacent to the registration it reads,
-// which is the ordering NewServer's telemetry filter depends on: the set is
-// written once, before Serve, and only read afterwards.
-//
-// A nil entry is refused rather than skipped. Skipping it produces a server that
-// starts and serves without a method its composition meant to publish — a
-// failure no probe and no test of the remaining services can see, and the same
-// class of unchecked programming error [Server] declines to absorb elsewhere.
-func registerServices(server *grpc.Server, services []RegisterService, methods methodSet) error {
-	for index, register := range services {
-		if register == nil {
-			return fmt.Errorf("build gRPC server: service registration at index %d is nil", index)
-		}
-		register(server)
-	}
-	for serviceName, service := range server.GetServiceInfo() {
-		for _, method := range service.Methods {
-			methods["/"+serviceName+"/"+method.Name] = struct{}{}
-		}
-	}
-	return nil
-}
-
-// methodSet holds the full RPC method names of every registered service.
-type methodSet map[string]struct{}
 
 // publishHealthLocked republishes standard health from the current inputs. It
 // owns the whole rule so each caller below only records its own input:

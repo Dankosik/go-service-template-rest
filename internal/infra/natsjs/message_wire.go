@@ -2,12 +2,8 @@ package natsjs
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"slices"
-	"strconv"
-	"strings"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -19,11 +15,14 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-// This file is the one place an envelope becomes NATS bytes and back. The
-// headers below are the whole wire contract, and every writer and reader of
-// them is here: buildNATSMessage writes a publication, decodeMessage reads a
-// delivery, and deadLetterMessage carries the first group forward onto a
-// transfer and adds the Original-* record.
+// This file is where an envelope becomes NATS bytes and back: buildNATSMessage
+// writes a publication and decodeMessage reads a delivery.
+//
+// The headers below are the whole wire contract, including the Original-* group
+// only the dead-letter transfer writes. They are declared together because they
+// are one published contract — renaming any of them is a consumer-visible
+// change — while message_deadletter.go owns the transfer that writes and reads
+// that second group.
 const (
 	headerMessageID             = "Message-Id"
 	headerPublicationID         = "Publication-Id"
@@ -41,16 +40,6 @@ const (
 	headerOriginalStoredAt      = "Original-Stored-At"
 	headerOriginalPublicationID = "Original-Publication-Id"
 	headerDeadLetterReason      = "Dead-Letter-Reason"
-)
-
-// The Dead-Letter-Reason values. They belong here rather than with the metric
-// and log labels in vocabulary.go because they travel on the wire to whatever
-// consumes the dead-letter stream: they are a published contract, and renaming
-// one is a consumer-visible change. Worker.deadLetter is the only caller.
-const (
-	deadLetterMalformed = "malformed"
-	deadLetterExhausted = "exhausted"
-	deadLetterPermanent = "permanent"
 )
 
 func validateEvent(event Event, maxPayloadBytes int) error {
@@ -246,98 +235,6 @@ func contextWithRemoteParent(base context.Context, remote remoteContext) context
 		base = reqctx.ContextWithRequestID(base, remote.correlationID)
 	}
 	return base
-}
-
-// deadLetterMessage builds the transfer envelope: the original identity headers
-// and trace context, the Original-* record of where the message came from, and a
-// transfer id derived from that origin.
-func deadLetterMessage(source jetstream.Msg, metadata *jetstream.MsgMetadata, decoded Message, reason string) (*nats.Msg, string) {
-	header := make(nats.Header)
-	carryIdentityHeaders(header, source.Headers())
-	setOriginHeaders(header, source, metadata)
-	header.Set(headerDeadLetterReason, reason)
-
-	transferID := deadLetterTransferID(source, metadata)
-	header.Set(headerPublicationID, transferID)
-	// Message-Id in descending order of what it is worth to whoever reads the
-	// dead-letter stream: the decoded id when the envelope parsed, otherwise
-	// whatever carryIdentityHeaders forwarded, otherwise the transfer id so the
-	// header is never absent. A malformed message reaches here with no decoded
-	// id at all, which is exactly when the last fallback matters.
-	switch {
-	case decoded.messageID != "":
-		header.Set(headerMessageID, decoded.messageID)
-	case header.Get(headerMessageID) == "":
-		header.Set(headerMessageID, transferID)
-	}
-	return &nats.Msg{Header: header, Data: slices.Clone(source.Data())}, transferID
-}
-
-// carryIdentityHeaders forwards the publisher's own envelope and trace context
-// onto the transfer. An absent header is left absent rather than set empty, so
-// a consumer can tell "the publisher did not send this" from "it sent a blank".
-func carryIdentityHeaders(header, source nats.Header) {
-	for _, name := range []string{
-		headerMessageID, headerPublicationID, headerEventType, headerEventSchema,
-		headerOrderingKey, headerCreatedAt, headerCorrelationID,
-		"traceparent", "tracestate",
-	} {
-		if value := source.Get(name); value != "" {
-			header.Set(name, value)
-		}
-	}
-}
-
-// setOriginHeaders records where the message came from. Every value is the
-// broker's own account of the delivery, which the transfer would otherwise
-// lose: the dead-letter stream assigns its own sequence and consumer.
-func setOriginHeaders(header nats.Header, source jetstream.Msg, metadata *jetstream.MsgMetadata) {
-	header.Set(headerOriginalSubject, source.Subject())
-	header.Set(headerOriginalStream, metadata.Stream)
-	header.Set(headerOriginalConsumer, metadata.Consumer)
-	header.Set(headerOriginalStreamSeq, strconv.FormatUint(metadata.Sequence.Stream, 10))
-	header.Set(headerOriginalConsumerSeq, strconv.FormatUint(metadata.Sequence.Consumer, 10))
-	header.Set(headerOriginalNumDelivered, strconv.FormatUint(metadata.NumDelivered, 10))
-	header.Set(headerOriginalStoredAt, metadata.Timestamp.UTC().Format(time.RFC3339Nano))
-	header.Set(headerOriginalPublicationID, source.Headers().Get(headerPublicationID))
-}
-
-// deadLetterTransferID derives the transfer's deduplication id from the origin
-// rather than minting a fresh one, so a transfer retried after an ambiguous
-// publish deduplicates at the dead-letter stream instead of accumulating
-// copies. The inputs are what identify one source delivery: the stream and
-// sequence that stored it, its store timestamp, and the publisher's own id.
-func deadLetterTransferID(source jetstream.Msg, metadata *jetstream.MsgMetadata) string {
-	return streamRecordID(
-		deadLetterTransferPrefix,
-		metadata.Stream,
-		metadata.Sequence.Stream,
-		metadata.Timestamp,
-		source.Headers().Get(headerPublicationID),
-	)
-}
-
-// The two prefixes streamRecordID is called with. They only make the derived
-// id legible to whoever reads it off a message; nothing parses one back.
-const (
-	deadLetterTransferPrefix = "dlq-"
-	redrivePublicationPrefix = "redrive-"
-)
-
-// streamRecordID derives a publication id from one stored record's own place in
-// a stream, so re-deriving it from that same record yields the same id and the
-// broker deduplicates a retried publication instead of storing a second copy.
-// Both directions of the dead-letter path need that property: the transfer into
-// the stream and the redrive back out of it.
-func streamRecordID(prefix, stream string, sequence uint64, storedAt time.Time, publicationID string) string {
-	identity := strings.Join([]string{
-		stream,
-		strconv.FormatUint(sequence, 10),
-		storedAt.UTC().Format(time.RFC3339Nano),
-		publicationID,
-	}, "\x00")
-	digest := sha256.Sum256([]byte(identity))
-	return prefix + hex.EncodeToString(digest[:])
 }
 
 // wireSize is what one message costs on the wire, which is the bound

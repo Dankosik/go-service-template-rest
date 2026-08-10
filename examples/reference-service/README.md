@@ -1,6 +1,6 @@
 # Reference feature slice
 
-This runnable example shows one complete, small feature without adding fictional
+This example shows one complete, small feature without adding fictional
 behavior to the production service:
 
 ```text
@@ -14,31 +14,22 @@ OpenAPI contract and request validation
 It covers both halves of a REST contract: a **public read** and a **protected
 write with a request body**.
 
-Run it from the repository root. Choose a throwaway local value; the example
-refuses to start without one, so no credential is ever baked into source.
+`referenceservice` is a library package, not a `main` package — there is no
+process here to run. The composition is proved by exercising `NewHandler` over
+`httptest`, the same way `go build` would fail to prove it:
 
 ```bash
-export REFERENCE_WRITE_TOKEN="$(openssl rand -hex 16)"
+go test ./examples/reference-service/...
 ```
 
-```bash
-go run ./examples/reference-service
-```
-
-```bash
-curl http://localhost:8080/api/v1/articles/clear-owners
-```
-
-```bash
-curl -i -X POST http://localhost:8080/api/v1/articles \
-  -H "Authorization: Bearer ${REFERENCE_WRITE_TOKEN}" \
-  -H 'Content-Type: application/json' \
-  -d '{"slug":"owned-writes","title":"Owned writes","summary":"A write needs an identity."}'
-```
-
-Without the header the same request returns `401` with a `WWW-Authenticate`
-header and a Problem body, because `createArticle` declares `bearerAuth` in the
-contract and the validator enforces the declaration.
+`TestReferenceServiceServesOverHTTP` and the other top-level tests in
+`reference_test.go` start a real `httptest.Server` from `NewHandler` and drive
+it with HTTP requests: a public `GET`, a bearer-protected `POST`, an oversized
+body, a missing credential, a panic in feature code, and one caller exhausting
+its rate limit without affecting another — proving the example inherits the
+shared hardened chain rather than merely compiling against it.
+`internal/httpapi/router_test.go` covers the same contract one layer down,
+against `NewAPIHandler` directly.
 
 The important boundaries are visible in the directory layout:
 
@@ -48,7 +39,26 @@ The important boundaries are visible in the directory layout:
   repository port it consumes; the use case keeps unpublished articles hidden;
 - `internal/article/memory/` adapts one concrete storage mechanism;
 - `internal/httpapi/` maps feature results to contract responses;
-- `main.go` only composes owners and manages the example process lifecycle.
+- `reference.go` is the composition root: it wires the feature onto its
+  generated contract and the shared `httpx.Harden` middleware chain, and owns
+  the demonstration bearer credential. It deliberately owns no process
+  lifecycle — no `main`, listener, signal handling, or shutdown.
+
+`reference.go` is the only file in this example that may import
+`internal/infra/*` (here, `httpx` and `telemetry`). That is not a convention;
+it falls out of where the file lives. `.golangci.yml`'s
+`feature_packages_no_adapters` rule matches `**/internal/**/*.go` and denies
+those files from importing `internal/infra`, `internal/config`, or the
+root-level `internal/openapi`. `reference.go` sits directly under
+`examples/reference-service/`, outside any `internal/` directory, so the rule
+never matches it. `internal/httpapi/`, `internal/article/`, and
+`internal/article/memory/` all live under `internal/` and are matched, so
+`internal/httpapi` cannot import an infra adapter directly — instead
+`NewAPIHandler` takes `RejectFunc` values (`Authenticate`, `RejectRequest`,
+`RejectResponse`) that the composition root builds from `httpx` and passes in.
+This is the lesson the example exists to teach: adapters get wired at a
+composition root outside `internal/`, and feature packages depend on the
+functions and interfaces that root supplies, not on the adapters themselves.
 
 Inside `internal/article/` the types, the ports, and both use cases share one
 `article.go`, which is the one place this example deliberately stops short of

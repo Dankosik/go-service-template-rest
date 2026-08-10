@@ -18,7 +18,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/example/go-service-template-rest/internal/failure"
+	"github.com/example/go-service-template-rest/internal/observability/logctx"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -132,7 +132,7 @@ func (s *Supervisor) runTask(name string, run func(context.Context) error) (runE
 			"background_task_panic",
 			append(
 				[]any{"component", "background", "task", name},
-				failure.PanicAttrs(recovered, debug.Stack())...,
+				logctx.PanicAttrs(recovered, debug.Stack())...,
 			)...,
 		)
 		runErr = fmt.Errorf("%w: %s", ErrPanic, name)

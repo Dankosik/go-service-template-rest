@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"runtime/debug"
 	"time"
 
 	"github.com/example/go-service-template-rest/cmd/internal/runtimeopts"
@@ -13,7 +14,14 @@ import (
 	"github.com/example/go-service-template-rest/internal/health"
 	"github.com/example/go-service-template-rest/internal/infra/natsjs"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
+	"github.com/example/go-service-template-rest/internal/observability/logctx"
 )
+
+// errWorkerPanic reports a run loop that ended in a recovered panic rather than
+// by returning. It explains the exit; whether cleanup is still safe is decided
+// by handlerStoppedBeforeReturn, which asks the drain instead, because the
+// handlers a panicking fetch loop leaves running are the ones that matter.
+var errWorkerPanic = errors.New("worker run loop panicked")
 
 // The post-drain budgets, kept together because validateWorkerShutdownBudget
 // charges http.grace_period for their sum and every one of them is spent on the
@@ -65,10 +73,7 @@ func runWorkerLifecycle(
 	})
 	workerResult := make(chan error, 1)
 	workerDone := make(chan struct{})
-	go func() {
-		defer close(workerDone)
-		workerResult <- worker.Run(runtimeCtx)
-	}()
+	go superviseWorkerRun(runtimeCtx, log, worker.Run, workerResult, workerDone)
 	var triggerErr error
 	workerResultRead := false
 	select {
@@ -107,6 +112,57 @@ func runWorkerLifecycle(
 		}
 	}
 	return cleanupSafe, shutdownDeadline, errors.Join(triggerErr, diagnosticsErr, workerErr, backgroundErr)
+}
+
+// workerReady is this binary's readiness verdict, which runtimeopts.DiagnosticsServer
+// serves as one answer.
+//
+// The two conditions are separate facts and both have to hold. The broker state
+// is read live rather than through a probe, because a consumer that lost its
+// connection is not ready now and waiting for the next refresh would keep it in
+// rotation for up to one interval. The cached verdict covers everything else the
+// process probes.
+func workerReady(messagingReady func() bool, healthSvc *health.Service) func() bool {
+	return func() bool {
+		return messagingReady() && healthSvc.Cached() == nil
+	}
+}
+
+// superviseWorkerRun contains a panic in the loop this process exists to run.
+// runWorkerLifecycle's two background helpers are background.Supervisor tasks,
+// which recover for themselves; this loop cannot be one, because the drain reads
+// its exit through done and charges it messaging.worker.drain_timeout rather
+// than the supervisor's own budget. Left bare, a panic here ends the process
+// where it happened, without the ordered drain, the handler join, or the
+// telemetry flush that would record why.
+//
+// The result is assigned and then sent from the deferred call, so the normal
+// path and the recovery send exactly once between them, and done closes after
+// that send for the caller reading them in that order.
+func superviseWorkerRun(
+	ctx context.Context,
+	log *slog.Logger,
+	run func(context.Context) error,
+	result chan<- error,
+	done chan<- struct{},
+) {
+	var runErr error
+	defer func() {
+		defer close(done)
+		if recovered := recover(); recovered != nil {
+			// Written from inside the deferred recovery, the one point the
+			// panicking frames still exist. The sentinel names only that a panic
+			// happened; this is the only record of the defect behind it.
+			log.ErrorContext(
+				ctx,
+				"worker_run_loop_panic",
+				append([]any{"component", "worker"}, logctx.PanicAttrs(recovered, debug.Stack())...)...,
+			)
+			runErr = errWorkerPanic
+		}
+		result <- runErr
+	}()
+	runErr = run(ctx)
 }
 
 func handlerStoppedBeforeReturn(workerErr error, workerDone <-chan struct{}) bool {

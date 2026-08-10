@@ -18,14 +18,7 @@ import (
 // error is as traceable as the transport rejections the template's own middleware
 // writes.
 func newProblem(ctx context.Context, code problem.Code, detail string) openapi.Problem {
-	definition, ok := problem.ForCode(code)
-	if !ok {
-		// A status the shared catalog does not publish is a contract defect in
-		// this package rather than a runtime condition. Answering with the
-		// internal-error envelope is the only honest option left: it must not
-		// claim the status that was asked for, because nothing describes it.
-		definition, _ = problem.ForCode(problem.CodeInternalError)
-	}
+	definition := problem.ForCodeOrInternal(code)
 
 	built := openapi.Problem{
 		Code:   string(definition.Code),

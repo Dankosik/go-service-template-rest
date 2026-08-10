@@ -225,7 +225,7 @@ func hardenedTestRouter(
 ) http.Handler {
 	t.Helper()
 
-	router, err := httpx.Harden(log, telemetry.New(), httpx.RouterConfig{
+	router, err := httpx.Harden(log, telemetry.New(), httpx.HardenConfig{
 		MaxBodyBytes:   1 << 20,
 		RequestTimeout: 5 * time.Second,
 		MaxInFlight:    4,

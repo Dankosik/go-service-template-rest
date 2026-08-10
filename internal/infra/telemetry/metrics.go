@@ -2,6 +2,7 @@ package telemetry
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -23,6 +24,10 @@ const (
 
 	activeRequestsInstrument = "http.server.active_requests"
 	shedRequestsInstrument   = "http.server.shed_requests"
+
+	startupMeterName = "service.startup"
+
+	traceExporterStateInstrument = "service.startup.trace_exporter.active"
 )
 
 // The gRPC admission signals are exported because two other builds emit or
@@ -118,6 +123,30 @@ func (l ServerLoad) Shed(ctx context.Context) {
 		return
 	}
 	l.shed.Add(ctx, 1)
+}
+
+// RecordTraceExporterState publishes whether the trace exporter is exporting.
+// Metrics setup succeeds independently of tracing setup, so this value stays
+// observable when tracing is degraded — which is the case an operator must be
+// able to alert on, because a service with no trace export still reports
+// healthy and answers every request.
+func (m *Metrics) RecordTraceExporterState(ctx context.Context, active bool) error {
+	// No unit: the Prometheus translation turns unit "1" into a `_ratio` suffix,
+	// which would misname a boolean state.
+	gauge, err := m.MeterProvider().Meter(startupMeterName).Int64Gauge(
+		traceExporterStateInstrument,
+		metric.WithDescription("1 when the OTLP trace exporter is configured and initialized, 0 otherwise."),
+	)
+	if err != nil {
+		return fmt.Errorf("create trace exporter state gauge: %w", err)
+	}
+
+	state := int64(0)
+	if active {
+		state = 1
+	}
+	gauge.Record(ctx, state)
+	return nil
 }
 
 // New builds the service metric registry.

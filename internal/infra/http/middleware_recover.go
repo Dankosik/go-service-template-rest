@@ -8,6 +8,7 @@ import (
 	"runtime/debug"
 
 	"github.com/example/go-service-template-rest/internal/failure"
+	"github.com/example/go-service-template-rest/internal/observability/logctx"
 	"github.com/example/go-service-template-rest/internal/problem"
 )
 
@@ -44,7 +45,7 @@ func Recover(log *slog.Logger, next http.Handler) http.Handler {
 				"http_panic_recovered",
 				append(
 					[]any{"method", request.Method, "route", route},
-					failure.PanicAttrs(rec, debug.Stack())...,
+					logctx.PanicAttrs(rec, debug.Stack())...,
 				)...,
 			)
 			if committed() {

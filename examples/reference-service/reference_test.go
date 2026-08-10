@@ -314,7 +314,7 @@ func mustBuildReferenceRouter(tb testing.TB, bodyLimit int64, repository article
 		tb.Fatalf("NewAPIHandler() error = %v", err)
 	}
 
-	handler, err := httpx.Harden(log, telemetry.New(), httpx.RouterConfig{
+	handler, err := httpx.Harden(log, telemetry.New(), httpx.HardenConfig{
 		MaxBodyBytes:   bodyLimit,
 		RequestTimeout: RequestTimeout,
 		MaxInFlight:    maxInFlight,

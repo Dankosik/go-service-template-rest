@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"runtime"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -168,34 +167,6 @@ func TestOpNamesTheStepWithoutPublishingText(t *testing.T) {
 			t.Fatalf("rendered name = %q, want valid UTF-8", name)
 		}
 	})
-}
-
-// TestPanicClassClassifiesRecoveredValues holds the closed set every recovery
-// site groups by. runtime_error is the one that has to stay separable: it is a
-// service defect every time, where a deliberate panic(error) from a library
-// often is not.
-func TestPanicClassClassifiesRecoveredValues(t *testing.T) {
-	t.Parallel()
-
-	for _, tt := range []struct {
-		name string
-		rec  any
-		want string
-	}{
-		{name: "runtime error", rec: &runtime.TypeAssertionError{}, want: "runtime_error"},
-		{name: "error", rec: errors.New("boom"), want: "error"},
-		{name: "string", rec: "boom", want: "string"},
-		{name: "value", rec: 42, want: "value"},
-		{name: "nil", rec: nil, want: "none"},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			if got := failure.PanicClass(tt.rec); got != tt.want {
-				t.Fatalf("PanicClass(%v) = %q, want %q", tt.rec, got, tt.want)
-			}
-		})
-	}
 }
 
 func TestClassifySkipsNilAndUsesFirstMatch(t *testing.T) {

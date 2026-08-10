@@ -74,19 +74,6 @@ func AccessLog(log *slog.Logger, logHealthProbes bool, next http.Handler) http.H
 	})
 }
 
-// problemCodeForRequest returns the problem code this request was answered with,
-// or the empty string when it was not answered with one.
-func problemCodeForRequest(r *http.Request) string {
-	if r == nil {
-		return ""
-	}
-	record, ok := r.Context().Value(problemRecordContextKey{}).(*problemRecord)
-	if !ok {
-		return ""
-	}
-	return string(record.code)
-}
-
 // skipHealthProbeLog matches on the routed template rather than the raw path,
 // so an unmatched request that merely looks like a probe is still recorded.
 func skipHealthProbeLog(r *http.Request, routePathTemplate string, logHealthProbes bool) bool {

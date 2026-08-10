@@ -53,8 +53,10 @@ with a path or query parameter makes the generated code import
 new import.
 
 Generated files under `internal/openapi` are derived output. Do not hand-edit
-them. Implement the generated strict-server operation in
-`internal/infra/http/<feature>_handlers.go`, map transport data to feature
+them. Implement the generated strict-server operation in the service's own
+package as `<feature>_handlers.go` and inject it as `httpx.Handlers.API`;
+`internal/infra/http` is shared template surface that adding an operation does
+not edit. Map transport data to feature
 types. Own domain error identities and their `failure.Mapper` beside the feature;
 return those errors for the composition root's shared HTTP/gRPC mapping, or a
 generated typed Problem response when the operation itself owns the rejection.
@@ -74,8 +76,12 @@ names each failed member and the constraint it broke. That comes from the
 contract and never carries the submitted value, so a feature adds nothing to get
 it; see `requestViolations` in `internal/infra/http` for the rule that governs
 what may appear there.
-Extend `httpx.Handlers` and wire the concrete feature in
+Set `httpx.Handlers.API` to the concrete feature handler in
 `cmd/service/internal/bootstrap`; do not register a parallel manual API route.
+Append the feature's `failure.Mapper` at `runtimeDependencies.DomainErrors` in
+the same package. The two fail differently when forgotten: a missing `API` stops
+the process at startup, while a missing mapper is silent and answers a sanitized
+500 in place of the status the contract documents.
 
 <!-- profile:grpc:start -->
 ### Native gRPC operation
@@ -173,9 +179,9 @@ authentication policy.
 
 ## 4. Add configuration
 
-For each runtime key, update the typed field and `koanf` tag in
-`internal/config/types.go`, its default when appropriate, validation, and the
-relevant example. Secret values belong only in `APP__...` environment
+For each runtime key, update the typed field and `koanf` tag, its default when
+appropriate, and its validation — all three in the section's own
+`internal/config/<section>_config.go` — plus the relevant example. Secret values belong only in `APP__...` environment
 variables. Add snapshot and invalid-value tests. Unknown keys already fail, so
 a misspelled deployment variable cannot silently fall back to a default.
 
@@ -231,6 +237,13 @@ to feature-owned types. The use case owns the transaction boundary; pass a
 transaction-scoped repository explicitly rather than hiding transaction state
 in context. `internal/infra/postgresmigrate` belongs only to `cmd/migrate` and
 must not enter the service dependency graph.
+
+When `examples/reference-service` is present, the executable reference for that
+shape is the `pgAdapter` in
+`examples/reference-service/postgres_unitofwork_integration_test.go`: it is the
+in-memory repository's replacement, satisfying the same feature-owned interfaces
+against a real pool, and it composes two repository calls in one transaction.
+Read it before writing the first `internal/infra/postgres/<feature>_repository.go`.
 
 The PostgreSQL profile is required, not a degraded mode:
 `APP__POSTGRES__ENABLED` must remain `true` and the DSN must be configured

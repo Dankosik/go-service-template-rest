@@ -131,8 +131,16 @@ new_fixture() {
 	cp "${ROOT_DIR}/env/.env.example" "${root}/env/.env.example"
 	printf 'SERVICE_NAME := service\nSERVICE_CMD := ./cmd/service\n' >"${root}/Makefile"
 	printf '# Template README\nhttps://github.com/Dankosik/go-service-template-rest\n' >"${root}/README.md"
-	printf 'package config\n\ntype Config struct { Postgres PostgresConfig }\ntype PostgresConfig struct { Enabled bool }\n\nvar defaults = map[string]any{\n\t"observability.otel.service_name":           "service",\n}\n' \
+	printf 'package config\n\ntype Config struct { Postgres PostgresConfig }\ntype PostgresConfig struct { Enabled bool }\n' \
 		>"${root}/internal/config/defaults.go"
+	# The gofmt column between this key and its value is deliberately not the one
+	# the real observability_config.go carries: a fixture that mirrors one
+	# alignment is how a rewrite keyed on that alignment passed here while
+	# silently doing nothing to the real tree. The minimal profile below re-proves
+	# the rewrite on the real file; this fixture proves only that the rewrite
+	# ignores the column.
+	printf 'package config\n\nfunc observabilityDefaults() map[string]any {\n\treturn map[string]any{\n\t\t"observability.otel.service_name": "service",\n\t}\n}\n' \
+		>"${root}/internal/config/observability_config.go"
 	printf 'package bootstrap\n\nimport "github.com/example/go-service-template-rest/internal/config"\n\ntype startupBootstrap struct{ cfg config.Config }\n\nvar bootstrapIdentity = []string{"service.name", "service"}\n' \
 		>"${root}/cmd/service/internal/bootstrap/run.go"
 	printf 'package health\n\ntype Service struct{}\n\nfunc New() *Service { return &Service{} }\n' \
@@ -274,7 +282,7 @@ fi
 grep -v '^[[:space:]]*#' "${derived}/.github/CODEOWNERS" | grep -Fq "@acme/platform"
 grep -Fqx '  title: "orders"' "${derived}/api/openapi/service.yaml"
 grep -Fqx 'SERVICE_NAME := orders' "${derived}/Makefile"
-grep -Fq '"observability.otel.service_name":           "orders"' "${derived}/internal/config/defaults.go"
+grep -Eq '"observability\.otel\.service_name": +"orders"' "${derived}/internal/config/observability_config.go"
 grep -Fq '"service.name", "orders"' "${derived}/cmd/service/internal/bootstrap/run.go"
 grep -Fqx 'APP__OBSERVABILITY__OTEL__SERVICE_NAME=orders' "${derived}/env/.env.example"
 grep -Fq '# orders' "${derived}/README.md"
@@ -407,6 +415,13 @@ assert "minimal initialization removed transport-neutral failure policy" path_pr
 # cmd/internal/runtimeopts ships in every profile and its diagnostics test
 # reserves a listen address through this package, so no profile may take it.
 assert "minimal initialization removed the shared test waits" path_present "${minimal_checkout}/internal/waittest"
+# The identity rewrites above run against a fixture this script writes itself.
+# These two files are the real tree, so they are the only proof that a derived
+# service stops reporting the template's own name to a tracing backend. Keep
+# both patterns free of the gofmt column: matching it is what let this rewrite
+# silently do nothing once already.
+grep -Eq '"observability\.otel\.service_name": +"feature-proof"' "${minimal_checkout}/internal/config/observability_config.go"
+grep -Fq '"service.name", "feature-proof"' "${minimal_checkout}/cmd/service/internal/bootstrap/run.go"
 # This profile carries no PostgreSQL configuration at all, so an APP__POSTGRES__*
 # variable is an unknown key rather than a runtime feature check. That is the
 # stronger rejection: it names every key it refused and it happens before any

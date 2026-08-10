@@ -23,8 +23,8 @@ import (
 //
 //	startupBudget             30s   flag parsing through readiness admission
 //	 ├─ startupTelemetryBudget 2s   metrics setup, then tracing setup
-//	 ├─ postgresStartupBudget 15s   PostgreSQL profile only (startup_dependencies.go)
-//	 │   └─ postgresProbeBudget 5s  pool open and first ping
+//	 ├─ dependency stage            connect budget and first-contact probe, only
+//	 │                              in a profile that has a dependency
 //	 └─ http.readiness_timeout      startup admission (typed config)
 //
 // Shutdown budgets, in the order they are spent after the HTTP drain:

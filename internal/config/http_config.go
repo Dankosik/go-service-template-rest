@@ -6,6 +6,98 @@ import (
 	"time"
 )
 
+type HTTPConfig struct {
+	Addr string `koanf:"addr"`
+	// GracePeriod is the total time the platform allows between SIGTERM and
+	// SIGKILL — terminationGracePeriodSeconds on Kubernetes, drainingSeconds on
+	// Railway. Every teardown stage draws from it, so it is the one number that
+	// bounds shutdown as a whole. ShutdownTimeout bounds only the HTTP drain;
+	// closing diagnostics, joining background work, releasing pooled
+	// dependencies, and flushing telemetry all still run after it.
+	GracePeriod time.Duration `koanf:"grace_period"`
+	// ShutdownTimeout bounds the HTTP drain, including the readiness
+	// propagation delay in front of it. It is validated against GracePeriod so
+	// the stages after the drain still have budget left.
+	ShutdownTimeout           time.Duration `koanf:"shutdown_timeout"`
+	ReadinessTimeout          time.Duration `koanf:"readiness_timeout"`
+	ReadinessPropagationDelay time.Duration `koanf:"readiness_propagation_delay"`
+	ReadHeaderTimeout         time.Duration `koanf:"read_header_timeout"`
+	ReadTimeout               time.Duration `koanf:"read_timeout"`
+	// RequestTimeout is the per-request handler budget. The net/http server
+	// timeouts are connection deadlines that never cancel the request context,
+	// so this is the only bound on how long one handler may hold a goroutine
+	// and its pooled resources.
+	RequestTimeout time.Duration `koanf:"request_timeout"`
+	WriteTimeout   time.Duration `koanf:"write_timeout"`
+	IdleTimeout    time.Duration `koanf:"idle_timeout"`
+	MaxHeaderBytes int           `koanf:"max_header_bytes"`
+	MaxBodyBytes   int64         `koanf:"max_body_bytes"`
+	// MaxInFlight bounds concurrent handler execution. Nothing else in the
+	// request path does: RequestTimeout bounds how long one request may run,
+	// not how many may run, so an arrival spike otherwise queues every request
+	// on a finite resource until all of them spend the full budget waiting.
+	// Zero disables shedding.
+	MaxInFlight int `koanf:"max_in_flight"`
+	// MaxConnections bounds how many connections the API listener accepts at
+	// once. MaxInFlight does not: it bounds handler execution, and every
+	// accepted connection already costs a goroutine and its read and write
+	// buffers before any middleware runs. Excess callers wait in the kernel
+	// backlog, where they cost nothing. Validated against MaxInFlight so the cap
+	// can never shed below the concurrency the service advertises. Zero accepts
+	// without a bound.
+	MaxConnections int `koanf:"max_connections"`
+	// AccessLogHealthProbes re-enables access logging for /health/live and
+	// /health/ready. It defaults to false because orchestrator probes generate
+	// continuous no-signal log volume.
+	AccessLogHealthProbes bool `koanf:"access_log_health_probes"`
+}
+
+func httpDefaults() map[string]any {
+	return map[string]any{
+		"http.addr": ":8080",
+		// grace_period matches railway.toml's drainingSeconds, the platform this
+		// repository ships a deployment profile for. Kubernetes grants 30s by
+		// default, so a deployment there sets both this and shutdown_timeout;
+		// leaving them mismatched is what validateShutdownGraceBudget rejects at
+		// startup rather than letting a SIGKILL discover it.
+		"http.grace_period": "45s",
+		// shutdown_timeout bounds the drain only. It is 25s rather than the whole
+		// grace period because the teardown after the drain — diagnostics,
+		// background join, pool release, telemetry flush — needs the remaining 17s,
+		// and the flush that records how all three went is what runs last.
+		"http.shutdown_timeout":  "25s",
+		"http.readiness_timeout": "4s",
+		// readiness_propagation_delay holds the drain open long enough for a load
+		// balancer to notice /health/ready failing before connections stop being
+		// accepted. It is production-shaped on purpose, so running the binary
+		// directly waits it out on SIGTERM; env/.env.example sets 0s for local
+		// iteration, and docs/railway-deployment-profile.md does the arithmetic
+		// against the platform's draining window.
+		"http.readiness_propagation_delay": "15s",
+		"http.read_header_timeout":         "5s",
+		"http.read_timeout":                "5s",
+		// request_timeout stays below write_timeout so the budget expires while
+		// the connection can still carry the 504 that reports it.
+		"http.request_timeout":  "8s",
+		"http.write_timeout":    "10s",
+		"http.idle_timeout":     "60s",
+		"http.max_header_bytes": 16 << 10,
+		"http.max_body_bytes":   int64(1 << 20),
+		// max_in_flight is deliberately larger than postgres.max_open_conns:
+		// shedding must engage after the pool is saturated and requests start
+		// queueing, not before it is used.
+		"http.max_in_flight": 256,
+		// max_connections is well above max_in_flight, because the two bound
+		// different things: shedding answers 503 with a Retry-After, while this
+		// leaves a caller in the kernel backlog with no answer at all. The
+		// headroom is what keeps the informative rejection the common one, and
+		// this the backstop against a connection flood costing a goroutine and
+		// two buffers apiece until the process is OOM-killed.
+		"http.max_connections":          4096,
+		"http.access_log_health_probes": false,
+	}
+}
+
 func validateHTTPConfig(cfg *HTTPConfig) error {
 	cfg.Addr = strings.TrimSpace(cfg.Addr)
 	if cfg.Addr == "" {

@@ -6,6 +6,7 @@ import (
 	"runtime/debug"
 
 	"github.com/example/go-service-template-rest/internal/failure"
+	"github.com/example/go-service-template-rest/internal/observability/logctx"
 	"google.golang.org/grpc/codes"
 )
 
@@ -27,6 +28,6 @@ func logRecoveredPanic(ctx context.Context, log *slog.Logger, method string, rec
 	log.ErrorContext(
 		ctx,
 		"grpc_panic_recovered",
-		append([]any{"rpc.method", method}, failure.PanicAttrs(recovered, debug.Stack())...)...,
+		append([]any{"rpc.method", method}, logctx.PanicAttrs(recovered, debug.Stack())...)...,
 	)
 }

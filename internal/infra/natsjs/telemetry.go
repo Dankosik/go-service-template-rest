@@ -30,7 +30,7 @@ const instrumentationScope = "service.messaging.nats"
 // so the two packs describe one publication in one vocabulary.
 //
 // The metric and log label vocabulary is vocabulary.go; the dead-letter reasons
-// that travel on the wire are message_wire.go.
+// that travel on the wire are message_deadletter.go.
 const (
 	// attributeOutcome has no semconv equivalent at the pinned version. It stays
 	// a literal because it is this repository's own attribute, bounded by
@@ -269,13 +269,38 @@ func (s *telemetry) recordHandler(ctx context.Context, msg Message, outcome, rea
 	)
 }
 
-func (s *telemetry) logTerminalDelivery(ctx context.Context, subject string, metadata *jetstream.MsgMetadata, reason string, handlerFrames []string) {
+func (s *telemetry) logTerminalDelivery(ctx context.Context, subject string, metadata *jetstream.MsgMetadata, reason string, panicked *handlerPanic) {
 	args := []any{"operation", "consume", "subject", subject, "outcome", outcomeTerminal, "reason", reason}
 	if metadata != nil {
 		args = append(args, "attempt", metadata.NumDelivered)
 	}
-	if len(handlerFrames) != 0 {
-		args = append(args, "handler_frames", handlerFrames)
+	if panicked != nil {
+		args = append(args, "panic.class", panicked.class, "handler_frames", panicked.frames)
 	}
 	s.log.ErrorContext(ctx, "messaging_terminal_delivery", args...)
+}
+
+// The counters below carry no log line of their own: each is one number on a
+// path recordHandler, recordDrain, or logTerminalDelivery already narrates. They
+// are methods anyway, so an attribute added to any of them is added here rather
+// than at whichever delivery site noticed first.
+func (s *telemetry) countFetch(ctx context.Context, messages int64, messageBytes int64) {
+	s.fetchMessages.Add(ctx, messages)
+	s.fetchBytes.Add(ctx, messageBytes)
+}
+
+func (s *telemetry) countConsumeActive(ctx context.Context, delta int64) {
+	s.consumeActive.Add(ctx, delta)
+}
+
+func (s *telemetry) countRedelivery(ctx context.Context) {
+	s.redeliveries.Add(ctx, 1)
+}
+
+func (s *telemetry) countRetry(ctx context.Context) {
+	s.retries.Add(ctx, 1)
+}
+
+func (s *telemetry) countForcedShutdown(ctx context.Context) {
+	s.forcedShutdowns.Add(ctx, 1)
 }

@@ -3,13 +3,6 @@ package oidcjwt
 import (
 	"context"
 	"errors"
-	"log/slog"
-	"runtime/debug"
-
-	// Aliased because this package's own failure(Kind) constructor owns the
-	// name: these are the repository's neutral failure identities, not this
-	// package's sanitized authentication categories.
-	sharedfailure "github.com/example/go-service-template-rest/internal/failure"
 )
 
 // Kind is the finite, sanitized authentication failure taxonomy.
@@ -136,31 +129,6 @@ func verificationReason(err error) string {
 
 func failure(kind Kind) error {
 	return &Error{kind: kind}
-}
-
-// logRecoveredPanic reports a panic this package converted into a sanitized
-// failure, which the metric alone cannot locate: it says a panic occurred, and
-// this says where the service defect is.
-//
-// It is the only record of where such a panic came from, because both
-// converters answer before any transport recovery could see it. What the record
-// may carry is [sharedfailure.PanicAttrs]'s decision: providerError's redaction
-// rule reaches logs as much as errors, and that constructor already withholds
-// the panic's value while publishing its type, class, and stack.
-func logRecoveredPanic(ctx context.Context, log *slog.Logger, operation string, recovered any) {
-	if log == nil {
-		log = slog.Default()
-	}
-	// debug.Stack is taken here, inside the caller's deferred recovery, because
-	// that is the only point the panicking frames still exist.
-	log.ErrorContext(
-		ctx,
-		"authn_panic_recovered",
-		append(
-			[]any{"component", "authn", "authn.operation", operation},
-			sharedfailure.PanicAttrs(recovered, debug.Stack())...,
-		)...,
-	)
 }
 
 // NewError builds one sanitized authentication category.

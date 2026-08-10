@@ -1,8 +1,9 @@
 // Package packagetest reads a Go package's own source, for the tests that hold a
 // package's prose to its code.
 //
-// Three packages run those tests — internal/infra/grpc, internal/infra/grpcclient,
-// and internal/infra/oidcjwt — because their comments carry more of the design
+// Four packages run those tests — internal/infra/grpc, internal/infra/grpcclient,
+// internal/infra/oidcjwt, and internal/infra/natsjs — because their comments
+// carry more of the design
 // than the code does and navigate by naming things the toolchain never checks: a
 // sibling file, a declaration in another package, the test that holds a property
 // the types cannot. Both the walk and the checks over it are here rather than in
@@ -209,15 +210,25 @@ func repositoryRootDirs(repositoryRoot string) map[string]struct{} {
 // prose produces — "I/O", "interval/timeout", an import path like
 // google.golang.org/grpc — without keeping a list of the prose.
 //
-// A path qualifies by naming a versioned file, or by starting at a directory
-// that exists at the repository root. A token failing both is skipped, so a
-// mistyped first segment is not reported; that is the price of not maintaining
-// the prose list, and the rename this check exists for changes a later segment.
+// Two shapes are rejected before either test below runs. A first segment
+// carrying a dot is a module or domain path, never a directory this repository
+// has: that rule is what keeps github.com/nats-io/nats.go out, which the
+// versioned-extension test would otherwise admit because the module's own name
+// ends in .go. A "..." segment is an elision a comment wrote for a reader.
+//
+// Past those, a path qualifies by naming a versioned file, or by starting at a
+// directory that exists at the repository root. A token failing both is skipped,
+// so a mistyped first segment is not reported; that is the price of not
+// maintaining the prose list, and the rename this check exists for changes a
+// later segment.
 func namesRepositoryPath(path string, rootDirs map[string]struct{}) bool {
+	root, _, _ := strings.Cut(path, "/")
+	if strings.Contains(root, ".") || slices.Contains(strings.Split(path, "/"), "...") {
+		return false
+	}
 	if slices.Contains(versionedFileExtensions, filepath.Ext(path)) {
 		return true
 	}
-	root, _, _ := strings.Cut(path, "/")
 	_, atRoot := rootDirs[root]
 	return atRoot
 }

@@ -6,40 +6,8 @@ import (
 	"net/url"
 	"os"
 	pathpkg "path"
-	"slices"
 	"strings"
 )
-
-// conflictingEnv returns the non-empty variables among names, sorted so reported
-// output is stable.
-func conflictingEnv(names []string) []string {
-	conflicting := make([]string, 0, len(names))
-	for _, name := range names {
-		if _, ok := nonEmptyEnv(name); ok {
-			conflicting = append(conflicting, name)
-		}
-	}
-	slices.Sort(conflicting)
-	return conflicting
-}
-
-// rejectConflictingAmbientEnv refuses a configured exporter that would otherwise
-// silently honor injected credentials or trust material.
-//
-// Both signals reject on the same terms, and the wording is the part worth
-// owning here: an operator matching on this message should not have to discover
-// that traces and metrics phrase the same refusal differently. Which variables
-// count is still each signal's own list.
-func rejectConflictingAmbientEnv(names []string) error {
-	conflicting := conflictingEnv(names)
-	if len(conflicting) == 0 {
-		return nil
-	}
-	return fmt.Errorf(
-		"unsupported ambient otel exporter environment (%s): injected credentials and trust material are not verifiable here; configure observability.otel.exporter.* instead",
-		strings.Join(conflicting, ", "),
-	)
-}
 
 // The standard OpenTelemetry endpoint variables. A signal-specific one is
 // already a complete endpoint for that signal; the signal-agnostic one is a root
@@ -233,59 +201,4 @@ func parseOTLPURL(raw string) (*url.URL, error) {
 	}
 
 	return parsedURL, nil
-}
-
-func parseOTLPHeaders(raw string) (map[string]string, error) {
-	headers := make(map[string]string)
-
-	pairs := strings.Split(raw, ",")
-	for i, pair := range pairs {
-		entry := strings.TrimSpace(pair)
-		if entry == "" {
-			continue
-		}
-		rawKey, rawValue, ok := strings.Cut(entry, "=")
-		if !ok {
-			return nil, fmt.Errorf("parse otlp headers: malformed entry at position %d", i+1)
-		}
-		key := strings.TrimSpace(rawKey)
-		value := strings.TrimSpace(rawValue)
-		if key == "" {
-			return nil, fmt.Errorf("parse otlp headers: malformed entry at position %d: empty header key", i+1)
-		}
-		if !validOTLPHeaderKey(key) {
-			return nil, fmt.Errorf("parse otlp headers: malformed entry at position %d: invalid header key", i+1)
-		}
-		if value == "" {
-			return nil, fmt.Errorf("parse otlp headers: malformed entry at position %d: empty header value", i+1)
-		}
-		headers[key] = value
-	}
-
-	if len(headers) == 0 {
-		return nil, errors.New("parse otlp headers: no valid header pairs")
-	}
-	return headers, nil
-}
-
-func validOTLPHeaderKey(key string) bool {
-	if key == "" {
-		return false
-	}
-	for i := range len(key) {
-		b := key[i]
-		if (b >= 'a' && b <= 'z') ||
-			(b >= 'A' && b <= 'Z') ||
-			(b >= '0' && b <= '9') ||
-			strings.ContainsRune("!#$%&'*+-.^_`|~", rune(b)) {
-			continue
-		}
-		return false
-	}
-	return true
-}
-
-func nonEmptyEnv(name string) (string, bool) {
-	value := strings.TrimSpace(os.Getenv(name))
-	return value, value != ""
 }

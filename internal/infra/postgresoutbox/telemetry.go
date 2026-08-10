@@ -10,9 +10,7 @@ import (
 	infratelemetry "github.com/example/go-service-template-rest/internal/infra/telemetry"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/metric"
-	semconv "go.opentelemetry.io/otel/semconv/v1.37.0"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -25,12 +23,10 @@ const TelemetryScope = "service.outbox.postgres"
 // the recorders that write it. The closed vocabularies every attribute here is
 // bounded through are vocabulary.go.
 
-// Telemetry records this package's metrics and operator logs. A nil *Telemetry
-// is a working no-op: every method below returns on a nil receiver, because
-// telemetry is optional at both NewStore and NewRelay. Call these methods
-// directly rather than guarding at the call site — a second nil check reads as
-// if one of the two were load-bearing, and neither is. A method added here
-// carries the same guard.
+// Telemetry owns this package's metrics, publish tracer, and operator logger.
+// Metrics live in this file, publish spans in telemetry_publish.go, and operator
+// records in telemetry_log.go. A nil *Telemetry is a working no-op because
+// telemetry is optional at both NewStore and NewRelay.
 type Telemetry struct {
 	log                  *slog.Logger
 	tracer               trace.Tracer
@@ -183,116 +179,6 @@ func operationAttributes(operation, outcome, errorType string) metric.Measuremen
 		attribute.String("outcome", boundedOutcome(outcome)),
 		attribute.String("error.type", boundedErrorType(errorType)),
 	)
-}
-
-// StartPublish opens the span covering one publication attempt and returns the
-// context the adapter is called with, so an adapter's own spans nest under it.
-//
-// The span is a new root linked to the event's creation context rather than a
-// child of it, which is the one decision here worth stating. A publication can
-// happen long after its append — after a backlog drains, or after an operator
-// redrives days later — and parenting would hold the producing request's trace
-// open for that whole horizon, past the assembly window of every backend that
-// has one. The link carries the same join without that lifetime coupling, and it
-// is what the OpenTelemetry messaging convention prescribes for a send that has
-// a separate creation context.
-//
-// messaging.system is deliberately absent: this package is broker-neutral and
-// only the adapter knows the system. The ordering key is absent for the reason
-// it is absent everywhere else in this package.
-// The span is returned rather than ended here: StartPublish and EndPublish are
-// one pair around the adapter call, so that the publication's outcome — which
-// only the caller learns — reaches the span it belongs to.
-//
-//nolint:ireturn,spancheck // trace.Span is OTel's own interface, and EndPublish is this span's end.
-func (t *Telemetry) StartPublish(ctx context.Context, event Event) (context.Context, trace.Span) {
-	if t == nil || t.tracer == nil {
-		return ctx, trace.SpanFromContext(ctx)
-	}
-	options := []trace.SpanStartOption{
-		trace.WithNewRoot(),
-		trace.WithSpanKind(trace.SpanKindProducer),
-		trace.WithAttributes(
-			semconv.MessagingOperationName(publishOperationName),
-			semconv.MessagingDestinationName(event.Destination),
-		),
-	}
-	// Extracted from a blank context on purpose. Extracting into ctx would leave
-	// whatever span the relay is already inside in place when the carrier is
-	// empty, and this span would then link to itself rather than to nothing.
-	creation := trace.SpanContextFromContext(
-		otel.GetTextMapPropagator().Extract(context.Background(), event.CreationContext()),
-	)
-	if creation.IsValid() {
-		options = append(options, trace.WithLinks(trace.Link{SpanContext: creation}))
-	}
-	return t.tracer.Start(ctx, publishOperationName+" "+event.Destination, options...)
-}
-
-// EndPublish closes a publication span with the same bounded class the publish
-// metric carries, so a trace and a dashboard name one condition. The broker's
-// own error text never reaches it, for the reason LogListenerRetry states.
-func (t *Telemetry) EndPublish(span trace.Span, err error, errorClass string) {
-	if t == nil || span == nil {
-		return
-	}
-	if err != nil {
-		bounded := boundedErrorType(errorClass)
-		span.SetAttributes(attribute.String("error.type", bounded))
-		span.SetStatus(codes.Error, bounded)
-	}
-	span.End()
-}
-
-func (t *Telemetry) LogPoison(ctx context.Context, errorClass string, attempt int) {
-	if t != nil {
-		t.log.ErrorContext(ctx, "outbox_event_poisoned", "error.type", errorClass, "attempt", attempt)
-	}
-}
-
-func (t *Telemetry) LogPublisherStuck(ctx context.Context) {
-	if t != nil {
-		t.log.ErrorContext(ctx, "outbox_publisher_stuck", "error.type", classStuck)
-	}
-}
-
-// LogPublisherPanic reports an adapter panic with the description the recover
-// consumed. It is the one place in this package that logs an unbounded string,
-// and it is deliberate: the process is exiting over a deployment fault, and the
-// class alone — publisher_panic on the exit line and the publish metric — names
-// the category without naming the line of code. LogListenerRetry's rule still
-// holds either way, because a panic value comes from the adapter rather than
-// from a driver that formats DSN material into it.
-//
-// The event is not named. A panicking adapter is reproducible from its stack,
-// while an event id on an ERROR line is the identity this package keeps off
-// telemetry everywhere else.
-func (t *Telemetry) LogPublisherPanic(ctx context.Context, value any, stack []byte) {
-	if t != nil {
-		t.log.ErrorContext(ctx, "outbox_publisher_panic",
-			"error.type", classPanic, "panic", fmt.Sprint(value), "stack", string(stack))
-	}
-}
-
-func (t *Telemetry) LogRecovery(ctx context.Context, attempt int) {
-	if t != nil {
-		t.log.WarnContext(ctx, "outbox_lease_recovered", "attempt", attempt)
-	}
-}
-
-// LogListenerRetry reports that wake-up notifications are unavailable. Pickup
-// latency falls back to the poll interval until the listener reconnects.
-//
-// stage is a bounded class from listenerStage, never the driver's error text.
-// A pgx connect failure formats the DSN's user, database, and host into its
-// message, and this package promises never to log DSN material. Losing that
-// detail costs little: the listener shares the pool's DSN, so a real
-// connectivity fault also fails the pool, and that path exits the process with
-// a postgres_unavailable class instead of degrading quietly.
-func (t *Telemetry) LogListenerRetry(ctx context.Context, stage string) {
-	if t != nil {
-		t.log.WarnContext(ctx, "outbox_listener_retry", "error.type", classDatabase, "stage", stage)
-	}
 }
 
 // collect answers one scrape from the published snapshot. It is the callback

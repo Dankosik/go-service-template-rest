@@ -145,12 +145,20 @@ func TestHandlerPanicFramesAreSanitized(t *testing.T) {
 	worker := unitWorker(t, &recordingJetStream{}, func(context.Context, Message) error {
 		panic(panicCanary)
 	})
-	frames, _ := worker.invokeHandler(t.Context(), Message{})
-	joined := strings.Join(frames, "\n")
-	if len(frames) == 0 || !strings.Contains(joined, "TestHandlerPanicFramesAreSanitized") {
-		t.Fatalf("panic frames = %q, want test handler location", frames)
+	panicked, _ := worker.invokeHandler(t.Context(), Message{})
+	if panicked == nil {
+		t.Fatal("invokeHandler() reported no panic")
+	}
+	joined := strings.Join(panicked.frames, "\n")
+	if len(panicked.frames) == 0 || !strings.Contains(joined, "TestHandlerPanicFramesAreSanitized") {
+		t.Fatalf("panic frames = %q, want test handler location", panicked.frames)
 	}
 	if strings.Contains(joined, panicCanary) {
-		t.Fatalf("panic frames leaked recovered value: %q", frames)
+		t.Fatalf("panic frames leaked recovered value: %q", panicked.frames)
+	}
+	// The class is what an operator alerts on, and it is the same vocabulary
+	// every other recovery site in this repository publishes.
+	if panicked.class != "string" {
+		t.Fatalf("panic class = %q, want the class internal/failure assigns a string panic", panicked.class)
 	}
 }

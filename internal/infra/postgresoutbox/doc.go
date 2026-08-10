@@ -62,8 +62,9 @@
 // [Store.ReconcileCommit] answer a writer needs when its own commit response was
 // lost, relay_ready.go the readiness policy the diagnostics probe and the metric
 // callback share, errors.go the sentinel set, vocabulary.go the closed metric
-// and log vocabularies with the functions that bound them, and telemetry.go the
-// instruments, the snapshot, and the scrape callback.
+// and log vocabularies with the functions that bound them. telemetry.go owns
+// metrics and scrape state, telemetry_publish.go publish spans, and
+// telemetry_log.go operator records.
 //
 // # Trace continuity
 //
@@ -163,7 +164,7 @@
 // exempts store*.go from the postgres_driver_boundary and sqlc_boundary rules and
 // notify*.go from the first, because those are the PostgreSQL adapters; the relay
 // loop and the envelope stay driver-free. That glob is why the statements split
-// as store_append.go, store_claim.go, store_finalize.go,
+// as store.go, store_append.go, store_claim.go, store_finalize.go,
 // store_legacy_classification.go, store_maintenance.go, store_operator.go,
 // store_retire.go, and store_rows.go: a file named anything
 // else moves pgx and

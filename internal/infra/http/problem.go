@@ -3,7 +3,9 @@ package httpx
 import (
 	"context"
 	"encoding/json"
+	"math"
 	"net/http"
+	"time"
 
 	"github.com/example/go-service-template-rest/internal/openapi"
 	"github.com/example/go-service-template-rest/internal/problem"
@@ -80,8 +82,28 @@ func recordProblemCode(ctx context.Context, code problem.Code) {
 	record.code = code
 }
 
+// problemCodeForRequest returns the problem code this request was answered with,
+// or the empty string when it was not answered with one.
+func problemCodeForRequest(r *http.Request) string {
+	if r == nil {
+		return ""
+	}
+	record, ok := r.Context().Value(problemRecordContextKey{}).(*problemRecord)
+	if !ok {
+		return ""
+	}
+	return string(record.code)
+}
+
+// retryAfterSeconds rounds up: a sub-second budget must not be advertised as
+// "retry immediately".
+func retryAfterSeconds(delay time.Duration) int {
+	seconds := int(math.Ceil(delay.Seconds()))
+	return max(seconds, 1)
+}
+
 func writeProblem(w http.ResponseWriter, r *http.Request, response problemResponse) {
-	definition := problemDefinitionFor(response.code)
+	definition := problem.ForCodeOrInternal(response.code)
 	if r != nil {
 		recordProblemCode(r.Context(), definition.Code)
 	}
@@ -124,21 +146,6 @@ func optionalInvalidParams(violations []fieldViolation) *[]openapi.InvalidParam 
 		params = append(params, openapi.InvalidParam{Name: violation.Field, Reason: violation.Reason})
 	}
 	return &params
-}
-
-// problemDefinitionFor resolves a code against the shared catalog, substituting
-// the internal-error entry for one it does not publish.
-//
-// The substitution is safe because the callers are this package's own fallback
-// paths, which pass constants from that same catalog. A caller that can pass an
-// arbitrary status uses problem.For, which refuses instead — see its
-// documentation for why a plausible wrong answer is the worse failure.
-func problemDefinitionFor(code problem.Code) problem.Definition {
-	if definition, ok := problem.ForCode(code); ok {
-		return definition
-	}
-	internalError, _ := problem.ForCode(problem.CodeInternalError)
-	return internalError
 }
 
 func optionalProblemString(value string) *string {

@@ -5,8 +5,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 )
+
+// This file owns one thing: bounding the response body. The fixed-target
+// guarantee itself — validateTarget, enforceDialAddress, and
+// authorityTransport.RoundTrip — lives entirely in target_policy.go.
 
 // ResponseTooLargeError reports a decoded response body exceeding its configured limit.
 type ResponseTooLargeError struct {
@@ -15,29 +18,6 @@ type ResponseTooLargeError struct {
 
 func (e *ResponseTooLargeError) Error() string {
 	return fmt.Sprintf("outbound HTTP response body exceeds %d bytes", e.Limit)
-}
-
-// authorityTransport is the innermost guard: it refuses any request whose scheme
-// or authority drifted from the one the client was built for, before a dial can
-// happen.
-type authorityTransport struct {
-	base      http.RoundTripper
-	scheme    string
-	authority string
-}
-
-func (t authorityTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	if req == nil || req.URL == nil ||
-		req.URL.User != nil ||
-		!strings.EqualFold(req.URL.Scheme, t.scheme) ||
-		!strings.EqualFold(req.URL.Host, t.authority) {
-		return nil, ErrTargetDenied
-	}
-	response, err := t.base.RoundTrip(req)
-	if err != nil {
-		return response, fmt.Errorf("send outbound HTTP request: %w", err)
-	}
-	return response, nil
 }
 
 type responseLimitTransport struct {

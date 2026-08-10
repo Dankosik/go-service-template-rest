@@ -17,10 +17,13 @@
 //
 // Add to this package only what the process shares: an admission or load signal
 // the transports report through [Metrics.ServerLoad] and
-// [Metrics.GRPCServerLoad] (metrics.go), exporter and provider wiring
-// (tracing.go, metrics_otel.go), endpoint resolution (otlp_endpoint.go), the
-// resource identity every signal carries (resource.go), or the classifier that
-// keeps exporter failures out of the logs verbatim (failure.go).
+// [Metrics.GRPCServerLoad], plus every published series name (metrics.go),
+// provider and exporter construction with no series of their own (tracing.go,
+// metrics_otel.go), the ambient OTEL_EXPORTER_OTLP_* environment policy
+// (exporter_env.go), endpoint resolution (otlp_endpoint.go), OTLP header parsing
+// (otlp_headers.go), the resource identity every signal carries (resource.go),
+// or the classifier that keeps exporter failures out of the logs verbatim
+// (failure.go).
 //
 // Test support lives in telemetrytest, which owns the global-state install and
 // restore that no test may do for itself.

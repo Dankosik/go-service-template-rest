@@ -30,9 +30,8 @@ type Event struct {
 	// OrderingKey travels to the consumer as data and nothing here acts on it.
 	// This package does not serialize a key: the broker assigns its own stream
 	// sequence and a worker above MaxConcurrency=1 runs one key's handlers
-	// concurrently, which TestNATSOrderingKeyDoesNotSerialize pins. A consumer
-	// that needs per-key order owns it — see the two shapes in
-	// docs/durable-messaging.md.
+	// concurrently. A consumer that needs per-key order owns it — see the two
+	// shapes in docs/durable-messaging.md.
 	OrderingKey string
 	CreatedAt   time.Time
 	Payload     []byte

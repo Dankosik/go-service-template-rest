@@ -302,8 +302,8 @@ func TestAuthnRedactionCoversRefreshPanicAndTelemetry(t *testing.T) {
 		}
 	}
 	// panic.class is the bounded label an operator alerts on, and this converter
-	// published only the unbounded type until failure.PanicAttrs became the one
-	// constructor for the set. Asserting the whole set is what keeps the three
+	// published only the unbounded type until the shared panic-attribute
+	// constructor became its single owner. Asserting the whole set keeps the three
 	// arriving together here as they already do at the other recovery sites.
 	for _, attribute := range []string{`"panic.class":"string"`, `"panic.type":"string"`, `"stack":`} {
 		if !strings.Contains(logged, attribute) {

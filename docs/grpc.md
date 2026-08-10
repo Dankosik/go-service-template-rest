@@ -612,12 +612,13 @@ seam unwired.
 
 A per-caller limit is a supplied policy, installed at
 `grpcx.Options.UnaryPolicy` and `StreamPolicy` like any other cross-cutting rule.
-Three things it must get right, all of which the HTTP middleware in
-`internal/infra/http/middleware_ratelimit.go` already records: exempt
-`grpc.health.v1.Health/Check`, or a limited platform evicts the instance;
-bound the key map, because a key derived from caller-controlled metadata is a
-memory leak with a limiter attached; and hash the key when it is derived from a
-credential. `httpx.KeyedRateLimiter` is that bucket. A service needing one
+Three things it must get right, all of which the HTTP side already records:
+exempt `grpc.health.v1.Health/Check`, or a limited platform evicts the instance,
+and hash the key when it is derived from a credential — both in
+`internal/infra/http/middleware_ratelimit.go`; and bound the key map, because a
+key derived from caller-controlled metadata is a memory leak with a limiter
+attached, which `internal/infra/http/ratelimit_keyed.go` states beside the bucket
+that does the bounding. `httpx.KeyedRateLimiter` is that bucket. A service needing one
 identity limited across both transports promotes it to a shared leaf package
 first rather than importing the HTTP adapter from a gRPC policy.
 
