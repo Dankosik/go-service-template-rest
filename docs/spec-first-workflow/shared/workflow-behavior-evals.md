@@ -967,6 +967,30 @@ writers stop; the carrier choice splits `T3` in the ledger; later dependent work
 starts early; or the next session must rediscover the eligible lane map from
 chat.
 
+### WBE-41 — Fresh-Session Orchestration
+
+**Given:** the user explicitly invokes orchestration for a ready
+serial chain containing one macro-phase handoff and `T1 -> T2 -> T3`; `T1`
+completes, `T2` blocks on new authority, and a near-miss run lacks explicit
+authorization to create App tasks.
+
+**Pass:** one dedicated coordinator Goal dispatches one fresh same-directory
+App task at a time. It passes the existing `Next Session Prompt` at the phase
+boundary and the accepted ledger path plus exact unit ID during Implementation.
+Each receiver owns its normal workflow, proof, review, persisted transition,
+and stop. The coordinator waits on task events and reads only lifecycle fields,
+named receipts, and candidate identity. Matching `UNIT_COMPLETE` evidence for
+`T1` permits `T2`; `UNIT_BLOCKED` for `T2` preserves the blocker and prevents
+`T3`. An incomplete envelope returns to the same task, and a transport
+interruption resumes that task once. The near-miss creates no task. No new
+scheduler artifact appears.
+
+**Fail:** the coordinator implements, reviews, repairs, replans, inspects a
+diff, or reruns proof; receivers overlap writes or cross their phase or unit;
+chat replaces durable authority; a semantic failure gets a fresh replacement;
+`T3` starts after the block; or task creation occurs without explicit user
+authorization.
+
 ## Acceptance
 
 Every applicable case must pass. Compare aggregate quality first and keep

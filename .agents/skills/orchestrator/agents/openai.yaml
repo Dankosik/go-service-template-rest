@@ -1,0 +1,4 @@
+interface:
+  display_name: "Orchestrator"
+  short_description: "Chain fresh Codex tasks through a ready ledger"
+  default_prompt: "Use $orchestrator to run the ready task ledger through fresh Codex tasks."
