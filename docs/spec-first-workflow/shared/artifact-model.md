@@ -132,6 +132,14 @@ status: draft | ready | blocked | done
   `tasks.md` ledger reaches `done` only after the final accepted unit also
   passes its global `Completion` condition.
 
+A leaf or reviewer `NEEDS_PARENT` return is a one-level message to its direct
+parent, never durable artifact state. Only the Acceptance-Unit Lead may promote
+its unresolved issue into the unit-local semantic `Blocked:` line below, after
+the phase-owned
+[bottom-up resolution ladder](../phases/implementation-worker-execution.md#bottom-up-obstacle-resolution)
+is exhausted. The Ledger Orchestrator never transcribes a child return into the
+ledger.
+
 When review is triggered, `PASS` or dispositioned `CONCERNS` can move an artifact to `ready`; `FAIL` requires repair or reopening and fresh review.
 
 For `tasks.md`, the implementation phase's [Acceptance-Unit
@@ -146,15 +154,18 @@ proof must survive a checkout, session, or external-environment boundary:
 Use `current bounded diff` for same-checkout proof and a commit/tree identity
 only when proof crosses a checkout or integration boundary. A failed triggered
 review leaves the unit unchecked for repair. When implementation is complete
-but required proof is blocked, leave it unchecked, set the ledger to `status:
-blocked`, and append or replace one unit-local line:
+but required proof is blocked, leave it unchecked and append or replace one
+unit-local line:
 
 ```markdown
   - Blocked: <unit or task IDs>; unverified: <claim>; evidence: <narrower evidence>; next proof owner: <owner and condition>; candidate: <bounded diff or commit/tree>
 ```
 
 Replace that line with the accepted receipt after proof instead of accumulating
-attempts. Do not add a second lifecycle field.
+attempts. A unit `Blocked:` record blocks that unit and its dependants. Keep the
+ledger `status: ready` while another unit is executable or an authorized
+recovery remains; set the whole ledger to `status: blocked` only when neither
+remains. Do not add a second lifecycle field.
 
 The accepted-unit transition changes every member task to `[x]` in one ledger
 edit. A receipt alias closes mechanically in that edit once its named accepted
@@ -175,11 +186,33 @@ persistence and status, not a second Specification template.
 
 A useful `tasks.md` uses the canonical shape, authoring rules, planned-wave
 contract, and readiness criterion in [Planning](../phases/planning.md). This
-file owns whether and when `tasks.md` is persisted, its lifecycle status,
-active-wave resume state, and removal; it does not define a second ledger
-schema.
+file owns whether and when `tasks.md` is persisted, its semantic lifecycle, and
+removal; native task lifecycle and Git candidate identity remain with their own
+systems.
 
-When an active wave must survive compaction, interruption, or session handoff, add one compact `Active wave` block to this same ledger with the acceptance-unit IDs, accepted integration base, unit-to-App-task/worktree state, frozen candidate identity when one exists, and next root action or open causal class. Update it only at a material transition and remove or collapse it into task evidence after atomic unit acceptance; do not create a scheduler file or reconstruct it from chat.
+On resume, inspect native task status for Acceptance-Unit Lead and lane lifecycle,
+the canonical ledger for unit readiness and receipts, and Git for candidates. Do
+not copy those task states into a machine-owned JSON block or scheduler artifact.
+`HANDOFF_READY` is native routing evidence for one fixed Worktree candidate; it
+changes no artifact state and releases no dependency before the same Lead
+records a Local receipt.
+
+When terminal task creation has an unknown outcome and no unique ready task
+identity can be recovered through [Agent Harness's native
+reconciliation](../../agent-harness.md#recovery), record `Blocked:
+UNKNOWN_CREATE for <scope>; unverified: whether
+one native task exists; evidence: <no identity, or client identity without one
+recoverable thread identity>; next proof owner: native task reconciliation;
+candidate: none`. Apply the ledger rollup rule above and do not redispatch
+automatically. An ordinary pending client identity is not an unknown outcome.
+
+An unresolved Handoff outcome uses the existing ordinary blocker shape rather
+than a second lifecycle state: `Blocked: unknown Handoff outcome for <scope>;
+unverified: whether the known Lead moved to Local; evidence: <known task and
+available operation/revision or missing response>; next proof owner: native
+Handoff reconciliation; candidate: <fixed commit/tree or none>`. Do not invoke
+Handoff again without one native state that proves the retry safe. Apply the
+same ledger rollup rule.
 
 A useful `workflow-plan.md` usually needs:
 
@@ -208,7 +241,7 @@ Use additional fields only when they change an action or verdict.
 
 ## Resume Order
 
-1. Inspect current workspace and Git status, then read current `tasks.md` first when implementation or validation is active. When the ledger is split, read the index first and then only the task files for the next unit or actual wave.
+1. Inspect current workspace and Git status, then read current `tasks.md` first when implementation or validation is active. When the ledger is split, read the index first and then only the task files for the next ready unit.
 2. Otherwise read `workflow-plan.md` when it exists for a real multi-session task.
 3. Then read the decision artifact named there: usually `spec.md`, followed by only the design, test, research, or rollout files needed for the next action.
 4. If artifacts conflict, stop and reopen the narrowest decision owner; do not merge the conflict silently.
@@ -222,7 +255,7 @@ Use additional fields only when they change an action or verdict.
    still match.
 
 Keep only active task bundles. At closeout, remove execution-only state such as
-`tasks.md` with any `tasks/` directory, `workflow-plan.md`, and `Active wave`. Retain a completed spec or
+`tasks.md` with any `tasks/` directory and `workflow-plan.md`. Retain a completed spec or
 design only when another live authority names it as a durable decision source;
 otherwise delete the completed bundle after moving durable decisions into
 canonical docs or code. A research note whose refresh trigger is still live

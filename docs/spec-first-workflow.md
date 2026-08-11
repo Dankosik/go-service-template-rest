@@ -36,7 +36,7 @@ Structured and orchestrated work evaluates the phase router in order:
 4. complete system and Go-ownership design when implementation would otherwise choose mechanism or placement, then apply path/risk-matched review;
 5. complete test design when proof is non-obvious, then apply path/risk-matched QA review;
 6. complete `tasks.md` and its path/risk-matched readiness review;
-7. enter [Implementation / Validation / Closeout](spec-first-workflow/phases/implementation-validation-closeout.md) with one direct outcome or the next ready planned acceptance unit or wave; that phase owns execution-carrier selection, root-local execution, triggered Worker execution, root candidate intake, acceptance and integration, risk-triggered independent implementation review, adaptation to execution drift, and validation.
+7. enter [Implementation / Validation / Closeout](spec-first-workflow/phases/implementation-validation-closeout.md) with one direct outcome or the next ready planned acceptance unit or wave; that phase owns execution-carrier selection, local execution, triggered Worker execution, acceptance-owner candidate intake, acceptance and integration, risk-triggered independent implementation review, adaptation to execution drift, and validation.
 
 Before substantive work in each non-implementation macro phase, apply the
 shared [Delegation Decision](spec-first-workflow/shared/subagents-and-handoff.md#delegation-decision).
@@ -88,9 +88,9 @@ Independent review, when triggered, is an internal method of the artifact-owning
 | Test technical design and ownership readiness. | [Technical Design Review](spec-first-workflow/phases/technical-design-review.md) | Findings and verdict returned to technical design. |
 | Falsify non-obvious scenarios and proof feasibility. | [Test Design](spec-first-workflow/phases/test-design.md#review) | Independent QA findings and verdict returned to test design. |
 | Test whether a ledger is executable. | [Task Review / Readiness](spec-first-workflow/phases/task-review-readiness.md) | Findings and verdict returned to planning. |
-| Independently falsify a fixed high-risk implementation acceptance unit. | [Independent Implementation Review](spec-first-workflow/shared/implementation-review.md) | A one-shot `PASS`, `FAIL`, or `BLOCKED` verdict returned to root acceptance. |
+| Independently falsify a fixed high-risk implementation acceptance unit. | [Independent Implementation Review](spec-first-workflow/shared/implementation-review.md) | A one-shot `PASS`, `FAIL`, or `NEEDS_PARENT` verdict returned to the acceptance owner. |
 
-Every independent-review decision follows the shared [Review Independence](spec-first-workflow/shared/review-independence.md) trigger. A dispositioned `CONCERNS` verdict may move for non-implementation artifacts; `FAIL` may not. [Implementation Review](spec-first-workflow/shared/implementation-review.md) owns its fixed-unit verdict and return to the root-owned acceptance contract; a `tasks.md` entry alone does not trigger it.
+Every independent-review decision follows the shared [Review Independence](spec-first-workflow/shared/review-independence.md) trigger. A dispositioned `CONCERNS` verdict may move for non-implementation artifacts; `FAIL` may not. [Implementation Review](spec-first-workflow/shared/implementation-review.md) owns its fixed-unit verdict and return to the acceptance owner; a `tasks.md` entry alone does not trigger it.
 
 ### Conditional Read Gate
 

@@ -74,6 +74,7 @@ whatever change is already editing that code, not to a separate cleanup.
   repository extension seams.
 - Before editing agent instructions, tool descriptions, or skill files, read [Prompt Maintenance](docs/spec-first-workflow.md#prompt-maintenance); skill changes also load [Skill Authoring](docs/skill-authoring.md).
 - Instruction loading is a gate: read the matching owner before the first edit, durable-artifact mutation, native-control dispatch, or readiness/completion claim it governs. Re-evaluate the read set only when evidence changes the phase, risk, ownership, proof, or harness control; retain only the current phase and triggered conditional owners.
+- Every different-session actor in orchestrated Implementation receives exactly one role from the [Execution Role Tree](docs/spec-first-workflow/phases/implementation-worker-execution.md#execution-role-tree) in the first line of its dispatch and loads that tree before its first governed action; a native carrier name never grants role authority.
 - Task-local artifacts own accepted task decisions. Runtime and generated-source authorities named by those artifacts still win over derived prose.
 
 ## Authorization And Boundaries
@@ -83,7 +84,7 @@ whatever change is already editing that code, not to a separate cleanup.
 - An approved external-write or purchase envelope owns its cost, security, and proof bounds. Inside it, choose live-state parameters such as region, equivalent host or size, bounded retry route, and local or remote execution from current evidence; a rejected route is no longer valid. Reopen authorization only to exceed the envelope, weaken required security or proof, or change scope or behavior.
 - Inspection and authorized in-scope edits may leave the assigned checkout. A `change`, `build`, or `fix` request authorizes required local edits in an available neighboring repository when it owns part of the accepted outcome; no separate task or confirmation is required solely because work crosses a repository boundary. Before editing, load the target repository's instructions, inspect its checkout and dirty state, preserve unrelated changes, and validate every changed repository. Treat the neighbor as an external blocker only when it is unavailable, read-only, outside the accepted outcome, or the required action needs authority the request did not grant.
 - Respect explicit `read-only`, `docs-only`, `research only`, and named-phase boundaries.
-- Use a durable execution control (a Codex Goal in the Codex App; `/goal` plus the task list in Claude Code — see [Agent Harness](docs/agent-harness.md)) only from implementation through closeout. Intake, research, specification, technical design, test design, planning, and their review and repair loops remain outside durable execution controls even when they edit repository workflow artifacts.
+- Use a durable execution control (a Codex Goal in the Codex App; `/goal` plus the task list in Claude Code — see [Agent Harness](docs/agent-harness.md)) only from implementation through closeout. Intake, research, specification, technical design, test design, planning, and their review and repair loops remain outside durable execution controls even when they edit repository workflow artifacts. The only exception is an explicitly requested Codex App Ledger Orchestrator: its Goal owns fresh Acceptance-Unit Lead dispatch and terminal routing of ready units, concurrently only for a ledger-proven independent wave, never unit execution strategy, implementation, review, proof, integration, correction, or acceptance.
 - Run ordinary non-interactive shell calls without shell startup: set `login: false` when supported; otherwise set `shell: "/bin/bash"`. Use a login or interactive shell only when the command materially depends on its initialization or zsh-only syntax.
 
 ## Decision Ownership
@@ -103,6 +104,16 @@ When one option dominates, choose it and state the choice with its reopen condit
 ### Proceeding
 
 Proceeding is the agent's decision inside the current macro phase. Within current authorization, begin, continue, widen inspection, analysis, diagnosis, or research, open a read-only lane, and take the next in-scope task, lane, wave, or supporting step autonomously. Take the action current evidence supports and report the result. Name the next step precisely and take it in the same turn unless the [workflow router's macro-phase boundary](docs/spec-first-workflow.md#phase-movement) requires a handoff and stop; a step too vague to name exposes a missing decision rather than a plan. End a turn with a question only for the single user-owned escalation above or the confirmation required before an irreversible external effect.
+
+Resolve obstacles bottom-up: take an evidence-changing action inside the current
+role and repeat no route under unchanged preconditions; otherwise return the
+evidence, boundary, and requested action only to the direct parent. In
+orchestrated Implementation, leaves return `NEEDS_PARENT`, only the
+Acceptance-Unit Lead may persist a unit `Blocked:` record, and only the Ledger
+Orchestrator may surface a user-owned or irreversible-effect boundary after the
+ladder is exhausted. [Bottom-Up Obstacle
+Resolution](docs/spec-first-workflow/phases/implementation-worker-execution.md#bottom-up-obstacle-resolution)
+owns the exact ladder.
 
 Every request authorizes resolving uncertainty through repository inspection, current external sources, and additional read-only lanes until another source is unlikely to change the decision. State and continue under a bounded assumption with its reopen condition when that keeps the result honest and useful. A named blocker or progress or scope note reports the current state without waiting for a reply.
 
@@ -132,9 +143,10 @@ When work can change Go, classify only the triggered pressures: package owner,
 import direction, composition, or exported surface; reader-visible control flow,
 naming, helper shape, or test diagnostics; method sets, nil/zero, errors, or
 context; resource or transaction lifetime; mutable ownership, aliasing,
-concurrency, or lifecycle; hot-path work amplification, resource cost, or
-capacity; canonical, generated, or hand-written authority; and repository-native
-proof. For a second present path, treat behavior as one policy only when it
+concurrency, or lifecycle; algorithmic complexity, hot-path work amplification,
+resource cost, or capacity; canonical, generated, or hand-written authority;
+and repository-native proof. For a second present path, treat behavior as one
+policy only when it
 shares the same accepted authority, invariant, and policy-level failure
 semantics; similar code shape alone is not evidence. Activate only the matching
 existing Go methods; untriggered categories create no work. Close every

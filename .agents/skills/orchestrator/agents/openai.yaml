@@ -1,0 +1,6 @@
+interface:
+  display_name: "Ledger Orchestrator"
+  short_description: "Route ready ledger units through Unit Leads"
+  default_prompt: "Execution role: LEDGER_ORCHESTRATOR. Use $orchestrator to execute the ready Implementation ledger autonomously through fresh native tasks in this saved Git project; authorize Local for serial Leads, Worktrees for ledger-proven independent waves or Lead-selected isolated Workers, and per-stage Lead Goals; select each direct child's model and reasoning effort from its fixed work."
+policy:
+  allow_implicit_invocation: false

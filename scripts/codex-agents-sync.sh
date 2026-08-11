@@ -9,9 +9,11 @@ end_marker="# template-owned-codex-agents:end"
 usage() {
 	cat <<'EOF'
 usage:
+  codex-agents-sync.sh --preflight [--repo <repository>]
   codex-agents-sync.sh --apply [--repo <repository>]
   codex-agents-sync.sh --check [--repo <repository>]
 
+  --preflight  refuse target path and marker shapes that cannot be rebuilt safely
   --apply  replace the managed role registry in .codex/config.toml
   --check  verify exact role coverage without changing files
   --repo   repository root (default: current working directory)
@@ -25,7 +27,7 @@ fail() {
 
 # shellcheck source=scripts/lib/sync-cli.sh
 source "$(dirname -- "${BASH_SOURCE[0]}")/lib/sync-cli.sh"
-sync_cli_parse "apply check" "$@"
+sync_cli_parse "preflight apply check" "$@"
 mode="${SYNC_MODE}"
 repo="${SYNC_REPO}"
 
@@ -35,6 +37,27 @@ config="${repo}/.codex/config.toml"
 [[ ! -L "${repo}/.codex" ]] || fail ".codex is a symlink"
 [[ ! -L "${roles_root}" ]] || fail ".codex/agents is a symlink"
 [[ ! -L "${config}" ]] || fail ".codex/config.toml is a symlink"
+if [[ -e "${repo}/.codex" && ! -d "${repo}/.codex" ]]; then
+	fail ".codex is not a directory"
+fi
+if [[ -e "${roles_root}" && ! -d "${roles_root}" ]]; then
+	fail ".codex/agents is not a directory"
+fi
+if [[ -e "${config}" && ! -f "${config}" ]]; then
+	fail ".codex/config.toml is not a regular file"
+fi
+
+validate_config_shape() {
+	local start_count=0 end_count=0
+	[[ -f "${config}" ]] || return 0
+	start_count=$(grep -Fxc "${start_marker}" "${config}" || true)
+	end_count=$(grep -Fxc "${end_marker}" "${config}" || true)
+	[[ "${start_count}" -le 1 && "${end_count}" -le 1 && "${start_count}" == "${end_count}" ]] ||
+		fail ".codex/config.toml has an invalid managed registry marker pair"
+}
+
+validate_config_shape
+[[ "${mode}" != "preflight" ]] || exit 0
 [[ -d "${roles_root}" ]] || fail ".codex/agents is missing"
 
 role_names=()
@@ -63,15 +86,11 @@ render_registry() {
 }
 
 expected_config() {
-	local output="$1" stripped trimmed start_count=0 end_count=0
+	local output="$1" stripped trimmed
 	stripped=$(mktemp "${TMPDIR:-/tmp}/codex-agents-stripped.XXXXXX")
 	trimmed=$(mktemp "${TMPDIR:-/tmp}/codex-agents-trimmed.XXXXXX")
 
 	if [[ -f "${config}" ]]; then
-		start_count=$(grep -Fxc "${start_marker}" "${config}" || true)
-		end_count=$(grep -Fxc "${end_marker}" "${config}" || true)
-		[[ "${start_count}" -le 1 && "${end_count}" -le 1 && "${start_count}" == "${end_count}" ]] ||
-			fail ".codex/config.toml has an invalid managed registry marker pair"
 		awk -v roles="${role_csv}" -v start="${start_marker}" -v end="${end_marker}" '
 			BEGIN {
 				count = split(roles, names, ",")

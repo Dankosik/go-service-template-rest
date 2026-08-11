@@ -3,28 +3,38 @@
 ## When To Load
 
 Load this before selecting or reviewing a mechanism whose work grows with
-input, data cardinality, traffic, remote round trips, serialization or copies,
-fan-out, retries, retained memory, or contention.
+input, cardinality, traffic, round trips, copies, fan-out, retries, retained
+memory, or contention.
 
 ## Behavior Change Thesis
 
-Design fails early when it chooses a topology without naming the multiplier;
-review fails late when it measures only a small success-path fixture. Both miss
-the maximum or failure state where repeated work dominates.
+Choosing topology without its multiplier and measuring only a small success
+path both miss maximum or failure states where repeated work dominates.
 
 ## Decision Rubric
 
-- State the multiplier before the cost: calls, queries, iterations, bytes,
-  serial work, or in-flight memory per logical operation as a function of rows,
-  page size, fan-out, misses, tenants, retries, or concurrency. Show units and
-  the evidence-bounded normal, maximum, and failure or recovery envelope.
+- Express dominant time and space complexity in workload variables. Name a
+  decision-relevant worst, average, or amortized case, and expose nested scans,
+  sorts, copies, membership checks, or remote work. Bind calls, queries, rows,
+  bytes, serial work, and in-flight memory to the evidence-bounded normal,
+  maximum, and failure or recovery envelope.
+- Model the complete logical operation, not only the changed component. Include
+  retained stages, nested multipliers, and recovery or replay. Sum serial work;
+  bound parallel critical-path time while retaining total resource demand;
+  model queues by arrival, service, backlog, and wait. Parallelism and queues do
+  not erase work.
 - Compare the maximum the contract permits, not only a default fixture. Compound
   failure multipliers such as retries times fan-out or one origin call per item
-  during a cache outage.
+  during a cache outage. Reopen on a changed formula or assumption; even a
+  smaller-than-order-of-magnitude input change can dominate superlinear work.
 - Try the smallest mechanism in order: remove repeated work, reuse an existing
   result, or bound the input; then batch, stream, cache, parallelize, or queue
   only when the remaining multiplier requires it and accepted semantics permit
   it.
+- Among contract-equivalent mechanisms, choose the simplest one that satisfies
+  the envelope; when ownership and operational cost are comparable, choose the
+  lower dominant complexity. Better Big-O alone does not justify new state or
+  machinery for a bound the simpler path already meets.
 - When batching wins, close the maximum item and byte count, accumulation and
   flush trigger, added wait bound, ordering, atomicity or partial failure,
   retry and idempotency owner, retained memory, and backpressure. A batch-size
@@ -40,7 +50,8 @@ the maximum or failure state where repeated work dominates.
   the multiplier and contract consequence.
 - Calling a lower asymptotic or boundary-crossing count a latency or throughput
   win before comparable measurement.
-- Clearing an unbounded path from a toy input or success-only benchmark.
+- Clearing unbounded, retained, or superlinear work from a toy or success-only
+  result, a bounded changed component, eventual completion, or same-order input.
 
 ## Validation Shape
 

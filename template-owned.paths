@@ -2,7 +2,11 @@
 #
 # Every path listed here is mirrored verbatim from this template into a derived
 # repository by `make template-sync`, including deletions inside listed
-# directories. A path may appear here only while it carries no
+# directories. A service may retain a local `.agents/skills/<name>` sibling
+# only with a `.service-owned` marker; the sync preserves that skill regardless
+# of Git status and keeps its Claude discovery link out of the sync commit. It
+# still mirrors and deletes every unmarked template-owned skill. A path may
+# appear here only while it carries no
 # repository-specific content: no service name, no module path, no deployment
 # target, no owner, and no initialization-profile marker. `make
 # template-owned-purity-check` enforces the manifest's structural safety and

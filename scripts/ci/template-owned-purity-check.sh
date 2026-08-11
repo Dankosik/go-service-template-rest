@@ -97,6 +97,7 @@ repo_owned=(
 	docs/project-structure-and-module-organization.md
 	docs/railway-deployment-profile.md
 	docs/repo-architecture.md
+	test/README.md
 )
 for reserved in "${repo_owned[@]}"; do
 	if contains_path "${reserved}"; then
@@ -126,6 +127,9 @@ for skill_file in .agents/skills/*/SKILL.md; do
 	grep -q '^description: .[^[:space:]]' "${skill_file}" ||
 		fail "${skill_file} has no discoverable description"
 done
+service_marker=$(find .agents/skills -mindepth 2 -maxdepth 2 -name .service-owned -print -quit 2>/dev/null || true)
+[[ -z "${service_marker}" ]] ||
+	fail "${service_marker} marks a template skill as service-owned; choose one owner"
 
 for role_file in .codex/agents/*.toml; do
 	role=$(basename "${role_file}" .toml)
@@ -155,11 +159,16 @@ if ((failed != 0)); then
 fi
 
 template_sync_behavior_check() (
-	local fixture template target target_with_directory target_with_link outside sync_script check_output
+	local fixture template target target_dirty_local target_empty_claude target_invalid_codex target_missing_owner target_without_local_skill target_with_directory target_with_link outside sync_script check_output failure_output
 	fixture=$(mktemp -d "${TMPDIR:-/tmp}/template-sync-check.XXXXXX")
 	trap 'rm -rf -- "${fixture}"' EXIT
 	template="${fixture}/template"
 	target="${fixture}/target"
+	target_dirty_local="${fixture}/target-dirty-local"
+	target_empty_claude="${fixture}/target-empty-claude"
+	target_invalid_codex="${fixture}/target-invalid-codex"
+	target_missing_owner="${fixture}/target-missing-owner"
+	target_without_local_skill="${fixture}/target-without-local-skill"
 	target_with_directory="${fixture}/target-with-directory"
 	target_with_link="${fixture}/target-with-link"
 	outside="${fixture}/outside"
@@ -169,8 +178,10 @@ template_sync_behavior_check() (
 		"${template}/owned" \
 		"${template}/.agents/skills/fixture-one" \
 		"${template}/.codex/agents" \
+		"${template}/docs" \
 		"${template}/scripts/ci" \
 		"${template}/scripts/lib" \
+		"${template}/test" \
 		"${outside}"
 	printf '%s\n' \
 		'owned/' \
@@ -188,6 +199,15 @@ template_sync_behavior_check() (
 		>"${template}/.codex/agents/fixture-agent.toml"
 	printf '%s\n' '[agents]' 'max_depth = 1' '' '[fixture]' 'retained = true' \
 		>"${template}/.codex/config.toml"
+	for repo_owned in \
+		docs/repo-architecture.md \
+		docs/project-structure-and-module-organization.md \
+		docs/build-test-and-development-commands.md \
+		docs/ci-cd-production-ready.md \
+		docs/railway-deployment-profile.md \
+		test/README.md; do
+		printf 'fixture repository owner\n' >"${template}/${repo_owned}"
+	done
 	cp scripts/claude-skills-sync.sh "${template}/scripts/claude-skills-sync.sh"
 	cp scripts/codex-agents-sync.sh "${template}/scripts/codex-agents-sync.sh"
 	# The synced sync scripts are executed from the target below, so the library
@@ -201,17 +221,34 @@ template_sync_behavior_check() (
 		.agents/skills/fixture-one/SKILL.md \
 		.codex/agents/fixture-agent.toml \
 		.codex/config.toml \
+		docs/repo-architecture.md \
+		docs/project-structure-and-module-organization.md \
+		docs/build-test-and-development-commands.md \
+		docs/ci-cd-production-ready.md \
+		docs/railway-deployment-profile.md \
 		scripts/claude-skills-sync.sh \
 		scripts/codex-agents-sync.sh \
 		scripts/lib/sync-cli.sh \
-		scripts/ci/claude-skills-check.sh
+		scripts/ci/claude-skills-check.sh \
+		test/README.md
 	git -C "${template}" -c user.name=template-sync-check -c user.email=template-sync-check@example.invalid commit -qm v1
 	git clone -q "${template}" "${target}"
+	git clone -q "${template}" "${target_empty_claude}"
+	git clone -q "${template}" "${target_without_local_skill}"
 	git -C "${target}" config user.name template-sync-check
 	git -C "${target}" config user.email template-sync-check@example.invalid
+	mkdir -p "${target}/.agents/skills/service-local"
+	printf '%s\n' '---' 'name: service-local' 'description: local fixture' '---' \
+		>"${target}/.agents/skills/service-local/SKILL.md"
+	printf 'owned by fixture service\n' >"${target}/.agents/skills/service-local/.service-owned"
+	git -C "${target}" add .agents/skills/service-local
+	git -C "${target}" commit -qm service-owned-skill
 	printf 'template legacy\n' >"${target}/.template-sync"
 	git -C "${target}" add .template-sync
 	git -C "${target}" -c user.name=template-sync-check -c user.email=template-sync-check@example.invalid commit -qm legacy-receipt
+	git clone -q "${target}" "${target_dirty_local}"
+	git -C "${target_dirty_local}" config user.name template-sync-check
+	git -C "${target_dirty_local}" config user.email template-sync-check@example.invalid
 
 	printf 'v2\n' >"${template}/owned/version"
 	mkdir -p "${template}/.agents/skills/fixture-two"
@@ -219,6 +256,70 @@ template_sync_behavior_check() (
 		>"${template}/.agents/skills/fixture-two/SKILL.md"
 	git -C "${template}" add owned/version .agents/skills/fixture-two/SKILL.md
 	git -C "${template}" -c user.name=template-sync-check -c user.email=template-sync-check@example.invalid commit -qm v2
+
+	mkdir -p "${target_empty_claude}/.claude/skills"
+	if failure_output=$(bash "${target_empty_claude}/scripts/claude-skills-sync.sh" --check --repo "${target_empty_claude}" 2>&1); then
+		echo "template-owned purity: Claude check accepted an empty generated view" >&2
+		return 1
+	fi
+	grep -Fq 'claude skills: .claude/skills/fixture-one is missing' <<<"${failure_output}" || {
+		echo "template-owned purity: Claude check rejected an empty generated view for the wrong reason" >&2
+		return 1
+	}
+	bash "${target_empty_claude}/scripts/claude-skills-sync.sh" --apply --repo "${target_empty_claude}" >/dev/null
+	[[ -L "${target_empty_claude}/.claude/skills/fixture-one" ]] || {
+		echo "template-owned purity: Claude sync did not repair an empty generated view" >&2
+		return 1
+	}
+	bash "${sync_script}" --apply --no-commit --from "${template}" --repo "${target_without_local_skill}" >/dev/null
+	grep -Fxq v2 "${target_without_local_skill}/owned/version" || {
+		echo "template-owned purity: sync failed for a target without service-owned skills" >&2
+		return 1
+	}
+
+	printf 'dirty local work\n' >>"${target_dirty_local}/.agents/skills/service-local/SKILL.md"
+	git -C "${target_dirty_local}" add .agents/skills/service-local/SKILL.md
+	mkdir -p "${target_dirty_local}/.agents/skills/untracked-local"
+	printf '%s\n' '---' 'name: untracked-local' 'description: untracked fixture' '---' \
+		>"${target_dirty_local}/.agents/skills/untracked-local/SKILL.md"
+	printf 'owned by fixture service\n' >"${target_dirty_local}/.agents/skills/untracked-local/.service-owned"
+	bash "${sync_script}" --apply --from "${template}" --repo "${target_dirty_local}" >/dev/null
+	grep -Fxq v2 "${target_dirty_local}/owned/version" || {
+		echo "template-owned purity: dirty service-owned skill blocked the sync" >&2
+		return 1
+	}
+	grep -Fq 'dirty local work' "${target_dirty_local}/.agents/skills/service-local/SKILL.md" || {
+		echo "template-owned purity: sync changed a dirty service-owned skill" >&2
+		return 1
+	}
+	git -C "${target_dirty_local}" diff --cached --name-only |
+		grep -Fxq '.agents/skills/service-local/SKILL.md' || {
+		echo "template-owned purity: sync consumed staged service-owned work" >&2
+		return 1
+	}
+	[[ -f "${target_dirty_local}/.agents/skills/untracked-local/SKILL.md" ]] || {
+		echo "template-owned purity: sync deleted an untracked service-owned skill" >&2
+		return 1
+	}
+	[[ -L "${target_dirty_local}/.claude/skills/untracked-local" ]] || {
+		echo "template-owned purity: sync omitted an untracked service-owned skill link" >&2
+		return 1
+	}
+	git -C "${target_dirty_local}" status --porcelain -- .agents/skills/untracked-local |
+		grep -Fq '?? .agents/skills/untracked-local/' || {
+		echo "template-owned purity: sync changed untracked service-owned Git status" >&2
+		return 1
+	}
+	git -C "${target_dirty_local}" status --porcelain -- .claude/skills/untracked-local |
+		grep -Fq '?? .claude/skills/untracked-local' || {
+		echo "template-owned purity: sync staged an untracked service-owned skill link" >&2
+		return 1
+	}
+	if git -C "${target_dirty_local}" show --format= --name-only HEAD |
+		grep -Eq '(^|/)(service-local|untracked-local)(/|$)'; then
+		echo "template-owned purity: sync commit included service-owned work" >&2
+		return 1
+	fi
 
 	printf 'owned/ignored.txt\n' >"${template}/.git/info/exclude"
 	printf 'ignored source\n' >"${template}/owned/ignored.txt"
@@ -264,6 +365,14 @@ template_sync_behavior_check() (
 			return 1
 		}
 	done
+	[[ -f "${target}/.agents/skills/service-local/SKILL.md" ]] || {
+		echo "template-owned purity: sync deleted a marked service-owned skill" >&2
+		return 1
+	}
+	[[ -L "${target}/.claude/skills/service-local" ]] || {
+		echo "template-owned purity: sync omitted the service-owned skill discovery link" >&2
+		return 1
+	}
 	bash "${target}/scripts/ci/claude-skills-check.sh" >/dev/null || {
 		echo "template-owned purity: synced Claude link checker rejected generated links" >&2
 		return 1
@@ -330,19 +439,61 @@ template_sync_behavior_check() (
 	printf 'only copy\n' >"${target_with_directory}/.claude/skills/manual/SKILL.md"
 	git -C "${target_with_directory}" add .claude/skills/manual/SKILL.md
 	git -C "${target_with_directory}" commit -qm manual-skill-directory
+
+	git clone -q "${template}" "${target_missing_owner}"
+	git -C "${target_missing_owner}" config user.name template-sync-check
+	git -C "${target_missing_owner}" config user.email template-sync-check@example.invalid
+	git -C "${target_missing_owner}" rm -q docs/repo-architecture.md
+	git -C "${target_missing_owner}" commit -qm missing-repository-owner
+
+	git clone -q "${template}" "${target_invalid_codex}"
+	git -C "${target_invalid_codex}" config user.name template-sync-check
+	git -C "${target_invalid_codex}" config user.email template-sync-check@example.invalid
+	printf '%s\n' '# template-owned-codex-agents:start' >"${target_invalid_codex}/.codex/config.toml"
+	git -C "${target_invalid_codex}" add .codex/config.toml
+	git -C "${target_invalid_codex}" commit -qm malformed-codex-registry
+
 	printf 'v4\n' >"${template}/owned/version"
 	git -C "${template}" add owned/version
 	git -C "${template}" -c user.name=template-sync-check -c user.email=template-sync-check@example.invalid commit -qm v4
-	if bash "${sync_script}" --apply --no-commit --from "${template}" --repo "${target_with_directory}" >/dev/null 2>&1; then
+	if failure_output=$(bash "${sync_script}" --apply --no-commit --from "${template}" --repo "${target_with_directory}" 2>&1); then
 		echo "template-owned purity: sync replaced a real Claude skill directory" >&2
 		return 1
 	fi
+	grep -Fq 'refused: generated Claude skill links cannot be rebuilt safely' <<<"${failure_output}" || {
+		echo "template-owned purity: Claude preflight refused for the wrong reason" >&2
+		return 1
+	}
 	grep -Fxq v3 "${target_with_directory}/owned/version" || {
 		echo "template-owned purity: Claude link preflight failed after manifest writes" >&2
 		return 1
 	}
 	grep -Fxq 'only copy' "${target_with_directory}/.claude/skills/manual/SKILL.md" || {
 		echo "template-owned purity: Claude link preflight changed a real skill directory" >&2
+		return 1
+	}
+	if failure_output=$(bash "${sync_script}" --apply --no-commit --from "${template}" --repo "${target_missing_owner}" 2>&1); then
+		echo "template-owned purity: sync accepted a missing repository-owned instruction" >&2
+		return 1
+	fi
+	grep -Fq 'refused: required repository-owned instruction is missing' <<<"${failure_output}" || {
+		echo "template-owned purity: repository-owner preflight refused for the wrong reason" >&2
+		return 1
+	}
+	grep -Fxq v3 "${target_missing_owner}/owned/version" || {
+		echo "template-owned purity: repository-owner refusal happened after manifest writes" >&2
+		return 1
+	}
+	if failure_output=$(bash "${sync_script}" --apply --no-commit --from "${template}" --repo "${target_invalid_codex}" 2>&1); then
+		echo "template-owned purity: sync accepted malformed Codex registry markers" >&2
+		return 1
+	fi
+	grep -Fq 'refused: generated Codex agent registry cannot be rebuilt safely' <<<"${failure_output}" || {
+		echo "template-owned purity: Codex preflight refused for the wrong reason" >&2
+		return 1
+	}
+	grep -Fxq v3 "${target_invalid_codex}/owned/version" || {
+		echo "template-owned purity: Codex registry refusal happened after manifest writes" >&2
 		return 1
 	}
 )

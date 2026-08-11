@@ -5,8 +5,8 @@
 # block are derived from that content and travel with the same sync.
 #
 # The sync never commits work it did not produce. A target whose manifest paths
-# hold uncommitted changes is refused, because overwriting them would destroy
-# them and committing them would push unfinished work toward a release.
+# hold uncommitted changes is refused, except for a marked service-owned skill
+# that the mirror and sync commit both exclude.
 set -euo pipefail
 
 usage() {
@@ -25,8 +25,9 @@ usage:
 
 Uncommitted work outside the manifest and its generated `.claude/skills` and
 `.codex/config.toml` views is never staged or touched. Changes inside those
-owned/generated paths refuse the target before any write. Commit or discard
-those paths yourself, then sync again.
+owned/generated paths refuse the target before any write, except a skill
+directory with a `.service-owned` marker and its matching Claude discovery
+link. Commit or discard other owned paths yourself, then sync again.
 EOF
 }
 
@@ -145,6 +146,16 @@ first_manifest_symlink() {
 generated_paths=(.claude/skills .codex/config.toml)
 # Historical generated receipts removed by the sync.
 retired_paths=(.template-sync)
+# These files carry service-specific decisions and therefore cannot be mirrored,
+# but template-owned instructions depend on them as local authorities.
+required_repo_owned_paths=(
+	docs/repo-architecture.md
+	docs/project-structure-and-module-organization.md
+	docs/build-test-and-development-commands.md
+	docs/ci-cd-production-ready.md
+	docs/railway-deployment-profile.md
+	test/README.md
+)
 
 template_revision=$(git -C "${template}" rev-parse --short HEAD 2>/dev/null || echo "")
 source_root="${template}"
@@ -200,6 +211,25 @@ diff_entry() {
 			return 1
 		fi
 		local delta status=0
+		if [[ "${entry}" == ".agents/skills/" ]]; then
+			local name
+			local -a excludes=()
+			while IFS= read -r name; do
+				[[ -n "${name}" ]] && excludes+=(--exclude "/${name}/")
+			done < <(service_owned_skill_names "${repo}")
+			if ((${#excludes[@]} > 0)); then
+				delta=$(rsync -rni --checksum --no-times --delete --prune-empty-dirs \
+					"${excludes[@]}" "${source%/}/" "${destination%/}/" 2>&1) || status=$?
+			else
+				delta=$(rsync -rni --checksum --no-times --delete --prune-empty-dirs \
+					"${source%/}/" "${destination%/}/" 2>&1) || status=$?
+			fi
+			((status == 0)) || fail "could not compare ${entry}: ${delta}"
+			delta=$(printf '%s\n' "${delta}" | sed '/^\.f\.\.T\.\.\.\. /d; /^$/d')
+			[[ -z "${delta}" ]] && return 0
+			printf '%s\n' "${delta}" | sed 's|^|  |'
+			return 1
+		fi
 		delta=$(git diff --no-ext-diff --no-index --name-status -- "${source%/}" "${destination}" 2>&1) || status=$?
 		((status == 0)) && return 0
 		((status == 1)) || fail "could not compare ${entry}: ${delta}"
@@ -220,8 +250,21 @@ diff_entry() {
 apply_entry() {
 	local repo="$1" entry="$2" source="${source_root}/$2"
 	if [[ "${entry}" == */ ]]; then
+		local name
+		local -a excludes=()
+		if [[ "${entry}" == ".agents/skills/" ]]; then
+			while IFS= read -r name; do
+				[[ -n "${name}" ]] && excludes+=(--exclude "/${name}/")
+			done < <(service_owned_skill_names "${repo}")
+		fi
 		mkdir -p "${repo}/${entry%/}"
-		rsync -a --checksum --no-times --delete --prune-empty-dirs "${source%/}/" "${repo}/${entry%/}/"
+		if ((${#excludes[@]} > 0)); then
+			rsync -a --checksum --no-times --delete --prune-empty-dirs \
+				"${excludes[@]}" "${source%/}/" "${repo}/${entry%/}/"
+		else
+			rsync -a --checksum --no-times --delete --prune-empty-dirs \
+				"${source%/}/" "${repo}/${entry%/}/"
+		fi
 		return
 	fi
 	mkdir -p "$(dirname -- "${repo}/${entry}")"
@@ -241,6 +284,57 @@ collect_present() {
 	return 0
 }
 
+service_owned_skill_names() {
+	local repo="$1" marker
+	local -a markers=()
+	[[ -d "${repo}/.agents/skills" ]] || return 0
+	shopt -s nullglob
+	markers=("${repo}/.agents/skills/"*/.service-owned)
+	shopt -u nullglob
+	((${#markers[@]} > 0)) || return 0
+	for marker in "${markers[@]}"; do
+		basename -- "$(dirname -- "${marker}")"
+	done
+}
+
+service_owned_skill_issue() {
+	local repo="$1" marker name skill_dir
+	local -a markers=()
+	[[ -d "${repo}/.agents/skills" ]] || return 0
+	shopt -s nullglob
+	markers=("${repo}/.agents/skills/"*/.service-owned)
+	shopt -u nullglob
+	((${#markers[@]} > 0)) || return 0
+	for marker in "${markers[@]}"; do
+		skill_dir=$(dirname -- "${marker}")
+		name=$(basename -- "${skill_dir}")
+		if [[ ! -f "${marker}" || -L "${marker}" ]]; then
+			printf '%s' "service-owned skill ${name} has an invalid .service-owned marker"
+			return
+		fi
+		if [[ ! -f "${skill_dir}/SKILL.md" || -L "${skill_dir}/SKILL.md" ]]; then
+			printf '%s' "service-owned skill ${name} has no real SKILL.md"
+			return
+		fi
+		if [[ -e "${source_root}/.agents/skills/${name}" ]]; then
+			printf '%s' "skill ${name} is marked service-owned but is also template-owned"
+			return
+		fi
+	done
+}
+
+collect_service_skill_exclusions() {
+	local repo="$1" name
+	service_skill_exclusions=()
+	while IFS= read -r name; do
+		[[ -n "${name}" ]] && service_skill_exclusions+=(
+			":(exclude).agents/skills/${name}"
+			":(exclude).agents/skills/${name}/**"
+			":(exclude).claude/skills/${name}"
+		)
+	done < <(service_owned_skill_names "${repo}")
+}
+
 # A file where the target keeps a directory (or the reverse) cannot be copied over.
 # Report it as a target problem instead of letting `cp` fail mid-mirror.
 type_conflicts() {
@@ -255,6 +349,15 @@ type_conflicts() {
 		fi
 	done
 	printf '%s' "${conflicts}"
+}
+
+missing_required_repo_owned() {
+	local repo="$1" entry
+	for entry in "${required_repo_owned_paths[@]}"; do
+		if [[ ! -f "${repo}/${entry}" || -L "${repo}/${entry}" ]]; then
+			printf '%s\n' "${entry}"
+		fi
+	done
 }
 
 # An ignored manifest path can never converge: the mirror writes the file, git
@@ -325,6 +428,29 @@ for target in "${targets[@]}"; do
 		continue
 	fi
 
+	missing_repo_owned=$(missing_required_repo_owned "${repo}")
+	if [[ -n "${missing_repo_owned}" ]]; then
+		if [[ "${mode}" == "check" ]]; then
+			while IFS= read -r entry; do
+				printf '  ! required repository-owned instruction is missing: %s\n' "${entry}"
+			done <<<"${missing_repo_owned}"
+			drifted_targets=$((drifted_targets + 1))
+		else
+			reject "required repository-owned instruction is missing: $(printf '%s' "${missing_repo_owned}" | head -1)"
+		fi
+		continue
+	fi
+	service_skill_problem=$(service_owned_skill_issue "${repo}")
+	if [[ -n "${service_skill_problem}" ]]; then
+		if [[ "${mode}" == "check" ]]; then
+			printf '  ! %s\n' "${service_skill_problem}"
+			drifted_targets=$((drifted_targets + 1))
+		else
+			reject "${service_skill_problem}"
+		fi
+		continue
+	fi
+
 	drift=0
 	report=""
 	for entry in "${paths[@]}"; do
@@ -364,8 +490,8 @@ for target in "${targets[@]}"; do
 		continue
 	fi
 
-	# Every refusal happens here, before the first write, so a refused target is
-	# left exactly as it was found.
+	# Resolve every deterministic target refusal before the first write. An
+	# unexpected write or helper failure can leave only sync-produced dirt.
 	if ! git -C "${repo}" rev-parse --git-dir >/dev/null 2>&1; then
 		reject "not a git repository"
 		continue
@@ -388,8 +514,13 @@ for target in "${targets[@]}"; do
 	fi
 
 	collect_present "${repo}"
+	collect_service_skill_exclusions "${repo}"
 	if ((${#present[@]} > 0)); then
-		dirty=$(git -C "${repo}" status --porcelain -- "${present[@]}")
+		if ((${#service_skill_exclusions[@]} > 0)); then
+			dirty=$(git -C "${repo}" status --porcelain -- "${present[@]}" "${service_skill_exclusions[@]}")
+		else
+			dirty=$(git -C "${repo}" status --porcelain -- "${present[@]}")
+		fi
 		if [[ -n "${dirty}" ]]; then
 			printf '   uncommitted changes inside the manifest:\n'
 			printf '%s\n' "${dirty}" | sed 's/^/     /'
@@ -403,6 +534,12 @@ for target in "${targets[@]}"; do
 		[[ -z "${preflight_report}" ]] ||
 			printf '%s\n' "${preflight_report}" | sed 's/^/   /'
 		reject "generated Claude skill links cannot be rebuilt safely"
+		continue
+	fi
+	if ! preflight_report=$(bash "${codex_agents_helper}" --preflight --repo "${repo}" 2>&1); then
+		[[ -z "${preflight_report}" ]] ||
+			printf '%s\n' "${preflight_report}" | sed 's/^/   /'
+		reject "generated Codex agent registry cannot be rebuilt safely"
 		continue
 	fi
 
@@ -434,7 +571,11 @@ for target in "${targets[@]}"; do
 	# The manifest was clean before the mirror ran, so everything staged here was
 	# produced by this sync. No work in progress can enter this commit.
 	collect_present "${repo}"
+	collect_service_skill_exclusions "${repo}"
 	commit_paths=("${present[@]}")
+	if ((${#service_skill_exclusions[@]} > 0)); then
+		commit_paths+=("${service_skill_exclusions[@]}")
+	fi
 	for entry in "${retired_paths[@]}"; do
 		if git -C "${repo}" ls-files --error-unmatch "${entry}" >/dev/null 2>&1; then
 			commit_paths+=("${entry}")
