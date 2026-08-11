@@ -18,10 +18,9 @@ authoritative sources disagree, reopen the narrowest owner instead of merging
 the conflict from chat.
 
 When completed coordination is larger than the live decision state, refresh
-the ledger's compact `Active wave` block and continue from that artifact in a
-fresh root context when the harness supports it. Carry no transcript replay;
-retain only accepted inputs, unit and candidate identities, proof receipts,
-open causal class, and next action.
+from the canonical ledger, native task status, and Git candidate identities in
+a fresh root context when the harness supports it. Carry no transcript replay
+or duplicate task-lifecycle record.
 
 ## Implementation Entry And Continuation Handoff
 
@@ -30,45 +29,77 @@ will enter or continue Implementation — after Planning movement, a persisted
 acceptance-unit transition, or an explicitly requested different-session resume
 — return a standalone `Next Session Prompt` without waiting for the user to ask.
 Inspect the authoritative ledger and current checkout to select only the next
-ready acceptance unit and determine whether its current paths and fixed
-dependencies satisfy [Shared-Checkout Implementation Lane
-eligibility](../phases/implementation-worker-execution.md#shared-checkout-implementation-lanes).
-Record the accepted ledger revision or receipt and relevant pre-existing dirty
-paths plus their owner as the handoff basis. Do not rewrite `tasks.md` merely to
-record an execution-carrier choice.
+ready acceptance unit. Record its accepted ledger revision or prerequisite
+receipt, accepted integration base, relevant pre-existing dirty paths plus their
+owner, current external-effect authority or durable locator, the initiating
+user's verbatim native-control envelope, and exact unit ID as the handoff basis.
+Use a commit or tree identity only when the candidate crosses a checkout or
+integration boundary. The dispatching Ledger Orchestrator does not choose or
+record the unit's carrier or internal lane map.
 
 When eligible, emit a copy-pastable prompt in this shape:
 
 ```text
-Implement <acceptance unit> only.
+Execution role: ACCEPTANCE_UNIT_LEAD
+Role contract: docs/spec-first-workflow/phases/implementation-worker-execution.md#execution-role-tree
 
-Execution decision:
-- Carrier: <count> parallel shared-checkout implementation lanes.
-- Handoff basis: <accepted ledger revision or receipt; relevant pre-existing dirty paths and owner, or none>.
-- Independence basis: <fixed contract and why the write/proof slices are independent>.
-- Root-reserved surfaces: <exact shared, integration, formatting, aggregate-proof, review, and receipt surfaces>.
-- Excluded work: <dependent units and the receipt that keeps them blocked>.
+Lead <acceptance unit> through the assigned stage toward one canonical receipt
+or blocker.
 
-Preflight: inspect the current ledger revision, owned paths, fixed dependencies, and relevant dirt. If current evidence still supports this exact lane map, dispatch every lane immediately. Otherwise recompute the serial or shared-lane carrier before editing.
+- Authority: <ledger and task paths; accepted revision or receipt; current external-effect envelope or durable locator>.
+- Native controls: <verbatim initiating user text authorizing fresh child App tasks and eligible Local/Worktree environments; otherwise none>. Goal use stays thread-local; this prompt expands no authority.
+- Scope: <exact unit ID, accepted outcome and writable boundary; dependent work that remains blocked>.
+- Dispatch scope: <ledger revision / unit ID / attempt>.
+- Model selection: <parent-selected model, reasoning effort, and task-specific reason>. This native follow-up applies the pair after the no-op create bootstrap.
+- Stage: <Local acceptance | Worktree candidate>.
+- Checkout: <accepted base when crossing a checkout; relevant pre-existing dirt and owner, or none; exact user-named starting state, or omit startingState>.
+- Proof: <accepted unit proof and completion condition>.
+- Stop: <accepted behavior, unit scope, ledger dependency, external-effect authority, or another fixed authority that would have to change>.
 
-Global constraints: preserve all existing and unrelated dirt. Workers may read repository sources but write only their owned paths. They must not edit the task ledger, commit, rebase, stash, deploy, mutate Git state, run broad or Docker gates, or cross another writer's ownership.
-
-Lane <name>:
-- Outcome: <lane-specific postcondition>.
-- Writes only: <exact paths>.
-- Focused proof: <commands and expected observable>.
-- Stop: <cross-owner file, shared resource, unrecorded choice, or scope expansion>.
-
-Repeat that block for each lane. Use one active writer per file. If a stop condition occurs, the lane returns the issue without crossing ownership.
-
-Worker return: `DONE` or `BLOCKED`; changed paths; focused commands and results; unresolved issue; `provisional edits: present|none`. A blocked lane leaves partial edits in its owned paths; neither root nor a lane resets, checks out, or stashes them.
-
-Root execution: while lanes run, edit only root-reserved paths. Wait for every lane before fan-in. Return a lane-local correction to the same lane. After all writers stop, verify ownership and scope, preserve and disposition provisional edits, reconcile and format the combined change, run focused checks, then execute <exact broad or Docker proof> serially. Complete review and the <unit> receipt. Do not start or accept <dependent later units> in this session.
+Set the thread-local Goal for this stage and role, then execute the Role Tree.
+Preflight the unit and repository before choosing serial work or bounded fan-out;
+if a child App-task control is unavailable, execute serially. A Worktree stage
+returns `HANDOFF_READY` with its fixed candidate and no receipt; Local continues
+under a separate Goal to the receipt or blocker. Preserve unrelated work and
+keep dependent units blocked.
 ```
 
-When the next unit is coupled or has only one useful write slice, emit the
-ordinary serial continuation prompt instead and state the concrete coupling;
-do not manufacture empty lanes or parallelize dependent units.
+A Local Acceptance-Unit Lead returns only after it records the unit's canonical
+`Accepted:` receipt or `Blocked:` record. A Worktree Lead may first return
+`HANDOFF_READY` with a fixed candidate for native Handoff; the same task and role
+then continue in Local to the canonical receipt or blocker under [Agent
+Harness](../../agent-harness.md#worktree-fan-in). A Ledger Orchestrator rereads
+that ledger transition before selecting another ready dependent unit; it never
+consumes or routes internal lane results.
+
+### Worktree To Local Continuation
+
+The Agent Harness passes this compact message atomically as native Handoff's
+`followUpPrompt`; it is never a later standalone send:
+
+```text
+Execution role: ACCEPTANCE_UNIT_LEAD
+Role contract: docs/spec-first-workflow/phases/implementation-worker-execution.md#execution-role-tree
+
+Continue the same <unit ID> and <dispatch_scope>.
+- Stage: Local acceptance.
+- Candidate: <fixed commit/tree and Worktree identity>.
+- Local precondition: <HEAD, status, and attributed dirt verified immediately before Handoff>.
+
+Create a new thread-local Goal for Local acceptance. Integrate the fixed candidate, review, prove, correct, and apply the Role Tree's bottom-up resolution ladder before recording the one canonical `Accepted:` receipt or `Blocked:` record. Do not rediscover the unit, repeat a route under unchanged preconditions, change role, or start another unit.
+```
+
+### Known Lead Terminalization
+
+When one known Lead stops or requests attention without its canonical
+transition, send this once to that same task with no model or effort override:
+
+```text
+Execution role: ACCEPTANCE_UNIT_LEAD
+Role contract: docs/spec-first-workflow/phases/implementation-worker-execution.md#execution-role-tree
+
+Terminalize the same <unit ID> and <dispatch_scope>. Re-read the canonical ledger, native task state, and Git candidate. If the accepted proof and candidate already close the unit, persist its one `Accepted:` receipt. Otherwise apply the Role Tree's bottom-up resolution ladder: take an evidence-changing unit-local remedy when one remains; persist the exact `Blocked:` record and reopen owner only after none remains. Start no new unit and repeat no valid proof, review, or remedy under unchanged preconditions.
+```
 
 ## Macro-Phase Handoff
 
@@ -85,10 +116,10 @@ The result tells the user
 what was completed, the decisions and authority that now hold, the movement
 evidence, and any open proof or risk. The prompt carries only the facts and
 evidence-backed direction needed to start the target macro phase from durable
-sources without replaying chat. Give the receiver the strongest current
+sources without replaying chat. Give the target session the strongest current
 continuation hypothesis, why it deserves attention, and the constraint or
 evidence that could overturn it. This steers the next phase without turning a
-candidate direction into accepted authority: the receiver tests it first, then
+candidate direction into accepted authority: the target session tests it first, then
 keeps, revises, or rejects it from current evidence and records why. When the
 completed phase supports no candidate solution, carry its most discriminating
 next decision question and evidence basis instead of inventing one.
@@ -117,7 +148,7 @@ becomes an acceptance or closeout gate.
 
 ## Stop Rule
 
-The receiver can continue from the named sources without reconstructing chat,
+The target session can continue from the named sources without reconstructing chat,
 and the phase result plus prompt preserve the target owner, authority boundary,
 proof obligation, evidence-backed leading hypothesis or decision question and
 its falsifier, next executable action, and exact stop or reopen condition. The

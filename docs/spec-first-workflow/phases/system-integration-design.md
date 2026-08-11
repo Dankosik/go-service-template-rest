@@ -68,7 +68,7 @@ trace exposes an unresolved mechanism or boundary, return to selection.
 
 ## Interaction And Data Flow
 
-Interaction design is complete when a fresh reviewer can trace every material flow from its actor or trigger to caller-visible completion or durable finality without inventing ownership, contract, data authority, or failure/recovery behavior. A flow is material when its ordering, ownership, contract, authority, failure behavior, or finality can change implementation, rollout, or proof. Show current and target flows only when their difference matters.
+Interaction design is complete when a fresh reviewer can trace every material flow from its actor or trigger to caller-visible completion or durable finality without inventing ownership, contract, data authority, failure/recovery behavior, or performance and capacity consequences. A flow is material when its ordering, ownership, contract, authority, failure behavior, finality, or critical-path work and resource demand can change implementation, rollout, or proof. Show current and target flows only when their difference matters.
 
 Select only mechanisms that are behaviorally equivalent under the ready spec; if the trace exposes alternatives with materially different user- or operator-visible outcomes, reopen Specification instead of deciding that divergence here.
 
@@ -76,6 +76,7 @@ For each material flow, record only decisions implementation must not invent:
 
 - Path, boundaries, and owners: target component responsibilities; actor or trigger; ingress or producer; ordered runtime, storage, and broker hops; every affected consumer and side effect; and the completion or finality boundary. At each crossing, name the initiating owner, receiving owner, responsibility transferred, contract, and state or effect produced.
 - Contract, transformation, and authority: canonical request/response contract or event schema; routing, partition, or ordering key; trust or tenant context; transformations and persistence; source of truth; decision, write, process, and finality owner; identifiers, units, and absence semantics; and material consistency, visibility, freshness, synchronization or serialization, and concurrency rules.
+- Work, scale, and critical path when scale-sensitive: evidence-bounded normal, maximum, and recovery workloads; dominant time and space complexity; retained and new hop multipliers; serial, genuinely parallel, and queued composition; structural ceiling; and later measured boundary. Apply the [Performance Rule](#performance-rule) for the decision method.
 - Failure, recovery, and degradation: at each material failure point, state timeout and cancellation propagation, what may already be committed, returned or terminal failure, acknowledgement or offset-commit boundary, retry owner, budget, and exhaustion behavior, idempotency scope, key, and lifetime, correlation, replay, recovery or reconciliation, degraded behavior, and restoration or failback boundary.
 
 When a durable design artifact is required, add a Mermaid diagram only when compact text is insufficient for a reviewer to validate ordering, ownership, fan-out, recovery, or transformation. Use `sequenceDiagram` for temporal request/event ordering and `flowchart` for topology or data transformation. The diagram is a review aid; it must agree with the normative text and canonical contracts and must not become another source of truth.
@@ -110,7 +111,7 @@ When a material boundary crossing changes component/runtime authority, source of
 
 ## Performance Rule
 
-When a material flow is scale-sensitive—its work grows with input or data cardinality, traffic, round trips, serialization or copies, fan-out, retained memory, or contention—or has an accepted latency, throughput, capacity, or resource objective, apply the `go-performance` Decision branch before mechanism closure and satisfy its completion criterion. If evidence cannot support a numeric budget, use an evidence-bounded `constraint_only` disposition only when it closes the implementation fork; otherwise reopen the budget owner.
+When a material flow is scale-sensitive—its work grows with input or data cardinality, traffic, round trips, serialization or copies, fan-out, retained memory, or contention—or has an accepted latency, throughput, capacity, or resource objective, apply the `go-performance` Decision branch before mechanism closure and satisfy its completion criterion. The disposition covers the complete material flow, including retained stages, rather than only the changed component. Without a numeric budget, `constraint_only` closes only with an evidence-bounded workload, end-to-end multiplier or ceiling, and structural falsifier that rejects the losing mechanism; otherwise reopen the budget owner.
 
 ## Contract Rule
 

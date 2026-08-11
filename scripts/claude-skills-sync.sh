@@ -37,6 +37,9 @@ preflight() {
 
 	[[ ! -L "${repo}/.claude" ]] ||
 		fail ".claude is a symlink; generated links must stay inside the repository"
+	if [[ -e "${repo}/.claude" && ! -d "${repo}/.claude" ]]; then
+		fail ".claude is not a directory"
+	fi
 	[[ ! -L "${links_root}" ]] ||
 		fail ".claude/skills is a symlink; per-skill links must be generated inside that directory"
 	if [[ -e "${links_root}" && ! -d "${links_root}" ]]; then
@@ -46,11 +49,13 @@ preflight() {
 		shopt -s nullglob dotglob
 		entries=("${links_root}"/*)
 		shopt -u nullglob dotglob
-		for entry in "${entries[@]}"; do
-			if [[ -d "${entry}" && ! -L "${entry}" ]]; then
-				fail "${entry#"${repo}/"} is a real directory; move or remove it before rebuilding generated links"
-			fi
-		done
+		if ((${#entries[@]} > 0)); then
+			for entry in "${entries[@]}"; do
+				if [[ -d "${entry}" && ! -L "${entry}" ]]; then
+					fail "${entry#"${repo}/"} is a real directory; move or remove it before rebuilding generated links"
+				fi
+			done
+		fi
 	fi
 }
 
@@ -107,14 +112,16 @@ check_links() {
 		shopt -s nullglob dotglob
 		entries=("${links_root}"/*)
 		shopt -u nullglob dotglob
-		for entry in "${entries[@]}"; do
-			name=$(basename -- "${entry}")
-			if [[ ! -d "${skills_root}/${name}" ]]; then
-				printf 'claude skills: %s has no owner in .agents/skills\n' \
-					"${entry#"${repo}/"}" >&2
-				failed=1
-			fi
-		done
+		if ((${#entries[@]} > 0)); then
+			for entry in "${entries[@]}"; do
+				name=$(basename -- "${entry}")
+				if [[ ! -d "${skills_root}/${name}" ]]; then
+					printf 'claude skills: %s has no owner in .agents/skills\n' \
+						"${entry#"${repo}/"}" >&2
+					failed=1
+				fi
+			done
+		fi
 	fi
 
 	((failed == 0)) || return 1

@@ -37,10 +37,14 @@ not completion evidence.
 
 ## Acceptance-Unit Closure
 
+For orchestrated ledger work, the bound Acceptance-Unit Lead is the acceptance
+owner and current phase root. For direct work, the current root is the
+acceptance owner.
+
 For ledger work, select one ready acceptance unit from the authoritative ledger
-and keep its recorded boundary fixed through implementation, bounded root
-review, mapped validation, any triggered fresh one-shot review, root acceptance,
-and the immediate persisted transition defined by [Artifact
+and keep its recorded boundary fixed through implementation, bounded
+acceptance-owner review, mapped validation, any triggered fresh one-shot review,
+acceptance, and the immediate persisted transition defined by [Artifact
 Model](../shared/artifact-model.md#minimal-status). That transition is the
 unit's completion criterion.
 
@@ -53,8 +57,8 @@ correction, reopen, or blocker disposition.
 When the current session stops at this transition and later implementation work
 remains, apply the shared [Implementation Entry And Continuation
 Handoff](../shared/resume-and-handoff.md#implementation-entry-and-continuation-handoff)
-so the next prompt carries a current serial or shared-lane execution decision
-and the receiving session revalidates it before editing.
+so the next prompt carries the next ready unit and the receiving session chooses
+its execution strategy from current evidence.
 
 ## Implement
 
@@ -107,27 +111,29 @@ reopens its narrow upstream decision owner.
 
 ### Local Execution
 
-Root-local execution covers direct work and ready acceptance units routed here by
-[Worker Execution](implementation-worker-execution.md). The root edits the
-assigned checkout, performs one coherent self-review of the bounded diff, and
-runs the [Validation Matrix](#validation-matrix)'s smallest matching proof. The
-bounded working-tree diff is the complete execution record for direct work;
-ledger work also retains its accepted task entry. The root accepts the fixed
-candidate when the Stop Rule passes and any triggered [independent implementation
-review](../shared/implementation-review.md) has returned `PASS`.
+Local execution covers direct work and ready acceptance units routed here by
+[Worker Execution](implementation-worker-execution.md). The acceptance owner
+edits the assigned checkout, performs one coherent self-review of the bounded
+diff, and runs the [Validation Matrix](#validation-matrix)'s smallest matching
+proof. The bounded working-tree diff is the complete execution record for direct
+work; ledger work also retains its accepted task entry. The acceptance owner
+accepts the fixed candidate when the Stop Rule passes and any triggered
+[independent implementation review](../shared/implementation-review.md) has
+returned `PASS`.
 Reopen the path only when evidence changes risk, ownership, reversibility, or
 proof.
 
 ### Worker Execution
 
 For ledger work, read
-[Implementation Worker Execution](implementation-worker-execution.md) before
-selecting or operating a Worker or shared-checkout implementation lane. That
-branch defines the execution-need trigger and owns carrier-specific dispatch,
-lane eligibility, dirty-state protection, Scope Lock, planned waves, correction
-continuity, rejected-delta handling, candidate intake, and candidate handoff.
-This phase retains implementation, correction, acceptance,
-and integration authority.
+[Implementation Worker Execution](implementation-worker-execution.md) and bind
+the current session's role from its [Execution Role
+Tree](implementation-worker-execution.md#execution-role-tree) before selecting
+or operating an internal Worker lane. That branch owns the Acceptance-Unit
+Lead's serial-or-fan-out choice, isolated lane eligibility,
+dirty-state protection, Scope Lock, correction continuity, rejected-delta
+handling, candidate intake, and handoff. The Lead applies this phase and
+retains implementation, correction, acceptance, and integration authority.
 
 ### Immutable Evidence
 
@@ -139,9 +145,9 @@ Assign one final owner to each deterministic gate for an acceptance unit. A
 Worker owns iterative focused checks while changing its candidate. The final
 owner runs the gate once on the exact accepted tree: use the Worker's receipt
 when its tree and preconditions cross into integration unchanged; otherwise the
-root runs the gate after integration. The root validates the receipt, tree
-identity, preconditions, scope, and claimed observable instead of automatically
-repeating the command. A reviewer runs only a missing or adversarial falsifier
+acceptance owner runs the gate after integration. The acceptance owner validates
+the receipt, tree identity, preconditions, scope, and claimed observable instead
+of automatically repeating the command. A reviewer runs only a missing or adversarial falsifier
 needed for its independent question. A deterministic result retains its
 disposition while tree, preconditions, command, and claim are unchanged.
 
@@ -210,15 +216,16 @@ and unverified remainder.
 
 ## Independent Implementation Review
 
-After root-local execution or Worker integration produces a fixed acceptance
-unit that passes bounded root review and mapped validation, load [Review
+After local execution or Worker integration produces a fixed acceptance unit
+that passes bounded acceptance-owner review and mapped validation, load [Review
 Independence](../shared/review-independence.md) to decide whether review is
 triggered. When it applies, load the [Independent Implementation
-Review](../shared/implementation-review.md) conditional branch. The root accepts
+Review](../shared/implementation-review.md) conditional branch. The acceptance owner accepts
 the fixed candidate only on `PASS`; `FAIL` remains in phase-owned correction or
-reopen, and `BLOCKED`
-records `implementation complete; verification incomplete` without accepting
-the unit or claiming outcome completion.
+reopen. `NEEDS_PARENT` returns to the acceptance owner for the bottom-up
+resolution ladder and becomes `implementation complete; verification
+incomplete` only when no evidence-changing in-scope remedy remains, without
+accepting the unit or claiming outcome completion.
 
 ## Close Out
 
@@ -245,7 +252,7 @@ the narrower evidence obtained, and the next proof or reopen owner; do not claim
 outcome completion or readiness. This is the `blocked` lifecycle state for a
 durable goal or artifact, not a third completion state.
 
-For a ledger acceptance unit, these criteria determine whether the root may
+For a ledger acceptance unit, these criteria determine whether the acceptance owner may
 accept the fixed candidate and what a triggered reviewer must falsify. A changed
 decision reopens its narrowest upstream owner; after acceptance, completing
 [Acceptance-Unit Closure](#acceptance-unit-closure) is the only authorized next

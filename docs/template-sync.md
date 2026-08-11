@@ -14,6 +14,14 @@ This template is the single source of truth for the workflow instruction set. A 
 
 A path may appear in the manifest only while it carries no repository-specific content: no service name, no module path, no deployment target, no owner, no service-specific invariant, and no initialization-profile marker. A profile marker means different derived repositories retain different content, which a verbatim mirror cannot preserve. That restriction is what makes mirroring safe — there is nothing in an owned file for a derived repository to lose.
 
+The one target-local exception is a service capability skill under
+`.agents/skills/<name>/` with a `.service-owned` marker. The sync
+preserves that directory, requires a real `SKILL.md`, refuses an ownership
+collision with a template skill of the same name, excludes it from the sync
+commit regardless of Git status, and regenerates its Claude discovery link
+locally without adding that link to the sync commit. An unmarked target-only
+skill remains drift and is deleted by apply.
+
 These documents stay repository-owned and the sync never touches them:
 
 | Repository-owned | Records |
@@ -24,6 +32,7 @@ These documents stay repository-owned and the sync never touches them:
 | `docs/build-test-and-development-commands.md` | The commands this service actually has |
 | `docs/ci-cd-production-ready.md` | This repository's setup, module path, and owners |
 | `docs/railway-deployment-profile.md` | This service's deployment target |
+| `test/README.md` | This service's integration-test topology and commands |
 | `docs/first-production-feature.md` | Template-only onboarding; not shipped to services |
 
 Record a service-specific decision in one of those, or in a task-local artifact.
@@ -46,12 +55,15 @@ bash ../go-service-template-rest/scripts/template-sync.sh \
 ```
 
 `--check` compares owned content, generated Claude skill links, and the Codex
-role registry directly, prints drift, and exits non-zero. `--apply` mirrors the
-exact committed `HEAD`, rebuilds both generated views through template-owned
-helpers without depending on the target `Makefile`, and removes the retired
-`.template-sync` file. Ignored and untracked empty content does not enter that
-snapshot. Generated paths stay out of the manifest, but the sync commits the
-ones it changed instead of leaving the target dirty behind it.
+role registry directly, prints drift, and exits non-zero. It also requires every
+repository-owned authority listed above except `README.md` and the template-only
+onboarding document; it verifies their presence but never copies their
+service-specific content. `--apply` mirrors the exact committed `HEAD`, rebuilds
+both generated views through template-owned helpers without depending on the
+target `Makefile`, and removes the retired `.template-sync` file. Ignored and
+untracked empty content does not enter that snapshot. Generated paths stay out
+of the manifest, but the sync commits the template-owned ones it changed. A
+service-owned skill and its Claude link retain their existing Git status.
 
 To fan out from this template to several local checkouts in one run:
 
@@ -69,8 +81,10 @@ sync. The script stages explicit pathspecs and never stashes, resets, cleans, or
 checks out over a change.
 
 **Work inside the manifest, generated `.claude/skills`, or
-`.codex/config.toml` refuses that target.** The sync cannot safely distinguish a
-concurrent config edit from its managed-block update, so it stops before writes:
+`.codex/config.toml` refuses that target, except a marked service-owned skill
+and its matching Claude link.** The sync neither mirrors nor stages those local
+paths. For every other owned path, it cannot safely distinguish a concurrent
+edit from its update, so it stops before writes:
 
 ```
    uncommitted changes inside the manifest:
@@ -84,7 +98,9 @@ Because the manifest is clean before the mirror runs, everything the sync stages
 
 ## What The Sync Refuses
 
-Every refusal happens before the first write, so a refused target is left exactly as it was found.
+Every deterministic refusal below is checked before the first write. An
+unexpected filesystem or helper failure can leave sync-produced uncommitted
+changes, but the sync never commits that partial result.
 
 | Refusal | Why it matters |
 | --- | --- |
@@ -92,7 +108,10 @@ Every refusal happens before the first write, so a refused target is left exactl
 | The template's own manifest is dirty | Targets must receive one committed, reviewable template revision |
 | A manifest path contains a symlink | The copy could read or write outside the repository |
 | `.claude/skills` is a symlink or contains a real directory | Generated skill links could overwrite content without a canonical owner |
+| `.claude` or `.codex` has an unsafe path shape, or the Codex managed markers are malformed | A generated view could fail after manifest writes |
 | Ignored content exists inside the template or target manifest | It could leak into a target or be silently deleted |
+| A required repository-owned instruction is missing | Mirrored instructions would point at an absent local authority |
+| A marked service-owned skill is malformed or collides with a template skill | The sync cannot preserve one unambiguous local owner |
 | Detached HEAD with commits enabled | A sync commit would belong to no branch; `--no-commit` remains safe |
 | A manifest path is gitignored in the target | The mirror writes it, git refuses to track it, and drift never clears |
 | Target has a directory where the template has a file, or the reverse | The copy cannot land |
