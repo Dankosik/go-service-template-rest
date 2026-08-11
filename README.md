@@ -195,6 +195,57 @@ Public contracts, persisted data, security, money, concurrency, deployment,
 and cross-service ownership receive explicit decisions and matching proof
 without forcing every task through the heaviest process.
 
+### Autonomous implementation tree
+
+Once Planning has produced a ready implementation ledger, a person launches
+orchestration once. The system then runs autonomously until the ledger is
+exhausted or it reaches an exact user-owned, external, or unrecoverable native
+boundary.
+
+```mermaid
+flowchart TD
+    user["User<br/>one orchestration launch"]
+    orchestrator["LEDGER_ORCHESTRATOR<br/>routes ready units only"]
+    lead["ACCEPTANCE_UNIT_LEAD<br/>owns one unit end to end"]
+    strategy{"Lead chooses the fastest safe strategy"}
+    serial["Serial implementation"]
+    specialist["READ_ONLY_SPECIALIST<br/>optional investigation"]
+    worker["IMPLEMENTATION_WORKER<br/>optional isolated write slice"]
+    fanin["Lead fan-in<br/>integration · proof · self-review"]
+    review{"Independent review required?"}
+    reviewer["ACCEPTANCE_REVIEWER<br/>fresh read-only review"]
+    receipt["One receipt or precise blocker"]
+    done["Ledger exhausted"]
+
+    user --> orchestrator
+    orchestrator -->|"dispatches one ready unit"| lead
+    lead --> strategy
+    strategy -->|"no useful split"| serial
+    strategy -->|"independent question"| specialist
+    strategy -->|"independent write slices"| worker
+    serial --> fanin
+    specialist --> fanin
+    worker --> fanin
+    fanin --> review
+    review -->|"yes"| reviewer
+    review -->|"no"| receipt
+    reviewer --> receipt
+    receipt -->|"re-read ledger and route again"| orchestrator
+    orchestrator -->|"no ready or pending units"| done
+```
+
+The orchestrator does not implement or review units. Each fresh Lead chooses
+whether its unit benefits from parallel leaves, selects the model and reasoning
+effort for every direct child from that child's exact work, owns serial fan-in,
+and accepts the result. Only positively independent work runs concurrently;
+integration and acceptance stay with one owner. A leaf resolves obstacles at
+its own level first, then escalates to exactly one parent, so recoverable
+problems do not stop the whole ledger.
+
+The detailed contracts live in the [Agent Harness](docs/agent-harness.md), its
+[Codex App selection tree](docs/agent-harness.md#codex-app-selection-tree), and
+[Implementation Worker Execution](docs/spec-first-workflow/phases/implementation-worker-execution.md).
+
 ## Agent Support
 
 | Harness | Entry point | Project-native support |
