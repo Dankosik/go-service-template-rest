@@ -58,6 +58,23 @@ type OutboxRedrife struct {
 	CycleNumber *int32
 }
 
+type PostgresHttpIdempotency struct {
+	IdentityToken                 []byte
+	Generation                    int64
+	Phase                         string
+	ProvisionalFingerprintVersion *string
+	ProvisionalFingerprint        []byte
+	FingerprintVersion            *string
+	Fingerprint                   []byte
+	Result                        []byte
+	ResultMaxBytes                *int64
+	ReplayNanos                   *int64
+	DuplicateRiskNanos            *int64
+	DuplicateRiskPermanent        *bool
+	RecoverAfter                  pgtype.Timestamptz
+	CommittedAt                   pgtype.Timestamptz
+}
+
 type PostgresInboxClaim struct {
 	ConsumerIdentity string
 	MessageID        string

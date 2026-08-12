@@ -401,6 +401,7 @@ linters:
             # The inbox claim binds generated SQL to its caller-owned pgx.Tx.
             - "!**/internal/infra/postgresinbox/*.go"
             # profile:inbox-postgres:end
+            - "!**/internal/infra/postgresidempotency/store*.go"
             # pgtest is a PostgreSQL adapter like the two above, scoped to tests:
             # it creates and drops the per-test database, which is driver work.
             - "!**/internal/infra/postgres/pgtest/*.go"
@@ -425,6 +426,7 @@ linters:
             # profile:inbox-postgres:start
             - "!**/internal/infra/postgresinbox/*.go"
             # profile:inbox-postgres:end
+            - "!**/internal/infra/postgresidempotency/store*.go"
           deny:
             - pkg: github.com/example/go-service-template-rest/internal/infra/postgres/sqlcgen
               desc: generated sqlc types stay behind the hand-written internal/infra/postgres adapter.
