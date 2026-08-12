@@ -73,3 +73,59 @@ func TestEngineAttemptEvaluatesAndFinalizesCapturedFacts(t *testing.T) {
 		})
 	}
 }
+
+func TestEngineAttemptFinalizationWaitsForCoordinator(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		observing := make(chan struct{})
+		releaseObservation := make(chan struct{})
+		finalized := make(chan struct{}, 1)
+		order := make([]string, 0, 2)
+		claim := engineClaim()
+		store := &engineStoreStub{
+			claim: func(context.Context, ClaimOptions) (ClaimResult, error) {
+				return ClaimResult{Attempts: []ClaimedAttempt{claim}}, nil
+			},
+			observe: func(context.Context, []jobs.Revision) (Observation, error) {
+				close(observing)
+				<-releaseObservation
+				return Observation{ObservedAt: time.Now(), Compatible: true}, nil
+			},
+			renew: func(context.Context, []AttemptIdentity, time.Duration) ([]Renewal, error) {
+				order = append(order, "renew")
+				return []Renewal{{Attempt: claim.Attempt, ObservedAt: time.Now()}}, nil
+			},
+			finalize: func(context.Context, FinalizeInput) (PersistedTransition, error) {
+				order = append(order, "finalize")
+				finalized <- struct{}{}
+				return PersistedTransition{}, nil
+			},
+		}
+		engine, err := newEngine(store, engineRegistry(t, func(context.Context, jobs.HandlerInput[engineArgs]) jobs.HandlerResult {
+			return jobs.HandlerResult{Outcome: jobs.OutcomeSuccess, Effect: jobs.EffectCompleted}
+		}), engineConfig())
+		if err != nil {
+			t.Fatal(err)
+		}
+		run := make(chan error, 1)
+		go func() { run <- engine.Run(context.Background()) }()
+		<-observing
+		synctest.Wait()
+		select {
+		case <-finalized:
+			t.Fatal("attempt finalized while coordinator observation was running")
+		default:
+		}
+		engine.mu.Lock()
+		engine.lastLease = time.Now().Add(-engine.config.LeaseDuration / 3)
+		engine.mu.Unlock()
+		close(releaseObservation)
+		if err := <-run; err != nil {
+			t.Fatalf("Run() error = %v", err)
+		}
+		<-finalized
+		if len(order) != 2 || order[0] != "renew" || order[1] != "finalize" {
+			t.Fatalf("completion order = %v, want renewal before finalization", order)
+		}
+		synctest.Wait()
+	})
+}

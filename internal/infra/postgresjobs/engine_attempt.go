@@ -25,7 +25,17 @@ func (e *Engine) runAttempt(ctx context.Context, cancel context.CancelFunc, clai
 	if err != nil {
 		return
 	}
-	_, _ = e.store.Finalize(context.WithoutCancel(ctx), FinalizeInput{Attempt: claim.Attempt, Transition: decision})
+	e.finalizeAttempt(context.WithoutCancel(ctx), FinalizeInput{Attempt: claim.Attempt, Transition: decision})
+}
+
+func (e *Engine) finalizeAttempt(ctx context.Context, input FinalizeInput) {
+	e.cycleMu.Lock()
+	defer e.cycleMu.Unlock()
+	if err := e.renew(ctx); err != nil {
+		e.fail(err)
+		return
+	}
+	_, _ = e.store.Finalize(ctx, input)
 }
 
 func dispatchAttempt(ctx context.Context, claim ClaimedAttempt, registered jobs.Registered) (result jobs.HandlerResult, outcome jobs.OutcomeClass, effect jobs.EffectStatus) {
