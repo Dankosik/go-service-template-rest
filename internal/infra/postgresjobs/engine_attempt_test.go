@@ -2,10 +2,12 @@ package postgresjobs
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"testing/synctest"
 	"time"
 
+	"github.com/example/go-service-template-rest/internal/infra/telemetry/telemetrytest"
 	"github.com/example/go-service-template-rest/internal/jobs"
 )
 
@@ -30,6 +32,7 @@ func TestEngineAttemptEvaluatesAndFinalizesCapturedFacts(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
+				reader := telemetrytest.InstallManualReader(t)
 				registry := engineRegistryWithAttemptDuration(t, test.duration, test.handler)
 				claim := engineClaim()
 				finalized := make(chan FinalizeInput, 1)
@@ -39,7 +42,7 @@ func TestEngineAttemptEvaluatesAndFinalizesCapturedFacts(t *testing.T) {
 					},
 					finalize: func(_ context.Context, input FinalizeInput) (PersistedTransition, error) {
 						finalized <- input
-						return PersistedTransition{}, nil
+						return PersistedTransition{Status: TransitionApplied}, nil
 					},
 				}
 				engine, err := newEngine(store, registry, engineConfig())
@@ -69,6 +72,45 @@ func TestEngineAttemptEvaluatesAndFinalizesCapturedFacts(t *testing.T) {
 					t.Fatalf("second finalization = %+v", duplicate)
 				default:
 				}
+				assertJobsEvent(t, reader, "attempt", test.want)
+			})
+		})
+	}
+}
+
+func TestEngineAttemptDoesNotRecordUnappliedFinalization(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		result PersistedTransition
+		err    error
+	}{
+		{name: string(TransitionStale), result: PersistedTransition{Status: TransitionStale}},
+		{name: string(TransitionNotFound), result: PersistedTransition{Status: TransitionNotFound}},
+		{name: "error", err: errors.New("finalize failed")},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				reader := telemetrytest.InstallManualReader(t)
+				claim := engineClaim()
+				store := &engineStoreStub{
+					claim: func(context.Context, ClaimOptions) (ClaimResult, error) {
+						return ClaimResult{Attempts: []ClaimedAttempt{claim}}, nil
+					},
+					finalize: func(context.Context, FinalizeInput) (PersistedTransition, error) {
+						return test.result, test.err
+					},
+				}
+				engine, err := newEngine(store, engineRegistry(t, func(context.Context, jobs.HandlerInput[engineArgs]) jobs.HandlerResult {
+					return jobs.HandlerResult{Outcome: jobs.OutcomeSuccess, Effect: jobs.EffectCompleted}
+				}), engineConfig())
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := engine.Run(context.Background()); err != nil {
+					t.Fatal(err)
+				}
+				synctest.Wait()
+				assertNoJobsEvent(t, reader, "attempt", jobs.OutcomeSuccess)
 			})
 		})
 	}

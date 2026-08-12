@@ -91,6 +91,7 @@ func (e *Engine) registerClaimLocked(ctx context.Context, claim ClaimedAttempt) 
 	// This map insertion is the registration barrier: a drain that takes this
 	// mutex can acknowledge quiescence only after the handler is join-visible.
 	e.inflight[claim.Attempt] = cancel
+	e.telemetry.RecordClaim(ctx, jobs.OutcomeSuccess)
 	go e.runAttempt(attemptCtx, cancel, claim, registered)
 	return nil
 }

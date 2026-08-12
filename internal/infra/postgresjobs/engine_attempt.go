@@ -35,7 +35,9 @@ func (e *Engine) finalizeAttempt(ctx context.Context, input FinalizeInput) {
 		e.fail(err)
 		return
 	}
-	_, _ = e.store.Finalize(ctx, input)
+	if transition, err := e.store.Finalize(ctx, input); err == nil && transition.Status == TransitionApplied {
+		e.telemetry.RecordAttempt(ctx, input.Transition.Outcome)
+	}
 }
 
 func dispatchAttempt(ctx context.Context, claim ClaimedAttempt, registered jobs.Registered) (result jobs.HandlerResult, outcome jobs.OutcomeClass, effect jobs.EffectStatus) {

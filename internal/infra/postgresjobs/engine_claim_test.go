@@ -7,11 +7,15 @@ import (
 	"testing/synctest"
 
 	"github.com/example/go-service-template-rest/internal/infra/postgres"
+	"github.com/example/go-service-template-rest/internal/infra/telemetry/telemetrytest"
 	"github.com/example/go-service-template-rest/internal/jobs"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 )
 
 func TestEngineClaimRegistersKnownCommitBeforeHandlerStarts(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
+		reader := telemetrytest.InstallManualReader(t)
 		claimStarted := make(chan struct{})
 		releaseClaim := make(chan struct{})
 		started := make(chan struct{})
@@ -50,13 +54,46 @@ func TestEngineClaimRegistersKnownCommitBeforeHandlerStarts(t *testing.T) {
 		if got := (<-acknowledged).InFlight; got != 1 {
 			t.Fatalf("in-flight handlers = %d, want registered handler", got)
 		}
+		assertJobsEvent(t, reader, "claim", jobs.OutcomeSuccess)
 		close(allowFinish)
 		synctest.Wait()
 	})
 }
 
+func assertJobsEvent(t *testing.T, reader *sdkmetric.ManualReader, event string, outcome jobs.OutcomeClass) {
+	t.Helper()
+	if value := jobsEventCount(t, reader, event, outcome); value != 1 {
+		t.Fatalf("%s/%s events = %d, want 1", event, outcome, value)
+	}
+}
+
+func assertNoJobsEvent(t *testing.T, reader *sdkmetric.ManualReader, event string, outcome jobs.OutcomeClass) {
+	t.Helper()
+	if value := jobsEventCount(t, reader, event, outcome); value != 0 {
+		t.Fatalf("%s/%s events = %d, want 0", event, outcome, value)
+	}
+}
+
+func jobsEventCount(t *testing.T, reader *sdkmetric.ManualReader, event string, outcome jobs.OutcomeClass) int64 {
+	t.Helper()
+	var value int64
+	telemetrytest.ForEachMetric(t, reader, func(measured metricdata.Metrics) {
+		if measured.Name != "postgres.jobs.events" {
+			return
+		}
+		for _, point := range telemetrytest.Int64Sum(t, measured).DataPoints {
+			if telemetrytest.Attribute(t, point.Attributes, "event") == event &&
+				telemetrytest.Attribute(t, point.Attributes, "outcome") == string(outcome) {
+				value += point.Value
+			}
+		}
+	})
+	return value
+}
+
 func TestEngineClaimUnknownCommitStartsOnlyWriterResolvedAttempt(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
+		reader := telemetrytest.InstallManualReader(t)
 		started := make(chan struct{}, 1)
 		registry := engineRegistry(t, func(context.Context, jobs.HandlerInput[engineArgs]) jobs.HandlerResult {
 			started <- struct{}{}
@@ -89,6 +126,40 @@ func TestEngineClaimUnknownCommitStartsOnlyWriterResolvedAttempt(t *testing.T) {
 			t.Fatal("unknown claim started a handler")
 		default:
 		}
+		assertJobsEvent(t, reader, "claim", jobs.OutcomeSuccess)
+	})
+}
+
+func TestEngineClaimUnknownCommitWithNoResolvedAttemptDoesNotRecordEvent(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		reader := telemetrytest.InstallManualReader(t)
+		claim := engineClaim()
+		started := make(chan struct{}, 1)
+		store := &engineStoreStub{
+			claim: func(context.Context, ClaimOptions) (ClaimResult, error) {
+				return ClaimResult{Attempts: []ClaimedAttempt{claim}}, postgres.ErrCommitUnknown
+			},
+			resolve: func(context.Context, []AttemptIdentity) ([]ClaimResolution, error) {
+				return nil, nil
+			},
+		}
+		engine, err := newEngine(store, engineRegistry(t, func(context.Context, jobs.HandlerInput[engineArgs]) jobs.HandlerResult {
+			started <- struct{}{}
+			return jobs.HandlerResult{}
+		}), engineConfig())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := engine.Run(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		synctest.Wait()
+		select {
+		case <-started:
+			t.Fatal("unresolved claim started a handler")
+		default:
+		}
+		assertNoJobsEvent(t, reader, "claim", jobs.OutcomeSuccess)
 	})
 }
 
