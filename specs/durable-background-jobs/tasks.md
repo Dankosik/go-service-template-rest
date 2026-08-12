@@ -192,13 +192,14 @@ generated/migration surface.
   - Reopen if: the generic engine loses an identity or fence — System Design; any result would claim adopter-wide exactly-once behavior — Specification.
   - Accepted: T10; evidence: TD-JOBS-018 exact serialized real-PostgreSQL command PASS (17.894s), scoped `git diff --check` PASS, and fresh independent implementation review PASS after falsifying all three crash gates, the fixed `email/v1/p1` policy/budget, effect-ledger uniqueness, stale finalization, retained facts, and adopter-wide exactly-once overclaim; candidate: current bounded diff.
 
-- [ ] T11: Exact prior-expand, N, and rollback N-1 artifacts remain compatible with every retained live revision and fail closed on an unknown revision
+- [x] T11: Exact prior-expand, N, and rollback N-1 artifacts remain compatible with every retained live revision and fail closed on an unknown revision
   - Source: `spec.md` B10, AC-10; `design/overview.md` mandatory expand/enable/contract sequence; `rollout.md` Gates 3-5; `test-plan.md` F-JOBS-7 and TD-JOBS-019.
   - Owner/surface/resources: add `test/postgres_jobs_compatibility_process_integration_test.go`; extend the one shared process fixture to build/hash only prior old-only `v1`, mandatory expand/rollback N-1 `v1+v2`, and N `v1+v2` artifacts. Mutable resources: exact hashed binaries/registries, live v1/v2/v3 rows, replacement processes, and serialized PostgreSQL.
   - Depends on: T10 — output handoff — needed to start.
   - Handoff: exact local N/N-1 compatibility and rollback receipts plus the final reusable code/process candidate consumed by T12; target image digests and registry manifests remain delivery-owned TD-JOBS-021 inputs.
   - Proof: run TD-JOBS-019's exact compatibility-process command. Expand N-1 is ready before N emits v2; exact N-1 executes live v1/v2 work without rewrite; old-only or retained v3 closes all claims/readiness while rows remain visible; compatible replacement restores progress; no contract/delete action runs.
   - Reopen if: prior-expand coverage is missing or a new handler cannot forward-ship in N-1 — B10/Technical Design; never substitute drain-and-guess or emission-first rollout.
+  - Accepted: T11; evidence: `REQUIRE_DOCKER=1 go test -p=1 -count=1 -tags=integration ./test -run '^TestPostgresJobsCompatibilityProcess$'` PASS on PostgreSQL 17; exact old-only v1, N-1 v1+v2, and N v1+v2 copied-checkout artifacts were SHA-256 hashed; the process carrier proves N-1 readiness before v2 staging, v1 ready/scheduled/retry-wait/paused/redriveable retention, N and exact rollback N-1 v1/v2 execution, old-only/v3 fail-closed retention, compatible replacement, and no action rows; `git diff --check` PASS; fresh independent implementation review PASS. Candidate: path-bounded current diff.
 
 - [ ] T12: The complete default-off profile is removable, sibling-independent, migration/image-exact, aggregate-clean, and River-free
   - Source: `spec.md` B1/B13, AC-01/AC-15; `design/overview.md` migration/profile authority and release closure; `design/go-code-ownership.md` profile/image/build/docs owners and cleanup; `test-plan.md` TD-JOBS-001, TD-JOBS-002 final absence, and TD-JOBS-020.

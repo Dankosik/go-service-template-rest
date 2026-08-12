@@ -5,6 +5,8 @@ package integration_test
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"net/http"
 	"os"
@@ -156,6 +158,12 @@ type postgresJobsTestWorker struct {
 	finished chan struct{}
 }
 
+type postgresJobsWorkerArtifact struct {
+	repositoryRoot string
+	binary         string
+	hash           string
+}
+
 func buildPostgresJobsTestWorker(t *testing.T) (string, string) {
 	t.Helper()
 	repositoryRoot, err := filepath.Abs("..")
@@ -169,6 +177,59 @@ func buildPostgresJobsTestWorker(t *testing.T) (string, string) {
 		t.Fatalf("build jobs worker: %v\n%s", err, output)
 	}
 	return repositoryRoot, binary
+}
+
+func buildPostgresJobsCompatibilityArtifacts(t *testing.T) (postgresJobsWorkerArtifact, postgresJobsWorkerArtifact, postgresJobsWorkerArtifact) {
+	t.Helper()
+	repositoryRoot, err := filepath.Abs("..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	build := func(name string, includeV2 bool) postgresJobsWorkerArtifact {
+		t.Helper()
+		artifactRoot := filepath.Join(t.TempDir(), name)
+		copyCurrentRepository(t, repositoryRoot, artifactRoot)
+		if includeV2 {
+			builderPath := filepath.Join(artifactRoot, "cmd", "jobs-worker", "builder_testworker.go")
+			builder, readErr := os.ReadFile(builderPath)
+			if readErr != nil {
+				t.Fatalf("read %s builder: %v", name, readErr)
+			}
+			const anchor = "\tacceptanceInput := definitionInput\n"
+			const registration = "\tcompatibilityInput := definitionInput\n" +
+				"\tcompatibilityInput.Revision.ArgsVersion = \"v2\"\n" +
+				"\tcompatibility, err := jobs.NewDefinition(compatibilityInput)\n" +
+				"\tif err != nil {\n\t\treturn nil, nil, err\n\t}\n" +
+				"\tif err := jobs.Register(registry, compatibility, handler); err != nil {\n\t\treturn nil, nil, err\n\t}\n\n" +
+				anchor
+			updated := strings.Replace(string(builder), anchor, registration, 1)
+			if updated == string(builder) {
+				t.Fatalf("inject %s v2 registry: builder anchor not found", name)
+			}
+			if writeErr := os.WriteFile(builderPath, []byte(updated), 0o600); writeErr != nil {
+				t.Fatalf("write %s builder: %v", name, writeErr)
+			}
+		}
+		binary := filepath.Join(artifactRoot, "jobs-worker")
+		command := exec.CommandContext(t.Context(), "go", "build", "-trimpath", "-tags", "jobs_test_worker", "-o", binary, "./cmd/jobs-worker")
+		command.Dir = artifactRoot
+		if output, buildErr := command.CombinedOutput(); buildErr != nil {
+			t.Fatalf("build %s jobs worker: %v\n%s", name, buildErr, output)
+		}
+		contents, readErr := os.ReadFile(binary)
+		if readErr != nil {
+			t.Fatalf("read %s jobs worker: %v", name, readErr)
+		}
+		digest := sha256.Sum256(contents)
+		return postgresJobsWorkerArtifact{repositoryRoot: artifactRoot, binary: binary, hash: hex.EncodeToString(digest[:])}
+	}
+	oldOnly := build("old-only", false)
+	nMinusOne := build("n-minus-one", true)
+	n := build("n", true)
+	if oldOnly.hash == nMinusOne.hash || nMinusOne.hash != n.hash {
+		t.Fatalf("compatibility artifact hashes old=%s n-1=%s n=%s", oldOnly.hash, nMinusOne.hash, n.hash)
+	}
+	return oldOnly, nMinusOne, n
 }
 
 func startPostgresJobsTestWorker(t *testing.T, repositoryRoot, binary string, options postgresJobsTestWorkerOptions) *postgresJobsTestWorker {
