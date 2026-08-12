@@ -47,6 +47,10 @@ func (e *Engine) claim(ctx context.Context) error {
 		if err := e.registerClaimLocked(ctx, claim); err != nil {
 			return err
 		}
+		claimedAt := claim.LeaseExpiresAt.Add(-e.config.LeaseDuration)
+		if claimedAt.After(e.lastLease) {
+			e.lastLease = claimedAt
+		}
 	}
 	return nil
 }

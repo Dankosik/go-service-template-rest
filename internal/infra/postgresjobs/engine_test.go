@@ -10,9 +10,38 @@ import (
 )
 
 type engineStoreStub struct {
-	claim    func(context.Context, ClaimOptions) (ClaimResult, error)
-	resolve  func(context.Context, []AttemptIdentity) ([]ClaimResolution, error)
-	finalize func(context.Context, FinalizeInput) (PersistedTransition, error)
+	claim      func(context.Context, ClaimOptions) (ClaimResult, error)
+	resolve    func(context.Context, []AttemptIdentity) ([]ClaimResolution, error)
+	finalize   func(context.Context, FinalizeInput) (PersistedTransition, error)
+	renew      func(context.Context, []AttemptIdentity, time.Duration) ([]Renewal, error)
+	candidates func(context.Context, int) ([]RescueCandidate, error)
+	rescue     func(context.Context, RescueInput) (PersistedTransition, error)
+	observe    func(context.Context, []jobs.Revision) (Observation, error)
+}
+
+func (s *engineStoreStub) Renew(ctx context.Context, attempts []AttemptIdentity, lease time.Duration) ([]Renewal, error) {
+	if s.renew != nil {
+		return s.renew(ctx, attempts, lease)
+	}
+	return nil, nil
+}
+func (s *engineStoreStub) RescueCandidates(ctx context.Context, limit int) ([]RescueCandidate, error) {
+	if s.candidates != nil {
+		return s.candidates(ctx, limit)
+	}
+	return nil, nil
+}
+func (s *engineStoreStub) Rescue(ctx context.Context, input RescueInput) (PersistedTransition, error) {
+	if s.rescue != nil {
+		return s.rescue(ctx, input)
+	}
+	return PersistedTransition{}, nil
+}
+func (s *engineStoreStub) Observe(ctx context.Context, keys []jobs.Revision) (Observation, error) {
+	if s.observe != nil {
+		return s.observe(ctx, keys)
+	}
+	return Observation{ObservedAt: time.Now(), Compatible: true}, nil
 }
 
 func (s *engineStoreStub) Claim(ctx context.Context, options ClaimOptions) (ClaimResult, error) {
@@ -92,7 +121,7 @@ func engineRegistryWithAttemptDuration(t *testing.T, attemptDuration time.Durati
 }
 
 func engineConfig() EngineConfig {
-	return EngineConfig{WorkerID: "worker-1", MaxConcurrency: 1, LeaseDuration: time.Minute}
+	return EngineConfig{WorkerID: "worker-1", MaxConcurrency: 1, LeaseDuration: time.Minute, ObservationInterval: time.Minute}
 }
 
 func engineClaim() ClaimedAttempt {
