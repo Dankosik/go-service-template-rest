@@ -133,9 +133,10 @@ func TestJobsWorkerLifecycleRetainsDependenciesAfterUnsafeDrain(t *testing.T) {
 			return postgresjobs.DrainResult{Err: unsafe}
 		},
 	}
+	cfg := jobsWorkerLifecycleConfig(t)
 	result := make(chan lifecycleResult, 1)
 	go func() {
-		result <- runLifecycle(signalCtx, context.Background(), jobsWorkerLifecycleConfig(t), telemetry.New(), engine)
+		result <- runLifecycle(signalCtx, t.Context(), cfg, telemetry.New(), engine)
 	}()
 	time.Sleep(10 * time.Millisecond)
 	cancel()
