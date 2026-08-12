@@ -33,25 +33,46 @@ func TestStoreOperationErrorClassification(t *testing.T) {
 }
 
 func TestStoreOperationErrorClassificationPrefersOperationOutcomeToClosedSession(t *testing.T) {
-	parentCtx, cancelParent := context.WithCancel(context.Background())
-	cancelParent()
-	operationCtx, cancelOperation := context.WithCancel(context.Background())
-	cancelOperation()
-
 	for _, test := range []struct {
-		name         string
-		parentCtx    context.Context
-		operationCtx context.Context
-		err          error
-		want         error
+		name string
+		run  func() error
+		want error
 	}{
-		{"parent cancellation", parentCtx, context.Background(), errors.New("connection closed"), context.Canceled},
-		{"operation timeout", context.Background(), operationCtx, errors.New("connection closed"), ErrOperationTimeout},
-		{"lock timeout", context.Background(), context.Background(), &pgconn.PgError{Code: pgerrcode.LockNotAvailable}, ErrOperationTimeout},
-		{"statement timeout", context.Background(), context.Background(), &pgconn.PgError{Code: pgerrcode.QueryCanceled}, ErrOperationTimeout},
+		{
+			name: "parent cancellation",
+			run: func() error {
+				parentCtx, cancel := context.WithCancel(context.Background())
+				cancel()
+				return classifyOperationError(parentCtx, context.Background(), true, errors.New("connection closed"))
+			},
+			want: context.Canceled,
+		},
+		{
+			name: "operation timeout",
+			run: func() error {
+				operationCtx, cancel := context.WithCancel(context.Background())
+				cancel()
+				return classifyOperationError(context.Background(), operationCtx, true, errors.New("connection closed"))
+			},
+			want: ErrOperationTimeout,
+		},
+		{
+			name: "lock timeout",
+			run: func() error {
+				return classifyOperationError(context.Background(), context.Background(), true, &pgconn.PgError{Code: pgerrcode.LockNotAvailable})
+			},
+			want: ErrOperationTimeout,
+		},
+		{
+			name: "statement timeout",
+			run: func() error {
+				return classifyOperationError(context.Background(), context.Background(), true, &pgconn.PgError{Code: pgerrcode.QueryCanceled})
+			},
+			want: ErrOperationTimeout,
+		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			if err := classifyOperationError(test.parentCtx, test.operationCtx, true, test.err); !errors.Is(err, test.want) {
+			if err := test.run(); !errors.Is(err, test.want) {
 				t.Fatalf("classifyOperationError() error = %v, want %v", err, test.want)
 			}
 		})
