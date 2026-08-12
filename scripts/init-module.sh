@@ -757,17 +757,16 @@ if [[ "${source_checkout}" != true ]]; then
 	fi
 
 	# internal/config/configtest exists for parity tests that hold runtime owners
-	# and internal/config to one answer. All current importers are removable, so
-	# the package leaves only when gRPC, authn, and messaging all leave.
-	if [[ "${grpc}" == "none" && "${authn}" == "none" && "${messaging}" == "none" ]]; then
+	# and internal/config to one answer. Retained outbox bootstrap tests also use
+	# it, so it leaves only after the outbox and its other current importers do.
+	if [[ "${outbox}" == "none" && "${grpc}" == "none" && "${authn}" == "none" && "${messaging}" == "none" ]]; then
 		rm -rf -- internal/config/configtest
 	fi
 
 	# internal/packagetest owns the source walk behind the comment and doc proofs
-	# in internal/infra/grpc, internal/infra/grpcclient, internal/infra/oidcjwt,
-	# and internal/infra/natsjs. All three profiles removing takes every importer
-	# with them, so it leaves too rather than shipping as an unreferenced leaf.
-	if [[ "${grpc}" == "none" && "${authn}" == "none" && "${messaging}" == "none" ]]; then
+	# in retained PostgreSQL outbox code as well as grpc, authn, and natsjs. It
+	# leaves only after the outbox and its other current importers do.
+	if [[ "${outbox}" == "none" && "${grpc}" == "none" && "${authn}" == "none" && "${messaging}" == "none" ]]; then
 		rm -rf -- internal/packagetest
 	fi
 
