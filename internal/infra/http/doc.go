@@ -28,6 +28,11 @@
 // [HardenConfig.RateLimitKey] together. Their field comments own why neither has
 // a default that a template could honestly guess.
 //
+// To opt an authenticated business operation into idempotency, pass one complete
+// [IdempotencyOperation] through [RouterConfig.IdempotencyOperations]. The
+// router checks its OpenAPI declaration before serving; no registration leaves
+// the health-only template inert.
+//
 // # Where things live
 //
 // Assembly, hardening, and fallback are separate owners. router.go mounts this

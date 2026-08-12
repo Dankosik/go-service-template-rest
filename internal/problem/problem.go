@@ -33,11 +33,17 @@ const (
 	// profile:authn-oidc-jwt:start
 	CodeRequestHeaderFieldsTooLarge Code = Code(failure.CodeRequestHeaderFieldsTooLarge)
 	// profile:authn-oidc-jwt:end
-	CodeUnprocessableContent Code = Code(failure.CodeUnprocessableContent)
-	CodeTooManyRequests      Code = Code(failure.CodeTooManyRequests)
-	CodeInternalError        Code = Code(failure.CodeInternalError)
-	CodeServiceUnavailable   Code = Code(failure.CodeServiceUnavailable)
-	CodeGatewayTimeout       Code = Code(failure.CodeGatewayTimeout)
+	CodeUnprocessableContent      Code = Code(failure.CodeUnprocessableContent)
+	CodeTooManyRequests           Code = Code(failure.CodeTooManyRequests)
+	CodeIdempotencyKeyMismatch    Code = "idempotency_key_mismatch"
+	CodeIdempotencyInProgress     Code = "idempotency_in_progress"
+	CodeIdempotencyKeyExpired     Code = "idempotency_key_expired"
+	CodeIdempotencyUnavailable    Code = "idempotency_unavailable"
+	CodeIdempotencyOutcomeUnknown Code = "idempotency_outcome_unknown"
+	CodeIdempotencyResultTooLarge Code = "idempotency_result_too_large"
+	CodeInternalError             Code = Code(failure.CodeInternalError)
+	CodeServiceUnavailable        Code = Code(failure.CodeServiceUnavailable)
+	CodeGatewayTimeout            Code = Code(failure.CodeGatewayTimeout)
 )
 
 // Definition is one published problem class.
@@ -127,6 +133,42 @@ var catalog = []Definition{
 		Title:  "too many requests",
 		// RFC 9110 stops at 426; 429 is still defined by RFC 6585.
 		TypeURI: "https://www.rfc-editor.org/rfc/rfc6585#section-4",
+	},
+	{
+		Code:    CodeIdempotencyKeyMismatch,
+		Status:  http.StatusUnprocessableEntity,
+		Title:   "unprocessable content",
+		TypeURI: "https://www.rfc-editor.org/rfc/rfc9110#section-15.5.21",
+	},
+	{
+		Code:    CodeIdempotencyInProgress,
+		Status:  http.StatusConflict,
+		Title:   "conflict",
+		TypeURI: "https://www.rfc-editor.org/rfc/rfc9110#section-15.5.10",
+	},
+	{
+		Code:    CodeIdempotencyKeyExpired,
+		Status:  http.StatusConflict,
+		Title:   "conflict",
+		TypeURI: "https://www.rfc-editor.org/rfc/rfc9110#section-15.5.10",
+	},
+	{
+		Code:    CodeIdempotencyUnavailable,
+		Status:  http.StatusServiceUnavailable,
+		Title:   "service unavailable",
+		TypeURI: "https://www.rfc-editor.org/rfc/rfc9110#section-15.6.4",
+	},
+	{
+		Code:    CodeIdempotencyOutcomeUnknown,
+		Status:  http.StatusServiceUnavailable,
+		Title:   "service unavailable",
+		TypeURI: "https://www.rfc-editor.org/rfc/rfc9110#section-15.6.4",
+	},
+	{
+		Code:    CodeIdempotencyResultTooLarge,
+		Status:  http.StatusInternalServerError,
+		Title:   "internal server error",
+		TypeURI: "https://www.rfc-editor.org/rfc/rfc9110#section-15.6.1",
 	},
 	{
 		Code:    CodeInternalError,
