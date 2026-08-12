@@ -78,3 +78,16 @@ func TestStoreOperationErrorClassificationPrefersOperationOutcomeToClosedSession
 		})
 	}
 }
+
+func TestStoreOperationErrorClassificationPreservesServerTimeoutAfterOperationDeadline(t *testing.T) {
+	operationCtx, cancel := context.WithCancel(context.Background())
+	cancel()
+	err := classifyOperationError(context.Background(), operationCtx, false, &pgconn.PgError{Code: pgerrcode.QueryCanceled})
+	if !errors.Is(err, ErrOperationTimeout) {
+		t.Fatalf("classifyOperationError() error = %v, want ErrOperationTimeout", err)
+	}
+	postgresErr, ok := errors.AsType[*pgconn.PgError](err)
+	if !ok || postgresErr.Code != pgerrcode.QueryCanceled {
+		t.Fatalf("classifyOperationError() PostgreSQL error = %v, want SQLSTATE %s", err, pgerrcode.QueryCanceled)
+	}
+}

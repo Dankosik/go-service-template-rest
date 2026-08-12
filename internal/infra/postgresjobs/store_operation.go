@@ -74,9 +74,6 @@ func classifyOperationError(parentCtx, operationCtx context.Context, connectionC
 	if parentCtx != nil && parentCtx.Err() != nil {
 		return fmt.Errorf("postgres jobs operation: %w", parentCtx.Err())
 	}
-	if operationCtx != nil && operationCtx.Err() != nil {
-		return fmt.Errorf("%w: %w", ErrOperationTimeout, operationCtx.Err())
-	}
 	if pgconn.Timeout(err) {
 		return fmt.Errorf("%w: %w", ErrOperationTimeout, err)
 	}
@@ -85,6 +82,9 @@ func classifyOperationError(parentCtx, operationCtx context.Context, connectionC
 		case pgerrcode.QueryCanceled, pgerrcode.LockNotAvailable:
 			return fmt.Errorf("%w: %w", ErrOperationTimeout, err)
 		}
+	}
+	if operationCtx != nil && operationCtx.Err() != nil {
+		return fmt.Errorf("%w: %w", ErrOperationTimeout, operationCtx.Err())
 	}
 	if connectionClosed {
 		return fmt.Errorf("%w: %w", ErrSessionTerminal, err)
