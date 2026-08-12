@@ -125,14 +125,17 @@ func TestPostgresJobsLeaseSafetyProcess(t *testing.T) {
 }
 
 type postgresJobsTestWorkerOptions struct {
-	Pool    *postgres.Pool
-	AppName string
-	Handler string
-	Files   jobsWorkerLeaseFileSet
+	Pool         *postgres.Pool
+	AppName      string
+	Handler      string
+	Files        jobsWorkerLeaseFileSet
+	EffectGate   string
+	CompleteGate string
+	Result       string
 }
 
 type jobsWorkerLeaseFileSet struct {
-	entered, cancelled, cleanup string
+	entered, cancelled, cleanup, effect, effectGate, completeGate string
 }
 
 func jobsWorkerLeaseFiles(t *testing.T) jobsWorkerLeaseFileSet {
@@ -140,7 +143,8 @@ func jobsWorkerLeaseFiles(t *testing.T) jobsWorkerLeaseFileSet {
 	dir := t.TempDir()
 	return jobsWorkerLeaseFileSet{
 		entered: filepath.Join(dir, "entered"), cancelled: filepath.Join(dir, "cancelled"),
-		cleanup: filepath.Join(dir, "cleanup"),
+		cleanup: filepath.Join(dir, "cleanup"), effect: filepath.Join(dir, "effect"),
+		effectGate: filepath.Join(dir, "effect-gate"), completeGate: filepath.Join(dir, "complete-gate"),
 	}
 }
 
@@ -185,7 +189,7 @@ func startPostgresJobsTestWorker(t *testing.T, repositoryRoot, binary string, op
 		"APP__JOBS__POLL_INTERVAL=10ms",
 		"APP__JOBS__MAX_CONCURRENCY=1",
 		"APP__JOBS__LEASE_DURATION=3s",
-		"APP__JOBS__STORE_OPERATION_TIMEOUT=100ms",
+		"APP__JOBS__STORE_OPERATION_TIMEOUT=500ms",
 		"APP__JOBS__OBSERVATION_INTERVAL=10ms",
 		"APP__JOBS__DRAIN_TIMEOUT=3s",
 		"APP__HTTP__GRACE_PERIOD=12s",
@@ -201,6 +205,15 @@ func startPostgresJobsTestWorker(t *testing.T, repositoryRoot, binary string, op
 			"JOBS_WORKER_TEST_HANDLER="+options.Handler,
 			"JOBS_WORKER_TEST_ENTERED_FILE="+options.Files.entered,
 			"JOBS_WORKER_TEST_CANCELLED_FILE="+options.Files.cancelled,
+			"JOBS_WORKER_TEST_RESULT="+options.Result,
+		)
+	}
+	if options.Handler == "recovery" {
+		worker.process.Env = append(worker.process.Env,
+			"JOBS_WORKER_TEST_EFFECT_DSN="+postgresJobsDSN(options.Pool),
+			"JOBS_WORKER_TEST_EFFECT_FILE="+options.Files.effect,
+			"JOBS_WORKER_TEST_EFFECT_GATE="+options.EffectGate,
+			"JOBS_WORKER_TEST_COMPLETE_GATE="+options.CompleteGate,
 		)
 	}
 	worker.process.Stdout, worker.process.Stderr = &worker.output, &worker.output

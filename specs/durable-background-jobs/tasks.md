@@ -183,13 +183,14 @@ generated/migration surface.
   - Reopen if: process replacement cannot remain the sole restoration owner — System Design; the terminal chain changes owner — Go Ownership.
   - Accepted: T9; evidence: TD-JOBS-017 exact real-PostgreSQL lease-safety process command PASS; scoped jobs-worker and T8 process regression commands PASS; `git diff --check` PASS; fresh independent acceptance review PASS after source and process falsification of blocked-PID identity, pre-expiry cancellation/readiness/claim closure, one drain, bounded nonzero terminalization without replacement Session, and distinct-PID fenced recovery only; candidate: current bounded diff.
 
-- [ ] T10: Two real worker processes preserve one effect authority and all durable job truth across crash, overlap, restart, and recovery
+- [x] T10: Two real worker processes preserve one effect authority and all durable job truth across crash, overlap, restart, and recovery
   - Source: `spec.md` B5-B6, AC-05/AC-06; `design/overview.md` lost ownership/recovery; `test-plan.md` F-JOBS-1/F-JOBS-2/F-JOBS-7/F-JOBS-8 and TD-JOBS-018.
   - Owner/surface/resources: add `test/postgres_jobs_recovery_process_integration_test.go`; extend the single T9 process/effect fixture only. Mutable resources: two Unix workers, test-owned same-database F-JOBS-2 effect ledger, process kill gates, overlapping attempts, and serialized PostgreSQL.
   - Depends on: T9 — output handoff — needed to start.
   - Handoff: one shared exact-process fixture with pre-effect/post-effect/overlap crash gates, durable effect readback, restart, and recovery classifications consumed by T11.
   - Proof: run TD-JOBS-018's exact recovery-process command. Logical/producer/occurrence/effect identities survive; generations differ; the effect ledger records one compatible effect; stale finalization changes nothing; stored revision/budgets decide recovery; every terminal/action fact remains retained.
   - Reopen if: the generic engine loses an identity or fence — System Design; any result would claim adopter-wide exactly-once behavior — Specification.
+  - Accepted: T10; evidence: TD-JOBS-018 exact serialized real-PostgreSQL command PASS (17.894s), scoped `git diff --check` PASS, and fresh independent implementation review PASS after falsifying all three crash gates, the fixed `email/v1/p1` policy/budget, effect-ledger uniqueness, stale finalization, retained facts, and adopter-wide exactly-once overclaim; candidate: current bounded diff.
 
 - [ ] T11: Exact prior-expand, N, and rollback N-1 artifacts remain compatible with every retained live revision and fail closed on an unknown revision
   - Source: `spec.md` B10, AC-10; `design/overview.md` mandatory expand/enable/contract sequence; `rollout.md` Gates 3-5; `test-plan.md` F-JOBS-7 and TD-JOBS-019.
