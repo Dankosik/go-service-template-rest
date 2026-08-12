@@ -147,13 +147,14 @@ generated/migration surface.
   - Proof: run TD-JOBS-011's exact Store-operation unit command and combined Session/OperationBudget real-PostgreSQL command. Every final stage returns the caller or expected SQL timeout class, commits no timed-out mutation, leaves no backend work/lock, destroys an unusable Session on release, and never reacquires it.
   - Reopen if: any final stage cannot use the one wrapper — Go Ownership; the lease margin cannot bound two consecutive operations — System Design.
 
-- [ ] T6: The deterministic coordinator hands only known committed claims to one registered typed attempt before drain can acknowledge
+- [x] T6: The deterministic coordinator hands only known committed claims to one registered typed attempt before drain can acknowledge
   - Source: `spec.md` B5/B9/B10; `design/overview.md` coordinator cycle and claim-to-handler handoff; `design/go-code-ownership.md` engine shared/claim/attempt owners; `test-plan.md` F-JOBS-1/F-JOBS-6 and TD-JOBS-012.
   - Owner/surface/resources: add `internal/infra/postgresjobs/engine.go`, `engine_claim.go`, `engine_attempt.go`, their fixed tests, and package `goleak_test.go`; owned channels and `testing/synctest`, no database.
   - Depends on: T4 — output handoff — needed to start.
   - Handoff: one serial coordinator, immutable registry-key claim request, known-commit registration barrier, typed attempt invocation/fact capture, and terminal component facts consumed by T7-T8.
   - Proof: run TD-JOBS-012's exact race command. Only known committed claims join before drain acknowledgement; unknown commit starts no handler; a coverage fault closes admission; panic/timeout/cancel facts invoke the exact stored evaluator once and hand one decision to finalization; package leak gate remains clean.
   - Reopen if: known committed claim registration cannot precede drain acknowledgement — Go Ownership; claim ambiguity would require handler execution — Specification.
+  - Accepted: T6; evidence: `go test -vet=off -race ./internal/infra/postgresjobs -run '^TestEngine(Claim|Attempt|Run)' -count=1` PASS on the fixed Local candidate, staged scope exactly the seven recorded engine paths, `git diff --cached --check` PASS, and fresh independent implementation review PASS; candidate: current bounded diff.
 
 - [ ] T7: Renewal priority, bounded rescue, observation, and cached telemetry preserve lease safety and publish no competing readiness truth
   - Source: `spec.md` B5-B6/B9-B12; `design/overview.md` renewal, rescue, telemetry, and readiness flows; `design/go-code-ownership.md` engine stage, telemetry, and vocabulary owners; `test-plan.md` F-JOBS-6/F-JOBS-10 and TD-JOBS-013 through TD-JOBS-015.
