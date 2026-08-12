@@ -79,3 +79,70 @@ type PostgresInboxClaim struct {
 	ConsumerIdentity string
 	MessageID        string
 }
+
+type PostgresJob struct {
+	LogicalJobID       string
+	ProducerScope      string
+	ProducerKey        string
+	OccurrenceScope    string
+	OccurrenceID       string
+	EffectScope        string
+	EffectKey          string
+	IntentFingerprint  []byte
+	Kind               string
+	ArgsVersion        string
+	PolicyVersion      string
+	Payload            []byte
+	WorkClass          string
+	State              string
+	AvailableAt        pgtype.Timestamptz
+	RecoveryGeneration int64
+	AttemptGeneration  int64
+	AttemptsUsed       int32
+	BudgetStartedAt    pgtype.Timestamptz
+	CurrentWorkerID    *string
+	LeaseExpiresAt     pgtype.Timestamptz
+	CreatedAt          pgtype.Timestamptz
+	UpdatedAt          pgtype.Timestamptz
+	TerminalAt         pgtype.Timestamptz
+}
+
+type PostgresJobAction struct {
+	ActionID           string
+	RequestFingerprint []byte
+	ActorID            string
+	ActionKind         string
+	TargetScope        *string
+	LogicalJobID       *string
+	ExpectedState      *string
+	ExpectedGeneration *int64
+	Reason             string
+	Result             string
+	CreatedAt          pgtype.Timestamptz
+	CompletedAt        pgtype.Timestamptz
+}
+
+type PostgresJobAttempt struct {
+	LogicalJobID            string
+	AttemptGeneration       int64
+	RecoveryGeneration      int64
+	AttemptNumber           int32
+	WorkerID                string
+	StartedAt               pgtype.Timestamptz
+	LeaseExpiresAt          pgtype.Timestamptz
+	FinalizedAt             pgtype.Timestamptz
+	FinalState              *string
+	Outcome                 *string
+	EffectStatus            *string
+	FailureCode             *string
+	RetryAt                 pgtype.Timestamptz
+	AttemptsUsed            *int32
+	ElapsedUsedMilliseconds *int64
+}
+
+type PostgresJobClaimScope struct {
+	WorkClass       string
+	Paused          bool
+	ScopeGeneration int64
+	UpdatedAt       pgtype.Timestamptz
+}

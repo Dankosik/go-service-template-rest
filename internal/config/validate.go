@@ -64,6 +64,11 @@ func validateConfig(cfg *Config, unknownKeys []string) error {
 		return err
 	}
 	// profile:database-postgres:end
+	// profile:jobs-postgres:start
+	if err := validateJobs(cfg.Jobs, cfg.Postgres); err != nil {
+		return err
+	}
+	// profile:jobs-postgres:end
 	// profile:outbox-postgres:start
 	if err := validateOutbox(cfg.Outbox, cfg.Postgres); err != nil {
 		return err

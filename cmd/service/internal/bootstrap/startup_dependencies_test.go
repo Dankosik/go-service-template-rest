@@ -385,6 +385,35 @@ func TestBootstrapConfigStageReturnsStartupCompatibilityFailure(t *testing.T) {
 	}
 }
 
+func TestJobsProducerDependencies(t *testing.T) {
+	t.Run("no concrete producer adds no probe", func(t *testing.T) {
+		if probes := (runtimeDependencies{}).ReadinessProbes(); len(probes) != 0 {
+			t.Fatalf("ReadinessProbes() = %d probes, want none", len(probes))
+		}
+	})
+
+	t.Run("a concrete producer supplies the existing bounded dependency slot", func(t *testing.T) {
+		checks := 0
+		dependencies := runtimeDependencies{readiness: newPostgresReadinessProbe(testProbe{
+			name: "postgres",
+			check: func(context.Context) error {
+				checks++
+				return nil
+			},
+		}, time.Second)}
+		probes := dependencies.ReadinessProbes()
+		if len(probes) != 1 || probes[0].Name() != "postgres" {
+			t.Fatalf("ReadinessProbes() = %+v, want one postgres producer-path probe", probes)
+		}
+		if err := probes[0].Check(context.Background()); err != nil {
+			t.Fatalf("producer-path probe error = %v", err)
+		}
+		if checks != 1 {
+			t.Fatalf("producer-path checks = %d, want 1", checks)
+		}
+	})
+}
+
 func resetBootstrapConfigEnv(t *testing.T) {
 	t.Helper()
 

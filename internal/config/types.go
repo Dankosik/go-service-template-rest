@@ -33,6 +33,9 @@ type Config struct {
 	// profile:database-postgres:start
 	Postgres PostgresConfig `koanf:"postgres"`
 	// profile:database-postgres:end
+	// profile:jobs-postgres:start
+	Jobs JobsConfig `koanf:"jobs"`
+	// profile:jobs-postgres:end
 	// profile:outbox-postgres:start
 	Outbox OutboxConfig `koanf:"outbox"`
 	// profile:outbox-postgres:end

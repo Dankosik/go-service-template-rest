@@ -49,6 +49,9 @@ func defaultValues() map[string]any {
 	// profile:database-postgres:start
 	maps.Copy(values, postgresDefaults())
 	// profile:database-postgres:end
+	// profile:jobs-postgres:start
+	maps.Copy(values, jobsDefaults())
+	// profile:jobs-postgres:end
 	// profile:outbox-postgres:start
 	maps.Copy(values, outboxDefaults())
 	// profile:outbox-postgres:end

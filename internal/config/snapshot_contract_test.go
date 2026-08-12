@@ -319,6 +319,16 @@ func sentinelConfigSourceValues() map[string]any {
 		"postgres.statement_timeout":           "7s",
 		// profile:database-postgres:end
 
+		// profile:jobs-postgres:start
+		"jobs.enabled":                 true,
+		"jobs.poll_interval":           "650ms",
+		"jobs.max_concurrency":         7,
+		"jobs.lease_duration":          "42s",
+		"jobs.store_operation_timeout": "7s",
+		"jobs.observation_interval":    "8s",
+		"jobs.drain_timeout":           "23s",
+		// profile:jobs-postgres:end
+
 		// profile:outbox-postgres:start
 		"outbox.enabled":              true,
 		"outbox.poll_interval":        "600ms",
@@ -449,6 +459,16 @@ func expectedSentinelSnapshotValues() map[string]any {
 		"postgres.conn_max_lifetime":           45 * time.Minute,
 		"postgres.statement_timeout":           7 * time.Second,
 		// profile:database-postgres:end
+
+		// profile:jobs-postgres:start
+		"jobs.enabled":                 true,
+		"jobs.poll_interval":           650 * time.Millisecond,
+		"jobs.max_concurrency":         7,
+		"jobs.lease_duration":          42 * time.Second,
+		"jobs.store_operation_timeout": 7 * time.Second,
+		"jobs.observation_interval":    8 * time.Second,
+		"jobs.drain_timeout":           23 * time.Second,
+		// profile:jobs-postgres:end
 
 		// profile:outbox-postgres:start
 		"outbox.enabled":              true,
