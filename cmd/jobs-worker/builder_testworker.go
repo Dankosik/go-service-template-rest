@@ -43,7 +43,13 @@ var buildRegistry bootstrap.RegistryBuilder = func(context.Context, config.Confi
 		return nil, nil, err
 	}
 	handler := func(ctx context.Context, _ jobs.HandlerInput[map[string]string]) jobs.HandlerResult {
-		if os.Getenv("JOBS_WORKER_TEST_HANDLER") == "noncooperative" {
+		switch os.Getenv("JOBS_WORKER_TEST_HANDLER") {
+		case "noncooperative":
+			select {}
+		case "lease":
+			writeJobsWorkerTestFile(os.Getenv("JOBS_WORKER_TEST_ENTERED_FILE"), "entered\n")
+			<-ctx.Done()
+			writeJobsWorkerTestFile(os.Getenv("JOBS_WORKER_TEST_CANCELLED_FILE"), "cancelled\n")
 			select {}
 		}
 		<-ctx.Done()
@@ -61,8 +67,18 @@ var buildRegistry bootstrap.RegistryBuilder = func(context.Context, config.Confi
 		return nil, nil, err
 	}
 	return registry, func(context.Context) {
-		if path := os.Getenv("JOBS_WORKER_TEST_CLEANUP_FILE"); path != "" {
-			_ = os.WriteFile(path, []byte("cleaned"), 0o600)
-		}
+		writeJobsWorkerTestFile(os.Getenv("JOBS_WORKER_TEST_CLEANUP_FILE"), "cleaned\n")
 	}, nil
+}
+
+func writeJobsWorkerTestFile(path, value string) {
+	if path == "" {
+		return
+	}
+	file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	if err != nil {
+		return
+	}
+	defer file.Close()
+	_, _ = file.WriteString(value)
 }
