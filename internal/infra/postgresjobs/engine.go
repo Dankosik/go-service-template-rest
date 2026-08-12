@@ -24,6 +24,7 @@ type EngineConfig struct {
 	MaxConcurrency      int
 	LeaseDuration       time.Duration
 	ObservationInterval time.Duration
+	DrainTimeout        time.Duration
 }
 
 type EngineFacts struct {
@@ -43,6 +44,7 @@ type Engine struct {
 
 	mu              sync.Mutex
 	cycleMu         sync.Mutex
+	attempts        sync.WaitGroup
 	admission       bool
 	compatible      bool
 	inflight        map[AttemptIdentity]context.CancelFunc
@@ -65,8 +67,8 @@ func newEngine(store engineStore, registry *jobs.Registry, config EngineConfig) 
 	if err := validateStoreToken("worker_id", config.WorkerID); err != nil {
 		return nil, err
 	}
-	if config.MaxConcurrency < 1 || config.LeaseDuration <= 0 || config.ObservationInterval <= 0 {
-		return nil, fmt.Errorf("%w: positive concurrency, lease duration, and observation interval are required", ErrConfig)
+	if config.MaxConcurrency < 1 || config.LeaseDuration <= 0 || config.ObservationInterval <= 0 || config.DrainTimeout <= 0 {
+		return nil, fmt.Errorf("%w: positive concurrency, lease duration, observation interval, and drain timeout are required", ErrConfig)
 	}
 	telemetry, err := NewTelemetry(nil)
 	if err != nil {

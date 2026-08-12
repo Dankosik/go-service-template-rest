@@ -121,7 +121,7 @@ func engineRegistryWithAttemptDuration(t *testing.T, attemptDuration time.Durati
 }
 
 func engineConfig() EngineConfig {
-	return EngineConfig{WorkerID: "worker-1", MaxConcurrency: 1, LeaseDuration: time.Minute, ObservationInterval: time.Minute}
+	return EngineConfig{WorkerID: "worker-1", MaxConcurrency: 1, LeaseDuration: time.Minute, ObservationInterval: time.Minute, DrainTimeout: time.Second}
 }
 
 func engineClaim() ClaimedAttempt {
