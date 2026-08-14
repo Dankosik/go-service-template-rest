@@ -8,6 +8,9 @@ import (
 	"net/http"
 
 	"github.com/example/go-service-template-rest/internal/failure"
+	// profile:http-idempotency-postgres:start
+	"github.com/example/go-service-template-rest/internal/httpidempotency"
+	// profile:http-idempotency-postgres:end
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 	"github.com/example/go-service-template-rest/internal/openapi"
 	"github.com/getkin/kin-openapi/openapi3"
@@ -30,6 +33,14 @@ type RouterConfig struct {
 	// DomainErrors classify the errors a generated operation returns instead of a
 	// typed response. The neutral type lets the same classification feed gRPC.
 	DomainErrors []failure.Mapper
+	// profile:http-idempotency-postgres:start
+	// IdempotencyOperations are the only opt-in seam. An empty slice leaves the
+	// health-only template inert even when a caller sends Idempotency-Key.
+	IdempotencyOperations []IdempotencyOperation
+	// IdempotencyTerminalObserver records one final rejected admission. An
+	// admitted endpoint records its own post-transaction result.
+	IdempotencyTerminalObserver func(context.Context, httpidempotency.Decision, error)
+	// profile:http-idempotency-postgres:end
 }
 
 // NewRouter builds the service router for this repository's own OpenAPI contract:
@@ -45,36 +56,29 @@ func NewRouter(log *slog.Logger, h Handlers, metrics *telemetry.Metrics, cfg Rou
 	}
 
 	rejectRequest := RejectRequest(log, cfg.AuthenticateChallenge)
-
-	server := openapi.NewStrictHandlerWithOptions(strict, nil, generatedStrictServerOptions(log, rejectRequest, cfg.DomainErrors))
-	requestValidator, err := openAPIRequestValidator(cfg.Authenticate, rejectRequest)
-	if err != nil {
-		return nil, err
-	}
-
-	apiSubrouter := openapi.HandlerWithOptions(
-		server,
-		generatedChiServerOptions(rejectRequest, requestValidator),
-	)
-	return Harden(log, metrics, cfg.HardenConfig, apiSubrouter)
-}
-
-// openAPIRequestValidator builds the contract validator and installs the
-// authentication seam.
-//
-// authenticate must be forwarded even when nil: openapi3filter then returns
-// ErrAuthenticationServiceMissing, which fails closed but as an unmapped error,
-// and handleAuthenticatedRequestError is what turns that into a 401 rather than
-// a 400 no client will retry with credentials.
-func openAPIRequestValidator(
-	authenticate openapi3filter.AuthenticationFunc,
-	rejectRequest func(http.ResponseWriter, *http.Request, error),
-) (openapi.MiddlewareFunc, error) {
 	spec, err := openapi.GetSpec()
 	if err != nil {
 		return nil, fmt.Errorf("http router: load embedded OpenAPI spec: %w", err)
 	}
-	return requestValidator(spec, authenticate, rejectRequest), nil
+	//nolint:ineffassign,staticcheck,wastedassign // The profile-off generator keeps this middleware slice.
+	apiMiddlewares := []openapi.MiddlewareFunc{requestValidator(spec, cfg.Authenticate, rejectRequest)}
+	// profile:http-idempotency-postgres:start
+	idempotency, err := newIdempotencyEnvelope(spec, cfg.IdempotencyOperations, cfg.IdempotencyTerminalObserver)
+	if err != nil {
+		return nil, err
+	}
+	apiMiddlewares = []openapi.MiddlewareFunc{idempotency.enforce, requestValidator(spec, cfg.Authenticate, rejectRequest), idempotency.prepareValidation, captureIdempotencyKey}
+	// profile:http-idempotency-postgres:end
+
+	server := openapi.NewStrictHandlerWithOptions(strict, nil, generatedStrictServerOptions(log, rejectRequest, cfg.DomainErrors))
+
+	apiSubrouter := openapi.HandlerWithOptions(
+		server,
+		// oapi-codegen wraps this slice from first to last, so the last entry runs
+		// first: capture → bounded-key masking → authentication/validation → authorization/admission.
+		generatedChiServerOptions(rejectRequest, apiMiddlewares...),
+	)
+	return Harden(log, metrics, cfg.HardenConfig, apiSubrouter)
 }
 
 func requestValidator(

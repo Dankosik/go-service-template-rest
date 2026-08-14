@@ -150,12 +150,10 @@ func (c sanitizingPerRPCCredentials) GetRequestMetadata(
 		//nolint:wrapcheck // Preserve the credential provider's authentication failure unchanged.
 		return nil, err
 	}
-	sanitized := make(map[string]string, len(values))
-	for key, value := range values {
-		if !reservedCorrelationMetadataKey(key) {
-			sanitized[key] = value
-		}
-	}
+	sanitized := maps.Clone(values)
+	maps.DeleteFunc(sanitized, func(key, _ string) bool {
+		return reservedCorrelationMetadataKey(key)
+	})
 	// Preserve the credential owner's exact error while replacing only its
 	// returned metadata map.
 	//nolint:wrapcheck // Preserve the credential provider's authentication failure unchanged.

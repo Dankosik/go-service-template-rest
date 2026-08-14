@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/samber/lo"
+
 	"github.com/example/go-service-template-rest/internal/openapi"
 	"github.com/example/go-service-template-rest/internal/problem"
 	"github.com/example/go-service-template-rest/internal/reqctx"
@@ -109,7 +111,7 @@ func writeProblem(w http.ResponseWriter, r *http.Request, response problemRespon
 	}
 	p := openapi.Problem{
 		Code:          string(definition.Code),
-		Detail:        optionalProblemString(response.detail),
+		Detail:        lo.EmptyableToPtr(response.detail),
 		Instance:      nil,
 		InvalidParams: optionalInvalidParams(response.invalidParams),
 		RequestId:     nil,
@@ -118,7 +120,7 @@ func writeProblem(w http.ResponseWriter, r *http.Request, response problemRespon
 		Type:          definition.TypeURI,
 	}
 	if r != nil {
-		p.RequestId = optionalProblemString(reqctx.RequestID(r.Context()))
+		p.RequestId = lo.EmptyableToPtr(reqctx.RequestID(r.Context()))
 	}
 
 	w.Header().Set("Content-Type", problemJSONContentType)
@@ -141,16 +143,8 @@ func optionalInvalidParams(violations []fieldViolation) *[]openapi.InvalidParam 
 	if len(violations) == 0 {
 		return nil
 	}
-	params := make([]openapi.InvalidParam, 0, len(violations))
-	for _, violation := range violations {
-		params = append(params, openapi.InvalidParam{Name: violation.Field, Reason: violation.Reason})
-	}
+	params := lo.Map(violations, func(violation fieldViolation, _ int) openapi.InvalidParam {
+		return openapi.InvalidParam{Name: violation.Field, Reason: violation.Reason}
+	})
 	return &params
-}
-
-func optionalProblemString(value string) *string {
-	if value == "" {
-		return nil
-	}
-	return &value
 }

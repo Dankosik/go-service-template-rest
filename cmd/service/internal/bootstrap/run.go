@@ -11,9 +11,9 @@ import (
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/background"
-	// profile:authn-oidc-jwt:start
+	// profile:bootstrap-config:start
 	"github.com/example/go-service-template-rest/internal/config"
-	// profile:authn-oidc-jwt:end
+	// profile:bootstrap-config:end
 	httpx "github.com/example/go-service-template-rest/internal/infra/http"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 	"github.com/example/go-service-template-rest/internal/observability/logctx"
@@ -77,16 +77,46 @@ const (
 type runtimeWiring struct {
 	dependencies func(context.Context, startupBootstrap) (runtimeDependencies, error)
 	serve        func(context.Context, context.Context, serveRuntimeArgs) error
+	lifecycle    func(runtimeLifecycleStage)
+	// profile:outbound-auth-oauth2-client-credentials:start
+	initOutboundAuth func(config.OutboundAuthConfig, *telemetry.Metrics, *slog.Logger) (outboundAuthRuntime, error)
+	// profile:outbound-auth-oauth2-client-credentials:end
+	// profile:object-storage:start
+	initObjectStorage func(config.ObjectStorageConfig) (objectStorageRuntime, error)
+	// profile:object-storage:end
 	// profile:authn-oidc-jwt:start
 	initAuthn  func(context.Context, config.Config, *telemetry.Metrics, *slog.Logger) (authnRuntime, error)
 	authnStage func(authnBootstrapStage)
 	// profile:authn-oidc-jwt:end
 }
 
+type runtimeLifecycleStage string
+
+const (
+	runtimeLifecycleMemoryPublished runtimeLifecycleStage = "memory_published"
+	// profile:object-storage:start
+	runtimeLifecycleObjectStorageConstructed runtimeLifecycleStage = "object_storage_constructed"
+	// profile:object-storage:end
+	runtimeLifecycleHTTPDrained      runtimeLifecycleStage = "http_drained"
+	runtimeLifecycleBackgroundJoined runtimeLifecycleStage = "background_joined"
+	// profile:object-storage:start
+	runtimeLifecycleObjectStorageClosed runtimeLifecycleStage = "object_storage_closed"
+	// profile:object-storage:end
+	runtimeLifecycleDependenciesClosed runtimeLifecycleStage = "dependencies_closed"
+	runtimeLifecycleTelemetryFlushed   runtimeLifecycleStage = "telemetry_flushed"
+)
+
 func productionRuntimeWiring() runtimeWiring {
 	return runtimeWiring{
 		dependencies: initRuntimeDependencies,
 		serve:        serveRuntime,
+		lifecycle:    func(runtimeLifecycleStage) {},
+		// profile:outbound-auth-oauth2-client-credentials:start
+		initOutboundAuth: initOutboundAuth,
+		// profile:outbound-auth-oauth2-client-credentials:end
+		// profile:object-storage:start
+		initObjectStorage: initObjectStorage,
+		// profile:object-storage:end
 		// profile:authn-oidc-jwt:start
 		initAuthn: func(
 			ctx context.Context,
@@ -101,10 +131,37 @@ func productionRuntimeWiring() runtimeWiring {
 	}
 }
 
+func checkRuntimeReadiness(
+	ctx context.Context,
+	startupAdmission *startupAdmissionController,
+	// profile:messaging-nats-jetstream:start
+	messaging messagingRuntime,
+	// profile:messaging-nats-jetstream:end
+	// profile:authn-oidc-jwt:start
+	authnVerifier authnRuntime,
+	// profile:authn-oidc-jwt:end
+) error {
+	if err := startupAdmission.CheckReady(ctx); err != nil {
+		return err
+	}
+	// profile:messaging-nats-jetstream:start
+	if !messaging.Ready() {
+		return errors.New("messaging is not ready")
+	}
+	// profile:messaging-nats-jetstream:end
+	// profile:authn-oidc-jwt:start
+	if err := authnVerifier.CheckReady(); err != nil {
+		return fmt.Errorf("check authentication readiness: %w", err)
+	}
+	// profile:authn-oidc-jwt:end
+	return nil
+}
+
 func Run(args []string) error {
 	return runWithRuntime(args, productionRuntimeWiring())
 }
 
+//nolint:cyclop,gocognit // Bootstrap keeps startup and shutdown ordering in the composition root.
 func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 	loadOptions, err := parseLoadOptions(args)
 	if err != nil {
@@ -142,16 +199,35 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 	// shutdown path below it did. The closure matters: a deferred call evaluates
 	// its arguments at registration, so building the context here rather than
 	// inside would start its clock at startup and hand the flush a spent budget.
-	defer func() { bootstrap.telemetryCleanup(shutdown.stage(signalCtx, telemetryShutdownTimeout)) }()
+	defer func() {
+		bootstrap.telemetryCleanup(shutdown.stage(signalCtx, telemetryShutdownTimeout))
+		wiring.lifecycle(runtimeLifecycleTelemetryFlushed)
+	}()
 
 	// The GC limit is published before any dependency allocates, so the first
 	// large allocation is already collected against the container's real ceiling
 	// rather than against math.MaxInt64.
 	memoryLimit := applyMemoryLimit(bootstrap.log, bootstrap.cfg.Runtime.MemoryLimitRatio)
+	wiring.lifecycle(runtimeLifecycleMemoryPublished)
 	// Reported against the same number, because http.max_in_flight and
 	// http.max_body_bytes bound a heap the GC was just handed a ceiling for and
 	// nothing else multiplies the two.
 	reportRequestBufferBudget(bootstrap.log, bootstrap.cfg, memoryLimit)
+
+	// profile:object-storage:start
+	objectStorage, err := wiring.initObjectStorage(bootstrap.cfg.ObjectStorage)
+	if err != nil {
+		return err
+	}
+	wiring.lifecycle(runtimeLifecycleObjectStorageConstructed)
+	objectStorageClosed := false
+	defer func() {
+		if !objectStorageClosed {
+			objectStorage.Close()
+			wiring.lifecycle(runtimeLifecycleObjectStorageClosed)
+		}
+	}()
+	// profile:object-storage:end
 
 	dependencies, err := wiring.dependencies(startupCtx, bootstrap)
 	if err != nil {
@@ -160,7 +236,43 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 	// Close is idempotent. The deferred call is the safety net for the early
 	// returns below; the ordered shutdown path closes it explicitly, before the
 	// telemetry flush and after background work has been joined.
-	defer func() { dependencies.Close(shutdown.stage(signalCtx, dependencyCloseTimeout)) }()
+	dependenciesClosed := false
+	// profile:outbound-auth-oauth2-client-credentials:start
+	var outboundAuth outboundAuthRuntime
+	outboundAuthClosed := true
+	// profile:outbound-auth-oauth2-client-credentials:end
+	closeOwners := func() {
+		if dependenciesClosed {
+			return
+		}
+
+		runtimeCloseCtx := shutdown.stage(signalCtx, dependencyCloseTimeout)
+		// profile:object-storage:start
+		if !objectStorageClosed {
+			objectStorage.Close()
+			objectStorageClosed = true
+			wiring.lifecycle(runtimeLifecycleObjectStorageClosed)
+		}
+		// profile:object-storage:end
+		// profile:outbound-auth-oauth2-client-credentials:start
+		if !outboundAuthClosed {
+			runErr = errors.Join(runErr, outboundAuth.Close(runtimeCloseCtx))
+			outboundAuthClosed = true
+		}
+		// profile:outbound-auth-oauth2-client-credentials:end
+		dependencies.Close(runtimeCloseCtx)
+		dependenciesClosed = true
+		wiring.lifecycle(runtimeLifecycleDependenciesClosed)
+	}
+	defer closeOwners()
+
+	// profile:outbound-auth-oauth2-client-credentials:start
+	outboundAuth, err = wiring.initOutboundAuth(bootstrap.cfg.OutboundAuth, metrics, bootstrap.log)
+	if err != nil {
+		return err
+	}
+	outboundAuthClosed = false
+	// profile:outbound-auth-oauth2-client-credentials:end
 
 	// profile:authn-oidc-jwt:start
 	authnVerifier, err := wiring.initAuthn(startupCtx, bootstrap.cfg, metrics, bootstrap.log)
@@ -175,7 +287,7 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 	defer func() { closeAuthnWithinBudget(authnVerifier, authnCloseAllowed) }()
 	// profile:authn-oidc-jwt:end
 
-	startupAdmission := newStartupAdmissionController()
+	startupAdmission := new(startupAdmissionController)
 
 	supervisor := newSupervisedBackground(signalCtx, bootstrap.log)
 	// The ordered teardown below owns the real stop. This is the safety net for
@@ -209,9 +321,28 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 	}
 	// profile:messaging-nats-jetstream:end
 
+	// profile:http-idempotency-postgres:start
+	var idempotencyOperations []httpx.IdempotencyOperation
+	idempotency, err := initHTTPIdempotencyRuntime(
+		startupCtx,
+		bootstrap.cfg,
+		dependencies.postgres,
+		idempotencyOperations,
+	)
+	if err != nil {
+		return err
+	}
+	if idempotency.maintain != nil {
+		supervisor.Go(background.Task{Name: "http_idempotency_maintenance", Run: idempotency.Run})
+	}
+	// profile:http-idempotency-postgres:end
+
 	// The failure channel below terminates serving; the readiness probe makes the
 	// same failure visible during the short interval before the drain begins.
 	readinessProbes := dependencies.ReadinessProbes()
+	// profile:http-idempotency-postgres:start
+	readinessProbes = append(readinessProbes, idempotency.ReadinessProbes()...)
+	// profile:http-idempotency-postgres:end
 	// profile:messaging-nats-jetstream:start
 	readinessProbes = append(readinessProbes, messaging.ReadinessProbes()...)
 	// profile:messaging-nats-jetstream:end
@@ -227,22 +358,22 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 			Handlers: httpx.Handlers{
 				Health: healthSvc,
 				ReadinessGate: func(ctx context.Context) error {
-					if err := startupAdmission.CheckReady(ctx); err != nil {
-						return err
-					}
-					// profile:messaging-nats-jetstream:start
-					if !messaging.Ready() {
-						return errors.New("messaging is not ready")
-					}
-					// profile:messaging-nats-jetstream:end
-					// profile:authn-oidc-jwt:start
-					if err := authnVerifier.CheckReady(); err != nil {
-						return fmt.Errorf("check authentication readiness: %w", err)
-					}
-					// profile:authn-oidc-jwt:end
-					return nil
+					return checkRuntimeReadiness(
+						ctx,
+						startupAdmission,
+						// profile:messaging-nats-jetstream:start
+						messaging,
+						// profile:messaging-nats-jetstream:end
+						// profile:authn-oidc-jwt:start
+						authnVerifier,
+						// profile:authn-oidc-jwt:end
+					)
 				},
 			},
+			// profile:http-idempotency-postgres:start
+			IdempotencyOperations:       idempotencyOperations,
+			IdempotencyTerminalObserver: idempotency.store.ObserveTerminal,
+			// profile:http-idempotency-postgres:end
 			// profile:authn-oidc-jwt:start
 			Authenticate:          httpx.Authenticated(authnVerifier.ResolveHTTP),
 			AuthenticateChallenge: "Bearer",
@@ -342,6 +473,7 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 		// profile:messaging-nats-jetstream:end
 		shutdown: shutdown,
 	})
+	wiring.lifecycle(runtimeLifecycleHTTPDrained)
 
 	// Ordered teardown. HTTP is already drained, so this is the first moment
 	// nothing can still depend on background work: cancel and join it, then
@@ -352,14 +484,15 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 	messagingErr := messaging.Shutdown(backgroundCtx)
 	// profile:messaging-nats-jetstream:end
 	backgroundErr := supervisor.Shutdown(backgroundCtx)
+	wiring.lifecycle(runtimeLifecycleBackgroundJoined)
 	// profile:authn-oidc-jwt:start
 	backgroundShutdownDone = true
 	authnCloseAllowed = backgroundCtx.Err() == nil
 	// profile:authn-oidc-jwt:end
-
-	dependencies.Close(shutdown.stage(signalCtx, dependencyCloseTimeout))
+	closeOwners()
 
 	return errors.Join(
+		runErr,
 		serveErr,
 		// profile:messaging-nats-jetstream:start
 		messagingErr,

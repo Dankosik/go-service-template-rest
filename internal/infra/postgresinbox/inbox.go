@@ -12,6 +12,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"unicode"
 	"unicode/utf8"
 
@@ -57,10 +58,8 @@ func validateIdentity(name, value string, limit int) error {
 	if value == "" || len(value) > limit || !utf8.ValidString(value) {
 		return fmt.Errorf("%w: %s must be valid UTF-8 between 1 and %d bytes", errInvalidInput, name, limit)
 	}
-	for _, character := range value {
-		if unicode.IsControl(character) {
-			return fmt.Errorf("%w: %s contains a control character", errInvalidInput, name)
-		}
+	if strings.ContainsFunc(value, unicode.IsControl) {
+		return fmt.Errorf("%w: %s contains a control character", errInvalidInput, name)
 	}
 	return nil
 }

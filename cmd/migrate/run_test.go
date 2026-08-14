@@ -95,7 +95,7 @@ func TestLogMigrationTerminalDoesNotDiscloseWrappedError(t *testing.T) {
 	t.Parallel()
 
 	var output bytes.Buffer
-	logger := newJSONLogger(&output)
+	logger := slog.New(slog.NewJSONHandler(&output, nil))
 	sensitive := errors.New("postgres://user:secret-canary@db/app SELECT secret_canary")
 	err := &postgresmigrate.RunError{
 		Stage: postgresmigrate.FailureExecute,
@@ -137,10 +137,6 @@ func TestContextFailureClass(t *testing.T) {
 	if got := contextFailureClass(errors.New("other")); got != "none" {
 		t.Fatalf("contextFailureClass(other) = %q", got)
 	}
-}
-
-func newJSONLogger(output *bytes.Buffer) *slog.Logger {
-	return slog.New(slog.NewJSONHandler(output, nil))
 }
 
 func decodeLastJSONRecord(t *testing.T, data []byte) map[string]any {

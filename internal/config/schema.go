@@ -55,11 +55,6 @@ func configSchemaHasTaggedFields(typ reflect.Type) bool {
 	return false
 }
 
-func configSectionValueIsMap(value any) bool {
-	_, ok := value.(map[string]any)
-	return ok
-}
-
 // removeSectionScalarOverridesInPlace drops every key that names a known section
 // but carries a scalar, and reports the keys it dropped. A scalar there would
 // otherwise replace the whole subtree during the merge, silently discarding the
@@ -80,13 +75,13 @@ func removeSectionScalarOverridesRecursive(values map[string]any, prefix string,
 			fullKey = prefix + keyDelimiter + key
 		}
 
-		if _, ok := knownSections[fullKey]; ok && !configSectionValueIsMap(value) {
+		nested, isMap := value.(map[string]any)
+		if _, ok := knownSections[fullKey]; ok && !isMap {
 			sectionScalarOverrideKeys = append(sectionScalarOverrideKeys, fullKey)
 			delete(values, key)
 			continue
 		}
-		nested, ok := value.(map[string]any)
-		if !ok {
+		if !isMap {
 			continue
 		}
 		sectionScalarOverrideKeys = append(sectionScalarOverrideKeys, removeSectionScalarOverridesRecursive(nested, fullKey, knownSections)...)

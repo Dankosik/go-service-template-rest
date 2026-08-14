@@ -36,6 +36,18 @@ every cold job. The action restores its golangci-lint analysis cache before its
 install-only step returns and saves it after the owning Make or template check;
 no second `actions/cache` step owns the same directory.
 
+<!-- profile:jobs-postgres:start -->
+The durable-jobs profile adds `/jobs-worker` to the one runtime image. Build it
+once with `make runtime-image-build`, then reuse that exact tag for migration
+validation; only `/migrate` writes schema.
+<!-- profile:jobs-postgres:end -->
+<!-- profile:webhooks-durable:start -->
+The durable-webhook profile adds `/webhook-worker` to the same runtime image.
+Use `make test-webhook-race` for its focused race pack, then build one exact tag
+with `make runtime-image-build RUNTIME_IMAGE=service:webhook-test` and reuse it
+for migration and process-lifecycle proof.
+<!-- profile:webhooks-durable:end -->
+
 The production Dockerfile persists module and compiler caches across BuildKit
 builds, but bind-mounts the source only for compilation. `.dockerignore`
 excludes API source, examples, tool sources, test files, and testdata from that
@@ -125,6 +137,12 @@ requires `DATABASE=postgres`, but is independent of `OUTBOX` and `MESSAGING`.
 When messaging is also selected, the joined NATS/PostgreSQL identity proof is
 retained. See [PostgreSQL idempotent inbox](./postgres-idempotent-inbox.md).
 <!-- profile:inbox-postgres:end -->
+<!-- profile:webhooks-durable:start -->
+`WEBHOOKS=none` removes webhook schema, SQLC output, worker/runtime code, tests,
+configuration, documentation, image entrypoint, and Make targets.
+`WEBHOOKS=durable` requires `DATABASE=postgres` and remains independent of
+outbox, inbox, jobs, messaging, and the fixed-target outbound HTTP profile.
+<!-- profile:webhooks-durable:end -->
 <!-- profile:grpc:start -->
 `GRPC=none` removes the native gRPC runtime, protobuf workflow, generated
 reference, gRPC-specific docs/tests/config, and their module dependencies.
@@ -507,6 +525,14 @@ wake-up loop without delaying readiness.
 
 Integration packages pay for one PostgreSQL container per test binary, while
 each test still owns and drops an isolated database.
+
+<!-- profile:object-storage:start -->
+## S3-compatible object storage
+
+`make test-s3-conformance-amazon` and `make test-s3-conformance-r2` are
+fail-closed certification entrypoints. They require a later authorized provider
+receipt and perform no provider request from this deterministic template unit.
+<!-- profile:object-storage:end -->
 The disposable cluster passes `POSTGRES_INITDB_ARGS=--no-sync`; together with
 Testcontainers' built-in `fsync=off`, this skips crash-durability work that the
 suite does not claim to test. Do not copy either setting to a persistent

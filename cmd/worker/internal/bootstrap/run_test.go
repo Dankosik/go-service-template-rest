@@ -15,6 +15,7 @@ import (
 
 	"github.com/example/go-service-template-rest/cmd/internal/runtimeopts"
 	"github.com/example/go-service-template-rest/internal/config"
+	"github.com/example/go-service-template-rest/internal/config/configtest"
 	"github.com/example/go-service-template-rest/internal/health"
 	"github.com/example/go-service-template-rest/internal/infra/natsjs"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
@@ -29,6 +30,7 @@ func TestMessagingCompositionRejectsEmptyHandlerBeforeConfig(t *testing.T) {
 }
 
 func TestMessagingCompositionRejectsDisabledTransportWithRegisteredHandler(t *testing.T) {
+	configtest.IsolateEnv(t)
 	// profile:authn-oidc-jwt:start
 	t.Setenv("APP__AUTHN__ISSUER", "https://issuer.example.com")
 	t.Setenv("APP__AUTHN__AUDIENCE", "https://api.example.com")
@@ -89,7 +91,7 @@ func TestWorkerLoggerCorrelatesRecords(t *testing.T) {
 	telemetrytest.InstallSpanRecorder(t)
 
 	var out bytes.Buffer
-	log := newWorkerLogger(&out, config.Config{
+	log := runtimeopts.Logger(&out, config.Config{
 		App:           config.AppConfig{Env: "test", Version: "v1"},
 		Observability: config.ObservabilityConfig{OTel: config.OTelConfig{ServiceName: "worker"}},
 	})
@@ -326,6 +328,7 @@ func TestMessagingCompositionRejectsMissingDiagnosticsBeforeConnection(t *testin
 
 func setWorkerTestEnvironment(t *testing.T, messagingURL, diagnosticsAddr string) {
 	t.Helper()
+	configtest.IsolateEnv(t)
 	for key, value := range map[string]string{
 		// profile:authn-oidc-jwt:start
 		"APP__AUTHN__ISSUER":              "https://issuer.example.com",

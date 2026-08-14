@@ -2,7 +2,8 @@ package postgresoutbox
 
 import (
 	"context"
-	"fmt"
+
+	"github.com/example/go-service-template-rest/internal/observability/logctx"
 )
 
 func (t *Telemetry) LogPoison(ctx context.Context, errorClass string, attempt int) {
@@ -17,18 +18,15 @@ func (t *Telemetry) LogPublisherStuck(ctx context.Context) {
 	}
 }
 
-// LogPublisherPanic reports an adapter panic with the description the recover
-// consumed. It is the one place in this package that logs an unbounded string,
-// and it is deliberate: the process is exiting over a deployment fault, and the
-// class alone names the category without naming the line of code.
+// LogPublisherPanic reports an adapter panic without publishing its value.
 //
 // The event is not named. A panicking adapter is reproducible from its stack,
 // while an event id on an ERROR line is the identity this package keeps off
 // telemetry everywhere else.
 func (t *Telemetry) LogPublisherPanic(ctx context.Context, value any, stack []byte) {
 	if t != nil {
-		t.log.ErrorContext(ctx, "outbox_publisher_panic",
-			"error.type", classPanic, "panic", fmt.Sprint(value), "stack", string(stack))
+		attrs := append([]any{"error.type", classPanic}, logctx.PanicAttrs(value, stack)...)
+		t.log.ErrorContext(ctx, "outbox_publisher_panic", attrs...)
 	}
 }
 

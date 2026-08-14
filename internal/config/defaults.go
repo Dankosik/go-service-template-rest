@@ -40,6 +40,9 @@ func defaultValues() map[string]any {
 	// profile:authn-oidc-jwt:start
 	maps.Copy(values, authnDefaults())
 	// profile:authn-oidc-jwt:end
+	// profile:outbound-auth-oauth2-client-credentials:start
+	maps.Copy(values, outboundAuthDefaults())
+	// profile:outbound-auth-oauth2-client-credentials:end
 	// profile:grpc:start
 	maps.Copy(values, grpcDefaults())
 	// profile:grpc:end
@@ -49,9 +52,18 @@ func defaultValues() map[string]any {
 	// profile:database-postgres:start
 	maps.Copy(values, postgresDefaults())
 	// profile:database-postgres:end
+	// profile:jobs-postgres:start
+	maps.Copy(values, jobsDefaults())
+	// profile:jobs-postgres:end
+	// profile:webhooks-durable:start
+	maps.Copy(values, webhooksDefaults())
+	// profile:webhooks-durable:end
 	// profile:outbox-postgres:start
 	maps.Copy(values, outboxDefaults())
 	// profile:outbox-postgres:end
+	// profile:object-storage:start
+	maps.Copy(values, objectStorageDefaults())
+	// profile:object-storage:end
 
 	return values
 }

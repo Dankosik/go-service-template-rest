@@ -16,15 +16,15 @@ import (
 	"github.com/example/go-service-template-rest/internal/infra/postgresoutbox"
 )
 
-var selectedPublisherBuilder bootstrap.PublisherBuilder
-
 func main() {
+	//nolint:wastedassign // The outbox-only profile keeps nil while the messaging profile replaces it.
+	publisherBuilder := bootstrap.PublisherBuilder(nil)
 	// profile:messaging-nats-jetstream:start
-	selectedPublisherBuilder = bootstrap.BuildNATSPublisher
+	publisherBuilder = bootstrap.BuildNATSPublisher
 	// profile:messaging-nats-jetstream:end
 	// No noop fallback: an outbox-only generated service leaves the builder nil
 	// and fails before it can claim work.
-	if err := bootstrap.Run(os.Args[1:], selectedPublisherBuilder); err != nil {
+	if err := bootstrap.Run(os.Args[1:], publisherBuilder); err != nil {
 		reportFailure(os.Stderr, err)
 		os.Exit(1)
 	}

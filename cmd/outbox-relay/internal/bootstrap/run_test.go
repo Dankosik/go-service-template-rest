@@ -18,6 +18,7 @@ import (
 
 	"github.com/example/go-service-template-rest/cmd/internal/runtimeopts"
 	"github.com/example/go-service-template-rest/internal/config"
+	"github.com/example/go-service-template-rest/internal/config/configtest"
 	"github.com/example/go-service-template-rest/internal/infra/postgresoutbox"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 )
@@ -868,6 +869,7 @@ func (*pointerTestPublisher) Publish(context.Context, postgresoutbox.Event) erro
 
 func setOutboxBootstrapEnvironment(t *testing.T, postgresEnabled bool) {
 	t.Helper()
+	configtest.IsolateEnv(t)
 	// profile:authn-oidc-jwt:start
 	t.Setenv("APP__AUTHN__ISSUER", "https://issuer.example.com")
 	t.Setenv("APP__AUTHN__AUDIENCE", "https://api.example.com")

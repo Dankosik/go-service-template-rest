@@ -785,7 +785,7 @@ func (w *firstRecordWriter) Write(record []byte) (int, error) {
 	defer w.mu.Unlock()
 	w.writes++
 	if w.first == nil {
-		w.first = append([]byte(nil), record...)
+		w.first = slices.Clone(record)
 	}
 	return len(record), nil
 }
@@ -799,7 +799,7 @@ func (w *firstRecordWriter) writeCount() int {
 func (w *firstRecordWriter) firstRecord() []byte {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	return append([]byte(nil), w.first...)
+	return slices.Clone(w.first)
 }
 
 type benchmarkUnaryHandler struct {

@@ -6,6 +6,7 @@ Repository-wide contract for reliable Go-service changes with the least workflow
 
 - Use the narrowest current evidence that can prove or falsify the next claim.
 - Reuse the current owner, repository pattern, standard library, and installed dependencies before adding machinery.
+- For pure generic slice and map transformations, use a clear one-call standard-library operation first and then `github.com/samber/lo`; do not add local generic helpers or wrappers around `lo`. Keep domain policy, errors, lifecycle, concurrency, security, and transactions in explicit local Go.
 - Keep behavior, failures, cleanup, and proof at their narrowest owner. Prefer concrete types and explicit control flow. Remove replaced code and adjacent stale artifacts unless current compatibility requires them.
 - Treat cancellation, deadlines, partial work, cleanup, shutdown, generated authority, and mutable ownership as first-class only when the change touches them.
 - During iteration, use cached focused checks and keep reusable local dependencies and caches. Run uncached tests, race, coverage, full lint, rebuilds, and teardown only for a triggered claim or publication evidence; cache clearing belongs only to diagnosis, disk reclamation, or proof that requires a cold state.
@@ -74,7 +75,14 @@ whatever change is already editing that code, not to a separate cleanup.
   repository extension seams.
 - Before editing agent instructions, tool descriptions, or skill files, read [Prompt Maintenance](docs/spec-first-workflow.md#prompt-maintenance); skill changes also load [Skill Authoring](docs/skill-authoring.md).
 - Instruction loading is a gate: read the matching owner before the first edit, durable-artifact mutation, native-control dispatch, or readiness/completion claim it governs. Re-evaluate the read set only when evidence changes the phase, risk, ownership, proof, or harness control; retain only the current phase and triggered conditional owners.
-- Every different-session actor in orchestrated Implementation receives exactly one role from the [Execution Role Tree](docs/spec-first-workflow/phases/implementation-worker-execution.md#execution-role-tree) in the first line of its dispatch and loads that tree before its first governed action; a native carrier name never grants role authority.
+- Every top-level task or implementation leaf dispatched during orchestrated
+  Implementation receives exactly one role from the [Execution Role
+  Tree](docs/spec-first-workflow/phases/implementation-worker-execution.md#execution-role-tree)
+  in the first line of its dispatch and loads that tree before its first governed
+  action; a native carrier name never grants role authority. Built-in read-only
+  lanes opened by an Upstream Reopen Lead remain non-implementation phase lanes
+  under [Subagents And Review](docs/spec-first-workflow/shared/subagents-and-handoff.md)
+  and the current phase adapter; they do not bind an Implementation role.
 - Task-local artifacts own accepted task decisions. Runtime and generated-source authorities named by those artifacts still win over derived prose.
 
 ## Authorization And Boundaries
@@ -84,7 +92,27 @@ whatever change is already editing that code, not to a separate cleanup.
 - An approved external-write or purchase envelope owns its cost, security, and proof bounds. Inside it, choose live-state parameters such as region, equivalent host or size, bounded retry route, and local or remote execution from current evidence; a rejected route is no longer valid. Reopen authorization only to exceed the envelope, weaken required security or proof, or change scope or behavior.
 - Inspection and authorized in-scope edits may leave the assigned checkout. A `change`, `build`, or `fix` request authorizes required local edits in an available neighboring repository when it owns part of the accepted outcome; no separate task or confirmation is required solely because work crosses a repository boundary. Before editing, load the target repository's instructions, inspect its checkout and dirty state, preserve unrelated changes, and validate every changed repository. Treat the neighbor as an external blocker only when it is unavailable, read-only, outside the accepted outcome, or the required action needs authority the request did not grant.
 - Respect explicit `read-only`, `docs-only`, `research only`, and named-phase boundaries.
-- Use a durable execution control (a Codex Goal in the Codex App; `/goal` plus the task list in Claude Code — see [Agent Harness](docs/agent-harness.md)) only from implementation through closeout. Intake, research, specification, technical design, test design, planning, and their review and repair loops remain outside durable execution controls even when they edit repository workflow artifacts. The only exception is an explicitly requested Codex App Ledger Orchestrator: its Goal owns fresh Acceptance-Unit Lead dispatch and terminal routing of ready units, concurrently only for a ledger-proven independent wave, never unit execution strategy, implementation, review, proof, integration, correction, or acceptance.
+- Use a durable execution control (a Codex Goal in the Codex App; `/goal` plus
+  the task list in Claude Code — see [Agent Harness](docs/agent-harness.md)) only
+  from implementation through closeout. Intake, research, specification,
+  technical design, test design, planning, and their review and repair loops set
+  no Goal even when they edit workflow artifacts. The only exception is an
+  explicitly requested Codex App Ledger Orchestrator: its Goal may suspend
+  Implementation and own native routing across fresh Acceptance-Unit Leads,
+  Upstream Reopen Leads, invalidated downstream phases, prerequisite repair
+  units, and the final resumed or replacement Lead. It owns task lifecycle and
+  phase-to-phase routing, concurrently only for a ledger-proven independent
+  wave, never phase or unit decisions, implementation, review, proof,
+  integration, correction, or acceptance.
+- One explicit Ledger Orchestrator launch authorizes every reversible local
+  routing action needed to exhaust its ledger: inspect native state; create,
+  wait on, message, hand off, pin, and archive fresh tasks; choose Local or
+  Worktree; select supported model and reasoning effort through the installed
+  controls; open eligible read-only lanes and Workers; route upstream reopens,
+  review, repair, re-review, prerequisite units, and recovery; and choose their
+  order. These are agent-owned decisions and never return to the user for
+  confirmation. The launch does not authorize an irreversible external effect,
+  a purchase, or invention of missing user-owned business meaning.
 - Run ordinary non-interactive shell calls without shell startup: set `login: false` when supported; otherwise set `shell: "/bin/bash"`. Use a login or interactive shell only when the command materially depends on its initialization or zsh-only syntax.
 
 ## Decision Ownership
@@ -105,10 +133,15 @@ When one option dominates, choose it and state the choice with its reopen condit
 
 Proceeding is the agent's decision inside the current macro phase. Within current authorization, begin, continue, widen inspection, analysis, diagnosis, or research, open a read-only lane, and take the next in-scope task, lane, wave, or supporting step autonomously. Take the action current evidence supports and report the result. Name the next step precisely and take it in the same turn unless the [workflow router's macro-phase boundary](docs/spec-first-workflow.md#phase-movement) requires a handoff and stop; a step too vague to name exposes a missing decision rather than a plan. End a turn with a question only for the single user-owned escalation above or the confirmation required before an irreversible external effect.
 
-Resolve obstacles bottom-up: take an evidence-changing action inside the current
-role and repeat no route under unchanged preconditions; otherwise return the
-evidence, boundary, and requested action only to the direct parent. In
-orchestrated Implementation, leaves return `NEEDS_PARENT`, only the
+Resolve obstacles bottom-up. A failed lookup, empty projection, or unavailable
+first control is evidence about that route, not proof that the resource or
+outcome is unavailable. Change the evidence source, query, or stable key before
+repeating, and inspect raw errors plus authoritative local or native backing
+before declaring absence. Do not ask the user to perform or report a read-only
+check that an authorized source can perform. Take an evidence-changing action
+inside the current role and repeat no route under unchanged preconditions;
+otherwise return the evidence, boundary, and requested action only to the direct
+parent. In orchestrated Implementation, leaves return `NEEDS_PARENT`, only the
 Acceptance-Unit Lead may persist a unit `Blocked:` record, and only the Ledger
 Orchestrator may surface a user-owned or irreversible-effect boundary after the
 ladder is exhausted. [Bottom-Up Obstacle
@@ -131,11 +164,11 @@ Structured and orchestrated work follows the workflow router's [Required Spine](
 
 1. Reconstruct the accepted outcome from current repository facts before acting. Resolve every open decision from current evidence and state the bounded assumption you chose; [Decision Ownership](#decision-ownership) owns which decisions are yours and when to escalate.
 2. State the outcome, non-obvious constraints or authority, matching proof, and stop condition. Omit inherited defaults, empty fields, and discretionary steps; prescribe an order or mechanism only when an accepted decision fixes it.
-3. Match every readiness or completion claim to current evidence of equal scope. Use a proof ladder: run locally every obligation the local environment can faithfully exercise, isolate the unsupported remainder, and make exercising that remainder on the actual deployed path in the target production environment the next action. Perform an already-authorized deployment or production mutation without asking whether to proceed; otherwise stop immediately before that external effect with the exact authority and action needed and, when implementation is otherwise complete, report `implementation complete; verification incomplete`. An unavailable or lower-fidelity local environment is evidence about the validation route and maximum claim, not evidence that accepted behavior, production architecture, or implementation scope should change. Do not delete, disable, replace with a mock, substitute the production path, or spend edits making the local substitute emulate a target-only capability solely to obtain local proof; change the path only when independent outcome or contract evidence reopens its owning decision. State beside the claim any coverage it did not reach — a sampled or top-N review, a skipped surface, a source that could not be read — because an unstated narrowing reads as full coverage.
+3. Match every readiness or completion claim to current evidence of equal scope. Use a proof ladder: run locally every obligation the local environment can faithfully exercise and isolate the unsupported remainder. Before any deployment or production mutation, close the phase-owned [Deployment And Remote-Proof Preflight](docs/spec-first-workflow/phases/implementation-validation-closeout.md#deployment-and-remote-proof-preflight), then make only the residual target-only remainder on the actual deployed path in the target production environment the next action. Perform an already-authorized deployment or production mutation without asking whether to proceed; otherwise stop immediately before that external effect with the exact authority and action needed and, when implementation is otherwise complete, report `implementation complete; verification incomplete`. An unavailable or lower-fidelity local environment is evidence about the validation route and maximum claim, not evidence that accepted behavior, production architecture, or implementation scope should change. Do not delete, disable, replace with a mock, substitute the production path, or spend edits making the local substitute emulate a target-only capability solely to obtain local proof; change the path only when independent outcome or contract evidence reopens its owning decision. State beside the claim any coverage it did not reach — a sampled or top-N review, a skipped surface, a source that could not be read — because an unstated narrowing reads as full coverage.
 
 ## Implementation And Evidence
 
-- During implementation, follow the phase-owned [Acceptance Posture](docs/spec-first-workflow/phases/implementation-validation-closeout.md#acceptance-posture) and its selected execution branch. Implementation / Validation / Closeout owns contract closure, bounded review, the Validation Matrix, claim-scoped proof, acceptance, and integration; skills and execution branches supply methods and carrier-specific mechanics only. A real blocker ends implementation and is reported.
+- During implementation, follow the phase-owned [Acceptance Posture](docs/spec-first-workflow/phases/implementation-validation-closeout.md#acceptance-posture) and its selected execution branch. Implementation / Validation / Closeout owns contract closure, bounded review, the Validation Matrix, claim-scoped proof, acceptance, and integration; skills and execution branches supply methods and carrier-specific mechanics only. A real blocker ends the current Acceptance-Unit Lead attempt and is reported to the Ledger Orchestrator. It ends orchestrated Implementation only when no authorized agent-owned recovery or unrelated ready work remains.
 
 ## Go Change Surface
 

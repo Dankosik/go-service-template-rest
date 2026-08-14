@@ -105,6 +105,43 @@ func TestRelayRunPublishesAndDrains(t *testing.T) {
 	}
 }
 
+func TestRelayRunCancellationDuringClaim(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	claimEntered := make(chan struct{})
+	var claims atomic.Int64
+	var publications atomic.Int64
+	store := &relayStoreStub{
+		claim: func(ctx context.Context, _ time.Duration, _ int) (ClaimedBatch, error) {
+			claims.Add(1)
+			close(claimEntered)
+			<-ctx.Done()
+			return ClaimedBatch{}, ctx.Err()
+		},
+	}
+	relay := newUnitRelay(store, publisherFunc(func(context.Context, Event) error {
+		publications.Add(1)
+		return nil
+	}))
+	result := make(chan RelayResult, 1)
+	go func() { result <- relay.Run(ctx) }()
+
+	<-claimEntered
+	cancel()
+	got := <-result
+	if got != (RelayResult{}) {
+		t.Fatalf("Run(cancellation during Claim) = %+v, want ordinary shutdown", got)
+	}
+	if got := claims.Load(); got != 1 {
+		t.Errorf("Claim calls = %d, want 1", got)
+	}
+	if got := publications.Load(); got != 0 {
+		t.Errorf("Publish calls = %d, want 0", got)
+	}
+}
+
 // A wake-up signal replaces the poll wait, so an append committed during an
 // idle cycle is claimed without waiting out the poll interval.
 func TestRelayRunWakesOnNotification(t *testing.T) {

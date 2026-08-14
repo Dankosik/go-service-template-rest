@@ -59,7 +59,7 @@ func run(signalCtx context.Context, args []string, buildHandler HandlerBuilder) 
 	if strings.TrimSpace(cfg.Observability.Metrics.Addr) == "" {
 		return fmt.Errorf("%w: worker diagnostics address is required", natsjs.ErrRejected)
 	}
-	log := newWorkerLogger(os.Stdout, cfg)
+	log := runtimeopts.Logger(os.Stdout, cfg)
 	metrics := telemetry.New()
 	// A metrics provider that could not be built stops this binary, which is this
 	// composition root's own answer rather than InstallTelemetry's: a worker with

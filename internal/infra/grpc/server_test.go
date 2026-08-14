@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/reqctx"
+	"github.com/example/go-service-template-rest/internal/waittest"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
@@ -318,13 +319,8 @@ func TestServerShutdownReturnsWhenHandlerIgnoresCancellation(t *testing.T) {
 	shutdownDone := make(chan error, 1)
 	go func() { shutdownDone <- server.Shutdown(shutdownCtx) }()
 
-	select {
-	case err := <-shutdownDone:
-		if !errors.Is(err, context.Canceled) {
-			t.Fatalf("Shutdown() error = %v, want context.Canceled", err)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("Shutdown() did not honor the canceled shutdown budget")
+	if err := waittest.Receive(t, shutdownDone, time.Second, "Shutdown to honor the canceled shutdown budget"); !errors.Is(err, context.Canceled) {
+		t.Fatalf("Shutdown() error = %v, want context.Canceled", err)
 	}
 	select {
 	case <-handlerDone:

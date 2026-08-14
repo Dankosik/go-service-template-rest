@@ -3,6 +3,8 @@ package config
 import (
 	"context"
 	"time"
+
+	"github.com/knadh/koanf/v2"
 )
 
 // The load-pipeline stage names, and one transport scheme that has to be
@@ -38,6 +40,24 @@ func LoadDetailed(opts LoadOptions) (Config, LoadReport, error) {
 }
 
 func LoadDetailedWithContext(ctx context.Context, opts LoadOptions) (Config, LoadReport, error) {
+	return loadDetailedWithContext(ctx, opts, buildSnapshot, validateConfig)
+}
+
+// LoadJobsWorkerDetailedWithContext loads the immutable snapshot required by
+// the jobs-worker binary. It validates only the sections that binary consumes.
+// profile:jobs-postgres:start
+func LoadJobsWorkerDetailedWithContext(ctx context.Context, opts LoadOptions) (Config, LoadReport, error) {
+	return loadDetailedWithContext(ctx, opts, buildJobsWorkerSnapshot, validateJobsWorkerConfig)
+}
+
+// profile:jobs-postgres:end
+
+func loadDetailedWithContext(
+	ctx context.Context,
+	opts LoadOptions,
+	build func(*koanf.Koanf) (Config, []string, error),
+	validate func(*Config, []string) error,
+) (Config, LoadReport, error) {
 	if err := checkContext(ctx); err != nil {
 		return Config{}, LoadReport{}, err
 	}
@@ -59,7 +79,7 @@ func LoadDetailedWithContext(ctx context.Context, opts LoadOptions) (Config, Loa
 		return Config{}, report, err
 	}
 
-	cfg, unknownKeys, err := buildSnapshot(k)
+	cfg, unknownKeys, err := build(k)
 	if err != nil {
 		report.FailedStage = StageParse
 		return Config{}, report, err
@@ -76,7 +96,7 @@ func LoadDetailedWithContext(ctx context.Context, opts LoadOptions) (Config, Loa
 		return Config{}, report, err
 	}
 
-	err = validateConfig(
+	err = validate(
 		&cfg,
 		append(unknownKeys, metadata.sectionScalarOverrideKeys...),
 	)

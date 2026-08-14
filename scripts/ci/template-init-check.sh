@@ -3,7 +3,13 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 TEMPLATE_INIT_PROFILE="${TEMPLATE_INIT_PROFILE:-all}"
-valid_profiles="all, minimal, postgres, grpc, authn"
+valid_profiles="all, minimal, postgres, grpc, authn, outbound-auth, http-idempotency, webhooks"
+# profile:jobs-postgres:start
+valid_profiles="${valid_profiles}, jobs"
+# profile:jobs-postgres:end
+# profile:object-storage:start
+valid_profiles="${valid_profiles}, object-storage"
+# profile:object-storage:end
 # profile:messaging-nats-jetstream:start
 valid_profiles="${valid_profiles}, messaging"
 # profile:messaging-nats-jetstream:end
@@ -15,7 +21,13 @@ valid_profiles="${valid_profiles}, inbox"
 # profile:inbox-postgres:end
 
 case "${TEMPLATE_INIT_PROFILE}" in
-	all | minimal | postgres | grpc | authn) ;;
+	all | minimal | postgres | grpc | authn | outbound-auth | http-idempotency | webhooks) ;;
+	# profile:jobs-postgres:start
+	jobs) ;;
+	# profile:jobs-postgres:end
+	# profile:object-storage:start
+	object-storage) ;;
+	# profile:object-storage:end
 	# profile:messaging-nats-jetstream:start
 	messaging) ;;
 	# profile:messaging-nats-jetstream:end
@@ -262,7 +274,7 @@ expect_unchanged_failure() {
 	}
 }
 
-if [[ "${TEMPLATE_INIT_PROFILE}" != "postgres" ]]; then
+if [[ "${TEMPLATE_INIT_PROFILE}" != "postgres" && "${TEMPLATE_INIT_PROFILE}" != "outbound-auth" && "${TEMPLATE_INIT_PROFILE}" != "object-storage" && "${TEMPLATE_INIT_PROFILE}" != "jobs" && "${TEMPLATE_INIT_PROFILE}" != "webhooks" ]]; then
 	derived="$(new_fixture derived git@github.com:acme/orders.git true)"
 	env_before="$(shasum -a 256 "${derived}/.env")"
 	derived_workflow_before="$(workflow_snapshot "${derived}")"
@@ -1086,6 +1098,18 @@ fi
 # profile:inbox-postgres:end
 
 if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "postgres" ]]; then
+	postgres_paths=(
+		cmd/migrate
+		internal/infra/postgres
+		internal/infra/postgresmigrate
+		scripts/ci/migration-source-check.sh
+		scripts/ci/migration-history-check.sh
+		scripts/ci/migration-check-self-test.sh
+		scripts/ci/migration-image-history-check.sh
+		scripts/ci/migration-publication-check.sh
+		env/docker-compose.yml
+	)
+	bounded_http_paths=(internal/infra/httpclient)
 	postgres_checkout="$(copy_template_checkout full-postgres git@github.com:acme/postgres-service.git)"
 	postgres_workflow_before="$(workflow_snapshot "${postgres_checkout}")"
 	(
@@ -1506,5 +1530,658 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "auth
 	assert "repeated bounded gRPC OIDC initialization changed the checkout" \
 		same_text "${authn_grpc_bounded_snapshot}" "$(snapshot "${authn_grpc_bounded_checkout}")"
 fi
+
+# profile:outbound-auth-oauth2-client-credentials:start
+if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "outbound-auth" ]]; then
+	outbound_auth_marker='profile:outbound-auth''-'
+	assert_outbound_auth_tree() {
+		local root="$1"
+		local http="$2"
+		local grpc="$3"
+
+		for retained in \
+			cmd/service/internal/bootstrap/startup_outbound_auth.go \
+			internal/config/outbound_auth_config.go \
+			internal/infra/oauth2clientcredentials \
+			docs/outbound-machine-authentication.md; do
+			assert "OAuth selection removed ${retained}" path_present "${root}/${retained}"
+		done
+		grep -Fqx 'outbound_auth = "oauth2-client-credentials"' "${root}/template.lock"
+		grep -Fqx 'APP__OUTBOUND_AUTH__CLIENT_ID=' "${root}/env/.env.example"
+		grep -Fqx 'APP__OUTBOUND_AUTH__CLIENT_SECRET=' "${root}/env/.env.example"
+		grep -Fqx 'APP__OUTBOUND_AUTH__TOKEN_ENDPOINT=' "${root}/env/.env.example"
+		grep -Fqx 'APP__OUTBOUND_AUTH__RESOURCE_AUTHORITY=' "${root}/env/.env.example"
+		assert "OAuth selection removed credential HTTP policy" grep -Fq \
+			'DisableInstrumentation' "${root}/internal/infra/httpclient/config.go"
+		assert "OAuth selection retained unresolved markers" grep_absent -R -Fq \
+			"${outbound_auth_marker}" "${root}/README.md" "${root}/cmd" "${root}/docs" \
+			"${root}/env" "${root}/internal" "${root}/scripts/ci"
+
+		if [[ "${http}" == "bounded" ]]; then
+			assert "HTTP OAuth selection removed adapter" file_present \
+				"${root}/internal/infra/oauth2clientcredentials/http.go"
+			assert "HTTP OAuth selection removed attempt seam" file_present \
+				"${root}/internal/infra/httpclient/attempt_authorization.go"
+		else
+			assert "gRPC-only OAuth retained HTTP adapter" path_absent \
+				"${root}/internal/infra/oauth2clientcredentials/http.go"
+			assert "gRPC-only OAuth retained HTTP attempt seam" path_absent \
+				"${root}/internal/infra/httpclient/attempt_authorization.go"
+			assert "gRPC-only OAuth removed token HTTP owner" path_present \
+				"${root}/internal/infra/httpclient"
+		fi
+
+		if [[ "${grpc}" == "enabled" ]]; then
+			assert "gRPC OAuth selection removed adapter" file_present \
+				"${root}/internal/infra/oauth2clientcredentials/grpc.go"
+		else
+			assert "HTTP-only OAuth retained gRPC adapter" path_absent \
+				"${root}/internal/infra/oauth2clientcredentials/grpc.go"
+		fi
+	}
+
+	assert_outbound_auth_none_tree() {
+		local root="$1"
+		for removed in \
+			cmd/service/internal/bootstrap/startup_outbound_auth.go \
+			internal/config/outbound_auth_config.go \
+			internal/infra/oauth2clientcredentials \
+			docs/outbound-machine-authentication.md; do
+			assert "OUTBOUND_AUTH=none retained ${removed}" path_absent "${root}/${removed}"
+		done
+		grep -Fqx 'outbound_auth = "none"' "${root}/template.lock"
+		assert "OUTBOUND_AUTH=none retained config or environment" grep_absent -R -Eq \
+			'OUTBOUND_AUTH|outbound_auth|oauth2clientcredentials|outbound-machine-authentication' \
+			"${root}/README.md" "${root}/cmd" "${root}/docs" "${root}/env" "${root}/internal" "${root}/scripts/ci"
+		assert "OUTBOUND_AUTH=none retained unresolved marker" grep_absent -R -Fq \
+			"${outbound_auth_marker}" "${root}/README.md" "${root}/cmd" "${root}/docs" \
+			"${root}/env" "${root}/internal" "${root}/scripts/ci"
+	}
+
+	check_outbound_auth_checkout() {
+		(
+			cd "$1"
+			go test -vet=off ./...
+			go build ./cmd/service
+			make mod-tidy-check
+		)
+	}
+
+	assert_outbound_auth_module_boundary() {
+		local root="$1"
+		local module
+
+		assert "generated output imports golang.org/x/oauth2" grep_absent -R -Fq \
+			--include='*.go' '"golang.org/x/oauth2' "${root}"
+		module="$({
+			cd "${root}"
+			go list -m -f '{{.Path}} {{.Version}} {{.Indirect}}' all
+		} | awk '$1 == "golang.org/x/oauth2" { print $1, $2, "indirect=" $3 }')"
+		if [[ -n "${module}" && "${module}" != 'golang.org/x/oauth2 v0.36.0 indirect=true' ]]; then
+			echo "unexpected OAuth module attribution: ${module}"
+			return 1
+		fi
+	}
+
+	outbound_auth_module_attribution() {
+		local root="$1"
+		(
+			cd "${root}"
+			go list -m -f '{{.Path}} {{.Version}} {{.Indirect}}' all |
+				awk '$1 == "golang.org/x/oauth2" { print $1, $2, "indirect=" $3 }'
+			go mod graph | awk '$2 == "golang.org/x/oauth2@v0.36.0"' | LC_ALL=C sort
+		)
+	}
+
+	outbound_auth_oauth2_packages() {
+		(
+			cd "$1"
+			go list -deps -test ./... | awk '/^golang.org\/x\/oauth2($|\/)/' | LC_ALL=C sort -u
+		)
+	}
+
+	for invalid in '' custom; do
+		invalid_outbound_auth="$(copy_template_checkout outbound-auth-invalid git@github.com:acme/outbound-auth-invalid.git)"
+		if [[ -z "${invalid}" ]]; then
+			expect_unchanged_failure "${invalid_outbound_auth}" env CODEOWNER=@acme/platform OUTBOUND_AUTH= \
+				bash "${ROOT_DIR}/scripts/init-module.sh"
+		else
+			expect_unchanged_failure "${invalid_outbound_auth}" env CODEOWNER=@acme/platform OUTBOUND_AUTH="${invalid}" \
+				bash "${ROOT_DIR}/scripts/init-module.sh"
+		fi
+	done
+	no_consumer_outbound_auth="$(copy_template_checkout outbound-auth-no-consumer git@github.com:acme/outbound-auth-no-consumer.git)"
+	expect_unchanged_failure "${no_consumer_outbound_auth}" env CODEOWNER=@acme/platform DATABASE=postgres GRPC=none \
+		OUTBOUND_HTTP=none OUTBOUND_AUTH=oauth2-client-credentials bash "${ROOT_DIR}/scripts/init-module.sh"
+
+	for transport in http grpc both; do
+		case "${transport}" in
+		http) outbound_http=bounded; grpc=none ;;
+		grpc) outbound_http=none; grpc=enabled ;;
+		both) outbound_http=bounded; grpc=enabled ;;
+		esac
+		base_outbound_auth="$(copy_template_checkout "outbound-auth-${transport}-base" "git@github.com:acme/outbound-auth-${transport}.git")"
+		omitted_outbound_auth="${TEMP_ROOT}/outbound-auth-${transport}-omitted"
+		explicit_none_outbound_auth="${TEMP_ROOT}/outbound-auth-${transport}-explicit-none"
+		selected_outbound_auth="${TEMP_ROOT}/outbound-auth-${transport}-selected"
+		cp -R "${base_outbound_auth}" "${omitted_outbound_auth}"
+		cp -R "${base_outbound_auth}" "${explicit_none_outbound_auth}"
+		cp -R "${base_outbound_auth}" "${selected_outbound_auth}"
+		(
+			cd "${omitted_outbound_auth}"
+			CODEOWNER=@acme/platform GRPC="${grpc}" OUTBOUND_HTTP="${outbound_http}" \
+				bash ./scripts/init-module.sh
+		)
+		(
+			cd "${explicit_none_outbound_auth}"
+			CODEOWNER=@acme/platform GRPC="${grpc}" OUTBOUND_HTTP="${outbound_http}" OUTBOUND_AUTH=none \
+				bash ./scripts/init-module.sh
+		)
+		assert "omitted OUTBOUND_AUTH differs from explicit none for ${transport}" \
+			same_text "$(snapshot "${omitted_outbound_auth}")" "$(snapshot "${explicit_none_outbound_auth}")"
+		assert_outbound_auth_none_tree "${omitted_outbound_auth}"
+		check_outbound_auth_checkout "${omitted_outbound_auth}"
+		check_outbound_auth_checkout "${explicit_none_outbound_auth}"
+		omitted_snapshot="$(snapshot "${omitted_outbound_auth}")"
+		(
+			cd "${omitted_outbound_auth}"
+			CODEOWNER=@acme/platform GRPC="${grpc}" OUTBOUND_HTTP="${outbound_http}" \
+				bash ./scripts/init-module.sh
+		)
+		assert "repeated omitted ${transport} OAuth initialization changed the checkout" \
+			same_text "${omitted_snapshot}" "$(snapshot "${omitted_outbound_auth}")"
+		none_snapshot="$(snapshot "${explicit_none_outbound_auth}")"
+		(
+			cd "${explicit_none_outbound_auth}"
+			CODEOWNER=@acme/platform GRPC="${grpc}" OUTBOUND_HTTP="${outbound_http}" OUTBOUND_AUTH=none \
+				bash ./scripts/init-module.sh
+		)
+		assert "repeated explicit-none ${transport} OAuth initialization changed the checkout" \
+			same_text "${none_snapshot}" "$(snapshot "${explicit_none_outbound_auth}")"
+		(
+			cd "${selected_outbound_auth}"
+			CODEOWNER=@acme/platform GRPC="${grpc}" OUTBOUND_HTTP="${outbound_http}" \
+				OUTBOUND_AUTH=oauth2-client-credentials bash ./scripts/init-module.sh
+		)
+		check_outbound_auth_checkout "${selected_outbound_auth}"
+		assert_outbound_auth_tree "${selected_outbound_auth}" "${outbound_http}" "${grpc}"
+		assert "omitted ${transport} output has invalid OAuth module ownership" \
+			assert_outbound_auth_module_boundary "${omitted_outbound_auth}"
+		assert "explicit-none ${transport} output has invalid OAuth module ownership" \
+			assert_outbound_auth_module_boundary "${explicit_none_outbound_auth}"
+		assert "selected ${transport} output has invalid OAuth module ownership" \
+			assert_outbound_auth_module_boundary "${selected_outbound_auth}"
+		omitted_module_attribution="$(outbound_auth_module_attribution "${omitted_outbound_auth}")"
+		none_module_attribution="$(outbound_auth_module_attribution "${explicit_none_outbound_auth}")"
+		selected_module_attribution="$(outbound_auth_module_attribution "${selected_outbound_auth}")"
+		omitted_oauth2_packages="$(outbound_auth_oauth2_packages "${omitted_outbound_auth}")"
+		none_oauth2_packages="$(outbound_auth_oauth2_packages "${explicit_none_outbound_auth}")"
+		selected_oauth2_packages="$(outbound_auth_oauth2_packages "${selected_outbound_auth}")"
+		assert "omitted and explicit-none ${transport} module attribution differs" \
+			same_text "${omitted_module_attribution}" "${none_module_attribution}"
+		assert "selected and none ${transport} module attribution differs" \
+			same_text "${selected_module_attribution}" "${none_module_attribution}"
+		assert "omitted and explicit-none ${transport} OAuth reachability differs" \
+			same_text "${omitted_oauth2_packages}" "${none_oauth2_packages}"
+		assert "selected and none ${transport} OAuth reachability differs" \
+			same_text "${selected_oauth2_packages}" "${none_oauth2_packages}"
+		if [[ "${grpc}" == "none" ]]; then
+			assert "HTTP-only output can reach golang.org/x/oauth2 packages" \
+				same_text '' "${selected_oauth2_packages}"
+		else
+			assert "gRPC output lost grpc-go OAuth attribution" grep -Fq \
+				'google.golang.org/grpc@v1.83.0 golang.org/x/oauth2@v0.36.0' \
+				<<<"${selected_module_attribution}"
+		fi
+		selected_snapshot="$(snapshot "${selected_outbound_auth}")"
+		(
+			cd "${selected_outbound_auth}"
+			CODEOWNER=@acme/platform GRPC="${grpc}" OUTBOUND_HTTP="${outbound_http}" \
+				OUTBOUND_AUTH=oauth2-client-credentials bash ./scripts/init-module.sh
+		)
+		assert "repeated ${transport} OAuth initialization changed the checkout" \
+			same_text "${selected_snapshot}" "$(snapshot "${selected_outbound_auth}")"
+	done
+
+	none_union_outbound_auth="$(copy_template_checkout outbound-auth-none-union git@github.com:acme/outbound-auth-none-union.git)"
+	(
+		cd "${none_union_outbound_auth}"
+		CODEOWNER=@acme/platform DATABASE=postgres AUTHN=none OUTBOUND_HTTP=bounded OUTBOUND_AUTH=none \
+			bash ./scripts/init-module.sh
+	)
+	assert "no credential profile retained credential option" grep_absent -R -Fq \
+		'DisableInstrumentation' "${none_union_outbound_auth}/internal/infra/httpclient"
+	oidc_union_outbound_auth="$(copy_template_checkout outbound-auth-oidc-union git@github.com:acme/outbound-auth-oidc-union.git)"
+	(
+		cd "${oidc_union_outbound_auth}"
+		CODEOWNER=@acme/platform DATABASE=postgres AUTHN=oidc-jwt OUTBOUND_HTTP=none OUTBOUND_AUTH=none \
+			bash ./scripts/init-module.sh
+	)
+	grep -Fq 'DisableInstrumentation' "${oidc_union_outbound_auth}/internal/infra/httpclient/config.go"
+fi
+# profile:outbound-auth-oauth2-client-credentials:end
+
+# profile:http-idempotency-postgres:start
+if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "http-idempotency" ]]; then
+	http_idempotency_marker='profile:http-idempotency''-postgres:'
+	assert_http_idempotency_none_tree() {
+		local root="$1"
+		for removed in \
+			cmd/service/internal/bootstrap/startup_idempotency.go \
+			internal/config/http_idempotency_config.go \
+			internal/httpidempotency \
+			internal/infra/postgresidempotency \
+			migrations/000003_postgres_http_idempotency.sql \
+			internal/infra/postgres/queries/postgres_http_idempotency.sql \
+			docs/postgres-http-idempotency.md; do
+			assert "HTTP_IDEMPOTENCY=none retained ${removed}" path_absent "${root}/${removed}"
+		done
+		grep -Fqx 'http_idempotency = "none"' "${root}/template.lock"
+		assert "HTTP_IDEMPOTENCY=none retained a capability surface" grep_absent -R -E \
+			'HTTP_IDEMPOTENCY|http_idempotency|httpidempotency|postgresidempotency|postgres-http-idempotency' \
+			"${root}/README.md" "${root}/cmd" "${root}/docs" "${root}/env" "${root}/internal" "${root}/migrations"
+		assert "HTTP_IDEMPOTENCY=none retained a marker" grep_absent -R -Fq \
+			"${http_idempotency_marker}" \
+			"${root}/README.md" "${root}/cmd" "${root}/docs" "${root}/env" "${root}/internal" "${root}/scripts/ci"
+	}
+
+	assert_http_idempotency_postgres_tree() {
+		local root="$1"
+		for retained in \
+			cmd/service/internal/bootstrap/startup_idempotency.go \
+			internal/config/http_idempotency_config.go \
+			internal/httpidempotency \
+			internal/infra/postgresidempotency \
+			migrations/000003_postgres_http_idempotency.sql \
+			internal/infra/postgres/queries/postgres_http_idempotency.sql \
+			internal/infra/postgres/sqlcgen/postgres_http_idempotency.sql.go \
+			docs/postgres-http-idempotency.md; do
+			assert "HTTP_IDEMPOTENCY=postgres removed ${retained}" path_present "${root}/${retained}"
+		done
+		grep -Fqx 'http_idempotency = "postgres"' "${root}/template.lock"
+		assert "HTTP_IDEMPOTENCY=postgres retained a marker" grep_absent -R -Fq \
+			"${http_idempotency_marker}" \
+			"${root}/README.md" "${root}/cmd" "${root}/docs" "${root}/env" "${root}/internal" "${root}/scripts/ci"
+		assert "health route opted into idempotency" grep_absent -Fq \
+			'x-http-idempotency' "${root}/api/openapi/service.yaml"
+	}
+
+	base_http_idempotency="$(copy_template_checkout http-idempotency-base git@github.com:acme/http-idempotency-service.git)"
+	omitted_http_idempotency="${TEMP_ROOT}/http-idempotency-omitted"
+	explicit_none_http_idempotency="${TEMP_ROOT}/http-idempotency-explicit-none"
+	cp -R "${base_http_idempotency}" "${omitted_http_idempotency}"
+	cp -R "${base_http_idempotency}" "${explicit_none_http_idempotency}"
+	(
+		cd "${omitted_http_idempotency}"
+		CODEOWNER=@acme/platform DATABASE=postgres OUTBOX=postgres INBOX=postgres AUTHN=oidc-jwt GRPC=enabled OUTBOUND_HTTP=bounded \
+			bash ./scripts/init-module.sh
+		go test -vet=off ./...
+		go build -o "${TEMP_ROOT}/http-idempotency-service" ./cmd/service
+		make openapi-check
+		make sqlc-check
+	)
+	(
+		cd "${explicit_none_http_idempotency}"
+		CODEOWNER=@acme/platform DATABASE=postgres HTTP_IDEMPOTENCY=none OUTBOX=postgres INBOX=postgres AUTHN=oidc-jwt GRPC=enabled OUTBOUND_HTTP=bounded \
+			bash ./scripts/init-module.sh
+	)
+	assert "omitted HTTP_IDEMPOTENCY differs from explicit none" \
+		same_text "$(snapshot "${omitted_http_idempotency}")" "$(snapshot "${explicit_none_http_idempotency}")"
+	assert_http_idempotency_none_tree "${omitted_http_idempotency}"
+
+	for invalid in '' custom; do
+		invalid_http_idempotency="$(copy_template_checkout http-idempotency-invalid git@github.com:acme/http-idempotency-invalid.git)"
+		if [[ -z "${invalid}" ]]; then
+			expect_unchanged_failure "${invalid_http_idempotency}" env CODEOWNER=@acme/platform HTTP_IDEMPOTENCY= \
+				bash "${ROOT_DIR}/scripts/init-module.sh"
+		else
+			expect_unchanged_failure "${invalid_http_idempotency}" env CODEOWNER=@acme/platform HTTP_IDEMPOTENCY="${invalid}" \
+				bash "${ROOT_DIR}/scripts/init-module.sh"
+		fi
+	done
+	invalid_http_idempotency_database="$(copy_template_checkout http-idempotency-database git@github.com:acme/http-idempotency-database.git)"
+	expect_unchanged_failure "${invalid_http_idempotency_database}" env CODEOWNER=@acme/platform DATABASE=none HTTP_IDEMPOTENCY=postgres \
+		bash "${ROOT_DIR}/scripts/init-module.sh"
+
+	combinations=('none none none none')
+	# profile:messaging-nats-jetstream:start
+	combinations+=('oidc-jwt postgres postgres nats-jetstream')
+	# profile:messaging-nats-jetstream:end
+	for combination in "${combinations[@]}"; do
+		read -r authn outbox inbox selected_profile <<<"${combination}"
+		init_env=(CODEOWNER=@acme/platform DATABASE=postgres HTTP_IDEMPOTENCY=postgres AUTHN="${authn}" OUTBOX="${outbox}" INBOX="${inbox}")
+		failure_env=(CODEOWNER=@acme/platform DATABASE=postgres HTTP_IDEMPOTENCY=none AUTHN="${authn}" OUTBOX="${outbox}" INBOX="${inbox}")
+		# profile:messaging-nats-jetstream:start
+		if [[ "${selected_profile}" != "none" ]]; then
+			init_env+=(MESSAGING="${selected_profile}")
+			failure_env+=(MESSAGING="${selected_profile}")
+		fi
+		# profile:messaging-nats-jetstream:end
+		selected_http_idempotency="$(copy_template_checkout "http-idempotency-${authn}-${outbox}-${inbox}-${selected_profile}" "git@github.com:acme/http-idempotency-${authn}-${outbox}-${inbox}-${selected_profile}.git")"
+		(
+			cd "${selected_http_idempotency}"
+			env "${init_env[@]}" \
+				bash ./scripts/init-module.sh
+			go test -vet=off ./...
+			go build ./cmd/service
+			make openapi-check
+			make sqlc-check
+		)
+		assert_http_idempotency_postgres_tree "${selected_http_idempotency}"
+		selected_snapshot="$(snapshot "${selected_http_idempotency}")"
+		(
+			cd "${selected_http_idempotency}"
+			env "${init_env[@]}" \
+				bash ./scripts/init-module.sh
+		)
+		assert "repeated HTTP idempotency initialization changed the checkout" \
+			same_text "${selected_snapshot}" "$(snapshot "${selected_http_idempotency}")"
+		expect_unchanged_failure "${selected_http_idempotency}" env "${failure_env[@]}" \
+			bash "${ROOT_DIR}/scripts/init-module.sh"
+	done
+fi
+# profile:http-idempotency-postgres:end
+
+# profile:object-storage:start
+if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "object-storage" ]]; then
+	assert_object_storage_none_tree() {
+		local root="$1"
+		for removed in \
+			cmd/service/internal/bootstrap/startup_object_storage.go \
+			cmd/service/internal/bootstrap/startup_object_storage_test.go \
+			internal/config/object_storage_config.go \
+			internal/config/object_storage_config_test.go \
+			internal/objectstorage \
+			internal/infra/s3 \
+			scripts/ci/s3-source-receipt.sh \
+			test/s3_object_storage_conformance_integration_test.go \
+			docs/s3-compatible-object-storage.md; do
+			assert "OBJECT_STORAGE=none retained ${removed}" path_absent "${root}/${removed}"
+		done
+		assert "OBJECT_STORAGE=none retained AWS dependencies" grep_absent -E \
+			'aws-sdk-go-v2|smithy-go' "${root}/go.mod" "${root}/go.sum"
+		assert "OBJECT_STORAGE=none retained object configuration" grep_absent -R -E \
+			'object_storage|OBJECT_STORAGE|objectstorage|infra/s3|test-s3-' \
+			"${root}/README.md" "${root}/Makefile" "${root}/cmd" "${root}/docs" "${root}/env" "${root}/internal" "${root}/test"
+		assert "OBJECT_STORAGE=none retained a marker" grep_absent -R -Fq \
+			'profile:object-storage:' \
+			"${root}/.github" "${root}/Makefile" "${root}/README.md" "${root}/cmd" "${root}/docs" "${root}/env" "${root}/internal" "${root}/scripts/ci" "${root}/test"
+	}
+
+	assert_object_storage_s3_tree() {
+		local root="$1"
+		for retained in \
+			cmd/service/internal/bootstrap/startup_object_storage.go \
+			cmd/service/internal/bootstrap/startup_object_storage_test.go \
+			internal/config/object_storage_config.go \
+			internal/config/object_storage_config_test.go \
+			internal/objectstorage \
+			internal/infra/s3 \
+			internal/infra/s3/image_root_bundle.go \
+			internal/infra/s3/image_root_bundle_test.go \
+			internal/infra/httpclient \
+			scripts/ci/s3-source-receipt.sh \
+			test/s3_object_storage_conformance_integration_test.go \
+			docs/s3-compatible-object-storage.md; do
+			assert "OBJECT_STORAGE=s3 removed ${retained}" path_present "${root}/${retained}"
+		done
+		assert "OBJECT_STORAGE=s3 removed generic RootCAs policy" grep -Fq \
+			'RootCAs' "${root}/internal/infra/httpclient/config.go"
+		assert "OBJECT_STORAGE=s3 removed AWS dependencies" grep -Eq \
+			'github.com/aws/aws-sdk-go-v2' "${root}/go.mod"
+		assert "OBJECT_STORAGE=s3 retained a rejected client" grep_absent -R -E \
+			'rhnvrm/simples3|kelindar/s3|manager.NewUploader|manager.NewDownloader' \
+			"${root}/go.mod" "${root}/go.sum" "${root}/internal"
+		assert "OBJECT_STORAGE=s3 generated a trust configuration path" grep_absent -R -E \
+			'object_storage.*(ca|root)|OBJECT_STORAGE.*(CA|ROOT)' \
+			"${root}/docs/s3-compatible-object-storage.md" \
+			"${root}/env/.env.example" \
+			"${root}/env/config/local.yaml" \
+			"${root}/internal/config/object_storage_config.go"
+		assert "OBJECT_STORAGE=s3 retained a marker" grep_absent -R -Eq \
+			'profile:object-storage:(start|end)' \
+			"${root}/.github" "${root}/Makefile" "${root}/README.md" "${root}/cmd" "${root}/docs" "${root}/env" "${root}/internal" "${root}/scripts/ci" "${root}/test"
+	}
+
+	for invalid in '' custom; do
+		invalid_name=empty
+		if [[ -n "${invalid}" ]]; then
+			invalid_name="${invalid}"
+		fi
+		invalid_object_storage="$(copy_template_checkout "object-storage-invalid-${invalid_name}" "git@github.com:acme/object-storage-invalid-${invalid_name}.git")"
+		if [[ -z "${invalid}" ]]; then
+			expect_unchanged_failure "${invalid_object_storage}" env CODEOWNER=@acme/platform OBJECT_STORAGE= \
+				bash "${ROOT_DIR}/scripts/init-module.sh"
+		else
+			expect_unchanged_failure "${invalid_object_storage}" env CODEOWNER=@acme/platform OBJECT_STORAGE="${invalid}" \
+				bash "${ROOT_DIR}/scripts/init-module.sh"
+		fi
+	done
+
+	for object_storage in none s3; do
+		for outbound_http in none bounded; do
+			checkout="$(copy_template_checkout "object-storage-${object_storage}-${outbound_http}" "git@github.com:acme/object-storage-${object_storage}-${outbound_http}.git")"
+			init_log="${TEMP_ROOT}/object-storage-${object_storage}-${outbound_http}.log"
+			(
+				cd "${checkout}"
+				CODEOWNER=@acme/platform DATABASE=postgres AUTHN=none OUTBOUND_HTTP="${outbound_http}" OBJECT_STORAGE="${object_storage}" \
+					bash ./scripts/init-module.sh >"${init_log}"
+				go test -vet=off ./...
+				go test -vet=off -tags=integration ./test -run '^TestS3ObjectStorageConformanceRequiresProviderCertification$' -count=1
+				go mod tidy
+				make mod-tidy-check project-structure-check
+			)
+			grep -Fqx "object_storage = \"${object_storage}\"" "${checkout}/template.lock"
+			grep -Fq "  object storage: ${object_storage}" "${init_log}"
+			if [[ "${object_storage}" == "none" ]]; then
+				assert_object_storage_none_tree "${checkout}"
+				printf '%s\n' \
+					'package config' \
+					'import "testing"' \
+					'func TestObjectStorageProfileRejectsUnknownConfig(t *testing.T) {' \
+					'  resetConfigEnv(t)' \
+					'  path := writeTempConfig(t, "object_storage:\\n  provider: amazon_s3")' \
+					'  if _, _, err := LoadDetailed(LoadOptions{ConfigPath: path}); err == nil { t.Fatal("object-storage config was accepted") }' \
+					'}' >"${checkout}/internal/config/object_storage_profile_test.go"
+				(
+					cd "${checkout}"
+					go test -vet=off ./internal/config -run '^TestObjectStorageProfileRejectsUnknownConfig$' -count=1
+				)
+				rm -f "${checkout}/internal/config/object_storage_profile_test.go"
+			else
+				assert_object_storage_s3_tree "${checkout}"
+			fi
+			snapshot_before_repeat="$(snapshot "${checkout}")"
+			(
+				cd "${checkout}"
+				CODEOWNER=@acme/platform DATABASE=postgres AUTHN=none OUTBOUND_HTTP="${outbound_http}" OBJECT_STORAGE="${object_storage}" \
+					bash ./scripts/init-module.sh
+			)
+			assert "repeated OBJECT_STORAGE=${object_storage} initialization changed the checkout" \
+				same_text "${snapshot_before_repeat}" "$(snapshot "${checkout}")"
+			other_object_storage=none
+			if [[ "${object_storage}" == "none" ]]; then
+				other_object_storage=s3
+			fi
+			expect_unchanged_failure "${checkout}" env CODEOWNER=@acme/platform DATABASE=postgres AUTHN=none OUTBOUND_HTTP="${outbound_http}" OBJECT_STORAGE="${other_object_storage}" \
+				bash "${ROOT_DIR}/scripts/init-module.sh"
+		done
+	done
+
+	authn_control="$(copy_template_checkout object-storage-authn-control git@github.com:acme/object-storage-authn-control.git)"
+	(
+		cd "${authn_control}"
+		CODEOWNER=@acme/platform DATABASE=postgres AUTHN=oidc-jwt OUTBOUND_HTTP=none OBJECT_STORAGE=none \
+			bash ./scripts/init-module.sh
+		go test -vet=off ./...
+	)
+	assert "AUTHN-only output removed shared HTTP client" path_present "${authn_control}/internal/infra/httpclient"
+	assert_object_storage_none_tree "${authn_control}"
+fi
+# profile:object-storage:end
+
+# profile:jobs-postgres:start
+if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "jobs" ]]; then
+	jobs_marker='profile:jobs''-postgres:'
+	assert_jobs_none_tree() {
+		local root="$1"
+		for removed in \
+			cmd/jobs-worker \
+			internal/jobs \
+			internal/infra/postgresjobs \
+			internal/config/jobs_config.go \
+			internal/config/jobs_worker_config.go \
+			internal/infra/postgres/queries/postgres_jobs.sql \
+			internal/infra/postgres/sqlcgen/postgres_jobs.sql.go \
+			migrations/000004_postgres_jobs.sql \
+			docs/postgres-durable-background-jobs.md; do
+			assert "JOBS=none retained ${removed}" path_absent "${root}/${removed}"
+		done
+		assert "JOBS=none retained jobs integration proof" glob_absent "${root}/test/postgres_jobs_*_test.go"
+		assert "JOBS=none retained jobs markers" grep_absent -R -Fq \
+			"${jobs_marker}" "${root}/.golangci.yml" "${root}/Makefile" "${root}/build" "${root}/cmd" \
+			"${root}/docs" "${root}/env" "${root}/internal" "${root}/scripts/ci"
+	}
+
+	assert_jobs_postgres_tree() {
+		local root="$1"
+		for retained in \
+			cmd/jobs-worker \
+			internal/jobs \
+			internal/infra/postgresjobs \
+			internal/config/jobs_config.go \
+			internal/config/jobs_worker_config.go \
+			internal/infra/postgres/queries/postgres_jobs.sql \
+			migrations/000004_postgres_jobs.sql \
+			docs/postgres-durable-background-jobs.md; do
+			assert "JOBS=postgres removed ${retained}" path_present "${root}/${retained}"
+		done
+		grep -Fqx 'jobs = "postgres"' "${root}/template.lock"
+		assert "JOBS=postgres retained unresolved markers" grep_absent -R -Fq \
+			"${jobs_marker}" "${root}/.golangci.yml" "${root}/Makefile" "${root}/build" "${root}/cmd" \
+			"${root}/docs" "${root}/env" "${root}/internal" "${root}/scripts/ci"
+	}
+
+	jobs_none="$(copy_template_checkout jobs-none git@github.com:acme/jobs-none.git)"
+	(
+		cd "${jobs_none}"
+		CODEOWNER=@acme/platform DATABASE=postgres bash ./scripts/init-module.sh
+		go test -vet=off ./...
+		make mod-tidy-check project-structure-check
+	)
+	assert_jobs_none_tree "${jobs_none}"
+	jobs_none_snapshot="$(snapshot "${jobs_none}")"
+	(
+		cd "${jobs_none}"
+		CODEOWNER=@acme/platform DATABASE=postgres bash ./scripts/init-module.sh
+	)
+	assert "repeated JOBS=none initialization changed the checkout" \
+		same_text "${jobs_none_snapshot}" "$(snapshot "${jobs_none}")"
+
+	for invalid in '' custom; do
+		invalid_name=empty
+		if [[ -n "${invalid}" ]]; then
+			invalid_name="${invalid}"
+		fi
+		invalid_jobs="$(copy_template_checkout "jobs-invalid-${invalid_name}" "git@github.com:acme/jobs-invalid-${invalid_name}.git")"
+		if [[ -z "${invalid}" ]]; then
+			expect_unchanged_failure "${invalid_jobs}" env CODEOWNER=@acme/platform JOBS= \
+				bash "${ROOT_DIR}/scripts/init-module.sh"
+		else
+			expect_unchanged_failure "${invalid_jobs}" env CODEOWNER=@acme/platform JOBS="${invalid}" \
+				bash "${ROOT_DIR}/scripts/init-module.sh"
+		fi
+	done
+	jobs_without_postgres="$(copy_template_checkout jobs-without-postgres git@github.com:acme/jobs-without-postgres.git)"
+	expect_unchanged_failure "${jobs_without_postgres}" env CODEOWNER=@acme/platform DATABASE=none JOBS=postgres \
+		bash "${ROOT_DIR}/scripts/init-module.sh"
+
+	jobs_postgres="$(copy_template_checkout jobs-postgres git@github.com:acme/jobs-postgres.git)"
+	(
+		cd "${jobs_postgres}"
+		CODEOWNER=@acme/platform DATABASE=postgres JOBS=postgres OUTBOX=postgres \
+			bash ./scripts/init-module.sh
+		go test -vet=off ./...
+		make mod-tidy-check project-structure-check
+	)
+	assert_jobs_postgres_tree "${jobs_postgres}"
+	assert "JOBS=postgres removed independent outbox sibling" path_present "${jobs_postgres}/internal/infra/postgresoutbox"
+	jobs_postgres_snapshot="$(snapshot "${jobs_postgres}")"
+	(
+		cd "${jobs_postgres}"
+		CODEOWNER=@acme/platform DATABASE=postgres JOBS=postgres OUTBOX=postgres \
+			bash ./scripts/init-module.sh
+	)
+	assert "repeated JOBS=postgres initialization changed the checkout" \
+		same_text "${jobs_postgres_snapshot}" "$(snapshot "${jobs_postgres}")"
+fi
+# profile:jobs-postgres:end
+
+# profile:webhooks-durable:start
+if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "webhooks" ]]; then
+	webhook_paths=(
+		cmd/webhook-worker
+		docs/outbound-webhook-delivery.md
+		internal/config/webhooks_config.go
+		internal/infra/postgreswebhook
+		internal/infra/postgres/queries/postgres_webhooks.sql
+		internal/outboundtrust
+		migrations/000005_postgres_webhooks.sql
+		test/postgres_webhook_acceptance_integration_test.go
+		test/webhook_network_integration_test.go
+		test/webhook_process_integration_test.go
+	)
+
+	webhooks_none="$(copy_template_checkout webhooks-none git@github.com:acme/webhooks-none.git)"
+	(
+		cd "${webhooks_none}"
+		CODEOWNER=@acme/platform DATABASE=postgres bash ./scripts/init-module.sh
+		go test -vet=off ./...
+		make sqlc-check mod-tidy-check project-structure-check
+	)
+	for removed in "${webhook_paths[@]}"; do
+		assert "WEBHOOKS=none retained ${removed}" path_absent "${webhooks_none}/${removed}"
+	done
+	grep -Fqx 'webhooks = "none"' "${webhooks_none}/template.lock"
+	assert "WEBHOOKS=none retained webhook profile markers" grep_absent -R -Fq \
+		'profile:webhooks-durable:' "${webhooks_none}/Makefile" "${webhooks_none}/README.md" \
+		"${webhooks_none}/build" "${webhooks_none}/docs" "${webhooks_none}/env" \
+		"${webhooks_none}/internal" "${webhooks_none}/scripts/ci"
+
+	for invalid in '' custom; do
+		invalid_name="${invalid:-empty}"
+		invalid_webhooks="$(copy_template_checkout "webhooks-invalid-${invalid_name}" "git@github.com:acme/webhooks-invalid-${invalid_name}.git")"
+		expect_unchanged_failure "${invalid_webhooks}" env CODEOWNER=@acme/platform WEBHOOKS="${invalid}" \
+			bash "${ROOT_DIR}/scripts/init-module.sh"
+	done
+	webhooks_without_postgres="$(copy_template_checkout webhooks-without-postgres git@github.com:acme/webhooks-without-postgres.git)"
+	expect_unchanged_failure "${webhooks_without_postgres}" env CODEOWNER=@acme/platform DATABASE=none WEBHOOKS=durable \
+		bash "${ROOT_DIR}/scripts/init-module.sh"
+
+	webhooks_durable="$(copy_template_checkout webhooks-durable git@github.com:acme/webhooks-durable.git)"
+	(
+		cd "${webhooks_durable}"
+		CODEOWNER=@acme/platform DATABASE=postgres WEBHOOKS=durable bash ./scripts/init-module.sh
+		go test -vet=off ./...
+		go build ./cmd/webhook-worker ./cmd/migrate
+		make sqlc-check mod-tidy-check project-structure-check
+	)
+	for retained in "${webhook_paths[@]}"; do
+		assert "WEBHOOKS=durable removed ${retained}" path_present "${webhooks_durable}/${retained}"
+	done
+	grep -Fqx 'webhooks = "durable"' "${webhooks_durable}/template.lock"
+	assert "WEBHOOKS=durable retained unresolved markers" grep_absent -R -Fq \
+		'profile:webhooks-durable:' "${webhooks_durable}/Makefile" "${webhooks_durable}/README.md" \
+		"${webhooks_durable}/build" "${webhooks_durable}/docs" "${webhooks_durable}/env" \
+		"${webhooks_durable}/internal" "${webhooks_durable}/scripts/ci"
+	webhooks_snapshot="$(snapshot "${webhooks_durable}")"
+	(
+		cd "${webhooks_durable}"
+		CODEOWNER=@acme/platform DATABASE=postgres WEBHOOKS=durable bash ./scripts/init-module.sh
+	)
+	assert "repeated WEBHOOKS=durable initialization changed the checkout" \
+		same_text "${webhooks_snapshot}" "$(snapshot "${webhooks_durable}")"
+fi
+# profile:webhooks-durable:end
 
 echo "template initialization contract passed"

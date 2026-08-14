@@ -1,6 +1,6 @@
 interface:
   display_name: "Ledger Orchestrator"
-  short_description: "Route ready ledger units through Unit Leads"
-  default_prompt: "Execution role: LEDGER_ORCHESTRATOR. Use $orchestrator to execute the ready Implementation ledger autonomously through fresh native tasks in this saved Git project; authorize Local for serial Leads, Worktrees for ledger-proven independent waves or Lead-selected isolated Workers, and per-stage Lead Goals; select each direct child's model and reasoning effort from its fixed work."
+  short_description: "Route ledger units and upstream recovery"
+  default_prompt: "Execution role: LEDGER_ORCHESTRATOR. Use $orchestrator to execute the ready Implementation ledger autonomously to exhaustion in this saved Git project. This one launch authorizes fresh Codex tasks, agent-selected Local or Worktree carriers, supported model and reasoning-effort selection, thread-local Goals, built-in read-only lanes, isolated Workers, Handoff, upstream reopen and review chains, prerequisite repair units, and post-reopen replacement Leads without further technical or routing questions. Choose every reversible carrier, order, lane, review, repair, recovery, model, and effort from current artifacts and installed controls; preserve unrelated work. Stop only for an unresolved user-owned business decision, an irreversible external effect outside existing authority, or unrecoverable ambiguous native state."
 policy:
   allow_implicit_invocation: false

@@ -58,7 +58,260 @@ type OutboxRedrife struct {
 	CycleNumber *int32
 }
 
+type PostgresHttpIdempotency struct {
+	IdentityToken                 []byte
+	Generation                    int64
+	Phase                         string
+	ProvisionalFingerprintVersion *string
+	ProvisionalFingerprint        []byte
+	FingerprintVersion            *string
+	Fingerprint                   []byte
+	Result                        []byte
+	ResultMaxBytes                *int64
+	ReplayNanos                   *int64
+	DuplicateRiskNanos            *int64
+	DuplicateRiskPermanent        *bool
+	RecoverAfter                  pgtype.Timestamptz
+	CommittedAt                   pgtype.Timestamptz
+}
+
 type PostgresInboxClaim struct {
 	ConsumerIdentity string
 	MessageID        string
+}
+
+type PostgresJob struct {
+	LogicalJobID       string
+	ProducerScope      string
+	ProducerKey        string
+	OccurrenceScope    string
+	OccurrenceID       string
+	EffectScope        string
+	EffectKey          string
+	IntentFingerprint  []byte
+	Kind               string
+	ArgsVersion        string
+	PolicyVersion      string
+	Payload            []byte
+	WorkClass          string
+	State              string
+	AvailableAt        pgtype.Timestamptz
+	RecoveryGeneration int64
+	AttemptGeneration  int64
+	AttemptsUsed       int32
+	BudgetStartedAt    pgtype.Timestamptz
+	CurrentWorkerID    *string
+	LeaseExpiresAt     pgtype.Timestamptz
+	CreatedAt          pgtype.Timestamptz
+	UpdatedAt          pgtype.Timestamptz
+	TerminalAt         pgtype.Timestamptz
+}
+
+type PostgresJobAction struct {
+	ActionID           string
+	RequestFingerprint []byte
+	ActorID            string
+	ActionKind         string
+	TargetScope        *string
+	LogicalJobID       *string
+	ExpectedState      *string
+	ExpectedGeneration *int64
+	Reason             string
+	Result             string
+	CreatedAt          pgtype.Timestamptz
+	CompletedAt        pgtype.Timestamptz
+}
+
+type PostgresJobAttempt struct {
+	LogicalJobID            string
+	AttemptGeneration       int64
+	RecoveryGeneration      int64
+	AttemptNumber           int32
+	WorkerID                string
+	StartedAt               pgtype.Timestamptz
+	LeaseExpiresAt          pgtype.Timestamptz
+	FinalizedAt             pgtype.Timestamptz
+	FinalState              *string
+	Outcome                 *string
+	EffectStatus            *string
+	FailureCode             *string
+	RetryAt                 pgtype.Timestamptz
+	AttemptsUsed            *int32
+	ElapsedUsedMilliseconds *int64
+}
+
+type PostgresJobClaimScope struct {
+	WorkClass       string
+	Paused          bool
+	ScopeGeneration int64
+	UpdatedAt       pgtype.Timestamptz
+}
+
+type WebhookAttempt struct {
+	OwnerScope            string
+	DeliveryID            string
+	CycleNumber           int64
+	AttemptID             string
+	Fence                 int64
+	CapacitySlot          int32
+	AttemptedAt           pgtype.Timestamptz
+	LeaseExpiresAt        pgtype.Timestamptz
+	KeyReference          *string
+	SignatureHeaderDigest []byte
+	PayloadDigest         []byte
+	PayloadBytes          int32
+	DnsSetDigest          []byte
+	SelectedAddress       []byte
+	SendAuthorized        bool
+	MayHaveSent           bool
+	ResponseHeaderBytes   *int32
+	ResponseBodyBytes     *int32
+	ResponseStatus        *int32
+	RetryAfter            *string
+	OutcomeClass          *string
+	FinalizedAt           pgtype.Timestamptz
+}
+
+type WebhookCapacitySlot struct {
+	SlotNumber       int32
+	CapacityRevision int64
+	OwnerScope       *string
+	DeliveryID       *string
+	CycleNumber      *int64
+	AttemptID        *string
+	LeaseExpiresAt   pgtype.Timestamptz
+	Fence            *int64
+}
+
+type WebhookClock struct {
+	Singleton  bool
+	HighWater  pgtype.Timestamptz
+	Regression bool
+	ObservedAt pgtype.Timestamptz
+}
+
+type WebhookCycle struct {
+	OwnerScope          string
+	DeliveryID          string
+	CycleNumber         int64
+	CycleKind           string
+	AuthorizingActionID *string
+	AcceptedAt          pgtype.Timestamptz
+	DeadlineAt          pgtype.Timestamptz
+	MaximumAttempts     int32
+	AttemptsUsed        int32
+	Disposition         string
+	FinalizedAt         pgtype.Timestamptz
+}
+
+type WebhookDelivery struct {
+	OwnerScope            string
+	DeliveryID            string
+	BusinessEventID       string
+	FanoutSnapshotID      string
+	DestinationID         string
+	DestinationGeneration int64
+	UrlSnapshot           string
+	PolicySnapshot        []byte
+	State                 string
+	CurrentCycle          int64
+	NextDueAt             pgtype.Timestamptz
+	LeaseOwner            *string
+	LeaseExpiresAt        pgtype.Timestamptz
+	Fence                 int64
+	CumulativeSummary     string
+	Sendable              bool
+	RedriveEligibleUntil  pgtype.Timestamptz
+	TerminalAt            pgtype.Timestamptz
+	CreatedAt             pgtype.Timestamptz
+	UpdatedAt             pgtype.Timestamptz
+}
+
+type WebhookDestination struct {
+	OwnerScope                   string
+	DestinationID                string
+	Generation                   int64
+	OwnershipVerificationReceipt string
+	Url                          string
+	SelectionRevision            string
+	PayloadVersionPreference     string
+	SignatureProfile             string
+	SigningAuthorityBinding      string
+	Policy                       []byte
+	PolicyFingerprint            []byte
+	DestinationConcurrency       int32
+	GlobalConcurrency            int32
+	ControlRevision              int64
+	RequiredSecretRevision       int64
+	KeyStateRevision             int64
+	ActiveKeyReference           string
+	PredecessorKeyReference      *string
+	PredecessorValidUntil        pgtype.Timestamptz
+	Disposition                  string
+	LastConsideredSequence       int64
+	CreatedAt                    pgtype.Timestamptz
+	UpdatedAt                    pgtype.Timestamptz
+}
+
+type WebhookEvent struct {
+	OwnerScope               string
+	BusinessEventID          string
+	AcceptanceID             string
+	FanoutSnapshotID         string
+	EventType                string
+	BusinessSchemaVersion    string
+	ContentType              string
+	Body                     []byte
+	DeliveryEnvelopeVersion  string
+	SubscriberPolicyRevision string
+	OriginTraceLink          *string
+	IntentFingerprint        []byte
+	RetentionPolicyIdentity  string
+	ControlRevision          int64
+	AcceptedAt               pgtype.Timestamptz
+}
+
+type WebhookFanout struct {
+	OwnerScope        string
+	FanoutSnapshotID  string
+	BusinessEventID   string
+	MemberCount       int32
+	MemberFingerprint []byte
+	AcceptedAt        pgtype.Timestamptz
+}
+
+type WebhookOperatorAction struct {
+	OwnerScope                string
+	ActionID                  string
+	EncodingVersion           string
+	RequestFingerprint        []byte
+	ActorReference            string
+	ActionKind                string
+	TargetKind                string
+	TargetID                  string
+	TargetGeneration          int64
+	ExpectedState             string
+	Reason                    string
+	DuplicateRiskAcknowledged bool
+	State                     string
+	Result                    string
+	CreatedAt                 pgtype.Timestamptz
+	CompletedAt               pgtype.Timestamptz
+}
+
+type WebhookTombstone struct {
+	OwnerScope            string
+	TargetKind            string
+	TargetID              string
+	AcceptanceID          *string
+	FanoutSnapshotID      *string
+	DeliveryIdentities    []byte
+	DestinationIdentities []byte
+	LastSemanticClass     string
+	ActionID              string
+	ActionEncodingVersion string
+	RequestFingerprint    []byte
+	FirstDisposition      string
+	DeletionAuthority     string
+	CreatedAt             pgtype.Timestamptz
 }

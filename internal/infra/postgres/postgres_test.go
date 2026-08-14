@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"go.uber.org/goleak"
 )
 
@@ -157,6 +158,46 @@ func TestNewInvalidDSNIsRedacted(t *testing.T) {
 		if strings.Contains(err.Error(), leaked) {
 			t.Fatalf("New() error = %v, leaked %q", err, leaked)
 		}
+	}
+}
+
+func TestNewReportsUnavailablePostgresHealthcheck(t *testing.T) {
+	t.Parallel()
+
+	pool, err := New(t.Context(), Options{
+		DSN:                "postgres://app:app@127.0.0.1:1/app?sslmode=disable",
+		ConnectTimeout:     100 * time.Millisecond,
+		HealthcheckTimeout: 100 * time.Millisecond,
+		MaxOpenConns:       1,
+		AcquireTimeout:     time.Second,
+		ConnMaxLifetime:    time.Minute,
+		StatementTimeout:   time.Second,
+	})
+	if pool != nil || !errors.Is(err, ErrHealthcheck) {
+		t.Fatalf("New() = (%v, %v), want unavailable postgres healthcheck", pool, err)
+	}
+}
+
+func TestPoolAcquireAndCheckClassifyConnectionFailure(t *testing.T) {
+	t.Parallel()
+
+	config, err := parsePoolConfig("postgres://app:app@127.0.0.1:1/app?sslmode=disable")
+	if err != nil {
+		t.Fatalf("parsePoolConfig() error = %v", err)
+	}
+	config.ConnConfig.ConnectTimeout = 100 * time.Millisecond
+	pool, err := pgxpool.NewWithConfig(t.Context(), config)
+	if err != nil {
+		t.Fatalf("pgxpool.NewWithConfig() error = %v", err)
+	}
+	p := &Pool{pool: pool, acquireTimeout: 100 * time.Millisecond}
+	t.Cleanup(p.Close)
+
+	if _, err := p.Acquire(t.Context()); !errors.Is(err, ErrConnect) {
+		t.Fatalf("Acquire() error = %v, want ErrConnect", err)
+	}
+	if err := p.Check(t.Context()); !errors.Is(err, ErrHealthcheck) || !errors.Is(err, ErrConnect) {
+		t.Fatalf("Check() error = %v, want ErrHealthcheck wrapping ErrConnect", err)
 	}
 }
 

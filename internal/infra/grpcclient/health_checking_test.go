@@ -9,6 +9,7 @@ import (
 
 	"github.com/example/go-service-template-rest/internal/infra/grpc/grpctest"
 	"github.com/example/go-service-template-rest/internal/infra/grpcclient"
+	"github.com/example/go-service-template-rest/internal/waittest"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/health"
@@ -75,13 +76,8 @@ func TestRoundRobinHealthTransitionDoesNotCancelInflightRPC(t *testing.T) {
 	}
 
 	close(release)
-	select {
-	case err := <-inflight:
-		if err != nil {
-			t.Fatalf("released in-flight RPC error = %v", err)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("released in-flight RPC did not finish")
+	if err := waittest.Receive(t, inflight, 2*time.Second, "released in-flight RPC"); err != nil {
+		t.Fatalf("released in-flight RPC error = %v", err)
 	}
 
 	first.calls.Store(0)
@@ -112,19 +108,11 @@ func TestClientConnCloseCancelsHealthWatch(t *testing.T) {
 	connection := newHealthConnection(t, "grpcclient-health-close", backend)
 	connection.Connect()
 
-	select {
-	case <-observer.started:
-	case <-time.After(2 * time.Second):
-		t.Fatal("standard health Watch did not start")
-	}
+	waittest.ReceiveSignal(t, observer.started, 2*time.Second, "standard health Watch start")
 	if err := connection.Close(); err != nil {
 		t.Fatalf("ClientConn.Close() error = %v", err)
 	}
-	select {
-	case <-observer.stopped:
-	case <-time.After(2 * time.Second):
-		t.Fatal("standard health Watch survived ClientConn.Close")
-	}
+	waittest.ReceiveSignal(t, observer.stopped, 2*time.Second, "standard health Watch stop after ClientConn.Close")
 }
 
 type healthBackend struct {

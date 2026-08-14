@@ -186,8 +186,8 @@ func (f providerError) Error() string {
 }
 
 func providerFailureReason(err error) string {
-	var failure providerError
-	if !errors.As(err, &failure) {
+	failure, ok := errors.AsType[providerError](err)
+	if !ok {
 		return "unknown"
 	}
 	return string(failure)

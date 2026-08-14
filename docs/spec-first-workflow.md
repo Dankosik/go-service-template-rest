@@ -50,9 +50,12 @@ For review and handoff, the owning macro phases are specification (including any
 
 One root session owns at most one active macro phase. Supporting steps, internal
 review, repair, focused re-review, and any narrow upstream reopen caused by
-current-phase evidence stay inside that session. Suspend the active phase,
-close the reopened owner and its triggered review, then resume the active phase;
-this is an internal correction, not a macro-phase handoff. Only after the active
+current-phase evidence stay inside that session's coordination boundary. Suspend
+the active phase, close the reopened owner and its triggered review, then resume
+the active phase; an explicit Ledger Orchestrator realizes this through the
+[fresh-task upstream-recovery route](spec-first-workflow/phases/implementation-worker-execution.md#upstream-reopen-recovery)
+without returning control to the user. This is an internal correction, not a
+macro-phase handoff. Only after the active
 macro phase satisfies its movement rule and every triggered review has a
 movement-allowing disposition may the root report its result, emit the short
 standalone prompt owned by [Resume And Macro-Phase Handoff](spec-first-workflow/shared/resume-and-handoff.md#macro-phase-handoff),
@@ -119,7 +122,11 @@ Before moving forward, close the inputs required by the next phase action or imp
 
 Inside the active macro phase, movement through its supporting steps, internal
 reviews, tasks, or planned waves is automatic while the required inputs remain
-closed. Before that macro phase is ready to hand off, stop only when:
+closed. A fixed candidate that still awaits triggered review is an internal
+state, not a reportable result or handoff boundary: on both first-pass and
+reopened work, the root launches the review, consumes its verdict, and completes
+any required repair and focused re-review before reporting the phase result.
+Before that macro phase is ready to hand off, stop only when:
 
 - the user explicitly named that boundary;
 - a required external decision or input is unavailable from its named owner;
@@ -127,8 +134,9 @@ closed. Before that macro phase is ready to hand off, stop only when:
 - the remaining work needs durable resume or coordination that has not yet been recorded.
 
 Current evidence that invalidates an upstream artifact is not itself a stop:
-reopen its smallest owner inside the current root session, repair or disposition
-it, run any required fresh review, and resume the active macro phase.
+reopen its smallest owner inside the current root session or through the Ledger
+Orchestrator's fresh-task recovery route, repair or disposition it, run any
+required fresh review, and resume the active macro phase.
 
 Absent one of those conditions, continue the active macro phase instead of
 asking whether to proceed ([Proceeding](../AGENTS.md#proceeding)). Movement to a

@@ -124,7 +124,8 @@ func repeatableRequest(request *http.Request) bool {
 	case http.MethodGet, http.MethodHead, http.MethodOptions:
 		return true
 	}
-	return hasUsableIdempotencyKey(request)
+	_, usable := idempotencyKeyState(request.Header)
+	return usable
 }
 
 // hasBlankIdempotencyKey applies whether or not retry is enabled: a blank key is
@@ -140,14 +141,6 @@ func hasBlankIdempotencyKey(request *http.Request) bool {
 	}
 	present, usable := idempotencyKeyState(request.Header)
 	return present && !usable
-}
-
-func hasUsableIdempotencyKey(request *http.Request) bool {
-	if request == nil {
-		return false
-	}
-	_, usable := idempotencyKeyState(request.Header)
-	return usable
 }
 
 func idempotencyKeyState(header http.Header) (present bool, usable bool) {
@@ -175,7 +168,15 @@ func hasBody(request *http.Request) bool {
 func retryableResult(response *http.Response, err error) bool {
 	if err != nil {
 		// A denied target or a body over its cap will fail identically forever.
-		return !errors.Is(err, ErrTargetDenied) && !isResponseTooLarge(err)
+		if errors.Is(err, ErrTargetDenied) || isResponseTooLarge(err) {
+			return false
+		}
+		// profile:outbound-auth-http:start
+		if isAttemptAuthorizationError(err) {
+			return false
+		}
+		// profile:outbound-auth-http:end
+		return true
 	}
 	if response == nil {
 		return false
@@ -189,6 +190,15 @@ func retryableResult(response *http.Response, err error) bool {
 	}
 	return false
 }
+
+// profile:outbound-auth-http:start
+
+func isAttemptAuthorizationError(err error) bool {
+	_, ok := errors.AsType[*attemptAuthorizationError](err)
+	return ok
+}
+
+// profile:outbound-auth-http:end
 
 func isResponseTooLarge(err error) bool {
 	_, ok := errors.AsType[*ResponseTooLargeError](err)

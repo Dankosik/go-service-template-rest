@@ -6,6 +6,7 @@ import (
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/getkin/kin-openapi/openapi3filter"
+	"github.com/samber/lo"
 )
 
 // A rejected request publishes at most this many violations, each with a reason
@@ -162,12 +163,7 @@ func violationFields(violations []fieldViolation) []string {
 	if len(violations) == 0 {
 		return nil
 	}
-	fields := make([]string, 0, len(violations))
-	for _, violation := range violations {
-		if violation.Field == "" {
-			continue
-		}
-		fields = append(fields, violation.Field)
-	}
-	return fields
+	return lo.FilterMap(violations, func(violation fieldViolation, _ int) (string, bool) {
+		return violation.Field, violation.Field != ""
+	})
 }

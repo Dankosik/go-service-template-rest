@@ -20,6 +20,9 @@ type Config struct {
 	// profile:authn-oidc-jwt:start
 	Authn AuthnConfig `koanf:"authn"`
 	// profile:authn-oidc-jwt:end
+	// profile:outbound-auth-oauth2-client-credentials:start
+	OutboundAuth OutboundAuthConfig `koanf:"outbound_auth"`
+	// profile:outbound-auth-oauth2-client-credentials:end
 	// profile:grpc:start
 	GRPC GRPCConfig `koanf:"grpc"`
 	// profile:grpc:end
@@ -33,9 +36,21 @@ type Config struct {
 	// profile:database-postgres:start
 	Postgres PostgresConfig `koanf:"postgres"`
 	// profile:database-postgres:end
+	// profile:http-idempotency-postgres:start
+	HTTPIdempotency HTTPIdempotencyConfig `koanf:"http_idempotency"`
+	// profile:http-idempotency-postgres:end
+	// profile:jobs-postgres:start
+	Jobs JobsConfig `koanf:"jobs"`
+	// profile:jobs-postgres:end
+	// profile:webhooks-durable:start
+	Webhooks WebhooksConfig `koanf:"webhooks"`
+	// profile:webhooks-durable:end
 	// profile:outbox-postgres:start
 	Outbox OutboxConfig `koanf:"outbox"`
 	// profile:outbox-postgres:end
+	// profile:object-storage:start
+	ObjectStorage ObjectStorageConfig `koanf:"object_storage"`
+	// profile:object-storage:end
 }
 
 type AppConfig struct {

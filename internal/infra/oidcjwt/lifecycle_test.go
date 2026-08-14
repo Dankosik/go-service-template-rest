@@ -16,6 +16,7 @@ package oidcjwt
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"slices"
 	"strings"
@@ -23,6 +24,8 @@ import (
 	"testing"
 	"testing/synctest"
 	"time"
+
+	"github.com/example/go-service-template-rest/internal/waittest"
 )
 
 func TestRefreshScheduleJittersOnlyProviderAttempts(t *testing.T) {
@@ -239,32 +242,17 @@ func TestCloseStopsAdmittingFetches(t *testing.T) {
 
 func requireSignal(t *testing.T, signal <-chan struct{}) {
 	t.Helper()
-	select {
-	case <-signal:
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for owned event")
-	}
+	waittest.ReceiveSignal(t, signal, 2*time.Second, "owned event")
 }
 
 func requireBoolEvent(t *testing.T, events <-chan bool, want bool) {
 	t.Helper()
-	select {
-	case got := <-events:
-		if got != want {
-			t.Fatalf("readiness event = %v, want %v", got, want)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for readiness event")
+	if got := waittest.Receive(t, events, 2*time.Second, "readiness event"); got != want {
+		t.Fatalf("readiness event = %v, want %v", got, want)
 	}
 }
 
 func requireErrorEvent(t *testing.T, events <-chan error) error {
 	t.Helper()
-	select {
-	case err := <-events:
-		return err
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for lifecycle result")
-		return nil
-	}
+	return fmt.Errorf("wait for lifecycle result: %w", waittest.Receive(t, events, 2*time.Second, "lifecycle result"))
 }

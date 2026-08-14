@@ -2,22 +2,15 @@ package bootstrap
 
 import (
 	"fmt"
-	"io"
-	"log/slog"
 	"strings"
 	"time"
 
-	"github.com/example/go-service-template-rest/cmd/internal/runtimeopts"
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/infra/natsjs"
 )
 
 func parseLoadOptions(args []string) (config.LoadOptions, error) {
 	return config.ParseLoadOptions("worker", args, nil)
-}
-
-func newWorkerLogger(out io.Writer, cfg config.Config) *slog.Logger {
-	return runtimeopts.Logger(out, cfg)
 }
 
 func messagingWorkerConfig(cfg config.MessagingConfig) (natsjs.WorkerConfig, error) {

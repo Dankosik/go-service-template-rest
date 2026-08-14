@@ -27,6 +27,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/example/go-service-template-rest/internal/packagetest"
 )
 
 // The two shapes the checks below read out of prose: a bare Go filename, which a
@@ -57,7 +59,7 @@ var driverPackages = []string{
 func TestCommentedFileNamesResolve(t *testing.T) {
 	t.Parallel()
 
-	files := packageGoFiles(t)
+	files := packagetest.FileNames(t, ".")
 	comments := packageComments(t)
 	// A walk that collected nothing would pass the loop below while covering
 	// nothing, and this package is emphatically not commentless.
@@ -227,7 +229,7 @@ type commentedText struct {
 func packageComments(t *testing.T) []commentedText {
 	t.Helper()
 	comments := make([]commentedText, 0)
-	eachGoFile(t, parser.ParseComments, func(name string, parsed *ast.File, fileSet *token.FileSet) {
+	packagetest.EachGoFile(t, ".", parser.ParseComments, func(name string, parsed *ast.File, fileSet *token.FileSet) {
 		for _, group := range parsed.Comments {
 			comments = append(comments, commentedText{
 				file: name,
@@ -239,22 +241,13 @@ func packageComments(t *testing.T) []commentedText {
 	return comments
 }
 
-func packageGoFiles(t *testing.T) map[string]struct{} {
-	t.Helper()
-	files := make(map[string]struct{})
-	eachGoFile(t, parser.SkipObjectResolution, func(name string, _ *ast.File, _ *token.FileSet) {
-		files[name] = struct{}{}
-	})
-	return files
-}
-
 // packageImports returns each Go file's import paths, test files included: the
 // exemptions cover them too, which is why the driver doubles are named
 // store_fixtures_test.go rather than a plain fixtures_test.go.
 func packageImports(t *testing.T) map[string][]string {
 	t.Helper()
 	imports := make(map[string][]string)
-	eachGoFile(t, parser.ImportsOnly, func(name string, parsed *ast.File, _ *token.FileSet) {
+	packagetest.EachGoFile(t, ".", parser.ImportsOnly, func(name string, parsed *ast.File, _ *token.FileSet) {
 		paths := make([]string, 0, len(parsed.Imports))
 		for _, imported := range parsed.Imports {
 			paths = append(paths, strings.Trim(imported.Path.Value, `"`))
@@ -262,23 +255,4 @@ func packageImports(t *testing.T) map[string][]string {
 		imports[name] = paths
 	})
 	return imports
-}
-
-func eachGoFile(t *testing.T, mode parser.Mode, visit func(string, *ast.File, *token.FileSet)) {
-	t.Helper()
-	entries, err := os.ReadDir(".")
-	if err != nil {
-		t.Fatalf("read package directory: %v", err)
-	}
-	fileSet := token.NewFileSet()
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") {
-			continue
-		}
-		parsed, err := parser.ParseFile(fileSet, entry.Name(), nil, mode)
-		if err != nil {
-			t.Fatalf("parse %s: %v", entry.Name(), err)
-		}
-		visit(entry.Name(), parsed, fileSet)
-	}
 }

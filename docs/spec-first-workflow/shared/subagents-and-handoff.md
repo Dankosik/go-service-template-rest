@@ -84,10 +84,10 @@ The root owns scope, lane choice, synthesis, correction routing, integration,
 acceptance, completion claims, and mechanical ledger updates. Built-in
 subagents under this non-implementation contract are read-only research,
 challenge, or review lanes; they never implement or repair code, config, docs,
-or tests. In the Codex App a lane is a project subagent; in Claude Code it is an
-`Agent` tool lane ([Agent Harness](../../agent-harness.md#control-map)). The
-harness-native isolated Worker lanes are outside this contract and follow the
-[implementation phase](../phases/implementation-validation-closeout.md#worker-execution).
+or tests. The harness-neutral lane maps through the [Read-Only Lane
+Carrier](../../agent-harness.md#read-only-lane-carrier). The harness-native
+isolated Worker lanes are outside this contract and follow the [implementation
+phase](../phases/implementation-validation-closeout.md#worker-execution).
 
 Run one lane per distinct decision-changing question. Current harness capacity,
 mutable-state independence, and synthesis coherence bound concurrency; do not

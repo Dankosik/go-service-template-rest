@@ -25,6 +25,7 @@ import (
 	"github.com/example/go-service-template-rest/internal/config"
 	grpcx "github.com/example/go-service-template-rest/internal/infra/grpc"
 	"github.com/example/go-service-template-rest/internal/infra/grpcclient"
+	"github.com/example/go-service-template-rest/internal/waittest"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
@@ -139,15 +140,11 @@ func TestBenchmarkServerProcessLifecycle(t *testing.T) {
 	if err := command.Process.Signal(syscall.SIGTERM); err != nil {
 		t.Fatalf("Signal(SIGTERM) error = %v", err)
 	}
-	select {
-	case err := <-waitDone:
+	if err := waittest.Receive(t, waitDone, shutdownTimeout+2*time.Second, "benchmark server to exit within its shutdown budget"); err != nil {
 		processExited = true
-		if err != nil {
-			t.Fatalf("benchmark server exit = %v; stderr=%s", err, stderr.String())
-		}
-	case <-time.After(shutdownTimeout + 2*time.Second):
-		t.Fatal("benchmark server did not exit within its shutdown budget")
+		t.Fatalf("benchmark server exit = %v; stderr=%s", err, stderr.String())
 	}
+	processExited = true
 
 	probe, err := (&net.Dialer{Timeout: 250 * time.Millisecond}).DialContext(t.Context(), "tcp4", address)
 	if err == nil {

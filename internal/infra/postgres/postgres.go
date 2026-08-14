@@ -7,11 +7,14 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/exaring/otelpgx"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgconn/ctxwatch"
 	"github.com/jackc/pgx/v5/pgxpool"
 	semconv "go.opentelemetry.io/otel/semconv/v1.37.0"
 )
@@ -80,9 +83,14 @@ type Options struct {
 }
 
 type Pool struct {
-	pool           *pgxpool.Pool
-	acquireTimeout time.Duration
-	commitTx       func(context.Context, pgx.Tx) error
+	pool                *pgxpool.Pool
+	acquireTimeout      time.Duration
+	commitTx            func(context.Context, pgx.Tx) error
+	contextWatcherMarks sync.Map // map[*pgconn.PgConn]*contextWatcherMark
+}
+
+type contextWatcherMark struct {
+	canceled atomic.Bool
 }
 
 func New(ctx context.Context, opts Options) (*Pool, error) {
@@ -120,6 +128,11 @@ func New(ctx context.Context, opts Options) (*Pool, error) {
 	}
 	poolConfig.ConnConfig.ConnectTimeout = opts.ConnectTimeout
 	applyStatementTimeouts(poolConfig.ConnConfig, opts.StatementTimeout)
+	p := &Pool{
+		acquireTimeout: opts.AcquireTimeout,
+		commitTx:       commitTx,
+	}
+	applyContextWatcher(poolConfig.ConnConfig, opts.StatementTimeout, &p.contextWatcherMarks)
 	poolConfig.ConnConfig.Tracer = otelpgx.NewTracer(
 		otelpgx.WithTrimSQLInSpanName(),
 		otelpgx.WithSpanNameFunc(postgresOperationName),
@@ -151,11 +164,8 @@ func New(ctx context.Context, opts Options) (*Pool, error) {
 		return nil, fmt.Errorf("record postgres pool metrics: %w", err)
 	}
 
-	return &Pool{
-		pool:           pool,
-		acquireTimeout: opts.AcquireTimeout,
-		commitTx:       commitTx,
-	}, nil
+	p.pool = pool
+	return p, nil
 }
 
 // Acquire takes a pooled connection, bounded by the acquire budget rather than by
@@ -206,6 +216,44 @@ func applyStatementTimeouts(connConfig *pgx.ConnConfig, statementTimeout time.Du
 	milliseconds := RuntimeParamMilliseconds(statementTimeout)
 	connConfig.RuntimeParams["statement_timeout"] = milliseconds
 	connConfig.RuntimeParams["idle_in_transaction_session_timeout"] = milliseconds
+}
+
+func applyContextWatcher(connConfig *pgx.ConnConfig, statementTimeout time.Duration, marks *sync.Map) {
+	if connConfig == nil {
+		return
+	}
+	connConfig.BuildContextWatcherHandler = func(conn *pgconn.PgConn) ctxwatch.Handler {
+		return &contextWatcherHandler{
+			marks: marks,
+			conn:  conn,
+			handler: &pgconn.CancelRequestContextWatcherHandler{
+				Conn:               conn,
+				CancelRequestDelay: 0,
+				DeadlineDelay:      statementTimeout,
+			},
+		}
+	}
+}
+
+type contextWatcherHandler struct {
+	marks   *sync.Map
+	conn    *pgconn.PgConn
+	handler ctxwatch.Handler
+}
+
+func (h *contextWatcherHandler) HandleCancel(ctx context.Context) {
+	if h.marks != nil {
+		if value, ok := h.marks.Load(h.conn); ok {
+			if marker, ok := value.(*contextWatcherMark); ok {
+				marker.canceled.Store(true)
+			}
+		}
+	}
+	h.handler.HandleCancel(ctx)
+}
+
+func (h *contextWatcherHandler) HandleUnwatchAfterCancel() {
+	h.handler.HandleUnwatchAfterCancel()
 }
 
 // RuntimeParamMilliseconds renders a duration as a PostgreSQL runtime-parameter

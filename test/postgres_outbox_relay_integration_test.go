@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	"github.com/example/go-service-template-rest/internal/infra/postgresoutbox"
 	"github.com/jackc/pgx/v5"
 )
@@ -59,6 +60,60 @@ func TestPostgresOutboxRelayReplicas(t *testing.T) {
 	for _, result := range results {
 		assertRelayResult(t, result, nil)
 	}
+}
+
+func TestPostgresOutboxRelayListenerStop(t *testing.T) {
+	for _, stopRelay := range []struct {
+		name string
+		stop func(*postgresoutbox.Relay, context.CancelFunc)
+	}{
+		{name: "drain", stop: func(relay *postgresoutbox.Relay, _ context.CancelFunc) { relay.StartDrain() }},
+		{name: "cancellation", stop: func(_ *postgresoutbox.Relay, cancel context.CancelFunc) { cancel() }},
+	} {
+		t.Run(stopRelay.name, func(t *testing.T) {
+			ctx, pool, store := newOutboxFixture(t)
+			relayCtx, cancel := context.WithCancel(ctx)
+			defer cancel()
+			config := testRelayConfig()
+			config.PollInterval = time.Hour
+			relay := mustNewOutboxRelay(t, store, testPublisherFunc(func(context.Context, postgresoutbox.Event) error { return nil }), nil, config)
+			result := runOutboxRelay(relayCtx, relay)
+
+			listenerPID := outboxListenerPID(t, ctx, pool)
+			stopRelay.stop(relay, cancel)
+			assertRelayResult(t, result, nil)
+			if relay.Ready() {
+				t.Fatal("relay remained ready after listener stop")
+			}
+			waitForOutbox(t, func() string { return "the stopped listener backend to disappear" }, func() bool {
+				return !outboxBackendExists(t, ctx, pool, fmt.Sprintf("pid = %d", listenerPID))
+			})
+			if _, err := store.Observe(ctx); err != nil {
+				t.Fatalf("Observe() after listener stop: %v", err)
+			}
+		})
+	}
+}
+
+func outboxListenerPID(t *testing.T, ctx context.Context, pool *postgres.Pool) int {
+	t.Helper()
+	var pid int
+	waitForOutbox(t, func() string { return "an idle outbox listener in ClientRead" }, func() bool {
+		if err := pool.PGX().QueryRow(ctx, `
+			SELECT COALESCE((
+				SELECT pid FROM pg_stat_activity
+				WHERE pid <> pg_backend_pid()
+				  AND query LIKE 'LISTEN %outbox_appended%'
+				  AND state = 'idle'
+				  AND wait_event_type = 'Client'
+				  AND wait_event = 'ClientRead'
+				LIMIT 1
+			), 0)`).Scan(&pid); err != nil {
+			t.Fatalf("read listener backend: %v", err)
+		}
+		return pid != 0
+	})
+	return pid
 }
 
 func TestPostgresOutboxRequestContinuesDuringBrokerOutage(t *testing.T) {

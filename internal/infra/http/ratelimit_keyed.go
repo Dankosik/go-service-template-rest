@@ -95,22 +95,16 @@ func (l *KeyedRateLimiter) bucket(key string) *rate.Limiter {
 	if limiter, ok := l.current[key]; ok {
 		return limiter
 	}
-	if limiter, ok := l.previous[key]; ok {
-		// Promoted, so a caller that is still active does not lose its bucket —
-		// and therefore its accumulated debt — when a generation rolls over.
-		if len(l.current) >= l.maxKeys {
-			l.previous = l.current
-			l.current = make(map[string]*rate.Limiter, min(l.maxKeys, rateLimitInitialKeys))
-		}
-		l.current[key] = limiter
-		return limiter
+	limiter, ok := l.previous[key]
+	if !ok {
+		limiter = rate.NewLimiter(l.limit, l.burst)
 	}
-
+	// A promoted caller keeps the previous limiter — and therefore its
+	// accumulated debt — when a generation rolls over.
 	if len(l.current) >= l.maxKeys {
 		l.previous = l.current
 		l.current = make(map[string]*rate.Limiter, min(l.maxKeys, rateLimitInitialKeys))
 	}
-	limiter := rate.NewLimiter(l.limit, l.burst)
 	l.current[key] = limiter
 	return limiter
 }

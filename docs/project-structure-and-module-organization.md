@@ -1,5 +1,27 @@
 # Project Structure And Module Organization
 
+<!-- profile:outbound-auth-oauth2-client-credentials:start -->
+
+`internal/infra/oauth2clientcredentials` owns the fixed machine-credential
+client, cache, wire contract, and transport adapters. Its HTTP adapter uses the
+bounded `internal/infra/httpclient` path; its gRPC adapter wraps a concrete
+`grpc.ClientConnInterface`. Bootstrap alone maps `internal/config` into this
+runtime owner.
+
+<!-- profile:outbound-auth-oauth2-client-credentials:end -->
+
+<!-- profile:jobs-postgres:start -->
+`internal/jobs`, `internal/infra/postgresjobs`, and `cmd/jobs-worker` are one
+removable profile pack; generic job mechanics never move into feature packages.
+<!-- profile:jobs-postgres:end -->
+
+<!-- profile:webhooks-durable:start -->
+`internal/outboundtrust` is a standard-library-only public-address predicate
+shared by fixed-target HTTP and dynamic webhook transport. It owns no URL,
+resolver, dialer, HTTP, or config policy. `internal/infra/postgreswebhook` and
+`cmd/webhook-worker` own the removable durable webhook pack.
+<!-- profile:webhooks-durable:end -->
+
 This document is the normative owner of repository placement and file naming.
 When a new artifact is needed, follow the decision tree below. Do not create a
 directory until the first real artifact has an owner.
@@ -83,10 +105,18 @@ packages. There is no reserved empty `api/proto/`, `migrations/`, `queries/`, or
 | `internal/openapi/` | generated Go bindings and generation config | hand-written handlers or business logic |
 | `internal/infra/http/` (`package httpx`) | HTTP mapping, router, middleware, Problem responses | SQL, database repositories, business decisions |
 | `internal/infra/httpclient/` (`OUTBOUND_HTTP=bounded`) | outbound fixed-authority transport safety, correlation enforcement, retry mechanism, and lifecycle | provider auth, concrete trust selection, retry eligibility, error mapping, or business policy |
+<!-- profile:object-storage:start -->
+| `internal/objectstorage/` and `internal/infra/s3/` (`OBJECT_STORAGE=s3`) | provider-neutral object port and one static S3-compatible adapter | feature policy, live credentials, bucket provisioning, provider certification, or generated trust configuration |
+<!-- profile:object-storage:end -->
 | `internal/infra/grpc/` (`package grpcx`, `GRPC=enabled`) | native gRPC server composition, standard health, the interceptor policy chain, transport bounds, and status mapping | feature packages, generated handlers, domain policy, authentication decisions, or this repository's configuration shape |
 | `internal/infra/grpcclient/` (`GRPC=enabled`) | bounded shared connections, correlation-policy enforcement, resolver metadata sanitization, address selection, standard-health eligibility, opt-in idle keepalive, and the connection lifecycle seam | provider auth, concrete trust selection, operation deadlines or application retries, generated-client ownership, or dependency readiness policy |
 | `internal/infra/oidcjwt/` (`AUTHN=oidc-jwt`) | inbound caller identity: OIDC trust bootstrap, JWKS lifecycle, token admission, and the HTTP and gRPC authentication adapters | authorization, roles, tenant policy, sessions, user provisioning, or any decision past who the caller is |
 | `internal/infra/postgres/` | pool, concrete repositories, query mapping | HTTP behavior, migration execution, and business policy |
+<!-- profile:webhooks-durable:start -->
+| `internal/outboundtrust/` | pure public/special IP classification shared by enabled outbound consumers | URLs, DNS, dialing, HTTP, configuration, or webhook policy |
+| `internal/infra/postgreswebhook/` (`WEBHOOKS=durable`) | immutable acceptance values, PostgreSQL webhook state, claim/send/finality, bounded maintenance, signing, and telemetry | feature mutation, subscriber discovery, operator transport, receiver processing, or deployment |
+| `cmd/webhook-worker/` (`WEBHOOKS=durable`) | webhook worker config mapping, diagnostics, readiness, drain, and dependency cleanup | webhook state policy or HTTP API routes |
+<!-- profile:webhooks-durable:end -->
 <!-- profile:inbox-postgres:start -->
 | `internal/infra/postgresinbox/` (`INBOX=postgres`) | validate and insert one `(consumer identity, logical message ID)` claim through a caller-owned `pgx.Tx` | transaction lifecycle, feature effects, transport configuration, expiry, cleanup, telemetry, or ordering |
 <!-- profile:inbox-postgres:end -->
@@ -185,6 +215,13 @@ Use the first matching rule.
     - executable boundary contract: sibling `<owner>_contract_test.go`;
     - container/external process: `test/<feature>_integration_test.go` with
       `//go:build integration` and `package integration_test`;
+    <!-- profile:http-idempotency-postgres:start -->
+    - sole package-local integration exception:
+      `cmd/service/internal/bootstrap/startup_idempotency_integration_test.go`
+      stays tagged `integration` in `package bootstrap` because it must exercise
+      unexported service composition against the real PostgreSQL writer; no
+      other `cmd/**/_integration_test.go` is permitted;
+    <!-- profile:http-idempotency-postgres:end -->
     - fake used by one test file: keep it in that file;
     - fake or harness shared within one package: keep it unexported in
       `harness_test.go`, which does not collide with the `<owner>_test.go` of a

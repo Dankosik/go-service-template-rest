@@ -20,6 +20,7 @@ import (
 	"io"
 	"log/slog"
 	"math"
+	"slices"
 	"testing"
 	"time"
 
@@ -28,6 +29,7 @@ import (
 	"github.com/example/go-service-template-rest/internal/config"
 	grpcx "github.com/example/go-service-template-rest/internal/infra/grpc"
 	"github.com/example/go-service-template-rest/internal/infra/grpc/grpctest"
+	"github.com/example/go-service-template-rest/internal/waittest"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -86,7 +88,7 @@ func TestReferenceServiceSupportsAllCardinalities(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ClientStream().CloseAndRecv() error = %v", err)
 	}
-	if got, want := clientStreamResponse.GetValues(), []string{"one", "two", "three"}; !equalStrings(got, want) {
+	if got, want := clientStreamResponse.GetValues(), []string{"one", "two", "three"}; !slices.Equal(got, want) {
 		t.Fatalf("ClientStream() values = %v, want %v", got, want)
 	}
 
@@ -243,11 +245,7 @@ func TestReferenceBidiStreamReleasesServerWorkOnCancellation(t *testing.T) {
 	if _, err := stream.Recv(); status.Code(err) != codes.Canceled {
 		t.Fatalf("BidiStream().Recv() after cancellation = %v, want Canceled", err)
 	}
-	select {
-	case <-handlerDone:
-	case <-time.After(time.Second):
-		t.Fatal("BidiStream() handler did not release server work after cancellation")
-	}
+	waittest.ReceiveSignal(t, handlerDone, time.Second, "BidiStream handler to release server work after cancellation")
 }
 
 func newConnection(t *testing.T) *grpc.ClientConn {
@@ -318,16 +316,4 @@ func (s cancellationService) BidiStream(stream referencev1.EchoService_BidiStrea
 		return fmt.Errorf("run cancellation test service: %w", err)
 	}
 	return nil
-}
-
-func equalStrings(left, right []string) bool {
-	if len(left) != len(right) {
-		return false
-	}
-	for index := range left {
-		if left[index] != right[index] {
-			return false
-		}
-	}
-	return true
 }

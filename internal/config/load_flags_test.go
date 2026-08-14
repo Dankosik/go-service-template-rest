@@ -2,7 +2,7 @@ package config
 
 import (
 	"flag"
-	"reflect"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -26,7 +26,7 @@ func TestParseLoadOptionsAcceptsTheSharedFlagSurface(t *testing.T) {
 	}
 	// Order matters: overlays are applied in the order they were given, so the
 	// last one wins on a key two of them set.
-	if want := []string{"one.yaml", "two.yaml"}; !reflect.DeepEqual(options.ConfigOverlays, want) {
+	if want := []string{"one.yaml", "two.yaml"}; !slices.Equal(options.ConfigOverlays, want) {
 		t.Errorf("ConfigOverlays = %v, want %v", options.ConfigOverlays, want)
 	}
 }

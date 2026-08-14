@@ -1,6 +1,7 @@
 package httpclient
 
 import (
+	"crypto/x509"
 	"errors"
 	"net/url"
 	"strings"
@@ -12,14 +13,20 @@ type Config struct {
 	DependencyName string
 	BaseURL        string
 	TargetClass    TargetClass
-	// profile:authn-oidc-jwt:start
-	// DisableInstrumentation prevents fixed identity-provider endpoints and
-	// credential-adjacent request metadata from entering the general outbound
-	// trace path. It is reserved for the OIDC trust bootstrap.
+	// OneAttempt sends each request on a new HTTP/1 connection without
+	// transparent compression, so net/http cannot replay a request from its idle
+	// pool or transform response bytes.
+	OneAttempt bool
+	// RootCAs is a caller-owned immutable trust snapshot. Nil preserves the
+	// process system-root behavior used by existing callers.
+	RootCAs *x509.CertPool
+	// profile:credential-provider-http:start
+	// DisableInstrumentation prevents fixed targets and credential-adjacent
+	// request metadata from entering the general outbound trace path.
 	DisableInstrumentation bool
-	// profile:authn-oidc-jwt:end
-	// PrivateHostSuffix is the required hostname suffix for PrivateHTTP
-	// targets, and is required for them. It is ignored for ExternalHTTPS.
+	// profile:credential-provider-http:end
+	// PrivateHostSuffix is the required hostname suffix for PrivateHTTP and
+	// PrivateHTTPS targets. It is ignored for ExternalHTTPS.
 	PrivateHostSuffix      string
 	RequestTimeout         time.Duration
 	ResponseHeaderTimeout  time.Duration

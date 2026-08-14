@@ -4,6 +4,7 @@ package integration_test
 
 import (
 	"reflect"
+	"slices"
 	"testing"
 	"time"
 )
@@ -46,7 +47,7 @@ func TestPostgresOutboxObservability(t *testing.T) {
 		observation.OrderingBlockedCount,
 		observation.PoisonCount,
 		observation.PublishedRetainedEstimate,
-	}; !reflect.DeepEqual(counts, []int64{1, 1, 1, 1, 1, 1, 1}) {
+	}; !slices.Equal(counts, []int64{1, 1, 1, 1, 1, 1, 1}) {
 		t.Fatalf("state counts = %v, want seven ones", counts)
 	}
 	assertOutboxObservationMatchesSQL(t, ctx, pool, observation)

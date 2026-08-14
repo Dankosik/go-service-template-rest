@@ -6,13 +6,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"reflect"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	"github.com/example/go-service-template-rest/internal/infra/postgresoutbox"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 func TestPostgresOutboxAuditedUnknownRecovery(t *testing.T) {
@@ -308,7 +310,7 @@ func TestPostgresOutboxLegacyUncertaintyClassification(t *testing.T) {
 			break
 		}
 	}
-	if !reflect.DeepEqual(batches, []int{2, 2, 2, 0}) {
+	if !slices.Equal(batches, []int{2, 2, 2, 0}) {
 		t.Fatalf("classification batches = %v, want [2 2 2 0]", batches)
 	}
 	mustAppendOutbox(t, ctx, pool, store, outboxEvent("legacy-locked"))
@@ -344,9 +346,37 @@ func TestPostgresOutboxLegacyUncertaintyClassification(t *testing.T) {
 	cancelClassification()
 	if err := <-classificationResult; !errors.Is(err, context.Canceled) {
 		t.Fatalf("locked classification error = %v, want cancellation instead of false zero", err)
+	} else if pgErr, ok := errors.AsType[*pgconn.PgError](err); !ok || pgErr.Code != "57014" {
+		t.Fatalf("locked classification error = %v, want caller cancellation with SQLSTATE 57014", err)
 	}
 	if err := lockTx.Rollback(ctx); err != nil {
 		t.Fatalf("release legacy classification lock: %v", err)
+	}
+	serverLock, err := pool.PGX().Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin server-cancelled classification lock: %v", err)
+	}
+	t.Cleanup(func() { _ = serverLock.Rollback(context.Background()) })
+	var serverBlockerPID int
+	if err := serverLock.QueryRow(ctx, `SELECT pg_backend_pid() FROM outbox_events WHERE id = 'legacy-locked' FOR UPDATE`).Scan(&serverBlockerPID); err != nil {
+		t.Fatalf("lock server-cancelled legacy row: %v", err)
+	}
+	serverResult := make(chan error, 1)
+	go func() {
+		_, err := store.ClassifyLegacyUncertainty(ctx, 3, 2)
+		serverResult <- err
+	}()
+	serverPID := outboxBlockedPID(t, ctx, pool, serverBlockerPID)
+	if err := pool.PGX().QueryRow(ctx, `SELECT pg_cancel_backend($1)`, serverPID).Scan(new(bool)); err != nil {
+		t.Fatalf("cancel classification backend: %v", err)
+	}
+	if err := <-serverResult; errors.Is(err, context.Canceled) {
+		t.Fatalf("server-cancelled classification error = %v, did not want caller cancellation", err)
+	} else if pgErr, ok := errors.AsType[*pgconn.PgError](err); !ok || pgErr.Code != "57014" {
+		t.Fatalf("server-cancelled classification error = %v, want SQLSTATE 57014", err)
+	}
+	if err := serverLock.Rollback(ctx); err != nil {
+		t.Fatalf("release server-cancelled legacy lock: %v", err)
 	}
 	if classified, err := store.ClassifyLegacyUncertainty(ctx, 3, 2); err != nil || classified < 0 || classified > 1 {
 		t.Fatalf("resume classification = %d, %v; want zero or one monotonic row", classified, err)
@@ -390,6 +420,20 @@ func TestPostgresOutboxLegacyUncertaintyClassification(t *testing.T) {
 				!record.PoisonedAt.IsZero(), record.LastErrorClass)
 		}
 	}
+}
+
+func outboxBlockedPID(t *testing.T, ctx context.Context, pool *postgres.Pool, blockerPID int) int {
+	t.Helper()
+	var pid int
+	waitForOutbox(t, func() string { return "legacy classification to block" }, func() bool {
+		if err := pool.PGX().QueryRow(ctx, `
+			SELECT COALESCE((SELECT pid FROM pg_stat_activity
+			WHERE $1 = ANY(pg_blocking_pids(pid)) LIMIT 1), 0)`, blockerPID).Scan(&pid); err != nil {
+			t.Fatalf("read blocked classification backend: %v", err)
+		}
+		return pid != 0
+	})
+	return pid
 }
 
 func TestPostgresOutboxUnknownObservationAndDiscovery(t *testing.T) {
@@ -452,7 +496,7 @@ func TestPostgresOutboxUnknownObservationAndDiscovery(t *testing.T) {
 		discovered = append(discovered, cursorID)
 	}
 	rows.Close()
-	if !reflect.DeepEqual(columns, wantColumns) || len(discovered) != 2 {
+	if !slices.Equal(columns, wantColumns) || len(discovered) != 2 {
 		t.Fatalf("discovery columns/first page = %v/%v, want %v/two rows", columns, discovered, wantColumns)
 	}
 	rows, err = pool.PGX().Query(ctx, discovery, cursorAt, cursorID)

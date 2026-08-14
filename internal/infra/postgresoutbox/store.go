@@ -9,6 +9,8 @@ import (
 	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	"github.com/example/go-service-template-rest/internal/infra/postgres/sqlcgen"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgconn/ctxwatch"
 )
 
 // Store owns every outbox statement, for three audiences. The write path calls
@@ -75,7 +77,15 @@ func errStoreRequired() error {
 // inherits the pool's validated DSN, TLS, and timeouts without ever competing
 // for a pooled connection.
 func (s *Store) listenerConfig() *pgx.ConnConfig {
-	return s.pool.PGX().Config().ConnConfig
+	return listenerConfig(s.pool.PGX().Config().ConnConfig)
+}
+
+func listenerConfig(source *pgx.ConnConfig) *pgx.ConnConfig {
+	config := source.Copy()
+	config.BuildContextWatcherHandler = func(conn *pgconn.PgConn) ctxwatch.Handler {
+		return &pgconn.DeadlineContextWatcherHandler{Conn: conn.Conn()}
+	}
+	return config
 }
 
 func (s *Store) withTelemetry(telemetry *Telemetry) *Store {

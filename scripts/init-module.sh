@@ -7,7 +7,7 @@ TEMPLATE_OWNER="@Dankosik"
 TEMPLATE_API_TITLE="go-service-template-rest"
 
 usage() {
-	echo "usage: CODEOWNER=@user-or-org/team DATABASE=none|postgres OUTBOX=none|postgres INBOX=none|postgres GRPC=none|enabled AUTHN=none|oidc-jwt OUTBOUND_HTTP=none|bounded MESSAGING=none|nats-jetstream REFERENCE_EXAMPLE=remove|keep $0 [module-path]"
+	echo "usage: CODEOWNER=@user-or-org/team DATABASE=none|postgres HTTP_IDEMPOTENCY=none|postgres JOBS=none|postgres WEBHOOKS=none|durable OUTBOX=none|postgres INBOX=none|postgres GRPC=none|enabled AUTHN=none|oidc-jwt OUTBOUND_HTTP=none|bounded OBJECT_STORAGE=none|s3 OUTBOUND_AUTH=none|oauth2-client-credentials MESSAGING=none|nats-jetstream REFERENCE_EXAMPLE=remove|keep $0 [module-path]"
 	echo "module-path is derived from git remote origin when omitted"
 }
 
@@ -227,19 +227,38 @@ strip_profile() {
 	fi
 }
 
+# The source profile contains assignments and branching that the profile-off
+# output no longer has, so neither source-only directive applies there.
+remove_http_idempotency_profile_lint() {
+	local file temporary
+
+	for file in cmd/service/internal/bootstrap/run.go internal/infra/http/router.go; do
+		[[ -f "${file}" ]] || continue
+		temporary="$(mktemp)"
+		awk '/nolint:cyclop,gocognit/ || /nolint:ineffassign,staticcheck,wastedassign/ { next } { print }' \
+			"${file}" >"${temporary}"
+		mv "${temporary}" "${file}"
+	done
+}
+
 # write_template_lock records where this service came from. Initialization
 # rewrites the module path, deletes packages, and resolves profiles in place, so
 # without this there is no way to tell which upstream commit a service forked
 # from — and therefore no way to review or pull a later upstream fix.
 write_template_lock() {
 	local database="$1"
-	local outbox="$2"
-	local inbox="$3"
-	local grpc="$4"
-	local authn="$5"
-	local outbound_http="$6"
-	local messaging="$7"
-	local reference_example="$8"
+	local http_idempotency="$2"
+	local outbox="$3"
+	local inbox="$4"
+	local grpc="$5"
+	local authn="$6"
+	local outbound_http="$7"
+	local outbound_auth="$8"
+	local messaging="$9"
+	local reference_example="${10}"
+	local object_storage="${11}"
+	local jobs="${12}"
+	local webhooks="${13}"
 	local source_revision
 
 	source_revision="$(git rev-parse HEAD 2>/dev/null || true)"
@@ -255,13 +274,18 @@ write_template_lock() {
 source = "${TEMPLATE_SOURCE}"
 source_revision = "${source_revision}"
 database = "${database}"
+http_idempotency = "${http_idempotency}"
 outbox = "${outbox}"
 inbox = "${inbox}"
 grpc = "${grpc}"
 authn = "${authn}"
 outbound_http = "${outbound_http}"
+outbound_auth = "${outbound_auth}"
 messaging = "${messaging}"
 reference_example = "${reference_example}"
+object_storage = "${object_storage}"
+jobs = "${jobs}"
+webhooks = "${webhooks}"
 EOF
 }
 
@@ -344,6 +368,10 @@ duplicate event IDs; see \`docs/postgres-transactional-outbox.md\`.
 This service includes the PostgreSQL idempotent inbox. Keep each claim and its
 feature effect in the same transaction; see \`docs/postgres-idempotent-inbox.md\`.
 <!-- profile:inbox-postgres:end -->
+<!-- profile:webhooks-durable:start -->
+This service includes durable PostgreSQL-backed outbound webhook delivery and
+its separately deployed worker; see \`docs/outbound-webhook-delivery.md\`.
+<!-- profile:webhooks-durable:end -->
 EOF
 }
 
@@ -395,6 +423,57 @@ if [[ "${inbox}" == "postgres" && "${database}" != "postgres" ]]; then
 	exit 1
 fi
 
+if [[ "${HTTP_IDEMPOTENCY+x}" == "x" && -z "${HTTP_IDEMPOTENCY-}" ]]; then
+	echo "HTTP_IDEMPOTENCY must be one of: none, postgres"
+	exit 1
+fi
+http_idempotency="${HTTP_IDEMPOTENCY:-none}"
+case "${http_idempotency}" in
+none | postgres) ;;
+*)
+	echo "HTTP_IDEMPOTENCY must be one of: none, postgres"
+	exit 1
+	;;
+esac
+if [[ "${http_idempotency}" == "postgres" && "${database}" != "postgres" ]]; then
+	echo "HTTP_IDEMPOTENCY=postgres requires DATABASE=postgres"
+	exit 1
+fi
+
+if [[ "${JOBS+x}" == "x" && -z "${JOBS-}" ]]; then
+	echo "JOBS must be one of: none, postgres"
+	exit 1
+fi
+jobs="${JOBS:-none}"
+case "${jobs}" in
+none | postgres) ;;
+*)
+	echo "JOBS must be one of: none, postgres"
+	exit 1
+	;;
+esac
+if [[ "${jobs}" == "postgres" && "${database}" != "postgres" ]]; then
+	echo "JOBS=postgres requires DATABASE=postgres"
+	exit 1
+fi
+
+if [[ "${WEBHOOKS+x}" == "x" && -z "${WEBHOOKS-}" ]]; then
+	echo "WEBHOOKS must be one of: none, durable"
+	exit 1
+fi
+webhooks="${WEBHOOKS:-none}"
+case "${webhooks}" in
+none | durable) ;;
+*)
+	echo "WEBHOOKS must be one of: none, durable"
+	exit 1
+	;;
+esac
+if [[ "${webhooks}" == "durable" && "${database}" != "postgres" ]]; then
+	echo "WEBHOOKS=durable requires DATABASE=postgres"
+	exit 1
+fi
+
 grpc="${GRPC:-none}"
 case "${grpc}" in
 none | enabled) ;;
@@ -425,6 +504,36 @@ none | bounded) ;;
 	exit 1
 	;;
 esac
+
+if [[ "${OBJECT_STORAGE+x}" == "x" && -z "${OBJECT_STORAGE-}" ]]; then
+	echo "OBJECT_STORAGE must be one of: none, s3"
+	exit 1
+fi
+object_storage="${OBJECT_STORAGE:-none}"
+case "${object_storage}" in
+none | s3) ;;
+*)
+	echo "OBJECT_STORAGE must be one of: none, s3"
+	exit 1
+	;;
+esac
+
+if [[ "${OUTBOUND_AUTH+x}" == "x" && -z "${OUTBOUND_AUTH-}" ]]; then
+	echo "OUTBOUND_AUTH must be one of: none, oauth2-client-credentials"
+	exit 1
+fi
+outbound_auth="${OUTBOUND_AUTH:-none}"
+case "${outbound_auth}" in
+none | oauth2-client-credentials) ;;
+*)
+	echo "OUTBOUND_AUTH must be one of: none, oauth2-client-credentials"
+	exit 1
+	;;
+esac
+if [[ "${outbound_auth}" == "oauth2-client-credentials" && "${outbound_http}" != "bounded" && "${grpc}" != "enabled" ]]; then
+	echo "OUTBOUND_AUTH=oauth2-client-credentials requires OUTBOUND_HTTP=bounded or GRPC=enabled"
+	exit 1
+fi
 
 if [[ "${MESSAGING+x}" == "x" && -z "${MESSAGING-}" ]]; then
 	echo "MESSAGING must be one of: none, nats-jetstream"
@@ -514,13 +623,18 @@ if [[ -f template.lock ]]; then
 	fi
 	for expected in \
 		"database = \"${database}\"" \
+		"http_idempotency = \"${http_idempotency}\"" \
+		"jobs = \"${jobs}\"" \
+		"webhooks = \"${webhooks}\"" \
 		"outbox = \"${outbox}\"" \
 		"inbox = \"${inbox}\"" \
 		"grpc = \"${grpc}\"" \
 		"authn = \"${authn}\"" \
 		"outbound_http = \"${outbound_http}\"" \
+		"outbound_auth = \"${outbound_auth}\"" \
 		"messaging = \"${messaging}\"" \
-		"reference_example = \"${reference_example}\""; do
+		"reference_example = \"${reference_example}\"" \
+		"object_storage = \"${object_storage}\""; do
 		grep -Fqx "${expected}" template.lock || {
 			echo "repository is already initialized with different profile choices"
 			exit 1
@@ -529,11 +643,15 @@ if [[ -f template.lock ]]; then
 	echo "template initialization already complete"
 	echo "  module: ${new_module}"
 	echo "  database: ${database}"
+	echo "  jobs: ${jobs}"
+	echo "  webhooks: ${webhooks}"
 	echo "  outbox: ${outbox}"
 	echo "  inbox: ${inbox}"
 	echo "  gRPC: ${grpc}"
 	echo "  authentication: ${authn}"
 	echo "  outbound HTTP: ${outbound_http}"
+	echo "  object storage: ${object_storage}"
+	echo "  outbound authentication: ${outbound_auth}"
 	echo "  messaging: ${messaging}"
 	echo "  reference example: ${reference_example}"
 	exit 0
@@ -620,8 +738,72 @@ if [[ "${source_checkout}" != true ]]; then
 		strip_profile inbox-postgres keep
 	fi
 
-	# Both persistence profiles derive from the same SQLC package. Resolve both
-	# source sets before one regeneration so either sibling can remain alone.
+	if [[ "${http_idempotency}" == "none" ]]; then
+		rm -rf -- internal/httpidempotency internal/infra/postgresidempotency
+		rm -f -- \
+			cmd/service/internal/bootstrap/startup_idempotency.go \
+			cmd/service/internal/bootstrap/startup_idempotency_test.go \
+			cmd/service/internal/bootstrap/startup_idempotency_integration_test.go \
+			internal/config/http_idempotency_config.go \
+			internal/config/http_idempotency_config_test.go \
+			internal/infra/http/idempotency.go \
+			internal/infra/http/idempotency_registration.go \
+			internal/infra/http/idempotency_registration_test.go \
+			internal/infra/http/idempotency_response.go \
+			internal/infra/http/idempotency_test.go \
+			internal/infra/http/middleware_idempotency.go \
+			internal/problem/idempotency_problem_test.go \
+			migrations/000003_postgres_http_idempotency.sql \
+			internal/infra/postgres/queries/postgres_http_idempotency.sql \
+			internal/infra/postgres/sqlcgen/postgres_http_idempotency.sql.go \
+			test/postgres_http_idempotency_fixtures_integration_test.go \
+			test/postgres_http_idempotency_integration_test.go \
+			docs/postgres-http-idempotency.md
+		strip_profile http-idempotency-postgres remove
+		remove_http_idempotency_profile_lint
+	else
+		strip_profile http-idempotency-postgres keep
+		if [[ "${outbox}" == "none" ]]; then
+			rm -f -- test/postgres_http_idempotency_integration_test.go
+		fi
+	fi
+
+		if [[ "${jobs}" == "none" ]]; then
+		rm -rf -- cmd/jobs-worker internal/jobs internal/infra/postgresjobs
+		rm -f -- \
+			internal/config/jobs_config.go \
+			internal/config/jobs_config_test.go \
+			internal/config/jobs_worker_config.go \
+			internal/config/jobs_worker_config_test.go \
+			migrations/000004_postgres_jobs.sql \
+			internal/infra/postgres/queries/postgres_jobs.sql \
+			internal/infra/postgres/sqlcgen/postgres_jobs.sql.go \
+			test/postgres_jobs_*_test.go \
+			docs/postgres-durable-background-jobs.md
+		strip_profile jobs-postgres remove
+	else
+		strip_profile jobs-postgres keep
+		fi
+
+		if [[ "${webhooks}" == "none" ]]; then
+			rm -rf -- cmd/webhook-worker internal/infra/postgreswebhook
+			rm -f -- \
+				docs/outbound-webhook-delivery.md \
+				internal/config/webhooks_config.go \
+				internal/config/webhooks_config_test.go \
+				migrations/000005_postgres_webhooks.sql \
+				internal/infra/postgres/queries/postgres_webhooks.sql \
+				internal/infra/postgres/sqlcgen/postgres_webhooks.sql.go \
+				test/postgres_webhook_*_test.go \
+				test/webhook_network_integration_test.go \
+				test/webhook_process_integration_test.go
+			strip_profile webhooks-durable remove
+		else
+			strip_profile webhooks-durable keep
+		fi
+
+	# All PostgreSQL capability profiles derive from the same SQLC package. Resolve
+	# their source sets before one regeneration so any sibling can remain alone.
 	if ! find internal/infra/postgres/queries -type f -name '*.sql' -print -quit 2>/dev/null | grep -q .; then
 		rm -rf -- internal/infra/postgres/queries internal/infra/postgres/sqlcgen
 	else
@@ -688,6 +870,67 @@ if [[ "${source_checkout}" != true ]]; then
 		strip_profile authn-oidc-jwt remove
 	else
 		strip_profile authn-oidc-jwt keep
+	fi
+
+	if [[ "${outbound_auth}" == "none" ]]; then
+		rm -rf -- internal/infra/oauth2clientcredentials
+		rm -f -- \
+			cmd/service/internal/bootstrap/startup_outbound_auth.go \
+			cmd/service/internal/bootstrap/startup_outbound_auth_test.go \
+			internal/config/outbound_auth_config.go \
+			internal/config/outbound_auth_config_test.go \
+			docs/outbound-machine-authentication.md
+		strip_profile outbound-auth-oauth2-client-credentials remove
+	else
+		strip_profile outbound-auth-oauth2-client-credentials keep
+	fi
+
+	if [[ "${object_storage}" == "none" ]]; then
+		rm -rf -- internal/objectstorage internal/infra/s3
+		rm -f -- \
+			cmd/service/internal/bootstrap/startup_object_storage.go \
+			cmd/service/internal/bootstrap/startup_object_storage_test.go \
+			internal/config/object_storage_config.go \
+			internal/config/object_storage_config_test.go \
+			scripts/ci/s3-source-receipt.sh \
+			test/s3_object_storage_conformance_integration_test.go \
+			docs/s3-compatible-object-storage.md
+		strip_profile object-storage remove
+	else
+		strip_profile object-storage keep
+	fi
+
+	if [[ "${authn}" == "none" && "${outbound_auth}" == "none" && "${object_storage}" == "none" ]]; then
+		strip_profile bootstrap-config remove
+	else
+		strip_profile bootstrap-config keep
+	fi
+
+if [[ "${outbound_auth}" == "oauth2-client-credentials" && "${outbound_http}" == "bounded" ]]; then
+	strip_profile outbound-auth-http keep
+else
+	rm -f -- \
+		internal/infra/httpclient/attempt_authorization.go \
+		internal/infra/httpclient/attempt_authorization_test.go \
+		internal/infra/oauth2clientcredentials/http.go \
+		internal/infra/oauth2clientcredentials/http_test.go
+	strip_profile outbound-auth-http remove
+fi
+
+if [[ "${outbound_auth}" == "oauth2-client-credentials" && "${grpc}" == "enabled" ]]; then
+	strip_profile outbound-auth-grpc keep
+else
+	rm -f -- \
+		internal/infra/oauth2clientcredentials/grpc.go \
+		internal/infra/oauth2clientcredentials/grpc_test.go
+	strip_profile outbound-auth-grpc remove
+fi
+
+	if [[ "${authn}" == "none" && "${outbound_auth}" == "none" && "${object_storage}" == "none" ]]; then
+		rm -f -- internal/infra/httpclient/credential_provider_contract_test.go
+		strip_profile credential-provider-http remove
+	else
+		strip_profile credential-provider-http keep
 	fi
 
 	if [[ "${messaging}" == "none" ]]; then
@@ -757,17 +1000,16 @@ if [[ "${source_checkout}" != true ]]; then
 	fi
 
 	# internal/config/configtest exists for parity tests that hold runtime owners
-	# and internal/config to one answer. All current importers are removable, so
-	# the package leaves only when gRPC, authn, and messaging all leave.
-	if [[ "${grpc}" == "none" && "${authn}" == "none" && "${messaging}" == "none" ]]; then
+	# and internal/config to one answer. Retained outbox and outbound-auth
+	# bootstrap tests also use it, so it leaves only after every current importer.
+	if [[ "${outbox}" == "none" && "${grpc}" == "none" && "${authn}" == "none" && "${outbound_auth}" == "none" && "${messaging}" == "none" ]]; then
 		rm -rf -- internal/config/configtest
 	fi
 
 	# internal/packagetest owns the source walk behind the comment and doc proofs
-	# in internal/infra/grpc, internal/infra/grpcclient, internal/infra/oidcjwt,
-	# and internal/infra/natsjs. All three profiles removing takes every importer
-	# with them, so it leaves too rather than shipping as an unreferenced leaf.
-	if [[ "${grpc}" == "none" && "${authn}" == "none" && "${messaging}" == "none" ]]; then
+	# in retained PostgreSQL outbox code as well as grpc, authn, outbound auth,
+	# and natsjs. It leaves only after every current importer.
+	if [[ "${http_idempotency}" == "none" && "${outbox}" == "none" && "${grpc}" == "none" && "${authn}" == "none" && "${outbound_auth}" == "none" && "${messaging}" == "none" ]]; then
 		rm -rf -- internal/packagetest
 	fi
 
@@ -795,8 +1037,11 @@ if [[ "${source_checkout}" != true ]]; then
 	# template rather than for this service.
 	rm -rf -- .github/assets .github/ISSUE_TEMPLATE
 
-	if [[ "${outbound_http}" == "none" && "${authn}" == "none" ]]; then
-		rm -rf -- internal/infra/httpclient
+		if [[ "${outbound_http}" == "none" && "${authn}" == "none" && "${outbound_auth}" == "none" && "${object_storage}" == "none" && "${webhooks}" == "none" ]]; then
+			rm -rf -- internal/infra/httpclient
+		fi
+	if [[ "${outbound_http}" == "none" && "${authn}" == "none" && "${outbound_auth}" == "none" && "${object_storage}" == "none" && "${webhooks}" == "none" ]]; then
+		rm -rf -- internal/outboundtrust
 	fi
 
 	if [[ "${reference_example}" == "remove" ]]; then
@@ -810,7 +1055,7 @@ if [[ "${source_checkout}" != true ]]; then
 		go generate ./internal/openapi
 	fi
 
-	write_template_lock "${database}" "${outbox}" "${inbox}" "${grpc}" "${authn}" "${outbound_http}" "${messaging}" "${reference_example}"
+	write_template_lock "${database}" "${http_idempotency}" "${outbox}" "${inbox}" "${grpc}" "${authn}" "${outbound_http}" "${outbound_auth}" "${messaging}" "${reference_example}" "${object_storage}" "${jobs}" "${webhooks}"
 
 fi
 
@@ -825,11 +1070,16 @@ fi
 echo "template initialization complete"
 echo "  module: ${new_module}"
 echo "  database: ${database}"
+echo "  HTTP idempotency: ${http_idempotency}"
+echo "  jobs: ${jobs}"
+echo "  webhooks: ${webhooks}"
 echo "  outbox: ${outbox}"
 echo "  inbox: ${inbox}"
 echo "  gRPC: ${grpc}"
 echo "  authentication: ${authn}"
 echo "  outbound HTTP: ${outbound_http}"
+echo "  object storage: ${object_storage}"
+echo "  outbound authentication: ${outbound_auth}"
 echo "  messaging: ${messaging}"
 echo "  reference example: ${reference_example}"
 if [[ -n "${codeowner}" ]]; then

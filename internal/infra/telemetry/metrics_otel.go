@@ -122,7 +122,7 @@ func SetupMetrics(ctx context.Context, metrics *Metrics, cfg MetricsConfig) (Met
 
 	// Shutdown flushes every reader the provider owns, so the periodic reader's
 	// last interval is exported rather than dropped on exit.
-	provider := newMeterProvider(options...)
+	provider := sdkmetric.NewMeterProvider(options...)
 
 	// Registered on the provider rather than on the Prometheus registry, so they
 	// reach both readers. The Prometheus client's Go collector would reach only
@@ -193,8 +193,4 @@ func ResolveMetricExporterEndpoint(cfg MetricExporterConfig) (ExporterEndpoint, 
 		owned,
 		ambientOTLPCandidates(otelExporterMetricsEndpointEnv),
 	)
-}
-
-func newMeterProvider(options ...sdkmetric.Option) *sdkmetric.MeterProvider {
-	return sdkmetric.NewMeterProvider(options...)
 }

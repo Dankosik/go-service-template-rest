@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/pressly/goose/v3"
 	"github.com/pressly/goose/v3/database"
+	"github.com/samber/lo"
 )
 
 func TestAdmitSource(t *testing.T) {
@@ -155,10 +156,9 @@ func TestAdmitSource(t *testing.T) {
 			if err != nil {
 				t.Fatalf("admitSource() error = %v", err)
 			}
-			gotFiles := make([]string, 0, len(got.Migrations))
-			for _, migration := range got.Migrations {
-				gotFiles = append(gotFiles, migration.Filename)
-			}
+			gotFiles := lo.Map(got.Migrations, func(migration sourceMigration, _ int) string {
+				return migration.Filename
+			})
 			if !slices.Equal(gotFiles, tc.wantFiles) {
 				t.Fatalf("admitSource() files = %v, want %v", gotFiles, tc.wantFiles)
 			}
@@ -420,9 +420,7 @@ func migrationSQL(up, down string) []byte {
 }
 
 func historyRow(versions ...int64) []*database.ListMigrationsResult {
-	rows := make([]*database.ListMigrationsResult, 0, len(versions))
-	for _, version := range versions {
-		rows = append(rows, &database.ListMigrationsResult{Version: version, IsApplied: true})
-	}
-	return rows
+	return lo.Map(versions, func(version int64, _ int) *database.ListMigrationsResult {
+		return &database.ListMigrationsResult{Version: version, IsApplied: true}
+	})
 }

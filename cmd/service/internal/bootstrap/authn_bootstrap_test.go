@@ -23,7 +23,7 @@ func TestAuthnBootstrapOrder(t *testing.T) {
 
 		trustFailure := errors.New("test initial trust failure")
 		var events []string
-		wiring := productionRuntimeWiring()
+		wiring := testRuntimeWiring()
 		wiring.dependencies = func(context.Context, startupBootstrap) (runtimeDependencies, error) {
 			return runtimeDependencies{}, nil
 		}
@@ -59,7 +59,7 @@ func TestAuthnBootstrapOrder(t *testing.T) {
 
 		stopServing := errors.New("test serving stop")
 		var events []string
-		wiring := productionRuntimeWiring()
+		wiring := testRuntimeWiring()
 		wiring.dependencies = func(context.Context, startupBootstrap) (runtimeDependencies, error) {
 			return runtimeDependencies{}, nil
 		}

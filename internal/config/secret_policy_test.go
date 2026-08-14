@@ -117,3 +117,74 @@ func TestSecretLikeConfigKeyPolicyAllowsNonSecretShapes(t *testing.T) {
 		}
 	}
 }
+
+// profile:outbound-auth-oauth2-client-credentials:start
+//
+//nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
+func TestOutboundAuthSecretSourcePolicy(t *testing.T) {
+	resetConfigEnv(t)
+	const canary = "outbound-client-secret-canary"
+	path := writeTempConfig(t, "outbound_auth:\n  client_secret: "+canary+"\n")
+	_, _, err := LoadDetailed(LoadOptions{ConfigPath: path})
+	if !errors.Is(err, ErrSecretPolicy) {
+		t.Fatalf("LoadDetailed() error = %v, want ErrSecretPolicy", err)
+	}
+	if strings.Contains(err.Error(), canary) {
+		t.Fatalf("LoadDetailed() error disclosed client secret: %v", err)
+	}
+
+	resetConfigEnv(t)
+	path = writeTempConfig(t, "outbound_auth:\n  client_secret: \"\"\n")
+	if _, _, err := LoadDetailed(LoadOptions{ConfigPath: path}); err != nil {
+		t.Fatalf("LoadDetailed() with empty placeholder error = %v", err)
+	}
+
+	resetConfigEnv(t)
+	t.Setenv("OAUTH_CLIENT_SECRET", canary)
+	cfg, _, err := LoadDetailed(LoadOptions{})
+	if err != nil {
+		t.Fatalf("LoadDetailed() with hostile ambient variable error = %v", err)
+	}
+	if cfg.OutboundAuth.ClientSecret == canary {
+		t.Fatal("LoadDetailed() accepted an ambient OAuth secret convention")
+	}
+	if got := defaultValues()["outbound_auth.client_secret"]; got != "" {
+		t.Fatalf("outbound_auth.client_secret default = %q, want empty", got)
+	}
+}
+
+// profile:outbound-auth-oauth2-client-credentials:end
+
+// profile:webhooks-durable:start
+//
+//nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
+func TestWebhookSecretSourcePolicy(t *testing.T) {
+	resetConfigEnv(t)
+	const canary = "webhook-secret-canary"
+	path := writeTempConfig(t, "webhooks:\n  static_secrets: "+canary+"\n")
+	_, _, err := LoadDetailed(LoadOptions{ConfigPath: path})
+	if !errors.Is(err, ErrSecretPolicy) {
+		t.Fatalf("LoadDetailed() error = %v, want ErrSecretPolicy", err)
+	}
+	if strings.Contains(err.Error(), canary) {
+		t.Fatalf("LoadDetailed() error disclosed webhook secret: %v", err)
+	}
+
+	resetConfigEnv(t)
+	path = writeTempConfig(t, "webhooks:\n  static_secrets: \"\"\n")
+	if _, _, err := LoadDetailed(LoadOptions{ConfigPath: path}); err != nil {
+		t.Fatalf("LoadDetailed() with empty placeholder error = %v", err)
+	}
+
+	resetConfigEnv(t)
+	t.Setenv("APP__WEBHOOKS__STATIC_SECRETS", canary)
+	cfg, _, err := LoadDetailed(LoadOptions{})
+	if err != nil {
+		t.Fatalf("LoadDetailed() with environment webhook secret error = %v", err)
+	}
+	if cfg.Webhooks.StaticSecrets != canary {
+		t.Fatal("LoadDetailed() did not accept environment webhook secret")
+	}
+}
+
+// profile:webhooks-durable:end

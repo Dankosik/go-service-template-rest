@@ -3,12 +3,14 @@ package httpclient
 import (
 	"compress/gzip"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"errors"
-	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -19,82 +21,6 @@ import (
 	metricnoop "go.opentelemetry.io/otel/metric/noop"
 	"go.opentelemetry.io/otel/trace"
 )
-
-func TestNewRejectsInvalidConfig(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name   string
-		mutate func(*Config)
-	}{
-		{name: "missing dependency", mutate: func(cfg *Config) { cfg.DependencyName = "" }},
-		{name: "invalid URL", mutate: func(cfg *Config) { cfg.BaseURL = "://invalid" }},
-		{name: "relative URL", mutate: func(cfg *Config) { cfg.BaseURL = "/provider" }},
-		{name: "user info", mutate: func(cfg *Config) { cfg.BaseURL = "https://user@example.com" }},
-		{name: "query", mutate: func(cfg *Config) { cfg.BaseURL = "https://example.com?token=secret" }},
-		{name: "fragment", mutate: func(cfg *Config) { cfg.BaseURL = "https://example.com#fragment" }},
-		{name: "external HTTP", mutate: func(cfg *Config) { cfg.BaseURL = "http://example.com" }},
-		{name: "external private literal", mutate: func(cfg *Config) { cfg.BaseURL = "https://127.0.0.1" }},
-		{name: "private HTTPS", mutate: func(cfg *Config) {
-			cfg.BaseURL = "https://api.railway.internal"
-			cfg.TargetClass = PrivateHTTP
-			cfg.PrivateHostSuffix = "railway.internal"
-		}},
-		{name: "private public host", mutate: func(cfg *Config) {
-			cfg.BaseURL = "http://example.com"
-			cfg.TargetClass = PrivateHTTP
-			cfg.PrivateHostSuffix = "railway.internal"
-		}},
-		// No platform default: a private target names its own DNS zone or is
-		// refused, so the package cannot silently assume one platform's zone.
-		{name: "private suffix is required", mutate: func(cfg *Config) {
-			cfg.BaseURL = "http://api.railway.internal"
-			cfg.TargetClass = PrivateHTTP
-			cfg.PrivateHostSuffix = ""
-		}},
-		{name: "private host outside configured suffix", mutate: func(cfg *Config) {
-			cfg.BaseURL = "http://api.railway.internal"
-			cfg.TargetClass = PrivateHTTP
-			cfg.PrivateHostSuffix = "svc.cluster.local"
-		}},
-		{name: "private suffix cannot be dot only", mutate: func(cfg *Config) {
-			cfg.BaseURL = "http://api.railway.internal"
-			cfg.TargetClass = PrivateHTTP
-			cfg.PrivateHostSuffix = "."
-		}},
-		{name: "invalid target class", mutate: func(cfg *Config) { cfg.TargetClass = 99 }},
-		{name: "external ignores private suffix", mutate: func(cfg *Config) {
-			cfg.BaseURL = "http://provider.example"
-			cfg.PrivateHostSuffix = "provider.example"
-		}},
-		{name: "missing request timeout", mutate: func(cfg *Config) { cfg.RequestTimeout = 0 }},
-		{name: "missing header timeout", mutate: func(cfg *Config) { cfg.ResponseHeaderTimeout = 0 }},
-		{name: "missing header limit", mutate: func(cfg *Config) { cfg.MaxResponseHeaderBytes = 0 }},
-		{name: "missing body limit", mutate: func(cfg *Config) { cfg.MaxResponseBodyBytes = 0 }},
-		{name: "missing conn limit", mutate: func(cfg *Config) { cfg.MaxConnsPerHost = 0 }},
-		{name: "negative idle conn limit", mutate: func(cfg *Config) { cfg.MaxIdleConnsPerHost = -1 }},
-		{name: "idle conn limit above conn limit", mutate: func(cfg *Config) {
-			cfg.MaxConnsPerHost = 4
-			cfg.MaxIdleConnsPerHost = 5
-		}},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			cfg := validExternalConfig()
-			tt.mutate(&cfg)
-			_, err := New(cfg, nil)
-			if err == nil {
-				t.Fatal("New() error = nil, want non-nil")
-			}
-			if strings.Contains(err.Error(), "token=secret") {
-				t.Fatalf("New() error leaks query secret: %q", err)
-			}
-		})
-	}
-}
 
 func TestNewBuildsBoundedInstrumentedClient(t *testing.T) {
 	t.Parallel()
@@ -134,227 +60,6 @@ func TestNewBuildsBoundedInstrumentedClient(t *testing.T) {
 	}
 
 	client.CloseIdleConnections()
-}
-
-func TestAuthorityTransportAllowsOnlyConfiguredAuthority(t *testing.T) {
-	t.Parallel()
-
-	var calls atomic.Int64
-	transport := authorityTransport{
-		base: roundTripFunc(func(*http.Request) (*http.Response, error) {
-			calls.Add(1)
-			return responseWithBody("ok"), nil
-		}),
-		scheme:    "https",
-		authority: "api.example.com",
-	}
-
-	allowed, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://api.example.com/v1/items", http.NoBody)
-	if err != nil {
-		t.Fatal(err)
-	}
-	response, err := transport.RoundTrip(allowed)
-	if err != nil {
-		t.Fatalf("allowed RoundTrip() error = %v", err)
-	}
-	_ = response.Body.Close()
-
-	for _, target := range []string{
-		"http://api.example.com/v1/items",
-		"https://other.example.com/v1/items",
-		"https://user@api.example.com/v1/items",
-	} {
-		request, requestErr := http.NewRequestWithContext(context.Background(), http.MethodGet, target, http.NoBody)
-		if requestErr != nil {
-			t.Fatal(requestErr)
-		}
-		response, roundTripErr := transport.RoundTrip(request)
-		if response != nil {
-			_ = response.Body.Close()
-		}
-		if !errors.Is(roundTripErr, ErrTargetDenied) {
-			t.Fatalf("RoundTrip(%q) error = %v, want %v", target, roundTripErr, ErrTargetDenied)
-		}
-	}
-
-	if got := calls.Load(); got != 1 {
-		t.Fatalf("base transport calls = %d, want 1", got)
-	}
-}
-
-func TestResponseLimitTransportBoundsDecodedBody(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name      string
-		body      func(t *testing.T) io.ReadCloser
-		limit     int64
-		want      string
-		wantLarge bool
-	}{
-		{
-			name:  "exact limit",
-			body:  func(*testing.T) io.ReadCloser { return io.NopCloser(strings.NewReader("hello")) },
-			limit: 5,
-			want:  "hello",
-		},
-		{
-			name:      "plain overflow",
-			body:      func(*testing.T) io.ReadCloser { return io.NopCloser(strings.NewReader("hello")) },
-			limit:     4,
-			want:      "hell",
-			wantLarge: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			var closed atomic.Bool
-			transport := responseLimitTransport{
-				base: roundTripFunc(func(*http.Request) (*http.Response, error) {
-					return &http.Response{
-						StatusCode: http.StatusOK,
-						Header:     make(http.Header),
-						Body: &trackedBody{
-							ReadCloser: tt.body(t),
-							closed:     &closed,
-						},
-					}, nil
-				}),
-				limit: tt.limit,
-			}
-
-			request, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://example.com", http.NoBody)
-			if err != nil {
-				t.Fatal(err)
-			}
-			response, err := transport.RoundTrip(request)
-			if err != nil {
-				t.Fatalf("RoundTrip() error = %v", err)
-			}
-			body, readErr := io.ReadAll(response.Body)
-			if got := string(body); got != tt.want {
-				t.Fatalf("body = %q, want %q", got, tt.want)
-			}
-			var tooLarge *ResponseTooLargeError
-			if got := errors.As(readErr, &tooLarge); got != tt.wantLarge {
-				t.Fatalf("ResponseTooLargeError present = %t, want %t; error = %v", got, tt.wantLarge, readErr)
-			}
-			if tooLarge != nil && tooLarge.Limit != tt.limit {
-				t.Fatalf("ResponseTooLargeError.Limit = %d, want %d", tooLarge.Limit, tt.limit)
-			}
-			if tt.wantLarge && !closed.Load() {
-				t.Fatal("overflow did not close the underlying response body")
-			}
-			if err := response.Body.Close(); err != nil {
-				t.Fatalf("Body.Close() error = %v", err)
-			}
-			if !closed.Load() {
-				t.Fatal("underlying response body was not closed")
-			}
-		})
-	}
-}
-
-func TestDialAddressGate(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name        string
-		targetClass TargetClass
-		address     string
-		allowed     bool
-	}{
-		{name: "external public IPv4", targetClass: ExternalHTTPS, address: "8.8.8.8:443", allowed: true},
-		{name: "external public IPv6", targetClass: ExternalHTTPS, address: "[2606:4700:4700::1111]:443", allowed: true},
-		{name: "external public NAT64", targetClass: ExternalHTTPS, address: "[64:ff9b::808:808]:443", allowed: true},
-		{name: "external public IPv4 special", targetClass: ExternalHTTPS, address: "192.0.0.9:443", allowed: true},
-		{name: "external public IPv6 special", targetClass: ExternalHTTPS, address: "[2001:1::1]:443", allowed: true},
-		{name: "external private", targetClass: ExternalHTTPS, address: "10.0.0.1:443"},
-		{name: "external shared", targetClass: ExternalHTTPS, address: "100.64.0.1:443"},
-		{name: "external loopback", targetClass: ExternalHTTPS, address: "127.0.0.1:443"},
-		{name: "external metadata", targetClass: ExternalHTTPS, address: "169.254.169.254:80"},
-		{name: "external protocol assignment", targetClass: ExternalHTTPS, address: "192.0.0.8:443"},
-		{name: "external documentation IPv4", targetClass: ExternalHTTPS, address: "192.0.2.1:443"},
-		{name: "external benchmark IPv4", targetClass: ExternalHTTPS, address: "198.18.0.1:443"},
-		{name: "external documentation IPv6", targetClass: ExternalHTTPS, address: "[2001:db8::1]:443"},
-		{name: "external benchmark IPv6", targetClass: ExternalHTTPS, address: "[2001:2::1]:443"},
-		{name: "external documentation IPv6 future", targetClass: ExternalHTTPS, address: "[3fff::1]:443"},
-		{name: "external unallocated IPv6", targetClass: ExternalHTTPS, address: "[4000::1]:443"},
-		{name: "external NAT64 private", targetClass: ExternalHTTPS, address: "[64:ff9b::a00:1]:443"},
-		{name: "external multicast", targetClass: ExternalHTTPS, address: "224.0.0.1:443"},
-		{name: "external broadcast", targetClass: ExternalHTTPS, address: "255.255.255.255:443"},
-		{name: "external unspecified", targetClass: ExternalHTTPS, address: "[::]:443"},
-		{name: "private RFC1918", targetClass: PrivateHTTP, address: "10.0.0.1:80", allowed: true},
-		{name: "private ULA", targetClass: PrivateHTTP, address: "[fd00::1]:80", allowed: true},
-		{name: "private public", targetClass: PrivateHTTP, address: "8.8.8.8:80"},
-		{name: "private shared", targetClass: PrivateHTTP, address: "100.64.0.1:80"},
-		{name: "private loopback", targetClass: PrivateHTTP, address: "127.0.0.1:80"},
-		{name: "hostname", targetClass: ExternalHTTPS, address: "example.com:443"},
-		{name: "invalid", targetClass: ExternalHTTPS, address: "invalid"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			err := enforceDialAddress(tt.targetClass, tt.address)
-			if tt.allowed && err != nil {
-				t.Fatalf("enforceDialAddress() error = %v, want nil", err)
-			}
-			if !tt.allowed && !errors.Is(err, ErrTargetDenied) {
-				t.Fatalf("enforceDialAddress() error = %v, want %v", err, ErrTargetDenied)
-			}
-		})
-	}
-}
-
-func TestExternalClientRejectsPrivateDNSResolutionBeforeConnect(t *testing.T) {
-	t.Parallel()
-
-	var listenConfig net.ListenConfig
-	listener, err := listenConfig.Listen(context.Background(), "tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = listener.Close() })
-
-	_, port, err := net.SplitHostPort(listener.Addr().String())
-	if err != nil {
-		t.Fatal(err)
-	}
-	cfg := validExternalConfig()
-	cfg.BaseURL = "https://localhost:" + port
-	client, err := New(cfg, metricnoop.NewMeterProvider())
-	if err != nil {
-		t.Fatalf("New() error = %v", err)
-	}
-
-	request, err := http.NewRequestWithContext(context.Background(), http.MethodGet, client.BaseURL(), http.NoBody)
-	if err != nil {
-		t.Fatal(err)
-	}
-	response, requestErr := client.Do(request)
-	if response != nil {
-		_ = response.Body.Close()
-	}
-	if !errors.Is(requestErr, ErrTargetDenied) {
-		t.Fatalf("Do() error = %v, want %v", requestErr, ErrTargetDenied)
-	}
-
-	tcpListener, ok := listener.(*net.TCPListener)
-	if !ok {
-		t.Fatalf("listener = %T, want *net.TCPListener", listener)
-	}
-	if err := tcpListener.SetDeadline(time.Now().Add(100 * time.Millisecond)); err != nil {
-		t.Fatal(err)
-	}
-	if connection, acceptErr := listener.Accept(); acceptErr == nil {
-		_ = connection.Close()
-		t.Fatal("private target accepted a connection")
-	}
 }
 
 func TestClientEnforcesDecodedLimitPropagatesTraceAndRejectsRedirect(t *testing.T) {
@@ -448,74 +153,327 @@ func TestClientEnforcesDecodedLimitPropagatesTraceAndRejectsRedirect(t *testing.
 	}
 }
 
-func validExternalConfig() Config {
-	return Config{
-		DependencyName:         "provider",
-		BaseURL:                "https://example.com",
-		TargetClass:            ExternalHTTPS,
-		RequestTimeout:         time.Second,
-		ResponseHeaderTimeout:  500 * time.Millisecond,
-		MaxResponseHeaderBytes: 32 << 10,
-		MaxResponseBodyBytes:   1 << 20,
-		MaxConnsPerHost:        8,
-	}
-}
-
-type roundTripFunc func(*http.Request) (*http.Response, error)
-
-func (f roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) {
-	return f(request)
-}
-
-type trackedBody struct {
-	io.ReadCloser
-
-	closed *atomic.Bool
-}
-
-func (b *trackedBody) Close() error {
-	b.closed.Store(true)
-	if err := b.ReadCloser.Close(); err != nil {
-		return fmt.Errorf("close tracked response body: %w", err)
-	}
-	return nil
-}
-
-func responseWithBody(body string) *http.Response {
-	return &http.Response{
-		StatusCode: http.StatusOK,
-		Header:     make(http.Header),
-		Body:       io.NopCloser(strings.NewReader(body)),
-	}
-}
-
-func TestNewAcceptsCustomPrivateHostSuffix(t *testing.T) {
+func TestOneAttemptTransportDoesNotReplayOrTransform(t *testing.T) {
 	t.Parallel()
 
-	for _, tt := range []struct {
-		name    string
-		suffix  string
-		baseURL string
-	}{
-		{name: "kubernetes cluster zone", suffix: "svc.cluster.local", baseURL: "http://billing.default.svc.cluster.local"},
-		{name: "leading dot accepted", suffix: ".internal", baseURL: "http://billing.internal"},
-		{name: "railway zone", suffix: "railway.internal", baseURL: "http://billing.railway.internal"},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
+	t.Run("does not replay", func(t *testing.T) {
+		t.Parallel()
 
-			cfg := validExternalConfig()
-			cfg.TargetClass = PrivateHTTP
-			cfg.PrivateHostSuffix = tt.suffix
-			cfg.BaseURL = tt.baseURL
-
-			client, err := New(cfg, metricnoop.NewMeterProvider())
-			if err != nil {
-				t.Fatalf("New() error = %v, want nil", err)
+		var connections atomic.Int64
+		var requests atomic.Int64
+		server := httptest.NewUnstartedServer(http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
+			switch requests.Add(1) {
+			case 1:
+				response.WriteHeader(http.StatusNoContent)
+			case 2:
+				hijacker, ok := response.(http.Hijacker)
+				if !ok {
+					t.Error("response writer does not implement http.Hijacker")
+					return
+				}
+				conn, _, err := hijacker.Hijack()
+				if err != nil {
+					t.Errorf("Hijack() error = %v", err)
+					return
+				}
+				_ = conn.Close()
+			default:
+				t.Errorf("server received request %d, want at most 2", requests.Load())
 			}
-			t.Cleanup(client.CloseIdleConnections)
-		})
+		}))
+		server.Config.ConnState = func(_ net.Conn, state http.ConnState) {
+			if state == http.StateNew {
+				connections.Add(1)
+			}
+		}
+		server.Start()
+		t.Cleanup(server.Close)
+
+		client := newOneAttemptTestClient(t, server.URL)
+		for _, path := range []string{"/warm", "/drop"} {
+			request, err := http.NewRequestWithContext(context.Background(), http.MethodGet, client.BaseURL()+path, http.NoBody)
+			if err != nil {
+				t.Fatal(err)
+			}
+			response, err := client.Do(request)
+			if path == "/drop" {
+				if err == nil {
+					t.Fatal("Do(drop) error = nil, want connection failure")
+				}
+				continue
+			}
+			if err != nil {
+				t.Fatalf("Do(warm) error = %v", err)
+			}
+			_ = response.Body.Close()
+		}
+		if got := connections.Load(); got != 2 {
+			t.Fatalf("opened connections = %d, want 2", got)
+		}
+		if got := requests.Load(); got != 2 {
+			t.Fatalf("server received %d requests, want 2", got)
+		}
+	})
+
+	t.Run("preserves wire bytes", func(t *testing.T) {
+		t.Parallel()
+
+		const wireBody = "\x1f\x8b\x08\x00raw gzip bytes"
+		server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+			if request.ProtoMajor != 1 {
+				t.Errorf("HTTP major version = %d, want 1", request.ProtoMajor)
+			}
+			if got := request.Header.Get("Accept-Encoding"); got != "" {
+				t.Errorf("Accept-Encoding = %q, want empty", got)
+			}
+			response.Header().Set("Content-Encoding", "gzip")
+			_, _ = response.Write([]byte(wireBody))
+		}))
+		t.Cleanup(server.Close)
+
+		client := newOneAttemptTestClient(t, server.URL)
+		request, err := http.NewRequestWithContext(context.Background(), http.MethodGet, client.BaseURL(), http.NoBody)
+		if err != nil {
+			t.Fatal(err)
+		}
+		response, err := client.Do(request)
+		if err != nil {
+			t.Fatalf("Do() error = %v", err)
+		}
+		body, err := io.ReadAll(response.Body)
+		if err != nil {
+			t.Fatalf("ReadAll() error = %v", err)
+		}
+		if err := response.Body.Close(); err != nil {
+			t.Fatalf("Body.Close() error = %v", err)
+		}
+		if got := string(body); got != wireBody {
+			t.Fatalf("wire body = %q, want %q", got, wireBody)
+		}
+	})
+}
+
+func TestOneAttemptTransportUsesRequestDeadlineAndExplicitRoots(t *testing.T) {
+	pki := newGeneratedClientPKI(t)
+	server, requests := newRootTestServer(t, pki.certificate(t, "provider.example"))
+	roots := x509.NewCertPool()
+	roots.AddCert(pki.root)
+
+	deadline := time.Now().Add(time.Second)
+	client := newRootTestClient(t, roots, server, deadline)
+	ctx, cancel := context.WithDeadline(t.Context(), deadline)
+	defer cancel()
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, client.BaseURL(), http.NoBody)
+	if err != nil {
+		t.Fatal(err)
 	}
+	response, err := client.Do(request)
+	if err != nil {
+		t.Fatalf("Do() error = %v", err)
+	}
+	if err := response.Body.Close(); err != nil {
+		t.Fatalf("response body close: %v", err)
+	}
+	if requests.Load() != 1 {
+		t.Fatalf("server requests = %d, want 1", requests.Load())
+	}
+
+	listener, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen for blocked TLS peer: %v", err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+	accepted := make(chan net.Conn, 1)
+	go func() {
+		conn, acceptErr := listener.Accept()
+		if acceptErr == nil {
+			accepted <- conn
+		}
+	}()
+
+	blockedDeadline := time.Now().Add(time.Minute)
+	client.transport.DialContext = func(ctx context.Context, network, _ string) (net.Conn, error) {
+		got, ok := ctx.Value(requestDeadlineKey{}).(time.Time)
+		if !ok || !got.Equal(blockedDeadline) {
+			return nil, errors.New("dial did not retain the request deadline")
+		}
+		var dialer net.Dialer
+		return dialer.DialContext(ctx, network, listener.Addr().String())
+	}
+	blockedCtx, stopBlocked := context.WithDeadline(t.Context(), blockedDeadline)
+	blockedRequest, err := http.NewRequestWithContext(blockedCtx, http.MethodGet, client.BaseURL(), http.NoBody)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := make(chan error, 1)
+	go func() {
+		response, requestErr := client.Do(blockedRequest)
+		if response != nil {
+			requestErr = errors.Join(requestErr, response.Body.Close())
+		}
+		result <- requestErr
+	}()
+	peer := <-accepted
+	t.Cleanup(func() { _ = peer.Close() })
+	stopBlocked()
+	select {
+	case err := <-result:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("blocked TLS Do() error = %v, want context canceled", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("blocked TLS handshake ignored request cancellation")
+	}
+}
+
+func TestTransportUsesCallerRootCAsWithoutAmbientFallback(t *testing.T) {
+	configured := newGeneratedClientPKI(t)
+	ambient := newGeneratedClientPKI(t)
+	roots := x509.NewCertPool()
+	roots.AddCert(configured.root)
+	snapshot := roots.Clone()
+	ambientFile := t.TempDir() + "/ambient.pem"
+	if err := os.WriteFile(ambientFile, ambient.rootPEM, 0o600); err != nil {
+		t.Fatalf("write ambient root: %v", err)
+	}
+	t.Setenv("SSL_CERT_FILE", ambientFile)
+	t.Setenv("SSL_CERT_DIR", t.TempDir())
+
+	t.Run("configured root succeeds", func(t *testing.T) {
+		server, requests := newRootTestServer(t, configured.certificate(t, "provider.example"))
+		client := newRootTestClient(t, roots, server, time.Time{})
+		response, err := client.Do(mustRootTestRequest(t, client))
+		if err != nil {
+			t.Fatalf("Do() error = %v", err)
+		}
+		if err := response.Body.Close(); err != nil {
+			t.Fatalf("response body close: %v", err)
+		}
+		if client.transport.TLSClientConfig == nil || client.transport.TLSClientConfig.RootCAs != roots || client.transport.TLSClientConfig.ServerName != "provider.example" || client.transport.TLSClientConfig.InsecureSkipVerify {
+			t.Fatalf("TLS config = %#v", client.transport.TLSClientConfig)
+		}
+		if requests.Load() != 1 {
+			t.Fatalf("server requests = %d, want 1", requests.Load())
+		}
+	})
+
+	t.Run("alternate root is denied", func(t *testing.T) {
+		server, requests := newRootTestServer(t, ambient.certificate(t, "provider.example"))
+		client := newRootTestClient(t, roots, server, time.Time{})
+		response, err := client.Do(mustRootTestRequest(t, client))
+		if response != nil {
+			if closeErr := response.Body.Close(); closeErr != nil {
+				t.Fatalf("response body close: %v", closeErr)
+			}
+		}
+		if err == nil {
+			t.Fatal("Do() error = nil for alternate root")
+		}
+		if requests.Load() != 0 {
+			t.Fatalf("server requests = %d, want 0", requests.Load())
+		}
+	})
+
+	t.Run("wrong hostname is denied", func(t *testing.T) {
+		server, requests := newRootTestServer(t, configured.certificate(t, "other.internal"))
+		client := newRootTestClient(t, roots, server, time.Time{})
+		response, err := client.Do(mustRootTestRequest(t, client))
+		if response != nil {
+			if closeErr := response.Body.Close(); closeErr != nil {
+				t.Fatalf("response body close: %v", closeErr)
+			}
+		}
+		if err == nil {
+			t.Fatal("Do() error = nil for wrong hostname")
+		}
+		if requests.Load() != 0 {
+			t.Fatalf("server requests = %d, want 0", requests.Load())
+		}
+	})
+
+	t.Run("nil preserves existing system-root mode", func(t *testing.T) {
+		cfg := validExternalConfig()
+		client, err := New(cfg, nil)
+		if err != nil {
+			t.Fatalf("New() error = %v", err)
+		}
+		t.Cleanup(client.CloseIdleConnections)
+		if client.transport.TLSClientConfig != nil {
+			t.Fatalf("nil-root TLS config = %#v, want nil", client.transport.TLSClientConfig)
+		}
+	})
+
+	if !roots.Equal(snapshot) {
+		t.Fatal("caller root pool was mutated")
+	}
+}
+
+func newRootTestServer(t *testing.T, certificate tls.Certificate) (*httptest.Server, *atomic.Int64) {
+	t.Helper()
+	requests := new(atomic.Int64)
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
+		requests.Add(1)
+		response.WriteHeader(http.StatusNoContent)
+	}))
+	server.TLS = &tls.Config{Certificates: []tls.Certificate{certificate}, MinVersion: tls.VersionTLS12}
+	server.StartTLS()
+	t.Cleanup(server.Close)
+	return server, requests
+}
+
+func newRootTestClient(t *testing.T, roots *x509.CertPool, server *httptest.Server, deadline time.Time) *Client {
+	t.Helper()
+	cfg := validExternalConfig()
+	cfg.OneAttempt = true
+	cfg.TargetClass = ExternalHTTPS
+	cfg.BaseURL = "https://provider.example"
+	cfg.RootCAs = roots
+	client, err := New(cfg, nil)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	t.Cleanup(client.CloseIdleConnections)
+	client.transport.DialContext = func(ctx context.Context, network, _ string) (net.Conn, error) {
+		if !deadline.IsZero() {
+			got, ok := ctx.Value(requestDeadlineKey{}).(time.Time)
+			if !ok || !got.Equal(deadline) {
+				t.Fatalf("dial deadline value = %s, present=%t; want request deadline %s", got, ok, deadline)
+			}
+		}
+		var dialer net.Dialer
+		return dialer.DialContext(ctx, network, server.Listener.Addr().String())
+	}
+	return client
+}
+
+func mustRootTestRequest(t *testing.T, client *Client) *http.Request {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+	t.Cleanup(cancel)
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, client.BaseURL(), http.NoBody)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return request
+}
+
+func newOneAttemptTestClient(t *testing.T, serverURL string) *Client {
+	t.Helper()
+	cfg := validExternalConfig()
+	cfg.OneAttempt = true
+	cfg.TargetClass = PrivateHTTP
+	cfg.PrivateHostSuffix = ".internal"
+	cfg.BaseURL = "http://provider.internal"
+	client, err := New(cfg, nil)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	t.Cleanup(client.CloseIdleConnections)
+	client.transport.DialContext = func(ctx context.Context, network, _ string) (net.Conn, error) {
+		var dialer net.Dialer
+		return dialer.DialContext(ctx, network, strings.TrimPrefix(serverURL, "http://"))
+	}
+	return client
 }
 
 // TestClientReusesConnectionsAcrossBursts covers the net/http default this

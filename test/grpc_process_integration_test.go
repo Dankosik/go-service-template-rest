@@ -18,6 +18,7 @@ package integration_test
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"net/http"
 	"os"
 	"os/exec"
@@ -113,28 +114,22 @@ func TestGRPCProcessLifecycle(t *testing.T) {
 	readyCtx, cancelReady := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancelReady()
 	healthClient := healthgrpc.NewHealthClient(conn)
-	retry := time.NewTicker(20 * time.Millisecond)
-	defer retry.Stop()
 	const requestID = "grpc_process_integration_123"
 	readyCallCtx := reqctx.ContextWithRequestID(readyCtx, requestID)
 	var responseHeader metadata.MD
-	for {
-		response, checkErr := healthClient.Check(
+	var checkErr error
+	waittest.UntilFunc(t, 10*time.Second, func() bool {
+		response, err := healthClient.Check(
 			readyCallCtx,
 			&healthgrpc.HealthCheckRequest{},
 			grpc.Header(&responseHeader),
 		)
+		checkErr = err
 		if checkErr == nil && response.GetStatus() == healthgrpc.HealthCheckResponse_SERVING {
-			break
+			return true
 		}
-		select {
-		case <-readyCtx.Done():
-			_ = process.Process.Kill()
-			<-waited
-			t.Fatalf("gRPC health did not become serving: %v\n%s", checkErr, output.String())
-		case <-retry.C:
-		}
-	}
+		return false
+	}, func() string { return fmt.Sprintf("gRPC health to become serving: %v\n%s", checkErr, output.String()) })
 	if got := responseHeader.Get("x-request-id"); len(got) != 1 || got[0] != requestID {
 		t.Fatalf("gRPC health response request IDs = %v, want %q", got, requestID)
 	}

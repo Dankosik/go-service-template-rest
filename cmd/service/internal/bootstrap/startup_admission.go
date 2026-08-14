@@ -14,10 +14,6 @@ type startupAdmissionController struct {
 	ready atomic.Bool
 }
 
-func newStartupAdmissionController() *startupAdmissionController {
-	return &startupAdmissionController{}
-}
-
 // The methods below carry no nil-receiver guard. The controller is constructed
 // unconditionally in Run and reaches every caller through a field that is always
 // set, so a nil check here is an unreachable branch on the path a readiness probe

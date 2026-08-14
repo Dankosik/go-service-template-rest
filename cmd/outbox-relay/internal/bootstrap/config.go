@@ -2,10 +2,7 @@ package bootstrap
 
 import (
 	"flag"
-	"io"
-	"log/slog"
 
-	"github.com/example/go-service-template-rest/cmd/internal/runtimeopts"
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/infra/postgresoutbox"
 )
@@ -20,10 +17,6 @@ func parseLoadOptions(args []string) (config.LoadOptions, bool, error) {
 		return config.LoadOptions{}, false, err
 	}
 	return loadOptions, classifyLegacy, nil
-}
-
-func newLogger(out io.Writer, cfg config.Config) *slog.Logger {
-	return runtimeopts.Logger(out, cfg, "component", "outbox_relay")
 }
 
 func relayConfig(cfg config.OutboxConfig) postgresoutbox.RelayConfig {

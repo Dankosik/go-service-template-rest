@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/infra/grpcclient"
+	"github.com/example/go-service-template-rest/internal/waittest"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
@@ -169,17 +170,13 @@ func TestResolverSelectionChild(t *testing.T) {
 	); err != nil {
 		t.Fatalf("Health.Check() error = %v", err)
 	}
-	select {
-	case selected := <-builder.called:
-		incoming := <-unaryMetadata
-		writeResolverSelectionRecord(t, resolverSelectionRecord{
-			Scheme:        selected.URL.Scheme,
-			Endpoint:      selected.Endpoint(),
-			WireRequestID: firstMetadataValue(incoming, "x-request-id"),
-		})
-	case <-time.After(2 * time.Second):
-		t.Fatal("selected resolver builder was not called")
-	}
+	selected := waittest.Receive(t, builder.called, 2*time.Second, "selected resolver builder")
+	incoming := waittest.Receive(t, unaryMetadata, 2*time.Second, "resolver selection unary metadata")
+	writeResolverSelectionRecord(t, resolverSelectionRecord{
+		Scheme:        selected.URL.Scheme,
+		Endpoint:      selected.Endpoint(),
+		WireRequestID: firstMetadataValue(incoming, "x-request-id"),
+	})
 }
 
 func resolverSelectionFixture(

@@ -16,6 +16,7 @@ import (
 
 	"github.com/example/go-service-template-rest/internal/infra/grpcclient"
 	"github.com/example/go-service-template-rest/internal/reqctx"
+	"github.com/example/go-service-template-rest/internal/waittest"
 	"go.opentelemetry.io/otel/propagation"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
@@ -190,11 +191,7 @@ func TestServiceToServiceGRPCCorrelationAndCancellation(t *testing.T) {
 	if err := stream.RecvMsg(&emptypb.Empty{}); status.Code(err) != codes.Canceled {
 		t.Fatalf("ClientStream.RecvMsg() error = %v, want canonical Canceled", err)
 	}
-	select {
-	case <-streamDone:
-	case <-time.After(time.Second):
-		t.Fatal("stream handler did not finish after caller cancellation")
-	}
+	waittest.ReceiveSignal(t, streamDone, time.Second, "stream handler to finish after caller cancellation")
 
 	spans.waitForEnded(t, 4)
 	ended := spans.Ended()

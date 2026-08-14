@@ -67,7 +67,17 @@ func (c *Client) NewWorker(ctx context.Context, cfg WorkerConfig, handler Handle
 	c.deadLetterStream = dlqStream
 	c.maxDeliveryBytes = cfg.MaxDeliveryBytes
 	c.probeMu.Unlock()
-	if err := c.Check(ctx); err != nil {
+	err = c.Check(probeCtx)
+	if err != nil && probeCtx.Err() == nil {
+		// JetStream can acknowledge consumer creation before its metadata is
+		// available to the first readiness probe.
+		select {
+		case <-time.After(100 * time.Millisecond):
+		case <-probeCtx.Done():
+		}
+		err = c.Check(probeCtx)
+	}
+	if err != nil {
 		c.probeMu.Lock()
 		c.consumer = nil
 		c.deadLetterStream = ""
@@ -128,7 +138,22 @@ func (c *Client) admitSourceStream(probeCtx context.Context, cfg WorkerConfig) e
 // Original-* headers the transfer adds. A stream that is also the source is
 // rejected: every dead-lettered message would be a delivery back to this worker.
 func (c *Client) admitDeadLetterStream(probeCtx context.Context, cfg WorkerConfig) (string, error) {
-	name, err := c.js.StreamNameBySubject(probeCtx, cfg.DeadLetterSubject)
+	var (
+		name string
+		err  error
+	)
+	for probeCtx.Err() == nil {
+		name, err = c.js.StreamNameBySubject(probeCtx, cfg.DeadLetterSubject)
+		if err == nil {
+			break
+		}
+		// A newly connected JetStream client can receive unavailable responses
+		// while the server finishes attaching its API subscription.
+		select {
+		case <-time.After(100 * time.Millisecond):
+		case <-probeCtx.Done():
+		}
+	}
 	if err != nil {
 		return "", fmt.Errorf("%w: dead-letter stream is unavailable", ErrRejected)
 	}

@@ -53,11 +53,12 @@ func TestRelayPublisherPanic(t *testing.T) {
 func TestRelayPublisherPanicIsDiagnosable(t *testing.T) {
 	t.Parallel()
 
+	const panicCanary = "publisher-panic-secret-canary"
 	var logs bytes.Buffer
 	_, telemetry := newTestTelemetry(t, slog.New(slog.NewJSONHandler(&logs, nil)))
 	relay, err := newRelay(
 		&relayStoreStub{},
-		publisherFunc(func(context.Context, Event) error { panic("adapter fault") }),
+		publisherFunc(func(context.Context, Event) error { panic(panicCanary) }),
 		telemetry,
 		unitRelayConfig(),
 	)
@@ -68,10 +69,19 @@ func TestRelayPublisherPanicIsDiagnosable(t *testing.T) {
 	if got := relay.publishOne(t.Context(), unitClaim(1).Event); !errors.Is(got, ErrPublisherPanic) {
 		t.Fatalf("publishOne() = %v, want ErrPublisherPanic", got)
 	}
-	for _, required := range []string{"outbox_publisher_panic", "adapter fault", "relay_publish_test.go"} {
+	for _, required := range []string{
+		"outbox_publisher_panic",
+		`"error.type":"panic"`,
+		`"panic.class":"string"`,
+		`"panic.type":"string"`,
+		"relay_publish_test.go",
+	} {
 		if !strings.Contains(logs.String(), required) {
 			t.Errorf("panic log does not carry %q: %s", required, logs.String())
 		}
+	}
+	if strings.Contains(logs.String(), panicCanary) {
+		t.Fatalf("panic log disclosed value %q: %s", panicCanary, logs.String())
 	}
 }
 

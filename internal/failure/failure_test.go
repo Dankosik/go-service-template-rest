@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"slices"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -35,16 +36,11 @@ func TestCodesAreStableAndTransportNeutral(t *testing.T) {
 	// the pin, and walking the published enumeration means this test also fails
 	// when AllCodes drifts from the constants every consumer resolves against.
 	got := failure.AllCodes()
-	if len(got) != len(want) {
+	if !slices.Equal(got, want) {
 		t.Fatalf("published codes = %v, want %v", got, want)
 	}
-	for index := range want {
-		if got[index] != want[index] {
-			t.Fatalf("published codes = %v, want %v", got, want)
-		}
-		if got[index] == "conflict" {
-			t.Fatal("generic conflict became a transport-neutral domain identity")
-		}
+	if slices.Contains(got, "conflict") {
+		t.Fatal("generic conflict became a transport-neutral domain identity")
 	}
 }
 

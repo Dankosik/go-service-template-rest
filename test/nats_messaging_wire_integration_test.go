@@ -13,13 +13,13 @@ import (
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/infra/natsjs"
+	"github.com/example/go-service-template-rest/internal/infra/telemetry/telemetrytest"
 	"github.com/example/go-service-template-rest/internal/reqctx"
 	"github.com/example/go-service-template-rest/internal/waittest"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	"go.opentelemetry.io/otel/baggage"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -121,9 +121,7 @@ func TestNATSTraceCorrelation(t *testing.T) {
 		baggageCanary = "TRACE_BAGGAGE_CANARY"
 	)
 	f := newNATSFixture(t)
-	recorder := tracetest.NewSpanRecorder()
-	provider := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder))
-	t.Cleanup(func() { _ = provider.Shutdown(context.Background()) })
+	recorder, provider := telemetrytest.NewRecordingTracerProvider(t)
 	observed := make(chan struct {
 		requestID string
 		traceID   string

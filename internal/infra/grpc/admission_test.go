@@ -19,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/example/go-service-template-rest/internal/waittest"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
@@ -68,11 +69,7 @@ func TestAdmissionBudgetIsProcessWide(t *testing.T) {
 	if err := stream.SendMsg(&emptypb.Empty{}); err != nil {
 		t.Fatalf("ClientStream.SendMsg() error = %v", err)
 	}
-	select {
-	case <-occupied:
-	case <-time.After(5 * time.Second):
-		t.Fatal("streaming handler never reached the admission slot")
-	}
+	waittest.ReceiveSignal(t, occupied, 5*time.Second, "streaming handler admission slot")
 
 	// The unary chain answers from the same budget, or it has one of its own.
 	err = connection.Invoke(t.Context(), testUnaryFullMethod, &emptypb.Empty{}, &emptypb.Empty{})
@@ -122,11 +119,7 @@ func TestHealthServiceSurvivesBusinessSaturation(t *testing.T) {
 	if err := stream.SendMsg(&emptypb.Empty{}); err != nil {
 		t.Fatalf("ClientStream.SendMsg() error = %v", err)
 	}
-	select {
-	case <-occupied:
-	case <-time.After(5 * time.Second):
-		t.Fatal("streaming handler never reached the admission slot")
-	}
+	waittest.ReceiveSignal(t, occupied, 5*time.Second, "streaming handler admission slot")
 
 	health := healthgrpc.NewHealthClient(connection)
 	if _, err := health.Check(t.Context(), &healthgrpc.HealthCheckRequest{}); err != nil {

@@ -81,6 +81,19 @@ if ((integration_test_count > 0)); then
 		fail "test/ must contain only external integration tests; got ${integration_package:-no package}"
 fi
 
+bootstrap_integration_test="cmd/service/internal/bootstrap/startup_idempotency_integration_test.go"
+while IFS= read -r integration_test; do
+	[[ -n "${integration_test}" ]] || continue
+	[[ "${integration_test}" == "${bootstrap_integration_test}" ]] ||
+		fail "${integration_test} is not the sole approved package-local integration test"
+done < <(find cmd -type f -name '*_integration_test.go' -print 2>/dev/null)
+if [[ -e "${bootstrap_integration_test}" ]]; then
+	grep -qx '//go:build integration' "${bootstrap_integration_test}" ||
+		fail "${bootstrap_integration_test} must declare the integration build tag"
+	grep -qx 'package bootstrap' "${bootstrap_integration_test}" ||
+		fail "${bootstrap_integration_test} must remain in package bootstrap"
+fi
+
 for skill_dir in .agents/skills/*; do
 	[[ -d "${skill_dir}" ]] || continue
 	[[ -f "${skill_dir}/SKILL.md" ]] || fail "${skill_dir}/ must contain SKILL.md"

@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"golang.org/x/net/http/httpguts"
 )
 
 func parseOTLPHeaders(raw string) (map[string]string, error) {
@@ -40,18 +42,5 @@ func parseOTLPHeaders(raw string) (map[string]string, error) {
 }
 
 func validOTLPHeaderKey(key string) bool {
-	if key == "" {
-		return false
-	}
-	for i := range len(key) {
-		b := key[i]
-		if (b >= 'a' && b <= 'z') ||
-			(b >= 'A' && b <= 'Z') ||
-			(b >= '0' && b <= '9') ||
-			strings.ContainsRune("!#$%&'*+-.^_`|~", rune(b)) {
-			continue
-		}
-		return false
-	}
-	return true
+	return httpguts.ValidHeaderFieldName(key)
 }

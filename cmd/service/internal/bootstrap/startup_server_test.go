@@ -14,6 +14,7 @@ import (
 
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/health"
+	"github.com/example/go-service-template-rest/internal/waittest"
 )
 
 type fakeRuntimeServer struct {
@@ -122,7 +123,7 @@ func TestServeHTTPRuntimeListenError(t *testing.T) {
 		healthSvc:      svc,
 		httpSrv:        newFakeRuntimeServer(),
 		readinessCheck: func(context.Context) error { return nil },
-		admission:      newTestStartupAdmissionController(),
+		admission:      new(startupAdmissionController),
 		shutdown:       testShutdownBudget(),
 	})
 
@@ -157,7 +158,7 @@ func TestServeHTTPRuntimeMetricsListenError(t *testing.T) {
 		httpSrv:        newFakeRuntimeServer(),
 		metricsSrv:     newFakeRuntimeServer(),
 		readinessCheck: func(context.Context) error { return nil },
-		admission:      newTestStartupAdmissionController(),
+		admission:      new(startupAdmissionController),
 		shutdown:       testShutdownBudget(),
 	})
 
@@ -174,7 +175,7 @@ func TestServeHTTPRuntimeStartsAndStopsApplicationAndMetricsServers(t *testing.T
 
 	appSrv := newFakeRuntimeServer()
 	metricsSrv := newFakeRuntimeServer()
-	admission := newTestStartupAdmissionController()
+	admission := new(startupAdmissionController)
 	signalCtx, cancelSignal := context.WithCancel(context.Background())
 	defer cancelSignal()
 	bootstrapCtx := context.WithoutCancel(signalCtx)
@@ -203,29 +204,14 @@ func TestServeHTTPRuntimeStartsAndStopsApplicationAndMetricsServers(t *testing.T
 		"application": appSrv.serveStarted,
 		"metrics":     metricsSrv.serveStarted,
 	} {
-		select {
-		case <-started:
-		case <-time.After(time.Second):
-			t.Fatalf("%s server did not start", name)
-		}
+		waittest.ReceiveSignal(t, started, time.Second, name+" server start")
 	}
 
-	deadline := time.Now().Add(time.Second)
-	for !admission.Ready() && time.Now().Before(deadline) {
-		time.Sleep(time.Millisecond)
-	}
-	if !admission.Ready() {
-		t.Fatal("startup admission was not marked ready")
-	}
+	waittest.Until(t, time.Second, admission.Ready, "startup admission to be marked ready")
 
 	cancelSignal()
-	select {
-	case err := <-runErrCh:
-		if err != nil {
-			t.Fatalf("serveRuntime() error = %v, want nil", err)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("serveRuntime() did not stop both servers")
+	if err := waittest.Receive(t, runErrCh, 2*time.Second, "serveRuntime to stop both servers"); err != nil {
+		t.Fatalf("serveRuntime() error = %v, want nil", err)
 	}
 }
 
@@ -233,7 +219,7 @@ func TestServeHTTPRuntimeStopsAfterBackgroundFailure(t *testing.T) {
 	t.Parallel()
 
 	srv := newFakeRuntimeServer()
-	admission := newTestStartupAdmissionController()
+	admission := new(startupAdmissionController)
 	failures := make(chan error, 1)
 	taskErr := errors.New("consumer lost its lease")
 
@@ -254,27 +240,12 @@ func TestServeHTTPRuntimeStopsAfterBackgroundFailure(t *testing.T) {
 		})
 	}()
 
-	select {
-	case <-srv.serveStarted:
-	case <-time.After(time.Second):
-		t.Fatal("application server did not start")
-	}
-	deadline := time.Now().Add(time.Second)
-	for !admission.Ready() && time.Now().Before(deadline) {
-		time.Sleep(time.Millisecond)
-	}
-	if !admission.Ready() {
-		t.Fatal("startup admission was not marked ready")
-	}
+	waittest.ReceiveSignal(t, srv.serveStarted, time.Second, "application server start")
+	waittest.Until(t, time.Second, admission.Ready, "startup admission to be marked ready")
 
 	failures <- taskErr
-	select {
-	case err := <-runErrCh:
-		if !errors.Is(err, taskErr) {
-			t.Fatalf("serveRuntime() error = %v, want wrapped %v", err, taskErr)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("serveRuntime() did not stop after the background failure")
+	if err := waittest.Receive(t, runErrCh, 2*time.Second, "serveRuntime to stop after the background failure"); !errors.Is(err, taskErr) {
+		t.Fatalf("serveRuntime() error = %v, want wrapped %v", err, taskErr)
 	}
 }
 
@@ -293,7 +264,7 @@ func TestServeHTTPRuntimeRejectsCanceledStartupBeforeListen(t *testing.T) {
 		healthSvc:      svc,
 		httpSrv:        newFakeRuntimeServer(),
 		readinessCheck: func(context.Context) error { return nil },
-		admission:      newTestStartupAdmissionController(),
+		admission:      new(startupAdmissionController),
 		shutdown:       testShutdownBudget(),
 	})
 
@@ -311,7 +282,7 @@ func TestServeHTTPRuntimeMarksReadyWithoutExternalReadinessProbe(t *testing.T) {
 	logger := slog.New(slog.DiscardHandler)
 	svc := health.New()
 	srv := newFakeRuntimeServer()
-	admission := newTestStartupAdmissionController()
+	admission := new(startupAdmissionController)
 	readinessChecked := make(chan struct{}, 1)
 
 	signalCtx, cancelSignal := context.WithCancel(context.Background())
@@ -337,29 +308,13 @@ func TestServeHTTPRuntimeMarksReadyWithoutExternalReadinessProbe(t *testing.T) {
 		})
 	}(signalCtx, bootstrapCtx)
 
-	select {
-	case <-readinessChecked:
-	case <-time.After(time.Second):
-		t.Fatal("internal readiness check was not executed")
-	}
-
-	deadline := time.Now().Add(time.Second)
-	for !admission.Ready() && time.Now().Before(deadline) {
-		time.Sleep(10 * time.Millisecond)
-	}
-	if !admission.Ready() {
-		t.Fatal("startup admission was not marked ready")
-	}
+	waittest.ReceiveSignal(t, readinessChecked, time.Second, "internal readiness check")
+	waittest.Until(t, time.Second, admission.Ready, "startup admission to be marked ready")
 
 	cancelSignal()
 
-	select {
-	case err := <-runErrCh:
-		if err != nil {
-			t.Fatalf("serveRuntime() error = %v, want nil", err)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("serveRuntime() did not return after shutdown signal")
+	if err := waittest.Receive(t, runErrCh, 2*time.Second, "serveRuntime to return after shutdown signal"); err != nil {
+		t.Fatalf("serveRuntime() error = %v, want nil", err)
 	}
 }
 
@@ -381,7 +336,7 @@ func TestServeHTTPRuntimeRejectsStartupDeadlineBeforeReadiness(t *testing.T) {
 			<-ctx.Done()
 			return ctx.Err()
 		},
-		admission: newTestStartupAdmissionController(),
+		admission: new(startupAdmissionController),
 		shutdown:  testShutdownBudget(),
 	})
 
@@ -414,7 +369,7 @@ func TestServeHTTPRuntimeSkipsPropagationDelayBeforeAdmissionReady(t *testing.T)
 		readinessCheck: func(context.Context) error {
 			return errors.New("readiness failed")
 		},
-		admission:     newTestStartupAdmissionController(),
+		admission:     new(startupAdmissionController),
 		shutdown:      testShutdownBudget(),
 		shutdownDelay: time.Hour,
 	})
@@ -453,7 +408,7 @@ func TestServeHTTPRuntimeReturnsServeFailureBeforeAdmissionReady(t *testing.T) {
 				return nil
 			}
 		},
-		admission: newTestStartupAdmissionController(),
+		admission: new(startupAdmissionController),
 		shutdown:  testShutdownBudget(),
 	})
 
@@ -478,7 +433,7 @@ func TestServeHTTPRuntimeReturnsPendingServeFailureBeforeMarkingAdmissionReady(t
 		logger := slog.New(slog.DiscardHandler)
 		svc := health.New()
 		srv := newFakeRuntimeServer()
-		admission := newTestStartupAdmissionController()
+		admission := new(startupAdmissionController)
 		serveReturned := make(chan struct{})
 		serveErr := errors.New("serve failed while admission succeeded")
 
@@ -552,7 +507,7 @@ func TestServeRuntimeCoordinatesGRPCReadinessAndDrain(t *testing.T) {
 			httpSrv:        httpServer,
 			grpcSrv:        grpcServer,
 			readinessCheck: func(context.Context) error { return nil },
-			admission:      newTestStartupAdmissionController(),
+			admission:      new(startupAdmissionController),
 			shutdown:       testShutdownBudget(),
 		})
 	}()
@@ -561,26 +516,13 @@ func TestServeRuntimeCoordinatesGRPCReadinessAndDrain(t *testing.T) {
 		"http": httpServer.serveStarted,
 		"grpc": grpcServer.serveStarted,
 	} {
-		select {
-		case <-started:
-		case <-time.After(time.Second):
-			t.Fatalf("%s server did not start", name)
-		}
+		waittest.ReceiveSignal(t, started, time.Second, name+" server start")
 	}
-	select {
-	case <-grpcServer.markServing:
-	case <-time.After(time.Second):
-		t.Fatal("gRPC health was not marked serving after startup admission")
-	}
+	waittest.ReceiveSignal(t, grpcServer.markServing, time.Second, "gRPC health to be marked serving after startup admission")
 
 	cancelSignal()
-	select {
-	case err := <-result:
-		if err != nil {
-			t.Fatalf("serveRuntime() error = %v, want nil", err)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("serveRuntime() did not stop")
+	if err := waittest.Receive(t, result, 2*time.Second, "serveRuntime to stop"); err != nil {
+		t.Fatalf("serveRuntime() error = %v, want nil", err)
 	}
 	select {
 	case <-grpcServer.startDrain:
@@ -612,7 +554,7 @@ func TestServeRuntimeRejectsGRPCListenFailureBeforeServing(t *testing.T) {
 		healthSvc: health.New(),
 		httpSrv:   newFakeRuntimeServer(),
 		grpcSrv:   grpcServer,
-		admission: newTestStartupAdmissionController(),
+		admission: new(startupAdmissionController),
 		shutdown:  testShutdownBudget(),
 	})
 	if err == nil || !strings.Contains(err.Error(), "listen gRPC server") {
@@ -672,7 +614,7 @@ func TestServeHTTPRuntimeStopsDiagnosticsAfterTheDrain(t *testing.T) {
 		httpSrv:        apiServer,
 		metricsSrv:     diagnosticsServer,
 		readinessCheck: func(context.Context) error { return nil },
-		admission:      newTestStartupAdmissionController(),
+		admission:      new(startupAdmissionController),
 		shutdown:       testShutdownBudget(),
 	})
 	if err != nil {

@@ -31,10 +31,12 @@ Role contract: docs/spec-first-workflow/phases/implementation-worker-execution.m
 
 The role contract is the canonical [Execution Role
 Tree](../phases/implementation-worker-execution.md#execution-role-tree).
-[Agent Harness](../../agent-harness.md#read-only-lanes) chooses the ordinary or
-critical role and harness-native clean-context mechanism. The implementation
-actor and implementation Worker are not eligible reviewers, and a lane used for
-one unit is not resumed for another task ID or unit.
+Dispatch through the harness [Read-Only Lane
+Carrier](../../agent-harness.md#read-only-lane-carrier); its [read-only lane
+rules](../../agent-harness.md#read-only-lanes) choose the ordinary or critical
+role and model tier. The implementation actor and implementation Worker are not
+eligible reviewers, and a lane used for one unit is not resumed for another
+task ID or unit.
 
 For ledger review, resolve supplied task IDs against the authoritative ledger.
 The dispatch must identify exactly one recorded singleton or grouped acceptance

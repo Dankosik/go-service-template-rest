@@ -31,6 +31,10 @@ func (p *Pool) InTx(ctx context.Context, opts pgx.TxOptions, fn func(pgx.Tx) err
 	}
 	defer conn.Release()
 
+	marker := &contextWatcherMark{}
+	p.contextWatcherMarks.Store(conn.Conn().PgConn(), marker)
+	defer p.contextWatcherMarks.Delete(conn.Conn().PgConn())
+
 	tx, err := conn.BeginTx(ctx, opts)
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrTransaction, err)
@@ -40,7 +44,7 @@ func (p *Pool) InTx(ctx context.Context, opts pgx.TxOptions, fn func(pgx.Tx) err
 	if commit == nil {
 		commit = commitTx
 	}
-	if err := runInTx(ctx, tx, fn, commit); err != nil {
+	if err := runInTx(ctx, tx, fn, commit, marker); err != nil {
 		return fmt.Errorf("%w: %w", ErrTransaction, err)
 	}
 	return nil
@@ -51,16 +55,23 @@ func runInTx(
 	tx pgx.Tx,
 	fn func(pgx.Tx) error,
 	commit func(context.Context, pgx.Tx) error,
+	marker *contextWatcherMark,
 ) (err error) {
 	defer func() {
-		rollbackErr := tx.Rollback(ctx)
+		rollbackErr := tx.Rollback(context.WithoutCancel(ctx))
 		if rollbackErr != nil && !errors.Is(rollbackErr, pgx.ErrTxClosed) {
-			err = rollbackErr
+			if err == nil {
+				err = rollbackErr
+			} else {
+				err = errors.Join(err, rollbackErr)
+			}
+		}
+		if marker != nil && marker.canceled.Load() && ctx.Err() != nil && err != nil {
+			err = errors.Join(ctx.Err(), err)
 		}
 	}()
 
 	if err := fn(tx); err != nil {
-		_ = tx.Rollback(ctx)
 		return err
 	}
 

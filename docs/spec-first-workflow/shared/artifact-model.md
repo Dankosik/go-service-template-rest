@@ -195,7 +195,12 @@ the canonical ledger for unit readiness and receipts, and Git for candidates. Do
 not copy those task states into a machine-owned JSON block or scheduler artifact.
 `HANDOFF_READY` is native routing evidence for one fixed Worktree candidate; it
 changes no artifact state and releases no dependency before the same Lead
-records a Local receipt.
+records a Local receipt. When a Worktree Lead discovers an agent-owned upstream
+boundary, the same return may carry a proposed blocker envelope. The
+Orchestrator moves that same Lead and candidate to Local before the Lead
+revalidates the boundary and either continues a newly available local remedy or
+writes the canonical `Blocked:` line; the proposed envelope is not durable
+blocker state and authorizes no upstream reopen before Handoff.
 
 When terminal task creation has an unknown outcome and no unique ready task
 identity can be recovered through [Agent Harness's native

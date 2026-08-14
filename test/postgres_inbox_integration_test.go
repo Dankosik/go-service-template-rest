@@ -14,7 +14,9 @@ import (
 	"github.com/example/go-service-template-rest/internal/infra/postgres/pgtest"
 	"github.com/example/go-service-template-rest/internal/infra/postgresinbox"
 	"github.com/example/go-service-template-rest/internal/waittest"
+	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 func TestPostgresInboxClaimAndEffectAtomicity(t *testing.T) {
@@ -154,18 +156,9 @@ func TestPostgresInboxConcurrentClaimAndEffect(t *testing.T) {
 				t.Fatalf("acquire winner connection: %v", err)
 			}
 			defer winnerConn.Release()
-			waiterConn, err := pool.PGX().Acquire(ctx)
-			if err != nil {
-				t.Fatalf("acquire waiter connection: %v", err)
-			}
-			defer waiterConn.Release()
 			winner, err := winnerConn.Begin(ctx)
 			if err != nil {
 				t.Fatalf("begin winner: %v", err)
-			}
-			waiter, err := waiterConn.Begin(ctx)
-			if err != nil {
-				t.Fatalf("begin waiter: %v", err)
 			}
 			claimed, err := postgresinbox.Claim(ctx, winner, consumer, messageID)
 			if err != nil || !claimed {
@@ -183,11 +176,46 @@ func TestPostgresInboxConcurrentClaimAndEffect(t *testing.T) {
 
 			waitCtx, cancelWait := context.WithCancel(ctx)
 			result := make(chan inboxClaimResult, 1)
+			ready := make(chan inboxWaiterReady, 1)
 			go func() {
-				claimed, claimErr := postgresinbox.Claim(waitCtx, waiter, consumer, messageID)
-				result <- inboxClaimResult{claimed: claimed, err: claimErr}
+				applied := false
+				readySent := false
+				publishReady := func(result inboxWaiterReady) {
+					if !readySent {
+						ready <- result
+						readySent = true
+					}
+				}
+				err := pool.InTx(waitCtx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+					if _, err := tx.Exec(waitCtx, "SELECT set_config('application_name', 'inbox-waiter', false)"); err != nil {
+						publishReady(inboxWaiterReady{err: err})
+						return err
+					}
+					var pid int
+					if err := tx.QueryRow(waitCtx, "SELECT pg_backend_pid()").Scan(&pid); err != nil {
+						publishReady(inboxWaiterReady{err: err})
+						return err
+					}
+					publishReady(inboxWaiterReady{pid: pid})
+
+					claimed, err := postgresinbox.Claim(waitCtx, tx, consumer, messageID)
+					if err != nil || !claimed {
+						return err
+					}
+					applied = true
+					if test.resolve == "rollback" {
+						return recordInboxEffect(waitCtx, consumer, messageID)(tx)
+					}
+					return nil
+				})
+				publishReady(inboxWaiterReady{err: err})
+				result <- inboxClaimResult{claimed: applied, err: err}
 			}()
-			waitForInboxBlock(t, ctx, pool, winnerPID)
+			waiter := <-ready
+			if waiter.err != nil {
+				t.Fatalf("start waiter: %v", waiter.err)
+			}
+			waitForInboxBlock(t, ctx, pool, winnerPID, waiter.pid)
 
 			switch test.resolve {
 			case "commit":
@@ -198,9 +226,6 @@ func TestPostgresInboxConcurrentClaimAndEffect(t *testing.T) {
 				if got.err != nil || got.claimed {
 					t.Fatalf("waiter after commit = %+v, want skipped", got)
 				}
-				if err := waiter.Commit(ctx); err != nil {
-					t.Fatalf("commit skipped waiter: %v", err)
-				}
 			case "rollback":
 				if err := winner.Rollback(ctx); err != nil {
 					t.Fatalf("roll back winner: %v", err)
@@ -209,24 +234,20 @@ func TestPostgresInboxConcurrentClaimAndEffect(t *testing.T) {
 				if got.err != nil || !got.claimed {
 					t.Fatalf("waiter after rollback = %+v, want claimed", got)
 				}
-				if err := recordInboxEffect(ctx, consumer, messageID)(waiter); err != nil {
-					t.Fatalf("waiter effect: %v", err)
-				}
-				if err := waiter.Commit(ctx); err != nil {
-					t.Fatalf("commit waiter: %v", err)
-				}
 			case "cancel":
 				cancelWait()
 				got := <-result
 				if !errors.Is(got.err, context.Canceled) || got.claimed {
 					t.Fatalf("canceled waiter = %+v", got)
 				}
-				// Canceling the in-flight PGX query may close the connection, which
-				// already rolls the transaction back server-side.
-				_ = waiter.Rollback(context.WithoutCancel(ctx))
+				var pgErr *pgconn.PgError
+				if !errors.As(got.err, &pgErr) || pgErr.Code != pgerrcode.QueryCanceled {
+					t.Fatalf("canceled waiter error = %v, want retained SQLSTATE %s", got.err, pgerrcode.QueryCanceled)
+				}
 				if err := winner.Commit(ctx); err != nil {
 					t.Fatalf("commit winner: %v", err)
 				}
+				assertInboxWaiterReleased(t, ctx, pool, waiter.pid)
 			default:
 				t.Fatalf("unknown resolution %q", test.resolve)
 			}
@@ -263,6 +284,11 @@ func TestPostgresInboxClaimSurvivesRestart(t *testing.T) {
 type inboxClaimResult struct {
 	claimed bool
 	err     error
+}
+
+type inboxWaiterReady struct {
+	pid int
+	err error
 }
 
 func newInboxFixture(t *testing.T) (context.Context, *postgres.Pool) {
@@ -385,7 +411,7 @@ func rollbackInboxThenReport(
 // on purpose: OUTBOX=none removes that file while INBOX=postgres keeps this one,
 // so neither suite can declare the shared helper the other would need. Only the
 // wait itself is shared, through internal/waittest.
-func waitForInboxBlock(t *testing.T, ctx context.Context, pool *postgres.Pool, blockerPID int) {
+func waitForInboxBlock(t *testing.T, ctx context.Context, pool *postgres.Pool, blockerPID, waiterPID int) {
 	t.Helper()
 	waittest.Until(t, 10*time.Second, func() bool {
 		var blocked bool
@@ -393,12 +419,39 @@ func waitForInboxBlock(t *testing.T, ctx context.Context, pool *postgres.Pool, b
 			SELECT EXISTS (
 				SELECT 1
 				FROM pg_stat_activity AS activity
-				WHERE $1 = ANY(pg_blocking_pids(activity.pid))
-			)`, blockerPID).Scan(&blocked); err != nil {
+				WHERE activity.pid = $2 AND $1 = ANY(pg_blocking_pids(activity.pid))
+			)`, blockerPID, waiterPID).Scan(&blocked); err != nil {
 			t.Fatalf("observe inbox claim lock: %v", err)
 		}
 		return blocked
 	}, "the duplicate inbox claim to wait on the winner transaction")
+}
+
+func assertInboxWaiterReleased(t *testing.T, ctx context.Context, pool *postgres.Pool, waiterPID int) {
+	t.Helper()
+	verifier, err := pgx.Connect(ctx, pool.PGX().Config().ConnString())
+	if err != nil {
+		t.Fatalf("connect waiter verifier: %v", err)
+	}
+	t.Cleanup(func() { _ = verifier.Close(context.WithoutCancel(ctx)) })
+
+	var state string
+	if err := verifier.QueryRow(ctx, "SELECT state FROM pg_stat_activity WHERE pid = $1", waiterPID).Scan(&state); err != nil {
+		t.Fatalf("read waiter backend state: %v", err)
+	}
+	if state != "idle" {
+		t.Fatalf("waiter backend state = %q, want idle", state)
+	}
+	var waiting bool
+	if err := verifier.QueryRow(ctx, "SELECT EXISTS (SELECT 1 FROM pg_locks WHERE pid = $1 AND NOT granted)", waiterPID).Scan(&waiting); err != nil {
+		t.Fatalf("read waiter locks: %v", err)
+	}
+	if waiting {
+		t.Fatal("waiter backend retains a lock wait")
+	}
+	if err := pool.PGX().QueryRow(ctx, "SELECT 1").Scan(new(int)); err != nil {
+		t.Fatalf("run query after waiter cancellation: %v", err)
+	}
 }
 
 func assertInboxCounts(t *testing.T, ctx context.Context, pool *postgres.Pool, claims, effects int) {

@@ -1,7 +1,31 @@
 # Repository Architecture Baseline
 
+<!-- profile:outbound-auth-oauth2-client-credentials:start -->
+
+## Outbound machine authentication
+
+`internal/infra/oauth2clientcredentials` owns one process-local OAuth
+client-credentials boundary for one fixed dependency. It composes through the
+existing bounded HTTP and gRPC clients; feature code receives only those
+concrete authenticated clients and never a token, provider, or credential
+source. Configuration is immutable and the client secret is environment-only.
+
+<!-- profile:outbound-auth-oauth2-client-credentials:end -->
+
 This document is the stable repository-wide current-state architecture baseline for `go-service-template-rest`.
 Use it as evidence to recover standing constraints, owners, reusable capabilities, and runtime flows before writing task-local design in `specs/<feature-id>/design/`. [System / Integration Design](spec-first-workflow/phases/system-integration-design.md) owns deciding which affected surfaces the target retains, replaces, or removes.
+
+<!-- profile:http-idempotency-postgres:start -->
+
+## HTTP idempotency
+
+`internal/httpidempotency` owns the reusable request identity and result
+contracts. `internal/infra/postgresidempotency` owns their PostgreSQL protocol;
+bootstrap composes it only when an adopting service registers an operation.
+`HTTP_IDEMPOTENCY=postgres` retains that complete pack but does not register a
+health route or activate endpoint traffic.
+
+<!-- profile:http-idempotency-postgres:end -->
 
 This file is intentionally narrower than:
 - [Project Structure & Module Organization](./project-structure-and-module-organization.md)
@@ -24,6 +48,9 @@ It does not restate the full tree, every command, or task-local design choices.
 | `internal/failure/` | Transport-neutral client-visible failure codes and mapper ordering shared by features and transports. | Feature error identities, HTTP envelopes, gRPC statuses, or I/O. |
 | `internal/infra/http/` | HTTP server, middleware, request/response mapping, route policy, and observability at the transport edge. | Core business rules or config loading. |
 | `internal/infra/httpclient/` (`OUTBOUND_HTTP=bounded`) | Optional shared outbound target validation, transport bounds, explicit correlation-policy enforcement, and idle-pool cleanup. | Provider authentication, concrete trust selection, operation budgets, retries, error mapping, or readiness policy. |
+<!-- profile:object-storage:start -->
+| `internal/objectstorage/` and `internal/infra/s3/` (`OBJECT_STORAGE=s3`) | Provider-neutral object port plus one fixed-authority S3-compatible adapter, static tuple validation, and lifecycle wiring. | Feature authorization, key/content/retention policy, bucket provisioning, provider certification, or trust configuration. |
+<!-- profile:object-storage:end -->
 | `internal/infra/postgres/` | Optional Postgres connection/pool lifecycle and repository code. | Process lifecycle, migrations, HTTP behavior, config precedence rules. |
 | `internal/infra/postgresmigrate/` | Optional migration execution used by `cmd/migrate`. | Runtime pool ownership or application startup. |
 | `internal/infra/telemetry/` | OpenTelemetry tracing/metrics SDK setup and Prometheus export. | Feature semantics, startup logging, or request routing decisions. |
@@ -44,6 +71,12 @@ It does not restate the full tree, every command, or task-local design choices.
 <!-- profile:inbox-postgres:start -->
 | `internal/infra/postgresinbox/` | Stateless claim binding for one caller-owned PostgreSQL transaction. | Transaction lifecycle, feature effects, transport identity construction, cleanup, or ordering. |
 <!-- profile:inbox-postgres:end -->
+<!-- profile:jobs-postgres:start -->
+| `internal/jobs/`, `internal/infra/postgresjobs/`, and `cmd/jobs-worker/` | Default-off PostgreSQL durable-job definitions, persistence/engine, and fail-closed worker lifecycle. | Concrete producer kinds, operator transport, periodic scheduling, or production capacity claims. |
+<!-- profile:jobs-postgres:end -->
+<!-- profile:webhooks-durable:start -->
+| `internal/outboundtrust/`, `internal/infra/postgreswebhook/`, and `cmd/webhook-worker/` | Shared public-address predicate, durable webhook engine, and independent worker lifecycle. | Subscriber discovery, feature transactions, operator transport, receiver processing, or deployment policy. |
+<!-- profile:webhooks-durable:end -->
 
 <!-- profile:grpc:start -->
 The gRPC profile adds four boundaries: `api/proto/` owns protobuf contracts,
@@ -235,6 +268,21 @@ effect; a rollback or database error remains a handler error. Claims do not
 expire, do not serialize generic consumer work, and do not cover external
 effects. See [PostgreSQL idempotent inbox](postgres-idempotent-inbox.md).
 <!-- profile:inbox-postgres:end -->
+
+<!-- profile:jobs-postgres:start -->
+The optional PostgreSQL jobs pack owns durable generic job truth and a separate
+worker binary. It remains inert without a concrete kind and fails before I/O
+without a worker-local builder; see [PostgreSQL durable background jobs](postgres-durable-background-jobs.md).
+<!-- profile:jobs-postgres:end -->
+
+<!-- profile:webhooks-durable:start -->
+The optional durable webhook pack accepts a complete immutable fan-out through
+the same caller-owned `pgx.Tx` as its business mutation. The separate
+`cmd/webhook-worker` process claims bounded work, resolves only the configured
+owner-scoped key, signs one public HTTPS request, and records the strongest
+known outcome. It supplies store control methods but no generic subscriber or
+operator API; see [Outbound webhook delivery](outbound-webhook-delivery.md).
+<!-- profile:webhooks-durable:end -->
 
 <!-- profile:messaging-nats-jetstream:start -->
 The optional NATS JetStream profile ships a separate `cmd/worker` composition

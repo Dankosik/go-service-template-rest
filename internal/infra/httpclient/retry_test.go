@@ -412,6 +412,11 @@ func TestRetryableResultClassification(t *testing.T) {
 	if retryableResult(nil, &ResponseTooLargeError{Limit: 1}) {
 		t.Fatal("retryableResult(ResponseTooLargeError) = true, want false")
 	}
+	// profile:outbound-auth-http:start
+	if retryableResult(nil, fmt.Errorf("wrapped attempt authorization: %w", &attemptAuthorizationError{err: errors.New("closed failure")})) {
+		t.Fatal("retryableResult(attemptAuthorizationError) = true, want false")
+	}
+	// profile:outbound-auth-http:end
 }
 
 func TestNewRejectsIncoherentRetryPolicy(t *testing.T) {
