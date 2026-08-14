@@ -67,7 +67,17 @@ func (c *Client) NewWorker(ctx context.Context, cfg WorkerConfig, handler Handle
 	c.deadLetterStream = dlqStream
 	c.maxDeliveryBytes = cfg.MaxDeliveryBytes
 	c.probeMu.Unlock()
-	if err := c.Check(ctx); err != nil {
+	err = c.Check(probeCtx)
+	if err != nil && probeCtx.Err() == nil {
+		// JetStream can acknowledge consumer creation before its metadata is
+		// available to the first readiness probe.
+		select {
+		case <-time.After(100 * time.Millisecond):
+		case <-probeCtx.Done():
+		}
+		err = c.Check(probeCtx)
+	}
+	if err != nil {
 		c.probeMu.Lock()
 		c.consumer = nil
 		c.deadLetterStream = ""
