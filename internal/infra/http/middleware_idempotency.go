@@ -8,8 +8,10 @@ import (
 	"github.com/example/go-service-template-rest/internal/httpidempotency"
 )
 
-type idempotencyKeyContextKey struct{}
-type idempotencyAttemptContextKey struct{}
+type (
+	idempotencyKeyContextKey     struct{}
+	idempotencyAttemptContextKey struct{}
+)
 
 func captureIdempotencyKey(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

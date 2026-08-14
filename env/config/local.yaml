@@ -8,15 +8,98 @@ http:
 # Replace these with a real local HTTPS issuer and proxy boundary. The
 # reserved example host intentionally cannot provide production trust.
 authn:
+# profile:jobs-postgres:start
+# The jobs pack is present but inactive until a deployment supplies its bounds.
+jobs:
+  enabled: false
+  poll_interval: 0s
+  max_concurrency: 0
+  lease_duration: 0s
+  store_operation_timeout: 0s
+  observation_interval: 0s
+  drain_timeout: 0s
+# profile:jobs-postgres:end
   issuer: "https://issuer.example.com"
   audience: "https://api.example.com"
   trusted_proxy_cidrs: "127.0.0.0/8,::1/128"
 # profile:authn-oidc-jwt:end
 
+# profile:http-idempotency-postgres:start
+# This optional pack stays inactive until an adopting operation is registered.
+# Values remain deployment-owned and intentionally invalid here.
+http_idempotency:
+  owner_recovery_delay: 0s
+  maintenance_interval: 0s
+  cleanup_batch_size: 0
+  max_maintenance_lag: 0s
+  max_relation_bytes: 0
+  admission_headroom_bytes: 0
+# profile:http-idempotency-postgres:end
+
+# profile:outbound-auth-oauth2-client-credentials:start
+# OAuth client credentials are environment-only. Keep this non-secret shape
+# empty until deployment supplies one complete fixed dependency.
+outbound_auth:
+  dependency: ""
+  client_id: ""
+  client_secret: ""
+  client_authentication: ""
+  token_endpoint: ""
+  token_target_class: ""
+  token_private_host_suffix: ""
+  scopes: ""
+  resource: ""
+  audience: ""
+  resource_authority: ""
+  acquisition_timeout: 0s
+# profile:outbound-auth-oauth2-client-credentials:end
+
 log:
   level: debug
+
+# profile:object-storage:start
+# The selected profile is fail-closed until deployment supplies this complete
+# static tuple through APP__OBJECT_STORAGE__* environment variables.
+object_storage:
+  provider: ""
+  endpoint: ""
+  region: ""
+  bucket: ""
+  access_key_id: ""
+  secret_access_key: ""
+  session_token: ""
+  max_object_bytes: 0
+  multipart_chunk_bytes: 0
+  max_active_operations: 0
+  max_operation_duration: 0s
+  max_presign_lifetime: 0s
+  max_response_header_bytes: 0
+  max_control_response_bytes: 0
+  max_working_memory_bytes: 0
+# profile:object-storage:end
 
 # profile:database-postgres:start
 postgres:
   enabled: true
 # profile:database-postgres:end
+
+# profile:webhooks-durable:start
+# Deployment must supply a complete immutable snapshot and the environment-only
+# secret manifest before enabling the independently deployed worker.
+webhooks:
+  enabled: false
+  capacity_revision: 0
+  global_concurrency: 0
+  claim_scan_page: 0
+  poll_interval: 0s
+  observation_interval: 0s
+  store_operation_timeout: 0s
+  attempt_timeout: 0s
+  response_header_timeout: 0s
+  response_header_bytes: 0
+  response_body_bytes: 0
+  drain_timeout: 0s
+  maintenance_interval: 0s
+  maintenance_batch: 0
+  static_secrets: ""
+# profile:webhooks-durable:end

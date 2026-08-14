@@ -7,6 +7,8 @@ import (
 	"time"
 )
 
+const minStoreOperationTimeout = 100 * time.Millisecond
+
 type JobsConfig struct {
 	Enabled               bool          `koanf:"enabled"`
 	PollInterval          time.Duration `koanf:"poll_interval"`
@@ -52,6 +54,9 @@ func validateJobs(cfg JobsConfig, postgres PostgresConfig) error {
 	}
 	if err := validateIntRange("jobs.max_concurrency", cfg.MaxConcurrency, 1, 500); err != nil {
 		return err
+	}
+	if cfg.StoreOperationTimeout < minStoreOperationTimeout {
+		return fmt.Errorf("%w: jobs.store_operation_timeout must be at least %s", ErrValidate, minStoreOperationTimeout)
 	}
 	if postgres.MaxOpenConns <= cfg.MaxConcurrency {
 		return fmt.Errorf(

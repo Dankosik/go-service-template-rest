@@ -51,6 +51,7 @@ func TestJobsConfigValidation(t *testing.T) {
 		{name: "max concurrency missing", mutate: func(jobs *JobsConfig, _ *PostgresConfig) { jobs.MaxConcurrency = 0 }, contains: "jobs.max_concurrency"},
 		{name: "lease duration missing", mutate: func(jobs *JobsConfig, _ *PostgresConfig) { jobs.LeaseDuration = 0 }, contains: "jobs.lease_duration"},
 		{name: "store timeout missing", mutate: func(jobs *JobsConfig, _ *PostgresConfig) { jobs.StoreOperationTimeout = 0 }, contains: "jobs.store_operation_timeout"},
+		{name: "store timeout below timer floor", mutate: func(jobs *JobsConfig, _ *PostgresConfig) { jobs.StoreOperationTimeout = 99 * time.Millisecond }, contains: "at least 100ms"},
 		{name: "observation interval missing", mutate: func(jobs *JobsConfig, _ *PostgresConfig) { jobs.ObservationInterval = 0 }, contains: "jobs.observation_interval"},
 		{name: "drain timeout missing", mutate: func(jobs *JobsConfig, _ *PostgresConfig) { jobs.DrainTimeout = 0 }, contains: "jobs.drain_timeout"},
 		{name: "pool has no reserved connection", mutate: func(jobs *JobsConfig, postgres *PostgresConfig) { postgres.MaxOpenConns = jobs.MaxConcurrency }, contains: "reserve the control Session"},

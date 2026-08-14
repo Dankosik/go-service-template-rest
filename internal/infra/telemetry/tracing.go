@@ -89,15 +89,11 @@ func SetupTracing(ctx context.Context, cfg TracingConfig) (TraceExporterEndpoint
 	otelSetupMu.Lock()
 	defer otelSetupMu.Unlock()
 
-	provider := newTracerProvider(options...)
+	provider := sdktrace.NewTracerProvider(options...)
 	otel.SetTracerProvider(provider)
 	otel.SetTextMapPropagator(propagation.TraceContext{})
 
 	return endpoint, provider.Shutdown, nil
-}
-
-func newTracerProvider(options ...sdktrace.TracerProviderOption) *sdktrace.TracerProvider {
-	return sdktrace.NewTracerProvider(options...)
 }
 
 func buildTraceSampler(name string, arg float64) (sdktrace.Sampler, error) {

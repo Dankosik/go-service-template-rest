@@ -32,7 +32,7 @@ func (e *Engine) finalizeAttempt(ctx context.Context, input FinalizeInput) {
 	e.cycleMu.Lock()
 	defer e.cycleMu.Unlock()
 	if err := e.renew(ctx); err != nil {
-		e.fail(err)
+		_ = e.fail(err)
 		return
 	}
 	if transition, err := e.store.Finalize(ctx, input); err == nil && transition.Status == TransitionApplied {

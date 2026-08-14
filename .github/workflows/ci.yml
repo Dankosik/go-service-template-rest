@@ -215,6 +215,12 @@ jobs:
         if: steps.template_source.outputs.required == 'true'
         run: TEMPLATE_INIT_PROFILE=minimal make template-init-check GOLANGCI_LINT_BIN=golangci-lint
 
+      # profile:object-storage:start
+      - name: Prove generated S3-compatible object storage services
+        if: steps.template_source.outputs.required == 'true'
+        run: TEMPLATE_INIT_PROFILE=object-storage make template-init-check GOLANGCI_LINT_BIN=golangci-lint
+      # profile:object-storage:end
+
       # profile:authn-oidc-jwt:start
       - name: Prove generated OIDC JWT services
         if: steps.template_source.outputs.required == 'true'
@@ -573,7 +579,7 @@ jobs:
             ! git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
             echo "should_run=true" >> "$GITHUB_OUTPUT"
           elif git diff --name-only "${BASE_SHA}" "${GITHUB_SHA}" |
-            grep -Eq '^(migrations/|env/docker-compose\.yml$|cmd/(migrate|service)/|internal/|build/docker/Dockerfile$|Makefile$|go\.(mod|sum)$|\.github/workflows/ci\.yml$)'; then
+            grep -Eq '^(migrations/|env/docker-compose\.yml$|cmd/(migrate|service)/|internal/|build/docker/Dockerfile$|scripts/ci/runtime-image-build\.sh$|scripts/ci/fixtures/postgres-http-idempotency-active\.patch$|scripts/profiles/http-idempotency-postgres/|Makefile$|go\.(mod|sum)$|\.github/workflows/ci\.yml$)'; then
             echo "should_run=true" >> "$GITHUB_OUTPUT"
           else
             echo "should_run=false" >> "$GITHUB_OUTPUT"

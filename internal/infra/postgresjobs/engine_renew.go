@@ -2,6 +2,9 @@ package postgresjobs
 
 import (
 	"context"
+	"fmt"
+	"maps"
+	"slices"
 	"time"
 )
 
@@ -11,15 +14,12 @@ func (e *Engine) renew(ctx context.Context) error {
 		e.mu.Unlock()
 		return nil
 	}
-	attempts := make([]AttemptIdentity, 0, len(e.inflight))
-	for attempt := range e.inflight {
-		attempts = append(attempts, attempt)
-	}
+	attempts := slices.Collect(maps.Keys(e.inflight))
 	e.mu.Unlock()
 
 	renewals, err := e.store.Renew(ctx, attempts, e.config.LeaseDuration)
 	if err != nil {
-		return err
+		return fmt.Errorf("renew job leases: %w", err)
 	}
 	e.mu.Lock()
 	defer e.mu.Unlock()

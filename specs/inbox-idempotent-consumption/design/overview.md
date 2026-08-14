@@ -89,11 +89,31 @@ placement. Effects outside the same PostgreSQL transaction remain outside the
 guarantee.
 
 The duplicate wait consumes one pool connection and is bounded by the existing
-handler context. A database outage remains a handler error under the worker's
-current retry/dead-letter policy. No generic worker readiness or pause mechanism
-is added: that would change transport behavior beyond the ready spec. Reopen
-Specification if database unavailability must pause delivery rather than spend
-the configured attempt budget.
+handler context. `postgres.Pool.InTx` owns the shared transaction cancellation
+boundary. While it owns an acquired pgx connection, it registers one private
+watcher-settlement marker for that connection; the pool's existing pgx
+cancel-request watcher marks it immediately before sending PostgreSQL the
+cancel request, and `InTx` unregisters it after transaction cleanup. Pgx
+settles the in-flight protocol operation before control returns to `InTx`. A
+marked operation deterministically attributes a concurrent `57014` to the
+handler: its returned transaction error satisfies `errors.Is(err, ctx.Err())`
+and also retains the observed PostgreSQL error when there is one. An unmarked
+server-originated timeout remains its PostgreSQL error, not a synthetic handler
+cancellation. This is the race rule: when both are observed for one in-flight
+operation, the watcher mark makes caller cancellation win; a later handler
+cancellation after an unmarked server result does not rewrite that result.
+
+After that settlement, `InTx` performs at most one rollback using a
+non-cancelled cleanup context and preserves the primary result; an already
+closed transaction is normal cleanup, while a distinct cleanup failure is
+retained alongside the primary error. It neither retries a query nor retries a
+rollback. The inbox claim neither translates errors nor cleans up: adding a
+per-inbox path would create a second transaction owner and could displace the
+winner's unique-index decision. A database outage remains a handler error under
+the worker's current retry/dead-letter policy. No generic worker readiness or
+pause mechanism is added: that would change transport behavior beyond the ready
+spec. Reopen Specification if database unavailability must pause delivery rather
+than spend the configured attempt budget.
 
 Claims never expire automatically. Storage grows by one compact primary-key row
 per consumer/message identity. Reopen only on measured capacity breach; any
@@ -154,6 +174,7 @@ and PostgreSQL errors never put key values into telemetry.
 | Responsibility and paths | Selected owner and exact action | Boundary and proof owner |
 | --- | --- | --- |
 | Validate and atomically claim one opaque identity | Add `internal/infra/postgresinbox/inbox.go` with exported `Claim` | Stateless concrete function accepts caller `pgx.Tx`; unit validation and real PostgreSQL concurrency proof |
+| Settle a canceled transaction and preserve its error identities | Change `internal/infra/postgres/postgres.go` and `internal/infra/postgres/transaction.go` with wrapper-local tests | The watcher marks the one private state registered for the acquired `InTx` connection before cancellation; `Pool.InTx` owns one rollback after it settles; the real PostgreSQL concurrent inbox carrier proves handler-context, SQLSTATE, and cleanup result |
 | Canonical claim schema/query | Add `migrations/000002_postgres_inbox.sql` and `internal/infra/postgres/queries/postgres_inbox.sql`; regenerate SQLC | SQL sources win; migration/SQLC drift and populated-schema proof |
 | Join claim and effect | Document the concrete adapter in `docs/postgres-idempotent-inbox.md`; add compile/lint exemplar under `examples/reference-service` | Service adapter owns pool/tx-bound feature repository; no template production fake |
 | Place and select/remove the independent pack | Change `docs/project-structure-and-module-organization.md`, `docs/repo-architecture.md`, `.golangci.yml`, `scripts/init-module.sh`, `scripts/ci/template-init-check.sh`, `README.md`, `docs/build-test-and-development-commands.md`, and only required aggregate Make targets | Normative structural model, ownership table, and first-match placement algorithm admit `internal/infra/postgresinbox`; depguard/profile rules enforce that exception and explicit removal/regeneration order |

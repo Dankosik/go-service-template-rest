@@ -8,47 +8,12 @@ import (
 	"net/netip"
 	"net/url"
 	"strings"
+
+	"github.com/example/go-service-template-rest/internal/outboundtrust"
 )
 
 // ErrTargetDenied reports a request or resolved address outside the client's fixed target.
 var ErrTargetDenied = errors.New("outbound HTTP target denied")
-
-var (
-	// netip.Addr.IsGlobalUnicast intentionally follows the IP protocol's broad
-	// definition, not IANA's globally-reachable registry. These are the
-	// special-purpose ranges it would otherwise admit.
-	nonPublicIPv4Prefixes = [...]netip.Prefix{
-		netip.MustParsePrefix("100.64.0.0/10"),
-		netip.MustParsePrefix("192.0.0.0/24"),
-		netip.MustParsePrefix("192.0.2.0/24"),
-		netip.MustParsePrefix("192.88.99.0/24"),
-		netip.MustParsePrefix("198.18.0.0/15"),
-		netip.MustParsePrefix("198.51.100.0/24"),
-		netip.MustParsePrefix("203.0.113.0/24"),
-		netip.MustParsePrefix("240.0.0.0/4"),
-	}
-	globallyReachableIPv4SpecialPrefixes = [...]netip.Prefix{
-		netip.MustParsePrefix("192.0.0.9/32"),
-		netip.MustParsePrefix("192.0.0.10/32"),
-	}
-	allocatedGlobalIPv6Prefix = netip.MustParsePrefix("2000::/3")
-	publicNAT64Prefix         = netip.MustParsePrefix("64:ff9b::/96")
-	nonPublicIPv6Prefixes     = [...]netip.Prefix{
-		netip.MustParsePrefix("2001::/23"),
-		netip.MustParsePrefix("2001:db8::/32"),
-		netip.MustParsePrefix("2002::/16"),
-		netip.MustParsePrefix("3fff::/20"),
-	}
-	globallyReachableIPv6SpecialPrefixes = [...]netip.Prefix{
-		netip.MustParsePrefix("2001:1::1/128"),
-		netip.MustParsePrefix("2001:1::2/128"),
-		netip.MustParsePrefix("2001:1::3/128"),
-		netip.MustParsePrefix("2001:3::/32"),
-		netip.MustParsePrefix("2001:4:112::/48"),
-		netip.MustParsePrefix("2001:20::/28"),
-		netip.MustParsePrefix("2001:30::/28"),
-	}
-)
 
 // TargetClass selects the transport security policy for one fixed provider authority.
 type TargetClass uint8
@@ -60,6 +25,12 @@ const (
 	// private DNS zone, named by Config.PrivateHostSuffix. Transport security
 	// is the platform's private network, not TLS.
 	PrivateHTTP
+	// profile:outbound-auth-oauth2-client-credentials:start
+	// PrivateHTTPS permits only HTTPS targets under the platform's private DNS
+	// zone and resolving to private addresses. TLS still uses the ordinary system
+	// roots and hostname verification.
+	PrivateHTTPS
+	// profile:outbound-auth-oauth2-client-credentials:end
 )
 
 // There is deliberately no default private DNS zone: one would succeed silently
@@ -85,28 +56,37 @@ func validateTarget(baseURL *url.URL, targetClass TargetClass, requiredPrivateSu
 		if !strings.EqualFold(baseURL.Scheme, "https") {
 			return errors.New("build outbound HTTP client: external target requires HTTPS")
 		}
-		if address, parseErr := netip.ParseAddr(baseURL.Hostname()); parseErr == nil && isForbiddenExternalAddress(address) {
+		if address, parseErr := netip.ParseAddr(baseURL.Hostname()); parseErr == nil && !outboundtrust.PublicAddress(address) {
 			return ErrTargetDenied
 		}
 	case PrivateHTTP:
-		if requiredPrivateSuffix == "." || requiredPrivateSuffix == "" {
-			return errors.New(
-				"build outbound HTTP client: private target requires Config.PrivateHostSuffix, " +
-					"the deployment platform's private DNS zone",
-			)
-		}
-		if !strings.EqualFold(baseURL.Scheme, "http") {
-			return errors.New("build outbound HTTP client: private target requires HTTP")
-		}
-		hostname := strings.ToLower(strings.TrimSuffix(baseURL.Hostname(), "."))
-		if !strings.HasSuffix(hostname, requiredPrivateSuffix) {
-			return fmt.Errorf(
-				"build outbound HTTP client: private target requires a %s hostname",
-				strings.TrimPrefix(requiredPrivateSuffix, "."),
-			)
-		}
+		return validatePrivateTarget(baseURL, "http", requiredPrivateSuffix)
+	// profile:outbound-auth-oauth2-client-credentials:start
+	case PrivateHTTPS:
+		return validatePrivateTarget(baseURL, "https", requiredPrivateSuffix)
+	// profile:outbound-auth-oauth2-client-credentials:end
 	default:
 		return errors.New("build outbound HTTP client: target class is invalid")
+	}
+	return nil
+}
+
+func validatePrivateTarget(baseURL *url.URL, requiredScheme, requiredPrivateSuffix string) error {
+	if requiredPrivateSuffix == "." || requiredPrivateSuffix == "" {
+		return errors.New(
+			"build outbound HTTP client: private target requires Config.PrivateHostSuffix, " +
+				"the deployment platform's private DNS zone",
+		)
+	}
+	if !strings.EqualFold(baseURL.Scheme, requiredScheme) {
+		return fmt.Errorf("build outbound HTTP client: private target requires %s", strings.ToUpper(requiredScheme))
+	}
+	hostname := strings.ToLower(strings.TrimSuffix(baseURL.Hostname(), "."))
+	if !strings.HasSuffix(hostname, requiredPrivateSuffix) {
+		return fmt.Errorf(
+			"build outbound HTTP client: private target requires a %s hostname",
+			strings.TrimPrefix(requiredPrivateSuffix, "."),
+		)
 	}
 	return nil
 }
@@ -156,61 +136,22 @@ func enforceDialAddress(targetClass TargetClass, address string) error {
 	}
 	switch targetClass {
 	case ExternalHTTPS:
-		if !isForbiddenExternalAddress(resolved) {
+		if outboundtrust.PublicAddress(resolved) {
 			return nil
 		}
 	case PrivateHTTP:
-		if resolved.Unmap().IsPrivate() {
-			return nil
-		}
+		return enforcePrivateDialAddress(resolved)
+	// profile:outbound-auth-oauth2-client-credentials:start
+	case PrivateHTTPS:
+		return enforcePrivateDialAddress(resolved)
+		// profile:outbound-auth-oauth2-client-credentials:end
 	}
 	return ErrTargetDenied
 }
 
-func isForbiddenExternalAddress(address netip.Addr) bool {
-	address = address.Unmap()
-	if !address.IsValid() ||
-		!address.IsGlobalUnicast() ||
-		address.IsPrivate() ||
-		address.IsLoopback() ||
-		address.IsLinkLocalUnicast() ||
-		address.IsMulticast() ||
-		address.IsUnspecified() {
-		return true
+func enforcePrivateDialAddress(resolved netip.Addr) error {
+	if resolved.Unmap().IsPrivate() {
+		return nil
 	}
-
-	if address.Is4() {
-		for _, prefix := range globallyReachableIPv4SpecialPrefixes {
-			if prefix.Contains(address) {
-				return false
-			}
-		}
-		for _, prefix := range nonPublicIPv4Prefixes {
-			if prefix.Contains(address) {
-				return true
-			}
-		}
-		return false
-	}
-
-	if publicNAT64Prefix.Contains(address) {
-		bits := address.As16()
-		return isForbiddenExternalAddress(netip.AddrFrom4([4]byte{
-			bits[12], bits[13], bits[14], bits[15],
-		}))
-	}
-	if !allocatedGlobalIPv6Prefix.Contains(address) {
-		return true
-	}
-	for _, prefix := range globallyReachableIPv6SpecialPrefixes {
-		if prefix.Contains(address) {
-			return false
-		}
-	}
-	for _, prefix := range nonPublicIPv6Prefixes {
-		if prefix.Contains(address) {
-			return true
-		}
-	}
-	return false
+	return ErrTargetDenied
 }

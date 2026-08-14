@@ -109,10 +109,6 @@ func parsePoolConfig(rawDSN string) (*pgxpool.Config, error) {
 // NormalizeDSN validates the template's single-target PostgreSQL policy and
 // returns the normalized URL used by both runtime pools and migrations.
 func NormalizeDSN(rawDSN string) (string, error) {
-	return preflightPostgresDSN(rawDSN)
-}
-
-func preflightPostgresDSN(rawDSN string) (string, error) {
 	dsn := strings.TrimSpace(rawDSN)
 	if dsn == "" {
 		return "", fmt.Errorf("%w: postgres dsn is empty", ErrConfig)

@@ -1,6 +1,7 @@
 package postgresjobs
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"math"
@@ -71,7 +72,7 @@ func (s *Session) Claim(ctx context.Context, options ClaimOptions) (result Claim
 	err = s.withOperation(ctx, pgx.ReadWrite, func(operationCtx context.Context, queries *sqlcgen.Queries) error {
 		rows, queryErr := queries.ClaimPostgresJobs(operationCtx, sqlcgen.ClaimPostgresJobsParams{
 			Kinds: kinds, ArgsVersions: argsVersions, PolicyVersions: policyVersions,
-			ClaimLimit: int32(options.Limit), WorkerID: options.WorkerID,
+			ClaimLimit: int32(options.Limit), WorkerID: options.WorkerID, // #nosec G115 -- claim limit is validated in [1, math.MaxInt32].
 			LeaseMicroseconds: leaseMicroseconds,
 		})
 		if queryErr != nil {
@@ -89,7 +90,7 @@ func (s *Session) Claim(ctx context.Context, options ClaimOptions) (result Claim
 		}
 		result = ClaimResult{
 			ObservedAt: observedAt, Paused: rows[0].Paused,
-			ScopeGeneration: uint64(rows[0].ScopeGeneration),
+			ScopeGeneration: uint64(rows[0].ScopeGeneration), // #nosec G115 -- negative scope generations are rejected before conversion.
 		}
 		if rows[0].Compatible == nil {
 			return fmt.Errorf("%w: missing compatibility result", ErrUnknownVocabulary)
@@ -163,8 +164,8 @@ func attemptParams(attempts []AttemptIdentity) (attemptQueryParams, error) {
 			return attemptQueryParams{}, err
 		}
 		params.LogicalJobIDs[index] = string(attempt.LogicalJobID)
-		params.AttemptGenerations[index] = int64(attempt.AttemptGeneration)
-		params.RecoveryGenerations[index] = int64(attempt.RecoveryGeneration)
+		params.AttemptGenerations[index] = int64(attempt.AttemptGeneration)   // #nosec G115 -- validateAttemptIdentity rejects generations above math.MaxInt64.
+		params.RecoveryGenerations[index] = int64(attempt.RecoveryGeneration) // #nosec G115 -- validateAttemptIdentity rejects generations above math.MaxInt64.
 		params.WorkerIDs[index] = attempt.WorkerID
 	}
 	return params, nil
@@ -256,13 +257,11 @@ func unsupportedRevisions(revisions []jobs.Revision) error {
 }
 
 func revisionLess(left, right jobs.Revision) bool {
-	if left.Kind != right.Kind {
-		return left.Kind < right.Kind
-	}
-	if left.ArgsVersion != right.ArgsVersion {
-		return left.ArgsVersion < right.ArgsVersion
-	}
-	return left.PolicyVersion < right.PolicyVersion
+	return cmp.Or(
+		cmp.Compare(left.Kind, right.Kind),
+		cmp.Compare(left.ArgsVersion, right.ArgsVersion),
+		cmp.Compare(left.PolicyVersion, right.PolicyVersion),
+	) < 0
 }
 
 func attemptIdentity(logicalJobID string, attemptGeneration, recoveryGeneration int64, workerID string) (AttemptIdentity, error) {
@@ -290,10 +289,8 @@ func validateStoreToken(name, value string) error {
 	if !utf8.ValidString(value) || len(value) < 1 || len(value) > 256 {
 		return fmt.Errorf("%w: %s must be 1-256 UTF-8 bytes", ErrConfig, name)
 	}
-	for _, character := range value {
-		if unicode.IsControl(character) {
-			return fmt.Errorf("%w: %s contains a control character", ErrConfig, name)
-		}
+	if strings.ContainsFunc(value, unicode.IsControl) {
+		return fmt.Errorf("%w: %s contains a control character", ErrConfig, name)
 	}
 	return nil
 }

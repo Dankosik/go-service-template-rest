@@ -14,6 +14,14 @@ import (
 // MaterializeEpoch stores the completed row's exact PostgreSQL commit timestamp.
 // It never substitutes statement or wall-clock time when the source is absent.
 func (s *Store) MaterializeEpoch(ctx context.Context, attempt httpidempotency.Attempt) (time.Time, error) {
+	epoch, err := s.materializeEpoch(ctx, attempt)
+	if errors.Is(err, ErrEpochLost) || errors.Is(err, ErrIntegrityConflict) {
+		s.markTerminal(err)
+	}
+	return epoch, err
+}
+
+func (s *Store) materializeEpoch(ctx context.Context, attempt httpidempotency.Attempt) (time.Time, error) {
 	if !s.valid() {
 		return time.Time{}, fmt.Errorf("%w: store is required", ErrConfig)
 	}
@@ -49,7 +57,7 @@ func (s *Store) MaterializeEpoch(ctx context.Context, attempt httpidempotency.At
 	if !row.WriterPrimary {
 		return time.Time{}, ErrUnavailable
 	}
-	if !row.RowExists || row.Phase == nil || *row.Phase != "completed" {
+	if !row.RowExists || row.Phase == nil || *row.Phase != phaseCompleted {
 		return time.Time{}, ErrIntegrityConflict
 	}
 	if !row.CommittedAt.Valid {

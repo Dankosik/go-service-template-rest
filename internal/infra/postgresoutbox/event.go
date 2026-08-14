@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -198,10 +199,8 @@ func validateText(sentinel error, name, value string, limit int) error {
 	if len(value) > limit {
 		return fmt.Errorf("%w: %s is %d bytes, limit is %d", sentinel, name, len(value), limit)
 	}
-	for _, r := range value {
-		if unicode.IsControl(r) {
-			return fmt.Errorf("%w: %s contains a control character", sentinel, name)
-		}
+	if strings.ContainsFunc(value, unicode.IsControl) {
+		return fmt.Errorf("%w: %s contains a control character", sentinel, name)
 	}
 	return nil
 }

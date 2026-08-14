@@ -28,10 +28,12 @@
 // [HardenConfig.RateLimitKey] together. Their field comments own why neither has
 // a default that a template could honestly guess.
 //
+// profile:http-idempotency-postgres:start
 // To opt an authenticated business operation into idempotency, pass one complete
 // [IdempotencyOperation] through [RouterConfig.IdempotencyOperations]. The
 // router checks its OpenAPI declaration before serving; no registration leaves
 // the health-only template inert.
+// profile:http-idempotency-postgres:end
 //
 // # Where things live
 //

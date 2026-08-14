@@ -4,7 +4,7 @@ package integration_test
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"runtime"
 	"syscall"
 	"testing"
@@ -29,8 +29,10 @@ func TestPostgresJobsCompatibilityProcess(t *testing.T) {
 	})
 	waitForPostgresJobsWorkerReady(t, expanded.addr)
 	// N may emit v2 only after the exact v1+v2 rollback artifact is ready.
+	setPostgresJobsCompatibilityPaused(ctx, t, pool, true)
 	expandedV1 := stageDuePostgresJobsCompatibilityJob(ctx, t, pool, store, "v1", "compat-expand-v1")
 	expandedV2 := stageDuePostgresJobsCompatibilityJob(ctx, t, pool, store, "v2", "compat-expand-v2")
+	setPostgresJobsCompatibilityPaused(ctx, t, pool, false)
 	waitForPostgresJobsCompatibilitySuccess(ctx, t, pool, expandedV1)
 	waitForPostgresJobsCompatibilitySuccess(ctx, t, pool, expandedV2)
 	stopPostgresJobsCompatibilityWorker(t, expanded)
@@ -48,8 +50,10 @@ func TestPostgresJobsCompatibilityProcess(t *testing.T) {
 		Pool: pool, AppName: "jobs-compat-n-work", Handler: "recovery", Files: jobsWorkerLeaseFiles(t),
 	})
 	waitForPostgresJobsWorkerReady(t, current.addr)
+	setPostgresJobsCompatibilityPaused(ctx, t, pool, true)
 	currentV1 := stageDuePostgresJobsCompatibilityJob(ctx, t, pool, store, "v1", "compat-n-v1")
 	currentV2 := stageDuePostgresJobsCompatibilityJob(ctx, t, pool, store, "v2", "compat-n-v2")
+	setPostgresJobsCompatibilityPaused(ctx, t, pool, false)
 	waitForPostgresJobsCompatibilitySuccess(ctx, t, pool, currentV1)
 	waitForPostgresJobsCompatibilitySuccess(ctx, t, pool, currentV2)
 	assertPostgresJobsCompatibilityRetained(ctx, t, pool, retained)
@@ -104,7 +108,7 @@ func stageDuePostgresJobsCompatibilityJob(ctx context.Context, t *testing.T, poo
 		MaxPayloadBytes: 1024,
 		Validate: func(args map[string]string) error {
 			if len(args) == 0 {
-				return fmt.Errorf("arguments are required")
+				return errors.New("arguments are required")
 			}
 			return nil
 		},
@@ -180,7 +184,8 @@ func setPostgresJobsCompatibilityPaused(ctx context.Context, t *testing.T, pool 
 func assertPostgresJobsCompatibilityRetained(ctx context.Context, t *testing.T, pool *postgres.Pool, retained []struct {
 	prepared jobs.Prepared
 	state    jobs.State
-}) {
+},
+) {
 	t.Helper()
 	for _, row := range retained {
 		assertPostgresJobsCompatibilityVisible(ctx, t, pool, row.prepared, row.state, 0)

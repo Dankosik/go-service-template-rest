@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	"github.com/example/go-service-template-rest/internal/infra/postgres/sqlcgen"
@@ -24,16 +25,16 @@ func (s *Session) withOperation(
 		return fmt.Errorf("%w: operation is required", ErrConfig)
 	}
 
-	timeout := min(s.store.operationTimeout, s.store.statementTimeout)
-	operationCtx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
+	setupCtx, setupCancel := context.WithTimeout(ctx, s.store.operationTimeout)
+	defer setupCancel()
 
-	tx, err := s.conn.BeginTx(operationCtx, pgx.TxOptions{AccessMode: accessMode})
+	tx, err := s.conn.BeginTx(setupCtx, pgx.TxOptions{AccessMode: accessMode})
 	if err != nil {
-		return s.classifyOperationError(ctx, operationCtx, err)
+		return s.classifyOperationError(ctx, setupCtx, err)
 	}
+	operationCtx := setupCtx
 	defer func() {
-		cleanupCtx, cleanupCancel := context.WithTimeout(context.WithoutCancel(ctx), timeout)
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.WithoutCancel(ctx), s.store.operationTimeout)
 		defer cleanupCancel()
 		rollbackErr := tx.Rollback(cleanupCtx)
 		if rollbackErr != nil && !errors.Is(rollbackErr, pgx.ErrTxClosed) && err == nil {
@@ -41,14 +42,16 @@ func (s *Session) withOperation(
 		}
 	}()
 
-	timeoutValue := postgres.RuntimeParamMilliseconds(timeout)
+	timeoutValue := postgres.RuntimeParamMilliseconds(operationTimerTimeout(s.store.operationTimeout, s.store.statementTimeout))
 	if _, err := tx.Exec(
-		operationCtx,
+		setupCtx,
 		"SELECT set_config('statement_timeout', $1, true), set_config('lock_timeout', $1, true)",
 		timeoutValue,
 	); err != nil {
-		return s.classifyOperationError(ctx, operationCtx, err)
+		return s.classifyOperationError(ctx, setupCtx, err)
 	}
+	operationCtx, cancel := context.WithTimeout(ctx, s.store.operationTimeout)
+	defer cancel()
 	if err := operation(operationCtx, s.queries.WithTx(tx)); err != nil {
 		return s.classifyOperationError(ctx, operationCtx, err)
 	}
@@ -56,6 +59,11 @@ func (s *Session) withOperation(
 		return s.classifyOperationError(ctx, operationCtx, err)
 	}
 	return nil
+}
+
+func operationTimerTimeout(operationTimeout, statementTimeout time.Duration) time.Duration {
+	timeout := min(operationTimeout, statementTimeout)
+	return timeout - min(timeout/10, 10*time.Millisecond)
 }
 
 func (s *Session) classifyOperationError(parentCtx, operationCtx context.Context, err error) error {

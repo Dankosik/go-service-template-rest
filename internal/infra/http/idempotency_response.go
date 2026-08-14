@@ -59,10 +59,12 @@ func writeIdempotencyRetryProblem(w http.ResponseWriter, r *http.Request, retryA
 func writeIdempotencyReplay(w http.ResponseWriter, contract httpidempotency.Contract, result httpidempotency.Result) error {
 	encoded, err := httpidempotency.EncodeResult(contract, result)
 	if err != nil {
+		//nolint:wrapcheck // The envelope deliberately maps either codec failure to one closed Problem.
 		return err
 	}
 	result, err = httpidempotency.DecodeResult(contract, encoded)
 	if err != nil {
+		//nolint:wrapcheck // The envelope deliberately maps either codec failure to one closed Problem.
 		return err
 	}
 	for header, values := range result.Headers {

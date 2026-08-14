@@ -22,6 +22,7 @@ import (
 	"github.com/example/go-service-template-rest/internal/infra/grpcclient"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry/telemetrytest"
 	"github.com/example/go-service-template-rest/internal/reqctx"
+	"github.com/example/go-service-template-rest/internal/waittest"
 	"go.opentelemetry.io/otel/propagation"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
@@ -261,14 +262,7 @@ func startTransparentRetryPeer(t *testing.T) *transparentRetryPeer {
 
 func (p *transparentRetryPeer) awaitAttempts(t *testing.T) []metadata.MD {
 	t.Helper()
-
-	select {
-	case attempts := <-p.attempts:
-		return attempts
-	case <-time.After(2 * time.Second):
-		t.Fatal("transparent retry peer did not report two attempts")
-		return nil
-	}
+	return waittest.Receive(t, p.attempts, 2*time.Second, "transparent retry peer to report two attempts")
 }
 
 func serveTransparentRetryConnection(

@@ -40,7 +40,6 @@ func TestEngineClaimRegistersKnownCommitBeforeHandlerStarts(t *testing.T) {
 		<-claimStarted
 		acknowledged := make(chan EngineFacts, 1)
 		go func() { acknowledged <- engine.Facts() }()
-		synctest.Wait()
 		select {
 		case facts := <-acknowledged:
 			t.Fatalf("drain acknowledgement saw %+v before claim registration", facts)

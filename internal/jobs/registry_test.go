@@ -3,7 +3,7 @@ package jobs
 import (
 	"context"
 	"errors"
-	"reflect"
+	"slices"
 	"testing"
 	"time"
 )
@@ -14,7 +14,7 @@ func TestJobsRegistry(t *testing.T) {
 	v2Input.Policy.MaxAttemptDuration = 90 * time.Second
 	v2, err := NewDefinition(v2Input)
 	requireError(t, err)
-	registry := NewRegistry()
+	registry := new(Registry)
 	called := 0
 	handler := func(_ context.Context, input HandlerInput[testArgs]) HandlerResult {
 		called++
@@ -37,11 +37,11 @@ func TestJobsRegistry(t *testing.T) {
 	}
 
 	wantKeys := []Revision{v1.Key(), v2.Key()}
-	if got := registry.Keys(); !reflect.DeepEqual(got, wantKeys) {
+	if got := registry.Keys(); !slices.Equal(got, wantKeys) {
 		t.Fatalf("Keys() = %+v, want %+v", got, wantKeys)
 	}
 	for _, omitted := range wantKeys {
-		partial := NewRegistry()
+		partial := new(Registry)
 		for _, definition := range []Definition[testArgs]{v1, v2} {
 			if definition.Key() != omitted {
 				requireError(t, Register(partial, definition, handler))

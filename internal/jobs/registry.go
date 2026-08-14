@@ -74,8 +74,6 @@ type Registry struct {
 	entries map[Revision]Registered
 }
 
-func NewRegistry() *Registry { return &Registry{} }
-
 func Register[A any](registry *Registry, definition Definition[A], handler Handler[A]) error {
 	if registry == nil {
 		return fmt.Errorf("%w: registry is nil", ErrInvalidDefinition)
@@ -152,11 +150,9 @@ func (r *Registry) Require(keys []Revision) error {
 }
 
 func compareRevision(a, b Revision) int {
-	if a.Kind != b.Kind {
-		return cmp.Compare(a.Kind, b.Kind)
-	}
-	if a.ArgsVersion != b.ArgsVersion {
-		return cmp.Compare(a.ArgsVersion, b.ArgsVersion)
-	}
-	return cmp.Compare(a.PolicyVersion, b.PolicyVersion)
+	return cmp.Or(
+		cmp.Compare(a.Kind, b.Kind),
+		cmp.Compare(a.ArgsVersion, b.ArgsVersion),
+		cmp.Compare(a.PolicyVersion, b.PolicyVersion),
+	)
 }

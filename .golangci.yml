@@ -406,6 +406,16 @@ linters:
             # it creates and drops the per-test database, which is driver work.
             - "!**/internal/infra/postgres/pgtest/*.go"
             - "!**/internal/infra/postgresmigrate/*.go"
+            # profile:jobs-postgres:start
+            # The durable-jobs Store is a PostgreSQL runtime adapter. It owns
+            # the pgx session and transaction boundary for its generated queries.
+            - "!**/internal/infra/postgresjobs/*.go"
+            # profile:jobs-postgres:end
+            # profile:webhooks-durable:start
+            # The durable webhook store owns its pgx transactions around the
+            # generated query contract.
+            - "!**/internal/infra/postgreswebhook/*.go"
+            # profile:webhooks-durable:end
           deny:
             - pkg: database/sql
               desc: database driver access belongs in PostgreSQL runtime or migration adapters.
@@ -427,9 +437,29 @@ linters:
             - "!**/internal/infra/postgresinbox/*.go"
             # profile:inbox-postgres:end
             - "!**/internal/infra/postgresidempotency/store*.go"
+            # profile:jobs-postgres:start
+            # The durable-jobs Store is the hand-written adapter around its
+            # generated SQLC contract and is removed with JOBS=none.
+            - "!**/internal/infra/postgresjobs/*.go"
+            # profile:jobs-postgres:end
+            # profile:webhooks-durable:start
+            - "!**/internal/infra/postgreswebhook/*.go"
+            # profile:webhooks-durable:end
           deny:
             - pkg: github.com/example/go-service-template-rest/internal/infra/postgres/sqlcgen
               desc: generated sqlc types stay behind the hand-written internal/infra/postgres adapter.
+        # profile:webhooks-durable:start
+        outboundtrust_is_pure_policy:
+          list-mode: lax
+          files:
+            - "**/internal/outboundtrust/*.go"
+            - "!**/internal/outboundtrust/*_test.go"
+          deny:
+            - pkg: github.com/example/go-service-template-rest/internal
+              desc: outboundtrust is a standard-library-only policy leaf shared by fixed and dynamic outbound HTTP transports.
+            - pkg: github.com/example/go-service-template-rest/cmd
+              desc: outboundtrust must not depend on composition roots.
+        # profile:webhooks-durable:end
         approved_router_boundary:
           list-mode: lax
           files:

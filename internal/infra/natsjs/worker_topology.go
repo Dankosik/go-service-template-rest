@@ -129,6 +129,12 @@ func (c *Client) admitSourceStream(probeCtx context.Context, cfg WorkerConfig) e
 // rejected: every dead-lettered message would be a delivery back to this worker.
 func (c *Client) admitDeadLetterStream(probeCtx context.Context, cfg WorkerConfig) (string, error) {
 	name, err := c.js.StreamNameBySubject(probeCtx, cfg.DeadLetterSubject)
+	if err != nil && probeCtx.Err() == nil {
+		// A newly connected JetStream client can receive one unavailable response
+		// while the server finishes attaching its API subscription.
+		time.Sleep(100 * time.Millisecond)
+		name, err = c.js.StreamNameBySubject(probeCtx, cfg.DeadLetterSubject)
+	}
 	if err != nil {
 		return "", fmt.Errorf("%w: dead-letter stream is unavailable", ErrRejected)
 	}

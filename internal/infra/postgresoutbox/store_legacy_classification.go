@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/infra/postgres/sqlcgen"
+	"github.com/jackc/pgx/v5"
 )
 
 // ClassifyLegacyUncertainty converts one bounded batch of pre-upgrade NULL
@@ -27,9 +28,17 @@ func (s *Store) ClassifyLegacyUncertainty(ctx context.Context, maxAttempts, batc
 	if maxAttempts < 1 || maxAttempts > math.MaxInt32 || batchSize < 1 || batchSize > math.MaxInt32 {
 		return 0, fmt.Errorf("%w: max attempts and classification batch size must be positive", ErrConfig)
 	}
-	count, err := s.queries.ClassifyLegacyOutboxUncertainty(ctx, sqlcgen.ClassifyLegacyOutboxUncertaintyParams{
-		MaxAttempts: int32(maxAttempts), // #nosec G115 -- range checked above.
-		BatchSize:   int32(batchSize),   // #nosec G115 -- range checked above.
+	var count int32
+	err = s.pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+		var classifyErr error
+		count, classifyErr = sqlcgen.New(tx).ClassifyLegacyOutboxUncertainty(ctx, sqlcgen.ClassifyLegacyOutboxUncertaintyParams{
+			MaxAttempts: int32(maxAttempts), // #nosec G115 -- range checked above.
+			BatchSize:   int32(batchSize),   // #nosec G115 -- range checked above.
+		})
+		if classifyErr != nil {
+			return fmt.Errorf("classify legacy outbox uncertainty statement: %w", classifyErr)
+		}
+		return nil
 	})
 	if err != nil {
 		return 0, fmt.Errorf("classify legacy outbox uncertainty: %w", err)

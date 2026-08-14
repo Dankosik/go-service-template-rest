@@ -199,10 +199,9 @@ func securedHandlerWithLog(
 }
 
 // securedHandlerWithTerminal runs securedSpec through the same requestValidator
-// openAPIRequestValidator installs, so the mapping under test cannot drift from
-// the one the router serves. The terminal handler is a parameter because the
-// identity seam can only be proved by a handler that inspects the request it was
-// given.
+// the router uses, so the mapping under test cannot drift from the served one.
+// The terminal handler is a parameter because the identity seam can only be
+// proved by a handler that inspects the request it was given.
 func securedHandlerWithTerminal(
 	tb testing.TB,
 	authenticate openapi3filter.AuthenticationFunc,

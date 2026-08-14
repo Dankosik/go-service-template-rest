@@ -17,11 +17,13 @@ import (
 	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	"github.com/example/go-service-template-rest/internal/infra/postgresidempotency"
 	"github.com/example/go-service-template-rest/internal/infra/postgresoutbox"
+	"github.com/example/go-service-template-rest/internal/infra/telemetry/telemetrytest"
 	"github.com/example/go-service-template-rest/internal/waittest"
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
+	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 )
 
 func TestPostgresHTTPIdempotencyRecordedFingerprintVersion(t *testing.T) {
@@ -679,7 +681,7 @@ func TestPostgresHTTPIdempotencyCommitReconciliation(t *testing.T) {
 
 	readOnlyDSN := httpIDDSNParam(t, httpIDDSN(t, fixture.dsn, "idempotency-read-only"), "default_transaction_read_only", "on")
 	readOnlyPool := newHTTPIDPool(t, fixture.ctx, readOnlyDSN, 1)
-	readOnlyStore, err := postgresidempotency.NewStore(readOnlyPool, httpIDRecoveryDelay)
+	readOnlyStore, err := postgresidempotency.NewStore(readOnlyPool, httpIDStoreOptions())
 	if err != nil {
 		t.Fatalf("new read-only Store: %v", err)
 	}
@@ -729,12 +731,326 @@ func TestPostgresHTTPIdempotencyCommitEpoch(t *testing.T) {
 	fixture.pool.Close()
 	fixture.dsn = httpIDDSN(t, setRestartableCommitTimestamps(t, fixture.ctx, container, fixture.dsn, "off"), "idempotency-commit-epoch")
 	fixture.pool = newHTTPIDPool(t, fixture.ctx, fixture.dsn, 4)
-	fixture.store, err = postgresidempotency.NewStore(fixture.pool, httpIDRecoveryDelay)
+	fixture.store, err = postgresidempotency.NewStore(fixture.pool, httpIDStoreOptions())
 	if err != nil {
 		t.Fatalf("new Store after epoch loss restart: %v", err)
 	}
 	if _, err := fixture.store.MaterializeEpoch(fixture.ctx, lost); !errors.Is(err, postgresidempotency.ErrEpochLost) {
 		t.Fatalf("lost epoch materialization error = %v, want epoch lost", err)
+	}
+}
+
+func TestPostgresHTTPIdempotencyRetentionAndCleanupRaces(t *testing.T) {
+	fixture := newHTTPIDFixture(t, "idempotency-retention", 4)
+	subMicrosecondContract := fixture.contract
+	subMicrosecondContract.ReplayTTL = time.Nanosecond
+	subMicrosecondContract.DuplicateRisk = httpidempotency.DuplicateRiskPolicy{Duration: time.Nanosecond}
+	subMicrosecond := seedHTTPIDCompleted(t, fixture, subMicrosecondContract, "retention-sub-microsecond")
+	if _, err := fixture.store.MaterializeEpoch(fixture.ctx, subMicrosecond); err != nil {
+		t.Fatalf("materialize sub-microsecond epoch: %v", err)
+	}
+	assertHTTPIDCeilingHorizon(t, fixture, subMicrosecond)
+
+	active := seedHTTPIDCompleted(t, fixture, fixture.contract, "retention-active")
+	if _, err := fixture.store.MaterializeEpoch(fixture.ctx, active); err != nil {
+		t.Fatalf("materialize active epoch: %v", err)
+	}
+	unknown := seedHTTPIDCompleted(t, fixture, fixture.contract, "retention-unknown")
+	expired := seedHTTPIDCompleted(t, fixture, fixture.contract, "retention-expired")
+	guard := seedHTTPIDCompleted(t, fixture, fixture.contract, "retention-guard")
+	permanentContract := fixture.contract
+	permanentContract.DuplicateRisk = httpidempotency.DuplicateRiskPolicy{Permanent: true}
+	permanent := seedHTTPIDCompleted(t, fixture, permanentContract, "retention-permanent")
+	setHTTPIDCommittedAgo(t, fixture, expired, 3*time.Hour)
+	setHTTPIDCommittedAgo(t, fixture, guard, 90*time.Minute)
+	setHTTPIDCommittedAgo(t, fixture, permanent, 3*time.Hour)
+
+	options := httpIDStoreOptions()
+	options.CleanupBatchSize = 1
+	bounded, err := postgresidempotency.NewStore(fixture.pool, options)
+	if err != nil {
+		t.Fatalf("new bounded maintenance Store: %v", err)
+	}
+	before := httpIDMaintenanceBacklog(t, fixture)
+	if before < 5 {
+		t.Fatalf("maintenance backlog = %d, want materialize/expiry/guard work", before)
+	}
+	for before > 0 {
+		if err := bounded.Maintain(fixture.ctx); err != nil {
+			t.Fatalf("bounded Maintain(): %v", err)
+		}
+		after := httpIDMaintenanceBacklog(t, fixture)
+		if after != before-1 {
+			t.Fatalf("one-item maintenance changed backlog %d -> %d", before, after)
+		}
+		before = after
+	}
+	assertHTTPIDStoredState(t, fixture, active, true, true)
+	assertHTTPIDStoredState(t, fixture, unknown, true, true)
+	assertHTTPIDStoredState(t, fixture, permanent, true, false)
+	assertHTTPIDStoredState(t, fixture, guard, true, false)
+	assertHTTPIDStoredState(t, fixture, expired, false, false)
+
+	locked := seedHTTPIDCompleted(t, fixture, fixture.contract, "retention-request-first")
+	setHTTPIDCommittedAgo(t, fixture, locked, 3*time.Hour)
+	lockTx, err := fixture.pool.PGX().Begin(fixture.ctx)
+	if err != nil {
+		t.Fatalf("begin request-first row lock: %v", err)
+	}
+	if _, err := lockTx.Exec(fixture.ctx, `
+		SELECT 1 FROM postgres_http_idempotency
+		WHERE identity_token = $1
+		FOR UPDATE`, locked.Identity[:]); err != nil {
+		t.Fatalf("lock request-first row: %v", err)
+	}
+	maintained := make(chan error, 1)
+	go func() { maintained <- bounded.Maintain(fixture.ctx) }()
+	select {
+	case err := <-maintained:
+		if err != nil {
+			t.Fatalf("maintenance while request held row: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("maintenance did not skip the request-locked row")
+	}
+	assertHTTPIDStoredState(t, fixture, locked, true, true)
+	if err := lockTx.Rollback(fixture.ctx); err != nil {
+		t.Fatalf("release request-first row lock: %v", err)
+	}
+	if err := bounded.Maintain(fixture.ctx); err != nil {
+		t.Fatalf("expire unlocked request-first row: %v", err)
+	}
+	if err := bounded.Maintain(fixture.ctx); err != nil {
+		t.Fatalf("delete unlocked request-first row: %v", err)
+	}
+	assertHTTPIDStoredState(t, fixture, locked, false, false)
+
+	cleanupFirst := seedHTTPIDCompleted(t, fixture, fixture.contract, "retention-cleanup-first")
+	setHTTPIDCommittedAgo(t, fixture, cleanupFirst, 3*time.Hour)
+	if err := bounded.Maintain(fixture.ctx); err != nil {
+		t.Fatalf("cleanup-first expiry: %v", err)
+	}
+	if err := bounded.Maintain(fixture.ctx); err != nil {
+		t.Fatalf("cleanup-first guard deletion: %v", err)
+	}
+	resolver := httpIDResolver(map[string]httpidempotency.Fingerprint{"v2": cleanupFirst.Fingerprint})
+	if _, decision, err := bounded.Reserve(fixture.ctx, fixture.contract, cleanupFirst, resolver); err != nil || decision.Outcome != httpidempotency.OutcomeExecute {
+		t.Fatalf("request after cleanup = (%v, %v), want execute", decision.Outcome, err)
+	}
+}
+
+func TestPostgresHTTPIdempotencyMaintenanceCapacity(t *testing.T) {
+	fixture := newHTTPIDFixture(t, "idempotency-maintenance-capacity", 4)
+	retained := seedHTTPIDCompleted(t, fixture, fixture.contract, "capacity-retained")
+	if _, err := fixture.store.MaterializeEpoch(fixture.ctx, retained); err != nil {
+		t.Fatalf("materialize retained row: %v", err)
+	}
+	var relationBytes int64
+	if err := fixture.pool.PGX().QueryRow(fixture.ctx, `
+		SELECT pg_total_relation_size('postgres_http_idempotency'::regclass)`).Scan(&relationBytes); err != nil {
+		t.Fatalf("read relation size: %v", err)
+	}
+	options := httpIDStoreOptions()
+	options.AdmissionHeadroomBytes = 1024
+	options.MaxRelationBytes = relationBytes + options.AdmissionHeadroomBytes
+	capacityStore, err := postgresidempotency.NewStore(fixture.pool, options)
+	if err != nil {
+		t.Fatalf("new capacity Store: %v", err)
+	}
+	if err := capacityStore.Maintain(fixture.ctx); err != nil {
+		t.Fatalf("capacity Maintain(): %v", err)
+	}
+	if err := capacityStore.Check(fixture.ctx); !errors.Is(err, postgresidempotency.ErrUnavailable) {
+		t.Fatalf("capacity readiness = %v, want unavailable", err)
+	}
+	retainedResolver := httpIDResolver(map[string]httpidempotency.Fingerprint{"v2": retained.Fingerprint})
+	if _, decision, err := capacityStore.Reserve(fixture.ctx, fixture.contract, retained, retainedResolver); err != nil || decision.Outcome != httpidempotency.OutcomeReplay {
+		t.Fatalf("retained read under capacity closure = (%v, %v), want replay", decision.Outcome, err)
+	}
+	first := httpIDAttemptWithKey(t, "v2", `{"name":"capacity-first"}`, "capacity-first")
+	firstResolver := httpIDResolver(map[string]httpidempotency.Fingerprint{"v2": first.Fingerprint})
+	if _, decision, err := capacityStore.Reserve(fixture.ctx, fixture.contract, first, firstResolver); err != nil || decision.Outcome != httpidempotency.OutcomeUnavailable {
+		t.Fatalf("new first execution under capacity closure = (%v, %v), want unavailable", decision.Outcome, err)
+	}
+	if rows := httpIDRows(t, fixture); rows != 1 {
+		t.Fatalf("capacity closure rows = %d, want retained row only", rows)
+	}
+
+	gate, err := fixture.pool.PGX().Begin(fixture.ctx)
+	if err != nil {
+		t.Fatalf("begin maintenance relation gate: %v", err)
+	}
+	if _, err := gate.Exec(fixture.ctx, "LOCK TABLE postgres_http_idempotency IN ACCESS EXCLUSIVE MODE"); err != nil {
+		t.Fatalf("lock maintenance relation: %v", err)
+	}
+	firstCycle := make(chan error, 1)
+	go func() { firstCycle <- fixture.store.Maintain(fixture.ctx) }()
+	waittest.Until(t, 5*time.Second, func() bool {
+		var blocked int
+		err := fixture.pool.PGX().QueryRow(fixture.ctx, `
+			SELECT count(*)
+			FROM pg_stat_activity
+			WHERE datname = current_database()
+			  AND application_name = 'idempotency-maintenance-capacity'
+			  AND wait_event_type = 'Lock'
+			  AND query LIKE '%WITH candidates AS%'`).Scan(&blocked)
+		return err == nil && blocked == 1
+	}, "one maintenance cycle to block on the relation")
+	if err := fixture.store.Maintain(fixture.ctx); !errors.Is(err, postgresidempotency.ErrUnavailable) {
+		t.Fatalf("overlapping Maintain() error = %v, want unavailable", err)
+	}
+	if err := gate.Rollback(fixture.ctx); err != nil {
+		t.Fatalf("release maintenance relation gate: %v", err)
+	}
+	if err := <-firstCycle; err != nil {
+		t.Fatalf("first maintenance cycle after gate release: %v", err)
+	}
+}
+
+func TestPostgresHTTPIdempotencyTelemetry(t *testing.T) {
+	reader := telemetrytest.InstallManualReader(t)
+	fixture := newHTTPIDFixture(t, "idempotency-telemetry", 4)
+	attempt := httpIDAttemptWithKey(t, "v2", `{"name":"telemetry"}`, "key-telemetry")
+	resolver := httpIDResolver(map[string]httpidempotency.Fingerprint{"v2": attempt.Fingerprint})
+	reservation := mustHTTPIDReserve(t, fixture, attempt, resolver)
+	mustHTTPIDComplete(t, fixture, reservation, resolver, httpIDResult(`{"id":"telemetry"}`))
+	if _, err := fixture.store.MaterializeEpoch(fixture.ctx, attempt); err != nil {
+		t.Fatalf("MaterializeEpoch(): %v", err)
+	}
+	fixture.store.ObserveTerminal(fixture.ctx, httpidempotency.Decision{Outcome: httpidempotency.OutcomeExecute}, nil)
+	if _, decision, err := fixture.store.Reserve(fixture.ctx, fixture.contract, attempt, resolver); err != nil || decision.Outcome != httpidempotency.OutcomeReplay {
+		t.Fatalf("telemetry replay = (%v, %v), want replay", decision.Outcome, err)
+	} else {
+		fixture.store.ObserveTerminal(fixture.ctx, decision, nil)
+	}
+	if err := fixture.store.Maintain(fixture.ctx); err != nil {
+		t.Fatalf("telemetry Maintain(): %v", err)
+	}
+
+	var wantRows, wantResultBytes, wantRelationBytes int64
+	if err := fixture.pool.PGX().QueryRow(fixture.ctx, `
+		SELECT count(*), coalesce(sum(octet_length(result)), 0),
+		       pg_total_relation_size('postgres_http_idempotency'::regclass)
+		FROM postgres_http_idempotency`).Scan(&wantRows, &wantResultBytes, &wantRelationBytes); err != nil {
+		t.Fatalf("read telemetry SQL oracle: %v", err)
+	}
+	wantGauge := map[string]int64{
+		"http.idempotency.rows":           wantRows,
+		"http.idempotency.relation.bytes": wantRelationBytes,
+		"http.idempotency.result.bytes":   wantResultBytes,
+	}
+	found := make(map[string]bool, len(wantGauge))
+	terminalCount := int64(0)
+	telemetrytest.ForEachMetric(t, reader, func(measured metricdata.Metrics) {
+		if want, ok := wantGauge[measured.Name]; ok {
+			got := telemetrytest.SinglePoint(t, measured.Name, telemetrytest.Int64Gauge(t, measured).DataPoints)
+			if got != want {
+				t.Fatalf("%s = %d, want SQL value %d", measured.Name, got, want)
+			}
+			found[measured.Name] = true
+		}
+		if measured.Name == "http.idempotency.requests" {
+			for _, point := range telemetrytest.Int64Sum(t, measured).DataPoints {
+				terminalCount += point.Value
+			}
+		}
+	})
+	for name := range wantGauge {
+		if !found[name] {
+			t.Errorf("metric %s was not collected", name)
+		}
+	}
+	if terminalCount != 2 {
+		t.Fatalf("terminal request outcomes = %d, want one for execute and one for replay", terminalCount)
+	}
+	telemetrytest.AssertNoAttributeContains(t, reader, "key-telemetry", "telemetry")
+}
+
+func seedHTTPIDCompleted(
+	t *testing.T,
+	fixture httpIDFixture,
+	contract httpidempotency.Contract,
+	key string,
+) httpidempotency.Attempt {
+	t.Helper()
+	seed := fixture
+	seed.contract = contract
+	attempt := httpIDAttemptWithKey(t, "v2", `{"name":"`+key+`"}`, key)
+	resolver := httpIDResolver(map[string]httpidempotency.Fingerprint{"v2": attempt.Fingerprint})
+	reservation := mustHTTPIDReserve(t, seed, attempt, resolver)
+	mustHTTPIDComplete(t, seed, reservation, resolver, httpIDResult(`{"id":"`+key+`"}`))
+	return attempt
+}
+
+func setHTTPIDCommittedAgo(t *testing.T, fixture httpIDFixture, attempt httpidempotency.Attempt, ago time.Duration) {
+	t.Helper()
+	if _, err := fixture.pool.PGX().Exec(fixture.ctx, `
+		UPDATE postgres_http_idempotency
+		SET committed_at = clock_timestamp() - $2::bigint * interval '1 microsecond'
+		WHERE identity_token = $1`, attempt.Identity[:], ago.Microseconds()); err != nil {
+		t.Fatalf("set writer-clock commit horizon: %v", err)
+	}
+}
+
+func httpIDMaintenanceBacklog(t *testing.T, fixture httpIDFixture) int {
+	t.Helper()
+	var backlog int
+	if err := fixture.pool.PGX().QueryRow(fixture.ctx, `
+		SELECT
+			count(*) FILTER (WHERE phase = 'completed' AND committed_at IS NULL)
+			+ count(*) FILTER (
+				WHERE phase = 'completed'
+				  AND committed_at IS NOT NULL
+				  AND octet_length(result) > 0
+			  AND committed_at + ((replay_nanos - 1) / 1000 + 1) * interval '1 microsecond' <= clock_timestamp()
+			)
+			+ count(*) FILTER (
+				WHERE phase = 'completed'
+				  AND committed_at IS NOT NULL
+				  AND duplicate_risk_permanent = false
+			  AND committed_at + ((duplicate_risk_nanos - 1) / 1000 + 1) * interval '1 microsecond' <= clock_timestamp()
+			)
+		FROM postgres_http_idempotency`).Scan(&backlog); err != nil {
+		t.Fatalf("read maintenance backlog: %v", err)
+	}
+	return backlog
+}
+
+func assertHTTPIDCeilingHorizon(t *testing.T, fixture httpIDFixture, attempt httpidempotency.Attempt) {
+	t.Helper()
+	var committedAt, replayExpiry, guardExpiry time.Time
+	if err := fixture.pool.PGX().QueryRow(fixture.ctx, `
+		SELECT
+			committed_at,
+			committed_at + ((replay_nanos - 1) / 1000 + 1) * interval '1 microsecond',
+			committed_at + ((duplicate_risk_nanos - 1) / 1000 + 1) * interval '1 microsecond'
+		FROM postgres_http_idempotency
+		WHERE identity_token = $1`, attempt.Identity[:]).Scan(&committedAt, &replayExpiry, &guardExpiry); err != nil {
+		t.Fatalf("read ceiling-normalized horizons: %v", err)
+	}
+	want := committedAt.Add(time.Microsecond)
+	if !replayExpiry.Equal(want) || !guardExpiry.Equal(want) {
+		t.Fatalf("sub-microsecond horizons = (%s, %s), want both %s", replayExpiry, guardExpiry, want)
+	}
+}
+
+func assertHTTPIDStoredState(
+	t *testing.T,
+	fixture httpIDFixture,
+	attempt httpidempotency.Attempt,
+	wantExists, wantResult bool,
+) {
+	t.Helper()
+	var rows int
+	var hasResult bool
+	if err := fixture.pool.PGX().QueryRow(fixture.ctx, `
+		SELECT count(*), coalesce(bool_or(octet_length(result) > 0), false)
+		FROM postgres_http_idempotency
+		WHERE identity_token = $1`, attempt.Identity[:]).Scan(&rows, &hasResult); err != nil {
+		t.Fatalf("read retained state: %v", err)
+	}
+	if (rows == 1) != wantExists || hasResult != wantResult {
+		t.Fatalf("stored state = (exists %t, result %t), want (%t, %t)", rows == 1, hasResult, wantExists, wantResult)
 	}
 }
 
@@ -746,7 +1062,7 @@ func TestPostgresHTTPIdempotencyWriterAuthority(t *testing.T) {
 		"default_transaction_read_only",
 		"on",
 	), 1)
-	readOnlyStore, err := postgresidempotency.NewStore(readOnlyPool, httpIDRecoveryDelay)
+	readOnlyStore, err := postgresidempotency.NewStore(readOnlyPool, httpIDStoreOptions())
 	if err != nil {
 		t.Fatalf("new read-only Store: %v", err)
 	}
@@ -774,9 +1090,12 @@ func TestPostgresHTTPIdempotencyHelperProcess(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
 	defer cancel()
 	pool := newHTTPIDPool(t, ctx, os.Getenv("HTTP_IDEMPOTENCY_DSN"), 2)
-	store, err := postgresidempotency.NewStore(pool, httpIDRecoveryDelay)
+	store, err := postgresidempotency.NewStore(pool, httpIDStoreOptions())
 	if err != nil {
 		t.Fatalf("postgresidempotency.NewStore(): %v", err)
+	}
+	if err := store.Maintain(ctx); err != nil {
+		t.Fatalf("initial idempotency maintenance: %v", err)
 	}
 	contract := httpIDContract()
 	attempt := httpIDAttemptWithKey(t, "v2", `{"name":"helper"}`, "key-helper")
@@ -834,9 +1153,12 @@ func runHTTPIDOwnerHelper(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
 	defer cancel()
 	pool := newHTTPIDPool(t, ctx, os.Getenv("HTTP_IDEMPOTENCY_DSN"), 2)
-	store, err := postgresidempotency.NewStore(pool, httpIDRecoveryDelay)
+	store, err := postgresidempotency.NewStore(pool, httpIDStoreOptions())
 	if err != nil {
 		t.Fatalf("postgresidempotency.NewStore(): %v", err)
+	}
+	if err := store.Maintain(ctx); err != nil {
+		t.Fatalf("initial idempotency maintenance: %v", err)
 	}
 	contract := httpIDContract()
 	attempt := httpIDAttemptWithKey(t, "v2", `{"name":"owner"}`, "key-owner")

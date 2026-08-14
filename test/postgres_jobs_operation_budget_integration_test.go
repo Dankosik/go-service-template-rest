@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"testing"
 	"time"
 
@@ -19,7 +20,27 @@ import (
 
 const postgresJobsOperationBudget = 150 * time.Millisecond
 
+func testPostgresJobsOperationTimerHeadroom(t *testing.T) {
+	ctx, pool, store := newPostgresJobsOperationBudgetFixture(t)
+	prepared := stageDuePostgresJob(ctx, t, pool, store, "operation-timer-headroom")
+	probePool, probeStore := newPostgresJobsStatementStore(ctx, t, pool)
+	defer probePool.Close()
+	installPostgresJobsTimerProbe(ctx, t, pool)
+
+	session := acquirePostgresJobsSession(ctx, t, probeStore)
+	defer session.Release(ctx)
+	_, err := session.Claim(ctx, postgresjobs.ClaimOptions{
+		RegistryKeys: []jobs.Revision{prepared.Revision()}, WorkerID: "worker-operation-timer-headroom", Limit: 1, LeaseDuration: time.Minute,
+	})
+	postgresErr, ok := errors.AsType[*pgconn.PgError](err)
+	if !ok || postgresErr.Message != "statement_timeout=140ms lock_timeout=140ms" {
+		t.Fatalf("operation timer probe error = %v, want server timers with 10ms headroom", err)
+	}
+}
+
 func TestPostgresJobsOperationBudget(t *testing.T) {
+	t.Run("server timer headroom", testPostgresJobsOperationTimerHeadroom)
+
 	for _, testCase := range postgresJobsOperationBudgetCases() {
 		t.Run(testCase.name+" client cancellation", func(t *testing.T) {
 			ctx, pool, store := newPostgresJobsOperationBudgetFixture(t)
@@ -29,10 +50,7 @@ func TestPostgresJobsOperationBudget(t *testing.T) {
 			before := postgresJobsOperationState(ctx, t, pool, logicalJobID)
 
 			locker, lockTx := lockPostgresJobsTable(ctx, t, pool)
-			defer locker.Release()
-			defer func() { _ = lockTx.Rollback(context.Background()) }()
 			operationCtx, cancel := context.WithCancel(ctx)
-			defer cancel()
 			done := make(chan error, 1)
 			go func() { done <- operation(operationCtx, session) }()
 			waitForPostgresJobsBlocker(ctx, t, pool, session.BackendPID(), locker.Conn().PgConn().PID())
@@ -40,6 +58,7 @@ func TestPostgresJobsOperationBudget(t *testing.T) {
 			if err := <-done; !errors.Is(err, context.Canceled) {
 				t.Fatalf("%s cancellation error = %v, want context.Canceled", testCase.name, err)
 			}
+			unlockPostgresJobsTable(t, locker, lockTx)
 			assertPostgresJobsOperationCleanup(ctx, t, pool, session, logicalJobID, before)
 		})
 
@@ -51,12 +70,11 @@ func TestPostgresJobsOperationBudget(t *testing.T) {
 			before := postgresJobsOperationState(ctx, t, pool, logicalJobID)
 
 			locker, lockTx := lockPostgresJobsTable(ctx, t, pool)
-			defer locker.Release()
-			defer func() { _ = lockTx.Rollback(context.Background()) }()
 			done := make(chan error, 1)
 			go func() { done <- operation(ctx, session) }()
 			waitForPostgresJobsBlocker(ctx, t, pool, session.BackendPID(), locker.Conn().PgConn().PID())
-			assertPostgresJobsTimeout(t, <-done, "55P03")
+			assertPostgresJobsTimeout(t, <-done, "55P03", "57014")
+			unlockPostgresJobsTable(t, locker, lockTx)
 			assertPostgresJobsOperationCleanup(ctx, t, pool, session, logicalJobID, before)
 		})
 
@@ -275,6 +293,14 @@ func lockPostgresJobsTable(ctx context.Context, t *testing.T, pool *postgres.Poo
 	return locker, tx
 }
 
+func unlockPostgresJobsTable(t *testing.T, locker *pgxpool.Conn, tx pgx.Tx) {
+	t.Helper()
+	if err := tx.Rollback(context.Background()); err != nil {
+		t.Fatalf("release operation blocker: %v", err)
+	}
+	locker.Release()
+}
+
 func installPostgresJobsStatementBlocker(ctx context.Context, t *testing.T, pool *postgres.Pool) {
 	t.Helper()
 	if _, err := pool.PGX().Exec(ctx, `
@@ -325,14 +351,39 @@ DROP FUNCTION IF EXISTS test_postgres_jobs_statement_blocker();`)
 	})
 }
 
-func assertPostgresJobsTimeout(t *testing.T, err error, code string) {
+func installPostgresJobsTimerProbe(ctx context.Context, t *testing.T, pool *postgres.Pool) {
+	t.Helper()
+	if _, err := pool.PGX().Exec(ctx, `
+CREATE FUNCTION test_postgres_jobs_timer_probe() RETURNS boolean
+LANGUAGE plpgsql AS $$
+BEGIN
+    RAISE EXCEPTION 'statement_timeout=% lock_timeout=%', current_setting('statement_timeout'), current_setting('lock_timeout');
+END;
+$$;
+ALTER TABLE postgres_job_claim_scopes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE postgres_job_claim_scopes FORCE ROW LEVEL SECURITY;
+CREATE POLICY test_postgres_jobs_timer_probe ON postgres_job_claim_scopes
+    USING (test_postgres_jobs_timer_probe())
+    WITH CHECK (test_postgres_jobs_timer_probe());`); err != nil {
+		t.Fatalf("install operation timer probe: %v", err)
+	}
+	t.Cleanup(func() {
+		_, _ = pool.PGX().Exec(context.Background(), `
+DROP POLICY IF EXISTS test_postgres_jobs_timer_probe ON postgres_job_claim_scopes;
+ALTER TABLE postgres_job_claim_scopes NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE postgres_job_claim_scopes DISABLE ROW LEVEL SECURITY;
+DROP FUNCTION IF EXISTS test_postgres_jobs_timer_probe();`)
+	})
+}
+
+func assertPostgresJobsTimeout(t *testing.T, err error, codes ...string) {
 	t.Helper()
 	if !errors.Is(err, postgresjobs.ErrOperationTimeout) {
 		t.Fatalf("operation error = %v, want ErrOperationTimeout", err)
 	}
-	var postgresErr *pgconn.PgError
-	if !errors.As(err, &postgresErr) || postgresErr.Code != code {
-		t.Fatalf("operation PostgreSQL error = %v, want SQLSTATE %s", err, code)
+	postgresErr, ok := errors.AsType[*pgconn.PgError](err)
+	if !ok || !slices.Contains(codes, postgresErr.Code) {
+		t.Fatalf("operation PostgreSQL error = %v, want SQLSTATE in %v", err, codes)
 	}
 }
 

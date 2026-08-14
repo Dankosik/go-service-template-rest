@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/infra/postgresoutbox"
+	"github.com/example/go-service-template-rest/internal/waittest"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	"go.opentelemetry.io/otel/propagation"
@@ -183,12 +184,7 @@ func (broker *barrierJetStream) wait(t *testing.T) []string {
 	t.Helper()
 	arrived := make([]string, 0, cap(broker.arrived))
 	for range cap(broker.arrived) {
-		select {
-		case id := <-broker.arrived:
-			arrived = append(arrived, id)
-		case <-time.After(time.Second):
-			t.Fatal("concurrent publish did not reach broker barrier")
-		}
+		arrived = append(arrived, waittest.Receive(t, broker.arrived, time.Second, "concurrent publish to reach broker barrier"))
 	}
 	return arrived
 }

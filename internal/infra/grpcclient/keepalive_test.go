@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/infra/grpcclient"
+	"github.com/example/go-service-template-rest/internal/waittest"
 	"golang.org/x/net/http2"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -126,12 +127,7 @@ func startIdlePingPeer(t *testing.T) idlePingPeer {
 
 func waitForIdleHandshake(t *testing.T, label string, handshake <-chan struct{}) {
 	t.Helper()
-
-	select {
-	case <-handshake:
-	case <-time.After(5 * time.Second):
-		t.Fatalf("%s idle peer did not complete the HTTP/2 handshake", label)
-	}
+	waittest.ReceiveSignal(t, handshake, 5*time.Second, label+" idle peer HTTP/2 handshake")
 }
 
 func exchangeIdleFrames(

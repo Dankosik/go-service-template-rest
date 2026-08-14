@@ -274,12 +274,16 @@ requires at least one additional pool connection and production headroom is not
 claimed without adopter workload evidence.
 
 Every reserved-session operation runs in a transaction with a child context
-bounded by explicit `StoreOperationTimeout`. The transaction sets local
-`statement_timeout` and `lock_timeout` to the smaller of that value and the
-existing runtime PostgreSQL statement timeout, so client cancellation and the
-server independently bound query and lock lifetime without changing unrelated
-pool traffic. Read-only observation uses the same transaction wrapper. Config
-admission requires `StoreOperationTimeout > 0` and
+bounded by explicit `StoreOperationTimeout`. The transaction gives local
+`statement_timeout` and `lock_timeout` a deterministic server-outcome margin:
+they use the smaller effective Store/PostgreSQL budget less than 10% (capped at
+10 ms), while the child context retains the full Store budget. Jobs admission
+rejects a Store operation budget below 100 ms, so PostgreSQL's millisecond
+parameter rounding cannot erase that ordering. Client cancellation still wins;
+otherwise PostgreSQL reports `55P03` or `57014` before the client deadline, and
+both remain inspectable beneath the typed operation timeout. This bounds server
+query and lock lifetime without changing unrelated pool traffic. Read-only
+observation uses the same transaction wrapper. Config admission requires
 `LeaseDuration >= 6 * StoreOperationTimeout`; enabling jobs rejects absence or
 overflow of that relationship.
 
@@ -391,11 +395,33 @@ claim admission. It waits for the sole coordinator to acknowledge that no claim
 transaction is open or can start and that every committed claim is registered
 in the handler join. Already committed attempts are in flight.
 The worker then spends the configured soft-drain bound, cancels remaining
-attempt contexts, records the drain outcome, and uses the existing process-wide
-grace deadline for diagnostics, telemetry, and dependency cleanup. If a handler
-ignores cancellation, bootstrap does not close resources underneath it; process
-exit owns cleanup at the hard platform bound and the lease later recovers as an
-ambiguous attempt.
+attempt contexts, and records the one drain outcome. A terminal control-Session
+fault has already closed admission and signalled every owned attempt before this
+drain begins; it is not retried, reconnected, or reclassified by shutdown.
+
+If that drain is unsafe because a handler did not join, the worker returns its
+terminal error immediately after the one drain result. It does not spend the
+remaining process grace on diagnostics, telemetry, pool, Session, or registry
+cleanup, and it does not run a second drain. Those resources remain owned by
+the exiting process, so OS process exit—not an in-process replacement or
+cleanup retry—ends them. This leaves the durable running attempt untouched for
+lease expiry and a distinct newly admitted process to rescue through the
+existing generation fence. Diagnostics shutdown is best-effort only after a
+safe drain; it cannot delay an unsafe terminal exit or change its nonzero
+classification.
+
+The rejected alternative is to continue joining diagnostics or dependencies
+after the unsafe drain. It consumes the same hard shutdown budget without
+making the live handler safe, can delay the fresh fenced recovery past the
+process carrier's recovery window, and creates a second lifecycle wait with no
+new authority. The selected boundary retains the existing engine-to-lifecycle
+terminal chain and `run`'s safe-versus-unsafe cleanup ownership. Test Design
+must extend TD-JOBS-017's real-process oracle to prove the unsafe path exits
+after one drain without a diagnostics/dependency join deadline, while retaining
+pre-expiry cancellation, nonzero exit, distinct-PID fresh admission, and
+fenced-only recovery. Reopen System Design if that immediate unsafe exit cannot
+leave restoration solely to a fresh process; reopen Go Ownership only if the
+existing engine/lifecycle/run ownership cannot express this boundary.
 
 ### 6. Operator controls
 

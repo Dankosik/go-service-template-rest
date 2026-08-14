@@ -11,7 +11,33 @@ import (
 	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	"github.com/example/go-service-template-rest/internal/infra/postgres/sqlcgen"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgconn/ctxwatch"
 )
+
+func TestStoreListenerConfig(t *testing.T) {
+	t.Parallel()
+
+	source, err := pgx.ParseConfig("postgres://app:secret@localhost:5432/app?sslmode=disable")
+	if err != nil {
+		t.Fatalf("pgx.ParseConfig(): %v", err)
+	}
+	source.RuntimeParams["statement_timeout"] = "7s"
+	source.BuildContextWatcherHandler = func(*pgconn.PgConn) ctxwatch.Handler {
+		return &pgconn.CancelRequestContextWatcherHandler{}
+	}
+
+	config := listenerConfig(source)
+	if config == source || config.ConnString() != source.ConnString() || config.RuntimeParams["statement_timeout"] != "7s" {
+		t.Fatalf("listener config = %#v, want copied connection policy", config)
+	}
+	if _, ok := config.BuildContextWatcherHandler(&pgconn.PgConn{}).(*pgconn.DeadlineContextWatcherHandler); !ok {
+		t.Fatalf("listener watcher = %T, want immediate deadline handler", config.BuildContextWatcherHandler(&pgconn.PgConn{}))
+	}
+	if _, ok := source.BuildContextWatcherHandler(&pgconn.PgConn{}).(*pgconn.CancelRequestContextWatcherHandler); !ok {
+		t.Fatalf("pool watcher = %T, want unchanged pool handler", source.BuildContextWatcherHandler(&pgconn.PgConn{}))
+	}
+}
 
 func TestStoreRejectsInvalidUseBeforeDatabaseAccess(t *testing.T) {
 	t.Parallel()

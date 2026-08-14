@@ -36,8 +36,8 @@ func TestPostgresStatementTimeoutIsEnforcedServerSide(t *testing.T) {
 		t.Fatal("Exec(pg_sleep) error = nil, want a server-side statement timeout")
 	}
 
-	var pgErr *pgconn.PgError
-	if !errors.As(err, &pgErr) {
+	pgErr, ok := errors.AsType[*pgconn.PgError](err)
+	if !ok {
 		t.Fatalf("Exec() error = %v, want *pgconn.PgError", err)
 	}
 	if pgErr.Code != pgerrcode.QueryCanceled {

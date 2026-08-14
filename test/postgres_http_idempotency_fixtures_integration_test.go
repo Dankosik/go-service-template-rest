@@ -26,6 +26,16 @@ import (
 
 const httpIDRecoveryDelay = 50 * time.Millisecond
 
+func httpIDStoreOptions() postgresidempotency.StoreOptions {
+	return postgresidempotency.StoreOptions{
+		OwnerRecoveryDelay:     httpIDRecoveryDelay,
+		CleanupBatchSize:       100,
+		MaxMaintenanceLag:      time.Minute,
+		MaxRelationBytes:       1 << 40,
+		AdmissionHeadroomBytes: 1 << 20,
+	}
+}
+
 type httpIDFixture struct {
 	ctx      context.Context
 	pool     *postgres.Pool
@@ -40,7 +50,7 @@ func newHTTPIDFixture(t *testing.T, applicationName string, maxOpenConns int) ht
 	t.Cleanup(cancel)
 	dsn := httpIDDSN(t, pgtest.Migrated(t, os.DirFS(".."), "migrations"), applicationName)
 	pool := newHTTPIDPool(t, ctx, dsn, maxOpenConns)
-	store, err := postgresidempotency.NewStore(pool, httpIDRecoveryDelay)
+	store, err := postgresidempotency.NewStore(pool, httpIDStoreOptions())
 	if err != nil {
 		t.Fatalf("postgresidempotency.NewStore(): %v", err)
 	}
@@ -50,6 +60,9 @@ func newHTTPIDFixture(t *testing.T, applicationName string, maxOpenConns int) ht
 	}
 	if commitTimestamps != "on" {
 		t.Fatalf("track_commit_timestamp = %q, want on", commitTimestamps)
+	}
+	if err := store.Maintain(ctx); err != nil {
+		t.Fatalf("initial idempotency maintenance: %v", err)
 	}
 	return httpIDFixture{
 		ctx:      ctx,
@@ -95,9 +108,12 @@ func newRestartableHTTPIDFixture(t *testing.T) (httpIDFixture, *tcpostgres.Postg
 	}
 	dsn = httpIDDSN(t, dsn, "idempotency-commit-epoch")
 	pool := newHTTPIDPool(t, ctx, dsn, 4)
-	store, err := postgresidempotency.NewStore(pool, httpIDRecoveryDelay)
+	store, err := postgresidempotency.NewStore(pool, httpIDStoreOptions())
 	if err != nil {
 		t.Fatalf("postgresidempotency.NewStore(): %v", err)
+	}
+	if err := store.Maintain(ctx); err != nil {
+		t.Fatalf("initial idempotency maintenance: %v", err)
 	}
 	return httpIDFixture{ctx: ctx, pool: pool, store: store, dsn: dsn, contract: httpIDContract()}, container
 }

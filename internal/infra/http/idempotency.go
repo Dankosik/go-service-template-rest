@@ -1,6 +1,7 @@
 package httpx
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/example/go-service-template-rest/internal/httpidempotency"
@@ -10,20 +11,26 @@ import (
 )
 
 type idempotencyEnvelope struct {
-	matcher  routers.Router
-	registry idempotencyRegistry
+	matcher          routers.Router
+	registry         idempotencyRegistry
+	terminalObserver func(context.Context, httpidempotency.Decision, error)
 }
 
-func newIdempotencyEnvelope(spec *openapi3.T, operations []IdempotencyOperation) (idempotencyEnvelope, error) {
+func newIdempotencyEnvelope(
+	spec *openapi3.T,
+	operations []IdempotencyOperation,
+	terminalObserver func(context.Context, httpidempotency.Decision, error),
+) (idempotencyEnvelope, error) {
 	registry, err := newIdempotencyRegistry(spec, operations)
 	if err != nil {
 		return idempotencyEnvelope{}, err
 	}
 	matcher, err := gorillamux.NewRouter(spec)
 	if err != nil {
+		//nolint:wrapcheck // Preserve the router constructor's accepted registration diagnostic.
 		return idempotencyEnvelope{}, err
 	}
-	return idempotencyEnvelope{matcher: matcher, registry: registry}, nil
+	return idempotencyEnvelope{matcher: matcher, registry: registry, terminalObserver: terminalObserver}, nil
 }
 
 func (e idempotencyEnvelope) enforce(next http.Handler) http.Handler {
@@ -50,6 +57,9 @@ func (e idempotencyEnvelope) enforce(next http.Handler) http.Handler {
 			return
 		}
 		decision := operation.admit(r.Context(), scope)
+		if decision.Outcome != httpidempotency.OutcomeExecute && e.terminalObserver != nil {
+			e.terminalObserver(r.Context(), decision, nil)
+		}
 		if writeIdempotencyDecision(w, r, operation.contract, decision) {
 			return
 		}

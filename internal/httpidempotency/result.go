@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -19,31 +19,79 @@ type Result struct {
 	Payload   []byte
 }
 
+type encodedHeader struct {
+	name   string
+	values []string
+}
+
 // EncodeResult returns the one versioned representation the Store may retain.
 func EncodeResult(contract Contract, result Result) ([]byte, error) {
 	if err := contract.Validate(); err != nil {
 		return nil, err
 	}
-	if result.Status < 200 || result.Status >= 300 || !containsStatus(contract.ReplayStatuses, result.Status) {
+	if result.Status < 200 || result.Status >= 300 || !slices.Contains(contract.ReplayStatuses, result.Status) {
 		return nil, fmt.Errorf("idempotency result: status %d is not replayable", result.Status)
 	}
 	if strings.TrimSpace(result.MediaType) == "" || strings.TrimSpace(result.Codec) == "" {
 		return nil, errors.New("idempotency result: media type and codec are required")
 	}
-	if !containsString(contract.ResultCodecs, result.Codec) {
+	if !slices.Contains(contract.ResultCodecs, result.Codec) {
 		return nil, fmt.Errorf("idempotency result: codec %q is not declared", result.Codec)
 	}
+	headers, err := encodeResultHeaders(contract, result.Headers)
+	if err != nil {
+		return nil, err
+	}
+
+	encoded := make([]byte, 0, len(result.Payload)+128)
+	encoded = append(encoded, "http-idempotency.result.v1"...)
+	encoded = append(encoded, 0)
+	var status [2]byte
+	binary.BigEndian.PutUint16(status[:], uint16(result.Status))
+	encoded = append(encoded, status[:]...)
+	encoded, err = appendBytes(encoded, result.MediaType)
+	if err != nil {
+		return nil, err
+	}
+	encoded, err = appendBytes(encoded, result.Codec)
+	if err != nil {
+		return nil, err
+	}
+	var count [2]byte
+	binary.BigEndian.PutUint16(count[:], uint16(len(headers))) // #nosec G115 -- header count is rejected above math.MaxUint16.
+	encoded = append(encoded, count[:]...)
+	for _, header := range headers {
+		encoded, err = appendBytes(encoded, header.name)
+		if err != nil {
+			return nil, err
+		}
+		binary.BigEndian.PutUint16(count[:], uint16(len(header.values))) // #nosec G115 -- header value count is rejected above math.MaxUint16.
+		encoded = append(encoded, count[:]...)
+		for _, value := range header.values {
+			encoded, err = appendBytes(encoded, value)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	encoded, err = appendBytes(encoded, string(result.Payload))
+	if err != nil {
+		return nil, err
+	}
+	if len(encoded) > contract.ResultMaxBytes {
+		return nil, fmt.Errorf("idempotency result: encoded result exceeds %d bytes", contract.ResultMaxBytes)
+	}
+	return encoded, nil
+}
+
+func encodeResultHeaders(contract Contract, resultHeaders http.Header) ([]encodedHeader, error) {
 	allowed := make(map[string]struct{}, len(contract.StableHeaders))
 	for _, header := range contract.StableHeaders {
 		allowed[header] = struct{}{}
 	}
-	type encodedHeader struct {
-		name   string
-		values []string
-	}
-	headers := make([]encodedHeader, 0, len(result.Headers))
-	seen := make(map[string]struct{}, len(result.Headers))
-	for name, values := range result.Headers {
+	headers := make([]encodedHeader, 0, len(resultHeaders))
+	seen := make(map[string]struct{}, len(resultHeaders))
+	for name, values := range resultHeaders {
 		lowerName := strings.ToLower(name)
 		if _, ok := allowed[lowerName]; !ok || forbiddenResultHeader(lowerName) || !validToken(lowerName) {
 			return nil, fmt.Errorf("idempotency result: header %q is not replayable", name)
@@ -65,48 +113,8 @@ func EncodeResult(contract Contract, result Result) ([]byte, error) {
 	if len(headers) > math.MaxUint16 {
 		return nil, errors.New("idempotency result: too many headers")
 	}
-	sort.Slice(headers, func(i, j int) bool { return headers[i].name < headers[j].name })
-
-	encoded := make([]byte, 0, len(result.Payload)+128)
-	encoded = append(encoded, "http-idempotency.result.v1"...)
-	encoded = append(encoded, 0)
-	var status [2]byte
-	binary.BigEndian.PutUint16(status[:], uint16(result.Status))
-	encoded = append(encoded, status[:]...)
-	var err error
-	encoded, err = appendBytes(encoded, result.MediaType)
-	if err != nil {
-		return nil, err
-	}
-	encoded, err = appendBytes(encoded, result.Codec)
-	if err != nil {
-		return nil, err
-	}
-	var count [2]byte
-	binary.BigEndian.PutUint16(count[:], uint16(len(headers)))
-	encoded = append(encoded, count[:]...)
-	for _, header := range headers {
-		encoded, err = appendBytes(encoded, header.name)
-		if err != nil {
-			return nil, err
-		}
-		binary.BigEndian.PutUint16(count[:], uint16(len(header.values)))
-		encoded = append(encoded, count[:]...)
-		for _, value := range header.values {
-			encoded, err = appendBytes(encoded, value)
-			if err != nil {
-				return nil, err
-			}
-		}
-	}
-	encoded, err = appendBytes(encoded, string(result.Payload))
-	if err != nil {
-		return nil, err
-	}
-	if len(encoded) > contract.ResultMaxBytes {
-		return nil, fmt.Errorf("idempotency result: encoded result exceeds %d bytes", contract.ResultMaxBytes)
-	}
-	return encoded, nil
+	slices.SortFunc(headers, func(a, b encodedHeader) int { return strings.Compare(a.name, b.name) })
+	return headers, nil
 }
 
 // DecodeResult checks and decodes a retained result before HTTP re-renders it.
@@ -130,37 +138,9 @@ func DecodeResult(contract Contract, encoded []byte) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	count, err := reader.uint16()
+	headers, err := decodeResultHeaders(contract, &reader)
 	if err != nil {
 		return Result{}, err
-	}
-	headers := make(http.Header, count)
-	seenHeaders := make(map[string]struct{}, count)
-	for range count {
-		name, err := reader.string()
-		if err != nil {
-			return Result{}, err
-		}
-		if name != strings.ToLower(name) || !containsString(contract.StableHeaders, name) || forbiddenResultHeader(name) || !validToken(name) {
-			return Result{}, errors.New("idempotency result: invalid retained header")
-		}
-		if _, duplicate := seenHeaders[name]; duplicate {
-			return Result{}, errors.New("idempotency result: duplicate retained header")
-		}
-		valuesCount, err := reader.uint16()
-		if err != nil || valuesCount == 0 {
-			return Result{}, errors.New("idempotency result: invalid retained header values")
-		}
-		values := make([]string, 0, valuesCount)
-		for range valuesCount {
-			value, err := reader.string()
-			if err != nil || !validHeaderValue(value) {
-				return Result{}, errors.New("idempotency result: invalid retained header value")
-			}
-			values = append(values, value)
-		}
-		seenHeaders[name] = struct{}{}
-		headers[http.CanonicalHeaderKey(name)] = values
 	}
 	payload, err := reader.bytes()
 	if err != nil || !reader.done() {
@@ -173,12 +153,48 @@ func DecodeResult(contract Contract, encoded []byte) (Result, error) {
 	return result, nil
 }
 
+func decodeResultHeaders(contract Contract, reader *resultReader) (http.Header, error) {
+	count, err := reader.uint16()
+	if err != nil {
+		return nil, err
+	}
+	headers := make(http.Header, count)
+	seen := make(map[string]struct{}, count)
+	for range count {
+		name, err := reader.string()
+		if err != nil {
+			return nil, err
+		}
+		if name != strings.ToLower(name) || !slices.Contains(contract.StableHeaders, name) || forbiddenResultHeader(name) || !validToken(name) {
+			return nil, errors.New("idempotency result: invalid retained header")
+		}
+		if _, duplicate := seen[name]; duplicate {
+			return nil, errors.New("idempotency result: duplicate retained header")
+		}
+		valuesCount, err := reader.uint16()
+		if err != nil || valuesCount == 0 {
+			return nil, errors.New("idempotency result: invalid retained header values")
+		}
+		values := make([]string, 0, valuesCount)
+		for range valuesCount {
+			value, err := reader.string()
+			if err != nil || !validHeaderValue(value) {
+				return nil, errors.New("idempotency result: invalid retained header value")
+			}
+			values = append(values, value)
+		}
+		seen[name] = struct{}{}
+		headers[http.CanonicalHeaderKey(name)] = values
+	}
+	return headers, nil
+}
+
 func appendBytes(dst []byte, value string) ([]byte, error) {
 	if len(value) > math.MaxUint32 {
 		return nil, errors.New("idempotency result: field exceeds uint32 length")
 	}
 	var length [4]byte
-	binary.BigEndian.PutUint32(length[:], uint32(len(value)))
+	binary.BigEndian.PutUint32(length[:], uint32(len(value))) // #nosec G115 -- field length is rejected above math.MaxUint32.
 	dst = append(dst, length[:]...)
 	return append(dst, value...), nil
 }
@@ -215,33 +231,10 @@ func (r *resultReader) string() (string, error) {
 	return string(value), err
 }
 
-func (r resultReader) done() bool {
+func (r *resultReader) done() bool {
 	return len(r.data) == 0
 }
 
-func containsStatus(statuses []int, want int) bool {
-	for _, status := range statuses {
-		if status == want {
-			return true
-		}
-	}
-	return false
-}
-
-func containsString(values []string, want string) bool {
-	for _, value := range values {
-		if value == want {
-			return true
-		}
-	}
-	return false
-}
-
 func validHeaderValue(value string) bool {
-	for i := range len(value) {
-		if value[i] == '\r' || value[i] == '\n' || value[i] == 0 {
-			return false
-		}
-	}
-	return true
+	return !strings.ContainsAny(value, "\r\n\x00")
 }

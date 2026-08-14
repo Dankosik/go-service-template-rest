@@ -82,6 +82,7 @@ func Main(m *testing.M, image string) int {
 		tcpostgres.WithUsername("app"),
 		tcpostgres.WithPassword("app"),
 		tcpostgres.BasicWaitStrategies(),
+		testcontainers.WithCmd("postgres", "-c", "track_commit_timestamp=on"),
 		// initdb runs before the server starts, so the module's own `-c fsync=off`
 		// never reaches it, and a default initdb spends most of container startup
 		// syncing a cluster this binary throws away minutes later.

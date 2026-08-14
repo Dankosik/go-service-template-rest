@@ -2,6 +2,7 @@ package postgresjobs
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/example/go-service-template-rest/internal/infra/postgres/sqlcgen"
 	"github.com/example/go-service-template-rest/internal/jobs"
@@ -69,10 +70,9 @@ func acceptanceIdentityFromReadback(row sqlcgen.ReadPostgresJobsAcceptanceRow) (
 }
 
 func vocabularyValue[T ~string](name, value string, allowed []T) (T, error) {
-	for _, candidate := range allowed {
-		if value == string(candidate) {
-			return candidate, nil
-		}
+	candidate := T(value)
+	if slices.Contains(allowed, candidate) {
+		return candidate, nil
 	}
 	var zero T
 	return zero, fmt.Errorf("%w: %s %q", ErrUnknownVocabulary, name, value)

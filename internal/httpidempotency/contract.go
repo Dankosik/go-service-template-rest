@@ -6,6 +6,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"golang.org/x/net/http/httpguts"
 )
 
 // Header is the one request header an opted operation declares.
@@ -76,18 +78,8 @@ func (c Contract) Validate() error {
 	if err := validateNames("result codec", c.ResultCodecs); err != nil {
 		return err
 	}
-	if len(c.ReplayStatuses) == 0 {
-		return errors.New("idempotency contract: replay statuses are required")
-	}
-	statuses := make(map[int]struct{}, len(c.ReplayStatuses))
-	for _, status := range c.ReplayStatuses {
-		if status < 200 || status >= 300 {
-			return fmt.Errorf("idempotency contract: replay status %d is not a success", status)
-		}
-		if _, duplicate := statuses[status]; duplicate {
-			return fmt.Errorf("idempotency contract: replay status %d is duplicated", status)
-		}
-		statuses[status] = struct{}{}
+	if err := validateReplayStatuses(c.ReplayStatuses); err != nil {
+		return err
 	}
 	if err := validateStableHeaders(c.StableHeaders); err != nil {
 		return err
@@ -95,18 +87,8 @@ func (c Contract) Validate() error {
 	if c.ResultMaxBytes <= 0 {
 		return errors.New("idempotency contract: result max bytes must be positive")
 	}
-	if c.ReplayTTL <= 0 || c.InProgressWait <= 0 || c.RetryAfter <= 0 {
-		return errors.New("idempotency contract: replay, in-progress, and retry durations must be positive")
-	}
-	if c.RetryAfter%time.Second != 0 {
-		return errors.New("idempotency contract: retry after must be whole seconds")
-	}
-	if c.DuplicateRisk.Permanent {
-		if c.DuplicateRisk.Duration != 0 {
-			return errors.New("idempotency contract: permanent duplicate risk has a duration")
-		}
-	} else if c.DuplicateRisk.Duration < c.ReplayTTL {
-		return errors.New("idempotency contract: finite duplicate risk must not precede replay TTL")
+	if err := validateDurations(c); err != nil {
+		return err
 	}
 	switch c.ExternalEffect {
 	case ExternalEffectNone, ExternalEffectTransactionalOutbox, ExternalEffectDownstreamKey, ExternalEffectReconciliation, ExternalEffectCompensation:
@@ -114,6 +96,42 @@ func (c Contract) Validate() error {
 	default:
 		return fmt.Errorf("idempotency contract: external effect disposition %q is invalid", c.ExternalEffect)
 	}
+}
+
+func validateReplayStatuses(statuses []int) error {
+	if len(statuses) == 0 {
+		return errors.New("idempotency contract: replay statuses are required")
+	}
+	seen := make(map[int]struct{}, len(statuses))
+	for _, status := range statuses {
+		if status < 200 || status >= 300 {
+			return fmt.Errorf("idempotency contract: replay status %d is not a success", status)
+		}
+		if _, duplicate := seen[status]; duplicate {
+			return fmt.Errorf("idempotency contract: replay status %d is duplicated", status)
+		}
+		seen[status] = struct{}{}
+	}
+	return nil
+}
+
+func validateDurations(contract Contract) error {
+	if contract.ReplayTTL <= 0 || contract.InProgressWait <= 0 || contract.RetryAfter <= 0 {
+		return errors.New("idempotency contract: replay, in-progress, and retry durations must be positive")
+	}
+	if contract.RetryAfter%time.Second != 0 {
+		return errors.New("idempotency contract: retry after must be whole seconds")
+	}
+	if contract.DuplicateRisk.Permanent {
+		if contract.DuplicateRisk.Duration != 0 {
+			return errors.New("idempotency contract: permanent duplicate risk has a duration")
+		}
+		return nil
+	}
+	if contract.DuplicateRisk.Duration < contract.ReplayTTL {
+		return errors.New("idempotency contract: finite duplicate risk must not precede replay TTL")
+	}
+	return nil
 }
 
 func validateNames(kind string, values []string) error {
@@ -152,15 +170,7 @@ func validateStableHeaders(headers []string) error {
 }
 
 func validToken(value string) bool {
-	if value == "" {
-		return false
-	}
-	for i := range len(value) {
-		if !isTchar(value[i]) {
-			return false
-		}
-	}
-	return true
+	return httpguts.ValidHeaderFieldName(value)
 }
 
 func forbiddenResultHeader(header string) bool {

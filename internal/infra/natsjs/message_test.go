@@ -35,10 +35,10 @@ func TestMessageIsImmutable(t *testing.T) {
 	if got := string(decoded.Payload()); got != "payload" {
 		t.Fatalf("decoded payload mutated through alias: %q", got)
 	}
-	if decoded.PublicationID() != "publication-1" || decoded.Type() != "created" || decoded.Schema() != "v1" ||
+	if decoded.MessageID() != "message-1" || decoded.PublicationID() != "publication-1" || decoded.Type() != "created" || decoded.Schema() != "v1" ||
 		decoded.OrderingKey() != "account-1" || decoded.CorrelationID() != "" || !decoded.CreatedAt().Equal(validTestEvent().CreatedAt) {
-		t.Fatalf("decoded accessors returned inconsistent envelope: publication=%q type=%q schema=%q key=%q correlation=%q created=%v",
-			decoded.PublicationID(), decoded.Type(), decoded.Schema(), decoded.OrderingKey(), decoded.CorrelationID(), decoded.CreatedAt())
+		t.Fatalf("decoded accessors returned inconsistent envelope: message=%q publication=%q type=%q schema=%q key=%q correlation=%q created=%v",
+			decoded.MessageID(), decoded.PublicationID(), decoded.Type(), decoded.Schema(), decoded.OrderingKey(), decoded.CorrelationID(), decoded.CreatedAt())
 	}
 	if id := NewID(); id == "" {
 		t.Fatal("NewID() returned empty identity")

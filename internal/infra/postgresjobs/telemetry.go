@@ -3,6 +3,7 @@ package postgresjobs
 import (
 	"context"
 	"fmt"
+	"math"
 	"sync"
 
 	infratelemetry "github.com/example/go-service-template-rest/internal/infra/telemetry"
@@ -95,24 +96,31 @@ func (t *Telemetry) RecordRescue(ctx context.Context, outcome jobs.OutcomeClass)
 func (t *Telemetry) RecordAcceptance(ctx context.Context, outcome jobs.OutcomeClass) {
 	t.record(ctx, "acceptance", metricOutcome(outcome))
 }
+
 func (t *Telemetry) RecordClaim(ctx context.Context, outcome jobs.OutcomeClass) {
 	t.record(ctx, "claim", metricOutcome(outcome))
 }
+
 func (t *Telemetry) RecordAttempt(ctx context.Context, outcome jobs.OutcomeClass) {
 	t.record(ctx, "attempt", metricOutcome(outcome))
 }
+
 func (t *Telemetry) RecordRetry(ctx context.Context, outcome jobs.OutcomeClass) {
 	t.record(ctx, "retry", metricOutcome(outcome))
 }
+
 func (t *Telemetry) RecordCancellation(ctx context.Context, outcome jobs.OutcomeClass) {
 	t.record(ctx, "cancellation", metricOutcome(outcome))
 }
+
 func (t *Telemetry) RecordRecovery(ctx context.Context, outcome jobs.OutcomeClass) {
 	t.record(ctx, "recovery", metricOutcome(outcome))
 }
+
 func (t *Telemetry) RecordAction(ctx context.Context, outcome jobs.OutcomeClass) {
 	t.record(ctx, "action", metricOutcome(outcome))
 }
+
 func (t *Telemetry) RecordDrain(ctx context.Context, outcome jobs.OutcomeClass) {
 	t.record(ctx, "drain", metricOutcome(outcome))
 }
@@ -130,7 +138,7 @@ func (t *Telemetry) collect(_ context.Context, observer metric.Observer) error {
 	if snapshot.fresh {
 		for _, state := range snapshot.observation.States {
 			options := metric.WithAttributes(attribute.String("state", metricState(state.State)))
-			observer.ObserveInt64(t.depth, int64(state.Count), options)
+			observer.ObserveInt64(t.depth, observationCount(state.Count), options)
 			observer.ObserveInt64(t.oldest, state.OldestAvailableAt.UTC().Unix(), options)
 		}
 		observer.ObserveInt64(t.freshness, 1)
@@ -146,9 +154,19 @@ func (t *Telemetry) collect(_ context.Context, observer metric.Observer) error {
 	return nil
 }
 
+func observationCount(count uint64) int64 {
+	if count > math.MaxInt64 {
+		return math.MaxInt64
+	}
+	return int64(count) // #nosec G115 -- count is at most math.MaxInt64 after saturation.
+}
+
 func (t *Telemetry) Unregister() error {
 	if t == nil || t.registration == nil {
 		return nil
 	}
-	return t.registration.Unregister()
+	if err := t.registration.Unregister(); err != nil {
+		return fmt.Errorf("unregister PostgreSQL jobs telemetry: %w", err)
+	}
+	return nil
 }

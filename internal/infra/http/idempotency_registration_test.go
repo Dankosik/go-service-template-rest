@@ -3,6 +3,7 @@ package httpx
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -133,7 +134,7 @@ func TestHTTPIdempotencyRegistrationContract(t *testing.T) {
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			candidate := idempotencyTestSpec(t)
-			extension := candidate.Paths.Value("/widgets").Post.Extensions[idempotencyExtension].(map[string]any)
+			extension := testIdempotencyExtension(t, candidate)
 			testCase.mutate(extension)
 			if _, err := newIdempotencyRegistry(candidate, []IdempotencyOperation{operation}); err == nil {
 				t.Fatal("invalid duplicate-risk declaration was accepted")
@@ -181,7 +182,7 @@ func TestHTTPIdempotencyRegistrationContract(t *testing.T) {
 	})
 	t.Run("unknown declaration field", func(t *testing.T) {
 		candidate := idempotencyTestSpec(t)
-		candidate.Paths.Value("/widgets").Post.Extensions[idempotencyExtension].(map[string]any)["unknown"] = true
+		testIdempotencyExtension(t, candidate)["unknown"] = true
 		if _, err := newIdempotencyRegistry(candidate, []IdempotencyOperation{operation}); err == nil {
 			t.Fatal("declaration with an unknown field was accepted")
 		}
@@ -189,7 +190,17 @@ func TestHTTPIdempotencyRegistrationContract(t *testing.T) {
 }
 
 func idempotencyTestSpec(tb testing.TB) *openapi3.T {
+	tb.Helper()
 	return idempotencyTestSpecForContract(tb, testIdempotencyOperation().Contract)
+}
+
+func testIdempotencyExtension(tb testing.TB, spec *openapi3.T) map[string]any {
+	tb.Helper()
+	extension, ok := spec.Paths.Value("/widgets").Post.Extensions[idempotencyExtension].(map[string]any)
+	if !ok {
+		tb.Fatalf("idempotency extension has type %T, want map[string]any", spec.Paths.Value("/widgets").Post.Extensions[idempotencyExtension])
+	}
+	return extension
 }
 
 func idempotencyTestSpecForContract(tb testing.TB, contract httpidempotency.Contract) *openapi3.T {
@@ -217,7 +228,7 @@ func idempotencyContractExtension(contract httpidempotency.Contract) (map[string
 	}
 	encodedRisk, err := json.Marshal(duplicateRisk)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("marshal duplicate risk: %w", err)
 	}
 	declaration := idempotencyDeclaration{
 		APIVersion:          contract.APIVersion,
@@ -235,10 +246,13 @@ func idempotencyContractExtension(contract httpidempotency.Contract) (map[string
 	}
 	encoded, err := json.Marshal(declaration)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("marshal idempotency declaration: %w", err)
 	}
 	var extension map[string]any
-	return extension, json.Unmarshal(encoded, &extension)
+	if err := json.Unmarshal(encoded, &extension); err != nil {
+		return nil, fmt.Errorf("unmarshal idempotency declaration: %w", err)
+	}
+	return extension, nil
 }
 
 func testIdempotencyOperation() IdempotencyOperation {

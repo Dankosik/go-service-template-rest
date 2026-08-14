@@ -2,7 +2,6 @@ package jobs
 
 import (
 	"errors"
-	"reflect"
 	"testing"
 	"time"
 )
@@ -33,7 +32,7 @@ func TestJobsTransition(t *testing.T) {
 	requireError(t, err)
 	second, err := definition.Evaluate(base)
 	requireError(t, err)
-	if !reflect.DeepEqual(first, second) {
+	if first != second {
 		t.Fatalf("replay changed decision: first=%+v second=%+v", first, second)
 	}
 	if first.State != StateRetryWait || first.Delay != 1_958_000_000 {

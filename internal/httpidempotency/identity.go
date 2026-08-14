@@ -4,7 +4,6 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"math"
 	"strings"
 )
@@ -52,13 +51,8 @@ func ParseKey(values []string, maxBytes int) (string, error) {
 		return "", ErrInvalidKey
 	}
 	key := values[0]
-	if len(key) == 0 || len(key) > maxBytes {
+	if len(key) > maxBytes || !validToken(key) {
 		return "", ErrInvalidKey
-	}
-	for i := range len(key) {
-		if !isTchar(key[i]) {
-			return "", ErrInvalidKey
-		}
 	}
 	return key, nil
 }
@@ -86,10 +80,10 @@ func EncodeIdentity(scope Scope, key string) ([]byte, error) {
 	encoded = append(encoded, 0)
 	for _, field := range fields {
 		if len(field) > math.MaxUint32 {
-			return nil, fmt.Errorf("idempotency identity: field exceeds uint32 length")
+			return nil, errors.New("idempotency identity: field exceeds uint32 length")
 		}
 		var length [4]byte
-		binary.BigEndian.PutUint32(length[:], uint32(len(field)))
+		binary.BigEndian.PutUint32(length[:], uint32(len(field))) // #nosec G115 -- field length is rejected above math.MaxUint32.
 		encoded = append(encoded, length[:]...)
 		encoded = append(encoded, field...)
 	}
@@ -111,11 +105,4 @@ func NewAttempt(scope Scope, key string, fingerprint Fingerprint) (Attempt, erro
 		Identity:    sha256.Sum256(encoded),
 		Fingerprint: fingerprint,
 	}, nil
-}
-
-func isTchar(value byte) bool {
-	return value >= '0' && value <= '9' ||
-		value >= 'A' && value <= 'Z' ||
-		value >= 'a' && value <= 'z' ||
-		strings.ContainsRune("!#$%&'*+-.^_`|~", rune(value))
 }

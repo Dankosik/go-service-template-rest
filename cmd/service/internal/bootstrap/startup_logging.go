@@ -20,12 +20,11 @@ const (
 // bootstrapLoggerStage adds it from the context passed to the logging call, so
 // adding it here too would duplicate the keys on every record.
 func startupLogArgs(component, operation, outcome string, extra ...any) []any {
-	args := make([]any, 0, 6+len(extra))
-	args = append(args,
+	args := []any{
 		"component", component,
 		"operation", operation,
 		"outcome", outcome,
-	)
+	}
 
 	return append(args, extra...)
 }

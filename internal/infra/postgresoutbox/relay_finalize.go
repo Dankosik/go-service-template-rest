@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/samber/lo"
 )
 
 // poisonedEvent pairs the parked claim with the class that parked it, so the
@@ -131,10 +133,7 @@ func (r *Relay) finalizeUnordered(ctx context.Context, token string, claims []Cl
 	if len(claims) == 0 {
 		return nil
 	}
-	ids := make([]string, len(claims))
-	for index, claim := range claims {
-		ids[index] = claim.Event.ID
-	}
+	ids := lo.Map(claims, func(claim ClaimedEvent, _ int) string { return claim.Event.ID })
 	marked, err := r.store.MarkUnorderedPublishedBatch(ctx, token, ids)
 	return r.reconcileRemainder(ctx, token, claims, marked, err, r.markOneUnordered)
 }
@@ -146,10 +145,9 @@ func (r *Relay) finalizeOrdered(ctx context.Context, token string, claims []Clai
 	if len(claims) == 0 {
 		return nil
 	}
-	directives := make([]OrderedDirective, len(claims))
-	for index, claim := range claims {
-		directives[index] = orderedDirective(claim)
-	}
+	directives := lo.Map(claims, func(claim ClaimedEvent, _ int) OrderedDirective {
+		return orderedDirective(claim)
+	})
 	marked, err := r.store.MarkOrderedPublishedBatch(ctx, token, directives)
 	return r.reconcileRemainder(ctx, token, claims, marked, err, r.markOneOrdered)
 }
@@ -201,10 +199,7 @@ func (r *Relay) reconcileRemainder(
 	if markErr == nil && len(marked) == len(claims) {
 		return nil
 	}
-	finalized := make(map[string]struct{}, len(marked))
-	for _, id := range marked {
-		finalized[id] = struct{}{}
-	}
+	finalized := lo.Associate(marked, func(id string) (string, struct{}) { return id, struct{}{} })
 	for _, claim := range claims {
 		if _, ok := finalized[claim.Event.ID]; ok {
 			continue
@@ -220,13 +215,12 @@ func (r *Relay) finalizePoisoned(ctx context.Context, token string, poisoned []p
 	if len(poisoned) == 0 {
 		return nil
 	}
-	directives := make([]PoisonDirective, len(poisoned))
-	for index, event := range poisoned {
-		directives[index] = PoisonDirective{
+	directives := lo.Map(poisoned, func(event poisonedEvent, _ int) PoisonDirective {
+		return PoisonDirective{
 			ID: event.claim.Event.ID, ErrorClass: event.errorClass,
 			PublicationUncertain: event.publicationUncertain,
 		}
-	}
+	})
 	if err := r.store.MarkPoisonedBatch(ctx, token, directives); err != nil {
 		return fmt.Errorf("poison outbox events: %w", err)
 	}

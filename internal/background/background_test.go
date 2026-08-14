@@ -10,6 +10,8 @@ import (
 	"testing"
 	"testing/synctest"
 	"time"
+
+	"github.com/example/go-service-template-rest/internal/waittest"
 )
 
 func TestSupervisorRunsTaskUntilShutdown(t *testing.T) {
@@ -88,11 +90,7 @@ func TestOnePanicDoesNotStopSiblingWork(t *testing.T) {
 	if err := sup.Shutdown(context.Background()); !errors.Is(err, ErrPanic) {
 		t.Fatalf("Shutdown() error = %v, want ErrPanic", err)
 	}
-	select {
-	case <-healthyStopped:
-	case <-time.After(2 * time.Second):
-		t.Fatal("sibling task was never canceled")
-	}
+	waittest.ReceiveSignal(t, healthyStopped, 2*time.Second, "sibling task cancellation")
 }
 
 // TestFailedTaskLeavesSiblingsRunning is the isolation property, asserted before
@@ -197,18 +195,12 @@ func TestUnexpectedTaskStopFailsTheProcess(t *testing.T) {
 func waitForCheckFailure(tb testing.TB, sup *Supervisor) error {
 	tb.Helper()
 
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		if err := sup.Check(context.Background()); err != nil {
-			return err
-		}
-		time.Sleep(time.Millisecond)
-	}
-	// Fatal ends the test, so what follows never runs — but the result still has
-	// to be non-nil, because the caller inspects it and nothing in the type
-	// system says Fatal does not return.
-	tb.Fatal("Check() never reported the failed task")
-	return errors.New("Check() never reported the failed task")
+	var result error
+	waittest.UntilFunc(tb, 2*time.Second, func() bool {
+		result = sup.Check(context.Background())
+		return result != nil
+	}, func() string { return "Check() to report the failed task" })
+	return result
 }
 
 func TestTaskErrorIsReported(t *testing.T) {
@@ -283,11 +275,7 @@ func TestParentCancellationStopsTasks(t *testing.T) {
 	}})
 
 	cancel()
-	select {
-	case <-stopped:
-	case <-time.After(2 * time.Second):
-		t.Fatal("task was not canceled by its parent context")
-	}
+	waittest.ReceiveSignal(t, stopped, 2*time.Second, "task cancellation by parent context")
 	if err := sup.Shutdown(context.Background()); err != nil {
 		t.Fatalf("Shutdown() error = %v, want nil", err)
 	}

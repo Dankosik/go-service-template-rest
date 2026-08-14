@@ -10,6 +10,7 @@ package httpclient
 import (
 	"cmp"
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"net"
@@ -40,6 +41,8 @@ type Client struct {
 	transport  *http.Transport
 }
 
+type requestDeadlineKey struct{}
+
 // New builds one instrumented client for a fixed provider authority.
 func New(cfg Config, meterProvider metric.MeterProvider) (*Client, error) {
 	baseURL, err := validateConfig(cfg)
@@ -53,9 +56,22 @@ func New(cfg Config, meterProvider metric.MeterProvider) (*Client, error) {
 	}
 	transport := baseTransport.Clone()
 	transport.Proxy = nil
+	if cfg.OneAttempt {
+		protocols := new(http.Protocols)
+		protocols.SetHTTP1(true)
+		transport.Protocols = protocols
+		transport.DisableKeepAlives = true
+		transport.DisableCompression = true
+	}
 	transport.ResponseHeaderTimeout = cfg.ResponseHeaderTimeout
 	transport.MaxResponseHeaderBytes = cfg.MaxResponseHeaderBytes
 	transport.TLSClientConfig = nil
+	if cfg.RootCAs != nil {
+		transport.TLSClientConfig = &tls.Config{
+			RootCAs:    cfg.RootCAs,
+			ServerName: baseURL.Hostname(),
+		}
+	}
 	transport.DialTLSContext = nil
 	// Both are set explicitly, because the clone carries net/http's defaults for
 	// a general-purpose client and this one is pinned to a single authority. See
@@ -71,6 +87,11 @@ func New(cfg Config, meterProvider metric.MeterProvider) (*Client, error) {
 		},
 	}
 	transport.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+		if deadline, ok := ctx.Value(requestDeadlineKey{}).(time.Time); ok {
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithDeadline(ctx, deadline)
+			defer cancel()
+		}
 		conn, dialErr := dialer.DialContext(ctx, network, address)
 		if errors.Is(dialErr, ErrTargetDenied) {
 			return nil, ErrTargetDenied
@@ -90,11 +111,15 @@ func New(cfg Config, meterProvider metric.MeterProvider) (*Client, error) {
 		scheme:    baseURL.Scheme,
 		authority: baseURL.Host,
 	}
+	var authorized http.RoundTripper = bounded
+	// profile:outbound-auth-http:start
+	authorized = attemptAuthorizationTransport{base: authorized}
+	// profile:outbound-auth-http:end
 	// Instrumentation sits inside retries so each attempt is its own span and
 	// metric sample. The fixed-authority and response-size bounds remain innermost
 	// and therefore apply to every attempt.
 	var instrumented http.RoundTripper = otelhttp.NewTransport(
-		bounded,
+		authorized,
 		otelhttp.WithMeterProvider(meterProvider),
 		otelhttp.WithPropagators(correlationpolicy.NewPropagator(cfg.Propagation, requestIDHeader)),
 		otelhttp.WithSpanOptions(trace.WithAttributes(
@@ -103,11 +128,11 @@ func New(cfg Config, meterProvider metric.MeterProvider) (*Client, error) {
 	)
 	sanitized := propagationSanitizer{base: instrumented}
 	var roundTripper http.RoundTripper = sanitized
-	// profile:authn-oidc-jwt:start
+	// profile:credential-provider-http:start
 	if cfg.DisableInstrumentation {
-		roundTripper = bounded
+		roundTripper = authorized
 	}
-	// profile:authn-oidc-jwt:end
+	// profile:credential-provider-http:end
 	if cfg.Retry.enabled() {
 		roundTripper = retryTransport{base: roundTripper, policy: cfg.Retry}
 	}
@@ -130,6 +155,9 @@ func (c *Client) Do(request *http.Request) (*http.Response, error) {
 	if hasBlankIdempotencyKey(request) {
 		return nil, errors.New("send outbound HTTP request: Idempotency-Key must not be blank")
 	}
+	if deadline, ok := request.Context().Deadline(); ok {
+		request = request.WithContext(context.WithValue(request.Context(), requestDeadlineKey{}, deadline))
+	}
 	// #nosec G704 -- authorityTransport rejects requests outside the configured scheme and authority before dialing.
 	response, err := c.httpClient.Do(request)
 	if err != nil {
@@ -137,6 +165,22 @@ func (c *Client) Do(request *http.Request) (*http.Response, error) {
 	}
 	return response, nil
 }
+
+// profile:outbound-auth-http:start
+
+// DoWithAuthorization sends a request and authorizes each concrete attempt.
+func (c *Client) DoWithAuthorization(
+	request *http.Request,
+	authorize AttemptAuthorizer,
+) (*http.Response, error) {
+	if authorize == nil {
+		return nil, errors.New("send outbound HTTP request: attempt authorizer is required")
+	}
+	request = request.WithContext(context.WithValue(request.Context(), attemptAuthorizerKey{}, authorize))
+	return c.Do(request)
+}
+
+// profile:outbound-auth-http:end
 
 // BaseURL returns the validated immutable provider base URL.
 func (c *Client) BaseURL() string {

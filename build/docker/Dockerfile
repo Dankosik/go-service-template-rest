@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-FROM --platform=$BUILDPLATFORM golang:1.26.5-bookworm@sha256:1ecb7edf62a0408027bd5729dfd6b1b8766e578e8df93995b225dfd0944eb651 AS build
+FROM --platform=$BUILDPLATFORM golang:1.26.6-bookworm@sha256:116d58cbd88c1297624acc6e967a060012422bacf9930927e23fb719189c6f36 AS build
 
 WORKDIR /src
 
@@ -40,6 +40,12 @@ RUN --mount=type=bind,target=. \
 # profile:outbox-postgres:start
     if [ -d ./cmd/outbox-relay ]; then build_packages="${build_packages} ./cmd/outbox-relay"; fi && \
 # profile:outbox-postgres:end
+# profile:jobs-postgres:start
+    if [ -d ./cmd/jobs-worker ]; then build_packages="${build_packages} ./cmd/jobs-worker"; fi && \
+# profile:jobs-postgres:end
+# profile:webhooks-durable:start
+    if [ -d ./cmd/webhook-worker ]; then build_packages="${build_packages} ./cmd/webhook-worker"; fi && \
+# profile:webhooks-durable:end
     if [ -d ./cmd/migrate ]; then build_packages="${build_packages} ./cmd/migrate"; fi && \
     resolved_version="${APP_VERSION}" && \
     if [ "${resolved_version}" = "dev" ] && [ -n "${RAILWAY_GIT_COMMIT_SHA}" ]; then \
@@ -77,6 +83,12 @@ COPY --from=build /out/worker /worker
 # profile:outbox-postgres:start
 COPY --from=build /out/outbox-relay /outbox-relay
 # profile:outbox-postgres:end
+# profile:jobs-postgres:start
+COPY --from=build /out/jobs-worker /jobs-worker
+# profile:jobs-postgres:end
+# profile:webhooks-durable:start
+COPY --from=build /out/webhook-worker /webhook-worker
+# profile:webhooks-durable:end
 # profile:database-postgres:start
 COPY --from=build /out/migrate /migrate
 COPY --from=build /out/migrations /migrations

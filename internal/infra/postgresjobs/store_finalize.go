@@ -128,8 +128,8 @@ func transitionParams(
 		elapsedMilliseconds++
 	}
 	return transitionQueryParams{
-		LogicalJobID: string(attempt.LogicalJobID), AttemptGeneration: int64(attempt.AttemptGeneration),
-		RecoveryGeneration: int64(attempt.RecoveryGeneration), WorkerID: attempt.WorkerID,
+		LogicalJobID: string(attempt.LogicalJobID), AttemptGeneration: int64(attempt.AttemptGeneration), // #nosec G115 -- validateAttemptIdentity rejects generations above math.MaxInt64.
+		RecoveryGeneration: int64(attempt.RecoveryGeneration), WorkerID: attempt.WorkerID, // #nosec G115 -- validateAttemptIdentity rejects generations above math.MaxInt64.
 		FinalState: string(transition.State), DelayMicroseconds: delayMicroseconds,
 		AttemptsUsed: int32(transition.AttemptsUsed), Outcome: string(transition.Outcome),
 		EffectStatus: string(transition.Effect), FailureCode: failureCode,

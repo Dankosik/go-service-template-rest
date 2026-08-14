@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -31,7 +32,8 @@ func TestPostgresJobsLeaseSafetyProcess(t *testing.T) {
 	}
 	ctx, pool, store := newPostgresJobsFixture(t)
 	repositoryRoot, binary := buildPostgresJobsTestWorker(t)
-	prepared := stageDuePostgresJob(ctx, t, pool, store, "lease-safety")
+	createPostgresJobsEffectLedger(ctx, t, pool)
+	prepared := stageDuePostgresRecoveryJob(ctx, t, pool, store, "lease-safety")
 	logicalJobID := prepared.Identity().LogicalJobID
 
 	firstAppName := "jobs-lease-first"
@@ -66,22 +68,37 @@ func TestPostgresJobsLeaseSafetyProcess(t *testing.T) {
 	}
 	waitForPostgresJobsReadinessClosed(t, first.addr)
 	waitForPostgresJobsWorkerPIDGone(ctx, t, pool, firstAppName, firstPID)
-
-	postClosure := stageDuePostgresJob(ctx, t, pool, store, "lease-safety-post-closure")
-	claims := monitorPostgresJobsPostFaultClaims(ctx, pool, postClosure.Identity().LogicalJobID, first.finished)
-	select {
-	case err := <-first.waited:
-		t.Fatalf("first worker exited before release: %v\n%s", err, first.output.String())
-	default:
+	waittest.Until(t, 15*time.Second, func() bool {
+		_, err := os.Stat(firstFiles.unsafeDrain)
+		return err == nil
+	}, "unsafe drain completion")
+	marker, err := os.ReadFile(firstFiles.unsafeDrain)
+	if err != nil || string(marker) != "unsafe drain\n" {
+		t.Fatalf("unsafe drain marker = %q, %v", marker, err)
 	}
-
-	firstErr, firstExited := waitForPostgresJobsWorkerExit(first, 16*time.Second)
+	drainMarkerRead := time.Now()
+	firstErr, firstExited := waitForPostgresJobsWorkerExit(first, 2*time.Second)
 	if !firstExited {
-		t.Fatalf("first worker did not exit inside the hard bound\n%s", first.output.String())
+		t.Fatalf("first worker did not exit within two seconds of unsafe drain\n%s", first.output.String())
 	}
 	if firstErr == nil {
 		t.Fatalf("first worker exit = nil, want terminal failure\n%s", first.output.String())
 	}
+	if elapsed := time.Since(drainMarkerRead); elapsed > 2*time.Second {
+		t.Fatalf("first worker unsafe-drain exit elapsed = %s, want at most 2s", elapsed)
+	}
+	if _, err := os.Stat(firstFiles.unsafeCleanup); !os.IsNotExist(err) {
+		t.Fatalf("first worker unsafe cleanup marker error = %v, want absent", err)
+	}
+	if !strings.Contains(first.output.String(), "postgres jobs control Session terminal") || !strings.Contains(first.output.String(), "SQLSTATE 57P01") {
+		t.Fatalf("first worker did not report terminal Session 57P01\n%s", first.output.String())
+	}
+	if strings.Contains(first.output.String(), "join jobs worker coordinator") || strings.Contains(first.output.String(), "join jobs-worker diagnostics") {
+		t.Fatalf("first worker performed forbidden post-drain cleanup\n%s", first.output.String())
+	}
+
+	postClosure := stageDuePostgresJob(ctx, t, pool, store, "lease-safety-post-closure")
+	claims := monitorPostgresJobsPostFaultClaims(ctx, pool, postClosure.Identity().LogicalJobID, first.finished)
 	assertPostgresJobsMonitor(t, pids, "replacement Session PID")
 	assertPostgresJobsMonitor(t, claims, "post-fault claim")
 	assertPostgresJobsAttemptCount(ctx, t, pool, postClosure.Identity().LogicalJobID, 0)
@@ -99,11 +116,12 @@ func TestPostgresJobsLeaseSafetyProcess(t *testing.T) {
 		return postgresJobsLeaseExpired(ctx, t, pool, logicalJobID)
 	}, "first attempt lease expiry")
 	secondAppName := "jobs-lease-second"
+	secondFiles := jobsWorkerLeaseFiles(t)
 	secondLocker, secondLockTx := lockPostgresJobsRow(ctx, t, pool, logicalJobID)
 	defer secondLocker.Release()
 	defer func() { _ = secondLockTx.Rollback(ctx) }()
 	second := startPostgresJobsTestWorker(t, repositoryRoot, binary, postgresJobsTestWorkerOptions{
-		Pool: pool, AppName: secondAppName, Files: jobsWorkerLeaseFiles(t),
+		Pool: pool, AppName: secondAppName, Handler: "recovery", Files: secondFiles, EffectGate: secondFiles.effectGate,
 	})
 	secondPID := waitForPostgresJobsBlockedWorkerPID(ctx, t, pool, secondAppName, secondLocker.Conn().PgConn().PID())
 	if secondPID == firstPID {
@@ -114,6 +132,12 @@ func TestPostgresJobsLeaseSafetyProcess(t *testing.T) {
 	}
 	waitForPostgresJobsWorkerReady(t, second.addr)
 	waitForPostgresJobsFencedRecovery(ctx, t, pool, logicalJobID)
+	waitForPostgresJobsTestFile(t, secondFiles.entered, "fenced recovery handler start")
+	if err := os.WriteFile(secondFiles.effectGate, []byte("release\n"), 0o600); err != nil {
+		t.Fatalf("release fenced recovery effect: %v", err)
+	}
+	waitForPostgresJobsTerminalRecovery(ctx, t, pool, prepared)
+	assertPostgresJobsEffectCount(ctx, t, pool, prepared.Identity(), 1)
 	if err := second.process.Process.Signal(syscall.SIGTERM); err != nil {
 		t.Fatalf("signal replacement worker: %v", err)
 	}
@@ -137,7 +161,7 @@ type postgresJobsTestWorkerOptions struct {
 }
 
 type jobsWorkerLeaseFileSet struct {
-	entered, cancelled, cleanup, effect, effectGate, completeGate string
+	entered, cancelled, cleanup, unsafeDrain, unsafeCleanup, effect, effectGate, completeGate string
 }
 
 func jobsWorkerLeaseFiles(t *testing.T) jobsWorkerLeaseFileSet {
@@ -145,7 +169,7 @@ func jobsWorkerLeaseFiles(t *testing.T) jobsWorkerLeaseFileSet {
 	dir := t.TempDir()
 	return jobsWorkerLeaseFileSet{
 		entered: filepath.Join(dir, "entered"), cancelled: filepath.Join(dir, "cancelled"),
-		cleanup: filepath.Join(dir, "cleanup"), effect: filepath.Join(dir, "effect"),
+		cleanup: filepath.Join(dir, "cleanup"), unsafeDrain: filepath.Join(dir, "unsafe-drain"), unsafeCleanup: filepath.Join(dir, "unsafe-cleanup"), effect: filepath.Join(dir, "effect"),
 		effectGate: filepath.Join(dir, "effect-gate"), completeGate: filepath.Join(dir, "complete-gate"),
 	}
 }
@@ -260,6 +284,8 @@ func startPostgresJobsTestWorker(t *testing.T, repositoryRoot, binary string, op
 		"APP__HTTP__REQUEST_TIMEOUT=1s",
 		"APP__HTTP__READINESS_PROPAGATION_DELAY=0s",
 		"JOBS_WORKER_TEST_CLEANUP_FILE="+options.Files.cleanup,
+		"JOBS_WORKER_TEST_UNSAFE_DRAIN_FILE="+options.Files.unsafeDrain,
+		"JOBS_WORKER_TEST_UNSAFE_CLEANUP_FILE="+options.Files.unsafeCleanup,
 	)
 	if options.Handler != "" {
 		worker.process.Env = append(worker.process.Env,
@@ -381,7 +407,7 @@ WHERE datname = current_database() AND application_name = $1`, appName, initialP
 				return
 			}
 			if replacement {
-				err = fmt.Errorf("terminated worker opened a replacement Session PID")
+				err = errors.New("terminated worker opened a replacement Session PID")
 				if !started {
 					ready <- err
 				}
@@ -550,19 +576,15 @@ func waitForPostgresJobsFencedRecovery(ctx context.Context, t *testing.T, pool *
 	t.Helper()
 	waittest.Until(t, 5*time.Second, func() bool {
 		var state, outcome, effect string
-		var attempts int
 		err := pool.PGX().QueryRow(ctx, `
-		SELECT j.state, coalesce(a.outcome, ''), coalesce(a.effect_status, ''), count(*) OVER ()
-FROM postgres_jobs AS j
-JOIN postgres_job_attempts AS a ON a.logical_job_id = j.logical_job_id
-WHERE j.logical_job_id = $1
-ORDER BY a.attempt_generation DESC
-LIMIT 1`, string(logicalJobID)).Scan(&state, &outcome, &effect, &attempts)
+		SELECT coalesce(final_state, ''), coalesce(outcome, ''), coalesce(effect_status, '')
+		FROM postgres_job_attempts
+		WHERE logical_job_id = $1 AND attempt_generation = 1`, string(logicalJobID)).Scan(&state, &outcome, &effect)
 		if err != nil {
 			t.Fatal(err)
 		}
-		return state == string(jobs.StateRetryWait) && outcome == string(jobs.OutcomeLost) && effect == string(jobs.EffectUnknown) && attempts == 1
-	}, "fenced lease-loss recovery without a replacement attempt")
+		return state == string(jobs.StateRetryWait) && outcome == string(jobs.OutcomeLost) && effect == string(jobs.EffectUnknown)
+	}, "fenced lease-loss recovery")
 }
 
 func waitForPostgresJobsWorkerExit(worker *postgresJobsTestWorker, timeout time.Duration) (error, bool) {

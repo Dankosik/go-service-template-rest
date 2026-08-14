@@ -41,3 +41,10 @@ func TestStoreZeroValueFailsClosed(t *testing.T) {
 		t.Fatalf("CheckSchema() error = %v, want ErrConfig", err)
 	}
 }
+
+func TestSchemaMismatchKeepsSchemaCause(t *testing.T) {
+	err := schemaMismatch("columns", []string{"actual"}, []string{"expected"})
+	if !errors.Is(err, ErrSchemaIncompatible) || !strings.Contains(err.Error(), "columns") {
+		t.Fatalf("schemaMismatch() = %v, want ErrSchemaIncompatible naming columns", err)
+	}
+}

@@ -14,9 +14,9 @@ import (
 )
 
 type lifecycleEngine interface {
-	Run(context.Context) error
+	Run(ctx context.Context) error
 	Facts() postgresjobs.EngineFacts
-	StartDrain(context.Context) postgresjobs.DrainResult
+	StartDrain(ctx context.Context) postgresjobs.DrainResult
 }
 
 type lifecycleResult struct {
@@ -76,10 +76,14 @@ func runLifecycle(signalCtx, startupCtx context.Context, cfg config.Config, metr
 	processCtx, cancelProcess, _ := runtimeopts.ArmTeardown(signalCtx, cfg.HTTP.GracePeriod)
 	defer cancelProcess()
 	drain := engine.StartDrain(processCtx)
+	if !drain.CleanupSafe {
+		recordUnsafeDrain()
+		return lifecycleResult{Err: errors.Join(trigger, drain.Err)}
+	}
 	cancelRun()
 	var runnerErr error
-	cleanupSafe := drain.CleanupSafe
-	if cleanupSafe && !runnerStopped {
+	cleanupSafe := true
+	if !runnerStopped {
 		select {
 		case runnerErr = <-runErr:
 			if errors.Is(runnerErr, context.Canceled) {

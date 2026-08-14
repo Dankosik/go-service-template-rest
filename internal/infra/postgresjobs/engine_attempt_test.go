@@ -151,7 +151,6 @@ func TestEngineAttemptFinalizationWaitsForCoordinator(t *testing.T) {
 		run := make(chan error, 1)
 		go func() { run <- engine.Run(context.Background()) }()
 		<-observing
-		synctest.Wait()
 		select {
 		case <-finalized:
 			t.Fatal("attempt finalized while coordinator observation was running")

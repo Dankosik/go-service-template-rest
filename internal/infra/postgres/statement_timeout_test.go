@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -59,6 +60,51 @@ func TestApplyStatementTimeoutsToleratesMissingConfig(t *testing.T) {
 	// Must not panic: New guards its inputs, but this helper is called before the
 	// pool exists and a nil config is the one shape it can receive.
 	applyStatementTimeouts(nil, time.Second)
+}
+
+func TestApplyStatementTimeoutsInstallsImmediateCancelHandler(t *testing.T) {
+	t.Parallel()
+
+	poolConfig, err := parsePoolConfig("postgres://app:app@127.0.0.1:5432/app?sslmode=disable")
+	if err != nil {
+		t.Fatalf("parsePoolConfig() error = %v", err)
+	}
+
+	var marks sync.Map
+	applyContextWatcher(poolConfig.ConnConfig, 8*time.Second, &marks)
+	handler, ok := poolConfig.ConnConfig.BuildContextWatcherHandler(&pgconn.PgConn{}).(*contextWatcherHandler)
+	if !ok {
+		t.Fatalf("BuildContextWatcherHandler() = %T, want *contextWatcherHandler", handler)
+	}
+	cancelHandler, ok := handler.handler.(*pgconn.CancelRequestContextWatcherHandler)
+	if !ok {
+		t.Fatalf("watcher handler = %T, want *pgconn.CancelRequestContextWatcherHandler", handler.handler)
+	}
+	if cancelHandler.CancelRequestDelay != 0 || cancelHandler.DeadlineDelay != 8*time.Second {
+		t.Fatalf("watcher delays = (%s, %s), want (0s, 8s)", cancelHandler.CancelRequestDelay, cancelHandler.DeadlineDelay)
+	}
+}
+
+type watcherStub struct {
+	cancel, unwatch int
+}
+
+func (s *watcherStub) HandleCancel(context.Context) { s.cancel++ }
+func (s *watcherStub) HandleUnwatchAfterCancel()    { s.unwatch++ }
+
+func TestContextWatcherMarksCanceledConnection(t *testing.T) {
+	conn := &pgconn.PgConn{}
+	marker := &contextWatcherMark{}
+	var marks sync.Map
+	marks.Store(conn, marker)
+	delegate := &watcherStub{}
+	handler := &contextWatcherHandler{marks: &marks, conn: conn, handler: delegate}
+
+	handler.HandleCancel(t.Context())
+	handler.HandleUnwatchAfterCancel()
+	if !marker.canceled.Load() || delegate.cancel != 1 || delegate.unwatch != 1 {
+		t.Fatalf("watcher state = canceled:%t cancel:%d unwatch:%d", marker.canceled.Load(), delegate.cancel, delegate.unwatch)
+	}
 }
 
 func TestNewRejectsMissingStatementTimeout(t *testing.T) {

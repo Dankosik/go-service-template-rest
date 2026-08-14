@@ -25,18 +25,21 @@ func (s *engineStoreStub) Renew(ctx context.Context, attempts []AttemptIdentity,
 	}
 	return nil, nil
 }
+
 func (s *engineStoreStub) RescueCandidates(ctx context.Context, limit int) ([]RescueCandidate, error) {
 	if s.candidates != nil {
 		return s.candidates(ctx, limit)
 	}
 	return nil, nil
 }
+
 func (s *engineStoreStub) Rescue(ctx context.Context, input RescueInput) (PersistedTransition, error) {
 	if s.rescue != nil {
 		return s.rescue(ctx, input)
 	}
 	return PersistedTransition{}, nil
 }
+
 func (s *engineStoreStub) Observe(ctx context.Context, keys []jobs.Revision) (Observation, error) {
 	if s.observe != nil {
 		return s.observe(ctx, keys)
@@ -86,6 +89,7 @@ type engineArgs struct {
 }
 
 func engineRegistry(t *testing.T, handler jobs.Handler[engineArgs]) *jobs.Registry {
+	t.Helper()
 	return engineRegistryWithAttemptDuration(t, time.Minute, handler)
 }
 
@@ -113,7 +117,7 @@ func engineRegistryWithAttemptDuration(t *testing.T, attemptDuration time.Durati
 	if err != nil {
 		t.Fatalf("NewDefinition() error = %v", err)
 	}
-	registry := jobs.NewRegistry()
+	registry := new(jobs.Registry)
 	if err := jobs.Register(registry, definition, handler); err != nil {
 		t.Fatalf("Register() error = %v", err)
 	}

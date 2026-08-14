@@ -385,6 +385,46 @@ before SQLC regeneration; the combined profile retains every one of these
 paths. `scripts/ci/template-init-check.sh` proves each exact path and repeat
 zero-drift.
 
+### Reopened relay-stop and legacy-cancellation boundary
+
+The shared PostgreSQL context watcher is an operation boundary, not a
+connection-template default. `Pool.InTx` owns its watcher mark, one
+non-cancelled rollback, and the resulting caller-cancellation/error identity
+precedence. Its cancel-request handler is correct for a transaction statement,
+but a relay append listener is an idle `WaitForNotification`, not a statement:
+a PostgreSQL `CancelRequest` has no statement to cancel. Copying that handler
+onto the listener therefore leaves the relay blocked until its later socket
+deadline, so `Relay.Run` cannot complete the one listener join after
+`StartDrain`.
+
+`Store.listenerConfig` must return a copied, dedicated listener configuration
+whose `BuildContextWatcherHandler` is reset to pgx's ordinary immediate
+deadline watcher. It retains the configured DSN, TLS, connect settings, and
+server statement limits, but does not inherit the Pool's operation watcher or
+its transaction attribution map. The existing listener-owned cancellation and
+bounded close remain its sole lifecycle controls: `StartDrain` cancels and
+joins exactly that listener before `Relay.Run` returns; no extra relay
+goroutine, poll loop, timeout, or NATS lifecycle path is added.
+
+`Store.ClassifyLegacyUncertainty` instead runs its one canonical SQLC batch
+inside the existing `Pool.InTx` callback. The Store still owns the one bounded
+writer transition and the bootstrap still owns the DB-only loop-to-zero; the
+transaction only gives this cancellation-sensitive write the already-accepted
+watcher attribution and one cleanup rollback. A caller-cancelled lock wait
+therefore returns an error matching both `context.Canceled` and the actual
+PostgreSQL `57014`; an unrelated server SQLSTATE remains discoverable and is
+not relabelled as caller cancellation. The method does not retry a cancelled
+or failed batch. Previously committed batches remain the nullable sticky-fact
+cursor, so rerun monotonicity, no synthetic receipt/order-head mutation, and
+the publisher-free carrier stay unchanged.
+
+This is the smallest boundary: changing the global watcher would reopen the
+accepted `Pool.InTx` contracts; wrapping the listener in a transaction or
+adding a relay-specific watcher would mix notification lifecycle with delivery
+or duplicate the PostgreSQL owner. Reopen System Design only if a copied
+listener config cannot preserve the validated connection policy while restoring
+immediate listener cancellation.
+
 ## Observability and privacy
 
 Observation distinguishes `poison` from `outcome_unknown`, including count and
@@ -425,7 +465,7 @@ earlier `messaging.message.id` decision is superseded accordingly.
 | Receipt encoding, append evidence, writer reconciliation | Add `internal/infra/postgresoutbox/store_receipt.go`; change `store_append.go` | Concrete `Store`, standard library only; unit golden vector plus real PostgreSQL lost-commit/cleanup proof |
 | Domain-mutation commit reconciliation | Change `docs/postgres-transactional-outbox.md`; add `examples/reference-service/postgres_outbox_reconciliation_integration_test.go` | Concrete PostgreSQL repository adapter owns stable event and the four-way caller route; worked lost-response proof, no feature or Store retry owner |
 | Sticky row mapping and claim recovery | Change `store_claim.go`, `store_rows.go`, `store_operator.go` | `postgresoutbox` owns durable state; real PostgreSQL legacy/lease/operator proof |
-| Pre-start legacy classification | Add `store_legacy_classification.go`; change `store.go` and `doc.go`; add `cmd/outbox-relay/internal/bootstrap/legacy_classification.go` and `legacy_classification_test.go`; change `run.go` | Concrete Store method plus one explicit DB-only relay mode; canonical SQL and writer pool own truth, the nearest Store/package authorities name the separate rollout audience, while bootstrap owns config, cancellation, loop-to-zero, exit, and cleanup |
+| Pre-start legacy classification | Add `store_legacy_classification.go`; change `store.go` and `doc.go`; add `cmd/outbox-relay/internal/bootstrap/legacy_classification.go` and `legacy_classification_test.go`; change `run.go` | Concrete Store method uses the existing `Pool.InTx` watcher/cleanup boundary for one canonical batch; the explicit DB-only relay mode owns config, loop-to-zero, exit, and cleanup |
 | Automatic retry/poison/unknown precedence | Change `relay.go`, `relay_finalize.go`, `store_finalize.go` | Existing relay/store boundary and lease fencing; focused relay table proof plus PostgreSQL transitions |
 | Observation and bounded telemetry | Change `store_maintenance.go`, `telemetry.go`, `vocabulary.go` | Existing snapshot/instrument owner; bounded-vocabulary and state-query proof |
 | Operator API and compatibility sentinels | Change `store_operator.go`, `errors.go` | Concrete methods, no public action enum; concurrent audit-action integration proof |
@@ -469,6 +509,7 @@ classification.
 | `internal/infra/postgresoutbox/store_operator.go` | Own all audited operator transactions and `Record` operator state | Concrete actions, row/audit locks, and compatibility behavior stay together |
 | `internal/infra/postgresoutbox/errors.go` | Own generalized receipt/operator sentinels and legacy aliases | No error-text routing |
 | `internal/infra/postgresoutbox/store_legacy_classification.go` (add) | Own the separate pre-start rollout classification path | Adds `ClassifyLegacyUncertainty`; validates existing max-attempt and maintenance-batch bounds, executes one canonical statement, and owns no rollout loop or classification SQL |
+| `internal/infra/postgresoutbox/store.go` | Supplies the separate relay-listener connection configuration | Its copied config resets only the pool operation watcher, retaining validated connection policy; it owns neither listener loop nor transaction semantics |
 | `internal/infra/postgresoutbox/store_maintenance.go` | Map the expanded aggregate observation | Periodic relay observation/cleanup only; no rollout transition or delivery decision |
 | `internal/infra/postgresoutbox/telemetry.go` | Export unknown state and remove unbounded event IDs | Bounded attributes only |
 | `internal/infra/postgresoutbox/vocabulary.go` | Close new operation/state values | No dynamic values |
@@ -502,6 +543,8 @@ reopen that decision.
 | `internal/infra/postgresoutbox/store_test.go` | New Store method validation and legacy sentinel aliases |
 | `internal/infra/postgresoutbox/telemetry_test.go` | Unknown vocabulary/storage gauges and absence of event IDs |
 | `internal/infra/postgresoutbox/relay_publish_span_test.go` | Preserve root/link/kind/error semantics and prove the relay span has no event ID or ordering key |
+| `internal/infra/postgresoutbox/notify_test.go` | Dedicated listener config retains connection policy but uses immediate cancellation, and one drain joins `Relay.Run` |
+| `internal/infra/postgresoutbox/store_legacy_classification_test.go` (add or existing nearest Store test) | Cancellation/error identity through the one `Pool.InTx` batch, without retry or false zero |
 | `internal/infra/natsjs/outbox_publisher_test.go` (add) | Conversion, private prevalidation mapping, ambiguity, and creation-context forwarding |
 | `internal/infra/natsjs/telemetry_test.go` | No message/consumer attributes after privacy repair |
 | `cmd/outbox-relay/internal/bootstrap/natsjs_publisher_test.go` (add) | Typed config mapping parity, connect failure, and complete runtime carrier |

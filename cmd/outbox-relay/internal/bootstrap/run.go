@@ -48,12 +48,12 @@ func run(signalCtx context.Context, args []string, buildPublisher PublisherBuild
 		if err := validateClassificationConfig(cfg); err != nil {
 			return err
 		}
-		return runLegacyClassification(signalCtx, startupCtx, cfg, newLogger(os.Stdout, cfg))
+		return runLegacyClassification(signalCtx, startupCtx, cfg, runtimeopts.Logger(os.Stdout, cfg, "component", "outbox_relay"))
 	}
 	if err := validateRuntimeConfig(cfg); err != nil {
 		return err
 	}
-	log := newLogger(os.Stdout, cfg)
+	log := runtimeopts.Logger(os.Stdout, cfg, "component", "outbox_relay")
 
 	// Telemetry is installed before any dependency it has to outlive. Defers run
 	// last-registered-first, so everything registered below this point releases

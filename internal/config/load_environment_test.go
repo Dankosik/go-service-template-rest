@@ -2,7 +2,9 @@ package config
 
 import (
 	"errors"
+	// profile:object-storage:start
 	"path/filepath"
+	// profile:object-storage:end
 	"strings"
 	"testing"
 	"time"
@@ -170,6 +172,12 @@ func TestNamespaceEnvPreservesRawDataBearingStrings(t *testing.T) {
 	postgresDSN := " postgres://user:pass@localhost:5432/app?sslmode=disable "
 	t.Setenv("APP__POSTGRES__DSN", postgresDSN)
 	// profile:database-postgres:end
+	// profile:outbound-auth-oauth2-client-credentials:start
+	clientID := " client:id "
+	clientSecret := " client secret "
+	t.Setenv("APP__OUTBOUND_AUTH__CLIENT_ID", clientID)
+	t.Setenv("APP__OUTBOUND_AUTH__CLIENT_SECRET", clientSecret)
+	// profile:outbound-auth-oauth2-client-credentials:end
 
 	cfg, _, err := LoadDetailed(LoadOptions{})
 	if err != nil {
@@ -183,6 +191,14 @@ func TestNamespaceEnvPreservesRawDataBearingStrings(t *testing.T) {
 	if cfg.Observability.OTel.Exporter.OTLPHeaders != headers {
 		t.Fatalf("OTLPHeaders = %q, want exact env value %q", cfg.Observability.OTel.Exporter.OTLPHeaders, headers)
 	}
+	// profile:outbound-auth-oauth2-client-credentials:start
+	if cfg.OutboundAuth.ClientID != clientID {
+		t.Fatalf("OutboundAuth.ClientID = %q, want exact env value %q", cfg.OutboundAuth.ClientID, clientID)
+	}
+	if cfg.OutboundAuth.ClientSecret != clientSecret {
+		t.Fatalf("OutboundAuth.ClientSecret = %q, want exact env value %q", cfg.OutboundAuth.ClientSecret, clientSecret)
+	}
+	// profile:outbound-auth-oauth2-client-credentials:end
 }
 
 func TestNamespaceEnvTrimsSyntaxFields(t *testing.T) {
@@ -226,25 +242,29 @@ func TestNamespaceEnvForConfigKey(t *testing.T) {
 	}
 }
 
+// profile:object-storage:start
+//
 //nolint:paralleltest // Reads env/.env.example through process-wide environment overrides.
-func TestEnvExampleLoadsThroughConfigLoader(t *testing.T) {
+func TestEnvExampleIsFailClosedUntilObjectStorageIsConfigured(t *testing.T) {
 	resetConfigEnv(t)
 
 	for key, value := range readEnvExample(t, filepath.Join("..", "..", "env", ".env.example")) {
 		t.Setenv(key, value)
 	}
+	// profile:outbound-auth-oauth2-client-credentials:start
+	setOutboundAuthTestEnv(t)
+	// profile:outbound-auth-oauth2-client-credentials:end
 
-	cfg, _, err := LoadDetailed(LoadOptions{})
-	if err != nil {
-		t.Fatalf("LoadDetailed() with env/.env.example values error = %v", err)
+	_, _, err := LoadDetailed(LoadOptions{})
+	if !errors.Is(err, ErrValidate) {
+		t.Fatalf("LoadDetailed() error = %v, want incomplete object-storage validation", err)
 	}
-	if cfg.HTTP.GracePeriod != 45*time.Second {
-		t.Fatalf("HTTP.GracePeriod = %s, want 45s from env/.env.example", cfg.HTTP.GracePeriod)
-	}
-	if cfg.HTTP.ShutdownTimeout != 25*time.Second {
-		t.Fatalf("HTTP.ShutdownTimeout = %s, want 25s from env/.env.example", cfg.HTTP.ShutdownTimeout)
+	if !strings.Contains(err.Error(), "object_storage.provider") {
+		t.Fatalf("LoadDetailed() error = %v, want object storage placeholder rejection", err)
 	}
 }
+
+// profile:object-storage:end
 
 func TestTST001PrecedenceDeterministicSnapshotAcrossRepeatedLoads(t *testing.T) {
 	resetConfigEnv(t)

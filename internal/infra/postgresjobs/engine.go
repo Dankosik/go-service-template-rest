@@ -10,13 +10,13 @@ import (
 )
 
 type engineStore interface {
-	Claim(context.Context, ClaimOptions) (ClaimResult, error)
-	ResolveClaims(context.Context, []AttemptIdentity) ([]ClaimResolution, error)
-	Finalize(context.Context, FinalizeInput) (PersistedTransition, error)
-	Renew(context.Context, []AttemptIdentity, time.Duration) ([]Renewal, error)
-	RescueCandidates(context.Context, int) ([]RescueCandidate, error)
-	Rescue(context.Context, RescueInput) (PersistedTransition, error)
-	Observe(context.Context, []jobs.Revision) (Observation, error)
+	Claim(ctx context.Context, options ClaimOptions) (ClaimResult, error)
+	ResolveClaims(ctx context.Context, attempts []AttemptIdentity) ([]ClaimResolution, error)
+	Finalize(ctx context.Context, input FinalizeInput) (PersistedTransition, error)
+	Renew(ctx context.Context, attempts []AttemptIdentity, leaseDuration time.Duration) ([]Renewal, error)
+	RescueCandidates(ctx context.Context, limit int) ([]RescueCandidate, error)
+	Rescue(ctx context.Context, input RescueInput) (PersistedTransition, error)
+	Observe(ctx context.Context, revisions []jobs.Revision) (Observation, error)
 }
 
 type EngineConfig struct {

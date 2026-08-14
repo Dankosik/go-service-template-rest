@@ -11,7 +11,9 @@ import (
 	"testing"
 
 	"github.com/example/go-service-template-rest/internal/httpidempotency"
+	// profile:authn-oidc-jwt:start
 	"github.com/example/go-service-template-rest/internal/infra/oidcjwt"
+	// profile:authn-oidc-jwt:end
 	"github.com/example/go-service-template-rest/internal/problem"
 	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/go-chi/chi/v5"
@@ -123,6 +125,8 @@ func TestHTTPIdempotencyAuthorizationAndAdmissionOrder(t *testing.T) {
 		}
 		w.WriteHeader(http.StatusCreated)
 	}))
+	var response *httptest.ResponseRecorder
+	// profile:authn-oidc-jwt:start
 	headerTooLarge := newIdempotencyTestHandler(t, operation, func(context.Context, *openapi3filter.AuthenticationInput) error {
 		return oidcjwt.NewError(oidcjwt.KindOversize)
 	}, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
@@ -131,7 +135,7 @@ func TestHTTPIdempotencyAuthorizationAndAdmissionOrder(t *testing.T) {
 	request := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/widgets", nil)
 	request.Header.Set("Authorization", "Bearer test")
 	request.Header.Set(httpidempotency.Header, "bad,key")
-	response := httptest.NewRecorder()
+	response = httptest.NewRecorder()
 	headerTooLarge.ServeHTTP(response, request)
 	if response.Code != http.StatusRequestHeaderFieldsTooLarge {
 		t.Fatalf("header-too-large status = %d, want 431", response.Code)
@@ -140,6 +144,7 @@ func TestHTTPIdempotencyAuthorizationAndAdmissionOrder(t *testing.T) {
 	if authorizations.Load() != 0 || admissions.Load() != 0 || handlers.Load() != 0 {
 		t.Fatal("header-too-large request reached idempotency callbacks")
 	}
+	// profile:authn-oidc-jwt:end
 
 	unauthenticated := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/widgets", nil)
 	unauthenticated.Header.Set(httpidempotency.Header, "bad,key")
@@ -320,6 +325,56 @@ func TestHTTPIdempotencyProblemAndRedaction(t *testing.T) {
 	}
 }
 
+func TestHTTPIdempotencyTerminalObservation(t *testing.T) {
+	operation := testIdempotencyOperation()
+	operation.Authorize = func(context.Context, *http.Request) (httpidempotency.Scope, bool) {
+		return httpidempotency.Scope{Authority: "authority", OperationID: "createWidget", APIVersion: "v1"}, true
+	}
+	var observed []httpidempotency.Decision
+	var handled atomic.Int64
+	observe := func(_ context.Context, decision httpidempotency.Decision, err error) {
+		if err != nil {
+			t.Fatalf("terminal observer error = %v", err)
+		}
+		observed = append(observed, decision)
+	}
+	for _, testCase := range []struct {
+		outcome    httpidempotency.Outcome
+		wantStatus int
+	}{
+		{outcome: httpidempotency.OutcomeExecute, wantStatus: http.StatusCreated},
+		{outcome: httpidempotency.OutcomeRateLimited, wantStatus: http.StatusTooManyRequests},
+	} {
+		operation.Admit = func(context.Context, httpidempotency.Scope) httpidempotency.Decision {
+			return httpidempotency.Decision{Outcome: testCase.outcome}
+		}
+		handler := newIdempotencyTestHandlerWithObserver(
+			t,
+			operation,
+			authenticatedTestRequest,
+			observe,
+			http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				handled.Add(1)
+				w.WriteHeader(http.StatusCreated)
+			}),
+		)
+		request := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/widgets", nil)
+		request.Header.Set("Authorization", "Bearer test")
+		request.Header.Set(httpidempotency.Header, "terminal-observation")
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		if response.Code != testCase.wantStatus {
+			t.Fatalf("%s response status = %d, want %d", string(testCase.outcome), response.Code, testCase.wantStatus)
+		}
+	}
+	if len(observed) != 1 || observed[0].Outcome != httpidempotency.OutcomeRateLimited {
+		t.Fatalf("terminal observations = %#v, want only rate-limited admission", observed)
+	}
+	if handled.Load() != 1 {
+		t.Fatalf("endpoint calls = %d, want admitted request only", handled.Load())
+	}
+}
+
 func newIdempotencyTestHandler(
 	tb testing.TB,
 	operation IdempotencyOperation,
@@ -327,8 +382,19 @@ func newIdempotencyTestHandler(
 	terminal http.Handler,
 ) http.Handler {
 	tb.Helper()
+	return newIdempotencyTestHandlerWithObserver(tb, operation, authenticate, nil, terminal)
+}
+
+func newIdempotencyTestHandlerWithObserver(
+	tb testing.TB,
+	operation IdempotencyOperation,
+	authenticate openapi3filter.AuthenticationFunc,
+	terminalObserver func(context.Context, httpidempotency.Decision, error),
+	terminal http.Handler,
+) http.Handler {
+	tb.Helper()
 	spec := idempotencyTestSpec(tb)
-	envelope, err := newIdempotencyEnvelope(spec, []IdempotencyOperation{operation})
+	envelope, err := newIdempotencyEnvelope(spec, []IdempotencyOperation{operation}, terminalObserver)
 	if err != nil {
 		tb.Fatalf("newIdempotencyEnvelope() error = %v", err)
 	}

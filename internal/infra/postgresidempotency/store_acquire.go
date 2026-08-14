@@ -14,6 +14,8 @@ import (
 
 // Acquire locks and verifies the exact reservation inside the endpoint's
 // transaction. It never begins, commits, or retries that feature transaction.
+//
+//nolint:cyclop // The lock/error classifications share one caller-owned transaction boundary.
 func (s *Store) Acquire(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -62,10 +64,10 @@ func (s *Store) Acquire(
 		return httpidempotency.Reservation{}, httpidempotency.Decision{}, unavailable(ctx, "release reservation lock savepoint")
 	}
 	row := storedRowFromLocked(locked)
-	if row.phase == "completed" {
-		return s.classifyLockedCompleted(contract, reservation.Attempt, resolve, row)
+	if row.phase == phaseCompleted {
+		return s.classifyLockedCompleted(contract, resolve, row)
 	}
-	if row.phase != "reserved" || row.generation <= 0 {
+	if row.phase != phaseReserved || row.generation <= 0 {
 		return httpidempotency.Reservation{}, httpidempotency.Decision{Outcome: httpidempotency.OutcomeIntegrityConflict}, nil
 	}
 	if row.generation != reservation.Generation {
@@ -103,7 +105,6 @@ func (s *Store) Acquire(
 
 func (s *Store) classifyLockedCompleted(
 	contract httpidempotency.Contract,
-	attempt httpidempotency.Attempt,
 	resolve FingerprintResolver,
 	row storedRow,
 ) (httpidempotency.Reservation, httpidempotency.Decision, error) {
@@ -115,6 +116,7 @@ func (s *Store) classifyLockedCompleted(
 	}
 	fingerprint, err := resolveFingerprint(resolve, row.fingerprintVersion)
 	if err != nil {
+		//nolint:nilerr // A resolver failure is an intentional unavailable decision, not a transaction error.
 		return httpidempotency.Reservation{}, httpidempotency.Decision{Outcome: httpidempotency.OutcomeUnavailable}, nil
 	}
 	if !sameFingerprint(row.fingerprintVersion, row.fingerprint, fingerprint) {
@@ -122,6 +124,7 @@ func (s *Store) classifyLockedCompleted(
 	}
 	result, err := httpidempotency.DecodeResult(contract, row.result)
 	if err != nil {
+		//nolint:nilerr // An invalid stored result is an intentional integrity decision.
 		return httpidempotency.Reservation{}, httpidempotency.Decision{Outcome: httpidempotency.OutcomeIntegrityConflict}, nil
 	}
 	return httpidempotency.Reservation{}, httpidempotency.Decision{Outcome: httpidempotency.OutcomeReplay, Result: &result}, nil

@@ -383,23 +383,7 @@ func messagingMetricAttributes(t *testing.T, collected metricdata.ResourceMetric
 
 func aggregationAttributeSets(t *testing.T, aggregation metricdata.Aggregation) []map[string]string {
 	t.Helper()
-	var sets []attribute.Set
-	switch data := aggregation.(type) {
-	case metricdata.Sum[int64]:
-		for _, point := range data.DataPoints {
-			sets = append(sets, point.Attributes)
-		}
-	case metricdata.Gauge[int64]:
-		for _, point := range data.DataPoints {
-			sets = append(sets, point.Attributes)
-		}
-	case metricdata.Histogram[float64]:
-		for _, point := range data.DataPoints {
-			sets = append(sets, point.Attributes)
-		}
-	default:
-		t.Fatalf("unexpected metric aggregation %T", aggregation)
-	}
+	sets := telemetrytest.AttributeSets(t, aggregation)
 	result := make([]map[string]string, 0, len(sets))
 	for _, set := range sets {
 		values := make(map[string]string)

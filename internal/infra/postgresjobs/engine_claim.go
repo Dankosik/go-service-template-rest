@@ -12,8 +12,11 @@ import (
 func (e *Engine) claim(ctx context.Context) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	if !e.admission || ctx.Err() != nil {
-		return ctx.Err()
+	if !e.admission {
+		return nil
+	}
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("claim context: %w", err)
 	}
 	limit := e.freeCapacityLocked()
 	if limit == 0 {

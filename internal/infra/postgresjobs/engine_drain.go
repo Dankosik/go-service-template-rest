@@ -33,6 +33,7 @@ func (e *Engine) StartDrain(ctx context.Context) DrainResult {
 	// Waiting for it here makes the map insertion in registerClaimLocked the
 	// quiescence boundary rather than leaving an untracked handoff behind.
 	e.cycleMu.Lock()
+	//nolint:staticcheck,gocritic // Immediate unlock is the cycle-quiescence barrier.
 	e.cycleMu.Unlock()
 
 	done := make(chan struct{})

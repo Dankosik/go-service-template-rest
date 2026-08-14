@@ -13,7 +13,7 @@ import (
 	"github.com/knadh/koanf/v2"
 )
 
-func TestBuildSnapshotMapsEveryKnownConfigLeafKey(t *testing.T) {
+func TestSnapshotContract(t *testing.T) {
 	t.Parallel()
 
 	sourceValues := sentinelConfigSourceValues()
@@ -92,9 +92,25 @@ func TestEveryKnownConfigKeyHasADefault(t *testing.T) {
 	t.Parallel()
 
 	defaults := defaultValues()
+	activeOnly := map[string]struct{}{
+		// profile:http-idempotency-postgres:start
+		"http_idempotency.owner_recovery_delay":     {},
+		"http_idempotency.maintenance_interval":     {},
+		"http_idempotency.cleanup_batch_size":       {},
+		"http_idempotency.max_maintenance_lag":      {},
+		"http_idempotency.max_relation_bytes":       {},
+		"http_idempotency.admission_headroom_bytes": {},
+		// profile:http-idempotency-postgres:end
+	}
 	missing := make([]string, 0)
 	for _, key := range configLeafKeysFromType(t, reflect.TypeFor[Config](), "") {
 		if _, defaulted := defaults[key]; defaulted {
+			if _, mustBeExplicit := activeOnly[key]; mustBeExplicit {
+				t.Errorf("defaultValues() contains active-only key %q", key)
+			}
+			continue
+		}
+		if _, mustBeExplicit := activeOnly[key]; mustBeExplicit {
 			continue
 		}
 		missing = append(missing, key)
@@ -245,6 +261,21 @@ func sentinelConfigSourceValues() map[string]any {
 		"authn.trusted_proxy_cidrs": "192.0.2.0/24",
 		// profile:authn-oidc-jwt:end
 
+		// profile:outbound-auth-oauth2-client-credentials:start
+		"outbound_auth.dependency":                "snapshot-dependency",
+		"outbound_auth.client_id":                 " snapshot-client:id ",
+		"outbound_auth.client_secret":             " snapshot-client-secret ",
+		"outbound_auth.client_authentication":     "client_secret_basic",
+		"outbound_auth.token_endpoint":            "https://auth.snapshot.example/oauth/token",
+		"outbound_auth.token_target_class":        "private_https",
+		"outbound_auth.token_private_host_suffix": "snapshot.internal",
+		"outbound_auth.scopes":                    "snapshot.read snapshot.write",
+		"outbound_auth.resource":                  "https://resource.snapshot.example",
+		"outbound_auth.audience":                  "",
+		"outbound_auth.resource_authority":        "https://resource.snapshot.example",
+		"outbound_auth.acquisition_timeout":       "4s",
+		// profile:outbound-auth-oauth2-client-credentials:end
+
 		// profile:grpc:start
 		"grpc.server.enabled":                        true,
 		"grpc.server.addr":                           ":19091",
@@ -319,6 +350,15 @@ func sentinelConfigSourceValues() map[string]any {
 		"postgres.statement_timeout":           "7s",
 		// profile:database-postgres:end
 
+		// profile:http-idempotency-postgres:start
+		"http_idempotency.owner_recovery_delay":     "30s",
+		"http_idempotency.maintenance_interval":     "5s",
+		"http_idempotency.cleanup_batch_size":       101,
+		"http_idempotency.max_maintenance_lag":      "45s",
+		"http_idempotency.max_relation_bytes":       int64(1 << 30),
+		"http_idempotency.admission_headroom_bytes": int64(1 << 20),
+		// profile:http-idempotency-postgres:end
+
 		// profile:jobs-postgres:start
 		"jobs.enabled":                 true,
 		"jobs.poll_interval":           "650ms",
@@ -328,6 +368,24 @@ func sentinelConfigSourceValues() map[string]any {
 		"jobs.observation_interval":    "8s",
 		"jobs.drain_timeout":           "23s",
 		// profile:jobs-postgres:end
+
+		// profile:webhooks-durable:start
+		"webhooks.enabled":                 true,
+		"webhooks.capacity_revision":       int64(8),
+		"webhooks.global_concurrency":      7,
+		"webhooks.claim_scan_page":         23,
+		"webhooks.poll_interval":           "450ms",
+		"webhooks.observation_interval":    "7s",
+		"webhooks.store_operation_timeout": "6s",
+		"webhooks.attempt_timeout":         "12s",
+		"webhooks.response_header_timeout": "4s",
+		"webhooks.response_header_bytes":   8192,
+		"webhooks.response_body_bytes":     16384,
+		"webhooks.drain_timeout":           "24s",
+		"webhooks.maintenance_interval":    "9s",
+		"webhooks.maintenance_batch":       41,
+		"webhooks.static_secrets":          `{"revision":8,"entries":[]}`,
+		// profile:webhooks-durable:end
 
 		// profile:outbox-postgres:start
 		"outbox.enabled":              true,
@@ -345,6 +403,24 @@ func sentinelConfigSourceValues() map[string]any {
 		"outbox.cleanup_batch_size":   321,
 		"outbox.drain_timeout":        "22s",
 		// profile:outbox-postgres:end
+
+		// profile:object-storage:start
+		"object_storage.provider":                   "amazon_s3",
+		"object_storage.endpoint":                   "https://s3.us-east-1.amazonaws.com",
+		"object_storage.region":                     "us-east-1",
+		"object_storage.bucket":                     "examplebucket",
+		"object_storage.access_key_id":              "snapshot-access-key",
+		"object_storage.secret_access_key":          "snapshot-secret-key",
+		"object_storage.session_token":              "snapshot-session-token",
+		"object_storage.max_object_bytes":           10485760,
+		"object_storage.multipart_chunk_bytes":      5242880,
+		"object_storage.max_active_operations":      2,
+		"object_storage.max_operation_duration":     "1s",
+		"object_storage.max_presign_lifetime":       "1m",
+		"object_storage.max_response_header_bytes":  1024,
+		"object_storage.max_control_response_bytes": 1024,
+		"object_storage.max_working_memory_bytes":   62_145_920,
+		// profile:object-storage:end
 
 		"observability.metrics.addr":                        "127.0.0.1:19090",
 		"observability.pprof.enabled":                       true,
@@ -385,6 +461,21 @@ func expectedSentinelSnapshotValues() map[string]any {
 		"authn.audience":            "snapshot-api",
 		"authn.trusted_proxy_cidrs": "192.0.2.0/24",
 		// profile:authn-oidc-jwt:end
+
+		// profile:outbound-auth-oauth2-client-credentials:start
+		"outbound_auth.dependency":                "snapshot-dependency",
+		"outbound_auth.client_id":                 " snapshot-client:id ",
+		"outbound_auth.client_secret":             " snapshot-client-secret ",
+		"outbound_auth.client_authentication":     "client_secret_basic",
+		"outbound_auth.token_endpoint":            "https://auth.snapshot.example/oauth/token",
+		"outbound_auth.token_target_class":        "private_https",
+		"outbound_auth.token_private_host_suffix": "snapshot.internal",
+		"outbound_auth.scopes":                    "snapshot.read snapshot.write",
+		"outbound_auth.resource":                  "https://resource.snapshot.example",
+		"outbound_auth.audience":                  "",
+		"outbound_auth.resource_authority":        "https://resource.snapshot.example",
+		"outbound_auth.acquisition_timeout":       4 * time.Second,
+		// profile:outbound-auth-oauth2-client-credentials:end
 
 		// profile:grpc:start
 		"grpc.server.enabled":                        true,
@@ -460,6 +551,15 @@ func expectedSentinelSnapshotValues() map[string]any {
 		"postgres.statement_timeout":           7 * time.Second,
 		// profile:database-postgres:end
 
+		// profile:http-idempotency-postgres:start
+		"http_idempotency.owner_recovery_delay":     30 * time.Second,
+		"http_idempotency.maintenance_interval":     5 * time.Second,
+		"http_idempotency.cleanup_batch_size":       101,
+		"http_idempotency.max_maintenance_lag":      45 * time.Second,
+		"http_idempotency.max_relation_bytes":       int64(1 << 30),
+		"http_idempotency.admission_headroom_bytes": int64(1 << 20),
+		// profile:http-idempotency-postgres:end
+
 		// profile:jobs-postgres:start
 		"jobs.enabled":                 true,
 		"jobs.poll_interval":           650 * time.Millisecond,
@@ -469,6 +569,24 @@ func expectedSentinelSnapshotValues() map[string]any {
 		"jobs.observation_interval":    8 * time.Second,
 		"jobs.drain_timeout":           23 * time.Second,
 		// profile:jobs-postgres:end
+
+		// profile:webhooks-durable:start
+		"webhooks.enabled":                 true,
+		"webhooks.capacity_revision":       int64(8),
+		"webhooks.global_concurrency":      7,
+		"webhooks.claim_scan_page":         23,
+		"webhooks.poll_interval":           450 * time.Millisecond,
+		"webhooks.observation_interval":    7 * time.Second,
+		"webhooks.store_operation_timeout": 6 * time.Second,
+		"webhooks.attempt_timeout":         12 * time.Second,
+		"webhooks.response_header_timeout": 4 * time.Second,
+		"webhooks.response_header_bytes":   8192,
+		"webhooks.response_body_bytes":     16384,
+		"webhooks.drain_timeout":           24 * time.Second,
+		"webhooks.maintenance_interval":    9 * time.Second,
+		"webhooks.maintenance_batch":       41,
+		"webhooks.static_secrets":          `{"revision":8,"entries":[]}`,
+		// profile:webhooks-durable:end
 
 		// profile:outbox-postgres:start
 		"outbox.enabled":              true,
@@ -487,6 +605,24 @@ func expectedSentinelSnapshotValues() map[string]any {
 		"outbox.drain_timeout":        22 * time.Second,
 		// profile:outbox-postgres:end
 
+		// profile:object-storage:start
+		"object_storage.provider":                   "amazon_s3",
+		"object_storage.endpoint":                   "https://s3.us-east-1.amazonaws.com",
+		"object_storage.region":                     "us-east-1",
+		"object_storage.bucket":                     "examplebucket",
+		"object_storage.access_key_id":              "snapshot-access-key",
+		"object_storage.secret_access_key":          "snapshot-secret-key",
+		"object_storage.session_token":              "snapshot-session-token",
+		"object_storage.max_object_bytes":           int64(10485760),
+		"object_storage.multipart_chunk_bytes":      int64(5242880),
+		"object_storage.max_active_operations":      2,
+		"object_storage.max_operation_duration":     time.Second,
+		"object_storage.max_presign_lifetime":       time.Minute,
+		"object_storage.max_response_header_bytes":  int64(1024),
+		"object_storage.max_control_response_bytes": int64(1024),
+		"object_storage.max_working_memory_bytes":   int64(62_145_920),
+		// profile:object-storage:end
+
 		"observability.metrics.addr":                        "127.0.0.1:19090",
 		"observability.pprof.enabled":                       true,
 		"observability.otel.service_name":                   "snapshot-service",
@@ -499,10 +635,5 @@ func expectedSentinelSnapshotValues() map[string]any {
 }
 
 func sortedStringSetKeys[V any](values map[string]V) []string {
-	keys := make([]string, 0, len(values))
-	for key := range values {
-		keys = append(keys, key)
-	}
-	slices.Sort(keys)
-	return keys
+	return slices.Sorted(maps.Keys(values))
 }

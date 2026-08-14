@@ -64,3 +64,22 @@ func TestPublicationGroupFollowerCancellation(t *testing.T) {
 		t.Fatalf("follower error = %v, want context canceled", err)
 	}
 }
+
+func TestStoreOptionsOwnerRecoveryDelay(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		delay time.Duration
+		want  int64
+	}{
+		{name: "30 seconds", delay: 30 * time.Second, want: 30_000_000},
+		{name: "50 seconds", delay: 50 * time.Second, want: 50_000_000},
+		{name: "sub microsecond ceiling", delay: time.Nanosecond, want: 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			store := Store{options: StoreOptions{OwnerRecoveryDelay: tc.delay}}
+			if got := store.recoveryMicros(); got != tc.want {
+				t.Fatalf("writer recovery microseconds = %d, want %d", got, tc.want)
+			}
+		})
+	}
+}

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/config"
+	"github.com/example/go-service-template-rest/internal/config/configtest"
 	"github.com/example/go-service-template-rest/internal/infra/natsjs"
 	"github.com/example/go-service-template-rest/internal/infra/natsjs/natsjstest"
 	"github.com/example/go-service-template-rest/internal/waittest"
@@ -211,6 +212,7 @@ func workerNATSFixture(t *testing.T) (string, jetstream.JetStream) {
 
 func setWorkerEnvironment(t *testing.T, url, consumer, diagnosticsAddress string) {
 	t.Helper()
+	configtest.IsolateEnv(t)
 	for key, value := range map[string]string{
 		// profile:authn-oidc-jwt:start
 		"APP__AUTHN__ISSUER":              "https://issuer.example.com",

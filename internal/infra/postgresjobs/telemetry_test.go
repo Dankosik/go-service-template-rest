@@ -2,6 +2,7 @@ package postgresjobs
 
 import (
 	"context"
+	"math"
 	"testing"
 	"time"
 
@@ -17,7 +18,7 @@ func TestTelemetryExportsCachedObservationWithoutStoreCalls(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	telemetry.Update(Observation{ObservedAt: time.Now(), Compatible: true, States: []StateObservation{{State: jobs.StateReady, Count: 2}}}, EngineFacts{ClaimAdmissionOpen: true, Compatible: true})
+	telemetry.Update(Observation{ObservedAt: time.Now(), Compatible: true, States: []StateObservation{{State: jobs.StateReady, Count: math.MaxUint64}}}, EngineFacts{ClaimAdmissionOpen: true, Compatible: true})
 	telemetry.RecordRenewal(context.Background())
 	telemetry.RecordRescue(context.Background(), jobs.OutcomeLost)
 	telemetry.RecordAcceptance(context.Background(), jobs.OutcomeSuccess)
@@ -35,13 +36,23 @@ func TestTelemetryExportsCachedObservationWithoutStoreCalls(t *testing.T) {
 	if got := telemetrytest.Int64GaugeValue(t, reader, "postgres.jobs.component.ready"); got != 1 {
 		t.Fatalf("ready gauge = %d, want 1", got)
 	}
+	if got := jobDepthValue(t, reader, jobs.StateReady); got != math.MaxInt64 {
+		t.Fatalf("ready depth = %d, want %d", got, math.MaxInt64)
+	}
 	for _, event := range []struct {
 		name    string
 		outcome jobs.OutcomeClass
 	}{
-		{"rescue", jobs.OutcomeLost}, {"rescue", jobs.OutcomeClass("other")}, {"acceptance", jobs.OutcomeSuccess},
-		{"claim", jobs.OutcomeSuccess}, {"attempt", jobs.OutcomeSuccess}, {"retry", jobs.OutcomeRetryable},
-		{"cancellation", jobs.OutcomeCancelled}, {"recovery", jobs.OutcomeLost}, {"action", jobs.OutcomeUnknown}, {"drain", jobs.OutcomeSuccess},
+		{"rescue", jobs.OutcomeLost},
+		{"rescue", jobs.OutcomeClass("other")},
+		{"acceptance", jobs.OutcomeSuccess},
+		{"claim", jobs.OutcomeSuccess},
+		{"attempt", jobs.OutcomeSuccess},
+		{"retry", jobs.OutcomeRetryable},
+		{"cancellation", jobs.OutcomeCancelled},
+		{"recovery", jobs.OutcomeLost},
+		{"action", jobs.OutcomeUnknown},
+		{"drain", jobs.OutcomeSuccess},
 	} {
 		assertJobsEvent(t, reader, event.name, event.outcome)
 	}

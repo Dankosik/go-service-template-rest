@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"maps"
 	"math"
 	"net"
 	"slices"
@@ -42,6 +43,11 @@ func validateConfig(cfg *Config, unknownKeys []string) error {
 		return err
 	}
 	// profile:authn-oidc-jwt:end
+	// profile:outbound-auth-oauth2-client-credentials:start
+	if err := validateOutboundAuthConfig(&cfg.OutboundAuth); err != nil {
+		return err
+	}
+	// profile:outbound-auth-oauth2-client-credentials:end
 	// profile:grpc:start
 	if err := validateGRPCConfig(&cfg.GRPC); err != nil {
 		return err
@@ -69,11 +75,21 @@ func validateConfig(cfg *Config, unknownKeys []string) error {
 		return err
 	}
 	// profile:jobs-postgres:end
+	// profile:webhooks-durable:start
+	if err := validateWebhooks(cfg.Webhooks, cfg.Postgres, cfg.HTTP); err != nil {
+		return err
+	}
+	// profile:webhooks-durable:end
 	// profile:outbox-postgres:start
 	if err := validateOutbox(cfg.Outbox, cfg.Postgres); err != nil {
 		return err
 	}
 	// profile:outbox-postgres:end
+	// profile:object-storage:start
+	if err := validateObjectStorage(&cfg.ObjectStorage); err != nil {
+		return err
+	}
+	// profile:object-storage:end
 
 	return validateObservabilityConfig(&cfg.Observability)
 }
@@ -118,20 +134,14 @@ func validateRuntimeConfig(cfg RuntimeConfig) error {
 
 func findUnknownKeys(keys []string) []string {
 	unknownSet := make(map[string]struct{})
-	unknown := make([]string, 0)
 	for _, key := range keys {
 		key = strings.TrimSpace(key)
 		if key == "" {
 			continue
 		}
-		if _, ok := unknownSet[key]; ok {
-			continue
-		}
 		unknownSet[key] = struct{}{}
-		unknown = append(unknown, key)
 	}
-	slices.Sort(unknown)
-	return unknown
+	return slices.Sorted(maps.Keys(unknownSet))
 }
 
 func validateDurationRange(name string, value time.Duration, lowerBound time.Duration, upperBound time.Duration) error {

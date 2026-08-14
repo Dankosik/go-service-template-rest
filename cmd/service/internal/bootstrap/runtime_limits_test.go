@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/config"
+	"github.com/example/go-service-template-rest/internal/waittest"
 )
 
 func TestApplyMemoryLimitSkipsWhenDisabled(t *testing.T) {
@@ -249,11 +250,7 @@ func TestBoundedAPIListenerCapsAcceptedConnections(t *testing.T) {
 
 		// Release the admitted requests only after the listener reaches its cap.
 		// The timeout diagnoses a broken accept path; it is not synchronization.
-		select {
-		case <-limitReached:
-		case <-time.After(5 * time.Second):
-			t.Fatal("listener did not reach its connection limit")
-		}
+		waittest.ReceiveSignal(t, limitReached, 5*time.Second, "listener to reach its connection limit")
 		observedPeak := peak.Load()
 		releaseAll()
 		wg.Wait()

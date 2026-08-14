@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
+	"github.com/example/go-service-template-rest/internal/waittest"
 
 	"github.com/example/go-service-template-rest/internal/problem"
 )
@@ -35,28 +36,20 @@ func TestMaxInFlightShedsPastLimitWithoutQueueing(t *testing.T) {
 		doRequest(handler, http.MethodGet, "/work")
 	})
 
-	select {
-	case <-entered:
-	case <-time.After(2 * time.Second):
-		t.Fatal("first request never reached the handler")
-	}
+	waittest.ReceiveSignal(t, entered, 2*time.Second, "first request to reach the handler")
 
 	shed := make(chan *httptest.ResponseRecorder, 1)
 	go func() { shed <- doRequest(handler, http.MethodGet, "/work") }()
 
-	select {
-	case resp := <-shed:
-		if resp.Code != http.StatusServiceUnavailable {
-			t.Fatalf("status = %d, want %d", resp.Code, http.StatusServiceUnavailable)
-		}
-		if got := resp.Header().Get("Retry-After"); got != "1" {
-			t.Fatalf("Retry-After = %q, want %q", got, "1")
-		}
-		assertProblemContentType(t, resp.Header())
-		assertProblemCode(t, resp, problem.CodeServiceUnavailable)
-	case <-time.After(2 * time.Second):
-		t.Fatal("second request queued instead of being shed")
+	resp := waittest.Receive(t, shed, 2*time.Second, "second request to be shed")
+	if resp.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d", resp.Code, http.StatusServiceUnavailable)
 	}
+	if got := resp.Header().Get("Retry-After"); got != "1" {
+		t.Fatalf("Retry-After = %q, want %q", got, "1")
+	}
+	assertProblemContentType(t, resp.Header())
+	assertProblemCode(t, resp, problem.CodeServiceUnavailable)
 
 	close(release)
 	admitted.Wait()
@@ -118,11 +111,7 @@ func TestMaxInFlightExemptsHealthProbes(t *testing.T) {
 	}))
 
 	go doRequest(handler, http.MethodGet, "/work")
-	select {
-	case <-entered:
-	case <-time.After(2 * time.Second):
-		t.Fatal("saturating request never reached the handler")
-	}
+	waittest.ReceiveSignal(t, entered, 2*time.Second, "saturating request to reach the handler")
 
 	for _, path := range healthProbeRoutePaths {
 		resp := doRequest(handler, http.MethodGet, path)
@@ -149,11 +138,7 @@ func TestMaxInFlightOnlyExemptsProbeReads(t *testing.T) {
 	}))
 
 	go doRequest(handler, http.MethodGet, "/work")
-	select {
-	case <-entered:
-	case <-time.After(2 * time.Second):
-		t.Fatal("saturating request never reached the handler")
-	}
+	waittest.ReceiveSignal(t, entered, 2*time.Second, "saturating request to reach the handler")
 
 	resp := doRequest(handler, http.MethodPost, "/health/ready")
 	if resp.Code != http.StatusServiceUnavailable {
@@ -207,11 +192,7 @@ func TestShedResponseIsCorrelatedAndLogged(t *testing.T) {
 	)
 
 	go doRequest(chain, http.MethodGet, "/work")
-	select {
-	case <-entered:
-	case <-time.After(2 * time.Second):
-		t.Fatal("saturating request never reached the handler")
-	}
+	waittest.ReceiveSignal(t, entered, 2*time.Second, "saturating request to reach the handler")
 
 	resp := doRequest(chain, http.MethodGet, "/work")
 

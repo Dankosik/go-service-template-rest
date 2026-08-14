@@ -5,9 +5,11 @@
 The user supplies a ready Implementation ledger once and explicitly launches
 its orchestration. The Ledger Orchestrator then routes autonomously until that
 ledger is exhausted or one terminal condition in the role table holds. It does
-not enter Intake, Research, Specification, Design, Test Design, or Planning,
-and never asks the user to choose a carrier, lane, model, effort, review,
-proof, or correction route.
+not perform Intake, Research, Specification, Design, Test Design,
+Planning, or unit work itself. It may suspend Implementation and route a
+canonical agent-owned upstream reopen through fresh phase tasks, and never asks
+the user to choose a carrier, lane, model, effort, review, proof, correction,
+or reopen route.
 
 Optimize wall-clock time without weakening acceptance quality: plan the
 [smallest coherent acceptance units](planning.md#acceptance-unit-contract), run
@@ -15,11 +17,13 @@ only positively independent units or slices concurrently, keep one Lead as the
 acceptance owner, integrate serially, and reuse proof while its preconditions
 remain valid.
 
-Every orchestrated Implementation actor binds exactly one execution role before
-its first governed action. A native task or subagent is a carrier, not a role;
-every different-session dispatch starts with `Execution role: <ROLE>` and links
-to this tree. A missing or unknown role makes the handoff invalid rather than
-granting broader authority. [Agent Harness's Codex App Selection
+Every top-level task and implementation leaf binds exactly one execution role
+before its first governed action. A native task or subagent is a carrier, not a
+role; each such dispatch starts with `Execution role: <ROLE>` and links to this
+tree. Built-in read-only lanes opened inside an upstream non-implementation
+phase follow that phase and Subagents And Review rather than binding an
+Implementation role. A missing or unknown required role makes the handoff
+invalid rather than granting broader authority. [Agent Harness's Codex App Selection
 Tree](../../agent-harness.md#codex-app-selection-tree) shows which actor selects
 the model and reasoning effort for each direct child.
 
@@ -28,6 +32,7 @@ flowchart TD
     user["User<br/>ready Implementation ledger<br/>one orchestration launch"]
     orchestrator["LEDGER_ORCHESTRATOR<br/>routing only"]
     lead["ACCEPTANCE_UNIT_LEAD<br/>one fresh native task per ready unit"]
+    reopen["UPSTREAM_REOPEN_LEAD<br/>one fresh task for one macro phase"]
     strategy{"Lead chooses the unit strategy"}
     serial["Lead executes serially"]
     specialist["READ_ONLY_SPECIALIST<br/>optional leaf"]
@@ -42,6 +47,9 @@ flowchart TD
 
     user --> orchestrator
     orchestrator -->|"one ready unit; several only in a proved wave"| lead
+    orchestrator -->|"agent-owned canonical reopen"| reopen
+    reopen -->|"review-cleared phase result"| orchestrator
+    orchestrator -->|"resume blocked unit after closure"| lead
     lead --> strategy
     strategy -->|"no useful independent work"| serial
     strategy -->|"one independent question"| specialist
@@ -61,8 +69,9 @@ flowchart TD
 
 | Role | Receives from | Owns | May dispatch | Upward result |
 | --- | --- | --- | --- | --- |
-| `LEDGER_ORCHESTRATOR` — Ledger Orchestrator | Ready canonical ledger and explicit task-creation authority | Ready-unit selection, native task lifecycle, and terminal routing | One `ACCEPTANCE_UNIT_LEAD` per ready unit; several only for a ledger-proven planned wave | Ledger exhausted; an AGENTS-owned user decision or external confirmation; an unrecoverable native blocker; or a canonical blocker with neither ready work nor authorized recovery |
+| `LEDGER_ORCHESTRATOR` — Ledger Orchestrator | Ready canonical ledger and explicit task-creation authority | Ready-unit selection, agent-owned upstream-reopen routing, native task lifecycle, and terminal routing | One `ACCEPTANCE_UNIT_LEAD` per ready unit; several only for a ledger-proven planned wave; one `UPSTREAM_REOPEN_LEAD` at a time | Ledger exhausted; an AGENTS-owned user decision or external confirmation; an unrecoverable native blocker; or a canonical blocker with neither ready work nor authorized recovery |
 | `ACCEPTANCE_UNIT_LEAD` — Acceptance-Unit Lead | Ledger Orchestrator, Planning handoff, or direct Implementation entry | Exactly one unit through strategy, implementation, serial integration, review, proof, correction, acceptance, and receipt | Optional leaf specialists, Workers, and a triggered reviewer | `HANDOFF_READY` for a fixed Worktree candidate, then one canonical `Accepted:` receipt or `Blocked:` record |
+| `UPSTREAM_REOPEN_LEAD` — Upstream Reopen Lead | Ledger Orchestrator and one canonical unit blocker | Exactly one named non-implementation macro phase through its phase stop rule, triggered review, repair, and focused re-review | Phase-eligible read-only lanes and triggered reviewers under Subagents And Review | Review-cleared phase result and next owner, or the exact user/external/native boundary that prevents closure |
 | `READ_ONLY_SPECIALIST` — Read-Only Specialist | Acceptance-Unit Lead | One independently checkable question | Nothing; it is a leaf | `DONE` with evidence, or `NEEDS_PARENT` |
 | `IMPLEMENTATION_WORKER` — Implementation Worker | Acceptance-Unit Lead | One exact write slice and its focused proof | Nothing; it is a leaf | `DONE` with a frozen candidate, or `NEEDS_PARENT` |
 | `ACCEPTANCE_REVIEWER` — Acceptance Reviewer | Acceptance-Unit Lead | Independent falsification of one fixed unit | Nothing; it is a fresh one-shot leaf | `PASS`, `FAIL`, or `NEEDS_PARENT` to the Lead |
@@ -70,8 +79,11 @@ flowchart TD
 The bound role does not change during the session. A Lead that implements
 serially remains the Lead; it does not relabel itself as a Worker. A child gets
 only its row's authority, not its parent's. A correction resumes the same actor
-under the same role. Planning and accepted artifacts remain above this runtime
-tree: no execution role may revise behavior, unit scope, or ledger dependencies.
+under the same role. Acceptance-unit roles never revise behavior, unit scope,
+or ledger dependencies. An Upstream Reopen Lead may revise only its named
+phase-owned artifacts; it returns at that macro-phase boundary and never enters
+Implementation or the next phase. Planning may change the ledger only in a
+separately routed Planning reopen.
 
 ### Bottom-Up Obstacle Resolution
 
@@ -79,6 +91,7 @@ tree: no execution role may revise behavior, unit scope, or ledger dependencies.
 | --- | --- | --- |
 | `READ_ONLY_SPECIALIST`, `IMPLEMENTATION_WORKER`, or `ACCEPTANCE_REVIEWER` | `ACCEPTANCE_UNIT_LEAD` | `NEEDS_PARENT` |
 | `ACCEPTANCE_UNIT_LEAD` | `LEDGER_ORCHESTRATOR` | Canonical unit `Blocked:` record |
+| `UPSTREAM_REOPEN_LEAD` | `LEDGER_ORCHESTRATOR` | Review-cleared phase result and next owner, or exact user/external/native boundary |
 | `LEDGER_ORCHESTRATOR` | User | Only an AGENTS-owned user decision, irreversible external-effect confirmation, unrecoverable native blocker, or canonical blocker with no ready work or authorized recovery |
 
 An obstacle is not a canonical blocker while a safe resolution remains inside
@@ -111,10 +124,47 @@ The Ledger Orchestrator consumes only that canonical transition or a native
 lifecycle obstacle. It resolves native identity, wait, resume, Handoff, and
 routing issues within its authority and continues unrelated ready units. If it
 receives a misrouted `NEEDS_PARENT`, it returns the message unchanged to its
-owning Lead instead of consuming it. A canonical blocked unit resumes only after
-its recorded reopen condition changes. The Orchestrator never enters the unit
-to implement, review, prove, or correct it. An outcome-level stop occurs only
-under its table row's terminal conditions.
+owning Lead instead of consuming it. The Orchestrator never enters the unit or
+an upstream phase to implement, author, review, prove, or correct it. An
+outcome-level stop occurs only under its table row's terminal conditions.
+
+### Upstream Reopen Recovery
+
+A Worktree Lead that reaches an agent-owned upstream boundary first freezes its
+current candidate and returns `HANDOFF_READY` with the proposed blocker,
+evidence, reopen owner, and condition. It does not persist `Blocked:` from the
+Worktree. The Orchestrator applies the ordinary native Handoff to move that same
+Lead and candidate into Local; the Lead's Local Goal revalidates the boundary
+and either takes a newly available unit-local remedy or persists the one
+canonical blocker there. Failed or ambiguous Handoff keeps the candidate in its
+original carrier and enters ordinary Handoff recovery.
+
+A canonical blocker whose recorded reopen owner is agent-owned is an authorized
+recovery route, not an outcome-level stop. Keep the blocked Lead, its native
+identity, Goal, candidate, and blocker pinned. Dispatch one fresh Local
+`UPSTREAM_REOPEN_LEAD` for the smallest named macro phase using [Upstream Reopen
+And Implementation Return](../shared/resume-and-handoff.md#upstream-reopen-and-implementation-return),
+then wait for that phase's movement-allowing result. The Reopen Lead applies the
+phase's ordinary delegation and review contract through repair and focused
+re-review; it starts neither another macro phase nor Implementation.
+
+Re-read the canonical artifacts after every reopened phase. Route another fresh
+Reopen Lead only when the completed change invalidated that downstream phase's
+inputs; otherwise preserve its prior disposition. If Planning must repair unit
+scope or dependencies, route Planning separately. A new or reopened prerequisite
+repair unit is accepted before the blocked unit continues; never widen the
+blocked unit silently.
+
+Once Implementation inputs are closed and the recorded reopen condition has
+changed, inspect the installed native controls. When they expose documented
+Goal resume, resume the original Lead and its Goal first; an ordinary message is
+not Goal-resume proof. If current native-schema inspection or a recorded
+rejection proves that the Goal cannot resume, the Orchestrator may create one
+fresh Local replacement `ACCEPTANCE_UNIT_LEAD` for the same unit from the
+preserved candidate and current artifact revisions. The replacement uses a new
+attempt in `dispatch_scope`, revalidates the candidate and checkout before work,
+and becomes the sole acceptance owner. An unknown task, Goal, create, candidate,
+or Handoff outcome never qualifies for replacement.
 
 An explicitly requested Ledger Orchestrator dispatches one ready
 [acceptance unit](planning.md#outputs), or each currently ready member of a
@@ -142,8 +192,9 @@ dispatch scope. The Ledger
 Orchestrator supplies no lane map.
 
 A Worktree Lead completes its Worktree Goal before returning a fixed candidate
-as `HANDOFF_READY`. `HANDOFF_READY` is not an artifact state, receipt,
-acceptance, or dependency release. [Agent Harness's native Worktree
+as `HANDOFF_READY`; when an upstream boundary caused the stop, that return also
+carries the proposed canonical blocker for Local revalidation. `HANDOFF_READY`
+is not an artifact state, receipt, acceptance, or dependency release. [Agent Harness's native Worktree
 fan-in](../../agent-harness.md#worktree-fan-in) solely owns the Handoff mechanics
 that move the same task into Local, one Lead at a time. After successful
 Handoff, the same Lead creates a separate Local Goal, then integrates, reviews,

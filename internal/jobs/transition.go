@@ -140,9 +140,7 @@ func (d Definition[A]) retryTransition(facts AttemptFacts, decision Transition) 
 	}
 	if d.policy.Retry.Jitter == JitterSHA256 {
 		delay += deterministicJitter(d.revision, facts, delay, d.policy.Retry.JitterPermille)
-		if delay < 0 {
-			delay = 0
-		}
+		delay = max(delay, 0)
 	}
 	if delay > d.policy.Retry.MaxElapsed-decision.ElapsedUsed {
 		decision.State = StateExhausted
@@ -216,7 +214,7 @@ func deterministicJitter(revision Revision, facts AttemptFacts, base time.Durati
 	binary.BigEndian.PutUint64(numbers[16:24], uint64(facts.AttemptNumber))
 	_, _ = hash.Write(numbers[:])
 	digest := hash.Sum(nil)
-	units := int64(binary.BigEndian.Uint64(digest[:8])%uint64(2*permille+1)) - int64(permille)
+	units := int64(binary.BigEndian.Uint64(digest[:8])%uint64(2*permille+1)) - int64(permille) // #nosec G115 -- JitterPermille is validated in [1,1000], so the modulo result is at most 2000.
 	baseValue := int64(base)
 	return time.Duration((baseValue/1000)*units + ((baseValue%1000)*units)/1000)
 }

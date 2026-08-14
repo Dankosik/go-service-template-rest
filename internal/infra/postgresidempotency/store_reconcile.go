@@ -18,6 +18,9 @@ func (s *Store) Reconcile(
 	attempt httpidempotency.Attempt,
 	resolve FingerprintResolver,
 ) (httpidempotency.Reservation, httpidempotency.Decision, error) {
+	if parent == nil {
+		return httpidempotency.Reservation{}, httpidempotency.Decision{}, fmt.Errorf("%w: context is required", ErrConfig)
+	}
 	if !s.valid() {
 		return httpidempotency.Reservation{}, httpidempotency.Decision{}, fmt.Errorf("%w: store is required", ErrConfig)
 	}
@@ -25,6 +28,9 @@ func (s *Store) Reconcile(
 		return httpidempotency.Reservation{}, httpidempotency.Decision{}, err
 	}
 	ctx, cancel, ownBudget := classificationContext(parent, contract.InProgressWait)
+	if ctx == nil {
+		return httpidempotency.Reservation{}, httpidempotency.Decision{}, fmt.Errorf("%w: classification context is required", ErrConfig)
+	}
 	defer cancel()
 	reservation, decision, err := s.reconcile(ctx, contract, attempt, resolve)
 	if err == nil {
@@ -60,18 +66,19 @@ func (s *Store) reconcile(
 		return s.reserve(ctx, contract, attempt, resolve)
 	}
 	switch row.phase {
-	case "completed":
+	case phaseCompleted:
 		reservation, decision, err := s.classifyCompleted(ctx, contract, attempt, resolve, row)
 		if err == nil && decision.Outcome == httpidempotency.OutcomeMismatch {
 			return httpidempotency.Reservation{}, httpidempotency.Decision{Outcome: httpidempotency.OutcomeIntegrityConflict}, nil
 		}
 		return reservation, decision, err
-	case "reserved":
+	case phaseReserved:
 		if row.generation <= 0 || row.provisionalVersion == "" || len(row.provisionalFingerprint) != 32 {
 			return httpidempotency.Reservation{}, httpidempotency.Decision{}, ErrIntegrityConflict
 		}
 		fingerprint, err := resolveFingerprint(resolve, row.provisionalVersion)
 		if err != nil {
+			//nolint:nilerr // A resolver failure is an intentional unknown decision after a lost commit result.
 			return httpidempotency.Reservation{}, httpidempotency.Decision{Outcome: httpidempotency.OutcomeUnknown}, nil
 		}
 		if !sameFingerprint(row.provisionalVersion, row.provisionalFingerprint, fingerprint) {
@@ -121,11 +128,11 @@ func (s *Store) probeReservationLock(ctx context.Context, attempt httpidempotenc
 			return ErrIntegrityConflict
 		}
 		if isLockUnavailable(err) {
-			return err
+			return err //nolint:wrapcheck // The caller classifies the exact lock error.
 		}
-		return unavailable(ctx, "lock reconciliation")
+		return fmt.Errorf("lock reconciliation: %w", unavailable(ctx, "lock reconciliation"))
 	}
-	if row.Phase != "reserved" || row.Generation != generation {
+	if row.Phase != phaseReserved || row.Generation != generation {
 		return ErrIntegrityConflict
 	}
 	return nil

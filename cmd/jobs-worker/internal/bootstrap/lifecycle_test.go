@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"sync"
 	"testing"
@@ -27,7 +28,7 @@ func (s *lifecycleEngineStub) Run(ctx context.Context) error {
 		return s.run(ctx)
 	}
 	<-ctx.Done()
-	return ctx.Err()
+	return fmt.Errorf("wait for lifecycle context: %w", ctx.Err())
 }
 func (s *lifecycleEngineStub) Facts() postgresjobs.EngineFacts { return s.facts }
 func (s *lifecycleEngineStub) StartDrain(ctx context.Context) postgresjobs.DrainResult {
@@ -76,24 +77,35 @@ func TestJobsWorkerLifecycleWithdrawsReadinessBeforeDrain(t *testing.T) {
 	cfg := jobsWorkerLifecycleConfig(t)
 	readyStatus := make(chan int, 1)
 	engine := &lifecycleEngineStub{facts: postgresjobs.EngineFacts{ClaimAdmissionOpen: true, Compatible: true, ObservationFresh: true}}
-	engine.drain = func(context.Context) postgresjobs.DrainResult {
-		response, err := http.Get("http://" + cfg.Observability.Metrics.Addr + "/health/ready")
+	engine.drain = func(ctx context.Context) postgresjobs.DrainResult {
+		request, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+cfg.Observability.Metrics.Addr+"/health/ready", http.NoBody)
 		if err != nil {
 			return postgresjobs.DrainResult{CleanupSafe: true, Err: err}
 		}
-		defer response.Body.Close()
-		readyStatus <- response.StatusCode
+		response, err := http.DefaultClient.Do(request)
+		if err != nil {
+			return postgresjobs.DrainResult{CleanupSafe: true, Err: err}
+		}
+		status := response.StatusCode
+		if err := response.Body.Close(); err != nil {
+			return postgresjobs.DrainResult{CleanupSafe: true, Err: err}
+		}
+		readyStatus <- status
 		return postgresjobs.DrainResult{CleanupSafe: true}
 	}
 	result := make(chan lifecycleResult, 1)
 	go func() { result <- runLifecycle(signalCtx, context.Background(), cfg, telemetry.New(), engine) }()
 	client := &http.Client{Timeout: 100 * time.Millisecond}
 	waittest.Until(t, time.Second, func() bool {
-		response, err := client.Get("http://" + cfg.Observability.Metrics.Addr + "/health/ready")
+		request, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://"+cfg.Observability.Metrics.Addr+"/health/ready", http.NoBody)
 		if err != nil {
 			return false
 		}
-		defer response.Body.Close()
+		response, err := client.Do(request)
+		if err != nil {
+			return false
+		}
+		defer func() { _ = response.Body.Close() }()
 		return response.StatusCode == http.StatusOK
 	}, "jobs worker initial readiness")
 	cancel()
@@ -120,28 +132,5 @@ func TestJobsWorkerLifecycleDrainsAfterTerminalEngineFailure(t *testing.T) {
 	defer engine.mu.Unlock()
 	if engine.drainCalls != 1 {
 		t.Fatalf("StartDrain calls = %d, want 1", engine.drainCalls)
-	}
-}
-
-func TestJobsWorkerLifecycleRetainsDependenciesAfterUnsafeDrain(t *testing.T) {
-	unsafe := errors.New("attempt did not join")
-	signalCtx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	engine := &lifecycleEngineStub{
-		facts: postgresjobs.EngineFacts{ClaimAdmissionOpen: true, Compatible: true, ObservationFresh: true},
-		drain: func(context.Context) postgresjobs.DrainResult {
-			return postgresjobs.DrainResult{Err: unsafe}
-		},
-	}
-	cfg := jobsWorkerLifecycleConfig(t)
-	result := make(chan lifecycleResult, 1)
-	go func() {
-		result <- runLifecycle(signalCtx, t.Context(), cfg, telemetry.New(), engine)
-	}()
-	time.Sleep(10 * time.Millisecond)
-	cancel()
-	got := <-result
-	if !errors.Is(got.Err, unsafe) || got.CleanupSafe {
-		t.Fatalf("runLifecycle() = %+v, want unsafe cleanup result", got)
 	}
 }

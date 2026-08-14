@@ -9,6 +9,14 @@ WORKER_BINARY := bin/$(SERVICE_NAME)-worker
 OUTBOX_RELAY_CMD := ./cmd/outbox-relay
 OUTBOX_RELAY_BINARY := bin/$(SERVICE_NAME)-outbox-relay
 # profile:outbox-postgres:end
+# profile:jobs-postgres:start
+JOBS_WORKER_CMD := ./cmd/jobs-worker
+JOBS_WORKER_BINARY := bin/$(SERVICE_NAME)-jobs-worker
+# profile:jobs-postgres:end
+# profile:webhooks-durable:start
+WEBHOOK_WORKER_CMD := ./cmd/webhook-worker
+WEBHOOK_WORKER_BINARY := bin/$(SERVICE_NAME)-webhook-worker
+# profile:webhooks-durable:end
 GO ?= go
 PGO_PROFILE ?= off
 OPENAPI_FILE := api/openapi/service.yaml
@@ -43,6 +51,9 @@ MESSAGING_RACE_PACKAGES += ./cmd/outbox-relay/internal/bootstrap
 # profile:outbox-postgres:start
 OUTBOX_RACE_PACKAGES := ./internal/infra/postgres ./internal/infra/postgresoutbox ./cmd/outbox-relay/internal/bootstrap ./test/...
 # profile:outbox-postgres:end
+# profile:webhooks-durable:start
+WEBHOOK_RACE_PACKAGES := ./internal/infra/postgreswebhook ./cmd/webhook-worker/internal/bootstrap ./test/...
+# profile:webhooks-durable:end
 # Effective coverage is measured across the whole module, so a freshly generated
 # service already sits near this floor on template tests alone. Initialization
 # lowers it to 70.0 so early feature work has runway; raise it as your own tests
@@ -64,6 +75,10 @@ COVERAGE_EXCLUDE_REGEX := $(COVERAGE_EXCLUDE_REGEX)|(^|/)internal/infra/natsjs/n
 # profile:outbox-postgres:start
 COVERAGE_EXCLUDE_REGEX := $(COVERAGE_EXCLUDE_REGEX)|(^|/)cmd/outbox-relay/main\.go:
 # profile:outbox-postgres:end
+# profile:webhooks-durable:start
+COVERAGE_EXCLUDE_REGEX := $(COVERAGE_EXCLUDE_REGEX)|(^|/)cmd/webhook-worker/main\.go:
+# profile:webhooks-durable:end
+
 FUZZ_TIME ?= 45s
 LINT_BASE_REF ?= origin/main
 LINT_CONCURRENCY ?= 4
@@ -123,6 +138,12 @@ CODEX_AGENTS_SYNC_SCRIPT := bash ./scripts/codex-agents-sync.sh
 CI_CHANGE_SCOPE_SCRIPT := bash ./scripts/ci/ci-change-scope.sh
 GENERATED_DRIFT_CHECK_SCRIPT := bash ./scripts/ci/generated-drift-check.sh
 PROJECT_STRUCTURE_CHECK_SCRIPT := bash ./scripts/ci/project-structure-check.sh
+# profile:object-storage:start
+S3_SOURCE_RECEIPT_SCRIPT := bash ./scripts/ci/s3-source-receipt.sh
+S3_ENVELOPE_GO_IMAGE := $(shell awk '$$1 == "FROM" { for (i = 1; i <= NF; i++) if ($$i ~ /^golang:/) { print $$i; exit } }' build/docker/Dockerfile)
+S3_ENVELOPE_GOMODCACHE := $(shell go env GOMODCACHE)
+S3_CONFORMANCE_TEST := go test -mod=readonly -vet=off -tags=integration ./test -run '^TestS3ObjectStorageConformanceRequiresProviderCertification$$' -count=1
+# profile:object-storage:end
 # profile:database-postgres:start
 MIGRATION_SOURCE_CHECK_SCRIPT := bash ./scripts/ci/migration-source-check.sh
 MIGRATION_HISTORY_CHECK_SCRIPT := bash ./scripts/ci/migration-history-check.sh
@@ -151,12 +172,21 @@ BENCHMARK_REMOTE_SCRIPT := bash ./scripts/dev/benchmark-remote.sh
 	proto-format proto-format-check proto-lint proto-generate proto-drift-check proto-breaking proto-check \
 	sqlc-check runtime-image-build container-security run build build-pgo docker-build docker-run vendor claude-skills-sync claude-skills-check codex-agents-sync codex-agents-check \
 	template-sync template-sync-check template-sync-all template-owned-purity-check
+# profile:object-storage:start
+.PHONY: test-s3-source-receipt test-s3-envelope test-s3-conformance-amazon test-s3-conformance-r2
+# profile:object-storage:end
 # profile:messaging-nats-jetstream:start
 .PHONY: run-worker build-worker test-messaging-race
 # profile:messaging-nats-jetstream:end
 # profile:outbox-postgres:start
 .PHONY: run-outbox-relay build-outbox-relay test-outbox-race
 # profile:outbox-postgres:end
+# profile:jobs-postgres:start
+.PHONY: run-jobs-worker build-jobs-worker
+# profile:jobs-postgres:end
+# profile:webhooks-durable:start
+.PHONY: run-webhook-worker build-webhook-worker test-webhook-race
+# profile:webhooks-durable:end
 # profile:grpc-reference-benchmark:start
 .PHONY: bench-grpc bench-grpc-smoke bench-grpc-inspect
 # profile:grpc-reference-benchmark:end
@@ -184,10 +214,15 @@ help:
 	@echo "  make run-worker | build-worker"
 	@echo "  make test-messaging-race"
 # profile:messaging-nats-jetstream:end
+
 # profile:outbox-postgres:start
 	@echo "  make run-outbox-relay | build-outbox-relay"
 	@echo "  make test-outbox-race"
 # profile:outbox-postgres:end
+# profile:webhooks-durable:start
+	@echo "  make run-webhook-worker | build-webhook-worker"
+	@echo "  make test-webhook-race"
+# profile:webhooks-durable:end
 	@echo ""
 	@echo "Focused validation:"
 	@echo "  make test | test-race | test-report | test-integration"
@@ -271,8 +306,8 @@ check-full:
 	@bash ./scripts/lib/require-docker.sh "make check-full"
 	$(MAKE) delivery-quality
 	$(MAKE) ci-local
-	REQUIRE_DOCKER=1 $(MAKE) test-integration
 	$(MAKE) runtime-image-build RUNTIME_IMAGE=$(SERVICE_NAME):ci
+	REQUIRE_DOCKER=1 $(MAKE) test-integration WEBHOOK_RUNTIME_IMAGE=$(SERVICE_NAME):ci
 # profile:database-postgres:start
 	$(MAKE) migration-validate RUNTIME_IMAGE=$(SERVICE_NAME):ci
 # profile:database-postgres:end
@@ -352,6 +387,11 @@ test-outbox-race:
 	go test -vet=off -p=1 -count=1 -race -tags=integration $(OUTBOX_RACE_PACKAGES) -run '^Test(PostgresOutbox|InTxCommitOutcomes|OutboxRelay)'
 # profile:outbox-postgres:end
 
+# profile:webhooks-durable:start
+test-webhook-race:
+	WEBHOOK_RUNTIME_IMAGE="$(WEBHOOK_RUNTIME_IMAGE)" go test -vet=off -p=1 -count=1 -race -tags=integration $(WEBHOOK_RACE_PACKAGES) -run '^Test(PostgresWebhook|WebhookWorker)'
+# profile:webhooks-durable:end
+
 test-cover:
 	GOTOOLCHAIN=$(COVERAGE_GOTOOLCHAIN) GOCOVERDIR= go test -vet=off -covermode=set -coverprofile=coverage.out ./...
 	$(MAKE) coverage-summary
@@ -409,13 +449,33 @@ test-flake-smoke:
 	go test -vet=off -count=5 -shuffle=on ./...
 
 test-integration:
-	go test -p=1 -count=1 -tags=integration $(INTEGRATION_PACKAGES)
+	@image="$(WEBHOOK_RUNTIME_IMAGE)"; \
+	if [ -z "$$image" ]; then \
+		image="$(SERVICE_NAME):integration"; \
+		$(MAKE) runtime-image-build RUNTIME_IMAGE="$$image"; \
+	fi; \
+	WEBHOOK_RUNTIME_IMAGE="$$image" go test -p=1 -count=1 -tags=integration $(INTEGRATION_PACKAGES)
 # profile:messaging-nats-jetstream:start
 	$(MAKE) test-messaging-race
 # profile:messaging-nats-jetstream:end
 # profile:outbox-postgres:start
 	$(MAKE) test-outbox-race
 # profile:outbox-postgres:end
+# profile:webhooks-durable:start
+	$(MAKE) test-webhook-race
+# profile:webhooks-durable:end
+
+# profile:webhooks-durable:start
+run-webhook-worker:
+	@set -a; \
+	if [ -f .env ]; then . ./.env; fi; \
+	set +a; \
+	go run $(WEBHOOK_WORKER_CMD)
+
+build-webhook-worker:
+	@mkdir -p $(dir $(WEBHOOK_WORKER_BINARY))
+	go build -trimpath -o $(WEBHOOK_WORKER_BINARY) $(WEBHOOK_WORKER_CMD)
+# profile:webhooks-durable:end
 
 # profile:outbox-postgres:start
 run-outbox-relay:
@@ -674,6 +734,11 @@ migration-validate:
 		image="$(SERVICE_NAME):migration"; \
 		$(MAKE) runtime-image-build RUNTIME_IMAGE="$$image" || exit 1; \
 	fi; \
+	active_image="$${image}-http-idempotency-active"; \
+	$(MAKE) runtime-image-build RUNTIME_IMAGE="$$active_image" RUNTIME_IMAGE_FIXTURE=postgres-http-idempotency-active || exit 1; \
+	active_env='-e APP__AUTHN__ISSUER=https://127.0.0.1:1 -e APP__AUTHN__AUDIENCE=fixture -e APP__AUTHN__TRUSTED_PROXY_CIDRS=127.0.0.0/8 -e APP__HTTP_IDEMPOTENCY__OWNER_RECOVERY_DELAY=30s -e APP__HTTP_IDEMPOTENCY__MAINTENANCE_INTERVAL=1s -e APP__HTTP_IDEMPOTENCY__CLEANUP_BATCH_SIZE=10 -e APP__HTTP_IDEMPOTENCY__MAX_MAINTENANCE_LAG=1m -e APP__HTTP_IDEMPOTENCY__MAX_RELATION_BYTES=1099511627776 -e APP__HTTP_IDEMPOTENCY__ADMISSION_HEADROOM_BYTES=1048576'; \
+	assert_active_failure() { output="$$(eval docker run --rm --network "$${project}_default" -e APP__POSTGRES__ENABLED=true -e APP__POSTGRES__DSN="postgres://app:app@postgres:5432/app?sslmode=disable" $$active_env "$$active_image" 2>&1 || true)"; echo "$$output" | grep -Fq 'initialize HTTP idempotency maintenance' || { echo "active fixture did not reject idempotency before OIDC"; echo "$$output"; exit 1; }; echo "$$output" | grep -Fq 'oidc' && { echo "active fixture reached OIDC before idempotency rejection"; echo "$$output"; exit 1; }; true; }; \
+	assert_active_failure; \
 	docker run --rm --network "$${project}_default" \
 		-e APP__POSTGRES__ENABLED=true \
 		-e APP__POSTGRES__DSN="postgres://app:app@postgres:5432/app?sslmode=disable" \
@@ -708,7 +773,14 @@ migration-validate:
 	fi; \
 	docker stop --time 45 "$$runtime" >/dev/null; \
 	exit_code="$$(docker inspect -f '{{.State.ExitCode}}' "$$runtime")"; \
-	test "$$exit_code" = "0" || { echo "runtime image exited with code $$exit_code after SIGTERM"; docker logs "$$runtime"; exit 1; }
+	test "$$exit_code" = "0" || { echo "runtime image exited with code $$exit_code after SIGTERM"; docker logs "$$runtime"; exit 1; }; \
+	docker run --rm --network "$${project}_default" --entrypoint psql "postgres:17@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d" "postgres://app:app@postgres:5432/app?sslmode=disable" -c 'ALTER ROLE app SET default_transaction_read_only = on'; \
+	assert_active_failure; \
+	docker run --rm --network "$${project}_default" --entrypoint psql "postgres:17@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d" "postgres://app:app@postgres:5432/app?sslmode=disable" -c 'SET default_transaction_read_only = off' -c 'ALTER ROLE app RESET default_transaction_read_only'; \
+	compose exec -T postgres psql -U app -d app -c "ALTER SYSTEM SET track_commit_timestamp = 'off'"; \
+	compose restart postgres; \
+	compose up -d --wait postgres; \
+	assert_active_failure
 # profile:database-postgres:end
 
 container-security:
@@ -729,7 +801,27 @@ container-security:
 		"$$image"
 
 runtime-image-build:
-	bash ./scripts/ci/runtime-image-build.sh "$(RUNTIME_IMAGE)"
+	bash ./scripts/ci/runtime-image-build.sh "$(RUNTIME_IMAGE)" "$(RUNTIME_IMAGE_FIXTURE)"
+
+# profile:object-storage:start
+test-s3-source-receipt:
+	$(S3_SOURCE_RECEIPT_SCRIPT)
+
+test-s3-envelope:
+	@bash ./scripts/lib/require-docker.sh "make test-s3-envelope"
+	@test "$(GOMAXPROCS)" = "1" || { echo "GOMAXPROCS=1 is required" >&2; exit 2; }
+	docker run --rm --platform linux/arm64 --network none \
+		-v "$(CURDIR):/src:ro" \
+		-v "$(S3_ENVELOPE_GOMODCACHE):/go/pkg/mod:ro" \
+		-w /src -e GOMAXPROCS=1 "$(S3_ENVELOPE_GO_IMAGE)" \
+		go test -mod=readonly -vet=off -count=1 -v ./internal/infra/s3 -run '^TestLinuxProcessEnvelope$$'
+
+test-s3-conformance-amazon:
+	@REQUIRE_S3_CONFORMANCE=1 S3_CONFORMANCE_PROVIDER=amazon_s3 $(S3_CONFORMANCE_TEST)
+
+test-s3-conformance-r2:
+	@REQUIRE_S3_CONFORMANCE=1 S3_CONFORMANCE_PROVIDER=cloudflare_r2 $(S3_CONFORMANCE_TEST)
+# profile:object-storage:end
 
 run:
 	@set -a; \

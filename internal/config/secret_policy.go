@@ -31,12 +31,16 @@ func isSecretLikeConfigKey(key string) bool {
 	switch lower {
 	case "postgres.dsn", "observability.otel.exporter.otlp_headers":
 		return true
+	// profile:object-storage:start
+	case "object_storage.access_key_id", "object_storage.secret_access_key", "object_storage.session_token":
+		return true
+		// profile:object-storage:end
 	}
 
 	segments := configKeySegments(lower)
 	for i, segment := range segments {
 		switch segment {
-		case "password", "token", "secret", "authorization", "dsn":
+		case "password", "token", "secret", "secrets", "authorization", "dsn":
 			return true
 		case "key":
 			if i > 0 && (segments[i-1] == "api" || segments[i-1] == "private") {

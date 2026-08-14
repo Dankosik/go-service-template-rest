@@ -8,14 +8,10 @@ import (
 	"time"
 )
 
-func newTestStartupAdmissionController() *startupAdmissionController {
-	return newStartupAdmissionController()
-}
-
 func TestStartupAdmissionControllerCheckReady(t *testing.T) {
 	t.Parallel()
 
-	admission := newTestStartupAdmissionController()
+	admission := new(startupAdmissionController)
 
 	err := admission.CheckReady(context.Background())
 	if !errors.Is(err, errStartupAdmissionPending) {

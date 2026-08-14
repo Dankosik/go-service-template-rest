@@ -15,11 +15,15 @@ import (
 	"net/http"
 	"slices"
 
+	"github.com/samber/lo"
+
 	"github.com/example/go-service-template-rest/internal/failure"
 )
 
 // Code is the stable machine-readable error code a client matches on.
 type Code string
+
+const conflictTypeURI = "https://www.rfc-editor.org/rfc/rfc9110#section-15.5.10"
 
 const (
 	CodeBadRequest            Code = Code(failure.CodeBadRequest)
@@ -33,17 +37,19 @@ const (
 	// profile:authn-oidc-jwt:start
 	CodeRequestHeaderFieldsTooLarge Code = Code(failure.CodeRequestHeaderFieldsTooLarge)
 	// profile:authn-oidc-jwt:end
-	CodeUnprocessableContent      Code = Code(failure.CodeUnprocessableContent)
-	CodeTooManyRequests           Code = Code(failure.CodeTooManyRequests)
+	CodeUnprocessableContent Code = Code(failure.CodeUnprocessableContent)
+	CodeTooManyRequests      Code = Code(failure.CodeTooManyRequests)
+	// profile:http-idempotency-postgres:start
 	CodeIdempotencyKeyMismatch    Code = "idempotency_key_mismatch"
 	CodeIdempotencyInProgress     Code = "idempotency_in_progress"
 	CodeIdempotencyKeyExpired     Code = "idempotency_key_expired"
 	CodeIdempotencyUnavailable    Code = "idempotency_unavailable"
 	CodeIdempotencyOutcomeUnknown Code = "idempotency_outcome_unknown"
 	CodeIdempotencyResultTooLarge Code = "idempotency_result_too_large"
-	CodeInternalError             Code = Code(failure.CodeInternalError)
-	CodeServiceUnavailable        Code = Code(failure.CodeServiceUnavailable)
-	CodeGatewayTimeout            Code = Code(failure.CodeGatewayTimeout)
+	// profile:http-idempotency-postgres:end
+	CodeInternalError      Code = Code(failure.CodeInternalError)
+	CodeServiceUnavailable Code = Code(failure.CodeServiceUnavailable)
+	CodeGatewayTimeout     Code = Code(failure.CodeGatewayTimeout)
 )
 
 // Definition is one published problem class.
@@ -98,14 +104,14 @@ var catalog = []Definition{
 	{
 		Code:    CodeConflict,
 		Status:  http.StatusConflict,
-		Title:   "conflict",
-		TypeURI: "https://www.rfc-editor.org/rfc/rfc9110#section-15.5.10",
+		Title:   string(CodeConflict),
+		TypeURI: conflictTypeURI,
 	},
 	{
 		Code:    CodeAlreadyExists,
 		Status:  http.StatusConflict,
-		Title:   "conflict",
-		TypeURI: "https://www.rfc-editor.org/rfc/rfc9110#section-15.5.10",
+		Title:   string(CodeConflict),
+		TypeURI: conflictTypeURI,
 	},
 	{
 		Code:    CodeRequestEntityTooLarge,
@@ -134,6 +140,7 @@ var catalog = []Definition{
 		// RFC 9110 stops at 426; 429 is still defined by RFC 6585.
 		TypeURI: "https://www.rfc-editor.org/rfc/rfc6585#section-4",
 	},
+	// profile:http-idempotency-postgres:start
 	{
 		Code:    CodeIdempotencyKeyMismatch,
 		Status:  http.StatusUnprocessableEntity,
@@ -143,14 +150,14 @@ var catalog = []Definition{
 	{
 		Code:    CodeIdempotencyInProgress,
 		Status:  http.StatusConflict,
-		Title:   "conflict",
-		TypeURI: "https://www.rfc-editor.org/rfc/rfc9110#section-15.5.10",
+		Title:   string(CodeConflict),
+		TypeURI: conflictTypeURI,
 	},
 	{
 		Code:    CodeIdempotencyKeyExpired,
 		Status:  http.StatusConflict,
-		Title:   "conflict",
-		TypeURI: "https://www.rfc-editor.org/rfc/rfc9110#section-15.5.10",
+		Title:   string(CodeConflict),
+		TypeURI: conflictTypeURI,
 	},
 	{
 		Code:    CodeIdempotencyUnavailable,
@@ -170,6 +177,7 @@ var catalog = []Definition{
 		Title:   "internal server error",
 		TypeURI: "https://www.rfc-editor.org/rfc/rfc9110#section-15.6.1",
 	},
+	// profile:http-idempotency-postgres:end
 	{
 		Code:    CodeInternalError,
 		Status:  http.StatusInternalServerError,
@@ -197,23 +205,13 @@ var catalog = []Definition{
 // uncatalogued status is a plausible wrong answer. A caller holding a status this
 // repository does not describe must publish its own type for it.
 func For(status int) (Definition, bool) {
-	for _, definition := range catalog {
-		if definition.Status == status {
-			return definition, true
-		}
-	}
-	return Definition{}, false
+	return lo.Find(catalog, func(definition Definition) bool { return definition.Status == status })
 }
 
 // ForCode returns the definition published for code, and false for a code this
 // repository does not publish.
 func ForCode(code Code) (Definition, bool) {
-	for _, definition := range catalog {
-		if definition.Code == code {
-			return definition, true
-		}
-	}
-	return Definition{}, false
+	return lo.Find(catalog, func(definition Definition) bool { return definition.Code == code })
 }
 
 // ForCodeOrInternal returns the definition published for code, substituting the

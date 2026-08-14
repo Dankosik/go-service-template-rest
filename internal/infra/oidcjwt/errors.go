@@ -117,8 +117,8 @@ func NewError(kind Kind) error {
 
 // KindOf reports the sanitized category carried by err.
 func KindOf(err error) (Kind, bool) {
-	var target *Error
-	if !errors.As(err, &target) {
+	target, ok := errors.AsType[*Error](err)
+	if !ok {
 		return 0, false
 	}
 	return target.kind, true

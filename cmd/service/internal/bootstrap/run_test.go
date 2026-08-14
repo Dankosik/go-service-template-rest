@@ -3,6 +3,10 @@ package bootstrap
 import (
 	"errors"
 	"os"
+
+	// profile:object-storage:start
+	"strconv"
+	// profile:object-storage:end
 	"strings"
 	"testing"
 	"testing/synctest"
@@ -11,6 +15,11 @@ import (
 	"github.com/example/go-service-template-rest/cmd/internal/runtimeopts"
 	"github.com/example/go-service-template-rest/internal/config"
 )
+
+// profile:object-storage:start
+const testObjectStorageMaxWorkingMemoryBytes int64 = 62145920
+
+// profile:object-storage:end
 
 func TestParseLoadOptions(t *testing.T) {
 	t.Parallel()
@@ -89,7 +98,7 @@ func TestParseLoadOptions(t *testing.T) {
 func TestRunReturnsParseErrorForInvalidFlags(t *testing.T) {
 	t.Parallel()
 
-	err := Run([]string{"--unknown-flag"})
+	err := runWithRuntime([]string{"--unknown-flag"}, testRuntimeWiring())
 	if err == nil {
 		t.Fatal("Run() error = nil, want non-nil")
 	}
@@ -214,4 +223,65 @@ func resetShutdownConfigEnv(t *testing.T) {
 	t.Setenv("APP__AUTHN__AUDIENCE", "service-api")
 	t.Setenv("APP__AUTHN__TRUSTED_PROXY_CIDRS", "127.0.0.0/8,::1/128")
 	// profile:authn-oidc-jwt:end
+	// profile:outbound-auth-oauth2-client-credentials:start
+	setOutboundAuthBootstrapTestEnv(t)
+	// profile:outbound-auth-oauth2-client-credentials:end
+	// profile:object-storage:start
+	setObjectStorageBootstrapTestEnv(t)
+	// profile:object-storage:end
+}
+
+// profile:outbound-auth-oauth2-client-credentials:start
+func setOutboundAuthBootstrapTestEnv(t *testing.T) {
+	t.Helper()
+	for key, value := range map[string]string{
+		"APP__OUTBOUND_AUTH__DEPENDENCY":            "payments",
+		"APP__OUTBOUND_AUTH__CLIENT_ID":             "test-client",
+		"APP__OUTBOUND_AUTH__CLIENT_SECRET":         "test-secret",
+		"APP__OUTBOUND_AUTH__CLIENT_AUTHENTICATION": "client_secret_basic",
+		"APP__OUTBOUND_AUTH__TOKEN_ENDPOINT":        "https://auth.example.com/oauth/token",
+		"APP__OUTBOUND_AUTH__TOKEN_TARGET_CLASS":    "external_https",
+		"APP__OUTBOUND_AUTH__SCOPES":                "payments.read",
+		"APP__OUTBOUND_AUTH__RESOURCE_AUTHORITY":    "https://payments.example.com",
+		"APP__OUTBOUND_AUTH__ACQUISITION_TIMEOUT":   "1s",
+	} {
+		t.Setenv(key, value)
+	}
+}
+
+// profile:outbound-auth-oauth2-client-credentials:end
+
+// profile:object-storage:start
+func setObjectStorageBootstrapTestEnv(t *testing.T) {
+	t.Helper()
+	for key, value := range map[string]string{
+		"APP__OBJECT_STORAGE__PROVIDER":                   "amazon_s3",
+		"APP__OBJECT_STORAGE__ENDPOINT":                   "https://s3.us-east-1.amazonaws.com",
+		"APP__OBJECT_STORAGE__REGION":                     "us-east-1",
+		"APP__OBJECT_STORAGE__BUCKET":                     "examplebucket",
+		"APP__OBJECT_STORAGE__ACCESS_KEY_ID":              "test-access-key",
+		"APP__OBJECT_STORAGE__SECRET_ACCESS_KEY":          "test-secret-key",
+		"APP__OBJECT_STORAGE__MAX_OBJECT_BYTES":           "10485760",
+		"APP__OBJECT_STORAGE__MULTIPART_CHUNK_BYTES":      "5242880",
+		"APP__OBJECT_STORAGE__MAX_ACTIVE_OPERATIONS":      "2",
+		"APP__OBJECT_STORAGE__MAX_OPERATION_DURATION":     "1s",
+		"APP__OBJECT_STORAGE__MAX_PRESIGN_LIFETIME":       "1m",
+		"APP__OBJECT_STORAGE__MAX_RESPONSE_HEADER_BYTES":  "1024",
+		"APP__OBJECT_STORAGE__MAX_CONTROL_RESPONSE_BYTES": "1024",
+		"APP__OBJECT_STORAGE__MAX_WORKING_MEMORY_BYTES":   strconv.FormatInt(testObjectStorageMaxWorkingMemoryBytes, 10),
+	} {
+		t.Setenv(key, value)
+	}
+}
+
+// profile:object-storage:end
+
+func testRuntimeWiring() runtimeWiring {
+	wiring := productionRuntimeWiring()
+	// profile:object-storage:start
+	wiring.initObjectStorage = func(config.ObjectStorageConfig) (objectStorageRuntime, error) {
+		return &countingObjectStorageRuntime{}, nil
+	}
+	// profile:object-storage:end
+	return wiring
 }

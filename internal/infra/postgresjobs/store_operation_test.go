@@ -4,10 +4,30 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5/pgconn"
 )
+
+func TestOperationTimerTimeout(t *testing.T) {
+	for _, test := range []struct {
+		name             string
+		operationTimeout time.Duration
+		statementTimeout time.Duration
+		want             time.Duration
+	}{
+		{name: "ten percent headroom", operationTimeout: 100 * time.Millisecond, statementTimeout: time.Second, want: 90 * time.Millisecond},
+		{name: "ten millisecond cap", operationTimeout: 150 * time.Millisecond, statementTimeout: time.Second, want: 140 * time.Millisecond},
+		{name: "postgres timeout is effective budget", operationTimeout: time.Second, statementTimeout: 100 * time.Millisecond, want: 90 * time.Millisecond},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := operationTimerTimeout(test.operationTimeout, test.statementTimeout); got != test.want {
+				t.Fatalf("operationTimerTimeout() = %s, want %s", got, test.want)
+			}
+		})
+	}
+}
 
 func TestStoreOperationErrorClassification(t *testing.T) {
 	baseErr := errors.New("database failed")

@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/pressly/goose/v3"
+	"github.com/samber/lo"
 )
 
 type FailureStage string
@@ -87,11 +88,9 @@ func migrationResultFromGoose(result *goose.MigrationResult) MigrationResult {
 }
 
 func migrationResultsFromGoose(results []*goose.MigrationResult) []MigrationResult {
-	mapped := make([]MigrationResult, 0, len(results))
-	for _, result := range results {
-		mapped = append(mapped, migrationResultFromGoose(result))
-	}
-	return mapped
+	return lo.Map(results, func(result *goose.MigrationResult, _ int) MigrationResult {
+		return migrationResultFromGoose(result)
+	})
 }
 
 func setPartialAfter(

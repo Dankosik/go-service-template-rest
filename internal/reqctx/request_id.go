@@ -3,11 +3,14 @@ package reqctx
 import (
 	"context"
 	"crypto/rand"
+	"regexp"
 	"strings"
 )
 
 // MaxRequestIDLength is the shared wire limit for a correlation identifier.
 const MaxRequestIDLength = 128
+
+var requestIDPattern = regexp.MustCompile(`^[A-Za-z0-9._~-]+$`)
 
 // RequestIDHeader and RequestIDMetadataKey are one wire name in the two
 // spellings the transports require: net/http canonicalizes header keys, gRPC
@@ -48,22 +51,5 @@ func ContextWithAcceptedRequestID(ctx context.Context, candidate string) (contex
 // metadata. The alphabet is transport-neutral and unchanged from the original
 // HTTP contract.
 func ValidRequestID(value string) bool {
-	if value == "" || len(value) > MaxRequestIDLength {
-		return false
-	}
-	for index := range len(value) {
-		character := value[index]
-		if (character >= 'a' && character <= 'z') ||
-			(character >= 'A' && character <= 'Z') ||
-			(character >= '0' && character <= '9') {
-			continue
-		}
-		switch character {
-		case '.', '_', '~', '-':
-			continue
-		default:
-			return false
-		}
-	}
-	return true
+	return len(value) <= MaxRequestIDLength && requestIDPattern.MatchString(value)
 }

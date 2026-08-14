@@ -5,6 +5,8 @@ import (
 	"os"
 	"slices"
 	"strings"
+
+	"github.com/samber/lo"
 )
 
 // AmbientOTLPExporterEnv returns the sorted names of non-empty
@@ -88,12 +90,7 @@ func rejectConflictingMetricExporterEnv() error {
 // conflictingEnv returns the non-empty variables among names, sorted so reported
 // output is stable.
 func conflictingEnv(names []string) []string {
-	conflicting := make([]string, 0, len(names))
-	for _, name := range names {
-		if nonEmptyEnv(name) {
-			conflicting = append(conflicting, name)
-		}
-	}
+	conflicting := lo.Filter(names, func(name string, _ int) bool { return nonEmptyEnv(name) })
 	slices.Sort(conflicting)
 	return conflicting
 }

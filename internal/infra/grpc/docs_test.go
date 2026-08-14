@@ -26,6 +26,7 @@ import (
 	"testing"
 
 	"github.com/example/go-service-template-rest/internal/failure"
+	"github.com/example/go-service-template-rest/internal/packagetest"
 	"google.golang.org/grpc/status"
 )
 
@@ -207,25 +208,10 @@ func failureCodeConstantNames(t *testing.T) map[failure.Code]string {
 	t.Helper()
 
 	directory := filepath.Join("..", "..", "failure")
-	entries, err := os.ReadDir(directory)
-	if err != nil {
-		t.Fatalf("read internal/failure: %v", err)
-	}
-
 	names := make(map[failure.Code]string)
-	fileSet := token.NewFileSet()
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
-			continue
-		}
-		parsed, err := parser.ParseFile(
-			fileSet,
-			filepath.Join(directory, entry.Name()),
-			nil,
-			parser.SkipObjectResolution,
-		)
-		if err != nil {
-			t.Fatalf("parse %s: %v", entry.Name(), err)
+	packagetest.EachGoFile(t, directory, parser.SkipObjectResolution, func(name string, parsed *ast.File, _ *token.FileSet) {
+		if strings.HasSuffix(name, "_test.go") {
+			return
 		}
 		ast.Inspect(parsed, func(node ast.Node) bool {
 			spec, isValue := node.(*ast.ValueSpec)
@@ -245,12 +231,12 @@ func failureCodeConstantNames(t *testing.T) map[failure.Code]string {
 				}
 				unquoted, err := strconv.Unquote(literal.Value)
 				if err != nil {
-					t.Fatalf("unquote %s in %s: %v", literal.Value, entry.Name(), err)
+					t.Fatalf("unquote %s in %s: %v", literal.Value, name, err)
 				}
 				names[failure.Code(unquoted)] = spec.Names[index].Name
 			}
 			return true
 		})
-	}
+	})
 	return names
 }

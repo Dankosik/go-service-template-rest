@@ -4,6 +4,7 @@ package integration_test
 
 import (
 	"errors"
+	"slices"
 	"testing"
 	"time"
 
@@ -52,13 +53,8 @@ func TestPostgresJobsObservation(t *testing.T) {
 		{Kind: "acceptance", ArgsVersion: "v1", PolicyVersion: "v1"},
 		{Kind: "unknown", ArgsVersion: "v1", PolicyVersion: "v1"},
 	}
-	if len(observation.RetainedRevisions) != len(wantRevisions) {
+	if !slices.Equal(observation.RetainedRevisions, wantRevisions) {
 		t.Fatalf("retained revisions = %+v, want %+v", observation.RetainedRevisions, wantRevisions)
-	}
-	for index := range wantRevisions {
-		if observation.RetainedRevisions[index] != wantRevisions[index] {
-			t.Fatalf("retained revisions = %+v, want %+v", observation.RetainedRevisions, wantRevisions)
-		}
 	}
 
 	type stateRow struct {

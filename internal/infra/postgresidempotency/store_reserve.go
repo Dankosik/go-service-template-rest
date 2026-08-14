@@ -28,7 +28,7 @@ func (g *publicationGroup) run(ctx context.Context, identity [32]byte, publish f
 		case <-done:
 			return false, nil
 		case <-ctx.Done():
-			return false, ctx.Err()
+			return false, ctx.Err() //nolint:wrapcheck // The caller classifies the exact request-context result.
 		}
 	}
 	done := make(chan struct{})
@@ -52,24 +52,65 @@ func (s *Store) Reserve(
 	attempt httpidempotency.Attempt,
 	resolve FingerprintResolver,
 ) (httpidempotency.Reservation, httpidempotency.Decision, error) {
+	if parent == nil {
+		return httpidempotency.Reservation{}, httpidempotency.Decision{}, fmt.Errorf("%w: context is required", ErrConfig)
+	}
+	started := time.Now()
 	if !s.valid() {
-		return httpidempotency.Reservation{}, httpidempotency.Decision{}, fmt.Errorf("%w: store is required", ErrConfig)
+		err := fmt.Errorf("%w: store is required", ErrConfig)
+		s.recordReserve(parent, httpidempotency.Decision{}, err, started)
+		return httpidempotency.Reservation{}, httpidempotency.Decision{}, err
 	}
 	if err := validateAttempt(contract, attempt, resolve); err != nil {
+		s.recordReserve(parent, httpidempotency.Decision{}, err, started)
 		return httpidempotency.Reservation{}, httpidempotency.Decision{}, err
 	}
 
 	ctx, cancel, ownBudget := classificationContext(parent, contract.InProgressWait)
+	if ctx == nil {
+		return httpidempotency.Reservation{}, httpidempotency.Decision{}, fmt.Errorf("%w: classification context is required", ErrConfig)
+	}
 	defer cancel()
 	reservation, decision, err := s.reserve(ctx, contract, attempt, resolve)
 	if err == nil {
+		s.recordReserve(parent, decision, nil, started)
 		return reservation, decision, nil
 	}
 	err = classificationError(parent, ctx, ownBudget, err)
 	if decision, handled := decisionForClassificationError(err); handled {
+		s.recordReserve(parent, decision, nil, started)
 		return httpidempotency.Reservation{}, decision, nil
 	}
+	s.recordReserve(parent, httpidempotency.Decision{}, err, started)
 	return httpidempotency.Reservation{}, httpidempotency.Decision{}, err
+}
+
+func (s *Store) recordReserve(ctx context.Context, decision httpidempotency.Decision, err error, started time.Time) {
+	if s == nil || s.telemetry == nil {
+		return
+	}
+	s.telemetry.recordStage(ctx, stageLookup, started)
+	if err != nil {
+		return
+	}
+	switch decision.Outcome {
+	case httpidempotency.OutcomeExecute:
+		s.telemetry.recordTransition(ctx, transitionFirstExecution)
+	case httpidempotency.OutcomeReplay:
+		s.telemetry.recordTransition(ctx, transitionReplay)
+	case httpidempotency.OutcomeMismatch:
+		s.telemetry.recordTransition(ctx, transitionMismatch)
+	case httpidempotency.OutcomeInProgress:
+		s.telemetry.recordTransition(ctx, transitionInProgress)
+	case httpidempotency.OutcomeUnknown:
+		s.telemetry.recordTransition(ctx, transitionCommitUnknown)
+	case httpidempotency.OutcomeExpired,
+		httpidempotency.OutcomeRateLimited,
+		httpidempotency.OutcomeUnavailable,
+		httpidempotency.OutcomeResultTooLarge,
+		httpidempotency.OutcomeIntegrityConflict:
+		return
+	}
 }
 
 func (s *Store) reserve(
@@ -78,7 +119,7 @@ func (s *Store) reserve(
 	attempt httpidempotency.Attempt,
 	resolve FingerprintResolver,
 ) (httpidempotency.Reservation, httpidempotency.Decision, error) {
-	for publication := 0; publication < 2; publication++ {
+	for range 2 {
 		reservation, decision, absent, err := s.classify(ctx, contract, attempt, resolve)
 		if err != nil || !absent {
 			return reservation, decision, err
@@ -86,6 +127,9 @@ func (s *Store) reserve(
 
 		var published httpidempotency.Reservation
 		leader, err := s.flights.run(ctx, attempt.Identity, func() error {
+			if !s.allowsFirstExecution() {
+				return ErrUnavailable
+			}
 			var publishErr error
 			published, publishErr = s.publish(ctx, attempt)
 			return publishErr
@@ -128,7 +172,7 @@ func (s *Store) classifyRow(
 	row storedRow,
 ) (httpidempotency.Reservation, httpidempotency.Decision, error) {
 	switch row.phase {
-	case "reserved":
+	case phaseReserved:
 		if row.generation <= 0 || row.provisionalVersion == "" || len(row.provisionalFingerprint) != 32 {
 			return httpidempotency.Reservation{}, httpidempotency.Decision{}, ErrIntegrityConflict
 		}
@@ -147,7 +191,7 @@ func (s *Store) classifyRow(
 			return httpidempotency.Reservation{}, httpidempotency.Decision{Outcome: httpidempotency.OutcomeMismatch}, nil
 		}
 		return httpidempotency.Reservation{}, httpidempotency.Decision{Outcome: httpidempotency.OutcomeInProgress}, nil
-	case "completed":
+	case phaseCompleted:
 		return s.classifyCompleted(ctx, contract, attempt, resolve, row)
 	default:
 		return httpidempotency.Reservation{}, httpidempotency.Decision{}, ErrIntegrityConflict
@@ -173,19 +217,22 @@ func (s *Store) classifyCompleted(
 		if !row.writer {
 			return httpidempotency.Reservation{}, httpidempotency.Decision{}, ErrUnavailable
 		}
-		if !row.exists || row.phase != "completed" || row.committedAt == nil {
+		if !row.exists || row.phase != phaseCompleted || row.committedAt == nil {
 			return httpidempotency.Reservation{}, httpidempotency.Decision{}, ErrEpochLost
 		}
 	}
-	if row.fingerprintVersion == "" || len(row.fingerprint) != 32 || len(row.result) == 0 {
+	if row.fingerprintVersion == "" || len(row.fingerprint) != 32 {
 		return httpidempotency.Reservation{}, httpidempotency.Decision{}, ErrIntegrityConflict
 	}
 	fingerprint, err := resolveFingerprint(resolve, row.fingerprintVersion)
 	if err != nil {
-		return httpidempotency.Reservation{}, httpidempotency.Decision{}, err
+		return httpidempotency.Reservation{}, httpidempotency.Decision{}, fmt.Errorf("publish reservation: %w", err)
 	}
 	if !sameFingerprint(row.fingerprintVersion, row.fingerprint, fingerprint) {
 		return httpidempotency.Reservation{}, httpidempotency.Decision{Outcome: httpidempotency.OutcomeMismatch}, nil
+	}
+	if len(row.result) == 0 {
+		return httpidempotency.Reservation{}, httpidempotency.Decision{Outcome: httpidempotency.OutcomeExpired}, nil
 	}
 	result, err := httpidempotency.DecodeResult(contract, row.result)
 	if err != nil {
@@ -228,7 +275,7 @@ func (s *Store) publish(ctx context.Context, attempt httpidempotency.Attempt) (h
 		IdentityToken:      identityBytes(attempt),
 		FingerprintVersion: attempt.Fingerprint.Version,
 		Fingerprint:        fingerprintBytes(attempt.Fingerprint),
-		RecoveryMicros:     durationMicros(s.recoveryDelay),
+		RecoveryMicros:     s.recoveryMicros(),
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return httpidempotency.Reservation{}, nil
@@ -248,7 +295,7 @@ func (s *Store) publish(ctx context.Context, attempt httpidempotency.Attempt) (h
 	if err != nil {
 		return httpidempotency.Reservation{}, err
 	}
-	if row.writer && row.exists && row.phase == "reserved" && row.generation == generation &&
+	if row.writer && row.exists && row.phase == phaseReserved && row.generation == generation &&
 		sameFingerprint(row.provisionalVersion, row.provisionalFingerprint, attempt.Fingerprint) {
 		return httpidempotency.Reservation{
 			Attempt:    attempt,
@@ -257,6 +304,10 @@ func (s *Store) publish(ctx context.Context, attempt httpidempotency.Attempt) (h
 		}, nil
 	}
 	return httpidempotency.Reservation{}, unavailable(ctx, "reconcile reservation commit")
+}
+
+func (s *Store) recoveryMicros() int64 {
+	return durationMicros(s.options.OwnerRecoveryDelay)
 }
 
 func (s *Store) read(ctx context.Context, identity [32]byte) (storedRow, error) {

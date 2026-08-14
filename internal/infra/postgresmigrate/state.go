@@ -107,16 +107,7 @@ func validateAppliedVersions(newestFirst []*database.ListMigrationsResult) ([]in
 	for i := len(newestFirst) - 2; i >= 0; i-- {
 		applied = append(applied, newestFirst[i].Version)
 	}
-	if !slices.IsSortedFunc(applied, func(a, b int64) int {
-		switch {
-		case a < b:
-			return -1
-		case a > b:
-			return 1
-		default:
-			return 0
-		}
-	}) {
+	if !slices.IsSorted(applied) {
 		return nil, errors.New("goose migration history is not ascending by application order")
 	}
 	for i := 1; i < len(applied); i++ {

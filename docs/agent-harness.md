@@ -58,13 +58,36 @@ first governed action.
 | --- | --- | --- | --- |
 | Durable execution control (implementation; Ledger Orchestrator exception) | `/goal <objective>`; the evaluator inspects real files, tests, logs and artifacts. A Goal is thread-local | `/goal <condition>` carries the outcome's completion condition and the evaluator sees only the transcript; the task list (`TaskCreate`/`TaskUpdate`) is its step ledger. One root control spans the outcome | Task list (`todo_write`, or team `task_create`/`task_update`); one root task tree spans the outcome |
 | Ledger Orchestrator | `$orchestrator` in a dedicated App task with `Execution role: LEDGER_ORCHESTRATOR`; it follows the [native orchestration protocol](#codex-app-native-orchestration-protocol). Codex owns task lifecycle, repository artifacts own semantic state, and Git owns candidates | — | — |
+| Agent-owned upstream reopen during orchestration | One fresh top-level Local task with `Execution role: UPSTREAM_REOPEN_LEAD`; the Orchestrator selects its model and effort and one task owns one macro phase | — | — |
 | Implementation Worker with isolated worktree | Separate top-level App task/chat started in Worktree mode with `Execution role: IMPLEMENTATION_WORKER`; never `collaboration.spawn_agent` | Background subagent whose brief starts `Execution role: IMPLEMENTATION_WORKER`, with `run_in_background: true`, `isolation: "worktree"`, and `subagent_type` set to a `worker-*` effort carrier | Background subagent whose brief starts `Execution role: IMPLEMENTATION_WORKER`, with `run_in_background: true` and `isolation: "worktree"` |
 | Correct a worker without losing its context | Message the same top-level App task/chat | `SendMessage` addressed to the worker's **agent ID**; a completed worker auto-resumes with full history | `SendMessage` to the same agent |
-| Read-only research/challenge/review lane | Project subagents in `.codex/agents/*.toml` | `Agent` tool lane: built-in `Explore`, `Plan`, or `general-purpose`, or a project agent in `.claude/agents/*.md` | `Agent` tool lane: built-in `Explore` or `general-purpose`, or a project agent in `.qwen/agents/*.md` |
-| Per-lane model selection | Parent-selected `model` on the real follow-up dispatch after the no-op create bootstrap below | `model` parameter on the `Agent` tool call (dispatch-time override) over `model` frontmatter in `.claude/agents/*.md` (role default) | `model` frontmatter in `.qwen/agents/*.md` (`inherit`, `fast`, a model ID, or `authType:modelId`); exact model IDs are provider-specific |
-| Per-lane reasoning effort | Parent-selected `thinking` on that real follow-up dispatch | `effort` frontmatter in the agent definition (`low`, `medium`, `high`, `xhigh`, `max`); no per-dispatch parameter — unset inherits the session effort | Not yet available in agent frontmatter; a lane inherits the session effort |
+| Read-only research/challenge/review lane | Project subagent in the current root task, selected from `.codex/agents/*.toml` | `Agent` tool lane: built-in `Explore`, `Plan`, or `general-purpose`, or a project agent in `.claude/agents/*.md` | `Agent` tool lane: built-in `Explore` or `general-purpose`, or a project agent in `.qwen/agents/*.md` |
+| Per-lane model selection | Direct-parent-selected `model` on the technical follow-up after the no-op create bootstrap when supported | `model` parameter on the `Agent` tool call (dispatch-time override) over `model` frontmatter in `.claude/agents/*.md` (role default) | `model` frontmatter in `.qwen/agents/*.md` (`inherit`, `fast`, a model ID, or `authType:modelId`); exact model IDs are provider-specific |
+| Per-lane reasoning effort | Parent-selected `thinking` on that technical follow-up when supported | `effort` frontmatter in the agent definition (`low`, `medium`, `high`, `xhigh`, `max`); no per-dispatch parameter — unset inherits the session effort | Not yet available in agent frontmatter; a lane inherits the session effort |
 | Worker completion signalling | Native completion and status events | Background-task completion notifications; continue an existing worker with `SendMessage` | Background-task completion notifications; continue an existing worker with `send_message` |
 | Reach an independent session this one did not spawn | — | `/list-agents` to discover, `SendMessage` by name ([Cross-Session Messaging](#cross-session-messaging)) | — |
+
+### Read-Only Lane Carrier
+
+Freshness is a context property, not a top-level task boundary. Every read-only
+research, challenge, or review lane runs as a built-in project subagent owned by
+the current root task. An independent review — including
+`ACCEPTANCE_REVIEWER` — always starts a new lane context. In the Codex App,
+dispatch the selected role through `collaboration.spawn_agent` with
+`fork_turns: "none"`; never create a top-level task, thread, chat, Local task,
+or Worktree task for review. Claude Code and Qwen Code use their `Agent`
+subagent carrier with a new lane context. A non-review lane may inherit only the
+smallest recent turn set when irreproducible user context is unavailable from
+the accepted brief or cited sources.
+
+The lane returns its finding or verdict to the root, which retains synthesis,
+correction, acceptance, and completion authority. When the carrier is
+unavailable, an untriggered boundary keeps root self-review; a boundary that
+requires independent review remains unaccepted and reports the missing carrier.
+Do not substitute a peer or top-level session. Top-level tasks remain reserved
+for the roles explicitly mapped by the Control Map or native orchestration
+protocol; a macro-phase handoff stops for the next user-started session instead
+of creating a reviewer chat.
 
 The Codex Ledger Orchestrator remains App-native. Reopen an App Server or SDK
 orchestrator only when known native tasks cannot be inspected or continued,
@@ -83,29 +106,29 @@ are authoritative for the installed App when they differ from public prose.
 
 ### Launch
 
-- The user explicitly invokes `$orchestrator` in a dedicated saved-project task
-  and names the allowed native controls: fresh App tasks and the eligible Local
-  or Worktree environments. Capture that initiating native-control envelope
-  verbatim and carry it into every fresh Lead. Repository policy, skill text,
-  and a parent-generated prompt cannot create missing user authority. A Lead
-  may create fresh App-task Workers only inside the carried envelope and the
-  native bootstrap rule below; otherwise it executes the unit serially.
+- The user invokes `$orchestrator` once in a dedicated saved-project task. That
+  launch authorizes the Orchestrator and its Leads to create fresh App tasks,
+  choose Local or Worktree, and autonomously select task-matched model and effort
+  from the installed controls. It also authorizes thread-local Goals, eligible
+  lanes, Handoff,
+  upstream phases, prerequisite units, and recovery without another technical
+  or routing choice from the user. Capture that native-control envelope verbatim
+  and carry it into every fresh Lead. It does not expand irreversible external
+  effects or supply missing user-owned business meaning.
 - The Orchestrator calls the native project-list control before creation and
   verifies the saved project and Git capability. It creates no projectless or
   cloud task as a fallback.
 - Each create carries a unique `dispatch_scope` derived from ledger revision,
   unit ID, and attempt and a title containing the unit ID and postcondition.
-  Omit `model` and `thinking`; its prompt binds `Execution role:
-  ACCEPTANCE_UNIT_LEAD`, links the Role Tree, names the scope, forbids repository
-  inspection or mutation, Goal creation, and unit work, and requires exactly
-  `READY_FOR_DISPATCH`. This no-op bootstrap is the only work allowed on the
-  configured create model.
-- Retain the ready task identity, wait for exactly `READY_FOR_DISPATCH`, then
-  send the compact [Implementation Entry And Continuation
-  Handoff](spec-first-workflow/shared/resume-and-handoff.md#implementation-entry-and-continuation-handoff)
-  to that task with the parent-selected `model` and `thinking`. This follow-up,
-  not create, starts technical work. A different bootstrap result blocks the
-  scope without a replacement task.
+  Select the direct child's model and effort from its fixed brief. Because the
+  create control permits an exact model only when the user named that model,
+  create the child with no model or effort override and a no-op prompt that binds
+  its role and `dispatch_scope`, forbids repository inspection, tools, and Goal
+  creation, and requires exactly `READY_FOR_DISPATCH`. Wait for that result, then
+  send the full technical handoff once with the selected model and effort through
+  the follow-up control. If either override is unavailable or rejected, omit only
+  that override, continue on the effective configured value, and record the
+  capability gap; never ask the user to choose.
 - A serial unit starts in Local. Only recorded members of one positively
   independent planned wave start as separate Worktree tasks from the wave's
   accepted base. Omit `startingState` unless the initiating user specifically
@@ -115,16 +138,20 @@ are authoritative for the installed App when they differ from public prose.
 
 ### Identity, wait, and correction
 
+- Inspect a native control's raw result before deriving state: surface tool
+  errors, decode a serialized payload once, honor the installed argument limits,
+  inspect both pinned and non-pinned collections, and copy identity from the
+  installed schema. An empty array produced by filtering an error or undecoded
+  response is not an empty task registry.
 - A ready create returns `threadId` and `hostId`. Retain both plus the latest
-  wait cursor, pin the active task, and address the bootstrap wait, real
-  dispatch, later waits, reads, corrections, and Handoff by native identity
-  rather than title or summary.
+  wait cursor, pin the active task, and address later waits, reads, corrections,
+  and Handoff by native identity rather than title or summary.
 - Wait on all currently relevant tasks in one native wait when available and
   pass the latest cursor. An unchanged timeout produces no new conclusion or
   message. A correction resumes the same task and omits model and effort so its
   selected configuration remains intact.
-- The Lead's first action after the real dispatch is a thread-local Goal for its
-  assigned stage. A Local Lead's stage ends with a canonical `Accepted:` receipt
+- The Lead's first action after the technical dispatch is a thread-local Goal for
+  its assigned stage. A Local Lead's stage ends with a canonical `Accepted:` receipt
   or `Blocked:` record. A Worktree Lead must complete its Worktree Goal before
   returning `HANDOFF_READY` with its fixed candidate; after successful Handoff
   the same Lead creates a separate Local Goal. The two Goals never overlap.
@@ -133,6 +160,43 @@ are authoritative for the installed App when they differ from public prose.
   blocker and native Goal terminality are distinct: keep the task pinned and
   dependants blocked while an active Goal cannot yet reach a native terminal
   state.
+
+### Upstream reopen and implementation return
+
+- A Worktree Lead that reaches an agent-owned upstream boundary completes its
+  Worktree Goal with a fixed candidate and `HANDOFF_READY` carrying the proposed
+  blocker. The Orchestrator performs the ordinary same-Lead Handoff before any
+  reopen. In Local, that Lead creates a blocker-revalidation Goal and either
+  takes a newly available unit-local remedy or persists the canonical
+  `Blocked:` record. Until then the proposed blocker is routing evidence only.
+- A canonical unit `Blocked:` record with an agent-owned upstream owner is an
+  authorized recovery route. Keep the blocked Lead, Goal, candidate, and native
+  identities pinned. Create one Local task from the compact [Upstream Reopen
+  handoff](spec-first-workflow/shared/resume-and-handoff.md#upstream-reopen-and-implementation-return)
+  through the same bootstrap and technical-dispatch protocol. Bind `Execution
+  role: UPSTREAM_REOPEN_LEAD`, select its model and effort from the fixed phase
+  brief, and use one unique recovery scope derived from the ledger revision,
+  unit, blocker, macro phase, and attempt.
+- Retain its thread and host identities plus wait cursor and wait through the
+  phase-owned review, repair, and focused re-review loop. Verify the canonical
+  artifact revisions and movement disposition before routing again. Create
+  another Reopen Lead only when those changes invalidate a downstream macro
+  phase. The Reopen Lead has no Implementation Goal and never enters another
+  phase; the Ledger Orchestrator chooses the next phase from canonical state.
+- Once the ledger is executable and every prerequisite repair unit is accepted,
+  inspect the installed native controls. When they expose documented Goal
+  resume, send the compact continuation to the original blocked Lead without
+  model or effort overrides and resume that Goal. Current native-schema
+  inspection or a recorded rejection may prove that no such resume is possible;
+  an ordinary follow-up turn is not Goal-resume evidence.
+- If the known Goal is proven non-resumable, create one replacement Local task
+  through the same bootstrap and technical-dispatch protocol with `Execution
+  role: ACCEPTANCE_UNIT_LEAD` and an agent-selected model and effort. Its
+  technical prompt carries the same unit, preserved Local candidate, current
+  artifacts, predecessor identity and native failure, and a new attempt in
+  `dispatch_scope`. Keep the predecessor pinned until the replacement validates
+  candidate ownership; then only the replacement may implement, accept, or
+  write the unit transition. Unknown native or candidate state never qualifies.
 
 ### Worktree fan-in
 
@@ -150,14 +214,23 @@ are authoritative for the installed App when they differ from public prose.
   Local integration checkout at a time.
 - After successful Handoff, the atomic follow-up makes the same Lead create its
   Local Goal for integration, review, proof, correction, and the canonical
-  receipt or blocker. It repeats the role, unit, and `dispatch_scope` without
-  replaying the ledger brief or choosing internal lanes.
+  receipt or blocker. A proposed upstream blocker instead selects the compact
+  Local blocker-revalidation continuation. Both repeat the role, unit, and
+  `dispatch_scope` without replaying the ledger brief or choosing internal
+  lanes.
 - The role and unit do not change across Handoff. The Orchestrator moves the
   carrier but never inspects or integrates the candidate. A different task,
   history fork, or new Lead cannot replace this continuation.
-- Unpin and archive only after the canonical receipt or blocker and Git identity
-  are durable and no unintegrated candidate remains. Archiving a Worktree task
-  before that point risks deleting its only candidate carrier.
+
+### Terminal task cleanup
+
+- After every child reaches native terminality, verify its canonical unit or
+  phase result and Git/candidate safety. When no resume or recovery route still
+  needs its native identity, unpin and archive it before routing again. Apply
+  this to accepted or terminally blocked Leads, completed Upstream Reopen Leads,
+  and superseded predecessors; keep only the Ledger Orchestrator and children
+  still active or needed for recovery visible. Never archive a Worktree task
+  while it owns the only unintegrated candidate.
 
 ### Recovery
 
@@ -167,43 +240,62 @@ are authoritative for the installed App when they differ from public prose.
   setup can still progress. If that progress cannot be observed, report the
   missing native capability; do not infer an unknown outcome from an initially
   empty task list.
+- When create returned no thread identity and a correctly decoded native list
+  still misses the task, inspect the App-owned read-only task receipts when they
+  are available. Search the narrow creation window in
+  `$CODEX_HOME/session_index.jsonl` and
+  `$CODEX_HOME/sessions/YYYY/MM/DD/rollout-*.jsonl` by the creator
+  `source_thread_id` plus exact `dispatch_scope` or initial bootstrap; title and
+  time may narrow the search but never establish identity. Treat the receipt
+  filename or session metadata only as a candidate `threadId`, then confirm its
+  saved project or Worktree, role, and scope through native read or wait before
+  pin, message, or Handoff. Inspect only identity and the bootstrap envelope; do
+  not replay the transcript or create a second lifecycle store. An already
+  available UI image or Chronicle view may prove that a task exists and narrow
+  the search, but it is neither required nor authoritative for identity.
 - Reconcile a terminal lost or ambiguous create only through a documented
-  native resolver or one exact native task whose saved project and bootstrap
-  prompt match `dispatch_scope`; title or summary alone never qualifies. One
-  exact match resumes that task. Zero matches after terminal ambiguity or
-  multiple matches record the Artifact Model's `UNKNOWN_CREATE` blocker and
-  never redispatch automatically. A stale base, scope, or ledger revision
-  releases no dependency.
+  native resolver, a correctly decoded native list, and the App-owned receipt
+  fallback above. One exact task whose saved project and initial prompt match
+  `dispatch_scope` resumes; title or summary alone never qualifies. Zero matches
+  after those materially distinct sources or multiple matches record the
+  Artifact Model's `UNKNOWN_CREATE` blocker and never redispatch automatically.
+  Do not ask the user to restart the App, reopen a project, inspect the sidebar,
+  or supply a screenshot while an authorized read-only reconciliation route
+  remains. A stale base, scope, or ledger revision releases no dependency.
 - If a known Lead becomes terminal or requests attention without a canonical
   receipt or blocker, send the compact terminalization prompt from [Resume And
   Handoff](spec-first-workflow/shared/resume-and-handoff.md#known-lead-terminalization)
   once to that same task, with model and effort omitted. Never create a
   replacement Lead. If the transition is still absent, stop its dependants and
-  report the known task and missing canonical transition as the blocker.
+  report the known task and missing canonical transition as the blocker. This
+  prohibition does not cover the narrow post-reopen exception above: that path
+  requires an existing canonical blocker, a changed reopen condition, a
+  preserved candidate, and proof that the known Goal cannot resume.
 - If Handoff returned an `operationId`, continue status waits from its latest
   revision. If the Handoff response was lost before that identity was retained,
   inspect the exact task's native backing and state; continue only when one
   native state proves the outcome. Otherwise record an ordinary semantic
   blocker for unknown Handoff outcome, preserve the candidate carrier, and do
   not invoke Handoff again. `UNKNOWN_CREATE` remains reserved for creation.
-- Native task state, the canonical ledger, and Git are the complete recovery
-  set. Add no scheduler file or database. Reopen an App Server only under the
-  conditions above; a hook is not a substitute for missing lifecycle APIs.
+- Native task state, including the App-owned identity receipts above, the
+  canonical ledger, and Git are the complete recovery set. Add no scheduler file
+  or database. Reopen an App Server only under the conditions above; a hook is
+  not a substitute for missing lifecycle APIs.
 
 ## Model And Effort Selection
 
-The dispatch policy lives in the [implementation phase](spec-first-workflow/phases/implementation-validation-closeout.md#worker-execution) and in [Subagents And Review](spec-first-workflow/shared/subagents-and-handoff.md). The actor that creates a direct child independently selects that child's best-suited available model and task-matched reasoning effort from the fixed brief. It never selects a grandchild or inherits a parent epic's tier. Planning records the outcome, risk, and proof rather than a vendor model name.
+The dispatch policy lives in the [implementation phase](spec-first-workflow/phases/implementation-validation-closeout.md#worker-execution) and in [Subagents And Review](spec-first-workflow/shared/subagents-and-handoff.md). The actor that creates a direct child independently selects that child's best-suited available model and task-matched reasoning effort from the fixed brief. A parent never selects a grandchild or inherits a parent epic's tier. Planning records the outcome, risk, and proof rather than a vendor model name.
 
-The installed Codex App create control permits `model` only when the user names
-that exact model, so delegated selection never sends a model on create. Use the
-native no-op bootstrap above, then send the real child prompt with the parent's
-task-specific `model` and `thinking` through the follow-up control that exposes
-those fields. If the installed follow-up control cannot apply both, block before
-technical work rather than silently inherit the create model or effort. A
-correction or continuation of the same child omits overrides so the selected
-pair remains stable. The same protocol applies when a Lead creates a top-level
-App-task Worker; built-in subagent controls receive the parent's selection
-directly when their schema permits it.
+The installed Codex App create control accepts `prompt`, `model`, and `thinking`
+but permits an exact `model` only when the user explicitly named that model. The
+one `$orchestrator` launch delegates selection without naming one, so each
+top-level child uses the no-op bootstrap above. Its direct parent applies the
+selected pair on the single technical follow-up when that control supports the
+fields. When a field is unavailable or rejected, continue on the effective
+configured value and record the capability gap; model-control limitations alone
+never become a user question. Corrections and continuations omit overrides so
+the effective configuration remains stable. Built-in subagent controls receive
+the parent's selection directly when their schema permits it.
 
 ### Codex App Selection Tree
 
@@ -212,6 +304,7 @@ flowchart TD
     launch["User invokes orchestration<br/>root session is the bootstrap"]
     orchestrator["LEDGER_ORCHESTRATOR<br/>selects each direct Lead"]
     lead["ACCEPTANCE_UNIT_LEAD<br/>selects each direct leaf"]
+    reopen["UPSTREAM_REOPEN_LEAD"]
     specialist["READ_ONLY_SPECIALIST"]
     worker["IMPLEMENTATION_WORKER"]
     reviewer["ACCEPTANCE_REVIEWER"]
@@ -220,7 +313,8 @@ flowchart TD
     reviewer_tier["task-selected model + effort"]
 
     launch --> orchestrator
-    orchestrator -->|"selects the Lead configuration from the fixed unit brief"| lead
+    orchestrator -->|"selects the Lead model + effort"| lead
+    orchestrator -->|"selects from the fixed phase brief"| reopen
     lead -->|"selects from the exact question"| specialist
     lead -->|"selects from the exact write slice"| worker
     lead -->|"selects from review risk"| reviewer
@@ -231,31 +325,44 @@ flowchart TD
 
 The already-running root session is the unavoidable bootstrap: no actor can
 choose the model already executing it. Below that root, the Orchestrator selects
-only each direct Lead and each Lead selects only its direct leaves. The create
-model performs only the no-op bootstrap; each child's technical turn starts on
-its parent-selected pair. No per-child human choice or role-based default is
-required. Tree depth and role name never select a tier. Programmatic `thinking:
-"ultra"` is a reasoning-effort override only; it does not itself enable
-orchestration or delegation.
+each direct Lead's model and effort and each Lead selects only its direct leaves.
+Each top-level App child receives one no-op bootstrap and then one technical
+handoff with the parent-selected pair when supported. Built-in leaf controls
+receive both parent-selected fields explicitly when their schema permits them;
+omitting either field and inheriting the parent's pair is a dispatch failure.
+Tree depth and role name never select a tier.
+Programmatic `thinking: "ultra"` is a reasoning-effort override only; it does
+not itself enable orchestration or delegation, and it is not an autonomous
+Implementation tier. The workflow has already narrowed each Implementation
+child to one acceptance unit or leaf and gives independent work its own child,
+so select the least effort that closes that fixed brief. Only an exact user
+request for `ultra` reasoning may override this exclusion.
 
 This table owns the per-harness tiers:
 
 | Task class | Codex App | Claude Code | Qwen Code |
 | --- | --- | --- | --- |
-| Clear mechanical work | Luna | Sonnet (`claude-sonnet-5`) | `fast` (the configured `fastModel`) |
-| Ordinary implementation and review | Terra | Sonnet (`claude-sonnet-5`) | `inherit` (the session model) |
-| Closed-route complex, cross-cutting, or high-consequence implementation | Terra with higher effort | Opus (`claude-opus-5`) | `inherit`, or a stronger configured model ID |
-| Open-ended root reasoning or critical review | Sol | Opus (`claude-opus-5`) | `inherit`, or a stronger configured model ID |
-| Explicit user request for the most capable model | — | Fable (`claude-fable-5`) | The strongest configured model ID |
+| Clear mechanical work | Luna (`gpt-5.6-luna`) with `low` effort | Sonnet (`claude-sonnet-5`) | `fast` (the configured `fastModel`) |
+| Ordinary implementation and ordinary review | Terra (`gpt-5.6-terra`) with `medium` effort | Sonnet (`claude-sonnet-5`) | `inherit` (the session model) |
+| Closed-route complex, cross-cutting, protected-domain, or high-consequence implementation | Terra (`gpt-5.6-terra`) with `high` or `xhigh` effort | Opus (`claude-opus-5`) | `inherit`, or a stronger configured model ID |
+| Open-ended root reasoning or critical review | Sol (`gpt-5.6-sol`) only under the recorded escalation rule below | Opus (`claude-opus-5`) | `inherit`, or a stronger configured model ID |
+| Explicit user request for one model | That exact installed model | Fable (`claude-fable-5`) | The exact configured model ID |
 
-- **Codex App has no role or task-class default.** Treat Luna as the candidate
-  for clear, narrow, repeatable work; Terra as the balanced candidate for
-  ordinary agentic work; and Sol as the candidate for ambiguous, open-ended, or
-  highest-consequence reasoning. Select among them and select effort separately
-  from the direct child's actual ambiguity, evidence volume, tool work, and
-  consequence of error. Keep unresolved architecture, cause, or route discovery
-  with its current owner instead of delegating it to a stronger Worker merely to
-  compensate for an unready brief.
+- **Codex App uses the explicit task-class ladder above.** Luna owns clear
+  mechanical work. Terra is the default for every ready ordinary unit and
+  ordinary review; raise Terra to `high` or `xhigh` for closed-route complex,
+  cross-cutting, protected-domain, or high-consequence implementation. A fixed
+  acceptance unit remains closed-route when it touches security, lifecycle,
+  performance, or another protected domain: consequence raises effort before it
+  raises the model tier. Sol is not an Implementation default. Select it only for
+  open-ended root reasoning or a genuinely critical review when a representative
+  evaluation or a diagnosed prior Terra-`xhigh` capability gap shows the expected
+  quality gain after brief and route defects are excluded; record that
+  direct-child-specific evidence in the trace. Without that evidence, use Terra.
+  A top-level App task receives its selected model on the technical follow-up;
+  every fresh built-in lane receives the explicit supported fields. Keep
+  unresolved architecture, cause, or route discovery with its current owner
+  instead of escalating a ready child to compensate for an unready brief.
 - **Claude Code runs a two-model ladder.** Sonnet 5 carries every mechanical and ordinary lane; Opus 5 carries the root session and every complex, cross-cutting-refactoring, or high-consequence lane. Haiku is no longer a default tier — select it only for a trivial lane when current task evidence or representative evaluation shows no material quality loss, and say why. Run the root on Opus 5 (`--model opus`, or the app's model selector) whenever it orchestrates workers or coordinates a structured or orchestrated outcome.
 - Qwen Code model tiers are provider-specific: the `model` frontmatter in `.qwen/agents/*.md` accepts `inherit`, `fast`, a bare model ID, or `authType:modelId`. `fast` resolves to the configured `fastModel` and falls back to `inherit` when none is set; `inherit` (or an omitted field) uses the session model. Pick exact model IDs from the models configured for the active provider rather than hardcoding them. Qwen Code does not yet expose a per-agent reasoning-effort field, so a lane inherits the session effort.
 
@@ -282,15 +389,18 @@ Both harnesses expose a durable execution control typed as `/goal`. The name and
 
 This part is owned here, not by either vendor, and applies to both:
 
-- Set a goal only for a genuinely long-running, multi-step, or resumable implementation outcome. The explicit Codex App Ledger Orchestrator is the sole exception: its Goal owns routing across fresh Acceptance-Unit Leads, concurrently only for a ledger-proven independent wave, and never their execution strategy, implementation, proof, review, integration, correction, or acceptance.
+- Set a goal only for a genuinely long-running, multi-step, or resumable implementation outcome. The explicit Codex App Ledger Orchestrator is the sole exception: its Goal owns routing across fresh Acceptance-Unit Leads and Upstream Reopen Leads, concurrently only for a ledger-proven independent wave, and never their phase decisions, execution strategy, implementation, proof, review, integration, correction, or acceptance.
 - One Goal spans one thread-local stage. The Ledger Orchestrator has one routing
   Goal. A serial Local Lead has one acceptance Goal; a Worktree Lead completes
   one candidate Goal before Handoff and creates one separate Local acceptance
   Goal after Handoff succeeds. The Lead task and role stay alive across those
-  two non-overlapping Goals through the unit receipt or blocker. The task list
-  is a step ledger, not a second control.
+  two non-overlapping Goals through the unit receipt or blocker. An Upstream
+  Reopen Lead sets no Goal because it owns a non-implementation macro phase. A
+  replacement Local Lead starts one new acceptance Goal only after the original
+  Goal is proven non-resumable. The task list is a step ledger, not a second
+  control.
 - An orchestrated Goal begins `Execution role: LEDGER_ORCHESTRATOR (Ledger Orchestrator)` or `Execution role: ACCEPTANCE_UNIT_LEAD (Acceptance-Unit Lead)` and matches the dispatch that created the session.
-- Carry the accepted stop condition and the invariants that must not change into the goal text. The stop condition is the phase-owned one — the outcome closed with its mapped proof, or the honest blocker ([Stop Rule](spec-first-workflow/phases/implementation-validation-closeout.md#stop-rule)) — and the text must let either ending satisfy it, because a condition that recognizes only success cannot end a genuinely blocked run. `Implementation complete; verification incomplete` is such a blocked ending: close the durable control as blocked with the unverified claim, narrower evidence, and next proof or reopen owner rather than leaving it active or marking it complete.
+- Carry the accepted stop condition and the invariants that must not change into the goal text. An Acceptance-Unit Lead Goal may end at the canonical receipt or blocker owned by the phase [Stop Rule](spec-first-workflow/phases/implementation-validation-closeout.md#stop-rule). The Ledger Orchestrator Goal does not end on an agent-owned blocker while an authorized upstream-recovery route remains; it waits through that route and the resumed or replacement Lead. `Implementation complete; verification incomplete` remains a blocked unit ending with the unverified claim, narrower evidence, and next proof or reopen owner rather than a completion claim.
 - Never bound a goal by a turn, step, or iteration count. A counter measures spending, not completion: it cuts an honest run off mid-outcome and lets a stuck one run to the same number. Judge convergence from evidence instead. A no-change turn permits neither another identical attempt nor an immediate durable blocker: take an evidence-changing action inside the current role or return `NEEDS_PARENT` to its direct parent. The Acceptance-Unit Lead records a canonical blocker only after no such unit-local action remains.
 - The goal text is the directive in both harnesses: setting a goal starts work immediately and no separate prompt follows. A brief that will not fit the harness's goal text means the outcome is too broad for one goal, never a reason to send a second message.
 
@@ -423,14 +533,10 @@ Read-only lanes follow [Subagents And Review](spec-first-workflow/shared/subagen
 
 Claude Code caps concurrent subagents at 20 by default and permits nesting to depth 3; there is no per-session cap on total spawns. These are ceilings, not targets: lane eligibility still decides how many lanes exist, and a lane that cannot state an independent evidence boundary does not become eligible because capacity is free.
 
-Start ordinary research, design, challenge, and review lanes with fresh context
-when the harness supports it. In the Codex App, dispatch the selected role with
-no inherited root turns; inherit only the smallest recent turn set when a
-non-review question depends on irreproducible user context that is unavailable
-from the accepted brief or cited sources. In Claude Code and Qwen Code, start a
-new lane of the selected role. Pass only the shared Lane Brief, minimal artifact
-or source pointers, and irreproducible current facts. Return only the shared
-Fan-In envelope rather than replaying the lane transcript.
+Use the [Read-Only Lane Carrier](#read-only-lane-carrier). Pass only the shared
+Lane Brief, minimal artifact or source pointers, and irreproducible current
+facts. Return only the shared Fan-In envelope rather than replaying the lane
+transcript.
 
 Triggered independent implementation review follows its [conditional
 branch](spec-first-workflow/shared/implementation-review.md) and opens a new

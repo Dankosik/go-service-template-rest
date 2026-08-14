@@ -4,6 +4,7 @@ package integration_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"runtime"
@@ -265,7 +266,7 @@ func stageDuePostgresRecoveryJob(ctx context.Context, t *testing.T, pool *postgr
 		MaxPayloadBytes: 1024,
 		Validate: func(args map[string]string) error {
 			if len(args) == 0 {
-				return fmt.Errorf("arguments are required")
+				return errors.New("arguments are required")
 			}
 			return nil
 		},

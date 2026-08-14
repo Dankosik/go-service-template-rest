@@ -3,6 +3,7 @@ package natsjs
 import (
 	"context"
 	"fmt"
+	"maps"
 	"slices"
 	"time"
 	"unicode"
@@ -248,9 +249,5 @@ type headerCarrier nats.Header
 func (h headerCarrier) Get(key string) string { return nats.Header(h).Get(key) }
 func (h headerCarrier) Set(key, value string) { nats.Header(h).Set(key, value) }
 func (h headerCarrier) Keys() []string {
-	keys := make([]string, 0, len(h))
-	for key := range h {
-		keys = append(keys, key)
-	}
-	return keys
+	return slices.AppendSeq(make([]string, 0, len(h)), maps.Keys(h))
 }

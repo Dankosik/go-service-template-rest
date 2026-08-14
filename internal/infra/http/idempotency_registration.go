@@ -60,56 +60,13 @@ func newIdempotencyRegistry(spec *openapi3.T, configured []IdempotencyOperation)
 	if spec == nil || spec.Paths == nil {
 		return idempotencyRegistry{}, errors.New("http idempotency: OpenAPI spec is required")
 	}
-	configuredByID := make(map[string]IdempotencyOperation, len(configured))
-	for _, operation := range configured {
-		if err := operation.Contract.Validate(); err != nil {
-			return idempotencyRegistry{}, err
-		}
-		if operation.Authorize == nil || operation.Admit == nil {
-			return idempotencyRegistry{}, fmt.Errorf("http idempotency: operation %q lacks authorization or admission", operation.Contract.OperationID)
-		}
-		if _, duplicate := configuredByID[operation.Contract.OperationID]; duplicate {
-			return idempotencyRegistry{}, fmt.Errorf("http idempotency: operation %q is registered twice", operation.Contract.OperationID)
-		}
-		configuredByID[operation.Contract.OperationID] = operation
+	configuredByID, err := configuredIdempotencyOperations(configured)
+	if err != nil {
+		return idempotencyRegistry{}, err
 	}
-
-	registered := make(map[string]registeredIdempotencyOperation, len(configured))
-	for _, pathItem := range spec.Paths.Map() {
-		if pathItem == nil {
-			continue
-		}
-		for _, operation := range pathItem.Operations() {
-			if operation == nil || operation.Extensions == nil {
-				continue
-			}
-			raw, opted := operation.Extensions[idempotencyExtension]
-			if !opted {
-				continue
-			}
-			configuredOperation, ok := configuredByID[operation.OperationID]
-			if !ok {
-				return idempotencyRegistry{}, fmt.Errorf("http idempotency: OpenAPI operation %q has no registration", operation.OperationID)
-			}
-			declaration, err := decodeIdempotencyDeclaration(operation.OperationID, raw)
-			if err != nil {
-				return idempotencyRegistry{}, err
-			}
-			if !sameIdempotencyContract(declaration, configuredOperation.Contract) {
-				return idempotencyRegistry{}, fmt.Errorf("http idempotency: OpenAPI declaration for %q differs from registration", operation.OperationID)
-			}
-			if err := validateIdempotencyOperationShape(spec, operation, declaration); err != nil {
-				return idempotencyRegistry{}, err
-			}
-			if _, duplicate := registered[operation.OperationID]; duplicate {
-				return idempotencyRegistry{}, fmt.Errorf("http idempotency: OpenAPI operation %q is declared twice", operation.OperationID)
-			}
-			registered[operation.OperationID] = registeredIdempotencyOperation{
-				contract:  configuredOperation.Contract.Clone(),
-				authorize: configuredOperation.Authorize,
-				admit:     configuredOperation.Admit,
-			}
-		}
+	registered, err := declaredIdempotencyOperations(spec, configuredByID)
+	if err != nil {
+		return idempotencyRegistry{}, err
 	}
 	if len(registered) != len(configuredByID) {
 		for operationID := range configuredByID {
@@ -119,6 +76,72 @@ func newIdempotencyRegistry(spec *openapi3.T, configured []IdempotencyOperation)
 		}
 	}
 	return idempotencyRegistry{operations: registered}, nil
+}
+
+func configuredIdempotencyOperations(configured []IdempotencyOperation) (map[string]IdempotencyOperation, error) {
+	configuredByID := make(map[string]IdempotencyOperation, len(configured))
+	for _, operation := range configured {
+		if err := operation.Contract.Validate(); err != nil {
+			//nolint:wrapcheck // Preserve the accepted Contract validation diagnostic.
+			return nil, err
+		}
+		if operation.Authorize == nil || operation.Admit == nil {
+			return nil, fmt.Errorf("http idempotency: operation %q lacks authorization or admission", operation.Contract.OperationID)
+		}
+		if _, duplicate := configuredByID[operation.Contract.OperationID]; duplicate {
+			return nil, fmt.Errorf("http idempotency: operation %q is registered twice", operation.Contract.OperationID)
+		}
+		configuredByID[operation.Contract.OperationID] = operation
+	}
+	return configuredByID, nil
+}
+
+func declaredIdempotencyOperations(spec *openapi3.T, configured map[string]IdempotencyOperation) (map[string]registeredIdempotencyOperation, error) {
+	registered := make(map[string]registeredIdempotencyOperation, len(configured))
+	for _, pathItem := range spec.Paths.Map() {
+		if pathItem == nil {
+			continue
+		}
+		for _, operation := range pathItem.Operations() {
+			if err := registerIdempotencyOperation(spec, operation, configured, registered); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return registered, nil
+}
+
+func registerIdempotencyOperation(spec *openapi3.T, operation *openapi3.Operation, configured map[string]IdempotencyOperation, registered map[string]registeredIdempotencyOperation) error {
+	if operation == nil || operation.Extensions == nil {
+		return nil
+	}
+	raw, opted := operation.Extensions[idempotencyExtension]
+	if !opted {
+		return nil
+	}
+	configuredOperation, ok := configured[operation.OperationID]
+	if !ok {
+		return fmt.Errorf("http idempotency: OpenAPI operation %q has no registration", operation.OperationID)
+	}
+	declaration, err := decodeIdempotencyDeclaration(operation.OperationID, raw)
+	if err != nil {
+		return err
+	}
+	if !sameIdempotencyContract(declaration, configuredOperation.Contract) {
+		return fmt.Errorf("http idempotency: OpenAPI declaration for %q differs from registration", operation.OperationID)
+	}
+	if err := validateIdempotencyOperationShape(spec, operation, declaration); err != nil {
+		return err
+	}
+	if _, duplicate := registered[operation.OperationID]; duplicate {
+		return fmt.Errorf("http idempotency: OpenAPI operation %q is declared twice", operation.OperationID)
+	}
+	registered[operation.OperationID] = registeredIdempotencyOperation{
+		contract:  configuredOperation.Contract.Clone(),
+		authorize: configuredOperation.Authorize,
+		admit:     configuredOperation.Admit,
+	}
+	return nil
 }
 
 func decodeIdempotencyDeclaration(operationID string, raw any) (httpidempotency.Contract, error) {
@@ -171,6 +194,7 @@ func decodeIdempotencyDeclaration(operationID string, raw any) (httpidempotency.
 		ExternalEffect:      httpidempotency.ExternalEffectDisposition(declaration.ExternalEffect),
 	}
 	if err := contract.Validate(); err != nil {
+		//nolint:wrapcheck // Preserve the accepted declaration validation diagnostic.
 		return httpidempotency.Contract{}, err
 	}
 	return contract, nil
@@ -260,7 +284,7 @@ func operationHasRequiredKey(operation *openapi3.Operation, keyMaxBytes int) boo
 	for _, parameterRef := range operation.Parameters {
 		parameter := parameterRef.Value
 		if parameter != nil && strings.EqualFold(parameter.In, "header") && strings.EqualFold(parameter.Name, httpidempotency.Header) && parameter.Required &&
-			parameter.Schema != nil && parameter.Schema.Value != nil && parameter.Schema.Value.MaxLength != nil && *parameter.Schema.Value.MaxLength == uint64(keyMaxBytes) {
+			parameter.Schema != nil && parameter.Schema.Value != nil && parameter.Schema.Value.MaxLength != nil && *parameter.Schema.Value.MaxLength == uint64(keyMaxBytes) { // #nosec G115 -- Contract.Validate rejects a non-positive KeyMaxBytes.
 			return true
 		}
 	}

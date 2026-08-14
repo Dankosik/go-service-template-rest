@@ -53,6 +53,22 @@ The defaults create a service with no database dependency. The complete agent
 workflow is always retained. Choose `DATABASE=postgres` when the service owns
 PostgreSQL, and choose `OUTBOUND_HTTP=bounded` only when a shared
 fixed-authority client removes repeated provider code.
+<!-- profile:object-storage:start -->
+Choose `OBJECT_STORAGE=s3` only when this service needs the S3-compatible
+capability. It requires a complete static tuple supplied by deployment and
+does not certify a provider or configure a bucket; see
+[S3-compatible object storage](docs/s3-compatible-object-storage.md).
+<!-- profile:object-storage:end -->
+<!-- profile:http-idempotency-postgres:start -->
+Choose `HTTP_IDEMPOTENCY=postgres` only with `DATABASE=postgres`. It retains the
+reusable PostgreSQL idempotency pack; an adopting operation still owns its
+registration and deployment quantities. See [PostgreSQL HTTP idempotency](docs/postgres-http-idempotency.md).
+<!-- profile:http-idempotency-postgres:end -->
+<!-- profile:outbound-auth-oauth2-client-credentials:start -->
+Choose `OUTBOUND_AUTH=oauth2-client-credentials` only with
+`OUTBOUND_HTTP=bounded`, `GRPC=enabled`, or both; it retains one fixed machine
+credential owner. See [outbound machine authentication](docs/outbound-machine-authentication.md).
+<!-- profile:outbound-auth-oauth2-client-credentials:end -->
 <!-- profile:outbox-postgres:start -->
 Choose `DATABASE=postgres OUTBOX=postgres` when a request transaction must
 durably record an outbound event for a separately deployed relay. Publication
@@ -64,6 +80,12 @@ Choose `DATABASE=postgres INBOX=postgres` when a consumer must suppress a
 logical message duplicate in the same PostgreSQL transaction as its feature
 effect; see the [PostgreSQL idempotent inbox](docs/postgres-idempotent-inbox.md).
 <!-- profile:inbox-postgres:end -->
+<!-- profile:webhooks-durable:start -->
+Choose `DATABASE=postgres WEBHOOKS=durable` when a feature transaction must
+atomically accept an immutable webhook fan-out for a separately deployed
+worker. Receiver processing is at-least-once; see
+[outbound webhook delivery](docs/outbound-webhook-delivery.md).
+<!-- profile:webhooks-durable:end -->
 <!-- profile:authn-oidc-jwt:start -->
 Choose `AUTHN=oidc-jwt` for strict OIDC discovery and signed JWT access-token
 authentication; see [OIDC/JWT authentication](docs/authentication.md).
@@ -100,6 +122,9 @@ it, and read it here or in
 <!-- profile:inbox-postgres:start -->
 | Idempotent inbox | Optional permanent per-consumer logical-message claims joined to one same-PostgreSQL feature effect |
 <!-- profile:inbox-postgres:end -->
+<!-- profile:webhooks-durable:start -->
+| Outbound webhooks | Optional PostgreSQL acceptance store and independent bounded delivery worker with HMAC signing and public-HTTPS enforcement |
+<!-- profile:webhooks-durable:end -->
 | Outbound HTTP | Standard library by default; optional fixed-authority transport bounds and response-size protection |
 <!-- profile:messaging-nats-jetstream:start -->
 | Messaging | Optional direct NATS JetStream producer and separate bounded durable pull-consumer worker |

@@ -231,6 +231,9 @@ func (r *Relay) runCycle(
 	claimedAt := time.Now()
 	batch, err := r.store.Claim(ctx, r.config.LeaseDuration, r.config.BatchSize, r.config.MaxAttempts)
 	if err != nil {
+		if ctx.Err() != nil {
+			return RelayResult{}, true
+		}
 		return RelayResult{Err: fmt.Errorf("claim outbox events: %w", err)}, true
 	}
 	if len(batch.Events) == 0 {
@@ -250,9 +253,7 @@ func (r *Relay) loopMustStop(ctx context.Context) bool {
 // must stop instead. An append notification and the poll timer both mean carry
 // on; cancellation and drain both mean stop.
 func (r *Relay) wait(ctx context.Context, wake <-chan struct{}, duration time.Duration) (stop bool) {
-	if duration < 0 {
-		duration = 0
-	}
+	duration = max(duration, 0)
 	timer := time.NewTimer(duration)
 	defer timer.Stop()
 	select {

@@ -29,17 +29,17 @@ func sanitizingResolverBuilders(target string) []resolver.Builder {
 		schemes = append(schemes, parsed.Scheme)
 	}
 
-	seen := make(map[string]struct{}, len(schemes))
 	builders := make([]resolver.Builder, 0, len(schemes))
 	for _, scheme := range schemes {
 		base := resolver.Get(scheme)
 		if base == nil {
 			continue
 		}
-		if _, ok := seen[base.Scheme()]; ok {
+		if slices.ContainsFunc(builders, func(builder resolver.Builder) bool {
+			return builder.Scheme() == base.Scheme()
+		}) {
 			continue
 		}
-		seen[base.Scheme()] = struct{}{}
 		builders = append(builders, wrapResolverBuilder(base))
 	}
 	return builders

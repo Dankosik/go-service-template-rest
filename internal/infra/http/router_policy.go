@@ -23,12 +23,13 @@ func applyHTTPPolicy(root chi.Router) {
 			writeProblem(w, r, notFoundProblem())
 			return
 		}
-		allowMethods = ensureMethodAllowed(allowMethods, http.MethodOptions)
+		if !slices.Contains(allowMethods, http.MethodOptions) {
+			allowMethods = append(allowMethods, http.MethodOptions)
+		}
+		setAllowHeader(w, allowMethods)
 
 		if r.Method == http.MethodOptions {
-			setAllowHeader(w, allowMethods)
-
-			if isCORSPreflightRequest(r) {
+			if r.Header.Get("Origin") != "" && r.Header.Get("Access-Control-Request-Method") != "" {
 				writeProblem(w, r, problemResponse{code: problem.CodeMethodNotAllowed, detail: "cors preflight is not enabled"})
 				return
 			}
@@ -37,7 +38,6 @@ func applyHTTPPolicy(root chi.Router) {
 			return
 		}
 
-		setAllowHeader(w, allowMethods)
 		writeProblem(w, r, problemResponse{code: problem.CodeMethodNotAllowed, detail: "method is not allowed for this resource"})
 	})
 }
@@ -79,18 +79,4 @@ func setAllowHeader(w http.ResponseWriter, methods []string) {
 	if len(methods) > 0 {
 		w.Header().Set("Allow", strings.Join(methods, ", "))
 	}
-}
-
-func ensureMethodAllowed(methods []string, method string) []string {
-	if slices.Contains(methods, method) {
-		return methods
-	}
-	return append(methods, method)
-}
-
-func isCORSPreflightRequest(r *http.Request) bool {
-	if r == nil {
-		return false
-	}
-	return r.Header.Get("Origin") != "" && r.Header.Get("Access-Control-Request-Method") != ""
 }

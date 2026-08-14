@@ -437,6 +437,12 @@ func resetBootstrapConfigEnv(t *testing.T) {
 	t.Setenv("APP__AUTHN__AUDIENCE", "service-api")
 	t.Setenv("APP__AUTHN__TRUSTED_PROXY_CIDRS", "127.0.0.0/8,::1/128")
 	// profile:authn-oidc-jwt:end
+	// profile:outbound-auth-oauth2-client-credentials:start
+	setOutboundAuthBootstrapTestEnv(t)
+	// profile:outbound-auth-oauth2-client-credentials:end
+	// profile:object-storage:start
+	setObjectStorageBootstrapTestEnv(t)
+	// profile:object-storage:end
 }
 
 // TestPostgresDomainErrorsMapSaturationToRetryableUnavailable closes the gap

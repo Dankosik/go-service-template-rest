@@ -35,17 +35,48 @@ classify() {
 is_template_independent_path() {
   local path="$1"
 
-  if is_docs_path "${path}"; then
-    return 0
-  fi
-
-  # profile:outbox-postgres:start
+  # profile:object-storage:start
   case "${path}" in
-    internal/infra/postgresoutbox/* | cmd/outbox-relay/*)
+	# profile:http-idempotency-postgres:start
+	  scripts/ci/runtime-image-build.sh | scripts/ci/fixtures/postgres-http-idempotency-active.patch | \
+	  scripts/profiles/http-idempotency-postgres/* | internal/httpidempotency/* | internal/infra/postgresidempotency/*)
+	    return 1
+	    ;;
+	# profile:http-idempotency-postgres:end
+    internal/objectstorage/* | internal/infra/s3/* | \
+      cmd/service/internal/bootstrap/startup_object_storage*.go | \
+      internal/config/object_storage_config*.go | \
+      test/s3_object_storage_conformance_integration_test.go | \
+      docs/s3-compatible-object-storage.md | \
+      scripts/ci/s3-source-receipt.sh)
       return 1
       ;;
   esac
-  # profile:outbox-postgres:end
+  # profile:object-storage:end
+
+	# profile:webhooks-durable:start
+	case "${path}" in
+	  internal/outboundtrust/* | internal/infra/postgreswebhook/* | cmd/webhook-worker/* | \
+      internal/config/webhooks_config*.go | internal/infra/postgres/queries/postgres_webhooks.sql | \
+      internal/infra/postgres/sqlcgen/postgres_webhooks.sql.go | migrations/*_postgres_webhooks.sql | \
+      test/postgres_webhook_*_test.go | test/webhook_*_integration_test.go | \
+      docs/outbound-webhook-delivery.md)
+      return 1
+      ;;
+	esac
+	# profile:webhooks-durable:end
+
+	if is_docs_path "${path}"; then
+	  return 0
+	fi
+
+	# profile:outbox-postgres:start
+	case "${path}" in
+	  internal/infra/postgresoutbox/* | cmd/outbox-relay/*)
+	    return 1
+	    ;;
+	esac
+	# profile:outbox-postgres:end
 
   case "${path}" in
     internal/config/* | \
@@ -136,6 +167,25 @@ self_test() {
   assert_template_required true internal/config/defaults.go
   assert_template_required true cmd/service/internal/bootstrap/run.go
   assert_template_required true internal/infra/postgres/repository.go
+	# profile:http-idempotency-postgres:start
+	assert_template_required true scripts/ci/runtime-image-build.sh
+	assert_template_required true scripts/ci/fixtures/postgres-http-idempotency-active.patch
+	assert_template_required true internal/httpidempotency/contract.go
+	assert_template_required true internal/infra/postgresidempotency/store.go
+	# profile:http-idempotency-postgres:end
+  # profile:object-storage:start
+  assert_template_required true internal/objectstorage/store.go
+  assert_template_required true internal/infra/s3/client.go
+  assert_template_required true test/s3_object_storage_conformance_integration_test.go
+  assert_template_required true docs/s3-compatible-object-storage.md
+  # profile:object-storage:end
+  # profile:webhooks-durable:start
+  assert_template_required true internal/outboundtrust/public_address.go
+  assert_template_required true internal/infra/postgreswebhook/store.go
+  assert_template_required true cmd/webhook-worker/main.go
+  assert_template_required true test/webhook_network_integration_test.go
+  assert_template_required true docs/outbound-webhook-delivery.md
+  # profile:webhooks-durable:end
   assert_template_required true test/postgres_integration_test.go
   assert_template_required true go.mod
   assert_template_required true .github/workflows/ci.yml
