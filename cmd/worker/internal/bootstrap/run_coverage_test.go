@@ -38,7 +38,12 @@ func TestWorkerRunDrainsGracefully(t *testing.T) {
 		})
 	}()
 
-	waittest.Until(t, 5*time.Second, func() bool {
+	waittest.Until(t, startupTimeout, func() bool {
+		select {
+		case err := <-result:
+			t.Fatalf("run() before worker consumer admission: %v", err)
+		default:
+		}
 		_, err := server.JS.Consumer(t.Context(), "EVENTS", "coverage-worker")
 		return err == nil
 	}, "worker consumer admission")
