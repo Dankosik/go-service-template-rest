@@ -22,6 +22,10 @@ func TestWorkerRunDrainsGracefully(t *testing.T) {
 		jetstream.StreamConfig{Name: "EVENTS_DLQ", Subjects: []string{"dead.>"}, Storage: jetstream.FileStorage, MaxMsgSize: 2 << 20},
 	))
 	waittest.Until(t, 5*time.Second, func() bool {
+		name, err := server.JS.StreamNameBySubject(t.Context(), "events.test")
+		return err == nil && name == "EVENTS"
+	}, "source stream availability")
+	waittest.Until(t, 5*time.Second, func() bool {
 		name, err := server.JS.StreamNameBySubject(t.Context(), "dead.events.test")
 		return err == nil && name == "EVENTS_DLQ"
 	}, "dead-letter stream availability")
