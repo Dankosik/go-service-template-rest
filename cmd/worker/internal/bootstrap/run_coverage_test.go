@@ -58,9 +58,6 @@ func setDefaultWorkerTestEnvironment(t *testing.T, messagingURL, diagnosticsAddr
 	t.Helper()
 	configtest.IsolateEnv(t)
 	for key, value := range map[string]string{
-		"APP__AUTHN__ISSUER":                                "https://issuer.example.com",
-		"APP__AUTHN__AUDIENCE":                              "https://api.example.com",
-		"APP__AUTHN__TRUSTED_PROXY_CIDRS":                   "127.0.0.0/8",
 		"APP__HTTP__READINESS_PROPAGATION_DELAY":            "0s",
 		"APP__MESSAGING__ENABLED":                           "true",
 		"APP__MESSAGING__URLS":                              messagingURL,
