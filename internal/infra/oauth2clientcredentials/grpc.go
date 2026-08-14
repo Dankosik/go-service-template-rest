@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/example/go-service-template-rest/internal/infra/grpcclient"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
@@ -21,9 +22,8 @@ type grpcOperationKey struct{}
 type grpcOperation struct {
 	token operationToken
 
-	mu            sync.Mutex
-	err           error
-	rejectionOnce sync.Once
+	mu  sync.Mutex
+	err error
 }
 
 func (o *grpcOperation) fail(err error) {
@@ -40,37 +40,19 @@ func (o *grpcOperation) failure() error {
 	return o.err
 }
 
-func (o *grpcOperation) recordRejection(ctx context.Context, client *Client, err error) {
-	var result string
-	//nolint:exhaustive // Only downstream auth rejections emit this metric.
-	switch status.Code(err) {
-	case codes.Unauthenticated:
-		result = resultUnauthenticated
-	case codes.PermissionDenied:
-		result = resultForbidden
-	default:
-		return
-	}
-	o.rejectionOnce.Do(func() {
-		client.telemetry.recordResourceRejection(ctx, transportGRPC, result)
-	})
-}
-
-// GRPC binds one credential owner to connection and application RPC paths.
-type GRPC struct {
+type grpcCredential struct {
 	client *Client
 }
 
-// NewGRPC builds one idle gRPC credential without contacting the provider.
-func NewGRPC(client *Client) (*GRPC, error) {
+func newGRPCCredential(client *Client) (*grpcCredential, error) {
 	if client == nil {
 		return nil, failure(FailureInvalidConfiguration)
 	}
-	return &GRPC{client: client}, nil
+	return &grpcCredential{client: client}, nil
 }
 
 // GetRequestMetadata supplies one bearer credential to an admitted TLS attempt.
-func (c *GRPC) GetRequestMetadata(ctx context.Context, requestURI ...string) (map[string]string, error) {
+func (c *grpcCredential) GetRequestMetadata(ctx context.Context, requestURI ...string) (map[string]string, error) {
 	if c == nil || c.client == nil || ctx == nil || !c.matchesResourceAuthority(requestURI) {
 		return nil, failure(FailureInvalidConfiguration)
 	}
@@ -100,12 +82,11 @@ func (c *GRPC) GetRequestMetadata(ctx context.Context, requestURI ...string) (ma
 }
 
 // RequireTransportSecurity prevents grpc-go from sending the credential on plaintext connections.
-func (*GRPC) RequireTransportSecurity() bool {
+func (*grpcCredential) RequireTransportSecurity() bool {
 	return true
 }
 
-// Wrap returns the application connection passed to generated clients.
-func (c *GRPC) Wrap( //nolint:ireturn // Generated gRPC clients consume this standard interface.
+func (c *grpcCredential) wrap( //nolint:ireturn // Generated gRPC clients consume this standard interface.
 	base grpc.ClientConnInterface,
 ) (grpc.ClientConnInterface, error) {
 	if c == nil || c.client == nil || base == nil {
@@ -114,7 +95,7 @@ func (c *GRPC) Wrap( //nolint:ireturn // Generated gRPC clients consume this sta
 	return grpcApplicationConn{credential: c, base: base}, nil
 }
 
-func (c *GRPC) matchesResourceAuthority(requestURI []string) bool {
+func (c *grpcCredential) matchesResourceAuthority(requestURI []string) bool {
 	if len(requestURI) != 1 {
 		return false
 	}
@@ -129,6 +110,78 @@ func (c *GRPC) matchesResourceAuthority(requestURI []string) bool {
 	return grpcAuthority(parsed) == grpcAuthority(resource)
 }
 
+func (c *grpcCredential) observeRPC(ctx context.Context, err error) {
+	var result string
+	//nolint:exhaustive // Only downstream auth rejections emit this metric.
+	switch status.Code(err) {
+	case codes.Unauthenticated:
+		result = resultUnauthenticated
+	case codes.PermissionDenied:
+		result = resultForbidden
+	default:
+		return
+	}
+	c.client.telemetry.recordResourceRejection(ctx, transportGRPC, result)
+}
+
+// GRPCClient is one correctly credentialed connection for generated clients.
+type GRPCClient struct {
+	connection  *grpc.ClientConn
+	application grpc.ClientConnInterface
+}
+
+// NewGRPCClient binds one credential owner to application and grpc-go control RPCs.
+func NewGRPCClient(client *Client, cfg grpcclient.Config, options grpcclient.Options) (*GRPCClient, error) {
+	if options.PerRPCCredentials != nil || options.ObserveRPC != nil {
+		return nil, failure(FailureInvalidConfiguration)
+	}
+	credential, err := newGRPCCredential(client)
+	if err != nil {
+		return nil, err
+	}
+	options.PerRPCCredentials = credential
+	options.ObserveRPC = credential.observeRPC
+	connection, err := grpcclient.New(cfg, options)
+	if err != nil {
+		return nil, failure(FailureInvalidConfiguration)
+	}
+	application, err := credential.wrap(connection)
+	if err != nil {
+		_ = connection.Close()
+		return nil, err
+	}
+	return &GRPCClient{connection: connection, application: application}, nil
+}
+
+// Invoke starts one authenticated logical unary operation.
+func (c *GRPCClient) Invoke(ctx context.Context, method string, args, reply any, options ...grpc.CallOption) error {
+	if c == nil || c.application == nil {
+		return failure(FailureInvalidConfiguration)
+	}
+	return c.application.Invoke(ctx, method, args, reply, options...) //nolint:wrapcheck // Preserve the downstream status.
+}
+
+// NewStream starts one authenticated logical streaming operation.
+func (c *GRPCClient) NewStream( //nolint:ireturn // Required by grpc.ClientConnInterface.
+	ctx context.Context,
+	description *grpc.StreamDesc,
+	method string,
+	options ...grpc.CallOption,
+) (grpc.ClientStream, error) {
+	if c == nil || c.application == nil {
+		return nil, failure(FailureInvalidConfiguration)
+	}
+	return c.application.NewStream(ctx, description, method, options...) //nolint:wrapcheck // Preserve the downstream status.
+}
+
+// Close releases the underlying shared connection.
+func (c *GRPCClient) Close() error {
+	if c == nil || c.connection == nil {
+		return failure(FailureInvalidConfiguration)
+	}
+	return c.connection.Close() //nolint:wrapcheck // grpc-go owns the connection close result.
+}
+
 func grpcAuthority(parsed *url.URL) string {
 	port := parsed.Port()
 	if port == "443" {
@@ -138,7 +191,7 @@ func grpcAuthority(parsed *url.URL) string {
 }
 
 type grpcApplicationConn struct {
-	credential *GRPC
+	credential *grpcCredential
 	base       grpc.ClientConnInterface
 }
 
@@ -157,7 +210,6 @@ func (c grpcApplicationConn) Invoke(
 	if operationErr := operation.failure(); operationErr != nil {
 		return operationErr
 	}
-	operation.recordRejection(callCtx, c.credential.client, err)
 	//nolint:wrapcheck // Preserve the downstream gRPC status unchanged.
 	return err
 }
@@ -178,16 +230,14 @@ func (c grpcApplicationConn) NewStream( //nolint:ireturn // Required by grpc.Cli
 	}
 	//nolint:wrapcheck // Preserve the downstream gRPC status unchanged.
 	if err != nil {
-		operation.recordRejection(callCtx, c.credential.client, err)
 		return stream, err
 	}
-	return &grpcApplicationStream{ClientStream: stream, client: c.credential.client, operation: operation}, nil
+	return &grpcApplicationStream{ClientStream: stream, operation: operation}, nil
 }
 
 type grpcApplicationStream struct {
 	grpc.ClientStream
 
-	client    *Client
 	operation *grpcOperation
 }
 
@@ -196,7 +246,6 @@ func (s *grpcApplicationStream) Header() (metadata.MD, error) {
 	if operationErr := s.operation.failure(); operationErr != nil {
 		return nil, operationErr
 	}
-	s.operation.recordRejection(s.Context(), s.client, err)
 	//nolint:wrapcheck // Preserve the downstream gRPC status unchanged.
 	return values, err
 }
@@ -217,7 +266,6 @@ func (s *grpcApplicationStream) finish(err error) error {
 	if operationErr := s.operation.failure(); operationErr != nil {
 		return operationErr
 	}
-	s.operation.recordRejection(s.Context(), s.client, err)
 	return err
 }
 
@@ -260,7 +308,8 @@ func hasPerRPCCredentials(options []grpc.CallOption) bool {
 }
 
 var (
-	_ credentials.PerRPCCredentials = (*GRPC)(nil)
+	_ credentials.PerRPCCredentials = (*grpcCredential)(nil)
+	_ grpc.ClientConnInterface      = (*GRPCClient)(nil)
 	_ grpc.ClientConnInterface      = grpcApplicationConn{}
 )
 

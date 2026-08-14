@@ -422,13 +422,21 @@ Choose `TrustedService` only when the named neighbor is allowed to receive the
 diagnostic request ID; TLS or private-network placement alone does not imply
 that trust. Unknown policy values fail during construction.
 
-When the dependency protects standard `Health/Watch`, pass its dynamic bearer
-credential through `Options.PerRPCCredentials`. The connection credential
-reaches both grpc-go's health stream and application RPCs, and the same reserved
-metadata removal applies to it. A per-call credential reaches only that call and
-cannot make an otherwise unauthenticated backend health-eligible. Disabling
-health is valid only when the dependency does not publish the whole-process
-health contract; it is not an authentication bypass.
+When a non-OAuth dependency protects standard `Health/Watch`, pass its dynamic
+bearer credential through `Options.PerRPCCredentials`. A connection credential
+reaches both grpc-go's health stream and application RPCs; a per-call credential
+reaches only that call and cannot make an otherwise unauthenticated backend
+health-eligible.
+
+<!-- profile:outbound-auth-grpc:start -->
+With `OUTBOUND_AUTH=oauth2-client-credentials`, use
+`oauth2clientcredentials.NewGRPCClient` instead of wiring
+`PerRPCCredentials` directly; it owns the complete application/control binding
+and terminal auth-rejection observation.
+<!-- profile:outbound-auth-grpc:end -->
+
+Disabling health is valid only when the dependency does not publish the
+whole-process health contract; it is not an authentication bypass.
 
 Each operation owns its realistic deadline:
 

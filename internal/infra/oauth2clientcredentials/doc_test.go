@@ -13,7 +13,7 @@ import (
 func TestPackageContract(t *testing.T) {
 	allowed := map[string]bool{
 		"Client": true, "Config": true, "FailureClass": true, "FailureClassOf": true,
-		"GRPC": true, "HTTPClient": true, "New": true, "NewGRPC": true, "NewHTTPClient": true,
+		"GRPCClient": true, "HTTPClient": true, "New": true, "NewGRPCClient": true, "NewHTTPClient": true,
 		"FailureInvalidConfiguration": true, "FailureEndpointTrust": true, "FailureCallerCanceled": true,
 		"FailureProviderTimeout": true, "FailureProviderUnavailable": true, "FailureClientRejected": true,
 		"FailureGrantRejected": true, "FailureUnsupportedResponse": true, "FailureTokenUnusable": true,

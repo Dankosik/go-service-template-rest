@@ -12,7 +12,10 @@ import (
 	"time"
 )
 
-const idempotencyKeyHeader = "Idempotency-Key"
+const (
+	idempotencyKeyHeader = "Idempotency-Key"
+	maxRetryAfterSeconds = (1<<63 - 1) / int64(time.Second)
+)
 
 // retryJitterFraction randomizes half of each delay: full jitter makes the first
 // retry nearly immediate, and none makes a fleet retry in lockstep.
@@ -206,7 +209,7 @@ func isResponseTooLarge(err error) bool {
 }
 
 func retryDelay(base time.Duration, attempt int, response *http.Response) time.Duration {
-	if hinted, ok := retryAfter(response, time.Now()); ok {
+	if hinted, ok := RetryAfter(response, time.Now()); ok {
 		return hinted
 	}
 
@@ -220,9 +223,9 @@ func retryDelay(base time.Duration, attempt int, response *http.Response) time.D
 	return backoff - time.Duration(retryJitterFraction*float64(backoff)) + jitter
 }
 
-// retryAfter reads either Retry-After form. A valid server Date is the reference
+// RetryAfter reads either Retry-After form. A valid server Date is the reference
 // for an HTTP-date hint, so ordinary client/server clock skew does not distort it.
-func retryAfter(response *http.Response, now time.Time) (time.Duration, bool) {
+func RetryAfter(response *http.Response, now time.Time) (time.Duration, bool) {
 	if response == nil {
 		return 0, false
 	}
@@ -230,7 +233,7 @@ func retryAfter(response *http.Response, now time.Time) (time.Duration, bool) {
 	if raw == "" {
 		return 0, false
 	}
-	if seconds, err := strconv.Atoi(raw); err == nil && seconds >= 0 {
+	if seconds, err := strconv.ParseInt(raw, 10, 64); err == nil && seconds >= 0 && seconds <= maxRetryAfterSeconds {
 		return time.Duration(seconds) * time.Second, true
 	}
 	retryAt, err := http.ParseTime(raw)

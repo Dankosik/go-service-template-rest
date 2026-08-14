@@ -350,7 +350,7 @@ func TestRetryHonorsRetryAfter(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(1994, time.November, 6, 8, 49, 37, 0, time.UTC)
-	if got, ok := retryAfter(&http.Response{Header: http.Header{"Retry-After": []string{"3"}}}, now); !ok || got != 3*time.Second {
+	if got, ok := RetryAfter(&http.Response{Header: http.Header{"Retry-After": []string{"3"}}}, now); !ok || got != 3*time.Second {
 		t.Fatalf("retryAfter(3) = (%s, %t), want (3s, true)", got, ok)
 	}
 	for _, tt := range []struct {
@@ -364,7 +364,7 @@ func TestRetryHonorsRetryAfter(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			if got, ok := retryAfter(&http.Response{
+			if got, ok := RetryAfter(&http.Response{
 				Header: http.Header{"Retry-After": []string{tt.raw}},
 			}, now); !ok || got != tt.want {
 				t.Fatalf("retryAfter(%q) = (%s, %t), want (%s, true)", tt.raw, got, ok, tt.want)
@@ -376,12 +376,12 @@ func TestRetryHonorsRetryAfter(t *testing.T) {
 		"Date":        []string{"Wed, 21 Oct 2026 07:27:58 GMT"},
 		"Retry-After": []string{"Wed, 21 Oct 2026 07:28:00 GMT"},
 	}}
-	if got, ok := retryAfter(response, time.Date(2026, time.October, 21, 8, 28, 0, 0, time.UTC)); !ok || got != 2*time.Second {
+	if got, ok := RetryAfter(response, time.Date(2026, time.October, 21, 8, 28, 0, 0, time.UTC)); !ok || got != 2*time.Second {
 		t.Fatalf("retryAfter() with server Date = (%s, %t), want (2s, true)", got, ok)
 	}
 
-	for _, raw := range []string{"", "-1", "soon", "Sun, 06 Nov 1994 08:49:36 GMT"} {
-		if _, ok := retryAfter(&http.Response{Header: http.Header{"Retry-After": []string{raw}}}, now); ok {
+	for _, raw := range []string{"", "-1", "soon", "Sun, 06 Nov 1994 08:49:36 GMT", "9223372036854775807"} {
+		if _, ok := RetryAfter(&http.Response{Header: http.Header{"Retry-After": []string{raw}}}, now); ok {
 			t.Fatalf("retryAfter(%q) reported a delay, want it ignored", raw)
 		}
 	}

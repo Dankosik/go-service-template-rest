@@ -215,6 +215,12 @@ jobs:
         if: steps.template_source.outputs.required == 'true'
         run: TEMPLATE_INIT_PROFILE=minimal make template-init-check GOLANGCI_LINT_BIN=golangci-lint
 
+      # profile:outbound-auth-oauth2-client-credentials:start
+      - name: Prove generated OAuth client-credentials services
+        if: steps.template_source.outputs.required == 'true'
+        run: TEMPLATE_INIT_PROFILE=outbound-auth make template-init-check GOLANGCI_LINT_BIN=golangci-lint
+      # profile:outbound-auth-oauth2-client-credentials:end
+
       # profile:object-storage:start
       - name: Prove generated S3-compatible object storage services
         if: steps.template_source.outputs.required == 'true'

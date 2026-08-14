@@ -3,5 +3,5 @@
 //
 // The package deliberately exposes no token source, provider interface,
 // registry, discovery, refresh, or retry seam. It exposes one process
-// credential owner and its fixed HTTP and gRPC adapters.
+// credential owner, one fixed HTTP adapter, and one complete gRPC client.
 package oauth2clientcredentials

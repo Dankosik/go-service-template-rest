@@ -43,9 +43,9 @@ func TestGRPCResourceAuthorityIsFixed(t *testing.T) {
 	clock := newMovableClock(fixedProviderTime)
 	provider := &scriptedAcquirer{steps: []acquisitionStep{{token: grpcTestToken(clock)}}}
 	client := requireTestClient(t, validTestConfig(), testClientOptions{now: clock.Now, acquire: provider.acquire})
-	auth, err := NewGRPC(client)
+	auth, err := newGRPCCredential(client)
 	if err != nil {
-		t.Fatalf("NewGRPC() error = %v", err)
+		t.Fatalf("newGRPCCredential() error = %v", err)
 	}
 
 	metadataValues, err := auth.GetRequestMetadata(t.Context(), client.config.ResourceAuthority+testUnaryMethod)
@@ -92,7 +92,7 @@ func TestGRPCApplicationCallsAttachOneToken(t *testing.T) {
 	fixture := newGRPCFixture(t, nil, nil)
 
 	if err := fixture.application.Invoke(t.Context(), testUnaryMethod, &emptypb.Empty{}, &emptypb.Empty{}); err != nil {
-		t.Fatalf("Invoke() error = %v; credential URI = %q", err, fixture.credential.last.Load())
+		t.Fatalf("Invoke() error = %v", err)
 	}
 	exerciseGRPCStream(t, fixture.application, &grpc.StreamDesc{ServerStreams: true}, testServerStream)
 	exerciseGRPCStream(t, fixture.application, &grpc.StreamDesc{ClientStreams: true}, testClientStream)
@@ -103,9 +103,6 @@ func TestGRPCApplicationCallsAttachOneToken(t *testing.T) {
 	}
 	if got := fixture.provider.Calls(); got != 1 {
 		t.Fatalf("provider calls = %d, want 1", got)
-	}
-	if got := fixture.credential.calls.Load(); got != 4 {
-		t.Fatalf("request metadata calls = %d, want 4", got)
 	}
 }
 
@@ -130,6 +127,20 @@ func TestGRPCRejectsCompetingAuthorization(t *testing.T) {
 	}
 	if got := fixture.service.calls.Load(); got != 0 {
 		t.Fatalf("handler calls = %d, want 0", got)
+	}
+
+	client := requireTestClient(t, validTestConfig(), testClientOptions{acquire: fixture.provider.acquire})
+	for name, options := range map[string]grpcclient.Options{
+		"credential": {PerRPCCredentials: staticTestCredential{}},
+		"observer":   {ObserveRPC: func(context.Context, error) {}},
+	} {
+		t.Run("construction rejects competing "+name, func(t *testing.T) {
+			connection, err := NewGRPCClient(client, grpcclient.DefaultConfig("passthrough:///127.0.0.1:1"), options)
+			assertFailureClass(t, err, FailureInvalidConfiguration)
+			if connection != nil {
+				t.Fatal("NewGRPCClient() connection is non-nil")
+			}
+		})
 	}
 }
 
@@ -185,20 +196,20 @@ func TestGRPCRequiresTransportSecurity(t *testing.T) {
 	client := requireTestClient(t, validTestConfig(), testClientOptions{acquire: func(context.Context) (accessToken, error) {
 		return accessToken{}, failure(FailureProviderUnavailable)
 	}})
-	auth, err := NewGRPC(client)
+	auth, err := newGRPCCredential(client)
 	if err != nil {
-		t.Fatalf("NewGRPC() error = %v", err)
+		t.Fatalf("newGRPCCredential() error = %v", err)
 	}
 	if !auth.RequireTransportSecurity() {
 		t.Fatal("RequireTransportSecurity() = false, want true")
 	}
-	_, err = grpcclient.New(grpcclient.DefaultConfig("passthrough:///127.0.0.1:1"), grpcclient.Options{
+	_, err = NewGRPCClient(client, grpcclient.DefaultConfig("passthrough:///127.0.0.1:1"), grpcclient.Options{
 		TransportCredentials: insecure.NewCredentials(),
-		PerRPCCredentials:    auth,
 	})
 	if err == nil {
-		t.Fatal("grpcclient.New() with insecure transport error = nil")
+		t.Fatal("NewGRPCClient() with insecure transport error = nil")
 	}
+	assertFailureClass(t, err, FailureInvalidConfiguration)
 }
 
 func TestGRPCPreservesDownstreamAuthStatus(t *testing.T) {
@@ -453,9 +464,6 @@ func TestLongLivedStreamDoesNotReauthenticateInPlace(t *testing.T) {
 	if got := provider.Calls(); got != 1 {
 		t.Fatalf("provider calls = %d, want 1", got)
 	}
-	if got := fixture.credential.calls.Load(); got != 1 {
-		t.Fatalf("request metadata calls = %d, want 1", got)
-	}
 }
 
 type rawGRPCPeer struct {
@@ -525,13 +533,13 @@ func newRawGRPCApplication( //nolint:ireturn // The test drives the generated-cl
 ) (grpc.ClientConnInterface, *countingCredential) {
 	t.Helper()
 	connection, counting := newRawGRPCConnection(t, peer, clock, provider)
-	auth, ok := counting.base.(*GRPC)
+	auth, ok := counting.base.(*grpcCredential)
 	if !ok {
-		t.Fatal("raw gRPC credential is not *GRPC")
+		t.Fatal("raw gRPC credential is not *grpcCredential")
 	}
-	application, err := auth.Wrap(connection)
+	application, err := auth.wrap(connection)
 	if err != nil {
-		t.Fatalf("GRPC.Wrap() error = %v", err)
+		t.Fatalf("grpcCredential.wrap() error = %v", err)
 	}
 	return application, counting
 }
@@ -546,9 +554,9 @@ func newRawGRPCConnection(
 	cfg := validTestConfig()
 	cfg.ResourceAuthority = "https://" + testGRPCHost
 	client := requireTestClient(t, cfg, testClientOptions{now: clock.Now, acquire: provider.acquire})
-	auth, err := NewGRPC(client)
+	auth, err := newGRPCCredential(client)
 	if err != nil {
-		t.Fatalf("NewGRPC() error = %v", err)
+		t.Fatalf("newGRPCCredential() error = %v", err)
 	}
 	counting := &countingCredential{base: auth}
 	clientConfig := grpcclient.DefaultConfig(peer.target)
@@ -677,7 +685,6 @@ func writeRawGRPCHeaders(
 type grpcFixture struct {
 	application grpc.ClientConnInterface
 	connection  *grpc.ClientConn
-	credential  *countingCredential
 	provider    *scriptedAcquirer
 	service     *grpcTestService
 }
@@ -755,33 +762,22 @@ func newGRPCFixtureWithResourceAuthorityAndMeter(
 	cfg := validTestConfig()
 	cfg.ResourceAuthority = resourceAuthority
 	client := requireTestClient(t, cfg, testClientOptions{now: clock.Now, acquire: provider.acquire, meterProvider: meterProvider})
-	auth, err := NewGRPC(client)
-	if err != nil {
-		t.Fatalf("NewGRPC() error = %v", err)
-	}
-	counting := &countingCredential{base: auth}
 	clientConfig := grpcclient.DefaultConfig("dns:///" + targetAuthority)
 	clientConfig.HealthCheck = false
-	connection, err := grpcclient.New(clientConfig, grpcclient.Options{
+	connection, err := NewGRPCClient(client, clientConfig, grpcclient.Options{
 		TransportCredentials: credentials.NewTLS(tlsConfigForClient(testGRPCHost)),
-		PerRPCCredentials:    counting,
 	})
 	if err != nil {
-		t.Fatalf("grpcclient.New() error = %v", err)
+		t.Fatalf("NewGRPCClient() error = %v", err)
 	}
 	t.Cleanup(func() {
 		if err := connection.Close(); err != nil {
-			t.Errorf("ClientConn.Close() error = %v", err)
+			t.Errorf("GRPCClient.Close() error = %v", err)
 		}
 	})
-	application, err := auth.Wrap(connection)
-	if err != nil {
-		t.Fatalf("GRPC.Wrap() error = %v", err)
-	}
 	return &grpcFixture{
-		application: application,
-		connection:  connection,
-		credential:  counting,
+		application: connection,
+		connection:  connection.connection,
 		provider:    provider,
 		service:     service,
 	}
@@ -854,6 +850,7 @@ type grpcTestService struct {
 	healthMetadata chan metadata.MD
 	calls          atomic.Int64
 	healthCalls    atomic.Int64
+	healthCode     atomic.Int32
 	unaryCode      atomic.Int32
 	longStream     atomic.Bool
 }
@@ -875,6 +872,9 @@ func (s *grpcTestService) Watch(
 	stream grpc.ServerStreamingServer[healthgrpc.HealthCheckResponse],
 ) error {
 	s.healthCalls.Add(1)
+	if code := codes.Code(s.healthCode.Load()); code != codes.OK {
+		return status.Error(code, "fixed downstream status")
+	}
 	if err := stream.Send(&healthgrpc.HealthCheckResponse{Status: healthgrpc.HealthCheckResponse_SERVING}); err != nil {
 		return fmt.Errorf("send health status: %w", err)
 	}

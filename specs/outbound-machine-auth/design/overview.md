@@ -115,7 +115,7 @@ unrepresentable; unknown extra keys remain rejected by the current loader.
 | `outbound_auth.resource` | Empty or one absolute URI at most 2048 bytes, without userinfo or fragment | Unique standard `resource` form field |
 | `outbound_auth.audience` | Empty or one valid UTF-8 value at most 2048 bytes with no control characters | Unique provider-contract `audience` form field; mutually exclusive with `resource` |
 | `outbound_auth.resource_authority` | Absolute HTTPS origin at most 2048 bytes, with no userinfo, path beyond `/`, query, or fragment | Immutable bearer disclosure boundary for both resource transports |
-| `outbound_auth.acquisition_timeout` | Required duration in `[100ms,30s]` | One provider attempt and the failure-suppression window; not a retry or cache-tuning knob |
+| `outbound_auth.acquisition_timeout` | Required duration in `[100ms,30s]` | One provider attempt and the minimum failure-cooldown input; not a retry or cache-tuning knob |
 
 All section defaults are empty or zero so a selected profile cannot start from
 an invented registration. `env/config/local.yaml` carries only empty non-secret
@@ -221,23 +221,26 @@ context.
 3. A caller during an active acquisition captures the same result channel. A
    caller inside a prior failure window receives the prior sanitized failure
    immediately.
-4. Otherwise one caller creates the wave. Its start time fixes both the provider
-   deadline and the failure-window end, increments the one active acquisition,
-   and starts one owner-lifetime provider operation.
+4. Otherwise one caller creates the wave, fixes the provider deadline,
+   increments the one active acquisition, and starts one owner-lifetime
+   provider operation.
 5. Every leader and follower waits independently for the shared result or its
    caller context. Caller cancellation stops only that wait; it neither cancels
    provider work nor changes another caller's result.
 6. Success publishes one token only after the final expiry check, clears prior
    failure state, closes the wave result, and records success. Failure publishes
-   no token, stores one sanitized failure until `start + acquisition_timeout`,
-   closes the same result, and records failure.
+   no token and computes a cooldown from completion: the maximum of one second,
+   `acquisition_timeout`, and a valid `Retry-After` from `429` or `503`, plus
+   positive random jitter up to 20 percent, capped at one hour. It stores one
+   sanitized failure until that boundary, closes the same result, and records
+   failure.
 7. At or after that boundary one later caller may create one recovery wave. No
    loop or automatic retry exists.
 
 The provider request remains useful even if its initiating caller stops
 waiting; a later caller may consume its success. The maximum active provider
 work is one request per process. During continuous fast failure, provider
-attempts are bounded by one per acquisition-timeout window. A provider that
+attempts are bounded by one per completed cooldown per process. A provider that
 does not honor context can delay owner close only until the existing process
 shutdown budget; the selected `httpclient` path does honor cancellation.
 
@@ -395,15 +398,19 @@ Ownership/Test Design; it does not authorize weakening production admission.
 
 ## gRPC attachment
 
-`oauth2clientcredentials.GRPC` has two present roles for one binding:
+`oauth2clientcredentials.NewGRPCClient` is the one public construction for an
+authenticated dependency connection. It creates one private
+`credentials.PerRPCCredentials`, installs it connection-wide through
+`grpcclient.Options`, wraps the raw `*grpc.ClientConn` as the standard
+`grpc.ClientConnInterface` given to generated or concrete clients, and installs
+one terminal result observer around the existing OTel stats handler. It rejects
+preconfigured per-RPC credentials or a competing observer, so application and
+grpc-go control paths cannot be wired under different auth policies.
 
-- it implements connection-wide `credentials.PerRPCCredentials`, which the
-  existing `grpcclient.Options` already applies to application RPCs and
-  grpc-go control streams; and
-- it wraps the raw `*grpc.ClientConn` as the standard
-  `grpc.ClientConnInterface` given to generated or concrete application clients.
-
-No `grpcclient` source changes. grpc-go v1.83.0 is already pinned. Its
+`grpcclient.Options.ObserveRPC` is the only shared-client addition. Its zero
+value changes nothing; when present, it receives one terminal result from
+grpc-go's connection stats path after the existing OTel handler, without
+request or response values. grpc-go v1.83.0 is already pinned. Its
 `ClientConn.NewStream` carries the caller context through transparent attempts,
 and transport creation invokes connection credentials for each attempt. Its
 standard health checker deliberately bypasses application interceptors and
@@ -444,11 +451,12 @@ same binding may serve application and control traffic only because the one
 configured registration, scopes, resource/audience, method, authority, and
 failure policy are identical; a second binding is outside R2.
 
-The application wrapper observes unary completion and the terminal errors of a
-small `grpc.ClientStream` wrapper only to record `Unauthenticated` or
-`PermissionDenied`. It returns those statuses unchanged and never triggers a
-new token or transparent replay. Reconnect, resume, replay, cursor, and
-idempotency remain concrete-client policy.
+The connection stats observer records only terminal `Unauthenticated` or
+`PermissionDenied` for both application and grpc-go control RPCs. The
+application wrapper remains responsible only for logical operation-token
+fixation. Statuses return unchanged and never trigger a new token or transparent
+replay. Reconnect, resume, replay, cursor, and idempotency remain concrete-client
+policy.
 
 ## Failure contract and telemetry
 
@@ -484,7 +492,7 @@ package adds metrics only, under meter `service.outbound_auth`:
 | `outbound.auth.token.resolutions` counter | dependency, source=`cache|acquisition`, result, failure class on failure |
 | `outbound.auth.provider.attempts` counter | dependency, result, failure class on failure |
 | `outbound.auth.provider.attempt.duration` histogram in seconds | same provider-attempt attributes |
-| `outbound.auth.resource.rejections` counter | dependency, transport=`http|grpc`, result=`unauthenticated|forbidden` |
+| `outbound.auth.resource.rejections` counter | dependency, transport=`http|grpc`, result=`unauthenticated|forbidden`; gRPC includes application and control RPC terminals |
 
 Attribute sets are prebuilt because every set is closed and the configured
 dependency count is one. No identity other than the validated dependency name,
@@ -508,9 +516,10 @@ The hot cache path performs one time read, one mutex critical section, and one
 closed-label counter update. State is O(1), provider concurrency is one, and
 there is no retained waiter queue. A healthy process performs approximately one
 grant per accepted token lifetime; continuous failure performs at most one
-grant per acquisition-timeout window. Fleet provider load is those ceilings
-multiplied by replicas. No latency, throughput, quota, or fleet-capacity claim
-is made. Reopen synchronization only if a representative benchmark shows the
+grant per completed cooldown. Fleet provider load is those ceilings multiplied
+by replicas; per-process jitter reduces synchronized recovery but does not
+coordinate the fleet. No latency, throughput, quota, or fleet-capacity claim is
+made. Reopen synchronization only if a representative benchmark shows the
 single mutex materially consumes an accepted operation budget; reopen fleet
 coordination only from measured synchronized-expiry or provider-quota pressure.
 
@@ -556,7 +565,7 @@ surface and must not survive a `none` output.
 | --- | --- | --- |
 | `outbound-auth-oauth2-client-credentials` | OAuth selected | core package, config, bootstrap, telemetry, endpoint transport, docs, examples, lock input |
 | `outbound-auth-http` | OAuth and bounded outbound HTTP selected | HTTP adapter, the `httpclient` per-attempt authorization seam, and the marked generated-client authenticated-Doer proof branch |
-| `outbound-auth-grpc` | OAuth and gRPC selected | gRPC adapter and its proof |
+| `outbound-auth-grpc` | OAuth and gRPC selected | gRPC client/credential, optional terminal observer seam, and proof |
 | `credential-provider-http` | OIDC or outbound OAuth selected | the bounded HTTP option and transport branch that omit general instrumentation for credential-adjacent provider requests |
 
 OAuth selection always prevents deletion of `internal/infra/httpclient`, even
@@ -582,7 +591,10 @@ invalid no-consumer selection. It checks unresolved markers, config and secret
 placeholder presence/absence, package/adapters, the union-owned credential HTTP
 option, `template.lock`, build, repeat initialization, bounded-HTTP retention,
 and the direct/reachable dependency rule. It does not consume the generator's
-own inventory. `template-owned.paths` is unchanged because it owns upstream
+own inventory. Pull-request CI invokes that exact oracle with
+`TEMPLATE_INIT_PROFILE=outbound-auth`; profile markers remove the job from
+generated services that do not retain this capability. `template-owned.paths`
+is unchanged because it owns upstream
 synchronization, not initialized runtime profiles.
 
 The initialized source tree and `template.lock` are generated. All Go, config,
@@ -604,7 +616,7 @@ hard checkpoint before the narrower claim it owns:
 | Workload identity, private key, mTLS, certificate binding, DPoP | Before accepting Basic for a named deployment; selection reopens the affected behavior |
 | Public/private route, system trust roots, no-proxy compatibility, allowlists | Before provider-specific config; mandatory proxy or incompatible private TLS blocks that deployment |
 | Dependency criticality | Before changing startup/readiness; default stays optional |
-| Replica count, quota, provider latency/capacity | Before any proactive refresh, jitter, shared cache, broker, or capacity claim |
+| Replica count, quota, provider latency/capacity and `Retry-After` contract | Before any proactive refresh, shared cache, broker, or fleet-capacity claim; local bounded jitter remains only a portable recovery floor |
 | Long-lived stream expiry, reconnect, resume, replay | Before continuity claims beyond stream creation; concrete RPC owner supplies policy |
 
 The three Research reopen conditions remain unchanged: a materially distinct
@@ -622,7 +634,7 @@ implementation-source choice reopens this design.
 | One HTTP client for token and resource endpoints | Conflates authorities, disclosure rules, retry, telemetry, and pools |
 | Disable resource retry | Changes current concrete-client behavior instead of composing the accepted fixed-token rule |
 | New generic transport or auth interface | One grant and one configured dependency provide no second implementation or consumer |
-| `grpcclient` auth interceptors | The standard `ClientConnInterface` wrapper fixes application operations with no shared-transport change; connection credentials already cover control streams |
+| `grpcclient` auth interceptors | The standard `ClientConnInterface` wrapper fixes application operations; connection credentials cover control streams and the stats handler supplies one terminal observation point |
 | Eager acquisition or readiness probing | Turns an optional provider into process admission and synchronous health I/O |
 | Proactive refresh, circuit breaker, shared cache, broker, sidecar, persistent state | No accepted behavior or measurement earns them |
 | Provider SDK, workload identity, private-key JWT, mTLS, DPoP, token exchange, SPIFFE | Changes provider/principal/credential/resource-transport authority and is outside the minimum |
@@ -639,7 +651,7 @@ implementation-source choice reopens this design.
 | Cache, wave, caller/provider cancellation, failure window, close | No outbound owner exists; `oidcjwt` is lifecycle precedent but inbound policy is not reusable | Add package `client.go` with concrete `Client`, operation token, one wave, process context, and idempotent close. Public construction is concrete; only a package-private clock/provider seam exists. `client_test.go` owns state and `goleak_test.go` the package lifecycle gate. |
 | Adapter metrics and safe warning | Adapter-owned closed signals belong beside the adapter, not telemetry SDK setup; repository naming requires one literal owner | Add `vocabulary.go` for every metric/log literal and `telemetry.go` for instruments, prebuilt attributes, recording, and no-op degradation. `vocabulary_test.go` owns the closed label space; `telemetry_test.go` owns construction, recording, degradation, and forbidden values. |
 | HTTP logical-operation fixation and deterministic cross-package proof | `httpclient` owns retry and currently exposes no inner-attempt seam; OAuth package tests alone can combine private owner controls with public concrete HTTP construction, while the existing `httpclient` subprocess oracle owns generated-client consumption without a compile-time import cycle | Add profile-marked `httpclient/attempt_authorization.go` plus one `Client.DoWithAuthorization` entry in `client.go` and one nonretryable check in `retry.go`. Add OAuth `http.go` as the sole production caller. `httpclient/attempt_authorization_test.go` and `retry_test.go` own leaf parity. OAuth `harness_test.go`, `goleak_test.go`, and `http_test.go` own the process-local CA/DNS/TLS carrier and deterministic TD-008/TD-009 concrete/retry composition through public `httpclient.New` and `NewHTTPClient`. Existing `httpclient/generated_client_test.go` owns the parent-hosted controlled endpoints and generated child compile/run for `TestGeneratedClientUsesAuthenticatedDoer`; no production surface is added for proof. |
-| gRPC application/control binding | `grpcclient.Options.PerRPCCredentials` already covers the raw connection and grpc-go health; generated clients accept `grpc.ClientConnInterface` | Add OAuth `grpc.go` implementing one concrete credential plus application connection wrapper. It imports grpc-go; no `grpcclient` change or new interface. `grpc_test.go` owns unary/stream/control and fixed-attempt behavior using the already pinned grpc-go v1.83.0. |
+| gRPC application/control binding | `grpcclient.Options.PerRPCCredentials` covers the raw connection and grpc-go health; its stats handler sees terminal application/control results; generated clients accept `grpc.ClientConnInterface` | Add OAuth `grpc.go` with one private credential/application wrapper and exported complete connection constructor. Add the optional `grpcclient.Options.ObserveRPC` stats-handler callback; no second transport or interceptor policy. `grpc_test.go` owns construction, unary/stream/control, terminal rejection telemetry, and fixed-attempt behavior using pinned grpc-go v1.83.0. |
 | Startup and shutdown composition | `cmd/service/internal/bootstrap/run.go` owns order, terminal error aggregation, and partial-start cleanup | Add `startup_outbound_auth.go`; mark wiring/construction/close in `run.go`. It maps config, builds token client/owner without I/O, registers close, joins ordered close failure once into the terminal error, joins partial-start close failure into the named return, and exposes the local owner for later concrete clients. It adds no readiness probe. `startup_outbound_auth_test.go` and `run_lifecycle_test.go` own order, single error propagation, and cleanup. |
 | Profile generation and dependency cleanup | `scripts/init-module.sh`, `template.lock`, independent CI oracle, and the source-only runtime-image fixture already own these | Add selector, markers, lock field, retention predicate, README derivation, and oracle matrix; mark the fixture's fixed `OUTBOUND_AUTH=none` input as core so generated `none` outputs remove it. No `go.mod` edit; both tidy paths remain. Shell oracle owns generated-tree proof. |
 | Operator and architecture guidance | Current docs own configuration, package boundaries, and adopter composition | Add `docs/outbound-machine-authentication.md`; update README, repository architecture, project structure, and configuration-source policy under profile markers. No rollout or deployment artifact is added. |
@@ -650,12 +662,9 @@ Import direction is acyclic:
 cmd/service/internal/bootstrap
         +--> internal/config (pure snapshot)
         +--> internal/infra/oauth2clientcredentials
-        |          |              |
-        |          v              +--> grpc-go (gRPC-marked file only)
-        |  internal/infra/httpclient
-        |          |
-        |          v
-        |       net/http
+        |          +--> internal/infra/httpclient --> net/http
+        |          +--> internal/infra/grpcclient --> grpc-go
+        |               (gRPC-marked file only)
         +--> resource concrete/generated clients (adopter-owned)
 ```
 
@@ -693,11 +702,12 @@ or feature-client consumer:
   `func NewHTTPClient(*Client, *httpclient.Client) (*HTTPClient, error)`, and
   `func (*HTTPClient) Do(*http.Request) (*http.Response, error)`; no OAuth HTTP
   interface or token-source method is exported;
-- `type GRPC struct`, `func NewGRPC(*Client) (*GRPC, error)`, the
-  `GetRequestMetadata` and `RequireTransportSecurity` methods required by
-  `credentials.PerRPCCredentials`, and
-  `func (*GRPC) Wrap(grpc.ClientConnInterface) (grpc.ClientConnInterface, error)`;
-  the returned application connection and stream wrappers are private.
+- `type GRPCClient struct`,
+  `func NewGRPCClient(*Client, grpcclient.Config, grpcclient.Options) (*GRPCClient, error)`,
+  the `Invoke` and `NewStream` methods required by `grpc.ClientConnInterface`,
+  and `func (*GRPCClient) Close() error`; the credential, raw connection,
+  application connection, stream wrappers, and terminal observer remain
+  private.
 
 The one shared HTTP transport seam exports
 `type AttemptAuthorizer func(*http.Request) error` and

@@ -266,17 +266,20 @@ in-flight provider work, and leaves no continuing activity.
 
 **Failure wave.** One failed acquisition result is shared, in sanitized form,
 with callers waiting on that attempt. They do not become a serial queue of new
-token requests. After a failure, new callers fail fast until the original
-attempt's acquisition-budget window has elapsed; then one later caller may
-start one recovery attempt. There is no automatic retry inside either attempt.
-This bounds a fast-rejecting provider to at most one attempt per configured
-acquisition-budget window per process and dependency.
+token requests. After the failed attempt completes, new callers fail fast for a
+cooldown equal to at least the acquisition budget or one second. A syntactically
+valid provider `Retry-After` on `429` or `503` may extend that base; bounded
+positive jitter of at most 20 percent is added and the total is capped at one
+hour. Then one later caller may start one recovery attempt. There is no
+automatic retry inside either attempt. This process-local rule limits fast
+failure and synchronized recovery without claiming fleet-wide throttling.
 
 **Falsifier.** High concurrency yields one provider request on success and one
 on failure; canceled followers return before the provider does; a canceled
 caller does not cancel a token later consumed by a live caller; immediate
-post-failure callers perform no provider I/O; a later recovery wave again
-coalesces to one attempt.
+post-failure callers perform no provider I/O; the cooldown begins at failure
+completion; a valid provider delay and bounded jitter are honored; a later
+recovery wave again coalesces to one attempt.
 
 ### R7 — Failures and observability are semantic and non-disclosing
 
@@ -311,7 +314,9 @@ bounded dependency identity and class, without raw resource-server details.
 
 **Signals.** Operators can distinguish acquisition attempt/result/latency,
 cache reuse versus acquisition, failure class, and the configured bounded
-dependency identity. Metrics use only closed low-cardinality values. Traces or
+dependency identity. HTTP application rejections and gRPC application or
+grpc-go control-RPC rejections are recorded once at their terminal result.
+Metrics use only closed low-cardinality values. Traces or
 access-controlled logs may correlate a dependency call using existing request
 and trace identities, but never record client IDs, secrets, access or refresh
 tokens, authorization metadata, issuer or endpoint URLs, scopes, resources,
@@ -398,6 +403,11 @@ lowercase `authorization` metadata value with the Bearer scheme. The credential
 requires transport security and never replaces or weakens the connection's
 transport credentials. Caller-supplied authorization metadata is rejected
 before the RPC starts. The caller's context governs its wait under R6.
+
+One concrete construction owns the raw connection credential, the application
+wrapper, and terminal rejection observation. It rejects preconfigured competing
+per-RPC credentials or observers, so callers cannot accidentally authenticate
+application RPCs while leaving grpc-go control RPCs outside the same policy.
 
 Application RPCs and client control streams on the same dependency use the same
 credential binding only when registration, scopes, resource/audience,

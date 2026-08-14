@@ -231,6 +231,19 @@ func TestProviderFailureClassificationIsClosed(t *testing.T) {
 		})
 	}
 
+	t.Run("provider retry delay remains sanitized", func(t *testing.T) {
+		provider := mustProvider(t, doerFunc(func(*http.Request) (*http.Response, error) {
+			response := providerResponse(http.StatusTooManyRequests, "application/json", forbiddenCanary)
+			response.Header.Set("Retry-After", "3")
+			return response, nil
+		}))
+		_, err := provider.acquire(context.Background())
+		assertFailureClass(t, err, FailureProviderUnavailable)
+		if got := providerCooldownDelay(err); got != 3*time.Second {
+			t.Fatalf("provider cooldown = %s, want 3s", got)
+		}
+	})
+
 	transportCases := []struct {
 		name string
 		ctx  func() context.Context

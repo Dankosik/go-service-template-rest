@@ -26,6 +26,11 @@ import (
 	metricnoop "go.opentelemetry.io/otel/metric/noop"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
+	// profile:outbound-auth-grpc:start
+	"google.golang.org/grpc/codes"
+	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
+	grpcstatus "google.golang.org/grpc/status"
+	// profile:outbound-auth-grpc:end
 )
 
 func TestOutboundAuthTelemetryIsCompleteAndBounded(t *testing.T) {
@@ -117,6 +122,32 @@ func TestOutboundAuthTelemetryIsCompleteAndBounded(t *testing.T) {
 	}
 	requireClosedResolutionAndProviderMatrix(t, metrics)
 }
+
+// profile:outbound-auth-grpc:start
+
+func TestGRPCControlRejectionIsMeasured(t *testing.T) {
+	reader, meterProvider := telemetrytest.NewManualMeterProvider(t)
+	fixture := newGRPCFixtureWithMeter(t, nil, nil, meterProvider)
+	fixture.service.healthCode.Store(int32(codes.Unauthenticated))
+
+	stream, err := healthgrpc.NewHealthClient(fixture.connection).Watch(t.Context(), &healthgrpc.HealthCheckRequest{})
+	if err != nil {
+		t.Fatalf("Health.Watch() error = %v", err)
+	}
+	if _, err = stream.Recv(); grpcstatus.Code(err) != codes.Unauthenticated {
+		t.Fatalf("Health.Watch().Recv() code = %s, want %s: %v", grpcstatus.Code(err), codes.Unauthenticated, err)
+	}
+
+	metrics := outboundAuthMetrics(t, reader)
+	points := telemetrytest.Int64Sum(t, requireMetric(t, metrics, resourceRejectionsInstrument, "{rejection}")).DataPoints
+	if len(points) != 1 || points[0].Value != 1 ||
+		telemetrytest.Attribute(t, points[0].Attributes, attributeTransport) != transportGRPC ||
+		telemetrytest.Attribute(t, points[0].Attributes, attributeResult) != resultUnauthenticated {
+		t.Fatalf("control rejection points = %v, want one grpc/unauthenticated point", points)
+	}
+}
+
+// profile:outbound-auth-grpc:end
 
 // profile:outbound-auth-http:start
 func TestOutboundAuthForbiddenValuesNeverReachSignals(t *testing.T) {

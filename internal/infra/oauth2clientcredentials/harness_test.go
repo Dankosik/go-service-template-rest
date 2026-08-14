@@ -388,6 +388,7 @@ func (s *scriptedAcquirer) Calls() int {
 type testClientOptions struct {
 	now           func() time.Time
 	acquire       acquireToken
+	jitter        func(time.Duration) time.Duration
 	closeIdle     func()
 	meterProvider metric.MeterProvider
 	log           *slog.Logger
@@ -397,6 +398,9 @@ func requireTestClient(t *testing.T, cfg Config, options testClientOptions) *Cli
 	t.Helper()
 	if options.now == nil {
 		options.now = time.Now
+	}
+	if options.jitter == nil {
+		options.jitter = func(time.Duration) time.Duration { return 0 }
 	}
 	client, err := newClient(
 		cfg,
@@ -409,6 +413,7 @@ func requireTestClient(t *testing.T, cfg Config, options testClientOptions) *Cli
 	if err != nil {
 		t.Fatalf("newClient() error = %v", err)
 	}
+	client.jitter = options.jitter
 	t.Cleanup(func() {
 		if err := client.Close(context.Background()); err != nil {
 			t.Errorf("Client.Close() cleanup error = %v", err)

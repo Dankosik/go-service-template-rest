@@ -3,6 +3,7 @@ package oauth2clientcredentials
 import (
 	"context"
 	"log/slog"
+	"math/rand/v2"
 	"sync"
 	"time"
 
@@ -12,13 +13,14 @@ import (
 type acquireToken func(context.Context) (accessToken, error)
 
 type acquisitionWave struct {
-	done        chan struct{}
-	cancel      context.CancelFunc
-	startedAt   time.Time
-	failedUntil time.Time
-	token       accessToken
-	err         error
+	done      chan struct{}
+	cancel    context.CancelFunc
+	startedAt time.Time
+	token     accessToken
+	err       error
 }
+
+const minimumProviderFailureCooldown = time.Second
 
 type operationToken struct {
 	value     string
@@ -38,6 +40,7 @@ type Client struct {
 	config     Config
 	now        func() time.Time
 	acquire    acquireToken
+	jitter     func(time.Duration) time.Duration
 	closeIdle  func()
 	telemetry  telemetry
 	processCtx context.Context //nolint:containedctx // Client owns this process lifetime and cancels it in Close.
@@ -103,6 +106,7 @@ func newClient(
 		config:     validated,
 		now:        now,
 		acquire:    acquire,
+		jitter:     providerFailureJitter,
 		closeIdle:  closeIdle,
 		telemetry:  newTelemetry(meterProvider, validated.DependencyName, log),
 		processCtx: processCtx,
@@ -139,10 +143,9 @@ func (c *Client) resolve(ctx context.Context) (operationToken, error) {
 	if wave == nil {
 		providerCtx, cancel := context.WithTimeout(c.processCtx, c.config.AcquisitionTimeout)
 		wave = &acquisitionWave{
-			done:        make(chan struct{}),
-			cancel:      cancel,
-			startedAt:   time.Now(),
-			failedUntil: now.Add(c.config.AcquisitionTimeout),
+			done:      make(chan struct{}),
+			cancel:    cancel,
+			startedAt: time.Now(),
 		}
 		c.failure = nil
 		c.failedUntil = time.Time{}
@@ -187,7 +190,7 @@ func (c *Client) runAcquisition(ctx context.Context, wave *acquisitionWave) {
 	default:
 		c.token = accessToken{}
 		c.failure = err
-		c.failedUntil = wave.failedUntil
+		c.failedUntil = c.now().Add(c.failureCooldown(err))
 	}
 	wave.token = token
 	wave.err = err
@@ -201,6 +204,21 @@ func (c *Client) runAcquisition(ctx context.Context, wave *acquisitionWave) {
 	if retired {
 		c.finishClose()
 	}
+}
+
+func (c *Client) failureCooldown(err error) time.Duration {
+	base := max(c.config.AcquisitionTimeout, minimumProviderFailureCooldown)
+	base = min(max(base, providerCooldownDelay(err)), maxTokenLifetime)
+	spread := min(base/5, maxTokenLifetime-base)
+	extra := c.jitter(spread)
+	return base + min(max(extra, 0), spread)
+}
+
+func providerFailureJitter(limit time.Duration) time.Duration {
+	if limit <= 0 {
+		return 0
+	}
+	return time.Duration(rand.Int64N(int64(limit)) + 1) // #nosec G404 -- Provider-load jitter is not security randomness.
 }
 
 func (c *Client) operationToken(token accessToken) operationToken {

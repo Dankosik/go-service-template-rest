@@ -71,6 +71,79 @@ func TestTokenReuseRenewalAndRestart(t *testing.T) {
 	}
 }
 
+func TestProviderFailureCooldownStartsWhenTheAttemptFinishes(t *testing.T) {
+	clock := newMovableClock(fixedProviderTime)
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	provider := &scriptedAcquirer{steps: []acquisitionStep{
+		{
+			err: &providerCooldownError{
+				err:   failure(FailureProviderUnavailable),
+				delay: 3 * time.Second,
+			},
+			entered: entered,
+			release: release,
+		},
+		{token: accessToken{value: "recovered", expiresAt: fixedProviderTime.Add(time.Minute)}},
+	}}
+	client := requireTestClient(t, validTestConfig(), testClientOptions{now: clock.Now, acquire: provider.acquire})
+
+	result := make(chan error, 1)
+	go func() {
+		_, err := client.resolve(t.Context())
+		result <- err
+	}()
+	<-entered
+	clock.Advance(10 * time.Second)
+	close(release)
+	assertFailureClass(t, <-result, FailureProviderUnavailable)
+
+	clock.Advance(3*time.Second - time.Nanosecond)
+	if _, err := client.resolve(t.Context()); err == nil {
+		t.Fatal("resolve() before provider cooldown ended returned no error")
+	} else {
+		assertFailureClass(t, err, FailureProviderUnavailable)
+	}
+	if got := provider.Calls(); got != 1 {
+		t.Fatalf("provider calls inside provider cooldown = %d, want 1", got)
+	}
+
+	clock.Advance(time.Nanosecond)
+	if got, err := requireOperationToken(t, client).authorization(); err != nil || got != "recovered" {
+		t.Fatalf("recovery authorization = %q, %v", got, err)
+	}
+	if got := provider.Calls(); got != 2 {
+		t.Fatalf("provider calls after provider cooldown = %d, want 2", got)
+	}
+}
+
+func TestProviderFailureCooldownIsBoundedAndJittered(t *testing.T) {
+	cfg := validTestConfig()
+	cfg.AcquisitionTimeout = minAcquisitionTimeout
+	client := requireTestClient(t, cfg, testClientOptions{
+		acquire: func(context.Context) (accessToken, error) {
+			return accessToken{}, failure(FailureProviderUnavailable)
+		},
+		jitter: func(limit time.Duration) time.Duration { return limit },
+	})
+
+	if got := client.failureCooldown(failure(FailureProviderUnavailable)); got != 1200*time.Millisecond {
+		t.Fatalf("default failure cooldown = %s, want 1.2s", got)
+	}
+	if got := client.failureCooldown(&providerCooldownError{
+		err:   failure(FailureProviderUnavailable),
+		delay: 3 * time.Second,
+	}); got != 3600*time.Millisecond {
+		t.Fatalf("provider-directed cooldown = %s, want 3.6s", got)
+	}
+	if got := client.failureCooldown(&providerCooldownError{
+		err:   failure(FailureProviderUnavailable),
+		delay: 2 * maxTokenLifetime,
+	}); got != maxTokenLifetime {
+		t.Fatalf("capped provider cooldown = %s, want %s", got, maxTokenLifetime)
+	}
+}
+
 func TestOperationTokenCannotRenewAcrossExpiryMargin(t *testing.T) {
 	clock := newMovableClock(fixedProviderTime)
 	provider := &scriptedAcquirer{steps: []acquisitionStep{

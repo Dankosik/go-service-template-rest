@@ -1,6 +1,9 @@
 package grpcclient
 
 import (
+	// profile:outbound-auth-grpc:start
+	"context"
+	// profile:outbound-auth-grpc:end
 	"errors"
 	"fmt"
 	"strings"
@@ -15,6 +18,9 @@ import (
 	"google.golang.org/grpc/credentials"
 	_ "google.golang.org/grpc/health" // Install grpc-go's standard client health checker.
 	"google.golang.org/grpc/keepalive"
+	// profile:outbound-auth-grpc:start
+	"google.golang.org/grpc/stats"
+	// profile:outbound-auth-grpc:end
 )
 
 // What the composition root supplies, and the construction that turns it plus a
@@ -40,6 +46,11 @@ type Options struct {
 	// implementations, so a test can leave them unset.
 	MeterProvider  metric.MeterProvider
 	TracerProvider trace.TracerProvider
+	// profile:outbound-auth-grpc:start
+	// ObserveRPC receives one terminal result for application and grpc-go control
+	// RPCs. It must remain bounded and must not inspect request or response values.
+	ObserveRPC func(context.Context, error)
+	// profile:outbound-auth-grpc:end
 
 	// Propagation selects which locally owned correlation values cross this
 	// client's trust boundary, once per dependency rather than per call. The
@@ -56,6 +67,16 @@ func New(cfg Config, options Options) (*grpc.ClientConn, error) {
 		return nil, err
 	}
 	options = withOptionDefaults(options)
+	statsHandler := otelgrpc.NewClientHandler(
+		otelgrpc.WithMeterProvider(options.MeterProvider),
+		otelgrpc.WithTracerProvider(options.TracerProvider),
+		otelgrpc.WithPropagators(correlationpolicy.NewPropagator(options.Propagation, requestIDMetadataKey)),
+	)
+	// profile:outbound-auth-grpc:start
+	if options.ObserveRPC != nil {
+		statsHandler = observingStatsHandler{base: statsHandler, observe: options.ObserveRPC}
+	}
+	// profile:outbound-auth-grpc:end
 
 	dialOptions := []grpc.DialOption{
 		grpc.WithTransportCredentials(options.TransportCredentials),
@@ -73,11 +94,7 @@ func New(cfg Config, options Options) (*grpc.ClientConn, error) {
 			grpc.MaxCallRecvMsgSize(cfg.MaxReceiveMessageBytes),
 			grpc.MaxCallSendMsgSize(cfg.MaxSendMessageBytes),
 		),
-		grpc.WithStatsHandler(otelgrpc.NewClientHandler(
-			otelgrpc.WithMeterProvider(options.MeterProvider),
-			otelgrpc.WithTracerProvider(options.TracerProvider),
-			otelgrpc.WithPropagators(correlationpolicy.NewPropagator(options.Propagation, requestIDMetadataKey)),
-		)),
+		grpc.WithStatsHandler(statsHandler),
 	}
 	if options.PerRPCCredentials != nil {
 		dialOptions = append(
@@ -99,6 +116,34 @@ func New(cfg Config, options Options) (*grpc.ClientConn, error) {
 	}
 	return connection, nil
 }
+
+// profile:outbound-auth-grpc:start
+
+type observingStatsHandler struct {
+	base    stats.Handler
+	observe func(context.Context, error)
+}
+
+func (h observingStatsHandler) TagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
+	return h.base.TagRPC(ctx, info)
+}
+
+func (h observingStatsHandler) HandleRPC(ctx context.Context, rpcStats stats.RPCStats) {
+	h.base.HandleRPC(ctx, rpcStats)
+	if end, ok := rpcStats.(*stats.End); ok {
+		h.observe(context.WithoutCancel(ctx), end.Error)
+	}
+}
+
+func (h observingStatsHandler) TagConn(ctx context.Context, info *stats.ConnTagInfo) context.Context {
+	return h.base.TagConn(ctx, info)
+}
+
+func (h observingStatsHandler) HandleConn(ctx context.Context, connStats stats.ConnStats) {
+	h.base.HandleConn(ctx, connStats)
+}
+
+// profile:outbound-auth-grpc:end
 
 // withOptionDefaults fills the collaborators [Options] documents as optional, so
 // the construction in [New] reads as one uninterrupted sequence and every later

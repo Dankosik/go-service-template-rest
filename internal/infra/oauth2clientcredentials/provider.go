@@ -44,6 +44,15 @@ type accessToken struct {
 	expiresAt time.Time
 }
 
+type providerCooldownError struct {
+	err   error
+	delay time.Duration
+}
+
+func (e *providerCooldownError) Error() string { return e.err.Error() }
+
+func (e *providerCooldownError) Unwrap() error { return e.err }
+
 func newTokenHTTPClient(cfg Config, meterProvider metric.MeterProvider) (*httpclient.Client, error) {
 	validated, err := validateConfig(cfg)
 	if err != nil {
@@ -115,7 +124,7 @@ func (p *provider) acquire(ctx context.Context) (accessToken, error) {
 	}
 	if response.Body == nil {
 		if response.StatusCode != http.StatusOK {
-			return accessToken{}, classifyProviderResponse(response.StatusCode, nil)
+			return accessToken{}, providerResponseFailure(response, nil, p.now())
 		}
 		return accessToken{}, failure(FailureUnsupportedResponse)
 	}
@@ -124,12 +133,12 @@ func (p *provider) acquire(ctx context.Context) (accessToken, error) {
 	body, err := readProviderBody(response.Body)
 	if err != nil {
 		if response.StatusCode != http.StatusOK {
-			return accessToken{}, classifyProviderResponse(response.StatusCode, nil)
+			return accessToken{}, providerResponseFailure(response, nil, p.now())
 		}
 		return accessToken{}, failure(FailureUnsupportedResponse)
 	}
 	if response.StatusCode != http.StatusOK {
-		return accessToken{}, classifyProviderResponse(response.StatusCode, body)
+		return accessToken{}, providerResponseFailure(response, body, p.now())
 	}
 	mediaType, _, err := mime.ParseMediaType(response.Header.Get("Content-Type"))
 	if err != nil || !strings.EqualFold(mediaType, "application/json") {
@@ -140,6 +149,25 @@ func (p *provider) acquire(ctx context.Context) (accessToken, error) {
 		return accessToken{}, failure(FailureUnsupportedResponse)
 	}
 	return token, nil
+}
+
+func providerResponseFailure(response *http.Response, body []byte, now time.Time) error {
+	err := classifyProviderResponse(response.StatusCode, body)
+	if response.StatusCode != http.StatusTooManyRequests && response.StatusCode != http.StatusServiceUnavailable {
+		return err
+	}
+	delay, ok := httpclient.RetryAfter(response, now)
+	if !ok {
+		return err
+	}
+	return &providerCooldownError{err: err, delay: delay}
+}
+
+func providerCooldownDelay(err error) time.Duration {
+	if cooldown, ok := errors.AsType[*providerCooldownError](err); ok {
+		return cooldown.delay
+	}
+	return 0
 }
 
 func readProviderBody(body io.Reader) ([]byte, error) {
