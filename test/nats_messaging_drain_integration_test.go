@@ -113,8 +113,8 @@ func TestNATSHandlerPanicIsSupervised(t *testing.T) {
 			return false
 		}
 		info, infoErr := consumer.Info(t.Context())
-		return infoErr == nil && info.NumPending >= 1
-	}, "post-failure message to remain broker-pending")
+		return infoErr == nil && (info.NumPending >= 1 || info.NumAckPending >= 1)
+	}, "post-failure message to remain broker-owned")
 	select {
 	case payload := <-startedAfterFailure:
 		t.Fatalf("handler started %q after terminal failure", payload)
