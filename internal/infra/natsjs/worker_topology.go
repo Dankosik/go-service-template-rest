@@ -128,12 +128,21 @@ func (c *Client) admitSourceStream(probeCtx context.Context, cfg WorkerConfig) e
 // Original-* headers the transfer adds. A stream that is also the source is
 // rejected: every dead-lettered message would be a delivery back to this worker.
 func (c *Client) admitDeadLetterStream(probeCtx context.Context, cfg WorkerConfig) (string, error) {
-	name, err := c.js.StreamNameBySubject(probeCtx, cfg.DeadLetterSubject)
-	if err != nil && probeCtx.Err() == nil {
-		// A newly connected JetStream client can receive one unavailable response
-		// while the server finishes attaching its API subscription.
-		time.Sleep(100 * time.Millisecond)
+	var (
+		name string
+		err  error
+	)
+	for probeCtx.Err() == nil {
 		name, err = c.js.StreamNameBySubject(probeCtx, cfg.DeadLetterSubject)
+		if err == nil {
+			break
+		}
+		// A newly connected JetStream client can receive unavailable responses
+		// while the server finishes attaching its API subscription.
+		select {
+		case <-time.After(100 * time.Millisecond):
+		case <-probeCtx.Done():
+		}
 	}
 	if err != nil {
 		return "", fmt.Errorf("%w: dead-letter stream is unavailable", ErrRejected)

@@ -462,7 +462,7 @@ test-integration:
 	$(MAKE) test-outbox-race
 # profile:outbox-postgres:end
 # profile:webhooks-durable:start
-	$(MAKE) test-webhook-race
+	WEBHOOK_RUNTIME_IMAGE="$$image" $(MAKE) test-webhook-race
 # profile:webhooks-durable:end
 
 # profile:webhooks-durable:start
