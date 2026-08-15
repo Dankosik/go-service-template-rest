@@ -518,10 +518,15 @@ fixed path: 219,109 bytes, 144 certificate blocks, SHA-256
 `27c6ae455d9ac17e4f86aaf1e72b1fe6850033f0f73e478232055b4719af2d90`.
 That is 109% byte headroom and exactly 100% count headroom against `B/N`; it does
 not substitute for the production image. The digest-pinned Distroless image
-named below was also inspected on 2026-08-12: its regular image file is 216,591
-bytes, contains 142 certificate blocks, and has SHA-256
-`a3413a37a8e09cc21b2c11c9ffb23d92d2fc9d1933c9e7617f5c4fba4f72d37d`,
-giving 112% byte and 103% count headroom. Delivery still must prove the
+named below was re-inspected on 2026-08-17 after its base digest moved: its
+regular image file is 224,449 bytes, contains 150 certificate blocks, and has
+SHA-256
+`714d457d580922dbf1d0be8bd35ba236a842b50b0072ae791582a19adef772a5`,
+giving 104% byte and 92% count headroom. That count headroom no longer meets
+`N`'s half-ceiling, so D4 is reopened to re-derive `N`; the ceiling itself is
+unchanged at 288 and the reserves below, which are charged against it rather
+than against the observed count, are unaffected. The previous digest carried
+216,591 bytes and 142 blocks at 112% and 103%. Delivery still must prove the
 deployed architecture image and no-override mount condition. At the design
 maxima, `trust_shared = 32,047,104`,
 `trust_verify = 9,309,776`, and `trust_startup = 61,997,056` bytes before the
@@ -533,7 +538,7 @@ configured process envelope; a small test CA does not reduce them.
 For the T9A source receipt, the canonical image-root source is the final stage
 of `build/docker/Dockerfile`, not the Go test/envelope runner. For the exact
 Linux `GOARCH` whose 64-bit receipt is under review, resolve the Dockerfile's
-`gcr.io/distroless/static-debian12:nonroot@sha256:f5b485ea962d9bd1186b2f6b3a061191539b905b82ec395de78cbfae51f20e35`
+`gcr.io/distroless/static-debian12:nonroot@sha256:1b7b9f0f0e0a1d2155f531db587cc48ec26aaf97ab64364225f5bf18a054e66a`
 reference to its platform manifest, build the final image, and materialize an
 otherwise unmounted stopped container from that exact image. The receipt records
 the Dockerfile source identity, platform, index and resolved manifest digest,
@@ -545,9 +550,9 @@ or if the no-mount materialization cannot reproduce it.
 The receipt hashes and counts that extracted final-image file, then supplies
 those same bytes through the unexported `imageRootSource` seam to the production
 strict loader. Both observations must agree. The currently accepted final-image
-facts are 216,591 bytes, SHA-256
-`a3413a37a8e09cc21b2c11c9ffb23d92d2fc9d1933c9e7617f5c4fba4f72d37d`, and
-142 unique valid roots; they, and not the 219,109-byte/144-root Go runner file,
+facts are 224,449 bytes, SHA-256
+`714d457d580922dbf1d0be8bd35ba236a842b50b0072ae791582a19adef772a5`, and
+150 unique valid roots; they, and not the 219,109-byte/144-root Go runner file,
 set D4's `b` and `n` headroom inputs. Running `productionImageRootSource` in the
 Go compiler/test image is therefore a receipt failure, even if its file is
 strictly valid and below the ceilings.
@@ -1319,7 +1324,7 @@ must resolve the selected module versions through `go list -m`, verify their
 `go.sum` identities, and cite the generated/deserializer/serializer, Smithy XML,
 Go transport/allocator, PEM/X.509 pool/parser/verifier, and TLS clone/handshake
 symbols named in D4. The production-image receipt separately binds
-`gcr.io/distroless/static-debian12:nonroot@sha256:f5b485ea962d9bd1186b2f6b3a061191539b905b82ec395de78cbfae51f20e35`
+`gcr.io/distroless/static-debian12:nonroot@sha256:1b7b9f0f0e0a1d2155f531db587cc48ec26aaf97ab64364225f5bf18a054e66a`
 for each architecture to the fixed public bundle path,
 upstream provenance/revision, SHA-256, bytes, accepted unique count, regular
 read-only ownership, and absence of a replacing runtime mount. A source link,

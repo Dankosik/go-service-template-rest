@@ -7,11 +7,11 @@ platform="${S3_RECEIPT_PLATFORM:-}"
 case "${platform}" in
 	linux/amd64)
 		expected_go_manifest="sha256:433f9dc4f8ea3a1ce4e28f9f15d0f7c056b10475307f886d6f1ac1ccc4abd976"
-		expected_final_manifest="sha256:7a2bd171a18bdd39a4729600d0dca5f16e779d41156a6908b4f8a9a289e76d92"
+		expected_final_manifest="sha256:b7ebc675e6df3e26840de28a9d119969806b5542902111bfd111964d0930c08a"
 		;;
 	linux/arm64)
 		expected_go_manifest="sha256:7939e2c75db3d059fc944bb6464a916d0fa64bd5a3bd7b3528f2a1ac7673a0eb"
-		expected_final_manifest="sha256:37d3baf4e657ce79c144b69b69f60b8542f366a64fb7a49bd99f5444ef008bb0"
+		expected_final_manifest="sha256:ff3d007f159ebbbdf9130affa1125b10c50a909821c7130419df4e979a197c79"
 		;;
 	*)
 		echo "S3_RECEIPT_PLATFORM must be linux/amd64 or linux/arm64" >&2
@@ -124,8 +124,8 @@ entry="$(tar -tvf "${bundle_tar}")"
 tar -xOf "${bundle_tar}" >"${bundle}"
 bytes="$(wc -c <"${bundle}" | tr -d ' ')"
 sha256="$(shasum -a 256 "${bundle}" | awk '{print $1}')"
-[[ "${bytes}" == '216591' ]] || fail "bundle byte identity drift: ${bytes}"
-[[ "${sha256}" == 'a3413a37a8e09cc21b2c11c9ffb23d92d2fc9d1933c9e7617f5c4fba4f72d37d' ]] || fail "bundle hash identity drift: ${sha256}"
+[[ "${bytes}" == '224449' ]] || fail "bundle byte identity drift: ${bytes}"
+[[ "${sha256}" == '714d457d580922dbf1d0be8bd35ba236a842b50b0072ae791582a19adef772a5' ]] || fail "bundle hash identity drift: ${sha256}"
 
 docker run --rm --platform "${platform}" --network none \
 		-v "${root_dir}:/src:ro" \
@@ -135,14 +135,14 @@ docker run --rm --platform "${platform}" --network none \
 		-e S3_IMAGE_ROOT_BUNDLE_RECEIPT_PATH=/receipt/ca-certificates.crt \
 		-e S3_IMAGE_ROOT_BUNDLE_RECEIPT_BYTES="${bytes}" \
 		-e S3_IMAGE_ROOT_BUNDLE_RECEIPT_SHA256="${sha256}" \
-		-e S3_IMAGE_ROOT_BUNDLE_RECEIPT_ROOTS=142 \
+		-e S3_IMAGE_ROOT_BUNDLE_RECEIPT_ROOTS=150 \
 		"${go_platform_ref}" \
 		go test -mod=readonly -vet=off ./internal/infra/s3 -run '^TestFinalImageRootBundleReceipt$' -count=1
 
-byte_headroom="$(awk 'BEGIN { printf "%.0f", (458752 - 216591) * 100 / 216591 }')"
-root_headroom="$(awk 'BEGIN { printf "%.0f", (288 - 142) * 100 / 142 }')"
+byte_headroom="$(awk 'BEGIN { printf "%.0f", (458752 - 224449) * 100 / 224449 }')"
+root_headroom="$(awk 'BEGIN { printf "%.0f", (288 - 150) * 100 / 150 }')"
 printf 'bundle entry: %s\nbundle bytes/hash/roots: %s %s %s\nbundle headroom: bytes-unused=%s (%s%%) roots-unused=%s (%s%%)\n' \
-	"${entry}" "${bytes}" "${sha256}" 142 "$((458752 - bytes))" "${byte_headroom}" "$((288 - 142))" "${root_headroom}"
+	"${entry}" "${bytes}" "${sha256}" 150 "$((458752 - bytes))" "${byte_headroom}" "$((288 - 150))" "${root_headroom}"
 
 printf '%s\n' \
 	'D4 class shared_fixed: driver=S; ceiling=2097152; used-max=1048576; unused-min=1048576; headroom-min=100%' \
