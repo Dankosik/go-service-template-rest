@@ -64,29 +64,39 @@ func ClassifyOutcome(evidence TransportEvidence) OutcomeClass {
 	return OutcomeTransportAmbiguous
 }
 
-func ParseRetryAfter(raw, date string, attemptedAt time.Time, maxDelay time.Duration) (time.Duration, bool) {
+type RetryAfterEvidence struct {
+	Delay  time.Duration
+	Source string
+}
+
+func NormalizeRetryAfter(raw, date string, attemptedAt time.Time, maxDelay time.Duration) (RetryAfterEvidence, bool) {
 	if maxDelay <= 0 {
-		return 0, false
+		return RetryAfterEvidence{}, false
 	}
 	raw = strings.TrimSpace(raw)
 	if seconds, err := strconv.ParseUint(raw, 10, 63); err == nil {
 		if seconds > uint64(math.MaxInt64/int64(time.Second)) {
-			return maxDelay, true
+			return RetryAfterEvidence{Delay: maxDelay, Source: "delay_seconds"}, true
 		}
-		return min(time.Duration(seconds)*time.Second, maxDelay), true
+		return RetryAfterEvidence{Delay: min(time.Duration(seconds)*time.Second, maxDelay), Source: "delay_seconds"}, true
 	}
 	when, err := http.ParseTime(raw)
 	if err != nil {
-		return 0, false
+		return RetryAfterEvidence{}, false
 	}
 	base := attemptedAt
 	if parsedDate, parseErr := http.ParseTime(date); parseErr == nil {
 		base = parsedDate
 	}
 	if !when.After(base) {
-		return 0, false
+		return RetryAfterEvidence{}, false
 	}
-	return min(when.Sub(base), maxDelay), true
+	return RetryAfterEvidence{Delay: min(when.Sub(base), maxDelay), Source: "http_date"}, true
+}
+
+func ParseRetryAfter(raw, date string, attemptedAt time.Time, maxDelay time.Duration) (time.Duration, bool) {
+	evidence, ok := NormalizeRetryAfter(raw, date, attemptedAt, maxDelay)
+	return evidence.Delay, ok
 }
 
 func CumulativeSummary(previous OutcomeClass, attempts ...OutcomeClass) OutcomeClass {
@@ -112,7 +122,7 @@ func RetryDue(now, deadline time.Time, localDelay, hint time.Duration) (time.Tim
 		return time.Time{}, errors.New("retry deadline exhausted")
 	}
 	due := now.Add(max(localDelay, hint))
-	if due.After(deadline) {
+	if !due.Before(deadline) {
 		return time.Time{}, errors.New("retry deadline exhausted")
 	}
 	return due, nil

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/example/go-service-template-rest/internal/infra/postgreswebhook"
 	"github.com/jackc/pgx/v5"
@@ -67,5 +68,33 @@ func TestPostgresWebhookAcceptanceReadback(t *testing.T) {
 	receipt, err := store.ResolveAcceptance(ctx, prepared)
 	if err != nil || receipt.Disposition != postgreswebhook.AcceptanceRejected {
 		t.Fatalf("ResolveAcceptance(absent) = %+v, %v", receipt, err)
+	}
+}
+
+func TestPostgresWebhookDestinationReuseAfterKeyRotation(t *testing.T) {
+	ctx, pool, store, _ := newPostgresWebhookFixture(t)
+	first := webhookPrepared(t, "destination-reuse-first")
+	if err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error { _, err := store.Accept(ctx, tx, first); return err }); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.PGX().Exec(ctx, `UPDATE webhook_destinations SET active_key_reference = 'key-b', destination_retained_until = clock_timestamp() + interval '1 minute', key_references_retained_until = clock_timestamp() + interval '1 minute' WHERE owner_scope = 'owner-a' AND destination_id = 'dest-a' AND generation = 1`); err != nil {
+		t.Fatal(err)
+	}
+	second := webhookPrepared(t, "destination-reuse-second")
+	var receipt postgreswebhook.AcceptanceReceipt
+	if err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+		var err error
+		receipt, err = store.Accept(ctx, tx, second)
+		return err
+	}); err != nil || receipt.Disposition != postgreswebhook.AcceptanceAccepted {
+		t.Fatalf("Accept(after rotation) = %+v, %v", receipt, err)
+	}
+	var activeKey string
+	var destinationUntil, keyUntil time.Time
+	if err := pool.PGX().QueryRow(ctx, `SELECT active_key_reference, destination_retained_until, key_references_retained_until FROM webhook_destinations WHERE owner_scope = 'owner-a' AND destination_id = 'dest-a' AND generation = 1`).Scan(&activeKey, &destinationUntil, &keyUntil); err != nil {
+		t.Fatal(err)
+	}
+	if activeKey != "key-b" || destinationUntil.Before(receipt.AcceptedAt.Add(3*time.Hour)) || keyUntil.Before(receipt.AcceptedAt.Add(time.Hour)) {
+		t.Fatalf("reused destination = key %q, destination %v, key %v, accepted %v", activeKey, destinationUntil, keyUntil, receipt.AcceptedAt)
 	}
 }

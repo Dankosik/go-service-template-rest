@@ -2119,6 +2119,7 @@ fi
 
 # profile:webhooks-durable:start
 if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "webhooks" ]]; then
+	webhook_marker='profile:webhooks''-durable:'
 	webhook_paths=(
 		cmd/webhook-worker
 		docs/outbound-webhook-delivery.md
@@ -2127,6 +2128,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "webh
 		internal/infra/postgres/queries/postgres_webhooks.sql
 		internal/outboundtrust
 		migrations/000005_postgres_webhooks.sql
+		migrations/000006_postgres_webhook_retention.sql
 		test/postgres_webhook_acceptance_integration_test.go
 		test/webhook_network_integration_test.go
 		test/webhook_process_integration_test.go
@@ -2144,7 +2146,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "webh
 	done
 	grep -Fqx 'webhooks = "none"' "${webhooks_none}/template.lock"
 	assert "WEBHOOKS=none retained webhook profile markers" grep_absent -R -Fq \
-		'profile:webhooks-durable:' "${webhooks_none}/Makefile" "${webhooks_none}/README.md" \
+		"${webhook_marker}" "${webhooks_none}/Makefile" "${webhooks_none}/README.md" \
 		"${webhooks_none}/build" "${webhooks_none}/docs" "${webhooks_none}/env" \
 		"${webhooks_none}/internal" "${webhooks_none}/scripts/ci"
 
@@ -2171,7 +2173,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "webh
 	done
 	grep -Fqx 'webhooks = "durable"' "${webhooks_durable}/template.lock"
 	assert "WEBHOOKS=durable retained unresolved markers" grep_absent -R -Fq \
-		'profile:webhooks-durable:' "${webhooks_durable}/Makefile" "${webhooks_durable}/README.md" \
+		"${webhook_marker}" "${webhooks_durable}/Makefile" "${webhooks_durable}/README.md" \
 		"${webhooks_durable}/build" "${webhooks_durable}/docs" "${webhooks_durable}/env" \
 		"${webhooks_durable}/internal" "${webhooks_durable}/scripts/ci"
 	webhooks_snapshot="$(snapshot "${webhooks_durable}")"

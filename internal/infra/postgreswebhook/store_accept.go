@@ -36,7 +36,7 @@ type AcceptanceReceipt struct {
 	AcceptedAt      time.Time
 }
 
-//nolint:cyclop // Acceptance keeps its ordered same-transaction failure boundary explicit.
+//nolint:cyclop,gocognit // Acceptance keeps its ordered same-transaction failure boundary explicit.
 func (s *Store) Accept(ctx context.Context, tx pgx.Tx, prepared PreparedAcceptance) (AcceptanceReceipt, error) {
 	if !s.valid() || tx == nil {
 		return AcceptanceReceipt{}, fmt.Errorf("%w: store and caller transaction are required", ErrConfig)
@@ -71,7 +71,7 @@ func (s *Store) Accept(ctx context.Context, tx pgx.Tx, prepared PreparedAcceptan
 		return AcceptanceReceipt{Disposition: AcceptanceRejected}, fmt.Errorf("%w: capacity authority mismatch", ErrConfig)
 	}
 	for _, destination := range prepared.Destinations {
-		if destination.Policy.GlobalConcurrency < s.options.GlobalConcurrency {
+		if destination.Policy.GlobalConcurrency < s.options.GlobalConcurrency || !s.accepts(destination.Policy) {
 			return AcceptanceReceipt{Disposition: AcceptanceRejected}, fmt.Errorf("%w: capacity exceeds destination policy", ErrConfig)
 		}
 		if err := insertAndMatchDestination(opCtx, queries, prepared.Acceptance.OwnerScope, destination, acceptedAt, s.options.ManifestRevision); err != nil {
@@ -80,12 +80,18 @@ func (s *Store) Accept(ctx context.Context, tx pgx.Tx, prepared PreparedAcceptan
 	}
 	input := prepared.Acceptance
 	accepted := pgtime(acceptedAt)
+	payloadRetainedUntil := acceptedAt
+	for _, destination := range prepared.Destinations {
+		if retainedUntil := acceptedAt.Add(destination.Policy.Horizons[PayloadHorizon]); retainedUntil.After(payloadRetainedUntil) {
+			payloadRetainedUntil = retainedUntil
+		}
+	}
 	if _, err := queries.InsertWebhookEvent(opCtx, sqlcgen.InsertWebhookEventParams{
 		OwnerScope: input.OwnerScope, BusinessEventID: input.BusinessEventID, AcceptanceID: input.AcceptanceID,
 		FanoutSnapshotID: input.FanoutSnapshotID, EventType: input.EventType, BusinessSchemaVersion: input.BusinessSchemaVersion,
 		ContentType: input.ContentType, Body: input.Body, DeliveryEnvelopeVersion: input.DeliveryEnvelopeVersion,
 		SubscriberPolicyRevision: input.SubscriberPolicyRevision, IntentFingerprint: prepared.Fingerprint[:],
-		RetentionPolicyIdentity: input.SubscriberPolicyRevision, AcceptedAt: accepted,
+		RetentionPolicyIdentity: input.SubscriberPolicyRevision, PayloadRetainedUntil: pgtime(payloadRetainedUntil), AcceptedAt: accepted,
 	}); err != nil {
 		return AcceptanceReceipt{}, fmt.Errorf("insert webhook event: %w", err)
 	}
@@ -102,12 +108,17 @@ func (s *Store) Accept(ctx context.Context, tx pgx.Tx, prepared PreparedAcceptan
 			return AcceptanceReceipt{}, fmt.Errorf("encode webhook policy: %w", err)
 		}
 		deadline := acceptedAt.Add(destination.Policy.MaximumDeliveryAge)
-		redriveUntil := acceptedAt.Add(destination.Policy.Horizons[6])
+		redriveUntil := acceptedAt.Add(destination.Policy.Horizons[RedriveHorizon])
 		if _, err := queries.InsertWebhookDelivery(opCtx, sqlcgen.InsertWebhookDeliveryParams{
 			OwnerScope: input.OwnerScope, DeliveryID: destination.DeliveryID, BusinessEventID: input.BusinessEventID,
 			FanoutSnapshotID: input.FanoutSnapshotID, DestinationID: destination.DestinationID,
 			DestinationGeneration: destination.Generation, UrlSnapshot: destination.URL, PolicySnapshot: policy,
-			NextDueAt: accepted, RedriveEligibleUntil: pgtime(redriveUntil), CreatedAt: accepted,
+			NextDueAt: accepted, RedriveEligibleUntil: pgtime(redriveUntil),
+			ActiveRetainedUntil:   pgtime(acceptedAt.Add(destination.Policy.Horizons[ActiveHorizon])),
+			TerminalRetainedUntil: pgtime(acceptedAt.Add(destination.Policy.Horizons[TerminalHorizon])),
+			AttemptsRetainedUntil: pgtime(acceptedAt.Add(destination.Policy.Horizons[AttemptHorizon])),
+			ActionsRetainedUntil:  pgtime(acceptedAt.Add(destination.Policy.Horizons[OperatorActionHorizon])),
+			CreatedAt:             accepted,
 		}); err != nil {
 			return AcceptanceReceipt{}, fmt.Errorf("insert webhook delivery: %w", err)
 		}
@@ -178,6 +189,7 @@ func resolveAcceptance(ctx context.Context, queries *sqlcgen.Queries, prepared P
 	return AcceptanceReceipt{Disposition: AcceptanceAccepted, OwnerScope: input.OwnerScope, AcceptanceID: input.AcceptanceID, BusinessEventID: input.BusinessEventID, FanoutID: input.FanoutSnapshotID, DeliveryIDs: ids, AcceptedAt: row.AcceptedAt.Time.UTC()}, nil
 }
 
+//nolint:cyclop // Immutable destination matching keeps every fail-closed conflict explicit.
 func insertAndMatchDestination(ctx context.Context, queries *sqlcgen.Queries, owner string, destination PreparedDestination, acceptedAt time.Time, manifestRevision int64) error {
 	policy, err := json.Marshal(destination.Policy)
 	if err != nil {
@@ -196,6 +208,7 @@ func insertAndMatchDestination(ctx context.Context, queries *sqlcgen.Queries, ow
 	if err != nil {
 		return err
 	}
+	activeKeyReference := destination.SigningAuthorityBinding
 	params := sqlcgen.InsertWebhookDestinationParams{
 		OwnerScope: owner, DestinationID: destination.DestinationID, Generation: destination.Generation,
 		OwnershipVerificationReceipt: destination.OwnershipVerificationReceipt, Url: destination.URL,
@@ -203,7 +216,10 @@ func insertAndMatchDestination(ctx context.Context, queries *sqlcgen.Queries, ow
 		SignatureProfile: destination.SignatureProfile, SigningAuthorityBinding: destination.SigningAuthorityBinding,
 		Policy: policy, PolicyFingerprint: digest[:], DestinationConcurrency: destinationConcurrency,
 		GlobalConcurrency: globalConcurrency, RequiredSecretRevision: manifestRevision,
-		ActiveKeyReference: destination.SigningAuthorityBinding, CreatedAt: pgtime(acceptedAt),
+		ActiveKeyReference:         &activeKeyReference,
+		DestinationRetainedUntil:   pgtime(acceptedAt.Add(destination.Policy.Horizons[DestinationHorizon])),
+		KeyReferencesRetainedUntil: pgtime(acceptedAt.Add(destination.Policy.Horizons[KeyReferenceHorizon])),
+		CreatedAt:                  pgtime(acceptedAt),
 	}
 	if _, err := queries.InsertWebhookDestination(ctx, params); err != nil {
 		return fmt.Errorf("insert webhook destination: %w", err)
@@ -212,7 +228,21 @@ func insertAndMatchDestination(ctx context.Context, queries *sqlcgen.Queries, ow
 	if err != nil {
 		return fmt.Errorf("read webhook destination: %w", err)
 	}
-	if row.OwnershipVerificationReceipt != params.OwnershipVerificationReceipt || row.Url != params.Url || row.SelectionRevision != params.SelectionRevision || row.PayloadVersionPreference != params.PayloadVersionPreference || row.SignatureProfile != params.SignatureProfile || row.SigningAuthorityBinding != params.SigningAuthorityBinding || !bytes.Equal(row.PolicyFingerprint, digest[:]) || row.DestinationConcurrency != params.DestinationConcurrency || row.GlobalConcurrency != params.GlobalConcurrency {
+	if row.OwnershipVerificationReceipt != params.OwnershipVerificationReceipt || row.Url != params.Url || row.SelectionRevision != params.SelectionRevision || row.PayloadVersionPreference != params.PayloadVersionPreference || row.SignatureProfile != params.SignatureProfile || row.SigningAuthorityBinding != params.SigningAuthorityBinding || row.Disposition != activeDisposition || row.ActiveKeyReference == nil || row.RequiredSecretRevision > manifestRevision || !bytes.Equal(row.PolicyFingerprint, digest[:]) || row.DestinationConcurrency != params.DestinationConcurrency || row.GlobalConcurrency != params.GlobalConcurrency {
+		return ErrConflict
+	}
+	rows, err := queries.ExtendWebhookDestinationRetention(ctx, sqlcgen.ExtendWebhookDestinationRetentionParams{
+		DestinationRetainedUntil:   params.DestinationRetainedUntil,
+		KeyReferencesRetainedUntil: params.KeyReferencesRetainedUntil,
+		UpdatedAt:                  params.CreatedAt,
+		OwnerScope:                 owner,
+		DestinationID:              destination.DestinationID,
+		Generation:                 destination.Generation,
+	})
+	if err != nil {
+		return fmt.Errorf("extend webhook destination retention: %w", err)
+	}
+	if rows != 1 {
 		return ErrConflict
 	}
 	return nil

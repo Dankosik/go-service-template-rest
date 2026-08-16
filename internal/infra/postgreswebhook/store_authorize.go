@@ -33,7 +33,7 @@ func (s *Store) AuthorizeAttempt(ctx context.Context, attempt ClaimedAttempt, ma
 			return ErrStaleAttempt
 		}
 		if barrier.ControlRevision != attempt.ControlRevision || barrier.KeyStateRevision != attempt.KeyStateRevision ||
-			barrier.RequiredSecretRevision > manifest.Revision() || barrier.ActiveKeyReference != evidence.KeyReference ||
+			barrier.RequiredSecretRevision > manifest.Revision() || barrier.ActiveKeyReference == nil || *barrier.ActiveKeyReference != evidence.KeyReference ||
 			barrier.DestinationID != attempt.DestinationID || barrier.DestinationGeneration != attempt.DestinationGeneration {
 			return ErrStaleAttempt
 		}

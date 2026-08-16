@@ -2,6 +2,7 @@ package postgreswebhook
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"testing"
@@ -93,6 +94,12 @@ func setScanValue(destinations []any, index int, value any) error {
 		return errors.New("unexpected scan destination")
 	}
 	switch destination := destinations[index].(type) {
+	case **string:
+		value, ok := value.(string)
+		if !ok || destination == nil {
+			return errors.New("unexpected optional string scan destination")
+		}
+		*destination = &value
 	case *string:
 		value, ok := value.(string)
 		if !ok || destination == nil {
@@ -151,11 +158,20 @@ func setScanValues(destinations []any, values ...scanValue) error {
 
 //nolint:ireturn // sqlcgen.DBTX requires pgx.Row.
 func webhookActionDeliveryRow(now time.Time, summary string) pgx.Row {
+	policy, err := json.Marshal(goldenAcceptance().Destinations[0].Policy)
+	if err != nil {
+		return webhookRowStub{err: err}
+	}
 	return webhookScanRow(func(destinations ...any) error {
 		return setScanValues(destinations,
 			scanValue{0, int64(2)}, scanValue{1, string(DeliveryTerminal)}, scanValue{2, summary},
 			scanValue{3, pgtime(now.Add(time.Hour))}, scanValue{4, "destination"}, scanValue{5, int64(1)},
 			scanValue{6, false}, scanValue{7, string(OutcomeAttemptsExhausted)},
+			scanValue{8, pgtime(now)}, scanValue{9, policy}, scanValue{10, pgtime(now.Add(time.Hour))},
+			scanValue{11, pgtime(now.Add(time.Hour))}, scanValue{12, pgtime(now.Add(time.Hour))},
+			scanValue{13, pgtime(now.Add(time.Hour))}, scanValue{14, activeDisposition}, scanValue{15, int64(1)},
+			scanValue{16, "key-a"}, scanValue{17, pgtime(now.Add(time.Hour))}, scanValue{18, pgtime(now.Add(time.Hour))},
+			scanValue{19, true}, scanValue{20, pgtime(now.Add(time.Hour))},
 		)
 	})
 }
@@ -242,10 +258,11 @@ func TestStoreQueryHelpersPropagateDatabaseFailures(t *testing.T) {
 			scanValue{5, destination.SelectionRevision}, scanValue{6, destination.PayloadVersionPreference},
 			scanValue{7, destination.SignatureProfile}, scanValue{8, destination.SigningAuthorityBinding},
 			scanValue{10, digest[:]}, scanValue{11, int32(destination.Policy.DestinationConcurrency)},
-			scanValue{12, int32(destination.Policy.GlobalConcurrency)},
+			scanValue{12, int32(destination.Policy.GlobalConcurrency)}, scanValue{14, int64(1)},
+			scanValue{16, destination.SigningAuthorityBinding}, scanValue{19, activeDisposition},
 		)
 	})
-	if err := insertAndMatchDestination(t.Context(), sqlcgen.New(&webhookQueryStub{rowResults: []pgx.Row{readback}}), "owner", destination, time.Now(), 1); err != nil {
+	if err := insertAndMatchDestination(t.Context(), sqlcgen.New(&webhookQueryStub{execTags: []pgconn.CommandTag{pgconn.NewCommandTag("INSERT 1"), pgconn.NewCommandTag("UPDATE 1")}, rowResults: []pgx.Row{readback}}), "owner", destination, time.Now(), 1); err != nil {
 		t.Fatalf("insertAndMatchDestination() error = %v", err)
 	}
 }
@@ -287,14 +304,15 @@ func TestOperatorMutationInputGuards(t *testing.T) {
 	guardQueries := sqlcgen.New(&webhookQueryStub{})
 	for _, request := range []ActionRequest{
 		{Kind: ActionDestinationState, Expected: "invalid", Values: []string{"disabled", ""}},
+		{Kind: ActionDestinationState, Expected: "0", Values: []string{"paused", ""}},
 		{Kind: ActionKeyRotation, Expected: "0", Values: []string{"bad", "", "", "", "", "", ""}},
 		{Kind: ActionRedrive, Expected: "0", DuplicateRisk: true, Values: []string{"bad", "bad"}},
 	} {
-		if _, _, err := applyActionMutation(t.Context(), guardQueries, request, now); !errors.Is(err, ErrConfig) {
+		if _, _, err := applyActionMutation(t.Context(), guardQueries, request, now, 1); !errors.Is(err, ErrConfig) {
 			t.Fatalf("applyActionMutation(%s) error = %v", request.Kind, err)
 		}
 	}
-	result, cycle, err := applyActionMutation(t.Context(), guardQueries, ActionRequest{Kind: ActionRedrive, Expected: "0", Values: []string{"1", "1"}}, now)
+	result, cycle, err := applyActionMutation(t.Context(), guardQueries, ActionRequest{Kind: ActionRedrive, Expected: "0", Values: []string{"1", "1"}}, now, 1)
 	if err != nil || result != "rejected" || cycle != 0 {
 		t.Fatalf("unacknowledged redrive = %q, %d, %v", result, cycle, err)
 	}
@@ -304,13 +322,13 @@ func TestOperatorMutationInputGuards(t *testing.T) {
 	if _, _, err := actionMutationResult(1, errors.New("write failed")); err == nil {
 		t.Fatal("actionMutationResult() error = nil")
 	}
-	request := ActionRequest{Kind: ActionDestinationState, OwnerScope: "owner", TargetID: "destination", TargetGeneration: 1, Expected: "0", Values: []string{"paused", ""}}
-	result, cycle, err = applyActionMutation(t.Context(), sqlcgen.New(&webhookQueryStub{execTags: []pgconn.CommandTag{pgconn.NewCommandTag("UPDATE 1")}}), request, now)
+	request := ActionRequest{Kind: ActionDestinationState, OwnerScope: "owner", TargetID: "destination", TargetGeneration: 1, Expected: "0", Values: []string{"disabled", ""}}
+	result, cycle, err = applyActionMutation(t.Context(), sqlcgen.New(&webhookQueryStub{execTags: []pgconn.CommandTag{pgconn.NewCommandTag("UPDATE 1")}}), request, now, 1)
 	if err != nil || result != "applied" || cycle != 0 {
 		t.Fatalf("applyActionMutation(destination) = %q, %d, %v", result, cycle, err)
 	}
 	rotation := ActionRequest{Kind: ActionKeyRotation, OwnerScope: "owner", TargetID: "destination", TargetGeneration: 1, Expected: "0", Values: []string{"1", "2", "key-new", "key-old", "1699999999", "1700000100", "rotation-receipt"}}
-	result, cycle, err = applyActionMutation(t.Context(), sqlcgen.New(&webhookQueryStub{execTags: []pgconn.CommandTag{pgconn.NewCommandTag("UPDATE 1")}}), rotation, now)
+	result, cycle, err = applyActionMutation(t.Context(), sqlcgen.New(&webhookQueryStub{execTags: []pgconn.CommandTag{pgconn.NewCommandTag("UPDATE 1")}}), rotation, now, 1)
 	if err != nil || result != "applied" || cycle != 0 {
 		t.Fatalf("applyActionMutation(rotation) = %q, %d, %v", result, cycle, err)
 	}
@@ -318,7 +336,7 @@ func TestOperatorMutationInputGuards(t *testing.T) {
 	result, cycle, err = applyActionMutation(t.Context(), sqlcgen.New(&webhookQueryStub{
 		rowResults: []pgx.Row{webhookActionDeliveryRow(now, string(OutcomeAttemptsExhausted))},
 		execTags:   []pgconn.CommandTag{pgconn.NewCommandTag("INSERT 1"), pgconn.NewCommandTag("UPDATE 1")},
-	}), redrive, now)
+	}), redrive, now, 1)
 	if err != nil || result != "applied" || cycle != 3 {
 		t.Fatalf("applyActionMutation(redrive) = %q, %d, %v", result, cycle, err)
 	}
@@ -326,7 +344,7 @@ func TestOperatorMutationInputGuards(t *testing.T) {
 	result, cycle, err = applyActionMutation(t.Context(), sqlcgen.New(&webhookQueryStub{
 		rowResults: []pgx.Row{webhookActionDeliveryRow(now, string(OutcomeUnknown))},
 		execTags:   []pgconn.CommandTag{pgconn.NewCommandTag("UPDATE 1"), pgconn.NewCommandTag("UPDATE 1")},
-	}), closeUnknown, now)
+	}), closeUnknown, now, 1)
 	if err != nil || result != "applied" || cycle != 0 {
 		t.Fatalf("applyActionMutation(close unknown) = %q, %d, %v", result, cycle, err)
 	}

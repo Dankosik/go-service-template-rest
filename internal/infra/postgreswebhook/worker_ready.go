@@ -11,14 +11,17 @@ import (
 )
 
 type Observation struct {
-	Scheduled       int64
-	InFlight        int64
-	Terminal        int64
-	Disabled        int64
-	LeasedSlots     int64
-	TotalSlots      int64
-	ClockHighWater  time.Time
-	ClockRegression bool
+	Scheduled            int64
+	InFlight             int64
+	Terminal             int64
+	Disabled             int64
+	OutcomeUnknown       int64
+	OldestDueTimestamp   int64
+	ObservationTimestamp int64
+	LeasedSlots          int64
+	TotalSlots           int64
+	ClockHighWater       time.Time
+	ClockRegression      bool
 }
 
 //nolint:gocognit // One observation must validate the complete database/secret snapshot atomically.
@@ -45,7 +48,7 @@ func (s *Store) ObserveReadiness(ctx context.Context, manifest *SecretManifest) 
 		if err != nil {
 			return fmt.Errorf("observe postgres webhooks: %w", err)
 		}
-		observation = Observation{Scheduled: counts.Scheduled, InFlight: counts.InFlight, Terminal: counts.Terminal, Disabled: counts.Disabled, LeasedSlots: counts.LeasedSlots, TotalSlots: counts.TotalSlots, ClockHighWater: clock.HighWater.Time.UTC(), ClockRegression: clock.Regression}
+		observation = Observation{Scheduled: counts.Scheduled, InFlight: counts.InFlight, Terminal: counts.Terminal, Disabled: counts.Disabled, OutcomeUnknown: counts.OutcomeUnknown, OldestDueTimestamp: counts.OldestDueTimestamp, ObservationTimestamp: counts.ObservationTimestamp, LeasedSlots: counts.LeasedSlots, TotalSlots: counts.TotalSlots, ClockHighWater: clock.HighWater.Time.UTC(), ClockRegression: clock.Regression}
 		if capacity.RevisionCount != 1 || capacity.CapacityRevision != s.options.CapacityRevision || int(capacity.SlotCount) != s.options.GlobalConcurrency {
 			return fmt.Errorf("%w: capacity revision/count conflict", ErrConfig)
 		}
@@ -53,7 +56,10 @@ func (s *Store) ObserveReadiness(ctx context.Context, manifest *SecretManifest) 
 			if binding.RequiredSecretRevision > manifest.Revision() {
 				return fmt.Errorf("%w: secret manifest revision is stale", ErrConfig)
 			}
-			if _, err := manifest.Resolve(binding.OwnerScope, binding.DestinationID, binding.ActiveKeyReference); err != nil {
+			if binding.ActiveKeyReference == nil {
+				return fmt.Errorf("%w: active secret binding is erased", ErrConfig)
+			}
+			if _, err := manifest.Resolve(binding.OwnerScope, binding.DestinationID, *binding.ActiveKeyReference); err != nil {
 				return fmt.Errorf("%w: active secret binding is missing", ErrConfig)
 			}
 			if binding.PredecessorKeyReference != nil && binding.PredecessorValidUntil.Valid && clock.HighWater.Time.Before(binding.PredecessorValidUntil.Time) {

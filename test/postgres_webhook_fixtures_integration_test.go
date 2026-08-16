@@ -16,6 +16,10 @@ import (
 )
 
 func newPostgresWebhookFixture(t *testing.T) (context.Context, *postgres.Pool, *postgreswebhook.Store, *postgreswebhook.SecretManifest) {
+	return newPostgresWebhookFixtureWithConcurrency(t, 2)
+}
+
+func newPostgresWebhookFixtureWithConcurrency(t *testing.T, concurrency int) (context.Context, *postgres.Pool, *postgreswebhook.Store, *postgreswebhook.SecretManifest) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
 	t.Cleanup(cancel)
@@ -26,7 +30,7 @@ func newPostgresWebhookFixture(t *testing.T) (context.Context, *postgres.Pool, *
 	}
 	t.Cleanup(pool.Close)
 	manifest := webhookManifest(t, 1, "owner-a", "dest-a", "key-a")
-	store, err := postgreswebhook.NewStore(pool, postgreswebhook.StoreOptions{OperationTimeout: 3 * time.Second, CapacityRevision: 1, GlobalConcurrency: 2, ManifestRevision: manifest.Revision()})
+	store, err := postgreswebhook.NewStore(pool, postgreswebhook.StoreOptions{OperationTimeout: 3 * time.Second, CapacityRevision: 1, GlobalConcurrency: concurrency, ManifestRevision: manifest.Revision(), AttemptTimeout: 5 * time.Second, ResponseHeaderTimeout: 2 * time.Second, ResponseHeaderBytes: 4096, ResponseBodyBytes: 4096, DrainTimeout: 10 * time.Second})
 	if err != nil {
 		t.Fatalf("postgreswebhook.NewStore(): %v", err)
 	}

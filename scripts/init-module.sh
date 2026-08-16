@@ -792,6 +792,7 @@ if [[ "${source_checkout}" != true ]]; then
 				internal/config/webhooks_config.go \
 				internal/config/webhooks_config_test.go \
 				migrations/000005_postgres_webhooks.sql \
+				migrations/000006_postgres_webhook_retention.sql \
 				internal/infra/postgres/queries/postgres_webhooks.sql \
 				internal/infra/postgres/sqlcgen/postgres_webhooks.sql.go \
 				test/postgres_webhook_*_test.go \

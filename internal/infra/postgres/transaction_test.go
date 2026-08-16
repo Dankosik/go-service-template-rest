@@ -116,3 +116,14 @@ func TestCommitTxWrapsCommitFailure(t *testing.T) {
 		t.Fatalf("commitTx() error = %v", err)
 	}
 }
+
+func TestCommitTxClassifiesUnknownOutcome(t *testing.T) {
+	err := CommitTx(t.Context(), &trackedTx{commitErr: errors.New("connection lost")})
+	if !errors.Is(err, ErrCommitUnknown) {
+		t.Fatalf("CommitTx() error = %v, want ErrCommitUnknown", err)
+	}
+	err = CommitTx(t.Context(), &trackedTx{commitErr: pgx.ErrTxCommitRollback})
+	if errors.Is(err, ErrCommitUnknown) || !errors.Is(err, pgx.ErrTxCommitRollback) {
+		t.Fatalf("CommitTx(definite rollback) error = %v", err)
+	}
+}

@@ -91,6 +91,16 @@ func commitTx(ctx context.Context, tx pgx.Tx) error {
 	return nil
 }
 
+// CommitTx commits a repository-owned transaction and preserves an ambiguous
+// commit as ErrCommitUnknown so callers can resolve it by identity readback.
+func CommitTx(ctx context.Context, tx pgx.Tx) error {
+	err := commitTx(ctx, tx)
+	if err == nil || commitDefinitelyFailed(err) {
+		return err
+	}
+	return fmt.Errorf("%w: %w", ErrCommitUnknown, err)
+}
+
 func commitDefinitelyFailed(err error) bool {
 	if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok {
 		return pgErr.Code != pgerrcode.TransactionResolutionUnknown &&

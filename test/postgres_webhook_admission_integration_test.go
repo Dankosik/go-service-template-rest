@@ -78,7 +78,7 @@ func TestPostgresWebhookReplicaCapacityAndSecretRevision(t *testing.T) {
 	if err != nil || claim.Attempt == nil {
 		t.Fatalf("Claim() = %+v, %v", claim, err)
 	}
-	higher, err := postgreswebhook.NewStore(pool, postgreswebhook.StoreOptions{OperationTimeout: 3 * time.Second, CapacityRevision: 2, GlobalConcurrency: 1, ManifestRevision: 1})
+	higher, err := postgreswebhook.NewStore(pool, postgreswebhook.StoreOptions{OperationTimeout: 3 * time.Second, CapacityRevision: 2, GlobalConcurrency: 1, ManifestRevision: 1, AttemptTimeout: 5 * time.Second, ResponseHeaderTimeout: 2 * time.Second, ResponseHeaderBytes: 4096, ResponseBodyBytes: 4096, DrainTimeout: 10 * time.Second})
 	if err != nil {
 		t.Fatal(err)
 	}

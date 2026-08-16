@@ -65,7 +65,10 @@ func (s *Store) Claim(ctx context.Context, workerID string, pageSize int, leaseD
 			if int(active) >= int(candidate.DestinationConcurrency) {
 				continue
 			}
-			if _, err := manifest.Resolve(candidate.OwnerScope, candidate.DestinationID, candidate.ActiveKeyReference); err != nil {
+			if candidate.ActiveKeyReference == nil {
+				return fmt.Errorf("%w: active secret binding is erased", ErrConfig)
+			}
+			if _, err := manifest.Resolve(candidate.OwnerScope, candidate.DestinationID, *candidate.ActiveKeyReference); err != nil {
 				return fmt.Errorf("%w: active secret binding is missing", ErrConfig)
 			}
 			if candidate.PredecessorKeyReference != nil && candidate.PredecessorValidUntil.Valid && sampledAt.Before(candidate.PredecessorValidUntil.Time) {
@@ -80,7 +83,7 @@ func (s *Store) Claim(ctx context.Context, workerID string, pageSize int, leaseD
 			if err != nil {
 				return fmt.Errorf("lock webhook delivery: %w", err)
 			}
-			slot, err := queries.LockWebhookCapacitySlot(ctx, sqlcgen.LockWebhookCapacitySlotParams{CapacityRevision: s.options.CapacityRevision, SampledAt: pgtime(sampledAt)})
+			slot, err := queries.LockWebhookCapacitySlot(ctx, s.options.CapacityRevision)
 			if errors.Is(err, pgx.ErrNoRows) {
 				break
 			}
@@ -114,7 +117,7 @@ func (s *Store) Claim(ctx context.Context, workerID string, pageSize int, leaseD
 			if err != nil {
 				return err
 			}
-			if err := queries.InsertWebhookAttempt(ctx, sqlcgen.InsertWebhookAttemptParams{OwnerScope: delivery.OwnerScope, DeliveryID: delivery.DeliveryID, CycleNumber: delivery.CurrentCycle, AttemptID: attemptID, Fence: fence, CapacitySlot: slot, AttemptedAt: pgtime(sampledAt), LeaseExpiresAt: pgtime(leaseExpiresAt), PayloadDigest: payloadDigest[:], PayloadBytes: payloadBytes}); err != nil {
+			if err := queries.InsertWebhookAttempt(ctx, sqlcgen.InsertWebhookAttemptParams{OwnerScope: delivery.OwnerScope, DeliveryID: delivery.DeliveryID, CycleNumber: delivery.CurrentCycle, AttemptID: attemptID, Fence: fence, CapacitySlot: slot, AttemptedAt: pgtime(sampledAt), LeaseExpiresAt: pgtime(leaseExpiresAt), PayloadDigest: payloadDigest[:], PayloadBytes: payloadBytes, RetainedUntil: delivery.AttemptsRetainedUntil}); err != nil {
 				return fmt.Errorf("insert webhook attempt: %w", err)
 			}
 			var policy DeliveryPolicy
@@ -123,9 +126,10 @@ func (s *Store) Claim(ctx context.Context, workerID string, pageSize int, leaseD
 			}
 			result.Attempt = &ClaimedAttempt{
 				Identity:      AttemptIdentity{OwnerScope: delivery.OwnerScope, DeliveryID: delivery.DeliveryID, Cycle: delivery.CurrentCycle, AttemptID: attemptID, Fence: fence},
+				AttemptNumber: int(delivery.AttemptsUsed) + 1,
 				DestinationID: delivery.DestinationID, DestinationGeneration: delivery.DestinationGeneration,
 				URL: delivery.UrlSnapshot, Body: append([]byte(nil), delivery.Body...), ContentType: delivery.ContentType,
-				AttemptedAt: sampledAt, Deadline: leaseExpiresAt, KeyReference: candidate.ActiveKeyReference,
+				AttemptedAt: sampledAt, Deadline: leaseExpiresAt, KeyReference: *candidate.ActiveKeyReference,
 				ManifestRevision: candidate.RequiredSecretRevision, SignatureProfile: candidate.SignatureProfile,
 				ControlRevision: candidate.ControlRevision, KeyStateRevision: candidate.KeyStateRevision, Policy: policy,
 			}

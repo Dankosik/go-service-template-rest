@@ -154,9 +154,11 @@ same per-destination HTTP, ambiguity, retention, redrive, and operator authority
 
 The future canonical source is the next unclaimed six-digit transactional
 Goose migration with stem `_postgres_webhooks`; on the current baseline that is
-`migrations/000005_postgres_webhooks.sql`. If another accepted change claims
-`000005` before implementation, Go Ownership reopens only the numeric filename
-and generated output receipt. This design creates no migration.
+`migrations/000005_postgres_webhooks.sql`. The post-merge audit repair keeps
+that migration immutable and adds
+`migrations/000006_postgres_webhook_retention.sql` for upgrade-safe retention,
+deadline, and normalized retry evidence. Production rollback remains
+fix-and-roll-forward.
 
 PostgreSQL server UTC is authoritative for acceptance, attempt instants, due
 times, deadlines, leases, disposition barriers, action times, and cleanup. One
@@ -591,8 +593,9 @@ bounded reason. The store serializes them with acceptance/claim barriers and
 returns the first result on replay. It exposes no authentication or transport.
 
 - Active admits current snapshots and claims.
-- Automatically paused remains implemented but cannot be enabled without the
-  complete W11 policy; the template's admitted value is off.
+- Automatically paused is a reserved persisted vocabulary value only. The
+  template has no pause engine or pause action; acceptance rejects the flag and
+  every pause-policy field until W11 is reopened with a complete policy.
 - Administratively disabled excludes snapshots after the authoritative
   revision and blocks new attempts on existing work.
 - Retired excludes new snapshots and permanently blocks its old generation.
@@ -875,6 +878,7 @@ seam.
 | File or surface | Exact future action |
 | --- | --- |
 | `migrations/000005_postgres_webhooks.sql` | One transactional canonical schema source for the ten relations plus the fairness sequence, checks, foreign keys, uniqueness, indexes, and `Down`; filename uses the reopen rule above. |
+| `migrations/000006_postgres_webhook_retention.sql` | Additive upgrade from the merged baseline: separate retained-until authorities, nullable erased payloads, and normalized `Retry-After` evidence; no rewrite of `000005`. |
 | `internal/infra/postgres/queries/postgres_webhooks.sql` | All webhook SQLC statements; no runtime SQL outside this owner. |
 | `scripts/init-module.sh` | Add `WEBHOOKS=none|durable`, require PostgreSQL for durable, write `template.lock`, remove all webhook files/migrations/tests/docs when none, retain shared `outboundtrust` when HTTP or webhooks needs it, and regenerate SQLC once after sibling profile decisions. |
 | `scripts/ci/template-init-check.sh` | Add webhook retained/removal fixtures and an independent `DATABASE=postgres WEBHOOKS=durable OUTBOX=none MESSAGING=none OUTBOUND_HTTP=none` compile/check profile. |

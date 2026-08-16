@@ -57,6 +57,7 @@ func TestRetryDueAndRetryAfterEdges(t *testing.T) {
 	}{
 		{name: "deadline exhausted", deadline: now},
 		{name: "delay exceeds deadline", deadline: deadline, local: time.Minute + time.Second},
+		{name: "delay equals deadline", deadline: deadline, local: time.Minute},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			if _, err := RetryDue(now, test.deadline, test.local, test.hint); err == nil {

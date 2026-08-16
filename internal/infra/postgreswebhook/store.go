@@ -12,10 +12,15 @@ import (
 )
 
 type StoreOptions struct {
-	OperationTimeout  time.Duration
-	CapacityRevision  int64
-	GlobalConcurrency int
-	ManifestRevision  int64
+	OperationTimeout      time.Duration
+	CapacityRevision      int64
+	GlobalConcurrency     int
+	ManifestRevision      int64
+	AttemptTimeout        time.Duration
+	ResponseHeaderTimeout time.Duration
+	ResponseHeaderBytes   int
+	ResponseBodyBytes     int
+	DrainTimeout          time.Duration
 }
 
 type Store struct {
@@ -52,10 +57,22 @@ func NewStore(pool *postgres.Pool, options StoreOptions) (*Store, error) {
 	}
 	if options.OperationTimeout <= 0 || options.OperationTimeout > MaxStoreOperationTime ||
 		options.CapacityRevision <= 0 || options.GlobalConcurrency < 1 ||
-		options.GlobalConcurrency > MaxConcurrency || options.ManifestRevision <= 0 {
+		options.GlobalConcurrency > MaxConcurrency || options.ManifestRevision <= 0 ||
+		options.ResponseHeaderTimeout <= 0 || options.ResponseHeaderTimeout > options.AttemptTimeout ||
+		options.AttemptTimeout <= 0 || options.AttemptTimeout > options.DrainTimeout || options.DrainTimeout <= 0 ||
+		options.ResponseHeaderBytes < 1 || options.ResponseHeaderBytes > MaxResponseBytes ||
+		options.ResponseBodyBytes < 1 || options.ResponseBodyBytes > MaxResponseBytes {
 		return nil, fmt.Errorf("%w: store bounds are invalid", ErrConfig)
 	}
 	return &Store{pool: pool, options: options}, nil
+}
+
+func (s *Store) accepts(policy DeliveryPolicy) bool {
+	return policy.AttemptTimeout <= s.options.AttemptTimeout &&
+		policy.ResponseHeaderTimeout <= s.options.ResponseHeaderTimeout &&
+		policy.ResponseHeaderBytes <= s.options.ResponseHeaderBytes &&
+		policy.ResponseBodyBytes <= s.options.ResponseBodyBytes &&
+		policy.DrainTimeout <= s.options.DrainTimeout
 }
 
 func (s *Store) valid() bool {
@@ -76,7 +93,7 @@ func (s *Store) transaction(ctx context.Context, fn func(context.Context, pgx.Tx
 	if err := fn(opCtx, tx); err != nil {
 		return err
 	}
-	if err := tx.Commit(opCtx); err != nil {
+	if err := postgres.CommitTx(opCtx, tx); err != nil {
 		return fmt.Errorf("commit webhook transaction: %w", err)
 	}
 	return nil

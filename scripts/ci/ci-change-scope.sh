@@ -58,7 +58,7 @@ is_template_independent_path() {
 	case "${path}" in
 	  internal/outboundtrust/* | internal/infra/postgreswebhook/* | cmd/webhook-worker/* | \
       internal/config/webhooks_config*.go | internal/infra/postgres/queries/postgres_webhooks.sql | \
-      internal/infra/postgres/sqlcgen/postgres_webhooks.sql.go | migrations/*_postgres_webhooks.sql | \
+      internal/infra/postgres/sqlcgen/postgres_webhooks.sql.go | migrations/*_postgres_webhook*.sql | \
       test/postgres_webhook_*_test.go | test/webhook_*_integration_test.go | \
       docs/outbound-webhook-delivery.md)
       return 1

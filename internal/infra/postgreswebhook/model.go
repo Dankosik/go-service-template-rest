@@ -39,6 +39,7 @@ type AttemptIdentity struct {
 
 type ClaimedAttempt struct {
 	Identity              AttemptIdentity
+	AttemptNumber         int
 	DestinationID         string
 	DestinationGeneration int64
 	URL                   string

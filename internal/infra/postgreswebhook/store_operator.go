@@ -3,6 +3,7 @@ package postgreswebhook
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -18,6 +19,8 @@ type ActionReceipt struct {
 	Replay   bool
 	Cycle    int64
 }
+
+const actionStateConflict = "state_conflict"
 
 func (s *Store) ApplyAction(ctx context.Context, request ActionRequest) (ActionReceipt, error) {
 	fingerprint, err := request.Fingerprint()
@@ -46,15 +49,23 @@ func (s *Store) ApplyAction(ctx context.Context, request ActionRequest) (ActionR
 		} else if !errors.Is(err, pgx.ErrNoRows) {
 			return fmt.Errorf("read webhook action: %w", err)
 		}
-		result, cycle, err := applyActionMutation(ctx, queries, request, now)
+		result, cycle, err := applyActionMutation(ctx, queries, request, now, s.options.ManifestRevision)
 		if err != nil {
 			return err
+		}
+		retainedUntil, err := queries.ReadWebhookActionRetainedUntil(ctx, sqlcgen.ReadWebhookActionRetainedUntilParams{
+			TargetKind: request.TargetKind, OwnerScope: request.OwnerScope, TargetID: request.TargetID,
+			TargetGeneration: request.TargetGeneration, SampledAt: pgtime(now),
+		})
+		if err != nil {
+			return fmt.Errorf("read webhook action retention: %w", err)
 		}
 		if _, err := queries.InsertWebhookOperatorAction(ctx, sqlcgen.InsertWebhookOperatorActionParams{
 			OwnerScope: request.OwnerScope, ActionID: request.ActionID, RequestFingerprint: fingerprint[:],
 			ActorReference: request.Actor, ActionKind: string(request.Kind), TargetKind: request.TargetKind,
 			TargetID: request.TargetID, TargetGeneration: request.TargetGeneration, ExpectedState: request.Expected,
-			Reason: request.Reason, DuplicateRiskAcknowledged: request.DuplicateRisk, Result: result, CreatedAt: pgtime(now),
+			Reason: request.Reason, DuplicateRiskAcknowledged: request.DuplicateRisk, Result: result,
+			RetainedUntil: retainedUntil, CreatedAt: pgtime(now),
 		}); err != nil {
 			return fmt.Errorf("insert webhook action: %w", err)
 		}
@@ -65,14 +76,14 @@ func (s *Store) ApplyAction(ctx context.Context, request ActionRequest) (ActionR
 }
 
 //nolint:gocognit,cyclop // Each closed operator action keeps its validation beside its SQL transition.
-func applyActionMutation(ctx context.Context, queries *sqlcgen.Queries, request ActionRequest, now time.Time) (string, int64, error) {
+func applyActionMutation(ctx context.Context, queries *sqlcgen.Queries, request ActionRequest, now time.Time, manifestRevision int64) (string, int64, error) {
 	expected, err := strconv.ParseInt(request.Expected, 10, 64)
 	if err != nil || expected < 0 {
 		return "", 0, fmt.Errorf("%w: expected revision is invalid", ErrConfig)
 	}
 	switch request.Kind {
 	case ActionDestinationState:
-		disposition := map[string]string{activeDisposition: activeDisposition, "paused": "automatically_paused", "disabled": "administratively_disabled", "retired": "retired"}[request.Values[0]]
+		disposition := map[string]string{activeDisposition: activeDisposition, "disabled": "administratively_disabled", "retired": "retired"}[request.Values[0]]
 		if disposition == "" {
 			return "", 0, fmt.Errorf("%w: destination disposition is invalid", ErrConfig)
 		}
@@ -87,7 +98,8 @@ func applyActionMutation(ctx context.Context, queries *sqlcgen.Queries, request 
 			return "", 0, fmt.Errorf("%w: key rotation is invalid", ErrConfig)
 		}
 		predecessor := request.Values[3]
-		rows, err := queries.ApplyWebhookKeyRotation(ctx, sqlcgen.ApplyWebhookKeyRotationParams{RequiredSecretRevision: secretRevision, KeyStateRevision: keyRevision, ActiveKeyReference: request.Values[2], PredecessorKeyReference: &predecessor, PredecessorValidUntil: pgtime(time.Unix(validUntilUnix, 0)), UpdatedAt: pgtime(now), OwnerScope: request.OwnerScope, DestinationID: request.TargetID, Generation: request.TargetGeneration, ExpectedRevision: expected})
+		active := request.Values[2]
+		rows, err := queries.ApplyWebhookKeyRotation(ctx, sqlcgen.ApplyWebhookKeyRotationParams{RequiredSecretRevision: secretRevision, KeyStateRevision: keyRevision, ActiveKeyReference: &active, PredecessorKeyReference: &predecessor, PredecessorValidUntil: pgtime(time.Unix(validUntilUnix, 0)), UpdatedAt: pgtime(now), OwnerScope: request.OwnerScope, DestinationID: request.TargetID, Generation: request.TargetGeneration, ExpectedRevision: expected})
 		return actionMutationResult(rows, err)
 	case ActionRedrive:
 		if !request.DuplicateRisk {
@@ -109,12 +121,32 @@ func applyActionMutation(ctx context.Context, queries *sqlcgen.Queries, request 
 		if err != nil {
 			return "", 0, fmt.Errorf("lock webhook redrive: %w", err)
 		}
-		if locked.CurrentCycle != expected || locked.State != string(DeliveryTerminal) && locked.State != string(DeliverySuspended) || locked.Disposition == activeDisposition || !locked.RedriveEligibleUntil.Time.After(now) || locked.CumulativeSummary == string(OutcomeHTTPAccepted) {
-			return "state_conflict", 0, nil
+		var policy DeliveryPolicy
+		if err := json.Unmarshal(locked.PolicySnapshot, &policy); err != nil || policy.validate() != nil {
+			return "", 0, fmt.Errorf("%w: retained redrive policy is invalid", ErrConflict)
+		}
+		if locked.CurrentCycle != expected || locked.State != string(DeliveryTerminal) && locked.State != string(DeliverySuspended) ||
+			locked.Disposition == activeDisposition || locked.DestinationDisposition != activeDisposition ||
+			locked.RequiredSecretRevision > manifestRevision || locked.ActiveKeyReference == nil || *locked.ActiveKeyReference == "" || !locked.PayloadRetained ||
+			!locked.RedriveEligibleUntil.Time.After(now) || !locked.PayloadRetainedUntil.Time.After(now) ||
+			!locked.ActiveRetainedUntil.Time.After(now) || !locked.AttemptsRetainedUntil.Time.After(now) ||
+			!locked.ActionsRetainedUntil.Time.After(now) || !locked.DestinationRetainedUntil.Time.After(now) ||
+			!locked.KeyReferencesRetainedUntil.Time.After(now) || locked.CumulativeSummary == string(OutcomeHTTPAccepted) ||
+			attempts > policy.RedriveAttempts || time.Duration(ageNanos) > policy.RedriveAge {
+			return actionStateConflict, 0, nil
 		}
 		deadline := now.Add(time.Duration(ageNanos))
-		if locked.RedriveEligibleUntil.Time.Before(deadline) {
-			deadline = locked.RedriveEligibleUntil.Time
+		for _, retainedUntil := range []time.Time{
+			locked.RedriveEligibleUntil.Time, locked.PayloadRetainedUntil.Time, locked.ActiveRetainedUntil.Time,
+			locked.AttemptsRetainedUntil.Time, locked.ActionsRetainedUntil.Time, locked.DestinationRetainedUntil.Time,
+			locked.KeyReferencesRetainedUntil.Time,
+		} {
+			if retainedUntil.Before(deadline) {
+				deadline = retainedUntil
+			}
+		}
+		if !deadline.After(now) {
+			return actionStateConflict, 0, nil
 		}
 		cycle := locked.CurrentCycle + 1
 		rows, err := queries.InsertWebhookRedriveCycle(ctx, sqlcgen.InsertWebhookRedriveCycleParams{OwnerScope: request.OwnerScope, DeliveryID: request.TargetID, CycleNumber: cycle, ActionID: &request.ActionID, AcceptedAt: pgtime(now), DeadlineAt: pgtime(deadline), MaximumAttempts: maximumAttempts})
@@ -133,7 +165,7 @@ func applyActionMutation(ctx context.Context, queries *sqlcgen.Queries, request 
 			return "", 0, fmt.Errorf("lock webhook unknown delivery: %w", err)
 		}
 		if locked.CurrentCycle != expected || locked.CumulativeSummary != string(OutcomeUnknown) {
-			return "state_conflict", 0, nil
+			return actionStateConflict, 0, nil
 		}
 		rows, err := queries.CloseWebhookUnknownCycle(ctx, sqlcgen.CloseWebhookUnknownCycleParams{FinalizedAt: pgtime(now), OwnerScope: request.OwnerScope, DeliveryID: request.TargetID, CycleNumber: locked.CurrentCycle})
 		if err != nil || rows != 1 {
@@ -153,7 +185,7 @@ func actionMutationResult(rows int64, err error) (string, int64, error) {
 		return "", 0, fmt.Errorf("apply webhook action mutation: %w", err)
 	}
 	if rows != 1 {
-		return "state_conflict", 0, nil
+		return actionStateConflict, 0, nil
 	}
 	return "applied", 0, nil
 }

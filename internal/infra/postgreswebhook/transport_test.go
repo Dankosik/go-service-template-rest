@@ -25,6 +25,20 @@ func TestWebhookDNSEvidenceVector(t *testing.T) {
 	}
 }
 
+func TestWebhookDNSEvidenceIsAnOrderIndependentSet(t *testing.T) {
+	first, err := DNSSetEvidence([]netip.Addr{netip.MustParseAddr("2001:db8::1"), netip.MustParseAddr("192.0.2.1"), netip.MustParseAddr("192.0.2.1")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := DNSSetEvidence([]netip.Addr{netip.MustParseAddr("192.0.2.1"), netip.MustParseAddr("2001:db8::1")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first != second {
+		t.Fatalf("equivalent DNS sets have different evidence: %x != %x", first, second)
+	}
+}
+
 func TestWebhookBoundedOneSendTransport(t *testing.T) {
 	var requests atomic.Int64
 	server := httptest.NewTLSServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {

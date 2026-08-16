@@ -58,11 +58,17 @@ func (s *Store) FinalizeAttempt(ctx context.Context, attempt ClaimedAttempt, fin
 			return fmt.Errorf("%w: possible-send evidence was not durably authorized", ErrConflict)
 		}
 		update := finalizationUpdateFor(locked, outcome, attempt, final, finalizedAt)
-		retryAfter := nullableString(final.RetryAfter)
+		var retryAfterDelayMS *int64
+		var retryAfterSource *string
+		if evidence, ok := NormalizeRetryAfter(final.RetryAfter, final.ResponseDate, attempt.AttemptedAt, attempt.Policy.RetryAfterCap); ok {
+			delay := evidence.Delay.Milliseconds()
+			retryAfterDelayMS, retryAfterSource = &delay, &evidence.Source
+		}
 		outcomeText := string(outcome)
 		rows, err := queries.FinalizeWebhookAttempt(ctx, sqlcgen.FinalizeWebhookAttemptParams{
 			ResponseHeaderBytes: values.headerBytes, ResponseBodyBytes: values.bodyBytes, ResponseStatus: values.status,
-			RetryAfter: retryAfter, OutcomeClass: &outcomeText, FinalizedAt: pgtime(finalizedAt),
+			RetryAfterDelayMs: retryAfterDelayMS, RetryAfterSource: retryAfterSource,
+			OutcomeClass: &outcomeText, FinalizedAt: pgtime(finalizedAt),
 			OwnerScope: identity.OwnerScope, DeliveryID: identity.DeliveryID, CycleNumber: identity.Cycle,
 			AttemptID: identity.AttemptID, Fence: identity.Fence, DeliveryState: update.deliveryState,
 			NextDueAt: pgtime(update.nextDueAt), CumulativeSummary: string(update.summary), TerminalAt: update.terminalAt,

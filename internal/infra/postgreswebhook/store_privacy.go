@@ -42,6 +42,19 @@ func (s *Store) RequestEventPrivacyDeletion(ctx context.Context, request ActionR
 		if err != nil {
 			return fmt.Errorf("read webhook event for privacy: %w", err)
 		}
+		if _, err := queries.LockWebhookEventDeliveriesForPrivacy(ctx, sqlcgen.LockWebhookEventDeliveriesForPrivacyParams{OwnerScope: request.OwnerScope, BusinessEventID: request.TargetID}); err != nil {
+			return fmt.Errorf("lock webhook deliveries for privacy: %w", err)
+		}
+		attempts, err := queries.LockWebhookEventAttemptsForPrivacy(ctx, sqlcgen.LockWebhookEventAttemptsForPrivacyParams{OwnerScope: request.OwnerScope, BusinessEventID: request.TargetID})
+		if err != nil {
+			return fmt.Errorf("lock webhook attempts for privacy: %w", err)
+		}
+		for _, attempt := range attempts {
+			if attempt.MayHaveSent || attempt.SendAuthorized {
+				event.LastSemanticClass = string(OutcomeUnknown)
+				break
+			}
+		}
 		deliveries, err := json.Marshal(event.DeliveryIdentities)
 		if err != nil {
 			return fmt.Errorf("encode webhook deletion identities: %w", err)
@@ -129,6 +142,24 @@ func (s *Store) RequestNamespaceRetirement(ctx context.Context, request ActionRe
 			}
 		} else if err != nil {
 			return fmt.Errorf("read webhook namespace tombstone: %w", err)
+		}
+		if _, err := queries.LockWebhookNamespaceDestinationsForPrivacy(ctx, request.OwnerScope); err != nil {
+			return fmt.Errorf("lock webhook namespace destinations: %w", err)
+		}
+		if _, err := queries.LockWebhookNamespaceDeliveriesForPrivacy(ctx, request.OwnerScope); err != nil {
+			return fmt.Errorf("lock webhook namespace deliveries: %w", err)
+		}
+		attempts, err := queries.LockWebhookNamespaceAttemptsForPrivacy(ctx, request.OwnerScope)
+		if err != nil {
+			return fmt.Errorf("lock webhook namespace attempts: %w", err)
+		}
+		for _, attempt := range attempts {
+			if attempt.MayHaveSent || attempt.SendAuthorized {
+				if _, err := queries.MarkWebhookNamespaceTombstoneUnknown(ctx, sqlcgen.MarkWebhookNamespaceTombstoneUnknownParams{OwnerScope: request.OwnerScope, ActionID: request.ActionID}); err != nil {
+					return fmt.Errorf("mark webhook namespace ambiguity: %w", err)
+				}
+				break
+			}
 		}
 		ownerScope := request.OwnerScope
 		if err := queries.ReleaseWebhookNamespaceCapacity(ctx, &ownerScope); err != nil {

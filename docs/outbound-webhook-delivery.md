@@ -24,12 +24,16 @@ receiver verifies:
 
 - `Webhook-Id`: the stable delivery ID;
 - `Webhook-Timestamp`: the attempt's Unix seconds;
-- `Webhook-Signature`: comma-separated `v1=<hex HMAC-SHA256>` values.
+- `Webhook-Signature`: one or two space-separated `v1,<base64 HMAC-SHA256>` values.
 
-The signed bytes are `webhook-signature-v1:<delivery-id>:<timestamp>:<body>`.
-Verify against the active key and, during an authorized overlap, its
-predecessor; compare MACs in constant time. Enforce a receiver-owned replay
-window and deduplicate by `Webhook-Id`. Retries and redrives are intentionally
+The signed bytes are the exact raw sequence
+`<Webhook-Id>.<Webhook-Timestamp>.<request-body>`. Do not parse, normalize, or
+re-encode the body before verification. Base64-decode each supported `v1`
+entry, compute HMAC-SHA256 with the active key and, during an authorized
+overlap, its predecessor, then compare MACs in constant time. The wire format
+does not carry an internal key reference: overlapping signatures are the
+rotation mechanism. Reject timestamps outside a receiver-owned replay window
+and deduplicate by `Webhook-Id`. Retries and redrives are intentionally
 at-least-once and may arrive duplicated or out of order. An HTTP 2xx proves
 receiver acceptance, not exactly-once business processing.
 
@@ -47,6 +51,12 @@ manifest revision before changing durable key authority. Retain the predecessor
 through every referenced delivery and overlap horizon, drain incompatible
 replicas, and only then remove old bytes. Revisions only move forward. Never put
 the manifest in YAML, a config file, logs, metrics, traces, or an action note.
+Every accepted destination policy must fit the running worker's attempt,
+header, response-body, drain, concurrency, delivery-age, and retention caps and
+must admit the event's exact content type, schema version, and body size.
+Automatic pause is deliberately unavailable: the store rejects the flag,
+pause fields, and a pause operator action until a complete policy and engine
+are implemented.
 
 ## Worker operation
 
@@ -78,6 +88,10 @@ a new cycle without changing the accepted delivery ID or body. Retention and
 privacy run in bounded, restartable batches. A privacy or namespace tombstone
 is permanent authority against resurrection; external secret erasure remains a
 separate controlled operation after no durable reference remains.
+Migration `000006_postgres_webhook_retention.sql` is the additive upgrade from
+the merged baseline. Cleanup independently expires payload, attempt, action,
+destination, and key-reference evidence in dependency order; production
+rollback is fix-and-roll-forward, never migration `Down` after erasure.
 
 ## Rollout limit
 

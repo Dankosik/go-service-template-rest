@@ -140,7 +140,7 @@ WHERE owner_scope = $7 AND destination_id = $8
 type ApplyWebhookKeyRotationParams struct {
 	RequiredSecretRevision  int64
 	KeyStateRevision        int64
-	ActiveKeyReference      string
+	ActiveKeyReference      *string
 	PredecessorKeyReference *string
 	PredecessorValidUntil   pgtype.Timestamptz
 	UpdatedAt               pgtype.Timestamptz
@@ -274,33 +274,157 @@ func (q *Queries) ClaimWebhookDelivery(ctx context.Context, arg ClaimWebhookDeli
 	return result.RowsAffected(), nil
 }
 
-const cleanupRetainedWebhookEvents = `-- name: CleanupRetainedWebhookEvents :one
+const cleanupRetainedWebhookActions = `-- name: CleanupRetainedWebhookActions :one
 WITH candidates AS (
-    SELECT e.owner_scope, e.business_event_id
-    FROM webhook_events e
-    WHERE NOT EXISTS (
-        SELECT 1 FROM webhook_deliveries d
-        WHERE d.owner_scope = e.owner_scope AND d.business_event_id = e.business_event_id
-          AND (d.state <> 'terminal' OR d.redrive_eligible_until > $1)
-    )
-    ORDER BY e.owner_scope, e.business_event_id
+    SELECT action.owner_scope, action.action_id
+    FROM webhook_operator_actions action
+    WHERE action.retained_until <= $1
+      AND NOT EXISTS (
+        SELECT 1 FROM webhook_cycles cycle
+        JOIN webhook_deliveries d
+          ON d.owner_scope = cycle.owner_scope AND d.delivery_id = cycle.delivery_id
+        WHERE cycle.owner_scope = action.owner_scope AND cycle.authorizing_action_id = action.action_id
+          AND (cycle.disposition = 'active' OR d.state <> 'terminal'
+            OR d.cumulative_summary = 'outcome_unknown'
+            OR d.redrive_eligible_until > $1
+            OR d.terminal_retained_until > $1
+            OR EXISTS (SELECT 1 FROM webhook_attempts a WHERE a.owner_scope = d.owner_scope AND a.delivery_id = d.delivery_id))
+      )
+    ORDER BY action.retained_until, action.owner_scope, action.action_id
     LIMIT $2
-    FOR UPDATE SKIP LOCKED
+    FOR UPDATE OF action SKIP LOCKED
 ), deleted AS (
-    DELETE FROM webhook_events e USING candidates c
-    WHERE e.owner_scope = c.owner_scope AND e.business_event_id = c.business_event_id
-    RETURNING 1
+    DELETE FROM webhook_operator_actions action USING candidates c
+    WHERE action.owner_scope = c.owner_scope AND action.action_id = c.action_id RETURNING 1
 )
 SELECT count(*) FROM deleted
 `
 
-type CleanupRetainedWebhookEventsParams struct {
+type CleanupRetainedWebhookActionsParams struct {
 	SampledAt pgtype.Timestamptz
 	BatchSize int32
 }
 
-func (q *Queries) CleanupRetainedWebhookEvents(ctx context.Context, arg CleanupRetainedWebhookEventsParams) (int64, error) {
-	row := q.db.QueryRow(ctx, cleanupRetainedWebhookEvents, arg.SampledAt, arg.BatchSize)
+func (q *Queries) CleanupRetainedWebhookActions(ctx context.Context, arg CleanupRetainedWebhookActionsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, cleanupRetainedWebhookActions, arg.SampledAt, arg.BatchSize)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const cleanupRetainedWebhookAttempts = `-- name: CleanupRetainedWebhookAttempts :one
+WITH candidates AS (
+    SELECT a.owner_scope, a.delivery_id, a.cycle_number, a.attempt_id
+    FROM webhook_attempts a
+    JOIN webhook_deliveries d
+      ON d.owner_scope = a.owner_scope AND d.delivery_id = a.delivery_id
+    WHERE a.finalized_at IS NOT NULL AND a.retained_until <= $1
+      AND d.state = 'terminal' AND d.redrive_eligible_until <= $1
+      AND d.cumulative_summary <> 'outcome_unknown'
+    ORDER BY a.retained_until, a.owner_scope, a.delivery_id, a.cycle_number, a.attempt_id
+    LIMIT $2
+    FOR UPDATE OF a SKIP LOCKED
+), deleted AS (
+    DELETE FROM webhook_attempts a USING candidates c
+    WHERE a.owner_scope = c.owner_scope AND a.delivery_id = c.delivery_id
+      AND a.cycle_number = c.cycle_number AND a.attempt_id = c.attempt_id RETURNING 1
+)
+SELECT count(*) FROM deleted
+`
+
+type CleanupRetainedWebhookAttemptsParams struct {
+	SampledAt pgtype.Timestamptz
+	BatchSize int32
+}
+
+func (q *Queries) CleanupRetainedWebhookAttempts(ctx context.Context, arg CleanupRetainedWebhookAttemptsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, cleanupRetainedWebhookAttempts, arg.SampledAt, arg.BatchSize)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const cleanupRetainedWebhookDeliveries = `-- name: CleanupRetainedWebhookDeliveries :one
+WITH candidates AS (
+    SELECT d.owner_scope, d.delivery_id
+    FROM webhook_deliveries d
+    WHERE d.state = 'terminal' AND d.cumulative_summary <> 'outcome_unknown'
+      AND d.redrive_eligible_until <= $1
+      AND d.terminal_retained_until <= $1
+      AND NOT EXISTS (SELECT 1 FROM webhook_attempts a WHERE a.owner_scope = d.owner_scope AND a.delivery_id = d.delivery_id)
+      AND NOT EXISTS (SELECT 1 FROM webhook_operator_actions action WHERE action.owner_scope = d.owner_scope AND action.target_kind = 'delivery' AND action.target_id = d.delivery_id)
+    ORDER BY d.terminal_retained_until, d.owner_scope, d.delivery_id
+    LIMIT $2
+    FOR UPDATE OF d SKIP LOCKED
+), deleted AS (
+    DELETE FROM webhook_deliveries d USING candidates c
+    WHERE d.owner_scope = c.owner_scope AND d.delivery_id = c.delivery_id RETURNING 1
+)
+SELECT count(*) FROM deleted
+`
+
+type CleanupRetainedWebhookDeliveriesParams struct {
+	SampledAt pgtype.Timestamptz
+	BatchSize int32
+}
+
+func (q *Queries) CleanupRetainedWebhookDeliveries(ctx context.Context, arg CleanupRetainedWebhookDeliveriesParams) (int64, error) {
+	row := q.db.QueryRow(ctx, cleanupRetainedWebhookDeliveries, arg.SampledAt, arg.BatchSize)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const cleanupRetainedWebhookDestinations = `-- name: CleanupRetainedWebhookDestinations :one
+WITH candidates AS (
+    SELECT g.owner_scope, g.destination_id, g.generation
+    FROM webhook_destinations g
+    WHERE g.disposition = 'retired'
+      AND g.destination_retained_until <= $1
+      AND g.key_references_erased_at IS NOT NULL
+      AND NOT EXISTS (SELECT 1 FROM webhook_deliveries d WHERE d.owner_scope = g.owner_scope AND d.destination_id = g.destination_id AND d.destination_generation = g.generation)
+      AND NOT EXISTS (SELECT 1 FROM webhook_operator_actions action WHERE action.owner_scope = g.owner_scope AND action.target_kind = 'destination' AND action.target_id = g.destination_id AND action.target_generation = g.generation)
+    ORDER BY g.destination_retained_until, g.owner_scope, g.destination_id, g.generation
+    LIMIT $2
+    FOR UPDATE OF g SKIP LOCKED
+), deleted AS (
+    DELETE FROM webhook_destinations g USING candidates c
+    WHERE g.owner_scope = c.owner_scope AND g.destination_id = c.destination_id
+      AND g.generation = c.generation RETURNING 1
+)
+SELECT count(*) FROM deleted
+`
+
+type CleanupRetainedWebhookDestinationsParams struct {
+	SampledAt pgtype.Timestamptz
+	BatchSize int32
+}
+
+func (q *Queries) CleanupRetainedWebhookDestinations(ctx context.Context, arg CleanupRetainedWebhookDestinationsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, cleanupRetainedWebhookDestinations, arg.SampledAt, arg.BatchSize)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const cleanupRetainedWebhookEvents = `-- name: CleanupRetainedWebhookEvents :one
+WITH candidates AS (
+    SELECT e.owner_scope, e.business_event_id
+    FROM webhook_events e
+    WHERE e.body IS NULL
+      AND NOT EXISTS (SELECT 1 FROM webhook_deliveries d WHERE d.owner_scope = e.owner_scope AND d.business_event_id = e.business_event_id)
+    ORDER BY e.owner_scope, e.business_event_id
+    LIMIT $1
+    FOR UPDATE OF e SKIP LOCKED
+), deleted AS (
+    DELETE FROM webhook_events e USING candidates c
+    WHERE e.owner_scope = c.owner_scope AND e.business_event_id = c.business_event_id RETURNING 1
+)
+SELECT count(*) FROM deleted
+`
+
+func (q *Queries) CleanupRetainedWebhookEvents(ctx context.Context, batchSize int32) (int64, error) {
+	row := q.db.QueryRow(ctx, cleanupRetainedWebhookEvents, batchSize)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -498,38 +622,198 @@ func (q *Queries) DeleteWebhookNamespaceDestinations(ctx context.Context, ownerS
 	return err
 }
 
+const eraseRetainedWebhookKeyReferences = `-- name: EraseRetainedWebhookKeyReferences :one
+WITH candidates AS (
+    SELECT g.owner_scope, g.destination_id, g.generation
+    FROM webhook_destinations g
+    WHERE g.disposition = 'retired' AND g.active_key_reference IS NOT NULL
+      AND g.key_references_retained_until <= $1
+      AND NOT EXISTS (SELECT 1 FROM webhook_deliveries d WHERE d.owner_scope = g.owner_scope AND d.destination_id = g.destination_id AND d.destination_generation = g.generation)
+    ORDER BY g.key_references_retained_until, g.owner_scope, g.destination_id, g.generation
+    LIMIT $2
+    FOR UPDATE OF g SKIP LOCKED
+), erased AS (
+    UPDATE webhook_destinations g
+    SET active_key_reference = NULL, predecessor_key_reference = NULL,
+        predecessor_valid_until = NULL, key_references_erased_at = $1,
+        updated_at = $1
+    FROM candidates c
+    WHERE g.owner_scope = c.owner_scope AND g.destination_id = c.destination_id
+      AND g.generation = c.generation
+    RETURNING 1
+)
+SELECT count(*) FROM erased
+`
+
+type EraseRetainedWebhookKeyReferencesParams struct {
+	SampledAt pgtype.Timestamptz
+	BatchSize int32
+}
+
+func (q *Queries) EraseRetainedWebhookKeyReferences(ctx context.Context, arg EraseRetainedWebhookKeyReferencesParams) (int64, error) {
+	row := q.db.QueryRow(ctx, eraseRetainedWebhookKeyReferences, arg.SampledAt, arg.BatchSize)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const eraseRetainedWebhookPayloads = `-- name: EraseRetainedWebhookPayloads :one
+WITH candidates AS (
+    SELECT e.owner_scope, e.business_event_id
+    FROM webhook_events e
+    WHERE e.body IS NOT NULL AND e.payload_retained_until <= $1
+      AND NOT EXISTS (
+        SELECT 1 FROM webhook_deliveries d
+        WHERE d.owner_scope = e.owner_scope AND d.business_event_id = e.business_event_id
+          AND (d.state <> 'terminal' OR d.redrive_eligible_until > $1
+            OR d.cumulative_summary = 'outcome_unknown')
+    )
+    ORDER BY e.owner_scope, e.business_event_id
+    LIMIT $2
+    FOR UPDATE SKIP LOCKED
+), erased AS (
+    UPDATE webhook_events e
+    SET body = NULL, payload_erased_at = $1
+    FROM candidates c
+    WHERE e.owner_scope = c.owner_scope AND e.business_event_id = c.business_event_id
+    RETURNING 1
+)
+SELECT count(*) FROM erased
+`
+
+type EraseRetainedWebhookPayloadsParams struct {
+	SampledAt pgtype.Timestamptz
+	BatchSize int32
+}
+
+func (q *Queries) EraseRetainedWebhookPayloads(ctx context.Context, arg EraseRetainedWebhookPayloadsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, eraseRetainedWebhookPayloads, arg.SampledAt, arg.BatchSize)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const extendWebhookDestinationRetention = `-- name: ExtendWebhookDestinationRetention :execrows
+UPDATE webhook_destinations
+SET destination_retained_until = GREATEST(destination_retained_until, $1),
+    key_references_retained_until = GREATEST(key_references_retained_until, $2),
+    updated_at = GREATEST(updated_at, $3)
+WHERE owner_scope = $4
+  AND destination_id = $5
+  AND generation = $6
+  AND disposition = 'active'
+  AND active_key_reference IS NOT NULL
+`
+
+type ExtendWebhookDestinationRetentionParams struct {
+	DestinationRetainedUntil   pgtype.Timestamptz
+	KeyReferencesRetainedUntil pgtype.Timestamptz
+	UpdatedAt                  pgtype.Timestamptz
+	OwnerScope                 string
+	DestinationID              string
+	Generation                 int64
+}
+
+func (q *Queries) ExtendWebhookDestinationRetention(ctx context.Context, arg ExtendWebhookDestinationRetentionParams) (int64, error) {
+	result, err := q.db.Exec(ctx, extendWebhookDestinationRetention,
+		arg.DestinationRetainedUntil,
+		arg.KeyReferencesRetainedUntil,
+		arg.UpdatedAt,
+		arg.OwnerScope,
+		arg.DestinationID,
+		arg.Generation,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const finalizeExpiredWebhookCycles = `-- name: FinalizeExpiredWebhookCycles :one
+WITH candidates AS (
+    SELECT d.owner_scope, d.delivery_id, d.current_cycle, d.cumulative_summary
+    FROM webhook_deliveries d
+    JOIN webhook_cycles c
+      ON c.owner_scope = d.owner_scope AND c.delivery_id = d.delivery_id AND c.cycle_number = d.current_cycle
+    WHERE d.state IN ('ready', 'scheduled') AND c.disposition = 'active'
+      AND (c.deadline_at <= $1 OR d.active_retained_until <= $1)
+      AND NOT EXISTS (
+        SELECT 1 FROM webhook_attempts a
+        WHERE a.owner_scope = d.owner_scope AND a.delivery_id = d.delivery_id
+          AND a.cycle_number = d.current_cycle AND a.finalized_at IS NULL
+      )
+    ORDER BY c.deadline_at, d.owner_scope, d.delivery_id
+    LIMIT $2
+    FOR UPDATE OF d, c SKIP LOCKED
+), cycles AS (
+    UPDATE webhook_cycles c
+    SET disposition = CASE WHEN x.cumulative_summary = 'outcome_unknown' THEN 'outcome_unknown' ELSE 'attempts_exhausted' END,
+        finalized_at = $1
+    FROM candidates x
+    WHERE c.owner_scope = x.owner_scope AND c.delivery_id = x.delivery_id
+      AND c.cycle_number = x.current_cycle AND c.disposition = 'active'
+    RETURNING c.owner_scope, c.delivery_id
+), deliveries AS (
+    UPDATE webhook_deliveries d
+    SET state = CASE WHEN d.cumulative_summary = 'outcome_unknown' THEN 'suspended' ELSE 'terminal' END,
+        cumulative_summary = CASE WHEN d.cumulative_summary = 'outcome_unknown' THEN 'outcome_unknown' ELSE 'attempts_exhausted' END,
+        sendable = false, lease_owner = NULL, lease_expires_at = NULL,
+        terminal_at = $1, updated_at = $1
+    FROM cycles c
+    WHERE d.owner_scope = c.owner_scope AND d.delivery_id = c.delivery_id
+    RETURNING 1
+)
+SELECT count(*) FROM deliveries
+`
+
+type FinalizeExpiredWebhookCyclesParams struct {
+	SampledAt pgtype.Timestamptz
+	BatchSize int32
+}
+
+func (q *Queries) FinalizeExpiredWebhookCycles(ctx context.Context, arg FinalizeExpiredWebhookCyclesParams) (int64, error) {
+	row := q.db.QueryRow(ctx, finalizeExpiredWebhookCycles, arg.SampledAt, arg.BatchSize)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const finalizeWebhookAttempt = `-- name: FinalizeWebhookAttempt :one
 WITH finalized AS (
     UPDATE webhook_attempts a
     SET response_header_bytes = $1,
         response_body_bytes = $2,
-        response_status = $3, retry_after = $4,
-        outcome_class = $5, finalized_at = $6
-    WHERE a.owner_scope = $7 AND a.delivery_id = $8
-      AND a.cycle_number = $9 AND a.attempt_id = $10
-      AND a.fence = $11 AND a.finalized_at IS NULL
-    RETURNING a.capacity_slot
+        response_status = $3,
+        retry_after_delay_ms = $4, retry_after_source = $5,
+        outcome_class = $6, finalized_at = $7
+    WHERE a.owner_scope = $8 AND a.delivery_id = $9
+      AND a.cycle_number = $10 AND a.attempt_id = $11
+      AND a.fence = $12 AND a.finalized_at IS NULL
+    RETURNING a.owner_scope, a.delivery_id, a.cycle_number, a.attempt_id, a.fence, a.capacity_slot
 ), released AS (
     UPDATE webhook_capacity_slots s
     SET owner_scope = NULL, delivery_id = NULL, cycle_number = NULL, attempt_id = NULL,
         lease_expires_at = NULL, fence = NULL
-    FROM finalized f WHERE s.slot_number = f.capacity_slot
+    FROM finalized f
+    WHERE s.slot_number = f.capacity_slot AND s.owner_scope = f.owner_scope
+      AND s.delivery_id = f.delivery_id AND s.cycle_number = f.cycle_number
+      AND s.attempt_id = f.attempt_id AND s.fence = f.fence
 ), delivery AS (
     UPDATE webhook_deliveries d
-    SET state = $12, next_due_at = $13,
-        lease_owner = NULL, lease_expires_at = NULL, cumulative_summary = $14,
-        terminal_at = $15, updated_at = $6
+    SET state = $13, next_due_at = $14,
+        lease_owner = NULL, lease_expires_at = NULL, cumulative_summary = $15,
+        terminal_at = $16, updated_at = $7
     FROM finalized
-    WHERE d.owner_scope = $7 AND d.delivery_id = $8
-      AND d.fence = $11
+    WHERE d.owner_scope = $8 AND d.delivery_id = $9
+      AND d.fence = $12
     RETURNING d.delivery_id
 ), cycle AS (
     UPDATE webhook_cycles c
-    SET disposition = $16, finalized_at = $15
+    SET disposition = $17, finalized_at = $16
     FROM finalized
-    WHERE c.owner_scope = $7 AND c.delivery_id = $8
-      AND c.cycle_number = $9 AND c.disposition = 'active'
-      AND $16 <> 'active'
+    WHERE c.owner_scope = $8 AND c.delivery_id = $9
+      AND c.cycle_number = $10 AND c.disposition = 'active'
+      AND $17 <> 'active'
 )
 SELECT count(*) FROM delivery
 `
@@ -538,7 +822,8 @@ type FinalizeWebhookAttemptParams struct {
 	ResponseHeaderBytes *int32
 	ResponseBodyBytes   *int32
 	ResponseStatus      *int32
-	RetryAfter          *string
+	RetryAfterDelayMs   *int64
+	RetryAfterSource    *string
 	OutcomeClass        *string
 	FinalizedAt         pgtype.Timestamptz
 	OwnerScope          string
@@ -558,7 +843,8 @@ func (q *Queries) FinalizeWebhookAttempt(ctx context.Context, arg FinalizeWebhoo
 		arg.ResponseHeaderBytes,
 		arg.ResponseBodyBytes,
 		arg.ResponseStatus,
-		arg.RetryAfter,
+		arg.RetryAfterDelayMs,
+		arg.RetryAfterSource,
 		arg.OutcomeClass,
 		arg.FinalizedAt,
 		arg.OwnerScope,
@@ -602,11 +888,11 @@ func (q *Queries) IncrementWebhookCycleAttempts(ctx context.Context, arg Increme
 const insertWebhookAttempt = `-- name: InsertWebhookAttempt :exec
 INSERT INTO webhook_attempts (
     owner_scope, delivery_id, cycle_number, attempt_id, fence, capacity_slot,
-    attempted_at, lease_expires_at, payload_digest, payload_bytes
+    attempted_at, lease_expires_at, payload_digest, payload_bytes, retained_until
 ) VALUES (
     $1, $2, $3, $4,
     $5, $6, $7, $8,
-    $9, $10
+    $9, $10, $11
 )
 `
 
@@ -621,6 +907,7 @@ type InsertWebhookAttemptParams struct {
 	LeaseExpiresAt pgtype.Timestamptz
 	PayloadDigest  []byte
 	PayloadBytes   int32
+	RetainedUntil  pgtype.Timestamptz
 }
 
 func (q *Queries) InsertWebhookAttempt(ctx context.Context, arg InsertWebhookAttemptParams) error {
@@ -635,6 +922,7 @@ func (q *Queries) InsertWebhookAttempt(ctx context.Context, arg InsertWebhookAtt
 		arg.LeaseExpiresAt,
 		arg.PayloadDigest,
 		arg.PayloadBytes,
+		arg.RetainedUntil,
 	)
 	return err
 }
@@ -694,12 +982,15 @@ const insertWebhookDelivery = `-- name: InsertWebhookDelivery :execrows
 INSERT INTO webhook_deliveries (
     owner_scope, delivery_id, business_event_id, fanout_snapshot_id, destination_id,
     destination_generation, url_snapshot, policy_snapshot, next_due_at,
-    redrive_eligible_until, created_at, updated_at
+    redrive_eligible_until, active_retained_until, terminal_retained_until,
+    attempts_retained_until, actions_retained_until, created_at, updated_at
 ) VALUES (
     $1, $2, $3,
     $4, $5, $6,
     $7, $8, $9,
-    $10, $11, $11
+    $10, $11,
+    $12, $13,
+    $14, $15, $15
 )
 ON CONFLICT DO NOTHING
 `
@@ -715,6 +1006,10 @@ type InsertWebhookDeliveryParams struct {
 	PolicySnapshot        []byte
 	NextDueAt             pgtype.Timestamptz
 	RedriveEligibleUntil  pgtype.Timestamptz
+	ActiveRetainedUntil   pgtype.Timestamptz
+	TerminalRetainedUntil pgtype.Timestamptz
+	AttemptsRetainedUntil pgtype.Timestamptz
+	ActionsRetainedUntil  pgtype.Timestamptz
 	CreatedAt             pgtype.Timestamptz
 }
 
@@ -730,6 +1025,10 @@ func (q *Queries) InsertWebhookDelivery(ctx context.Context, arg InsertWebhookDe
 		arg.PolicySnapshot,
 		arg.NextDueAt,
 		arg.RedriveEligibleUntil,
+		arg.ActiveRetainedUntil,
+		arg.TerminalRetainedUntil,
+		arg.AttemptsRetainedUntil,
+		arg.ActionsRetainedUntil,
 		arg.CreatedAt,
 	)
 	if err != nil {
@@ -743,7 +1042,8 @@ INSERT INTO webhook_destinations (
     owner_scope, destination_id, generation, ownership_verification_receipt, url,
     selection_revision, payload_version_preference, signature_profile,
     signing_authority_binding, policy, policy_fingerprint, destination_concurrency,
-    global_concurrency, required_secret_revision, active_key_reference, created_at, updated_at
+    global_concurrency, required_secret_revision, active_key_reference,
+    destination_retained_until, key_references_retained_until, created_at, updated_at
 ) VALUES (
     $1, $2, $3,
     $4, $5, $6,
@@ -751,7 +1051,8 @@ INSERT INTO webhook_destinations (
     $9, $10, $11,
     $12, $13,
     $14, $15,
-    $16, $16
+    $16, $17,
+    $18, $18
 )
 ON CONFLICT (owner_scope, destination_id, generation) DO NOTHING
 `
@@ -771,7 +1072,9 @@ type InsertWebhookDestinationParams struct {
 	DestinationConcurrency       int32
 	GlobalConcurrency            int32
 	RequiredSecretRevision       int64
-	ActiveKeyReference           string
+	ActiveKeyReference           *string
+	DestinationRetainedUntil     pgtype.Timestamptz
+	KeyReferencesRetainedUntil   pgtype.Timestamptz
 	CreatedAt                    pgtype.Timestamptz
 }
 
@@ -792,6 +1095,8 @@ func (q *Queries) InsertWebhookDestination(ctx context.Context, arg InsertWebhoo
 		arg.GlobalConcurrency,
 		arg.RequiredSecretRevision,
 		arg.ActiveKeyReference,
+		arg.DestinationRetainedUntil,
+		arg.KeyReferencesRetainedUntil,
 		arg.CreatedAt,
 	)
 	if err != nil {
@@ -804,13 +1109,14 @@ const insertWebhookEvent = `-- name: InsertWebhookEvent :execrows
 INSERT INTO webhook_events (
     owner_scope, business_event_id, acceptance_id, fanout_snapshot_id, event_type,
     business_schema_version, content_type, body, delivery_envelope_version,
-    subscriber_policy_revision, intent_fingerprint, retention_policy_identity, accepted_at
+    subscriber_policy_revision, intent_fingerprint, retention_policy_identity,
+    payload_retained_until, accepted_at
 ) VALUES (
     $1, $2, $3,
     $4, $5, $6,
     $7, $8, $9,
     $10, $11,
-    $12, $13
+    $12, $13, $14
 )
 ON CONFLICT DO NOTHING
 `
@@ -828,6 +1134,7 @@ type InsertWebhookEventParams struct {
 	SubscriberPolicyRevision string
 	IntentFingerprint        []byte
 	RetentionPolicyIdentity  string
+	PayloadRetainedUntil     pgtype.Timestamptz
 	AcceptedAt               pgtype.Timestamptz
 }
 
@@ -845,6 +1152,7 @@ func (q *Queries) InsertWebhookEvent(ctx context.Context, arg InsertWebhookEvent
 		arg.SubscriberPolicyRevision,
 		arg.IntentFingerprint,
 		arg.RetentionPolicyIdentity,
+		arg.PayloadRetainedUntil,
 		arg.AcceptedAt,
 	)
 	if err != nil {
@@ -891,13 +1199,13 @@ const insertWebhookOperatorAction = `-- name: InsertWebhookOperatorAction :execr
 INSERT INTO webhook_operator_actions (
     owner_scope, action_id, encoding_version, request_fingerprint, actor_reference,
     action_kind, target_kind, target_id, target_generation, expected_state, reason,
-    duplicate_risk_acknowledged, result, created_at, completed_at
+    duplicate_risk_acknowledged, result, retained_until, created_at, completed_at
 ) VALUES (
     $1, $2, 'webhook-operator-action-v1',
     $3, $4, $5,
     $6, $7, $8,
     $9, $10, $11,
-    $12, $13, $13
+    $12, $13, $14, $14
 )
 ON CONFLICT DO NOTHING
 `
@@ -915,6 +1223,7 @@ type InsertWebhookOperatorActionParams struct {
 	Reason                    string
 	DuplicateRiskAcknowledged bool
 	Result                    string
+	RetainedUntil             pgtype.Timestamptz
 	CreatedAt                 pgtype.Timestamptz
 }
 
@@ -932,6 +1241,7 @@ func (q *Queries) InsertWebhookOperatorAction(ctx context.Context, arg InsertWeb
 		arg.Reason,
 		arg.DuplicateRiskAcknowledged,
 		arg.Result,
+		arg.RetainedUntil,
 		arg.CreatedAt,
 	)
 	if err != nil {
@@ -1037,6 +1347,7 @@ SET owner_scope = $1, delivery_id = $2,
     cycle_number = $3, attempt_id = $4,
     lease_expires_at = $5, fence = $6
 WHERE slot_number = $7 AND capacity_revision = $8
+  AND attempt_id IS NULL
 `
 
 type LeaseWebhookCapacitySlotParams struct {
@@ -1215,9 +1526,10 @@ func (q *Queries) ListWebhookAcceptanceDeliveries(ctx context.Context, arg ListW
 }
 
 const listWebhookClaimDestinations = `-- name: ListWebhookClaimDestinations :many
-SELECT d.owner_scope, d.destination_id, d.generation, d.ownership_verification_receipt, d.url, d.selection_revision, d.payload_version_preference, d.signature_profile, d.signing_authority_binding, d.policy, d.policy_fingerprint, d.destination_concurrency, d.global_concurrency, d.control_revision, d.required_secret_revision, d.key_state_revision, d.active_key_reference, d.predecessor_key_reference, d.predecessor_valid_until, d.disposition, d.last_considered_sequence, d.created_at, d.updated_at
+SELECT d.owner_scope, d.destination_id, d.generation, d.ownership_verification_receipt, d.url, d.selection_revision, d.payload_version_preference, d.signature_profile, d.signing_authority_binding, d.policy, d.policy_fingerprint, d.destination_concurrency, d.global_concurrency, d.control_revision, d.required_secret_revision, d.key_state_revision, d.active_key_reference, d.predecessor_key_reference, d.predecessor_valid_until, d.disposition, d.last_considered_sequence, d.created_at, d.updated_at, d.destination_retained_until, d.key_references_retained_until, d.key_references_erased_at
 FROM webhook_destinations d
 WHERE d.disposition = 'active'
+  AND d.active_key_reference IS NOT NULL
   AND d.required_secret_revision <= $1
   AND EXISTS (
       SELECT 1 FROM webhook_deliveries w
@@ -1272,6 +1584,9 @@ func (q *Queries) ListWebhookClaimDestinations(ctx context.Context, arg ListWebh
 			&i.LastConsideredSequence,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.DestinationRetainedUntil,
+			&i.KeyReferencesRetainedUntil,
+			&i.KeyReferencesErasedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -1287,7 +1602,7 @@ const listWebhookSecretBindings = `-- name: ListWebhookSecretBindings :many
 SELECT owner_scope, destination_id, required_secret_revision, active_key_reference,
        predecessor_key_reference, predecessor_valid_until
 FROM webhook_destinations
-WHERE disposition IN ('active', 'automatically_paused')
+WHERE disposition IN ('active', 'automatically_paused') AND active_key_reference IS NOT NULL
 ORDER BY owner_scope, destination_id, generation
 `
 
@@ -1295,7 +1610,7 @@ type ListWebhookSecretBindingsRow struct {
 	OwnerScope              string
 	DestinationID           string
 	RequiredSecretRevision  int64
-	ActiveKeyReference      string
+	ActiveKeyReference      *string
 	PredecessorKeyReference *string
 	PredecessorValidUntil   pgtype.Timestamptz
 }
@@ -1340,19 +1655,14 @@ const lockWebhookCapacitySlot = `-- name: LockWebhookCapacitySlot :one
 SELECT slot_number
 FROM webhook_capacity_slots
 WHERE capacity_revision = $1
-  AND (attempt_id IS NULL OR lease_expires_at <= $2)
+  AND attempt_id IS NULL
 ORDER BY slot_number
 LIMIT 1
 FOR UPDATE SKIP LOCKED
 `
 
-type LockWebhookCapacitySlotParams struct {
-	CapacityRevision int64
-	SampledAt        pgtype.Timestamptz
-}
-
-func (q *Queries) LockWebhookCapacitySlot(ctx context.Context, arg LockWebhookCapacitySlotParams) (int32, error) {
-	row := q.db.QueryRow(ctx, lockWebhookCapacitySlot, arg.CapacityRevision, arg.SampledAt)
+func (q *Queries) LockWebhookCapacitySlot(ctx context.Context, capacityRevision int64) (int32, error) {
+	row := q.db.QueryRow(ctx, lockWebhookCapacitySlot, capacityRevision)
 	var slot_number int32
 	err := row.Scan(&slot_number)
 	return slot_number, err
@@ -1369,10 +1679,19 @@ func (q *Queries) LockWebhookCapacityTable(ctx context.Context) error {
 
 const lockWebhookDeliveryForAction = `-- name: LockWebhookDeliveryForAction :one
 SELECT d.current_cycle, d.state, d.cumulative_summary, d.redrive_eligible_until,
-       d.destination_id, d.destination_generation, d.sendable, c.disposition, c.deadline_at
+       d.destination_id, d.destination_generation, d.sendable, c.disposition, c.deadline_at,
+       d.policy_snapshot, d.active_retained_until, d.terminal_retained_until,
+       d.attempts_retained_until, d.actions_retained_until,
+       g.disposition AS destination_disposition, g.required_secret_revision,
+       g.active_key_reference, g.destination_retained_until, g.key_references_retained_until,
+       CASE WHEN e.body IS NULL THEN false ELSE true END AS payload_retained, e.payload_retained_until
 FROM webhook_deliveries d
 JOIN webhook_cycles c
   ON c.owner_scope = d.owner_scope AND c.delivery_id = d.delivery_id AND c.cycle_number = d.current_cycle
+JOIN webhook_destinations g
+  ON g.owner_scope = d.owner_scope AND g.destination_id = d.destination_id AND g.generation = d.destination_generation
+JOIN webhook_events e
+  ON e.owner_scope = d.owner_scope AND e.business_event_id = d.business_event_id
 WHERE d.owner_scope = $1 AND d.delivery_id = $2
 FOR UPDATE OF d, c
 `
@@ -1383,15 +1702,27 @@ type LockWebhookDeliveryForActionParams struct {
 }
 
 type LockWebhookDeliveryForActionRow struct {
-	CurrentCycle          int64
-	State                 string
-	CumulativeSummary     string
-	RedriveEligibleUntil  pgtype.Timestamptz
-	DestinationID         string
-	DestinationGeneration int64
-	Sendable              bool
-	Disposition           string
-	DeadlineAt            pgtype.Timestamptz
+	CurrentCycle               int64
+	State                      string
+	CumulativeSummary          string
+	RedriveEligibleUntil       pgtype.Timestamptz
+	DestinationID              string
+	DestinationGeneration      int64
+	Sendable                   bool
+	Disposition                string
+	DeadlineAt                 pgtype.Timestamptz
+	PolicySnapshot             []byte
+	ActiveRetainedUntil        pgtype.Timestamptz
+	TerminalRetainedUntil      pgtype.Timestamptz
+	AttemptsRetainedUntil      pgtype.Timestamptz
+	ActionsRetainedUntil       pgtype.Timestamptz
+	DestinationDisposition     string
+	RequiredSecretRevision     int64
+	ActiveKeyReference         *string
+	DestinationRetainedUntil   pgtype.Timestamptz
+	KeyReferencesRetainedUntil pgtype.Timestamptz
+	PayloadRetained            bool
+	PayloadRetainedUntil       pgtype.Timestamptz
 }
 
 func (q *Queries) LockWebhookDeliveryForAction(ctx context.Context, arg LockWebhookDeliveryForActionParams) (LockWebhookDeliveryForActionRow, error) {
@@ -1407,12 +1738,24 @@ func (q *Queries) LockWebhookDeliveryForAction(ctx context.Context, arg LockWebh
 		&i.Sendable,
 		&i.Disposition,
 		&i.DeadlineAt,
+		&i.PolicySnapshot,
+		&i.ActiveRetainedUntil,
+		&i.TerminalRetainedUntil,
+		&i.AttemptsRetainedUntil,
+		&i.ActionsRetainedUntil,
+		&i.DestinationDisposition,
+		&i.RequiredSecretRevision,
+		&i.ActiveKeyReference,
+		&i.DestinationRetainedUntil,
+		&i.KeyReferencesRetainedUntil,
+		&i.PayloadRetained,
+		&i.PayloadRetainedUntil,
 	)
 	return i, err
 }
 
 const lockWebhookDueDelivery = `-- name: LockWebhookDueDelivery :one
-SELECT d.owner_scope, d.delivery_id, d.business_event_id, d.fanout_snapshot_id, d.destination_id, d.destination_generation, d.url_snapshot, d.policy_snapshot, d.state, d.current_cycle, d.next_due_at, d.lease_owner, d.lease_expires_at, d.fence, d.cumulative_summary, d.sendable, d.redrive_eligible_until, d.terminal_at, d.created_at, d.updated_at, e.body, e.content_type
+SELECT d.owner_scope, d.delivery_id, d.business_event_id, d.fanout_snapshot_id, d.destination_id, d.destination_generation, d.url_snapshot, d.policy_snapshot, d.state, d.current_cycle, d.next_due_at, d.lease_owner, d.lease_expires_at, d.fence, d.cumulative_summary, d.sendable, d.redrive_eligible_until, d.terminal_at, d.created_at, d.updated_at, d.active_retained_until, d.terminal_retained_until, d.attempts_retained_until, d.actions_retained_until, e.body, e.content_type, c.attempts_used
 FROM webhook_deliveries d
 JOIN webhook_events e
   ON e.owner_scope = d.owner_scope AND e.business_event_id = d.business_event_id
@@ -1457,8 +1800,13 @@ type LockWebhookDueDeliveryRow struct {
 	TerminalAt            pgtype.Timestamptz
 	CreatedAt             pgtype.Timestamptz
 	UpdatedAt             pgtype.Timestamptz
+	ActiveRetainedUntil   pgtype.Timestamptz
+	TerminalRetainedUntil pgtype.Timestamptz
+	AttemptsRetainedUntil pgtype.Timestamptz
+	ActionsRetainedUntil  pgtype.Timestamptz
 	Body                  []byte
 	ContentType           string
+	AttemptsUsed          int32
 }
 
 func (q *Queries) LockWebhookDueDelivery(ctx context.Context, arg LockWebhookDueDeliveryParams) (LockWebhookDueDeliveryRow, error) {
@@ -1490,10 +1838,95 @@ func (q *Queries) LockWebhookDueDelivery(ctx context.Context, arg LockWebhookDue
 		&i.TerminalAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ActiveRetainedUntil,
+		&i.TerminalRetainedUntil,
+		&i.AttemptsRetainedUntil,
+		&i.ActionsRetainedUntil,
 		&i.Body,
 		&i.ContentType,
+		&i.AttemptsUsed,
 	)
 	return i, err
+}
+
+const lockWebhookEventAttemptsForPrivacy = `-- name: LockWebhookEventAttemptsForPrivacy :many
+SELECT a.may_have_sent, a.send_authorized
+FROM webhook_attempts a
+JOIN webhook_deliveries d
+  ON d.owner_scope = a.owner_scope AND d.delivery_id = a.delivery_id
+JOIN webhook_capacity_slots s
+  ON s.slot_number = a.capacity_slot AND s.owner_scope = a.owner_scope
+  AND s.delivery_id = a.delivery_id AND s.cycle_number = a.cycle_number
+  AND s.attempt_id = a.attempt_id AND s.fence = a.fence
+WHERE d.owner_scope = $1 AND d.business_event_id = $2
+  AND a.finalized_at IS NULL
+ORDER BY a.delivery_id, a.cycle_number, a.attempt_id
+FOR UPDATE OF a, s
+`
+
+type LockWebhookEventAttemptsForPrivacyParams struct {
+	OwnerScope      string
+	BusinessEventID string
+}
+
+type LockWebhookEventAttemptsForPrivacyRow struct {
+	MayHaveSent    bool
+	SendAuthorized bool
+}
+
+func (q *Queries) LockWebhookEventAttemptsForPrivacy(ctx context.Context, arg LockWebhookEventAttemptsForPrivacyParams) ([]LockWebhookEventAttemptsForPrivacyRow, error) {
+	rows, err := q.db.Query(ctx, lockWebhookEventAttemptsForPrivacy, arg.OwnerScope, arg.BusinessEventID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []LockWebhookEventAttemptsForPrivacyRow
+	for rows.Next() {
+		var i LockWebhookEventAttemptsForPrivacyRow
+		if err := rows.Scan(&i.MayHaveSent, &i.SendAuthorized); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const lockWebhookEventDeliveriesForPrivacy = `-- name: LockWebhookEventDeliveriesForPrivacy :many
+SELECT d.delivery_id
+FROM webhook_deliveries d
+JOIN webhook_cycles c
+  ON c.owner_scope = d.owner_scope AND c.delivery_id = d.delivery_id AND c.cycle_number = d.current_cycle
+WHERE d.owner_scope = $1 AND d.business_event_id = $2
+ORDER BY d.delivery_id
+FOR UPDATE OF d, c
+`
+
+type LockWebhookEventDeliveriesForPrivacyParams struct {
+	OwnerScope      string
+	BusinessEventID string
+}
+
+func (q *Queries) LockWebhookEventDeliveriesForPrivacy(ctx context.Context, arg LockWebhookEventDeliveriesForPrivacyParams) ([]string, error) {
+	rows, err := q.db.Query(ctx, lockWebhookEventDeliveriesForPrivacy, arg.OwnerScope, arg.BusinessEventID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var delivery_id string
+		if err := rows.Scan(&delivery_id); err != nil {
+			return nil, err
+		}
+		items = append(items, delivery_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const lockWebhookFinalization = `-- name: LockWebhookFinalization :one
@@ -1505,7 +1938,10 @@ JOIN webhook_deliveries d
   ON d.owner_scope = a.owner_scope AND d.delivery_id = a.delivery_id
 JOIN webhook_cycles c
   ON c.owner_scope = a.owner_scope AND c.delivery_id = a.delivery_id AND c.cycle_number = a.cycle_number
-JOIN webhook_capacity_slots s ON s.slot_number = a.capacity_slot
+JOIN webhook_capacity_slots s
+  ON s.slot_number = a.capacity_slot AND s.owner_scope = a.owner_scope
+  AND s.delivery_id = a.delivery_id AND s.cycle_number = a.cycle_number
+  AND s.attempt_id = a.attempt_id AND s.fence = a.fence
 WHERE a.owner_scope = $1 AND a.delivery_id = $2
   AND a.cycle_number = $3 AND a.attempt_id = $4
   AND a.fence = $5 AND a.finalized_at IS NULL
@@ -1555,6 +1991,101 @@ func (q *Queries) LockWebhookFinalization(ctx context.Context, arg LockWebhookFi
 	return i, err
 }
 
+const lockWebhookNamespaceAttemptsForPrivacy = `-- name: LockWebhookNamespaceAttemptsForPrivacy :many
+SELECT a.may_have_sent, a.send_authorized
+FROM webhook_attempts a
+JOIN webhook_capacity_slots s
+  ON s.slot_number = a.capacity_slot AND s.owner_scope = a.owner_scope
+  AND s.delivery_id = a.delivery_id AND s.cycle_number = a.cycle_number
+  AND s.attempt_id = a.attempt_id AND s.fence = a.fence
+WHERE a.owner_scope = $1 AND a.finalized_at IS NULL
+ORDER BY a.delivery_id, a.cycle_number, a.attempt_id
+FOR UPDATE OF a, s
+`
+
+type LockWebhookNamespaceAttemptsForPrivacyRow struct {
+	MayHaveSent    bool
+	SendAuthorized bool
+}
+
+func (q *Queries) LockWebhookNamespaceAttemptsForPrivacy(ctx context.Context, ownerScope string) ([]LockWebhookNamespaceAttemptsForPrivacyRow, error) {
+	rows, err := q.db.Query(ctx, lockWebhookNamespaceAttemptsForPrivacy, ownerScope)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []LockWebhookNamespaceAttemptsForPrivacyRow
+	for rows.Next() {
+		var i LockWebhookNamespaceAttemptsForPrivacyRow
+		if err := rows.Scan(&i.MayHaveSent, &i.SendAuthorized); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const lockWebhookNamespaceDeliveriesForPrivacy = `-- name: LockWebhookNamespaceDeliveriesForPrivacy :many
+SELECT d.delivery_id
+FROM webhook_deliveries d
+JOIN webhook_cycles c
+  ON c.owner_scope = d.owner_scope AND c.delivery_id = d.delivery_id AND c.cycle_number = d.current_cycle
+WHERE d.owner_scope = $1
+ORDER BY d.delivery_id
+FOR UPDATE OF d, c
+`
+
+func (q *Queries) LockWebhookNamespaceDeliveriesForPrivacy(ctx context.Context, ownerScope string) ([]string, error) {
+	rows, err := q.db.Query(ctx, lockWebhookNamespaceDeliveriesForPrivacy, ownerScope)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var delivery_id string
+		if err := rows.Scan(&delivery_id); err != nil {
+			return nil, err
+		}
+		items = append(items, delivery_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const lockWebhookNamespaceDestinationsForPrivacy = `-- name: LockWebhookNamespaceDestinationsForPrivacy :many
+SELECT destination_id
+FROM webhook_destinations
+WHERE owner_scope = $1
+ORDER BY destination_id, generation
+FOR UPDATE
+`
+
+func (q *Queries) LockWebhookNamespaceDestinationsForPrivacy(ctx context.Context, ownerScope string) ([]string, error) {
+	rows, err := q.db.Query(ctx, lockWebhookNamespaceDestinationsForPrivacy, ownerScope)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var destination_id string
+		if err := rows.Scan(&destination_id); err != nil {
+			return nil, err
+		}
+		items = append(items, destination_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lockWebhookSendBarrier = `-- name: LockWebhookSendBarrier :one
 SELECT g.control_revision, g.key_state_revision, g.required_secret_revision,
        g.active_key_reference, g.predecessor_key_reference, g.predecessor_valid_until,
@@ -1585,7 +2116,7 @@ type LockWebhookSendBarrierRow struct {
 	ControlRevision         int64
 	KeyStateRevision        int64
 	RequiredSecretRevision  int64
-	ActiveKeyReference      string
+	ActiveKeyReference      *string
 	PredecessorKeyReference *string
 	PredecessorValidUntil   pgtype.Timestamptz
 	DestinationID           string
@@ -1616,25 +2147,52 @@ func (q *Queries) LockWebhookSendBarrier(ctx context.Context, arg LockWebhookSen
 	return i, err
 }
 
+const markWebhookNamespaceTombstoneUnknown = `-- name: MarkWebhookNamespaceTombstoneUnknown :execrows
+UPDATE webhook_tombstones
+SET last_semantic_class = 'outcome_unknown'
+WHERE owner_scope = $1 AND target_kind = 'namespace'
+  AND target_id = $1 AND action_id = $2
+  AND last_semantic_class = 'none'
+`
+
+type MarkWebhookNamespaceTombstoneUnknownParams struct {
+	OwnerScope string
+	ActionID   string
+}
+
+func (q *Queries) MarkWebhookNamespaceTombstoneUnknown(ctx context.Context, arg MarkWebhookNamespaceTombstoneUnknownParams) (int64, error) {
+	result, err := q.db.Exec(ctx, markWebhookNamespaceTombstoneUnknown, arg.OwnerScope, arg.ActionID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const observePostgresWebhooks = `-- name: ObservePostgresWebhooks :one
 SELECT
     (SELECT count(*) FROM webhook_deliveries WHERE state IN ('ready', 'scheduled'))::bigint AS scheduled,
     (SELECT count(*) FROM webhook_deliveries WHERE state = 'in_flight')::bigint AS in_flight,
     (SELECT count(*) FROM webhook_deliveries WHERE state = 'terminal')::bigint AS terminal,
     (SELECT count(*) FROM webhook_destinations WHERE disposition = 'administratively_disabled')::bigint AS disabled,
+    (SELECT count(*) FROM webhook_deliveries WHERE cumulative_summary = 'outcome_unknown')::bigint AS outcome_unknown,
+    COALESCE((SELECT extract(epoch FROM min(next_due_at))::bigint FROM webhook_deliveries WHERE state IN ('ready', 'scheduled')), 0)::bigint AS oldest_due_timestamp,
+    extract(epoch FROM clock_timestamp())::bigint AS observation_timestamp,
     (SELECT count(*) FROM webhook_capacity_slots WHERE attempt_id IS NOT NULL)::bigint AS leased_slots,
     (SELECT count(*) FROM webhook_capacity_slots)::bigint AS total_slots,
     (SELECT regression FROM webhook_clock WHERE singleton) AS clock_regression
 `
 
 type ObservePostgresWebhooksRow struct {
-	Scheduled       int64
-	InFlight        int64
-	Terminal        int64
-	Disabled        int64
-	LeasedSlots     int64
-	TotalSlots      int64
-	ClockRegression bool
+	Scheduled            int64
+	InFlight             int64
+	Terminal             int64
+	Disabled             int64
+	OutcomeUnknown       int64
+	OldestDueTimestamp   int64
+	ObservationTimestamp int64
+	LeasedSlots          int64
+	TotalSlots           int64
+	ClockRegression      bool
 }
 
 func (q *Queries) ObservePostgresWebhooks(ctx context.Context) (ObservePostgresWebhooksRow, error) {
@@ -1645,6 +2203,9 @@ func (q *Queries) ObservePostgresWebhooks(ctx context.Context) (ObservePostgresW
 		&i.InFlight,
 		&i.Terminal,
 		&i.Disabled,
+		&i.OutcomeUnknown,
+		&i.OldestDueTimestamp,
+		&i.ObservationTimestamp,
 		&i.LeasedSlots,
 		&i.TotalSlots,
 		&i.ClockRegression,
@@ -1719,6 +2280,45 @@ func (q *Queries) ReadWebhookAcceptance(ctx context.Context, arg ReadWebhookAcce
 	return i, err
 }
 
+const readWebhookActionRetainedUntil = `-- name: ReadWebhookActionRetainedUntil :one
+SELECT COALESCE(
+    CASE $1::text
+      WHEN 'delivery' THEN (
+        SELECT d.actions_retained_until FROM webhook_deliveries d
+        WHERE d.owner_scope = $2 AND d.delivery_id = $3
+      )
+      WHEN 'destination' THEN (
+        SELECT g.created_at + ((g.policy->'horizons'->>4)::double precision / 1000000000) * interval '1 second'
+        FROM webhook_destinations g
+        WHERE g.owner_scope = $2 AND g.destination_id = $3
+          AND g.generation = $4
+      )
+    END,
+    $5::timestamptz + interval '365 days'
+)::timestamptz AS retained_until
+`
+
+type ReadWebhookActionRetainedUntilParams struct {
+	TargetKind       string
+	OwnerScope       string
+	TargetID         string
+	TargetGeneration int64
+	SampledAt        pgtype.Timestamptz
+}
+
+func (q *Queries) ReadWebhookActionRetainedUntil(ctx context.Context, arg ReadWebhookActionRetainedUntilParams) (pgtype.Timestamptz, error) {
+	row := q.db.QueryRow(ctx, readWebhookActionRetainedUntil,
+		arg.TargetKind,
+		arg.OwnerScope,
+		arg.TargetID,
+		arg.TargetGeneration,
+		arg.SampledAt,
+	)
+	var retained_until pgtype.Timestamptz
+	err := row.Scan(&retained_until)
+	return retained_until, err
+}
+
 const readWebhookCapacity = `-- name: ReadWebhookCapacity :one
 SELECT COALESCE(max(capacity_revision), 0)::bigint AS capacity_revision,
        count(*)::integer AS slot_count,
@@ -1764,7 +2364,7 @@ func (q *Queries) ReadWebhookClock(ctx context.Context) (ReadWebhookClockRow, er
 }
 
 const readWebhookDestination = `-- name: ReadWebhookDestination :one
-SELECT owner_scope, destination_id, generation, ownership_verification_receipt, url, selection_revision, payload_version_preference, signature_profile, signing_authority_binding, policy, policy_fingerprint, destination_concurrency, global_concurrency, control_revision, required_secret_revision, key_state_revision, active_key_reference, predecessor_key_reference, predecessor_valid_until, disposition, last_considered_sequence, created_at, updated_at FROM webhook_destinations
+SELECT owner_scope, destination_id, generation, ownership_verification_receipt, url, selection_revision, payload_version_preference, signature_profile, signing_authority_binding, policy, policy_fingerprint, destination_concurrency, global_concurrency, control_revision, required_secret_revision, key_state_revision, active_key_reference, predecessor_key_reference, predecessor_valid_until, disposition, last_considered_sequence, created_at, updated_at, destination_retained_until, key_references_retained_until, key_references_erased_at FROM webhook_destinations
 WHERE owner_scope = $1
   AND destination_id = $2
   AND generation = $3
@@ -1803,6 +2403,9 @@ func (q *Queries) ReadWebhookDestination(ctx context.Context, arg ReadWebhookDes
 		&i.LastConsideredSequence,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DestinationRetainedUntil,
+		&i.KeyReferencesRetainedUntil,
+		&i.KeyReferencesErasedAt,
 	)
 	return i, err
 }
@@ -1877,7 +2480,7 @@ func (q *Queries) ReadWebhookMinimumDeclaredConcurrency(ctx context.Context) (in
 }
 
 const readWebhookOperatorAction = `-- name: ReadWebhookOperatorAction :one
-SELECT owner_scope, action_id, encoding_version, request_fingerprint, actor_reference, action_kind, target_kind, target_id, target_generation, expected_state, reason, duplicate_risk_acknowledged, state, result, created_at, completed_at FROM webhook_operator_actions
+SELECT owner_scope, action_id, encoding_version, request_fingerprint, actor_reference, action_kind, target_kind, target_id, target_generation, expected_state, reason, duplicate_risk_acknowledged, state, result, created_at, completed_at, retained_until FROM webhook_operator_actions
 WHERE owner_scope = $1 AND action_id = $2
 `
 
@@ -1906,6 +2509,7 @@ func (q *Queries) ReadWebhookOperatorAction(ctx context.Context, arg ReadWebhook
 		&i.Result,
 		&i.CreatedAt,
 		&i.CompletedAt,
+		&i.RetainedUntil,
 	)
 	return i, err
 }

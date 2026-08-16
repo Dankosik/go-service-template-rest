@@ -86,23 +86,29 @@ func PrepareSend(ctx context.Context, resolver *net.Resolver, attempt ClaimedAtt
 }
 
 func DNSSetEvidence(addresses []netip.Addr) ([32]byte, error) {
-	items := make([][]byte, len(addresses))
-	for i, address := range addresses {
+	canonical := slices.Clone(addresses)
+	for i, address := range canonical {
 		address = address.Unmap()
 		if !address.IsValid() {
 			return [32]byte{}, fmt.Errorf("%w: invalid DNS address evidence", ErrConfig)
 		}
+		canonical[i] = address
+	}
+	slices.SortFunc(canonical, netip.Addr.Compare)
+	canonical = slices.Compact(canonical)
+	items := make([][]byte, len(canonical))
+	for i, address := range canonical {
 		items[i] = bytes.Clone(address.AsSlice())
 	}
 	encoded, err := canonicalList(items)
 	if err != nil {
 		return [32]byte{}, fmt.Errorf("%w: DNS answer set: %w", ErrConfig, err)
 	}
-	canonical, err := canonicalRecord("webhook-dns-set-v1", encoded)
+	record, err := canonicalRecord("webhook-dns-set-v1", encoded)
 	if err != nil {
 		return [32]byte{}, err
 	}
-	return canonicalDigest(canonical), nil
+	return canonicalDigest(record), nil
 }
 
 func Send(ctx context.Context, prepared PreparedSend) (SendResult, error) {

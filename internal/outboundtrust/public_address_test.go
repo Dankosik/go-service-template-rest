@@ -11,6 +11,7 @@ func TestPublicAddressCorpus(t *testing.T) {
 	tests := map[string]bool{
 		"8.8.8.8": true, "2606:4700:4700::1111": true,
 		"192.0.0.9": true, "2001:1::1": true, "64:ff9b::808:808": true,
+		"0.0.0.1": false, "::ffff:0.0.0.1": false, "64:ff9b::1": false,
 		"10.0.0.1": false, "100.64.0.1": false, "127.0.0.1": false,
 		"169.254.169.254": false, "192.0.2.1": false, "198.18.0.1": false,
 		"2001:db8::1": false, "2001:2::1": false, "3fff::1": false,

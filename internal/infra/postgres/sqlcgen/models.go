@@ -167,9 +167,11 @@ type WebhookAttempt struct {
 	ResponseHeaderBytes   *int32
 	ResponseBodyBytes     *int32
 	ResponseStatus        *int32
-	RetryAfter            *string
 	OutcomeClass          *string
 	FinalizedAt           pgtype.Timestamptz
+	RetryAfterDelayMs     *int64
+	RetryAfterSource      *string
+	RetainedUntil         pgtype.Timestamptz
 }
 
 type WebhookCapacitySlot struct {
@@ -225,6 +227,10 @@ type WebhookDelivery struct {
 	TerminalAt            pgtype.Timestamptz
 	CreatedAt             pgtype.Timestamptz
 	UpdatedAt             pgtype.Timestamptz
+	ActiveRetainedUntil   pgtype.Timestamptz
+	TerminalRetainedUntil pgtype.Timestamptz
+	AttemptsRetainedUntil pgtype.Timestamptz
+	ActionsRetainedUntil  pgtype.Timestamptz
 }
 
 type WebhookDestination struct {
@@ -244,13 +250,16 @@ type WebhookDestination struct {
 	ControlRevision              int64
 	RequiredSecretRevision       int64
 	KeyStateRevision             int64
-	ActiveKeyReference           string
+	ActiveKeyReference           *string
 	PredecessorKeyReference      *string
 	PredecessorValidUntil        pgtype.Timestamptz
 	Disposition                  string
 	LastConsideredSequence       int64
 	CreatedAt                    pgtype.Timestamptz
 	UpdatedAt                    pgtype.Timestamptz
+	DestinationRetainedUntil     pgtype.Timestamptz
+	KeyReferencesRetainedUntil   pgtype.Timestamptz
+	KeyReferencesErasedAt        pgtype.Timestamptz
 }
 
 type WebhookEvent struct {
@@ -269,6 +278,8 @@ type WebhookEvent struct {
 	RetentionPolicyIdentity  string
 	ControlRevision          int64
 	AcceptedAt               pgtype.Timestamptz
+	PayloadRetainedUntil     pgtype.Timestamptz
+	PayloadErasedAt          pgtype.Timestamptz
 }
 
 type WebhookFanout struct {
@@ -297,6 +308,7 @@ type WebhookOperatorAction struct {
 	Result                    string
 	CreatedAt                 pgtype.Timestamptz
 	CompletedAt               pgtype.Timestamptz
+	RetainedUntil             pgtype.Timestamptz
 }
 
 type WebhookTombstone struct {

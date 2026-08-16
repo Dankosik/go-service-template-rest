@@ -5,6 +5,7 @@ import "net/netip"
 
 var (
 	nonPublicIPv4Prefixes = [...]netip.Prefix{
+		netip.MustParsePrefix("0.0.0.0/8"),
 		netip.MustParsePrefix("100.64.0.0/10"),
 		netip.MustParsePrefix("192.0.0.0/24"),
 		netip.MustParsePrefix("192.0.2.0/24"),

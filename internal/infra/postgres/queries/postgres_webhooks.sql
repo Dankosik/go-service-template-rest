@@ -80,7 +80,7 @@ WHERE disposition IN ('active', 'automatically_paused');
 SELECT owner_scope, destination_id, required_secret_revision, active_key_reference,
        predecessor_key_reference, predecessor_valid_until
 FROM webhook_destinations
-WHERE disposition IN ('active', 'automatically_paused')
+WHERE disposition IN ('active', 'automatically_paused') AND active_key_reference IS NOT NULL
 ORDER BY owner_scope, destination_id, generation;
 
 -- name: ReadWebhookMinimumDeclaredConcurrency :one
@@ -111,7 +111,8 @@ INSERT INTO webhook_destinations (
     owner_scope, destination_id, generation, ownership_verification_receipt, url,
     selection_revision, payload_version_preference, signature_profile,
     signing_authority_binding, policy, policy_fingerprint, destination_concurrency,
-    global_concurrency, required_secret_revision, active_key_reference, created_at, updated_at
+    global_concurrency, required_secret_revision, active_key_reference,
+    destination_retained_until, key_references_retained_until, created_at, updated_at
 ) VALUES (
     sqlc.arg(owner_scope), sqlc.arg(destination_id), sqlc.arg(generation),
     sqlc.arg(ownership_verification_receipt), sqlc.arg(url), sqlc.arg(selection_revision),
@@ -119,6 +120,7 @@ INSERT INTO webhook_destinations (
     sqlc.arg(signing_authority_binding), sqlc.arg(policy), sqlc.arg(policy_fingerprint),
     sqlc.arg(destination_concurrency), sqlc.arg(global_concurrency),
     sqlc.arg(required_secret_revision), sqlc.arg(active_key_reference),
+    sqlc.arg(destination_retained_until), sqlc.arg(key_references_retained_until),
     sqlc.arg(created_at), sqlc.arg(created_at)
 )
 ON CONFLICT (owner_scope, destination_id, generation) DO NOTHING;
@@ -129,17 +131,29 @@ WHERE owner_scope = sqlc.arg(owner_scope)
   AND destination_id = sqlc.arg(destination_id)
   AND generation = sqlc.arg(generation);
 
+-- name: ExtendWebhookDestinationRetention :execrows
+UPDATE webhook_destinations
+SET destination_retained_until = GREATEST(destination_retained_until, sqlc.arg(destination_retained_until)),
+    key_references_retained_until = GREATEST(key_references_retained_until, sqlc.arg(key_references_retained_until)),
+    updated_at = GREATEST(updated_at, sqlc.arg(updated_at))
+WHERE owner_scope = sqlc.arg(owner_scope)
+  AND destination_id = sqlc.arg(destination_id)
+  AND generation = sqlc.arg(generation)
+  AND disposition = 'active'
+  AND active_key_reference IS NOT NULL;
+
 -- name: InsertWebhookEvent :execrows
 INSERT INTO webhook_events (
     owner_scope, business_event_id, acceptance_id, fanout_snapshot_id, event_type,
     business_schema_version, content_type, body, delivery_envelope_version,
-    subscriber_policy_revision, intent_fingerprint, retention_policy_identity, accepted_at
+    subscriber_policy_revision, intent_fingerprint, retention_policy_identity,
+    payload_retained_until, accepted_at
 ) VALUES (
     sqlc.arg(owner_scope), sqlc.arg(business_event_id), sqlc.arg(acceptance_id),
     sqlc.arg(fanout_snapshot_id), sqlc.arg(event_type), sqlc.arg(business_schema_version),
     sqlc.arg(content_type), sqlc.arg(body), sqlc.arg(delivery_envelope_version),
     sqlc.arg(subscriber_policy_revision), sqlc.arg(intent_fingerprint),
-    sqlc.arg(retention_policy_identity), sqlc.arg(accepted_at)
+    sqlc.arg(retention_policy_identity), sqlc.arg(payload_retained_until), sqlc.arg(accepted_at)
 )
 ON CONFLICT DO NOTHING;
 
@@ -156,12 +170,15 @@ ON CONFLICT DO NOTHING;
 INSERT INTO webhook_deliveries (
     owner_scope, delivery_id, business_event_id, fanout_snapshot_id, destination_id,
     destination_generation, url_snapshot, policy_snapshot, next_due_at,
-    redrive_eligible_until, created_at, updated_at
+    redrive_eligible_until, active_retained_until, terminal_retained_until,
+    attempts_retained_until, actions_retained_until, created_at, updated_at
 ) VALUES (
     sqlc.arg(owner_scope), sqlc.arg(delivery_id), sqlc.arg(business_event_id),
     sqlc.arg(fanout_snapshot_id), sqlc.arg(destination_id), sqlc.arg(destination_generation),
     sqlc.arg(url_snapshot), sqlc.arg(policy_snapshot), sqlc.arg(next_due_at),
-    sqlc.arg(redrive_eligible_until), sqlc.arg(created_at), sqlc.arg(created_at)
+    sqlc.arg(redrive_eligible_until), sqlc.arg(active_retained_until),
+    sqlc.arg(terminal_retained_until), sqlc.arg(attempts_retained_until),
+    sqlc.arg(actions_retained_until), sqlc.arg(created_at), sqlc.arg(created_at)
 )
 ON CONFLICT DO NOTHING;
 
@@ -196,6 +213,7 @@ ORDER BY d.destination_id, d.destination_generation;
 SELECT d.*
 FROM webhook_destinations d
 WHERE d.disposition = 'active'
+  AND d.active_key_reference IS NOT NULL
   AND d.required_secret_revision <= sqlc.arg(manifest_revision)
   AND EXISTS (
       SELECT 1 FROM webhook_deliveries w
@@ -229,7 +247,7 @@ WHERE d.owner_scope = sqlc.arg(owner_scope)
   AND a.lease_expires_at > sqlc.arg(sampled_at);
 
 -- name: LockWebhookDueDelivery :one
-SELECT d.*, e.body, e.content_type
+SELECT d.*, e.body, e.content_type, c.attempts_used
 FROM webhook_deliveries d
 JOIN webhook_events e
   ON e.owner_scope = d.owner_scope AND e.business_event_id = d.business_event_id
@@ -249,7 +267,7 @@ FOR UPDATE OF d SKIP LOCKED;
 SELECT slot_number
 FROM webhook_capacity_slots
 WHERE capacity_revision = sqlc.arg(capacity_revision)
-  AND (attempt_id IS NULL OR lease_expires_at <= sqlc.arg(sampled_at))
+  AND attempt_id IS NULL
 ORDER BY slot_number
 LIMIT 1
 FOR UPDATE SKIP LOCKED;
@@ -264,11 +282,11 @@ WHERE owner_scope = sqlc.arg(owner_scope) AND delivery_id = sqlc.arg(delivery_id
 -- name: InsertWebhookAttempt :exec
 INSERT INTO webhook_attempts (
     owner_scope, delivery_id, cycle_number, attempt_id, fence, capacity_slot,
-    attempted_at, lease_expires_at, payload_digest, payload_bytes
+    attempted_at, lease_expires_at, payload_digest, payload_bytes, retained_until
 ) VALUES (
     sqlc.arg(owner_scope), sqlc.arg(delivery_id), sqlc.arg(cycle_number), sqlc.arg(attempt_id),
     sqlc.arg(fence), sqlc.arg(capacity_slot), sqlc.arg(attempted_at), sqlc.arg(lease_expires_at),
-    sqlc.arg(payload_digest), sqlc.arg(payload_bytes)
+    sqlc.arg(payload_digest), sqlc.arg(payload_bytes), sqlc.arg(retained_until)
 );
 
 -- name: IncrementWebhookCycleAttempts :execrows
@@ -283,7 +301,8 @@ UPDATE webhook_capacity_slots
 SET owner_scope = sqlc.arg(owner_scope), delivery_id = sqlc.arg(delivery_id),
     cycle_number = sqlc.arg(cycle_number), attempt_id = sqlc.arg(attempt_id),
     lease_expires_at = sqlc.arg(lease_expires_at), fence = sqlc.arg(fence)
-WHERE slot_number = sqlc.arg(slot_number) AND capacity_revision = sqlc.arg(capacity_revision);
+WHERE slot_number = sqlc.arg(slot_number) AND capacity_revision = sqlc.arg(capacity_revision)
+  AND attempt_id IS NULL;
 
 -- name: AuthorizeWebhookAttempt :execrows
 UPDATE webhook_attempts a
@@ -330,7 +349,10 @@ JOIN webhook_deliveries d
   ON d.owner_scope = a.owner_scope AND d.delivery_id = a.delivery_id
 JOIN webhook_cycles c
   ON c.owner_scope = a.owner_scope AND c.delivery_id = a.delivery_id AND c.cycle_number = a.cycle_number
-JOIN webhook_capacity_slots s ON s.slot_number = a.capacity_slot
+JOIN webhook_capacity_slots s
+  ON s.slot_number = a.capacity_slot AND s.owner_scope = a.owner_scope
+  AND s.delivery_id = a.delivery_id AND s.cycle_number = a.cycle_number
+  AND s.attempt_id = a.attempt_id AND s.fence = a.fence
 WHERE a.owner_scope = sqlc.arg(owner_scope) AND a.delivery_id = sqlc.arg(delivery_id)
   AND a.cycle_number = sqlc.arg(cycle_number) AND a.attempt_id = sqlc.arg(attempt_id)
   AND a.fence = sqlc.arg(fence) AND a.finalized_at IS NULL
@@ -341,17 +363,21 @@ WITH finalized AS (
     UPDATE webhook_attempts a
     SET response_header_bytes = sqlc.narg(response_header_bytes),
         response_body_bytes = sqlc.narg(response_body_bytes),
-        response_status = sqlc.narg(response_status), retry_after = sqlc.narg(retry_after),
+        response_status = sqlc.narg(response_status),
+        retry_after_delay_ms = sqlc.narg(retry_after_delay_ms), retry_after_source = sqlc.narg(retry_after_source),
         outcome_class = sqlc.arg(outcome_class), finalized_at = sqlc.arg(finalized_at)
     WHERE a.owner_scope = sqlc.arg(owner_scope) AND a.delivery_id = sqlc.arg(delivery_id)
       AND a.cycle_number = sqlc.arg(cycle_number) AND a.attempt_id = sqlc.arg(attempt_id)
       AND a.fence = sqlc.arg(fence) AND a.finalized_at IS NULL
-    RETURNING a.capacity_slot
+    RETURNING a.owner_scope, a.delivery_id, a.cycle_number, a.attempt_id, a.fence, a.capacity_slot
 ), released AS (
     UPDATE webhook_capacity_slots s
     SET owner_scope = NULL, delivery_id = NULL, cycle_number = NULL, attempt_id = NULL,
         lease_expires_at = NULL, fence = NULL
-    FROM finalized f WHERE s.slot_number = f.capacity_slot
+    FROM finalized f
+    WHERE s.slot_number = f.capacity_slot AND s.owner_scope = f.owner_scope
+      AND s.delivery_id = f.delivery_id AND s.cycle_number = f.cycle_number
+      AND s.attempt_id = f.attempt_id AND s.fence = f.fence
 ), delivery AS (
     UPDATE webhook_deliveries d
     SET state = sqlc.arg(delivery_state), next_due_at = sqlc.arg(next_due_at),
@@ -406,10 +432,19 @@ WHERE owner_scope = sqlc.arg(owner_scope) AND destination_id = sqlc.arg(destinat
 
 -- name: LockWebhookDeliveryForAction :one
 SELECT d.current_cycle, d.state, d.cumulative_summary, d.redrive_eligible_until,
-       d.destination_id, d.destination_generation, d.sendable, c.disposition, c.deadline_at
+       d.destination_id, d.destination_generation, d.sendable, c.disposition, c.deadline_at,
+       d.policy_snapshot, d.active_retained_until, d.terminal_retained_until,
+       d.attempts_retained_until, d.actions_retained_until,
+       g.disposition AS destination_disposition, g.required_secret_revision,
+       g.active_key_reference, g.destination_retained_until, g.key_references_retained_until,
+       CASE WHEN e.body IS NULL THEN false ELSE true END AS payload_retained, e.payload_retained_until
 FROM webhook_deliveries d
 JOIN webhook_cycles c
   ON c.owner_scope = d.owner_scope AND c.delivery_id = d.delivery_id AND c.cycle_number = d.current_cycle
+JOIN webhook_destinations g
+  ON g.owner_scope = d.owner_scope AND g.destination_id = d.destination_id AND g.generation = d.destination_generation
+JOIN webhook_events e
+  ON e.owner_scope = d.owner_scope AND e.business_event_id = d.business_event_id
 WHERE d.owner_scope = sqlc.arg(owner_scope) AND d.delivery_id = sqlc.arg(delivery_id)
 FOR UPDATE OF d, c;
 
@@ -447,15 +482,32 @@ WHERE owner_scope = sqlc.arg(owner_scope) AND delivery_id = sqlc.arg(delivery_id
 INSERT INTO webhook_operator_actions (
     owner_scope, action_id, encoding_version, request_fingerprint, actor_reference,
     action_kind, target_kind, target_id, target_generation, expected_state, reason,
-    duplicate_risk_acknowledged, result, created_at, completed_at
+    duplicate_risk_acknowledged, result, retained_until, created_at, completed_at
 ) VALUES (
     sqlc.arg(owner_scope), sqlc.arg(action_id), 'webhook-operator-action-v1',
     sqlc.arg(request_fingerprint), sqlc.arg(actor_reference), sqlc.arg(action_kind),
     sqlc.arg(target_kind), sqlc.arg(target_id), sqlc.arg(target_generation),
     sqlc.arg(expected_state), sqlc.arg(reason), sqlc.arg(duplicate_risk_acknowledged),
-    sqlc.arg(result), sqlc.arg(created_at), sqlc.arg(created_at)
+    sqlc.arg(result), sqlc.arg(retained_until), sqlc.arg(created_at), sqlc.arg(created_at)
 )
 ON CONFLICT DO NOTHING;
+
+-- name: ReadWebhookActionRetainedUntil :one
+SELECT COALESCE(
+    CASE sqlc.arg(target_kind)::text
+      WHEN 'delivery' THEN (
+        SELECT d.actions_retained_until FROM webhook_deliveries d
+        WHERE d.owner_scope = sqlc.arg(owner_scope) AND d.delivery_id = sqlc.arg(target_id)
+      )
+      WHEN 'destination' THEN (
+        SELECT g.created_at + ((g.policy->'horizons'->>4)::double precision / 1000000000) * interval '1 second'
+        FROM webhook_destinations g
+        WHERE g.owner_scope = sqlc.arg(owner_scope) AND g.destination_id = sqlc.arg(target_id)
+          AND g.generation = sqlc.arg(target_generation)
+      )
+    END,
+    sqlc.arg(sampled_at)::timestamptz + interval '365 days'
+)::timestamptz AS retained_until;
 
 -- name: InsertWebhookTombstone :execrows
 INSERT INTO webhook_tombstones (
@@ -509,6 +561,63 @@ LEFT JOIN webhook_deliveries d
   ON d.owner_scope = sqlc.arg(owner_scope) AND d.business_event_id = sqlc.arg(business_event_id)
 GROUP BY e.acceptance_id, e.fanout_snapshot_id;
 
+-- name: LockWebhookEventDeliveriesForPrivacy :many
+SELECT d.delivery_id
+FROM webhook_deliveries d
+JOIN webhook_cycles c
+  ON c.owner_scope = d.owner_scope AND c.delivery_id = d.delivery_id AND c.cycle_number = d.current_cycle
+WHERE d.owner_scope = sqlc.arg(owner_scope) AND d.business_event_id = sqlc.arg(business_event_id)
+ORDER BY d.delivery_id
+FOR UPDATE OF d, c;
+
+-- name: LockWebhookEventAttemptsForPrivacy :many
+SELECT a.may_have_sent, a.send_authorized
+FROM webhook_attempts a
+JOIN webhook_deliveries d
+  ON d.owner_scope = a.owner_scope AND d.delivery_id = a.delivery_id
+JOIN webhook_capacity_slots s
+  ON s.slot_number = a.capacity_slot AND s.owner_scope = a.owner_scope
+  AND s.delivery_id = a.delivery_id AND s.cycle_number = a.cycle_number
+  AND s.attempt_id = a.attempt_id AND s.fence = a.fence
+WHERE d.owner_scope = sqlc.arg(owner_scope) AND d.business_event_id = sqlc.arg(business_event_id)
+  AND a.finalized_at IS NULL
+ORDER BY a.delivery_id, a.cycle_number, a.attempt_id
+FOR UPDATE OF a, s;
+
+-- name: LockWebhookNamespaceDestinationsForPrivacy :many
+SELECT destination_id
+FROM webhook_destinations
+WHERE owner_scope = sqlc.arg(owner_scope)
+ORDER BY destination_id, generation
+FOR UPDATE;
+
+-- name: LockWebhookNamespaceDeliveriesForPrivacy :many
+SELECT d.delivery_id
+FROM webhook_deliveries d
+JOIN webhook_cycles c
+  ON c.owner_scope = d.owner_scope AND c.delivery_id = d.delivery_id AND c.cycle_number = d.current_cycle
+WHERE d.owner_scope = sqlc.arg(owner_scope)
+ORDER BY d.delivery_id
+FOR UPDATE OF d, c;
+
+-- name: LockWebhookNamespaceAttemptsForPrivacy :many
+SELECT a.may_have_sent, a.send_authorized
+FROM webhook_attempts a
+JOIN webhook_capacity_slots s
+  ON s.slot_number = a.capacity_slot AND s.owner_scope = a.owner_scope
+  AND s.delivery_id = a.delivery_id AND s.cycle_number = a.cycle_number
+  AND s.attempt_id = a.attempt_id AND s.fence = a.fence
+WHERE a.owner_scope = sqlc.arg(owner_scope) AND a.finalized_at IS NULL
+ORDER BY a.delivery_id, a.cycle_number, a.attempt_id
+FOR UPDATE OF a, s;
+
+-- name: MarkWebhookNamespaceTombstoneUnknown :execrows
+UPDATE webhook_tombstones
+SET last_semantic_class = 'outcome_unknown'
+WHERE owner_scope = sqlc.arg(owner_scope) AND target_kind = 'namespace'
+  AND target_id = sqlc.arg(owner_scope) AND action_id = sqlc.arg(action_id)
+  AND last_semantic_class = 'none';
+
 -- name: CountWebhookNamespaceRows :one
 SELECT (
   (SELECT count(*) FROM webhook_events events WHERE events.owner_scope = sqlc.arg(owner_scope)) +
@@ -530,24 +639,182 @@ WHERE owner_scope = sqlc.arg(owner_scope) AND target_kind = 'namespace'
   AND target_id = sqlc.arg(owner_scope) AND action_id = sqlc.arg(action_id)
   AND first_disposition = 'pending';
 
--- name: CleanupRetainedWebhookEvents :one
+-- name: FinalizeExpiredWebhookCycles :one
+WITH candidates AS (
+    SELECT d.owner_scope, d.delivery_id, d.current_cycle, d.cumulative_summary
+    FROM webhook_deliveries d
+    JOIN webhook_cycles c
+      ON c.owner_scope = d.owner_scope AND c.delivery_id = d.delivery_id AND c.cycle_number = d.current_cycle
+    WHERE d.state IN ('ready', 'scheduled') AND c.disposition = 'active'
+      AND (c.deadline_at <= sqlc.arg(sampled_at) OR d.active_retained_until <= sqlc.arg(sampled_at))
+      AND NOT EXISTS (
+        SELECT 1 FROM webhook_attempts a
+        WHERE a.owner_scope = d.owner_scope AND a.delivery_id = d.delivery_id
+          AND a.cycle_number = d.current_cycle AND a.finalized_at IS NULL
+      )
+    ORDER BY c.deadline_at, d.owner_scope, d.delivery_id
+    LIMIT sqlc.arg(batch_size)
+    FOR UPDATE OF d, c SKIP LOCKED
+), cycles AS (
+    UPDATE webhook_cycles c
+    SET disposition = CASE WHEN x.cumulative_summary = 'outcome_unknown' THEN 'outcome_unknown' ELSE 'attempts_exhausted' END,
+        finalized_at = sqlc.arg(sampled_at)
+    FROM candidates x
+    WHERE c.owner_scope = x.owner_scope AND c.delivery_id = x.delivery_id
+      AND c.cycle_number = x.current_cycle AND c.disposition = 'active'
+    RETURNING c.owner_scope, c.delivery_id
+), deliveries AS (
+    UPDATE webhook_deliveries d
+    SET state = CASE WHEN d.cumulative_summary = 'outcome_unknown' THEN 'suspended' ELSE 'terminal' END,
+        cumulative_summary = CASE WHEN d.cumulative_summary = 'outcome_unknown' THEN 'outcome_unknown' ELSE 'attempts_exhausted' END,
+        sendable = false, lease_owner = NULL, lease_expires_at = NULL,
+        terminal_at = sqlc.arg(sampled_at), updated_at = sqlc.arg(sampled_at)
+    FROM cycles c
+    WHERE d.owner_scope = c.owner_scope AND d.delivery_id = c.delivery_id
+    RETURNING 1
+)
+SELECT count(*) FROM deliveries;
+
+-- name: EraseRetainedWebhookPayloads :one
 WITH candidates AS (
     SELECT e.owner_scope, e.business_event_id
     FROM webhook_events e
-    WHERE NOT EXISTS (
+    WHERE e.body IS NOT NULL AND e.payload_retained_until <= sqlc.arg(sampled_at)
+      AND NOT EXISTS (
         SELECT 1 FROM webhook_deliveries d
         WHERE d.owner_scope = e.owner_scope AND d.business_event_id = e.business_event_id
-          AND (d.state <> 'terminal' OR d.redrive_eligible_until > sqlc.arg(sampled_at))
+          AND (d.state <> 'terminal' OR d.redrive_eligible_until > sqlc.arg(sampled_at)
+            OR d.cumulative_summary = 'outcome_unknown')
     )
     ORDER BY e.owner_scope, e.business_event_id
     LIMIT sqlc.arg(batch_size)
     FOR UPDATE SKIP LOCKED
-), deleted AS (
-    DELETE FROM webhook_events e USING candidates c
+), erased AS (
+    UPDATE webhook_events e
+    SET body = NULL, payload_erased_at = sqlc.arg(sampled_at)
+    FROM candidates c
     WHERE e.owner_scope = c.owner_scope AND e.business_event_id = c.business_event_id
     RETURNING 1
 )
+SELECT count(*) FROM erased;
+
+-- name: CleanupRetainedWebhookAttempts :one
+WITH candidates AS (
+    SELECT a.owner_scope, a.delivery_id, a.cycle_number, a.attempt_id
+    FROM webhook_attempts a
+    JOIN webhook_deliveries d
+      ON d.owner_scope = a.owner_scope AND d.delivery_id = a.delivery_id
+    WHERE a.finalized_at IS NOT NULL AND a.retained_until <= sqlc.arg(sampled_at)
+      AND d.state = 'terminal' AND d.redrive_eligible_until <= sqlc.arg(sampled_at)
+      AND d.cumulative_summary <> 'outcome_unknown'
+    ORDER BY a.retained_until, a.owner_scope, a.delivery_id, a.cycle_number, a.attempt_id
+    LIMIT sqlc.arg(batch_size)
+    FOR UPDATE OF a SKIP LOCKED
+), deleted AS (
+    DELETE FROM webhook_attempts a USING candidates c
+    WHERE a.owner_scope = c.owner_scope AND a.delivery_id = c.delivery_id
+      AND a.cycle_number = c.cycle_number AND a.attempt_id = c.attempt_id RETURNING 1
+)
 SELECT count(*) FROM deleted;
+
+-- name: CleanupRetainedWebhookActions :one
+WITH candidates AS (
+    SELECT action.owner_scope, action.action_id
+    FROM webhook_operator_actions action
+    WHERE action.retained_until <= sqlc.arg(sampled_at)
+      AND NOT EXISTS (
+        SELECT 1 FROM webhook_cycles cycle
+        JOIN webhook_deliveries d
+          ON d.owner_scope = cycle.owner_scope AND d.delivery_id = cycle.delivery_id
+        WHERE cycle.owner_scope = action.owner_scope AND cycle.authorizing_action_id = action.action_id
+          AND (cycle.disposition = 'active' OR d.state <> 'terminal'
+            OR d.cumulative_summary = 'outcome_unknown'
+            OR d.redrive_eligible_until > sqlc.arg(sampled_at)
+            OR d.terminal_retained_until > sqlc.arg(sampled_at)
+            OR EXISTS (SELECT 1 FROM webhook_attempts a WHERE a.owner_scope = d.owner_scope AND a.delivery_id = d.delivery_id))
+      )
+    ORDER BY action.retained_until, action.owner_scope, action.action_id
+    LIMIT sqlc.arg(batch_size)
+    FOR UPDATE OF action SKIP LOCKED
+), deleted AS (
+    DELETE FROM webhook_operator_actions action USING candidates c
+    WHERE action.owner_scope = c.owner_scope AND action.action_id = c.action_id RETURNING 1
+)
+SELECT count(*) FROM deleted;
+
+-- name: CleanupRetainedWebhookDeliveries :one
+WITH candidates AS (
+    SELECT d.owner_scope, d.delivery_id
+    FROM webhook_deliveries d
+    WHERE d.state = 'terminal' AND d.cumulative_summary <> 'outcome_unknown'
+      AND d.redrive_eligible_until <= sqlc.arg(sampled_at)
+      AND d.terminal_retained_until <= sqlc.arg(sampled_at)
+      AND NOT EXISTS (SELECT 1 FROM webhook_attempts a WHERE a.owner_scope = d.owner_scope AND a.delivery_id = d.delivery_id)
+      AND NOT EXISTS (SELECT 1 FROM webhook_operator_actions action WHERE action.owner_scope = d.owner_scope AND action.target_kind = 'delivery' AND action.target_id = d.delivery_id)
+    ORDER BY d.terminal_retained_until, d.owner_scope, d.delivery_id
+    LIMIT sqlc.arg(batch_size)
+    FOR UPDATE OF d SKIP LOCKED
+), deleted AS (
+    DELETE FROM webhook_deliveries d USING candidates c
+    WHERE d.owner_scope = c.owner_scope AND d.delivery_id = c.delivery_id RETURNING 1
+)
+SELECT count(*) FROM deleted;
+
+-- name: CleanupRetainedWebhookEvents :one
+WITH candidates AS (
+    SELECT e.owner_scope, e.business_event_id
+    FROM webhook_events e
+    WHERE e.body IS NULL
+      AND NOT EXISTS (SELECT 1 FROM webhook_deliveries d WHERE d.owner_scope = e.owner_scope AND d.business_event_id = e.business_event_id)
+    ORDER BY e.owner_scope, e.business_event_id
+    LIMIT sqlc.arg(batch_size)
+    FOR UPDATE OF e SKIP LOCKED
+), deleted AS (
+    DELETE FROM webhook_events e USING candidates c
+    WHERE e.owner_scope = c.owner_scope AND e.business_event_id = c.business_event_id RETURNING 1
+)
+SELECT count(*) FROM deleted;
+
+-- name: CleanupRetainedWebhookDestinations :one
+WITH candidates AS (
+    SELECT g.owner_scope, g.destination_id, g.generation
+    FROM webhook_destinations g
+    WHERE g.disposition = 'retired'
+      AND g.destination_retained_until <= sqlc.arg(sampled_at)
+      AND g.key_references_erased_at IS NOT NULL
+      AND NOT EXISTS (SELECT 1 FROM webhook_deliveries d WHERE d.owner_scope = g.owner_scope AND d.destination_id = g.destination_id AND d.destination_generation = g.generation)
+      AND NOT EXISTS (SELECT 1 FROM webhook_operator_actions action WHERE action.owner_scope = g.owner_scope AND action.target_kind = 'destination' AND action.target_id = g.destination_id AND action.target_generation = g.generation)
+    ORDER BY g.destination_retained_until, g.owner_scope, g.destination_id, g.generation
+    LIMIT sqlc.arg(batch_size)
+    FOR UPDATE OF g SKIP LOCKED
+), deleted AS (
+    DELETE FROM webhook_destinations g USING candidates c
+    WHERE g.owner_scope = c.owner_scope AND g.destination_id = c.destination_id
+      AND g.generation = c.generation RETURNING 1
+)
+SELECT count(*) FROM deleted;
+
+-- name: EraseRetainedWebhookKeyReferences :one
+WITH candidates AS (
+    SELECT g.owner_scope, g.destination_id, g.generation
+    FROM webhook_destinations g
+    WHERE g.disposition = 'retired' AND g.active_key_reference IS NOT NULL
+      AND g.key_references_retained_until <= sqlc.arg(sampled_at)
+      AND NOT EXISTS (SELECT 1 FROM webhook_deliveries d WHERE d.owner_scope = g.owner_scope AND d.destination_id = g.destination_id AND d.destination_generation = g.generation)
+    ORDER BY g.key_references_retained_until, g.owner_scope, g.destination_id, g.generation
+    LIMIT sqlc.arg(batch_size)
+    FOR UPDATE OF g SKIP LOCKED
+), erased AS (
+    UPDATE webhook_destinations g
+    SET active_key_reference = NULL, predecessor_key_reference = NULL,
+        predecessor_valid_until = NULL, key_references_erased_at = sqlc.arg(sampled_at),
+        updated_at = sqlc.arg(sampled_at)
+    FROM candidates c
+    WHERE g.owner_scope = c.owner_scope AND g.destination_id = c.destination_id
+      AND g.generation = c.generation
+    RETURNING 1
+)
+SELECT count(*) FROM erased;
 
 -- name: DeleteWebhookNamespaceBatch :one
 WITH deleted AS (
@@ -566,6 +833,9 @@ SELECT
     (SELECT count(*) FROM webhook_deliveries WHERE state = 'in_flight')::bigint AS in_flight,
     (SELECT count(*) FROM webhook_deliveries WHERE state = 'terminal')::bigint AS terminal,
     (SELECT count(*) FROM webhook_destinations WHERE disposition = 'administratively_disabled')::bigint AS disabled,
+    (SELECT count(*) FROM webhook_deliveries WHERE cumulative_summary = 'outcome_unknown')::bigint AS outcome_unknown,
+    COALESCE((SELECT extract(epoch FROM min(next_due_at))::bigint FROM webhook_deliveries WHERE state IN ('ready', 'scheduled')), 0)::bigint AS oldest_due_timestamp,
+    extract(epoch FROM clock_timestamp())::bigint AS observation_timestamp,
     (SELECT count(*) FROM webhook_capacity_slots WHERE attempt_id IS NOT NULL)::bigint AS leased_slots,
     (SELECT count(*) FROM webhook_capacity_slots)::bigint AS total_slots,
     (SELECT regression FROM webhook_clock WHERE singleton) AS clock_regression;

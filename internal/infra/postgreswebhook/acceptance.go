@@ -21,6 +21,19 @@ const (
 	MaxConcurrency        = 256
 	MaxClaimScanPage      = 256
 	MaxStoreOperationTime = 30 * time.Second
+	MaxResponseBytes      = 1 << 20
+	MaxRetentionHorizon   = 365 * 24 * time.Hour
+)
+
+const (
+	PayloadHorizon = iota
+	ActiveHorizon
+	TerminalHorizon
+	AttemptHorizon
+	OperatorActionHorizon
+	DestinationHorizon
+	KeyReferenceHorizon
+	RedriveHorizon
 )
 
 type DeliveryPolicy struct {
@@ -93,6 +106,10 @@ type PreparedAcceptance struct {
 }
 
 func PrepareAcceptance(input Acceptance) (PreparedAcceptance, error) {
+	return prepareAcceptance(input, rand.Text)
+}
+
+func prepareAcceptance(input Acceptance, newID func() string) (PreparedAcceptance, error) {
 	if err := validateAcceptance(input); err != nil {
 		return PreparedAcceptance{}, err
 	}
@@ -103,8 +120,11 @@ func PrepareAcceptance(input Acceptance) (PreparedAcceptance, error) {
 		if err != nil {
 			return PreparedAcceptance{}, err
 		}
+		if len(encoded) > MaxDestinationBytes {
+			return PreparedAcceptance{}, fmt.Errorf("%w: destination intent exceeds %d bytes", ErrConfig, MaxDestinationBytes)
+		}
 		encodedDestinations = append(encodedDestinations, encoded)
-		destinations = append(destinations, PreparedDestination{DestinationSnapshot: cloneDestination(destination), DeliveryID: rand.Text()})
+		destinations = append(destinations, PreparedDestination{DestinationSnapshot: cloneDestination(destination)})
 	}
 	list, err := canonicalList(encodedDestinations)
 	if err != nil {
@@ -120,6 +140,9 @@ func PrepareAcceptance(input Acceptance) (PreparedAcceptance, error) {
 	}
 	if len(canonical) > MaxAcceptanceBytes {
 		return PreparedAcceptance{}, fmt.Errorf("%w: prepared acceptance exceeds %d bytes", ErrConfig, MaxAcceptanceBytes)
+	}
+	for i := range destinations {
+		destinations[i].DeliveryID = newID()
 	}
 	slices.SortFunc(destinations, func(a, b PreparedDestination) int {
 		if order := strings.Compare(a.DestinationID, b.DestinationID); order != 0 {
@@ -160,6 +183,11 @@ func validateAcceptance(input Acceptance) error {
 		if err := validateDestination(destination); err != nil {
 			return err
 		}
+		if len(input.Body) > destination.Policy.MaximumPayloadBytes ||
+			!slices.Contains(destination.Policy.AcceptedContentTypes, input.ContentType) ||
+			!slices.Contains(destination.Policy.AcceptedBusinessSchemas, input.BusinessSchemaVersion) {
+			return fmt.Errorf("%w: event does not satisfy destination payload contract", ErrConfig)
+		}
 	}
 	return nil
 }
@@ -190,16 +218,37 @@ func (p DeliveryPolicy) validate() error {
 			return fmt.Errorf("%w: delivery policy duration must be positive", ErrConfig)
 		}
 	}
-	if p.BackoffBase > p.BackoffCap || p.AttemptTimeout > p.DrainTimeout || p.ResponseHeaderTimeout > p.AttemptTimeout || p.ResponseHeaderBytes <= 0 || p.ResponseBodyBytes <= 0 || len(p.AcceptedContentTypes) == 0 || len(p.AcceptedBusinessSchemas) == 0 {
+	if p.BackoffBase > p.BackoffCap || p.BackoffCap > p.MaximumDeliveryAge || p.RetryAfterCap > p.MaximumDeliveryAge ||
+		p.AttemptTimeout > p.DrainTimeout || p.AttemptTimeout > p.MaximumDeliveryAge || p.ResponseHeaderTimeout > p.AttemptTimeout ||
+		p.ResponseHeaderBytes <= 0 || p.ResponseHeaderBytes > MaxResponseBytes || p.ResponseBodyBytes <= 0 || p.ResponseBodyBytes > MaxResponseBytes ||
+		len(p.AcceptedContentTypes) == 0 || len(p.AcceptedBusinessSchemas) == 0 {
 		return fmt.Errorf("%w: delivery policy relation is invalid", ErrConfig)
 	}
 	for _, horizon := range p.Horizons {
-		if horizon <= 0 {
+		if horizon <= 0 || horizon > MaxRetentionHorizon {
 			return fmt.Errorf("%w: retention horizon must be positive", ErrConfig)
 		}
 	}
-	if p.AutomaticPause && (len(p.AutomaticPauseClasses) == 0 || p.PauseWindow <= 0 || p.PauseThreshold <= 0 || p.PauseMinimumTraffic <= 0 || p.PauseAlertPolicy == "") {
-		return fmt.Errorf("%w: automatic pause policy is incomplete", ErrConfig)
+	if p.Horizons[ActiveHorizon] < p.MaximumDeliveryAge || p.Horizons[RedriveHorizon] < p.RedriveAge {
+		return fmt.Errorf("%w: retention horizon is shorter than its live operation", ErrConfig)
+	}
+	for _, horizon := range []time.Duration{p.Horizons[PayloadHorizon], p.Horizons[TerminalHorizon], p.Horizons[AttemptHorizon], p.Horizons[OperatorActionHorizon], p.Horizons[DestinationHorizon], p.Horizons[KeyReferenceHorizon]} {
+		if horizon < p.Horizons[RedriveHorizon] {
+			return fmt.Errorf("%w: retained redrive evidence would be incomplete", ErrConfig)
+		}
+	}
+	if p.AutomaticPause || len(p.AutomaticPauseClasses) != 0 || p.PauseWindow != 0 || p.PauseDuration != 0 || p.PauseThreshold != 0 || p.PauseMinimumTraffic != 0 || p.PauseManualOnly || p.PauseRetentionEffect != "" || p.PauseAlertPolicy != "" {
+		return fmt.Errorf("%w: automatic pause is not implemented", ErrConfig)
+	}
+	for _, contentType := range p.AcceptedContentTypes {
+		if contentType == "" || len(contentType) > 256 || strings.IndexFunc(contentType, unicode.IsControl) >= 0 {
+			return fmt.Errorf("%w: accepted content type is invalid", ErrConfig)
+		}
+	}
+	for _, schema := range p.AcceptedBusinessSchemas {
+		if err := validateToken("accepted business schema", schema); err != nil {
+			return err
+		}
 	}
 	return nil
 }
