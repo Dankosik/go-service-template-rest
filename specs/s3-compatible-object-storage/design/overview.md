@@ -46,7 +46,7 @@ different client mechanism.
 
 | Candidate inspected on 2026-08-11 | Hard-contract fit | Required repository machinery | Disposition |
 | --- | --- | --- | --- |
-| AWS SDK Go v2 low-level `service/s3 v1.107.1`, core `v1.43.5`, credentials `v1.19.5`, Smithy `v1.27.7` | Direct explicit credentials, contexts, fixed base endpoint plus a final-authority HTTP guard, global `aws.NopRetryer` with per-operation `retry.Standard` only for HeadObject and pre-body GetObject, modeled conditions/checksums/multipart/ListParts/errors, and GET presign. The checksum middleware streams a known-length non-seekable body through an `aws-chunked` trailer instead of prebuffering it. | Adapter-owned admission/deadline, exact-length readers, whole-object multipart CRC, cleanup policy, conservative error mapping, response caps, and one transport attempt per SDK attempt. | **Selected.** It leaves the least protocol and checksum behavior for repository code while retaining all fixed decisions. |
+| AWS SDK Go v2 low-level `service/s3 v1.107.1`, core `v1.43.5`, credentials `v1.19.34`, Smithy `v1.27.7` | Direct explicit credentials, contexts, fixed base endpoint plus a final-authority HTTP guard, global `aws.NopRetryer` with per-operation `retry.Standard` only for HeadObject and pre-body GetObject, modeled conditions/checksums/multipart/ListParts/errors, and GET presign. The checksum middleware streams a known-length non-seekable body through an `aws-chunked` trailer instead of prebuffering it. | Adapter-owned admission/deadline, exact-length readers, whole-object multipart CRC, cleanup policy, conservative error mapping, response caps, and one transport attempt per SDK attempt. | **Selected.** It leaves the least protocol and checksum behavior for repository code while retaining all fixed decisions. |
 | AWS Transfer Manager `v0.3.12` | Defaults include multipart workers, thresholds and buffers, body retries, ranged concurrent GET, and failure handling that can root work in a fresh background context. Abort has no ListParts proof. | Overriding or fighting mechanisms forbidden by R4, R5, and R9. | Rejected; it adds no required capability absent from the low-level client. |
 | `minio-go/v7 v7.2.1` low-level `Core` | Viable static credentials, contexts, DNS-style bucket lookup, custom transport, serial raw multipart/ListParts/abort, structured errors, and presign. `MaxRetries=1` disables its operation retry. | Adapter-owned EOF checksum validation, lower-level multipart checksum assembly, active override of AWS dual-stack and path-style choices, and either a new `RoundTripper` seam or transport refactor. | Viable fallback, but not selected: it recreates more checksum behavior and fits the repository's HTTP `Doer` boundary less directly. |
 | `rhnvrm/simples3 v0.11.1` | Custom endpoints are path-style; core calls lack caller contexts; signing and uploads buffer whole bodies; multipart retries cannot be disabled; checksum/error surfaces are insufficient. | Reimplementation of multiple hard requirements. | Rejected. |
@@ -72,7 +72,7 @@ Primary implementation evidence:
 
 - [AWS SDK v2 S3 options](https://github.com/aws/aws-sdk-go-v2/blob/service/s3/v1.107.1/service/s3/options.go)
   and [`aws.NopRetryer`](https://github.com/aws/aws-sdk-go-v2/blob/v1.43.5/aws/retryer.go);
-- [static credentials provider](https://github.com/aws/aws-sdk-go-v2/blob/credentials/v1.19.5/credentials/static_provider.go);
+- [static credentials provider](https://github.com/aws/aws-sdk-go-v2/blob/credentials/v1.19.34/credentials/static_provider.go);
 - [streaming checksum middleware](https://github.com/aws/aws-sdk-go-v2/blob/service/internal/checksum/v1.9.29/service/internal/checksum/middleware_compute_input_checksum.go)
   and [output validation](https://github.com/aws/aws-sdk-go-v2/blob/service/internal/checksum/v1.9.29/service/internal/checksum/middleware_validate_output.go);
 - [AWS checksum contract](https://docs.aws.amazon.com/AmazonS3/latest/userguide/checking-object-integrity-upload.html),
@@ -438,7 +438,7 @@ labels alone:
 
 ```text
 github.com/aws/aws-sdk-go-v2            v1.43.5  h1:yKT5GYnFWhuDo+DqKvE5ZPwVn3RjC4MAeBtZGlh6AVM=
-github.com/aws/aws-sdk-go-v2/credentials v1.19.5 h1:xMo63RlqP3ZZydpJDMBsH9uJ10hgHYfQFIk1cHDXrR4=
+github.com/aws/aws-sdk-go-v2/credentials v1.19.34 h1:y6GkSmcv5myd1ngrYbGmiLlwQqB6TQhOuN/tbSSuWDY=
 github.com/aws/aws-sdk-go-v2/service/s3 v1.107.1 h1:VUTtUJMuRNMkb/7NIKmd8NQaeQLPGCMoTJxkYKre4qM=
 github.com/aws/smithy-go                 v1.27.7 h1:Zgj5z4LfcDYoQIVk+n/yGdTkP/2y6ZT5vYxe0fp7bqE=
 Go toolchain                             go1.26.6
@@ -1308,7 +1308,7 @@ The selected runtime source is pinned as direct dependencies where imported:
 
 ```text
 github.com/aws/aws-sdk-go-v2                         v1.43.5
-github.com/aws/aws-sdk-go-v2/credentials             v1.19.5
+github.com/aws/aws-sdk-go-v2/credentials             v1.19.34
 github.com/aws/aws-sdk-go-v2/service/s3              v1.107.1
 github.com/aws/smithy-go                             v1.27.7
 ```

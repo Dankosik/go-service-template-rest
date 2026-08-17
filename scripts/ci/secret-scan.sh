@@ -148,12 +148,12 @@ self_test() {
 	CLEANUP_DIR="${fixture}"
 	script_receipt=$'\t'
 	script_receipt+="'github.com/aws/aws-sdk-go-v2/"
-	script_receipt+='credentials v1.19.5 h1:'
-	script_receipt+='xMo63RlqP3ZZydpJDMBsH9uJ10hgHYfQFIk1cHDXrR4='
+	script_receipt+='credentials v1.19.34 h1:'
+	script_receipt+='y6GkSmcv5myd1ngrYbGmiLlwQqB6TQhOuN/tbSSuWDY='
 	script_receipt+="' \\"
 	design_receipt='github.com/aws/aws-sdk-go-v2/'
-	design_receipt+='credentials v1.19.5 h1:'
-	design_receipt+='xMo63RlqP3ZZydpJDMBsH9uJ10hgHYfQFIk1cHDXrR4='
+	design_receipt+='credentials v1.19.34 h1:'
+	design_receipt+='y6GkSmcv5myd1ngrYbGmiLlwQqB6TQhOuN/tbSSuWDY='
 	generic_api_key="$(printf '%s%s' 'A1b2C3d4E5f6G7h8I9j0' 'K1l2M3n4O5p6Q7r8')"
 	fake_secret='ghp_'
 	fake_secret+='A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8'
