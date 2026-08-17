@@ -95,7 +95,6 @@ network policy that keeps the listener private.
 ## Secret Rules
 
 - Do not place secrets in YAML.
-<!-- profile:object-storage:start -->
 - For `OBJECT_STORAGE=s3`, `object_storage.access_key_id`,
   `object_storage.secret_access_key`, and `object_storage.session_token` are
   credential material and accept only environment values (empty YAML
@@ -105,7 +104,6 @@ network policy that keeps the listener private.
   credentials and forbids expected owner. The adapter never falls back to an
   ambient AWS credential chain, and snapshot rotation requires process
   replacement.
-<!-- profile:object-storage:end -->
 - Do not baseline a new or active secret-scanner finding. A historical
   credential may remain in the gitleaks baseline only after its owner confirms
   revocation or rotation and records the owner, date, and rationale in the
