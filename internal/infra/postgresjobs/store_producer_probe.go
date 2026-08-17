@@ -32,7 +32,7 @@ func (s *Store) CheckProducerPath(ctx context.Context) error {
 func (s *Session) checkProducerAuthority(ctx context.Context) error {
 	// A bare BEGIN preserves the endpoint's default read-only state. READ ONLY
 	// would hide writers; READ WRITE would mask a read-only primary session.
-	return s.withOperation(ctx, pgx.TxAccessMode(""), func(ctx context.Context, queries *sqlcgen.Queries) error {
+	return s.withOperation(ctx, "producer_probe", pgx.TxAccessMode(""), func(ctx context.Context, queries *sqlcgen.Queries) error {
 		authority, err := queries.CheckPostgresJobsProducerAuthority(ctx)
 		if err != nil {
 			return fmt.Errorf("check postgres jobs producer authority: %w", err)

@@ -2,14 +2,19 @@
 
 status: done
 
-Completion: T1-T10 deterministic template implementation and aggregate gates are accepted; generated `none|s3` profiles are dependency-clean. Amazon S3 and Cloudflare R2 certification remain separate optional adopter-owned handoffs, each unverified until its own exact-tuple external receipt; neither blocks local template completion or promotes a result to the other provider, a deployed path, or a future adopter.
+Completion: T1-T10 are the accepted original deterministic implementation. T13,
+T14, T15, and T16 are accepted audit repairs. Amazon S3 and Cloudflare R2
+certification remain separate optional adopter-owned handoffs, each unverified
+until its own exact-tuple external receipt.
 
-Blocked stop: no local template task remains. A future certification attempt requires the matching H11 or H12 external authority and inputs; without them its provider claim remains unverified. A deterministic gate that cannot preserve an accepted mechanism reopens its named Technical Design or Specification owner.
+Stop: T16 is accepted; stop without provider contact. A future certification
+attempt requires the matching H11 or H12 external authority and inputs; without
+them its provider claim remains unverified.
 
 Global constraints:
 
-- T1-T10, including T9A, are credential-free and make no provider request. Static secrets are environment-only; no selected output contains a usable endpoint, bucket, credential, or finite workload default.
-- One process fixes one exact provider, HTTPS endpoint, signing region, dotless bucket, virtual-hosted authority, static credential snapshot, checksum policy, strict bounded image-owned public-root snapshot, and finite resource envelope. There is no ambient SDK/root policy, production CA setting or reload, automatic storage retry, provider fallback, queue, background cleanup worker, readiness probe, public API, bucket provisioner, or feature-policy owner in this pack.
+- T1-T10, T9A, and T13-T16 are credential-free and make no provider request. Credential values are environment-only; no selected output contains a usable endpoint, bucket, credential, or finite workload default.
+- One process fixes one exact provider, HTTPS endpoint, signing region, dotless bucket, virtual-hosted authority, explicit credential snapshot, expected-owner policy, checksum policy, strict bounded image-owned public-root snapshot, and finite resource envelope. Amazon requires temporary session credentials; R2 admits its documented static or temporary credentials. There is no ambient SDK/root policy, credential refresh, production CA setting or reload, provider fallback, queue, background cleanup worker, readiness probe, public API, bucket provisioner, or feature-policy owner. Only HeadObject and pre-body GetObject have the finite three-attempt retry policy fixed by R4/R9.
 - Every task preserves the provider-neutral five-operation port, feature-owned authorization/key/content/retention/overwrite policy, exact-length streaming, one adapter-wide non-blocking admission bound, one effective context, serial multipart, conservative mutation ambiguity, bounded secret telemetry, and the profile independence fixed by R1-R12.
 - Canonical source, its tests/fixtures, profile markers, generated inventory, dependencies, operator docs, and replacement cleanup remain in the task that makes their postcondition true. Rejected clients, transfer managers, stale markers, generator-only sources, and object-owned outputs are absent where R12 requires them.
 - Deterministic tests prove only their exercised repository surface; T9 proves only the pinned Linux process envelope; H11 and H12 can prove only their recorded exact provider tuple after separate authorization. Deployment identity, DNS/TLS/egress, bucket policy, lifecycle backstop, quotas, telemetry delivery, and encryption still require a separate authorized deployed-path canary.
@@ -120,7 +125,7 @@ condition.
   - Depends on: T3 — accepted direct client, authority, limits, and send-phase state needed to start.
   - Proof: for TD-007, gate a non-seekable source, independently decode `aws-chunked`, compute CRC64/NVME with stdlib polynomial `0x9a6c9329ac4bc9b5`, require exact declared length/trailer/algorithm/type/content type and qualifying `If-None-Match:*`, accept only matching provider confirmation, fail short input, leave byte `length+1` unread, and select single/multipart exactly at the threshold. Run `go test -vet=off ./internal/infra/s3 -run '^TestSingleUploadStreamsCRC64NVMEAndExactLength$' -count=1`.
   - Proof: for TD-008, exercise `C+1`, exact multiples, final remainder, and part-count edge; require serial Create/UploadPart/Complete, ordered bounded completion descriptors, independently checked part and whole CRC64NVME/FULL_OBJECT plus declared size, and failure on missing/out-of-order/corrupt/embedded-error results. Run `go test -vet=off ./internal/infra/s3 -run '^TestMultipartUploadIsSerialAndConfirmsWholeChecksum$' -count=1`.
-  - Proof: for TD-009, after any created upload session stop new parts, make at most one Abort and bounded paginated ListParts under the same remaining context, preserve the primary error, hide upload ID, close every body, and emit `complete` only for a tuple-approved empty/terminal observation; non-empty, truncated, malformed, timeout, cancellation, abort/list failure, unknown R2 observation, or post-return work is `pending`. Run `go test -vet=off ./internal/infra/s3 -run '^TestMultipartCleanupIsBoundedAndConservative$' -count=1` and `go test -vet=off -race ./internal/infra/s3 -run '^TestMultipartCleanupIsBoundedAndConservative$' -count=10`.
+  - Proof: for TD-009, after any created upload session stop new parts, make at most three Amazon Abort/List cycles with bounded pagination or one R2 Abort under the same remaining context, preserve the primary error, hide upload ID, close every body, and keep every failed multipart cleanup `pending`; no bounded empty observation becomes terminal proof. Run `go test -vet=off ./internal/infra/s3 -run '^TestMultipartCleanupIsBoundedAndConservative$' -count=1` and `go test -vet=off -race ./internal/infra/s3 -run '^TestMultipartCleanupIsBoundedAndConservative$' -count=10`.
   - Reopen if: SDK framing/checksum/completion metadata or a cleanup terminal observation breaks while an equivalent mechanism may exist — Technical Design; common integrity, create-only, cleanup outcome, or five-operation semantics require a provider escape — Specification.
   - Accepted: T4; evidence: TD-007, TD-008, TD-009, and TD-009 race x10 focused commands PASS; fresh independent implementation review PASS; candidate: current bounded diff.
   - Accepted: T4 lint-repair; evidence: TD-007 focused proof PASS (6), TD-008 PASS (5), TD-009 PASS (9), TD-009 race x10 PASS (90), and `go test -vet=off ./internal/infra/s3 -count=1` PASS (122); scoped `golangci-lint` is clean in `checksum.go`, `upload.go`, and `upload_test.go`; `gofmt`, scoped whitespace, and `git diff --check` are clean; fresh independent implementation review PASS. Candidate: current bounded Local repair in `checksum.go`, `upload.go`, and `upload_test.go`; it preserves closed object-storage errors, reader EOF identity, exact-length CRC64NVME, serial multipart, confirmed completion, and conservative cleanup. T10 whole-tree `make lint` remains outside this receipt.
@@ -139,7 +144,7 @@ condition.
   - Owner/surface/resources: `internal/infra/s3/metadata.go`, `delete.go`, `presign.go`, and reached `errors.go`/`transport.go`; `metadata_test.go`, `delete_test.go`, `presign_test.go`, `errors_test.go`, and shared fixture; no live URL/provider.
   - Depends on: T5 — accepted body/checksum/error state and shared package safety gate needed to start.
   - Proof: script Head/Delete success, tuple-admitted absence, concealed absence, conditional conflicts, throttling, malformed/oversized XML, request-write loss, and after-write response loss. Require portable UTC fields, 403 never absence, only admitted 404 as `not_found`, absent delete as operation completion, one request per stage, sanitized closed errors/private diagnostics, and `outcome_unknown` for possibly sent Put/Complete/Delete. Run `go test -vet=off ./internal/infra/s3 -run '^(TestMetadataAndDeleteExposePortableResults|TestErrorMappingIsConservativeAndOneAttempt)$' -count=1`.
-  - Proof: sign only GET for fixed credentials/key at `0`, `1s`, configured maximum, maximum+1, and seven-day boundary; parse `X-Amz-Date` and integer `X-Amz-Expires`, require `ExpiresAt` to equal their UTC sum, exact bucket authority/decoded key/query/required headers, no HTTP call/default TTL/ambient drift, and no URL/query/header canary in errors or telemetry. Run `go test -vet=off ./internal/infra/s3 -run '^TestPresignGETIsBoundedAndSecret$' -count=1`.
+  - Proof: sign only GET for fixed credentials/key at `0`, `1s`, configured maximum, maximum+1, and seven-day boundary; parse `X-Amz-Date` and integer `X-Amz-Expires`, require `SignatureExpiresAt` to equal their UTC sum without claiming credential validity until that instant, exact bucket authority/decoded key/query/required headers, no HTTP call/default TTL/ambient drift, and no URL/query/header canary in errors or telemetry. Run `go test -vet=off ./internal/infra/s3 -run '^TestPresignGETIsBoundedAndSecret$' -count=1`.
   - Reopen if: SDK/Smithy/send-phase or presigner output changes — Technical Design; portable absence/delete/error semantics or presign operation/lifetime/recipient guarantees change — Specification.
   - Accepted: T6; evidence: mandated TD-011 and TD-012 focused commands PASS, `go test -vet=off ./internal/infra/s3 -count=1` PASS (83), `git diff --check` PASS, and fresh independent implementation review PASS; candidate: current bounded diff.
   - Accepted: T6 lint-repair; evidence: TD-011 PASS (15), TD-012 PASS (1), `go test -vet=off ./internal/infra/s3 -count=1` PASS (122), and fresh independent implementation review PASS; scoped `golangci-lint` has no finding in the T6 paths while four retained findings belong to T7 telemetry; `gofmt -d` and scoped whitespace checks are clean; candidate: current bounded Local repair in `metadata.go`, `delete.go`, `presign.go`, `errors.go`, and their direct tests. The repair preserves closed object-storage errors and the span rooted in the caller context; T10 whole-tree `make lint` remains outside this receipt.
@@ -150,7 +155,7 @@ condition.
   - Depends on: T6 — complete accepted operation/result paths needed to start and prove the matrix.
   - Proof: with `A=2`, hold both tokens and saturate upload/download/metadata/delete/presign; each rejected call is `busy` before body read, signing, or I/O. Release through success, error, EOF, and Close; forbid multipart/cleanup overlap; prove no queue, token leak, or goroutine. Run `go test -vet=off ./internal/infra/s3 -run '^TestAdmissionIsProcessWideAndNonBlocking$' -count=1` and `go test -vet=off -race ./internal/infra/s3 -run '^TestAdmissionIsProcessWideAndNonBlocking$' -count=10`.
   - Proof: under `synctest`, propagate the earlier caller/configured deadline through DNS/connect, TLS, write, response, body, parts, Abort/ListParts, and presign before/after signing. Cancellation starts no new stage, cleanup keeps the same deadline, upload source remains caller-owned, EOF/error/Close release idempotently, and possibly sent mutations remain `outcome_unknown` ahead of context errors. Run `go test -vet=off ./internal/infra/httpclient ./internal/infra/s3 -run '^(TestOneAttemptTransportUsesRequestDeadline|TestEffectiveDeadlineAndLifecycleOwnEveryPhase)$' -count=1`.
-  - Proof: drive only the reachable TD-013 pairs: upload `{success,invalid,too_large,busy,precondition_failed,denied,integrity_failed,cancelled,deadline_exceeded,outcome_unknown,internal}` with `single|multipart` and `none|complete|pending`; download `{success,invalid,too_large,busy,not_found,denied,temporary,integrity_failed,cancelled,deadline_exceeded,internal}`; metadata `{success,invalid,busy,not_found,denied,temporary,cancelled,deadline_exceeded,internal}`; delete `{success,invalid,busy,denied,cancelled,deadline_exceeded,outcome_unknown,internal}`, with context kinds only when non-transmission is proved; presign `{success,invalid,busy,cancelled,deadline_exceeded,internal}`. Require admitted active `0->1->0`, admitted/rejected counts, result duration, failure phase, full-success bytes only, integrity count only on integrity failure, presign issuance without transfer success, impossible pairs absent, one `unknown` fallback, and zero leakage from every forbidden-field canary except sanitized request ID as a non-metric field. Run `go test -vet=off ./internal/infra/s3 -run '^TestTelemetryContractIsBoundedAndSecret$' -count=1`.
+  - Proof: drive only the reachable TD-013 pairs: upload `{success,invalid,too_large,busy,precondition_failed,denied,integrity_failed,cancelled,deadline_exceeded,outcome_unknown,internal}` with `single|multipart` and `none|pending`; download `{success,invalid,too_large,busy,not_found,denied,temporary,integrity_failed,cancelled,deadline_exceeded,internal}`; metadata `{success,invalid,busy,not_found,denied,temporary,cancelled,deadline_exceeded,internal}`; delete `{success,invalid,busy,denied,cancelled,deadline_exceeded,outcome_unknown,internal}`, with context kinds only when non-transmission is proved; presign `{success,invalid,busy,cancelled,deadline_exceeded,internal}`. Require admitted active `0->1->0`, admitted/rejected counts, result duration, failure phase, full-success bytes only, integrity count only on integrity failure, presign issuance without transfer success, impossible pairs absent, one `unknown` fallback, and zero leakage from every forbidden-field canary except sanitized request ID as a non-metric field. Run `go test -vet=off ./internal/infra/s3 -run '^TestTelemetryContractIsBoundedAndSecret$' -count=1`.
   - Reopen if: an SDK path adds a worker/queue/overlap, any stage loses the caller context, or a required safe signal has no owner — Technical Design; error precedence, result vocabulary, or operator question changes — Specification.
   - Accepted: T7; evidence: TD-004 focused command PASS and race x10 PASS; TD-005 focused command PASS; TD-013 focused command PASS (including real multipart `complete` and `pending` cleanup telemetry); affected `internal/infra/s3` and `internal/infra/httpclient` package and race gates PASS; `git diff --check` PASS; fresh independent implementation review PASS after one cleanup-telemetry repair; candidate: current bounded diff.
   - Accepted: T7 lint-repair; evidence: scoped `golangci-lint` PASS (0 issues); TD-004 PASS and race x10 PASS; current explicit-root TD-005 PASS (2); TD-013 PASS (3); `go test -vet=off ./internal/infra/s3 -count=1` and package race PASS (122 each); target `gofmt -d` and whitespace checks clean; fresh independent implementation review PASS. Candidate: current bounded Local repair in `telemetry.go` and `telemetry_test.go`; it only documents the existing caller-context/span-end ownership and makes the unreachable scripted-request fallback return an error. T10 whole-tree `make lint` remains outside this receipt.
@@ -192,12 +197,241 @@ condition.
 
 - [x] T10: `OBJECT_STORAGE=none|s3` generation is deterministic, orthogonal, dependency-clean, credential-free, and leaves complete proof/operator entry points
   - Source: `spec.md` R12 and success criteria 5-6; `design/overview.md` D9, inverse map, and dependency ownership; `test-plan.md` TD-016 plus aggregate gates.
-  - Owner/surface/resources: `scripts/init-module.sh`, `scripts/ci/template-init-check.sh`, `scripts/ci/ci-change-scope.sh` and its self-test cases, `.github/workflows/ci.yml`, `Makefile`, build-tagged external-package `test/s3_object_storage_conformance_integration_test.go`, `go.mod`, `go.sum`, `env/.env.example`, `env/config/local.yaml`, `docs/configuration-source-policy.md`, `docs/s3-compatible-object-storage.md`, `docs/repo-architecture.md`, `docs/project-structure-and-module-organization.md`, `docs/build-test-and-development-commands.md`, `README.md`, and the exact object-profile markers/inventory across T1-T9A/T9-owned files, including `image_root_bundle.go`/test and the generic non-nil-`RootCAs` `httpclient` branch; checkout-copy generator fixtures only. The existing runtime-image bundle remains image-owned and is never copied or exposed as generated config.
+  - Owner/surface/resources: `scripts/init-module.sh`, `scripts/ci/template-init-check.sh`, `scripts/ci/ci-change-scope.sh` and its self-test cases, `.github/workflows/ci.yml`, `Makefile`, build-tagged external-package `test/s3conformance/conformance_test.go`, `go.mod`, `go.sum`, `env/.env.example`, `env/config/local.yaml`, `docs/configuration-source-policy.md`, `docs/s3-compatible-object-storage.md`, `docs/repo-architecture.md`, `docs/project-structure-and-module-organization.md`, `docs/build-test-and-development-commands.md`, `README.md`, and the exact object-profile markers/inventory across T1-T9A/T9-owned files, including `image_root_bundle.go`/test and the generic non-nil-`RootCAs` `httpclient` branch; checkout-copy generator fixtures only. The existing runtime-image bundle remains image-owned and is never copied or exposed as generated config.
   - Depends on: T9 — complete deterministic capability and accepted process envelope needed to prove retained/absent inventories and aggregate closure.
   - Proof: generate all four object/outbound combinations plus authn controls for the three-way `httpclient` predicate; compare independent present/absent inventories, including the strict S3 image-root owners and shared code-only `RootCAs` branch; compile/test each retained output, run `go mod tidy`, require only the selected AWS family and no rejected client/transfer manager or generated CA source/setting, strip markers/generator sources, check lock/completion values, unknown/empty no-mutation, byte-identical equal repeat, and unchanged incompatible repeat. The CI scope self-test must classify every object-profile source and the S3 conformance integration file as template-required. Run `TEMPLATE_INIT_PROFILE=object-storage make template-init-check`, `make ci-change-scope-check`, `make project-structure-check`, and `make mod-tidy-check`.
   - Proof: on the same bounded candidate run `go test -vet=off ./internal/objectstorage ./internal/infra/s3 ./internal/infra/httpclient ./internal/config ./cmd/service/internal/bootstrap`, `go test -vet=off -race ./internal/infra/s3 ./internal/infra/httpclient ./cmd/service/internal/bootstrap`, `TEMPLATE_INIT_PROFILE=object-storage make template-init-check`, `make project-structure-check`, `make mod-tidy-check`, and `make lint`. These are current-tree aggregate evidence only; the credentialed entrypoints compile/fail closed but establish no provider support.
   - Reopen if: inventory/retention placement changes — Go Ownership; selector semantics change — Specification; a dependency/source update hits the design source-ownership triggers — Technical Design before updating.
   - Accepted: T10; evidence: repaired profile-boundary inventory, then `TEMPLATE_INIT_PROFILE=object-storage make template-init-check` PASS for every object/outbound/authn generated fixture; five-package aggregate PASS (797); three-package race PASS (427); `make ci-change-scope-check`, `make project-structure-check`, `make mod-tidy-check`, `bash -n scripts/ci/template-init-check.sh`, and `git diff --check` PASS; the released whole-current-tree `make lint` PASS (0 issues); fresh independent implementation review PASS, including an adversarial fail-closed inventory check. Candidate: current bounded Local T10 diff; no provider-support claim and no provider request, credential use, deployment, publication, or H11/H12 activity occurred.
+
+- [x] T13: Audit hardening closes provider-specific trust, retry, cleanup,
+  integrity, error, presign, portability, and proof gaps without widening the
+  five-operation port
+  - Source: repaired `spec.md` R3-R11; `design/overview.md` D1/D3/D5-D8;
+    `test-plan.md` TD-002/003/006/009-013/015-018; the reference audit of
+    immutable candidate `282b15e007f95ab0feaec530308570185ad58d0e`.
+  - Owner/surface/resources: existing object-storage config/bootstrap,
+    `internal/infra/s3`, their direct tests, operator/config/architecture docs,
+    `env` examples, `scripts/ci/s3-source-receipt.sh`, and the existing profile
+    inventory. No new package, dependency, goroutine, credential source,
+    provider call, bucket, or deployment resource.
+  - Depends on: T1-T10 accepted original capability.
+  - Postcondition: Amazon accepts only a commercial regional endpoint,
+    temporary access/secret/session snapshot, and 12-digit expected owner on
+    every operation; R2 accepts only exact 32-hex default/EU/FedRAMP account
+    endpoints and omits expected owner. Both remain fixed-authority,
+    virtual-host, explicit-root, no-ambient clients; snapshot rotation is
+    process replacement and refreshed workload identity remains out of scope.
+  - Postcondition: only HeadObject and pre-body GetObject use the exact bounded
+    three-attempt transient set. Head 404 is `not_found` only for pinned
+    `NotFound`/`NoSuchKey`; Get 404 only for exact `NoSuchKey`; 401/403 is
+    `denied`, exhausted read 429/5xx is `temporary`, Amazon create-only 409/412
+    is `precondition_failed`, and every possibly sent mutation remains
+    `outcome_unknown`. Span-only provider diagnostics use the finite code,
+    category, request-ID, status, and attempt policy without exposing an SDK
+    cause or input-driven metric label.
+  - Postcondition: a lost possibly sent CreateMultipartUpload reports cleanup
+    `pending`; Amazon known-ID cleanup performs at most three serial Abort plus
+    ten 1000-part ListParts pages per cycle; every failed multipart upload
+    remains `pending`, including after an empty listing. Upload oversize is
+    `too_large`; mediated Get rejects range responses before body exposure,
+    owns terminal close, maps any non-context terminal checksum mismatch to
+    `integrity_failed`, and does not label ordinary early Close cancellation.
+    Presign validates Amazon expected owner in the signed query, R2 omission,
+    GET/authority/TTL, and documents unsigned Range and bearer limits.
+  - Proof: run the focused TD-002/003/009-013 commands, complete S3/config/
+    bootstrap packages, and their race surfaces. Run
+    `S3_RECEIPT_PLATFORM=linux/arm64 make test-s3-source-receipt` against Go
+    1.26.6 index `sha256:116d58cbd88c1297624acc6e967a060012422bacf9930927e23fb719189c6f36`
+    and arm64 manifest
+    `sha256:7939e2c75db3d059fc944bb6464a916d0fa64bd5a3bd7b3528f2a1ac7673a0eb`,
+    then `GOMAXPROCS=1 make test-s3-envelope`. Run
+    `TEMPLATE_INIT_PROFILE=object-storage make template-init-check`,
+    `make ci-change-scope-check`, `make project-structure-check`,
+    `make mod-tidy-check`, the claim-scoped linter, and `git diff --check`.
+  - Reopen if: an exact provider rejects the local mechanism, the fixed
+    credential/authority class must expand, a new provider-specific port field
+    is required, the source/process envelope fails, or generated `none|s3`
+    purity cannot preserve the repaired owners — route to the owner named by
+    the repaired spec/design/test-plan, never to the other provider's receipt.
+  - Accepted: T13; evidence: ready Specification
+    `46ee347a7931d9d20601ce00cea8455a89e2d9ba166dfa8e308b8a4154e16def`,
+    ready Technical Design
+    `b7b53857051b5c5dec35bc787782a461fb022a70d8dddbc12d599f71c702e496`,
+    and ready Test Design
+    `2c709fdc8ec6841945df320a33bc3f8d1665c101d4752d6e705af23dfc6be147`
+    each received fresh independent PASS. The five-package aggregate passed 860
+    tests and the three-package race aggregate passed 475; the claim-scoped
+    linter reported 0 issues. The complete object-storage template profile
+    matrix passed after proving that `none` removes the S3 secret-policy block;
+    CI change-scope, project structure, module tidy, shell syntax, and full
+    `git diff --check` passed. The final Linux/arm64 process envelope passed five
+    runs with deltas `279367680`, `279015424`, `279265280`, `279240704`, and
+    `279408640`, all below the computed `310099108`-byte ceiling with zero
+    retained tokens/connections/goroutine growth. On a clean projection of
+    immutable base `282b15e007f95ab0feaec530308570185ad58d0e` plus only the T13
+    S3 production delta, the Go 1.26.6 source/image receipt passed with the
+    pinned index/manifest above, final image config
+    `sha256:1cf6e7019cd8accc6eafc4b5e56532355204f919b7bcf55209c91528cdba0588`,
+    and bundle `216591` bytes / 142 roots / SHA-256
+    `a3413a37a8e09cc21b2c11c9ffb23d92d2fc9d1933c9e7617f5c4fba4f72d37d`.
+    The mixed working-tree receipt is excluded because unrelated in-progress
+    webhook sources do not compile; none was copied into or repaired by the
+    T13 projection. Fresh implementation re-review PASS after the final
+    Amazon-only 409/412 mapper repair. No provider request, credential use,
+    bucket mutation, deployment, publication, or H11/H12 activity occurred.
+
+- [x] T14: Reference-audit repair makes provider differences and certification
+  proof executable without widening runtime authority
+  - Source: current official Amazon S3 bucket, conditional PutObject,
+    AbortMultipartUpload, and SigV4 query-auth contracts; current Cloudflare R2
+    bucket, S3-extension, error, and presign contracts; the reference audit of
+    immutable candidate `282b15e007f95ab0feaec530308570185ad58d0e`.
+  - Owner/surface/resources: existing S3 config/error/upload/presign/telemetry
+    owners, their tests, the isolated `test/s3conformance` package, Make/profile
+    inventory, multi-architecture source/process receipts, and current S3
+    operator/specification artifacts. No new dependency, runtime worker,
+    provider call, credential use, bucket, or deployment resource.
+  - Postcondition: the shared bucket subset rejects all current Amazon reserved
+    namespaces; lost possibly-sent CreateMultipartUpload is
+    `outcome_unknown`/cleanup `pending`; Amazon 409
+    `ConditionalRequestConflict` is retryable only by a fresh caller operation,
+    exact Amazon/R2 412 `PreconditionFailed` is `precondition_failed`, and all
+    other possibly-sent mutations stay `outcome_unknown`. Provider diagnostics
+    expose only finite phase/category/code/status/request-ID evidence.
+  - Postcondition: presigned GET validates exact singular SigV4 credential
+    scope, token, lifetime, signature, authority, signed-header ordering, and
+    provider expected-owner policy. Source and process receipts cover both
+    `linux/amd64` and `linux/arm64`. Separate fail-closed Amazon and R2 harnesses
+    execute the real port matrix only after all provider/image/policy inputs are
+    present and never substitute one provider's result for the other.
+  - Proof: focused and package/race tests; integration-tag compile/skip; both
+    fail-closed no-credential provider targets; both architecture source and
+    process receipts; object-storage template/profile, change-scope, structure,
+    module, shell, lint, and whitespace gates.
+  - Reopen if: either exact provider rejects its mechanism, a current official
+    contract changes, a supported architecture receipt fails, or profile purity
+    loses an owner. H11 and H12 remain separately unverified until authorized
+    provider-specific runs succeed.
+  - Accepted: T14; evidence: the final five-package aggregate passed 886 tests;
+    the three-package race aggregate passed 501; integration-tag compilation,
+    the focused S3/conformance linter (`0 issues`), shell syntax, change-scope,
+    project-structure, module-tidy, whitespace, and final `none|s3` profile
+    matrix passed. Clean projection receipts passed for `linux/amd64` and
+    `linux/arm64` with their pinned Go/Distroless manifests and identical
+    `216591`-byte, 142-root bundle; process-envelope maxima were `283156480`
+    and `279396352` bytes against `310099108`. The first amd64 envelope run
+    exposed a one-second test-only operation deadline that could expire before
+    maximum-part serialization reached the fixture; the repaired harness keeps
+    the independent ten-second diagnostic guard and the same memory ceiling
+    while giving the measured operation 30 seconds. Both provider targets failed
+    closed before I/O on missing mutation authorization, as required. The
+    whole dirty-tree linter is excluded from this receipt: its eight findings
+    are confined to unrelated in-progress jobs/webhook files. Candidate:
+    current bounded T14 S3 delta over immutable base
+    `282b15e007f95ab0feaec530308570185ad58d0e`; no provider request,
+    credential use, bucket mutation, deployment, or publication occurred. A
+    fresh independent implementation review found no actionable finding and
+    passed 43 targeted adversarial S3 tests. H11 and H12 remain separate,
+    unverified external provider certifications.
+
+- [x] T15: Remaining reference-audit repairs make upload cancellation,
+  multipart cleanup, read absence, download length, and presign lifetime honest
+  at the provider-neutral boundary
+  - Source: repaired `spec.md` R4-R6/R8/R11; `design/overview.md` D5-D7;
+    `test-plan.md` TD-005/009-013; the final focused audit findings against
+    immutable base `282b15e007f95ab0feaec530308570185ad58d0e`.
+  - Owner/surface/resources: `internal/objectstorage`, existing S3 upload,
+    download, error, presign, telemetry owners and tests, bootstrap/conformance
+    fakes, and current S3 docs/artifacts. No new dependency, worker, buffered
+    body, provider call, credential, bucket, or deployment resource.
+  - Postcondition: `Upload` owns an `io.ReadCloser`, closes it exactly once on
+    every path, and cancellation/deadline closes a source whose contract
+    promptly unblocks `Read`; admission cannot be retained by the prior bare
+    `io.Reader` contract. Every failed multipart cleanup is `pending`, including
+    after Amazon returns one empty ListParts traversal; abandoned-upload
+    lifecycle remains the terminal reclamation boundary.
+  - Postcondition: HeadObject 404 is `not_found` only for pinned SDK
+    `NotFound`/`NoSuchKey`, GetObject 404 only for exact `NoSuchKey`, and generic
+    404/`NoSuchBucket` stays `internal`. Download refuses missing, negative, or
+    above-ceiling Content-Length before body exposure and closes/releases an
+    idle returned body when its effective context ends. Presign returns
+    `SignatureExpiresAt`, the SigV4 expiry rather than a guaranteed credential
+    lifetime; credential expiry/revocation may end access earlier.
+  - Proof: focused/package/race tests; integration-tag compile; both
+    provider targets fail closed before I/O without mutation authorization;
+    object-storage profile, CI-scope, structure, module-tidy, claim-scoped lint,
+    whitespace, both architecture source receipts, and both architecture Linux
+    process envelopes. Independent implementation review applies to this fixed
+    unit. H11/H12 remain unverified and non-substitutable.
+  - Reopen if: a caller cannot provide a Close-unblocks-Read source, an exact
+    provider proves a different structured absence/error shape, a stable
+    terminal multipart cleanup observation becomes available, or the public
+    presign result needs a guaranteed minimum lifetime — route to Specification
+    or Technical Design as named by the current artifacts, never infer the
+    other provider's behavior.
+  - Accepted: T15; candidate was bounded S3 diff SHA-256
+    `459d612c7aa80d314538f9962043f2aeea91e747aadc9c5433c3f46ade58992e`
+    over immutable base `282b15e007f95ab0feaec530308570185ad58d0e`.
+    Focused object/S3/httpclient packages passed 334 tests; object-storage
+    config oracles passed 15; bootstrap passed 6; the mapped race set passed
+    142. Integration-tag conformance compiled, claim-scoped lint reported 0
+    issues, targeted whitespace passed, and both Amazon/R2 targets failed
+    closed before I/O without mutation authorization. The final object-storage
+    profile, CI-scope, project-structure, and module-tidy gates passed; current
+    linux/amd64 and linux/arm64 source/image receipts and process envelopes
+    passed. The full `internal/config` aggregate is excluded because concurrent
+    unrelated webhook work fails
+    `TestWebhookWorkerLoaderIgnoresForeignProfiles`; the exact S3 config oracle
+    passed and no webhook/jobs path was changed for T15. Fresh independent T15
+    implementation review returned PASS after its own focused and adversarial
+    race checks. No provider request, credential use, bucket mutation,
+    deployment, publication, or certification occurred; H11 and H12 remain
+    separate and unverified.
+
+- [x] T16: Provider ceilings, partition validation, source receipts, process
+  envelopes, and CI claims match the final reference-audit boundary
+  - Source: current official Amazon commercial regional endpoint contract and
+    Cloudflare R2 limits; `spec.md` R3/R4/R12; `design/overview.md` D1/D4/D9;
+    `test-plan.md` TD-002/006/016; the reference audit of immutable base
+    `282b15e007f95ab0feaec530308570185ad58d0e`.
+  - Owner/surface/resources: existing S3 config and resource-envelope tests,
+    source-receipt script, object-storage CI profile, and the matching operator,
+    Specification, Technical Design, and Test Design text. No new package,
+    dependency, runtime worker, provider call, credential, bucket, deployment,
+    or publication resource.
+  - Postcondition: Amazon accepts only the selected commercial partition and a
+    maximum 5 TiB object envelope; R2 accepts at most its documented 5
+    TiB-minus-5 GiB object envelope. Invalid partition or provider ceiling fails
+    during local construction before signing or I/O.
+  - Postcondition: the source receipt runs the strict root-bundle loader and
+    checked compiler predicates inside the selected pinned Linux Go image. The
+    process baseline precedes config, PEM input, root parsing, and client
+    construction; the construction barrier keeps the raw bundle live. The
+    measured child conservatively retains the production client plus a separate
+    TLS-fixture client, while focused tests—not the fixture—own production
+    DNS/IP, authority, proxy, redirect, hostname, and ambient-root denial.
+  - Postcondition: the generated object-storage CI profile runs the amd64 source
+    and process-envelope gates; arm64 remains a separate mandatory local receipt.
+    Amazon and R2 conformance remain distinct fail-closed external handoffs.
+  - Accepted: T16; fixed nine-file content candidate SHA-256
+    `ea20e459b3167a838f67741bc031d338eefaf8b073fe8b404e12ce080ff2d773`.
+    The five-package aggregate passed 897 tests; the three-package race aggregate
+    passed 511; integration-tag conformance compiled; scoped lint reported 0
+    issues; actionlint, targeted ShellCheck/shell syntax, CI change-scope,
+    project structure, module tidy, profile generation, and whitespace passed.
+    Both provider targets failed closed before I/O on absent mutation authority.
+    Fresh independent implementation review verified the same content hash,
+    passed 43 focused adversarial S3 tests, and returned PASS.
+    Current pinned source/image receipts passed on linux/amd64 and linux/arm64
+    with checked compiler evidence and identical `216591`-byte, 142-root bundle;
+    process-envelope maxima were `283365376` and `279633920` bytes against the
+    `310099108`-byte ceiling. No provider request, credential use, bucket
+    mutation, deployment, publication, or certification occurred; H11 and H12
+    remain separate and unverified.
+
+The prior T9A/T9 Go 1.26.5 source/process receipts above are historical inputs
+only and are superseded for the current candidate by T14's Go 1.26.6 receipts.
 
 ## Optional adopter-owned certification handoffs
 
@@ -211,10 +445,10 @@ is implied by this completed ledger.
 - Status: optional adopter-owned handoff; unverified until its own Amazon-only receipt.
 - Recipient instructions: only an authorized adopter may run this handoff after every external input below is available. Its receipt cannot certify R2, a deployed path, or another adopter.
   - Source: `spec.md` R1 and success criterion 3; `design/overview.md` provider matrix and reopen conditions; `test-plan.md` TD-017.
-  - Owner/surface/resources: fixed `//go:build integration`, external-package `test/s3_object_storage_conformance_integration_test.go` Amazon entrypoint and `Makefile` target that supplies `-tags=integration`; one pre-existing operator-owned commercial regional general-purpose bucket, primary and concealment static identities, and unique `conformance/amazon_s3/<run-id>/` prefix/uploads. The test may mutate only that prefix/uploads and never provisions or changes bucket, identity, policy, lifecycle, versioning, encryption, DNS, or network controls.
+  - Owner/surface/resources: fixed `//go:build integration`, external-package `test/s3conformance/conformance_test.go` Amazon entrypoint and `Makefile` target that supplies `-tags=integration`; one pre-existing operator-owned commercial regional general-purpose bucket, primary and concealment temporary-session identities, and unique `conformance/amazon_s3/<run-id>/` prefix/uploads. The test may mutate only that prefix/uploads and never provisions or changes bucket, identity, policy, lifecycle, versioning, encryption, DNS, or network controls.
   - Local prerequisite: T1-T10 accepted deterministic template capability, conformance entrypoint, aggregate gates, and profile output.
-  - External input/gate: explicit provider-mutation authorization plus Amazon endpoint, matching region, dotless bucket, unique run ID, both environment-only static credential sets, identity-policy receipt, never-enabled versioning evidence, abandoned-multipart lifecycle backstop, and the exact production-architecture image digest with fixed bundle path/provenance/revision/hash/bytes/unique-valid-root count, regular read-only image ownership, and no replacing runtime mount. Every item must be present before the first request; secrets are never recorded; bundle bytes and roots must satisfy D4's half-ceilings.
-  - Proof: before signing, build through the production strict non-nil pool and require the Amazon authority's public chain/hostname to validate while wrong-host and ambient-only chains fail. Register direct test cleanup before the first mutation. Under the owned prefix exercise single create-only collision/replace, serial multipart replace and forced cleanup, validated-EOF download, metadata with unambiguous and concealed absence identities, absent/existing delete, and presigned GET twice plus method/key/query/header mutations; independently verify bytes/CRC64NVME and attempt counts. After adapter assertions, the test-only direct SDK path lists/removes only owned objects/uploads and requires final empty readback. Run `REQUIRE_S3_CONFORMANCE=1 make test-s3-conformance-amazon`; a missing/stale image or no-override input, skipped case, field mismatch, or ambiguous result fails Amazon only.
+  - External input/gate: explicit provider-mutation authorization plus Amazon endpoint, matching region, dotless bucket, 12-digit expected bucket owner, unique run ID, both environment-only temporary access/secret/session credential sets, identity-policy receipt, never-enabled versioning evidence, abandoned-multipart lifecycle backstop, and the exact production-architecture image digest with fixed bundle path/provenance/revision/hash/bytes/unique-valid-root count, regular read-only image ownership, and no replacing runtime mount. Every item must be present before the first request; secrets are never recorded; bundle bytes and roots must satisfy D4's half-ceilings.
+  - Proof: the deterministic strict-loader prerequisite proves wrong-host and ambient-only denial; the first exact signed request through the same production non-nil pool proves the Amazon public chain/hostname. Register direct test cleanup before the first mutation. Under the owned prefix exercise single create-only collision/replace, serial multipart replace and forced cleanup, validated-EOF download, metadata with unambiguous and concealed absence identities, absent/existing delete, and presigned GET twice plus method/key/query/header mutations; independently verify exact bytes, portable metadata, and cleanup while the adapter requires provider checksum evidence. TD-003/007/010/011 remain the separate deterministic attempt, retry, and known-answer checksum authority. After adapter assertions, the test-only direct SDK path lists/removes only owned objects/uploads and requires final empty readback. Run `REQUIRE_S3_CONFORMANCE=1 make test-s3-conformance-amazon`; a missing/stale image or no-override input, skipped case, field mismatch, or ambiguous result fails Amazon only.
   - Reopen if: trailer/checksum/one-attempt/cleanup mechanics fail while an equivalent mechanism may exist — Technical Design first; only the design-wide Specification conditions may reopen the common contract. Provider/client/tuple drift requires a fresh H11 receipt.
 
 ### H12: Cloudflare R2 exact-tuple support certification
@@ -222,8 +456,8 @@ is implied by this completed ledger.
 - Status: optional adopter-owned handoff; unverified until its own R2-only receipt.
 - Recipient instructions: only an authorized adopter may run this handoff after every external input below is available. Its receipt cannot certify Amazon, a deployed path, or another adopter.
   - Source: `spec.md` R1 and success criterion 3; `design/overview.md` provider matrix and reopen conditions; `test-plan.md` TD-018.
-  - Owner/surface/resources: fixed `//go:build integration`, external-package `test/s3_object_storage_conformance_integration_test.go` R2 entrypoint and distinct `Makefile` target that supplies `-tags=integration`; one pre-existing operator-owned R2 bucket, primary and concealment static identities, and unique `conformance/cloudflare_r2/<run-id>/` prefix/uploads. The test may mutate only that prefix/uploads and never provisions or changes provider controls or uses a custom domain.
+  - Owner/surface/resources: fixed `//go:build integration`, external-package `test/s3conformance/conformance_test.go` R2 entrypoint and distinct `Makefile` target that supplies `-tags=integration`; one pre-existing operator-owned R2 bucket, primary and concealment static-or-temporary identities, and unique `conformance/cloudflare_r2/<run-id>/` prefix/uploads. The test may mutate only that prefix/uploads and never provisions or changes provider controls or uses a custom domain.
   - Local prerequisite: T1-T10 accepted deterministic template capability, conformance entrypoint, aggregate gates, and profile output.
-  - External input/gate: explicit provider-mutation authorization plus exact R2 account S3 endpoint, region `auto`, dotless bucket, unique run ID, both environment-only static credential sets, identity-policy receipt, lifecycle/versioning evidence, abandoned-multipart lifecycle backstop, and the exact production-architecture image digest with fixed bundle path/provenance/revision/hash/bytes/unique-valid-root count, regular read-only image ownership, and no replacing runtime mount. Every item must be present before the first request; secrets are never recorded; bundle bytes and roots must satisfy D4's half-ceilings.
-  - Proof: before signing, build through the production strict non-nil pool and require the R2 account authority's public chain/hostname to validate while wrong-host and ambient-only chains fail. Register direct test cleanup before the first mutation. Under the R2 prefix exercise byte-exact accepted keys, single create-only collision and replace, serial multipart replace and forced cleanup, validated-EOF download, metadata with unambiguous and concealed absence identities, absent/existing delete, and presigned GET twice plus method/key/query/header mutations through the account S3 authority; independently verify bytes/CRC64NVME and attempt counts. Immediate cleanup is `complete` only for an H12-proven terminal observation and otherwise remains visible `pending`; the test-only direct path removes only owned objects/uploads and requires final empty readback. Run `REQUIRE_S3_CONFORMANCE=1 make test-s3-conformance-r2`; a missing/stale image or no-override input, skipped case, field mismatch, or ambiguous result fails R2 only and cannot consume H11.
+  - External input/gate: explicit provider-mutation authorization plus exact 32-hex default/EU/FedRAMP R2 account S3 endpoint, region `auto`, dotless bucket, unique run ID, both environment-only static-or-temporary credential sets, identity-policy receipt, lifecycle/versioning evidence, abandoned-multipart lifecycle backstop, and the exact production-architecture image digest with fixed bundle path/provenance/revision/hash/bytes/unique-valid-root count, regular read-only image ownership, and no replacing runtime mount. Every item must be present before the first request; secrets are never recorded; bundle bytes and roots must satisfy D4's half-ceilings.
+  - Proof: the deterministic strict-loader prerequisite proves wrong-host and ambient-only denial; the first exact signed request through the same production non-nil pool proves the R2 public chain/hostname. Register direct test cleanup before the first mutation. Under the R2 prefix exercise byte-exact accepted keys, single create-only collision and replace, serial multipart replace and forced cleanup, validated-EOF download, metadata with unambiguous and concealed absence identities, absent/existing delete, and presigned GET twice plus method/key/query/header mutations through the account S3 authority; independently verify exact bytes, portable metadata, and cleanup while the adapter requires provider checksum evidence. TD-003/007/010/011 remain the separate deterministic attempt, retry, and known-answer checksum authority. Immediate cleanup remains visible `pending`; the test-only direct path removes only owned objects/uploads and requires final empty readback. Run `REQUIRE_S3_CONFORMANCE=1 make test-s3-conformance-r2`; a missing/stale image or no-override input, skipped case, field mismatch, or ambiguous result fails R2 only and cannot consume H11.
   - Reopen if: trailer/checksum/one-attempt/cleanup mechanics fail while an equivalent mechanism may exist — Technical Design first; only the design-wide Specification conditions may reopen the common contract. Provider/client/tuple drift requires a fresh H12 receipt.

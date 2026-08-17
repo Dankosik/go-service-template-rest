@@ -59,6 +59,9 @@ func TestJobsConfigValidation(t *testing.T) {
 		{name: "lease ratio below six", mutate: func(jobs *JobsConfig, _ *PostgresConfig) {
 			jobs.LeaseDuration = 6*jobs.StoreOperationTimeout - time.Nanosecond
 		}, contains: "at least 6 times"},
+		{name: "poll cannot renew lease in time", mutate: func(jobs *JobsConfig, _ *PostgresConfig) {
+			jobs.PollInterval = jobs.LeaseDuration/3 - jobs.StoreOperationTimeout + time.Nanosecond
+		}, contains: "jobs.poll_interval"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			jobs, postgres := validJobs, validPostgres

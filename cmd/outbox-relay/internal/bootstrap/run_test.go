@@ -1,4 +1,21 @@
-package bootstrap
+package //nolint:paralleltest // This test mutates process-global environment or working directory.
+
+// This package is the only one that wires internal/config and postgresoutbox
+// together, so it is the only one that can hold their restated ceilings to each
+// other. The postgresoutbox ceiling block owns why the values are restated at
+// all; the three tests here own which part each of them pins.
+//
+// This one pins the four numeric ceilings: each must be accepted and one past it
+// rejected. A ceiling raised in one place and not the other would otherwise
+// surface only as an operator rejected by a bound the relay no longer enforces.
+//nolint:paralleltest // This test mutates process-global environment or working directory.
+
+// The fifth restated constant. The lease budget is the one rule that spends
+// internal/config's copy of postgresoutbox.PublisherJoinTimeout, so it is also
+// the only place that can pin it from outside the package. A lease exactly
+// equal to the budget it must exceed is rejected and one millisecond more is
+// accepted; a copy that drifted either way moves one of those two verdicts.
+bootstrap
 
 import (
 	"context"
@@ -23,14 +40,6 @@ import (
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 )
 
-// This package is the only one that wires internal/config and postgresoutbox
-// together, so it is the only one that can hold their restated ceilings to each
-// other. The postgresoutbox ceiling block owns why the values are restated at
-// all; the three tests here own which part each of them pins.
-//
-// This one pins the four numeric ceilings: each must be accepted and one past it
-// rejected. A ceiling raised in one place and not the other would otherwise
-// surface only as an operator rejected by a bound the relay no longer enforces.
 func TestOutboxConfigBoundsMatchRelayCeilings(t *testing.T) {
 	for _, bound := range []struct {
 		key     string
@@ -55,11 +64,6 @@ func TestOutboxConfigBoundsMatchRelayCeilings(t *testing.T) {
 	}
 }
 
-// The fifth restated constant. The lease budget is the one rule that spends
-// internal/config's copy of postgresoutbox.PublisherJoinTimeout, so it is also
-// the only place that can pin it from outside the package. A lease exactly
-// equal to the budget it must exceed is rejected and one millisecond more is
-// accepted; a copy that drifted either way moves one of those two verdicts.
 func TestOutboxLeaseBudgetSpendsTheRelayJoinTimeout(t *testing.T) {
 	const (
 		publishTimeout   = 4 * time.Second
@@ -144,8 +148,6 @@ func TestRelayRejectsEveryOutboxBudget(t *testing.T) {
 // fields it happens to range over. Mapping an OutboxConfig whose every field is
 // set must therefore leave no RelayConfig field zero.
 func TestRelayConfigMapsEveryOutboxField(t *testing.T) {
-	t.Parallel()
-
 	var source config.OutboxConfig
 	settable := reflect.ValueOf(&source).Elem()
 	for index := range settable.NumField() {
@@ -682,8 +684,6 @@ func TestOutboxRelayReadinessAndLiveness(t *testing.T) {
 }
 
 func TestOutboxRelayFlagAndConfigMapping(t *testing.T) {
-	t.Parallel()
-
 	options, classify, err := parseLoadOptions([]string{"--config", "base.yaml", "--config-overlay", "one.yaml", "--config-overlay=two.yaml"})
 	if err != nil || classify || options.ConfigPath != "base.yaml" || strings.Join(options.ConfigOverlays, ",") != "one.yaml,two.yaml" {
 		t.Fatalf("parseLoadOptions() = %+v, %v", options, err)
@@ -813,8 +813,6 @@ func TestOutboxRelayStartupDoesNotClaimWithoutPublisher(t *testing.T) {
 }
 
 func TestOutboxRelayTelemetrySetupAndFailureClasses(t *testing.T) {
-	t.Parallel()
-
 	cfg := config.Config{
 		App: config.AppConfig{Version: "test", Commit: "commit", Env: "test", InstanceID: "instance"},
 		Observability: config.ObservabilityConfig{OTel: config.OTelConfig{
@@ -829,8 +827,6 @@ func TestOutboxRelayTelemetrySetupAndFailureClasses(t *testing.T) {
 // reports without touching an endpoint, which makes it the cheap stand-in for
 // any hard metrics failure.
 func TestOutboxRelayTelemetrySetupDegradesInsteadOfFailing(t *testing.T) {
-	t.Parallel()
-
 	metrics := &telemetry.Metrics{}
 	cleanup := setupTelemetry(t.Context(), config.Config{}, metrics, slog.Default())
 	if cleanup == nil {

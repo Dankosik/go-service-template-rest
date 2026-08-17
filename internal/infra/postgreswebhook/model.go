@@ -27,6 +27,7 @@ const (
 	OutcomeAttemptsExhausted      OutcomeClass = "attempts_exhausted"
 	OutcomeUnknown                OutcomeClass = "outcome_unknown"
 	OutcomeClosedUnknown          OutcomeClass = "closed_unknown"
+	OutcomeRetained               OutcomeClass = "retained"
 )
 
 type AttemptIdentity struct {
@@ -39,6 +40,7 @@ type AttemptIdentity struct {
 
 type ClaimedAttempt struct {
 	Identity              AttemptIdentity
+	CapacityRevision      int64
 	DestinationID         string
 	DestinationGeneration int64
 	URL                   string
@@ -46,6 +48,7 @@ type ClaimedAttempt struct {
 	ContentType           string
 	AttemptedAt           time.Time
 	Deadline              time.Time
+	PreviousRetryDelay    time.Duration
 	KeyReference          string
 	PredecessorReference  string
 	ManifestRevision      int64

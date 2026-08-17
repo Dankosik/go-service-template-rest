@@ -199,7 +199,7 @@ func (r *scriptedObjectStorageRuntime) Metadata(context.Context, string) (object
 
 type noOpObjectStorageStore struct{}
 
-func (noOpObjectStorageStore) Upload(context.Context, string, io.Reader, objectstorage.UploadOptions) (objectstorage.UploadResult, error) {
+func (noOpObjectStorageStore) Upload(context.Context, string, io.ReadCloser, objectstorage.UploadOptions) (objectstorage.UploadResult, error) {
 	return objectstorage.UploadResult{}, nil
 }
 
@@ -225,6 +225,8 @@ func validObjectStorageConfig() config.ObjectStorageConfig {
 		Bucket:                  "examplebucket",
 		AccessKeyID:             "test-access-key",
 		SecretAccessKey:         "test-secret-key",
+		SessionToken:            "test-session-token",
+		ExpectedBucketOwner:     "123456789012",
 		MaxObjectBytes:          10 << 20,
 		MultipartChunkBytes:     5 << 20,
 		MaxActiveOperations:     2,

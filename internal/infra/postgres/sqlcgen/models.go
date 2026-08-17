@@ -170,6 +170,9 @@ type WebhookAttempt struct {
 	RetryAfter            *string
 	OutcomeClass          *string
 	FinalizedAt           pgtype.Timestamptz
+	KeyReferences         []string
+	RetryAfterDelayNs     *int64
+	RetryDelayNs          *int64
 }
 
 type WebhookCapacitySlot struct {
@@ -205,26 +208,34 @@ type WebhookCycle struct {
 }
 
 type WebhookDelivery struct {
-	OwnerScope            string
-	DeliveryID            string
-	BusinessEventID       string
-	FanoutSnapshotID      string
-	DestinationID         string
-	DestinationGeneration int64
-	UrlSnapshot           string
-	PolicySnapshot        []byte
-	State                 string
-	CurrentCycle          int64
-	NextDueAt             pgtype.Timestamptz
-	LeaseOwner            *string
-	LeaseExpiresAt        pgtype.Timestamptz
-	Fence                 int64
-	CumulativeSummary     string
-	Sendable              bool
-	RedriveEligibleUntil  pgtype.Timestamptz
-	TerminalAt            pgtype.Timestamptz
-	CreatedAt             pgtype.Timestamptz
-	UpdatedAt             pgtype.Timestamptz
+	OwnerScope                         string
+	DeliveryID                         string
+	BusinessEventID                    string
+	FanoutSnapshotID                   string
+	DestinationID                      string
+	DestinationGeneration              int64
+	UrlSnapshot                        string
+	PolicySnapshot                     []byte
+	State                              string
+	CurrentCycle                       int64
+	NextDueAt                          pgtype.Timestamptz
+	LeaseOwner                         *string
+	LeaseExpiresAt                     pgtype.Timestamptz
+	Fence                              int64
+	CumulativeSummary                  string
+	Sendable                           bool
+	RedriveEligibleUntil               pgtype.Timestamptz
+	TerminalAt                         pgtype.Timestamptz
+	CreatedAt                          pgtype.Timestamptz
+	UpdatedAt                          pgtype.Timestamptz
+	PayloadRetainedUntil               pgtype.Timestamptz
+	ActiveRetainedUntil                pgtype.Timestamptz
+	TerminalSummaryRetainedUntil       pgtype.Timestamptz
+	AttemptRetainedUntil               pgtype.Timestamptz
+	ActionRetainedUntil                pgtype.Timestamptz
+	DestinationGenerationRetainedUntil pgtype.Timestamptz
+	ReceiverDedupRetainedUntil         pgtype.Timestamptz
+	LegalHold                          bool
 }
 
 type WebhookDestination struct {
@@ -251,6 +262,13 @@ type WebhookDestination struct {
 	LastConsideredSequence       int64
 	CreatedAt                    pgtype.Timestamptz
 	UpdatedAt                    pgtype.Timestamptz
+}
+
+type WebhookDestinationTombstone struct {
+	OwnerScope    string
+	DestinationID string
+	Generation    int64
+	RetiredAt     pgtype.Timestamptz
 }
 
 type WebhookEvent struct {
@@ -297,6 +315,9 @@ type WebhookOperatorAction struct {
 	Result                    string
 	CreatedAt                 pgtype.Timestamptz
 	CompletedAt               pgtype.Timestamptz
+	RetainUntil               pgtype.Timestamptz
+	RequestPayload            []byte
+	ResultCycle               int64
 }
 
 type WebhookTombstone struct {

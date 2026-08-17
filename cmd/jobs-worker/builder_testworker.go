@@ -28,13 +28,10 @@ var buildRegistry bootstrap.RegistryBuilder = func(context.Context, config.Confi
 			return nil
 		},
 		Policy: jobs.Policy{
-			Producer: jobs.ProducerPolicy{Scope: "feature-operation", RecognitionPeriod: time.Hour},
-			Effect:   jobs.EffectPolicy{Authority: jobs.EffectConditionalWrite, DuplicateTolerance: "same key is harmless", LateResultPrecedence: "effect ledger wins", AmbiguousAction: jobs.AmbiguousEffectRetry, ReadbackAuthority: "effect ledger"},
-			Retry:    jobs.RetryPolicy{MaxAttempts: 3, MaxElapsed: time.Hour, InitialBackoff: 20 * time.Millisecond, MaxBackoff: 20 * time.Millisecond, HintPolicy: jobs.RetryHintIgnore, Jitter: jobs.JitterNone, MaxRecoveryWave: 8},
-			Recovery: jobs.RecoveryPolicy{Mode: jobs.RecoveryUnavailable, Attempts: jobs.BudgetPreserved, Elapsed: jobs.BudgetPreserved},
-			Schedule: jobs.ScheduleOneOff, MaxAttemptDuration: time.Minute, MaxAttemptCost: 1, MaxUsefulDuration: time.Hour, TerminationEnvelope: time.Minute,
-			Data:     jobs.DataPolicy{Classification: "private", Redaction: "omit payload", Retention: "explicit deletion only", Deletion: "disabled", OperatorRoles: "none"},
-			Operator: jobs.OperatorUnavailable, WorkClass: jobs.WorkClassNeutral,
+			Effect:             jobs.EffectPolicy{AmbiguousAction: jobs.AmbiguousEffectRetry},
+			Retry:              jobs.RetryPolicy{MaxAttempts: 3, MaxElapsed: time.Hour, InitialBackoff: 20 * time.Millisecond, MaxBackoff: 20 * time.Millisecond, HintPolicy: jobs.RetryHintIgnore, Jitter: jobs.JitterNone, MaxRecoveryWave: 8},
+			Recovery:           jobs.RecoveryPolicy{Mode: jobs.RecoveryUnavailable, Attempts: jobs.BudgetPreserved, Elapsed: jobs.BudgetPreserved},
+			MaxAttemptDuration: 8 * time.Second, TerminationEnvelope: 8 * time.Second,
 		},
 	}
 	definition, err := jobs.NewDefinition(definitionInput)

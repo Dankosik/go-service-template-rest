@@ -2,6 +2,7 @@ package jobs
 
 import (
 	"errors"
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -30,13 +31,7 @@ func TestJobsDefinition(t *testing.T) {
 			{name: "policy version", change: func(i *DefinitionInput[testArgs]) { i.Revision.PolicyVersion = "" }, want: "policy_version"},
 			{name: "payload limit", change: func(i *DefinitionInput[testArgs]) { i.MaxPayloadBytes = 0 }, want: "max_payload_bytes"},
 			{name: "validator", change: func(i *DefinitionInput[testArgs]) { i.Validate = nil }, want: "validate"},
-			{name: "producer scope", change: func(i *DefinitionInput[testArgs]) { i.Policy.Producer.Scope = "" }, want: "producer.scope"},
-			{name: "recognition period", change: func(i *DefinitionInput[testArgs]) { i.Policy.Producer.RecognitionPeriod = 0 }, want: "producer.recognition_period"},
-			{name: "effect authority", change: func(i *DefinitionInput[testArgs]) { i.Policy.Effect.Authority = "" }, want: "effect.authority"},
-			{name: "duplicate tolerance", change: func(i *DefinitionInput[testArgs]) { i.Policy.Effect.DuplicateTolerance = "" }, want: "effect.duplicate_tolerance"},
-			{name: "late result", change: func(i *DefinitionInput[testArgs]) { i.Policy.Effect.LateResultPrecedence = "" }, want: "effect.late_result_precedence"},
 			{name: "ambiguous effect", change: func(i *DefinitionInput[testArgs]) { i.Policy.Effect.AmbiguousAction = "" }, want: "effect.ambiguous_action"},
-			{name: "effect readback", change: func(i *DefinitionInput[testArgs]) { i.Policy.Effect.ReadbackAuthority = "" }, want: "effect.readback_authority"},
 			{name: "attempts", change: func(i *DefinitionInput[testArgs]) { i.Policy.Retry.MaxAttempts = 0 }, want: "retry.max_attempts"},
 			{name: "elapsed", change: func(i *DefinitionInput[testArgs]) { i.Policy.Retry.MaxElapsed = 0 }, want: "retry.max_elapsed"},
 			{name: "initial backoff", change: func(i *DefinitionInput[testArgs]) { i.Policy.Retry.InitialBackoff = 0 }, want: "retry.initial_backoff"},
@@ -45,18 +40,8 @@ func TestJobsDefinition(t *testing.T) {
 			{name: "jitter", change: func(i *DefinitionInput[testArgs]) { i.Policy.Retry.Jitter = "" }, want: "retry.jitter"},
 			{name: "recovery wave", change: func(i *DefinitionInput[testArgs]) { i.Policy.Retry.MaxRecoveryWave = 0 }, want: "retry.max_recovery_wave"},
 			{name: "recovery", change: func(i *DefinitionInput[testArgs]) { i.Policy.Recovery.Mode = "" }, want: "recovery.mode"},
-			{name: "schedule", change: func(i *DefinitionInput[testArgs]) { i.Policy.Schedule = "" }, want: "schedule"},
 			{name: "attempt duration", change: func(i *DefinitionInput[testArgs]) { i.Policy.MaxAttemptDuration = 0 }, want: "max_attempt_duration"},
-			{name: "attempt cost", change: func(i *DefinitionInput[testArgs]) { i.Policy.MaxAttemptCost = 0 }, want: "max_attempt_cost"},
-			{name: "useful duration", change: func(i *DefinitionInput[testArgs]) { i.Policy.MaxUsefulDuration = 0 }, want: "max_useful_duration"},
 			{name: "termination", change: func(i *DefinitionInput[testArgs]) { i.Policy.TerminationEnvelope = 0 }, want: "termination_envelope"},
-			{name: "classification", change: func(i *DefinitionInput[testArgs]) { i.Policy.Data.Classification = "" }, want: "data.classification"},
-			{name: "redaction", change: func(i *DefinitionInput[testArgs]) { i.Policy.Data.Redaction = "" }, want: "data.redaction"},
-			{name: "retention", change: func(i *DefinitionInput[testArgs]) { i.Policy.Data.Retention = "" }, want: "data.retention"},
-			{name: "deletion", change: func(i *DefinitionInput[testArgs]) { i.Policy.Data.Deletion = "" }, want: "data.deletion"},
-			{name: "operator roles", change: func(i *DefinitionInput[testArgs]) { i.Policy.Data.OperatorRoles = "" }, want: "data.operator_roles"},
-			{name: "operator", change: func(i *DefinitionInput[testArgs]) { i.Policy.Operator = "" }, want: "operator"},
-			{name: "work class", change: func(i *DefinitionInput[testArgs]) { i.Policy.WorkClass = "" }, want: "work_class"},
 		}
 		for _, tc := range cases {
 			t.Run(tc.name, func(t *testing.T) {
@@ -78,9 +63,7 @@ func TestJobsDefinition(t *testing.T) {
 		change func(*DefinitionInput[testArgs])
 	}{
 		{name: "oversized payload", change: func(i *DefinitionInput[testArgs]) { i.MaxPayloadBytes = MaxPayloadBytes + 1 }},
-		{name: "periodic", change: func(i *DefinitionInput[testArgs]) { i.Policy.Schedule = ScheduleMode("periodic") }},
-		{name: "second class", change: func(i *DefinitionInput[testArgs]) { i.Policy.WorkClass = WorkClass("priority") }},
-		{name: "operator capability", change: func(i *DefinitionInput[testArgs]) { i.Policy.Operator = OperatorMode("enabled") }},
+		{name: "unpersistable recovery wave", change: func(i *DefinitionInput[testArgs]) { i.Policy.Retry.MaxRecoveryWave = math.MaxUint32 }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			candidate := input
@@ -120,12 +103,7 @@ func testDefinition(t *testing.T, revision Revision) Definition[testArgs] {
 
 func testPolicy() Policy {
 	return Policy{
-		Producer: ProducerPolicy{Scope: "feature-operation", RecognitionPeriod: 30 * 24 * time.Hour},
-		Effect: EffectPolicy{
-			Authority: EffectConditionalWrite, DuplicateTolerance: "same key is harmless",
-			LateResultPrecedence: "effect ledger wins", AmbiguousAction: AmbiguousEffectOutcomeUnknown,
-			ReadbackAuthority: "effect ledger",
-		},
+		Effect: EffectPolicy{AmbiguousAction: AmbiguousEffectOutcomeUnknown},
 		Retry: RetryPolicy{
 			MaxAttempts: 4, MaxElapsed: 24 * time.Hour, InitialBackoff: time.Second,
 			MaxBackoff: time.Minute, HintPolicy: RetryHintPrefer, Jitter: JitterSHA256,
@@ -134,13 +112,7 @@ func testPolicy() Policy {
 		Recovery: RecoveryPolicy{
 			Mode: RecoveryUnavailable, Attempts: BudgetPreserved, Elapsed: BudgetPreserved,
 		},
-		Schedule: ScheduleOneOff, MaxAttemptDuration: time.Minute, MaxAttemptCost: 1,
-		MaxUsefulDuration: time.Hour, TerminationEnvelope: 2 * time.Minute,
-		Data: DataPolicy{
-			Classification: "private", Redaction: "omit payload", Retention: "explicit deletion only",
-			Deletion: "disabled", OperatorRoles: "none",
-		},
-		Operator: OperatorUnavailable, WorkClass: WorkClassNeutral,
+		MaxAttemptDuration: time.Minute, TerminationEnvelope: 2 * time.Minute,
 	}
 }
 

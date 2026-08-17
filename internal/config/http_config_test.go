@@ -104,9 +104,10 @@ func TestReadinessTimeoutMustNotExceedWriteTimeout(t *testing.T) {
 // The readiness/health-check relationship is owned by
 // bootstrap.validateStartupBudgetCompatibility, which enforces it with the
 // startup headroom this package cannot see. It is proved there.
-
 // The request budget must expire while the connection can still carry the 504
 // that reports it, so it may not outlast the response write deadline.
+//
+//nolint:paralleltest // This test mutates process-global environment or working directory.
 func TestRequestTimeoutMustNotExceedWriteTimeout(t *testing.T) {
 	t.Run("greater request timeout rejects", func(t *testing.T) {
 		resetConfigEnv(t)
@@ -186,6 +187,11 @@ func TestMaxInFlightBounds(t *testing.T) {
 			// profile:authn-oidc-jwt:start
 			wantErr: true,
 			// profile:authn-oidc-jwt:end
+			//nolint:paralleltest // This test mutates process-global environment or working directory.
+
+			// TestMaxConnectionsBounds covers the accept ceiling, which bounds what
+			// max_in_flight cannot: a connection costs a goroutine and its buffers before
+			// any middleware, including the load shedder, ever runs.
 		},
 		{name: "negative", value: "-1", wantErr: true},
 		{name: "above ceiling", value: "100001", wantErr: true},
@@ -207,9 +213,6 @@ func TestMaxInFlightBounds(t *testing.T) {
 	}
 }
 
-// TestMaxConnectionsBounds covers the accept ceiling, which bounds what
-// max_in_flight cannot: a connection costs a goroutine and its buffers before
-// any middleware, including the load shedder, ever runs.
 func TestMaxConnectionsBounds(t *testing.T) {
 	for _, tc := range []struct {
 		name        string

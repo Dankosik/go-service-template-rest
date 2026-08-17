@@ -40,6 +40,7 @@ func NewWorker(store *Store, manifest *SecretManifest, config WorkerConfig) (*Wo
 		validateToken("worker_id", config.WorkerID) != nil || config.ClaimScanPage < 1 || config.ClaimScanPage > MaxClaimScanPage ||
 		config.PollInterval <= 0 || config.ObservationInterval <= 0 || config.AttemptTimeout <= 0 ||
 		config.StoreOperationTimeout <= 0 || config.DrainTimeout <= config.AttemptTimeout ||
+		config.AttemptTimeout != store.options.AttemptTimeout || config.StoreOperationTimeout != store.options.OperationTimeout || config.DrainTimeout != store.options.DrainTimeout ||
 		config.MaintenanceInterval <= 0 || config.MaintenanceBatch < 1 || config.MaintenanceBatch > 1000 {
 		return nil, fmt.Errorf("%w: worker bounds are invalid", ErrConfig)
 	}

@@ -44,7 +44,8 @@ observed AS MATERIALIZED (
 uncovered AS MATERIALIZED (
     SELECT DISTINCT job.kind, job.args_version, job.policy_version
     FROM postgres_jobs AS job
-    WHERE NOT EXISTS (
+    WHERE job.state IN ('ready', 'scheduled', 'retry_wait', 'running', 'cancel_requested')
+      AND NOT EXISTS (
         SELECT 1
         FROM input_keys AS key
         WHERE key.kind = job.kind
@@ -106,6 +107,7 @@ claimed AS (
         job.attempt_generation,
         job.attempts_used,
         job.budget_started_at,
+        job.available_at,
         job.current_worker_id,
         job.lease_expires_at,
         observed.observed_at AS started_at
@@ -154,6 +156,7 @@ SELECT
     claimed.attempt_generation,
     claimed.attempts_used,
     claimed.budget_started_at,
+    claimed.available_at,
     claimed.current_worker_id,
     claimed.started_at::timestamptz AS started_at,
     claimed.lease_expires_at
@@ -200,6 +203,7 @@ type ClaimPostgresJobsRow struct {
 	AttemptGeneration     *int64
 	AttemptsUsed          *int32
 	BudgetStartedAt       pgtype.Timestamptz
+	AvailableAt           pgtype.Timestamptz
 	CurrentWorkerID       *string
 	StartedAt             pgtype.Timestamptz
 	LeaseExpiresAt        pgtype.Timestamptz
@@ -244,6 +248,7 @@ func (q *Queries) ClaimPostgresJobs(ctx context.Context, arg ClaimPostgresJobsPa
 			&i.AttemptGeneration,
 			&i.AttemptsUsed,
 			&i.BudgetStartedAt,
+			&i.AvailableAt,
 			&i.CurrentWorkerID,
 			&i.StartedAt,
 			&i.LeaseExpiresAt,
@@ -286,22 +291,23 @@ current_attempt AS MATERIALIZED (
       AND locked_job.recovery_generation = $3::bigint
       AND locked_job.current_worker_id = $4::text
       AND locked_job.state IN ('running', 'cancel_requested')
+	  AND locked_job.attempts_used = $5::integer
 ),
 updated_job AS (
     UPDATE postgres_jobs AS job
-    SET state = $5::text,
+    SET state = $6::text,
         available_at = CASE
-            WHEN $5::text = 'retry_wait'
+            WHEN $6::text = 'retry_wait'
             THEN observed.observed_at
-                + $6::bigint * interval '1 microsecond'
+                + $7::bigint * interval '1 microsecond'
             ELSE job.available_at
         END,
-        attempts_used = $7::integer,
+        attempts_used = $5::integer,
         current_worker_id = NULL,
         lease_expires_at = NULL,
         updated_at = observed.observed_at,
         terminal_at = CASE
-            WHEN $5::text = 'retry_wait' THEN NULL
+            WHEN $6::text = 'retry_wait' THEN NULL
             ELSE observed.observed_at
         END
     FROM current_attempt, observed
@@ -311,17 +317,17 @@ updated_job AS (
 updated_attempt AS (
     UPDATE postgres_job_attempts AS attempt
     SET finalized_at = observed.observed_at,
-        final_state = $5::text,
+        final_state = $6::text,
         outcome = $8::text,
         effect_status = $9::text,
         failure_code = NULLIF($10::text, ''),
         retry_at = CASE
-            WHEN $5::text = 'retry_wait'
+            WHEN $6::text = 'retry_wait'
             THEN observed.observed_at
-                + $6::bigint * interval '1 microsecond'
+                + $7::bigint * interval '1 microsecond'
             ELSE NULL
         END,
-        attempts_used = $7::integer,
+        attempts_used = $5::integer,
         elapsed_used_milliseconds = $11::bigint
     FROM updated_job, observed
     WHERE attempt.logical_job_id = updated_job.logical_job_id
@@ -358,9 +364,9 @@ type FinalizePostgresJobAttemptParams struct {
 	AttemptGeneration       int64
 	RecoveryGeneration      int64
 	WorkerID                string
+	AttemptsUsed            int32
 	FinalState              string
 	DelayMicroseconds       int64
-	AttemptsUsed            int32
 	Outcome                 string
 	EffectStatus            string
 	FailureCode             string
@@ -386,9 +392,9 @@ func (q *Queries) FinalizePostgresJobAttempt(ctx context.Context, arg FinalizePo
 		arg.AttemptGeneration,
 		arg.RecoveryGeneration,
 		arg.WorkerID,
+		arg.AttemptsUsed,
 		arg.FinalState,
 		arg.DelayMicroseconds,
-		arg.AttemptsUsed,
 		arg.Outcome,
 		arg.EffectStatus,
 		arg.FailureCode,
@@ -503,39 +509,81 @@ func (q *Queries) InsertPostgresJobAcceptance(ctx context.Context, arg InsertPos
 }
 
 const listExpiredPostgresJobAttempts = `-- name: ListExpiredPostgresJobAttempts :many
-WITH observed AS MATERIALIZED (
+WITH input_limits AS MATERIALIZED (
+    SELECT kind.kind, args.args_version, policy.policy_version, wave.max_recovery_wave
+    FROM unnest($2::text[]) WITH ORDINALITY AS kind(kind, position)
+    JOIN unnest($3::text[]) WITH ORDINALITY AS args(args_version, position) USING (position)
+    JOIN unnest($4::text[]) WITH ORDINALITY AS policy(policy_version, position) USING (position)
+    JOIN unnest($5::integer[]) WITH ORDINALITY AS wave(max_recovery_wave, position) USING (position)
+),
+observed AS MATERIALIZED (
     SELECT clock_timestamp() AS observed_at
+),
+ranked AS MATERIALIZED (
+    SELECT
+        job.logical_job_id,
+        job.kind,
+        job.args_version,
+        job.policy_version,
+        job.state,
+        job.recovery_generation,
+        job.attempt_generation,
+        job.attempts_used,
+        job.current_worker_id,
+        job.budget_started_at,
+        attempt.started_at,
+        attempt.lease_expires_at,
+        observed.observed_at,
+        input_limits.max_recovery_wave,
+        row_number() OVER (
+            PARTITION BY job.kind, job.args_version, job.policy_version
+            ORDER BY job.lease_expires_at, job.logical_job_id
+        ) AS recovery_position
+    FROM postgres_jobs AS job
+    JOIN postgres_job_attempts AS attempt
+      ON attempt.logical_job_id = job.logical_job_id
+     AND attempt.attempt_generation = job.attempt_generation
+    JOIN input_limits
+      ON input_limits.kind = job.kind
+     AND input_limits.args_version = job.args_version
+     AND input_limits.policy_version = job.policy_version
+    CROSS JOIN observed
+    WHERE job.state IN ('running', 'cancel_requested')
+      AND job.current_worker_id IS NOT NULL
+      AND job.lease_expires_at < observed.observed_at
+      AND attempt.finalized_at IS NULL
 )
 SELECT
-    job.logical_job_id,
-    job.kind,
-    job.args_version,
-    job.policy_version,
-    job.state,
-    job.recovery_generation,
-    job.attempt_generation,
-    job.attempts_used,
-    job.current_worker_id,
-    job.budget_started_at,
-    attempt.started_at,
-    attempt.lease_expires_at,
-    observed.observed_at::timestamptz AS observed_at,
-    greatest(
-        0,
-        floor(extract(epoch FROM observed.observed_at - job.budget_started_at) * 1000)
-    )::bigint AS elapsed_milliseconds
-FROM postgres_jobs AS job
-JOIN postgres_job_attempts AS attempt
-  ON attempt.logical_job_id = job.logical_job_id
- AND attempt.attempt_generation = job.attempt_generation
-CROSS JOIN observed
-WHERE job.state IN ('running', 'cancel_requested')
-  AND job.current_worker_id IS NOT NULL
-  AND job.lease_expires_at < observed.observed_at
-  AND attempt.finalized_at IS NULL
-ORDER BY job.lease_expires_at, job.logical_job_id
+	ranked.logical_job_id,
+	ranked.kind,
+	ranked.args_version,
+	ranked.policy_version,
+	ranked.state,
+	ranked.recovery_generation,
+	ranked.attempt_generation,
+	ranked.attempts_used,
+	ranked.current_worker_id,
+	ranked.budget_started_at,
+	ranked.started_at,
+	ranked.lease_expires_at,
+	ranked.observed_at::timestamptz AS observed_at,
+	greatest(
+		0,
+		floor(extract(epoch FROM ranked.observed_at - ranked.budget_started_at) * 1000)
+	)::bigint AS elapsed_milliseconds
+FROM ranked
+WHERE ranked.recovery_position <= ranked.max_recovery_wave
+ORDER BY ranked.lease_expires_at, ranked.logical_job_id
 LIMIT $1::integer
 `
+
+type ListExpiredPostgresJobAttemptsParams struct {
+	CandidateLimit   int32
+	Kinds            []string
+	ArgsVersions     []string
+	PolicyVersions   []string
+	MaxRecoveryWaves []int32
+}
 
 type ListExpiredPostgresJobAttemptsRow struct {
 	LogicalJobID        string
@@ -554,8 +602,14 @@ type ListExpiredPostgresJobAttemptsRow struct {
 	ElapsedMilliseconds int64
 }
 
-func (q *Queries) ListExpiredPostgresJobAttempts(ctx context.Context, candidateLimit int32) ([]ListExpiredPostgresJobAttemptsRow, error) {
-	rows, err := q.db.Query(ctx, listExpiredPostgresJobAttempts, candidateLimit)
+func (q *Queries) ListExpiredPostgresJobAttempts(ctx context.Context, arg ListExpiredPostgresJobAttemptsParams) ([]ListExpiredPostgresJobAttemptsRow, error) {
+	rows, err := q.db.Query(ctx, listExpiredPostgresJobAttempts,
+		arg.CandidateLimit,
+		arg.Kinds,
+		arg.ArgsVersions,
+		arg.PolicyVersions,
+		arg.MaxRecoveryWaves,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -799,6 +853,7 @@ observed AS MATERIALIZED (
 inventory AS MATERIALIZED (
     SELECT DISTINCT kind, args_version, policy_version
     FROM postgres_jobs
+    WHERE state IN ('ready', 'scheduled', 'retry_wait', 'running', 'cancel_requested')
 ),
 state_counts AS MATERIALIZED (
     SELECT state, count(*)::bigint AS job_count, min(available_at) AS oldest_available_at
@@ -818,9 +873,9 @@ SELECT
               AND input_keys.policy_version = inventory.policy_version
         )
     )::boolean AS compatible,
-    ARRAY(SELECT kind FROM inventory ORDER BY kind, args_version, policy_version)::text[] AS retained_kinds,
-    ARRAY(SELECT args_version FROM inventory ORDER BY kind, args_version, policy_version)::text[] AS retained_args_versions,
-    ARRAY(SELECT policy_version FROM inventory ORDER BY kind, args_version, policy_version)::text[] AS retained_policy_versions,
+    ARRAY(SELECT kind FROM inventory ORDER BY kind, args_version, policy_version)::text[] AS required_kinds,
+    ARRAY(SELECT args_version FROM inventory ORDER BY kind, args_version, policy_version)::text[] AS required_args_versions,
+    ARRAY(SELECT policy_version FROM inventory ORDER BY kind, args_version, policy_version)::text[] AS required_policy_versions,
     ARRAY(SELECT state FROM state_counts ORDER BY state)::text[] AS states,
     ARRAY(SELECT job_count FROM state_counts ORDER BY state)::bigint[] AS state_counts,
     ARRAY(SELECT oldest_available_at FROM state_counts ORDER BY state)::timestamptz[] AS oldest_available_at
@@ -836,9 +891,9 @@ type ObservePostgresJobsParams struct {
 type ObservePostgresJobsRow struct {
 	ObservedAt             pgtype.Timestamptz
 	Compatible             *bool
-	RetainedKinds          []string
-	RetainedArgsVersions   []string
-	RetainedPolicyVersions []string
+	RequiredKinds          []string
+	RequiredArgsVersions   []string
+	RequiredPolicyVersions []string
 	States                 []string
 	StateCounts            []int64
 	OldestAvailableAt      []pgtype.Timestamptz
@@ -850,9 +905,9 @@ func (q *Queries) ObservePostgresJobs(ctx context.Context, arg ObservePostgresJo
 	err := row.Scan(
 		&i.ObservedAt,
 		&i.Compatible,
-		&i.RetainedKinds,
-		&i.RetainedArgsVersions,
-		&i.RetainedPolicyVersions,
+		&i.RequiredKinds,
+		&i.RequiredArgsVersions,
+		&i.RequiredPolicyVersions,
 		&i.States,
 		&i.StateCounts,
 		&i.OldestAvailableAt,
@@ -1055,22 +1110,23 @@ current_expired AS MATERIALIZED (
       AND locked_job.current_worker_id = $4::text
       AND locked_job.state IN ('running', 'cancel_requested')
       AND locked_job.lease_expires_at < observed.observed_at
+	  AND locked_job.attempts_used = $5::integer
 ),
 updated_job AS (
     UPDATE postgres_jobs AS job
-    SET state = $5::text,
+    SET state = $6::text,
         available_at = CASE
-            WHEN $5::text = 'retry_wait'
+            WHEN $6::text = 'retry_wait'
             THEN observed.observed_at
-                + $6::bigint * interval '1 microsecond'
+                + $7::bigint * interval '1 microsecond'
             ELSE job.available_at
         END,
-        attempts_used = $7::integer,
+        attempts_used = $5::integer,
         current_worker_id = NULL,
         lease_expires_at = NULL,
         updated_at = observed.observed_at,
         terminal_at = CASE
-            WHEN $5::text = 'retry_wait' THEN NULL
+            WHEN $6::text = 'retry_wait' THEN NULL
             ELSE observed.observed_at
         END
     FROM current_expired, observed
@@ -1080,17 +1136,17 @@ updated_job AS (
 updated_attempt AS (
     UPDATE postgres_job_attempts AS attempt
     SET finalized_at = observed.observed_at,
-        final_state = $5::text,
+        final_state = $6::text,
         outcome = $8::text,
         effect_status = $9::text,
         failure_code = NULLIF($10::text, ''),
         retry_at = CASE
-            WHEN $5::text = 'retry_wait'
+            WHEN $6::text = 'retry_wait'
             THEN observed.observed_at
-                + $6::bigint * interval '1 microsecond'
+                + $7::bigint * interval '1 microsecond'
             ELSE NULL
         END,
-        attempts_used = $7::integer,
+        attempts_used = $5::integer,
         elapsed_used_milliseconds = $11::bigint
     FROM updated_job, observed
     WHERE attempt.logical_job_id = updated_job.logical_job_id
@@ -1127,9 +1183,9 @@ type RescuePostgresJobAttemptParams struct {
 	AttemptGeneration       int64
 	RecoveryGeneration      int64
 	WorkerID                string
+	AttemptsUsed            int32
 	FinalState              string
 	DelayMicroseconds       int64
-	AttemptsUsed            int32
 	Outcome                 string
 	EffectStatus            string
 	FailureCode             string
@@ -1155,9 +1211,9 @@ func (q *Queries) RescuePostgresJobAttempt(ctx context.Context, arg RescuePostgr
 		arg.AttemptGeneration,
 		arg.RecoveryGeneration,
 		arg.WorkerID,
+		arg.AttemptsUsed,
 		arg.FinalState,
 		arg.DelayMicroseconds,
-		arg.AttemptsUsed,
 		arg.Outcome,
 		arg.EffectStatus,
 		arg.FailureCode,

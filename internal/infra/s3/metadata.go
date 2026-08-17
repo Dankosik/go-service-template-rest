@@ -26,9 +26,12 @@ func (c *Client) Metadata(ctx context.Context, key string) (result objectstorage
 		return result, c.admissionError(err)
 	}
 
-	out, err := c.sdk.HeadObject(effective, &awss3.HeadObjectInput{Bucket: aws.String(c.config.Bucket), Key: aws.String(key)})
+	send := &sendState{}
+	out, err := c.sdk.HeadObject(withSendState(effective, send), &awss3.HeadObjectInput{
+		Bucket: aws.String(c.config.Bucket), ExpectedBucketOwner: c.expectedBucketOwner(), Key: aws.String(key),
+	}, withReadRetry)
 	if err != nil {
-		return result, operationError(operationMetadata, err, false)
+		return result, operationError(c.config.Provider, operationMetadata, err, send)
 	}
 	if out == nil || out.ContentLength == nil || *out.ContentLength < 0 || out.LastModified == nil {
 		return result, objectstorage.NewError(objectstorage.KindInternal)

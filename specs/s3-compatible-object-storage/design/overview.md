@@ -3,12 +3,12 @@
 status: ready
 
 Realizes: [../spec.md](../spec.md) at ready SHA-256
-`8b4000e19c3bd560809ef5beecf8a313582b7cfdbf65c3748822c08d42e0e0ca`.
+`46ee347a7931d9d20601ce00cea8455a89e2d9ba166dfa8e308b8a4154e16def`.
 [Research synthesis](../research/synthesis.md), SHA-256
 `d13fbc8ad407eaf89cf29653611d1efc0c5d30c489e97d5476e1328d909ed9a6`,
 remains supporting evidence rather than contract authority.
 
-Evidence was refreshed on 2026-08-12 against the pinned client and Go sources and
+Evidence was refreshed on 2026-08-14 against the pinned client and Go sources and
 the provider sources linked below. Cloudflare's compatibility matrix is an
 evolving statement of implemented fields, not an Amazon guarantee and not
 exact-provider conformance.
@@ -46,7 +46,7 @@ different client mechanism.
 
 | Candidate inspected on 2026-08-11 | Hard-contract fit | Required repository machinery | Disposition |
 | --- | --- | --- | --- |
-| AWS SDK Go v2 low-level `service/s3 v1.107.1`, core `v1.43.5`, credentials `v1.19.5`, Smithy `v1.27.7` | Direct static credentials, contexts, fixed base endpoint plus a final-authority HTTP guard, `aws.NopRetryer`, modeled conditions/checksums/multipart/ListParts/errors, and GET presign. The checksum middleware streams a known-length non-seekable body through an `aws-chunked` trailer instead of prebuffering it. | Adapter-owned admission/deadline, exact-length readers, whole-object multipart CRC, cleanup policy, conservative error mapping, response caps, and a one-attempt fixed-authority transport. | **Selected.** It leaves the least protocol and checksum behavior for repository code while retaining all fixed decisions. |
+| AWS SDK Go v2 low-level `service/s3 v1.107.1`, core `v1.43.5`, credentials `v1.19.5`, Smithy `v1.27.7` | Direct explicit credentials, contexts, fixed base endpoint plus a final-authority HTTP guard, global `aws.NopRetryer` with per-operation `retry.Standard` only for HeadObject and pre-body GetObject, modeled conditions/checksums/multipart/ListParts/errors, and GET presign. The checksum middleware streams a known-length non-seekable body through an `aws-chunked` trailer instead of prebuffering it. | Adapter-owned admission/deadline, exact-length readers, whole-object multipart CRC, cleanup policy, conservative error mapping, response caps, and one transport attempt per SDK attempt. | **Selected.** It leaves the least protocol and checksum behavior for repository code while retaining all fixed decisions. |
 | AWS Transfer Manager `v0.3.12` | Defaults include multipart workers, thresholds and buffers, body retries, ranged concurrent GET, and failure handling that can root work in a fresh background context. Abort has no ListParts proof. | Overriding or fighting mechanisms forbidden by R4, R5, and R9. | Rejected; it adds no required capability absent from the low-level client. |
 | `minio-go/v7 v7.2.1` low-level `Core` | Viable static credentials, contexts, DNS-style bucket lookup, custom transport, serial raw multipart/ListParts/abort, structured errors, and presign. `MaxRetries=1` disables its operation retry. | Adapter-owned EOF checksum validation, lower-level multipart checksum assembly, active override of AWS dual-stack and path-style choices, and either a new `RoundTripper` seam or transport refactor. | Viable fallback, but not selected: it recreates more checksum behavior and fits the repository's HTTP `Doer` boundary less directly. |
 | `rhnvrm/simples3 v0.11.1` | Custom endpoints are path-style; core calls lack caller contexts; signing and uploads buffer whole bodies; multipart retries cannot be disabled; checksum/error surfaces are insufficient. | Reimplementation of multiple hard requirements. | Rejected. |
@@ -131,7 +131,7 @@ interface is the complete shared surface:
 
 ```go
 type Store interface {
-	Upload(context.Context, string, io.Reader, UploadOptions) (UploadResult, error)
+	Upload(context.Context, string, io.ReadCloser, UploadOptions) (UploadResult, error)
 	Download(context.Context, string) (Download, error)
 	Metadata(context.Context, string) (Metadata, error)
 	Delete(context.Context, string) error
@@ -144,11 +144,11 @@ The package owns these provider-neutral values and nothing more:
 - `UploadOptions { ContentLength int64; ContentType string; Intent UploadIntent }`,
   with closed intents `create_only` and `replace`;
 - `UploadResult { Cleanup CleanupDisposition }`, where cleanup is `none` for a
-  successful/single request and `complete|pending` only when failed multipart
-  work created an upload session;
+  successful request and `pending` when failed multipart work may have created
+  or retained an upload session;
 - `Download { Body io.ReadCloser; Size int64; ContentType string; LastModified time.Time }`;
 - `Metadata { Size int64; ContentType string; LastModified time.Time }`;
-- `PresignedGET { Method string; URL string; Headers http.Header; ExpiresAt time.Time }`;
+- `PresignedGET { Method string; URL string; Headers http.Header; SignatureExpiresAt time.Time }`;
 - the exact R9 error kinds and a `Kind(error)` accessor that never exposes an
   SDK value or provider text.
 
@@ -171,12 +171,16 @@ The selected `s3` profile has no `enabled` field. It requires:
 
 - provider: exactly `amazon_s3` or `cloudflare_r2`;
 - HTTPS base endpoint without user info, path, query, fragment, or non-default
-  port; region; DNS-compatible dotless bucket; static access-key identifier,
-  secret, and optional session token;
+  port; region; DNS-compatible dotless bucket; explicit access-key identifier,
+  secret, and optional session token; plus Amazon-only expected bucket owner;
 - maximum object bytes, multipart chunk bytes, maximum active operations,
   maximum operation duration, maximum presign lifetime, maximum response-header
   bytes, maximum control-response bytes, and maximum adapter working-memory
   bytes.
+
+The object-size validator is provider-specific: Amazon permits at most 5 TiB,
+while R2 permits at most 5 TiB minus 5 GiB. The lower R2 limit is enforced at
+construction rather than presented as an Amazon-compatible 5 TiB ceiling.
 
 Production trust is not another deployment-configurable tuple field. The S3
 constructor reads exactly `/etc/ssl/certs/ca-certificates.crt`, the public-WebPKI
@@ -186,10 +190,18 @@ system-root fallback, root augmentation, environment override, or hot reload.
 
 For Amazon, startup accepts only a current commercial-partition regional
 general-purpose endpoint whose SDK-resolved region and configured endpoint are
-the same authority; the region cannot be `auto`. For R2, the endpoint must be
-the account S3 endpoint and the region must be exactly `auto`. The final request
+the same authority; the region cannot be `auto`, the expected owner is exactly
+12 decimal digits, and the session token is non-empty. Every modeled mediated
+input receives that owner; the pinned presigner serializes it into the signed
+query rather than the returned opaque headers. For R2,
+the endpoint host is exactly a 32-lowercase-hex account ID followed by
+`.r2.cloudflarestorage.com`, `.eu.r2.cloudflarestorage.com`, or
+`.fedramp.r2.cloudflarestorage.com`; region is `auto` and expected owner is
+empty because R2 marks that field unsupported. The final request
 authority is precomputed as `<bucket>.<endpoint-host>` and independently given
-to the fixed-authority HTTP client. Dotted buckets are rejected because normal
+to the fixed-authority HTTP client. The common bucket grammar is 3–63 lowercase
+alphanumeric or hyphen characters with alphanumeric ends and rejects Amazon's
+reserved prefixes/suffixes, including account-regional `-an`. Dotted buckets are rejected because normal
 public TLS wildcard validation would not cover that final host.
 
 Construction validates the tuple, credential presence, key-independent field
@@ -200,11 +212,14 @@ I/O, or provider request. A successful constructor therefore means locally
 valid capability and trust wiring, not bucket existence, identity authorization,
 provider availability, or support certification.
 
-The SDK is built directly from `s3.Options` with static credentials. No ambient
+The SDK is built directly from `s3.Options` with explicit snapshot credentials. No ambient
 AWS region, endpoint, profile, web identity, instance/container metadata,
 credential process, SSO, environment SDK flag, retry mode, logger, proxy, or
-defaults mode is consulted. Optional session credentials are still static and
-create no refresh path.
+defaults mode is consulted. Session credentials remain a process snapshot and
+create no refresh path. Amazon's required session token prevents accidental
+long-lived IAM-user certification but still requires deployment-owned rolling
+replacement before expiry; supporting one SDK-refreshed IAM-role source remains
+a separate Specification decision because it adds another network authority.
 
 ### D2 — The existing fixed-target HTTP owner gains explicit one-attempt and trust inputs
 
@@ -247,7 +262,7 @@ selects and builds its public-root pool; `httpclient` neither reads a trust
 source nor mutates the pool. The pool is a startup snapshot and is never
 modified after client publication.
 
-Go 1.26.5 `net/http` shallow-clones that TLS config per connection and preserves
+Go 1.26.6 `net/http` shallow-clones that TLS config per connection and preserves
 the pool pointer; it fills `ServerName` from the connection host only when the
 field is empty. `crypto/tls` passes the non-nil pool and exact name into
 `x509.Verify`, and `x509.Verify` calls the process-global `systemRootsPool` only
@@ -258,12 +273,14 @@ the S3 trust set nor becomes S3-retained state. The process-global pool remains
 outside the S3 envelope only under that source-proven non-reachability; another
 client that uses it owns its service-envelope charge.
 
-The exact Linux/arm64 source receipt resolves the Dockerfile build-stage
-`golang:1.26.5-bookworm@sha256:1ecb7edf62a0408027bd5729dfd6b1b8766e578e8df93995b225dfd0944eb651`
-index for `linux/arm64/v8` to
-`sha256:145d3e4c318457af3040b2e575f3f511c7860054c277e4cb5de58c4fe913c3e7`
+The exact per-architecture source receipt resolves the Dockerfile build-stage
+`golang:1.26.6-bookworm@sha256:116d58cbd88c1297624acc6e967a060012422bacf9930927e23fb719189c6f36`
+index to `sha256:433f9dc4f8ea3a1ce4e28f9f15d0f7c056b10475307f886d6f1ac1ccc4abd976`
+for `linux/amd64` and
+`sha256:7939e2c75db3d059fc944bb6464a916d0fa64bd5a3bd7b3528f2a1ac7673a0eb`
+for `linux/arm64`; it separately pins each Distroless platform manifest
 and uses that platform image's source tree. It binds `net/http/transport.go` (`1c170e...`),
-`crypto/tls/common.go` (`d2837f...`) and `handshake_client.go` (`8cd7aa...`),
+`crypto/tls/common.go` (`d2837f...`) and `handshake_client.go` (`7d6210...`),
 and `crypto/x509/root.go` (`813fae...`), `root_unix.go` (`421c06...`),
 `cert_pool.go` (`d995d6...`), and `verify.go` (`3fbc65...`) to their complete
 SHA-256 values in the T9 receipt. The governing upstream source locations are
@@ -333,10 +350,19 @@ signing.
 
 Each admitted operation is synchronous and has at most one provider request in
 flight. Multipart reads and uploads one part at a time; cleanup starts only
-after the failed request has returned. SDK retry is `aws.NopRetryer`, repository
-retry is zero, the transport is one-attempt, and static credentials perform no
-I/O. Consequently provider request concurrency cannot exceed the active token
-count and there is no internal waiting queue.
+after the failed request has returned. The client default is `aws.NopRetryer`.
+HeadObject and the request-to-headers GetObject phase override it with a fresh
+`retry.Standard` instance capped at three attempts and one-second maximum
+backoff. Its only retry predicate admits non-TLS `net.Error`, HTTP `429`, `500`,
+`502`, `503`, or `504`, and provider code `RequestTimeout`,
+`RequestTimeoutException`, `SlowDown`, or `TooManyRequests`; target denial,
+certificate verification, context, and every other response are terminal. The
+same effective context bounds attempts and jitter. Every mutation,
+cleanup stage, and returned download body remains one-attempt. The transport's
+`OneAttempt` mode forbids transparent `net/http` replay inside each SDK attempt,
+and explicit credentials perform no I/O. Consequently provider request
+concurrency cannot exceed the active token count and there is no internal
+waiting queue.
 
 The service's existing drain controls caller contexts. Shutdown closes the S3
 HTTP client's idle transport in the dependency-close stage. One-attempt mode
@@ -366,7 +392,7 @@ neither creates nor retains Go's process-global system pool.
 The pinned `UploadPart` success path does not deserialize a control body. S3
 `v1.107.1` copies `ETag` and `x-amz-checksum-crc64nvme` response headers into
 `UploadPartOutput`; the adapter retains only those two pointers plus its local
-part number in each `types.CompletedPart`. Go 1.26.5 applies
+part number in each `types.CompletedPart`. Go 1.26.6 applies
 `http.Transport.MaxResponseHeaderBytes` to the complete response header, so the
 two provider strings are jointly `H`-bounded. `E > H` therefore does not make
 the current deserializer's retained strings larger than `H`.
@@ -396,7 +422,7 @@ The exact pinned evidence is:
   `bytes.Buffer` while all retained descriptors remain reachable;
 - `smithy-go@v1.27.7/encoding/xml/escape.go`, `escapeString`: every selected
   replacement is at most five output bytes per input byte;
-- Go 1.26.5 `net/http/transport.go`, `bytes/buffer.go`,
+- Go 1.26.6 `net/http/transport.go`, `bytes/buffer.go`,
   `runtime/slice.go`, and `runtime/msize.go`: `Transport.maxHeaderResponseSize`,
   `persistConn.Read`, and `persistConn.readLoop` make `H` bound the whole HTTP/1
   wire header; `Buffer.grow`/`growSlice` request no more than twice the final
@@ -415,7 +441,7 @@ github.com/aws/aws-sdk-go-v2            v1.43.5  h1:yKT5GYnFWhuDo+DqKvE5ZPwVn3Rj
 github.com/aws/aws-sdk-go-v2/credentials v1.19.5 h1:xMo63RlqP3ZZydpJDMBsH9uJ10hgHYfQFIk1cHDXrR4=
 github.com/aws/aws-sdk-go-v2/service/s3 v1.107.1 h1:VUTtUJMuRNMkb/7NIKmd8NQaeQLPGCMoTJxkYKre4qM=
 github.com/aws/smithy-go                 v1.27.7 h1:Zgj5z4LfcDYoQIVk+n/yGdTkP/2y6ZT5vYxe0fp7bqE=
-Go toolchain                             go1.26.5
+Go toolchain                             go1.26.6
 ```
 
 For the repaired trust path the same Linux receipt additionally binds complete
@@ -430,7 +456,7 @@ SHA-256 identities for `encoding/pem/pem.go`
 `crypto/tls/common.go`
 (`d2837fbe55a398c7362b3ff8ffe43c06d0832df2305f45f32aeaebadc784486d`),
 `handshake_client.go`
-(`8cd7aa69d597097d91fd92a489aee9fd9dd72cbf0b0f6e08e04c339c997104d6`),
+(`7d6210c69ff9bf0d8506a8f2f59bf33a6132d0a3574487bcc356f858e50c6fab`),
 `net/http/transport.go`
 (`1c170ec3581321bd19ccd1b15863f46b16dc749ac6d54d00f5e97f7ffa2ccb5f`),
 `crypto/x509/root.go`
@@ -478,7 +504,7 @@ Let:
   source headroom;
 - `heap(0) = 0`; for positive `x <= 32 KiB`,
   `heap(x) = 2*x + 8`; otherwise `heap(x) = align_up(x, 8 KiB)`. This is a
-  conservative upper bound over the pinned Go 1.26.5 allocator size-class and
+  conservative upper bound over the pinned Go 1.26.6 allocator size-class and
   page rounding, not a language-version promise.
 
 These are fail-closed ceilings, not values that Implementation may calibrate.
@@ -544,7 +570,7 @@ a larger cap to make the arithmetic pass:
 | --- | --- | --- |
 | Shared fixed | Adapter/client/config shallow values, the admission channel header, resolver/dialer/transport/client structs, fixed SDK client and middleware registration, telemetry instrument handles, and fixed close bookkeeping in `internal/infra/s3/client.go`, `telemetry.go`, `internal/infra/httpclient/client.go`, AWS `service/s3/api_client.go`, and Smithy middleware stack construction. | `S`; the `A` channel cells are charged one per admitted operation under `F`. |
 | Shared variable | The immutable config strings named by `Q`, derived authority/URL copies, credential-provider copies, and client/middleware values that retain or canonicalize those strings; plus the eagerly parsed adapter-private public-root pool, its maps/slices/DER/decoded fields, and the construction-only bounded PEM/decode input in `internal/infra/s3/image_root_bundle.go`, Go `encoding/pem`, `crypto/x509/parser.go`, and `cert_pool.go`. | Steady state is `U(Q) + trust_shared(B,N)`; the construction barrier substitutes `trust_startup(B,N)`. Original config strings are included, not caller-excluded. |
-| Operation fixed | Admission/context/timer and telemetry-call state; one SDK input/output and middleware values; request/response wrappers; CRC/hash values; HTTP/1 request, TCP/TLS connection, fixed buffers, and read/write goroutines; bounded DNS result; and fixed error/signing/checksum/serializer scratch in the operation, Smithy, `net/http`, `crypto/tls`, and `crypto/x509` paths. Go 1.26.5 `crypto/tls` fixes ordinary handshake messages at 64 KiB and the certificate message at 256 KiB; those bytes and their fixed-path parse copies are included here because they do not scale with a D4 runtime input. Root-count-driven candidate/chain state in `crypto/x509/verify.go` is separated from this fixed set. | `F + trust_verify(N)`; one complete set per admission while a provider request is active. |
+| Operation fixed | Admission/context/timer and telemetry-call state; one SDK input/output and middleware values; request/response wrappers; CRC/hash values; HTTP/1 request, TCP/TLS connection, fixed buffers, and read/write goroutines; bounded DNS result; and fixed error/signing/checksum/serializer scratch in the operation, Smithy, `net/http`, `crypto/tls`, and `crypto/x509` paths. Go 1.26.6 `crypto/tls` fixes ordinary handshake messages at 64 KiB and the certificate message at 256 KiB; those bytes and their fixed-path parse copies are included here because they do not scale with a D4 runtime input. Root-count-driven candidate/chain state in `crypto/x509/verify.go` is separated from this fixed set. | `F + trust_verify(N)`; one complete set per admission while a provider request is active. |
 | Request variable | Copies and canonical forms driven by the current immutable tuple plus key and, for upload, content type. | `request_state(Q,K)` or `request_state(Q,K+T)`. |
 | Response header | HTTP/1 wire bytes, textproto strings, header map/slices, selected output strings, and header-deserializer scratch driven by `H`. | `response_headers(H)`; retained multipart strings are removed from this transient owner and charged below. |
 | Control response | Limited body copy, XML tokens/field strings, generated error/output values, and error formatting driven by `E`. | `control_response(E)`; a surviving upload ID is removed from this transient owner and charged below. |
@@ -660,25 +686,30 @@ unused, and percentage headroom for every row. An unowned value, collection,
 goroutine, buffer, copy, coefficient, root, or failed half-ceiling reopens D4.
 
 The complementary measurable proof is credential-free. In the pinned Docker
-Linux Go 1.26.5 environment, `GOMAXPROCS=1 make test-s3-envelope` runs five
-identical staged children through the real low-level SDK and production fresh
-HTTP/1 TLS transport. The measured child PID contains only the runtime,
-adapter, SDK, client transport, and a pre-opened scalar barrier/control channel.
+Linux Go 1.26.6 environment, `GOMAXPROCS=1 make test-s3-envelope` runs five
+identical staged children through the real low-level SDK. Each child retains
+the production fixed-authority client and drives the SDK through a separate
+fresh HTTP/1 TLS fixture transport with the same private roots, hostname
+verification, connection policy, and response bounds. Retaining both clients
+is a conservative memory superset; focused transport tests separately own the
+production DNS/IP, authority, proxy, redirect, and ambient-root deny paths. The
+measured child PID contains the runtime, adapter, SDK, both client transports,
+and a pre-opened scalar barrier/control channel.
 The controller and TLS fixture run in a separate unmeasured PID; IPC carries
 only fixed-size stage/counter messages and never response payloads. The
 controller makes the fixture ready before launching the child; each child then
-warms only its runtime and quiescent IPC, and samples before adapter
-construction, at the held trust-construction barrier while the complete PEM
+warms only its runtime and quiescent IPC, samples before configuration and
+adapter construction, and samples again at the held trust-construction barrier while the complete PEM
 input and parsed pool are live, after idle adapter construction, at the held
 operation peak, and after cancellation/join. The test bundle contains `N`
 unique valid CA certificates with aggregate retained certificate input driven
 to `B`; the fixture authority chains to one of them. Padding that only enlarges
 the discarded PEM input cannot stand in for maximum retained DER/parsed state.
-Hostile `SSL_CERT_FILE` and `SSL_CERT_DIR` canaries contain an additional CA and
-large bounded files; a certificate chaining only to that ambient CA must fail
-before the fixture handles an HTTP request. The shared network namespace binds
-an allowed public-class test address and resolves the accepted test-only bucket
-authority to the fixture PID. No provider endpoint or credential is used. Peak
+The fixture transport dials only the controller-owned local listener; it does
+not claim to exercise the production DNS gate. The separate production-client
+tests prove hostile `SSL_CERT_FILE`/`SSL_CERT_DIR`, ambient-only CA, private DNS,
+wrong-host, proxy, redirect, and alternate-authority denial. No provider
+endpoint or credential is used. Peak
 cases hold `A=2` operations at each formula class, including
 `2*10,000` source-equivalent descriptors with escape-amplifying `H`-bounded
 ETags at the real Complete request barrier, filled `H` and `E` responses, and
@@ -764,8 +795,11 @@ For single upload the adapter:
    returned CRC64NVME/FULL_OBJECT value to exist and match before success.
 
 The exact-length reader never reads byte `length+1`, so extra bytes remain with
-the caller. A short source is an error. The caller still owns and closes the
-source. If any bytes could have been transmitted, conservative mutation-phase
+the caller. A short source is an error. The adapter owns the source after the
+call begins and closes it exactly once. A `context.AfterFunc` closes it on
+cancellation or deadline, so the required `io.ReadCloser.Close` must promptly
+unblock an in-flight `Read`; the adapter adds no goroutine around an
+uninterruptible reader. If any bytes could have been transmitted, conservative mutation-phase
 mapping applies; local knowledge about the reader does not invent a provider
 rollback.
 
@@ -787,15 +821,20 @@ The stdlib table uses the pinned inverted NVME polynomial
 does not import AWS internal checksum code. SDK and adapter calculation observe
 the same limited readers, so neither can silently choose another byte range.
 
-For download the adapter sends checksum mode `ENABLED`, validates declared size
-before exposing the body, and requires SDK result metadata to show that a
+For download the adapter sends checksum mode `ENABLED` and no Range, rejects an
+unexpected Content-Range response, requires a non-negative declared size no
+greater than `O` before exposing the body, and requires SDK result metadata to show that a
 CRC64NVME validator was installed. Missing or composite/hyphenated checksum
 metadata fails `integrity_failed` before returning a body. The returned wrapper
-limits observed bytes to `O`, maps the SDK's checksum mismatch only when Read
-reaches EOF, and releases admission on EOF, terminal read failure, or Close.
-Early Close is not integrity success. An absent/false provider size is guarded
-by the streamed `O + 1` observation and fails `too_large` before exposing an
-extra byte.
+limits observed bytes to `O` and compares its own checksum at terminal Read.
+Caller cancellation/deadline wins first; otherwise any terminal mismatch is
+`integrity_failed`, so the adapter does not match an unexported SDK error string.
+It releases admission on EOF, terminal read failure, or Close. Early Close
+records cancellation only when the retained context is cancelled; an ordinary
+incomplete Close records sanitized `internal` and is not integrity success. A
+context callback closes an otherwise-idle body and releases its token at the
+effective deadline; one joined finish path closes the provider body exactly
+once at EOF, error, cancellation, or explicit Close.
 
 The current R2 contract does not explicitly promise all of these trailer and
 response fields. That is a conformance obligation, not a license to fall back
@@ -804,25 +843,28 @@ to ETag, MD5, an Amazon guarantee, buffering, or a provider escape.
 ### D6 — Multipart cleanup is immediate, serial, and conservative
 
 Any failure after CreateMultipartUpload and before confirmed completion stops
-new parts. If the same effective context has time remaining, the adapter makes
-one AbortMultipartUpload call and then consumes bounded, paginated ListParts
-under that context. There is no repeat abort, background reconciler, detached
-cleanup context, or hidden retry.
+new parts. A failed create whose request headers were written but whose upload
+ID was not returned immediately reports `pending`; no safe direct cleanup is
+possible without that identifier. When the ID is known and the same effective
+context has time remaining, Amazon cleanup performs at most three serial cycles
+of one AbortMultipartUpload followed by at most ten ListParts pages. Every page
+sets `MaxParts=1000`; a truncated page supplies the next request's
+`PartNumberMarker`, and a missing/non-advancing marker is invalid. A complete
+empty traversal stops the immediate attempt; a complete traversal containing
+any part starts the next abort cycle. Invalid continuation state, excess
+pages/cycles, or exhausted context also stop the attempt. There is no
+background reconciler or detached cleanup context.
 
-`complete` is emitted only when the exact provider's conformance-approved
-terminal observation proves no retained parts for that upload. For Amazon the
-leading observation is a fully consumed empty ListParts result, with a terminal
-`NoSuchUpload` admitted only if the exact tuple proves the same postcondition.
-For R2, documentation alone authorizes no `complete` mapping; it remains
-`pending` until exact conformance proves a terminal observation. Timeout,
-cancellation, abort failure, pagination failure, a truncated/non-empty result,
-or any ambiguous observation is always `pending`.
+Every failed multipart upload returns `pending`. Amazon explicitly allows an
+in-flight part to finish after `AbortMultipartUpload`, so a bounded empty
+`ListParts` observation is useful best-effort evidence but not a stable terminal
+proof. R2 receives one bounded abort and also remains `pending`.
 
 Cleanup disposition accompanies the primary stable upload error. It never
 exposes the upload ID and never changes an ambiguous possible object commit
 into a known rollback. Deployment's exact-provider abandoned-multipart
-lifecycle rule is mandatory backstop evidence but does not make immediate
-cleanup `complete`.
+lifecycle rule is mandatory backstop evidence and is the terminal reclamation
+boundary.
 
 ### D7 — One conservative error mapper owns provider and send-phase evidence
 
@@ -835,7 +877,8 @@ errors. Rules are ordered:
    configured size violations;
 2. a more specific provider-confirmed precondition, denial, unambiguous absence,
    or integrity result admitted by that tuple's conformance table;
-3. `outcome_unknown` for PutObject, CompleteMultipartUpload, or Delete after
+3. `outcome_unknown` for PutObject, CreateMultipartUpload,
+   CompleteMultipartUpload, or Delete after
    request headers could have left the process and no authoritative result is
    available, even when caller cancellation or the effective deadline is the
    local error that ended the wait;
@@ -843,14 +886,19 @@ errors. Rules are ordered:
    pre-completion multipart stage that cannot commit the object, or a mutating
    request whose non-transmission was proved;
 5. `temporary` only for a conformance-admitted failure before a non-mutating
-   Metadata or pre-body Download result;
+   Metadata or pre-body Download result, or Amazon's documented create-only
+   `409 ConditionalRequestConflict` without an automatic body replay;
 6. sanitized `internal` for every remaining case.
 
-403 never becomes absence. 404 becomes `not_found` only for the intended
-provider identity whose exact evidence proves unambiguous disclosure. A 412 or
-documented conditional-write conflict becomes `precondition_failed` only on
-single create-only. Throttling does not make a mutation retry-safe. Deferred
-download errors are never restarted.
+401 and 403 become `denied` and never become absence. A 404 from GetObject or
+HeadObject becomes `not_found`; this uses HTTP status for HEAD because Amazon
+documents that exact exceptions are unavailable there. Amazon and R2
+`412 PreconditionFailed` become `precondition_failed` only on single
+create-only. Amazon-only `409 ConditionalRequestConflict` becomes `temporary`;
+R2 409 and unrelated 412 evidence do not inherit that rule. For Head/Get only, 429 and 5xx remaining after bounded SDK
+retry become `temporary`; the exact retry eligibility is D3's finite predicate.
+Throttling does not make a mutation retry-safe.
+Deferred download errors are never restarted.
 
 Provider code, status, request ID, and phase may remain in a private diagnostic
 record long enough to emit sanitized telemetry; the feature error never wraps
@@ -870,9 +918,25 @@ single/multipart path, cleanup disposition, and presign issuance. Closed labels
 are exactly operation, stable result kind, transfer path, and cleanup
 disposition, with one `unknown` fallback. The design adds no provider label.
 
-Safe logs/spans may carry operation, phase, attempt count (always one per
-stage), bytes, duration, active count, cleanup disposition, and a sanitized
-request ID. They never carry key, bucket, endpoint, provider/account, URL,
+Safe spans may carry operation, phase, bounded attempt count, numeric HTTP
+status, an allowlisted provider code, one closed failure category, bytes,
+duration, active count, cleanup disposition, and a sanitized request ID. The
+finite provider-code set is `AccessDenied`, `AuthorizationHeaderMalformed`,
+`ConditionalRequestConflict`, `ExpiredToken`, `InternalError`,
+`InvalidAccessKeyId`, `InvalidArgument`, `InvalidRequest`, `NoSuchBucket`,
+`NoSuchKey`, `PreconditionFailed`, `RequestTimeTooSkewed`, `RequestTimeout`,
+`RequestTimeoutException`, `ServiceUnavailable`, `SignatureDoesNotMatch`,
+`SlowDown`, and `TooManyRequests`; another non-empty code becomes `other`.
+Request IDs must match `[A-Za-z0-9._:/+=-]{1,128}`; another non-empty value
+becomes `invalid`.
+
+Classification precedence is exact: HTTP 401 or
+`InvalidAccessKeyId|SignatureDoesNotMatch|ExpiredToken` is `credential`;
+`httpclient.ErrTargetDenied` or a TLS/X.509 verification error is
+`authority_tls`; HTTP 429 or `SlowDown|TooManyRequests` is `throttle`; a
+no-response `net.Error` is `transport`; every other provider response is
+`provider`; a local failure emits no category. They never carry key, bucket,
+endpoint, provider/account, URL,
 query, headers, content type, checksum, ETag, upload ID, access-key identifier,
 credential, SDK error/type, provider message, or body. SDK client logging and
 the generic HTTP URL instrumentation are disabled. Presign telemetry ends at
@@ -931,8 +995,9 @@ establish that either external provider is supported.
 
 Amazon S3 and Cloudflare R2 certification are separate adopter-owned optional
 handoffs. Each needs its own explicitly authorized, exact provider tuple and
-receipt under the existing safety constraints: environment-only static
-credentials, a pre-existing operator-owned bucket, mutations limited to the
+receipt under the existing safety constraints: environment-only explicit
+credentials (temporary session credentials for Amazon), a pre-existing
+operator-owned bucket, mutations limited to the
 owned conformance prefix, and no provisioning or change to bucket, identity,
 network, encryption, versioning, lifecycle, or deployment controls. An Amazon
 receipt never substitutes for an R2 receipt, and the absence, failure, or later
@@ -953,7 +1018,7 @@ load selected config
   -> validate exact provider tuple + finite bounds + memory equation
   -> publish the existing GC memory limit
   -> startup_object_storage reads and strictly parses the fixed bounded image CA
-     bundle, then builds fixed-authority HTTP + static S3 client
+     bundle, then builds fixed-authority HTTP + explicit-credential S3 client
      and returns one objectStorageRuntime (store + idempotent close; no network)
   -> immediately defer its early-return CloseIdleConnections safety close
   -> construct the existing runtimeDependencies
@@ -1023,9 +1088,9 @@ validated replace above C
 
 any pre-completion failure after upload ID
   -> stop parts
-  -> one Abort within remaining context
-  -> bounded paginated ListParts verification
-  -> complete only on tuple-proven terminal observation; otherwise pending
+  -> Amazon: at most 3 serial Abort + bounded paginated ListParts cycles
+  -> R2: one Abort and pending
+  -> complete only on Amazon's full empty traversal; otherwise pending
   -> return primary stable error + disposition
 ```
 
@@ -1051,22 +1116,26 @@ feature authorizes key
   completion; a send-phase loss is `outcome_unknown`.
 - Presign performs local SigV4 GET issuance after authorization and admission,
   validates `1s <= requested <= configured <= 7d`, rechecks method/final
-  authority/query-bearing URL/returned headers, and exposes the exact signature
-  expiry. No provider call or mediated-transfer claim occurs.
+  authority/query-bearing URL/returned headers, single query values, exact
+  access-key/date/region/`s3`/`aws4_request` credential scope, session-token
+  presence, provider-specific expected owner, and requested lifetime, then
+  exposes `SignatureExpiresAt`, the exact expiry encoded by the signature. A
+  session credential may expire or be revoked earlier. No provider call or
+  mediated-transfer claim occurs.
 
 ## Provider operation and conformance matrix
 
 | Common behavior | Amazon S3 current contract | Cloudflare R2 current contract | Design consequence |
 | --- | --- | --- | --- |
-| Authority/static identity | Regional virtual-hosted SigV4 with matching region | Account S3 endpoint, virtual host, region `auto`, static R2 token credentials | One hidden provider tuple validates different fixed region/endpoint rules; port unchanged. |
+| Authority/credential identity | Regional virtual-hosted SigV4 with matching region, expected 12-digit bucket owner, and temporary session credential | Exact default/EU/FedRAMP account S3 endpoint, virtual host, region `auto`, explicit long-lived or temporary R2 credentials, and no expected-owner field | One hidden provider tuple validates different fixed region/endpoint/credential rules; required presign headers stay opaque to the port. |
 | Public TLS trust | Exact virtual authority chains to the image-owned public-WebPKI snapshot and passes hostname verification | Same, independently, for the exact R2 account authority | Each provider receipt records the image bundle provenance/path/SHA-256/bytes/count plus its own successful chain and hostname; neither provider result substitutes for the other or for the production-image receipt. |
 | Single create/replace | PutObject supports checksum fields, Content-Type, `If-None-Match:*`, and returned checksum/type | Matrix lists PutObject, conditional header, Content-Type, CRC64NVME/FULL_OBJECT | Same request vocabulary; R2 trailer acceptance and returned fields require exact proof. |
 | Multipart replace | Create/part/complete, full CRC64NVME, object size, 2xx embedded-error handling | Operations and CRC64NVME/FULL_OBJECT are listed | Same hidden path; every R2 create/part/complete checksum field requires exact proof. Multipart create-only stays invalid. |
 | Download | GetObject checksum mode returns stored checksum; SDK validates at EOF | GetObject and checksum mode are documented, but ordinary GET response fields are not fully enumerated | Require CRC64NVME validator before exposing body; R2 must prove it. |
-| Metadata/absence | Head fields documented; 403/404 disclosure depends on identity permission | Head implemented; NoSuchKey and AccessDenied documented | Exact identity policy must prove when absence is unambiguous; otherwise denied. |
+| Metadata/absence | Head fields documented; HEAD exposes generic HTTP status and 403/404 disclosure depends on ListBucket permission | Head implemented; NoSuchKey, Unauthorized, and AccessDenied documented | Head 404 maps only pinned `NotFound`/`NoSuchKey`, Get 404 only exact `NoSuchKey`; 401/403 maps to denied; each provider receipt proves both with its intended identity policy. |
 | Delete | Versionless delete has accepted meaning only if versioning was never enabled | Delete implemented; S3 versioning is unsupported | Deployment precondition differs; port meaning remains operation completion only. |
-| Presigned GET | SigV4 GET, 1 second through 7 days | Same documented expiry range and virtual-host GET, excluding custom domains | Same result vocabulary; exact method/authority/query/headers/reuse remain per-tuple proof. |
-| Abort proof | Abort may leave in-flight parts; ListParts must establish terminal emptiness | Abort/ListParts implemented, default lifecycle documented, terminal cleanup semantics incomplete | Immediate bounded check for both; R2 cannot report `complete` from documentation alone. |
+| Presigned GET | SigV4 GET, 1 second through 7 days; expected owner is a signed query field; unsigned Range may alter the representation | Same documented expiry range and virtual-host GET, excluding custom domains; expected owner is absent | Same result vocabulary; exact method/authority/query/opaque headers/reuse remain per-tuple proof, and neither result claims a full transfer. |
+| Abort proof | In-flight parts may finish after abort; repeated abort and ListParts emptiness may be required | Abort/ListParts implemented, default lifecycle documented, terminal cleanup semantics incomplete | Amazon gets bounded repeated-abort/paginated best effort; both providers remain `pending` and require their own lifecycle receipt. |
 
 One provider passing never covers the other. A local scripted transport proves
 adapter policy only. An emulator, if later chosen by Test Design, proves only
@@ -1086,18 +1155,18 @@ memory envelope.
 | `internal/objectstorage/store.go` | Provider-neutral port, request/result values, and common key grammar. |
 | `internal/objectstorage/errors.go` | Closed stable error and cleanup vocabularies. |
 | `internal/infra/s3/doc.go` | Multi-stage adapter contract, explicit immutable public-root snapshot, and deliberately absent provider registry/factory/trust reload. |
-| `internal/infra/s3/config.go` | Exact provider-tuple validation; pinned D4 constants including `B/N` trust reserves, checked amplification/serialization arithmetic, and startup memory/resource rejection. |
+| `internal/infra/s3/config.go` | Exact provider-tuple, expected-owner, R2 jurisdiction-host, and credential-shape validation; pinned D4 constants including `B/N` trust reserves, checked amplification/serialization arithmetic, and startup memory/resource rejection. |
 | `internal/infra/s3/image_root_bundle.go` | Fixed-image-path, byte/count-bounded, strict PEM/X.509 public-root loading into one adapter-private immutable pool. |
-| `internal/infra/s3/client.go` | Bounded trust loading, direct SDK construction, admission, effective context, and lifecycle. |
-| `internal/infra/s3/transport.go` | SDK HTTP response narrowing and possible-send phase evidence. |
+| `internal/infra/s3/client.go` | Bounded trust loading, direct SDK construction, default mutation non-retry plus bounded read retry, expected-owner projection, admission, effective context, and lifecycle. |
+| `internal/infra/s3/transport.go` | SDK HTTP response narrowing plus attempt and possible-send phase evidence. |
 | `internal/infra/s3/checksum.go` | Hidden CRC64NVME policy, wire encoding, and checksum metadata comparison. |
 | `internal/infra/s3/upload.go` | Exact-length single/multipart upload, the 1,024-byte valid content-type boundary, bounded completion state, and immediate cleanup state machine. |
-| `internal/infra/s3/download.go` | Metadata-checked streaming body, EOF integrity, ceiling, deadline, and token release. |
-| `internal/infra/s3/metadata.go` | One-request portable HeadObject projection and absence semantics. |
+| `internal/infra/s3/download.go` | Bounded-retry GetObject acquisition, range refusal, metadata-checked streaming body, terminal integrity, ceiling, deadline, close classification, and token release. |
+| `internal/infra/s3/metadata.go` | Bounded-retry HeadObject projection and HTTP-status absence semantics. |
 | `internal/infra/s3/delete.go` | Unversioned mutating delete and possible-send outcome. |
 | `internal/infra/s3/presign.go` | Local bounded SigV4 GET issuance and bearer-result validation. |
-| `internal/infra/s3/errors.go` | Conservative tuple/send-phase classification and sanitization. |
-| `internal/infra/s3/telemetry.go` | Closed safe adapter signals and redaction boundary. |
+| `internal/infra/s3/errors.go` | Conservative tuple/send-phase classification plus bounded private provider diagnostics and sanitization. |
+| `internal/infra/s3/telemetry.go` | Closed safe adapter signals, diagnostic span projection, and redaction boundary. |
 | `internal/infra/httpclient/config.go` | Declare/validate unconditional one-attempt, no-instrumentation, and code-only caller-selected `RootCAs` transport policy. |
 | `internal/infra/httpclient/client.go` | Apply HTTP/1 fresh-connection exact-byte mode and a non-nil pool with the validated base hostname; remove OIDC-only markers from instrumentation bypass. |
 | `internal/config/object_storage_config.go` | Object section type, empty/zero profile defaults, canonicalization, and fail-closed section validation. |
@@ -1139,7 +1208,7 @@ No import reaches from either shared package into a feature or composition root.
 | `internal/config/secret_policy_test.go` | File-source rejection and empty-placeholder allowance for all static credential fields. |
 | `cmd/service/internal/bootstrap/startup_object_storage_test.go` | Bounded local trust-source construction with no DNS/provider I/O, selected startup failure, no readiness probe, and idempotent close. |
 | `cmd/service/internal/bootstrap/run_lifecycle_test.go` | Construction after GC limit and object close after drain/background but before dependency close/telemetry flush. |
-| `test/s3_object_storage_conformance_integration_test.go` | Credentialed Amazon and R2 tuple entry points; results remain provider-specific. |
+| `test/s3conformance/conformance_test.go` | Credentialed Amazon and R2 tuple entry points isolated from unrelated integration fixtures; results remain provider-specific. |
 | `docs/s3-compatible-object-storage.md` | Operator inputs, image-bundle provenance/rotation/receipt, exact support/evidence boundary, feature/deployment ownership, lifecycle and versioning preconditions. |
 | `build/docker/Dockerfile` | Existing digest-pinned runtime-image owner; no new copy or path is added, and Delivery receipts the bundle already present in that image. |
 | `env/.env.example` | Empty environment-only static credential inputs; no usable endpoint, bucket, or credential. |
@@ -1148,6 +1217,7 @@ No import reaches from either shared package into a feature or composition root.
 | `scripts/init-module.sh` | Selector validation, exact profile removal/retention markers, lock/output values, and three-way `httpclient` retention predicate. |
 | `scripts/ci/template-init-check.sh` | Independent selected/absent inventories, all four object/outbound combinations, marker survival, idempotency, and dependency pruning. |
 | `scripts/ci/ci-change-scope.sh` | Route every object-profile owner, including the build-tagged conformance file, through the template-required CI lane and self-test that classification. |
+| `scripts/ci/s3-source-receipt.sh` | Fail-closed Dockerfile-derived Go and Distroless platform manifests, source identities, fixed root-bundle receipt, and separate `linux/amd64` or `linux/arm64` target proof. |
 | `.github/workflows/ci.yml` | One credential-free object-profile generator/compile/image lane. |
 | `Makefile` | Discoverable deterministic and credentialed S3 proof entry points without making live conformance a merge prerequisite. |
 | `go.mod` | Direct selected AWS module requirements and no rejected client/transfer manager. |
@@ -1244,7 +1314,7 @@ fixed NVME table selection, base64 wire representation, and comparison policy.
 AWS generated models remain dependency authority and are never copied or
 edited.
 
-D4 additionally pins the Go toolchain source at `go 1.26.5`. Its source receipt
+D4 additionally pins the Go toolchain source at the Dockerfile's `go 1.26.6`. Its source receipt
 must resolve the selected module versions through `go list -m`, verify their
 `go.sum` identities, and cite the generated/deserializer/serializer, Smithy XML,
 Go transport/allocator, PEM/X.509 pool/parser/verifier, and TLS clone/handshake
@@ -1531,9 +1601,8 @@ test-plan obligation, task, or implementation candidate.
 Independent review of fixed design candidate SHA-256
 `cf3757a9662eb81d261f5e76c8d5b98f761157024d9ad3d0662d22e07ad6bc6b`
 returned **PASS**. The Dockerfile build-stage Go index resolves for
-`linux/arm64/v8` to `sha256:145d3e4c318457af3040b2e575f3f511c7860054c277e4cb5de58c4fe913c3e7`;
-the preserved T9A receipt's `53ee...` assertion is the only stale downstream
-implementation input, whose replacement is mechanically derivable. Final-image
+`linux/arm64/v8` to `sha256:7939e2c75db3d059fc944bb6464a916d0fa64bd5a3bd7b3528f2a1ac7673a0eb`;
+the repaired source-receipt input now carries that exact identity. Final-image
 bundle `b`/`n`, D4 accounting and headroom, and Delivery's deployed-image
 no-override receipt remain unchanged. No provider, deployment, certification,
 test-plan, task, or T9A candidate claim changed.

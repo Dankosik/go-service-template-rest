@@ -181,7 +181,7 @@ jobs:
   template-minimal-feature:
     if: needs.repo-integrity.outputs.expensive_required == 'true' && needs.repo-integrity.outputs.template_required == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
     needs: repo-integrity
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -219,6 +219,12 @@ jobs:
       - name: Prove generated S3-compatible object storage services
         if: steps.template_source.outputs.required == 'true'
         run: TEMPLATE_INIT_PROFILE=object-storage make template-init-check GOLANGCI_LINT_BIN=golangci-lint
+
+      - name: Prove S3 source and Linux process envelopes
+        if: steps.template_source.outputs.required == 'true'
+        run: |
+          S3_RECEIPT_PLATFORM=linux/amd64 make test-s3-source-receipt
+          GOMAXPROCS=1 S3_ENVELOPE_PLATFORM=linux/amd64 make test-s3-envelope
       # profile:object-storage:end
 
       # profile:authn-oidc-jwt:start
@@ -244,6 +250,18 @@ jobs:
         if: steps.template_source.outputs.required == 'true'
         run: TEMPLATE_INIT_PROFILE=outbox make template-init-check GOLANGCI_LINT_BIN=golangci-lint
       # profile:outbox-postgres:end
+
+      # profile:jobs-postgres:start
+      - name: Prove generated PostgreSQL durable jobs services
+        if: steps.template_source.outputs.required == 'true'
+        run: TEMPLATE_INIT_PROFILE='jobs' make template-init-check GOLANGCI_LINT_BIN=golangci-lint
+      # profile:jobs-postgres:end
+
+      # profile:webhooks-durable:start
+      - name: Prove generated PostgreSQL durable webhook services
+        if: steps.template_source.outputs.required == 'true'
+        run: TEMPLATE_INIT_PROFILE=webhooks make template-init-check GOLANGCI_LINT_BIN=golangci-lint
+      # profile:webhooks-durable:end
 
   template-postgres-feature:
     if: needs.repo-integrity.outputs.expensive_required == 'true' && needs.repo-integrity.outputs.template_required == 'true'

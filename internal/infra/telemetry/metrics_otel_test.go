@@ -1,4 +1,7 @@
-package telemetry
+package //nolint:paralleltest // This test mutates process-global environment or working directory.
+
+//nolint:paralleltest // Mutates the process-wide OpenTelemetry MeterProvider.
+telemetry
 
 import (
 	"context"
@@ -11,7 +14,6 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-//nolint:paralleltest // Mutates the process-wide OpenTelemetry MeterProvider.
 func TestSetupMetricsUsesPrivateRegistryAndConfigResource(t *testing.T) {
 	t.Setenv("OTEL_RESOURCE_ATTRIBUTES", "service.name=env-service,env.only=true")
 	t.Setenv("OTEL_SERVICE_NAME", "env-service")

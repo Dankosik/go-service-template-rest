@@ -53,6 +53,7 @@ func TestAuthnConfigCanonicalizesTrustedProxyCIDRs(t *testing.T) {
 
 // profile:grpc:start
 
+//nolint:paralleltest // This test mutates process-global environment.
 func TestAuthnRequiresGRPCTLS(t *testing.T) {
 	resetConfigEnv(t)
 	for name, value := range map[string]string{

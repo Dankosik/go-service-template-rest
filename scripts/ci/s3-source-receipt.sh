@@ -5,9 +5,16 @@ root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 platform="${S3_RECEIPT_PLATFORM:-}"
 
 case "${platform}" in
-	linux/arm64) ;;
+	linux/amd64)
+		expected_go_manifest="sha256:433f9dc4f8ea3a1ce4e28f9f15d0f7c056b10475307f886d6f1ac1ccc4abd976"
+		expected_final_manifest="sha256:7a2bd171a18bdd39a4729600d0dca5f16e779d41156a6908b4f8a9a289e76d92"
+		;;
+	linux/arm64)
+		expected_go_manifest="sha256:7939e2c75db3d059fc944bb6464a916d0fa64bd5a3bd7b3528f2a1ac7673a0eb"
+		expected_final_manifest="sha256:37d3baf4e657ce79c144b69b69f60b8542f366a64fb7a49bd99f5444ef008bb0"
+		;;
 	*)
-		echo "S3_RECEIPT_PLATFORM must be linux/arm64" >&2
+		echo "S3_RECEIPT_PLATFORM must be linux/amd64 or linux/arm64" >&2
 		exit 2
 		;;
 esac
@@ -61,13 +68,15 @@ final_ref="$(awk '$1 == "FROM" && $2 ~ /^gcr\.io\/distroless\/static-debian12:/ 
 
 go_manifest="$(platform_manifest "${go_ref}")"
 final_manifest="$(platform_manifest "${final_ref}")"
-[[ "${go_manifest}" == "sha256:145d3e4c318457af3040b2e575f3f511c7860054c277e4cb5de58c4fe913c3e7" ]] || fail "unexpected Go linux/arm64 manifest: ${go_manifest}"
+[[ "${go_manifest}" == "${expected_go_manifest}" ]] || fail "unexpected Go ${platform} manifest: ${go_manifest}"
+[[ "${final_manifest}" == "${expected_final_manifest}" ]] || fail "unexpected Distroless ${platform} manifest: ${final_manifest}"
 
 printf 'Dockerfile SHA-256: %s\nplatform: %s\nGo index: %s\nGo manifest: %s\nDistroless index: %s\nDistroless manifest: %s\n' \
 	"${dockerfile_sha256}" "${platform}" "${go_ref##*@}" "${go_manifest}" "${final_ref##*@}" "${final_manifest}"
 
-docker pull --platform "${platform}" "${go_ref}" >/dev/null
-go_container="$(docker create --platform "${platform}" "${go_ref}")"
+go_platform_ref="${go_ref%@*}@${go_manifest}"
+docker pull --platform "${platform}" "${go_platform_ref}" >/dev/null
+go_container="$(docker create --platform "${platform}" "${go_platform_ref}")"
 while IFS=' ' read -r source expected; do
 	actual="$(source_file_sha256 "${source}")"
 	[[ "${actual}" == "${expected}" ]] || fail "Go source identity mismatch for ${source}: ${actual}"
@@ -78,7 +87,7 @@ done <<'EOF'
 /usr/local/go/src/crypto/x509/cert_pool.go d995d6e88af70f36a345185420bac88c58e86ebed1b3eea8e087228eaa7da03b
 /usr/local/go/src/crypto/x509/verify.go 3fbc65e9ba1a710f1276d6b9e36483bbc9dd98f48817ed0991ca0894505783f9
 /usr/local/go/src/crypto/tls/common.go d2837fbe55a398c7362b3ff8ffe43c06d0832df2305f45f32aeaebadc784486d
-/usr/local/go/src/crypto/tls/handshake_client.go 8cd7aa69d597097d91fd92a489aee9fd9dd72cbf0b0f6e08e04c339c997104d6
+/usr/local/go/src/crypto/tls/handshake_client.go 7d6210c69ff9bf0d8506a8f2f59bf33a6132d0a3574487bcc356f858e50c6fab
 /usr/local/go/src/net/http/transport.go 1c170ec3581321bd19ccd1b15863f46b16dc749ac6d54d00f5e97f7ffa2ccb5f
 /usr/local/go/src/crypto/x509/root.go 813faea4e4990c9760b5fe99d8ae91c8f26c4d3b5dd3c4a6d7bef7b0f11dbae7
 /usr/local/go/src/crypto/x509/root_unix.go 421c066f193250dc1adaf13fce4779fc3dc576e20faa86e43bc22af6c9536a14
@@ -118,11 +127,17 @@ sha256="$(shasum -a 256 "${bundle}" | awk '{print $1}')"
 [[ "${bytes}" == '216591' ]] || fail "bundle byte identity drift: ${bytes}"
 [[ "${sha256}" == 'a3413a37a8e09cc21b2c11c9ffb23d92d2fc9d1933c9e7617f5c4fba4f72d37d' ]] || fail "bundle hash identity drift: ${sha256}"
 
-S3_IMAGE_ROOT_BUNDLE_RECEIPT_PATH="${bundle}" \
-	S3_IMAGE_ROOT_BUNDLE_RECEIPT_BYTES="${bytes}" \
-	S3_IMAGE_ROOT_BUNDLE_RECEIPT_SHA256="${sha256}" \
-	S3_IMAGE_ROOT_BUNDLE_RECEIPT_ROOTS=142 \
-	go test -vet=off ./internal/infra/s3 -run '^TestFinalImageRootBundleReceipt$' -count=1
+docker run --rm --platform "${platform}" --network none \
+		-v "${root_dir}:/src:ro" \
+		-v "${temp_dir}:/receipt:ro" \
+		-v "$(go env GOMODCACHE):/go/pkg/mod:ro" \
+		-w /src \
+		-e S3_IMAGE_ROOT_BUNDLE_RECEIPT_PATH=/receipt/ca-certificates.crt \
+		-e S3_IMAGE_ROOT_BUNDLE_RECEIPT_BYTES="${bytes}" \
+		-e S3_IMAGE_ROOT_BUNDLE_RECEIPT_SHA256="${sha256}" \
+		-e S3_IMAGE_ROOT_BUNDLE_RECEIPT_ROOTS=142 \
+		"${go_platform_ref}" \
+		go test -mod=readonly -vet=off ./internal/infra/s3 -run '^TestFinalImageRootBundleReceipt$' -count=1
 
 byte_headroom="$(awk 'BEGIN { printf "%.0f", (458752 - 216591) * 100 / 216591 }')"
 root_headroom="$(awk 'BEGIN { printf "%.0f", (288 - 142) * 100 / 142 }')"
@@ -145,5 +160,27 @@ printf '%s\n' \
 	'D4 shallow: completed_part=96 part_number_pointee=8 string_pointees=32 crc64_text=heap(12) complete_root=101 complete_part=107 escape_factor=5 complete_buffer_slack=8192' \
 	'D4 simultaneous: A=2 P<=10000 B=458752 N=288 K=1024 T=1024'
 
-go test -vet=off -gcflags=all=-m=1 ./internal/infra/s3 -run '^TestWorkingMemoryAccounting$' -count=1
+compiler_output="$(
+	docker run --rm --platform "${platform}" --network none \
+		-v "${root_dir}:/src:ro" \
+		-v "$(go env GOMODCACHE):/go/pkg/mod:ro" \
+		-w /src "${go_platform_ref}" \
+		go test -mod=readonly -vet=off \
+			-gcflags='github.com/example/go-service-template-rest/internal/infra/s3=-m=1' \
+			./internal/infra/s3 -run '^TestWorkingMemoryAccounting$' -count=1 2>&1
+)"
+
+require_compiler_evidence() {
+	local description="$1"
+	local pattern="$2"
+	grep -Eq "${pattern}" <<<"${compiler_output}" || fail "compiler evidence misses ${description}"
+}
+
+require_compiler_evidence 'parsed root pool escape' 'image_root_bundle\.go:.*&x509\.CertPool\{\.\.\.\} escapes to heap'
+require_compiler_evidence 'retained client escape' 'client\.go:.*&Client\{\.\.\.\} escapes to heap'
+require_compiler_evidence 'multipart descriptor backing escape' 'upload\.go:.*make\(\[\]types\.CompletedPart, 0, ~r0\) escapes to heap'
+require_compiler_evidence 'multipart request escape' 'upload\.go:.*&types\.CompletedMultipartUpload\{\.\.\.\} escapes to heap'
+require_compiler_evidence 'download body escape' 'download\.go:.*&downloadBody\{\.\.\.\} escapes to heap'
+require_compiler_evidence 'bounded transport body escape' 'transport\.go:.*&limitedBody\{\.\.\.\} escapes to heap'
+printf 'compiler evidence: parsed roots, retained client, multipart descriptors/request, download body, bounded transport body\n'
 printf 'T9A source receipt PASS\n'

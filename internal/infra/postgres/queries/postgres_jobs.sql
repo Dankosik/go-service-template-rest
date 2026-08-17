@@ -139,7 +139,8 @@ observed AS MATERIALIZED (
 uncovered AS MATERIALIZED (
     SELECT DISTINCT job.kind, job.args_version, job.policy_version
     FROM postgres_jobs AS job
-    WHERE NOT EXISTS (
+    WHERE job.state IN ('ready', 'scheduled', 'retry_wait', 'running', 'cancel_requested')
+      AND NOT EXISTS (
         SELECT 1
         FROM input_keys AS key
         WHERE key.kind = job.kind
@@ -201,6 +202,7 @@ claimed AS (
         job.attempt_generation,
         job.attempts_used,
         job.budget_started_at,
+        job.available_at,
         job.current_worker_id,
         job.lease_expires_at,
         observed.observed_at AS started_at
@@ -249,6 +251,7 @@ SELECT
     claimed.attempt_generation,
     claimed.attempts_used,
     claimed.budget_started_at,
+    claimed.available_at,
     claimed.current_worker_id,
     claimed.started_at::timestamptz AS started_at,
     claimed.lease_expires_at
@@ -375,6 +378,7 @@ current_attempt AS MATERIALIZED (
       AND locked_job.recovery_generation = sqlc.arg(recovery_generation)::bigint
       AND locked_job.current_worker_id = sqlc.arg(worker_id)::text
       AND locked_job.state IN ('running', 'cancel_requested')
+	  AND locked_job.attempts_used = sqlc.arg(attempts_used)::integer
 ),
 updated_job AS (
     UPDATE postgres_jobs AS job
@@ -442,37 +446,71 @@ SELECT
     (SELECT finalized_at FROM result_attempt)::timestamptz AS finalized_at;
 
 -- name: ListExpiredPostgresJobAttempts :many
-WITH observed AS MATERIALIZED (
+WITH input_limits AS MATERIALIZED (
+    SELECT kind.kind, args.args_version, policy.policy_version, wave.max_recovery_wave
+    FROM unnest(sqlc.arg(kinds)::text[]) WITH ORDINALITY AS kind(kind, position)
+    JOIN unnest(sqlc.arg(args_versions)::text[]) WITH ORDINALITY AS args(args_version, position) USING (position)
+    JOIN unnest(sqlc.arg(policy_versions)::text[]) WITH ORDINALITY AS policy(policy_version, position) USING (position)
+    JOIN unnest(sqlc.arg(max_recovery_waves)::integer[]) WITH ORDINALITY AS wave(max_recovery_wave, position) USING (position)
+),
+observed AS MATERIALIZED (
     SELECT clock_timestamp() AS observed_at
+),
+ranked AS MATERIALIZED (
+    SELECT
+        job.logical_job_id,
+        job.kind,
+        job.args_version,
+        job.policy_version,
+        job.state,
+        job.recovery_generation,
+        job.attempt_generation,
+        job.attempts_used,
+        job.current_worker_id,
+        job.budget_started_at,
+        attempt.started_at,
+        attempt.lease_expires_at,
+        observed.observed_at,
+        input_limits.max_recovery_wave,
+        row_number() OVER (
+            PARTITION BY job.kind, job.args_version, job.policy_version
+            ORDER BY job.lease_expires_at, job.logical_job_id
+        ) AS recovery_position
+    FROM postgres_jobs AS job
+    JOIN postgres_job_attempts AS attempt
+      ON attempt.logical_job_id = job.logical_job_id
+     AND attempt.attempt_generation = job.attempt_generation
+    JOIN input_limits
+      ON input_limits.kind = job.kind
+     AND input_limits.args_version = job.args_version
+     AND input_limits.policy_version = job.policy_version
+    CROSS JOIN observed
+    WHERE job.state IN ('running', 'cancel_requested')
+      AND job.current_worker_id IS NOT NULL
+      AND job.lease_expires_at < observed.observed_at
+      AND attempt.finalized_at IS NULL
 )
 SELECT
-    job.logical_job_id,
-    job.kind,
-    job.args_version,
-    job.policy_version,
-    job.state,
-    job.recovery_generation,
-    job.attempt_generation,
-    job.attempts_used,
-    job.current_worker_id,
-    job.budget_started_at,
-    attempt.started_at,
-    attempt.lease_expires_at,
-    observed.observed_at::timestamptz AS observed_at,
-    greatest(
-        0,
-        floor(extract(epoch FROM observed.observed_at - job.budget_started_at) * 1000)
-    )::bigint AS elapsed_milliseconds
-FROM postgres_jobs AS job
-JOIN postgres_job_attempts AS attempt
-  ON attempt.logical_job_id = job.logical_job_id
- AND attempt.attempt_generation = job.attempt_generation
-CROSS JOIN observed
-WHERE job.state IN ('running', 'cancel_requested')
-  AND job.current_worker_id IS NOT NULL
-  AND job.lease_expires_at < observed.observed_at
-  AND attempt.finalized_at IS NULL
-ORDER BY job.lease_expires_at, job.logical_job_id
+	ranked.logical_job_id,
+	ranked.kind,
+	ranked.args_version,
+	ranked.policy_version,
+	ranked.state,
+	ranked.recovery_generation,
+	ranked.attempt_generation,
+	ranked.attempts_used,
+	ranked.current_worker_id,
+	ranked.budget_started_at,
+	ranked.started_at,
+	ranked.lease_expires_at,
+	ranked.observed_at::timestamptz AS observed_at,
+	greatest(
+		0,
+		floor(extract(epoch FROM ranked.observed_at - ranked.budget_started_at) * 1000)
+	)::bigint AS elapsed_milliseconds
+FROM ranked
+WHERE ranked.recovery_position <= ranked.max_recovery_wave
+ORDER BY ranked.lease_expires_at, ranked.logical_job_id
 LIMIT sqlc.arg(candidate_limit)::integer;
 
 -- name: RescuePostgresJobAttempt :one
@@ -505,6 +543,7 @@ current_expired AS MATERIALIZED (
       AND locked_job.current_worker_id = sqlc.arg(worker_id)::text
       AND locked_job.state IN ('running', 'cancel_requested')
       AND locked_job.lease_expires_at < observed.observed_at
+	  AND locked_job.attempts_used = sqlc.arg(attempts_used)::integer
 ),
 updated_job AS (
     UPDATE postgres_jobs AS job
@@ -584,6 +623,7 @@ observed AS MATERIALIZED (
 inventory AS MATERIALIZED (
     SELECT DISTINCT kind, args_version, policy_version
     FROM postgres_jobs
+    WHERE state IN ('ready', 'scheduled', 'retry_wait', 'running', 'cancel_requested')
 ),
 state_counts AS MATERIALIZED (
     SELECT state, count(*)::bigint AS job_count, min(available_at) AS oldest_available_at
@@ -603,9 +643,9 @@ SELECT
               AND input_keys.policy_version = inventory.policy_version
         )
     )::boolean AS compatible,
-    ARRAY(SELECT kind FROM inventory ORDER BY kind, args_version, policy_version)::text[] AS retained_kinds,
-    ARRAY(SELECT args_version FROM inventory ORDER BY kind, args_version, policy_version)::text[] AS retained_args_versions,
-    ARRAY(SELECT policy_version FROM inventory ORDER BY kind, args_version, policy_version)::text[] AS retained_policy_versions,
+    ARRAY(SELECT kind FROM inventory ORDER BY kind, args_version, policy_version)::text[] AS required_kinds,
+    ARRAY(SELECT args_version FROM inventory ORDER BY kind, args_version, policy_version)::text[] AS required_args_versions,
+    ARRAY(SELECT policy_version FROM inventory ORDER BY kind, args_version, policy_version)::text[] AS required_policy_versions,
     ARRAY(SELECT state FROM state_counts ORDER BY state)::text[] AS states,
     ARRAY(SELECT job_count FROM state_counts ORDER BY state)::bigint[] AS state_counts,
     ARRAY(SELECT oldest_available_at FROM state_counts ORDER BY state)::timestamptz[] AS oldest_available_at

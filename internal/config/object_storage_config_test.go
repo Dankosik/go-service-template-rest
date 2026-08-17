@@ -6,6 +6,7 @@ import (
 	"testing"
 )
 
+//nolint:paralleltest // This test mutates process-global environment or working directory.
 func TestObjectStorageConfigContract(t *testing.T) {
 	for _, test := range []struct {
 		name  string

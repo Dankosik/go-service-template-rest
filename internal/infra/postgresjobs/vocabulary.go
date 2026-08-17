@@ -3,16 +3,27 @@ package postgresjobs
 import "github.com/example/go-service-template-rest/internal/jobs"
 
 const (
-	metricOutcomeOther = "other"
-	metricStateOther   = "other"
+	metricOutcomeOther   = "other"
+	metricOperationOther = "other"
+	metricStateOther     = "other"
 )
 
 func metricEvent(event string) string {
 	switch event {
-	case "acceptance", "claim", "attempt", "retry", "rescue", "cancellation", "recovery", "action", "drain":
+	case "acceptance", "acceptance_duplicate", "acceptance_conflict", "acceptance_rejected",
+		"claim", "attempt", "retry", "rescue", "cancellation", "drain", "terminal_failure":
 		return event
 	default:
 		return metricOutcomeOther
+	}
+}
+
+func metricOperation(operation string) string {
+	switch operation {
+	case "claim", "resolve_claims", "check_schema", "renew", "rescue_candidates", "rescue", "finalize", "observe", "producer_probe":
+		return operation
+	default:
+		return metricOperationOther
 	}
 }
 

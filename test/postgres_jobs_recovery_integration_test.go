@@ -4,6 +4,7 @@ package integration_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -20,7 +21,9 @@ func TestPostgresJobsRecovery(t *testing.T) {
 		expirePostgresJobsAttempt(ctx, t, pool, claimed.Attempt)
 		session := acquirePostgresJobsSession(ctx, t, store)
 		defer session.Release(ctx)
-		candidates, err := session.RescueCandidates(ctx, 1)
+		candidates, err := session.RescueCandidates(ctx, postgresjobs.RescueCandidateOptions{
+			Limits: []postgresjobs.RescueLimit{{Revision: prepared.Revision(), MaxRecoveryWave: 1}}, Limit: 1,
+		})
 		if err != nil || len(candidates) != 1 {
 			t.Fatalf("RescueCandidates() = %+v, %v", candidates, err)
 		}
@@ -77,6 +80,55 @@ func TestPostgresJobsRecovery(t *testing.T) {
 		runPostgresJobsFinalizeRescueOrder(ctx, t, pool, store, true)
 		runPostgresJobsFinalizeRescueOrder(ctx, t, pool, store, false)
 	})
+
+	t.Run("rescue budget mismatch is fenced", func(t *testing.T) {
+		_, claimed := claimPostgresJob(ctx, t, pool, store, "rescue-budget-mismatch", "worker-rescue-budget-mismatch", time.Minute)
+		expirePostgresJobsAttempt(ctx, t, pool, claimed.Attempt)
+		session := acquirePostgresJobsSession(ctx, t, store)
+		defer session.Release(ctx)
+		result, err := session.Rescue(ctx, postgresjobs.RescueInput{
+			Attempt: claimed.Attempt,
+			Transition: jobs.Transition{
+				State: jobs.StateOutcomeUnknown, AttemptsUsed: claimed.AttemptNumber + 1,
+				ElapsedUsed: time.Second, Outcome: jobs.OutcomeLost, Effect: jobs.EffectUnknown,
+			},
+			FailureCode: "lease_lost",
+		})
+		if err != nil || result.Status != postgresjobs.TransitionStale {
+			t.Fatalf("Rescue(counter mismatch) = %+v, %v, want stale", result, err)
+		}
+	})
+}
+
+func TestPostgresJobsRecoveryWaveIsPerRevision(t *testing.T) {
+	ctx, pool, store := newPostgresJobsFixture(t)
+	claims := make([]postgresjobs.ClaimedAttempt, 0, 3)
+	for index := range 3 {
+		_, claim := claimPostgresJob(ctx, t, pool, store, fmt.Sprintf("recovery-wave-%d", index), fmt.Sprintf("worker-wave-%d", index), time.Minute)
+		claims = append(claims, claim)
+	}
+	for index, claim := range claims {
+		kind := "email"
+		if index == len(claims)-1 {
+			kind = "report"
+		}
+		if _, err := pool.PGX().Exec(ctx, `UPDATE postgres_jobs SET kind = $2 WHERE logical_job_id = $1`, claim.Attempt.LogicalJobID, kind); err != nil {
+			t.Fatalf("set recovery revision: %v", err)
+		}
+		expirePostgresJobsAttempt(ctx, t, pool, claim.Attempt)
+	}
+	session := acquirePostgresJobsSession(ctx, t, store)
+	defer session.Release(ctx)
+	candidates, err := session.RescueCandidates(ctx, postgresjobs.RescueCandidateOptions{
+		Limits: []postgresjobs.RescueLimit{
+			{Revision: jobs.Revision{Kind: "email", ArgsVersion: "v1", PolicyVersion: "v1"}, MaxRecoveryWave: 1},
+			{Revision: jobs.Revision{Kind: "report", ArgsVersion: "v1", PolicyVersion: "v1"}, MaxRecoveryWave: 1},
+		},
+		Limit: 2,
+	})
+	if err != nil || len(candidates) != 2 || candidates[0].Revision.Kind == candidates[1].Revision.Kind {
+		t.Fatalf("RescueCandidates(per revision) = %+v, %v, want one email and one report", candidates, err)
+	}
 }
 
 func runPostgresJobsFinalizeRescueOrder(ctx context.Context, t *testing.T, pool *postgres.Pool, store *postgresjobs.Store, finalizeFirst bool) {

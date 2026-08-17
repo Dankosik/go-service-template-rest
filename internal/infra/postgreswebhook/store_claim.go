@@ -80,7 +80,11 @@ func (s *Store) Claim(ctx context.Context, workerID string, pageSize int, leaseD
 			if err != nil {
 				return fmt.Errorf("lock webhook delivery: %w", err)
 			}
-			slot, err := queries.LockWebhookCapacitySlot(ctx, sqlcgen.LockWebhookCapacitySlotParams{CapacityRevision: s.options.CapacityRevision, SampledAt: pgtime(sampledAt)})
+			var policy DeliveryPolicy
+			if err := json.Unmarshal(delivery.PolicySnapshot, &policy); err != nil || policy.validate() != nil || !s.admits(policy) || leaseDuration < policy.AttemptTimeout+2*s.options.OperationTimeout || delivery.PreviousRetryDelayNs < 0 {
+				return fmt.Errorf("%w: retained webhook policy is incompatible with this worker", ErrConflict)
+			}
+			slot, err := queries.LockWebhookCapacitySlot(ctx, s.options.CapacityRevision)
 			if errors.Is(err, pgx.ErrNoRows) {
 				break
 			}
@@ -117,15 +121,16 @@ func (s *Store) Claim(ctx context.Context, workerID string, pageSize int, leaseD
 			if err := queries.InsertWebhookAttempt(ctx, sqlcgen.InsertWebhookAttemptParams{OwnerScope: delivery.OwnerScope, DeliveryID: delivery.DeliveryID, CycleNumber: delivery.CurrentCycle, AttemptID: attemptID, Fence: fence, CapacitySlot: slot, AttemptedAt: pgtime(sampledAt), LeaseExpiresAt: pgtime(leaseExpiresAt), PayloadDigest: payloadDigest[:], PayloadBytes: payloadBytes}); err != nil {
 				return fmt.Errorf("insert webhook attempt: %w", err)
 			}
-			var policy DeliveryPolicy
-			if err := json.Unmarshal(delivery.PolicySnapshot, &policy); err != nil {
-				return fmt.Errorf("%w: decode retained webhook policy", ErrConflict)
+			attemptDeadline := sampledAt.Add(policy.AttemptTimeout)
+			if delivery.DeadlineAt.Time.Before(attemptDeadline) {
+				attemptDeadline = delivery.DeadlineAt.Time
 			}
 			result.Attempt = &ClaimedAttempt{
-				Identity:      AttemptIdentity{OwnerScope: delivery.OwnerScope, DeliveryID: delivery.DeliveryID, Cycle: delivery.CurrentCycle, AttemptID: attemptID, Fence: fence},
-				DestinationID: delivery.DestinationID, DestinationGeneration: delivery.DestinationGeneration,
+				Identity:         AttemptIdentity{OwnerScope: delivery.OwnerScope, DeliveryID: delivery.DeliveryID, Cycle: delivery.CurrentCycle, AttemptID: attemptID, Fence: fence},
+				CapacityRevision: s.options.CapacityRevision,
+				DestinationID:    delivery.DestinationID, DestinationGeneration: delivery.DestinationGeneration,
 				URL: delivery.UrlSnapshot, Body: append([]byte(nil), delivery.Body...), ContentType: delivery.ContentType,
-				AttemptedAt: sampledAt, Deadline: leaseExpiresAt, KeyReference: candidate.ActiveKeyReference,
+				AttemptedAt: sampledAt, Deadline: attemptDeadline, PreviousRetryDelay: time.Duration(delivery.PreviousRetryDelayNs), KeyReference: candidate.ActiveKeyReference,
 				ManifestRevision: candidate.RequiredSecretRevision, SignatureProfile: candidate.SignatureProfile,
 				ControlRevision: candidate.ControlRevision, KeyStateRevision: candidate.KeyStateRevision, Policy: policy,
 			}

@@ -5,11 +5,13 @@ import (
 	"errors"
 	"maps"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/infra/telemetry/telemetrytest"
 	"github.com/example/go-service-template-rest/internal/objectstorage"
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 	"go.opentelemetry.io/otel/trace/noop"
 )
@@ -89,7 +91,7 @@ func TestTelemetryContractIsBoundedAndSecret(t *testing.T) {
 		abortOK bool
 		want    string
 	}{
-		{name: "complete", abortOK: true, want: "complete"},
+		{name: "empty observation remains pending", abortOK: true, want: "pending"},
 		{name: "pending", want: "pending"},
 	} {
 		t.Run("multipart cleanup "+test.name, func(t *testing.T) {
@@ -121,7 +123,7 @@ func TestTelemetryContractIsBoundedAndSecret(t *testing.T) {
 				}
 			})
 			client.telemetry = telemetry
-			_, err = client.Upload(t.Context(), "object-key-canary", bytes.NewReader(make([]byte, cfg.MultipartChunkBytes+1)), objectstorage.UploadOptions{ContentLength: cfg.MultipartChunkBytes + 1, Intent: objectstorage.UploadReplace})
+			_, err = client.Upload(t.Context(), "object-key-canary", uploadSource(bytes.NewReader(make([]byte, cfg.MultipartChunkBytes+1))), objectstorage.UploadOptions{ContentLength: cfg.MultipartChunkBytes + 1, Intent: objectstorage.UploadReplace})
 			if objectstorage.Kind(err) != objectstorage.KindInternal {
 				t.Fatalf("Upload() kind = %q, want internal", objectstorage.Kind(err))
 			}
@@ -140,4 +142,55 @@ func TestTelemetryContractIsBoundedAndSecret(t *testing.T) {
 			telemetrytest.AssertNoAttributeContains(t, reader, "object-key-canary", "private-upload", "test-secret-key")
 		})
 	}
+
+	t.Run("provider diagnostics are bounded and span only", func(t *testing.T) {
+		recorder := telemetrytest.InstallSpanRecorder(t)
+		reader, meter := telemetrytest.NewManualMeter(t, telemetryScope)
+		telemetry, err := newTelemetryWithMeter(meter, otel.GetTracerProvider().Tracer(telemetryScope))
+		if err != nil {
+			t.Fatal(err)
+		}
+		const codeCanary = "secret-code-canary"
+		const requestIDCanary = "secret request id canary\n"
+		call := telemetry.begin(t.Context(), telemetryOperationMetadata)
+		call.finish(operationError(ProviderAmazonS3, operationMetadata, providerTestError{
+			status: http.StatusServiceUnavailable, code: codeCanary, requestID: requestIDCanary,
+		}, &sendState{attempts: 3}), 0)
+
+		spans := recorder.Ended()
+		if len(spans) != 1 {
+			t.Fatalf("ended spans = %d, want 1", len(spans))
+		}
+		attributes := map[string]string{}
+		for _, field := range spans[0].Attributes() {
+			attributes[string(field.Key)] = field.Value.String()
+		}
+		for key, want := range map[string]string{
+			"object_storage.attempts":            "3",
+			"http.response.status_code":          "503",
+			"object_storage.provider_code":       "other",
+			"object_storage.failure_category":    "provider",
+			"object_storage.provider_request_id": "invalid",
+			"object_storage.phase":               "response",
+		} {
+			if attributes[key] != want {
+				t.Errorf("span attribute %s = %q, want %q", key, attributes[key], want)
+			}
+		}
+		for key, value := range attributes {
+			if strings.Contains(value, codeCanary) || strings.Contains(value, requestIDCanary) {
+				t.Errorf("span attribute %s leaked diagnostic canary %q", key, value)
+			}
+		}
+		telemetrytest.ForEachMetric(t, reader, func(measured metricdata.Metrics) {
+			if measured.Name != "object_storage.operations" {
+				return
+			}
+			for _, point := range telemetrytest.Int64Sum(t, measured).DataPoints {
+				if point.Attributes.Len() != 4 {
+					t.Fatalf("diagnostic fields became metric labels: %v", point.Attributes)
+				}
+			}
+		})
+	})
 }

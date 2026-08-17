@@ -69,13 +69,9 @@ func TestPostgresJobsLeaseSafetyProcess(t *testing.T) {
 	waitForPostgresJobsReadinessClosed(t, first.addr)
 	waitForPostgresJobsWorkerPIDGone(ctx, t, pool, firstAppName, firstPID)
 	waittest.Until(t, 15*time.Second, func() bool {
-		_, err := os.Stat(firstFiles.unsafeDrain)
-		return err == nil
-	}, "unsafe drain completion")
-	marker, err := os.ReadFile(firstFiles.unsafeDrain)
-	if err != nil || string(marker) != "unsafe drain\n" {
-		t.Fatalf("unsafe drain marker = %q, %v", marker, err)
-	}
+		marker, err := os.ReadFile(firstFiles.unsafeDrain)
+		return err == nil && string(marker) == "unsafe drain\n"
+	}, "complete unsafe drain marker")
 	drainMarkerRead := time.Now()
 	firstErr, firstExited := waitForPostgresJobsWorkerExit(first, 2*time.Second)
 	if !firstExited {
@@ -112,9 +108,7 @@ func TestPostgresJobsLeaseSafetyProcess(t *testing.T) {
 		t.Fatalf("first worker cleanup marker error = %v, want unsafe cleanup absent", err)
 	}
 
-	waittest.Until(t, 5*time.Second, func() bool {
-		return postgresJobsLeaseExpired(ctx, t, pool, logicalJobID)
-	}, "first attempt lease expiry")
+	waitForPostgresJobsLeaseExpiry(ctx, t, pool, logicalJobID, "first attempt lease expiry")
 	secondAppName := "jobs-lease-second"
 	secondFiles := jobsWorkerLeaseFiles(t)
 	secondLocker, secondLockTx := lockPostgresJobsRow(ctx, t, pool, logicalJobID)
@@ -273,8 +267,8 @@ func startPostgresJobsTestWorker(t *testing.T, repositoryRoot, binary string, op
 		"APP__JOBS__ENABLED=true",
 		"APP__JOBS__POLL_INTERVAL=10ms",
 		"APP__JOBS__MAX_CONCURRENCY=1",
-		"APP__JOBS__LEASE_DURATION=3s",
-		"APP__JOBS__STORE_OPERATION_TIMEOUT=500ms",
+		"APP__JOBS__LEASE_DURATION=6s",
+		"APP__JOBS__STORE_OPERATION_TIMEOUT=1s",
 		"APP__JOBS__OBSERVATION_INTERVAL=10ms",
 		"APP__JOBS__DRAIN_TIMEOUT=3s",
 		"APP__HTTP__GRACE_PERIOD=12s",
@@ -530,8 +524,8 @@ func waitForPostgresJobsAttempt(ctx context.Context, t *testing.T, pool *postgre
 func waitForPostgresJobsTestFile(t *testing.T, path, description string) {
 	t.Helper()
 	waittest.Until(t, 5*time.Second, func() bool {
-		_, err := os.Stat(path)
-		return err == nil
+		contents, err := os.ReadFile(path)
+		return err == nil && len(contents) > 0
 	}, description)
 }
 
@@ -570,6 +564,26 @@ func postgresJobsLeaseExpired(ctx context.Context, t *testing.T, pool *postgres.
 		t.Fatal(err)
 	}
 	return expired
+}
+
+func waitForPostgresJobsLeaseExpiry(
+	ctx context.Context,
+	t *testing.T,
+	pool *postgres.Pool,
+	logicalJobID jobs.LogicalJobID,
+	description string,
+) {
+	t.Helper()
+	var remainingMilliseconds int64
+	if err := pool.PGX().QueryRow(ctx, `
+SELECT greatest(coalesce((extract(epoch FROM (lease_expires_at - clock_timestamp())) * 1000)::bigint, 0), 0)
+FROM postgres_jobs
+WHERE logical_job_id = $1`, logicalJobID).Scan(&remainingMilliseconds); err != nil {
+		t.Fatalf("read jobs lease deadline: %v", err)
+	}
+	waittest.Until(t, time.Duration(remainingMilliseconds)*time.Millisecond+2*time.Second, func() bool {
+		return postgresJobsLeaseExpired(ctx, t, pool, logicalJobID)
+	}, description)
 }
 
 func waitForPostgresJobsFencedRecovery(ctx context.Context, t *testing.T, pool *postgres.Pool, logicalJobID jobs.LogicalJobID) {

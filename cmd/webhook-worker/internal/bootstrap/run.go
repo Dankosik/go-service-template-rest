@@ -28,7 +28,7 @@ func run(signalCtx context.Context, args []string) (runErr error) {
 	}
 	startupCtx, cancelStartup := context.WithTimeout(signalCtx, startupTimeout)
 	defer cancelStartup()
-	cfg, _, err := config.LoadDetailedWithContext(startupCtx, loadOptions)
+	cfg, _, err := config.LoadWebhookWorkerDetailedWithContext(startupCtx, loadOptions)
 	if err != nil {
 		return fmt.Errorf("load webhook worker config: %w", err)
 	}
@@ -58,7 +58,13 @@ func run(signalCtx context.Context, args []string) (runErr error) {
 			pool.Close()
 		}
 	}()
-	store, err := postgreswebhook.NewStore(pool, postgreswebhook.StoreOptions{OperationTimeout: cfg.Webhooks.StoreOperationTimeout, CapacityRevision: cfg.Webhooks.CapacityRevision, GlobalConcurrency: cfg.Webhooks.GlobalConcurrency, ManifestRevision: manifest.Revision()})
+	store, err := postgreswebhook.NewStore(pool, postgreswebhook.StoreOptions{
+		OperationTimeout: cfg.Webhooks.StoreOperationTimeout, CapacityRevision: cfg.Webhooks.CapacityRevision,
+		GlobalConcurrency: cfg.Webhooks.GlobalConcurrency, ManifestRevision: manifest.Revision(),
+		AttemptTimeout: cfg.Webhooks.AttemptTimeout, ResponseHeaderTimeout: cfg.Webhooks.ResponseHeaderTimeout,
+		ResponseHeaderBytes: cfg.Webhooks.ResponseHeaderBytes, ResponseBodyBytes: cfg.Webhooks.ResponseBodyBytes,
+		DrainTimeout: cfg.Webhooks.DrainTimeout,
+	})
 	if err != nil {
 		return fmt.Errorf("initialize webhook store: %w", err)
 	}

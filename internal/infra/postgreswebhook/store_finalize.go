@@ -32,7 +32,7 @@ type finalizationUpdate struct {
 }
 
 func (s *Store) FinalizeAttempt(ctx context.Context, attempt ClaimedAttempt, final Finalization) (OutcomeClass, error) {
-	if !s.valid() || !validFinalization(attempt, final) {
+	if !s.valid() || attempt.CapacityRevision != s.options.CapacityRevision || !validFinalization(attempt, final) {
 		return "", fmt.Errorf("%w: finalization evidence is invalid", ErrConfig)
 	}
 	values, err := prepareFinalizationValues(final)
@@ -40,6 +40,16 @@ func (s *Store) FinalizeAttempt(ctx context.Context, attempt ClaimedAttempt, fin
 		return "", err
 	}
 	outcome := ClassifyOutcome(final.Evidence)
+	retryAfter, retryAfterSet := ParseRetryAfter(final.RetryAfter, final.ResponseDate, attempt.AttemptedAt, attempt.Policy.RetryAfterCap)
+	var retryAfterNS, retryDelayNS *int64
+	if retryAfterSet {
+		value := retryAfter.Nanoseconds()
+		retryAfterNS = &value
+	}
+	if final.LocalRetryDelay > 0 {
+		value := final.LocalRetryDelay.Nanoseconds()
+		retryDelayNS = &value
+	}
 	err = s.transaction(ctx, func(ctx context.Context, tx pgx.Tx) error {
 		queries := sqlcgen.New(tx)
 		finalizedAt, err := advanceClock(ctx, queries)
@@ -47,7 +57,10 @@ func (s *Store) FinalizeAttempt(ctx context.Context, attempt ClaimedAttempt, fin
 			return err
 		}
 		identity := attempt.Identity
-		locked, err := queries.LockWebhookFinalization(ctx, sqlcgen.LockWebhookFinalizationParams{OwnerScope: identity.OwnerScope, DeliveryID: identity.DeliveryID, CycleNumber: identity.Cycle, AttemptID: identity.AttemptID, Fence: identity.Fence})
+		locked, err := queries.LockWebhookFinalization(ctx, sqlcgen.LockWebhookFinalizationParams{
+			CapacityRevision: attempt.CapacityRevision, OwnerScope: identity.OwnerScope, DeliveryID: identity.DeliveryID,
+			CycleNumber: identity.Cycle, AttemptID: identity.AttemptID, Fence: identity.Fence,
+		})
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrStaleAttempt
 		}
@@ -57,16 +70,16 @@ func (s *Store) FinalizeAttempt(ctx context.Context, attempt ClaimedAttempt, fin
 		if final.Evidence.MayHaveSent && !locked.MayHaveSent {
 			return fmt.Errorf("%w: possible-send evidence was not durably authorized", ErrConflict)
 		}
-		update := finalizationUpdateFor(locked, outcome, attempt, final, finalizedAt)
-		retryAfter := nullableString(final.RetryAfter)
+		update := finalizationUpdateFor(locked, outcome, final, finalizedAt, retryAfter)
 		outcomeText := string(outcome)
 		rows, err := queries.FinalizeWebhookAttempt(ctx, sqlcgen.FinalizeWebhookAttemptParams{
 			ResponseHeaderBytes: values.headerBytes, ResponseBodyBytes: values.bodyBytes, ResponseStatus: values.status,
-			RetryAfter: retryAfter, OutcomeClass: &outcomeText, FinalizedAt: pgtime(finalizedAt),
+			RetryAfterDelayNs: retryAfterNS, RetryDelayNs: retryDelayNS,
+			OutcomeClass: &outcomeText, FinalizedAt: pgtime(finalizedAt),
 			OwnerScope: identity.OwnerScope, DeliveryID: identity.DeliveryID, CycleNumber: identity.Cycle,
 			AttemptID: identity.AttemptID, Fence: identity.Fence, DeliveryState: update.deliveryState,
 			NextDueAt: pgtime(update.nextDueAt), CumulativeSummary: string(update.summary), TerminalAt: update.terminalAt,
-			CycleDisposition: update.cycleDisposition,
+			CycleDisposition: update.cycleDisposition, CapacityRevision: attempt.CapacityRevision,
 		})
 		if err != nil {
 			return fmt.Errorf("finalize webhook attempt: %w", err)
@@ -79,15 +92,14 @@ func (s *Store) FinalizeAttempt(ctx context.Context, attempt ClaimedAttempt, fin
 	return outcome, err
 }
 
-func finalizationUpdateFor(locked sqlcgen.LockWebhookFinalizationRow, outcome OutcomeClass, attempt ClaimedAttempt, final Finalization, finalizedAt time.Time) finalizationUpdate {
+func finalizationUpdateFor(locked sqlcgen.LockWebhookFinalizationRow, outcome OutcomeClass, final Finalization, finalizedAt time.Time, retryAfter time.Duration) finalizationUpdate {
 	summary := CumulativeSummary(OutcomeClass(locked.CumulativeSummary), outcome)
 	if outcome == OutcomeDefinitelyNotSentRetry && locked.CumulativeSummary == "none" {
 		summary = OutcomeClass("none")
 	}
 	update := finalizationUpdate{summary: summary, deliveryState: string(DeliveryTerminal), cycleDisposition: terminalDisposition(outcome, summary), nextDueAt: finalizedAt}
 	if retryableOutcome(outcome) && locked.AttemptsUsed < locked.MaximumAttempts {
-		hint, _ := ParseRetryAfter(final.RetryAfter, final.ResponseDate, attempt.AttemptedAt, attempt.Policy.RetryAfterCap)
-		if due, err := RetryDue(finalizedAt, locked.DeadlineAt.Time, final.LocalRetryDelay, hint); err == nil {
+		if due, err := RetryDue(finalizedAt, locked.DeadlineAt.Time, final.LocalRetryDelay, retryAfter); err == nil {
 			update.deliveryState = string(DeliveryScheduled)
 			update.cycleDisposition = activeDisposition
 			update.nextDueAt = due
@@ -120,7 +132,7 @@ func terminalDisposition(outcome, summary OutcomeClass) string {
 	case OutcomeHTTPAccepted, OutcomeHTTPRejected, OutcomeLocallyDenied:
 		return string(outcome)
 	case OutcomeDefinitelyNotSentRetry, OutcomeRetryableHTTPAmbiguous, OutcomeTransportAmbiguous,
-		OutcomeAttemptsExhausted, OutcomeUnknown, OutcomeClosedUnknown:
+		OutcomeAttemptsExhausted, OutcomeUnknown, OutcomeClosedUnknown, OutcomeRetained:
 		return string(OutcomeAttemptsExhausted)
 	}
 	return string(OutcomeAttemptsExhausted)
@@ -161,11 +173,4 @@ func nullableInt32(value int) (int32, bool, error) {
 		return 0, false, err
 	}
 	return converted, true, nil
-}
-
-func nullableString(value string) *string {
-	if value == "" {
-		return nil
-	}
-	return &value
 }

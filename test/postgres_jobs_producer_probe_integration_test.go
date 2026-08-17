@@ -65,7 +65,7 @@ func TestPostgresJobsProducerProbe(t *testing.T) {
 		statements := []string{
 			"GRANT CONNECT ON DATABASE " + pgx.Identifier{database}.Sanitize() + " TO " + roleIdentifier,
 			"GRANT USAGE ON SCHEMA public TO " + roleIdentifier,
-			"GRANT SELECT ON postgres_job_actions, postgres_job_attempts, postgres_job_claim_scopes, postgres_jobs TO " + roleIdentifier,
+			"GRANT SELECT ON postgres_job_attempts, postgres_job_claim_scopes, postgres_jobs TO " + roleIdentifier,
 			"GRANT INSERT ON postgres_jobs TO " + roleIdentifier,
 		}
 		for _, statement := range statements {

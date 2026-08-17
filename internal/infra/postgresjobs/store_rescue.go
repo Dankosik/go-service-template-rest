@@ -29,12 +29,29 @@ type RescueInput struct {
 	FailureCode string
 }
 
-func (s *Session) RescueCandidates(ctx context.Context, limit int) (candidates []RescueCandidate, err error) {
-	if limit < 1 || limit > math.MaxInt32 {
+type RescueLimit struct {
+	Revision        jobs.Revision
+	MaxRecoveryWave uint32
+}
+
+type RescueCandidateOptions struct {
+	Limits []RescueLimit
+	Limit  int
+}
+
+func (s *Session) RescueCandidates(ctx context.Context, options RescueCandidateOptions) (candidates []RescueCandidate, err error) {
+	if options.Limit < 1 || options.Limit > math.MaxInt32 {
 		return nil, fmt.Errorf("%w: rescue limit must be between 1 and %d", ErrConfig, math.MaxInt32)
 	}
-	err = s.withOperation(ctx, pgx.ReadOnly, func(operationCtx context.Context, queries *sqlcgen.Queries) error {
-		rows, queryErr := queries.ListExpiredPostgresJobAttempts(operationCtx, int32(limit)) // #nosec G115 -- rescue limit is validated in [1, math.MaxInt32].
+	kinds, argsVersions, policyVersions, waves, err := rescueLimitColumns(options.Limits)
+	if err != nil {
+		return nil, err
+	}
+	err = s.withOperation(ctx, "rescue_candidates", pgx.ReadOnly, func(operationCtx context.Context, queries *sqlcgen.Queries) error {
+		rows, queryErr := queries.ListExpiredPostgresJobAttempts(operationCtx, sqlcgen.ListExpiredPostgresJobAttemptsParams{
+			Kinds: kinds, ArgsVersions: argsVersions, PolicyVersions: policyVersions, MaxRecoveryWaves: waves,
+			CandidateLimit: int32(options.Limit), // #nosec G115 -- rescue limit is validated in [1, math.MaxInt32].
+		})
 		if queryErr != nil {
 			return fmt.Errorf("list expired postgres job attempts: %w", queryErr)
 		}
@@ -43,6 +60,23 @@ func (s *Session) RescueCandidates(ctx context.Context, limit int) (candidates [
 		return mapErr
 	})
 	return candidates, err
+}
+
+func rescueLimitColumns(limits []RescueLimit) ([]string, []string, []string, []int32, error) {
+	if len(limits) == 0 {
+		return nil, nil, nil, nil, fmt.Errorf("%w: at least one rescue revision limit is required", ErrConfig)
+	}
+	keys := make([]jobs.Revision, len(limits))
+	waves := make([]int32, len(limits))
+	for index, limit := range limits {
+		if limit.MaxRecoveryWave == 0 || limit.MaxRecoveryWave > math.MaxInt32 {
+			return nil, nil, nil, nil, fmt.Errorf("%w: invalid recovery wave", ErrConfig)
+		}
+		keys[index] = limit.Revision
+		waves[index] = int32(limit.MaxRecoveryWave) // #nosec G115 -- recovery wave is validated against math.MaxInt32.
+	}
+	kinds, argsVersions, policyVersions, err := registryColumns(keys)
+	return kinds, argsVersions, policyVersions, waves, err
 }
 
 func rescueCandidatesFromRows(rows []sqlcgen.ListExpiredPostgresJobAttemptsRow) ([]RescueCandidate, error) {
@@ -94,7 +128,7 @@ func (s *Session) Rescue(ctx context.Context, input RescueInput) (result Persist
 	if err != nil {
 		return PersistedTransition{}, err
 	}
-	err = s.withOperation(ctx, pgx.ReadWrite, func(operationCtx context.Context, queries *sqlcgen.Queries) error {
+	err = s.withOperation(ctx, "rescue", pgx.ReadWrite, func(operationCtx context.Context, queries *sqlcgen.Queries) error {
 		row, queryErr := queries.RescuePostgresJobAttempt(operationCtx, sqlcgen.RescuePostgresJobAttemptParams(params))
 		if queryErr != nil {
 			return fmt.Errorf("rescue postgres job attempt: %w", queryErr)

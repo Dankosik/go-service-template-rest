@@ -1,37 +1,9 @@
 package objectstorage
 
 import (
-	"context"
-	"io"
-	"net/http"
 	"strings"
 	"testing"
-	"time"
 )
-
-type featureFake struct{}
-
-func (featureFake) Upload(context.Context, string, io.Reader, UploadOptions) (UploadResult, error) {
-	return UploadResult{}, nil
-}
-
-func (featureFake) Download(context.Context, string) (Download, error) {
-	return Download{}, nil
-}
-
-func (featureFake) Metadata(context.Context, string) (Metadata, error) {
-	return Metadata{}, nil
-}
-
-func (featureFake) Delete(context.Context, string) error {
-	return nil
-}
-
-func (featureFake) PresignGET(context.Context, string, time.Duration) (PresignedGET, error) {
-	return PresignedGET{Method: http.MethodGet}, nil
-}
-
-var _ Store = featureFake{}
 
 func TestPortContractAndKeyGrammar(t *testing.T) {
 	if got := Kind(NewError(ErrorKind("provider-secret"))); got != KindInternal {

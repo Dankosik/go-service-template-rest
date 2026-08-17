@@ -30,6 +30,9 @@ type manifestEntry struct {
 }
 
 func ParseSecretManifest(raw string) (*SecretManifest, error) {
+	if raw == "" || len(raw) > MaxSecretManifestBytes {
+		return nil, errors.New("parse webhook secret manifest: document size is invalid")
+	}
 	if err := rejectDuplicateJSONFields(raw); err != nil {
 		return nil, errors.New("parse webhook secret manifest: duplicate field")
 	}
@@ -42,7 +45,7 @@ func ParseSecretManifest(raw string) (*SecretManifest, error) {
 	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
 		return nil, errors.New("parse webhook secret manifest: trailing data")
 	}
-	if document.Revision <= 0 || len(document.Entries) == 0 {
+	if document.Revision <= 0 || len(document.Entries) == 0 || len(document.Entries) > MaxSecretManifestEntries {
 		return nil, errors.New("parse webhook secret manifest: positive revision and entries are required")
 	}
 	manifest := &SecretManifest{revision: document.Revision, entries: make(map[secretTuple][]byte, len(document.Entries))}
@@ -145,7 +148,7 @@ func (m *SecretManifest) Resolve(owner, destination, reference string) (SigningK
 	}
 	value, ok := m.entries[secretTuple{owner, destination, reference}]
 	if !ok {
-		return SigningKey{}, errors.New("resolve webhook signing key: binding not found")
+		return SigningKey{}, fmt.Errorf("%w: binding not found", ErrSecretUnavailable)
 	}
 	return SigningKey{Reference: reference, Bytes: bytes.Clone(value)}, nil
 }

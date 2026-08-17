@@ -23,6 +23,15 @@ func TestWebhooksConfigContract(t *testing.T) {
 		{"claim page", func(w *WebhooksConfig, _ *PostgresConfig, _ *HTTPConfig) { w.ClaimScanPage = 257 }},
 		{"store timeout", func(w *WebhooksConfig, _ *PostgresConfig, _ *HTTPConfig) { w.StoreOperationTimeout = 6 * time.Second }},
 		{"budget nesting", func(w *WebhooksConfig, _ *PostgresConfig, _ *HTTPConfig) { w.ResponseHeaderTimeout = 6 * time.Second }},
+		{"attempt ceiling", func(w *WebhooksConfig, _ *PostgresConfig, h *HTTPConfig) {
+			w.AttemptTimeout = 10*time.Minute + time.Nanosecond
+			w.DrainTimeout = w.AttemptTimeout + time.Second
+			h.GracePeriod = w.DrainTimeout + time.Second
+		}},
+		{"drain ceiling", func(w *WebhooksConfig, _ *PostgresConfig, h *HTTPConfig) {
+			w.DrainTimeout = 30*time.Minute + time.Nanosecond
+			h.GracePeriod = w.DrainTimeout + time.Second
+		}},
 		{"grace", func(w *WebhooksConfig, _ *PostgresConfig, h *HTTPConfig) { h.GracePeriod = w.DrainTimeout }},
 		{"secret", func(w *WebhooksConfig, _ *PostgresConfig, _ *HTTPConfig) { w.StaticSecrets = "" }},
 	}
@@ -48,6 +57,7 @@ func TestWebhooksConfigDefaultsDisabled(t *testing.T) {
 	}
 }
 
+//nolint:paralleltest // This test mutates process-global environment or working directory.
 func TestWebhookWorkerProcessEnvironment(t *testing.T) {
 	resetConfigEnv(t)
 	secret := "whsec_" + base64.StdEncoding.EncodeToString([]byte("0123456789abcdef0123456789abcdef"))

@@ -20,13 +20,13 @@ func TestWebhookWorkerLocalLifecycleGuards(t *testing.T) {
 	if !errors.Is(result.Err, ErrConfig) || result.CleanupUnsafe {
 		t.Fatalf("Run(invalid store) = %+v", result)
 	}
-	if got := worker.leaseDuration(); got != 4*time.Second {
+	if got := worker.leaseDuration(); got != 3*time.Second {
 		t.Fatalf("leaseDuration() = %v", got)
 	}
 	if err := worker.drain(); err != nil {
 		t.Fatalf("drain() error = %v", err)
 	}
-	if err := worker.runAttempt(t.Context(), ClaimedAttempt{}); !errors.Is(err, ErrConfig) {
+	if _, _, err := worker.runAttempt(t.Context(), ClaimedAttempt{}); !errors.Is(err, ErrConfig) {
 		t.Fatalf("runAttempt(invalid) error = %v", err)
 	}
 }

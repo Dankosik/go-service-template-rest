@@ -37,6 +37,8 @@ type ClaimedAttempt struct {
 	Attempt         AttemptIdentity
 	AttemptNumber   uint32
 	BudgetStartedAt time.Time
+	BudgetElapsed   time.Duration
+	QueueDelay      time.Duration
 	StartedAt       time.Time
 	LeaseExpiresAt  time.Time
 }
@@ -69,7 +71,7 @@ func (s *Session) Claim(ctx context.Context, options ClaimOptions) (result Claim
 		return ClaimResult{}, err
 	}
 
-	err = s.withOperation(ctx, pgx.ReadWrite, func(operationCtx context.Context, queries *sqlcgen.Queries) error {
+	err = s.withOperation(ctx, "claim", pgx.ReadWrite, func(operationCtx context.Context, queries *sqlcgen.Queries) error {
 		rows, queryErr := queries.ClaimPostgresJobs(operationCtx, sqlcgen.ClaimPostgresJobsParams{
 			Kinds: kinds, ArgsVersions: argsVersions, PolicyVersions: policyVersions,
 			ClaimLimit: int32(options.Limit), WorkerID: options.WorkerID, // #nosec G115 -- claim limit is validated in [1, math.MaxInt32].
@@ -126,7 +128,7 @@ func (s *Session) ResolveClaims(ctx context.Context, attempts []AttemptIdentity)
 	if err != nil {
 		return nil, err
 	}
-	err = s.withOperation(ctx, pgx.ReadOnly, func(operationCtx context.Context, queries *sqlcgen.Queries) error {
+	err = s.withOperation(ctx, "resolve_claims", pgx.ReadOnly, func(operationCtx context.Context, queries *sqlcgen.Queries) error {
 		rows, queryErr := queries.ResolvePostgresJobsClaims(operationCtx, sqlcgen.ResolvePostgresJobsClaimsParams{
 			LogicalJobIds: params.LogicalJobIDs, AttemptGenerations: params.AttemptGenerations,
 			RecoveryGenerations: params.RecoveryGenerations, WorkerIds: params.WorkerIDs,
@@ -203,6 +205,10 @@ func claimedAttemptFromRow(row sqlcgen.ClaimPostgresJobsRow) (ClaimedAttempt, er
 	if err != nil {
 		return ClaimedAttempt{}, err
 	}
+	availableAt, err := requiredTime("claim available_at", row.AvailableAt)
+	if err != nil {
+		return ClaimedAttempt{}, err
+	}
 	startedAt, err := requiredTime("claim started_at", row.StartedAt)
 	if err != nil {
 		return ClaimedAttempt{}, err
@@ -214,7 +220,9 @@ func claimedAttemptFromRow(row sqlcgen.ClaimPostgresJobsRow) (ClaimedAttempt, er
 	return ClaimedAttempt{
 		Identity: identity, Revision: revision, Payload: append([]byte(nil), row.Payload...),
 		Attempt: attempt, AttemptNumber: uint32(*row.AttemptsUsed), BudgetStartedAt: budgetStartedAt,
-		StartedAt: startedAt, LeaseExpiresAt: leaseExpiresAt,
+		BudgetElapsed: max(time.Duration(0), startedAt.Sub(budgetStartedAt)),
+		QueueDelay:    max(time.Duration(0), startedAt.Sub(availableAt)),
+		StartedAt:     startedAt, LeaseExpiresAt: leaseExpiresAt,
 	}, nil
 }
 

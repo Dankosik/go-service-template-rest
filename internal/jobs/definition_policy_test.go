@@ -24,19 +24,16 @@ func TestDefinitionRejectsUnsafeRetryAndRecoveryPolicies(t *testing.T) {
 		{name: "SHA jitter above maximum", update: func(input *DefinitionInput[testArgs]) { input.Policy.Retry.JitterPermille = 1001 }},
 		{name: "unavailable recovery with eligible state", update: func(input *DefinitionInput[testArgs]) { input.Policy.Recovery.Eligible = []State{StateExhausted} }},
 		{name: "allowed recovery without eligible states", update: func(input *DefinitionInput[testArgs]) {
-			input.Policy.Recovery = RecoveryPolicy{Mode: RecoveryAllowed, RequiredEvidence: "operator receipt", Attempts: BudgetPreserved, Elapsed: BudgetPreserved}
-		}},
-		{name: "allowed recovery without evidence", update: func(input *DefinitionInput[testArgs]) {
-			input.Policy.Recovery = RecoveryPolicy{Mode: RecoveryAllowed, Eligible: []State{StateExhausted}, Attempts: BudgetPreserved, Elapsed: BudgetPreserved}
+			input.Policy.Recovery = RecoveryPolicy{Mode: RecoveryAllowed, Attempts: BudgetPreserved, Elapsed: BudgetPreserved}
 		}},
 		{name: "allowed recovery resets without policy", update: func(input *DefinitionInput[testArgs]) {
-			input.Policy.Recovery = RecoveryPolicy{Mode: RecoveryAllowed, Eligible: []State{StateExhausted}, RequiredEvidence: "operator receipt"}
+			input.Policy.Recovery = RecoveryPolicy{Mode: RecoveryAllowed, Eligible: []State{StateExhausted}}
 		}},
 		{name: "allowed recovery from non terminal state", update: func(input *DefinitionInput[testArgs]) {
-			input.Policy.Recovery = RecoveryPolicy{Mode: RecoveryAllowed, Eligible: []State{StateRunning}, RequiredEvidence: "operator receipt", Attempts: BudgetPreserved, Elapsed: BudgetPreserved}
+			input.Policy.Recovery = RecoveryPolicy{Mode: RecoveryAllowed, Eligible: []State{StateRunning}, Attempts: BudgetPreserved, Elapsed: BudgetPreserved}
 		}},
 		{name: "allowed recovery duplicate state", update: func(input *DefinitionInput[testArgs]) {
-			input.Policy.Recovery = RecoveryPolicy{Mode: RecoveryAllowed, Eligible: []State{StateExhausted, StateExhausted}, RequiredEvidence: "operator receipt", Attempts: BudgetPreserved, Elapsed: BudgetPreserved}
+			input.Policy.Recovery = RecoveryPolicy{Mode: RecoveryAllowed, Eligible: []State{StateExhausted, StateExhausted}, Attempts: BudgetPreserved, Elapsed: BudgetPreserved}
 		}},
 		{name: "termination before attempt ceiling", update: func(input *DefinitionInput[testArgs]) {
 			input.Policy.TerminationEnvelope = input.Policy.MaxAttemptDuration - time.Nanosecond

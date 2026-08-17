@@ -9,8 +9,12 @@ import (
 )
 
 // Store is the complete provider-neutral object-storage feature surface.
+//
+//nolint:iface // Consumers compose the provider-neutral port outside this package.
 type Store interface {
-	Upload(ctx context.Context, key string, source io.Reader, options UploadOptions) (UploadResult, error)
+	// Upload takes ownership of source. Close must promptly unblock Read;
+	// Upload closes source exactly once before it returns.
+	Upload(ctx context.Context, key string, source io.ReadCloser, options UploadOptions) (UploadResult, error)
 	Download(ctx context.Context, key string) (Download, error)
 	Metadata(ctx context.Context, key string) (Metadata, error)
 	Delete(ctx context.Context, key string) error
@@ -33,9 +37,8 @@ type UploadOptions struct {
 type CleanupDisposition string
 
 const (
-	CleanupNone     CleanupDisposition = "none"
-	CleanupComplete CleanupDisposition = "complete"
-	CleanupPending  CleanupDisposition = "pending"
+	CleanupNone    CleanupDisposition = "none"
+	CleanupPending CleanupDisposition = "pending"
 )
 
 type UploadResult struct {
@@ -56,10 +59,10 @@ type Metadata struct {
 }
 
 type PresignedGET struct {
-	Method    string
-	URL       string
-	Headers   http.Header
-	ExpiresAt time.Time
+	Method             string
+	URL                string
+	Headers            http.Header
+	SignatureExpiresAt time.Time
 }
 
 // ValidateKey rejects keys outside the common Amazon S3 and Cloudflare R2 domain.

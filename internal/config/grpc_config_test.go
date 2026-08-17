@@ -221,6 +221,13 @@ func TestGRPCEnabledTransportSecurity(t *testing.T) {
 				wantErrPart = "authn OIDC profile requires"
 			}
 			// profile:authn-oidc-jwt:end
+			//nolint:paralleltest // This test mutates process-global environment or working directory.
+
+			// Every relation the gRPC lifetime bounds state, driven from the outside so a
+			// rule that exists only in prose fails here.
+			//
+			// The conditional rules are the point: three of these configurations are refused
+			// only because rotation is on, and the same values with no age are accepted.
 			if wantErrPart == "" {
 				if err != nil {
 					t.Fatalf("LoadDetailed() error = %v", err)
@@ -318,11 +325,6 @@ func TestGRPCProcessAdmissionCannotExceedConnectionCapacity(t *testing.T) {
 	}
 }
 
-// Every relation the gRPC lifetime bounds state, driven from the outside so a
-// rule that exists only in prose fails here.
-//
-// The conditional rules are the point: three of these configurations are refused
-// only because rotation is on, and the same values with no age are accepted.
 func TestGRPCLifetimeBoundValidation(t *testing.T) {
 	for _, testCase := range []struct {
 		name        string
@@ -354,6 +356,10 @@ func TestGRPCLifetimeBoundValidation(t *testing.T) {
 		{
 			// A zero grace is read as infinity, so the connection would drain
 			// and never close.
+			//nolint:paralleltest // This test mutates process-global environment or working directory.
+
+			// The same values the conditional rules refuse are accepted with rotation off,
+			// which is what makes them conditional rather than flat bounds.
 			name: "rotation with a zero grace",
 			env: map[string]string{
 				"APP__GRPC__SERVER__MAX_CONNECTION_AGE":       "30s",
@@ -396,8 +402,6 @@ func TestGRPCLifetimeBoundValidation(t *testing.T) {
 	}
 }
 
-// The same values the conditional rules refuse are accepted with rotation off,
-// which is what makes them conditional rather than flat bounds.
 func TestGRPCLifetimeBoundsAcceptTheShippedShapeWithoutRotation(t *testing.T) {
 	resetConfigEnv(t)
 	t.Setenv("APP__GRPC__SERVER__MAX_CONNECTION_AGE_GRACE", "1s")

@@ -42,7 +42,7 @@ reopen Specification instead.
 | Caller-owned atomic acceptance and `ErrCommitUnknown` | Staging must accept `pgx.Tx`, perform no transaction lifecycle action, and support current-writer readback under the same identities. An engine whose native identity is not the producer identity needs extra authority and loses if that authority cannot stay atomic. |
 | Attempt/effect separation | Each claim needs a monotonically fenced attempt generation. Job success is not proof of exactly-once business effect. No stale attempt may mutate the current job. |
 | Independent lifecycle | The worker needs its own process, pool use, readiness, claim admission, drain acknowledgement, and hard shutdown bound. Reusing the NATS worker, outbox relay, or API supervisor is rejected. |
-| Explicit kind policy | Missing retry, effect, cancellation, duration, payload, retention, operator, or work-class policy admits neither producer nor worker. Library defaults cannot close a slot. |
+| Explicit kind policy | Definition validation admits only executable retry, recovery, ambiguous-effect, duration, payload, and revision policy. Effect idempotency, privacy/retention, operator, topology and capacity remain evidence-backed production checkpoints; placeholder strings cannot close them. |
 | Canonical schema authority | Only six-digit transactional Goose migrations may create or evolve job schema. Runtime migration code is forbidden. |
 | N/N-1 with live jobs | Kind, args, and policy versions are immutable stored facts; workers use exact registered decoders. Unknown versions remain retained and visible without being executed. |
 | Profile independence and removability | `JOBS=postgres` requires only `DATABASE=postgres`. All JOBS/OUTBOX/INBOX/MESSAGING combinations must generate independently, and `JOBS=none` must leave no job residue. |
@@ -57,7 +57,7 @@ reopen Specification instead.
 | API process | No job producer -> optional in-process producer adapter | Feature use case owns the required business mutation and pre-transaction identities; `postgresjobs` owns staging mechanics only. |
 | Jobs worker | Absent -> independently deployed `/jobs-worker` | Its bootstrap owns config, registry construction, PostgreSQL connection, diagnostics, readiness, claim lifecycle, drain, and cleanup. |
 | Migration process | Existing canonical Goose runner -> same runner with one append-only jobs migration | `/migrate` is the only schema writer. API and worker only verify compatible schema. |
-| PostgreSQL | Existing service database -> four job-owned relations in the same writer database | Job rows own acceptance/current state; attempt rows own attempt history; claim-scope row owns durable pause; action rows own idempotent audit. Business data/effect truth remains outside them. |
+| PostgreSQL | Existing service database -> three active job-owned relations in the same writer database | Job rows own acceptance/current state; attempt rows own attempt history; claim-scope row owns durable pause. Business data/effect truth remains outside them. |
 | Operator edge | No generic transport -> still no generic transport | A later authenticated adapter may invoke the fixed control semantics only after security/data policy admission. Manual SQL is not the control plane. |
 | Deployment owner | One API service definition -> an adopter adds a separately scalable worker service using the same image and `/jobs-worker` entrypoint | Platform-specific service creation, region, secrets, and resource sizing remain adopter delivery/SRE inputs. |
 
@@ -74,13 +74,13 @@ is no JOBS-to-NATS, OUTBOX, or INBOX edge.
 | B1 | Independent removable JOBS profile and `/jobs-worker`; no sibling-profile edge. |
 | B2 | Feature-owned transaction, `Store.Stage(pgx.Tx)`, and writer-only unknown-commit readback. |
 | B3 | Unique producer authority plus immutable-intent comparison; the retained job row is the recognition receipt, never effect idempotency. |
-| B4 | Versioned typed definition/registry rejects every incomplete policy and registers no concrete template kind. |
+| B4 | Versioned typed definition/registry rejects incomplete executable policy and registers no concrete template kind; adopter-owned effect/data/operator obligations remain closed gates outside the generic Definition. |
 | B5 | Distinct attempt generation, fenced transitions, lease-safe bounded control operations, and feature/downstream-owned effect policy; success never proves exactly-once effect. |
 | B6 | Fenced finalize/rescue, explicit terminal classes/budgets, distinct recovery generation, retained history, and no default redrive. |
 | B7 | One persisted `available_at` for a one-off occurrence; no periodic scheduler. |
 | B8 | One literal neutral work class, capacity bound only; no priority/fairness mechanism or claim. |
 | B9 | Durable cancel request, lease-safe timeout cancellation, attempt-scoped context, join-aware drain, and a hard process bound. |
-| B10 | Immutable revisions, strict decode, authoritative retained-revision coverage at startup/observation/claim, and retained visible unknown revisions. |
+| B10 | Immutable revisions, strict decode, authoritative execution-required revision coverage at observation/claim, retained visible terminal history, and exact-revision admission for any future redrive. |
 | B11 | A runtime producer writer/schema probe and separate worker progress/readiness; backlog/SLO remains degradation evidence. |
 | B12 | Cached bounded telemetry, scope-lock pause barrier, expected-generation controls, atomic idempotent action receipt, and no transport without policy. |
 | B13 | One canonical transactional Goose source, SQLC output only, runtime compatibility reads only, and independent profile/image proof. |
@@ -138,17 +138,22 @@ current tree. If another accepted change claims version 000003 before
 implementation, the deterministic rule is the next unclaimed six-digit version
 with the same `_postgres_jobs` stem. This design creates no migration.
 
-One transactional Goose migration creates four relations. PostgreSQL server
-time is authoritative for availability, leases, and transition timestamps.
-Names below are logical schema ownership; the migration owns exact SQL and
-constraints.
+PostgreSQL server time is authoritative for availability, leases, and
+transition timestamps. Names below are active logical schema ownership; the
+migration set owns exact SQL and constraints.
 
 | Relation | Authority and minimum facts |
 | --- | --- |
 | `postgres_jobs` | One row per logical job. Stores bounded opaque logical, producer-scope/key, occurrence-scope/ID, and effect-scope/key identities; immutable-intent fingerprint; kind, args version, policy version, immutable validated JSON bytes, neutral work class; current state; `available_at`; recovery generation; monotonically increasing attempt generation; current recovery attempt count and budget-start timestamp; current worker/lease; and created/updated/terminal timestamps. Unique constraints prevent a second logical job, producer acceptance, occurrence, or effect authority from being created under conflicting identities. The row is the producer readback authority and is never automatically deleted. |
 | `postgres_job_attempts` | One row per `(logical_job_id, attempt_generation)`, including recovery generation, worker identity, start/lease/final timestamps, bounded outcome/failure code, and possible-effect classification. It is attempt history; it never becomes business-effect truth. |
 | `postgres_job_claim_scopes` | The single `neutral` work-class row with paused flag and scope generation. Claim transactions take a shared row lock; pause/resume takes an exclusive row lock and changes the generation. This serializes a committed pause with all claim transactions without a broker or notification subsystem. |
-| `postgres_job_actions` | One row per stable action identity, containing a request fingerprint, actor, action, target scope/job, expected state/generation, bounded reason, first result, and timestamps. Repeating the same identity/request returns the stored result; reusing it for a different request conflicts. No row is deleted without admitted retention/legal-hold/audit policy. |
+
+Migration `000004` also created `postgres_job_actions` before any operator
+capability was admitted. It is now a deprecated compatibility relation, absent
+from schema admission, runtime privileges, and proof. A later append-only
+contract migration removes it only after the N-1 worker that still checks the
+original exact schema has left the rollback window; it grants no current
+operator authority.
 
 Identity and bounded audit values are opaque application strings of 1-256
 bytes in C-collated text columns; database comparisons are exact, not
@@ -316,9 +321,11 @@ recovery progress without permitting a rescue batch to delay lease safety.
 
 When handler capacity is free, one claim statement first compares the worker's
 sorted exact registry keys with the authoritative distinct revision inventory
-of all retained job rows in the same PostgreSQL snapshot. If any retained key
-is absent, it claims nothing and returns a compatibility fault that closes this
-process's admission and readiness. Otherwise the short transaction takes a
+of execution-required states in the same PostgreSQL snapshot. Unknown terminal
+history remains visible but does not block unrelated claims; any future redrive
+must recheck its exact revision before changing state. If any execution-required
+key is absent, claim returns only the scope row and a compatibility fault closes
+this process's admission and readiness. Otherwise the short transaction takes a
 shared lock on the neutral claim-scope row, verifies it is not paused, and
 selects up to the free capacity using `available_at, logical_job_id FOR UPDATE
 SKIP LOCKED`. For each selected row it increments attempt generation, records
@@ -462,9 +469,10 @@ registered kind, and neutral work class, then replaces an in-memory snapshot.
 OpenTelemetry callbacks read only that snapshot. They perform no database I/O
 and expose observation freshness when PostgreSQL is unavailable.
 
-Counters/histograms cover acceptance result, claim, attempt outcome, retry,
-rescue, cancellation, recovery, action result, and drain. Gauges cover state
-depth/oldest age, in-flight/capacity, claim-loop freshness, and readiness.
+Counters/histograms cover acceptance result, bounded Store-operation
+duration/outcome, claim, attempt outcome, retry, rescue, cancellation, terminal
+engine failure, and drain. Gauges cover state depth/oldest age,
+in-flight/capacity, observation freshness, and readiness.
 Raw payloads, identities, tenant values, and arbitrary error strings are never
 metric labels. Access-controlled logs/traces may carry identities only after
 the job's data policy admits them. Existing pgx telemetry remains the owner of
@@ -476,40 +484,44 @@ Concrete feature composition must have admitted every job it requires before
 serving. Backlog and worker failure do not automatically make an API that can
 still durably accept work unready.
 
-Worker readiness is true only while schema, registry coverage of every retained
-revision, reserved control connection, claim loop, and telemetry observation
-are current and the process is not draining. Periodic observation refreshes
-coverage; a claim-time coverage fault closes admission before another claim.
+Worker readiness is true only while schema, registry coverage of every
+execution-required revision, reserved control connection, claim loop, and a
+locally age-bounded telemetry observation are current and the process is not
+draining. The observation deadline is derived from its interval plus one poll
+and one Store-operation budget, and never compares a PostgreSQL timestamp with
+the worker clock. Periodic observation refreshes coverage; a claim-time coverage
+fault closes admission before another claim.
 Backlog size, SLO thresholds, downstream business dependency health, and
 shared-OLTP capacity are separate degradation signals, not invented readiness
 policy. Liveness remains process-local.
 
 The jobs-worker bootstrap lifecycle is the single owner that aggregates and
 publishes that final predicate. Engine and telemetry expose component facts;
-telemetry mirrors the aggregate for its readiness instrument. Neither component
-publishes a competing readiness answer.
+telemetry's readiness instrument reports only the engine component predicate.
+Neither component publishes a competing final diagnostics answer.
 
 ## Compatibility, migration, profiles, and release closure
 
 ### Compatibility
 
 Stored `kind`, `args_version`, and `policy_version` are immutable. The distinct
-keys of all retained job rows are the authoritative live-revision inventory;
-because this design deletes no rows, a key remains live until the later
-retention/deletion checkpoint removes its last authority. Worker startup and
-periodic observation compare that inventory with the exact registry. Claim
+keys of rows in `ready`, `scheduled`, `retry_wait`, `running`, and
+`cancel_requested` are the authoritative execution-required inventory.
+Periodic observation compares that inventory with the exact registry. Claim
 repeats the comparison in its own statement snapshot and claims no row on any
 gap. Known versions use strict typed decode; malformed known payload becomes
-fenced `poison` without business execution. An unknown version is never claimed
-or rewritten by that process; it remains retained and observable while the
-process is unready.
+fenced `poison` without business execution. An unknown execution-required
+version is never claimed or rewritten by that process; it remains retained and
+observable while the process is unready. Terminal history remains stored but is
+not a global readiness dependency. A future authenticated redrive path must
+check its target's exact revision before changing state and remains absent now.
 
 Every new revision uses a mandatory expand/enable/contract sequence. The prior
 expand worker release, designated N-1, first ships the new definition/handler
-alongside every retained revision while producers continue emitting only old
+alongside every execution-required revision while producers continue emitting only old
 revisions. Its exact image and registry are proven as the rollback authority.
 Release N may roll and its producer may emit the new revision only after both
-the active N fleet and rollback N-1 image cover every retained plus candidate
+the active N fleet and rollback N-1 image cover every execution-required plus candidate
 revision. Thus N and N-1 can execute every live job throughout the live-job and
 rollback window. If the new handler cannot be forward-shipped in N-1, emission
 remains blocked and Specification must reopen; draining an incompatible N-1 is
@@ -517,7 +529,7 @@ not an alternative.
 
 Existing names remain aliases only as their original stored keys; a rename
 never rewrites a live job. The code registry remains authoritative for every
-retained policy revision, not merely the two newest releases;
+execution-required policy revision, not merely the two newest releases;
 behavior-changing scalar policy and handler logic are never looked up under a
 reused revision. Producer and worker both fail closed when the exact stored
 revision is absent. Old definitions, schema, and rows are deleted only in a
@@ -562,7 +574,7 @@ Structurally, one accepted job adds one insert in the caller transaction; one
 attempt adds one short claim transaction, periodic batched renewal/cancel
 observation, and one fenced finalization; rescue adds one fenced transaction.
 Each claim also compares the sorted registry with the composite-indexed distinct
-retained revision keys. That conservative scan and the single coordinator/
+execution-required revision keys. That conservative scan and the single coordinator/
 reserved connection are deliberate first ceilings: they avoid a second durable
 revision catalog and private pool scheduler. Claim work remains bounded by free
 handler capacity and is indexed by neutral class, state, availability, and
@@ -584,9 +596,10 @@ shape. CPU or memory limits follow representative peaks; none are guessed here.
 
 The input-closure table in `spec.md` is unchanged:
 
-- no concrete definition without effect identity/tolerance, retry/dependency
-  budgets, maximum duration, payload classification, retention, and neutral
-  work-class policy;
+- no concrete production emission without effect identity/tolerance,
+  retry/dependency budgets, maximum duration, payload classification,
+  retention, and target operational evidence; executable fields are validated
+  by Definition while external obligations require owner receipts;
 - no periodic schedule, multiple class/priority/fairness, operator transport,
   manual recovery, deletion, SLO/alert, capacity, or production topology claim
   without its named owner;

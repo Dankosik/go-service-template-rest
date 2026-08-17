@@ -17,10 +17,10 @@ func TestPostgresJobsClaim(t *testing.T) {
 	ctx, pool, store := newPostgresJobsFixture(t)
 	keys := []jobs.Revision{{Kind: "acceptance", ArgsVersion: "v1", PolicyVersion: "v1"}}
 
-	t.Run("retained revision coverage fails closed in the claim snapshot", func(t *testing.T) {
+	t.Run("required revision coverage fails closed in the claim snapshot", func(t *testing.T) {
 		unknown := stageDuePostgresJob(ctx, t, pool, store, "claim-unknown")
 		if _, err := pool.PGX().Exec(ctx, `UPDATE postgres_jobs SET kind = 'unknown' WHERE logical_job_id = $1`, string(unknown.Identity().LogicalJobID)); err != nil {
-			t.Fatalf("make retained revision unknown: %v", err)
+			t.Fatalf("make required revision unknown: %v", err)
 		}
 		session := acquirePostgresJobsSession(ctx, t, store)
 		defer session.Release(ctx)
@@ -29,6 +29,13 @@ func TestPostgresJobsClaim(t *testing.T) {
 			t.Fatalf("Claim(unknown revision) = %+v, %v; want no claims and ErrUnsupportedRevision", result, err)
 		}
 		assertPostgresJobsAttemptCount(ctx, t, pool, unknown.Identity().LogicalJobID, 0)
+		if _, err := pool.PGX().Exec(ctx, `UPDATE postgres_jobs SET state = 'permanent', terminal_at = clock_timestamp() WHERE logical_job_id = $1`, string(unknown.Identity().LogicalJobID)); err != nil {
+			t.Fatalf("make unknown revision terminal history: %v", err)
+		}
+		result, err = session.Claim(ctx, postgresjobs.ClaimOptions{RegistryKeys: keys, WorkerID: "worker-history", Limit: 1, LeaseDuration: time.Minute})
+		if err != nil || len(result.Attempts) != 0 {
+			t.Fatalf("Claim(terminal unknown revision) = %+v, %v; want compatible empty claim", result, err)
+		}
 		if _, err := pool.PGX().Exec(ctx, `DELETE FROM postgres_jobs WHERE logical_job_id = $1`, string(unknown.Identity().LogicalJobID)); err != nil {
 			t.Fatalf("remove unknown revision fixture: %v", err)
 		}

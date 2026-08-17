@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"slices"
 	"time"
 	"unicode"
@@ -46,27 +47,6 @@ func (r Revision) Validate() error {
 	return nil
 }
 
-type WorkClass string
-
-const WorkClassNeutral WorkClass = "neutral"
-
-type ScheduleMode string
-
-const ScheduleOneOff ScheduleMode = "one_off"
-
-type OperatorMode string
-
-const OperatorUnavailable OperatorMode = "unavailable"
-
-type EffectAuthority string
-
-const (
-	EffectConditionalWrite EffectAuthority = "conditional_write"
-	EffectDownstreamKey    EffectAuthority = "downstream_idempotency"
-	EffectRepeatable       EffectAuthority = "repeatable"
-	EffectReconciliation   EffectAuthority = "reconciliation"
-)
-
 type AmbiguousEffectAction string
 
 const (
@@ -103,17 +83,8 @@ const (
 	BudgetReset     BudgetResetMode = "reset"
 )
 
-type ProducerPolicy struct {
-	Scope             string
-	RecognitionPeriod time.Duration
-}
-
 type EffectPolicy struct {
-	Authority            EffectAuthority
-	DuplicateTolerance   string
-	LateResultPrecedence string
-	AmbiguousAction      AmbiguousEffectAction
-	ReadbackAuthority    string
+	AmbiguousAction AmbiguousEffectAction
 }
 
 type RetryPolicy struct {
@@ -128,34 +99,18 @@ type RetryPolicy struct {
 }
 
 type RecoveryPolicy struct {
-	Mode             RecoveryMode
-	Eligible         []State
-	RequiredEvidence string
-	Attempts         BudgetResetMode
-	Elapsed          BudgetResetMode
-}
-
-type DataPolicy struct {
-	Classification string
-	Redaction      string
-	Retention      string
-	Deletion       string
-	OperatorRoles  string
+	Mode     RecoveryMode
+	Eligible []State
+	Attempts BudgetResetMode
+	Elapsed  BudgetResetMode
 }
 
 type Policy struct {
-	Producer            ProducerPolicy
 	Effect              EffectPolicy
 	Retry               RetryPolicy
 	Recovery            RecoveryPolicy
-	Schedule            ScheduleMode
 	MaxAttemptDuration  time.Duration
-	MaxAttemptCost      uint64
-	MaxUsefulDuration   time.Duration
 	TerminationEnvelope time.Duration
-	Data                DataPolicy
-	Operator            OperatorMode
-	WorkClass           WorkClass
 }
 
 type DefinitionInput[A any] struct {
@@ -282,31 +237,6 @@ func (d Definition[A]) valid() error {
 }
 
 func (p Policy) validate() error {
-	required := []struct {
-		name  string
-		value string
-	}{
-		{name: "producer.scope", value: p.Producer.Scope},
-		{name: "effect.duplicate_tolerance", value: p.Effect.DuplicateTolerance},
-		{name: "effect.late_result_precedence", value: p.Effect.LateResultPrecedence},
-		{name: "effect.readback_authority", value: p.Effect.ReadbackAuthority},
-		{name: "data.classification", value: p.Data.Classification},
-		{name: "data.redaction", value: p.Data.Redaction},
-		{name: "data.retention", value: p.Data.Retention},
-		{name: "data.deletion", value: p.Data.Deletion},
-		{name: "data.operator_roles", value: p.Data.OperatorRoles},
-	}
-	for _, field := range required {
-		if field.value == "" {
-			return fmt.Errorf("%w: %s is required", ErrInvalidDefinition, field.name)
-		}
-	}
-	if p.Producer.RecognitionPeriod <= 0 {
-		return fmt.Errorf("%w: producer.recognition_period must be positive", ErrInvalidDefinition)
-	}
-	if !p.Effect.Authority.valid() {
-		return fmt.Errorf("%w: effect.authority is required", ErrInvalidDefinition)
-	}
 	if !p.Effect.AmbiguousAction.valid() {
 		return fmt.Errorf("%w: effect.ambiguous_action is required", ErrInvalidDefinition)
 	}
@@ -316,26 +246,11 @@ func (p Policy) validate() error {
 	if err := p.Recovery.validate(); err != nil {
 		return err
 	}
-	if p.Schedule != ScheduleOneOff {
-		return fmt.Errorf("%w: schedule must be one_off", ErrInvalidDefinition)
-	}
 	if p.MaxAttemptDuration <= 0 {
 		return fmt.Errorf("%w: max_attempt_duration must be positive", ErrInvalidDefinition)
 	}
-	if p.MaxAttemptCost == 0 {
-		return fmt.Errorf("%w: max_attempt_cost must be positive", ErrInvalidDefinition)
-	}
-	if p.MaxUsefulDuration <= 0 {
-		return fmt.Errorf("%w: max_useful_duration must be positive", ErrInvalidDefinition)
-	}
 	if p.TerminationEnvelope <= 0 || p.MaxAttemptDuration > p.TerminationEnvelope {
 		return fmt.Errorf("%w: termination_envelope must cover max_attempt_duration", ErrInvalidDefinition)
-	}
-	if p.Operator != OperatorUnavailable {
-		return fmt.Errorf("%w: operator must be unavailable", ErrInvalidDefinition)
-	}
-	if p.WorkClass != WorkClassNeutral {
-		return fmt.Errorf("%w: work_class must be neutral", ErrInvalidDefinition)
 	}
 	return nil
 }
@@ -368,8 +283,8 @@ func (p RetryPolicy) validate() error {
 	default:
 		return fmt.Errorf("%w: retry.jitter is required", ErrInvalidDefinition)
 	}
-	if p.MaxRecoveryWave == 0 {
-		return fmt.Errorf("%w: retry.max_recovery_wave must be positive", ErrInvalidDefinition)
+	if p.MaxRecoveryWave == 0 || p.MaxRecoveryWave > math.MaxInt32 {
+		return fmt.Errorf("%w: retry.max_recovery_wave must be in [1,%d]", ErrInvalidDefinition, math.MaxInt32)
 	}
 	return nil
 }
@@ -377,15 +292,12 @@ func (p RetryPolicy) validate() error {
 func (p RecoveryPolicy) validate() error {
 	switch p.Mode {
 	case RecoveryUnavailable:
-		if len(p.Eligible) != 0 || p.RequiredEvidence != "" || p.Attempts != BudgetPreserved || p.Elapsed != BudgetPreserved {
+		if len(p.Eligible) != 0 || p.Attempts != BudgetPreserved || p.Elapsed != BudgetPreserved {
 			return fmt.Errorf("%w: unavailable recovery must preserve budgets and admit no terminal state", ErrInvalidDefinition)
 		}
 	case RecoveryAllowed:
 		if len(p.Eligible) == 0 {
 			return fmt.Errorf("%w: recovery.eligible is required", ErrInvalidDefinition)
-		}
-		if p.RequiredEvidence == "" {
-			return fmt.Errorf("%w: recovery.required_evidence is required", ErrInvalidDefinition)
 		}
 		if !p.Attempts.valid() || !p.Elapsed.valid() {
 			return fmt.Errorf("%w: recovery budget policy is required", ErrInvalidDefinition)
@@ -441,10 +353,6 @@ func fingerprintIntent(revision Revision, identity AcceptanceIdentity, available
 	var result [sha256.Size]byte
 	copy(result[:], hash.Sum(nil))
 	return result
-}
-
-func (v EffectAuthority) valid() bool {
-	return v == EffectConditionalWrite || v == EffectDownstreamKey || v == EffectRepeatable || v == EffectReconciliation
 }
 
 func (v AmbiguousEffectAction) valid() bool {

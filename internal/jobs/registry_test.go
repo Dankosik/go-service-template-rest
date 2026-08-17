@@ -60,6 +60,15 @@ func TestJobsRegistry(t *testing.T) {
 	if registered.MaxAttemptDuration() != time.Minute {
 		t.Fatalf("Lookup().MaxAttemptDuration() = %s, want %s", registered.MaxAttemptDuration(), time.Minute)
 	}
+	if registered.TerminationEnvelope() != 2*time.Minute {
+		t.Fatalf("Lookup().TerminationEnvelope() = %s, want %s", registered.TerminationEnvelope(), 2*time.Minute)
+	}
+	if registered.MaxRecoveryWave() != 8 {
+		t.Fatalf("Lookup().MaxRecoveryWave() = %d, want 8", registered.MaxRecoveryWave())
+	}
+	if registry.TerminationEnvelope() != 2*time.Minute {
+		t.Fatalf("TerminationEnvelope() = %s, want %s", registry.TerminationEnvelope(), 2*time.Minute)
+	}
 	registeredV2, err := registry.Lookup(v2.Key())
 	requireError(t, err)
 	if registeredV2.MaxAttemptDuration() != 90*time.Second {

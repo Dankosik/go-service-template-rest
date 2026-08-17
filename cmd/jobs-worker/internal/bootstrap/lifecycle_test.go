@@ -21,6 +21,7 @@ type lifecycleEngineStub struct {
 	facts      postgresjobs.EngineFacts
 	run        func(context.Context) error
 	drain      func(context.Context) postgresjobs.DrainResult
+	terminal   chan error
 }
 
 func (s *lifecycleEngineStub) Run(ctx context.Context) error {
@@ -31,6 +32,7 @@ func (s *lifecycleEngineStub) Run(ctx context.Context) error {
 	return fmt.Errorf("wait for lifecycle context: %w", ctx.Err())
 }
 func (s *lifecycleEngineStub) Facts() postgresjobs.EngineFacts { return s.facts }
+func (s *lifecycleEngineStub) Terminal() <-chan error          { return s.terminal }
 func (s *lifecycleEngineStub) StartDrain(ctx context.Context) postgresjobs.DrainResult {
 	s.mu.Lock()
 	s.drainCalls++
@@ -127,6 +129,25 @@ func TestJobsWorkerLifecycleDrainsAfterTerminalEngineFailure(t *testing.T) {
 	got := runLifecycle(context.Background(), context.Background(), jobsWorkerLifecycleConfig(t), telemetry.New(), engine)
 	if !errors.Is(got.Err, terminal) || !got.CleanupSafe {
 		t.Fatalf("runLifecycle() = %+v, want safe terminal drain", got)
+	}
+	engine.mu.Lock()
+	defer engine.mu.Unlock()
+	if engine.drainCalls != 1 {
+		t.Fatalf("StartDrain calls = %d, want 1", engine.drainCalls)
+	}
+}
+
+func TestJobsWorkerLifecycleDrainsAfterAsynchronousEngineFailure(t *testing.T) {
+	want := errors.New("asynchronous finalization failure")
+	terminal := make(chan error, 1)
+	terminal <- want
+	engine := &lifecycleEngineStub{
+		facts:    postgresjobs.EngineFacts{ClaimAdmissionOpen: true, Compatible: true, ObservationFresh: true},
+		terminal: terminal,
+	}
+	got := runLifecycle(context.Background(), context.Background(), jobsWorkerLifecycleConfig(t), telemetry.New(), engine)
+	if !errors.Is(got.Err, want) || !got.CleanupSafe {
+		t.Fatalf("runLifecycle() = %+v, want safe asynchronous terminal drain", got)
 	}
 	engine.mu.Lock()
 	defer engine.mu.Unlock()

@@ -85,7 +85,7 @@ Research selection.
 
 ### No existing object-storage pack
 
-The module targets Go 1.26.5 and currently depends on Testcontainers core and
+The module targets Go 1.26.6 and currently depends on Testcontainers core and
 PostgreSQL, but contains no AWS, MinIO, Go Cloud, Thanos, or other object-storage
 runtime dependency ([go.mod](../../../go.mod)). `OBJECT_STORAGE` is absent from
 the initializer and profile lock. The default outbound profile is also not an
@@ -494,7 +494,7 @@ Current module snapshots, not version selections:
 - `github.com/aws/smithy-go` v1.27.7;
 - `github.com/minio/minio-go/v7` v7.2.1, Go 1.25 minimum,
   published 2026-06-26;
-- this repository uses Go 1.26.5, so minimum Go versions do not currently block
+- this repository uses Go 1.26.6, so minimum Go versions do not currently block
   either client family.
 
 AWS SDK for Go v1 is not a current candidate because support ended on

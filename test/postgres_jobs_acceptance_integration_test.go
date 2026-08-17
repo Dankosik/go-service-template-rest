@@ -329,12 +329,7 @@ func postgresJobsPrepared(t *testing.T, identity jobs.AcceptanceIdentity, value 
 			return nil
 		},
 		Policy: jobs.Policy{
-			Producer: jobs.ProducerPolicy{Scope: "acceptance", RecognitionPeriod: 24 * time.Hour},
-			Effect: jobs.EffectPolicy{
-				Authority: jobs.EffectConditionalWrite, DuplicateTolerance: "same effect key",
-				LateResultPrecedence: "effect row wins", AmbiguousAction: jobs.AmbiguousEffectOutcomeUnknown,
-				ReadbackAuthority: "test business row",
-			},
+			Effect: jobs.EffectPolicy{AmbiguousAction: jobs.AmbiguousEffectOutcomeUnknown},
 			Retry: jobs.RetryPolicy{
 				MaxAttempts: 2, MaxElapsed: time.Hour, InitialBackoff: time.Second,
 				MaxBackoff: time.Minute, HintPolicy: jobs.RetryHintIgnore, Jitter: jobs.JitterNone,
@@ -343,13 +338,7 @@ func postgresJobsPrepared(t *testing.T, identity jobs.AcceptanceIdentity, value 
 			Recovery: jobs.RecoveryPolicy{
 				Mode: jobs.RecoveryUnavailable, Attempts: jobs.BudgetPreserved, Elapsed: jobs.BudgetPreserved,
 			},
-			Schedule: jobs.ScheduleOneOff, MaxAttemptDuration: time.Minute, MaxAttemptCost: 1,
-			MaxUsefulDuration: time.Hour, TerminationEnvelope: 2 * time.Minute,
-			Data: jobs.DataPolicy{
-				Classification: "test", Redaction: "omit", Retention: "retain",
-				Deletion: "disabled", OperatorRoles: "none",
-			},
-			Operator: jobs.OperatorUnavailable, WorkClass: jobs.WorkClassNeutral,
+			MaxAttemptDuration: time.Minute, TerminationEnvelope: 2 * time.Minute,
 		},
 	})
 	if err != nil {

@@ -17,7 +17,7 @@ import (
 )
 
 // profile:object-storage:start
-const testObjectStorageMaxWorkingMemoryBytes int64 = 62145920
+const testObjectStorageMaxWorkingMemoryBytes int64 = 62149760
 
 // profile:object-storage:end
 
@@ -194,6 +194,10 @@ func TestShutdownBudgetStartsWhenTeardownBegins(t *testing.T) {
 		budget.start()
 		// A second caller must not restart it: several points can each be the
 		// first to observe that serving ended.
+		//nolint:paralleltest // This test mutates process-global environment or working directory.
+
+		// resetShutdownConfigEnv clears the ambient APP__ variables a developer shell may
+		// carry, so the defaults under test are the shipped ones.
 		budget.start()
 
 		if got := budget.clamp(time.Hour); got != 10*time.Second {
@@ -202,8 +206,6 @@ func TestShutdownBudgetStartsWhenTeardownBegins(t *testing.T) {
 	})
 }
 
-// resetShutdownConfigEnv clears the ambient APP__ variables a developer shell may
-// carry, so the defaults under test are the shipped ones.
 func resetShutdownConfigEnv(t *testing.T) {
 	t.Helper()
 
@@ -232,6 +234,8 @@ func resetShutdownConfigEnv(t *testing.T) {
 }
 
 // profile:outbound-auth-oauth2-client-credentials:start
+//
+//nolint:paralleltest // resetShutdownConfigEnv mutates process-wide configuration environment.
 func setOutboundAuthBootstrapTestEnv(t *testing.T) {
 	t.Helper()
 	for key, value := range map[string]string{
@@ -250,8 +254,9 @@ func setOutboundAuthBootstrapTestEnv(t *testing.T) {
 }
 
 // profile:outbound-auth-oauth2-client-credentials:end
-
 // profile:object-storage:start
+//
+//nolint:paralleltest // This test mutates process-global environment or working directory.
 func setObjectStorageBootstrapTestEnv(t *testing.T) {
 	t.Helper()
 	for key, value := range map[string]string{
@@ -261,6 +266,8 @@ func setObjectStorageBootstrapTestEnv(t *testing.T) {
 		"APP__OBJECT_STORAGE__BUCKET":                     "examplebucket",
 		"APP__OBJECT_STORAGE__ACCESS_KEY_ID":              "test-access-key",
 		"APP__OBJECT_STORAGE__SECRET_ACCESS_KEY":          "test-secret-key",
+		"APP__OBJECT_STORAGE__SESSION_TOKEN":              "test-session-token",
+		"APP__OBJECT_STORAGE__EXPECTED_BUCKET_OWNER":      "123456789012",
 		"APP__OBJECT_STORAGE__MAX_OBJECT_BYTES":           "10485760",
 		"APP__OBJECT_STORAGE__MULTIPART_CHUNK_BYTES":      "5242880",
 		"APP__OBJECT_STORAGE__MAX_ACTIVE_OPERATIONS":      "2",

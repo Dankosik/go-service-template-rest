@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"sync"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awss3 "github.com/aws/aws-sdk-go-v2/service/s3"
@@ -16,19 +17,39 @@ import (
 
 const (
 	maximumCleanupListParts = 1_000
+	maximumCleanupListPages = 10
+	maximumCleanupCycles    = 3
 	maximumContentTypeBytes = 1_024
 )
 
 // Upload streams exactly the declared bytes through one S3 write path.
 //
 //nolint:contextcheck // begin roots the span in ctx; finish only finalizes that outcome after the call.
-func (c *Client) Upload(ctx context.Context, key string, source io.Reader, options objectstorage.UploadOptions) (result objectstorage.UploadResult, err error) {
+func (c *Client) Upload(ctx context.Context, key string, source io.ReadCloser, options objectstorage.UploadOptions) (result objectstorage.UploadResult, err error) {
 	call := c.telemetry.begin(ctx, telemetryOperationUpload)
 	defer func() {
 		if result.Cleanup != "" {
 			call.cleanup = string(result.Cleanup)
 		}
 		call.finish(err, options.ContentLength)
+	}()
+	var closeSource func()
+	if source != nil {
+		var closeOnce sync.Once
+		closeSource = func() { closeOnce.Do(func() { _ = source.Close() }) }
+	}
+	var release func()
+	var stopClose func() bool
+	defer func() {
+		if stopClose != nil {
+			_ = stopClose()
+		}
+		if closeSource != nil {
+			closeSource()
+		}
+		if release != nil {
+			release()
+		}
 	}()
 	if err := c.validateUpload(key, source, options); err != nil {
 		return result, err
@@ -38,15 +59,17 @@ func (c *Client) Upload(ctx context.Context, key string, source io.Reader, optio
 	} else {
 		call.path = "multipart"
 	}
-	effective, release, err := c.admit(ctx, call)
+	effective, admittedRelease, err := c.admit(ctx, call)
 	if err != nil {
 		return result, c.admissionError(err)
 	}
+	release = admittedRelease
 	if err := effective.Err(); err != nil {
-		release()
 		return result, c.admissionError(err)
 	}
-	defer release()
+	if closeSource != nil {
+		stopClose = context.AfterFunc(effective, closeSource)
+	}
 
 	if options.ContentLength <= c.config.MultipartChunkBytes {
 		return c.uploadSingle(effective, key, source, options)
@@ -55,12 +78,15 @@ func (c *Client) Upload(ctx context.Context, key string, source io.Reader, optio
 }
 
 //nolint:wrapcheck // Object-storage errors are the closed, sanitized feature result.
-func (c *Client) validateUpload(key string, source io.Reader, options objectstorage.UploadOptions) error {
+func (c *Client) validateUpload(key string, source io.ReadCloser, options objectstorage.UploadOptions) error {
 	if err := objectstorage.ValidateKey(key); err != nil {
 		return err
 	}
-	if source == nil || options.ContentLength < 0 || options.ContentLength > c.config.MaxObjectBytes {
+	if source == nil || options.ContentLength < 0 {
 		return objectstorage.NewError(objectstorage.KindInvalid)
+	}
+	if options.ContentLength > c.config.MaxObjectBytes {
+		return objectstorage.NewError(objectstorage.KindTooLarge)
 	}
 	if len(options.ContentType) > maximumContentTypeBytes || !httpguts.ValidHeaderFieldValue(options.ContentType) {
 		return objectstorage.NewError(objectstorage.KindInvalid)
@@ -84,11 +110,12 @@ func (c *Client) uploadSingle(ctx context.Context, key string, source io.Reader,
 	send := &sendState{}
 	ctx = withSendState(ctx, send)
 	input := &awss3.PutObjectInput{
-		Bucket:            aws.String(c.config.Bucket),
-		Key:               aws.String(key),
-		Body:              body,
-		ContentLength:     aws.Int64(options.ContentLength),
-		ChecksumAlgorithm: types.ChecksumAlgorithmCrc64nvme,
+		Bucket:              aws.String(c.config.Bucket),
+		ExpectedBucketOwner: c.expectedBucketOwner(),
+		Key:                 aws.String(key),
+		Body:                body,
+		ContentLength:       aws.Int64(options.ContentLength),
+		ChecksumAlgorithm:   types.ChecksumAlgorithmCrc64nvme,
 	}
 	if options.ContentType != "" {
 		input.ContentType = aws.String(options.ContentType)
@@ -98,10 +125,10 @@ func (c *Client) uploadSingle(ctx context.Context, key string, source io.Reader,
 	}
 	out, err := c.sdk.PutObject(ctx, input)
 	if err != nil {
-		return objectstorage.UploadResult{}, c.uploadError(uploadOperation(options.Intent), err, send.wroteHeaders, true)
+		return objectstorage.UploadResult{}, operationError(c.config.Provider, uploadOperation(options.Intent), err, send)
 	}
 	if err := body.complete(); err != nil {
-		return objectstorage.UploadResult{}, c.uploadError(uploadOperation(options.Intent), err, send.wroteHeaders, true)
+		return objectstorage.UploadResult{}, operationError(c.config.Provider, uploadOperation(options.Intent), err, send)
 	}
 	if !matchingCRC64NVME(crc64NVMEBase64(checksum), out.ChecksumCRC64NVME) || out.ChecksumType != types.ChecksumTypeFullObject {
 		return objectstorage.UploadResult{}, objectstorage.NewError(objectstorage.KindIntegrityFailed)
@@ -113,14 +140,18 @@ func (c *Client) uploadSingle(ctx context.Context, key string, source io.Reader,
 func (c *Client) uploadMultipart(ctx context.Context, key string, source io.Reader, options objectstorage.UploadOptions) (result objectstorage.UploadResult, err error) {
 	createSend := &sendState{}
 	created, err := c.sdk.CreateMultipartUpload(withSendState(ctx, createSend), &awss3.CreateMultipartUploadInput{
-		Bucket:            aws.String(c.config.Bucket),
-		Key:               aws.String(key),
-		ChecksumAlgorithm: types.ChecksumAlgorithmCrc64nvme,
-		ChecksumType:      types.ChecksumTypeFullObject,
-		ContentType:       lo.EmptyableToPtr(options.ContentType),
+		Bucket:              aws.String(c.config.Bucket),
+		ExpectedBucketOwner: c.expectedBucketOwner(),
+		Key:                 aws.String(key),
+		ChecksumAlgorithm:   types.ChecksumAlgorithmCrc64nvme,
+		ChecksumType:        types.ChecksumTypeFullObject,
+		ContentType:         lo.EmptyableToPtr(options.ContentType),
 	})
 	if err != nil {
-		return result, c.uploadError(operationPut, err, createSend.wroteHeaders, false)
+		if createSend.wroteHeaders {
+			result.Cleanup = objectstorage.CleanupPending
+		}
+		return result, operationError(c.config.Provider, operationCreateMultipart, err, createSend)
 	}
 	if created == nil || created.UploadId == nil || *created.UploadId == "" {
 		return objectstorage.UploadResult{Cleanup: objectstorage.CleanupPending}, objectstorage.NewError(objectstorage.KindInternal)
@@ -130,7 +161,8 @@ func (c *Client) uploadMultipart(ctx context.Context, key string, source io.Read
 	completed := false
 	defer func() {
 		if err != nil && !completed {
-			result.Cleanup = c.cleanupMultipart(ctx, key, uploadID)
+			result.Cleanup = objectstorage.CleanupPending
+			c.cleanupMultipart(ctx, key, uploadID)
 		}
 	}()
 
@@ -143,19 +175,20 @@ func (c *Client) uploadMultipart(ctx context.Context, key string, source io.Read
 		partBody := newExactChecksumReader(source, length, io.MultiWriter(whole, partChecksum))
 		send := &sendState{}
 		part, partErr := c.sdk.UploadPart(withSendState(ctx, send), &awss3.UploadPartInput{
-			Bucket:            aws.String(c.config.Bucket),
-			Key:               aws.String(key),
-			UploadId:          aws.String(uploadID),
-			PartNumber:        aws.Int32(partNumber),
-			Body:              partBody,
-			ContentLength:     aws.Int64(length),
-			ChecksumAlgorithm: types.ChecksumAlgorithmCrc64nvme,
+			Bucket:              aws.String(c.config.Bucket),
+			ExpectedBucketOwner: c.expectedBucketOwner(),
+			Key:                 aws.String(key),
+			UploadId:            aws.String(uploadID),
+			PartNumber:          aws.Int32(partNumber),
+			Body:                partBody,
+			ContentLength:       aws.Int64(length),
+			ChecksumAlgorithm:   types.ChecksumAlgorithmCrc64nvme,
 		})
 		if partErr != nil {
-			return result, c.uploadError(operationPut, partErr, send.wroteHeaders, false)
+			return result, operationError(c.config.Provider, operationMultipartStage, partErr, send)
 		}
 		if partErr = partBody.complete(); partErr != nil {
-			return result, c.uploadError(operationPut, partErr, send.wroteHeaders, false)
+			return result, operationError(c.config.Provider, operationMultipartStage, partErr, send)
 		}
 		if part == nil || part.ETag == nil || !matchingCRC64NVME(crc64NVMEBase64(partChecksum), part.ChecksumCRC64NVME) {
 			return result, objectstorage.NewError(objectstorage.KindIntegrityFailed)
@@ -170,16 +203,17 @@ func (c *Client) uploadMultipart(ctx context.Context, key string, source io.Read
 
 	completeSend := &sendState{}
 	complete, completeErr := c.sdk.CompleteMultipartUpload(withSendState(ctx, completeSend), &awss3.CompleteMultipartUploadInput{
-		Bucket:            aws.String(c.config.Bucket),
-		Key:               aws.String(key),
-		UploadId:          aws.String(uploadID),
-		ChecksumCRC64NVME: aws.String(crc64NVMEBase64(whole)),
-		ChecksumType:      types.ChecksumTypeFullObject,
-		MpuObjectSize:     aws.Int64(options.ContentLength),
-		MultipartUpload:   &types.CompletedMultipartUpload{Parts: parts},
+		Bucket:              aws.String(c.config.Bucket),
+		ExpectedBucketOwner: c.expectedBucketOwner(),
+		Key:                 aws.String(key),
+		UploadId:            aws.String(uploadID),
+		ChecksumCRC64NVME:   aws.String(crc64NVMEBase64(whole)),
+		ChecksumType:        types.ChecksumTypeFullObject,
+		MpuObjectSize:       aws.Int64(options.ContentLength),
+		MultipartUpload:     &types.CompletedMultipartUpload{Parts: parts},
 	})
 	if completeErr != nil {
-		return result, c.uploadError(operationComplete, completeErr, completeSend.wroteHeaders, true)
+		return result, operationError(c.config.Provider, operationComplete, completeErr, completeSend)
 	}
 	if complete == nil || !matchingCRC64NVME(crc64NVMEBase64(whole), complete.ChecksumCRC64NVME) || complete.ChecksumType != types.ChecksumTypeFullObject {
 		return result, objectstorage.NewError(objectstorage.KindIntegrityFailed)
@@ -188,30 +222,61 @@ func (c *Client) uploadMultipart(ctx context.Context, key string, source io.Read
 	return objectstorage.UploadResult{Cleanup: objectstorage.CleanupNone}, nil
 }
 
-func (c *Client) cleanupMultipart(ctx context.Context, key, uploadID string) objectstorage.CleanupDisposition {
+func (c *Client) cleanupMultipart(ctx context.Context, key, uploadID string) {
 	if ctx.Err() != nil {
-		return objectstorage.CleanupPending
+		return
 	}
-	abortResponse := &responseState{}
-	if _, err := c.sdk.AbortMultipartUpload(withResponseState(ctx, abortResponse), &awss3.AbortMultipartUploadInput{
-		Bucket: aws.String(c.config.Bucket), Key: aws.String(key), UploadId: aws.String(uploadID),
-	}); err != nil || ctx.Err() != nil {
-		abortResponse.close()
-		return objectstorage.CleanupPending
-	}
-	abortResponse.close()
 	if c.config.Provider != ProviderAmazonS3 {
-		return objectstorage.CleanupPending
+		_ = c.abortMultipart(ctx, key, uploadID)
+		return
 	}
-	listResponse := &responseState{}
-	parts, err := c.sdk.ListParts(withResponseState(ctx, listResponse), &awss3.ListPartsInput{
-		Bucket: aws.String(c.config.Bucket), Key: aws.String(key), UploadId: aws.String(uploadID), MaxParts: aws.Int32(maximumCleanupListParts),
+	for range maximumCleanupCycles {
+		if !c.abortMultipart(ctx, key, uploadID) {
+			return
+		}
+		empty, complete := c.multipartPartsEmpty(ctx, key, uploadID)
+		if !complete {
+			return
+		}
+		if empty {
+			break
+		}
+	}
+}
+
+func (c *Client) abortMultipart(ctx context.Context, key, uploadID string) bool {
+	response := &responseState{}
+	_, err := c.sdk.AbortMultipartUpload(withResponseState(ctx, response), &awss3.AbortMultipartUploadInput{
+		Bucket: aws.String(c.config.Bucket), ExpectedBucketOwner: c.expectedBucketOwner(), Key: aws.String(key), UploadId: aws.String(uploadID),
 	})
-	listResponse.close()
-	if err != nil || ctx.Err() != nil || parts.IsTruncated == nil || *parts.IsTruncated || len(parts.Parts) != 0 {
-		return objectstorage.CleanupPending
+	response.close()
+	return err == nil && ctx.Err() == nil
+}
+
+func (c *Client) multipartPartsEmpty(ctx context.Context, key, uploadID string) (bool, bool) {
+	var marker *string
+	empty := true
+	for range maximumCleanupListPages {
+		response := &responseState{}
+		parts, err := c.sdk.ListParts(withResponseState(ctx, response), &awss3.ListPartsInput{
+			Bucket: aws.String(c.config.Bucket), ExpectedBucketOwner: c.expectedBucketOwner(), Key: aws.String(key), UploadId: aws.String(uploadID),
+			MaxParts: aws.Int32(maximumCleanupListParts), PartNumberMarker: marker,
+		})
+		response.close()
+		if err != nil || ctx.Err() != nil || parts == nil || parts.IsTruncated == nil {
+			return false, false
+		}
+		empty = empty && len(parts.Parts) == 0
+		if !*parts.IsTruncated {
+			return empty, true
+		}
+		next := parts.NextPartNumberMarker
+		if next == nil || *next == "" || marker != nil && *next == *marker {
+			return false, false
+		}
+		marker = next
 	}
-	return objectstorage.CleanupComplete
+	return false, false
 }
 
 //nolint:wrapcheck // Object-storage errors are the closed, sanitized feature result.
@@ -226,20 +291,6 @@ func (c *Client) admissionError(err error) error {
 		return objectstorage.NewError(objectstorage.KindBusy)
 	}
 	return objectstorage.NewError(objectstorage.KindInvalid)
-}
-
-//nolint:wrapcheck // Object-storage errors are the closed, sanitized feature result.
-func (c *Client) uploadError(op operation, err error, wroteHeaders, mayCommit bool) error {
-	if mayCommit {
-		return operationError(op, err, wroteHeaders)
-	}
-	if errors.Is(err, context.Canceled) {
-		return objectstorage.NewError(objectstorage.KindCancelled)
-	}
-	if errors.Is(err, context.DeadlineExceeded) {
-		return objectstorage.NewError(objectstorage.KindDeadlineExceeded)
-	}
-	return stableError(err)
 }
 
 func uploadOperation(intent objectstorage.UploadIntent) operation {

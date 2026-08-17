@@ -1,4 +1,13 @@
-package bootstrap
+package //nolint:paralleltest // This test mutates process-global environment or working directory.
+
+// TestApplyMemoryLimitDefersToPlatform keeps the template from overriding a limit
+// the deployment already chose.
+//nolint:paralleltest // This test mutates process-global environment or working directory.
+
+// TestApplyMemoryLimitReportsItsDecision is what makes this debuggable: an
+// operator seeing exit 137 needs the resolved number in the boot log, not an
+// inference from a restart count.
+bootstrap
 
 import (
 	"bytes"
@@ -33,8 +42,6 @@ func TestApplyMemoryLimitSkipsWhenDisabled(t *testing.T) {
 	}
 }
 
-// TestApplyMemoryLimitDefersToPlatform keeps the template from overriding a limit
-// the deployment already chose.
 func TestApplyMemoryLimitDefersToPlatform(t *testing.T) {
 	restoreMemoryLimit(t)
 	t.Setenv(memoryLimitEnv, "512MiB")
@@ -50,9 +57,6 @@ func TestApplyMemoryLimitDefersToPlatform(t *testing.T) {
 	}
 }
 
-// TestApplyMemoryLimitReportsItsDecision is what makes this debuggable: an
-// operator seeing exit 137 needs the resolved number in the boot log, not an
-// inference from a restart count.
 func TestApplyMemoryLimitReportsItsDecision(t *testing.T) {
 	restoreMemoryLimit(t)
 	t.Setenv(memoryLimitEnv, "")

@@ -8,7 +8,7 @@ import (
 func TestWebhookWorkerRetryDelayBound(t *testing.T) {
 	policy := DeliveryPolicy{BackoffBase: time.Second, BackoffCap: 3 * time.Second}
 	for range 100 {
-		delay := retryDelay(policy)
+		delay := retryDelay(policy, 2*time.Second)
 		if delay < policy.BackoffBase || delay > 3*policy.BackoffBase {
 			t.Fatalf("retry delay = %v", delay)
 		}

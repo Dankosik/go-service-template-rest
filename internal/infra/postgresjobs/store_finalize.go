@@ -41,7 +41,7 @@ func (s *Session) Finalize(ctx context.Context, input FinalizeInput) (result Per
 	if err != nil {
 		return PersistedTransition{}, err
 	}
-	err = s.withOperation(ctx, pgx.ReadWrite, func(operationCtx context.Context, queries *sqlcgen.Queries) error {
+	err = s.withOperation(ctx, "finalize", pgx.ReadWrite, func(operationCtx context.Context, queries *sqlcgen.Queries) error {
 		row, queryErr := queries.FinalizePostgresJobAttempt(operationCtx, sqlcgen.FinalizePostgresJobAttemptParams(params))
 		if queryErr != nil {
 			return fmt.Errorf("finalize postgres job attempt: %w", queryErr)
@@ -62,9 +62,9 @@ type transitionQueryParams struct {
 	AttemptGeneration       int64
 	RecoveryGeneration      int64
 	WorkerID                string
+	AttemptsUsed            int32
 	FinalState              string
 	DelayMicroseconds       int64
-	AttemptsUsed            int32
 	Outcome                 string
 	EffectStatus            string
 	FailureCode             string
@@ -84,7 +84,6 @@ type transitionResultRow struct {
 	FinalizedAt             pgtype.Timestamptz
 }
 
-//nolint:cyclop // Keeping the transition invariants together makes the persistence boundary auditable.
 func transitionParams(
 	attempt AttemptIdentity,
 	transition jobs.Transition,
@@ -92,6 +91,9 @@ func transitionParams(
 ) (transitionQueryParams, error) {
 	if err := validateAttemptIdentity(attempt); err != nil {
 		return transitionQueryParams{}, err
+	}
+	if err := transition.Validate(); err != nil {
+		return transitionQueryParams{}, fmt.Errorf("validate job transition: %w", err)
 	}
 	if _, err := stateFromDatabase(string(transition.State)); err != nil {
 		return transitionQueryParams{}, err
@@ -108,11 +110,8 @@ func transitionParams(
 	if _, err := effectFromDatabase(string(transition.Effect)); err != nil {
 		return transitionQueryParams{}, err
 	}
-	if transition.AttemptsUsed == 0 || transition.AttemptsUsed > math.MaxInt32 || transition.ElapsedUsed < 0 || transition.Delay < 0 {
+	if transition.AttemptsUsed > math.MaxInt32 {
 		return transitionQueryParams{}, fmt.Errorf("%w: invalid persisted budget", jobs.ErrInvalidTransition)
-	}
-	if transition.State != jobs.StateRetryWait && transition.Delay != 0 {
-		return transitionQueryParams{}, fmt.Errorf("%w: terminal transition has a retry delay", jobs.ErrInvalidTransition)
 	}
 	if failureCode != "" {
 		if err := validateStoreToken("failure_code", failureCode); err != nil {
@@ -171,6 +170,9 @@ func persistedTransition(row transitionResultRow) (PersistedTransition, error) {
 		State: state, AttemptsUsed: uint32(row.AttemptsUsed),
 		ElapsedUsed: time.Duration(row.ElapsedUsedMilliseconds) * time.Millisecond,
 		Outcome:     outcome, Effect: effect,
+	}
+	if err := result.Transition.Validate(); err != nil {
+		return PersistedTransition{}, fmt.Errorf("%w: %w", ErrUnknownVocabulary, err)
 	}
 	result.FailureCode = row.FailureCode
 	result.FinalizedAt = finalizedAt

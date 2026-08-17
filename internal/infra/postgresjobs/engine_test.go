@@ -14,7 +14,7 @@ type engineStoreStub struct {
 	resolve    func(context.Context, []AttemptIdentity) ([]ClaimResolution, error)
 	finalize   func(context.Context, FinalizeInput) (PersistedTransition, error)
 	renew      func(context.Context, []AttemptIdentity, time.Duration) ([]Renewal, error)
-	candidates func(context.Context, int) ([]RescueCandidate, error)
+	candidates func(context.Context, RescueCandidateOptions) ([]RescueCandidate, error)
 	rescue     func(context.Context, RescueInput) (PersistedTransition, error)
 	observe    func(context.Context, []jobs.Revision) (Observation, error)
 }
@@ -26,9 +26,9 @@ func (s *engineStoreStub) Renew(ctx context.Context, attempts []AttemptIdentity,
 	return nil, nil
 }
 
-func (s *engineStoreStub) RescueCandidates(ctx context.Context, limit int) ([]RescueCandidate, error) {
+func (s *engineStoreStub) RescueCandidates(ctx context.Context, options RescueCandidateOptions) ([]RescueCandidate, error) {
 	if s.candidates != nil {
-		return s.candidates(ctx, limit)
+		return s.candidates(ctx, options)
 	}
 	return nil, nil
 }
@@ -75,6 +75,9 @@ func TestEngineConstructionAndFacts(t *testing.T) {
 	if _, err := NewEngine(nil, registry, engineConfig()); !errors.Is(err, ErrConfig) {
 		t.Fatalf("NewEngine(nil) error = %v, want ErrConfig", err)
 	}
+	if _, err := newEngine(&engineStoreStub{}, new(jobs.Registry), engineConfig()); !errors.Is(err, ErrConfig) {
+		t.Fatalf("newEngine(empty registry) error = %v, want ErrConfig", err)
+	}
 	engine, err := newEngine(&engineStoreStub{}, registry, engineConfig())
 	if err != nil {
 		t.Fatalf("newEngine() error = %v", err)
@@ -95,8 +98,23 @@ func engineRegistry(t *testing.T, handler jobs.Handler[engineArgs]) *jobs.Regist
 
 func engineRegistryWithAttemptDuration(t *testing.T, attemptDuration time.Duration, handler jobs.Handler[engineArgs]) *jobs.Registry {
 	t.Helper()
+	definition := engineDefinition(t, jobs.Revision{Kind: "email", ArgsVersion: "v1", PolicyVersion: "p1"}, attemptDuration, 8)
+	registry := new(jobs.Registry)
+	if err := jobs.Register(registry, definition, handler); err != nil {
+		t.Fatalf("Register() error = %v", err)
+	}
+	return registry
+}
+
+func engineDefinition(t *testing.T, revision jobs.Revision, attemptDuration time.Duration, recoveryWave uint32) jobs.Definition[engineArgs] {
+	t.Helper()
+	return engineDefinitionWithAmbiguousAction(t, revision, attemptDuration, recoveryWave, jobs.AmbiguousEffectOutcomeUnknown)
+}
+
+func engineDefinitionWithAmbiguousAction(t *testing.T, revision jobs.Revision, attemptDuration time.Duration, recoveryWave uint32, action jobs.AmbiguousEffectAction) jobs.Definition[engineArgs] {
+	t.Helper()
 	definition, err := jobs.NewDefinition(jobs.DefinitionInput[engineArgs]{
-		Revision:        jobs.Revision{Kind: "email", ArgsVersion: "v1", PolicyVersion: "p1"},
+		Revision:        revision,
 		MaxPayloadBytes: 1024,
 		Validate: func(args engineArgs) error {
 			if args.Task == "" {
@@ -105,27 +123,20 @@ func engineRegistryWithAttemptDuration(t *testing.T, attemptDuration time.Durati
 			return nil
 		},
 		Policy: jobs.Policy{
-			Producer: jobs.ProducerPolicy{Scope: "feature-operation", RecognitionPeriod: time.Hour},
-			Effect:   jobs.EffectPolicy{Authority: jobs.EffectConditionalWrite, DuplicateTolerance: "same key is harmless", LateResultPrecedence: "effect ledger wins", AmbiguousAction: jobs.AmbiguousEffectOutcomeUnknown, ReadbackAuthority: "effect ledger"},
-			Retry:    jobs.RetryPolicy{MaxAttempts: 4, MaxElapsed: time.Hour, InitialBackoff: time.Second, MaxBackoff: time.Minute, HintPolicy: jobs.RetryHintPrefer, Jitter: jobs.JitterSHA256, JitterPermille: 100, MaxRecoveryWave: 8},
-			Recovery: jobs.RecoveryPolicy{Mode: jobs.RecoveryUnavailable, Attempts: jobs.BudgetPreserved, Elapsed: jobs.BudgetPreserved},
-			Schedule: jobs.ScheduleOneOff, MaxAttemptDuration: attemptDuration, MaxAttemptCost: 1, MaxUsefulDuration: time.Hour, TerminationEnvelope: time.Minute,
-			Data:     jobs.DataPolicy{Classification: "private", Redaction: "omit payload", Retention: "explicit deletion only", Deletion: "disabled", OperatorRoles: "none"},
-			Operator: jobs.OperatorUnavailable, WorkClass: jobs.WorkClassNeutral,
+			Effect:             jobs.EffectPolicy{AmbiguousAction: action},
+			Retry:              jobs.RetryPolicy{MaxAttempts: 4, MaxElapsed: time.Hour, InitialBackoff: time.Second, MaxBackoff: time.Minute, HintPolicy: jobs.RetryHintPrefer, Jitter: jobs.JitterSHA256, JitterPermille: 100, MaxRecoveryWave: recoveryWave},
+			Recovery:           jobs.RecoveryPolicy{Mode: jobs.RecoveryUnavailable, Attempts: jobs.BudgetPreserved, Elapsed: jobs.BudgetPreserved},
+			MaxAttemptDuration: attemptDuration, TerminationEnvelope: time.Minute,
 		},
 	})
 	if err != nil {
 		t.Fatalf("NewDefinition() error = %v", err)
 	}
-	registry := new(jobs.Registry)
-	if err := jobs.Register(registry, definition, handler); err != nil {
-		t.Fatalf("Register() error = %v", err)
-	}
-	return registry
+	return definition
 }
 
 func engineConfig() EngineConfig {
-	return EngineConfig{WorkerID: "worker-1", MaxConcurrency: 1, LeaseDuration: time.Minute, ObservationInterval: time.Minute, DrainTimeout: time.Second}
+	return EngineConfig{WorkerID: "worker-1", MaxConcurrency: 1, LeaseDuration: time.Minute, ObservationInterval: time.Minute, ObservationMaxAge: 2 * time.Minute, DrainTimeout: time.Second}
 }
 
 func engineClaim() ClaimedAttempt {

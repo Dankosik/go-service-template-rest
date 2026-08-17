@@ -141,12 +141,10 @@ func databasePreparedJob(t *testing.T, suffix, value, policyVersion string) jobs
 			return nil
 		},
 		Policy: jobs.Policy{
-			Producer: jobs.ProducerPolicy{Scope: "acceptance", RecognitionPeriod: time.Hour},
-			Effect:   jobs.EffectPolicy{Authority: jobs.EffectConditionalWrite, DuplicateTolerance: "same", LateResultPrecedence: "stored", AmbiguousAction: jobs.AmbiguousEffectOutcomeUnknown, ReadbackAuthority: "database"},
-			Retry:    jobs.RetryPolicy{MaxAttempts: 2, MaxElapsed: time.Hour, InitialBackoff: time.Second, MaxBackoff: time.Minute, HintPolicy: jobs.RetryHintIgnore, Jitter: jobs.JitterNone, MaxRecoveryWave: 1},
-			Recovery: jobs.RecoveryPolicy{Mode: jobs.RecoveryUnavailable, Attempts: jobs.BudgetPreserved, Elapsed: jobs.BudgetPreserved},
-			Schedule: jobs.ScheduleOneOff, MaxAttemptDuration: time.Minute, MaxAttemptCost: 1, MaxUsefulDuration: time.Hour, TerminationEnvelope: 2 * time.Minute,
-			Data: jobs.DataPolicy{Classification: "test", Redaction: "omit", Retention: "retain", Deletion: "disabled", OperatorRoles: "none"}, Operator: jobs.OperatorUnavailable, WorkClass: jobs.WorkClassNeutral,
+			Effect:             jobs.EffectPolicy{AmbiguousAction: jobs.AmbiguousEffectOutcomeUnknown},
+			Retry:              jobs.RetryPolicy{MaxAttempts: 2, MaxElapsed: time.Hour, InitialBackoff: time.Second, MaxBackoff: time.Minute, HintPolicy: jobs.RetryHintIgnore, Jitter: jobs.JitterNone, MaxRecoveryWave: 1},
+			Recovery:           jobs.RecoveryPolicy{Mode: jobs.RecoveryUnavailable, Attempts: jobs.BudgetPreserved, Elapsed: jobs.BudgetPreserved},
+			MaxAttemptDuration: time.Minute, TerminationEnvelope: 2 * time.Minute,
 		},
 	})
 	if err != nil {
@@ -154,7 +152,7 @@ func databasePreparedJob(t *testing.T, suffix, value, policyVersion string) jobs
 	}
 	prepared, err := definition.Prepare(struct{ Value string }{Value: value}, jobs.AcceptanceIdentity{
 		LogicalJobID: jobs.LogicalJobID("job-" + suffix), ProducerScope: "acceptance", ProducerKey: jobs.ProducerKey("producer-" + suffix), OccurrenceScope: "acceptance", OccurrenceID: jobs.OccurrenceID("occurrence-" + suffix), EffectScope: "acceptance", EffectKey: jobs.EffectKey("effect-" + suffix),
-	}, time.Now().UTC())
+	}, time.Now().UTC().Add(-time.Minute))
 	if err != nil {
 		t.Fatalf("Prepare() = %v", err)
 	}

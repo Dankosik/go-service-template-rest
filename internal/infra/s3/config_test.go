@@ -2,6 +2,7 @@ package s3
 
 import (
 	"math"
+	"strings"
 	"testing"
 )
 
@@ -21,7 +22,16 @@ func TestConfigRejectsInvalidTupleAndEnvelope(t *testing.T) {
 		{name: "provider", update: func(cfg *Config) { cfg.Provider = "other" }},
 		{name: "missing credentials", update: func(cfg *Config) { cfg.AccessKeyID = "" }},
 		{name: "missing secret", update: func(cfg *Config) { cfg.SecretAccessKey = "" }},
+		{name: "Amazon missing session token", update: func(cfg *Config) { cfg.SessionToken = "" }},
+		{name: "Amazon invalid expected owner", update: func(cfg *Config) { cfg.ExpectedBucketOwner = "owner" }},
+		{name: "short bucket", update: func(cfg *Config) { cfg.Bucket = "ab" }},
 		{name: "dotted bucket", update: func(cfg *Config) { cfg.Bucket = "bucket.with.dot" }},
+		{name: "reserved prefix", update: func(cfg *Config) { cfg.Bucket = "xn--bucket" }},
+		{name: "reserved access point suffix", update: func(cfg *Config) { cfg.Bucket = "bucket-s3alias" }},
+		{name: "reserved object lambda suffix", update: func(cfg *Config) { cfg.Bucket = "bucket--ol-s3" }},
+		{name: "reserved directory suffix", update: func(cfg *Config) { cfg.Bucket = "bucket--x-s3" }},
+		{name: "reserved table suffix", update: func(cfg *Config) { cfg.Bucket = "bucket--table-s3" }},
+		{name: "reserved account regional suffix", update: func(cfg *Config) { cfg.Bucket = "bucket-an" }},
 		{name: "endpoint path", update: func(cfg *Config) { cfg.Endpoint += "/path" }},
 		{name: "endpoint empty query", update: func(cfg *Config) { cfg.Endpoint += "?" }},
 		{name: "Amazon region mismatch", update: func(cfg *Config) { cfg.Region = "us-west-2" }},
@@ -29,9 +39,27 @@ func TestConfigRejectsInvalidTupleAndEnvelope(t *testing.T) {
 			cfg.Region = "us-gov-west-1"
 			cfg.Endpoint = "https://s3.us-gov-west-1.amazonaws.com"
 		}},
+		{name: "Amazon China partition", update: func(cfg *Config) {
+			cfg.Region = "cn-north-1"
+			cfg.Endpoint = "https://s3.cn-north-1.amazonaws.com"
+		}},
 		{name: "R2 region mismatch", update: func(cfg *Config) {
 			cfg.Provider = ProviderCloudflare
+			cfg.Endpoint = "https://0123456789abcdef0123456789abcdef.r2.cloudflarestorage.com"
+		}},
+		{name: "R2 arbitrary account host", update: func(cfg *Config) {
+			*cfg = validConfig(ProviderCloudflare)
 			cfg.Endpoint = "https://account.r2.cloudflarestorage.com"
+		}},
+		{name: "R2 expected owner", update: func(cfg *Config) {
+			*cfg = validConfig(ProviderCloudflare)
+			cfg.ExpectedBucketOwner = "123456789012"
+		}},
+		{name: "R2 documented object limit", update: func(cfg *Config) {
+			*cfg = validConfig(ProviderCloudflare)
+			cfg.MaxObjectBytes = maximumR2ObjectBytes + 1
+			cfg.MultipartChunkBytes = maximumMultipartChunk
+			cfg.MaxWorkingMemoryBytes = math.MaxInt64
 		}},
 		{name: "object limit", update: func(cfg *Config) { cfg.MaxObjectBytes = 0 }},
 		{name: "multipart chunk", update: func(cfg *Config) { cfg.MultipartChunkBytes = 1 }},
@@ -54,12 +82,49 @@ func TestConfigRejectsInvalidTupleAndEnvelope(t *testing.T) {
 	}
 }
 
+func TestProviderObjectSizeCeilings(t *testing.T) {
+	for _, test := range []struct {
+		provider Provider
+		maximum  int64
+	}{
+		{provider: ProviderAmazonS3, maximum: maximumObjectBytes},
+		{provider: ProviderCloudflare, maximum: maximumR2ObjectBytes},
+	} {
+		t.Run(string(test.provider), func(t *testing.T) {
+			cfg := validConfig(test.provider)
+			cfg.MaxObjectBytes = test.maximum
+			cfg.MultipartChunkBytes = maximumMultipartChunk
+			cfg.MaxWorkingMemoryBytes = math.MaxInt64
+			if _, err := cfg.validate(); err != nil {
+				t.Fatalf("documented maximum %d was rejected: %v", test.maximum, err)
+			}
+			cfg.MaxObjectBytes++
+			if _, err := cfg.validate(); err == nil {
+				t.Fatalf("object size above documented maximum %d was accepted", test.maximum)
+			}
+		})
+	}
+}
+
+func TestPortableBucketNameAcceptsOnlyTheSharedNamespace(t *testing.T) {
+	for _, name := range []string{"abc", "portable-bucket-123", strings.Repeat("a", 63)} {
+		for _, provider := range []Provider{ProviderAmazonS3, ProviderCloudflare} {
+			cfg := validConfig(provider)
+			cfg.Bucket = name
+			cfg.MaxWorkingMemoryBytes, _ = cfg.requiredMemory()
+			if _, err := cfg.validate(); err != nil {
+				t.Fatalf("%s bucket %q was rejected: %v", provider, name, err)
+			}
+		}
+	}
+}
+
 func TestWorkingMemoryAccounting(t *testing.T) {
 	cfg := validConfig(ProviderAmazonS3)
 
 	configured, ok := cfg.configuredStringBytes()
-	if !ok || configured != 135 {
-		t.Fatalf("configured string bytes = %d, %t; want 135, true", configured, ok)
+	if !ok || configured != 165 {
+		t.Fatalf("configured string bytes = %d, %t; want 165, true", configured, ok)
 	}
 	sharedTrust, startupTrust, verifyTrust, ok := trustMemory()
 	if !ok || sharedTrust != 32_047_104 || startupTrust != 61_997_056 || verifyTrust != 9_309_776 {
@@ -89,14 +154,14 @@ func TestWorkingMemoryAccounting(t *testing.T) {
 	download, downloadOK := cfg.operationMemory(configured, maximumKeyBytes, false, verifyTrust)
 	control, controlOK := cfg.operationMemory(configured, maximumKeyBytes, true, verifyTrust)
 	if !retainedOK || retained != 4_648 || !completeOK || complete != 29_302 ||
-		!multipartOK || multipart != 12_184_710 || !singleOK || single != 12_148_688 ||
-		!downloadOK || download != 11_819_472 || !controlOK || control != 12_016_592 {
+		!multipartOK || multipart != 12_188_550 || !singleOK || single != 12_152_528 ||
+		!downloadOK || download != 11_823_312 || !controlOK || control != 12_020_432 {
 		t.Fatalf("operation bytes = retained:%d complete:%d multipart:%d single:%d download:%d control:%d", retained, complete, multipart, single, download, control)
 	}
 
 	required, ok := cfg.requiredMemory()
-	if !ok || required != 62_145_920 {
-		t.Fatalf("required memory = %d, %t; want 62145920, true", required, ok)
+	if !ok || required != 62_149_760 {
+		t.Fatalf("required memory = %d, %t; want 62149760, true", required, ok)
 	}
 	cfg.MaxWorkingMemoryBytes = required
 	if _, err := cfg.validate(); err != nil {
@@ -141,9 +206,9 @@ func TestWorkingMemoryAccounting(t *testing.T) {
 		control  int64
 		required int64
 	}{
-		{name: "H less than E", header: 64 << 10, control: 128 << 10, required: 84_297_308},
-		{name: "H equals E", header: 128 << 10, control: 128 << 10, required: 95_569_500},
-		{name: "H greater than E", header: 256 << 10, control: 128 << 10, required: 118_113_884},
+		{name: "H less than E", header: 64 << 10, control: 128 << 10, required: 84_308_828},
+		{name: "H equals E", header: 128 << 10, control: 128 << 10, required: 95_581_020},
+		{name: "H greater than E", header: 256 << 10, control: 128 << 10, required: 118_125_404},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			cfg := validConfig(ProviderAmazonS3)

@@ -24,6 +24,14 @@ func TestNumericBoundsRejectOverflow(t *testing.T) {
 }
 
 func TestNumericBoundsAcceptBoundaries(t *testing.T) {
+	if value, err := remainingBatch(10, 3); err != nil || value != 7 {
+		t.Fatalf("remainingBatch(10, 3) = %d, %v", value, err)
+	}
+	for _, used := range []int64{-1, 11} {
+		if _, err := remainingBatch(10, used); !errors.Is(err, ErrConflict) {
+			t.Fatalf("remainingBatch(10, %d) error = %v", used, err)
+		}
+	}
 	if value, err := int32Value(math.MinInt32); err != nil || value != math.MinInt32 {
 		t.Fatalf("int32Value(min) = %d, %v", value, err)
 	}

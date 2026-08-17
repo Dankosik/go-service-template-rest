@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"sync"
+	"time"
 
 	infratelemetry "github.com/example/go-service-template-rest/internal/infra/telemetry"
 	"github.com/example/go-service-template-rest/internal/jobs"
@@ -17,7 +18,7 @@ const jobsMeterName = "service.postgres.jobs"
 type telemetrySnapshot struct {
 	observation Observation
 	facts       EngineFacts
-	fresh       bool
+	freshUntil  time.Time
 }
 
 // Telemetry owns bounded job metrics. Callbacks only read this cached snapshot.
@@ -26,6 +27,8 @@ type Telemetry struct {
 	snapshot     telemetrySnapshot
 	renewals     metric.Int64Counter
 	events       metric.Int64Counter
+	queueDelay   metric.Float64Histogram
+	attemptTime  metric.Float64Histogram
 	depth        metric.Int64ObservableGauge
 	oldest       metric.Int64ObservableGauge
 	capacity     metric.Int64ObservableGauge
@@ -40,6 +43,8 @@ func NewTelemetry(meter metric.Meter) (*Telemetry, error) {
 	set := infratelemetry.NewInstrumentSet(meter)
 	set.Int64Counter(&t.renewals, "postgres.jobs.lease.renewals")
 	set.Int64Counter(&t.events, "postgres.jobs.events")
+	set.Float64Histogram(&t.queueDelay, "postgres.jobs.queue.delay", metric.WithUnit("s"))
+	set.Float64Histogram(&t.attemptTime, "postgres.jobs.attempt.duration", metric.WithUnit("s"))
 	set.Int64ObservableGauge(&t.depth, "postgres.jobs.depth")
 	set.Int64ObservableGauge(&t.oldest, "postgres.jobs.oldest_available.timestamp")
 	set.Int64ObservableGauge(&t.capacity, "postgres.jobs.capacity.available")
@@ -56,12 +61,12 @@ func NewTelemetry(meter metric.Meter) (*Telemetry, error) {
 	return t, nil
 }
 
-func (t *Telemetry) Update(observation Observation, facts EngineFacts) {
+func (t *Telemetry) Update(observation Observation, facts EngineFacts, freshUntil time.Time) {
 	if t == nil {
 		return
 	}
 	t.mu.Lock()
-	t.snapshot = telemetrySnapshot{observation: observation, facts: facts, fresh: true}
+	t.snapshot = telemetrySnapshot{observation: observation, facts: facts, freshUntil: freshUntil}
 	t.mu.Unlock()
 }
 
@@ -70,7 +75,7 @@ func (t *Telemetry) MarkStale() {
 		return
 	}
 	t.mu.Lock()
-	t.snapshot.fresh = false
+	t.snapshot.freshUntil = time.Time{}
 	t.mu.Unlock()
 }
 
@@ -93,16 +98,18 @@ func (t *Telemetry) RecordRescue(ctx context.Context, outcome jobs.OutcomeClass)
 	t.record(ctx, "rescue", metricOutcome(outcome))
 }
 
-func (t *Telemetry) RecordAcceptance(ctx context.Context, outcome jobs.OutcomeClass) {
-	t.record(ctx, "acceptance", metricOutcome(outcome))
-}
-
-func (t *Telemetry) RecordClaim(ctx context.Context, outcome jobs.OutcomeClass) {
+func (t *Telemetry) RecordClaim(ctx context.Context, outcome jobs.OutcomeClass, delay time.Duration) {
 	t.record(ctx, "claim", metricOutcome(outcome))
+	if t != nil {
+		t.queueDelay.Record(ctx, delay.Seconds())
+	}
 }
 
-func (t *Telemetry) RecordAttempt(ctx context.Context, outcome jobs.OutcomeClass) {
+func (t *Telemetry) RecordAttempt(ctx context.Context, outcome jobs.OutcomeClass, duration time.Duration) {
 	t.record(ctx, "attempt", metricOutcome(outcome))
+	if t != nil {
+		t.attemptTime.Record(ctx, duration.Seconds(), metric.WithAttributes(attribute.String("outcome", metricOutcome(outcome))))
+	}
 }
 
 func (t *Telemetry) RecordRetry(ctx context.Context, outcome jobs.OutcomeClass) {
@@ -113,16 +120,12 @@ func (t *Telemetry) RecordCancellation(ctx context.Context, outcome jobs.Outcome
 	t.record(ctx, "cancellation", metricOutcome(outcome))
 }
 
-func (t *Telemetry) RecordRecovery(ctx context.Context, outcome jobs.OutcomeClass) {
-	t.record(ctx, "recovery", metricOutcome(outcome))
-}
-
-func (t *Telemetry) RecordAction(ctx context.Context, outcome jobs.OutcomeClass) {
-	t.record(ctx, "action", metricOutcome(outcome))
-}
-
 func (t *Telemetry) RecordDrain(ctx context.Context, outcome jobs.OutcomeClass) {
 	t.record(ctx, "drain", metricOutcome(outcome))
+}
+
+func (t *Telemetry) RecordTerminalFailure(ctx context.Context) {
+	t.record(ctx, "terminal_failure", metricOutcome(jobs.OutcomeUnknown))
 }
 
 func (t *Telemetry) record(ctx context.Context, event, outcome string) {
@@ -135,7 +138,8 @@ func (t *Telemetry) collect(_ context.Context, observer metric.Observer) error {
 	t.mu.RLock()
 	snapshot := t.snapshot
 	t.mu.RUnlock()
-	if snapshot.fresh {
+	fresh := !snapshot.freshUntil.IsZero() && time.Now().Before(snapshot.freshUntil)
+	if fresh {
 		for _, state := range snapshot.observation.States {
 			options := metric.WithAttributes(attribute.String("state", metricState(state.State)))
 			observer.ObserveInt64(t.depth, observationCount(state.Count), options)
@@ -147,7 +151,7 @@ func (t *Telemetry) collect(_ context.Context, observer metric.Observer) error {
 	}
 	observer.ObserveInt64(t.capacity, int64(max(0, snapshot.facts.Capacity-snapshot.facts.InFlight)))
 	ready := int64(0)
-	if snapshot.fresh && snapshot.facts.ClaimAdmissionOpen && snapshot.facts.Compatible {
+	if fresh && snapshot.facts.ClaimAdmissionOpen && snapshot.facts.Compatible {
 		ready = 1
 	}
 	observer.ObserveInt64(t.readiness, ready)

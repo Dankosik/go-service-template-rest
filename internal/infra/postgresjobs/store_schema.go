@@ -12,25 +12,12 @@ import (
 )
 
 var postgresJobsTables = []string{
-	"postgres_job_actions",
 	"postgres_job_attempts",
 	"postgres_job_claim_scopes",
 	"postgres_jobs",
 }
 
 var expectedPostgresJobsColumns = []string{
-	"postgres_job_actions.action_id|text|text|NO|",
-	"postgres_job_actions.request_fingerprint|bytea|bytea|NO|",
-	"postgres_job_actions.actor_id|text|text|NO|",
-	"postgres_job_actions.action_kind|text|text|NO|",
-	"postgres_job_actions.target_scope|text|text|YES|",
-	"postgres_job_actions.logical_job_id|text|text|YES|",
-	"postgres_job_actions.expected_state|text|text|YES|",
-	"postgres_job_actions.expected_generation|bigint|int8|YES|",
-	"postgres_job_actions.reason|text|text|NO|",
-	"postgres_job_actions.result|text|text|NO|",
-	"postgres_job_actions.created_at|timestamp with time zone|timestamptz|NO|clock_timestamp()",
-	"postgres_job_actions.completed_at|timestamp with time zone|timestamptz|NO|clock_timestamp()",
 	"postgres_job_attempts.logical_job_id|text|text|NO|",
 	"postgres_job_attempts.attempt_generation|bigint|int8|NO|",
 	"postgres_job_attempts.recovery_generation|bigint|int8|NO|",
@@ -77,14 +64,6 @@ var expectedPostgresJobsColumns = []string{
 }
 
 var expectedPostgresJobsCollations = []string{
-	"postgres_job_actions.action_id|C",
-	"postgres_job_actions.actor_id|C",
-	"postgres_job_actions.action_kind|C",
-	"postgres_job_actions.target_scope|C",
-	"postgres_job_actions.logical_job_id|C",
-	"postgres_job_actions.expected_state|C",
-	"postgres_job_actions.reason|C",
-	"postgres_job_actions.result|C",
 	"postgres_job_attempts.logical_job_id|C",
 	"postgres_job_attempts.worker_id|C",
 	"postgres_job_attempts.final_state|C",
@@ -108,15 +87,6 @@ var expectedPostgresJobsCollations = []string{
 }
 
 var expectedPostgresJobsConstraints = []string{
-	"postgres_job_actions.postgres_job_actions_expectation_check|c|7f6dfe3870b7b1015f05cff294377796",
-	"postgres_job_actions.postgres_job_actions_identity_check|c|78734433e0d2260326239f6a4a54b5f1",
-	"postgres_job_actions.postgres_job_actions_kind_check|c|0a7a6df67b23ae56c45eb48c6251d632",
-	"postgres_job_actions.postgres_job_actions_pkey|p|a733eaf516aafa318b5c5b573526e168",
-	"postgres_job_actions.postgres_job_actions_reason_check|c|f44e30625e24defbbace64c8a9f39dae",
-	"postgres_job_actions.postgres_job_actions_result_check|c|65f3720f7c105ccb24dc9af359d9216e",
-	"postgres_job_actions.postgres_job_actions_target_check|c|a803efb7ab781a2e8865919ff327c8ce",
-	"postgres_job_actions.postgres_job_actions_target_value_check|c|29972de0d15ba369929841f609919b92",
-	"postgres_job_actions.postgres_job_actions_timestamp_check|c|8965b697377526b4591b2760cf5cbe65",
 	"postgres_job_attempts.postgres_job_attempts_effect_check|c|dc80aa27de228d01c2b772155c04ca71",
 	"postgres_job_attempts.postgres_job_attempts_failure_check|c|e87ac3a7edbefa6552cb329abfb4518a",
 	"postgres_job_attempts.postgres_job_attempts_final_check|c|171905e856df100583f25a71ca2c5f5d",
@@ -147,8 +117,6 @@ var expectedPostgresJobsConstraints = []string{
 }
 
 var expectedPostgresJobsIndexes = []string{
-	"postgres_job_actions.postgres_job_actions_job_idx|0abbbaf25661bbc882c48a73905a630d",
-	"postgres_job_actions.postgres_job_actions_pkey|7702241b1b52e721e8d4223b9f57b860",
 	"postgres_job_attempts.postgres_job_attempts_lease_idx|a99885f8ebeb14eabcc8fe487744945e",
 	"postgres_job_attempts.postgres_job_attempts_pkey|26fe4859f7a8b8d9b21ce3cb6b6e7ce9",
 	"postgres_job_claim_scopes.postgres_job_claim_scopes_pkey|c16a31c40f3c07303794585ab0efa6a0",
@@ -163,7 +131,7 @@ var expectedPostgresJobsIndexes = []string{
 }
 
 func (s *Session) CheckSchema(ctx context.Context) error {
-	return s.withOperation(ctx, pgx.ReadOnly, func(ctx context.Context, queries *sqlcgen.Queries) error {
+	return s.withOperation(ctx, "check_schema", pgx.ReadOnly, func(ctx context.Context, queries *sqlcgen.Queries) error {
 		columns, err := queries.ListPostgresJobsSchemaColumns(ctx, postgresJobsTables)
 		if err != nil {
 			return fmt.Errorf("list postgres jobs schema columns: %w", err)
@@ -182,10 +150,10 @@ func (s *Session) CheckSchema(ctx context.Context) error {
 			name := column.TableName + "." + column.ColumnName
 			return name + "|" + column.CollationName, column.CollationName != ""
 		})
-		if !slices.Equal(gotColumns, expectedPostgresJobsColumns) {
+		if !schemaContains(gotColumns, expectedPostgresJobsColumns) {
 			return schemaMismatch("columns", gotColumns, expectedPostgresJobsColumns)
 		}
-		if !slices.Equal(gotCollations, expectedPostgresJobsCollations) {
+		if !schemaContains(gotCollations, expectedPostgresJobsCollations) {
 			return schemaMismatch("collations", gotCollations, expectedPostgresJobsCollations)
 		}
 
@@ -196,7 +164,7 @@ func (s *Session) CheckSchema(ctx context.Context) error {
 		gotConstraints := lo.Map(constraints, func(constraint sqlcgen.ListPostgresJobsSchemaConstraintsRow, _ int) string {
 			return constraint.TableName + "." + constraint.ConstraintName + "|" + constraint.ConstraintType + "|" + constraint.DefinitionHash
 		})
-		if !slices.Equal(gotConstraints, expectedPostgresJobsConstraints) {
+		if !schemaContains(gotConstraints, expectedPostgresJobsConstraints) {
 			return schemaMismatch("constraints", gotConstraints, expectedPostgresJobsConstraints)
 		}
 
@@ -207,7 +175,7 @@ func (s *Session) CheckSchema(ctx context.Context) error {
 		gotIndexes := lo.Map(indexes, func(index sqlcgen.ListPostgresJobsSchemaIndexesRow, _ int) string {
 			return index.TableName + "." + index.IndexName + "|" + index.DefinitionHash
 		})
-		if !slices.Equal(gotIndexes, expectedPostgresJobsIndexes) {
+		if !schemaContains(gotIndexes, expectedPostgresJobsIndexes) {
 			return schemaMismatch("indexes", gotIndexes, expectedPostgresJobsIndexes)
 		}
 
@@ -219,6 +187,12 @@ func (s *Session) CheckSchema(ctx context.Context) error {
 			return fmt.Errorf("%w: neutral claim scope has unexpected identity", ErrSchemaIncompatible)
 		}
 		return nil
+	})
+}
+
+func schemaContains(got, required []string) bool {
+	return !slices.ContainsFunc(required, func(authority string) bool {
+		return !slices.Contains(got, authority)
 	})
 }
 

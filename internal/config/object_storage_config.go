@@ -10,13 +10,14 @@ import (
 // It has no executable defaults: selecting the profile requires deployment to
 // provide one complete authority, credential, and resource envelope.
 type ObjectStorageConfig struct {
-	Provider        string `koanf:"provider"`
-	Endpoint        string `koanf:"endpoint"`
-	Region          string `koanf:"region"`
-	Bucket          string `koanf:"bucket"`
-	AccessKeyID     string `koanf:"access_key_id"`
-	SecretAccessKey string `koanf:"secret_access_key"`
-	SessionToken    string `koanf:"session_token"`
+	Provider            string `koanf:"provider"`
+	Endpoint            string `koanf:"endpoint"`
+	Region              string `koanf:"region"`
+	Bucket              string `koanf:"bucket"`
+	AccessKeyID         string `koanf:"access_key_id"`
+	SecretAccessKey     string `koanf:"secret_access_key"`
+	SessionToken        string `koanf:"session_token"`
+	ExpectedBucketOwner string `koanf:"expected_bucket_owner"`
 
 	MaxObjectBytes          int64         `koanf:"max_object_bytes"`
 	MultipartChunkBytes     int64         `koanf:"multipart_chunk_bytes"`
@@ -37,6 +38,7 @@ func objectStorageDefaults() map[string]any {
 		"object_storage.access_key_id":              "",
 		"object_storage.secret_access_key":          "",
 		"object_storage.session_token":              "",
+		"object_storage.expected_bucket_owner":      "",
 		"object_storage.max_object_bytes":           0,
 		"object_storage.multipart_chunk_bytes":      0,
 		"object_storage.max_active_operations":      0,
@@ -56,6 +58,7 @@ func validateObjectStorage(cfg *ObjectStorageConfig) error {
 	cfg.AccessKeyID = strings.TrimSpace(cfg.AccessKeyID)
 	cfg.SecretAccessKey = strings.TrimSpace(cfg.SecretAccessKey)
 	cfg.SessionToken = strings.TrimSpace(cfg.SessionToken)
+	cfg.ExpectedBucketOwner = strings.TrimSpace(cfg.ExpectedBucketOwner)
 
 	for _, value := range []struct {
 		name  string

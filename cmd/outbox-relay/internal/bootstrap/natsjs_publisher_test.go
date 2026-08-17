@@ -14,6 +14,7 @@ import (
 	"github.com/example/go-service-template-rest/internal/infra/postgresoutbox"
 )
 
+//nolint:paralleltest // This test mutates process-global environment or working directory.
 func TestNATSPublisherConfigParity(t *testing.T) {
 	for _, test := range configtest.MessagingCases() {
 		t.Run(test.Name, func(t *testing.T) {

@@ -115,7 +115,7 @@ func TestJobsTransition(t *testing.T) {
 	t.Run("recovery reset", func(t *testing.T) {
 		input := testDefinitionInput(Revision{Kind: "email", ArgsVersion: "v1", PolicyVersion: "recovery"})
 		input.Policy.Recovery = RecoveryPolicy{
-			Mode: RecoveryAllowed, Eligible: []State{StateExhausted}, RequiredEvidence: "remediated",
+			Mode: RecoveryAllowed, Eligible: []State{StateExhausted},
 			Attempts: BudgetReset, Elapsed: BudgetReset,
 		}
 		recoveryDefinition, err := NewDefinition(input)
@@ -141,7 +141,7 @@ func TestJobsTransition(t *testing.T) {
 	t.Run("recovery preserves budgets", func(t *testing.T) {
 		input := testDefinitionInput(Revision{Kind: "email", ArgsVersion: "v1", PolicyVersion: "recovery-preserved"})
 		input.Policy.Recovery = RecoveryPolicy{
-			Mode: RecoveryAllowed, Eligible: []State{StateExhausted}, RequiredEvidence: "remediated",
+			Mode: RecoveryAllowed, Eligible: []State{StateExhausted},
 			Attempts: BudgetPreserved, Elapsed: BudgetPreserved,
 		}
 		definition, err := NewDefinition(input)
@@ -162,6 +162,23 @@ func TestJobsTransition(t *testing.T) {
 	} {
 		if _, err := definition.Evaluate(facts); !errors.Is(err, ErrInvalidTransition) {
 			t.Fatalf("Evaluate(invalid %+v) error = %v", facts, err)
+		}
+	}
+}
+
+func TestJobsTransitionRejectsImpossiblePersistedFacts(t *testing.T) {
+	valid := Transition{State: StateSucceeded, AttemptsUsed: 1, Outcome: OutcomeSuccess, Effect: EffectNone}
+	if err := valid.Validate(); err != nil {
+		t.Fatalf("Validate(valid) error = %v", err)
+	}
+	for _, transition := range []Transition{
+		{State: StateSucceeded, AttemptsUsed: 1, Outcome: OutcomePoison, Effect: EffectNone},
+		{State: StateCancelled, AttemptsUsed: 1, Outcome: OutcomeCancelled, Effect: EffectCompleted},
+		{State: StateRetryWait, AttemptsUsed: 1, Outcome: OutcomeSuccess, Effect: EffectNone},
+		{State: StateRunning, AttemptsUsed: 1, Outcome: OutcomeSuccess, Effect: EffectNone},
+	} {
+		if err := transition.Validate(); !errors.Is(err, ErrInvalidTransition) {
+			t.Fatalf("Validate(%+v) error = %v, want ErrInvalidTransition", transition, err)
 		}
 	}
 }

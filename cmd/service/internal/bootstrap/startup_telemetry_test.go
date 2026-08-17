@@ -1,4 +1,42 @@
-package bootstrap
+package //nolint:paralleltest // This test mutates process-global environment or working directory.
+
+// A platform that injects only the standard endpoint variable must still get
+// traces: this is the deployment where ignoring it looks healthy and exports
+// nothing.
+//nolint:paralleltest // This test mutates process-global environment or working directory.
+
+// An unconfigured exporter with ambient variables present is reachable when
+// configured headers pin the destination and there is no configured endpoint:
+// nothing was honored, so everything injected is reported.
+//nolint:paralleltest // This test mutates process-global environment or working directory.
+
+// An injected endpoint no longer disables this service's own trace export, so
+// the operator needs to learn that their collector is not the destination. The
+// warning names the variable and the config key that won.
+//nolint:paralleltest // This test mutates process-global environment or working directory.
+
+// The variable that supplied the endpoint was honored, so reporting it as
+// ignored would send an operator looking for a problem that does not exist.
+// Everything else injected alongside it is still reported.
+//nolint:paralleltest // This test mutates process-global environment or working directory.
+
+// Metrics resolve their own endpoint, and a variable that supplied it was
+// honored exactly as the trace one would be. Reporting it as ignored while
+// reportMetricExporterState names the same variable as the active
+// endpoint_source puts two contradicting lines in one startup log, and an
+// operator has no way to tell which is right.
+//nolint:paralleltest // This test mutates process-global environment or working directory.
+
+// The metrics half of the conflict rule. A credential this service refused is
+// reported as degraded telemetry by the metrics exporter itself, so listing it
+// here as merely ignored contradicts that record for the same reason the trace
+// case does.
+//nolint:paralleltest // This test mutates process-global environment or working directory.
+
+// A credential or trust variable fails exporter setup and is reported as
+// degraded telemetry. Listing it here as merely "ignored" would contradict that
+// record, so this path stays silent for it.
+bootstrap
 
 import (
 	"bytes"
@@ -46,9 +84,6 @@ func TestBootstrapTelemetryStageConfiguresExporter(t *testing.T) {
 	t.Cleanup(func() { stage.cleanup(context.Background()) })
 }
 
-// A platform that injects only the standard endpoint variable must still get
-// traces: this is the deployment where ignoring it looks healthy and exports
-// nothing.
 func TestBootstrapTelemetryStageUsesAmbientEndpointEnv(t *testing.T) {
 	telemetrytest.ClearAmbientExporterEnv(t)
 	telemetrytest.RestoreGlobals(t)
@@ -95,9 +130,6 @@ func TestBootstrapTelemetryStageRejectsAmbientExporterEnv(t *testing.T) {
 	}
 }
 
-// An unconfigured exporter with ambient variables present is reachable when
-// configured headers pin the destination and there is no configured endpoint:
-// nothing was honored, so everything injected is reported.
 func TestReportIgnoredAmbientOTLPEnvWarnsWhenExporterUnconfigured(t *testing.T) {
 	telemetrytest.ClearAmbientExporterEnv(t)
 	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://injected-collector.example:4318")
@@ -131,9 +163,6 @@ func TestReportIgnoredAmbientOTLPEnvWarnsWhenExporterUnconfigured(t *testing.T) 
 	}
 }
 
-// An injected endpoint no longer disables this service's own trace export, so
-// the operator needs to learn that their collector is not the destination. The
-// warning names the variable and the config key that won.
 func TestReportIgnoredAmbientOTLPEnvWarnsOnOverriddenEndpointWhenConfigured(t *testing.T) {
 	telemetrytest.ClearAmbientExporterEnv(t)
 	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://injected-collector.example:4318")
@@ -159,9 +188,6 @@ func TestReportIgnoredAmbientOTLPEnvWarnsOnOverriddenEndpointWhenConfigured(t *t
 	}
 }
 
-// The variable that supplied the endpoint was honored, so reporting it as
-// ignored would send an operator looking for a problem that does not exist.
-// Everything else injected alongside it is still reported.
 func TestReportIgnoredAmbientOTLPEnvSkipsTheHonoredEndpointVariable(t *testing.T) {
 	telemetrytest.ClearAmbientExporterEnv(t)
 	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://injected-collector.example:4318")
@@ -187,11 +213,6 @@ func TestReportIgnoredAmbientOTLPEnvSkipsTheHonoredEndpointVariable(t *testing.T
 	}
 }
 
-// Metrics resolve their own endpoint, and a variable that supplied it was
-// honored exactly as the trace one would be. Reporting it as ignored while
-// reportMetricExporterState names the same variable as the active
-// endpoint_source puts two contradicting lines in one startup log, and an
-// operator has no way to tell which is right.
 func TestReportIgnoredAmbientOTLPEnvSkipsTheHonoredMetricsEndpointVariable(t *testing.T) {
 	telemetrytest.ClearAmbientExporterEnv(t)
 	t.Setenv("OTEL_EXPORTER_OTLP_METRICS_ENDPOINT", "http://injected-collector.example:4318/v1/metrics")
@@ -217,10 +238,6 @@ func TestReportIgnoredAmbientOTLPEnvSkipsTheHonoredMetricsEndpointVariable(t *te
 	}
 }
 
-// The metrics half of the conflict rule. A credential this service refused is
-// reported as degraded telemetry by the metrics exporter itself, so listing it
-// here as merely ignored contradicts that record for the same reason the trace
-// case does.
 func TestReportIgnoredAmbientOTLPEnvSilentOnMetricsConflictWhenConfigured(t *testing.T) {
 	telemetrytest.ClearAmbientExporterEnv(t)
 	t.Setenv("OTEL_EXPORTER_OTLP_METRICS_HEADERS", "authorization=Bearer secret-value")
@@ -241,9 +258,6 @@ func TestReportIgnoredAmbientOTLPEnvSilentOnMetricsConflictWhenConfigured(t *tes
 	}
 }
 
-// A credential or trust variable fails exporter setup and is reported as
-// degraded telemetry. Listing it here as merely "ignored" would contradict that
-// record, so this path stays silent for it.
 func TestReportIgnoredAmbientOTLPEnvSilentOnConflictWhenConfigured(t *testing.T) {
 	telemetrytest.ClearAmbientExporterEnv(t)
 	t.Setenv("OTEL_EXPORTER_OTLP_HEADERS", "authorization=Bearer secret-value")

@@ -152,14 +152,26 @@ func TestPostgresJobsProcess(t *testing.T) {
 				}
 			}
 			if test.wantFailed {
-				waittest.Until(t, 3*time.Second, func() bool {
-					var state string
+				var leaseRemainingMilliseconds int64
+				if err := pool.PGX().QueryRow(ctx, `
+SELECT greatest(coalesce((extract(epoch FROM (lease_expires_at - clock_timestamp())) * 1000)::bigint, 0), 0)
+FROM postgres_jobs
+WHERE logical_job_id = $1`, claimedJobID).Scan(&leaseRemainingMilliseconds); err != nil {
+					t.Fatalf("read durable unjoined attempt lease: %v", err)
+				}
+				waittest.Until(t, time.Duration(leaseRemainingMilliseconds)*time.Millisecond+3*time.Second, func() bool {
+					var state, outcome, effect string
 					var leaseExpired bool
 					if err := pool.PGX().QueryRow(ctx, `
-SELECT state, lease_expires_at < clock_timestamp()
-FROM postgres_jobs
-WHERE logical_job_id = $1`, claimedJobID).Scan(&state, &leaseExpired); err == nil {
-						return state == "running" && leaseExpired
+SELECT job.state, coalesce(job.lease_expires_at < clock_timestamp(), false),
+  coalesce(attempt.outcome, ''), coalesce(attempt.effect_status, '')
+FROM postgres_jobs AS job
+LEFT JOIN postgres_job_attempts AS attempt
+  ON attempt.logical_job_id = job.logical_job_id
+ AND attempt.attempt_generation = job.attempt_generation
+WHERE job.logical_job_id = $1`, claimedJobID).Scan(&state, &leaseExpired, &outcome, &effect); err == nil {
+						return state == "running" && leaseExpired ||
+							state == "outcome_unknown" && outcome == "lost" && effect == "unknown"
 					}
 					return false
 				}, "durable unjoined attempt recoverability")

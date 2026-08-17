@@ -7,7 +7,11 @@ import (
 
 	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	"github.com/example/go-service-template-rest/internal/infra/postgres/sqlcgen"
+	infratelemetry "github.com/example/go-service-template-rest/internal/infra/telemetry"
+	"github.com/example/go-service-template-rest/internal/jobs"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 )
 
 type StoreOptions struct {
@@ -19,6 +23,8 @@ type Store struct {
 	pool             *postgres.Pool
 	operationTimeout time.Duration
 	statementTimeout time.Duration
+	events           metric.Int64Counter
+	operationTime    metric.Float64Histogram
 }
 
 func NewStore(pool *postgres.Pool, options StoreOptions) (*Store, error) {
@@ -31,10 +37,60 @@ func NewStore(pool *postgres.Pool, options StoreOptions) (*Store, error) {
 	if pool == nil || pool.PGX() == nil {
 		return nil, fmt.Errorf("%w: postgres pool is required", ErrConfig)
 	}
+	events, err := infratelemetry.MeterOrGlobal(nil, jobsMeterName).Int64Counter("postgres.jobs.events")
+	if err != nil {
+		return nil, fmt.Errorf("create PostgreSQL jobs acceptance telemetry: %w", err)
+	}
+	operationTime, err := infratelemetry.MeterOrGlobal(nil, jobsMeterName).Float64Histogram("postgres.jobs.store.operation.duration", metric.WithUnit("s"))
+	if err != nil {
+		return nil, fmt.Errorf("create PostgreSQL jobs Store telemetry: %w", err)
+	}
 	return &Store{
 		pool: pool, operationTimeout: options.OperationTimeout,
-		statementTimeout: options.StatementTimeout,
+		statementTimeout: options.StatementTimeout, events: events, operationTime: operationTime,
 	}, nil
+}
+
+func (s *Store) recordOperation(ctx context.Context, operation string, err error, duration time.Duration) {
+	if s == nil || s.operationTime == nil {
+		return
+	}
+	outcome := jobs.OutcomeSuccess
+	if err != nil {
+		outcome = jobs.OutcomeUnknown
+	}
+	s.operationTime.Record(ctx, duration.Seconds(), metric.WithAttributes(
+		attribute.String("operation", metricOperation(operation)),
+		attribute.String("outcome", metricOutcome(outcome)),
+	))
+}
+
+func (s *Store) recordAcceptance(ctx context.Context, result jobs.StageResult, err error) {
+	if s == nil || s.events == nil {
+		return
+	}
+	event := "acceptance_rejected"
+	outcome := jobs.OutcomeUnknown
+	if err == nil {
+		switch result.Outcome {
+		case jobs.StageNew:
+			event = "acceptance"
+			outcome = jobs.OutcomeSuccess
+		case jobs.StageExisting:
+			event = "acceptance_duplicate"
+			outcome = jobs.OutcomeSuccess
+		case jobs.StageConflict:
+			event = "acceptance_conflict"
+			outcome = jobs.OutcomePermanent
+		case jobs.StageRejected:
+			event = "acceptance_rejected"
+			outcome = jobs.OutcomeUnknown
+		}
+	}
+	s.events.Add(ctx, 1, metric.WithAttributes(
+		attribute.String("event", metricEvent(event)),
+		attribute.String("outcome", metricOutcome(outcome)),
+	))
 }
 
 func (s *Store) valid() bool {

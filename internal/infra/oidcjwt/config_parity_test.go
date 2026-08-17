@@ -123,6 +123,10 @@ func policyInputOf(testCase authnConfigCase) PolicyInput {
 //
 // Cases vary one field at a time, so a field's rejected case is found by
 // comparing against the canonical row rather than by naming it.
+//nolint:paralleltest // This test mutates process-global environment or working directory.
+
+// loadAuthnConfig runs one corpus entry through the real configuration loader
+// and returns whether it survived validation.
 func requireRejectedCasePerPolicyInputField(t *testing.T, cases []authnConfigCase) {
 	t.Helper()
 	if len(cases) == 0 || !cases[0].acceptable {
@@ -153,8 +157,6 @@ func requireRejectedCasePerPolicyInputField(t *testing.T, cases []authnConfigCas
 	}
 }
 
-// loadAuthnConfig runs one corpus entry through the real configuration loader
-// and returns whether it survived validation.
 func loadAuthnConfig(t *testing.T, testCase authnConfigCase) error {
 	t.Helper()
 	configtest.IsolateEnv(t)

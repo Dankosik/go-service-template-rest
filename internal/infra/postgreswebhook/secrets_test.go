@@ -28,6 +28,9 @@ func TestWebhookStaticSecretManifest(t *testing.T) {
 			t.Fatalf("ParseSecretManifest(%q) succeeded", invalid)
 		}
 	}
+	if _, err := ParseSecretManifest(strings.Repeat("x", MaxSecretManifestBytes+1)); err == nil {
+		t.Fatal("oversized manifest was accepted")
+	}
 	for _, duplicate := range []string{
 		`{"revision":1,"revision":2,"entries":[]}`,
 		`{"revision":1,"entries":[{"owner_scope":"owner-a","owner_scope":"owner-b","destination_id":"dest-a","key_reference":"key-a","secret":"whsec_` + encoded + `"}]}`,

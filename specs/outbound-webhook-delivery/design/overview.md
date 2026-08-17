@@ -3,9 +3,9 @@
 status: ready
 macro phase: Technical Design
 behavioral authority: [`../spec.md`](../spec.md), ready SHA-256
-`f3805950687cf60c55cf4af80c358d3435564b58bc4e38ce7ba8e7ea492f9720`
+`cc730583902806e2188fc603ff058ea3aea1c0c1939e6128dac09bb24327c49e`
 evidence authority: [`../research/synthesis.md`](../research/synthesis.md), SHA-256
-`8be73a3f02e70cca18ba435ccde5beec5a9526fd0d7b7938bd9e636b1b1f2b23`
+`5f8484fca734b58b0c903280409f019dadeb937329bb00ebaef71fae758e45b2`
 repository baseline: `40e6d212799ae8677b675339929c559246536181`
 
 ## Outcome and selection
@@ -109,11 +109,16 @@ service process. PostgreSQL loss closes new acceptance and worker readiness.
    fan-out ID, destination IDs and generations, verified URL snapshots, version
    preferences, signing-authority bindings, and complete delivery/retention
    policy. The engine does not query a current subscriber set later.
-3. `PrepareAcceptance` validates all immutable inputs, assigns one stable random
-   delivery ID per member with standard-library `crypto/rand.Text`, sorts the
-   member set canonically, and computes the protected intent fingerprint. The
-   prepared value is reused unchanged across transaction retries.
-4. `Store.Accept(ctx, tx, prepared)` writes or recognizes the event, fan-out,
+3. `PrepareAcceptance` validates all immutable inputs, sorts the member set
+   canonically, computes the protected intent fingerprint, and derives one
+   stable delivery ID per member from that fingerprint plus destination
+   identity. Reconstructing the same complete intent recovers the same IDs
+   after process loss; changed intent produces different IDs.
+4. `Store.AcceptAtomic(ctx, prepared, mutate)` owns the preferred feature
+   transaction: it applies `mutate`, then calls `Accept` as the final SQL
+   operation and immediately commits or rolls back. Existing repositories may
+   use `Store.Accept(ctx, tx, prepared)` only as the final operation of their
+   caller-owned transaction. Both write or recognize the event, fan-out,
    destination generations, and all deliveries inside the feature transaction.
    Same acceptance identity and fingerprint returns the original IDs; any
    identity collision with different immutable intent is a conflict.
@@ -152,11 +157,17 @@ same per-destination HTTP, ambiguity, retention, redrive, and operator authority
 
 ## Durable authorities and minimum state
 
-The future canonical source is the next unclaimed six-digit transactional
-Goose migration with stem `_postgres_webhooks`; on the current baseline that is
-`migrations/000005_postgres_webhooks.sql`. If another accepted change claims
-`000005` before implementation, Go Ownership reopens only the numeric filename
-and generated output receipt. This design creates no migration.
+The initial canonical source is the published transactional Goose migration
+`migrations/000005_postgres_webhooks.sql`. Reference-audit repairs are additive
+in `migrations/000006_postgres_webhook_reference_repairs.sql`; the published
+initial migration remains immutable and generated SQLC output follows both.
+New retention/action columns use additive `NOT NULL DEFAULT 'infinity'`
+compatibility sentinels so the published writer remains valid during bounded
+overlap. Maintenance backfills those rows in restartable pages from each stored
+policy; complete observation and readiness fail closed until no live sentinel
+remains. Database constraints reject policy JSON outside engine ceilings and
+send authorization without the complete destination, key, DNS, selected-address,
+signature, attempt, capacity-revision, lease, and cycle-deadline evidence.
 
 PostgreSQL server UTC is authoritative for acceptance, attempt instants, due
 times, deadlines, leases, disposition barriers, action times, and cleanup. One
@@ -210,6 +221,7 @@ its wall clock never moves durable eligibility or extends a deadline.
 | `webhook_attempts` | One `(owner_scope, delivery_id, cycle_number, attempt_id)` referencing its durable cycle; append-only attempt instant, fence, signature/key references and signature-header digest, payload digest/size, DNS-set digest and selected address, timing, possible-send marker, bounded response counts/status/`Retry-After` evidence, outcome class, and finalization time. No URL, payload copy, body, secret, or raw signature is stored. |
 | `webhook_capacity_slots` | Exactly the configured number of numbered global attempt slots, each carrying the same positive monotone capacity revision. A slot has one lease/fence and attempt owner; claim and expiry/reconciliation make global in-flight capacity durable across replicas. The row set itself is the revision/count authority. Per-destination concurrency is checked while locking its destination row and counting current unexpired attempts. |
 | `webhook_operator_actions` | One stable owner-scoped action ID with versioned request fingerprint, actor reference, action, target, expected state/generation, bounded reason, first result, pending/completed irreversible-action state where applicable, and timestamps. Same request replays the result; different reuse conflicts. |
+| `webhook_destination_tombstones` | Minimal permanent `(owner_scope, destination_id, generation)` retirement authority and time. It prevents a cleaned retired generation from being recreated and retains no URL, policy, key, payload, or response evidence. |
 | `webhook_tombstones` | Minimum owner-scoped event-deletion or namespace-retirement identity and last semantic/ambiguity class, stable deletion action ID, action-encoding version, non-content request fingerprint, first disposition, deletion authority, and time. The event form retains acceptance, business-event, fan-out, delivery, and destination-generation identities; the namespace form guards every identity in the retired owner scope. It contains no content, URL, secret, signature, response material, protected note, or reversible content digest. |
 
 Every primary, unique, and foreign-key identity includes `owner_scope`; no
@@ -260,24 +272,35 @@ Every durable fingerprint uses canonical encoding `webhook-canonical-v1`:
   durable versions; every version referenced by retained events/actions remains
   readable through their horizon.
 
-`webhook-acceptance-intent-v1` orders these fields: owner scope, acceptance ID,
+New acceptance uses `webhook-acceptance-intent-v2` and orders these fields:
+owner scope, acceptance ID,
 business-event ID, fan-out ID, event type, business schema version, content
 type, exact body bytes, delivery-envelope version, subscriber policy revision,
 and the canonically sorted destination-intent list. Each
-`webhook-destination-intent-v1` orders: destination ID, destination generation,
+`webhook-destination-intent-v2` orders: destination ID, destination generation,
 ownership-verification receipt, exact URL, selection revision, payload-version
 preference, signature profile, signing-authority binding, and
-`webhook-delivery-policy-v1`. That policy record fixes, in this order: maximum
+`webhook-delivery-policy-v2`. That policy record fixes, in this order: maximum
 payload bytes; accepted-content-type set; accepted-business-schema set; maximum
 attempts; maximum delivery age; backoff base; backoff cap; `Retry-After` cap;
-total attempt, header-time, header-byte, body-byte, per-destination concurrency,
+total attempt, header-time, header-byte, body-byte, minimum TLS version,
+per-destination concurrency,
 global-concurrency, and drain bounds; redrive attempts and age; payload, active,
-terminal-summary, attempt, action, destination-generation, key-reference,
-redrive-eligibility, and receiver-dedup horizons; automatic-pause enabled,
+terminal-summary, attempt, action, destination-generation, redrive-eligibility,
+and receiver-dedup horizons; key-reference evidence derives its lifetime from
+the attempt/redrive/dedup facts it interprets; automatic-pause enabled,
 eligible-class set, window, threshold, minimum traffic, pause duration,
-manual-only recovery, retention effect, and alert policy. Engine-generated
-delivery IDs and mutable active/predecessor key generations are excluded; their
-own stored identities/revisions govern them.
+manual-only recovery, retention effect, and alert policy. Derived delivery IDs
+and mutable active/predecessor key generations are excluded; their own stored
+identities/revisions govern them.
+
+The published `282b15e0` writer used the corresponding `*-v1` acceptance,
+destination, policy, and delivery-ID tags and omitted minimum TLS from its
+policy record. Readers reproduce that exact legacy encoding only to resolve
+retained v1 rows and return their stored delivery IDs; they never reinterpret a
+v1 fingerprint with v2 fields or mint replacement identities. New snapshots
+materialize the default minimum TLS as `1.3` before hashing and derive IDs with
+`webhook-delivery-id-v2`.
 
 The acceptance golden vector uses exactly the values below; a list/record cell
 means the encoding just defined:
@@ -286,15 +309,15 @@ means the encoding just defined:
 | --- | --- |
 | Outer fields | `owner-a`, `accept-01`, `evt-01`, `fanout-01`, `order.created`, `1`, `application/json`, body `{"id":"evt-01"}`, envelope `1`, subscriber revision `subrev-7` |
 | One destination | `dest-01`, generation `3`, receipt `verify-9`, URL `https://hooks.example.test/orders`, selection `sel-4`, preference `1`, signature `v1`, authority `keys-01` |
-| Policy | payload `262144`; content types [`application/json`]; schemas [`1`]; attempts `8`; delivery age `86400000000000`; backoff `1000000000`/`300000000000`; retry-after `3600000000000`; attempt/header/header-bytes/body-bytes `10000000000`/`3000000000`/`16384`/`65536`; destination/global concurrency `2`/`32`; drain `20000000000`; redrive attempts/age `3`/`3600000000000` |
+| Policy | payload `262144`; content types [`application/json`]; schemas [`1`]; attempts `8`; delivery age `86400000000000`; backoff `1000000000`/`300000000000`; retry-after `3600000000000`; attempt/header/header-bytes/body-bytes `10000000000`/`3000000000`/`16384`/`65536`; minimum TLS `1.3`; destination/global concurrency `2`/`32`; drain `20000000000`; redrive attempts/age `3`/`3600000000000` |
 
 The vector's horizons in
 policy order are `604800000000000`, `604800000000000`,
 `2592000000000000`, `2592000000000000`, `7776000000000000`,
 `7776000000000000`, `604800000000000`, `604800000000000`; automatic pause is
 `0`, its class set is empty, and its remaining seven optional fields are empty.
-The canonical byte length is `736`; its expected SHA-256 is
-`40d72664c74d6e84ce96f82dec63b8471c15d9c3586e59438d586c2dd0d232a2`.
+The canonical byte length is `743`; its expected SHA-256 is
+`24dd3797de2eda77cd0646ef823255f4d60aa6ebfbb5a372723473c1c0d9c784`.
 
 Operator action requests use `webhook-operator-action-v1`, ordered: owner,
 actor, action kind, target kind, target ID, target generation, expected
@@ -311,7 +334,8 @@ and exact expected SHA-256:
 | `key_rotation`; destination `dest-01` gen `3`; `11`; `rotate`; `0` | `webhook-action-key-rotation-v1`: secret-set revision `12`, key-state revision `5`, `key-new`, `key-old`, `1700000000`, `1700086400`, deployment receipt `stage-receipt-12` | `28c10f3a83ebed44bf22010f2ff054c5447fd971bd428595deb41f10f3b335ff` |
 | `redrive`; delivery `delivery-01` gen `0`; `4`; `remediated`; `1` | `webhook-action-redrive-v1`: attempts `3`, age `3600000000000` | `908fad852adaba75e0fedb5cc3b9b5bed75b088fd039c90a1d45edf5c49df27d` |
 | `close_unknown`; delivery `delivery-01` gen `0`; `4`; `stop_recovery`; `1` | `webhook-action-close-unknown-v1`: `closed_unknown` | `20d5e8bdc876f18f8f14297b6014b8676e2c66839510e83ae4718da18cd6d51e` |
-| `privacy_delete`; event `evt-01` gen `0`; `2`; `privacy_request`; `0` | `webhook-action-privacy-delete-v1`: `event`, `evt-01`, `minimal_tombstone`, authority `privacy-ticket-44` | `70066ff4fc7faea45b319b0e67b9004be1084a7803295168d21bc0619dda13e2` |
+| `retention_hold`; delivery `delivery-01` gen `0`; `4`; `legal_hold`; `0` | `webhook-action-retention-hold-v1`: `on` | `f6d26ed5edf429d20b2318f9ab2a7977855b091c66acf59a8b3ce3a7601bf6de` |
+| `privacy_delete`; event `evt-01` gen `0`; empty expected; `privacy_request`; `0` | `webhook-action-privacy-delete-v1`: `event`, `evt-01`, `minimal_tombstone`, authority `privacy-ticket-44` | `9605ac89e1dbf168862a6d255750a258f56930559dc59b3525131bca4476adac` |
 | `namespace_retire`; namespace `owner-a` gen `0`; empty expected; `privacy_request`; `0` | `webhook-action-namespace-retire-v1`: `full_erasure`, authority `privacy-ticket-44` | `002038c16d40dc98ccdb637c9b8067617a7dc13a6bde80b67d419590a831195c` |
 
 The protected acceptance fingerprint is identity-comparison evidence only and
@@ -328,6 +352,9 @@ and SHA-256
 `b8885b9ec04d4deff5ba050bc10c60c280fdae844902444fe82e754cab46aaa4`.
 Mixed-version readers use the stored tag.
 
+`Store.AcceptAtomic` validates before opening the transaction, runs the feature
+mutation, calls `Store.Accept`, and immediately commits through the repository
+transaction owner so a non-definite commit failure is returned as unknown.
 `Store.Accept` first validates the prepared value, then uses the supplied
 `pgx.Tx` as its final SQL operation. It takes the exclusive commit-high-water
 barrier, then a shared owner-namespace advisory lock and an exclusive business-
@@ -363,7 +390,7 @@ acceptance or cycle evidence. This is the acceptance side of the W2/W8/W10/W11
 barriers. A count/hash, identity, delivery, cycle, or deadline mismatch is an
 integrity conflict and commits nothing new. The store sends no notification
 whose success is needed for durability; worker polling owns wakeup.
-The caller immediately commits or rolls back after `Accept` returns. A violation
+The low-level caller immediately commits or rolls back after `Accept` returns. A violation
 of this call-order contract is unsupported because it extends the global clock
 lock beyond the admitted store envelope. `ResolveAcceptance` commits no time-
 sensitive fact and therefore does not take or advance the clock barrier; inside
@@ -411,7 +438,10 @@ begin the next bounded page only on its next regular poll interval, so an all-
 saturated set cannot create a hot progress loop. If it selected no unlocked
 candidate it returns contended/idle without cursor change.
 No transaction examines, locks, counts, or writes more than the fixed page, and
-rollback loses only that page's progress. After at most
+rollback loses only that page's progress. After one successful claim the worker
+may consume another bounded free local
+slot in the same poll tick; a no-attempt result stops that tick, and a committed
+`progress_without_claim` result is recorded instead of hot-looped. After at most
 `ceil(candidates_ahead / claim_scan_page)` committed progress pages, a retained
 eligible destination reaches the front, excluding finite lock contention and
 newly changed eligibility; new insertions start at the tail. A revision mismatch
@@ -447,10 +477,12 @@ is claimed.
 
 The lease exceeds the complete DNS/secret/HTTP/finalization bound plus database
 acquire/statement and worker join margins. Expiry alone does not free possible
-send evidence. Recovery first locks and finalizes the expired attempt as
-definitely-not-sent or ambiguous from its durable marker, releases its capacity
-slot, and only then makes a later attempt eligible. A stale fence changes zero
-rows.
+send evidence. Recovery locks and classifies the expired attempt from its
+durable marker, stores a deterministic SHA-256-seeded decorrelated delay, and
+releases its full-identity capacity lease in the same transaction. Definite-
+not-sent and possible-send crashes retry only while the immutable attempt and
+cycle-deadline budgets remain; ambiguous history stays `outcome_unknown` and
+becomes suspended only on exhaustion. A stale fence changes zero rows.
 
 ### Secret, DNS, and send barrier
 
@@ -504,9 +536,9 @@ Before the send barrier, the worker:
    exact owner/destination/reference tuple;
 3. parses the stored absolute HTTPS URL, requires port 443, and resolves all A
    and AAAA answers with a concrete `net.Resolver`;
-4. rejects the entire set if any address fails the shared IANA public-address
-   predicate, chooses one admitted address, and prepares TLS verification for
-   the original hostname; and
+4. rejects the entire bounded set if any address fails the shared IANA
+   public-address predicate, orders the admitted addresses, and prepares TLS
+   verification for the original hostname; and
 5. constructs the exact W4 HMAC input from stored body, stable delivery ID, and
    PostgreSQL attempt seconds, newest generation first.
 
@@ -582,6 +614,9 @@ the cumulative summary `outcome_unknown` forever, even if later attempts are
 definitely not sent. Recovery quarantines a delivery whose pointer/summary and
 append-only cycle/attempt evidence disagree; an idempotent maintenance pass
 recomputes only from stronger durable evidence and never from absence.
+The same maintenance owner resumes one pending namespace-retirement page per
+cycle under the namespace lock until writer inventory proves completion;
+operator replay is not required for progress.
 
 ## Destination control, redrive, and retention
 
@@ -589,6 +624,13 @@ Destination state changes and operator actions require `owner_scope`, stable
 action ID, actor reference, expected destination/delivery generation, and a
 bounded reason. The store serializes them with acceptance/claim barriers and
 returns the first result on replay. It exposes no authentication or transport.
+Every mutation also supplies the current immutable secret-manifest revision.
+Missing targets retain only the bounded action request/result through the
+engine maximum action horizon, except an authorized deletion of an absent event,
+which records the permanent minimum no-content tombstone required to prevent
+resurrection. `InspectDelivery` is separately owner-scoped and paginates the
+redacted delivery/cycle/attempt/action chain without payload, URL, DNS address,
+key reference, signature, or request payload.
 
 - Active admits current snapshots and claims.
 - Automatically paused remains implemented but cannot be enabled without the
@@ -634,10 +676,11 @@ the exact store owner for:
 - readiness/progress observation; and
 - dependency-aware retention and privacy deletion.
 
-Ordinary cleanup deletes content only after every dependent delivery is
-terminal, non-redrivable, outside its separate horizons, and not legally held.
-A cycle row cannot be deleted while a retained delivery summary, attempt, or
-operator receipt depends on it; a destination generation cannot be deleted
+Ordinary cleanup independently erases payload, finalized attempts, completed
+cycles, terminal-summary detail, operator payloads, and finally the retained
+delivery/event graph as their dependency horizons expire. Redrive authority and
+legal hold delay only facts they still require; stable delivery identity remains
+through receiver-dedup retention. A destination generation cannot be deleted
 while any live or redrive-eligible delivery depends on it. Cleanup preserves
 foreign-key order and never orphans retained interpretation evidence.
 
@@ -657,8 +700,8 @@ returns the retained first disposition, and different reuse conflicts.
 
 An event request takes the clock/shared-namespace/exclusive-event guards and
 locks every event delivery in canonical order. In that single PostgreSQL
-transaction it blocks every send barrier, conservatively finalizes any already
-authorized in-flight attempt as possible-send, writes the permitted event
+transaction it blocks every send barrier, preserves any already authorized
+in-flight attempt as possible-send, writes the permitted event
 tombstone including the action/deletion authority, and deletes every event-owned
 payload, fan-out, delivery, cycle, attempt, and action fact targeting the event
 or one of its deliveries except the equivalent non-content action receipt now
@@ -666,7 +709,10 @@ carried by the tombstone.
 Shared destination rows remain. Failure commits nothing; unknown commit is
 resolved only by writer readback, where tombstone plus absent event content is
 the replay receipt and retained content without a tombstone means retry the
-same action. No intermediate acceptance state is introduced.
+same action. No intermediate acceptance state is introduced. An occupied global
+capacity slot is not made reusable by erasure: it retains only its fenced
+attempt identity through the original lease deadline, after which
+reconciliation releases the expired orphan slot.
 
 A namespace request instead takes the exclusive namespace guard and records the
 namespace-retirement tombstone plus pending action before any batch, which
@@ -775,7 +821,8 @@ new package or production file requires Go Ownership review.
 | `internal/infra/postgreswebhook/store_authorize.go` | Security-critical pre-send authorization transaction: recheck attempt/destination/key/manifest/deadline/capacity fences and set the possible-send marker while serialized with control. |
 | `internal/infra/postgreswebhook/store_finalize.go` | Fenced ordinary attempt finalization, retry due time, cycle/cumulative summaries, and stale/divergence result. |
 | `internal/infra/postgreswebhook/store_recovery.go` | Expired-attempt reconciliation, ambiguous/definite deadline exhaustion, and safe capacity-slot release. |
-| `internal/infra/postgreswebhook/store_operator.go` | Exported replay-safe destination state/key rotation and inspect/suspend/redrive control methods under clock/owner/identity/action guards; these are the later authenticated adapter's concrete transport-neutral surface. |
+| `internal/infra/postgreswebhook/store_operator.go` | Exported replay-safe destination state/key rotation and suspend/redrive control methods under clock/owner/identity/action guards; these are the later authenticated adapter's concrete transport-neutral mutation surface. |
+| `internal/infra/postgreswebhook/store_inspect.go` | Exported owner-scoped bounded paginated redacted delivery/cycle/attempt/action inspection; no authentication, transport, or protected content. |
 | `internal/infra/postgreswebhook/store_privacy.go` | Exported replay-safe event-privacy and namespace-retirement controls plus same-package tombstone action replay and guarded namespace-deletion batches. |
 | `internal/infra/postgreswebhook/store_retention.go` | Ordinary dependency-aware retained-evidence eligibility and cleanup only; no legal/privacy override. |
 | `internal/infra/postgreswebhook/signing.go` | Exact W4 HMAC v1 construction, key overlap ordering, and non-replayable signature-header digest. Standard library only. |
@@ -840,6 +887,7 @@ cannot preserve an existing non-secret key or the profile-removal invariant.
 | --- | --- |
 | `internal/outboundtrust/public_address_test.go` | One shared current-IANA address corpus, including mapped IPv4 and NAT64 cases. |
 | `internal/infra/postgreswebhook/acceptance_test.go` | Bounds, canonical membership, stable IDs, exact intent golden vector, and collisions without PostgreSQL. |
+| `internal/infra/postgreswebhook/store_helpers_test.go` | SQLC row mapping, absent readback, current v2 and published v1 fingerprint resolution, and preservation of retained v1 random delivery IDs. |
 | `internal/infra/postgreswebhook/actions_test.go` | Exact action fingerprint vectors, replay/conflict inputs, and version retention. |
 | `internal/infra/postgreswebhook/secrets_test.go` | Strict manifest grammar, tuple scope, duplicate/cross-binding rejection, revision comparison, and no secret leakage. |
 | `internal/infra/postgreswebhook/signing_test.go` | W4 golden raw-byte vectors, malformed input, overlap/retirement, constant-time validation fixture, and no secret/signature leakage. |
@@ -860,6 +908,7 @@ cannot preserve an existing non-secret key or the profile-removal invariant.
 | `test/postgres_webhook_recovery_integration_test.go` | Real PostgreSQL fenced finalization, expiry, cumulative ambiguity, deadline, retry/redrive admission/replay, and reconciliation races. |
 | `test/postgres_webhook_retention_integration_test.go` | Real PostgreSQL ordinary dependency-aware cleanup and horizon/redrive/legal-hold races. |
 | `test/postgres_webhook_privacy_integration_test.go` | Real PostgreSQL event deletion, namespace batch/resume, action replay/conflict, tombstone/readback/no-resurrection, and shared-destination preservation. |
+| `test/postgres_webhook_operator_integration_test.go` | Real PostgreSQL owner-scoped paginated redacted inspection plus replayable missing-target/state-conflict action receipts. |
 | `test/webhook_network_integration_test.go` | Controlled resolver/dial/TLS/receiver matrix across DNS rebinding, stage failures, ambiguity, response caps, rotation, and one-send proof. |
 | `test/webhook_process_integration_test.go` | External `/webhook-worker` startup, cached readiness, PostgreSQL loss/recovery, SIGTERM drain, crash/restart, and exact-image process behavior. |
 | `test/postgres_webhook_fixtures_integration_test.go` | Shared PostgreSQL fixture/schema setup and owner-scoped row assertions only. |
@@ -874,7 +923,7 @@ seam.
 
 | File or surface | Exact future action |
 | --- | --- |
-| `migrations/000005_postgres_webhooks.sql` | One transactional canonical schema source for the ten relations plus the fairness sequence, checks, foreign keys, uniqueness, indexes, and `Down`; filename uses the reopen rule above. |
+| `migrations/000005_postgres_webhooks.sql` and `migrations/000006_postgres_webhook_reference_repairs.sql` | Published initial schema plus additive reference-audit repair for named horizons/legal hold, mixed-writer infinity sentinels and bounded backfill, database policy/authorization constraints, normalized retry/key evidence, operator retention, and retired-destination tombstones. Both are transactional and append-only. |
 | `internal/infra/postgres/queries/postgres_webhooks.sql` | All webhook SQLC statements; no runtime SQL outside this owner. |
 | `scripts/init-module.sh` | Add `WEBHOOKS=none|durable`, require PostgreSQL for durable, write `template.lock`, remove all webhook files/migrations/tests/docs when none, retain shared `outboundtrust` when HTTP or webhooks needs it, and regenerate SQLC once after sibling profile decisions. |
 | `scripts/ci/template-init-check.sh` | Add webhook retained/removal fixtures and an independent `DATABASE=postgres WEBHOOKS=durable OUTBOX=none MESSAGING=none OUTBOUND_HTTP=none` compile/check profile. |
@@ -988,13 +1037,10 @@ production readiness. At that revision, only this receipt and `status: ready`
 followed the reviewed pair; neither changed a design decision, owner, flow,
 rollout edge, or reopen condition.
 
-Technical Design is complete: the complementary Go Ownership panel and the
-independent Technical Design reviewer passed the fixed candidate. The
-non-trivial deployment sequence is persisted in [`../rollout.md`](../rollout.md)
-as `draft`; its architecture and rollback boundaries are fixed here, while
-exact executable proof references must be supplied by the next Test Design
-macro phase before it can become `ready` for Planning.
-
-This macro phase does not authorize Test Design, `tasks.md`, migration creation,
-code, deployment, or production verification. The next authorized handoff is
-Test Design for the reviewed W1-W17 design and rollout gates.
+Those receipts are historical evidence for the named fixed revisions. They do
+not review the reference-audit repair delta after candidate `282b15e0`; that
+delta requires fresh independent review before T1 acceptance. The current
+Specification, Technical Design, Test Design, and rollout artifacts remain the
+behavior and proof authorities, while `tasks.md` records the reopened
+Implementation boundary. No local receipt authorizes deployment or production
+verification.

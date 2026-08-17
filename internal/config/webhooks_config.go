@@ -77,6 +77,9 @@ func validateWebhooks(cfg WebhooksConfig, postgres PostgresConfig, http HTTPConf
 	if cfg.ResponseHeaderTimeout > cfg.AttemptTimeout || cfg.AttemptTimeout > cfg.DrainTimeout {
 		return fmt.Errorf("%w: webhook header, attempt, and drain budgets must nest", ErrValidate)
 	}
+	if cfg.AttemptTimeout > 10*time.Minute || cfg.DrainTimeout > 30*time.Minute {
+		return fmt.Errorf("%w: webhook attempt and drain budgets exceed engine ceilings", ErrValidate)
+	}
 	if http.GracePeriod <= cfg.DrainTimeout {
 		return fmt.Errorf("%w: http.grace_period must exceed webhooks.drain_timeout", ErrValidate)
 	}

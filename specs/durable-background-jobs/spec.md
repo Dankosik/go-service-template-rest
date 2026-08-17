@@ -38,10 +38,11 @@ Out of scope, with the condition that reopens each boundary:
   status, list, cancel, retry, or redrive contract. A concrete caller or
   operator API requires its own Specification, identity, authorization,
   disclosure, pagination, concurrency, and error semantics before exposure.
-- **Business policy values.** A generic pack defines required policy slots and
-  safe absence behavior. It does not choose an effect's duplicate tolerance,
-  retry budget, calendar meaning, latency SLO, tenant fairness, data retention,
-  operator roles, deployment window, or database capacity for an adopter.
+- **Business policy values.** A generic pack validates only policy it can
+  execute and defines fail-closed adopter checkpoints for the rest. It does not
+  accept self-attested strings as proof of an effect's duplicate tolerance,
+  calendar meaning, latency SLO, tenant fairness, data retention, operator
+  roles, deployment window, or database capacity.
 - **Technical representation and placement.** Package names, interfaces,
   schemas, SQL, configuration keys, process/binary composition, library
   adapters, retry algorithms, metric names, and generated-source changes belong
@@ -184,36 +185,44 @@ intent is rejected.
 Actor: the worker process admitting a typed handler, and the producer trying to
 accept that kind.
 
-Rule: a kind is admitted only when its external owner has supplied all
-behavior-changing values required for that kind:
+Rule: a reusable definition is admitted only when every value the generic
+engine executes is present and valid:
 
-- stable kind and argument compatibility rules;
+- stable kind, argument and policy revision plus strict argument validation;
+- ambiguous-effect action;
+- maximum attempts and elapsed retry age, backoff cap and jitter rule,
+  downstream retry-hint precedence, and recovery-wave bound;
+- manual-recovery eligibility by terminal class, required evidence, and budget
+  reset/preservation semantics; and
+- maximum attempt duration covered by the process termination envelope.
+
+Production emission remains closed until the external owner also supplies and
+proves every behavior-changing value outside the generic engine:
+
 - producer-key scope, immutable intent, and recognition lifetime;
 - business-effect key plus the B5 duplicate/late-effect policy;
 - retryable, permanent, poison, cancellation, and operator-actionable failure
   classifications;
-- per-attempt maximum duration/cost, maximum attempts, maximum elapsed age,
-  backoff cap and jitter rule, downstream retry-hint precedence, and
-  recovery-wave admission rule;
-- manual-recovery eligibility by terminal class, required remediation or
-  duplicate-risk evidence, and whether a recovery cycle resets attempt and
-  elapsed-age budgets;
 - one-off schedule policy when scheduling is used;
-- maximum useful duration, partial-effect behavior, and fit within the
-  deployment termination envelope;
+- maximum useful duration and partial-effect behavior;
 - payload classification, redaction, retention/deletion policy, and required
-  operator roles; and
-- explicit work class. Additional priority, queue, or tenant-isolation policy
-  is required only if that feature is enabled.
+  operator roles;
+- target termination, capacity, and operational evidence; and
+- any priority, queue, fairness, or tenant-isolation policy beyond the fixed
+  neutral baseline.
 
-Missing or invalid policy prevents producer acceptance for that kind and keeps
-a worker configured to serve it not ready. The pack does not substitute a
-library default. Before any kind exists, the selected generic pack may build
-and migrate but has no production-ready handler surface to claim.
+Missing or invalid executable policy prevents definition registration. Missing
+external evidence keeps production emission and the corresponding operator or
+recovery surface disabled; the generic pack does not encode an unverifiable
+string merely to make construction pass. Before any kind exists, the selected
+generic pack may build and migrate but has no production-ready handler surface
+to claim.
 
-Falsifier: omit each required policy slot in turn. Producer admission is
-rejected, the worker does not claim that kind, and diagnostics name the missing
-slot without exposing sensitive values.
+Falsifier: omit each executable definition field in turn. Registration is
+rejected and diagnostics name the missing field without exposing sensitive
+values. Structural/profile proof shows that periodic, multi-class and generic
+operator surfaces remain absent; adopter receipts, not Definition strings,
+close their production checkpoints.
 
 ### B5 — Attempts are at least once; each kind owns duplicate-effect safety
 
@@ -390,16 +399,21 @@ zero values. New consumers are admitted before producers switch kind or queue,
 and old registrations are removed only after authoritative state proves no live
 job requires them and the delivery owner reaches the deletion checkpoint.
 
-A worker registry that is incomplete or incompatible at startup is not ready
-and makes no claims. If an individual accepted record is nevertheless unknown
-or undecodable, no business handler runs; the record becomes retained,
-observable compatibility poison for authorized recovery rather than looping or
-being discarded.
+A worker registry that cannot cover every execution-required row (`ready`,
+`scheduled`, `retry_wait`, `running`, or `cancel_requested`) is not ready and
+makes no claims. Terminal history remains retained and observable, but an
+unsupported terminal revision does not globally stop unrelated live work.
+Because this pack exposes no manual recovery path, any future redrive must first
+prove the exact stored revision is registered; otherwise the action is rejected
+without changing the row. If an execution-required record is unknown or a known
+payload is undecodable, no business handler runs: the former closes admission,
+and the latter becomes retained poison rather than looping or being discarded.
 
 Falsifier: roll N and N-1 producers/workers forward and back with ready,
-scheduled, retrying, paused, and terminal-redriveable jobs. Every live job is
-handled by a compatible worker or retained visibly; no rename strands work and
-no decoded zero value changes business meaning.
+scheduled, retrying, paused, and terminal jobs. Every execution-required job is
+handled by a compatible worker or retained visibly; unsupported terminal
+history does not stop known live work and cannot be redriven; no rename strands
+work and no decoded zero value changes business meaning.
 
 ### B11 — API and worker readiness are separate truths
 
@@ -438,7 +452,7 @@ The generic capability emits enough evidence to distinguish:
 - enqueue accepted, rejected, and producer-duplicate outcomes;
 - ready, scheduled, retry, running, and terminal depth plus oldest age;
 - attempt start, queue delay, duration, success, retry, exhaustion, permanent
-  failure, poison, cancellation, rescue, outcome unknown, and manual recovery;
+  failure, poison, cancellation, rescue, and outcome unknown;
 - worker and claim capacity, PostgreSQL pool/WAL/vacuum pressure, and shutdown
   drain outcome; and
 - logical job, attempt, producer, schedule occurrence, business effect,
@@ -519,9 +533,11 @@ or scale the API process.
 ## Decisions, constraints, and authorities
 
 - **D1 — Generic Specification is ready without adopter values.** Research
-  explicitly closes unavailable adopter values to policy slots, safe absence,
-  and named checkpoints. Each missing value rejects or disables only the
-  concrete behavior it governs; no `TBD` or upstream default can become policy.
+  closes unavailable adopter values to safe absence and named checkpoints.
+  Executable generic policy validates in code; external business/data/operator
+  evidence is not represented by a placeholder field. Each missing value
+  disables only the concrete behavior it governs; no `TBD`, self-attestation,
+  or upstream default can become policy.
 - **D2 — Transaction ownership does not move.** The existing `pgx.Tx` caller
   owns begin, commit, rollback, and retry. `ErrCommitUnknown` remains ambiguous
   until current-writer readback. Reopen only if business state and job

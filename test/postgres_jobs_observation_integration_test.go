@@ -36,7 +36,11 @@ func TestPostgresJobsObservation(t *testing.T) {
 	}
 	unknown := stageDuePostgresJob(ctx, t, pool, store, "observe-unknown-revision")
 	if _, err := pool.PGX().Exec(ctx, `UPDATE postgres_jobs SET kind = 'unknown' WHERE logical_job_id = $1`, string(unknown.Identity().LogicalJobID)); err != nil {
-		t.Fatalf("seed unknown retained revision: %v", err)
+		t.Fatalf("seed unknown required revision: %v", err)
+	}
+	terminalUnknown := stageDuePostgresJob(ctx, t, pool, store, "observe-terminal-unknown-revision")
+	if _, err := pool.PGX().Exec(ctx, `UPDATE postgres_jobs SET kind = 'terminal-unknown', state = 'permanent', terminal_at = clock_timestamp() WHERE logical_job_id = $1`, string(terminalUnknown.Identity().LogicalJobID)); err != nil {
+		t.Fatalf("seed terminal historical revision: %v", err)
 	}
 
 	session := acquirePostgresJobsSession(ctx, t, store)
@@ -53,8 +57,8 @@ func TestPostgresJobsObservation(t *testing.T) {
 		{Kind: "acceptance", ArgsVersion: "v1", PolicyVersion: "v1"},
 		{Kind: "unknown", ArgsVersion: "v1", PolicyVersion: "v1"},
 	}
-	if !slices.Equal(observation.RetainedRevisions, wantRevisions) {
-		t.Fatalf("retained revisions = %+v, want %+v", observation.RetainedRevisions, wantRevisions)
+	if !slices.Equal(observation.RequiredRevisions, wantRevisions) {
+		t.Fatalf("required revisions = %+v, want %+v", observation.RequiredRevisions, wantRevisions)
 	}
 
 	type stateRow struct {

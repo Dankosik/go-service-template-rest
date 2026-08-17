@@ -1,11 +1,4 @@
-package config
-
-import (
-	"os"
-	"path/filepath"
-	"strings"
-	"testing"
-)
+package //nolint:paralleltest // This test mutates process-global environment or working directory.
 
 // TestLoadsAKubernetesProjectedConfigFile is the deployment the deleted path
 // policy made impossible.
@@ -17,6 +10,15 @@ import (
 // config file both failed at boot. The path arrives on this process's own argv, at
 // the same trust level as the binary, so there was nothing on the other side of
 // that trade.
+config
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
 func TestLoadsAKubernetesProjectedConfigFile(t *testing.T) {
 	resetConfigEnv(t)
 	// Anything other than local is what used to switch the hardened policy on.

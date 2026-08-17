@@ -12,7 +12,7 @@ func TestWebhookWorkerConstructor(t *testing.T) {
 }
 
 func TestWebhookOwnerScope(t *testing.T) {
-	base := ActionRequest{OwnerScope: "owner-a", Actor: "actor-a", ActionID: "action-a", Kind: ActionDestinationState, TargetKind: "destination", TargetID: "dest-a", TargetGeneration: 1, Expected: "1", Reason: "admin_disable", Values: []string{"disabled", ""}}
+	base := ActionRequest{OwnerScope: "owner-a", Actor: "actor-a", ActionID: "action-a", Kind: ActionDestinationState, TargetKind: "destination", TargetID: "dest-a", TargetGeneration: 1, ExpectedRevision: 1, Reason: "admin_disable", Payload: &DestinationStateAction{Disposition: "disabled"}}
 	first, err := base.Fingerprint()
 	if err != nil {
 		t.Fatal(err)

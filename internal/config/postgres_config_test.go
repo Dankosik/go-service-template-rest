@@ -1,4 +1,16 @@
-package config
+package //nolint:paralleltest // This test mutates process-global environment or working directory.
+
+// The three tests below hold the budgets this section shares with HTTP. They
+// live here rather than in validate_test.go because validatePostgres owns those
+// rules, and because a build profile that removes Postgres removes this file
+// whole instead of cutting marked blocks out of a shared one.
+//nolint:paralleltest // This test mutates process-global environment or working directory.
+
+// TestAcquireTimeoutMustLeaveQueryBudget keeps the two numbers one budget. An
+// acquire budget at or above the request budget is not a bound: a caller that
+// waited it out has nothing left to run a query with, which is the unbounded
+// wait this setting replaced.
+config
 
 import (
 	"errors"
@@ -130,10 +142,6 @@ func TestMinIdleConnsMustFitPool(t *testing.T) {
 	}
 }
 
-// The three tests below hold the budgets this section shares with HTTP. They
-// live here rather than in validate_test.go because validatePostgres owns those
-// rules, and because a build profile that removes Postgres removes this file
-// whole instead of cutting marked blocks out of a shared one.
 func TestStatementTimeoutMustFitRequestBudget(t *testing.T) {
 	for _, tc := range []struct {
 		name             string
@@ -186,10 +194,6 @@ func TestHTTPAdmissionAndPoolCapacityAreIndependent(t *testing.T) {
 	}
 }
 
-// TestAcquireTimeoutMustLeaveQueryBudget keeps the two numbers one budget. An
-// acquire budget at or above the request budget is not a bound: a caller that
-// waited it out has nothing left to run a query with, which is the unbounded
-// wait this setting replaced.
 func TestAcquireTimeoutMustLeaveQueryBudget(t *testing.T) {
 	for _, tc := range []struct {
 		name           string

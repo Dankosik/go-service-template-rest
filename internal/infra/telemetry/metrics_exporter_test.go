@@ -202,6 +202,10 @@ func TestSetupMetricsPushesToOTLPCollector(t *testing.T) {
 // the deployments that scrape, which is the shape the template shipped with.
 //
 //nolint:paralleltest // Mutates the process-wide OpenTelemetry MeterProvider.
+//nolint:paralleltest // This test mutates process-global environment or working directory.
+
+// TestConflictingMetricExporterEnvNamesUnverifiableMaterial keeps injected
+// credentials from travelling to a collector this service named.
 func TestSetupMetricsWithoutEndpointStaysScrapeOnly(t *testing.T) {
 	telemetrytest.ClearAmbientExporterEnv(t)
 	telemetrytest.RestoreGlobals(t)
@@ -238,8 +242,6 @@ func TestSetupMetricsWithoutEndpointStaysScrapeOnly(t *testing.T) {
 	}
 }
 
-// TestConflictingMetricExporterEnvNamesUnverifiableMaterial keeps injected
-// credentials from travelling to a collector this service named.
 func TestConflictingMetricExporterEnvNamesUnverifiableMaterial(t *testing.T) {
 	telemetrytest.ClearAmbientExporterEnv(t)
 	t.Setenv("OTEL_EXPORTER_OTLP_METRICS_HEADERS", "authorization=Bearer injected")

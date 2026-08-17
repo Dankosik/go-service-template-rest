@@ -52,7 +52,9 @@ func TestUnboundStoreAndSessionFailBeforeIssuingDatabaseWork(t *testing.T) {
 			return err
 		}},
 		{name: "rescue candidates", call: func() error {
-			_, err := session.RescueCandidates(ctx, 1)
+			_, err := session.RescueCandidates(ctx, RescueCandidateOptions{
+				Limits: []RescueLimit{{Revision: revision, MaxRecoveryWave: 1}}, Limit: 1,
+			})
 			return err
 		}},
 		{name: "rescue", call: func() error {

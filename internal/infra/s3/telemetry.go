@@ -2,6 +2,7 @@ package s3
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"time"
 
@@ -99,6 +100,9 @@ func (c *operationCall) finish(err error, bytes int64) {
 		if err != nil {
 			result = boundedResult(objectstorage.Kind(err))
 			phase = failurePhase(result)
+			if failure, ok := errors.AsType[*providerFailureError](err); ok && failure.phase != "" {
+				phase = failure.phase
+			}
 		}
 		attrs := metric.WithAttributes(
 			attribute.String("object_storage.operation", string(c.name)),
@@ -117,15 +121,41 @@ func (c *operationCall) finish(err error, bytes int64) {
 		if c.name == telemetryOperationPresign && err == nil {
 			c.telemetry.issuances.Add(context.Background(), 1)
 		}
-		c.span.SetAttributes(
+		spanAttributes := []attribute.KeyValue{
 			attribute.String("object_storage.operation", string(c.name)),
 			attribute.String("object_storage.result", result),
 			attribute.String("object_storage.phase", phase),
 			attribute.String("object_storage.transfer_path", boundedPath(c.path)),
 			attribute.String("object_storage.cleanup", boundedCleanup(c.cleanup)),
-		)
+		}
+		spanAttributes = append(spanAttributes, providerSpanAttributes(err)...)
+		c.span.SetAttributes(spanAttributes...)
 		c.span.End()
 	})
+}
+
+func providerSpanAttributes(err error) []attribute.KeyValue {
+	failure, _ := errors.AsType[*providerFailureError](err)
+	if failure == nil {
+		return nil
+	}
+	attributes := make([]attribute.KeyValue, 0, 5)
+	if failure.attempts > 0 && failure.attempts <= 3 {
+		attributes = append(attributes, attribute.Int("object_storage.attempts", failure.attempts))
+	}
+	if failure.status >= 100 && failure.status <= 599 {
+		attributes = append(attributes, attribute.Int("http.response.status_code", failure.status))
+	}
+	if failure.code != "" {
+		attributes = append(attributes, attribute.String("object_storage.provider_code", failure.code))
+	}
+	if failure.category != "" {
+		attributes = append(attributes, attribute.String("object_storage.failure_category", failure.category))
+	}
+	if failure.requestID != "" {
+		attributes = append(attributes, attribute.String("object_storage.provider_request_id", failure.requestID))
+	}
+	return attributes
 }
 
 func boundedResult(kind objectstorage.ErrorKind) string {
@@ -148,7 +178,7 @@ func boundedPath(path string) string {
 }
 
 func boundedCleanup(cleanup string) string {
-	if cleanup == string(objectstorage.CleanupNone) || cleanup == string(objectstorage.CleanupComplete) || cleanup == string(objectstorage.CleanupPending) {
+	if cleanup == string(objectstorage.CleanupNone) || cleanup == string(objectstorage.CleanupPending) {
 		return cleanup
 	}
 	return "unknown"

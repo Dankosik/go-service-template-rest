@@ -72,4 +72,20 @@ func TestPostgresJobsFinalize(t *testing.T) {
 			t.Fatalf("Finalize(expired current attempt) = %+v, %v", result, err)
 		}
 	})
+
+	t.Run("attempt budget mismatch is fenced", func(t *testing.T) {
+		_, claimed := claimPostgresJob(ctx, t, pool, store, "finalize-budget-mismatch", "worker-budget-mismatch", time.Minute)
+		session := acquirePostgresJobsSession(ctx, t, store)
+		defer session.Release(ctx)
+		result, err := session.Finalize(ctx, postgresjobs.FinalizeInput{
+			Attempt: claimed.Attempt,
+			Transition: jobs.Transition{
+				State: jobs.StateSucceeded, AttemptsUsed: claimed.AttemptNumber + 1,
+				ElapsedUsed: time.Second, Outcome: jobs.OutcomeSuccess, Effect: jobs.EffectCompleted,
+			},
+		})
+		if err != nil || result.Status != postgresjobs.TransitionStale {
+			t.Fatalf("Finalize(counter mismatch) = %+v, %v, want stale", result, err)
+		}
+	})
 }

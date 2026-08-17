@@ -38,19 +38,15 @@ func TestEngineClaimRegistersKnownCommitBeforeHandlerStarts(t *testing.T) {
 		run := make(chan error, 1)
 		go func() { run <- engine.Run(context.Background()) }()
 		<-claimStarted
-		acknowledged := make(chan EngineFacts, 1)
-		go func() { acknowledged <- engine.Facts() }()
-		select {
-		case facts := <-acknowledged:
-			t.Fatalf("drain acknowledgement saw %+v before claim registration", facts)
-		default:
+		if facts := engine.Facts(); facts.InFlight != 0 || !facts.ClaimAdmissionOpen {
+			t.Fatalf("Facts() during claim = %+v, want responsive open admission without registered work", facts)
 		}
 		close(releaseClaim)
 		if err := <-run; err != nil {
 			t.Fatalf("Run() error = %v", err)
 		}
 		<-started
-		if got := (<-acknowledged).InFlight; got != 1 {
+		if got := engine.Facts().InFlight; got != 1 {
 			t.Fatalf("in-flight handlers = %d, want registered handler", got)
 		}
 		assertJobsEvent(t, reader, "claim", jobs.OutcomeSuccess)
@@ -160,6 +156,34 @@ func TestEngineClaimUnknownCommitWithNoResolvedAttemptDoesNotRecordEvent(t *test
 		}
 		assertNoJobsEvent(t, reader, "claim", jobs.OutcomeSuccess)
 	})
+}
+
+func TestEngineClaimUnknownCommitWithLostSessionDoesNotReadBackOrDispatch(t *testing.T) {
+	claim := engineClaim()
+	resolved := false
+	started := false
+	store := &engineStoreStub{
+		claim: func(context.Context, ClaimOptions) (ClaimResult, error) {
+			return ClaimResult{Attempts: []ClaimedAttempt{claim}}, errors.Join(postgres.ErrCommitUnknown, ErrSessionTerminal)
+		},
+		resolve: func(context.Context, []AttemptIdentity) ([]ClaimResolution, error) {
+			resolved = true
+			return nil, nil
+		},
+	}
+	engine, err := newEngine(store, engineRegistry(t, func(context.Context, jobs.HandlerInput[engineArgs]) jobs.HandlerResult {
+		started = true
+		return jobs.HandlerResult{}
+	}), engineConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := engine.Run(context.Background()); !errors.Is(err, ErrSessionTerminal) {
+		t.Fatalf("Run() error = %v, want ErrSessionTerminal", err)
+	}
+	if resolved || started {
+		t.Fatalf("lost Session resolved/dispatched = %t/%t, want neither", resolved, started)
+	}
 }
 
 func TestEngineClaimCoverageFaultClosesAdmission(t *testing.T) {

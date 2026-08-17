@@ -290,15 +290,18 @@ enforces transport safety at use time.
 The baseline admits only an absolute `https` URL with a non-empty host, port
 443 (explicit or implicit), an optional path, and no user information, query,
 fragment, embedded credential, or alternate authority. Standard certificate
-and hostname verification is mandatory. Endpoint changes create a new
-destination generation.
+and hostname verification is mandatory. TLS 1.3 is the default minimum; TLS
+1.2 requires an explicit immutable destination compatibility policy. Endpoint
+changes create a new destination generation.
 
 Before every attempt and every new connection, the engine resolves and checks
 all resulting IPv4 and IPv6 addresses. If any answer is loopback, private,
 link-local, multicast, unspecified, metadata, documentation, benchmarking, or
 otherwise non-public/special-use under the current IANA registries, the entire
-answer set is denied. The actual dial address is checked again immediately
-before connection. CNAMEs, mixed answers, DNS changes between registration and
+bounded answer set is denied. The actual dial address is checked again
+immediately before connection. A later admitted address may be tried only when
+the prior candidate definitely wrote no HTTP request. CNAMEs, mixed answers,
+DNS changes between registration and
 send, and pooled-connection replacement cannot bypass the rule.
 
 Environment proxies are disabled. A resolver, dialer, proxy, or transport that
@@ -562,6 +565,11 @@ The following precedence holds:
    work non-sendable and non-redrivable, records the tombstone defined below,
    and never fabricates a delivery outcome.
 
+A legal hold or release is a replay-safe owner-scoped operator action on one
+delivery with a stable action ID and expected current cycle. Ordinary cleanup
+cannot remove held facts; privacy deletion remains the separately authorized
+higher-precedence transition.
+
 Privacy deletion is an explicit terminal content-lifecycle transition named
 `privacy_deleted`; it is orthogonal to the last delivery outcome. Before
 removing content, the engine durably records the minimum owner-scoped
@@ -571,6 +579,12 @@ identities, last semantic delivery/ambiguity class, deletion authority and
 time, and no payload, URL, secret, signature, response content, or reversible
 content digest. The deletion is not complete until the tombstone is durable and
 the governed content is authoritatively absent.
+
+An authorized privacy deletion request for an event that is not present still
+records the permanent minimum event-identity tombstone and the replay-safe
+`not_found` action receipt in one transaction. It stores no invented event,
+fan-out, delivery, payload, destination, or outcome fact; its purpose is to
+close the acceptance/deletion race so later reuse cannot resurrect content.
 
 An authoritative read of any retained identity returns `privacy_deleted`, the
 non-content identities the caller is authorized to see, and the prior semantic
@@ -616,6 +630,9 @@ same destination generation is currently authorized and transport-admissible,
 and an owner-approved finite redrive attempt/age budget is supplied. Admission
 atomically prevents a scheduled automated retry from racing the action.
 Repeating the same operator-action ID returns the original result.
+If the target is missing or its expected state conflicts, the bounded action
+request and `not_found` or `state_conflict` result remain replayable through the
+engine's finite maximum action horizon; no target state is invented.
 
 A successful redrive admission records `redrive_accepted_at` from the same
 durable UTC clock and fixes that recovery cycle's deadline as
@@ -687,6 +704,13 @@ observation; bounded outcome/error trends; retry/redrive budget consumption;
 and the append-only event -> delivery -> attempt -> operator-action chain. It
 returns no secret or raw response content and applies subscriber scope before
 lookup.
+
+The reusable store inspection primitive is transport-neutral, requires owner
+scope plus delivery identity, and independently paginates cycles, attempts, and
+actions under fixed page ceilings. Its returned chain excludes payloads, URLs,
+DNS answers/selected addresses, key references, signatures, request payloads,
+and arbitrary notes; a public adapter remains responsible for principal/role
+authorization, rate limits, and audit policy before calling it.
 
 Readiness and alert signals distinguish store/worker observation freshness,
 backlog age, destination health cohorts, retry exhaustion, outcome unknown,

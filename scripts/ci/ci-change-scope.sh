@@ -46,7 +46,7 @@ is_template_independent_path() {
     internal/objectstorage/* | internal/infra/s3/* | \
       cmd/service/internal/bootstrap/startup_object_storage*.go | \
       internal/config/object_storage_config*.go | \
-      test/s3_object_storage_conformance_integration_test.go | \
+      test/s3conformance/conformance_test.go | \
       docs/s3-compatible-object-storage.md | \
       scripts/ci/s3-source-receipt.sh)
       return 1
@@ -58,7 +58,7 @@ is_template_independent_path() {
 	case "${path}" in
 	  internal/outboundtrust/* | internal/infra/postgreswebhook/* | cmd/webhook-worker/* | \
       internal/config/webhooks_config*.go | internal/infra/postgres/queries/postgres_webhooks.sql | \
-      internal/infra/postgres/sqlcgen/postgres_webhooks.sql.go | migrations/*_postgres_webhooks.sql | \
+      internal/infra/postgres/sqlcgen/postgres_webhooks.sql.go | migrations/*_postgres_webhook*.sql | \
       test/postgres_webhook_*_test.go | test/webhook_*_integration_test.go | \
       docs/outbound-webhook-delivery.md)
       return 1
@@ -176,12 +176,13 @@ self_test() {
   # profile:object-storage:start
   assert_template_required true internal/objectstorage/store.go
   assert_template_required true internal/infra/s3/client.go
-  assert_template_required true test/s3_object_storage_conformance_integration_test.go
+  assert_template_required true test/s3conformance/conformance_test.go
   assert_template_required true docs/s3-compatible-object-storage.md
   # profile:object-storage:end
   # profile:webhooks-durable:start
   assert_template_required true internal/outboundtrust/public_address.go
   assert_template_required true internal/infra/postgreswebhook/store.go
+  assert_template_required true migrations/000006_postgres_webhook_reference_repairs.sql
   assert_template_required true cmd/webhook-worker/main.go
   assert_template_required true test/webhook_network_integration_test.go
   assert_template_required true docs/outbound-webhook-delivery.md

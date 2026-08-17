@@ -68,8 +68,8 @@ The only initial adopter certification targets are exactly this pair:
 
 | Provider target | Required target form | Credential modes | Provider-specific fixed value |
 | --- | --- | --- | --- |
-| Amazon S3 | Commercial-partition regional endpoint and a general-purpose bucket with versioning never enabled | `static` | the signing region equals the configured bucket region |
-| Cloudflare R2 | Account S3 API endpoint and one R2 bucket | `static` | signing region is exactly `auto` |
+| Amazon S3 | Commercial-partition regional endpoint and a general-purpose bucket with versioning never enabled | explicit temporary snapshot (`static` plus session token) | the signing region equals the configured bucket region and the expected bucket owner is the 12-digit AWS account ID |
+| Cloudflare R2 | Exact default, EU, or FedRAMP account S3 API endpoint and one R2 bucket | explicit static snapshot, optionally temporary with a session token | signing region is exactly `auto`; expected-owner fields are omitted because R2 does not implement them |
 
 An adopter may claim a target is "supported" only when that exact tuple of
 provider target, endpoint, region,
@@ -86,10 +86,10 @@ The common wire subset contains only:
 | --- | --- | --- |
 | Upload at or below the multipart threshold | `PutObject`: bucket, validated common key, declared content length, optional content type, selected checksum fields, and `If-None-Match: *` only for create-only | completion, or one closed error kind |
 | Upload above the threshold | `CreateMultipartUpload`, serial `UploadPart`, `CompleteMultipartUpload`, `AbortMultipartUpload`, and cleanup-only `ListParts`; bucket, validated common key, declared total size, optional content type, selected checksum fields, upload ID, part number, and internal part ETag | completion, or one closed error kind plus cleanup disposition |
-| Download | whole-object `GetObject`: bucket, validated common key, checksum-validation request fields | a bounded body stream plus size, optional content type, and last-modified time |
+| Download | mediated whole-object `GetObject`: bucket, validated common key, checksum-validation request fields, and no range field | a bounded body stream plus size, optional content type, and last-modified time |
 | Metadata | `HeadObject`: bucket and validated common key | size, optional content type, and last-modified time |
 | Delete | unversioned `DeleteObject`: bucket and validated common key | provider-operation completion only |
-| Presigned access | SigV4 presign of whole-object `GetObject`: bucket, validated common key, expiry, and signer-selected headers | exact `GET` method, bearer URL, required headers, and signature expiry |
+| Presigned access | SigV4 presign of `GetObject`: bucket, validated common key, expiry, and signer-selected fields | exact `GET` method, bearer URL, required opaque headers, and signature expiry; an unsigned client `Range` header may request a partial representation |
 
 The feature surface exposes no bucket, endpoint, region, provider request type,
 HTTP status, provider code, upload ID, part ETag, object ETag, version ID,
@@ -154,17 +154,27 @@ provider, endpoint, signing region, bucket, credential mode, maximum object
 bytes, global active-operation ceiling, maximum adapter working-memory bytes,
 multipart threshold, maximum operation duration, and maximum presign expiry.
 Every bound is positive and finite; the threshold is within the object ceiling
-and provider multipart constraints. Missing, empty, inconsistent, or
+and provider multipart constraints. Amazon's maximum object ceiling is 5 TiB;
+R2's portable ceiling is 5 TiB minus 5 GiB, matching its documented effective
+maximum rather than inheriting Amazon's nominal limit. Missing, empty, inconsistent, or
 unprovable values fail startup before network I/O.
 
-The only initial credential mode is `static`: an explicitly injected
-access-key identifier and secret, plus an optional session token. Secret values
-come only from the repository's `APP__...` environment channel, never
-non-empty YAML. The immutable process snapshot neither discovers nor refreshes
-credentials. Rotation, replacement of an expired session credential, or
-recovery from revocation requires a new process with a new validated snapshot.
-An R2 temporary access key is still explicit static input with its external
-expiry owner.
+The only initial credential mechanism is an explicit process snapshot: an
+injected access-key identifier and secret plus an optional session token.
+Secret values come only from the repository's `APP__...` environment channel,
+never non-empty YAML. Amazon certification requires a session token so the
+snapshot is temporary rather than a long-lived IAM-user access key. R2 may use
+a narrowly scoped long-lived API token or a temporary credential with a session
+token; its exact credential class is recorded in the R2-only receipt.
+
+The process neither discovers nor refreshes credentials. Rotation,
+replacement of an expired session credential, or recovery from revocation
+requires a rolling process replacement with a new validated snapshot. This is
+an explicit portability boundary, not AWS workload-identity support: an adopter
+running on AWS compute must either deliver a temporary snapshot and own timely
+replacement, or reopen this rule for one named refreshable role source. The
+template must not describe static-only construction as current AWS workload
+identity best practice.
 
 There is no anonymous, default-chain, shared-file, named-profile, web-identity,
 container-task, instance-metadata, or fallback mode. AWS workload identity
@@ -178,8 +188,16 @@ of changing the signed target, credential, or operation policy is ignored or
 rejected visibly at startup.
 
 The endpoint is an absolute HTTPS origin with no user info, path, query, or
-fragment. Address style is fixed to virtual-hosted. The bucket must be valid for
-that style and contain no dot, so the only request authority is the validated
+fragment. Amazon accepts only its exact commercial regional hostname and
+requires a 12-digit expected bucket owner on every supported mediated request
+and in the signed query of its presigned GET. R2 accepts only a
+32-lowercase-hex account ID followed by the documented default, `eu`, or
+`fedramp` S3 hostname; arbitrary subdomains are rejected. Address style is
+fixed to virtual-hosted. The bucket must be valid for that style and contain no
+dot. The portable namespace is 3–63 lowercase alphanumeric or hyphen
+characters, starts and ends alphanumeric, and rejects Amazon's reserved
+prefixes/suffixes, including account-regional `-an`; supporting that namespace
+requires its own authority and ownership decision. The only request authority is the validated
 `<bucket>.<endpoint-host>` authority. TLS validates that host against normal
 trusted roots. Redirects, proxies, region correction, alternate endpoints, and
 authority rewriting are refused. DNS resolution must remain in the external
@@ -204,12 +222,22 @@ ceiling. At capacity a new call returns `busy` before body read, signing, or
 provider I/O; the adapter owns no waiting queue. An
 upload holds admission until its provider result and required cleanup
 disposition are known. A download holds admission until its body reaches EOF or
-is closed. Metadata, delete, and presign hold it until return.
+is closed, or until its effective context ends and closes it. Metadata, delete,
+and presign hold it until return.
 
 At most one provider request is in flight for one admitted operation. Multipart
 parts are uploaded serially. Cleanup replaces, rather than runs beside, the
-failed transfer request. Therefore provider-request concurrency never exceeds
-the configured active-operation ceiling. Static credential use creates no
+failed transfer request. Metadata and the request-to-headers phase of download
+may make at most three sequential attempts under one admission token and the
+same effective deadline, using bounded exponential backoff with jitter. Only a
+non-TLS network error, HTTP `429`, `500`, `502`, `503`, or `504`, or provider
+code `RequestTimeout`, `RequestTimeoutException`, `SlowDown`, or
+`TooManyRequests` is retryable. Cancellation, deadline, DNS/authority refusal,
+TLS verification, `401`, `403`, `404`, integrity failure, and every other
+provider result are terminal. No attempt restarts a returned body. Every
+mutation and each explicit multipart stage remains one-attempt. Therefore
+provider-request concurrency never exceeds
+the configured active-operation ceiling. Explicit credential use creates no
 secondary credential-network request or refresh worker.
 
 The adapter streams mediated bodies and never buffers an entire object. The
@@ -232,15 +260,22 @@ happen.
 Upload requires an exact declared content length no greater than the object
 ceiling before reading the source. The adapter sends exactly that many bytes;
 a short source is failure, and bytes after the declared length remain
-caller-owned and unsent. The caller owns and closes the upload source.
+unsent. Upload takes ownership of an `io.ReadCloser`, closes it exactly once on
+every return path, and cancellation or deadline calls `Close` to interrupt a
+blocked `Read`. The caller must supply a source whose `Close` promptly unblocks
+`Read`; the adapter does not hide an uninterruptible reader in a goroutine.
 
-Download rejects a declared provider size above the object ceiling before
-returning a body. If size is absent or false, the returned stream delivers no
-byte beyond the ceiling and then fails `too_large`. The feature owns closing the
-body on every path. Receiving headers is not download completion: only EOF with
-no deferred read or integrity error is success. Closing early releases
-admission but proves no complete download. Reads after cancellation or deadline
-fail with the matching stable error.
+Download sends no range request and requires a whole-object response before
+exposing the body. HTTP `206` or any `Content-Range` response is closed and
+returns `integrity_failed`. A declared provider size above the object ceiling is
+rejected before returning a body. A missing or negative provider
+`Content-Length` is also rejected before body exposure. The feature owns
+calling `Close` for an early stop; the adapter closes the provider body at
+terminal EOF/error or context end. Receiving headers is not download completion:
+only EOF with no deferred read or integrity error is success.
+Closing early releases admission but proves no complete download; it is not
+reported as caller cancellation unless the context is actually cancelled.
+Reads after cancellation or deadline fail with the matching stable error.
 
 **Falsifier.** Concurrent calls cannot create more provider requests or
 retained adapter memory than the configured ceilings; a saturated call causes
@@ -252,8 +287,9 @@ the bound; cancellation reaches I/O, body read, and multipart progress.
 An upload chooses exactly one feature-owned intent:
 
 - `create_only`: at or below the multipart threshold, the adapter sends
-  `If-None-Match: *`. Existing or concurrently created content returns
-  `precondition_failed` without overwrite. `create_only` above the threshold is
+  `If-None-Match: *`. A documented `412` collision returns
+  `precondition_failed` without overwrite; Amazon's distinct concurrent `409`
+  returns `temporary` for a fresh feature-owned call. `create_only` above the threshold is
   rejected as `invalid` before reading the body because Cloudflare R2 does not
   currently document the completion-time conditional needed for an atomic
   multipart create.
@@ -268,13 +304,16 @@ constraints, and completion verifies the provider's final response rather than
 treating the initial HTTP status alone as success.
 
 On any multipart failure before confirmed completion, the adapter stops new
-parts and attempts `AbortMultipartUpload` only within the operation's remaining
-deadline. It returns one cleanup disposition:
-
-- `complete`: the provider-specific bounded check proves no retained parts for
-  that upload session;
-- `pending`: abort or verification failed, timed out, was cancelled, or cannot
-  rule out an in-flight/retained part.
+parts and attempts cleanup only within the operation's remaining deadline. A
+`CreateMultipartUpload` request whose response is lost yields `pending` because
+the provider may own an upload session whose identifier is unavailable. When an
+upload ID is known, Amazon cleanup performs up to three serial
+`AbortMultipartUpload` plus paginated `ListParts` cycles, with at most ten
+1000-part pages per cycle. A complete non-empty traversal triggers another
+abort; an empty traversal stops the immediate attempt. Every failed multipart
+upload returns cleanup `pending`: Amazon documents that an in-flight part may
+finish after abort, so one bounded observation cannot prove stable terminal
+cleanup. R2 likewise remains `pending`; Amazon evidence is never reused.
 
 The upload ID remains adapter diagnostic state and never reaches the feature.
 The adapter starts no background reconciler. Deployment must configure an
@@ -297,8 +336,8 @@ adapter and receives no adapter checksum-success claim.
 
 **Falsifier.** Single and multipart corruption fail, partial download never
 claims checksum success, the exact threshold selects one path, create-only
-never overwrites, and every failed multipart upload yields either proven
-`complete` or visible `pending` cleanup.
+never overwrites, and every failed multipart upload yields visible `pending`
+cleanup.
 
 ### R6 — Metadata and download expose only portable observations
 
@@ -313,11 +352,14 @@ cache/custom-domain freshness, snapshots, object generations, or list
 consistency. A feature requiring those semantics must name one exact provider
 contract and reopen Specification rather than infer them from this port.
 
-An unambiguous provider absence returns `not_found`. A response that may hide
-absence because the identity lacks disclosure permission returns `denied`; it
-does not guess that an object exists or does not exist. Exact-provider
-conformance must exercise both outcomes with the deployment's intended
-identity policy.
+For `HeadObject`, HTTP `404` with the pinned SDK's status-derived `NotFound` or
+provider `NoSuchKey` returns `not_found`. For `GetObject`, only exact provider
+`NoSuchKey` with HTTP `404` returns `not_found`; a generic `404` or
+`NoSuchBucket` remains `internal` rather than inventing object absence.
+An HTTP `401` or `403` returns `denied`; it may hide absence because the identity
+lacks disclosure permission, so the adapter does not guess that an object
+exists or does not exist. Exact-provider conformance must exercise both outcomes
+with the deployment's intended identity policy.
 
 **Falsifier.** Feature code cannot use metadata as a version token or checksum,
 and a permission-concealed missing object never becomes `not_found` without
@@ -344,17 +386,26 @@ used as proof of historical or physical erasure.
 
 ### R8 — Presigned access is read-only, bounded issuance of a bearer URL
 
-The only presigned operation is whole-object `GET`. The feature authorizes the
+The only presigned operation is object `GET`. The feature authorizes the
 recipient, operation, and key immediately before issuance and requests an
 expiry in whole seconds. The request must be at least one second and no greater
 than both the configured deployment maximum and the SigV4 ceiling of seven
 days; there is no default TTL.
 
 The result contains the exact method `GET`, query-bearing URL, exact headers the
-recipient must send, and the signature expiry instant. The URL is tied to the
+recipient must send, and `SignatureExpiresAt`, the expiry encoded in SigV4. The URL is tied to the
 configured key and fixed virtual-hosted authority. R2 custom domains are not
 eligible. A changed method, key, query value, authority, or signed header fails
-provider signature validation.
+provider signature validation. The recipient treats returned headers as opaque;
+Amazon must include the expected owner in the signed URL query while R2 must not
+receive it. SigV4 commonly signs only `host`, so an additional unsigned `Range` header
+may ask the provider for a partial representation. Issuance therefore
+authorizes `GetObject`, not proof that the recipient will fetch every byte.
+Before returning the bearer value, the adapter requires single canonical SigV4
+algorithm/date/expiry/credential/signed-header/signature query values; exact
+access-key, signing-date, configured-region, `s3`, and `aws4_request` scope;
+session-token presence matching the immutable snapshot; exact requested
+lifetime; and the provider-specific expected-owner rule.
 
 The URL is a reusable bearer credential until the provider stops accepting it.
 It has no one-time-use or revocation guarantee and may become unusable before
@@ -392,7 +443,7 @@ Feature code receives one closed error kind:
 | `not_found` | Exact provider/identity evidence unambiguously proves current absence for this read. |
 | `precondition_failed` | Create-only observed an existing or concurrent target; no overwrite is claimed. |
 | `denied` | Provider policy denied the operation, including a response that deliberately conceals absence. It does not distinguish authentication from authorization. |
-| `temporary` | A bounded non-mutating operation failed in a way exact provider evidence permits the feature to try again under a fresh business decision and deadline. |
+| `temporary` | A bounded non-mutating operation, or Amazon create-only `409 ConditionalRequestConflict`, failed in a provider-documented state that permits the feature to try again under a fresh business decision, source, and deadline. |
 | `integrity_failed` | Required upload or fully consumed download checksum evidence is missing or mismatched. |
 | `cancelled` | Caller cancellation won before a more specific outcome was known. |
 | `deadline_exceeded` | The effective operation deadline expired before a more specific outcome was known. |
@@ -404,12 +455,18 @@ identifier, SDK type, HTTP status, provider code, ETag, version, checksum value,
 or upload ID is feature-visible. The adapter may retain sanitized operation,
 phase, status, provider code, and request ID as internal diagnostic evidence.
 
-The pack performs no automatic storage-operation retry. SDK/client and
-`OUTBOUND_HTTP` operation retries are disabled, so one port call makes at most
-one attempt at each required protocol stage. Metadata and pre-body download may
-return `temporary`; deferred download reads are never silently restarted. A
-mutating transmission failure is
-`outcome_unknown` unless exact evidence proves the effect was not sent.
+The pack performs automatic retry only for metadata and the pre-body request
+phase of download, and only for the finite R4 outcome set. Each has at most
+three attempts, bounded jittered backoff, one admission token, and one effective
+deadline. SDK/client retries remain
+disabled for upload, multipart create/part/complete/abort/list stages, delete,
+and presign. Deferred download reads are never silently restarted. A mutating
+transmission failure is `outcome_unknown` unless exact evidence proves the
+feature-visible effect was not sent. Amazon and R2 documented create-only `412
+PreconditionFailed` map to `precondition_failed`. Amazon-only `409
+ConditionalRequestConflict` maps to `temporary`, matching Amazon's instruction
+to make a fresh upload; the adapter never replays the body. An R2 409 or an
+unrecognized 412 remains conservative rather than borrowing Amazon semantics.
 
 Feature code may make a new call only under its own business semantics. The
 pack never describes upload or delete as generically safe to retry, never turns
@@ -457,8 +514,8 @@ The adapter must let an operator answer:
   ceiling;
 - how many mediated bytes complete upload/download and how often integrity
   fails;
-- whether an upload used single or multipart and whether multipart cleanup was
-  `complete` or `pending`;
+- whether an upload used single or multipart and whether cleanup is `none` or
+  `pending`;
 - whether presign generation succeeded, while explicitly not observing the
   direct transfer;
 - whether credential rejection, endpoint trust, throttling, or the provider
@@ -471,9 +528,27 @@ provider code/message, status text, URL, and checksum are not metric labels.
 The label product must remain within the repository's per-instrument
 cardinality limit, with unknown values collapsed to one bounded fallback.
 
-Structured logs and traces may carry operation, stable result, phase, attempt
-count, byte count, duration, active count, cleanup disposition, and a sanitized
-provider request ID as a non-metric diagnostic field. They never carry key,
+Structured logs and traces may carry operation, stable result, phase, bounded
+attempt count, byte count, duration, active count, cleanup disposition,
+numeric HTTP status, an allowlisted provider code, a closed failure category
+(`credential`, `authority_tls`, `throttle`, `provider`, or `transport`), and a
+provider request ID matching `[A-Za-z0-9._:/+=-]{1,128}` as non-metric
+diagnostic fields. The provider-code allowlist is `AccessDenied`,
+`AuthorizationHeaderMalformed`, `ConditionalRequestConflict`, `ExpiredToken`,
+`InternalError`, `InvalidAccessKeyId`, `InvalidArgument`, `InvalidRequest`,
+`NoSuchBucket`, `NoSuchKey`, `PreconditionFailed`, `RequestTimeTooSkewed`,
+`RequestTimeout`, `RequestTimeoutException`, `ServiceUnavailable`,
+`SignatureDoesNotMatch`, `SlowDown`, and `TooManyRequests`. Unknown non-empty
+codes collapse to `other`; malformed non-empty request IDs collapse to
+`invalid`.
+
+Diagnostic classification has one precedence: HTTP `401` or
+`InvalidAccessKeyId|SignatureDoesNotMatch|ExpiredToken` is `credential`; local
+target refusal or certificate verification is
+`authority_tls`; HTTP `429` or an admitted throttle code is `throttle`; an
+error with no provider response that implements `net.Error` is `transport`;
+any remaining provider response is `provider`; and a local failure carries no
+category. They never carry key,
 bucket, endpoint, body, user metadata, content type, checksum value, access-key
 identifier, credential material, authorization/signing headers, provider error
 text, presigned URL/query, or returned signed headers. Existing context logging
@@ -587,8 +662,8 @@ provider's own exact-tuple receipt.
   and bypasses process bounds after issuance.
 - ETag and provider version/generation are neither exposed nor used as portable
   identity. Multipart part ETags remain internal protocol receipts only.
-- No automatic storage retry, background cleanup worker, hidden provider
-  fallback, ambient SDK policy, or second admission queue exists.
+- No mutation or deferred-body retry, background cleanup worker, hidden
+  provider fallback, ambient SDK policy, or second admission queue exists.
 - Errors, telemetry, and conformance claims remain provider-evidence-bounded;
   unsupported provider behavior is a failed target, not `internal` success.
 
@@ -621,10 +696,13 @@ provider's own exact-tuple receipt.
   Mediated PUT already supplies bounded writes; portable presigned PUT cannot
   enforce the process body/concurrency contract. Reopen only from measured
   throughput need plus exact-provider size/integrity/cleanup proof.
-- **D6 — No automatic operation retry.** Side-effect ambiguity and incompatible
-  client defaults make a generic retry policy unsafe. Reopen per operation only
-  with exact provider evidence, immutable replayable intent, one attempt owner,
-  and a total budget that preserves the same feature-visible outcome.
+- **D6 — Retry only safe request-to-headers reads.** Side-effect ambiguity and
+  incompatible client defaults make a generic retry policy unsafe. Metadata and
+  pre-body download use one explicit SDK retry owner with at most three attempts
+  inside the existing operation deadline; mutations and deferred reads remain
+  one-attempt. Reopen another operation only with exact provider evidence,
+  immutable replayable intent, one attempt owner, and a total budget that
+  preserves the same feature-visible outcome.
 - **D7 — Provider availability is non-critical after construction.** A generic
   bucket probe cannot decide feature degradation policy and can cause fleet
   eviction during a dependency outage. Reopen only for a feature whose accepted
@@ -644,8 +722,10 @@ provider's own exact-tuple receipt.
   source policy, fixed-authority egress policy, runtime budgets, readiness
   service, telemetry cardinality/privacy rules, architecture seams, and
   template-init contract remain local authorities.
-- **D10 — Initial credentials are static-only.** The explicit snapshot keeps
-  all signed requests inside the one accepted S3 authority boundary. Rejected:
+- **D10 — Initial credentials are explicit snapshots.** The explicit snapshot
+  keeps all signed requests inside the one accepted S3 authority boundary;
+  Amazon certification requires a temporary session credential and R2 records
+  whether its snapshot is long-lived or temporary. Rejected:
   labeling AWS's default/workload chain as one mode, because web identity adds
   STS while ECS and EC2 add separate link-local metadata authorities with
   different trust, refresh, deadline, and failure semantics. Add one workload
@@ -661,13 +741,14 @@ provider's own exact-tuple receipt.
    covers authority refusal, admission, finite memory/body bounds, caller
    deadline/cancellation at every blocking phase, single/multipart threshold,
    serial parts, short body, oversized response, deferred body failure,
-   checksum mismatch/missing checksum, create-only collision, no operation
-   retry, after-possible-send ambiguity, abort `complete|pending`, body close,
-   and telemetry redaction.
+   checksum mismatch/missing checksum, create-only `409|412`, bounded safe-read
+   retry with mutation/deferred-read non-retry, after-possible-send ambiguity,
+   lost-create cleanup `pending`, repeated abort plus paginated observation,
+   body close, range-response refusal, and diagnostic redaction.
 3. **Exact-provider conformance.** A real adopter may separately run
    credentialed tests against one Amazon S3 general-purpose bucket and one
-   Cloudflare R2 bucket to prove the exact R1 operation/field matrix, static
-   credential mode, endpoint/region, virtual-hosted authority, checksum choices
+   Cloudflare R2 bucket to prove the exact R1 operation/field matrix, exact
+   credential class, endpoint/region/owner, virtual-hosted authority, checksum choices
    for single/multipart/download, create-only precondition, unambiguous/hidden
    absence, delete on the accepted versioning state, multipart abort/list-parts
    cleanup, presigned GET method/headers/expiry/reuse, and sanitized provider

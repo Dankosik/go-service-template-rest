@@ -14,16 +14,18 @@ import (
 
 // Stage stores one prepared job in the caller's transaction. It never begins,
 // commits, rolls back, or retries that transaction.
-func (s *Store) Stage(ctx context.Context, tx pgx.Tx, prepared jobs.Prepared) (jobs.StageResult, error) {
+func (s *Store) Stage(ctx context.Context, tx pgx.Tx, prepared jobs.Prepared) (result jobs.StageResult, err error) {
 	rejected := jobs.StageResult{Outcome: jobs.StageRejected}
+	result = rejected
+	defer func() { s.recordAcceptance(ctx, result, err) }()
 	if !s.valid() {
-		return rejected, fmt.Errorf("%w: Store is required", ErrConfig)
+		return result, fmt.Errorf("%w: Store is required", ErrConfig)
 	}
 	if tx == nil {
-		return rejected, fmt.Errorf("%w: transaction is required", ErrConfig)
+		return result, fmt.Errorf("%w: transaction is required", ErrConfig)
 	}
 	if err := prepared.Validate(); err != nil {
-		return rejected, fmt.Errorf("validate prepared job: %w", err)
+		return result, fmt.Errorf("validate prepared job: %w", err)
 	}
 
 	identity := prepared.Identity()
@@ -49,7 +51,7 @@ func (s *Store) Stage(ctx context.Context, tx pgx.Tx, prepared jobs.Prepared) (j
 		return jobs.StageResult{Outcome: jobs.StageNew, LogicalJobID: jobs.LogicalJobID(logicalJobID)}, nil
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
-		return rejected, fmt.Errorf("insert postgres jobs acceptance: %w", err)
+		return result, fmt.Errorf("insert postgres jobs acceptance: %w", err)
 	}
 
 	conflicts, err := queries.ListPostgresJobsAcceptanceConflicts(ctx, sqlcgen.ListPostgresJobsAcceptanceConflictsParams{
@@ -62,10 +64,10 @@ func (s *Store) Stage(ctx context.Context, tx pgx.Tx, prepared jobs.Prepared) (j
 		EffectKey:       string(identity.EffectKey),
 	})
 	if err != nil {
-		return rejected, fmt.Errorf("read postgres jobs acceptance conflict: %w", err)
+		return result, fmt.Errorf("read postgres jobs acceptance conflict: %w", err)
 	}
 	if len(conflicts) == 0 {
-		return rejected, errors.New("insert postgres jobs acceptance reported a conflict without retained authority")
+		return result, errors.New("insert postgres jobs acceptance reported a conflict without retained authority")
 	}
 	if len(conflicts) == 1 && bytes.Equal(conflicts[0].IntentFingerprint, fingerprint[:]) {
 		return jobs.StageResult{Outcome: jobs.StageExisting, LogicalJobID: jobs.LogicalJobID(conflicts[0].LogicalJobID)}, nil
