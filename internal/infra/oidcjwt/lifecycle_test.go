@@ -29,7 +29,6 @@ import (
 )
 
 func TestRefreshScheduleJittersOnlyProviderAttempts(t *testing.T) {
-	t.Parallel()
 	var calls []time.Duration
 	jitter := func(delay time.Duration) time.Duration {
 		calls = append(calls, delay)
@@ -47,7 +46,6 @@ func TestRefreshScheduleJittersOnlyProviderAttempts(t *testing.T) {
 }
 
 func TestRefreshJitterIsBounded(t *testing.T) {
-	t.Parallel()
 	const delay = time.Minute
 	for range 100 {
 		got := refreshJitter(delay)
@@ -58,7 +56,6 @@ func TestRefreshJitterIsBounded(t *testing.T) {
 }
 
 func TestScheduledRecoveryCadenceResetsFromSuccessfulInstall(t *testing.T) {
-	t.Parallel()
 	first := loadTestRSAKey(t, testSigningKey)
 	second := loadTestRSAKey(t, testRotatedKey)
 	synctest.Test(t, func(t *testing.T) {
@@ -107,7 +104,6 @@ func TestScheduledRecoveryCadenceResetsFromSuccessfulInstall(t *testing.T) {
 }
 
 func TestTrustCurrentness(t *testing.T) {
-	t.Parallel()
 	first := loadTestRSAKey(t, testSigningKey)
 	second := loadTestRSAKey(t, testRotatedKey)
 	synctest.Test(t, func(t *testing.T) {
@@ -159,7 +155,6 @@ func TestTrustCurrentness(t *testing.T) {
 }
 
 func TestVerifierLifecycleClosesExactlyOnce(t *testing.T) {
-	t.Parallel()
 	client := &scriptedClient{responses: initialResponses(t, loadTestRSAKey(t, testSigningKey))}
 	var closes atomic.Int64
 	verifier, err := buildTestVerifier(t, testVerifierOptions{
@@ -191,7 +186,6 @@ func TestVerifierLifecycleClosesExactlyOnce(t *testing.T) {
 // message is the only thing that tells an operator whether Run ended because
 // the process was draining or because this Verifier was retired under it.
 func TestCloseRetiresARunningRun(t *testing.T) {
-	t.Parallel()
 	verifier := newTestVerifier(t, loadTestRSAKey(t, testSigningKey))
 
 	runResult := make(chan error, 1)
@@ -226,7 +220,6 @@ func TestCloseRetiresARunningRun(t *testing.T) {
 // refreshAdmission.retire owns why the release would otherwise be racing a fetch
 // it cannot see.
 func TestCloseStopsAdmittingFetches(t *testing.T) {
-	t.Parallel()
 	first := loadTestRSAKey(t, testSigningKey)
 	rotated := loadTestRSAKey(t, testRotatedKey)
 	client := &scriptedClient{responses: append(initialResponses(t, first), scriptedResponse{

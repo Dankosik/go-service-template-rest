@@ -22,7 +22,6 @@ import (
 const keepaliveStreamFullMethod = "/grpcx.test.KeepaliveService/Hold"
 
 func TestLivenessBoundsDoNotEndAnRPCInProgress(t *testing.T) {
-	t.Parallel()
 	cfg := testServerConfig()
 	// Every liveness clock is set to fire several times over while one stream is
 	// outstanding. None of them may end it: the idle clock only runs when
@@ -57,7 +56,6 @@ func TestLivenessBoundsDoNotEndAnRPCInProgress(t *testing.T) {
 }
 
 func TestRotationEndsAnRPCInProgress(t *testing.T) {
-	t.Parallel()
 	cfg := testServerConfig()
 	// Rotation is the one bound that cuts live work, which is what makes it the
 	// one this repository ships disabled. The grace clears the unary timeout,

@@ -66,7 +66,6 @@ func TestTelemetryInitFailureReason(t *testing.T) {
 }
 
 func TestBootstrapTelemetryStageConfiguresExporter(t *testing.T) {
-	t.Parallel()
 	telemetrytest.ClearAmbientExporterEnv(t)
 	telemetrytest.RestoreGlobals(t)
 
@@ -277,7 +276,6 @@ func TestReportIgnoredAmbientOTLPEnvSilentOnConflictWhenConfigured(t *testing.T)
 }
 
 func TestReportIgnoredAmbientOTLPEnvSilentWithoutAmbientEnv(t *testing.T) {
-	t.Parallel()
 	telemetrytest.ClearAmbientExporterEnv(t)
 
 	var buf bytes.Buffer
@@ -402,7 +400,6 @@ func TestBootstrapReportStageLogsTelemetryFailureCause(t *testing.T) {
 // and no span — while every log record lost trace_id and span_id, because logctx
 // reads them off the span context a real provider produces.
 func TestBootstrapTelemetryStageInstallsTracingWhenMetricsExportFails(t *testing.T) {
-	t.Parallel()
 	telemetrytest.ClearAmbientExporterEnv(t)
 	telemetrytest.RestoreGlobals(t)
 

@@ -12,7 +12,6 @@ import (
 )
 
 func TestEngineRenewPrecedesRescueAndSignalsMatchingCancellation(t *testing.T) {
-	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		reader := telemetrytest.InstallManualReader(t)
 		order := make([]string, 0, 2)
@@ -62,7 +61,6 @@ func TestEngineRenewPrecedesRescueAndSignalsMatchingCancellation(t *testing.T) {
 }
 
 func TestEngineRenewFaultClosesAdmissionAndSignalsAttempts(t *testing.T) {
-	t.Parallel()
 	engine, err := newEngine(&engineStoreStub{renew: func(context.Context, []AttemptIdentity, time.Duration) ([]Renewal, error) {
 		return nil, errors.New("lost control session")
 	}}, engineRegistry(t, func(context.Context, jobs.HandlerInput[engineArgs]) jobs.HandlerResult { return jobs.HandlerResult{} }), engineConfig())
@@ -87,7 +85,6 @@ func TestEngineRenewFaultClosesAdmissionAndSignalsAttempts(t *testing.T) {
 }
 
 func TestEngineRenewUsesPerAttemptMonotonicDeadline(t *testing.T) {
-	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		oldAttempt := engineClaim().Attempt
 		newAttempt := oldAttempt
@@ -121,7 +118,6 @@ func TestEngineRenewUsesPerAttemptMonotonicDeadline(t *testing.T) {
 }
 
 func TestEngineClaimLatencyCannotPostponeFirstRenewal(t *testing.T) {
-	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		claim := engineClaim()
 		release := make(chan struct{})

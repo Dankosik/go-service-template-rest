@@ -19,7 +19,6 @@ import (
 )
 
 func TestPostgresJobsRecoveryProcess(t *testing.T) {
-	t.Parallel()
 	if runtime.GOOS == "windows" {
 		t.Skip("SIGKILL/SIGSTOP process lifecycle is Unix-specific")
 	}
@@ -34,7 +33,6 @@ func TestPostgresJobsRecoveryProcess(t *testing.T) {
 		{name: "stale_overlap_after_rescue", overlap: true},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
-			t.Parallel()
 			testPostgresJobsRecoveryProcess(t, repositoryRoot, binary, scenario.beforeEffect, scenario.overlap)
 		})
 	}
@@ -48,7 +46,6 @@ func TestPostgresJobsRecoveryProcess(t *testing.T) {
 		{result: "exhausted", state: jobs.StateExhausted},
 	} {
 		t.Run("stored_revision_"+terminal.result, func(t *testing.T) {
-			t.Parallel()
 			testPostgresJobsStoredRevisionTerminal(t, repositoryRoot, binary, terminal.result, terminal.state)
 		})
 	}

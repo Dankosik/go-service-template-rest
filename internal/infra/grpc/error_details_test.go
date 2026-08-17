@@ -50,7 +50,6 @@ func saturatedMapper(delay time.Duration) failure.Mapper {
 // it exactly; HTTP rounds up, because whole seconds is Retry-After's own
 // granularity rather than a defect to mirror.
 func TestRetryHintReachesBothTransports(t *testing.T) {
-	t.Parallel()
 	for _, testCase := range []struct {
 		delay           time.Duration
 		wantRetryAfter  int
@@ -61,7 +60,6 @@ func TestRetryHintReachesBothTransports(t *testing.T) {
 		{delay: 1500 * time.Millisecond, wantRetryAfter: 2, wantGRPCSeconds: 1.5},
 	} {
 		t.Run(testCase.delay.String(), func(t *testing.T) {
-			t.Parallel()
 			mappers := []failure.Mapper{saturatedMapper(testCase.delay)}
 
 			retryInfo, _ := classifiedDetailsFromServer(t, mappers, testErrorDomain)
@@ -95,7 +93,6 @@ func TestRetryHintReachesBothTransports(t *testing.T) {
 // both CodeBadRequest and CodeUnprocessableContent. The reason is what lets a
 // caller tell them apart.
 func TestErrorInfoDistinguishesCodesSharingOneGRPCCode(t *testing.T) {
-	t.Parallel()
 	reasons := make(map[failure.Code]string, 2)
 	for _, code := range []failure.Code{failure.CodeBadRequest, failure.CodeUnprocessableContent} {
 		mappers := []failure.Mapper{func(err error) (failure.Classification, bool) {
@@ -128,7 +125,6 @@ func TestErrorInfoDistinguishesCodesSharingOneGRPCCode(t *testing.T) {
 // defect in that code, caught here over the whole catalog rather than per call
 // site.
 func TestEveryFailureCodeRendersAConformingReason(t *testing.T) {
-	t.Parallel()
 	for code := range failureCodeConstantNames(t) {
 		reason := reasonFor(t, code)
 		if len(reason) < 3 || len(reason) > 63 {
@@ -149,7 +145,6 @@ func TestEveryFailureCodeRendersAConformingReason(t *testing.T) {
 }
 
 func TestUnclassifiedErrorCarriesNoDetailsAndNoHandlerText(t *testing.T) {
-	t.Parallel()
 	const handlerText = "dial tcp 10.0.0.7:5432: connection refused"
 
 	cfg := testServerConfig()
@@ -176,7 +171,6 @@ func TestUnclassifiedErrorCarriesNoDetailsAndNoHandlerText(t *testing.T) {
 }
 
 func TestErrorInfoIsOmittedWithoutADomainAndRetryInfoIsNot(t *testing.T) {
-	t.Parallel()
 	mappers := []failure.Mapper{saturatedMapper(time.Second)}
 
 	retryInfo, errorInfo := classifiedDetailsFromServer(t, mappers, "")

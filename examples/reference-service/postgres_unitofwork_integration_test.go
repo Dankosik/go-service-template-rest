@@ -122,7 +122,6 @@ func (r pgRepository) AppendEvent(ctx context.Context, event article.Event) erro
 // TestUnitOfWorkCommitsBothWrites is the ordinary path: the article and the event
 // that announces it land together.
 func TestUnitOfWorkCommitsBothWrites(t *testing.T) {
-	t.Parallel()
 	adapter, service := newUnitOfWorkService(t)
 
 	created, err := service.Create(t.Context(), article.Draft{
@@ -151,7 +150,6 @@ func TestUnitOfWorkCommitsBothWrites(t *testing.T) {
 // failure arrives the way a real one does — from PostgreSQL, mid-transaction —
 // rather than from a stub that decided to return an error.
 func TestUnitOfWorkRollsBackTheArticleWhenTheEventFails(t *testing.T) {
-	t.Parallel()
 	adapter, _ := newUnitOfWorkService(t)
 
 	const slug = "rolled-back"

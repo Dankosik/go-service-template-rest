@@ -9,7 +9,6 @@ import (
 )
 
 func TestUnboundStoreAndSessionFailBeforeIssuingDatabaseWork(t *testing.T) {
-	t.Parallel()
 	ctx := t.Context()
 	var store Store
 	if _, err := store.Stage(ctx, nil, jobs.Prepared{}); !errors.Is(err, ErrConfig) {
@@ -66,7 +65,6 @@ func TestUnboundStoreAndSessionFailBeforeIssuingDatabaseWork(t *testing.T) {
 		{name: "producer authority", call: func() error { return session.checkProducerAuthority(ctx) }},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
 			if err := test.call(); !errors.Is(err, ErrConfig) {
 				t.Fatalf("unbound Session error = %v, want ErrConfig", err)
 			}

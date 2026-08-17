@@ -86,7 +86,6 @@ func TestDeliveryVocabularyIsBounded(t *testing.T) {
 func outcomeOf(outcome, _ string, _ error) string { return outcome }
 
 func TestMessagingTelemetryContract(t *testing.T) {
-	t.Parallel()
 	const (
 		payloadCanary    = "PAYLOAD_CANARY"
 		credentialCanary = "CREDENTIAL_PATH_CANARY"
@@ -297,7 +296,6 @@ func TestMessagingSpanNamesFollowSemanticConventions(t *testing.T) {
 }
 
 func TestAsyncConnectionErrorIsClassifiedWithoutRawBrokerText(t *testing.T) {
-	t.Parallel()
 	const brokerCanary = "BROKER_ERROR_CANARY"
 	var logs bytes.Buffer
 	sig, err := newTelemetry(Observability{Logger: slog.New(slog.NewJSONHandler(&logs, nil))}, RoleWorker, func() bool { return false })
@@ -316,7 +314,6 @@ func TestAsyncConnectionErrorIsClassifiedWithoutRawBrokerText(t *testing.T) {
 }
 
 func TestAsyncErrorReason(t *testing.T) {
-	t.Parallel()
 	tests := map[string]struct {
 		err  error
 		want string
@@ -330,7 +327,6 @@ func TestAsyncErrorReason(t *testing.T) {
 
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			t.Parallel()
 			if got := asyncErrorReason(tt.err); got != tt.want {
 				t.Fatalf("asyncErrorReason() = %q, want %q", got, tt.want)
 			}

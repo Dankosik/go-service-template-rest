@@ -11,7 +11,6 @@ import (
 )
 
 func TestFinalizationHelpers(t *testing.T) {
-	t.Parallel()
 	for _, outcome := range []OutcomeClass{
 		OutcomeDefinitelyNotSentRetry,
 		OutcomeRetryableHTTPAmbiguous,
@@ -54,7 +53,6 @@ func TestFinalizationHelpers(t *testing.T) {
 }
 
 func TestPrepareFinalizationValues(t *testing.T) {
-	t.Parallel()
 	values, err := prepareFinalizationValues(Finalization{})
 	if err != nil || values.status != nil || values.headerBytes != nil || values.bodyBytes != nil {
 		t.Fatalf("prepare zero values = %+v, %v", values, err)
@@ -75,7 +73,6 @@ func TestPrepareFinalizationValues(t *testing.T) {
 }
 
 func TestFinalizationUpdate(t *testing.T) {
-	t.Parallel()
 	now := time.Unix(1700000000, 0).UTC()
 	locked := sqlcgen.LockWebhookFinalizationRow{AttemptsUsed: 1, MaximumAttempts: 2, DeadlineAt: pgtype.Timestamptz{Time: now.Add(time.Minute), Valid: true}}
 	final := Finalization{LocalRetryDelay: time.Second}
@@ -114,7 +111,6 @@ func TestFinalizationUpdate(t *testing.T) {
 }
 
 func TestValidFinalization(t *testing.T) {
-	t.Parallel()
 	attempt := ClaimedAttempt{Policy: DeliveryPolicy{ResponseHeaderBytes: 10, ResponseBodyBytes: 20}}
 	if !validFinalization(attempt, Finalization{ResponseHeaderBytes: 10, ResponseBodyBytes: 20}) {
 		t.Fatal("valid finalization rejected")

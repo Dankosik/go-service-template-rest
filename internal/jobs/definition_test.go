@@ -15,14 +15,12 @@ type testArgs struct {
 }
 
 func TestJobsDefinition(t *testing.T) {
-	t.Parallel()
 	input := testDefinitionInput(Revision{Kind: "email", ArgsVersion: "v1", PolicyVersion: "p1"})
 	if _, err := NewDefinition(input); err != nil {
 		t.Fatalf("NewDefinition(complete) error = %v", err)
 	}
 
 	t.Run("missing slots", func(t *testing.T) {
-		t.Parallel()
 		cases := []struct {
 			name   string
 			change func(*DefinitionInput[testArgs])
@@ -47,7 +45,6 @@ func TestJobsDefinition(t *testing.T) {
 		}
 		for _, tc := range cases {
 			t.Run(tc.name, func(t *testing.T) {
-				t.Parallel()
 				candidate := input
 				tc.change(&candidate)
 				_, err := NewDefinition(candidate)
@@ -69,7 +66,6 @@ func TestJobsDefinition(t *testing.T) {
 		{name: "unpersistable recovery wave", change: func(i *DefinitionInput[testArgs]) { i.Policy.Retry.MaxRecoveryWave = math.MaxUint32 }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			candidate := input
 			tc.change(&candidate)
 			if _, err := NewDefinition(candidate); !errors.Is(err, ErrInvalidDefinition) {

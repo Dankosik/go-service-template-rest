@@ -9,7 +9,6 @@ import (
 )
 
 func TestJobsRegistry(t *testing.T) {
-	t.Parallel()
 	v1 := testDefinition(t, Revision{Kind: "email", ArgsVersion: "v1", PolicyVersion: "p1"})
 	v2Input := testDefinitionInput(Revision{Kind: "email", ArgsVersion: "v2", PolicyVersion: "p1"})
 	v2Input.Policy.MaxAttemptDuration = 90 * time.Second

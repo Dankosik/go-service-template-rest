@@ -6,7 +6,6 @@ import (
 )
 
 func TestPortContractAndKeyGrammar(t *testing.T) {
-	t.Parallel()
 	if got := Kind(NewError(ErrorKind("provider-secret"))); got != KindInternal {
 		t.Fatalf("Kind(NewError(unknown)) = %q, want %q", got, KindInternal)
 	}
@@ -34,7 +33,6 @@ func TestPortContractAndKeyGrammar(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
 			err := ValidateKey(test.key)
 			if test.valid {
 				if err != nil {

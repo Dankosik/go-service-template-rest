@@ -18,7 +18,6 @@ import (
 )
 
 func TestPostgresJobsProcess(t *testing.T) {
-	t.Parallel()
 	if runtime.GOOS == "windows" {
 		t.Skip("SIGTERM process lifecycle is Unix-specific")
 	}
@@ -45,7 +44,6 @@ func TestPostgresJobsProcess(t *testing.T) {
 		{name: "noncooperative", handler: "noncooperative", stage: true, wantFailed: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
 			var claimedJobID string
 			var postSignalJobID string
 			if test.stage {

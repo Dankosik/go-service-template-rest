@@ -7,7 +7,6 @@ import (
 )
 
 func TestWebhookOutcomeClassifier(t *testing.T) {
-	t.Parallel()
 	for status := 100; status <= 599; status++ {
 		got := ClassifyOutcome(TransportEvidence{StatusCode: status, MayHaveSent: true})
 		want := OutcomeHTTPRejected
@@ -32,7 +31,6 @@ func TestWebhookOutcomeClassifier(t *testing.T) {
 }
 
 func TestWebhookRetryAndSummary(t *testing.T) {
-	t.Parallel()
 	now := time.Unix(1700000000, 0).UTC()
 	if got, ok := ParseRetryAfter("120", "", now, time.Minute); !ok || got != time.Minute {
 		t.Fatalf("Retry-After = %v, %t", got, ok)
@@ -58,7 +56,6 @@ func TestWebhookRetryAndSummary(t *testing.T) {
 }
 
 func TestRetryDueAndRetryAfterEdges(t *testing.T) {
-	t.Parallel()
 	now := time.Unix(1700000000, 0).UTC()
 	deadline := now.Add(time.Minute)
 
@@ -74,7 +71,6 @@ func TestRetryDueAndRetryAfterEdges(t *testing.T) {
 		{name: "delay exceeds deadline", deadline: deadline, local: time.Minute + time.Second},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
 			if _, err := RetryDue(now, test.deadline, test.local, test.hint); err == nil {
 				t.Fatal("RetryDue() error = nil")
 			}
@@ -95,7 +91,6 @@ func TestRetryDueAndRetryAfterEdges(t *testing.T) {
 		{name: "disabled", raw: "1", ok: false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
 			got, ok := ParseRetryAfter(test.raw, test.date, now, test.max)
 			if got != test.want || ok != test.ok {
 				t.Fatalf("ParseRetryAfter() = %v, %t; want %v, %t", got, ok, test.want, test.ok)

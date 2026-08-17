@@ -91,7 +91,6 @@ func TestSetupTracingMergesAmbientResourceUnderConfig(t *testing.T) {
 }
 
 func TestSetupTracingWithoutExporterDoesNotRecord(t *testing.T) {
-	t.Parallel()
 	// "Without exporter" now includes the ambient endpoint variables, so this
 	// test states that condition rather than inheriting the machine's.
 	telemetrytest.ClearAmbientExporterEnv(t)
@@ -171,7 +170,6 @@ func BenchmarkTracingWithoutExporter(b *testing.B) {
 // that suppression is gone, so what remains to prove is that concurrent callers do
 // not corrupt the globals under the race detector.
 func TestSetupTracingDoesNotApplyResourceIdentityFallbacks(t *testing.T) {
-	t.Parallel()
 	telemetrytest.RestoreGlobals(t)
 
 	_, shutdown, err := SetupTracing(context.Background(), TracingConfig{
@@ -292,7 +290,6 @@ func TestAmbientOTLPExporterEnvReportsNamesOnly(t *testing.T) {
 }
 
 func TestAmbientOTLPExporterEnvEmptyWithoutAmbientEnv(t *testing.T) {
-	t.Parallel()
 	telemetrytest.ClearAmbientExporterEnv(t)
 
 	if got := AmbientOTLPExporterEnv(); len(got) != 0 {

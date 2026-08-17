@@ -10,7 +10,6 @@ import (
 )
 
 func TestPostgresJobsRenew(t *testing.T) {
-	t.Parallel()
 	ctx, pool, store := newPostgresJobsFixture(t)
 	_, claimed := claimPostgresJob(ctx, t, pool, store, "renew", "worker-renew", 30*time.Second)
 	session := acquirePostgresJobsSession(ctx, t, store)

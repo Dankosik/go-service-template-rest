@@ -18,7 +18,6 @@ import (
 // These tests install process-wide OpenTelemetry state and therefore do not run
 // in parallel; telemetrytest owns that contract.
 func TestCreationContextRoundTrip(t *testing.T) {
-	t.Parallel()
 	telemetrytest.InstallSpanRecorder(t)
 
 	ctx, span := otel.GetTracerProvider().Tracer("test").Start(context.Background(), "producing operation")
@@ -50,7 +49,6 @@ func TestCreationContextRoundTrip(t *testing.T) {
 // it stores the empty object and reports no degradation. Only a context that
 // existed and could not be stored is degraded.
 func TestCreationContextAbsentIsNotDegraded(t *testing.T) {
-	t.Parallel()
 	telemetrytest.InstallSpanRecorder(t)
 
 	stored, degraded := captureCreationContext(context.Background())
@@ -70,7 +68,6 @@ func TestCreationContextAbsentIsNotDegraded(t *testing.T) {
 // telemetry configuration rather than from the caller, so rejecting the event
 // would let a telemetry setting decide whether a business event is stored.
 func TestCreationContextTooLargeDegradesInsteadOfFailing(t *testing.T) {
-	t.Parallel()
 	telemetrytest.RestoreGlobals(t)
 	otel.SetTextMapPropagator(oversizePropagator{})
 

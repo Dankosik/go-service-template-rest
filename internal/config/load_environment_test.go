@@ -11,7 +11,6 @@ import (
 )
 
 func TestLoadDefaults(t *testing.T) {
-	t.Parallel()
 	resetConfigEnv(t)
 
 	cfg, report, err := LoadDetailed(LoadOptions{})
@@ -200,11 +199,6 @@ func TestNamespaceEnvPreservesRawDataBearingStrings(t *testing.T) {
 		t.Fatalf("OutboundAuth.ClientSecret = %q, want exact env value %q", cfg.OutboundAuth.ClientSecret, clientSecret)
 	}
 	// profile:outbound-auth-oauth2-client-credentials:end
-	//nolint:paralleltest // This test mutates process-global environment or working directory.
-
-	// profile:object-storage:start
-	//
-	//nolint:paralleltest // Reads env/.env.example through process-wide environment overrides.
 }
 
 func TestNamespaceEnvTrimsSyntaxFields(t *testing.T) {
@@ -248,7 +242,9 @@ func TestNamespaceEnvForConfigKey(t *testing.T) {
 	}
 }
 
-//nolint:paralleltest // This test mutates process-global environment.
+// profile:object-storage:start
+//
+//nolint:paralleltest // Reads env/.env.example through process-wide environment overrides.
 func TestEnvExampleIsFailClosedUntilObjectStorageIsConfigured(t *testing.T) {
 	resetConfigEnv(t)
 

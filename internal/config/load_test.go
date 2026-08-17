@@ -1,12 +1,4 @@
-package //nolint:paralleltest // This test mutates process-global environment or working directory.
-
-//nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
-//nolint:paralleltest // This test mutates process-global environment or working directory.
-
-// profile:database-postgres:start
-//
-//nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
-config
+package config
 
 import (
 	"context"
@@ -15,6 +7,7 @@ import (
 	"testing"
 )
 
+//nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
 func TestLoadNormalizesStringsAtSemanticValidationOwners(t *testing.T) {
 	resetConfigEnv(t)
 	t.Setenv("APP__APP__ENV", " local ")
@@ -50,6 +43,9 @@ func TestLoadNormalizesStringsAtSemanticValidationOwners(t *testing.T) {
 	}
 }
 
+// profile:database-postgres:start
+//
+//nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
 func TestFlatPostgresDSNIsIgnored(t *testing.T) {
 	resetConfigEnv(t)
 
@@ -97,7 +93,6 @@ func TestErrorTypeMapping(t *testing.T) {
 
 //nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
 func TestLoadDetailedWithContextCanceled(t *testing.T) {
-	t.Parallel()
 	resetConfigEnv(t)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -134,7 +129,6 @@ func TestLoadDetailedFailedStageReporting(t *testing.T) {
 
 	//nolint:paralleltest // Subtests reset process-wide configuration environment.
 	t.Run("validate_stage", func(t *testing.T) {
-		t.Parallel()
 		resetConfigEnv(t)
 		configPath := writeTempConfig(t, `
 unknown:
@@ -172,7 +166,6 @@ unknown:
 }
 
 func TestLoadDetailedRejectsEmptyExplicitPaths(t *testing.T) {
-	t.Parallel()
 	testCases := []struct {
 		name string
 		opts LoadOptions
@@ -193,7 +186,6 @@ func TestLoadDetailedRejectsEmptyExplicitPaths(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			resetConfigEnv(t)
 
 			_, report, err := LoadDetailed(tc.opts)
@@ -299,7 +291,6 @@ func TestNonFiniteSamplerArgReturnsParseError(t *testing.T) {
 
 //nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
 func TestMalformedYAMLReturnsParseError(t *testing.T) {
-	t.Parallel()
 	resetConfigEnv(t)
 
 	configPath := writeTempConfig(t, `

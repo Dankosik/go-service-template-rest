@@ -14,11 +14,9 @@ import (
 )
 
 func TestPostgresJobsRecovery(t *testing.T) {
-	t.Parallel()
 	ctx, pool, store := newPostgresJobsFixture(t)
 
 	t.Run("rescue read and write preserve ambiguity and fence the next generation", func(t *testing.T) {
-		t.Parallel()
 		prepared, claimed := claimPostgresJob(ctx, t, pool, store, "recovery", "worker-lost", time.Minute)
 		expirePostgresJobsAttempt(ctx, t, pool, claimed.Attempt)
 		session := acquirePostgresJobsSession(ctx, t, store)
@@ -79,13 +77,11 @@ func TestPostgresJobsRecovery(t *testing.T) {
 	})
 
 	t.Run("finalize and rescue equal one job-row lock order", func(t *testing.T) {
-		t.Parallel()
 		runPostgresJobsFinalizeRescueOrder(ctx, t, pool, store, true)
 		runPostgresJobsFinalizeRescueOrder(ctx, t, pool, store, false)
 	})
 
 	t.Run("rescue budget mismatch is fenced", func(t *testing.T) {
-		t.Parallel()
 		_, claimed := claimPostgresJob(ctx, t, pool, store, "rescue-budget-mismatch", "worker-rescue-budget-mismatch", time.Minute)
 		expirePostgresJobsAttempt(ctx, t, pool, claimed.Attempt)
 		session := acquirePostgresJobsSession(ctx, t, store)
@@ -105,7 +101,6 @@ func TestPostgresJobsRecovery(t *testing.T) {
 }
 
 func TestPostgresJobsRecoveryWaveIsPerRevision(t *testing.T) {
-	t.Parallel()
 	ctx, pool, store := newPostgresJobsFixture(t)
 	claims := make([]postgresjobs.ClaimedAttempt, 0, 3)
 	for index := range 3 {

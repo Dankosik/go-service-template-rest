@@ -7,7 +7,6 @@ import (
 )
 
 func TestWebhookWorkerTerminalResult(t *testing.T) {
-	t.Parallel()
 	var worker *Worker
 	result := worker.Run(t.Context())
 	if !errors.Is(result.Err, ErrConfig) || result.CleanupUnsafe {
@@ -16,7 +15,6 @@ func TestWebhookWorkerTerminalResult(t *testing.T) {
 }
 
 func TestWebhookWorkerLocalLifecycleGuards(t *testing.T) {
-	t.Parallel()
 	worker := &Worker{config: WorkerConfig{AttemptTimeout: time.Second, StoreOperationTimeout: time.Second, DrainTimeout: time.Second}}
 	result := worker.Run(t.Context())
 	if !errors.Is(result.Err, ErrConfig) || result.CleanupUnsafe {

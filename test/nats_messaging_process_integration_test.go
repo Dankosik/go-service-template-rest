@@ -20,7 +20,6 @@ import (
 )
 
 func TestNATSServiceProducerOnlyProcess(t *testing.T) {
-	t.Parallel()
 	if runtime.GOOS == "windows" {
 		t.Skip("SIGTERM process lifecycle is Unix-specific")
 	}
@@ -118,7 +117,6 @@ func TestNATSServiceProducerOnlyProcess(t *testing.T) {
 }
 
 func TestNATSWorkerMainRejectsEmptyHandler(t *testing.T) {
-	t.Parallel()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("listen for connection sentinel: %v", err)

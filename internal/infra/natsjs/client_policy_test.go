@@ -10,7 +10,6 @@ import (
 )
 
 func TestConnectOptionsApplyReconnectPolicyAndLifecycleHandlers(t *testing.T) {
-	t.Parallel()
 	client := unitClient(t, &recordingJetStream{}, RoleProducer)
 	client.ready.Store(true)
 

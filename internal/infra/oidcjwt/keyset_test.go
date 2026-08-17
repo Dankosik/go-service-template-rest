@@ -11,7 +11,6 @@ import (
 )
 
 func TestKeySetAdmission(t *testing.T) {
-	t.Parallel()
 	key := loadTestRSAKey(t, testSigningKey)
 	valid, err := publicJWK(&key.PublicKey, "key-1")
 	if err != nil {
@@ -49,7 +48,6 @@ func TestKeySetAdmission(t *testing.T) {
 
 	for _, testCase := range tests {
 		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
 			var jwk map[string]any
 			if err := json.Unmarshal(valid, &jwk); err != nil {
 				t.Fatal(err)
@@ -73,7 +71,6 @@ func TestKeySetAdmission(t *testing.T) {
 }
 
 func TestRejectedJWKSIsAtomic(t *testing.T) {
-	t.Parallel()
 	now := testNow
 	first := loadTestRSAKey(t, testSigningKey)
 	second := loadTestRSAKey(t, testRotatedKey)

@@ -55,7 +55,6 @@ components:
 `
 
 func TestHTTPIdempotencyRegistrationContract(t *testing.T) {
-	t.Parallel()
 	spec := idempotencyTestSpec(t)
 	operation := testIdempotencyOperation()
 	registry, err := newIdempotencyRegistry(spec, []IdempotencyOperation{operation})
@@ -67,7 +66,6 @@ func TestHTTPIdempotencyRegistrationContract(t *testing.T) {
 	}
 
 	t.Run("unregistered health route is inert", func(t *testing.T) {
-		t.Parallel()
 		handler := mustNewRouter(t, slog.New(slog.DiscardHandler), Handlers{Health: health.New()}, telemetry.New(), RouterConfig{})
 		request := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/health/live", nil)
 		request.Header.Set(httpidempotency.Header, "unused-key")
@@ -79,7 +77,6 @@ func TestHTTPIdempotencyRegistrationContract(t *testing.T) {
 	})
 
 	t.Run("missing declaration", func(t *testing.T) {
-		t.Parallel()
 		candidate := idempotencyTestSpec(t)
 		delete(candidate.Paths.Value("/widgets").Post.Extensions, idempotencyExtension)
 		if _, err := newIdempotencyRegistry(candidate, []IdempotencyOperation{operation}); err == nil {
@@ -87,19 +84,16 @@ func TestHTTPIdempotencyRegistrationContract(t *testing.T) {
 		}
 	})
 	t.Run("missing registration", func(t *testing.T) {
-		t.Parallel()
 		if _, err := newIdempotencyRegistry(idempotencyTestSpec(t), nil); err == nil {
 			t.Fatal("OpenAPI declaration without registration was accepted")
 		}
 	})
 	t.Run("duplicate registration", func(t *testing.T) {
-		t.Parallel()
 		if _, err := newIdempotencyRegistry(idempotencyTestSpec(t), []IdempotencyOperation{operation, operation}); err == nil {
 			t.Fatal("duplicate registration was accepted")
 		}
 	})
 	t.Run("duplicate OpenAPI operation ID", func(t *testing.T) {
-		t.Parallel()
 		candidate := idempotencyTestSpec(t)
 		duplicate := *candidate.Paths.Value("/widgets").Post
 		candidate.Paths.Set("/widgets-copy", &openapi3.PathItem{Post: &duplicate})
@@ -108,7 +102,6 @@ func TestHTTPIdempotencyRegistrationContract(t *testing.T) {
 		}
 	})
 	t.Run("fingerprint version mismatch", func(t *testing.T) {
-		t.Parallel()
 		candidate := testIdempotencyOperation()
 		candidate.Contract.FingerprintVersions = []string{"v2"}
 		if _, err := newIdempotencyRegistry(idempotencyTestSpec(t), []IdempotencyOperation{candidate}); err == nil {
@@ -116,7 +109,6 @@ func TestHTTPIdempotencyRegistrationContract(t *testing.T) {
 		}
 	})
 	t.Run("permanent duplicate risk", func(t *testing.T) {
-		t.Parallel()
 		candidate := testIdempotencyOperation()
 		candidate.Contract.DuplicateRisk = httpidempotency.DuplicateRiskPolicy{Permanent: true}
 		spec := idempotencyTestSpecForContract(t, candidate.Contract)
@@ -141,7 +133,6 @@ func TestHTTPIdempotencyRegistrationContract(t *testing.T) {
 		{name: "conflicting duplicate risk", mutate: func(extension map[string]any) { extension["duplicate_risk"] = map[string]any{"kind": "permanent"} }},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
 			candidate := idempotencyTestSpec(t)
 			extension := testIdempotencyExtension(t, candidate)
 			testCase.mutate(extension)
@@ -151,7 +142,6 @@ func TestHTTPIdempotencyRegistrationContract(t *testing.T) {
 		})
 	}
 	t.Run("external effect mutation", func(t *testing.T) {
-		t.Parallel()
 		candidate := testIdempotencyOperation()
 		candidate.Contract.ExternalEffect = "uncovered"
 		if _, err := newIdempotencyRegistry(idempotencyTestSpec(t), []IdempotencyOperation{candidate}); err == nil {
@@ -159,7 +149,6 @@ func TestHTTPIdempotencyRegistrationContract(t *testing.T) {
 		}
 	})
 	t.Run("fractional retry after", func(t *testing.T) {
-		t.Parallel()
 		candidate := testIdempotencyOperation()
 		candidate.Contract.RetryAfter += time.Millisecond
 		spec := idempotencyTestSpec(t)
@@ -173,7 +162,6 @@ func TestHTTPIdempotencyRegistrationContract(t *testing.T) {
 		}
 	})
 	t.Run("header declaration", func(t *testing.T) {
-		t.Parallel()
 		candidate := idempotencyTestSpec(t)
 		candidate.Paths.Value("/widgets").Post.Parameters = nil
 		if _, err := newIdempotencyRegistry(candidate, []IdempotencyOperation{operation}); err == nil {
@@ -181,7 +169,6 @@ func TestHTTPIdempotencyRegistrationContract(t *testing.T) {
 		}
 	})
 	t.Run("key max bytes declaration", func(t *testing.T) {
-		t.Parallel()
 		for _, maxLength := range []*uint64{nil, new(uint64)} {
 			candidate := idempotencyTestSpec(t)
 			if maxLength != nil {
@@ -194,7 +181,6 @@ func TestHTTPIdempotencyRegistrationContract(t *testing.T) {
 		}
 	})
 	t.Run("unknown declaration field", func(t *testing.T) {
-		t.Parallel()
 		candidate := idempotencyTestSpec(t)
 		testIdempotencyExtension(t, candidate)["unknown"] = true
 		if _, err := newIdempotencyRegistry(candidate, []IdempotencyOperation{operation}); err == nil {

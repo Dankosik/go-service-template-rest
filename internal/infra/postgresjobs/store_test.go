@@ -11,7 +11,6 @@ import (
 )
 
 func TestStoreRejectsInvalidConstructionWithoutAcquiring(t *testing.T) {
-	t.Parallel()
 	options := StoreOptions{OperationTimeout: time.Second, StatementTimeout: time.Second}
 	for _, test := range []struct {
 		name    string
@@ -25,7 +24,6 @@ func TestStoreRejectsInvalidConstructionWithoutAcquiring(t *testing.T) {
 		{name: "missing statement timeout", pool: &postgres.Pool{}, options: StoreOptions{OperationTimeout: time.Second}, want: "statement timeout"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
 			store, err := NewStore(test.pool, test.options)
 			if store != nil || !errors.Is(err, ErrConfig) || !strings.Contains(err.Error(), test.want) {
 				t.Fatalf("NewStore() = %v, %v, want nil ErrConfig containing %q", store, err, test.want)
@@ -35,7 +33,6 @@ func TestStoreRejectsInvalidConstructionWithoutAcquiring(t *testing.T) {
 }
 
 func TestStoreZeroValueFailsClosed(t *testing.T) {
-	t.Parallel()
 	store := &Store{}
 	if _, err := store.AcquireSession(context.Background()); !errors.Is(err, ErrConfig) {
 		t.Fatalf("AcquireSession() error = %v, want ErrConfig", err)
@@ -46,7 +43,6 @@ func TestStoreZeroValueFailsClosed(t *testing.T) {
 }
 
 func TestSchemaMismatchKeepsSchemaCause(t *testing.T) {
-	t.Parallel()
 	err := schemaMismatch("columns", []string{"actual"}, []string{"expected"})
 	if !errors.Is(err, ErrSchemaIncompatible) || !strings.Contains(err.Error(), "columns") {
 		t.Fatalf("schemaMismatch() = %v, want ErrSchemaIncompatible naming columns", err)

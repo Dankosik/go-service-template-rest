@@ -278,7 +278,6 @@ func TestRetryCancellationNeverReturnsADrainedResponse(t *testing.T) {
 }
 
 func TestRetryRecordsOneClientSpanPerAttempt(t *testing.T) {
-	t.Parallel()
 	recorder := telemetrytest.InstallSpanRecorder(t)
 
 	var attempts atomic.Int32

@@ -17,7 +17,6 @@ import (
 )
 
 func TestTelemetryContractIsBoundedAndSecret(t *testing.T) {
-	t.Parallel()
 	reader, meter := telemetrytest.NewManualMeter(t, telemetryScope)
 	telemetry, err := newTelemetryWithMeter(meter, noop.NewTracerProvider().Tracer(telemetryScope))
 	if err != nil {
@@ -96,7 +95,6 @@ func TestTelemetryContractIsBoundedAndSecret(t *testing.T) {
 		{name: "pending", want: "pending"},
 	} {
 		t.Run("multipart cleanup "+test.name, func(t *testing.T) {
-			t.Parallel()
 			reader, meter := telemetrytest.NewManualMeter(t, telemetryScope)
 			telemetry, err := newTelemetryWithMeter(meter, noop.NewTracerProvider().Tracer(telemetryScope))
 			if err != nil {
@@ -146,7 +144,6 @@ func TestTelemetryContractIsBoundedAndSecret(t *testing.T) {
 	}
 
 	t.Run("provider diagnostics are bounded and span only", func(t *testing.T) {
-		t.Parallel()
 		recorder := telemetrytest.InstallSpanRecorder(t)
 		reader, meter := telemetrytest.NewManualMeter(t, telemetryScope)
 		telemetry, err := newTelemetryWithMeter(meter, otel.GetTracerProvider().Tracer(telemetryScope))

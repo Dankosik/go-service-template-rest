@@ -24,9 +24,7 @@ import (
 )
 
 func TestServerEnforcesReceiveAndSendMessageLimits(t *testing.T) {
-	t.Parallel()
 	t.Run("receive", func(t *testing.T) {
-		t.Parallel()
 		cfg := testServerConfig()
 		cfg.MaxReceiveMessageBytes = 64
 		handlerCalled := false
@@ -55,7 +53,6 @@ func TestServerEnforcesReceiveAndSendMessageLimits(t *testing.T) {
 	})
 
 	t.Run("send", func(t *testing.T) {
-		t.Parallel()
 		cfg := testServerConfig()
 		cfg.MaxSendMessageBytes = 64
 		handlerCalled := false
@@ -85,7 +82,6 @@ func TestServerEnforcesReceiveAndSendMessageLimits(t *testing.T) {
 }
 
 func TestServerRejectsOversizedIncomingMetadataBeforeHandler(t *testing.T) {
-	t.Parallel()
 	cfg := testServerConfig()
 	cfg.MaxHeaderListBytes = 512
 	var handlerCalls atomic.Int64
@@ -128,7 +124,6 @@ func TestServerRejectsOversizedIncomingMetadataBeforeHandler(t *testing.T) {
 }
 
 func TestServerMaxConcurrentStreamsQueuesAdditionalStreams(t *testing.T) {
-	t.Parallel()
 	cfg := testServerConfig()
 	cfg.MaxConcurrentStreams = 1
 	server, connection := startTestServer(t, cfg, nil)

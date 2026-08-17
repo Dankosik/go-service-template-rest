@@ -17,7 +17,6 @@ import (
 )
 
 func TestTelemetryExportsCachedObservationWithoutStoreCalls(t *testing.T) {
-	t.Parallel()
 	reader := telemetrytest.InstallManualReader(t)
 	telemetry, err := NewTelemetry(nil)
 	if err != nil {
@@ -80,7 +79,6 @@ func TestTelemetryExportsCachedObservationWithoutStoreCalls(t *testing.T) {
 }
 
 func TestStoreRecordsAcceptanceOutcomes(t *testing.T) {
-	t.Parallel()
 	reader := telemetrytest.InstallManualReader(t)
 	meter := infratelemetry.MeterOrGlobal(nil, jobsMeterName)
 	events, err := meter.Int64Counter("postgres.jobs.events")
@@ -107,7 +105,6 @@ func TestStoreRecordsAcceptanceOutcomes(t *testing.T) {
 }
 
 func TestTelemetryExpiresObservationOnLocalClock(t *testing.T) {
-	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		reader := telemetrytest.InstallManualReader(t)
 		telemetry, err := NewTelemetry(nil)

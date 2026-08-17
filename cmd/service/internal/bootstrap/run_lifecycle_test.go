@@ -30,7 +30,6 @@ import (
 // line inside an otherwise orderly shutdown. This walks the three moments that
 // distinguish the two orderings.
 func TestSupervisedWorkOutlivesTheHTTPDrain(t *testing.T) {
-	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		signalCtx, signal := context.WithCancel(context.Background())
 		supervisor := newSupervisedBackground(signalCtx, shutdownTestLogger())
@@ -78,7 +77,6 @@ func TestSupervisedWorkOutlivesTheHTTPDrain(t *testing.T) {
 
 // profile:http-idempotency-postgres:start
 func TestHTTPIdempotencyMaintenanceJoinsAfterHTTPDrain(t *testing.T) {
-	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		signalCtx, signal := context.WithCancel(context.Background())
 		supervisor := newSupervisedBackground(signalCtx, shutdownTestLogger())
@@ -124,7 +122,6 @@ func TestHTTPIdempotencyMaintenanceJoinsAfterHTTPDrain(t *testing.T) {
 // inheriting the already-canceled signal context, which would make Shutdown
 // return instantly and report a task that had not been given its budget.
 func TestSupervisedBackgroundShutdownIsBoundedByItsOwnBudget(t *testing.T) {
-	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		signalCtx, signal := context.WithCancel(context.Background())
 		signal()
@@ -146,9 +143,7 @@ func TestSupervisedBackgroundShutdownIsBoundedByItsOwnBudget(t *testing.T) {
 
 // profile:outbound-auth-oauth2-client-credentials:start
 func TestOutboundAuthRuntimeCloseOrder(t *testing.T) {
-	t.Parallel()
 	t.Run("normal shutdown", func(t *testing.T) {
-		t.Parallel()
 		resetShutdownConfigEnv(t)
 		var events []string
 		runtime := &recordingOutboundAuthRuntime{onClose: func() {
@@ -194,7 +189,6 @@ func TestOutboundAuthRuntimeCloseOrder(t *testing.T) {
 
 	// profile:authn-oidc-jwt:start
 	t.Run("partial startup", func(t *testing.T) {
-		t.Parallel()
 		resetShutdownConfigEnv(t)
 		var events []string
 		runtime := &recordingOutboundAuthRuntime{onClose: func() {
@@ -244,7 +238,6 @@ func TestOutboundAuthRuntimeCloseOrder(t *testing.T) {
 }
 
 func TestOutboundAuthCloseFailureIsJoinedOnce(t *testing.T) {
-	t.Parallel()
 	for _, partialStartup := range []bool{
 		false,
 		// profile:authn-oidc-jwt:start
@@ -256,7 +249,6 @@ func TestOutboundAuthCloseFailureIsJoinedOnce(t *testing.T) {
 			name = "partial startup"
 		}
 		t.Run(name, func(t *testing.T) {
-			t.Parallel()
 			resetShutdownConfigEnv(t)
 			closeErr := errors.New("outbound authentication provider is unavailable")
 			runtime := &recordingOutboundAuthRuntime{closeErr: closeErr}
@@ -321,7 +313,6 @@ func assertOutboundAuthCloseOrder(
 
 // profile:authn-oidc-jwt:start
 func TestAuthnCloseDoesNotOutliveTheBackgroundBudget(t *testing.T) {
-	t.Parallel()
 	authn := &countingAuthnRuntime{}
 	closeAuthnWithinBudget(authn, true)
 	if authn.closes != 1 {

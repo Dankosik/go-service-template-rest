@@ -22,7 +22,6 @@ func testWorkerConfig() WorkerConfig {
 }
 
 func TestWorkerAdmissionBound(t *testing.T) {
-	t.Parallel()
 	valid := testWorkerConfig()
 	valid.Consumer = "events-worker"
 	valid.FilterSubject = "events.>"
@@ -50,7 +49,6 @@ func TestWorkerAdmissionBound(t *testing.T) {
 	}
 	for name, mutate := range cases {
 		t.Run(name, func(t *testing.T) {
-			t.Parallel()
 			cfg := valid
 			mutate(&cfg)
 			if err := ValidateWorkerConfig(cfg, testMaxPayloadBytes); !errors.Is(err, ErrRejected) {

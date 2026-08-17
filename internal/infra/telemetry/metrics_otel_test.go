@@ -100,7 +100,6 @@ func TestSetupMetricsUsesPrivateRegistryAndConfigResource(t *testing.T) {
 //
 //nolint:paralleltest // Mutates the process-wide OpenTelemetry MeterProvider.
 func TestRecordTraceExporterStateIsScrapable(t *testing.T) {
-	t.Parallel()
 	for _, tt := range []struct {
 		name      string
 		active    bool
@@ -110,7 +109,6 @@ func TestRecordTraceExporterStateIsScrapable(t *testing.T) {
 		{name: "degraded", active: false, wantValue: "0"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
 			telemetrytest.RestoreGlobals(t)
 
 			metrics := New()
@@ -197,7 +195,6 @@ func TestSetupMetricsRequiresRegistry(t *testing.T) {
 //
 //nolint:paralleltest // Mutates the process-wide OpenTelemetry MeterProvider.
 func TestSetupMetricsDegradesToScrapeOnlyForUnusableEndpoint(t *testing.T) {
-	t.Parallel()
 	telemetrytest.ClearAmbientExporterEnv(t)
 	telemetrytest.RestoreGlobals(t)
 

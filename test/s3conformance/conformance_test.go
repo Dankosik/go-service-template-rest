@@ -44,7 +44,6 @@ var (
 
 // profile:object-storage:start
 func TestS3ObjectStorageConformanceRequiresProviderCertification(t *testing.T) {
-	t.Parallel()
 	if os.Getenv("REQUIRE_S3_CONFORMANCE") != "1" {
 		t.Skip("provider conformance is not requested")
 	}
@@ -513,7 +512,6 @@ func assertS3PresignedMutationsRejected(t *testing.T, client *http.Client, presi
 		}},
 	} {
 		t.Run("presigned rejects "+mutation.name, func(t *testing.T) {
-			t.Parallel()
 			candidate := presigned
 			if mutation.method != "" {
 				candidate.Method = mutation.method

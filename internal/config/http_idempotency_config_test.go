@@ -7,7 +7,6 @@ import (
 )
 
 func TestValidateHTTPIdempotencyActive(t *testing.T) {
-	t.Parallel()
 	valid := HTTPIdempotencyConfig{MaintenanceInterval: time.Second}
 	for _, tc := range []struct {
 		name     string
@@ -21,7 +20,6 @@ func TestValidateHTTPIdempotencyActive(t *testing.T) {
 		{name: "negative cadence", cfg: HTTPIdempotencyConfig{MaintenanceInterval: -time.Second}, postgres: PostgresConfig{Enabled: true}, want: "http_idempotency.maintenance_interval"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			err := ValidateHTTPIdempotencyActive(tc.cfg, tc.postgres)
 			if tc.want == "" && err != nil {
 				t.Fatalf("ValidateHTTPIdempotencyActive() error = %v", err)

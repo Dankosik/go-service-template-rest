@@ -19,7 +19,6 @@ import (
 // cannot make on its own: the request budget only cancels client-side, so this
 // proves the server will stop an abandoned statement by itself.
 func TestPostgresStatementTimeoutIsEnforcedServerSide(t *testing.T) {
-	t.Parallel()
 	const statementTimeout = 300 * time.Millisecond
 
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
@@ -52,7 +51,6 @@ func TestPostgresStatementTimeoutIsEnforcedServerSide(t *testing.T) {
 // TestPostgresInTxRollsBackOnError proves the transaction seam actually isolates
 // work, so a service composing two repository calls does not need PGX().
 func TestPostgresInTxRollsBackOnError(t *testing.T) {
-	t.Parallel()
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
 	defer cancel()
 
@@ -104,7 +102,6 @@ func TestPostgresInTxRollsBackOnError(t *testing.T) {
 // TestPostgresRetryableRecognizesSerializationFailure proves the classifier
 // against a real conflict rather than a synthesized error code.
 func TestPostgresRetryableRecognizesSerializationFailure(t *testing.T) {
-	t.Parallel()
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
 	defer cancel()
 
@@ -188,7 +185,6 @@ func mustOpenBoundedPool(t *testing.T, ctx context.Context, statementTimeout tim
 // wait ends at the acquire budget rather than the caller's deadline, and it ends
 // with a distinct retryable identity rather than a timeout.
 func TestPostgresAcquireShedsInsteadOfQueueing(t *testing.T) {
-	t.Parallel()
 	const acquireTimeout = 250 * time.Millisecond
 
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
@@ -231,7 +227,6 @@ func TestPostgresAcquireShedsInsteadOfQueueing(t *testing.T) {
 // is reporting a slow request or a gone client, and filing that under capacity
 // would make the saturation signal useless for deciding to shed.
 func TestPostgresAcquireReportsCallerCancellationAsSuch(t *testing.T) {
-	t.Parallel()
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
 	defer cancel()
 
@@ -264,7 +259,6 @@ func TestPostgresAcquireReportsCallerCancellationAsSuch(t *testing.T) {
 // would evict the instance, and its traffic would move to instances that are
 // already busy. A saturated pool is evidence the database is answering.
 func TestPostgresCheckStaysReadyWhileSaturated(t *testing.T) {
-	t.Parallel()
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
 	defer cancel()
 

@@ -13,7 +13,6 @@ import (
 )
 
 func TestPostgresWebhookRetention(t *testing.T) {
-	t.Parallel()
 	ctx, pool, store, manifest := newPostgresWebhookFixture(t)
 	prepared := webhookPrepared(t, "retention")
 	if err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error { _, err := store.Accept(ctx, tx, prepared); return err }); err != nil {
@@ -95,7 +94,6 @@ func TestPostgresWebhookRetention(t *testing.T) {
 }
 
 func TestPostgresWebhookMixedVersionRetentionBackfill(t *testing.T) {
-	t.Parallel()
 	ctx, pool, store, manifest := newPostgresWebhookFixture(t)
 	prepared := webhookPrepared(t, "retention-backfill")
 	if err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error { _, err := store.Accept(ctx, tx, prepared); return err }); err != nil {

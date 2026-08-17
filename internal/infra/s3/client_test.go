@@ -40,15 +40,12 @@ import (
 )
 
 func TestNewUsesOnlyStaticConfigurationAndPerformsNoIO(t *testing.T) {
-	t.Parallel()
 	testNewUsesStaticConfigurationAndImageRootsWithoutNetworkIO(t)
 }
 
 func TestExpectedBucketOwnerProjectsEveryOperation(t *testing.T) {
-	t.Parallel()
 	for _, provider := range []Provider{ProviderAmazonS3, ProviderCloudflare} {
 		t.Run(string(provider), func(t *testing.T) {
-			t.Parallel()
 			cfg := validConfig(provider)
 			multipartData := bytes.Repeat([]byte("m"), int(cfg.MultipartChunkBytes)+1)
 			downloadData := []byte("download")
@@ -160,7 +157,6 @@ func TestExpectedBucketOwnerProjectsEveryOperation(t *testing.T) {
 }
 
 func TestNewUsesStaticConfigurationAndImageRootsWithoutNetworkIO(t *testing.T) {
-	t.Parallel()
 	testNewUsesStaticConfigurationAndImageRootsWithoutNetworkIO(t)
 }
 
@@ -173,7 +169,6 @@ func testNewUsesStaticConfigurationAndImageRootsWithoutNetworkIO(t *testing.T) {
 
 	for _, provider := range []Provider{ProviderAmazonS3, ProviderCloudflare} {
 		t.Run(string(provider), func(t *testing.T) {
-			t.Parallel()
 			cfg := validConfig(provider)
 			client, err := newClient(cfg, testImageRootSource(t))
 			if err != nil {
@@ -207,7 +202,6 @@ func testNewUsesStaticConfigurationAndImageRootsWithoutNetworkIO(t *testing.T) {
 }
 
 func TestObjectStorageStartupLoadsImageRootsLocally(t *testing.T) {
-	t.Parallel()
 	opened := 0
 	source := testImageRootSource(t)
 	client, err := newClient(validConfig(ProviderAmazonS3), func() (imageRootFile, error) {
@@ -233,7 +227,6 @@ func mustHost(t *testing.T, rawURL string) string {
 }
 
 func TestAdmissionIsProcessWideAndNonBlocking(t *testing.T) {
-	t.Parallel()
 	cfg := validConfig(ProviderAmazonS3)
 	cfg.MaxActiveOperations = 2
 	cfg.MaxWorkingMemoryBytes, _ = cfg.requiredMemory()
@@ -311,7 +304,6 @@ func TestAdmissionIsProcessWideAndNonBlocking(t *testing.T) {
 }
 
 func TestEffectiveDeadlineAndLifecycleOwnEveryPhase(t *testing.T) {
-	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		cfg := validConfig(ProviderAmazonS3)
 		cfg.MaxOperationDuration = 2 * time.Second
@@ -416,7 +408,6 @@ type envelopeRecord struct {
 }
 
 func TestLinuxProcessEnvelope(t *testing.T) {
-	t.Parallel()
 	if os.Getenv(envelopeChildEnv) == "1" {
 		runLinuxProcessEnvelopeChild(t)
 		return
@@ -924,7 +915,6 @@ func parseSmapsRollup(data string) (smapsRollup, error) {
 }
 
 func TestSmapsRollupParserIsFailClosed(t *testing.T) {
-	t.Parallel()
 	valid := "Rss: 5 kB\nShared_Clean: 1 kB\nShared_Dirty: 1 kB\nPrivate_Clean: 1 kB\nPrivate_Dirty: 2 kB\n"
 	if _, err := parseSmapsRollup(valid); err != nil {
 		t.Fatalf("parseSmapsRollup(valid) error = %v", err)

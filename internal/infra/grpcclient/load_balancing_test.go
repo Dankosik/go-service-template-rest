@@ -31,7 +31,6 @@ const loadBalancingProbeMethod = "/grpcclient.test.Backend/Probe"
 // relocating the default one, so it needs none of the child-process isolation
 // resolver_selection_test.go uses.
 func TestLoadBalancingPolicyDecidesHowManyBackendsAreReached(t *testing.T) {
-	t.Parallel()
 	for _, testCase := range []struct {
 		name            string
 		scheme          string
@@ -55,7 +54,6 @@ func TestLoadBalancingPolicyDecidesHowManyBackendsAreReached(t *testing.T) {
 		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
 			var first, second atomic.Int64
 			addresses := []resolver.Address{
 				{Addr: startCountingBackend(t, &first)},
@@ -113,7 +111,6 @@ func TestLoadBalancingPolicyDecidesHowManyBackendsAreReached(t *testing.T) {
 }
 
 func TestHealthConfigurationCallability(t *testing.T) {
-	t.Parallel()
 	backend := startHealthBackend(
 		t,
 		healthgrpc.HealthCheckResponse_NOT_SERVING,
@@ -138,7 +135,6 @@ func TestHealthConfigurationCallability(t *testing.T) {
 		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
 			cfg := grpcclient.DefaultConfig("passthrough:///" + backend.address)
 			cfg.LoadBalancing = testCase.policy
 			cfg.HealthCheck = testCase.healthCheck

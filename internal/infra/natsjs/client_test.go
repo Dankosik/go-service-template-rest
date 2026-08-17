@@ -8,7 +8,6 @@ import (
 )
 
 func TestClientStateTransitions(t *testing.T) {
-	t.Parallel()
 	client := unitClient(t, &recordingJetStream{}, RoleProducer)
 	client.ready.Store(true)
 	if client.Name() != "messaging" || client.Producer() == nil || !client.Ready() {

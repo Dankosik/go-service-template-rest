@@ -27,7 +27,6 @@ import (
 // newVerificationSets fallback, and the two measurements converge — which is
 // exactly the regression worth failing on.
 func TestPrebuiltAttributeSetsBeatPerCallConstruction(t *testing.T) {
-	t.Parallel()
 	metrics := verificationCostFixture(t)
 	ctx := t.Context()
 	err := failure(KindInvalid)

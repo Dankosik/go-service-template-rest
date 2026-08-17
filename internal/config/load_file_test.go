@@ -42,7 +42,6 @@ http:
 // that names a directory is a manifest mistake, and reading it would otherwise
 // fail with a message about YAML.
 func TestRejectsAConfigDirectory(t *testing.T) {
-	t.Parallel()
 	resetConfigEnv(t)
 
 	_, _, err := LoadDetailed(LoadOptions{ConfigPath: t.TempDir()})
@@ -57,7 +56,6 @@ func TestRejectsAConfigDirectory(t *testing.T) {
 // TestRejectsAnOversizedConfigFile keeps the read bounded. The path is trusted;
 // what is behind it still does not have to be what the manifest author expected.
 func TestRejectsAnOversizedConfigFile(t *testing.T) {
-	t.Parallel()
 	resetConfigEnv(t)
 
 	path := filepath.Join(t.TempDir(), "config.yaml")

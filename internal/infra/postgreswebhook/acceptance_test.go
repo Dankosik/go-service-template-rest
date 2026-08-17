@@ -21,7 +21,6 @@ func goldenAcceptance() Acceptance {
 }
 
 func TestWebhookAcceptanceEnforcesDestinationAdmission(t *testing.T) {
-	t.Parallel()
 	for _, test := range []struct {
 		name   string
 		mutate func(*Acceptance)
@@ -52,7 +51,6 @@ func TestWebhookAcceptanceEnforcesDestinationAdmission(t *testing.T) {
 		{name: "retention dependency", mutate: func(input *Acceptance) { input.Destinations[0].Policy.Horizons.Payload = time.Hour }},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
 			input := goldenAcceptance()
 			test.mutate(&input)
 			if _, err := PrepareAcceptance(input); !errors.Is(err, ErrConfig) {
@@ -63,7 +61,6 @@ func TestWebhookAcceptanceEnforcesDestinationAdmission(t *testing.T) {
 }
 
 func TestWebhookRetentionHorizonsRequireExactShape(t *testing.T) {
-	t.Parallel()
 	var horizons RetentionHorizons
 	if err := json.Unmarshal([]byte(`[1,2,3,4,5,6,7,8,9]`), &horizons); err == nil {
 		t.Fatal("UnmarshalJSON() accepted a ninth retention horizon")
@@ -71,7 +68,6 @@ func TestWebhookRetentionHorizonsRequireExactShape(t *testing.T) {
 }
 
 func TestWebhookAcceptanceCanonicalVector(t *testing.T) {
-	t.Parallel()
 	prepared, err := PrepareAcceptance(goldenAcceptance())
 	if err != nil {
 		t.Fatal(err)

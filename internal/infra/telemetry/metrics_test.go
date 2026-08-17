@@ -72,7 +72,6 @@ func collectMetricsText(t *testing.T, metrics *Metrics) string {
 // TestServerLoadIsScrapable pins the admission signals the generic protocol
 // instrumentation cannot distinguish from other failures.
 func TestServerLoadIsScrapable(t *testing.T) {
-	t.Parallel()
 	telemetrytest.RestoreGlobals(t)
 	telemetrytest.ClearAmbientExporterEnv(t)
 

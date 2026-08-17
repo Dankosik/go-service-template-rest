@@ -137,7 +137,6 @@ func TestResolveMetricExporterEndpointRejectsInvalidValues(t *testing.T) {
 //
 //nolint:paralleltest // Mutates the process-wide OpenTelemetry MeterProvider.
 func TestSetupMetricsPushesToOTLPCollector(t *testing.T) {
-	t.Parallel()
 	telemetrytest.ClearAmbientExporterEnv(t)
 	telemetrytest.RestoreGlobals(t)
 
@@ -208,7 +207,6 @@ func TestSetupMetricsPushesToOTLPCollector(t *testing.T) {
 // TestConflictingMetricExporterEnvNamesUnverifiableMaterial keeps injected
 // credentials from travelling to a collector this service named.
 func TestSetupMetricsWithoutEndpointStaysScrapeOnly(t *testing.T) {
-	t.Parallel()
 	telemetrytest.ClearAmbientExporterEnv(t)
 	telemetrytest.RestoreGlobals(t)
 

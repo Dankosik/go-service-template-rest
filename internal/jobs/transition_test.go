@@ -7,7 +7,6 @@ import (
 )
 
 func TestJobsTransition(t *testing.T) {
-	t.Parallel()
 	definition := testDefinition(t, Revision{Kind: "email", ArgsVersion: "v1", PolicyVersion: "p1"})
 	base := AttemptFacts{
 		LogicalJobID: "job-1", AttemptGeneration: 2, RecoveryGeneration: 1,
@@ -15,7 +14,6 @@ func TestJobsTransition(t *testing.T) {
 	}
 
 	t.Run("ambiguous effect follows explicit retry policy", func(t *testing.T) {
-		t.Parallel()
 		input := testDefinitionInput(Revision{Kind: "email", ArgsVersion: "v1", PolicyVersion: "ambiguous-retry"})
 		input.Policy.Effect.AmbiguousAction = AmbiguousEffectRetry
 		retryDefinition, err := NewDefinition(input)
@@ -60,7 +58,6 @@ func TestJobsTransition(t *testing.T) {
 		{name: "age exhausted", change: func(f *AttemptFacts) { f.Elapsed = 24 * time.Hour }, state: StateExhausted},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			facts := base
 			tc.change(&facts)
 			got, err := definition.Evaluate(facts)
@@ -72,7 +69,6 @@ func TestJobsTransition(t *testing.T) {
 	}
 
 	t.Run("retry hint precedence and cap", func(t *testing.T) {
-		t.Parallel()
 		input := testDefinitionInput(Revision{Kind: "email", ArgsVersion: "v1", PolicyVersion: "no-jitter"})
 		input.Policy.Retry.Jitter = JitterNone
 		input.Policy.Retry.JitterPermille = 0
@@ -88,7 +84,6 @@ func TestJobsTransition(t *testing.T) {
 	})
 
 	t.Run("retry hint policies", func(t *testing.T) {
-		t.Parallel()
 		for _, tc := range []struct {
 			name      string
 			policy    RetryHintPolicy
@@ -100,7 +95,6 @@ func TestJobsTransition(t *testing.T) {
 			{name: "backoff floor", policy: RetryHintBackoffFloor, retryHint: 30 * time.Second, want: 30 * time.Second},
 		} {
 			t.Run(tc.name, func(t *testing.T) {
-				t.Parallel()
 				input := testDefinitionInput(Revision{Kind: "email", ArgsVersion: "v1", PolicyVersion: tc.name})
 				input.Policy.Retry.HintPolicy = tc.policy
 				input.Policy.Retry.Jitter = JitterNone
@@ -119,7 +113,6 @@ func TestJobsTransition(t *testing.T) {
 	})
 
 	t.Run("recovery reset", func(t *testing.T) {
-		t.Parallel()
 		input := testDefinitionInput(Revision{Kind: "email", ArgsVersion: "v1", PolicyVersion: "recovery"})
 		input.Policy.Recovery = RecoveryPolicy{
 			Mode: RecoveryAllowed, Eligible: []State{StateExhausted},
@@ -146,7 +139,6 @@ func TestJobsTransition(t *testing.T) {
 	})
 
 	t.Run("recovery preserves budgets", func(t *testing.T) {
-		t.Parallel()
 		input := testDefinitionInput(Revision{Kind: "email", ArgsVersion: "v1", PolicyVersion: "recovery-preserved"})
 		input.Policy.Recovery = RecoveryPolicy{
 			Mode: RecoveryAllowed, Eligible: []State{StateExhausted},
@@ -175,7 +167,6 @@ func TestJobsTransition(t *testing.T) {
 }
 
 func TestJobsTransitionRejectsImpossiblePersistedFacts(t *testing.T) {
-	t.Parallel()
 	valid := Transition{State: StateSucceeded, AttemptsUsed: 1, Outcome: OutcomeSuccess, Effect: EffectNone}
 	if err := valid.Validate(); err != nil {
 		t.Fatalf("Validate(valid) error = %v", err)

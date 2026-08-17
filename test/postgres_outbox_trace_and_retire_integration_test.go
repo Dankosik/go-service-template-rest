@@ -29,7 +29,6 @@ import (
 // carrier, and another can show the carrier survives PostgreSQL, but only this
 // shows the relay hands the claimed event's own carrier to the span it opens.
 func TestPostgresOutboxPublicationNamesTheProducingOperation(t *testing.T) {
-	t.Parallel()
 	// Installed before the telemetry is built: NewTelemetry takes its tracer from
 	// the global provider, so a recorder installed afterwards would see nothing.
 	recorder := telemetrytest.InstallSpanRecorder(t)
@@ -87,7 +86,6 @@ func TestPostgresOutboxPublicationNamesTheProducingOperation(t *testing.T) {
 // idempotent repeat, and the restarted sequence space are all PostgreSQL's
 // behavior, and none of them can be proven against a stubbed driver.
 func TestPostgresOutboxRetireOrderingKey(t *testing.T) {
-	t.Parallel()
 	ctx, pool, store := newOutboxFixture(t)
 	const key = "aggregate-1"
 	mustAppendOutbox(t, ctx, pool, store, orderedEvent("ordered-1", key, 9))
@@ -133,9 +131,7 @@ func TestPostgresOutboxRetireOrderingKey(t *testing.T) {
 // precondition: both take the same head lock, so the append is either visible
 // as pending work that refuses the retirement, or lands after it.
 func TestPostgresOutboxRetireSerializesWithAppend(t *testing.T) {
-	t.Parallel()
 	t.Run("append before retirement", func(t *testing.T) {
-		t.Parallel()
 		ctx, pool, store := newOutboxFixture(t)
 		const key = "append-first"
 		mustAppendOutbox(t, ctx, pool, store, orderedEvent("append-first-1", key, 1))
@@ -176,7 +172,6 @@ func TestPostgresOutboxRetireSerializesWithAppend(t *testing.T) {
 	})
 
 	t.Run("retirement before append", func(t *testing.T) {
-		t.Parallel()
 		ctx, pool, store := newOutboxFixture(t)
 		const key = "retire-first"
 		mustAppendOutbox(t, ctx, pool, store, orderedEvent("retire-first-9", key, 9))
@@ -221,7 +216,6 @@ func TestPostgresOutboxRetireSerializesWithAppend(t *testing.T) {
 	})
 
 	t.Run("simultaneous retirements", func(t *testing.T) {
-		t.Parallel()
 		ctx, pool, store := newOutboxFixture(t)
 		const key = "double-retire"
 		mustAppendOutbox(t, ctx, pool, store, orderedEvent("double-retire-1", key, 1))
@@ -271,7 +265,6 @@ func TestPostgresOutboxRetireSerializesWithAppend(t *testing.T) {
 // An event appended outside any trace still stores and publishes. The stored
 // context is the column default rather than absent, so the CHECK holds.
 func TestPostgresOutboxAppendWithoutTraceContext(t *testing.T) {
-	t.Parallel()
 	ctx, pool, store := newOutboxFixture(t)
 	mustAppendOutbox(t, ctx, pool, store, outboxEvent("untraced"))
 
@@ -287,7 +280,6 @@ func TestPostgresOutboxAppendWithoutTraceContext(t *testing.T) {
 // The outbox-owned creation context has its own allowance: it neither mutates
 // caller metadata nor consumes the caller's 288 KiB envelope budget.
 func TestPostgresOutboxTraceContextAllowance(t *testing.T) {
-	t.Parallel()
 	telemetrytest.InstallSpanRecorder(t)
 	ctx, pool, store := newOutboxFixture(t)
 
@@ -344,7 +336,6 @@ func TestPostgresOutboxTraceContextAllowance(t *testing.T) {
 // Retry, lease recovery, reconstruction, and redrive all reuse the immutable
 // creation carrier captured by the original append.
 func TestPostgresOutboxCreationContextSurvivesRecovery(t *testing.T) {
-	t.Parallel()
 	recorder := telemetrytest.InstallSpanRecorder(t)
 	ctx, pool, store := newOutboxFixture(t)
 

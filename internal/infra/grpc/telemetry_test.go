@@ -37,7 +37,6 @@ import (
 )
 
 func TestOTelStatsHandlersTraceAndMeasureUnaryAndStreamingRPCs(t *testing.T) {
-	t.Parallel()
 	recording := newRecordingTelemetry(t)
 
 	cfg := testServerConfig()

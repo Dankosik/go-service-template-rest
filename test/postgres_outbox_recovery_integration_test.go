@@ -18,7 +18,6 @@ import (
 )
 
 func TestPostgresOutboxAuditedUnknownRecovery(t *testing.T) {
-	t.Parallel()
 	ctx, pool, store := newOutboxFixture(t)
 	mustAppendOutbox(t, ctx, pool, store, outboxEvent("operator-ready"))
 	if err := store.RedriveUnknown(ctx, "operator-ready", "invalid-ready-redrive"); !errors.Is(err, postgresoutbox.ErrOperatorStateConflict) {
@@ -117,9 +116,7 @@ func TestPostgresOutboxAuditedUnknownRecovery(t *testing.T) {
 }
 
 func TestPostgresOutboxRetryAndPoison(t *testing.T) {
-	t.Parallel()
 	t.Run("exhaustion", func(t *testing.T) {
-		t.Parallel()
 		ctx, pool, store := newOutboxFixture(t)
 		mustAppendOutbox(t, ctx, pool, store, outboxEvent("exhaustion"))
 		var attempts atomic.Int64
@@ -147,7 +144,6 @@ func TestPostgresOutboxRetryAndPoison(t *testing.T) {
 }
 
 func TestPostgresOutboxStickyAtLimitQuarantinesWithoutPublish(t *testing.T) {
-	t.Parallel()
 	ctx, pool, store := newOutboxFixture(t)
 	mustAppendOutbox(t, ctx, pool, store, outboxEvent("ambiguous-limit"))
 	config := testRelayConfig()
@@ -270,7 +266,6 @@ func TestPostgresOutboxStickyAtLimitQuarantinesWithoutPublish(t *testing.T) {
 }
 
 func TestPostgresOutboxLegacyUncertaintyClassification(t *testing.T) {
-	t.Parallel()
 	ctx, pool, store := newOutboxFixture(t)
 	for _, id := range []string{
 		"legacy-unattempted", "legacy-published", "legacy-retry",
@@ -442,7 +437,6 @@ func outboxBlockedPID(t *testing.T, ctx context.Context, pool *postgres.Pool, bl
 }
 
 func TestPostgresOutboxUnknownObservationAndDiscovery(t *testing.T) {
-	t.Parallel()
 	ctx, pool, store := newOutboxFixture(t)
 	for index := 1; index <= 3; index++ {
 		mustAppendOutbox(t, ctx, pool, store, outboxEvent(fmt.Sprintf("unknown-observe-%d", index)))
@@ -527,7 +521,6 @@ func TestPostgresOutboxUnknownObservationAndDiscovery(t *testing.T) {
 }
 
 func TestPostgresOutboxFailedObservationStaysStaleAndUnready(t *testing.T) {
-	t.Parallel()
 	ctx, pool, store := newOutboxFixture(t)
 	reader, telemetry := newOutboxTelemetry(t)
 	config := testRelayConfig()

@@ -26,9 +26,7 @@ type postgresJobsSchemaMutation struct {
 }
 
 func TestPostgresJobsSchema(t *testing.T) {
-	t.Parallel()
 	t.Run("canonical read-only authority", func(t *testing.T) {
-		t.Parallel()
 		ctx, _, store := newPostgresJobsFixture(t)
 		if err := store.CheckSchema(ctx); err != nil {
 			t.Fatalf("CheckSchema() error = %v", err)
@@ -36,7 +34,6 @@ func TestPostgresJobsSchema(t *testing.T) {
 	})
 
 	t.Run("admits additive next-release contract shape", func(t *testing.T) {
-		t.Parallel()
 		ctx, pool, store := newPostgresJobsFixture(t)
 		if _, err := pool.PGX().Exec(ctx, `
 ALTER TABLE postgres_job_attempts
@@ -71,7 +68,6 @@ ON postgres_job_attempts USING gin (executor_metadata);`); err != nil {
 		{name: "resumed", sql: "UPDATE postgres_job_claim_scopes SET scope_generation = 2 WHERE work_class = 'neutral'"},
 	} {
 		t.Run("accepts mutable neutral scope "+state.name, func(t *testing.T) {
-			t.Parallel()
 			ctx, pool, store := newPostgresJobsFixture(t)
 			if _, err := pool.PGX().Exec(ctx, state.sql); err != nil {
 				t.Fatalf("change neutral scope state: %v", err)
@@ -84,7 +80,6 @@ ON postgres_job_attempts USING gin (executor_metadata);`); err != nil {
 
 	for _, mutation := range postgresJobsSchemaMutations(t) {
 		t.Run("rejects "+mutation.name, func(t *testing.T) {
-			t.Parallel()
 			ctx, pool, store := newPostgresJobsFixture(t)
 			if _, err := pool.PGX().Exec(ctx, mutation.sql); err != nil {
 				t.Fatalf("apply schema mutation: %v", err)
@@ -96,7 +91,6 @@ ON postgres_job_attempts USING gin (executor_metadata);`); err != nil {
 	}
 
 	t.Run("Go and database vocabulary are bijective", func(t *testing.T) {
-		t.Parallel()
 		ctx, pool, _ := newPostgresJobsFixture(t)
 		states := []jobs.State{
 			jobs.StateReady, jobs.StateScheduled, jobs.StateRetryWait, jobs.StateRunning,

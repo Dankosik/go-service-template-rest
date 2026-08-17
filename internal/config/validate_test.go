@@ -8,7 +8,6 @@ import (
 
 //nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
 func TestReadDurationParsesDefaultDurations(t *testing.T) {
-	t.Parallel()
 	resetConfigEnv(t)
 
 	cfg, _, err := LoadDetailed(LoadOptions{})

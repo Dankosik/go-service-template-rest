@@ -6,7 +6,6 @@ import (
 )
 
 func TestWebhookWorkerReadinessFreshness(t *testing.T) {
-	t.Parallel()
 	state := readinessState{interval: time.Second}
 	state.observed()
 	if state.ready() {

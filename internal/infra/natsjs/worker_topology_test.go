@@ -9,7 +9,6 @@ import (
 )
 
 func TestStreamContract(t *testing.T) {
-	t.Parallel()
 	cfg := testConfig()
 	valid := jetstream.StreamConfig{
 		Storage: jetstream.FileStorage, Replicas: 1,
@@ -47,7 +46,6 @@ func TestStreamContract(t *testing.T) {
 	}
 	for name, mutate := range cases {
 		t.Run(name, func(t *testing.T) {
-			t.Parallel()
 			stream := valid
 			caseCfg := cfg
 			mutate(&stream)
@@ -59,7 +57,6 @@ func TestStreamContract(t *testing.T) {
 }
 
 func TestExplicitAckPolicy(t *testing.T) {
-	t.Parallel()
 	cfg := testWorkerConfig()
 	cfg.Consumer = "events-worker"
 	cfg.FilterSubject = "events.>"
@@ -101,7 +98,6 @@ func TestExplicitAckPolicy(t *testing.T) {
 	}
 	for name, mutate := range mutations {
 		t.Run(name, func(t *testing.T) {
-			t.Parallel()
 			mutated := desired
 			mutate(&mutated)
 			if consumerConfigEqual(mutated, desired) {

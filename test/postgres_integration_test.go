@@ -20,7 +20,6 @@ import (
 )
 
 func TestPostgresPool(t *testing.T) {
-	t.Parallel()
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
 	defer cancel()
 
@@ -50,7 +49,6 @@ func TestPostgresPool(t *testing.T) {
 	}
 
 	t.Run("readiness probe", func(t *testing.T) {
-		t.Parallel()
 		traceCtx, traceSpan := otel.Tracer("postgres-integration-test").Start(t.Context(), "postgres readiness")
 		defer traceSpan.End()
 
@@ -63,7 +61,6 @@ func TestPostgresPool(t *testing.T) {
 	})
 
 	t.Run("telemetry is useful and does not expose database details", func(t *testing.T) {
-		t.Parallel()
 		assertPostgresTracePrivacy(t, spanRecorder)
 		assertPostgresPoolMetrics(t, ctx, metricReader, pool.Name())
 	})

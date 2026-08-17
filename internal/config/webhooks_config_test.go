@@ -8,7 +8,6 @@ import (
 )
 
 func TestWebhooksConfigContract(t *testing.T) {
-	t.Parallel()
 	valid := WebhooksConfig{Enabled: true, CapacityRevision: 1, GlobalConcurrency: 4, ClaimScanPage: 4, PollInterval: time.Second, ObservationInterval: time.Second, StoreOperationTimeout: time.Second, AttemptTimeout: 5 * time.Second, ResponseHeaderTimeout: 2 * time.Second, ResponseHeaderBytes: 4096, ResponseBodyBytes: 4096, DrainTimeout: 10 * time.Second, MaintenanceInterval: time.Second, MaintenanceBatch: 10, StaticSecrets: `{"revision":1,"entries":[]}`}
 	postgres := PostgresConfig{Enabled: true, StatementTimeout: 5 * time.Second}
 	http := HTTPConfig{GracePeriod: 45 * time.Second}
@@ -38,7 +37,6 @@ func TestWebhooksConfigContract(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
 			w, p, h := valid, postgres, http
 			test.mutate(&w, &p, &h)
 			if err := validateWebhooks(w, p, h); !errors.Is(err, ErrValidate) {
@@ -49,7 +47,6 @@ func TestWebhooksConfigContract(t *testing.T) {
 }
 
 func TestWebhooksConfigDefaultsDisabled(t *testing.T) {
-	t.Parallel()
 	resetConfigEnv(t)
 	cfg, _, err := LoadDetailed(LoadOptions{})
 	if err != nil {

@@ -10,7 +10,6 @@ import (
 )
 
 func TestOperatorActionCycle(t *testing.T) {
-	t.Parallel()
 	falseValue := false
 	trueValue := true
 	unknownClass := classOutcomeUnknown
@@ -40,7 +39,6 @@ func TestOperatorActionCycle(t *testing.T) {
 		"unknown action": {action: "other", row: unknown, want: ErrConfig},
 	} {
 		t.Run(name, func(t *testing.T) {
-			t.Parallel()
 			cycle, has, err := operatorActionCycle(test.action, test.row)
 			if !errors.Is(err, test.want) || cycle != test.cycle || has != test.has {
 				t.Fatalf("operatorActionCycle() = (%d, %t, %v), want (%d, %t, %v)", cycle, has, err, test.cycle, test.has, test.want)
@@ -50,7 +48,6 @@ func TestOperatorActionCycle(t *testing.T) {
 }
 
 func TestOperatorRows(t *testing.T) {
-	t.Parallel()
 	if err := operatorRows("operator action", 1, nil); err != nil {
 		t.Fatalf("operatorRows() error = %v", err)
 	}

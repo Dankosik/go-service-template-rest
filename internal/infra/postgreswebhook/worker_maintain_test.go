@@ -6,7 +6,6 @@ import (
 )
 
 func TestWebhookWorkerMaintenanceRequiresStore(t *testing.T) {
-	t.Parallel()
 	worker := &Worker{config: WorkerConfig{MaintenanceBatch: 1}}
 	_, err := worker.maintain(t.Context())
 	if !errors.Is(err, ErrConfig) {

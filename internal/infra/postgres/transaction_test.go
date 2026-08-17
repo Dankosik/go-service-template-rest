@@ -30,7 +30,6 @@ func (tx *trackedTx) Rollback(ctx context.Context) error {
 }
 
 func TestRunInTxPreservesServerErrorAfterLaterCancellation(t *testing.T) {
-	t.Parallel()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	serverErr := &pgconn.PgError{Code: pgerrcode.QueryCanceled}
@@ -56,7 +55,6 @@ func TestRunInTxPreservesServerErrorAfterLaterCancellation(t *testing.T) {
 }
 
 func TestRunInTxAttributesMarkedCancellation(t *testing.T) {
-	t.Parallel()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	serverErr := &pgconn.PgError{Code: pgerrcode.QueryCanceled}
@@ -117,7 +115,6 @@ func TestClassifyCommitOutcome(t *testing.T) {
 }
 
 func TestCommitTxWrapsCommitFailure(t *testing.T) {
-	t.Parallel()
 	want := errors.New("connection lost")
 	if err := commitTx(t.Context(), &trackedTx{commitErr: want}); !errors.Is(err, want) {
 		t.Fatalf("commitTx() error = %v, want wrapped commit failure", err)

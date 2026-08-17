@@ -24,7 +24,6 @@ import (
 // a lint triage, or left in place with the pattern widened past the type it pins.
 // The module path is not anchored, because a generated service rewrites it.
 func TestPolicyInputIsHeldToExhaustruct(t *testing.T) {
-	t.Parallel()
 	const required = `oidcjwt\.PolicyInput$`
 	config, err := os.ReadFile(filepath.Join("..", "..", "..", ".golangci.yml"))
 	if err != nil {
@@ -44,7 +43,6 @@ func TestPolicyInputIsHeldToExhaustruct(t *testing.T) {
 }
 
 func TestPolicyRejectsDuplicateTrustedProxyCIDRs(t *testing.T) {
-	t.Parallel()
 	_, err := NewPolicy(PolicyInput{
 		Issuer:            testIssuer,
 		Audience:          testAudience,

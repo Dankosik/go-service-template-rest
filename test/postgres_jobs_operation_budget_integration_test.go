@@ -48,12 +48,10 @@ func testPostgresJobsOperationTimerHeadroom(t *testing.T) {
 }
 
 func TestPostgresJobsOperationBudget(t *testing.T) {
-	t.Parallel()
 	t.Run("server timer headroom", testPostgresJobsOperationTimerHeadroom)
 
 	for _, testCase := range postgresJobsOperationBudgetCases() {
 		t.Run(testCase.name+" client cancellation", func(t *testing.T) {
-			t.Parallel()
 			ctx, pool, store := newPostgresJobsOperationBudgetFixture(t)
 			logicalJobID, operation := testCase.prepare(ctx, t, pool, store)
 			session := acquirePostgresJobsSession(ctx, t, store)
@@ -74,7 +72,6 @@ func TestPostgresJobsOperationBudget(t *testing.T) {
 		})
 
 		t.Run(testCase.name+" lock timeout", func(t *testing.T) {
-			t.Parallel()
 			ctx, pool, store := newPostgresJobsOperationBudgetFixture(t)
 			logicalJobID, operation := testCase.prepare(ctx, t, pool, store)
 			session := acquirePostgresJobsSession(ctx, t, store)
@@ -91,7 +88,6 @@ func TestPostgresJobsOperationBudget(t *testing.T) {
 		})
 
 		t.Run(testCase.name+" statement timeout", func(t *testing.T) {
-			t.Parallel()
 			ctx, pool, store := newPostgresJobsOperationBudgetFixture(t)
 			logicalJobID, operation := testCase.prepare(ctx, t, pool, store)
 			before := postgresJobsOperationState(ctx, t, pool, logicalJobID)

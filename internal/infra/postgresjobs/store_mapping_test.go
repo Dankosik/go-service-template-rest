@@ -123,7 +123,6 @@ func TestStoreClaimMappingPreservesOnlyValidRows(t *testing.T) {
 }
 
 func TestStoreRescueLimitColumnsRejectInvalidInput(t *testing.T) {
-	t.Parallel()
 	revision := jobs.Revision{Kind: "email", ArgsVersion: "v1", PolicyVersion: "p1"}
 	if _, _, _, _, err := rescueLimitColumns(nil); !errors.Is(err, ErrConfig) {
 		t.Fatalf("rescueLimitColumns(nil) error = %v, want ErrConfig", err)
@@ -134,7 +133,6 @@ func TestStoreRescueLimitColumnsRejectInvalidInput(t *testing.T) {
 }
 
 func TestStoreSchemaRequiresCapabilitiesAndAllowsAdditiveAuthority(t *testing.T) {
-	t.Parallel()
 	required := []string{"table.column|type", "table.constraint|hash"}
 	if !schemaContains(append(append([]string(nil), required...), "table.future|type"), required) {
 		t.Fatal("schemaContains() rejected additive authority")
@@ -145,7 +143,6 @@ func TestStoreSchemaRequiresCapabilitiesAndAllowsAdditiveAuthority(t *testing.T)
 }
 
 func TestStoreClaimElapsedUsesOnlyDatabaseTimestamps(t *testing.T) {
-	t.Parallel()
 	for _, test := range []struct {
 		name      string
 		startedAt time.Time
@@ -154,7 +151,6 @@ func TestStoreClaimElapsedUsesOnlyDatabaseTimestamps(t *testing.T) {
 		{name: "database ahead of worker", startedAt: time.Date(2040, time.January, 1, 0, 1, 0, 0, time.UTC)},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
 			row := testClaimedRow()
 			row.BudgetStartedAt = pgtype.Timestamptz{Time: test.startedAt.Add(-time.Minute), Valid: true}
 			row.AvailableAt = pgtype.Timestamptz{Time: test.startedAt.Add(-2 * time.Second), Valid: true}
@@ -281,7 +277,6 @@ func TestOperationErrorClassificationPreservesSessionSafety(t *testing.T) {
 }
 
 func TestRetainedVocabularyMappingRejectsIncompleteOrUnsupportedRows(t *testing.T) {
-	t.Parallel()
 	revisions, err := revisionRows([]string{"email", "webhook"}, []string{"v1", "v2"}, []string{"p1", "p2"})
 	if err != nil || len(revisions) != 2 || revisions[1].Kind != "webhook" {
 		t.Fatalf("revisionRows() = %#v, %v", revisions, err)
@@ -329,7 +324,6 @@ func TestRetainedVocabularyMappingRejectsIncompleteOrUnsupportedRows(t *testing.
 		{name: "missing finalized time", update: func(row *transitionResultRow) { row.FinalizedAt = pgtype.Timestamptz{} }},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
 			row := completed
 			test.update(&row)
 			if _, err := persistedTransition(row); err == nil {

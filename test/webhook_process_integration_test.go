@@ -25,7 +25,6 @@ import (
 )
 
 func TestWebhookWorkerProcessLifecycle(t *testing.T) {
-	t.Parallel()
 	if runtime.GOOS == "windows" {
 		t.Skip("container signal lifecycle is Unix-specific")
 	}

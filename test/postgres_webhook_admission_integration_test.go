@@ -14,7 +14,6 @@ import (
 )
 
 func TestPostgresWebhookSchema(t *testing.T) {
-	t.Parallel()
 	ctx, pool, store, _ := newPostgresWebhookFixture(t)
 	if err := store.CheckSchema(ctx); err != nil {
 		t.Fatalf("CheckSchema(): %v", err)
@@ -50,7 +49,6 @@ func TestPostgresWebhookSchema(t *testing.T) {
 }
 
 func TestPostgresWebhookClockHighWater(t *testing.T) {
-	t.Parallel()
 	ctx, pool, store, manifest := newPostgresWebhookFixture(t)
 	if _, err := pool.PGX().Exec(ctx, `UPDATE webhook_clock SET high_water = clock_timestamp() + interval '1 hour', regression = false`); err != nil {
 		t.Fatal(err)
@@ -72,7 +70,6 @@ func TestPostgresWebhookClockHighWater(t *testing.T) {
 }
 
 func TestPostgresWebhookBoundedFairness(t *testing.T) {
-	t.Parallel()
 	ctx, pool, store, manifest := newPostgresWebhookFixture(t)
 	for _, suffix := range []string{"fair-a", "fair-b"} {
 		prepared := webhookPrepared(t, suffix)
@@ -101,7 +98,6 @@ func TestPostgresWebhookBoundedFairness(t *testing.T) {
 }
 
 func TestPostgresWebhookReplicaCapacityAndSecretRevision(t *testing.T) {
-	t.Parallel()
 	ctx, pool, store, manifest := newPostgresWebhookFixture(t)
 	prepared := webhookPrepared(t, "capacity")
 	if err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error { _, err := store.Accept(ctx, tx, prepared); return err }); err != nil {
@@ -145,7 +141,6 @@ func TestPostgresWebhookReplicaCapacityAndSecretRevision(t *testing.T) {
 }
 
 func TestPostgresWebhookDestinationControlBarrier(t *testing.T) {
-	t.Parallel()
 	ctx, pool, store, manifest := newPostgresWebhookFixture(t)
 	prepared := webhookPrepared(t, "barrier")
 	if err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error { _, err := store.Accept(ctx, tx, prepared); return err }); err != nil {
@@ -166,7 +161,6 @@ func TestPostgresWebhookDestinationControlBarrier(t *testing.T) {
 }
 
 func TestPostgresWebhookAttemptLeaseAndCapacityFences(t *testing.T) {
-	t.Parallel()
 	ctx, pool, store, manifest := newPostgresWebhookFixture(t)
 	prepared := webhookPrepared(t, "attempt-fences")
 	if err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error { _, err := store.Accept(ctx, tx, prepared); return err }); err != nil {
@@ -212,7 +206,6 @@ func TestPostgresWebhookAttemptLeaseAndCapacityFences(t *testing.T) {
 }
 
 func TestPostgresWebhookDatabaseRejectsInvalidPolicyAndAuthorizationEvidence(t *testing.T) {
-	t.Parallel()
 	ctx, pool, store, manifest := newPostgresWebhookFixture(t)
 	prepared := webhookPrepared(t, "database-constraints")
 	if err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error { _, err := store.Accept(ctx, tx, prepared); return err }); err != nil {
@@ -231,7 +224,6 @@ func TestPostgresWebhookDatabaseRejectsInvalidPolicyAndAuthorizationEvidence(t *
 }
 
 func TestPostgresWebhookOwnerIsolation(t *testing.T) {
-	t.Parallel()
 	ctx, pool, _, _ := newPostgresWebhookFixture(t)
 	var count int
 	if err := pool.PGX().QueryRow(ctx, `SELECT count(*) FROM webhook_destinations WHERE owner_scope = $1`, "owner-b").Scan(&count); err != nil || count != 0 {
@@ -240,7 +232,6 @@ func TestPostgresWebhookOwnerIsolation(t *testing.T) {
 }
 
 func TestPostgresWebhookRotationAttemptEvidence(t *testing.T) {
-	t.Parallel()
 	ctx, pool, store, _ := newPostgresWebhookFixture(t)
 	prepared := webhookPrepared(t, "rotation-evidence")
 	if err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error { _, err := store.Accept(ctx, tx, prepared); return err }); err != nil {

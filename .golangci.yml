@@ -99,16 +99,6 @@ linters:
           - exhaustruct
           - gocognit
           - nestif
-      # These suites exercise process-global configuration through configtest.IsolateEnv.
-      # Go forbids t.Parallel with t.Setenv, so this exemption preserves the required
-      # serial execution instead of faking parallelism.
-      - path: '^(cmd/jobs-worker/internal/bootstrap/run_coverage_test|cmd/outbox-relay/internal/bootstrap/(natsjs_publisher_test|run_test)|cmd/service/internal/bootstrap/startup_outbound_auth_test|cmd/worker/internal/bootstrap/(integration_test|run_coverage_test|run_test)|internal/infra/(grpc/config_parity_test|oidcjwt/config_parity_test))\.go$'
-        linters:
-          - paralleltest
-          - tparallel
-      - path: '^(internal/config/(load_test|outbound_auth_config_test)|internal/infra/(httpclient/client_test|telemetry/tracing_exporter_test)|cmd/outbox-relay/internal/bootstrap/run_test)\.go$'
-        linters:
-          - tparallel
   settings:
     embeddedstructfieldcheck:
       forbid-mutex: true

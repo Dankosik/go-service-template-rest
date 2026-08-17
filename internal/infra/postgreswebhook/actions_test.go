@@ -7,7 +7,6 @@ import (
 )
 
 func TestWebhookActionCanonicalVectors(t *testing.T) {
-	t.Parallel()
 	tests := []struct {
 		request  ActionRequest
 		expected string

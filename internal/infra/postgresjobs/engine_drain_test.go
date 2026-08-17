@@ -11,7 +11,6 @@ import (
 )
 
 func TestEngineDrainClosesAdmissionBeforeAnotherClaim(t *testing.T) {
-	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		claims := 0
 		engine, err := newEngine(&engineStoreStub{
@@ -38,7 +37,6 @@ func TestEngineDrainClosesAdmissionBeforeAnotherClaim(t *testing.T) {
 }
 
 func TestEngineDrainCancelsBlockedClaimWithoutTerminalFailure(t *testing.T) {
-	t.Parallel()
 	claimStarted := make(chan struct{})
 	handlerStarted := make(chan struct{}, 1)
 	engine, err := newEngine(&engineStoreStub{
@@ -78,7 +76,6 @@ func TestEngineDrainCancelsBlockedClaimWithoutTerminalFailure(t *testing.T) {
 }
 
 func TestEngineDrainJoinsClaimCommittedAcrossAdmissionBarrier(t *testing.T) {
-	t.Parallel()
 	claimStarted := make(chan struct{})
 	releaseClaim := make(chan struct{})
 	handlerStarted := make(chan struct{})
@@ -127,7 +124,6 @@ func TestEngineDrainJoinsClaimCommittedAcrossAdmissionBarrier(t *testing.T) {
 }
 
 func TestEngineDrainCancelsAndJoinsRegisteredAttempt(t *testing.T) {
-	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		started := make(chan struct{})
 		stopped := make(chan struct{})
@@ -160,7 +156,6 @@ func TestEngineDrainCancelsAndJoinsRegisteredAttempt(t *testing.T) {
 }
 
 func TestEngineDrainReportsUnsafeUntilAttemptJoins(t *testing.T) {
-	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		started := make(chan struct{})
 		release := make(chan struct{})

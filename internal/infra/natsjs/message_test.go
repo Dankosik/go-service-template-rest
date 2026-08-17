@@ -12,7 +12,6 @@ import (
 )
 
 func TestMessageIsImmutable(t *testing.T) {
-	t.Parallel()
 	msg := &fakeMsg{
 		subject: "events.created",
 		header:  eventHeaders(validTestEvent()),
@@ -52,7 +51,6 @@ func TestMessageIsImmutable(t *testing.T) {
 }
 
 func TestPermanent(t *testing.T) {
-	t.Parallel()
 	want := errors.New("poison")
 	err := Permanent(want)
 	if !isPermanent(err) || !errors.Is(err, want) {

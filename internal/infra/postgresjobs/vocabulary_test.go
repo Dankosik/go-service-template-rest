@@ -7,7 +7,6 @@ import (
 )
 
 func TestVocabularyFallsBackForUnknownValues(t *testing.T) {
-	t.Parallel()
 	if got := metricEvent("sentinel"); got != metricOutcomeOther {
 		t.Fatalf("metricEvent() = %q, want %q", got, metricOutcomeOther)
 	}

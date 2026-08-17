@@ -11,7 +11,6 @@ import (
 )
 
 func TestMetadataAndDeleteExposePortableResults(t *testing.T) {
-	t.Parallel()
 	var requests atomic.Int32
 	modified := time.Date(2026, 8, 12, 10, 11, 12, 0, time.FixedZone("offset", 3*60*60))
 	client := scriptedClient(t, func(request *http.Request) (*http.Response, error) {
@@ -55,7 +54,6 @@ func TestMetadataAndDeleteExposePortableResults(t *testing.T) {
 		{name: "concealed absence", code: http.StatusForbidden, body: `<Error><Code>AccessDenied</Code></Error>`, want: objectstorage.KindDenied},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
 			client := scriptedClient(t, func(*http.Request) (*http.Response, error) {
 				return s3Response(test.code, nil, test.body), nil
 			})

@@ -7,7 +7,6 @@ import (
 )
 
 func TestWebhookSigningContract(t *testing.T) {
-	t.Parallel()
 	key := []byte("0123456789abcdef0123456789abcdef")
 	header, evidence, err := SignV1("test_delivery_01", time.Unix(1700000000, 0), []byte(`{"event":"order.created","id":"evt_01"}`), []SigningKey{{Reference: "key-1", Bytes: key}})
 	if err != nil {

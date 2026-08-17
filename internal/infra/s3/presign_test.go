@@ -14,7 +14,6 @@ import (
 )
 
 func TestPresignGETIsBoundedAndSecret(t *testing.T) {
-	t.Parallel()
 	var requests int
 	cfg := validConfig(ProviderAmazonS3)
 	cfg.MaxPresignLifetime = maximumPresignLifetime
@@ -53,7 +52,6 @@ func TestPresignGETIsBoundedAndSecret(t *testing.T) {
 }
 
 func TestPresignedGETValidatorRejectsScopeAndLifetimeDrift(t *testing.T) {
-	t.Parallel()
 	cfg := validConfig(ProviderAmazonS3)
 	client := scriptedClientWithConfig(t, cfg, func(*http.Request) (*http.Response, error) {
 		t.Fatal("presign validator made an HTTP request")
@@ -104,7 +102,6 @@ func TestPresignedGETValidatorRejectsScopeAndLifetimeDrift(t *testing.T) {
 		{name: "signed headers order", mutate: func(_ *url.URL, query url.Values, _ http.Header) { query.Set("X-Amz-SignedHeaders", "host;host") }},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
 			target, parseErr := url.Parse(result.URL)
 			if parseErr != nil {
 				t.Fatal(parseErr)

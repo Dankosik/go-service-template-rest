@@ -11,7 +11,6 @@ import (
 )
 
 func TestPackageContract(t *testing.T) {
-	t.Parallel()
 	allowed := map[string]bool{
 		"Client": true, "Config": true, "FailureClass": true, "FailureClassOf": true,
 		"GRPC": true, "HTTPClient": true, "New": true, "NewGRPC": true, "NewHTTPClient": true,

@@ -87,11 +87,11 @@ func resetConfigEnv(t *testing.T) {
 	// profile:object-storage:start
 	setObjectStorageTestEnv(t)
 	// profile:object-storage:end
-	//nolint:paralleltest // This test mutates process-global environment or working directory.
-
-	// profile:outbound-auth-oauth2-client-credentials:start
 }
 
+// profile:outbound-auth-oauth2-client-credentials:start
+//
+//nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
 func setOutboundAuthTestEnv(t *testing.T) {
 	t.Helper()
 	for key, value := range map[string]string{

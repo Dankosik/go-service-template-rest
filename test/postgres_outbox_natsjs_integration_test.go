@@ -16,7 +16,6 @@ import (
 )
 
 func TestPostgresOutboxNATSConformance(t *testing.T) {
-	t.Parallel()
 	telemetrytest.InstallSpanRecorder(t)
 	fixture := newNATSFixture(t)
 	publisher := natsjs.NewOutboxPublisher(fixture.client(t, natsjs.RoleProducer).Producer())

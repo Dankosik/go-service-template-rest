@@ -17,7 +17,6 @@ import (
 )
 
 func TestTokenEndpointAdmissionPreventsCredentialDisclosure(t *testing.T) {
-	t.Parallel()
 	cfg := validTestConfig()
 	client, err := newTokenHTTPClient(cfg, nil)
 	if err != nil {
@@ -57,9 +56,7 @@ func TestTokenEndpointAdmissionPreventsCredentialDisclosure(t *testing.T) {
 }
 
 func TestProviderGrantRequestAndStrictResponse(t *testing.T) {
-	t.Parallel()
 	t.Run("exact Basic form transaction", func(t *testing.T) {
-		t.Parallel()
 		cfg := validTestConfig()
 		var calls int
 		client := doerFunc(func(request *http.Request) (*http.Response, error) {
@@ -123,7 +120,6 @@ func TestProviderGrantRequestAndStrictResponse(t *testing.T) {
 	}
 	for _, test := range validCases {
 		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
 			token, calls, err := acquireScripted(t, test.mediaType, test.body, fixedProviderTime, fixedProviderTime)
 			if err != nil || calls != 1 || token.value == "" {
 				t.Fatalf("acquire() token=%#v error=%v calls=%d", token, err, calls)
@@ -171,7 +167,6 @@ func TestProviderGrantRequestAndStrictResponse(t *testing.T) {
 	}
 	for _, test := range invalidCases {
 		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
 			secondNow := test.secondNow
 			if secondNow.IsZero() {
 				secondNow = fixedProviderTime
@@ -189,9 +184,7 @@ func TestProviderGrantRequestAndStrictResponse(t *testing.T) {
 }
 
 func TestProviderFailureClassificationIsClosed(t *testing.T) {
-	t.Parallel()
 	t.Run("response returned with transport error is closed", func(t *testing.T) {
-		t.Parallel()
 		closed := false
 		provider := mustProvider(t, doerFunc(func(*http.Request) (*http.Response, error) {
 			return &http.Response{Body: closeTrackingBody{Reader: strings.NewReader(""), closed: &closed}}, errors.New(forbiddenCanary)
@@ -225,7 +218,6 @@ func TestProviderFailureClassificationIsClosed(t *testing.T) {
 	}
 	for _, test := range responseCases {
 		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
 			calls := 0
 			provider := mustProvider(t, doerFunc(func(*http.Request) (*http.Response, error) {
 				calls++
@@ -255,7 +247,6 @@ func TestProviderFailureClassificationIsClosed(t *testing.T) {
 	}
 	for _, test := range transportCases {
 		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
 			calls := 0
 			provider := mustProvider(t, doerFunc(func(*http.Request) (*http.Response, error) {
 				calls++

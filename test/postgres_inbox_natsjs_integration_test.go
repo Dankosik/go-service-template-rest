@@ -17,7 +17,6 @@ import (
 )
 
 func TestPostgresInboxNATSLogicalIdentityAndAcknowledgement(t *testing.T) {
-	t.Parallel()
 	ctx, pool := newInboxFixture(t)
 	createInboxEffects(t, ctx, pool)
 	fixture := newNATSFixture(t)
@@ -157,7 +156,6 @@ func TestPostgresInboxNATSLogicalIdentityAndAcknowledgement(t *testing.T) {
 	}
 
 	t.Run("forced shutdown rolls back before redelivery", func(t *testing.T) {
-		t.Parallel()
 		const (
 			shutdownConsumer    = "postgres-inbox-shutdown-worker"
 			shutdownMessage     = "logical-shutdown"

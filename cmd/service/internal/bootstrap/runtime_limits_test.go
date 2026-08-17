@@ -29,7 +29,6 @@ import (
 )
 
 func TestApplyMemoryLimitSkipsWhenDisabled(t *testing.T) {
-	t.Parallel()
 	restoreMemoryLimit(t)
 
 	var logged bytes.Buffer

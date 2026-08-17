@@ -8,7 +8,6 @@ import (
 )
 
 func TestEventValidation(t *testing.T) {
-	t.Parallel()
 	event := validTestEvent()
 	if err := validateEvent(event, len(event.Payload)); err != nil {
 		t.Fatalf("validateEvent(valid) error = %v", err)
@@ -33,7 +32,6 @@ func TestEventValidation(t *testing.T) {
 	}
 	for name, mutate := range cases {
 		t.Run(name, func(t *testing.T) {
-			t.Parallel()
 			candidate := event
 			candidate.Payload = slices.Clone(event.Payload)
 			mutate(&candidate)

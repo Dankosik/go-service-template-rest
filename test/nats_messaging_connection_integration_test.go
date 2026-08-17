@@ -20,7 +20,6 @@ import (
 )
 
 func TestNATSStartupAdmission(t *testing.T) {
-	t.Parallel()
 	closedListener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("reserve unavailable endpoint: %v", err)
@@ -68,7 +67,6 @@ func TestNATSStartupAdmission(t *testing.T) {
 	}
 	for name, streamConfig := range unsafeStreams {
 		t.Run(name, func(t *testing.T) {
-			t.Parallel()
 			if _, err := f.js.CreateStream(t.Context(), streamConfig); err != nil {
 				t.Fatalf("create unsafe stream: %v", err)
 			}
@@ -99,7 +97,6 @@ func TestNATSStartupAdmission(t *testing.T) {
 		"oversized source": int32(workerCfg.MaxDeliveryBytes + 1),
 	} {
 		t.Run(name, func(t *testing.T) {
-			t.Parallel()
 			if _, err := f.js.UpdateStream(t.Context(), jetstream.StreamConfig{
 				Name: sourceStream, Subjects: []string{"events.>"}, Storage: jetstream.FileStorage, MaxMsgSize: maxMessageSize,
 			}); err != nil {
@@ -176,7 +173,6 @@ func TestNATSStartupAdmission(t *testing.T) {
 }
 
 func TestNATSReadinessRejectsStreamContractDrift(t *testing.T) {
-	t.Parallel()
 	f := newNATSFixture(t)
 	client := f.client(t, natsjs.RoleWorker)
 	workerCfg := testWorkerConfig()
@@ -215,7 +211,6 @@ func TestNATSReadinessRejectsStreamContractDrift(t *testing.T) {
 }
 
 func TestNATSAuthenticatedStartupAdmission(t *testing.T) {
-	t.Parallel()
 	f := newAuthenticatedNATSFixture(t)
 	valid := testClientConfig()
 	valid.URLs = []string{f.url}
@@ -239,7 +234,6 @@ func TestNATSAuthenticatedStartupAdmission(t *testing.T) {
 }
 
 func TestNATSConnectionLossAndReconnect(t *testing.T) {
-	t.Parallel()
 	f := newNATSFixture(t)
 	client := f.client(t, natsjs.RoleProducer)
 	runCtx, cancelRun := context.WithCancel(t.Context())
@@ -280,7 +274,6 @@ func TestNATSConnectionLossAndReconnect(t *testing.T) {
 }
 
 func TestNATSWorkerConnectionLossAndReconnect(t *testing.T) {
-	t.Parallel()
 	f := newNATSFixture(t)
 	delivered := make(chan struct{}, 1)
 	client, _, errCh := f.worker(t, func(context.Context, natsjs.Message) error {
@@ -314,7 +307,6 @@ func TestNATSWorkerConnectionLossAndReconnect(t *testing.T) {
 }
 
 func TestNATSConnectionReconnectExhaustion(t *testing.T) {
-	t.Parallel()
 	if testing.Short() {
 		t.Skip("reconnect exhaustion exercises the fixed 60 second budget")
 	}

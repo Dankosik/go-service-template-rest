@@ -20,7 +20,6 @@ import (
 )
 
 func TestGRPCIdentityParityAndMetadataRemoval(t *testing.T) {
-	t.Parallel()
 	now := testNow
 	key := loadTestRSAKey(t, testSigningKey)
 	verifier := newTestVerifier(t, key)
@@ -75,7 +74,6 @@ func TestGRPCIdentityParityAndMetadataRemoval(t *testing.T) {
 // which check said so, exactly as it would for KindInvalid. The HTTP side of the
 // same property is a case in TestHTTPAuthnBoundary.
 func TestGRPCLifetimeIsIndistinguishableFromAnInvalidCredential(t *testing.T) {
-	t.Parallel()
 	lifetime := status.Convert(grpcAuthenticationError(failure(KindLifetime)))
 	invalid := status.Convert(grpcAuthenticationError(failure(KindInvalid)))
 	if lifetime.Code() != invalid.Code() || lifetime.Message() != invalid.Message() {
@@ -93,7 +91,6 @@ func TestGRPCLifetimeIsIndistinguishableFromAnInvalidCredential(t *testing.T) {
 }
 
 func TestGRPCHealthCheckIsPublicAndWatchIsProtected(t *testing.T) {
-	t.Parallel()
 	key := loadTestRSAKey(t, testSigningKey)
 	verifier := newTestVerifier(t, key)
 	ctx := metadata.NewIncomingContext(t.Context(), metadata.Pairs("authorization", "not-a-token"))
@@ -132,7 +129,6 @@ func TestGRPCHealthCheckIsPublicAndWatchIsProtected(t *testing.T) {
 }
 
 func TestGRPCAuthnBoundaryExactHealthAllowlist(t *testing.T) {
-	t.Parallel()
 	key := loadTestRSAKey(t, testSigningKey)
 	verifier := newTestVerifier(t, key)
 	const futureHealthMethod = "/grpc.health.v1.Health/Future"
@@ -173,7 +169,6 @@ func TestGRPCAuthnBoundaryExactHealthAllowlist(t *testing.T) {
 }
 
 func TestGRPCStreamIdentityParityAndMetadataRemoval(t *testing.T) {
-	t.Parallel()
 	now := testNow
 	key := loadTestRSAKey(t, testSigningKey)
 	verifier := newTestVerifier(t, key)
@@ -223,7 +218,6 @@ func TestGRPCStreamIdentityParityAndMetadataRemoval(t *testing.T) {
 }
 
 func TestGRPCStreamMessageOperationsHonorAuthenticatedContext(t *testing.T) {
-	t.Parallel()
 	expired, cancelExpired := context.WithDeadline(t.Context(), time.Now().Add(-time.Second))
 	defer cancelExpired()
 	var recvCalls, sendCalls int
@@ -273,7 +267,6 @@ func TestGRPCStreamMessageOperationsHonorAuthenticatedContext(t *testing.T) {
 }
 
 func TestGRPCProviderTimeoutIsUnavailable(t *testing.T) {
-	t.Parallel()
 	now := testNow
 	first := loadTestRSAKey(t, testSigningKey)
 	second := loadTestRSAKey(t, testRotatedKey)

@@ -54,7 +54,6 @@ func jobsWorkerLifecycleConfig(t *testing.T) config.Config {
 }
 
 func TestJobsWorkerLifecycleDrainsOnceAfterSignal(t *testing.T) {
-	t.Parallel()
 	signalCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	engine := &lifecycleEngineStub{facts: postgresjobs.EngineFacts{ClaimAdmissionOpen: true, Compatible: true, ObservationFresh: true}}
@@ -75,7 +74,6 @@ func TestJobsWorkerLifecycleDrainsOnceAfterSignal(t *testing.T) {
 }
 
 func TestJobsWorkerLifecycleWithdrawsReadinessBeforeDrain(t *testing.T) {
-	t.Parallel()
 	signalCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	cfg := jobsWorkerLifecycleConfig(t)
@@ -123,7 +121,6 @@ func TestJobsWorkerLifecycleWithdrawsReadinessBeforeDrain(t *testing.T) {
 }
 
 func TestJobsWorkerLifecycleDrainsAfterTerminalEngineFailure(t *testing.T) {
-	t.Parallel()
 	terminal := errors.New("terminal engine failure")
 	engine := &lifecycleEngineStub{
 		facts: postgresjobs.EngineFacts{ClaimAdmissionOpen: true, Compatible: true, ObservationFresh: true},
@@ -141,7 +138,6 @@ func TestJobsWorkerLifecycleDrainsAfterTerminalEngineFailure(t *testing.T) {
 }
 
 func TestJobsWorkerLifecycleDrainsAfterAsynchronousEngineFailure(t *testing.T) {
-	t.Parallel()
 	want := errors.New("asynchronous finalization failure")
 	terminal := make(chan error, 1)
 	terminal <- want

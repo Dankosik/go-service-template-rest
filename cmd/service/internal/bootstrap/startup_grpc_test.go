@@ -83,7 +83,6 @@ func TestNewGRPCRuntimeBuildsExplicitPlaintextServer(t *testing.T) {
 
 //nolint:paralleltest // Installs a process-wide tracer provider to observe bootstrap wiring.
 func TestNewGRPCRuntimeMapsObservabilityPolicy(t *testing.T) {
-	t.Parallel()
 	spanRecorder := telemetrytest.InstallSpanRecorder(t)
 
 	for _, testCase := range []struct {
@@ -130,7 +129,6 @@ func TestNewGRPCRuntimeMapsObservabilityPolicy(t *testing.T) {
 		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
 			cfg := grpcRuntimeTestConfig()
 			cfg.GRPC.Server.TransportSecurity = "plaintext"
 			cfg.GRPC.Server.AllowPlaintext = true

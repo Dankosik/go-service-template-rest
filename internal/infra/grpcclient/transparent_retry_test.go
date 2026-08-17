@@ -36,7 +36,6 @@ import (
 const transparentRetryMethod = "/grpcclient.test.Transparent/Call"
 
 func TestTransparentRetryReappliesClosedPropagationPerAttempt(t *testing.T) {
-	t.Parallel()
 	for _, testCase := range []struct {
 		name          string
 		policy        grpcclient.PropagationPolicy
@@ -53,7 +52,6 @@ func TestTransparentRetryReappliesClosedPropagationPerAttempt(t *testing.T) {
 		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
 			peer := startTransparentRetryPeer(t)
 			recorder, tracerProvider := telemetrytest.NewRecordingTracerProvider(t)
 

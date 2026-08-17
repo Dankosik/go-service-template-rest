@@ -19,7 +19,6 @@ import (
 )
 
 func TestGeneratedClientCompositionUsesSharedConnection(t *testing.T) {
-	t.Parallel()
 	unaryMetadata, _, target := startMetadataCaptureServer(t)
 	recorder, tracerProvider := telemetrytest.NewRecordingTracerProvider(t)
 

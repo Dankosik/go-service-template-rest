@@ -172,7 +172,6 @@ func webhookActionDeliveryRow(now time.Time, summary string) pgx.Row {
 }
 
 func TestResolveAcceptanceRejectsAbsentRecord(t *testing.T) {
-	t.Parallel()
 	prepared, err := PrepareAcceptance(goldenAcceptance())
 	if err != nil {
 		t.Fatal(err)
@@ -185,7 +184,6 @@ func TestResolveAcceptanceRejectsAbsentRecord(t *testing.T) {
 }
 
 func TestResolveAcceptanceReadbackReturnsDeliveryReceipt(t *testing.T) {
-	t.Parallel()
 	prepared, err := PrepareAcceptance(goldenAcceptance())
 	if err != nil {
 		t.Fatal(err)
@@ -201,7 +199,6 @@ func TestResolveAcceptanceReadbackReturnsDeliveryReceipt(t *testing.T) {
 		fingerprint [32]byte
 	}{{name: "v2", fingerprint: prepared.Fingerprint}, {name: "legacy-v1", fingerprint: legacy}} {
 		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
 			stub := &webhookQueryStub{
 				rowResults: []pgx.Row{webhookRowStub{err: pgx.ErrNoRows}, webhookScanRow(func(destinations ...any) error {
 					return setScanValues(destinations,
@@ -227,7 +224,6 @@ func TestResolveAcceptanceReadbackReturnsDeliveryReceipt(t *testing.T) {
 }
 
 func TestStoreQueryHelpersPropagateDatabaseFailures(t *testing.T) {
-	t.Parallel()
 	prepared, err := PrepareAcceptance(goldenAcceptance())
 	if err != nil {
 		t.Fatal(err)
@@ -241,7 +237,6 @@ func TestStoreQueryHelpersPropagateDatabaseFailures(t *testing.T) {
 		{name: "acceptance", rowResults: []pgx.Row{webhookRowStub{err: pgx.ErrNoRows}, webhookRowStub{err: errors.New("read acceptance")}}, want: AcceptanceUnknown},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
 			receipt, err := resolveAcceptance(t.Context(), sqlcgen.New(&webhookQueryStub{rowResults: test.rowResults}), prepared)
 			if err == nil || receipt.Disposition != test.want {
 				t.Fatalf("resolveAcceptance() = %+v, %v", receipt, err)
@@ -279,7 +274,6 @@ func TestStoreQueryHelpersPropagateDatabaseFailures(t *testing.T) {
 }
 
 func TestPreparedAcceptanceAndStoreInputGuards(t *testing.T) {
-	t.Parallel()
 	prepared, err := PrepareAcceptance(goldenAcceptance())
 	if err != nil {
 		t.Fatal(err)
@@ -312,7 +306,6 @@ func TestPreparedAcceptanceAndStoreInputGuards(t *testing.T) {
 }
 
 func TestOperatorMutationInputGuards(t *testing.T) {
-	t.Parallel()
 	now := time.Unix(1700000000, 0)
 	guardQueries := sqlcgen.New(&webhookQueryStub{})
 	store := &Store{options: StoreOptions{AttemptTimeout: MaxAttemptTime, ResponseHeaderTimeout: MaxAttemptTime, ResponseHeaderBytes: MaxResponseBytes, ResponseBodyBytes: MaxResponseBytes, DrainTimeout: MaxDrainTime}}
@@ -368,7 +361,6 @@ func TestOperatorMutationInputGuards(t *testing.T) {
 }
 
 func TestTombstoneReplayRecognizesConflictsAndReplays(t *testing.T) {
-	t.Parallel()
 	request := ActionRequest{OwnerScope: "owner", Actor: "actor", ActionID: "privacy", Kind: ActionPrivacyDelete, TargetKind: "event", TargetID: "event", Reason: "privacy", Payload: &PrivacyDeletionAction{TargetKind: "event", TargetID: "event", Mode: "minimal_tombstone", DeletionAuthority: "ticket"}}
 	fingerprint, err := request.Fingerprint()
 	if err != nil {

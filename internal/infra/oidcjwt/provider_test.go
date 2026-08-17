@@ -18,7 +18,6 @@ import (
 )
 
 func TestAuthnExternalHTTPSPolicyConstruction(t *testing.T) {
-	t.Parallel()
 	cfg := providerHTTPConfig("https://issuer.example.com")
 	if cfg.DependencyName != "oidc" ||
 		cfg.BaseURL != "https://issuer.example.com" ||
@@ -35,7 +34,6 @@ func TestAuthnExternalHTTPSPolicyConstruction(t *testing.T) {
 }
 
 func TestInitialTrustOutageFailsClosed(t *testing.T) {
-	t.Parallel()
 	transportErr := errors.New("poison outage")
 	client := &scriptedClient{responses: []scriptedResponse{{err: transportErr}}}
 	_, err := buildTestVerifier(t, testVerifierOptions{now: time.Now, client: client})
@@ -51,7 +49,6 @@ func TestInitialTrustOutageFailsClosed(t *testing.T) {
 }
 
 func TestProviderFetchFailureCategories(t *testing.T) {
-	t.Parallel()
 	for _, testCase := range []struct {
 		name   string
 		target string
@@ -129,7 +126,6 @@ func TestProviderFetchFailureCategories(t *testing.T) {
 		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
 			_, err := fetchDocument(t.Context(), testCase.client, testCase.target)
 			if err == nil {
 				t.Fatal("fetchDocument() error = nil")
@@ -159,7 +155,6 @@ func (c bodyErrorClient) Do(*http.Request) (*http.Response, error) {
 }
 
 func TestInitialTrustAcceptsDiscoveredJWKSQuery(t *testing.T) {
-	t.Parallel()
 	const jwksURI = "https://keys.example.net/jwks?tenant=main"
 	key := loadTestRSAKey(t, testSigningKey)
 	client := &scriptedClient{responses: []scriptedResponse{
@@ -180,7 +175,6 @@ func TestInitialTrustAcceptsDiscoveredJWKSQuery(t *testing.T) {
 }
 
 func TestInitialTrustHonorsCancellationAndDeadline(t *testing.T) {
-	t.Parallel()
 	for _, testCase := range []struct {
 		name string
 		ctx  func() (context.Context, context.CancelFunc)
@@ -204,7 +198,6 @@ func TestInitialTrustHonorsCancellationAndDeadline(t *testing.T) {
 		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
 			ctx, cancel := testCase.ctx()
 			defer cancel()
 			client := &scriptedClient{responses: []scriptedResponse{{status: http.StatusOK, body: []byte(`{}`)}}}

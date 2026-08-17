@@ -7,7 +7,6 @@ import (
 )
 
 func TestNumericBoundsRejectOverflow(t *testing.T) {
-	t.Parallel()
 	for _, test := range []struct {
 		name string
 		err  error
@@ -17,7 +16,6 @@ func TestNumericBoundsRejectOverflow(t *testing.T) {
 		{"duration", func() error { _, err := durationValue(math.MaxInt64 + 1); return err }()},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
 			if !errors.Is(test.err, ErrConfig) {
 				t.Fatalf("overflow error = %v", test.err)
 			}
@@ -26,7 +24,6 @@ func TestNumericBoundsRejectOverflow(t *testing.T) {
 }
 
 func TestNumericBoundsAcceptBoundaries(t *testing.T) {
-	t.Parallel()
 	if value, err := remainingBatch(10, 3); err != nil || value != 7 {
 		t.Fatalf("remainingBatch(10, 3) = %d, %v", value, err)
 	}

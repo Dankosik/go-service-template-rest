@@ -8,7 +8,6 @@ import (
 )
 
 func TestDefinitionRejectsUnsafeRetryAndRecoveryPolicies(t *testing.T) {
-	t.Parallel()
 	for _, test := range []struct {
 		name   string
 		update func(*DefinitionInput[testArgs])
@@ -41,7 +40,6 @@ func TestDefinitionRejectsUnsafeRetryAndRecoveryPolicies(t *testing.T) {
 		}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
 			input := testDefinitionInput(Revision{Kind: "email", ArgsVersion: "v1", PolicyVersion: "policy-test"})
 			test.update(&input)
 			if _, err := NewDefinition(input); !errors.Is(err, ErrInvalidDefinition) {
@@ -52,7 +50,6 @@ func TestDefinitionRejectsUnsafeRetryAndRecoveryPolicies(t *testing.T) {
 }
 
 func TestDefinitionRejectsMalformedOrInadmissiblePayloads(t *testing.T) {
-	t.Parallel()
 	definition := testDefinition(t, Revision{Kind: "email", ArgsVersion: "v1", PolicyVersion: "payload-test"})
 	for _, test := range []struct {
 		name    string
@@ -65,7 +62,6 @@ func TestDefinitionRejectsMalformedOrInadmissiblePayloads(t *testing.T) {
 		{name: "over maximum", payload: []byte(strings.Repeat("x", 1025))},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
 			if _, err := definition.Decode(test.payload); !errors.Is(err, ErrInvalidPayload) {
 				t.Fatalf("Decode() error = %v, want ErrInvalidPayload", err)
 			}

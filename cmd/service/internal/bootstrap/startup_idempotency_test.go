@@ -20,7 +20,6 @@ import (
 )
 
 func TestHTTPIdempotencyZeroRegistrationIsInert(t *testing.T) {
-	t.Parallel()
 	reader := telemetrytest.InstallManualReader(t)
 	for _, delay := range []time.Duration{0, -time.Second} {
 		cfg := config.Config{HTTPIdempotency: config.HTTPIdempotencyConfig{OwnerRecoveryDelay: delay}}
@@ -46,7 +45,6 @@ func TestHTTPIdempotencyZeroRegistrationIsInert(t *testing.T) {
 }
 
 func TestHTTPIdempotencyActiveConfigMapping(t *testing.T) {
-	t.Parallel()
 	base := config.HTTPIdempotencyConfig{
 		OwnerRecoveryDelay:     30 * time.Second,
 		MaintenanceInterval:    5 * time.Second,
@@ -84,7 +82,6 @@ func TestHTTPIdempotencyActiveConfigMapping(t *testing.T) {
 }
 
 func TestHTTPIdempotencyEpochLossDrains(t *testing.T) {
-	t.Parallel()
 	supervisor := newSupervisedBackground(t.Context(), slog.New(slog.DiscardHandler))
 	terminalErrors := make(chan error, 1)
 	terminalErrors <- postgresidempotency.ErrEpochLost
@@ -142,7 +139,6 @@ func TestHTTPIdempotencyEpochLossDrains(t *testing.T) {
 }
 
 func TestHTTPIdempotencyMaintenanceReadiness(t *testing.T) {
-	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		ctx, cancel := context.WithCancel(t.Context())
 		calls := 0
@@ -168,7 +164,6 @@ func TestHTTPIdempotencyMaintenanceReadiness(t *testing.T) {
 }
 
 func TestHTTPIdempotencyReadinessLifecycle(t *testing.T) {
-	t.Parallel()
 	zero := httpIdempotencyRuntime{}
 	if zero.ReadinessProbes() != nil {
 		t.Fatal("zero runtime registered readiness")

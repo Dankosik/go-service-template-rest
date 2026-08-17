@@ -22,7 +22,6 @@ import (
 )
 
 func TestPostgresMigrateUpNoopDownUp(t *testing.T) {
-	t.Parallel()
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
 	defer cancel()
 
@@ -89,7 +88,6 @@ func TestPostgresMigrateUpNoopDownUp(t *testing.T) {
 }
 
 func TestPostgresMigrateRepositorySourceRehearsal(t *testing.T) {
-	t.Parallel()
 	if _, err := os.Stat("../migrations"); errors.Is(err, fs.ErrNotExist) {
 		t.Skip("repository has no owned migration corpus yet")
 	} else if err != nil {
@@ -137,7 +135,6 @@ func TestPostgresMigrateRepositorySourceRehearsal(t *testing.T) {
 }
 
 func TestPostgresMigratePreservesCommittedPrefixAndRollsBackFailedFile(t *testing.T) {
-	t.Parallel()
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
 	defer cancel()
 
@@ -198,7 +195,6 @@ func TestPostgresMigratePreservesCommittedPrefixAndRollsBackFailedFile(t *testin
 }
 
 func TestPostgresMigrateRejectsSourceBehindAppliedHistory(t *testing.T) {
-	t.Parallel()
 	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
 	defer cancel()
 
@@ -223,9 +219,7 @@ func TestPostgresMigrateRejectsSourceBehindAppliedHistory(t *testing.T) {
 }
 
 func TestPostgresMigrateBoundsStatementAndDDLLockWait(t *testing.T) {
-	t.Parallel()
 	t.Run("statement timeout", func(t *testing.T) {
-		t.Parallel()
 		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 		defer cancel()
 
@@ -252,7 +246,6 @@ func TestPostgresMigrateBoundsStatementAndDDLLockWait(t *testing.T) {
 	})
 
 	t.Run("ddl lock timeout", func(t *testing.T) {
-		t.Parallel()
 		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 		defer cancel()
 
@@ -293,7 +286,6 @@ func TestPostgresMigrateBoundsStatementAndDDLLockWait(t *testing.T) {
 }
 
 func TestPostgresMigrateSessionLockSerializesConcurrentRunners(t *testing.T) {
-	t.Parallel()
 	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
 	defer cancel()
 
@@ -336,7 +328,6 @@ func TestPostgresMigrateSessionLockSerializesConcurrentRunners(t *testing.T) {
 }
 
 func TestPostgresMigrateAdvisoryLockTimeout(t *testing.T) {
-	t.Parallel()
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 
@@ -372,7 +363,6 @@ func TestPostgresMigrateAdvisoryLockTimeout(t *testing.T) {
 }
 
 func TestPostgresMigrateCancellationStopsLaterMigration(t *testing.T) {
-	t.Parallel()
 	outer, cancelOuter := context.WithTimeout(t.Context(), 20*time.Second)
 	defer cancelOuter()
 
@@ -484,7 +474,6 @@ func waitForMigrationQuery(
 const migrationQueryWait = 10 * time.Second
 
 func TestPostgresMigrateFailureDoesNotCreateDirtyState(t *testing.T) {
-	t.Parallel()
 	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
 	defer cancel()
 

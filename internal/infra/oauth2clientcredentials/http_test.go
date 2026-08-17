@@ -211,13 +211,11 @@ func closeResponse(t *testing.T, response *http.Response) {
 }
 
 func TestHTTPClientResourceAuthorityIsFixed(t *testing.T) {
-	t.Parallel()
 	t.Run("constructor mismatch", testHTTPClientResourceAuthorityMismatch)
 	t.Run("alternate authority and redirect", testHTTPClientAlternateAuthorityAndRedirectDoNotForwardBearer)
 }
 
 func testHTTPClientResourceAuthorityMismatch(t *testing.T) {
-	t.Parallel()
 	clock := newMovableClock(fixedProviderTime)
 	client := requireTestClient(t, validTestConfig(), testClientOptions{
 		now:     clock.Now,
@@ -242,13 +240,11 @@ func testHTTPClientResourceAuthorityMismatch(t *testing.T) {
 }
 
 func TestHTTPClientAttachesOneOperationToken(t *testing.T) {
-	t.Parallel()
 	t.Run("attaches fixed token", testHTTPClientAttachesOneOperationToken)
 	t.Run("token failure reaches no resource", testHTTPClientTokenFailureReachesNoResource)
 }
 
 func testHTTPClientAttachesOneOperationToken(t *testing.T) {
-	t.Parallel()
 	clock := newMovableClock(fixedProviderTime)
 	fixture := newHTTPFixture(t, clock, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -271,7 +267,6 @@ func testHTTPClientAttachesOneOperationToken(t *testing.T) {
 }
 
 func TestHTTPClientRejectsCallerAuthorization(t *testing.T) {
-	t.Parallel()
 	clock := newMovableClock(fixedProviderTime)
 	fixture := newHTTPFixture(t, clock, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -292,7 +287,6 @@ func TestHTTPClientRejectsCallerAuthorization(t *testing.T) {
 }
 
 func TestHTTPClientCallerCancellationStopsOnlyItsWait(t *testing.T) {
-	t.Parallel()
 	clock := newMovableClock(fixedProviderTime)
 	entered := make(chan struct{})
 	release := make(chan struct{})
@@ -332,10 +326,8 @@ func TestHTTPClientCallerCancellationStopsOnlyItsWait(t *testing.T) {
 }
 
 func TestHTTPClientPreservesDownstreamAuthResponses(t *testing.T) {
-	t.Parallel()
 	for _, status := range []int{http.StatusUnauthorized, http.StatusForbidden} {
 		t.Run(http.StatusText(status), func(t *testing.T) {
-			t.Parallel()
 			clock := newMovableClock(fixedProviderTime)
 			fixture := newHTTPFixture(t, clock, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(status)
@@ -359,9 +351,7 @@ func TestHTTPClientPreservesDownstreamAuthResponses(t *testing.T) {
 }
 
 func TestHTTPRetryFixesOneTokenAndStopsAtMargin(t *testing.T) {
-	t.Parallel()
 	t.Run("permitted retry reuses the operation token", func(t *testing.T) {
-		t.Parallel()
 		clock := newMovableClock(fixedProviderTime)
 		var attempts atomic.Int32
 		fixture := newHTTPFixture(t, clock, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -386,7 +376,6 @@ func TestHTTPRetryFixesOneTokenAndStopsAtMargin(t *testing.T) {
 	})
 
 	t.Run("margin stops before attempt two", func(t *testing.T) {
-		t.Parallel()
 		clock := newMovableClock(fixedProviderTime)
 		var advanceOnce sync.Once
 		fixture := newHTTPFixture(t, clock, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -414,7 +403,6 @@ func TestHTTPRetryFixesOneTokenAndStopsAtMargin(t *testing.T) {
 }
 
 func testHTTPClientTokenFailureReachesNoResource(t *testing.T) {
-	t.Parallel()
 	clock := newMovableClock(fixedProviderTime)
 	fixture := newHTTPFixture(t, clock, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -428,7 +416,6 @@ func testHTTPClientTokenFailureReachesNoResource(t *testing.T) {
 }
 
 func testHTTPClientAlternateAuthorityAndRedirectDoNotForwardBearer(t *testing.T) {
-	t.Parallel()
 	clock := newMovableClock(fixedProviderTime)
 	fixture := newHTTPFixture(t, clock, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Location", "https://"+otherResourceHost+"/stolen")

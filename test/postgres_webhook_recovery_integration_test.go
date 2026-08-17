@@ -16,7 +16,6 @@ import (
 )
 
 func TestPostgresWebhookAttemptIdentity(t *testing.T) {
-	t.Parallel()
 	ctx, pool, store, manifest := newPostgresWebhookFixture(t)
 	prepared := webhookPrepared(t, "identity")
 	if err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error { _, err := store.Accept(ctx, tx, prepared); return err }); err != nil {
@@ -29,7 +28,6 @@ func TestPostgresWebhookAttemptIdentity(t *testing.T) {
 }
 
 func TestPostgresWebhookRetryEvidenceAndExhaustion(t *testing.T) {
-	t.Parallel()
 	ctx, pool, store, manifest := newPostgresWebhookFixture(t)
 	prepared := webhookPrepared(t, "retry-evidence")
 	if err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error { _, err := store.Accept(ctx, tx, prepared); return err }); err != nil {
@@ -99,7 +97,6 @@ func TestPostgresWebhookRetryEvidenceAndExhaustion(t *testing.T) {
 }
 
 func TestPostgresWebhookZeroAttemptDeadlineExhaustion(t *testing.T) {
-	t.Parallel()
 	ctx, pool, store, _ := newPostgresWebhookFixture(t)
 	prepared := webhookPrepared(t, "zero-attempt-expiry")
 	if err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error { _, err := store.Accept(ctx, tx, prepared); return err }); err != nil {
@@ -121,7 +118,6 @@ func TestPostgresWebhookZeroAttemptDeadlineExhaustion(t *testing.T) {
 }
 
 func TestPostgresWebhookQuarantinesLedgerDivergence(t *testing.T) {
-	t.Parallel()
 	ctx, pool, store, manifest := newPostgresWebhookFixture(t)
 	prepared := webhookPrepared(t, "ledger-divergence")
 	if err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error { _, err := store.Accept(ctx, tx, prepared); return err }); err != nil {
@@ -147,7 +143,6 @@ func TestPostgresWebhookQuarantinesLedgerDivergence(t *testing.T) {
 }
 
 func TestPostgresWebhookFencedRecovery(t *testing.T) {
-	t.Parallel()
 	ctx, pool, store, manifest := newPostgresWebhookFixture(t)
 	prepared := webhookPrepared(t, "recovery")
 	if err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error { _, err := store.Accept(ctx, tx, prepared); return err }); err != nil {
@@ -180,7 +175,6 @@ func TestPostgresWebhookFencedRecovery(t *testing.T) {
 }
 
 func TestPostgresWebhookCapacitySlotRequiresReconciliation(t *testing.T) {
-	t.Parallel()
 	ctx, pool, store, _ := newPostgresWebhookFixture(t)
 	secretA := base64.StdEncoding.EncodeToString([]byte("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
 	secretB := base64.StdEncoding.EncodeToString([]byte("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"))
@@ -237,7 +231,6 @@ func TestPostgresWebhookCapacitySlotRequiresReconciliation(t *testing.T) {
 }
 
 func TestPostgresWebhookRedrive(t *testing.T) {
-	t.Parallel()
 	ctx, pool, store, manifest := newPostgresWebhookFixture(t)
 	prepared := webhookPrepared(t, "redrive")
 	if err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error { _, err := store.Accept(ctx, tx, prepared); return err }); err != nil {

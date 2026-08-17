@@ -17,7 +17,6 @@ import (
 )
 
 func TestWebhookNetworkSecurity(t *testing.T) {
-	t.Parallel()
 	manifest := webhookManifest(t, 1, "owner-a", "dest-a", "key-a")
 	tests := []struct {
 		name      string
@@ -30,7 +29,6 @@ func TestWebhookNetworkSecurity(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
 			resolver := webhookResolver(t, "hooks.test", test.addresses)
 			attempt := webhookNetworkAttempt()
 			ctx, cancel := context.WithDeadline(t.Context(), attempt.Deadline)
@@ -53,7 +51,6 @@ func TestWebhookNetworkSecurity(t *testing.T) {
 }
 
 func TestWebhookBoundedAttempt(t *testing.T) {
-	t.Parallel()
 	attempt := webhookNetworkAttempt()
 	prepared := postgreswebhook.PreparedSend{
 		Attempt: attempt, URL: mustWebhookURL(t, attempt.URL),
@@ -72,7 +69,6 @@ func TestWebhookBoundedAttempt(t *testing.T) {
 }
 
 func TestWebhookRetrySignatureIdentity(t *testing.T) {
-	t.Parallel()
 	key := []byte("0123456789abcdef0123456789abcdef")
 	body := []byte(`{"event":"order.created","id":"evt-01"}`)
 	firstAt := time.Unix(1700000000, 0)

@@ -18,7 +18,6 @@ import (
 )
 
 func TestAuthnHealthState(t *testing.T) {
-	t.Parallel()
 	server, connection := startTestServer(t, testServerConfig(), nil)
 	healthClient := healthgrpc.NewHealthClient(connection)
 

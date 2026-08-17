@@ -17,7 +17,6 @@ import (
 )
 
 func TestPostgresOutboxEnvelope(t *testing.T) {
-	t.Parallel()
 	ctx, pool, store := newOutboxFixture(t)
 	payload := []byte(" {\n  \"id\" : \"42\"\n} ")
 	metadata := []byte(`{"z":1,"a":"two"}`)
@@ -178,7 +177,6 @@ func TestPostgresOutboxEnvelope(t *testing.T) {
 }
 
 func TestPostgresOutboxAtomicity(t *testing.T) {
-	t.Parallel()
 	ctx, pool, store := newOutboxFixture(t)
 	if _, err := pool.PGX().Exec(ctx, `
 		CREATE TABLE outbox_domain_probe (id text PRIMARY KEY);
@@ -222,7 +220,6 @@ func TestPostgresOutboxAtomicity(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
 			err := pool.InTx(ctx, pgx.TxOptions{}, test.run)
 			if err == nil {
 				t.Fatal("InTx() succeeded, want rollback")
@@ -301,7 +298,6 @@ func TestPostgresOutboxAtomicity(t *testing.T) {
 }
 
 func TestPostgresOutboxCommitReceiptAtomicityAndLifetime(t *testing.T) {
-	t.Parallel()
 	ctx, pool, store := newOutboxFixture(t)
 	counts := func(id string) (events, receipts int) {
 		t.Helper()
@@ -397,7 +393,6 @@ func TestPostgresOutboxCommitReceiptAtomicityAndLifetime(t *testing.T) {
 }
 
 func TestPostgresOutboxCommitReconciliationAuthority(t *testing.T) {
-	t.Parallel()
 	ctx, pool, store := newOutboxFixture(t)
 
 	applied := outboxEvent("reconcile-applied")
@@ -477,7 +472,6 @@ func TestPostgresOutboxCommitReconciliationAuthority(t *testing.T) {
 // them rather than taking a round trip each, and the events still see the same
 // durable state and report the same outcomes they would one call at a time.
 func TestPostgresOutboxBatchedAppend(t *testing.T) {
-	t.Parallel()
 	ctx, pool, store := newOutboxFixture(t)
 
 	// Mixed shapes commit together, and a key's events are ordered by their own
@@ -544,7 +538,6 @@ func TestPostgresOutboxBatchedAppend(t *testing.T) {
 }
 
 func TestPostgresOutboxCleanup(t *testing.T) {
-	t.Parallel()
 	ctx, pool, store := newOutboxFixture(t)
 	mustAppendOutbox(t, ctx, pool, store, orderedEvent("cleanup-ordered", "cleanup-key", 1))
 	mustAppendOutbox(t, ctx, pool, store, outboxEvent("cleanup-unordered"))

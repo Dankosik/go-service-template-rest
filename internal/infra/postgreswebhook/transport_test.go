@@ -21,7 +21,6 @@ import (
 )
 
 func TestWebhookPrepareSendUsesCallerAttemptDeadline(t *testing.T) {
-	t.Parallel()
 	secret := base64.StdEncoding.EncodeToString([]byte("0123456789abcdef0123456789abcdef"))
 	manifest, err := ParseSecretManifest(`{"revision":1,"entries":[{"owner_scope":"owner-a","destination_id":"dest-a","key_reference":"key-a","secret":"whsec_` + secret + `"}]}`)
 	if err != nil {
@@ -49,7 +48,6 @@ func TestWebhookPrepareSendUsesCallerAttemptDeadline(t *testing.T) {
 }
 
 func TestWebhookDNSEvidenceVector(t *testing.T) {
-	t.Parallel()
 	digest, err := DNSSetEvidence([]netip.Addr{netip.MustParseAddr("2001:db8::1"), netip.MustParseAddr("192.0.2.1")})
 	if err != nil {
 		t.Fatal(err)
@@ -60,7 +58,6 @@ func TestWebhookDNSEvidenceVector(t *testing.T) {
 }
 
 func TestWebhookAddressFallbackAuthorizesEveryCandidate(t *testing.T) {
-	t.Parallel()
 	first := netip.MustParseAddr("8.8.8.8")
 	second := netip.MustParseAddr("1.1.1.1")
 	prepared := PreparedSend{Addresses: []netip.Addr{first, second}, SelectedAddress: first}
@@ -81,7 +78,6 @@ func TestWebhookAddressFallbackAuthorizesEveryCandidate(t *testing.T) {
 }
 
 func TestWebhookBoundedOneSendTransport(t *testing.T) {
-	t.Parallel()
 	var requests atomic.Int64
 	server := httptest.NewTLSServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		requests.Add(1)
@@ -122,7 +118,6 @@ func TestWebhookBoundedOneSendTransport(t *testing.T) {
 }
 
 func TestWebhookReceiverAmbiguityAndIdentity(t *testing.T) {
-	t.Parallel()
 	type received struct {
 		body      string
 		delivery  string
@@ -209,7 +204,6 @@ func TestWebhookReceiverAmbiguityAndIdentity(t *testing.T) {
 }
 
 func TestWebhookRequestContract(t *testing.T) {
-	t.Parallel()
 	prepared := PreparedSend{Attempt: ClaimedAttempt{Identity: AttemptIdentity{DeliveryID: "delivery-1"}, Body: []byte("{}"), ContentType: "application/json", AttemptedAt: time.Unix(1700000000, 0)}, Signature: "v1,test"}
 	prepared.URL, _ = parseWebhookURL("https://hooks.example.test/orders")
 	request, err := webhookRequest(t.Context(), prepared)
@@ -227,7 +221,6 @@ func TestWebhookRequestContract(t *testing.T) {
 }
 
 func TestWebhookSendBoundsAndURLValidation(t *testing.T) {
-	t.Parallel()
 	for _, raw := range []string{
 		"http://hooks.example.test/orders",
 		"https://user@hooks.example.test/orders",
@@ -257,7 +250,6 @@ func TestWebhookSendBoundsAndURLValidation(t *testing.T) {
 		{name: "body limit", body: string(make([]byte, 33))},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
 			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				if test.header != "" {
 					w.Header().Set("X-Long", test.header)
@@ -292,7 +284,6 @@ func TestWebhookSendBoundsAndURLValidation(t *testing.T) {
 }
 
 func TestWebhookCertificateFailureIsLocalDenial(t *testing.T) {
-	t.Parallel()
 	server := httptest.NewTLSServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
 	defer server.Close()
 	serverURL, err := url.Parse(server.URL)

@@ -12,7 +12,6 @@ import (
 )
 
 func TestEngineRescueBoundsCandidatesAndUsesStoredRevision(t *testing.T) {
-	t.Parallel()
 	reader := telemetrytest.InstallManualReader(t)
 	candidate := RescueCandidate{Attempt: engineClaim().Attempt, Revision: jobs.Revision{Kind: "email", ArgsVersion: "v1", PolicyVersion: "p1"}, State: jobs.StateRunning, AttemptNumber: 1, Elapsed: time.Second}
 	var limit, rescues int
@@ -62,7 +61,6 @@ func TestEngineRescueBoundsCandidatesAndUsesStoredRevision(t *testing.T) {
 }
 
 func TestEngineRescueHonorsDefinitionRecoveryWave(t *testing.T) {
-	t.Parallel()
 	emailRevision := engineClaim().Revision
 	reportRevision := jobs.Revision{Kind: "report", ArgsVersion: "v1", PolicyVersion: "p1"}
 	candidates := make([]RescueCandidate, 0, 11)
@@ -115,7 +113,6 @@ func TestEngineRescueHonorsDefinitionRecoveryWave(t *testing.T) {
 }
 
 func TestEngineRescueIncludesLocalTimeAfterDatabaseObservation(t *testing.T) {
-	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		candidate := RescueCandidate{
 			Attempt: engineClaim().Attempt, Revision: engineClaim().Revision,

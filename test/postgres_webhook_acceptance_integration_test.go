@@ -14,7 +14,6 @@ import (
 )
 
 func TestPostgresWebhookAcceptance(t *testing.T) {
-	t.Parallel()
 	ctx, pool, store, _ := newPostgresWebhookFixture(t)
 	if _, err := pool.PGX().Exec(ctx, `CREATE TABLE webhook_business_fixture (id text PRIMARY KEY)`); err != nil {
 		t.Fatal(err)
@@ -69,7 +68,6 @@ func TestPostgresWebhookAcceptance(t *testing.T) {
 }
 
 func TestPostgresWebhookAcceptanceReadback(t *testing.T) {
-	t.Parallel()
 	ctx, _, store, _ := newPostgresWebhookFixture(t)
 	prepared := webhookPrepared(t, "absent")
 	receipt, err := store.ResolveAcceptance(ctx, prepared)
@@ -79,7 +77,6 @@ func TestPostgresWebhookAcceptanceReadback(t *testing.T) {
 }
 
 func TestPostgresWebhookAcceptanceCollisionAndDestinationState(t *testing.T) {
-	t.Parallel()
 	ctx, pool, store, manifest := newPostgresWebhookFixture(t)
 	accepted := webhookPrepared(t, "collision-a")
 	if err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error { _, err := store.Accept(ctx, tx, accepted); return err }); err != nil {

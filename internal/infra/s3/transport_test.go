@@ -35,7 +35,6 @@ func (r closeRecorder) Close() error {
 }
 
 func TestTransportRefusesAlternateAuthority(t *testing.T) {
-	t.Parallel()
 	endpoint, err := url.Parse("https://bucket.s3.us-east-1.amazonaws.com")
 	if err != nil {
 		t.Fatal(err)
@@ -55,7 +54,6 @@ func TestTransportRefusesAlternateAuthority(t *testing.T) {
 }
 
 func TestTransportBoundsControlAndObjectBodies(t *testing.T) {
-	t.Parallel()
 	endpoint, err := url.Parse("https://bucket.s3.us-east-1.amazonaws.com")
 	if err != nil {
 		t.Fatal(err)
@@ -70,7 +68,6 @@ func TestTransportBoundsControlAndObjectBodies(t *testing.T) {
 		{name: "object", method: http.MethodGet, limit: 8, body: "123456789"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
 			doer := &scriptedDoer{body: test.body}
 			transport := transport{base: doer, endpoint: *endpoint, controlLimit: 4, objectLimit: 8}
 			request, err := http.NewRequestWithContext(t.Context(), test.method, endpoint.String()+"/object", http.NoBody)
@@ -94,7 +91,6 @@ func TestTransportBoundsControlAndObjectBodies(t *testing.T) {
 }
 
 func TestSDKGetObjectUsesObjectBodyLimit(t *testing.T) {
-	t.Parallel()
 	endpoint, err := url.Parse("https://bucket.s3.us-east-1.amazonaws.com")
 	if err != nil {
 		t.Fatal(err)

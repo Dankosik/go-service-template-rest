@@ -13,7 +13,6 @@ import (
 )
 
 func TestPostgresWebhookOperatorInspection(t *testing.T) {
-	t.Parallel()
 	ctx, pool, store, manifest := newPostgresWebhookFixture(t)
 	prepared := webhookPrepared(t, "inspection")
 	if err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error { _, err := store.Accept(ctx, tx, prepared); return err }); err != nil {
@@ -51,7 +50,6 @@ func TestPostgresWebhookOperatorInspection(t *testing.T) {
 }
 
 func TestPostgresWebhookNotFoundActionIdentityIsReplayable(t *testing.T) {
-	t.Parallel()
 	ctx, pool, store, manifest := newPostgresWebhookFixture(t)
 	action := postgreswebhook.ActionRequest{OwnerScope: "owner-a", Actor: "operator-a", ActionID: "redrive-missing", Kind: postgreswebhook.ActionRedrive, TargetKind: "delivery", TargetID: "missing-delivery", Reason: "operator-check", Payload: &postgreswebhook.RedriveAction{MaximumAttempts: 1, MaximumAge: time.Minute, AcknowledgeDuplicateRisk: true}}
 	first, err := store.ApplyAction(ctx, action, manifest)

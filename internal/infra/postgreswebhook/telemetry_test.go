@@ -10,8 +10,6 @@ import (
 )
 
 func TestWebhookTelemetryPrivacyAndVocabulary(t *testing.T) {
-	t.Parallel()
-
 	if got := boundedValue(boundedEvents, "https://secret.example/path"); got != "other" {
 		t.Fatalf("unbounded label = %q", got)
 	}
@@ -42,8 +40,6 @@ func TestWebhookTelemetryPrivacyAndVocabulary(t *testing.T) {
 }
 
 func TestWebhookTelemetryExportsOperatorSignals(t *testing.T) {
-	t.Parallel()
-
 	reader, meter := telemetrytest.NewManualMeter(t, webhookMeterName)
 	telemetry, err := NewTelemetry(meter)
 	if err != nil {

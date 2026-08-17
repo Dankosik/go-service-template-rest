@@ -64,10 +64,8 @@ func TestObjectStorageConfigContract(t *testing.T) {
 }
 
 func TestStaticCredentialSourcePolicy(t *testing.T) {
-	t.Parallel()
 	for _, key := range []string{"access_key_id", "secret_access_key", "session_token"} {
 		t.Run(key, func(t *testing.T) {
-			t.Parallel()
 			resetConfigEnv(t)
 			const canary = "object-storage-credential-canary"
 			path := writeTempConfig(t, "object_storage:\n  "+key+": "+canary+"\n")

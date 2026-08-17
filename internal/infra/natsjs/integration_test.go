@@ -45,7 +45,6 @@ func packageClient(t *testing.T, f *natsjstest.Server, pending int) *Client {
 }
 
 func TestNATSWorkerRegistrationIsSingleton(t *testing.T) {
-	t.Parallel()
 	f := newPackageNATSFixture(t)
 	client := packageClient(t, f, testMaxPending)
 	cfg := testWorkerConfig()
@@ -94,7 +93,6 @@ func TestNATSWorkerRegistrationIsSingleton(t *testing.T) {
 }
 
 func TestNATSConnectedTopologyErrorDoesNotEnterReconnect(t *testing.T) {
-	t.Parallel()
 	f := newPackageNATSFixture(t)
 	client := packageClient(t, f, testMaxPending)
 	client.ready.Store(false)
@@ -104,7 +102,6 @@ func TestNATSConnectedTopologyErrorDoesNotEnterReconnect(t *testing.T) {
 }
 
 func TestNATSReconnectProbeStopsWithRunContext(t *testing.T) {
-	t.Parallel()
 	f := newPackageNATSFixture(t)
 	client := packageClient(t, f, testMaxPending)
 	probeEntered := make(chan struct{}, 1)
@@ -123,7 +120,6 @@ func TestNATSReconnectProbeStopsWithRunContext(t *testing.T) {
 }
 
 func TestNATSPublishDispatchCancellationAndNoRetry(t *testing.T) {
-	t.Parallel()
 	f := newPackageNATSFixture(t)
 	client := packageClient(t, f, 2)
 
@@ -228,7 +224,6 @@ func TestNATSPublishDispatchCancellationAndNoRetry(t *testing.T) {
 }
 
 func TestNATSHandlerAckAmbiguityRedelivers(t *testing.T) {
-	t.Parallel()
 	f := newPackageNATSFixture(t)
 	client := packageClient(t, f, testMaxPending)
 	cfg := testWorkerConfig()
@@ -263,7 +258,6 @@ func TestNATSHandlerAckAmbiguityRedelivers(t *testing.T) {
 }
 
 func TestNATSDLQSourceAckAmbiguityDeduplicates(t *testing.T) {
-	t.Parallel()
 	f := newPackageNATSFixture(t)
 	client := packageClient(t, f, testMaxPending)
 	cfg := testWorkerConfig()

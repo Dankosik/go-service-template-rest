@@ -94,7 +94,6 @@ func TestErrorClassVocabularyIsBounded(t *testing.T) {
 // Payload and metadata cannot reach telemetry at all: no entry point on
 // Telemetry accepts them.
 func TestTelemetryBoundedContract(t *testing.T) {
-	t.Parallel()
 	var logs bytes.Buffer
 	reader, telemetry := newTestTelemetry(t, slog.New(slog.NewJSONHandler(&logs, nil)))
 
@@ -205,7 +204,6 @@ func TestTelemetryBoundedContract(t *testing.T) {
 }
 
 func TestTelemetryReadinessRequiresFreshObservation(t *testing.T) {
-	t.Parallel()
 	reader, telemetry := newTestTelemetry(t, nil)
 
 	telemetry.RecordObservation(StateObservation{}, time.Now())
@@ -220,7 +218,6 @@ func TestTelemetryReadinessRequiresFreshObservation(t *testing.T) {
 }
 
 func TestRelayMarkPublishedReconciliationRecordsDurableProgress(t *testing.T) {
-	t.Parallel()
 	reader, telemetry := newTestTelemetry(t, nil)
 
 	relay := newUnitRelay(&relayStoreStub{
@@ -385,7 +382,6 @@ func TestRelayInflightReportsTheClaimedBatch(t *testing.T) {
 // value rather than by name — a field the callback never reads takes its value
 // with it.
 func TestTelemetryObservesEveryObservedCount(t *testing.T) {
-	t.Parallel()
 	reader, telemetry := newTestTelemetry(t, nil)
 
 	var observation StateObservation
@@ -425,7 +421,6 @@ func TestTelemetryObservesEveryObservedCount(t *testing.T) {
 }
 
 func TestOutboxTelemetryRepeatedCollection(t *testing.T) {
-	t.Parallel()
 	reader, telemetry := newTestTelemetry(t, nil)
 	observation := StateObservation{
 		OutcomeUnknownCount: 1,
@@ -451,7 +446,6 @@ func TestOutboxTelemetryRepeatedCollection(t *testing.T) {
 }
 
 func TestOutboxTelemetryOmitsEventIdentity(t *testing.T) {
-	t.Parallel()
 	recorder := telemetrytest.InstallSpanRecorder(t)
 	var logs bytes.Buffer
 	_, telemetry := newTestTelemetry(t, slog.New(slog.NewJSONHandler(&logs, nil)))
@@ -478,7 +472,6 @@ func TestOutboxTelemetryOmitsEventIdentity(t *testing.T) {
 // a zero span, or the enclosing operation's elapsed time — is invisible in a
 // counter assertion and ruins the histogram it lands in.
 func TestCountOperationLeavesTheDurationHistogramAlone(t *testing.T) {
-	t.Parallel()
 	reader, telemetry := newTestTelemetry(t, slog.New(slog.DiscardHandler))
 
 	telemetry.CountOperation(t.Context(), "drain", "started", "none")
@@ -505,7 +498,6 @@ func TestCountOperationLeavesTheDurationHistogramAlone(t *testing.T) {
 // and its retry statement carries no per-event class. It also has to stay off the
 // error series, because nothing failed.
 func TestRelayCountsUnattemptedPublicationsAsSkipped(t *testing.T) {
-	t.Parallel()
 	reader, telemetry := newTestTelemetry(t, slog.New(slog.DiscardHandler))
 	relay, err := newRelay(&relayStoreStub{}, publisherFunc(func(ctx context.Context, _ Event) error {
 		<-ctx.Done()

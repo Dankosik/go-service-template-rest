@@ -13,7 +13,6 @@ import (
 )
 
 func TestPostgresJobsObservation(t *testing.T) {
-	t.Parallel()
 	ctx, pool, store := newPostgresJobsFixture(t)
 	states := []jobs.State{
 		jobs.StateReady, jobs.StateScheduled, jobs.StateRetryWait, jobs.StateRunning,

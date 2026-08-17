@@ -7,7 +7,6 @@ import (
 )
 
 func TestUnknownKeyRejects(t *testing.T) {
-	t.Parallel()
 	resetConfigEnv(t)
 
 	configPath := writeTempConfig(t, `
@@ -28,7 +27,6 @@ unknown:
 }
 
 func TestOverlayUnknownKeyRejects(t *testing.T) {
-	t.Parallel()
 	resetConfigEnv(t)
 
 	overlayPath := writeTempConfig(t, `
@@ -79,7 +77,6 @@ func TestUnknownKeyRejectsScalarSectionKeys(t *testing.T) {
 
 //nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
 func TestScalarSectionRejects(t *testing.T) {
-	t.Parallel()
 	resetConfigEnv(t)
 
 	configPath := writeTempConfig(t, `
@@ -100,7 +97,6 @@ http: oops
 
 // profile:database-postgres:start
 func TestRemovedObservabilityKeysReject(t *testing.T) {
-	t.Parallel()
 	resetConfigEnv(t)
 
 	configPath := writeTempConfig(t, `

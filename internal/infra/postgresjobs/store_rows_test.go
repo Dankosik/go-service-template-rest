@@ -9,7 +9,6 @@ import (
 )
 
 func TestStoreRowsVocabularyIsClosedAndBijective(t *testing.T) {
-	t.Parallel()
 	for _, state := range databaseStates {
 		got, err := stateFromDatabase(string(state))
 		if err != nil || got != state {
@@ -40,7 +39,6 @@ func TestStoreRowsVocabularyIsClosedAndBijective(t *testing.T) {
 }
 
 func TestStoreRowsAcceptanceReadbackRequiresCompleteIdentity(t *testing.T) {
-	t.Parallel()
 	logicalJobID := "job-1"
 	producerScope := "producer-scope"
 	producerKey := "producer-key"

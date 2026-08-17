@@ -14,12 +14,10 @@ import (
 )
 
 func TestPostgresJobsClaim(t *testing.T) {
-	t.Parallel()
 	ctx, pool, store := newPostgresJobsFixture(t)
 	keys := []jobs.Revision{{Kind: "acceptance", ArgsVersion: "v1", PolicyVersion: "v1"}}
 
 	t.Run("required revision coverage fails closed in the claim snapshot", func(t *testing.T) {
-		t.Parallel()
 		unknown := stageDuePostgresJob(ctx, t, pool, store, "claim-unknown")
 		if _, err := pool.PGX().Exec(ctx, `UPDATE postgres_jobs SET kind = 'unknown' WHERE logical_job_id = $1`, string(unknown.Identity().LogicalJobID)); err != nil {
 			t.Fatalf("make required revision unknown: %v", err)
@@ -44,7 +42,6 @@ func TestPostgresJobsClaim(t *testing.T) {
 	})
 
 	t.Run("a revision committed after one snapshot closes the next claim", func(t *testing.T) {
-		t.Parallel()
 		due := stageDuePostgresJob(ctx, t, pool, store, "claim-before-late-revision")
 		late := postgresJobsPrepared(t, postgresJobsAcceptanceIdentity("claim-late-revision"), "late")
 		tx, err := pool.PGX().Begin(ctx)
@@ -77,7 +74,6 @@ func TestPostgresJobsClaim(t *testing.T) {
 	})
 
 	t.Run("pause and claim serialize on the neutral scope", func(t *testing.T) {
-		t.Parallel()
 		prepared := stageDuePostgresJob(ctx, t, pool, store, "claim-paused")
 		pauseConn, err := pool.PGX().Acquire(ctx)
 		if err != nil {
@@ -120,7 +116,6 @@ func TestPostgresJobsClaim(t *testing.T) {
 	})
 
 	t.Run("claim and pause serialize in the opposite lock order", func(t *testing.T) {
-		t.Parallel()
 		if _, err := pool.PGX().Exec(ctx, `UPDATE postgres_jobs SET state = 'scheduled', available_at = '2100-01-01' WHERE state IN ('ready', 'scheduled', 'retry_wait')`); err != nil {
 			t.Fatalf("isolate claim-first candidate: %v", err)
 		}
@@ -236,7 +231,6 @@ func TestPostgresJobsClaim(t *testing.T) {
 	})
 
 	t.Run("skip locked creates one atomic generation and attempt", func(t *testing.T) {
-		t.Parallel()
 		if _, err := pool.PGX().Exec(ctx, `UPDATE postgres_jobs SET state = 'scheduled', available_at = '2100-01-01' WHERE state IN ('ready', 'scheduled', 'retry_wait')`); err != nil {
 			t.Fatalf("isolate SKIP LOCKED candidates: %v", err)
 		}
@@ -267,7 +261,6 @@ func TestPostgresJobsClaim(t *testing.T) {
 	})
 
 	t.Run("future work follows the writer clock and survives downtime", func(t *testing.T) {
-		t.Parallel()
 		if _, err := pool.PGX().Exec(ctx, `UPDATE postgres_jobs SET state = 'scheduled', available_at = '2100-01-01' WHERE state IN ('ready', 'scheduled', 'retry_wait')`); err != nil {
 			t.Fatalf("isolate future candidate: %v", err)
 		}

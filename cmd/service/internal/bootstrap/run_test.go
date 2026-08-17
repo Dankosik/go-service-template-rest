@@ -123,7 +123,6 @@ func testShutdownBudget() *shutdownBudget {
 // related the two, so the overrun was only ever observable as a SIGKILL that took
 // the shutdown telemetry with it.
 func TestShippedDefaultsFitTheGracePeriod(t *testing.T) {
-	t.Parallel()
 	resetShutdownConfigEnv(t)
 
 	cfg, _, err := config.LoadDetailed(config.LoadOptions{})
@@ -161,9 +160,7 @@ func TestValidateShutdownGraceBudgetRejectsADrainThatCannotFit(t *testing.T) {
 // ordering worth anything: a stage that asks for more than the grace period has
 // left gets what is left, so the stages behind it still run.
 func TestShutdownBudgetClampsStagesToTheRemainingGracePeriod(t *testing.T) {
-	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
-		t.Parallel()
 		budget := newShutdownBudget(10 * time.Second)
 		budget.start()
 
@@ -190,7 +187,6 @@ func TestShutdownBudgetClampsStagesToTheRemainingGracePeriod(t *testing.T) {
 // lifetime. A deadline taken at startup would be spent before the first request
 // was ever served.
 func TestShutdownBudgetStartsWhenTeardownBegins(t *testing.T) {
-	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		budget := newShutdownBudget(10 * time.Second)
 
@@ -235,11 +231,11 @@ func resetShutdownConfigEnv(t *testing.T) {
 	// profile:object-storage:start
 	setObjectStorageBootstrapTestEnv(t)
 	// profile:object-storage:end
-	//nolint:paralleltest // This test mutates process-global environment or working directory.
-
-	// profile:outbound-auth-oauth2-client-credentials:start
 }
 
+// profile:outbound-auth-oauth2-client-credentials:start
+//
+//nolint:paralleltest // resetShutdownConfigEnv mutates process-wide configuration environment.
 func setOutboundAuthBootstrapTestEnv(t *testing.T) {
 	t.Helper()
 	for key, value := range map[string]string{

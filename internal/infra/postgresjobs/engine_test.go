@@ -69,7 +69,6 @@ func (s *engineStoreStub) Finalize(ctx context.Context, input FinalizeInput) (Pe
 }
 
 func TestEngineConstructionAndFacts(t *testing.T) {
-	t.Parallel()
 	registry := engineRegistry(t, func(context.Context, jobs.HandlerInput[engineArgs]) jobs.HandlerResult {
 		return jobs.HandlerResult{Outcome: jobs.OutcomeSuccess, Effect: jobs.EffectCompleted}
 	})

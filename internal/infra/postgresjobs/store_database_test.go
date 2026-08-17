@@ -17,7 +17,6 @@ import (
 )
 
 func TestStoreDatabaseAcceptanceAndClaim(t *testing.T) {
-	t.Parallel()
 	ctx, store, pool := newDatabaseJobsStore(t)
 	if err := store.CheckSchema(ctx); err != nil {
 		t.Fatalf("CheckSchema() = %v", err)

@@ -15,7 +15,6 @@ import (
 )
 
 func TestDownloadCompletesOnlyAtValidatedEOF(t *testing.T) {
-	t.Parallel()
 	const data = "download"
 
 	validHeader := func(checksum string) http.Header {
@@ -38,7 +37,6 @@ func TestDownloadCompletesOnlyAtValidatedEOF(t *testing.T) {
 	}
 
 	t.Run("range response is refused before body exposure", func(t *testing.T) {
-		t.Parallel()
 		body := &countedReadCloser{reader: strings.NewReader(data)}
 		header := validHeader(testCRC64NVME([]byte(data)))
 		header.Set("Content-Range", "bytes 0-7/20")
@@ -57,7 +55,6 @@ func TestDownloadCompletesOnlyAtValidatedEOF(t *testing.T) {
 	})
 
 	t.Run("only valid metadata exposes a body", func(t *testing.T) {
-		t.Parallel()
 		for _, test := range []struct {
 			name   string
 			header http.Header
@@ -95,7 +92,6 @@ func TestDownloadCompletesOnlyAtValidatedEOF(t *testing.T) {
 			}(), kind: objectstorage.KindIntegrityFailed},
 		} {
 			t.Run(test.name, func(t *testing.T) {
-				t.Parallel()
 				body := &countedReadCloser{reader: strings.NewReader(data)}
 				client := scriptedClient(t, func(*http.Request) (*http.Response, error) {
 					return response(test.header, body), nil
@@ -112,7 +108,6 @@ func TestDownloadCompletesOnlyAtValidatedEOF(t *testing.T) {
 	})
 
 	t.Run("validated EOF is the only success", func(t *testing.T) {
-		t.Parallel()
 		body := &countedReadCloser{reader: strings.NewReader(data)}
 		client := scriptedClient(t, func(request *http.Request) (*http.Response, error) {
 			if got := request.Header.Get("X-Amz-Checksum-Mode"); got != "ENABLED" {
@@ -140,7 +135,6 @@ func TestDownloadCompletesOnlyAtValidatedEOF(t *testing.T) {
 	})
 
 	t.Run("mismatch and terminal errors are stable", func(t *testing.T) {
-		t.Parallel()
 		for _, test := range []struct {
 			name   string
 			header http.Header
@@ -151,7 +145,6 @@ func TestDownloadCompletesOnlyAtValidatedEOF(t *testing.T) {
 			{name: "terminal mismatch", header: validHeader(testCRC64NVME([]byte(data))), reader: errReader{errors.New("provider secret")}, kind: objectstorage.KindIntegrityFailed},
 		} {
 			t.Run(test.name, func(t *testing.T) {
-				t.Parallel()
 				body := &countedReadCloser{reader: test.reader}
 				client := scriptedClient(t, func(*http.Request) (*http.Response, error) {
 					return response(test.header, body), nil
@@ -172,7 +165,6 @@ func TestDownloadCompletesOnlyAtValidatedEOF(t *testing.T) {
 	})
 
 	t.Run("declared maximum still bounds a longer body", func(t *testing.T) {
-		t.Parallel()
 		cfg := validConfig(ProviderAmazonS3)
 		cfg.MaxObjectBytes = cfg.MultipartChunkBytes
 		cfg.MaxWorkingMemoryBytes, _ = cfg.requiredMemory()
@@ -185,7 +177,6 @@ func TestDownloadCompletesOnlyAtValidatedEOF(t *testing.T) {
 			{name: "overflow", body: strings.Repeat("d", int(cfg.MaxObjectBytes)) + "!", kind: objectstorage.KindTooLarge},
 		} {
 			t.Run(test.name, func(t *testing.T) {
-				t.Parallel()
 				body := &countedReadCloser{reader: strings.NewReader(test.body)}
 				header := validHeader(testCRC64NVME([]byte(test.body)))
 				header.Set("Content-Length", strconv.FormatInt(cfg.MaxObjectBytes, 10))
@@ -212,7 +203,6 @@ func TestDownloadCompletesOnlyAtValidatedEOF(t *testing.T) {
 	})
 
 	t.Run("close and cancellation release admission once", func(t *testing.T) {
-		t.Parallel()
 		var calls atomic.Int32
 		first := &countedReadCloser{reader: strings.NewReader(data)}
 		client := scriptedClient(t, func(*http.Request) (*http.Response, error) {
@@ -268,7 +258,6 @@ func TestDownloadCompletesOnlyAtValidatedEOF(t *testing.T) {
 	})
 
 	t.Run("close releases a blocked read", func(t *testing.T) {
-		t.Parallel()
 		cfg := validConfig(ProviderAmazonS3)
 		cfg.MaxActiveOperations = 1
 		cfg.MaxWorkingMemoryBytes, _ = cfg.requiredMemory()
@@ -303,7 +292,6 @@ func TestDownloadCompletesOnlyAtValidatedEOF(t *testing.T) {
 	})
 
 	t.Run("cancellation releases a blocked read", func(t *testing.T) {
-		t.Parallel()
 		cfg := validConfig(ProviderAmazonS3)
 		cfg.MaxActiveOperations = 1
 		cfg.MaxWorkingMemoryBytes, _ = cfg.requiredMemory()
@@ -335,7 +323,6 @@ func TestDownloadCompletesOnlyAtValidatedEOF(t *testing.T) {
 	})
 
 	t.Run("expired deadline starts no GET", func(t *testing.T) {
-		t.Parallel()
 		ctx, cancel := context.WithDeadline(t.Context(), time.Now().Add(-time.Second))
 		defer cancel()
 		calls := 0
@@ -351,7 +338,6 @@ func TestDownloadCompletesOnlyAtValidatedEOF(t *testing.T) {
 }
 
 func TestDownloadAcquisitionRetryIsBounded(t *testing.T) {
-	t.Parallel()
 	const data = "download"
 	validResponse := func() *http.Response {
 		response := s3Response(http.StatusOK, http.Header{
@@ -364,7 +350,6 @@ func TestDownloadAcquisitionRetryIsBounded(t *testing.T) {
 	}
 
 	t.Run("transient acquisition succeeds on third attempt", func(t *testing.T) {
-		t.Parallel()
 		attempts := 0
 		client := scriptedClient(t, func(*http.Request) (*http.Response, error) {
 			attempts++
@@ -384,7 +369,6 @@ func TestDownloadAcquisitionRetryIsBounded(t *testing.T) {
 	})
 
 	t.Run("transient acquisition exhausts at three attempts", func(t *testing.T) {
-		t.Parallel()
 		attempts := 0
 		client := scriptedClient(t, func(*http.Request) (*http.Response, error) {
 			attempts++
@@ -397,7 +381,6 @@ func TestDownloadAcquisitionRetryIsBounded(t *testing.T) {
 	})
 
 	t.Run("cancellation prevents another acquisition attempt", func(t *testing.T) {
-		t.Parallel()
 		ctx, cancel := context.WithCancel(t.Context())
 		attempts := 0
 		client := scriptedClient(t, func(*http.Request) (*http.Response, error) {

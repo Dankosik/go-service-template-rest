@@ -13,7 +13,6 @@ import (
 )
 
 func TestStableErrorSanitizesProviderFailures(t *testing.T) {
-	t.Parallel()
 	if got := objectstorage.Kind(stableError(errors.New("provider secret endpoint"))); got != objectstorage.KindInternal {
 		t.Fatalf("Kind(stableError(provider error)) = %q, want %q", got, objectstorage.KindInternal)
 	}
@@ -23,9 +22,7 @@ func TestStableErrorSanitizesProviderFailures(t *testing.T) {
 }
 
 func TestErrorMappingAndReadRetryAreConservative(t *testing.T) {
-	t.Parallel()
 	t.Run("metadata retries only admitted transient responses", func(t *testing.T) {
-		t.Parallel()
 		attempts := 0
 		client := scriptedClient(t, func(*http.Request) (*http.Response, error) {
 			attempts++
@@ -52,7 +49,6 @@ func TestErrorMappingAndReadRetryAreConservative(t *testing.T) {
 		{name: "absence is terminal", code: http.StatusNotFound, body: `<Error><Code>NotFound</Code></Error>`, want: objectstorage.KindNotFound},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
 			attempts := 0
 			client := scriptedClient(t, func(*http.Request) (*http.Response, error) {
 				attempts++
@@ -66,7 +62,6 @@ func TestErrorMappingAndReadRetryAreConservative(t *testing.T) {
 	}
 
 	t.Run("exhaustion is temporary", func(t *testing.T) {
-		t.Parallel()
 		attempts := 0
 		client := scriptedClient(t, func(*http.Request) (*http.Response, error) {
 			attempts++
@@ -79,7 +74,6 @@ func TestErrorMappingAndReadRetryAreConservative(t *testing.T) {
 	})
 
 	t.Run("mutation stays one attempt", func(t *testing.T) {
-		t.Parallel()
 		attempts := 0
 		client := scriptedClient(t, func(*http.Request) (*http.Response, error) {
 			attempts++
@@ -92,7 +86,6 @@ func TestErrorMappingAndReadRetryAreConservative(t *testing.T) {
 }
 
 func TestErrorMappingIsConservativeAndOneAttempt(t *testing.T) {
-	t.Parallel()
 	for _, test := range []struct {
 		name     string
 		provider Provider
@@ -121,7 +114,6 @@ func TestErrorMappingIsConservativeAndOneAttempt(t *testing.T) {
 		{name: "before write context is deadline", op: operationDelete, err: context.DeadlineExceeded, want: objectstorage.KindDeadlineExceeded},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
 			if got := objectstorage.Kind(operationError(test.provider, test.op, test.err, &sendState{wroteHeaders: test.sent, attempts: 1})); got != test.want {
 				t.Fatalf("Kind(operationError()) = %q, want %q", got, test.want)
 			}
@@ -129,7 +121,6 @@ func TestErrorMappingIsConservativeAndOneAttempt(t *testing.T) {
 	}
 
 	t.Run("create-only 412 reaches the shared mapper", func(t *testing.T) {
-		t.Parallel()
 		client := scriptedClient(t, func(request *http.Request) (*http.Response, error) {
 			_, _ = decodeAWSChunked(t, request.Body)
 			return s3Response(http.StatusPreconditionFailed, nil, `<Error><Code>PreconditionFailed</Code></Error>`), nil
@@ -143,7 +134,6 @@ func TestErrorMappingIsConservativeAndOneAttempt(t *testing.T) {
 	})
 
 	t.Run("create-only 409 reaches the shared mapper", func(t *testing.T) {
-		t.Parallel()
 		client := scriptedClient(t, func(request *http.Request) (*http.Response, error) {
 			_, _ = decodeAWSChunked(t, request.Body)
 			return s3Response(http.StatusConflict, nil, `<Error><Code>ConditionalRequestConflict</Code></Error>`), nil
@@ -158,7 +148,6 @@ func TestErrorMappingIsConservativeAndOneAttempt(t *testing.T) {
 }
 
 func TestProviderDiagnosticClassificationIsFinite(t *testing.T) {
-	t.Parallel()
 	for _, test := range []struct {
 		name   string
 		status int
@@ -174,7 +163,6 @@ func TestProviderDiagnosticClassificationIsFinite(t *testing.T) {
 		{name: "throttle", status: http.StatusTooManyRequests, code: "SlowDown", want: "throttle"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
 			if got := failureCategory(providerTestError{status: test.status, code: test.code}, test.status, test.code); got != test.want {
 				t.Fatalf("failureCategory() = %q, want %q", got, test.want)
 			}
@@ -194,7 +182,6 @@ func TestProviderDiagnosticClassificationIsFinite(t *testing.T) {
 		{name: "sign", op: operationPresign, err: errors.New("signing failed"), want: "sign"},
 	} {
 		t.Run("phase "+test.name, func(t *testing.T) {
-			t.Parallel()
 			if got := providerFailurePhase(test.op, test.err, test.status, test.sent); got != test.want {
 				t.Fatalf("providerFailurePhase() = %q, want %q", got, test.want)
 			}

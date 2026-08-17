@@ -6,7 +6,6 @@ import (
 )
 
 func TestWebhookWorkerRetryDelayBound(t *testing.T) {
-	t.Parallel()
 	policy := DeliveryPolicy{BackoffBase: time.Second, BackoffCap: 3 * time.Second}
 	for range 100 {
 		delay := retryDelay(policy, 2*time.Second)

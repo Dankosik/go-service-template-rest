@@ -38,7 +38,6 @@ postgres:
 
 //nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
 func TestLocalRejectsSecretLikeValuesInConfigFile(t *testing.T) {
-	t.Parallel()
 	resetConfigEnv(t)
 
 	path := writeTempConfig(t, `
@@ -58,7 +57,6 @@ postgres:
 
 //nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
 func TestConfigFileAllowsEmptySecretLikePlaceholders(t *testing.T) {
-	t.Parallel()
 	resetConfigEnv(t)
 
 	path := writeTempConfig(t, `
@@ -78,13 +76,7 @@ observability:
 }
 
 //nolint:paralleltest // Subtests reset process-wide configuration environment.
-//nolint:paralleltest // This test mutates process-global environment or working directory.
-
-// profile:outbound-auth-oauth2-client-credentials:start
-//
-//nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
 func TestConfigFileRejectsCommonFutureSecretLikeKeys(t *testing.T) {
-	t.Parallel()
 	tests := []struct {
 		name    string
 		content string
@@ -99,7 +91,6 @@ func TestConfigFileRejectsCommonFutureSecretLikeKeys(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
 			resetConfigEnv(t)
 
 			path := writeTempConfig(t, tt.content)
@@ -127,6 +118,9 @@ func TestSecretLikeConfigKeyPolicyAllowsNonSecretShapes(t *testing.T) {
 	}
 }
 
+// profile:outbound-auth-oauth2-client-credentials:start
+//
+//nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
 func TestOutboundAuthSecretSourcePolicy(t *testing.T) {
 	resetConfigEnv(t)
 	const canary = "outbound-client-secret-canary"
@@ -160,9 +154,9 @@ func TestOutboundAuthSecretSourcePolicy(t *testing.T) {
 }
 
 // profile:outbound-auth-oauth2-client-credentials:end
+
 // profile:webhooks-durable:start
 //
-//nolint:paralleltest // This test mutates process-global environment or working directory.
 //nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
 func TestWebhookSecretSourcePolicy(t *testing.T) {
 	resetConfigEnv(t)

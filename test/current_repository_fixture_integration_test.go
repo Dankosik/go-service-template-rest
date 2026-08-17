@@ -78,7 +78,6 @@ func copyRepositoryFile(t *testing.T, source, destination string, mode os.FileMo
 }
 
 func TestCopyCurrentRepositoryUsesWorkingTree(t *testing.T) {
-	t.Parallel()
 	source := t.TempDir()
 	git := func(args ...string) {
 		t.Helper()

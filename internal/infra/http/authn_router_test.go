@@ -44,7 +44,6 @@ components:
 `
 
 func TestHTTPAuthnBoundary(t *testing.T) {
-	t.Parallel()
 	spec, err := openapi3.NewLoader().LoadFromData([]byte(secureTestContract))
 	if err != nil {
 		t.Fatalf("load secure test contract: %v", err)
@@ -165,7 +164,6 @@ func TestHTTPAuthnBoundary(t *testing.T) {
 
 	for _, testCase := range tests {
 		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
 			var calls atomic.Int64
 			resolve := func(
 				_ context.Context,
@@ -270,9 +268,7 @@ func assertAuthnProblem(
 }
 
 func TestOpenAPIRuntimeContract(t *testing.T) {
-	t.Parallel()
 	t.Run("Authn", func(t *testing.T) {
-		t.Parallel()
 		spec, err := serviceopenapi.GetSpec()
 		if err != nil {
 			t.Fatalf("load generated OpenAPI: %v", err)

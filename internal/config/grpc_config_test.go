@@ -20,7 +20,6 @@ import (
 )
 
 func TestDefaultGRPCServerConfigMatchesLoadedDefaults(t *testing.T) {
-	t.Parallel()
 	resetConfigEnv(t)
 
 	cfg, _, err := LoadDetailed(LoadOptions{})
@@ -48,7 +47,6 @@ func TestDefaultGRPCServerConfigMatchesLoadedDefaults(t *testing.T) {
 // asserts the defaults path only, because that comment also allows a deployment
 // to configure the two apart; a validation rule would forbid what it permits.
 func TestDefaultUnaryTimeoutMatchesHTTPRequestTimeout(t *testing.T) {
-	t.Parallel()
 	resetConfigEnv(t)
 
 	cfg, _, err := LoadDetailed(LoadOptions{})
@@ -62,7 +60,6 @@ func TestDefaultUnaryTimeoutMatchesHTTPRequestTimeout(t *testing.T) {
 }
 
 func TestGRPCDefaultsAreDisabledAndBounded(t *testing.T) {
-	t.Parallel()
 	resetConfigEnv(t)
 
 	cfg, _, err := LoadDetailed(LoadOptions{})

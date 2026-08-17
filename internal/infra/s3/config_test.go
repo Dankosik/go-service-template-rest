@@ -7,10 +7,8 @@ import (
 )
 
 func TestConfigRejectsInvalidTupleAndEnvelope(t *testing.T) {
-	t.Parallel()
 	for _, provider := range []Provider{ProviderAmazonS3, ProviderCloudflare} {
 		t.Run(string(provider)+" valid", func(t *testing.T) {
-			t.Parallel()
 			if _, err := validConfig(provider).validate(); err != nil {
 				t.Fatalf("validate() error = %v", err)
 			}
@@ -75,7 +73,6 @@ func TestConfigRejectsInvalidTupleAndEnvelope(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
 			cfg := validConfig(ProviderAmazonS3)
 			test.update(&cfg)
 			if _, err := cfg.validate(); err == nil {
@@ -86,7 +83,6 @@ func TestConfigRejectsInvalidTupleAndEnvelope(t *testing.T) {
 }
 
 func TestProviderObjectSizeCeilings(t *testing.T) {
-	t.Parallel()
 	for _, test := range []struct {
 		provider Provider
 		maximum  int64
@@ -95,7 +91,6 @@ func TestProviderObjectSizeCeilings(t *testing.T) {
 		{provider: ProviderCloudflare, maximum: maximumR2ObjectBytes},
 	} {
 		t.Run(string(test.provider), func(t *testing.T) {
-			t.Parallel()
 			cfg := validConfig(test.provider)
 			cfg.MaxObjectBytes = test.maximum
 			cfg.MultipartChunkBytes = maximumMultipartChunk
@@ -112,7 +107,6 @@ func TestProviderObjectSizeCeilings(t *testing.T) {
 }
 
 func TestPortableBucketNameAcceptsOnlyTheSharedNamespace(t *testing.T) {
-	t.Parallel()
 	for _, name := range []string{"abc", "portable-bucket-123", strings.Repeat("a", 63)} {
 		for _, provider := range []Provider{ProviderAmazonS3, ProviderCloudflare} {
 			cfg := validConfig(provider)
@@ -126,7 +120,6 @@ func TestPortableBucketNameAcceptsOnlyTheSharedNamespace(t *testing.T) {
 }
 
 func TestWorkingMemoryAccounting(t *testing.T) {
-	t.Parallel()
 	cfg := validConfig(ProviderAmazonS3)
 
 	configured, ok := cfg.configuredStringBytes()
@@ -218,7 +211,6 @@ func TestWorkingMemoryAccounting(t *testing.T) {
 		{name: "H greater than E", header: 256 << 10, control: 128 << 10, required: 118_125_404},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
 			cfg := validConfig(ProviderAmazonS3)
 			cfg.MaxResponseHeaderBytes = test.header
 			cfg.MaxControlResponseBytes = test.control
@@ -244,7 +236,6 @@ func TestWorkingMemoryAccounting(t *testing.T) {
 	}
 	for _, test := range overflows {
 		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
 			if test.fn() {
 				t.Fatal("overflow was accepted")
 			}
@@ -265,7 +256,6 @@ func TestWorkingMemoryAccounting(t *testing.T) {
 }
 
 func TestWorkingMemoryAccountingRejectsInvalidIntermediateInputs(t *testing.T) {
-	t.Parallel()
 	cfg := validConfig(ProviderAmazonS3)
 
 	for _, test := range []struct {
@@ -316,7 +306,6 @@ func TestWorkingMemoryAccountingRejectsInvalidIntermediateInputs(t *testing.T) {
 		}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
 			if test.check() {
 				t.Fatal("memory accounting accepted an invalid intermediate bound")
 			}

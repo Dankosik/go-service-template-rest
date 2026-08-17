@@ -17,7 +17,6 @@ import (
 )
 
 func TestHTTPIdempotencyTelemetryAndVocabulary(t *testing.T) {
-	t.Parallel()
 	reader := telemetrytest.InstallManualReader(t)
 	store := maintenanceUnitStore()
 	store.safety.Store(&maintenanceSnapshot{
@@ -82,7 +81,6 @@ func TestHTTPIdempotencyTelemetryAndVocabulary(t *testing.T) {
 }
 
 func TestTerminalObservationFollowsReservation(t *testing.T) {
-	t.Parallel()
 	reader := telemetrytest.InstallManualReader(t)
 	store := maintenanceUnitStore()
 	telemetry, err := newStoreTelemetry(store)
@@ -104,7 +102,6 @@ func TestTerminalObservationFollowsReservation(t *testing.T) {
 }
 
 func TestTerminalOutcome(t *testing.T) {
-	t.Parallel()
 	for _, testCase := range []struct {
 		name     string
 		decision httpidempotency.Decision
@@ -115,7 +112,6 @@ func TestTerminalOutcome(t *testing.T) {
 		{name: "render loss", err: errors.New("render failed"), want: terminalFailed},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
 			if got := terminalOutcome(testCase.decision, testCase.err); got != testCase.want {
 				t.Fatalf("terminal outcome = %q, want %q", got, testCase.want)
 			}

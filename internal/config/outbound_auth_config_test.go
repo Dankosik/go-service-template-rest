@@ -116,7 +116,6 @@ func TestOutboundAuthConfigContract(t *testing.T) {
 	}
 	for _, test := range pureBounds {
 		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
 			cfg := validOutboundAuthSourceConfig()
 			test.mutate(&cfg)
 			if err := validateOutboundAuthConfig(&cfg); !errors.Is(err, ErrValidate) {

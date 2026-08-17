@@ -9,7 +9,6 @@ import (
 )
 
 func TestCredentialProviderDisablesGeneralInstrumentation(t *testing.T) {
-	t.Parallel()
 	cfg := validExternalConfig()
 	cfg.DependencyName = "credential-provider"
 	cfg.BaseURL = "https://issuer.example.com"

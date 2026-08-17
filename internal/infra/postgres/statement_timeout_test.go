@@ -93,7 +93,6 @@ func (s *watcherStub) HandleCancel(context.Context) { s.cancel++ }
 func (s *watcherStub) HandleUnwatchAfterCancel()    { s.unwatch++ }
 
 func TestContextWatcherMarksCanceledConnection(t *testing.T) {
-	t.Parallel()
 	conn := &pgconn.PgConn{}
 	marker := &contextWatcherMark{}
 	var marks sync.Map

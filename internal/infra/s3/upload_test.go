@@ -31,7 +31,6 @@ func (f httpDoerFunc) Do(request *http.Request) (*http.Response, error) {
 }
 
 func TestUploadRejectsUnboundedContentType(t *testing.T) {
-	t.Parallel()
 	client := scriptedClient(t, func(*http.Request) (*http.Response, error) {
 		t.Fatal("invalid Content-Type reached provider transport")
 		return nil, errors.New("unreachable")
@@ -79,7 +78,6 @@ func TestUploadRejectsUnboundedContentType(t *testing.T) {
 }
 
 func TestUploadCancellationClosesBlockedSourceAndReleasesAdmission(t *testing.T) {
-	t.Parallel()
 	cfg := validConfig(ProviderAmazonS3)
 	cfg.MaxActiveOperations = 1
 	cfg.MaxWorkingMemoryBytes, _ = cfg.requiredMemory()
@@ -143,7 +141,6 @@ func (s *blockingUploadSource) Close() error {
 }
 
 func TestSingleUploadStreamsCRC64NVMEAndExactLength(t *testing.T) {
-	t.Parallel()
 	data := []byte("the declared bytes")
 	buffer := bytes.NewBuffer(append(slices.Clone(data), '!'))
 	source := &transportGatedReader{t: t, reader: buffer}
@@ -191,7 +188,6 @@ func TestSingleUploadStreamsCRC64NVMEAndExactLength(t *testing.T) {
 	}
 
 	t.Run("short source fails", func(t *testing.T) {
-		t.Parallel()
 		client := scriptedClient(t, func(request *http.Request) (*http.Response, error) {
 			_, _ = io.Copy(io.Discard, request.Body)
 			return s3Response(http.StatusOK, http.Header{
@@ -208,7 +204,6 @@ func TestSingleUploadStreamsCRC64NVMEAndExactLength(t *testing.T) {
 	})
 
 	t.Run("mismatched confirmation fails", func(t *testing.T) {
-		t.Parallel()
 		client := scriptedClient(t, func(request *http.Request) (*http.Response, error) {
 			_, _ = decodeAWSChunked(t, request.Body)
 			return s3Response(http.StatusOK, http.Header{
@@ -225,7 +220,6 @@ func TestSingleUploadStreamsCRC64NVMEAndExactLength(t *testing.T) {
 	})
 
 	t.Run("missing confirmation fails", func(t *testing.T) {
-		t.Parallel()
 		client := scriptedClient(t, func(request *http.Request) (*http.Response, error) {
 			_, _ = decodeAWSChunked(t, request.Body)
 			return s3Response(http.StatusOK, http.Header{"X-Amz-Checksum-Type": []string{"FULL_OBJECT"}}, ""), nil
@@ -237,7 +231,6 @@ func TestSingleUploadStreamsCRC64NVMEAndExactLength(t *testing.T) {
 	})
 
 	t.Run("threshold is still single", func(t *testing.T) {
-		t.Parallel()
 		threshold := validConfig(ProviderAmazonS3).MultipartChunkBytes
 		data := bytes.Repeat([]byte("t"), int(threshold))
 		client := scriptedClient(t, func(request *http.Request) (*http.Response, error) {
@@ -283,7 +276,6 @@ func (r *transportGatedReader) Close() error {
 }
 
 func TestMultipartUploadIsSerialAndConfirmsWholeChecksum(t *testing.T) {
-	t.Parallel()
 	cfg := validConfig(ProviderAmazonS3)
 	cfg.MaxObjectBytes = 3*cfg.MultipartChunkBytes + 1
 	cfg.MaxWorkingMemoryBytes, _ = cfg.requiredMemory()
@@ -354,11 +346,9 @@ func TestMultipartUploadIsSerialAndConfirmsWholeChecksum(t *testing.T) {
 	}
 
 	t.Run("C+1", func(t *testing.T) {
-		t.Parallel()
 		assertMultipartSuccess(t, cfg, cfg.MultipartChunkBytes+1)
 	})
 	t.Run("exact multiple", func(t *testing.T) {
-		t.Parallel()
 		assertMultipartSuccess(t, cfg, 2*cfg.MultipartChunkBytes)
 	})
 	if got := partCount(cfg.MultipartChunkBytes*maximumPartCount, cfg.MultipartChunkBytes); got != maximumPartCount {
@@ -403,10 +393,8 @@ func assertMultipartSuccess(t *testing.T, cfg Config, length int64) {
 }
 
 func TestMultipartCleanupIsBoundedAndConservative(t *testing.T) {
-	t.Parallel()
 	for _, sent := range []bool{false, true} {
 		t.Run(fmt.Sprintf("lost create sent=%t", sent), func(t *testing.T) {
-			t.Parallel()
 			cfg := validConfig(ProviderAmazonS3)
 			calls := 0
 			client := scriptedClientWithConfig(t, cfg, func(request *http.Request) (*http.Response, error) {
@@ -434,7 +422,6 @@ func TestMultipartCleanupIsBoundedAndConservative(t *testing.T) {
 	}
 
 	t.Run("missing upload ID is visible pending", func(t *testing.T) {
-		t.Parallel()
 		cfg := validConfig(ProviderAmazonS3)
 		calls := 0
 		client := scriptedClientWithConfig(t, cfg, func(request *http.Request) (*http.Response, error) {
@@ -451,7 +438,6 @@ func TestMultipartCleanupIsBoundedAndConservative(t *testing.T) {
 	})
 
 	t.Run("pagination stops at ten advancing pages", func(t *testing.T) {
-		t.Parallel()
 		lists := 0
 		client := scriptedClient(t, func(request *http.Request) (*http.Response, error) {
 			lists++
@@ -541,7 +527,6 @@ func TestMultipartCleanupIsBoundedAndConservative(t *testing.T) {
 		{name: "R2 remains pending", provider: ProviderCloudflare, abortCode: http.StatusNoContent},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
-			t.Parallel()
 			result, aborts, lists, err := failedMultipartCleanup(t, scenario)
 			if got := objectstorage.Kind(err); got != objectstorage.KindIntegrityFailed {
 				t.Fatalf("primary error = %q, want integrity_failed", got)
@@ -580,7 +565,6 @@ func assertMultipartCompletionFailures(t *testing.T) {
 		{name: "embedded error", body: "<Error><Code>InternalError</Code><Message>private detail</Message></Error>"},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
-			t.Parallel()
 			cfg := validConfig(ProviderAmazonS3)
 			var aborts, lists int
 			client := scriptedClientWithConfig(t, cfg, func(request *http.Request) (*http.Response, error) {

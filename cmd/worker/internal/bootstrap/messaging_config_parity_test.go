@@ -26,10 +26,8 @@ import (
 // config-load failure to connect time, where an operator reads it as a broker
 // outage instead of a typo.
 func TestMessagingConfigRulesMatchAdapter(t *testing.T) {
-	t.Parallel()
 	for _, testCase := range configtest.MessagingCases() {
 		t.Run(testCase.Name, func(t *testing.T) {
-			t.Parallel()
 			cfg, loadErr := loadMessagingConfig(t, testCase.URLs, testCase.Stream, testCase.Plaintext)
 			configRejected := cfg == nil
 			if configRejected != testCase.ConfigRejects {
@@ -78,7 +76,6 @@ func loadMessagingConfig(t *testing.T, urls, stream string, plaintext bool) (*co
 // scheme sets themselves rather than only their accept/reject verdicts, because
 // the two files list them independently.
 func TestMessagingSchemeVocabularyMatchesAdapter(t *testing.T) {
-	t.Parallel()
 	for _, scheme := range []string{"nats", "tls", "ws", "wss"} {
 		cfg := natsjs.Config{
 			URLs: []string{scheme + "://broker.example:4222"}, Stream: "EVENTS",

@@ -24,7 +24,6 @@ import (
 )
 
 func TestNATSOversizedSourceIsRetained(t *testing.T) {
-	t.Parallel()
 	f := newNATSFixture(t)
 	client, _, errCh := f.worker(t, func(context.Context, natsjs.Message) error {
 		t.Fatal("oversized source reached handler")
@@ -77,7 +76,6 @@ func TestNATSOversizedSourceIsRetained(t *testing.T) {
 }
 
 func TestNATSOversizedHeadersAreDeadLettered(t *testing.T) {
-	t.Parallel()
 	f := newNATSFixture(t)
 	var handlerCalls atomic.Int32
 	_, _, _ = f.worker(t, func(context.Context, natsjs.Message) error {
@@ -116,7 +114,6 @@ func TestNATSOversizedHeadersAreDeadLettered(t *testing.T) {
 }
 
 func TestNATSTraceCorrelation(t *testing.T) {
-	t.Parallel()
 	const (
 		payloadCanary = "TRACE_PAYLOAD_CANARY"
 		typeCanary    = "TRACE_EVENT_TYPE_CANARY"

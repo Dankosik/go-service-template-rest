@@ -17,7 +17,6 @@ import (
 )
 
 func TestPostgresJobsAcceptance(t *testing.T) {
-	t.Parallel()
 	ctx, pool, store := newPostgresJobsFixture(t)
 	if _, err := pool.PGX().Exec(ctx, `
 		CREATE TABLE postgres_jobs_acceptance_business (
@@ -28,7 +27,6 @@ func TestPostgresJobsAcceptance(t *testing.T) {
 	}
 
 	t.Run("caller transaction commits and rolls back atomically", func(t *testing.T) {
-		t.Parallel()
 		committed := postgresJobsPrepared(t, postgresJobsAcceptanceIdentity("commit"), "committed")
 		err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
 			if _, err := tx.Exec(ctx, "INSERT INTO postgres_jobs_acceptance_business (id, value) VALUES ('commit', 'committed')"); err != nil {
@@ -81,7 +79,6 @@ func TestPostgresJobsAcceptance(t *testing.T) {
 	})
 
 	t.Run("staging failure rejects the business mutation", func(t *testing.T) {
-		t.Parallel()
 		err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
 			if _, err := tx.Exec(ctx, "INSERT INTO postgres_jobs_acceptance_business (id, value) VALUES ('rejected', 'rejected')"); err != nil {
 				return fmt.Errorf("insert rejected business row: %w", err)
@@ -112,7 +109,6 @@ func TestPostgresJobsAcceptance(t *testing.T) {
 	})
 
 	t.Run("matching intent returns the retained receipt", func(t *testing.T) {
-		t.Parallel()
 		prepared := postgresJobsPrepared(t, postgresJobsAcceptanceIdentity("duplicate"), "same")
 		mustStagePostgresJob(ctx, t, pool, store, prepared)
 		rollback := errors.New("duplicate business operation has no matching receipt")
@@ -136,7 +132,6 @@ func TestPostgresJobsAcceptance(t *testing.T) {
 	})
 
 	t.Run("every conflicting identity leaves the retained receipt unchanged", func(t *testing.T) {
-		t.Parallel()
 		cases := []struct {
 			name   string
 			change func(*jobs.AcceptanceIdentity)
@@ -164,7 +159,6 @@ func TestPostgresJobsAcceptance(t *testing.T) {
 		}
 		for _, tc := range cases {
 			t.Run(tc.name, func(t *testing.T) {
-				t.Parallel()
 				seedIdentity := postgresJobsAcceptanceIdentity("conflict-" + tc.name)
 				seed := postgresJobsPrepared(t, seedIdentity, "retained")
 				mustStagePostgresJob(ctx, t, pool, store, seed)
@@ -202,7 +196,6 @@ func TestPostgresJobsAcceptance(t *testing.T) {
 	})
 
 	t.Run("writer readback resolves every closed outcome", func(t *testing.T) {
-		t.Parallel()
 		accepted := postgresJobsPrepared(t, postgresJobsAcceptanceIdentity("readback"), "accepted")
 		mustStagePostgresJob(ctx, t, pool, store, accepted)
 		result, err := store.ResolveAcceptance(ctx, accepted.ReadbackExpectation())

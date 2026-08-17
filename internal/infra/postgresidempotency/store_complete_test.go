@@ -7,7 +7,6 @@ import (
 )
 
 func TestCompletionFingerprintFence(t *testing.T) {
-	t.Parallel()
 	fingerprint, err := httpidempotency.NewFingerprint("v2", []byte("canonical"))
 	if err != nil {
 		t.Fatalf("new fingerprint: %v", err)

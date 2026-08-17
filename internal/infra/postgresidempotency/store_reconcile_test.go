@@ -8,7 +8,6 @@ import (
 )
 
 func TestReconcileClassificationErrorDecisions(t *testing.T) {
-	t.Parallel()
 	decision, handled := decisionForClassificationError(fmt.Errorf("wrapped: %w", ErrIntegrityConflict))
 	if !handled || decision.Outcome != httpidempotency.OutcomeIntegrityConflict {
 		t.Fatalf("integrity error decision = (%v, %t), want integrity/true", decision.Outcome, handled)

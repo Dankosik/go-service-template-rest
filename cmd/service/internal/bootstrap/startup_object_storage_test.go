@@ -24,7 +24,6 @@ import (
 )
 
 func TestObjectStorageStartupLoadsImageRootsLocally(t *testing.T) {
-	t.Parallel()
 	want := validObjectStorageConfig()
 	built := &countingObjectStorageRuntime{}
 	runtime, err := initObjectStorageWith(want, func(got s3.Config) (objectStorageRuntime, error) {
@@ -56,7 +55,6 @@ func TestObjectStorageStartupLoadsImageRootsLocally(t *testing.T) {
 }
 
 func TestObjectStorageConstructionFollowsMemoryPublication(t *testing.T) {
-	t.Parallel()
 	resetShutdownConfigEnv(t)
 	stopServing := errors.New("stop serving")
 	wiring := objectStorageTestWiring(&countingObjectStorageRuntime{})
@@ -73,7 +71,6 @@ func TestObjectStorageConstructionFollowsMemoryPublication(t *testing.T) {
 }
 
 func TestObjectStorageStartupAndOutageDoNotChangeReadiness(t *testing.T) {
-	t.Parallel()
 	resetShutdownConfigEnv(t)
 	runtime := &scriptedObjectStorageRuntime{outcomes: []error{errors.New("provider unavailable"), nil}}
 	stopServing := errors.New("stop serving")
@@ -105,9 +102,7 @@ func TestObjectStorageStartupAndOutageDoNotChangeReadiness(t *testing.T) {
 }
 
 func TestObjectStorageRuntimeCloseOrder(t *testing.T) {
-	t.Parallel()
 	t.Run("normal shutdown", func(t *testing.T) {
-		t.Parallel()
 		resetShutdownConfigEnv(t)
 		closed := &countingObjectStorageRuntime{}
 		stopServing := errors.New("stop serving")
@@ -137,7 +132,6 @@ func TestObjectStorageRuntimeCloseOrder(t *testing.T) {
 	})
 
 	t.Run("early return", func(t *testing.T) {
-		t.Parallel()
 		resetShutdownConfigEnv(t)
 		closed := &countingObjectStorageRuntime{}
 		initFailure := errors.New("dependency init failed")

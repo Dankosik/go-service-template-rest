@@ -11,7 +11,6 @@ import (
 )
 
 func TestEngineObserveCachesFreshnessAndClosesOnCompatibilityLoss(t *testing.T) {
-	t.Parallel()
 	now := time.Now()
 	store := &engineStoreStub{observe: func(context.Context, []jobs.Revision) (Observation, error) {
 		return Observation{ObservedAt: now, Compatible: false}, nil
@@ -29,7 +28,6 @@ func TestEngineObserveCachesFreshnessAndClosesOnCompatibilityLoss(t *testing.T) 
 }
 
 func TestEngineObserveFailureMarksTelemetryStale(t *testing.T) {
-	t.Parallel()
 	store := &engineStoreStub{observe: func(context.Context, []jobs.Revision) (Observation, error) {
 		return Observation{}, errors.New("database unavailable")
 	}}
@@ -49,7 +47,6 @@ func TestEngineObserveFailureMarksTelemetryStale(t *testing.T) {
 }
 
 func TestEngineObserveUsesLocalClockForCadenceAndFreshness(t *testing.T) {
-	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		observedAt := []time.Time{
 			time.Date(2200, time.January, 1, 0, 0, 0, 0, time.UTC),

@@ -11,7 +11,6 @@ import (
 )
 
 func TestStoreOptionsValidation(t *testing.T) {
-	t.Parallel()
 	valid := StoreOptions{
 		OwnerRecoveryDelay:     time.Second,
 		CleanupBatchSize:       1,
@@ -33,7 +32,6 @@ func TestStoreOptionsValidation(t *testing.T) {
 		{name: "headroom equals ceiling", mutate: func(o *StoreOptions) { o.AdmissionHeadroomBytes = o.MaxRelationBytes }, wantErr: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			options := valid
 			if tc.mutate != nil {
 				tc.mutate(&options)
@@ -47,7 +45,6 @@ func TestStoreOptionsValidation(t *testing.T) {
 }
 
 func TestClassificationBudgetDoesNotReset(t *testing.T) {
-	t.Parallel()
 	deadline := time.Now().Add(time.Second)
 	parent, cancel := context.WithDeadline(t.Context(), deadline)
 	defer cancel()
@@ -73,7 +70,6 @@ func TestClassificationBudgetDoesNotReset(t *testing.T) {
 }
 
 func TestStoreClassificationRequiresContext(t *testing.T) {
-	t.Parallel()
 	var store Store
 	var parent context.Context
 	for _, call := range []struct {
@@ -96,7 +92,6 @@ func TestStoreClassificationRequiresContext(t *testing.T) {
 		},
 	} {
 		t.Run(call.name, func(t *testing.T) {
-			t.Parallel()
 			if err := call.call(); !errors.Is(err, ErrConfig) {
 				t.Fatalf("classification with nil context error = %v, want ErrConfig", err)
 			}
@@ -105,7 +100,6 @@ func TestStoreClassificationRequiresContext(t *testing.T) {
 }
 
 func TestStoreConstructionAndFailureHelpers(t *testing.T) {
-	t.Parallel()
 	options := StoreOptions{
 		OwnerRecoveryDelay:     time.Second,
 		CleanupBatchSize:       1,

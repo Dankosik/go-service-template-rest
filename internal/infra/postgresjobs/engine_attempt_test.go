@@ -14,7 +14,6 @@ import (
 )
 
 func TestEngineAttemptEvaluatesAndFinalizesCapturedFacts(t *testing.T) {
-	t.Parallel()
 	for _, test := range []struct {
 		name     string
 		handler  func(context.Context, jobs.HandlerInput[engineArgs]) jobs.HandlerResult
@@ -34,7 +33,6 @@ func TestEngineAttemptEvaluatesAndFinalizesCapturedFacts(t *testing.T) {
 		}, want: jobs.OutcomeCancelled, state: jobs.StateOutcomeUnknown, duration: time.Minute, cancel: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
 			synctest.Test(t, func(t *testing.T) {
 				reader := telemetrytest.InstallManualReader(t)
 				registry := engineRegistryWithAttemptDuration(t, test.duration, test.handler)
@@ -83,7 +81,6 @@ func TestEngineAttemptEvaluatesAndFinalizesCapturedFacts(t *testing.T) {
 }
 
 func TestEngineAttemptClassifiesPoisonPayload(t *testing.T) {
-	t.Parallel()
 	claim := engineClaim()
 	claim.Payload = []byte(`{"unknown":true}`)
 	registered, err := engineRegistry(t, func(context.Context, jobs.HandlerInput[engineArgs]) jobs.HandlerResult {
@@ -100,7 +97,6 @@ func TestEngineAttemptClassifiesPoisonPayload(t *testing.T) {
 }
 
 func TestEngineAttemptDoesNotRecordUnappliedFinalization(t *testing.T) {
-	t.Parallel()
 	for _, test := range []struct {
 		name   string
 		result PersistedTransition
@@ -111,7 +107,6 @@ func TestEngineAttemptDoesNotRecordUnappliedFinalization(t *testing.T) {
 		{name: "error", err: errors.New("finalize failed")},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
 			synctest.Test(t, func(t *testing.T) {
 				reader := telemetrytest.InstallManualReader(t)
 				claim := engineClaim()
@@ -140,7 +135,6 @@ func TestEngineAttemptDoesNotRecordUnappliedFinalization(t *testing.T) {
 }
 
 func TestEngineAttemptBudgetIncludesClaimHandoff(t *testing.T) {
-	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		claim := engineClaim()
 		claim.BudgetElapsed = time.Hour - 1500*time.Millisecond
@@ -171,7 +165,6 @@ func TestEngineAttemptBudgetIncludesClaimHandoff(t *testing.T) {
 }
 
 func TestEngineAttemptFinalizationFailureIsTerminal(t *testing.T) {
-	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		want := fmt.Errorf("%w: finalize failed", ErrOperationTimeout)
 		claim := engineClaim()
@@ -210,7 +203,6 @@ func TestEngineAttemptFinalizationFailureIsTerminal(t *testing.T) {
 }
 
 func TestEngineAttemptUnknownFinalizationUsesFencedReadback(t *testing.T) {
-	t.Parallel()
 	for _, test := range []struct {
 		name         string
 		second       PersistedTransition
@@ -225,7 +217,6 @@ func TestEngineAttemptUnknownFinalizationUsesFencedReadback(t *testing.T) {
 		{name: "session lost", firstErr: errors.Join(postgres.ErrCommitUnknown, ErrSessionTerminal), wantCalls: 1, wantTerminal: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
 			reader := telemetrytest.InstallManualReader(t)
 			calls := 0
 			store := &engineStoreStub{finalize: func(context.Context, FinalizeInput) (PersistedTransition, error) {
@@ -267,7 +258,6 @@ func TestEngineAttemptUnknownFinalizationUsesFencedReadback(t *testing.T) {
 }
 
 func TestEngineAttemptRecordsAppliedRetry(t *testing.T) {
-	t.Parallel()
 	reader := telemetrytest.InstallManualReader(t)
 	store := &engineStoreStub{finalize: func(context.Context, FinalizeInput) (PersistedTransition, error) {
 		return PersistedTransition{Status: TransitionApplied}, nil
@@ -286,7 +276,6 @@ func TestEngineAttemptRecordsAppliedRetry(t *testing.T) {
 }
 
 func TestEngineAttemptEvaluationFailureIsTerminal(t *testing.T) {
-	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		claim := engineClaim()
 		claim.BudgetElapsed = -time.Second
@@ -309,7 +298,6 @@ func TestEngineAttemptEvaluationFailureIsTerminal(t *testing.T) {
 }
 
 func TestEngineAttemptFinalizationWaitsForCoordinator(t *testing.T) {
-	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		observing := make(chan struct{})
 		releaseObservation := make(chan struct{})

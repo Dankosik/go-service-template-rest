@@ -14,7 +14,6 @@ import (
 )
 
 func TestEngineClaimRegistersKnownCommitBeforeHandlerStarts(t *testing.T) {
-	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		reader := telemetrytest.InstallManualReader(t)
 		claimStarted := make(chan struct{})
@@ -88,7 +87,6 @@ func jobsEventCount(t *testing.T, reader *sdkmetric.ManualReader, event string, 
 }
 
 func TestEngineClaimUnknownCommitStartsOnlyWriterResolvedAttempt(t *testing.T) {
-	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		reader := telemetrytest.InstallManualReader(t)
 		started := make(chan struct{}, 1)
@@ -128,7 +126,6 @@ func TestEngineClaimUnknownCommitStartsOnlyWriterResolvedAttempt(t *testing.T) {
 }
 
 func TestEngineClaimUnknownCommitWithNoResolvedAttemptDoesNotRecordEvent(t *testing.T) {
-	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		reader := telemetrytest.InstallManualReader(t)
 		claim := engineClaim()
@@ -162,7 +159,6 @@ func TestEngineClaimUnknownCommitWithNoResolvedAttemptDoesNotRecordEvent(t *test
 }
 
 func TestEngineClaimUnknownCommitWithLostSessionDoesNotReadBackOrDispatch(t *testing.T) {
-	t.Parallel()
 	claim := engineClaim()
 	resolved := false
 	started := false
@@ -191,7 +187,6 @@ func TestEngineClaimUnknownCommitWithLostSessionDoesNotReadBackOrDispatch(t *tes
 }
 
 func TestEngineClaimCoverageFaultClosesAdmission(t *testing.T) {
-	t.Parallel()
 	registry := engineRegistry(t, func(context.Context, jobs.HandlerInput[engineArgs]) jobs.HandlerResult {
 		return jobs.HandlerResult{Outcome: jobs.OutcomeSuccess, Effect: jobs.EffectCompleted}
 	})
@@ -211,7 +206,6 @@ func TestEngineClaimCoverageFaultClosesAdmission(t *testing.T) {
 }
 
 func TestEngineClaimCommittedUnsupportedRevisionClosesAdmission(t *testing.T) {
-	t.Parallel()
 	claim := engineClaim()
 	claim.Revision.PolicyVersion = "p2"
 	started := make(chan struct{}, 1)

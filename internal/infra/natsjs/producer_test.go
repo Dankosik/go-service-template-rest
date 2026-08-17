@@ -11,9 +11,7 @@ import (
 )
 
 func TestProducerPublishAndLifecycleOutcomes(t *testing.T) {
-	t.Parallel()
 	t.Run("accepted", func(t *testing.T) {
-		t.Parallel()
 		broker := &recordingJetStream{ack: &jetstream.PubAck{Stream: "EVENTS", Sequence: 7, Duplicate: true}}
 		client := unitClient(t, broker, RoleProducer)
 		result, err := client.Producer().Publish(t.Context(), validTestEvent())
@@ -26,7 +24,6 @@ func TestProducerPublishAndLifecycleOutcomes(t *testing.T) {
 	})
 
 	t.Run("rejections", func(t *testing.T) {
-		t.Parallel()
 		client := unitClient(t, &recordingJetStream{}, RoleProducer)
 		invalid := validTestEvent()
 		invalid.Subject = "events.*"
@@ -59,7 +56,6 @@ func TestProducerPublishAndLifecycleOutcomes(t *testing.T) {
 		"ambiguous ack":    {brokerErr: errors.New("connection vanished"), want: ErrAmbiguous},
 	} {
 		t.Run(name, func(t *testing.T) {
-			t.Parallel()
 			client := unitClient(t, &recordingJetStream{err: tc.brokerErr}, RoleProducer)
 			_, err := client.Producer().Publish(t.Context(), validTestEvent())
 			if !errors.Is(err, tc.want) {
@@ -69,7 +65,6 @@ func TestProducerPublishAndLifecycleOutcomes(t *testing.T) {
 	}
 
 	t.Run("wait", func(t *testing.T) {
-		t.Parallel()
 		client := unitClient(t, &recordingJetStream{}, RoleProducer)
 		if err := client.producer.begin(); err != nil {
 			t.Fatalf("begin() error = %v", err)
@@ -92,7 +87,6 @@ func TestProducerPublishAndLifecycleOutcomes(t *testing.T) {
 }
 
 func TestProducerAdmissionAndCopy(t *testing.T) {
-	t.Parallel()
 	p := newProducer(nil, 1, testMaxPayloadBytes)
 	if err := p.begin(); err != nil {
 		t.Fatalf("begin(first) error = %v", err)

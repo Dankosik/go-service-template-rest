@@ -20,7 +20,6 @@ import (
 )
 
 func TestPostgresInboxClaimAndEffectAtomicity(t *testing.T) {
-	t.Parallel()
 	ctx, pool := newInboxFixture(t)
 	createInboxEffects(t, ctx, pool)
 
@@ -54,12 +53,10 @@ func TestPostgresInboxClaimAndEffectAtomicity(t *testing.T) {
 }
 
 func TestPostgresInboxRedeliveryResolvesTransactionOutcome(t *testing.T) {
-	t.Parallel()
 	ctx, pool := newInboxFixture(t)
 	createInboxEffects(t, ctx, pool)
 
 	t.Run("failed effect rolls back claim", func(t *testing.T) {
-		t.Parallel()
 		effectErr := errors.New("effect failed")
 		_, err := applyInbox(ctx, pool, "stream/retry", "failed-effect", func(pgx.Tx) error { return effectErr })
 		if !errors.Is(err, effectErr) {
@@ -72,7 +69,6 @@ func TestPostgresInboxRedeliveryResolvesTransactionOutcome(t *testing.T) {
 	})
 
 	t.Run("lost commit response skips on redelivery", func(t *testing.T) {
-		t.Parallel()
 		err := commitInboxThenReport(ctx, pool, "stream/retry", "commit-unknown", postgres.ErrCommitUnknown)
 		if !errors.Is(err, postgres.ErrCommitUnknown) {
 			t.Fatalf("commit observation error = %v, want ErrCommitUnknown", err)
@@ -88,7 +84,6 @@ func TestPostgresInboxRedeliveryResolvesTransactionOutcome(t *testing.T) {
 	})
 
 	t.Run("confirmed rollback applies on redelivery", func(t *testing.T) {
-		t.Parallel()
 		err := rollbackInboxThenReport(ctx, pool, "stream/retry", "confirmed-rollback", errors.New("handler failed"))
 		if err == nil {
 			t.Fatal("confirmed rollback reported success")
@@ -100,7 +95,6 @@ func TestPostgresInboxRedeliveryResolvesTransactionOutcome(t *testing.T) {
 	})
 
 	t.Run("canceled handler rolls back before redelivery", func(t *testing.T) {
-		t.Parallel()
 		handlerCtx, cancel := context.WithCancel(ctx)
 		defer cancel()
 		claimed := make(chan error, 1)
@@ -143,7 +137,6 @@ func TestPostgresInboxRedeliveryResolvesTransactionOutcome(t *testing.T) {
 }
 
 func TestPostgresInboxConcurrentClaimAndEffect(t *testing.T) {
-	t.Parallel()
 	ctx, pool := newInboxFixture(t)
 	createInboxEffects(t, ctx, pool)
 
@@ -156,7 +149,6 @@ func TestPostgresInboxConcurrentClaimAndEffect(t *testing.T) {
 		{name: "waiter is canceled", resolve: "cancel"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
 			messageID := "concurrent-" + test.resolve
 			consumer := "stream/concurrent"
 			winnerConn, err := pool.PGX().Acquire(ctx)
@@ -266,7 +258,6 @@ func TestPostgresInboxConcurrentClaimAndEffect(t *testing.T) {
 }
 
 func TestPostgresInboxClaimSurvivesRestart(t *testing.T) {
-	t.Parallel()
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
 	defer cancel()
 	dsn := pgtest.Migrated(t, os.DirFS(".."), "migrations")

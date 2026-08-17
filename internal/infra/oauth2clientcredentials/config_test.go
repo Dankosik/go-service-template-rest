@@ -9,7 +9,6 @@ import (
 )
 
 func TestOutboundAuthConfigContract(t *testing.T) {
-	t.Parallel()
 	joinedScopes := make([]string, 17)
 	for index := range joinedScopes {
 		joinedScopes[index] = strings.Repeat(string(rune('a'+index)), maxScopeBytes)
@@ -71,7 +70,6 @@ func TestOutboundAuthConfigContract(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
 			cfg := validTestConfig()
 			test.mutate(&cfg)
 			_, err := validateConfig(cfg)
@@ -84,7 +82,6 @@ func TestOutboundAuthConfigContract(t *testing.T) {
 	}
 
 	t.Run("canonical valid private binding", func(t *testing.T) {
-		t.Parallel()
 		cfg := validTestConfig()
 		cfg.TokenEndpoint = "HTTPS://AUTH.SERVICE.INTERNAL/oauth/token"
 		cfg.TokenTargetClass = httpclient.PrivateHTTPS
@@ -112,7 +109,6 @@ func TestOutboundAuthConfigContract(t *testing.T) {
 }
 
 func TestTokenEndpointHTTPPolicy(t *testing.T) {
-	t.Parallel()
 	cfg := validTestConfig()
 	httpConfig := tokenHTTPConfig(cfg)
 	if httpConfig.DependencyName != cfg.DependencyName || httpConfig.BaseURL != cfg.TokenEndpoint ||

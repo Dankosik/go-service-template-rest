@@ -17,7 +17,6 @@ import (
 )
 
 func TestStoreDatabaseLifecycle(t *testing.T) {
-	t.Parallel()
 	ctx, store, pool := newDatabaseStore(t)
 	contract, attempt, resolver := testIdempotencyInputs(t)
 	if err := store.Maintain(ctx); err != nil {

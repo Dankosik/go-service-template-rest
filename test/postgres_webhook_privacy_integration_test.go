@@ -13,7 +13,6 @@ import (
 )
 
 func TestPostgresWebhookEventPrivacyDeletion(t *testing.T) {
-	t.Parallel()
 	ctx, pool, store, manifest := newPostgresWebhookFixture(t)
 	prepared := webhookPrepared(t, "privacy")
 	if err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error { _, err := store.Accept(ctx, tx, prepared); return err }); err != nil {
@@ -43,7 +42,6 @@ func TestPostgresWebhookEventPrivacyDeletion(t *testing.T) {
 }
 
 func TestPostgresWebhookTombstoneProtectsEveryDeliveryIdentity(t *testing.T) {
-	t.Parallel()
 	ctx, pool, store, _ := newPostgresWebhookFixture(t)
 	for _, test := range []struct {
 		name       string
@@ -88,7 +86,6 @@ func TestPostgresWebhookTombstoneProtectsEveryDeliveryIdentity(t *testing.T) {
 }
 
 func TestPostgresWebhookAbsentPrivacyDeletionIsPermanentAndReplayable(t *testing.T) {
-	t.Parallel()
 	ctx, pool, store, _ := newPostgresWebhookFixture(t)
 	action := postgreswebhook.ActionRequest{OwnerScope: "owner-a", Actor: "privacy-a", ActionID: "privacy-absent", Kind: postgreswebhook.ActionPrivacyDelete, TargetKind: "event", TargetID: "event-absent", Reason: "privacy_request", Payload: &postgreswebhook.PrivacyDeletionAction{TargetKind: "event", TargetID: "event-absent", Mode: "minimal_tombstone", DeletionAuthority: "privacy-ticket-absent"}}
 	first, err := store.RequestEventPrivacyDeletion(ctx, action)
@@ -114,7 +111,6 @@ func TestPostgresWebhookAbsentPrivacyDeletionIsPermanentAndReplayable(t *testing
 }
 
 func TestPostgresWebhookPrivacySendBarrier(t *testing.T) {
-	t.Parallel()
 	ctx, pool, store, manifest := newPostgresWebhookFixture(t)
 	prepared := webhookPrepared(t, "privacy-barrier")
 	if err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error { _, err := store.Accept(ctx, tx, prepared); return err }); err != nil {
@@ -191,7 +187,6 @@ func TestPostgresWebhookPrivacySendBarrier(t *testing.T) {
 }
 
 func TestPostgresWebhookNamespaceRetirement(t *testing.T) {
-	t.Parallel()
 	ctx, pool, store, manifest := newPostgresWebhookFixture(t)
 	prepared := webhookPrepared(t, "namespace")
 	if err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error { _, err := store.Accept(ctx, tx, prepared); return err }); err != nil {

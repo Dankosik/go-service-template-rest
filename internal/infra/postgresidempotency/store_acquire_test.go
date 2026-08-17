@@ -9,7 +9,6 @@ import (
 )
 
 func TestAcquireLockUnavailable(t *testing.T) {
-	t.Parallel()
 	if !isLockUnavailable(&pgconn.PgError{Code: pgerrcode.LockNotAvailable}) {
 		t.Fatal("lock-not-available PostgreSQL error was not classified")
 	}

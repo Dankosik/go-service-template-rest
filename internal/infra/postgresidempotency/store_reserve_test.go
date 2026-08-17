@@ -10,7 +10,6 @@ import (
 )
 
 func TestPublicationGroup(t *testing.T) {
-	t.Parallel()
 	var identity [32]byte
 	identity[0] = 1
 	done := make(chan struct{})
@@ -52,7 +51,6 @@ func TestPublicationGroup(t *testing.T) {
 }
 
 func TestPublicationGroupFollowerCancellation(t *testing.T) {
-	t.Parallel()
 	var identity [32]byte
 	identity[0] = 2
 	group := publicationGroup{waiting: map[[32]byte]chan struct{}{identity: make(chan struct{})}}
@@ -68,7 +66,6 @@ func TestPublicationGroupFollowerCancellation(t *testing.T) {
 }
 
 func TestStoreOptionsOwnerRecoveryDelay(t *testing.T) {
-	t.Parallel()
 	for _, tc := range []struct {
 		name  string
 		delay time.Duration
@@ -79,7 +76,6 @@ func TestStoreOptionsOwnerRecoveryDelay(t *testing.T) {
 		{name: "sub microsecond ceiling", delay: time.Nanosecond, want: 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			store := Store{options: StoreOptions{OwnerRecoveryDelay: tc.delay}}
 			if got := store.recoveryMicros(); got != tc.want {
 				t.Fatalf("writer recovery microseconds = %d, want %d", got, tc.want)

@@ -13,7 +13,6 @@ import (
 )
 
 func TestDriverBoundaryMatchesStoreFiles(t *testing.T) {
-	t.Parallel()
 	configuration, err := os.ReadFile(filepath.Join("..", "..", "..", ".golangci.yml"))
 	if err != nil {
 		t.Fatalf("read linter configuration: %v", err)

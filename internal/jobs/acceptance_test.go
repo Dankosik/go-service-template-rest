@@ -9,9 +9,7 @@ import (
 )
 
 func TestJobsAcceptance(t *testing.T) {
-	t.Parallel()
 	t.Run("identity bounds", func(t *testing.T) {
-		t.Parallel()
 		setters := []struct {
 			name string
 			set  func(*AcceptanceIdentity, string)
@@ -78,7 +76,6 @@ func TestJobsAcceptance(t *testing.T) {
 	}
 
 	t.Run("JSON object order is not intent", func(t *testing.T) {
-		t.Parallel()
 		type rawArgs struct {
 			Task string          `json:"task"`
 			Data json.RawMessage `json:"data"`
@@ -112,7 +109,6 @@ func TestJobsAcceptance(t *testing.T) {
 	}
 
 	t.Run("closed results", func(t *testing.T) {
-		t.Parallel()
 		stages := []StageResult{
 			{Outcome: StageNew, LogicalJobID: "job-1"},
 			{Outcome: StageExisting, LogicalJobID: "job-1"},
