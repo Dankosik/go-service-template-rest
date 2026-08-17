@@ -77,6 +77,10 @@ COVERAGE_EXCLUDE_REGEX := $(COVERAGE_EXCLUDE_REGEX)|(^|/)cmd/outbox-relay/main\.
 # profile:outbox-postgres:end
 # profile:webhooks-durable:start
 COVERAGE_EXCLUDE_REGEX := $(COVERAGE_EXCLUDE_REGEX)|(^|/)cmd/webhook-worker/main\.go:
+# Store methods are PostgreSQL transaction adapters. Their behavioral coverage
+# is owned by test-integration and test-webhook-race, which run against the
+# real schema; the unit coverage job has no database authority.
+COVERAGE_EXCLUDE_REGEX := $(COVERAGE_EXCLUDE_REGEX)|(^|/)internal/infra/postgreswebhook/store_.*\.go:
 # profile:webhooks-durable:end
 
 FUZZ_TIME ?= 45s
