@@ -5,6 +5,7 @@ package bootstrap
 import (
 	"context"
 	"log/slog"
+	"net/http"
 	"testing"
 	"time"
 
@@ -42,15 +43,30 @@ func TestWorkerRunDrainsGracefully(t *testing.T) {
 		})
 	}()
 
+	// Readiness rather than the durable consumer, which the broker publishes
+	// midway through admission: cancelling on it races the rest of NewWorker,
+	// whose remaining probes then fail on the cancelled context and are reported
+	// as a rejected admission.
+	probe := &http.Client{Timeout: time.Second}
 	waittest.Until(t, startupTimeout, func() bool {
 		select {
 		case err := <-result:
-			t.Fatalf("run() before worker consumer admission: %v", err)
+			t.Fatalf("run() before worker readiness: %v", err)
 		default:
 		}
-		_, err := server.JS.Consumer(t.Context(), "EVENTS", "coverage-worker")
-		return err == nil
-	}, "worker consumer admission")
+		request, err := http.NewRequestWithContext(
+			t.Context(), http.MethodGet, "http://"+diagnosticsAddr+"/health/ready", http.NoBody,
+		)
+		if err != nil {
+			return false
+		}
+		response, err := probe.Do(request)
+		if err != nil {
+			return false
+		}
+		defer func() { _ = response.Body.Close() }()
+		return response.StatusCode == http.StatusOK
+	}, "worker readiness")
 	cancel()
 	if err := waittest.Receive(t, result, 5*time.Second, "graceful worker shutdown"); err != nil {
 		t.Fatalf("run() error = %v", err)
