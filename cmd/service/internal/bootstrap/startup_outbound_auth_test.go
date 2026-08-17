@@ -5,7 +5,6 @@ import (
 	"errors"
 	"log/slog"
 	"maps"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -15,6 +14,7 @@ import (
 	"github.com/example/go-service-template-rest/internal/infra/httpclient"
 	"github.com/example/go-service-template-rest/internal/infra/oauth2clientcredentials"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
+	"github.com/google/go-cmp/cmp"
 )
 
 // TestOutboundAuthConfigParity proves that every configuration value admitted
@@ -53,8 +53,8 @@ func TestOutboundAuthConfigParity(t *testing.T) {
 			if err != nil {
 				t.Fatalf("mapOutboundAuthConfig() error = %v", err)
 			}
-			if !reflect.DeepEqual(got, testCase.want) {
-				t.Fatalf("mapOutboundAuthConfig() = %#v, want %#v", got, testCase.want)
+			if diff := cmp.Diff(testCase.want, got); diff != "" {
+				t.Fatalf("mapOutboundAuthConfig() mismatch (-want +got):\n%s", diff)
 			}
 			if got.ClientID != source.ClientID || got.ClientSecret != source.ClientSecret {
 				t.Fatal("mapOutboundAuthConfig() changed exact client credential bytes")

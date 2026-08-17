@@ -136,10 +136,7 @@ func drainAndShutdown(ctx context.Context, log *slog.Logger, propagationDelay ti
 
 	if propagationDelay > 0 {
 		if deadline, ok := shutdownCtx.Deadline(); ok {
-			remaining := time.Until(deadline)
-			if remaining < propagationDelay {
-				propagationDelay = remaining
-			}
+			propagationDelay = min(propagationDelay, time.Until(deadline))
 		}
 		if err := sleepWithContext(shutdownCtx, propagationDelay); err != nil {
 			return fmt.Errorf("drain propagation wait failed: %w", err)

@@ -150,7 +150,7 @@ func newOTLPMetricReader(
 	// variables named it, the platform owns the whole exporter configuration and
 	// its credentials belong to the collector it also named.
 	if endpoint.Source == MetricExporterConfigKey {
-		if err := rejectConflictingMetricExporterEnv(); err != nil {
+		if err := rejectConflictingAmbientEnv(metricExporterEnvConflicts); err != nil {
 			return nil, err
 		}
 	}

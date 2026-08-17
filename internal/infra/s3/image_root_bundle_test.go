@@ -81,13 +81,13 @@ func TestImageRootBundleLoaderIsStrictAndBounded(t *testing.T) {
 	}
 
 	t.Run("source errors", func(t *testing.T) {
-		if _, err := loadImageRootBundle(func() (imageRootFile, error) { return nil, errors.New("open") }); err == nil {
+		if _, err := loadImageRootBundle(func() (fs.File, error) { return nil, errors.New("open") }); err == nil {
 			t.Fatal("open error was not returned")
 		}
 		if _, err := loadImageRootBundle(memoryImageRootSource(ca, 0, errors.New("stat"))); err == nil {
 			t.Fatal("stat error was not returned")
 		}
-		if _, err := loadImageRootBundle(func() (imageRootFile, error) {
+		if _, err := loadImageRootBundle(func() (fs.File, error) {
 			return readErrorImageRootFile{info: memoryImageRootInfo{size: int64(len(ca))}}, nil
 		}); err == nil {
 			t.Fatal("read error was not returned")
@@ -95,7 +95,7 @@ func TestImageRootBundleLoaderIsStrictAndBounded(t *testing.T) {
 	})
 
 	t.Run("source changes", func(t *testing.T) {
-		if _, err := loadImageRootBundle(func() (imageRootFile, error) {
+		if _, err := loadImageRootBundle(func() (fs.File, error) {
 			return &memoryImageRootFile{Reader: bytes.NewReader(ca), info: memoryImageRootInfo{size: int64(len(ca) + 1)}}, nil
 		}); err == nil {
 			t.Fatal("changed source error = nil")
@@ -265,7 +265,7 @@ func envelopeRootDER(t *testing.T, signer crypto.Signer, serial int64, payload [
 }
 
 func memoryImageRootSource(data []byte, mode fs.FileMode, statErr error) imageRootSource {
-	return func() (imageRootFile, error) {
+	return func() (fs.File, error) {
 		return &memoryImageRootFile{
 			Reader:  bytes.NewReader(data),
 			info:    memoryImageRootInfo{size: int64(len(data)), mode: mode},

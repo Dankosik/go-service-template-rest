@@ -2,6 +2,7 @@ package jobs
 
 import (
 	"bytes"
+	"cmp"
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/json"
@@ -29,6 +30,16 @@ type Revision struct {
 	Kind          string
 	ArgsVersion   string
 	PolicyVersion string
+}
+
+// Compare returns -1, 0, or 1 when r sorts before, equal to, or after other.
+// Revisions are ordered by kind, arguments version, then policy version.
+func (r Revision) Compare(other Revision) int {
+	return cmp.Or(
+		cmp.Compare(r.Kind, other.Kind),
+		cmp.Compare(r.ArgsVersion, other.ArgsVersion),
+		cmp.Compare(r.PolicyVersion, other.PolicyVersion),
+	)
 }
 
 func (r Revision) Validate() error {

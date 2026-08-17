@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+
+	"github.com/samber/lo"
 )
 
 // Result is the bounded semantic response an operation may retain and replay.
@@ -85,10 +87,7 @@ func EncodeResult(contract Contract, result Result) ([]byte, error) {
 }
 
 func encodeResultHeaders(contract Contract, resultHeaders http.Header) ([]encodedHeader, error) {
-	allowed := make(map[string]struct{}, len(contract.StableHeaders))
-	for _, header := range contract.StableHeaders {
-		allowed[header] = struct{}{}
-	}
+	allowed := lo.Keyify(contract.StableHeaders)
 	headers := make([]encodedHeader, 0, len(resultHeaders))
 	seen := make(map[string]struct{}, len(resultHeaders))
 	for name, values := range resultHeaders {

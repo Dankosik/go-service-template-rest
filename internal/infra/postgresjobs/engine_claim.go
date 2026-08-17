@@ -8,6 +8,7 @@ import (
 
 	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	"github.com/example/go-service-template-rest/internal/jobs"
+	"github.com/samber/lo"
 )
 
 func (e *Engine) claim(ctx, attemptParent context.Context) error {
@@ -66,25 +67,14 @@ func (e *Engine) claim(ctx, attemptParent context.Context) error {
 }
 
 func claimIdentities(claims []ClaimedAttempt) []AttemptIdentity {
-	identities := make([]AttemptIdentity, len(claims))
-	for index, claim := range claims {
-		identities[index] = claim.Attempt
-	}
-	return identities
+	return lo.Map(claims, func(claim ClaimedAttempt, _ int) AttemptIdentity { return claim.Attempt })
 }
 
 func knownClaims(claims []ClaimedAttempt, resolutions []ClaimResolution) []ClaimedAttempt {
-	known := make(map[AttemptIdentity]bool, len(resolutions))
-	for _, resolution := range resolutions {
-		known[resolution.Attempt] = resolution.Committed
-	}
-	committed := make([]ClaimedAttempt, 0, len(claims))
-	for _, claim := range claims {
-		if known[claim.Attempt] {
-			committed = append(committed, claim)
-		}
-	}
-	return committed
+	known := lo.Associate(resolutions, func(resolution ClaimResolution) (AttemptIdentity, bool) {
+		return resolution.Attempt, resolution.Committed
+	})
+	return lo.Filter(claims, func(claim ClaimedAttempt, _ int) bool { return known[claim.Attempt] })
 }
 
 func (e *Engine) registerClaimLocked(ctx context.Context, claim ClaimedAttempt, claimStartedAt time.Time) error {

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/example/go-service-template-rest/internal/authntrust"
+	"github.com/samber/lo"
 )
 
 func TestParseProxyCIDRsAccepts(t *testing.T) {
@@ -32,10 +33,7 @@ func TestParseProxyCIDRsAccepts(t *testing.T) {
 			if err != nil {
 				t.Fatalf("ParseProxyCIDRs(%q) error = %v, want success", testCase.raw, err)
 			}
-			got := make([]string, 0, len(parsed))
-			for _, prefix := range parsed {
-				got = append(got, prefix.String())
-			}
+			got := lo.Map(parsed, func(prefix netip.Prefix, _ int) string { return prefix.String() })
 			if !slices.Equal(got, testCase.want) {
 				t.Fatalf("ParseProxyCIDRs(%q) = %v, want %v", testCase.raw, got, testCase.want)
 			}

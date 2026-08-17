@@ -13,7 +13,7 @@ func TestJobsRegistry(t *testing.T) {
 	v2Input := testDefinitionInput(Revision{Kind: "email", ArgsVersion: "v2", PolicyVersion: "p1"})
 	v2Input.Policy.MaxAttemptDuration = 90 * time.Second
 	v2, err := NewDefinition(v2Input)
-	requireError(t, err)
+	requireNoError(t, err)
 	registry := new(Registry)
 	called := 0
 	handler := func(_ context.Context, input HandlerInput[testArgs]) HandlerResult {
@@ -44,7 +44,7 @@ func TestJobsRegistry(t *testing.T) {
 		partial := new(Registry)
 		for _, definition := range []Definition[testArgs]{v1, v2} {
 			if definition.Key() != omitted {
-				requireError(t, Register(partial, definition, handler))
+				requireNoError(t, Register(partial, definition, handler))
 			}
 		}
 		if err := partial.Require(wantKeys); !errors.Is(err, ErrUnsupportedRevision) {
@@ -53,7 +53,7 @@ func TestJobsRegistry(t *testing.T) {
 	}
 
 	registered, err := registry.Lookup(v1.Key())
-	requireError(t, err)
+	requireNoError(t, err)
 	if registered.Key() != v1.Key() {
 		t.Fatalf("Lookup().Key() = %+v, want %+v", registered.Key(), v1.Key())
 	}
@@ -70,7 +70,7 @@ func TestJobsRegistry(t *testing.T) {
 		t.Fatalf("TerminationEnvelope() = %s, want %s", registry.TerminationEnvelope(), 2*time.Minute)
 	}
 	registeredV2, err := registry.Lookup(v2.Key())
-	requireError(t, err)
+	requireNoError(t, err)
 	if registeredV2.MaxAttemptDuration() != 90*time.Second {
 		t.Fatalf("Lookup(v2).MaxAttemptDuration() = %s, want %s", registeredV2.MaxAttemptDuration(), 90*time.Second)
 	}
@@ -79,7 +79,7 @@ func TestJobsRegistry(t *testing.T) {
 		Identity: testIdentity(), AttemptGeneration: 1,
 	}
 	result, err := registered.Dispatch(context.Background(), input)
-	requireError(t, err)
+	requireNoError(t, err)
 	if result.Outcome != OutcomeSuccess || called != 1 {
 		t.Fatalf("valid dispatch result=%+v called=%d", result, called)
 	}

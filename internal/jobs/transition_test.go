@@ -17,21 +17,21 @@ func TestJobsTransition(t *testing.T) {
 		input := testDefinitionInput(Revision{Kind: "email", ArgsVersion: "v1", PolicyVersion: "ambiguous-retry"})
 		input.Policy.Effect.AmbiguousAction = AmbiguousEffectRetry
 		retryDefinition, err := NewDefinition(input)
-		requireError(t, err)
+		requireNoError(t, err)
 		facts := base
 		facts.Outcome = OutcomeSuccess
 		facts.Effect = EffectUnknown
 		got, err := retryDefinition.Evaluate(facts)
-		requireError(t, err)
+		requireNoError(t, err)
 		if got.State != StateRetryWait {
 			t.Fatalf("ambiguous effect state = %q, want %q", got.State, StateRetryWait)
 		}
 	})
 
 	first, err := definition.Evaluate(base)
-	requireError(t, err)
+	requireNoError(t, err)
 	second, err := definition.Evaluate(base)
-	requireError(t, err)
+	requireNoError(t, err)
 	if first != second {
 		t.Fatalf("replay changed decision: first=%+v second=%+v", first, second)
 	}
@@ -61,7 +61,7 @@ func TestJobsTransition(t *testing.T) {
 			facts := base
 			tc.change(&facts)
 			got, err := definition.Evaluate(facts)
-			requireError(t, err)
+			requireNoError(t, err)
 			if got.State != tc.state {
 				t.Fatalf("Evaluate() state = %q, want %q", got.State, tc.state)
 			}
@@ -73,11 +73,11 @@ func TestJobsTransition(t *testing.T) {
 		input.Policy.Retry.Jitter = JitterNone
 		input.Policy.Retry.JitterPermille = 0
 		noJitter, err := NewDefinition(input)
-		requireError(t, err)
+		requireNoError(t, err)
 		facts := base
 		facts.RetryHint = 2 * time.Hour
 		got, err := noJitter.Evaluate(facts)
-		requireError(t, err)
+		requireNoError(t, err)
 		if got.Delay != time.Minute {
 			t.Fatalf("retry delay = %s, want cap %s", got.Delay, time.Minute)
 		}
@@ -100,11 +100,11 @@ func TestJobsTransition(t *testing.T) {
 				input.Policy.Retry.Jitter = JitterNone
 				input.Policy.Retry.JitterPermille = 0
 				definition, err := NewDefinition(input)
-				requireError(t, err)
+				requireNoError(t, err)
 				facts := base
 				facts.RetryHint = tc.retryHint
 				got, err := definition.Evaluate(facts)
-				requireError(t, err)
+				requireNoError(t, err)
 				if got.Delay != tc.want {
 					t.Fatalf("Evaluate().Delay = %s, want %s", got.Delay, tc.want)
 				}
@@ -119,13 +119,13 @@ func TestJobsTransition(t *testing.T) {
 			Attempts: BudgetReset, Elapsed: BudgetReset,
 		}
 		recoveryDefinition, err := NewDefinition(input)
-		requireError(t, err)
+		requireNoError(t, err)
 		facts := base
 		facts.RecoveryFrom = StateExhausted
 		facts.AttemptNumber = input.Policy.Retry.MaxAttempts
 		facts.Elapsed = input.Policy.Retry.MaxElapsed
 		got, err := recoveryDefinition.Evaluate(facts)
-		requireError(t, err)
+		requireNoError(t, err)
 		if got.State != StateRetryWait || got.AttemptsUsed != 1 || got.ElapsedUsed != 0 {
 			t.Fatalf("recovery decision = %+v", got)
 		}
@@ -145,11 +145,11 @@ func TestJobsTransition(t *testing.T) {
 			Attempts: BudgetPreserved, Elapsed: BudgetPreserved,
 		}
 		definition, err := NewDefinition(input)
-		requireError(t, err)
+		requireNoError(t, err)
 		facts := base
 		facts.RecoveryFrom = StateExhausted
 		got, err := definition.Evaluate(facts)
-		requireError(t, err)
+		requireNoError(t, err)
 		if got.State != StateRetryWait || got.AttemptsUsed != facts.AttemptNumber || got.ElapsedUsed != facts.Elapsed {
 			t.Fatalf("preserved recovery decision = %+v", got)
 		}

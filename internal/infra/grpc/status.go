@@ -1,6 +1,7 @@
 package grpcx
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"log/slog"
@@ -186,10 +187,7 @@ func mappedStatus(mapped failure.Classification, domain string) error {
 		code = codes.Internal
 	}
 
-	detail := strings.TrimSpace(mapped.Detail)
-	if detail == "" {
-		detail = failure.SanitizedDetail
-	}
+	detail := cmp.Or(strings.TrimSpace(mapped.Detail), failure.SanitizedDetail)
 
 	rendered := status.New(code, detail)
 	if details := classifiedDetails(mapped, domain); len(details) > 0 {

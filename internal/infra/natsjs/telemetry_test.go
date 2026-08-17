@@ -9,11 +9,11 @@ import (
 	"io"
 	"log/slog"
 	"maps"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	"go.opentelemetry.io/otel/attribute"
@@ -174,8 +174,8 @@ func TestMessagingTelemetryContract(t *testing.T) {
 		"messaging.observation.timestamp":   {},
 	}
 	got := messagingMetricAttributes(t, collected)
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("metric attributes = %#v, want %#v", got, want)
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("metric attributes mismatch (-want +got):\n%s", diff)
 	}
 	wantGauges := map[string]int64{
 		"messaging.consumer.pending":        3,
@@ -187,8 +187,8 @@ func TestMessagingTelemetryContract(t *testing.T) {
 		"messaging.stream.oldest.timestamp": 100,
 		"messaging.observation.timestamp":   500,
 	}
-	if got := messagingGaugeValues(t, collected); !reflect.DeepEqual(got, wantGauges) {
-		t.Fatalf("broker gauge values = %#v, want %#v", got, wantGauges)
+	if diff := cmp.Diff(wantGauges, messagingGaugeValues(t, collected)); diff != "" {
+		t.Fatalf("broker gauge values mismatch (-want +got):\n%s", diff)
 	}
 
 	serialized := logs.String()
@@ -211,7 +211,7 @@ func TestMessagingTelemetryContract(t *testing.T) {
 	if terminal["attempt"] != float64(2) ||
 		terminal["reason"] != "handler_panic" ||
 		terminal["panic.class"] != "string" ||
-		!reflect.DeepEqual(terminal["handler_frames"], []any{"featureHandler handler_test.go:42"}) {
+		!cmp.Equal(terminal["handler_frames"], []any{"featureHandler handler_test.go:42"}) {
 		t.Fatalf("terminal delivery log = %#v, want bounded diagnostics", terminal)
 	}
 	for _, span := range spanRecorder.Ended() {
@@ -290,8 +290,8 @@ func TestMessagingSpanNamesFollowSemanticConventions(t *testing.T) {
 			"messaging.destination.template": filter,
 		},
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("messaging spans = %#v, want %#v", got, want)
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("messaging spans mismatch (-want +got):\n%s", diff)
 	}
 }
 

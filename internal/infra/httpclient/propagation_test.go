@@ -6,7 +6,6 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -15,6 +14,7 @@ import (
 	"github.com/example/go-service-template-rest/internal/infra/telemetry/telemetrytest"
 	"github.com/example/go-service-template-rest/internal/observability/correlationpolicy"
 	"github.com/example/go-service-template-rest/internal/reqctx"
+	"github.com/google/go-cmp/cmp"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/propagation"
@@ -112,10 +112,10 @@ func TestHTTPPropagationPolicy(t *testing.T) {
 			assertHTTPPolicyHeader(t, wire.header, test.wantTrace, test.wantID)
 			assertNoHTTPPropagationFields(t, wire.trailer)
 			assertAllowedHTTPTrailer(t, wire.trailer)
-			if !reflect.DeepEqual(request.Header, originalHeader) {
+			if !cmp.Equal(request.Header, originalHeader) {
 				t.Fatalf("caller header mutated:\ngot  %#v\nwant %#v", request.Header, originalHeader)
 			}
-			if !reflect.DeepEqual(request.Trailer, originalTrailer) {
+			if !cmp.Equal(request.Trailer, originalTrailer) {
 				t.Fatalf("caller trailer mutated:\ngot  %#v\nwant %#v", request.Trailer, originalTrailer)
 			}
 
@@ -227,10 +227,10 @@ func TestHTTPPropagationPolicyRetriesEveryAttempt(t *testing.T) {
 			if got := attempts.Load(); got != 2 {
 				t.Fatalf("attempts = %d, want 2", got)
 			}
-			if !reflect.DeepEqual(request.Header, originalHeader) {
+			if !cmp.Equal(request.Header, originalHeader) {
 				t.Fatalf("caller header mutated:\ngot  %#v\nwant %#v", request.Header, originalHeader)
 			}
-			if !reflect.DeepEqual(request.Trailer, originalTrailer) {
+			if !cmp.Equal(request.Trailer, originalTrailer) {
 				t.Fatalf("caller trailer mutated:\ngot  %#v\nwant %#v", request.Trailer, originalTrailer)
 			}
 			clientSpans := clientSpansSince(recorder, before)

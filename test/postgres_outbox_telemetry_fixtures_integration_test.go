@@ -5,7 +5,7 @@ package integration_test
 import (
 	"context"
 	"fmt"
-	"reflect"
+	"slices"
 	"testing"
 	"time"
 
@@ -235,7 +235,7 @@ func assertOutboxObservationMatchesSQL(
 		observation.ReceiptsBytes,
 		observation.ReceiptsIndexBytes,
 	}
-	if !reflect.DeepEqual(got, want) {
+	if !slices.Equal(got, want) {
 		t.Fatalf("observation storage = %v, direct SQL %v", got, want)
 	}
 }

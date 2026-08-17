@@ -1,6 +1,7 @@
 package httpx
 
 import (
+	"cmp"
 	"errors"
 	"strings"
 
@@ -114,13 +115,7 @@ func schemaViolation(schemaErr *openapi3.SchemaError, fallbackField string) fiel
 	// Reason first: it is the only member kin-openapi documents as value-free.
 	// SchemaField names the keyword that failed and is the contract's own
 	// vocabulary, which is a usable answer when Reason is empty.
-	reason := strings.TrimSpace(schemaErr.Reason)
-	if reason == "" {
-		reason = strings.TrimSpace(schemaErr.SchemaField)
-	}
-	if reason == "" {
-		reason = "does not match the contract"
-	}
+	reason := cmp.Or(strings.TrimSpace(schemaErr.Reason), strings.TrimSpace(schemaErr.SchemaField), "does not match the contract")
 
 	return fieldViolation{Field: field, Reason: boundedReason(reason)}
 }

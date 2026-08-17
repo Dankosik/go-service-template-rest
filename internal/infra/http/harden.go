@@ -1,6 +1,7 @@
 package httpx
 
 import (
+	"cmp"
 	"errors"
 	"log/slog"
 	"net"
@@ -127,10 +128,7 @@ func newRootRouter(
 }
 
 func otelServerName(configured string) string {
-	serverName := strings.TrimSpace(configured)
-	if serverName == "" {
-		serverName = "service"
-	}
+	serverName := cmp.Or(strings.TrimSpace(configured), "service")
 	// Port zero keeps server.address bounded without inventing a listening port.
 	return net.JoinHostPort(serverName, "0")
 }

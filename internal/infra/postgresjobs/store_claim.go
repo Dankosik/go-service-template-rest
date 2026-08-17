@@ -1,7 +1,6 @@
 package postgresjobs
 
 import (
-	"cmp"
 	"context"
 	"fmt"
 	"math"
@@ -234,7 +233,7 @@ func registryColumns(keys []jobs.Revision) ([]string, []string, []string, error)
 		if err := key.Validate(); err != nil {
 			return nil, nil, nil, fmt.Errorf("validate registry revision: %w", err)
 		}
-		if index > 0 && !revisionLess(keys[index-1], key) {
+		if index > 0 && keys[index-1].Compare(key) >= 0 {
 			return nil, nil, nil, fmt.Errorf("%w: registry keys must be strictly sorted", jobs.ErrInvalidDefinition)
 		}
 		kinds[index], argsVersions[index], policyVersions[index] = key.Kind, key.ArgsVersion, key.PolicyVersion
@@ -262,14 +261,6 @@ func unsupportedRevisions(revisions []jobs.Revision) error {
 		values[index] = revision.Kind + "/" + revision.ArgsVersion + "/" + revision.PolicyVersion
 	}
 	return fmt.Errorf("%w: retained revisions %s", jobs.ErrUnsupportedRevision, strings.Join(values, ","))
-}
-
-func revisionLess(left, right jobs.Revision) bool {
-	return cmp.Or(
-		cmp.Compare(left.Kind, right.Kind),
-		cmp.Compare(left.ArgsVersion, right.ArgsVersion),
-		cmp.Compare(left.PolicyVersion, right.PolicyVersion),
-	) < 0
 }
 
 func attemptIdentity(logicalJobID string, attemptGeneration, recoveryGeneration int64, workerID string) (AttemptIdentity, error) {
