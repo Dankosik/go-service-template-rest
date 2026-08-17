@@ -13,6 +13,14 @@ func int32Value(value int) (int32, error) {
 	return int32(value), nil
 }
 
+func remainingBatch(batch int32, used int64) (int32, error) {
+	if batch < 0 || used < 0 || used > int64(batch) {
+		return 0, fmt.Errorf("%w: database batch result is out of range", ErrConflict)
+	}
+	// #nosec G115 -- the preceding bounds prove used fits this non-negative int32 batch.
+	return batch - int32(used), nil
+}
+
 func uint32Value(value int) (uint32, error) {
 	if value < 0 || value > math.MaxUint32 {
 		return 0, fmt.Errorf("%w: integer value is out of range", ErrConfig)

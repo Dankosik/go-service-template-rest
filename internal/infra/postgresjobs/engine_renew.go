@@ -3,44 +3,58 @@ package postgresjobs
 import (
 	"context"
 	"fmt"
-	"maps"
-	"slices"
 	"time"
+
+	"github.com/example/go-service-template-rest/internal/jobs"
 )
 
 func (e *Engine) renew(ctx context.Context) error {
 	e.mu.Lock()
-	if e.lastLease.IsZero() || time.Since(e.lastLease) < e.config.LeaseDuration/3 || len(e.inflight) == 0 {
+	now := time.Now()
+	attempts := make([]AttemptIdentity, 0, len(e.inflight))
+	for identity, attempt := range e.inflight {
+		if !now.Before(attempt.renewAt) {
+			attempts = append(attempts, identity)
+		}
+	}
+	if len(attempts) == 0 {
 		e.mu.Unlock()
 		return nil
 	}
-	attempts := slices.Collect(maps.Keys(e.inflight))
 	e.mu.Unlock()
 
+	renewStartedAt := time.Now()
 	renewals, err := e.store.Renew(ctx, attempts, e.config.LeaseDuration)
 	if err != nil {
 		return fmt.Errorf("renew job leases: %w", err)
 	}
 	e.mu.Lock()
-	defer e.mu.Unlock()
+	cancellations := 0
 	seen := make(map[AttemptIdentity]Renewal, len(renewals))
 	for _, renewal := range renewals {
 		seen[renewal.Attempt] = renewal
-		if renewal.ObservedAt.After(e.lastLease) {
-			e.lastLease = renewal.ObservedAt
-		}
-		if renewal.CancelRequested {
-			if cancel := e.inflight[renewal.Attempt]; cancel != nil {
-				cancel()
+		if attempt, ok := e.inflight[renewal.Attempt]; ok {
+			attempt.renewAt = renewStartedAt.Add(e.config.LeaseDuration / 3)
+			if renewal.CancelRequested && !attempt.cancelObserved {
+				attempt.cancelObserved = true
+				cancellations++
+			}
+			e.inflight[renewal.Attempt] = attempt
+			if renewal.CancelRequested {
+				attempt.cancel()
 			}
 		}
 	}
 	for _, attempt := range attempts {
 		if _, ok := seen[attempt]; !ok {
-			if cancel := e.inflight[attempt]; cancel != nil {
-				cancel()
+			if inflight, ok := e.inflight[attempt]; ok {
+				inflight.cancel()
 			}
 		}
+	}
+	e.mu.Unlock()
+	for range cancellations {
+		e.telemetry.RecordCancellation(ctx, jobs.OutcomeCancelled)
 	}
 	e.telemetry.RecordRenewal(ctx)
 	return nil

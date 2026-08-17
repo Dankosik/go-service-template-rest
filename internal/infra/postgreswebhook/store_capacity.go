@@ -8,12 +8,6 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-type CapacityObservation struct {
-	Revision int64
-	Slots    int
-	Leased   int
-}
-
 func (s *Store) InitializeOrTransitionCapacity(ctx context.Context) error {
 	if !s.valid() {
 		return fmt.Errorf("%w: store is required", ErrConfig)
@@ -63,18 +57,4 @@ func (s *Store) InitializeOrTransitionCapacity(ctx context.Context) error {
 
 func (s *Store) EnsureCapacity(ctx context.Context) error {
 	return s.InitializeOrTransitionCapacity(ctx)
-}
-
-func (s *Store) ObserveCapacity(ctx context.Context) (CapacityObservation, error) {
-	if !s.valid() {
-		return CapacityObservation{}, fmt.Errorf("%w: store is required", ErrConfig)
-	}
-	row, err := sqlcgen.New(s.pool.PGX()).ReadWebhookCapacity(ctx)
-	if err != nil {
-		return CapacityObservation{}, fmt.Errorf("read webhook capacity: %w", err)
-	}
-	if row.RevisionCount != 1 || row.CapacityRevision != s.options.CapacityRevision || int(row.SlotCount) != s.options.GlobalConcurrency {
-		return CapacityObservation{}, fmt.Errorf("%w: capacity revision/count conflict", ErrConfig)
-	}
-	return CapacityObservation{Revision: row.CapacityRevision, Slots: int(row.SlotCount), Leased: int(row.LeasedCount)}, nil
 }

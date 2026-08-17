@@ -792,6 +792,7 @@ if [[ "${source_checkout}" != true ]]; then
 				internal/config/webhooks_config.go \
 				internal/config/webhooks_config_test.go \
 				migrations/000005_postgres_webhooks.sql \
+				migrations/000006_postgres_webhook_reference_repairs.sql \
 				internal/infra/postgres/queries/postgres_webhooks.sql \
 				internal/infra/postgres/sqlcgen/postgres_webhooks.sql.go \
 				test/postgres_webhook_*_test.go \
@@ -893,7 +894,7 @@ if [[ "${source_checkout}" != true ]]; then
 			internal/config/object_storage_config.go \
 			internal/config/object_storage_config_test.go \
 			scripts/ci/s3-source-receipt.sh \
-			test/s3_object_storage_conformance_integration_test.go \
+			test/s3conformance/conformance_test.go \
 			docs/s3-compatible-object-storage.md
 		strip_profile object-storage remove
 	else
@@ -1000,9 +1001,9 @@ fi
 	fi
 
 	# internal/config/configtest exists for parity tests that hold runtime owners
-	# and internal/config to one answer. Retained outbox and outbound-auth
+	# and internal/config to one answer. Retained jobs, outbox, and outbound-auth
 	# bootstrap tests also use it, so it leaves only after every current importer.
-	if [[ "${outbox}" == "none" && "${grpc}" == "none" && "${authn}" == "none" && "${outbound_auth}" == "none" && "${messaging}" == "none" ]]; then
+	if [[ "${jobs}" == "none" && "${outbox}" == "none" && "${grpc}" == "none" && "${authn}" == "none" && "${outbound_auth}" == "none" && "${messaging}" == "none" ]]; then
 		rm -rf -- internal/config/configtest
 	fi
 

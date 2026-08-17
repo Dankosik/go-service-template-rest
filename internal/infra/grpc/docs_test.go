@@ -36,6 +36,7 @@ import (
 const documentedTableHeader = "| `failure.Code` | gRPC code |"
 
 func TestDocumentedFailureCodeTableMatchesStatusMapping(t *testing.T) {
+	t.Parallel()
 	documented := documentedProblemCodes(t)
 	if len(documented) == 0 {
 		t.Fatalf("docs/grpc.md has no rows under %q", documentedTableHeader)
@@ -130,6 +131,7 @@ const documentedUnreachableHeader = "The gRPC codes this table cannot produce:"
 // off the list costs a reader nothing; one that becomes reachable and stays on
 // it sends them to write a contract change they no longer need.
 func TestDocumentedUnreachableCodesAreActuallyUnreachable(t *testing.T) {
+	t.Parallel()
 	documented := documentedUnreachableCodes(t)
 	if len(documented) == 0 {
 		t.Fatalf("docs/grpc.md has no entries under %q", documentedUnreachableHeader)

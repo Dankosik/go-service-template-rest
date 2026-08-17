@@ -70,6 +70,12 @@ func validateJobs(cfg JobsConfig, postgres PostgresConfig) error {
 			ErrValidate,
 		)
 	}
+	if cfg.PollInterval > cfg.LeaseDuration/3-cfg.StoreOperationTimeout {
+		return fmt.Errorf(
+			"%w: jobs.poll_interval plus jobs.store_operation_timeout must not exceed one third of jobs.lease_duration",
+			ErrValidate,
+		)
+	}
 	return nil
 }
 

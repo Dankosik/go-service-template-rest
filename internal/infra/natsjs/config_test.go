@@ -19,6 +19,7 @@ func testConfig() Config {
 }
 
 func TestConfigValidation(t *testing.T) {
+	t.Parallel()
 	valid := testConfig()
 	valid.URLs = []string{"tls://nats.example:4222"}
 	valid.CredentialsFile = "/run/secrets/nats.creds"
@@ -41,6 +42,7 @@ func TestConfigValidation(t *testing.T) {
 	}
 	for name, mutate := range cases {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			cfg := valid
 			mutate(&cfg)
 			if err := ValidateConfig(cfg); !errors.Is(err, ErrRejected) {

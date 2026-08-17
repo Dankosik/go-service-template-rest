@@ -14,6 +14,7 @@ import (
 )
 
 func TestInTxCommitOutcomes(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
 	defer cancel()
 
@@ -69,6 +70,7 @@ func TestInTxCommitOutcomes(t *testing.T) {
 	}
 
 	t.Run("server confirmed failure", func(t *testing.T) {
+		t.Parallel()
 		err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
 			_, err := tx.Exec(ctx, "INSERT INTO intx_commit_probe (id, value) VALUES (2, 1)")
 			return err
@@ -90,6 +92,7 @@ func TestInTxCommitOutcomes(t *testing.T) {
 	})
 
 	t.Run("result lost after commit", func(t *testing.T) {
+		t.Parallel()
 		realCommit := pool.commitTx
 		pool.commitTx = func(ctx context.Context, tx pgx.Tx) error {
 			if err := realCommit(ctx, tx); err != nil {

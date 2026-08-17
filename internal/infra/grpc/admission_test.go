@@ -29,6 +29,7 @@ import (
 const admissionStreamFullMethod = "/grpcx.test.AdmissionService/Hold"
 
 func TestAdmissionBudgetIsProcessWide(t *testing.T) {
+	t.Parallel()
 	cfg := testServerConfig()
 	// One slot for the whole process, so a second budget is the only way both
 	// RPCs below can be admitted.
@@ -87,6 +88,7 @@ func TestAdmissionBudgetIsProcessWide(t *testing.T) {
 // the second half — a platform that cannot probe a saturated instance restarts a
 // healthy one.
 func TestHealthServiceSurvivesBusinessSaturation(t *testing.T) {
+	t.Parallel()
 	cfg := testServerConfig()
 	// One business slot, held for the whole test by the stream below.
 	cfg.MaxConcurrentRPCs = 1

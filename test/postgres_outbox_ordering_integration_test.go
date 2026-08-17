@@ -14,6 +14,7 @@ import (
 )
 
 func TestPostgresOutboxOrderingAuthority(t *testing.T) {
+	t.Parallel()
 	ctx, pool, store := newOutboxFixture(t)
 	mustAppendOutbox(t, ctx, pool, store, orderedEvent("ordered-2", "account-1", 2))
 
@@ -89,6 +90,7 @@ func TestPostgresOutboxOrderingAuthority(t *testing.T) {
 }
 
 func TestPostgresOutboxOrderingHandoffRace(t *testing.T) {
+	t.Parallel()
 	ctx, pool, store := newOutboxFixture(t)
 	const iterations = 24
 	for iteration := range iterations {
@@ -126,6 +128,7 @@ func TestPostgresOutboxOrderingHandoffRace(t *testing.T) {
 }
 
 func TestPostgresOutboxOrderingHandoffAfterBlockedSnapshot(t *testing.T) {
+	t.Parallel()
 	ctx, pool, store := newOutboxFixture(t)
 	mustAppendOutbox(t, ctx, pool, store, orderedEvent("snapshot-1", "snapshot", 1))
 	first := mustClaimOutbox(t, ctx, store)
@@ -176,6 +179,7 @@ func TestPostgresOutboxOrderingHandoffAfterBlockedSnapshot(t *testing.T) {
 }
 
 func TestPostgresOutboxOrderedMarkFencesClaimIdentity(t *testing.T) {
+	t.Parallel()
 	ctx, pool, store := newOutboxFixture(t)
 	mustAppendOutbox(t, ctx, pool, store, orderedEvent("identity-a", "identity-a", 1))
 	mustAppendOutbox(t, ctx, pool, store, orderedEvent("identity-b", "identity-b", 1))
@@ -206,6 +210,7 @@ func TestPostgresOutboxOrderedMarkFencesClaimIdentity(t *testing.T) {
 // poison until redrive. Each phase below builds on the durable state the
 // previous one left, so the comments mark where one ends and the next begins.
 func TestPostgresOutboxOrderingClaims(t *testing.T) {
+	t.Parallel()
 	ctx, pool, store := newOutboxFixture(t)
 	mustAppendOutbox(t, ctx, pool, store, orderedEvent("key-1", "key", 1))
 	mustAppendOutbox(t, ctx, pool, store, orderedEvent("key-2", "key", 2))
@@ -303,6 +308,7 @@ func TestPostgresOutboxOrderingClaims(t *testing.T) {
 // The claim query hands out at most one ready event per ordering key, which is
 // what makes concurrent publication of a batch safe.
 func TestPostgresOutboxBatchClaimHoldsOneEventPerOrderingKey(t *testing.T) {
+	t.Parallel()
 	ctx, pool, store := newOutboxFixture(t)
 	for sequence := int64(1); sequence <= 4; sequence++ {
 		mustAppendOutbox(t, ctx, pool, store, orderedEvent(fmt.Sprintf("ordered-%d", sequence), "one-key", sequence))
@@ -327,6 +333,7 @@ func TestPostgresOutboxBatchClaimHoldsOneEventPerOrderingKey(t *testing.T) {
 // claimable, so a batch of ordered events costs one round trip rather than one
 // per event.
 func TestPostgresOutboxOrderedBatchFinalizationAdvancesEveryKey(t *testing.T) {
+	t.Parallel()
 	ctx, pool, store := newOutboxFixture(t)
 	const keys = 3
 	for key := 1; key <= keys; key++ {

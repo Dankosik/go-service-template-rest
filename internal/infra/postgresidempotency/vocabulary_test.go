@@ -6,6 +6,7 @@ import (
 )
 
 func TestHTTPIdempotencyVocabularyIsClosed(t *testing.T) {
+	t.Parallel()
 	for _, value := range []string{
 		transitionFirstExecution, transitionReplay, transitionMismatch,
 		transitionInProgress, transitionRollback, transitionRetry,

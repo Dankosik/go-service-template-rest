@@ -30,6 +30,7 @@ func TestMessagingCompositionRejectsEmptyHandlerBeforeConfig(t *testing.T) {
 }
 
 func TestMessagingCompositionRejectsDisabledTransportWithRegisteredHandler(t *testing.T) {
+
 	configtest.IsolateEnv(t)
 	// profile:authn-oidc-jwt:start
 	t.Setenv("APP__AUTHN__ISSUER", "https://issuer.example.com")
@@ -76,7 +77,6 @@ func TestMessagingCompositionRejectsInvalidWorkerBeforeConnection(t *testing.T) 
 }
 
 func TestWorkerShutdownBudgetFitsProcessGrace(t *testing.T) {
-	t.Parallel()
 
 	if err := validateWorkerShutdownBudget(45*time.Second, 20*time.Second); err != nil {
 		t.Fatalf("shipped worker shutdown budget does not fit: %v", err)
@@ -132,7 +132,6 @@ func TestWorkerTelemetrySetupCanBeCleanedWithinCallerBudget(t *testing.T) {
 }
 
 func TestWorkerCompositionHelpers(t *testing.T) {
-	t.Parallel()
 
 	options, err := parseLoadOptions([]string{
 		"--config", "config.yaml",
@@ -167,7 +166,6 @@ func TestWorkerCompositionHelpers(t *testing.T) {
 }
 
 func TestHandlerCleanupSafetyTracksWorkerExit(t *testing.T) {
-	t.Parallel()
 
 	stopped := make(chan struct{})
 	close(stopped)
@@ -190,7 +188,6 @@ func TestHandlerCleanupSafetyTracksWorkerExit(t *testing.T) {
 // cleanup safety from done and only then looks for a result that has not been
 // read, so a done that closed first would let a real exit reason go unreported.
 func TestWorkerRunLoopPanicIsRecovered(t *testing.T) {
-	t.Parallel()
 
 	const poison = "worker-panic-marker-8c23"
 	stopped := errors.New("worker stopped")
@@ -204,7 +201,6 @@ func TestWorkerRunLoopPanicIsRecovered(t *testing.T) {
 		{name: "return", run: func(context.Context) error { return stopped }, want: stopped},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-			t.Parallel()
 
 			var records strings.Builder
 			result := make(chan error, 1)

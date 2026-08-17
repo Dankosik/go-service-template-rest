@@ -6,11 +6,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
 func TestOperationTimerTimeout(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		name             string
 		operationTimeout time.Duration
@@ -20,8 +22,10 @@ func TestOperationTimerTimeout(t *testing.T) {
 		{name: "ten percent headroom", operationTimeout: 100 * time.Millisecond, statementTimeout: time.Second, want: 90 * time.Millisecond},
 		{name: "ten millisecond cap", operationTimeout: 150 * time.Millisecond, statementTimeout: time.Second, want: 140 * time.Millisecond},
 		{name: "postgres timeout is effective budget", operationTimeout: time.Second, statementTimeout: 100 * time.Millisecond, want: 90 * time.Millisecond},
+		{name: "setup exhausted operation budget", operationTimeout: 10 * time.Millisecond, statementTimeout: time.Second, want: 0},
 	} {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			if got := operationTimerTimeout(test.operationTimeout, test.statementTimeout); got != test.want {
 				t.Fatalf("operationTimerTimeout() = %s, want %s", got, test.want)
 			}
@@ -30,6 +34,7 @@ func TestOperationTimerTimeout(t *testing.T) {
 }
 
 func TestStoreOperationErrorClassification(t *testing.T) {
+	t.Parallel()
 	baseErr := errors.New("database failed")
 
 	parentCtx, cancelParent := context.WithCancel(context.Background())
@@ -53,6 +58,7 @@ func TestStoreOperationErrorClassification(t *testing.T) {
 }
 
 func TestStoreOperationErrorClassificationPrefersOperationOutcomeToClosedSession(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		name string
 		run  func() error
@@ -92,7 +98,8 @@ func TestStoreOperationErrorClassificationPrefersOperationOutcomeToClosedSession
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			if err := test.run(); !errors.Is(err, test.want) {
+			t.Parallel()
+			if err := test.run(); !errors.Is(err, test.want) || !errors.Is(err, ErrSessionTerminal) {
 				t.Fatalf("classifyOperationError() error = %v, want %v", err, test.want)
 			}
 		})
@@ -100,6 +107,7 @@ func TestStoreOperationErrorClassificationPrefersOperationOutcomeToClosedSession
 }
 
 func TestStoreOperationErrorClassificationPreservesServerTimeoutAfterOperationDeadline(t *testing.T) {
+	t.Parallel()
 	operationCtx, cancel := context.WithCancel(context.Background())
 	cancel()
 	err := classifyOperationError(context.Background(), operationCtx, false, &pgconn.PgError{Code: pgerrcode.QueryCanceled})
@@ -109,5 +117,16 @@ func TestStoreOperationErrorClassificationPreservesServerTimeoutAfterOperationDe
 	postgresErr, ok := errors.AsType[*pgconn.PgError](err)
 	if !ok || postgresErr.Code != pgerrcode.QueryCanceled {
 		t.Fatalf("classifyOperationError() PostgreSQL error = %v, want SQLSTATE %s", err, pgerrcode.QueryCanceled)
+	}
+}
+
+func TestStoreOperationErrorClassificationPreservesUnknownCommit(t *testing.T) {
+	t.Parallel()
+	operationCtx, cancel := context.WithCancel(context.Background())
+	cancel()
+	want := postgres.ClassifyCommitError(errors.New("connection lost after commit"))
+	err := classifyOperationError(context.Background(), operationCtx, false, want)
+	if !errors.Is(err, postgres.ErrCommitUnknown) || !errors.Is(err, ErrOperationTimeout) {
+		t.Fatalf("classifyOperationError() error = %v, want unknown commit and operation timeout", err)
 	}
 }

@@ -4,39 +4,48 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	"github.com/example/go-service-template-rest/internal/jobs"
 )
 
-func (e *Engine) claim(ctx context.Context) error {
+func (e *Engine) claim(ctx, attemptParent context.Context) error {
 	e.mu.Lock()
-	defer e.mu.Unlock()
 	if !e.admission {
+		e.mu.Unlock()
 		return nil
 	}
 	if err := ctx.Err(); err != nil {
+		e.mu.Unlock()
 		return fmt.Errorf("claim context: %w", err)
 	}
 	limit := e.freeCapacityLocked()
+	e.mu.Unlock()
 	if limit == 0 {
 		return nil
 	}
 
+	claimStartedAt := time.Now()
 	claims, err := e.store.Claim(ctx, ClaimOptions{
 		RegistryKeys: e.registry.Keys(), WorkerID: e.config.WorkerID,
 		Limit: limit, LeaseDuration: e.config.LeaseDuration,
 	})
 	if err != nil && !errors.Is(err, postgres.ErrCommitUnknown) {
 		if errors.Is(err, jobs.ErrUnsupportedRevision) {
+			e.mu.Lock()
 			e.compatible = false
 			e.closeAdmissionLocked()
+			e.mu.Unlock()
 		}
 		return fmt.Errorf("claim jobs: %w", err)
 	}
 
 	committed := claims.Attempts
 	if errors.Is(err, postgres.ErrCommitUnknown) {
+		if errors.Is(err, ErrSessionTerminal) {
+			return fmt.Errorf("claim jobs with lost control session: %w", err)
+		}
 		if len(committed) == 0 {
 			return nil
 		}
@@ -46,13 +55,11 @@ func (e *Engine) claim(ctx context.Context) error {
 		}
 		committed = knownClaims(claims.Attempts, resolved)
 	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	for _, claim := range committed {
-		if err := e.registerClaimLocked(ctx, claim); err != nil {
+		if err := e.registerClaimLocked(attemptParent, claim, claimStartedAt); err != nil {
 			return err
-		}
-		claimedAt := claim.LeaseExpiresAt.Add(-e.config.LeaseDuration)
-		if claimedAt.After(e.lastLease) {
-			e.lastLease = claimedAt
 		}
 	}
 	return nil
@@ -80,7 +87,7 @@ func knownClaims(claims []ClaimedAttempt, resolutions []ClaimResolution) []Claim
 	return committed
 }
 
-func (e *Engine) registerClaimLocked(ctx context.Context, claim ClaimedAttempt) error {
+func (e *Engine) registerClaimLocked(ctx context.Context, claim ClaimedAttempt, claimStartedAt time.Time) error {
 	registered, err := e.registry.Lookup(claim.Revision)
 	if err != nil {
 		e.compatible = false
@@ -88,19 +95,17 @@ func (e *Engine) registerClaimLocked(ctx context.Context, claim ClaimedAttempt) 
 		return fmt.Errorf("lookup claimed revision: %w", err)
 	}
 
-	if !e.admission {
-		return nil
-	}
 	if e.freeCapacityLocked() == 0 {
 		return nil
 	}
 	attemptCtx, cancel := context.WithTimeout(ctx, registered.MaxAttemptDuration())
 	// This map insertion is the registration barrier: a drain that takes this
 	// mutex can acknowledge quiescence only after the handler is join-visible.
-	e.inflight[claim.Attempt] = cancel
-	e.telemetry.RecordClaim(ctx, jobs.OutcomeSuccess)
+	e.inflight[claim.Attempt] = inflightAttempt{cancel: cancel, renewAt: claimStartedAt.Add(e.config.LeaseDuration / 3)}
+	e.telemetry.RecordClaim(ctx, jobs.OutcomeSuccess, claim.QueueDelay)
+	attemptStartedAt := time.Now()
 	e.attempts.Go(func() {
-		e.runAttempt(attemptCtx, cancel, claim, registered)
+		e.runAttempt(attemptCtx, cancel, claim, registered, claimStartedAt, attemptStartedAt)
 	})
 	return nil
 }

@@ -3,6 +3,7 @@ package postgreswebhook
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -19,12 +20,20 @@ type ActionReceipt struct {
 	Cycle    int64
 }
 
-func (s *Store) ApplyAction(ctx context.Context, request ActionRequest) (ActionReceipt, error) {
+const (
+	actionResultNotFound      = "not_found"
+	actionResultStateConflict = "state_conflict"
+)
+
+func (s *Store) ApplyAction(ctx context.Context, request ActionRequest, manifest *SecretManifest) (ActionReceipt, error) {
 	fingerprint, err := request.Fingerprint()
 	if err != nil {
 		return ActionReceipt{}, err
 	}
-	if request.Kind == ActionPrivacyDelete || request.Kind == ActionNamespaceRetire || request.Note != "" {
+	if !s.valid() || manifest == nil || manifest.Revision() != s.options.ManifestRevision {
+		return ActionReceipt{}, fmt.Errorf("%w: current secret manifest is required", ErrConfig)
+	}
+	if request.Kind == ActionPrivacyDelete || request.Kind == ActionNamespaceRetire {
 		return ActionReceipt{}, fmt.Errorf("%w: privacy actions use their dedicated store owner", ErrConfig)
 	}
 	var receipt ActionReceipt
@@ -41,20 +50,35 @@ func (s *Store) ApplyAction(ctx context.Context, request ActionRequest) (ActionR
 			if !bytes.Equal(row.RequestFingerprint, fingerprint[:]) {
 				return ErrConflict
 			}
-			receipt = ActionReceipt{ActionID: request.ActionID, Result: row.Result, Replay: true}
+			receipt = ActionReceipt{ActionID: request.ActionID, Result: row.Result, Replay: true, Cycle: row.ResolvedResultCycle}
 			return nil
 		} else if !errors.Is(err, pgx.ErrNoRows) {
 			return fmt.Errorf("read webhook action: %w", err)
 		}
-		result, cycle, err := applyActionMutation(ctx, queries, request, now)
+		result, cycle, err := s.applyActionMutation(ctx, queries, request, now, manifest)
 		if err != nil {
 			return err
+		}
+		retainUntil := now.Add(MaxRetentionTime)
+		if result != actionResultNotFound {
+			retainUntil, err = actionRetainUntil(ctx, queries, request, now)
+			if err != nil && !errors.Is(err, ErrConflict) {
+				return err
+			}
+			if errors.Is(err, ErrConflict) {
+				retainUntil = now.Add(MaxRetentionTime)
+			}
+		}
+		payload, err := json.Marshal(request.Payload)
+		if err != nil {
+			return fmt.Errorf("encode webhook action payload: %w", err)
 		}
 		if _, err := queries.InsertWebhookOperatorAction(ctx, sqlcgen.InsertWebhookOperatorActionParams{
 			OwnerScope: request.OwnerScope, ActionID: request.ActionID, RequestFingerprint: fingerprint[:],
 			ActorReference: request.Actor, ActionKind: string(request.Kind), TargetKind: request.TargetKind,
-			TargetID: request.TargetID, TargetGeneration: request.TargetGeneration, ExpectedState: request.Expected,
-			Reason: request.Reason, DuplicateRiskAcknowledged: request.DuplicateRisk, Result: result, CreatedAt: pgtime(now),
+			TargetID: request.TargetID, TargetGeneration: request.TargetGeneration, ExpectedState: strconv.FormatInt(request.ExpectedRevision, 10),
+			Reason: request.Reason, DuplicateRiskAcknowledged: actionDuplicateRisk(request), Result: result,
+			CreatedAt: pgtime(now), RetainUntil: pgtime(retainUntil), RequestPayload: payload, ResultCycle: cycle,
 		}); err != nil {
 			return fmt.Errorf("insert webhook action: %w", err)
 		}
@@ -65,56 +89,83 @@ func (s *Store) ApplyAction(ctx context.Context, request ActionRequest) (ActionR
 }
 
 //nolint:gocognit,cyclop // Each closed operator action keeps its validation beside its SQL transition.
-func applyActionMutation(ctx context.Context, queries *sqlcgen.Queries, request ActionRequest, now time.Time) (string, int64, error) {
-	expected, err := strconv.ParseInt(request.Expected, 10, 64)
-	if err != nil || expected < 0 {
-		return "", 0, fmt.Errorf("%w: expected revision is invalid", ErrConfig)
-	}
+func (s *Store) applyActionMutation(ctx context.Context, queries *sqlcgen.Queries, request ActionRequest, now time.Time, manifest *SecretManifest) (string, int64, error) {
+	expected := request.ExpectedRevision
 	switch request.Kind {
 	case ActionDestinationState:
-		disposition := map[string]string{activeDisposition: activeDisposition, "paused": "automatically_paused", "disabled": "administratively_disabled", "retired": "retired"}[request.Values[0]]
+		payload, ok := request.Payload.(*DestinationStateAction)
+		if !ok || payload == nil {
+			return "", 0, fmt.Errorf("%w: destination state payload is invalid", ErrConfig)
+		}
+		disposition := map[string]string{activeDisposition: activeDisposition, "paused": "automatically_paused", "disabled": "administratively_disabled", "retired": "retired"}[payload.Disposition]
 		if disposition == "" {
 			return "", 0, fmt.Errorf("%w: destination disposition is invalid", ErrConfig)
 		}
 		rows, err := queries.ApplyWebhookDestinationState(ctx, sqlcgen.ApplyWebhookDestinationStateParams{Disposition: disposition, UpdatedAt: pgtime(now), OwnerScope: request.OwnerScope, DestinationID: request.TargetID, Generation: request.TargetGeneration, ExpectedRevision: expected})
 		return actionMutationResult(rows, err)
 	case ActionKeyRotation:
-		secretRevision, err1 := strconv.ParseInt(request.Values[0], 10, 64)
-		keyRevision, err2 := strconv.ParseInt(request.Values[1], 10, 64)
-		overlapStartUnix, err3 := strconv.ParseInt(request.Values[4], 10, 64)
-		validUntilUnix, err4 := strconv.ParseInt(request.Values[5], 10, 64)
-		if err1 != nil || err2 != nil || err3 != nil || err4 != nil || secretRevision <= 0 || keyRevision <= 0 || overlapStartUnix > now.Unix() || validUntilUnix <= max(overlapStartUnix, now.Unix()) || request.Values[6] == "" {
+		payload, ok := request.Payload.(*KeyRotationAction)
+		if !ok || payload == nil || payload.SecretRevision <= 0 || payload.SecretRevision > manifest.Revision() || payload.KeyRevision <= 0 || payload.ActiveKeyReference == "" || payload.PredecessorReference == "" || payload.ActiveKeyReference == payload.PredecessorReference || payload.OverlapStartsAt.After(now) || !payload.PredecessorValidUntil.After(now) || payload.AuthorityReceipt == "" {
 			return "", 0, fmt.Errorf("%w: key rotation is invalid", ErrConfig)
 		}
-		predecessor := request.Values[3]
-		rows, err := queries.ApplyWebhookKeyRotation(ctx, sqlcgen.ApplyWebhookKeyRotationParams{RequiredSecretRevision: secretRevision, KeyStateRevision: keyRevision, ActiveKeyReference: request.Values[2], PredecessorKeyReference: &predecessor, PredecessorValidUntil: pgtime(time.Unix(validUntilUnix, 0)), UpdatedAt: pgtime(now), OwnerScope: request.OwnerScope, DestinationID: request.TargetID, Generation: request.TargetGeneration, ExpectedRevision: expected})
+		if _, err := manifest.Resolve(request.OwnerScope, request.TargetID, payload.ActiveKeyReference); err != nil {
+			return "", 0, fmt.Errorf("%w: active rotation secret is missing", ErrConfig)
+		}
+		if _, err := manifest.Resolve(request.OwnerScope, request.TargetID, payload.PredecessorReference); err != nil {
+			return "", 0, fmt.Errorf("%w: predecessor rotation secret is missing", ErrConfig)
+		}
+		predecessor := payload.PredecessorReference
+		rows, err := queries.ApplyWebhookKeyRotation(ctx, sqlcgen.ApplyWebhookKeyRotationParams{RequiredSecretRevision: payload.SecretRevision, KeyStateRevision: payload.KeyRevision, ActiveKeyReference: payload.ActiveKeyReference, PredecessorKeyReference: &predecessor, PredecessorValidUntil: pgtime(payload.PredecessorValidUntil), UpdatedAt: pgtime(now), OwnerScope: request.OwnerScope, DestinationID: request.TargetID, Generation: request.TargetGeneration, ExpectedRevision: expected})
 		return actionMutationResult(rows, err)
 	case ActionRedrive:
-		if !request.DuplicateRisk {
+		payload, ok := request.Payload.(*RedriveAction)
+		if !ok || payload == nil {
+			return "", 0, fmt.Errorf("%w: redrive payload is invalid", ErrConfig)
+		}
+		if !payload.AcknowledgeDuplicateRisk {
 			return "rejected", 0, nil
 		}
-		attempts, err1 := strconv.Atoi(request.Values[0])
-		ageNanos, err2 := strconv.ParseInt(request.Values[1], 10, 64)
-		if err1 != nil || err2 != nil || attempts < 1 || attempts > MaxAttempts || ageNanos <= 0 {
+		if payload.MaximumAttempts < 1 || payload.MaximumAttempts > MaxAttempts || payload.MaximumAge <= 0 {
 			return "", 0, fmt.Errorf("%w: redrive bounds are invalid", ErrConfig)
 		}
-		maximumAttempts, err := int32Value(attempts)
+		maximumAttempts, err := int32Value(payload.MaximumAttempts)
 		if err != nil {
 			return "", 0, err
 		}
 		locked, err := queries.LockWebhookDeliveryForAction(ctx, sqlcgen.LockWebhookDeliveryForActionParams{OwnerScope: request.OwnerScope, DeliveryID: request.TargetID})
 		if errors.Is(err, pgx.ErrNoRows) {
-			return "not_found", 0, nil
+			return actionResultNotFound, 0, nil
 		}
 		if err != nil {
 			return "", 0, fmt.Errorf("lock webhook redrive: %w", err)
 		}
-		if locked.CurrentCycle != expected || locked.State != string(DeliveryTerminal) && locked.State != string(DeliverySuspended) || locked.Disposition == activeDisposition || !locked.RedriveEligibleUntil.Time.After(now) || locked.CumulativeSummary == string(OutcomeHTTPAccepted) {
-			return "state_conflict", 0, nil
+		var policy DeliveryPolicy
+		if err := json.Unmarshal(locked.PolicySnapshot, &policy); err != nil || policy.validate() != nil || !s.admits(policy) {
+			return "", 0, fmt.Errorf("%w: decode retained webhook redrive policy", ErrConflict)
 		}
-		deadline := now.Add(time.Duration(ageNanos))
-		if locked.RedriveEligibleUntil.Time.Before(deadline) {
-			deadline = locked.RedriveEligibleUntil.Time
+		if locked.CurrentCycle != expected || locked.State != string(DeliveryTerminal) && locked.State != string(DeliverySuspended) || locked.Disposition == activeDisposition || locked.DestinationDisposition != activeDisposition || locked.RequiredSecretRevision > manifest.Revision() || !locked.PayloadPresent || locked.CumulativeSummary == string(OutcomeHTTPAccepted) || payload.MaximumAttempts > policy.RedriveAttempts || payload.MaximumAge > policy.RedriveAge {
+			return actionResultStateConflict, 0, nil
+		}
+		if !manifestContains(manifest, request.OwnerScope, locked.DestinationID, locked.ActiveKeyReference) {
+			return actionResultStateConflict, 0, nil
+		}
+		if locked.PredecessorKeyReference != nil && locked.PredecessorValidUntil.Valid && now.Before(locked.PredecessorValidUntil.Time) {
+			if !manifestContains(manifest, request.OwnerScope, locked.DestinationID, *locked.PredecessorKeyReference) {
+				return actionResultStateConflict, 0, nil
+			}
+		}
+		retainedUntil := locked.RedriveEligibleUntil.Time
+		for _, limit := range []time.Time{locked.PayloadRetainedUntil.Time, locked.ActiveRetainedUntil.Time, locked.TerminalSummaryRetainedUntil.Time, locked.AttemptRetainedUntil.Time, locked.ActionRetainedUntil.Time, locked.DestinationGenerationRetainedUntil.Time, locked.ReceiverDedupRetainedUntil.Time} {
+			if limit.Before(retainedUntil) {
+				retainedUntil = limit
+			}
+		}
+		if !retainedUntil.After(now) {
+			return actionResultStateConflict, 0, nil
+		}
+		deadline := now.Add(payload.MaximumAge)
+		if retainedUntil.Before(deadline) {
+			deadline = retainedUntil
 		}
 		cycle := locked.CurrentCycle + 1
 		rows, err := queries.InsertWebhookRedriveCycle(ctx, sqlcgen.InsertWebhookRedriveCycleParams{OwnerScope: request.OwnerScope, DeliveryID: request.TargetID, CycleNumber: cycle, ActionID: &request.ActionID, AcceptedAt: pgtime(now), DeadlineAt: pgtime(deadline), MaximumAttempts: maximumAttempts})
@@ -125,21 +176,35 @@ func applyActionMutation(ctx context.Context, queries *sqlcgen.Queries, request 
 		result, _, err := actionMutationResult(rows, err)
 		return result, cycle, err
 	case ActionCloseUnknown:
+		payload, ok := request.Payload.(*CloseUnknownAction)
+		if !ok || payload == nil || payload.Disposition != string(OutcomeClosedUnknown) || !payload.AcknowledgeDuplicateRisk {
+			return "", 0, fmt.Errorf("%w: close-unknown payload is invalid", ErrConfig)
+		}
 		locked, err := queries.LockWebhookDeliveryForAction(ctx, sqlcgen.LockWebhookDeliveryForActionParams{OwnerScope: request.OwnerScope, DeliveryID: request.TargetID})
 		if errors.Is(err, pgx.ErrNoRows) {
-			return "not_found", 0, nil
+			return actionResultNotFound, 0, nil
 		}
 		if err != nil {
 			return "", 0, fmt.Errorf("lock webhook unknown delivery: %w", err)
 		}
 		if locked.CurrentCycle != expected || locked.CumulativeSummary != string(OutcomeUnknown) {
-			return "state_conflict", 0, nil
+			return actionResultStateConflict, 0, nil
 		}
 		rows, err := queries.CloseWebhookUnknownCycle(ctx, sqlcgen.CloseWebhookUnknownCycleParams{FinalizedAt: pgtime(now), OwnerScope: request.OwnerScope, DeliveryID: request.TargetID, CycleNumber: locked.CurrentCycle})
 		if err != nil || rows != 1 {
 			return actionMutationResult(rows, err)
 		}
 		rows, err = queries.CloseWebhookUnknownDelivery(ctx, sqlcgen.CloseWebhookUnknownDeliveryParams{FinalizedAt: pgtime(now), OwnerScope: request.OwnerScope, DeliveryID: request.TargetID, CycleNumber: locked.CurrentCycle})
+		return actionMutationResult(rows, err)
+	case ActionRetentionHold:
+		payload, ok := request.Payload.(*RetentionHoldAction)
+		if request.TargetKind != targetKindDelivery || !ok || payload == nil {
+			return "", 0, fmt.Errorf("%w: retention hold is invalid", ErrConfig)
+		}
+		rows, err := queries.ApplyWebhookRetentionHold(ctx, sqlcgen.ApplyWebhookRetentionHoldParams{
+			LegalHold: payload.Enabled, UpdatedAt: pgtime(now), OwnerScope: request.OwnerScope,
+			DeliveryID: request.TargetID, ExpectedCycle: expected,
+		})
 		return actionMutationResult(rows, err)
 	case ActionPrivacyDelete, ActionNamespaceRetire:
 		return "", 0, fmt.Errorf("%w: privacy actions use their dedicated store owner", ErrConfig)
@@ -148,12 +213,57 @@ func applyActionMutation(ctx context.Context, queries *sqlcgen.Queries, request 
 	}
 }
 
+func manifestContains(manifest *SecretManifest, owner, destination, reference string) bool {
+	_, err := manifest.Resolve(owner, destination, reference)
+	return err == nil
+}
+
+func actionDuplicateRisk(request ActionRequest) bool {
+	switch payload := request.Payload.(type) {
+	case *RedriveAction:
+		return payload != nil && payload.AcknowledgeDuplicateRisk
+	case *CloseUnknownAction:
+		return payload != nil && payload.AcknowledgeDuplicateRisk
+	default:
+		return false
+	}
+}
+
+func actionRetainUntil(ctx context.Context, queries *sqlcgen.Queries, request ActionRequest, now time.Time) (time.Time, error) {
+	switch request.TargetKind {
+	case targetKindDelivery:
+		row, err := queries.LockWebhookDeliveryForAction(ctx, sqlcgen.LockWebhookDeliveryForActionParams{OwnerScope: request.OwnerScope, DeliveryID: request.TargetID})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return time.Time{}, ErrConflict
+		}
+		if err != nil {
+			return time.Time{}, fmt.Errorf("read webhook action retention: %w", err)
+		}
+		return row.ActionRetainedUntil.Time.UTC(), nil
+	case targetKindDestination:
+		row, err := queries.ReadWebhookDestination(ctx, sqlcgen.ReadWebhookDestinationParams{OwnerScope: request.OwnerScope, DestinationID: request.TargetID, Generation: request.TargetGeneration})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return time.Time{}, ErrConflict
+		}
+		if err != nil {
+			return time.Time{}, fmt.Errorf("read webhook destination action retention: %w", err)
+		}
+		var policy DeliveryPolicy
+		if err := json.Unmarshal(row.Policy, &policy); err != nil {
+			return time.Time{}, fmt.Errorf("%w: decode retained webhook action policy", ErrConflict)
+		}
+		return now.Add(policy.Horizons.Action), nil
+	default:
+		return time.Time{}, fmt.Errorf("%w: action target kind is invalid", ErrConfig)
+	}
+}
+
 func actionMutationResult(rows int64, err error) (string, int64, error) {
 	if err != nil {
 		return "", 0, fmt.Errorf("apply webhook action mutation: %w", err)
 	}
 	if rows != 1 {
-		return "state_conflict", 0, nil
+		return actionResultStateConflict, 0, nil
 	}
 	return "applied", 0, nil
 }

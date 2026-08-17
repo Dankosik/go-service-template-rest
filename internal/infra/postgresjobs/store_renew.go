@@ -30,7 +30,7 @@ func (s *Session) Renew(
 		return nil, err
 	}
 
-	err = s.withOperation(ctx, pgx.ReadWrite, func(operationCtx context.Context, queries *sqlcgen.Queries) error {
+	err = s.withOperation(ctx, "renew", pgx.ReadWrite, func(operationCtx context.Context, queries *sqlcgen.Queries) error {
 		rows, queryErr := queries.RenewPostgresJobAttempts(operationCtx, sqlcgen.RenewPostgresJobAttemptsParams{
 			LogicalJobIds: params.LogicalJobIDs, AttemptGenerations: params.AttemptGenerations,
 			RecoveryGenerations: params.RecoveryGenerations, WorkerIds: params.WorkerIDs,

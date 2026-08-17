@@ -21,6 +21,7 @@ import (
 // it, so the producing request's trace does not stay open for the whole backlog
 // and redrive horizon. The link is what carries the join.
 func TestPublishSpanLinksToTheProducingOperation(t *testing.T) {
+	t.Parallel()
 	recorder := telemetrytest.InstallSpanRecorder(t)
 	telemetry := newTracingTelemetry(t)
 
@@ -58,6 +59,7 @@ func TestPublishSpanLinksToTheProducingOperation(t *testing.T) {
 // whatever span the relay itself is running inside, which is what extracting
 // into the live context instead of a blank one would produce.
 func TestPublishSpanWithoutCreationContextLinksToNothing(t *testing.T) {
+	t.Parallel()
 	recorder := telemetrytest.InstallSpanRecorder(t)
 	telemetry := newTracingTelemetry(t)
 
@@ -82,6 +84,7 @@ func TestPublishSpanWithoutCreationContextLinksToNothing(t *testing.T) {
 // carries, so a trace and a dashboard name one condition. The broker's own
 // error text never reaches the span.
 func TestPublishSpanRecordsTheBoundedErrorClass(t *testing.T) {
+	t.Parallel()
 	recorder := telemetrytest.InstallSpanRecorder(t)
 	telemetry := newTracingTelemetry(t)
 

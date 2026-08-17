@@ -16,6 +16,7 @@ import (
 // A publisher that reports success once the batch's publication budget is gone
 // has not proven the broker accepted the event, so the attempt stays retryable.
 func TestRelayTimeoutRejectsNilCompletion(t *testing.T) {
+	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		relay := newUnitRelay(&relayStoreStub{}, publisherFunc(func(ctx context.Context, _ Event) error {
 			<-ctx.Done()
@@ -93,6 +94,7 @@ func TestRelayPublisherPanicIsDiagnosable(t *testing.T) {
 // tried to publish to the attempt cap and quarantines it as outcome-unknown,
 // which is an operator action per event for a broker that was merely slow.
 func TestRelayReturnsTheAttemptForAnUnattemptedPublication(t *testing.T) {
+	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		var retries []RetryDirective
 		poisoned := 0
@@ -155,6 +157,7 @@ func TestRelayReturnsTheAttemptForAnUnattemptedPublication(t *testing.T) {
 }
 
 func TestRelayPublisherStuck(t *testing.T) {
+	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		started := make(chan struct{})
 		release := make(chan struct{})
@@ -193,6 +196,7 @@ func TestRelayPublisherStuck(t *testing.T) {
 // timeout would allow more, so every claimed event is finalized while the
 // relay still owns it.
 func TestRelayPublishStopsBeforeLeaseExpiry(t *testing.T) {
+	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		relay := newUnitRelay(&relayStoreStub{}, publisherFunc(func(ctx context.Context, _ Event) error {
 			<-ctx.Done()
@@ -362,6 +366,7 @@ func TestRelayCycleFinalizesUnderCancellation(t *testing.T) {
 // A publisher that ignores cancellation makes cleanup unsafe for the whole
 // cycle: its goroutine can still touch dependencies the process is closing.
 func TestRelayCycleStuckPublisherIsCleanupUnsafe(t *testing.T) {
+	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		release := make(chan struct{})
 		finalized := false

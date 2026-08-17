@@ -23,6 +23,7 @@ import (
 )
 
 func TestHTTPPropagationPolicy(t *testing.T) {
+	t.Parallel()
 	recorder := telemetrytest.InstallSpanRecorder(t)
 
 	tests := []struct {
@@ -61,6 +62,7 @@ func TestHTTPPropagationPolicy(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			reader, meterProvider := telemetrytest.NewManualMeterProvider(t)
 
 			observations := make(chan propagationWireObservation, 1)
@@ -155,6 +157,7 @@ func TestHTTPPropagationPolicy(t *testing.T) {
 }
 
 func TestHTTPPropagationPolicyRetriesEveryAttempt(t *testing.T) {
+	t.Parallel()
 	recorder := telemetrytest.InstallSpanRecorder(t)
 
 	for _, test := range []struct {
@@ -173,6 +176,7 @@ func TestHTTPPropagationPolicyRetriesEveryAttempt(t *testing.T) {
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			var attempts atomic.Int32
 			observations := make(chan propagationWireObservation, 2)
 			client := newPropagationTestClient(

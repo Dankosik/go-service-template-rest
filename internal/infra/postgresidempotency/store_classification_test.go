@@ -243,6 +243,7 @@ func TestStoreInputValidationAndClassificationBudget(t *testing.T) {
 }
 
 func TestStoreRejectsUnboundDatabaseOperationsBeforeAnyQuery(t *testing.T) {
+	t.Parallel()
 	contract, attempt, resolver := testIdempotencyInputs(t)
 	reservation := httpidempotency.Reservation{Attempt: attempt, Generation: 1, Recovery: httpidempotency.ReservationRecoveryNone}
 	result := httpidempotency.Result{Status: http.StatusCreated, MediaType: "application/json", Codec: "create/v1", Payload: []byte(`{"id":"widget-1"}`)}
@@ -262,6 +263,7 @@ func TestStoreRejectsUnboundDatabaseOperationsBeforeAnyQuery(t *testing.T) {
 		{name: "materialize epoch", call: func() error { _, err := store.MaterializeEpoch(t.Context(), attempt); return err }},
 	} {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			if err := test.call(); !errors.Is(err, ErrConfig) {
 				t.Fatalf("unbound Store error = %v, want ErrConfig", err)
 			}

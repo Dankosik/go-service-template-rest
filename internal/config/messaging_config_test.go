@@ -7,6 +7,7 @@ import (
 )
 
 func TestValidateMessagingConfig(t *testing.T) {
+	t.Parallel()
 	valid := MessagingConfig{
 		Enabled:             true,
 		URLs:                " tls://one.example:4222 , tls://two.example:4222 ",
@@ -37,6 +38,7 @@ func TestValidateMessagingConfig(t *testing.T) {
 	}
 	for name, mutate := range cases {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			cfg := valid
 			mutate(&cfg)
 			if err := validateMessagingConfig(&cfg); !errors.Is(err, ErrValidate) {

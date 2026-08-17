@@ -168,6 +168,7 @@ func TestNewRejectsMissingTrustAndBounds(t *testing.T) {
 }
 
 func TestClientEnforcesSendAndReceiveMessageLimits(t *testing.T) {
+	t.Parallel()
 	var handlerCalls atomic.Int64
 	target := startPayloadServer(t, func(
 		_ context.Context,
@@ -181,6 +182,7 @@ func TestClientEnforcesSendAndReceiveMessageLimits(t *testing.T) {
 	})
 
 	t.Run("send", func(t *testing.T) {
+		t.Parallel()
 		cfg := grpcclient.DefaultConfig(target)
 		cfg.MaxSendMessageBytes = 64
 		connection, err := grpcclient.New(
@@ -207,6 +209,7 @@ func TestClientEnforcesSendAndReceiveMessageLimits(t *testing.T) {
 	})
 
 	t.Run("receive", func(t *testing.T) {
+		t.Parallel()
 		cfg := grpcclient.DefaultConfig(target)
 		cfg.MaxReceiveMessageBytes = 64
 		connection, err := grpcclient.New(
@@ -234,6 +237,7 @@ func TestClientEnforcesSendAndReceiveMessageLimits(t *testing.T) {
 }
 
 func TestClientEnforcesReceivedMetadataLimit(t *testing.T) {
+	t.Parallel()
 	var handlerCalls atomic.Int64
 	target := startPayloadServer(t, func(
 		ctx context.Context,
@@ -285,6 +289,7 @@ func TestClientEnforcesReceivedMetadataLimit(t *testing.T) {
 }
 
 func TestClientTLSVerifiesServerHostname(t *testing.T) {
+	t.Parallel()
 	serverCertificate, leafCertificate := testTLSMaterial(t)
 	serverCredentials := credentials.NewTLS(&tls.Config{
 		Certificates: []tls.Certificate{serverCertificate},

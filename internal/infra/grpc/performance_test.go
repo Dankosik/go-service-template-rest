@@ -147,6 +147,7 @@ var knownBuiltinPolicies = []string{
 const benchmarkUnaryTimeout = 8 * time.Second
 
 func TestBenchmarkVariantsCoverEveryBuiltinPolicy(t *testing.T) {
+	t.Parallel()
 	names := make([]string, 0, len(knownBuiltinPolicies))
 	for _, policy := range builtinPolicies(
 		slog.New(slog.DiscardHandler),
@@ -174,8 +175,10 @@ func TestBenchmarkVariantsCoverEveryBuiltinPolicy(t *testing.T) {
 }
 
 func TestGRPCBenchmarkVariantsComposeExpectedLayers(t *testing.T) {
+	t.Parallel()
 	for _, variant := range benchmarkVariants {
 		t.Run(variant.name, func(t *testing.T) {
+			t.Parallel()
 			fixture, err := newBenchmarkFixture(variant)
 			if err != nil {
 				t.Fatalf("newBenchmarkFixture(%q) error = %v", variant.name, err)

@@ -334,6 +334,7 @@ func TestOpenAPIRuntimeContractAccessLogIncludesRouteLabel(t *testing.T) {
 }
 
 func TestOpenAPIRuntimeContractMetricsExposeRouteLabels(t *testing.T) {
+	t.Parallel()
 	log := slog.New(slog.DiscardHandler)
 	metrics := telemetry.New()
 	telemetrytest.RestoreGlobals(t)
@@ -461,6 +462,7 @@ func openAPIOperationRoutes(t *testing.T) map[rootRouteKey]struct{} {
 
 //nolint:paralleltest // Installs a process-wide tracer provider for span capture.
 func TestOpenAPIRuntimeContractRouteTemplateUsedForOTelSpanName(t *testing.T) {
+	t.Parallel()
 	recorder := telemetrytest.InstallSpanRecorder(t)
 
 	log := slog.New(slog.DiscardHandler)

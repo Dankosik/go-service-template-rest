@@ -13,6 +13,7 @@ import (
 )
 
 func TestResolveMetricExporterEndpoint(t *testing.T) {
+
 	for _, tc := range []struct {
 		name       string
 		cfg        MetricExporterConfig
@@ -78,6 +79,7 @@ func TestResolveMetricExporterEndpoint(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+
 			telemetrytest.ClearAmbientExporterEnv(t)
 			for name, value := range tc.env {
 				t.Setenv(name, value)
@@ -101,6 +103,7 @@ func TestResolveMetricExporterEndpoint(t *testing.T) {
 }
 
 func TestResolveMetricExporterEndpointRejectsInvalidValues(t *testing.T) {
+
 	for _, tc := range []struct {
 		name string
 		cfg  MetricExporterConfig
@@ -112,6 +115,7 @@ func TestResolveMetricExporterEndpointRejectsInvalidValues(t *testing.T) {
 		{name: "ambient endpoint", env: map[string]string{otelExporterMetricsEndpointEnv: "https://user:secret@platform.example"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+
 			telemetrytest.ClearAmbientExporterEnv(t)
 			for name, value := range tc.env {
 				t.Setenv(name, value)
@@ -137,6 +141,7 @@ func TestResolveMetricExporterEndpointRejectsInvalidValues(t *testing.T) {
 //
 //nolint:paralleltest // Mutates the process-wide OpenTelemetry MeterProvider.
 func TestSetupMetricsPushesToOTLPCollector(t *testing.T) {
+	t.Parallel()
 	telemetrytest.ClearAmbientExporterEnv(t)
 	telemetrytest.RestoreGlobals(t)
 
@@ -202,7 +207,12 @@ func TestSetupMetricsPushesToOTLPCollector(t *testing.T) {
 // the deployments that scrape, which is the shape the template shipped with.
 //
 //nolint:paralleltest // Mutates the process-wide OpenTelemetry MeterProvider.
+//nolint:paralleltest // This test mutates process-global environment or working directory.
+
+// TestConflictingMetricExporterEnvNamesUnverifiableMaterial keeps injected
+// credentials from travelling to a collector this service named.
 func TestSetupMetricsWithoutEndpointStaysScrapeOnly(t *testing.T) {
+	t.Parallel()
 	telemetrytest.ClearAmbientExporterEnv(t)
 	telemetrytest.RestoreGlobals(t)
 
@@ -238,9 +248,8 @@ func TestSetupMetricsWithoutEndpointStaysScrapeOnly(t *testing.T) {
 	}
 }
 
-// TestConflictingMetricExporterEnvNamesUnverifiableMaterial keeps injected
-// credentials from travelling to a collector this service named.
 func TestConflictingMetricExporterEnvNamesUnverifiableMaterial(t *testing.T) {
+
 	telemetrytest.ClearAmbientExporterEnv(t)
 	t.Setenv("OTEL_EXPORTER_OTLP_METRICS_HEADERS", "authorization=Bearer injected")
 

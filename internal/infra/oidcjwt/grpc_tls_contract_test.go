@@ -37,6 +37,7 @@ const (
 )
 
 func TestGRPCAuthnBoundaryOverTLS(t *testing.T) {
+	t.Parallel()
 	now := testNow
 	signingKey := loadTestRSAKey(t, testSigningKey)
 	verifier := newTestVerifier(t, signingKey)

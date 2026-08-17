@@ -22,9 +22,11 @@ import (
 )
 
 func TestImageRootBundleLoaderIsStrictAndBounded(t *testing.T) {
+	t.Parallel()
 	ca := testCACertificate(t, 1, true)
 
 	t.Run("valid", func(t *testing.T) {
+		t.Parallel()
 		bundle, err := loadImageRootBundle(memoryImageRootSource(ca, 0, nil))
 		if err != nil {
 			t.Fatalf("loadImageRootBundle() error = %v", err)
@@ -35,6 +37,7 @@ func TestImageRootBundleLoaderIsStrictAndBounded(t *testing.T) {
 	})
 
 	t.Run("byte limit", func(t *testing.T) {
+		t.Parallel()
 		exact := append(bytes.Clone(ca), bytes.Repeat([]byte{'\n'}, maxImageRootBundleBytes-len(ca))...)
 		if _, err := loadImageRootBundle(memoryImageRootSource(exact, 0, nil)); err != nil {
 			t.Fatalf("exact byte limit error = %v", err)
@@ -45,6 +48,7 @@ func TestImageRootBundleLoaderIsStrictAndBounded(t *testing.T) {
 	})
 
 	t.Run("certificate limit", func(t *testing.T) {
+		t.Parallel()
 		var roots []byte
 		for serial := int64(1); serial <= maxImageRootCertificates+1; serial++ {
 			roots = append(roots, testCACertificate(t, serial, true)...)
@@ -74,6 +78,7 @@ func TestImageRootBundleLoaderIsStrictAndBounded(t *testing.T) {
 	}
 	for _, test := range invalid {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			if _, err := loadImageRootBundle(memoryImageRootSource(test.data, test.mode, nil)); err == nil {
 				t.Fatal("loadImageRootBundle() error = nil")
 			}
@@ -81,6 +86,7 @@ func TestImageRootBundleLoaderIsStrictAndBounded(t *testing.T) {
 	}
 
 	t.Run("source errors", func(t *testing.T) {
+		t.Parallel()
 		if _, err := loadImageRootBundle(func() (imageRootFile, error) { return nil, errors.New("open") }); err == nil {
 			t.Fatal("open error was not returned")
 		}
@@ -95,6 +101,7 @@ func TestImageRootBundleLoaderIsStrictAndBounded(t *testing.T) {
 	})
 
 	t.Run("source changes", func(t *testing.T) {
+		t.Parallel()
 		if _, err := loadImageRootBundle(func() (imageRootFile, error) {
 			return &memoryImageRootFile{Reader: bytes.NewReader(ca), info: memoryImageRootInfo{size: int64(len(ca) + 1)}}, nil
 		}); err == nil {
@@ -104,6 +111,7 @@ func TestImageRootBundleLoaderIsStrictAndBounded(t *testing.T) {
 }
 
 func TestFinalImageRootBundleReceipt(t *testing.T) {
+	t.Parallel()
 	path := os.Getenv("S3_IMAGE_ROOT_BUNDLE_RECEIPT_PATH")
 	if path == "" {
 		t.Skip("S3_IMAGE_ROOT_BUNDLE_RECEIPT_PATH is not set")

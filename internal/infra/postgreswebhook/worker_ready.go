@@ -2,6 +2,7 @@ package postgreswebhook
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
@@ -11,17 +12,29 @@ import (
 )
 
 type Observation struct {
-	Scheduled       int64
-	InFlight        int64
-	Terminal        int64
-	Disabled        int64
-	LeasedSlots     int64
-	TotalSlots      int64
-	ClockHighWater  time.Time
-	ClockRegression bool
+	Ready             int64
+	Scheduled         int64
+	InFlight          int64
+	Terminal          int64
+	Suspended         int64
+	Quarantined       int64
+	Disabled          int64
+	OldestDueAge      time.Duration
+	HTTPAccepted      int64
+	HTTPRejected      int64
+	LocallyDenied     int64
+	OutcomeUnknown    int64
+	AttemptsExhausted int64
+	RedriveExhausted  int64
+	LeasedSlots       int64
+	TotalSlots        int64
+	RetentionBackfill int64
+	PrivacyPending    int64
+	ClockHighWater    time.Time
+	ClockRegression   bool
 }
 
-//nolint:gocognit // One observation must validate the complete database/secret snapshot atomically.
+//nolint:gocognit,cyclop // One observation must validate the complete database/secret snapshot atomically.
 func (s *Store) ObserveReadiness(ctx context.Context, manifest *SecretManifest) (Observation, error) {
 	if !s.valid() || manifest == nil {
 		return Observation{}, fmt.Errorf("%w: store and manifest are required", ErrConfig)
@@ -45,11 +58,27 @@ func (s *Store) ObserveReadiness(ctx context.Context, manifest *SecretManifest) 
 		if err != nil {
 			return fmt.Errorf("observe postgres webhooks: %w", err)
 		}
-		observation = Observation{Scheduled: counts.Scheduled, InFlight: counts.InFlight, Terminal: counts.Terminal, Disabled: counts.Disabled, LeasedSlots: counts.LeasedSlots, TotalSlots: counts.TotalSlots, ClockHighWater: clock.HighWater.Time.UTC(), ClockRegression: clock.Regression}
+		observation = Observation{
+			Ready: counts.Ready, Scheduled: counts.Scheduled, InFlight: counts.InFlight,
+			Terminal: counts.Terminal, Suspended: counts.Suspended, Quarantined: counts.Quarantined,
+			Disabled: counts.Disabled, OldestDueAge: time.Duration(counts.OldestDueAgeSeconds) * time.Second,
+			HTTPAccepted: counts.HttpAccepted, HTTPRejected: counts.HttpRejected, LocallyDenied: counts.LocallyDenied,
+			OutcomeUnknown: counts.OutcomeUnknown, AttemptsExhausted: counts.AttemptsExhausted,
+			RedriveExhausted: counts.RedriveExhausted, LeasedSlots: counts.LeasedSlots,
+			TotalSlots: counts.TotalSlots, RetentionBackfill: counts.RetentionBackfillPending, PrivacyPending: counts.PrivacyPending,
+			ClockHighWater: clock.HighWater.Time.UTC(), ClockRegression: clock.Regression,
+		}
+		if observation.RetentionBackfill != 0 {
+			return fmt.Errorf("%w: webhook retention backfill is incomplete", ErrConfig)
+		}
 		if capacity.RevisionCount != 1 || capacity.CapacityRevision != s.options.CapacityRevision || int(capacity.SlotCount) != s.options.GlobalConcurrency {
 			return fmt.Errorf("%w: capacity revision/count conflict", ErrConfig)
 		}
 		for _, binding := range bindings {
+			var policy DeliveryPolicy
+			if err := json.Unmarshal(binding.Policy, &policy); err != nil || policy.validate() != nil || !s.admits(policy) {
+				return fmt.Errorf("%w: retained destination policy is incompatible", ErrConfig)
+			}
 			if binding.RequiredSecretRevision > manifest.Revision() {
 				return fmt.Errorf("%w: secret manifest revision is stale", ErrConfig)
 			}
@@ -81,17 +110,23 @@ type readinessState struct {
 	interval        time.Duration
 }
 
-func (state *readinessState) update() {
+func (state *readinessState) observed() {
 	state.mu.Lock()
 	state.admission = true
-	state.maintenanceLive = true
 	state.lastObservation = time.Now()
+	state.mu.Unlock()
+}
+
+func (state *readinessState) maintained() {
+	state.mu.Lock()
+	state.maintenanceLive = true
 	state.mu.Unlock()
 }
 
 func (state *readinessState) close() {
 	state.mu.Lock()
 	state.admission = false
+	state.maintenanceLive = false
 	state.mu.Unlock()
 }
 

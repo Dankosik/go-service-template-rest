@@ -17,6 +17,7 @@ import (
 )
 
 func TestWebhookNetworkSecurity(t *testing.T) {
+	t.Parallel()
 	manifest := webhookManifest(t, 1, "owner-a", "dest-a", "key-a")
 	tests := []struct {
 		name      string
@@ -29,8 +30,12 @@ func TestWebhookNetworkSecurity(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			resolver := webhookResolver(t, "hooks.test", test.addresses)
-			prepared, err := postgreswebhook.PrepareSend(t.Context(), resolver, webhookNetworkAttempt(), manifest)
+			attempt := webhookNetworkAttempt()
+			ctx, cancel := context.WithDeadline(t.Context(), attempt.Deadline)
+			defer cancel()
+			prepared, err := postgreswebhook.PrepareSend(ctx, resolver, attempt, manifest)
 			if test.wantDeny {
 				if !errors.Is(err, postgreswebhook.ErrDestinationDenied) {
 					t.Fatalf("PrepareSend() error = %v, want ErrDestinationDenied", err)
@@ -48,13 +53,16 @@ func TestWebhookNetworkSecurity(t *testing.T) {
 }
 
 func TestWebhookBoundedAttempt(t *testing.T) {
+	t.Parallel()
 	attempt := webhookNetworkAttempt()
 	prepared := postgreswebhook.PreparedSend{
 		Attempt: attempt, URL: mustWebhookURL(t, attempt.URL),
 		SelectedAddress: netip.MustParseAddr("127.0.0.1"), Signature: "v1,test",
 	}
+	ctx, cancel := context.WithDeadline(t.Context(), attempt.Deadline)
+	defer cancel()
 	started := time.Now()
-	result, err := postgreswebhook.Send(t.Context(), prepared)
+	result, err := postgreswebhook.Send(ctx, prepared)
 	if !errors.Is(err, postgreswebhook.ErrDestinationDenied) {
 		t.Fatalf("Send() error = %v, want ErrDestinationDenied", err)
 	}
@@ -63,7 +71,8 @@ func TestWebhookBoundedAttempt(t *testing.T) {
 	}
 }
 
-func TestWebhookReceiverAmbiguityAndIdentity(t *testing.T) {
+func TestWebhookRetrySignatureIdentity(t *testing.T) {
+	t.Parallel()
 	key := []byte("0123456789abcdef0123456789abcdef")
 	body := []byte(`{"event":"order.created","id":"evt-01"}`)
 	firstAt := time.Unix(1700000000, 0)
@@ -82,10 +91,11 @@ func TestWebhookReceiverAmbiguityAndIdentity(t *testing.T) {
 }
 
 func webhookNetworkAttempt() postgreswebhook.ClaimedAttempt {
+	attemptedAt := time.Now()
 	return postgreswebhook.ClaimedAttempt{
 		Identity:      postgreswebhook.AttemptIdentity{OwnerScope: "owner-a", DeliveryID: "delivery-01", AttemptID: "attempt-01", Fence: 1},
 		DestinationID: "dest-a", URL: "https://hooks.test/deliver", Body: []byte(`{"id":"evt-01"}`), ContentType: "application/json",
-		AttemptedAt: time.Unix(1700000000, 0), KeyReference: "key-a", ManifestRevision: 1,
+		AttemptedAt: attemptedAt, Deadline: attemptedAt.Add(time.Second), KeyReference: "key-a", ManifestRevision: 1,
 		Policy: postgreswebhook.DeliveryPolicy{AttemptTimeout: time.Second, ResponseHeaderTimeout: 500 * time.Millisecond, ResponseHeaderBytes: 4096, ResponseBodyBytes: 4096},
 	}
 }

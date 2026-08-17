@@ -12,6 +12,7 @@ import (
 )
 
 func TestCommitReceipt(t *testing.T) {
+	t.Parallel()
 	event := Event{
 		ID:               "evt-1",
 		Type:             "order.created",
@@ -46,6 +47,7 @@ func TestCommitReceipt(t *testing.T) {
 	}
 
 	t.Run("outcomes", func(t *testing.T) {
+		t.Parallel()
 		tests := []struct {
 			name       string
 			row        pgx.Row
@@ -62,6 +64,7 @@ func TestCommitReceipt(t *testing.T) {
 		}
 		for _, test := range tests {
 			t.Run(test.name, func(t *testing.T) {
+				t.Parallel()
 				driver := &commitReceiptDriver{row: test.row}
 				outcome, reconcileErr := stubbedStore(driver).ReconcileCommit(t.Context(), event)
 				if outcome != test.want {
@@ -84,6 +87,7 @@ func TestCommitReceipt(t *testing.T) {
 	})
 
 	t.Run("invalid event stays off wire", func(t *testing.T) {
+		t.Parallel()
 		driver := &commitReceiptDriver{row: commitReceiptRow{}}
 		invalid := event
 		invalid.ID = ""
@@ -97,6 +101,7 @@ func TestCommitReceipt(t *testing.T) {
 	})
 
 	t.Run("read failure stays unknown", func(t *testing.T) {
+		t.Parallel()
 		databaseErr := errors.New("database unavailable")
 		driver := &commitReceiptDriver{row: rowStub{err: databaseErr}}
 		outcome, reconcileErr := stubbedStore(driver).ReconcileCommit(t.Context(), event)

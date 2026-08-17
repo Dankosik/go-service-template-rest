@@ -87,6 +87,7 @@ func TestContractCloneDoesNotAliasDeclaration(t *testing.T) {
 }
 
 func TestContractValidationRejectsIncompleteOrUnsafeDeclarations(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		name   string
 		update func(*Contract)
@@ -110,6 +111,7 @@ func TestContractValidationRejectsIncompleteOrUnsafeDeclarations(t *testing.T) {
 		{name: "invalid external effect", update: func(contract *Contract) { contract.ExternalEffect = "other" }},
 	} {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			contract := testContract()
 			test.update(&contract)
 			if err := contract.Validate(); err == nil {

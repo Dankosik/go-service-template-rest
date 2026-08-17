@@ -17,6 +17,7 @@ import (
 )
 
 func TestPostgresJobsCompatibilityProcess(t *testing.T) {
+	t.Parallel()
 	if runtime.GOOS == "windows" {
 		t.Skip("SIGTERM process lifecycle is Unix-specific")
 	}
@@ -92,13 +93,6 @@ func TestPostgresJobsCompatibilityProcess(t *testing.T) {
 	assertPostgresJobsCompatibilityVisible(ctx, t, pool, v3, jobs.StateReady, 0)
 	assertPostgresJobsCompatibilityRetained(ctx, t, pool, retained)
 
-	var actions int
-	if err := pool.PGX().QueryRow(ctx, `SELECT count(*) FROM postgres_job_actions`).Scan(&actions); err != nil {
-		t.Fatalf("count compatibility actions: %v", err)
-	}
-	if actions != 0 {
-		t.Fatalf("compatibility actions = %d, want no contract/delete action", actions)
-	}
 }
 
 func stageDuePostgresJobsCompatibilityJob(ctx context.Context, t *testing.T, pool *postgres.Pool, store *postgresjobs.Store, argsVersion, suffix string) jobs.Prepared {
@@ -113,13 +107,10 @@ func stageDuePostgresJobsCompatibilityJob(ctx context.Context, t *testing.T, poo
 			return nil
 		},
 		Policy: jobs.Policy{
-			Producer: jobs.ProducerPolicy{Scope: "feature-operation", RecognitionPeriod: time.Hour},
-			Effect:   jobs.EffectPolicy{Authority: jobs.EffectConditionalWrite, DuplicateTolerance: "same key is harmless", LateResultPrecedence: "effect ledger wins", AmbiguousAction: jobs.AmbiguousEffectRetry, ReadbackAuthority: "effect ledger"},
-			Retry:    jobs.RetryPolicy{MaxAttempts: 3, MaxElapsed: time.Hour, InitialBackoff: 20 * time.Millisecond, MaxBackoff: 20 * time.Millisecond, HintPolicy: jobs.RetryHintIgnore, Jitter: jobs.JitterNone, MaxRecoveryWave: 8},
-			Recovery: jobs.RecoveryPolicy{Mode: jobs.RecoveryUnavailable, Attempts: jobs.BudgetPreserved, Elapsed: jobs.BudgetPreserved},
-			Schedule: jobs.ScheduleOneOff, MaxAttemptDuration: time.Minute, MaxAttemptCost: 1, MaxUsefulDuration: time.Hour, TerminationEnvelope: time.Minute,
-			Data:     jobs.DataPolicy{Classification: "private", Redaction: "omit payload", Retention: "explicit deletion only", Deletion: "disabled", OperatorRoles: "none"},
-			Operator: jobs.OperatorUnavailable, WorkClass: jobs.WorkClassNeutral,
+			Effect:             jobs.EffectPolicy{AmbiguousAction: jobs.AmbiguousEffectRetry},
+			Retry:              jobs.RetryPolicy{MaxAttempts: 3, MaxElapsed: time.Hour, InitialBackoff: 20 * time.Millisecond, MaxBackoff: 20 * time.Millisecond, HintPolicy: jobs.RetryHintIgnore, Jitter: jobs.JitterNone, MaxRecoveryWave: 8},
+			Recovery:           jobs.RecoveryPolicy{Mode: jobs.RecoveryUnavailable, Attempts: jobs.BudgetPreserved, Elapsed: jobs.BudgetPreserved},
+			MaxAttemptDuration: time.Minute, TerminationEnvelope: time.Minute,
 		},
 	})
 	if err != nil {

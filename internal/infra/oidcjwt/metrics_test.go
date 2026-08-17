@@ -26,6 +26,7 @@ import (
 )
 
 func TestAuthnMetricAttributesAreBounded(t *testing.T) {
+	t.Parallel()
 	reader, provider := telemetrytest.NewManualMeterProvider(t)
 
 	now := testNow
@@ -119,6 +120,7 @@ func TestAuthnMetricAttributesAreBounded(t *testing.T) {
 // recordRejection; the second was counted as "invalid" until verificationReason
 // stopped reading a missing Kind as a bad credential.
 func TestAuthnMetricsCountRejectionsVerifyNeverSaw(t *testing.T) {
+	t.Parallel()
 	reader, provider := telemetrytest.NewManualMeterProvider(t)
 
 	now := testNow
@@ -210,6 +212,7 @@ func TestAuthnMetricsCountRejectionsVerifyNeverSaw(t *testing.T) {
 }
 
 func TestFailingMeterDegradesTelemetryNotAuthentication(t *testing.T) {
+	t.Parallel()
 	for _, testCase := range []struct {
 		name            string
 		failInstruments bool
@@ -219,6 +222,7 @@ func TestFailingMeterDegradesTelemetryNotAuthentication(t *testing.T) {
 		{name: "callback registration failure", failCallback: true},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
 			var logs strings.Builder
 			log := slog.New(slog.NewJSONHandler(&logs, nil))
 			base := metricnoop.NewMeterProvider()
@@ -419,6 +423,7 @@ func requireHistogramMetricAttributes(
 }
 
 func TestKindDetailsHaveNoGaps(t *testing.T) {
+	t.Parallel()
 	for index := range kindDetails[1:] {
 		kind := Kind(index + 1)
 		if _, ok := detailFor(kind); !ok {

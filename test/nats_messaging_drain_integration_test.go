@@ -14,6 +14,7 @@ import (
 )
 
 func TestNATSForcedShutdownRedelivers(t *testing.T) {
+	t.Parallel()
 	f := newNATSFixture(t)
 	entered := make(chan struct{})
 	client, worker, _ := f.worker(t, func(ctx context.Context, _ natsjs.Message) error {
@@ -55,6 +56,7 @@ func TestNATSForcedShutdownRedelivers(t *testing.T) {
 }
 
 func TestNATSHandlerPanicIsSupervised(t *testing.T) {
+	t.Parallel()
 	f := newNATSFixture(t)
 	producer := f.client(t, natsjs.RoleProducer)
 	blockEntered := make(chan struct{})
@@ -147,6 +149,7 @@ func TestNATSHandlerPanicIsSupervised(t *testing.T) {
 }
 
 func TestNATSGracefulDrain(t *testing.T) {
+	t.Parallel()
 	f := newNATSFixture(t)
 	entered := make(chan struct{})
 	release := make(chan struct{})

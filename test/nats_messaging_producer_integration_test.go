@@ -11,6 +11,7 @@ import (
 )
 
 func TestNATSProducerOutcomesAndCapacity(t *testing.T) {
+	t.Parallel()
 	f := newNATSFixture(t)
 	client := f.client(t, natsjs.RoleProducer)
 	event := testEvent("accepted")

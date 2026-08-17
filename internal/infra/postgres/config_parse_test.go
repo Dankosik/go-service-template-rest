@@ -56,6 +56,7 @@ func TestParsePoolConfigRejectsKeywordValueDSN(t *testing.T) {
 }
 
 func TestParsePoolConfigRejectsAmbientPostgresEnv(t *testing.T) {
+
 	validDSN := "postgres://user:pass@localhost:5432/app?sslmode=disable"
 
 	for _, envName := range []string{
@@ -67,6 +68,7 @@ func TestParsePoolConfigRejectsAmbientPostgresEnv(t *testing.T) {
 		"PGSSLSNI",
 	} {
 		t.Run(envName, func(t *testing.T) {
+
 			t.Setenv(envName, "ambient-value")
 
 			_, err := parsePoolConfig(validDSN)
@@ -76,6 +78,7 @@ func TestParsePoolConfigRejectsAmbientPostgresEnv(t *testing.T) {
 	}
 
 	t.Run("empty dsn rejects environment only parsing", func(t *testing.T) {
+
 		t.Setenv("PGHOST", "ambient-host")
 
 		_, err := parsePoolConfig("")
@@ -85,6 +88,7 @@ func TestParsePoolConfigRejectsAmbientPostgresEnv(t *testing.T) {
 }
 
 func TestParsePoolConfigAllowsUnrelatedPGPrefixedEnv(t *testing.T) {
+
 	t.Setenv("PGO_ENABLED", "1")
 
 	const dsn = "postgres://user:pass@localhost:5432/app?sslmode=disable"

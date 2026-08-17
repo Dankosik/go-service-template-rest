@@ -3,6 +3,7 @@ package bootstrap
 import "testing"
 
 func TestAuthnReadinessComposition(t *testing.T) {
+	t.Parallel()
 	server := newFakeGRPCRuntimeServer()
 	for _, current := range []bool{true, false, true} {
 		setGRPCAuthnReady(server, current)

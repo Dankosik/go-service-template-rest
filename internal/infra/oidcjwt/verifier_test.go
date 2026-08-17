@@ -21,6 +21,7 @@ import (
 )
 
 func TestKeyMissRefresh(t *testing.T) {
+	t.Parallel()
 	now := testNow
 	first := loadTestRSAKey(t, testSigningKey)
 	second := loadTestRSAKey(t, testRotatedKey)
@@ -52,6 +53,7 @@ func TestKeyMissRefresh(t *testing.T) {
 }
 
 func TestSameKIDRotation(t *testing.T) {
+	t.Parallel()
 	now := testNow
 	first := loadTestRSAKey(t, testSigningKey)
 	second := loadTestRSAKey(t, testRotatedKey)
@@ -85,6 +87,7 @@ func TestSameKIDRotation(t *testing.T) {
 }
 
 func TestStaleUnknownKIDPerformsRequestDrivenRecovery(t *testing.T) {
+	t.Parallel()
 	now := testNow
 	first := loadTestRSAKey(t, testSigningKey)
 	second := loadTestRSAKey(t, testRotatedKey)
@@ -109,6 +112,7 @@ func TestStaleUnknownKIDPerformsRequestDrivenRecovery(t *testing.T) {
 // set, unavailable against one the refresh could not replace. [Verifier.Verify]
 // states why.
 func TestUnknownKIDCategoryDependsOnTrustCurrentness(t *testing.T) {
+	t.Parallel()
 	first := loadTestRSAKey(t, testSigningKey)
 	second := loadTestRSAKey(t, testRotatedKey)
 	for _, testCase := range []struct {
@@ -120,6 +124,7 @@ func TestUnknownKIDCategoryDependsOnTrustCurrentness(t *testing.T) {
 		{name: "stale set answers unavailable", stale: true, wantKind: KindUnavailable},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
 			client := &scriptedClient{responses: append(initialResponses(t, first), scriptedResponse{
 				err: errors.New("poison refresh outage"),
 			})}
@@ -138,6 +143,7 @@ func TestUnknownKIDCategoryDependsOnTrustCurrentness(t *testing.T) {
 }
 
 func TestConcurrentKeyMissesBoundRequestWaiters(t *testing.T) {
+	t.Parallel()
 	now := testNow
 	first := loadTestRSAKey(t, testSigningKey)
 	second := loadTestRSAKey(t, testRotatedKey)
@@ -185,6 +191,7 @@ func TestConcurrentKeyMissesBoundRequestWaiters(t *testing.T) {
 }
 
 func TestRefreshCancellation(t *testing.T) {
+	t.Parallel()
 	now := testNow
 	first := loadTestRSAKey(t, testSigningKey)
 	second := loadTestRSAKey(t, testRotatedKey)
@@ -213,6 +220,7 @@ func TestRefreshCancellation(t *testing.T) {
 }
 
 func TestProviderTimeoutDuringKeyMissIsUnavailable(t *testing.T) {
+	t.Parallel()
 	now := testNow
 	first := loadTestRSAKey(t, testSigningKey)
 	second := loadTestRSAKey(t, testRotatedKey)
@@ -230,6 +238,7 @@ func TestProviderTimeoutDuringKeyMissIsUnavailable(t *testing.T) {
 }
 
 func TestStaleKeySetFailsReadinessAndVerificationClosed(t *testing.T) {
+	t.Parallel()
 	now := testNow
 	key := loadTestRSAKey(t, testSigningKey)
 	client := &scriptedClient{responses: initialResponses(t, key)}
@@ -244,6 +253,7 @@ func TestStaleKeySetFailsReadinessAndVerificationClosed(t *testing.T) {
 }
 
 func TestErrorsAndLogsRedactCredentialAndProviderContent(t *testing.T) {
+	t.Parallel()
 	const sensitive = "sensitive-token-and-claim"
 	var output strings.Builder
 	client := &scriptedClient{responses: []scriptedResponse{{
@@ -271,6 +281,7 @@ func TestErrorsAndLogsRedactCredentialAndProviderContent(t *testing.T) {
 }
 
 func TestAuthnRedactionCoversRefreshPanicAndTelemetry(t *testing.T) {
+	t.Parallel()
 	const poison = "poison-authn-marker-7c5e"
 	now := testNow
 	first := loadTestRSAKey(t, testSigningKey)

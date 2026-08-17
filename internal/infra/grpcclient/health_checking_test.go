@@ -22,6 +22,7 @@ import (
 const healthProbeMethod = "/grpcclient.healthtest.Backend/Probe"
 
 func TestRoundRobinHealthControlsEligibility(t *testing.T) {
+	t.Parallel()
 	first := startHealthBackend(t, healthgrpc.HealthCheckResponse_SERVING, nil)
 	second := startHealthBackend(t, healthgrpc.HealthCheckResponse_SERVING, nil)
 	connection := newHealthConnection(t, "grpcclient-health-transition", first, second)
@@ -45,6 +46,7 @@ func TestRoundRobinHealthControlsEligibility(t *testing.T) {
 }
 
 func TestRoundRobinHealthTransitionDoesNotCancelInflightRPC(t *testing.T) {
+	t.Parallel()
 	entered := make(chan struct{})
 	release := make(chan struct{})
 	var blocked atomic.Bool
@@ -86,6 +88,7 @@ func TestRoundRobinHealthTransitionDoesNotCancelInflightRPC(t *testing.T) {
 }
 
 func TestHealthUnimplementedFallsBackToConnectivity(t *testing.T) {
+	t.Parallel()
 	backend := startBackend(t, nil, nil)
 	connection := newHealthConnection(t, "grpcclient-health-unimplemented", backend)
 
@@ -100,6 +103,7 @@ func TestHealthUnimplementedFallsBackToConnectivity(t *testing.T) {
 }
 
 func TestClientConnCloseCancelsHealthWatch(t *testing.T) {
+	t.Parallel()
 	observer := newHealthWatchObserver()
 	address := serveTestServer(t, listenLoopback(t), func(server *grpc.Server) {
 		healthgrpc.RegisterHealthServer(server, observer)

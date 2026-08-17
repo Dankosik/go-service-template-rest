@@ -27,9 +27,11 @@ func (c *Client) Delete(ctx context.Context, key string) (err error) {
 	}
 
 	send := &sendState{}
-	_, err = c.sdk.DeleteObject(withSendState(effective, send), &awss3.DeleteObjectInput{Bucket: aws.String(c.config.Bucket), Key: aws.String(key)})
+	_, err = c.sdk.DeleteObject(withSendState(effective, send), &awss3.DeleteObjectInput{
+		Bucket: aws.String(c.config.Bucket), ExpectedBucketOwner: c.expectedBucketOwner(), Key: aws.String(key),
+	})
 	if err != nil {
-		return operationError(operationDelete, err, send.wroteHeaders)
+		return operationError(c.config.Provider, operationDelete, err, send)
 	}
 	return nil
 }

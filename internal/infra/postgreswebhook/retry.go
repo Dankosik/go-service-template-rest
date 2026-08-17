@@ -69,7 +69,11 @@ func ParseRetryAfter(raw, date string, attemptedAt time.Time, maxDelay time.Dura
 		return 0, false
 	}
 	raw = strings.TrimSpace(raw)
-	if seconds, err := strconv.ParseUint(raw, 10, 63); err == nil {
+	if raw != "" && strings.IndexFunc(raw, func(r rune) bool { return r < '0' || r > '9' }) < 0 {
+		seconds, err := strconv.ParseUint(raw, 10, 63)
+		if err != nil {
+			return maxDelay, true
+		}
 		if seconds > uint64(math.MaxInt64/int64(time.Second)) {
 			return maxDelay, true
 		}
@@ -99,6 +103,9 @@ func CumulativeSummary(previous OutcomeClass, attempts ...OutcomeClass) OutcomeC
 			return OutcomeUnknown
 		}
 	}
+	if previous == OutcomeClosedUnknown {
+		return OutcomeClosedUnknown
+	}
 	for _, outcome := range slices.Backward(all) {
 		if outcome != "" {
 			return outcome
@@ -112,7 +119,7 @@ func RetryDue(now, deadline time.Time, localDelay, hint time.Duration) (time.Tim
 		return time.Time{}, errors.New("retry deadline exhausted")
 	}
 	due := now.Add(max(localDelay, hint))
-	if due.After(deadline) {
+	if !due.Before(deadline) {
 		return time.Time{}, errors.New("retry deadline exhausted")
 	}
 	return due, nil

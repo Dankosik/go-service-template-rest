@@ -31,6 +31,7 @@ import (
 
 //nolint:paralleltest // Replaces net.DefaultResolver and the global OTel provider with cleanup restoration.
 func TestServiceToServiceHTTPCorrelationAndCancellation(t *testing.T) {
+	t.Parallel()
 	recorder := telemetrytest.InstallSpanRecorder(t)
 	privateAddress := privateTestAddress(t)
 	const downstreamHost = "service-b.correlation.internal"

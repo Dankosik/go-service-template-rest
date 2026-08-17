@@ -20,6 +20,7 @@ import (
 )
 
 func TestPostgresOutboxRelayReplicas(t *testing.T) {
+	t.Parallel()
 	ctx, pool, store := newOutboxFixture(t)
 	const eventCount = 32
 	for i := range eventCount {
@@ -63,6 +64,7 @@ func TestPostgresOutboxRelayReplicas(t *testing.T) {
 }
 
 func TestPostgresOutboxRelayListenerStop(t *testing.T) {
+	t.Parallel()
 	for _, stopRelay := range []struct {
 		name string
 		stop func(*postgresoutbox.Relay, context.CancelFunc)
@@ -71,6 +73,7 @@ func TestPostgresOutboxRelayListenerStop(t *testing.T) {
 		{name: "cancellation", stop: func(_ *postgresoutbox.Relay, cancel context.CancelFunc) { cancel() }},
 	} {
 		t.Run(stopRelay.name, func(t *testing.T) {
+			t.Parallel()
 			ctx, pool, store := newOutboxFixture(t)
 			relayCtx, cancel := context.WithCancel(ctx)
 			defer cancel()
@@ -117,6 +120,7 @@ func outboxListenerPID(t *testing.T, ctx context.Context, pool *postgres.Pool) i
 }
 
 func TestPostgresOutboxRequestContinuesDuringBrokerOutage(t *testing.T) {
+	t.Parallel()
 	ctx, pool, store := newOutboxFixture(t)
 	if _, err := pool.PGX().Exec(ctx, `CREATE TABLE outbox_http_probe (id text PRIMARY KEY)`); err != nil {
 		t.Fatalf("create HTTP mutation probe: %v", err)
@@ -196,6 +200,7 @@ func TestPostgresOutboxRequestContinuesDuringBrokerOutage(t *testing.T) {
 // A backlog drains through batched claims and concurrent publication, so
 // throughput is not one database round trip per event.
 func TestPostgresOutboxRelayPublishesBacklogConcurrently(t *testing.T) {
+	t.Parallel()
 	ctx, pool, store := newOutboxFixture(t)
 	const (
 		backlog     = 48
@@ -246,6 +251,7 @@ func TestPostgresOutboxRelayPublishesBacklogConcurrently(t *testing.T) {
 // A committed append wakes an idle relay through PostgreSQL notification
 // rather than waiting out the poll interval.
 func TestPostgresOutboxRelayWakesOnAppendNotification(t *testing.T) {
+	t.Parallel()
 	ctx, pool, store := newOutboxFixture(t)
 	publisher := testPublisherFunc(func(context.Context, postgresoutbox.Event) error { return nil })
 	config := testRelayConfig()
@@ -269,7 +275,9 @@ func TestPostgresOutboxRelayWakesOnAppendNotification(t *testing.T) {
 // crash. Both are kept deliberately; a change to the decision belongs in the
 // twin, a change to the resulting row state belongs here.
 func TestPostgresOutboxRelayLifecycleFaults(t *testing.T) {
+	t.Parallel()
 	t.Run("process cancellation leaves durable unfinished work", func(t *testing.T) {
+		t.Parallel()
 		fixtureCtx, pool, store := newOutboxFixture(t)
 		mustAppendOutbox(t, fixtureCtx, pool, store, outboxEvent("cancel-current"))
 		mustAppendOutbox(t, fixtureCtx, pool, store, outboxEvent("cancel-next"))
@@ -298,6 +306,7 @@ func TestPostgresOutboxRelayLifecycleFaults(t *testing.T) {
 	})
 
 	t.Run("publisher panic is fatal and starts no next claim", func(t *testing.T) {
+		t.Parallel()
 		ctx, pool, store := newOutboxFixture(t)
 		mustAppendOutbox(t, ctx, pool, store, outboxEvent("panic-current"))
 		mustAppendOutbox(t, ctx, pool, store, outboxEvent("panic-next"))
@@ -315,6 +324,7 @@ func TestPostgresOutboxRelayLifecycleFaults(t *testing.T) {
 	})
 
 	t.Run("stuck publisher is cleanup unsafe and starts no next claim", func(t *testing.T) {
+		t.Parallel()
 		ctx, pool, store := newOutboxFixture(t)
 		mustAppendOutbox(t, ctx, pool, store, outboxEvent("stuck-current"))
 		mustAppendOutbox(t, ctx, pool, store, outboxEvent("stuck-next"))
@@ -333,6 +343,7 @@ func TestPostgresOutboxRelayLifecycleFaults(t *testing.T) {
 	})
 
 	t.Run("drain finishes current acknowledgement and starts no next claim", func(t *testing.T) {
+		t.Parallel()
 		ctx, pool, store := newOutboxFixture(t)
 		mustAppendOutbox(t, ctx, pool, store, outboxEvent("drain-current"))
 		mustAppendOutbox(t, ctx, pool, store, outboxEvent("drain-next"))
@@ -351,6 +362,7 @@ func TestPostgresOutboxRelayLifecycleFaults(t *testing.T) {
 }
 
 func TestPostgresOutboxDrainDuringMaintenanceStartsNoClaim(t *testing.T) {
+	t.Parallel()
 	ctx, pool, store := newOutboxFixture(t)
 	mustAppendOutbox(t, ctx, pool, store, outboxEvent("maintenance-drain"))
 	if _, err := pool.PGX().Exec(ctx, "UPDATE outbox_events SET available_at = clock_timestamp() + interval '1 hour'"); err != nil {
@@ -400,6 +412,7 @@ func TestPostgresOutboxDrainDuringMaintenanceStartsNoClaim(t *testing.T) {
 }
 
 func TestPostgresOutboxDrainDuringInitialObservationNeverBecomesReady(t *testing.T) {
+	t.Parallel()
 	ctx, pool, store := newOutboxFixture(t)
 	lockTx, err := pool.PGX().Begin(ctx)
 	if err != nil {
@@ -442,6 +455,7 @@ func TestPostgresOutboxDrainDuringInitialObservationNeverBecomesReady(t *testing
 // storage-bytes column, so dropping the column drops that share of the gate — this test is
 // what fails, and it says so.
 func TestPostgresOutboxStartupRequiresRedriveLedger(t *testing.T) {
+	t.Parallel()
 	ctx, pool, store := newOutboxFixture(t)
 	if _, err := pool.PGX().Exec(ctx, "DROP TABLE outbox_redrives"); err != nil {
 		t.Fatalf("drop redrive ledger: %v", err)
@@ -467,6 +481,7 @@ func TestPostgresOutboxStartupRequiresRedriveLedger(t *testing.T) {
 }
 
 func TestPostgresOutboxStartupRequiresReceiptLedger(t *testing.T) {
+	t.Parallel()
 	ctx, pool, store := newOutboxFixture(t)
 	if _, err := pool.PGX().Exec(ctx, "DROP TABLE outbox_commit_receipts"); err != nil {
 		t.Fatalf("drop commit receipt ledger: %v", err)

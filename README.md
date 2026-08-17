@@ -39,11 +39,16 @@ make template-init \
   MODULE=github.com/your-org/my-service \
   CODEOWNER=@your-org/backend \
   DATABASE=none \
+  HTTP_IDEMPOTENCY=none \
+  JOBS=none \
+  WEBHOOKS=none \
   OUTBOX=none \
   INBOX=none \
   GRPC=none \
   AUTHN=none \
   OUTBOUND_HTTP=none \
+  OBJECT_STORAGE=none \
+  OUTBOUND_AUTH=none \
   MESSAGING=none
 make check
 make run

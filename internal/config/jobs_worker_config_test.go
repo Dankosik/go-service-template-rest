@@ -8,7 +8,9 @@ import (
 	"testing"
 )
 
+//nolint:paralleltest // This test mutates process-global environment or working directory.
 func TestJobsConfigWorkerLoaderIgnoresForeignProfiles(t *testing.T) {
+
 	setJobsWorkerConfigEnv(t)
 	t.Setenv("APP__AUTHN__ISSUER", "")
 	t.Setenv("APP__OUTBOUND_AUTH__DEPENDENCY", "not a dependency")
@@ -21,7 +23,9 @@ func TestJobsConfigWorkerLoaderIgnoresForeignProfiles(t *testing.T) {
 	}
 }
 
+//nolint:paralleltest // This test mutates process-global environment or working directory.
 func TestJobsConfigWorkerLoaderRejectsInvalidJobsAndPostgres(t *testing.T) {
+
 	for _, test := range []struct {
 		name     string
 		key      string
@@ -33,6 +37,7 @@ func TestJobsConfigWorkerLoaderRejectsInvalidJobsAndPostgres(t *testing.T) {
 		{name: "invalid jobs poll interval", key: "APP__JOBS__POLL_INTERVAL", value: "0s", contains: "jobs.poll_interval"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
+
 			setJobsWorkerConfigEnv(t)
 			t.Setenv(test.key, test.value)
 
@@ -47,6 +52,7 @@ func TestJobsConfigWorkerLoaderRejectsInvalidJobsAndPostgres(t *testing.T) {
 	}
 }
 
+//nolint:paralleltest // This test mutates process-global environment or working directory.
 func setJobsWorkerConfigEnv(t *testing.T) {
 	t.Helper()
 	for _, key := range configEnvResetKeys(t) {

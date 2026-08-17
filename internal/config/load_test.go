@@ -1,4 +1,12 @@
-package config
+package //nolint:paralleltest // This test mutates process-global environment or working directory.
+
+//nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
+//nolint:paralleltest // This test mutates process-global environment or working directory.
+
+// profile:database-postgres:start
+//
+//nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
+config
 
 import (
 	"context"
@@ -7,8 +15,8 @@ import (
 	"testing"
 )
 
-//nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
 func TestLoadNormalizesStringsAtSemanticValidationOwners(t *testing.T) {
+
 	resetConfigEnv(t)
 	t.Setenv("APP__APP__ENV", " local ")
 	t.Setenv("APP__APP__VERSION", " v1.2.3 ")
@@ -43,10 +51,8 @@ func TestLoadNormalizesStringsAtSemanticValidationOwners(t *testing.T) {
 	}
 }
 
-// profile:database-postgres:start
-//
-//nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
 func TestFlatPostgresDSNIsIgnored(t *testing.T) {
+
 	resetConfigEnv(t)
 
 	t.Setenv("POSTGRES_DSN", "postgres://app:app@localhost:5432/app?sslmode=disable")
@@ -93,6 +99,7 @@ func TestErrorTypeMapping(t *testing.T) {
 
 //nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
 func TestLoadDetailedWithContextCanceled(t *testing.T) {
+	t.Parallel()
 	resetConfigEnv(t)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -111,7 +118,9 @@ func TestLoadDetailedWithContextCanceled(t *testing.T) {
 }
 
 func TestLoadDetailedFailedStageReporting(t *testing.T) {
+
 	t.Run("parse_stage", func(t *testing.T) {
+
 		resetConfigEnv(t)
 		t.Setenv("APP__HTTP__READ_TIMEOUT", "oops")
 
@@ -129,6 +138,7 @@ func TestLoadDetailedFailedStageReporting(t *testing.T) {
 
 	//nolint:paralleltest // Subtests reset process-wide configuration environment.
 	t.Run("validate_stage", func(t *testing.T) {
+		t.Parallel()
 		resetConfigEnv(t)
 		configPath := writeTempConfig(t, `
 unknown:
@@ -148,6 +158,7 @@ unknown:
 	})
 
 	t.Run("load_file_stage", func(t *testing.T) {
+
 		resetConfigEnv(t)
 		t.Setenv("APP__APP__ENV", "prod")
 		t.Setenv("APP_CONFIG_ALLOWED_ROOTS", t.TempDir())
@@ -166,6 +177,7 @@ unknown:
 }
 
 func TestLoadDetailedRejectsEmptyExplicitPaths(t *testing.T) {
+	t.Parallel()
 	testCases := []struct {
 		name string
 		opts LoadOptions
@@ -186,6 +198,7 @@ func TestLoadDetailedRejectsEmptyExplicitPaths(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			resetConfigEnv(t)
 
 			_, report, err := LoadDetailed(tc.opts)
@@ -200,6 +213,7 @@ func TestLoadDetailedRejectsEmptyExplicitPaths(t *testing.T) {
 }
 
 func TestOTLPExporterValuesFromNamespaceEnv(t *testing.T) {
+
 	resetConfigEnv(t)
 
 	t.Setenv("APP__OBSERVABILITY__OTEL__EXPORTER__OTLP_ENDPOINT", "https://otel.example.com:4318")
@@ -218,6 +232,7 @@ func TestOTLPExporterValuesFromNamespaceEnv(t *testing.T) {
 }
 
 func TestLoadInvalidDurationReturnsParseError(t *testing.T) {
+
 	resetConfigEnv(t)
 	t.Setenv("APP__HTTP__READ_TIMEOUT", "oops")
 
@@ -234,6 +249,7 @@ func TestLoadInvalidDurationReturnsParseError(t *testing.T) {
 }
 
 func TestParseErrorsExposeSanitizedDetail(t *testing.T) {
+
 	tests := []struct {
 		name       string
 		envKey     string
@@ -249,6 +265,7 @@ func TestParseErrorsExposeSanitizedDetail(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+
 			resetConfigEnv(t)
 			t.Setenv(tt.envKey, tt.envValue)
 
@@ -270,8 +287,10 @@ func TestParseErrorsExposeSanitizedDetail(t *testing.T) {
 }
 
 func TestNonFiniteSamplerArgReturnsParseError(t *testing.T) {
+
 	for _, value := range []string{"NaN", "+Inf"} {
 		t.Run(value, func(t *testing.T) {
+
 			resetConfigEnv(t)
 			t.Setenv("APP__OBSERVABILITY__OTEL__TRACES_SAMPLER_ARG", value)
 
@@ -291,6 +310,7 @@ func TestNonFiniteSamplerArgReturnsParseError(t *testing.T) {
 
 //nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
 func TestMalformedYAMLReturnsParseError(t *testing.T) {
+	t.Parallel()
 	resetConfigEnv(t)
 
 	configPath := writeTempConfig(t, `
@@ -312,6 +332,7 @@ broken: [
 }
 
 func TestParseErrorDoesNotLeakRawValue(t *testing.T) {
+
 	resetConfigEnv(t)
 
 	secretLikeValue := "supersecret-token-value"

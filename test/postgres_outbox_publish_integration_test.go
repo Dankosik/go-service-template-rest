@@ -13,6 +13,7 @@ import (
 )
 
 func TestPostgresOutboxPublishFailure(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name            string
 		publisherResult error
@@ -29,6 +30,7 @@ func TestPostgresOutboxPublishFailure(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			ctx, pool, store := newOutboxFixture(t)
 			mustAppendOutbox(t, ctx, pool, store, outboxEvent("publish-failure"))
 			entered := make(chan struct{})
@@ -79,6 +81,7 @@ func TestPostgresOutboxPublishFailure(t *testing.T) {
 // those events to max_attempts and quarantine them having never attempted one
 // publication — an operator action per event for a throughput problem.
 func TestPostgresOutboxUnattemptedRetryReturnsTheAttempt(t *testing.T) {
+	t.Parallel()
 	ctx, pool, store := newOutboxFixture(t)
 	mustAppendOutbox(t, ctx, pool, store, outboxEvent("unattempted"))
 
@@ -130,6 +133,7 @@ func TestPostgresOutboxUnattemptedRetryReturnsTheAttempt(t *testing.T) {
 }
 
 func TestPostgresOutboxAckCrashDuplicate(t *testing.T) {
+	t.Parallel()
 	ctx, pool, store := newOutboxFixture(t)
 	event := outboxEvent("ack-crash")
 	event.Payload = []byte(" {\"same\": true} ")

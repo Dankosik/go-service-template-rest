@@ -59,7 +59,7 @@ log:
 
 # profile:object-storage:start
 # The selected profile is fail-closed until deployment supplies this complete
-# static tuple through APP__OBJECT_STORAGE__* environment variables.
+# immutable tuple through APP__OBJECT_STORAGE__* environment variables.
 object_storage:
   provider: ""
   endpoint: ""
@@ -68,6 +68,7 @@ object_storage:
   access_key_id: ""
   secret_access_key: ""
   session_token: ""
+  expected_bucket_owner: ""
   max_object_bytes: 0
   multipart_chunk_bytes: 0
   max_active_operations: 0

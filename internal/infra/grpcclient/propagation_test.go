@@ -28,6 +28,7 @@ import (
 )
 
 func TestPropagationPoliciesApplyToUnaryAndStreamingRPCs(t *testing.T) {
+	t.Parallel()
 	unaryMetadata, streamMetadata, target := startMetadataCaptureServer(t)
 	recorder, tracerProvider := telemetrytest.NewRecordingTracerProvider(t)
 
@@ -60,6 +61,7 @@ func TestPropagationPoliciesApplyToUnaryAndStreamingRPCs(t *testing.T) {
 		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
 			cfg := grpcclient.DefaultConfig(target)
 			cfg.HealthCheck = false
 			connection, err := grpcclient.New(
@@ -139,6 +141,7 @@ func TestPropagationPoliciesApplyToUnaryAndStreamingRPCs(t *testing.T) {
 }
 
 func TestPropagationMetricAttributesExcludeCorrelationValues(t *testing.T) {
+	t.Parallel()
 	unaryMetadata, _, target := startMetadataCaptureServer(t)
 	reader, meterProvider := telemetrytest.NewManualMeterProvider(t)
 	_, tracerProvider := telemetrytest.NewRecordingTracerProvider(t)
@@ -177,6 +180,7 @@ func TestPropagationMetricAttributesExcludeCorrelationValues(t *testing.T) {
 }
 
 func TestPerRPCCredentialsCannotOverrideCorrelationMetadata(t *testing.T) {
+	t.Parallel()
 	serverCredentials, clientCredentials := testTLSCredentials(t)
 	unaryMetadata, streamMetadata, target := startMetadataCaptureServer(
 		t,
@@ -258,6 +262,7 @@ func TestPerRPCCredentialsCannotOverrideCorrelationMetadata(t *testing.T) {
 }
 
 func TestPerRPCCredentialsSecurityAndErrorFailuresReachNoHandler(t *testing.T) {
+	t.Parallel()
 	for _, testCase := range []struct {
 		name       string
 		credential livePerRPCCredentials
@@ -280,6 +285,7 @@ func TestPerRPCCredentialsSecurityAndErrorFailuresReachNoHandler(t *testing.T) {
 		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
 			unaryMetadata, _, target := startMetadataCaptureServer(t)
 			cfg := grpcclient.DefaultConfig(target)
 			cfg.HealthCheck = false

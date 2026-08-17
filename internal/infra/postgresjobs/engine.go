@@ -2,6 +2,7 @@ package postgresjobs
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -14,7 +15,7 @@ type engineStore interface {
 	ResolveClaims(ctx context.Context, attempts []AttemptIdentity) ([]ClaimResolution, error)
 	Finalize(ctx context.Context, input FinalizeInput) (PersistedTransition, error)
 	Renew(ctx context.Context, attempts []AttemptIdentity, leaseDuration time.Duration) ([]Renewal, error)
-	RescueCandidates(ctx context.Context, limit int) ([]RescueCandidate, error)
+	RescueCandidates(ctx context.Context, options RescueCandidateOptions) ([]RescueCandidate, error)
 	Rescue(ctx context.Context, input RescueInput) (PersistedTransition, error)
 	Observe(ctx context.Context, revisions []jobs.Revision) (Observation, error)
 }
@@ -24,6 +25,7 @@ type EngineConfig struct {
 	MaxConcurrency      int
 	LeaseDuration       time.Duration
 	ObservationInterval time.Duration
+	ObservationMaxAge   time.Duration
 	DrainTimeout        time.Duration
 }
 
@@ -35,6 +37,12 @@ type EngineFacts struct {
 	ObservationFresh   bool
 }
 
+type inflightAttempt struct {
+	cancel         context.CancelFunc
+	renewAt        time.Time
+	cancelObserved bool
+}
+
 // Engine owns the single coordinator's shared state. Stage-specific behavior
 // stays with its engine_* file so later stages can extend this cycle directly.
 type Engine struct {
@@ -43,13 +51,16 @@ type Engine struct {
 	config   EngineConfig
 
 	mu              sync.Mutex
-	cycleMu         sync.Mutex
+	cycle           chan struct{}
+	cycleCancel     context.CancelFunc
 	attempts        sync.WaitGroup
 	admission       bool
+	draining        bool
 	compatible      bool
-	inflight        map[AttemptIdentity]context.CancelFunc
-	lastLease       time.Time
+	inflight        map[AttemptIdentity]inflightAttempt
 	lastObservation time.Time
+	terminal        chan error
+	terminalErr     error
 	telemetry       *Telemetry
 }
 
@@ -67,17 +78,23 @@ func newEngine(store engineStore, registry *jobs.Registry, config EngineConfig) 
 	if err := validateStoreToken("worker_id", config.WorkerID); err != nil {
 		return nil, err
 	}
-	if config.MaxConcurrency < 1 || config.LeaseDuration <= 0 || config.ObservationInterval <= 0 || config.DrainTimeout <= 0 {
-		return nil, fmt.Errorf("%w: positive concurrency, lease duration, observation interval, and drain timeout are required", ErrConfig)
+	if len(registry.Keys()) == 0 {
+		return nil, fmt.Errorf("%w: at least one jobs definition is required", ErrConfig)
+	}
+	if config.MaxConcurrency < 1 || config.LeaseDuration <= 0 || config.ObservationInterval <= 0 || config.ObservationMaxAge < config.ObservationInterval || config.DrainTimeout <= 0 {
+		return nil, fmt.Errorf("%w: positive concurrency, lease duration, observation interval, observation max age, and drain timeout are required", ErrConfig)
 	}
 	telemetry, err := NewTelemetry(nil)
 	if err != nil {
 		return nil, err
 	}
-	return &Engine{
+	engine := &Engine{
 		store: store, registry: registry, config: config,
-		admission: true, compatible: true, inflight: make(map[AttemptIdentity]context.CancelFunc), telemetry: telemetry,
-	}, nil
+		admission: true, compatible: true, inflight: make(map[AttemptIdentity]inflightAttempt),
+		cycle: make(chan struct{}, 1), terminal: make(chan error, 1), telemetry: telemetry,
+	}
+	engine.cycle <- struct{}{}
+	return engine, nil
 }
 
 // Run performs one serial coordinator cycle.
@@ -85,27 +102,72 @@ func (e *Engine) Run(ctx context.Context) error {
 	if e == nil {
 		return fmt.Errorf("%w: engine is required", ErrConfig)
 	}
-	e.cycleMu.Lock()
-	defer e.cycleMu.Unlock()
-	if err := e.renew(ctx); err != nil {
-		return e.fail(err)
+	if !e.lockCycle(ctx) {
+		return fmt.Errorf("run jobs coordinator: %w", ctx.Err())
 	}
-	if err := e.rescue(ctx); err != nil {
-		return e.fail(err)
+	defer e.unlockCycle()
+	cycleCtx, cancelCycle := context.WithCancel(ctx)
+	defer cancelCycle()
+	e.mu.Lock()
+	if e.draining {
+		e.mu.Unlock()
+		return nil
 	}
-	if err := e.renew(ctx); err != nil {
-		return e.fail(err)
+	e.cycleCancel = cancelCycle
+	defer func() {
+		e.mu.Lock()
+		e.cycleCancel = nil
+		e.mu.Unlock()
+	}()
+	terminalErr := e.terminalErr
+	e.mu.Unlock()
+	if terminalErr != nil {
+		return terminalErr
 	}
-	if err := e.claim(ctx); err != nil {
-		return e.fail(err)
+	if err := e.renew(cycleCtx); err != nil {
+		return e.failCycle(cycleCtx, err)
 	}
-	if err := e.renew(ctx); err != nil {
-		return e.fail(err)
+	if err := e.rescue(cycleCtx); err != nil {
+		return e.failCycle(cycleCtx, err)
 	}
-	if err := e.observe(ctx); err != nil {
-		return e.fail(err)
+	if err := e.renew(cycleCtx); err != nil {
+		return e.failCycle(cycleCtx, err)
+	}
+	if err := e.claim(cycleCtx, ctx); err != nil {
+		return e.failCycle(cycleCtx, err)
+	}
+	if err := e.renew(cycleCtx); err != nil {
+		return e.failCycle(cycleCtx, err)
+	}
+	if err := e.observe(cycleCtx); err != nil {
+		return e.failCycle(cycleCtx, err)
 	}
 	return nil
+}
+
+func (e *Engine) lockCycle(ctx context.Context) bool {
+	select {
+	case <-ctx.Done():
+		return false
+	case <-e.cycle:
+		return true
+	}
+}
+
+func (e *Engine) unlockCycle() { e.cycle <- struct{}{} }
+
+func (e *Engine) Terminal() <-chan error {
+	if e == nil {
+		return nil
+	}
+	return e.terminal
+}
+
+func (e *Engine) Close() error {
+	if e == nil || e.telemetry == nil {
+		return nil
+	}
+	return e.telemetry.Unregister()
 }
 
 func (e *Engine) Facts() EngineFacts {
@@ -114,12 +176,16 @@ func (e *Engine) Facts() EngineFacts {
 	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	return e.factsLocked(time.Now())
+}
+
+func (e *Engine) factsLocked(now time.Time) EngineFacts {
 	return EngineFacts{
 		ClaimAdmissionOpen: e.admission,
 		Compatible:         e.compatible,
 		InFlight:           len(e.inflight),
 		Capacity:           e.config.MaxConcurrency,
-		ObservationFresh:   !e.lastObservation.IsZero(),
+		ObservationFresh:   !e.lastObservation.IsZero() && now.Before(e.lastObservation.Add(e.config.ObservationMaxAge)),
 	}
 }
 
@@ -127,16 +193,34 @@ func (e *Engine) freeCapacityLocked() int { return e.config.MaxConcurrency - len
 
 func (e *Engine) closeAdmissionLocked() { e.admission = false }
 
-func (e *Engine) fail(err error) error {
+func (e *Engine) fail(ctx context.Context, err error) error {
 	e.mu.Lock()
 	e.closeAdmissionLocked()
 	e.lastObservation = time.Time{}
-	for _, cancel := range e.inflight {
-		cancel()
+	for _, attempt := range e.inflight {
+		attempt.cancel()
 	}
-	facts := EngineFacts{ClaimAdmissionOpen: e.admission, Compatible: e.compatible, InFlight: len(e.inflight), Capacity: e.config.MaxConcurrency}
+	firstFailure := e.terminalErr == nil
+	if firstFailure {
+		e.terminalErr = err
+		e.terminal <- err
+	}
+	facts := e.factsLocked(time.Now())
 	e.mu.Unlock()
 	e.telemetry.MarkStale()
 	e.telemetry.UpdateFacts(facts)
+	if firstFailure {
+		e.telemetry.RecordTerminalFailure(context.WithoutCancel(ctx))
+	}
 	return err
+}
+
+func (e *Engine) failCycle(ctx context.Context, err error) error {
+	e.mu.Lock()
+	draining := e.draining
+	e.mu.Unlock()
+	if draining && errors.Is(err, context.Canceled) {
+		return nil
+	}
+	return e.fail(ctx, err)
 }

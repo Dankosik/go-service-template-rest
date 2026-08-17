@@ -8,6 +8,7 @@ import (
 
 //nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
 func TestReadDurationParsesDefaultDurations(t *testing.T) {
+	t.Parallel()
 	resetConfigEnv(t)
 
 	cfg, _, err := LoadDetailed(LoadOptions{})
@@ -25,6 +26,7 @@ func TestReadDurationParsesDefaultDurations(t *testing.T) {
 }
 
 func TestHealthRefreshBounds(t *testing.T) {
+
 	for _, tc := range []struct {
 		name      string
 		interval  string
@@ -39,6 +41,7 @@ func TestHealthRefreshBounds(t *testing.T) {
 		{name: "threshold one accepted", threshold: "1"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+
 			resetConfigEnv(t)
 			if tc.interval != "" {
 				t.Setenv("APP__HEALTH__REFRESH_INTERVAL", tc.interval)
@@ -59,6 +62,7 @@ func TestHealthRefreshBounds(t *testing.T) {
 }
 
 func TestRuntimeMemoryLimitRatioBounds(t *testing.T) {
+
 	for _, tc := range []struct {
 		name    string
 		ratio   string
@@ -72,6 +76,7 @@ func TestRuntimeMemoryLimitRatioBounds(t *testing.T) {
 		{name: "not a number", ratio: "NaN", wantErr: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+
 			resetConfigEnv(t)
 			if tc.ratio != "" {
 				t.Setenv("APP__RUNTIME__MEMORY_LIMIT_RATIO", tc.ratio)

@@ -7,6 +7,7 @@ import (
 )
 
 func TestErrorsKeepStableIdentity(t *testing.T) {
+	t.Parallel()
 	for _, sentinel := range []error{
 		ErrConfig,
 		ErrSchemaIncompatible,

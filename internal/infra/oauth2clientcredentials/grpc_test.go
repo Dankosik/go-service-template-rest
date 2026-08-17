@@ -40,6 +40,7 @@ const (
 )
 
 func TestGRPCResourceAuthorityIsFixed(t *testing.T) {
+	t.Parallel()
 	clock := newMovableClock(fixedProviderTime)
 	provider := &scriptedAcquirer{steps: []acquisitionStep{{token: grpcTestToken(clock)}}}
 	client := requireTestClient(t, validTestConfig(), testClientOptions{now: clock.Now, acquire: provider.acquire})
@@ -72,6 +73,7 @@ func TestGRPCResourceAuthorityIsFixed(t *testing.T) {
 	}
 
 	t.Run("explicit default port matches grpc-go authority", func(t *testing.T) {
+		t.Parallel()
 		fixture := newGRPCFixtureWithResourceAuthority(t, nil, nil, "https://"+testGRPCHost+":443")
 		if err := fixture.application.Invoke(t.Context(), testUnaryMethod, &emptypb.Empty{}, &emptypb.Empty{}); err != nil {
 			t.Fatalf("Invoke() error = %v", err)
@@ -89,6 +91,7 @@ func TestGRPCResourceAuthorityIsFixed(t *testing.T) {
 }
 
 func TestGRPCApplicationCallsAttachOneToken(t *testing.T) {
+	t.Parallel()
 	fixture := newGRPCFixture(t, nil, nil)
 
 	if err := fixture.application.Invoke(t.Context(), testUnaryMethod, &emptypb.Empty{}, &emptypb.Empty{}); err != nil {
@@ -110,6 +113,7 @@ func TestGRPCApplicationCallsAttachOneToken(t *testing.T) {
 }
 
 func TestGRPCRejectsCompetingAuthorization(t *testing.T) {
+	t.Parallel()
 	fixture := newGRPCFixture(t, nil, nil)
 	ctx := metadata.NewOutgoingContext(
 		t.Context(),
@@ -134,6 +138,7 @@ func TestGRPCRejectsCompetingAuthorization(t *testing.T) {
 }
 
 func TestGRPCCallerCancellationStopsApplicationWait(t *testing.T) {
+	t.Parallel()
 	entered := make(chan struct{})
 	release := make(chan struct{})
 	clock := newMovableClock(fixedProviderTime)
@@ -172,6 +177,7 @@ func TestGRPCCallerCancellationStopsApplicationWait(t *testing.T) {
 	}
 
 	t.Run("provider failure reaches no handler", func(t *testing.T) {
+		t.Parallel()
 		failed := newGRPCFixture(t, nil, &scriptedAcquirer{steps: []acquisitionStep{{err: failure(FailureProviderUnavailable)}}})
 		err := failed.application.Invoke(t.Context(), testUnaryMethod, &emptypb.Empty{}, &emptypb.Empty{})
 		assertFailureClass(t, err, FailureProviderUnavailable)
@@ -182,6 +188,7 @@ func TestGRPCCallerCancellationStopsApplicationWait(t *testing.T) {
 }
 
 func TestGRPCRequiresTransportSecurity(t *testing.T) {
+	t.Parallel()
 	client := requireTestClient(t, validTestConfig(), testClientOptions{acquire: func(context.Context) (accessToken, error) {
 		return accessToken{}, failure(FailureProviderUnavailable)
 	}})
@@ -202,6 +209,7 @@ func TestGRPCRequiresTransportSecurity(t *testing.T) {
 }
 
 func TestGRPCPreservesDownstreamAuthStatus(t *testing.T) {
+	t.Parallel()
 	assertGRPCDownstreamAuthStatus(t, nil)
 }
 
@@ -224,7 +232,9 @@ func assertGRPCDownstreamAuthStatus(t *testing.T, meterProvider metric.MeterProv
 }
 
 func TestGRPCAttemptsUseOneOperationToken(t *testing.T) {
+	t.Parallel()
 	t.Run("transparent retry reuses one token", func(t *testing.T) {
+		t.Parallel()
 		clock := newMovableClock(fixedProviderTime)
 		provider := &scriptedAcquirer{steps: []acquisitionStep{{token: grpcTestToken(clock)}}}
 		peer := startRawGRPCPeer(t, nil)
@@ -249,6 +259,7 @@ func TestGRPCAttemptsUseOneOperationToken(t *testing.T) {
 	})
 
 	t.Run("margin stops before second headers", func(t *testing.T) {
+		t.Parallel()
 		clock := newMovableClock(fixedProviderTime)
 		provider := &scriptedAcquirer{steps: []acquisitionStep{{token: grpcTestToken(clock)}}}
 		releaseFirst := make(chan struct{})
@@ -276,6 +287,7 @@ func TestGRPCAttemptsUseOneOperationToken(t *testing.T) {
 	})
 
 	t.Run("streaming margin returns local failure", func(t *testing.T) {
+		t.Parallel()
 		clock := newMovableClock(fixedProviderTime)
 		provider := &scriptedAcquirer{steps: []acquisitionStep{{token: grpcTestToken(clock)}}}
 		releaseFirst := make(chan struct{})
@@ -310,6 +322,7 @@ func TestGRPCAttemptsUseOneOperationToken(t *testing.T) {
 }
 
 func TestGRPCControlStreamCancellationStopsOnlyItsWait(t *testing.T) {
+	t.Parallel()
 	entered := make(chan struct{})
 	release := make(chan struct{})
 	clock := newMovableClock(fixedProviderTime)
@@ -353,6 +366,7 @@ func TestGRPCControlStreamCancellationStopsOnlyItsWait(t *testing.T) {
 	}
 
 	t.Run("cancellation sends no headers", func(t *testing.T) {
+		t.Parallel()
 		entered := make(chan struct{})
 		release := make(chan struct{})
 		clock := newMovableClock(fixedProviderTime)
@@ -386,6 +400,7 @@ func TestGRPCControlStreamCancellationStopsOnlyItsWait(t *testing.T) {
 }
 
 func TestGRPCHealthWatchUsesConnectionCredentialOnReconnect(t *testing.T) {
+	t.Parallel()
 	clock := newMovableClock(fixedProviderTime)
 	provider := &scriptedAcquirer{steps: []acquisitionStep{
 		{token: grpcTestToken(clock)},
@@ -422,6 +437,7 @@ func TestGRPCHealthWatchUsesConnectionCredentialOnReconnect(t *testing.T) {
 }
 
 func TestLongLivedStreamDoesNotReauthenticateInPlace(t *testing.T) {
+	t.Parallel()
 	clock := newMovableClock(fixedProviderTime)
 	provider := &scriptedAcquirer{steps: []acquisitionStep{{token: grpcTestToken(clock)}}}
 	fixture := newGRPCFixture(t, clock, provider)

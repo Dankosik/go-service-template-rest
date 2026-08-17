@@ -7,7 +7,9 @@ import (
 	"testing"
 )
 
+//nolint:paralleltest // This test mutates process-global environment or working directory.
 func TestMetricsAddressValidation(t *testing.T) {
+
 	for _, tc := range []struct {
 		name    string
 		addr    string
@@ -21,6 +23,7 @@ func TestMetricsAddressValidation(t *testing.T) {
 		{name: "non numeric port", addr: "127.0.0.1:http", wantErr: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+
 			resetConfigEnv(t)
 			t.Setenv("APP__OBSERVABILITY__METRICS__ADDR", tc.addr)
 
@@ -85,7 +88,9 @@ func TestValidateSamplerAdditionalErrorCoverage(t *testing.T) {
 	}
 }
 
+//nolint:paralleltest // This test mutates process-global environment or working directory.
 func TestPprofRequiresDiagnosticsListener(t *testing.T) {
+
 	resetConfigEnv(t)
 	t.Setenv("APP__OBSERVABILITY__PPROF__ENABLED", "true")
 	t.Setenv("APP__OBSERVABILITY__METRICS__ADDR", "")

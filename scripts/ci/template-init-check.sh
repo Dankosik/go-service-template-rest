@@ -1894,7 +1894,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "obje
 			internal/objectstorage \
 			internal/infra/s3 \
 			scripts/ci/s3-source-receipt.sh \
-			test/s3_object_storage_conformance_integration_test.go \
+			test/s3conformance/conformance_test.go \
 			docs/s3-compatible-object-storage.md; do
 			assert "OBJECT_STORAGE=none retained ${removed}" path_absent "${root}/${removed}"
 		done
@@ -1921,7 +1921,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "obje
 			internal/infra/s3/image_root_bundle_test.go \
 			internal/infra/httpclient \
 			scripts/ci/s3-source-receipt.sh \
-			test/s3_object_storage_conformance_integration_test.go \
+			test/s3conformance/conformance_test.go \
 			docs/s3-compatible-object-storage.md; do
 			assert "OBJECT_STORAGE=s3 removed ${retained}" path_present "${root}/${retained}"
 		done
@@ -2096,24 +2096,75 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "jobs
 	expect_unchanged_failure "${jobs_without_postgres}" env CODEOWNER=@acme/platform DATABASE=none JOBS=postgres \
 		bash "${ROOT_DIR}/scripts/init-module.sh"
 
-	jobs_postgres="$(copy_template_checkout jobs-postgres git@github.com:acme/jobs-postgres.git)"
-	(
-		cd "${jobs_postgres}"
-		CODEOWNER=@acme/platform DATABASE=postgres JOBS=postgres OUTBOX=postgres \
-			bash ./scripts/init-module.sh
-		go test -vet=off ./...
-		make mod-tidy-check project-structure-check
-	)
-	assert_jobs_postgres_tree "${jobs_postgres}"
-	assert "JOBS=postgres removed independent outbox sibling" path_present "${jobs_postgres}/internal/infra/postgresoutbox"
-	jobs_postgres_snapshot="$(snapshot "${jobs_postgres}")"
-	(
-		cd "${jobs_postgres}"
-		CODEOWNER=@acme/platform DATABASE=postgres JOBS=postgres OUTBOX=postgres \
-			bash ./scripts/init-module.sh
-	)
-	assert "repeated JOBS=postgres initialization changed the checkout" \
-		same_text "${jobs_postgres_snapshot}" "$(snapshot "${jobs_postgres}")"
+	prove_jobs_profile() {
+		local name="$1"
+		local outbox="$2"
+		local inbox="$3"
+		local messaging="$4"
+		local full="${5:-false}"
+		local checkout sibling choice path jobs_snapshot retained
+		local extra_profiles=(REFERENCE_EXAMPLE=remove)
+		if [[ "${full}" == "true" ]]; then
+			extra_profiles=(
+				HTTP_IDEMPOTENCY=postgres
+				WEBHOOKS=durable
+				GRPC=enabled
+				AUTHN=oidc-jwt
+				OUTBOUND_HTTP=bounded
+				OBJECT_STORAGE=s3
+				OUTBOUND_AUTH=oauth2-client-credentials
+				REFERENCE_EXAMPLE=remove
+			)
+		fi
+
+		checkout="$(copy_template_checkout "jobs-${name}" "git@github.com:acme/jobs-${name}.git")"
+		(
+			cd "${checkout}"
+			env CODEOWNER=@acme/platform DATABASE=postgres JOBS=postgres OUTBOX="${outbox}" INBOX="${inbox}" MESSAGING="${messaging}" \
+				"${extra_profiles[@]}" bash ./scripts/init-module.sh
+			go test -vet=off ./cmd/jobs-worker/... ./internal/jobs ./internal/infra/postgresjobs
+			go test -vet=off -run '^$' ./...
+			make mod-tidy-check project-structure-check
+		)
+		assert_jobs_postgres_tree "${checkout}"
+		for sibling in \
+			"${outbox}:internal/infra/postgresoutbox" \
+			"${inbox}:internal/infra/postgresinbox" \
+			"${messaging}:cmd/worker"; do
+			choice="${sibling%%:*}"
+			path="${sibling#*:}"
+			if [[ "${choice}" == "none" ]]; then
+				assert "jobs ${name} retained disabled sibling ${path}" path_absent "${checkout}/${path}"
+			else
+				assert "jobs ${name} removed selected sibling ${path}" path_present "${checkout}/${path}"
+			fi
+		done
+		if [[ "${full}" == "true" ]]; then
+			for retained in \
+				cmd/webhook-worker \
+				internal/httpidempotency \
+				internal/infra/oidcjwt \
+				internal/infra/oauth2clientcredentials \
+				internal/objectstorage \
+				buf.yaml; do
+				assert "jobs ${name} removed selected profile ${retained}" path_present "${checkout}/${retained}"
+			done
+		fi
+		jobs_snapshot="$(snapshot "${checkout}")"
+		(
+			cd "${checkout}"
+			env CODEOWNER=@acme/platform DATABASE=postgres JOBS=postgres OUTBOX="${outbox}" INBOX="${inbox}" MESSAGING="${messaging}" \
+				"${extra_profiles[@]}" bash ./scripts/init-module.sh
+		)
+		assert "repeated jobs ${name} initialization changed the checkout" \
+			same_text "${jobs_snapshot}" "$(snapshot "${checkout}")"
+	}
+
+	prove_jobs_profile only none none none
+	prove_jobs_profile outbox postgres none none
+	prove_jobs_profile inbox none postgres none
+	prove_jobs_profile messaging none none nats-jetstream
+	prove_jobs_profile combined postgres postgres nats-jetstream true
 fi
 # profile:jobs-postgres:end
 
@@ -2127,6 +2178,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "webh
 		internal/infra/postgres/queries/postgres_webhooks.sql
 		internal/outboundtrust
 		migrations/000005_postgres_webhooks.sql
+		migrations/000006_postgres_webhook_reference_repairs.sql
 		test/postgres_webhook_acceptance_integration_test.go
 		test/webhook_network_integration_test.go
 		test/webhook_process_integration_test.go
@@ -2144,7 +2196,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "webh
 	done
 	grep -Fqx 'webhooks = "none"' "${webhooks_none}/template.lock"
 	assert "WEBHOOKS=none retained webhook profile markers" grep_absent -R -Fq \
-		'profile:webhooks-durable:' "${webhooks_none}/Makefile" "${webhooks_none}/README.md" \
+		'profile:webhooks-'"durable:" "${webhooks_none}/Makefile" "${webhooks_none}/README.md" \
 		"${webhooks_none}/build" "${webhooks_none}/docs" "${webhooks_none}/env" \
 		"${webhooks_none}/internal" "${webhooks_none}/scripts/ci"
 
@@ -2171,7 +2223,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "webh
 	done
 	grep -Fqx 'webhooks = "durable"' "${webhooks_durable}/template.lock"
 	assert "WEBHOOKS=durable retained unresolved markers" grep_absent -R -Fq \
-		'profile:webhooks-durable:' "${webhooks_durable}/Makefile" "${webhooks_durable}/README.md" \
+		'profile:webhooks-'"durable:" "${webhooks_durable}/Makefile" "${webhooks_durable}/README.md" \
 		"${webhooks_durable}/build" "${webhooks_durable}/docs" "${webhooks_durable}/env" \
 		"${webhooks_durable}/internal" "${webhooks_durable}/scripts/ci"
 	webhooks_snapshot="$(snapshot "${webhooks_durable}")"

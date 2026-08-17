@@ -13,6 +13,7 @@ import (
 )
 
 func TestHTTPAuthnBoundaryTransportAndIdentity(t *testing.T) {
+	t.Parallel()
 	now := testNow
 	key := loadTestRSAKey(t, testSigningKey)
 	verifier := newTestVerifier(t, key)
@@ -52,6 +53,7 @@ func TestHTTPAuthnBoundaryTransportAndIdentity(t *testing.T) {
 // a requirement this boundary declined would refuse a valid caller as one who
 // sent nothing.
 func TestHTTPAuthnBoundaryAnswersOnlyItsOwnSecurityScheme(t *testing.T) {
+	t.Parallel()
 	key := loadTestRSAKey(t, testSigningKey)
 	credential := "Bearer " + signToken(t, key, "key-1", "at+jwt", validClaims(testNow))
 
@@ -69,6 +71,7 @@ func TestHTTPAuthnBoundaryAnswersOnlyItsOwnSecurityScheme(t *testing.T) {
 
 	for _, testCase := range tests {
 		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
 			verifier := newTestVerifier(t, key)
 			request, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "https://service.example/protected", http.NoBody)
 			if err != nil {
@@ -111,6 +114,7 @@ func TestHTTPAuthnBoundaryAnswersOnlyItsOwnSecurityScheme(t *testing.T) {
 }
 
 func TestHTTPAuthnBoundaryCarrierClasses(t *testing.T) {
+	t.Parallel()
 	now := testNow
 	trustedKey := loadTestRSAKey(t, testSigningKey)
 	otherKey := loadTestRSAKey(t, testRotatedKey)
@@ -173,6 +177,7 @@ func TestHTTPAuthnBoundaryCarrierClasses(t *testing.T) {
 
 	for _, testCase := range tests {
 		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
 			client := &scriptedClient{responses: initialResponses(t, trustedKey)}
 			clock := newTestClock(now)
 			verifier := requireTestVerifier(t, testVerifierOptions{now: clock.now, client: client})

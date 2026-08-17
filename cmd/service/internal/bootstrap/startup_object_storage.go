@@ -34,6 +34,7 @@ func initObjectStorageWith(
 		AccessKeyID:             cfg.AccessKeyID,
 		SecretAccessKey:         cfg.SecretAccessKey,
 		SessionToken:            cfg.SessionToken,
+		ExpectedBucketOwner:     cfg.ExpectedBucketOwner,
 		MaxObjectBytes:          cfg.MaxObjectBytes,
 		MultipartChunkBytes:     cfg.MultipartChunkBytes,
 		MaxActiveOperations:     cfg.MaxActiveOperations,

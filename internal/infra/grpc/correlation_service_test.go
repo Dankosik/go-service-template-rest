@@ -36,6 +36,7 @@ import (
 const correlationStreamFullMethod = "/grpcx.test.CorrelationService/Wait"
 
 func TestServiceToServiceGRPCCorrelationAndCancellation(t *testing.T) {
+	t.Parallel()
 	const requestID = "request_123"
 
 	spans := newCorrelationSpanRecorder()

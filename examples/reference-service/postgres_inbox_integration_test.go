@@ -56,6 +56,7 @@ func (transaction boundArticleTransaction) Do(_ context.Context, fn func(article
 }
 
 func TestPostgresInboxAdapterPlacement(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
 	defer cancel()
 	dsn := pgtest.Migrated(t, os.DirFS("../.."), "migrations")

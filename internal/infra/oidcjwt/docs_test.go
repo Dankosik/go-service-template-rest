@@ -22,6 +22,7 @@ import (
 )
 
 func TestDocumentedTokenExample(t *testing.T) {
+	t.Parallel()
 	guide := readAuthenticationGuide(t)
 	for _, required := range []string{
 		"AUTHN=oidc-jwt",
@@ -64,6 +65,7 @@ func TestDocumentedTokenExample(t *testing.T) {
 // TestDocumentedMetricReasonsMatchTheGuide holds every authn.reason label this
 // package can emit to the closed set docs/authentication.md publishes.
 func TestDocumentedMetricReasonsMatchTheGuide(t *testing.T) {
+	t.Parallel()
 	guide := readAuthenticationGuide(t)
 	labels := []string{verificationReason(context.Canceled)}
 	for _, detail := range kindDetails[1:] {
@@ -93,6 +95,7 @@ func TestDocumentedMetricReasonsMatchTheGuide(t *testing.T) {
 // The declarations are read from the source rather than listed here, so there is
 // no second enumeration of refreshTrigger to keep in step.
 func TestDocumentedTriggersMatchTheGuide(t *testing.T) {
+	t.Parallel()
 	guide := readAuthenticationGuide(t)
 	triggers := declaredConstants(t, ".", "refreshTrigger")
 
@@ -114,6 +117,7 @@ func TestDocumentedTriggersMatchTheGuide(t *testing.T) {
 }
 
 func TestDocumentedProviderFailureReasonsMatchTheGuide(t *testing.T) {
+	t.Parallel()
 	guide := readAuthenticationGuide(t)
 	reasons := append(declaredConstants(t, ".", "providerError"), "unknown")
 	if !slices.Contains(reasons, string(errProviderTransport)) {

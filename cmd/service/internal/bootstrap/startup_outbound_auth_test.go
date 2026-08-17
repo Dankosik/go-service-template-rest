@@ -220,6 +220,8 @@ func loadOutboundAuthParityConfig(t *testing.T, values map[string]string) (confi
 		"APP__OBJECT_STORAGE__BUCKET":                     "examplebucket",
 		"APP__OBJECT_STORAGE__ACCESS_KEY_ID":              "test-access-key",
 		"APP__OBJECT_STORAGE__SECRET_ACCESS_KEY":          "test-secret-key",
+		"APP__OBJECT_STORAGE__SESSION_TOKEN":              "test-session-token",
+		"APP__OBJECT_STORAGE__EXPECTED_BUCKET_OWNER":      "123456789012",
 		"APP__OBJECT_STORAGE__MAX_OBJECT_BYTES":           "10485760",
 		"APP__OBJECT_STORAGE__MULTIPART_CHUNK_BYTES":      "5242880",
 		"APP__OBJECT_STORAGE__MAX_ACTIVE_OPERATIONS":      "2",
@@ -227,7 +229,7 @@ func loadOutboundAuthParityConfig(t *testing.T, values map[string]string) (confi
 		"APP__OBJECT_STORAGE__MAX_PRESIGN_LIFETIME":       "1m",
 		"APP__OBJECT_STORAGE__MAX_RESPONSE_HEADER_BYTES":  "1024",
 		"APP__OBJECT_STORAGE__MAX_CONTROL_RESPONSE_BYTES": "1024",
-		"APP__OBJECT_STORAGE__MAX_WORKING_MEMORY_BYTES":   "62145920",
+		"APP__OBJECT_STORAGE__MAX_WORKING_MEMORY_BYTES":   "62149760",
 	} {
 		t.Setenv(key, value)
 	}
@@ -330,6 +332,7 @@ func TestOutboundAuthOutageDoesNotChangeHealth(t *testing.T) {
 }
 
 func TestOutboundAuthInvalidConfigFailsBeforeServing(t *testing.T) {
+
 	resetShutdownConfigEnv(t)
 	t.Setenv("APP__OUTBOUND_AUTH__CLIENT_AUTHENTICATION", "client_secret_post")
 

@@ -272,14 +272,25 @@ is not a sufficient public-destination predicate. Whether a mixed DNS answer
 set rejects the destination wholesale or admits only a checked selected
 address remains an explicit security/availability policy.
 
+Both registries were rechecked on 2026-08-15 and still report `2025-10-09` as
+their latest revision. The implementation corpus and its documented revision
+therefore remain aligned; a later registry revision must reopen the corpus and
+tests together.
+
 Redirect following is unsafe because it permits a validated public authority to
 transfer the request, secret-bearing headers, or method semantics to another
 authority. The current local client already refuses redirects, and Shopify
 treats every 3xx as failure. The delivery boundary should therefore carry
 redirect refusal as a downstream constraint; endpoint migration belongs to an
 audited subscription update. HTTPS/TLS verification is the general external
-default. Any private-network, custom-CA, mutual-TLS, proxy, or non-HTTPS route is
-a separate trust-boundary capability, not a harmless endpoint option.
+default. [BCP 195 / RFC 9325](https://www.rfc-editor.org/rfc/rfc9325.html)
+requires TLS 1.2 support and recommends TLS 1.3 for existing application
+protocols; the newer [RFC 9852](https://www.rfc-editor.org/rfc/rfc9852.html)
+requires TLS 1.3 for new protocols and permits TLS 1.2 as compatibility. This
+supports a materialized TLS 1.3 default with one explicit immutable TLS 1.2
+exception, never a fallback below 1.2. Any private-network, custom-CA,
+mutual-TLS, proxy, or non-HTTPS route is a separate trust-boundary capability,
+not a harmless endpoint option.
 
 Destination ownership verification, allowed domains/ports, and who may
 register are subscriber-management policy inputs. No surveyed standard proves
@@ -360,6 +371,14 @@ where it is honored, parsing/date reference, a cap inside delivery retention,
 malformed and past-date behavior, and interaction with jitter and endpoint
 budgets. AWS documents a conservative combination with its own backoff, which
 is evidence that blindly replacing local scheduling is not required.
+
+[RFC 6585](https://www.rfc-editor.org/rfc/rfc6585.html#section-4) permits a 429
+response to carry `Retry-After`; [RFC 8470](https://www.rfc-editor.org/rfc/rfc8470.html#section-5.2)
+defines 425 as a retry signal for early-data requests. Neither status proves a
+webhook effect was absent. Classifying them as ambiguous retryable responses
+inside the fixed attempt/deadline/dedup contract is therefore conservative;
+the client sends no TLS early data and grants neither response an unbounded
+retry mandate.
 
 ### Fan-out, ordering, and unhealthy destinations
 

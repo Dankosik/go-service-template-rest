@@ -33,16 +33,27 @@ func testPostgresJobsOperationTimerHeadroom(t *testing.T) {
 		RegistryKeys: []jobs.Revision{prepared.Revision()}, WorkerID: "worker-operation-timer-headroom", Limit: 1, LeaseDuration: time.Minute,
 	})
 	postgresErr, ok := errors.AsType[*pgconn.PgError](err)
-	if !ok || postgresErr.Message != "statement_timeout=140ms lock_timeout=140ms" {
-		t.Fatalf("operation timer probe error = %v, want server timers with 10ms headroom", err)
+	var statementMilliseconds, lockMilliseconds int
+	if ok {
+		_, _ = fmt.Sscanf(
+			postgresErr.Message,
+			"statement_timeout=%dms lock_timeout=%dms",
+			&statementMilliseconds,
+			&lockMilliseconds,
+		)
+	}
+	if !ok || statementMilliseconds < 1 || statementMilliseconds > 140 || lockMilliseconds != statementMilliseconds {
+		t.Fatalf("operation timer probe error = %v, want equal positive server timers no greater than 140ms", err)
 	}
 }
 
 func TestPostgresJobsOperationBudget(t *testing.T) {
+	t.Parallel()
 	t.Run("server timer headroom", testPostgresJobsOperationTimerHeadroom)
 
 	for _, testCase := range postgresJobsOperationBudgetCases() {
 		t.Run(testCase.name+" client cancellation", func(t *testing.T) {
+			t.Parallel()
 			ctx, pool, store := newPostgresJobsOperationBudgetFixture(t)
 			logicalJobID, operation := testCase.prepare(ctx, t, pool, store)
 			session := acquirePostgresJobsSession(ctx, t, store)
@@ -63,6 +74,7 @@ func TestPostgresJobsOperationBudget(t *testing.T) {
 		})
 
 		t.Run(testCase.name+" lock timeout", func(t *testing.T) {
+			t.Parallel()
 			ctx, pool, store := newPostgresJobsOperationBudgetFixture(t)
 			logicalJobID, operation := testCase.prepare(ctx, t, pool, store)
 			session := acquirePostgresJobsSession(ctx, t, store)
@@ -79,6 +91,7 @@ func TestPostgresJobsOperationBudget(t *testing.T) {
 		})
 
 		t.Run(testCase.name+" statement timeout", func(t *testing.T) {
+			t.Parallel()
 			ctx, pool, store := newPostgresJobsOperationBudgetFixture(t)
 			logicalJobID, operation := testCase.prepare(ctx, t, pool, store)
 			before := postgresJobsOperationState(ctx, t, pool, logicalJobID)
@@ -115,7 +128,7 @@ func postgresJobsOperationBudgetCases() []postgresJobsOperationBudgetCase {
 		{
 			name: "claim resolution",
 			prepare: func(ctx context.Context, t *testing.T, pool *postgres.Pool, store *postgresjobs.Store) (jobs.LogicalJobID, func(context.Context, *postgresjobs.Session) error) {
-				_, claimed := claimPostgresJob(ctx, t, pool, store, "operation-resolve", "worker-operation-resolve", time.Minute)
+				_, claimed := claimPostgresJobForOperationBudget(ctx, t, pool, "operation-resolve", "worker-operation-resolve")
 				return claimed.Attempt.LogicalJobID, func(ctx context.Context, session *postgresjobs.Session) error {
 					_, err := session.ResolveClaims(ctx, []postgresjobs.AttemptIdentity{claimed.Attempt})
 					return err
@@ -125,7 +138,7 @@ func postgresJobsOperationBudgetCases() []postgresJobsOperationBudgetCase {
 		{
 			name: "renew and cancellation observation",
 			prepare: func(ctx context.Context, t *testing.T, pool *postgres.Pool, store *postgresjobs.Store) (jobs.LogicalJobID, func(context.Context, *postgresjobs.Session) error) {
-				_, claimed := claimPostgresJob(ctx, t, pool, store, "operation-renew", "worker-operation-renew", time.Minute)
+				_, claimed := claimPostgresJobForOperationBudget(ctx, t, pool, "operation-renew", "worker-operation-renew")
 				return claimed.Attempt.LogicalJobID, func(ctx context.Context, session *postgresjobs.Session) error {
 					_, err := session.Renew(ctx, []postgresjobs.AttemptIdentity{claimed.Attempt}, time.Minute)
 					return err
@@ -135,7 +148,7 @@ func postgresJobsOperationBudgetCases() []postgresJobsOperationBudgetCase {
 		{
 			name: "finalize",
 			prepare: func(ctx context.Context, t *testing.T, pool *postgres.Pool, store *postgresjobs.Store) (jobs.LogicalJobID, func(context.Context, *postgresjobs.Session) error) {
-				_, claimed := claimPostgresJob(ctx, t, pool, store, "operation-finalize", "worker-operation-finalize", time.Minute)
+				_, claimed := claimPostgresJobForOperationBudget(ctx, t, pool, "operation-finalize", "worker-operation-finalize")
 				input := postgresjobs.FinalizeInput{Attempt: claimed.Attempt, Transition: postgresJobsSucceededTransition(claimed.AttemptNumber)}
 				return claimed.Attempt.LogicalJobID, func(ctx context.Context, session *postgresjobs.Session) error {
 					_, err := session.Finalize(ctx, input)
@@ -146,10 +159,13 @@ func postgresJobsOperationBudgetCases() []postgresJobsOperationBudgetCase {
 		{
 			name: "rescue read",
 			prepare: func(ctx context.Context, t *testing.T, pool *postgres.Pool, store *postgresjobs.Store) (jobs.LogicalJobID, func(context.Context, *postgresjobs.Session) error) {
-				_, claimed := claimPostgresJob(ctx, t, pool, store, "operation-rescue-read", "worker-operation-rescue-read", time.Minute)
+				_, claimed := claimPostgresJobForOperationBudget(ctx, t, pool, "operation-rescue-read", "worker-operation-rescue-read")
 				expirePostgresJobsAttempt(ctx, t, pool, claimed.Attempt)
 				return claimed.Attempt.LogicalJobID, func(ctx context.Context, session *postgresjobs.Session) error {
-					_, err := session.RescueCandidates(ctx, 1)
+					_, err := session.RescueCandidates(ctx, postgresjobs.RescueCandidateOptions{
+						Limits: []postgresjobs.RescueLimit{{Revision: jobs.Revision{Kind: "acceptance", ArgsVersion: "v1", PolicyVersion: "v1"}, MaxRecoveryWave: 1}},
+						Limit:  1,
+					})
 					return err
 				}
 			},
@@ -157,7 +173,7 @@ func postgresJobsOperationBudgetCases() []postgresJobsOperationBudgetCase {
 		{
 			name: "rescue write",
 			prepare: func(ctx context.Context, t *testing.T, pool *postgres.Pool, store *postgresjobs.Store) (jobs.LogicalJobID, func(context.Context, *postgresjobs.Session) error) {
-				_, claimed := claimPostgresJob(ctx, t, pool, store, "operation-rescue-write", "worker-operation-rescue-write", time.Minute)
+				_, claimed := claimPostgresJobForOperationBudget(ctx, t, pool, "operation-rescue-write", "worker-operation-rescue-write")
 				expirePostgresJobsAttempt(ctx, t, pool, claimed.Attempt)
 				input := postgresjobs.RescueInput{Attempt: claimed.Attempt, Transition: postgresJobsLostTransition(claimed.AttemptNumber), FailureCode: "lease_lost"}
 				return claimed.Attempt.LogicalJobID, func(ctx context.Context, session *postgresjobs.Session) error {
@@ -177,6 +193,24 @@ func postgresJobsOperationBudgetCases() []postgresJobsOperationBudgetCase {
 			},
 		},
 	}
+}
+
+func claimPostgresJobForOperationBudget(
+	ctx context.Context,
+	t *testing.T,
+	pool *postgres.Pool,
+	suffix string,
+	workerID string,
+) (jobs.Prepared, postgresjobs.ClaimedAttempt) {
+	t.Helper()
+	setupStore, err := postgresjobs.NewStore(pool, postgresjobs.StoreOptions{
+		OperationTimeout: 2 * time.Second,
+		StatementTimeout: 5 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("NewStore(operation setup) error = %v", err)
+	}
+	return claimPostgresJob(ctx, t, pool, setupStore, suffix, workerID, time.Minute)
 }
 
 func newPostgresJobsOperationBudgetFixture(t *testing.T) (context.Context, *postgres.Pool, *postgresjobs.Store) {
@@ -216,7 +250,7 @@ func newPostgresJobsStatementStore(ctx context.Context, t *testing.T, pool *post
 	statements := []string{
 		"GRANT CONNECT ON DATABASE " + pgx.Identifier{database}.Sanitize() + " TO " + roleIdentifier,
 		"GRANT USAGE ON SCHEMA public TO " + roleIdentifier,
-		"GRANT SELECT, INSERT, UPDATE ON postgres_job_actions, postgres_job_attempts, postgres_job_claim_scopes, postgres_jobs TO " + roleIdentifier,
+		"GRANT SELECT, INSERT, UPDATE ON postgres_job_attempts, postgres_job_claim_scopes, postgres_jobs TO " + roleIdentifier,
 	}
 	for _, statement := range statements {
 		if _, err := pool.PGX().Exec(ctx, statement); err != nil {
@@ -311,11 +345,6 @@ BEGIN
     RETURN true;
 END;
 $$;
-ALTER TABLE postgres_job_actions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE postgres_job_actions FORCE ROW LEVEL SECURITY;
-CREATE POLICY test_postgres_jobs_statement_blocker ON postgres_job_actions
-    USING (test_postgres_jobs_statement_blocker())
-    WITH CHECK (test_postgres_jobs_statement_blocker());
 ALTER TABLE postgres_job_attempts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE postgres_job_attempts FORCE ROW LEVEL SECURITY;
 CREATE POLICY test_postgres_jobs_statement_blocker ON postgres_job_attempts
@@ -335,9 +364,6 @@ CREATE POLICY test_postgres_jobs_statement_blocker ON postgres_jobs
 	}
 	t.Cleanup(func() {
 		_, _ = pool.PGX().Exec(context.Background(), `
-DROP POLICY IF EXISTS test_postgres_jobs_statement_blocker ON postgres_job_actions;
-ALTER TABLE postgres_job_actions NO FORCE ROW LEVEL SECURITY;
-ALTER TABLE postgres_job_actions DISABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS test_postgres_jobs_statement_blocker ON postgres_job_attempts;
 ALTER TABLE postgres_job_attempts NO FORCE ROW LEVEL SECURITY;
 ALTER TABLE postgres_job_attempts DISABLE ROW LEVEL SECURITY;

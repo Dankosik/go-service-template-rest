@@ -11,12 +11,15 @@ import (
 	"hash/crc64"
 	"io"
 	"net/http"
+	"net/http/httptrace"
 	"runtime"
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/example/go-service-template-rest/internal/objectstorage"
 )
@@ -28,13 +31,14 @@ func (f httpDoerFunc) Do(request *http.Request) (*http.Response, error) {
 }
 
 func TestUploadRejectsUnboundedContentType(t *testing.T) {
+	t.Parallel()
 	client := scriptedClient(t, func(*http.Request) (*http.Response, error) {
 		t.Fatal("invalid Content-Type reached provider transport")
 		return nil, errors.New("unreachable")
 	})
 
 	for _, contentType := range []string{"", "a", strings.Repeat("a", maximumContentTypeBytes)} {
-		if err := client.validateUpload("object", strings.NewReader("x"), objectstorage.UploadOptions{
+		if err := client.validateUpload("object", uploadSource(strings.NewReader("x")), objectstorage.UploadOptions{
 			ContentLength: 1,
 			ContentType:   contentType,
 			Intent:        objectstorage.UploadReplace,
@@ -56,13 +60,90 @@ func TestUploadRejectsUnboundedContentType(t *testing.T) {
 		}); objectstorage.Kind(err) != objectstorage.KindInvalid {
 			t.Fatalf("Upload() kind = %q, want invalid", objectstorage.Kind(err))
 		}
-		if source.reads != 0 || len(client.tokens) != 0 {
-			t.Fatalf("invalid Content-Type read source %d times and held %d admissions", source.reads, len(client.tokens))
+		if source.reads != 0 || source.closes != 1 || len(client.tokens) != 0 {
+			t.Fatalf("invalid Content-Type read source %d times, closed it %d times, and held %d admissions", source.reads, source.closes, len(client.tokens))
 		}
+	}
+
+	oversized := validConfig(ProviderAmazonS3)
+	source := &admissionReader{}
+	if _, err := client.Upload(t.Context(), "object", source, objectstorage.UploadOptions{
+		ContentLength: oversized.MaxObjectBytes + 1,
+		Intent:        objectstorage.UploadReplace,
+	}); objectstorage.Kind(err) != objectstorage.KindTooLarge {
+		t.Fatalf("oversized Upload() kind = %q, want too_large", objectstorage.Kind(err))
+	}
+	if source.reads != 0 || source.closes != 1 {
+		t.Fatalf("oversized Upload() read source %d times and closed it %d times", source.reads, source.closes)
 	}
 }
 
+func TestUploadCancellationClosesBlockedSourceAndReleasesAdmission(t *testing.T) {
+	t.Parallel()
+	cfg := validConfig(ProviderAmazonS3)
+	cfg.MaxActiveOperations = 1
+	cfg.MaxWorkingMemoryBytes, _ = cfg.requiredMemory()
+	source := newBlockingUploadSource()
+	client := scriptedClientWithConfig(t, cfg, func(request *http.Request) (*http.Response, error) {
+		httptrace.ContextClientTrace(request.Context()).WroteHeaders()
+		_, err := io.Copy(io.Discard, request.Body)
+		return nil, fmt.Errorf("copy blocked upload body: %w", err)
+	})
+
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan error, 1)
+	go func() {
+		_, err := client.Upload(ctx, "object", source, objectstorage.UploadOptions{ContentLength: 1, Intent: objectstorage.UploadReplace})
+		done <- err
+	}()
+	select {
+	case <-source.entered:
+	case <-time.After(time.Second):
+		t.Fatal("upload source was not read")
+	}
+	cancel()
+	select {
+	case err := <-done:
+		if objectstorage.Kind(err) != objectstorage.KindOutcomeUnknown {
+			t.Fatalf("cancelled possible-send Upload() kind = %q, want outcome_unknown", objectstorage.Kind(err))
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Upload did not return after cancellation closed its source")
+	}
+	if got := source.closes.Load(); got != 1 {
+		t.Fatalf("blocked upload source closes = %d, want 1", got)
+	}
+	if got := len(client.tokens); got != 0 {
+		t.Fatalf("admission tokens after blocked upload cancellation = %d, want 0", got)
+	}
+}
+
+type blockingUploadSource struct {
+	entered     chan struct{}
+	release     chan struct{}
+	enterOnce   sync.Once
+	releaseOnce sync.Once
+	closes      atomic.Int32
+}
+
+func newBlockingUploadSource() *blockingUploadSource {
+	return &blockingUploadSource{entered: make(chan struct{}), release: make(chan struct{})}
+}
+
+func (s *blockingUploadSource) Read([]byte) (int, error) {
+	s.enterOnce.Do(func() { close(s.entered) })
+	<-s.release
+	return 0, errors.New("upload source closed")
+}
+
+func (s *blockingUploadSource) Close() error {
+	s.closes.Add(1)
+	s.releaseOnce.Do(func() { close(s.release) })
+	return nil
+}
+
 func TestSingleUploadStreamsCRC64NVMEAndExactLength(t *testing.T) {
+	t.Parallel()
 	data := []byte("the declared bytes")
 	buffer := bytes.NewBuffer(append(slices.Clone(data), '!'))
 	source := &transportGatedReader{t: t, reader: buffer}
@@ -102,11 +183,15 @@ func TestSingleUploadStreamsCRC64NVMEAndExactLength(t *testing.T) {
 	if err != nil || result.Cleanup != objectstorage.CleanupNone {
 		t.Fatalf("Upload() = %#v, %v", result, err)
 	}
+	if got := source.closes.Load(); got != 1 {
+		t.Fatalf("successful upload source closes = %d, want 1", got)
+	}
 	if sentinel, err := buffer.ReadByte(); err != nil || sentinel != '!' {
 		t.Fatalf("byte after declared length = %q, %v; want unread sentinel", sentinel, err)
 	}
 
 	t.Run("short source fails", func(t *testing.T) {
+		t.Parallel()
 		client := scriptedClient(t, func(request *http.Request) (*http.Response, error) {
 			_, _ = io.Copy(io.Discard, request.Body)
 			return s3Response(http.StatusOK, http.Header{
@@ -114,7 +199,7 @@ func TestSingleUploadStreamsCRC64NVMEAndExactLength(t *testing.T) {
 				"X-Amz-Checksum-Type":      []string{"FULL_OBJECT"},
 			}, ""), nil
 		})
-		_, err := client.Upload(context.Background(), "object", bytes.NewBuffer(data[:len(data)-1]), objectstorage.UploadOptions{
+		_, err := client.Upload(context.Background(), "object", uploadSource(bytes.NewBuffer(data[:len(data)-1])), objectstorage.UploadOptions{
 			ContentLength: int64(len(data)), Intent: objectstorage.UploadReplace,
 		})
 		if err == nil {
@@ -123,6 +208,7 @@ func TestSingleUploadStreamsCRC64NVMEAndExactLength(t *testing.T) {
 	})
 
 	t.Run("mismatched confirmation fails", func(t *testing.T) {
+		t.Parallel()
 		client := scriptedClient(t, func(request *http.Request) (*http.Response, error) {
 			_, _ = decodeAWSChunked(t, request.Body)
 			return s3Response(http.StatusOK, http.Header{
@@ -130,7 +216,7 @@ func TestSingleUploadStreamsCRC64NVMEAndExactLength(t *testing.T) {
 				"X-Amz-Checksum-Type":      []string{"FULL_OBJECT"},
 			}, ""), nil
 		})
-		_, err := client.Upload(context.Background(), "object", bytes.NewBuffer(data), objectstorage.UploadOptions{
+		_, err := client.Upload(context.Background(), "object", uploadSource(bytes.NewBuffer(data)), objectstorage.UploadOptions{
 			ContentLength: int64(len(data)), Intent: objectstorage.UploadReplace,
 		})
 		if got := objectstorage.Kind(err); got != objectstorage.KindIntegrityFailed {
@@ -139,17 +225,19 @@ func TestSingleUploadStreamsCRC64NVMEAndExactLength(t *testing.T) {
 	})
 
 	t.Run("missing confirmation fails", func(t *testing.T) {
+		t.Parallel()
 		client := scriptedClient(t, func(request *http.Request) (*http.Response, error) {
 			_, _ = decodeAWSChunked(t, request.Body)
 			return s3Response(http.StatusOK, http.Header{"X-Amz-Checksum-Type": []string{"FULL_OBJECT"}}, ""), nil
 		})
-		_, err := client.Upload(context.Background(), "object", bytes.NewBuffer(data), objectstorage.UploadOptions{ContentLength: int64(len(data)), Intent: objectstorage.UploadReplace})
+		_, err := client.Upload(context.Background(), "object", uploadSource(bytes.NewBuffer(data)), objectstorage.UploadOptions{ContentLength: int64(len(data)), Intent: objectstorage.UploadReplace})
 		if got := objectstorage.Kind(err); got != objectstorage.KindIntegrityFailed {
 			t.Fatalf("missing confirmation kind = %q, want integrity_failed", got)
 		}
 	})
 
 	t.Run("threshold is still single", func(t *testing.T) {
+		t.Parallel()
 		threshold := validConfig(ProviderAmazonS3).MultipartChunkBytes
 		data := bytes.Repeat([]byte("t"), int(threshold))
 		client := scriptedClient(t, func(request *http.Request) (*http.Response, error) {
@@ -165,7 +253,7 @@ func TestSingleUploadStreamsCRC64NVMEAndExactLength(t *testing.T) {
 				"X-Amz-Checksum-Type":      []string{"FULL_OBJECT"},
 			}, ""), nil
 		})
-		_, err := client.Upload(context.Background(), "object", bytes.NewBuffer(data), objectstorage.UploadOptions{
+		_, err := client.Upload(context.Background(), "object", uploadSource(bytes.NewBuffer(data)), objectstorage.UploadOptions{
 			ContentLength: threshold, Intent: objectstorage.UploadReplace,
 		})
 		if err != nil {
@@ -178,6 +266,7 @@ type transportGatedReader struct {
 	t      *testing.T
 	reader io.Reader
 	allow  atomic.Bool
+	closes atomic.Int32
 }
 
 func (r *transportGatedReader) Read(p []byte) (int, error) {
@@ -188,7 +277,13 @@ func (r *transportGatedReader) Read(p []byte) (int, error) {
 	return r.reader.Read(p) //nolint:wrapcheck // Reader callers require the source EOF identity.
 }
 
+func (r *transportGatedReader) Close() error {
+	r.closes.Add(1)
+	return nil
+}
+
 func TestMultipartUploadIsSerialAndConfirmsWholeChecksum(t *testing.T) {
+	t.Parallel()
 	cfg := validConfig(ProviderAmazonS3)
 	cfg.MaxObjectBytes = 3*cfg.MultipartChunkBytes + 1
 	cfg.MaxWorkingMemoryBytes, _ = cfg.requiredMemory()
@@ -248,7 +343,7 @@ func TestMultipartUploadIsSerialAndConfirmsWholeChecksum(t *testing.T) {
 		}
 	})
 
-	result, err := client.Upload(context.Background(), "object", bytes.NewBuffer(data), objectstorage.UploadOptions{
+	result, err := client.Upload(context.Background(), "object", uploadSource(bytes.NewBuffer(data)), objectstorage.UploadOptions{
 		ContentLength: int64(len(data)), Intent: objectstorage.UploadReplace,
 	})
 	if err != nil || result.Cleanup != objectstorage.CleanupNone {
@@ -258,8 +353,14 @@ func TestMultipartUploadIsSerialAndConfirmsWholeChecksum(t *testing.T) {
 		t.Fatalf("uploaded parts = %d, want 3", part)
 	}
 
-	t.Run("C+1", func(t *testing.T) { assertMultipartSuccess(t, cfg, cfg.MultipartChunkBytes+1) })
-	t.Run("exact multiple", func(t *testing.T) { assertMultipartSuccess(t, cfg, 2*cfg.MultipartChunkBytes) })
+	t.Run("C+1", func(t *testing.T) {
+		t.Parallel()
+		assertMultipartSuccess(t, cfg, cfg.MultipartChunkBytes+1)
+	})
+	t.Run("exact multiple", func(t *testing.T) {
+		t.Parallel()
+		assertMultipartSuccess(t, cfg, 2*cfg.MultipartChunkBytes)
+	})
 	if got := partCount(cfg.MultipartChunkBytes*maximumPartCount, cfg.MultipartChunkBytes); got != maximumPartCount {
 		t.Fatalf("maximum multipart count = %d, want %d", got, maximumPartCount)
 	}
@@ -295,14 +396,45 @@ func assertMultipartSuccess(t *testing.T, cfg Config, length int64) {
 			return nil, errors.New("unreachable")
 		}
 	})
-	_, err := client.Upload(context.Background(), "object", bytes.NewBuffer(data), objectstorage.UploadOptions{ContentLength: length, Intent: objectstorage.UploadReplace})
+	_, err := client.Upload(context.Background(), "object", uploadSource(bytes.NewBuffer(data)), objectstorage.UploadOptions{ContentLength: length, Intent: objectstorage.UploadReplace})
 	if err != nil || part != int(partCount(length, cfg.MultipartChunkBytes)) {
 		t.Fatalf("Upload() = %v; parts=%d", err, part)
 	}
 }
 
 func TestMultipartCleanupIsBoundedAndConservative(t *testing.T) {
+	t.Parallel()
+	for _, sent := range []bool{false, true} {
+		t.Run(fmt.Sprintf("lost create sent=%t", sent), func(t *testing.T) {
+			t.Parallel()
+			cfg := validConfig(ProviderAmazonS3)
+			calls := 0
+			client := scriptedClientWithConfig(t, cfg, func(request *http.Request) (*http.Response, error) {
+				calls++
+				if sent {
+					httptrace.ContextClientTrace(request.Context()).WroteHeaders()
+				}
+				return nil, errors.New("lost CreateMultipartUpload response")
+			})
+			result, err := client.Upload(t.Context(), "object", uploadSource(bytes.NewReader(make([]byte, cfg.MultipartChunkBytes+1))), objectstorage.UploadOptions{
+				ContentLength: cfg.MultipartChunkBytes + 1, Intent: objectstorage.UploadReplace,
+			})
+			wantCleanup := objectstorage.CleanupDisposition("")
+			if sent {
+				wantCleanup = objectstorage.CleanupPending
+			}
+			wantKind := objectstorage.KindInternal
+			if sent {
+				wantKind = objectstorage.KindOutcomeUnknown
+			}
+			if objectstorage.Kind(err) != wantKind || result.Cleanup != wantCleanup || calls != 1 {
+				t.Fatalf("lost create = %#v, %v; calls=%d, want cleanup %q and one call", result, err, calls, wantCleanup)
+			}
+		})
+	}
+
 	t.Run("missing upload ID is visible pending", func(t *testing.T) {
+		t.Parallel()
 		cfg := validConfig(ProviderAmazonS3)
 		calls := 0
 		client := scriptedClientWithConfig(t, cfg, func(request *http.Request) (*http.Response, error) {
@@ -312,9 +444,29 @@ func TestMultipartCleanupIsBoundedAndConservative(t *testing.T) {
 			}
 			return s3Response(http.StatusOK, nil, "<InitiateMultipartUploadResult></InitiateMultipartUploadResult>"), nil
 		})
-		result, err := client.Upload(context.Background(), "object", bytes.NewBuffer(bytes.Repeat([]byte("p"), int(cfg.MultipartChunkBytes)+1)), objectstorage.UploadOptions{ContentLength: cfg.MultipartChunkBytes + 1, Intent: objectstorage.UploadReplace})
+		result, err := client.Upload(context.Background(), "object", uploadSource(bytes.NewBuffer(bytes.Repeat([]byte("p"), int(cfg.MultipartChunkBytes)+1))), objectstorage.UploadOptions{ContentLength: cfg.MultipartChunkBytes + 1, Intent: objectstorage.UploadReplace})
 		if objectstorage.Kind(err) != objectstorage.KindInternal || result.Cleanup != objectstorage.CleanupPending || calls != 1 {
 			t.Fatalf("malformed Create = %#v, %v; calls=%d", result, err, calls)
+		}
+	})
+
+	t.Run("pagination stops at ten advancing pages", func(t *testing.T) {
+		t.Parallel()
+		lists := 0
+		client := scriptedClient(t, func(request *http.Request) (*http.Response, error) {
+			lists++
+			wantMarker := ""
+			if lists > 1 {
+				wantMarker = strconv.Itoa(lists - 1)
+			}
+			if got := request.URL.Query().Get("part-number-marker"); got != wantMarker {
+				t.Fatalf("page %d marker = %q, want %q", lists, got, wantMarker)
+			}
+			return s3Response(http.StatusOK, nil, "<ListPartsResult><IsTruncated>true</IsTruncated><NextPartNumberMarker>"+strconv.Itoa(lists)+"</NextPartNumberMarker></ListPartsResult>"), nil
+		})
+		empty, complete := client.multipartPartsEmpty(t.Context(), "object", "private-upload")
+		if empty || complete || lists != maximumCleanupListPages {
+			t.Fatalf("pagination result = %t, %t; lists=%d, want both false and %d", empty, complete, lists, maximumCleanupListPages)
 		}
 	})
 
@@ -347,13 +499,13 @@ func TestMultipartCleanupIsBoundedAndConservative(t *testing.T) {
 		}
 	})
 
-	result, err := client.Upload(context.Background(), "object", bytes.NewBuffer(bytes.Repeat([]byte("p"), int(cfg.MultipartChunkBytes)+1)), objectstorage.UploadOptions{
+	result, err := client.Upload(context.Background(), "object", uploadSource(bytes.NewBuffer(bytes.Repeat([]byte("p"), int(cfg.MultipartChunkBytes)+1))), objectstorage.UploadOptions{
 		ContentLength: cfg.MultipartChunkBytes + 1, Intent: objectstorage.UploadReplace,
 	})
 	if got := objectstorage.Kind(err); got != objectstorage.KindIntegrityFailed {
 		t.Fatalf("primary error = %q, want integrity_failed", got)
 	}
-	if result.Cleanup != objectstorage.CleanupComplete || aborts != 1 || lists != 1 {
+	if result.Cleanup != objectstorage.CleanupPending || aborts != 1 || lists != 1 {
 		t.Fatalf("cleanup = %#v, aborts=%d, lists=%d", result, aborts, lists)
 	}
 	if strings.Contains(err.Error(), "private-upload") {
@@ -389,6 +541,7 @@ func TestMultipartCleanupIsBoundedAndConservative(t *testing.T) {
 		{name: "R2 remains pending", provider: ProviderCloudflare, abortCode: http.StatusNoContent},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
+			t.Parallel()
 			result, aborts, lists, err := failedMultipartCleanup(t, scenario)
 			if got := objectstorage.Kind(err); got != objectstorage.KindIntegrityFailed {
 				t.Fatalf("primary error = %q, want integrity_failed", got)
@@ -396,8 +549,22 @@ func TestMultipartCleanupIsBoundedAndConservative(t *testing.T) {
 			if result.Cleanup != objectstorage.CleanupPending {
 				t.Fatalf("cleanup = %q, want pending", result.Cleanup)
 			}
-			if aborts > 1 || lists > 1 {
+			if aborts > maximumCleanupCycles || lists > maximumCleanupCycles*maximumCleanupListPages {
 				t.Fatalf("cleanup exceeded bounded calls: aborts=%d lists=%d", aborts, lists)
+			}
+			switch scenario.name {
+			case "non-empty page":
+				if aborts != maximumCleanupCycles || lists != maximumCleanupCycles {
+					t.Fatalf("non-empty cleanup = aborts:%d lists:%d, want %d each", aborts, lists, maximumCleanupCycles)
+				}
+			case "truncated page":
+				if aborts != 1 || lists != 2 {
+					t.Fatalf("non-advancing pagination = aborts:%d lists:%d, want 1 and 2", aborts, lists)
+				}
+			case "R2 remains pending":
+				if aborts != 1 || lists != 0 {
+					t.Fatalf("R2 cleanup = aborts:%d lists:%d, want 1 and 0", aborts, lists)
+				}
 			}
 		})
 	}
@@ -413,6 +580,7 @@ func assertMultipartCompletionFailures(t *testing.T) {
 		{name: "embedded error", body: "<Error><Code>InternalError</Code><Message>private detail</Message></Error>"},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
+			t.Parallel()
 			cfg := validConfig(ProviderAmazonS3)
 			var aborts, lists int
 			client := scriptedClientWithConfig(t, cfg, func(request *http.Request) (*http.Response, error) {
@@ -437,8 +605,8 @@ func assertMultipartCompletionFailures(t *testing.T) {
 					return nil, errors.New("unreachable")
 				}
 			})
-			result, err := client.Upload(context.Background(), "object", bytes.NewBuffer(bytes.Repeat([]byte("p"), int(cfg.MultipartChunkBytes)+1)), objectstorage.UploadOptions{ContentLength: cfg.MultipartChunkBytes + 1, Intent: objectstorage.UploadReplace})
-			if err == nil || result.Cleanup != objectstorage.CleanupComplete || aborts != 1 || lists != 1 {
+			result, err := client.Upload(context.Background(), "object", uploadSource(bytes.NewBuffer(bytes.Repeat([]byte("p"), int(cfg.MultipartChunkBytes)+1))), objectstorage.UploadOptions{ContentLength: cfg.MultipartChunkBytes + 1, Intent: objectstorage.UploadReplace})
+			if err == nil || result.Cleanup != objectstorage.CleanupPending || aborts != 1 || lists != 1 {
 				t.Fatalf("failure cleanup = %#v, %v; aborts=%d lists=%d", result, err, aborts, lists)
 			}
 		})
@@ -480,7 +648,7 @@ func failedMultipartCleanup(t *testing.T, scenario struct {
 			return nil, errors.New("unreachable")
 		}
 	})
-	result, err := client.Upload(ctx, "object", bytes.NewBuffer(bytes.Repeat([]byte("p"), int(cfg.MultipartChunkBytes)+1)), objectstorage.UploadOptions{
+	result, err := client.Upload(ctx, "object", uploadSource(bytes.NewBuffer(bytes.Repeat([]byte("p"), int(cfg.MultipartChunkBytes)+1))), objectstorage.UploadOptions{
 		ContentLength: cfg.MultipartChunkBytes + 1, Intent: objectstorage.UploadReplace,
 	})
 	return result, aborts, lists, err
@@ -497,7 +665,19 @@ func scriptedClientWithConfig(t *testing.T, cfg Config, script httpDoerFunc) *Cl
 	if err != nil {
 		t.Fatal(err)
 	}
-	client.transport.base = script
+	client.transport.base = httpDoerFunc(func(request *http.Request) (*http.Response, error) {
+		got := request.Header.Get("X-Amz-Expected-Bucket-Owner")
+		if cfg.Provider == ProviderAmazonS3 && got != cfg.ExpectedBucketOwner {
+			t.Fatalf("expected bucket owner header = %q, want %q", got, cfg.ExpectedBucketOwner)
+		}
+		if cfg.Provider == ProviderCloudflare && got != "" {
+			t.Fatalf("R2 request included expected bucket owner %q", got)
+		}
+		if request.Method == http.MethodGet && request.URL.Query().Get("uploadId") != "" && request.URL.Query().Get("max-parts") != strconv.Itoa(maximumCleanupListParts) {
+			t.Fatalf("ListParts max-parts = %q, want %d", request.URL.Query().Get("max-parts"), maximumCleanupListParts)
+		}
+		return script(request)
+	})
 	return client
 }
 

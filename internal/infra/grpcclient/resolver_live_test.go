@@ -42,6 +42,7 @@ import (
 const resolverLiveChildEnv = "GRPCCLIENT_RESOLVER_LIVE_CHILD"
 
 func TestResolverServiceConfigProxyTLSAreClosedByClientPolicy(t *testing.T) {
+	t.Parallel()
 	serverCertificate, leafCertificate := testTLSMaterial(t)
 	var handlerCalls atomic.Int64
 	serverAddress := startLiveTLSHealthServer(
@@ -76,6 +77,7 @@ func TestResolverServiceConfigProxyTLSAreClosedByClientPolicy(t *testing.T) {
 }
 
 func TestResolverServiceConfigProxyTLSChild(t *testing.T) {
+	t.Parallel()
 	if os.Getenv(resolverLiveChildEnv) == "" {
 		t.Skip("subprocess-only live resolver fixture")
 	}

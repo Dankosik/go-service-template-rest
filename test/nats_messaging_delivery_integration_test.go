@@ -19,6 +19,7 @@ import (
 )
 
 func TestNATSConsumerSaturation(t *testing.T) {
+	t.Parallel()
 	f := newNATSFixture(t)
 	const maxDeliveryBytes = testMaxDeliveryBytes
 	maxPayloadBytes := maxDeliveryBytes - natsjs.HeaderLimitBytes
@@ -101,6 +102,7 @@ func TestNATSConsumerSaturation(t *testing.T) {
 }
 
 func TestNATSHandlerAckAndRedelivery(t *testing.T) {
+	t.Parallel()
 	f := newNATSFixture(t)
 	type observedDelivery struct {
 		message natsjs.Message
@@ -145,6 +147,7 @@ func TestNATSHandlerAckAndRedelivery(t *testing.T) {
 }
 
 func TestNATSRetryExhaustionAndCrashBudget(t *testing.T) {
+	t.Parallel()
 	f := newNATSFixture(t)
 	retryDelays := []time.Duration{20 * time.Millisecond, 20 * time.Millisecond, 20 * time.Millisecond, 20 * time.Millisecond}
 	called := make(chan uint64, 5)
@@ -225,6 +228,7 @@ func TestNATSRetryExhaustionAndCrashBudget(t *testing.T) {
 }
 
 func TestNATSRetryCrashConsumesAttemptBudget(t *testing.T) {
+	t.Parallel()
 	f := newNATSFixture(t)
 	retryDelays := []time.Duration{20 * time.Millisecond, 20 * time.Millisecond, 20 * time.Millisecond, 20 * time.Millisecond}
 	attempts := make(chan uint64, 4)
@@ -277,6 +281,7 @@ func TestNATSRetryCrashConsumesAttemptBudget(t *testing.T) {
 }
 
 func TestNATSPoisonDLQAndRedrive(t *testing.T) {
+	t.Parallel()
 	f := newNATSFixture(t)
 	var handlerCalls atomic.Int32
 	_, _, _ = f.worker(t, func(context.Context, natsjs.Message) error {
@@ -344,6 +349,7 @@ func TestNATSPoisonDLQAndRedrive(t *testing.T) {
 }
 
 func TestNATSOrderingKeyDoesNotSerialize(t *testing.T) {
+	t.Parallel()
 	f := newNATSFixture(t)
 	firstEntered := make(chan struct{})
 	secondDone := make(chan struct{})

@@ -19,7 +19,7 @@ type StateObservation struct {
 type Observation struct {
 	ObservedAt        time.Time
 	Compatible        bool
-	RetainedRevisions []jobs.Revision
+	RequiredRevisions []jobs.Revision
 	States            []StateObservation
 }
 
@@ -28,7 +28,7 @@ func (s *Session) Observe(ctx context.Context, registryKeys []jobs.Revision) (ob
 	if err != nil {
 		return Observation{}, err
 	}
-	err = s.withOperation(ctx, pgx.ReadOnly, func(operationCtx context.Context, queries *sqlcgen.Queries) error {
+	err = s.withOperation(ctx, "observe", pgx.ReadOnly, func(operationCtx context.Context, queries *sqlcgen.Queries) error {
 		row, queryErr := queries.ObservePostgresJobs(operationCtx, sqlcgen.ObservePostgresJobsParams{
 			Kinds: kinds, ArgsVersions: argsVersions, PolicyVersions: policyVersions,
 		})
@@ -42,7 +42,7 @@ func (s *Session) Observe(ctx context.Context, registryKeys []jobs.Revision) (ob
 		if mapErr != nil {
 			return mapErr
 		}
-		revisions, mapErr := revisionRows(row.RetainedKinds, row.RetainedArgsVersions, row.RetainedPolicyVersions)
+		revisions, mapErr := revisionRows(row.RequiredKinds, row.RequiredArgsVersions, row.RequiredPolicyVersions)
 		if mapErr != nil {
 			return mapErr
 		}
@@ -66,7 +66,7 @@ func (s *Session) Observe(ctx context.Context, registryKeys []jobs.Revision) (ob
 		}
 		observation = Observation{
 			ObservedAt: observedAt, Compatible: *row.Compatible,
-			RetainedRevisions: revisions, States: states,
+			RequiredRevisions: revisions, States: states,
 		}
 		return nil
 	})

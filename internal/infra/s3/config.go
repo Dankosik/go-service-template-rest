@@ -21,6 +21,7 @@ const (
 	minimumMultipartChunk       = 5 << 20
 	maximumMultipartChunk       = 5 << 30
 	maximumObjectBytes          = 5 << 40
+	maximumR2ObjectBytes        = maximumObjectBytes - maximumMultipartChunk
 	maximumPartCount            = 10_000
 	maximumKeyBytes       int64 = 1024
 
@@ -32,19 +33,22 @@ const (
 )
 
 var (
-	bucketName = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{1,61}[a-z0-9])?$`)
-	regionName = regexp.MustCompile(`^[a-z]{2}(?:-gov)?-[a-z]+-\d+$`)
+	bucketName  = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{1,61}[a-z0-9])?$`)
+	regionName  = regexp.MustCompile(`^[a-z]{2}(?:-gov)?-[a-z]+-\d+$`)
+	accountID   = regexp.MustCompile(`^[0-9a-f]{32}(?:\.(?:eu|fedramp))?\.r2\.cloudflarestorage\.com$`)
+	bucketOwner = regexp.MustCompile(`^\d{12}$`)
 )
 
 // Config is one explicit immutable provider tuple and its finite local bounds.
 type Config struct {
-	Provider        Provider
-	Endpoint        string
-	Region          string
-	Bucket          string
-	AccessKeyID     string
-	SecretAccessKey string
-	SessionToken    string
+	Provider            Provider
+	Endpoint            string
+	Region              string
+	Bucket              string
+	AccessKeyID         string
+	SecretAccessKey     string
+	SessionToken        string
+	ExpectedBucketOwner string
 
 	MaxObjectBytes          int64
 	MultipartChunkBytes     int64
@@ -71,7 +75,7 @@ func validateTuple(cfg Config) (*url.URL, error) {
 	if strings.TrimSpace(cfg.AccessKeyID) == "" || strings.TrimSpace(cfg.SecretAccessKey) == "" {
 		return nil, errors.New("build S3 adapter: static credentials are required")
 	}
-	if !bucketName.MatchString(cfg.Bucket) || strings.Contains(cfg.Bucket, ".") {
+	if !validBucketName(cfg.Bucket) {
 		return nil, errors.New("build S3 adapter: bucket must be a dotless DNS name")
 	}
 	endpoint, err := url.Parse(strings.TrimSpace(cfg.Endpoint))
@@ -85,11 +89,14 @@ func validateTuple(cfg Config) (*url.URL, error) {
 
 	switch cfg.Provider {
 	case ProviderAmazonS3:
-		if !regionName.MatchString(cfg.Region) || cfg.Region == "auto" || strings.HasPrefix(cfg.Region, "us-gov-") || endpoint.Host != "s3."+cfg.Region+".amazonaws.com" {
+		if !regionName.MatchString(cfg.Region) || cfg.Region == "auto" || strings.HasPrefix(cfg.Region, "cn-") || strings.HasPrefix(cfg.Region, "us-gov-") || endpoint.Host != "s3."+cfg.Region+".amazonaws.com" {
 			return nil, errors.New("build S3 adapter: Amazon endpoint and region must be one commercial regional tuple")
 		}
+		if strings.TrimSpace(cfg.SessionToken) == "" || !bucketOwner.MatchString(cfg.ExpectedBucketOwner) {
+			return nil, errors.New("build S3 adapter: Amazon requires session credentials and a 12-digit expected bucket owner")
+		}
 	case ProviderCloudflare:
-		if cfg.Region != "auto" || !strings.HasSuffix(endpoint.Host, ".r2.cloudflarestorage.com") || strings.TrimSuffix(endpoint.Host, ".r2.cloudflarestorage.com") == "" {
+		if cfg.Region != "auto" || !accountID.MatchString(endpoint.Host) || cfg.ExpectedBucketOwner != "" {
 			return nil, errors.New("build S3 adapter: Cloudflare R2 endpoint and region must be one account tuple")
 		}
 	default:
@@ -98,13 +105,27 @@ func validateTuple(cfg Config) (*url.URL, error) {
 	return endpoint, nil
 }
 
+func validBucketName(name string) bool {
+	return len(name) >= 3 && len(name) <= 63 && bucketName.MatchString(name) && !strings.Contains(name, ".") && !reservedBucketName(name)
+}
+
+func reservedBucketName(name string) bool {
+	return strings.HasPrefix(name, "xn--") || strings.HasPrefix(name, "sthree-") || strings.HasPrefix(name, "amzn-s3-demo-") ||
+		strings.HasSuffix(name, "-s3alias") || strings.HasSuffix(name, "--ol-s3") || strings.HasSuffix(name, ".mrap") ||
+		strings.HasSuffix(name, "--x-s3") || strings.HasSuffix(name, "--table-s3") || strings.HasSuffix(name, "-an")
+}
+
 func isHTTPSOrigin(endpoint *url.URL) bool {
 	return endpoint.Scheme == "https" && endpoint.Host != "" && endpoint.Hostname() != "" &&
 		endpoint.User == nil && endpoint.Path == "" && endpoint.RawQuery == "" && !endpoint.ForceQuery && endpoint.Fragment == "" && endpoint.Port() == ""
 }
 
 func validateBounds(cfg Config) error {
-	if cfg.MaxObjectBytes <= 0 || cfg.MaxObjectBytes > maximumObjectBytes {
+	maximum := int64(maximumObjectBytes)
+	if cfg.Provider == ProviderCloudflare {
+		maximum = maximumR2ObjectBytes
+	}
+	if cfg.MaxObjectBytes <= 0 || cfg.MaxObjectBytes > maximum {
 		return errors.New("build S3 adapter: maximum object bytes are invalid")
 	}
 	if cfg.MultipartChunkBytes < minimumMultipartChunk || cfg.MultipartChunkBytes > maximumMultipartChunk || cfg.MultipartChunkBytes > cfg.MaxObjectBytes {
@@ -210,6 +231,7 @@ func (cfg Config) configuredStringBytes() (int64, bool) {
 		int64(len(cfg.AccessKeyID)),
 		int64(len(cfg.SecretAccessKey)),
 		int64(len(cfg.SessionToken)),
+		int64(len(cfg.ExpectedBucketOwner)),
 	)
 }
 

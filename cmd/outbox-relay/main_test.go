@@ -29,6 +29,7 @@ import (
 // single publication attempt, so none ends the process and none needs a class. A
 // new sentinel that can stop the relay needs a case here and in failureClass.
 func TestReportFailureIsBoundedAndSanitized(t *testing.T) {
+	t.Parallel()
 	const canary = "postgres://user:secret@db/app SELECT payload FROM outbox broker-detail"
 	tests := []struct {
 		name  string
@@ -58,6 +59,7 @@ func TestReportFailureIsBoundedAndSanitized(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			var stderr bytes.Buffer
 			reportFailure(&stderr, test.err)
 			want := "outbox relay failed: error_class=" + test.class + "\n"

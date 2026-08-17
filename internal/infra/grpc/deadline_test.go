@@ -26,6 +26,7 @@ import (
 const deadlineStreamFullMethod = "/grpcx.test.DeadlineService/Wait"
 
 func TestUnaryDeadlineCutsTheHandlerAndReleasesItsSlot(t *testing.T) {
+	t.Parallel()
 	const budget = 150 * time.Millisecond
 
 	cfg := testServerConfig()
@@ -67,6 +68,7 @@ func TestUnaryDeadlineCutsTheHandlerAndReleasesItsSlot(t *testing.T) {
 }
 
 func TestCallerDeadlineEarlierThanTheBudgetWins(t *testing.T) {
+	t.Parallel()
 	const callerBudget = 200 * time.Millisecond
 
 	cfg := testServerConfig()
@@ -102,7 +104,9 @@ func TestCallerDeadlineEarlierThanTheBudgetWins(t *testing.T) {
 }
 
 func TestStreamDeadlineIsOffByDefaultAndCutsWhenConfigured(t *testing.T) {
+	t.Parallel()
 	t.Run("off by default", func(t *testing.T) {
+		t.Parallel()
 		cfg := testServerConfig()
 		// The unary bound is short and the stream bound is the shipped zero, so
 		// a stream cut here would mean the two chains share one value.
@@ -131,6 +135,7 @@ func TestStreamDeadlineIsOffByDefaultAndCutsWhenConfigured(t *testing.T) {
 	})
 
 	t.Run("configured", func(t *testing.T) {
+		t.Parallel()
 		cfg := testServerConfig()
 		cfg.StreamTimeout = 150 * time.Millisecond
 

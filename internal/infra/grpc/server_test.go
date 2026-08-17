@@ -28,6 +28,7 @@ import (
 )
 
 func TestServerHealthFollowsAdmissionAndDrain(t *testing.T) {
+	t.Parallel()
 	server, connection := startTestServer(t, testServerConfig(), nil)
 	healthClient := healthgrpc.NewHealthClient(connection)
 
@@ -43,6 +44,7 @@ func TestServerHealthFollowsAdmissionAndDrain(t *testing.T) {
 }
 
 func TestServerHealthPreservesStandardUnknownServiceStatus(t *testing.T) {
+	t.Parallel()
 	_, connection := startTestServer(t, testServerConfig(), nil)
 	healthClient := healthgrpc.NewHealthClient(connection)
 
@@ -64,6 +66,7 @@ type policyBoundaryCase struct {
 }
 
 func TestServerPolicyErrorBoundary(t *testing.T) {
+	t.Parallel()
 	for _, testCase := range []policyBoundaryCase{
 		{
 			name:       "chosen status is service-owned output",
@@ -79,6 +82,7 @@ func TestServerPolicyErrorBoundary(t *testing.T) {
 		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
 			handlerCalled := false
 			register := func(registrar grpc.ServiceRegistrar) {
 				registerUnaryTestService(registrar, testUnaryFullMethod,
@@ -118,6 +122,7 @@ func TestServerPolicyErrorBoundary(t *testing.T) {
 }
 
 func TestServerStreamingPolicyErrorBoundary(t *testing.T) {
+	t.Parallel()
 	for _, testCase := range []policyBoundaryCase{
 		{
 			name:       "chosen status is service-owned output",
@@ -133,6 +138,7 @@ func TestServerStreamingPolicyErrorBoundary(t *testing.T) {
 		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
 			_, connection := startTestServerWithOptions(t, testServerConfig(), nil, Options{
 				StreamPolicy: []grpc.StreamServerInterceptor{
 					func(
@@ -160,6 +166,7 @@ func TestServerStreamingPolicyErrorBoundary(t *testing.T) {
 }
 
 func TestServerSanitizesUntrustedHandlerStatus(t *testing.T) {
+	t.Parallel()
 	register := func(registrar grpc.ServiceRegistrar) {
 		registerUnaryTestService(registrar, testUnaryFullMethod,
 			func(context.Context, *emptypb.Empty) (*emptypb.Empty, error) {
@@ -181,6 +188,7 @@ func TestServerSanitizesUntrustedHandlerStatus(t *testing.T) {
 }
 
 func TestServerCorrelationReturnsAcceptedRequestID(t *testing.T) {
+	t.Parallel()
 	observed := make(chan string, 2)
 	register := func(registrar grpc.ServiceRegistrar) {
 		registerUnaryTestService(registrar, testUnaryFullMethod,
@@ -207,6 +215,7 @@ func TestServerCorrelationReturnsAcceptedRequestID(t *testing.T) {
 		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
 			pairs := make([]string, 0, 2*len(testCase.candidates))
 			for _, candidate := range testCase.candidates {
 				pairs = append(pairs, requestIDMetadataKey, candidate)
@@ -246,6 +255,7 @@ func TestServerCorrelationReturnsAcceptedRequestID(t *testing.T) {
 }
 
 func TestServerShutdownForcesBlockedRPCOnCanceledBudget(t *testing.T) {
+	t.Parallel()
 	entered := make(chan struct{})
 	handlerDone := make(chan struct{})
 	var enteredOnce sync.Once
@@ -286,6 +296,7 @@ func TestServerShutdownForcesBlockedRPCOnCanceledBudget(t *testing.T) {
 }
 
 func TestServerShutdownReturnsWhenHandlerIgnoresCancellation(t *testing.T) {
+	t.Parallel()
 	entered := make(chan struct{})
 	handlerDone := make(chan struct{})
 	release := make(chan struct{})
@@ -342,6 +353,7 @@ func TestServerShutdownReturnsWhenHandlerIgnoresCancellation(t *testing.T) {
 }
 
 func TestNewServerRejectsUnboundedConfig(t *testing.T) {
+	t.Parallel()
 	valid := testServerConfig()
 	for _, testCase := range []struct {
 		name   string
@@ -359,6 +371,7 @@ func TestNewServerRejectsUnboundedConfig(t *testing.T) {
 		{name: "negative slow threshold", mutate: func(cfg *Config) { cfg.AccessLogSlowThreshold = -time.Nanosecond }},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
 			cfg := valid
 			testCase.mutate(&cfg)
 			if _, err := NewServer(cfg, Options{}); err == nil {
@@ -387,6 +400,7 @@ func assertHealthStatus(
 // produce a server that starts and serves without the method it was meant to
 // publish — which no probe and no test of the other services can see.
 func TestNewServerRejectsNilServiceRegistration(t *testing.T) {
+	t.Parallel()
 	server, err := NewServer(testServerConfig(), Options{
 		Services: []RegisterService{nil},
 	})

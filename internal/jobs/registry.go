@@ -46,15 +46,21 @@ type DispatchInput struct {
 }
 
 type Registered struct {
-	key                Revision
-	maxAttemptDuration time.Duration
-	dispatch           func(context.Context, DispatchInput) (HandlerResult, error)
-	evaluate           func(AttemptFacts) (Transition, error)
+	key                 Revision
+	maxAttemptDuration  time.Duration
+	terminationEnvelope time.Duration
+	maxRecoveryWave     uint32
+	dispatch            func(context.Context, DispatchInput) (HandlerResult, error)
+	evaluate            func(AttemptFacts) (Transition, error)
 }
 
 func (r Registered) Key() Revision { return r.key }
 
 func (r Registered) MaxAttemptDuration() time.Duration { return r.maxAttemptDuration }
+
+func (r Registered) TerminationEnvelope() time.Duration { return r.terminationEnvelope }
+
+func (r Registered) MaxRecoveryWave() uint32 { return r.maxRecoveryWave }
 
 func (r Registered) Dispatch(ctx context.Context, input DispatchInput) (HandlerResult, error) {
 	if r.dispatch == nil {
@@ -92,9 +98,11 @@ func Register[A any](registry *Registry, definition Definition[A], handler Handl
 		return fmt.Errorf("%w: %s/%s/%s", ErrDuplicateRevision, key.Kind, key.ArgsVersion, key.PolicyVersion)
 	}
 	registry.entries[key] = Registered{
-		key:                key,
-		maxAttemptDuration: definition.policy.MaxAttemptDuration,
-		evaluate:           definition.Evaluate,
+		key:                 key,
+		maxAttemptDuration:  definition.policy.MaxAttemptDuration,
+		terminationEnvelope: definition.policy.TerminationEnvelope,
+		maxRecoveryWave:     definition.policy.Retry.MaxRecoveryWave,
+		evaluate:            definition.Evaluate,
 		dispatch: func(ctx context.Context, input DispatchInput) (HandlerResult, error) {
 			if err := input.Identity.Validate(); err != nil {
 				return HandlerResult{}, err
@@ -117,6 +125,17 @@ func Register[A any](registry *Registry, definition Definition[A], handler Handl
 		},
 	}
 	return nil
+}
+
+func (r *Registry) TerminationEnvelope() time.Duration {
+	var envelope time.Duration
+	if r == nil {
+		return envelope
+	}
+	for _, registered := range r.entries {
+		envelope = max(envelope, registered.TerminationEnvelope())
+	}
+	return envelope
 }
 
 func (r *Registry) Lookup(key Revision) (Registered, error) {

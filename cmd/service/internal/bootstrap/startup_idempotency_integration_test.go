@@ -25,6 +25,7 @@ import (
 )
 
 func TestPostgresHTTPIdempotencyActiveBootstrap(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
 	defer cancel()
 	container, err := tcpostgres.Run(

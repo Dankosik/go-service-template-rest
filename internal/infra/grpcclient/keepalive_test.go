@@ -20,6 +20,7 @@ import (
 )
 
 func TestClientIdleKeepaliveIsOptIn(t *testing.T) {
+	t.Parallel()
 	const observationWindow = 35 * time.Second
 
 	defaultPeer := startIdlePingPeer(t)

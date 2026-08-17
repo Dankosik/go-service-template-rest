@@ -36,6 +36,7 @@ func TestSignalCollapsesPendingWakeups(t *testing.T) {
 // exactly its duration. Under synctest both are exact, so "immediate" is zero
 // rather than a wall-clock bound loose enough to pass while hanging.
 func TestSleepReturnsOnCancellationAndOnExpiry(t *testing.T) {
+	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
@@ -77,6 +78,7 @@ func TestConsumeAppendsReportsConnectFailure(t *testing.T) {
 // Under synctest the retry sleep is the bubble's only durable block point, so
 // synctest.Wait is an owned event rather than a polled wall-clock bound.
 func TestListenForAppendsRetriesUntilContextDone(t *testing.T) {
+	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		logs := &syncBuffer{}
 		telemetry, err := NewTelemetry(nil, slog.New(slog.NewJSONHandler(logs, nil)))

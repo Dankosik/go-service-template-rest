@@ -12,6 +12,7 @@ import (
 )
 
 func TestWebhookWorkerStartupRejectsDisabledProfile(t *testing.T) {
+	t.Parallel()
 	err := validateRuntimeConfig(config.Config{})
 	if !errors.Is(err, postgreswebhook.ErrConfig) {
 		t.Fatalf("validateRuntimeConfig() error = %v", err)
@@ -19,6 +20,7 @@ func TestWebhookWorkerStartupRejectsDisabledProfile(t *testing.T) {
 }
 
 func TestWebhookWorkerConfigHelpers(t *testing.T) {
+	t.Parallel()
 	options, err := parseLoadOptions([]string{"--config", "base.yaml", "--config-overlay", "one.yaml", "--config-overlay=two.yaml"})
 	if err != nil || options.ConfigPath != "base.yaml" || len(options.ConfigOverlays) != 2 || options.ConfigOverlays[1] != "two.yaml" {
 		t.Fatalf("parseLoadOptions() = %+v, %v", options, err)
@@ -48,6 +50,7 @@ func TestWebhookWorkerConfigHelpers(t *testing.T) {
 		{name: "grace too short", mutate: func(cfg *config.Config) { cfg.HTTP.GracePeriod = 9 * time.Second }, contains: "http.grace_period"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			cfg := valid
 			test.mutate(&cfg)
 			if err := validateRuntimeConfig(cfg); err == nil || !strings.Contains(err.Error(), test.contains) {

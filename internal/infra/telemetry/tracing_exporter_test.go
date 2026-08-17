@@ -1,4 +1,12 @@
-package telemetry
+package //nolint:paralleltest // This test mutates process-global environment or working directory.
+
+// Every subtest clears the ambient exporter environment, because resolution now
+// falls back to the standard OpenTelemetry variables and a developer or CI
+// machine that exports one would otherwise change what these assert.
+// t.Setenv forbids t.Parallel, so these run sequentially.
+//
+//nolint:paralleltest // ambient env control is process-wide state.
+telemetry
 
 import (
 	"net/http"
@@ -9,14 +17,10 @@ import (
 	"github.com/example/go-service-template-rest/internal/infra/telemetry/telemetrytest"
 )
 
-// Every subtest clears the ambient exporter environment, because resolution now
-// falls back to the standard OpenTelemetry variables and a developer or CI
-// machine that exports one would otherwise change what these assert.
-// t.Setenv forbids t.Parallel, so these run sequentially.
-//
-//nolint:paralleltest // ambient env control is process-wide state.
 func TestBuildTraceExporterOptions(t *testing.T) {
+
 	t.Run("not configured", func(t *testing.T) {
+		t.Parallel()
 		telemetrytest.ClearAmbientExporterEnv(t)
 
 		options, endpoint, err := buildTraceExporterOptions(TraceExporterConfig{})
@@ -32,6 +36,7 @@ func TestBuildTraceExporterOptions(t *testing.T) {
 	})
 
 	t.Run("headers without endpoint do not reach an ambient destination", func(t *testing.T) {
+
 		telemetrytest.ClearAmbientExporterEnv(t)
 		t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://env-collector.example:4318")
 
@@ -50,6 +55,7 @@ func TestBuildTraceExporterOptions(t *testing.T) {
 	})
 
 	t.Run("configured endpoint and headers", func(t *testing.T) {
+		t.Parallel()
 		telemetrytest.ClearAmbientExporterEnv(t)
 
 		options, endpoint, err := buildTraceExporterOptions(TraceExporterConfig{
@@ -68,6 +74,7 @@ func TestBuildTraceExporterOptions(t *testing.T) {
 	})
 
 	t.Run("endpoint without path defaults to the traces path", func(t *testing.T) {
+		t.Parallel()
 		telemetrytest.ClearAmbientExporterEnv(t)
 
 		paths := make(chan string, 1)
@@ -92,6 +99,7 @@ func TestBuildTraceExporterOptions(t *testing.T) {
 	})
 
 	t.Run("endpoint path is used exactly as configured", func(t *testing.T) {
+		t.Parallel()
 		telemetrytest.ClearAmbientExporterEnv(t)
 
 		paths := make(chan string, 1)
@@ -116,6 +124,7 @@ func TestBuildTraceExporterOptions(t *testing.T) {
 	})
 
 	t.Run("scheme-less endpoint is rejected fail-closed", func(t *testing.T) {
+		t.Parallel()
 		telemetrytest.ClearAmbientExporterEnv(t)
 
 		_, _, err := buildTraceExporterOptions(TraceExporterConfig{
@@ -132,6 +141,7 @@ func TestBuildTraceExporterOptions(t *testing.T) {
 
 //nolint:paralleltest // ambient env control is process-wide state.
 func TestTraceOTLPEndpointRedactsInvalidAndSecretBearingEndpoints(t *testing.T) {
+	t.Parallel()
 	testCases := []struct {
 		name    string
 		raw     string
@@ -176,6 +186,7 @@ func TestTraceOTLPEndpointRedactsInvalidAndSecretBearingEndpoints(t *testing.T) 
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			telemetrytest.ClearAmbientExporterEnv(t)
 
 			_, err := ResolveTraceExporterEndpoint(TraceExporterConfig{

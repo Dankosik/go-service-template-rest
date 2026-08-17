@@ -14,7 +14,6 @@ import (
 )
 
 var postgresJobsSchemaTables = []string{
-	"postgres_job_actions",
 	"postgres_job_attempts",
 	"postgres_job_claim_scopes",
 	"postgres_jobs",
@@ -27,10 +26,40 @@ type postgresJobsSchemaMutation struct {
 }
 
 func TestPostgresJobsSchema(t *testing.T) {
+	t.Parallel()
 	t.Run("canonical read-only authority", func(t *testing.T) {
+		t.Parallel()
 		ctx, _, store := newPostgresJobsFixture(t)
 		if err := store.CheckSchema(ctx); err != nil {
 			t.Fatalf("CheckSchema() error = %v", err)
+		}
+	})
+
+	t.Run("admits additive next-release contract shape", func(t *testing.T) {
+		t.Parallel()
+		ctx, pool, store := newPostgresJobsFixture(t)
+		if _, err := pool.PGX().Exec(ctx, `
+ALTER TABLE postgres_job_attempts
+ADD COLUMN executor_metadata jsonb,
+ADD CONSTRAINT postgres_job_attempts_transition_check CHECK (
+    final_state IS NULL
+    OR (effect_status = 'completed' AND final_state = 'succeeded')
+    OR (effect_status IN ('partial', 'unknown') AND final_state IN ('retry_wait', 'exhausted', 'outcome_unknown'))
+    OR (effect_status = 'none' AND (
+        (outcome = 'success' AND final_state = 'succeeded')
+        OR (outcome = 'permanent' AND final_state = 'permanent')
+        OR (outcome = 'poison' AND final_state = 'poison')
+        OR (outcome = 'cancelled' AND final_state = 'cancelled')
+        OR (outcome = 'unknown' AND final_state = 'outcome_unknown')
+        OR (outcome IN ('retryable', 'timeout', 'panic', 'lost') AND final_state IN ('retry_wait', 'exhausted'))
+    ))
+) NOT VALID;
+CREATE INDEX postgres_job_attempts_executor_metadata_idx
+ON postgres_job_attempts USING gin (executor_metadata);`); err != nil {
+			t.Fatalf("apply additive contract shape: %v", err)
+		}
+		if err := store.CheckSchema(ctx); err != nil {
+			t.Fatalf("CheckSchema(additive contract shape) error = %v", err)
 		}
 	})
 
@@ -42,6 +71,7 @@ func TestPostgresJobsSchema(t *testing.T) {
 		{name: "resumed", sql: "UPDATE postgres_job_claim_scopes SET scope_generation = 2 WHERE work_class = 'neutral'"},
 	} {
 		t.Run("accepts mutable neutral scope "+state.name, func(t *testing.T) {
+			t.Parallel()
 			ctx, pool, store := newPostgresJobsFixture(t)
 			if _, err := pool.PGX().Exec(ctx, state.sql); err != nil {
 				t.Fatalf("change neutral scope state: %v", err)
@@ -54,6 +84,7 @@ func TestPostgresJobsSchema(t *testing.T) {
 
 	for _, mutation := range postgresJobsSchemaMutations(t) {
 		t.Run("rejects "+mutation.name, func(t *testing.T) {
+			t.Parallel()
 			ctx, pool, store := newPostgresJobsFixture(t)
 			if _, err := pool.PGX().Exec(ctx, mutation.sql); err != nil {
 				t.Fatalf("apply schema mutation: %v", err)
@@ -65,6 +96,7 @@ func TestPostgresJobsSchema(t *testing.T) {
 	}
 
 	t.Run("Go and database vocabulary are bijective", func(t *testing.T) {
+		t.Parallel()
 		ctx, pool, _ := newPostgresJobsFixture(t)
 		states := []jobs.State{
 			jobs.StateReady, jobs.StateScheduled, jobs.StateRetryWait, jobs.StateRunning,
@@ -109,24 +141,34 @@ func TestPostgresJobsSchema(t *testing.T) {
 				'{}'::bytea, 'neutral', 'running', clock_timestamp(), 'worker', clock_timestamp() + interval '1 minute')`); err != nil {
 			t.Fatalf("insert attempt parent: %v", err)
 		}
-		outcomes := []jobs.OutcomeClass{
-			jobs.OutcomeSuccess, jobs.OutcomeRetryable, jobs.OutcomePermanent, jobs.OutcomePoison,
-			jobs.OutcomeTimeout, jobs.OutcomeCancelled, jobs.OutcomePanic, jobs.OutcomeLost, jobs.OutcomeUnknown,
+		transitions := []struct {
+			state   jobs.State
+			outcome jobs.OutcomeClass
+			effect  jobs.EffectStatus
+		}{
+			{jobs.StateSucceeded, jobs.OutcomeSuccess, jobs.EffectNone},
+			{jobs.StateRetryWait, jobs.OutcomeRetryable, jobs.EffectNone},
+			{jobs.StatePermanent, jobs.OutcomePermanent, jobs.EffectNone},
+			{jobs.StatePoison, jobs.OutcomePoison, jobs.EffectNone},
+			{jobs.StateExhausted, jobs.OutcomeTimeout, jobs.EffectNone},
+			{jobs.StateCancelled, jobs.OutcomeCancelled, jobs.EffectNone},
+			{jobs.StateRetryWait, jobs.OutcomePanic, jobs.EffectNone},
+			{jobs.StateRetryWait, jobs.OutcomeLost, jobs.EffectNone},
+			{jobs.StateOutcomeUnknown, jobs.OutcomeUnknown, jobs.EffectNone},
+			{jobs.StateSucceeded, jobs.OutcomeSuccess, jobs.EffectCompleted},
+			{jobs.StateOutcomeUnknown, jobs.OutcomeRetryable, jobs.EffectPartial},
+			{jobs.StateOutcomeUnknown, jobs.OutcomeLost, jobs.EffectUnknown},
 		}
-		effects := []jobs.EffectStatus{jobs.EffectNone, jobs.EffectCompleted, jobs.EffectPartial, jobs.EffectUnknown}
-		generation := int64(0)
-		for _, outcome := range outcomes {
-			for _, effect := range effects {
-				generation++
-				if _, err := pool.PGX().Exec(ctx, `
+		for generation, transition := range transitions {
+			if _, err := pool.PGX().Exec(ctx, `
 					INSERT INTO postgres_job_attempts (
 						logical_job_id, attempt_generation, recovery_generation, attempt_number, worker_id,
 						lease_expires_at, finalized_at, final_state, outcome, effect_status,
-						attempts_used, elapsed_used_milliseconds
+						retry_at, attempts_used, elapsed_used_milliseconds
 					) VALUES ('attempt-job', $1::bigint, 0, ($1::bigint)::integer, 'worker', clock_timestamp() + interval '1 minute',
-						clock_timestamp(), 'succeeded', $2, $3, ($1::bigint)::integer, 0)`, generation, outcome, effect); err != nil {
-					t.Fatalf("insert outcome/effect %q/%q: %v", outcome, effect, err)
-				}
+						clock_timestamp(), $2, $3, $4, CASE WHEN $2 = 'retry_wait' THEN clock_timestamp() + interval '1 minute' END,
+						($1::bigint)::integer, 0)`, generation+1, transition.state, transition.outcome, transition.effect); err != nil {
+				t.Fatalf("insert transition %q/%q/%q: %v", transition.state, transition.outcome, transition.effect, err)
 			}
 		}
 		if _, err := pool.PGX().Exec(ctx, `
@@ -228,26 +270,6 @@ func postgresJobsSchemaMutations(t *testing.T) []postgresJobsSchemaMutation {
 	}
 
 	return append(mutations,
-		postgresJobsSchemaMutation{
-			name:      "column default postgres_job_actions.completed_at",
-			authority: "postgres_job_actions.completed_at",
-			sql:       "ALTER TABLE postgres_job_actions ALTER COLUMN completed_at SET DEFAULT statement_timestamp()",
-		},
-		postgresJobsSchemaMutation{
-			name:      "column collation postgres_job_actions.reason",
-			authority: "postgres_job_actions.reason",
-			sql:       `ALTER TABLE postgres_job_actions ALTER COLUMN reason TYPE text COLLATE "POSIX"`,
-		},
-		postgresJobsSchemaMutation{
-			name:      "constraint definition postgres_job_actions_result_check",
-			authority: "postgres_job_actions.postgres_job_actions_result_check",
-			sql:       "ALTER TABLE postgres_job_actions DROP CONSTRAINT postgres_job_actions_result_check, ADD CONSTRAINT postgres_job_actions_result_check CHECK (result IS NOT NULL)",
-		},
-		postgresJobsSchemaMutation{
-			name:      "index definition postgres_job_actions_job_idx",
-			authority: "postgres_job_actions.postgres_job_actions_job_idx",
-			sql:       "DROP INDEX postgres_job_actions_job_idx; CREATE INDEX postgres_job_actions_job_idx ON postgres_job_actions (logical_job_id) WHERE logical_job_id IS NOT NULL",
-		},
 		postgresJobsSchemaMutation{
 			name:      "neutral scope",
 			authority: "neutral claim scope",

@@ -71,6 +71,43 @@ type Transition struct {
 	Effect       EffectStatus
 }
 
+//nolint:cyclop // The closed transition vocabulary is clearer as one exhaustive validator.
+func (t Transition) Validate() error {
+	if t.AttemptsUsed == 0 || t.ElapsedUsed < 0 || t.Delay < 0 || !t.Outcome.valid() || !t.Effect.valid() {
+		return fmt.Errorf("%w: invalid persisted budget or vocabulary", ErrInvalidTransition)
+	}
+	if t.State != StateRetryWait && t.Delay != 0 {
+		return fmt.Errorf("%w: terminal transition has a retry delay", ErrInvalidTransition)
+	}
+
+	valid := false
+	switch t.Effect {
+	case EffectCompleted:
+		valid = t.State == StateSucceeded
+	case EffectPartial, EffectUnknown:
+		valid = t.State == StateRetryWait || t.State == StateExhausted || t.State == StateOutcomeUnknown
+	case EffectNone:
+		switch t.Outcome {
+		case OutcomeSuccess:
+			valid = t.State == StateSucceeded
+		case OutcomePermanent:
+			valid = t.State == StatePermanent
+		case OutcomePoison:
+			valid = t.State == StatePoison
+		case OutcomeCancelled:
+			valid = t.State == StateCancelled
+		case OutcomeUnknown:
+			valid = t.State == StateOutcomeUnknown
+		case OutcomeRetryable, OutcomeTimeout, OutcomePanic, OutcomeLost:
+			valid = t.State == StateRetryWait || t.State == StateExhausted
+		}
+	}
+	if !valid {
+		return fmt.Errorf("%w: state %q does not match outcome %q and effect %q", ErrInvalidTransition, t.State, t.Outcome, t.Effect)
+	}
+	return nil
+}
+
 func (d Definition[A]) Evaluate(facts AttemptFacts) (Transition, error) {
 	if err := d.valid(); err != nil {
 		return Transition{}, err

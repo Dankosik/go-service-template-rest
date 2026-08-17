@@ -10,6 +10,7 @@ import (
 )
 
 func TestPostgresJobsSession(t *testing.T) {
+	t.Parallel()
 	ctx, pool, store := newPostgresJobsFixture(t)
 
 	healthy, err := store.AcquireSession(ctx)

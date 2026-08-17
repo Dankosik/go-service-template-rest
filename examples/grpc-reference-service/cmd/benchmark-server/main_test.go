@@ -30,6 +30,7 @@ import (
 )
 
 func TestBenchmarkServerProcessLifecycle(t *testing.T) {
+	t.Parallel()
 	defaults := config.DefaultGRPCServerConfig()
 	settings, err := settingsFromDefaults(defaults)
 	if err != nil {

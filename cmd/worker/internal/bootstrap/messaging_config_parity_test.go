@@ -26,8 +26,10 @@ import (
 // config-load failure to connect time, where an operator reads it as a broker
 // outage instead of a typo.
 func TestMessagingConfigRulesMatchAdapter(t *testing.T) {
+	t.Parallel()
 	for _, testCase := range configtest.MessagingCases() {
 		t.Run(testCase.Name, func(t *testing.T) {
+			t.Parallel()
 			cfg, loadErr := loadMessagingConfig(t, testCase.URLs, testCase.Stream, testCase.Plaintext)
 			configRejected := cfg == nil
 			if configRejected != testCase.ConfigRejects {
@@ -37,6 +39,12 @@ func TestMessagingConfigRulesMatchAdapter(t *testing.T) {
 				// internal/config already refused it, so the operator sees the
 				// fault at load. Whether natsjs would also refuse it does not
 				// change what anyone observes.
+				//nolint:paralleltest // This test mutates process-global environment or working directory.
+
+				// loadMessagingConfig runs one messaging setting set through the real load path
+				// and returns the validated config, or nil when validation rejected it. Only
+				// ErrValidate counts as a rejection; a parse or IO fault fails the test, so a
+				// broken fixture cannot read as the config side doing its job.
 				return
 			}
 			if err := natsjs.ValidateConfig(runtimeopts.Messaging(*cfg)); err != nil {
@@ -49,10 +57,6 @@ func TestMessagingConfigRulesMatchAdapter(t *testing.T) {
 	}
 }
 
-// loadMessagingConfig runs one messaging setting set through the real load path
-// and returns the validated config, or nil when validation rejected it. Only
-// ErrValidate counts as a rejection; a parse or IO fault fails the test, so a
-// broken fixture cannot read as the config side doing its job.
 func loadMessagingConfig(t *testing.T, urls, stream string, plaintext bool) (*config.MessagingConfig, error) {
 	t.Helper()
 	// A concrete port: nothing is served here, but config validation rejects 0.
@@ -74,6 +78,7 @@ func loadMessagingConfig(t *testing.T, urls, stream string, plaintext bool) (*co
 // scheme sets themselves rather than only their accept/reject verdicts, because
 // the two files list them independently.
 func TestMessagingSchemeVocabularyMatchesAdapter(t *testing.T) {
+	t.Parallel()
 	for _, scheme := range []string{"nats", "tls", "ws", "wss"} {
 		cfg := natsjs.Config{
 			URLs: []string{scheme + "://broker.example:4222"}, Stream: "EVENTS",

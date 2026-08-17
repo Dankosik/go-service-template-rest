@@ -218,6 +218,14 @@ func TestServerConfigMappingFillsEveryTransportBound(t *testing.T) {
 		// The two bounds the template ships disabled are set here anyway: this
 		// corpus proves the mapping, not the default, and a field left at its
 		// shipped zero would make the check below vacuous for it.
+		//nolint:paralleltest // This test mutates process-global environment or working directory.
+
+		// loadGRPCServerConfig runs one corpus entry through the real configuration
+		// loader and returns the gRPC section it produced.
+		//
+		// Keys are the grpc.server suffix; the server stays disabled because the bounds
+		// under test are validated either way, which keeps every case free of the
+		// address and transport-security values an enabled server additionally demands.
 		"UNARY_TIMEOUT":              "8s",
 		"STREAM_TIMEOUT":             "30s",
 		"MAX_CONNECTION_IDLE":        "15m",
@@ -244,12 +252,6 @@ func TestServerConfigMappingFillsEveryTransportBound(t *testing.T) {
 	}
 }
 
-// loadGRPCServerConfig runs one corpus entry through the real configuration
-// loader and returns the gRPC section it produced.
-//
-// Keys are the grpc.server suffix; the server stays disabled because the bounds
-// under test are validated either way, which keeps every case free of the
-// address and transport-security values an enabled server additionally demands.
 func loadGRPCServerConfig(t *testing.T, env map[string]string) (config.GRPCServerConfig, error) {
 	t.Helper()
 	configtest.IsolateEnv(t)

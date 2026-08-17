@@ -74,7 +74,9 @@ mutation:
 }
 
 func TestPostgresOutboxWriterPrimaryReconciliation(t *testing.T) {
+	t.Parallel()
 	t.Run("committed result lost", func(t *testing.T) {
+		t.Parallel()
 		adapter := newReconciliationAdapter(t)
 		realInTx := adapter.inTx
 		calls := 0
@@ -96,6 +98,7 @@ func TestPostgresOutboxWriterPrimaryReconciliation(t *testing.T) {
 	})
 
 	t.Run("authoritative absence retries same event", func(t *testing.T) {
+		t.Parallel()
 		adapter := newReconciliationAdapter(t)
 		realInTx := adapter.inTx
 		calls := 0
@@ -117,6 +120,7 @@ func TestPostgresOutboxWriterPrimaryReconciliation(t *testing.T) {
 	})
 
 	t.Run("conflicting receipt fails without mutation", func(t *testing.T) {
+		t.Parallel()
 		adapter := newReconciliationAdapter(t)
 		if _, err := adapter.pool.PGX().Exec(t.Context(), `
 			INSERT INTO outbox_commit_receipts (event_id, fingerprint_version, envelope_fingerprint)
@@ -140,6 +144,7 @@ func TestPostgresOutboxWriterPrimaryReconciliation(t *testing.T) {
 	})
 
 	t.Run("inconclusive read never retries mutation", func(t *testing.T) {
+		t.Parallel()
 		adapter := newReconciliationAdapter(t)
 		calls := 0
 		adapter.inTx = func(context.Context, pgx.TxOptions, func(pgx.Tx) error) error {

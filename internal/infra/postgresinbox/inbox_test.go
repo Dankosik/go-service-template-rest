@@ -13,6 +13,7 @@ import (
 )
 
 func TestClaimValidation(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name        string
 		tx          pgx.Tx
@@ -38,6 +39,7 @@ func TestClaimValidation(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			claimed, err := Claim(t.Context(), test.tx, test.consumer, test.message)
 			if claimed != test.wantClaim || !errors.Is(err, test.wantErr) {
 				t.Fatalf("Claim() = (%t, %v), want (%t, %v)", claimed, err, test.wantClaim, test.wantErr)
@@ -56,6 +58,7 @@ func TestClaimValidation(t *testing.T) {
 }
 
 func TestInboxSchemaHasNoExpirySurface(t *testing.T) {
+	t.Parallel()
 	migration, err := os.ReadFile("../../../migrations/000002_postgres_inbox.sql")
 	if err != nil {
 		t.Fatalf("read inbox migration: %v", err)

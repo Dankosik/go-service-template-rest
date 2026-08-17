@@ -27,6 +27,7 @@ import (
 )
 
 func TestPostgresHTTPIdempotencyRecordedFingerprintVersion(t *testing.T) {
+	t.Parallel()
 	fixture := newHTTPIDFixture(t, "idempotency-recorded-version", 4)
 	v1 := httpIDAttempt(t, "v1", `{"name":"saved"}`)
 	v2 := httpIDAttempt(t, "v2", `{"name":"current"}`)
@@ -77,6 +78,7 @@ func TestPostgresHTTPIdempotencyRecordedFingerprintVersion(t *testing.T) {
 }
 
 func TestPostgresHTTPIdempotencyFirstPublicationAndPoolHeadroom(t *testing.T) {
+	t.Parallel()
 	fixture := newHTTPIDFixture(t, "idempotency-publisher-a", 2)
 	otherPool := newHTTPIDPool(t, fixture.ctx, httpIDDSN(t, fixture.dsn, "idempotency-authority-b"), 1)
 	gatePool := newHTTPIDPool(t, fixture.ctx, httpIDDSN(t, fixture.dsn, "idempotency-gate"), 1)
@@ -161,6 +163,7 @@ func TestPostgresHTTPIdempotencyFirstPublicationAndPoolHeadroom(t *testing.T) {
 }
 
 func TestPostgresHTTPIdempotencyClassificationBudget(t *testing.T) {
+	t.Parallel()
 	fixture := newHTTPIDFixture(t, "idempotency-classification", 2)
 	gatePool := newHTTPIDPool(t, fixture.ctx, httpIDDSN(t, fixture.dsn, "idempotency-classification-gate"), 1)
 	lock, err := gatePool.PGX().Begin(fixture.ctx)
@@ -201,6 +204,7 @@ func TestPostgresHTTPIdempotencyClassificationBudget(t *testing.T) {
 }
 
 func TestPostgresHTTPIdempotencyOwnerRecovery(t *testing.T) {
+	t.Parallel()
 	fixture := newHTTPIDFixture(t, "idempotency-owner-recovery", 6)
 	if _, err := fixture.pool.PGX().Exec(fixture.ctx, `
 		CREATE TABLE test_http_idempotency_feature (
@@ -359,6 +363,7 @@ func TestPostgresHTTPIdempotencyOwnerRecovery(t *testing.T) {
 }
 
 func TestPostgresHTTPIdempotencyCallerTransactionAtomicity(t *testing.T) {
+	t.Parallel()
 	fixture := newHTTPIDFixture(t, "idempotency-caller-transaction", 4)
 	if _, err := fixture.pool.PGX().Exec(fixture.ctx, `
 		CREATE TABLE test_http_idempotency_feature (
@@ -428,6 +433,7 @@ func TestPostgresHTTPIdempotencyCallerTransactionAtomicity(t *testing.T) {
 }
 
 func TestPostgresHTTPIdempotencyReplayResultBoundAndPostCommitDeath(t *testing.T) {
+	t.Parallel()
 	fixture := newHTTPIDFixture(t, "idempotency-replay-bound", 6)
 	if _, err := fixture.pool.PGX().Exec(fixture.ctx, `
 		CREATE TABLE test_http_idempotency_feature (
@@ -567,6 +573,7 @@ func TestPostgresHTTPIdempotencyReplayResultBoundAndPostCommitDeath(t *testing.T
 }
 
 func TestPostgresHTTPIdempotencyCommitReconciliation(t *testing.T) {
+	t.Parallel()
 	fixture := newHTTPIDFixture(t, "idempotency-reconcile", 6)
 
 	completed := httpIDAttemptWithKey(t, "v2", `{"name":"completed"}`, "key-completed")
@@ -695,6 +702,7 @@ func TestPostgresHTTPIdempotencyCommitReconciliation(t *testing.T) {
 }
 
 func TestPostgresHTTPIdempotencyCommitEpoch(t *testing.T) {
+	t.Parallel()
 	fixture, container := newRestartableHTTPIDFixture(t)
 	attempt := httpIDAttemptWithKey(t, "v2", `{"name":"epoch"}`, "key-epoch")
 	resolver := httpIDResolver(map[string]httpidempotency.Fingerprint{"v2": attempt.Fingerprint})
@@ -741,6 +749,7 @@ func TestPostgresHTTPIdempotencyCommitEpoch(t *testing.T) {
 }
 
 func TestPostgresHTTPIdempotencyRetentionAndCleanupRaces(t *testing.T) {
+	t.Parallel()
 	fixture := newHTTPIDFixture(t, "idempotency-retention", 4)
 	subMicrosecondContract := fixture.contract
 	subMicrosecondContract.ReplayTTL = time.Nanosecond
@@ -840,6 +849,7 @@ func TestPostgresHTTPIdempotencyRetentionAndCleanupRaces(t *testing.T) {
 }
 
 func TestPostgresHTTPIdempotencyMaintenanceCapacity(t *testing.T) {
+	t.Parallel()
 	fixture := newHTTPIDFixture(t, "idempotency-maintenance-capacity", 4)
 	retained := seedHTTPIDCompleted(t, fixture, fixture.contract, "capacity-retained")
 	if _, err := fixture.store.MaterializeEpoch(fixture.ctx, retained); err != nil {
@@ -908,6 +918,7 @@ func TestPostgresHTTPIdempotencyMaintenanceCapacity(t *testing.T) {
 }
 
 func TestPostgresHTTPIdempotencyTelemetry(t *testing.T) {
+	t.Parallel()
 	reader := telemetrytest.InstallManualReader(t)
 	fixture := newHTTPIDFixture(t, "idempotency-telemetry", 4)
 	attempt := httpIDAttemptWithKey(t, "v2", `{"name":"telemetry"}`, "key-telemetry")
@@ -1055,6 +1066,7 @@ func assertHTTPIDStoredState(
 }
 
 func TestPostgresHTTPIdempotencyWriterAuthority(t *testing.T) {
+	t.Parallel()
 	fixture := newHTTPIDFixture(t, "idempotency-writer-authority", 4)
 	readOnlyPool := newHTTPIDPool(t, fixture.ctx, httpIDDSNParam(
 		t,
@@ -1080,6 +1092,7 @@ func TestPostgresHTTPIdempotencyWriterAuthority(t *testing.T) {
 }
 
 func TestPostgresHTTPIdempotencyHelperProcess(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("HTTP_IDEMPOTENCY_HELPER") != "1" {
 		return
 	}

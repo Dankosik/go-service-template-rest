@@ -12,10 +12,15 @@ import (
 )
 
 type StoreOptions struct {
-	OperationTimeout  time.Duration
-	CapacityRevision  int64
-	GlobalConcurrency int
-	ManifestRevision  int64
+	OperationTimeout      time.Duration
+	CapacityRevision      int64
+	GlobalConcurrency     int
+	ManifestRevision      int64
+	AttemptTimeout        time.Duration
+	ResponseHeaderTimeout time.Duration
+	ResponseHeaderBytes   int
+	ResponseBodyBytes     int
+	DrainTimeout          time.Duration
 }
 
 type Store struct {
@@ -32,7 +37,7 @@ func (s *Store) CheckSchema(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("inspect webhook schema: %w", err)
 	}
-	want := []string{"webhook_attempts", "webhook_capacity_slots", "webhook_clock", "webhook_cycles", "webhook_deliveries", "webhook_destinations", "webhook_events", "webhook_fanouts", "webhook_operator_actions", "webhook_tombstones"}
+	want := []string{"webhook_attempts", "webhook_capacity_slots", "webhook_clock", "webhook_cycles", "webhook_deliveries", "webhook_destination_tombstones", "webhook_destinations", "webhook_events", "webhook_fanouts", "webhook_operator_actions", "webhook_tombstones"}
 	if !slices.Equal(relations, want) {
 		return fmt.Errorf("%w: webhook schema relations = %v", ErrConfig, relations)
 	}
@@ -52,10 +57,23 @@ func NewStore(pool *postgres.Pool, options StoreOptions) (*Store, error) {
 	}
 	if options.OperationTimeout <= 0 || options.OperationTimeout > MaxStoreOperationTime ||
 		options.CapacityRevision <= 0 || options.GlobalConcurrency < 1 ||
-		options.GlobalConcurrency > MaxConcurrency || options.ManifestRevision <= 0 {
+		options.GlobalConcurrency > MaxConcurrency || options.ManifestRevision <= 0 ||
+		options.AttemptTimeout <= 0 || options.AttemptTimeout > MaxAttemptTime ||
+		options.ResponseHeaderTimeout <= 0 || options.ResponseHeaderTimeout > options.AttemptTimeout ||
+		options.ResponseHeaderBytes < 1 || options.ResponseHeaderBytes > MaxResponseBytes ||
+		options.ResponseBodyBytes < 1 || options.ResponseBodyBytes > MaxResponseBytes ||
+		options.DrainTimeout <= options.AttemptTimeout || options.DrainTimeout > MaxDrainTime {
 		return nil, fmt.Errorf("%w: store bounds are invalid", ErrConfig)
 	}
 	return &Store{pool: pool, options: options}, nil
+}
+
+func (s *Store) admits(policy DeliveryPolicy) bool {
+	return policy.AttemptTimeout <= s.options.AttemptTimeout &&
+		policy.ResponseHeaderTimeout <= s.options.ResponseHeaderTimeout &&
+		policy.ResponseHeaderBytes <= s.options.ResponseHeaderBytes &&
+		policy.ResponseBodyBytes <= s.options.ResponseBodyBytes &&
+		policy.DrainTimeout <= s.options.DrainTimeout
 }
 
 func (s *Store) valid() bool {
@@ -68,16 +86,10 @@ func (s *Store) transaction(ctx context.Context, fn func(context.Context, pgx.Tx
 	}
 	opCtx, cancel := context.WithTimeout(ctx, s.options.OperationTimeout)
 	defer cancel()
-	tx, err := s.pool.PGX().BeginTx(opCtx, pgx.TxOptions{})
-	if err != nil {
-		return fmt.Errorf("begin webhook transaction: %w", err)
-	}
-	defer func() { _ = tx.Rollback(context.WithoutCancel(opCtx)) }()
-	if err := fn(opCtx, tx); err != nil {
-		return err
-	}
-	if err := tx.Commit(opCtx); err != nil {
-		return fmt.Errorf("commit webhook transaction: %w", err)
+	if err := s.pool.InTx(opCtx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+		return fn(opCtx, tx)
+	}); err != nil {
+		return fmt.Errorf("webhook transaction: %w", err)
 	}
 	return nil
 }

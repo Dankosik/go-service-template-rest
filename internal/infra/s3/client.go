@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/aws/retry"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	awss3 "github.com/aws/aws-sdk-go-v2/service/s3"
 	smithyendpoints "github.com/aws/smithy-go/endpoints"
@@ -26,6 +27,21 @@ type Client struct {
 	telemetry *telemetry
 	roots     *x509.CertPool
 	closed    sync.Once
+}
+
+func withReadRetry(options *awss3.Options) {
+	options.Retryer = retry.NewStandard(func(standard *retry.StandardOptions) {
+		standard.MaxAttempts = 3
+		standard.MaxBackoff = 100 * time.Millisecond
+		standard.Retryables = []retry.IsErrorRetryable{retry.IsErrorRetryableFunc(readRetryable)}
+	})
+}
+
+func (c *Client) expectedBucketOwner() *string {
+	if c.config.Provider != ProviderAmazonS3 {
+		return nil
+	}
+	return aws.String(c.config.ExpectedBucketOwner)
 }
 
 func (c *Client) admit(ctx context.Context, call *operationCall) (context.Context, func(), error) {

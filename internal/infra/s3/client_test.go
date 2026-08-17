@@ -40,10 +40,127 @@ import (
 )
 
 func TestNewUsesOnlyStaticConfigurationAndPerformsNoIO(t *testing.T) {
+	t.Parallel()
 	testNewUsesStaticConfigurationAndImageRootsWithoutNetworkIO(t)
 }
 
+func TestExpectedBucketOwnerProjectsEveryOperation(t *testing.T) {
+	t.Parallel()
+	for _, provider := range []Provider{ProviderAmazonS3, ProviderCloudflare} {
+		t.Run(string(provider), func(t *testing.T) {
+			t.Parallel()
+			cfg := validConfig(provider)
+			multipartData := bytes.Repeat([]byte("m"), int(cfg.MultipartChunkBytes)+1)
+			downloadData := []byte("download")
+			seen := map[string]bool{}
+			creates := 0
+			client := scriptedClientWithConfig(t, cfg, func(request *http.Request) (*http.Response, error) {
+				query := request.URL.Query()
+				switch {
+				case request.Method == http.MethodPut && query.Get("partNumber") == "":
+					seen["PutObject"] = true
+					payload, _ := decodeAWSChunked(t, request.Body)
+					return s3Response(http.StatusOK, http.Header{
+						"X-Amz-Checksum-Crc64nvme": {testCRC64NVME(payload)},
+						"X-Amz-Checksum-Type":      {"FULL_OBJECT"},
+					}, ""), nil
+				case request.Method == http.MethodPost && query.Has("uploads"):
+					seen["CreateMultipartUpload"] = true
+					creates++
+					return s3Response(http.StatusOK, nil, fmt.Sprintf("<InitiateMultipartUploadResult><UploadId>upload-%d</UploadId></InitiateMultipartUploadResult>", creates)), nil
+				case request.Method == http.MethodPut && query.Get("partNumber") != "":
+					seen["UploadPart"] = true
+					payload, _ := decodeAWSChunked(t, request.Body)
+					header := http.Header{"Etag": {"part"}}
+					if query.Get("uploadId") == "upload-1" {
+						header.Set("X-Amz-Checksum-Crc64nvme", testCRC64NVME(payload))
+					}
+					return s3Response(http.StatusOK, header, ""), nil
+				case request.Method == http.MethodPost && query.Get("uploadId") == "upload-1":
+					seen["CompleteMultipartUpload"] = true
+					_, _ = io.Copy(io.Discard, request.Body)
+					return s3Response(http.StatusOK, nil, "<CompleteMultipartUploadResult><ChecksumCRC64NVME>"+testCRC64NVME(multipartData)+"</ChecksumCRC64NVME><ChecksumType>FULL_OBJECT</ChecksumType></CompleteMultipartUploadResult>"), nil
+				case request.Method == http.MethodDelete && query.Get("uploadId") != "":
+					seen["AbortMultipartUpload"] = true
+					return s3Response(http.StatusNoContent, nil, ""), nil
+				case request.Method == http.MethodGet && query.Get("uploadId") != "":
+					seen["ListParts"] = true
+					return s3Response(http.StatusOK, nil, "<ListPartsResult><IsTruncated>false</IsTruncated></ListPartsResult>"), nil
+				case request.Method == http.MethodGet:
+					seen["GetObject"] = true
+					return s3Response(http.StatusOK, http.Header{
+						"Content-Length":           {strconv.Itoa(len(downloadData))},
+						"X-Amz-Checksum-Crc64nvme": {testCRC64NVME(downloadData)},
+						"X-Amz-Checksum-Type":      {"FULL_OBJECT"},
+					}, string(downloadData)), nil
+				case request.Method == http.MethodHead:
+					seen["HeadObject"] = true
+					return s3Response(http.StatusOK, http.Header{
+						"Content-Length": {"1"},
+						"Last-Modified":  {time.Now().UTC().Format(http.TimeFormat)},
+					}, ""), nil
+				case request.Method == http.MethodDelete:
+					seen["DeleteObject"] = true
+					return s3Response(http.StatusNoContent, nil, ""), nil
+				default:
+					t.Fatalf("unexpected operation request %s %s", request.Method, request.URL)
+					return nil, http.ErrAbortHandler
+				}
+			})
+
+			if _, err := client.Upload(t.Context(), "single", uploadSource(strings.NewReader("x")), objectstorage.UploadOptions{ContentLength: 1, Intent: objectstorage.UploadReplace}); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := client.Upload(t.Context(), "multipart", uploadSource(bytes.NewReader(multipartData)), objectstorage.UploadOptions{ContentLength: int64(len(multipartData)), Intent: objectstorage.UploadReplace}); err != nil {
+				t.Fatal(err)
+			}
+			failed, err := client.Upload(t.Context(), "cleanup", uploadSource(bytes.NewReader(multipartData)), objectstorage.UploadOptions{ContentLength: int64(len(multipartData)), Intent: objectstorage.UploadReplace})
+			if objectstorage.Kind(err) != objectstorage.KindIntegrityFailed || failed.Cleanup == objectstorage.CleanupNone {
+				t.Fatalf("cleanup upload = %#v, %v", failed, err)
+			}
+			download, err := client.Download(t.Context(), "download")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := io.ReadAll(download.Body); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := client.Metadata(t.Context(), "metadata"); err != nil {
+				t.Fatal(err)
+			}
+			if err := client.Delete(t.Context(), "delete"); err != nil {
+				t.Fatal(err)
+			}
+			if provider == ProviderCloudflare {
+				empty, complete := client.multipartPartsEmpty(t.Context(), "projection", "projection")
+				if !empty || !complete {
+					t.Fatal("R2 ListParts projection did not complete")
+				}
+			}
+			presigned, err := client.PresignGET(t.Context(), "presign", time.Second)
+			if err != nil {
+				t.Fatal(err)
+			}
+			signed, err := url.Parse(presigned.URL)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := signed.Query().Get("x-amz-expected-bucket-owner"); got != cfg.ExpectedBucketOwner {
+				t.Fatalf("presigned expected owner = %q, want %q", got, cfg.ExpectedBucketOwner)
+			}
+
+			want := []string{"PutObject", "CreateMultipartUpload", "UploadPart", "CompleteMultipartUpload", "AbortMultipartUpload", "ListParts", "GetObject", "HeadObject", "DeleteObject"}
+			for _, operation := range want {
+				if !seen[operation] {
+					t.Errorf("%s was not exercised", operation)
+				}
+			}
+		})
+	}
+}
+
 func TestNewUsesStaticConfigurationAndImageRootsWithoutNetworkIO(t *testing.T) {
+	t.Parallel()
 	testNewUsesStaticConfigurationAndImageRootsWithoutNetworkIO(t)
 }
 
@@ -56,6 +173,7 @@ func testNewUsesStaticConfigurationAndImageRootsWithoutNetworkIO(t *testing.T) {
 
 	for _, provider := range []Provider{ProviderAmazonS3, ProviderCloudflare} {
 		t.Run(string(provider), func(t *testing.T) {
+			t.Parallel()
 			cfg := validConfig(provider)
 			client, err := newClient(cfg, testImageRootSource(t))
 			if err != nil {
@@ -89,6 +207,7 @@ func testNewUsesStaticConfigurationAndImageRootsWithoutNetworkIO(t *testing.T) {
 }
 
 func TestObjectStorageStartupLoadsImageRootsLocally(t *testing.T) {
+	t.Parallel()
 	opened := 0
 	source := testImageRootSource(t)
 	client, err := newClient(validConfig(ProviderAmazonS3), func() (imageRootFile, error) {
@@ -114,6 +233,7 @@ func mustHost(t *testing.T, rawURL string) string {
 }
 
 func TestAdmissionIsProcessWideAndNonBlocking(t *testing.T) {
+	t.Parallel()
 	cfg := validConfig(ProviderAmazonS3)
 	cfg.MaxActiveOperations = 2
 	cfg.MaxWorkingMemoryBytes, _ = cfg.requiredMemory()
@@ -163,8 +283,8 @@ func TestAdmissionIsProcessWideAndNonBlocking(t *testing.T) {
 	if _, err := client.PresignGET(t.Context(), "presign", time.Second); objectstorage.Kind(err) != objectstorage.KindBusy {
 		t.Fatalf("PresignGET() kind = %q, want busy", objectstorage.Kind(err))
 	}
-	if source.reads != 0 || requests != 2 {
-		t.Fatalf("saturated operations read source=%d and made requests=%d, want 0 and 2", source.reads, requests)
+	if source.reads != 0 || source.closes != 1 || requests != 2 {
+		t.Fatalf("saturated operations read source=%d, closed source=%d, and made requests=%d; want 0, 1, and 2", source.reads, source.closes, requests)
 	}
 
 	if _, err := io.ReadAll(first.Body); err != nil {
@@ -191,6 +311,7 @@ func TestAdmissionIsProcessWideAndNonBlocking(t *testing.T) {
 }
 
 func TestEffectiveDeadlineAndLifecycleOwnEveryPhase(t *testing.T) {
+	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		cfg := validConfig(ProviderAmazonS3)
 		cfg.MaxOperationDuration = 2 * time.Second
@@ -232,8 +353,8 @@ func TestEffectiveDeadlineAndLifecycleOwnEveryPhase(t *testing.T) {
 		if _, err := client.Upload(expired, "upload", source, objectstorage.UploadOptions{ContentLength: 1, Intent: objectstorage.UploadReplace}); objectstorage.Kind(err) != objectstorage.KindCancelled {
 			t.Fatalf("cancelled Upload() kind = %q, want cancelled", objectstorage.Kind(err))
 		}
-		if source.reads != 0 {
-			t.Fatalf("cancelled upload read source %d times", source.reads)
+		if source.reads != 0 || source.closes != 1 {
+			t.Fatalf("cancelled upload read source %d times and closed it %d times", source.reads, source.closes)
 		}
 		if got := len(client.tokens); got != 0 {
 			t.Fatalf("admission tokens still held = %d", got)
@@ -250,11 +371,19 @@ func admissionDownloadResponse(body string) *http.Response {
 	}, ContentLength: int64(len(body)), Body: io.NopCloser(strings.NewReader(body))}
 }
 
-type admissionReader struct{ reads int }
+type admissionReader struct {
+	reads  int
+	closes int
+}
 
 func (r *admissionReader) Read([]byte) (int, error) {
 	r.reads++
 	return 0, io.EOF
+}
+
+func (r *admissionReader) Close() error {
+	r.closes++
+	return nil
 }
 
 const (
@@ -287,6 +416,7 @@ type envelopeRecord struct {
 }
 
 func TestLinuxProcessEnvelope(t *testing.T) {
+	t.Parallel()
 	if os.Getenv(envelopeChildEnv) == "1" {
 		runLinuxProcessEnvelopeChild(t)
 		return
@@ -414,7 +544,6 @@ func runLinuxProcessEnvelopeChild(t *testing.T) {
 		t.Fatal("missing envelope fixture address")
 	}
 
-	cfg := envelopeConfig(t)
 	runtime.GC()
 	baseline := readSmapsRollup(t)
 	peak := baseline
@@ -429,18 +558,17 @@ func runLinuxProcessEnvelopeChild(t *testing.T) {
 		return current.rss - baseline.rss
 	}
 
-	var client *Client
-	{
-		bundle, err := os.ReadFile(os.Getenv(envelopeBundleEnv))
-		if err != nil || len(bundle) != maxImageRootBundleBytes {
-			t.Fatalf("read envelope bundle: bytes=%d err=%v", len(bundle), err)
-		}
-		client, err = newClient(cfg, memoryImageRootSource(bundle, 0, nil))
-		if err != nil {
-			t.Fatal(err)
-		}
+	cfg := envelopeConfig(t)
+	bundle, err := os.ReadFile(os.Getenv(envelopeBundleEnv))
+	if err != nil || len(bundle) != maxImageRootBundleBytes {
+		t.Fatalf("read envelope bundle: bytes=%d err=%v", len(bundle), err)
+	}
+	client, err := newClient(cfg, memoryImageRootSource(bundle, 0, nil))
+	if err != nil {
+		t.Fatal(err)
 	}
 	construction := sample()
+	runtime.KeepAlive(bundle)
 	runtime.GC()
 	idle := sample()
 	base := newEnvelopeHTTPClient(t, client.roots, client.transport.endpoint.Host, fixtureAddress, cfg.MaxResponseHeaderBytes)
@@ -453,7 +581,7 @@ func runLinuxProcessEnvelopeChild(t *testing.T) {
 	for phase, test := range []envelopePhase{
 		{headerBytes: envelopeControlHeaderBytes(), responseBytes: envelopeControlBytes, operation: func(ctx context.Context) error { return client.Delete(ctx, key+"d") }},
 		{sourceReads: chunkReads, operation: func(ctx context.Context) error {
-			source := envelopeBlockingReader{done: ctx.Done(), reads: chunkReads}
+			source := envelopeBlockingReader{done: make(chan struct{}), reads: chunkReads}
 			_, err := client.Upload(ctx, key+"u", &source, objectstorage.UploadOptions{ContentLength: minimumMultipartChunk, ContentType: strings.Repeat("a", maximumContentTypeBytes), Intent: objectstorage.UploadReplace})
 			return err
 		}},
@@ -496,10 +624,11 @@ func envelopeConfig(t *testing.T) Config {
 	t.Helper()
 	cfg := validConfig(ProviderAmazonS3)
 	cfg.MaxObjectBytes = maximumPartCount * minimumMultipartChunk
+	cfg.MaxOperationDuration = 30 * time.Second
 	cfg.MaxResponseHeaderBytes = envelopeHeaderBytes
 	cfg.MaxControlResponseBytes = envelopeControlBytes
 	required, ok := cfg.requiredMemory()
-	if !ok || required != 310_087_588 {
+	if !ok || required != 310_099_108 {
 		t.Fatalf("envelope required memory = %d, %t", required, ok)
 	}
 	cfg.MaxWorkingMemoryBytes = required
@@ -554,14 +683,20 @@ func runEnvelopePair(t *testing.T, control *os.File, report *os.File, phase uint
 }
 
 type envelopeBlockingReader struct {
-	done  <-chan struct{}
+	done  chan struct{}
 	reads *atomic.Int64
+	once  sync.Once
 }
 
 func (r *envelopeBlockingReader) Read([]byte) (int, error) {
 	r.reads.Add(1)
 	<-r.done
 	return 0, context.Canceled
+}
+
+func (r *envelopeBlockingReader) Close() error {
+	r.once.Do(func() { close(r.done) })
+	return nil
 }
 
 func envelopeDownload(ctx context.Context, client *Client, key string) error {
@@ -789,6 +924,7 @@ func parseSmapsRollup(data string) (smapsRollup, error) {
 }
 
 func TestSmapsRollupParserIsFailClosed(t *testing.T) {
+	t.Parallel()
 	valid := "Rss: 5 kB\nShared_Clean: 1 kB\nShared_Dirty: 1 kB\nPrivate_Clean: 1 kB\nPrivate_Dirty: 2 kB\n"
 	if _, err := parseSmapsRollup(valid); err != nil {
 		t.Fatalf("parseSmapsRollup(valid) error = %v", err)

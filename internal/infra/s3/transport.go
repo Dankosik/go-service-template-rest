@@ -26,6 +26,7 @@ type transport struct {
 
 type sendState struct {
 	wroteHeaders bool
+	attempts     int
 }
 
 type sendStateKey struct{}
@@ -73,6 +74,9 @@ func (t *transport) do(request *http.Request) (*http.Response, error) {
 		return nil, httpclient.ErrTargetDenied
 	}
 	wroteHeaders := false
+	if state, ok := request.Context().Value(sendStateKey{}).(*sendState); ok {
+		state.attempts++
+	}
 	request = request.Clone(httptrace.WithClientTrace(request.Context(), &httptrace.ClientTrace{
 		WroteHeaders: func() { wroteHeaders = true },
 	}))
@@ -81,7 +85,7 @@ func (t *transport) do(request *http.Request) (*http.Response, error) {
 		state.body = response.Body
 	}
 	if state, ok := request.Context().Value(sendStateKey{}).(*sendState); ok {
-		state.wroteHeaders = wroteHeaders
+		state.wroteHeaders = state.wroteHeaders || wroteHeaders
 	}
 	if err != nil {
 		return response, fmt.Errorf("send S3 request: %w", err)

@@ -99,6 +99,7 @@ func TestNATSWorkerComposition(t *testing.T) {
 }
 
 func TestNATSWorkerForcedShutdownDoesNotRaceHandlerCleanup(t *testing.T) {
+
 	url, js := workerNATSFixture(t)
 	diagnosticsAddress := waittest.FreeTCPAddr(t, "worker diagnostics")
 	setWorkerEnvironment(t, url, "forced-cleanup-worker", diagnosticsAddress)

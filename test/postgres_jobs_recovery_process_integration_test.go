@@ -19,6 +19,7 @@ import (
 )
 
 func TestPostgresJobsRecoveryProcess(t *testing.T) {
+	t.Parallel()
 	if runtime.GOOS == "windows" {
 		t.Skip("SIGKILL/SIGSTOP process lifecycle is Unix-specific")
 	}
@@ -33,6 +34,7 @@ func TestPostgresJobsRecoveryProcess(t *testing.T) {
 		{name: "stale_overlap_after_rescue", overlap: true},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
+			t.Parallel()
 			testPostgresJobsRecoveryProcess(t, repositoryRoot, binary, scenario.beforeEffect, scenario.overlap)
 		})
 	}
@@ -46,6 +48,7 @@ func TestPostgresJobsRecoveryProcess(t *testing.T) {
 		{result: "exhausted", state: jobs.StateExhausted},
 	} {
 		t.Run("stored_revision_"+terminal.result, func(t *testing.T) {
+			t.Parallel()
 			testPostgresJobsStoredRevisionTerminal(t, repositoryRoot, binary, terminal.result, terminal.state)
 		})
 	}
@@ -57,7 +60,6 @@ func testPostgresJobsRecoveryProcess(t *testing.T, repositoryRoot, binary string
 	createPostgresJobsEffectLedger(ctx, t, pool)
 	prepared := stageDuePostgresRecoveryJob(ctx, t, pool, store, "recovery-"+t.Name())
 	logicalJobID := prepared.Identity().LogicalJobID
-	retainPostgresJobsAction(ctx, t, pool, logicalJobID)
 
 	firstFiles := jobsWorkerLeaseFiles(t)
 	first := startPostgresJobsTestWorker(t, repositoryRoot, binary, postgresJobsTestWorkerOptions{
@@ -87,9 +89,7 @@ func testPostgresJobsRecoveryProcess(t *testing.T, repositoryRoot, binary string
 			t.Fatalf("crashed worker exit = %v, exited=%t", err, exited)
 		}
 	}
-	waittest.Until(t, 5*time.Second, func() bool {
-		return postgresJobsLeaseExpired(ctx, t, pool, logicalJobID)
-	}, "crashed attempt lease expiry")
+	waitForPostgresJobsLeaseExpiry(ctx, t, pool, logicalJobID, "crashed attempt lease expiry")
 
 	secondFiles := jobsWorkerLeaseFiles(t)
 	second := startPostgresJobsTestWorker(t, repositoryRoot, binary, postgresJobsTestWorkerOptions{
@@ -149,15 +149,6 @@ CREATE TABLE test_postgres_jobs_effect_ledger (
 	}
 }
 
-func retainPostgresJobsAction(ctx context.Context, t *testing.T, pool *postgres.Pool, logicalJobID jobs.LogicalJobID) {
-	t.Helper()
-	if _, err := pool.PGX().Exec(ctx, `
-INSERT INTO postgres_job_actions (action_id, request_fingerprint, actor_id, action_kind, logical_job_id, expected_state, expected_generation, reason, result)
-VALUES ('recovery-action', decode(repeat('00', 32), 'hex'), 'recovery-test', 'cancel', $1, 'running', 1, 'recovery-test', 'applied')`, string(logicalJobID)); err != nil {
-		t.Fatalf("retain action fact: %v", err)
-	}
-}
-
 func assertPostgresJobsEffectCount(ctx context.Context, t *testing.T, pool *postgres.Pool, identity jobs.AcceptanceIdentity, want int) {
 	t.Helper()
 	var got int
@@ -185,11 +176,10 @@ func waitForPostgresJobsTerminalRecovery(ctx context.Context, t *testing.T, pool
 func assertPostgresJobsRetainedRecoveryFacts(ctx context.Context, t *testing.T, pool *postgres.Pool, prepared jobs.Prepared) {
 	t.Helper()
 	var producerScope, producerKey, occurrenceScope, occurrenceID, effectScope, effectKey, kind, argsVersion, policyVersion, state string
-	var attemptsUsed, generation, recoveryGeneration, actions int
+	var attemptsUsed, generation, recoveryGeneration int
 	err := pool.PGX().QueryRow(ctx, `
-SELECT producer_scope, producer_key, occurrence_scope, occurrence_id, effect_scope, effect_key, kind, args_version, policy_version, state, attempts_used, attempt_generation, recovery_generation,
-  (SELECT count(*) FROM postgres_job_actions WHERE logical_job_id = postgres_jobs.logical_job_id)
-FROM postgres_jobs WHERE logical_job_id = $1`, prepared.Identity().LogicalJobID).Scan(&producerScope, &producerKey, &occurrenceScope, &occurrenceID, &effectScope, &effectKey, &kind, &argsVersion, &policyVersion, &state, &attemptsUsed, &generation, &recoveryGeneration, &actions)
+SELECT producer_scope, producer_key, occurrence_scope, occurrence_id, effect_scope, effect_key, kind, args_version, policy_version, state, attempts_used, attempt_generation, recovery_generation
+FROM postgres_jobs WHERE logical_job_id = $1`, prepared.Identity().LogicalJobID).Scan(&producerScope, &producerKey, &occurrenceScope, &occurrenceID, &effectScope, &effectKey, &kind, &argsVersion, &policyVersion, &state, &attemptsUsed, &generation, &recoveryGeneration)
 	if err != nil {
 		t.Fatalf("read retained recovery facts: %v", err)
 	}
@@ -198,8 +188,8 @@ FROM postgres_jobs WHERE logical_job_id = $1`, prepared.Identity().LogicalJobID)
 		t.Fatalf("retained identities changed: producer=%q/%q occurrence=%q/%q effect=%q/%q", producerScope, producerKey, occurrenceScope, occurrenceID, effectScope, effectKey)
 	}
 	revision := prepared.Revision()
-	if kind != revision.Kind || argsVersion != revision.ArgsVersion || policyVersion != revision.PolicyVersion || state != string(jobs.StateSucceeded) || attemptsUsed != 2 || generation != 2 || recoveryGeneration != 0 || actions != 1 {
-		t.Fatalf("retained recovery facts = revision=%s/%s/%s state=%s attempts=%d generation=%d recovery=%d actions=%d", kind, argsVersion, policyVersion, state, attemptsUsed, generation, recoveryGeneration, actions)
+	if kind != revision.Kind || argsVersion != revision.ArgsVersion || policyVersion != revision.PolicyVersion || state != string(jobs.StateSucceeded) || attemptsUsed != 2 || generation != 2 || recoveryGeneration != 0 {
+		t.Fatalf("retained recovery facts = revision=%s/%s/%s state=%s attempts=%d generation=%d recovery=%d", kind, argsVersion, policyVersion, state, attemptsUsed, generation, recoveryGeneration)
 	}
 }
 
@@ -271,13 +261,10 @@ func stageDuePostgresRecoveryJob(ctx context.Context, t *testing.T, pool *postgr
 			return nil
 		},
 		Policy: jobs.Policy{
-			Producer: jobs.ProducerPolicy{Scope: "feature-operation", RecognitionPeriod: time.Hour},
-			Effect:   jobs.EffectPolicy{Authority: jobs.EffectConditionalWrite, DuplicateTolerance: "same key is harmless", LateResultPrecedence: "effect ledger wins", AmbiguousAction: jobs.AmbiguousEffectRetry, ReadbackAuthority: "effect ledger"},
-			Retry:    jobs.RetryPolicy{MaxAttempts: 3, MaxElapsed: time.Hour, InitialBackoff: 20 * time.Millisecond, MaxBackoff: 20 * time.Millisecond, HintPolicy: jobs.RetryHintIgnore, Jitter: jobs.JitterNone, MaxRecoveryWave: 8},
-			Recovery: jobs.RecoveryPolicy{Mode: jobs.RecoveryUnavailable, Attempts: jobs.BudgetPreserved, Elapsed: jobs.BudgetPreserved},
-			Schedule: jobs.ScheduleOneOff, MaxAttemptDuration: time.Minute, MaxAttemptCost: 1, MaxUsefulDuration: time.Hour, TerminationEnvelope: time.Minute,
-			Data:     jobs.DataPolicy{Classification: "private", Redaction: "omit payload", Retention: "explicit deletion only", Deletion: "disabled", OperatorRoles: "none"},
-			Operator: jobs.OperatorUnavailable, WorkClass: jobs.WorkClassNeutral,
+			Effect:             jobs.EffectPolicy{AmbiguousAction: jobs.AmbiguousEffectRetry},
+			Retry:              jobs.RetryPolicy{MaxAttempts: 3, MaxElapsed: time.Hour, InitialBackoff: 20 * time.Millisecond, MaxBackoff: 20 * time.Millisecond, HintPolicy: jobs.RetryHintIgnore, Jitter: jobs.JitterNone, MaxRecoveryWave: 8},
+			Recovery:           jobs.RecoveryPolicy{Mode: jobs.RecoveryUnavailable, Attempts: jobs.BudgetPreserved, Elapsed: jobs.BudgetPreserved},
+			MaxAttemptDuration: time.Minute, TerminationEnvelope: time.Minute,
 		},
 	})
 	if err != nil {

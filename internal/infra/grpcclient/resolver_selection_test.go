@@ -35,6 +35,7 @@ const (
 )
 
 func TestResolverSelectionHarnessExposesUnwrappedAddressMetadata(t *testing.T) {
+	t.Parallel()
 	unaryMetadata, _, serverTarget := startMetadataCaptureServer(t)
 	builder := newSelectionResolverBuilder("selection-control")
 	builder.address = strings.TrimPrefix(serverTarget, "passthrough:///")
@@ -62,6 +63,7 @@ func TestResolverSelectionHarnessExposesUnwrappedAddressMetadata(t *testing.T) {
 }
 
 func TestResolverSelectionUsesNativeRulesInIsolatedProcesses(t *testing.T) {
+	t.Parallel()
 	for _, testCase := range []struct {
 		name         string
 		scenario     string
@@ -100,6 +102,7 @@ func TestResolverSelectionUsesNativeRulesInIsolatedProcesses(t *testing.T) {
 		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
 			record := runResolverSelectionChild(t, testCase.scenario)
 			if !strings.Contains(record.Error, testCase.wantError) {
 				t.Fatalf("construction error = %q, want substring %q", record.Error, testCase.wantError)
@@ -124,6 +127,7 @@ func TestResolverSelectionUsesNativeRulesInIsolatedProcesses(t *testing.T) {
 }
 
 func TestResolverSelectionChild(t *testing.T) {
+	t.Parallel()
 	scenario := os.Getenv(resolverSelectionScenarioEnv)
 	if scenario == "" {
 		t.Skip("subprocess-only resolver selection fixture")

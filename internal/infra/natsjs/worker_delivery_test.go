@@ -11,7 +11,9 @@ import (
 )
 
 func TestWorkerHandleOutcomes(t *testing.T) {
+	t.Parallel()
 	t.Run("success and ambiguous ack", func(t *testing.T) {
+		t.Parallel()
 		source := unitSource(t, 1)
 		worker := unitWorker(t, &recordingJetStream{}, func(context.Context, Message) error { return nil })
 		if err := worker.handle(t.Context(), source); err != nil || source.ackCount != 1 {
@@ -25,6 +27,7 @@ func TestWorkerHandleOutcomes(t *testing.T) {
 	})
 
 	t.Run("retry and shutdown", func(t *testing.T) {
+		t.Parallel()
 		source := unitSource(t, 1)
 		worker := unitWorker(t, &recordingJetStream{}, func(context.Context, Message) error { return errors.New("retry") })
 		if err := worker.handle(t.Context(), source); err != nil || source.nakDelay != worker.cfg.RetryDelays[0] {
@@ -44,12 +47,14 @@ func TestWorkerHandleOutcomes(t *testing.T) {
 	})
 
 	t.Run("permanent malformed and exhausted dead-letter", func(t *testing.T) {
+		t.Parallel()
 		for name, source := range map[string]*fakeMsg{
 			"permanent": unitSource(t, 1),
 			"malformed": unitSource(t, 1),
 			"exhausted": unitSource(t, 6),
 		} {
 			t.Run(name, func(t *testing.T) {
+				t.Parallel()
 				broker := &recordingJetStream{ack: &jetstream.PubAck{Stream: "EVENTS_DLQ", Sequence: 1}}
 				handler := func(context.Context, Message) error { return Permanent(errors.New("poison")) }
 				if name == "malformed" {
@@ -68,6 +73,7 @@ func TestWorkerHandleOutcomes(t *testing.T) {
 	})
 
 	t.Run("terminal inputs", func(t *testing.T) {
+		t.Parallel()
 		worker := unitWorker(t, &recordingJetStream{}, func(context.Context, Message) error { panic("canary") })
 		if err := worker.handle(t.Context(), unitSource(t, 1)); !errors.Is(err, ErrTerminal) || strings.Contains(err.Error(), "canary") {
 			t.Fatalf("handle(panic) error = %v", err)
@@ -93,11 +99,13 @@ func TestWorkerHandleOutcomes(t *testing.T) {
 	})
 
 	t.Run("dead-letter failures", func(t *testing.T) {
+		t.Parallel()
 		for name, brokerErr := range map[string]error{
 			"rejected":  nats.ErrNoResponders,
 			"ambiguous": errors.New("ack unavailable"),
 		} {
 			t.Run(name, func(t *testing.T) {
+				t.Parallel()
 				source := unitSource(t, 1)
 				worker := unitWorker(t, &recordingJetStream{err: brokerErr}, func(context.Context, Message) error {
 					return Permanent(errors.New("poison"))
@@ -141,6 +149,7 @@ func TestWorkerHandleOutcomes(t *testing.T) {
 }
 
 func TestHandlerPanicFramesAreSanitized(t *testing.T) {
+	t.Parallel()
 	const panicCanary = "PANIC_VALUE_CANARY"
 	worker := unitWorker(t, &recordingJetStream{}, func(context.Context, Message) error {
 		panic(panicCanary)

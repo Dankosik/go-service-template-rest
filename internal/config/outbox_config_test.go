@@ -1,4 +1,18 @@
-package config
+package //nolint:paralleltest // This test mutates process-global environment or working directory.
+
+// Every OutboxConfig field must be rejected when it carries an unusable value.
+// validateOutbox checks fields by listing them, so a field added to the struct
+// and to bootstrap's relayConfig mapper but forgotten in those lists reaches the
+// relay unvalidated: nothing rejects it at load time, and ValidateRelayConfig
+// only covers the fields it happens to range over.
+//
+// Deriving the field set by reflection rather than listing it is the whole point.
+// Two tests in cmd/outbox-relay walk the same struct for the halves this one
+// cannot reach, because depguard keeps postgresoutbox out of this package:
+// TestRelayConfigMapsEveryOutboxField guards the mapper and
+// TestRelayRejectsEveryOutboxBudget the relay's own validator. The three together
+// cover every field end to end.
+config
 
 import (
 	"errors"
@@ -9,6 +23,7 @@ import (
 )
 
 func TestOutboxConfigDefaultsAndPostgresRequirement(t *testing.T) {
+
 	resetConfigEnv(t)
 	disabled, _, err := LoadDetailed(LoadOptions{})
 	if err != nil || disabled.Outbox.Enabled {
@@ -45,6 +60,7 @@ func TestOutboxConfigDefaultsAndPostgresRequirement(t *testing.T) {
 }
 
 func TestOutboxConfigRejectsIncoherentBudgets(t *testing.T) {
+
 	tests := []struct {
 		name  string
 		key   string
@@ -64,6 +80,7 @@ func TestOutboxConfigRejectsIncoherentBudgets(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+
 			enableOutbox(t)
 			t.Setenv(test.key, test.value)
 			_, _, err := LoadDetailed(LoadOptions{})
@@ -74,22 +91,15 @@ func TestOutboxConfigRejectsIncoherentBudgets(t *testing.T) {
 	}
 }
 
-// Every OutboxConfig field must be rejected when it carries an unusable value.
-// validateOutbox checks fields by listing them, so a field added to the struct
-// and to bootstrap's relayConfig mapper but forgotten in those lists reaches the
-// relay unvalidated: nothing rejects it at load time, and ValidateRelayConfig
-// only covers the fields it happens to range over.
-//
-// Deriving the field set by reflection rather than listing it is the whole point.
-// Two tests in cmd/outbox-relay walk the same struct for the halves this one
-// cannot reach, because depguard keeps postgresoutbox out of this package:
-// TestRelayConfigMapsEveryOutboxField guards the mapper and
-// TestRelayRejectsEveryOutboxBudget the relay's own validator. The three together
-// cover every field end to end.
 func TestOutboxConfigValidatesEveryField(t *testing.T) {
+
 	// The only field with no unusable value: it is the switch that turns the
 	// rest on, and TestOutboxConfigDefaultsAndPostgresRequirement covers what it
 	// gates. Anything else added here needs a reason.
+	//nolint:paralleltest // This test mutates process-global environment or working directory.
+
+	// enableOutbox resets the environment to the smallest configuration the outbox
+	// loads under, so each case only has to set the one value it is testing.
 	unvalidatable := map[string]string{"enabled": "a switch has no invalid value"}
 
 	for _, field := range reflect.VisibleFields(reflect.TypeFor[OutboxConfig]()) {
@@ -111,6 +121,7 @@ func TestOutboxConfigValidatesEveryField(t *testing.T) {
 		}
 
 		t.Run(key, func(t *testing.T) {
+
 			enableOutbox(t)
 			t.Setenv("APP__OUTBOX__"+strings.ToUpper(key), unusable)
 			_, _, err := LoadDetailed(LoadOptions{})
@@ -122,8 +133,6 @@ func TestOutboxConfigValidatesEveryField(t *testing.T) {
 	}
 }
 
-// enableOutbox resets the environment to the smallest configuration the outbox
-// loads under, so each case only has to set the one value it is testing.
 func enableOutbox(t *testing.T) {
 	t.Helper()
 	resetConfigEnv(t)

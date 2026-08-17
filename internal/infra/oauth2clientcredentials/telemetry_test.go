@@ -29,6 +29,7 @@ import (
 )
 
 func TestOutboundAuthTelemetryIsCompleteAndBounded(t *testing.T) {
+	t.Parallel()
 	reader, meterProvider := telemetrytest.NewManualMeterProvider(t)
 	// profile:outbound-auth-http:start
 	for _, status := range []int{http.StatusUnauthorized, http.StatusForbidden} {
@@ -120,6 +121,7 @@ func TestOutboundAuthTelemetryIsCompleteAndBounded(t *testing.T) {
 
 // profile:outbound-auth-http:start
 func TestOutboundAuthForbiddenValuesNeverReachSignals(t *testing.T) {
+	t.Parallel()
 	recorder := telemetrytest.InstallSpanRecorder(t)
 	reader, meterProvider := telemetrytest.NewManualMeterProvider(t)
 	var output bytes.Buffer
@@ -167,6 +169,7 @@ func TestOutboundAuthForbiddenValuesNeverReachSignals(t *testing.T) {
 // profile:outbound-auth-http:end
 
 func TestOutboundAuthProviderOutageIsOperationLocal(t *testing.T) {
+	t.Parallel()
 	reader, meterProvider := telemetrytest.NewManualMeterProvider(t)
 	provider := &scriptedAcquirer{steps: []acquisitionStep{{
 		err: failure(FailureProviderUnavailable),
@@ -206,6 +209,7 @@ func TestOutboundAuthProviderOutageIsOperationLocal(t *testing.T) {
 }
 
 func TestTelemetryRecordsCacheAndAcquisition(t *testing.T) {
+	t.Parallel()
 	reader, meterProvider := telemetrytest.NewManualMeterProvider(t)
 	provider := &scriptedAcquirer{steps: []acquisitionStep{{
 		token: accessToken{value: "token", expiresAt: fixedProviderTime.Add(time.Minute)},
@@ -254,6 +258,7 @@ func TestTelemetryRecordsCacheAndAcquisition(t *testing.T) {
 }
 
 func TestOutboundAuthTelemetryFailureDegradesToNoop(t *testing.T) {
+	t.Parallel()
 	var output bytes.Buffer
 	log := slog.New(slog.NewJSONHandler(&output, nil))
 	base := metricnoop.NewMeterProvider()

@@ -2,11 +2,13 @@ package bootstrap
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/example/go-service-template-rest/cmd/internal/runtimeopts"
 	"github.com/example/go-service-template-rest/internal/config"
@@ -27,6 +29,7 @@ func Run(args []string, buildRegistry RegistryBuilder) error {
 	return run(signalCtx, args, buildRegistry)
 }
 
+//nolint:cyclop // Startup and ownership cleanup remain explicit in their single composition owner.
 func run(signalCtx context.Context, args []string, buildRegistry RegistryBuilder) (runErr error) {
 	if buildRegistry == nil {
 		return fmt.Errorf("%w: jobs worker registry builder is not registered", postgresjobs.ErrConfig)
@@ -45,20 +48,45 @@ func run(signalCtx context.Context, args []string, buildRegistry RegistryBuilder
 		return err
 	}
 	log := runtimeopts.Logger(os.Stdout, cfg, "component", "jobs_worker")
+	instanceID := telemetry.ResolveInstanceID(cfg.App.InstanceID)
+	cfg.App.InstanceID = instanceID
+	cleanupSafe := true
+	metrics := telemetry.New()
+	telemetryCleanup, err := runtimeopts.InstallTelemetry(startupCtx, cfg, metrics, log, "jobs_worker")
+	var cleanupDeadline time.Time
+	defer func() {
+		if cleanupSafe {
+			cleanupCtx, cleanupCancel := runtimeopts.TeardownStage(signalCtx, cleanupDeadline, telemetryClose)
+			defer cleanupCancel()
+			telemetryCleanup(cleanupCtx)
+		}
+	}()
+	if err != nil {
+		return err
+	}
 	registry, cleanup, err := buildRegistry(startupCtx, cfg, log)
 	if err != nil {
 		return fmt.Errorf("build jobs registry: %w", err)
 	}
-	cleanupSafe := true
 	defer func() {
 		if cleanup != nil && cleanupSafe {
-			cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(signalCtx), telemetryClose)
+			cleanupCtx, cancel := runtimeopts.TeardownStage(signalCtx, cleanupDeadline, telemetryClose)
 			defer cancel()
 			cleanup(cleanupCtx)
 		}
 	}()
 	if registry == nil {
 		return fmt.Errorf("%w: jobs worker registry is not registered", postgresjobs.ErrConfig)
+	}
+	if len(registry.Keys()) == 0 {
+		return fmt.Errorf("%w: jobs worker registry has no definitions", postgresjobs.ErrConfig)
+	}
+	if err := validateTerminationEnvelope(cfg.HTTP.GracePeriod, registry.TerminationEnvelope()); err != nil {
+		return err
+	}
+	engineCfg, err := engineConfig(cfg.Jobs, instanceID)
+	if err != nil {
+		return err
 	}
 
 	pool, err := postgres.New(startupCtx, runtimeopts.Postgres(cfg.Postgres))
@@ -80,22 +108,25 @@ func run(signalCtx context.Context, args []string, buildRegistry RegistryBuilder
 	}
 	defer func() {
 		if cleanupSafe {
-			session.Release(context.WithoutCancel(signalCtx))
+			releaseCtx, cancel := runtimeopts.TeardownStage(signalCtx, cleanupDeadline, cfg.Jobs.StoreOperationTimeout)
+			defer cancel()
+			session.Release(releaseCtx)
 		}
 	}()
 	if err := session.CheckSchema(startupCtx); err != nil {
 		return fmt.Errorf("admit jobs schema: %w", err)
 	}
-	engineCfg, err := engineConfig(cfg.Jobs)
-	if err != nil {
-		return err
-	}
 	engine, err := postgresjobs.NewEngine(session, registry, engineCfg)
 	if err != nil {
 		return fmt.Errorf("initialize jobs engine: %w", err)
 	}
-	metrics := telemetry.New()
+	defer func() {
+		if cleanupSafe {
+			runErr = errors.Join(runErr, engine.Close())
+		}
+	}()
 	result := runLifecycle(signalCtx, startupCtx, cfg, metrics, engine)
 	cleanupSafe = result.CleanupSafe
+	cleanupDeadline = result.Deadline
 	return result.Err
 }

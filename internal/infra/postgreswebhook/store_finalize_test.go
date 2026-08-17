@@ -11,6 +11,7 @@ import (
 )
 
 func TestFinalizationHelpers(t *testing.T) {
+	t.Parallel()
 	for _, outcome := range []OutcomeClass{
 		OutcomeDefinitelyNotSentRetry,
 		OutcomeRetryableHTTPAmbiguous,
@@ -40,15 +41,12 @@ func TestFinalizationHelpers(t *testing.T) {
 	}
 
 	zero, set, err := nullableInt32(0)
-	if err != nil || set || zero != 0 || nullableString("") != nil {
+	if err != nil || set || zero != 0 {
 		t.Fatal("zero finalization values must be NULL")
 	}
 	value, set, err := nullableInt32(42)
 	if err != nil || !set || value != 42 {
 		t.Fatalf("nullableInt32(42) = %v", value)
-	}
-	if value := nullableString("retry"); value == nil || *value != "retry" {
-		t.Fatalf("nullableString() = %v", value)
 	}
 	if got := terminalDisposition("unexpected", ""); got != string(OutcomeAttemptsExhausted) {
 		t.Fatalf("terminalDisposition(unexpected) = %q", got)
@@ -56,6 +54,7 @@ func TestFinalizationHelpers(t *testing.T) {
 }
 
 func TestPrepareFinalizationValues(t *testing.T) {
+	t.Parallel()
 	values, err := prepareFinalizationValues(Finalization{})
 	if err != nil || values.status != nil || values.headerBytes != nil || values.bodyBytes != nil {
 		t.Fatalf("prepare zero values = %+v, %v", values, err)
@@ -76,45 +75,46 @@ func TestPrepareFinalizationValues(t *testing.T) {
 }
 
 func TestFinalizationUpdate(t *testing.T) {
+	t.Parallel()
 	now := time.Unix(1700000000, 0).UTC()
 	locked := sqlcgen.LockWebhookFinalizationRow{AttemptsUsed: 1, MaximumAttempts: 2, DeadlineAt: pgtype.Timestamptz{Time: now.Add(time.Minute), Valid: true}}
-	attempt := ClaimedAttempt{AttemptedAt: now, Policy: DeliveryPolicy{RetryAfterCap: time.Minute}}
 	final := Finalization{LocalRetryDelay: time.Second}
 
-	update := finalizationUpdateFor(locked, OutcomeDefinitelyNotSentRetry, attempt, final, now)
+	update := finalizationUpdateFor(locked, OutcomeDefinitelyNotSentRetry, final, now, 0)
 	if update.summary != OutcomeDefinitelyNotSentRetry || update.deliveryState != string(DeliveryScheduled) || update.cycleDisposition != activeDisposition || !update.nextDueAt.Equal(now.Add(time.Second)) || update.terminalAt.Valid {
 		t.Fatalf("scheduled update = %+v", update)
 	}
 
 	locked.MaximumAttempts = 1
-	update = finalizationUpdateFor(locked, OutcomeDefinitelyNotSentRetry, attempt, final, now)
+	update = finalizationUpdateFor(locked, OutcomeDefinitelyNotSentRetry, final, now, 0)
 	if update.summary != OutcomeAttemptsExhausted || update.deliveryState != string(DeliveryTerminal) || update.cycleDisposition != string(OutcomeAttemptsExhausted) || !update.terminalAt.Valid {
 		t.Fatalf("exhausted update = %+v", update)
 	}
 
 	locked.MaximumAttempts = 2
 	locked.CumulativeSummary = "none"
-	update = finalizationUpdateFor(locked, OutcomeDefinitelyNotSentRetry, attempt, final, now)
+	update = finalizationUpdateFor(locked, OutcomeDefinitelyNotSentRetry, final, now, 0)
 	if update.summary != "none" || update.cycleDisposition != activeDisposition {
 		t.Fatalf("none summary update = %+v", update)
 	}
 
 	locked.MaximumAttempts = 1
 	locked.CumulativeSummary = string(OutcomeUnknown)
-	update = finalizationUpdateFor(locked, OutcomeRetryableHTTPAmbiguous, attempt, final, now)
+	update = finalizationUpdateFor(locked, OutcomeRetryableHTTPAmbiguous, final, now, 0)
 	if update.summary != OutcomeUnknown || update.cycleDisposition != string(OutcomeUnknown) || !update.terminalAt.Valid {
 		t.Fatalf("unknown update = %+v", update)
 	}
 
 	locked.CumulativeSummary = ""
 	locked.DeadlineAt.Time = now
-	update = finalizationUpdateFor(locked, OutcomeRetryableHTTPAmbiguous, attempt, final, now)
+	update = finalizationUpdateFor(locked, OutcomeRetryableHTTPAmbiguous, final, now, 0)
 	if update.deliveryState != string(DeliveryTerminal) || !update.nextDueAt.Equal(now) {
 		t.Fatalf("deadline update = %+v", update)
 	}
 }
 
 func TestValidFinalization(t *testing.T) {
+	t.Parallel()
 	attempt := ClaimedAttempt{Policy: DeliveryPolicy{ResponseHeaderBytes: 10, ResponseBodyBytes: 20}}
 	if !validFinalization(attempt, Finalization{ResponseHeaderBytes: 10, ResponseBodyBytes: 20}) {
 		t.Fatal("valid finalization rejected")

@@ -17,6 +17,7 @@ import (
 )
 
 func TestAttemptAuthorizationPreservesRetryPolicy(t *testing.T) {
+	t.Parallel()
 	const bearerCanary = "Bearer attempt-authorization-canary"
 
 	recorder := telemetrytest.InstallSpanRecorder(t)
@@ -75,6 +76,7 @@ func TestAttemptAuthorizationPreservesRetryPolicy(t *testing.T) {
 	}
 
 	t.Run("authorizer failure is not retried", func(t *testing.T) {
+		t.Parallel()
 		var calls atomic.Int32
 		client := newRetryTestClient(t, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 			calls.Add(1)

@@ -3,6 +3,7 @@ package postgresjobs
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/example/go-service-template-rest/internal/jobs"
 )
@@ -24,17 +25,24 @@ func (e *Engine) StartDrain(ctx context.Context) DrainResult {
 		return DrainResult{Err: fmt.Errorf("%w: engine is required", ErrConfig)}
 	}
 	e.mu.Lock()
+	e.draining = true
 	e.closeAdmissionLocked()
-	facts := EngineFacts{ClaimAdmissionOpen: e.admission, Compatible: e.compatible, InFlight: len(e.inflight), Capacity: e.config.MaxConcurrency, ObservationFresh: !e.lastObservation.IsZero()}
+	cancelCycle := e.cycleCancel
+	facts := e.factsLocked(time.Now())
 	e.mu.Unlock()
+	if cancelCycle != nil {
+		cancelCycle()
+	}
 	e.telemetry.UpdateFacts(facts)
 
 	// A cycle that began before admission closed may have durably claimed work.
-	// Waiting for it here makes the map insertion in registerClaimLocked the
-	// quiescence boundary rather than leaving an untracked handoff behind.
-	e.cycleMu.Lock()
-	//nolint:staticcheck,gocritic // Immediate unlock is the cycle-quiescence barrier.
-	e.cycleMu.Unlock()
+	// The context-aware cycle barrier prevents shutdown from waiting past the
+	// process deadline for a broken Store operation.
+	if !e.lockCycle(ctx) {
+		e.telemetry.RecordDrain(context.WithoutCancel(ctx), jobs.OutcomeUnknown)
+		return DrainResult{Err: fmt.Errorf("quiesce jobs coordinator: %w", ctx.Err())}
+	}
+	e.unlockCycle()
 
 	done := make(chan struct{})
 	go func() {
@@ -51,8 +59,8 @@ func (e *Engine) StartDrain(ctx context.Context) DrainResult {
 	}
 
 	e.mu.Lock()
-	for _, cancel := range e.inflight {
-		cancel()
+	for _, attempt := range e.inflight {
+		attempt.cancel()
 	}
 	e.mu.Unlock()
 	select {

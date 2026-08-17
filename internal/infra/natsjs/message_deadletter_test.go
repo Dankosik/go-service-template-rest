@@ -35,6 +35,7 @@ func unitDeadLetter(t *testing.T, reason string) *fakeMsg {
 }
 
 func TestRestoreDeadLetterReturnsTheOriginalPublication(t *testing.T) {
+	t.Parallel()
 	restored, err := RestoreDeadLetter(unitDeadLetter(t, deadLetterExhausted))
 	if err != nil {
 		t.Fatalf("RestoreDeadLetter() error = %v", err)
@@ -64,6 +65,7 @@ func TestRestoreDeadLetterReturnsTheOriginalPublication(t *testing.T) {
 // The publication id is the one identity a redrive must not carry over:
 // reusing it would have the broker recognize a duplicate and store nothing.
 func TestRestoreDeadLetterReplacesThePublicationID(t *testing.T) {
+	t.Parallel()
 	record := unitDeadLetter(t, deadLetterExhausted)
 	restored, err := RestoreDeadLetter(record)
 	if err != nil {
@@ -90,6 +92,7 @@ func TestRestoreDeadLetterReplacesThePublicationID(t *testing.T) {
 // Two dead-letter records are two publications even when they carry the same
 // logical message, because each is its own place in the stream.
 func TestRestoreDeadLetterSeparatesDistinctRecords(t *testing.T) {
+	t.Parallel()
 	first := unitDeadLetter(t, deadLetterExhausted)
 	second := unitDeadLetter(t, deadLetterExhausted)
 	second.metadata.Sequence.Stream = 12
@@ -108,6 +111,7 @@ func TestRestoreDeadLetterSeparatesDistinctRecords(t *testing.T) {
 }
 
 func TestRestoreDeadLetterRejectsWhatItCannotRebuild(t *testing.T) {
+	t.Parallel()
 	cases := map[string]func(*fakeMsg){
 		"malformed record kept no creation time": func(msg *fakeMsg) {
 			msg.header.Del(headerCreatedAt)
@@ -133,6 +137,7 @@ func TestRestoreDeadLetterRejectsWhatItCannotRebuild(t *testing.T) {
 	}
 	for name, mutate := range cases {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			record := unitDeadLetter(t, deadLetterMalformed)
 			mutate(record)
 			if _, err := RestoreDeadLetter(record); !errors.Is(err, ErrRejected) {
@@ -150,6 +155,7 @@ func TestRestoreDeadLetterRejectsWhatItCannotRebuild(t *testing.T) {
 // exists to feed, so this drives the whole operator route: a dead-letter record
 // goes back onto the broker addressed to the subject it originally failed on.
 func TestRestoredDeadLetterRepublishesOnTheOriginalSubject(t *testing.T) {
+	t.Parallel()
 	broker := &recordingJetStream{ack: &jetstream.PubAck{Stream: "EVENTS", Sequence: 21}}
 	client := unitClient(t, broker, RoleProducer)
 
@@ -180,8 +186,10 @@ func TestRestoredDeadLetterRepublishesOnTheOriginalSubject(t *testing.T) {
 }
 
 func TestDeadLetterReasonReportsWhyTheRecordWasTransferred(t *testing.T) {
+	t.Parallel()
 	for _, reason := range []string{deadLetterMalformed, deadLetterExhausted, deadLetterPermanent} {
 		t.Run(reason, func(t *testing.T) {
+			t.Parallel()
 			if got := DeadLetterReason(unitDeadLetter(t, reason)); got != reason {
 				t.Errorf("DeadLetterReason() = %q, want %q", got, reason)
 			}

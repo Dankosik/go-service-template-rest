@@ -8,6 +8,7 @@ import (
 )
 
 func TestJobsWorkerMainRejectsNilBuilder(t *testing.T) {
+	t.Parallel()
 	err := bootstrap.Run(nil, nil)
 	if err == nil || !strings.Contains(err.Error(), "registry builder") {
 		t.Fatalf("Run(nil) error = %v, want missing registry builder", err)

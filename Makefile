@@ -140,9 +140,15 @@ GENERATED_DRIFT_CHECK_SCRIPT := bash ./scripts/ci/generated-drift-check.sh
 PROJECT_STRUCTURE_CHECK_SCRIPT := bash ./scripts/ci/project-structure-check.sh
 # profile:object-storage:start
 S3_SOURCE_RECEIPT_SCRIPT := bash ./scripts/ci/s3-source-receipt.sh
-S3_ENVELOPE_GO_IMAGE := $(shell awk '$$1 == "FROM" { for (i = 1; i <= NF; i++) if ($$i ~ /^golang:/) { print $$i; exit } }' build/docker/Dockerfile)
+S3_RECEIPT_PLATFORM ?= linux/arm64
+S3_ENVELOPE_PLATFORM ?= linux/arm64
+S3_ENVELOPE_GO_IMAGE_BASE := $(shell awk '$$1 == "FROM" { for (i = 1; i <= NF; i++) if ($$i ~ /^golang:/) { split($$i, ref, "@"); print ref[1]; exit } }' build/docker/Dockerfile)
+S3_ENVELOPE_GO_MANIFEST_linux_amd64 := sha256:433f9dc4f8ea3a1ce4e28f9f15d0f7c056b10475307f886d6f1ac1ccc4abd976
+S3_ENVELOPE_GO_MANIFEST_linux_arm64 := sha256:7939e2c75db3d059fc944bb6464a916d0fa64bd5a3bd7b3528f2a1ac7673a0eb
+S3_ENVELOPE_GO_MANIFEST := $(S3_ENVELOPE_GO_MANIFEST_$(subst /,_,$(S3_ENVELOPE_PLATFORM)))
+S3_ENVELOPE_GO_IMAGE := $(S3_ENVELOPE_GO_IMAGE_BASE)@$(S3_ENVELOPE_GO_MANIFEST)
 S3_ENVELOPE_GOMODCACHE := $(shell go env GOMODCACHE)
-S3_CONFORMANCE_TEST := go test -mod=readonly -vet=off -tags=integration ./test -run '^TestS3ObjectStorageConformanceRequiresProviderCertification$$' -count=1
+S3_CONFORMANCE_TEST := go test -mod=readonly -vet=off -tags=integration ./test/s3conformance -run '^TestS3ObjectStorageConformanceRequiresProviderCertification$$' -count=1
 # profile:object-storage:end
 # profile:database-postgres:start
 MIGRATION_SOURCE_CHECK_SCRIPT := bash ./scripts/ci/migration-source-check.sh
@@ -477,6 +483,18 @@ build-webhook-worker:
 	go build -trimpath -o $(WEBHOOK_WORKER_BINARY) $(WEBHOOK_WORKER_CMD)
 # profile:webhooks-durable:end
 
+# profile:jobs-postgres:start
+run-jobs-worker:
+	@set -a; \
+	if [ -f .env ]; then . ./.env; fi; \
+	set +a; \
+	go run $(JOBS_WORKER_CMD)
+
+build-jobs-worker:
+	mkdir -p bin
+	CGO_ENABLED=0 $(GO) build -trimpath -ldflags='-s -w' -o $(JOBS_WORKER_BINARY) $(JOBS_WORKER_CMD)
+# profile:jobs-postgres:end
+
 # profile:outbox-postgres:start
 run-outbox-relay:
 	@set -a; \
@@ -805,12 +823,13 @@ runtime-image-build:
 
 # profile:object-storage:start
 test-s3-source-receipt:
-	$(S3_SOURCE_RECEIPT_SCRIPT)
+	S3_RECEIPT_PLATFORM="$(S3_RECEIPT_PLATFORM)" $(S3_SOURCE_RECEIPT_SCRIPT)
 
 test-s3-envelope:
 	@bash ./scripts/lib/require-docker.sh "make test-s3-envelope"
 	@test "$(GOMAXPROCS)" = "1" || { echo "GOMAXPROCS=1 is required" >&2; exit 2; }
-	docker run --rm --platform linux/arm64 --network none \
+	@test -n "$(S3_ENVELOPE_GO_MANIFEST)" || { echo "S3_ENVELOPE_PLATFORM must be linux/amd64 or linux/arm64" >&2; exit 2; }
+	docker run --rm --platform "$(S3_ENVELOPE_PLATFORM)" --network none \
 		-v "$(CURDIR):/src:ro" \
 		-v "$(S3_ENVELOPE_GOMODCACHE):/go/pkg/mod:ro" \
 		-w /src -e GOMAXPROCS=1 "$(S3_ENVELOPE_GO_IMAGE)" \

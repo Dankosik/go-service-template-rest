@@ -12,6 +12,7 @@ import (
 )
 
 func TestTokenReuseRenewalAndRestart(t *testing.T) {
+	t.Parallel()
 	constructed, err := New(validTestConfig(), nil, slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
@@ -72,6 +73,7 @@ func TestTokenReuseRenewalAndRestart(t *testing.T) {
 }
 
 func TestOperationTokenCannotRenewAcrossExpiryMargin(t *testing.T) {
+	t.Parallel()
 	clock := newMovableClock(fixedProviderTime)
 	provider := &scriptedAcquirer{steps: []acquisitionStep{
 		{token: accessToken{value: "fixed", expiresAt: fixedProviderTime.Add(30 * time.Second)}},
@@ -98,6 +100,7 @@ func TestOperationTokenCannotRenewAcrossExpiryMargin(t *testing.T) {
 }
 
 func TestAcquisitionWavesPreserveCallerCancellation(t *testing.T) {
+	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		clock := newMovableClock(fixedProviderTime)
 		successEntered := make(chan struct{})
@@ -206,7 +209,9 @@ func TestAcquisitionWavesPreserveCallerCancellation(t *testing.T) {
 }
 
 func TestProviderWorkOutlivesCallersWithinItsBudget(t *testing.T) {
+	t.Parallel()
 	t.Run("caller cancellation", func(t *testing.T) {
+		t.Parallel()
 		synctest.Test(t, func(t *testing.T) {
 			entered := make(chan struct{})
 			release := make(chan struct{})
@@ -251,6 +256,7 @@ func TestProviderWorkOutlivesCallersWithinItsBudget(t *testing.T) {
 	})
 
 	t.Run("provider timeout", func(t *testing.T) {
+		t.Parallel()
 		synctest.Test(t, func(t *testing.T) {
 			entered := make(chan struct{})
 			release := make(chan struct{})
@@ -275,7 +281,9 @@ func TestProviderWorkOutlivesCallersWithinItsBudget(t *testing.T) {
 }
 
 func TestClientCloseRetiresAndJoinsAcquisition(t *testing.T) {
+	t.Parallel()
 	t.Run("joins active wave and closes once", func(t *testing.T) {
+		t.Parallel()
 		synctest.Test(t, func(t *testing.T) {
 			entered := make(chan struct{})
 			releaseAfterCancel := make(chan struct{})
@@ -334,6 +342,7 @@ func TestClientCloseRetiresAndJoinsAcquisition(t *testing.T) {
 	})
 
 	t.Run("shutdown context expires before join", func(t *testing.T) {
+		t.Parallel()
 		synctest.Test(t, func(t *testing.T) {
 			entered := make(chan struct{})
 			release := make(chan struct{})

@@ -11,6 +11,7 @@ import (
 )
 
 func TestDeleteAfterPossibleSendIsOutcomeUnknown(t *testing.T) {
+	t.Parallel()
 	client := scriptedClient(t, func(*http.Request) (*http.Response, error) {
 		return nil, errors.New("private transport failure")
 	})

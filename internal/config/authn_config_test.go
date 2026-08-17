@@ -7,6 +7,7 @@ import (
 )
 
 func TestAuthnConfigRequiresCompleteSafePolicy(t *testing.T) {
+
 	for _, testCase := range []struct {
 		name  string
 		key   string
@@ -24,6 +25,7 @@ func TestAuthnConfigRequiresCompleteSafePolicy(t *testing.T) {
 		{name: "duplicate proxy", key: "APP__AUTHN__TRUSTED_PROXY_CIDRS", value: "127.0.0.0/8,127.0.0.1/8", want: "duplicate CIDR"},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
+
 			resetConfigEnv(t)
 			t.Setenv(testCase.key, testCase.value)
 			_, _, err := LoadDetailed(LoadOptions{})
@@ -38,6 +40,7 @@ func TestAuthnConfigRequiresCompleteSafePolicy(t *testing.T) {
 }
 
 func TestAuthnConfigCanonicalizesTrustedProxyCIDRs(t *testing.T) {
+
 	resetConfigEnv(t)
 	t.Setenv("APP__AUTHN__TRUSTED_PROXY_CIDRS", " 127.0.0.1/8,2001:db8:1::1/32 ")
 
@@ -53,7 +56,9 @@ func TestAuthnConfigCanonicalizesTrustedProxyCIDRs(t *testing.T) {
 
 // profile:grpc:start
 
+//nolint:paralleltest // This test mutates process-global environment.
 func TestAuthnRequiresGRPCTLS(t *testing.T) {
+
 	resetConfigEnv(t)
 	for name, value := range map[string]string{
 		"APP__GRPC__SERVER__ENABLED":            "true",

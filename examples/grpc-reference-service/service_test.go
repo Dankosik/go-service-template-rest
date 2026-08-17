@@ -36,6 +36,7 @@ import (
 )
 
 func TestReferenceServiceSupportsAllCardinalities(t *testing.T) {
+	t.Parallel()
 	client := referencev1.NewEchoServiceClient(newConnection(t))
 	ctx := t.Context()
 
@@ -127,10 +128,12 @@ func TestReferenceServiceSupportsAllCardinalities(t *testing.T) {
 }
 
 func TestServerStreamBounds(t *testing.T) {
+	t.Parallel()
 	client := referencev1.NewEchoServiceClient(newConnection(t))
 
 	for _, count := range []int32{-1, 0, 1, 1024} {
 		t.Run(fmt.Sprintf("count_%d", count), func(t *testing.T) {
+			t.Parallel()
 			stream, err := client.ServerStream(t.Context(), referencev1.ServerStreamRequest_builder{
 				Value: new("bounded"),
 				Count: new(count),
@@ -163,6 +166,7 @@ func TestServerStreamBounds(t *testing.T) {
 
 	for _, count := range []int32{1025, math.MaxInt32} {
 		t.Run(fmt.Sprintf("reject_%d", count), func(t *testing.T) {
+			t.Parallel()
 			stream, err := client.ServerStream(t.Context(), referencev1.ServerStreamRequest_builder{
 				Value: new("rejected"),
 				Count: new(count),
@@ -186,9 +190,11 @@ func TestServerStreamBounds(t *testing.T) {
 }
 
 func TestReferenceClientStreamRejectsUnboundedAggregation(t *testing.T) {
+	t.Parallel()
 	client := referencev1.NewEchoServiceClient(newConnection(t))
 
 	t.Run("aggregate bytes", func(t *testing.T) {
+		t.Parallel()
 		stream, err := client.ClientStream(t.Context())
 		if err != nil {
 			t.Fatalf("ClientStream() error = %v", err)
@@ -205,6 +211,7 @@ func TestReferenceClientStreamRejectsUnboundedAggregation(t *testing.T) {
 	})
 
 	t.Run("message count", func(t *testing.T) {
+		t.Parallel()
 		stream, err := client.ClientStream(t.Context())
 		if err != nil {
 			t.Fatalf("ClientStream() error = %v", err)
@@ -224,6 +231,7 @@ func TestReferenceClientStreamRejectsUnboundedAggregation(t *testing.T) {
 }
 
 func TestReferenceBidiStreamReleasesServerWorkOnCancellation(t *testing.T) {
+	t.Parallel()
 	handlerDone := make(chan struct{})
 	client := referencev1.NewEchoServiceClient(newConnectionWithService(t, cancellationService{
 		Service: grpcreference.Service{},

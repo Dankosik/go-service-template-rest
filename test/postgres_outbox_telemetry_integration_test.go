@@ -10,6 +10,7 @@ import (
 )
 
 func TestPostgresOutboxObservability(t *testing.T) {
+	t.Parallel()
 	ctx, pool, store := newOutboxFixture(t)
 	states := []string{"eligible", "in-progress", "retry-wait", "recovery-due", "published"}
 	for _, state := range states {
@@ -77,6 +78,7 @@ func TestPostgresOutboxObservability(t *testing.T) {
 }
 
 func TestPostgresOutboxTelemetryTransitions(t *testing.T) {
+	t.Parallel()
 	ctx, pool, store, reader, telemetry := newInstrumentedOutboxFixture(t)
 
 	mustAppendOutbox(t, ctx, pool, store, outboxEvent("telemetry-recovery"))

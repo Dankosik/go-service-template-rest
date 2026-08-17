@@ -39,6 +39,7 @@ import (
 )
 
 func TestGeneratedClientComposition(t *testing.T) {
+	t.Parallel()
 	packageDirectory, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("os.Getwd() error = %v", err)
@@ -89,6 +90,7 @@ import (
 )
 
 func TestGeneratedClientUsesBoundedHTTPClient(t *testing.T) {
+	t.Parallel()
 	cfg := httpclient.Config{
 		DependencyName:         "generated-fixture",
 		BaseURL:                "https://localhost:443",
@@ -157,6 +159,7 @@ func TestGeneratedClientUsesBoundedHTTPClient(t *testing.T) {
 // profile:outbound-auth-http:start
 
 func TestGeneratedClientUsesAuthenticatedDoer(t *testing.T) {
+	t.Parallel()
 	const (
 		tokenHost    = "token.generated.internal"
 		resourceHost = "resource.generated.internal"
@@ -261,6 +264,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestGeneratedClientUsesAuthenticatedDoer(t *testing.T) {
+	t.Parallel()
 	cfg := oauth2clientcredentials.Config{
 		DependencyName: "generated-fixture",
 		ClientID: "generated-client",

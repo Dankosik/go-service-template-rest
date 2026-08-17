@@ -14,6 +14,7 @@ import (
 )
 
 func TestPostgresJobsProducerProbe(t *testing.T) {
+	t.Parallel()
 	ctx, pool, store := newPostgresJobsFixture(t)
 	if err := store.CheckProducerPath(ctx); err != nil {
 		t.Fatalf("CheckProducerPath() error = %v", err)
@@ -21,6 +22,7 @@ func TestPostgresJobsProducerProbe(t *testing.T) {
 	dsn := postgresJobsDSN(pool)
 
 	t.Run("caller deadline closes readiness", func(t *testing.T) {
+		t.Parallel()
 		cancelled, cancel := context.WithDeadline(ctx, time.Now().Add(-time.Second))
 		cancel()
 		if err := store.CheckProducerPath(cancelled); !errors.Is(err, context.DeadlineExceeded) {
@@ -29,6 +31,7 @@ func TestPostgresJobsProducerProbe(t *testing.T) {
 	})
 
 	t.Run("read-only endpoint closes readiness", func(t *testing.T) {
+		t.Parallel()
 		readOnlyPool, readOnlyStore := newPostgresJobsStore(
 			ctx,
 			t,
@@ -43,6 +46,7 @@ func TestPostgresJobsProducerProbe(t *testing.T) {
 	})
 
 	t.Run("producer privilege loss closes readiness", func(t *testing.T) {
+		t.Parallel()
 		var database string
 		if err := pool.PGX().QueryRow(ctx, "SELECT current_database()").Scan(&database); err != nil {
 			t.Fatalf("read current database: %v", err)
@@ -65,7 +69,7 @@ func TestPostgresJobsProducerProbe(t *testing.T) {
 		statements := []string{
 			"GRANT CONNECT ON DATABASE " + pgx.Identifier{database}.Sanitize() + " TO " + roleIdentifier,
 			"GRANT USAGE ON SCHEMA public TO " + roleIdentifier,
-			"GRANT SELECT ON postgres_job_actions, postgres_job_attempts, postgres_job_claim_scopes, postgres_jobs TO " + roleIdentifier,
+			"GRANT SELECT ON postgres_job_attempts, postgres_job_claim_scopes, postgres_jobs TO " + roleIdentifier,
 			"GRANT INSERT ON postgres_jobs TO " + roleIdentifier,
 		}
 		for _, statement := range statements {
@@ -89,6 +93,7 @@ func TestPostgresJobsProducerProbe(t *testing.T) {
 	})
 
 	t.Run("pool saturation is capacity-only", func(t *testing.T) {
+		t.Parallel()
 		saturatedPool, saturatedStore := newPostgresJobsStore(ctx, t, dsn, 1, 20*time.Millisecond)
 		defer saturatedPool.Close()
 		conn, err := saturatedPool.Acquire(ctx)
@@ -102,6 +107,7 @@ func TestPostgresJobsProducerProbe(t *testing.T) {
 	})
 
 	t.Run("schema authority loss closes readiness", func(t *testing.T) {
+		t.Parallel()
 		if _, err := pool.PGX().Exec(ctx, "ALTER TABLE postgres_jobs DROP CONSTRAINT postgres_jobs_producer_key"); err != nil {
 			t.Fatalf("remove producer schema authority: %v", err)
 		}

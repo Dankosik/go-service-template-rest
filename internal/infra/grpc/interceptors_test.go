@@ -33,6 +33,7 @@ import (
 )
 
 func TestAccessLogSuccessSamplingIsDeterministicAndBounded(t *testing.T) {
+	t.Parallel()
 	if sampleRequestID("request", 0) {
 		t.Fatal("sampleRequestID(rate 0) = true, want false")
 	}
@@ -67,6 +68,7 @@ func TestAccessLogSuccessSamplingIsDeterministicAndBounded(t *testing.T) {
 // belongs to TestAccessLogPolicyAppliesToStreamingRPCs below, which is where a
 // new rule goes.
 func TestAccessLogPolicyIsSharedByUnaryAndStreamAdapters(t *testing.T) {
+	t.Parallel()
 	var output bytes.Buffer
 	log := slog.New(slog.NewJSONHandler(&output, nil))
 	policy := accessLogPolicy{successSampleRate: 0}
@@ -131,6 +133,7 @@ func TestAccessLogPolicyIsSharedByUnaryAndStreamAdapters(t *testing.T) {
 // twin it also proves the decision is consulted. A new rule belongs in this
 // table, not in a second one beside shouldLog.
 func TestAccessLogPolicyAppliesToStreamingRPCs(t *testing.T) {
+	t.Parallel()
 	for _, testCase := range []struct {
 		name             string
 		missingRequestID bool
@@ -193,6 +196,7 @@ func TestAccessLogPolicyAppliesToStreamingRPCs(t *testing.T) {
 		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
 			synctest.Test(t, func(t *testing.T) {
 				ctx := t.Context()
 				if !testCase.missingRequestID {
@@ -234,6 +238,7 @@ func TestAccessLogPolicyAppliesToStreamingRPCs(t *testing.T) {
 }
 
 func TestAccessLogSkipsAllWorkWhenInfoIsDisabled(t *testing.T) {
+	t.Parallel()
 	var output bytes.Buffer
 	log := slog.New(slog.NewJSONHandler(&output, &slog.HandlerOptions{Level: slog.LevelWarn}))
 	unaryCalled := false
@@ -270,6 +275,7 @@ func TestAccessLogSkipsAllWorkWhenInfoIsDisabled(t *testing.T) {
 }
 
 func TestOneAdmissionPolicyServesBothInterceptorTypes(t *testing.T) {
+	t.Parallel()
 	load := &recordingLoad{}
 	policy := newAdmissionPolicy(1, 1, load)
 	unary := asUnaryInterceptor(policy.around)
@@ -321,6 +327,7 @@ func TestOneAdmissionPolicyServesBothInterceptorTypes(t *testing.T) {
 // Check answers under both, because the platform probe is what tells an operator
 // the instance is alive while either budget is full.
 func TestHealthServiceHoldsItsOwnAdmissionBudget(t *testing.T) {
+	t.Parallel()
 	const (
 		checkMethod        = healthMethodPrefix + "Check"
 		watchMethod        = healthMethodPrefix + "Watch"
@@ -429,6 +436,7 @@ func occupyAdmissionSlot(
 }
 
 func TestMapErrorAppliesEachBoundarysTrustRule(t *testing.T) {
+	t.Parallel()
 	sentinel := errors.New("domain sentinel")
 	mapper := func(err error) (failure.Classification, bool) {
 		if !errors.Is(err, sentinel) {
@@ -520,6 +528,7 @@ func TestMapErrorAppliesEachBoundarysTrustRule(t *testing.T) {
 		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
 			trusted := testCase.trusted
 			if trusted == nil {
 				trusted = ownedStatusOnly
@@ -543,6 +552,7 @@ func TestMapErrorAppliesEachBoundarysTrustRule(t *testing.T) {
 // this proves there is a record at all, which is what an INTERNAL that carries
 // no detail depends on to be diagnosable.
 func TestHandlerErrorBoundaryRecordsTheUnclassifiedFailure(t *testing.T) {
+	t.Parallel()
 	const secretCanary = "password=handler-boundary-secret"
 
 	var logged bytes.Buffer
@@ -582,6 +592,7 @@ func TestHandlerErrorBoundaryRecordsTheUnclassifiedFailure(t *testing.T) {
 // not faults, and repeating them at ERROR is how an error rate stops meaning
 // anything.
 func TestHandlerErrorBoundaryDoesNotRecordADeliberateStatus(t *testing.T) {
+	t.Parallel()
 	sentinel := errors.New("record not found")
 	classify := func(err error) (failure.Classification, bool) {
 		if !errors.Is(err, sentinel) {
@@ -601,6 +612,7 @@ func TestHandlerErrorBoundaryDoesNotRecordADeliberateStatus(t *testing.T) {
 		{name: "success", err: nil},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
 			var logged bytes.Buffer
 			boundary := handlerErrorBoundary(
 				slogJSONLogger(&logged),
@@ -620,10 +632,12 @@ func TestHandlerErrorBoundaryDoesNotRecordADeliberateStatus(t *testing.T) {
 // each RPC kind, so both are driven here. A shim that let the panic escape would
 // take down the process instead of failing this test politely.
 func TestRecoveryReturnsSanitizedOwnedStatus(t *testing.T) {
+	t.Parallel()
 	const panicValue = "credential=secret"
 	log := slog.New(slog.DiscardHandler)
 
 	t.Run("unary", func(t *testing.T) {
+		t.Parallel()
 		response, err := asUnaryInterceptor(recoveryAround(log))(
 			t.Context(),
 			nil,
@@ -639,6 +653,7 @@ func TestRecoveryReturnsSanitizedOwnedStatus(t *testing.T) {
 	})
 
 	t.Run("streaming", func(t *testing.T) {
+		t.Parallel()
 		err := asStreamInterceptor(recoveryAround(log))(
 			nil,
 			testServerStream{ctx: t.Context()},
@@ -724,6 +739,7 @@ func (s testServerStream) RecvMsg(any) error            { return nil }
 // a status it returned. The unary half drives the real branch: grpc.SetHeader
 // refuses a context carrying no server transport stream.
 func TestCorrelationFailureIsAnsweredAndRecorded(t *testing.T) {
+	t.Parallel()
 	for _, testCase := range []struct {
 		name   string
 		method string
@@ -762,6 +778,7 @@ func TestCorrelationFailureIsAnsweredAndRecorded(t *testing.T) {
 		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
 			var output bytes.Buffer
 			handlerCalled := false
 
@@ -781,7 +798,9 @@ func TestCorrelationFailureIsAnsweredAndRecorded(t *testing.T) {
 }
 
 func TestDeadlineAroundCapsWithoutExtending(t *testing.T) {
+	t.Parallel()
 	t.Run("derives a deadline when none exists", func(t *testing.T) {
+		t.Parallel()
 		var observed time.Duration
 		err := deadlineAround(time.Minute)(
 			t.Context(),
@@ -804,6 +823,7 @@ func TestDeadlineAroundCapsWithoutExtending(t *testing.T) {
 	})
 
 	t.Run("never extends an earlier caller deadline", func(t *testing.T) {
+		t.Parallel()
 		ctx, cancel := context.WithTimeout(t.Context(), time.Millisecond)
 		defer cancel()
 
@@ -821,6 +841,7 @@ func TestDeadlineAroundCapsWithoutExtending(t *testing.T) {
 	})
 
 	t.Run("non-positive disables the cap", func(t *testing.T) {
+		t.Parallel()
 		if err := deadlineAround(0)(t.Context(), testUnaryFullMethod, func(ctx context.Context) error {
 			if _, ok := ctx.Deadline(); ok {
 				t.Fatal("disabled policy still derived a deadline")
@@ -832,6 +853,7 @@ func TestDeadlineAroundCapsWithoutExtending(t *testing.T) {
 	})
 
 	t.Run("health RPCs are exempt", func(t *testing.T) {
+		t.Parallel()
 		health := healthMethodPrefix + "Check"
 		if err := deadlineAround(time.Minute)(t.Context(), health, func(ctx context.Context) error {
 			if _, ok := ctx.Deadline(); ok {

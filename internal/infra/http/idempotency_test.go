@@ -20,6 +20,7 @@ import (
 )
 
 func TestHTTPIdempotencyKeyContract(t *testing.T) {
+	t.Parallel()
 	var authorizations atomic.Int64
 	var admissions atomic.Int64
 	var handlers atomic.Int64
@@ -80,6 +81,7 @@ func TestHTTPIdempotencyKeyContract(t *testing.T) {
 }
 
 func TestHTTPIdempotencyAuthorizationAndAdmissionOrder(t *testing.T) {
+	t.Parallel()
 	var authorizations atomic.Int64
 	var admissions atomic.Int64
 	var handlers atomic.Int64
@@ -245,6 +247,7 @@ func TestHTTPIdempotencyAuthorizationAndAdmissionOrder(t *testing.T) {
 }
 
 func TestHTTPIdempotencyReplayRendering(t *testing.T) {
+	t.Parallel()
 	result := httpidempotency.Result{
 		Status:    http.StatusCreated,
 		MediaType: "application/json",
@@ -280,6 +283,7 @@ func TestHTTPIdempotencyReplayRendering(t *testing.T) {
 }
 
 func TestHTTPIdempotencyProblemAndRedaction(t *testing.T) {
+	t.Parallel()
 	contract := testIdempotencyOperation().Contract
 	for _, testCase := range []struct {
 		name       string
@@ -298,6 +302,7 @@ func TestHTTPIdempotencyProblemAndRedaction(t *testing.T) {
 		{"integrity", httpidempotency.Decision{Outcome: httpidempotency.OutcomeIntegrityConflict}, http.StatusInternalServerError, problem.CodeInternalError, false},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
 			handler := RequestCorrelation(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				writeIdempotencyDecision(w, r, contract, testCase.decision)
 			}))
@@ -326,6 +331,7 @@ func TestHTTPIdempotencyProblemAndRedaction(t *testing.T) {
 }
 
 func TestHTTPIdempotencyTerminalObservation(t *testing.T) {
+	t.Parallel()
 	operation := testIdempotencyOperation()
 	operation.Authorize = func(context.Context, *http.Request) (httpidempotency.Scope, bool) {
 		return httpidempotency.Scope{Authority: "authority", OperationID: "createWidget", APIVersion: "v1"}, true

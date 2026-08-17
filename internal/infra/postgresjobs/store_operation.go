@@ -15,6 +15,7 @@ import (
 
 func (s *Session) withOperation(
 	ctx context.Context,
+	name string,
 	accessMode pgx.TxAccessMode,
 	operation func(context.Context, *sqlcgen.Queries) error,
 ) (err error) {
@@ -24,15 +25,18 @@ func (s *Session) withOperation(
 	if operation == nil {
 		return fmt.Errorf("%w: operation is required", ErrConfig)
 	}
+	startedAt := time.Now()
+	defer func() {
+		s.store.recordOperation(context.WithoutCancel(ctx), name, err, time.Since(startedAt))
+	}()
 
-	setupCtx, setupCancel := context.WithTimeout(ctx, s.store.operationTimeout)
-	defer setupCancel()
+	operationCtx, cancel := context.WithTimeout(ctx, s.store.operationTimeout)
+	defer cancel()
 
-	tx, err := s.conn.BeginTx(setupCtx, pgx.TxOptions{AccessMode: accessMode})
+	tx, err := s.conn.BeginTx(operationCtx, pgx.TxOptions{AccessMode: accessMode})
 	if err != nil {
-		return s.classifyOperationError(ctx, setupCtx, err)
+		return s.classifyOperationError(ctx, operationCtx, err)
 	}
-	operationCtx := setupCtx
 	defer func() {
 		cleanupCtx, cleanupCancel := context.WithTimeout(context.WithoutCancel(ctx), s.store.operationTimeout)
 		defer cleanupCancel()
@@ -42,27 +46,36 @@ func (s *Session) withOperation(
 		}
 	}()
 
-	timeoutValue := postgres.RuntimeParamMilliseconds(operationTimerTimeout(s.store.operationTimeout, s.store.statementTimeout))
+	deadline, _ := operationCtx.Deadline()
+	timerTimeout := operationTimerTimeout(time.Until(deadline), s.store.statementTimeout)
+	if timerTimeout == 0 {
+		if err := ctx.Err(); err != nil {
+			return fmt.Errorf("postgres jobs operation: %w", err)
+		}
+		return fmt.Errorf("%w: transaction setup exhausted operation timeout", ErrOperationTimeout)
+	}
+	timeoutValue := postgres.RuntimeParamMilliseconds(timerTimeout)
 	if _, err := tx.Exec(
-		setupCtx,
+		operationCtx,
 		"SELECT set_config('statement_timeout', $1, true), set_config('lock_timeout', $1, true)",
 		timeoutValue,
 	); err != nil {
-		return s.classifyOperationError(ctx, setupCtx, err)
+		return s.classifyOperationError(ctx, operationCtx, err)
 	}
-	operationCtx, cancel := context.WithTimeout(ctx, s.store.operationTimeout)
-	defer cancel()
 	if err := operation(operationCtx, s.queries.WithTx(tx)); err != nil {
 		return s.classifyOperationError(ctx, operationCtx, err)
 	}
 	if err := tx.Commit(operationCtx); err != nil {
-		return s.classifyOperationError(ctx, operationCtx, err)
+		return s.classifyOperationError(ctx, operationCtx, postgres.ClassifyCommitError(err))
 	}
 	return nil
 }
 
 func operationTimerTimeout(operationTimeout, statementTimeout time.Duration) time.Duration {
 	timeout := min(operationTimeout, statementTimeout)
+	if timeout <= 10*time.Millisecond {
+		return 0
+	}
 	return timeout - min(timeout/10, 10*time.Millisecond)
 }
 
@@ -79,23 +92,27 @@ func (s *Session) classifyOperationError(parentCtx, operationCtx context.Context
 }
 
 func classifyOperationError(parentCtx, operationCtx context.Context, connectionClosed bool, err error) error {
+	var classified error
 	if parentCtx != nil && parentCtx.Err() != nil {
-		return fmt.Errorf("postgres jobs operation: %w", parentCtx.Err())
-	}
-	if pgconn.Timeout(err) {
-		return fmt.Errorf("%w: %w", ErrOperationTimeout, err)
-	}
-	if postgresError, ok := errors.AsType[*pgconn.PgError](err); ok {
-		switch postgresError.Code {
-		case pgerrcode.QueryCanceled, pgerrcode.LockNotAvailable:
-			return fmt.Errorf("%w: %w", ErrOperationTimeout, err)
+		classified = errors.Join(fmt.Errorf("postgres jobs operation: %w", parentCtx.Err()), err)
+	} else {
+		if pgconn.Timeout(err) {
+			classified = fmt.Errorf("%w: %w", ErrOperationTimeout, err)
+		} else if postgresError, ok := errors.AsType[*pgconn.PgError](err); ok {
+			switch postgresError.Code {
+			case pgerrcode.QueryCanceled, pgerrcode.LockNotAvailable:
+				classified = fmt.Errorf("%w: %w", ErrOperationTimeout, err)
+			}
+		}
+		if classified == nil && operationCtx != nil && operationCtx.Err() != nil {
+			classified = errors.Join(fmt.Errorf("%w: %w", ErrOperationTimeout, operationCtx.Err()), err)
 		}
 	}
-	if operationCtx != nil && operationCtx.Err() != nil {
-		return fmt.Errorf("%w: %w", ErrOperationTimeout, operationCtx.Err())
+	if classified == nil {
+		classified = err
 	}
 	if connectionClosed {
-		return fmt.Errorf("%w: %w", ErrSessionTerminal, err)
+		classified = errors.Join(ErrSessionTerminal, classified)
 	}
-	return err
+	return classified
 }

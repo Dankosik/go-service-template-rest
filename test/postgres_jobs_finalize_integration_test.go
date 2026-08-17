@@ -11,9 +11,11 @@ import (
 )
 
 func TestPostgresJobsFinalize(t *testing.T) {
+	t.Parallel()
 	ctx, pool, store := newPostgresJobsFixture(t)
 
 	t.Run("finalization stores one replayable transition", func(t *testing.T) {
+		t.Parallel()
 		_, claimed := claimPostgresJob(ctx, t, pool, store, "finalize-retry", "worker-finalize", time.Minute)
 		session := acquirePostgresJobsSession(ctx, t, store)
 		defer session.Release(ctx)
@@ -52,6 +54,7 @@ func TestPostgresJobsFinalize(t *testing.T) {
 	})
 
 	t.Run("lease expiry alone does not defeat the current finalizer", func(t *testing.T) {
+		t.Parallel()
 		_, claimed := claimPostgresJob(ctx, t, pool, store, "finalize-expired", "worker-expired-finalize", time.Minute)
 		if _, err := pool.PGX().Exec(ctx, `UPDATE postgres_jobs SET lease_expires_at = clock_timestamp() - interval '1 second' WHERE logical_job_id = $1`, string(claimed.Attempt.LogicalJobID)); err != nil {
 			t.Fatalf("expire current job lease: %v", err)
@@ -70,6 +73,23 @@ func TestPostgresJobsFinalize(t *testing.T) {
 		})
 		if err != nil || result.Status != postgresjobs.TransitionApplied || result.Transition.State != jobs.StateSucceeded {
 			t.Fatalf("Finalize(expired current attempt) = %+v, %v", result, err)
+		}
+	})
+
+	t.Run("attempt budget mismatch is fenced", func(t *testing.T) {
+		t.Parallel()
+		_, claimed := claimPostgresJob(ctx, t, pool, store, "finalize-budget-mismatch", "worker-budget-mismatch", time.Minute)
+		session := acquirePostgresJobsSession(ctx, t, store)
+		defer session.Release(ctx)
+		result, err := session.Finalize(ctx, postgresjobs.FinalizeInput{
+			Attempt: claimed.Attempt,
+			Transition: jobs.Transition{
+				State: jobs.StateSucceeded, AttemptsUsed: claimed.AttemptNumber + 1,
+				ElapsedUsed: time.Second, Outcome: jobs.OutcomeSuccess, Effect: jobs.EffectCompleted,
+			},
+		})
+		if err != nil || result.Status != postgresjobs.TransitionStale {
+			t.Fatalf("Finalize(counter mismatch) = %+v, %v, want stale", result, err)
 		}
 	})
 }

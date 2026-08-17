@@ -26,7 +26,11 @@ func newPostgresWebhookFixture(t *testing.T) (context.Context, *postgres.Pool, *
 	}
 	t.Cleanup(pool.Close)
 	manifest := webhookManifest(t, 1, "owner-a", "dest-a", "key-a")
-	store, err := postgreswebhook.NewStore(pool, postgreswebhook.StoreOptions{OperationTimeout: 3 * time.Second, CapacityRevision: 1, GlobalConcurrency: 2, ManifestRevision: manifest.Revision()})
+	store, err := postgreswebhook.NewStore(pool, postgreswebhook.StoreOptions{
+		OperationTimeout: 3 * time.Second, CapacityRevision: 1, GlobalConcurrency: 2, ManifestRevision: manifest.Revision(),
+		AttemptTimeout: 5 * time.Second, ResponseHeaderTimeout: 2 * time.Second, ResponseHeaderBytes: 4096,
+		ResponseBodyBytes: 4096, DrainTimeout: 10 * time.Second,
+	})
 	if err != nil {
 		t.Fatalf("postgreswebhook.NewStore(): %v", err)
 	}
@@ -47,6 +51,18 @@ func webhookManifest(t *testing.T, revision int64, owner, destination, reference
 	return manifest
 }
 
+func webhookRotationManifest(t *testing.T) *postgreswebhook.SecretManifest {
+	t.Helper()
+	oldSecret := base64.StdEncoding.EncodeToString([]byte("0123456789abcdef0123456789abcdef"))
+	newSecret := base64.StdEncoding.EncodeToString([]byte("abcdef0123456789abcdef0123456789"))
+	raw := fmt.Sprintf(`{"revision":2,"entries":[{"owner_scope":"owner-a","destination_id":"dest-a","key_reference":"key-new","secret":"whsec_%s"},{"owner_scope":"owner-a","destination_id":"dest-a","key_reference":"key-a","secret":"whsec_%s"}]}`, newSecret, oldSecret)
+	manifest, err := postgreswebhook.ParseSecretManifest(raw)
+	if err != nil {
+		t.Fatalf("ParseSecretManifest(rotation): %v", err)
+	}
+	return manifest
+}
+
 func webhookPrepared(t *testing.T, suffix string) postgreswebhook.PreparedAcceptance {
 	t.Helper()
 	policy := postgreswebhook.DeliveryPolicy{
@@ -55,7 +71,7 @@ func webhookPrepared(t *testing.T, suffix string) postgreswebhook.PreparedAccept
 		RetryAfterCap: time.Minute, AttemptTimeout: 5 * time.Second, ResponseHeaderTimeout: 2 * time.Second,
 		ResponseHeaderBytes: 4096, ResponseBodyBytes: 4096, DestinationConcurrency: 1, GlobalConcurrency: 2,
 		DrainTimeout: 10 * time.Second, RedriveAttempts: 2, RedriveAge: time.Hour,
-		Horizons: [8]time.Duration{time.Hour, time.Hour, 2 * time.Hour, 2 * time.Hour, 3 * time.Hour, 3 * time.Hour, time.Hour, time.Hour},
+		Horizons: postgreswebhook.RetentionHorizons{Payload: time.Hour, Active: time.Hour, TerminalSummary: 2 * time.Hour, Attempt: 2 * time.Hour, Action: 3 * time.Hour, DestinationGeneration: 3 * time.Hour, RedriveEligibility: time.Hour, ReceiverDedup: time.Hour},
 	}
 	prepared, err := postgreswebhook.PrepareAcceptance(postgreswebhook.Acceptance{
 		OwnerScope: "owner-a", AcceptanceID: "accept-" + suffix, BusinessEventID: "event-" + suffix,

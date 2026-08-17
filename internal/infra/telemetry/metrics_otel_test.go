@@ -1,4 +1,7 @@
-package telemetry
+package //nolint:paralleltest // This test mutates process-global environment or working directory.
+
+//nolint:paralleltest // Mutates the process-wide OpenTelemetry MeterProvider.
+telemetry
 
 import (
 	"context"
@@ -11,8 +14,8 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-//nolint:paralleltest // Mutates the process-wide OpenTelemetry MeterProvider.
 func TestSetupMetricsUsesPrivateRegistryAndConfigResource(t *testing.T) {
+
 	t.Setenv("OTEL_RESOURCE_ATTRIBUTES", "service.name=env-service,env.only=true")
 	t.Setenv("OTEL_SERVICE_NAME", "env-service")
 
@@ -98,6 +101,7 @@ func TestSetupMetricsUsesPrivateRegistryAndConfigResource(t *testing.T) {
 //
 //nolint:paralleltest // Mutates the process-wide OpenTelemetry MeterProvider.
 func TestRecordTraceExporterStateIsScrapable(t *testing.T) {
+	t.Parallel()
 	for _, tt := range []struct {
 		name      string
 		active    bool
@@ -107,6 +111,7 @@ func TestRecordTraceExporterStateIsScrapable(t *testing.T) {
 		{name: "degraded", active: false, wantValue: "0"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			telemetrytest.RestoreGlobals(t)
 
 			metrics := New()
@@ -193,6 +198,7 @@ func TestSetupMetricsRequiresRegistry(t *testing.T) {
 //
 //nolint:paralleltest // Mutates the process-wide OpenTelemetry MeterProvider.
 func TestSetupMetricsDegradesToScrapeOnlyForUnusableEndpoint(t *testing.T) {
+	t.Parallel()
 	telemetrytest.ClearAmbientExporterEnv(t)
 	telemetrytest.RestoreGlobals(t)
 

@@ -11,6 +11,7 @@ import (
 )
 
 func TestFetchAsksForEveryFreeSlot(t *testing.T) {
+	t.Parallel()
 	consumer := &recordingConsumer{fetchErr: errors.New("stop")}
 	w := &Worker{
 		client:   &Client{},
@@ -33,6 +34,7 @@ func TestFetchAsksForEveryFreeSlot(t *testing.T) {
 // so the resident wire data stays inside MaxConcurrency deliveries however
 // large a batch the broker could return.
 func TestFetchBatchShrinksToFreeSlots(t *testing.T) {
+	t.Parallel()
 	const occupied = 5
 
 	sources := make([]jetstream.Msg, occupied)
@@ -66,6 +68,7 @@ func TestFetchBatchShrinksToFreeSlots(t *testing.T) {
 }
 
 func TestDrainedHandlersReclaimsEveryFinishedSlot(t *testing.T) {
+	t.Parallel()
 	completion := make(chan struct{}, 4)
 	if got := drainedHandlers(completion); got != 0 {
 		t.Fatalf("drainedHandlers(none finished) = %d, want 0", got)
@@ -82,6 +85,7 @@ func TestDrainedHandlersReclaimsEveryFinishedSlot(t *testing.T) {
 }
 
 func TestWorkerWaitForHandlersPreservesTerminalError(t *testing.T) {
+	t.Parallel()
 	w := &Worker{fatal: make(chan error, 1)}
 	want := fmt.Errorf("%w: handler failed", ErrTerminal)
 	w.fatal <- want
@@ -92,6 +96,7 @@ func TestWorkerWaitForHandlersPreservesTerminalError(t *testing.T) {
 }
 
 func TestWorkerDrainRejectsMessageAlreadyReturnedByFetch(t *testing.T) {
+	t.Parallel()
 	consumer := &gatedConsumer{fetchStarted: make(chan struct{}), batch: make(chan jetstream.MessageBatch, 1)}
 	sig, err := newTelemetry(Observability{}, RoleWorker, func() bool { return false })
 	if err != nil {
@@ -185,6 +190,7 @@ func (c *recordingConsumer) Info(context.Context) (*jetstream.ConsumerInfo, erro
 }
 
 func TestWorkerShutdownStateTransitions(t *testing.T) {
+	t.Parallel()
 	worker := unitWorker(t, &recordingJetStream{}, func(context.Context, Message) error { return nil })
 	close(worker.runDone)
 	if err := worker.Shutdown(t.Context()); err != nil {
@@ -200,6 +206,7 @@ func TestWorkerShutdownStateTransitions(t *testing.T) {
 }
 
 func TestWorkerShutdownWaitsForRunCompletion(t *testing.T) {
+	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		worker := unitWorker(t, &recordingJetStream{}, func(context.Context, Message) error { return nil })
 		result := make(chan error, 1)

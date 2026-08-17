@@ -11,6 +11,8 @@ import (
 )
 
 func advanceClock(ctx context.Context, queries *sqlcgen.Queries) (time.Time, error) {
+	// ponytail: the singleton is the commit-order safety boundary; replace it only
+	// with a separately designed monotone authority if target contention exceeds budget.
 	value, err := queries.AdvanceWebhookClock(ctx)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return time.Time{}, ErrClockRegression
@@ -22,23 +24,4 @@ func advanceClock(ctx context.Context, queries *sqlcgen.Queries) (time.Time, err
 		return time.Time{}, fmt.Errorf("%w: webhook clock returned no time", ErrConflict)
 	}
 	return value.Time.UTC(), nil
-}
-
-type ClockObservation struct {
-	HighWater  time.Time
-	Regression bool
-	ObservedAt time.Time
-}
-
-func (s *Store) ObserveClock(ctx context.Context) (ClockObservation, error) {
-	var observation ClockObservation
-	err := s.transaction(ctx, func(ctx context.Context, tx pgx.Tx) error {
-		row, err := sqlcgen.New(tx).ObserveWebhookClock(ctx)
-		if err != nil {
-			return fmt.Errorf("observe webhook clock: %w", err)
-		}
-		observation = ClockObservation{HighWater: row.HighWater.Time.UTC(), Regression: row.Regression, ObservedAt: row.ObservedAt.Time.UTC()}
-		return nil
-	})
-	return observation, err
 }

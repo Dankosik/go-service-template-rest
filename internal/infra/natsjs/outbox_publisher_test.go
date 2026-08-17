@@ -17,11 +17,13 @@ import (
 )
 
 func TestOutboxPublisher(t *testing.T) {
+	t.Parallel()
 	if NewOutboxPublisher(nil) != nil {
 		t.Fatal("NewOutboxPublisher(nil) must return a nil interface")
 	}
 
 	t.Run("acknowledgement and envelope", func(t *testing.T) {
+		t.Parallel()
 		broker := &recordingJetStream{ack: &jetstream.PubAck{Stream: "EVENTS", Sequence: 7}}
 		publisher := NewOutboxPublisher(unitClient(t, broker, RoleProducer).Producer())
 		ctx := trace.ContextWithSpanContext(t.Context(), trace.NewSpanContext(trace.SpanContextConfig{
@@ -45,6 +47,7 @@ func TestOutboxPublisher(t *testing.T) {
 	})
 
 	t.Run("classification", func(t *testing.T) {
+		t.Parallel()
 		tests := []struct {
 			name      string
 			mutate    func(*postgresoutbox.Event)
@@ -59,6 +62,7 @@ func TestOutboxPublisher(t *testing.T) {
 		}
 		for _, test := range tests {
 			t.Run(test.name, func(t *testing.T) {
+				t.Parallel()
 				broker := &recordingJetStream{ack: &jetstream.PubAck{Stream: "EVENTS"}, err: test.brokerErr}
 				publisher := NewOutboxPublisher(unitClient(t, broker, RoleProducer).Producer())
 				event := validOutboxEvent()
@@ -83,6 +87,7 @@ func TestOutboxPublisher(t *testing.T) {
 	})
 
 	t.Run("concurrent calls retain identity and W3C carrier", func(t *testing.T) {
+		t.Parallel()
 		broker := newBarrierJetStream("event-one", "event-two")
 		client := unitClient(t, broker, RoleProducer)
 		client.producer = newProducer(client, 2, client.cfg.MaxPayloadBytes)

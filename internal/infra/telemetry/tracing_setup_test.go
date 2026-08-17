@@ -1,4 +1,13 @@
-package telemetry
+package //nolint:paralleltest // This test mutates process-global environment or working directory.
+
+// TestSetupTracingMergesAmbientResourceUnderConfig pins both halves of the merge.
+// Configured attributes win, so a platform cannot silently rename this service in
+// every dashboard. Attributes it does not set survive, which is how k8s.pod.name
+// and container.id reach the exported resource — the version this replaced unset
+// OTEL_RESOURCE_ATTRIBUTES around provider construction and discarded them, while
+// protecting nothing, because resource.Merge already gives the local resource
+// precedence.
+telemetry
 
 import (
 	"context"
@@ -16,14 +25,8 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
 
-// TestSetupTracingMergesAmbientResourceUnderConfig pins both halves of the merge.
-// Configured attributes win, so a platform cannot silently rename this service in
-// every dashboard. Attributes it does not set survive, which is how k8s.pod.name
-// and container.id reach the exported resource — the version this replaced unset
-// OTEL_RESOURCE_ATTRIBUTES around provider construction and discarded them, while
-// protecting nothing, because resource.Merge already gives the local resource
-// precedence.
 func TestSetupTracingMergesAmbientResourceUnderConfig(t *testing.T) {
+
 	t.Setenv("OTEL_RESOURCE_ATTRIBUTES", "service.name=env-service,service.version=env-version,deployment.environment.name=env,env.only=true")
 	t.Setenv("OTEL_SERVICE_NAME", "env-service-name")
 
@@ -89,6 +92,7 @@ func TestSetupTracingMergesAmbientResourceUnderConfig(t *testing.T) {
 }
 
 func TestSetupTracingWithoutExporterDoesNotRecord(t *testing.T) {
+	t.Parallel()
 	// "Without exporter" now includes the ambient endpoint variables, so this
 	// test states that condition rather than inheriting the machine's.
 	telemetrytest.ClearAmbientExporterEnv(t)
@@ -160,7 +164,15 @@ func BenchmarkTracingWithoutExporter(b *testing.B) {
 }
 
 //nolint:paralleltest // Mutates the process-wide OpenTelemetry provider and propagator.
+//nolint:paralleltest // This test mutates process-global environment or working directory.
+
+// TestSetupTracingIsSafeUnderConcurrentSetup keeps the provider installation
+// serialized. It used to also assert that the ambient resource variables were
+// restored after each call, because setup unset them around provider construction;
+// that suppression is gone, so what remains to prove is that concurrent callers do
+// not corrupt the globals under the race detector.
 func TestSetupTracingDoesNotApplyResourceIdentityFallbacks(t *testing.T) {
+	t.Parallel()
 	telemetrytest.RestoreGlobals(t)
 
 	_, shutdown, err := SetupTracing(context.Background(), TracingConfig{
@@ -217,12 +229,8 @@ func testTraceExporter(t *testing.T) TraceExporterConfig {
 	return TraceExporterConfig{OTLPEndpoint: collector.URL}
 }
 
-// TestSetupTracingIsSafeUnderConcurrentSetup keeps the provider installation
-// serialized. It used to also assert that the ambient resource variables were
-// restored after each call, because setup unset them around provider construction;
-// that suppression is gone, so what remains to prove is that concurrent callers do
-// not corrupt the globals under the race detector.
 func TestSetupTracingIsSafeUnderConcurrentSetup(t *testing.T) {
+
 	const (
 		resourceAttrs = "service.name=env-service,service.version=env-version,deployment.environment.name=env,env.only=true"
 		serviceName   = "env-service-name"
@@ -272,6 +280,7 @@ func TestSetupTracingIsSafeUnderConcurrentSetup(t *testing.T) {
 }
 
 func TestAmbientOTLPExporterEnvReportsNamesOnly(t *testing.T) {
+
 	telemetrytest.ClearAmbientExporterEnv(t)
 	t.Setenv("OTEL_EXPORTER_OTLP_HEADERS", "authorization=Bearer secret-value")
 	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://collector.example:4318")
@@ -286,6 +295,7 @@ func TestAmbientOTLPExporterEnvReportsNamesOnly(t *testing.T) {
 }
 
 func TestAmbientOTLPExporterEnvEmptyWithoutAmbientEnv(t *testing.T) {
+	t.Parallel()
 	telemetrytest.ClearAmbientExporterEnv(t)
 
 	if got := AmbientOTLPExporterEnv(); len(got) != 0 {
@@ -294,6 +304,7 @@ func TestAmbientOTLPExporterEnvEmptyWithoutAmbientEnv(t *testing.T) {
 }
 
 func TestSetupTracingRejectsAmbientOTLPExporterEnv(t *testing.T) {
+
 	typedCollector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -307,6 +318,41 @@ func TestSetupTracingRejectsAmbientOTLPExporterEnv(t *testing.T) {
 	// Credential and trust material is not covered by any option this service
 	// sets, so an injected value would reach the collector unverified. These
 	// must fail exporter setup rather than be silently accepted.
+	//nolint:paralleltest // This test mutates process-global environment or working directory.
+
+	// TestSetupTracingIgnoresOverriddenAmbientOTLPExporterEnv locks in the reason
+	// these variables are safe to ignore: otlptracehttp applies ambient environment
+	// before explicit options, so WithEndpointURL wins for the endpoint, the URL
+	// path, and the TLS scheme. A platform collector injects exactly these, and
+	// treating them as conflicts would disable this service's own trace export on
+	// every such deployment.
+	//nolint:paralleltest // This test mutates process-global environment or working directory.
+
+	// TestSetupTracingExportsToAmbientOTLPEndpointEnv covers the deployment this
+	// service is most often put into: a platform injects the standard OpenTelemetry
+	// endpoint variable and expects traces. Ignoring it would leave the service
+	// reporting healthy, answering every request, and exporting nothing.
+	//nolint:paralleltest // This test mutates process-global environment or working directory.
+
+	// TestSetupTracingPrefersConfiguredEndpointOverAmbientEnv keeps this service's
+	// own setting authoritative: the ambient variable is a fallback, not an
+	// override, so a platform cannot redirect a service that named its collector.
+	//nolint:paralleltest // This test mutates process-global environment or working directory.
+
+	// TestSetupTracingDoesNotSendConfiguredHeadersToAmbientEndpoint is the one case
+	// the ambient fallback must refuse: configured headers are this service's own
+	// credential, and an ambient endpoint is a destination it never named.
+	//nolint:paralleltest // This test mutates process-global environment or working directory.
+
+	// TestSetupTracingAcceptsAmbientCredentialsForAnAmbientEndpoint records why the
+	// conflict rule is scoped to a configured endpoint: when the platform supplies
+	// the collector, its credentials belong to that collector, and rejecting them
+	// would refuse the ordinary injected-collector deployment.
+	//nolint:paralleltest // This test mutates process-global environment or working directory.
+
+	// TestResolveTraceExporterEndpointRejectsInvalidAmbientEndpoint keeps ambient
+	// values under the same fail-closed validation as configured ones, and keeps the
+	// raw value out of the error because it can carry a credential.
 	tests := []struct {
 		name      string
 		envName   string
@@ -353,6 +399,7 @@ func TestSetupTracingRejectsAmbientOTLPExporterEnv(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+
 			telemetrytest.ClearAmbientExporterEnv(t)
 			telemetrytest.RestoreGlobals(t)
 			t.Setenv(tt.envName, tt.envValue)
@@ -369,13 +416,8 @@ func TestSetupTracingRejectsAmbientOTLPExporterEnv(t *testing.T) {
 	}
 }
 
-// TestSetupTracingIgnoresOverriddenAmbientOTLPExporterEnv locks in the reason
-// these variables are safe to ignore: otlptracehttp applies ambient environment
-// before explicit options, so WithEndpointURL wins for the endpoint, the URL
-// path, and the TLS scheme. A platform collector injects exactly these, and
-// treating them as conflicts would disable this service's own trace export on
-// every such deployment.
 func TestSetupTracingIgnoresOverriddenAmbientOTLPExporterEnv(t *testing.T) {
+
 	typedCollector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -425,6 +467,7 @@ func TestSetupTracingIgnoresOverriddenAmbientOTLPExporterEnv(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+
 			telemetrytest.ClearAmbientExporterEnv(t)
 			telemetrytest.RestoreGlobals(t)
 			t.Setenv(tt.envName, tt.envValue)
@@ -439,6 +482,7 @@ func TestSetupTracingIgnoresOverriddenAmbientOTLPExporterEnv(t *testing.T) {
 }
 
 func TestConflictingTraceExporterEnvReportsCredentialAndTrustNamesOnly(t *testing.T) {
+
 	telemetrytest.ClearAmbientExporterEnv(t)
 	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://collector.example:4318")
 	t.Setenv("OTEL_EXPORTER_OTLP_TIMEOUT", "15000")
@@ -453,11 +497,8 @@ func TestConflictingTraceExporterEnvReportsCredentialAndTrustNamesOnly(t *testin
 	}
 }
 
-// TestSetupTracingExportsToAmbientOTLPEndpointEnv covers the deployment this
-// service is most often put into: a platform injects the standard OpenTelemetry
-// endpoint variable and expects traces. Ignoring it would leave the service
-// reporting healthy, answering every request, and exporting nothing.
 func TestSetupTracingExportsToAmbientOTLPEndpointEnv(t *testing.T) {
+
 	tests := []struct {
 		name      string
 		envName   string
@@ -485,6 +526,7 @@ func TestSetupTracingExportsToAmbientOTLPEndpointEnv(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+
 			telemetrytest.ClearAmbientExporterEnv(t)
 			telemetrytest.RestoreGlobals(t)
 
@@ -510,10 +552,8 @@ func TestSetupTracingExportsToAmbientOTLPEndpointEnv(t *testing.T) {
 	}
 }
 
-// TestSetupTracingPrefersConfiguredEndpointOverAmbientEnv keeps this service's
-// own setting authoritative: the ambient variable is a fallback, not an
-// override, so a platform cannot redirect a service that named its collector.
 func TestSetupTracingPrefersConfiguredEndpointOverAmbientEnv(t *testing.T) {
+
 	telemetrytest.ClearAmbientExporterEnv(t)
 	telemetrytest.RestoreGlobals(t)
 
@@ -545,10 +585,8 @@ func TestSetupTracingPrefersConfiguredEndpointOverAmbientEnv(t *testing.T) {
 	assertNoCollectorRequest(t, ambient, "ambient endpoint collector")
 }
 
-// TestSetupTracingDoesNotSendConfiguredHeadersToAmbientEndpoint is the one case
-// the ambient fallback must refuse: configured headers are this service's own
-// credential, and an ambient endpoint is a destination it never named.
 func TestSetupTracingDoesNotSendConfiguredHeadersToAmbientEndpoint(t *testing.T) {
+
 	telemetrytest.ClearAmbientExporterEnv(t)
 	telemetrytest.RestoreGlobals(t)
 
@@ -574,11 +612,8 @@ func TestSetupTracingDoesNotSendConfiguredHeadersToAmbientEndpoint(t *testing.T)
 	assertNoCollectorRequest(t, requests, "ambient endpoint collector")
 }
 
-// TestSetupTracingAcceptsAmbientCredentialsForAnAmbientEndpoint records why the
-// conflict rule is scoped to a configured endpoint: when the platform supplies
-// the collector, its credentials belong to that collector, and rejecting them
-// would refuse the ordinary injected-collector deployment.
 func TestSetupTracingAcceptsAmbientCredentialsForAnAmbientEndpoint(t *testing.T) {
+
 	telemetrytest.ClearAmbientExporterEnv(t)
 	telemetrytest.RestoreGlobals(t)
 
@@ -598,10 +633,8 @@ func TestSetupTracingAcceptsAmbientCredentialsForAnAmbientEndpoint(t *testing.T)
 	}
 }
 
-// TestResolveTraceExporterEndpointRejectsInvalidAmbientEndpoint keeps ambient
-// values under the same fail-closed validation as configured ones, and keeps the
-// raw value out of the error because it can carry a credential.
 func TestResolveTraceExporterEndpointRejectsInvalidAmbientEndpoint(t *testing.T) {
+
 	telemetrytest.ClearAmbientExporterEnv(t)
 	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "https://user:secret-value@collector.example:4318")
 

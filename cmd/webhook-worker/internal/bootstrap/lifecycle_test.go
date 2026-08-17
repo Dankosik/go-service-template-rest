@@ -10,6 +10,7 @@ import (
 )
 
 func TestWebhookWorkerLifecycleUnexpectedExit(t *testing.T) {
+	t.Parallel()
 	cfg := config.Config{}
 	cfg.Observability.Metrics.Addr = "127.0.0.1:0"
 	cfg.HTTP.GracePeriod = time.Second

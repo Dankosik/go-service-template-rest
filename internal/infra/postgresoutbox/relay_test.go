@@ -14,6 +14,7 @@ import (
 )
 
 func TestRelayCancellation(t *testing.T) {
+	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		started := make(chan struct{})
 		relay := newUnitRelay(&relayStoreStub{}, publisherFunc(func(ctx context.Context, _ Event) error {
@@ -145,6 +146,7 @@ func TestRelayRunCancellationDuringClaim(t *testing.T) {
 // A wake-up signal replaces the poll wait, so an append committed during an
 // idle cycle is claimed without waiting out the poll interval.
 func TestRelayRunWakesOnNotification(t *testing.T) {
+	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		claims := 0
 		store := &relayStoreStub{}
@@ -174,6 +176,7 @@ func TestRelayRunWakesOnNotification(t *testing.T) {
 }
 
 func TestRelayRunMaintainsWhileEmpty(t *testing.T) {
+	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		claims := 0
 		observations := 0
@@ -260,6 +263,7 @@ func TestRelayRejectsMissingDependencies(t *testing.T) {
 // The next observation is measured from when the slow one finished, not from
 // when it came due, so a store slower than the interval cannot queue up.
 func TestRelayMaintainReschedulesFromEndOfSlowObservation(t *testing.T) {
+	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		relay := newUnitRelay(&relayStoreStub{
 			observe: func(context.Context) (StateObservation, error) {

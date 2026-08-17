@@ -11,6 +11,7 @@ import (
 )
 
 func TestJobsConfigDefaultsDisabled(t *testing.T) {
+	t.Parallel()
 	resetConfigEnv(t)
 	cfg, _, err := LoadDetailed(LoadOptions{})
 	if err != nil {
@@ -22,6 +23,7 @@ func TestJobsConfigDefaultsDisabled(t *testing.T) {
 }
 
 func TestJobsConfigValidation(t *testing.T) {
+	t.Parallel()
 	validJobs := JobsConfig{
 		Enabled:               true,
 		PollInterval:          time.Second,
@@ -59,8 +61,12 @@ func TestJobsConfigValidation(t *testing.T) {
 		{name: "lease ratio below six", mutate: func(jobs *JobsConfig, _ *PostgresConfig) {
 			jobs.LeaseDuration = 6*jobs.StoreOperationTimeout - time.Nanosecond
 		}, contains: "at least 6 times"},
+		{name: "poll cannot renew lease in time", mutate: func(jobs *JobsConfig, _ *PostgresConfig) {
+			jobs.PollInterval = jobs.LeaseDuration/3 - jobs.StoreOperationTimeout + time.Nanosecond
+		}, contains: "jobs.poll_interval"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			jobs, postgres := validJobs, validPostgres
 			test.mutate(&jobs, &postgres)
 			err := validateJobs(jobs, postgres)
@@ -72,6 +78,7 @@ func TestJobsConfigValidation(t *testing.T) {
 }
 
 func TestJobsConfigLeaseRatioAvoidsOverflow(t *testing.T) {
+	t.Parallel()
 	postgres := PostgresConfig{Enabled: true, MaxOpenConns: 2}
 	jobs := JobsConfig{
 		Enabled:               true,

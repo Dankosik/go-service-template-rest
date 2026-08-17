@@ -6,6 +6,7 @@ import (
 )
 
 func TestFailureVocabularyAndPrecedence(t *testing.T) {
+	t.Parallel()
 	if maxConfiguredDependencies != 1 || maxDependencyNameBytes != 64 {
 		t.Fatalf("dependency bounds = %d, %d", maxConfiguredDependencies, maxDependencyNameBytes)
 	}

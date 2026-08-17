@@ -52,6 +52,15 @@ func LoadJobsWorkerDetailedWithContext(ctx context.Context, opts LoadOptions) (C
 
 // profile:jobs-postgres:end
 
+// LoadWebhookWorkerDetailedWithContext loads only the immutable snapshot used
+// by webhook-worker, so unrelated selected profiles cannot block the binary.
+// profile:webhooks-durable:start
+func LoadWebhookWorkerDetailedWithContext(ctx context.Context, opts LoadOptions) (Config, LoadReport, error) {
+	return loadDetailedWithContext(ctx, opts, buildWebhookWorkerSnapshot, validateWebhookWorkerConfig)
+}
+
+// profile:webhooks-durable:end
+
 func loadDetailedWithContext(
 	ctx context.Context,
 	opts LoadOptions,

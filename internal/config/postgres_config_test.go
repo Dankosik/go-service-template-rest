@@ -1,4 +1,16 @@
-package config
+package //nolint:paralleltest // This test mutates process-global environment or working directory.
+
+// The three tests below hold the budgets this section shares with HTTP. They
+// live here rather than in validate_test.go because validatePostgres owns those
+// rules, and because a build profile that removes Postgres removes this file
+// whole instead of cutting marked blocks out of a shared one.
+//nolint:paralleltest // This test mutates process-global environment or working directory.
+
+// TestAcquireTimeoutMustLeaveQueryBudget keeps the two numbers one budget. An
+// acquire budget at or above the request budget is not a bound: a caller that
+// waited it out has nothing left to run a query with, which is the unbounded
+// wait this setting replaced.
+config
 
 import (
 	"errors"
@@ -7,6 +19,7 @@ import (
 )
 
 func TestPostgresDurationBounds(t *testing.T) {
+
 	resetConfigEnv(t)
 
 	t.Setenv("APP__POSTGRES__CONNECT_TIMEOUT", "50ms")
@@ -21,6 +34,7 @@ func TestPostgresDurationBounds(t *testing.T) {
 }
 
 func TestPostgresMaxOpenConnsMustStayWithinRange(t *testing.T) {
+
 	resetConfigEnv(t)
 
 	t.Setenv("APP__POSTGRES__MAX_OPEN_CONNS", "501")
@@ -38,6 +52,7 @@ func TestPostgresMaxOpenConnsMustStayWithinRange(t *testing.T) {
 }
 
 func TestMigrationTimeoutsMustFitOverallBudget(t *testing.T) {
+
 	resetConfigEnv(t)
 
 	t.Setenv("APP__POSTGRES__MIGRATION_TIMEOUT", "30s")
@@ -56,6 +71,7 @@ func TestMigrationTimeoutsMustFitOverallBudget(t *testing.T) {
 }
 
 func TestMigrationLockTimeoutMustLeaveCleanupReserve(t *testing.T) {
+
 	resetConfigEnv(t)
 
 	t.Setenv("APP__POSTGRES__MIGRATION_TIMEOUT", "30s")
@@ -75,6 +91,7 @@ func TestMigrationLockTimeoutMustLeaveCleanupReserve(t *testing.T) {
 }
 
 func TestPostgresDSNParseIsAdapterOwned(t *testing.T) {
+
 	resetConfigEnv(t)
 
 	t.Setenv("APP__POSTGRES__ENABLED", "true")
@@ -90,6 +107,7 @@ func TestPostgresDSNParseIsAdapterOwned(t *testing.T) {
 }
 
 func TestMinIdleConnsMustFitPool(t *testing.T) {
+
 	for _, tc := range []struct {
 		name         string
 		minIdleConns string
@@ -103,6 +121,7 @@ func TestMinIdleConnsMustFitPool(t *testing.T) {
 		{name: "negative warm floor", minIdleConns: "-1", maxOpenConns: "25", wantErr: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+
 			resetConfigEnv(t)
 			if tc.minIdleConns != "" {
 				t.Setenv("APP__POSTGRES__MIN_IDLE_CONNS", tc.minIdleConns)
@@ -130,11 +149,8 @@ func TestMinIdleConnsMustFitPool(t *testing.T) {
 	}
 }
 
-// The three tests below hold the budgets this section shares with HTTP. They
-// live here rather than in validate_test.go because validatePostgres owns those
-// rules, and because a build profile that removes Postgres removes this file
-// whole instead of cutting marked blocks out of a shared one.
 func TestStatementTimeoutMustFitRequestBudget(t *testing.T) {
+
 	for _, tc := range []struct {
 		name             string
 		statementTimeout string
@@ -147,6 +163,7 @@ func TestStatementTimeoutMustFitRequestBudget(t *testing.T) {
 		{name: "statement budget outlives request", statementTimeout: "9s", requestTimeout: "8s", wantErr: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+
 			resetConfigEnv(t)
 			if tc.statementTimeout != "" {
 				t.Setenv("APP__POSTGRES__STATEMENT_TIMEOUT", tc.statementTimeout)
@@ -175,6 +192,7 @@ func TestStatementTimeoutMustFitRequestBudget(t *testing.T) {
 }
 
 func TestHTTPAdmissionAndPoolCapacityAreIndependent(t *testing.T) {
+
 	resetConfigEnv(t)
 	t.Setenv("APP__POSTGRES__ENABLED", "true")
 	t.Setenv("APP__POSTGRES__DSN", "postgres://app:app@127.0.0.1:5432/app?sslmode=disable")
@@ -186,11 +204,8 @@ func TestHTTPAdmissionAndPoolCapacityAreIndependent(t *testing.T) {
 	}
 }
 
-// TestAcquireTimeoutMustLeaveQueryBudget keeps the two numbers one budget. An
-// acquire budget at or above the request budget is not a bound: a caller that
-// waited it out has nothing left to run a query with, which is the unbounded
-// wait this setting replaced.
 func TestAcquireTimeoutMustLeaveQueryBudget(t *testing.T) {
+
 	for _, tc := range []struct {
 		name           string
 		acquireTimeout string
@@ -203,6 +218,7 @@ func TestAcquireTimeoutMustLeaveQueryBudget(t *testing.T) {
 		{name: "acquire budget outlives request", acquireTimeout: "9s", requestTimeout: "8s", wantErr: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+
 			resetConfigEnv(t)
 			if tc.acquireTimeout != "" {
 				t.Setenv("APP__POSTGRES__ACQUIRE_TIMEOUT", tc.acquireTimeout)

@@ -3,8 +3,13 @@ package outboundtrust
 
 import "net/netip"
 
+// IANASpecialPurposeRegistryRevision pins both special-purpose registries used
+// below. Update the corpus with the revision, never the date alone.
+const IANASpecialPurposeRegistryRevision = "2025-10-09"
+
 var (
 	nonPublicIPv4Prefixes = [...]netip.Prefix{
+		netip.MustParsePrefix("0.0.0.0/8"),
 		netip.MustParsePrefix("100.64.0.0/10"),
 		netip.MustParsePrefix("192.0.0.0/24"),
 		netip.MustParsePrefix("192.0.2.0/24"),
@@ -37,8 +42,8 @@ var (
 	}
 )
 
-// PublicAddress reports whether address is globally reachable under the
-// current IANA special-purpose registries used by this repository.
+// PublicAddress reports whether address is globally reachable under the pinned
+// IANA IPv4 and IPv6 Special-Purpose Address Space registries.
 func PublicAddress(address netip.Addr) bool {
 	address = address.Unmap()
 	if !address.IsValid() || !address.IsGlobalUnicast() || address.IsPrivate() ||

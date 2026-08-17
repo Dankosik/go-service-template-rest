@@ -8,6 +8,7 @@ import (
 )
 
 func TestWebhooksConfigContract(t *testing.T) {
+	t.Parallel()
 	valid := WebhooksConfig{Enabled: true, CapacityRevision: 1, GlobalConcurrency: 4, ClaimScanPage: 4, PollInterval: time.Second, ObservationInterval: time.Second, StoreOperationTimeout: time.Second, AttemptTimeout: 5 * time.Second, ResponseHeaderTimeout: 2 * time.Second, ResponseHeaderBytes: 4096, ResponseBodyBytes: 4096, DrainTimeout: 10 * time.Second, MaintenanceInterval: time.Second, MaintenanceBatch: 10, StaticSecrets: `{"revision":1,"entries":[]}`}
 	postgres := PostgresConfig{Enabled: true, StatementTimeout: 5 * time.Second}
 	http := HTTPConfig{GracePeriod: 45 * time.Second}
@@ -23,11 +24,21 @@ func TestWebhooksConfigContract(t *testing.T) {
 		{"claim page", func(w *WebhooksConfig, _ *PostgresConfig, _ *HTTPConfig) { w.ClaimScanPage = 257 }},
 		{"store timeout", func(w *WebhooksConfig, _ *PostgresConfig, _ *HTTPConfig) { w.StoreOperationTimeout = 6 * time.Second }},
 		{"budget nesting", func(w *WebhooksConfig, _ *PostgresConfig, _ *HTTPConfig) { w.ResponseHeaderTimeout = 6 * time.Second }},
+		{"attempt ceiling", func(w *WebhooksConfig, _ *PostgresConfig, h *HTTPConfig) {
+			w.AttemptTimeout = 10*time.Minute + time.Nanosecond
+			w.DrainTimeout = w.AttemptTimeout + time.Second
+			h.GracePeriod = w.DrainTimeout + time.Second
+		}},
+		{"drain ceiling", func(w *WebhooksConfig, _ *PostgresConfig, h *HTTPConfig) {
+			w.DrainTimeout = 30*time.Minute + time.Nanosecond
+			h.GracePeriod = w.DrainTimeout + time.Second
+		}},
 		{"grace", func(w *WebhooksConfig, _ *PostgresConfig, h *HTTPConfig) { h.GracePeriod = w.DrainTimeout }},
 		{"secret", func(w *WebhooksConfig, _ *PostgresConfig, _ *HTTPConfig) { w.StaticSecrets = "" }},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			w, p, h := valid, postgres, http
 			test.mutate(&w, &p, &h)
 			if err := validateWebhooks(w, p, h); !errors.Is(err, ErrValidate) {
@@ -38,6 +49,7 @@ func TestWebhooksConfigContract(t *testing.T) {
 }
 
 func TestWebhooksConfigDefaultsDisabled(t *testing.T) {
+	t.Parallel()
 	resetConfigEnv(t)
 	cfg, _, err := LoadDetailed(LoadOptions{})
 	if err != nil {
@@ -48,7 +60,9 @@ func TestWebhooksConfigDefaultsDisabled(t *testing.T) {
 	}
 }
 
+//nolint:paralleltest // This test mutates process-global environment or working directory.
 func TestWebhookWorkerProcessEnvironment(t *testing.T) {
+
 	resetConfigEnv(t)
 	secret := "whsec_" + base64.StdEncoding.EncodeToString([]byte("0123456789abcdef0123456789abcdef"))
 	for key, value := range map[string]string{

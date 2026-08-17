@@ -6,8 +6,13 @@ import (
 )
 
 func TestWebhookWorkerReadinessFreshness(t *testing.T) {
+	t.Parallel()
 	state := readinessState{interval: time.Second}
-	state.update()
+	state.observed()
+	if state.ready() {
+		t.Fatal("observation without successful maintenance opened readiness")
+	}
+	state.maintained()
 	if !state.ready() {
 		t.Fatal("fresh admitted worker is not ready")
 	}
@@ -17,7 +22,7 @@ func TestWebhookWorkerReadinessFreshness(t *testing.T) {
 	if state.ready() {
 		t.Fatal("observation older than exactly two intervals remained ready")
 	}
-	state.update()
+	state.observed()
 	state.close()
 	if state.ready() {
 		t.Fatal("closed admission remained ready")

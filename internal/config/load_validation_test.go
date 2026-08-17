@@ -7,6 +7,7 @@ import (
 )
 
 func TestUnknownKeyRejects(t *testing.T) {
+	t.Parallel()
 	resetConfigEnv(t)
 
 	configPath := writeTempConfig(t, `
@@ -27,6 +28,7 @@ unknown:
 }
 
 func TestOverlayUnknownKeyRejects(t *testing.T) {
+	t.Parallel()
 	resetConfigEnv(t)
 
 	overlayPath := writeTempConfig(t, `
@@ -46,6 +48,7 @@ unknown:
 }
 
 func TestUnknownKeyRejectsScalarSectionKeys(t *testing.T) {
+
 	for _, tc := range []struct {
 		name    string
 		envKey  string
@@ -55,6 +58,7 @@ func TestUnknownKeyRejectsScalarSectionKeys(t *testing.T) {
 		{name: "nested section", envKey: "APP__OBSERVABILITY__OTEL", wantKey: "observability.otel"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+
 			resetConfigEnv(t)
 			t.Setenv(tc.envKey, "oops")
 
@@ -77,6 +81,7 @@ func TestUnknownKeyRejectsScalarSectionKeys(t *testing.T) {
 
 //nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
 func TestScalarSectionRejects(t *testing.T) {
+	t.Parallel()
 	resetConfigEnv(t)
 
 	configPath := writeTempConfig(t, `
@@ -93,7 +98,11 @@ http: oops
 }
 
 //nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
+//nolint:paralleltest // This test mutates process-global environment or working directory.
+
+// profile:database-postgres:start
 func TestRemovedObservabilityKeysReject(t *testing.T) {
+	t.Parallel()
 	resetConfigEnv(t)
 
 	configPath := writeTempConfig(t, `
@@ -115,8 +124,8 @@ observability:
 	}
 }
 
-// profile:database-postgres:start
 func TestRequiredIfEnabledPostgresSecretPolicy(t *testing.T) {
+
 	resetConfigEnv(t)
 
 	t.Setenv("APP__POSTGRES__ENABLED", "true")
@@ -131,10 +140,13 @@ func TestRequiredIfEnabledPostgresSecretPolicy(t *testing.T) {
 }
 
 // profile:database-postgres:end
-
 // profile:database-postgres:start
+//
+//nolint:paralleltest // This test mutates process-global environment or working directory.
 func TestTST003RequiredIfEnabledContracts(t *testing.T) {
+
 	t.Run("postgres_enabled_without_dsn_rejected", func(t *testing.T) {
+
 		resetConfigEnv(t)
 		t.Setenv("APP__POSTGRES__ENABLED", "true")
 
@@ -148,6 +160,7 @@ func TestTST003RequiredIfEnabledContracts(t *testing.T) {
 	})
 
 	t.Run("postgres_enabled_with_dsn_allowed", func(t *testing.T) {
+
 		resetConfigEnv(t)
 		dsn := "postgres://app:app@localhost:5432/app?sslmode=disable"
 		t.Setenv("APP__POSTGRES__ENABLED", "true")

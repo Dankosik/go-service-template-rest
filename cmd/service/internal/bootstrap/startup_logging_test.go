@@ -21,6 +21,7 @@ import (
 //
 //nolint:paralleltest // Installs a process-wide tracer provider for span capture.
 func TestProcessLoggerCorrelatesRecords(t *testing.T) {
+	t.Parallel()
 	telemetrytest.InstallSpanRecorder(t)
 
 	var out bytes.Buffer

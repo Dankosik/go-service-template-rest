@@ -30,6 +30,7 @@ func (tx *trackedTx) Rollback(ctx context.Context) error {
 }
 
 func TestRunInTxPreservesServerErrorAfterLaterCancellation(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	serverErr := &pgconn.PgError{Code: pgerrcode.QueryCanceled}
@@ -55,6 +56,7 @@ func TestRunInTxPreservesServerErrorAfterLaterCancellation(t *testing.T) {
 }
 
 func TestRunInTxAttributesMarkedCancellation(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	serverErr := &pgconn.PgError{Code: pgerrcode.QueryCanceled}
@@ -83,31 +85,39 @@ func TestClassifyCommitOutcome(t *testing.T) {
 	t.Parallel()
 
 	for _, tc := range []struct {
-		name string
-		err  error
-		want bool
+		name        string
+		err         error
+		wantUnknown bool
 	}{
-		{name: "server rejection", err: &pgconn.PgError{Code: "23505"}, want: true},
-		{name: "transaction resolution unknown", err: &pgconn.PgError{Code: "08007"}},
-		{name: "statement completion unknown", err: &pgconn.PgError{Code: "40003"}},
-		{name: "commit returned rollback", err: pgx.ErrTxCommitRollback, want: true},
-		{name: "request was not sent", err: safeToRetryError{}, want: true},
-		{name: "wrapped request was not sent", err: errors.Join(errors.New("commit"), safeToRetryError{}), want: true},
-		{name: "opaque transport failure", err: errors.New("connection lost")},
-		{name: "context deadline after send", err: context.DeadlineExceeded},
+		{name: "server rejection", err: &pgconn.PgError{Code: "23505"}},
+		{name: "transaction resolution unknown", err: &pgconn.PgError{Code: "08007"}, wantUnknown: true},
+		{name: "statement completion unknown", err: &pgconn.PgError{Code: "40003"}, wantUnknown: true},
+		{name: "server shutdown during commit", err: &pgconn.PgError{Code: pgerrcode.AdminShutdown}, wantUnknown: true},
+		{name: "commit cancellation", err: &pgconn.PgError{Code: pgerrcode.QueryCanceled}, wantUnknown: true},
+		{name: "serialization rollback", err: &pgconn.PgError{Code: pgerrcode.SerializationFailure}},
+		{name: "commit returned rollback", err: pgx.ErrTxCommitRollback},
+		{name: "request was not sent", err: safeToRetryError{}},
+		{name: "wrapped request was not sent", err: errors.Join(errors.New("commit"), safeToRetryError{})},
+		{name: "opaque transport failure", err: errors.New("connection lost"), wantUnknown: true},
+		{name: "context deadline after send", err: context.DeadlineExceeded, wantUnknown: true},
 		{name: "nil", err: nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			if got := commitDefinitelyFailed(tc.err); got != tc.want {
-				t.Fatalf("commitDefinitelyFailed(%v) = %t, want %t", tc.err, got, tc.want)
+			got := ClassifyCommitError(tc.err)
+			if errors.Is(got, ErrCommitUnknown) != tc.wantUnknown {
+				t.Fatalf("ClassifyCommitError(%v) = %v, unknown=%t want %t", tc.err, got, errors.Is(got, ErrCommitUnknown), tc.wantUnknown)
+			}
+			if tc.err != nil && !errors.Is(got, tc.err) {
+				t.Fatalf("ClassifyCommitError(%v) = %v, want original cause", tc.err, got)
 			}
 		})
 	}
 }
 
 func TestCommitTxWrapsCommitFailure(t *testing.T) {
+	t.Parallel()
 	want := errors.New("connection lost")
 	if err := commitTx(t.Context(), &trackedTx{commitErr: want}); !errors.Is(err, want) {
 		t.Fatalf("commitTx() error = %v, want wrapped commit failure", err)

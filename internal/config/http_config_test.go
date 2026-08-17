@@ -8,6 +8,7 @@ import (
 )
 
 func TestShutdownTimeoutCanBeTunedWhenDrainBudgetIsValid(t *testing.T) {
+
 	resetConfigEnv(t)
 
 	t.Setenv("APP__HTTP__SHUTDOWN_TIMEOUT", "45s")
@@ -24,6 +25,7 @@ func TestShutdownTimeoutCanBeTunedWhenDrainBudgetIsValid(t *testing.T) {
 }
 
 func TestShutdownTimeoutMustStayWithinRange(t *testing.T) {
+
 	resetConfigEnv(t)
 
 	t.Setenv("APP__HTTP__SHUTDOWN_TIMEOUT", "500ms")
@@ -43,6 +45,7 @@ func TestShutdownTimeoutMustStayWithinRange(t *testing.T) {
 }
 
 func TestHTTPShutdownBudgetMustLeaveWriteDrainTime(t *testing.T) {
+
 	resetConfigEnv(t)
 
 	t.Setenv("APP__HTTP__READINESS_PROPAGATION_DELAY", "20s")
@@ -61,7 +64,9 @@ func TestHTTPShutdownBudgetMustLeaveWriteDrainTime(t *testing.T) {
 }
 
 func TestReadinessTimeoutMustNotExceedWriteTimeout(t *testing.T) {
+
 	t.Run("greater readiness timeout rejects", func(t *testing.T) {
+
 		resetConfigEnv(t)
 		t.Setenv("APP__HTTP__READINESS_TIMEOUT", "6s")
 		t.Setenv("APP__HTTP__REQUEST_TIMEOUT", "5s")
@@ -88,6 +93,7 @@ func TestReadinessTimeoutMustNotExceedWriteTimeout(t *testing.T) {
 		{name: "lower readiness timeout allows", readinessTimeout: "4s", writeTimeout: "5s"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+
 			resetConfigEnv(t)
 			t.Setenv("APP__HTTP__READINESS_TIMEOUT", tc.readinessTimeout)
 			t.Setenv("APP__HTTP__REQUEST_TIMEOUT", tc.writeTimeout)
@@ -104,11 +110,14 @@ func TestReadinessTimeoutMustNotExceedWriteTimeout(t *testing.T) {
 // The readiness/health-check relationship is owned by
 // bootstrap.validateStartupBudgetCompatibility, which enforces it with the
 // startup headroom this package cannot see. It is proved there.
-
 // The request budget must expire while the connection can still carry the 504
 // that reports it, so it may not outlast the response write deadline.
+//
+//nolint:paralleltest // This test mutates process-global environment or working directory.
 func TestRequestTimeoutMustNotExceedWriteTimeout(t *testing.T) {
+
 	t.Run("greater request timeout rejects", func(t *testing.T) {
+
 		resetConfigEnv(t)
 		t.Setenv("APP__HTTP__REQUEST_TIMEOUT", "6s")
 		t.Setenv("APP__HTTP__WRITE_TIMEOUT", "5s")
@@ -134,6 +143,7 @@ func TestRequestTimeoutMustNotExceedWriteTimeout(t *testing.T) {
 		{name: "lower request timeout allows", requestTimeout: "4s", writeTimeout: "5s"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+
 			resetConfigEnv(t)
 			t.Setenv("APP__HTTP__READINESS_TIMEOUT", "1s")
 			t.Setenv("APP__HTTP__REQUEST_TIMEOUT", tc.requestTimeout)
@@ -148,6 +158,7 @@ func TestRequestTimeoutMustNotExceedWriteTimeout(t *testing.T) {
 }
 
 func TestRequestTimeoutRejectsOutOfRangeValues(t *testing.T) {
+
 	for _, tc := range []struct {
 		name  string
 		value string
@@ -156,6 +167,7 @@ func TestRequestTimeoutRejectsOutOfRangeValues(t *testing.T) {
 		{name: "above upper bound", value: "11m"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+
 			resetConfigEnv(t)
 			t.Setenv("APP__HTTP__REQUEST_TIMEOUT", tc.value)
 
@@ -174,6 +186,7 @@ func TestRequestTimeoutRejectsOutOfRangeValues(t *testing.T) {
 }
 
 func TestMaxInFlightBounds(t *testing.T) {
+
 	for _, tc := range []struct {
 		name    string
 		value   string
@@ -186,11 +199,17 @@ func TestMaxInFlightBounds(t *testing.T) {
 			// profile:authn-oidc-jwt:start
 			wantErr: true,
 			// profile:authn-oidc-jwt:end
+			//nolint:paralleltest // This test mutates process-global environment or working directory.
+
+			// TestMaxConnectionsBounds covers the accept ceiling, which bounds what
+			// max_in_flight cannot: a connection costs a goroutine and its buffers before
+			// any middleware, including the load shedder, ever runs.
 		},
 		{name: "negative", value: "-1", wantErr: true},
 		{name: "above ceiling", value: "100001", wantErr: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+
 			resetConfigEnv(t)
 			if tc.value != "" {
 				t.Setenv("APP__HTTP__MAX_IN_FLIGHT", tc.value)
@@ -207,10 +226,8 @@ func TestMaxInFlightBounds(t *testing.T) {
 	}
 }
 
-// TestMaxConnectionsBounds covers the accept ceiling, which bounds what
-// max_in_flight cannot: a connection costs a goroutine and its buffers before
-// any middleware, including the load shedder, ever runs.
 func TestMaxConnectionsBounds(t *testing.T) {
+
 	for _, tc := range []struct {
 		name        string
 		connections string
@@ -228,6 +245,7 @@ func TestMaxConnectionsBounds(t *testing.T) {
 		{name: "below in flight", connections: "128", inFlight: "256", wantErr: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+
 			resetConfigEnv(t)
 			if tc.connections != "" {
 				t.Setenv("APP__HTTP__MAX_CONNECTIONS", tc.connections)

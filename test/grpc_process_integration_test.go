@@ -42,6 +42,7 @@ import (
 )
 
 func TestGRPCProcessLifecycle(t *testing.T) {
+	t.Parallel()
 	if runtime.GOOS == "windows" {
 		t.Skip("SIGTERM process lifecycle is Unix-specific")
 	}

@@ -15,6 +15,7 @@ import (
 )
 
 func TestPostgresOutboxConcurrentClaims(t *testing.T) {
+	t.Parallel()
 	ctx, pool, store := newOutboxFixture(t)
 	const eventCount = 24
 	for i := range eventCount {
@@ -76,6 +77,7 @@ func TestPostgresOutboxConcurrentClaims(t *testing.T) {
 }
 
 func TestPostgresOutboxLeaseExpiryAndFence(t *testing.T) {
+	t.Parallel()
 	ctx, pool, store := newOutboxFixture(t)
 	mustAppendOutbox(t, ctx, pool, store, outboxEvent("lease"))
 	first, err := claimOutboxEvent(ctx, store, shortOutboxLease)
@@ -108,6 +110,7 @@ func TestPostgresOutboxLeaseExpiryAndFence(t *testing.T) {
 }
 
 func TestPostgresOutboxCrashAfterClaim(t *testing.T) {
+	t.Parallel()
 	ctx, pool, store := newOutboxFixture(t)
 	mustAppendOutbox(t, ctx, pool, store, outboxEvent("abandoned"))
 	first, err := claimOutboxEvent(ctx, store, shortOutboxLease)
@@ -138,6 +141,7 @@ func TestPostgresOutboxCrashAfterClaim(t *testing.T) {
 // Sequential idempotence cannot catch a regression here — a Redrive that dropped
 // the lock would still pass it, because the second call reads a committed row.
 func TestPostgresOutboxConcurrentRedriveIsIdempotent(t *testing.T) {
+	t.Parallel()
 	ctx, pool, store := newOutboxFixture(t)
 	const racers = 4
 	mustAppendOutbox(t, ctx, pool, store, outboxEvent("race-poison"))
@@ -180,6 +184,7 @@ func TestPostgresOutboxConcurrentRedriveIsIdempotent(t *testing.T) {
 }
 
 func TestPostgresOutboxRedrive(t *testing.T) {
+	t.Parallel()
 	ctx, pool, store := newOutboxFixture(t)
 	event := outboxEvent("poison")
 	event.Payload = []byte(" {\n \"redrive\" : true\n} ")
@@ -254,6 +259,7 @@ func TestPostgresOutboxRedrive(t *testing.T) {
 }
 
 func TestPostgresOutboxConcurrentUnknownActions(t *testing.T) {
+	t.Parallel()
 	ctx, pool, store := newOutboxFixture(t)
 	mustAppendOutbox(t, ctx, pool, store, outboxEvent("unknown-race"))
 	claim := mustClaimOutbox(t, ctx, store)

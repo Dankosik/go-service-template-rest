@@ -254,6 +254,7 @@ func TestOneAttemptTransportDoesNotReplayOrTransform(t *testing.T) {
 }
 
 func TestOneAttemptTransportUsesRequestDeadlineAndExplicitRoots(t *testing.T) {
+	t.Parallel()
 	pki := newGeneratedClientPKI(t)
 	server, requests := newRootTestServer(t, pki.certificate(t, "provider.example"))
 	roots := x509.NewCertPool()
@@ -327,6 +328,7 @@ func TestOneAttemptTransportUsesRequestDeadlineAndExplicitRoots(t *testing.T) {
 }
 
 func TestTransportUsesCallerRootCAsWithoutAmbientFallback(t *testing.T) {
+
 	configured := newGeneratedClientPKI(t)
 	ambient := newGeneratedClientPKI(t)
 	roots := x509.NewCertPool()
@@ -340,6 +342,7 @@ func TestTransportUsesCallerRootCAsWithoutAmbientFallback(t *testing.T) {
 	t.Setenv("SSL_CERT_DIR", t.TempDir())
 
 	t.Run("configured root succeeds", func(t *testing.T) {
+		t.Parallel()
 		server, requests := newRootTestServer(t, configured.certificate(t, "provider.example"))
 		client := newRootTestClient(t, roots, server, time.Time{})
 		response, err := client.Do(mustRootTestRequest(t, client))
@@ -358,6 +361,7 @@ func TestTransportUsesCallerRootCAsWithoutAmbientFallback(t *testing.T) {
 	})
 
 	t.Run("alternate root is denied", func(t *testing.T) {
+		t.Parallel()
 		server, requests := newRootTestServer(t, ambient.certificate(t, "provider.example"))
 		client := newRootTestClient(t, roots, server, time.Time{})
 		response, err := client.Do(mustRootTestRequest(t, client))
@@ -375,6 +379,7 @@ func TestTransportUsesCallerRootCAsWithoutAmbientFallback(t *testing.T) {
 	})
 
 	t.Run("wrong hostname is denied", func(t *testing.T) {
+		t.Parallel()
 		server, requests := newRootTestServer(t, configured.certificate(t, "other.internal"))
 		client := newRootTestClient(t, roots, server, time.Time{})
 		response, err := client.Do(mustRootTestRequest(t, client))
@@ -392,6 +397,7 @@ func TestTransportUsesCallerRootCAsWithoutAmbientFallback(t *testing.T) {
 	})
 
 	t.Run("nil preserves existing system-root mode", func(t *testing.T) {
+		t.Parallel()
 		cfg := validExternalConfig()
 		client, err := New(cfg, nil)
 		if err != nil {

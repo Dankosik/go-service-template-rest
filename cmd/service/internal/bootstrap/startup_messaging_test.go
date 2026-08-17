@@ -9,6 +9,7 @@ import (
 )
 
 func TestMessagingCompositionDisabledHasNoRuntimeOrReadiness(t *testing.T) {
+	t.Parallel()
 	runtime, err := initMessagingRuntime(t.Context(), config.MessagingConfig{}, nil)
 	if err != nil {
 		t.Fatalf("initMessagingRuntime(disabled) error = %v", err)
@@ -26,6 +27,7 @@ func TestMessagingCompositionDisabledHasNoRuntimeOrReadiness(t *testing.T) {
 }
 
 func TestMessagingCompositionReadinessUsesImmediateClientState(t *testing.T) {
+	t.Parallel()
 	runtime := messagingRuntime{client: new(natsjs.Client)}
 	if runtime.Ready() {
 		t.Fatal("disconnected messaging runtime reported ready")
@@ -33,6 +35,7 @@ func TestMessagingCompositionReadinessUsesImmediateClientState(t *testing.T) {
 }
 
 func TestMessagingCompositionSplitsCanonicalURLs(t *testing.T) {
+	t.Parallel()
 	got := runtimeopts.Messaging(config.MessagingConfig{URLs: "tls://one.example:4222,tls://two.example:4222"}).URLs
 	if len(got) != 2 || got[0] != "tls://one.example:4222" || got[1] != "tls://two.example:4222" {
 		t.Fatalf("runtimeopts.Messaging().URLs = %v", got)

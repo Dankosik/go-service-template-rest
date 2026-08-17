@@ -19,7 +19,9 @@ func TestFailedConfigStage(t *testing.T) {
 	}
 }
 
+//nolint:paralleltest // This test mutates process-global environment or working directory.
 func TestBootstrapConfigStageReturnsConfigLoadFailure(t *testing.T) {
+
 	t.Setenv("APP__APP__ENV", "local")
 
 	missingConfig := filepath.Join(t.TempDir(), "missing.yaml")

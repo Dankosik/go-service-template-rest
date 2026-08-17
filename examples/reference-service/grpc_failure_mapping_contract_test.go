@@ -22,6 +22,7 @@ import (
 const articleCreateFullMethod = "/reference.test.Article/Create"
 
 func TestArticleAlreadyExistsMapsThroughGRPCTransport(t *testing.T) {
+	t.Parallel()
 	server, err := grpcx.NewServer(grpcx.Config{
 		MaxConcurrentRPCs:          4,
 		MaxConcurrentHealthRPCs:    4,

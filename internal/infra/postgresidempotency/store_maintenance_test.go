@@ -10,6 +10,7 @@ import (
 )
 
 func TestMaintenanceScheduleAndBounds(t *testing.T) {
+	t.Parallel()
 	store := maintenanceUnitStore()
 	now := time.Now()
 	for _, tc := range []struct {
@@ -25,6 +26,7 @@ func TestMaintenanceScheduleAndBounds(t *testing.T) {
 		{name: "terminal epoch", snapshot: &maintenanceSnapshot{observedAt: now, writer: true, terminal: ErrEpochLost}, wantErr: ErrEpochLost},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			err := store.snapshotError(tc.snapshot)
 			if !errors.Is(err, tc.wantErr) {
 				t.Fatalf("snapshotError() = %v, want %v", err, tc.wantErr)
@@ -34,6 +36,7 @@ func TestMaintenanceScheduleAndBounds(t *testing.T) {
 }
 
 func TestMaintenanceFailureAndCapacityClosure(t *testing.T) {
+	t.Parallel()
 	store := maintenanceUnitStore()
 	if store.allowsFirstExecution() {
 		t.Fatal("unobserved Store admitted first execution")
@@ -68,6 +71,7 @@ func TestMaintenanceFailureAndCapacityClosure(t *testing.T) {
 }
 
 func TestMaintenanceFailureStateFailsClosedBeforeAnotherCycle(t *testing.T) {
+	t.Parallel()
 	store := maintenanceUnitStore()
 	if err := store.Maintain(t.Context()); !errors.Is(err, ErrConfig) {
 		t.Fatalf("Maintain(unbound Store) error = %v, want ErrConfig", err)

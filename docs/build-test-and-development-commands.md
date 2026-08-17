@@ -529,9 +529,21 @@ each test still owns and drops an isolated database.
 <!-- profile:object-storage:start -->
 ## S3-compatible object storage
 
+Run `S3_RECEIPT_PLATFORM=linux/amd64 make test-s3-source-receipt` and
+`S3_RECEIPT_PLATFORM=linux/arm64 make test-s3-source-receipt` to bind each
+supported Dockerfile Go image, source files, module versions, and final-image
+root bundle. Run `GOMAXPROCS=1 S3_ENVELOPE_PLATFORM=<platform> make
+test-s3-envelope` for the corresponding Linux real-SDK process
+memory/resource envelope. These are credential-free local evidence; neither is
+a provider or deployed-runtime receipt.
+
 `make test-s3-conformance-amazon` and `make test-s3-conformance-r2` are
-fail-closed certification entrypoints. They require a later authorized provider
-receipt and perform no provider request from this deterministic template unit.
+separate fail-closed certification entrypoints implemented by the isolated
+`test/s3conformance` package. They require explicit mutation authorization,
+provider-specific primary and concealment credentials, policy/lifecycle/
+versioning receipts, and exact production image/root-bundle evidence before the
+first request. A deterministic local run without those inputs fails before
+provider I/O and certifies neither provider.
 <!-- profile:object-storage:end -->
 The disposable cluster passes `POSTGRES_INITDB_ARGS=--no-sync`; together with
 Testcontainers' built-in `fsync=off`, this skips crash-durability work that the

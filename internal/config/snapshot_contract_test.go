@@ -412,6 +412,7 @@ func sentinelConfigSourceValues() map[string]any {
 		"object_storage.access_key_id":              "snapshot-access-key",
 		"object_storage.secret_access_key":          "snapshot-secret-key",
 		"object_storage.session_token":              "snapshot-session-token",
+		"object_storage.expected_bucket_owner":      "123456789012",
 		"object_storage.max_object_bytes":           10485760,
 		"object_storage.multipart_chunk_bytes":      5242880,
 		"object_storage.max_active_operations":      2,
@@ -419,7 +420,7 @@ func sentinelConfigSourceValues() map[string]any {
 		"object_storage.max_presign_lifetime":       "1m",
 		"object_storage.max_response_header_bytes":  1024,
 		"object_storage.max_control_response_bytes": 1024,
-		"object_storage.max_working_memory_bytes":   62_145_920,
+		"object_storage.max_working_memory_bytes":   62_149_760,
 		// profile:object-storage:end
 
 		"observability.metrics.addr":                        "127.0.0.1:19090",
@@ -613,6 +614,7 @@ func expectedSentinelSnapshotValues() map[string]any {
 		"object_storage.access_key_id":              "snapshot-access-key",
 		"object_storage.secret_access_key":          "snapshot-secret-key",
 		"object_storage.session_token":              "snapshot-session-token",
+		"object_storage.expected_bucket_owner":      "123456789012",
 		"object_storage.max_object_bytes":           int64(10485760),
 		"object_storage.multipart_chunk_bytes":      int64(5242880),
 		"object_storage.max_active_operations":      2,
@@ -620,7 +622,7 @@ func expectedSentinelSnapshotValues() map[string]any {
 		"object_storage.max_presign_lifetime":       time.Minute,
 		"object_storage.max_response_header_bytes":  int64(1024),
 		"object_storage.max_control_response_bytes": int64(1024),
-		"object_storage.max_working_memory_bytes":   int64(62_145_920),
+		"object_storage.max_working_memory_bytes":   int64(62_149_760),
 		// profile:object-storage:end
 
 		"observability.metrics.addr":                        "127.0.0.1:19090",

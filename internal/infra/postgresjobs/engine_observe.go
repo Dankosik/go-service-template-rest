@@ -21,14 +21,15 @@ func (e *Engine) observe(ctx context.Context) error {
 		e.telemetry.MarkStale()
 		return fmt.Errorf("observe jobs: %w", err)
 	}
+	observedLocallyAt := time.Now()
 	e.mu.Lock()
-	e.lastObservation = observation.ObservedAt
+	e.lastObservation = observedLocallyAt
 	if !observation.Compatible {
 		e.compatible = false
 		e.closeAdmissionLocked()
 	}
-	facts := EngineFacts{ClaimAdmissionOpen: e.admission, Compatible: e.compatible, InFlight: len(e.inflight), Capacity: e.config.MaxConcurrency, ObservationFresh: true}
+	facts := e.factsLocked(observedLocallyAt)
 	e.mu.Unlock()
-	e.telemetry.Update(observation, facts)
+	e.telemetry.Update(observation, facts, observedLocallyAt.Add(e.config.ObservationMaxAge))
 	return nil
 }

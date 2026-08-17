@@ -6,7 +6,6 @@ import (
 	"errors"
 	"hash"
 	"io"
-	"strings"
 	"sync"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -37,41 +36,44 @@ func (c *Client) Download(ctx context.Context, key string) (result objectstorage
 		return result, err
 	}
 
-	out, err := c.sdk.GetObject(effective, &awss3.GetObjectInput{
-		Bucket:       aws.String(c.config.Bucket),
-		Key:          aws.String(key),
-		ChecksumMode: types.ChecksumModeEnabled,
-	})
+	send := &sendState{}
+	out, err := c.sdk.GetObject(withSendState(effective, send), &awss3.GetObjectInput{
+		Bucket:              aws.String(c.config.Bucket),
+		ExpectedBucketOwner: c.expectedBucketOwner(),
+		Key:                 aws.String(key),
+		ChecksumMode:        types.ChecksumModeEnabled,
+	}, withReadRetry)
 	if err != nil {
 		release()
-		err = c.downloadError(err)
+		err = operationError(c.config.Provider, operationDownload, err, send)
 		call.finish(err, 0)
 		return result, err
 	}
-	if out == nil || out.Body == nil || out.ContentLength != nil && *out.ContentLength > c.config.MaxObjectBytes ||
-		!validCRC64NVME(out.ChecksumCRC64NVME) || out.ChecksumType != types.ChecksumTypeFullObject {
+	if err := downloadOutputError(out, c.config.MaxObjectBytes); err != nil {
 		if out != nil && out.Body != nil {
 			_ = out.Body.Close()
 		}
 		release()
-		if out != nil && out.ContentLength != nil && *out.ContentLength > c.config.MaxObjectBytes {
-			err = objectstorage.NewError(objectstorage.KindTooLarge)
-			call.finish(err, 0)
-			return result, err
-		}
-		err = objectstorage.NewError(objectstorage.KindIntegrityFailed)
 		call.finish(err, 0)
 		return result, err
 	}
 
-	size := int64(0)
-	if out.ContentLength != nil && *out.ContentLength >= 0 {
-		size = *out.ContentLength
-	}
 	return objectstorage.Download{
 		Body: newDownloadBody(effective, out.Body, c.config.MaxObjectBytes, *out.ChecksumCRC64NVME, release, call),
-		Size: size, ContentType: aws.ToString(out.ContentType), LastModified: aws.ToTime(out.LastModified),
+		Size: *out.ContentLength, ContentType: aws.ToString(out.ContentType), LastModified: aws.ToTime(out.LastModified),
 	}, nil
+}
+
+//nolint:wrapcheck // Object-storage errors are the closed, sanitized validation result.
+func downloadOutputError(out *awss3.GetObjectOutput, maximum int64) error {
+	if out != nil && out.ContentRange == nil && out.ContentLength != nil && *out.ContentLength > maximum {
+		return objectstorage.NewError(objectstorage.KindTooLarge)
+	}
+	if out == nil || out.Body == nil || out.ContentRange != nil || out.ContentLength == nil || *out.ContentLength < 0 ||
+		!validCRC64NVME(out.ChecksumCRC64NVME) || out.ChecksumType != types.ChecksumTypeFullObject {
+		return objectstorage.NewError(objectstorage.KindIntegrityFailed)
+	}
+	return nil
 }
 
 func validCRC64NVME(value *string) bool {
@@ -92,14 +94,27 @@ type downloadBody struct {
 	release   func()
 	call      *operationCall
 	bytes     int64
+	stopClose func() bool
+	resultErr error
 
-	readMu sync.Mutex
-	mu     sync.Mutex
-	done   bool
+	readMu     sync.Mutex
+	mu         sync.Mutex
+	finishOnce sync.Once
+	done       bool
 }
 
+//nolint:contextcheck // The returned body deliberately retains ctx through its full stream lifetime.
 func newDownloadBody(ctx context.Context, body io.ReadCloser, limit int64, expected string, release func(), call *operationCall) *downloadBody {
-	return &downloadBody{ctx: ctx, body: body, remaining: limit, expected: expected, checksum: crc64NVME(), release: release, call: call}
+	result := &downloadBody{ctx: ctx, body: body, remaining: limit, expected: expected, checksum: crc64NVME(), release: release, call: call}
+	stopClose := context.AfterFunc(ctx, func() { result.finish(downloadContextError(ctx.Err())) })
+	result.mu.Lock()
+	result.stopClose = stopClose
+	done := result.done
+	result.mu.Unlock()
+	if done {
+		_ = stopClose()
+	}
+	return result
 }
 
 func (b *downloadBody) Read(p []byte) (int, error) {
@@ -110,13 +125,17 @@ func (b *downloadBody) Read(p []byte) (int, error) {
 	}
 	b.mu.Lock()
 	if b.done {
+		err := b.resultErr
 		b.mu.Unlock()
+		if err != nil {
+			return 0, err
+		}
 		return 0, io.EOF
 	}
 	if err := b.ctx.Err(); err != nil {
 		b.mu.Unlock()
 		mapped := downloadContextError(err)
-		b.finish(true, mapped)
+		b.finish(mapped)
 		return 0, mapped
 	}
 	remaining := b.remaining
@@ -126,7 +145,7 @@ func (b *downloadBody) Read(p []byte) (int, error) {
 		n, err := b.body.Read(probe[:])
 		if n > 0 {
 			mapped := objectstorage.NewError(objectstorage.KindTooLarge)
-			b.finish(true, mapped)
+			b.finish(mapped)
 			return 0, mapped //nolint:wrapcheck // Reader callers receive the closed, sanitized size error.
 		}
 		return b.terminal(0, err)
@@ -137,7 +156,11 @@ func (b *downloadBody) Read(p []byte) (int, error) {
 	n, err := b.body.Read(p)
 	b.mu.Lock()
 	if b.done {
+		resultErr := b.resultErr
 		b.mu.Unlock()
+		if resultErr != nil {
+			return 0, resultErr
+		}
 		return 0, io.EOF
 	}
 	if n > 0 {
@@ -158,20 +181,25 @@ func (b *downloadBody) Read(p []byte) (int, error) {
 
 //nolint:wrapcheck // Object-storage errors preserve the closed, sanitized read result.
 func (b *downloadBody) terminal(n int, err error) (int, error) {
+	if b.ctx.Err() != nil {
+		mapped := downloadContextError(b.ctx.Err())
+		b.finish(mapped)
+		return n, mapped
+	}
 	b.mu.Lock()
 	actual := crc64NVMEBase64(b.checksum)
 	b.mu.Unlock()
 	if errors.Is(err, io.EOF) && actual == b.expected {
-		b.finish(false, nil)
+		b.finish(nil)
 		return n, io.EOF
 	}
-	if actual != b.expected && (errors.Is(err, io.EOF) || deferredChecksumError(err)) {
+	if actual != b.expected {
 		mapped := objectstorage.NewError(objectstorage.KindIntegrityFailed)
-		b.finish(false, mapped)
+		b.finish(mapped)
 		return n, mapped
 	}
 	mapped := b.readError(err)
-	b.finish(true, mapped)
+	b.finish(mapped)
 	return n, mapped
 }
 
@@ -182,37 +210,30 @@ func (b *downloadBody) readError(err error) error {
 	return stableError(err)
 }
 
-// The pinned SDK exposes its deferred checksum failure as an unexported error.
-func deferredChecksumError(err error) bool {
-	return strings.Contains(err.Error(), "checksum did not match: algorithm CRC64NVME")
-}
-
 func (b *downloadBody) Close() error {
-	b.finish(true, objectstorage.NewError(objectstorage.KindCancelled))
+	err := objectstorage.NewError(objectstorage.KindInternal)
+	if b.ctx.Err() != nil {
+		err = downloadContextError(b.ctx.Err())
+	}
+	b.finish(err)
 	return nil
 }
 
-func (b *downloadBody) finish(closeBody bool, err error) {
-	b.mu.Lock()
-	if b.done {
+func (b *downloadBody) finish(err error) {
+	b.finishOnce.Do(func() {
+		b.mu.Lock()
+		b.done = true
+		bytes := b.bytes
+		b.resultErr = err
+		stopClose := b.stopClose
 		b.mu.Unlock()
-		return
-	}
-	b.done = true
-	bytes := b.bytes
-	b.mu.Unlock()
-	if closeBody {
+		if stopClose != nil {
+			_ = stopClose()
+		}
 		_ = b.body.Close()
-	}
-	b.release()
-	b.call.finish(err, bytes)
-}
-
-func (c *Client) downloadError(err error) error {
-	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-		return downloadContextError(err)
-	}
-	return stableError(err)
+		b.release()
+		b.call.finish(err, bytes)
+	})
 }
 
 //nolint:wrapcheck // Object-storage errors are the closed, sanitized context result.

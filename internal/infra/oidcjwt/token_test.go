@@ -17,6 +17,7 @@ import (
 )
 
 func TestVerify_Claims(t *testing.T) {
+	t.Parallel()
 	now := testNow
 	key := loadTestRSAKey(t, testSigningKey)
 	otherKey := loadTestRSAKey(t, testRotatedKey)
@@ -102,6 +103,7 @@ func TestVerify_Claims(t *testing.T) {
 
 	for _, testCase := range tests {
 		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
 			signingKey := key
 			if testCase.key != nil {
 				signingKey = testCase.key
@@ -132,6 +134,7 @@ func TestVerify_Claims(t *testing.T) {
 }
 
 func TestVerify_Serialization(t *testing.T) {
+	t.Parallel()
 	now := testNow
 	key := loadTestRSAKey(t, testSigningKey)
 	client := &scriptedClient{responses: initialResponses(t, key)}
@@ -200,6 +203,7 @@ func TestVerify_Serialization(t *testing.T) {
 	}
 	for name, token := range tests {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			_, err := verifier.verify(t.Context(), token, transportHTTP)
 			requireKind(t, err, KindInvalid)
 			requireProviderCalls(t, client, 0, "after a locally invalid token")
@@ -208,6 +212,7 @@ func TestVerify_Serialization(t *testing.T) {
 }
 
 func TestVerifyRejectsExplicitNullNotBefore(t *testing.T) {
+	t.Parallel()
 	now := testNow
 	key := loadTestRSAKey(t, testSigningKey)
 	claims := claimsMap(t, validClaims(now))
@@ -223,6 +228,7 @@ func TestVerifyRejectsExplicitNullNotBefore(t *testing.T) {
 }
 
 func TestVerify_TimePolicy(t *testing.T) {
+	t.Parallel()
 	now := testNow
 	key := loadTestRSAKey(t, testSigningKey)
 	base := claimsMap(t, validClaims(now))
@@ -395,6 +401,7 @@ func TestVerify_TimePolicy(t *testing.T) {
 
 	for _, testCase := range tests {
 		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
 			claims := make(map[string]any, len(base))
 			maps.Copy(claims, base)
 			testCase.mutate(claims)
@@ -431,6 +438,7 @@ func TestVerify_TimePolicy(t *testing.T) {
 // too and the table above already covers the answer. The budget is, so this
 // measures what parsing allocated.
 func TestNumericDateBudgetSurvivesAnExpandingExponent(t *testing.T) {
+	t.Parallel()
 	// Far above the honest cost of parsing a token this size and far below one
 	// expansion, so neither has to be tracked precisely for this to stay true.
 	const budgetBytes = 64 << 10
@@ -466,6 +474,7 @@ func TestNumericDateBudgetSurvivesAnExpandingExponent(t *testing.T) {
 }
 
 func TestBearerCredential(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		values   []string
@@ -485,6 +494,7 @@ func TestBearerCredential(t *testing.T) {
 	}
 	for _, testCase := range tests {
 		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
 			got, err := bearerToken(testCase.values)
 			requireKind(t, err, testCase.wantKind)
 			if got != testCase.want {

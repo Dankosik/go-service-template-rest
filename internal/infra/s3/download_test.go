@@ -15,6 +15,7 @@ import (
 )
 
 func TestDownloadCompletesOnlyAtValidatedEOF(t *testing.T) {
+	t.Parallel()
 	const data = "download"
 
 	validHeader := func(checksum string) http.Header {
@@ -36,7 +37,27 @@ func TestDownloadCompletesOnlyAtValidatedEOF(t *testing.T) {
 		return &http.Response{StatusCode: http.StatusOK, Status: "200", Header: header, ContentLength: length, Body: body}
 	}
 
+	t.Run("range response is refused before body exposure", func(t *testing.T) {
+		t.Parallel()
+		body := &countedReadCloser{reader: strings.NewReader(data)}
+		header := validHeader(testCRC64NVME([]byte(data)))
+		header.Set("Content-Range", "bytes 0-7/20")
+		client := scriptedClient(t, func(*http.Request) (*http.Response, error) {
+			response := response(header, body)
+			response.StatusCode = http.StatusPartialContent
+			return response, nil
+		})
+		result, err := client.Download(t.Context(), "object")
+		if objectstorage.Kind(err) != objectstorage.KindIntegrityFailed || result.Body != nil {
+			t.Fatalf("Download(range) = %#v, %v", result, err)
+		}
+		if got := body.closes.Load(); got != 1 {
+			t.Fatalf("range body closes = %d, want 1", got)
+		}
+	})
+
 	t.Run("only valid metadata exposes a body", func(t *testing.T) {
+		t.Parallel()
 		for _, test := range []struct {
 			name   string
 			header http.Header
@@ -47,6 +68,11 @@ func TestDownloadCompletesOnlyAtValidatedEOF(t *testing.T) {
 				h.Set("Content-Length", strconv.FormatInt(validConfig(ProviderAmazonS3).MaxObjectBytes+1, 10))
 				return h
 			}(), kind: objectstorage.KindTooLarge},
+			{name: "missing content length", header: func() http.Header {
+				h := validHeader(testCRC64NVME([]byte(data)))
+				h.Del("Content-Length")
+				return h
+			}(), kind: objectstorage.KindIntegrityFailed},
 			{name: "missing checksum", header: func() http.Header {
 				h := validHeader(testCRC64NVME([]byte(data)))
 				h.Del("X-Amz-Checksum-Crc64nvme")
@@ -69,6 +95,7 @@ func TestDownloadCompletesOnlyAtValidatedEOF(t *testing.T) {
 			}(), kind: objectstorage.KindIntegrityFailed},
 		} {
 			t.Run(test.name, func(t *testing.T) {
+				t.Parallel()
 				body := &countedReadCloser{reader: strings.NewReader(data)}
 				client := scriptedClient(t, func(*http.Request) (*http.Response, error) {
 					return response(test.header, body), nil
@@ -85,6 +112,7 @@ func TestDownloadCompletesOnlyAtValidatedEOF(t *testing.T) {
 	})
 
 	t.Run("validated EOF is the only success", func(t *testing.T) {
+		t.Parallel()
 		body := &countedReadCloser{reader: strings.NewReader(data)}
 		client := scriptedClient(t, func(request *http.Request) (*http.Response, error) {
 			if got := request.Header.Get("X-Amz-Checksum-Mode"); got != "ENABLED" {
@@ -100,6 +128,9 @@ func TestDownloadCompletesOnlyAtValidatedEOF(t *testing.T) {
 		if err != nil || string(got) != data {
 			t.Fatalf("ReadAll() = %q, %v", got, err)
 		}
+		if got := body.closes.Load(); got != 1 {
+			t.Fatalf("underlying closes at validated EOF = %d, want 1", got)
+		}
 		if err := result.Body.Close(); err != nil {
 			t.Fatal(err)
 		}
@@ -109,6 +140,7 @@ func TestDownloadCompletesOnlyAtValidatedEOF(t *testing.T) {
 	})
 
 	t.Run("mismatch and terminal errors are stable", func(t *testing.T) {
+		t.Parallel()
 		for _, test := range []struct {
 			name   string
 			header http.Header
@@ -116,9 +148,10 @@ func TestDownloadCompletesOnlyAtValidatedEOF(t *testing.T) {
 			kind   objectstorage.ErrorKind
 		}{
 			{name: "mismatch", header: validHeader(testCRC64NVME([]byte("mismatch"))), reader: strings.NewReader(data), kind: objectstorage.KindIntegrityFailed},
-			{name: "terminal", header: validHeader(testCRC64NVME([]byte(data))), reader: errReader{errors.New("provider secret")}, kind: objectstorage.KindInternal},
+			{name: "terminal mismatch", header: validHeader(testCRC64NVME([]byte(data))), reader: errReader{errors.New("provider secret")}, kind: objectstorage.KindIntegrityFailed},
 		} {
 			t.Run(test.name, func(t *testing.T) {
+				t.Parallel()
 				body := &countedReadCloser{reader: test.reader}
 				client := scriptedClient(t, func(*http.Request) (*http.Response, error) {
 					return response(test.header, body), nil
@@ -138,7 +171,8 @@ func TestDownloadCompletesOnlyAtValidatedEOF(t *testing.T) {
 		}
 	})
 
-	t.Run("absent size is bounded", func(t *testing.T) {
+	t.Run("declared maximum still bounds a longer body", func(t *testing.T) {
+		t.Parallel()
 		cfg := validConfig(ProviderAmazonS3)
 		cfg.MaxObjectBytes = cfg.MultipartChunkBytes
 		cfg.MaxWorkingMemoryBytes, _ = cfg.requiredMemory()
@@ -151,9 +185,10 @@ func TestDownloadCompletesOnlyAtValidatedEOF(t *testing.T) {
 			{name: "overflow", body: strings.Repeat("d", int(cfg.MaxObjectBytes)) + "!", kind: objectstorage.KindTooLarge},
 		} {
 			t.Run(test.name, func(t *testing.T) {
+				t.Parallel()
 				body := &countedReadCloser{reader: strings.NewReader(test.body)}
 				header := validHeader(testCRC64NVME([]byte(test.body)))
-				header.Del("Content-Length")
+				header.Set("Content-Length", strconv.FormatInt(cfg.MaxObjectBytes, 10))
 				client := scriptedClientWithConfig(t, cfg, func(*http.Request) (*http.Response, error) {
 					return response(header, body), nil
 				})
@@ -177,6 +212,7 @@ func TestDownloadCompletesOnlyAtValidatedEOF(t *testing.T) {
 	})
 
 	t.Run("close and cancellation release admission once", func(t *testing.T) {
+		t.Parallel()
 		var calls atomic.Int32
 		first := &countedReadCloser{reader: strings.NewReader(data)}
 		client := scriptedClient(t, func(*http.Request) (*http.Response, error) {
@@ -206,7 +242,7 @@ func TestDownloadCompletesOnlyAtValidatedEOF(t *testing.T) {
 		}
 
 		ctx, cancel := context.WithCancel(t.Context())
-		body := &countedReadCloser{reader: strings.NewReader(data)}
+		body := newBlockedReadCloser()
 		cancelClient := scriptedClient(t, func(*http.Request) (*http.Response, error) {
 			return response(validHeader(testCRC64NVME([]byte(data))), body), nil
 		})
@@ -215,13 +251,24 @@ func TestDownloadCompletesOnlyAtValidatedEOF(t *testing.T) {
 			t.Fatal(err)
 		}
 		cancel()
+		select {
+		case <-body.closed:
+		case <-time.After(time.Second):
+			t.Fatal("cancelled download did not close its idle body")
+		}
 		_, err = cancelled.Body.Read(make([]byte, 1))
 		if objectstorage.Kind(err) != objectstorage.KindCancelled || body.closes.Load() != 1 {
 			t.Fatalf("cancelled read = %v; closes = %d", err, body.closes.Load())
 		}
+		next, err := cancelClient.Download(t.Context(), "object")
+		if err != nil {
+			t.Fatalf("Download() after context cancellation = %v, want admission release", err)
+		}
+		_ = next.Body.Close()
 	})
 
 	t.Run("close releases a blocked read", func(t *testing.T) {
+		t.Parallel()
 		cfg := validConfig(ProviderAmazonS3)
 		cfg.MaxActiveOperations = 1
 		cfg.MaxWorkingMemoryBytes, _ = cfg.requiredMemory()
@@ -242,8 +289,8 @@ func TestDownloadCompletesOnlyAtValidatedEOF(t *testing.T) {
 		if err := result.Body.Close(); err != nil {
 			t.Fatal(err)
 		}
-		if err := <-readDone; !errors.Is(err, io.EOF) {
-			t.Fatalf("blocked Read() error = %v, want EOF after Close", err)
+		if err := <-readDone; objectstorage.Kind(err) != objectstorage.KindInternal {
+			t.Fatalf("blocked Read() error = %v, want internal after incomplete Close", err)
 		}
 		if got := body.closes.Load(); got != 1 {
 			t.Fatalf("underlying closes = %d, want 1", got)
@@ -255,7 +302,40 @@ func TestDownloadCompletesOnlyAtValidatedEOF(t *testing.T) {
 		_ = next.Body.Close()
 	})
 
+	t.Run("cancellation releases a blocked read", func(t *testing.T) {
+		t.Parallel()
+		cfg := validConfig(ProviderAmazonS3)
+		cfg.MaxActiveOperations = 1
+		cfg.MaxWorkingMemoryBytes, _ = cfg.requiredMemory()
+		body := newBlockedReadCloser()
+		client := scriptedClientWithConfig(t, cfg, func(*http.Request) (*http.Response, error) {
+			return response(validHeader(testCRC64NVME([]byte(data))), body), nil
+		})
+		ctx, cancel := context.WithCancel(t.Context())
+		result, err := client.Download(ctx, "object")
+		if err != nil {
+			t.Fatal(err)
+		}
+		readDone := make(chan error, 1)
+		go func() {
+			_, err := result.Body.Read(make([]byte, 1))
+			readDone <- err
+		}()
+		<-body.entered
+		cancel()
+		if err := <-readDone; objectstorage.Kind(err) != objectstorage.KindCancelled {
+			t.Fatalf("blocked cancelled Read() error = %v, want cancelled", err)
+		}
+		if got := body.closes.Load(); got != 1 {
+			t.Fatalf("underlying closes = %d, want 1", got)
+		}
+		if got := len(client.tokens); got != 0 {
+			t.Fatalf("admission tokens after blocked download cancellation = %d, want 0", got)
+		}
+	})
+
 	t.Run("expired deadline starts no GET", func(t *testing.T) {
+		t.Parallel()
 		ctx, cancel := context.WithDeadline(t.Context(), time.Now().Add(-time.Second))
 		defer cancel()
 		calls := 0
@@ -266,6 +346,68 @@ func TestDownloadCompletesOnlyAtValidatedEOF(t *testing.T) {
 		_, err := client.Download(ctx, "object")
 		if objectstorage.Kind(err) != objectstorage.KindDeadlineExceeded || calls != 0 {
 			t.Fatalf("Download() = %v; calls = %d", err, calls)
+		}
+	})
+}
+
+func TestDownloadAcquisitionRetryIsBounded(t *testing.T) {
+	t.Parallel()
+	const data = "download"
+	validResponse := func() *http.Response {
+		response := s3Response(http.StatusOK, http.Header{
+			"Content-Length":           {strconv.Itoa(len(data))},
+			"X-Amz-Checksum-Crc64nvme": {testCRC64NVME([]byte(data))},
+			"X-Amz-Checksum-Type":      {"FULL_OBJECT"},
+		}, data)
+		response.ContentLength = int64(len(data))
+		return response
+	}
+
+	t.Run("transient acquisition succeeds on third attempt", func(t *testing.T) {
+		t.Parallel()
+		attempts := 0
+		client := scriptedClient(t, func(*http.Request) (*http.Response, error) {
+			attempts++
+			if attempts < 3 {
+				return s3Response(http.StatusServiceUnavailable, nil, `<Error><Code>SlowDown</Code></Error>`), nil
+			}
+			return validResponse(), nil
+		})
+		result, err := client.Download(t.Context(), "object")
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := io.ReadAll(result.Body)
+		if err != nil || string(got) != data || attempts != 3 {
+			t.Fatalf("Download() = %q, %v, attempts=%d; want %q, nil, 3", got, err, attempts, data)
+		}
+	})
+
+	t.Run("transient acquisition exhausts at three attempts", func(t *testing.T) {
+		t.Parallel()
+		attempts := 0
+		client := scriptedClient(t, func(*http.Request) (*http.Response, error) {
+			attempts++
+			return s3Response(http.StatusServiceUnavailable, nil, `<Error><Code>SlowDown</Code></Error>`), nil
+		})
+		result, err := client.Download(t.Context(), "object")
+		if objectstorage.Kind(err) != objectstorage.KindTemporary || result.Body != nil || attempts != 3 {
+			t.Fatalf("Download() = %#v, %v, attempts=%d; want temporary, no body, 3", result, err, attempts)
+		}
+	})
+
+	t.Run("cancellation prevents another acquisition attempt", func(t *testing.T) {
+		t.Parallel()
+		ctx, cancel := context.WithCancel(t.Context())
+		attempts := 0
+		client := scriptedClient(t, func(*http.Request) (*http.Response, error) {
+			attempts++
+			cancel()
+			return s3Response(http.StatusServiceUnavailable, nil, `<Error><Code>SlowDown</Code></Error>`), nil
+		})
+		result, err := client.Download(ctx, "object")
+		if objectstorage.Kind(err) != objectstorage.KindCancelled || result.Body != nil || attempts != 1 {
+			t.Fatalf("Download() = %#v, %v, attempts=%d; want canceled, no body, 1", result, err, attempts)
 		}
 	})
 }

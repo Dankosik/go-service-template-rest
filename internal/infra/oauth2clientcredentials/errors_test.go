@@ -16,6 +16,7 @@ func (e *canaryContextError) Error() string { return forbiddenCanary }
 func (e *canaryContextError) Unwrap() error { return e.cause }
 
 func TestAuthErrorsAreSanitized(t *testing.T) {
+	t.Parallel()
 	classes := []FailureClass{
 		FailureInvalidConfiguration,
 		FailureEndpointTrust,
@@ -32,6 +33,7 @@ func TestAuthErrorsAreSanitized(t *testing.T) {
 	canaryCause := fmt.Errorf("raw provider cause: %s", forbiddenCanary)
 	for _, class := range classes {
 		t.Run(string(class), func(t *testing.T) {
+			t.Parallel()
 			cause := canaryCause
 			if class == FailureCallerCanceled {
 				cause = context.Canceled

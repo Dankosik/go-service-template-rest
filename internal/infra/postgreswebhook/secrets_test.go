@@ -7,6 +7,7 @@ import (
 )
 
 func TestWebhookStaticSecretManifest(t *testing.T) {
+	t.Parallel()
 	encoded := base64.StdEncoding.EncodeToString([]byte("0123456789abcdef0123456789abcdef"))
 	raw := `{"revision":12,"entries":[{"owner_scope":"owner-a","destination_id":"dest-01","key_reference":"key-new","secret":"whsec_` + encoded + `"}]}`
 	manifest, err := ParseSecretManifest(raw)
@@ -27,6 +28,9 @@ func TestWebhookStaticSecretManifest(t *testing.T) {
 		if _, err := ParseSecretManifest(invalid); err == nil {
 			t.Fatalf("ParseSecretManifest(%q) succeeded", invalid)
 		}
+	}
+	if _, err := ParseSecretManifest(strings.Repeat("x", MaxSecretManifestBytes+1)); err == nil {
+		t.Fatal("oversized manifest was accepted")
 	}
 	for _, duplicate := range []string{
 		`{"revision":1,"revision":2,"entries":[]}`,

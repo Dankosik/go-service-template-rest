@@ -11,6 +11,7 @@ import (
 )
 
 func TestLoadDefaults(t *testing.T) {
+	t.Parallel()
 	resetConfigEnv(t)
 
 	cfg, report, err := LoadDetailed(LoadOptions{})
@@ -68,6 +69,7 @@ func TestLoadDefaults(t *testing.T) {
 }
 
 func TestPrecedenceNamespaceWinsOverFileAndOverlay(t *testing.T) {
+
 	resetConfigEnv(t)
 
 	basePath := writeTempConfig(t, `
@@ -95,6 +97,7 @@ http:
 }
 
 func TestEmptyNamespaceEnvOverridesRequiredDefault(t *testing.T) {
+
 	resetConfigEnv(t)
 
 	t.Setenv("APP__HTTP__ADDR", "")
@@ -109,6 +112,7 @@ func TestEmptyNamespaceEnvOverridesRequiredDefault(t *testing.T) {
 }
 
 func TestResourceIdentityFieldsCannotBeEmpty(t *testing.T) {
+
 	for _, tc := range []struct {
 		name       string
 		envKey     string
@@ -126,6 +130,7 @@ func TestResourceIdentityFieldsCannotBeEmpty(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+
 			resetConfigEnv(t)
 			t.Setenv(tc.envKey, "")
 
@@ -144,6 +149,7 @@ func TestResourceIdentityFieldsCannotBeEmpty(t *testing.T) {
 }
 
 func TestEmptyNamespaceEnvOverridesConfigFileValue(t *testing.T) {
+
 	resetConfigEnv(t)
 
 	configPath := writeTempConfig(t, `
@@ -164,6 +170,7 @@ observability:
 }
 
 func TestNamespaceEnvPreservesRawDataBearingStrings(t *testing.T) {
+
 	resetConfigEnv(t)
 
 	headers := " authorization=Bearer token, x-trace= spaced value "
@@ -199,9 +206,15 @@ func TestNamespaceEnvPreservesRawDataBearingStrings(t *testing.T) {
 		t.Fatalf("OutboundAuth.ClientSecret = %q, want exact env value %q", cfg.OutboundAuth.ClientSecret, clientSecret)
 	}
 	// profile:outbound-auth-oauth2-client-credentials:end
+	//nolint:paralleltest // This test mutates process-global environment or working directory.
+
+	// profile:object-storage:start
+	//
+	//nolint:paralleltest // Reads env/.env.example through process-wide environment overrides.
 }
 
 func TestNamespaceEnvTrimsSyntaxFields(t *testing.T) {
+
 	resetConfigEnv(t)
 
 	t.Setenv("APP__APP__ENV", " local ")
@@ -220,6 +233,7 @@ func TestNamespaceEnvTrimsSyntaxFields(t *testing.T) {
 }
 
 func TestFlatEnvKeysAreIgnored(t *testing.T) {
+
 	resetConfigEnv(t)
 
 	t.Setenv("HTTP_ADDR", ":9090")
@@ -242,10 +256,9 @@ func TestNamespaceEnvForConfigKey(t *testing.T) {
 	}
 }
 
-// profile:object-storage:start
-//
-//nolint:paralleltest // Reads env/.env.example through process-wide environment overrides.
+//nolint:paralleltest // This test mutates process-global environment.
 func TestEnvExampleIsFailClosedUntilObjectStorageIsConfigured(t *testing.T) {
+
 	resetConfigEnv(t)
 
 	for key, value := range readEnvExample(t, filepath.Join("..", "..", "env", ".env.example")) {
@@ -267,6 +280,7 @@ func TestEnvExampleIsFailClosedUntilObjectStorageIsConfigured(t *testing.T) {
 // profile:object-storage:end
 
 func TestTST001PrecedenceDeterministicSnapshotAcrossRepeatedLoads(t *testing.T) {
+
 	resetConfigEnv(t)
 
 	basePath := writeTempConfig(t, `

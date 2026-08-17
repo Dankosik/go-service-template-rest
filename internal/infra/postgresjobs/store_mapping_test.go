@@ -41,6 +41,7 @@ func TestStoreMappingRejectsMalformedDatabaseValues(t *testing.T) {
 		{name: "missing attempt", transition: validTransition},
 		{name: "non-final state", attempt: attempt, transition: jobs.Transition{State: jobs.StateRunning, AttemptsUsed: 1, Outcome: jobs.OutcomeSuccess, Effect: jobs.EffectNone}},
 		{name: "terminal delay", attempt: attempt, transition: jobs.Transition{State: jobs.StateSucceeded, Delay: time.Second, AttemptsUsed: 1, Outcome: jobs.OutcomeSuccess, Effect: jobs.EffectCompleted}},
+		{name: "impossible facts", attempt: attempt, transition: jobs.Transition{State: jobs.StateSucceeded, AttemptsUsed: 1, Outcome: jobs.OutcomePoison, Effect: jobs.EffectNone}},
 		{name: "control failure code", attempt: attempt, transition: validTransition, failure: "retry\nagain"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -118,6 +119,54 @@ func TestStoreClaimMappingPreservesOnlyValidRows(t *testing.T) {
 	valid.CurrentWorkerID = nil
 	if _, err := claimedAttemptFromRow(valid); err == nil {
 		t.Fatal("claimedAttemptFromRow() error = nil, want incomplete row rejected")
+	}
+}
+
+func TestStoreRescueLimitColumnsRejectInvalidInput(t *testing.T) {
+	t.Parallel()
+	revision := jobs.Revision{Kind: "email", ArgsVersion: "v1", PolicyVersion: "p1"}
+	if _, _, _, _, err := rescueLimitColumns(nil); !errors.Is(err, ErrConfig) {
+		t.Fatalf("rescueLimitColumns(nil) error = %v, want ErrConfig", err)
+	}
+	if _, _, _, _, err := rescueLimitColumns([]RescueLimit{{Revision: revision}}); !errors.Is(err, ErrConfig) {
+		t.Fatalf("rescueLimitColumns(zero wave) error = %v, want ErrConfig", err)
+	}
+}
+
+func TestStoreSchemaRequiresCapabilitiesAndAllowsAdditiveAuthority(t *testing.T) {
+	t.Parallel()
+	required := []string{"table.column|type", "table.constraint|hash"}
+	if !schemaContains(append(append([]string(nil), required...), "table.future|type"), required) {
+		t.Fatal("schemaContains() rejected additive authority")
+	}
+	if schemaContains(required[:1], required) || schemaContains([]string{"table.column|changed"}, required[:1]) {
+		t.Fatal("schemaContains() accepted missing or changed required authority")
+	}
+}
+
+func TestStoreClaimElapsedUsesOnlyDatabaseTimestamps(t *testing.T) {
+	t.Parallel()
+	for _, test := range []struct {
+		name      string
+		startedAt time.Time
+	}{
+		{name: "database behind worker", startedAt: time.Date(2000, time.January, 1, 0, 1, 0, 0, time.UTC)},
+		{name: "database ahead of worker", startedAt: time.Date(2040, time.January, 1, 0, 1, 0, 0, time.UTC)},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			row := testClaimedRow()
+			row.BudgetStartedAt = pgtype.Timestamptz{Time: test.startedAt.Add(-time.Minute), Valid: true}
+			row.AvailableAt = pgtype.Timestamptz{Time: test.startedAt.Add(-2 * time.Second), Valid: true}
+			row.StartedAt = pgtype.Timestamptz{Time: test.startedAt, Valid: true}
+			claim, err := claimedAttemptFromRow(row)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if claim.BudgetElapsed != time.Minute || claim.QueueDelay != 2*time.Second {
+				t.Fatalf("claim elapsed/queue = %s/%s, want 1m/2s from PostgreSQL timestamps", claim.BudgetElapsed, claim.QueueDelay)
+			}
+		})
 	}
 }
 
@@ -232,6 +281,7 @@ func TestOperationErrorClassificationPreservesSessionSafety(t *testing.T) {
 }
 
 func TestRetainedVocabularyMappingRejectsIncompleteOrUnsupportedRows(t *testing.T) {
+	t.Parallel()
 	revisions, err := revisionRows([]string{"email", "webhook"}, []string{"v1", "v2"}, []string{"p1", "p2"})
 	if err != nil || len(revisions) != 2 || revisions[1].Kind != "webhook" {
 		t.Fatalf("revisionRows() = %#v, %v", revisions, err)
@@ -279,6 +329,7 @@ func TestRetainedVocabularyMappingRejectsIncompleteOrUnsupportedRows(t *testing.
 		{name: "missing finalized time", update: func(row *transitionResultRow) { row.FinalizedAt = pgtype.Timestamptz{} }},
 	} {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			row := completed
 			test.update(&row)
 			if _, err := persistedTransition(row); err == nil {
@@ -307,7 +358,8 @@ func testClaimedRow() sqlcgen.ClaimPostgresJobsRow {
 		OccurrenceScope: &occurrenceScope, OccurrenceID: &occurrenceID, EffectScope: &effectScope, EffectKey: &effectKey,
 		Kind: &kind, ArgsVersion: &argsVersion, PolicyVersion: &policyVersion, Payload: []byte(`{"kind":"email"}`),
 		RecoveryGeneration: &recoveryGeneration, AttemptGeneration: &attemptGeneration, AttemptsUsed: &attemptsUsed,
-		BudgetStartedAt: testTimestamp(), CurrentWorkerID: &workerID, StartedAt: testTimestamp(), LeaseExpiresAt: testTimestamp(),
+		BudgetStartedAt: testTimestamp(), AvailableAt: testTimestamp(), CurrentWorkerID: &workerID,
+		StartedAt: testTimestamp(), LeaseExpiresAt: testTimestamp(),
 	}
 }
 

@@ -76,10 +76,7 @@ func runInTx(
 	}
 
 	if err := commit(ctx, tx); err != nil {
-		if commitDefinitelyFailed(err) {
-			return err
-		}
-		return fmt.Errorf("%w: %w", ErrCommitUnknown, err)
+		return ClassifyCommitError(err)
 	}
 	return nil
 }
@@ -91,10 +88,19 @@ func commitTx(ctx context.Context, tx pgx.Tx) error {
 	return nil
 }
 
+// ClassifyCommitError preserves failures known to have rejected commit and
+// marks every other commit response as an unknown durable outcome.
+func ClassifyCommitError(err error) error {
+	if err == nil || commitDefinitelyFailed(err) {
+		return err
+	}
+	return fmt.Errorf("%w: %w", ErrCommitUnknown, err)
+}
+
 func commitDefinitelyFailed(err error) bool {
 	if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok {
-		return pgErr.Code != pgerrcode.TransactionResolutionUnknown &&
-			pgErr.Code != pgerrcode.StatementCompletionUnknown
+		return pgerrcode.IsIntegrityConstraintViolation(pgErr.Code) ||
+			pgerrcode.IsTransactionRollback(pgErr.Code) && pgErr.Code != pgerrcode.StatementCompletionUnknown
 	}
 	return errors.Is(err, pgx.ErrTxCommitRollback) || pgconn.SafeToRetry(err)
 }

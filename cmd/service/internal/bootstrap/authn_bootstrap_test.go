@@ -18,7 +18,9 @@ import (
 )
 
 func TestAuthnBootstrapOrder(t *testing.T) {
+	t.Parallel()
 	t.Run("initial trust failure constructs no serving surface", func(t *testing.T) {
+		t.Parallel()
 		resetShutdownConfigEnv(t)
 
 		trustFailure := errors.New("test initial trust failure")
@@ -55,6 +57,7 @@ func TestAuthnBootstrapOrder(t *testing.T) {
 	})
 
 	t.Run("successful trust precedes serving surfaces and admission", func(t *testing.T) {
+		t.Parallel()
 		resetShutdownConfigEnv(t)
 
 		stopServing := errors.New("test serving stop")

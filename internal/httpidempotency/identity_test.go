@@ -11,6 +11,7 @@ import (
 )
 
 func TestHTTPIdempotencyKeyParser(t *testing.T) {
+	t.Parallel()
 	for value := range 0x100 {
 		key := string([]byte{byte(value)})
 		_, err := ParseKey([]string{key}, 1)
@@ -63,6 +64,7 @@ func TestHTTPIdempotencyKeyParser(t *testing.T) {
 }
 
 func TestHTTPIdempotencyCanonicalVectors(t *testing.T) {
+	t.Parallel()
 	scope := Scope{
 		Authority:   "authority-A",
 		OperationID: "CreateWidget",
@@ -152,6 +154,7 @@ func TestHTTPIdempotencyCanonicalVectors(t *testing.T) {
 }
 
 func TestEncodeResultRejectsResponsesThatCannotBeSafelyReplayed(t *testing.T) {
+	t.Parallel()
 	valid := Result{
 		Status:    http.StatusCreated,
 		MediaType: "application/json",
@@ -173,6 +176,7 @@ func TestEncodeResultRejectsResponsesThatCannotBeSafelyReplayed(t *testing.T) {
 		{name: "invalid header value", update: func(result *Result) { result.Headers = http.Header{"Location": {"/one\r\ntwo"}} }},
 	} {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			result := valid
 			test.update(&result)
 			if _, err := EncodeResult(testContract(), result); err == nil {
@@ -193,6 +197,7 @@ func TestEncodeResultRejectsResponsesThatCannotBeSafelyReplayed(t *testing.T) {
 }
 
 func TestDecodeResultRejectsCorruptOrOverlongRetainedData(t *testing.T) {
+	t.Parallel()
 	contract := testContract()
 	encoded, err := EncodeResult(contract, Result{
 		Status:    http.StatusCreated,
@@ -216,6 +221,7 @@ func TestDecodeResultRejectsCorruptOrOverlongRetainedData(t *testing.T) {
 		{name: "wrong envelope", contract: contract, encoded: []byte("other")},
 	} {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			if _, err := DecodeResult(test.contract, test.encoded); err == nil {
 				t.Fatal("DecodeResult() error = nil")
 			}
@@ -242,6 +248,7 @@ func TestDecodeResultRejectsCorruptOrOverlongRetainedData(t *testing.T) {
 		{name: "header name", encoded: append(codec, 0, 1)},
 	} {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			if _, err := DecodeResult(contract, test.encoded); err == nil {
 				t.Fatal("DecodeResult() error = nil")
 			}
@@ -250,6 +257,7 @@ func TestDecodeResultRejectsCorruptOrOverlongRetainedData(t *testing.T) {
 }
 
 func TestDecodeResultRejectsInvalidRetainedFields(t *testing.T) {
+	t.Parallel()
 	contract := testContract()
 	contract.ResultMaxBytes = 4096
 	for _, test := range []struct {
@@ -265,6 +273,7 @@ func TestDecodeResultRejectsInvalidRetainedFields(t *testing.T) {
 		{name: "invalid retained header value", encoded: retainedResult(http.StatusCreated, "application/json", "create-widget/v1", []retainedHeader{{name: "location", values: []string{"/one\r\ntwo"}}})},
 	} {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			if _, err := DecodeResult(contract, test.encoded); err == nil {
 				t.Fatal("DecodeResult() error = nil")
 			}
@@ -273,6 +282,7 @@ func TestDecodeResultRejectsInvalidRetainedFields(t *testing.T) {
 }
 
 func TestResultReaderRejectsTruncatedRetainedFields(t *testing.T) {
+	t.Parallel()
 	for _, test := range []struct {
 		name string
 		read func(*resultReader) error
@@ -282,6 +292,7 @@ func TestResultReaderRejectsTruncatedRetainedFields(t *testing.T) {
 		{name: "payload", read: func(reader *resultReader) error { _, err := reader.bytes(); return err }},
 	} {
 		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 			data := []byte(nil)
 			if test.name == "length" {
 				data = []byte{0, 0, 0}

@@ -52,18 +52,49 @@ func TestJobsWorkerRunCleansUpRejectedRegistry(t *testing.T) {
 	waittest.ReceiveSignal(t, cleaned, time.Second, "rejected registry cleanup")
 }
 
-func TestJobsWorkerRunReportsPostgresStartupFailure(t *testing.T) {
+//nolint:paralleltest // This test mutates process-global environment or working directory.
+func TestJobsWorkerRunRejectsEmptyRegistryBeforePostgres(t *testing.T) {
+
 	setJobsWorkerRunEnvironment(t)
 	t.Setenv("APP__POSTGRES__DSN", "postgres://jobs:password@127.0.0.1:1/jobs?sslmode=disable")
 	err := run(t.Context(), nil, func(context.Context, config.Config, *slog.Logger) (*jobs.Registry, func(context.Context), error) {
-		return &jobs.Registry{}, nil, nil
+		return new(jobs.Registry), nil, nil
+	})
+	if !errors.Is(err, postgresjobs.ErrConfig) || !strings.Contains(err.Error(), "no definitions") {
+		t.Fatalf("run() error = %v, want empty registry rejection before PostgreSQL", err)
+	}
+}
+
+//nolint:paralleltest // This test mutates process-global environment or working directory.
+func TestJobsWorkerRunReportsPostgresStartupFailure(t *testing.T) {
+
+	setJobsWorkerRunEnvironment(t)
+	t.Setenv("APP__POSTGRES__DSN", "postgres://jobs:password@127.0.0.1:1/jobs?sslmode=disable")
+	err := run(t.Context(), nil, func(context.Context, config.Config, *slog.Logger) (*jobs.Registry, func(context.Context), error) {
+		return jobsWorkerRegistry(t, time.Second), nil, nil
 	})
 	if err == nil || !strings.Contains(err.Error(), "initialize jobs worker postgres") {
 		t.Fatalf("run() error = %v, want postgres startup failure", err)
 	}
 }
 
+//nolint:paralleltest // This test mutates process-global environment or working directory.
+func TestJobsWorkerRunRejectsDefinitionEnvelopeBeforePostgres(t *testing.T) {
+
+	setJobsWorkerRunEnvironment(t)
+	t.Setenv("APP__POSTGRES__DSN", "postgres://jobs:password@127.0.0.1:1/jobs?sslmode=disable")
+	registry := jobsWorkerRegistry(t, 2*time.Minute)
+	err := run(t.Context(), nil, func(context.Context, config.Config, *slog.Logger) (*jobs.Registry, func(context.Context), error) {
+		return registry, nil, nil
+	})
+	if !errors.Is(err, postgresjobs.ErrConfig) || !strings.Contains(err.Error(), "termination envelope") {
+		t.Fatalf("run() error = %v, want definition envelope rejection before PostgreSQL", err)
+	}
+}
+
+//nolint:paralleltest // This test mutates process-global environment or working directory.
 func TestJobsWorkerRunStartsAndDrains(t *testing.T) {
+
 	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
 	defer cancel()
 	container, err := tcpostgres.Run(ctx, pgtest.DefaultImage,
@@ -92,7 +123,7 @@ func TestJobsWorkerRunStartsAndDrains(t *testing.T) {
 	result := make(chan error, 1)
 	go func() {
 		result <- run(runCtx, nil, func(context.Context, config.Config, *slog.Logger) (*jobs.Registry, func(context.Context), error) {
-			return &jobs.Registry{}, nil, nil
+			return jobsWorkerRegistry(t, time.Second), nil, nil
 		})
 	}()
 
@@ -145,6 +176,7 @@ func TestJobsWorkerLifecycleRejectsUnavailableDiagnostics(t *testing.T) {
 	}
 }
 
+//nolint:paralleltest // This test mutates process-global environment or working directory.
 func setJobsWorkerRunEnvironment(t *testing.T) {
 	t.Helper()
 	configtest.IsolateEnv(t)
@@ -164,4 +196,32 @@ func setJobsWorkerRunEnvironment(t *testing.T) {
 	} {
 		t.Setenv(key, value)
 	}
+}
+
+func jobsWorkerRegistry(t *testing.T, envelope time.Duration) *jobs.Registry {
+	t.Helper()
+	definition, err := jobs.NewDefinition(jobs.DefinitionInput[map[string]string]{
+		Revision:        jobs.Revision{Kind: "test", ArgsVersion: "v1", PolicyVersion: "p1"},
+		MaxPayloadBytes: 1024,
+		Validate:        func(map[string]string) error { return nil },
+		Policy: jobs.Policy{
+			Effect: jobs.EffectPolicy{AmbiguousAction: jobs.AmbiguousEffectOutcomeUnknown},
+			Retry: jobs.RetryPolicy{
+				MaxAttempts: 1, MaxElapsed: time.Hour, InitialBackoff: time.Second, MaxBackoff: time.Second,
+				HintPolicy: jobs.RetryHintIgnore, Jitter: jobs.JitterNone, MaxRecoveryWave: 1,
+			},
+			Recovery:           jobs.RecoveryPolicy{Mode: jobs.RecoveryUnavailable, Attempts: jobs.BudgetPreserved, Elapsed: jobs.BudgetPreserved},
+			MaxAttemptDuration: envelope, TerminationEnvelope: envelope,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	registry := new(jobs.Registry)
+	if err := jobs.Register(registry, definition, func(context.Context, jobs.HandlerInput[map[string]string]) jobs.HandlerResult {
+		return jobs.HandlerResult{Outcome: jobs.OutcomeSuccess, Effect: jobs.EffectCompleted}
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return registry
 }
