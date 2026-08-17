@@ -23,7 +23,6 @@ import (
 )
 
 func TestOutboxConfigDefaultsAndPostgresRequirement(t *testing.T) {
-
 	resetConfigEnv(t)
 	disabled, _, err := LoadDetailed(LoadOptions{})
 	if err != nil || disabled.Outbox.Enabled {
@@ -60,7 +59,6 @@ func TestOutboxConfigDefaultsAndPostgresRequirement(t *testing.T) {
 }
 
 func TestOutboxConfigRejectsIncoherentBudgets(t *testing.T) {
-
 	tests := []struct {
 		name  string
 		key   string
@@ -80,7 +78,6 @@ func TestOutboxConfigRejectsIncoherentBudgets(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-
 			enableOutbox(t)
 			t.Setenv(test.key, test.value)
 			_, _, err := LoadDetailed(LoadOptions{})
@@ -92,7 +89,6 @@ func TestOutboxConfigRejectsIncoherentBudgets(t *testing.T) {
 }
 
 func TestOutboxConfigValidatesEveryField(t *testing.T) {
-
 	// The only field with no unusable value: it is the switch that turns the
 	// rest on, and TestOutboxConfigDefaultsAndPostgresRequirement covers what it
 	// gates. Anything else added here needs a reason.
@@ -121,7 +117,6 @@ func TestOutboxConfigValidatesEveryField(t *testing.T) {
 		}
 
 		t.Run(key, func(t *testing.T) {
-
 			enableOutbox(t)
 			t.Setenv("APP__OUTBOX__"+strings.ToUpper(key), unusable)
 			_, _, err := LoadDetailed(LoadOptions{})

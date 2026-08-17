@@ -86,7 +86,6 @@ func TestBootstrapTelemetryStageConfiguresExporter(t *testing.T) {
 }
 
 func TestBootstrapTelemetryStageUsesAmbientEndpointEnv(t *testing.T) {
-
 	telemetrytest.ClearAmbientExporterEnv(t)
 	telemetrytest.RestoreGlobals(t)
 	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://127.0.0.1:4318")
@@ -107,7 +106,6 @@ func TestBootstrapTelemetryStageUsesAmbientEndpointEnv(t *testing.T) {
 }
 
 func TestBootstrapTelemetryStageRejectsAmbientExporterEnv(t *testing.T) {
-
 	telemetrytest.ClearAmbientExporterEnv(t)
 	telemetrytest.RestoreGlobals(t)
 	t.Setenv("OTEL_EXPORTER_OTLP_HEADERS", "authorization=Bearer secret-value")
@@ -134,7 +132,6 @@ func TestBootstrapTelemetryStageRejectsAmbientExporterEnv(t *testing.T) {
 }
 
 func TestReportIgnoredAmbientOTLPEnvWarnsWhenExporterUnconfigured(t *testing.T) {
-
 	telemetrytest.ClearAmbientExporterEnv(t)
 	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://injected-collector.example:4318")
 	t.Setenv("OTEL_EXPORTER_OTLP_HEADERS", "authorization=Bearer secret-value")
@@ -168,7 +165,6 @@ func TestReportIgnoredAmbientOTLPEnvWarnsWhenExporterUnconfigured(t *testing.T) 
 }
 
 func TestReportIgnoredAmbientOTLPEnvWarnsOnOverriddenEndpointWhenConfigured(t *testing.T) {
-
 	telemetrytest.ClearAmbientExporterEnv(t)
 	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://injected-collector.example:4318")
 
@@ -194,7 +190,6 @@ func TestReportIgnoredAmbientOTLPEnvWarnsOnOverriddenEndpointWhenConfigured(t *t
 }
 
 func TestReportIgnoredAmbientOTLPEnvSkipsTheHonoredEndpointVariable(t *testing.T) {
-
 	telemetrytest.ClearAmbientExporterEnv(t)
 	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://injected-collector.example:4318")
 	t.Setenv("OTEL_EXPORTER_OTLP_TIMEOUT", "15000")
@@ -220,7 +215,6 @@ func TestReportIgnoredAmbientOTLPEnvSkipsTheHonoredEndpointVariable(t *testing.T
 }
 
 func TestReportIgnoredAmbientOTLPEnvSkipsTheHonoredMetricsEndpointVariable(t *testing.T) {
-
 	telemetrytest.ClearAmbientExporterEnv(t)
 	t.Setenv("OTEL_EXPORTER_OTLP_METRICS_ENDPOINT", "http://injected-collector.example:4318/v1/metrics")
 	t.Setenv("OTEL_EXPORTER_OTLP_TIMEOUT", "15000")
@@ -246,7 +240,6 @@ func TestReportIgnoredAmbientOTLPEnvSkipsTheHonoredMetricsEndpointVariable(t *te
 }
 
 func TestReportIgnoredAmbientOTLPEnvSilentOnMetricsConflictWhenConfigured(t *testing.T) {
-
 	telemetrytest.ClearAmbientExporterEnv(t)
 	t.Setenv("OTEL_EXPORTER_OTLP_METRICS_HEADERS", "authorization=Bearer secret-value")
 
@@ -267,7 +260,6 @@ func TestReportIgnoredAmbientOTLPEnvSilentOnMetricsConflictWhenConfigured(t *tes
 }
 
 func TestReportIgnoredAmbientOTLPEnvSilentOnConflictWhenConfigured(t *testing.T) {
-
 	telemetrytest.ClearAmbientExporterEnv(t)
 	t.Setenv("OTEL_EXPORTER_OTLP_HEADERS", "authorization=Bearer secret-value")
 

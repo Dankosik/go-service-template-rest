@@ -350,7 +350,6 @@ func TestValidateStartupBudgetCompatibilityRequiresReadinessHeadroom(t *testing.
 }
 
 func TestValidateStartupBudgetCompatibilityAllowsDefaultPostgresReadiness(t *testing.T) {
-
 	resetBootstrapConfigEnv(t)
 	t.Setenv("APP__POSTGRES__ENABLED", "true")
 	t.Setenv("APP__POSTGRES__DSN", "postgres://user:pass@localhost:5432/app?sslmode=disable")
@@ -372,7 +371,6 @@ func TestValidateStartupBudgetCompatibilityAllowsDefaultPostgresReadiness(t *tes
 }
 
 func TestBootstrapConfigStageReturnsStartupCompatibilityFailure(t *testing.T) {
-
 	resetBootstrapConfigEnv(t)
 	t.Setenv("APP__POSTGRES__ENABLED", "true")
 	t.Setenv("APP__POSTGRES__DSN", "postgres://user:pass@localhost:5432/app?sslmode=disable")

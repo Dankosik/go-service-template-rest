@@ -41,7 +41,6 @@ import (
 )
 
 func TestOutboxConfigBoundsMatchRelayCeilings(t *testing.T) {
-
 	for _, bound := range []struct {
 		key     string
 		ceiling int
@@ -52,7 +51,6 @@ func TestOutboxConfigBoundsMatchRelayCeilings(t *testing.T) {
 		{key: "APP__OUTBOX__CLEANUP_BATCH_SIZE", ceiling: postgresoutbox.MaxCleanupBatchSize},
 	} {
 		t.Run(bound.key, func(t *testing.T) {
-
 			setOutboxBootstrapEnvironment(t, true)
 			t.Setenv(bound.key, strconv.Itoa(bound.ceiling))
 			if _, _, err := config.LoadDetailed(config.LoadOptions{}); err != nil {
@@ -67,7 +65,6 @@ func TestOutboxConfigBoundsMatchRelayCeilings(t *testing.T) {
 }
 
 func TestOutboxLeaseBudgetSpendsTheRelayJoinTimeout(t *testing.T) {
-
 	const (
 		publishTimeout   = 4 * time.Second
 		acquireTimeout   = 2 * time.Second
@@ -84,7 +81,6 @@ func TestOutboxLeaseBudgetSpendsTheRelayJoinTimeout(t *testing.T) {
 		{name: "past the budget", value: budget + time.Millisecond, wantAccepted: true},
 	} {
 		t.Run(lease.name, func(t *testing.T) {
-
 			setOutboxBootstrapEnvironment(t, true)
 			t.Setenv("APP__OUTBOX__PUBLISH_TIMEOUT", publishTimeout.String())
 			t.Setenv("APP__POSTGRES__ACQUIRE_TIMEOUT", acquireTimeout.String())
@@ -152,7 +148,6 @@ func TestRelayRejectsEveryOutboxBudget(t *testing.T) {
 // fields it happens to range over. Mapping an OutboxConfig whose every field is
 // set must therefore leave no RelayConfig field zero.
 func TestRelayConfigMapsEveryOutboxField(t *testing.T) {
-
 	var source config.OutboxConfig
 	settable := reflect.ValueOf(&source).Elem()
 	for index := range settable.NumField() {
@@ -215,7 +210,6 @@ func (relay *fakeRelay) Run(ctx context.Context) postgresoutbox.RelayResult {
 }
 
 func TestOutboxRelayComposition(t *testing.T) {
-
 	t.Run("invalid flags reject before nil builder", func(t *testing.T) {
 		err := run(t.Context(), []string{"--not-a-real-flag"}, nil)
 		if err == nil || !strings.Contains(err.Error(), "parse flags") {
@@ -267,7 +261,6 @@ func TestOutboxRelayComposition(t *testing.T) {
 	})
 
 	t.Run("invalid drain budget rejects before builder", func(t *testing.T) {
-
 		setOutboxBootstrapEnvironment(t, true)
 		t.Setenv("APP__HTTP__GRACE_PERIOD", "35s")
 		built := false
@@ -281,7 +274,6 @@ func TestOutboxRelayComposition(t *testing.T) {
 	})
 
 	t.Run("complete drain budget reaches builder before postgres", func(t *testing.T) {
-
 		setOutboxBootstrapEnvironment(t, true)
 		t.Setenv("APP__HTTP__GRACE_PERIOD", "36s")
 		builderErr := errors.New("builder admission canary")
@@ -299,7 +291,6 @@ func TestOutboxRelayComposition(t *testing.T) {
 	})
 
 	t.Run("overflowing drain budget rejects before builder", func(t *testing.T) {
-
 		setOutboxBootstrapEnvironment(t, true)
 		t.Setenv("APP__OUTBOX__DRAIN_TIMEOUT", time.Duration(1<<63-1).String())
 		built := false
@@ -693,7 +684,6 @@ func TestOutboxRelayReadinessAndLiveness(t *testing.T) {
 }
 
 func TestOutboxRelayFlagAndConfigMapping(t *testing.T) {
-
 	options, classify, err := parseLoadOptions([]string{"--config", "base.yaml", "--config-overlay", "one.yaml", "--config-overlay=two.yaml"})
 	if err != nil || classify || options.ConfigPath != "base.yaml" || strings.Join(options.ConfigOverlays, ",") != "one.yaml,two.yaml" {
 		t.Fatalf("parseLoadOptions() = %+v, %v", options, err)
@@ -766,7 +756,6 @@ func TestOutboxRelayFlagAndConfigMapping(t *testing.T) {
 }
 
 func TestLegacyUncertaintyClassificationMode(t *testing.T) {
-
 	options, classify, err := parseLoadOptions([]string{
 		"--classify-legacy-uncertainty", "--config", "base.yaml",
 	})
@@ -813,7 +802,6 @@ func TestLegacyUncertaintyClassificationMode(t *testing.T) {
 }
 
 func TestOutboxRelayStartupDoesNotClaimWithoutPublisher(t *testing.T) {
-
 	t.Setenv("APP__POSTGRES__DSN", "postgres://must-not-connect@127.0.0.1:1/outbox")
 	err := run(t.Context(), nil, nil)
 	if err == nil {
@@ -825,7 +813,6 @@ func TestOutboxRelayStartupDoesNotClaimWithoutPublisher(t *testing.T) {
 }
 
 func TestOutboxRelayTelemetrySetupAndFailureClasses(t *testing.T) {
-
 	cfg := config.Config{
 		App: config.AppConfig{Version: "test", Commit: "commit", Env: "test", InstanceID: "instance"},
 		Observability: config.ObservabilityConfig{OTel: config.OTelConfig{
@@ -840,7 +827,6 @@ func TestOutboxRelayTelemetrySetupAndFailureClasses(t *testing.T) {
 // reports without touching an endpoint, which makes it the cheap stand-in for
 // any hard metrics failure.
 func TestOutboxRelayTelemetrySetupDegradesInsteadOfFailing(t *testing.T) {
-
 	metrics := &telemetry.Metrics{}
 	cleanup := setupTelemetry(t.Context(), config.Config{}, metrics, slog.Default())
 	if cleanup == nil {

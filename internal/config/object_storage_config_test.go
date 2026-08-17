@@ -8,7 +8,6 @@ import (
 
 //nolint:paralleltest // This test mutates process-global environment or working directory.
 func TestObjectStorageConfigContract(t *testing.T) {
-
 	for _, test := range []struct {
 		name  string
 		key   string
@@ -25,7 +24,6 @@ func TestObjectStorageConfigContract(t *testing.T) {
 		{"zero operation duration", "APP__OBJECT_STORAGE__MAX_OPERATION_DURATION", "0s", ErrValidate},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-
 			resetConfigEnv(t)
 			t.Setenv(test.key, test.value)
 			_, _, err := LoadDetailed(LoadOptions{})

@@ -113,7 +113,8 @@ func TestWebhookTelemetryExportsOperatorSignals(t *testing.T) {
 
 func webhookDurationEvents(t *testing.T, reader interface {
 	Collect(ctx context.Context, metrics *metricdata.ResourceMetrics) error
-}) map[string]uint64 {
+},
+) map[string]uint64 {
 	t.Helper()
 	values := make(map[string]uint64)
 	var collected metricdata.ResourceMetrics

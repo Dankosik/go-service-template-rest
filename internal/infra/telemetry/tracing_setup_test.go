@@ -26,7 +26,6 @@ import (
 )
 
 func TestSetupTracingMergesAmbientResourceUnderConfig(t *testing.T) {
-
 	t.Setenv("OTEL_RESOURCE_ATTRIBUTES", "service.name=env-service,service.version=env-version,deployment.environment.name=env,env.only=true")
 	t.Setenv("OTEL_SERVICE_NAME", "env-service-name")
 
@@ -230,7 +229,6 @@ func testTraceExporter(t *testing.T) TraceExporterConfig {
 }
 
 func TestSetupTracingIsSafeUnderConcurrentSetup(t *testing.T) {
-
 	const (
 		resourceAttrs = "service.name=env-service,service.version=env-version,deployment.environment.name=env,env.only=true"
 		serviceName   = "env-service-name"
@@ -280,7 +278,6 @@ func TestSetupTracingIsSafeUnderConcurrentSetup(t *testing.T) {
 }
 
 func TestAmbientOTLPExporterEnvReportsNamesOnly(t *testing.T) {
-
 	telemetrytest.ClearAmbientExporterEnv(t)
 	t.Setenv("OTEL_EXPORTER_OTLP_HEADERS", "authorization=Bearer secret-value")
 	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://collector.example:4318")
@@ -304,7 +301,6 @@ func TestAmbientOTLPExporterEnvEmptyWithoutAmbientEnv(t *testing.T) {
 }
 
 func TestSetupTracingRejectsAmbientOTLPExporterEnv(t *testing.T) {
-
 	typedCollector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -399,7 +395,6 @@ func TestSetupTracingRejectsAmbientOTLPExporterEnv(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-
 			telemetrytest.ClearAmbientExporterEnv(t)
 			telemetrytest.RestoreGlobals(t)
 			t.Setenv(tt.envName, tt.envValue)
@@ -417,7 +412,6 @@ func TestSetupTracingRejectsAmbientOTLPExporterEnv(t *testing.T) {
 }
 
 func TestSetupTracingIgnoresOverriddenAmbientOTLPExporterEnv(t *testing.T) {
-
 	typedCollector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -467,7 +461,6 @@ func TestSetupTracingIgnoresOverriddenAmbientOTLPExporterEnv(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-
 			telemetrytest.ClearAmbientExporterEnv(t)
 			telemetrytest.RestoreGlobals(t)
 			t.Setenv(tt.envName, tt.envValue)
@@ -482,7 +475,6 @@ func TestSetupTracingIgnoresOverriddenAmbientOTLPExporterEnv(t *testing.T) {
 }
 
 func TestConflictingTraceExporterEnvReportsCredentialAndTrustNamesOnly(t *testing.T) {
-
 	telemetrytest.ClearAmbientExporterEnv(t)
 	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://collector.example:4318")
 	t.Setenv("OTEL_EXPORTER_OTLP_TIMEOUT", "15000")
@@ -498,7 +490,6 @@ func TestConflictingTraceExporterEnvReportsCredentialAndTrustNamesOnly(t *testin
 }
 
 func TestSetupTracingExportsToAmbientOTLPEndpointEnv(t *testing.T) {
-
 	tests := []struct {
 		name      string
 		envName   string
@@ -526,7 +517,6 @@ func TestSetupTracingExportsToAmbientOTLPEndpointEnv(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-
 			telemetrytest.ClearAmbientExporterEnv(t)
 			telemetrytest.RestoreGlobals(t)
 
@@ -553,7 +543,6 @@ func TestSetupTracingExportsToAmbientOTLPEndpointEnv(t *testing.T) {
 }
 
 func TestSetupTracingPrefersConfiguredEndpointOverAmbientEnv(t *testing.T) {
-
 	telemetrytest.ClearAmbientExporterEnv(t)
 	telemetrytest.RestoreGlobals(t)
 
@@ -586,7 +575,6 @@ func TestSetupTracingPrefersConfiguredEndpointOverAmbientEnv(t *testing.T) {
 }
 
 func TestSetupTracingDoesNotSendConfiguredHeadersToAmbientEndpoint(t *testing.T) {
-
 	telemetrytest.ClearAmbientExporterEnv(t)
 	telemetrytest.RestoreGlobals(t)
 
@@ -613,7 +601,6 @@ func TestSetupTracingDoesNotSendConfiguredHeadersToAmbientEndpoint(t *testing.T)
 }
 
 func TestSetupTracingAcceptsAmbientCredentialsForAnAmbientEndpoint(t *testing.T) {
-
 	telemetrytest.ClearAmbientExporterEnv(t)
 	telemetrytest.RestoreGlobals(t)
 
@@ -634,7 +621,6 @@ func TestSetupTracingAcceptsAmbientCredentialsForAnAmbientEndpoint(t *testing.T)
 }
 
 func TestResolveTraceExporterEndpointRejectsInvalidAmbientEndpoint(t *testing.T) {
-
 	telemetrytest.ClearAmbientExporterEnv(t)
 	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "https://user:secret-value@collector.example:4318")
 

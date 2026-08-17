@@ -13,7 +13,6 @@ import (
 )
 
 func TestResolveMetricExporterEndpoint(t *testing.T) {
-
 	for _, tc := range []struct {
 		name       string
 		cfg        MetricExporterConfig
@@ -79,7 +78,6 @@ func TestResolveMetricExporterEndpoint(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-
 			telemetrytest.ClearAmbientExporterEnv(t)
 			for name, value := range tc.env {
 				t.Setenv(name, value)
@@ -103,7 +101,6 @@ func TestResolveMetricExporterEndpoint(t *testing.T) {
 }
 
 func TestResolveMetricExporterEndpointRejectsInvalidValues(t *testing.T) {
-
 	for _, tc := range []struct {
 		name string
 		cfg  MetricExporterConfig
@@ -115,7 +112,6 @@ func TestResolveMetricExporterEndpointRejectsInvalidValues(t *testing.T) {
 		{name: "ambient endpoint", env: map[string]string{otelExporterMetricsEndpointEnv: "https://user:secret@platform.example"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-
 			telemetrytest.ClearAmbientExporterEnv(t)
 			for name, value := range tc.env {
 				t.Setenv(name, value)
@@ -249,7 +245,6 @@ func TestSetupMetricsWithoutEndpointStaysScrapeOnly(t *testing.T) {
 }
 
 func TestConflictingMetricExporterEnvNamesUnverifiableMaterial(t *testing.T) {
-
 	telemetrytest.ClearAmbientExporterEnv(t)
 	t.Setenv("OTEL_EXPORTER_OTLP_METRICS_HEADERS", "authorization=Bearer injected")
 

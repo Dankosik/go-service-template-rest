@@ -9,7 +9,6 @@ import (
 )
 
 func TestWebhookWorkerLoaderIgnoresForeignProfiles(t *testing.T) {
-
 	setWebhookWorkerConfigEnv(t)
 	t.Setenv("APP__AUTHN__ISSUER", "")
 	t.Setenv("APP__OUTBOUND_AUTH__DEPENDENCY", "not a dependency")

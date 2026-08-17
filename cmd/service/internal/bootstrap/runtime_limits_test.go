@@ -44,7 +44,6 @@ func TestApplyMemoryLimitSkipsWhenDisabled(t *testing.T) {
 }
 
 func TestApplyMemoryLimitDefersToPlatform(t *testing.T) {
-
 	restoreMemoryLimit(t)
 	t.Setenv(memoryLimitEnv, "512MiB")
 
@@ -60,7 +59,6 @@ func TestApplyMemoryLimitDefersToPlatform(t *testing.T) {
 }
 
 func TestApplyMemoryLimitReportsItsDecision(t *testing.T) {
-
 	restoreMemoryLimit(t)
 	t.Setenv(memoryLimitEnv, "")
 

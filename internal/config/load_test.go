@@ -16,7 +16,6 @@ import (
 )
 
 func TestLoadNormalizesStringsAtSemanticValidationOwners(t *testing.T) {
-
 	resetConfigEnv(t)
 	t.Setenv("APP__APP__ENV", " local ")
 	t.Setenv("APP__APP__VERSION", " v1.2.3 ")
@@ -52,7 +51,6 @@ func TestLoadNormalizesStringsAtSemanticValidationOwners(t *testing.T) {
 }
 
 func TestFlatPostgresDSNIsIgnored(t *testing.T) {
-
 	resetConfigEnv(t)
 
 	t.Setenv("POSTGRES_DSN", "postgres://app:app@localhost:5432/app?sslmode=disable")
@@ -118,9 +116,7 @@ func TestLoadDetailedWithContextCanceled(t *testing.T) {
 }
 
 func TestLoadDetailedFailedStageReporting(t *testing.T) {
-
 	t.Run("parse_stage", func(t *testing.T) {
-
 		resetConfigEnv(t)
 		t.Setenv("APP__HTTP__READ_TIMEOUT", "oops")
 
@@ -158,7 +154,6 @@ unknown:
 	})
 
 	t.Run("load_file_stage", func(t *testing.T) {
-
 		resetConfigEnv(t)
 		t.Setenv("APP__APP__ENV", "prod")
 		t.Setenv("APP_CONFIG_ALLOWED_ROOTS", t.TempDir())
@@ -213,7 +208,6 @@ func TestLoadDetailedRejectsEmptyExplicitPaths(t *testing.T) {
 }
 
 func TestOTLPExporterValuesFromNamespaceEnv(t *testing.T) {
-
 	resetConfigEnv(t)
 
 	t.Setenv("APP__OBSERVABILITY__OTEL__EXPORTER__OTLP_ENDPOINT", "https://otel.example.com:4318")
@@ -232,7 +226,6 @@ func TestOTLPExporterValuesFromNamespaceEnv(t *testing.T) {
 }
 
 func TestLoadInvalidDurationReturnsParseError(t *testing.T) {
-
 	resetConfigEnv(t)
 	t.Setenv("APP__HTTP__READ_TIMEOUT", "oops")
 
@@ -249,7 +242,6 @@ func TestLoadInvalidDurationReturnsParseError(t *testing.T) {
 }
 
 func TestParseErrorsExposeSanitizedDetail(t *testing.T) {
-
 	tests := []struct {
 		name       string
 		envKey     string
@@ -265,7 +257,6 @@ func TestParseErrorsExposeSanitizedDetail(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-
 			resetConfigEnv(t)
 			t.Setenv(tt.envKey, tt.envValue)
 
@@ -287,10 +278,8 @@ func TestParseErrorsExposeSanitizedDetail(t *testing.T) {
 }
 
 func TestNonFiniteSamplerArgReturnsParseError(t *testing.T) {
-
 	for _, value := range []string{"NaN", "+Inf"} {
 		t.Run(value, func(t *testing.T) {
-
 			resetConfigEnv(t)
 			t.Setenv("APP__OBSERVABILITY__OTEL__TRACES_SAMPLER_ARG", value)
 
@@ -332,7 +321,6 @@ broken: [
 }
 
 func TestParseErrorDoesNotLeakRawValue(t *testing.T) {
-
 	resetConfigEnv(t)
 
 	secretLikeValue := "supersecret-token-value"

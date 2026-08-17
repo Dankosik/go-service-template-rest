@@ -20,7 +20,6 @@ import (
 )
 
 func TestLoadsAKubernetesProjectedConfigFile(t *testing.T) {
-
 	resetConfigEnv(t)
 	// Anything other than local is what used to switch the hardened policy on.
 	t.Setenv("APP__APP__ENV", "production")

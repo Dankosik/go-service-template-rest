@@ -62,7 +62,6 @@ func TestWebhooksConfigDefaultsDisabled(t *testing.T) {
 
 //nolint:paralleltest // This test mutates process-global environment or working directory.
 func TestWebhookWorkerProcessEnvironment(t *testing.T) {
-
 	resetConfigEnv(t)
 	secret := "whsec_" + base64.StdEncoding.EncodeToString([]byte("0123456789abcdef0123456789abcdef"))
 	for key, value := range map[string]string{

@@ -18,7 +18,6 @@ import (
 )
 
 func TestBuildTraceExporterOptions(t *testing.T) {
-
 	t.Run("not configured", func(t *testing.T) {
 		t.Parallel()
 		telemetrytest.ClearAmbientExporterEnv(t)
@@ -36,7 +35,6 @@ func TestBuildTraceExporterOptions(t *testing.T) {
 	})
 
 	t.Run("headers without endpoint do not reach an ambient destination", func(t *testing.T) {
-
 		telemetrytest.ClearAmbientExporterEnv(t)
 		t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://env-collector.example:4318")
 

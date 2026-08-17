@@ -8,7 +8,6 @@ import (
 )
 
 func TestOutboundAuthConfigContract(t *testing.T) {
-
 	invalid := []struct {
 		name  string
 		key   string
@@ -34,7 +33,6 @@ func TestOutboundAuthConfigContract(t *testing.T) {
 	}
 	for _, test := range invalid {
 		t.Run(test.name, func(t *testing.T) {
-
 			resetConfigEnv(t)
 			t.Setenv(test.key, test.value)
 			_, _, err := LoadDetailed(LoadOptions{})
@@ -48,7 +46,6 @@ func TestOutboundAuthConfigContract(t *testing.T) {
 	}
 
 	t.Run("resource and audience conflict", func(t *testing.T) {
-
 		resetConfigEnv(t)
 		t.Setenv("APP__OUTBOUND_AUTH__AUDIENCE", "payments-api")
 		_, _, err := LoadDetailed(LoadOptions{})
@@ -58,7 +55,6 @@ func TestOutboundAuthConfigContract(t *testing.T) {
 	})
 
 	t.Run("second binding is unrepresentable", func(t *testing.T) {
-
 		resetConfigEnv(t)
 		t.Setenv("APP__OUTBOUND_AUTH__SECOND__CLIENT_ID", "other")
 		_, _, err := LoadDetailed(LoadOptions{})
@@ -68,7 +64,6 @@ func TestOutboundAuthConfigContract(t *testing.T) {
 	})
 
 	t.Run("private HTTPS is canonical", func(t *testing.T) {
-
 		resetConfigEnv(t)
 		t.Setenv("APP__OUTBOUND_AUTH__TOKEN_ENDPOINT", "HTTPS://AUTH.SERVICE.INTERNAL/oauth/token")
 		t.Setenv("APP__OUTBOUND_AUTH__TOKEN_TARGET_CLASS", "private_https")

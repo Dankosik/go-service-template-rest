@@ -48,7 +48,6 @@ unknown:
 }
 
 func TestUnknownKeyRejectsScalarSectionKeys(t *testing.T) {
-
 	for _, tc := range []struct {
 		name    string
 		envKey  string
@@ -58,7 +57,6 @@ func TestUnknownKeyRejectsScalarSectionKeys(t *testing.T) {
 		{name: "nested section", envKey: "APP__OBSERVABILITY__OTEL", wantKey: "observability.otel"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-
 			resetConfigEnv(t)
 			t.Setenv(tc.envKey, "oops")
 
@@ -125,7 +123,6 @@ observability:
 }
 
 func TestRequiredIfEnabledPostgresSecretPolicy(t *testing.T) {
-
 	resetConfigEnv(t)
 
 	t.Setenv("APP__POSTGRES__ENABLED", "true")
@@ -144,9 +141,7 @@ func TestRequiredIfEnabledPostgresSecretPolicy(t *testing.T) {
 //
 //nolint:paralleltest // This test mutates process-global environment or working directory.
 func TestTST003RequiredIfEnabledContracts(t *testing.T) {
-
 	t.Run("postgres_enabled_without_dsn_rejected", func(t *testing.T) {
-
 		resetConfigEnv(t)
 		t.Setenv("APP__POSTGRES__ENABLED", "true")
 
@@ -160,7 +155,6 @@ func TestTST003RequiredIfEnabledContracts(t *testing.T) {
 	})
 
 	t.Run("postgres_enabled_with_dsn_allowed", func(t *testing.T) {
-
 		resetConfigEnv(t)
 		dsn := "postgres://app:app@localhost:5432/app?sslmode=disable"
 		t.Setenv("APP__POSTGRES__ENABLED", "true")

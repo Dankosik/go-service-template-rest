@@ -37,7 +37,6 @@ func TestRunRejectsArgumentsWithSafeTerminalRecord(t *testing.T) {
 
 //nolint:paralleltest // This test mutates process-global environment or working directory.
 func TestResolveMigrationSourceUsesConfiguredAbsoluteDirectory(t *testing.T) {
-
 	directory := t.TempDir()
 	t.Setenv(migrationPathEnv, directory)
 
@@ -55,7 +54,6 @@ func TestResolveMigrationSourceUsesConfiguredAbsoluteDirectory(t *testing.T) {
 
 //nolint:paralleltest // This test mutates process-global environment or working directory.
 func TestResolveMigrationSourceUsesConfiguredRelativeDirectory(t *testing.T) {
-
 	directory := t.TempDir()
 	t.Chdir(directory)
 	if err := os.Mkdir("owned_migrations", 0o750); err != nil {
@@ -77,7 +75,6 @@ func TestResolveMigrationSourceUsesConfiguredRelativeDirectory(t *testing.T) {
 
 //nolint:paralleltest // This test mutates process-global environment or working directory.
 func TestResolveMigrationSourceRejectsMissingConfiguredDirectory(t *testing.T) {
-
 	t.Setenv(migrationPathEnv, filepath.Join(t.TempDir(), "missing"))
 	_, _, err := resolveMigrationSource()
 	if !errors.Is(err, errMigrationSourceMissing) {
@@ -87,7 +84,6 @@ func TestResolveMigrationSourceRejectsMissingConfiguredDirectory(t *testing.T) {
 
 //nolint:paralleltest // This test mutates process-global environment or working directory.
 func TestResolveMigrationSourceRejectsConfiguredFile(t *testing.T) {
-
 	filename := filepath.Join(t.TempDir(), "migration.sql")
 	if err := os.WriteFile(filename, []byte("SELECT 1"), 0o600); err != nil {
 		t.Fatalf("write fixture: %v", err)

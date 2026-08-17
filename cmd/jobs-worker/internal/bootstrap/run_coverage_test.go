@@ -54,7 +54,6 @@ func TestJobsWorkerRunCleansUpRejectedRegistry(t *testing.T) {
 
 //nolint:paralleltest // This test mutates process-global environment or working directory.
 func TestJobsWorkerRunRejectsEmptyRegistryBeforePostgres(t *testing.T) {
-
 	setJobsWorkerRunEnvironment(t)
 	t.Setenv("APP__POSTGRES__DSN", "postgres://jobs:password@127.0.0.1:1/jobs?sslmode=disable")
 	err := run(t.Context(), nil, func(context.Context, config.Config, *slog.Logger) (*jobs.Registry, func(context.Context), error) {
@@ -67,7 +66,6 @@ func TestJobsWorkerRunRejectsEmptyRegistryBeforePostgres(t *testing.T) {
 
 //nolint:paralleltest // This test mutates process-global environment or working directory.
 func TestJobsWorkerRunReportsPostgresStartupFailure(t *testing.T) {
-
 	setJobsWorkerRunEnvironment(t)
 	t.Setenv("APP__POSTGRES__DSN", "postgres://jobs:password@127.0.0.1:1/jobs?sslmode=disable")
 	err := run(t.Context(), nil, func(context.Context, config.Config, *slog.Logger) (*jobs.Registry, func(context.Context), error) {
@@ -80,7 +78,6 @@ func TestJobsWorkerRunReportsPostgresStartupFailure(t *testing.T) {
 
 //nolint:paralleltest // This test mutates process-global environment or working directory.
 func TestJobsWorkerRunRejectsDefinitionEnvelopeBeforePostgres(t *testing.T) {
-
 	setJobsWorkerRunEnvironment(t)
 	t.Setenv("APP__POSTGRES__DSN", "postgres://jobs:password@127.0.0.1:1/jobs?sslmode=disable")
 	registry := jobsWorkerRegistry(t, 2*time.Minute)
@@ -94,7 +91,6 @@ func TestJobsWorkerRunRejectsDefinitionEnvelopeBeforePostgres(t *testing.T) {
 
 //nolint:paralleltest // This test mutates process-global environment or working directory.
 func TestJobsWorkerRunStartsAndDrains(t *testing.T) {
-
 	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
 	defer cancel()
 	container, err := tcpostgres.Run(ctx, pgtest.DefaultImage,

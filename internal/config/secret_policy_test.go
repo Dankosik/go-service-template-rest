@@ -9,7 +9,6 @@ import (
 )
 
 func TestNonLocalRejectsSecretLikeValuesInConfigFile(t *testing.T) {
-
 	resetConfigEnv(t)
 	t.Setenv("APP__APP__ENV", "prod")
 
@@ -129,7 +128,6 @@ func TestSecretLikeConfigKeyPolicyAllowsNonSecretShapes(t *testing.T) {
 }
 
 func TestOutboundAuthSecretSourcePolicy(t *testing.T) {
-
 	resetConfigEnv(t)
 	const canary = "outbound-client-secret-canary"
 	path := writeTempConfig(t, "outbound_auth:\n  client_secret: "+canary+"\n")
@@ -167,7 +165,6 @@ func TestOutboundAuthSecretSourcePolicy(t *testing.T) {
 //nolint:paralleltest // This test mutates process-global environment or working directory.
 //nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
 func TestWebhookSecretSourcePolicy(t *testing.T) {
-
 	resetConfigEnv(t)
 	const canary = "webhook-secret-canary"
 	path := writeTempConfig(t, "webhooks:\n  static_secrets: "+canary+"\n")

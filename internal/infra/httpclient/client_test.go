@@ -328,7 +328,6 @@ func TestOneAttemptTransportUsesRequestDeadlineAndExplicitRoots(t *testing.T) {
 }
 
 func TestTransportUsesCallerRootCAsWithoutAmbientFallback(t *testing.T) {
-
 	configured := newGeneratedClientPKI(t)
 	ambient := newGeneratedClientPKI(t)
 	roots := x509.NewCertPool()

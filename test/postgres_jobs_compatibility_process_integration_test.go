@@ -92,7 +92,6 @@ func TestPostgresJobsCompatibilityProcess(t *testing.T) {
 	waitForPostgresJobsCompatibilityRejection(t, unknown)
 	assertPostgresJobsCompatibilityVisible(ctx, t, pool, v3, jobs.StateReady, 0)
 	assertPostgresJobsCompatibilityRetained(ctx, t, pool, retained)
-
 }
 
 func stageDuePostgresJobsCompatibilityJob(ctx context.Context, t *testing.T, pool *postgres.Pool, store *postgresjobs.Store, argsVersion, suffix string) jobs.Prepared {

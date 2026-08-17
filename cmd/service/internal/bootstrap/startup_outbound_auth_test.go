@@ -332,7 +332,6 @@ func TestOutboundAuthOutageDoesNotChangeHealth(t *testing.T) {
 }
 
 func TestOutboundAuthInvalidConfigFailsBeforeServing(t *testing.T) {
-
 	resetShutdownConfigEnv(t)
 	t.Setenv("APP__OUTBOUND_AUTH__CLIENT_AUTHENTICATION", "client_secret_post")
 

@@ -95,7 +95,6 @@ func TestGRPCDefaultsAreDisabledAndBounded(t *testing.T) {
 }
 
 func TestGRPCObservabilityPolicyValidation(t *testing.T) {
-
 	for _, testCase := range []struct {
 		name        string
 		key         string
@@ -122,7 +121,6 @@ func TestGRPCObservabilityPolicyValidation(t *testing.T) {
 		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-
 			resetConfigEnv(t)
 			t.Setenv(testCase.key, testCase.value)
 
@@ -138,7 +136,6 @@ func TestGRPCObservabilityPolicyValidation(t *testing.T) {
 }
 
 func TestGRPCEnabledTransportSecurity(t *testing.T) {
-
 	for _, testCase := range []struct {
 		name        string
 		env         map[string]string
@@ -215,7 +212,6 @@ func TestGRPCEnabledTransportSecurity(t *testing.T) {
 		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-
 			resetConfigEnv(t)
 			for key, value := range testCase.env {
 				t.Setenv(key, value)
@@ -255,7 +251,6 @@ func TestGRPCEnabledTransportSecurity(t *testing.T) {
 }
 
 func TestGRPCAddressAndCapacityValidation(t *testing.T) {
-
 	for _, testCase := range []struct {
 		name        string
 		key         string
@@ -300,7 +295,6 @@ func TestGRPCAddressAndCapacityValidation(t *testing.T) {
 		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-
 			resetConfigEnv(t)
 			t.Setenv("APP__GRPC__SERVER__ENABLED", "true")
 			t.Setenv("APP__GRPC__SERVER__ADDR", ":9091")
@@ -320,7 +314,6 @@ func TestGRPCAddressAndCapacityValidation(t *testing.T) {
 }
 
 func TestGRPCProcessAdmissionCannotExceedConnectionCapacity(t *testing.T) {
-
 	resetConfigEnv(t)
 	t.Setenv("APP__GRPC__SERVER__MAX_CONNECTIONS", "1")
 	t.Setenv("APP__GRPC__SERVER__MAX_CONCURRENT_STREAMS", "1")
@@ -336,7 +329,6 @@ func TestGRPCProcessAdmissionCannotExceedConnectionCapacity(t *testing.T) {
 }
 
 func TestGRPCLifetimeBoundValidation(t *testing.T) {
-
 	for _, testCase := range []struct {
 		name        string
 		env         map[string]string
@@ -397,7 +389,6 @@ func TestGRPCLifetimeBoundValidation(t *testing.T) {
 		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-
 			resetConfigEnv(t)
 			for key, value := range testCase.env {
 				t.Setenv(key, value)
@@ -415,7 +406,6 @@ func TestGRPCLifetimeBoundValidation(t *testing.T) {
 }
 
 func TestGRPCLifetimeBoundsAcceptTheShippedShapeWithoutRotation(t *testing.T) {
-
 	resetConfigEnv(t)
 	t.Setenv("APP__GRPC__SERVER__MAX_CONNECTION_AGE_GRACE", "1s")
 	t.Setenv("APP__GRPC__SERVER__UNARY_TIMEOUT", "8s")

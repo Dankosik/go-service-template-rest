@@ -88,7 +88,6 @@ func TestOTelStatsHandlersTraceAndMeasureUnaryAndStreamingRPCs(t *testing.T) {
 }
 
 func TestServerObservabilitySanitizesValuesAndFiltersUnknownMethods(t *testing.T) {
-
 	t.Setenv("OTEL_SEMCONV_STABILITY_OPT_IN", "")
 
 	const secretCanary = "credential=grpc-observability-secret"
@@ -215,7 +214,6 @@ func TestServerObservabilitySanitizesValuesAndFiltersUnknownMethods(t *testing.T
 }
 
 func TestStreamingPolicyObservabilitySanitizesRawError(t *testing.T) {
-
 	t.Setenv("OTEL_SEMCONV_STABILITY_OPT_IN", "")
 
 	const secretCanary = "credential=grpc-stream-policy-secret"

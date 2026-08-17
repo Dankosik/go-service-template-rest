@@ -15,7 +15,6 @@ import (
 )
 
 func TestSetupMetricsUsesPrivateRegistryAndConfigResource(t *testing.T) {
-
 	t.Setenv("OTEL_RESOURCE_ATTRIBUTES", "service.name=env-service,env.only=true")
 	t.Setenv("OTEL_SERVICE_NAME", "env-service")
 
