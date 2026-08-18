@@ -65,8 +65,9 @@ does not certify a provider or configure a bucket; see
 <!-- profile:object-storage:end -->
 <!-- profile:http-idempotency-postgres:start -->
 Choose `HTTP_IDEMPOTENCY=postgres` only with `DATABASE=postgres`. It retains the
-reusable PostgreSQL idempotency pack; an adopting operation still owns its
-registration and deployment quantities. See [PostgreSQL HTTP idempotency](docs/postgres-http-idempotency.md).
+one-transaction PostgreSQL idempotency executor; an operation opts in with one
+OpenAPI declaration and supplies only its authorized business effect. See
+[PostgreSQL HTTP idempotency](docs/postgres-http-idempotency.md).
 <!-- profile:http-idempotency-postgres:end -->
 <!-- profile:outbound-auth-oauth2-client-credentials:start -->
 Choose `OUTBOUND_AUTH=oauth2-client-credentials` only with

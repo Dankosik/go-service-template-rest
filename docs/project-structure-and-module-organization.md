@@ -209,13 +209,6 @@ Use the first matching rule.
     - executable boundary contract: sibling `<owner>_contract_test.go`;
     - container/external process: `test/<feature>_integration_test.go` with
       `//go:build integration` and `package integration_test`;
-    <!-- profile:http-idempotency-postgres:start -->
-    - sole package-local integration exception:
-      `cmd/service/internal/bootstrap/startup_idempotency_integration_test.go`
-      stays tagged `integration` in `package bootstrap` because it must exercise
-      unexported service composition against the real PostgreSQL writer; no
-      other `cmd/**/_integration_test.go` is permitted;
-    <!-- profile:http-idempotency-postgres:end -->
     - fake used by one test file: keep it in that file;
     - fake or harness shared within one package: keep it unexported in
       `harness_test.go`, which does not collide with the `<owner>_test.go` of a

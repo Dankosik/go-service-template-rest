@@ -21,14 +21,9 @@ jobs:
 
 # profile:http-idempotency-postgres:start
 # This optional pack stays inactive until an adopting operation is registered.
-# Values remain deployment-owned and intentionally invalid here.
+# The retry window is deployment-owned and intentionally invalid here.
 http_idempotency:
-  owner_recovery_delay: 0s
-  maintenance_interval: 0s
-  cleanup_batch_size: 0
-  max_maintenance_lag: 0s
-  max_relation_bytes: 0
-  admission_headroom_bytes: 0
+  retention: 0s
 # profile:http-idempotency-postgres:end
 
 # profile:outbound-auth-oauth2-client-credentials:start

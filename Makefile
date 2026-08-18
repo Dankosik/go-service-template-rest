@@ -38,6 +38,9 @@ TEST_REPORT_DIR := .artifacts/test
 TEST_JUNIT_FILE := $(TEST_REPORT_DIR)/junit.xml
 TEST_JSON_FILE := $(TEST_REPORT_DIR)/test2json.json
 INTEGRATION_PACKAGES := ./test/...
+# profile:http-idempotency-postgres:start
+INTEGRATION_PACKAGES += ./internal/infra/postgresidempotency
+# profile:http-idempotency-postgres:end
 # profile:messaging-nats-jetstream:start
 INTEGRATION_PACKAGES += ./internal/infra/natsjs ./cmd/worker/internal/bootstrap
 MESSAGING_RACE_PACKAGES := ./internal/infra/natsjs ./cmd/worker/internal/bootstrap ./test/...
@@ -72,6 +75,11 @@ COVERAGE_EXCLUDE_REGEX := $(COVERAGE_EXCLUDE_REGEX)|(^|/)internal/infra/natsjs/n
 # profile:outbox-postgres:start
 COVERAGE_EXCLUDE_REGEX := $(COVERAGE_EXCLUDE_REGEX)|(^|/)cmd/outbox-relay/main\.go:
 # profile:outbox-postgres:end
+# profile:http-idempotency-postgres:start
+# Store and executor behavior is owned by the real-PostgreSQL integration
+# matrix; a fake DB would decide the unique-conflict behavior it claims to test.
+COVERAGE_EXCLUDE_REGEX := $(COVERAGE_EXCLUDE_REGEX)|(^|/)internal/infra/postgresidempotency/store\.go:
+# profile:http-idempotency-postgres:end
 # profile:webhooks-durable:start
 COVERAGE_EXCLUDE_REGEX := $(COVERAGE_EXCLUDE_REGEX)|(^|/)cmd/webhook-worker/main\.go:
 # Store methods are PostgreSQL transaction adapters. Their behavioral coverage
@@ -755,8 +763,8 @@ migration-validate:
 	fi; \
 	active_image="$${image}-http-idempotency-active"; \
 	$(MAKE) runtime-image-build RUNTIME_IMAGE="$$active_image" RUNTIME_IMAGE_FIXTURE=postgres-http-idempotency-active || exit 1; \
-	active_env='-e APP__AUTHN__ISSUER=https://127.0.0.1:1 -e APP__AUTHN__AUDIENCE=fixture -e APP__AUTHN__TRUSTED_PROXY_CIDRS=127.0.0.0/8 -e APP__HTTP_IDEMPOTENCY__OWNER_RECOVERY_DELAY=30s -e APP__HTTP_IDEMPOTENCY__MAINTENANCE_INTERVAL=1s -e APP__HTTP_IDEMPOTENCY__CLEANUP_BATCH_SIZE=10 -e APP__HTTP_IDEMPOTENCY__MAX_MAINTENANCE_LAG=1m -e APP__HTTP_IDEMPOTENCY__MAX_RELATION_BYTES=1099511627776 -e APP__HTTP_IDEMPOTENCY__ADMISSION_HEADROOM_BYTES=1048576'; \
-	assert_active_failure() { output="$$(eval docker run --rm --network "$${project}_default" -e APP__POSTGRES__ENABLED=true -e APP__POSTGRES__DSN="postgres://app:app@postgres:5432/app?sslmode=disable" $$active_env "$$active_image" 2>&1 || true)"; echo "$$output" | grep -Fq 'initialize HTTP idempotency maintenance' || { echo "active fixture did not reject idempotency before OIDC"; echo "$$output"; exit 1; }; echo "$$output" | grep -Fq 'oidc' && { echo "active fixture reached OIDC before idempotency rejection"; echo "$$output"; exit 1; }; true; }; \
+	active_env='-e APP__AUTHN__ISSUER=https://127.0.0.1:1 -e APP__AUTHN__AUDIENCE=fixture -e APP__AUTHN__TRUSTED_PROXY_CIDRS=127.0.0.0/8 -e APP__HTTP_IDEMPOTENCY__RETENTION=24h'; \
+	assert_active_failure() { output="$$(eval docker run --rm --network "$${project}_default" -e APP__POSTGRES__ENABLED=true -e APP__POSTGRES__DSN="postgres://app:app@postgres:5432/app?sslmode=disable" $$active_env "$$active_image" 2>&1 || true)"; echo "$$output" | grep -Fq 'initialize HTTP idempotency cleanup' || { echo "active fixture did not reject idempotency before OIDC"; echo "$$output"; exit 1; }; echo "$$output" | grep -Fq 'oidc' && { echo "active fixture reached OIDC before idempotency rejection"; echo "$$output"; exit 1; }; true; }; \
 	assert_active_failure; \
 	docker run --rm --network "$${project}_default" \
 		-e APP__POSTGRES__ENABLED=true \
@@ -795,11 +803,7 @@ migration-validate:
 	test "$$exit_code" = "0" || { echo "runtime image exited with code $$exit_code after SIGTERM"; docker logs "$$runtime"; exit 1; }; \
 	docker run --rm --network "$${project}_default" --entrypoint psql "postgres:17@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d" "postgres://app:app@postgres:5432/app?sslmode=disable" -c 'ALTER ROLE app SET default_transaction_read_only = on'; \
 	assert_active_failure; \
-	docker run --rm --network "$${project}_default" --entrypoint psql "postgres:17@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d" "postgres://app:app@postgres:5432/app?sslmode=disable" -c 'SET default_transaction_read_only = off' -c 'ALTER ROLE app RESET default_transaction_read_only'; \
-	compose exec -T postgres psql -U app -d app -c "ALTER SYSTEM SET track_commit_timestamp = 'off'"; \
-	compose restart postgres; \
-	compose up -d --wait postgres; \
-	assert_active_failure
+	docker run --rm --network "$${project}_default" --entrypoint psql "postgres:17@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d" "postgres://app:app@postgres:5432/app?sslmode=disable" -c 'SET default_transaction_read_only = off' -c 'ALTER ROLE app RESET default_transaction_read_only'
 # profile:database-postgres:end
 
 container-security:

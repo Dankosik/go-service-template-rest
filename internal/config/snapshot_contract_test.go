@@ -95,12 +95,7 @@ func TestEveryKnownConfigKeyHasADefault(t *testing.T) {
 	defaults := defaultValues()
 	activeOnly := map[string]struct{}{
 		// profile:http-idempotency-postgres:start
-		"http_idempotency.owner_recovery_delay":     {},
-		"http_idempotency.maintenance_interval":     {},
-		"http_idempotency.cleanup_batch_size":       {},
-		"http_idempotency.max_maintenance_lag":      {},
-		"http_idempotency.max_relation_bytes":       {},
-		"http_idempotency.admission_headroom_bytes": {},
+		"http_idempotency.retention": {},
 		// profile:http-idempotency-postgres:end
 	}
 	missing := make([]string, 0)
@@ -343,12 +338,7 @@ func sentinelConfigSourceValues() map[string]any {
 		// profile:database-postgres:end
 
 		// profile:http-idempotency-postgres:start
-		"http_idempotency.owner_recovery_delay":     "30s",
-		"http_idempotency.maintenance_interval":     "5s",
-		"http_idempotency.cleanup_batch_size":       101,
-		"http_idempotency.max_maintenance_lag":      "45s",
-		"http_idempotency.max_relation_bytes":       int64(1 << 30),
-		"http_idempotency.admission_headroom_bytes": int64(1 << 20),
+		"http_idempotency.retention": "24h",
 		// profile:http-idempotency-postgres:end
 
 		// profile:jobs-postgres:start
@@ -530,12 +520,7 @@ func expectedSentinelSnapshotValues() map[string]any {
 		// profile:database-postgres:end
 
 		// profile:http-idempotency-postgres:start
-		"http_idempotency.owner_recovery_delay":     30 * time.Second,
-		"http_idempotency.maintenance_interval":     5 * time.Second,
-		"http_idempotency.cleanup_batch_size":       101,
-		"http_idempotency.max_maintenance_lag":      45 * time.Second,
-		"http_idempotency.max_relation_bytes":       int64(1 << 30),
-		"http_idempotency.admission_headroom_bytes": int64(1 << 20),
+		"http_idempotency.retention": 24 * time.Hour,
 		// profile:http-idempotency-postgres:end
 
 		// profile:jobs-postgres:start

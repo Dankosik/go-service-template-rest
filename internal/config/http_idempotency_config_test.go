@@ -7,7 +7,7 @@ import (
 )
 
 func TestValidateHTTPIdempotencyActive(t *testing.T) {
-	valid := HTTPIdempotencyConfig{MaintenanceInterval: time.Second}
+	valid := HTTPIdempotencyConfig{Retention: time.Hour}
 	for _, tc := range []struct {
 		name     string
 		cfg      HTTPIdempotencyConfig
@@ -16,8 +16,8 @@ func TestValidateHTTPIdempotencyActive(t *testing.T) {
 	}{
 		{name: "valid", cfg: valid, postgres: PostgresConfig{Enabled: true}},
 		{name: "postgres disabled", cfg: valid, want: "postgres.enabled"},
-		{name: "missing cadence", postgres: PostgresConfig{Enabled: true}, want: "http_idempotency.maintenance_interval"},
-		{name: "negative cadence", cfg: HTTPIdempotencyConfig{MaintenanceInterval: -time.Second}, postgres: PostgresConfig{Enabled: true}, want: "http_idempotency.maintenance_interval"},
+		{name: "missing retention", postgres: PostgresConfig{Enabled: true}, want: "http_idempotency.retention"},
+		{name: "negative retention", cfg: HTTPIdempotencyConfig{Retention: -time.Second}, postgres: PostgresConfig{Enabled: true}, want: "http_idempotency.retention"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			err := ValidateHTTPIdempotencyActive(tc.cfg, tc.postgres)

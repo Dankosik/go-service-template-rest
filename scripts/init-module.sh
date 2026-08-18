@@ -227,18 +227,13 @@ strip_profile() {
 	fi
 }
 
-# The source profile contains assignments and branching that the profile-off
-# output no longer has, so neither source-only directive applies there.
+# The idempotency profile adds the one branch that needs this source-only
+# directive; the profile-off output is below the cyclomatic ceiling.
 remove_http_idempotency_profile_lint() {
-	local file temporary
-
-	for file in cmd/service/internal/bootstrap/run.go internal/infra/http/router.go; do
-		[[ -f "${file}" ]] || continue
-		temporary="$(mktemp)"
-		awk '/nolint:cyclop,gocognit/ || /nolint:ineffassign,staticcheck,wastedassign/ { next } { print }' \
-			"${file}" >"${temporary}"
-		mv "${temporary}" "${file}"
-	done
+	local temporary
+	temporary="$(mktemp)"
+	awk '/nolint:cyclop/ { next } { print }' cmd/service/internal/bootstrap/run.go >"${temporary}"
+	mv "${temporary}" cmd/service/internal/bootstrap/run.go
 }
 
 # write_template_lock records where this service came from. Initialization
@@ -709,29 +704,21 @@ if [[ "${source_checkout}" != true ]]; then
 		rm -f -- \
 			cmd/service/internal/bootstrap/startup_idempotency.go \
 			cmd/service/internal/bootstrap/startup_idempotency_test.go \
-			cmd/service/internal/bootstrap/startup_idempotency_integration_test.go \
 			internal/config/http_idempotency_config.go \
 			internal/config/http_idempotency_config_test.go \
 			internal/infra/http/idempotency.go \
-			internal/infra/http/idempotency_registration.go \
-			internal/infra/http/idempotency_registration_test.go \
-			internal/infra/http/idempotency_response.go \
 			internal/infra/http/idempotency_test.go \
-			internal/infra/http/middleware_idempotency.go \
 			internal/problem/idempotency_problem_test.go \
 			migrations/000003_postgres_http_idempotency.sql \
 			internal/infra/postgres/queries/postgres_http_idempotency.sql \
 			internal/infra/postgres/sqlcgen/postgres_http_idempotency.sql.go \
-			test/postgres_http_idempotency_fixtures_integration_test.go \
+			test/postgres_http_idempotency_http_integration_test.go \
 			test/postgres_http_idempotency_integration_test.go \
 			docs/postgres-http-idempotency.md
 		strip_profile http-idempotency-postgres remove
 		remove_http_idempotency_profile_lint
 	else
 		strip_profile http-idempotency-postgres keep
-		if [[ "${outbox}" == "none" ]]; then
-			rm -f -- test/postgres_http_idempotency_integration_test.go
-		fi
 	fi
 
 		if [[ "${jobs}" == "none" ]]; then

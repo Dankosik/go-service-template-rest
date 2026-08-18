@@ -7,229 +7,87 @@ package sqlcgen
 
 import (
 	"context"
-
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const advanceHTTPIdempotencyReservation = `-- name: AdvanceHTTPIdempotencyReservation :one
-UPDATE postgres_http_idempotency
-SET
-    generation = nextval('postgres_http_idempotency_generation_seq'),
-    provisional_fingerprint_version = $1::text,
-    provisional_fingerprint = $2::bytea,
-    recover_after = clock_timestamp() + $3::bigint * interval '1 microsecond'
-WHERE identity_token = $4::bytea
-  AND generation = $5::bigint
-  AND phase = 'reserved'
-RETURNING generation
-`
-
-type AdvanceHTTPIdempotencyReservationParams struct {
-	FingerprintVersion string
-	Fingerprint        []byte
-	RecoveryMicros     int64
-	IdentityToken      []byte
-	Generation         int64
-}
-
-func (q *Queries) AdvanceHTTPIdempotencyReservation(ctx context.Context, arg AdvanceHTTPIdempotencyReservationParams) (int64, error) {
-	row := q.db.QueryRow(ctx, advanceHTTPIdempotencyReservation,
-		arg.FingerprintVersion,
-		arg.Fingerprint,
-		arg.RecoveryMicros,
-		arg.IdentityToken,
-		arg.Generation,
-	)
-	var generation int64
-	err := row.Scan(&generation)
-	return generation, err
-}
-
-const checkHTTPIdempotencyWriter = `-- name: CheckHTTPIdempotencyWriter :one
-SELECT
-    (NOT pg_is_in_recovery()
-        AND current_setting('transaction_read_only') = 'off')::boolean AS writer_primary
-`
-
-func (q *Queries) CheckHTTPIdempotencyWriter(ctx context.Context) (bool, error) {
-	row := q.db.QueryRow(ctx, checkHTTPIdempotencyWriter)
-	var writer_primary bool
-	err := row.Scan(&writer_primary)
-	return writer_primary, err
-}
-
-const completeHTTPIdempotencyReservation = `-- name: CompleteHTTPIdempotencyReservation :one
-UPDATE postgres_http_idempotency
-SET
-    phase = 'completed',
-    provisional_fingerprint_version = NULL,
-    provisional_fingerprint = NULL,
-    fingerprint_version = $1::text,
-    fingerprint = $2::bytea,
-    result = $3::bytea,
-    result_max_bytes = $4::bigint,
-    replay_nanos = $5::bigint,
-    duplicate_risk_nanos = $6::bigint,
-    duplicate_risk_permanent = $7::boolean
-WHERE identity_token = $8::bytea
-  AND generation = $9::bigint
-  AND phase = 'reserved'
-RETURNING generation
-`
-
-type CompleteHTTPIdempotencyReservationParams struct {
-	FingerprintVersion     string
-	Fingerprint            []byte
-	Result                 []byte
-	ResultMaxBytes         int64
-	ReplayNanos            int64
-	DuplicateRiskNanos     *int64
-	DuplicateRiskPermanent bool
-	IdentityToken          []byte
-	Generation             int64
-}
-
-func (q *Queries) CompleteHTTPIdempotencyReservation(ctx context.Context, arg CompleteHTTPIdempotencyReservationParams) (int64, error) {
-	row := q.db.QueryRow(ctx, completeHTTPIdempotencyReservation,
-		arg.FingerprintVersion,
-		arg.Fingerprint,
-		arg.Result,
-		arg.ResultMaxBytes,
-		arg.ReplayNanos,
-		arg.DuplicateRiskNanos,
-		arg.DuplicateRiskPermanent,
-		arg.IdentityToken,
-		arg.Generation,
-	)
-	var generation int64
-	err := row.Scan(&generation)
-	return generation, err
-}
-
-const insertHTTPIdempotencyReservation = `-- name: InsertHTTPIdempotencyReservation :one
+const claimHTTPIdempotency = `-- name: ClaimHTTPIdempotency :one
 INSERT INTO postgres_http_idempotency (
     identity_token,
-    generation,
-    phase,
-    provisional_fingerprint_version,
-    provisional_fingerprint,
-    recover_after
+    fingerprint_version,
+    fingerprint
 )
 SELECT
     $1::bytea,
-    nextval('postgres_http_idempotency_generation_seq'),
-    'reserved',
-    $2::text,
-    $3::bytea,
-    clock_timestamp() + $4::bigint * interval '1 microsecond'
+    $2::smallint,
+    $3::bytea
 WHERE NOT pg_is_in_recovery()
   AND current_setting('transaction_read_only') = 'off'
-ON CONFLICT (identity_token) DO NOTHING
-RETURNING generation
+ON CONFLICT (identity_token) DO UPDATE
+SET
+    fingerprint_version = EXCLUDED.fingerprint_version,
+    fingerprint = EXCLUDED.fingerprint,
+    result = NULL,
+    expires_at = NULL
+WHERE postgres_http_idempotency.expires_at <= clock_timestamp()
+RETURNING identity_token
 `
 
-type InsertHTTPIdempotencyReservationParams struct {
+type ClaimHTTPIdempotencyParams struct {
 	IdentityToken      []byte
-	FingerprintVersion string
+	FingerprintVersion int16
 	Fingerprint        []byte
-	RecoveryMicros     int64
 }
 
-func (q *Queries) InsertHTTPIdempotencyReservation(ctx context.Context, arg InsertHTTPIdempotencyReservationParams) (int64, error) {
-	row := q.db.QueryRow(ctx, insertHTTPIdempotencyReservation,
-		arg.IdentityToken,
-		arg.FingerprintVersion,
-		arg.Fingerprint,
-		arg.RecoveryMicros,
-	)
-	var generation int64
-	err := row.Scan(&generation)
-	return generation, err
+func (q *Queries) ClaimHTTPIdempotency(ctx context.Context, arg ClaimHTTPIdempotencyParams) ([]byte, error) {
+	row := q.db.QueryRow(ctx, claimHTTPIdempotency, arg.IdentityToken, arg.FingerprintVersion, arg.Fingerprint)
+	var identity_token []byte
+	err := row.Scan(&identity_token)
+	return identity_token, err
 }
 
-const lockHTTPIdempotencyReservation = `-- name: LockHTTPIdempotencyReservation :one
-SELECT
-    generation,
-    phase,
-    provisional_fingerprint_version,
-    provisional_fingerprint,
-    fingerprint_version,
-    fingerprint,
-    result,
-    result_max_bytes,
-    replay_nanos,
-    duplicate_risk_nanos,
-    duplicate_risk_permanent,
-    recover_after,
-    committed_at,
-    (recover_after <= clock_timestamp())::boolean AS recovery_due
-FROM postgres_http_idempotency
-WHERE identity_token = $1::bytea
-FOR UPDATE NOWAIT
+const cleanupHTTPIdempotency = `-- name: CleanupHTTPIdempotency :execrows
+WITH expired AS (
+    SELECT identity_token
+    FROM postgres_http_idempotency
+    WHERE expires_at <= clock_timestamp()
+    ORDER BY expires_at, identity_token
+    FOR UPDATE SKIP LOCKED
+    LIMIT $1
+)
+DELETE FROM postgres_http_idempotency AS target
+USING expired
+WHERE target.identity_token = expired.identity_token
 `
 
-type LockHTTPIdempotencyReservationRow struct {
-	Generation                    int64
-	Phase                         string
-	ProvisionalFingerprintVersion *string
-	ProvisionalFingerprint        []byte
-	FingerprintVersion            *string
-	Fingerprint                   []byte
-	Result                        []byte
-	ResultMaxBytes                *int64
-	ReplayNanos                   *int64
-	DuplicateRiskNanos            *int64
-	DuplicateRiskPermanent        *bool
-	RecoverAfter                  pgtype.Timestamptz
-	CommittedAt                   pgtype.Timestamptz
-	RecoveryDue                   bool
+func (q *Queries) CleanupHTTPIdempotency(ctx context.Context, batchSize int32) (int64, error) {
+	result, err := q.db.Exec(ctx, cleanupHTTPIdempotency, batchSize)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
-func (q *Queries) LockHTTPIdempotencyReservation(ctx context.Context, identityToken []byte) (LockHTTPIdempotencyReservationRow, error) {
-	row := q.db.QueryRow(ctx, lockHTTPIdempotencyReservation, identityToken)
-	var i LockHTTPIdempotencyReservationRow
-	err := row.Scan(
-		&i.Generation,
-		&i.Phase,
-		&i.ProvisionalFingerprintVersion,
-		&i.ProvisionalFingerprint,
-		&i.FingerprintVersion,
-		&i.Fingerprint,
-		&i.Result,
-		&i.ResultMaxBytes,
-		&i.ReplayNanos,
-		&i.DuplicateRiskNanos,
-		&i.DuplicateRiskPermanent,
-		&i.RecoverAfter,
-		&i.CommittedAt,
-		&i.RecoveryDue,
-	)
-	return i, err
-}
-
-const materializeHTTPIdempotencyCommitEpoch = `-- name: MaterializeHTTPIdempotencyCommitEpoch :one
+const completeHTTPIdempotency = `-- name: CompleteHTTPIdempotency :one
 UPDATE postgres_http_idempotency
-SET committed_at = CASE
-    WHEN current_setting('track_commit_timestamp') = 'on'
-    THEN pg_xact_commit_timestamp(xmin)
-    ELSE NULL
-END
-WHERE identity_token = $1::bytea
-  AND phase = 'completed'
-  AND committed_at IS NULL
-  AND CASE
-      WHEN current_setting('track_commit_timestamp') = 'on'
-      THEN pg_xact_commit_timestamp(xmin) IS NOT NULL
-      ELSE FALSE
-  END
-RETURNING committed_at
+SET
+    result = $1::bytea,
+    expires_at = clock_timestamp()
+        + $2::bigint * interval '1 microsecond'
+WHERE identity_token = $3::bytea
+  AND result IS NULL
+RETURNING result
 `
 
-func (q *Queries) MaterializeHTTPIdempotencyCommitEpoch(ctx context.Context, identityToken []byte) (pgtype.Timestamptz, error) {
-	row := q.db.QueryRow(ctx, materializeHTTPIdempotencyCommitEpoch, identityToken)
-	var committed_at pgtype.Timestamptz
-	err := row.Scan(&committed_at)
-	return committed_at, err
+type CompleteHTTPIdempotencyParams struct {
+	Result          []byte
+	RetentionMicros int64
+	IdentityToken   []byte
+}
+
+func (q *Queries) CompleteHTTPIdempotency(ctx context.Context, arg CompleteHTTPIdempotencyParams) ([]byte, error) {
+	row := q.db.QueryRow(ctx, completeHTTPIdempotency, arg.Result, arg.RetentionMicros, arg.IdentityToken)
+	var result []byte
+	err := row.Scan(&result)
+	return result, err
 }
 
 const readHTTPIdempotency = `-- name: ReadHTTPIdempotency :one
@@ -238,43 +96,23 @@ WITH input AS (
 )
 SELECT
     (entry.identity_token IS NOT NULL)::boolean AS row_exists,
-    entry.generation,
-    entry.phase,
-    entry.provisional_fingerprint_version,
-    entry.provisional_fingerprint,
+    (NOT pg_is_in_recovery()
+        AND current_setting('transaction_read_only') = 'off')::boolean AS writer_primary,
+    coalesce(entry.expires_at > clock_timestamp(), FALSE)::boolean AS live,
     entry.fingerprint_version,
     entry.fingerprint,
-    entry.result,
-    entry.result_max_bytes,
-    entry.replay_nanos,
-    entry.duplicate_risk_nanos,
-    entry.duplicate_risk_permanent,
-    entry.recover_after,
-    entry.committed_at,
-    coalesce(entry.recover_after <= clock_timestamp(), FALSE)::boolean AS recovery_due,
-    (NOT pg_is_in_recovery()
-        AND current_setting('transaction_read_only') = 'off')::boolean AS writer_primary
+    entry.result
 FROM input
 LEFT JOIN postgres_http_idempotency AS entry USING (identity_token)
 `
 
 type ReadHTTPIdempotencyRow struct {
-	RowExists                     bool
-	Generation                    *int64
-	Phase                         *string
-	ProvisionalFingerprintVersion *string
-	ProvisionalFingerprint        []byte
-	FingerprintVersion            *string
-	Fingerprint                   []byte
-	Result                        []byte
-	ResultMaxBytes                *int64
-	ReplayNanos                   *int64
-	DuplicateRiskNanos            *int64
-	DuplicateRiskPermanent        *bool
-	RecoverAfter                  pgtype.Timestamptz
-	CommittedAt                   pgtype.Timestamptz
-	RecoveryDue                   bool
-	WriterPrimary                 bool
+	RowExists          bool
+	WriterPrimary      bool
+	Live               bool
+	FingerprintVersion *int16
+	Fingerprint        []byte
+	Result             []byte
 }
 
 func (q *Queries) ReadHTTPIdempotency(ctx context.Context, identityToken []byte) (ReadHTTPIdempotencyRow, error) {
@@ -282,41 +120,11 @@ func (q *Queries) ReadHTTPIdempotency(ctx context.Context, identityToken []byte)
 	var i ReadHTTPIdempotencyRow
 	err := row.Scan(
 		&i.RowExists,
-		&i.Generation,
-		&i.Phase,
-		&i.ProvisionalFingerprintVersion,
-		&i.ProvisionalFingerprint,
+		&i.WriterPrimary,
+		&i.Live,
 		&i.FingerprintVersion,
 		&i.Fingerprint,
 		&i.Result,
-		&i.ResultMaxBytes,
-		&i.ReplayNanos,
-		&i.DuplicateRiskNanos,
-		&i.DuplicateRiskPermanent,
-		&i.RecoverAfter,
-		&i.CommittedAt,
-		&i.RecoveryDue,
-		&i.WriterPrimary,
 	)
 	return i, err
-}
-
-const releaseHTTPIdempotencyReservation = `-- name: ReleaseHTTPIdempotencyReservation :execrows
-DELETE FROM postgres_http_idempotency
-WHERE identity_token = $1::bytea
-  AND generation = $2::bigint
-  AND phase = 'reserved'
-`
-
-type ReleaseHTTPIdempotencyReservationParams struct {
-	IdentityToken []byte
-	Generation    int64
-}
-
-func (q *Queries) ReleaseHTTPIdempotencyReservation(ctx context.Context, arg ReleaseHTTPIdempotencyReservationParams) (int64, error) {
-	result, err := q.db.Exec(ctx, releaseHTTPIdempotencyReservation, arg.IdentityToken, arg.Generation)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
 }

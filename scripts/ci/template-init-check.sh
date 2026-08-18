@@ -1655,7 +1655,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "http
 			"${http_idempotency_marker}" \
 			"${root}/README.md" "${root}/cmd" "${root}/docs" "${root}/env" "${root}/internal" "${root}/scripts/ci"
 		assert "health route opted into idempotency" grep_absent -Fq \
-			'x-http-idempotency' "${root}/api/openapi/service.yaml"
+			'x-idempotent' "${root}/api/openapi/service.yaml"
 	}
 
 	base_http_idempotency="$(copy_template_checkout http-idempotency-base git@github.com:acme/http-idempotency-service.git)"

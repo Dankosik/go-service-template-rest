@@ -19,11 +19,11 @@ Use it as evidence to recover standing constraints, owners, reusable capabilitie
 
 ## HTTP idempotency
 
-`internal/httpidempotency` owns the reusable request identity and result
-contracts. `internal/infra/postgresidempotency` owns their PostgreSQL protocol;
-bootstrap composes it only when an adopting service registers an operation.
-`HTTP_IDEMPOTENCY=postgres` retains that complete pack but does not register a
-health route or activate endpoint traffic.
+`internal/httpidempotency` owns the fixed scoped-request and generated-result
+contract. `internal/infra/postgresidempotency` binds a feature repository to one
+PostgreSQL transaction that commits the business effect and replay evidence.
+An OpenAPI `x-idempotent: true` declaration activates the component; the
+health-only template stays inert.
 
 <!-- profile:http-idempotency-postgres:end -->
 

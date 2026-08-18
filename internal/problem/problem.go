@@ -40,12 +40,9 @@ const (
 	CodeUnprocessableContent Code = Code(failure.CodeUnprocessableContent)
 	CodeTooManyRequests      Code = Code(failure.CodeTooManyRequests)
 	// profile:http-idempotency-postgres:start
-	CodeIdempotencyKeyMismatch    Code = "idempotency_key_mismatch"
-	CodeIdempotencyInProgress     Code = "idempotency_in_progress"
-	CodeIdempotencyKeyExpired     Code = "idempotency_key_expired"
-	CodeIdempotencyUnavailable    Code = "idempotency_unavailable"
-	CodeIdempotencyOutcomeUnknown Code = "idempotency_outcome_unknown"
-	CodeIdempotencyResultTooLarge Code = "idempotency_result_too_large"
+	CodeIdempotencyKeyMismatch    Code = Code(failure.CodeIdempotencyKeyMismatch)
+	CodeIdempotencyUnavailable    Code = Code(failure.CodeIdempotencyUnavailable)
+	CodeIdempotencyOutcomeUnknown Code = Code(failure.CodeIdempotencyOutcomeUnknown)
 	// profile:http-idempotency-postgres:end
 	CodeInternalError      Code = Code(failure.CodeInternalError)
 	CodeServiceUnavailable Code = Code(failure.CodeServiceUnavailable)
@@ -148,18 +145,6 @@ var catalog = []Definition{
 		TypeURI: "https://www.rfc-editor.org/rfc/rfc9110#section-15.5.21",
 	},
 	{
-		Code:    CodeIdempotencyInProgress,
-		Status:  http.StatusConflict,
-		Title:   string(CodeConflict),
-		TypeURI: conflictTypeURI,
-	},
-	{
-		Code:    CodeIdempotencyKeyExpired,
-		Status:  http.StatusConflict,
-		Title:   string(CodeConflict),
-		TypeURI: conflictTypeURI,
-	},
-	{
 		Code:    CodeIdempotencyUnavailable,
 		Status:  http.StatusServiceUnavailable,
 		Title:   "service unavailable",
@@ -170,12 +155,6 @@ var catalog = []Definition{
 		Status:  http.StatusServiceUnavailable,
 		Title:   "service unavailable",
 		TypeURI: "https://www.rfc-editor.org/rfc/rfc9110#section-15.6.4",
-	},
-	{
-		Code:    CodeIdempotencyResultTooLarge,
-		Status:  http.StatusInternalServerError,
-		Title:   "internal server error",
-		TypeURI: "https://www.rfc-editor.org/rfc/rfc9110#section-15.6.1",
 	},
 	// profile:http-idempotency-postgres:end
 	{
