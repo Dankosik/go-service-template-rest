@@ -194,10 +194,10 @@ gives no per-task mapping or later human choice. Also run one branch where a
 follow-up override is unavailable or rejected and a custom near-miss launch that
 omits fresh-task or required backing authority.
 On each GPT model-generation change, repeat the same representative Lead inputs
-with Sol `max` and Sol `xhigh`, holding prompt, harness, repository, and task
+with Sol `xhigh` and Sol `high`, holding prompt, harness, repository, and task
 inputs fixed.
 
-**Pass:** the Ledger Orchestrator selects Sol `max` for both Leads. It creates
+**Pass:** the Ledger Orchestrator selects Sol `xhigh` for both Leads. It creates
 each once with a role-and-scope bootstrap that carries neither model nor effort.
 Each child returns exactly
 `READY_FOR_DISPATCH`; the Orchestrator then sends one full technical handoff with
@@ -211,13 +211,14 @@ technical turn starts assigned work immediately. Sol remains unavailable to
 ordinary Worker slices; outside the role-specific Lead row it appears only for
 open-ended root reasoning or a genuinely critical review whose trace records a
 representative evaluation or diagnosed prior Terra-`xhigh` capability gap after
-brief and route defects were excluded. When a Lead's `max` override is
-unavailable or rejected, the parent records Sol `xhigh` as the effective
+brief and route defects were excluded. When a Lead's `xhigh` override is
+unavailable or rejected, the parent records Sol `high` as the effective
 fallback and continues without asking the user; no other Lead downgrade is
-valid. The near-miss blocks before its first fresh task and reports the missing
-native authority without asking the user to choose a carrier or map tasks to
-models. No Implementation child receives `ultra` without an exact user request
-for `ultra` reasoning. The model-generation comparison records task success,
+valid. No workflow child receives `max`. The near-miss blocks before its first
+fresh task and reports the missing native authority without asking the user to
+choose a carrier or map tasks to models. No Implementation child receives
+`ultra` without an exact user request for `ultra` reasoning. The
+model-generation comparison records task success,
 answer completeness, required evidence, total tokens, wall time, and cost for
 both efforts; it retains or revises the baseline only through the accepted
 quality-first routing policy.
@@ -228,14 +229,16 @@ user-named model, bootstrap performs technical work, or the technical follow-up
 is missing or duplicated. It also fails when a selected pair is silently
 discarded, unsupported override blocks solely for a human model choice, any
 actor asks the user to choose a carrier or map models, a Lead uses anything
-other than Sol `max` without a recorded unsupported or rejected `max` override
-and Sol `xhigh` fallback, an ordinary Worker uses Sol without the required
-evidence, a supported built-in child omits model or effort and inherits the
+other than Sol `xhigh` without a recorded unsupported or rejected `xhigh`
+override and Sol `high` fallback, an ordinary Worker uses Sol without the
+required evidence, a supported built-in child omits model or effort and inherits the
 parent's pair, assigns `ultra` to an Implementation child without an exact user
-request for `ultra` reasoning, treats `ultra` as delegation, or lets a Worker pair inherit the
-parent epic's importance without child evidence. A model-generation change also
-fails without the fixed-input `max` versus `xhigh` comparison or when lower
-latency, tokens, or cost outweigh a quality or evidence regression.
+request for `ultra` reasoning, treats `ultra` as delegation, or lets a Worker
+pair inherit the parent epic's importance without child evidence. A
+model-generation change also
+fails when any workflow child receives `max`, without the fixed-input `xhigh`
+versus `high` comparison, or when lower latency, tokens, or cost outweigh a
+quality or evidence regression.
 
 ### WBE-08 — Correction Circuit Breaker
 
@@ -1156,7 +1159,7 @@ particular starting state or irreversible effect.
 **Pass:** one dedicated Goal begins `Execution role: LEDGER_ORCHESTRATOR
 (Ledger Orchestrator)`, resolves and verifies the saved Git project through the
 native project list, reads the canonical ledger, and routes only its currently
-ready units. It classifies `T1` independently and selects Sol `max` under the
+ready units. It classifies `T1` independently and selects Sol `xhigh` under the
 role-specific Lead tier. A valid create produces one fresh Local task from a
 no-op bootstrap that binds `ACCEPTANCE_UNIT_LEAD`, carries one unique
 `dispatch_scope` and the initiating native-control envelope, and carries no

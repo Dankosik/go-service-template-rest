@@ -388,17 +388,18 @@ so outside the role-specific Acceptance-Unit Lead baseline select the least
 effort that closes that fixed brief. Only an exact user request for `ultra`
 reasoning may override this exclusion.
 
-The Acceptance-Unit Lead baseline is the reserved hardest quality-first
-workload; it never propagates to its leaves. On each GPT model-generation
-change, WBE-07 compares Sol `max` and `xhigh` on the same representative Lead
-cases before this baseline is retained or revised; a running unit keeps its
-selected configuration.
+The Acceptance-Unit Lead is the reserved quality-first workload and uses
+`xhigh`; that effort never propagates to its leaves. When `xhigh` is unavailable
+or rejected, use `high` and record the effective fallback. On each GPT
+model-generation change, WBE-07 compares `xhigh` and `high` on the same
+representative Lead cases before this baseline is retained or revised. This
+workflow never selects `max`; a running unit keeps its selected configuration.
 
 This table owns the per-harness tiers:
 
 | Task class | Codex App | Claude Code | Qwen Code |
 | --- | --- | --- | --- |
-| Acceptance-Unit Lead | Sol (`gpt-5.6-sol`) with `max`; use Sol `xhigh` only when `max` is unavailable or rejected and record the effective fallback | Opus (`claude-opus-5`) with `max`; use `xhigh` only when `max` is unavailable or rejected and record the effective fallback | The strongest configured model with its maximum supported session effort |
+| Acceptance-Unit Lead | Sol (`gpt-5.6-sol`) with `xhigh`; use Sol `high` only when `xhigh` is unavailable or rejected and record the effective fallback | Opus (`claude-opus-5`) with `xhigh`; use `high` only when `xhigh` is unavailable or rejected and record the effective fallback | The strongest configured model; inherit session effort and never request `max` |
 | Clear mechanical work | Luna (`gpt-5.6-luna`) with `low` effort | Sonnet (`claude-sonnet-5`) | `fast` (the configured `fastModel`) |
 | Ordinary implementation and ordinary review | Terra (`gpt-5.6-terra`) with `medium` effort | Sonnet (`claude-sonnet-5`) | `inherit` (the session model) |
 | Closed-route complex, cross-cutting, protected-domain, or high-consequence implementation | Terra (`gpt-5.6-terra`) with `high` or `xhigh` effort | Opus (`claude-opus-5`) | `inherit`, or a stronger configured model ID |
@@ -407,8 +408,8 @@ This table owns the per-harness tiers:
 
 - **Codex App uses the explicit task-class ladder above.** The role-specific
   Acceptance-Unit Lead row overrides the write-slice rows: every Lead uses Sol
-  `max`, falling back to Sol `xhigh` only on a recorded unsupported or rejected
-  `max` override. Luna owns clear mechanical Worker work. Terra is the
+  `xhigh`, falling back to Sol `high` only on a recorded unsupported or rejected
+  `xhigh` override. Luna owns clear mechanical Worker work. Terra is the
   default for every ready ordinary Worker slice and
   ordinary review; raise Terra to `high` or `xhigh` for closed-route complex,
   cross-cutting, protected-domain, or high-consequence implementation. A fixed
@@ -435,8 +436,7 @@ This table owns the per-harness tiers:
 | --- | --- |
 | `low` | Clear, bounded mechanical work whose route and proof are already known and whose lower effort has no material quality loss on current task evidence or representative evaluation. |
 | `medium` | Ordinary implementation, review, and document analysis. |
-| `high` / `xhigh` | Complex debugging, broad synthesis, or high-consequence reasoning when task evidence or a representative evaluation shows that extra reasoning improves the outcome. |
-| `max` | Every Acceptance-Unit Lead; otherwise the hardest architecture, research, or formal-reasoning work when lower effort is demonstrably insufficient. |
+| `high` / `xhigh` | Complex debugging, broad synthesis, or high-consequence reasoning when task evidence or a representative evaluation shows that extra reasoning improves the outcome. Every Acceptance-Unit Lead uses `xhigh`, with `high` as its recorded capability fallback. |
 
 - A wrong result is evidence to improve the diagnosis, brief, or route, not by itself a reason to raise effort. Implementation correction follows its phase-owned frozen-finding contract and never raises effort merely to keep a repair loop active.
 - Required re-review remains at least as capable (model and effort) as the review that found the issue. Implementation correction uses delta-only acceptance-owner verification; when independent implementation review remains triggered, the fixed candidate enters a fresh one-shot lane.
