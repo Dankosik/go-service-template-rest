@@ -73,7 +73,7 @@ It does not restate the full tree, every command, or task-local design choices.
 | `cmd/jobs-worker/` and River | Default-off typed PostgreSQL jobs, transactional insertion, and a separate worker process. | Business job kinds, effect idempotency, operator exposure, or production capacity claims. |
 <!-- profile:jobs-postgres:end -->
 <!-- profile:webhooks-durable:start -->
-| `internal/outboundtrust/`, `internal/infra/postgreswebhook/`, and `cmd/webhook-worker/` | Shared public-address predicate, durable webhook engine, and independent worker lifecycle. | Subscriber discovery, feature transactions, operator transport, receiver processing, or deployment policy. |
+| `internal/outboundtrust/` and `internal/infra/postgreswebhook/` | Shared public-address predicate and the Standard Webhooks job adapter executed by `cmd/jobs-worker`. | Generic job persistence/lifecycle, subscriber administration, feature transactions, operator transport, receiver processing, or deployment policy. |
 <!-- profile:webhooks-durable:end -->
 
 <!-- profile:grpc:start -->
@@ -263,12 +263,12 @@ builder and uses River's `InsertTx` for caller-owned PostgreSQL transactions; se
 <!-- profile:jobs-postgres:end -->
 
 <!-- profile:webhooks-durable:start -->
-The optional durable webhook pack accepts a complete immutable fan-out through
-the same caller-owned `pgx.Tx` as its business mutation. The separate
-`cmd/webhook-worker` process claims bounded work, resolves only the configured
-owner-scoped key, signs one public HTTPS request, and records the strongest
-known outcome. It supplies store control methods but no generic subscriber or
-operator API; see [Outbound webhook delivery](outbound-webhook-delivery.md).
+The optional durable webhook pack prepares a complete immutable fan-out before
+the feature transaction and stages one `postgresjobs` row per receiver inside
+that transaction. `cmd/jobs-worker` runs the registered webhook definition;
+the adapter signs one bounded public-HTTPS request and maps its result into the
+generic jobs outcome vocabulary. It has no separate worker, delivery ledger,
+subscriber administration, or operator API; see [Outbound webhook delivery](outbound-webhook-delivery.md).
 <!-- profile:webhooks-durable:end -->
 
 <!-- profile:messaging-nats-jetstream:start -->

@@ -346,21 +346,9 @@ func sentinelConfigSourceValues() map[string]any {
 		// profile:jobs-postgres:end
 
 		// profile:webhooks-durable:start
-		"webhooks.enabled":                 true,
-		"webhooks.capacity_revision":       int64(8),
-		"webhooks.global_concurrency":      7,
-		"webhooks.claim_scan_page":         23,
-		"webhooks.poll_interval":           "450ms",
-		"webhooks.observation_interval":    "7s",
-		"webhooks.store_operation_timeout": "6s",
-		"webhooks.attempt_timeout":         "12s",
-		"webhooks.response_header_timeout": "4s",
-		"webhooks.response_header_bytes":   8192,
-		"webhooks.response_body_bytes":     16384,
-		"webhooks.drain_timeout":           "24s",
-		"webhooks.maintenance_interval":    "9s",
-		"webhooks.maintenance_batch":       41,
-		"webhooks.static_secrets":          `{"revision":8,"entries":[]}`,
+		"webhooks.enabled":        true,
+		"webhooks.endpoints":      `{"endpoints":[]}`,
+		"webhooks.static_secrets": `{"entries":[]}`,
 		// profile:webhooks-durable:end
 
 		// profile:object-storage:start
@@ -511,21 +499,9 @@ func expectedSentinelSnapshotValues() map[string]any {
 		// profile:jobs-postgres:end
 
 		// profile:webhooks-durable:start
-		"webhooks.enabled":                 true,
-		"webhooks.capacity_revision":       int64(8),
-		"webhooks.global_concurrency":      7,
-		"webhooks.claim_scan_page":         23,
-		"webhooks.poll_interval":           450 * time.Millisecond,
-		"webhooks.observation_interval":    7 * time.Second,
-		"webhooks.store_operation_timeout": 6 * time.Second,
-		"webhooks.attempt_timeout":         12 * time.Second,
-		"webhooks.response_header_timeout": 4 * time.Second,
-		"webhooks.response_header_bytes":   8192,
-		"webhooks.response_body_bytes":     16384,
-		"webhooks.drain_timeout":           24 * time.Second,
-		"webhooks.maintenance_interval":    9 * time.Second,
-		"webhooks.maintenance_batch":       41,
-		"webhooks.static_secrets":          `{"revision":8,"entries":[]}`,
+		"webhooks.enabled":        true,
+		"webhooks.endpoints":      `{"endpoints":[]}`,
+		"webhooks.static_secrets": `{"entries":[]}`,
 		// profile:webhooks-durable:end
 
 		// profile:object-storage:start

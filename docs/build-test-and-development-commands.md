@@ -42,10 +42,9 @@ Build it once with `make runtime-image-build`, then reuse that exact tag for
 migration validation; only `/migrate` writes schema.
 <!-- profile:jobs-postgres:end -->
 <!-- profile:webhooks-durable:start -->
-The durable-webhook profile adds `/webhook-worker` to the same runtime image.
-Use `make test-webhook-race` for its focused race pack, then build one exact tag
-with `make runtime-image-build RUNTIME_IMAGE=service:webhook-test` and reuse it
-for migration and process-lifecycle proof.
+The durable-webhook profile registers its definition in `/jobs-worker`. Use
+`make test-webhook-race` for the staging and network-security race pack; the
+jobs profile owns process lifecycle proof.
 <!-- profile:webhooks-durable:end -->
 
 The production Dockerfile persists module and compiler caches across BuildKit
@@ -131,10 +130,10 @@ than a broker-neutral relay that needs source edits. See
 [PostgreSQL transactional outbox](./postgres-transactional-outbox.md).
 <!-- profile:outbox-postgres:end -->
 <!-- profile:webhooks-durable:start -->
-`WEBHOOKS=none` removes webhook schema, SQLC output, worker/runtime code, tests,
-configuration, documentation, image entrypoint, and Make targets.
-`WEBHOOKS=durable` requires `DATABASE=postgres` and remains independent of
-outbox, jobs, messaging, and the fixed-target outbound HTTP profile.
+`WEBHOOKS=none` removes the webhook job adapter, its historical migrations,
+tests, configuration, documentation, and focused Make target.
+`WEBHOOKS=durable` requires `DATABASE=postgres JOBS=postgres`; it remains
+independent of outbox, messaging, and the fixed-target outbound HTTP profile.
 <!-- profile:webhooks-durable:end -->
 <!-- profile:grpc:start -->
 `GRPC=none` removes the native gRPC runtime, protobuf workflow, generated

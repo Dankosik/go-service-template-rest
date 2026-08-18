@@ -75,22 +75,10 @@ postgres:
 # profile:database-postgres:end
 
 # profile:webhooks-durable:start
-# Deployment must supply a complete immutable snapshot and the environment-only
-# secret manifest before enabling the independently deployed worker.
+# Deployment supplies receiver metadata and the jobs worker receives signing
+# secrets through APP__WEBHOOKS__STATIC_SECRETS only.
 webhooks:
   enabled: false
-  capacity_revision: 0
-  global_concurrency: 0
-  claim_scan_page: 0
-  poll_interval: 0s
-  observation_interval: 0s
-  store_operation_timeout: 0s
-  attempt_timeout: 0s
-  response_header_timeout: 0s
-  response_header_bytes: 0
-  response_body_bytes: 0
-  drain_timeout: 0s
-  maintenance_interval: 0s
-  maintenance_batch: 0
+  endpoints: ""
   static_secrets: ""
 # profile:webhooks-durable:end

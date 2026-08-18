@@ -13,10 +13,6 @@ OUTBOX_RELAY_BINARY := bin/$(SERVICE_NAME)-outbox-relay
 JOBS_WORKER_CMD := ./cmd/jobs-worker
 JOBS_WORKER_BINARY := bin/$(SERVICE_NAME)-jobs-worker
 # profile:jobs-postgres:end
-# profile:webhooks-durable:start
-WEBHOOK_WORKER_CMD := ./cmd/webhook-worker
-WEBHOOK_WORKER_BINARY := bin/$(SERVICE_NAME)-webhook-worker
-# profile:webhooks-durable:end
 GO ?= go
 PGO_PROFILE ?= off
 OPENAPI_FILE := api/openapi/service.yaml
@@ -52,7 +48,7 @@ MESSAGING_RACE_PACKAGES += ./cmd/outbox-relay/internal/bootstrap
 OUTBOX_RACE_PACKAGES := ./internal/domainevent ./internal/infra/postgresoutbox ./internal/infra/natsjs ./cmd/outbox-relay/internal/bootstrap ./test/...
 # profile:outbox-postgres:end
 # profile:webhooks-durable:start
-WEBHOOK_RACE_PACKAGES := ./internal/infra/postgreswebhook ./cmd/webhook-worker/internal/bootstrap ./test/...
+WEBHOOK_RACE_PACKAGES := ./internal/infra/postgreswebhook ./test/...
 # profile:webhooks-durable:end
 # Effective coverage is measured across the whole module, so a freshly generated
 # service already sits near this floor on template tests alone. Initialization
@@ -80,13 +76,6 @@ COVERAGE_EXCLUDE_REGEX := $(COVERAGE_EXCLUDE_REGEX)|(^|/)cmd/outbox-relay/main\.
 # matrix; a fake DB would decide the unique-conflict behavior it claims to test.
 COVERAGE_EXCLUDE_REGEX := $(COVERAGE_EXCLUDE_REGEX)|(^|/)internal/infra/postgresidempotency/store\.go:
 # profile:http-idempotency-postgres:end
-# profile:webhooks-durable:start
-COVERAGE_EXCLUDE_REGEX := $(COVERAGE_EXCLUDE_REGEX)|(^|/)cmd/webhook-worker/main\.go:
-# Store methods are PostgreSQL transaction adapters. Their behavioral coverage
-# is owned by test-integration and test-webhook-race, which run against the
-# real schema; the unit coverage job has no database authority.
-COVERAGE_EXCLUDE_REGEX := $(COVERAGE_EXCLUDE_REGEX)|(^|/)internal/infra/postgreswebhook/store_.*\.go:
-# profile:webhooks-durable:end
 
 FUZZ_TIME ?= 45s
 LINT_BASE_REF ?= origin/main
@@ -200,7 +189,7 @@ BENCHMARK_REMOTE_SCRIPT := bash ./scripts/dev/benchmark-remote.sh
 .PHONY: run-jobs-worker build-jobs-worker
 # profile:jobs-postgres:end
 # profile:webhooks-durable:start
-.PHONY: run-webhook-worker build-webhook-worker test-webhook-race
+.PHONY: test-webhook-race
 # profile:webhooks-durable:end
 # profile:grpc-reference-benchmark:start
 .PHONY: bench-grpc bench-grpc-smoke bench-grpc-inspect
@@ -235,7 +224,6 @@ help:
 	@echo "  make test-outbox-race"
 # profile:outbox-postgres:end
 # profile:webhooks-durable:start
-	@echo "  make run-webhook-worker | build-webhook-worker"
 	@echo "  make test-webhook-race"
 # profile:webhooks-durable:end
 	@echo ""
@@ -322,7 +310,7 @@ check-full:
 	$(MAKE) delivery-quality
 	$(MAKE) ci-local
 	$(MAKE) runtime-image-build RUNTIME_IMAGE=$(SERVICE_NAME):ci
-	REQUIRE_DOCKER=1 $(MAKE) test-integration WEBHOOK_RUNTIME_IMAGE=$(SERVICE_NAME):ci
+	REQUIRE_DOCKER=1 $(MAKE) test-integration
 # profile:database-postgres:start
 	$(MAKE) migration-validate RUNTIME_IMAGE=$(SERVICE_NAME):ci
 # profile:database-postgres:end
@@ -404,7 +392,7 @@ test-outbox-race:
 
 # profile:webhooks-durable:start
 test-webhook-race:
-	WEBHOOK_RUNTIME_IMAGE="$(WEBHOOK_RUNTIME_IMAGE)" go test -vet=off -p=1 -count=1 -race -tags=integration $(WEBHOOK_RACE_PACKAGES) -run '^Test(PostgresWebhook|WebhookWorker)'
+	go test -vet=off -p=1 -count=1 -race -tags=integration $(WEBHOOK_RACE_PACKAGES) -run '^Test(PostgresWebhookAcceptance|WebhookNetwork)'
 # profile:webhooks-durable:end
 
 test-cover:
@@ -464,12 +452,7 @@ test-flake-smoke:
 	go test -vet=off -count=5 -shuffle=on ./...
 
 test-integration:
-	@image="$(WEBHOOK_RUNTIME_IMAGE)"; \
-	if [ -z "$$image" ]; then \
-		image="$(SERVICE_NAME):integration"; \
-		$(MAKE) runtime-image-build RUNTIME_IMAGE="$$image"; \
-	fi; \
-	WEBHOOK_RUNTIME_IMAGE="$$image" go test -p=1 -count=1 -tags=integration $(INTEGRATION_PACKAGES)
+	go test -p=1 -count=1 -tags=integration $(INTEGRATION_PACKAGES)
 # profile:messaging-nats-jetstream:start
 	$(MAKE) test-messaging-race
 # profile:messaging-nats-jetstream:end
@@ -477,19 +460,7 @@ test-integration:
 	$(MAKE) test-outbox-race
 # profile:outbox-postgres:end
 # profile:webhooks-durable:start
-	WEBHOOK_RUNTIME_IMAGE="$(or $(WEBHOOK_RUNTIME_IMAGE),$(SERVICE_NAME):integration)" $(MAKE) test-webhook-race
-# profile:webhooks-durable:end
-
-# profile:webhooks-durable:start
-run-webhook-worker:
-	@set -a; \
-	if [ -f .env ]; then . ./.env; fi; \
-	set +a; \
-	go run $(WEBHOOK_WORKER_CMD)
-
-build-webhook-worker:
-	@mkdir -p $(dir $(WEBHOOK_WORKER_BINARY))
-	go build -trimpath -o $(WEBHOOK_WORKER_BINARY) $(WEBHOOK_WORKER_CMD)
+	$(MAKE) test-webhook-race
 # profile:webhooks-durable:end
 
 # profile:jobs-postgres:start

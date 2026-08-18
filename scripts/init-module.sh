@@ -358,8 +358,8 @@ separate NATS publication worker. Publication is at-least-once and consumers
 must tolerate duplicate event IDs; see \`docs/postgres-transactional-outbox.md\`.
 <!-- profile:outbox-postgres:end -->
 <!-- profile:webhooks-durable:start -->
-This service includes durable PostgreSQL-backed outbound webhook delivery and
-its separately deployed worker; see \`docs/outbound-webhook-delivery.md\`.
+This service stages one durable job per webhook receiver and delivers it from
+the shared jobs worker; see \`docs/outbound-webhook-delivery.md\`.
 <!-- profile:webhooks-durable:end -->
 EOF
 }
@@ -446,8 +446,8 @@ none | durable) ;;
 	exit 1
 	;;
 esac
-if [[ "${webhooks}" == "durable" && "${database}" != "postgres" ]]; then
-	echo "WEBHOOKS=durable requires DATABASE=postgres"
+if [[ "${webhooks}" == "durable" && ( "${database}" != "postgres" || "${jobs}" != "postgres" ) ]]; then
+	echo "WEBHOOKS=durable requires DATABASE=postgres JOBS=postgres"
 	exit 1
 fi
 
@@ -737,18 +737,16 @@ if [[ "${source_checkout}" != true ]]; then
 		fi
 
 		if [[ "${webhooks}" == "none" ]]; then
-			rm -rf -- cmd/webhook-worker internal/infra/postgreswebhook
+			rm -rf -- internal/infra/postgreswebhook
 			rm -f -- \
 				docs/outbound-webhook-delivery.md \
 				internal/config/webhooks_config.go \
 				internal/config/webhooks_config_test.go \
 				migrations/000005_postgres_webhooks.sql \
 				migrations/000006_postgres_webhook_reference_repairs.sql \
-				internal/infra/postgres/queries/postgres_webhooks.sql \
-				internal/infra/postgres/sqlcgen/postgres_webhooks.sql.go \
+				migrations/000007_postgres_webhooks_retire.sql \
 				test/postgres_webhook_*_test.go \
-				test/webhook_network_integration_test.go \
-				test/webhook_process_integration_test.go
+				test/webhook_network_integration_test.go
 			strip_profile webhooks-durable remove
 		else
 			strip_profile webhooks-durable keep

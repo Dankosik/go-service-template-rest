@@ -82,9 +82,9 @@ must tolerate duplicate event IDs; see the
 [PostgreSQL transactional outbox](docs/postgres-transactional-outbox.md).
 <!-- profile:outbox-postgres:end -->
 <!-- profile:webhooks-durable:start -->
-Choose `DATABASE=postgres WEBHOOKS=durable` when a feature transaction must
-atomically accept an immutable webhook fan-out for a separately deployed
-worker. Receiver processing is at-least-once; see
+Choose `DATABASE=postgres JOBS=postgres WEBHOOKS=durable` when a feature
+transaction must stage an immutable per-receiver webhook fan-out for the shared
+jobs worker. Receiver processing is at-least-once; see
 [outbound webhook delivery](docs/outbound-webhook-delivery.md).
 <!-- profile:webhooks-durable:end -->
 <!-- profile:authn-oidc-jwt:start -->
@@ -121,7 +121,7 @@ it, and read it here or in
 | Transactional outbox | Optional River-backed PostgreSQL job appended inside the business transaction and published by a separate NATS worker |
 <!-- profile:outbox-postgres:end -->
 <!-- profile:webhooks-durable:start -->
-| Outbound webhooks | Optional PostgreSQL acceptance store and independent bounded delivery worker with HMAC signing and public-HTTPS enforcement |
+| Outbound webhooks | Optional Standard Webhooks job kind with atomic fan-out staging and public-HTTPS enforcement through the shared jobs worker |
 <!-- profile:webhooks-durable:end -->
 | Outbound HTTP | Standard library by default; optional fixed-authority transport bounds and response-size protection |
 <!-- profile:messaging-nats-jetstream:start -->

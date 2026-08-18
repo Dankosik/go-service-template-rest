@@ -56,9 +56,9 @@ is_template_independent_path() {
 
 	# profile:webhooks-durable:start
 	case "${path}" in
-	  internal/outboundtrust/* | internal/infra/postgreswebhook/* | cmd/webhook-worker/* | \
-      internal/config/webhooks_config*.go | internal/infra/postgres/queries/postgres_webhooks.sql | \
-      internal/infra/postgres/sqlcgen/postgres_webhooks.sql.go | migrations/*_postgres_webhook*.sql | \
+	  internal/outboundtrust/* | internal/infra/postgreswebhook/* | cmd/jobs-worker/builder.go | \
+      internal/config/webhooks_config*.go | internal/config/jobs_worker_config*.go | \
+      migrations/*_postgres_webhook*.sql | \
       test/postgres_webhook_*_test.go | test/webhook_*_integration_test.go | \
       docs/outbound-webhook-delivery.md)
       return 1
@@ -183,9 +183,9 @@ self_test() {
   # profile:object-storage:end
   # profile:webhooks-durable:start
   assert_template_required true internal/outboundtrust/public_address.go
-  assert_template_required true internal/infra/postgreswebhook/store.go
-  assert_template_required true migrations/000006_postgres_webhook_reference_repairs.sql
-  assert_template_required true cmd/webhook-worker/main.go
+  assert_template_required true internal/infra/postgreswebhook/dispatcher.go
+  assert_template_required true migrations/000007_postgres_webhooks_retire.sql
+  assert_template_required true cmd/jobs-worker/builder.go
   assert_template_required true test/webhook_network_integration_test.go
   assert_template_required true docs/outbound-webhook-delivery.md
   # profile:webhooks-durable:end

@@ -36,6 +36,7 @@ require (
 	github.com/riverqueue/river/rivertype v0.44.0
 	github.com/riverqueue/rivercontrib/otelriver v0.12.0
 	github.com/samber/lo v1.53.0
+	github.com/standard-webhooks/standard-webhooks/libraries v0.0.1
 	github.com/testcontainers/testcontainers-go v0.44.0
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.44.0
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.70.0

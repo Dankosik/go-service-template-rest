@@ -49,6 +49,21 @@ func TestJobsConfigWorkerLoaderRejectsInvalidJobsAndPostgres(t *testing.T) {
 	}
 }
 
+// profile:webhooks-durable:start
+//
+//nolint:paralleltest // This test mutates process-global environment.
+func TestJobsWorkerRequiresWebhookSecretsWhenEnabled(t *testing.T) {
+	setJobsWorkerConfigEnv(t)
+	t.Setenv("APP__WEBHOOKS__ENABLED", "true")
+	t.Setenv("APP__WEBHOOKS__ENDPOINTS", `{"endpoints":[]}`)
+	_, _, err := LoadJobsWorkerDetailedWithContext(context.Background(), LoadOptions{})
+	if !errors.Is(err, ErrValidate) || !strings.Contains(err.Error(), "webhooks.static_secrets") {
+		t.Fatalf("LoadJobsWorkerDetailedWithContext() error = %v", err)
+	}
+}
+
+// profile:webhooks-durable:end
+
 //nolint:paralleltest // This test mutates process-global environment or working directory.
 func setJobsWorkerConfigEnv(t *testing.T) {
 	t.Helper()

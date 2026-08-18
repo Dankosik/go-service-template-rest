@@ -5,6 +5,10 @@
 `/jobs-worker` process. Business code defines a typed `river.JobArgs`, implements
 `river.Worker[T]`, registers it once with `river.AddWorkerSafely`, and inserts it
 through `Client.InsertTx` in the business transaction.
+<!-- profile:webhooks-durable:start -->
+`WEBHOOKS=durable` supplies the template's one concrete River worker; without
+that profile the nil-builder fail-closed contract remains unchanged.
+<!-- profile:webhooks-durable:end -->
 
 The template does not implement a second claim, lease, retry, heartbeat, rescue,
 scheduling, concurrency, shutdown, readiness, telemetry, or operator engine.

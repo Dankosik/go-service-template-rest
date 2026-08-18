@@ -25,8 +25,8 @@ contract owns no broker address; NATS routing stays in `internal/infra/natsjs`.
 <!-- profile:webhooks-durable:start -->
 `internal/outboundtrust` is a standard-library-only public-address predicate
 shared by fixed-target HTTP and dynamic webhook transport. It owns no URL,
-resolver, dialer, HTTP, or config policy. `internal/infra/postgreswebhook` and
-`cmd/webhook-worker` own the removable durable webhook pack.
+resolver, dialer, HTTP, or config policy. `internal/infra/postgreswebhook` owns
+the removable webhook job adapter; `cmd/jobs-worker` owns execution lifecycle.
 <!-- profile:webhooks-durable:end -->
 
 This document is the normative owner of repository placement and file naming.
@@ -126,8 +126,8 @@ packages. There is no reserved empty `api/proto/`, `migrations/`, `queries/`, or
 <!-- profile:outbox-postgres:end -->
 <!-- profile:webhooks-durable:start -->
 | `internal/outboundtrust/` | pure public/special IP classification shared by enabled outbound consumers | URLs, DNS, dialing, HTTP, configuration, or webhook policy |
-| `internal/infra/postgreswebhook/` (`WEBHOOKS=durable`) | immutable acceptance values, PostgreSQL webhook state, claim/send/finality, bounded maintenance, signing, and telemetry | feature mutation, subscriber discovery, operator transport, receiver processing, or deployment |
-| `cmd/webhook-worker/` (`WEBHOOKS=durable`) | webhook worker config mapping, diagnostics, readiness, drain, and dependency cleanup | webhook state policy or HTTP API routes |
+| `internal/infra/postgreswebhook/` (`WEBHOOKS=durable`) | receiver snapshot resolution, per-receiver job staging, Standard Webhooks delivery, signing, and dynamic-target safety | feature mutation, generic job state, worker lifecycle, subscriber administration, or operator transport |
+| `cmd/jobs-worker/` (`JOBS=postgres`) | registered job kinds, diagnostics, readiness, drain, and dependency cleanup | webhook business meaning, endpoint administration, or HTTP API routes |
 <!-- profile:webhooks-durable:end -->
 | `internal/infra/postgresmigrate/` | Goose composition, empty-source state admission, lock bounds, and failure metadata | canonical source validation, service startup, domain policy, and production rollback commands |
 | `internal/infra/telemetry/` | OpenTelemetry/Prometheus SDK setup and exporters | feature policy |

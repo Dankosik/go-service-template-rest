@@ -20,11 +20,23 @@ esac
 
 build_image() {
 	local context="$1"
+	local worktree_fingerprint
+	worktree_fingerprint="$({
+		git -C "${context}" rev-parse HEAD
+		git -C "${context}" --no-pager diff --no-ext-diff --binary HEAD --
+		while IFS= read -r -d '' file; do
+			if [[ -f "${context}/${file}" ]]; then
+				file_digest="$(shasum -a 256 "${context}/${file}" | awk '{print $1}')"
+				printf '%s  %s\n' "${file_digest}" "${file}"
+			fi
+		done < <(git -C "${context}" ls-files -z --others --exclude-standard)
+	} | shasum -a 256 | awk '{print $1}')"
 
 	docker build \
 		--build-arg "APP_VERSION=${APP_VERSION:-dev}" \
 		--build-arg "VCS_REF=${VCS_REF:-unknown}" \
 		--build-arg "SOURCE_URL=${SOURCE_URL:-}" \
+		--build-arg "WORKTREE_FINGERPRINT=${worktree_fingerprint}" \
 		-f "${context}/build/docker/Dockerfile" \
 		-t "${IMAGE}" \
 		"${context}"
@@ -71,28 +83,13 @@ verify_jobs_worker_image() {
 		echo "runtime image jobs worker exited successfully without a builder" >&2
 		exit 1
 	fi
-	if ! grep -Fq 'jobs worker builder is not registered' <<<"${output}"; then
+	if ! grep -Eq 'jobs worker builder is not registered|jobs and postgres must be enabled for jobs-worker|webhooks must be enabled for the template jobs worker' <<<"${output}"; then
 		echo "runtime image jobs worker did not execute the expected fail-closed binary" >&2
 		echo "${output}" >&2
 		exit 1
 	fi
 }
 # profile:jobs-postgres:end
-
-# profile:webhooks-durable:start
-verify_webhook_worker_image() {
-	local output
-	if output="$(docker run --rm --read-only --network none --entrypoint /webhook-worker "${IMAGE}" 2>&1)"; then
-		echo "runtime image webhook worker exited successfully without configuration" >&2
-		exit 1
-	fi
-	if ! grep -Fxq 'webhook worker failed: error_class=config' <<<"${output}"; then
-		echo "runtime image webhook worker did not execute the expected fail-closed binary" >&2
-		echo "${output}" >&2
-		exit 1
-	fi
-}
-# profile:webhooks-durable:end
 
 # Generated services no longer own profile sources, so their checkout is
 # already the exact production source and needs no fixture.
@@ -107,9 +104,6 @@ if [[ ! -d "${ROOT_DIR}/scripts/profiles" ]]; then
 	# profile:jobs-postgres:start
 	verify_jobs_worker_image
 	# profile:jobs-postgres:end
-	# profile:webhooks-durable:start
-	verify_webhook_worker_image
-	# profile:webhooks-durable:end
 	exit 0
 fi
 
@@ -213,6 +207,3 @@ verify_outbox_relay_image
 # profile:jobs-postgres:start
 verify_jobs_worker_image
 # profile:jobs-postgres:end
-# profile:webhooks-durable:start
-verify_webhook_worker_image
-# profile:webhooks-durable:end

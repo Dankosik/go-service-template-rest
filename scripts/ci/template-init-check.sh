@@ -1986,7 +1986,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "jobs
 		done
 		if [[ "${full}" == "true" ]]; then
 			for retained in \
-				cmd/webhook-worker \
+				internal/infra/postgreswebhook \
 				internal/httpidempotency \
 				internal/infra/oidcjwt \
 				internal/infra/oauth2clientcredentials \
@@ -2015,17 +2015,15 @@ fi
 # profile:webhooks-durable:start
 if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "webhooks" ]]; then
 	webhook_paths=(
-		cmd/webhook-worker
 		docs/outbound-webhook-delivery.md
 		internal/config/webhooks_config.go
 		internal/infra/postgreswebhook
-		internal/infra/postgres/queries/postgres_webhooks.sql
 		internal/outboundtrust
 		migrations/000005_postgres_webhooks.sql
 		migrations/000006_postgres_webhook_reference_repairs.sql
+		migrations/000007_postgres_webhooks_retire.sql
 		test/postgres_webhook_acceptance_integration_test.go
 		test/webhook_network_integration_test.go
-		test/webhook_process_integration_test.go
 	)
 
 	webhooks_none="$(copy_template_checkout webhooks-none git@github.com:acme/webhooks-none.git)"
@@ -2051,15 +2049,18 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "webh
 			bash "${ROOT_DIR}/scripts/init-module.sh"
 	done
 	webhooks_without_postgres="$(copy_template_checkout webhooks-without-postgres git@github.com:acme/webhooks-without-postgres.git)"
-	expect_unchanged_failure "${webhooks_without_postgres}" env CODEOWNER=@acme/platform DATABASE=none WEBHOOKS=durable \
+	expect_unchanged_failure "${webhooks_without_postgres}" env CODEOWNER=@acme/platform DATABASE=none JOBS=postgres WEBHOOKS=durable \
+		bash "${ROOT_DIR}/scripts/init-module.sh"
+	webhooks_without_jobs="$(copy_template_checkout webhooks-without-jobs git@github.com:acme/webhooks-without-jobs.git)"
+	expect_unchanged_failure "${webhooks_without_jobs}" env CODEOWNER=@acme/platform DATABASE=postgres JOBS=none WEBHOOKS=durable \
 		bash "${ROOT_DIR}/scripts/init-module.sh"
 
 	webhooks_durable="$(copy_template_checkout webhooks-durable git@github.com:acme/webhooks-durable.git)"
 	(
 		cd "${webhooks_durable}"
-		CODEOWNER=@acme/platform DATABASE=postgres WEBHOOKS=durable bash ./scripts/init-module.sh
+		CODEOWNER=@acme/platform DATABASE=postgres JOBS=postgres WEBHOOKS=durable bash ./scripts/init-module.sh
 		go test -vet=off ./...
-		go build ./cmd/webhook-worker ./cmd/migrate
+		go build ./cmd/jobs-worker ./cmd/migrate
 		make sqlc-check mod-tidy-check project-structure-check
 	)
 	for retained in "${webhook_paths[@]}"; do
@@ -2073,7 +2074,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "webh
 	webhooks_snapshot="$(snapshot "${webhooks_durable}")"
 	(
 		cd "${webhooks_durable}"
-		CODEOWNER=@acme/platform DATABASE=postgres WEBHOOKS=durable bash ./scripts/init-module.sh
+		CODEOWNER=@acme/platform DATABASE=postgres JOBS=postgres WEBHOOKS=durable bash ./scripts/init-module.sh
 	)
 	assert "repeated WEBHOOKS=durable initialization changed the checkout" \
 		same_text "${webhooks_snapshot}" "$(snapshot "${webhooks_durable}")"

@@ -22,7 +22,11 @@ func buildJobsWorkerSnapshot(source *koanf.Koanf) (Config, []string, error) {
 }
 
 func jobsWorkerConfigKey(key string) bool {
-	for _, section := range []string{"app", "http", "log", "observability", "postgres", "jobs"} {
+	sections := []string{"app", "http", "log", "observability", "postgres", "jobs"}
+	// profile:webhooks-durable:start
+	sections = append(sections, "webhooks")
+	// profile:webhooks-durable:end
+	for _, section := range sections {
 		if key == section || strings.HasPrefix(key, section+keyDelimiter) {
 			return true
 		}
@@ -46,5 +50,10 @@ func validateJobsWorkerConfig(cfg *Config, unknownKeys []string) error {
 	if err := validateJobs(cfg.Jobs, cfg.Postgres); err != nil {
 		return err
 	}
+	// profile:webhooks-durable:start
+	if cfg.Webhooks.Enabled && cfg.Webhooks.StaticSecrets == "" {
+		return fmt.Errorf("%w: webhooks.static_secrets must be supplied through environment", ErrValidate)
+	}
+	// profile:webhooks-durable:end
 	return validateObservabilityConfig(&cfg.Observability)
 }
