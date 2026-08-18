@@ -6,15 +6,13 @@ import (
 
 	"github.com/knadh/koanf/providers/confmap"
 	"github.com/knadh/koanf/v2"
+	"github.com/samber/lo"
 )
 
 func buildJobsWorkerSnapshot(source *koanf.Koanf) (Config, []string, error) {
-	values := make(map[string]any)
-	for key, value := range source.All() {
-		if jobsWorkerConfigKey(key) {
-			values[key] = value
-		}
-	}
+	values := lo.PickBy(source.All(), func(key string, _ any) bool {
+		return jobsWorkerConfigKey(key)
+	})
 
 	worker := koanf.New(keyDelimiter)
 	if err := worker.Load(confmap.Provider(values, keyDelimiter), nil); err != nil {

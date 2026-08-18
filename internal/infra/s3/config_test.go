@@ -1,6 +1,7 @@
 package s3
 
 import (
+	"io/fs"
 	"math"
 	"strings"
 	"testing"
@@ -177,7 +178,7 @@ func TestWorkingMemoryAccounting(t *testing.T) {
 		t.Fatal("one-byte-short validate() error = nil")
 	}
 	opened := 0
-	if _, err := newClient(cfg, func() (imageRootFile, error) {
+	if _, err := newClient(cfg, func() (fs.File, error) {
 		opened++
 		return testImageRootSource(t)()
 	}); err == nil || opened != 0 {

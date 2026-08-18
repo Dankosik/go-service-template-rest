@@ -3,7 +3,7 @@ package correlationpolicy
 import (
 	"context"
 	"net/http"
-	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/example/go-service-template-rest/internal/reqctx"
@@ -22,7 +22,7 @@ func TestPolicyAndReservedFieldsAreClosed(t *testing.T) {
 	if Policy(99).Valid() {
 		t.Fatal("unknown policy was accepted")
 	}
-	if got, want := ReservedFields("x-request-id"), []string{"traceparent", "tracestate", "baggage", "x-request-id"}; !reflect.DeepEqual(got, want) {
+	if got, want := ReservedFields("x-request-id"), []string{"traceparent", "tracestate", "baggage", "x-request-id"}; !slices.Equal(got, want) {
 		t.Fatalf("ReservedFields() = %#v, want %#v", got, want)
 	}
 	reserved := Reserved("x-request-id")
@@ -65,7 +65,7 @@ func TestPropagatorEmitsOnlySelectedCorrelation(t *testing.T) {
 	if got := propagator.Extract(ctx, propagation.HeaderCarrier(trusted)); got != ctx {
 		t.Fatal("outbound propagator adopted response correlation")
 	}
-	if got := propagator.Fields(); !reflect.DeepEqual(got, append(propagation.TraceContext{}.Fields(), reqctx.RequestIDHeader)) {
+	if got := propagator.Fields(); !slices.Equal(got, append(propagation.TraceContext{}.Fields(), reqctx.RequestIDHeader)) {
 		t.Fatalf("Fields() = %#v, want trusted outbound fields", got)
 	}
 }

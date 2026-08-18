@@ -79,14 +79,6 @@ func ConflictingMetricExporterEnv() []string {
 	return conflictingEnv(metricExporterEnvConflicts)
 }
 
-func rejectConflictingTraceExporterEnv() error {
-	return rejectConflictingAmbientEnv(traceExporterEnvConflicts)
-}
-
-func rejectConflictingMetricExporterEnv() error {
-	return rejectConflictingAmbientEnv(metricExporterEnvConflicts)
-}
-
 // conflictingEnv returns the non-empty variables among names, sorted so reported
 // output is stable.
 func conflictingEnv(names []string) []string {

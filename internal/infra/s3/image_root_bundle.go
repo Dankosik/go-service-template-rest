@@ -18,13 +18,7 @@ const (
 	maxImageRootCertificates = 288
 )
 
-type imageRootFile interface {
-	io.Reader
-	io.Closer
-	Stat() (fs.FileInfo, error)
-}
-
-type imageRootSource func() (imageRootFile, error)
+type imageRootSource func() (fs.File, error)
 
 type imageRootBundle struct {
 	pool  *x509.CertPool
@@ -32,8 +26,7 @@ type imageRootBundle struct {
 	roots int
 }
 
-//nolint:iface,ireturn // The strict loader's test-only source seam must abstract *os.File.
-func productionImageRootSource() (imageRootFile, error) {
+func productionImageRootSource() (fs.File, error) {
 	file, err := os.Open(imageRootBundlePath)
 	if err != nil {
 		return nil, fmt.Errorf("open image root bundle: %w", err)

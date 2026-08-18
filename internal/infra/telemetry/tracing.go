@@ -75,7 +75,7 @@ func SetupTracing(ctx context.Context, cfg TracingConfig) (TraceExporterEndpoint
 	}
 	if endpoint.Configured() {
 		if endpoint.fromConfig() {
-			if err := rejectConflictingTraceExporterEnv(); err != nil {
+			if err := rejectConflictingAmbientEnv(traceExporterEnvConflicts); err != nil {
 				return endpoint, nil, err
 			}
 		}

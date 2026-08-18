@@ -40,9 +40,9 @@ func TestJobsAcceptance(t *testing.T) {
 
 	definition := testDefinition(t, Revision{Kind: "email", ArgsVersion: "v1", PolicyVersion: "p1"})
 	first, err := definition.Prepare(testArgs{Task: "send", Count: 1, Metadata: map[string]string{"b": "2", "a": "1"}}, testIdentity(), testAvailableAt())
-	requireError(t, err)
+	requireNoError(t, err)
 	second, err := definition.Prepare(testArgs{Task: "send", Count: 1, Metadata: map[string]string{"a": "1", "b": "2"}}, testIdentity(), testAvailableAt())
-	requireError(t, err)
+	requireNoError(t, err)
 	if first.Fingerprint() != second.Fingerprint() {
 		t.Fatal("equivalent typed intent produced different fingerprints")
 	}
@@ -67,7 +67,7 @@ func TestJobsAcceptance(t *testing.T) {
 		t.Fatalf("fingerprint = %s, want %s", got, wantFingerprint)
 	}
 	changed, err := definition.Prepare(testArgs{Task: "send", Count: 2, Metadata: map[string]string{"a": "1", "b": "2"}}, testIdentity(), testAvailableAt())
-	requireError(t, err)
+	requireNoError(t, err)
 	if first.Fingerprint() == changed.Fingerprint() {
 		t.Fatal("changed semantic field retained fingerprint")
 	}
@@ -92,11 +92,11 @@ func TestJobsAcceptance(t *testing.T) {
 			Policy: testPolicy(),
 		}
 		rawDefinition, err := NewDefinition(input)
-		requireError(t, err)
+		requireNoError(t, err)
 		left, err := rawDefinition.Prepare(rawArgs{Task: "send", Data: json.RawMessage(`{"a":1,"b":2}`)}, testIdentity(), testAvailableAt())
-		requireError(t, err)
+		requireNoError(t, err)
 		right, err := rawDefinition.Prepare(rawArgs{Task: "send", Data: json.RawMessage(`{"b":2,"a":1}`)}, testIdentity(), testAvailableAt())
-		requireError(t, err)
+		requireNoError(t, err)
 		if left.Fingerprint() != right.Fingerprint() {
 			t.Fatal("equivalent JSON object order changed fingerprint")
 		}

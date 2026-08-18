@@ -10,6 +10,7 @@
 package background
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -98,10 +99,7 @@ func New(ctx context.Context, log *slog.Logger) *Supervisor {
 // Go starts task. A panic inside Run is recovered and converted into an error so
 // the process can run its ordered drain instead of losing shutdown telemetry.
 func (s *Supervisor) Go(task Task) {
-	name := task.Name
-	if name == "" {
-		name = "unnamed"
-	}
+	name := cmp.Or(task.Name, "unnamed")
 	if task.Run == nil {
 		s.log.Error("background_task_invalid", "component", "background", "task", name, "reason", "run is nil")
 		s.recordStop(name, errors.New("run is nil"))

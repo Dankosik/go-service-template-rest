@@ -5,12 +5,16 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"reflect"
+	"slices"
 	"testing"
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
+
+	// profile:messaging-nats-jetstream:start
+	"github.com/google/go-cmp/cmp"
+	// profile:messaging-nats-jetstream:end
 )
 
 func TestAdapterOptionsPreserveConfiguredValues(t *testing.T) {
@@ -33,7 +37,7 @@ func TestAdapterOptionsPreserveConfiguredValues(t *testing.T) {
 		t.Fatalf("Resource() = %#v, want complete process identity", resource)
 	}
 	tracing := Tracing(cfg, "pod-1")
-	if !reflect.DeepEqual(tracing.Resource, resource) || tracing.TracesSampler != "parentbased_traceidratio" || tracing.TracesSamplerArg != 0.25 || tracing.Exporter.OTLPEndpoint != "https://otel.example/v1/traces" || tracing.Exporter.OTLPHeaders != "authorization=Bearer token" {
+	if tracing.Resource != resource || tracing.TracesSampler != "parentbased_traceidratio" || tracing.TracesSamplerArg != 0.25 || tracing.Exporter.OTLPEndpoint != "https://otel.example/v1/traces" || tracing.Exporter.OTLPHeaders != "authorization=Bearer token" {
 		t.Fatalf("Tracing() = %#v, want configured tracing adapter", tracing)
 	}
 	metrics := Metrics(cfg, "pod-1")
@@ -55,7 +59,7 @@ func TestLoggerCarriesProcessIdentityAndExtraFields(t *testing.T) {
 		Log:           config.LogConfig{Level: slog.LevelInfo},
 		Observability: config.ObservabilityConfig{OTel: config.OTelConfig{ServiceName: "orders"}},
 	}
-	if got, want := LoggerFields(cfg), []any{"service.name", "orders", "service.version", "v1.2.3", "deployment.environment.name", "production"}; !reflect.DeepEqual(got, want) {
+	if got, want := LoggerFields(cfg), []any{"service.name", "orders", "service.version", "v1.2.3", "deployment.environment.name", "production"}; !slices.Equal(got, want) {
 		t.Fatalf("LoggerFields() = %#v, want %#v", got, want)
 	}
 
@@ -134,8 +138,8 @@ func TestMessagingMappingRetainsBlankAddressesForAdapterValidation(t *testing.T)
 	want.MinStreamRetention = 3600
 	want.MaxPayloadBytes = 1024
 	want.MaxPendingPublishes = 4
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("Messaging() = %#v, want %#v", got, want)
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("Messaging() mismatch (-want +got):\n%s", diff)
 	}
 }
 

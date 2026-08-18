@@ -14,6 +14,29 @@ type testArgs struct {
 	Metadata map[string]string `json:"metadata"`
 }
 
+func TestRevisionCompareOrdersEveryField(t *testing.T) {
+	for _, testCase := range []struct {
+		name  string
+		left  Revision
+		right Revision
+		want  int
+	}{
+		{name: "kind", left: Revision{Kind: "email", ArgsVersion: "v2", PolicyVersion: "p2"}, right: Revision{Kind: "report", ArgsVersion: "v1", PolicyVersion: "p1"}, want: -1},
+		{name: "arguments version", left: Revision{Kind: "email", ArgsVersion: "v1", PolicyVersion: "p2"}, right: Revision{Kind: "email", ArgsVersion: "v2", PolicyVersion: "p1"}, want: -1},
+		{name: "policy version", left: Revision{Kind: "email", ArgsVersion: "v1", PolicyVersion: "p1"}, right: Revision{Kind: "email", ArgsVersion: "v1", PolicyVersion: "p2"}, want: -1},
+		{name: "equal", left: Revision{Kind: "email", ArgsVersion: "v1", PolicyVersion: "p1"}, right: Revision{Kind: "email", ArgsVersion: "v1", PolicyVersion: "p1"}, want: 0},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := testCase.left.Compare(testCase.right); got != testCase.want {
+				t.Fatalf("left.Compare(right) = %d, want %d", got, testCase.want)
+			}
+			if got := testCase.right.Compare(testCase.left); got != -testCase.want {
+				t.Fatalf("right.Compare(left) = %d, want %d", got, -testCase.want)
+			}
+		})
+	}
+}
+
 func TestJobsDefinition(t *testing.T) {
 	input := testDefinitionInput(Revision{Kind: "email", ArgsVersion: "v1", PolicyVersion: "p1"})
 	if _, err := NewDefinition(input); err != nil {
@@ -128,7 +151,7 @@ func testAvailableAt() time.Time {
 	return time.Date(2026, time.August, 12, 12, 0, 0, 123456789, time.UTC)
 }
 
-func requireError(t *testing.T, err error) {
+func requireNoError(t *testing.T, err error) {
 	t.Helper()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

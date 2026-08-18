@@ -1,7 +1,6 @@
 package jobs
 
 import (
-	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -156,7 +155,7 @@ func (r *Registry) Keys() []Revision {
 	if r == nil {
 		return nil
 	}
-	return slices.SortedFunc(maps.Keys(r.entries), compareRevision)
+	return slices.SortedFunc(maps.Keys(r.entries), Revision.Compare)
 }
 
 func (r *Registry) Require(keys []Revision) error {
@@ -166,12 +165,4 @@ func (r *Registry) Require(keys []Revision) error {
 		}
 	}
 	return nil
-}
-
-func compareRevision(a, b Revision) int {
-	return cmp.Or(
-		cmp.Compare(a.Kind, b.Kind),
-		cmp.Compare(a.ArgsVersion, b.ArgsVersion),
-		cmp.Compare(a.PolicyVersion, b.PolicyVersion),
-	)
 }

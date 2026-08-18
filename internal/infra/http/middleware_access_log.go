@@ -1,6 +1,7 @@
 package httpx
 
 import (
+	"cmp"
 	"log/slog"
 	"net/http"
 	"slices"
@@ -46,10 +47,7 @@ func AccessLog(log *slog.Logger, logHealthProbes bool, next http.Handler) http.H
 		// route, which only exists for the methods the contract declares. The
 		// bounded label that observability does need is otelhttp's, which maps
 		// anything outside the RFC methods to _OTHER on its own spans and metrics.
-		route := joinMethodAndPattern(r.Method, routePathTemplate)
-		if route == "" {
-			route = "<unmatched>"
-		}
+		route := cmp.Or(joinMethodAndPattern(r.Method, routePathTemplate), "<unmatched>")
 
 		// Correlation is not listed here. The process logger publishes
 		// request_id, trace_id, and span_id from the context every record is

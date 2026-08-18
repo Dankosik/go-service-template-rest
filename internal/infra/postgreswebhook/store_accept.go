@@ -15,6 +15,7 @@ import (
 	"github.com/example/go-service-template-rest/internal/infra/postgres/sqlcgen"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/samber/lo"
 )
 
 type AcceptanceDisposition string
@@ -241,10 +242,7 @@ func resolveAcceptance(ctx context.Context, queries *sqlcgen.Queries, prepared P
 
 func tombstoneLookup(prepared PreparedAcceptance) sqlcgen.ReadWebhookTombstoneParams {
 	input := prepared.Acceptance
-	deliveryIDs := make([]string, len(prepared.Destinations))
-	for i := range prepared.Destinations {
-		deliveryIDs[i] = prepared.Destinations[i].DeliveryID
-	}
+	deliveryIDs := lo.Map(prepared.Destinations, func(destination PreparedDestination, _ int) string { return destination.DeliveryID })
 	return sqlcgen.ReadWebhookTombstoneParams{
 		OwnerScope: input.OwnerScope, BusinessEventID: input.BusinessEventID,
 		AcceptanceID: &input.AcceptanceID, FanoutSnapshotID: &input.FanoutSnapshotID,

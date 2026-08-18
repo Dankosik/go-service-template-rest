@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/knadh/koanf/providers/confmap"
 	"github.com/knadh/koanf/v2"
 )
@@ -20,7 +21,7 @@ func TestSnapshotContract(t *testing.T) {
 	knownKeys := configLeafKeysFromType(t, reflect.TypeFor[Config](), "")
 	slices.Sort(knownKeys)
 	sourceKeys := sortedStringSetKeys(sourceValues)
-	if !reflect.DeepEqual(sourceKeys, knownKeys) {
+	if !slices.Equal(sourceKeys, knownKeys) {
 		t.Fatalf("sentinel source keys = %v, want known config keys %v", sourceKeys, knownKeys)
 	}
 
@@ -36,19 +37,19 @@ func TestSnapshotContract(t *testing.T) {
 
 	observedValues := flattenConfigSnapshotValues(t, reflect.ValueOf(cfg), "")
 	observedKeys := sortedStringSetKeys(observedValues)
-	if !reflect.DeepEqual(observedKeys, knownKeys) {
+	if !slices.Equal(observedKeys, knownKeys) {
 		t.Fatalf("flattened Config keys = %v, want known config keys %v", observedKeys, knownKeys)
 	}
 
 	expectedValues := expectedSentinelSnapshotValues()
 	expectedKeys := sortedStringSetKeys(expectedValues)
-	if !reflect.DeepEqual(expectedKeys, knownKeys) {
+	if !slices.Equal(expectedKeys, knownKeys) {
 		t.Fatalf("expected sentinel keys = %v, want known config keys %v", expectedKeys, knownKeys)
 	}
 
 	for _, key := range knownKeys {
-		if got, want := observedValues[key], expectedValues[key]; !reflect.DeepEqual(got, want) {
-			t.Fatalf("buildSnapshot() value for %s = %#v (%T), want %#v (%T)", key, got, got, want, want)
+		if diff := cmp.Diff(expectedValues[key], observedValues[key]); diff != "" {
+			t.Fatalf("buildSnapshot() value for %s mismatch (-want +got):\n%s", key, diff)
 		}
 	}
 }
@@ -60,7 +61,7 @@ func TestKnownConfigSectionsMatchSnapshotTags(t *testing.T) {
 
 	tagSections := configSectionKeysFromType(t, reflect.TypeFor[Config](), "")
 	slices.Sort(tagSections)
-	if !reflect.DeepEqual(knownSections, tagSections) {
+	if !slices.Equal(knownSections, tagSections) {
 		t.Fatalf("knownConfigSections() = %v, want Config koanf section keys %v", knownSections, tagSections)
 	}
 }

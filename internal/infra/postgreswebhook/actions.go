@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strconv"
 	"time"
+
+	"github.com/samber/lo"
 )
 
 type ActionKind string
@@ -202,9 +204,5 @@ func validateActionTarget(request ActionRequest) error {
 }
 
 func textFields(values ...string) [][]byte {
-	fields := make([][]byte, len(values))
-	for i := range values {
-		fields[i] = []byte(values[i])
-	}
-	return fields
+	return lo.Map(values, func(value string, _ int) []byte { return []byte(value) })
 }

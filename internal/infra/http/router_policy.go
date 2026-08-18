@@ -1,6 +1,7 @@
 package httpx
 
 import (
+	"cmp"
 	"net/http"
 	"slices"
 	"strings"
@@ -60,9 +61,7 @@ var boundedHTTPMethods = []string{
 }
 
 func allowedMethodsForPath(root chi.Router, path string) []string {
-	if path == "" {
-		path = "/"
-	}
+	path = cmp.Or(path, "/")
 
 	allowMethods := make([]string, 0, len(boundedHTTPMethods))
 	for _, method := range boundedHTTPMethods {

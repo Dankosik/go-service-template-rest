@@ -412,11 +412,7 @@ func encodeLegacyDeliveryPolicy(p DeliveryPolicy) ([]byte, error) {
 }
 
 func stringList(values []string) ([]byte, error) {
-	items := make([][]byte, len(values))
-	for i := range values {
-		items[i] = []byte(values[i])
-	}
-	return canonicalList(items)
+	return canonicalList(textFields(values...))
 }
 func uintText[T ~int | ~int64](value T) []byte { return []byte(strconv.FormatInt(int64(value), 10)) }
 func uintTextOptional(value int) []byte {

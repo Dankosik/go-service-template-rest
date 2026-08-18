@@ -67,6 +67,22 @@ func TestRequestViolationsNamesTheMemberAndNotItsValue(t *testing.T) {
 	}
 }
 
+func TestSchemaViolationChoosesTheFirstNonemptyReason(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		reason, schemaField, want string
+	}{
+		{reason: " documented reason ", schemaField: "minLength", want: "documented reason"},
+		{reason: " ", schemaField: " minLength ", want: "minLength"},
+		{reason: " ", schemaField: " ", want: "does not match the contract"},
+	} {
+		if got := schemaViolation(&openapi3.SchemaError{Reason: test.reason, SchemaField: test.schemaField}, "body").Reason; got != test.want {
+			t.Errorf("schemaViolation(%q, %q) reason = %q, want %q", test.reason, test.schemaField, got, test.want)
+		}
+	}
+}
+
 // TestRequestViolationsReportsEveryFailedMember covers the shape a caller
 // actually wants: fix one field, resubmit, get told about the next one is the
 // loop this avoids.

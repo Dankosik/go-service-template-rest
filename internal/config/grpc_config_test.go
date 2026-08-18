@@ -14,7 +14,6 @@ package config
 
 import (
 	"errors"
-	"reflect"
 	"strings"
 	"testing"
 )
@@ -27,13 +26,13 @@ func TestDefaultGRPCServerConfigMatchesLoadedDefaults(t *testing.T) {
 		t.Fatalf("LoadDetailed() error = %v", err)
 	}
 	want := DefaultGRPCServerConfig()
-	if !reflect.DeepEqual(cfg.GRPC.Server, want) {
+	if cfg.GRPC.Server != want {
 		t.Fatalf("loaded gRPC defaults = %+v, want %+v", cfg.GRPC.Server, want)
 	}
 
 	mutated := DefaultGRPCServerConfig()
 	mutated.MaxConnections++
-	if got := DefaultGRPCServerConfig(); reflect.DeepEqual(got, mutated) {
+	if got := DefaultGRPCServerConfig(); got == mutated {
 		t.Fatal("DefaultGRPCServerConfig() returned state shared with a prior call")
 	}
 }

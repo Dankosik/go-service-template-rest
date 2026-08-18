@@ -50,6 +50,9 @@ func TestWebhookRetryAndSummary(t *testing.T) {
 	if got := DecorrelatedJitter(time.Second, time.Second, 10*time.Second, 0); got != time.Second {
 		t.Fatalf("minimum jitter = %v", got)
 	}
+	if got := DecorrelatedJitter(0, time.Second, 10*time.Second, 0); got != time.Second {
+		t.Fatalf("clamped minimum jitter = %v", got)
+	}
 	if got := DecorrelatedJitter(time.Second, time.Second, 10*time.Second, uint64(2*time.Second)); got != 3*time.Second {
 		t.Fatalf("maximum first jitter = %v", got)
 	}

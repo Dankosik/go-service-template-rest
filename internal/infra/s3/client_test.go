@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"math"
 	"math/big"
 	"net"
@@ -204,7 +205,7 @@ func testNewUsesStaticConfigurationAndImageRootsWithoutNetworkIO(t *testing.T) {
 func TestObjectStorageStartupLoadsImageRootsLocally(t *testing.T) {
 	opened := 0
 	source := testImageRootSource(t)
-	client, err := newClient(validConfig(ProviderAmazonS3), func() (imageRootFile, error) {
+	client, err := newClient(validConfig(ProviderAmazonS3), func() (fs.File, error) {
 		opened++
 		return source()
 	})

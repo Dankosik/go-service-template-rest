@@ -14,9 +14,7 @@ func DecorrelatedJitter(previous, base, maxDelay time.Duration, random uint64) t
 	if base <= 0 || maxDelay < base {
 		return 0
 	}
-	if previous < base {
-		previous = base
-	}
+	previous = max(previous, base)
 	var upper time.Duration
 	if previous <= time.Duration(math.MaxInt64/3) {
 		upper = previous * 3
