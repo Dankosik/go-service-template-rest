@@ -51,7 +51,8 @@ Lead <acceptance unit> through the assigned stage toward one canonical receipt
 or blocker.
 
 - Authority: <ledger and task paths; accepted revision or receipt; current external-effect envelope or durable locator>.
-- Native controls: <verbatim initiating authority for the Role Tree's mandatory Worker-backed Implementation Write Boundary, Slice DAG scheduler, frozen-base materialization, model/effort selection, review, recovery, and Handoff>. Goal use stays thread-local; this prompt expands no authority.
+- Secret inputs: <durable locator or environment-variable names under AGENTS.md; none when no secret is required>.
+- Native controls: <verbatim initiating authority for the Role Tree's mandatory Worker-backed Implementation Write Boundary, current-harness Write-Carrier Gate, Slice DAG scheduler, frozen-base materialization, model/effort selection, review, recovery, and Handoff>. Goal use stays thread-local; this prompt expands no authority.
 - Scope: <exact unit ID, accepted outcome and writable boundary; dependent work that remains blocked>.
 - Dispatch scope: <ledger revision / unit ID / attempt>.
 - Stage: <Local acceptance | Worktree candidate>.
