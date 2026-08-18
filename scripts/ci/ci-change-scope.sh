@@ -72,7 +72,9 @@ is_template_independent_path() {
 
 	# profile:outbox-postgres:start
 	case "${path}" in
-	  internal/infra/postgresoutbox/* | cmd/outbox-relay/*)
+	  internal/domainevent/* | internal/infra/natsjs/outbox* | \
+	  internal/infra/postgresoutbox/* | cmd/outbox-relay/* | \
+	  test/postgres_outbox_*_integration_test.go)
 	    return 1
 	    ;;
 	esac

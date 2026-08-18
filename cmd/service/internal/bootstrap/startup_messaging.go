@@ -32,10 +32,9 @@ func initMessagingRuntime(ctx context.Context, cfg config.MessagingConfig, log *
 }
 
 // Producer is the seam a feature takes to publish from the API process. The
-// template wires no publisher, so nothing here calls it yet — the same gap
-// postgresoutbox states for its own append side, where cmd/service builds no
-// Store at all. Deleting it as unused would remove the one accessor a feature
-// needs; the worked wiring is in docs/durable-messaging.md.
+// template wires no publisher, so nothing here calls it yet. Deleting it as
+// unused would remove the one accessor a feature needs; the worked wiring is in
+// docs/durable-messaging.md.
 func (m messagingRuntime) Producer() *natsjs.Producer {
 	if m.client == nil {
 		return nil

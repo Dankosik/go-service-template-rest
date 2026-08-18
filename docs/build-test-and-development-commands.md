@@ -123,11 +123,12 @@ and tool surfaces. `DATABASE=postgres` retains them. The complete agent
 workflow and its harness files are always retained and are not an
 initialization profile.
 <!-- profile:outbox-postgres:start -->
-`OUTBOX=none` removes the outbox schema, sqlc source/output, runtime package,
-relay command, configuration, tests, docs, image binary, and Make targets.
-`OUTBOX=postgres` requires `DATABASE=postgres` and retains those surfaces; it
-does not choose a broker adapter. The relay command fails closed until the
-service registers one. See [PostgreSQL transactional outbox](./postgres-transactional-outbox.md).
+`OUTBOX=none` removes the event contract, River schema/appender/worker, relay
+command, tests, docs, image binary, and Make targets. `OUTBOX=postgres`
+requires both `DATABASE=postgres` and `MESSAGING=nats-jetstream`; the
+generator therefore retains one runnable PostgreSQL-to-NATS component rather
+than a broker-neutral relay that needs source edits. See
+[PostgreSQL transactional outbox](./postgres-transactional-outbox.md).
 <!-- profile:outbox-postgres:end -->
 <!-- profile:webhooks-durable:start -->
 `WEBHOOKS=none` removes webhook schema, SQLC output, worker/runtime code, tests,
@@ -159,8 +160,8 @@ provide a real module path and an owner in `@user` or `@org/team` form.
 | --- | --- |
 | `make project-structure-check` | Placement, naming, command, integration-test, canonical migration filename, and no-empty-placeholder contract |
 <!-- profile:outbox-postgres:start -->
-| `make run-outbox-relay` / `make build-outbox-relay` | Run or build the separately deployed relay; combined outbox+NATS builds the selected publisher, while outbox-only fails closed |
-| `make test-outbox-race` | Serialized real-PostgreSQL relay, crash-window, lifecycle, and race proof |
+| `make run-outbox-relay` / `make build-outbox-relay` | Run or build the separately deployed River-to-NATS relay |
+| `make test-outbox-race` | Serialized real-PostgreSQL atomicity and River-to-NATS identity/trace race proof |
 <!-- profile:outbox-postgres:end -->
 | `make claude-skills-check` | Every `.agents/skills/` entry is exposed to Claude Code by a matching `.claude/skills/` symlink, and no link outlives its skill |
 | `make delivery-quality` | Digest-pinned actionlint, medium-or-higher/high-confidence zizmor security audit, ShellCheck for repository scripts, and native BuildKit Dockerfile checks |

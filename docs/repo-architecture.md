@@ -65,8 +65,9 @@ It does not restate the full tree, every command, or task-local design choices.
 <!-- profile:authn-oidc-jwt:end -->
 | `migrations/` | SQL schema migration source of truth. | Runtime repository logic or generated Go bindings. |
 <!-- profile:outbox-postgres:start -->
-| `internal/infra/postgresoutbox/` | PostgreSQL outbox envelope, transactional append, claims, retries, poison/redrive, retention, and broker-neutral relay loop. | Domain event selection, a broker adapter, consumer duplicate suppression, or exactly-once delivery. |
-| `cmd/outbox-relay/` | Separate relay composition, readiness, drain, and dependency cleanup. | API routes or a fallback/noop publisher. |
+| `internal/domainevent/` | Minimal typed domain-event identity, version, time, and JSON encoding. | Broker routing, retries, ordering, or process lifecycle. |
+| `internal/infra/postgresoutbox/` | River job shape and transactional append through the caller's `pgx.Tx`. | Relay claims, retries, maintenance, broker mapping, ordering, or exactly-once delivery. |
+| `cmd/outbox-relay/` | Separate River-to-NATS composition, readiness, drain, and dependency cleanup. | API routes or business event selection. |
 <!-- profile:outbox-postgres:end -->
 <!-- profile:jobs-postgres:start -->
 | `cmd/jobs-worker/` and River | Default-off typed PostgreSQL jobs, transactional insertion, and a separate worker process. | Business job kinds, effect idempotency, operator exposure, or production capacity claims. |
@@ -244,15 +245,13 @@ The lifecycle baseline is: config and dependency validation happen before accept
 ### Background / Async Extension Path
 
 <!-- profile:outbox-postgres:start -->
-The optional PostgreSQL outbox keeps the request path broker-independent: the
-PostgreSQL repository adapter appends a feature-selected event through the same
-`pgx.Tx` as its mutation, and `cmd/outbox-relay` later claims and publishes that
-durable intent.
-The relay owns only a minimal Publisher contract; an initialized service must
-register a real adapter, and the process fails closed if none is registered.
-When both outbox and NATS are selected, `internal/infra/natsjs` owns that
-adapter and `cmd/outbox-relay` supervises the NATS client beside the relay.
-Outbox without messaging retains the nil registration and fails before claims.
+The optional PostgreSQL outbox keeps the request path off the broker: the
+PostgreSQL repository adapter appends a typed event as a River job through the
+same `pgx.Tx` as its mutation. `internal/infra/natsjs` owns the
+event-version-to-subject routing and River worker that maps the stored job onto
+the existing NATS wire contract. `cmd/outbox-relay` supervises River and the
+NATS producer. Profile initialization requires both outbox and NATS, so no
+unusable broker-neutral relay is generated.
 See [PostgreSQL transactional outbox](postgres-transactional-outbox.md).
 <!-- profile:outbox-postgres:end -->
 
@@ -277,9 +276,10 @@ The optional NATS JetStream profile ships a separate `cmd/worker` composition
 root and concrete `internal/infra/natsjs` producer/consumer owner. The service
 process remains producer-only; the worker fails before connecting until a
 binary-local handler adapter is registered to invoke duplicate-safe feature
-behavior. The same package supplies the selected outbox adapter when the outbox
-profile is also retained; it forwards the stored W3C creation context without
-adding generic consumer ordering. See [Durable messaging](./durable-messaging.md).
+behavior. When the outbox profile is also retained, the same package supplies
+its service-owned subject router and River publication worker; it restores the
+stored W3C creation context without adding generic consumer ordering. See
+[Durable messaging](./durable-messaging.md).
 <!-- profile:messaging-nats-jetstream:end -->
 
 When a task introduces async work, keep the extension path stable:

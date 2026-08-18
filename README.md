@@ -75,9 +75,10 @@ Choose `OUTBOUND_AUTH=oauth2-client-credentials` only with
 credential owner. See [outbound machine authentication](docs/outbound-machine-authentication.md).
 <!-- profile:outbound-auth-oauth2-client-credentials:end -->
 <!-- profile:outbox-postgres:start -->
-Choose `DATABASE=postgres OUTBOX=postgres` when a request transaction must
-durably record an outbound event for a separately deployed relay. Publication
-is at-least-once, so consumers must tolerate duplicate event IDs; see the
+Choose `DATABASE=postgres OUTBOX=postgres MESSAGING=nats-jetstream` when a
+request transaction must durably record a typed outbound event for the
+separately deployed River relay. Publication is at-least-once, so consumers
+must tolerate duplicate event IDs; see the
 [PostgreSQL transactional outbox](docs/postgres-transactional-outbox.md).
 <!-- profile:outbox-postgres:end -->
 <!-- profile:webhooks-durable:start -->
@@ -98,9 +99,9 @@ when the service publishes or consumes native gRPC; see the
 <!-- profile:messaging-nats-jetstream:start -->
 Choose `MESSAGING=nats-jetstream` for bounded direct JetStream publishing and a
 separate durable pull-consumer worker; see [durable messaging](docs/durable-messaging.md).
-Together with `DATABASE=postgres OUTBOX=postgres`, it also composes the outbox
-relay's production NATS publisher and stored W3C trace continuity. Outbox
-without messaging keeps its fail-closed adapter registration seam.
+Together with `DATABASE=postgres OUTBOX=postgres`, it supplies the outbox
+relay's concrete NATS producer and W3C trace continuity. The generator rejects
+outbox without messaging.
 <!-- profile:messaging-nats-jetstream:end -->
 
 `examples/reference-service` is a worked feature slice kept in this template for
@@ -117,7 +118,7 @@ it, and read it here or in
 | API contract | OpenAPI 3.0 and `oapi-codegen v2` with generated request bindings and typed responses |
 | Data | No database by default; optional PostgreSQL 17, `pgx v5`, `goose v3`, and `sqlc` profile |
 <!-- profile:outbox-postgres:start -->
-| Transactional outbox | Optional PostgreSQL intent store and separately deployed bounded relay; the NATS profile supplies the selected adapter, while outbox-only stays fail-closed |
+| Transactional outbox | Optional River-backed PostgreSQL job appended inside the business transaction and published by a separate NATS worker |
 <!-- profile:outbox-postgres:end -->
 <!-- profile:webhooks-durable:start -->
 | Outbound webhooks | Optional PostgreSQL acceptance store and independent bounded delivery worker with HMAC signing and public-HTTPS enforcement |

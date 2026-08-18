@@ -28,8 +28,7 @@ const instrumentationScope = "service.messaging.nats"
 // package's own, for the reason the literals they replaced did not survive: the
 // convention renamed the producer's messaging.operation.type from "publish" to
 // "send", and a hardcoded key or value cannot be carried across that by the
-// version bump that performs it. postgresoutbox pins the same semconv version,
-// so the two packs describe one publication in one vocabulary.
+// version bump that performs it.
 //
 // The metric and log label vocabulary is vocabulary.go; the dead-letter reasons
 // that travel on the wire are message_deadletter.go.
@@ -56,7 +55,7 @@ const (
 // publishSpanName and consumeSpanName build the two span names.
 //
 // The publish name carries the concrete subject, which is the publisher's own
-// choice and matches what postgresoutbox names a publication. The consume name
+// choice and matches what the outbox worker names a publication. The consume name
 // carries the worker's configured filter rather than the delivered subject:
 // semconv asks for the destination template when a subscription has one, and a
 // filter with a wildcard is exactly the case where the delivered subject would

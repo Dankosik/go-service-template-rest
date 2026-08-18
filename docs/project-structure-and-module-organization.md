@@ -16,6 +16,12 @@ one removable profile pack. Business packages define typed River arguments and
 workers directly; the template owns no second job framework.
 <!-- profile:jobs-postgres:end -->
 
+<!-- profile:outbox-postgres:start -->
+`internal/domainevent`, `internal/infra/postgresoutbox`, and
+`cmd/outbox-relay` are one removable River-backed outbox pack. The event
+contract owns no broker address; NATS routing stays in `internal/infra/natsjs`.
+<!-- profile:outbox-postgres:end -->
+
 <!-- profile:webhooks-durable:start -->
 `internal/outboundtrust` is a standard-library-only public-address predicate
 shared by fixed-target HTTP and dynamic webhook transport. It owns no URL,
@@ -113,6 +119,11 @@ packages. There is no reserved empty `api/proto/`, `migrations/`, `queries/`, or
 | `internal/infra/grpcclient/` (`GRPC=enabled`) | bounded shared connections, correlation-policy enforcement, resolver metadata sanitization, address selection, standard-health eligibility, opt-in idle keepalive, and the connection lifecycle seam | provider auth, concrete trust selection, operation deadlines or application retries, generated-client ownership, or dependency readiness policy |
 | `internal/infra/oidcjwt/` (`AUTHN=oidc-jwt`) | inbound caller identity: OIDC trust bootstrap, JWKS lifecycle, token admission, and the HTTP and gRPC authentication adapters | authorization, roles, tenant policy, sessions, user provisioning, or any decision past who the caller is |
 | `internal/infra/postgres/` | strict connection admission, template defaults, transaction outcome policy, concrete repositories, query mapping | pgxpool mechanics, HTTP behavior, migration execution, and business policy |
+<!-- profile:outbox-postgres:start -->
+| `internal/domainevent/` | typed domain-event identity, version, time, and payload encoding | broker addresses, delivery state, retries, or lifecycle |
+| `internal/infra/postgresoutbox/` | River publication job and caller-transaction append | business payload meaning, NATS mapping, River runtime, or operator transport |
+| `cmd/outbox-relay/` | River-to-NATS process composition and lifecycle | business event policy or API routes |
+<!-- profile:outbox-postgres:end -->
 <!-- profile:webhooks-durable:start -->
 | `internal/outboundtrust/` | pure public/special IP classification shared by enabled outbound consumers | URLs, DNS, dialing, HTTP, configuration, or webhook policy |
 | `internal/infra/postgreswebhook/` (`WEBHOOKS=durable`) | immutable acceptance values, PostgreSQL webhook state, claim/send/finality, bounded maintenance, signing, and telemetry | feature mutation, subscriber discovery, operator transport, receiver processing, or deployment |

@@ -363,23 +363,6 @@ func sentinelConfigSourceValues() map[string]any {
 		"webhooks.static_secrets":          `{"revision":8,"entries":[]}`,
 		// profile:webhooks-durable:end
 
-		// profile:outbox-postgres:start
-		"outbox.enabled":              true,
-		"outbox.poll_interval":        "600ms",
-		"outbox.batch_size":           64,
-		"outbox.publish_concurrency":  8,
-		"outbox.publish_timeout":      "11s",
-		"outbox.lease_duration":       "41s",
-		"outbox.max_attempts":         12,
-		"outbox.retry_base":           "2s",
-		"outbox.retry_max":            "6m",
-		"outbox.observation_interval": "7s",
-		"outbox.cleanup_interval":     "2m",
-		"outbox.published_retention":  "192h",
-		"outbox.cleanup_batch_size":   321,
-		"outbox.drain_timeout":        "22s",
-		// profile:outbox-postgres:end
-
 		// profile:object-storage:start
 		"object_storage.provider":                   "amazon_s3",
 		"object_storage.endpoint":                   "https://s3.us-east-1.amazonaws.com",
@@ -544,23 +527,6 @@ func expectedSentinelSnapshotValues() map[string]any {
 		"webhooks.maintenance_batch":       41,
 		"webhooks.static_secrets":          `{"revision":8,"entries":[]}`,
 		// profile:webhooks-durable:end
-
-		// profile:outbox-postgres:start
-		"outbox.enabled":              true,
-		"outbox.poll_interval":        600 * time.Millisecond,
-		"outbox.batch_size":           64,
-		"outbox.publish_concurrency":  8,
-		"outbox.publish_timeout":      11 * time.Second,
-		"outbox.lease_duration":       41 * time.Second,
-		"outbox.max_attempts":         12,
-		"outbox.retry_base":           2 * time.Second,
-		"outbox.retry_max":            6 * time.Minute,
-		"outbox.observation_interval": 7 * time.Second,
-		"outbox.cleanup_interval":     2 * time.Minute,
-		"outbox.published_retention":  192 * time.Hour,
-		"outbox.cleanup_batch_size":   321,
-		"outbox.drain_timeout":        22 * time.Second,
-		// profile:outbox-postgres:end
 
 		// profile:object-storage:start
 		"object_storage.provider":                   "amazon_s3",

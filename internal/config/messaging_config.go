@@ -69,9 +69,7 @@ func messagingDefaults() map[string]any {
 // The copy survives only because the composition root — cmd/worker/internal/
 // bootstrap, the one package that wires both — pins it from outside;
 // TestMessagingConfigRulesMatchAdapter there feeds the same values through both
-// validators and fails when they disagree. The same arrangement, for the same
-// reason, holds the outbox ceilings: see the block above RelayConfig in
-// internal/infra/postgresoutbox/relay_config.go.
+// validators and fails when they disagree.
 //
 // The two sides deliberately differ in one direction only: this one also
 // canonicalizes — it trims, rejects duplicate URLs, and rewrites cfg.URLs — so

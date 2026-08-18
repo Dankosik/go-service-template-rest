@@ -4,110 +4,214 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
+	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
 	"github.com/example/go-service-template-rest/cmd/internal/runtimeopts"
+	"github.com/example/go-service-template-rest/internal/background"
 	"github.com/example/go-service-template-rest/internal/config"
+	"github.com/example/go-service-template-rest/internal/health"
+	"github.com/example/go-service-template-rest/internal/infra/natsjs"
 	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	"github.com/example/go-service-template-rest/internal/infra/postgresoutbox"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
+	"github.com/riverqueue/river"
+	"github.com/riverqueue/river/riverdriver/riverpgxv5"
+	"github.com/riverqueue/river/rivertype"
+	"github.com/riverqueue/rivercontrib/otelriver"
 )
 
-const startupTimeout = 15 * time.Second
+const (
+	startupTimeout       = 30 * time.Second
+	defaultOutboxWorkers = 16
+	diagnosticsClose     = 2 * time.Second
+	backgroundClose      = 5 * time.Second
+	telemetryClose       = 5 * time.Second
+)
 
-type relayRunner interface {
-	Ready() bool
-	StartDrain()
-	Run(ctx context.Context) postgresoutbox.RelayResult
-}
-
-func Run(args []string, buildPublisher PublisherBuilder) error {
+func Run(args []string) error {
 	signalCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	return run(signalCtx, args, buildPublisher)
+	return run(signalCtx, args)
 }
 
-func run(signalCtx context.Context, args []string, buildPublisher PublisherBuilder) (runErr error) {
-	loadOptions, classifyLegacy, err := parseLoadOptions(args)
+func run(signalCtx context.Context, args []string) (runErr error) {
+	loadOptions, err := config.ParseLoadOptions("outbox-relay", args, nil)
 	if err != nil {
 		return err
 	}
-	if !classifyLegacy && buildPublisher == nil {
-		return fmt.Errorf("%w: outbox publisher builder is not registered", postgresoutbox.ErrConfig)
-	}
-	startupCtx, startupCancel := context.WithTimeout(signalCtx, startupTimeout)
-	defer startupCancel()
+	startupCtx, cancelStartup := context.WithTimeout(signalCtx, startupTimeout)
+	defer cancelStartup()
 	cfg, _, err := config.LoadDetailedWithContext(startupCtx, loadOptions)
 	if err != nil {
 		return fmt.Errorf("load outbox relay config: %w", err)
-	}
-	if classifyLegacy {
-		if err := validateClassificationConfig(cfg); err != nil {
-			return err
-		}
-		return runLegacyClassification(signalCtx, startupCtx, cfg, runtimeopts.Logger(os.Stdout, cfg, "component", "outbox_relay"))
 	}
 	if err := validateRuntimeConfig(cfg); err != nil {
 		return err
 	}
 	log := runtimeopts.Logger(os.Stdout, cfg, "component", "outbox_relay")
-
-	// Telemetry is installed before any dependency it has to outlive. Defers run
-	// last-registered-first, so everything registered below this point releases
-	// while telemetry can still export what that cleanup records.
 	metrics := telemetry.New()
-	telemetryCleanup := setupTelemetry(startupCtx, cfg, metrics, log)
-	// cleanupDeadline is the one process-wide teardown bound, published by the
-	// lifecycle once it arms the grace period. Telemetry runs last, so without it
-	// this flush is an independent 5s ceiling stacked on whatever the stages
-	// before it already spent — the case validateRuntimeConfig sizes the grace
-	// period against, and the one an overrunning drain would blow through. It
-	// stays zero on every startup-failure path, which is what gives this flush its
-	// whole budget when no process bound was ever armed.
+	telemetryCleanup, metricsErr := runtimeopts.InstallTelemetry(startupCtx, cfg, metrics, log, "outbox")
+	if metricsErr != nil {
+		log.WarnContext(startupCtx, "outbox_metrics_degraded", "reason", telemetry.FailureReason(metricsErr))
+	}
 	var cleanupDeadline time.Time
 	defer func() {
-		ctx, cancel := runtimeopts.TeardownStage(signalCtx, cleanupDeadline, telemetryClose)
+		cleanupCtx, cancel := runtimeopts.TeardownStage(signalCtx, cleanupDeadline, telemetryClose)
 		defer cancel()
-		telemetryCleanup(ctx)
+		telemetryCleanup(cleanupCtx)
 	}()
-	outboxTelemetry, err := postgresoutbox.NewTelemetry(
-		metrics.MeterProvider().Meter(postgresoutbox.TelemetryScope), log)
-	if err != nil {
-		return fmt.Errorf("initialize outbox telemetry: %w", err)
-	}
-	defer outboxTelemetry.Close()
-
-	publisherRuntime, err := buildPublisher(startupCtx, cfg, log)
-	// One registration, covering every exit from here on. teardown's fields fill
-	// in as each dependency appears, so a startup failure releases exactly what
-	// had been built by then.
-	teardown := relayTeardown{publisher: &publisherRuntime}
-	defer func() { runErr = errors.Join(runErr, teardown.release(signalCtx)) }()
-	if err != nil {
-		return fmt.Errorf("build outbox publisher: %w", err)
-	}
-	if err := validatePublisherRuntime(publisherRuntime); err != nil {
-		return fmt.Errorf("admit outbox publisher runtime: %w", err)
-	}
 
 	pool, err := postgres.Open(startupCtx, runtimeopts.Postgres(cfg.Postgres))
 	if err != nil {
 		return fmt.Errorf("initialize outbox postgres: %w", err)
 	}
-	teardown.pool = pool.Close
-	store, err := postgresoutbox.NewStore(pool, outboxTelemetry)
+	cleanupSafe := true
+	defer func() {
+		if cleanupSafe {
+			pool.Close()
+		}
+	}()
+	client, err := natsjs.Connect(
+		startupCtx,
+		runtimeopts.Messaging(cfg.Messaging),
+		natsjs.RoleProducer,
+		natsjs.Observability{Logger: log},
+	)
 	if err != nil {
-		return fmt.Errorf("initialize outbox store: %w", err)
+		return fmt.Errorf("initialize outbox messaging: %w", err)
 	}
-	relay, err := postgresoutbox.NewRelay(store, publisherRuntime.publisher, outboxTelemetry, relayConfig(cfg.Outbox))
+	defer func() {
+		if cleanupSafe {
+			client.Close()
+		}
+	}()
+
+	workers := river.NewWorkers()
+	outboxWorker, err := natsjs.NewOutboxWorker(client.Producer())
 	if err != nil {
-		return fmt.Errorf("initialize outbox relay: %w", err)
+		return fmt.Errorf("initialize NATS outbox worker: %w", err)
 	}
-	result, deadline := runRelayLifecycle(signalCtx, startupCtx, cfg, log, metrics, relay, &publisherRuntime)
-	cleanupDeadline = deadline
-	teardown.unsafe = result.CleanupUnsafe
-	return result.Err
+	if err := river.AddWorkerSafely(workers, outboxWorker); err != nil {
+		return fmt.Errorf("register outbox worker: %w", err)
+	}
+	riverClient, err := river.NewClient(
+		riverpgxv5.New(pool.PGX()),
+		riverClientConfig(cfg, workers, log),
+	)
+	if err != nil {
+		return fmt.Errorf("initialize River outbox worker: %w", err)
+	}
+	cleanupSafe, cleanupDeadline, runErr = runLifecycle(
+		signalCtx, startupCtx, cfg, log, metrics, pool, client, riverClient,
+	)
+	return runErr
+}
+
+func validateRuntimeConfig(cfg config.Config) error {
+	if !cfg.Postgres.Enabled {
+		return fmt.Errorf("%w: postgres must be enabled for outbox relay", postgresoutbox.ErrConfig)
+	}
+	if !cfg.Messaging.Enabled {
+		return fmt.Errorf("%w: messaging must be enabled for outbox relay", postgresoutbox.ErrConfig)
+	}
+	if strings.TrimSpace(cfg.Observability.Metrics.Addr) == "" {
+		return fmt.Errorf("%w: outbox diagnostics address is required", postgresoutbox.ErrConfig)
+	}
+	return nil
+}
+
+func riverClientConfig(cfg config.Config, workers *river.Workers, log *slog.Logger) *river.Config {
+	plugin := otelriver.NewMiddleware(&otelriver.MiddlewareConfig{
+		EnableSemanticMetrics:  true,
+		EnableTracePropagation: true,
+	})
+	return &river.Config{
+		CancelledJobRetentionPeriod: -1,
+		DiscardedJobRetentionPeriod: -1,
+		Logger:                      log,
+		PollOnly:                    true,
+		Plugins:                     []rivertype.Plugin{plugin},
+		Queues: map[string]river.QueueConfig{
+			postgresoutbox.Queue: {MaxWorkers: min(defaultOutboxWorkers, cfg.Messaging.MaxPendingPublishes)},
+		},
+		SoftStopTimeout: cfg.Messaging.Worker.DrainTimeout,
+		Workers:         workers,
+	}
+}
+
+func runLifecycle[TTx any](
+	signalCtx context.Context,
+	startupCtx context.Context,
+	cfg config.Config,
+	log *slog.Logger,
+	metrics *telemetry.Metrics,
+	pool *postgres.Pool,
+	client *natsjs.Client,
+	riverClient *river.Client[TTx],
+) (cleanupSafe bool, deadline time.Time, result error) {
+	var ready atomic.Bool
+	postgresHealth := health.New(pool)
+	if err := postgresHealth.Refresh(startupCtx, cfg.HTTP.ReadinessTimeout, cfg.Health.FailureThreshold); err != nil {
+		return true, time.Time{}, fmt.Errorf("admit outbox readiness: %w", err)
+	}
+	diagnostics, err := runtimeopts.ListenDiagnostics(
+		startupCtx,
+		cfg.Observability.Metrics.Addr,
+		"outbox",
+		func() bool { return ready.Load() && client.Ready() && postgresHealth.Cached() == nil },
+		metrics,
+	)
+	if err != nil {
+		return true, time.Time{}, err
+	}
+	runtimeCtx := context.WithoutCancel(signalCtx)
+	supervisor := background.New(runtimeCtx, log)
+	supervisor.Go(background.Task{Name: "messaging_connection", Run: client.Run})
+	supervisor.Go(background.Task{
+		Name: "postgres_readiness",
+		Run: func(ctx context.Context) error {
+			return postgresHealth.Watch(
+				ctx,
+				cfg.Health.RefreshInterval,
+				cfg.HTTP.ReadinessTimeout,
+				cfg.Health.FailureThreshold,
+				nil,
+			)
+		},
+	})
+	if err := riverClient.Start(runtimeCtx); err != nil {
+		_ = diagnostics.Stop(startupCtx, diagnosticsClose)
+		_ = supervisor.Shutdown(startupCtx)
+		return true, time.Time{}, fmt.Errorf("start River outbox worker: %w", err)
+	}
+	ready.Store(true)
+
+	var trigger error
+	select {
+	case <-signalCtx.Done():
+	case trigger = <-supervisor.Failures():
+	case <-riverClient.Stopped():
+		trigger = errors.New("river outbox worker stopped unexpectedly")
+	case <-diagnostics.Stopped():
+		trigger = errors.New("outbox diagnostics stopped unexpectedly")
+	}
+	ready.Store(false)
+	postgresHealth.StartDrain()
+	processCtx, cancelProcess, shutdownDeadline := runtimeopts.ArmTeardown(signalCtx, cfg.HTTP.GracePeriod)
+	defer cancelProcess()
+	riverErr := riverClient.Stop(processCtx)
+	cleanupSafe = riverErr == nil
+	client.StopPublish()
+	messagingErr := client.Shutdown(processCtx)
+	diagnosticsErr := diagnostics.Stop(processCtx, diagnosticsClose)
+	backgroundCtx, cancelBackground := context.WithTimeout(processCtx, backgroundClose)
+	backgroundErr := supervisor.Shutdown(backgroundCtx)
+	cancelBackground()
+	return cleanupSafe, shutdownDeadline, errors.Join(trigger, riverErr, messagingErr, diagnosticsErr, backgroundErr)
 }

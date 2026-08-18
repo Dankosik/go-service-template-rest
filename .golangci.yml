@@ -391,11 +391,8 @@ linters:
             - "$all"
             - "!**/internal/infra/postgres/*.go"
             # profile:outbox-postgres:start
-            # The optional outbox store and its append listener are themselves
-            # PostgreSQL runtime adapters; the directory is removed when
-            # OUTBOX=none. The relay and envelope stay driver-free.
+            # The outbox store binds River insertion to its caller-owned pgx.Tx.
             - "!**/internal/infra/postgresoutbox/store*.go"
-            - "!**/internal/infra/postgresoutbox/notify*.go"
             # profile:outbox-postgres:end
             - "!**/internal/infra/postgresidempotency/store*.go"
             # pgtest is a PostgreSQL adapter like the two above, scoped to tests:
@@ -425,9 +422,6 @@ linters:
           files:
             - "$all"
             - "!**/internal/infra/postgres/*.go"
-            # profile:outbox-postgres:start
-            - "!**/internal/infra/postgresoutbox/store*.go"
-            # profile:outbox-postgres:end
             - "!**/internal/infra/postgresidempotency/store*.go"
             # profile:webhooks-durable:start
             - "!**/internal/infra/postgreswebhook/*.go"

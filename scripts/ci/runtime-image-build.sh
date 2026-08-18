@@ -53,16 +53,12 @@ verify_worker_image() {
 verify_outbox_relay_image() {
 	local output
 	if output="$(docker run --rm --read-only --network none --entrypoint /outbox-relay "${IMAGE}" 2>&1)"; then
-		echo "runtime image outbox relay exited successfully without a publisher" >&2
+		echo "runtime image outbox relay exited successfully without PostgreSQL" >&2
 		exit 1
 	fi
-	if ! grep -Fxq 'outbox relay failed: error_class=config' <<<"${output}"; then
+	if ! grep -Eq '^(postgres outbox config: postgres must be enabled for outbox relay|load outbox relay config: config validate: )' <<<"${output}"; then
 		echo "runtime image outbox relay did not execute the expected fail-closed binary" >&2
 		echo "${output}" >&2
-		exit 1
-	fi
-	if grep -Fq 'outbox publisher builder is not registered' <<<"${output}"; then
-		echo "runtime image outbox relay leaked raw startup error text" >&2
 		exit 1
 	fi
 }

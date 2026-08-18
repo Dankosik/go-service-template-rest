@@ -49,7 +49,7 @@ MESSAGING_RACE_PACKAGES += ./cmd/outbox-relay/internal/bootstrap
 # profile:outbox-postgres:end
 # profile:messaging-nats-jetstream:end
 # profile:outbox-postgres:start
-OUTBOX_RACE_PACKAGES := ./internal/infra/postgres ./internal/infra/postgresoutbox ./cmd/outbox-relay/internal/bootstrap ./test/...
+OUTBOX_RACE_PACKAGES := ./internal/domainevent ./internal/infra/postgresoutbox ./internal/infra/natsjs ./cmd/outbox-relay/internal/bootstrap ./test/...
 # profile:outbox-postgres:end
 # profile:webhooks-durable:start
 WEBHOOK_RACE_PACKAGES := ./internal/infra/postgreswebhook ./cmd/webhook-worker/internal/bootstrap ./test/...
@@ -394,12 +394,12 @@ test-race:
 
 # profile:messaging-nats-jetstream:start
 test-messaging-race:
-	go test -vet=off -p=1 -count=1 -race -tags=integration $(MESSAGING_RACE_PACKAGES) -run '^(TestOutboxPublisher|TestOutboxRelayPublisherRuntime|TestNATSWorkerRegistrationIsSingleton|TestNATSReconnectProbeStopsWithRunContext|TestNATSPublishDispatchCancellationAndNoRetry|TestNATSWorkerComposition|TestNATSWorkerForcedShutdownDoesNotRaceHandlerCleanup|TestNATSWorkerConnectionLossAndReconnect|TestNATSConsumerSaturation|TestNATSForcedShutdownRedelivers|TestNATSGracefulDrain)$$'
+	go test -vet=off -p=1 -count=1 -race -tags=integration $(MESSAGING_RACE_PACKAGES) -run '^(TestOutboxWorkerPublishesStableWireIdentityAndTrace|TestNATSWorkerRegistrationIsSingleton|TestNATSReconnectProbeStopsWithRunContext|TestNATSPublishDispatchCancellationAndNoRetry|TestNATSWorkerComposition|TestNATSWorkerForcedShutdownDoesNotRaceHandlerCleanup|TestNATSWorkerConnectionLossAndReconnect|TestNATSConsumerSaturation|TestNATSForcedShutdownRedelivers|TestNATSGracefulDrain)$$'
 # profile:messaging-nats-jetstream:end
 
 # profile:outbox-postgres:start
 test-outbox-race:
-	go test -vet=off -p=1 -count=1 -race -tags=integration $(OUTBOX_RACE_PACKAGES) -run '^Test(PostgresOutbox|InTxCommitOutcomes|OutboxRelay)'
+	go test -vet=off -p=1 -count=1 -race -tags=integration $(OUTBOX_RACE_PACKAGES) -run '^TestPostgresOutbox'
 # profile:outbox-postgres:end
 
 # profile:webhooks-durable:start

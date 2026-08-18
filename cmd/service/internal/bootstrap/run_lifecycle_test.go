@@ -36,7 +36,7 @@ func TestSupervisedWorkOutlivesTheHTTPDrain(t *testing.T) {
 
 		started := make(chan context.Context, 1)
 		supervisor.Go(background.Task{
-			Name: "outbox_publisher",
+			Name: "background_task",
 			Run: func(ctx context.Context) error {
 				started <- ctx
 				<-ctx.Done()

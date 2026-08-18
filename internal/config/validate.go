@@ -80,11 +80,6 @@ func validateConfig(cfg *Config, unknownKeys []string) error {
 		return err
 	}
 	// profile:webhooks-durable:end
-	// profile:outbox-postgres:start
-	if err := validateOutbox(cfg.Outbox, cfg.Postgres); err != nil {
-		return err
-	}
-	// profile:outbox-postgres:end
 	// profile:object-storage:start
 	if err := validateObjectStorage(&cfg.ObjectStorage); err != nil {
 		return err

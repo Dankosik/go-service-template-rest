@@ -353,9 +353,9 @@ publisher limits, and the separate consumer worker using
 \`docs/durable-messaging.md\` before enabling it.
 <!-- profile:messaging-nats-jetstream:end -->
 <!-- profile:outbox-postgres:start -->
-This service includes the PostgreSQL transactional outbox and its separately
-deployed bounded relay. Publication is at-least-once and consumers must tolerate
-duplicate event IDs; see \`docs/postgres-transactional-outbox.md\`.
+This service includes a River-backed PostgreSQL transactional outbox and its
+separate NATS publication worker. Publication is at-least-once and consumers
+must tolerate duplicate event IDs; see \`docs/postgres-transactional-outbox.md\`.
 <!-- profile:outbox-postgres:end -->
 <!-- profile:webhooks-durable:start -->
 This service includes durable PostgreSQL-backed outbound webhook delivery and
@@ -524,6 +524,10 @@ none | nats-jetstream) ;;
 	exit 1
 	;;
 esac
+if [[ "${outbox}" == "postgres" && "${messaging}" != "nats-jetstream" ]]; then
+	echo "OUTBOX=postgres requires MESSAGING=nats-jetstream"
+	exit 1
+fi
 
 # The reference example is upstream teaching material. Keeping it would make a
 # generated service own five extra packages, a second OpenAPI contract, and a
@@ -682,15 +686,10 @@ if [[ "${source_checkout}" != true ]]; then
 	rebase_coverage_floor
 
 	if [[ "${outbox}" == "none" ]]; then
-		rm -rf -- cmd/outbox-relay internal/infra/postgresoutbox
+		rm -rf -- cmd/outbox-relay internal/domainevent internal/infra/postgresoutbox
 		rm -f -- \
-			examples/reference-service/postgres_outbox_reconciliation_integration_test.go \
-			internal/config/outbox_config.go \
-			internal/config/outbox_config_test.go \
-			internal/infra/natsjs/outbox_publisher.go \
-			internal/infra/natsjs/outbox_publisher_test.go \
-			internal/infra/postgres/queries/postgres_outbox.sql \
-			internal/infra/postgres/sqlcgen/postgres_outbox.sql.go \
+			internal/infra/natsjs/outbox.go \
+			internal/infra/natsjs/outbox_test.go \
 			test/postgres_outbox_*_test.go \
 			docs/postgres-transactional-outbox.md
 		remove_outbox_migrations
@@ -890,8 +889,6 @@ fi
 		rm -rf -- cmd/worker internal/infra/natsjs
 		rm -f -- \
 			cmd/internal/runtimeopts/messaging.go \
-			cmd/outbox-relay/internal/bootstrap/natsjs_publisher.go \
-			cmd/outbox-relay/internal/bootstrap/natsjs_publisher_test.go \
 			cmd/service/internal/bootstrap/startup_messaging.go \
 			cmd/service/internal/bootstrap/startup_messaging_test.go \
 			docs/durable-messaging.md \
