@@ -80,7 +80,7 @@ type outboxAppender interface {
 Its transaction contains the exact business call:
 
 ```go
-return pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+return postgres.InTx(ctx, pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
     if err := orders.Update(ctx, tx, change); err != nil {
         return err
     }
@@ -138,18 +138,18 @@ endpoint and performs no automatic discard.
 
 ## Schema and upgrades
 
-`migrations/000001_postgres_outbox.sql` is the final River v0.44.0 PostgreSQL
-schema collapsed into one transactional initial migration. Its
+`migrations/000008_river.sql` installs the shared River v0.44.0 PostgreSQL
+schema after the retained legacy capability migrations. Its
 `river_migration` ledger records main versions 1 through 7, so River's migrator
 starts from the same baseline. Upgrade River modules together and append the
 matching upstream migration delta; never edit an applied generated-service
 migration.
 
-This schema is not compatible with the former `outbox_events`,
-`outbox_ordering_heads`, receipt, or redrive tables. A service that deployed
-that older pack must keep the old migration and drain or explicitly bridge its
-remaining rows before switching workers. Deleting pending rows is a separate
-authorized production action.
+The former `outbox_events`, `outbox_ordering_heads`, receipt, and redrive tables
+remain for rollback but are not read by the River worker. A service that
+deployed the older pack must drain or explicitly bridge its remaining rows
+before switching workers. Dropping the legacy tables or pending rows is a
+separate authorized production action.
 
 ## Proof
 

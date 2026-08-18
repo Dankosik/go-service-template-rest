@@ -12,6 +12,7 @@ import (
 	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	"github.com/example/go-service-template-rest/internal/infra/postgresoutbox"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
 	"github.com/riverqueue/river/rivermigrate"
 )
@@ -19,7 +20,7 @@ import (
 func TestPostgresOutboxAtomicAppendAndIdentity(t *testing.T) {
 	ctx, pool, appender := newOutboxFixture(t)
 	assertRiverMigrationBaseline(t, ctx, pool)
-	if _, err := pool.PGX().Exec(ctx, "CREATE TABLE outbox_domain_probe (id text PRIMARY KEY)"); err != nil {
+	if _, err := pool.Exec(ctx, "CREATE TABLE outbox_domain_probe (id text PRIMARY KEY)"); err != nil {
 		t.Fatalf("create domain probe: %v", err)
 	}
 	event, err := domainevent.New(
@@ -34,7 +35,7 @@ func TestPostgresOutboxAtomicAppendAndIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("domainevent.New(): %v", err)
 	}
-	if err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+	if err := postgres.InTx(ctx, pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "INSERT INTO outbox_domain_probe (id) VALUES ($1)", "domain-1"); err != nil {
 			return err
 		}
@@ -42,12 +43,12 @@ func TestPostgresOutboxAtomicAppendAndIdentity(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("commit domain mutation and event: %v", err)
 	}
-	assertOutboxAtomicCounts(t, pool.PGX(), "domain-1", event.ID, 1, 1)
+	assertOutboxAtomicCounts(t, pool, "domain-1", event.ID, 1, 1)
 
 	rollback := errors.New("rollback")
 	rolledBack := event
 	rolledBack.ID = "event-rollback"
-	if err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+	if err := postgres.InTx(ctx, pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "INSERT INTO outbox_domain_probe (id) VALUES ($1)", "domain-rollback"); err != nil {
 			return err
 		}
@@ -58,14 +59,14 @@ func TestPostgresOutboxAtomicAppendAndIdentity(t *testing.T) {
 	}); !errors.Is(err, rollback) {
 		t.Fatalf("rollback transaction error = %v", err)
 	}
-	assertOutboxAtomicCounts(t, pool.PGX(), "domain-rollback", rolledBack.ID, 0, 0)
+	assertOutboxAtomicCounts(t, pool, "domain-rollback", rolledBack.ID, 0, 0)
 
-	if err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+	if err := postgres.InTx(ctx, pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 		return appender.Append(ctx, tx, event)
 	}); err != nil {
 		t.Fatalf("repeat identical event: %v", err)
 	}
-	assertOutboxAtomicCounts(t, pool.PGX(), "domain-1", event.ID, 1, 1)
+	assertOutboxAtomicCounts(t, pool, "domain-1", event.ID, 1, 1)
 
 	conflict, err := domainevent.New(
 		event.ID,
@@ -77,7 +78,7 @@ func TestPostgresOutboxAtomicAppendAndIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("domainevent.New(conflict): %v", err)
 	}
-	err = pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+	err = postgres.InTx(ctx, pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 		return appender.Append(ctx, tx, conflict)
 	})
 	if !errors.Is(err, postgresoutbox.ErrEventIDConflict) {
@@ -85,9 +86,9 @@ func TestPostgresOutboxAtomicAppendAndIdentity(t *testing.T) {
 	}
 }
 
-func assertRiverMigrationBaseline(t *testing.T, ctx context.Context, pool *postgres.Pool) {
+func assertRiverMigrationBaseline(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
 	t.Helper()
-	migrator, err := rivermigrate.New(riverpgxv5.New(pool.PGX()), nil)
+	migrator, err := rivermigrate.New(riverpgxv5.New(pool), nil)
 	if err != nil {
 		t.Fatalf("rivermigrate.New(): %v", err)
 	}

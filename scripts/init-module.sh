@@ -722,13 +722,12 @@ if [[ "${source_checkout}" != true ]]; then
 
 		if [[ "${jobs}" == "none" ]]; then
 		rm -rf -- cmd/jobs-worker
-		rm -f -- \
+			rm -f -- \
 			internal/config/jobs_config.go \
 			internal/config/jobs_config_test.go \
 			internal/config/jobs_worker_config.go \
 			internal/config/jobs_worker_config_test.go \
 			migrations/000004_postgres_jobs.sql \
-			migrations/000008_river_jobs.sql \
 			test/postgres_jobs_*_test.go \
 			docs/postgres-durable-background-jobs.md
 		strip_profile jobs-postgres remove
@@ -751,6 +750,10 @@ if [[ "${source_checkout}" != true ]]; then
 		else
 			strip_profile webhooks-durable keep
 		fi
+
+	if [[ "${jobs}" == "none" && "${outbox}" == "none" && "${webhooks}" == "none" ]]; then
+		rm -f -- migrations/000008_river.sql
+	fi
 
 	# All PostgreSQL capability profiles derive from the same SQLC package. Resolve
 	# their source sets before one regeneration so any sibling can remain alone.

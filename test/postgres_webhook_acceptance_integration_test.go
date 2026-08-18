@@ -3,19 +3,30 @@
 package integration_test
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"os"
 	"testing"
 	"time"
 
+	"github.com/example/go-service-template-rest/internal/infra/postgres"
+	"github.com/example/go-service-template-rest/internal/infra/postgres/pgtest"
 	"github.com/example/go-service-template-rest/internal/infra/postgreswebhook"
 	"github.com/jackc/pgx/v5"
 )
 
 func TestPostgresWebhookAcceptanceUsesJobsAuthority(t *testing.T) {
-	ctx, pool, store := newPostgresJobsFixture(t)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
+	defer cancel()
+	dsn := pgtest.Migrated(t, os.DirFS(".."), "migrations")
+	pool, err := postgres.Open(ctx, postgres.Options{DSN: dsn, MaxOpenConns: 4})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
 	var activeRelations, deprecatedRelations int
-	if err := pool.PGX().QueryRow(ctx, `
+	if err := pool.QueryRow(ctx, `
 SELECT count(*) FILTER (WHERE tablename LIKE 'webhook_%'),
        count(*) FILTER (WHERE tablename LIKE 'deprecated_webhook_%')
 FROM pg_tables
@@ -48,9 +59,9 @@ WHERE schemaname = current_schema()`).Scan(&activeRelations, &deprecatedRelation
 	}
 	stage := func(prepared postgreswebhook.Prepared) (postgreswebhook.AcceptanceStatus, error) {
 		var status postgreswebhook.AcceptanceStatus
-		err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+		err := postgres.InTx(ctx, pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 			var err error
-			status, err = prepared.Stage(ctx, store, tx)
+			status, err = prepared.Stage(ctx, tx)
 			return err
 		})
 		return status, err
@@ -63,7 +74,7 @@ WHERE schemaname = current_schema()`).Scan(&activeRelations, &deprecatedRelation
 	}
 
 	var count int
-	if err := pool.PGX().QueryRow(ctx, `SELECT count(*) FROM postgres_jobs WHERE kind = 'outbound_webhook'`).Scan(&count); err != nil {
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM river_job WHERE kind = 'outbound_webhook'`).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
 	if count != 2 {
@@ -84,7 +95,7 @@ WHERE schemaname = current_schema()`).Scan(&activeRelations, &deprecatedRelation
 	if status, err := stage(replaced); !errors.Is(err, postgreswebhook.ErrConflict) || status != postgreswebhook.AcceptanceConflict {
 		t.Fatalf("Stage(replaced fanout) = %s, %v", status, err)
 	}
-	if status, err := prepared.Resolve(ctx, store); err != nil || status != postgreswebhook.AcceptanceAccepted {
+	if status, err := prepared.Resolve(ctx, pool); err != nil || status != postgreswebhook.AcceptanceAccepted {
 		t.Fatalf("Resolve() = %s, %v", status, err)
 	}
 }

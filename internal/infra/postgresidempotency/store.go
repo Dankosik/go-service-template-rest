@@ -12,6 +12,7 @@ import (
 	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	"github.com/example/go-service-template-rest/internal/infra/postgres/sqlcgen"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 const CleanupBatchSize = 500
@@ -25,7 +26,7 @@ var (
 )
 
 type Store struct {
-	pool      *postgres.Pool
+	pool      *pgxpool.Pool
 	retention time.Duration
 	inTx      func(context.Context, pgx.TxOptions, func(pgx.Tx) error) error
 }
@@ -73,14 +74,19 @@ func (e *Executor[Repository, Response]) Execute(
 	return response, replayed, nil
 }
 
-func NewStore(pool *postgres.Pool, retention time.Duration) (*Store, error) {
-	if pool == nil || pool.PGX() == nil {
+func NewStore(pool *pgxpool.Pool, retention time.Duration) (*Store, error) {
+	if pool == nil {
 		return nil, fmt.Errorf("%w: postgres pool is required", ErrConfig)
 	}
 	if retention <= 0 {
 		return nil, fmt.Errorf("%w: retention must be positive", ErrConfig)
 	}
-	return &Store{pool: pool, retention: retention, inTx: pool.InTx}, nil
+	return &Store{
+		pool: pool, retention: retention,
+		inTx: func(ctx context.Context, opts pgx.TxOptions, fn func(pgx.Tx) error) error {
+			return postgres.InTx(ctx, pool, opts, fn)
+		},
+	}, nil
 }
 
 // Execute serializes one scoped key at PostgreSQL, runs work only for the

@@ -4,6 +4,7 @@ package integration_test
 
 import (
 	"context"
+	"log/slog"
 	"os"
 	"testing"
 	"time"
@@ -50,7 +51,9 @@ func TestPostgresJobsTransactionalInsertionAndWorkerLifecycle(t *testing.T) {
 	}
 	client, err := river.NewClient(riverpgxv5.New(pool), &river.Config{
 		JobTimeout:  time.Minute,
+		Logger:      slog.Default(),
 		MaxAttempts: 1,
+		PollOnly:    true,
 		Queues: map[string]river.QueueConfig{
 			river.QueueDefault: {MaxWorkers: 1},
 		},

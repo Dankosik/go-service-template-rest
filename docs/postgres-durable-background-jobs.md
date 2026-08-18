@@ -32,13 +32,17 @@ idempotency key, a repeat-safe invariant, or reconciliation owned by the busines
 feature. Keep payloads to stable identifiers rather than secrets or unnecessary
 personal data; OSS retention is client-wide.
 
-Migration `000004` remains append-only legacy history. Migration `000008` vendors
-River v0.44.0 migrations 002-007 into the canonical Goose sequence; River's own
-migration ledger is omitted because Goose remains authoritative. Existing
+Migration `000004` remains append-only legacy history. Shared migration
+`000008_river.sql` vendors River v0.44.0 migrations 001-007 into the canonical
+Goose sequence for jobs, outbox, and webhooks. Existing
 deployments must stop legacy production, drain every nonterminal `postgres_jobs`
 row, apply the additive River schema, and then switch producer and worker code.
 If legacy work cannot drain, do not deploy this cutover without a separately
 designed row bridge. Legacy tables remain during the rollback window.
+
+The worker runs River in `PollOnly` mode because the shared PostgreSQL pool
+enforces finite statement budgets; an unbounded `LISTEN` would conflict with
+that connection policy.
 
 River's OSS UI is not part of this profile and is publicly accessible by default.
 Any deployment of it needs externally owned authentication and network policy.

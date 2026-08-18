@@ -101,7 +101,7 @@ func run(signalCtx context.Context, args []string) (runErr error) {
 		return fmt.Errorf("register outbox worker: %w", err)
 	}
 	riverClient, err := river.NewClient(
-		riverpgxv5.New(pool.PGX()),
+		riverpgxv5.New(pool),
 		riverClientConfig(cfg, workers, log),
 	)
 	if err != nil {
@@ -151,12 +151,12 @@ func runLifecycle[TTx any](
 	cfg config.Config,
 	log *slog.Logger,
 	metrics *telemetry.Metrics,
-	pool *postgres.Pool,
+	pool postgresPinger,
 	client *natsjs.Client,
 	riverClient *river.Client[TTx],
 ) (cleanupSafe bool, deadline time.Time, result error) {
 	var ready atomic.Bool
-	postgresHealth := health.New(pool)
+	postgresHealth := health.New(postgresReadinessProbe{pool: pool})
 	if err := postgresHealth.Refresh(startupCtx, cfg.HTTP.ReadinessTimeout, cfg.Health.FailureThreshold); err != nil {
 		return true, time.Time{}, fmt.Errorf("admit outbox readiness: %w", err)
 	}
@@ -214,4 +214,21 @@ func runLifecycle[TTx any](
 	backgroundErr := supervisor.Shutdown(backgroundCtx)
 	cancelBackground()
 	return cleanupSafe, shutdownDeadline, errors.Join(trigger, riverErr, messagingErr, diagnosticsErr, backgroundErr)
+}
+
+type postgresReadinessProbe struct {
+	pool postgresPinger
+}
+
+type postgresPinger interface {
+	Ping(ctx context.Context) error
+}
+
+func (postgresReadinessProbe) Name() string { return "postgres" }
+
+func (p postgresReadinessProbe) Check(ctx context.Context) error {
+	if err := p.pool.Ping(ctx); err != nil {
+		return fmt.Errorf("check PostgreSQL readiness: %w", err)
+	}
+	return nil
 }

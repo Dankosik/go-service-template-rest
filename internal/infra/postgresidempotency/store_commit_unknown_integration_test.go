@@ -23,16 +23,12 @@ func TestExecuteReadsBackCommittedResultAfterLostCommitResponse(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
 	t.Cleanup(cancel)
 	dsn := pgtest.Migrated(t, os.DirFS("../../.."), "migrations")
-	pool, err := postgres.New(ctx, postgres.Options{
-		DSN: dsn, ConnectTimeout: 3 * time.Second, HealthcheckTimeout: 3 * time.Second,
-		MaxOpenConns: 3, AcquireTimeout: time.Second, ConnMaxLifetime: time.Hour,
-		StatementTimeout: 10 * time.Second,
-	})
+	pool, err := postgres.Open(ctx, postgres.Options{DSN: dsn, MaxOpenConns: 3})
 	if err != nil {
-		t.Fatalf("postgres.New(): %v", err)
+		t.Fatalf("postgres.Open(): %v", err)
 	}
 	t.Cleanup(pool.Close)
-	if _, err := pool.PGX().Exec(ctx, "CREATE TABLE idempotency_commit_effect (value text NOT NULL)"); err != nil {
+	if _, err := pool.Exec(ctx, "CREATE TABLE idempotency_commit_effect (value text NOT NULL)"); err != nil {
 		t.Fatalf("create effect table: %v", err)
 	}
 	store, err := NewStore(pool, time.Hour)
@@ -70,7 +66,7 @@ func TestExecuteReadsBackCommittedResultAfterLostCommitResponse(t *testing.T) {
 		t.Fatalf("Execute() = %#v, replayed %v, error %v", result, replayed, err)
 	}
 	var effects int
-	if err := pool.PGX().QueryRow(ctx, "SELECT count(*) FROM idempotency_commit_effect").Scan(&effects); err != nil {
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM idempotency_commit_effect").Scan(&effects); err != nil {
 		t.Fatalf("count effects: %v", err)
 	}
 	if effects != 1 {

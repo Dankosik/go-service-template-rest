@@ -19,6 +19,7 @@ import (
 	"github.com/example/go-service-template-rest/internal/infra/postgresidempotency"
 	"github.com/example/go-service-template-rest/internal/waittest"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func TestPostgresHTTPIdempotencyReplayMismatchAndScope(t *testing.T) {
@@ -112,7 +113,7 @@ func TestPostgresHTTPIdempotencySerializesConcurrentReplicas(t *testing.T) {
 
 	waittest.UntilFunc(t, 5*time.Second, func() bool {
 		var waiters int
-		err := fixture.pool.PGX().QueryRow(fixture.ctx, `
+		err := fixture.pool.QueryRow(fixture.ctx, `
 			SELECT count(*) FROM pg_stat_activity
 			WHERE application_name = 'idempotency-concurrent'
 			  AND query LIKE '%INSERT INTO postgres_http_idempotency%'
@@ -153,7 +154,7 @@ func TestPostgresHTTPIdempotencyRollbackAndExpiryPermitRetry(t *testing.T) {
 		t.Fatalf("retry Execute() = replayed %v, error %v", replayed, err)
 	}
 
-	if _, err := fixture.pool.PGX().Exec(fixture.ctx, "UPDATE postgres_http_idempotency SET expires_at = clock_timestamp() - interval '1 second'"); err != nil {
+	if _, err := fixture.pool.Exec(fixture.ctx, "UPDATE postgres_http_idempotency SET expires_at = clock_timestamp() - interval '1 second'"); err != nil {
 		t.Fatalf("expire result: %v", err)
 	}
 	if deleted, err := fixture.store.Cleanup(fixture.ctx); err != nil || deleted != 1 {
@@ -186,7 +187,7 @@ func TestPostgresHTTPIdempotencyRejectsReadOnlyAuthority(t *testing.T) {
 
 type httpIDFixture struct {
 	ctx   context.Context
-	pool  *postgres.Pool
+	pool  *pgxpool.Pool
 	store *postgresidempotency.Store
 	dsn   string
 }
@@ -212,22 +213,18 @@ func newHTTPIDFixture(t *testing.T, applicationName string) httpIDFixture {
 	if err != nil {
 		t.Fatalf("NewStore(): %v", err)
 	}
-	if _, err := pool.PGX().Exec(ctx, "CREATE TABLE test_http_idempotency_effects (value text NOT NULL)"); err != nil {
+	if _, err := pool.Exec(ctx, "CREATE TABLE test_http_idempotency_effects (value text NOT NULL)"); err != nil {
 		t.Fatalf("create effects table: %v", err)
 	}
 	return httpIDFixture{ctx: ctx, pool: pool, store: store, dsn: dsn}
 }
 
-func newHTTPIDPool(t *testing.T, ctx context.Context, dsn, applicationName string) *postgres.Pool {
+func newHTTPIDPool(t *testing.T, ctx context.Context, dsn, applicationName string) *pgxpool.Pool {
 	t.Helper()
 	dsn = httpIDDSNParam(t, dsn, "application_name", applicationName)
-	pool, err := postgres.New(ctx, postgres.Options{
-		DSN: dsn, ConnectTimeout: 3 * time.Second, HealthcheckTimeout: 3 * time.Second,
-		MaxOpenConns: 4, AcquireTimeout: time.Second, ConnMaxLifetime: time.Hour,
-		StatementTimeout: 10 * time.Second,
-	})
+	pool, err := postgres.Open(ctx, postgres.Options{DSN: dsn, MaxOpenConns: 4})
 	if err != nil {
-		t.Fatalf("postgres.New(): %v", err)
+		t.Fatalf("postgres.Open(): %v", err)
 	}
 	t.Cleanup(pool.Close)
 	return pool
@@ -280,7 +277,7 @@ func (f httpIDFixture) effect(value string) func(context.Context, pgx.Tx) (httpi
 func (f httpIDFixture) assertEffects(t *testing.T, want int) {
 	t.Helper()
 	var got int
-	if err := f.pool.PGX().QueryRow(f.ctx, "SELECT count(*) FROM test_http_idempotency_effects").Scan(&got); err != nil {
+	if err := f.pool.QueryRow(f.ctx, "SELECT count(*) FROM test_http_idempotency_effects").Scan(&got); err != nil {
 		t.Fatalf("count effects: %v", err)
 	}
 	if got != want {

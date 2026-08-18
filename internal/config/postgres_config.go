@@ -5,10 +5,7 @@ package config
 import (
 	"fmt"
 	"strings"
-	"time"
 )
-
-const postgresStatementTimeout = 8 * time.Second
 
 // PostgresConfig contains the profile switch, secret connection source, and
 // the one deployment capacity value that has no universal safe answer.

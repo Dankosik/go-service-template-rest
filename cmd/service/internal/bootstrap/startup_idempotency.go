@@ -9,8 +9,8 @@ import (
 	"github.com/example/go-service-template-rest/internal/background"
 	"github.com/example/go-service-template-rest/internal/config"
 	httpx "github.com/example/go-service-template-rest/internal/infra/http"
-	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	"github.com/example/go-service-template-rest/internal/infra/postgresidempotency"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 const httpIdempotencyMaintenanceInterval = time.Minute
@@ -31,7 +31,7 @@ func (r httpIdempotencyRuntime) Supervise(supervisor *background.Supervisor) {
 func initDeclaredHTTPIdempotency(
 	ctx context.Context,
 	cfg config.Config,
-	pool *postgres.Pool,
+	pool *pgxpool.Pool,
 	log *slog.Logger,
 ) (httpIdempotencyRuntime, error) {
 	enabled, err := httpx.HasIdempotentOperations()
@@ -44,7 +44,7 @@ func initDeclaredHTTPIdempotency(
 func initHTTPIdempotencyRuntime(
 	ctx context.Context,
 	cfg config.Config,
-	pool *postgres.Pool,
+	pool *pgxpool.Pool,
 	log *slog.Logger,
 	enabled bool,
 ) (httpIdempotencyRuntime, error) {

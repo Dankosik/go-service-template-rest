@@ -13,6 +13,7 @@ import (
 	// profile:database-postgres:start
 	"github.com/example/go-service-template-rest/internal/config/configtest"
 	"github.com/example/go-service-template-rest/internal/infra/postgres"
+
 	// profile:database-postgres:end
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 

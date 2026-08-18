@@ -404,8 +404,8 @@ linters:
             - "!**/cmd/service/internal/bootstrap/startup_dependencies.go"
             - "!**/cmd/service/internal/bootstrap/startup_idempotency.go"
             # profile:webhooks-durable:start
-            # Webhook staging joins the caller-owned pgx transaction through
-            # postgresjobs.Store; delivery itself owns no SQL.
+            # Webhook staging uses River InsertTx on the caller-owned pgx
+            # transaction; delivery itself owns no independent SQL schema.
             - "!**/internal/infra/postgreswebhook/*.go"
             # profile:webhooks-durable:end
           deny:

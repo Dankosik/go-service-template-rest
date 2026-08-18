@@ -8,10 +8,12 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/example/go-service-template-rest/internal/jobs"
+	"github.com/riverqueue/river"
 )
 
 type Handler struct {
+	river.WorkerDefaults[deliveryArgs]
+
 	secrets  *SecretManifest
 	resolver *net.Resolver
 }
@@ -23,80 +25,86 @@ func NewHandler(secrets *SecretManifest) (*Handler, error) {
 	return &Handler{secrets: secrets, resolver: &net.Resolver{PreferGo: true}}, nil
 }
 
-func NewRegistry(secrets *SecretManifest) (*jobs.Registry, error) {
-	definition, err := deliveryDefinition()
-	if err != nil {
-		return nil, err
+func AddWorker(workers *river.Workers, secrets *SecretManifest) error {
+	if workers == nil {
+		return fmt.Errorf("%w: River workers are required", ErrConfig)
 	}
 	handler, err := NewHandler(secrets)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	registry := new(jobs.Registry)
-	if err := jobs.Register(registry, definition, handler.Handle); err != nil {
-		return nil, fmt.Errorf("register webhook definition: %w", err)
+	if err := river.AddWorkerSafely(workers, handler); err != nil {
+		return fmt.Errorf("register webhook worker: %w", err)
 	}
-	return registry, nil
+	return nil
 }
 
-func (h *Handler) Handle(ctx context.Context, input jobs.HandlerInput[deliveryArgs]) jobs.HandlerResult {
-	if h == nil || h.resolver == nil || h.secrets == nil {
-		return jobs.HandlerResult{Outcome: jobs.OutcomePoison, Effect: jobs.EffectNone}
+func (*Handler) Timeout(*river.Job[deliveryArgs]) time.Duration { return 30 * time.Second }
+
+func (h *Handler) Work(ctx context.Context, job *river.Job[deliveryArgs]) error {
+	if h == nil || h.resolver == nil || h.secrets == nil || job == nil {
+		return cancelJob("webhook worker is not configured")
+	}
+	if err := job.Args.validate(); err != nil {
+		return cancelJob("webhook job arguments are invalid")
 	}
 	deadline, ok := ctx.Deadline()
 	if !ok {
-		return jobs.HandlerResult{Outcome: jobs.OutcomePoison, Effect: jobs.EffectNone}
+		return cancelJob("webhook attempt deadline is required")
 	}
 	attemptedAt := time.Now().UTC()
 	attempt := DeliveryAttempt{
-		ID: string(input.Identity.LogicalJobID), OwnerScope: input.Arguments.OwnerScope,
-		ReceiverID: input.Arguments.ReceiverID, URL: input.Arguments.URL,
-		Body: input.Arguments.Body, AttemptedAt: attemptedAt, Deadline: deadline,
-		KeyReference:         input.Arguments.ActiveKeyReference,
-		PredecessorReference: input.Arguments.PredecessorKeyReference,
+		ID: job.Args.DeliveryID, OwnerScope: job.Args.OwnerScope,
+		ReceiverID: job.Args.ReceiverID, URL: job.Args.URL,
+		Body: job.Args.Body, AttemptedAt: attemptedAt, Deadline: deadline,
+		KeyReference:         job.Args.ActiveKeyReference,
+		PredecessorReference: job.Args.PredecessorKeyReference,
 	}
 	prepared, err := PrepareSend(ctx, h.resolver, attempt, h.secrets)
 	if err != nil {
 		return prepareFailure(ctx, err)
 	}
 	result, sendErr := tryPreparedAddresses(ctx, prepared, Send)
-	hint, _ := ParseRetryAfter(result.RetryAfter, result.ResponseDate, attemptedAt, 24*time.Hour)
-	return classifyDelivery(result, sendErr, hint)
+	return classifyDelivery(result, sendErr)
 }
 
-func prepareFailure(ctx context.Context, err error) jobs.HandlerResult {
+func prepareFailure(ctx context.Context, err error) error {
 	switch {
 	case errors.Is(err, ErrDestinationDenied):
-		return jobs.HandlerResult{Outcome: jobs.OutcomePermanent, Effect: jobs.EffectNone}
+		return cancelJob("webhook destination denied")
 	case errors.Is(err, context.DeadlineExceeded), errors.Is(ctx.Err(), context.DeadlineExceeded):
-		return jobs.HandlerResult{Outcome: jobs.OutcomeTimeout, Effect: jobs.EffectNone}
+		return context.DeadlineExceeded
 	case errors.Is(err, context.Canceled), errors.Is(ctx.Err(), context.Canceled):
-		return jobs.HandlerResult{Outcome: jobs.OutcomeCancelled, Effect: jobs.EffectNone}
+		return context.Canceled
 	default:
-		return jobs.HandlerResult{Outcome: jobs.OutcomeRetryable, Effect: jobs.EffectNone}
+		return errors.New("prepare webhook delivery")
 	}
 }
 
-func classifyDelivery(result SendResult, err error, hint time.Duration) jobs.HandlerResult {
+func classifyDelivery(result SendResult, err error) error {
 	evidence := result.Evidence
 	switch {
 	case evidence.LocalDenial:
-		return jobs.HandlerResult{Outcome: jobs.OutcomePermanent, Effect: jobs.EffectNone}
+		return cancelJob("webhook destination denied")
 	case evidence.StatusCode >= http.StatusOK && evidence.StatusCode <= 299:
-		return jobs.HandlerResult{Outcome: jobs.OutcomeSuccess, Effect: jobs.EffectCompleted}
+		return nil
 	case retryableWebhookStatus(evidence.StatusCode):
-		return jobs.HandlerResult{Outcome: jobs.OutcomeRetryable, Effect: jobs.EffectUnknown, RetryHint: hint}
+		return errors.New("webhook delivery retryable")
 	case evidence.StatusCode >= 100:
-		return jobs.HandlerResult{Outcome: jobs.OutcomePermanent, Effect: jobs.EffectNone}
+		return cancelJob("webhook receiver rejected delivery")
 	case evidence.MayHaveSent:
-		return jobs.HandlerResult{Outcome: jobs.OutcomeRetryable, Effect: jobs.EffectUnknown}
+		return errors.New("webhook delivery outcome is ambiguous")
 	case errors.Is(err, context.DeadlineExceeded):
-		return jobs.HandlerResult{Outcome: jobs.OutcomeTimeout, Effect: jobs.EffectNone}
+		return context.DeadlineExceeded
 	case errors.Is(err, context.Canceled):
-		return jobs.HandlerResult{Outcome: jobs.OutcomeCancelled, Effect: jobs.EffectNone}
+		return context.Canceled
 	default:
-		return jobs.HandlerResult{Outcome: jobs.OutcomeRetryable, Effect: jobs.EffectNone}
+		return errors.New("webhook delivery failed")
 	}
+}
+
+func cancelJob(reason string) error {
+	return fmt.Errorf("cancel webhook job: %w", river.JobCancel(errors.New(reason)))
 }
 
 func retryableWebhookStatus(status int) bool {

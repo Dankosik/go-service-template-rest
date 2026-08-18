@@ -1,7 +1,19 @@
 -- +goose Up
 
--- River v0.44.0 migrations 002-007. Version 001 is River's own
--- migration ledger and is omitted because Goose remains the migration authority.
+-- River v0.44.0 migrations 001-007. Goose remains the runtime migration
+-- authority, while River's ledger lets its tooling verify the installed schema.
+
+CREATE TABLE /* TEMPLATE: schema */river_migration(
+  line text NOT NULL,
+  version bigint NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT line_length CHECK (char_length(line) > 0 AND char_length(line) < 128),
+  CONSTRAINT version_gte_1 CHECK (version >= 1),
+  PRIMARY KEY (line, version)
+);
+
+INSERT INTO /* TEMPLATE: schema */river_migration (line, version)
+SELECT 'main', generate_series(1, 7);
 
 -- River 002
 CREATE TYPE /* TEMPLATE: schema */river_job_state AS ENUM(
@@ -443,3 +455,4 @@ DROP FUNCTION /* TEMPLATE: schema */river_job_notify;
 DROP TYPE /* TEMPLATE: schema */river_job_state;
 
 DROP TABLE /* TEMPLATE: schema */river_leader;
+DROP TABLE /* TEMPLATE: schema */river_migration;

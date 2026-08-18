@@ -438,13 +438,12 @@ grep -Fq 'messaging.urls' "${TEMP_ROOT}/minimal-messaging.log"
 for removed in \
 	cmd/outbox-relay \
 	docs/postgres-transactional-outbox.md \
-	examples/reference-service/postgres_outbox_reconciliation_integration_test.go \
-	internal/config/outbox_config_test.go \
-	internal/infra/natsjs/outbox_publisher.go \
-	internal/infra/natsjs/outbox_publisher_test.go \
+	internal/domainevent \
+	internal/infra/natsjs/outbox.go \
+	internal/infra/natsjs/outbox_test.go \
 	internal/infra/postgresoutbox \
-	test/postgres_outbox_store_fixtures_integration_test.go \
-	test/postgres_outbox_store_integration_test.go \
+	test/postgres_outbox_fixtures_integration_test.go \
+	test/postgres_outbox_integration_test.go \
 	test/postgres_outbox_natsjs_integration_test.go; do
 	assert "${removed} must not survive OUTBOX=none initialization" path_absent "${minimal_checkout}/${removed}"
 done
@@ -770,32 +769,27 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "outb
 		make sqlc-check migration-check mod-tidy-check project-structure-check
 	)
 	assert "OUTBOX=none removed PostgreSQL" path_present "${outbox_none_checkout}/internal/infra/postgres"
-	# One list, asserted absent here and present under OUTBOX=postgres below. The
-	# NATS-bound proof is named separately because it belongs to both this profile
-	# and messaging, and the fixture that keeps the outbox selects no broker.
+	# One list, asserted absent here and present under the complete
+	# OUTBOX=postgres+MESSAGING=nats-jetstream profile below.
 	outbox_paths=(
 		cmd/outbox-relay
 		docs/postgres-transactional-outbox.md
-		internal/config/outbox_config_test.go
-		internal/infra/postgres/queries/postgres_outbox.sql
-		internal/infra/postgres/sqlcgen/postgres_outbox.sql.go
+		internal/domainevent
+		internal/infra/natsjs/outbox.go
 		internal/infra/postgresoutbox
-		test/postgres_outbox_bench_integration_test.go
-		test/postgres_outbox_store_fixtures_integration_test.go
-		test/postgres_outbox_store_integration_test.go
+		test/postgres_outbox_fixtures_integration_test.go
+		test/postgres_outbox_integration_test.go
+		test/postgres_outbox_natsjs_integration_test.go
 	)
-	for removed in "${outbox_paths[@]}" test/postgres_outbox_natsjs_integration_test.go; do
+	for removed in "${outbox_paths[@]}"; do
 		assert "PostgreSQL OUTBOX=none retained ${removed}" path_absent "${outbox_none_checkout}/${removed}"
 	done
 	assert "generated service retained removed inbox SQLC output" path_absent \
 		"${outbox_none_checkout}/internal/infra/postgres/sqlcgen/postgres_inbox.sql.go"
 	assert "generated service retained removed inbox migration history" \
 		glob_absent "${outbox_none_checkout}/migrations/*_postgres_inbox*.sql"
-	# Every outbox migration, not a named list: one left behind runs against
-	# tables this profile never creates, and only the generated service's own
-	# migration run would notice.
-	assert "PostgreSQL OUTBOX=none retained an outbox migration" \
-		glob_absent "${outbox_none_checkout}/migrations/*_postgres_outbox*.sql"
+	assert "PostgreSQL OUTBOX=none retained the unused River schema" \
+		path_absent "${outbox_none_checkout}/migrations/000008_river.sql"
 	grep -Fqx 'database = "postgres"' "${outbox_none_checkout}/template.lock"
 	grep -Fqx 'outbox = "none"' "${outbox_none_checkout}/template.lock"
 	outbox_none_snapshot="$(snapshot "${outbox_none_checkout}")"
@@ -812,19 +806,13 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "outb
 	outbox_revision="$(git -C "${outbox_checkout}" rev-parse HEAD)"
 	(
 		cd "${outbox_checkout}"
-		CODEOWNER=@acme/platform DATABASE=postgres OUTBOX=postgres bash ./scripts/init-module.sh
+		CODEOWNER=@acme/platform DATABASE=postgres OUTBOX=postgres MESSAGING=nats-jetstream bash ./scripts/init-module.sh
 		go test -vet=off ./...
-		go build ./cmd/service ./cmd/migrate ./cmd/outbox-relay
+		go build ./cmd/service ./cmd/migrate ./cmd/worker ./cmd/outbox-relay
 		make sqlc-check migration-check mod-tidy-check project-structure-check
-		if go run ./cmd/outbox-relay >"${TEMP_ROOT}/outbox-missing-publisher.log" 2>&1; then
-			echo "outbox relay accepted a missing production publisher"
-			exit 1
-		fi
 		go list -deps ./cmd/outbox-relay | grep -Fx 'github.com/acme/outbox-service/internal/infra/postgresoutbox'
+		go list -deps ./cmd/outbox-relay | grep -Fx 'github.com/acme/outbox-service/internal/infra/natsjs'
 	)
-	grep -Fxq 'outbox relay failed: error_class=config' "${TEMP_ROOT}/outbox-missing-publisher.log"
-	assert "outbox relay leaked raw missing-publisher error" \
-		grep_absent -Fq 'outbox publisher builder is not registered' "${TEMP_ROOT}/outbox-missing-publisher.log"
 	for retained in "${outbox_paths[@]}"; do
 		assert "OUTBOX=postgres removed ${retained}" path_present "${outbox_checkout}/${retained}"
 	done
@@ -832,6 +820,8 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "outb
 		"${outbox_checkout}/internal/infra/postgres/sqlcgen/postgres_inbox.sql.go"
 	assert "generated service retained removed inbox runtime" path_absent \
 		"${outbox_checkout}/internal/infra/postgresinbox"
+	assert "OUTBOX=postgres removed the shared River schema" path_present \
+		"${outbox_checkout}/migrations/000008_river.sql"
 
 	combined_checkout="$(copy_template_checkout combined-outbox-messaging git@github.com:acme/combined-service.git)"
 	(
@@ -845,9 +835,8 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "outb
 		make sqlc-check mod-tidy-check project-structure-check
 	)
 	for retained in \
-		cmd/outbox-relay/internal/bootstrap/natsjs_publisher.go \
 		internal/config/configtest/messaging.go \
-		internal/infra/natsjs/outbox_publisher.go \
+		internal/infra/natsjs/outbox.go \
 		test/postgres_outbox_natsjs_integration_test.go; do
 		assert "combined outbox+messaging removed ${retained}" path_present "${combined_checkout}/${retained}"
 	done
@@ -862,11 +851,9 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "outb
 	assert "repeated combined initialization changed the checkout" \
 		same_text "${combined_snapshot}" "$(snapshot "${combined_checkout}")"
 
-	# Compared against the template's own outbox migrations rather than a named
-	# list, so a migration added later is covered the day it lands.
-	assert "OUTBOX=postgres changed the outbox migration set" same_text \
-		"$(cd "${ROOT_DIR}" && printf '%s\n' migrations/*_postgres_outbox*.sql)" \
-		"$(cd "${outbox_checkout}" && printf '%s\n' migrations/*_postgres_outbox*.sql)"
+	assert "OUTBOX=postgres changed the River migration" same_text \
+		"$(cat "${ROOT_DIR}/migrations/000008_river.sql")" \
+		"$(cat "${outbox_checkout}/migrations/000008_river.sql")"
 	# The template edits its migrations in place because nothing has applied
 	# them; a generated service is the opposite case and must refuse, with no
 	# escape it could be talked into. Exercised on an isolated copy of the
@@ -880,7 +867,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "outb
 		git init -q .
 		git add -A
 		git -c user.email=init-check@example.invalid -c user.name=init-check commit -qm generated
-		printf '\n-- rewritten after generation\n' >>migrations/000001_postgres_outbox.sql
+		printf '\n-- rewritten after generation\n' >>migrations/000008_river.sql
 		if MIGRATION_REPO_ROOT="${rewrite_probe}" MIGRATION_HISTORY_MODE=worktree \
 			bash ./scripts/ci/migration-history-check.sh >/dev/null 2>&1; then
 			echo "template initialization contract: generated service accepted a migration rewrite" >&2
@@ -890,7 +877,8 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "outb
 	grep -Fqx 'database = "postgres"' "${outbox_checkout}/template.lock"
 	grep -Fqx 'outbox = "postgres"' "${outbox_checkout}/template.lock"
 	grep -Fqx "source_revision = \"${outbox_revision}\"" "${outbox_checkout}/template.lock"
-	grep -Fq 'APP__OUTBOX__ENABLED=true' "${outbox_checkout}/env/.env.example"
+	assert "generated outbox retained removed APP__OUTBOX__ config" \
+		grep_absent -Fq 'APP__OUTBOX__' "${outbox_checkout}/env/.env.example"
 	grep -Fq 'run-outbox-relay' "${outbox_checkout}/Makefile"
 	grep -Fq '/out/outbox-relay' "${outbox_checkout}/build/docker/Dockerfile"
 	outbox_marker='profile:outbox''-postgres:'
@@ -909,7 +897,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "outb
 	outbox_snapshot="$(snapshot "${outbox_checkout}")"
 	(
 		cd "${outbox_checkout}"
-		CODEOWNER=@acme/platform DATABASE=postgres OUTBOX=postgres bash ./scripts/init-module.sh
+		CODEOWNER=@acme/platform DATABASE=postgres OUTBOX=postgres MESSAGING=nats-jetstream bash ./scripts/init-module.sh
 	)
 	assert "repeated OUTBOX=postgres initialization changed the checkout" \
 		same_text "${outbox_snapshot}" "$(snapshot "${outbox_checkout}")"
@@ -1665,7 +1653,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "http
 	cp -R "${base_http_idempotency}" "${explicit_none_http_idempotency}"
 	(
 		cd "${omitted_http_idempotency}"
-		CODEOWNER=@acme/platform DATABASE=postgres OUTBOX=postgres AUTHN=oidc-jwt GRPC=enabled OUTBOUND_HTTP=bounded \
+		CODEOWNER=@acme/platform DATABASE=postgres OUTBOX=postgres MESSAGING=nats-jetstream AUTHN=oidc-jwt GRPC=enabled OUTBOUND_HTTP=bounded \
 			bash ./scripts/init-module.sh
 		go test -vet=off ./...
 		go build -o "${TEMP_ROOT}/http-idempotency-service" ./cmd/service
@@ -1674,7 +1662,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "http
 	)
 	(
 		cd "${explicit_none_http_idempotency}"
-		CODEOWNER=@acme/platform DATABASE=postgres HTTP_IDEMPOTENCY=none OUTBOX=postgres AUTHN=oidc-jwt GRPC=enabled OUTBOUND_HTTP=bounded \
+		CODEOWNER=@acme/platform DATABASE=postgres HTTP_IDEMPOTENCY=none OUTBOX=postgres MESSAGING=nats-jetstream AUTHN=oidc-jwt GRPC=enabled OUTBOUND_HTTP=bounded \
 			bash ./scripts/init-module.sh
 	)
 	assert "omitted HTTP_IDEMPOTENCY differs from explicit none" \
@@ -1881,8 +1869,8 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "jobs
 			cmd/jobs-worker \
 			internal/config/jobs_config.go \
 			internal/config/jobs_worker_config.go \
+			migrations/000008_river.sql \
 			migrations/000004_postgres_jobs.sql \
-			migrations/000008_river_jobs.sql \
 			docs/postgres-durable-background-jobs.md; do
 			assert "JOBS=none retained ${removed}" path_absent "${root}/${removed}"
 		done
@@ -1898,8 +1886,8 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "jobs
 			cmd/jobs-worker \
 			internal/config/jobs_config.go \
 			internal/config/jobs_worker_config.go \
+			migrations/000008_river.sql \
 			migrations/000004_postgres_jobs.sql \
-			migrations/000008_river_jobs.sql \
 			docs/postgres-durable-background-jobs.md; do
 			assert "JOBS=postgres removed ${retained}" path_present "${root}/${retained}"
 		done
@@ -2006,7 +1994,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "jobs
 	}
 
 	prove_jobs_profile only none none
-	prove_jobs_profile outbox postgres none
+	prove_jobs_profile outbox postgres nats-jetstream
 	prove_jobs_profile messaging none nats-jetstream
 	prove_jobs_profile combined postgres nats-jetstream true
 fi

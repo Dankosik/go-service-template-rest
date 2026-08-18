@@ -98,6 +98,7 @@ func run(signalCtx context.Context, args []string, buildWorkers WorkersBuilder) 
 		JobTimeout:                  river.JobTimeoutDefault,
 		Logger:                      log,
 		MaxAttempts:                 river.MaxAttemptsDefault,
+		PollOnly:                    true,
 		SoftStopTimeout:             cfg.HTTP.ShutdownTimeout,
 		Plugins: []rivertype.Plugin{
 			otelriver.NewMiddleware(&otelriver.MiddlewareConfig{EnableTracePropagation: true}),

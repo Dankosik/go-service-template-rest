@@ -1,127 +1,375 @@
 -- +goose Up
 
--- River v0.44.0 main schema, collapsed to its final form for a new generated
--- service. Later River upgrades append migrations; they never rewrite this one.
-CREATE TABLE river_migration (
-    line text NOT NULL,
-    version bigint NOT NULL,
-    created_at timestamptz NOT NULL DEFAULT now(),
-    CONSTRAINT line_length CHECK (char_length(line) > 0 AND char_length(line) < 128),
-    CONSTRAINT version_gte_1 CHECK (version >= 1),
-    PRIMARY KEY (line, version)
-);
-
-INSERT INTO river_migration (line, version)
-SELECT 'main', generate_series(1, 7);
-
-CREATE TYPE river_job_state AS ENUM (
-    'available',
-    'cancelled',
-    'completed',
-    'discarded',
-    'pending',
-    'retryable',
-    'running',
-    'scheduled'
-);
-
-CREATE TABLE river_job (
-    id bigserial PRIMARY KEY,
-    state river_job_state NOT NULL DEFAULT 'available',
-    attempt smallint NOT NULL DEFAULT 0,
-    max_attempts smallint NOT NULL DEFAULT 25,
-    attempted_at timestamptz,
-    created_at timestamptz NOT NULL DEFAULT now(),
-    finalized_at timestamptz,
-    scheduled_at timestamptz NOT NULL DEFAULT now(),
-    priority smallint NOT NULL DEFAULT 1,
-    args jsonb NOT NULL,
-    attempted_by text[],
-    errors jsonb[],
-    kind text NOT NULL,
-    metadata jsonb NOT NULL DEFAULT '{}',
-    queue text NOT NULL DEFAULT 'default',
-    tags varchar(255)[] NOT NULL DEFAULT '{}',
-    unique_key bytea,
-    unique_states bit(8),
-    CONSTRAINT finalized_or_finalized_at_null CHECK (
-        (finalized_at IS NULL AND state NOT IN ('cancelled', 'completed', 'discarded'))
-        OR (finalized_at IS NOT NULL AND state IN ('cancelled', 'completed', 'discarded'))
+-- One head per ordering key. last_sequence is the retained, monotonic authority
+-- that rejects a reused sequence: Append advances it under a row lock in the
+-- same transaction as the insert, and cleanup never deletes a head, so the
+-- rejection survives the events it was derived from. current_sequence names the
+-- key's earliest unpublished sequence, or NULL while the key is idle.
+--
+-- Every append and every publication for a key updates that key's single row,
+-- and a batched ordered finalization advances one head per event in the lease,
+-- so heads face whole-page updates. fillfactor leaves room for a second version
+-- of every live row a page carries, which keeps those updates heap-only.
+CREATE TABLE outbox_ordering_heads (
+    ordering_key text COLLATE "C" PRIMARY KEY,
+    last_sequence bigint NOT NULL,
+    current_sequence bigint,
+    updated_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    CONSTRAINT outbox_ordering_heads_key_check CHECK (
+        octet_length(ordering_key) BETWEEN 1 AND 256
+        AND ordering_key !~ '[[:cntrl:]]'
     ),
-    CONSTRAINT max_attempts_is_positive CHECK (max_attempts > 0),
-    CONSTRAINT priority_in_range CHECK (priority BETWEEN 1 AND 4),
-    CONSTRAINT queue_length CHECK (char_length(queue) > 0 AND char_length(queue) < 128),
-    CONSTRAINT kind_length CHECK (char_length(kind) > 0 AND char_length(kind) < 128)
+    CONSTRAINT outbox_ordering_heads_sequence_check CHECK (
+        last_sequence > 0
+        AND (
+            current_sequence IS NULL
+            OR current_sequence BETWEEN 1 AND last_sequence
+        )
+    )
+) WITH (
+    fillfactor = 45,
+    autovacuum_vacuum_scale_factor = 0.01,
+    autovacuum_vacuum_threshold = 2000,
+    autovacuum_analyze_scale_factor = 0.01,
+    autovacuum_analyze_threshold = 2000
 );
 
-CREATE INDEX river_job_kind ON river_job USING btree (kind);
-CREATE INDEX river_job_state_and_finalized_at_index
-    ON river_job USING btree (state, finalized_at)
-    WHERE finalized_at IS NOT NULL;
-CREATE INDEX river_job_prioritized_fetching_index
-    ON river_job USING btree (state, queue, priority, scheduled_at, id);
-CREATE INDEX river_job_args_index ON river_job USING gin (args);
-CREATE INDEX river_job_metadata_index ON river_job USING gin (metadata);
+-- The event envelope is immutable; every other column is delivery state.
+-- ordering_ready materializes "this event is its key's claimable head" so the
+-- claim never scans a hot key's predecessors.
+--
+-- Storage parameters are measured rather than conventional. A batch claim
+-- updates most of one heap page at a time and touches no indexed column, so a
+-- page with room for a second version of every live row it carries keeps every
+-- claim heap-only: no index insert, and the dead version reclaimed by ordinary
+-- page pruning instead of an index vacuum pass. Over insert, claim, and publish
+-- of 2,000 events on the repository's PostgreSQL 17 fixture:
+--
+--   fillfactor  100     70     60     50     45     40     30
+--   HOT claims  201    845   1168   1700   1996   2000   2000
+--   cycle WAL  2.12M  1.53M  1.31M  1.06M  0.97M  0.94M  0.94M
+--   heap       1.18M  1.07M  1.00M  0.94M  0.93M  0.95M  1.29M
+--
+-- 45 is the knee: every claim is heap-only and the heap is at its smallest,
+-- because the version sprawl a packed page causes costs more than the reserve.
+-- Below it the unused reserve grows the table again. With a 1 KiB payload the
+-- same setting moved cycle WAL from 6.28M to 1.00M and the heap from 8.15M to
+-- 5.50M, so this is a ratio rather than a value tuned to one payload size.
+-- Re-measure if the claim stops updating whole pages at a time.
+--
+-- Autovacuum's default scale factors are proportional to table size, so a
+-- retention window would make maintenance wait longer the more published rows
+-- are kept even though the churn producing dead tuples is unrelated to that.
+-- These values keep a floor that does not move with retention and a 1% slope
+-- that still scales; they are a starting point, not a measured optimum. Raise
+-- them when autovacuum runs back to back on this table, since each pass reads
+-- its indexes, and lower them when n_dead_tup or the relation size keeps
+-- growing between passes.
+--
+-- Every identifier in this pack is stored `COLLATE "C"`. Event ids, ordering
+-- keys, and audit ids are opaque tokens: they are compared for equality and
+-- sorted only so an order is deterministic, so a locale means nothing for them.
+-- A locale collation still makes every B-tree descent call `strcoll` instead of
+-- `memcmp`, and the claim, the batch finalization, and the ordered head lookup
+-- each descend one of these indexes per event. Measured on a CPU-Optimized
+-- 4-vCPU Droplet, it is worth 11% of a 100-event claim, 11% of the unordered
+-- publication, and 17% of the ordered one.
+--
+-- It weakens no check. PostgreSQL derives the regex character classes in the
+-- constraints below from the database encoding rather than from the collation,
+-- so `[[:cntrl:]]` still rejects the same bytes, C1 controls included. Sorting
+-- becomes byte order, which `id` only ever provides as a tiebreaker, and the
+-- ordered append still takes head locks in one total order, so its deadlock
+-- avoidance is unchanged.
+CREATE TABLE outbox_events (
+    id text COLLATE "C" PRIMARY KEY,
+    event_type text NOT NULL,
+    source text NOT NULL,
+    destination text NOT NULL,
+    schema_name text NOT NULL,
+    occurred_at timestamptz NOT NULL,
+    payload bytea NOT NULL,
+    metadata bytea NOT NULL DEFAULT '\x7b7d'::bytea,
+    -- The trace context active when the event was appended, in the configured
+    -- propagator's own carrier shape: a flat JSON object of header name to
+    -- value. It is envelope state rather than delivery state -- captured once at
+    -- append and never rewritten, so every retry, lease recovery, and operator
+    -- redrive of one event reports the same origin. `{}` means the append had no
+    -- propagatable context, which is ordinary rather than an error.
+    --
+    -- It is deliberately separate from `metadata`: metadata is the caller's
+    -- bytes, stored and retried exactly as given, and merging an outbox-owned
+    -- key into them would break that and collide with a caller that carries its
+    -- own `traceparent`.
+    trace_context bytea NOT NULL DEFAULT '\x7b7d'::bytea,
+    ordering_key text COLLATE "C",
+    ordering_sequence bigint,
+    ordering_ready boolean NOT NULL DEFAULT false,
+    created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    available_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    cycle_attempt_count integer NOT NULL DEFAULT 0,
+    total_attempt_count bigint NOT NULL DEFAULT 0,
+    last_attempt_at timestamptz,
+    lease_token text,
+    lease_expires_at timestamptz,
+    published_at timestamptz,
+    poisoned_at timestamptz,
+    publication_uncertain boolean DEFAULT false,
+    last_error_class text,
+    redrive_count integer NOT NULL DEFAULT 0,
+    last_redrive_id text,
+    last_redriven_at timestamptz,
+    CONSTRAINT outbox_events_id_check CHECK (
+        octet_length(id) BETWEEN 1 AND 256 AND id !~ '[[:cntrl:]]'
+    ),
+    CONSTRAINT outbox_events_type_check CHECK (
+        octet_length(event_type) BETWEEN 1 AND 256 AND event_type !~ '[[:cntrl:]]'
+    ),
+    CONSTRAINT outbox_events_source_check CHECK (
+        octet_length(source) BETWEEN 1 AND 256 AND source !~ '[[:cntrl:]]'
+    ),
+    CONSTRAINT outbox_events_destination_check CHECK (
+        octet_length(destination) BETWEEN 1 AND 256 AND destination !~ '[[:cntrl:]]'
+    ),
+    CONSTRAINT outbox_events_schema_check CHECK (
+        octet_length(schema_name) BETWEEN 1 AND 256 AND schema_name !~ '[[:cntrl:]]'
+    ),
+    CONSTRAINT outbox_events_occurred_at_check CHECK (
+        isfinite(occurred_at)
+        AND occurred_at <> TIMESTAMPTZ '0001-01-01 00:00:00+00'
+    ),
+    -- Every size below mirrors a Go constant in internal/infra/postgresoutbox,
+    -- which rejects the same value before the statement is sent: 262144 is
+    -- maxPayloadBytes, 32768 maxMetadataBytes, 294912 maxEnvelopeBytes, 1024
+    -- maxTraceContextBytes, 256 maxTextBytes, and 64 maxErrorClassBytes
+    -- (store_rows.go). Change event.go
+    -- first, then here: TestEnvelopeLimitsMatchMigrationChecks reads this file
+    -- and fails on a limit only one side learned about, because raising one
+    -- alone turns a rejected envelope into a check violation at append time.
+    --
+    -- IS JSON holds the stored bytes to the same lenient grammar the json type
+    -- accepts, rather than the jsonb one: the outbox stores and retries the
+    -- exact bytes it was given, and jsonb would reject payloads that are valid
+    -- JSON, such as a number outside PostgreSQL numeric range or a string with
+    -- an escaped NUL. IS JSON OBJECT is also the whole metadata rule, so the
+    -- object requirement no longer needs a second decode and a text pattern
+    -- beside the parse. Bytes that are not valid UTF-8 are rejected as an
+    -- encoding error rather than a check violation; both refuse the row, and
+    -- the append path validates encoding before the statement is sent.
+    CONSTRAINT outbox_events_payload_check CHECK (
+        octet_length(payload) BETWEEN 1 AND 262144
+        AND payload IS JSON
+    ),
+    CONSTRAINT outbox_events_metadata_check CHECK (
+        octet_length(metadata) BETWEEN 2 AND 32768
+        AND metadata IS JSON OBJECT
+    ),
+    CONSTRAINT outbox_events_trace_context_check CHECK (
+        octet_length(trace_context) BETWEEN 2 AND 1024
+        AND trace_context IS JSON OBJECT
+    ),
+    CONSTRAINT outbox_events_ordering_check CHECK (
+        (ordering_key IS NULL AND ordering_sequence IS NULL)
+        OR (
+            ordering_key IS NOT NULL
+            AND octet_length(ordering_key) BETWEEN 1 AND 256
+            AND ordering_key !~ '[[:cntrl:]]'
+            AND ordering_sequence IS NOT NULL
+            AND ordering_sequence > 0
+        )
+    ),
+    -- trace_context is deliberately absent from this total. The budget bounds
+    -- what a caller must keep under, and charging an outbox-owned field against
+    -- it would start rejecting events a service appends successfully today. The
+    -- stored row therefore exceeds this figure by at most the trace-context
+    -- allowance above.
+    CONSTRAINT outbox_events_envelope_size_check CHECK (
+        octet_length(id)
+        + octet_length(event_type)
+        + octet_length(source)
+        + octet_length(destination)
+        + octet_length(schema_name)
+        + coalesce(octet_length(ordering_key), 0)
+        + octet_length(payload)
+        + octet_length(metadata) <= 294912
+    ),
+    CONSTRAINT outbox_events_attempts_check CHECK (
+        cycle_attempt_count >= 0 AND total_attempt_count >= cycle_attempt_count
+    ),
+    CONSTRAINT outbox_events_lease_check CHECK (
+        (lease_token IS NULL) = (lease_expires_at IS NULL)
+        AND (
+            lease_token IS NULL
+            OR (
+                octet_length(lease_token) BETWEEN 1 AND 256
+                AND lease_token !~ '[[:cntrl:]]'
+            )
+        )
+    ),
+    CONSTRAINT outbox_events_terminal_check CHECK (
+        NOT (published_at IS NOT NULL AND poisoned_at IS NOT NULL)
+        AND (published_at IS NULL OR lease_token IS NULL)
+        AND (poisoned_at IS NULL OR lease_token IS NULL)
+    ),
+    CONSTRAINT outbox_events_publication_uncertainty_check CHECK (
+        publication_uncertain IS NULL
+        OR (last_error_class IS NOT DISTINCT FROM 'outcome_unknown') = (
+            published_at IS NULL
+            AND poisoned_at IS NOT NULL
+            AND publication_uncertain
+        )
+    ),
+    CONSTRAINT outbox_events_error_class_check CHECK (
+        last_error_class IS NULL
+        OR (
+            octet_length(last_error_class) BETWEEN 1 AND 64
+            AND last_error_class !~ '[[:cntrl:]]'
+        )
+    ),
+    CONSTRAINT outbox_events_redrive_check CHECK (
+        redrive_count >= 0
+        AND (
+            (redrive_count = 0 AND last_redrive_id IS NULL AND last_redriven_at IS NULL)
+            OR (
+                redrive_count > 0
+                AND last_redrive_id IS NOT NULL
+                AND octet_length(last_redrive_id) BETWEEN 1 AND 256
+                AND last_redrive_id !~ '[[:cntrl:]]'
+                AND last_redriven_at IS NOT NULL
+            )
+        )
+    )
+) WITH (
+    fillfactor = 45,
+    autovacuum_vacuum_scale_factor = 0.01,
+    autovacuum_vacuum_threshold = 10000,
+    autovacuum_vacuum_insert_scale_factor = 0.01,
+    autovacuum_vacuum_insert_threshold = 10000,
+    autovacuum_analyze_scale_factor = 0.01,
+    autovacuum_analyze_threshold = 5000
+);
 
+-- Claim order and eligibility in one index. Excluding rows that are not their
+-- key's claimable head keeps a hot key's backlog out of the scan entirely.
+CREATE INDEX outbox_events_claim_idx
+    ON outbox_events (available_at, created_at, id)
+    WHERE published_at IS NULL
+      AND poisoned_at IS NULL
+      AND (ordering_key IS NULL OR ordering_ready);
+
+-- At most one claimable event per ordering key. This is what lets the relay
+-- publish a batch concurrently without reordering a key, and what lets one
+-- statement finalize a whole lease: a lease can never hold two events of the
+-- same key.
+CREATE UNIQUE INDEX outbox_events_ordering_ready_key
+    ON outbox_events (ordering_key)
+    WHERE published_at IS NULL
+      AND ordering_key IS NOT NULL
+      AND ordering_ready;
+
+-- Successor lookup during ordered finalization, and the uniqueness that still
+-- has work to do: at most one unpublished event per (key, sequence). Spanning
+-- published rows as well would reject nothing the retained high-water mark
+-- already rejects, while every ordered append paid to maintain it.
+CREATE UNIQUE INDEX outbox_events_ordering_pending_key
+    ON outbox_events (ordering_key, ordering_sequence)
+    WHERE published_at IS NULL AND ordering_key IS NOT NULL;
+
+CREATE INDEX outbox_events_cleanup_idx
+    ON outbox_events (published_at, id)
+    WHERE published_at IS NOT NULL;
+
+CREATE INDEX outbox_events_poison_idx
+    ON outbox_events (poisoned_at, id)
+    WHERE poisoned_at IS NOT NULL;
+
+-- State observation reads the pending set instead of every retained published
+-- row, so its cost tracks backlog rather than retention volume.
+CREATE INDEX outbox_events_pending_idx
+    ON outbox_events (created_at)
+    WHERE published_at IS NULL;
+
+-- A compact receipt outlives normal event cleanup so a writer can reconcile an
+-- ambiguous commit without retaining the full envelope. It intentionally has
+-- no foreign key or cleanup path: event_id is the immutable operation identity.
+CREATE TABLE outbox_commit_receipts (
+    event_id text COLLATE "C" PRIMARY KEY,
+    fingerprint_version smallint NOT NULL,
+    envelope_fingerprint bytea NOT NULL,
+    CONSTRAINT outbox_commit_receipts_event_id_check CHECK (
+        octet_length(event_id) BETWEEN 1 AND 256 AND event_id !~ '[[:cntrl:]]'
+    ),
+    CONSTRAINT outbox_commit_receipts_fingerprint_check CHECK (
+        octet_length(envelope_fingerprint) = 32
+    )
+);
+
+CREATE TABLE outbox_redrives (
+    audit_id text COLLATE "C" PRIMARY KEY,
+    event_id text COLLATE "C" NOT NULL,
+    action_kind text NOT NULL,
+    redriven_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+    cycle_number integer,
+    CONSTRAINT outbox_redrives_audit_id_check CHECK (
+        octet_length(audit_id) BETWEEN 1 AND 256 AND audit_id !~ '[[:cntrl:]]'
+    ),
+    CONSTRAINT outbox_redrives_event_id_check CHECK (
+        octet_length(event_id) BETWEEN 1 AND 256 AND event_id !~ '[[:cntrl:]]'
+    ),
+    CONSTRAINT outbox_redrives_action_check CHECK (
+        action_kind IN ('redrive_poison', 'redrive_unknown', 'confirm_accepted')
+    ),
+    CONSTRAINT outbox_redrives_cycle_check CHECK (
+        (action_kind = 'confirm_accepted') = (cycle_number IS NULL)
+        AND (cycle_number IS NULL OR cycle_number > 0)
+    )
+);
+
+CREATE INDEX outbox_redrives_event_idx ON outbox_redrives (event_id, cycle_number);
+
+-- Wake relays on commit instead of only on the poll timer. A statement-level
+-- trigger costs the appending transaction no extra client round trip, and
+-- PostgreSQL collapses duplicate (channel, payload) notifications inside one
+-- transaction. The signal is an optimization only: a relay that misses it still
+-- claims the row on its next poll.
+--
+-- Concurrent appends coalesce onto one signal. PostgreSQL collapses duplicates
+-- only within a transaction, so without this every concurrent appender queues
+-- its own notification onto a shared, lock-protected queue -- and a relay wakes
+-- on any one of them, so the rest are pure contention. The advisory lock is held
+-- until commit, so exactly one transaction of a concurrent group signals: with a
+-- single writer nothing changes and the wake-on-commit latency is untouched,
+-- while sixteen concurrent appenders cost 5% less unordered and 6% less ordered.
+--
+-- The cost is a tail: an appender that skipped the signal relies on the one that
+-- sent it, and if that notification is delivered before this transaction becomes
+-- visible, this event waits for `poll_interval` instead of a round trip. Under
+-- sustained load the next append covers it; at the end of a burst it does not.
+-- Drop the `IF` to trade that tail back for the contention.
 -- +goose StatementBegin
-CREATE FUNCTION river_job_state_in_bitmask(bitmask bit(8), state river_job_state)
-RETURNS boolean
-LANGUAGE sql
-IMMUTABLE
+CREATE FUNCTION outbox_notify_appended() RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = pg_catalog
 AS $$
-    SELECT CASE state
-        WHEN 'available' THEN get_bit(bitmask, 7)
-        WHEN 'cancelled' THEN get_bit(bitmask, 6)
-        WHEN 'completed' THEN get_bit(bitmask, 5)
-        WHEN 'discarded' THEN get_bit(bitmask, 4)
-        WHEN 'pending' THEN get_bit(bitmask, 3)
-        WHEN 'retryable' THEN get_bit(bitmask, 2)
-        WHEN 'running' THEN get_bit(bitmask, 1)
-        WHEN 'scheduled' THEN get_bit(bitmask, 0)
-        ELSE 0
-    END = 1;
+BEGIN
+    IF pg_try_advisory_xact_lock(4162899732) THEN
+        PERFORM pg_notify('outbox_appended', '');
+    END IF;
+    RETURN NULL;
+END
 $$;
 -- +goose StatementEnd
 
-CREATE UNIQUE INDEX river_job_unique_idx ON river_job (unique_key)
-    WHERE unique_key IS NOT NULL
-      AND unique_states IS NOT NULL
-      AND river_job_state_in_bitmask(unique_states, state);
-
-CREATE UNLOGGED TABLE river_leader (
-    elected_at timestamptz NOT NULL,
-    expires_at timestamptz NOT NULL,
-    leader_id text NOT NULL,
-    name text PRIMARY KEY DEFAULT 'default',
-    CONSTRAINT name_length CHECK (name = 'default'),
-    CONSTRAINT leader_id_length CHECK (char_length(leader_id) > 0 AND char_length(leader_id) < 128)
-);
-
-CREATE TABLE river_queue (
-    name text PRIMARY KEY,
-    created_at timestamptz NOT NULL DEFAULT now(),
-    metadata jsonb NOT NULL DEFAULT '{}',
-    paused_at timestamptz,
-    updated_at timestamptz NOT NULL DEFAULT current_timestamp
-);
-
-CREATE TABLE river_notification (
-    id bigserial PRIMARY KEY,
-    created_at timestamptz NOT NULL DEFAULT now(),
-    payload text NOT NULL,
-    topic text NOT NULL,
-    CONSTRAINT topic_length CHECK (length(topic) > 0 AND length(topic) < 128)
-);
-
-CREATE INDEX river_notification_created_at_idx ON river_notification (created_at);
-CREATE INDEX river_notification_topic_id_idx ON river_notification (topic, id);
+CREATE TRIGGER outbox_events_notify_appended
+    AFTER INSERT ON outbox_events
+    FOR EACH STATEMENT
+    EXECUTE FUNCTION outbox_notify_appended();
 
 -- +goose Down
 
-DROP TABLE river_notification;
-DROP TABLE river_queue;
-DROP TABLE river_job;
-DROP FUNCTION river_job_state_in_bitmask;
-DROP TYPE river_job_state;
-DROP TABLE river_leader;
-DROP TABLE river_migration;
+DROP TRIGGER outbox_events_notify_appended ON outbox_events;
+DROP FUNCTION outbox_notify_appended();
+DROP TABLE outbox_redrives;
+DROP TABLE outbox_commit_receipts;
+DROP TABLE outbox_events;
+DROP TABLE outbox_ordering_heads;

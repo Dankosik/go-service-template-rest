@@ -69,6 +69,11 @@ one-transaction PostgreSQL idempotency executor; an operation opts in with one
 OpenAPI declaration and supplies only its authorized business effect. See
 [PostgreSQL HTTP idempotency](docs/postgres-http-idempotency.md).
 <!-- profile:http-idempotency-postgres:end -->
+<!-- profile:jobs-postgres:start -->
+Choose `DATABASE=postgres JOBS=postgres` for typed River jobs inserted in the
+business transaction and executed by the separate jobs worker; see
+[PostgreSQL background jobs](docs/postgres-durable-background-jobs.md).
+<!-- profile:jobs-postgres:end -->
 <!-- profile:outbound-auth-oauth2-client-credentials:start -->
 Choose `OUTBOUND_AUTH=oauth2-client-credentials` only with
 `OUTBOUND_HTTP=bounded`, `GRPC=enabled`, or both; it retains one fixed machine
@@ -117,6 +122,9 @@ it, and read it here or in
 | Service foundation | Go 1.26, `chi v5`, `koanf v2`, graceful shutdown, health and readiness |
 | API contract | OpenAPI 3.0 and `oapi-codegen v2` with generated request bindings and typed responses |
 | Data | No database by default; optional PostgreSQL 17, `pgx v5`, `goose v3`, and `sqlc` profile |
+<!-- profile:jobs-postgres:start -->
+| Background jobs | Optional River-backed typed jobs with transactional insertion and a separate worker process |
+<!-- profile:jobs-postgres:end -->
 <!-- profile:outbox-postgres:start -->
 | Transactional outbox | Optional River-backed PostgreSQL job appended inside the business transaction and published by a separate NATS worker |
 <!-- profile:outbox-postgres:end -->

@@ -10,6 +10,7 @@ import (
 
 	"github.com/example/go-service-template-rest/internal/domainevent"
 	"github.com/example/go-service-template-rest/internal/infra/natsjs"
+	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	"github.com/example/go-service-template-rest/internal/infra/postgresoutbox"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry/telemetrytest"
 	"github.com/example/go-service-template-rest/internal/waittest"
@@ -52,7 +53,7 @@ func TestPostgresOutboxPublishesThroughRiverWithOriginalIdentityAndTrace(t *test
 		EnableSemanticMetrics:  true,
 		EnableTracePropagation: true,
 	})
-	riverClient, err := river.NewClient(riverpgxv5.New(pool.PGX()), &river.Config{
+	riverClient, err := river.NewClient(riverpgxv5.New(pool), &river.Config{
 		CancelledJobRetentionPeriod: -1,
 		DiscardedJobRetentionPeriod: -1,
 		Logger:                      slog.New(slog.DiscardHandler),
@@ -89,7 +90,7 @@ func TestPostgresOutboxPublishesThroughRiverWithOriginalIdentityAndTrace(t *test
 	if err != nil {
 		t.Fatalf("domainevent.New(): %v", err)
 	}
-	if err := pool.InTx(producing, pgx.TxOptions{}, func(tx pgx.Tx) error {
+	if err := postgres.InTx(producing, pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 		return appender.Append(producing, tx, event)
 	}); err != nil {
 		t.Fatalf("append event: %v", err)
@@ -119,7 +120,7 @@ func TestPostgresOutboxPublishesThroughRiverWithOriginalIdentityAndTrace(t *test
 	}
 	waittest.Until(t, 10*time.Second, func() bool {
 		var state string
-		return pool.PGX().QueryRow(ctx, "SELECT state::text FROM river_job WHERE args->>'id' = $1", event.ID).Scan(&state) == nil &&
+		return pool.QueryRow(ctx, "SELECT state::text FROM river_job WHERE args->>'id' = $1", event.ID).Scan(&state) == nil &&
 			state == "completed"
 	}, "River job completion")
 }

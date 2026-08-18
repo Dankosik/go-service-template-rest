@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"slices"
 	"strconv"
@@ -14,23 +13,23 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/example/go-service-template-rest/internal/infra/postgresjobs"
-	"github.com/example/go-service-template-rest/internal/jobs"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/riverqueue/river"
+	"github.com/riverqueue/river/riverdriver/riverpgxv5"
+	"github.com/riverqueue/river/rivertype"
+	"github.com/riverqueue/rivercontrib/otelriver"
 )
 
 const (
 	MaxEventDataBytes = 128 << 10
 	MaxReceivers      = 1000
+	maxIdentityBytes  = 256
+	deliveryKind      = "outbound_webhook"
+	maxAttempts       = 20
 	ownerScopeField   = "owner_scope"
 	receiverIDField   = "receiver_id"
 )
-
-var deliveryRevision = jobs.Revision{
-	Kind:          "outbound_webhook",
-	ArgsVersion:   "v1",
-	PolicyVersion: "standard_webhooks_v1",
-}
 
 type Event struct {
 	OwnerScope string
@@ -43,16 +42,17 @@ type Event struct {
 type ReceiverID string
 
 type Dispatcher struct {
-	endpoints  *EndpointManifest
-	definition jobs.Definition[deliveryArgs]
+	client    *river.Client[pgx.Tx]
+	endpoints *EndpointManifest
 }
 
 type preparedDelivery struct {
-	id  string
-	job jobs.Prepared
+	args        deliveryArgs
+	scheduledAt time.Time
 }
 
 type Prepared struct {
+	client     *river.Client[pgx.Tx]
 	deliveries []preparedDelivery
 }
 
@@ -68,6 +68,8 @@ const (
 )
 
 type deliveryArgs struct {
+	AcceptanceID            string          `json:"acceptance_id" river:"unique"`
+	DeliveryID              string          `json:"delivery_id"`
 	OwnerScope              string          `json:"owner_scope"`
 	ReceiverID              string          `json:"receiver_id"`
 	ReceiverGeneration      int64           `json:"receiver_generation"`
@@ -78,19 +80,22 @@ type deliveryArgs struct {
 	Body                    json.RawMessage `json:"body"`
 }
 
+func (deliveryArgs) Kind() string { return deliveryKind }
+
 func NewDispatcher(endpoints *EndpointManifest) (*Dispatcher, error) {
 	if endpoints == nil || len(endpoints.entries) == 0 {
 		return nil, fmt.Errorf("%w: endpoint manifest is required", ErrConfig)
 	}
-	definition, err := deliveryDefinition()
+	telemetry := otelriver.NewMiddleware(&otelriver.MiddlewareConfig{EnableTracePropagation: true})
+	client, err := river.NewClient(riverpgxv5.New(nil), &river.Config{Plugins: []rivertype.Plugin{telemetry}})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("initialize River webhook dispatcher: %w", err)
 	}
-	return &Dispatcher{endpoints: endpoints, definition: definition}, nil
+	return &Dispatcher{client: client, endpoints: endpoints}, nil
 }
 
 func (d *Dispatcher) Prepare(event Event, receivers []ReceiverID) (Prepared, error) {
-	if d == nil || d.endpoints == nil {
+	if d == nil || d.client == nil || d.endpoints == nil {
 		return Prepared{}, fmt.Errorf("%w: dispatcher is required", ErrConfig)
 	}
 	if err := validateEvent(event); err != nil {
@@ -103,7 +108,7 @@ func (d *Dispatcher) Prepare(event Event, receivers []ReceiverID) (Prepared, err
 	ordered := slices.Clone(receivers)
 	slices.Sort(ordered)
 	for i, receiver := range ordered {
-		if err := validateToken("receiver_id", string(receiver)); err != nil {
+		if err := validateToken(receiverIDField, string(receiver)); err != nil {
 			return Prepared{}, err
 		}
 		if i > 0 && receiver == ordered[i-1] {
@@ -128,29 +133,27 @@ func (d *Dispatcher) Prepare(event Event, receivers []ReceiverID) (Prepared, err
 		}
 		resolved[i] = endpoint
 	}
-	fanoutFingerprint := fingerprintFanout(event.OwnerScope, event.ID, resolved)
+	fanoutFingerprint := fingerprintFanout(event.OwnerScope, event.ID, body, resolved)
 	eventAnchor := deriveStableID("whe_", event.OwnerScope, event.ID)
-	prepared := Prepared{deliveries: make([]preparedDelivery, 0, len(ordered))}
-	availableAt := event.OccurredAt.UTC()
+	prepared := Prepared{client: d.client, deliveries: make([]preparedDelivery, 0, len(ordered))}
 	for i, receiver := range ordered {
 		endpoint := resolved[i]
 		deliveryID := deriveJobID(event.OwnerScope, event.ID, string(receiver), endpoint.Generation)
-		occurrenceID := deliveryID
+		acceptanceID := deliveryID
 		if i == 0 {
-			occurrenceID = eventAnchor
+			acceptanceID = eventAnchor
 		}
-		producerKey := deriveStableID("whr_", event.OwnerScope, event.ID, string(receiver))
 		args := deliveryArgs{
+			AcceptanceID: acceptanceID, DeliveryID: deliveryID,
 			OwnerScope: event.OwnerScope, ReceiverID: string(receiver), ReceiverGeneration: endpoint.Generation,
 			URL: endpoint.URL, ActiveKeyReference: endpoint.ActiveKeyReference,
 			PredecessorKeyReference: endpoint.PredecessorKeyReference,
 			FanoutFingerprint:       fanoutFingerprint, Body: body,
 		}
-		job, err := d.definition.Prepare(args, deliveryIdentity(deliveryID, producerKey, occurrenceID), availableAt)
-		if err != nil {
-			return Prepared{}, fmt.Errorf("prepare webhook delivery %s: %w", deliveryID, err)
+		if err := args.validate(); err != nil {
+			return Prepared{}, fmt.Errorf("prepare webhook delivery %s: %w", args.DeliveryID, err)
 		}
-		prepared.deliveries = append(prepared.deliveries, preparedDelivery{id: deliveryID, job: job})
+		prepared.deliveries = append(prepared.deliveries, preparedDelivery{args: args, scheduledAt: event.OccurredAt.UTC()})
 	}
 	return prepared, nil
 }
@@ -158,34 +161,32 @@ func (d *Dispatcher) Prepare(event Event, receivers []ReceiverID) (Prepared, err
 func (p Prepared) DeliveryIDs() []string {
 	ids := make([]string, len(p.deliveries))
 	for i := range p.deliveries {
-		ids[i] = p.deliveries[i].id
+		ids[i] = p.deliveries[i].args.DeliveryID
 	}
 	return ids
 }
 
 // Stage must be the final operation in the caller-owned transaction. The
 // caller rolls the transaction back when Stage returns an error.
-func (p Prepared) Stage(ctx context.Context, store *postgresjobs.Store, tx pgx.Tx) (AcceptanceStatus, error) {
-	if store == nil || tx == nil || len(p.deliveries) == 0 {
-		return AcceptanceUnknown, fmt.Errorf("%w: prepared deliveries, store, and transaction are required", ErrConfig)
+func (p Prepared) Stage(ctx context.Context, tx pgx.Tx) (AcceptanceStatus, error) {
+	if p.client == nil || tx == nil || len(p.deliveries) == 0 {
+		return AcceptanceUnknown, fmt.Errorf("%w: prepared deliveries and transaction are required", ErrConfig)
 	}
 	newCount := 0
 	existingCount := 0
 	for _, delivery := range p.deliveries {
-		result, err := store.Stage(ctx, tx, delivery.job)
+		result, err := p.client.InsertTx(ctx, tx, delivery.args, deliveryInsertOpts(delivery.scheduledAt))
 		if err != nil {
 			return AcceptanceUnknown, fmt.Errorf("stage webhook delivery: %w", err)
 		}
-		switch result.Outcome {
-		case jobs.StageNew:
+		if !result.UniqueSkippedAsDuplicate {
 			newCount++
-		case jobs.StageExisting:
-			existingCount++
-		case jobs.StageConflict:
-			return AcceptanceConflict, ErrConflict
-		case jobs.StageRejected:
-			return AcceptanceUnknown, fmt.Errorf("%w: jobs stage returned %q", ErrConfig, result.Outcome)
+			continue
 		}
+		if result.Job == nil || !sameDelivery(result.Job.EncodedArgs, delivery.args) {
+			return AcceptanceConflict, ErrConflict
+		}
+		existingCount++
 	}
 	if newCount != 0 && existingCount != 0 {
 		return AcceptanceConflict, fmt.Errorf("%w: partial fanout replay", ErrConflict)
@@ -196,67 +197,69 @@ func (p Prepared) Stage(ctx context.Context, store *postgresjobs.Store, tx pgx.T
 	return AcceptanceNew, nil
 }
 
-func (p Prepared) Resolve(ctx context.Context, store *postgresjobs.Store) (AcceptanceStatus, error) {
-	if store == nil || len(p.deliveries) == 0 {
-		return AcceptanceUnknown, fmt.Errorf("%w: prepared deliveries and store are required", ErrConfig)
+func (p Prepared) Resolve(ctx context.Context, pool *pgxpool.Pool) (AcceptanceStatus, error) {
+	if pool == nil || len(p.deliveries) == 0 {
+		return AcceptanceUnknown, fmt.Errorf("%w: prepared deliveries and pool are required", ErrConfig)
 	}
-	accepted := 0
-	notAccepted := 0
-	for _, delivery := range p.deliveries {
-		result, err := store.ResolveAcceptance(ctx, delivery.job.ReadbackExpectation())
-		if err != nil {
+	found := make(map[string]deliveryArgs, len(p.deliveries))
+	rows, err := pool.Query(ctx, `SELECT args FROM river_job WHERE kind = $1 AND args->>'delivery_id' = ANY($2)`, deliveryKind, p.DeliveryIDs())
+	if err != nil {
+		return AcceptanceUnknown, fmt.Errorf("resolve webhook acceptance: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var encoded []byte
+		if err := rows.Scan(&encoded); err != nil {
 			return AcceptanceUnknown, fmt.Errorf("resolve webhook acceptance: %w", err)
 		}
-		switch result.Outcome {
-		case jobs.ReadbackAccepted:
-			accepted++
-		case jobs.ReadbackNotAccepted:
-			notAccepted++
-		case jobs.ReadbackConflict:
-			return AcceptanceConflict, ErrConflict
-		case jobs.ReadbackUnknown:
-			return AcceptanceUnknown, errors.New("webhook acceptance remains unknown")
+		var args deliveryArgs
+		if err := json.Unmarshal(encoded, &args); err != nil {
+			return AcceptanceConflict, fmt.Errorf("%w: stored webhook arguments are invalid", ErrConflict)
 		}
+		found[args.DeliveryID] = args
 	}
-	if accepted == len(p.deliveries) {
-		return AcceptanceAccepted, nil
+	if err := rows.Err(); err != nil {
+		return AcceptanceUnknown, fmt.Errorf("resolve webhook acceptance: %w", err)
 	}
-	if notAccepted == len(p.deliveries) {
+	if len(found) == 0 {
 		return AcceptanceNotAccepted, nil
 	}
-	return AcceptanceConflict, fmt.Errorf("%w: fanout readback is not atomic", ErrConflict)
+	if len(found) != len(p.deliveries) {
+		return AcceptanceConflict, fmt.Errorf("%w: fanout readback is not atomic", ErrConflict)
+	}
+	for _, delivery := range p.deliveries {
+		stored, ok := found[delivery.args.DeliveryID]
+		if !ok || !equalDelivery(stored, delivery.args) {
+			return AcceptanceConflict, ErrConflict
+		}
+	}
+	return AcceptanceAccepted, nil
 }
 
-func deliveryDefinition() (jobs.Definition[deliveryArgs], error) {
-	definition, err := jobs.NewDefinition(jobs.DefinitionInput[deliveryArgs]{
-		Revision:        deliveryRevision,
-		MaxPayloadBytes: jobs.MaxPayloadBytes,
-		Validate:        deliveryArgs.validate,
-		Policy: jobs.Policy{
-			Effect: jobs.EffectPolicy{AmbiguousAction: jobs.AmbiguousEffectRetry},
-			Retry: jobs.RetryPolicy{
-				MaxAttempts: 20, MaxElapsed: 4 * 24 * time.Hour,
-				InitialBackoff: 5 * time.Second, MaxBackoff: 24 * time.Hour,
-				HintPolicy: jobs.RetryHintBackoffFloor, Jitter: jobs.JitterSHA256,
-				JitterPermille: 100, MaxRecoveryWave: 8,
-			},
-			Recovery: jobs.RecoveryPolicy{
-				Mode: jobs.RecoveryUnavailable, Attempts: jobs.BudgetPreserved, Elapsed: jobs.BudgetPreserved,
-			},
-			MaxAttemptDuration:  30 * time.Second,
-			TerminationEnvelope: 30 * time.Second,
-		},
-	})
-	if err != nil {
-		return jobs.Definition[deliveryArgs]{}, fmt.Errorf("define webhook job: %w", err)
+func deliveryInsertOpts(scheduledAt time.Time) *river.InsertOpts {
+	states := append(rivertype.UniqueOptsByStateDefault(), rivertype.JobStateCancelled, rivertype.JobStateDiscarded)
+	return &river.InsertOpts{
+		MaxAttempts: maxAttempts,
+		ScheduledAt: scheduledAt,
+		UniqueOpts:  river.UniqueOpts{ByArgs: true, ByState: states},
 	}
-	return definition, nil
+}
+
+func sameDelivery(encoded []byte, want deliveryArgs) bool {
+	var got deliveryArgs
+	return json.Unmarshal(encoded, &got) == nil && equalDelivery(got, want)
+}
+
+func equalDelivery(got, want deliveryArgs) bool {
+	return got.DeliveryID == want.DeliveryID &&
+		got.FanoutFingerprint == want.FanoutFingerprint
 }
 
 func (a deliveryArgs) validate() error {
 	for name, value := range map[string]string{
-		ownerScopeField: a.OwnerScope, receiverIDField: a.ReceiverID, "active_key_reference": a.ActiveKeyReference,
-		"fanout_fingerprint": a.FanoutFingerprint,
+		"acceptance_id": a.AcceptanceID, "delivery_id": a.DeliveryID,
+		ownerScopeField: a.OwnerScope, receiverIDField: a.ReceiverID,
+		"active_key_reference": a.ActiveKeyReference, "fanout_fingerprint": a.FanoutFingerprint,
 	} {
 		if err := validateToken(name, value); err != nil {
 			return err
@@ -289,15 +292,6 @@ func validateEvent(event Event) error {
 	return nil
 }
 
-func deliveryIdentity(deliveryID, producerKey, occurrenceID string) jobs.AcceptanceIdentity {
-	return jobs.AcceptanceIdentity{
-		LogicalJobID:  jobs.LogicalJobID(deliveryID),
-		ProducerScope: "webhook_receiver", ProducerKey: jobs.ProducerKey(producerKey),
-		OccurrenceScope: "webhook_event", OccurrenceID: jobs.OccurrenceID(occurrenceID),
-		EffectScope: "webhook", EffectKey: jobs.EffectKey(deliveryID),
-	}
-}
-
 func deriveJobID(owner, eventID, receiver string, generation int64) string {
 	return deriveStableID("whd_", owner, eventID, receiver, strconv.FormatInt(generation, 10))
 }
@@ -311,12 +305,14 @@ func deriveStableID(prefix string, values ...string) string {
 	return prefix + hex.EncodeToString(hash.Sum(nil))
 }
 
-func fingerprintFanout(owner, eventID string, endpoints []Endpoint) string {
+func fingerprintFanout(owner, eventID string, body []byte, endpoints []Endpoint) string {
 	hash := sha256.New()
 	for _, value := range []string{owner, eventID} {
 		_, _ = hash.Write([]byte(value))
 		_, _ = hash.Write([]byte{0})
 	}
+	_, _ = hash.Write(body)
+	_, _ = hash.Write([]byte{0})
 	for _, endpoint := range endpoints {
 		for _, value := range []string{
 			endpoint.ReceiverID, strconv.FormatInt(endpoint.Generation, 10), endpoint.URL,
@@ -330,7 +326,7 @@ func fingerprintFanout(owner, eventID string, endpoints []Endpoint) string {
 }
 
 func validateToken(name, value string) error {
-	if value == "" || len(value) > jobs.MaxIdentityBytes || !utf8.ValidString(value) ||
+	if value == "" || len(value) > maxIdentityBytes || !utf8.ValidString(value) ||
 		strings.IndexFunc(value, func(r rune) bool { return unicode.IsControl(r) || unicode.IsSpace(r) }) >= 0 {
 		return fmt.Errorf("%w: %s is invalid", ErrConfig, name)
 	}

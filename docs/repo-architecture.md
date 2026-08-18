@@ -264,10 +264,10 @@ builder and uses River's `InsertTx` for caller-owned PostgreSQL transactions; se
 
 <!-- profile:webhooks-durable:start -->
 The optional durable webhook pack prepares a complete immutable fan-out before
-the feature transaction and stages one `postgresjobs` row per receiver inside
-that transaction. `cmd/jobs-worker` runs the registered webhook definition;
+the feature transaction and inserts one typed River job per receiver inside
+that transaction. `cmd/jobs-worker` runs the registered webhook worker;
 the adapter signs one bounded public-HTTPS request and maps its result into the
-generic jobs outcome vocabulary. It has no separate worker, delivery ledger,
+River completion/retry contract. It has no separate worker, delivery ledger,
 subscriber administration, or operator API; see [Outbound webhook delivery](outbound-webhook-delivery.md).
 <!-- profile:webhooks-durable:end -->
 
