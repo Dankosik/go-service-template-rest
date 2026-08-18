@@ -70,6 +70,35 @@ first governed action.
 | Worker completion signalling | Native completion and status events | Background-task completion notifications; continue an existing worker with `SendMessage` | Background-task completion notifications; continue an existing worker with `send_message` |
 | Reach an independent session this one did not spawn | — | `/list-agents` to discover, `SendMessage` by name ([Cross-Session Messaging](#cross-session-messaging)) | — |
 
+### Write-Carrier Gate
+
+Before an `IMPLEMENTATION_WORKER` may write, its Lead records in the Execution
+Map the carrier required by the current harness, the actual native backing and
+identity returned by that control, and the isolated checkout or Worktree
+identity. A role label, write-capable tool set, or successful dispatch is not
+carrier proof; all recorded fields must match the Control Map's Implementation
+Worker row before the first file change.
+
+In the Codex App, only a separate top-level App task in Worktree mode with its
+`threadId`, `hostId`, and Worktree backing recorded satisfies this gate. A
+`subAgentActivity`, `collaboration.spawn_agent` child, or any agent writing in
+the Lead's checkout is a read-only/subtask carrier regardless of its prompt or
+role name and fails the gate. Its availability does not create a fallback write
+route.
+
+A mismatch discovered before a write cancels the lane and releases its
+reservations. A mismatch discovered after a write interrupts the actor, freezes
+its bytes and proof as diagnostic evidence only, and forbids integration,
+acceptance, or proof reuse from that candidate. Re-run the exact slice from its
+original frozen base through a valid carrier, or record the missing-carrier or
+base-materialization blocker. No in-flight or completed lane is grandfathered.
+
+The isolated checkout contains the frozen Git base, not Lead-staged input
+copies. An ignored, external, or otherwise non-Git input crosses as an immutable
+read-only locator plus its expected identity; the Worker validates it before
+the first edit and again before `DONE`. The Lead never copies input bytes into
+the Worker checkout. A missing, unreadable, or drifted locator blocks the slice.
+
 ### Read-Only Lane Carrier
 
 Freshness is a context property, not a top-level task boundary. Every read-only
@@ -142,13 +171,15 @@ are authoritative for the installed App when they differ from public prose.
   native default branch must equal the recorded base; otherwise creation blocks
   before dispatch.
 - For each internal Worker slice, the Lead applies the Role Tree's
-  base-materialization preflight. For a working-tree base it records the
-  synthetic Git tree ID, creates the Worktree child from `startingState:
-  working-tree`, and makes the child validate that identity before editing.
-  Create concurrently ready children sharing that identity without an
-  intervening local mutation. Any mismatch invalidates the unedited child and
-  triggers a fresh DAG calculation. This authority applies only to internal
-  Workers; it does not select a different top-level Lead base.
+  base-materialization preflight and [Write-Carrier Gate](#write-carrier-gate).
+  For a working-tree base it records the synthetic Git tree ID, creates the
+  top-level Worktree child from `startingState: working-tree`, records its
+  actual backing and native identity, and makes the child validate that tree
+  before editing. Create concurrently ready children sharing that identity
+  without an intervening local mutation. Any carrier or base mismatch
+  invalidates the unedited child and triggers a fresh DAG calculation. This
+  authority applies only to internal Workers; it does not select a different
+  top-level Lead base.
 
 ### Identity, wait, and correction
 

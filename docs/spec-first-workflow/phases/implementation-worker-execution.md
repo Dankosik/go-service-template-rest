@@ -76,7 +76,7 @@ flowchart TD
 | Role | Receives from | Owns | May dispatch | Upward result |
 | --- | --- | --- | --- | --- |
 | `LEDGER_ORCHESTRATOR` — Ledger Orchestrator | Ready canonical ledger and explicit task-creation authority | Ready-unit selection, agent-owned upstream-reopen routing, native task lifecycle, and terminal routing | One `ACCEPTANCE_UNIT_LEAD` per ready unit; several only for a ledger-proven planned wave; one `UPSTREAM_REOPEN_LEAD` at a time | Ledger exhausted; an AGENTS-owned user decision or external confirmation; an unrecoverable native blocker; or a canonical blocker with neither ready work nor authorized recovery |
-| `ACCEPTANCE_UNIT_LEAD` — Acceptance-Unit Lead | Ledger Orchestrator or another Implementation entry carrying explicit Worker-task authority | Exactly one unit through decisions, Slice DAG scheduling, Worker intake, serial integration, review, proof, correction routing, acceptance, and receipt | One or more implementation Workers for every implementation write; optional read-only specialists and a triggered reviewer | `HANDOFF_READY` for a fixed Worktree candidate, then one canonical `Accepted:` receipt or `Blocked:` record |
+| `ACCEPTANCE_UNIT_LEAD` — Acceptance-Unit Lead | Ledger Orchestrator or another Implementation entry carrying explicit Worker-task authority | Exactly one unit through decisions, Slice DAG scheduling, Worker intake, serial integration, review, proof, correction routing, acceptance, and receipt | One or more harness-valid implementation Workers for every implementation write; optional read-only specialists and a triggered reviewer | `HANDOFF_READY` for a fixed Worktree candidate, then one canonical `Accepted:` receipt or `Blocked:` record |
 | `UPSTREAM_REOPEN_LEAD` — Upstream Reopen Lead | Ledger Orchestrator and one canonical unit blocker | Exactly one named non-implementation macro phase through its phase stop rule, triggered review, repair, and focused re-review | Phase-eligible read-only lanes and triggered reviewers under Subagents And Review | Review-cleared phase result and next owner, or the exact user/external/native boundary that prevents closure |
 | `READ_ONLY_SPECIALIST` — Read-Only Specialist | Acceptance-Unit Lead | One independently checkable question | Nothing; it is a leaf | `DONE` with evidence, or `NEEDS_PARENT` |
 | `IMPLEMENTATION_WORKER` — Implementation Worker | Acceptance-Unit Lead | One exact write slice and its focused proof | Nothing; it is a leaf | `DONE` with a frozen candidate, or `NEEDS_PARENT` |
@@ -217,6 +217,10 @@ Slices:
 - id: <slice ID>
   outcome: <one implementation postcondition>
   base: <initial Base, or after slice IDs; replace with exact tree ID before dispatch>
+  carrier:
+    required: <current Agent Harness Implementation Worker carrier>
+    actual: <pending before create; exact backing kind and native IDs before write>
+    checkout: <pending before create; exact isolated checkout or Worktree identity before write>
   writes: <exact paths>
   inputs:
   - <path, package surface, contract, schema, artifact, state, or proof result>: <exact Git blob/tree, revision, digest, or receipt identity>
@@ -246,6 +250,14 @@ identities are refreshed. Every pair that shares a writable path, exclusive
 mutable resource, or exclusive proof gate appears in `Conflicts` unless a named
 consumption instead requires an edge.
 
+Resolve `carrier.required` from the Agent Harness [Write-Carrier
+Gate](../../agent-harness.md#write-carrier-gate) before dispatch. Replace
+`carrier.actual` and `carrier.checkout` from the native create result before the
+first write. A role label or write-capable child does not satisfy the gate. A
+carrier mismatch makes the slice unready; if it wrote before detection, its
+candidate and proof are diagnostic only and the Lead follows the Gate's
+base-preserving rerun or blocker disposition.
+
 For a working-tree base, create the synthetic Git tree with a temporary index so
 it covers every tracked and untracked non-ignored path and byte without changing
 the repository index or working tree; a path-only status is insufficient. Every
@@ -262,6 +274,12 @@ the focused tests and fixtures that prove its postcondition **must** stay in the
 same slice. A separate test-only slice is valid only when its interface already
 exists in the frozen base and its deterministic oracle needs no provisional
 sibling output.
+
+An input outside the frozen Git tree remains at its accepted owner and crosses
+the lane boundary as a read-only absolute or durable locator plus exact
+identity. The Lead does not copy or recreate its bytes in the Worker checkout.
+The Worker validates every such locator before editing and before `DONE`; a
+missing, unreadable, or changed input returns `NEEDS_PARENT` without a write.
 
 A unit has a **large writable surface** when bounded discovery finds at least
 eight implementation paths, three package or owner surfaces, or two independent
@@ -361,17 +379,25 @@ write.
 At every scheduling point, a slice is **ready** only when:
 
 - every declared predecessor is integrated;
+- `carrier.required` names the current-harness Implementation Worker carrier and
+  its native create control is available;
 - its exact frozen base is materializable and every declared input identity
   matches that base and current external state;
 - it has no declared writable-path, mutable-resource, or proof-gate conflict
   with an active Worker; and
 - its focused proof needs no provisional output outside its predecessors.
 
-Capacity is evidence, not a Lead estimate. Derive free write slots from the
-installed native limit or status and every active Worker carrier identity
-visible in the current harness/project; derive proof and resource availability
-from repository-owned serialization rules and current reservations. When the
-native write limit is unavailable,
+Dispatch reserves the slice but grants no write authority. The created slice
+becomes write-ready only after `carrier.actual`, the native identity, and
+`carrier.checkout` pass the Agent Harness Write-Carrier Gate against its frozen
+base. A failed gate releases the reservation and applies the Gate's invalid
+carrier disposition.
+
+Capacity is evidence, not a Lead estimate. Count only carriers that pass the
+Write-Carrier Gate. Derive free write slots from the installed native limit or
+status and every valid active Worker carrier identity visible in the current
+harness/project; derive proof and resource availability from repository-owned
+serialization rules and current reservations. When the native write limit is unavailable,
 dispatch eligible ready slices one at a time: every successful create proves
 another occupied slot and requires trying the next eligible slice, while a
 native capacity refusal bounds further dispatch at the current active count.
@@ -413,6 +439,8 @@ Outcome: <one checkable postcondition>
 Unit: <unit ID and accepted revision>
 Lane: <slice ID or question ID>
 Base: <exact frozen tree or state identity>
+Carrier: <required current-harness carrier and actual native backing/identity>
+Checkout: <exact isolated checkout or Worktree identity>
 Writes: <exact paths, or none>
 Inputs: <immutable identities consumed by this lane>
 Resources: <exclusive mutable resources, or none>
