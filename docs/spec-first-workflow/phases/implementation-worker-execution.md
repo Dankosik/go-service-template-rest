@@ -275,6 +275,12 @@ same slice. A separate test-only slice is valid only when its interface already
 exists in the frozen base and its deterministic oracle needs no provisional
 sibling output.
 
+An input outside the frozen Git tree remains at its accepted owner and crosses
+the lane boundary as a read-only absolute or durable locator plus exact
+identity. The Lead does not copy or recreate its bytes in the Worker checkout.
+The Worker validates every such locator before editing and before `DONE`; a
+missing, unreadable, or changed input returns `NEEDS_PARENT` without a write.
+
 A unit has a **large writable surface** when bounded discovery finds at least
 eight implementation paths, three package or owner surfaces, or two independent
 focused proof surfaces. Count a unique expanded authorized file as one

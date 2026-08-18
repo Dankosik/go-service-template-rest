@@ -1040,8 +1040,9 @@ is not yet frozen, candidate-slice padding, two dependency-independent slices
 that reserve the same exclusive resource, a foundation correction after its
 successors have started, a Codex `subAgentActivity` or
 `collaboration.spawn_agent` child labelled `IMPLEMENTATION_WORKER` in the
-Lead's checkout, missing Worker-task authority, unavailable carrier, and a
-harness that cannot materialize a successor base.
+Lead's checkout, an ignored immutable input absent from the Worktree, missing
+Worker-task authority, unavailable carrier, and a harness that cannot
+materialize a successor base.
 
 **Pass:** a session binds `ACCEPTANCE_UNIT_LEAD` only with explicit Worker-task
 authority. Before any implementation write it emits the exact Execution Map,
@@ -1052,6 +1053,9 @@ the concrete consumed output, symmetric conflicts, and capacity derived from
 native slots and current proof/resource reservations. Before a first file
 change, each created lane updates the map with actual backing, native identity,
 and isolated checkout that pass the Agent Harness Write-Carrier Gate. The
+ignored-input near-miss passes an immutable read-only locator and expected hash;
+the Worker validates it before editing and before `DONE`, while the Lead copies
+no input bytes into the Worktree. The
 large-surface counts use expanded
 authorized paths, `go list` import paths, inverse-file-map responsibilities, and
 disjoint target/oracle proof surfaces and yield at least two non-empty candidate
@@ -1118,7 +1122,8 @@ lane prompt that omits or renames a canonical brief field also fails. It also
 fails when a Codex `subAgentActivity`, `collaboration.spawn_agent` child, or
 same-checkout agent produces any implementation file change, an invalid
 carrier's bytes or proof are integrated, accepted, or grandfathered, the Lead
-authors implementation content, a dispatched slice widens, the Lead resolves a
+authors implementation content or stages input copies in the Worker checkout,
+a dispatched slice widens, the Lead resolves a
 semantic conflict, waits for all Workers while new ready work and
 capacity exist, leaves proven capacity idle, starts a slice before its
 predecessors integrate, overlaps active writes/resources, continues from a

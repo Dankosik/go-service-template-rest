@@ -93,6 +93,12 @@ acceptance, or proof reuse from that candidate. Re-run the exact slice from its
 original frozen base through a valid carrier, or record the missing-carrier or
 base-materialization blocker. No in-flight or completed lane is grandfathered.
 
+The isolated checkout contains the frozen Git base, not Lead-staged input
+copies. An ignored, external, or otherwise non-Git input crosses as an immutable
+read-only locator plus its expected identity; the Worker validates it before
+the first edit and again before `DONE`. The Lead never copies input bytes into
+the Worker checkout. A missing, unreadable, or drifted locator blocks the slice.
+
 ### Read-Only Lane Carrier
 
 Freshness is a context property, not a top-level task boundary. Every read-only
