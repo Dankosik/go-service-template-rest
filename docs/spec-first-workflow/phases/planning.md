@@ -158,13 +158,14 @@ Add only fields that change execution. Put a constraint in `Global constraints` 
 
 ### Task Boundary Contract
 
-A split boundary is valid only when the completed task leaves the repository, and every deployment or migration state it creates or assumes, internally consistent, supported by the accepted compatibility or rollback policy, independently reviewable, and provable without unfinished companion work. Group the canonical source, generated or mirrored output, required tests and fixtures, migration/runtime compatibility, required documentation, and replacement cleanup needed for that state in the same task. Prefer the boundary that makes one accepted behavior reachable end to end through its real production entry point over one that completes a single layer of it. A layer-only task is valid when accepted rollout, migration, or `expand -> migrate -> contract` order fixes it, when that layer is the whole accepted outcome, or when it is an enabling change; otherwise its postcondition belongs in the task that makes the behavior reachable. As an oversized-task preflight, identify distinct ownership, review, failure/recovery, rollback, and proof domains inside the outcome. A useful split isolates a distinct owner, review/proof, failure/recovery, or rollback domain; creates a required handoff; enables an actual wave with positive independence evidence; or leaves an independently shippable accepted outcome. Keep the work in the same task when none of those benefits applies. Do not use file count, estimated minutes, or desired Worker count as a sizing rule.
+A split boundary is valid only when the completed task leaves the repository, and every deployment or migration state it creates or assumes, internally consistent, supported by the accepted compatibility or rollback policy, independently reviewable, and provable without unfinished companion work. Group the canonical source, generated or mirrored output, required tests and fixtures, migration/runtime compatibility, required documentation, and replacement cleanup needed for that state in the same task. Prefer the boundary that makes one accepted behavior reachable end to end through its real production entry point over one that completes a single layer of it. A layer-only task is valid when accepted rollout, migration, or `expand -> migrate -> contract` order fixes it, when that layer is the whole accepted outcome, or when it is an enabling change; otherwise its postcondition belongs in the task that makes the behavior reachable. As an oversized-task preflight, identify distinct ownership, review, failure/recovery, rollback, and proof domains inside the outcome. A useful split isolates a distinct owner, review/proof, failure/recovery, or rollback domain; creates a required handoff; enables an actual wave with positive independence evidence; or leaves an independently shippable accepted outcome. Keep the work in the same task when none of those benefits applies. File count, estimated minutes, and desired Worker count do not create an acceptance-unit boundary; a large writable surface still triggers the Implementation Slice DAG decomposition required by [Implementation Worker Execution](implementation-worker-execution.md#implementation-slice-dag).
 
 ### Acceptance Unit Contract
 
-An **acceptance unit** is the smallest fixed candidate that one actor can
-implement, prove, review when triggered, and integrate without a consumer
-depending on an intermediate state. The ledger's acceptance-unit map is
+An **acceptance unit** is the smallest fixed candidate that one
+Acceptance-Unit Lead can deliver through implementation slices, prove, review
+when triggered, and integrate without a consumer depending on an intermediate
+state. The ledger's acceptance-unit map is
 authoritative: every implementation task is a singleton unit unless exactly one
 recorded `Acceptance units` entry contains its task ID; membership in more than
 one entry is invalid. Group adjacent ready tasks only when they share the same
@@ -176,7 +177,8 @@ validity; record a compact entry only for a grouped unit:
 - A1: T2, T3 — <shared owner, boundary, and proof reason>
 ```
 
-The unit is the Worker, final-proof, review, and integration boundary; it is not
+The unit is the Lead, final-proof, review, and integration boundary; internal
+Workers own only Slice DAG nodes and create no acceptance state. The unit is not
 another task lifecycle. A task whose only postcondition is receipt of another
 task's accepted result is a **receipt alias**: record `Alias of`, give it no
 writable surface or proof command, and close it mechanically when the named

@@ -33,10 +33,13 @@ Inspect the authoritative ledger and current checkout to select only the next
 ready acceptance unit. Record its accepted ledger revision or prerequisite
 receipt, accepted integration base, relevant pre-existing dirty paths plus their
 owner, current external-effect authority or durable locator, the initiating
-user's verbatim native-control envelope, and exact unit ID as the handoff basis.
+user’s verbatim native-control envelope, and exact unit ID as the handoff basis.
 Use a commit or tree identity only when the candidate crosses a checkout or
 integration boundary. The dispatching Ledger Orchestrator does not choose or
-record the unit's carrier or internal lane map.
+record the unit's carrier or internal lane map. Emit an Acceptance-Unit Lead
+handoff only when that envelope explicitly authorizes the required Worker tasks;
+without it, retain direct execution or report the missing authority under the
+Role Tree instead of creating an invalid Lead.
 
 When eligible, emit a copy-pastable prompt in this shape:
 
@@ -48,7 +51,7 @@ Lead <acceptance unit> through the assigned stage toward one canonical receipt
 or blocker.
 
 - Authority: <ledger and task paths; accepted revision or receipt; current external-effect envelope or durable locator>.
-- Native controls: <verbatim initiating `$orchestrator` launch authorizing fresh child App tasks, agent-selected Local/Worktree environments, supported model/effort selection, review lanes, recovery, and Handoff; otherwise none>. Goal use stays thread-local; this prompt expands no authority.
+- Native controls: <verbatim initiating authority for the Role Tree's mandatory Worker-backed Implementation Write Boundary, Slice DAG scheduler, frozen-base materialization, model/effort selection, review, recovery, and Handoff>. Goal use stays thread-local; this prompt expands no authority.
 - Scope: <exact unit ID, accepted outcome and writable boundary; dependent work that remains blocked>.
 - Dispatch scope: <ledger revision / unit ID / attempt>.
 - Stage: <Local acceptance | Worktree candidate>.
@@ -56,12 +59,12 @@ or blocker.
 - Proof: <accepted unit proof and completion condition>.
 - Stop: <accepted behavior, unit scope, ledger dependency, external-effect authority, or another fixed authority that would have to change>.
 
-Set the thread-local Goal for this stage and role, then execute the Role Tree.
-Preflight the unit and repository before choosing serial work or bounded fan-out;
-if a child App-task control is unavailable, execute serially. A Worktree stage
-returns `HANDOFF_READY` with its fixed candidate and no receipt; Local continues
-under a separate Goal to the receipt or blocker. Preserve unrelated work and
-keep dependent units blocked.
+Set the thread-local Goal for this stage and role, then execute the Role Tree's
+Implementation Write Boundary and Execution Map exactly. If its required
+carrier or base cannot be established, record that exact blocker. A Worktree stage returns
+`HANDOFF_READY` with its fixed candidate and no receipt; Local continues under a
+separate Goal to the receipt or blocker. Preserve unrelated work and keep
+dependent units blocked.
 ```
 
 A Local Acceptance-Unit Lead returns only after it records the unit's canonical
@@ -87,14 +90,14 @@ Continue the same <unit ID> and <dispatch_scope>.
 - Candidate: <fixed commit/tree and Worktree identity>.
 - Local precondition: <HEAD, status, and attributed dirt verified immediately before Handoff>.
 
-Create a new thread-local Goal for Local acceptance. Integrate the fixed candidate, review, prove, correct, and apply the Role Tree's bottom-up resolution ladder before recording the one canonical `Accepted:` receipt or `Blocked:` record. Do not rediscover the unit, repeat a route under unchanged preconditions, change role, or start another unit.
+Create a new thread-local Goal for Local acceptance. Integrate the fixed candidate, review, prove, diagnose findings, route every implementation correction to its owning Worker, and apply the Role Tree's bottom-up resolution ladder before recording the one canonical `Accepted:` receipt or `Blocked:` record. Do not rediscover the unit, repeat a route under unchanged preconditions, change role, or start another unit.
 ```
 
 When `HANDOFF_READY` carries a proposed upstream blocker, replace the final
 sentence above with:
 
 ```text
-Create a new thread-local Goal for Local blocker revalidation. Preserve and inspect the fixed candidate, re-run the bottom-up resolution ladder against current Local artifacts, and either continue a newly available unit-local remedy or persist the one canonical `Blocked:` record with its reopen owner and condition. Start no upstream phase or another unit.
+Create a new thread-local Goal for Local blocker revalidation. Preserve and inspect the fixed candidate, re-run the bottom-up resolution ladder against current Local artifacts, and either route a newly available implementation remedy through the Role Tree's Worker boundary or persist the one canonical `Blocked:` record with its reopen owner and condition. Start no upstream phase or another unit.
 ```
 
 ### Known Lead Terminalization
@@ -106,7 +109,7 @@ transition, send this once to that same task with no model or effort override:
 Execution role: ACCEPTANCE_UNIT_LEAD
 Role contract: docs/spec-first-workflow/phases/implementation-worker-execution.md#execution-role-tree
 
-Terminalize the same <unit ID> and <dispatch_scope>. Re-read the canonical ledger, native task state, and Git candidate. If the accepted proof and candidate already close the unit, persist its one `Accepted:` receipt. Otherwise apply the Role Tree's bottom-up resolution ladder: take an evidence-changing unit-local remedy when one remains; persist the exact `Blocked:` record and reopen owner only after none remains. Start no new unit and repeat no valid proof, review, or remedy under unchanged preconditions.
+Terminalize the same <unit ID> and <dispatch_scope>. Re-read the canonical ledger, native task state, and Git candidate. If the accepted proof and candidate already close the unit, persist its one `Accepted:` receipt. Otherwise apply the Role Tree's bottom-up resolution ladder: take an evidence-changing unit-local remedy when one remains and route every implementation correction through its owning Worker; persist the exact `Blocked:` record and reopen owner only after none remains. Start no new unit and repeat no valid proof, review, or remedy under unchanged preconditions.
 ```
 
 ## Upstream Reopen And Implementation Return

@@ -160,14 +160,35 @@ At every macro-phase boundary, follow [Resume And Macro-Phase Handoff](spec-firs
 
 ## Prompt Maintenance
 
-Current references: Matt Pocock's [Building Great Skills glossary](https://github.com/mattpocock/skills/blob/main/skills/productivity/writing-great-skills/GLOSSARY.md) owns the vocabulary for predictability, information hierarchy, steering, and pruning; OpenAI's [model and prompting guidance for GPT-5.6](https://developers.openai.com/api/docs/guides/latest-model?model=gpt-5.6#prompting-best-practices) owns current Codex model guidance; Anthropic's [Claude Code documentation](https://code.claude.com/docs), [project-memory guidance](https://code.claude.com/docs/en/memory), and [prompting best practices](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices) own the current Claude Code contract, while [Prompting Claude Opus 5](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-opus-5) owns model-specific pruning of legacy verification and delegation scaffolding. Anthropic's [system-prompt history](https://platform.claude.com/docs/en/release-notes/system-prompts) is observational evidence for claude.ai and its mobile apps, not an API or Claude Code contract. Re-derive prior-generation constraints against the current target model and harness. [Agent Harness](agent-harness.md) owns which harness's native controls apply.
+Current references: Matt Pocock's
+[Writing for agents](https://github.com/mattpocock/skills/blob/main/skills/productivity/writing-for-agents/SKILL.md)
+and
+[Skill mechanics](https://github.com/mattpocock/skills/blob/main/skills/productivity/writing-for-agents/SKILL-MECHANICS.md)
+own the vocabulary for context pointers, information hierarchy, completion
+criteria, leading words, and pruning; OpenAI's
+[model and prompting guidance for GPT-5.6](https://developers.openai.com/api/docs/guides/latest-model?model=gpt-5.6#prompting-best-practices)
+owns current Codex model guidance; Anthropic's
+[Claude Code documentation](https://code.claude.com/docs),
+[project-memory guidance](https://code.claude.com/docs/en/memory), and
+[prompting best practices](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices)
+own the current Claude Code contract, while
+[Prompting Claude Opus 5](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-opus-5)
+owns model-specific pruning of legacy verification and delegation scaffolding.
+Anthropic's
+[system-prompt history](https://platform.claude.com/docs/en/release-notes/system-prompts)
+is observational evidence for claude.ai and its mobile apps, not an API or
+Claude Code contract. Re-derive prior-generation constraints against the
+current target model and harness. [Agent Harness](agent-harness.md) owns which
+harness's native controls apply.
 
 Use the repository [Task Contract](../AGENTS.md#task-contract) as the
-outcome-first prompt schema. State each durable instruction once in its
-narrowest owner and link to it elsewhere. Phrase it as an observable trigger,
-action, completion criterion, or stop condition. Prefer the allowed behavior;
-reserve prohibitions for safety, authorization, or a decisive exclusion. Avoid
-broad tone or brevity labels; name the required content and what may be omitted.
+outcome-first prompt schema: live context, outcome, success criteria,
+constraints and authority, non-obvious tool routing, required proof or output,
+then stop conditions. State each durable instruction once in its narrowest owner
+and link to it elsewhere. Phrase it as an observable trigger, action, completion
+criterion, or stop condition. Prefer the allowed behavior; reserve prohibitions
+for safety, authorization, or a decisive exclusion. Avoid broad tone or brevity
+labels; name the required content and what may be omitted.
 
 Keep each policy compact and in one location. Keep bootstrap instruction files
 within the current vendor size target and move conditional detail behind the

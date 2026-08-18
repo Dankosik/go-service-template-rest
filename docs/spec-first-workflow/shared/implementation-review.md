@@ -48,7 +48,7 @@ received: <task or unit IDs>
 recorded units: <matching singleton or grouped units, or none>
 ```
 
-The acceptance owner corrects the boundary and opens a fresh one-shot lane.
+The acceptance owner repairs the review handoff and opens a fresh one-shot lane.
 An inline direct outcome has no ledger IDs; its fixed accepted outcome and
 bounded candidate are the complete review boundary.
 
