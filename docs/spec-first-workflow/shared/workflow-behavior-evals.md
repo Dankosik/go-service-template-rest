@@ -8,15 +8,18 @@ lower latency, tool traffic, and context load where quality stays equal.
 This file owns eval cases and assertions. It does not pretend to execute an
 agent or judge model behavior. Run the cases in the real target harness and
 model, using the same repository snapshot and task inputs for baseline and
-candidate. Current method references are the [Building Great Skills
-glossary](https://github.com/mattpocock/skills/blob/main/skills/productivity/writing-great-skills/GLOSSARY.md)
-and OpenAI's [latest model prompting
-guidance](https://developers.openai.com/api/docs/guides/latest-model?model=gpt-5.6#prompting-best-practices).
+candidate. Current method references are Matt Pocock's
+[Writing for agents](https://github.com/mattpocock/skills/blob/main/skills/productivity/writing-for-agents/SKILL.md)
+and
+[Skill mechanics](https://github.com/mattpocock/skills/blob/main/skills/productivity/writing-for-agents/SKILL-MECHANICS.md),
+plus OpenAI's
+[latest model prompting guidance](https://developers.openai.com/api/docs/guides/latest-model?model=gpt-5.6#prompting-best-practices).
 
 ## Run Contract
 
 Capture the root and lane tool trace, durable artifacts, final diff, proof
-receipts, verdicts, root and lane input tokens when the harness reports them,
+receipts, verdicts, root and lane input tokens at the first technical turn,
+major milestones, and before the final answer when the harness reports them,
 compaction events, total tokens, wall time, wait time, tool calls, messages,
 correction batches, and model/effort choices. For orchestration cases also
 capture each assigned execution role, the Role Tree read before the first
@@ -26,12 +29,20 @@ accepted base, requested `startingState`, candidate identity, Handoff
 `operationId` and revision stream, upstream-reopen scope and phase sequence,
 Goal-resume outcome, replacement predecessor and attempt, artifact transitions,
 pin/archive lifecycle, and proof/reviewer invocation counts. For each fresh App
-task also capture its
-single role-and-scope bootstrap create with no model or effort override, exact
+task also capture its single role-and-scope bootstrap create with no model or
+effort override, exact
 `READY_FOR_DISPATCH` result, one technical follow-up with the direct parent's
 selected model and effort when the installed control supports them, effective
 fallback values, returned native identity, and first technical turn. Redact
 secrets without changing event order.
+
+For each Acceptance-Unit Lead, also capture the emitted Slice DAG, large-surface
+trigger inputs and their normalized counts, every slice's writes and immutable
+input identities, every dependency edge and consumed output, every symmetric
+conflict and reserved resource, frozen base identity, capacity source and free
+write slots, proof/resource reservations, every ready-set transition, dispatch
+and first-completion order, integration order, correction invalidation closure,
+and any interval where capacity was idle while a slice was ready.
 
 For each instruction change:
 
@@ -50,8 +61,9 @@ For each instruction change:
    load without a quality loss.
 
 For a change that can affect implementation or Worker behavior, use at least
-one ordinary unit, one high-risk unit, one Worker correction, and one
-multi-Worker wave. For a non-implementation fan-out change, use at least one
+one ordinary single-write unit, one high-risk unit, one Worker correction, and
+one large-surface dependency DAG whose ready set changes while another Worker
+remains active. For a non-implementation fan-out change, use at least one
 Research case, one Technical Design case, and one dependent or duplicate
 near-miss in a third non-implementation macro phase. A single happy path cannot
 qualify a workflow change.
@@ -84,9 +96,10 @@ improvement cannot offset a behavior, scope, or proof regression.
 **Given:** structured or orchestrated work whose ready `tasks.md` exists only as
 an untracked or working-tree file.
 
-**Pass:** Worker dispatch is withheld; the root either places the exact ledger
-and cited durable authority in the accepted integration base or executes
-root-locally. A later Worker receives the visible ledger path and IDs.
+**Pass:** Worker dispatch is withheld until the root places the exact ledger and
+cited durable authority in the accepted integration base. A later Lead and each
+of its Workers receive the visible ledger path and IDs. Missing Worker-task
+authority blocks this planned unit rather than converting it to root-local work.
 
 **Fail:** a Worker starts from a base that cannot contain the exact accepted
 ledger, or its prompt reconstructs that authority from chat.
@@ -97,8 +110,9 @@ ledger, or its prompt reconstructs that authority from chat.
 proof preconditions, and final-state validity, followed by one task that only
 consumes their accepted receipt.
 
-**Pass:** one Worker handles the grouped acceptance unit; the receipt alias
-closes mechanically after the unit receipt. The trace contains no Worker,
+**Pass:** one Acceptance-Unit Lead owns the grouped unit and its implementation
+writes follow WBE-40. The receipt alias closes mechanically after the unit
+receipt. The trace contains no Worker,
 reviewer, validation command, or integration commit for the alias.
 
 **Fail:** each ledger checkbox creates a lane or proof run, or the alias is
@@ -167,49 +181,59 @@ self-review and acceptance, or a risk label alone selects the critical tier.
 
 **Given:** a Ledger Orchestrator routes a large high-consequence parent outcome
 containing one ordinary closed-route acceptance unit and one protected-domain,
-high-consequence but still closed-route unit. Their Leads find one clear
-mechanical write slice, one ordinary write slice, and one ordinary acceptance
-review. Harness configuration contains model and effort defaults that differ
-from the task-suitable choices.
+high-consequence but still closed-route unit. Their Leads
+find one clear mechanical write slice, one ordinary write slice, and one
+ordinary acceptance review. Harness configuration contains model and effort
+defaults that differ from the task-suitable choices.
 
 Use the default `$orchestrator` invocation: it authorizes autonomous
 direct-parent model and effort selection from the installed native controls but
 gives no per-task mapping or later human choice. Also run one branch where a
 follow-up override is unavailable or rejected and a custom near-miss launch that
 omits fresh-task or required backing authority.
+On each GPT model-generation change, repeat the same representative Lead inputs
+with Sol `max` and Sol `xhigh`, holding prompt, harness, repository, and task
+inputs fixed.
 
-**Pass:** the Ledger Orchestrator classifies the ordinary Lead independently,
-selects Terra `medium`, and classifies the closed-route high-consequence Lead as
-Terra `high` or `xhigh`. It creates each once with a role-and-scope bootstrap
-that carries neither model nor effort. Each child returns exactly
+**Pass:** the Ledger Orchestrator selects Sol `max` for both Leads. It creates
+each once with a role-and-scope bootstrap that carries neither model nor effort.
+Each child returns exactly
 `READY_FOR_DISPATCH`; the Orchestrator then sends one full technical handoff with
-the selected pair in the native structured fields. The Lead independently
+the selected pair in the native structured fields. Each Lead independently
 selects Luna `low` for its mechanical Worker and Terra `medium` for its ordinary
 Worker and ordinary reviewer, dispatching each once with both supported fields
 explicitly set. Every Worker prompt begins `Execution role:
 IMPLEMENTATION_WORKER`, links the Execution Role Tree, and contains the ledger
 path, unit or task IDs, and only live facts absent from the ledger. Every first
-technical turn starts assigned work immediately. Sol appears only for open-ended
-root reasoning or a genuinely critical review whose trace records a
+technical turn starts assigned work immediately. Sol remains unavailable to
+ordinary Worker slices; outside the role-specific Lead row it appears only for
+open-ended root reasoning or a genuinely critical review whose trace records a
 representative evaluation or diagnosed prior Terra-`xhigh` capability gap after
-brief and route defects were excluded. When an override is unavailable, the
-parent records the effective configured value and continues without asking the
-user. The near-miss blocks before its first fresh task and reports the missing
+brief and route defects were excluded. When a Lead's `max` override is
+unavailable or rejected, the parent records Sol `xhigh` as the effective
+fallback and continues without asking the user; no other Lead downgrade is
+valid. The near-miss blocks before its first fresh task and reports the missing
 native authority without asking the user to choose a carrier or map tasks to
 models. No Implementation child receives `ultra` without an exact user request
-for `ultra` reasoning.
+for `ultra` reasoning. The model-generation comparison records task success,
+answer completeness, required evidence, total tokens, wall time, and cost for
+both efforts; it retains or revises the baseline only through the accepted
+quality-first routing policy.
 
 **Fail:** a prompt omits or misstates the role, restates visible ledger content,
 a parent selects a grandchild, create carries a model or effort without an exact
 user-named model, bootstrap performs technical work, or the technical follow-up
 is missing or duplicated. It also fails when a selected pair is silently
 discarded, unsupported override blocks solely for a human model choice, any
-actor asks the user to choose a carrier or map models, the Ledger Orchestrator
-uses Sol for a ready ordinary or closed-route Implementation child without the
-required evidence, a supported built-in child omits model or effort and inherits
-the parent's pair, assigns `ultra` to an Implementation child without an exact
-user request for `ultra` reasoning, treats `ultra` as delegation, or lets the
-pair inherit the parent epic's importance without child evidence.
+actor asks the user to choose a carrier or map models, a Lead uses anything
+other than Sol `max` without a recorded unsupported or rejected `max` override
+and Sol `xhigh` fallback, an ordinary Worker uses Sol without the required
+evidence, a supported built-in child omits model or effort and inherits the
+parent's pair, assigns `ultra` to an Implementation child without an exact user
+request for `ultra` reasoning, treats `ultra` as delegation, or lets a Worker pair inherit the
+parent epic's importance without child evidence. A model-generation change also
+fails without the fixed-input `max` versus `xhigh` comparison or when lower
+latency, tokens, or cost outweigh a quality or evidence regression.
 
 ### WBE-08 — Correction Circuit Breaker
 
@@ -226,7 +250,7 @@ route and causal hypothesis.
 
 ### WBE-09 — Atomic Integration
 
-**Given:** a Worker unit contains several intermediate commits and correction
+**Given:** an acceptance unit's Slice DAG produces several Worker and correction
 commits.
 
 **Pass:** commit-backed integration produces one acceptance commit containing
@@ -1000,53 +1024,94 @@ near-miss receives library-research ceremony; or Implementation merely adds
 tests to the pinned custom copy after current evidence invalidates its source
 decision.
 
-### WBE-40 — Acceptance-Unit Lead Fan-Out
+### WBE-40 — Acceptance-Unit Slice DAG
 
-**Given:** `T3` is one ready acceptance unit. Its fixed contract exposes one
-independent read-only question and three useful write slices with exact
-pairwise-disjoint paths, while integration, formatting, aggregate proof, review,
-and the receipt must stay together. `T4` depends on `T3`; unrelated dirt exists.
-Before one run the unit input changes. During another, a writer discovers a
-Lead-owned dependency after producing a candidate. In another, a reviewer lacks
-proof the Lead can obtain. A near-miss has two files coupled through one
-generated or interface authority.
+**Given:** `T3` is one ready acceptance unit spanning 20 implementation paths,
+four package/owner surfaces, and three independent focused proof surfaces. Its
+fixed contract exposes a small shared-schema foundation `S0`, an independent
+long-running adapter slice `S1`, and two slices `S2` and `S3` that consume the
+schema but not each other. Integration, aggregate proof, review, and the receipt
+stay atomic.
+`T4` depends on `T3`; unrelated dirt exists. Near-misses include same-feature
+files with no consumed output, source plus generated output, two tests whose API
+is not yet frozen, candidate-slice padding, two dependency-independent slices
+that reserve the same exclusive resource, a foundation correction after its
+successors have started, missing Worker-task authority, unavailable carrier,
+and a harness that cannot materialize a successor base.
 
-**Pass:** the fresh `T3` session binds `ACCEPTANCE_UNIT_LEAD` and revalidates the
-unit and repository before it
-chooses serial execution or bounded one-level fan-out. Unchanged input may open
-the read-only question and three isolated Worktree writers from one accepted
-base; changed input recomputes the strategy and launches no stale lane map. Each
-lane dispatch begins `Execution role: READ_ONLY_SPECIALIST` or `Execution role:
-IMPLEMENTATION_WORKER`, links the Execution Role Tree, and has one outcome,
-exact ownership, focused proof, stop condition, and `DONE|NEEDS_PARENT` return.
-Write lanes remain leaves and never edit the ledger or integration checkout.
+**Pass:** a session binds `ACCEPTANCE_UNIT_LEAD` only with explicit Worker-task
+authority. Before any implementation write it emits the exact Execution Map,
+including every write once, each material input's immutable identity, exact
+resources, focused proof, model/effort, dependency edges that name the concrete
+consumed output, symmetric conflicts, and capacity derived from native slots
+and current proof/resource reservations. The large-surface counts use expanded
+authorized paths, `go list` import paths, inverse-file-map responsibilities, and
+disjoint target/oracle proof surfaces and yield at least two non-empty candidate
+slices. Formatting, metadata, receipts, duplicate commands, and documentation
+padding do not count. Same feature, package, unit, dirty checkout, broad proof,
+possible merge risk, or generic "shared contracts" creates no edge. Generated
+output that consumes canonical source uses a dependency edge; cyclic
+dependencies collapse into one serial slice. Production code and its focused
+tests stay together unless the test interface and oracle already exist in the
+frozen base.
 
-The Lead waits for every current lane, performs serial candidate intake and
-integration, reconciles and formats the combined change, runs focused and
-aggregate proof, performs Lead self-review, dispatches any triggered review as
-`ACCEPTANCE_REVIEWER`, owns all corrections, and records the one `T3` receipt
-or blocker. A lane or review obstacle returns only as `NEEDS_PARENT` to the
-Lead with evidence, attempted actions, exceeded boundary, and one requested
-action. The Lead re-diagnoses and uses its wider unit authority before it may
-record a canonical
-blocker; here it resolves the discovered dependency and obtains the missing
-proof. A failed lane may leave a retained provisional candidate but never
-creates partial acceptance or releases `T4`. The near-miss stays serial. Internal
-evidence cannot change `T3`'s accepted behavior, scope, or dependencies; such
-evidence becomes a canonical blocker only after no evidence-changing unit-local
-route remains and reopens the owning decision. No actor repeats a route under
-unchanged inputs, hypothesis, and expected observable.
+The initial ready set contains `S0` and `S1`, so both dispatch concurrently.
+`S0` returns first; the Lead scope-checks and integrates it serially, releases
+its reservations, recomputes the DAG, and dispatches `S2` and `S3` while `S1`
+continues. Each slice validates its mapped synthetic Git tree ID before editing.
+No carrier slot with native availability evidence stays idle while an eligible
+ready slice exists. A zero-edge pair is only dependency-independent: the pair
+that reserves one exclusive resource has a `Conflict`, no edge, and runs
+sequentially in either order. When a successor base cannot be materialized, the
+initial map groups that complete chain into one exact serial slice before
+dispatch; no running slice widens. Different frozen bases overlap only when
+write sets are disjoint, all declared input identities remain unchanged, and
+the immutable deltas commute before formatting. Changed input or a newly
+invalidated active-worker assumption stops only the affected Worker and emits a
+fresh map.
 
-**Fail:** an actor starts without exactly one role or changes role; the Ledger
-Orchestrator chooses the carrier or lanes; file count or capacity alone creates
-fan-out; writers share a checkout or path; a lane
-edits the ledger, integrates, runs aggregate proof, changes accepted behavior or
-dependencies, or spawns another writer; fan-in is concurrent or starts before
-all current writers stop; a passing subset gains its own receipt; corrections
-leave the `T3` Lead; a child obstacle is copied directly into the ledger, skips
-the Lead, returns as `BLOCKED`, or reaches the user or Ledger Orchestrator; an
-actor repeats an unchanged route; `T4` starts before `T3` acceptance; or resume
-requires reconstructing the lane map from chat.
+When a correction changes `S0`, the Lead stops active members of its affected
+closure, invalidates integrated deltas and proof for transitive successors `S2`
+and `S3`, rebuilds the unit-internal base, and returns those slices to their
+original Workers from fresh bases. The unrelated `S1` candidate and proof remain
+valid. Any affected slice outside the declared successor closure exposes a
+missing input, edge, or conflict that the fresh map must repair before
+redispatch.
+
+Each lane matches the canonical outcome-first brief exactly: role and Role Tree,
+outcome, unit/revision, lane ID, base, writes, immutable inputs, resources, Lead
+reservations, authorities, proof, `DONE|NEEDS_PARENT` return, and stop boundary.
+Workers remain leaves. The Lead authors no implementation bytes; it only applies
+immutable deltas, formats deterministically, runs aggregate proof, and records
+integration metadata plus the unit receipt or blocker. Semantic conflicts and
+corrections return to the owning Worker, whose identity remains reachable
+through final review.
+
+The Lead consumes the first completed Worker rather than waiting for an
+all-Worker barrier, integrates every accepted slice serially, and recomputes the
+ready set until the DAG is exhausted. A child obstacle returns only as
+`NEEDS_PARENT`; no slice creates partial acceptance or releases `T4`. Missing
+carrier capability produces the canonical blocker. Missing Worker-task
+authority prevents the role from binding: an eligible non-ledger outcome stays
+root-local, while the planned unit reports the missing authority.
+
+**Fail:** the map is missing, private, omits a write or field, uses a path-only
+base identity, keeps a 20-file single slice without one cyclic component or
+base-materialization evidence, pads candidate count, lacks immutable input
+identities, guesses capacity, invents an edge from an invalid generic reason,
+uses an edge for an unordered exclusive-resource conflict, treats zero edges as
+sufficient concurrency proof, separates a test from an unfrozen API, absorbs
+independent downstream work into the foundation, or serializes an eligible
+ready slice without an evidence-backed conflict or capacity reason. An ad-hoc
+lane prompt that omits or renames a canonical brief field also fails. It also
+fails when the Lead authors implementation content, widens a dispatched slice,
+resolves a semantic conflict, waits for all Workers while new ready work and
+capacity exist, leaves proven capacity idle, starts a slice before its
+predecessors integrate, overlaps active writes/resources, continues from a
+changed input identity, fails to invalidate and rerun the corrected
+predecessor's affected closure, discards an unrelated slice, lets a Worker spawn
+another writer, archives a Worker before final review, accepts a subset, or
+resumes from chat instead of recomputing from ledger, native state, and Git.
 
 ### WBE-41 — Acceptance-Unit Orchestration
 
@@ -1057,29 +1122,32 @@ installed App already satisfies them.
 `T1 -> T2 -> T3` and one two-unit planned wave whose positive independence is
 already recorded in the canonical ledger. That prompt authorizes fresh native
 tasks in the saved project, names the eligible Local and Worktree controls, and
-authorizes autonomous direct-parent model and effort selection from the
-installed controls. The user supplies no per-task mapping and receives no
+explicitly requests the Role Tree's mandatory Worker-backed Implementation
+Write Boundary plus autonomous direct-parent model and effort selection from
+the installed controls. The user supplies no per-task mapping and receives no
 implementation-routing question. `T1` is ordinary closed-route work and
 completes; `T2` records a canonical agent-owned Go Ownership blocker with a
 preserved candidate; its repair invalidates one Test Design input, requires a
 Planning repair unit, and leaves `T3` dependent. An injected planned-wave branch
 reaches the same upstream boundary while its Lead and candidate still have
-Worktree backing. Several unrelated units are small and serial. Near-misses
-require a user-owned Specification decision or lack authority for a particular
-starting state or irreversible effect.
+Worktree backing. Several unrelated units each contain one small write slice.
+Near-misses require a user-owned Specification decision or lack authority for a
+particular starting state or irreversible effect.
 
 **Pass:** one dedicated Goal begins `Execution role: LEDGER_ORCHESTRATOR
 (Ledger Orchestrator)`, resolves and verifies the saved Git project through the
 native project list, reads the canonical ledger, and routes only its currently
-ready units. It classifies `T1` independently and selects a task-suitable model
-and effort. A valid create produces one fresh Local task from a no-op bootstrap
-that binds `ACCEPTANCE_UNIT_LEAD`, carries one unique `dispatch_scope` and the
-initiating native-control envelope, and carries no model or effort override. The
+ready units. It classifies `T1` independently and selects Sol `max` under the
+role-specific Lead tier. A valid create produces one fresh Local task from a
+no-op bootstrap that binds `ACCEPTANCE_UNIT_LEAD`, carries one unique
+`dispatch_scope` and the initiating native-control envelope, and carries no
+model or effort override. The
 child returns exactly `READY_FOR_DISPATCH`; one technical follow-up then carries
-the selected pair in native structured fields and the full Lead handoff. The
-first technical turn starts assigned work. The Orchestrator retains the returned
-thread and host identities plus the latest wait cursor, pins the task, and waits
-for the terminal event, then
+the selected pair in native structured fields, the full Lead handoff, and the
+initiating user's exact Implementation Write Boundary authority. The first
+technical turn emits the complete WBE-40 Execution Map before its first Worker
+dispatch. The Orchestrator retains the returned thread and host identities plus
+the latest wait cursor, pins the task, and waits for the terminal event, then
 rereads the canonical receipt or blocker and Git candidate identity before
 selecting again. `T2` receives a different fresh Lead despite being small and in
 the same macro phase. Its canonical blocker prevents `T3`;
@@ -1090,11 +1158,10 @@ work. It then creates one fresh Local task whose initial prompt binds
 `UPSTREAM_REOPEN_LEAD` to the Technical Design macro phase with Go Ownership as
 the exact reopen step. It applies the same bootstrap-and-technical-follow-up
 protocol with the model and effort it independently selects from the fixed phase
-brief. That task owns
-only Technical Design through its triggered review,
+brief. That task owns only Technical Design through its triggered review,
 repair, and focused re-review, returns the review-cleared artifact revision, and
-starts neither Test Design nor Implementation. The
-Orchestrator verifies the result, creates a separate `UPSTREAM_REOPEN_LEAD` with
+starts neither Test Design nor Implementation. The Orchestrator verifies the
+result, creates a separate `UPSTREAM_REOPEN_LEAD` with
 an independently selected pair for invalidated Test Design, and then a separate
 Planning reopen. It routes Planning's prerequisite repair unit to acceptance
 before resuming `T2`; unchanged phase dispositions and receipts are reused.
@@ -1117,8 +1184,9 @@ rejection proof, then creates exactly one replacement Local
 `ACCEPTANCE_UNIT_LEAD` through the same bootstrap-and-technical-follow-up
 protocol with an independently selected pair, the same unit and preserved Local
 candidate, current artifact revisions, predecessor identity, and a new attempt
-in `dispatch_scope`. The replacement validates candidate ownership before edits
-and becomes the sole acceptance owner. Unknown Goal or candidate state creates
+in `dispatch_scope`. The replacement validates candidate ownership and re-emits
+the Execution Map before any implementation write; it then becomes the sole
+acceptance owner. Unknown Goal or candidate state creates
 no replacement. A misrouted `NEEDS_PARENT` returns unchanged to its owning Lead.
 The Lead's first action
 creates a Goal repeating its assigned role and stage. Between canonical
@@ -1135,17 +1203,21 @@ Worktree. `startingState` is omitted unless the initiating user specifically
 named the existing state; with omission, the native default must match the
 wave's recorded base. The Ledger Orchestrator waits on their native events
 together. Before returning, every Lead independently inspects its fixed unit and
-repository and chooses serial work or WBE-40 bounded one-level fan-out. A Lead
-without carried child-App-task authority serializes. A Worktree Lead completes
-its first Goal before returning `HANDOFF_READY` with a fixed candidate; this
-creates no receipt. Except for the blocker-revalidation branch above,
+repository and follows WBE-40: one small slice gets one Worker, while dependent
+slices use the work-conserving ready-set scheduler without an all-Worker barrier.
+A handoff without explicit Worker-task authority creates no Lead. A valid Lead
+whose authorized carrier later becomes unavailable records the capability
+blocker after safe recovery. A Worktree Lead
+completes its first Goal before returning `HANDOFF_READY` with a fixed
+candidate; this creates no receipt. Except for the blocker-revalidation branch above,
 immediately before fan-in the Orchestrator rechecks Local
 HEAD/status/dirt, then hands ready candidates to Local one at a time. One
 Handoff call carries the compact Local continuation in `followUpPrompt`; the
 Orchestrator retains its `operationId` and revisions and waits from the latest
 revision. No later continuation message is sent. After success, that same Lead
-creates a separate Local Goal, integrates, conducts self-review and triggered
-independent review, runs proof, keeps corrections in the same task, and records
+creates a separate Local Goal, integrates frozen Worker deltas, conducts
+self-review and triggered independent review, runs proof, routes corrections to
+the owning Worker in the same task, and records
 exactly one unit receipt or blocker. The Ledger Orchestrator then rereads the
 transition and Git identity; an accepted member remains accepted while a failed
 independent member and its dependants remain blocked. Internal writers remain
@@ -1161,7 +1233,9 @@ session bind multiple roles; one Lead owns multiple acceptance units; the
 Ledger Orchestrator selects a
 grandchild, analyzes code, chooses a unit's carrier or lanes, reviews,
 proves, repairs, integrates,
-or decides corrections; cross-unit concurrency lacks a ledger-proven planned
+or decides corrections; a Lead authors an implementation write, omits the
+single-slice Worker, or binds without its required child-task
+authority; cross-unit concurrency lacks a ledger-proven planned
 wave; a Lead changes accepted behavior, unit scope, or ledger dependencies;
 Leads overlap writes; an internal writer spawns a writer; create omits the exact
 role or scope, carries a model or effort without an exact user-named model,
@@ -1204,7 +1278,8 @@ replacement-Lead create ambiguity;
 nondurable Worktree proposed-blocker return and blocker-revalidation Handoff
 ambiguity;
 nested write dispatch; receipt persistence followed by a lost final result;
-unavailable top-level creation and unavailable inner fan-out separately; and an
+unavailable top-level creation, missing inner Worker-task authority, and later
+failure of an authorized inner write carrier separately; and an
 external effect with absent authority or an ambiguous response.
 
 **Pass:** native Codex state is the only task-lifecycle authority, repository
@@ -1279,8 +1354,10 @@ one. A known Lead without a canonical transition receives one compact
 terminalization message on the same task with no model/effort override; if the
 transition remains absent, its dependants stop and no replacement Lead is
 created. This missing-transition rule is distinct from the proven post-reopen
-Goal-resume exception. Missing top-level creation blocks the Ledger Orchestrator, while
-missing or unauthorized inner fan-out serializes the same unit in its Lead. No
+Goal-resume exception. Missing top-level creation blocks the Ledger Orchestrator.
+Missing explicit inner Worker-task authority prevents Lead creation; failure of
+an authorized inner write carrier after Lead creation produces its canonical
+capability blocker without an implementation write. No
 external effect occurs without its carried authority; an effect whose outcome
 may be unknown is not retried unless its own owner supplies an idempotency
 contract. A canonical semantic blocker does not imply native Goal terminality.

@@ -112,11 +112,14 @@ reopens its narrow upstream decision owner.
 ### Local Execution
 
 Local execution covers direct work and ready acceptance units routed here by
-[Worker Execution](implementation-worker-execution.md). The acceptance owner
-edits the assigned checkout, performs one coherent self-review of the bounded
-diff, and runs the [Validation Matrix](#validation-matrix)'s smallest matching
-proof. The bounded working-tree diff is the complete execution record for direct
-work; ledger work also retains its accepted task entry. The acceptance owner
+[Worker Execution](implementation-worker-execution.md). A direct-work
+acceptance owner edits the assigned checkout. A ledger Acceptance-Unit Lead
+follows the Role Tree's [Implementation Write
+Boundary](implementation-worker-execution.md#implementation-write-boundary),
+performs one coherent self-review of the bounded integrated diff, and runs the [Validation
+Matrix](#validation-matrix)'s smallest matching proof. The bounded working-tree
+diff is the complete execution record for direct work; ledger work also retains
+its accepted task entry. The acceptance owner
 accepts the fixed candidate when the Stop Rule passes and any triggered
 [independent implementation review](../shared/implementation-review.md) has
 returned `PASS`.
@@ -130,10 +133,10 @@ For ledger work, read
 the current session's role from its [Execution Role
 Tree](implementation-worker-execution.md#execution-role-tree) before selecting
 or operating an internal Worker lane. That branch owns the Acceptance-Unit
-Lead's serial-or-fan-out choice, isolated lane eligibility,
-dirty-state protection, Scope Lock, correction continuity, rejected-delta
-handling, candidate intake, and handoff. The Lead applies this phase and
-retains implementation, correction, acceptance, and integration authority.
+Lead's Slice DAG scheduling and delegation, isolated lane eligibility, dirty-state
+protection, Scope Lock, correction continuity, rejected-delta handling,
+candidate intake, and handoff. The Lead applies this phase and retains decision,
+correction-routing, acceptance, and integration authority.
 
 ### Immutable Evidence
 

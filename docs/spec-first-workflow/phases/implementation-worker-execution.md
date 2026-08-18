@@ -13,9 +13,12 @@ or reopen route.
 
 Optimize wall-clock time without weakening acceptance quality: plan the
 [smallest coherent acceptance units](planning.md#acceptance-unit-contract), run
-only positively independent units or slices concurrently, keep one Lead as the
-acceptance owner, integrate serially, and reuse proof while its preconditions
-remain valid.
+every currently ready positively independent planned-wave unit or mapped slice
+concurrently within current carrier and proof capacity, keep one Lead as the
+decision, quality, and acceptance owner, integrate serially, and reuse proof
+while its preconditions remain valid. Atomic acceptance does not require serial
+implementation: one unit may use a Worker Slice DAG while only the complete unit
+can be accepted.
 
 Every top-level task and implementation leaf binds exactly one execution role
 before its first governed action. A native task or subagent is a carrier, not a
@@ -33,14 +36,15 @@ flowchart TD
     orchestrator["LEDGER_ORCHESTRATOR<br/>routing only"]
     lead["ACCEPTANCE_UNIT_LEAD<br/>one fresh native task per ready unit"]
     reopen["UPSTREAM_REOPEN_LEAD<br/>one fresh task for one macro phase"]
-    strategy{"Lead chooses the unit strategy"}
-    serial["Lead executes serially"]
+    strategy{"Lead emits the Slice DAG"}
     specialist["READ_ONLY_SPECIALIST<br/>optional leaf"]
-    worker["IMPLEMENTATION_WORKER<br/>optional isolated write leaf"]
+    worker["IMPLEMENTATION_WORKER<br/>every ready slice up to capacity"]
+    intake["Lead serial intake<br/>integrate · release reservations"]
+    exhausted{"Slice DAG exhausted?"}
     reviewer["ACCEPTANCE_REVIEWER<br/>triggered fresh read-only leaf"]
     fanin["Lead serial fan-in<br/>integration · self-review · proof"]
     review{"Independent review triggered?"}
-    acceptance["Lead corrections and acceptance"]
+    acceptance["Lead correction routing and acceptance"]
     result["One canonical receipt or blocker"]
     done["Ledger exhausted"]
     stopped["Exact user/external boundary,<br/>unrecoverable native blocker,<br/>or canonical blocker with no ready/recovery"]
@@ -51,12 +55,14 @@ flowchart TD
     reopen -->|"review-cleared phase result"| orchestrator
     orchestrator -->|"resume blocked unit after closure"| lead
     lead --> strategy
-    strategy -->|"no useful independent work"| serial
     strategy -->|"one independent question"| specialist
-    strategy -->|"independent write slices"| worker
-    serial --> fanin
-    specialist --> fanin
-    worker --> fanin
+    specialist --> strategy
+    strategy -->|"no implementation write"| fanin
+    strategy -->|"dispatch ready set"| worker
+    worker -->|"first completed candidate"| intake
+    intake --> exhausted
+    exhausted -->|"no: recompute ready set"| worker
+    exhausted -->|"yes"| fanin
     fanin --> review
     review -->|"yes"| reviewer
     review -->|"no"| acceptance
@@ -70,14 +76,34 @@ flowchart TD
 | Role | Receives from | Owns | May dispatch | Upward result |
 | --- | --- | --- | --- | --- |
 | `LEDGER_ORCHESTRATOR` — Ledger Orchestrator | Ready canonical ledger and explicit task-creation authority | Ready-unit selection, agent-owned upstream-reopen routing, native task lifecycle, and terminal routing | One `ACCEPTANCE_UNIT_LEAD` per ready unit; several only for a ledger-proven planned wave; one `UPSTREAM_REOPEN_LEAD` at a time | Ledger exhausted; an AGENTS-owned user decision or external confirmation; an unrecoverable native blocker; or a canonical blocker with neither ready work nor authorized recovery |
-| `ACCEPTANCE_UNIT_LEAD` — Acceptance-Unit Lead | Ledger Orchestrator, Planning handoff, or direct Implementation entry | Exactly one unit through strategy, implementation, serial integration, review, proof, correction, acceptance, and receipt | Optional leaf specialists, Workers, and a triggered reviewer | `HANDOFF_READY` for a fixed Worktree candidate, then one canonical `Accepted:` receipt or `Blocked:` record |
+| `ACCEPTANCE_UNIT_LEAD` — Acceptance-Unit Lead | Ledger Orchestrator or another Implementation entry carrying explicit Worker-task authority | Exactly one unit through decisions, Slice DAG scheduling, Worker intake, serial integration, review, proof, correction routing, acceptance, and receipt | One or more implementation Workers for every implementation write; optional read-only specialists and a triggered reviewer | `HANDOFF_READY` for a fixed Worktree candidate, then one canonical `Accepted:` receipt or `Blocked:` record |
 | `UPSTREAM_REOPEN_LEAD` — Upstream Reopen Lead | Ledger Orchestrator and one canonical unit blocker | Exactly one named non-implementation macro phase through its phase stop rule, triggered review, repair, and focused re-review | Phase-eligible read-only lanes and triggered reviewers under Subagents And Review | Review-cleared phase result and next owner, or the exact user/external/native boundary that prevents closure |
 | `READ_ONLY_SPECIALIST` — Read-Only Specialist | Acceptance-Unit Lead | One independently checkable question | Nothing; it is a leaf | `DONE` with evidence, or `NEEDS_PARENT` |
 | `IMPLEMENTATION_WORKER` — Implementation Worker | Acceptance-Unit Lead | One exact write slice and its focused proof | Nothing; it is a leaf | `DONE` with a frozen candidate, or `NEEDS_PARENT` |
 | `ACCEPTANCE_REVIEWER` — Acceptance Reviewer | Acceptance-Unit Lead | Independent falsification of one fixed unit | Nothing; it is a fresh one-shot leaf | `PASS`, `FAIL`, or `NEEDS_PARENT` to the Lead |
 
-The bound role does not change during the session. A Lead that implements
-serially remains the Lead; it does not relabel itself as a Worker. A child gets
+### Implementation Write Boundary
+
+An **implementation write** is any content change required by the unit to
+production source, tests, fixtures, migrations, generated or contract artifacts,
+executable scripts or configuration, or implementation-owned documentation. A
+session may bind `ACCEPTANCE_UNIT_LEAD` only when its handoff carries explicit
+authority to create the required implementation Workers; otherwise the handoff
+is invalid. An eligible direct outcome remains root-local; a planned ledger unit
+reports the missing authority without binding the role.
+
+The Lead owns judgment and delivery but authors no implementation write. Its
+complete mutation authority is:
+
+- apply a returned immutable Worker delta through native Handoff or an exact
+  byte-preserving patch operation;
+- run the repository's deterministic formatter on those Worker-authored bytes;
+  and
+- update integration metadata plus the canonical ledger receipt or blocker.
+
+A merge conflict, formatter result requiring a content choice, or any other
+semantic edit returns to the owning Worker. The bound role does not change
+during the session, and the Lead never relabels itself as a Worker. A child gets
 only its row's authority, not its parent's. A correction resumes the same actor
 under the same role. Acceptance-unit roles never revise behavior, unit scope,
 or ledger dependencies. An Upstream Reopen Lead may revise only its named
@@ -108,8 +134,8 @@ A Specialist, Worker, or Reviewer returns its obstacle only to the
 Acceptance-Unit Lead. `NEEDS_PARENT` is a message, not artifact state, partial
 acceptance, or dependency release. The Lead re-diagnoses instead of
 copying that result into the ledger. It uses unit-level authority to close
-technical decisions, revise the internal execution strategy, fall back from
-fan-out to serial work, obtain missing evidence, integrate, or route a valid
+technical decisions, revise the internal execution strategy, replace fan-out
+with one serial Worker, obtain missing evidence, integrate, or route a valid
 same-actor correction. Review findings always return to the Lead for this
 disposition.
 
@@ -172,15 +198,130 @@ ledger-proven independent planned wave, to a separate fresh native task hosting
 an Acceptance-Unit Lead. A serial unit starts in Local; each planned-wave member
 starts in its own Worktree from the recorded base. The Orchestrator selects no
 internal carrier or lane. Outside global orchestration, the current
-Implementation root binds `ACCEPTANCE_UNIT_LEAD` when it selects a unit.
+Implementation root binds `ACCEPTANCE_UNIT_LEAD` only when the initiating user
+or handoff explicitly authorizes its required Worker tasks. Without that
+authority, eligible direct work stays root-local and a planned ledger unit
+reports the missing authority rather than creating an invalid Lead.
 
 The Acceptance-Unit Lead inspects the fixed unit, current repository, relevant
 dirt, dependencies, generated/manual authority, mutable resources, and proof
-preconditions before choosing serial execution or bounded one-level fan-out.
-Internal decomposition may realize only the accepted unit outcome: it never
-changes accepted behavior, splits the ledger unit, revises dependencies, or
-starts another acceptance unit. New evidence that requires one of those changes
-blocks the unit and reopens its owner.
+preconditions, then freezes a compact execution map before the first
+implementation write. The map is emitted in the Lead trace in this exact shape;
+it is operational state, not a new repository artifact:
+
+```text
+Execution Map
+Base: <accepted commit/tree, or synthetic Git tree ID for the frozen working tree>
+Lead-only: <exact delta-application, formatter, proof, and receipt actions>
+Slices:
+- id: <slice ID>
+  outcome: <one implementation postcondition>
+  base: <initial Base, or after slice IDs; replace with exact tree ID before dispatch>
+  writes: <exact paths>
+  inputs:
+  - <path, package surface, contract, schema, artifact, state, or proof result>: <exact Git blob/tree, revision, digest, or receipt identity>
+  resources: <exclusive mutable resources, or none>
+  model: <model and effort>
+  proof: <focused proof>
+Edges:
+- from: <slice ID>
+  to: <slice ID>
+  consumes: <exact byte, type, schema, state, artifact, or proof result>
+Conflicts:
+- left: <slice ID>
+  right: <slice ID>
+  resource: <exact writable path, exclusive mutable resource, or proof gate>
+Capacity:
+  write_slots: <free count from native evidence, or probing after active Worker identities>
+  proof_gates: <gate = free or reserved by slice>
+  resources: <resource = free or reserved by slice>
+```
+
+Use `Edges: none` when no slice consumes another slice's output and
+`Conflicts: none` when no pair excludes concurrent execution. An edge is
+directed producer-to-consumer order. A conflict is symmetric reservation state,
+never an order or a consumed output: either member may run first, and the other
+becomes eligible after the reservation is released and its base and input
+identities are refreshed. Every pair that shares a writable path, exclusive
+mutable resource, or exclusive proof gate appears in `Conflicts` unless a named
+consumption instead requires an edge.
+
+For a working-tree base, create the synthetic Git tree with a temporary index so
+it covers every tracked and untracked non-ignored path and byte without changing
+the repository index or working tree; a path-only status is insufficient. Every
+concurrently ready Worker using that base recomputes and validates the exact
+tree ID before its first edit. Any mismatch invalidates every undispatched or
+unedited slice using that base and requires a fresh map.
+
+Every required content change belongs to exactly one slice. Every slice declares
+the base blob identity, or absence at the base tree, of every writable path and
+the immutable identity of each material package surface, contract, schema,
+artifact, state, or proof result whose change could invalidate its delta or
+proof. Start from the accepted owner and inverse file map. Production code and
+the focused tests and fixtures that prove its postcondition **must** stay in the
+same slice. A separate test-only slice is valid only when its interface already
+exists in the frozen base and its deterministic oracle needs no provisional
+sibling output.
+
+A unit has a **large writable surface** when bounded discovery finds at least
+eight implementation paths, three package or owner surfaces, or two independent
+focused proof surfaces. Count a unique expanded authorized file as one
+implementation path; a unique `go list` import path as one Go surface; a
+distinct inverse-file-map responsibility as one non-Go owner surface; and one
+focused target plus deterministic oracle as one proof surface. Two proof
+surfaces are independent only when their targets and oracles are disjoint and
+neither proof consumes the other's output. Raw globs, duplicate commands, and
+estimates do not count.
+
+That trigger requires at least two candidate slices. A candidate counts only
+when it has at least one required implementation write and a non-empty
+implementation postcondition checkable on its declared base after predecessors.
+Formatting, integration metadata, and receipts create no slice. A
+documentation-only candidate counts only when the accepted unit has a distinct
+documentation postcondition checkable without sibling writes. One final serial
+slice is valid only when the concrete dependency graph below collapses every
+candidate group into one cyclic component, or the base-materialization preflight
+proves with current harness evidence that the complete dependency chain cannot
+cross Workers. File count triggers this proof but never splits the acceptance
+unit by itself.
+
+Add a dependency edge only when the downstream slice cannot start until it
+observes one concrete output from the upstream slice:
+
+- content in the same writable path;
+- a type, interface, schema, or generated contract absent from the frozen base;
+- canonical source bytes consumed by a generator, or generated output consumed
+  by a downstream slice;
+- a migration, rollout, or state transition observed by the downstream slice in
+  an accepted fixed order;
+- a focused proof input produced by the upstream slice.
+
+Each edge names that consumed output. The same feature, package, acceptance
+unit, dirty checkout, broad final gate, possible merge risk, or general claim of
+"shared contracts" creates no edge. A shared writable path, exclusive mutable
+resource, or exclusive proof gate creates a `Conflict` unless one slice actually
+consumes the other's output, in which case the concrete consumption creates an
+edge. Collapse each strongly connected component of the dependency graph into
+one serial slice. A zero-edge pair is dependency-independent only; it is
+concurrency-eligible only when it also has no conflict, its declared input
+identities are stable on materializable bases, and its proof consumes no
+provisional sibling output.
+
+Before dispatch, prove that every dependency successor's frozen base can be
+materialized by the current harness. If it cannot, group that complete
+dependency chain into one exact serial Worker slice before work begins and
+select a model and effort sufficient for its hardest work. A dispatched slice
+is never widened. The same path may appear in more than one slice only under a
+directed dependency edge when the successor consumes its content, or under a
+symmetric conflict when neither slice consumes the other and the second base
+and inputs are refreshed after the first integrates. Concurrent path overlap is
+invalid. On resume or changed evidence, recompute and emit the map from the
+canonical ledger, native task state, and Git candidate before another write. A
+unit with one write slice still dispatches one Worker. Internal
+decomposition may realize only the accepted unit outcome: it never changes
+accepted behavior, splits the ledger unit, revises dependencies, or starts
+another acceptance unit. New evidence that requires one of those changes blocks
+the unit and reopens its owner.
 
 The unit's ledger entries are the brief body. Every different-session dispatch
 uses [Implementation Entry And Continuation
@@ -198,65 +339,100 @@ is not an artifact state, receipt, acceptance, or dependency release. [Agent Har
 fan-in](../../agent-harness.md#worktree-fan-in) solely owns the Handoff mechanics
 that move the same task into Local, one Lead at a time. After successful
 Handoff, the same Lead creates a separate Local Goal, then integrates, reviews,
-proves, corrects, and records the one canonical receipt or blocker. Moving the
-carrier is Orchestrator lifecycle routing; candidate judgment and integration
-remain Lead-owned.
+proves, routes corrections, and records the one canonical receipt or blocker.
+Moving the carrier is Orchestrator lifecycle routing; candidate judgment and
+integration remain Lead-owned.
 
-When the Lead works serially, it implements, reviews, proves, corrects, and
-records the unit receipt or blocker itself. When it selects fan-out, it retains
-the same responsibilities and integrates every returned lane serially. A
-routing-only Ledger Orchestrator that lacks fresh top-level task creation stops
-blocked instead of implementing. A missing inner fan-out control returns
-execution to the same Lead serially.
+When the unit has one write slice, the Lead dispatches one Worker, then reviews,
+proves, routes corrections, and records the unit receipt or blocker. When
+dependencies make later slices independent only after a shared foundation, the
+Lead integrates the foundation Worker's frozen delta, freezes a new
+unit-internal base, and makes its successors ready. Every Worker remains the
+Lead's direct leaf; no internal base or slice creates acceptance or releases a
+ledger dependency.
+A routing-only Ledger Orchestrator that lacks fresh top-level task creation
+stops blocked instead of implementing. An Acceptance-Unit Lead that lacks its
+required write carrier records the exact capability blocker after exhausting
+safe carrier recovery; it never substitutes a Lead-authored implementation
+write.
 
-## Acceptance-Unit Lead Fan-Out
+## Implementation Slice DAG
 
-Open only the lanes that current unit evidence makes useful:
+At every scheduling point, a slice is **ready** only when:
 
-- use a read-only research, evidence, or review lane for one independently
-  checkable question whose result can change this unit's implementation or
-  acceptance;
-- use an isolated write lane only when two or more implementation slices can
-  start from the same fixed unit contract and accepted base, with exact
-  pairwise-disjoint writable paths and one writer per path;
-- keep every shared interface, schema, generated authority, mutable resource,
-  integration, ledger, formatting, aggregate-proof, review, and receipt surface
-  with the Lead; and
-- require focused lane checks that do not depend on another lane's provisional
-  output or a shared broad or Docker gate.
+- every declared predecessor is integrated;
+- its exact frozen base is materializable and every declared input identity
+  matches that base and current external state;
+- it has no declared writable-path, mutable-resource, or proof-gate conflict
+  with an active Worker; and
+- its focused proof needs no provisional output outside its predecessors.
 
-Lane count is the useful independent width, bounded by harness and proof
-capacity. Do not create lanes to fill capacity. Dispatch isolated writers from
-one accepted base and explicitly select each lane's model and reasoning effort
-under [Agent Harness](../../agent-harness.md#model-and-effort-selection).
-Read-only lanes write nothing. Every internal lane remains a leaf; in
-particular, a discovered child write dependency returns to the Lead instead
-of being dispatched by a write lane.
+Capacity is evidence, not a Lead estimate. Derive free write slots from the
+installed native limit or status and every active Worker carrier identity
+visible in the current harness/project; derive proof and resource availability
+from repository-owned serialization rules and current reservations. When the
+native write limit is unavailable,
+dispatch eligible ready slices one at a time: every successful create proves
+another occupied slot and requires trying the next eligible slice, while a
+native capacity refusal bounds further dispatch at the current active count.
+Guessing a number does not. Dispatch every ready slice immediately while a
+write slot and all of its proof gates and resources are free. If capacity is
+full, keep only the excess ready slices queued and record the exact evidence;
+idle proven capacity while an eligible ready slice exists is a routing defect.
+Each dispatch atomically reserves the slice's writes, proof gates, and resources
+and recomputes the ready set before another dispatch.
 
-Each lane brief begins:
+Different active slices may use different frozen bases only when their write
+sets are disjoint, neither changes any declared input identity of the other,
+and they share no conflict. Under those conditions applying their immutable
+deltas in either order yields the same pre-format tree; otherwise serialize
+them.
+
+Consume the first completed Worker without waiting for an all-Worker barrier:
+freeze its candidate, apply Scope Lock and mergeability checks, integrate it
+serially, release its write, proof-gate, and resource reservations, and
+recompute the ready set.
+Other Workers continue only while that integration leaves every declared input
+identity unchanged; otherwise stop the affected Worker before another edit and
+emit a fresh map. This work-conserving loop ends only when the Slice DAG is
+exhausted or blocked.
+
+Use a read-only research, evidence, or review lane only for one independently
+checkable question whose result can change implementation or acceptance. Keep
+integration, ledger, formatting, aggregate proof, review, and receipt surfaces
+with the Lead. Read-only lanes write nothing. Every internal lane remains a
+leaf; a discovered dependency returns to the Lead for a new edge and ready-set
+calculation rather than being dispatched by a Worker.
+
+Each lane brief uses this exact outcome-first shape:
 
 ```text
 Execution role: <READ_ONLY_SPECIALIST | IMPLEMENTATION_WORKER>
 Role contract: docs/spec-first-workflow/phases/implementation-worker-execution.md#execution-role-tree
+Outcome: <one checkable postcondition>
+Unit: <unit ID and accepted revision>
+Lane: <slice ID or question ID>
+Base: <exact frozen tree or state identity>
+Writes: <exact paths, or none>
+Inputs: <immutable identities consumed by this lane>
+Resources: <exclusive mutable resources, or none>
+Lead reservations: <surfaces the lane must preserve>
+Authorities: <fixed canonical and generated owners>
+Proof: <focused command and expected observable>
+Return: <DONE | NEEDS_PARENT> with paths, commands/results, and commit/tree/bounded-diff identity when applicable
+Stop: <owner, scope, behavior, dependency, or authority boundary>
 ```
 
-It then names the unit, lane outcome, exact writable or read-only surface,
-Lead-reserved surfaces, fixed authorities, focused proof, and stop condition. A
-write lane may return a fixed commit, tree, or bounded diff from its Worktree;
-it never edits the ledger, integrates, rebases, stashes, deploys, or mutates the
-integration checkout. Every lane preserves unrelated work and stops before
-crossing another owner, changing accepted behavior or dependencies, or widening
-the unit.
+A write lane never edits the ledger, integrates, rebases, stashes, deploys, or
+mutates the integration checkout. Every lane preserves unrelated work and stops
+before crossing another owner, changing accepted behavior or dependencies, or
+widening the unit.
 
-Every lane returns `DONE` or `NEEDS_PARENT`, source or changed paths, focused
-commands and results, candidate identity when applicable, and the one-level
-escalation envelope above. The Lead waits for all current lanes, freezes their
-output, verifies scope and ownership, and performs candidate intake and
-integration serially. It alone
-reconciles and formats the combined change, runs focused and aggregate proof,
-performs Lead self-review and triggered independent review, routes same-lane
-corrections when useful, and writes the one unit receipt or blocker. No internal subset
-creates a receipt or releases a ledger dependency.
+After the DAG is exhausted, the Lead reconciles and formats the combined change,
+runs aggregate proof, performs Lead self-review and triggered independent
+review, routes same-Worker corrections when useful, and writes the one unit
+receipt or blocker. No internal base or subset creates a receipt or releases a
+ledger dependency.
 
 ## Execution-Ready Dispatch
 
@@ -264,7 +440,8 @@ Dispatch only when the route is closed: the reproducer or current facts,
 narrowest owner, known cause or deterministic mechanism, expected behavior,
 editable boundary, and exact proof live in the accepted ledger entry or its
 live delta. If an intermediate finding still determines the next step, keep
-discovery Lead-local.
+discovery and the decision Lead-local; once closed, dispatch its implementation
+as the next Worker slice.
 
 If a dispatched task exposes an open route, the Worker returns the frozen
 candidate and missing decision. The Lead closes that route before
@@ -280,16 +457,35 @@ message the Worker only to stop unsafe work or when new evidence invalidates an
 accepted input; ordinary findings wait for the frozen candidate.
 
 Wait on all currently relevant Workers together when the harness supports it,
-using the latest delivered cursor or equivalent. An unchanged timeout carries
-no new evidence: preserve the current disposition, emit no correction, and
-either continue independent Lead work or wait again. Never convert partial
-progress or a mutable diff into a review finding.
+using the latest delivered cursor or equivalent, and consume the first completed
+Worker rather than waiting for all targets. Recompute the DAG ready set after
+each serial intake. An unchanged timeout carries no new evidence: preserve the
+current disposition, emit no correction, and either continue independent Lead
+work or wait again. Never convert partial progress or a mutable diff into a
+review finding.
 
 ## Correction Loop
 
-The Acceptance-Unit Lead owns every correction through its terminal receipt
-or blocker; the Ledger Orchestrator remains waiting and makes no correction
-decision.
+The Acceptance-Unit Lead owns diagnosis and correction routing through its
+terminal receipt or blocker; the Ledger Orchestrator remains waiting and makes
+no correction decision.
+
+Keep every implementation Worker's native identity and context available until
+the whole unit reaches its receipt or blocker. `DONE` freezes a lane candidate;
+it does not authorize archiving that Worker before final unit review can return
+a correction.
+
+Before adopting a correction that changes a slice output, compute the affected
+closure: seed it with that slice's direct successors and every slice whose
+declared input identity changed, then include all of their transitive dependency
+successors. Stop each active affected Worker before another edit; invalidate the
+corrected slice's prior proof plus every affected integrated delta and proof;
+rebuild the unit-internal base from the initial base, preserved unrelated
+deltas, and the corrected delta; then emit a fresh map. Resume each affected
+slice's original Worker on the fresh base when the harness can rematerialize it;
+otherwise use only the invalidated-base replacement rule below. Preserve
+unrelated active and integrated slices. A changed undeclared input is a map
+defect: add the missing edge or conflict before redispatch.
 
 A returned candidate that misses an accepted criterion goes back to **the same
 Worker**, with its context intact, through the harness's own correction channel.
@@ -321,12 +517,12 @@ A candidate is scope-valid only when every changed path is authorized by an
 explicit editable path or by the deterministic placement rule in its bounded
 discovery boundary, and every retained change maps to an accepted criterion or
 required proof. Before Lead intake review, derive paths
-with `git diff --name-only <recorded-base> <candidate-tree>` or the
+with `git diff --name-only <slice-base> <candidate-tree>` or the
 harness-native equivalent. For an uncommitted checkout, combine
-`git diff --name-only <recorded-base>` with
+`git diff --name-only <slice-base>` with
 `git ls-files --others --exclude-standard` so the check includes untracked
 paths. A scope-invalid lane candidate has one disposition: reject it in full
-from the recorded base while other provisional unit lanes remain unaffected. A
+from the slice base while other provisional unit lanes remain unaffected. A
 required boundary expansion reopens the scope owner before implementation.
 
 ## Progress
@@ -339,11 +535,11 @@ blocker. A correction re-enters the write lane only through the Diagnostic
 Gate. Judge convergence from returned candidates, not elapsed time, wait
 timeouts, message count, or intermediate Worker activity.
 
-For internal write fan-out, every lane starts from the same accepted unit base
-and every return remains provisional. Assemble only bounded deltas into the
-unit's frozen candidate. A passing lane may be retained after another fails,
-but no subset is accepted independently: the Lead completes or blocks the
-whole unit. Start later work only through the phase-owned [Acceptance-Unit
+Every Worker starts from its mapped frozen slice base and every return remains
+provisional. Assemble only bounded deltas into the unit candidate. A passing
+slice may be retained after another fails, but no base or subset is accepted
+independently: the Lead completes or blocks the whole unit. Start another
+acceptance unit only through the phase-owned [Acceptance-Unit
 Closure](implementation-validation-closeout.md#acceptance-unit-closure).
 
 ## Candidate Intake And Correction
@@ -353,8 +549,9 @@ Closure](implementation-validation-closeout.md#acceptance-unit-closure).
 The Acceptance-Unit Lead owns candidate intake, correction routing,
 acceptance, and integration.
 Each Worker return first passes Scope Lock plus ownership, mergeability, and
-proof-provenance intake. The first intake-valid candidate becomes the frozen
-baseline for the phase-owned bounded
+proof-provenance intake. Intake-valid candidates are integrated serially into
+the unit-internal base; after the Slice DAG is exhausted, the combined candidate
+becomes the frozen baseline for the phase-owned bounded
 [review](implementation-validation-closeout.md#review) and mapped proof. That
 review creates the finite finding set supported by the evidence then available,
 containing only candidate-caused regressions, concrete violations of accepted

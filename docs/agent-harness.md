@@ -27,11 +27,14 @@ The workflow instructions in this repository are harness-neutral. This document 
   carrier. Use a read-only role for research, challenge, or review; it never
   substitutes for the isolated implementation Worker above ([OpenAI
   Subagents](https://learn.chatgpt.com/docs/agent-configuration/subagents.md)).
-- When an ordinary Worker or inner fan-out control is unavailable, do the work
-  root-locally under the owning phase's local-execution rules and state the
-  missing control. A Ledger Orchestrator that lacks top-level fresh-task
-  creation records the next owner and stops blocked; routing-only coordination
-  never degrades into phase work.
+- When an ordinary Worker or inner write-carrier control is unavailable, direct work
+  may continue root-locally under the owning phase's local-execution rules. An
+  Acceptance-Unit Lead instead records the exact missing-write-carrier blocker
+  under the Role Tree's [Implementation Write
+  Boundary](spec-first-workflow/phases/implementation-worker-execution.md#implementation-write-boundary).
+  A Ledger Orchestrator that lacks top-level
+  fresh-task creation records the next owner and stops blocked; routing-only
+  coordination never degrades into phase work.
 
 ## Instruction Loading Map
 
@@ -112,9 +115,12 @@ are authoritative for the installed App when they differ from public prose.
   from the installed controls. It also authorizes thread-local Goals, eligible
   lanes, Handoff,
   upstream phases, prerequisite units, and recovery without another technical
-  or routing choice from the user. Capture that native-control envelope verbatim
-  and carry it into every fresh Lead. It does not expand irreversible external
-  effects or supply missing user-owned business meaning.
+  or routing choice from the user. The same invocation explicitly requests that
+  every Acceptance-Unit Lead follow the Role Tree's mandatory Worker-backed
+  Implementation Write Boundary, including its Slice DAG and frozen bases; carry that
+  request and native-control envelope verbatim into every fresh Lead. It does
+  not expand irreversible external effects or supply missing user-owned
+  business meaning.
 - The Orchestrator calls the native project-list control before creation and
   verifies the saved project and Git capability. It creates no projectless or
   cloud task as a fallback.
@@ -135,6 +141,14 @@ are authoritative for the installed App when they differ from public prose.
   named the existing branch/ref or working-tree state. When it is omitted, the
   native default branch must equal the recorded base; otherwise creation blocks
   before dispatch.
+- For each internal Worker slice, the Lead applies the Role Tree's
+  base-materialization preflight. For a working-tree base it records the
+  synthetic Git tree ID, creates the Worktree child from `startingState:
+  working-tree`, and makes the child validate that identity before editing.
+  Create concurrently ready children sharing that identity without an
+  intervening local mutation. Any mismatch invalidates the unedited child and
+  triggers a fresh DAG calculation. This authority applies only to internal
+  Workers; it does not select a different top-level Lead base.
 
 ### Identity, wait, and correction
 
@@ -213,7 +227,7 @@ are authoritative for the installed App when they differ from public prose.
   Do not send a second continuation message. Move at most one Lead into the
   Local integration checkout at a time.
 - After successful Handoff, the atomic follow-up makes the same Lead create its
-  Local Goal for integration, review, proof, correction, and the canonical
+  Local Goal for integration, review, proof, correction routing, and the canonical
   receipt or blocker. A proposed upstream blocker instead selects the compact
   Local blocker-revalidation continuation. Both repeat the role, unit, and
   `dispatch_scope` without replaying the ledger brief or choosing internal
@@ -231,6 +245,10 @@ are authoritative for the installed App when they differ from public prose.
   and superseded predecessors; keep only the Ledger Orchestrator and children
   still active or needed for recovery visible. Never archive a Worktree task
   while it owns the only unintegrated candidate.
+- An Acceptance-Unit Lead keeps every returned implementation Worker reachable
+  through final unit review and terminal receipt or blocker; lane `DONE` alone
+  does not close the same-Worker correction channel. Archive those Workers only
+  after the unit is terminal and candidate safety is proven.
 
 ### Recovery
 
@@ -335,26 +353,37 @@ Programmatic `thinking: "ultra"` is a reasoning-effort override only; it does
 not itself enable orchestration or delegation, and it is not an autonomous
 Implementation tier. The workflow has already narrowed each Implementation
 child to one acceptance unit or leaf and gives independent work its own child,
-so select the least effort that closes that fixed brief. Only an exact user
-request for `ultra` reasoning may override this exclusion.
+so outside the role-specific Acceptance-Unit Lead baseline select the least
+effort that closes that fixed brief. Only an exact user request for `ultra`
+reasoning may override this exclusion.
+
+The Acceptance-Unit Lead baseline is the reserved hardest quality-first
+workload; it never propagates to its leaves. On each GPT model-generation
+change, WBE-07 compares Sol `max` and `xhigh` on the same representative Lead
+cases before this baseline is retained or revised; a running unit keeps its
+selected configuration.
 
 This table owns the per-harness tiers:
 
 | Task class | Codex App | Claude Code | Qwen Code |
 | --- | --- | --- | --- |
+| Acceptance-Unit Lead | Sol (`gpt-5.6-sol`) with `max`; use Sol `xhigh` only when `max` is unavailable or rejected and record the effective fallback | Opus (`claude-opus-5`) with `max`; use `xhigh` only when `max` is unavailable or rejected and record the effective fallback | The strongest configured model with its maximum supported session effort |
 | Clear mechanical work | Luna (`gpt-5.6-luna`) with `low` effort | Sonnet (`claude-sonnet-5`) | `fast` (the configured `fastModel`) |
 | Ordinary implementation and ordinary review | Terra (`gpt-5.6-terra`) with `medium` effort | Sonnet (`claude-sonnet-5`) | `inherit` (the session model) |
 | Closed-route complex, cross-cutting, protected-domain, or high-consequence implementation | Terra (`gpt-5.6-terra`) with `high` or `xhigh` effort | Opus (`claude-opus-5`) | `inherit`, or a stronger configured model ID |
 | Open-ended root reasoning or critical review | Sol (`gpt-5.6-sol`) only under the recorded escalation rule below | Opus (`claude-opus-5`) | `inherit`, or a stronger configured model ID |
 | Explicit user request for one model | That exact installed model | Fable (`claude-fable-5`) | The exact configured model ID |
 
-- **Codex App uses the explicit task-class ladder above.** Luna owns clear
-  mechanical work. Terra is the default for every ready ordinary unit and
+- **Codex App uses the explicit task-class ladder above.** The role-specific
+  Acceptance-Unit Lead row overrides the write-slice rows: every Lead uses Sol
+  `max`, falling back to Sol `xhigh` only on a recorded unsupported or rejected
+  `max` override. Luna owns clear mechanical Worker work. Terra is the
+  default for every ready ordinary Worker slice and
   ordinary review; raise Terra to `high` or `xhigh` for closed-route complex,
   cross-cutting, protected-domain, or high-consequence implementation. A fixed
   acceptance unit remains closed-route when it touches security, lifecycle,
   performance, or another protected domain: consequence raises effort before it
-  raises the model tier. Sol is not an Implementation default. Select it only for
+  raises the Worker model tier. Outside the Lead row, select Sol only for
   open-ended root reasoning or a genuinely critical review when a representative
   evaluation or a diagnosed prior Terra-`xhigh` capability gap shows the expected
   quality gain after brief and route defects are excluded; record that
@@ -363,7 +392,7 @@ This table owns the per-harness tiers:
   every fresh built-in lane receives the explicit supported fields. Keep
   unresolved architecture, cause, or route discovery with its current owner
   instead of escalating a ready child to compensate for an unready brief.
-- **Claude Code runs a two-model ladder.** Sonnet 5 carries every mechanical and ordinary lane; Opus 5 carries the root session and every complex, cross-cutting-refactoring, or high-consequence lane. Haiku is no longer a default tier — select it only for a trivial lane when current task evidence or representative evaluation shows no material quality loss, and say why. Run the root on Opus 5 (`--model opus`, or the app's model selector) whenever it orchestrates workers or coordinates a structured or orchestrated outcome.
+- **Claude Code runs a two-model ladder.** Sonnet 5 carries every mechanical and ordinary Worker lane; Opus 5 carries every Acceptance-Unit Lead, the root session, and every complex, cross-cutting-refactoring, or high-consequence lane. Haiku is no longer a default tier — select it only for a trivial lane when current task evidence or representative evaluation shows no material quality loss, and say why. Run the root on Opus 5 (`--model opus`, or the app's model selector) whenever it orchestrates workers or coordinates a structured or orchestrated outcome.
 - Qwen Code model tiers are provider-specific: the `model` frontmatter in `.qwen/agents/*.md` accepts `inherit`, `fast`, a bare model ID, or `authType:modelId`. `fast` resolves to the configured `fastModel` and falls back to `inherit` when none is set; `inherit` (or an omitted field) uses the session model. Pick exact model IDs from the models configured for the active provider rather than hardcoding them. Qwen Code does not yet expose a per-agent reasoning-effort field, so a lane inherits the session effort.
 
 - Claude Code accepts the aliases `haiku`, `sonnet`, `opus`, and `fable` on the `Agent` tool and in agent frontmatter; the exact model IDs are for SDK and API dispatch.
@@ -376,7 +405,7 @@ This table owns the per-harness tiers:
 | `low` | Clear, bounded mechanical work whose route and proof are already known and whose lower effort has no material quality loss on current task evidence or representative evaluation. |
 | `medium` | Ordinary implementation, review, and document analysis. |
 | `high` / `xhigh` | Complex debugging, broad synthesis, or high-consequence reasoning when task evidence or a representative evaluation shows that extra reasoning improves the outcome. |
-| `max` | The hardest architecture, research, or formal-reasoning work when lower effort is demonstrably insufficient. |
+| `max` | Every Acceptance-Unit Lead; otherwise the hardest architecture, research, or formal-reasoning work when lower effort is demonstrably insufficient. |
 
 - A wrong result is evidence to improve the diagnosis, brief, or route, not by itself a reason to raise effort. Implementation correction follows its phase-owned frozen-finding contract and never raises effort merely to keep a repair loop active.
 - Required re-review remains at least as capable (model and effort) as the review that found the issue. Implementation correction uses delta-only acceptance-owner verification; when independent implementation review remains triggered, the fixed candidate enters a fresh one-shot lane.
@@ -391,7 +420,7 @@ This part is owned here, not by either vendor, and applies to both:
 
 - Set a goal only for a genuinely long-running, multi-step, or resumable implementation outcome. The explicit Codex App Ledger Orchestrator is the sole exception: its Goal owns routing across fresh Acceptance-Unit Leads and Upstream Reopen Leads, concurrently only for a ledger-proven independent wave, and never their phase decisions, execution strategy, implementation, proof, review, integration, correction, or acceptance.
 - One Goal spans one thread-local stage. The Ledger Orchestrator has one routing
-  Goal. A serial Local Lead has one acceptance Goal; a Worktree Lead completes
+  Goal. A single-unit Local Lead has one acceptance Goal; a Worktree Lead completes
   one candidate Goal before Handoff and creates one separate Local acceptance
   Goal after Handoff succeeds. The Lead task and role stay alive across those
   two non-overlapping Goals through the unit receipt or blocker. An Upstream
@@ -452,17 +481,22 @@ Vendor authority: [Subagents](https://code.claude.com/docs/en/sub-agents), in pa
 
 ### Dispatch
 
-- An Acceptance-Unit Lead that selects internal write fan-out dispatches one
-  background `Agent` lane per positively independent slice with `isolation:
-  "worktree"`. All lanes stay inside that unit, use one accepted base, remain
-  leaf writers, and return to the Lead for serial intake and integration. Each
-  brief begins `Execution role: IMPLEMENTATION_WORKER`.
+- An Acceptance-Unit Lead realizes the Role Tree's [Implementation Write
+  Boundary](spec-first-workflow/phases/implementation-worker-execution.md#implementation-write-boundary)
+  with background `Agent` lanes using `isolation: "worktree"`. All lanes stay
+  inside that unit, remain leaf writers, and return to the Lead for serial
+  intake and integration. Each brief begins `Execution role:
+  IMPLEMENTATION_WORKER`.
+- Before the first dispatch, verify that the harness can materialize every base
+  form required by the Slice DAG. If a successor base cannot be materialized, collapse
+  that complete dependency chain into one exact serial slice now and choose its
+  model for the hardest included work. Never widen a dispatched slice.
 - Read-only research or review lanes use ordinary background `Agent` subagents
   without worktree isolation. They answer one independently checkable question
   and never become an alternate acceptance owner. An Implementation brief begins
   `Execution role: READ_ONLY_SPECIALIST` or, for the fixed-unit review branch,
   `Execution role: ACCEPTANCE_REVIEWER`.
-- Pass `isolation` as a dispatch parameter rather than moving it into the role's frontmatter. A dispatch-parameter worktree branches from the parent's `HEAD`, which is the accepted integrated base the wave needs; frontmatter isolation follows the `--worktree` base rule and branches from the repository's default branch unless [`worktree.baseRef`](https://code.claude.com/docs/en/worktrees#choose-the-base-branch) is `"head"`.
+- Pass `isolation` as a dispatch parameter rather than moving it into the role's frontmatter. A dispatch-parameter worktree branches from the parent's `HEAD`, which must equal the mapped slice base; frontmatter isolation follows the `--worktree` base rule and branches from the repository's default branch unless [`worktree.baseRef`](https://code.claude.com/docs/en/worktrees#choose-the-base-branch) is `"head"`.
 - Dispatch only after the exact accepted ledger revision — `tasks.md` plus any
   `tasks/` files it links — is in the base visible to the worker. Pass the index
   path, the unit's task-file paths when the ledger is split, and acceptance-unit
@@ -491,7 +525,7 @@ This is why [Execution-Ready Dispatch](spec-first-workflow/phases/implementation
 
 ### Return work for rework
 
-This is the loop that lets the Acceptance-Unit Lead retain correction
+This is the loop that lets the Acceptance-Unit Lead retain correction-routing
 ownership instead of treating a Worker as a one-shot dispatch.
 
 - After the worker returns a frozen candidate, send one batched correction to the
