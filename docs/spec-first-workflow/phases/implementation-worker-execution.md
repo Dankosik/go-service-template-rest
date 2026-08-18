@@ -31,46 +31,79 @@ Tree](../../agent-harness.md#codex-app-selection-tree) shows which actor selects
 the model and reasoning effort for each direct child.
 
 ```mermaid
-flowchart TD
-    user["User<br/>ready Implementation ledger<br/>one orchestration launch"]
-    orchestrator["LEDGER_ORCHESTRATOR<br/>routing only"]
-    lead["ACCEPTANCE_UNIT_LEAD<br/>one fresh native task per ready unit"]
-    reopen["UPSTREAM_REOPEN_LEAD<br/>one fresh task for one macro phase"]
-    strategy{"Lead emits the Slice DAG"}
-    specialist["READ_ONLY_SPECIALIST<br/>optional leaf"]
-    worker["IMPLEMENTATION_WORKER<br/>every ready slice up to capacity"]
-    intake["Lead serial intake<br/>integrate · release reservations"]
-    exhausted{"Slice DAG exhausted?"}
-    reviewer["ACCEPTANCE_REVIEWER<br/>triggered fresh read-only leaf"]
-    fanin["Lead serial fan-in<br/>integration · self-review · proof"]
-    review{"Independent review triggered?"}
-    acceptance["Lead correction routing and acceptance"]
-    result["One canonical receipt or blocker"]
-    done["Ledger exhausted"]
-    stopped["Exact user/external boundary,<br/>unrecoverable native blocker,<br/>or canonical blocker with no ready/recovery"]
+flowchart TB
+    user["User<br/>outcome · business meaning · external authority"]
+    orchestrator["LEDGER_ORCHESTRATOR<br/>routes ledger and native task lifecycle<br/>no phase or unit work"]
+    lead["ACCEPTANCE_UNIT_LEAD<br/>decides · maps · schedules · integrates · proves · accepts<br/>no implementation bytes"]
+    reopen["UPSTREAM_REOPEN_LEAD<br/>closes one upstream phase<br/>never enters Implementation"]
+    specialist["READ_ONLY_SPECIALIST<br/>answers one question<br/>no writes"]
+    gate{"WRITE-CARRIER GATE<br/>required carrier = actual backing<br/>= isolated checkout?"}
+    worker["IMPLEMENTATION_WORKER<br/>owns one slice's bytes and focused proof<br/>Codex App: top-level Worktree task"]
+    reviewer["ACCEPTANCE_REVIEWER<br/>falsifies one fixed candidate<br/>no writes"]
+    invalid["INVALID CARRIER<br/>diagnostic bytes only<br/>rerun from frozen base or block"]
+    result["Canonical Accepted: receipt<br/>or Blocked: record"]
 
     user --> orchestrator
-    orchestrator -->|"one ready unit; several only in a proved wave"| lead
-    orchestrator -->|"agent-owned canonical reopen"| reopen
+    orchestrator -->|"ready unit"| lead
+    orchestrator -->|"agent-owned upstream blocker"| reopen
     reopen -->|"review-cleared phase result"| orchestrator
-    orchestrator -->|"resume blocked unit after closure"| lead
-    lead --> strategy
-    strategy -->|"one independent question"| specialist
-    specialist --> strategy
-    strategy -->|"no implementation write"| fanin
-    strategy -->|"dispatch ready set"| worker
-    worker -->|"first completed candidate"| intake
-    intake --> exhausted
-    exhausted -->|"no: recompute ready set"| worker
-    exhausted -->|"yes"| fanin
-    fanin --> review
-    review -->|"yes"| reviewer
-    review -->|"no"| acceptance
-    reviewer --> acceptance
-    acceptance --> result
-    result -->|"re-read ledger and route again"| orchestrator
-    orchestrator -->|"no ready or pending units"| done
-    orchestrator -->|"stop condition reached"| stopped
+    lead -->|"optional decision-changing question"| specialist
+    specialist --> lead
+    lead -->|"every ready write slice"| gate
+    gate -->|"valid"| worker
+    worker -->|"DONE or NEEDS_PARENT"| lead
+    gate -->|"invalid"| invalid
+    invalid --> lead
+    lead -->|"triggered fixed-unit review"| reviewer
+    reviewer --> lead
+    lead --> result
+    result --> orchestrator
+```
+
+The only path to implementation bytes is
+`ACCEPTANCE_UNIT_LEAD -> WRITE-CARRIER GATE -> IMPLEMENTATION_WORKER`. The
+Orchestrator, Lead, Specialist, Reopen Lead, and Reviewer have no
+implementation-byte authoring path. The table and clauses below define the
+evidence required on each arrow.
+
+### One Acceptance Unit
+
+```mermaid
+sequenceDiagram
+    participant O as LEDGER_ORCHESTRATOR
+    participant L as ACCEPTANCE_UNIT_LEAD
+    participant G as WRITE-CARRIER GATE
+    participant W as IMPLEMENTATION_WORKER
+    participant R as ACCEPTANCE_REVIEWER
+    participant D as Canonical ledger
+
+    O->>L: Ready unit + Worker-task authority
+    L->>L: Decide route and freeze Execution Map
+    Note over L,W: Independent ready slices run concurrently; Lead intake and integration stay serial
+    loop Every ready slice up to evidenced capacity
+        L->>G: Create required carrier from frozen base
+        alt Carrier or base invalid
+            G-->>L: Invalid backing, identity, checkout, or base
+            L->>L: Release reservations; rematerialize or block
+        else Carrier and base valid
+            G-->>L: Native identity + isolated checkout
+            L->>W: Exact outcome-first Worker brief
+            W->>W: Author slice bytes + focused proof
+            W-->>L: DONE or NEEDS_PARENT + frozen candidate
+            alt Supported finding
+                L->>W: Same-Worker correction
+            else Intake valid
+                L->>L: Serial integration; recompute ready set
+            end
+        end
+    end
+    L->>L: Aggregate proof + Lead self-review
+    opt Independent review triggered
+        L->>R: One fixed candidate
+        R-->>L: PASS, FAIL, or NEEDS_PARENT
+    end
+    L->>D: One Accepted receipt or Blocked record
+    D-->>O: Canonical transition; route again
 ```
 
 | Role | Receives from | Owns | May dispatch | Upward result |
