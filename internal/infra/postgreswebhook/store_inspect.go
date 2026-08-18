@@ -110,7 +110,7 @@ func (s *Store) InspectDelivery(ctx context.Context, request InspectionRequest) 
 	}
 	opCtx, cancel := context.WithTimeout(ctx, s.options.OperationTimeout)
 	defer cancel()
-	tx, err := s.pool.PGX().BeginTx(opCtx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
+	tx, err := s.pool.BeginTx(opCtx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
 	if err != nil {
 		return DeliveryInspection{}, fmt.Errorf("begin webhook inspection: %w", err)
 	}

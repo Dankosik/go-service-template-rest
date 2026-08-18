@@ -6,4 +6,4 @@ import "github.com/example/go-service-template-rest/cmd/jobs-worker/internal/boo
 
 // A concrete feature replaces this nil builder in its selected binary. The
 // generic pack has no default kind and must therefore fail before database I/O.
-var buildRegistry bootstrap.RegistryBuilder
+var buildWorkers bootstrap.WorkersBuilder

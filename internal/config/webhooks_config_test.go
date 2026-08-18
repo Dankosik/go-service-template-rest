@@ -9,7 +9,7 @@ import (
 
 func TestWebhooksConfigContract(t *testing.T) {
 	valid := WebhooksConfig{Enabled: true, CapacityRevision: 1, GlobalConcurrency: 4, ClaimScanPage: 4, PollInterval: time.Second, ObservationInterval: time.Second, StoreOperationTimeout: time.Second, AttemptTimeout: 5 * time.Second, ResponseHeaderTimeout: 2 * time.Second, ResponseHeaderBytes: 4096, ResponseBodyBytes: 4096, DrainTimeout: 10 * time.Second, MaintenanceInterval: time.Second, MaintenanceBatch: 10, StaticSecrets: `{"revision":1,"entries":[]}`}
-	postgres := PostgresConfig{Enabled: true, StatementTimeout: 5 * time.Second}
+	postgres := PostgresConfig{Enabled: true}
 	http := HTTPConfig{GracePeriod: 45 * time.Second}
 	if err := validateWebhooks(valid, postgres, http); err != nil {
 		t.Fatalf("validateWebhooks(valid) error = %v", err)
@@ -21,7 +21,7 @@ func TestWebhooksConfigContract(t *testing.T) {
 		{"postgres disabled", func(_ *WebhooksConfig, p *PostgresConfig, _ *HTTPConfig) { p.Enabled = false }},
 		{"capacity revision", func(w *WebhooksConfig, _ *PostgresConfig, _ *HTTPConfig) { w.CapacityRevision = 0 }},
 		{"claim page", func(w *WebhooksConfig, _ *PostgresConfig, _ *HTTPConfig) { w.ClaimScanPage = 257 }},
-		{"store timeout", func(w *WebhooksConfig, _ *PostgresConfig, _ *HTTPConfig) { w.StoreOperationTimeout = 6 * time.Second }},
+		{"store timeout", func(w *WebhooksConfig, _ *PostgresConfig, _ *HTTPConfig) { w.StoreOperationTimeout = 9 * time.Second }},
 		{"budget nesting", func(w *WebhooksConfig, _ *PostgresConfig, _ *HTTPConfig) { w.ResponseHeaderTimeout = 6 * time.Second }},
 		{"attempt ceiling", func(w *WebhooksConfig, _ *PostgresConfig, h *HTTPConfig) {
 			w.AttemptTimeout = 10*time.Minute + time.Nanosecond
@@ -64,10 +64,8 @@ func TestWebhookWorkerProcessEnvironment(t *testing.T) {
 	for key, value := range map[string]string{
 		"APP__APP__ENV": "integration", "APP__OBSERVABILITY__METRICS__ADDR": ":9090",
 		"APP__POSTGRES__ENABLED": "true", "APP__POSTGRES__DSN": "postgres://app:app@127.0.0.1:5432/app?sslmode=disable",
-		"APP__POSTGRES__MAX_OPEN_CONNS": "4", "APP__POSTGRES__MIN_IDLE_CONNS": "0",
-		"APP__POSTGRES__CONNECT_TIMEOUT": "1s", "APP__POSTGRES__HEALTHCHECK_TIMEOUT": "1s",
-		"APP__POSTGRES__ACQUIRE_TIMEOUT": "100ms", "APP__POSTGRES__STATEMENT_TIMEOUT": "500ms",
-		"APP__HTTP__REQUEST_TIMEOUT": "2s", "APP__HTTP__GRACE_PERIOD": "12s", "APP__HTTP__SHUTDOWN_TIMEOUT": "3s",
+		"APP__POSTGRES__MAX_OPEN_CONNS": "4",
+		"APP__HTTP__REQUEST_TIMEOUT":    "2s", "APP__HTTP__GRACE_PERIOD": "12s", "APP__HTTP__SHUTDOWN_TIMEOUT": "3s",
 		"APP__HTTP__WRITE_TIMEOUT": "2s", "APP__HTTP__READINESS_TIMEOUT": "1s", "APP__HTTP__READINESS_PROPAGATION_DELAY": "0s",
 		"APP__WEBHOOKS__ENABLED": "true", "APP__WEBHOOKS__CAPACITY_REVISION": "1", "APP__WEBHOOKS__GLOBAL_CONCURRENCY": "2",
 		"APP__WEBHOOKS__CLAIM_SCAN_PAGE": "4", "APP__WEBHOOKS__POLL_INTERVAL": "50ms", "APP__WEBHOOKS__OBSERVATION_INTERVAL": "100ms",

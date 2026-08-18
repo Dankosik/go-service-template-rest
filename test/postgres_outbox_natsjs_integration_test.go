@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/infra/natsjs"
+	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry/telemetrytest"
 	"github.com/example/go-service-template-rest/internal/waittest"
 	"github.com/jackc/pgx/v5"
@@ -40,7 +41,7 @@ func TestPostgresOutboxNATSConformance(t *testing.T) {
 	event.OrderingSequence = 7
 	producing, span := otel.GetTracerProvider().Tracer("integration").Start(ctx, "create outbox event")
 	origin := trace.SpanContextFromContext(producing)
-	if err := pool.InTx(producing, pgx.TxOptions{}, func(tx pgx.Tx) error {
+	if err := postgres.InTx(producing, pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 		return store.Append(producing, tx, event)
 	}); err != nil {
 		t.Fatalf("append traced outbox event: %v", err)

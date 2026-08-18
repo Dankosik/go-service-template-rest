@@ -75,7 +75,7 @@ verify_jobs_worker_image() {
 		echo "runtime image jobs worker exited successfully without a builder" >&2
 		exit 1
 	fi
-	if ! grep -Fq 'jobs worker registry builder is not registered' <<<"${output}"; then
+	if ! grep -Fq 'jobs worker builder is not registered' <<<"${output}"; then
 		echo "runtime image jobs worker did not execute the expected fail-closed binary" >&2
 		echo "${output}" >&2
 		exit 1
@@ -159,9 +159,6 @@ profile_environment=(
 	# profile:outbox-postgres:start
 	"OUTBOX=postgres"
 	# profile:outbox-postgres:end
-	# profile:inbox-postgres:start
-	"INBOX=postgres"
-	# profile:inbox-postgres:end
 	# profile:jobs-postgres:start
 	"JOBS=postgres"
 	# profile:jobs-postgres:end
@@ -197,9 +194,6 @@ grep -Fqx 'outbound_http = "bounded"' "${CHECKOUT}/template.lock"
 # profile:outbox-postgres:start
 grep -Fqx 'outbox = "postgres"' "${CHECKOUT}/template.lock"
 # profile:outbox-postgres:end
-# profile:inbox-postgres:start
-grep -Fqx 'inbox = "postgres"' "${CHECKOUT}/template.lock"
-# profile:inbox-postgres:end
 # profile:jobs-postgres:start
 grep -Fqx 'jobs = "postgres"' "${CHECKOUT}/template.lock"
 # profile:jobs-postgres:end

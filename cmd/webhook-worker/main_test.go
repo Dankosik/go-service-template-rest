@@ -21,7 +21,6 @@ func TestFailureClassAndReportFailure(t *testing.T) {
 		{postgres.ErrConfig, "config"},
 		{postgres.ErrConnect, "postgres_unavailable"},
 		{postgres.ErrHealthcheck, "postgres_unavailable"},
-		{postgres.ErrSaturated, "postgres_unavailable"},
 		{postgreswebhook.ErrClockRegression, "clock_regression"},
 		{postgreswebhook.ErrDrainUnsafe, "drain_unsafe"},
 		{errors.New("unexpected"), "runtime"},

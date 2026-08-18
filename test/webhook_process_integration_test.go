@@ -22,6 +22,7 @@ import (
 	"github.com/example/go-service-template-rest/internal/infra/postgreswebhook"
 	"github.com/example/go-service-template-rest/internal/waittest"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func TestWebhookWorkerProcessLifecycle(t *testing.T) {
@@ -55,9 +56,7 @@ func TestWebhookWorkerProcessLifecycle(t *testing.T) {
 			"APP__APP__ENV=integration",
 			"APP__OBSERVABILITY__METRICS__ADDR=:9090",
 			"APP__POSTGRES__ENABLED=true", "APP__POSTGRES__DSN=" + dsn,
-			"APP__POSTGRES__MAX_OPEN_CONNS=4", "APP__POSTGRES__MIN_IDLE_CONNS=0",
-			"APP__POSTGRES__CONNECT_TIMEOUT=1s", "APP__POSTGRES__HEALTHCHECK_TIMEOUT=1s",
-			"APP__POSTGRES__ACQUIRE_TIMEOUT=100ms", "APP__POSTGRES__STATEMENT_TIMEOUT=500ms",
+			"APP__POSTGRES__MAX_OPEN_CONNS=4",
 			"APP__HTTP__REQUEST_TIMEOUT=2s", "APP__HTTP__GRACE_PERIOD=25s",
 			"APP__HTTP__SHUTDOWN_TIMEOUT=3s", "APP__HTTP__WRITE_TIMEOUT=2s",
 			"APP__HTTP__READINESS_TIMEOUT=1s", "APP__HTTP__READINESS_PROPAGATION_DELAY=0s",
@@ -112,7 +111,7 @@ func TestWebhookWorkerProcessLifecycle(t *testing.T) {
 
 	name, address, waited, output := start()
 	waitWebhookStatus(t, address, http.StatusOK)
-	lock, err := pool.PGX().Begin(ctx)
+	lock, err := pool.Begin(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +149,7 @@ func TestWebhookWorkerProcessLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error { _, err := store.Accept(ctx, tx, prepared); return err }); err != nil {
+	if err := postgres.InTx(ctx, pool, pgx.TxOptions{}, func(tx pgx.Tx) error { _, err := store.Accept(ctx, tx, prepared); return err }); err != nil {
 		t.Fatal(err)
 	}
 	claim, err := store.Claim(ctx, "crashed-worker", 1, 30*time.Second, manifest)
@@ -160,17 +159,17 @@ func TestWebhookWorkerProcessLifecycle(t *testing.T) {
 	if err := store.AuthorizeAttempt(ctx, *claim.Attempt, manifest, postgreswebhook.AuthorizationEvidence{KeyReference: "key-a", KeyReferences: []string{"key-a"}, SelectedAddress: netip.MustParseAddr("8.8.8.8")}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.PGX().Exec(ctx, `UPDATE webhook_attempts SET lease_expires_at = clock_timestamp() - interval '1 second' WHERE attempt_id = $1`, claim.Attempt.Identity.AttemptID); err != nil {
+	if _, err := pool.Exec(ctx, `UPDATE webhook_attempts SET lease_expires_at = clock_timestamp() - interval '1 second' WHERE attempt_id = $1`, claim.Attempt.Identity.AttemptID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.PGX().Exec(ctx, `UPDATE webhook_capacity_slots SET lease_expires_at = clock_timestamp() - interval '1 second' WHERE attempt_id = $1`, claim.Attempt.Identity.AttemptID); err != nil {
+	if _, err := pool.Exec(ctx, `UPDATE webhook_capacity_slots SET lease_expires_at = clock_timestamp() - interval '1 second' WHERE attempt_id = $1`, claim.Attempt.Identity.AttemptID); err != nil {
 		t.Fatal(err)
 	}
 
 	name, address, waited, output = start()
 	waitWebhookStatus(t, address, http.StatusOK)
 	var deliveries, attempts int
-	if err := pool.PGX().QueryRow(ctx, `SELECT (SELECT count(*) FROM webhook_deliveries), (SELECT count(*) FROM webhook_attempts)`).Scan(&deliveries, &attempts); err != nil {
+	if err := pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM webhook_deliveries), (SELECT count(*) FROM webhook_attempts)`).Scan(&deliveries, &attempts); err != nil {
 		t.Fatal(err)
 	}
 	if deliveries != 1 || attempts != 1 {
@@ -179,7 +178,7 @@ func TestWebhookWorkerProcessLifecycle(t *testing.T) {
 	var state, summary string
 	var leased int
 	var retryDue, retryDelay bool
-	if err := pool.PGX().QueryRow(ctx, `SELECT d.state, d.cumulative_summary,
+	if err := pool.QueryRow(ctx, `SELECT d.state, d.cumulative_summary,
         (SELECT count(*) FROM webhook_capacity_slots WHERE attempt_id IS NOT NULL),
         d.next_due_at > clock_timestamp(),
         a.retry_delay_ns > 0
@@ -207,9 +206,9 @@ func waitWebhookStatus(t *testing.T, address string, status int) {
 	}, "webhook worker readiness")
 }
 
-func webhookDockerDSN(t *testing.T, pool *postgres.Pool) string {
+func webhookDockerDSN(t *testing.T, pool *pgxpool.Pool) string {
 	t.Helper()
-	config := pool.PGX().Config().ConnConfig
+	config := pool.Config().ConnConfig
 	return (&url.URL{
 		Scheme: "postgres", User: url.UserPassword(config.User, config.Password),
 		Host: net.JoinHostPort("host.docker.internal", strconv.Itoa(int(config.Port))), Path: "/" + config.Database,

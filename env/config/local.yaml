@@ -9,15 +9,10 @@ http:
 # reserved example host intentionally cannot provide production trust.
 authn:
 # profile:jobs-postgres:start
-# The jobs pack is present but inactive until a deployment supplies its bounds.
+# The source template keeps the jobs worker inactive. A selected service enables
+# it with one conservative worker and raises the value only from capacity proof.
 jobs:
-  enabled: false
-  poll_interval: 0s
-  max_concurrency: 0
-  lease_duration: 0s
-  store_operation_timeout: 0s
-  observation_interval: 0s
-  drain_timeout: 0s
+  max_workers: 0
 # profile:jobs-postgres:end
   issuer: "https://issuer.example.com"
   audience: "https://api.example.com"

@@ -9,6 +9,7 @@ import (
 	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	"github.com/example/go-service-template-rest/internal/infra/postgres/sqlcgen"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type StoreOptions struct {
@@ -24,7 +25,7 @@ type StoreOptions struct {
 }
 
 type Store struct {
-	pool    *postgres.Pool
+	pool    *pgxpool.Pool
 	options StoreOptions
 }
 
@@ -32,7 +33,7 @@ func (s *Store) CheckSchema(ctx context.Context) error {
 	if !s.valid() {
 		return fmt.Errorf("%w: store is required", ErrConfig)
 	}
-	queries := sqlcgen.New(s.pool.PGX())
+	queries := sqlcgen.New(s.pool)
 	relations, err := queries.ListPostgresWebhookRelations(ctx)
 	if err != nil {
 		return fmt.Errorf("inspect webhook schema: %w", err)
@@ -51,8 +52,8 @@ func (s *Store) CheckSchema(ctx context.Context) error {
 	return nil
 }
 
-func NewStore(pool *postgres.Pool, options StoreOptions) (*Store, error) {
-	if pool == nil || pool.PGX() == nil {
+func NewStore(pool *pgxpool.Pool, options StoreOptions) (*Store, error) {
+	if pool == nil {
 		return nil, fmt.Errorf("%w: postgres pool is required", ErrConfig)
 	}
 	if options.OperationTimeout <= 0 || options.OperationTimeout > MaxStoreOperationTime ||
@@ -77,7 +78,7 @@ func (s *Store) admits(policy DeliveryPolicy) bool {
 }
 
 func (s *Store) valid() bool {
-	return s != nil && s.pool != nil && s.pool.PGX() != nil && s.options.OperationTimeout > 0
+	return s != nil && s.pool != nil && s.options.OperationTimeout > 0
 }
 
 func (s *Store) transaction(ctx context.Context, fn func(context.Context, pgx.Tx) error) error {
@@ -86,7 +87,7 @@ func (s *Store) transaction(ctx context.Context, fn func(context.Context, pgx.Tx
 	}
 	opCtx, cancel := context.WithTimeout(ctx, s.options.OperationTimeout)
 	defer cancel()
-	if err := s.pool.InTx(opCtx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+	if err := postgres.InTx(opCtx, s.pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 		return fn(opCtx, tx)
 	}); err != nil {
 		return fmt.Errorf("webhook transaction: %w", err)

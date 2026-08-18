@@ -27,7 +27,7 @@ func failureClass(err error) string {
 	switch {
 	case config.ErrorType(err) != config.ErrorTypeUnknown, errors.Is(err, postgres.ErrConfig), errors.Is(err, postgreswebhook.ErrConfig):
 		return "config"
-	case errors.Is(err, postgres.ErrConnect), errors.Is(err, postgres.ErrHealthcheck), errors.Is(err, postgres.ErrSaturated):
+	case errors.Is(err, postgres.ErrConnect), errors.Is(err, postgres.ErrHealthcheck):
 		return "postgres_unavailable"
 	case errors.Is(err, postgreswebhook.ErrClockRegression):
 		return "clock_regression"

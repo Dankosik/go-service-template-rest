@@ -14,6 +14,7 @@ import (
 	"github.com/example/go-service-template-rest/internal/infra/postgresoutbox"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry/telemetrytest"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"go.opentelemetry.io/otel"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
@@ -38,7 +39,7 @@ func TestPostgresOutboxPublicationNamesTheProducingOperation(t *testing.T) {
 	origin := trace.SpanContextFromContext(producing)
 	// Appended with the request's context, which is the only way the creation
 	// context is captured — a caller cannot set one.
-	if err := pool.InTx(producing, pgx.TxOptions{}, func(tx pgx.Tx) error {
+	if err := postgres.InTx(producing, pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 		return store.Append(producing, tx, outboxEvent("traced-event"))
 	}); err != nil {
 		t.Fatalf("append inside the producing trace: %v", err)
@@ -140,7 +141,7 @@ func TestPostgresOutboxRetireSerializesWithAppend(t *testing.T) {
 			t.Fatalf("drain ordering key: %v", err)
 		}
 
-		appendTx, err := pool.PGX().Begin(ctx)
+		appendTx, err := pool.Begin(ctx)
 		if err != nil {
 			t.Fatalf("begin append transaction: %v", err)
 		}
@@ -180,7 +181,7 @@ func TestPostgresOutboxRetireSerializesWithAppend(t *testing.T) {
 			t.Fatalf("drain ordering key: %v", err)
 		}
 
-		retireTx, err := pool.PGX().Begin(ctx)
+		retireTx, err := pool.Begin(ctx)
 		if err != nil {
 			t.Fatalf("begin retirement transaction: %v", err)
 		}
@@ -195,7 +196,7 @@ func TestPostgresOutboxRetireSerializesWithAppend(t *testing.T) {
 
 		appended := make(chan error, 1)
 		go func() {
-			appended <- pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+			appended <- postgres.InTx(ctx, pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 				return store.Append(ctx, tx, orderedEvent("retire-first-1", key, 1))
 			})
 		}()
@@ -224,7 +225,7 @@ func TestPostgresOutboxRetireSerializesWithAppend(t *testing.T) {
 			t.Fatalf("drain ordering key: %v", err)
 		}
 
-		firstTx, err := pool.PGX().Begin(ctx)
+		firstTx, err := pool.Begin(ctx)
 		if err != nil {
 			t.Fatalf("begin first retirement: %v", err)
 		}
@@ -311,7 +312,7 @@ func TestPostgresOutboxTraceContextAllowance(t *testing.T) {
 		t.Fatalf("test envelope = %d bytes, want %d", got, maxEnvelopeBytes)
 	}
 
-	if err := pool.InTx(producing, pgx.TxOptions{}, func(tx pgx.Tx) error {
+	if err := postgres.InTx(producing, pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 		return store.Append(producing, tx, event)
 	}); err != nil {
 		t.Fatalf("append traced event at caller envelope limit: %v", err)
@@ -341,7 +342,7 @@ func TestPostgresOutboxCreationContextSurvivesRecovery(t *testing.T) {
 
 	producing, producingSpan := otel.GetTracerProvider().Tracer("integration").Start(ctx, "POST /orders")
 	origin := trace.SpanContextFromContext(producing)
-	if err := pool.InTx(producing, pgx.TxOptions{}, func(tx pgx.Tx) error {
+	if err := postgres.InTx(producing, pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 		return store.Append(producing, tx, outboxEvent("recover-trace"))
 	}); err != nil {
 		t.Fatalf("append inside the producing trace: %v", err)
@@ -444,11 +445,11 @@ func TestPostgresOutboxCreationContextSurvivesRecovery(t *testing.T) {
 
 func retireOrderingKeys(
 	ctx context.Context,
-	pool *postgres.Pool,
+	pool *pgxpool.Pool,
 	store *postgresoutbox.Store,
 	keys ...string,
 ) error {
-	return pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+	return postgres.InTx(ctx, pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 		return store.RetireOrderingKeys(ctx, tx, keys...)
 	})
 }
@@ -465,10 +466,10 @@ func findSpan(t *testing.T, recorder *tracetest.SpanRecorder, name string) sdktr
 	return nil
 }
 
-func countOrderingHeads(t *testing.T, ctx context.Context, pool *postgres.Pool) int {
+func countOrderingHeads(t *testing.T, ctx context.Context, pool *pgxpool.Pool) int {
 	t.Helper()
 	var count int
-	if err := pool.PGX().QueryRow(ctx, "SELECT count(*) FROM outbox_ordering_heads").Scan(&count); err != nil {
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM outbox_ordering_heads").Scan(&count); err != nil {
 		t.Fatalf("count ordering heads: %v", err)
 	}
 	return count

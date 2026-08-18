@@ -46,7 +46,7 @@ func TestPostgresMigrateUpNoopDownUp(t *testing.T) {
 	if err != nil {
 		t.Fatalf("MigrateUp(first) error: %v", err)
 	}
-	if first.Before != 0 || first.Target != 2 || first.After != 2 || len(first.Migrations) != 2 {
+	if first.Before != 0 || first.Target != 2 || first.After != 2 || first.AppliedCount != 2 {
 		t.Fatalf("MigrateUp(first) result = %+v", first)
 	}
 
@@ -54,7 +54,7 @@ func TestPostgresMigrateUpNoopDownUp(t *testing.T) {
 	if err != nil {
 		t.Fatalf("MigrateUp(second) error: %v", err)
 	}
-	if second.Before != 2 || second.After != 2 || len(second.Migrations) != 0 {
+	if second.Before != 2 || second.After != 2 || second.AppliedCount != 0 {
 		t.Fatalf("MigrateUp(second) result = %+v, want no change", second)
 	}
 
@@ -62,7 +62,7 @@ func TestPostgresMigrateUpNoopDownUp(t *testing.T) {
 	if err != nil {
 		t.Fatalf("MigrateDown() error: %v", err)
 	}
-	if down.Before != 2 || down.Target != 0 || down.After != 0 || len(down.Migrations) != 2 {
+	if down.Before != 2 || down.Target != 0 || down.After != 0 || down.AppliedCount != 2 {
 		t.Fatalf("MigrateDown() result = %+v", down)
 	}
 
@@ -82,7 +82,7 @@ func TestPostgresMigrateUpNoopDownUp(t *testing.T) {
 	if err != nil {
 		t.Fatalf("MigrateUp(reapply) error: %v", err)
 	}
-	if reapplied.Before != 0 || reapplied.After != 2 || len(reapplied.Migrations) != 2 {
+	if reapplied.Before != 0 || reapplied.After != 2 || reapplied.AppliedCount != 2 {
 		t.Fatalf("MigrateUp(reapply) result = %+v", reapplied)
 	}
 }
@@ -115,7 +115,7 @@ func TestPostgresMigrateRepositorySourceRehearsal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("repository MigrateUp(second) error: %v", err)
 	}
-	if len(second.Migrations) != 0 || second.After != first.After {
+	if second.AppliedCount != 0 || second.After != first.After {
 		t.Fatalf("repository second Up = %+v, first = %+v", second, first)
 	}
 	down, err := postgresmigrate.MigrateDown(ctx, options)
@@ -161,8 +161,7 @@ func TestPostgresMigratePreservesCommittedPrefixAndRollsBackFailedFile(t *testin
 	if postgresmigrate.FailureStageOf(err) != postgresmigrate.FailureExecute {
 		t.Fatalf("failure stage = %q, want execute; error = %v", postgresmigrate.FailureStageOf(err), err)
 	}
-	if result.After != 1 || len(result.Migrations) != 1 || result.Failed == nil ||
-		result.Failed.Version != 2 {
+	if result.After != 1 || result.AppliedCount != 1 {
 		t.Fatalf("partial result = %+v", result)
 	}
 
@@ -320,7 +319,7 @@ func TestPostgresMigrateSessionLockSerializesConcurrentRunners(t *testing.T) {
 		if err := <-errs; err != nil {
 			t.Fatalf("concurrent MigrateUp() error: %v", err)
 		}
-		totalApplied += len((<-results).Migrations)
+		totalApplied += (<-results).AppliedCount
 	}
 	if totalApplied != 1 {
 		t.Fatalf("concurrent applied count = %d, want exactly one", totalApplied)
@@ -393,7 +392,7 @@ func TestPostgresMigrateCancellationStopsLaterMigration(t *testing.T) {
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("MigrateUp() error = %v, want context.Canceled", err)
 	}
-	if result.After != 0 || len(result.Migrations) != 0 {
+	if result.After != 0 || result.AppliedCount != 0 {
 		t.Fatalf("canceled result = %+v, want no committed migration", result)
 	}
 	if relationExists(t, outer, pool, "migration_later") {

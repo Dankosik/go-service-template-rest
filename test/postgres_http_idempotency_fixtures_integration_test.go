@@ -38,7 +38,7 @@ func httpIDStoreOptions() postgresidempotency.StoreOptions {
 
 type httpIDFixture struct {
 	ctx      context.Context
-	pool     *postgres.Pool
+	pool     *pgxpool.Pool
 	store    *postgresidempotency.Store
 	dsn      string
 	contract httpidempotency.Contract
@@ -55,7 +55,7 @@ func newHTTPIDFixture(t *testing.T, applicationName string, maxOpenConns int) ht
 		t.Fatalf("postgresidempotency.NewStore(): %v", err)
 	}
 	var commitTimestamps string
-	if err := pool.PGX().QueryRow(ctx, "SHOW track_commit_timestamp").Scan(&commitTimestamps); err != nil {
+	if err := pool.QueryRow(ctx, "SHOW track_commit_timestamp").Scan(&commitTimestamps); err != nil {
 		t.Fatalf("read track_commit_timestamp: %v", err)
 	}
 	if commitTimestamps != "on" {
@@ -95,15 +95,10 @@ func newRestartableHTTPIDFixture(t *testing.T) (httpIDFixture, *tcpostgres.Postg
 		t.Fatalf("resolve restartable PostgreSQL DSN: %v", err)
 	}
 	dsn = setRestartableCommitTimestamps(t, ctx, container, dsn, "on")
-	if _, err := postgresmigrate.MigrateUp(ctx, postgresmigrate.MigrationOptions{
-		DSN:              dsn,
-		SourceFS:         os.DirFS(".."),
-		SourcePath:       "migrations",
-		ConnectTimeout:   3 * time.Second,
-		StatementTimeout: time.Minute,
-		LockTimeout:      15 * time.Second,
-		CleanupTimeout:   15 * time.Second,
-	}); err != nil {
+	if _, err := postgresmigrate.MigrateUp(
+		ctx,
+		postgresmigrate.DefaultOptions(dsn, os.DirFS(".."), "migrations", nil),
+	); err != nil {
 		t.Fatalf("migrate restartable PostgreSQL: %v", err)
 	}
 	dsn = httpIDDSN(t, dsn, "idempotency-commit-epoch")
@@ -177,19 +172,15 @@ func setRestartableCommitTimestamps(
 	return refreshedDSN
 }
 
-func newHTTPIDPool(t *testing.T, ctx context.Context, dsn string, maxOpenConns int) *postgres.Pool {
+func newHTTPIDPool(t *testing.T, ctx context.Context, dsn string, maxOpenConns int) *pgxpool.Pool {
 	t.Helper()
-	pool, err := postgres.New(ctx, postgres.Options{
-		DSN:                dsn,
-		ConnectTimeout:     3 * time.Second,
-		HealthcheckTimeout: 3 * time.Second,
-		MaxOpenConns:       maxOpenConns,
-		AcquireTimeout:     time.Second,
-		ConnMaxLifetime:    time.Hour,
-		StatementTimeout:   10 * time.Second,
+	pool, err := postgres.Open(ctx, postgres.Options{
+		DSN: dsn,
+
+		MaxOpenConns: maxOpenConns,
 	})
 	if err != nil {
-		t.Fatalf("postgres.New(): %v", err)
+		t.Fatalf("postgres.Open(): %v", err)
 	}
 	t.Cleanup(pool.Close)
 	return pool
@@ -308,7 +299,7 @@ func mustHTTPIDComplete(
 	result httpidempotency.Result,
 ) {
 	t.Helper()
-	if err := fixture.pool.InTx(fixture.ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+	if err := postgres.InTx(fixture.ctx, fixture.pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 		acquired, decision, err := fixture.store.Acquire(fixture.ctx, tx, fixture.contract, reservation, resolve)
 		if err != nil {
 			return err

@@ -13,16 +13,17 @@ import (
 	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	"github.com/example/go-service-template-rest/internal/infra/postgres/pgtest"
 	"github.com/example/go-service-template-rest/internal/infra/postgreswebhook"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func newPostgresWebhookFixture(t *testing.T) (context.Context, *postgres.Pool, *postgreswebhook.Store, *postgreswebhook.SecretManifest) {
+func newPostgresWebhookFixture(t *testing.T) (context.Context, *pgxpool.Pool, *postgreswebhook.Store, *postgreswebhook.SecretManifest) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
 	t.Cleanup(cancel)
 	dsn := pgtest.Migrated(t, os.DirFS(".."), "migrations")
-	pool, err := postgres.New(ctx, postgres.Options{DSN: dsn, ConnectTimeout: 3 * time.Second, HealthcheckTimeout: 3 * time.Second, MaxOpenConns: 12, AcquireTimeout: time.Second, ConnMaxLifetime: time.Hour, StatementTimeout: 5 * time.Second})
+	pool, err := postgres.Open(ctx, postgres.Options{DSN: dsn, MaxOpenConns: 12})
 	if err != nil {
-		t.Fatalf("postgres.New(): %v", err)
+		t.Fatalf("postgres.Open(): %v", err)
 	}
 	t.Cleanup(pool.Close)
 	manifest := webhookManifest(t, 1, "owner-a", "dest-a", "key-a")

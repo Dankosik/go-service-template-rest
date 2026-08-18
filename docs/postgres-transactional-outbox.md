@@ -127,7 +127,7 @@ published-event cleanup. That lifetime is what keeps reconciliation possible
 after the full event has expired.
 
 The repository adapter must build and retain the stable `Event` before entering
-`Pool.InTx`, as in the example above. When `InTx` wraps
+`postgres.InTx`, as in the example above. When `InTx` wraps
 `postgres.ErrCommitUnknown`, call `Store.ReconcileCommit` with that same event
 on the same configured writer pool:
 

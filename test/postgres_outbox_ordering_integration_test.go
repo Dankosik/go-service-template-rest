@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	"github.com/example/go-service-template-rest/internal/infra/postgresoutbox"
 	"github.com/jackc/pgx/v5"
 )
@@ -17,7 +18,7 @@ func TestPostgresOutboxOrderingAuthority(t *testing.T) {
 	ctx, pool, store := newOutboxFixture(t)
 	mustAppendOutbox(t, ctx, pool, store, orderedEvent("ordered-2", "account-1", 2))
 
-	err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+	err := postgres.InTx(ctx, pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 		return store.Append(ctx, tx, orderedEvent("ordered-1", "account-1", 1))
 	})
 	if !errors.Is(err, postgresoutbox.ErrOrderingSequence) {
@@ -26,7 +27,7 @@ func TestPostgresOutboxOrderingAuthority(t *testing.T) {
 	mustAppendOutbox(t, ctx, pool, store, orderedEvent("ordered-4", "account-1", 4))
 
 	var highWater int64
-	if err := pool.PGX().QueryRow(ctx, `SELECT last_sequence FROM outbox_ordering_heads WHERE ordering_key = 'account-1'`).Scan(&highWater); err != nil {
+	if err := pool.QueryRow(ctx, `SELECT last_sequence FROM outbox_ordering_heads WHERE ordering_key = 'account-1'`).Scan(&highWater); err != nil {
 		t.Fatalf("read ordering high-water: %v", err)
 	}
 	if highWater != 4 {
@@ -45,13 +46,13 @@ func TestPostgresOutboxOrderingAuthority(t *testing.T) {
 			t.Fatalf("MarkPublished(%s): %v", wantID, err)
 		}
 	}
-	if _, err := pool.PGX().Exec(ctx, "UPDATE outbox_events SET published_at = clock_timestamp() - interval '2 hours'"); err != nil {
+	if _, err := pool.Exec(ctx, "UPDATE outbox_events SET published_at = clock_timestamp() - interval '2 hours'"); err != nil {
 		t.Fatalf("backdate published rows: %v", err)
 	}
 	if _, err := store.CleanupPublished(ctx, time.Hour, 10); err != nil {
 		t.Fatalf("CleanupPublished(): %v", err)
 	}
-	err = pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+	err = postgres.InTx(ctx, pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 		return store.Append(ctx, tx, orderedEvent("ordered-3", "account-1", 3))
 	})
 	if !errors.Is(err, postgresoutbox.ErrOrderingSequence) {
@@ -65,7 +66,7 @@ func TestPostgresOutboxOrderingAuthority(t *testing.T) {
 	results := make(chan appendResult, 2)
 	for _, sequence := range []int64{5, 6} {
 		go func() {
-			err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+			err := postgres.InTx(ctx, pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 				return store.Append(ctx, tx, orderedEvent(fmt.Sprintf("ordered-%d", sequence), "account-1", sequence))
 			})
 			results <- appendResult{sequence: sequence, err: err}
@@ -80,7 +81,7 @@ func TestPostgresOutboxOrderingAuthority(t *testing.T) {
 			t.Fatalf("lower concurrent sequence error = %v", result.err)
 		}
 	}
-	if err := pool.PGX().QueryRow(ctx, `SELECT last_sequence FROM outbox_ordering_heads WHERE ordering_key = 'account-1'`).Scan(&highWater); err != nil {
+	if err := pool.QueryRow(ctx, `SELECT last_sequence FROM outbox_ordering_heads WHERE ordering_key = 'account-1'`).Scan(&highWater); err != nil {
 		t.Fatalf("read concurrent ordering high-water: %v", err)
 	}
 	if highWater != 6 {
@@ -100,7 +101,7 @@ func TestPostgresOutboxOrderingHandoffRace(t *testing.T) {
 		errs := make(chan error, 2)
 		go func() {
 			<-start
-			errs <- pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+			errs <- postgres.InTx(ctx, pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 				return store.Append(ctx, tx, orderedEvent(key+"-2", key, 2))
 			})
 		}()
@@ -130,7 +131,7 @@ func TestPostgresOutboxOrderingHandoffAfterBlockedSnapshot(t *testing.T) {
 	mustAppendOutbox(t, ctx, pool, store, orderedEvent("snapshot-1", "snapshot", 1))
 	first := mustClaimOutbox(t, ctx, store)
 
-	tx, err := pool.PGX().Begin(ctx)
+	tx, err := pool.Begin(ctx)
 	if err != nil {
 		t.Fatalf("begin append: %v", err)
 	}
@@ -241,7 +242,7 @@ func TestPostgresOutboxOrderingClaims(t *testing.T) {
 	if _, err := claimOutboxEvent(ctx, store, time.Minute); !errors.Is(err, errNoOutboxWork) {
 		t.Fatalf("Claim() behind retry-wait predecessor = %v, want ErrNoWork", err)
 	}
-	if _, err := pool.PGX().Exec(ctx, "UPDATE outbox_events SET available_at = clock_timestamp() WHERE id = 'key-2'"); err != nil {
+	if _, err := pool.Exec(ctx, "UPDATE outbox_events SET available_at = clock_timestamp() WHERE id = 'key-2'"); err != nil {
 		t.Fatalf("make key-2 retry eligible: %v", err)
 	}
 	retryClaim, err := claimOutboxEvent(ctx, store, shortOutboxLease)
@@ -254,7 +255,7 @@ func TestPostgresOutboxOrderingClaims(t *testing.T) {
 	// explicit FOR UPDATE is what makes that a proven wait rather than a
 	// timing assumption.
 	expireOutboxLease(t, ctx, pool)
-	lockTx, err := pool.PGX().Begin(ctx)
+	lockTx, err := pool.Begin(ctx)
 	if err != nil {
 		t.Fatalf("begin recovery predecessor lock: %v", err)
 	}

@@ -49,7 +49,7 @@ var commentProseWords = map[string]struct{}{
 	// The standard library.
 	"IsControl":     {},
 	"WithoutCancel": {},
-	// PostgreSQL, the database postgresoutbox and postgresinbox front.
+	// PostgreSQL, the database postgresoutbox fronts.
 	"PostgreSQL": {},
 }
 

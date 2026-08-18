@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/httpidempotency"
-	"github.com/example/go-service-template-rest/internal/infra/postgres"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // FingerprintResolver reconstructs the current request under a retained
@@ -52,7 +52,7 @@ func (o StoreOptions) validate() error {
 
 // Store is the concrete PostgreSQL idempotency adapter.
 type Store struct {
-	pool              *postgres.Pool
+	pool              *pgxpool.Pool
 	options           StoreOptions
 	recoveryDelay     time.Duration
 	flights           publicationGroup
@@ -64,11 +64,11 @@ type Store struct {
 }
 
 // NewStore constructs a Store with its deployment-owned runtime safety bounds.
-func NewStore(pool *postgres.Pool, options StoreOptions) (*Store, error) {
+func NewStore(pool *pgxpool.Pool, options StoreOptions) (*Store, error) {
 	if err := options.validate(); err != nil {
 		return nil, err
 	}
-	if pool == nil || pool.PGX() == nil {
+	if pool == nil {
 		return nil, fmt.Errorf("%w: postgres pool is required", ErrConfig)
 	}
 	store := &Store{
@@ -110,7 +110,7 @@ func (s *Store) ObserveTerminal(ctx context.Context, decision httpidempotency.De
 }
 
 func (s *Store) valid() bool {
-	return s != nil && s.pool != nil && s.pool.PGX() != nil && s.options.validate() == nil
+	return s != nil && s.pool != nil && s.options.validate() == nil
 }
 
 func validReservation(reservation httpidempotency.Reservation) bool {

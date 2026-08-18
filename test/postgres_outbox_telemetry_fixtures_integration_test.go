@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	"github.com/example/go-service-template-rest/internal/infra/postgresoutbox"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry/telemetrytest"
+	"github.com/jackc/pgx/v5/pgxpool"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 )
@@ -37,7 +37,7 @@ func newOutboxTelemetry(t *testing.T) (*sdkmetric.ManualReader, *postgresoutbox.
 // only on relay ones.
 func newInstrumentedOutboxFixture(
 	t *testing.T,
-) (context.Context, *postgres.Pool, *postgresoutbox.Store, *sdkmetric.ManualReader, *postgresoutbox.Telemetry) {
+) (context.Context, *pgxpool.Pool, *postgresoutbox.Store, *sdkmetric.ManualReader, *postgresoutbox.Telemetry) {
 	t.Helper()
 	ctx, pool, _ := newOutboxFixture(t)
 	reader, telemetry := newOutboxTelemetry(t)
@@ -175,7 +175,7 @@ func collectOutboxDatabaseMetrics(t *testing.T, reader *sdkmetric.ManualReader) 
 func assertOutboxObservationMatchesSQL(
 	t *testing.T,
 	ctx context.Context,
-	pool *postgres.Pool,
+	pool *pgxpool.Pool,
 	observation postgresoutbox.StateObservation,
 ) {
 	t.Helper()
@@ -192,7 +192,7 @@ func assertOutboxObservationMatchesSQL(
 	}
 	for _, state := range oldestByID {
 		var want time.Time
-		if err := pool.PGX().QueryRow(ctx, "SELECT created_at FROM outbox_events WHERE id = $1", state.id).Scan(&want); err != nil {
+		if err := pool.QueryRow(ctx, "SELECT created_at FROM outbox_events WHERE id = $1", state.id).Scan(&want); err != nil {
 			t.Fatalf("read direct oldest timestamp for %s: %v", state.id, err)
 		}
 		if delta := state.got.Sub(want.UTC()); delta < -time.Microsecond || delta > time.Microsecond {
@@ -200,7 +200,7 @@ func assertOutboxObservationMatchesSQL(
 		}
 	}
 	var publishedAt time.Time
-	if err := pool.PGX().QueryRow(ctx, "SELECT published_at FROM outbox_events WHERE id = 'observe-published'").Scan(&publishedAt); err != nil {
+	if err := pool.QueryRow(ctx, "SELECT published_at FROM outbox_events WHERE id = 'observe-published'").Scan(&publishedAt); err != nil {
 		t.Fatalf("read direct published oldest timestamp: %v", err)
 	}
 	if delta := observation.PublishedRetainedOldestAt.Sub(publishedAt.UTC()); delta < -time.Microsecond || delta > time.Microsecond {
@@ -209,7 +209,7 @@ func assertOutboxObservationMatchesSQL(
 
 	var heads, eventsBytes, eventIndexes, headBytes, headIndexes, redriveBytes, redriveIndexes,
 		receiptBytes, receiptIndexes int64
-	if err := pool.PGX().QueryRow(ctx, `SELECT
+	if err := pool.QueryRow(ctx, `SELECT
 		(SELECT count(*) FROM outbox_ordering_heads),
 		pg_total_relation_size('outbox_events'), pg_indexes_size('outbox_events'),
 		pg_total_relation_size('outbox_ordering_heads'), pg_indexes_size('outbox_ordering_heads'),

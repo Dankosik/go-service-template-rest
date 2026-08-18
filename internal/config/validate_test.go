@@ -17,11 +17,6 @@ func TestReadDurationParsesDefaultDurations(t *testing.T) {
 	if cfg.HTTP.ReadTimeout != 5*time.Second {
 		t.Fatalf("HTTP.ReadTimeout = %s, want 5s", cfg.HTTP.ReadTimeout)
 	}
-	// profile:database-postgres:start
-	if cfg.Postgres.ConnMaxLifetime != 30*time.Minute {
-		t.Fatalf("Postgres.ConnMaxLifetime = %s, want 30m", cfg.Postgres.ConnMaxLifetime)
-	}
-	// profile:database-postgres:end
 }
 
 func TestHealthRefreshBounds(t *testing.T) {

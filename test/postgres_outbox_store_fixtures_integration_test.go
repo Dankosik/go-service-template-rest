@@ -15,25 +15,22 @@ import (
 	"github.com/example/go-service-template-rest/internal/infra/postgresoutbox"
 	"github.com/example/go-service-template-rest/internal/waittest"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func newOutboxFixture(t *testing.T) (context.Context, *postgres.Pool, *postgresoutbox.Store) {
+func newOutboxFixture(t *testing.T) (context.Context, *pgxpool.Pool, *postgresoutbox.Store) {
 	t.Helper()
 
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
 	t.Cleanup(cancel)
 	dsn := pgtest.Migrated(t, os.DirFS(".."), "migrations")
-	pool, err := postgres.New(ctx, postgres.Options{
-		DSN:                dsn,
-		ConnectTimeout:     3 * time.Second,
-		HealthcheckTimeout: 3 * time.Second,
-		MaxOpenConns:       32,
-		AcquireTimeout:     time.Second,
-		ConnMaxLifetime:    time.Hour,
-		StatementTimeout:   10 * time.Second,
+	pool, err := postgres.Open(ctx, postgres.Options{
+		DSN: dsn,
+
+		MaxOpenConns: 32,
 	})
 	if err != nil {
-		t.Fatalf("postgres.New(): %v", err)
+		t.Fatalf("postgres.Open(): %v", err)
 	}
 	t.Cleanup(pool.Close)
 	store, err := postgresoutbox.NewStore(pool, nil)
@@ -63,9 +60,9 @@ func orderedEvent(id, key string, sequence int64) postgresoutbox.Event {
 	return event
 }
 
-func mustAppendOutbox(t *testing.T, ctx context.Context, pool *postgres.Pool, store *postgresoutbox.Store, event postgresoutbox.Event) {
+func mustAppendOutbox(t *testing.T, ctx context.Context, pool *pgxpool.Pool, store *postgresoutbox.Store, event postgresoutbox.Event) {
 	t.Helper()
-	if err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+	if err := postgres.InTx(ctx, pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 		return store.Append(ctx, tx, event)
 	}); err != nil {
 		t.Fatalf("append event %q: %v", event.ID, err)
@@ -157,13 +154,13 @@ func poisonOutcomeUnknown(t *testing.T, ctx context.Context, store *postgresoutb
 	}
 }
 
-func assertAtomicCounts(t *testing.T, ctx context.Context, pool *postgres.Pool, id string, wantDomain, wantOutbox int) {
+func assertAtomicCounts(t *testing.T, ctx context.Context, pool *pgxpool.Pool, id string, wantDomain, wantOutbox int) {
 	t.Helper()
 	var domainCount, outboxCount int
-	if err := pool.PGX().QueryRow(ctx, "SELECT count(*) FROM outbox_domain_probe WHERE id = $1", id).Scan(&domainCount); err != nil {
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM outbox_domain_probe WHERE id = $1", id).Scan(&domainCount); err != nil {
 		t.Fatalf("count domain rows for %s: %v", id, err)
 	}
-	if err := pool.PGX().QueryRow(ctx, "SELECT count(*) FROM outbox_events WHERE id = $1", id).Scan(&outboxCount); err != nil {
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM outbox_events WHERE id = $1", id).Scan(&outboxCount); err != nil {
 		t.Fatalf("count outbox rows for %s: %v", id, err)
 	}
 	if domainCount != wantDomain || outboxCount != wantOutbox {
@@ -171,10 +168,10 @@ func assertAtomicCounts(t *testing.T, ctx context.Context, pool *postgres.Pool, 
 	}
 }
 
-func assertOutboxCount(t *testing.T, ctx context.Context, pool *postgres.Pool, id string, want int) {
+func assertOutboxCount(t *testing.T, ctx context.Context, pool *pgxpool.Pool, id string, want int) {
 	t.Helper()
 	var count int
-	if err := pool.PGX().QueryRow(ctx, "SELECT count(*) FROM outbox_events WHERE id = $1", id).Scan(&count); err != nil {
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM outbox_events WHERE id = $1", id).Scan(&count); err != nil {
 		t.Fatalf("count outbox rows: %v", err)
 	}
 	if count != want {
@@ -182,10 +179,10 @@ func assertOutboxCount(t *testing.T, ctx context.Context, pool *postgres.Pool, i
 	}
 }
 
-func assertTotalOutboxCount(t *testing.T, ctx context.Context, pool *postgres.Pool, want int) {
+func assertTotalOutboxCount(t *testing.T, ctx context.Context, pool *pgxpool.Pool, want int) {
 	t.Helper()
 	var count int
-	if err := pool.PGX().QueryRow(ctx, "SELECT count(*) FROM outbox_events").Scan(&count); err != nil {
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM outbox_events").Scan(&count); err != nil {
 		t.Fatalf("count all outbox rows: %v", err)
 	}
 	if count != want {
@@ -193,9 +190,9 @@ func assertTotalOutboxCount(t *testing.T, ctx context.Context, pool *postgres.Po
 	}
 }
 
-func postgresSleep(t *testing.T, ctx context.Context, pool *postgres.Pool, seconds float64) {
+func postgresSleep(t *testing.T, ctx context.Context, pool *pgxpool.Pool, seconds float64) {
 	t.Helper()
-	if _, err := pool.PGX().Exec(ctx, "SELECT pg_sleep($1)", seconds); err != nil {
+	if _, err := pool.Exec(ctx, "SELECT pg_sleep($1)", seconds); err != nil {
 		t.Fatalf("PostgreSQL sleep: %v", err)
 	}
 }
@@ -216,7 +213,7 @@ const outboxWaitTimeout = 10 * time.Second
 // unrelated units — one a Duration, one a float of PostgreSQL seconds.
 const shortOutboxLease = 5 * time.Millisecond
 
-func expireOutboxLease(t *testing.T, ctx context.Context, pool *postgres.Pool) {
+func expireOutboxLease(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
 	t.Helper()
 	postgresSleep(t, ctx, pool, 4*shortOutboxLease.Seconds())
 }
@@ -234,15 +231,10 @@ func waitForOutbox(t *testing.T, describe func() string, condition func() bool) 
 
 // outboxBlockedBy reports whether any backend is waiting on a lock that the
 // given backend holds.
-//
-// The inbox suite asks the same question with its own copy of this statement, and
-// that duplication is required rather than missed: OUTBOX=none removes this file
-// while INBOX=postgres keeps that one, so a shared helper declared here would not
-// exist in every profile that needs it.
-func outboxBlockedBy(t *testing.T, ctx context.Context, pool *postgres.Pool, blockerPID int) bool {
+func outboxBlockedBy(t *testing.T, ctx context.Context, pool *pgxpool.Pool, blockerPID int) bool {
 	t.Helper()
 	var blocked bool
-	if err := pool.PGX().QueryRow(ctx, `
+	if err := pool.QueryRow(ctx, `
 		SELECT EXISTS (
 			SELECT 1
 			FROM pg_stat_activity AS activity
@@ -253,11 +245,11 @@ func outboxBlockedBy(t *testing.T, ctx context.Context, pool *postgres.Pool, blo
 	return blocked
 }
 
-func outboxBackendCount(t *testing.T, ctx context.Context, pool *postgres.Pool, predicate string) int {
+func outboxBackendCount(t *testing.T, ctx context.Context, pool *pgxpool.Pool, predicate string) int {
 	t.Helper()
 	var count int
 	query := "SELECT count(*) FROM pg_stat_activity WHERE pid <> pg_backend_pid() AND " + predicate
-	if err := pool.PGX().QueryRow(ctx, query).Scan(&count); err != nil {
+	if err := pool.QueryRow(ctx, query).Scan(&count); err != nil {
 		t.Fatalf("count outbox backends for %s: %v", predicate, err)
 	}
 	return count
@@ -265,17 +257,17 @@ func outboxBackendCount(t *testing.T, ctx context.Context, pool *postgres.Pool, 
 
 // outboxBackendExists asks pg_stat_activity about the relay's own connections,
 // which are always a different backend from the one running the query.
-func outboxBackendExists(t *testing.T, ctx context.Context, pool *postgres.Pool, predicate string) bool {
+func outboxBackendExists(t *testing.T, ctx context.Context, pool *pgxpool.Pool, predicate string) bool {
 	t.Helper()
 	var found bool
 	query := "SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE pid <> pg_backend_pid() AND " + predicate + ")"
-	if err := pool.PGX().QueryRow(ctx, query).Scan(&found); err != nil {
+	if err := pool.QueryRow(ctx, query).Scan(&found); err != nil {
 		t.Fatalf("inspect pg_stat_activity for %s: %v", predicate, err)
 	}
 	return found
 }
 
-func waitForOutboxCount(t *testing.T, ctx context.Context, pool *postgres.Pool, predicate string, want int) {
+func waitForOutboxCount(t *testing.T, ctx context.Context, pool *pgxpool.Pool, predicate string, want int) {
 	t.Helper()
 	var count int
 	waitForOutbox(t,
@@ -283,14 +275,14 @@ func waitForOutboxCount(t *testing.T, ctx context.Context, pool *postgres.Pool, 
 			return fmt.Sprintf("outbox count for %q to reach %d, last seen %d", predicate, want, count)
 		},
 		func() bool {
-			if err := pool.PGX().QueryRow(ctx, "SELECT count(*) FROM outbox_events WHERE "+predicate).Scan(&count); err != nil {
+			if err := pool.QueryRow(ctx, "SELECT count(*) FROM outbox_events WHERE "+predicate).Scan(&count); err != nil {
 				t.Fatalf("count outbox state: %v", err)
 			}
 			return count == want
 		})
 }
 
-func waitForOutboxListener(t *testing.T, ctx context.Context, pool *postgres.Pool) {
+func waitForOutboxListener(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
 	t.Helper()
 	waitForOutbox(t,
 		func() string { return "the outbox append listener to subscribe" },
@@ -316,7 +308,7 @@ const observationStatementProbe = "query LIKE '%name: ObserveOutbox :one%'"
 
 // waitForBlockedOutboxObservation waits until the relay's observation is parked
 // on a lock.
-func waitForBlockedOutboxObservation(t *testing.T, ctx context.Context, pool *postgres.Pool) {
+func waitForBlockedOutboxObservation(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
 	t.Helper()
 	waitForOutbox(t,
 		func() string {

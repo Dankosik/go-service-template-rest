@@ -17,6 +17,7 @@ import (
 	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	"github.com/example/go-service-template-rest/internal/infra/postgresoutbox"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func TestPostgresOutboxRelayReplicas(t *testing.T) {
@@ -95,11 +96,11 @@ func TestPostgresOutboxRelayListenerStop(t *testing.T) {
 	}
 }
 
-func outboxListenerPID(t *testing.T, ctx context.Context, pool *postgres.Pool) int {
+func outboxListenerPID(t *testing.T, ctx context.Context, pool *pgxpool.Pool) int {
 	t.Helper()
 	var pid int
 	waitForOutbox(t, func() string { return "an idle outbox listener in ClientRead" }, func() bool {
-		if err := pool.PGX().QueryRow(ctx, `
+		if err := pool.QueryRow(ctx, `
 			SELECT COALESCE((
 				SELECT pid FROM pg_stat_activity
 				WHERE pid <> pg_backend_pid()
@@ -118,7 +119,7 @@ func outboxListenerPID(t *testing.T, ctx context.Context, pool *postgres.Pool) i
 
 func TestPostgresOutboxRequestContinuesDuringBrokerOutage(t *testing.T) {
 	ctx, pool, store := newOutboxFixture(t)
-	if _, err := pool.PGX().Exec(ctx, `CREATE TABLE outbox_http_probe (id text PRIMARY KEY)`); err != nil {
+	if _, err := pool.Exec(ctx, `CREATE TABLE outbox_http_probe (id text PRIMARY KEY)`); err != nil {
 		t.Fatalf("create HTTP mutation probe: %v", err)
 	}
 
@@ -139,7 +140,7 @@ func TestPostgresOutboxRequestContinuesDuringBrokerOutage(t *testing.T) {
 			return
 		}
 		id := strings.TrimPrefix(request.URL.Path, prefix)
-		err := pool.InTx(request.Context(), pgx.TxOptions{}, func(tx pgx.Tx) error {
+		err := postgres.InTx(request.Context(), pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 			if _, err := tx.Exec(request.Context(), "INSERT INTO outbox_http_probe (id) VALUES ($1)", id); err != nil {
 				return err
 			}
@@ -172,7 +173,7 @@ func TestPostgresOutboxRequestContinuesDuringBrokerOutage(t *testing.T) {
 	assertRelayResult(t, relayResult, nil)
 
 	var domainRows, outboxRows, publishedRows int
-	if err := pool.PGX().QueryRow(ctx, `SELECT
+	if err := pool.QueryRow(ctx, `SELECT
 		(SELECT count(*) FROM outbox_http_probe),
 		(SELECT count(*) FROM outbox_events),
 		(SELECT count(*) FROM outbox_events WHERE published_at IS NOT NULL)
@@ -353,7 +354,7 @@ func TestPostgresOutboxRelayLifecycleFaults(t *testing.T) {
 func TestPostgresOutboxDrainDuringMaintenanceStartsNoClaim(t *testing.T) {
 	ctx, pool, store := newOutboxFixture(t)
 	mustAppendOutbox(t, ctx, pool, store, outboxEvent("maintenance-drain"))
-	if _, err := pool.PGX().Exec(ctx, "UPDATE outbox_events SET available_at = clock_timestamp() + interval '1 hour'"); err != nil {
+	if _, err := pool.Exec(ctx, "UPDATE outbox_events SET available_at = clock_timestamp() + interval '1 hour'"); err != nil {
 		t.Fatalf("delay event eligibility: %v", err)
 	}
 
@@ -375,7 +376,7 @@ func TestPostgresOutboxDrainDuringMaintenanceStartsNoClaim(t *testing.T) {
 	waitForOutboxOperationCount(t, reader, "claim", "empty",
 		outboxOperationCount(t, reader, "claim", "empty")+1)
 
-	lockTx, err := pool.PGX().Begin(ctx)
+	lockTx, err := pool.Begin(ctx)
 	if err != nil {
 		t.Fatalf("begin maintenance gate: %v", err)
 	}
@@ -401,7 +402,7 @@ func TestPostgresOutboxDrainDuringMaintenanceStartsNoClaim(t *testing.T) {
 
 func TestPostgresOutboxDrainDuringInitialObservationNeverBecomesReady(t *testing.T) {
 	ctx, pool, store := newOutboxFixture(t)
-	lockTx, err := pool.PGX().Begin(ctx)
+	lockTx, err := pool.Begin(ctx)
 	if err != nil {
 		t.Fatalf("begin startup observation gate: %v", err)
 	}
@@ -443,7 +444,7 @@ func TestPostgresOutboxDrainDuringInitialObservationNeverBecomesReady(t *testing
 // what fails, and it says so.
 func TestPostgresOutboxStartupRequiresRedriveLedger(t *testing.T) {
 	ctx, pool, store := newOutboxFixture(t)
-	if _, err := pool.PGX().Exec(ctx, "DROP TABLE outbox_redrives"); err != nil {
+	if _, err := pool.Exec(ctx, "DROP TABLE outbox_redrives"); err != nil {
 		t.Fatalf("drop redrive ledger: %v", err)
 	}
 	var attempts atomic.Int64
@@ -468,7 +469,7 @@ func TestPostgresOutboxStartupRequiresRedriveLedger(t *testing.T) {
 
 func TestPostgresOutboxStartupRequiresReceiptLedger(t *testing.T) {
 	ctx, pool, store := newOutboxFixture(t)
-	if _, err := pool.PGX().Exec(ctx, "DROP TABLE outbox_commit_receipts"); err != nil {
+	if _, err := pool.Exec(ctx, "DROP TABLE outbox_commit_receipts"); err != nil {
 		t.Fatalf("drop commit receipt ledger: %v", err)
 	}
 	var attempts atomic.Int64

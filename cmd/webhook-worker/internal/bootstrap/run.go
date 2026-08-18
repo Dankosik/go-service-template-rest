@@ -48,7 +48,7 @@ func run(signalCtx context.Context, args []string) (runErr error) {
 		defer cancel()
 		telemetryCleanup(ctx)
 	}()
-	pool, err := postgres.New(startupCtx, runtimeopts.Postgres(cfg.Postgres))
+	pool, err := postgres.Open(startupCtx, runtimeopts.Postgres(cfg.Postgres))
 	if err != nil {
 		return fmt.Errorf("initialize webhook worker postgres: %w", err)
 	}

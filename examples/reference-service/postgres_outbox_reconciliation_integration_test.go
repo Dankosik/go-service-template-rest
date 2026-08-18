@@ -14,13 +14,14 @@ import (
 	"github.com/example/go-service-template-rest/internal/infra/postgres/pgtest"
 	"github.com/example/go-service-template-rest/internal/infra/postgresoutbox"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // reconciliationAdapter is the concrete repository pattern for a write whose
 // commit response can be lost. The stable event exists before InTx, and only a
 // writer-primary CommitNotApplied result can send the mutation again.
 type reconciliationAdapter struct {
-	pool  *postgres.Pool
+	pool  *pgxpool.Pool
 	store *postgresoutbox.Store
 	inTx  func(context.Context, pgx.TxOptions, func(pgx.Tx) error) error
 }
@@ -118,7 +119,7 @@ func TestPostgresOutboxWriterPrimaryReconciliation(t *testing.T) {
 
 	t.Run("conflicting receipt fails without mutation", func(t *testing.T) {
 		adapter := newReconciliationAdapter(t)
-		if _, err := adapter.pool.PGX().Exec(t.Context(), `
+		if _, err := adapter.pool.Exec(t.Context(), `
 			INSERT INTO outbox_commit_receipts (event_id, fingerprint_version, envelope_fingerprint)
 			VALUES ('conflict-event', 1, decode(repeat('01', 32), 'hex'))`); err != nil {
 			t.Fatalf("seed conflicting receipt: %v", err)
@@ -165,20 +166,16 @@ func newReconciliationAdapter(t *testing.T) reconciliationAdapter {
 	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
 	defer cancel()
 	dsn := pgtest.Migrated(t, os.DirFS("../.."), "migrations")
-	pool, err := postgres.New(ctx, postgres.Options{
-		DSN:                dsn,
-		ConnectTimeout:     3 * time.Second,
-		HealthcheckTimeout: 3 * time.Second,
-		MaxOpenConns:       4,
-		AcquireTimeout:     time.Second,
-		ConnMaxLifetime:    time.Hour,
-		StatementTimeout:   5 * time.Second,
+	pool, err := postgres.Open(ctx, postgres.Options{
+		DSN: dsn,
+
+		MaxOpenConns: 4,
 	})
 	if err != nil {
-		t.Fatalf("postgres.New() error = %v", err)
+		t.Fatalf("postgres.Open() error = %v", err)
 	}
 	t.Cleanup(pool.Close)
-	if _, err := pool.PGX().Exec(ctx, `
+	if _, err := pool.Exec(ctx, `
 		CREATE TABLE reconciliation_writes (
 			id text PRIMARY KEY,
 			event_id text NOT NULL
@@ -189,18 +186,24 @@ func newReconciliationAdapter(t *testing.T) reconciliationAdapter {
 	if err != nil {
 		t.Fatalf("postgresoutbox.NewStore() error = %v", err)
 	}
-	return reconciliationAdapter{pool: pool, store: store, inTx: pool.InTx}
+	return reconciliationAdapter{
+		pool:  pool,
+		store: store,
+		inTx: func(ctx context.Context, opts pgx.TxOptions, fn func(pgx.Tx) error) error {
+			return postgres.InTx(ctx, pool, opts, fn)
+		},
+	}
 }
 
 func assertReconciliationCounts(
 	t *testing.T,
-	pool *postgres.Pool,
+	pool *pgxpool.Pool,
 	mutationID, eventID string,
 	wantMutations, wantReceipts int,
 ) {
 	t.Helper()
 	var mutations, receipts int
-	if err := pool.PGX().QueryRow(t.Context(), `
+	if err := pool.QueryRow(t.Context(), `
 		SELECT
 			(SELECT count(*) FROM reconciliation_writes WHERE id = $1 AND event_id = $2),
 			(SELECT count(*) FROM outbox_commit_receipts WHERE event_id = $2)`,

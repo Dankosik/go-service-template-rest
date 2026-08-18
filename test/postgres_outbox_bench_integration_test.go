@@ -15,6 +15,7 @@ import (
 	"github.com/example/go-service-template-rest/internal/infra/postgres/pgtest"
 	"github.com/example/go-service-template-rest/internal/infra/postgresoutbox"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // BenchmarkOutboxRelayCycle measures the database cost of one relay cycle:
@@ -61,7 +62,7 @@ func BenchmarkOutboxRelayCycle(b *testing.B) {
 			b.StopTimer()
 
 			reportOutboxEventCost(b, events)
-			if _, err := pool.PGX().Exec(ctx, "SELECT 1"); err != nil {
+			if _, err := pool.Exec(ctx, "SELECT 1"); err != nil {
 				b.Fatalf("database unusable after benchmark: %v", err)
 			}
 		})
@@ -215,7 +216,7 @@ func BenchmarkOutboxAppendDurable(b *testing.B) {
 					sequence++
 					events[index] = outboxEvent(fmt.Sprintf("durable-bench-%d", sequence))
 				}
-				if err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+				if err := postgres.InTx(ctx, pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 					return store.Append(ctx, tx, events...)
 				}); err != nil {
 					b.Fatalf("Append(): %v", err)
@@ -231,13 +232,13 @@ func BenchmarkOutboxAppendDurable(b *testing.B) {
 // SIGHUP setting, so a reload is enough and no container restart is needed. The
 // value is restored afterwards because the container is shared by the whole
 // test binary.
-func setOutboxDurability(b *testing.B, ctx context.Context, pool *postgres.Pool, durable bool) {
+func setOutboxDurability(b *testing.B, ctx context.Context, pool *pgxpool.Pool, durable bool) {
 	b.Helper()
 	apply := func(value string) {
-		if _, err := pool.PGX().Exec(ctx, "ALTER SYSTEM SET fsync = "+value); err != nil {
+		if _, err := pool.Exec(ctx, "ALTER SYSTEM SET fsync = "+value); err != nil {
 			b.Fatalf("set fsync=%s: %v", value, err)
 		}
-		if _, err := pool.PGX().Exec(ctx, "SELECT pg_reload_conf()"); err != nil {
+		if _, err := pool.Exec(ctx, "SELECT pg_reload_conf()"); err != nil {
 			b.Fatalf("reload configuration: %v", err)
 		}
 	}
@@ -247,12 +248,12 @@ func setOutboxDurability(b *testing.B, ctx context.Context, pool *postgres.Pool,
 	}
 	apply(setting)
 	b.Cleanup(func() {
-		if _, err := pool.PGX().Exec(context.WithoutCancel(ctx), "ALTER SYSTEM RESET fsync"); err == nil {
-			_, _ = pool.PGX().Exec(context.WithoutCancel(ctx), "SELECT pg_reload_conf()")
+		if _, err := pool.Exec(context.WithoutCancel(ctx), "ALTER SYSTEM RESET fsync"); err == nil {
+			_, _ = pool.Exec(context.WithoutCancel(ctx), "SELECT pg_reload_conf()")
 		}
 	})
 	var effective string
-	if err := pool.PGX().QueryRow(ctx, "SHOW fsync").Scan(&effective); err != nil {
+	if err := pool.QueryRow(ctx, "SHOW fsync").Scan(&effective); err != nil {
 		b.Fatalf("read fsync: %v", err)
 	}
 	if effective != setting {
@@ -266,7 +267,7 @@ func setOutboxDurability(b *testing.B, ctx context.Context, pool *postgres.Pool,
 func runOutboxPublishCycle(
 	b *testing.B,
 	ctx context.Context,
-	pool *postgres.Pool,
+	pool *pgxpool.Pool,
 	store *postgresoutbox.Store,
 	batchSize int,
 	seed func(),
@@ -307,7 +308,7 @@ func runOutboxPublishCycle(
 func runOutboxCleanupCycle(
 	b *testing.B,
 	ctx context.Context,
-	pool *postgres.Pool,
+	pool *pgxpool.Pool,
 	store *postgresoutbox.Store,
 	batchSize int,
 	seed func(),
@@ -454,7 +455,7 @@ func BenchmarkOutboxObserveSplit(b *testing.B) {
 		for b.Loop() {
 			var count int64
 			var oldest float64
-			if err := pool.PGX().QueryRow(ctx, `
+			if err := pool.QueryRow(ctx, `
 				SELECT count(*)::bigint,
 				       coalesce(extract(epoch FROM min(created_at)), 0)::double precision
 				FROM outbox_events
@@ -512,7 +513,7 @@ func BenchmarkOutboxHeapGrowth(b *testing.B) {
 		b.Fatal("no events cycled")
 	}
 	var total, dead int64
-	if err := pool.PGX().QueryRow(ctx, `
+	if err := pool.QueryRow(ctx, `
 		SELECT pg_total_relation_size('outbox_events'),
 		       coalesce((SELECT n_dead_tup FROM pg_stat_user_tables
 		                 WHERE relname = 'outbox_events'), 0)`).Scan(&total, &dead); err != nil {
@@ -527,7 +528,7 @@ func BenchmarkOutboxHeapGrowth(b *testing.B) {
 func runOutboxOrderedPublishCycle(
 	b *testing.B,
 	ctx context.Context,
-	pool *postgres.Pool,
+	pool *pgxpool.Pool,
 	store *postgresoutbox.Store,
 	batchSize int,
 	seed func(),
@@ -639,7 +640,7 @@ func BenchmarkOutboxAppend(b *testing.B) {
 							events[index].OrderingSequence = sequence
 						}
 					}
-					if err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+					if err := postgres.InTx(ctx, pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 						return store.Append(ctx, tx, events...)
 					}); err != nil {
 						b.Fatalf("Append(): %v", err)
@@ -648,7 +649,7 @@ func BenchmarkOutboxAppend(b *testing.B) {
 				b.StopTimer()
 
 				var stored int64
-				if err := pool.PGX().QueryRow(ctx, "SELECT count(*) FROM outbox_events").Scan(&stored); err != nil {
+				if err := pool.QueryRow(ctx, "SELECT count(*) FROM outbox_events").Scan(&stored); err != nil {
 					b.Fatalf("count appended events: %v", err)
 				}
 				if stored != sequence {
@@ -683,7 +684,7 @@ func BenchmarkOutboxAppendPayload(b *testing.B) {
 					events[index] = outboxEvent(fmt.Sprintf("payload-bench-%d", sequence))
 					events[index].Payload = payload
 				}
-				if err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+				if err := postgres.InTx(ctx, pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 					return store.Append(ctx, tx, events...)
 				}); err != nil {
 					b.Fatalf("Append(): %v", err)
@@ -750,7 +751,7 @@ func BenchmarkOutboxAppendConcurrent(b *testing.B) {
 						event.OrderingKey = key
 						event.OrderingSequence = sequence
 					}
-					if err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+					if err := postgres.InTx(ctx, pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 						return store.Append(ctx, tx, event)
 					}); err != nil {
 						b.Fatalf("Append(): %v", err)
@@ -858,7 +859,7 @@ func BenchmarkOutboxIdentifierShape(b *testing.B) {
 			b.ReportAllocs()
 			for b.Loop() {
 				event := outboxEvent(nextID())
-				if err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+				if err := postgres.InTx(ctx, pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 					return store.Append(ctx, tx, event)
 				}); err != nil {
 					b.Fatalf("Append(): %v", err)
@@ -910,7 +911,7 @@ func outboxIdentifier(shape string) func() string {
 func seedOutboxIdentifiers(
 	b *testing.B,
 	ctx context.Context,
-	pool *postgres.Pool,
+	pool *pgxpool.Pool,
 	count int,
 	nextID func() string,
 	published bool,
@@ -924,7 +925,7 @@ func seedOutboxIdentifiers(
 	if published {
 		publishedAt = "clock_timestamp() - interval '1 hour'"
 	}
-	if _, err := pool.PGX().Exec(ctx, `
+	if _, err := pool.Exec(ctx, `
 		INSERT INTO outbox_events (
 			id, event_type, source, destination, schema_name, occurred_at, payload, metadata,
 			published_at
@@ -961,7 +962,7 @@ func outboxBenchmarkPayload(size int) []byte {
 	return []byte(`{"data":"` + string(value) + `"}`)
 }
 
-func newOutboxBenchmarkFixture(b *testing.B, backlog int) (context.Context, *postgres.Pool, *postgresoutbox.Store) {
+func newOutboxBenchmarkFixture(b *testing.B, backlog int) (context.Context, *pgxpool.Pool, *postgresoutbox.Store) {
 	b.Helper()
 	return newOutboxBenchmarkFixtureWithConns(b, backlog, 4)
 }
@@ -973,23 +974,19 @@ func newOutboxBenchmarkFixture(b *testing.B, backlog int) (context.Context, *pos
 func newOutboxBenchmarkFixtureWithConns(
 	b *testing.B,
 	backlog, maxConns int,
-) (context.Context, *postgres.Pool, *postgresoutbox.Store) {
+) (context.Context, *pgxpool.Pool, *postgresoutbox.Store) {
 	b.Helper()
 
 	ctx, cancel := context.WithTimeout(b.Context(), 10*time.Minute)
 	b.Cleanup(cancel)
 	dsn := pgtest.Migrated(b, os.DirFS(".."), "migrations")
-	pool, err := postgres.New(ctx, postgres.Options{
-		DSN:                dsn,
-		ConnectTimeout:     3 * time.Second,
-		HealthcheckTimeout: 3 * time.Second,
-		MaxOpenConns:       maxConns,
-		AcquireTimeout:     10 * time.Second,
-		ConnMaxLifetime:    time.Hour,
-		StatementTimeout:   30 * time.Second,
+	pool, err := postgres.Open(ctx, postgres.Options{
+		DSN: dsn,
+
+		MaxOpenConns: maxConns,
 	})
 	if err != nil {
-		b.Fatalf("postgres.New(): %v", err)
+		b.Fatalf("postgres.Open(): %v", err)
 	}
 	b.Cleanup(pool.Close)
 	store, err := postgresoutbox.NewStore(pool, nil)
@@ -1005,9 +1002,9 @@ func newOutboxBenchmarkFixtureWithConns(
 
 // analyzeOutboxFixture refreshes statistics so the planner chooses the claim
 // plan a warmed deployment would rather than one derived from an empty table.
-func analyzeOutboxFixture(b *testing.B, ctx context.Context, pool *postgres.Pool) {
+func analyzeOutboxFixture(b *testing.B, ctx context.Context, pool *pgxpool.Pool) {
 	b.Helper()
-	if _, err := pool.PGX().Exec(ctx, "ANALYZE outbox_events, outbox_ordering_heads"); err != nil {
+	if _, err := pool.Exec(ctx, "ANALYZE outbox_events, outbox_ordering_heads"); err != nil {
 		b.Fatalf("analyze benchmark fixture: %v", err)
 	}
 }
@@ -1015,9 +1012,9 @@ func analyzeOutboxFixture(b *testing.B, ctx context.Context, pool *postgres.Pool
 // refillOutboxBacklog restores the declared fixture after a case has drained
 // it. It runs outside the timed interval and discards leftover leases, so every
 // measured cycle sees the same backlog shape.
-func refillOutboxBacklog(b *testing.B, ctx context.Context, pool *postgres.Pool, seed func()) {
+func refillOutboxBacklog(b *testing.B, ctx context.Context, pool *pgxpool.Pool, seed func()) {
 	b.Helper()
-	if _, err := pool.PGX().Exec(ctx,
+	if _, err := pool.Exec(ctx,
 		"TRUNCATE outbox_events, outbox_ordering_heads, outbox_redrives"); err != nil {
 		b.Fatalf("reset outbox backlog: %v", err)
 	}
@@ -1033,15 +1030,15 @@ func reportOutboxEventCost(b *testing.B, events int64) {
 	b.ReportMetric(float64(b.Elapsed().Nanoseconds())/float64(events), "ns/event")
 }
 
-func seedOutboxOrderedBacklog(b *testing.B, ctx context.Context, pool *postgres.Pool, keys, depth int) {
+func seedOutboxOrderedBacklog(b *testing.B, ctx context.Context, pool *pgxpool.Pool, keys, depth int) {
 	b.Helper()
-	if _, err := pool.PGX().Exec(ctx, `
+	if _, err := pool.Exec(ctx, `
 		INSERT INTO outbox_ordering_heads (ordering_key, last_sequence, current_sequence)
 		SELECT 'bench-key-' || key, $2, 1
 		FROM generate_series(1, $1) AS key`, keys, depth); err != nil {
 		b.Fatalf("seed outbox ordering heads: %v", err)
 	}
-	if _, err := pool.PGX().Exec(ctx, `
+	if _, err := pool.Exec(ctx, `
 		INSERT INTO outbox_events (
 			id, event_type, source, destination, schema_name, occurred_at, payload, metadata,
 			ordering_key, ordering_sequence, ordering_ready
@@ -1066,12 +1063,12 @@ func seedOutboxOrderedBacklog(b *testing.B, ctx context.Context, pool *postgres.
 // seedOutboxRetained fills the published rows a service is holding for its
 // retention window. They are already an hour old, so the retention path treats
 // them as expired at any realistic setting.
-func seedOutboxRetained(b *testing.B, ctx context.Context, pool *postgres.Pool, count int) {
+func seedOutboxRetained(b *testing.B, ctx context.Context, pool *pgxpool.Pool, count int) {
 	b.Helper()
 	if count == 0 {
 		return
 	}
-	if _, err := pool.PGX().Exec(ctx, `
+	if _, err := pool.Exec(ctx, `
 		INSERT INTO outbox_events (
 			id, event_type, source, destination, schema_name, occurred_at, payload, metadata,
 			published_at
@@ -1093,9 +1090,9 @@ func seedOutboxRetained(b *testing.B, ctx context.Context, pool *postgres.Pool, 
 
 // seedOutboxSizedBacklog is seedOutboxBacklog with the payload size a case
 // declares, so claim decoding and TOAST behave as they would for that event.
-func seedOutboxSizedBacklog(b *testing.B, ctx context.Context, pool *postgres.Pool, count, payloadBytes int) {
+func seedOutboxSizedBacklog(b *testing.B, ctx context.Context, pool *pgxpool.Pool, count, payloadBytes int) {
 	b.Helper()
-	if _, err := pool.PGX().Exec(ctx, `
+	if _, err := pool.Exec(ctx, `
 		INSERT INTO outbox_events (
 			id, event_type, source, destination, schema_name, occurred_at, payload, metadata
 		)
@@ -1115,9 +1112,9 @@ func seedOutboxSizedBacklog(b *testing.B, ctx context.Context, pool *postgres.Po
 
 // seedOutboxRetryWaiting fills rows that are pending but not yet due, which is
 // what a broker outage leaves behind once the relay has backed them off.
-func seedOutboxRetryWaiting(b *testing.B, ctx context.Context, pool *postgres.Pool, count int) {
+func seedOutboxRetryWaiting(b *testing.B, ctx context.Context, pool *pgxpool.Pool, count int) {
 	b.Helper()
-	if _, err := pool.PGX().Exec(ctx, `
+	if _, err := pool.Exec(ctx, `
 		INSERT INTO outbox_events (
 			id, event_type, source, destination, schema_name, occurred_at, payload, metadata,
 			created_at, available_at, cycle_attempt_count, total_attempt_count, last_error_class
@@ -1133,9 +1130,9 @@ func seedOutboxRetryWaiting(b *testing.B, ctx context.Context, pool *postgres.Po
 	}
 }
 
-func seedOutboxBacklog(b *testing.B, ctx context.Context, pool *postgres.Pool, count int) {
+func seedOutboxBacklog(b *testing.B, ctx context.Context, pool *pgxpool.Pool, count int) {
 	b.Helper()
-	if _, err := pool.PGX().Exec(ctx, `
+	if _, err := pool.Exec(ctx, `
 		INSERT INTO outbox_events (
 			id, event_type, source, destination, schema_name, occurred_at, payload, metadata
 		)

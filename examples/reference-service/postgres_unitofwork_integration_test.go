@@ -13,6 +13,8 @@ import (
 	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	"github.com/example/go-service-template-rest/internal/infra/postgres/pgtest"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func TestMain(m *testing.M) {
@@ -48,14 +50,14 @@ CREATE TABLE article_events (
 //
 // Do is the only interesting method: it takes the pool's transaction and hands fn
 // a repository built over the pgx.Tx. Because repository statements are written
-// against postgres.Querier, which both a pooled connection and a transaction
-// satisfy, the same code serves inside and outside a transaction.
+// against the same DBTX shape sqlc generates, so the same code serves inside
+// and outside a transaction.
 type pgAdapter struct {
-	pool *postgres.Pool
+	pool *pgxpool.Pool
 }
 
 func (a pgAdapter) Do(ctx context.Context, fn func(article.Repository) error) error {
-	return a.pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+	return postgres.InTx(ctx, a.pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 		return fn(pgRepository{querier: tx})
 	})
 }
@@ -81,8 +83,14 @@ func (a pgAdapter) AppendEvent(ctx context.Context, event article.Event) error {
 	})
 }
 
+type pgQuerier interface {
+	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
+	Query(context.Context, string, ...any) (pgx.Rows, error)
+	QueryRow(context.Context, string, ...any) pgx.Row
+}
+
 type pgRepository struct {
-	querier postgres.Querier
+	querier pgQuerier
 }
 
 func (r pgRepository) FindBySlug(ctx context.Context, slug string) (article.Article, error) {
@@ -182,17 +190,13 @@ func newUnitOfWorkService(t *testing.T) (pgAdapter, *article.Service) {
 	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
 	defer cancel()
 
-	pool, err := postgres.New(ctx, postgres.Options{
-		DSN:                dsn,
-		ConnectTimeout:     3 * time.Second,
-		HealthcheckTimeout: 3 * time.Second,
-		MaxOpenConns:       4,
-		AcquireTimeout:     5 * time.Second,
-		ConnMaxLifetime:    time.Hour,
-		StatementTimeout:   5 * time.Second,
+	pool, err := postgres.Open(ctx, postgres.Options{
+		DSN: dsn,
+
+		MaxOpenConns: 4,
 	})
 	if err != nil {
-		t.Fatalf("postgres.New() error = %v", err)
+		t.Fatalf("postgres.Open() error = %v", err)
 	}
 	t.Cleanup(pool.Close)
 

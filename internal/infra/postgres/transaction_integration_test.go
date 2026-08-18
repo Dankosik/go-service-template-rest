@@ -41,21 +41,17 @@ func TestInTxCommitOutcomes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve PostgreSQL DSN: %v", err)
 	}
-	pool, err := New(ctx, Options{
-		DSN:                dsn,
-		ConnectTimeout:     3 * time.Second,
-		HealthcheckTimeout: 3 * time.Second,
-		MaxOpenConns:       4,
-		AcquireTimeout:     time.Second,
-		ConnMaxLifetime:    time.Hour,
-		StatementTimeout:   8 * time.Second,
+	pool, err := Open(ctx, Options{
+		DSN: dsn,
+
+		MaxOpenConns: 4,
 	})
 	if err != nil {
-		t.Fatalf("New() error = %v", err)
+		t.Fatalf("Open() error = %v", err)
 	}
 	t.Cleanup(pool.Close)
 
-	if _, err := pool.PGX().Exec(ctx, `
+	if _, err := pool.Exec(ctx, `
 		CREATE TABLE intx_commit_probe (
 			id integer PRIMARY KEY,
 			value integer NOT NULL,
@@ -64,12 +60,12 @@ func TestInTxCommitOutcomes(t *testing.T) {
 		)`); err != nil {
 		t.Fatalf("create probe table: %v", err)
 	}
-	if _, err := pool.PGX().Exec(ctx, "INSERT INTO intx_commit_probe (id, value) VALUES (1, 1)"); err != nil {
+	if _, err := pool.Exec(ctx, "INSERT INTO intx_commit_probe (id, value) VALUES (1, 1)"); err != nil {
 		t.Fatalf("seed probe table: %v", err)
 	}
 
 	t.Run("server confirmed failure", func(t *testing.T) {
-		err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+		err := InTx(ctx, pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 			_, err := tx.Exec(ctx, "INSERT INTO intx_commit_probe (id, value) VALUES (2, 1)")
 			return err
 		})
@@ -81,7 +77,7 @@ func TestInTxCommitOutcomes(t *testing.T) {
 		}
 
 		var count int
-		if err := pool.PGX().QueryRow(ctx, "SELECT count(*) FROM intx_commit_probe WHERE id = 2").Scan(&count); err != nil {
+		if err := pool.QueryRow(ctx, "SELECT count(*) FROM intx_commit_probe WHERE id = 2").Scan(&count); err != nil {
 			t.Fatalf("count rejected rows: %v", err)
 		}
 		if count != 0 {
@@ -90,24 +86,21 @@ func TestInTxCommitOutcomes(t *testing.T) {
 	})
 
 	t.Run("result lost after commit", func(t *testing.T) {
-		realCommit := pool.commitTx
-		pool.commitTx = func(ctx context.Context, tx pgx.Tx) error {
-			if err := realCommit(ctx, tx); err != nil {
+		tx, err := pool.BeginTx(ctx, pgx.TxOptions{})
+		if err != nil {
+			t.Fatalf("BeginTx() error = %v", err)
+		}
+		err = runInTx(ctx, tx, func(tx pgx.Tx) error {
+			_, err := tx.Exec(ctx, "INSERT INTO intx_commit_probe (id, value) VALUES (3, 3)")
+			return err
+		}, func(ctx context.Context, tx pgx.Tx) error {
+			if err := commitTx(ctx, tx); err != nil {
 				return err
 			}
 			return errors.New("commit result lost")
-		}
-		t.Cleanup(func() { pool.commitTx = realCommit })
-
-		err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
-			_, err := tx.Exec(ctx, "INSERT INTO intx_commit_probe (id, value) VALUES (3, 3)")
-			return err
-		})
-		if !errors.Is(err, ErrTransaction) {
-			t.Fatalf("InTx() error = %v, want ErrTransaction", err)
-		}
+		}, nil)
 		if !errors.Is(err, ErrCommitUnknown) {
-			t.Fatalf("InTx() error = %v, want ErrCommitUnknown", err)
+			t.Fatalf("runInTx() error = %v, want ErrCommitUnknown", err)
 		}
 
 		verifier, err := pgx.Connect(ctx, dsn)

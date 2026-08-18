@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	"github.com/example/go-service-template-rest/internal/infra/postgreswebhook"
 	"github.com/jackc/pgx/v5"
 )
@@ -15,7 +16,7 @@ import (
 func TestPostgresWebhookOperatorInspection(t *testing.T) {
 	ctx, pool, store, manifest := newPostgresWebhookFixture(t)
 	prepared := webhookPrepared(t, "inspection")
-	if err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error { _, err := store.Accept(ctx, tx, prepared); return err }); err != nil {
+	if err := postgres.InTx(ctx, pool, pgx.TxOptions{}, func(tx pgx.Tx) error { _, err := store.Accept(ctx, tx, prepared); return err }); err != nil {
 		t.Fatal(err)
 	}
 	for i, enabled := range []bool{true, false} {
@@ -62,7 +63,7 @@ func TestPostgresWebhookNotFoundActionIdentityIsReplayable(t *testing.T) {
 	}
 	var count int
 	var finite bool
-	if err := pool.PGX().QueryRow(ctx, `SELECT count(*), bool_and(isfinite(retain_until)) FROM webhook_operator_actions WHERE owner_scope = 'owner-a' AND action_id = $1`, action.ActionID).Scan(&count, &finite); err != nil || count != 1 || !finite {
+	if err := pool.QueryRow(ctx, `SELECT count(*), bool_and(isfinite(retain_until)) FROM webhook_operator_actions WHERE owner_scope = 'owner-a' AND action_id = $1`, action.ActionID).Scan(&count, &finite); err != nil || count != 1 || !finite {
 		t.Fatalf("not-found action ledger = count:%d finite:%t err:%v", count, finite, err)
 	}
 	missingDestination := postgreswebhook.ActionRequest{OwnerScope: "owner-a", Actor: "operator-a", ActionID: "disable-missing", Kind: postgreswebhook.ActionDestinationState, TargetKind: "destination", TargetID: "missing-destination", TargetGeneration: 1, ExpectedRevision: 1, Reason: "operator-check", Payload: &postgreswebhook.DestinationStateAction{Disposition: "disabled"}}

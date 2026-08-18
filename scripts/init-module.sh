@@ -7,7 +7,7 @@ TEMPLATE_OWNER="@Dankosik"
 TEMPLATE_API_TITLE="go-service-template-rest"
 
 usage() {
-	echo "usage: CODEOWNER=@user-or-org/team DATABASE=none|postgres HTTP_IDEMPOTENCY=none|postgres JOBS=none|postgres WEBHOOKS=none|durable OUTBOX=none|postgres INBOX=none|postgres GRPC=none|enabled AUTHN=none|oidc-jwt OUTBOUND_HTTP=none|bounded OBJECT_STORAGE=none|s3 OUTBOUND_AUTH=none|oauth2-client-credentials MESSAGING=none|nats-jetstream REFERENCE_EXAMPLE=remove|keep $0 [module-path]"
+	echo "usage: CODEOWNER=@user-or-org/team DATABASE=none|postgres HTTP_IDEMPOTENCY=none|postgres JOBS=none|postgres WEBHOOKS=none|durable OUTBOX=none|postgres GRPC=none|enabled AUTHN=none|oidc-jwt OUTBOUND_HTTP=none|bounded OBJECT_STORAGE=none|s3 OUTBOUND_AUTH=none|oauth2-client-credentials MESSAGING=none|nats-jetstream REFERENCE_EXAMPLE=remove|keep $0 [module-path]"
 	echo "module-path is derived from git remote origin when omitted"
 }
 
@@ -249,16 +249,15 @@ write_template_lock() {
 	local database="$1"
 	local http_idempotency="$2"
 	local outbox="$3"
-	local inbox="$4"
-	local grpc="$5"
-	local authn="$6"
-	local outbound_http="$7"
-	local outbound_auth="$8"
-	local messaging="$9"
-	local reference_example="${10}"
-	local object_storage="${11}"
-	local jobs="${12}"
-	local webhooks="${13}"
+	local grpc="$4"
+	local authn="$5"
+	local outbound_http="$6"
+	local outbound_auth="$7"
+	local messaging="$8"
+	local reference_example="$9"
+	local object_storage="${10}"
+	local jobs="${11}"
+	local webhooks="${12}"
 	local source_revision
 
 	source_revision="$(git rev-parse HEAD 2>/dev/null || true)"
@@ -276,7 +275,6 @@ source_revision = "${source_revision}"
 database = "${database}"
 http_idempotency = "${http_idempotency}"
 outbox = "${outbox}"
-inbox = "${inbox}"
 grpc = "${grpc}"
 authn = "${authn}"
 outbound_http = "${outbound_http}"
@@ -364,10 +362,6 @@ This service includes the PostgreSQL transactional outbox and its separately
 deployed bounded relay. Publication is at-least-once and consumers must tolerate
 duplicate event IDs; see \`docs/postgres-transactional-outbox.md\`.
 <!-- profile:outbox-postgres:end -->
-<!-- profile:inbox-postgres:start -->
-This service includes the PostgreSQL idempotent inbox. Keep each claim and its
-feature effect in the same transaction; see \`docs/postgres-idempotent-inbox.md\`.
-<!-- profile:inbox-postgres:end -->
 <!-- profile:webhooks-durable:start -->
 This service includes durable PostgreSQL-backed outbound webhook delivery and
 its separately deployed worker; see \`docs/outbound-webhook-delivery.md\`.
@@ -406,20 +400,8 @@ if [[ "${outbox}" == "postgres" && "${database}" != "postgres" ]]; then
 	exit 1
 fi
 
-if [[ "${INBOX+x}" == "x" && -z "${INBOX-}" ]]; then
-	echo "INBOX must be one of: none, postgres"
-	exit 1
-fi
-inbox="${INBOX:-none}"
-case "${inbox}" in
-none | postgres) ;;
-*)
-	echo "INBOX must be one of: none, postgres"
-	exit 1
-	;;
-esac
-if [[ "${inbox}" == "postgres" && "${database}" != "postgres" ]]; then
-	echo "INBOX=postgres requires DATABASE=postgres"
+if [[ "${INBOX+x}" == "x" ]]; then
+	echo "INBOX is no longer supported"
 	exit 1
 fi
 
@@ -627,7 +609,6 @@ if [[ -f template.lock ]]; then
 		"jobs = \"${jobs}\"" \
 		"webhooks = \"${webhooks}\"" \
 		"outbox = \"${outbox}\"" \
-		"inbox = \"${inbox}\"" \
 		"grpc = \"${grpc}\"" \
 		"authn = \"${authn}\"" \
 		"outbound_http = \"${outbound_http}\"" \
@@ -646,7 +627,6 @@ if [[ -f template.lock ]]; then
 	echo "  jobs: ${jobs}"
 	echo "  webhooks: ${webhooks}"
 	echo "  outbox: ${outbox}"
-	echo "  inbox: ${inbox}"
 	echo "  gRPC: ${grpc}"
 	echo "  authentication: ${authn}"
 	echo "  outbound HTTP: ${outbound_http}"
@@ -724,20 +704,6 @@ if [[ "${source_checkout}" != true ]]; then
 		strip_profile outbox-postgres keep
 	fi
 
-	if [[ "${inbox}" == "none" ]]; then
-		rm -rf -- internal/infra/postgresinbox
-		rm -f -- \
-			docs/postgres-idempotent-inbox.md \
-			examples/reference-service/postgres_inbox_integration_test.go \
-			internal/infra/postgres/queries/postgres_inbox.sql \
-			internal/infra/postgres/sqlcgen/postgres_inbox.sql.go \
-			migrations/000002_postgres_inbox.sql \
-			test/postgres_inbox_*_test.go
-		strip_profile inbox-postgres remove
-	else
-		strip_profile inbox-postgres keep
-	fi
-
 	if [[ "${http_idempotency}" == "none" ]]; then
 		rm -rf -- internal/httpidempotency internal/infra/postgresidempotency
 		rm -f -- \
@@ -769,15 +735,14 @@ if [[ "${source_checkout}" != true ]]; then
 	fi
 
 		if [[ "${jobs}" == "none" ]]; then
-		rm -rf -- cmd/jobs-worker internal/jobs internal/infra/postgresjobs
+		rm -rf -- cmd/jobs-worker
 		rm -f -- \
 			internal/config/jobs_config.go \
 			internal/config/jobs_config_test.go \
 			internal/config/jobs_worker_config.go \
 			internal/config/jobs_worker_config_test.go \
 			migrations/000004_postgres_jobs.sql \
-			internal/infra/postgres/queries/postgres_jobs.sql \
-			internal/infra/postgres/sqlcgen/postgres_jobs.sql.go \
+			migrations/000008_river_jobs.sql \
 			test/postgres_jobs_*_test.go \
 			docs/postgres-durable-background-jobs.md
 		strip_profile jobs-postgres remove
@@ -947,7 +912,6 @@ fi
 			internal/config/messaging_config_test.go \
 			internal/config/configtest/messaging.go \
 			test/nats_messaging_*_test.go \
-			test/postgres_inbox_natsjs_integration_test.go \
 			test/postgres_outbox_natsjs_integration_test.go
 		strip_profile messaging-nats-jetstream remove
 		go mod tidy
@@ -1001,9 +965,9 @@ fi
 	fi
 
 	# internal/config/configtest exists for parity tests that hold runtime owners
-	# and internal/config to one answer. Retained jobs, outbox, and outbound-auth
-	# bootstrap tests also use it, so it leaves only after every current importer.
-	if [[ "${jobs}" == "none" && "${outbox}" == "none" && "${grpc}" == "none" && "${authn}" == "none" && "${outbound_auth}" == "none" && "${messaging}" == "none" ]]; then
+	# and internal/config to one answer. Retained Postgres, jobs, outbox, and
+	# outbound-auth tests also use it, so it leaves only after every current importer.
+	if [[ "${database}" == "none" && "${jobs}" == "none" && "${outbox}" == "none" && "${grpc}" == "none" && "${authn}" == "none" && "${outbound_auth}" == "none" && "${messaging}" == "none" ]]; then
 		rm -rf -- internal/config/configtest
 	fi
 
@@ -1056,7 +1020,7 @@ fi
 		go generate ./internal/openapi
 	fi
 
-	write_template_lock "${database}" "${http_idempotency}" "${outbox}" "${inbox}" "${grpc}" "${authn}" "${outbound_http}" "${outbound_auth}" "${messaging}" "${reference_example}" "${object_storage}" "${jobs}" "${webhooks}"
+	write_template_lock "${database}" "${http_idempotency}" "${outbox}" "${grpc}" "${authn}" "${outbound_http}" "${outbound_auth}" "${messaging}" "${reference_example}" "${object_storage}" "${jobs}" "${webhooks}"
 
 fi
 
@@ -1075,7 +1039,6 @@ echo "  HTTP idempotency: ${http_idempotency}"
 echo "  jobs: ${jobs}"
 echo "  webhooks: ${webhooks}"
 echo "  outbox: ${outbox}"
-echo "  inbox: ${inbox}"
 echo "  gRPC: ${grpc}"
 echo "  authentication: ${authn}"
 echo "  outbound HTTP: ${outbound_http}"

@@ -46,7 +46,7 @@ func failureClass(err error) string {
 		return "config"
 	case errors.Is(err, postgres.ErrConfig), errors.Is(err, postgresoutbox.ErrConfig):
 		return "config"
-	case errors.Is(err, postgres.ErrConnect), errors.Is(err, postgres.ErrHealthcheck), errors.Is(err, postgres.ErrSaturated):
+	case errors.Is(err, postgres.ErrConnect), errors.Is(err, postgres.ErrHealthcheck):
 		return "postgres_unavailable"
 	case errors.Is(err, postgresoutbox.ErrPublisherStuck):
 		return "publisher_stuck"

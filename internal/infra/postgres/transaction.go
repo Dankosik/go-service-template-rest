@@ -8,43 +8,38 @@ import (
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // InTx runs fn inside one transaction, committing when it returns nil and
 // rolling back otherwise.
 //
-// This is the seam that keeps a service from reaching for PGX to compose two
-// repository calls atomically. fn receives a pgx.Tx, which satisfies Querier, so a
-// method written against Querier works inside and outside a transaction. The
-// connection comes from Acquire, under the same acquire budget as anything else.
-func (p *Pool) InTx(ctx context.Context, opts pgx.TxOptions, fn func(pgx.Tx) error) error {
-	if p == nil {
+// This is the single transaction seam for generated sqlc queries. The caller
+// chooses the atomic boundary and binds its generated Queries with WithTx.
+func InTx(ctx context.Context, pool *pgxpool.Pool, opts pgx.TxOptions, fn func(pgx.Tx) error) error {
+	if pool == nil {
 		return fmt.Errorf("%w: postgres pool is nil", ErrConfig)
 	}
 	if fn == nil {
 		return fmt.Errorf("%w: transaction function is required", ErrConfig)
 	}
 
-	conn, err := p.Acquire(ctx)
+	conn, err := pool.Acquire(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: acquire connection: %w", ErrTransaction, err)
 	}
 	defer conn.Release()
 
-	marker := &contextWatcherMark{}
-	p.contextWatcherMarks.Store(conn.Conn().PgConn(), marker)
-	defer p.contextWatcherMarks.Delete(conn.Conn().PgConn())
+	marker := new(contextWatcherMark)
+	contextWatcherMarks.Store(conn.Conn().PgConn(), marker)
+	defer contextWatcherMarks.Delete(conn.Conn().PgConn())
 
 	tx, err := conn.BeginTx(ctx, opts)
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrTransaction, err)
 	}
 
-	commit := p.commitTx
-	if commit == nil {
-		commit = commitTx
-	}
-	if err := runInTx(ctx, tx, fn, commit, marker); err != nil {
+	if err := runInTx(ctx, tx, fn, commitTx, marker); err != nil {
 		return fmt.Errorf("%w: %w", ErrTransaction, err)
 	}
 	return nil
@@ -58,7 +53,9 @@ func runInTx(
 	marker *contextWatcherMark,
 ) (err error) {
 	defer func() {
-		rollbackErr := tx.Rollback(context.WithoutCancel(ctx))
+		rollbackCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), postgresConnectTimeout)
+		defer cancel()
+		rollbackErr := tx.Rollback(rollbackCtx)
 		if rollbackErr != nil && !errors.Is(rollbackErr, pgx.ErrTxClosed) {
 			if err == nil {
 				err = rollbackErr

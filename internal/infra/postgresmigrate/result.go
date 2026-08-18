@@ -3,12 +3,11 @@ package postgresmigrate
 import (
 	"errors"
 	"fmt"
-	"path/filepath"
+	"slices"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/pressly/goose/v3"
-	"github.com/samber/lo"
 )
 
 type FailureStage string
@@ -23,21 +22,12 @@ const (
 	FailureCleanup FailureStage = "cleanup"
 )
 
-type MigrationResult struct {
-	Version   int64
-	Filename  string
-	Direction string
-	Duration  time.Duration
-	Empty     bool
-}
-
 type RunResult struct {
-	Before     int64
-	Target     int64
-	After      int64
-	Migrations []MigrationResult
-	Failed     *MigrationResult
-	Duration   time.Duration
+	Before       int64
+	Target       int64
+	After        int64
+	AppliedCount int
+	Duration     time.Duration
 }
 
 type RunError struct {
@@ -74,49 +64,35 @@ func stageError(stage FailureStage, err error) error {
 	return &RunError{Stage: stage, Err: err}
 }
 
-func migrationResultFromGoose(result *goose.MigrationResult) MigrationResult {
+func migrationVersion(result *goose.MigrationResult) int64 {
 	if result == nil || result.Source == nil {
-		return MigrationResult{}
+		return 0
 	}
-	return MigrationResult{
-		Version:   result.Source.Version,
-		Filename:  filepath.Base(result.Source.Path),
-		Direction: result.Direction,
-		Duration:  result.Duration,
-		Empty:     result.Empty,
-	}
+	return result.Source.Version
 }
 
-func migrationResultsFromGoose(results []*goose.MigrationResult) []MigrationResult {
-	return lo.Map(results, func(result *goose.MigrationResult, _ int) MigrationResult {
-		return migrationResultFromGoose(result)
-	})
-}
-
-func setPartialAfter(
+func setAfterFromApplied(
 	result *RunResult,
 	direction migrationDirection,
-	source []sourceMigration,
+	sources []*goose.Source,
+	applied []*goose.MigrationResult,
 ) {
-	if len(result.Migrations) == 0 {
+	result.AppliedCount = len(applied)
+	if len(applied) == 0 {
 		return
 	}
 	switch direction {
 	case directionUp:
-		result.After = result.Migrations[len(result.Migrations)-1].Version
+		result.After = migrationVersion(applied[len(applied)-1])
 	case directionDown:
-		beforeIndex := -1
-		for i, migration := range source {
-			if migration.Version == result.Before {
-				beforeIndex = i
-				break
-			}
-		}
-		remainingIndex := beforeIndex - len(result.Migrations)
+		beforeIndex := slices.IndexFunc(sources, func(source *goose.Source) bool {
+			return source != nil && source.Version == result.Before
+		})
+		remainingIndex := beforeIndex - len(applied)
 		if remainingIndex < 0 {
 			result.After = 0
 			return
 		}
-		result.After = source[remainingIndex].Version
+		result.After = sources[remainingIndex].Version
 	}
 }

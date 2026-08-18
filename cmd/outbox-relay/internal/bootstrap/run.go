@@ -93,7 +93,7 @@ func run(signalCtx context.Context, args []string, buildPublisher PublisherBuild
 		return fmt.Errorf("admit outbox publisher runtime: %w", err)
 	}
 
-	pool, err := postgres.New(startupCtx, runtimeopts.Postgres(cfg.Postgres))
+	pool, err := postgres.Open(startupCtx, runtimeopts.Postgres(cfg.Postgres))
 	if err != nil {
 		return fmt.Errorf("initialize outbox postgres: %w", err)
 	}

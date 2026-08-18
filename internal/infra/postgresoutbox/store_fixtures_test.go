@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	"github.com/example/go-service-template-rest/internal/infra/postgres/sqlcgen"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // The driver doubles the store test files share. The store prefix on this file
@@ -23,7 +23,7 @@ import (
 // sets, because Store.valid admits nothing less — half a Store is exactly what
 // that guard exists to reject, as the half cases below prove.
 func stubbedStore(driver sqlcgen.DBTX) *Store {
-	return &Store{pool: &postgres.Pool{}, queries: sqlcgen.New(driver)}
+	return &Store{pool: &pgxpool.Pool{}, queries: sqlcgen.New(driver)}
 }
 
 func unitRetries() []RetryDirective {
