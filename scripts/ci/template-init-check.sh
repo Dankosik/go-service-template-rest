@@ -2003,6 +2003,8 @@ fi
 # profile:webhooks-durable:start
 if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "webhooks" ]]; then
 	webhook_paths=(
+		cmd/jobs-worker/builder_webhooks.go
+		cmd/jobs-worker/builder_webhooks_test.go
 		docs/outbound-webhook-delivery.md
 		internal/config/webhooks_config.go
 		internal/infra/postgreswebhook

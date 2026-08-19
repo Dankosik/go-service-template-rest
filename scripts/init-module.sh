@@ -738,6 +738,8 @@ if [[ "${source_checkout}" != true ]]; then
 		if [[ "${webhooks}" == "none" ]]; then
 			rm -rf -- internal/infra/postgreswebhook
 			rm -f -- \
+				cmd/jobs-worker/builder_webhooks.go \
+				cmd/jobs-worker/builder_webhooks_test.go \
 				docs/outbound-webhook-delivery.md \
 				internal/config/webhooks_config.go \
 				internal/config/webhooks_config_test.go \

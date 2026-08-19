@@ -1,7 +1,5 @@
 package main
 
-// profile:webhooks-durable:start
-
 import (
 	"context"
 	"encoding/base64"
@@ -33,5 +31,3 @@ func TestBuildWebhookWorkers(t *testing.T) {
 		t.Fatal("duplicate webhook worker registration succeeded")
 	}
 }
-
-// profile:webhooks-durable:end
