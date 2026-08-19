@@ -32,7 +32,8 @@ pin/archive lifecycle, and proof/reviewer invocation counts. For each fresh App
 task also capture its single role-and-scope bootstrap create with no model or
 effort override, exact
 `READY_FOR_DISPATCH` result, one technical follow-up with the direct parent's
-selected model and effort when the installed control supports them, effective
+selected model and effort when the installed control supports them, the dispatch
+configuration receipt, any schema-absence or rejected-call evidence, effective
 fallback values, returned native identity, and first technical turn. Redact
 secrets without changing event order.
 
@@ -192,7 +193,9 @@ Use the default `$orchestrator` invocation: it authorizes autonomous
 direct-parent model and effort selection from the installed native controls but
 gives no per-task mapping or later human choice. Also run one branch where a
 follow-up override is unavailable or rejected and a custom near-miss launch that
-omits fresh-task or required backing authority.
+omits fresh-task or required backing authority. Run another near-miss where the
+technical follow-up omits one supported structured field while the child's
+inherited configuration differs from the selected pair.
 On each GPT model-generation change, repeat the same representative Lead inputs
 with Sol `xhigh` and Sol `high`, holding prompt, harness, repository, and task
 inputs fixed.
@@ -201,7 +204,10 @@ inputs fixed.
 each once with a role-and-scope bootstrap that carries neither model nor effort.
 Each child returns exactly
 `READY_FOR_DISPATCH`; the Orchestrator then sends one full technical handoff with
-the selected pair in the native structured fields. Each Lead independently
+the selected pair in the native structured fields and retains the dispatch
+configuration receipt. A supported-field omission is rejected as an invalid
+dispatch before technical work and the inherited pair is never accepted as the
+selection. Each Lead independently
 selects Luna `low` for its mechanical Worker and Terra `medium` for its ordinary
 Worker and ordinary reviewer, dispatching each once with both supported fields
 explicitly set. Every Worker prompt begins `Execution role:
@@ -226,8 +232,11 @@ quality-first routing policy.
 **Fail:** a prompt omits or misstates the role, restates visible ledger content,
 a parent selects a grandchild, create carries a model or effort without an exact
 user-named model, bootstrap performs technical work, or the technical follow-up
-is missing or duplicated. It also fails when a selected pair is silently
-discarded, unsupported override blocks solely for a human model choice, any
+is missing or duplicated. It also fails when a supported technical follow-up
+omits `model` or `thinking`, an inherited value or prose-only pair is accepted as
+the selection, capability fallback lacks schema-absence or rejected-call
+evidence, a selected pair is silently discarded, unsupported override blocks
+solely for a human model choice, any
 actor asks the user to choose a carrier or map models, a Lead uses anything
 other than Sol `xhigh` without a recorded unsupported or rejected `xhigh`
 override and Sol `high` fallback, an ordinary Worker uses Sol without the
@@ -1166,7 +1175,8 @@ no-op bootstrap that binds `ACCEPTANCE_UNIT_LEAD`, carries one unique
 model or effort override. The
 child returns exactly `READY_FOR_DISPATCH`; one technical follow-up then carries
 the selected pair in native structured fields, the full Lead handoff, and the
-initiating user's exact Implementation Write Boundary authority. The first
+initiating user's exact Implementation Write Boundary authority, then retains
+the dispatch configuration receipt. The first
 technical turn emits the complete WBE-40 Execution Map before its first Worker
 dispatch. The Orchestrator retains the returned thread and host identities plus
 the latest wait cursor, pins the task, and waits for the terminal event, then
@@ -1262,7 +1272,9 @@ wave; a Lead changes accepted behavior, unit scope, or ledger dependencies;
 Leads overlap writes; an internal writer spawns a writer; create omits the exact
 role or scope, carries a model or effort without an exact user-named model,
 technical work begins in bootstrap, or the one technical follow-up is missing or
-duplicated; chat replaces
+duplicated, omits a supported `model` or `thinking` field, accepts inherited
+configuration as the selected pair, or uses a capability fallback without
+schema-absence or rejected-call evidence; chat replaces
 durable authority; `T3` starts before the reopen chain and prerequisite repair
 unit close; a history fork substitutes for
 a fresh Lead; two Leads enter Local concurrently; a Worktree result releases a
@@ -1303,7 +1315,9 @@ nested write dispatch; receipt persistence followed by a lost final result;
 unavailable top-level creation, missing inner Worker-task authority, and later
 failure of an authorized inner write carrier separately; and an
 external effect with absent authority or an ambiguous response. Inject a raw
-provider credential into one bootstrap or technical handoff near-miss.
+provider credential into one bootstrap or technical handoff near-miss. Also
+inject a technical follow-up that omits one or both supported structured
+configuration fields while the task retains a prior chat's model and effort.
 
 **Pass:** native Codex state is the only task-lifecycle authority, repository
 artifacts own semantic readiness and receipts, and Git owns candidate identity.
@@ -1332,9 +1346,15 @@ matches produce one `UNKNOWN_CREATE` unit blocker, and the scope is never
 automatically redispatched. The ledger remains `ready` while unrelated work or
 authorized recovery exists. A known task is never recreated and receives no
 second bootstrap. Its single technical follow-up carries the selected model and
-effort when supported and the full handoff; an ambiguous follow-up is not
-repeated unless native state proves it was not delivered. Unsupported override
-records the effective configured value and never becomes a human question.
+effort when supported and the full handoff, and its accepted call plus selected
+pair become the dispatch configuration receipt before technical work. Omission
+of a supported field is an invalid dispatch and inherited configuration supplies
+no receipt. Schema absence is the only unavailable-field evidence; an actual
+rejection is the only rejected-field evidence, and an adjusted retry is allowed
+only when that result proves no message was delivered. An ambiguous follow-up is
+not repeated unless native state proves it was not delivered. Unsupported
+override records the effective configured value and never becomes a human
+question. Corrections omit overrides only after the initial receipt exists.
 Restart and compaction recover the same
 execution role from the active Goal or initial dispatch plus the canonical Role
 Tree, and recover work from native state plus canonical artifacts without
@@ -1418,7 +1438,10 @@ preconditions; missing Ledger Orchestrator controls degrade into unit
 execution; or a safe terminal child remains unarchived. It also fails when a
 Worktree proposed blocker becomes canonical or
 opens an upstream phase before Local revalidation, Handoff replaces the Lead or
-candidate, model-control ambiguity is escalated to the user, a raw secret is
+candidate, a supported technical follow-up omits `model` or `thinking`, inherited
+configuration is treated as selected, fallback lacks schema-absence or
+rejected-call evidence, a correction proceeds without an initial dispatch
+configuration receipt, model-control ambiguity is escalated to the user, a raw secret is
 copied into another prompt/artifact/log, or exposed-credential authority remains
 usable without rotation.
 
