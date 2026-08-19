@@ -65,8 +65,8 @@ first governed action.
 | Implementation Worker with isolated worktree | Separate top-level App task/chat started in Worktree mode with `Execution role: IMPLEMENTATION_WORKER`; never `collaboration.spawn_agent` | Background subagent whose brief starts `Execution role: IMPLEMENTATION_WORKER`, with `run_in_background: true`, `isolation: "worktree"`, and `subagent_type` set to a `worker-*` effort carrier | Background subagent whose brief starts `Execution role: IMPLEMENTATION_WORKER`, with `run_in_background: true` and `isolation: "worktree"` |
 | Correct a worker without losing its context | Message the same top-level App task/chat | `SendMessage` addressed to the worker's **agent ID**; a completed worker auto-resumes with full history | `SendMessage` to the same agent |
 | Read-only research/challenge/review lane | Project subagent in the current root task, selected from `.codex/agents/*.toml` | `Agent` tool lane: built-in `Explore`, `Plan`, or `general-purpose`, or a project agent in `.claude/agents/*.md` | `Agent` tool lane: built-in `Explore` or `general-purpose`, or a project agent in `.qwen/agents/*.md` |
-| Per-lane model selection | Direct-parent-selected `model` on the technical follow-up after the no-op create bootstrap when supported | `model` parameter on the `Agent` tool call (dispatch-time override) over `model` frontmatter in `.claude/agents/*.md` (role default) | `model` frontmatter in `.qwen/agents/*.md` (`inherit`, `fast`, a model ID, or `authType:modelId`); exact model IDs are provider-specific |
-| Per-lane reasoning effort | Parent-selected `thinking` on that technical follow-up when supported | `effort` frontmatter in the agent definition (`low`, `medium`, `high`, `xhigh`, `max`); no per-dispatch parameter — unset inherits the session effort | Not yet available in agent frontmatter; a lane inherits the session effort |
+| Per-lane model selection | Required direct-parent-selected `model` on the accepted technical follow-up after the no-op create bootstrap; supported-field omission is invalid | `model` parameter on the `Agent` tool call (dispatch-time override) over `model` frontmatter in `.claude/agents/*.md` (role default) | `model` frontmatter in `.qwen/agents/*.md` (`inherit`, `fast`, a model ID, or `authType:modelId`); exact model IDs are provider-specific |
+| Per-lane reasoning effort | Required parent-selected `thinking` on that accepted technical follow-up; supported-field omission is invalid | `effort` frontmatter in the agent definition (`low`, `medium`, `high`, `xhigh`, `max`); no per-dispatch parameter — unset inherits the session effort | Not yet available in agent frontmatter; a lane inherits the session effort |
 | Worker completion signalling | Native completion and status events | Background-task completion notifications; continue an existing worker with `SendMessage` | Background-task completion notifications; continue an existing worker with `send_message` |
 | Reach an independent session this one did not spawn | — | `/list-agents` to discover, `SendMessage` by name ([Cross-Session Messaging](#cross-session-messaging)) | — |
 
@@ -160,10 +160,19 @@ are authoritative for the installed App when they differ from public prose.
   create the child with no model or effort override and a no-op prompt that binds
   its role and `dispatch_scope`, forbids repository inspection, tools, and Goal
   creation, and requires exactly `READY_FOR_DISPATCH`. Wait for that result, then
-  send the full technical handoff once with the selected model and effort through
-  the follow-up control. If either override is unavailable or rejected, omit only
-  that override, continue on the effective configured value, and record the
-  capability gap; never ask the user to choose.
+  make one accepted technical follow-up carrying the full handoff plus the
+  selected `model` and `thinking` in their structured fields. When the installed
+  schema exposes a field, omitting it is an invalid dispatch: inherited settings
+  and a model or effort named only in prompt text do not satisfy selection, and
+  the child may not start technical work. Treat a field as unavailable only when
+  the installed schema lacks it, and as rejected only from the control's actual
+  rejection. An absent-schema field may be omitted from the first call. After a
+  rejection, retry without only the rejected field solely when native evidence
+  proves that call delivered no message; ambiguous delivery follows
+  [Recovery](#recovery) and never repeats the handoff. Retain the capability
+  evidence and effective configured value. Record the selected pair, accepted
+  call, any capability evidence, and effective fallback as the dispatch
+  configuration receipt. Never ask the user to choose.
 - A serial unit starts in Local. Only recorded members of one positively
   independent planned wave start as separate Worktree tasks from the wave's
   accepted base. Omit `startingState` unless the initiating user specifically
@@ -193,8 +202,10 @@ are authoritative for the installed App when they differ from public prose.
   and Handoff by native identity rather than title or summary.
 - Wait on all currently relevant tasks in one native wait when available and
   pass the latest cursor. An unchanged timeout produces no new conclusion or
-  message. A correction resumes the same task and omits model and effort so its
-  selected configuration remains intact.
+  message. After a valid [dispatch configuration
+  receipt](#launch), a correction resumes the same task and omits model and
+  effort so its selected configuration remains intact. Without that receipt,
+  the initial dispatch remains invalid rather than becoming a correction.
 - The Lead's first action after the technical dispatch is a thread-local Goal for
   its assigned stage. A Local Lead's stage ends with a canonical `Accepted:` receipt
   or `Blocked:` record. A Worktree Lead must complete its Worktree Goal before
@@ -339,12 +350,13 @@ The installed Codex App create control accepts `prompt`, `model`, and `thinking`
 but permits an exact `model` only when the user explicitly named that model. The
 one `$orchestrator` launch delegates selection without naming one, so each
 top-level child uses the no-op bootstrap above. Its direct parent applies the
-selected pair on the single technical follow-up when that control supports the
-fields. When a field is unavailable or rejected, continue on the effective
-configured value and record the capability gap; model-control limitations alone
-never become a user question. Corrections and continuations omit overrides so
-the effective configuration remains stable. Built-in subagent controls receive
-the parent's selection directly when their schema permits it.
+selected pair through the [Launch](#launch) technical-follow-up gate. That gate
+owns the required structured fields, capability evidence, fallback, and dispatch
+configuration receipt; omission of a supported field never selects an inherited
+value. Only after that receipt do corrections and continuations omit overrides
+so the effective configuration remains stable. Model-control limitations alone
+never become a user question. Built-in subagent controls receive the parent's
+selection directly when their schema permits it.
 
 ### Codex App Selection Tree
 
