@@ -83,7 +83,7 @@ verify_jobs_worker_image() {
 		echo "runtime image jobs worker exited successfully without a builder" >&2
 		exit 1
 	fi
-	if ! grep -Eq 'jobs worker builder is not registered|jobs and postgres must be enabled for jobs-worker|webhooks must be enabled for the template jobs worker' <<<"${output}"; then
+	if ! grep -Eq 'jobs worker builder is not registered|jobs and postgres must be enabled for jobs-worker|webhooks must be enabled for the template jobs worker|config validate: jobs worker requires postgres.enabled' <<<"${output}"; then
 		echo "runtime image jobs worker did not execute the expected fail-closed binary" >&2
 		echo "${output}" >&2
 		exit 1
