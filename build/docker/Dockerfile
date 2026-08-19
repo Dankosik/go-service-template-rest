@@ -10,6 +10,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 
 ARG APP_VERSION=dev
 ARG VCS_REF=unknown
+ARG WORKTREE_FINGERPRINT=unknown
 ARG RAILWAY_GIT_COMMIT_SHA
 ARG PGO_PROFILE=off
 ARG TARGETOS
@@ -18,6 +19,7 @@ ENV CGO_ENABLED=0
 RUN --mount=type=bind,target=. \
     --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
+    test -n "${WORKTREE_FINGERPRINT}" && \
     if [ "${PGO_PROFILE}" = "auto" ] || [ -z "${PGO_PROFILE}" ]; then \
       echo "PGO_PROFILE must be off or name an explicit representative CPU profile" >&2; \
       exit 2; \
@@ -43,9 +45,6 @@ RUN --mount=type=bind,target=. \
 # profile:jobs-postgres:start
     if [ -d ./cmd/jobs-worker ]; then build_packages="${build_packages} ./cmd/jobs-worker"; fi && \
 # profile:jobs-postgres:end
-# profile:webhooks-durable:start
-    if [ -d ./cmd/webhook-worker ]; then build_packages="${build_packages} ./cmd/webhook-worker"; fi && \
-# profile:webhooks-durable:end
     if [ -d ./cmd/migrate ]; then build_packages="${build_packages} ./cmd/migrate"; fi && \
     resolved_version="${APP_VERSION}" && \
     if [ "${resolved_version}" = "dev" ] && [ -n "${RAILWAY_GIT_COMMIT_SHA}" ]; then \
@@ -86,9 +85,6 @@ COPY --from=build /out/outbox-relay /outbox-relay
 # profile:jobs-postgres:start
 COPY --from=build /out/jobs-worker /jobs-worker
 # profile:jobs-postgres:end
-# profile:webhooks-durable:start
-COPY --from=build /out/webhook-worker /webhook-worker
-# profile:webhooks-durable:end
 # profile:database-postgres:start
 COPY --from=build /out/migrate /migrate
 COPY --from=build /out/migrations /migrations

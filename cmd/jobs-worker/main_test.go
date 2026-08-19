@@ -9,7 +9,7 @@ import (
 
 func TestJobsWorkerMainRejectsNilBuilder(t *testing.T) {
 	err := bootstrap.Run(nil, nil)
-	if err == nil || !strings.Contains(err.Error(), "registry builder") {
-		t.Fatalf("Run(nil) error = %v, want missing registry builder", err)
+	if err == nil || !strings.Contains(err.Error(), "worker builder") {
+		t.Fatalf("Run(nil) error = %v, want missing worker builder", err)
 	}
 }

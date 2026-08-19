@@ -72,33 +72,21 @@ per-key ordering. `TestNATSOrderingKeyDoesNotSerialize` pins that as behavior
 rather than an omission, so a later change that starts serializing a key has to
 argue with a test.
 
-When the PostgreSQL outbox relay uses this producer,
-`OUTBOX__PUBLISH_CONCURRENCY` must not exceed `MAX_PENDING_PUBLISHES`; startup
-rejects the composition before opening a broker connection. That keeps local
-admission pressure from spending durable event attempts while the broker is
-healthy.
+The River outbox worker derives its concurrency from this same admission
+capacity: it uses at most 16 workers and never more than
+`MAX_PENDING_PUBLISHES`. A capacity refusal remains an ordinary River retry.
 
-### Ordering does not compose with the outbox
+### The outbox adds no ordering
 
-The [PostgreSQL transactional outbox](postgres-transactional-outbox.md) does
-guarantee claim order per ordering key, and that guarantee ends at this pack.
-The worked adapter in `test/postgres_outbox_natsjs_integration_test.go` forwards
-`Event.OrderingKey` onto the JetStream envelope, so the key survives as data a
-handler can read — but the relay hands one key's events to the broker in order
-and nothing after that keeps them in it: JetStream assigns its own stream
-sequence, and a worker with `MAX_CONCURRENCY` above one runs handlers for the
-same key concurrently.
-
-A service that needs per-key order end to end owns the last hop and has two
-shapes to choose between, neither of which this pack decides:
+A typed outbox event has no ordering key or sequence. Adding producer-only
+ordering would not order concurrent JetStream handler effects, so the template
+does not create that partial guarantee. A service that needs per-key order end
+to end owns the last hop and has two shapes to choose between:
 
 - run the worker at `MAX_CONCURRENCY=1` per key space — one worker process per
   key partition, which trades throughput for order;
-- or keep the concurrency and re-sequence in the handler, using the key and a
-  sequence the publisher put in the payload, against state the handler owns.
-
-Until one of those exists, treat the composed guarantee as at-least-once
-delivery of correctly ordered *publications*, not ordered *processing*.
+- or keep concurrency and re-sequence in the handler, using a key and revision
+  carried by the typed payload against state the handler owns.
 
 ## Worker
 
@@ -153,7 +141,8 @@ can duplicate a DLQ record; consumers and operator replay must be idempotent.
 `NumDelivered`, not process memory, owns retry exhaustion, so restarts and lost
 ACKs still consume the finite handler budget. Broker delivery remains unlimited
 until the DLQ handoff is confirmed. Messages can be delivered more than once;
-the pack does not claim exactly-once processing and provides no outbox or inbox.
+the pack does not claim exactly-once processing and provides no outbox or
+consumer-side database idempotency.
 
 ## Lifecycle and operations
 
@@ -186,8 +175,9 @@ diagnosis. The metrics have no stream, consumer, subject, tenant, or message
 labels.
 
 Spans follow the OpenTelemetry messaging convention, so they are named
-`publish {subject}` and `process {filter subject}` — the same shape the outbox
-relay's `publish {destination}` uses. The consume span is named after the
+`publish {subject}` and `process {filter subject}`. River adds a linked
+`river.work` span, while the outbox worker restores the original producing
+context before the NATS publish. The consume span is named after the
 worker's configured filter rather than the delivered subject, because a
 wildcard filter would otherwise put an unbounded value in the field a tracing
 backend groups on; the delivered subject is still on the span as
@@ -212,9 +202,9 @@ _, err = producer.Publish(ctx, event)
 ```
 
 Two identities move differently, and both are deliberate. The logical
-`MessageID` is preserved, so a consumer deduplicating on it — through the
-[PostgreSQL inbox](postgres-idempotent-inbox.md) or its own key — treats the
-redrive as the delivery it already refused. The publication ID is replaced,
+`MessageID` is preserved, so a consumer deduplicating on its own durable key
+treats the redrive as the delivery it already refused. The publication ID is
+replaced,
 because reusing it would have the broker recognize a duplicate and store
 nothing. Its replacement is derived from the dead-letter record's own stream and
 sequence rather than minted fresh, so restoring one record twice yields one

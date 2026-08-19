@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/config"
-	"github.com/example/go-service-template-rest/internal/failure"
 	"github.com/example/go-service-template-rest/internal/infra/postgres"
 )
 
@@ -179,14 +178,10 @@ func TestInitRuntimeDependenciesRejectsUnavailablePostgres(t *testing.T) {
 	dependencies, err := initRuntimeDependencies(startupCtx, startupBootstrap{
 		cfg: config.Config{
 			Postgres: config.PostgresConfig{
-				Enabled:            true,
-				DSN:                "postgres://app:app@127.0.0.1:1/app?sslmode=disable",
-				ConnectTimeout:     10 * time.Millisecond,
-				HealthcheckTimeout: 10 * time.Millisecond,
-				MaxOpenConns:       1,
-				AcquireTimeout:     time.Second,
-				ConnMaxLifetime:    time.Minute,
-				StatementTimeout:   time.Second,
+				Enabled: true,
+				DSN:     "postgres://app:app@127.0.0.1:1/app?sslmode=disable",
+
+				MaxOpenConns: 1,
 			},
 		},
 		log: slog.New(slog.DiscardHandler),
@@ -212,14 +207,10 @@ func TestInitPostgresDependencyRejectsCancelledDependencyContext(t *testing.T) {
 
 	runtime := postgresStartupRuntime{
 		cfg: config.Config{Postgres: config.PostgresConfig{
-			Enabled:            true,
-			DSN:                "postgres://user:pass@localhost:5432/app?sslmode=disable",
-			ConnectTimeout:     time.Second,
-			HealthcheckTimeout: time.Second,
-			MaxOpenConns:       1,
-			AcquireTimeout:     time.Second,
-			ConnMaxLifetime:    time.Minute,
-			StatementTimeout:   time.Second,
+			Enabled: true,
+			DSN:     "postgres://user:pass@localhost:5432/app?sslmode=disable",
+
+			MaxOpenConns: 1,
 		}},
 		log: slog.New(slog.DiscardHandler),
 	}
@@ -248,72 +239,8 @@ func (p testProbe) Name() string {
 	return p.name
 }
 
-func (p testProbe) Check(ctx context.Context) error {
+func (p testProbe) Ping(ctx context.Context) error {
 	return p.check(ctx)
-}
-
-func TestValidateStartupBudgetCompatibilityRejectsDependencyTimeoutsAboveProbeBudgets(t *testing.T) {
-	t.Parallel()
-
-	testCases := []struct {
-		name    string
-		cfg     config.Config
-		wantKey string
-	}{
-		{
-			name: "postgres connect timeout",
-			cfg: config.Config{
-				Postgres: config.PostgresConfig{
-					Enabled:        true,
-					ConnectTimeout: postgresProbeBudget + time.Nanosecond,
-				},
-			},
-			wantKey: "postgres.connect_timeout",
-		},
-		{
-			name: "postgres healthcheck timeout",
-			cfg: config.Config{
-				Postgres: config.PostgresConfig{
-					Enabled:            true,
-					ConnectTimeout:     postgresProbeBudget,
-					HealthcheckTimeout: postgresProbeBudget + time.Nanosecond,
-				},
-			},
-			wantKey: "postgres.healthcheck_timeout",
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			err := validateStartupBudgetCompatibility(tc.cfg)
-			if err == nil {
-				t.Fatal("validateStartupBudgetCompatibility() error = nil, want validation error")
-			}
-			if !errors.Is(err, config.ErrValidate) {
-				t.Fatalf("error = %v, want ErrValidate", err)
-			}
-			if !strings.Contains(err.Error(), tc.wantKey) {
-				t.Fatalf("error = %v, want key %q", err, tc.wantKey)
-			}
-		})
-	}
-}
-
-func TestValidateStartupBudgetCompatibilityIgnoresDisabledDependencies(t *testing.T) {
-	t.Parallel()
-
-	err := validateStartupBudgetCompatibility(config.Config{
-		HTTP: config.HTTPConfig{ReadinessTimeout: time.Second},
-		Postgres: config.PostgresConfig{
-			ConnectTimeout:     postgresProbeBudget + time.Second,
-			HealthcheckTimeout: postgresProbeBudget + time.Second,
-		},
-	})
-	if err != nil {
-		t.Fatalf("validateStartupBudgetCompatibility() error = %v, want nil for disabled dependencies", err)
-	}
 }
 
 func TestValidateStartupBudgetCompatibilityRequiresReadinessHeadroom(t *testing.T) {
@@ -324,8 +251,7 @@ func TestValidateStartupBudgetCompatibilityRequiresReadinessHeadroom(t *testing.
 			ReadinessTimeout: time.Second,
 		},
 		Postgres: config.PostgresConfig{
-			Enabled:            true,
-			HealthcheckTimeout: time.Second,
+			Enabled: true,
 		},
 	}
 
@@ -339,11 +265,11 @@ func TestValidateStartupBudgetCompatibilityRequiresReadinessHeadroom(t *testing.
 	if !strings.Contains(err.Error(), "startup headroom") {
 		t.Fatalf("error = %v, want startup headroom context", err)
 	}
-	if !strings.Contains(err.Error(), "postgres.healthcheck_timeout") {
+	if !strings.Contains(err.Error(), "postgres readiness budget") {
 		t.Fatalf("error = %v, want readiness probe name", err)
 	}
 
-	cfg.HTTP.ReadinessTimeout = time.Second + startupReadinessHeadroom
+	cfg.HTTP.ReadinessTimeout = postgres.DefaultHealthcheckTimeout + startupReadinessHeadroom
 	if err := validateStartupBudgetCompatibility(cfg); err != nil {
 		t.Fatalf("validateStartupBudgetCompatibility() error = %v, want nil when headroom is included", err)
 	}
@@ -361,27 +287,8 @@ func TestValidateStartupBudgetCompatibilityAllowsDefaultPostgresReadiness(t *tes
 	if cfg.HTTP.ReadinessTimeout != 4*time.Second {
 		t.Fatalf("HTTP.ReadinessTimeout = %s, want 4s default", cfg.HTTP.ReadinessTimeout)
 	}
-	if cfg.Postgres.HealthcheckTimeout != 3*time.Second {
-		t.Fatalf("Postgres.HealthcheckTimeout = %s, want 3s default", cfg.Postgres.HealthcheckTimeout)
-	}
-
 	if err := validateStartupBudgetCompatibility(cfg); err != nil {
 		t.Fatalf("validateStartupBudgetCompatibility() error = %v, want nil for default Postgres readiness headroom", err)
-	}
-}
-
-func TestBootstrapConfigStageReturnsStartupCompatibilityFailure(t *testing.T) {
-	resetBootstrapConfigEnv(t)
-	t.Setenv("APP__POSTGRES__ENABLED", "true")
-	t.Setenv("APP__POSTGRES__DSN", "postgres://user:pass@localhost:5432/app?sslmode=disable")
-	t.Setenv("APP__POSTGRES__CONNECT_TIMEOUT", "6s")
-
-	_, _, err := bootstrapConfigStage(context.Background(), config.LoadOptions{})
-	if err == nil {
-		t.Fatal("bootstrapConfigStage() error = nil, want startup compatibility validation error")
-	}
-	if !errors.Is(err, config.ErrValidate) {
-		t.Fatalf("error = %v, want ErrValidate", err)
 	}
 }
 
@@ -443,39 +350,4 @@ func resetBootstrapConfigEnv(t *testing.T) {
 	// profile:object-storage:start
 	setObjectStorageBootstrapTestEnv(t)
 	// profile:object-storage:end
-}
-
-// TestPostgresDomainErrorsMapSaturationToRetryableUnavailable closes the gap
-// between what internal/infra/postgres documented and what the transport did.
-//
-// ErrSaturated is the one database failure that is not the database's fault:
-// every connection is busy serving, so the request should be told to come back
-// rather than told the server broke. It reached a handler as an ordinary error
-// and came out as 500, which tells a client library not to retry the one failure
-// retrying fixes, and buries a moment of capacity pressure in the same rate as a
-// genuine bug.
-func TestPostgresDomainErrorsMapSaturationToRetryableUnavailable(t *testing.T) {
-	t.Parallel()
-
-	mappers := runtimeDependencies{}.DomainErrors()
-	if len(mappers) == 0 {
-		t.Fatal("DomainErrors() is empty; the pool's own failures reach handlers unclassified")
-	}
-
-	mapped, ok := failure.Classify(fmt.Errorf("load article: %w", postgres.ErrSaturated), mappers)
-	if !ok {
-		t.Fatal("postgres.ErrSaturated is unclassified; it answers 500 instead of a retryable 503")
-	}
-	if mapped.Code != failure.CodeServiceUnavailable {
-		t.Fatalf("code = %q, want %q", mapped.Code, failure.CodeServiceUnavailable)
-	}
-	if mapped.RetryAfter <= 0 {
-		t.Fatal("RetryAfter is unset; a 503 with no hint reads as down rather than busy")
-	}
-
-	// A connect failure is the database's fault and is not retryable in the same
-	// sense, so it must not be dressed up as capacity pressure.
-	if _, ok := failure.Classify(fmt.Errorf("dial: %w", postgres.ErrConnect), mappers); ok {
-		t.Fatal("postgres.ErrConnect was classified as a client-retryable problem")
-	}
 }

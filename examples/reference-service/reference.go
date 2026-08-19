@@ -88,7 +88,7 @@ func NewHandler(log *slog.Logger, opts Options) (http.Handler, error) {
 		return nil, fmt.Errorf("build article repository: %w", err)
 	}
 	// The repository is both the store and the unit of work. A PostgreSQL adapter
-	// passes postgres.Pool.InTx behind the same article.Atomically port; nothing
+	// passes postgres.InTx behind the same article.Atomically port; nothing
 	// in the feature package changes.
 	articles, err := article.NewService(repository, repository)
 	if err != nil {

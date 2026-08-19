@@ -86,16 +86,16 @@ Dockerfile. A derived service may add them after it owns and verifies its
 Railway service ID.
 
 <!-- profile:webhooks-durable:start -->
-## Durable webhook worker
+## Durable webhook jobs
 
-The image contains `/webhook-worker`, but `railway.toml` does not create or
-configure a second Railway service. An adopter must create an independently
-scalable worker from the exact service image, run `/webhook-worker`, use the
-same write-home PostgreSQL writer and immutable secret manifest, expose only
-its private diagnostics port, and set a stop grace longer than the validated
-worker drain and cleanup equation. Keep webhook emission disabled until the
-target migration, no-row worker, canary, recovery, and any applicable
-rotation/privacy checkpoints have their own authenticated evidence.
+The image contains `/jobs-worker`, but `railway.toml` does not create or
+configure a second Railway service. An adopter must run that binary from the
+exact service image, use the same write-home PostgreSQL writer, supply the
+worker-only webhook secret manifest, expose only its private diagnostics port,
+and preserve the jobs worker stop-grace contract. Keep webhook emission
+disabled; drain every legacy `/webhook-worker` before migration 000007, then
+require no-row jobs-worker, egress, receiver canary, and secret-rotation
+checkpoints with authenticated evidence.
 <!-- profile:webhooks-durable:end -->
 
 <!-- profile:grpc:start -->
@@ -138,11 +138,8 @@ this template. See [Native gRPC](grpc.md) for runtime config and proof.
   expand/migrate/verify/contract plan and an explicit recovery method.
 - A failed pre-deploy command blocks promotion. Fix the migration or
   configuration; do not move migration ownership into application startup.
-- The migrator owns explicit overall, statement, and lock budgets through
-  `APP__POSTGRES__MIGRATION_TIMEOUT`,
-  `APP__POSTGRES__MIGRATION_STATEMENT_TIMEOUT`, and
-  `APP__POSTGRES__MIGRATION_LOCK_TIMEOUT`. The lock budget is also the detached
-  cleanup reserve and must be strictly below the overall budget. Railway
+- The migrator owns fixed `5m` overall, `2m` statement, and `15s` lock budgets.
+  The lock budget is also the detached cleanup reserve. Railway
   documents that a failed pre-deploy command blocks deployment and is not
   retried, but does not publish a platform timeout for this command, so do not
   rely on an implicit provider bound.

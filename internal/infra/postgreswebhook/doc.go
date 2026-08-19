@@ -1,4 +1,4 @@
-// Package postgreswebhook owns durable outbound webhook acceptance, delivery,
-// recovery, and worker mechanics. It does not own subscriber administration,
-// business-event meaning, authentication, or a public operator transport.
+// Package postgreswebhook stages one immutable job per receiver and delivers it
+// with the Standard Webhooks protocol. PostgreSQL job infrastructure owns
+// durability, retries, recovery, concurrency, telemetry, and worker lifecycle.
 package postgreswebhook

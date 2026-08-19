@@ -1,9 +1,6 @@
 package bootstrap
 
 import (
-	// profile:http-idempotency-postgres:start
-	"context"
-	// profile:http-idempotency-postgres:end
 	"fmt"
 	stdlog "log"
 	"log/slog"
@@ -12,9 +9,6 @@ import (
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/failure"
 
-	// profile:http-idempotency-postgres:start
-	"github.com/example/go-service-template-rest/internal/httpidempotency"
-	// profile:http-idempotency-postgres:end
 	httpx "github.com/example/go-service-template-rest/internal/infra/http"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 
@@ -29,10 +23,6 @@ import (
 // resolve through. Everything else the router needs comes from configuration.
 type httpRuntimeBindings struct {
 	Handlers httpx.Handlers
-	// profile:http-idempotency-postgres:start
-	IdempotencyOperations       []httpx.IdempotencyOperation
-	IdempotencyTerminalObserver func(context.Context, httpidempotency.Decision, error)
-	// profile:http-idempotency-postgres:end
 	// profile:authn-oidc-jwt:start
 	Authenticate          openapi3filter.AuthenticationFunc
 	AuthenticateChallenge string
@@ -66,10 +56,6 @@ func newHTTPHandler(
 			// mappers at runtimeDependencies.DomainErrors; see failure.Mapper
 			// for why the seam exists.
 			DomainErrors: domainErrors,
-			// profile:http-idempotency-postgres:start
-			IdempotencyOperations:       bindings.IdempotencyOperations,
-			IdempotencyTerminalObserver: bindings.IdempotencyTerminalObserver,
-			// profile:http-idempotency-postgres:end
 			// profile:authn-oidc-jwt:start
 			Authenticate:          bindings.Authenticate,
 			AuthenticateChallenge: bindings.AuthenticateChallenge,

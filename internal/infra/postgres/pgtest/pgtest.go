@@ -29,6 +29,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	"github.com/example/go-service-template-rest/internal/infra/postgresmigrate"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/testcontainers/testcontainers-go"
@@ -154,18 +155,30 @@ func Migrated(tb testing.TB, source fs.FS, path string) string {
 	ctx, cancel := context.WithTimeout(tb.Context(), migrationTimeout)
 	defer cancel()
 
-	if _, err := postgresmigrate.MigrateUp(ctx, postgresmigrate.MigrationOptions{
-		DSN:              dsn,
-		SourceFS:         source,
-		SourcePath:       path,
-		ConnectTimeout:   databaseOpTimeout,
-		StatementTimeout: migrationTimeout,
-		LockTimeout:      migrationLockTimeout,
-		CleanupTimeout:   migrationLockTimeout,
-	}); err != nil {
+	options := postgresmigrate.DefaultOptions(dsn, source, path, nil)
+	options.ConnectTimeout = databaseOpTimeout
+	options.StatementTimeout = migrationTimeout
+	options.LockTimeout = migrationLockTimeout
+	options.CleanupTimeout = migrationLockTimeout
+	if _, err := postgresmigrate.MigrateUp(ctx, options); err != nil {
 		tb.Fatalf("apply migrations from %s: %v", path, err)
 	}
 	return dsn
+}
+
+// MigratedPool returns an isolated, migrated pool and closes it with tb.
+func MigratedPool(tb testing.TB, source fs.FS, path string) *pgxpool.Pool {
+	tb.Helper()
+
+	pool, err := postgres.Open(tb.Context(), postgres.Options{
+		DSN:          Migrated(tb, source, path),
+		MaxOpenConns: postgres.DefaultMaxOpenConns,
+	})
+	if err != nil {
+		tb.Fatalf("open migrated postgres pool: %v", err)
+	}
+	tb.Cleanup(pool.Close)
+	return pool
 }
 
 func dropDatabase(tb testing.TB, name string) {

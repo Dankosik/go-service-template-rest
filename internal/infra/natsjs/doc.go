@@ -13,10 +13,9 @@
 // the composition root's: [Connect], [Client.Producer], [Client.NewWorker], and
 // the lifecycle methods the two cmd packages drive.
 // profile:outbox-postgres:start
-// The outbox relay uses only
-// [NewOutboxPublisher], which converts the broker-neutral event, forwards its
-// stored W3C creation context, and maps publication evidence onto the outbox's
-// permanent, not-accepted, and ambiguous outcomes.
+// The PostgreSQL outbox uses [NewOutboxAppender] to resolve subjects before a
+// transaction commits and [NewOutboxWorker] to publish River jobs with their
+// stable event identity and stored W3C creation context.
 // profile:outbox-postgres:end
 // Operator tooling uses
 // [RestoreDeadLetter] and [DeadLetterReason] to take a record back out of the
@@ -69,10 +68,8 @@
 // There is deliberately no seam for a second broker. [Producer], [Message], and
 // [Handler] are concrete throughout, including in the composition roots'
 // signatures, so replacing NATS means editing those roots and every handler
-// rather than implementing an interface. Broker choice is abstracted one layer
-// out instead: postgresoutbox.Publisher is the seam, and this package is one
-// implementation behind it. Add an interface here only when a second
-// implementation actually exists.
+// rather than implementing an interface. The outbox worker follows the same
+// rule and depends on the concrete Producer.
 //
 // Three things about a handler are not visible from its signature. It gets
 // 1+len(RetryDelays) deliveries in total — the first, plus one per configured

@@ -43,7 +43,6 @@ make template-init \
   JOBS=none \
   WEBHOOKS=none \
   OUTBOX=none \
-  INBOX=none \
   GRPC=none \
   AUTHN=none \
   OUTBOUND_HTTP=none \
@@ -66,29 +65,31 @@ does not certify a provider or configure a bucket; see
 <!-- profile:object-storage:end -->
 <!-- profile:http-idempotency-postgres:start -->
 Choose `HTTP_IDEMPOTENCY=postgres` only with `DATABASE=postgres`. It retains the
-reusable PostgreSQL idempotency pack; an adopting operation still owns its
-registration and deployment quantities. See [PostgreSQL HTTP idempotency](docs/postgres-http-idempotency.md).
+one-transaction PostgreSQL idempotency executor; an operation opts in with one
+OpenAPI declaration and supplies only its authorized business effect. See
+[PostgreSQL HTTP idempotency](docs/postgres-http-idempotency.md).
 <!-- profile:http-idempotency-postgres:end -->
+<!-- profile:jobs-postgres:start -->
+Choose `DATABASE=postgres JOBS=postgres` for typed River jobs inserted in the
+business transaction and executed by the separate jobs worker; see
+[PostgreSQL background jobs](docs/postgres-durable-background-jobs.md).
+<!-- profile:jobs-postgres:end -->
 <!-- profile:outbound-auth-oauth2-client-credentials:start -->
 Choose `OUTBOUND_AUTH=oauth2-client-credentials` only with
 `OUTBOUND_HTTP=bounded`, `GRPC=enabled`, or both; it retains one fixed machine
 credential owner. See [outbound machine authentication](docs/outbound-machine-authentication.md).
 <!-- profile:outbound-auth-oauth2-client-credentials:end -->
 <!-- profile:outbox-postgres:start -->
-Choose `DATABASE=postgres OUTBOX=postgres` when a request transaction must
-durably record an outbound event for a separately deployed relay. Publication
-is at-least-once, so consumers must tolerate duplicate event IDs; see the
+Choose `DATABASE=postgres OUTBOX=postgres MESSAGING=nats-jetstream` when a
+request transaction must durably record a typed outbound event for the
+separately deployed River relay. Publication is at-least-once, so consumers
+must tolerate duplicate event IDs; see the
 [PostgreSQL transactional outbox](docs/postgres-transactional-outbox.md).
 <!-- profile:outbox-postgres:end -->
-<!-- profile:inbox-postgres:start -->
-Choose `DATABASE=postgres INBOX=postgres` when a consumer must suppress a
-logical message duplicate in the same PostgreSQL transaction as its feature
-effect; see the [PostgreSQL idempotent inbox](docs/postgres-idempotent-inbox.md).
-<!-- profile:inbox-postgres:end -->
 <!-- profile:webhooks-durable:start -->
-Choose `DATABASE=postgres WEBHOOKS=durable` when a feature transaction must
-atomically accept an immutable webhook fan-out for a separately deployed
-worker. Receiver processing is at-least-once; see
+Choose `DATABASE=postgres JOBS=postgres WEBHOOKS=durable` when a feature
+transaction must stage an immutable per-receiver webhook fan-out for the shared
+jobs worker. Receiver processing is at-least-once; see
 [outbound webhook delivery](docs/outbound-webhook-delivery.md).
 <!-- profile:webhooks-durable:end -->
 <!-- profile:authn-oidc-jwt:start -->
@@ -103,9 +104,9 @@ when the service publishes or consumes native gRPC; see the
 <!-- profile:messaging-nats-jetstream:start -->
 Choose `MESSAGING=nats-jetstream` for bounded direct JetStream publishing and a
 separate durable pull-consumer worker; see [durable messaging](docs/durable-messaging.md).
-Together with `DATABASE=postgres OUTBOX=postgres`, it also composes the outbox
-relay's production NATS publisher and stored W3C trace continuity. Outbox
-without messaging keeps its fail-closed adapter registration seam.
+Together with `DATABASE=postgres OUTBOX=postgres`, it supplies the outbox
+relay's concrete NATS producer and W3C trace continuity. The generator rejects
+outbox without messaging.
 <!-- profile:messaging-nats-jetstream:end -->
 
 `examples/reference-service` is a worked feature slice kept in this template for
@@ -121,14 +122,14 @@ it, and read it here or in
 | Service foundation | Go 1.26, `chi v5`, `koanf v2`, graceful shutdown, health and readiness |
 | API contract | OpenAPI 3.0 and `oapi-codegen v2` with generated request bindings and typed responses |
 | Data | No database by default; optional PostgreSQL 17, `pgx v5`, `goose v3`, and `sqlc` profile |
+<!-- profile:jobs-postgres:start -->
+| Background jobs | Optional River-backed typed jobs with transactional insertion and a separate worker process |
+<!-- profile:jobs-postgres:end -->
 <!-- profile:outbox-postgres:start -->
-| Transactional outbox | Optional PostgreSQL intent store and separately deployed bounded relay; the NATS profile supplies the selected adapter, while outbox-only stays fail-closed |
+| Transactional outbox | Optional River-backed PostgreSQL job appended inside the business transaction and published by a separate NATS worker |
 <!-- profile:outbox-postgres:end -->
-<!-- profile:inbox-postgres:start -->
-| Idempotent inbox | Optional permanent per-consumer logical-message claims joined to one same-PostgreSQL feature effect |
-<!-- profile:inbox-postgres:end -->
 <!-- profile:webhooks-durable:start -->
-| Outbound webhooks | Optional PostgreSQL acceptance store and independent bounded delivery worker with HMAC signing and public-HTTPS enforcement |
+| Outbound webhooks | Optional Standard Webhooks job kind with atomic fan-out staging and public-HTTPS enforcement through the shared jobs worker |
 <!-- profile:webhooks-durable:end -->
 | Outbound HTTP | Standard library by default; optional fixed-authority transport bounds and response-size protection |
 <!-- profile:messaging-nats-jetstream:start -->

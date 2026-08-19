@@ -32,7 +32,7 @@ func TestJobsConfigWorkerLoaderRejectsInvalidJobsAndPostgres(t *testing.T) {
 	}{
 		{name: "postgres disabled", key: "APP__POSTGRES__ENABLED", value: "false", contains: "requires postgres.enabled"},
 		{name: "missing postgres dsn", key: "APP__POSTGRES__DSN", value: "", contains: "postgres.dsn"},
-		{name: "invalid jobs poll interval", key: "APP__JOBS__POLL_INTERVAL", value: "0s", contains: "jobs.poll_interval"},
+		{name: "invalid jobs workers", key: "APP__JOBS__MAX_WORKERS", value: "501", contains: "jobs.max_workers"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			setJobsWorkerConfigEnv(t)
@@ -49,6 +49,21 @@ func TestJobsConfigWorkerLoaderRejectsInvalidJobsAndPostgres(t *testing.T) {
 	}
 }
 
+// profile:webhooks-durable:start
+//
+//nolint:paralleltest // This test mutates process-global environment.
+func TestJobsWorkerRequiresWebhookSecretsWhenEnabled(t *testing.T) {
+	setJobsWorkerConfigEnv(t)
+	t.Setenv("APP__WEBHOOKS__ENABLED", "true")
+	t.Setenv("APP__WEBHOOKS__ENDPOINTS", `{"endpoints":[]}`)
+	_, _, err := LoadJobsWorkerDetailedWithContext(context.Background(), LoadOptions{})
+	if !errors.Is(err, ErrValidate) || !strings.Contains(err.Error(), "webhooks.static_secrets") {
+		t.Fatalf("LoadJobsWorkerDetailedWithContext() error = %v", err)
+	}
+}
+
+// profile:webhooks-durable:end
+
 //nolint:paralleltest // This test mutates process-global environment or working directory.
 func setJobsWorkerConfigEnv(t *testing.T) {
 	t.Helper()
@@ -61,17 +76,11 @@ func setJobsWorkerConfigEnv(t *testing.T) {
 		}
 	}
 	for key, value := range map[string]string{
-		"APP__APP__ENV":                      "local",
-		"APP__POSTGRES__ENABLED":             "true",
-		"APP__POSTGRES__DSN":                 "postgres://jobs:password@localhost:5432/jobs?sslmode=disable",
-		"APP__POSTGRES__MAX_OPEN_CONNS":      "2",
-		"APP__JOBS__ENABLED":                 "true",
-		"APP__JOBS__POLL_INTERVAL":           "1s",
-		"APP__JOBS__MAX_CONCURRENCY":         "1",
-		"APP__JOBS__LEASE_DURATION":          "6s",
-		"APP__JOBS__STORE_OPERATION_TIMEOUT": "1s",
-		"APP__JOBS__OBSERVATION_INTERVAL":    "1s",
-		"APP__JOBS__DRAIN_TIMEOUT":           "1s",
+		"APP__APP__ENV":                 "local",
+		"APP__POSTGRES__ENABLED":        "true",
+		"APP__POSTGRES__DSN":            "postgres://jobs:password@localhost:5432/jobs?sslmode=disable",
+		"APP__POSTGRES__MAX_OPEN_CONNS": "2",
+		"APP__JOBS__MAX_WORKERS":        "1",
 	} {
 		t.Setenv(key, value)
 	}

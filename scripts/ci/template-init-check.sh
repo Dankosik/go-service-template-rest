@@ -16,9 +16,6 @@ valid_profiles="${valid_profiles}, messaging"
 # profile:outbox-postgres:start
 valid_profiles="${valid_profiles}, outbox"
 # profile:outbox-postgres:end
-# profile:inbox-postgres:start
-valid_profiles="${valid_profiles}, inbox"
-# profile:inbox-postgres:end
 
 case "${TEMPLATE_INIT_PROFILE}" in
 	all | minimal | postgres | grpc | authn | outbound-auth | http-idempotency | webhooks) ;;
@@ -34,9 +31,6 @@ case "${TEMPLATE_INIT_PROFILE}" in
 	# profile:outbox-postgres:start
 	outbox) ;;
 	# profile:outbox-postgres:end
-	# profile:inbox-postgres:start
-	inbox) ;;
-	# profile:inbox-postgres:end
 	*)
 		echo "TEMPLATE_INIT_PROFILE must be one of: ${valid_profiles}" >&2
 		exit 2
@@ -354,17 +348,9 @@ expect_unchanged_failure "${invalid_outbox_database}" \
 	env CODEOWNER=@acme/platform DATABASE=none OUTBOX=postgres bash "${ROOT_DIR}/scripts/init-module.sh"
 # profile:outbox-postgres:end
 
-# profile:inbox-postgres:start
-malformed_inbox="$(new_fixture malformed-inbox git@github.com:acme/malformed-inbox.git)"
-expect_unchanged_failure "${malformed_inbox}" \
-	env CODEOWNER=@acme/platform INBOX=custom bash "${ROOT_DIR}/scripts/init-module.sh"
-empty_inbox="$(new_fixture empty-inbox git@github.com:acme/empty-inbox.git)"
-expect_unchanged_failure "${empty_inbox}" \
-	env CODEOWNER=@acme/platform INBOX= bash "${ROOT_DIR}/scripts/init-module.sh"
-invalid_inbox_database="$(new_fixture invalid-inbox-database git@github.com:acme/invalid-inbox-database.git)"
-expect_unchanged_failure "${invalid_inbox_database}" \
-	env CODEOWNER=@acme/platform DATABASE=none INBOX=postgres bash "${ROOT_DIR}/scripts/init-module.sh"
-# profile:inbox-postgres:end
+removed_inbox="$(new_fixture removed-inbox git@github.com:acme/removed-inbox.git)"
+expect_unchanged_failure "${removed_inbox}" \
+	env CODEOWNER=@acme/platform INBOX=postgres bash "${ROOT_DIR}/scripts/init-module.sh"
 
 minimal_checkout="$(copy_template_checkout full-minimal git@github.com:acme/feature-proof.git)"
 minimal_source_revision="$(git -C "${minimal_checkout}" rev-parse HEAD)"
@@ -452,27 +438,16 @@ grep -Fq 'messaging.urls' "${TEMP_ROOT}/minimal-messaging.log"
 for removed in \
 	cmd/outbox-relay \
 	docs/postgres-transactional-outbox.md \
-	examples/reference-service/postgres_outbox_reconciliation_integration_test.go \
-	internal/config/outbox_config_test.go \
-	internal/infra/natsjs/outbox_publisher.go \
-	internal/infra/natsjs/outbox_publisher_test.go \
+	internal/domainevent \
+	internal/infra/natsjs/outbox.go \
+	internal/infra/natsjs/outbox_test.go \
 	internal/infra/postgresoutbox \
-	test/postgres_outbox_store_fixtures_integration_test.go \
-	test/postgres_outbox_store_integration_test.go \
+	test/postgres_outbox_fixtures_integration_test.go \
+	test/postgres_outbox_integration_test.go \
 	test/postgres_outbox_natsjs_integration_test.go; do
 	assert "${removed} must not survive OUTBOX=none initialization" path_absent "${minimal_checkout}/${removed}"
 done
 # profile:outbox-postgres:end
-# profile:inbox-postgres:start
-for removed in \
-	docs/postgres-idempotent-inbox.md \
-	examples/reference-service/postgres_inbox_integration_test.go \
-	internal/infra/postgresinbox \
-	test/postgres_inbox_integration_test.go \
-	test/postgres_inbox_natsjs_integration_test.go; do
-	assert "${removed} must not survive INBOX=none initialization" path_absent "${minimal_checkout}/${removed}"
-done
-# profile:inbox-postgres:end
 # A profile's paths are one list, asserted absent when the profile is off and
 # present when it is on. Two lists would let a path be proven removed and never
 # proven kept — which reads as full coverage and is how a path silently stops
@@ -545,9 +520,6 @@ done
 # profile:outbox-postgres:start
 grep -Fq 'outbox = "none"' "${minimal_checkout}/template.lock"
 # profile:outbox-postgres:end
-# profile:inbox-postgres:start
-grep -Fq 'inbox = "none"' "${minimal_checkout}/template.lock"
-# profile:inbox-postgres:end
 for benchmark_surface in \
 	Makefile \
 	scripts/dev/benchmark.sh \
@@ -577,17 +549,6 @@ assert "explicit OUTBOX=none changed the default-none checkout" \
 expect_unchanged_failure "${minimal_checkout}" \
 	env CODEOWNER=@acme/platform DATABASE=postgres OUTBOX=postgres bash "${ROOT_DIR}/scripts/init-module.sh"
 # profile:outbox-postgres:end
-# profile:inbox-postgres:start
-minimal_inbox_snapshot="$(snapshot "${minimal_checkout}")"
-(
-	cd "${minimal_checkout}"
-	CODEOWNER=@acme/platform DATABASE=none INBOX=none bash "${ROOT_DIR}/scripts/init-module.sh"
-)
-assert "explicit INBOX=none changed the default-none checkout" \
-	same_text "${minimal_inbox_snapshot}" "$(snapshot "${minimal_checkout}")"
-expect_unchanged_failure "${minimal_checkout}" \
-	env CODEOWNER=@acme/platform DATABASE=postgres INBOX=postgres bash "${ROOT_DIR}/scripts/init-module.sh"
-# profile:inbox-postgres:end
 grep -Fqx "source_revision = \"${minimal_source_revision}\"" "${minimal_checkout}/template.lock"
 # profile:messaging-nats-jetstream:start
 expect_unchanged_failure "${minimal_checkout}" \
@@ -600,16 +561,6 @@ if make -C "${minimal_checkout}" help | grep -Fq 'outbox'; then
 fi
 # profile:outbox-postgres:end
 
-# profile:inbox-postgres:start
-assert "INBOX=none retained inbox runtime, documentation, test, SQL, or profile wiring" grep_absent -R -E \
-	'postgresinbox|postgres_inbox|postgres-idempotent-inbox|profile:inbox-postgres' \
-	"${minimal_checkout}/Makefile" \
-	"${minimal_checkout}/README.md" \
-	"${minimal_checkout}/.golangci.yml" \
-	"${minimal_checkout}/docs" \
-	"${minimal_checkout}/internal" \
-	"${minimal_checkout}/scripts/ci"
-# profile:inbox-postgres:end
 # A generated service owns no generator, so the initialization contract check
 # reports that and succeeds instead of failing the first push of every service.
 #
@@ -818,33 +769,29 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "outb
 		make sqlc-check migration-check mod-tidy-check project-structure-check
 	)
 	assert "OUTBOX=none removed PostgreSQL" path_present "${outbox_none_checkout}/internal/infra/postgres"
-	# One list, asserted absent here and present under OUTBOX=postgres below. The
-	# NATS-bound proof is named separately because it belongs to both this profile
-	# and messaging, and the fixture that keeps the outbox selects no broker.
+	# One list, asserted absent here and present under the complete
+	# OUTBOX=postgres+MESSAGING=nats-jetstream profile below.
 	outbox_paths=(
 		cmd/outbox-relay
 		docs/postgres-transactional-outbox.md
-		internal/config/outbox_config_test.go
-		internal/infra/postgres/queries/postgres_outbox.sql
-		internal/infra/postgres/sqlcgen/postgres_outbox.sql.go
+		internal/domainevent
+		internal/infra/natsjs/outbox.go
 		internal/infra/postgresoutbox
-		test/postgres_outbox_bench_integration_test.go
-		test/postgres_outbox_store_fixtures_integration_test.go
-		test/postgres_outbox_store_integration_test.go
+		test/postgres_outbox_fixtures_integration_test.go
+		test/postgres_outbox_integration_test.go
+		test/postgres_outbox_natsjs_integration_test.go
 	)
-	for removed in "${outbox_paths[@]}" test/postgres_outbox_natsjs_integration_test.go; do
+	for removed in "${outbox_paths[@]}"; do
 		assert "PostgreSQL OUTBOX=none retained ${removed}" path_absent "${outbox_none_checkout}/${removed}"
 	done
-	assert "outbox-only fixture retained inbox SQLC output" path_absent \
+	assert "generated service retained removed inbox SQLC output" path_absent \
 		"${outbox_none_checkout}/internal/infra/postgres/sqlcgen/postgres_inbox.sql.go"
-	# Every outbox migration, not a named list: one left behind runs against
-	# tables this profile never creates, and only the generated service's own
-	# migration run would notice.
-	assert "PostgreSQL OUTBOX=none retained an outbox migration" \
-		glob_absent "${outbox_none_checkout}/migrations/*_postgres_outbox*.sql"
+	assert "generated service retained removed inbox migration history" \
+		glob_absent "${outbox_none_checkout}/migrations/*_postgres_inbox*.sql"
+	assert "PostgreSQL OUTBOX=none retained the unused River schema" \
+		path_absent "${outbox_none_checkout}/migrations/000008_river.sql"
 	grep -Fqx 'database = "postgres"' "${outbox_none_checkout}/template.lock"
 	grep -Fqx 'outbox = "none"' "${outbox_none_checkout}/template.lock"
-	grep -Fqx 'inbox = "none"' "${outbox_none_checkout}/template.lock"
 	outbox_none_snapshot="$(snapshot "${outbox_none_checkout}")"
 	(
 		cd "${outbox_none_checkout}"
@@ -859,26 +806,22 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "outb
 	outbox_revision="$(git -C "${outbox_checkout}" rev-parse HEAD)"
 	(
 		cd "${outbox_checkout}"
-		CODEOWNER=@acme/platform DATABASE=postgres OUTBOX=postgres bash ./scripts/init-module.sh
+		CODEOWNER=@acme/platform DATABASE=postgres OUTBOX=postgres MESSAGING=nats-jetstream bash ./scripts/init-module.sh
 		go test -vet=off ./...
-		go build ./cmd/service ./cmd/migrate ./cmd/outbox-relay
+		go build ./cmd/service ./cmd/migrate ./cmd/worker ./cmd/outbox-relay
 		make sqlc-check migration-check mod-tidy-check project-structure-check
-		if go run ./cmd/outbox-relay >"${TEMP_ROOT}/outbox-missing-publisher.log" 2>&1; then
-			echo "outbox relay accepted a missing production publisher"
-			exit 1
-		fi
 		go list -deps ./cmd/outbox-relay | grep -Fx 'github.com/acme/outbox-service/internal/infra/postgresoutbox'
+		go list -deps ./cmd/outbox-relay | grep -Fx 'github.com/acme/outbox-service/internal/infra/natsjs'
 	)
-	grep -Fxq 'outbox relay failed: error_class=config' "${TEMP_ROOT}/outbox-missing-publisher.log"
-	assert "outbox relay leaked raw missing-publisher error" \
-		grep_absent -Fq 'outbox publisher builder is not registered' "${TEMP_ROOT}/outbox-missing-publisher.log"
 	for retained in "${outbox_paths[@]}"; do
 		assert "OUTBOX=postgres removed ${retained}" path_present "${outbox_checkout}/${retained}"
 	done
-	assert "outbox-only fixture retained inbox SQLC output" path_absent \
+	assert "generated service retained removed inbox SQLC output" path_absent \
 		"${outbox_checkout}/internal/infra/postgres/sqlcgen/postgres_inbox.sql.go"
-	assert "outbox-only fixture retained inbox runtime" path_absent \
+	assert "generated service retained removed inbox runtime" path_absent \
 		"${outbox_checkout}/internal/infra/postgresinbox"
+	assert "OUTBOX=postgres removed the shared River schema" path_present \
+		"${outbox_checkout}/migrations/000008_river.sql"
 
 	combined_checkout="$(copy_template_checkout combined-outbox-messaging git@github.com:acme/combined-service.git)"
 	(
@@ -892,13 +835,12 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "outb
 		make sqlc-check mod-tidy-check project-structure-check
 	)
 	for retained in \
-		cmd/outbox-relay/internal/bootstrap/natsjs_publisher.go \
 		internal/config/configtest/messaging.go \
-		internal/infra/natsjs/outbox_publisher.go \
+		internal/infra/natsjs/outbox.go \
 		test/postgres_outbox_natsjs_integration_test.go; do
 		assert "combined outbox+messaging removed ${retained}" path_present "${combined_checkout}/${retained}"
 	done
-	assert "combined outbox+messaging retained the unselected inbox proof" path_absent \
+	assert "combined outbox+messaging retained removed inbox proof" path_absent \
 		"${combined_checkout}/test/postgres_inbox_natsjs_integration_test.go"
 	combined_snapshot="$(snapshot "${combined_checkout}")"
 	(
@@ -909,11 +851,9 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "outb
 	assert "repeated combined initialization changed the checkout" \
 		same_text "${combined_snapshot}" "$(snapshot "${combined_checkout}")"
 
-	# Compared against the template's own outbox migrations rather than a named
-	# list, so a migration added later is covered the day it lands.
-	assert "OUTBOX=postgres changed the outbox migration set" same_text \
-		"$(cd "${ROOT_DIR}" && printf '%s\n' migrations/*_postgres_outbox*.sql)" \
-		"$(cd "${outbox_checkout}" && printf '%s\n' migrations/*_postgres_outbox*.sql)"
+	assert "OUTBOX=postgres changed the River migration" same_text \
+		"$(cat "${ROOT_DIR}/migrations/000008_river.sql")" \
+		"$(cat "${outbox_checkout}/migrations/000008_river.sql")"
 	# The template edits its migrations in place because nothing has applied
 	# them; a generated service is the opposite case and must refuse, with no
 	# escape it could be talked into. Exercised on an isolated copy of the
@@ -927,7 +867,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "outb
 		git init -q .
 		git add -A
 		git -c user.email=init-check@example.invalid -c user.name=init-check commit -qm generated
-		printf '\n-- rewritten after generation\n' >>migrations/000001_postgres_outbox.sql
+		printf '\n-- rewritten after generation\n' >>migrations/000008_river.sql
 		if MIGRATION_REPO_ROOT="${rewrite_probe}" MIGRATION_HISTORY_MODE=worktree \
 			bash ./scripts/ci/migration-history-check.sh >/dev/null 2>&1; then
 			echo "template initialization contract: generated service accepted a migration rewrite" >&2
@@ -936,9 +876,9 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "outb
 	)
 	grep -Fqx 'database = "postgres"' "${outbox_checkout}/template.lock"
 	grep -Fqx 'outbox = "postgres"' "${outbox_checkout}/template.lock"
-	grep -Fqx 'inbox = "none"' "${outbox_checkout}/template.lock"
 	grep -Fqx "source_revision = \"${outbox_revision}\"" "${outbox_checkout}/template.lock"
-	grep -Fq 'APP__OUTBOX__ENABLED=true' "${outbox_checkout}/env/.env.example"
+	assert "generated outbox retained removed APP__OUTBOX__ config" \
+		grep_absent -Fq 'APP__OUTBOX__' "${outbox_checkout}/env/.env.example"
 	grep -Fq 'run-outbox-relay' "${outbox_checkout}/Makefile"
 	grep -Fq '/out/outbox-relay' "${outbox_checkout}/build/docker/Dockerfile"
 	outbox_marker='profile:outbox''-postgres:'
@@ -957,7 +897,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "outb
 	outbox_snapshot="$(snapshot "${outbox_checkout}")"
 	(
 		cd "${outbox_checkout}"
-		CODEOWNER=@acme/platform DATABASE=postgres OUTBOX=postgres bash ./scripts/init-module.sh
+		CODEOWNER=@acme/platform DATABASE=postgres OUTBOX=postgres MESSAGING=nats-jetstream bash ./scripts/init-module.sh
 	)
 	assert "repeated OUTBOX=postgres initialization changed the checkout" \
 		same_text "${outbox_snapshot}" "$(snapshot "${outbox_checkout}")"
@@ -989,114 +929,6 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "outb
 fi
 # profile:outbox-postgres:end
 
-# profile:inbox-postgres:start
-if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "inbox" ]]; then
-	inbox_checkout="$(copy_template_checkout full-inbox git@github.com:acme/inbox-service.git)"
-	inbox_revision="$(git -C "${inbox_checkout}" rev-parse HEAD)"
-	(
-		cd "${inbox_checkout}"
-		CODEOWNER=@acme/platform DATABASE=postgres INBOX=postgres bash ./scripts/init-module.sh
-		go test -vet=off ./internal/infra/postgresinbox
-		go test -vet=off -tags=integration ./test -run '^$'
-		go build ./cmd/service ./cmd/migrate
-		make sqlc-check migration-check mod-tidy-check project-structure-check
-		mkdir -p "${TEMP_ROOT}/inbox-lint-cache"
-		GOLANGCI_LINT_CACHE="${TEMP_ROOT}/inbox-lint-cache" make lint
-	)
-	for retained in \
-		docs/postgres-idempotent-inbox.md \
-		internal/infra/postgres/queries/postgres_inbox.sql \
-		internal/infra/postgres/sqlcgen/postgres_inbox.sql.go \
-		internal/infra/postgresinbox \
-		migrations/000002_postgres_inbox.sql \
-		test/postgres_inbox_integration_test.go; do
-		assert "INBOX=postgres removed ${retained}" path_present "${inbox_checkout}/${retained}"
-	done
-	for removed in \
-		cmd/outbox-relay \
-		internal/infra/postgresoutbox \
-		internal/infra/postgres/queries/postgres_outbox.sql \
-		internal/infra/postgres/sqlcgen/postgres_outbox.sql.go \
-		test/postgres_inbox_natsjs_integration_test.go; do
-		assert "inbox-only fixture retained ${removed}" path_absent "${inbox_checkout}/${removed}"
-	done
-	grep -Fqx 'database = "postgres"' "${inbox_checkout}/template.lock"
-	grep -Fqx 'outbox = "none"' "${inbox_checkout}/template.lock"
-	grep -Fqx 'inbox = "postgres"' "${inbox_checkout}/template.lock"
-	grep -Fqx 'messaging = "none"' "${inbox_checkout}/template.lock"
-	grep -Fqx "source_revision = \"${inbox_revision}\"" "${inbox_checkout}/template.lock"
-	inbox_marker='profile:inbox''-postgres:'
-	assert "selected inbox checkout retained unresolved profile markers" \
-		grep_absent -R -Fq "${inbox_marker}" \
-		"${inbox_checkout}/.golangci.yml" \
-		"${inbox_checkout}/Makefile" \
-		"${inbox_checkout}/README.md" \
-		"${inbox_checkout}/docs" \
-		"${inbox_checkout}/internal" \
-		"${inbox_checkout}/scripts/ci" \
-		"${inbox_checkout}/test"
-	inbox_snapshot="$(snapshot "${inbox_checkout}")"
-	(
-		cd "${inbox_checkout}"
-		CODEOWNER=@acme/platform DATABASE=postgres INBOX=postgres bash ./scripts/init-module.sh
-	)
-	assert "repeated INBOX=postgres initialization changed the checkout" \
-		same_text "${inbox_snapshot}" "$(snapshot "${inbox_checkout}")"
-	expect_unchanged_failure "${inbox_checkout}" \
-		env CODEOWNER=@acme/platform DATABASE=postgres INBOX=none bash "${ROOT_DIR}/scripts/init-module.sh"
-
-	inbox_messaging_checkout="$(copy_template_checkout inbox-messaging git@github.com:acme/inbox-messaging-service.git)"
-	(
-		cd "${inbox_messaging_checkout}"
-		CODEOWNER=@acme/platform DATABASE=postgres INBOX=postgres MESSAGING=nats-jetstream \
-			bash ./scripts/init-module.sh
-		go test -vet=off ./internal/infra/postgresinbox ./internal/infra/natsjs
-		go test -vet=off -tags=integration ./test -run '^$'
-		go build ./cmd/service ./cmd/migrate ./cmd/worker
-		make sqlc-check mod-tidy-check project-structure-check
-	)
-	assert "combined inbox+messaging removed joined proof" path_present \
-		"${inbox_messaging_checkout}/test/postgres_inbox_natsjs_integration_test.go"
-	assert "inbox+messaging retained outbox runtime" path_absent \
-		"${inbox_messaging_checkout}/internal/infra/postgresoutbox"
-	inbox_messaging_snapshot="$(snapshot "${inbox_messaging_checkout}")"
-	(
-		cd "${inbox_messaging_checkout}"
-		CODEOWNER=@acme/platform DATABASE=postgres INBOX=postgres MESSAGING=nats-jetstream \
-			bash ./scripts/init-module.sh
-	)
-	assert "repeated inbox+messaging initialization changed the checkout" \
-		same_text "${inbox_messaging_snapshot}" "$(snapshot "${inbox_messaging_checkout}")"
-
-	inbox_combined_checkout="$(copy_template_checkout inbox-outbox-messaging git@github.com:acme/inbox-outbox-service.git)"
-	(
-		cd "${inbox_combined_checkout}"
-		CODEOWNER=@acme/platform DATABASE=postgres OUTBOX=postgres INBOX=postgres MESSAGING=nats-jetstream \
-			bash ./scripts/init-module.sh
-		go test -vet=off ./internal/infra/postgresinbox ./internal/infra/postgresoutbox ./internal/infra/natsjs
-		go test -vet=off -tags=integration ./test -run '^$'
-		go build ./cmd/service ./cmd/migrate ./cmd/worker ./cmd/outbox-relay
-		make sqlc-check mod-tidy-check project-structure-check
-	)
-	for retained in \
-		internal/infra/postgres/sqlcgen/postgres_inbox.sql.go \
-		internal/infra/postgres/sqlcgen/postgres_outbox.sql.go \
-		test/postgres_inbox_natsjs_integration_test.go \
-		test/postgres_outbox_natsjs_integration_test.go; do
-		assert "combined inbox+outbox+messaging removed ${retained}" path_present \
-			"${inbox_combined_checkout}/${retained}"
-	done
-	inbox_combined_snapshot="$(snapshot "${inbox_combined_checkout}")"
-	(
-		cd "${inbox_combined_checkout}"
-		CODEOWNER=@acme/platform DATABASE=postgres OUTBOX=postgres INBOX=postgres MESSAGING=nats-jetstream \
-			bash ./scripts/init-module.sh
-	)
-	assert "repeated inbox+outbox+messaging initialization changed the checkout" \
-		same_text "${inbox_combined_snapshot}" "$(snapshot "${inbox_combined_checkout}")"
-fi
-# profile:inbox-postgres:end
-
 if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "postgres" ]]; then
 	postgres_paths=(
 		cmd/migrate
@@ -1125,10 +957,18 @@ assert "REFERENCE_EXAMPLE=keep did not retain examples/" path_present "${postgre
 assert "agent workflow changed during postgres+bounded initialization" same_text "${postgres_workflow_before}" "$(workflow_snapshot "${postgres_checkout}")"
 assert "specs/ must not survive postgres+bounded initialization" path_absent "${postgres_checkout}/specs"
 assert "scripts/profiles/ must not survive postgres initialization" path_absent "${postgres_checkout}/scripts/profiles"
-for retained in "${postgres_paths[@]}" "${bounded_http_paths[@]}"; do
-	assert "${retained} must survive DATABASE=postgres initialization" path_present "${postgres_checkout}/${retained}"
-done
-grep -Fq 'database = "postgres"' "${postgres_checkout}/template.lock"
+	for retained in "${postgres_paths[@]}" "${bounded_http_paths[@]}"; do
+		assert "${retained} must survive DATABASE=postgres initialization" path_present "${postgres_checkout}/${retained}"
+	done
+	assert "generated PostgreSQL service retained removed inbox runtime" \
+		path_absent "${postgres_checkout}/internal/infra/postgresinbox"
+	assert "generated PostgreSQL service retained removed inbox SQLC output" \
+		path_absent "${postgres_checkout}/internal/infra/postgres/sqlcgen/postgres_inbox.sql.go"
+	assert "generated PostgreSQL service retained removed inbox migration history" \
+		glob_absent "${postgres_checkout}/migrations/*_postgres_inbox*.sql"
+	assert "generated PostgreSQL service retained removed inbox lock field" \
+		grep_absent -Fq 'inbox = ' "${postgres_checkout}/template.lock"
+	grep -Fq 'database = "postgres"' "${postgres_checkout}/template.lock"
 grep -Fq 'outbound_http = "bounded"' "${postgres_checkout}/template.lock"
 (
 	cd "${postgres_checkout}"
@@ -1772,6 +1612,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "http
 			internal/httpidempotency \
 			internal/infra/postgresidempotency \
 			migrations/000003_postgres_http_idempotency.sql \
+			migrations/000009_postgres_http_idempotency_simplify.sql \
 			internal/infra/postgres/queries/postgres_http_idempotency.sql \
 			docs/postgres-http-idempotency.md; do
 			assert "HTTP_IDEMPOTENCY=none retained ${removed}" path_absent "${root}/${removed}"
@@ -1793,6 +1634,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "http
 			internal/httpidempotency \
 			internal/infra/postgresidempotency \
 			migrations/000003_postgres_http_idempotency.sql \
+			migrations/000009_postgres_http_idempotency_simplify.sql \
 			internal/infra/postgres/queries/postgres_http_idempotency.sql \
 			internal/infra/postgres/sqlcgen/postgres_http_idempotency.sql.go \
 			docs/postgres-http-idempotency.md; do
@@ -1803,7 +1645,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "http
 			"${http_idempotency_marker}" \
 			"${root}/README.md" "${root}/cmd" "${root}/docs" "${root}/env" "${root}/internal" "${root}/scripts/ci"
 		assert "health route opted into idempotency" grep_absent -Fq \
-			'x-http-idempotency' "${root}/api/openapi/service.yaml"
+			'x-idempotent' "${root}/api/openapi/service.yaml"
 	}
 
 	base_http_idempotency="$(copy_template_checkout http-idempotency-base git@github.com:acme/http-idempotency-service.git)"
@@ -1813,7 +1655,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "http
 	cp -R "${base_http_idempotency}" "${explicit_none_http_idempotency}"
 	(
 		cd "${omitted_http_idempotency}"
-		CODEOWNER=@acme/platform DATABASE=postgres OUTBOX=postgres INBOX=postgres AUTHN=oidc-jwt GRPC=enabled OUTBOUND_HTTP=bounded \
+		CODEOWNER=@acme/platform DATABASE=postgres OUTBOX=postgres MESSAGING=nats-jetstream AUTHN=oidc-jwt GRPC=enabled OUTBOUND_HTTP=bounded \
 			bash ./scripts/init-module.sh
 		go test -vet=off ./...
 		go build -o "${TEMP_ROOT}/http-idempotency-service" ./cmd/service
@@ -1822,7 +1664,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "http
 	)
 	(
 		cd "${explicit_none_http_idempotency}"
-		CODEOWNER=@acme/platform DATABASE=postgres HTTP_IDEMPOTENCY=none OUTBOX=postgres INBOX=postgres AUTHN=oidc-jwt GRPC=enabled OUTBOUND_HTTP=bounded \
+		CODEOWNER=@acme/platform DATABASE=postgres HTTP_IDEMPOTENCY=none OUTBOX=postgres MESSAGING=nats-jetstream AUTHN=oidc-jwt GRPC=enabled OUTBOUND_HTTP=bounded \
 			bash ./scripts/init-module.sh
 	)
 	assert "omitted HTTP_IDEMPOTENCY differs from explicit none" \
@@ -1843,21 +1685,21 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "http
 	expect_unchanged_failure "${invalid_http_idempotency_database}" env CODEOWNER=@acme/platform DATABASE=none HTTP_IDEMPOTENCY=postgres \
 		bash "${ROOT_DIR}/scripts/init-module.sh"
 
-	combinations=('none none none none')
+	combinations=('none none none')
 	# profile:messaging-nats-jetstream:start
-	combinations+=('oidc-jwt postgres postgres nats-jetstream')
+	combinations+=('oidc-jwt postgres nats-jetstream')
 	# profile:messaging-nats-jetstream:end
 	for combination in "${combinations[@]}"; do
-		read -r authn outbox inbox selected_profile <<<"${combination}"
-		init_env=(CODEOWNER=@acme/platform DATABASE=postgres HTTP_IDEMPOTENCY=postgres AUTHN="${authn}" OUTBOX="${outbox}" INBOX="${inbox}")
-		failure_env=(CODEOWNER=@acme/platform DATABASE=postgres HTTP_IDEMPOTENCY=none AUTHN="${authn}" OUTBOX="${outbox}" INBOX="${inbox}")
+		read -r authn outbox selected_profile <<<"${combination}"
+		init_env=(CODEOWNER=@acme/platform DATABASE=postgres HTTP_IDEMPOTENCY=postgres AUTHN="${authn}" OUTBOX="${outbox}")
+		failure_env=(CODEOWNER=@acme/platform DATABASE=postgres HTTP_IDEMPOTENCY=none AUTHN="${authn}" OUTBOX="${outbox}")
 		# profile:messaging-nats-jetstream:start
 		if [[ "${selected_profile}" != "none" ]]; then
 			init_env+=(MESSAGING="${selected_profile}")
 			failure_env+=(MESSAGING="${selected_profile}")
 		fi
 		# profile:messaging-nats-jetstream:end
-		selected_http_idempotency="$(copy_template_checkout "http-idempotency-${authn}-${outbox}-${inbox}-${selected_profile}" "git@github.com:acme/http-idempotency-${authn}-${outbox}-${inbox}-${selected_profile}.git")"
+		selected_http_idempotency="$(copy_template_checkout "http-idempotency-${authn}-${outbox}-${selected_profile}" "git@github.com:acme/http-idempotency-${authn}-${outbox}-${selected_profile}.git")"
 		(
 			cd "${selected_http_idempotency}"
 			env "${init_env[@]}" \
@@ -2027,12 +1869,9 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "jobs
 		local root="$1"
 		for removed in \
 			cmd/jobs-worker \
-			internal/jobs \
-			internal/infra/postgresjobs \
 			internal/config/jobs_config.go \
 			internal/config/jobs_worker_config.go \
-			internal/infra/postgres/queries/postgres_jobs.sql \
-			internal/infra/postgres/sqlcgen/postgres_jobs.sql.go \
+			migrations/000008_river.sql \
 			migrations/000004_postgres_jobs.sql \
 			docs/postgres-durable-background-jobs.md; do
 			assert "JOBS=none retained ${removed}" path_absent "${root}/${removed}"
@@ -2047,11 +1886,9 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "jobs
 		local root="$1"
 		for retained in \
 			cmd/jobs-worker \
-			internal/jobs \
-			internal/infra/postgresjobs \
 			internal/config/jobs_config.go \
 			internal/config/jobs_worker_config.go \
-			internal/infra/postgres/queries/postgres_jobs.sql \
+			migrations/000008_river.sql \
 			migrations/000004_postgres_jobs.sql \
 			docs/postgres-durable-background-jobs.md; do
 			assert "JOBS=postgres removed ${retained}" path_present "${root}/${retained}"
@@ -2099,9 +1936,8 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "jobs
 	prove_jobs_profile() {
 		local name="$1"
 		local outbox="$2"
-		local inbox="$3"
-		local messaging="$4"
-		local full="${5:-false}"
+		local messaging="$3"
+		local full="${4:-false}"
 		local checkout sibling choice path jobs_snapshot retained
 		local extra_profiles=(REFERENCE_EXAMPLE=remove)
 		if [[ "${full}" == "true" ]]; then
@@ -2120,16 +1956,15 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "jobs
 		checkout="$(copy_template_checkout "jobs-${name}" "git@github.com:acme/jobs-${name}.git")"
 		(
 			cd "${checkout}"
-			env CODEOWNER=@acme/platform DATABASE=postgres JOBS=postgres OUTBOX="${outbox}" INBOX="${inbox}" MESSAGING="${messaging}" \
+			env CODEOWNER=@acme/platform DATABASE=postgres JOBS=postgres OUTBOX="${outbox}" MESSAGING="${messaging}" \
 				"${extra_profiles[@]}" bash ./scripts/init-module.sh
-			go test -vet=off ./cmd/jobs-worker/... ./internal/jobs ./internal/infra/postgresjobs
+			go test -vet=off ./cmd/jobs-worker/...
 			go test -vet=off -run '^$' ./...
 			make mod-tidy-check project-structure-check
 		)
 		assert_jobs_postgres_tree "${checkout}"
 		for sibling in \
 			"${outbox}:internal/infra/postgresoutbox" \
-			"${inbox}:internal/infra/postgresinbox" \
 			"${messaging}:cmd/worker"; do
 			choice="${sibling%%:*}"
 			path="${sibling#*:}"
@@ -2141,7 +1976,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "jobs
 		done
 		if [[ "${full}" == "true" ]]; then
 			for retained in \
-				cmd/webhook-worker \
+				internal/infra/postgreswebhook \
 				internal/httpidempotency \
 				internal/infra/oidcjwt \
 				internal/infra/oauth2clientcredentials \
@@ -2153,35 +1988,34 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "jobs
 		jobs_snapshot="$(snapshot "${checkout}")"
 		(
 			cd "${checkout}"
-			env CODEOWNER=@acme/platform DATABASE=postgres JOBS=postgres OUTBOX="${outbox}" INBOX="${inbox}" MESSAGING="${messaging}" \
+			env CODEOWNER=@acme/platform DATABASE=postgres JOBS=postgres OUTBOX="${outbox}" MESSAGING="${messaging}" \
 				"${extra_profiles[@]}" bash ./scripts/init-module.sh
 		)
 		assert "repeated jobs ${name} initialization changed the checkout" \
 			same_text "${jobs_snapshot}" "$(snapshot "${checkout}")"
 	}
 
-	prove_jobs_profile only none none none
-	prove_jobs_profile outbox postgres none none
-	prove_jobs_profile inbox none postgres none
-	prove_jobs_profile messaging none none nats-jetstream
-	prove_jobs_profile combined postgres postgres nats-jetstream true
+	prove_jobs_profile only none none
+	prove_jobs_profile outbox postgres nats-jetstream
+	prove_jobs_profile messaging none nats-jetstream
+	prove_jobs_profile combined postgres nats-jetstream true
 fi
 # profile:jobs-postgres:end
 
 # profile:webhooks-durable:start
 if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "webhooks" ]]; then
 	webhook_paths=(
-		cmd/webhook-worker
+		cmd/jobs-worker/builder_webhooks.go
+		cmd/jobs-worker/builder_webhooks_test.go
 		docs/outbound-webhook-delivery.md
 		internal/config/webhooks_config.go
 		internal/infra/postgreswebhook
-		internal/infra/postgres/queries/postgres_webhooks.sql
 		internal/outboundtrust
 		migrations/000005_postgres_webhooks.sql
 		migrations/000006_postgres_webhook_reference_repairs.sql
+		migrations/000007_postgres_webhooks_retire.sql
 		test/postgres_webhook_acceptance_integration_test.go
 		test/webhook_network_integration_test.go
-		test/webhook_process_integration_test.go
 	)
 
 	webhooks_none="$(copy_template_checkout webhooks-none git@github.com:acme/webhooks-none.git)"
@@ -2207,15 +2041,18 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "webh
 			bash "${ROOT_DIR}/scripts/init-module.sh"
 	done
 	webhooks_without_postgres="$(copy_template_checkout webhooks-without-postgres git@github.com:acme/webhooks-without-postgres.git)"
-	expect_unchanged_failure "${webhooks_without_postgres}" env CODEOWNER=@acme/platform DATABASE=none WEBHOOKS=durable \
+	expect_unchanged_failure "${webhooks_without_postgres}" env CODEOWNER=@acme/platform DATABASE=none JOBS=postgres WEBHOOKS=durable \
+		bash "${ROOT_DIR}/scripts/init-module.sh"
+	webhooks_without_jobs="$(copy_template_checkout webhooks-without-jobs git@github.com:acme/webhooks-without-jobs.git)"
+	expect_unchanged_failure "${webhooks_without_jobs}" env CODEOWNER=@acme/platform DATABASE=postgres JOBS=none WEBHOOKS=durable \
 		bash "${ROOT_DIR}/scripts/init-module.sh"
 
 	webhooks_durable="$(copy_template_checkout webhooks-durable git@github.com:acme/webhooks-durable.git)"
 	(
 		cd "${webhooks_durable}"
-		CODEOWNER=@acme/platform DATABASE=postgres WEBHOOKS=durable bash ./scripts/init-module.sh
+		CODEOWNER=@acme/platform DATABASE=postgres JOBS=postgres WEBHOOKS=durable bash ./scripts/init-module.sh
 		go test -vet=off ./...
-		go build ./cmd/webhook-worker ./cmd/migrate
+		go build ./cmd/jobs-worker ./cmd/migrate
 		make sqlc-check mod-tidy-check project-structure-check
 	)
 	for retained in "${webhook_paths[@]}"; do
@@ -2229,7 +2066,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "webh
 	webhooks_snapshot="$(snapshot "${webhooks_durable}")"
 	(
 		cd "${webhooks_durable}"
-		CODEOWNER=@acme/platform DATABASE=postgres WEBHOOKS=durable bash ./scripts/init-module.sh
+		CODEOWNER=@acme/platform DATABASE=postgres JOBS=postgres WEBHOOKS=durable bash ./scripts/init-module.sh
 	)
 	assert "repeated WEBHOOKS=durable initialization changed the checkout" \
 		same_text "${webhooks_snapshot}" "$(snapshot "${webhooks_durable}")"

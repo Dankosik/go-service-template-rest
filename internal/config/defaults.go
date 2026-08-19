@@ -58,9 +58,6 @@ func defaultValues() map[string]any {
 	// profile:webhooks-durable:start
 	maps.Copy(values, webhooksDefaults())
 	// profile:webhooks-durable:end
-	// profile:outbox-postgres:start
-	maps.Copy(values, outboxDefaults())
-	// profile:outbox-postgres:end
 	// profile:object-storage:start
 	maps.Copy(values, objectStorageDefaults())
 	// profile:object-storage:end

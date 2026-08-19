@@ -1,0 +1,41 @@
+package domainevent
+
+import (
+	"strings"
+	"testing"
+	"time"
+)
+
+func TestNew(t *testing.T) {
+	t.Parallel()
+
+	type payload struct {
+		OrderID string `json:"order_id"`
+	}
+	event, err := New("event-1", "order.updated", 1, time.Unix(1, 0).UTC(), payload{OrderID: "order-1"})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	if string(event.Payload) != `{"order_id":"order-1"}` {
+		t.Fatalf("Payload = %s", event.Payload)
+	}
+
+	for name, mutate := range map[string]func(*Event){
+		"missing id":      func(event *Event) { event.ID = "" },
+		"invalid type":    func(event *Event) { event.Type = "bad\n" },
+		"missing version": func(event *Event) { event.Version = 0 },
+		"non UTC time":    func(event *Event) { event.OccurredAt = time.Unix(1, 0).In(time.FixedZone("offset", 60)) },
+		"invalid payload": func(event *Event) { event.Payload = []byte("{") },
+		"oversized type":  func(event *Event) { event.Type = strings.Repeat("x", maxTextBytes+1) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			invalid := event
+			mutate(&invalid)
+			if err := invalid.Validate(); err == nil {
+				t.Fatal("Validate() error = nil")
+			}
+		})
+	}
+}

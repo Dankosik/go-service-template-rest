@@ -7,32 +7,34 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"sync/atomic"
 	"syscall"
 	"time"
 
 	"github.com/example/go-service-template-rest/cmd/internal/runtimeopts"
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/infra/postgres"
-	"github.com/example/go-service-template-rest/internal/infra/postgresjobs"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
-	"github.com/example/go-service-template-rest/internal/jobs"
+	"github.com/riverqueue/river"
+	"github.com/riverqueue/river/riverdriver/riverpgxv5"
+	"github.com/riverqueue/river/rivertype"
+	"github.com/riverqueue/rivercontrib/otelriver"
 )
 
-// RegistryBuilder is binary-local feature composition. The reusable binary has
-// no default job kind, so a nil builder fails before loading configuration or
-// acquiring PostgreSQL.
-type RegistryBuilder func(context.Context, config.Config, *slog.Logger) (*jobs.Registry, func(context.Context), error)
+// WorkersBuilder is binary-local business composition. Derived services add
+// their typed River workers here; the reusable binary has no default job kind.
+type WorkersBuilder func(context.Context, config.Config, *slog.Logger) (*river.Workers, func(context.Context), error)
 
-func Run(args []string, buildRegistry RegistryBuilder) error {
+func Run(args []string, buildWorkers WorkersBuilder) error {
 	signalCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	return run(signalCtx, args, buildRegistry)
+	return run(signalCtx, args, buildWorkers)
 }
 
-//nolint:cyclop // Startup and ownership cleanup remain explicit in their single composition owner.
-func run(signalCtx context.Context, args []string, buildRegistry RegistryBuilder) (runErr error) {
-	if buildRegistry == nil {
-		return fmt.Errorf("%w: jobs worker registry builder is not registered", postgresjobs.ErrConfig)
+//nolint:cyclop // This is the single process composition and teardown owner.
+func run(signalCtx context.Context, args []string, buildWorkers WorkersBuilder) error {
+	if buildWorkers == nil {
+		return errors.New("jobs worker builder is not registered")
 	}
 	loadOptions, err := parseLoadOptions(args)
 	if err != nil {
@@ -47,12 +49,14 @@ func run(signalCtx context.Context, args []string, buildRegistry RegistryBuilder
 	if err := validateRuntimeConfig(cfg); err != nil {
 		return err
 	}
+
 	log := runtimeopts.Logger(os.Stdout, cfg, "component", "jobs_worker")
-	instanceID := telemetry.ResolveInstanceID(cfg.App.InstanceID)
-	cfg.App.InstanceID = instanceID
-	cleanupSafe := true
 	metrics := telemetry.New()
 	telemetryCleanup, err := runtimeopts.InstallTelemetry(startupCtx, cfg, metrics, log, "jobs_worker")
+	if err != nil {
+		return err
+	}
+	cleanupSafe := true
 	var cleanupDeadline time.Time
 	defer func() {
 		if cleanupSafe {
@@ -61,12 +65,13 @@ func run(signalCtx context.Context, args []string, buildRegistry RegistryBuilder
 			telemetryCleanup(cleanupCtx)
 		}
 	}()
+
+	workers, cleanup, err := buildWorkers(startupCtx, cfg, log)
 	if err != nil {
-		return err
+		return fmt.Errorf("build jobs workers: %w", err)
 	}
-	registry, cleanup, err := buildRegistry(startupCtx, cfg, log)
-	if err != nil {
-		return fmt.Errorf("build jobs registry: %w", err)
+	if workers == nil {
+		return errors.New("jobs workers are not registered")
 	}
 	defer func() {
 		if cleanup != nil && cleanupSafe {
@@ -75,21 +80,8 @@ func run(signalCtx context.Context, args []string, buildRegistry RegistryBuilder
 			cleanup(cleanupCtx)
 		}
 	}()
-	if registry == nil {
-		return fmt.Errorf("%w: jobs worker registry is not registered", postgresjobs.ErrConfig)
-	}
-	if len(registry.Keys()) == 0 {
-		return fmt.Errorf("%w: jobs worker registry has no definitions", postgresjobs.ErrConfig)
-	}
-	if err := validateTerminationEnvelope(cfg.HTTP.GracePeriod, registry.TerminationEnvelope()); err != nil {
-		return err
-	}
-	engineCfg, err := engineConfig(cfg.Jobs, instanceID)
-	if err != nil {
-		return err
-	}
 
-	pool, err := postgres.New(startupCtx, runtimeopts.Postgres(cfg.Postgres))
+	pool, err := postgres.Open(startupCtx, runtimeopts.Postgres(cfg.Postgres))
 	if err != nil {
 		return fmt.Errorf("initialize jobs worker postgres: %w", err)
 	}
@@ -98,35 +90,72 @@ func run(signalCtx context.Context, args []string, buildRegistry RegistryBuilder
 			pool.Close()
 		}
 	}()
-	store, err := postgresjobs.NewStore(pool, postgresjobs.StoreOptions{OperationTimeout: cfg.Jobs.StoreOperationTimeout, StatementTimeout: cfg.Postgres.StatementTimeout})
+
+	client, err := river.NewClient(riverpgxv5.New(pool), &river.Config{
+		CancelledJobRetentionPeriod: 24 * time.Hour,
+		CompletedJobRetentionPeriod: 24 * time.Hour,
+		DiscardedJobRetentionPeriod: 7 * 24 * time.Hour,
+		JobTimeout:                  river.JobTimeoutDefault,
+		Logger:                      log,
+		MaxAttempts:                 river.MaxAttemptsDefault,
+		PollOnly:                    true,
+		SoftStopTimeout:             cfg.HTTP.ShutdownTimeout,
+		Plugins: []rivertype.Plugin{
+			otelriver.NewMiddleware(&otelriver.MiddlewareConfig{EnableTracePropagation: true}),
+		},
+		Queues: map[string]river.QueueConfig{
+			river.QueueDefault: {MaxWorkers: cfg.Jobs.MaxWorkers},
+		},
+		Workers: workers,
+	})
 	if err != nil {
-		return fmt.Errorf("initialize jobs store: %w", err)
+		return fmt.Errorf("initialize River client: %w", err)
 	}
-	session, err := store.AcquireSession(startupCtx)
+
+	runCtx, cancelRun := context.WithCancel(context.WithoutCancel(signalCtx))
+	defer cancelRun()
+	if err := client.Start(runCtx); err != nil {
+		return fmt.Errorf("start River client: %w", err)
+	}
+
+	var ready atomic.Bool
+	ready.Store(true)
+	diagnostics, err := runtimeopts.ListenDiagnostics(
+		startupCtx,
+		cfg.Observability.Metrics.Addr,
+		"jobs-worker",
+		ready.Load,
+		metrics,
+	)
 	if err != nil {
-		return fmt.Errorf("acquire jobs Session: %w", err)
+		stopCtx, cancel := context.WithTimeout(context.WithoutCancel(signalCtx), cfg.HTTP.ShutdownTimeout)
+		defer cancel()
+		return errors.Join(err, client.StopAndCancel(stopCtx))
 	}
-	defer func() {
-		if cleanupSafe {
-			releaseCtx, cancel := runtimeopts.TeardownStage(signalCtx, cleanupDeadline, cfg.Jobs.StoreOperationTimeout)
-			defer cancel()
-			session.Release(releaseCtx)
-		}
-	}()
-	if err := session.CheckSchema(startupCtx); err != nil {
-		return fmt.Errorf("admit jobs schema: %w", err)
+
+	var trigger error
+	select {
+	case <-signalCtx.Done():
+	case <-client.Stopped():
+		trigger = errors.New("river client stopped unexpectedly")
+	case <-diagnostics.Stopped():
+		trigger = errors.New("jobs worker diagnostics stopped unexpectedly")
 	}
-	engine, err := postgresjobs.NewEngine(session, registry, engineCfg)
-	if err != nil {
-		return fmt.Errorf("initialize jobs engine: %w", err)
+	ready.Store(false)
+
+	processCtx, cancelProcess, deadline := runtimeopts.ArmTeardown(signalCtx, cfg.HTTP.GracePeriod)
+	defer cancelProcess()
+	cleanupDeadline = deadline
+	stopErr := client.Stop(processCtx)
+	select {
+	case <-client.Stopped():
+	case <-processCtx.Done():
+		cleanupSafe = false
+		stopErr = errors.Join(stopErr, fmt.Errorf("join River client: %w", processCtx.Err()))
 	}
-	defer func() {
-		if cleanupSafe {
-			runErr = errors.Join(runErr, engine.Close())
-		}
-	}()
-	result := runLifecycle(signalCtx, startupCtx, cfg, metrics, engine)
-	cleanupSafe = result.CleanupSafe
-	cleanupDeadline = result.Deadline
-	return result.Err
+	if cleanupSafe {
+		cancelRun()
+	}
+	diagnosticsErr := diagnostics.Stop(processCtx, diagnosticsClose)
+	return errors.Join(trigger, stopErr, diagnosticsErr)
 }

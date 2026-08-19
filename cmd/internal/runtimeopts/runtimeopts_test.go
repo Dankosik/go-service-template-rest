@@ -10,6 +10,11 @@ import (
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/config"
+	// profile:database-postgres:start
+	"github.com/example/go-service-template-rest/internal/config/configtest"
+	"github.com/example/go-service-template-rest/internal/infra/postgres"
+
+	// profile:database-postgres:end
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 
 	// profile:messaging-nats-jetstream:start
@@ -28,7 +33,7 @@ func TestAdapterOptionsPreserveConfiguredValues(t *testing.T) {
 			Exporter: config.OTelExporterConfig{OTLPEndpoint: "https://otel.example/v1/traces", OTLPMetricsEndpoint: "https://otel.example/v1/metrics", OTLPHeaders: "authorization=Bearer token"},
 		}},
 		// profile:database-postgres:start
-		Postgres: config.PostgresConfig{DSN: "postgres://db", ConnectTimeout: 1, HealthcheckTimeout: 2, MaxOpenConns: 5, MinIdleConns: 2, AcquireTimeout: 3, ConnMaxLifetime: 4, StatementTimeout: 5},
+		Postgres: config.PostgresConfig{DSN: "postgres://db", MaxOpenConns: 5},
 		// profile:database-postgres:end
 	}
 
@@ -45,11 +50,26 @@ func TestAdapterOptionsPreserveConfiguredValues(t *testing.T) {
 		t.Fatalf("Metrics() = %#v, want configured metrics adapter", metrics)
 	}
 	// profile:database-postgres:start
-	if got := Postgres(cfg.Postgres); got.DSN != cfg.Postgres.DSN || got.MaxOpenConns != 5 || got.MinIdleConns != 2 || got.StatementTimeout != 5 {
-		t.Fatalf("Postgres() = %#v, want complete pool mapping", got)
+	if got := Postgres(cfg.Postgres); got.DSN != cfg.Postgres.DSN || got.MaxOpenConns != 5 {
+		t.Fatalf("Postgres() = %#v, want DSN and pool ceiling", got)
 	}
 	// profile:database-postgres:end
 }
+
+// profile:database-postgres:start
+func TestPostgresDefaultPoolCeilingMatchesAdapter(t *testing.T) {
+	configtest.IsolateEnv(t)
+
+	cfg, _, err := config.LoadDetailed(config.LoadOptions{})
+	if err != nil {
+		t.Fatalf("config.LoadDetailed() error = %v", err)
+	}
+	if got := Postgres(cfg.Postgres).MaxOpenConns; got != postgres.DefaultMaxOpenConns {
+		t.Fatalf("Postgres default MaxOpenConns = %d, want adapter default %d", got, postgres.DefaultMaxOpenConns)
+	}
+}
+
+// profile:database-postgres:end
 
 func TestLoggerCarriesProcessIdentityAndExtraFields(t *testing.T) {
 	t.Parallel()

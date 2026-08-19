@@ -29,10 +29,10 @@
 // a default that a template could honestly guess.
 //
 // profile:http-idempotency-postgres:start
-// To opt an authenticated business operation into idempotency, pass one complete
-// [IdempotencyOperation] through [RouterConfig.IdempotencyOperations]. The
-// router checks its OpenAPI declaration before serving; no registration leaves
-// the health-only template inert.
+// To opt an authenticated business operation into PostgreSQL idempotency,
+// declare x-idempotent: true and the required Idempotency-Key parameter in
+// OpenAPI. Startup checks that single declaration before serving; the generated
+// handler composes the transaction-owning adapter with its business effect.
 // profile:http-idempotency-postgres:end
 //
 // # Where things live

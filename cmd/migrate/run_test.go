@@ -5,10 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io/fs"
 	"log/slog"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -36,65 +33,6 @@ func TestRunRejectsArgumentsWithSafeTerminalRecord(t *testing.T) {
 }
 
 //nolint:paralleltest // This test mutates process-global environment or working directory.
-func TestResolveMigrationSourceUsesConfiguredAbsoluteDirectory(t *testing.T) {
-	directory := t.TempDir()
-	t.Setenv(migrationPathEnv, directory)
-
-	source, sourcePath, err := resolveMigrationSource()
-	if err != nil {
-		t.Fatalf("resolveMigrationSource() error = %v", err)
-	}
-	if filepath.IsAbs(sourcePath) {
-		t.Fatalf("sourcePath = %q, want fs-relative path", sourcePath)
-	}
-	if _, err := fs.ReadDir(source, sourcePath); err != nil {
-		t.Fatalf("resolved source cannot read directory: %v", err)
-	}
-}
-
-//nolint:paralleltest // This test mutates process-global environment or working directory.
-func TestResolveMigrationSourceUsesConfiguredRelativeDirectory(t *testing.T) {
-	directory := t.TempDir()
-	t.Chdir(directory)
-	if err := os.Mkdir("owned_migrations", 0o750); err != nil {
-		t.Fatalf("mkdir owned_migrations: %v", err)
-	}
-	t.Setenv(migrationPathEnv, "owned_migrations")
-
-	source, sourcePath, err := resolveMigrationSource()
-	if err != nil {
-		t.Fatalf("resolveMigrationSource() error = %v", err)
-	}
-	if sourcePath != "owned_migrations" {
-		t.Fatalf("sourcePath = %q, want owned_migrations", sourcePath)
-	}
-	if _, err := fs.ReadDir(source, sourcePath); err != nil {
-		t.Fatalf("resolved source cannot read directory: %v", err)
-	}
-}
-
-//nolint:paralleltest // This test mutates process-global environment or working directory.
-func TestResolveMigrationSourceRejectsMissingConfiguredDirectory(t *testing.T) {
-	t.Setenv(migrationPathEnv, filepath.Join(t.TempDir(), "missing"))
-	_, _, err := resolveMigrationSource()
-	if !errors.Is(err, errMigrationSourceMissing) {
-		t.Fatalf("resolveMigrationSource() error = %v, want errMigrationSourceMissing", err)
-	}
-}
-
-//nolint:paralleltest // This test mutates process-global environment or working directory.
-func TestResolveMigrationSourceRejectsConfiguredFile(t *testing.T) {
-	filename := filepath.Join(t.TempDir(), "migration.sql")
-	if err := os.WriteFile(filename, []byte("SELECT 1"), 0o600); err != nil {
-		t.Fatalf("write fixture: %v", err)
-	}
-	t.Setenv(migrationPathEnv, filename)
-	_, _, err := resolveMigrationSource()
-	if err == nil || !strings.Contains(err.Error(), "not a directory") {
-		t.Fatalf("resolveMigrationSource() error = %v, want directory error", err)
-	}
-}
-
 func TestLogMigrationTerminalDoesNotDiscloseWrappedError(t *testing.T) {
 	t.Parallel()
 
@@ -112,7 +50,6 @@ func TestLogMigrationTerminalDoesNotDiscloseWrappedError(t *testing.T) {
 			Target:   2,
 			After:    1,
 			Duration: time.Second,
-			Failed:   &postgresmigrate.MigrationResult{Version: 2, Filename: "000002_add.sql"},
 		},
 		err,
 		postgresmigrate.FailureStageOf(err),

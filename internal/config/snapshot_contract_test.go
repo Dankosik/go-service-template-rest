@@ -95,12 +95,7 @@ func TestEveryKnownConfigKeyHasADefault(t *testing.T) {
 	defaults := defaultValues()
 	activeOnly := map[string]struct{}{
 		// profile:http-idempotency-postgres:start
-		"http_idempotency.owner_recovery_delay":     {},
-		"http_idempotency.maintenance_interval":     {},
-		"http_idempotency.cleanup_batch_size":       {},
-		"http_idempotency.max_maintenance_lag":      {},
-		"http_idempotency.max_relation_bytes":       {},
-		"http_idempotency.admission_headroom_bytes": {},
+		"http_idempotency.retention": {},
 		// profile:http-idempotency-postgres:end
 	}
 	missing := make([]string, 0)
@@ -337,73 +332,24 @@ func sentinelConfigSourceValues() map[string]any {
 		"runtime.memory_limit_ratio": 0.75,
 
 		// profile:database-postgres:start
-		"postgres.enabled":                     true,
-		"postgres.dsn":                         "postgres://app:secret@db:5432/app?sslmode=disable",
-		"postgres.connect_timeout":             "17s",
-		"postgres.healthcheck_timeout":         "18s",
-		"postgres.migration_timeout":           "19m",
-		"postgres.migration_statement_timeout": "3m",
-		"postgres.migration_lock_timeout":      "19s",
-		"postgres.max_open_conns":              26,
-		"postgres.min_idle_conns":              3,
-		"postgres.acquire_timeout":             "1500ms",
-		"postgres.conn_max_lifetime":           "45m",
-		"postgres.statement_timeout":           "7s",
+		"postgres.enabled":        true,
+		"postgres.dsn":            "postgres://app:secret@db:5432/app?sslmode=disable",
+		"postgres.max_open_conns": 26,
 		// profile:database-postgres:end
 
 		// profile:http-idempotency-postgres:start
-		"http_idempotency.owner_recovery_delay":     "30s",
-		"http_idempotency.maintenance_interval":     "5s",
-		"http_idempotency.cleanup_batch_size":       101,
-		"http_idempotency.max_maintenance_lag":      "45s",
-		"http_idempotency.max_relation_bytes":       int64(1 << 30),
-		"http_idempotency.admission_headroom_bytes": int64(1 << 20),
+		"http_idempotency.retention": "24h",
 		// profile:http-idempotency-postgres:end
 
 		// profile:jobs-postgres:start
-		"jobs.enabled":                 true,
-		"jobs.poll_interval":           "650ms",
-		"jobs.max_concurrency":         7,
-		"jobs.lease_duration":          "42s",
-		"jobs.store_operation_timeout": "7s",
-		"jobs.observation_interval":    "8s",
-		"jobs.drain_timeout":           "23s",
+		"jobs.max_workers": 7,
 		// profile:jobs-postgres:end
 
 		// profile:webhooks-durable:start
-		"webhooks.enabled":                 true,
-		"webhooks.capacity_revision":       int64(8),
-		"webhooks.global_concurrency":      7,
-		"webhooks.claim_scan_page":         23,
-		"webhooks.poll_interval":           "450ms",
-		"webhooks.observation_interval":    "7s",
-		"webhooks.store_operation_timeout": "6s",
-		"webhooks.attempt_timeout":         "12s",
-		"webhooks.response_header_timeout": "4s",
-		"webhooks.response_header_bytes":   8192,
-		"webhooks.response_body_bytes":     16384,
-		"webhooks.drain_timeout":           "24s",
-		"webhooks.maintenance_interval":    "9s",
-		"webhooks.maintenance_batch":       41,
-		"webhooks.static_secrets":          `{"revision":8,"entries":[]}`,
+		"webhooks.enabled":        true,
+		"webhooks.endpoints":      `{"endpoints":[]}`,
+		"webhooks.static_secrets": `{"entries":[]}`,
 		// profile:webhooks-durable:end
-
-		// profile:outbox-postgres:start
-		"outbox.enabled":              true,
-		"outbox.poll_interval":        "600ms",
-		"outbox.batch_size":           64,
-		"outbox.publish_concurrency":  8,
-		"outbox.publish_timeout":      "11s",
-		"outbox.lease_duration":       "41s",
-		"outbox.max_attempts":         12,
-		"outbox.retry_base":           "2s",
-		"outbox.retry_max":            "6m",
-		"outbox.observation_interval": "7s",
-		"outbox.cleanup_interval":     "2m",
-		"outbox.published_retention":  "192h",
-		"outbox.cleanup_batch_size":   321,
-		"outbox.drain_timeout":        "22s",
-		// profile:outbox-postgres:end
 
 		// profile:object-storage:start
 		"object_storage.provider":                   "amazon_s3",
@@ -539,73 +485,24 @@ func expectedSentinelSnapshotValues() map[string]any {
 		"runtime.memory_limit_ratio": 0.75,
 
 		// profile:database-postgres:start
-		"postgres.enabled":                     true,
-		"postgres.dsn":                         "postgres://app:secret@db:5432/app?sslmode=disable",
-		"postgres.connect_timeout":             17 * time.Second,
-		"postgres.healthcheck_timeout":         18 * time.Second,
-		"postgres.migration_timeout":           19 * time.Minute,
-		"postgres.migration_statement_timeout": 3 * time.Minute,
-		"postgres.migration_lock_timeout":      19 * time.Second,
-		"postgres.max_open_conns":              26,
-		"postgres.min_idle_conns":              3,
-		"postgres.acquire_timeout":             1500 * time.Millisecond,
-		"postgres.conn_max_lifetime":           45 * time.Minute,
-		"postgres.statement_timeout":           7 * time.Second,
+		"postgres.enabled":        true,
+		"postgres.dsn":            "postgres://app:secret@db:5432/app?sslmode=disable",
+		"postgres.max_open_conns": 26,
 		// profile:database-postgres:end
 
 		// profile:http-idempotency-postgres:start
-		"http_idempotency.owner_recovery_delay":     30 * time.Second,
-		"http_idempotency.maintenance_interval":     5 * time.Second,
-		"http_idempotency.cleanup_batch_size":       101,
-		"http_idempotency.max_maintenance_lag":      45 * time.Second,
-		"http_idempotency.max_relation_bytes":       int64(1 << 30),
-		"http_idempotency.admission_headroom_bytes": int64(1 << 20),
+		"http_idempotency.retention": 24 * time.Hour,
 		// profile:http-idempotency-postgres:end
 
 		// profile:jobs-postgres:start
-		"jobs.enabled":                 true,
-		"jobs.poll_interval":           650 * time.Millisecond,
-		"jobs.max_concurrency":         7,
-		"jobs.lease_duration":          42 * time.Second,
-		"jobs.store_operation_timeout": 7 * time.Second,
-		"jobs.observation_interval":    8 * time.Second,
-		"jobs.drain_timeout":           23 * time.Second,
+		"jobs.max_workers": 7,
 		// profile:jobs-postgres:end
 
 		// profile:webhooks-durable:start
-		"webhooks.enabled":                 true,
-		"webhooks.capacity_revision":       int64(8),
-		"webhooks.global_concurrency":      7,
-		"webhooks.claim_scan_page":         23,
-		"webhooks.poll_interval":           450 * time.Millisecond,
-		"webhooks.observation_interval":    7 * time.Second,
-		"webhooks.store_operation_timeout": 6 * time.Second,
-		"webhooks.attempt_timeout":         12 * time.Second,
-		"webhooks.response_header_timeout": 4 * time.Second,
-		"webhooks.response_header_bytes":   8192,
-		"webhooks.response_body_bytes":     16384,
-		"webhooks.drain_timeout":           24 * time.Second,
-		"webhooks.maintenance_interval":    9 * time.Second,
-		"webhooks.maintenance_batch":       41,
-		"webhooks.static_secrets":          `{"revision":8,"entries":[]}`,
+		"webhooks.enabled":        true,
+		"webhooks.endpoints":      `{"endpoints":[]}`,
+		"webhooks.static_secrets": `{"entries":[]}`,
 		// profile:webhooks-durable:end
-
-		// profile:outbox-postgres:start
-		"outbox.enabled":              true,
-		"outbox.poll_interval":        600 * time.Millisecond,
-		"outbox.batch_size":           64,
-		"outbox.publish_concurrency":  8,
-		"outbox.publish_timeout":      11 * time.Second,
-		"outbox.lease_duration":       41 * time.Second,
-		"outbox.max_attempts":         12,
-		"outbox.retry_base":           2 * time.Second,
-		"outbox.retry_max":            6 * time.Minute,
-		"outbox.observation_interval": 7 * time.Second,
-		"outbox.cleanup_interval":     2 * time.Minute,
-		"outbox.published_retention":  192 * time.Hour,
-		"outbox.cleanup_batch_size":   321,
-		"outbox.drain_timeout":        22 * time.Second,
-		// profile:outbox-postgres:end
 
 		// profile:object-storage:start
 		"object_storage.provider":                   "amazon_s3",

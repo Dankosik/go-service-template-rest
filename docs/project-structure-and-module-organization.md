@@ -11,15 +11,22 @@ runtime owner.
 <!-- profile:outbound-auth-oauth2-client-credentials:end -->
 
 <!-- profile:jobs-postgres:start -->
-`internal/jobs`, `internal/infra/postgresjobs`, and `cmd/jobs-worker` are one
-removable profile pack; generic job mechanics never move into feature packages.
+`cmd/jobs-worker`, the River dependency, and River's Goose-owned migration are
+one removable profile pack. Business packages define typed River arguments and
+workers directly; the template owns no second job framework.
 <!-- profile:jobs-postgres:end -->
+
+<!-- profile:outbox-postgres:start -->
+`internal/domainevent`, `internal/infra/postgresoutbox`, and
+`cmd/outbox-relay` are one removable River-backed outbox pack. The event
+contract owns no broker address; NATS routing stays in `internal/infra/natsjs`.
+<!-- profile:outbox-postgres:end -->
 
 <!-- profile:webhooks-durable:start -->
 `internal/outboundtrust` is a standard-library-only public-address predicate
 shared by fixed-target HTTP and dynamic webhook transport. It owns no URL,
-resolver, dialer, HTTP, or config policy. `internal/infra/postgreswebhook` and
-`cmd/webhook-worker` own the removable durable webhook pack.
+resolver, dialer, HTTP, or config policy. `internal/infra/postgreswebhook` owns
+the removable webhook job adapter; `cmd/jobs-worker` owns execution lifecycle.
 <!-- profile:webhooks-durable:end -->
 
 This document is the normative owner of repository placement and file naming.
@@ -111,16 +118,18 @@ packages. There is no reserved empty `api/proto/`, `migrations/`, `queries/`, or
 | `internal/infra/grpc/` (`package grpcx`, `GRPC=enabled`) | native gRPC server composition, standard health, the interceptor policy chain, transport bounds, and status mapping | feature packages, generated handlers, domain policy, authentication decisions, or this repository's configuration shape |
 | `internal/infra/grpcclient/` (`GRPC=enabled`) | bounded shared connections, correlation-policy enforcement, resolver metadata sanitization, address selection, standard-health eligibility, opt-in idle keepalive, and the connection lifecycle seam | provider auth, concrete trust selection, operation deadlines or application retries, generated-client ownership, or dependency readiness policy |
 | `internal/infra/oidcjwt/` (`AUTHN=oidc-jwt`) | inbound caller identity: OIDC trust bootstrap, JWKS lifecycle, token admission, and the HTTP and gRPC authentication adapters | authorization, roles, tenant policy, sessions, user provisioning, or any decision past who the caller is |
-| `internal/infra/postgres/` | pool, concrete repositories, query mapping | HTTP behavior, migration execution, and business policy |
+| `internal/infra/postgres/` | strict connection admission, template defaults, transaction outcome policy, concrete repositories, query mapping | pgxpool mechanics, HTTP behavior, migration execution, and business policy |
+<!-- profile:outbox-postgres:start -->
+| `internal/domainevent/` | typed domain-event identity, version, time, and payload encoding | broker addresses, delivery state, retries, or lifecycle |
+| `internal/infra/postgresoutbox/` | River publication job and caller-transaction append | business payload meaning, NATS mapping, River runtime, or operator transport |
+| `cmd/outbox-relay/` | River-to-NATS process composition and lifecycle | business event policy or API routes |
+<!-- profile:outbox-postgres:end -->
 <!-- profile:webhooks-durable:start -->
 | `internal/outboundtrust/` | pure public/special IP classification shared by enabled outbound consumers | URLs, DNS, dialing, HTTP, configuration, or webhook policy |
-| `internal/infra/postgreswebhook/` (`WEBHOOKS=durable`) | immutable acceptance values, PostgreSQL webhook state, claim/send/finality, bounded maintenance, signing, and telemetry | feature mutation, subscriber discovery, operator transport, receiver processing, or deployment |
-| `cmd/webhook-worker/` (`WEBHOOKS=durable`) | webhook worker config mapping, diagnostics, readiness, drain, and dependency cleanup | webhook state policy or HTTP API routes |
+| `internal/infra/postgreswebhook/` (`WEBHOOKS=durable`) | receiver snapshot resolution, per-receiver job staging, Standard Webhooks delivery, signing, and dynamic-target safety | feature mutation, generic job state, worker lifecycle, subscriber administration, or operator transport |
+| `cmd/jobs-worker/` (`JOBS=postgres`) | registered job kinds, diagnostics, readiness, drain, and dependency cleanup | webhook business meaning, endpoint administration, or HTTP API routes |
 <!-- profile:webhooks-durable:end -->
-<!-- profile:inbox-postgres:start -->
-| `internal/infra/postgresinbox/` (`INBOX=postgres`) | validate and insert one `(consumer identity, logical message ID)` claim through a caller-owned `pgx.Tx` | transaction lifecycle, feature effects, transport configuration, expiry, cleanup, telemetry, or ordering |
-<!-- profile:inbox-postgres:end -->
-| `internal/infra/postgresmigrate/` | Goose lifecycle, source/state admission, lock, and migration result metadata | service startup, domain policy, and production rollback commands |
+| `internal/infra/postgresmigrate/` | Goose composition, empty-source state admission, lock bounds, and failure metadata | canonical source validation, service startup, domain policy, and production rollback commands |
 | `internal/infra/telemetry/` | OpenTelemetry/Prometheus SDK setup and exporters | feature policy |
 | `internal/observability/otelconfig/` | pure sampler/exporter policy values | SDK construction and repository runtime imports |
 | `internal/observability/correlationpolicy/` | the outbound correlation policy enum and propagator shared by the HTTP and gRPC clients | carrier-specific stripping, transport construction, or repository runtime imports |
@@ -172,10 +181,6 @@ Use the first matching rule.
      `Down` section;
    - sqlc source: `internal/infra/postgres/queries/<feature>.sql`;
    - generated result: `internal/infra/postgres/sqlcgen/`.
-   <!-- profile:inbox-postgres:start -->
-   - transport-neutral inbox claim bound to the caller's transaction:
-     `internal/infra/postgresinbox/`.
-   <!-- profile:inbox-postgres:end -->
 5. Is it another outbound system?
    Put the concrete adapter in
    `internal/infra/<outbound-system>/client.go`; add
@@ -215,13 +220,6 @@ Use the first matching rule.
     - executable boundary contract: sibling `<owner>_contract_test.go`;
     - container/external process: `test/<feature>_integration_test.go` with
       `//go:build integration` and `package integration_test`;
-    <!-- profile:http-idempotency-postgres:start -->
-    - sole package-local integration exception:
-      `cmd/service/internal/bootstrap/startup_idempotency_integration_test.go`
-      stays tagged `integration` in `package bootstrap` because it must exercise
-      unexported service composition against the real PostgreSQL writer; no
-      other `cmd/**/_integration_test.go` is permitted;
-    <!-- profile:http-idempotency-postgres:end -->
     - fake used by one test file: keep it in that file;
     - fake or harness shared within one package: keep it unexported in
       `harness_test.go`, which does not collide with the `<owner>_test.go` of a

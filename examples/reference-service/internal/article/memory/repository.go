@@ -44,7 +44,7 @@ func New(articles []article.Article) (*Repository, error) {
 // when fn succeeds, which is this adapter's version of a transaction.
 //
 // A datastore adapter binds the same port to its own transaction — for
-// PostgreSQL, postgres.Pool.InTx, with fn handed a repository built over the
+// PostgreSQL, postgres.InTx, with fn handed a repository built over the
 // pgx.Tx rather than over the pool. What must not change is the signature: fn
 // receives an article.Repository, so the use case never sees a driver handle.
 func (r *Repository) Do(ctx context.Context, fn func(article.Repository) error) error {
