@@ -1,6 +1,6 @@
 ---
 name: go-test-strategy
-description: "Test strategy: Use for risk scenarios, proof levels, deterministic oracles, gates, or evidence review. Own proof design; Skip unresolved behavior, test implementation, or completion validation."
+description: "Test strategy: Use for risk scenarios, proof levels, or deterministic oracles. Own proof design; Skip behavior, test code, and completion claims."
 ---
 
 # Go Test Strategy

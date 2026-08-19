@@ -1,6 +1,6 @@
 ---
 name: go-chi
-description: "Chi transport: Use for router composition, middleware, OpenAPI wiring, fallbacks, CORS, labels, or routing review. Own chi decisions; Skip client API semantics, system topology, or general Go defects."
+description: "Chi transport: Use for routers, middleware, OpenAPI wiring, fallbacks, CORS, labels, or routing review. Own chi composition; Skip API meaning, topology, or general Go."
 ---
 
 # Go Chi
@@ -9,15 +9,19 @@ The router is a **composition**: one route tree where middleware order is semant
 
 `route tree -> middleware order and scope -> handler boundary -> fallbacks -> labels -> proof`
 
-What runs before what decides what is protected, limited, and observed: authentication before body consumption, limits before expensive work, recovery around everything that can panic. Every fallback — not found, method not allowed, preflight, panic — is an explicit route node with an owner, and route labels stay a bounded set so telemetry cardinality remains a decision rather than an accident.
+Order decides what is protected, limited, and observed. Every fallback is an
+owned route node, and route labels remain bounded.
 
 Load the [shared specialist contract](../specialist-contract.md). Reconstruct the affected route nodes from the composition root, generated and manual routes, middleware, fallbacks, and bounded labels; place them on one route tree, then reason about scope and order.
 
-Most of that tree already has an owner here: `internal/infra/http/router.go` builds the chain, the root mount, and the fallback policy, and `internal/infra/http/middleware_access_log.go` owns route identity. Read the affected owner before proposing a node.
+`internal/infra/http/router.go` owns the chain, root mount, and fallbacks;
+`internal/infra/http/middleware_access_log.go` owns route identity. Read the
+affected owner before proposing a node.
 
 ## Choose The Branch
 
-The branch decides what you return. Load the [reference selector](references/index.md) when the diff touches the middleware chain or route tree, a router fallback (`NotFound`, `MethodNotAllowed`, `Allow`, preflight), or a log/metric/span label derived from the request path.
+Load the [reference selector](references/index.md) for middleware or route-tree
+changes, fallbacks, or request-path-derived telemetry labels.
 
 - **Decision** — select when transport policy is absent or changing. Complete when shared Decision dispositions cover every affected route node with its position in the tree, forced consequence, and focused proof.
 - **Review** — select when changed chi code must conform to accepted transport policy. Complete when the shared finding envelope accounts for every affected node.

@@ -15,7 +15,7 @@ Apply the shared [Review Independence](../shared/review-independence.md) contrac
 
 ## Outputs
 
-Use the shared [Review Finding Envelope](../shared/subagents-and-handoff.md#review-finding-envelope). Add the earliest unsupported design edge and its smallest reopen owner.
+Use the shared [Finding Envelope](../shared/review-findings-and-convergence.md#finding-envelope). Add the earliest unsupported design edge and its smallest reopen owner.
 
 Design-specific verdict threshold:
 

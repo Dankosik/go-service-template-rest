@@ -22,9 +22,12 @@ completion bar while keeping the spec as small as the decision surface allows.
 
 ## Outputs
 
-For structured/orchestrated work, synthesize a compact behavioral contract in
-`spec.md`; direct work may keep the same rules inline. A summary of inputs is
-traceability evidence, not the contract. Use only applicable sections:
+Synthesize a compact behavioral contract. Persist it as `spec.md` only when the
+[Artifact Model](../shared/artifact-model.md#when-to-persist) triggers; otherwise
+keep the delta inline and cite the stable authoritative OpenAPI, tests, code,
+mockup, or external contract that already owns unchanged behavior. A summary of
+inputs is traceability evidence, not the contract. When persisted, use only
+applicable sections:
 
 ```markdown
 # <User/operator-visible outcome>
@@ -47,6 +50,9 @@ Ownership](../../../AGENTS.md#decision-ownership).
 Record changed, removed, and deliberately unchanged behavior. For a replaced
 surface, either make removal/refactor part of the target state or state the
 current compatibility owner, evidence for retention, and exit condition.
+Reference authoritative OpenAPI, tests, code, or mockups instead of restating
+them. `spec.md` records only the behavior delta, accepted decisions, and proof
+gaps that those references do not already own.
 
 ## Method
 
@@ -149,55 +155,29 @@ evidence in research.
 
 ## Decision Bar
 
-The spec is ready only when the affected behavior surface has been reconstructed
-from every applicable source named in Method, each resulting materially affected
-case has one falsifiable behavioral answer, and every live downstream
-realization permitted by the spec is behaviorally equivalent:
+The spec is ready when every materially affected case reconstructed by Method
+has one grounded answer satisfying the material-rule contract and
+two-implementation divergence test. Changed, removed, compatible, and
+deliberately unchanged behavior is explicit; source-of-truth semantics, success
+criteria, proof expectations, and bounded assumptions carry every field their
+Method contract requires; no Specification-owned alternative or material `TBD`
+remains. Design may choose only behaviorally equivalent representation,
+mechanism, sequence, and placement.
 
-- each accepted intent and decision-changing evidence implication is closed as
-  a traceable, falsifiable behavioral rule grounded in accepted intent, current
-  evidence or a named authority, or an explicit Specification-owned decision
-  with rationale, and passes the material-rule contract and two-implementation
-  divergence test; otherwise it has an explicit unchanged or non-goal
-  disposition, or a blocker owned by the user or a named external owner;
-- triggered source-of-truth semantics satisfy the authority, absence,
-  currentness, finality, and conflict contract in Method rather than merely
-  naming a source;
-- changed, removed, compatible, and deliberately unchanged behavior is explicit,
-  and non-goals do not hide required target-state work;
-- each success criterion names its observable scope and pass/fail condition;
-  numeric targets appear only when supported by accepted authority or evidence;
-- each proof expectation names its evidence boundary without selecting an
-  implementation mechanism;
-- each assumption names the affected rule, safe boundary, objective invalidating
-  evidence, reopen owner, and reopen condition;
-- every materially triggered lens has the decision, unchanged constraint, or
-  proof consequence required by the accepted scope;
-- no unresolved scope, behavior, policy, authority, source-of-truth,
-  compatibility, or risk-acceptance alternative owned by Specification remains;
-- design receives closed behavioral semantics and may choose only concrete
-  representations, mechanisms, sequences, and placements that preserve them
-  without choosing product or system meaning;
-- no material `TBD` remains.
-
-Only uncertainty about proving an already accepted rule may carry as a
-downstream proof obligation. Missing scope, behavior, invariant, ownership,
-compatibility, authority, source-of-truth, success meaning, or risk-acceptance
-decisions remain current-phase defects.
-
-Unless the accepted outcome is explicitly a prototype or staged result, close
-every materially triggered production behavior required by the accepted scope.
-Use only triggered rules and supported values; unaffected concerns create no
-section or decision.
+Only uncertainty about proving an accepted rule may move downstream. Missing
+scope, behavior, invariant, authority, source-of-truth, compatibility, success
+meaning, or risk acceptance remains a Specification defect. Close every
+triggered production behavior unless the accepted outcome is explicitly staged;
+unaffected concerns create no decision.
 
 ## Review
 
 Apply focused root self-review. Run independent [Specification
 Review](specification-review.md) only when the shared review trigger applies.
 
-Use the shared [Review Independence](../shared/review-independence.md) trigger and
-the loaded Subagents And Review contract for
-disposition, repair, and convergence.
+Use [Review Independence](../shared/review-independence.md) and [Review Findings
+And Convergence](../shared/review-findings-and-convergence.md) for disposition,
+repair, and convergence.
 
 ## Stop Rule
 

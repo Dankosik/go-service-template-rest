@@ -1,0 +1,5 @@
+interface:
+  display_name: "Acceptance-Unit Lead"
+  short_description: "Close one fixed implementation unit"
+policy:
+  allow_implicit_invocation: false

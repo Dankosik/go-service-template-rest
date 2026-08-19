@@ -167,13 +167,37 @@ unless the shared persistence trigger requires a durable design artifact.
   consequence, and proving surface. Include only triggered infrastructure such
   as migrations, topics, schemas, consumer groups, access policy, service
   discovery, environment-variable semantics, capacity, and latency budgets.
-  Persist a non-trivial sequence under the compact `rollout.md` contract in
-  [Artifact Model](../shared/artifact-model.md#rollout-record). Proof must
+  Persist a non-trivial sequence under the compact [Rollout Record](#rollout-record).
+  Proof must
   exercise the material service call or message path through its required
   durable effect and target-environment readiness or post-cutover signals;
   provider deployment status or one component's health is insufficient.
 
 An unverified cross-region or otherwise remote latency-sensitive path is a blocker unless current evidence shows that the accepted end-to-end and per-hop budgets hold. Do not assume either co-location or multi-region safety from platform defaults. If a required node, edge, configuration, or proof is outside current authority, assign its owner and earliest checkpoint and narrow the completion claim instead of declaring the system ready, deployed, or complete.
+
+### Rollout Record
+
+When `rollout.md` is triggered, keep only the affected deployment graph and its
+critical path:
+
+```markdown
+# Rollout
+status: draft | ready | blocked | done
+Affected graph: <affected nodes and edges; current -> target state>
+Irreversible boundary: <last rollback-safe state and first new-only effect>
+
+| Gate | Owner; node or edge | Prerequisite | Action | Success and distinct safe failure signal | Duration or behavior-changing horizon | Rollback or roll-forward | Proof |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+
+Completion: <user-visible path, durable effect, and target-environment signals>
+```
+
+Each gate names its authoritative readback and proving surface. Before Planning,
+cite the exact Test Design scenario, command, or bounded procedure plus its
+environment or fixture. Use an evidence-based bound when available; otherwise
+name the signal that ends the step and the missing estimate's owner. Reuse a
+passing gate while its candidate, inputs, preconditions, and risk surface remain
+unchanged; after failure, repeat only invalidated or still-uncovered gates.
 
 ## Fan-Out And Review
 

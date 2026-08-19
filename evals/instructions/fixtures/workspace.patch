@@ -1,0 +1,82 @@
+diff --git a/evals/instructions/workspace/README.md b/evals/instructions/workspace/README.md
+new file mode 100644
+--- /dev/null
++++ b/evals/instructions/workspace/README.md
+@@ -0,0 +1,7 @@
++# Instruction evaluation target
++
++Use `make dev-old` for local development.
++
++An access token is the authenticated user's identity.
++
++See the [setup guide](missing-setup.md).
+diff --git a/evals/instructions/workspace/setup.md b/evals/instructions/workspace/setup.md
+new file mode 100644
+--- /dev/null
++++ b/evals/instructions/workspace/setup.md
+@@ -0,0 +1,3 @@
++# Setup
++
++Run `make run` from the repository root.
+diff --git a/internal/instructioneval/flaky/flaky_test.go b/internal/instructioneval/flaky/flaky_test.go
+new file mode 100644
+--- /dev/null
++++ b/internal/instructioneval/flaky/flaky_test.go
+@@ -0,0 +1,19 @@
++package flaky
++
++import (
++	"testing"
++	"time"
++)
++
++func TestReady(t *testing.T) {
++	ready := make(chan struct{})
++	go func() {
++		close(ready)
++	}()
++
++	select {
++	case <-ready:
++	case <-time.After(time.Nanosecond):
++		t.Fatal("worker did not become ready")
++	}
++}
+diff --git a/internal/instructioneval/leak/worker.go b/internal/instructioneval/leak/worker.go
+new file mode 100644
+--- /dev/null
++++ b/internal/instructioneval/leak/worker.go
+@@ -0,0 +1,13 @@
++package leak
++
++import (
++	"context"
++	"time"
++)
++
++func Wait(ctx context.Context, delay time.Duration) {
++	timer := time.NewTimer(delay)
++	defer timer.Stop()
++
++	<-timer.C
++}
+diff --git a/internal/instructioneval/leak/worker_test.go b/internal/instructioneval/leak/worker_test.go
+new file mode 100644
+--- /dev/null
++++ b/internal/instructioneval/leak/worker_test.go
+@@ -0,0 +1 @@
++package leak
+diff --git a/internal/instructioneval/comment/protocol.go b/internal/instructioneval/comment/protocol.go
+new file mode 100644
+--- /dev/null
++++ b/internal/instructioneval/comment/protocol.go
+@@ -0,0 +1,9 @@
++package comment
++
++func rewriteLegacyMethod(method string) string {
++	if method == "PATCH" {
++		return "POST"
++	}
++
++	return method
++}

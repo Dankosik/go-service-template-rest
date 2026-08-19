@@ -1,6 +1,6 @@
 ---
 name: agent-prompt-composer
-description: "Reconstruction: Use when rough, mixed-language, or noisy input needs a short, repository-grounded English prompt. Own a routing-sufficient Intake contract; Skip routing-ready input or translation/editing."
+description: "Prompt reconstruction: Use for rough input needing a repo-grounded English prompt. Own Intake packaging; Skip routing-ready input and translation."
 ---
 
 # Agent Prompt Composer
