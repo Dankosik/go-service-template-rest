@@ -1,0 +1,5 @@
+interface:
+  display_name: "Upstream Reopen Lead"
+  short_description: "Close one upstream phase reopen"
+policy:
+  allow_implicit_invocation: false

@@ -1,6 +1,6 @@
 ---
 name: go-test-implementation
-description: "Executable proof: Use when approved behavior/test design is ready for Go tests. Own the smallest deterministic layer/oracle; Skip production changes, unresolved strategy, test review, or claim verification."
+description: "Go test code: Use when behavior and proof design are ready. Own the smallest deterministic oracle; Skip production changes and strategy."
 ---
 
 # Go Test Implementation
@@ -9,7 +9,10 @@ A test is an **executable falsifier**: it exists to reject the wrong behavior at
 
 `accepted obligation -> proving layer -> deterministic controls -> independent oracle -> executable proof -> disposition`
 
-Use [Test Design](../../../docs/spec-first-workflow/phases/test-design.md) for accepted proof obligations and [Implementation / Validation / Closeout](../../../docs/spec-first-workflow/phases/implementation-validation-closeout.md) for authorized edits.
+Use [Test Design](../../../docs/spec-first-workflow/phases/test-design.md) for
+accepted proof obligations. Direct edits follow the root [Direct
+Work](../../../AGENTS.md#direct-work) contract; structured or conditionally
+complex edits use [Implementation / Validation / Closeout](../../../docs/spec-first-workflow/phases/implementation-validation-closeout.md).
 
 Reconstruct every obligation from the accepted proof handoff and its cited behavior, then use the oracle as the anchor: inspect existing proof and choose the smallest deterministic test layer and independent observable that rejects the wrong behavior. Source-string presence substitutes for execution only when the exact text is itself the accepted output contract. When a concrete test pressure can change the proving layer, controls, oracle, or command, load [the reference selector](references/index.md) and let it choose one reference by default, adding another only for an independent pressure.
 

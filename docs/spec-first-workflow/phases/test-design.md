@@ -135,17 +135,15 @@ When test design owns that review, findings return to the owning root for dispos
 
 ## Stop Rule
 
-Continue to Planning only after a bidirectional closure check: every material acceptance claim, deliberately preserved behavior, carried risk, affected-boundary invariant, and triggered proof lens maps to one final disposition, and every disposition maps back to one of those sources. A lens exclusion requires an inspected current-boundary anchor; upstream omission does not close it.
+Continue to Planning when bidirectional closure maps every material claim,
+preserved behavior, risk, boundary invariant, and triggered lens to one final
+disposition and back. Each non-residual disposition satisfies the falsifier and
+Outputs contracts; each residual-risk acceptance has authorization, owner, and
+reopen condition. A lens exclusion needs an inspected current-boundary anchor,
+and existing proof needs the required path-and-oracle inspection.
 
-Every non-residual disposition must satisfy the falsifier contract and contain
-every applicable proof-carrier, command or bounded procedure, fixture/input,
-owner, Planning-placement, and reopen field required by Outputs. Existing proof
-counts only after the required path-and-oracle inspection. Residual-risk
-acceptance records authorization evidence, owner, and reopen condition.
-Planning may choose order and placement only; it must not invent a plausible
-wrong behavior, scenario, setup or trigger, oracle, proof boundary or level,
-command or procedure, fixture or input, or proof or reopen owner. A mandatory
-proof with an unavailable input is `FAIL`; any triggered review has returned
-`PASS` or its `CONCERNS` are dispositioned.
+Planning may choose order and placement only. A mandatory proof with an
+unavailable input is `FAIL`; any triggered review has returned `PASS` or its
+`CONCERNS` are dispositioned.
 
 Reopen Specification or Design when closure would require deciding behavior, failure policy, ownership, migration or rollout policy, or another accepted upstream rule.

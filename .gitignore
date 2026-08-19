@@ -3,6 +3,7 @@ coverage.out
 .artifacts/test/
 .artifacts/bench/
 .artifacts/skill-evals/
+.artifacts/instruction-evals/
 .env
 .env.bench
 .cache/

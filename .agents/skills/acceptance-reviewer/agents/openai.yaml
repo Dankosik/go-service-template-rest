@@ -1,0 +1,5 @@
+interface:
+  display_name: "Acceptance Reviewer"
+  short_description: "Falsify one fixed acceptance unit"
+policy:
+  allow_implicit_invocation: false

@@ -26,14 +26,18 @@ CLAUDE.md
 QWEN.md
 
 docs/agent-harness.md
+docs/agent-harness/
 docs/benchmarking.md
 docs/configuration-source-policy.md
+docs/prompt-maintenance.md
 docs/skill-authoring.md
 docs/spec-first-workflow.md
 docs/subagent-brief-template.md
 docs/template-sync.md
 docs/spec-first-workflow/
 docs/universal-disciplines/
+
+evals/instructions/
 
 .agents/skills/
 .claude/agents/
@@ -47,4 +51,6 @@ scripts/codex-agents-sync.sh
 scripts/lib/manifest.sh
 scripts/lib/sync-cli.sh
 scripts/ci/claude-skills-check.sh
+scripts/ci/instruction-evals-check.sh
 scripts/ci/template-owned-purity-check.sh
+scripts/dev/instruction-evals-run.sh

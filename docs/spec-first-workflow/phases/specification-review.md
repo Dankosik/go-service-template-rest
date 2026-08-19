@@ -4,11 +4,11 @@ Review the fixed candidate through one kernel:
 reconstruct -> falsify -> disposition -> verdict.
 
 Apply the shared [Review Independence](../shared/review-independence.md) trigger
-and [Subagents And Review](../shared/subagents-and-handoff.md) contract. Those
-shared owners provide the generic finding envelope, verdict semantics,
-convergence, read-only boundaries, and return routing. This
-file owns only Specification-specific affected-surface reconstruction,
-falsifiers, evidence anchors, and completion coverage.
+and [Review Findings And
+Convergence](../shared/review-findings-and-convergence.md) contract. Those shared
+owners provide verdict routing, the finding envelope, and convergence. This file
+owns only Specification-specific affected-surface reconstruction, falsifiers,
+evidence anchors, and completion coverage.
 
 ## Read When
 
@@ -25,8 +25,8 @@ falsifiers, evidence anchors, and completion coverage.
 
 ## Outputs
 
-Use the shared [Review Finding
-Envelope](../shared/subagents-and-handoff.md#review-finding-envelope). For
+Use the shared [Finding
+Envelope](../shared/review-findings-and-convergence.md#finding-envelope). For
 Specification, anchor each surviving finding to the fixed candidate and the
 contradicting evidence or omitted affected surface.
 
