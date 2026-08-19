@@ -337,18 +337,9 @@ func sentinelConfigSourceValues() map[string]any {
 		"runtime.memory_limit_ratio": 0.75,
 
 		// profile:database-postgres:start
-		"postgres.enabled":                     true,
-		"postgres.dsn":                         "postgres://app:secret@db:5432/app?sslmode=disable",
-		"postgres.connect_timeout":             "17s",
-		"postgres.healthcheck_timeout":         "18s",
-		"postgres.migration_timeout":           "19m",
-		"postgres.migration_statement_timeout": "3m",
-		"postgres.migration_lock_timeout":      "19s",
-		"postgres.max_open_conns":              26,
-		"postgres.min_idle_conns":              3,
-		"postgres.acquire_timeout":             "1500ms",
-		"postgres.conn_max_lifetime":           "45m",
-		"postgres.statement_timeout":           "7s",
+		"postgres.enabled":        true,
+		"postgres.dsn":            "postgres://app:secret@db:5432/app?sslmode=disable",
+		"postgres.max_open_conns": 26,
 		// profile:database-postgres:end
 
 		// profile:http-idempotency-postgres:start
@@ -361,13 +352,7 @@ func sentinelConfigSourceValues() map[string]any {
 		// profile:http-idempotency-postgres:end
 
 		// profile:jobs-postgres:start
-		"jobs.enabled":                 true,
-		"jobs.poll_interval":           "650ms",
-		"jobs.max_concurrency":         7,
-		"jobs.lease_duration":          "42s",
-		"jobs.store_operation_timeout": "7s",
-		"jobs.observation_interval":    "8s",
-		"jobs.drain_timeout":           "23s",
+		"jobs.max_workers": 7,
 		// profile:jobs-postgres:end
 
 		// profile:webhooks-durable:start
@@ -539,18 +524,9 @@ func expectedSentinelSnapshotValues() map[string]any {
 		"runtime.memory_limit_ratio": 0.75,
 
 		// profile:database-postgres:start
-		"postgres.enabled":                     true,
-		"postgres.dsn":                         "postgres://app:secret@db:5432/app?sslmode=disable",
-		"postgres.connect_timeout":             17 * time.Second,
-		"postgres.healthcheck_timeout":         18 * time.Second,
-		"postgres.migration_timeout":           19 * time.Minute,
-		"postgres.migration_statement_timeout": 3 * time.Minute,
-		"postgres.migration_lock_timeout":      19 * time.Second,
-		"postgres.max_open_conns":              26,
-		"postgres.min_idle_conns":              3,
-		"postgres.acquire_timeout":             1500 * time.Millisecond,
-		"postgres.conn_max_lifetime":           45 * time.Minute,
-		"postgres.statement_timeout":           7 * time.Second,
+		"postgres.enabled":        true,
+		"postgres.dsn":            "postgres://app:secret@db:5432/app?sslmode=disable",
+		"postgres.max_open_conns": 26,
 		// profile:database-postgres:end
 
 		// profile:http-idempotency-postgres:start
@@ -563,13 +539,7 @@ func expectedSentinelSnapshotValues() map[string]any {
 		// profile:http-idempotency-postgres:end
 
 		// profile:jobs-postgres:start
-		"jobs.enabled":                 true,
-		"jobs.poll_interval":           650 * time.Millisecond,
-		"jobs.max_concurrency":         7,
-		"jobs.lease_duration":          42 * time.Second,
-		"jobs.store_operation_timeout": 7 * time.Second,
-		"jobs.observation_interval":    8 * time.Second,
-		"jobs.drain_timeout":           23 * time.Second,
+		"jobs.max_workers": 7,
 		// profile:jobs-postgres:end
 
 		// profile:webhooks-durable:start

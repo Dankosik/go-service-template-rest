@@ -23,6 +23,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 )
 
@@ -37,7 +38,7 @@ func TestPostgresHTTPIdempotencyRecordedFingerprintVersion(t *testing.T) {
 	reservation := mustHTTPIDReserve(t, fixture, v1, resolver)
 	mustHTTPIDComplete(t, fixture, reservation, resolver, httpIDResult(`{"id":"one"}`))
 	assertHTTPIDDuplicateRisk(t, fixture, v1, false, 2*time.Hour)
-	if _, err := fixture.pool.PGX().Exec(fixture.ctx, `
+	if _, err := fixture.pool.Exec(fixture.ctx, `
 		UPDATE postgres_http_idempotency
 		SET duplicate_risk_nanos = NULL
 		WHERE identity_token = $1`, v1.Identity[:]); err == nil {
@@ -80,7 +81,7 @@ func TestPostgresHTTPIdempotencyFirstPublicationAndPoolHeadroom(t *testing.T) {
 	fixture := newHTTPIDFixture(t, "idempotency-publisher-a", 2)
 	otherPool := newHTTPIDPool(t, fixture.ctx, httpIDDSN(t, fixture.dsn, "idempotency-authority-b"), 1)
 	gatePool := newHTTPIDPool(t, fixture.ctx, httpIDDSN(t, fixture.dsn, "idempotency-gate"), 1)
-	if _, err := fixture.pool.PGX().Exec(fixture.ctx, `
+	if _, err := fixture.pool.Exec(fixture.ctx, `
 		CREATE FUNCTION test_http_idempotency_publication_gate() RETURNS trigger
 		LANGUAGE plpgsql AS $$
 		BEGIN
@@ -96,7 +97,7 @@ func TestPostgresHTTPIdempotencyFirstPublicationAndPoolHeadroom(t *testing.T) {
 		t.Fatalf("create publication gate: %v", err)
 	}
 
-	lock, err := gatePool.PGX().Begin(fixture.ctx)
+	lock, err := gatePool.Begin(fixture.ctx)
 	if err != nil {
 		t.Fatalf("begin advisory gate: %v", err)
 	}
@@ -125,7 +126,7 @@ func TestPostgresHTTPIdempotencyFirstPublicationAndPoolHeadroom(t *testing.T) {
 	if count := publicationBackendCount(t, fixture.ctx, otherPool, "idempotency-publisher-a"); count != 1 {
 		t.Fatalf("publication backend count = %d, want 1", count)
 	}
-	if _, err := otherPool.PGX().Exec(fixture.ctx, "SELECT 1"); err != nil {
+	if _, err := otherPool.Exec(fixture.ctx, "SELECT 1"); err != nil {
 		t.Fatalf("authority B writer headroom: %v", err)
 	}
 	if err := lock.Rollback(fixture.ctx); err != nil {
@@ -152,7 +153,7 @@ func TestPostgresHTTPIdempotencyFirstPublicationAndPoolHeadroom(t *testing.T) {
 		t.Fatalf("publication outcomes execute/in-progress = %d/%d, want 1/1", execute, inProgress)
 	}
 	var rows int
-	if err := otherPool.PGX().QueryRow(fixture.ctx, "SELECT count(*) FROM postgres_http_idempotency").Scan(&rows); err != nil {
+	if err := otherPool.QueryRow(fixture.ctx, "SELECT count(*) FROM postgres_http_idempotency").Scan(&rows); err != nil {
 		t.Fatalf("count reservations: %v", err)
 	}
 	if rows != 1 {
@@ -163,7 +164,7 @@ func TestPostgresHTTPIdempotencyFirstPublicationAndPoolHeadroom(t *testing.T) {
 func TestPostgresHTTPIdempotencyClassificationBudget(t *testing.T) {
 	fixture := newHTTPIDFixture(t, "idempotency-classification", 2)
 	gatePool := newHTTPIDPool(t, fixture.ctx, httpIDDSN(t, fixture.dsn, "idempotency-classification-gate"), 1)
-	lock, err := gatePool.PGX().Begin(fixture.ctx)
+	lock, err := gatePool.Begin(fixture.ctx)
 	if err != nil {
 		t.Fatalf("begin writer lock: %v", err)
 	}
@@ -192,7 +193,7 @@ func TestPostgresHTTPIdempotencyClassificationBudget(t *testing.T) {
 		t.Fatalf("release writer lock: %v", err)
 	}
 	var rows int
-	if err := fixture.pool.PGX().QueryRow(fixture.ctx, "SELECT count(*) FROM postgres_http_idempotency").Scan(&rows); err != nil {
+	if err := fixture.pool.QueryRow(fixture.ctx, "SELECT count(*) FROM postgres_http_idempotency").Scan(&rows); err != nil {
 		t.Fatalf("count blocked reservations: %v", err)
 	}
 	if rows != 0 {
@@ -202,7 +203,7 @@ func TestPostgresHTTPIdempotencyClassificationBudget(t *testing.T) {
 
 func TestPostgresHTTPIdempotencyOwnerRecovery(t *testing.T) {
 	fixture := newHTTPIDFixture(t, "idempotency-owner-recovery", 6)
-	if _, err := fixture.pool.PGX().Exec(fixture.ctx, `
+	if _, err := fixture.pool.Exec(fixture.ctx, `
 		CREATE TABLE test_http_idempotency_feature (
 			id text PRIMARY KEY
 		)`); err != nil {
@@ -227,7 +228,7 @@ func TestPostgresHTTPIdempotencyOwnerRecovery(t *testing.T) {
 	if abandonedGeneration <= firstGeneration {
 		t.Fatalf("new reservation generation = %d, want above %d", abandonedGeneration, firstGeneration)
 	}
-	if _, err := fixture.pool.PGX().Exec(fixture.ctx, `
+	if _, err := fixture.pool.Exec(fixture.ctx, `
 		UPDATE postgres_http_idempotency
 		SET recover_after = clock_timestamp() - interval '1 microsecond'
 		WHERE identity_token = $1`, attempt.Identity[:]); err != nil {
@@ -256,7 +257,7 @@ func TestPostgresHTTPIdempotencyOwnerRecovery(t *testing.T) {
 	t.Cleanup(releaseFirst)
 	firstDone := make(chan error, 1)
 	go func() {
-		firstDone <- fixture.pool.InTx(fixture.ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+		firstDone <- postgres.InTx(fixture.ctx, fixture.pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 			_, decision, err := fixture.store.Acquire(fixture.ctx, tx, fixture.contract, firstSuccessor, resolver)
 			if err != nil {
 				return err
@@ -270,7 +271,7 @@ func TestPostgresHTTPIdempotencyOwnerRecovery(t *testing.T) {
 		})
 	}()
 	waittest.ReceiveSignal(t, acquired, 5*time.Second, "first successor to lock the recovered reservation")
-	if err := fixture.pool.InTx(fixture.ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+	if err := postgres.InTx(fixture.ctx, fixture.pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 		_, decision, err := fixture.store.Acquire(fixture.ctx, tx, fixture.contract, secondSuccessor, resolver)
 		if err != nil {
 			return err
@@ -328,7 +329,7 @@ func TestPostgresHTTPIdempotencyOwnerRecovery(t *testing.T) {
 		return !httpIDBackendExists(t, fixture, backendPID)
 	}, "killed owner backend and row lock to disappear")
 	var ownerEffects int
-	if err := fixture.pool.PGX().QueryRow(fixture.ctx, "SELECT count(*) FROM test_http_idempotency_feature WHERE id = 'owner'").Scan(&ownerEffects); err != nil {
+	if err := fixture.pool.QueryRow(fixture.ctx, "SELECT count(*) FROM test_http_idempotency_feature WHERE id = 'owner'").Scan(&ownerEffects); err != nil {
 		t.Fatalf("count killed owner feature effects: %v", err)
 	}
 	if ownerEffects != 0 {
@@ -336,7 +337,7 @@ func TestPostgresHTTPIdempotencyOwnerRecovery(t *testing.T) {
 	}
 
 	ownerAttempt := httpIDAttemptWithKey(t, "v2", `{"name":"owner"}`, "key-owner")
-	if _, err := fixture.pool.PGX().Exec(fixture.ctx, `
+	if _, err := fixture.pool.Exec(fixture.ctx, `
 		UPDATE postgres_http_idempotency
 		SET recover_after = clock_timestamp() - interval '1 microsecond'
 		WHERE identity_token = $1`, ownerAttempt.Identity[:]); err != nil {
@@ -344,7 +345,7 @@ func TestPostgresHTTPIdempotencyOwnerRecovery(t *testing.T) {
 	}
 	ownerResolver := httpIDResolver(map[string]httpidempotency.Fingerprint{"v2": ownerAttempt.Fingerprint})
 	ownerSuccessor := mustHTTPIDReserve(t, fixture, ownerAttempt, ownerResolver)
-	if err := fixture.pool.InTx(fixture.ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+	if err := postgres.InTx(fixture.ctx, fixture.pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 		_, decision, err := fixture.store.Acquire(fixture.ctx, tx, fixture.contract, ownerSuccessor, ownerResolver)
 		if err != nil {
 			return err
@@ -360,7 +361,7 @@ func TestPostgresHTTPIdempotencyOwnerRecovery(t *testing.T) {
 
 func TestPostgresHTTPIdempotencyCallerTransactionAtomicity(t *testing.T) {
 	fixture := newHTTPIDFixture(t, "idempotency-caller-transaction", 4)
-	if _, err := fixture.pool.PGX().Exec(fixture.ctx, `
+	if _, err := fixture.pool.Exec(fixture.ctx, `
 		CREATE TABLE test_http_idempotency_feature (
 			id text PRIMARY KEY
 		)`); err != nil {
@@ -369,7 +370,7 @@ func TestPostgresHTTPIdempotencyCallerTransactionAtomicity(t *testing.T) {
 	attempt := httpIDAttempt(t, "v2", `{"name":"atomic"}`)
 	resolver := httpIDResolver(map[string]httpidempotency.Fingerprint{"v2": attempt.Fingerprint})
 	reservation := mustHTTPIDReserve(t, fixture, attempt, resolver)
-	if err := fixture.pool.InTx(fixture.ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+	if err := postgres.InTx(fixture.ctx, fixture.pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 		acquired, decision, err := fixture.store.Acquire(fixture.ctx, tx, fixture.contract, reservation, resolver)
 		if err != nil {
 			return err
@@ -394,7 +395,7 @@ func TestPostgresHTTPIdempotencyCallerTransactionAtomicity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("postgresoutbox.NewStore(): %v", err)
 	}
-	if err := fixture.pool.InTx(fixture.ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+	if err := postgres.InTx(fixture.ctx, fixture.pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 		acquired, decision, err := fixture.store.Acquire(fixture.ctx, tx, fixture.contract, reservation, resolver)
 		if err != nil {
 			return err
@@ -429,7 +430,7 @@ func TestPostgresHTTPIdempotencyCallerTransactionAtomicity(t *testing.T) {
 
 func TestPostgresHTTPIdempotencyReplayResultBoundAndPostCommitDeath(t *testing.T) {
 	fixture := newHTTPIDFixture(t, "idempotency-replay-bound", 6)
-	if _, err := fixture.pool.PGX().Exec(fixture.ctx, `
+	if _, err := fixture.pool.Exec(fixture.ctx, `
 		CREATE TABLE test_http_idempotency_feature (
 			id text PRIMARY KEY
 		)`); err != nil {
@@ -456,7 +457,7 @@ func TestPostgresHTTPIdempotencyReplayResultBoundAndPostCommitDeath(t *testing.T
 	overflowFixture := fixture
 	overflowFixture.contract.ResultMaxBytes = len(encoded) - 1
 	overflowReservation := mustHTTPIDReserve(t, overflowFixture, overflowAttempt, overflowResolver)
-	err = overflowFixture.pool.InTx(overflowFixture.ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+	err = postgres.InTx(overflowFixture.ctx, overflowFixture.pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 		acquired, decision, err := overflowFixture.store.Acquire(overflowFixture.ctx, tx, overflowFixture.contract, overflowReservation, overflowResolver)
 		if err != nil {
 			return err
@@ -480,7 +481,7 @@ func TestPostgresHTTPIdempotencyReplayResultBoundAndPostCommitDeath(t *testing.T
 	}
 
 	const epochGate = 48002
-	if _, err := fixture.pool.PGX().Exec(fixture.ctx, `
+	if _, err := fixture.pool.Exec(fixture.ctx, `
 		CREATE FUNCTION test_http_idempotency_epoch_gate() RETURNS trigger
 		LANGUAGE plpgsql AS $$
 		BEGIN
@@ -497,7 +498,7 @@ func TestPostgresHTTPIdempotencyReplayResultBoundAndPostCommitDeath(t *testing.T
 		t.Fatalf("create epoch gate: %v", err)
 	}
 	gatePool := newHTTPIDPool(t, fixture.ctx, httpIDDSN(t, fixture.dsn, "idempotency-epoch-gate"), 1)
-	gate, err := gatePool.PGX().Begin(fixture.ctx)
+	gate, err := gatePool.Begin(fixture.ctx)
 	if err != nil {
 		t.Fatalf("begin epoch gate: %v", err)
 	}
@@ -534,7 +535,7 @@ func TestPostgresHTTPIdempotencyReplayResultBoundAndPostCommitDeath(t *testing.T
 
 	helperAttempt := httpIDAttemptWithKey(t, "v2", `{"name":"helper"}`, "key-helper")
 	var expectedEpoch time.Time
-	if err := fixture.pool.PGX().QueryRow(fixture.ctx, `
+	if err := fixture.pool.QueryRow(fixture.ctx, `
 		SELECT pg_xact_commit_timestamp(xmin)
 		FROM postgres_http_idempotency
 		WHERE identity_token = $1`, helperAttempt.Identity[:]).Scan(&expectedEpoch); err != nil {
@@ -556,7 +557,7 @@ func TestPostgresHTTPIdempotencyReplayResultBoundAndPostCommitDeath(t *testing.T
 		t.Fatalf("fresh replay after helper death = (%v, %v), want replay", decision.Outcome, err)
 	}
 	var committedAt time.Time
-	if err := fixture.pool.PGX().QueryRow(fixture.ctx, `
+	if err := fixture.pool.QueryRow(fixture.ctx, `
 		SELECT committed_at FROM postgres_http_idempotency WHERE identity_token = $1`, helperAttempt.Identity[:]).Scan(&committedAt); err != nil {
 		t.Fatalf("read materialized epoch: %v", err)
 	}
@@ -588,7 +589,7 @@ func TestPostgresHTTPIdempotencyCommitReconciliation(t *testing.T) {
 	if lockableReservation.Recovery != httpidempotency.ReservationRecoveryReconciled {
 		t.Fatalf("lockable reconciliation recovery = %v, want reconciled", lockableReservation.Recovery)
 	}
-	if err := fixture.pool.InTx(fixture.ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+	if err := postgres.InTx(fixture.ctx, fixture.pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 		_, decision, err := fixture.store.Acquire(fixture.ctx, tx, fixture.contract, lockableReservation, lockableResolver)
 		if err != nil {
 			return err
@@ -608,7 +609,7 @@ func TestPostgresHTTPIdempotencyCommitReconciliation(t *testing.T) {
 	release := make(chan struct{})
 	lockedDone := make(chan error, 1)
 	go func() {
-		lockedDone <- fixture.pool.InTx(fixture.ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+		lockedDone <- postgres.InTx(fixture.ctx, fixture.pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 			_, decision, err := fixture.store.Acquire(fixture.ctx, tx, fixture.contract, lockedReservation, lockedResolver)
 			if err != nil {
 				return err
@@ -702,7 +703,7 @@ func TestPostgresHTTPIdempotencyCommitEpoch(t *testing.T) {
 	mustHTTPIDComplete(t, fixture, reservation, resolver, httpIDResult(`{"id":"epoch"}`))
 
 	var expected time.Time
-	if err := fixture.pool.PGX().QueryRow(fixture.ctx, `
+	if err := fixture.pool.QueryRow(fixture.ctx, `
 		SELECT pg_xact_commit_timestamp(xmin)
 		FROM postgres_http_idempotency
 		WHERE identity_token = $1`, attempt.Identity[:]).Scan(&expected); err != nil {
@@ -716,7 +717,7 @@ func TestPostgresHTTPIdempotencyCommitEpoch(t *testing.T) {
 		t.Fatalf("materialized epoch = %s, want %s", materialized, expected)
 	}
 	var stored time.Time
-	if err := fixture.pool.PGX().QueryRow(fixture.ctx, `
+	if err := fixture.pool.QueryRow(fixture.ctx, `
 		SELECT committed_at FROM postgres_http_idempotency WHERE identity_token = $1`, attempt.Identity[:]).Scan(&stored); err != nil {
 		t.Fatalf("read stored commit epoch: %v", err)
 	}
@@ -793,7 +794,7 @@ func TestPostgresHTTPIdempotencyRetentionAndCleanupRaces(t *testing.T) {
 
 	locked := seedHTTPIDCompleted(t, fixture, fixture.contract, "retention-request-first")
 	setHTTPIDCommittedAgo(t, fixture, locked, 3*time.Hour)
-	lockTx, err := fixture.pool.PGX().Begin(fixture.ctx)
+	lockTx, err := fixture.pool.Begin(fixture.ctx)
 	if err != nil {
 		t.Fatalf("begin request-first row lock: %v", err)
 	}
@@ -846,7 +847,7 @@ func TestPostgresHTTPIdempotencyMaintenanceCapacity(t *testing.T) {
 		t.Fatalf("materialize retained row: %v", err)
 	}
 	var relationBytes int64
-	if err := fixture.pool.PGX().QueryRow(fixture.ctx, `
+	if err := fixture.pool.QueryRow(fixture.ctx, `
 		SELECT pg_total_relation_size('postgres_http_idempotency'::regclass)`).Scan(&relationBytes); err != nil {
 		t.Fatalf("read relation size: %v", err)
 	}
@@ -876,7 +877,7 @@ func TestPostgresHTTPIdempotencyMaintenanceCapacity(t *testing.T) {
 		t.Fatalf("capacity closure rows = %d, want retained row only", rows)
 	}
 
-	gate, err := fixture.pool.PGX().Begin(fixture.ctx)
+	gate, err := fixture.pool.Begin(fixture.ctx)
 	if err != nil {
 		t.Fatalf("begin maintenance relation gate: %v", err)
 	}
@@ -887,7 +888,7 @@ func TestPostgresHTTPIdempotencyMaintenanceCapacity(t *testing.T) {
 	go func() { firstCycle <- fixture.store.Maintain(fixture.ctx) }()
 	waittest.Until(t, 5*time.Second, func() bool {
 		var blocked int
-		err := fixture.pool.PGX().QueryRow(fixture.ctx, `
+		err := fixture.pool.QueryRow(fixture.ctx, `
 			SELECT count(*)
 			FROM pg_stat_activity
 			WHERE datname = current_database()
@@ -928,7 +929,7 @@ func TestPostgresHTTPIdempotencyTelemetry(t *testing.T) {
 	}
 
 	var wantRows, wantResultBytes, wantRelationBytes int64
-	if err := fixture.pool.PGX().QueryRow(fixture.ctx, `
+	if err := fixture.pool.QueryRow(fixture.ctx, `
 		SELECT count(*), coalesce(sum(octet_length(result)), 0),
 		       pg_total_relation_size('postgres_http_idempotency'::regclass)
 		FROM postgres_http_idempotency`).Scan(&wantRows, &wantResultBytes, &wantRelationBytes); err != nil {
@@ -984,7 +985,7 @@ func seedHTTPIDCompleted(
 
 func setHTTPIDCommittedAgo(t *testing.T, fixture httpIDFixture, attempt httpidempotency.Attempt, ago time.Duration) {
 	t.Helper()
-	if _, err := fixture.pool.PGX().Exec(fixture.ctx, `
+	if _, err := fixture.pool.Exec(fixture.ctx, `
 		UPDATE postgres_http_idempotency
 		SET committed_at = clock_timestamp() - $2::bigint * interval '1 microsecond'
 		WHERE identity_token = $1`, attempt.Identity[:], ago.Microseconds()); err != nil {
@@ -995,7 +996,7 @@ func setHTTPIDCommittedAgo(t *testing.T, fixture httpIDFixture, attempt httpidem
 func httpIDMaintenanceBacklog(t *testing.T, fixture httpIDFixture) int {
 	t.Helper()
 	var backlog int
-	if err := fixture.pool.PGX().QueryRow(fixture.ctx, `
+	if err := fixture.pool.QueryRow(fixture.ctx, `
 		SELECT
 			count(*) FILTER (WHERE phase = 'completed' AND committed_at IS NULL)
 			+ count(*) FILTER (
@@ -1019,7 +1020,7 @@ func httpIDMaintenanceBacklog(t *testing.T, fixture httpIDFixture) int {
 func assertHTTPIDCeilingHorizon(t *testing.T, fixture httpIDFixture, attempt httpidempotency.Attempt) {
 	t.Helper()
 	var committedAt, replayExpiry, guardExpiry time.Time
-	if err := fixture.pool.PGX().QueryRow(fixture.ctx, `
+	if err := fixture.pool.QueryRow(fixture.ctx, `
 		SELECT
 			committed_at,
 			committed_at + ((replay_nanos - 1) / 1000 + 1) * interval '1 microsecond',
@@ -1043,7 +1044,7 @@ func assertHTTPIDStoredState(
 	t.Helper()
 	var rows int
 	var hasResult bool
-	if err := fixture.pool.PGX().QueryRow(fixture.ctx, `
+	if err := fixture.pool.QueryRow(fixture.ctx, `
 		SELECT count(*), coalesce(bool_or(octet_length(result) > 0), false)
 		FROM postgres_http_idempotency
 		WHERE identity_token = $1`, attempt.Identity[:]).Scan(&rows, &hasResult); err != nil {
@@ -1108,7 +1109,7 @@ func TestPostgresHTTPIdempotencyHelperProcess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("postgresoutbox.NewStore(): %v", err)
 	}
-	if err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+	if err := postgres.InTx(ctx, pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 		acquired, decision, err := store.Acquire(ctx, tx, contract, reservation, resolver)
 		if err != nil {
 			return err
@@ -1172,7 +1173,7 @@ func runHTTPIDOwnerHelper(t *testing.T) {
 		t.Fatal("open owner helper IPC")
 	}
 	defer pipe.Close()
-	if err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+	if err := postgres.InTx(ctx, pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 		_, decision, err := store.Acquire(ctx, tx, contract, reservation, resolver)
 		if err != nil {
 			return err
@@ -1222,7 +1223,7 @@ func waitHTTPIDHelperLine(t *testing.T, reader *os.File, description string) str
 func httpIDBackendExists(t *testing.T, fixture httpIDFixture, backendPID int) bool {
 	t.Helper()
 	var exists bool
-	if err := fixture.pool.PGX().QueryRow(fixture.ctx, `
+	if err := fixture.pool.QueryRow(fixture.ctx, `
 		SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE pid = $1)`, backendPID).Scan(&exists); err != nil {
 		t.Fatalf("inspect backend %d: %v", backendPID, err)
 	}
@@ -1232,7 +1233,7 @@ func httpIDBackendExists(t *testing.T, fixture httpIDFixture, backendPID int) bo
 func httpIDGeneration(t *testing.T, fixture httpIDFixture, attempt httpidempotency.Attempt) int64 {
 	t.Helper()
 	var generation int64
-	if err := fixture.pool.PGX().QueryRow(fixture.ctx, `
+	if err := fixture.pool.QueryRow(fixture.ctx, `
 		SELECT generation FROM postgres_http_idempotency WHERE identity_token = $1`, attempt.Identity[:]).Scan(&generation); err != nil {
 		t.Fatalf("read reservation generation: %v", err)
 	}
@@ -1242,7 +1243,7 @@ func httpIDGeneration(t *testing.T, fixture httpIDFixture, attempt httpidempoten
 func httpIDRows(t *testing.T, fixture httpIDFixture) int {
 	t.Helper()
 	var rows int
-	if err := fixture.pool.PGX().QueryRow(fixture.ctx, "SELECT count(*) FROM postgres_http_idempotency").Scan(&rows); err != nil {
+	if err := fixture.pool.QueryRow(fixture.ctx, "SELECT count(*) FROM postgres_http_idempotency").Scan(&rows); err != nil {
 		t.Fatalf("count idempotency rows: %v", err)
 	}
 	return rows
@@ -1251,7 +1252,7 @@ func httpIDRows(t *testing.T, fixture httpIDFixture) int {
 func httpIDPhase(t *testing.T, fixture httpIDFixture, attempt httpidempotency.Attempt) string {
 	t.Helper()
 	var phase string
-	if err := fixture.pool.PGX().QueryRow(fixture.ctx, `
+	if err := fixture.pool.QueryRow(fixture.ctx, `
 		SELECT phase FROM postgres_http_idempotency WHERE identity_token = $1`, attempt.Identity[:]).Scan(&phase); err != nil {
 		t.Fatalf("read idempotency phase: %v", err)
 	}
@@ -1268,7 +1269,7 @@ func assertHTTPIDDuplicateRisk(
 	t.Helper()
 	var duration pgtype.Int8
 	var permanent bool
-	if err := fixture.pool.PGX().QueryRow(fixture.ctx, `
+	if err := fixture.pool.QueryRow(fixture.ctx, `
 		SELECT duplicate_risk_nanos, duplicate_risk_permanent
 		FROM postgres_http_idempotency
 		WHERE identity_token = $1`, attempt.Identity[:]).Scan(&duration, &permanent); err != nil {
@@ -1291,10 +1292,10 @@ func assertHTTPIDDuplicateRisk(
 func assertHTTPIDFeatureAndOutboxCounts(t *testing.T, fixture httpIDFixture, id string, wantFeature, wantOutbox int) {
 	t.Helper()
 	var feature, outbox int
-	if err := fixture.pool.PGX().QueryRow(fixture.ctx, "SELECT count(*) FROM test_http_idempotency_feature WHERE id = $1", id).Scan(&feature); err != nil {
+	if err := fixture.pool.QueryRow(fixture.ctx, "SELECT count(*) FROM test_http_idempotency_feature WHERE id = $1", id).Scan(&feature); err != nil {
 		t.Fatalf("count feature rows: %v", err)
 	}
-	if err := fixture.pool.PGX().QueryRow(fixture.ctx, "SELECT count(*) FROM outbox_events WHERE id = $1", "idempotency-atomic-event").Scan(&outbox); err != nil {
+	if err := fixture.pool.QueryRow(fixture.ctx, "SELECT count(*) FROM outbox_events WHERE id = $1", "idempotency-atomic-event").Scan(&outbox); err != nil {
 		t.Fatalf("count outbox rows: %v", err)
 	}
 	if feature != wantFeature || outbox != wantOutbox {
@@ -1302,10 +1303,10 @@ func assertHTTPIDFeatureAndOutboxCounts(t *testing.T, fixture httpIDFixture, id 
 	}
 }
 
-func publicationBackendCount(t *testing.T, ctx context.Context, pool *postgres.Pool, applicationName string) int {
+func publicationBackendCount(t *testing.T, ctx context.Context, pool *pgxpool.Pool, applicationName string) int {
 	t.Helper()
 	var count int
-	if err := pool.PGX().QueryRow(ctx, `
+	if err := pool.QueryRow(ctx, `
 		SELECT count(*)
 		FROM pg_stat_activity
 		WHERE application_name = $1

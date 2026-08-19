@@ -6,6 +6,7 @@ import (
 	"math"
 	"time"
 
+	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	"github.com/example/go-service-template-rest/internal/infra/postgres/sqlcgen"
 	"github.com/jackc/pgx/v5"
 )
@@ -29,7 +30,7 @@ func (s *Store) ClassifyLegacyUncertainty(ctx context.Context, maxAttempts, batc
 		return 0, fmt.Errorf("%w: max attempts and classification batch size must be positive", ErrConfig)
 	}
 	var count int32
-	err = s.pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+	err = postgres.InTx(ctx, s.pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 		var classifyErr error
 		count, classifyErr = sqlcgen.New(tx).ClassifyLegacyOutboxUncertainty(ctx, sqlcgen.ClassifyLegacyOutboxUncertaintyParams{
 			MaxAttempts: int32(maxAttempts), // #nosec G115 -- range checked above.

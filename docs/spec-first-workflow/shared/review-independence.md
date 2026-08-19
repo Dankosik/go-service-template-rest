@@ -10,12 +10,12 @@ acceptance unit needs an independent reviewer.
 
 ## Trigger
 
-Use an independent reviewer when the fixed boundary controls an orchestrated,
-high-impact, hard-to-reverse, protected-domain, cross-owner, or materially
-contested decision that its author cannot credibly falsify alone. Artifact or
-`tasks.md` presence alone does not trigger a reviewer. Other structured
-artifacts and ordinary implementation use root self-review. An explicit user
-request for independent review also triggers it.
+Use an independent reviewer when the fixed boundary is high-impact,
+hard-to-reverse, protected-domain, cross-owner, or materially contested and its
+owning actor cannot credibly falsify it alone. The execution path,
+artifact presence, and `tasks.md` alone do not trigger review; ordinary work
+uses root self-review. An explicit user request for independent review also
+triggers it.
 
 ## Route
 
@@ -26,9 +26,9 @@ request for independent review also triggers it.
 - When the trigger does not apply, continue with root self-review and do not
   load a review-specific branch.
 - For a triggered non-implementation review, continue through the current
-  phase's review adapter and [Subagents And Review](subagents-and-handoff.md#non-implementation-review-convergence).
-- For implementation, evaluate this trigger only after a fixed candidate passes
-  bounded root review and mapped validation. When it applies, load [Independent
+  phase's review adapter and [Review Findings And Convergence](review-findings-and-convergence.md#convergence).
+- For implementation, evaluate this trigger only after a fixed unit candidate
+  passes bounded root review and mapped validation. When it applies, load [Independent
   Implementation Review](implementation-review.md).
 
 ## Stop Rule

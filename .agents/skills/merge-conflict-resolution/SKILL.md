@@ -1,6 +1,6 @@
 ---
 name: merge-conflict-resolution
-description: "Merge conflicts: Use for an active merge, rebase, cherry-pick, or revert conflict. Own intent, resolution, proof, and continuation; report only under read-only authorization; Skip when no conflict is active."
+description: "Merge conflicts: Use during merge, rebase, cherry-pick, or revert conflicts. Own resolution/proof/continuation; Skip inactive conflicts and read-only writes."
 ---
 
 # Merge Conflict Resolution

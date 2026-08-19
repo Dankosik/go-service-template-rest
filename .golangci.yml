@@ -397,20 +397,15 @@ linters:
             - "!**/internal/infra/postgresoutbox/store*.go"
             - "!**/internal/infra/postgresoutbox/notify*.go"
             # profile:outbox-postgres:end
-            # profile:inbox-postgres:start
-            # The inbox claim binds generated SQL to its caller-owned pgx.Tx.
-            - "!**/internal/infra/postgresinbox/*.go"
-            # profile:inbox-postgres:end
             - "!**/internal/infra/postgresidempotency/store*.go"
             # pgtest is a PostgreSQL adapter like the two above, scoped to tests:
             # it creates and drops the per-test database, which is driver work.
             - "!**/internal/infra/postgres/pgtest/*.go"
             - "!**/internal/infra/postgresmigrate/*.go"
-            # profile:jobs-postgres:start
-            # The durable-jobs Store is a PostgreSQL runtime adapter. It owns
-            # the pgx session and transaction boundary for its generated queries.
-            - "!**/internal/infra/postgresjobs/*.go"
-            # profile:jobs-postgres:end
+            # The service composition root retains the concrete library pool;
+            # feature and transport packages still cannot import the driver.
+            - "!**/cmd/service/internal/bootstrap/startup_dependencies.go"
+            - "!**/cmd/service/internal/bootstrap/startup_idempotency.go"
             # profile:webhooks-durable:start
             # The durable webhook store owns its pgx transactions around the
             # generated query contract.
@@ -433,15 +428,7 @@ linters:
             # profile:outbox-postgres:start
             - "!**/internal/infra/postgresoutbox/store*.go"
             # profile:outbox-postgres:end
-            # profile:inbox-postgres:start
-            - "!**/internal/infra/postgresinbox/*.go"
-            # profile:inbox-postgres:end
             - "!**/internal/infra/postgresidempotency/store*.go"
-            # profile:jobs-postgres:start
-            # The durable-jobs Store is the hand-written adapter around its
-            # generated SQLC contract and is removed with JOBS=none.
-            - "!**/internal/infra/postgresjobs/*.go"
-            # profile:jobs-postgres:end
             # profile:webhooks-durable:start
             - "!**/internal/infra/postgreswebhook/*.go"
             # profile:webhooks-durable:end

@@ -48,7 +48,7 @@ func (s *Store) AcceptAtomic(ctx context.Context, prepared PreparedAcceptance, m
 		return AcceptanceReceipt{}, err
 	}
 	var receipt AcceptanceReceipt
-	err := s.pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+	err := postgres.InTx(ctx, s.pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 		if err := mutate(ctx, tx); err != nil {
 			return err
 		}

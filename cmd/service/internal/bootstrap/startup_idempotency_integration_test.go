@@ -45,25 +45,16 @@ func TestPostgresHTTPIdempotencyActiveBootstrap(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve PostgreSQL DSN: %v", err)
 	}
-	if _, err := postgresmigrate.MigrateUp(ctx, postgresmigrate.MigrationOptions{
-		DSN:              dsn,
-		SourceFS:         os.DirFS("../../../.."),
-		SourcePath:       "migrations",
-		ConnectTimeout:   5 * time.Second,
-		StatementTimeout: time.Minute,
-		LockTimeout:      15 * time.Second,
-		CleanupTimeout:   15 * time.Second,
-	}); err != nil {
+	if _, err := postgresmigrate.MigrateUp(
+		ctx,
+		postgresmigrate.DefaultOptions(dsn, os.DirFS("../../../.."), "migrations", nil),
+	); err != nil {
 		t.Fatalf("migrate PostgreSQL: %v", err)
 	}
-	pool, err := postgres.New(ctx, postgres.Options{
-		DSN:                dsn,
-		ConnectTimeout:     5 * time.Second,
-		HealthcheckTimeout: 5 * time.Second,
-		MaxOpenConns:       4,
-		AcquireTimeout:     2 * time.Second,
-		ConnMaxLifetime:    time.Hour,
-		StatementTimeout:   10 * time.Second,
+	pool, err := postgres.Open(ctx, postgres.Options{
+		DSN: dsn,
+
+		MaxOpenConns: 4,
 	})
 	if err != nil {
 		t.Fatalf("connect PostgreSQL: %v", err)
@@ -116,21 +107,21 @@ func TestPostgresHTTPIdempotencyActiveBootstrap(t *testing.T) {
 			return attempt.Fingerprint, nil
 		}
 		var before, after time.Time
-		if err := pool.PGX().QueryRow(ctx, "SELECT clock_timestamp()").Scan(&before); err != nil {
+		if err := pool.QueryRow(ctx, "SELECT clock_timestamp()").Scan(&before); err != nil {
 			t.Fatalf("writer time before %s reservation: %v", delay, err)
 		}
 		_, decision, err := runtime.store.Reserve(ctx, contract, attempt, resolver)
 		if err != nil || decision.Outcome != httpidempotency.OutcomeExecute {
 			t.Fatalf("Reserve(%s) = (%v, %v), want execute", delay, decision.Outcome, err)
 		}
-		if err := pool.PGX().QueryRow(ctx, "SELECT clock_timestamp()").Scan(&after); err != nil {
+		if err := pool.QueryRow(ctx, "SELECT clock_timestamp()").Scan(&after); err != nil {
 			t.Fatalf("writer time after %s reservation: %v", delay, err)
 		}
 		if width := after.Sub(before); width <= 0 || width >= 5*time.Second {
 			t.Fatalf("writer bracket for %s = %s, want (0,5s)", delay, width)
 		}
 		var recoverAfter time.Time
-		if err := pool.PGX().QueryRow(ctx, `
+		if err := pool.QueryRow(ctx, `
 			SELECT recover_after
 			FROM postgres_http_idempotency
 			WHERE identity_token = $1`, attempt.Identity[:]).Scan(&recoverAfter); err != nil {

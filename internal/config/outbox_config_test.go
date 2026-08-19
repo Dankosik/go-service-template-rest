@@ -43,13 +43,11 @@ func TestOutboxConfigDefaultsAndPostgresRequirement(t *testing.T) {
 	}
 
 	t.Setenv("APP__POSTGRES__MAX_OPEN_CONNS", "1")
-	t.Setenv("APP__POSTGRES__MIN_IDLE_CONNS", "0")
 	_, _, err = LoadDetailed(LoadOptions{})
 	if !errors.Is(err, ErrValidate) || !strings.Contains(err.Error(), "postgres.max_open_conns >= 2") {
 		t.Fatalf("single-connection outbox error = %v", err)
 	}
 	t.Setenv("APP__POSTGRES__MAX_OPEN_CONNS", "25")
-	t.Setenv("APP__POSTGRES__MIN_IDLE_CONNS", "2")
 
 	t.Setenv("APP__POSTGRES__ENABLED", "false")
 	_, _, err = LoadDetailed(LoadOptions{})
@@ -65,7 +63,7 @@ func TestOutboxConfigRejectsIncoherentBudgets(t *testing.T) {
 		value string
 		want  string
 	}{
-		{name: "lease total", key: "APP__OUTBOX__LEASE_DURATION", value: "20s", want: "outbox.lease_duration"},
+		{name: "lease total", key: "APP__OUTBOX__LEASE_DURATION", value: "19s", want: "outbox.lease_duration"},
 		{name: "attempts below", key: "APP__OUTBOX__MAX_ATTEMPTS", value: "0", want: "outbox.max_attempts"},
 		{name: "attempts above", key: "APP__OUTBOX__MAX_ATTEMPTS", value: "101", want: "outbox.max_attempts"},
 		{name: "retry order", key: "APP__OUTBOX__RETRY_MAX", value: "500ms", want: "outbox.retry_max"},

@@ -12,6 +12,7 @@ import (
 	"github.com/example/go-service-template-rest/internal/infra/postgres/pgtest"
 	"github.com/example/go-service-template-rest/internal/infra/postgresmigrate"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/testcontainers/testcontainers-go"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 )
@@ -27,7 +28,7 @@ func TestStoreDatabaseLifecycle(t *testing.T) {
 	if err != nil || decision.Outcome != httpidempotency.OutcomeExecute {
 		t.Fatalf("Reserve() = %#v, %#v, %v, want execute", reservation, decision, err)
 	}
-	if err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+	if err := postgres.InTx(ctx, pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 		owned, decision, err := store.Acquire(ctx, tx, contract, reservation, resolver)
 		if err != nil || decision.Outcome != httpidempotency.OutcomeExecute {
 			t.Fatalf("Acquire() = %#v, %#v, %v, want execute", owned, decision, err)
@@ -58,7 +59,7 @@ func TestStoreDatabaseLifecycle(t *testing.T) {
 	if err != nil || decision.Outcome != httpidempotency.OutcomeExecute || recovered.Recovery != httpidempotency.ReservationRecoveryReconciled {
 		t.Fatalf("Reconcile(reserved) = %#v, %#v, %v, want reconciled execute", recovered, decision, err)
 	}
-	if err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+	if err := postgres.InTx(ctx, pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 		owned, decision, err := store.Acquire(ctx, tx, contract, recovered, resolver)
 		if err != nil || decision.Outcome != httpidempotency.OutcomeExecute {
 			t.Fatalf("Acquire(reconciled) = %#v, %#v, %v, want execute", owned, decision, err)
@@ -88,14 +89,14 @@ func TestStoreDatabaseLifecycle(t *testing.T) {
 	if _, decision, err = store.Reconcile(ctx, contract, conflictAttempt, conflictResolver); err != nil || decision.Outcome != httpidempotency.OutcomeIntegrityConflict {
 		t.Fatalf("Reconcile(conflict) = %#v, %v, want integrity conflict", decision, err)
 	}
-	if _, err := pool.PGX().Exec(ctx, `UPDATE postgres_http_idempotency SET committed_at = clock_timestamp() - interval '3 hours' WHERE identity_token = $1`, identityBytes(attempt)); err != nil {
+	if _, err := pool.Exec(ctx, `UPDATE postgres_http_idempotency SET committed_at = clock_timestamp() - interval '3 hours' WHERE identity_token = $1`, identityBytes(attempt)); err != nil {
 		t.Fatalf("age completed reservation: %v", err)
 	}
 	if err := store.Maintain(ctx); err != nil {
 		t.Fatalf("Maintain(cleanup) = %v", err)
 	}
 	var retained int
-	if err := pool.PGX().QueryRow(ctx, `SELECT count(*) FROM postgres_http_idempotency WHERE identity_token = $1`, identityBytes(attempt)).Scan(&retained); err != nil {
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM postgres_http_idempotency WHERE identity_token = $1`, identityBytes(attempt)).Scan(&retained); err != nil {
 		t.Fatalf("count cleaned reservation: %v", err)
 	}
 	if retained != 0 {
@@ -103,7 +104,7 @@ func TestStoreDatabaseLifecycle(t *testing.T) {
 	}
 }
 
-func newDatabaseStore(t *testing.T) (context.Context, *Store, *postgres.Pool) {
+func newDatabaseStore(t *testing.T) (context.Context, *Store, *pgxpool.Pool) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
 	t.Cleanup(cancel)
@@ -119,18 +120,17 @@ func newDatabaseStore(t *testing.T) (context.Context, *Store, *postgres.Pool) {
 	if err != nil {
 		t.Fatalf("PostgreSQL connection string: %v", err)
 	}
-	if _, err := postgresmigrate.MigrateUp(ctx, postgresmigrate.MigrationOptions{
-		DSN: dsn, SourceFS: os.DirFS("../../.."), SourcePath: "migrations", ConnectTimeout: 3 * time.Second,
-		StatementTimeout: time.Minute, LockTimeout: 15 * time.Second, CleanupTimeout: 15 * time.Second,
-	}); err != nil {
+	if _, err := postgresmigrate.MigrateUp(
+		ctx,
+		postgresmigrate.DefaultOptions(dsn, os.DirFS("../../.."), "migrations", nil),
+	); err != nil {
 		t.Fatalf("migrate PostgreSQL: %v", err)
 	}
-	pool, err := postgres.New(ctx, postgres.Options{
-		DSN: dsn, ConnectTimeout: 3 * time.Second, HealthcheckTimeout: 3 * time.Second, MaxOpenConns: 4,
-		AcquireTimeout: time.Second, ConnMaxLifetime: time.Hour, StatementTimeout: 5 * time.Second,
+	pool, err := postgres.Open(ctx, postgres.Options{
+		DSN: dsn, MaxOpenConns: 4,
 	})
 	if err != nil {
-		t.Fatalf("postgres.New(): %v", err)
+		t.Fatalf("postgres.Open(): %v", err)
 	}
 	t.Cleanup(pool.Close)
 	store, err := NewStore(pool, StoreOptions{

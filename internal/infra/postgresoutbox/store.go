@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	"github.com/example/go-service-template-rest/internal/infra/postgres/sqlcgen"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgconn/ctxwatch"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // Store owns every outbox statement, for three audiences. The write path calls
@@ -47,16 +47,16 @@ import (
 // method opens with valid(), so a method added later cannot admit a half-built
 // Store.
 type Store struct {
-	pool      *postgres.Pool
+	pool      *pgxpool.Pool
 	queries   *sqlcgen.Queries
 	telemetry *Telemetry
 }
 
-func NewStore(pool *postgres.Pool, telemetry *Telemetry) (*Store, error) {
-	if pool == nil || pool.PGX() == nil {
+func NewStore(pool *pgxpool.Pool, telemetry *Telemetry) (*Store, error) {
+	if pool == nil {
 		return nil, fmt.Errorf("%w: postgres pool is required", ErrConfig)
 	}
-	return &Store{pool: pool, queries: sqlcgen.New(pool.PGX()), telemetry: telemetry}, nil
+	return &Store{pool: pool, queries: sqlcgen.New(pool), telemetry: telemetry}, nil
 }
 
 // valid reports whether this Store came from NewStore. It is the one predicate
@@ -77,7 +77,7 @@ func errStoreRequired() error {
 // inherits the pool's validated DSN, TLS, and timeouts without ever competing
 // for a pooled connection.
 func (s *Store) listenerConfig() *pgx.ConnConfig {
-	return listenerConfig(s.pool.PGX().Config().ConnConfig)
+	return listenerConfig(s.pool.Config().ConnConfig)
 }
 
 func listenerConfig(source *pgx.ConnConfig) *pgx.ConnConfig {

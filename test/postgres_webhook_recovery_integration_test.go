@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	"github.com/example/go-service-template-rest/internal/infra/postgreswebhook"
 	"github.com/jackc/pgx/v5"
 )
@@ -18,7 +19,7 @@ import (
 func TestPostgresWebhookAttemptIdentity(t *testing.T) {
 	ctx, pool, store, manifest := newPostgresWebhookFixture(t)
 	prepared := webhookPrepared(t, "identity")
-	if err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error { _, err := store.Accept(ctx, tx, prepared); return err }); err != nil {
+	if err := postgres.InTx(ctx, pool, pgx.TxOptions{}, func(tx pgx.Tx) error { _, err := store.Accept(ctx, tx, prepared); return err }); err != nil {
 		t.Fatal(err)
 	}
 	claim, err := store.Claim(ctx, "worker-a", 1, 30*time.Second, manifest)
@@ -30,7 +31,7 @@ func TestPostgresWebhookAttemptIdentity(t *testing.T) {
 func TestPostgresWebhookRetryEvidenceAndExhaustion(t *testing.T) {
 	ctx, pool, store, manifest := newPostgresWebhookFixture(t)
 	prepared := webhookPrepared(t, "retry-evidence")
-	if err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error { _, err := store.Accept(ctx, tx, prepared); return err }); err != nil {
+	if err := postgres.InTx(ctx, pool, pgx.TxOptions{}, func(tx pgx.Tx) error { _, err := store.Accept(ctx, tx, prepared); return err }); err != nil {
 		t.Fatal(err)
 	}
 	claim, err := store.Claim(ctx, "worker-a", 1, 30*time.Second, manifest)
@@ -45,39 +46,39 @@ func TestPostgresWebhookRetryEvidenceAndExhaustion(t *testing.T) {
 	}
 	var raw *string
 	var retryAfterNS, retryDelayNS *int64
-	if err := pool.PGX().QueryRow(ctx, `SELECT retry_after, retry_after_delay_ns, retry_delay_ns FROM webhook_attempts WHERE attempt_id = $1`, claim.Attempt.Identity.AttemptID).Scan(&raw, &retryAfterNS, &retryDelayNS); err != nil {
+	if err := pool.QueryRow(ctx, `SELECT retry_after, retry_after_delay_ns, retry_delay_ns FROM webhook_attempts WHERE attempt_id = $1`, claim.Attempt.Identity.AttemptID).Scan(&raw, &retryAfterNS, &retryDelayNS); err != nil {
 		t.Fatal(err)
 	}
 	if raw != nil || retryAfterNS == nil || *retryAfterNS != int64(time.Minute) || retryDelayNS == nil || *retryDelayNS != int64(2*time.Second) {
 		t.Fatalf("normalized retry evidence = raw:%v retry-after:%v retry:%v", raw, retryAfterNS, retryDelayNS)
 	}
-	if _, err := pool.PGX().Exec(ctx, `UPDATE webhook_deliveries SET next_due_at = clock_timestamp() - interval '1 second' WHERE delivery_id = $1`, claim.Attempt.Identity.DeliveryID); err != nil {
+	if _, err := pool.Exec(ctx, `UPDATE webhook_deliveries SET next_due_at = clock_timestamp() - interval '1 second' WHERE delivery_id = $1`, claim.Attempt.Identity.DeliveryID); err != nil {
 		t.Fatal(err)
 	}
 	next, err := store.Claim(ctx, "worker-b", 1, 30*time.Second, manifest)
 	if err != nil || next.Attempt == nil || next.Attempt.PreviousRetryDelay != 2*time.Second {
 		t.Fatalf("Claim(progressive retry) = %+v, %v", next, err)
 	}
-	if _, err := pool.PGX().Exec(ctx, `UPDATE webhook_attempts SET lease_expires_at = clock_timestamp() - interval '1 second' WHERE attempt_id = $1`, next.Attempt.Identity.AttemptID); err != nil {
+	if _, err := pool.Exec(ctx, `UPDATE webhook_attempts SET lease_expires_at = clock_timestamp() - interval '1 second' WHERE attempt_id = $1`, next.Attempt.Identity.AttemptID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.PGX().Exec(ctx, `UPDATE webhook_capacity_slots SET lease_expires_at = clock_timestamp() - interval '1 second' WHERE attempt_id = $1`, next.Attempt.Identity.AttemptID); err != nil {
+	if _, err := pool.Exec(ctx, `UPDATE webhook_capacity_slots SET lease_expires_at = clock_timestamp() - interval '1 second' WHERE attempt_id = $1`, next.Attempt.Identity.AttemptID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := store.ReconcileExpired(ctx, 10); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.PGX().Exec(ctx, `UPDATE webhook_deliveries SET next_due_at = clock_timestamp() - interval '1 second' WHERE delivery_id = $1`, next.Attempt.Identity.DeliveryID); err != nil {
+	if _, err := pool.Exec(ctx, `UPDATE webhook_deliveries SET next_due_at = clock_timestamp() - interval '1 second' WHERE delivery_id = $1`, next.Attempt.Identity.DeliveryID); err != nil {
 		t.Fatal(err)
 	}
 	last, err := store.Claim(ctx, "worker-c", 1, 30*time.Second, manifest)
 	if err != nil || last.Attempt == nil {
 		t.Fatalf("Claim(last attempt) = %+v, %v", last, err)
 	}
-	if _, err := pool.PGX().Exec(ctx, `UPDATE webhook_attempts SET lease_expires_at = clock_timestamp() - interval '1 second' WHERE attempt_id = $1`, last.Attempt.Identity.AttemptID); err != nil {
+	if _, err := pool.Exec(ctx, `UPDATE webhook_attempts SET lease_expires_at = clock_timestamp() - interval '1 second' WHERE attempt_id = $1`, last.Attempt.Identity.AttemptID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.PGX().Exec(ctx, `UPDATE webhook_capacity_slots SET lease_expires_at = clock_timestamp() - interval '1 second' WHERE attempt_id = $1`, last.Attempt.Identity.AttemptID); err != nil {
+	if _, err := pool.Exec(ctx, `UPDATE webhook_capacity_slots SET lease_expires_at = clock_timestamp() - interval '1 second' WHERE attempt_id = $1`, last.Attempt.Identity.AttemptID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := store.ReconcileExpired(ctx, 10); err != nil {
@@ -85,7 +86,7 @@ func TestPostgresWebhookRetryEvidenceAndExhaustion(t *testing.T) {
 	}
 	var state, summary, disposition string
 	var attempts int
-	if err := pool.PGX().QueryRow(ctx, `SELECT d.state, d.cumulative_summary, c.disposition, c.attempts_used FROM webhook_deliveries d JOIN webhook_cycles c ON c.owner_scope = d.owner_scope AND c.delivery_id = d.delivery_id AND c.cycle_number = d.current_cycle WHERE d.delivery_id = $1`, last.Attempt.Identity.DeliveryID).Scan(&state, &summary, &disposition, &attempts); err != nil {
+	if err := pool.QueryRow(ctx, `SELECT d.state, d.cumulative_summary, c.disposition, c.attempts_used FROM webhook_deliveries d JOIN webhook_cycles c ON c.owner_scope = d.owner_scope AND c.delivery_id = d.delivery_id AND c.cycle_number = d.current_cycle WHERE d.delivery_id = $1`, last.Attempt.Identity.DeliveryID).Scan(&state, &summary, &disposition, &attempts); err != nil {
 		t.Fatal(err)
 	}
 	if state != "terminal" || summary != "attempts_exhausted" || disposition != "attempts_exhausted" || attempts != 3 {
@@ -99,17 +100,17 @@ func TestPostgresWebhookRetryEvidenceAndExhaustion(t *testing.T) {
 func TestPostgresWebhookZeroAttemptDeadlineExhaustion(t *testing.T) {
 	ctx, pool, store, _ := newPostgresWebhookFixture(t)
 	prepared := webhookPrepared(t, "zero-attempt-expiry")
-	if err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error { _, err := store.Accept(ctx, tx, prepared); return err }); err != nil {
+	if err := postgres.InTx(ctx, pool, pgx.TxOptions{}, func(tx pgx.Tx) error { _, err := store.Accept(ctx, tx, prepared); return err }); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.PGX().Exec(ctx, `UPDATE webhook_cycles SET accepted_at = clock_timestamp() - interval '2 seconds', deadline_at = clock_timestamp() - interval '1 second' WHERE delivery_id = $1`, prepared.Destinations[0].DeliveryID); err != nil {
+	if _, err := pool.Exec(ctx, `UPDATE webhook_cycles SET accepted_at = clock_timestamp() - interval '2 seconds', deadline_at = clock_timestamp() - interval '1 second' WHERE delivery_id = $1`, prepared.Destinations[0].DeliveryID); err != nil {
 		t.Fatal(err)
 	}
 	if reconciled, err := store.ReconcileExpired(ctx, 10); err != nil || reconciled != 1 {
 		t.Fatalf("ReconcileExpired(zero-attempt) = %d, %v", reconciled, err)
 	}
 	var state, summary string
-	if err := pool.PGX().QueryRow(ctx, `SELECT state, cumulative_summary FROM webhook_deliveries WHERE delivery_id = $1`, prepared.Destinations[0].DeliveryID).Scan(&state, &summary); err != nil {
+	if err := pool.QueryRow(ctx, `SELECT state, cumulative_summary FROM webhook_deliveries WHERE delivery_id = $1`, prepared.Destinations[0].DeliveryID).Scan(&state, &summary); err != nil {
 		t.Fatal(err)
 	}
 	if state != "terminal" || summary != "attempts_exhausted" {
@@ -120,10 +121,10 @@ func TestPostgresWebhookZeroAttemptDeadlineExhaustion(t *testing.T) {
 func TestPostgresWebhookQuarantinesLedgerDivergence(t *testing.T) {
 	ctx, pool, store, manifest := newPostgresWebhookFixture(t)
 	prepared := webhookPrepared(t, "ledger-divergence")
-	if err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error { _, err := store.Accept(ctx, tx, prepared); return err }); err != nil {
+	if err := postgres.InTx(ctx, pool, pgx.TxOptions{}, func(tx pgx.Tx) error { _, err := store.Accept(ctx, tx, prepared); return err }); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.PGX().Exec(ctx, `UPDATE webhook_cycles SET disposition = 'http_rejected', finalized_at = clock_timestamp() WHERE delivery_id = $1`, prepared.Destinations[0].DeliveryID); err != nil {
+	if _, err := pool.Exec(ctx, `UPDATE webhook_cycles SET disposition = 'http_rejected', finalized_at = clock_timestamp() WHERE delivery_id = $1`, prepared.Destinations[0].DeliveryID); err != nil {
 		t.Fatal(err)
 	}
 	if reconciled, err := store.ReconcileExpired(ctx, 10); err != nil || reconciled != 1 {
@@ -131,7 +132,7 @@ func TestPostgresWebhookQuarantinesLedgerDivergence(t *testing.T) {
 	}
 	var state string
 	var sendable bool
-	if err := pool.PGX().QueryRow(ctx, `SELECT state, sendable FROM webhook_deliveries WHERE delivery_id = $1`, prepared.Destinations[0].DeliveryID).Scan(&state, &sendable); err != nil {
+	if err := pool.QueryRow(ctx, `SELECT state, sendable FROM webhook_deliveries WHERE delivery_id = $1`, prepared.Destinations[0].DeliveryID).Scan(&state, &sendable); err != nil {
 		t.Fatal(err)
 	}
 	if state != "quarantined" || sendable {
@@ -145,7 +146,7 @@ func TestPostgresWebhookQuarantinesLedgerDivergence(t *testing.T) {
 func TestPostgresWebhookFencedRecovery(t *testing.T) {
 	ctx, pool, store, manifest := newPostgresWebhookFixture(t)
 	prepared := webhookPrepared(t, "recovery")
-	if err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error { _, err := store.Accept(ctx, tx, prepared); return err }); err != nil {
+	if err := postgres.InTx(ctx, pool, pgx.TxOptions{}, func(tx pgx.Tx) error { _, err := store.Accept(ctx, tx, prepared); return err }); err != nil {
 		t.Fatal(err)
 	}
 	claim, err := store.Claim(ctx, "worker-a", 1, 30*time.Second, manifest)
@@ -156,7 +157,7 @@ func TestPostgresWebhookFencedRecovery(t *testing.T) {
 	if err := store.AuthorizeAttempt(ctx, *claim.Attempt, manifest, authorization); err != nil {
 		t.Fatalf("AuthorizeAttempt(): %v", err)
 	}
-	if _, err := pool.PGX().Exec(ctx, `UPDATE webhook_attempts SET lease_expires_at = clock_timestamp() - interval '1 second'; UPDATE webhook_capacity_slots SET lease_expires_at = clock_timestamp() - interval '1 second' WHERE attempt_id IS NOT NULL`); err != nil {
+	if _, err := pool.Exec(ctx, `UPDATE webhook_attempts SET lease_expires_at = clock_timestamp() - interval '1 second'; UPDATE webhook_capacity_slots SET lease_expires_at = clock_timestamp() - interval '1 second' WHERE attempt_id IS NOT NULL`); err != nil {
 		t.Fatal(err)
 	}
 	reconciled, err := store.ReconcileExpired(ctx, 10)
@@ -166,7 +167,7 @@ func TestPostgresWebhookFencedRecovery(t *testing.T) {
 	var state, summary string
 	var nextDue time.Time
 	var retryDelay int64
-	if err := pool.PGX().QueryRow(ctx, `SELECT d.state, d.cumulative_summary, d.next_due_at, a.retry_delay_ns FROM webhook_deliveries d JOIN webhook_attempts a ON a.owner_scope = d.owner_scope AND a.delivery_id = d.delivery_id WHERE a.attempt_id = $1`, claim.Attempt.Identity.AttemptID).Scan(&state, &summary, &nextDue, &retryDelay); err != nil || state != "scheduled" || summary != "outcome_unknown" || !nextDue.After(time.Now()) || retryDelay <= 0 {
+	if err := pool.QueryRow(ctx, `SELECT d.state, d.cumulative_summary, d.next_due_at, a.retry_delay_ns FROM webhook_deliveries d JOIN webhook_attempts a ON a.owner_scope = d.owner_scope AND a.delivery_id = d.delivery_id WHERE a.attempt_id = $1`, claim.Attempt.Identity.AttemptID).Scan(&state, &summary, &nextDue, &retryDelay); err != nil || state != "scheduled" || summary != "outcome_unknown" || !nextDue.After(time.Now()) || retryDelay <= 0 {
 		t.Fatalf("recovered delivery = %s/%s due:%s retry:%d, %v", state, summary, nextDue, retryDelay, err)
 	}
 	if _, err := store.FinalizeAttempt(ctx, *claim.Attempt, postgreswebhook.Finalization{Evidence: postgreswebhook.TransportEvidence{MayHaveSent: true}}); !errors.Is(err, postgreswebhook.ErrStaleAttempt) {
@@ -193,7 +194,7 @@ func TestPostgresWebhookCapacitySlotRequiresReconciliation(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error { _, err := store.Accept(ctx, tx, prepared); return err }); err != nil {
+		if err := postgres.InTx(ctx, pool, pgx.TxOptions{}, func(tx pgx.Tx) error { _, err := store.Accept(ctx, tx, prepared); return err }); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -205,10 +206,10 @@ func TestPostgresWebhookCapacitySlotRequiresReconciliation(t *testing.T) {
 	if err != nil || second.Attempt == nil {
 		t.Fatalf("Claim(second) = %+v, %v", second, err)
 	}
-	if _, err := pool.PGX().Exec(ctx, `UPDATE webhook_attempts SET may_have_sent = true, lease_expires_at = clock_timestamp() - interval '1 second' WHERE attempt_id = $1`, first.Attempt.Identity.AttemptID); err != nil {
+	if _, err := pool.Exec(ctx, `UPDATE webhook_attempts SET may_have_sent = true, lease_expires_at = clock_timestamp() - interval '1 second' WHERE attempt_id = $1`, first.Attempt.Identity.AttemptID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.PGX().Exec(ctx, `UPDATE webhook_capacity_slots SET lease_expires_at = clock_timestamp() - interval '1 second' WHERE attempt_id = $1`, first.Attempt.Identity.AttemptID); err != nil {
+	if _, err := pool.Exec(ctx, `UPDATE webhook_capacity_slots SET lease_expires_at = clock_timestamp() - interval '1 second' WHERE attempt_id = $1`, first.Attempt.Identity.AttemptID); err != nil {
 		t.Fatal(err)
 	}
 	if blocked, err := store.Claim(ctx, "worker-c", 3, 30*time.Second, manifest); err != nil || blocked.Attempt != nil {
@@ -225,7 +226,7 @@ func TestPostgresWebhookCapacitySlotRequiresReconciliation(t *testing.T) {
 		t.Fatalf("FinalizeAttempt(stale) error = %v", err)
 	}
 	var leased, replacement int
-	if err := pool.PGX().QueryRow(ctx, `SELECT count(*) FILTER (WHERE attempt_id IS NOT NULL), count(*) FILTER (WHERE attempt_id = $1) FROM webhook_capacity_slots`, third.Attempt.Identity.AttemptID).Scan(&leased, &replacement); err != nil || leased != 2 || replacement != 1 {
+	if err := pool.QueryRow(ctx, `SELECT count(*) FILTER (WHERE attempt_id IS NOT NULL), count(*) FILTER (WHERE attempt_id = $1) FROM webhook_capacity_slots`, third.Attempt.Identity.AttemptID).Scan(&leased, &replacement); err != nil || leased != 2 || replacement != 1 {
 		t.Fatalf("capacity after stale finalize = leased:%d replacement:%d err:%v", leased, replacement, err)
 	}
 }
@@ -233,7 +234,7 @@ func TestPostgresWebhookCapacitySlotRequiresReconciliation(t *testing.T) {
 func TestPostgresWebhookRedrive(t *testing.T) {
 	ctx, pool, store, manifest := newPostgresWebhookFixture(t)
 	prepared := webhookPrepared(t, "redrive")
-	if err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error { _, err := store.Accept(ctx, tx, prepared); return err }); err != nil {
+	if err := postgres.InTx(ctx, pool, pgx.TxOptions{}, func(tx pgx.Tx) error { _, err := store.Accept(ctx, tx, prepared); return err }); err != nil {
 		t.Fatal(err)
 	}
 	claim, _ := store.Claim(ctx, "worker-a", 1, 30*time.Second, manifest)
@@ -244,10 +245,10 @@ func TestPostgresWebhookRedrive(t *testing.T) {
 	if err := store.AuthorizeAttempt(ctx, *claim.Attempt, manifest, authorization); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.PGX().Exec(ctx, `UPDATE webhook_attempts SET lease_expires_at = clock_timestamp() - interval '1 second'; UPDATE webhook_capacity_slots SET lease_expires_at = clock_timestamp() - interval '1 second' WHERE attempt_id IS NOT NULL`); err != nil {
+	if _, err := pool.Exec(ctx, `UPDATE webhook_attempts SET lease_expires_at = clock_timestamp() - interval '1 second'; UPDATE webhook_capacity_slots SET lease_expires_at = clock_timestamp() - interval '1 second' WHERE attempt_id IS NOT NULL`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.PGX().Exec(ctx, `UPDATE webhook_cycles SET attempts_used = maximum_attempts WHERE delivery_id = $1`, claim.Attempt.Identity.DeliveryID); err != nil {
+	if _, err := pool.Exec(ctx, `UPDATE webhook_cycles SET attempts_used = maximum_attempts WHERE delivery_id = $1`, claim.Attempt.Identity.DeliveryID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := store.ReconcileExpired(ctx, 10); err != nil {
@@ -259,7 +260,7 @@ func TestPostgresWebhookRedrive(t *testing.T) {
 	if receipt, err := store.ApplyAction(ctx, missingKey, webhookManifest(t, 1, "owner-a", "dest-a", "other-key")); err != nil || receipt.Result != "state_conflict" {
 		t.Fatalf("ApplyAction(missing key) = %+v, %v", receipt, err)
 	}
-	if _, err := pool.PGX().Exec(ctx, `UPDATE webhook_events SET body = NULL WHERE business_event_id = $1`, prepared.Acceptance.BusinessEventID); err != nil {
+	if _, err := pool.Exec(ctx, `UPDATE webhook_events SET body = NULL WHERE business_event_id = $1`, prepared.Acceptance.BusinessEventID); err != nil {
 		t.Fatal(err)
 	}
 	missingPayload := action
@@ -267,10 +268,10 @@ func TestPostgresWebhookRedrive(t *testing.T) {
 	if receipt, err := store.ApplyAction(ctx, missingPayload, manifest); err != nil || receipt.Result != "state_conflict" {
 		t.Fatalf("ApplyAction(missing payload) = %+v, %v", receipt, err)
 	}
-	if _, err := pool.PGX().Exec(ctx, `UPDATE webhook_events SET body = $1 WHERE business_event_id = $2`, prepared.Acceptance.Body, prepared.Acceptance.BusinessEventID); err != nil {
+	if _, err := pool.Exec(ctx, `UPDATE webhook_events SET body = $1 WHERE business_event_id = $2`, prepared.Acceptance.Body, prepared.Acceptance.BusinessEventID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.PGX().Exec(ctx, `UPDATE webhook_deliveries SET receiver_dedup_retained_until = clock_timestamp() - interval '1 second' WHERE delivery_id = $1`, claim.Attempt.Identity.DeliveryID); err != nil {
+	if _, err := pool.Exec(ctx, `UPDATE webhook_deliveries SET receiver_dedup_retained_until = clock_timestamp() - interval '1 second' WHERE delivery_id = $1`, claim.Attempt.Identity.DeliveryID); err != nil {
 		t.Fatal(err)
 	}
 	expiredRetention := action
@@ -278,10 +279,10 @@ func TestPostgresWebhookRedrive(t *testing.T) {
 	if receipt, err := store.ApplyAction(ctx, expiredRetention, manifest); err != nil || receipt.Result != "state_conflict" {
 		t.Fatalf("ApplyAction(expired retention) = %+v, %v", receipt, err)
 	}
-	if _, err := pool.PGX().Exec(ctx, `UPDATE webhook_deliveries SET receiver_dedup_retained_until = clock_timestamp() + interval '1 hour' WHERE delivery_id = $1`, claim.Attempt.Identity.DeliveryID); err != nil {
+	if _, err := pool.Exec(ctx, `UPDATE webhook_deliveries SET receiver_dedup_retained_until = clock_timestamp() + interval '1 hour' WHERE delivery_id = $1`, claim.Attempt.Identity.DeliveryID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.PGX().Exec(ctx, `UPDATE webhook_destinations SET disposition = 'administratively_disabled' WHERE destination_id = 'dest-a'`); err != nil {
+	if _, err := pool.Exec(ctx, `UPDATE webhook_destinations SET disposition = 'administratively_disabled' WHERE destination_id = 'dest-a'`); err != nil {
 		t.Fatal(err)
 	}
 	inactive := action
@@ -289,7 +290,7 @@ func TestPostgresWebhookRedrive(t *testing.T) {
 	if receipt, err := store.ApplyAction(ctx, inactive, manifest); err != nil || receipt.Result != "state_conflict" {
 		t.Fatalf("ApplyAction(inactive destination) = %+v, %v", receipt, err)
 	}
-	if _, err := pool.PGX().Exec(ctx, `UPDATE webhook_destinations SET disposition = 'active' WHERE destination_id = 'dest-a'`); err != nil {
+	if _, err := pool.Exec(ctx, `UPDATE webhook_destinations SET disposition = 'active' WHERE destination_id = 'dest-a'`); err != nil {
 		t.Fatal(err)
 	}
 	incompatible, err := postgreswebhook.NewStore(pool, postgreswebhook.StoreOptions{OperationTimeout: 3 * time.Second, CapacityRevision: 1, GlobalConcurrency: 2, ManifestRevision: 1, AttemptTimeout: 5 * time.Second, ResponseHeaderTimeout: 2 * time.Second, ResponseHeaderBytes: 1024, ResponseBodyBytes: 1024, DrainTimeout: 10 * time.Second})
@@ -311,7 +312,7 @@ func TestPostgresWebhookRedrive(t *testing.T) {
 	}
 	var payload []byte
 	var resultCycle int64
-	if err := pool.PGX().QueryRow(ctx, `SELECT request_payload, result_cycle FROM webhook_operator_actions WHERE action_id = $1`, action.ActionID).Scan(&payload, &resultCycle); err != nil || len(payload) == 0 || resultCycle != 1 {
+	if err := pool.QueryRow(ctx, `SELECT request_payload, result_cycle FROM webhook_operator_actions WHERE action_id = $1`, action.ActionID).Scan(&payload, &resultCycle); err != nil || len(payload) == 0 || resultCycle != 1 {
 		t.Fatalf("redrive action evidence = payload:%s cycle:%d err:%v", payload, resultCycle, err)
 	}
 	next, err := store.Claim(ctx, "worker-b", 1, 30*time.Second, manifest)

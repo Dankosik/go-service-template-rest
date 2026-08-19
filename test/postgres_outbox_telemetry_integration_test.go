@@ -17,7 +17,7 @@ func TestPostgresOutboxObservability(t *testing.T) {
 	}
 	mustAppendOutbox(t, ctx, pool, store, orderedEvent("observe-poison", "observe-order", 1))
 	mustAppendOutbox(t, ctx, pool, store, orderedEvent("observe-ordering-blocked", "observe-order", 2))
-	if _, err := pool.PGX().Exec(ctx, `
+	if _, err := pool.Exec(ctx, `
 		UPDATE outbox_events SET lease_token = 'live', lease_expires_at = clock_timestamp() + interval '1 hour'
 		WHERE id = 'observe-in-progress';
 		UPDATE outbox_events SET available_at = clock_timestamp() + interval '1 hour'
@@ -32,7 +32,7 @@ func TestPostgresOutboxObservability(t *testing.T) {
 	}
 	// The retained-published count is the planner's row estimate minus the exact
 	// pending count, so the fixture needs current statistics to be comparable.
-	if _, err := pool.PGX().Exec(ctx, "ANALYZE outbox_events"); err != nil {
+	if _, err := pool.Exec(ctx, "ANALYZE outbox_events"); err != nil {
 		t.Fatalf("analyze observation fixtures: %v", err)
 	}
 	observation, err := store.Observe(ctx)
@@ -109,7 +109,7 @@ func TestPostgresOutboxTelemetryTransitions(t *testing.T) {
 	if err := markOutboxPublished(ctx, store, poison); err != nil {
 		t.Fatalf("mark redriven event published: %v", err)
 	}
-	if _, err := pool.PGX().Exec(ctx, "UPDATE outbox_events SET published_at = clock_timestamp() - interval '2 hours'"); err != nil {
+	if _, err := pool.Exec(ctx, "UPDATE outbox_events SET published_at = clock_timestamp() - interval '2 hours'"); err != nil {
 		t.Fatalf("age telemetry cleanup rows: %v", err)
 	}
 	if deleted, err := store.CleanupPublished(ctx, time.Hour, 10); err != nil || deleted != 2 {

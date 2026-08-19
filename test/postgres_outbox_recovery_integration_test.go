@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	"github.com/example/go-service-template-rest/internal/infra/postgresoutbox"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func TestPostgresOutboxAuditedUnknownRecovery(t *testing.T) {
@@ -78,7 +78,7 @@ func TestPostgresOutboxAuditedUnknownRecovery(t *testing.T) {
 		t.Fatalf("confirmed unknown = %+v, %v", record, err)
 	}
 
-	if _, err := pool.PGX().Exec(ctx,
+	if _, err := pool.Exec(ctx,
 		"UPDATE outbox_events SET published_at = clock_timestamp() - interval '2 hours' WHERE id = $1",
 		claim.Event.ID,
 	); err != nil {
@@ -104,7 +104,7 @@ func TestPostgresOutboxAuditedUnknownRecovery(t *testing.T) {
 
 	var action, eventID string
 	var cycle *int32
-	if err := pool.PGX().QueryRow(ctx, `
+	if err := pool.QueryRow(ctx, `
 		SELECT action_kind, event_id, cycle_number
 		FROM outbox_redrives WHERE audit_id = 'unknown-confirm'
 	`).Scan(&action, &eventID, &cycle); err != nil {
@@ -172,7 +172,7 @@ func TestPostgresOutboxStickyAtLimitQuarantinesWithoutPublish(t *testing.T) {
 			record.PoisonedAt, record.LastErrorClass)
 	}
 	mustAppendOutbox(t, ctx, pool, store, outboxEvent("preclaim-limit"))
-	if _, err := pool.PGX().Exec(ctx, `
+	if _, err := pool.Exec(ctx, `
 		UPDATE outbox_events
 		SET cycle_attempt_count = 2, total_attempt_count = 2,
 			publication_uncertain = true, last_error_class = 'publisher_temporary'
@@ -273,7 +273,7 @@ func TestPostgresOutboxLegacyUncertaintyClassification(t *testing.T) {
 	} {
 		mustAppendOutbox(t, ctx, pool, store, outboxEvent(id))
 	}
-	if _, err := pool.PGX().Exec(ctx, `
+	if _, err := pool.Exec(ctx, `
 		UPDATE outbox_events SET publication_uncertain = NULL;
 		UPDATE outbox_events SET published_at = clock_timestamp(), cycle_attempt_count = 1,
 			total_attempt_count = 1 WHERE id = 'legacy-published';
@@ -292,7 +292,7 @@ func TestPostgresOutboxLegacyUncertaintyClassification(t *testing.T) {
 		t.Fatalf("prepare legacy rows: %v", err)
 	}
 	var receiptsBefore, headsBefore int
-	if err := pool.PGX().QueryRow(ctx, `SELECT
+	if err := pool.QueryRow(ctx, `SELECT
 		(SELECT count(*) FROM outbox_commit_receipts),
 		(SELECT count(*) FROM outbox_ordering_heads)
 	`).Scan(&receiptsBefore, &headsBefore); err != nil {
@@ -314,14 +314,14 @@ func TestPostgresOutboxLegacyUncertaintyClassification(t *testing.T) {
 		t.Fatalf("classification batches = %v, want [2 2 2 0]", batches)
 	}
 	mustAppendOutbox(t, ctx, pool, store, outboxEvent("legacy-locked"))
-	if _, err := pool.PGX().Exec(ctx, `
+	if _, err := pool.Exec(ctx, `
 		UPDATE outbox_events SET publication_uncertain = NULL,
 			cycle_attempt_count = 1, total_attempt_count = 1
 		WHERE id = 'legacy-locked'
 	`); err != nil {
 		t.Fatalf("prepare locked legacy row: %v", err)
 	}
-	lockTx, err := pool.PGX().Begin(ctx)
+	lockTx, err := pool.Begin(ctx)
 	if err != nil {
 		t.Fatalf("begin legacy classification lock: %v", err)
 	}
@@ -352,7 +352,7 @@ func TestPostgresOutboxLegacyUncertaintyClassification(t *testing.T) {
 	if err := lockTx.Rollback(ctx); err != nil {
 		t.Fatalf("release legacy classification lock: %v", err)
 	}
-	serverLock, err := pool.PGX().Begin(ctx)
+	serverLock, err := pool.Begin(ctx)
 	if err != nil {
 		t.Fatalf("begin server-cancelled classification lock: %v", err)
 	}
@@ -367,7 +367,7 @@ func TestPostgresOutboxLegacyUncertaintyClassification(t *testing.T) {
 		serverResult <- err
 	}()
 	serverPID := outboxBlockedPID(t, ctx, pool, serverBlockerPID)
-	if err := pool.PGX().QueryRow(ctx, `SELECT pg_cancel_backend($1)`, serverPID).Scan(new(bool)); err != nil {
+	if err := pool.QueryRow(ctx, `SELECT pg_cancel_backend($1)`, serverPID).Scan(new(bool)); err != nil {
 		t.Fatalf("cancel classification backend: %v", err)
 	}
 	if err := <-serverResult; errors.Is(err, context.Canceled) {
@@ -385,7 +385,7 @@ func TestPostgresOutboxLegacyUncertaintyClassification(t *testing.T) {
 		t.Fatalf("authoritative final classification = %d, %v; want zero", classified, err)
 	}
 	var receiptsAfter, headsAfter int
-	if err := pool.PGX().QueryRow(ctx, `SELECT
+	if err := pool.QueryRow(ctx, `SELECT
 		(SELECT count(*) FROM outbox_commit_receipts),
 		(SELECT count(*) FROM outbox_ordering_heads)
 	`).Scan(&receiptsAfter, &headsAfter); err != nil {
@@ -422,11 +422,11 @@ func TestPostgresOutboxLegacyUncertaintyClassification(t *testing.T) {
 	}
 }
 
-func outboxBlockedPID(t *testing.T, ctx context.Context, pool *postgres.Pool, blockerPID int) int {
+func outboxBlockedPID(t *testing.T, ctx context.Context, pool *pgxpool.Pool, blockerPID int) int {
 	t.Helper()
 	var pid int
 	waitForOutbox(t, func() string { return "legacy classification to block" }, func() bool {
-		if err := pool.PGX().QueryRow(ctx, `
+		if err := pool.QueryRow(ctx, `
 			SELECT COALESCE((SELECT pid FROM pg_stat_activity
 			WHERE $1 = ANY(pg_blocking_pids(pid)) LIMIT 1), 0)`, blockerPID).Scan(&pid); err != nil {
 			t.Fatalf("read blocked classification backend: %v", err)
@@ -470,7 +470,7 @@ func TestPostgresOutboxUnknownObservationAndDiscovery(t *testing.T) {
 		ORDER BY poisoned_at, id
 		LIMIT 2
 	`
-	rows, err := pool.PGX().Query(ctx, discovery, time.Unix(0, 0).UTC(), "")
+	rows, err := pool.Query(ctx, discovery, time.Unix(0, 0).UTC(), "")
 	if err != nil {
 		t.Fatalf("outcome-unknown discovery: %v", err)
 	}
@@ -499,7 +499,7 @@ func TestPostgresOutboxUnknownObservationAndDiscovery(t *testing.T) {
 	if !slices.Equal(columns, wantColumns) || len(discovered) != 2 {
 		t.Fatalf("discovery columns/first page = %v/%v, want %v/two rows", columns, discovered, wantColumns)
 	}
-	rows, err = pool.PGX().Query(ctx, discovery, cursorAt, cursorID)
+	rows, err = pool.Query(ctx, discovery, cursorAt, cursorID)
 	if err != nil {
 		t.Fatalf("outcome-unknown second discovery page: %v", err)
 	}
@@ -535,7 +535,7 @@ func TestPostgresOutboxFailedObservationStaysStaleAndUnready(t *testing.T) {
 	if before.ready != 1 || before.observedAt == 0 {
 		t.Fatalf("initial ready/observation = %d/%f, want 1/>0", before.ready, before.observedAt)
 	}
-	if _, err := pool.PGX().Exec(ctx, "DROP TABLE outbox_events CASCADE"); err != nil {
+	if _, err := pool.Exec(ctx, "DROP TABLE outbox_events CASCADE"); err != nil {
 		t.Fatalf("remove schema for fatal observation: %v", err)
 	}
 	failed := readRelayResult(t, result)

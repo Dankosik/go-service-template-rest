@@ -28,24 +28,20 @@ func TestPostgresPool(t *testing.T) {
 	metricReader := telemetrytest.InstallManualReader(t)
 
 	opts := postgres.Options{
-		DSN:                dsn,
-		ConnectTimeout:     3 * time.Second,
-		HealthcheckTimeout: 3 * time.Second,
-		MaxOpenConns:       10,
-		AcquireTimeout:     time.Second,
-		ConnMaxLifetime:    time.Hour,
-		StatementTimeout:   time.Second,
+		DSN: dsn,
+
+		MaxOpenConns: 10,
 	}
-	pool, err := postgres.New(ctx, opts)
+	pool, err := postgres.Open(ctx, opts)
 	if err != nil {
 		t.Fatalf("create postgres pool: %v", err)
 	}
 	t.Cleanup(pool.Close)
-	if pool.PGX() == nil {
-		t.Fatal("postgres PGX() = nil, want initialized pool")
+	if pool == nil {
+		t.Fatal("postgres pool = nil, want initialized pool")
 	}
-	if got, want := pool.PGX().Config().MaxConnLifetimeJitter, opts.ConnMaxLifetime/10; got != want {
-		t.Fatalf("MaxConnLifetimeJitter = %s, want %s", got, want)
+	if got, want := pool.Config().MaxConns, int32(opts.MaxOpenConns); got != want {
+		t.Fatalf("MaxConns = %d, want %d", got, want)
 	}
 
 	t.Run("readiness probe", func(t *testing.T) {
@@ -55,14 +51,14 @@ func TestPostgresPool(t *testing.T) {
 		checkCtx, checkCancel := context.WithTimeout(traceCtx, 3*time.Second)
 		defer checkCancel()
 
-		if err := pool.Check(checkCtx); err != nil {
+		if err := pool.Ping(checkCtx); err != nil {
 			t.Fatalf("readiness check failed: %v", err)
 		}
 	})
 
 	t.Run("telemetry is useful and does not expose database details", func(t *testing.T) {
 		assertPostgresTracePrivacy(t, spanRecorder)
-		assertPostgresPoolMetrics(t, ctx, metricReader, pool.Name())
+		assertPostgresPoolMetrics(t, ctx, metricReader, "postgres")
 	})
 }
 

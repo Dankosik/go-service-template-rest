@@ -71,8 +71,8 @@ func validateWebhooks(cfg WebhooksConfig, postgres PostgresConfig, http HTTPConf
 			return fmt.Errorf("%w: webhooks.%s must be positive", ErrValidate, name)
 		}
 	}
-	if cfg.StoreOperationTimeout > 30*time.Second || cfg.StoreOperationTimeout > postgres.StatementTimeout {
-		return fmt.Errorf("%w: webhooks.store_operation_timeout must be at most 30s and postgres.statement_timeout", ErrValidate)
+	if cfg.StoreOperationTimeout > 30*time.Second || cfg.StoreOperationTimeout > postgresStatementTimeout {
+		return fmt.Errorf("%w: webhooks.store_operation_timeout must be at most the 8s Postgres statement budget", ErrValidate)
 	}
 	if cfg.ResponseHeaderTimeout > cfg.AttemptTimeout || cfg.AttemptTimeout > cfg.DrainTimeout {
 		return fmt.Errorf("%w: webhook header, attempt, and drain budgets must nest", ErrValidate)

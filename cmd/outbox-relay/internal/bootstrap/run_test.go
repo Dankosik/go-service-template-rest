@@ -36,6 +36,7 @@ import (
 	"github.com/example/go-service-template-rest/cmd/internal/runtimeopts"
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/config/configtest"
+	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	"github.com/example/go-service-template-rest/internal/infra/postgresoutbox"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 )
@@ -66,11 +67,9 @@ func TestOutboxConfigBoundsMatchRelayCeilings(t *testing.T) {
 
 func TestOutboxLeaseBudgetSpendsTheRelayJoinTimeout(t *testing.T) {
 	const (
-		publishTimeout   = 4 * time.Second
-		acquireTimeout   = 2 * time.Second
-		statementTimeout = 3 * time.Second
+		publishTimeout = 4 * time.Second
 	)
-	budget := publishTimeout + postgresoutbox.PublisherJoinTimeout + acquireTimeout + statementTimeout
+	budget := publishTimeout + postgresoutbox.PublisherJoinTimeout + postgres.DefaultStatementTimeout
 
 	for _, lease := range []struct {
 		name         string
@@ -83,8 +82,6 @@ func TestOutboxLeaseBudgetSpendsTheRelayJoinTimeout(t *testing.T) {
 		t.Run(lease.name, func(t *testing.T) {
 			setOutboxBootstrapEnvironment(t, true)
 			t.Setenv("APP__OUTBOX__PUBLISH_TIMEOUT", publishTimeout.String())
-			t.Setenv("APP__POSTGRES__ACQUIRE_TIMEOUT", acquireTimeout.String())
-			t.Setenv("APP__POSTGRES__STATEMENT_TIMEOUT", statementTimeout.String())
 			t.Setenv("APP__OUTBOX__LEASE_DURATION", lease.value.String())
 			_, _, err := config.LoadDetailed(config.LoadOptions{})
 			if accepted := err == nil; accepted != lease.wantAccepted {
@@ -700,13 +697,11 @@ func TestOutboxRelayFlagAndConfigMapping(t *testing.T) {
 	}
 
 	postgresConfig := config.PostgresConfig{
-		DSN: "dsn", ConnectTimeout: time.Second, HealthcheckTimeout: 2 * time.Second,
-		MaxOpenConns: 3, MinIdleConns: 1, AcquireTimeout: 4 * time.Second,
-		ConnMaxLifetime: 5 * time.Second, StatementTimeout: 6 * time.Second,
+		DSN:          "dsn",
+		MaxOpenConns: 3,
 	}
 	postgresMapped := runtimeopts.Postgres(postgresConfig)
-	if postgresMapped.DSN != postgresConfig.DSN || postgresMapped.MaxOpenConns != postgresConfig.MaxOpenConns ||
-		postgresMapped.StatementTimeout != postgresConfig.StatementTimeout {
+	if postgresMapped.DSN != postgresConfig.DSN || postgresMapped.MaxOpenConns != postgresConfig.MaxOpenConns {
 		t.Fatalf("runtimeopts.Postgres() = %+v", postgresMapped)
 	}
 	outboxConfig := config.OutboxConfig{

@@ -84,8 +84,8 @@ func validateRequiredValue(name, value string) error {
 // Ranging a string yields U+FFFD for each invalid byte, and U+FFFD is not a
 // control character — so a value that is not text at all would pass the scan and
 // reach the broker, where the consumer that decodes it is the one that fails.
-// The two durable-identity validators in postgresoutbox and postgresinbox reject
-// it at their own boundary for the same reason.
+// The durable-identity validator in postgresoutbox rejects it at its own
+// boundary for the same reason.
 //
 // Control characters are matched with [unicode.IsControl] rather than an ASCII
 // test, so C1 (U+0080-U+009F) is refused alongside C0. Those bytes are as

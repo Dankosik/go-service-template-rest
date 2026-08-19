@@ -62,7 +62,7 @@ type Repository interface {
 // Atomically runs several repository calls as one unit of work.
 //
 // This is the port that keeps a transaction from leaking into the domain. The
-// repository-level answer this template ships is postgres.Pool.InTx, which yields
+// repository-level answer this template ships is postgres.InTx, which yields
 // a pgx.Tx — and the repository contract forbids a feature package from importing
 // a concrete infra adapter, so a use case cannot call it and must not want to. The
 // shape that resolves it is this one: the feature declares what it needs, the

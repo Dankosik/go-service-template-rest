@@ -233,10 +233,24 @@ make migration-validate
 ```
 
 Keep generated SQL types behind a hand-written Postgres repository that maps
-to feature-owned types. The use case owns the transaction boundary; pass a
-transaction-scoped repository explicitly rather than hiding transaction state
-in context. `internal/infra/postgresmigrate` belongs only to `cmd/migrate` and
-must not enter the service dependency graph.
+to feature-owned types. Construct its root queries with `sqlcgen.New(pool)`.
+The use case owns the transaction boundary and joins generated methods through
+the one callback seam:
+
+```go
+return postgres.InTx(ctx, pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
+	txQueries := queries.WithTx(tx)
+	if err := txQueries.InsertOrder(ctx, order); err != nil {
+		return err
+	}
+	return txQueries.InsertOrderEvent(ctx, event)
+})
+```
+
+`InTx` owns begin, bounded rollback, commit, and unknown-commit
+classification. Do not begin or finish the transaction manually and do not
+hide transaction state in context. `internal/infra/postgresmigrate` belongs
+only to `cmd/migrate` and must not enter the service dependency graph.
 
 When `examples/reference-service` is present, the executable reference for that
 shape is the `pgAdapter` in
@@ -244,14 +258,17 @@ shape is the `pgAdapter` in
 in-memory repository's replacement, satisfying the same feature-owned interfaces
 against a real pool, and it composes two repository calls in one transaction.
 Read it before writing the first `internal/infra/postgres/<feature>_repository.go`.
+For a repository integration test, `pgtest.MigratedPool` supplies the isolated
+migrated pool and registers cleanup; the test writes no pool, migration, or
+container setup.
 
 The PostgreSQL profile is required, not a degraded mode:
 `APP__POSTGRES__ENABLED` must remain `true` and the DSN must be configured
 before either the service or migrator starts. Bootstrap retains the initialized
-`postgres.Pool`; feature composition uses its concrete `PGX()` pool with the
-generated sqlc constructor. For a transaction, call `Begin(ctx)`, pass
-`queries.WithTx(tx)` to the transaction-scoped repository, and commit or roll
-back at the use-case boundary. Do not add query delegates to `postgres.Pool`.
+`*pgxpool.Pool`; feature composition injects that concrete library type into
+the hand-written repository. The template fixes connection, readiness,
+statement, migration, and cleanup budgets. A deployment sets only the DSN and,
+when capacity evidence requires it, `postgres.max_open_conns`.
 
 For a service initialized with `DATABASE=none`, re-derive from the template or
 bring in the PostgreSQL profile deliberately; do not copy only a pool file and

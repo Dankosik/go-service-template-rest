@@ -12,14 +12,8 @@ import (
 // section, so a budget added to it reaches both or neither.
 func Postgres(cfg config.PostgresConfig) postgres.Options {
 	return postgres.Options{
-		DSN:                cfg.DSN,
-		ConnectTimeout:     cfg.ConnectTimeout,
-		HealthcheckTimeout: cfg.HealthcheckTimeout,
-		MaxOpenConns:       cfg.MaxOpenConns,
-		MinIdleConns:       cfg.MinIdleConns,
-		AcquireTimeout:     cfg.AcquireTimeout,
-		ConnMaxLifetime:    cfg.ConnMaxLifetime,
-		StatementTimeout:   cfg.StatementTimeout,
+		DSN:          cfg.DSN,
+		MaxOpenConns: cfg.MaxOpenConns,
 	}
 }
 

@@ -9,8 +9,8 @@ import (
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/health"
 	httpx "github.com/example/go-service-template-rest/internal/infra/http"
-	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	"github.com/example/go-service-template-rest/internal/infra/postgresidempotency"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type httpIdempotencyRuntime struct {
@@ -23,7 +23,7 @@ type httpIdempotencyRuntime struct {
 func initHTTPIdempotencyRuntime(
 	ctx context.Context,
 	cfg config.Config,
-	pool *postgres.Pool,
+	pool *pgxpool.Pool,
 	operations []httpx.IdempotencyOperation,
 ) (httpIdempotencyRuntime, error) {
 	if len(operations) == 0 {

@@ -58,7 +58,7 @@ func TestPostgresOutboxConcurrentClaims(t *testing.T) {
 
 	mustAppendOutbox(t, ctx, pool, store, outboxEvent("locked-first"))
 	mustAppendOutbox(t, ctx, pool, store, outboxEvent("locked-second"))
-	tx, err := pool.PGX().Begin(ctx)
+	tx, err := pool.Begin(ctx)
 	if err != nil {
 		t.Fatalf("begin lock holder: %v", err)
 	}
@@ -170,7 +170,7 @@ func TestPostgresOutboxConcurrentRedriveIsIdempotent(t *testing.T) {
 			racers, record.RedriveCount, record.LastRedriveID, record.PoisonedAt)
 	}
 	var ledgerRows int
-	if err := pool.PGX().QueryRow(ctx,
+	if err := pool.QueryRow(ctx,
 		"SELECT count(*) FROM outbox_redrives WHERE event_id = $1", claim.Event.ID).Scan(&ledgerRows); err != nil {
 		t.Fatalf("count redrive ledger: %v", err)
 	}
@@ -238,14 +238,14 @@ func TestPostgresOutboxRedrive(t *testing.T) {
 	if err := store.Redrive(ctx, other.Event.ID, "audit-2"); !errors.Is(err, postgresoutbox.ErrOperatorAuditConflict) {
 		t.Fatalf("cross-event audit reuse = %v, want ErrOperatorAuditConflict", err)
 	}
-	if _, err := pool.PGX().Exec(ctx, "UPDATE outbox_events SET published_at = clock_timestamp() - interval '2 hours' WHERE id = 'poison'"); err != nil {
+	if _, err := pool.Exec(ctx, "UPDATE outbox_events SET published_at = clock_timestamp() - interval '2 hours' WHERE id = 'poison'"); err != nil {
 		t.Fatalf("backdate redriven published event: %v", err)
 	}
 	if deleted, err := store.CleanupPublished(ctx, time.Hour, 1); err != nil || deleted != 1 {
 		t.Fatalf("cleanup redriven event = %d, %v; want 1, nil", deleted, err)
 	}
 	var auditRows int
-	if err := pool.PGX().QueryRow(ctx, "SELECT count(*) FROM outbox_redrives WHERE event_id = 'poison'").Scan(&auditRows); err != nil {
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM outbox_redrives WHERE event_id = 'poison'").Scan(&auditRows); err != nil {
 		t.Fatalf("count cascaded redrive rows: %v", err)
 	}
 	if auditRows != 2 {
@@ -258,7 +258,7 @@ func TestPostgresOutboxConcurrentUnknownActions(t *testing.T) {
 	mustAppendOutbox(t, ctx, pool, store, outboxEvent("unknown-race"))
 	claim := mustClaimOutbox(t, ctx, store)
 	poisonOutcomeUnknown(t, ctx, store, claim)
-	lockTx, err := pool.PGX().Begin(ctx)
+	lockTx, err := pool.Begin(ctx)
 	if err != nil {
 		t.Fatalf("begin operator action gate: %v", err)
 	}
@@ -310,7 +310,7 @@ func TestPostgresOutboxConcurrentUnknownActions(t *testing.T) {
 		t.Fatalf("operator race success/conflict = %d/%d, want 1/1", succeeded, conflicted)
 	}
 	var audits int
-	if err := pool.PGX().QueryRow(ctx,
+	if err := pool.QueryRow(ctx,
 		"SELECT count(*) FROM outbox_redrives WHERE event_id = $1", claim.Event.ID,
 	).Scan(&audits); err != nil || audits != 1 {
 		t.Fatalf("operator race audits = %d, %v; want 1", audits, err)

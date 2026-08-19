@@ -68,8 +68,8 @@ func deadLetterMessage(source jetstream.Msg, metadata *jetstream.MsgMetadata, de
 // string literals no test would pin.
 //
 // The restored event keeps the logical [Event.MessageID], so a consumer that
-// deduplicates on it — through the PostgreSQL inbox or its own key — treats the
-// redrive as the delivery it already refused rather than as new work. It does
+// deduplicates on its own durable key treats the redrive as the delivery it
+// already refused rather than as new work. It does
 // not keep the publication id: that one identifies a publication, and reusing
 // it would have the broker recognize the redrive as a duplicate and store
 // nothing, which is the opposite of the intent.

@@ -1,6 +1,6 @@
 ---
 name: workflow-plan-adequacy-challenge
-description: "Handoff integrity: Use for contested workflow-plan.md routing or an explicit challenge. Own a read-only anchored gap/next owner; Skip ordinary low-risk plans, authoring, or state changes."
+description: "Workflow handoff: Use only for contested workflow-plan.md routing. Own one anchored gap/next owner; Skip authoring and state changes."
 ---
 
 # Workflow Plan Adequacy Challenge

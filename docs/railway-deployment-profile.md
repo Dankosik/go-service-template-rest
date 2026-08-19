@@ -138,11 +138,8 @@ this template. See [Native gRPC](grpc.md) for runtime config and proof.
   expand/migrate/verify/contract plan and an explicit recovery method.
 - A failed pre-deploy command blocks promotion. Fix the migration or
   configuration; do not move migration ownership into application startup.
-- The migrator owns explicit overall, statement, and lock budgets through
-  `APP__POSTGRES__MIGRATION_TIMEOUT`,
-  `APP__POSTGRES__MIGRATION_STATEMENT_TIMEOUT`, and
-  `APP__POSTGRES__MIGRATION_LOCK_TIMEOUT`. The lock budget is also the detached
-  cleanup reserve and must be strictly below the overall budget. Railway
+- The migrator owns fixed `5m` overall, `2m` statement, and `15s` lock budgets.
+  The lock budget is also the detached cleanup reserve. Railway
   documents that a failed pre-deploy command blocks deployment and is not
   retried, but does not publish a platform timeout for this command, so do not
   rely on an implicit provider bound.

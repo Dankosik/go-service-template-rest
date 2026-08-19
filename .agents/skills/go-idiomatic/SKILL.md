@@ -1,6 +1,6 @@
 ---
 name: go-idiomatic
-description: "Go idiom: Use when changed Go risks errors, context, nil/zero, method sets, aliasing, or resource lifetimes. Own semantics; Skip readability, whole-diff structure, or package ownership."
+description: "Go semantics: Use for errors, context, nil/zero, method sets, aliasing, or resource lifetimes. Own correctness; Skip readability, structure, or ownership."
 ---
 
 # Go Idiomatic

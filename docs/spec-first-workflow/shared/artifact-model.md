@@ -43,76 +43,15 @@ Task-local artifacts live in the task bundle at `specs/<task>/` named by
 
 | Artifact | Create when | Owns | Does not own |
 | --- | --- | --- | --- |
-| `spec.md` | Required for structured/orchestrated work; direct work uses it only when decisions must survive. | Outcome, behavior delta, invariants, constraints, accepted risks, proof expectations. | Runtime implementation order. |
+| `spec.md` | The behavior delta or accepted decision is not already owned by a stable authoritative reference, or must cross an actor/session boundary. | Outcome, behavior delta, invariants, constraints, accepted risks, proof expectations. | Runtime implementation order or unchanged behavior already owned by cited OpenAPI, tests, code, mockups, or external contracts. |
 | `design/overview.md` or focused `design/*` | Implementation would otherwise choose architecture, contract, data, failure, rollout, or package ownership. | Selected mechanism and ownership decisions. | Task progress. |
 | `test-plan.md` | Proof spans meaningful scenarios or levels. | Scenario obligations, observables, proof levels, residual gaps. | Test implementation. |
-| `tasks.md` (+ `tasks/` task files when [split](../phases/planning.md#ledger-layout)) | Required for structured/orchestrated work; direct work may keep its plan inline. | Executable order, planned waves, owners, evidence, progress, completion condition. Lifecycle state stays in the index even when detail moves to task files. | New product or design decisions. |
+| `tasks.md` (+ `tasks/` task files when [split](../phases/planning/ledger-contract.md#ledger-layout)) | Work has multiple acceptance units, dependencies or waves, crosses an actor/session boundary, or needs durable resume state. A single fixed unit may stay inline. | Executable order, planned waves, owners, evidence, progress, completion condition. Lifecycle state stays in the index even when detail moves to task files. | New product or design decisions. |
 | `research/*.md` | Evidence must be reused, audited, or refreshed. | Findings, source limits, conflicts, decision impact. | Final task decisions. |
 | `rollout.md` | Deployment, migration, backfill, compatibility, or rollback has a non-trivial sequence. | Operational order, gates, rollback/failback, observables. | Product scope. |
 | `workflow-plan.md` | Cross-session or multi-lane coordination cannot be recovered from the main artifacts. | Current goal, phase, active artifacts, blockers, next action, surviving open decisions and fog. | Duplicate spec/design/task content; the decisions themselves, which stay with their phase owner. |
 
 Split an artifact only when the split creates a real owner or makes review materially easier. Do not create a directory of one-line files.
-
-### Rollout Record
-
-When `rollout.md` is triggered, keep only the affected deployment graph and its
-critical path in this compact shape:
-
-```markdown
-# Rollout
-status: draft | ready | blocked | done
-Affected graph: <affected nodes and edges; current -> target state>
-Irreversible boundary: <last rollback-safe state and first new-only effect>
-
-| Gate | Owner; node or edge | Prerequisite | Action | Success and distinct safe failure signal | Duration or behavior-changing horizon | Rollback or roll-forward | Proof |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-
-Completion: <user-visible path, durable effect, and target-environment signals>
-```
-
-Each gate names its authoritative readback and required proving surface during
-System Design. Before the record is ready for Planning, it cites the exact Test
-Design scenario, command, or bounded procedure plus the relevant environment or
-fixture. Use an evidence-based bound when one exists; otherwise record the
-signal that ends the step and the owner of the missing estimate. A generic
-`deploy and monitor`, component health, deployment status, or `all green`
-cannot close a gate. Reuse a passing gate while its candidate, inputs,
-preconditions, and risk surface remain unchanged; after a failure, repeat only
-the invalidated or still-uncovered gates.
-
-## Open Decisions And Fog
-
-An **open decision** is a question you can already state precisely: what it can
-change, who owns it, and what it blocks. Record one line per open decision in
-`workflow-plan.md` at a real handoff, context rollover, or second-lane dispatch,
-never in anticipation of one; a phase that finishes in its own session writes
-none. An open decision that stops the next action belongs to the `blocked`
-status and its `Blockers / assumptions` entry instead. The **frontier** is every
-listed decision whose blockers are resolved — what can be worked or dispatched
-now, and the surviving form of the question map the [Delegation
-Decision](subagents-and-handoff.md#delegation-decision) builds and re-derives.
-
-```markdown
-- <question, stated as the decision it can change> — owner: <agent, named external owner, or user> — blocks: <decision, phase, or task; or nothing> — route: <research lane, design owner, probe, or escalation>
-```
-
-**Fog** is a decision surface you can see coming but cannot yet phrase
-precisely. The test is whether you can state the question precisely now, not
-whether you can answer it: an already sharp question is an open decision even
-when it is blocked and unworkable. Each `Not yet specified` entry carries both
-parts, and an entry that cannot name its second part is deleted rather than
-carried:
-
-```markdown
-- <suspected area> — sharpens when: <the open decision that resolves it, or the evidence that would let you phrase it>
-```
-
-Fog never appears in a readiness or completion claim, and never closes, defers,
-or softens a decision the current phase's decision bar has triggered. When the
-decision an entry names resolves, that entry graduates into an open decision or
-is deleted in the same edit. Work already ruled beyond the accepted outcome
-follows the scope-exit record in
-[Planning](../phases/planning.md#obligation-reconciliation-contract).
 
 ## Minimal Status
 
@@ -124,55 +63,15 @@ status: draft | ready | blocked | done
 
 - `draft`: still being authored or repaired.
 - `ready`: the artifact has closed every decision it owns, and its next consumer can act without semantic invention. A ready `tasks.md` additionally closes the inputs and proof for its next executable acceptance unit or real parallel wave plus any decision that could invalidate that work.
-- `blocked`: name the missing decision/evidence and reopen owner. This also
-  represents `implementation complete; verification incomplete` when the
-  implementation is finished but required proof is unavailable; record the
-  unverified claim, narrower evidence, and next proof or reopen owner.
+- `blocked`: name the missing decision or evidence and reopen owner.
 - `done`: use for execution/closeout state, not as a substitute for evidence. A
   `tasks.md` ledger reaches `done` only after the final accepted unit also
   passes its global `Completion` condition.
 
-A leaf or reviewer `NEEDS_PARENT` return is a one-level message to its direct
-parent, never durable artifact state. Only the Acceptance-Unit Lead may promote
-its unresolved issue into the unit-local semantic `Blocked:` line below, after
-the phase-owned
-[bottom-up resolution ladder](../phases/implementation-worker-execution.md#bottom-up-obstacle-resolution)
-is exhausted. The Ledger Orchestrator never transcribes a child return into the
-ledger.
-
 When review is triggered, `PASS` or dispositioned `CONCERNS` can move an artifact to `ready`; `FAIL` requires repair or reopening and fresh review.
 
-For `tasks.md`, the implementation phase's [Acceptance-Unit
-Closure](../phases/implementation-validation-closeout.md#acceptance-unit-closure)
-authorizes the state transition. Record one compact unit receipt only when
-proof must survive a checkout, session, or external-environment boundary:
-
-```markdown
-  - Accepted: <unit or task IDs>; evidence: <command or source and result>; candidate: <bounded diff or commit/tree>
-```
-
-Use `current bounded diff` for same-checkout proof and a commit/tree identity
-only when proof crosses a checkout or integration boundary. A failed triggered
-review leaves the unit unchecked for repair. When implementation is complete
-but required proof is blocked, leave it unchecked and append or replace one
-unit-local line:
-
-```markdown
-  - Blocked: <unit or task IDs>; unverified: <claim>; evidence: <narrower evidence>; next proof owner: <owner and condition>; candidate: <bounded diff or commit/tree>
-```
-
-Replace that line with the accepted receipt after proof instead of accumulating
-attempts. A unit `Blocked:` record blocks that unit and its dependants. Keep the
-ledger `status: ready` while another unit is executable or an authorized
-recovery remains; set the whole ledger to `status: blocked` only when neither
-remains. Do not add a second lifecycle field.
-
-The accepted-unit transition changes every member task to `[x]` in one ledger
-edit. A receipt alias closes mechanically in that edit once its named accepted
-receipt exists; it creates no candidate or proof. Task selection, dependency
-movement, and resume follow the phase-owned closure using the persisted
-checkboxes. After the final accepted task and any aliases, set `status: done` in
-the same edit.
+For `tasks.md` receipts, blockers, and implementation state transitions, load
+the [Planning Ledger Contract](../phases/planning/ledger-contract.md#implementation-transitions).
 
 Add a reviewed revision or verdict only when a review actually occurred. Do not maintain parallel fields for phase state, artifact lifecycle, record validity, session boundary, handoff readiness, waiver, and routing revision unless a concrete external consumer requires them.
 
@@ -184,40 +83,12 @@ A useful `spec.md` follows the canonical shape and adaptive authoring method in
 [Specification](../phases/specification.md). This file owns artifact
 persistence and status, not a second Specification template.
 
-A useful `tasks.md` uses the canonical shape, authoring rules, planned-wave
-contract, and readiness criterion in [Planning](../phases/planning.md). This
+A useful `tasks.md` uses the canonical shape and execution contracts in
+[Planning Ledger Contract](../phases/planning/ledger-contract.md), with readiness
+owned by [Planning](../phases/planning.md). This
 file owns whether and when `tasks.md` is persisted, its semantic lifecycle, and
 removal; native task lifecycle and Git candidate identity remain with their own
 systems.
-
-On resume, inspect native task status for Acceptance-Unit Lead and lane lifecycle,
-the canonical ledger for unit readiness and receipts, and Git for candidates. Do
-not copy those task states into a machine-owned JSON block or scheduler artifact.
-`HANDOFF_READY` is native routing evidence for one fixed Worktree candidate; it
-changes no artifact state and releases no dependency before the same Lead
-records a Local receipt. When a Worktree Lead discovers an agent-owned upstream
-boundary, the same return may carry a proposed blocker envelope. The
-Orchestrator moves that same Lead and candidate to Local before the Lead
-revalidates the boundary and either continues a newly available local remedy or
-writes the canonical `Blocked:` line; the proposed envelope is not durable
-blocker state and authorizes no upstream reopen before Handoff.
-
-When terminal task creation has an unknown outcome and no unique ready task
-identity can be recovered through [Agent Harness's native
-reconciliation](../../agent-harness.md#recovery), record `Blocked:
-UNKNOWN_CREATE for <scope>; unverified: whether
-one native task exists; evidence: <no identity, or client identity without one
-recoverable thread identity>; next proof owner: native task reconciliation;
-candidate: none`. Apply the ledger rollup rule above and do not redispatch
-automatically. An ordinary pending client identity is not an unknown outcome.
-
-An unresolved Handoff outcome uses the existing ordinary blocker shape rather
-than a second lifecycle state: `Blocked: unknown Handoff outcome for <scope>;
-unverified: whether the known Lead moved to Local; evidence: <known task and
-available operation/revision or missing response>; next proof owner: native
-Handoff reconciliation; candidate: <fixed commit/tree or none>`. Do not invoke
-Handoff again without one native state that proves the retry safe. Apply the
-same ledger rollup rule.
 
 A useful `workflow-plan.md` usually needs:
 
@@ -243,6 +114,9 @@ Use additional fields only when they change an action or verdict.
 - Time-sensitive external evidence carries the claim-level locator and freshness
   required by [Research](../phases/research.md#outputs).
 - A stale artifact may explain history but cannot override a newer accepted decision or runtime source of truth.
+- When a ready artifact's review predates a material change to its owning phase
+  contract, recheck only the affected next action against the current Stop Rule
+  and retain unaffected decisions and proof.
 
 ## Resume Order
 
@@ -250,14 +124,10 @@ Use additional fields only when they change an action or verdict.
 2. Otherwise read `workflow-plan.md` when it exists for a real multi-session task.
 3. Then read the decision artifact named there: usually `spec.md`, followed by only the design, test, research, or rollout files needed for the next action.
 4. If artifacts conflict, stop and reopen the narrowest decision owner; do not merge the conflict silently.
-5. Before continuing an implementation unit, compare its recorded tree and proof
-   preconditions with the workspace. Reuse the receipt when they match; when they
-   drift or the receipt is unavailable, run the smallest ledger proof that can
-   detect the affected change and broaden only when its result requires it.
-6. When a ready artifact's review predates a material change to its owning phase
-   contract, recheck only the affected next unit or release gate against the
-   current Stop Rule. Retain unaffected decisions and proof whose preconditions
-   still match.
+5. Before continuing Implementation, apply [Implementation
+   Handoff](implementation-handoff.md) and its [Evidence
+   Contract](../phases/implementation-validation-closeout.md#evidence-contract)
+   to candidate and proof reuse.
 
 Keep only active task bundles. At closeout, remove execution-only state such as
 `tasks.md` with any `tasks/` directory and `workflow-plan.md`. Retain a completed spec or

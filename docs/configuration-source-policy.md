@@ -116,20 +116,17 @@ Allowed roots can be overridden with `APP_CONFIG_ALLOWED_ROOTS`. In non-local en
 
 ## Runtime Budget Policy
 
-- `http.readiness_timeout` bounds `/health/ready` and startup admission readiness checks. It must not exceed `http.write_timeout`, because readiness handlers still run under the server write deadline. Readiness probes run sequentially, so this timeout must also cover the aggregate budget of every enabled readiness probe. In the baseline template that means `postgres.healthcheck_timeout` when Postgres readiness is enabled. Startup admission also requires headroom above the aggregate readiness probe budget, currently the bootstrap fail-fast threshold (`150ms`), because bootstrap checks the readiness context again after the internal readiness check returns.
+- `http.readiness_timeout` bounds `/health/ready` and startup admission readiness checks. It must not exceed `http.write_timeout`, because readiness handlers still run under the server write deadline. Readiness probes run sequentially, so this timeout must also cover the aggregate budget of every enabled readiness probe. The PostgreSQL probe has one template-owned `3s` budget. Startup admission also requires `150ms` headroom because bootstrap checks the readiness context again after the internal readiness check returns.
 - `http.request_timeout` is the per-request handler budget and defaults to `8s`. It is the only bound on how long one request may hold a goroutine and its pooled resources: `http.read_timeout` and `http.write_timeout` are connection deadlines that never cancel the request context, so without this a handler waiting on a slow dependency outlives the client that asked. It must not exceed `http.write_timeout`, because a budget that expires after the write deadline can no longer send the `504` reporting it. Lowering `http.write_timeout` below `8s` therefore requires lowering this too. It bounds handlers, not the process: a handler that ignores its context cannot be interrupted from the transport layer.
-- Dependency startup timeout fields are per-attempt maxima, not guarantees that every retry gets that much time. When a dependency is enabled, bootstrap rejects values that exceed its startup probe envelope: `postgres.connect_timeout` and `postgres.healthcheck_timeout` must be at most `5s`.
-- `postgres.migration_timeout` starts the migrator's orchestration deadline and
-  defaults to `5m`. Cancellation stops subsequent migration work; one
-  in-flight statement can still take up to its separate
-  `postgres.migration_statement_timeout`, which defaults to `2m`.
-  `postgres.migration_lock_timeout` bounds waiting for the migration lock and
-  defaults to `15s`; the migrator also reserves that duration for detached
+- PostgreSQL connection and startup-ping timeouts are template-owned `3s` defaults inside the adapter; the startup stage still caps the whole probe at `5s`.
+- The migrator owns a `5m` orchestration deadline. Cancellation stops subsequent
+  migration work; one in-flight statement can still take up to its separate
+  `2m` server limit. Its `15s` Goose session-lock budget also reserves time for detached
   advisory-lock release and connection cleanup. The statement budget must not
   exceed the overall budget, and the lock budget must be strictly smaller than
-  it so the cleanup reserve is non-empty. A service owner should increase them
-  only from rehearsal evidence for the actual schema and largest production
-  table.
+  it so the cleanup reserve is non-empty. Reopen these code defaults only when
+  rehearsal evidence for the actual schema and largest production table proves
+  them insufficient.
 - `http.shutdown_timeout` is tunable within validation bounds. `http.readiness_propagation_delay` is counted inside it; the remaining drain budget must still cover `http.write_timeout`.
 - The default process-grace expectation is `30s` HTTP shutdown plus the bootstrap telemetry flush window (`5s`) after HTTP drain. Platform termination grace should cover readiness propagation, HTTP drain, and telemetry flush instead of only the HTTP server timeout.
 

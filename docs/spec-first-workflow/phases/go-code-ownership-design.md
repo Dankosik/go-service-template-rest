@@ -121,7 +121,7 @@ capacity permits and sequentially otherwise:
    returns to the root without a second lane verdict.
 
 Each lane uses the shared [Lane Brief](../shared/subagents-and-handoff.md#lane-brief)
-and [Finding Envelope](../shared/subagents-and-handoff.md#review-finding-envelope)
+and [Finding Envelope](../shared/review-findings-and-convergence.md#finding-envelope)
 and returns a lane-specific `PASS`, `CONCERNS`, or `FAIL` recommendation with
 current evidence anchors. The root synthesizes cross-lane compatibility and
 accepts the Go Ownership review only when all three lanes recommend `PASS` on

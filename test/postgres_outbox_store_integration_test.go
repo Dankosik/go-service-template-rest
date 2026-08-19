@@ -62,7 +62,7 @@ func TestPostgresOutboxEnvelope(t *testing.T) {
 		}
 	}
 
-	_, err = pool.PGX().Exec(ctx, `
+	_, err = pool.Exec(ctx, `
 		INSERT INTO outbox_events (
 			id, event_type, source, destination, schema_name, occurred_at, payload, metadata
 		) VALUES ('invalid-bypass', 't', 's', 'd', 'v', clock_timestamp(),
@@ -77,7 +77,7 @@ func TestPostgresOutboxEnvelope(t *testing.T) {
 		"-infinity",
 	} {
 		id := fmt.Sprintf("invalid-occurred-at-%d", index)
-		_, err = pool.PGX().Exec(ctx, `
+		_, err = pool.Exec(ctx, `
 			INSERT INTO outbox_events (
 				id, event_type, source, destination, schema_name, occurred_at, payload, metadata
 			) VALUES ($1, 't', 's', 'd', 'v', $2::timestamptz,
@@ -88,14 +88,14 @@ func TestPostgresOutboxEnvelope(t *testing.T) {
 		assertOutboxCount(t, ctx, pool, id, 0)
 	}
 
-	if _, err := pool.PGX().Exec(ctx, `
+	if _, err := pool.Exec(ctx, `
 		INSERT INTO outbox_events (
 			id, event_type, source, destination, schema_name, occurred_at, payload, metadata
 		) VALUES ('payload-max', 't', 's', 'd', 'v', clock_timestamp(),
 			convert_to('"' || repeat('p', 262142) || '"', 'UTF8'), convert_to('{}', 'UTF8'))`); err != nil {
 		t.Fatalf("insert maximum payload bytes: %v", err)
 	}
-	_, err = pool.PGX().Exec(ctx, `
+	_, err = pool.Exec(ctx, `
 		INSERT INTO outbox_events (
 			id, event_type, source, destination, schema_name, occurred_at, payload, metadata
 		) VALUES ('payload-too-large', 't', 's', 'd', 'v', clock_timestamp(),
@@ -103,14 +103,14 @@ func TestPostgresOutboxEnvelope(t *testing.T) {
 	if err == nil {
 		t.Fatal("direct oversized payload insert succeeded")
 	}
-	if _, err := pool.PGX().Exec(ctx, `
+	if _, err := pool.Exec(ctx, `
 		INSERT INTO outbox_events (
 			id, event_type, source, destination, schema_name, occurred_at, payload, metadata
 		) VALUES ('metadata-max', 't', 's', 'd', 'v', clock_timestamp(),
 			convert_to('{}', 'UTF8'), convert_to('{"m":"' || repeat('m', 32760) || '"}', 'UTF8'))`); err != nil {
 		t.Fatalf("insert maximum metadata bytes: %v", err)
 	}
-	_, err = pool.PGX().Exec(ctx, `
+	_, err = pool.Exec(ctx, `
 		INSERT INTO outbox_events (
 			id, event_type, source, destination, schema_name, occurred_at, payload, metadata,
 			ordering_key, ordering_sequence
@@ -123,7 +123,7 @@ func TestPostgresOutboxEnvelope(t *testing.T) {
 	if err != nil {
 		t.Fatalf("insert exact 288 KiB envelope: %v", err)
 	}
-	_, err = pool.PGX().Exec(ctx, `
+	_, err = pool.Exec(ctx, `
 		INSERT INTO outbox_events (
 			id, event_type, source, destination, schema_name, occurred_at, payload, metadata,
 			ordering_key, ordering_sequence
@@ -136,7 +136,7 @@ func TestPostgresOutboxEnvelope(t *testing.T) {
 	if err == nil {
 		t.Fatal("direct 288 KiB plus one envelope insert succeeded")
 	}
-	_, err = pool.PGX().Exec(ctx, `
+	_, err = pool.Exec(ctx, `
 		INSERT INTO outbox_events (
 			id, event_type, source, destination, schema_name, occurred_at, payload, metadata
 		) VALUES ('metadata-too-large', 't', 's', 'd', 'v', clock_timestamp(),
@@ -146,7 +146,7 @@ func TestPostgresOutboxEnvelope(t *testing.T) {
 	}
 	// Metadata must be a JSON object, and insignificant leading whitespace does
 	// not change that. Every other JSON value is rejected even though it parses.
-	if _, err := pool.PGX().Exec(ctx, `
+	if _, err := pool.Exec(ctx, `
 		INSERT INTO outbox_events (
 			id, event_type, source, destination, schema_name, occurred_at, payload, metadata
 		) VALUES ('metadata-leading-whitespace', 't', 's', 'd', 'v', clock_timestamp(),
@@ -155,7 +155,7 @@ func TestPostgresOutboxEnvelope(t *testing.T) {
 	}
 	for _, metadata := range []string{`[1,2]`, `"text"`, `42`, `null`, `true`} {
 		id := "metadata-not-object-" + metadata
-		if _, err := pool.PGX().Exec(ctx, `
+		if _, err := pool.Exec(ctx, `
 			INSERT INTO outbox_events (
 				id, event_type, source, destination, schema_name, occurred_at, payload, metadata
 			) VALUES ($1, 't', 's', 'd', 'v', clock_timestamp(),
@@ -170,7 +170,7 @@ func TestPostgresOutboxEnvelope(t *testing.T) {
 		`INSERT INTO outbox_events (id, event_type, source, destination, schema_name, occurred_at, payload, metadata, ordering_sequence)
 		 VALUES ('pair-sequence-only', 't', 's', 'd', 'v', clock_timestamp(), convert_to('{}','UTF8'), convert_to('{}','UTF8'), 1)`,
 	} {
-		if _, err := pool.PGX().Exec(ctx, statement); err == nil {
+		if _, err := pool.Exec(ctx, statement); err == nil {
 			t.Fatalf("asymmetric ordering pair insert succeeded: %s", statement)
 		}
 	}
@@ -178,7 +178,7 @@ func TestPostgresOutboxEnvelope(t *testing.T) {
 
 func TestPostgresOutboxAtomicity(t *testing.T) {
 	ctx, pool, store := newOutboxFixture(t)
-	if _, err := pool.PGX().Exec(ctx, `
+	if _, err := pool.Exec(ctx, `
 		CREATE TABLE outbox_domain_probe (id text PRIMARY KEY);
 		CREATE TABLE outbox_commit_guard (
 			value integer UNIQUE DEFERRABLE INITIALLY DEFERRED
@@ -220,7 +220,7 @@ func TestPostgresOutboxAtomicity(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			err := pool.InTx(ctx, pgx.TxOptions{}, test.run)
+			err := postgres.InTx(ctx, pool, pgx.TxOptions{}, test.run)
 			if err == nil {
 				t.Fatal("InTx() succeeded, want rollback")
 			}
@@ -229,7 +229,7 @@ func TestPostgresOutboxAtomicity(t *testing.T) {
 	}
 
 	mustAppendOutbox(t, ctx, pool, store, outboxEvent("duplicate"))
-	err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+	err := postgres.InTx(ctx, pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "INSERT INTO outbox_domain_probe (id) VALUES ('insert-failure')"); err != nil {
 			return err
 		}
@@ -240,7 +240,7 @@ func TestPostgresOutboxAtomicity(t *testing.T) {
 	}
 	assertAtomicCounts(t, ctx, pool, "insert-failure", 0, 0)
 
-	err = pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+	err = postgres.InTx(ctx, pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "INSERT INTO outbox_domain_probe (id) VALUES ('commit-failure')"); err != nil {
 			return err
 		}
@@ -257,7 +257,7 @@ func TestPostgresOutboxAtomicity(t *testing.T) {
 
 	canceled, cancel := context.WithCancel(ctx)
 	cancel()
-	err = pool.InTx(canceled, pgx.TxOptions{}, func(tx pgx.Tx) error {
+	err = postgres.InTx(canceled, pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(canceled, "INSERT INTO outbox_domain_probe (id) VALUES ('canceled')"); err != nil {
 			return err
 		}
@@ -269,7 +269,7 @@ func TestPostgresOutboxAtomicity(t *testing.T) {
 	assertAtomicCounts(t, ctx, pool, "canceled", 0, 0)
 
 	afterAppendCtx, cancelAfterAppend := context.WithCancel(ctx)
-	err = pool.InTx(afterAppendCtx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+	err = postgres.InTx(afterAppendCtx, pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(afterAppendCtx, "INSERT INTO outbox_domain_probe (id) VALUES ('canceled-after-append')"); err != nil {
 			return err
 		}
@@ -285,7 +285,7 @@ func TestPostgresOutboxAtomicity(t *testing.T) {
 	}
 	assertAtomicCounts(t, ctx, pool, "canceled-after-append", 0, 0)
 
-	err = pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+	err = postgres.InTx(ctx, pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "INSERT INTO outbox_domain_probe (id) VALUES ('success')"); err != nil {
 			return err
 		}
@@ -301,7 +301,7 @@ func TestPostgresOutboxCommitReceiptAtomicityAndLifetime(t *testing.T) {
 	ctx, pool, store := newOutboxFixture(t)
 	counts := func(id string) (events, receipts int) {
 		t.Helper()
-		if err := pool.PGX().QueryRow(ctx, `
+		if err := pool.QueryRow(ctx, `
 			SELECT
 				(SELECT count(*) FROM outbox_events WHERE id = $1),
 				(SELECT count(*) FROM outbox_commit_receipts WHERE event_id = $1)`,
@@ -327,7 +327,7 @@ func TestPostgresOutboxCommitReceiptAtomicityAndLifetime(t *testing.T) {
 		assertCounts(id, 1, 1)
 		var version int16
 		var size int
-		if err := pool.PGX().QueryRow(ctx, `
+		if err := pool.QueryRow(ctx, `
 			SELECT fingerprint_version, octet_length(envelope_fingerprint)
 			FROM outbox_commit_receipts WHERE event_id = $1`, id,
 		).Scan(&version, &size); err != nil {
@@ -340,7 +340,7 @@ func TestPostgresOutboxCommitReceiptAtomicityAndLifetime(t *testing.T) {
 
 	rollback := outboxEvent("receipt-rollback")
 	rollbackErr := errors.New("rollback receipt transaction")
-	err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+	err := postgres.InTx(ctx, pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 		if err := store.Append(ctx, tx, rollback); err != nil {
 			return err
 		}
@@ -352,7 +352,7 @@ func TestPostgresOutboxCommitReceiptAtomicityAndLifetime(t *testing.T) {
 	assertCounts(rollback.ID, 0, 0)
 
 	rejected := orderedEvent("receipt-rejected", "receipt-key", 1)
-	err = pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+	err = postgres.InTx(ctx, pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 		return store.Append(ctx, tx, rejected)
 	})
 	if !errors.Is(err, postgresoutbox.ErrOrderingSequence) {
@@ -368,7 +368,7 @@ func TestPostgresOutboxCommitReceiptAtomicityAndLifetime(t *testing.T) {
 	}
 
 	unsupported := outboxEvent("receipt-unsupported-version")
-	if _, err := pool.PGX().Exec(ctx, `
+	if _, err := pool.Exec(ctx, `
 		INSERT INTO outbox_commit_receipts (event_id, fingerprint_version, envelope_fingerprint)
 		VALUES ($1, 2, $2)`, unsupported.ID, bytes.Repeat([]byte{1}, 32)); err != nil {
 		t.Fatalf("seed unsupported receipt: %v", err)
@@ -380,7 +380,7 @@ func TestPostgresOutboxCommitReceiptAtomicityAndLifetime(t *testing.T) {
 
 	cleanup := outboxEvent("receipt-survives-cleanup")
 	mustAppendOutbox(t, ctx, pool, store, cleanup)
-	if _, err := pool.PGX().Exec(ctx, `
+	if _, err := pool.Exec(ctx, `
 		UPDATE outbox_events
 		SET published_at = clock_timestamp() - interval '2 hours'
 		WHERE id = $1`, cleanup.ID); err != nil {
@@ -447,9 +447,9 @@ func TestPostgresOutboxCommitReconciliationAuthority(t *testing.T) {
 			t.Errorf("restore fixture writer authority: %v", cleanupErr)
 		}
 		admin.Release()
-		pool.PGX().Reset()
+		pool.Reset()
 	})
-	pool.PGX().Reset()
+	pool.Reset()
 	outcome, err = store.ReconcileCommit(ctx, outboxEvent("reconcile-read-only"))
 	if outcome != postgresoutbox.CommitStillUnknown || err == nil {
 		t.Fatalf("ReconcileCommit(read only absence) = %v, %v", outcome, err)
@@ -458,7 +458,7 @@ func TestPostgresOutboxCommitReconciliationAuthority(t *testing.T) {
 		t.Fatalf("restore fixture writer authority: %v", err)
 	}
 	admin.Release()
-	pool.PGX().Reset()
+	pool.Reset()
 	restored = true
 
 	pool.Close()
@@ -481,7 +481,7 @@ func TestPostgresOutboxBatchedAppend(t *testing.T) {
 	// behind it. Passing them in ascending order would leave the two rules
 	// indistinguishable, and the ordering contract a feature relies on is that
 	// argument order does not matter.
-	if err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+	if err := postgres.InTx(ctx, pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 		return store.Append(ctx, tx,
 			outboxEvent("batch-plain-1"),
 			orderedEvent("batch-key-2", "batch-account", 2),
@@ -495,7 +495,7 @@ func TestPostgresOutboxBatchedAppend(t *testing.T) {
 		assertOutboxCount(t, ctx, pool, id, 1)
 	}
 	var ready []string
-	rows, err := pool.PGX().Query(ctx,
+	rows, err := pool.Query(ctx,
 		`SELECT id FROM outbox_events WHERE ordering_ready ORDER BY id`)
 	if err != nil {
 		t.Fatalf("read ready ordered events: %v", err)
@@ -510,7 +510,7 @@ func TestPostgresOutboxBatchedAppend(t *testing.T) {
 
 	// One rejected sequence rejects the whole call, and the message names the
 	// event that lost rather than the first one in it.
-	err = pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+	err = postgres.InTx(ctx, pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 		return store.Append(ctx, tx,
 			outboxEvent("batch-rolled-back"),
 			orderedEvent("batch-key-replay", "batch-account", 1),
@@ -527,7 +527,7 @@ func TestPostgresOutboxBatchedAppend(t *testing.T) {
 	// beside it are not stored either.
 	invalid := outboxEvent("batch-invalid")
 	invalid.Payload = []byte(`not json`)
-	err = pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+	err = postgres.InTx(ctx, pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 		return store.Append(ctx, tx, outboxEvent("batch-valid-neighbor"), invalid)
 	})
 	if !errors.Is(err, postgresoutbox.ErrInvalidEvent) {
@@ -548,7 +548,7 @@ func TestPostgresOutboxCleanup(t *testing.T) {
 			t.Fatalf("MarkPublished(): %v", err)
 		}
 	}
-	if _, err := pool.PGX().Exec(ctx, "UPDATE outbox_events SET published_at = clock_timestamp() - interval '2 hours' WHERE id <> 'cleanup-recent'"); err != nil {
+	if _, err := pool.Exec(ctx, "UPDATE outbox_events SET published_at = clock_timestamp() - interval '2 hours' WHERE id <> 'cleanup-recent'"); err != nil {
 		t.Fatalf("backdate published rows: %v", err)
 	}
 	mustAppendOutbox(t, ctx, pool, store, outboxEvent("cleanup-pending"))
@@ -582,7 +582,7 @@ func TestPostgresOutboxCleanup(t *testing.T) {
 	assertOutboxCount(t, ctx, pool, "cleanup-recent", 1)
 	assertOutboxCount(t, ctx, pool, "cleanup-pending", 1)
 	var headCount int
-	if err := pool.PGX().QueryRow(ctx, "SELECT count(*) FROM outbox_ordering_heads WHERE ordering_key = 'cleanup-key'").Scan(&headCount); err != nil {
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM outbox_ordering_heads WHERE ordering_key = 'cleanup-key'").Scan(&headCount); err != nil {
 		t.Fatalf("count retained ordering head: %v", err)
 	}
 	if headCount != 1 {

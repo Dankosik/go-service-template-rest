@@ -1,6 +1,6 @@
 ---
 name: spec-document-designer
-description: "Behavioral contract: Use when accepted intent/evidence need delegated spec.md synthesis/revision in Specification. Own falsifiable behavior; Skip phase ownership, review gating, or end-to-end repair."
+description: "Spec authoring: Use for delegated spec.md synthesis or repair from accepted inputs. Own falsifiable behavior; Skip phase and review ownership."
 ---
 
 # Spec Document Designer

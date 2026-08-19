@@ -43,7 +43,6 @@ make template-init \
   JOBS=none \
   WEBHOOKS=none \
   OUTBOX=none \
-  INBOX=none \
   GRPC=none \
   AUTHN=none \
   OUTBOUND_HTTP=none \
@@ -80,11 +79,6 @@ durably record an outbound event for a separately deployed relay. Publication
 is at-least-once, so consumers must tolerate duplicate event IDs; see the
 [PostgreSQL transactional outbox](docs/postgres-transactional-outbox.md).
 <!-- profile:outbox-postgres:end -->
-<!-- profile:inbox-postgres:start -->
-Choose `DATABASE=postgres INBOX=postgres` when a consumer must suppress a
-logical message duplicate in the same PostgreSQL transaction as its feature
-effect; see the [PostgreSQL idempotent inbox](docs/postgres-idempotent-inbox.md).
-<!-- profile:inbox-postgres:end -->
 <!-- profile:webhooks-durable:start -->
 Choose `DATABASE=postgres WEBHOOKS=durable` when a feature transaction must
 atomically accept an immutable webhook fan-out for a separately deployed
@@ -124,9 +118,6 @@ it, and read it here or in
 <!-- profile:outbox-postgres:start -->
 | Transactional outbox | Optional PostgreSQL intent store and separately deployed bounded relay; the NATS profile supplies the selected adapter, while outbox-only stays fail-closed |
 <!-- profile:outbox-postgres:end -->
-<!-- profile:inbox-postgres:start -->
-| Idempotent inbox | Optional permanent per-consumer logical-message claims joined to one same-PostgreSQL feature effect |
-<!-- profile:inbox-postgres:end -->
 <!-- profile:webhooks-durable:start -->
 | Outbound webhooks | Optional PostgreSQL acceptance store and independent bounded delivery worker with HMAC signing and public-HTTPS enforcement |
 <!-- profile:webhooks-durable:end -->
@@ -273,8 +264,9 @@ its own level first, then escalates to exactly one parent, so recoverable
 problems do not stop the whole ledger.
 
 The detailed contracts live in the [Agent Harness](docs/agent-harness.md), its
-[Codex App selection tree](docs/agent-harness.md#codex-app-selection-tree), and
-[Implementation Worker Execution](docs/spec-first-workflow/phases/implementation-worker-execution.md).
+[Codex adapter](docs/agent-harness/codex.md), the [Execution Role
+Tree](docs/spec-first-workflow/phases/implementation-worker-execution.md), and
+[Lead Execution](docs/spec-first-workflow/phases/implementation-lead-execution.md).
 
 ## Agent Support
 

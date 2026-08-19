@@ -1,6 +1,6 @@
 ---
 name: go-concurrency
-description: "Concurrency: Use for goroutines, shared state, channels, locks, atomics, timers, worker bounds, cancellation, or joins. Own happens-before/lifecycle; Skip resilience policy, replay, or context semantics."
+description: "Happens-before: Use for goroutines, shared state, channels, locks, atomics, timers, bounds, cancellation, or joins. Own lifecycle; Skip resilience."
 ---
 
 # Go Concurrency
@@ -11,6 +11,16 @@ Judge every change by its **happens-before** story: a claim that two events cann
 
 Every goroutine has an owner, a signal it observes to stop, a guaranteed unblock for each blocking site, and a join point; a goroutine missing any of these outlives its purpose and leaks work, memory, or writes into freed assumptions. Worker pools and fan-outs carry explicit bounds, and timers and tickers have named stop owners.
 
-Load the [shared specialist contract](../specialist-contract.md). This skill has one review branch: reconstruct affected values and activities by tracing changed goroutines, shared state, callers, cancellation, unblock, close, join, timer, and sync-identity edges, then build each happens-before story. Complete when the shared finding envelope accounts for every story with a named edge or a named race — the race detector rejects a story, it does not prove one. This repository already proves concurrency with `make test-race`, `go.uber.org/goleak` package gates, and `testing/synctest` bubbles, and mandatory lint already fails `copylocks`, `waitgroup`, and `lostcancel`, so review spends on the invariant rather than on what a gate reports without help. Missing lifecycle policy returns to the named `go-reliability` Decision owner.
+Load the [shared specialist contract](../specialist-contract.md). Reconstruct
+affected values and activities by tracing goroutines, shared state, callers,
+cancellation, unblock, close, join, timers, and synchronization identity. Build
+each happens-before story and complete when the shared finding envelope names an
+edge or a race for every story. The race detector can reject a story; it cannot
+prove one. Use existing race, leak, `synctest`, and lint gates for mechanical
+evidence and spend review on the invariant.
 
-Load the [review selector](references/index.md) when the diff contains fire-and-forget or blocked goroutines, shared-state publication or lock scope, unbounded fan-out or queues, or timer-driven coordination. Hand placement to `go-implementation-ownership`. Load [`concurrency-control`](../../../docs/universal-disciplines/concurrency-control/SKILL.md) when the contested state is durable and shared beyond this process — across requests, replicas, or services: it forces the weakest mechanism that closes a named breaking schedule at the isolation level actually in force, with fencing wherever exclusivity can expire, instead of a lock whose scope stops at the process boundary.
+Load the [review selector](references/index.md) for fire-and-forget or blocked
+goroutines, publication or lock scope, unbounded fan-out or queues, and
+timer-driven coordination. Hand lifecycle policy to `go-reliability`, placement
+to `go-implementation-ownership`, and state durable beyond this process to
+[concurrency control](../../../docs/universal-disciplines/concurrency-control/SKILL.md).

@@ -3,6 +3,23 @@
 The `Makefile` is the command index. Scripts exist only when they own behavior
 that would be awkward or misleading inside a recipe.
 
+## Validation routing
+
+Load only the row selected by the changed surface or claim; follow another row
+only when its pressure is independently present. Start with a focused check and
+broaden only when its result or the completion claim requires it.
+
+| Trigger | Read |
+| --- | --- |
+| Documentation or repository instructions | The owning docs/instruction check; use `git diff --check` plus a named structural check when one exists. |
+| Local Go behavior, a focused defect, or a package-local change | [Tests](#tests), then [Formatting and analysis](#formatting-and-analysis) only for the changed semantic surface. |
+| OpenAPI, Protobuf, SQLC, migrations, or generated output | [OpenAPI, Protobuf, SQLC, and generated drift](#openapi-protobuf-sqlc-and-generated-drift), plus [Migrations and containers](#migrations-and-containers) only when runtime schema behavior changed. |
+| Dependencies, secrets, trust, or vulnerability claims | [Security](#security). |
+| Runtime image, container lifecycle, or migration rehearsal | [Migrations and containers](#migrations-and-containers). |
+| Local process or binary build | [Run and build](#run-and-build). |
+| Performance or capacity claim | [Benchmarking](#benchmarking) and the dedicated benchmarking owner linked there. |
+| CI parity, publication, release, or a broad cross-cutting claim | [Everyday validation](#everyday-validation), then [CI and repository settings](#ci-and-repository-settings) when repository or merge policy matters. |
+
 ## Prerequisites
 
 - Go at the version declared in `go.mod`.
@@ -37,9 +54,9 @@ install-only step returns and saves it after the owning Make or template check;
 no second `actions/cache` step owns the same directory.
 
 <!-- profile:jobs-postgres:start -->
-The durable-jobs profile adds `/jobs-worker` to the one runtime image. Build it
-once with `make runtime-image-build`, then reuse that exact tag for migration
-validation; only `/migrate` writes schema.
+The River-backed jobs profile adds `/jobs-worker` to the one runtime image.
+Build it once with `make runtime-image-build`, then reuse that exact tag for
+migration validation; only `/migrate` writes schema.
 <!-- profile:jobs-postgres:end -->
 <!-- profile:webhooks-durable:start -->
 The durable-webhook profile adds `/webhook-worker` to the same runtime image.
@@ -109,7 +126,6 @@ make template-init \
   CODEOWNER=@acme/backend \
   DATABASE=none \
   OUTBOX=none \
-  INBOX=none \
   GRPC=none \
   MESSAGING=none
 make template-init-check
@@ -130,18 +146,11 @@ relay command, configuration, tests, docs, image binary, and Make targets.
 does not choose a broker adapter. The relay command fails closed until the
 service registers one. See [PostgreSQL transactional outbox](./postgres-transactional-outbox.md).
 <!-- profile:outbox-postgres:end -->
-<!-- profile:inbox-postgres:start -->
-`INBOX=none` removes the inbox migration, SQLC source/output, runtime package,
-reference adapter, integration proof, and documentation. `INBOX=postgres`
-requires `DATABASE=postgres`, but is independent of `OUTBOX` and `MESSAGING`.
-When messaging is also selected, the joined NATS/PostgreSQL identity proof is
-retained. See [PostgreSQL idempotent inbox](./postgres-idempotent-inbox.md).
-<!-- profile:inbox-postgres:end -->
 <!-- profile:webhooks-durable:start -->
 `WEBHOOKS=none` removes webhook schema, SQLC output, worker/runtime code, tests,
 configuration, documentation, image entrypoint, and Make targets.
 `WEBHOOKS=durable` requires `DATABASE=postgres` and remains independent of
-outbox, inbox, jobs, messaging, and the fixed-target outbound HTTP profile.
+outbox, jobs, messaging, and the fixed-target outbound HTTP profile.
 <!-- profile:webhooks-durable:end -->
 <!-- profile:grpc:start -->
 `GRPC=none` removes the native gRPC runtime, protobuf workflow, generated

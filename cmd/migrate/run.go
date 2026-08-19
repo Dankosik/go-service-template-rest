@@ -9,8 +9,6 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
-	"path"
-	"strings"
 	"syscall"
 
 	"github.com/example/go-service-template-rest/cmd/internal/runtimeopts"
@@ -22,7 +20,6 @@ import (
 const (
 	imageMigrationSourcePath = "/migrations"
 	localMigrationSourcePath = "migrations"
-	migrationPathEnv         = "MIGRATION_PATH"
 	recoveryDocument         = "docs/railway-deployment-profile.md"
 )
 
@@ -64,18 +61,12 @@ func run(args []string, stdout io.Writer) error {
 		return wrapped
 	}
 
-	migrationCtx, cancelMigration := context.WithTimeout(ctx, cfg.Postgres.MigrationTimeout)
+	migrationCtx, cancelMigration := context.WithTimeout(ctx, postgresmigrate.DefaultTimeout)
 	defer cancelMigration()
-	result, err := postgresmigrate.MigrateUp(migrationCtx, postgresmigrate.MigrationOptions{
-		DSN:              cfg.Postgres.DSN,
-		SourceFS:         migrationSourceFS,
-		SourcePath:       migrationSourcePath,
-		ConnectTimeout:   cfg.Postgres.ConnectTimeout,
-		StatementTimeout: cfg.Postgres.MigrationStatementTimeout,
-		LockTimeout:      cfg.Postgres.MigrationLockTimeout,
-		CleanupTimeout:   cfg.Postgres.MigrationLockTimeout,
-		Logger:           logger,
-	})
+	result, err := postgresmigrate.MigrateUp(
+		migrationCtx,
+		postgresmigrate.DefaultOptions(cfg.Postgres.DSN, migrationSourceFS, migrationSourcePath, logger),
+	)
 	if err != nil {
 		logMigrationTerminal(logger, result, err, postgresmigrate.FailureStageOf(err))
 		return fmt.Errorf("apply postgres migrations: %w", err)
@@ -85,19 +76,8 @@ func run(args []string, stdout io.Writer) error {
 }
 
 func resolveMigrationSource() (fs.FS, string, error) {
-	if configuredPath := strings.TrimSpace(os.Getenv(migrationPathEnv)); configuredPath != "" {
-		cleaned := path.Clean(configuredPath)
-		if err := requireDirectory(cleaned); err != nil {
-			return nil, "", err
-		}
-		if path.IsAbs(cleaned) {
-			return os.DirFS("/"), strings.TrimPrefix(cleaned, "/"), nil
-		}
-		return os.DirFS("."), cleaned, nil
-	}
-
 	if err := requireDirectory(imageMigrationSourcePath); err == nil {
-		return os.DirFS("/"), strings.TrimPrefix(imageMigrationSourcePath, "/"), nil
+		return os.DirFS("/"), "migrations", nil
 	} else if !errors.Is(err, errMigrationSourceMissing) {
 		return nil, "", err
 	}
@@ -137,14 +117,14 @@ func logMigrationTerminal(
 	outcome := "success"
 	if err != nil {
 		outcome = "error"
-	} else if len(result.Migrations) == 0 {
+	} else if result.AppliedCount == 0 {
 		outcome = "no_change"
 	}
 	attrs := []any{
 		"migration.before", result.Before,
 		"migration.target", result.Target,
 		"migration.after", result.After,
-		"migration.applied_count", len(result.Migrations),
+		"migration.applied_count", result.AppliedCount,
 		"migration.duration", result.Duration,
 		"outcome", outcome,
 	}

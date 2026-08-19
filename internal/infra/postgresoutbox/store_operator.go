@@ -7,6 +7,7 @@ import (
 	"math"
 	"time"
 
+	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	"github.com/example/go-service-template-rest/internal/infra/postgres/sqlcgen"
 	"github.com/jackc/pgx/v5"
 )
@@ -85,7 +86,7 @@ func (s *Store) runOperatorAction(ctx context.Context, operation, action, id, au
 	if err := validateText(ErrConfig, "audit_id", auditID, maxTextBytes); err != nil {
 		return err
 	}
-	err = s.pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
+	err = postgres.InTx(ctx, s.pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
 		return operatorActionInTx(ctx, sqlcgen.New(tx), action, id, auditID)
 	})
 	if err != nil {

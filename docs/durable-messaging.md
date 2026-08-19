@@ -153,7 +153,8 @@ can duplicate a DLQ record; consumers and operator replay must be idempotent.
 `NumDelivered`, not process memory, owns retry exhaustion, so restarts and lost
 ACKs still consume the finite handler budget. Broker delivery remains unlimited
 until the DLQ handoff is confirmed. Messages can be delivered more than once;
-the pack does not claim exactly-once processing and provides no outbox or inbox.
+the pack does not claim exactly-once processing and provides no outbox or
+consumer-side database idempotency.
 
 ## Lifecycle and operations
 
@@ -212,9 +213,9 @@ _, err = producer.Publish(ctx, event)
 ```
 
 Two identities move differently, and both are deliberate. The logical
-`MessageID` is preserved, so a consumer deduplicating on it — through the
-[PostgreSQL inbox](postgres-idempotent-inbox.md) or its own key — treats the
-redrive as the delivery it already refused. The publication ID is replaced,
+`MessageID` is preserved, so a consumer deduplicating on its own durable key
+treats the redrive as the delivery it already refused. The publication ID is
+replaced,
 because reusing it would have the broker recognize a duplicate and store
 nothing. Its replacement is derived from the dead-letter record's own stream and
 sequence rather than minted fresh, so restoring one record twice yields one

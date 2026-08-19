@@ -81,7 +81,9 @@ for required in \
 	scripts/lib/manifest.sh \
 	scripts/lib/sync-cli.sh \
 	scripts/ci/claude-skills-check.sh \
-	scripts/ci/template-owned-purity-check.sh; do
+	scripts/ci/instruction-evals-check.sh \
+	scripts/ci/template-owned-purity-check.sh \
+	scripts/dev/instruction-evals-run.sh; do
 	contains_path "${required}" ||
 		fail "${manifest} must list ${required} so the sync mechanism propagates itself"
 done
@@ -118,8 +120,8 @@ skill_metadata_bytes=$(
 		sed -n -e 's/^name: //p' -e 's/^description: //p' "${skill_file}"
 	done | wc -c | tr -d ' '
 )
-if ((skill_metadata_bytes > 8000)); then
-	fail "repo skill name/description metadata is ${skill_metadata_bytes} bytes; keep it at or below 8000 so discovery descriptions remain lean"
+if ((skill_metadata_bytes > 7000)); then
+	fail "repo skill name/description metadata is ${skill_metadata_bytes} bytes; keep it at or below 7000 so global skills and paths retain discovery headroom"
 fi
 for skill_file in .agents/skills/*/SKILL.md; do
 	grep -q '^name: [^[:space:]]' "${skill_file}" ||
@@ -152,6 +154,9 @@ while IFS= read -r role; do
 done < <(sed -n 's/^\[agents\.\([^]]*\)\]$/\1/p' .codex/config.toml)
 if ! codex_registry_report=$(bash scripts/codex-agents-sync.sh --check --repo . 2>&1); then
 	fail "Codex role registry is not the generated current block: ${codex_registry_report}"
+fi
+if ! instruction_eval_report=$(bash scripts/ci/instruction-evals-check.sh 2>&1); then
+	fail "instruction eval surface is invalid: ${instruction_eval_report}"
 fi
 
 if ((failed != 0)); then

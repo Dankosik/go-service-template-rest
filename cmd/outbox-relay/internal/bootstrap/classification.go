@@ -27,7 +27,7 @@ func runLegacyClassification(
 	cfg config.Config,
 	log *slog.Logger,
 ) error {
-	pool, err := postgres.New(startupCtx, runtimeopts.Postgres(cfg.Postgres))
+	pool, err := postgres.Open(startupCtx, runtimeopts.Postgres(cfg.Postgres))
 	if err != nil {
 		return fmt.Errorf("initialize outbox postgres for legacy classification: %w", err)
 	}

@@ -118,11 +118,10 @@ func validateOutbox(cfg OutboxConfig, postgres PostgresConfig) error {
 		cfg.LeaseDuration,
 		cfg.PublishTimeout,
 		outboxPublisherJoinTimeout,
-		postgres.AcquireTimeout,
-		postgres.StatementTimeout,
+		postgresStatementTimeout,
 	) {
 		return fmt.Errorf(
-			"%w: outbox.lease_duration must exceed publish, publisher-join, postgres acquire, and statement budgets",
+			"%w: outbox.lease_duration must exceed publish, publisher-join, and postgres statement budgets",
 			ErrValidate,
 		)
 	}

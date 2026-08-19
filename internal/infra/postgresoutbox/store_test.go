@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	"github.com/example/go-service-template-rest/internal/infra/postgres/sqlcgen"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgconn/ctxwatch"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func TestStoreListenerConfig(t *testing.T) {
@@ -48,7 +48,7 @@ func TestStoreRejectsInvalidUseBeforeDatabaseAccess(t *testing.T) {
 	// Constructed enough to pass the entry-point guards, so each assertion below
 	// reaches the argument validation it is actually about. A zero-value Store
 	// stops earlier, which TestZeroValueStoreRejectsEveryExportedMethod covers.
-	store := &Store{pool: &postgres.Pool{}, queries: sqlcgen.New(nil)}
+	store := &Store{pool: &pgxpool.Pool{}, queries: sqlcgen.New(nil)}
 	if err := store.Append(t.Context(), nil, outboxEventForUnit()); !errors.Is(err, ErrConfig) {
 		t.Fatalf("Append(nil tx) error = %v", err)
 	}
@@ -98,9 +98,6 @@ func TestStoreRejectsInvalidUseBeforeDatabaseAccess(t *testing.T) {
 	if err := store.Redrive(t.Context(), "", "audit"); !errors.Is(err, ErrConfig) {
 		t.Fatalf("Redrive(invalid id) error = %v", err)
 	}
-	if err := store.Redrive(t.Context(), "event", "audit"); !errors.Is(err, postgres.ErrConfig) {
-		t.Fatalf("Redrive(unusable pool) error = %v", err)
-	}
 	if _, err := store.CleanupPublished(t.Context(), 0, 0); !errors.Is(err, ErrConfig) {
 		t.Fatalf("CleanupPublished(invalid) error = %v", err)
 	}
@@ -115,7 +112,7 @@ func TestStoreRejectsInvalidUseBeforeDatabaseAccess(t *testing.T) {
 func TestStoreIdentityFailuresAreNotEventFailures(t *testing.T) {
 	t.Parallel()
 
-	store := &Store{pool: &postgres.Pool{}, queries: sqlcgen.New(nil)}
+	store := &Store{pool: &pgxpool.Pool{}, queries: sqlcgen.New(nil)}
 	for name, call := range map[string]func() error{
 		"MarkUnorderedPublished empty id": func() error {
 			return store.MarkUnorderedPublished(t.Context(), "lease", "")
@@ -229,7 +226,7 @@ func TestZeroValueStoreRejectsEveryExportedMethod(t *testing.T) {
 	}
 	for _, store := range map[string]*Store{
 		"zero":         {},
-		"pool only":    {pool: &postgres.Pool{}},
+		"pool only":    {pool: &pgxpool.Pool{}},
 		"queries only": {queries: sqlcgen.New(databaseStub{})},
 		"nil":          nil,
 	} {
