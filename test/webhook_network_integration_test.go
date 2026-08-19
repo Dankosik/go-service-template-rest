@@ -4,20 +4,23 @@ package integration_test
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
 	"net/netip"
 	"net/url"
 	"testing"
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/infra/postgreswebhook"
+	standardwebhooks "github.com/standard-webhooks/standard-webhooks/libraries/go"
 	"golang.org/x/net/dns/dnsmessage"
 )
 
 func TestWebhookNetworkSecurity(t *testing.T) {
-	manifest := webhookManifest(t, 1, "owner-a", "dest-a", "key-a")
+	manifest := webhookSecretManifest(t)
 	tests := []struct {
 		name      string
 		addresses []netip.Addr
@@ -43,8 +46,8 @@ func TestWebhookNetworkSecurity(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if prepared.SelectedAddress != test.addresses[0] || prepared.DNSSetDigest == ([32]byte{}) {
-				t.Fatalf("prepared DNS evidence = %+v", prepared)
+			if prepared.SelectedAddress != test.addresses[0] {
+				t.Fatalf("prepared address = %+v", prepared)
 			}
 		})
 	}
@@ -63,7 +66,7 @@ func TestWebhookBoundedAttempt(t *testing.T) {
 	if !errors.Is(err, postgreswebhook.ErrDestinationDenied) {
 		t.Fatalf("Send() error = %v, want ErrDestinationDenied", err)
 	}
-	if !result.Evidence.DefinitelyNotSent || result.Evidence.MayHaveSent || time.Since(started) > attempt.Policy.AttemptTimeout {
+	if !result.Evidence.DefinitelyNotSent || result.Evidence.MayHaveSent || time.Since(started) > time.Second {
 		t.Fatalf("bounded denial result = %+v", result)
 	}
 }
@@ -73,27 +76,42 @@ func TestWebhookRetrySignatureIdentity(t *testing.T) {
 	body := []byte(`{"event":"order.created","id":"evt-01"}`)
 	firstAt := time.Unix(1700000000, 0)
 	secondAt := firstAt.Add(time.Second)
-	first, _, err := postgreswebhook.SignV1("delivery-01", firstAt, body, []postgreswebhook.SigningKey{{Reference: "key-a", Bytes: key}})
+	first, err := postgreswebhook.SignV1("whd_delivery-01", firstAt, body, []postgreswebhook.SigningKey{{Reference: "key-a", Bytes: key}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, _, err := postgreswebhook.SignV1("delivery-01", secondAt, body, []postgreswebhook.SigningKey{{Reference: "key-a", Bytes: key}})
+	second, err := postgreswebhook.SignV1("whd_delivery-01", secondAt, body, []postgreswebhook.SigningKey{{Reference: "key-a", Bytes: key}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if first == second || !postgreswebhook.VerifyV1("delivery-01", "1700000000", body, first, [][]byte{key}) || !postgreswebhook.VerifyV1("delivery-01", "1700000001", body, second, [][]byte{key}) {
+	webhook, err := standardwebhooks.NewWebhookRaw(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstHeaders := http.Header{"Webhook-Id": {"whd_delivery-01"}, "Webhook-Timestamp": {"1700000000"}, "Webhook-Signature": {first}}
+	secondHeaders := http.Header{"Webhook-Id": {"whd_delivery-01"}, "Webhook-Timestamp": {"1700000001"}, "Webhook-Signature": {second}}
+	if first == second || webhook.VerifyIgnoringTimestamp(body, firstHeaders) != nil || webhook.VerifyIgnoringTimestamp(body, secondHeaders) != nil {
 		t.Fatal("retry identity did not retain body/delivery while refreshing attempt time and signature")
 	}
 }
 
-func webhookNetworkAttempt() postgreswebhook.ClaimedAttempt {
+func webhookNetworkAttempt() postgreswebhook.DeliveryAttempt {
 	attemptedAt := time.Now()
-	return postgreswebhook.ClaimedAttempt{
-		Identity:      postgreswebhook.AttemptIdentity{OwnerScope: "owner-a", DeliveryID: "delivery-01", AttemptID: "attempt-01", Fence: 1},
-		DestinationID: "dest-a", URL: "https://hooks.test/deliver", Body: []byte(`{"id":"evt-01"}`), ContentType: "application/json",
-		AttemptedAt: attemptedAt, Deadline: attemptedAt.Add(time.Second), KeyReference: "key-a", ManifestRevision: 1,
-		Policy: postgreswebhook.DeliveryPolicy{AttemptTimeout: time.Second, ResponseHeaderTimeout: 500 * time.Millisecond, ResponseHeaderBytes: 4096, ResponseBodyBytes: 4096},
+	return postgreswebhook.DeliveryAttempt{
+		ID: "whd_delivery-01", OwnerScope: "owner-a", ReceiverID: "receiver-a",
+		URL: "https://hooks.test/deliver", Body: []byte(`{"id":"evt-01"}`),
+		AttemptedAt: attemptedAt, Deadline: attemptedAt.Add(time.Second), KeyReference: "key-a",
 	}
+}
+
+func webhookSecretManifest(t *testing.T) *postgreswebhook.SecretManifest {
+	t.Helper()
+	secret := base64.StdEncoding.EncodeToString([]byte("0123456789abcdef0123456789abcdef"))
+	manifest, err := postgreswebhook.ParseSecretManifest(`{"entries":[{"owner_scope":"owner-a","receiver_id":"receiver-a","key_reference":"key-a","secret":"whsec_` + secret + `"}]}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return manifest
 }
 
 func mustWebhookURL(t *testing.T, raw string) *url.URL {

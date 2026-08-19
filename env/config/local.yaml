@@ -9,15 +9,10 @@ http:
 # reserved example host intentionally cannot provide production trust.
 authn:
 # profile:jobs-postgres:start
-# The jobs pack is present but inactive until a deployment supplies its bounds.
+# The source template keeps the jobs worker inactive. A selected service enables
+# it with one conservative worker and raises the value only from capacity proof.
 jobs:
-  enabled: false
-  poll_interval: 0s
-  max_concurrency: 0
-  lease_duration: 0s
-  store_operation_timeout: 0s
-  observation_interval: 0s
-  drain_timeout: 0s
+  max_workers: 0
 # profile:jobs-postgres:end
   issuer: "https://issuer.example.com"
   audience: "https://api.example.com"
@@ -26,14 +21,9 @@ jobs:
 
 # profile:http-idempotency-postgres:start
 # This optional pack stays inactive until an adopting operation is registered.
-# Values remain deployment-owned and intentionally invalid here.
+# The retry window is deployment-owned and intentionally invalid here.
 http_idempotency:
-  owner_recovery_delay: 0s
-  maintenance_interval: 0s
-  cleanup_batch_size: 0
-  max_maintenance_lag: 0s
-  max_relation_bytes: 0
-  admission_headroom_bytes: 0
+  retention: 0s
 # profile:http-idempotency-postgres:end
 
 # profile:outbound-auth-oauth2-client-credentials:start
@@ -85,22 +75,10 @@ postgres:
 # profile:database-postgres:end
 
 # profile:webhooks-durable:start
-# Deployment must supply a complete immutable snapshot and the environment-only
-# secret manifest before enabling the independently deployed worker.
+# Deployment supplies receiver metadata and the jobs worker receives signing
+# secrets through APP__WEBHOOKS__STATIC_SECRETS only.
 webhooks:
   enabled: false
-  capacity_revision: 0
-  global_concurrency: 0
-  claim_scan_page: 0
-  poll_interval: 0s
-  observation_interval: 0s
-  store_operation_timeout: 0s
-  attempt_timeout: 0s
-  response_header_timeout: 0s
-  response_header_bytes: 0
-  response_body_bytes: 0
-  drain_timeout: 0s
-  maintenance_interval: 0s
-  maintenance_batch: 0
+  endpoints: ""
   static_secrets: ""
 # profile:webhooks-durable:end

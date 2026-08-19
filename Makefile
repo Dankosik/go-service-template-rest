@@ -13,10 +13,6 @@ OUTBOX_RELAY_BINARY := bin/$(SERVICE_NAME)-outbox-relay
 JOBS_WORKER_CMD := ./cmd/jobs-worker
 JOBS_WORKER_BINARY := bin/$(SERVICE_NAME)-jobs-worker
 # profile:jobs-postgres:end
-# profile:webhooks-durable:start
-WEBHOOK_WORKER_CMD := ./cmd/webhook-worker
-WEBHOOK_WORKER_BINARY := bin/$(SERVICE_NAME)-webhook-worker
-# profile:webhooks-durable:end
 GO ?= go
 PGO_PROFILE ?= off
 OPENAPI_FILE := api/openapi/service.yaml
@@ -38,21 +34,21 @@ TEST_REPORT_DIR := .artifacts/test
 TEST_JUNIT_FILE := $(TEST_REPORT_DIR)/junit.xml
 TEST_JSON_FILE := $(TEST_REPORT_DIR)/test2json.json
 INTEGRATION_PACKAGES := ./test/...
+# profile:http-idempotency-postgres:start
+INTEGRATION_PACKAGES += ./internal/infra/postgresidempotency
+# profile:http-idempotency-postgres:end
 # profile:messaging-nats-jetstream:start
 INTEGRATION_PACKAGES += ./internal/infra/natsjs ./cmd/worker/internal/bootstrap
 MESSAGING_RACE_PACKAGES := ./internal/infra/natsjs ./cmd/worker/internal/bootstrap ./test/...
-# profile:inbox-postgres:start
-MESSAGING_RACE_INBOX_TEST := |TestPostgresInboxNATSLogicalIdentityAndAcknowledgement
-# profile:inbox-postgres:end
 # profile:outbox-postgres:start
 MESSAGING_RACE_PACKAGES += ./cmd/outbox-relay/internal/bootstrap
 # profile:outbox-postgres:end
 # profile:messaging-nats-jetstream:end
 # profile:outbox-postgres:start
-OUTBOX_RACE_PACKAGES := ./internal/infra/postgres ./internal/infra/postgresoutbox ./cmd/outbox-relay/internal/bootstrap ./test/...
+OUTBOX_RACE_PACKAGES := ./internal/domainevent ./internal/infra/postgresoutbox ./internal/infra/natsjs ./cmd/outbox-relay/internal/bootstrap ./test/...
 # profile:outbox-postgres:end
 # profile:webhooks-durable:start
-WEBHOOK_RACE_PACKAGES := ./internal/infra/postgreswebhook ./cmd/webhook-worker/internal/bootstrap ./test/...
+WEBHOOK_RACE_PACKAGES := ./internal/infra/postgreswebhook ./test/...
 # profile:webhooks-durable:end
 # Effective coverage is measured across the whole module, so a freshly generated
 # service already sits near this floor on template tests alone. Initialization
@@ -75,13 +71,11 @@ COVERAGE_EXCLUDE_REGEX := $(COVERAGE_EXCLUDE_REGEX)|(^|/)internal/infra/natsjs/n
 # profile:outbox-postgres:start
 COVERAGE_EXCLUDE_REGEX := $(COVERAGE_EXCLUDE_REGEX)|(^|/)cmd/outbox-relay/main\.go:
 # profile:outbox-postgres:end
-# profile:webhooks-durable:start
-COVERAGE_EXCLUDE_REGEX := $(COVERAGE_EXCLUDE_REGEX)|(^|/)cmd/webhook-worker/main\.go:
-# Store methods are PostgreSQL transaction adapters. Their behavioral coverage
-# is owned by test-integration and test-webhook-race, which run against the
-# real schema; the unit coverage job has no database authority.
-COVERAGE_EXCLUDE_REGEX := $(COVERAGE_EXCLUDE_REGEX)|(^|/)internal/infra/postgreswebhook/store_.*\.go:
-# profile:webhooks-durable:end
+# profile:http-idempotency-postgres:start
+# Store and executor behavior is owned by the real-PostgreSQL integration
+# matrix; a fake DB would decide the unique-conflict behavior it claims to test.
+COVERAGE_EXCLUDE_REGEX := $(COVERAGE_EXCLUDE_REGEX)|(^|/)internal/infra/postgresidempotency/store\.go:
+# profile:http-idempotency-postgres:end
 
 FUZZ_TIME ?= 45s
 LINT_BASE_REF ?= origin/main
@@ -195,7 +189,7 @@ BENCHMARK_REMOTE_SCRIPT := bash ./scripts/dev/benchmark-remote.sh
 .PHONY: run-jobs-worker build-jobs-worker
 # profile:jobs-postgres:end
 # profile:webhooks-durable:start
-.PHONY: run-webhook-worker build-webhook-worker test-webhook-race
+.PHONY: test-webhook-race
 # profile:webhooks-durable:end
 # profile:grpc-reference-benchmark:start
 .PHONY: bench-grpc bench-grpc-smoke bench-grpc-inspect
@@ -230,7 +224,6 @@ help:
 	@echo "  make test-outbox-race"
 # profile:outbox-postgres:end
 # profile:webhooks-durable:start
-	@echo "  make run-webhook-worker | build-webhook-worker"
 	@echo "  make test-webhook-race"
 # profile:webhooks-durable:end
 	@echo ""
@@ -317,7 +310,7 @@ check-full:
 	$(MAKE) delivery-quality
 	$(MAKE) ci-local
 	$(MAKE) runtime-image-build RUNTIME_IMAGE=$(SERVICE_NAME):ci
-	REQUIRE_DOCKER=1 $(MAKE) test-integration WEBHOOK_RUNTIME_IMAGE=$(SERVICE_NAME):ci
+	REQUIRE_DOCKER=1 $(MAKE) test-integration
 # profile:database-postgres:start
 	$(MAKE) migration-validate RUNTIME_IMAGE=$(SERVICE_NAME):ci
 # profile:database-postgres:end
@@ -389,17 +382,17 @@ test-race:
 
 # profile:messaging-nats-jetstream:start
 test-messaging-race:
-	go test -vet=off -p=1 -count=1 -race -tags=integration $(MESSAGING_RACE_PACKAGES) -run '^(TestOutboxPublisher|TestOutboxRelayPublisherRuntime|TestNATSWorkerRegistrationIsSingleton|TestNATSReconnectProbeStopsWithRunContext|TestNATSPublishDispatchCancellationAndNoRetry|TestNATSWorkerComposition|TestNATSWorkerForcedShutdownDoesNotRaceHandlerCleanup|TestNATSWorkerConnectionLossAndReconnect|TestNATSConsumerSaturation|TestNATSForcedShutdownRedelivers|TestNATSGracefulDrain$(MESSAGING_RACE_INBOX_TEST))$$'
+	go test -vet=off -p=1 -count=1 -race -tags=integration $(MESSAGING_RACE_PACKAGES) -run '^(TestOutboxWorkerPublishesStableWireIdentityAndTrace|TestNATSWorkerRegistrationIsSingleton|TestNATSReconnectProbeStopsWithRunContext|TestNATSPublishDispatchCancellationAndNoRetry|TestNATSWorkerComposition|TestNATSWorkerForcedShutdownDoesNotRaceHandlerCleanup|TestNATSWorkerConnectionLossAndReconnect|TestNATSConsumerSaturation|TestNATSForcedShutdownRedelivers|TestNATSGracefulDrain)$$'
 # profile:messaging-nats-jetstream:end
 
 # profile:outbox-postgres:start
 test-outbox-race:
-	go test -vet=off -p=1 -count=1 -race -tags=integration $(OUTBOX_RACE_PACKAGES) -run '^Test(PostgresOutbox|InTxCommitOutcomes|OutboxRelay)'
+	go test -vet=off -p=1 -count=1 -race -tags=integration $(OUTBOX_RACE_PACKAGES) -run '^TestPostgresOutbox'
 # profile:outbox-postgres:end
 
 # profile:webhooks-durable:start
 test-webhook-race:
-	WEBHOOK_RUNTIME_IMAGE="$(WEBHOOK_RUNTIME_IMAGE)" go test -vet=off -p=1 -count=1 -race -tags=integration $(WEBHOOK_RACE_PACKAGES) -run '^Test(PostgresWebhook|WebhookWorker)'
+	go test -vet=off -p=1 -count=1 -race -tags=integration $(WEBHOOK_RACE_PACKAGES) -run '^Test(PostgresWebhookAcceptance|WebhookNetwork)'
 # profile:webhooks-durable:end
 
 test-cover:
@@ -459,12 +452,7 @@ test-flake-smoke:
 	go test -vet=off -count=5 -shuffle=on ./...
 
 test-integration:
-	@image="$(WEBHOOK_RUNTIME_IMAGE)"; \
-	if [ -z "$$image" ]; then \
-		image="$(SERVICE_NAME):integration"; \
-		$(MAKE) runtime-image-build RUNTIME_IMAGE="$$image"; \
-	fi; \
-	WEBHOOK_RUNTIME_IMAGE="$$image" go test -p=1 -count=1 -tags=integration $(INTEGRATION_PACKAGES)
+	go test -p=1 -count=1 -tags=integration $(INTEGRATION_PACKAGES)
 # profile:messaging-nats-jetstream:start
 	$(MAKE) test-messaging-race
 # profile:messaging-nats-jetstream:end
@@ -472,19 +460,7 @@ test-integration:
 	$(MAKE) test-outbox-race
 # profile:outbox-postgres:end
 # profile:webhooks-durable:start
-	WEBHOOK_RUNTIME_IMAGE="$(or $(WEBHOOK_RUNTIME_IMAGE),$(SERVICE_NAME):integration)" $(MAKE) test-webhook-race
-# profile:webhooks-durable:end
-
-# profile:webhooks-durable:start
-run-webhook-worker:
-	@set -a; \
-	if [ -f .env ]; then . ./.env; fi; \
-	set +a; \
-	go run $(WEBHOOK_WORKER_CMD)
-
-build-webhook-worker:
-	@mkdir -p $(dir $(WEBHOOK_WORKER_BINARY))
-	go build -trimpath -o $(WEBHOOK_WORKER_BINARY) $(WEBHOOK_WORKER_CMD)
+	$(MAKE) test-webhook-race
 # profile:webhooks-durable:end
 
 # profile:jobs-postgres:start
@@ -750,7 +726,7 @@ migration-validate:
 	dsn="postgres://app:app@localhost:$$port/app?sslmode=disable"; \
 	$(MIGRATION_SOURCE_CHECK_SCRIPT); \
 	PGTEST_POSTGRES_DSN="$$dsn" REQUIRE_DOCKER=1 $(GO) test -vet=off -count=1 -tags=integration ./test \
-		-run '^TestPostgresMigrateRepositorySourceRehearsal$$'; \
+		-run '^TestPostgres(MigrateRepositorySourceRehearsal|HTTPIdempotencySchemaReplacementIsFailClosed)$$'; \
 	image="$(RUNTIME_IMAGE)"; \
 	if [ -z "$$image" ]; then \
 		image="$(SERVICE_NAME):migration"; \
@@ -758,8 +734,8 @@ migration-validate:
 	fi; \
 	active_image="$${image}-http-idempotency-active"; \
 	$(MAKE) runtime-image-build RUNTIME_IMAGE="$$active_image" RUNTIME_IMAGE_FIXTURE=postgres-http-idempotency-active || exit 1; \
-	active_env='-e APP__AUTHN__ISSUER=https://127.0.0.1:1 -e APP__AUTHN__AUDIENCE=fixture -e APP__AUTHN__TRUSTED_PROXY_CIDRS=127.0.0.0/8 -e APP__HTTP_IDEMPOTENCY__OWNER_RECOVERY_DELAY=30s -e APP__HTTP_IDEMPOTENCY__MAINTENANCE_INTERVAL=1s -e APP__HTTP_IDEMPOTENCY__CLEANUP_BATCH_SIZE=10 -e APP__HTTP_IDEMPOTENCY__MAX_MAINTENANCE_LAG=1m -e APP__HTTP_IDEMPOTENCY__MAX_RELATION_BYTES=1099511627776 -e APP__HTTP_IDEMPOTENCY__ADMISSION_HEADROOM_BYTES=1048576'; \
-	assert_active_failure() { output="$$(eval docker run --rm --network "$${project}_default" -e APP__POSTGRES__ENABLED=true -e APP__POSTGRES__DSN="postgres://app:app@postgres:5432/app?sslmode=disable" $$active_env "$$active_image" 2>&1 || true)"; echo "$$output" | grep -Fq 'initialize HTTP idempotency maintenance' || { echo "active fixture did not reject idempotency before OIDC"; echo "$$output"; exit 1; }; echo "$$output" | grep -Fq 'oidc' && { echo "active fixture reached OIDC before idempotency rejection"; echo "$$output"; exit 1; }; true; }; \
+	active_env='-e APP__AUTHN__ISSUER=https://127.0.0.1:1 -e APP__AUTHN__AUDIENCE=fixture -e APP__AUTHN__TRUSTED_PROXY_CIDRS=127.0.0.0/8 -e APP__HTTP_IDEMPOTENCY__RETENTION=24h'; \
+	assert_active_failure() { output="$$(eval docker run --rm --network "$${project}_default" -e APP__POSTGRES__ENABLED=true -e APP__POSTGRES__DSN="postgres://app:app@postgres:5432/app?sslmode=disable" $$active_env "$$active_image" 2>&1 || true)"; echo "$$output" | grep -Fq 'initialize HTTP idempotency cleanup' || { echo "active fixture did not reject idempotency before OIDC"; echo "$$output"; exit 1; }; echo "$$output" | grep -Fq 'oidc' && { echo "active fixture reached OIDC before idempotency rejection"; echo "$$output"; exit 1; }; true; }; \
 	assert_active_failure; \
 	docker run --rm --network "$${project}_default" \
 		-e APP__POSTGRES__ENABLED=true \
@@ -798,11 +774,7 @@ migration-validate:
 	test "$$exit_code" = "0" || { echo "runtime image exited with code $$exit_code after SIGTERM"; docker logs "$$runtime"; exit 1; }; \
 	docker run --rm --network "$${project}_default" --entrypoint psql "postgres:17@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d" "postgres://app:app@postgres:5432/app?sslmode=disable" -c 'ALTER ROLE app SET default_transaction_read_only = on'; \
 	assert_active_failure; \
-	docker run --rm --network "$${project}_default" --entrypoint psql "postgres:17@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d" "postgres://app:app@postgres:5432/app?sslmode=disable" -c 'SET default_transaction_read_only = off' -c 'ALTER ROLE app RESET default_transaction_read_only'; \
-	compose exec -T postgres psql -U app -d app -c "ALTER SYSTEM SET track_commit_timestamp = 'off'"; \
-	compose restart postgres; \
-	compose up -d --wait postgres; \
-	assert_active_failure
+	docker run --rm --network "$${project}_default" --entrypoint psql "postgres:17@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d" "postgres://app:app@postgres:5432/app?sslmode=disable" -c 'SET default_transaction_read_only = off' -c 'ALTER ROLE app RESET default_transaction_read_only'
 # profile:database-postgres:end
 
 container-security:

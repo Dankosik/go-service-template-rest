@@ -19,11 +19,11 @@ Use it as evidence to recover standing constraints, owners, reusable capabilitie
 
 ## HTTP idempotency
 
-`internal/httpidempotency` owns the reusable request identity and result
-contracts. `internal/infra/postgresidempotency` owns their PostgreSQL protocol;
-bootstrap composes it only when an adopting service registers an operation.
-`HTTP_IDEMPOTENCY=postgres` retains that complete pack but does not register a
-health route or activate endpoint traffic.
+`internal/httpidempotency` owns the fixed scoped-request and generated-result
+contract. `internal/infra/postgresidempotency` binds a feature repository to one
+PostgreSQL transaction that commits the business effect and replay evidence.
+An OpenAPI `x-idempotent: true` declaration activates the component; the
+health-only template stays inert.
 
 <!-- profile:http-idempotency-postgres:end -->
 
@@ -51,7 +51,7 @@ It does not restate the full tree, every command, or task-local design choices.
 <!-- profile:object-storage:start -->
 | `internal/objectstorage/` and `internal/infra/s3/` (`OBJECT_STORAGE=s3`) | Provider-neutral object port plus one fixed-authority Amazon S3/Cloudflare R2 adapter, explicit credential snapshot, provider-specific authority/owner validation, bounded read retry, streaming integrity, multipart cleanup, and lifecycle wiring. | Feature authorization, key/content/retention policy, ambient credential discovery, credential refresh, bucket provisioning, cross-provider certification, or trust configuration. |
 <!-- profile:object-storage:end -->
-| `internal/infra/postgres/` | Optional Postgres connection/pool lifecycle and repository code. | Process lifecycle, migrations, HTTP behavior, config precedence rules. |
+| `internal/infra/postgres/` | Strict Postgres connection admission, template defaults, commit-outcome policy, and repository code over `pgxpool`. | Pool mechanics, process lifecycle, migrations, HTTP behavior, config precedence rules. |
 | `internal/infra/postgresmigrate/` | Optional migration execution used by `cmd/migrate`. | Runtime pool ownership or application startup. |
 | `internal/infra/telemetry/` | OpenTelemetry tracing/metrics SDK setup and Prometheus export. | Feature semantics, startup logging, or request routing decisions. |
 | `internal/observability/otelconfig/` | Narrow shared OTel config vocabulary, defaults, and pure validation helpers used by config and telemetry. | Config loading, OTel SDK construction, exporter setup, or generic observability helpers. |
@@ -65,17 +65,15 @@ It does not restate the full tree, every command, or task-local design choices.
 <!-- profile:authn-oidc-jwt:end -->
 | `migrations/` | SQL schema migration source of truth. | Runtime repository logic or generated Go bindings. |
 <!-- profile:outbox-postgres:start -->
-| `internal/infra/postgresoutbox/` | PostgreSQL outbox envelope, transactional append, claims, retries, poison/redrive, retention, and broker-neutral relay loop. | Domain event selection, a broker adapter, inbox processing, or exactly-once delivery. |
-| `cmd/outbox-relay/` | Separate relay composition, readiness, drain, and dependency cleanup. | API routes or a fallback/noop publisher. |
+| `internal/domainevent/` | Minimal typed domain-event identity, version, time, and JSON encoding. | Broker routing, retries, ordering, or process lifecycle. |
+| `internal/infra/postgresoutbox/` | River job shape and transactional append through the caller's `pgx.Tx`. | Relay claims, retries, maintenance, broker mapping, ordering, or exactly-once delivery. |
+| `cmd/outbox-relay/` | Separate River-to-NATS composition, readiness, drain, and dependency cleanup. | API routes or business event selection. |
 <!-- profile:outbox-postgres:end -->
-<!-- profile:inbox-postgres:start -->
-| `internal/infra/postgresinbox/` | Stateless claim binding for one caller-owned PostgreSQL transaction. | Transaction lifecycle, feature effects, transport identity construction, cleanup, or ordering. |
-<!-- profile:inbox-postgres:end -->
 <!-- profile:jobs-postgres:start -->
-| `internal/jobs/`, `internal/infra/postgresjobs/`, and `cmd/jobs-worker/` | Default-off PostgreSQL durable-job definitions, persistence/engine, and fail-closed worker lifecycle. | Concrete producer kinds, operator transport, periodic scheduling, or production capacity claims. |
+| `cmd/jobs-worker/` and River | Default-off typed PostgreSQL jobs, transactional insertion, and a separate worker process. | Business job kinds, effect idempotency, operator exposure, or production capacity claims. |
 <!-- profile:jobs-postgres:end -->
 <!-- profile:webhooks-durable:start -->
-| `internal/outboundtrust/`, `internal/infra/postgreswebhook/`, and `cmd/webhook-worker/` | Shared public-address predicate, durable webhook engine, and independent worker lifecycle. | Subscriber discovery, feature transactions, operator transport, receiver processing, or deployment policy. |
+| `internal/outboundtrust/` and `internal/infra/postgreswebhook/` | Shared public-address predicate and the Standard Webhooks job adapter executed by `cmd/jobs-worker`. | Generic job persistence/lifecycle, subscriber administration, feature transactions, operator transport, receiver processing, or deployment policy. |
 <!-- profile:webhooks-durable:end -->
 
 <!-- profile:grpc:start -->
@@ -247,41 +245,30 @@ The lifecycle baseline is: config and dependency validation happen before accept
 ### Background / Async Extension Path
 
 <!-- profile:outbox-postgres:start -->
-The optional PostgreSQL outbox keeps the request path broker-independent: the
-PostgreSQL repository adapter appends a feature-selected event through the same
-`pgx.Tx` as its mutation, and `cmd/outbox-relay` later claims and publishes that
-durable intent.
-The relay owns only a minimal Publisher contract; an initialized service must
-register a real adapter, and the process fails closed if none is registered.
-When both outbox and NATS are selected, `internal/infra/natsjs` owns that
-adapter and `cmd/outbox-relay` supervises the NATS client beside the relay.
-Outbox without messaging retains the nil registration and fails before claims.
+The optional PostgreSQL outbox keeps the request path off the broker: the
+PostgreSQL repository adapter appends a typed event as a River job through the
+same `pgx.Tx` as its mutation. `internal/infra/natsjs` owns the
+event-version-to-subject routing and River worker that maps the stored job onto
+the existing NATS wire contract. `cmd/outbox-relay` supervises River and the
+NATS producer. Profile initialization requires both outbox and NATS, so no
+unusable broker-neutral relay is generated.
 See [PostgreSQL transactional outbox](postgres-transactional-outbox.md).
 <!-- profile:outbox-postgres:end -->
 
-<!-- profile:inbox-postgres:start -->
-The optional PostgreSQL inbox is a sibling persistence capability. A concrete
-consumer adapter derives a stable consumer identity and logical message ID,
-then calls `postgresinbox.Claim` in the same caller-owned `pgx.Tx` as one
-feature effect. A committed duplicate returns success without reapplying the
-effect; a rollback or database error remains a handler error. Claims do not
-expire, do not serialize generic consumer work, and do not cover external
-effects. See [PostgreSQL idempotent inbox](postgres-idempotent-inbox.md).
-<!-- profile:inbox-postgres:end -->
-
 <!-- profile:jobs-postgres:start -->
-The optional PostgreSQL jobs pack owns durable generic job truth and a separate
-worker binary. It remains inert without a concrete kind and fails before I/O
-without a worker-local builder; see [PostgreSQL durable background jobs](postgres-durable-background-jobs.md).
+The optional PostgreSQL jobs pack delegates queue state and lifecycle to River
+and retains a separate worker binary. It remains inert without a business worker
+builder and uses River's `InsertTx` for caller-owned PostgreSQL transactions; see
+[PostgreSQL durable background jobs](postgres-durable-background-jobs.md).
 <!-- profile:jobs-postgres:end -->
 
 <!-- profile:webhooks-durable:start -->
-The optional durable webhook pack accepts a complete immutable fan-out through
-the same caller-owned `pgx.Tx` as its business mutation. The separate
-`cmd/webhook-worker` process claims bounded work, resolves only the configured
-owner-scoped key, signs one public HTTPS request, and records the strongest
-known outcome. It supplies store control methods but no generic subscriber or
-operator API; see [Outbound webhook delivery](outbound-webhook-delivery.md).
+The optional durable webhook pack prepares a complete immutable fan-out before
+the feature transaction and inserts one typed River job per receiver inside
+that transaction. `cmd/jobs-worker` runs the registered webhook worker;
+the adapter signs one bounded public-HTTPS request and maps its result into the
+River completion/retry contract. It has no separate worker, delivery ledger,
+subscriber administration, or operator API; see [Outbound webhook delivery](outbound-webhook-delivery.md).
 <!-- profile:webhooks-durable:end -->
 
 <!-- profile:messaging-nats-jetstream:start -->
@@ -289,9 +276,10 @@ The optional NATS JetStream profile ships a separate `cmd/worker` composition
 root and concrete `internal/infra/natsjs` producer/consumer owner. The service
 process remains producer-only; the worker fails before connecting until a
 binary-local handler adapter is registered to invoke duplicate-safe feature
-behavior. The same package supplies the selected outbox adapter when the outbox
-profile is also retained; it forwards the stored W3C creation context without
-adding generic consumer ordering. See [Durable messaging](./durable-messaging.md).
+behavior. When the outbox profile is also retained, the same package supplies
+its service-owned subject router and River publication worker; it restores the
+stored W3C creation context without adding generic consumer ordering. See
+[Durable messaging](./durable-messaging.md).
 <!-- profile:messaging-nats-jetstream:end -->
 
 When a task introduces async work, keep the extension path stable:
@@ -332,13 +320,10 @@ Use these seams when extending the repository:
 <!-- profile:authn-oidc-jwt:start -->
 - New rule about who may call this service — `internal/infra/oidcjwt` has no registration point, so an extra claim requirement, a different audience rule, or propagating more than the verified issuer, opaque subject, and OAuth client ID is an edit inside that package — `parseAccessTokenClaims` for claim rules, and the `reqctx.Principal` construction in `parseToken` for what reaches handlers. A new configured value is the one that leaves the package: it needs a field on `config.AuthnConfig` with its koanf key and validation in `internal/config` as well as the value in `Policy`/`NewPolicy`, because both owners must refuse a bad value — the loader so the process stops, the verifier so a policy built any other way still fails closed. `internal/config` cannot import runtime adapters, so a rule the two share belongs in `internal/authntrust` and is called from each side; a rule only the verifier applies stays in the verifier. Its package documentation names each site. Treat such an edit as a deliberate fork of the template's copy: a later template sync reports it as a conflict, which is what keeps a change to who may call this service visible in review. Anything past identity — roles, tenant policy, per-operation permission — is feature-owned and does not belong in this package.
 <!-- profile:authn-oidc-jwt:end -->
-- New persistence flow: add one canonical transactional Goose file under `migrations`, add SQLC query sources under `internal/infra/postgres/queries`, regenerate `internal/infra/postgres/sqlcgen`, add a hand-written Postgres repository that maps generated rows into feature-facing types, add a feature-owned port only if needed, then wire the concrete adapter in `cmd/service/internal/bootstrap`.
-<!-- profile:inbox-postgres:start -->
-- New idempotent consumer effect: keep `postgresinbox.Claim` and the tx-bound feature repository in the concrete consumer adapter; use the logical message ID plus a stable consumer identity, and return success on a committed duplicate. External effects require their own downstream idempotency or transactional outbox.
-<!-- profile:inbox-postgres:end -->
+- New persistence flow: add one canonical transactional Goose file under `migrations`, add SQLC query sources under `internal/infra/postgres/queries`, regenerate `internal/infra/postgres/sqlcgen`, add a hand-written Postgres repository that maps generated rows into feature-facing types, join generated queries only through `postgres.InTx` plus `Queries.WithTx`, add a feature-owned port only if needed, then wire the concrete adapter in `cmd/service/internal/bootstrap`.
 - New integration adapter: add it under `internal/infra/<integration>`; add a feature-owned contract only if `internal/<feature>` needs inversion over the concrete adapter; wire concrete dependencies in `cmd/service/internal/bootstrap`. For ordinary provider-specific clients, start with `net/http`. When the repository was initialized with `OUTBOUND_HTTP=bounded`, reuse `internal/infra/httpclient` for fixed-authority transport safety and explicitly select `PropagationNone`, `PropagationTraceContext`, or `PropagationTrustedService` per dependency; zero emits no remote correlation. Keep authentication, operation budgets, retry eligibility, provider errors, and generated clients in the provider adapter. Credentials belong in headers; query-string authentication requires a separate telemetry-disclosure design. When the adapter calls another microservice, first verify the provider's current contract from its repository, generated contract, published spec, or live contract endpoint, then record the source used in the owning spec/design/tasks proof. Before enabling a runtime dependency, define config keys and secret-source policy, platform egress policy, criticality, retry and timeout budget, readiness participation, cleanup on partial initialization, low-cardinality metrics labels, and bootstrap tests.
 <!-- profile:messaging-nats-jetstream:start -->
-- New durable event flow: keep payload/schema semantics in the feature, compose the concrete `natsjs.Producer` or one duplicate-safe worker handler at bootstrap, and use the existing message identity and ACK boundary. Add outbox or inbox persistence only through its separate accepted workflow; do not hide it inside the transport package.
+- New durable event flow: keep payload/schema semantics in the feature, compose the concrete `natsjs.Producer` or one duplicate-safe worker handler at bootstrap, and use the existing message identity and ACK boundary. A consumer that needs same-PostgreSQL duplicate suppression owns its unique key and `INSERT ... ON CONFLICT` claim in the concrete adapter's existing `pgx.Tx`; do not hide it inside the transport package.
 - New event type on a durable flow: an event payload is a published contract with no repository gate. REST compatibility is owned by `api/openapi/service.yaml` and gRPC compatibility by `make proto-breaking`; an event has neither, because the template ships no event and `Event.Schema` is a version label this repository stores, forwards, and never parses. The emitting feature therefore owns compatibility itself: decide the payload's canonical source and its version label before the first append or publish, and treat a consumer you cannot deploy with the producer as permanently one version behind. A retained event is replayed as the exact bytes it was stored with, and a dead-letter record can be redriven long after, so a consumer must keep reading every version still present in a stream or an outbox — not only the current one. Add a repository-native compatibility check when the first event exists; until then, no gate can be written against an empty contract.
 <!-- profile:messaging-nats-jetstream:end -->
 - New outbound target: fixed targets must declare source, timeout, redirect policy, and DNS/IP-class behavior before bootstrap wiring; the deployment owns network-level egress enforcement. Dynamic or user-controlled URLs require a separate security design.

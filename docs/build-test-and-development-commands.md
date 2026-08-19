@@ -37,15 +37,14 @@ install-only step returns and saves it after the owning Make or template check;
 no second `actions/cache` step owns the same directory.
 
 <!-- profile:jobs-postgres:start -->
-The durable-jobs profile adds `/jobs-worker` to the one runtime image. Build it
-once with `make runtime-image-build`, then reuse that exact tag for migration
-validation; only `/migrate` writes schema.
+The River-backed jobs profile adds `/jobs-worker` to the one runtime image.
+Build it once with `make runtime-image-build`, then reuse that exact tag for
+migration validation; only `/migrate` writes schema.
 <!-- profile:jobs-postgres:end -->
 <!-- profile:webhooks-durable:start -->
-The durable-webhook profile adds `/webhook-worker` to the same runtime image.
-Use `make test-webhook-race` for its focused race pack, then build one exact tag
-with `make runtime-image-build RUNTIME_IMAGE=service:webhook-test` and reuse it
-for migration and process-lifecycle proof.
+The durable-webhook profile registers its definition in `/jobs-worker`. Use
+`make test-webhook-race` for the staging and network-security race pack; the
+jobs profile owns process lifecycle proof.
 <!-- profile:webhooks-durable:end -->
 
 The production Dockerfile persists module and compiler caches across BuildKit
@@ -109,7 +108,6 @@ make template-init \
   CODEOWNER=@acme/backend \
   DATABASE=none \
   OUTBOX=none \
-  INBOX=none \
   GRPC=none \
   MESSAGING=none
 make template-init-check
@@ -124,24 +122,18 @@ and tool surfaces. `DATABASE=postgres` retains them. The complete agent
 workflow and its harness files are always retained and are not an
 initialization profile.
 <!-- profile:outbox-postgres:start -->
-`OUTBOX=none` removes the outbox schema, sqlc source/output, runtime package,
-relay command, configuration, tests, docs, image binary, and Make targets.
-`OUTBOX=postgres` requires `DATABASE=postgres` and retains those surfaces; it
-does not choose a broker adapter. The relay command fails closed until the
-service registers one. See [PostgreSQL transactional outbox](./postgres-transactional-outbox.md).
+`OUTBOX=none` removes the event contract, River schema/appender/worker, relay
+command, tests, docs, image binary, and Make targets. `OUTBOX=postgres`
+requires both `DATABASE=postgres` and `MESSAGING=nats-jetstream`; the
+generator therefore retains one runnable PostgreSQL-to-NATS component rather
+than a broker-neutral relay that needs source edits. See
+[PostgreSQL transactional outbox](./postgres-transactional-outbox.md).
 <!-- profile:outbox-postgres:end -->
-<!-- profile:inbox-postgres:start -->
-`INBOX=none` removes the inbox migration, SQLC source/output, runtime package,
-reference adapter, integration proof, and documentation. `INBOX=postgres`
-requires `DATABASE=postgres`, but is independent of `OUTBOX` and `MESSAGING`.
-When messaging is also selected, the joined NATS/PostgreSQL identity proof is
-retained. See [PostgreSQL idempotent inbox](./postgres-idempotent-inbox.md).
-<!-- profile:inbox-postgres:end -->
 <!-- profile:webhooks-durable:start -->
-`WEBHOOKS=none` removes webhook schema, SQLC output, worker/runtime code, tests,
-configuration, documentation, image entrypoint, and Make targets.
-`WEBHOOKS=durable` requires `DATABASE=postgres` and remains independent of
-outbox, inbox, jobs, messaging, and the fixed-target outbound HTTP profile.
+`WEBHOOKS=none` removes the webhook job adapter, its historical migrations,
+tests, configuration, documentation, and focused Make target.
+`WEBHOOKS=durable` requires `DATABASE=postgres JOBS=postgres`; it remains
+independent of outbox, messaging, and the fixed-target outbound HTTP profile.
 <!-- profile:webhooks-durable:end -->
 <!-- profile:grpc:start -->
 `GRPC=none` removes the native gRPC runtime, protobuf workflow, generated
@@ -167,8 +159,8 @@ provide a real module path and an owner in `@user` or `@org/team` form.
 | --- | --- |
 | `make project-structure-check` | Placement, naming, command, integration-test, canonical migration filename, and no-empty-placeholder contract |
 <!-- profile:outbox-postgres:start -->
-| `make run-outbox-relay` / `make build-outbox-relay` | Run or build the separately deployed relay; combined outbox+NATS builds the selected publisher, while outbox-only fails closed |
-| `make test-outbox-race` | Serialized real-PostgreSQL relay, crash-window, lifecycle, and race proof |
+| `make run-outbox-relay` / `make build-outbox-relay` | Run or build the separately deployed River-to-NATS relay |
+| `make test-outbox-race` | Serialized real-PostgreSQL atomicity and River-to-NATS identity/trace race proof |
 <!-- profile:outbox-postgres:end -->
 | `make claude-skills-check` | Every `.agents/skills/` entry is exposed to Claude Code by a matching `.claude/skills/` symlink, and no link outlives its skill |
 | `make delivery-quality` | Digest-pinned actionlint, medium-or-higher/high-confidence zizmor security audit, ShellCheck for repository scripts, and native BuildKit Dockerfile checks |

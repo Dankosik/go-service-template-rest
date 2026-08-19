@@ -163,6 +163,10 @@ func mappedStatus(mapped failure.Classification, domain string) error {
 	switch mapped.Code {
 	case failure.CodeBadRequest, failure.CodeUnprocessableContent:
 		code = codes.InvalidArgument
+	// profile:http-idempotency-postgres:start
+	case failure.CodeIdempotencyKeyMismatch:
+		code = codes.InvalidArgument
+	// profile:http-idempotency-postgres:end
 	case failure.CodeUnauthorized:
 		code = codes.Unauthenticated
 	case failure.CodeForbidden:
@@ -181,6 +185,10 @@ func mappedStatus(mapped failure.Classification, domain string) error {
 	// profile:authn-oidc-jwt:end
 	case failure.CodeServiceUnavailable:
 		code = codes.Unavailable
+	// profile:http-idempotency-postgres:start
+	case failure.CodeIdempotencyUnavailable, failure.CodeIdempotencyOutcomeUnknown:
+		code = codes.Unavailable
+	// profile:http-idempotency-postgres:end
 	case failure.CodeGatewayTimeout:
 		code = codes.DeadlineExceeded
 	case failure.CodeInternalError:

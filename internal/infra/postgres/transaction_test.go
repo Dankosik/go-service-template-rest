@@ -39,7 +39,7 @@ func TestRunInTxPreservesServerErrorAfterLaterCancellation(t *testing.T) {
 	err := runInTx(ctx, tx, func(pgx.Tx) error {
 		cancel()
 		return serverErr
-	}, func(context.Context, pgx.Tx) error { return nil }, &contextWatcherMark{})
+	}, func(context.Context, pgx.Tx) error { return nil }, new(contextWatcherMark))
 	if errors.Is(err, context.Canceled) {
 		t.Fatalf("runInTx() error = %v, did not want caller cancellation", err)
 	}
@@ -49,8 +49,8 @@ func TestRunInTxPreservesServerErrorAfterLaterCancellation(t *testing.T) {
 	if tx.rollbackCount != 1 {
 		t.Fatalf("Rollback calls = %d, want 1", tx.rollbackCount)
 	}
-	if tx.rollbackContextCanceled || tx.rollbackContextHasDone {
-		t.Fatal("rollback context = canceled or done, want non-cancelled cleanup context")
+	if tx.rollbackContextCanceled || !tx.rollbackContextHasDone {
+		t.Fatal("rollback context = canceled or unbounded, want bounded non-cancelled cleanup context")
 	}
 }
 
@@ -58,9 +58,9 @@ func TestRunInTxAttributesMarkedCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	serverErr := &pgconn.PgError{Code: pgerrcode.QueryCanceled}
-	marker := &contextWatcherMark{}
+	marker := new(contextWatcherMark)
 	marker.canceled.Store(true)
-	tx := &trackedTx{}
+	tx := new(trackedTx)
 
 	err := runInTx(ctx, tx, func(pgx.Tx) error {
 		cancel()

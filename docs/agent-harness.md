@@ -54,9 +54,11 @@ session.
 Select the least capable available configuration that representative evidence
 shows can close the fixed brief. Preserve an exact user-requested model. Start
 ordinary implementation, review, and document work at the adapter's balanced
-tier; use low effort for closed mechanical work, high or xhigh for complex or
-high-consequence reasoning, and `max` only for the hardest quality-first work
-when representative evaluation or a diagnosed lower-effort gap justifies it.
+tier; use low effort for closed mechanical work and high or xhigh for complex
+or high-consequence reasoning. The Acceptance-Unit Lead is the reserved
+quality-first workload and uses `xhigh`, falling back to `high` only on a
+recorded unsupported or rejected override; that effort never propagates to its
+leaves. This workflow never selects `max`.
 
 Role names and tree depth do not select effort. A wrong result first reopens the
 diagnosis, brief, or route; it does not by itself justify more reasoning. Keep a

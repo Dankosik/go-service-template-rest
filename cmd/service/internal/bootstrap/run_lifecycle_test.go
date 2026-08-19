@@ -36,7 +36,7 @@ func TestSupervisedWorkOutlivesTheHTTPDrain(t *testing.T) {
 
 		started := make(chan context.Context, 1)
 		supervisor.Go(background.Task{
-			Name: "outbox_publisher",
+			Name: "background_task",
 			Run: func(ctx context.Context) error {
 				started <- ctx
 				<-ctx.Done()
@@ -83,10 +83,10 @@ func TestHTTPIdempotencyMaintenanceJoinsAfterHTTPDrain(t *testing.T) {
 		started := make(chan context.Context, 1)
 		runtime := httpIdempotencyRuntime{
 			interval: time.Second,
-			maintain: func(ctx context.Context) error {
+			cleanup: func(ctx context.Context) (int64, error) {
 				started <- ctx
 				<-ctx.Done()
-				return ctx.Err()
+				return 0, ctx.Err()
 			},
 		}
 		supervisor.Go(background.Task{Name: "http_idempotency_maintenance", Run: runtime.Run})

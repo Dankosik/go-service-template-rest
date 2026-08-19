@@ -1,7 +1,7 @@
 diff --git a/api/openapi/service.yaml b/api/openapi/service.yaml
 --- a/api/openapi/service.yaml
 +++ b/api/openapi/service.yaml
-@@ -14,6 +14,47 @@ tags:
+@@ -14,6 +14,38 @@ tags:
      description: Operational endpoints for liveness and readiness.
  paths:
 +  /active-fixture:
@@ -14,94 +14,37 @@ diff --git a/api/openapi/service.yaml b/api/openapi/service.yaml
 +          required: true
 +          schema:
 +            type: string
-+            maxLength: 64
++            maxLength: 255
 +      x-security-decision:
 +        exposure: protected
 +        rationale: disposable runtime-image fixture
-+      x-http-idempotency:
-+        api_version: v1
-+        key_max_bytes: 64
-+        fingerprint_versions: [v1]
-+        result_codecs: [fixture/v1]
-+        replay_statuses: [201]
-+        stable_headers: []
-+        result_max_bytes: 1024
-+        replay_ttl: 1h
-+        duplicate_risk:
-+          kind: finite
-+          duration: 2h
-+        in_progress_wait: 1s
-+        retry_after: 1s
-+        external_effect: none
++      x-idempotent: true
 +      responses:
 +        "201": {description: created}
 +        "400": {$ref: "#/components/responses/BadRequest"}
 +        "401": {description: unauthorized}
 +        "403": {description: forbidden}
-+        "409": {description: conflict}
 +        "413": {$ref: "#/components/responses/RequestEntityTooLarge"}
 +        "422": {description: unprocessable entity}
-+        "429": {description: too many requests}
++        "431": {description: request header fields too large}
 +        "500": {$ref: "#/components/responses/InternalServerError"}
 +        "503": {description: service unavailable}
 +        "504": {description: gateway timeout}
    /health/live:
      get:
        security: []
-       tags: [system]
-diff --git a/cmd/service/internal/bootstrap/active_idempotency_fixture.go b/cmd/service/internal/bootstrap/active_idempotency_fixture.go
-new file mode 100644
---- /dev/null
-+++ b/cmd/service/internal/bootstrap/active_idempotency_fixture.go
-@@ -0,0 +1,35 @@
-+package bootstrap
-+
-+import (
-+	"context"
-+	"net/http"
-+	"time"
-+
-+	"github.com/acme/runtime-image-proof/internal/httpidempotency"
-+	httpx "github.com/acme/runtime-image-proof/internal/infra/http"
-+)
-+
-+func activeFixtureIdempotencyOperations() []httpx.IdempotencyOperation {
-+	return []httpx.IdempotencyOperation{{
-+		Contract: httpidempotency.Contract{
-+			OperationID:         "activeFixture",
-+			APIVersion:          "v1",
-+			KeyMaxBytes:         64,
-+			FingerprintVersions: []string{"v1"},
-+			ResultCodecs:        []string{"fixture/v1"},
-+			ReplayStatuses:      []int{http.StatusCreated},
-+			ResultMaxBytes:      1024,
-+			ReplayTTL:           time.Hour,
-+			DuplicateRisk:       httpidempotency.DuplicateRiskPolicy{Duration: 2 * time.Hour},
-+			InProgressWait:      time.Second,
-+			RetryAfter:          time.Second,
-+			ExternalEffect:      httpidempotency.ExternalEffectNone,
-+		},
-+		Authorize: func(context.Context, *http.Request) (httpidempotency.Scope, bool) {
-+			return httpidempotency.Scope{Authority: "fixture", OperationID: "activeFixture", APIVersion: "v1", Resource: "fixture", Environment: "ci", Region: "local"}, true
-+		},
-+		Admit: func(context.Context, httpidempotency.Scope) httpidempotency.Decision {
-+			return httpidempotency.Decision{Outcome: httpidempotency.OutcomeExecute}
-+		},
-+	}}
-+}
 diff --git a/cmd/service/internal/bootstrap/run.go b/cmd/service/internal/bootstrap/run.go
 --- a/cmd/service/internal/bootstrap/run.go
 +++ b/cmd/service/internal/bootstrap/run.go
-@@ -202,5 +202,16 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
+@@ -201,6 +201,17 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
  	}
  	defer closeOwners()
-
-+	idempotencyOperations := activeFixtureIdempotencyOperations()
-+	idempotency, err := initHTTPIdempotencyRuntime(
+ 
++	idempotency, err := initDeclaredHTTPIdempotency(
 +		startupCtx,
 +		bootstrap.cfg,
 +		dependencies.postgres,
-+		idempotencyOperations,
++		bootstrap.log,
 +	)
 +	if err != nil {
 +		return err
@@ -109,17 +52,20 @@ diff --git a/cmd/service/internal/bootstrap/run.go b/cmd/service/internal/bootst
 +
  	authnVerifier, err := wiring.initAuthn(startupCtx, bootstrap.cfg, metrics, bootstrap.log)
  	if err != nil {
-@@ -242,13 +253,3 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
--	var idempotencyOperations []httpx.IdempotencyOperation
--	idempotency, err := initHTTPIdempotencyRuntime(
+ 		return err
+@@ -240,16 +251,6 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
+ 		supervisor.Go(background.Task{Name: "messaging_connection", Run: connectionRun})
+ 	}
+ 
+-	idempotency, err := initDeclaredHTTPIdempotency(
 -		startupCtx,
 -		bootstrap.cfg,
 -		dependencies.postgres,
--		idempotencyOperations,
+-		bootstrap.log,
 -	)
 -	if err != nil {
 -		return err
 -	}
- 	if idempotency.maintain != nil {
- 		supervisor.Go(background.Task{Name: "http_idempotency_maintenance", Run: idempotency.Run})
- 	}
+ 	idempotency.Supervise(supervisor)
+ 
+ 	// The failure channel below terminates serving; the readiness probe makes the

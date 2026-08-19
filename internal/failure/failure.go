@@ -26,9 +26,14 @@ const (
 	// profile:authn-oidc-jwt:end
 	CodeUnprocessableContent Code = "unprocessable_content"
 	CodeTooManyRequests      Code = "too_many_requests"
-	CodeInternalError        Code = "internal_error"
-	CodeServiceUnavailable   Code = "service_unavailable"
-	CodeGatewayTimeout       Code = "gateway_timeout"
+	// profile:http-idempotency-postgres:start
+	CodeIdempotencyKeyMismatch    Code = "idempotency_key_mismatch"
+	CodeIdempotencyUnavailable    Code = "idempotency_unavailable"
+	CodeIdempotencyOutcomeUnknown Code = "idempotency_outcome_unknown"
+	// profile:http-idempotency-postgres:end
+	CodeInternalError      Code = "internal_error"
+	CodeServiceUnavailable Code = "service_unavailable"
+	CodeGatewayTimeout     Code = "gateway_timeout"
 )
 
 // AllCodes returns every published code so a caller can walk the catalog rather
@@ -55,6 +60,11 @@ func AllCodes() []Code {
 		// profile:authn-oidc-jwt:end
 		CodeUnprocessableContent,
 		CodeTooManyRequests,
+		// profile:http-idempotency-postgres:start
+		CodeIdempotencyKeyMismatch,
+		CodeIdempotencyUnavailable,
+		CodeIdempotencyOutcomeUnknown,
+		// profile:http-idempotency-postgres:end
 		CodeInternalError,
 		CodeServiceUnavailable,
 		CodeGatewayTimeout,

@@ -13,6 +13,7 @@ import (
 	"github.com/example/go-service-template-rest/internal/failure"
 	"github.com/example/go-service-template-rest/internal/health"
 	"github.com/example/go-service-template-rest/internal/infra/postgres"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 const (
@@ -26,9 +27,7 @@ const (
 	postgresStartupBudget = 15 * time.Second
 
 	// postgresProbeBudget bounds the pool open and first ping, and is the
-	// ceiling validateStartupBudgetCompatibility enforces on
-	// postgres.connect_timeout and postgres.healthcheck_timeout, so a
-	// configured timeout can never exceed the stage that runs it.
+	// ceiling around the adapter's fixed connection and ping budgets.
 	postgresProbeBudget = 5 * time.Second
 
 	// startupReadinessHeadroom is the margin required between the health-check
@@ -49,7 +48,7 @@ type postgresStartupRuntime struct {
 
 type runtimeDependencies struct {
 	readiness health.Probe
-	postgres  *postgres.Pool
+	postgres  *pgxpool.Pool
 	closed    *sync.Once
 }
 
@@ -72,41 +71,16 @@ func (d runtimeDependencies) ReadinessProbes() []health.Probe {
 //
 // It is passed to health.Watch separately from the refresh interval. The two used
 // to be one argument, which clamped this budget to the interval: with the shipped
-// defaults a 3s postgres.healthcheck_timeout became 2s in steady state while
+// defaults a 3s PostgreSQL probe became 2s in steady state while
 // startup admission still granted the full 3s, so a database answering in between
 // passed admission and then flapped out of rotation. Configuration validation
 // keeps health.refresh_interval above this value.
-func readinessProbeBudget(cfg config.Config) time.Duration {
-	return cfg.Postgres.HealthcheckTimeout
+func readinessProbeBudget(config.Config) time.Duration {
+	return postgres.DefaultHealthcheckTimeout
 }
 
-// postgresSaturationRetryAfter is the hint on a request refused because every
-// pooled connection was busy. It matches the load-shedding hint for the same
-// reason: saturation means momentarily past capacity, not down, and a long hint
-// turns a brief spike into a client-side outage.
-const postgresSaturationRetryAfter = time.Second
-
-// DomainErrors classifies the dependency failures a handler can surface but
-// should not each have to translate.
-//
-// postgres.ErrSaturated is the one this profile owns. It is the database failure
-// that is not the database's fault: every connection is busy serving, so the
-// caller should back off and retry. Answering 500 instead told a client library
-// not to retry the one failure retrying fixes, and buried capacity pressure in the
-// same error rate as a genuine bug.
 func (d runtimeDependencies) DomainErrors() []failure.Mapper {
-	return []failure.Mapper{classifyPostgresDomainError}
-}
-
-func classifyPostgresDomainError(err error) (failure.Classification, bool) {
-	if !errors.Is(err, postgres.ErrSaturated) {
-		return failure.Classification{}, false
-	}
-	return failure.Classification{
-		Code:       failure.CodeServiceUnavailable,
-		Detail:     "the service is temporarily at capacity",
-		RetryAfter: postgresSaturationRetryAfter,
-	}, true
+	return nil
 }
 
 // Close releases pooled dependencies, bounded by ctx, and is safe to call twice.
@@ -118,13 +92,9 @@ func classifyPostgresDomainError(err error) (failure.Classification, bool) {
 // connection still held at this point is a leaked handler, not a slow close, and
 // reporting it beats waiting for it.
 func (d runtimeDependencies) Close(ctx context.Context) {
-	// profile:authn-oidc-jwt:start
-	// Ordered bootstrap proof substitutes an empty dependency owner before the
-	// authentication stage. Production dependency values remain non-empty.
 	if d.postgres == nil {
 		return
 	}
-	// profile:authn-oidc-jwt:end
 	if d.closed == nil {
 		d.postgres.Close()
 		return
@@ -159,20 +129,20 @@ func initRuntimeDependencies(
 	}
 
 	return runtimeDependencies{
-		readiness: newPostgresReadinessProbe(pg, bootstrap.cfg.Postgres.HealthcheckTimeout),
+		readiness: newPostgresReadinessProbe(pg, postgres.DefaultHealthcheckTimeout),
 		postgres:  pg,
 		closed:    new(sync.Once),
 	}, nil
 }
 
 // initPostgres opens the pool once. There is deliberately no retry loop here:
-// postgres.ConnectTimeout already bounds a slow dependency, and a bounded
+// the shared connection timeout already bounds a slow dependency, and a bounded
 // in-process retry cannot survive the failure it would be for — a database
 // restart takes seconds to minutes, far beyond any startup budget. Restarting
 // the process is the platform's job, and every supported deployment target
 // already has a restart policy for it.
-func initPostgres(ctx context.Context, cfg config.PostgresConfig) (*postgres.Pool, error) {
-	pg, err := postgres.New(ctx, runtimeopts.Postgres(cfg))
+func initPostgres(ctx context.Context, cfg config.PostgresConfig) (*pgxpool.Pool, error) {
+	pg, err := postgres.Open(ctx, runtimeopts.Postgres(cfg))
 	if err != nil {
 		return nil, fmt.Errorf("%w: postgres init failed: %w", errDependencyInit, err)
 	}
@@ -180,27 +150,7 @@ func initPostgres(ctx context.Context, cfg config.PostgresConfig) (*postgres.Poo
 }
 
 func validateStartupBudgetCompatibility(cfg config.Config) error {
-	if cfg.Postgres.Enabled {
-		if err := validateStartupTimeoutBudget("postgres.connect_timeout", cfg.Postgres.ConnectTimeout, postgresProbeBudget); err != nil {
-			return err
-		}
-		if err := validateStartupTimeoutBudget("postgres.healthcheck_timeout", cfg.Postgres.HealthcheckTimeout, postgresProbeBudget); err != nil {
-			return err
-		}
-	}
 	return validateStartupReadinessHeadroom(cfg)
-}
-
-func validateStartupTimeoutBudget(name string, value time.Duration, budget time.Duration) error {
-	if value <= budget {
-		return nil
-	}
-	return fmt.Errorf(
-		"%w: %s must be <= startup probe budget %s",
-		config.ErrValidate,
-		name,
-		budget,
-	)
 }
 
 func validateStartupReadinessHeadroom(cfg config.Config) error {
@@ -208,36 +158,43 @@ func validateStartupReadinessHeadroom(cfg config.Config) error {
 		return nil
 	}
 
-	required := cfg.Postgres.HealthcheckTimeout + startupReadinessHeadroom
+	required := postgres.DefaultHealthcheckTimeout + startupReadinessHeadroom
 	if cfg.HTTP.ReadinessTimeout >= required {
 		return nil
 	}
 	return fmt.Errorf(
-		"%w: http.readiness_timeout must be >= postgres.healthcheck_timeout readiness budget plus startup headroom (%s + %s = %s)",
+		"%w: http.readiness_timeout must be >= postgres readiness budget plus startup headroom (%s + %s = %s)",
 		config.ErrValidate,
-		cfg.Postgres.HealthcheckTimeout,
+		postgres.DefaultHealthcheckTimeout,
 		startupReadinessHeadroom,
 		required,
 	)
 }
 
+type postgresPinger interface {
+	Ping(ctx context.Context) error
+}
+
 type postgresReadinessProbe struct {
-	probe  health.Probe
+	pool   postgresPinger
 	budget time.Duration
 }
 
-func newPostgresReadinessProbe(probe health.Probe, budget time.Duration) postgresReadinessProbe {
-	return postgresReadinessProbe{probe: probe, budget: budget}
+func newPostgresReadinessProbe(pool postgresPinger, budget time.Duration) postgresReadinessProbe {
+	return postgresReadinessProbe{pool: pool, budget: budget}
 }
 
 func (p postgresReadinessProbe) Name() string {
-	return p.probe.Name()
+	return startupDependencyPostgres
 }
 
 func (p postgresReadinessProbe) Check(ctx context.Context) error {
+	if p.pool == nil {
+		return fmt.Errorf("postgres readiness probe: %w", postgres.ErrHealthcheck)
+	}
 	probeCtx, probeCancel := withStageBudget(ctx, p.budget)
 	defer probeCancel()
-	if err := p.probe.Check(probeCtx); err != nil {
+	if err := p.pool.Ping(probeCtx); err != nil {
 		return fmt.Errorf("postgres readiness probe: %w", err)
 	}
 	if err := probeCtx.Err(); err != nil {
@@ -246,7 +203,7 @@ func (p postgresReadinessProbe) Check(ctx context.Context) error {
 	return nil
 }
 
-func initPostgresDependency(bootstrapCtx context.Context, dependencyCtx context.Context, runtime postgresStartupRuntime) (*postgres.Pool, error) {
+func initPostgresDependency(bootstrapCtx context.Context, dependencyCtx context.Context, runtime postgresStartupRuntime) (*pgxpool.Pool, error) {
 	if !runtime.cfg.Postgres.Enabled {
 		return nil, rejectPostgresStartupForDependencyInit(
 			bootstrapCtx,

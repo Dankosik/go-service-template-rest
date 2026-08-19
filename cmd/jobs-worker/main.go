@@ -8,7 +8,7 @@ import (
 )
 
 func main() {
-	if err := bootstrap.Run(os.Args[1:], buildRegistry); err != nil {
+	if err := bootstrap.Run(os.Args[1:], buildWorkers); err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}

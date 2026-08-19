@@ -14,6 +14,9 @@ import (
 	// profile:bootstrap-config:start
 	"github.com/example/go-service-template-rest/internal/config"
 	// profile:bootstrap-config:end
+	// profile:http-idempotency-postgres:start
+	"github.com/example/go-service-template-rest/internal/httpidempotency"
+	// profile:http-idempotency-postgres:end
 	httpx "github.com/example/go-service-template-rest/internal/infra/http"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 	"github.com/example/go-service-template-rest/internal/observability/logctx"
@@ -161,7 +164,7 @@ func Run(args []string) error {
 	return runWithRuntime(args, productionRuntimeWiring())
 }
 
-//nolint:cyclop,gocognit // Bootstrap keeps startup and shutdown ordering in the composition root.
+//nolint:cyclop // Bootstrap keeps startup and shutdown ordering in the composition root.
 func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 	loadOptions, err := parseLoadOptions(args)
 	if err != nil {
@@ -322,33 +325,30 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 	// profile:messaging-nats-jetstream:end
 
 	// profile:http-idempotency-postgres:start
-	var idempotencyOperations []httpx.IdempotencyOperation
-	idempotency, err := initHTTPIdempotencyRuntime(
+	idempotency, err := initDeclaredHTTPIdempotency(
 		startupCtx,
 		bootstrap.cfg,
 		dependencies.postgres,
-		idempotencyOperations,
+		bootstrap.log,
 	)
 	if err != nil {
 		return err
 	}
-	if idempotency.maintain != nil {
-		supervisor.Go(background.Task{Name: "http_idempotency_maintenance", Run: idempotency.Run})
-	}
+	idempotency.Supervise(supervisor)
 	// profile:http-idempotency-postgres:end
 
 	// The failure channel below terminates serving; the readiness probe makes the
 	// same failure visible during the short interval before the drain begins.
 	readinessProbes := dependencies.ReadinessProbes()
-	// profile:http-idempotency-postgres:start
-	readinessProbes = append(readinessProbes, idempotency.ReadinessProbes()...)
-	// profile:http-idempotency-postgres:end
 	// profile:messaging-nats-jetstream:start
 	readinessProbes = append(readinessProbes, messaging.ReadinessProbes()...)
 	// profile:messaging-nats-jetstream:end
 	healthSvc := newReadinessService(bootstrap.cfg, bootstrap.log, readinessProbes, supervisor)
 
 	domainErrors := dependencies.DomainErrors()
+	// profile:http-idempotency-postgres:start
+	domainErrors = append(domainErrors, httpidempotency.ClassifyError)
+	// profile:http-idempotency-postgres:end
 	handler, err := newHTTPHandler(
 		bootstrap.cfg,
 		bootstrap.log,
@@ -370,10 +370,6 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 					)
 				},
 			},
-			// profile:http-idempotency-postgres:start
-			IdempotencyOperations:       idempotencyOperations,
-			IdempotencyTerminalObserver: idempotency.store.ObserveTerminal,
-			// profile:http-idempotency-postgres:end
 			// profile:authn-oidc-jwt:start
 			Authenticate:          httpx.Authenticated(authnVerifier.ResolveHTTP),
 			AuthenticateChallenge: "Bearer",

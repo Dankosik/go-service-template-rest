@@ -215,6 +215,10 @@ reachable vocabulary:
 | `failure.Code` | gRPC code |
 | --- | --- |
 | `CodeBadRequest`, `CodeUnprocessableContent` | `InvalidArgument` |
+<!-- profile:http-idempotency-postgres:start -->
+| `CodeIdempotencyKeyMismatch` | `InvalidArgument` |
+| `CodeIdempotencyUnavailable`, `CodeIdempotencyOutcomeUnknown` | `Unavailable` |
+<!-- profile:http-idempotency-postgres:end -->
 | `CodeUnauthorized` | `Unauthenticated` |
 | `CodeForbidden` | `PermissionDenied` |
 | `CodeNotFound` | `NotFound` |

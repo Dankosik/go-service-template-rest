@@ -45,9 +45,6 @@ type Config struct {
 	// profile:webhooks-durable:start
 	Webhooks WebhooksConfig `koanf:"webhooks"`
 	// profile:webhooks-durable:end
-	// profile:outbox-postgres:start
-	Outbox OutboxConfig `koanf:"outbox"`
-	// profile:outbox-postgres:end
 	// profile:object-storage:start
 	ObjectStorage ObjectStorageConfig `koanf:"object_storage"`
 	// profile:object-storage:end

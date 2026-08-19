@@ -1,48 +1,53 @@
 <!-- profile:jobs-postgres:start -->
-# PostgreSQL durable background jobs
+# PostgreSQL background jobs
 
-`JOBS=postgres` retains the reusable default-off job pack and `/jobs-worker`.
-The worker fails closed before database I/O until a derived service supplies a
-concrete builder. It neither creates a producer nor enables operator controls,
-periodic scheduling, multiple classes, deployment, or capacity claims.
-Every registered definition's termination envelope must fit
-`http.grace_period`; the worker rejects a mismatch before opening PostgreSQL.
+`JOBS=postgres` retains River, its Goose-owned schema migration, and the
+`/jobs-worker` process. Business code defines a typed `river.JobArgs`, implements
+`river.Worker[T]`, registers it once with `river.AddWorkerSafely`, and inserts it
+through `Client.InsertTx` in the business transaction.
+<!-- profile:webhooks-durable:start -->
+`WEBHOOKS=durable` supplies the template's one concrete River worker; without
+that profile the nil-builder fail-closed contract remains unchanged.
+<!-- profile:webhooks-durable:end -->
 
-Worker metrics include `postgres.jobs.queue.delay` (eligible-to-claim delay)
-and `postgres.jobs.attempt.duration` (handler duration), bounded Store-operation
-duration/outcome, and terminal/drain events. They carry no job, payload,
-producer, occurrence, effect identity, or arbitrary error; attributes use only
-closed operation/outcome vocabularies.
+The template does not implement a second claim, lease, retry, heartbeat, rescue,
+scheduling, concurrency, shutdown, readiness, telemetry, or operator engine.
+River owns those mechanics. The worker adds River's OpenTelemetry plugin to the
+repository's existing providers and exposes the standard process diagnostics.
 
-This pack is a durable execution kernel, not a complete job platform. It has no
-authenticated inspect/cancel/redrive/delete surface, terminal cleanup loop,
-retention defaults, tenant fairness, admission backpressure, capacity model, or
-SLO/alert thresholds. `postgres_job_actions` is a deprecated compatibility
-relation from migration `000004`, not reserved capacity: current schema
-admission, runtime code, roles, and proofs do not depend on it. Remove it only
-in a later append-only contract migration after every N-1 worker that still
-checks the original exact schema has left the rollback window.
+The reusable binary deliberately has no job kind. A derived service replaces its
+nil worker builder and registers its business workers before PostgreSQL is opened.
+`jobs.max_workers` is the only jobs-specific runtime setting; the source template
+uses `0` to stay inert, and a selected deployment starts at `1` unless capacity
+evidence supports more.
 
-Compatibility blocks claims only when a `ready`, `scheduled`, `retry_wait`,
-`running`, or `cancel_requested` row has an unregistered exact revision.
-Terminal history stays retained but does not globally stop unrelated live work;
-any future redrive must recheck the target revision before changing state.
-Observation cadence and readiness freshness use a worker-local monotonic
-deadline derived from the observation interval, one poll interval, and one
-Store-operation timeout. PostgreSQL `clock_timestamp()` remains authoritative
-for persisted scheduling, leases, and transition timestamps, never local timer
-arithmetic.
+River's configured baseline is its explicit one-minute job timeout and 25-attempt
+retry default. Business job types may narrow attempts, timeout, queue, uniqueness,
+or one-off schedule through River's native `InsertOpts` and worker methods. The
+baseline uses one default queue and no periodic jobs, River UI, or River Pro.
 
-Before production use, the adopter must supply a concrete definition and effect
-idempotency/reconciliation authority, payload classification and retention,
-operator decision (including safe redrive classes), representative capacity and
-PostgreSQL/vacuum evidence, N/N-1 artifact proof, termination-platform bounds,
-and alerts/runbooks. Until those inputs exist, keep producer emission and any
-manual recovery surface disabled.
+River provides enqueue uniqueness, not effect idempotency. Workers run with
+at-least-once semantics, so an external side effect still needs a stable provider
+idempotency key, a repeat-safe invariant, or reconciliation owned by the business
+feature. Keep payloads to stable identifiers rather than secrets or unnecessary
+personal data; OSS retention is client-wide.
 
-`app.instance_id` is only the deployment-instance prefix. Each worker process
-adds a random suffix so overlapping replicas and restarts never share lease or
-fencing identity.
+Migration `000004` remains append-only legacy history. Shared migration
+`000008_river.sql` vendors River v0.44.0 migrations 001-007 into the canonical
+Goose sequence for jobs, outbox, and webhooks. Existing
+deployments must stop legacy production, drain every nonterminal `postgres_jobs`
+row, apply the additive River schema, and then switch producer and worker code.
+If legacy work cannot drain, do not deploy this cutover without a separately
+designed row bridge. Legacy tables remain during the rollback window.
+
+The worker runs River in `PollOnly` mode because the shared PostgreSQL pool
+enforces finite statement budgets; an unbounded `LISTEN` would conflict with
+that connection policy.
+
+River's OSS UI is not part of this profile and is publicly accessible by default.
+Any deployment of it needs externally owned authentication and network policy.
+Per-queue retention, durable periodic schedules, global concurrency limits, and
+the Pro dead-letter queue require an explicit River Pro purchase and reopen.
 
 Local commands:
 

@@ -23,8 +23,16 @@ work](https://learn.chatgpt.com/docs/long-running-work), and
 - Give every create a unique `dispatch_scope` from ledger revision, unit, and
   attempt. When the create schema cannot accept the parent-selected model and
   effort directly, bootstrap with the role and scope only, require exactly
-  `READY_FOR_DISPATCH`, then send one technical follow-up with the selected
-  supported fields.
+  `READY_FOR_DISPATCH`, then make one accepted technical follow-up carrying the
+  full handoff plus the selected `model` and `thinking` in their structured
+  fields. Omitting a field the installed schema exposes is an invalid dispatch,
+  and the child may not start technical work. After a rejection, retry without
+  only the rejected field solely when native evidence proves that call delivered
+  no message; ambiguous delivery follows [Codex
+  Recovery](codex-recovery.md) and never repeats the handoff.
+- Record the selected pair, the accepted call, any schema-absence or rejection
+  evidence, and the effective fallback as the dispatch configuration receipt.
+  Model-control limitations never become a user question.
 - Set `startingState` only when the accepted base requires it. Before a Worker
   writes, verify its actual Worktree identity and exact frozen base.
 
@@ -33,8 +41,10 @@ work](https://learn.chatgpt.com/docs/long-running-work), and
 Decode each native response once and copy identity from the installed schema.
 Retain `threadId`, `hostId`, and the latest wait cursor; address later waits,
 messages, and Handoff by identity, never title. Wait on relevant tasks together
-and emit no conclusion from an unchanged timeout. Correct the same task without
-model or effort overrides.
+and emit no conclusion from an unchanged timeout. After a valid dispatch
+configuration receipt, correct the same task without model or effort overrides
+so its selected configuration stays intact; without that receipt the initial
+dispatch stays invalid rather than becoming a correction.
 
 A Local Lead creates one acceptance Goal. A Worktree Lead completes its
 candidate Goal, returns `HANDOFF_READY`, and creates a separate Local acceptance

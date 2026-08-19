@@ -2,6 +2,7 @@ package postgreswebhook
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -10,23 +11,30 @@ import (
 	"strings"
 )
 
-type (
-	secretTuple    struct{ owner, destination, reference string }
-	SecretManifest struct {
-		revision int64
-		entries  map[secretTuple][]byte
-	}
+const (
+	MaxSecretManifestBytes   = 1 << 20
+	MaxSecretManifestEntries = 4096
 )
 
-type manifestDocument struct {
-	Revision int64           `json:"revision"`
-	Entries  []manifestEntry `json:"entries"`
+type secretTuple struct {
+	owner     string
+	receiver  string
+	reference string
 }
-type manifestEntry struct {
-	OwnerScope    string `json:"owner_scope"`
-	DestinationID string `json:"destination_id"`
-	KeyReference  string `json:"key_reference"`
-	Secret        string `json:"secret"`
+
+type SecretManifest struct {
+	entries map[secretTuple][]byte
+}
+
+type secretDocument struct {
+	Entries []secretEntry `json:"entries"`
+}
+
+type secretEntry struct {
+	OwnerScope   string `json:"owner_scope"`
+	ReceiverID   string `json:"receiver_id"`
+	KeyReference string `json:"key_reference"`
+	Secret       string `json:"secret"`
 }
 
 func ParseSecretManifest(raw string) (*SecretManifest, error) {
@@ -38,20 +46,22 @@ func ParseSecretManifest(raw string) (*SecretManifest, error) {
 	}
 	decoder := json.NewDecoder(strings.NewReader(raw))
 	decoder.DisallowUnknownFields()
-	var document manifestDocument
+	var document secretDocument
 	if err := decoder.Decode(&document); err != nil {
 		return nil, errors.New("parse webhook secret manifest: invalid JSON")
 	}
 	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
 		return nil, errors.New("parse webhook secret manifest: trailing data")
 	}
-	if document.Revision <= 0 || len(document.Entries) == 0 || len(document.Entries) > MaxSecretManifestEntries {
-		return nil, errors.New("parse webhook secret manifest: positive revision and entries are required")
+	if len(document.Entries) == 0 || len(document.Entries) > MaxSecretManifestEntries {
+		return nil, errors.New("parse webhook secret manifest: entries are required")
 	}
-	manifest := &SecretManifest{revision: document.Revision, entries: make(map[secretTuple][]byte, len(document.Entries))}
-	bindings := make(map[string]secretTuple)
+	manifest := &SecretManifest{entries: make(map[secretTuple][]byte, len(document.Entries))}
+	bindings := make(map[[sha256.Size]byte]secretTuple)
 	for _, entry := range document.Entries {
-		for name, value := range map[string]string{"owner_scope": entry.OwnerScope, "destination_id": entry.DestinationID, "key_reference": entry.KeyReference} {
+		for name, value := range map[string]string{
+			ownerScopeField: entry.OwnerScope, receiverIDField: entry.ReceiverID, "key_reference": entry.KeyReference,
+		} {
 			if err := validateToken(name, value); err != nil {
 				return nil, errors.New("parse webhook secret manifest: invalid identifier")
 			}
@@ -64,16 +74,15 @@ func ParseSecretManifest(raw string) (*SecretManifest, error) {
 		if err != nil || len(secret) < 32 || len(secret) > 64 {
 			return nil, errors.New("parse webhook secret manifest: secret encoding is invalid")
 		}
-		tuple := secretTuple{entry.OwnerScope, entry.DestinationID, entry.KeyReference}
+		tuple := secretTuple{owner: entry.OwnerScope, receiver: entry.ReceiverID, reference: entry.KeyReference}
 		if _, exists := manifest.entries[tuple]; exists {
 			return nil, errors.New("parse webhook secret manifest: duplicate binding")
 		}
-		digest := canonicalDigest(secret)
-		fingerprint := string(digest[:])
-		if previous, exists := bindings[fingerprint]; exists && (previous.owner != tuple.owner || previous.destination != tuple.destination) {
+		digest := sha256.Sum256(secret)
+		if previous, exists := bindings[digest]; exists && (previous.owner != tuple.owner || previous.receiver != tuple.receiver) {
 			return nil, errors.New("parse webhook secret manifest: key is cross-bound")
 		}
-		bindings[fingerprint] = tuple
+		bindings[digest] = tuple
 		manifest.entries[tuple] = bytes.Clone(secret)
 	}
 	return manifest, nil
@@ -135,18 +144,11 @@ func inspectJSONValue(decoder *json.Decoder) error {
 	return nil
 }
 
-func (m *SecretManifest) Revision() int64 {
-	if m == nil {
-		return 0
-	}
-	return m.revision
-}
-
-func (m *SecretManifest) Resolve(owner, destination, reference string) (SigningKey, error) {
+func (m *SecretManifest) Resolve(owner, receiver, reference string) (SigningKey, error) {
 	if m == nil {
 		return SigningKey{}, fmt.Errorf("%w: secret manifest is required", ErrConfig)
 	}
-	value, ok := m.entries[secretTuple{owner, destination, reference}]
+	value, ok := m.entries[secretTuple{owner: owner, receiver: receiver, reference: reference}]
 	if !ok {
 		return SigningKey{}, fmt.Errorf("%w: binding not found", ErrSecretUnavailable)
 	}

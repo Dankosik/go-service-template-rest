@@ -28,6 +28,11 @@ func TestCodesAreStableAndTransportNeutral(t *testing.T) {
 		// profile:authn-oidc-jwt:end
 		"unprocessable_content",
 		"too_many_requests",
+		// profile:http-idempotency-postgres:start
+		"idempotency_key_mismatch",
+		"idempotency_unavailable",
+		"idempotency_outcome_unknown",
+		// profile:http-idempotency-postgres:end
 		"internal_error",
 		"service_unavailable",
 		"gateway_timeout",

@@ -46,7 +46,7 @@ func TestPostgresMigrateUpNoopDownUp(t *testing.T) {
 	if err != nil {
 		t.Fatalf("MigrateUp(first) error: %v", err)
 	}
-	if first.Before != 0 || first.Target != 2 || first.After != 2 || len(first.Migrations) != 2 {
+	if first.Before != 0 || first.Target != 2 || first.After != 2 || first.AppliedCount != 2 {
 		t.Fatalf("MigrateUp(first) result = %+v", first)
 	}
 
@@ -54,7 +54,7 @@ func TestPostgresMigrateUpNoopDownUp(t *testing.T) {
 	if err != nil {
 		t.Fatalf("MigrateUp(second) error: %v", err)
 	}
-	if second.Before != 2 || second.After != 2 || len(second.Migrations) != 0 {
+	if second.Before != 2 || second.After != 2 || second.AppliedCount != 0 {
 		t.Fatalf("MigrateUp(second) result = %+v, want no change", second)
 	}
 
@@ -62,7 +62,7 @@ func TestPostgresMigrateUpNoopDownUp(t *testing.T) {
 	if err != nil {
 		t.Fatalf("MigrateDown() error: %v", err)
 	}
-	if down.Before != 2 || down.Target != 0 || down.After != 0 || len(down.Migrations) != 2 {
+	if down.Before != 2 || down.Target != 0 || down.After != 0 || down.AppliedCount != 2 {
 		t.Fatalf("MigrateDown() result = %+v", down)
 	}
 
@@ -82,7 +82,7 @@ func TestPostgresMigrateUpNoopDownUp(t *testing.T) {
 	if err != nil {
 		t.Fatalf("MigrateUp(reapply) error: %v", err)
 	}
-	if reapplied.Before != 0 || reapplied.After != 2 || len(reapplied.Migrations) != 2 {
+	if reapplied.Before != 0 || reapplied.After != 2 || reapplied.AppliedCount != 2 {
 		t.Fatalf("MigrateUp(reapply) result = %+v", reapplied)
 	}
 }
@@ -115,7 +115,7 @@ func TestPostgresMigrateRepositorySourceRehearsal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("repository MigrateUp(second) error: %v", err)
 	}
-	if len(second.Migrations) != 0 || second.After != first.After {
+	if second.AppliedCount != 0 || second.After != first.After {
 		t.Fatalf("repository second Up = %+v, first = %+v", second, first)
 	}
 	down, err := postgresmigrate.MigrateDown(ctx, options)
@@ -131,6 +131,96 @@ func TestPostgresMigrateRepositorySourceRehearsal(t *testing.T) {
 	}
 	if reapplied.After != first.Target {
 		t.Fatalf("repository reapply after = %d, want target %d", reapplied.After, first.Target)
+	}
+}
+
+func TestPostgresHTTPIdempotencySchemaReplacementIsFailClosed(t *testing.T) {
+	legacyMigration, err := os.ReadFile("../migrations/000003_postgres_http_idempotency.sql")
+	if err != nil {
+		t.Fatalf("read legacy HTTP idempotency migration: %v", err)
+	}
+	replacementMigration, err := os.ReadFile("../migrations/000009_postgres_http_idempotency_simplify.sql")
+	if err != nil {
+		t.Fatalf("read replacement HTTP idempotency migration: %v", err)
+	}
+	legacySource := fstest.MapFS{
+		"migrations/000003_postgres_http_idempotency.sql": {Data: legacyMigration},
+	}
+	replacementSource := fstest.MapFS{
+		"migrations/000003_postgres_http_idempotency.sql":          {Data: legacyMigration},
+		"migrations/000009_postgres_http_idempotency_simplify.sql": {Data: replacementMigration},
+	}
+
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
+	defer cancel()
+	dsn := pgtest.DSN(t)
+	if _, err := postgresmigrate.MigrateUp(ctx, migrationOptions(dsn, legacySource)); err != nil {
+		t.Fatalf("apply published legacy migration: %v", err)
+	}
+	pool := openVerificationPool(t, ctx, dsn)
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO postgres_http_idempotency (
+			identity_token, generation, phase, provisional_fingerprint_version,
+			provisional_fingerprint, recover_after
+		) VALUES (
+			decode(repeat('01', 32), 'hex'),
+			nextval('postgres_http_idempotency_generation_seq'),
+			'reserved', 'v1', decode(repeat('02', 32), 'hex'), clock_timestamp() + interval '1 hour'
+		)`); err != nil {
+		t.Fatalf("seed active legacy row: %v", err)
+	}
+
+	if _, err := postgresmigrate.MigrateUp(ctx, migrationOptions(dsn, replacementSource)); err == nil {
+		t.Fatal("replace schema with active legacy row: error = nil")
+	} else if !strings.Contains(err.Error(), "cannot replace active legacy HTTP idempotency state") {
+		t.Fatalf("replace schema with active legacy row: %v", err)
+	}
+	if !columnExists(t, ctx, pool, "postgres_http_idempotency", "generation") ||
+		columnExists(t, ctx, pool, "postgres_http_idempotency", "expires_at") {
+		t.Fatal("failed replacement did not preserve the published legacy schema")
+	}
+	var rows int
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM postgres_http_idempotency").Scan(&rows); err != nil || rows != 1 {
+		t.Fatalf("legacy row after rejected replacement = %d, error %v", rows, err)
+	}
+
+	if _, err := pool.Exec(ctx, "DELETE FROM postgres_http_idempotency"); err != nil {
+		t.Fatalf("drain legacy rows: %v", err)
+	}
+	if _, err := postgresmigrate.MigrateUp(ctx, migrationOptions(dsn, replacementSource)); err != nil {
+		t.Fatalf("replace drained legacy schema: %v", err)
+	}
+	if columnExists(t, ctx, pool, "postgres_http_idempotency", "generation") ||
+		!columnExists(t, ctx, pool, "postgres_http_idempotency", "expires_at") {
+		t.Fatal("replacement schema columns are not active")
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO postgres_http_idempotency (identity_token, fingerprint_version, fingerprint)
+		VALUES (decode(repeat('03', 32), 'hex'), 2, decode(repeat('04', 32), 'hex'))
+	`); err != nil {
+		t.Fatalf("seed active replacement row: %v", err)
+	}
+
+	if _, err := postgresmigrate.MigrateDown(ctx, migrationOptions(dsn, replacementSource)); err == nil {
+		t.Fatal("restore legacy schema with active replacement row: error = nil")
+	} else if !strings.Contains(err.Error(), "cannot restore legacy HTTP idempotency schema") {
+		t.Fatalf("restore legacy schema with active replacement row: %v", err)
+	}
+	if !columnExists(t, ctx, pool, "postgres_http_idempotency", "expires_at") {
+		t.Fatal("failed rollback did not preserve the replacement schema")
+	}
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM postgres_http_idempotency").Scan(&rows); err != nil || rows != 1 {
+		t.Fatalf("replacement row after rejected rollback = %d, error %v", rows, err)
+	}
+
+	if _, err := pool.Exec(ctx, "DELETE FROM postgres_http_idempotency"); err != nil {
+		t.Fatalf("drain replacement rows: %v", err)
+	}
+	if _, err := postgresmigrate.MigrateDown(ctx, migrationOptions(dsn, replacementSource)); err != nil {
+		t.Fatalf("roll back drained replacement schema: %v", err)
+	}
+	if relationExists(t, ctx, pool, "postgres_http_idempotency") {
+		t.Fatal("HTTP idempotency table exists after complete rollback")
 	}
 }
 
@@ -161,8 +251,7 @@ func TestPostgresMigratePreservesCommittedPrefixAndRollsBackFailedFile(t *testin
 	if postgresmigrate.FailureStageOf(err) != postgresmigrate.FailureExecute {
 		t.Fatalf("failure stage = %q, want execute; error = %v", postgresmigrate.FailureStageOf(err), err)
 	}
-	if result.After != 1 || len(result.Migrations) != 1 || result.Failed == nil ||
-		result.Failed.Version != 2 {
+	if result.After != 1 || result.AppliedCount != 1 {
 		t.Fatalf("partial result = %+v", result)
 	}
 
@@ -320,7 +409,7 @@ func TestPostgresMigrateSessionLockSerializesConcurrentRunners(t *testing.T) {
 		if err := <-errs; err != nil {
 			t.Fatalf("concurrent MigrateUp() error: %v", err)
 		}
-		totalApplied += len((<-results).Migrations)
+		totalApplied += (<-results).AppliedCount
 	}
 	if totalApplied != 1 {
 		t.Fatalf("concurrent applied count = %d, want exactly one", totalApplied)
@@ -393,7 +482,7 @@ func TestPostgresMigrateCancellationStopsLaterMigration(t *testing.T) {
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("MigrateUp() error = %v, want context.Canceled", err)
 	}
-	if result.After != 0 || len(result.Migrations) != 0 {
+	if result.After != 0 || result.AppliedCount != 0 {
 		t.Fatalf("canceled result = %+v, want no committed migration", result)
 	}
 	if relationExists(t, outer, pool, "migration_later") {
@@ -434,6 +523,22 @@ func relationExists(t *testing.T, ctx context.Context, pool *pgxpool.Pool, relat
 	var exists bool
 	if err := pool.QueryRow(ctx, "SELECT to_regclass($1) IS NOT NULL", relation).Scan(&exists); err != nil {
 		t.Fatalf("inspect relation %s: %v", relation, err)
+	}
+	return exists
+}
+
+func columnExists(t *testing.T, ctx context.Context, pool *pgxpool.Pool, table, column string) bool {
+	t.Helper()
+
+	var exists bool
+	if err := pool.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT FROM information_schema.columns
+			WHERE table_schema = current_schema()
+			  AND table_name = $1
+			  AND column_name = $2
+		)`, table, column).Scan(&exists); err != nil {
+		t.Fatalf("inspect column %s.%s: %v", table, column, err)
 	}
 	return exists
 }

@@ -35,11 +35,16 @@ Otherwise:
 
 | Lane | Model |
 | --- | --- |
-| Closed mechanical Worker | Luna |
-| Ordinary or complex Worker or review | Terra |
-| Acceptance-Unit Lead or hardest critical review | Sol |
+| Closed mechanical Worker | Luna with `low` effort |
+| Ordinary or complex Worker or review | Terra at `medium`, raised to `high` or `xhigh` for closed-route complex, cross-cutting, protected-domain, or high-consequence work |
+| Acceptance-Unit Lead or hardest critical review | Sol with `xhigh`, falling back to Sol `high` only on a recorded unsupported or rejected `xhigh` override |
 
-Apply the shared effort policy through installed supported fields. Omit an
-unsupported field, continue on the effective configured value, and record the
-capability gap. Corrections and continuations keep the established
-configuration.
+Apply the shared effort policy through the installed supported fields. When the
+installed schema exposes `model` or `thinking`, omitting it is an invalid
+dispatch: inherited settings and a model or effort named only in prompt text do
+not satisfy selection. Treat a field as unavailable only when the installed
+schema lacks it, and as rejected only from the control's actual rejection;
+then continue on the effective configured value and retain that capability
+evidence. [Codex Orchestration](codex/codex-orchestration.md) owns the dispatch
+configuration receipt. Only after that receipt do corrections and continuations
+omit overrides so the established configuration stays intact.

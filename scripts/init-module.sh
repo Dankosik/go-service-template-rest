@@ -7,7 +7,7 @@ TEMPLATE_OWNER="@Dankosik"
 TEMPLATE_API_TITLE="go-service-template-rest"
 
 usage() {
-	echo "usage: CODEOWNER=@user-or-org/team DATABASE=none|postgres HTTP_IDEMPOTENCY=none|postgres JOBS=none|postgres WEBHOOKS=none|durable OUTBOX=none|postgres INBOX=none|postgres GRPC=none|enabled AUTHN=none|oidc-jwt OUTBOUND_HTTP=none|bounded OBJECT_STORAGE=none|s3 OUTBOUND_AUTH=none|oauth2-client-credentials MESSAGING=none|nats-jetstream REFERENCE_EXAMPLE=remove|keep $0 [module-path]"
+	echo "usage: CODEOWNER=@user-or-org/team DATABASE=none|postgres HTTP_IDEMPOTENCY=none|postgres JOBS=none|postgres WEBHOOKS=none|durable OUTBOX=none|postgres GRPC=none|enabled AUTHN=none|oidc-jwt OUTBOUND_HTTP=none|bounded OBJECT_STORAGE=none|s3 OUTBOUND_AUTH=none|oauth2-client-credentials MESSAGING=none|nats-jetstream REFERENCE_EXAMPLE=remove|keep $0 [module-path]"
 	echo "module-path is derived from git remote origin when omitted"
 }
 
@@ -227,18 +227,13 @@ strip_profile() {
 	fi
 }
 
-# The source profile contains assignments and branching that the profile-off
-# output no longer has, so neither source-only directive applies there.
+# The idempotency profile adds the one branch that needs this source-only
+# directive; the profile-off output is below the cyclomatic ceiling.
 remove_http_idempotency_profile_lint() {
-	local file temporary
-
-	for file in cmd/service/internal/bootstrap/run.go internal/infra/http/router.go; do
-		[[ -f "${file}" ]] || continue
-		temporary="$(mktemp)"
-		awk '/nolint:cyclop,gocognit/ || /nolint:ineffassign,staticcheck,wastedassign/ { next } { print }' \
-			"${file}" >"${temporary}"
-		mv "${temporary}" "${file}"
-	done
+	local temporary
+	temporary="$(mktemp)"
+	awk '/nolint:cyclop/ { next } { print }' cmd/service/internal/bootstrap/run.go >"${temporary}"
+	mv "${temporary}" cmd/service/internal/bootstrap/run.go
 }
 
 # write_template_lock records where this service came from. Initialization
@@ -249,16 +244,15 @@ write_template_lock() {
 	local database="$1"
 	local http_idempotency="$2"
 	local outbox="$3"
-	local inbox="$4"
-	local grpc="$5"
-	local authn="$6"
-	local outbound_http="$7"
-	local outbound_auth="$8"
-	local messaging="$9"
-	local reference_example="${10}"
-	local object_storage="${11}"
-	local jobs="${12}"
-	local webhooks="${13}"
+	local grpc="$4"
+	local authn="$5"
+	local outbound_http="$6"
+	local outbound_auth="$7"
+	local messaging="$8"
+	local reference_example="$9"
+	local object_storage="${10}"
+	local jobs="${11}"
+	local webhooks="${12}"
 	local source_revision
 
 	source_revision="$(git rev-parse HEAD 2>/dev/null || true)"
@@ -276,7 +270,6 @@ source_revision = "${source_revision}"
 database = "${database}"
 http_idempotency = "${http_idempotency}"
 outbox = "${outbox}"
-inbox = "${inbox}"
 grpc = "${grpc}"
 authn = "${authn}"
 outbound_http = "${outbound_http}"
@@ -360,17 +353,13 @@ publisher limits, and the separate consumer worker using
 \`docs/durable-messaging.md\` before enabling it.
 <!-- profile:messaging-nats-jetstream:end -->
 <!-- profile:outbox-postgres:start -->
-This service includes the PostgreSQL transactional outbox and its separately
-deployed bounded relay. Publication is at-least-once and consumers must tolerate
-duplicate event IDs; see \`docs/postgres-transactional-outbox.md\`.
+This service includes a River-backed PostgreSQL transactional outbox and its
+separate NATS publication worker. Publication is at-least-once and consumers
+must tolerate duplicate event IDs; see \`docs/postgres-transactional-outbox.md\`.
 <!-- profile:outbox-postgres:end -->
-<!-- profile:inbox-postgres:start -->
-This service includes the PostgreSQL idempotent inbox. Keep each claim and its
-feature effect in the same transaction; see \`docs/postgres-idempotent-inbox.md\`.
-<!-- profile:inbox-postgres:end -->
 <!-- profile:webhooks-durable:start -->
-This service includes durable PostgreSQL-backed outbound webhook delivery and
-its separately deployed worker; see \`docs/outbound-webhook-delivery.md\`.
+This service stages one durable job per webhook receiver and delivers it from
+the shared jobs worker; see \`docs/outbound-webhook-delivery.md\`.
 <!-- profile:webhooks-durable:end -->
 EOF
 }
@@ -406,20 +395,8 @@ if [[ "${outbox}" == "postgres" && "${database}" != "postgres" ]]; then
 	exit 1
 fi
 
-if [[ "${INBOX+x}" == "x" && -z "${INBOX-}" ]]; then
-	echo "INBOX must be one of: none, postgres"
-	exit 1
-fi
-inbox="${INBOX:-none}"
-case "${inbox}" in
-none | postgres) ;;
-*)
-	echo "INBOX must be one of: none, postgres"
-	exit 1
-	;;
-esac
-if [[ "${inbox}" == "postgres" && "${database}" != "postgres" ]]; then
-	echo "INBOX=postgres requires DATABASE=postgres"
+if [[ "${INBOX+x}" == "x" ]]; then
+	echo "INBOX is no longer supported"
 	exit 1
 fi
 
@@ -469,8 +446,8 @@ none | durable) ;;
 	exit 1
 	;;
 esac
-if [[ "${webhooks}" == "durable" && "${database}" != "postgres" ]]; then
-	echo "WEBHOOKS=durable requires DATABASE=postgres"
+if [[ "${webhooks}" == "durable" && ( "${database}" != "postgres" || "${jobs}" != "postgres" ) ]]; then
+	echo "WEBHOOKS=durable requires DATABASE=postgres JOBS=postgres"
 	exit 1
 fi
 
@@ -547,6 +524,10 @@ none | nats-jetstream) ;;
 	exit 1
 	;;
 esac
+if [[ "${outbox}" == "postgres" && "${messaging}" != "nats-jetstream" ]]; then
+	echo "OUTBOX=postgres requires MESSAGING=nats-jetstream"
+	exit 1
+fi
 
 # The reference example is upstream teaching material. Keeping it would make a
 # generated service own five extra packages, a second OpenAPI contract, and a
@@ -627,7 +608,6 @@ if [[ -f template.lock ]]; then
 		"jobs = \"${jobs}\"" \
 		"webhooks = \"${webhooks}\"" \
 		"outbox = \"${outbox}\"" \
-		"inbox = \"${inbox}\"" \
 		"grpc = \"${grpc}\"" \
 		"authn = \"${authn}\"" \
 		"outbound_http = \"${outbound_http}\"" \
@@ -646,7 +626,6 @@ if [[ -f template.lock ]]; then
 	echo "  jobs: ${jobs}"
 	echo "  webhooks: ${webhooks}"
 	echo "  outbox: ${outbox}"
-	echo "  inbox: ${inbox}"
 	echo "  gRPC: ${grpc}"
 	echo "  authentication: ${authn}"
 	echo "  outbound HTTP: ${outbound_http}"
@@ -707,15 +686,10 @@ if [[ "${source_checkout}" != true ]]; then
 	rebase_coverage_floor
 
 	if [[ "${outbox}" == "none" ]]; then
-		rm -rf -- cmd/outbox-relay internal/infra/postgresoutbox
+		rm -rf -- cmd/outbox-relay internal/domainevent internal/infra/postgresoutbox
 		rm -f -- \
-			examples/reference-service/postgres_outbox_reconciliation_integration_test.go \
-			internal/config/outbox_config.go \
-			internal/config/outbox_config_test.go \
-			internal/infra/natsjs/outbox_publisher.go \
-			internal/infra/natsjs/outbox_publisher_test.go \
-			internal/infra/postgres/queries/postgres_outbox.sql \
-			internal/infra/postgres/sqlcgen/postgres_outbox.sql.go \
+			internal/infra/natsjs/outbox.go \
+			internal/infra/natsjs/outbox_test.go \
 			test/postgres_outbox_*_test.go \
 			docs/postgres-transactional-outbox.md
 		remove_outbox_migrations
@@ -724,60 +698,37 @@ if [[ "${source_checkout}" != true ]]; then
 		strip_profile outbox-postgres keep
 	fi
 
-	if [[ "${inbox}" == "none" ]]; then
-		rm -rf -- internal/infra/postgresinbox
-		rm -f -- \
-			docs/postgres-idempotent-inbox.md \
-			examples/reference-service/postgres_inbox_integration_test.go \
-			internal/infra/postgres/queries/postgres_inbox.sql \
-			internal/infra/postgres/sqlcgen/postgres_inbox.sql.go \
-			migrations/000002_postgres_inbox.sql \
-			test/postgres_inbox_*_test.go
-		strip_profile inbox-postgres remove
-	else
-		strip_profile inbox-postgres keep
-	fi
-
 	if [[ "${http_idempotency}" == "none" ]]; then
 		rm -rf -- internal/httpidempotency internal/infra/postgresidempotency
 		rm -f -- \
 			cmd/service/internal/bootstrap/startup_idempotency.go \
 			cmd/service/internal/bootstrap/startup_idempotency_test.go \
-			cmd/service/internal/bootstrap/startup_idempotency_integration_test.go \
 			internal/config/http_idempotency_config.go \
 			internal/config/http_idempotency_config_test.go \
 			internal/infra/http/idempotency.go \
-			internal/infra/http/idempotency_registration.go \
-			internal/infra/http/idempotency_registration_test.go \
-			internal/infra/http/idempotency_response.go \
 			internal/infra/http/idempotency_test.go \
-			internal/infra/http/middleware_idempotency.go \
 			internal/problem/idempotency_problem_test.go \
 			migrations/000003_postgres_http_idempotency.sql \
+			migrations/000009_postgres_http_idempotency_simplify.sql \
 			internal/infra/postgres/queries/postgres_http_idempotency.sql \
 			internal/infra/postgres/sqlcgen/postgres_http_idempotency.sql.go \
-			test/postgres_http_idempotency_fixtures_integration_test.go \
+			test/postgres_http_idempotency_http_integration_test.go \
 			test/postgres_http_idempotency_integration_test.go \
 			docs/postgres-http-idempotency.md
 		strip_profile http-idempotency-postgres remove
 		remove_http_idempotency_profile_lint
 	else
 		strip_profile http-idempotency-postgres keep
-		if [[ "${outbox}" == "none" ]]; then
-			rm -f -- test/postgres_http_idempotency_integration_test.go
-		fi
 	fi
 
 		if [[ "${jobs}" == "none" ]]; then
-		rm -rf -- cmd/jobs-worker internal/jobs internal/infra/postgresjobs
-		rm -f -- \
+		rm -rf -- cmd/jobs-worker
+			rm -f -- \
 			internal/config/jobs_config.go \
 			internal/config/jobs_config_test.go \
 			internal/config/jobs_worker_config.go \
 			internal/config/jobs_worker_config_test.go \
 			migrations/000004_postgres_jobs.sql \
-			internal/infra/postgres/queries/postgres_jobs.sql \
-			internal/infra/postgres/sqlcgen/postgres_jobs.sql.go \
 			test/postgres_jobs_*_test.go \
 			docs/postgres-durable-background-jobs.md
 		strip_profile jobs-postgres remove
@@ -786,22 +737,26 @@ if [[ "${source_checkout}" != true ]]; then
 		fi
 
 		if [[ "${webhooks}" == "none" ]]; then
-			rm -rf -- cmd/webhook-worker internal/infra/postgreswebhook
+			rm -rf -- internal/infra/postgreswebhook
 			rm -f -- \
+				cmd/jobs-worker/builder_webhooks.go \
+				cmd/jobs-worker/builder_webhooks_test.go \
 				docs/outbound-webhook-delivery.md \
 				internal/config/webhooks_config.go \
 				internal/config/webhooks_config_test.go \
 				migrations/000005_postgres_webhooks.sql \
 				migrations/000006_postgres_webhook_reference_repairs.sql \
-				internal/infra/postgres/queries/postgres_webhooks.sql \
-				internal/infra/postgres/sqlcgen/postgres_webhooks.sql.go \
+				migrations/000007_postgres_webhooks_retire.sql \
 				test/postgres_webhook_*_test.go \
-				test/webhook_network_integration_test.go \
-				test/webhook_process_integration_test.go
+				test/webhook_network_integration_test.go
 			strip_profile webhooks-durable remove
 		else
 			strip_profile webhooks-durable keep
 		fi
+
+	if [[ "${jobs}" == "none" && "${outbox}" == "none" && "${webhooks}" == "none" ]]; then
+		rm -f -- migrations/000008_river.sql
+	fi
 
 	# All PostgreSQL capability profiles derive from the same SQLC package. Resolve
 	# their source sets before one regeneration so any sibling can remain alone.
@@ -938,8 +893,6 @@ fi
 		rm -rf -- cmd/worker internal/infra/natsjs
 		rm -f -- \
 			cmd/internal/runtimeopts/messaging.go \
-			cmd/outbox-relay/internal/bootstrap/natsjs_publisher.go \
-			cmd/outbox-relay/internal/bootstrap/natsjs_publisher_test.go \
 			cmd/service/internal/bootstrap/startup_messaging.go \
 			cmd/service/internal/bootstrap/startup_messaging_test.go \
 			docs/durable-messaging.md \
@@ -947,7 +900,6 @@ fi
 			internal/config/messaging_config_test.go \
 			internal/config/configtest/messaging.go \
 			test/nats_messaging_*_test.go \
-			test/postgres_inbox_natsjs_integration_test.go \
 			test/postgres_outbox_natsjs_integration_test.go
 		strip_profile messaging-nats-jetstream remove
 		go mod tidy
@@ -1001,9 +953,9 @@ fi
 	fi
 
 	# internal/config/configtest exists for parity tests that hold runtime owners
-	# and internal/config to one answer. Retained jobs, outbox, and outbound-auth
-	# bootstrap tests also use it, so it leaves only after every current importer.
-	if [[ "${jobs}" == "none" && "${outbox}" == "none" && "${grpc}" == "none" && "${authn}" == "none" && "${outbound_auth}" == "none" && "${messaging}" == "none" ]]; then
+	# and internal/config to one answer. Retained Postgres, jobs, outbox, and
+	# outbound-auth tests also use it, so it leaves only after every current importer.
+	if [[ "${database}" == "none" && "${jobs}" == "none" && "${outbox}" == "none" && "${grpc}" == "none" && "${authn}" == "none" && "${outbound_auth}" == "none" && "${messaging}" == "none" ]]; then
 		rm -rf -- internal/config/configtest
 	fi
 
@@ -1056,7 +1008,7 @@ fi
 		go generate ./internal/openapi
 	fi
 
-	write_template_lock "${database}" "${http_idempotency}" "${outbox}" "${inbox}" "${grpc}" "${authn}" "${outbound_http}" "${outbound_auth}" "${messaging}" "${reference_example}" "${object_storage}" "${jobs}" "${webhooks}"
+	write_template_lock "${database}" "${http_idempotency}" "${outbox}" "${grpc}" "${authn}" "${outbound_http}" "${outbound_auth}" "${messaging}" "${reference_example}" "${object_storage}" "${jobs}" "${webhooks}"
 
 fi
 
@@ -1075,7 +1027,6 @@ echo "  HTTP idempotency: ${http_idempotency}"
 echo "  jobs: ${jobs}"
 echo "  webhooks: ${webhooks}"
 echo "  outbox: ${outbox}"
-echo "  inbox: ${inbox}"
 echo "  gRPC: ${grpc}"
 echo "  authentication: ${authn}"
 echo "  outbound HTTP: ${outbound_http}"

@@ -3,134 +3,99 @@
 package integration_test
 
 import (
-	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
-	"fmt"
+	"os"
 	"testing"
+	"time"
 
+	"github.com/example/go-service-template-rest/internal/infra/postgres"
+	"github.com/example/go-service-template-rest/internal/infra/postgres/pgtest"
 	"github.com/example/go-service-template-rest/internal/infra/postgreswebhook"
 	"github.com/jackc/pgx/v5"
 )
 
-func TestPostgresWebhookAcceptance(t *testing.T) {
-	ctx, pool, store, _ := newPostgresWebhookFixture(t)
-	if _, err := pool.PGX().Exec(ctx, `CREATE TABLE webhook_business_fixture (id text PRIMARY KEY)`); err != nil {
+func TestPostgresWebhookAcceptanceUsesJobsAuthority(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
+	defer cancel()
+	dsn := pgtest.Migrated(t, os.DirFS(".."), "migrations")
+	pool, err := postgres.Open(ctx, postgres.Options{DSN: dsn, MaxOpenConns: 4})
+	if err != nil {
 		t.Fatal(err)
 	}
-	prepared := webhookPrepared(t, "atomic")
-	receipt, err := store.AcceptAtomic(ctx, prepared, func(ctx context.Context, tx pgx.Tx) error {
-		if _, err := tx.Exec(ctx, `INSERT INTO webhook_business_fixture VALUES ('atomic')`); err != nil {
-			return err
-		}
-		return nil
-	})
-	if err != nil || receipt.Disposition != postgreswebhook.AcceptanceAccepted || len(receipt.DeliveryIDs) != 1 {
-		t.Fatalf("AcceptAtomic() = %+v, %v", receipt, err)
-	}
-	reconstructedInput := prepared.Acceptance
-	reconstructedInput.Destinations = []postgreswebhook.DestinationSnapshot{prepared.Destinations[0].DestinationSnapshot}
-	reconstructed, err := postgreswebhook.PrepareAcceptance(reconstructedInput)
-	if err != nil || reconstructed.Destinations[0].DeliveryID != prepared.Destinations[0].DeliveryID {
-		t.Fatalf("PrepareAcceptance(reconstructed) = %+v, %v", reconstructed, err)
-	}
-	readback, err := store.ResolveAcceptance(ctx, reconstructed)
-	if err != nil || readback.Disposition != postgreswebhook.AcceptanceAccepted || !bytes.Equal([]byte(readback.DeliveryIDs[0]), []byte(prepared.Destinations[0].DeliveryID)) {
-		t.Fatalf("ResolveAcceptance() = %+v, %v", readback, err)
-	}
-	if err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
-		receipt, err := store.Accept(ctx, tx, prepared)
-		if err != nil || receipt.Disposition != postgreswebhook.AcceptanceAccepted {
-			return fmt.Errorf("replay acceptance: %+v: %w", receipt, err)
-		}
-		return nil
-	}); err != nil {
+	t.Cleanup(pool.Close)
+	var activeRelations, deprecatedRelations int
+	if err := pool.QueryRow(ctx, `
+SELECT count(*) FILTER (WHERE tablename LIKE 'webhook_%'),
+       count(*) FILTER (WHERE tablename LIKE 'deprecated_webhook_%')
+FROM pg_tables
+WHERE schemaname = current_schema()`).Scan(&activeRelations, &deprecatedRelations); err != nil {
 		t.Fatal(err)
 	}
-	rolledBack := webhookPrepared(t, "rollback")
-	rollback := errors.New("rollback fixture")
-	_, err = store.AcceptAtomic(ctx, rolledBack, func(ctx context.Context, tx pgx.Tx) error {
-		if _, err := tx.Exec(ctx, `INSERT INTO webhook_business_fixture VALUES ('rollback')`); err != nil {
-			return err
-		}
-		return rollback
-	})
-	if !errors.Is(err, rollback) {
-		t.Fatalf("rollback error = %v", err)
+	if activeRelations != 0 || deprecatedRelations != 11 {
+		t.Fatalf("webhook relations = active %d, deprecated %d", activeRelations, deprecatedRelations)
 	}
+	endpoints, err := postgreswebhook.ParseEndpointManifest(`{"endpoints":[
+		{"owner_scope":"orders","receiver_id":"alpha","generation":1,"url":"https://alpha.example/hooks","active_key_reference":"alpha-v1"},
+		{"owner_scope":"orders","receiver_id":"beta","generation":1,"url":"https://beta.example/hooks","active_key_reference":"beta-v1"},
+		{"owner_scope":"orders","receiver_id":"gamma","generation":1,"url":"https://gamma.example/hooks","active_key_reference":"gamma-v1"}
+	]}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dispatcher, err := postgreswebhook.NewDispatcher(endpoints)
+	if err != nil {
+		t.Fatal(err)
+	}
+	event := postgreswebhook.Event{
+		OwnerScope: "orders", ID: "evt-1", Type: "order.created",
+		OccurredAt: time.Date(2026, 8, 18, 10, 0, 0, 0, time.UTC),
+		Data:       json.RawMessage(`{"order_id":"ord-1"}`),
+	}
+	prepared, err := dispatcher.Prepare(event, []postgreswebhook.ReceiverID{"alpha", "beta"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	stage := func(prepared postgreswebhook.Prepared) (postgreswebhook.AcceptanceStatus, error) {
+		var status postgreswebhook.AcceptanceStatus
+		err := postgres.InTx(ctx, pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
+			var err error
+			status, err = prepared.Stage(ctx, tx)
+			return err
+		})
+		return status, err
+	}
+	if status, err := stage(prepared); err != nil || status != postgreswebhook.AcceptanceNew {
+		t.Fatalf("Stage(new) = %s, %v", status, err)
+	}
+	if status, err := stage(prepared); err != nil || status != postgreswebhook.AcceptanceExisting {
+		t.Fatalf("Stage(existing) = %s, %v", status, err)
+	}
+
 	var count int
-	if err := pool.PGX().QueryRow(ctx, `SELECT count(*) FROM webhook_events WHERE acceptance_id = $1`, rolledBack.Acceptance.AcceptanceID).Scan(&count); err != nil || count != 0 {
-		t.Fatalf("rolled-back event count = %d, %v", count, err)
-	}
-	if err := pool.PGX().QueryRow(ctx, `SELECT count(*) FROM webhook_business_fixture WHERE id = 'rollback'`).Scan(&count); err != nil || count != 0 {
-		t.Fatalf("rolled-back feature count = %d, %v", count, err)
-	}
-}
-
-func TestPostgresWebhookAcceptanceReadback(t *testing.T) {
-	ctx, _, store, _ := newPostgresWebhookFixture(t)
-	prepared := webhookPrepared(t, "absent")
-	receipt, err := store.ResolveAcceptance(ctx, prepared)
-	if err != nil || receipt.Disposition != postgreswebhook.AcceptanceRejected {
-		t.Fatalf("ResolveAcceptance(absent) = %+v, %v", receipt, err)
-	}
-}
-
-func TestPostgresWebhookAcceptanceCollisionAndDestinationState(t *testing.T) {
-	ctx, pool, store, manifest := newPostgresWebhookFixture(t)
-	accepted := webhookPrepared(t, "collision-a")
-	if err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error { _, err := store.Accept(ctx, tx, accepted); return err }); err != nil {
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM river_job WHERE kind = 'outbound_webhook'`).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
+	if count != 2 {
+		t.Fatalf("webhook jobs = %d, want 2", count)
+	}
 
-	conflictingInput := accepted.Acceptance
-	conflictingInput.AcceptanceID = "accept-collision-b"
-	conflictingInput.FanoutSnapshotID = "fanout-collision-b"
-	conflictingInput.Destinations = []postgreswebhook.DestinationSnapshot{accepted.Destinations[0].DestinationSnapshot}
-	conflicting, err := postgreswebhook.PrepareAcceptance(conflictingInput)
+	narrowed, err := dispatcher.Prepare(event, []postgreswebhook.ReceiverID{"alpha"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
-		receipt, err := store.Accept(ctx, tx, conflicting)
-		if !errors.Is(err, postgreswebhook.ErrConflict) || receipt.Disposition != postgreswebhook.AcceptanceConflict {
-			return fmt.Errorf("Accept(conflict) = %+v, %w", receipt, err)
-		}
-		return err
-	})
-	if !errors.Is(err, postgreswebhook.ErrConflict) {
-		t.Fatalf("collision error = %v", err)
+	if status, err := stage(narrowed); !errors.Is(err, postgreswebhook.ErrConflict) || status != postgreswebhook.AcceptanceConflict {
+		t.Fatalf("Stage(narrowed fanout) = %s, %v", status, err)
 	}
-
-	disable := postgreswebhook.ActionRequest{OwnerScope: "owner-a", Actor: "operator-a", ActionID: "disable-a", Kind: postgreswebhook.ActionDestinationState, TargetKind: "destination", TargetID: "dest-a", TargetGeneration: 1, ExpectedRevision: 1, Reason: "admin_disable", Payload: &postgreswebhook.DestinationStateAction{Disposition: "disabled"}}
-	if receipt, err := store.ApplyAction(ctx, disable, manifest); err != nil || receipt.Result != "applied" {
-		t.Fatalf("ApplyAction(disable) = %+v, %v", receipt, err)
-	}
-	if err := pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error {
-		receipt, err := store.Accept(ctx, tx, accepted)
-		if err != nil || receipt.Disposition != postgreswebhook.AcceptanceAccepted {
-			return fmt.Errorf("Accept(replay after disable) = %+v, %w", receipt, err)
-		}
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
-
-	newInput := conflictingInput
-	newInput.BusinessEventID = "event-collision-b"
-	newAcceptance, err := postgreswebhook.PrepareAcceptance(newInput)
+	replaced, err := dispatcher.Prepare(event, []postgreswebhook.ReceiverID{"gamma"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = pool.InTx(ctx, pgx.TxOptions{}, func(tx pgx.Tx) error { _, err := store.Accept(ctx, tx, newAcceptance); return err })
-	if !errors.Is(err, postgreswebhook.ErrConflict) {
-		t.Fatalf("Accept(disabled generation) error = %v", err)
+	if status, err := stage(replaced); !errors.Is(err, postgreswebhook.ErrConflict) || status != postgreswebhook.AcceptanceConflict {
+		t.Fatalf("Stage(replaced fanout) = %s, %v", status, err)
 	}
-	var events, fanouts, deliveries, cycles int
-	if err := pool.PGX().QueryRow(ctx, `SELECT (SELECT count(*) FROM webhook_events), (SELECT count(*) FROM webhook_fanouts), (SELECT count(*) FROM webhook_deliveries), (SELECT count(*) FROM webhook_cycles)`).Scan(&events, &fanouts, &deliveries, &cycles); err != nil {
-		t.Fatal(err)
-	}
-	if events != 1 || fanouts != 1 || deliveries != 1 || cycles != 1 {
-		t.Fatalf("partial authority remained: events=%d fanouts=%d deliveries=%d cycles=%d", events, fanouts, deliveries, cycles)
+	if status, err := prepared.Resolve(ctx, pool); err != nil || status != postgreswebhook.AcceptanceAccepted {
+		t.Fatalf("Resolve() = %s, %v", status, err)
 	}
 }

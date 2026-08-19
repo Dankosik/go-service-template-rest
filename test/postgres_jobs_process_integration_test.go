@@ -4,178 +4,101 @@ package integration_test
 
 import (
 	"bytes"
-	"net/http"
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"syscall"
 	"testing"
 	"time"
 
-	"github.com/example/go-service-template-rest/internal/jobs"
+	"github.com/example/go-service-template-rest/internal/infra/postgres"
+	"github.com/example/go-service-template-rest/internal/infra/postgres/pgtest"
 	"github.com/example/go-service-template-rest/internal/waittest"
+	"github.com/riverqueue/river"
+	"github.com/riverqueue/river/riverdriver/riverpgxv5"
 )
 
-func TestPostgresJobsProcess(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("SIGTERM process lifecycle is Unix-specific")
-	}
-	ctx, pool, store := newPostgresJobsFixture(t)
-	repositoryRoot, err := filepath.Abs("..")
+type jobsWorkerProcessArgs struct {
+	Value string `json:"value"`
+}
+
+func (jobsWorkerProcessArgs) Kind() string { return "jobs_worker_test" }
+
+func TestPostgresJobsWorkerProcess(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
+	defer cancel()
+	dsn := pgtest.Migrated(t, os.DirFS(".."), "migrations")
+	pool, err := postgres.Open(ctx, postgres.Options{DSN: dsn, MaxOpenConns: 4})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("open PostgreSQL: %v", err)
 	}
+	t.Cleanup(pool.Close)
+
+	producer, err := river.NewClient(riverpgxv5.New(pool), &river.Config{})
+	if err != nil {
+		t.Fatalf("create River producer: %v", err)
+	}
+	if _, err := producer.Insert(ctx, jobsWorkerProcessArgs{Value: "worked"}, nil); err != nil {
+		t.Fatalf("insert River job: %v", err)
+	}
+
 	binary := filepath.Join(t.TempDir(), "jobs-worker")
-	build := exec.CommandContext(t.Context(), "go", "build", "-tags", "jobs_test_worker", "-o", binary, "./cmd/jobs-worker")
-	build.Dir = repositoryRoot
+	build := exec.CommandContext(ctx, "go", "build", "-tags", "jobs_test_worker", "-o", binary, "./cmd/jobs-worker")
+	build.Dir = ".."
 	if output, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build jobs worker: %v\n%s", err, output)
 	}
 
-	for _, test := range []struct {
-		name       string
-		handler    string
-		stage      bool
-		wantFailed bool
-	}{
-		{name: "no_work"},
-		{name: "cooperative", handler: "cooperative", stage: true},
-		{name: "noncooperative", handler: "noncooperative", stage: true, wantFailed: true},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			var claimedJobID string
-			var postSignalJobID string
-			if test.stage {
-				claimedJobID = string(stageDuePostgresJob(ctx, t, pool, store, "process-"+test.name).Identity().LogicalJobID)
-			}
-			addr := waittest.FreeTCPAddr(t, "jobs worker diagnostics")
-			cleanupFile := filepath.Join(t.TempDir(), "cleanup")
-			var output bytes.Buffer
-			process := exec.Command(binary)
-			process.Dir = repositoryRoot
-			process.Env = append(cleanServiceEnvironment(os.Environ()),
-				"APP__APP__ENV=integration",
-				"APP__AUTHN__ISSUER=",
-				"APP__OBSERVABILITY__METRICS__ADDR="+addr,
-				"APP__POSTGRES__ENABLED=true",
-				"APP__POSTGRES__DSN="+postgresJobsDSN(pool),
-				"APP__POSTGRES__MAX_OPEN_CONNS=8",
-				"APP__POSTGRES__STATEMENT_TIMEOUT=1s",
-				"APP__POSTGRES__ACQUIRE_TIMEOUT=500ms",
-				"APP__JOBS__ENABLED=true",
-				"APP__JOBS__POLL_INTERVAL=10ms",
-				"APP__JOBS__MAX_CONCURRENCY=1",
-				"APP__JOBS__LEASE_DURATION=1s",
-				"APP__JOBS__STORE_OPERATION_TIMEOUT=100ms",
-				"APP__JOBS__OBSERVATION_INTERVAL=10ms",
-				"APP__JOBS__DRAIN_TIMEOUT=100ms",
-				"APP__HTTP__GRACE_PERIOD=8s",
-				"APP__HTTP__SHUTDOWN_TIMEOUT=1s",
-				"APP__HTTP__WRITE_TIMEOUT=1s",
-				"APP__HTTP__READINESS_TIMEOUT=1s",
-				"APP__HTTP__REQUEST_TIMEOUT=1s",
-				"APP__HTTP__READINESS_PROPAGATION_DELAY=0s",
-				"JOBS_WORKER_TEST_CLEANUP_FILE="+cleanupFile,
-			)
-			if test.handler != "" {
-				process.Env = append(process.Env, "JOBS_WORKER_TEST_HANDLER="+test.handler)
-			}
-			process.Stdout, process.Stderr = &output, &output
-			t.Cleanup(func() { t.Logf("jobs worker output:\n%s", output.String()) })
-			if err := process.Start(); err != nil {
-				t.Fatalf("start jobs worker: %v", err)
-			}
-			waited := make(chan error, 1)
-			finished := make(chan struct{})
-			go func() {
-				waited <- process.Wait()
-				close(finished)
-			}()
-			t.Cleanup(func() {
-				select {
-				case <-finished:
-				default:
-					_ = process.Process.Kill()
-					<-finished
-				}
-			})
+	marker := filepath.Join(t.TempDir(), "worked")
+	var output bytes.Buffer
+	process := exec.CommandContext(ctx, binary)
+	process.Stdout = &output
+	process.Stderr = &output
+	process.Env = append(os.Environ(),
+		"APP__APP__ENV=local",
+		"APP__POSTGRES__ENABLED=true",
+		"APP__POSTGRES__DSN="+dsn,
+		"APP__POSTGRES__MAX_OPEN_CONNS=4",
+		"APP__JOBS__MAX_WORKERS=1",
+		"APP__OBSERVABILITY__METRICS__ADDR="+waittest.FreeTCPAddr(t, "jobs diagnostics"),
+		"JOBS_WORKER_TEST_MARKER="+marker,
+	)
+	if err := process.Start(); err != nil {
+		t.Fatalf("start jobs worker: %v", err)
+	}
+	waitErr := make(chan error, 1)
+	go func() { waitErr <- process.Wait() }()
+	t.Cleanup(func() {
+		if process.ProcessState == nil {
+			_ = process.Process.Kill()
+		}
+	})
 
-			client := &http.Client{Timeout: 100 * time.Millisecond}
-			waittest.Until(t, 5*time.Second, func() bool {
-				response, err := client.Get("http://" + addr + "/health/ready")
-				if err != nil {
-					return false
-				}
-				_ = response.Body.Close()
-				return response.StatusCode == http.StatusOK
-			}, "jobs worker readiness")
-			if test.stage {
-				waittest.Until(t, 5*time.Second, func() bool {
-					var attempts int
-					if err := pool.PGX().QueryRow(ctx, `SELECT count(*) FROM postgres_job_attempts WHERE logical_job_id = $1`, claimedJobID).Scan(&attempts); err != nil {
-						t.Fatal(err)
-					}
-					return attempts == 1
-				}, "durable claimed attempt")
-			}
-			if err := process.Process.Signal(syscall.SIGTERM); err != nil {
-				t.Fatalf("signal jobs worker: %v", err)
-			}
-			if test.stage {
-				waittest.Until(t, 5*time.Second, func() bool {
-					response, err := client.Get("http://" + addr + "/health/ready")
-					if err != nil {
-						return false
-					}
-					defer response.Body.Close()
-					return response.StatusCode == http.StatusServiceUnavailable
-				}, "readiness withdrawal before claim quiescence")
-				postSignal := stageDuePostgresJob(ctx, t, pool, store, "process-post-signal-"+test.name)
-				postSignalJobID = string(postSignal.Identity().LogicalJobID)
-			}
-			select {
-			case err := <-waited:
-				if (err != nil) != test.wantFailed {
-					t.Fatalf("jobs worker exit = %v, want failed=%t\n%s", err, test.wantFailed, output.String())
-				}
-			case <-time.After(12 * time.Second):
-				t.Fatalf("jobs worker did not exit\n%s", output.String())
-			}
-			if _, err := os.Stat(cleanupFile); (err == nil) != !test.wantFailed {
-				t.Fatalf("cleanup marker error = %v, want cleanup=%t", err, !test.wantFailed)
-			}
-			if test.stage {
-				assertPostgresJobsAttemptCount(ctx, t, pool, jobs.LogicalJobID(postSignalJobID), 0)
-				if _, err := pool.PGX().Exec(ctx, `UPDATE postgres_jobs SET state = 'scheduled', available_at = clock_timestamp() + interval '1 hour' WHERE logical_job_id = $1`, postSignalJobID); err != nil {
-					t.Fatalf("isolate post-quiescence job: %v", err)
-				}
-			}
-			if test.wantFailed {
-				var leaseRemainingMilliseconds int64
-				if err := pool.PGX().QueryRow(ctx, `
-SELECT greatest(coalesce((extract(epoch FROM (lease_expires_at - clock_timestamp())) * 1000)::bigint, 0), 0)
-FROM postgres_jobs
-WHERE logical_job_id = $1`, claimedJobID).Scan(&leaseRemainingMilliseconds); err != nil {
-					t.Fatalf("read durable unjoined attempt lease: %v", err)
-				}
-				waittest.Until(t, time.Duration(leaseRemainingMilliseconds)*time.Millisecond+3*time.Second, func() bool {
-					var state, outcome, effect string
-					var leaseExpired bool
-					if err := pool.PGX().QueryRow(ctx, `
-SELECT job.state, coalesce(job.lease_expires_at < clock_timestamp(), false),
-  coalesce(attempt.outcome, ''), coalesce(attempt.effect_status, '')
-FROM postgres_jobs AS job
-LEFT JOIN postgres_job_attempts AS attempt
-  ON attempt.logical_job_id = job.logical_job_id
- AND attempt.attempt_generation = job.attempt_generation
-WHERE job.logical_job_id = $1`, claimedJobID).Scan(&state, &leaseExpired, &outcome, &effect); err == nil {
-						return state == "running" && leaseExpired ||
-							state == "outcome_unknown" && outcome == "lost" && effect == "unknown"
-					}
-					return false
-				}, "durable unjoined attempt recoverability")
-			}
-		})
+	var earlyExit bool
+	var earlyErr error
+	waittest.Until(t, 30*time.Second, func() bool {
+		select {
+		case earlyErr = <-waitErr:
+			earlyExit = true
+			return true
+		default:
+		}
+		value, err := os.ReadFile(marker)
+		return err == nil && string(value) == "worked"
+	}, "jobs worker effect")
+	if earlyExit {
+		t.Fatalf("jobs worker exited before handling work: %v\n%s", earlyErr, output.String())
+	}
+	if err := process.Process.Signal(syscall.SIGTERM); err != nil {
+		t.Fatalf("signal jobs worker: %v", err)
+	}
+	select {
+	case err := <-waitErr:
+		if err != nil {
+			t.Fatalf("jobs worker exit: %v\n%s", err, output.String())
+		}
+	case <-time.After(15 * time.Second):
+		t.Fatalf("jobs worker did not stop\n%s", output.String())
 	}
 }
