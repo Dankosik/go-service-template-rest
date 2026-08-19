@@ -249,6 +249,56 @@ type DeprecatedWebhookTombstone struct {
 	CreatedAt             pgtype.Timestamptz
 }
 
+type OutboxCommitReceipt struct {
+	EventID             string
+	FingerprintVersion  int16
+	EnvelopeFingerprint []byte
+}
+
+type OutboxEvent struct {
+	ID                   string
+	EventType            string
+	Source               string
+	Destination          string
+	SchemaName           string
+	OccurredAt           pgtype.Timestamptz
+	Payload              []byte
+	Metadata             []byte
+	TraceContext         []byte
+	OrderingKey          *string
+	OrderingSequence     *int64
+	OrderingReady        bool
+	CreatedAt            pgtype.Timestamptz
+	AvailableAt          pgtype.Timestamptz
+	CycleAttemptCount    int32
+	TotalAttemptCount    int64
+	LastAttemptAt        pgtype.Timestamptz
+	LeaseToken           *string
+	LeaseExpiresAt       pgtype.Timestamptz
+	PublishedAt          pgtype.Timestamptz
+	PoisonedAt           pgtype.Timestamptz
+	PublicationUncertain *bool
+	LastErrorClass       *string
+	RedriveCount         int32
+	LastRedriveID        *string
+	LastRedrivenAt       pgtype.Timestamptz
+}
+
+type OutboxOrderingHead struct {
+	OrderingKey     string
+	LastSequence    int64
+	CurrentSequence *int64
+	UpdatedAt       pgtype.Timestamptz
+}
+
+type OutboxRedrife struct {
+	AuditID     string
+	EventID     string
+	ActionKind  string
+	RedrivenAt  pgtype.Timestamptz
+	CycleNumber *int32
+}
+
 type PostgresHttpIdempotency struct {
 	IdentityToken      []byte
 	FingerprintVersion int16
