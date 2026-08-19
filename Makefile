@@ -726,7 +726,7 @@ migration-validate:
 	dsn="postgres://app:app@localhost:$$port/app?sslmode=disable"; \
 	$(MIGRATION_SOURCE_CHECK_SCRIPT); \
 	PGTEST_POSTGRES_DSN="$$dsn" REQUIRE_DOCKER=1 $(GO) test -vet=off -count=1 -tags=integration ./test \
-		-run '^TestPostgresMigrateRepositorySourceRehearsal$$'; \
+		-run '^TestPostgres(MigrateRepositorySourceRehearsal|HTTPIdempotencySchemaReplacementIsFailClosed)$$'; \
 	image="$(RUNTIME_IMAGE)"; \
 	if [ -z "$$image" ]; then \
 		image="$(SERVICE_NAME):migration"; \

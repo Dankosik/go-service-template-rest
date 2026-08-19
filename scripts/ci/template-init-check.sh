@@ -1612,6 +1612,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "http
 			internal/httpidempotency \
 			internal/infra/postgresidempotency \
 			migrations/000003_postgres_http_idempotency.sql \
+			migrations/000009_postgres_http_idempotency_simplify.sql \
 			internal/infra/postgres/queries/postgres_http_idempotency.sql \
 			docs/postgres-http-idempotency.md; do
 			assert "HTTP_IDEMPOTENCY=none retained ${removed}" path_absent "${root}/${removed}"
@@ -1633,6 +1634,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "http
 			internal/httpidempotency \
 			internal/infra/postgresidempotency \
 			migrations/000003_postgres_http_idempotency.sql \
+			migrations/000009_postgres_http_idempotency_simplify.sql \
 			internal/infra/postgres/queries/postgres_http_idempotency.sql \
 			internal/infra/postgres/sqlcgen/postgres_http_idempotency.sql.go \
 			docs/postgres-http-idempotency.md; do

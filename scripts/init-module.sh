@@ -709,6 +709,7 @@ if [[ "${source_checkout}" != true ]]; then
 			internal/infra/http/idempotency_test.go \
 			internal/problem/idempotency_problem_test.go \
 			migrations/000003_postgres_http_idempotency.sql \
+			migrations/000009_postgres_http_idempotency_simplify.sql \
 			internal/infra/postgres/queries/postgres_http_idempotency.sql \
 			internal/infra/postgres/sqlcgen/postgres_http_idempotency.sql.go \
 			test/postgres_http_idempotency_http_integration_test.go \

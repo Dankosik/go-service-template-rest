@@ -76,4 +76,9 @@ Reads and reconciliation use the writer; a replica absence never authorizes
 execution. When commit acknowledgement is lost and writer readback cannot
 resolve it, return `idempotency_outcome_unknown` and require retry with the same
 key.
+
+Migration 9 replaces the published reservation schema only when it is empty.
+Drain its legacy reservations and replay rows with the previous release before
+upgrading; the migration fails without changing data while any remain. Rollback
+is likewise refused until the replacement table is empty.
 <!-- profile:http-idempotency-postgres:end -->
