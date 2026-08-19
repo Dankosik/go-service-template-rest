@@ -27,12 +27,11 @@ The workflow instructions in this repository are harness-neutral. This document 
   carrier. Use a read-only role for research, challenge, or review; it never
   substitutes for the isolated implementation Worker above ([OpenAI
   Subagents](https://learn.chatgpt.com/docs/agent-configuration/subagents.md)).
-- When an ordinary Worker or inner write-carrier control is unavailable, direct
-  work continues root-locally under the owning phase's local-execution rules. An
-  Acceptance-Unit Lead records the actual capability evidence and, after safe
-  carrier recovery is exhausted, uses the Role Tree's bounded direct fallback
-  for the same authorized unit. Carrier failure alone is neither semantic task
-  state nor a user blocker. A Ledger Orchestrator that lacks top-level
+- When an ordinary Worker or inner write-carrier control is unavailable, apply
+  the Role Tree's [Implementation Write
+  Boundary](spec-first-workflow/phases/implementation-worker-execution.md#implementation-write-boundary);
+  this document supplies native capability evidence, not a second semantic
+  disposition. A Ledger Orchestrator that lacks top-level
   fresh-task creation records the next owner and stops blocked; routing-only
   coordination never degrades into phase work.
 
@@ -147,11 +146,10 @@ are authoritative for the installed App when they differ from public prose.
   lanes, Handoff,
   upstream phases, prerequisite units, and recovery without another technical
   or routing choice from the user. The same invocation explicitly requests that
-  every Acceptance-Unit Lead follow the Role Tree's adaptive Implementation
-  Write Boundary: bounded small work may stay Lead-direct, larger work must
-  use the Slice DAG and valid Workers, and proven Worker unavailability falls
-  back to the same Lead without changing the unit. Carry that request and
-  native-control envelope verbatim into every fresh Lead. It does
+  every Acceptance-Unit Lead follow the Role Tree's [Implementation Write
+  Boundary](spec-first-workflow/phases/implementation-worker-execution.md#implementation-write-boundary).
+  Carry that request and the native-control envelope verbatim into every fresh
+  Lead. It does
   not expand irreversible external effects or supply missing user-owned
   business meaning.
 - The Orchestrator calls the native project-list control before creation and

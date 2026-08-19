@@ -133,12 +133,10 @@ For ledger work, read
 the current session's role from its [Execution Role
 Tree](implementation-worker-execution.md#execution-role-tree) before the first
 implementation write or internal Worker lane. That branch owns the
-Acceptance-Unit Lead's Direct-Write Gate, mandatory delegation for larger
-surfaces, Slice DAG scheduling, isolated lane eligibility, evidenced direct
-fallback, dirty-state protection, Scope Lock, correction continuity,
-rejected-delta handling, candidate intake, and handoff. The Lead applies this
-phase and retains decision, correction-routing, acceptance, and integration
-authority.
+Acceptance-Unit Lead's direct-versus-delegated route, Slice DAG, recovery,
+Scope Lock, correction continuity, candidate intake, and handoff. The Lead
+applies this phase and retains decision, correction-routing, acceptance, and
+integration authority.
 
 ### Immutable Evidence
 

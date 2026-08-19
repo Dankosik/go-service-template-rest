@@ -188,7 +188,11 @@ then stop conditions. State each durable instruction once in its narrowest owner
 and link to it elsewhere. Phrase it as an observable trigger, action, completion
 criterion, or stop condition. Prefer the allowed behavior; reserve prohibitions
 for safety, authorization, or a decisive exclusion. Avoid broad tone or brevity
-labels; name the required content and what may be omitted.
+labels; name the required content and what may be omitted. Let the model choose
+routine mechanisms from current evidence. For a non-obvious routing choice,
+name only the bounded work that stays direct, the work eligible or required for
+delegation, the evidence to retain, and the retry or stop condition; generic
+instructions to use tools or agents efficiently do not select a route.
 
 Keep each policy compact and in one location. Keep bootstrap instruction files
 within the current vendor size target and move conditional detail behind the

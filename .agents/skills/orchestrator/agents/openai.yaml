@@ -1,6 +1,6 @@
 interface:
   display_name: "Ledger Orchestrator"
   short_description: "Route ledger units and upstream recovery"
-  default_prompt: "Use $orchestrator as LEDGER_ORCHESTRATOR to execute this saved Git project's ready Implementation ledger to a Role Tree terminal condition with adaptive Acceptance-Unit Leads that write only bounded small surfaces and delegate larger work."
+  default_prompt: "Use $orchestrator to exhaust this saved Git project's ready Implementation ledger under the Role Tree's adaptive Implementation Write Boundary and stop only at its terminal conditions."
 policy:
   allow_implicit_invocation: false

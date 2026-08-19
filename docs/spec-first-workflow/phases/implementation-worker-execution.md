@@ -352,15 +352,14 @@ identity. The Lead does not copy or recreate its bytes in the Worker checkout.
 The Worker validates every such locator before editing and before `DONE`; a
 missing, unreadable, or changed input returns `NEEDS_PARENT` without a write.
 
-A unit has a **large writable surface** when bounded discovery finds at least
-eight implementation paths, three package or owner surfaces, or two independent
-focused proof surfaces. Count a unique expanded authorized file as one
-implementation path; a unique `go list` import path as one Go surface; a
-distinct inverse-file-map responsibility as one non-Go owner surface; and one
-focused target plus deterministic oracle as one proof surface. Two proof
-surfaces are independent only when their targets and oracles are disjoint and
-neither proof consumes the other's output. Raw globs, duplicate commands, and
-estimates do not count.
+A unit has a **large writable surface** when it triggers Planning's
+[Oversized Task Preflight](planning.md#oversized-task-preflight). Re-derive its
+counts from current code before dispatch: one expanded authorized file is one
+implementation path; one `go list` import path is one Go surface; one inverse
+file-map responsibility is one non-Go owner surface; and one focused target plus
+deterministic oracle is one proof surface. Proof surfaces are independent only
+when their targets and oracles are disjoint and neither consumes the other's
+output. Raw globs, duplicate commands, and estimates do not count.
 
 Every large surface is Worker-required and the trigger requires at least two
 candidate slices. A candidate counts only
