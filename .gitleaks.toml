@@ -21,18 +21,18 @@ paths = ['''^\.agents/skills/go-db-cache-spec/SKILL\.md$''']
 
 [[allowlists]]
 targetRules = ["generic-api-key"]
-description = "Public AWS credentials module checksum in the S3 source receipt"
+description = "Current and retired public AWS credentials module checksums in the S3 source receipt"
 condition = "AND"
 regexTarget = "match"
-regexes = ['''^credentials v1\.19\.34 h1:y6GkSmcv5myd1ngrYbGmiLlwQqB6TQhOuN/tbSSuWDY='$''']
+regexes = ['''^credentials (v1\.19\.5 h1:xMo63RlqP3ZZydpJDMBsH9uJ10hgHYfQFIk1cHDXrR4|v1\.19\.34 h1:y6GkSmcv5myd1ngrYbGmiLlwQqB6TQhOuN/tbSSuWDY)='$''']
 paths = ['''^scripts/ci/s3-source-receipt\.sh$''']
 
 [[allowlists]]
 targetRules = ["generic-api-key"]
-description = "Public AWS credentials module checksum in the S3 design receipt"
+description = "Current and retired public AWS credentials module checksums in the S3 design receipt"
 condition = "AND"
 regexTarget = "match"
-regexes = ['''^credentials v1\.19\.34 h1:y6GkSmcv5myd1ngrYbGmiLlwQqB6TQhOuN/tbSSuWDY=$''']
+regexes = ['''^credentials (v1\.19\.5 h1:xMo63RlqP3ZZydpJDMBsH9uJ10hgHYfQFIk1cHDXrR4|v1\.19\.34 h1:y6GkSmcv5myd1ngrYbGmiLlwQqB6TQhOuN/tbSSuWDY)=$''']
 paths = ['''^specs/s3-compatible-object-storage/design/overview\.md$''']
 
 # profile:authn-oidc-jwt:start
