@@ -34,9 +34,10 @@ the model and reasoning effort for each direct child.
 flowchart TB
     user["User<br/>outcome · business meaning · external authority"]
     orchestrator["LEDGER_ORCHESTRATOR<br/>routes ledger and native task lifecycle<br/>no phase or unit work"]
-    lead["ACCEPTANCE_UNIT_LEAD<br/>decides · maps · schedules · integrates · proves · accepts<br/>no implementation bytes"]
+    lead["ACCEPTANCE_UNIT_LEAD<br/>decides · maps · writes small units · delegates large units<br/>integrates · proves · accepts"]
     reopen["UPSTREAM_REOPEN_LEAD<br/>closes one upstream phase<br/>never enters Implementation"]
     specialist["READ_ONLY_SPECIALIST<br/>answers one question<br/>no writes"]
+    direct{"DIRECT-WRITE GATE<br/>small enough for Lead<br/>or Worker required?"}
     gate{"WRITE-CARRIER GATE<br/>required carrier = actual backing<br/>= isolated checkout?"}
     worker["IMPLEMENTATION_WORKER<br/>owns one slice's bytes and focused proof<br/>Codex App: top-level Worktree task"]
     reviewer["ACCEPTANCE_REVIEWER<br/>falsifies one fixed candidate<br/>no writes"]
@@ -49,7 +50,9 @@ flowchart TB
     reopen -->|"review-cleared phase result"| orchestrator
     lead -->|"optional decision-changing question"| specialist
     specialist --> lead
-    lead -->|"every ready write slice"| gate
+    lead --> direct
+    direct -->|"small direct surface"| lead
+    direct -->|"delegated slice"| gate
     gate -->|"valid"| worker
     worker -->|"DONE or NEEDS_PARENT"| lead
     gate -->|"invalid"| invalid
@@ -60,11 +63,11 @@ flowchart TB
     result --> orchestrator
 ```
 
-The only path to implementation bytes is
+Implementation bytes follow one of two paths: a bounded Lead-direct change that
+passes the Direct-Write Gate, or
 `ACCEPTANCE_UNIT_LEAD -> WRITE-CARRIER GATE -> IMPLEMENTATION_WORKER`. The
-Orchestrator, Lead, Specialist, Reopen Lead, and Reviewer have no
-implementation-byte authoring path. The table and clauses below define the
-evidence required on each arrow.
+Orchestrator, Specialist, Reopen Lead, and Reviewer author no implementation
+bytes. The table and clauses below define the evidence required on each path.
 
 ### One Acceptance Unit
 
@@ -77,23 +80,28 @@ sequenceDiagram
     participant R as ACCEPTANCE_REVIEWER
     participant D as Canonical ledger
 
-    O->>L: Ready unit + Worker-task authority
-    L->>L: Decide route and freeze Execution Map
-    Note over L,W: Independent ready slices run concurrently; Lead intake and integration stay serial
-    loop Every ready slice up to evidenced capacity
-        L->>G: Create required carrier from frozen base
-        alt Carrier or base invalid
-            G-->>L: Invalid backing, identity, checkout, or base
-            L->>L: Release reservations; rematerialize or block
-        else Carrier and base valid
-            G-->>L: Native identity + isolated checkout
-            L->>W: Exact outcome-first Worker brief
-            W->>W: Author slice bytes + focused proof
-            W-->>L: DONE or NEEDS_PARENT + frozen candidate
-            alt Supported finding
-                L->>W: Same-Worker correction
-            else Intake valid
-                L->>L: Serial integration; recompute ready set
+    O->>L: Ready unit + available native-control authority
+    L->>L: Resolve writable surface and apply Direct-Write Gate
+    alt Small direct surface
+        L->>L: Author bounded bytes + focused proof
+    else Delegation required
+        L->>L: Freeze Execution Map
+        Note over L,W: Independent ready slices run concurrently; Lead intake and integration stay serial
+        loop Every ready slice up to evidenced capacity
+            L->>G: Create required carrier from frozen base
+            alt Carrier or base invalid
+                G-->>L: Invalid backing, identity, checkout, or base
+                L->>L: Release reservations; rematerialize or evidence direct fallback
+            else Carrier and base valid
+                G-->>L: Native identity + isolated checkout
+                L->>W: Exact outcome-first Worker brief
+                W->>W: Author slice bytes + focused proof
+                W-->>L: DONE or NEEDS_PARENT + frozen candidate
+                alt Supported finding exceeds correction gate
+                    L->>W: Same-Worker correction
+                else Intake valid or bounded Lead correction
+                    L->>L: Serial integration; recompute ready set
+                end
             end
         end
     end
@@ -109,7 +117,7 @@ sequenceDiagram
 | Role | Receives from | Owns | May dispatch | Upward result |
 | --- | --- | --- | --- | --- |
 | `LEDGER_ORCHESTRATOR` — Ledger Orchestrator | Ready canonical ledger and explicit task-creation authority | Ready-unit selection, agent-owned upstream-reopen routing, native task lifecycle, and terminal routing | One `ACCEPTANCE_UNIT_LEAD` per ready unit; several only for a ledger-proven planned wave; one `UPSTREAM_REOPEN_LEAD` at a time | Ledger exhausted; an AGENTS-owned user decision or external confirmation; an unrecoverable native blocker; or a canonical blocker with neither ready work nor authorized recovery |
-| `ACCEPTANCE_UNIT_LEAD` — Acceptance-Unit Lead | Ledger Orchestrator or another Implementation entry carrying explicit Worker-task authority | Exactly one unit through decisions, Slice DAG scheduling, Worker intake, serial integration, review, proof, correction routing, acceptance, and receipt | One or more harness-valid implementation Workers for every implementation write; optional read-only specialists and a triggered reviewer | `HANDOFF_READY` for a fixed Worktree candidate, then one canonical `Accepted:` receipt or `Blocked:` record |
+| `ACCEPTANCE_UNIT_LEAD` — Acceptance-Unit Lead | Ledger Orchestrator or another Implementation entry carrying available native-control authority | Exactly one unit through direct-write classification, bounded direct implementation or Slice DAG scheduling, Worker intake, serial integration, review, proof, correction routing, acceptance, and receipt | Mandatory harness-valid implementation Workers when the Direct-Write Gate fails; optional read-only specialists and a triggered reviewer | `HANDOFF_READY` for a fixed Worktree candidate, then one canonical `Accepted:` receipt or `Blocked:` record |
 | `UPSTREAM_REOPEN_LEAD` — Upstream Reopen Lead | Ledger Orchestrator and one canonical unit blocker | Exactly one named non-implementation macro phase through its phase stop rule, triggered review, repair, and focused re-review | Phase-eligible read-only lanes and triggered reviewers under Subagents And Review | Review-cleared phase result and next owner, or the exact user/external/native boundary that prevents closure |
 | `READ_ONLY_SPECIALIST` — Read-Only Specialist | Acceptance-Unit Lead | One independently checkable question | Nothing; it is a leaf | `DONE` with evidence, or `NEEDS_PARENT` |
 | `IMPLEMENTATION_WORKER` — Implementation Worker | Acceptance-Unit Lead | One exact write slice and its focused proof | Nothing; it is a leaf | `DONE` with a frozen candidate, or `NEEDS_PARENT` |
@@ -119,30 +127,47 @@ sequenceDiagram
 
 An **implementation write** is any content change required by the unit to
 production source, tests, fixtures, migrations, generated or contract artifacts,
-executable scripts or configuration, or implementation-owned documentation. A
-session may bind `ACCEPTANCE_UNIT_LEAD` only when its handoff carries explicit
-authority to create the required implementation Workers; otherwise the handoff
-is invalid. An eligible direct outcome remains root-local; a planned ledger unit
-reports the missing authority without binding the role.
+executable scripts or configuration, or implementation-owned documentation.
+Before the first such write, bounded discovery resolves the unit's current
+unique writable paths, package or owner surfaces, focused proof surfaces, and
+triggered protected domains. The Lead records those counts and one of these
+dispositions in its trace; the ledger remains carrier-neutral:
 
-The Lead owns judgment and delivery but authors no implementation write. Its
-complete mutation authority is:
+- **Lead direct:** at most three cumulative writable paths, one package or
+  implementation owner, one focused proof surface, and no migration, schema,
+  generated-source, public-contract, security, concurrency, or deployment
+  change. The Lead authors, reviews, and proves those bytes directly.
+- **Lead correction:** after a fixed-candidate review, at most two cumulative
+  writable paths for one recorded finding under the same owner, with no
+  accepted-behavior, contract, or production-ownership change. The Lead may
+  author and prove that correction directly.
+- **Worker required:** every other implementation surface. The Lead must
+  dispatch at least one valid Worker before authoring implementation bytes;
+  large surfaces follow the Slice DAG below.
 
-- apply a returned immutable Worker delta through native Handoff or an exact
-  byte-preserving patch operation;
-- run the repository's deterministic formatter on those Worker-authored bytes;
-  and
-- update integration metadata plus the canonical ledger receipt or blocker.
+Counts are cumulative for the unit or, after review, for the complete fixed
+finding set. The Lead may not manufacture several small edits to evade the
+gate. When later evidence grows a direct surface past its limit, the Lead stops
+before the next write, freezes its bounded delta, recomputes the map, and
+delegates the remaining implementation from that candidate.
 
-A merge conflict, formatter result requiring a content choice, or any other
-semantic edit returns to the owning Worker. The bound role does not change
-during the session, and the Lead never relabels itself as a Worker. A child gets
-only its row's authority, not its parent's. A correction resumes the same actor
-under the same role. Acceptance-unit roles never revise behavior, unit scope,
-or ledger dependencies. An Upstream Reopen Lead may revise only its named
-phase-owned artifacts; it returns at that macro-phase boundary and never enters
-Implementation or the next phase. Planning may change the ledger only in a
-separately routed Planning reopen.
+For delegated work, the Lead may apply immutable Worker deltas, run the
+deterministic formatter, and update integration metadata plus the canonical
+ledger receipt or blocker. A semantic merge conflict or a correction that
+exceeds the Lead-correction gate returns to the owning Worker. If native
+evidence proves that no valid Worker can be created, continued, replaced, or
+rematerialized after safe recovery, the Lead records that capability evidence
+and completes the same authorized unit directly; an internal carrier failure
+does not become a user or semantic blocker. This fallback never expands unit
+scope, external-effect authority, or accepted behavior.
+
+The bound role does not change during the session, and the Lead never relabels
+itself as a Worker. A child gets only its row's authority, not its parent's.
+Acceptance-unit roles never revise behavior, unit scope, or ledger dependencies.
+An Upstream Reopen Lead may revise only its named phase-owned artifacts; it
+returns at that macro-phase boundary and never enters Implementation or the next
+phase. Planning may change the ledger only in a separately routed Planning
+reopen.
 
 ### Bottom-Up Obstacle Resolution
 
@@ -168,9 +193,10 @@ Acceptance-Unit Lead. `NEEDS_PARENT` is a message, not artifact state, partial
 acceptance, or dependency release. The Lead re-diagnoses instead of
 copying that result into the ledger. It uses unit-level authority to close
 technical decisions, revise the internal execution strategy, replace fan-out
-with one serial Worker, obtain missing evidence, integrate, or route a valid
-same-actor correction. Review findings always return to the Lead for this
-disposition.
+with one serial Worker, obtain missing evidence, apply a correction that passes
+the Lead-correction gate, integrate, use evidenced direct fallback after Worker
+recovery is exhausted, or route a valid same-actor correction. Review findings
+always return to the Lead for this disposition.
 
 The Lead records the unit's one canonical blocker only after every safe
 unit-local route is exhausted, or when resolution requires a change to accepted
@@ -228,19 +254,31 @@ or Handoff outcome never qualifies for replacement.
 An explicitly requested Ledger Orchestrator dispatches one ready
 [acceptance unit](planning.md#outputs), or each currently ready member of a
 ledger-proven independent planned wave, to a separate fresh native task hosting
-an Acceptance-Unit Lead. A serial unit starts in Local; each planned-wave member
-starts in its own Worktree from the recorded base. The Orchestrator selects no
-internal carrier or lane. Outside global orchestration, the current
-Implementation root binds `ACCEPTANCE_UNIT_LEAD` only when the initiating user
-or handoff explicitly authorizes its required Worker tasks. Without that
-authority, eligible direct work stays root-local and a planned ledger unit
-reports the missing authority rather than creating an invalid Lead.
+an Acceptance-Unit Lead. The Orchestrator selects Local or Worktree from current
+native capability, isolation, and candidate-safety evidence; that choice never
+enters the ledger or changes unit semantics. It selects no internal Worker
+carrier or lane. Outside global orchestration, the current Implementation root
+binds `ACCEPTANCE_UNIT_LEAD` only when the initiating user or handoff authorizes
+the available native controls; the Lead then applies the Direct-Write Gate and
+delegates only when required.
 
 The Acceptance-Unit Lead inspects the fixed unit, current repository, relevant
 dirt, dependencies, generated/manual authority, mutable resources, and proof
-preconditions, then freezes a compact execution map before the first
-implementation write. The map is emitted in the Lead trace in this exact shape;
-it is operational state, not a new repository artifact:
+preconditions, then applies the Direct-Write Gate. A direct disposition records
+the exact paths and normalized counts before the first write. A Worker-required
+disposition freezes the compact execution map below before dispatch. Both are
+operational trace state, never a new repository artifact:
+
+```text
+Direct Write
+Paths: <one to three exact paths>
+Owners: <one package or implementation owner>
+Proof surfaces: <one focused target and oracle>
+Protected-domain triggers: none
+Disposition: Lead direct
+```
+
+The delegated map uses this exact shape:
 
 ```text
 Execution Map
@@ -324,7 +362,8 @@ surfaces are independent only when their targets and oracles are disjoint and
 neither proof consumes the other's output. Raw globs, duplicate commands, and
 estimates do not count.
 
-That trigger requires at least two candidate slices. A candidate counts only
+Every large surface is Worker-required and the trigger requires at least two
+candidate slices. A candidate counts only
 when it has at least one required implementation write and a non-empty
 implementation postcondition checkable on its declared base after predecessors.
 Formatting, integration metadata, and receipts create no slice. A
@@ -368,7 +407,7 @@ symmetric conflict when neither slice consumes the other and the second base
 and inputs are refreshed after the first integrates. Concurrent path overlap is
 invalid. On resume or changed evidence, recompute and emit the map from the
 canonical ledger, native task state, and Git candidate before another write. A
-unit with one write slice still dispatches one Worker. Internal
+Worker-required unit with one write slice still dispatches one Worker. Internal
 decomposition may realize only the accepted unit outcome: it never changes
 accepted behavior, splits the ledger unit, revises dependencies, or starts
 another acceptance unit. New evidence that requires one of those changes blocks
@@ -394,8 +433,9 @@ proves, routes corrections, and records the one canonical receipt or blocker.
 Moving the carrier is Orchestrator lifecycle routing; candidate judgment and
 integration remain Lead-owned.
 
-When the unit has one write slice, the Lead dispatches one Worker, then reviews,
-proves, routes corrections, and records the unit receipt or blocker. When
+When a Worker-required unit has one write slice, the Lead dispatches one Worker,
+then reviews, proves, routes corrections, and records the unit receipt or
+blocker. When
 dependencies make later slices independent only after a shared foundation, the
 Lead integrates the foundation Worker's frozen delta, freezes a new
 unit-internal base, and makes its successors ready. Every Worker remains the
@@ -403,13 +443,14 @@ Lead's direct leaf; no internal base or slice creates acceptance or releases a
 ledger dependency.
 A routing-only Ledger Orchestrator that lacks fresh top-level task creation
 stops blocked instead of implementing. An Acceptance-Unit Lead that lacks its
-required write carrier records the exact capability blocker after exhausting
-safe carrier recovery; it never substitutes a Lead-authored implementation
-write.
+required write carrier exhausts safe carrier recovery, records the exact native
+evidence, and uses the direct fallback owned by the Implementation Write
+Boundary. It blocks only when the unit itself, authority, candidate,
+or proof cannot be preserved through that fallback.
 
 ## Implementation Slice DAG
 
-At every scheduling point, a slice is **ready** only when:
+For a Worker-required disposition, a slice is **ready** only when:
 
 - every declared predecessor is integrated;
 - `carrier.required` names the current-harness Implementation Worker carrier and
@@ -548,11 +589,14 @@ otherwise use only the invalidated-base replacement rule below. Preserve
 unrelated active and integrated slices. A changed undeclared input is a map
 defect: add the missing edge or conflict before redispatch.
 
-A returned candidate that misses an accepted criterion goes back to **the same
-Worker**, with its context intact, through the harness's own correction channel.
-Spawning a fresh Worker for the same task instead is a defect: it throws away
-the reasoning that made the second attempt cheaper than the first, and it
-re-opens questions the first attempt already closed.
+A returned candidate that misses an accepted criterion first passes the
+Lead-correction gate. A correction of at most two cumulative paths for one fixed
+finding under the same owner, with no behavior, contract, or production-owner
+change, may be authored and proved by the Lead. Every larger correction goes
+back to **the same Worker**, with its context intact, through the harness's own
+correction channel. Spawning a fresh Worker for an ordinary correction is a
+defect: it throws away the reasoning that made the second attempt cheaper than
+the first and re-opens questions the first attempt already closed.
 
 Review one frozen candidate, disposition all supported findings, and send one
 batched correction brief. It names each finding, the criterion it violates, and
@@ -562,7 +606,8 @@ candidate-caused regression, a violated accepted criterion or repository-owned
 invariant, or missing proof is recorded as an observation rather than
 re-entering the write lane.
 
-Before sending a third correction batch for the same acceptance unit, audit the
+Before a third correction batch for the same acceptance unit, whether direct or
+delegated, audit the
 route: cause, owner, accepted input, unit boundary, and proof strategy. Resume
 the same Worker only when new evidence closes the diagnosed route defect;
 otherwise reopen the narrowest upstream owner or return the honest blocker.

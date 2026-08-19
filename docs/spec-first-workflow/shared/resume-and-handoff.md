@@ -37,9 +37,9 @@ user’s verbatim native-control envelope, and exact unit ID as the handoff basi
 Use a commit or tree identity only when the candidate crosses a checkout or
 integration boundary. The dispatching Ledger Orchestrator does not choose or
 record the unit's carrier or internal lane map. Emit an Acceptance-Unit Lead
-handoff only when that envelope explicitly authorizes the required Worker tasks;
-without it, retain direct execution or report the missing authority under the
-Role Tree instead of creating an invalid Lead.
+handoff when the envelope authorizes the available native controls; the Lead
+classifies the surface, writes bounded small work directly, and attempts Workers
+only when the Direct-Write Gate requires them.
 
 When eligible, emit a copy-pastable prompt in this shape:
 
@@ -52,7 +52,7 @@ or blocker.
 
 - Authority: <ledger and task paths; accepted revision or receipt; current external-effect envelope or durable locator>.
 - Secret inputs: <durable locator or environment-variable names under AGENTS.md; none when no secret is required>.
-- Native controls: <verbatim initiating authority for the Role Tree's mandatory Worker-backed Implementation Write Boundary, current-harness Write-Carrier Gate, Slice DAG scheduler, frozen-base materialization, model/effort selection, review, recovery, and Handoff>. Goal use stays thread-local; this prompt expands no authority.
+- Native controls: <verbatim initiating authority for the Role Tree's adaptive Implementation Write Boundary, current-harness Worker controls when required, Slice DAG scheduler, frozen-base materialization, model/effort selection, review, recovery, direct fallback, and Handoff>. Goal use stays thread-local; this prompt expands no authority.
 - Scope: <exact unit ID, accepted outcome and writable boundary; dependent work that remains blocked>.
 - Dispatch scope: <ledger revision / unit ID / attempt>.
 - Stage: <Local acceptance | Worktree candidate>.
@@ -61,8 +61,10 @@ or blocker.
 - Stop: <accepted behavior, unit scope, ledger dependency, external-effect authority, or another fixed authority that would have to change>.
 
 Set the thread-local Goal for this stage and role, then execute the Role Tree's
-Implementation Write Boundary and Execution Map exactly. If its required
-carrier or base cannot be established, record that exact blocker. A Worktree stage returns
+Direct-Write Gate and, when required, its Execution Map. If a required Worker
+carrier or base cannot be established after safe recovery, retain the same unit
+and use the evidenced direct fallback; block only when candidate, authority,
+scope, or proof cannot be preserved. A Worktree stage returns
 `HANDOFF_READY` with its fixed candidate and no receipt; Local continues under a
 separate Goal to the receipt or blocker. Preserve unrelated work and keep
 dependent units blocked.

@@ -131,12 +131,14 @@ proof.
 For ledger work, read
 [Implementation Worker Execution](implementation-worker-execution.md) and bind
 the current session's role from its [Execution Role
-Tree](implementation-worker-execution.md#execution-role-tree) before selecting
-or operating an internal Worker lane. That branch owns the Acceptance-Unit
-Lead's Slice DAG scheduling and delegation, isolated lane eligibility, dirty-state
-protection, Scope Lock, correction continuity, rejected-delta handling,
-candidate intake, and handoff. The Lead applies this phase and retains decision,
-correction-routing, acceptance, and integration authority.
+Tree](implementation-worker-execution.md#execution-role-tree) before the first
+implementation write or internal Worker lane. That branch owns the
+Acceptance-Unit Lead's Direct-Write Gate, mandatory delegation for larger
+surfaces, Slice DAG scheduling, isolated lane eligibility, evidenced direct
+fallback, dirty-state protection, Scope Lock, correction continuity,
+rejected-delta handling, candidate intake, and handoff. The Lead applies this
+phase and retains decision, correction-routing, acceptance, and integration
+authority.
 
 ### Immutable Evidence
 

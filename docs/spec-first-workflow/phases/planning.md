@@ -26,6 +26,13 @@ Direct changes may use an inline plan.
 4. Link-check the working set against the current repository and accepted deployment topology. For each accepted change to a contract, schema, canonical/generated authority, identifier, composition point, migration, or rollout state, confirm the accepted ownership record against every current producer, consumer, mirror, proof carrier, configuration/documentation surface, and replacement surface within its impact boundary. Give each reached surface one auditable boundary disposition: coupled into the outcome task, assigned to named task deltas whose intermediate states and handoffs satisfy the split rule, or proved unchanged. A required surface without accepted ownership or placement reopens its narrow design owner; Planning does not choose it.
 5. Record a planned wave only when multiple ready acceptance units will actually run concurrently and current evidence establishes their independence.
 6. Prove that the next acceptance unit or real wave is executable from closed inputs; later tasks need owners and dependencies, not prematurely materialized inputs.
+7. Apply the oversized-task preflight when bounded discovery reaches eight
+   writable paths, three package or owner surfaces, or two independent focused
+   proof surfaces. Split it into smaller valid acceptance tasks when their
+   intermediate states satisfy the Task Boundary Contract. When atomic
+   acceptance is required, record the exact atomicity reason and the distinct
+   implementation domains that the Lead must decompose; never leave a large
+   task as an unexplained single implementation slice.
 
 A **scope exit** disposes of an obligation or existing task that sits beyond the
 accepted outcome — mis-scoped while planning, or exposed by a later result.
@@ -97,6 +104,7 @@ Global constraints: <exact constraints shared by multiple tasks; omit when none>
   - Handoff: <for an output dependency: exact produced output and consumed input/acceptance condition; omit when none>
   - Alias of: <task ID and exact accepted receipt consumed; use only when this entry has no implementation delta; omit otherwise>
   - External input/gate: <required non-ledger input or rollout gate; named owner; objective availability checkpoint; omit when none>
+  - Atomicity / implementation domains: <only for an oversized task that cannot be split; exact atomicity reason and distinct implementation postconditions>
   - Proof: <claim; command/check; expected observable>
   - Reopen if: <concrete objective future invalidation condition; upstream owner; omit when none>
 ```
@@ -141,7 +149,7 @@ execution-changing accepted constraints and any preserved or forbidden behavior>
 
 - Source: <narrow stable anchors>
 - Owner/surface/resources: <canonical owner; authorized paths or discovery rule; mutable resources, or none>
-- Handoff / Alias of / External input/gate: <when present>
+- Handoff / Alias of / External input/gate / Atomicity and implementation domains: <when present>
 - Proof: <claim; command/check; expected observable>
 - Reopen if: <omit when none>
 ```
@@ -154,11 +162,11 @@ A task file adds no restatement of the index outcome and no skill routing.
 
 ### Ledger Entry Contract
 
-Add only fields that change execution. Put a constraint in `Global constraints` only when its exact meaning applies across multiple tasks; keep task-specific constraints in the task outcome. Write each task title as the postcondition that becomes true. Put paths and symbols in `Owner/surface/resources` and commands in `Proof`; neither creates a task boundary. A task may carry prose beyond its fields when the postcondition needs it; keep that prose execution-changing.
+Add only fields that change execution. Put a constraint in `Global constraints` only when its exact meaning applies across multiple tasks; keep task-specific constraints in the task outcome. Write each task title as the postcondition that becomes true. Put paths and symbols in `Owner/surface/resources` and commands in `Proof`; neither creates a task boundary. Record atomicity and implementation domains only for an oversized task that the Task Boundary Contract cannot split. A task may carry prose beyond its fields when the postcondition needs it; keep that prose execution-changing.
 
 ### Task Boundary Contract
 
-A split boundary is valid only when the completed task leaves the repository, and every deployment or migration state it creates or assumes, internally consistent, supported by the accepted compatibility or rollback policy, independently reviewable, and provable without unfinished companion work. Group the canonical source, generated or mirrored output, required tests and fixtures, migration/runtime compatibility, required documentation, and replacement cleanup needed for that state in the same task. Prefer the boundary that makes one accepted behavior reachable end to end through its real production entry point over one that completes a single layer of it. A layer-only task is valid when accepted rollout, migration, or `expand -> migrate -> contract` order fixes it, when that layer is the whole accepted outcome, or when it is an enabling change; otherwise its postcondition belongs in the task that makes the behavior reachable. As an oversized-task preflight, identify distinct ownership, review, failure/recovery, rollback, and proof domains inside the outcome. A useful split isolates a distinct owner, review/proof, failure/recovery, or rollback domain; creates a required handoff; enables an actual wave with positive independence evidence; or leaves an independently shippable accepted outcome. Keep the work in the same task when none of those benefits applies. File count, estimated minutes, and desired Worker count do not create an acceptance-unit boundary; a large writable surface still triggers the Implementation Slice DAG decomposition required by [Implementation Worker Execution](implementation-worker-execution.md#implementation-slice-dag).
+A split boundary is valid only when the completed task leaves the repository, and every deployment or migration state it creates or assumes, internally consistent, supported by the accepted compatibility or rollback policy, independently reviewable, and provable without unfinished companion work. Group the canonical source, generated or mirrored output, required tests and fixtures, migration/runtime compatibility, required documentation, and replacement cleanup needed for that state in the same task. Prefer the boundary that makes one accepted behavior reachable end to end through its real production entry point over one that completes a single layer of it. A layer-only task is valid when accepted rollout, migration, or `expand -> migrate -> contract` order fixes it, when that layer is the whole accepted outcome, or when it is an enabling change; otherwise its postcondition belongs in the task that makes the behavior reachable. As an oversized-task preflight, identify distinct ownership, review, failure/recovery, rollback, and proof domains inside the outcome. A useful split isolates a distinct owner, review/proof, failure/recovery, or rollback domain; creates a required handoff; enables an actual wave with positive independence evidence; or leaves an independently shippable accepted outcome. Keep the work in the same task only when none of those benefits applies, and then record its atomicity reason plus distinct implementation domains. File count alone does not create an acceptance boundary, but eight writable paths, three owner surfaces, or two independent proof surfaces always trigger this split-or-decompose disposition. Worker count and carrier choice remain Implementation concerns.
 
 ### Acceptance Unit Contract
 

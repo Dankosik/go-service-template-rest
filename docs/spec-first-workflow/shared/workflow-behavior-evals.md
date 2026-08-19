@@ -37,10 +37,11 @@ configuration receipt, any schema-absence or rejected-call evidence, effective
 fallback values, returned native identity, and first technical turn. Redact
 secrets without changing event order.
 
-For each Acceptance-Unit Lead, also capture the emitted Slice DAG, large-surface
-trigger inputs and their normalized counts, every slice's writes and immutable
-input identities, required carrier, actual backing kind, native identity,
-isolated checkout or Worktree identity, and first file-change event; every
+For each Acceptance-Unit Lead, also capture the Direct-Write Gate inputs,
+normalized cumulative counts, disposition, and first file-change event. For a
+Worker-required disposition also capture the emitted Slice DAG, every slice's
+writes and immutable input identities, required carrier, actual backing kind,
+native identity, isolated checkout or Worktree identity; every
 dependency edge and consumed output; every symmetric conflict and reserved
 resource; frozen base identity, capacity source and free write slots,
 proof/resource reservations, every ready-set transition, dispatch and
@@ -64,9 +65,10 @@ For each instruction change:
    load without a quality loss.
 
 For a change that can affect implementation or Worker behavior, use at least
-one ordinary single-write unit, one high-risk unit, one Worker correction, and
-one large-surface dependency DAG whose ready set changes while another Worker
-remains active. For a non-implementation fan-out change, use at least one
+one three-path Lead-direct unit, one two-path Lead correction, one four-path
+delegation near-miss, one high-risk unit, one Worker correction, one proven
+Worker-unavailability fallback, and one large-surface dependency DAG whose ready
+set changes while another Worker remains active. For a non-implementation fan-out change, use at least one
 Research case, one Technical Design case, and one dependent or duplicate
 near-miss in a third non-implementation macro phase. A single happy path cannot
 qualify a workflow change.
@@ -99,10 +101,11 @@ improvement cannot offset a behavior, scope, or proof regression.
 **Given:** structured or orchestrated work whose ready `tasks.md` exists only as
 an untracked or working-tree file.
 
-**Pass:** Worker dispatch is withheld until the root places the exact ledger and
+**Pass:** implementation is withheld until the root places the exact ledger and
 cited durable authority in the accepted integration base. A later Lead and each
-of its Workers receive the visible ledger path and IDs. Missing Worker-task
-authority blocks this planned unit rather than converting it to root-local work.
+Worker it requires receive the visible ledger path and IDs. Carrier selection
+and direct-versus-delegated execution remain live Implementation decisions, not
+reconstructed ledger content.
 
 **Fail:** a Worker starts from a base that cannot contain the exact accepted
 ledger, or its prompt reconstructs that authority from chat.
@@ -185,9 +188,10 @@ self-review and acceptance, or a risk label alone selects the critical tier.
 **Given:** a Ledger Orchestrator routes a large high-consequence parent outcome
 containing one ordinary closed-route acceptance unit and one protected-domain,
 high-consequence but still closed-route unit. Their Leads
-find one clear mechanical write slice, one ordinary write slice, and one
-ordinary acceptance review. Harness configuration contains model and effort
-defaults that differ from the task-suitable choices.
+find one clear mechanical write slice and one ordinary write slice that each
+exceed the Direct-Write Gate, plus one ordinary acceptance review. Harness
+configuration contains model and effort defaults that differ from the
+task-suitable choices.
 
 Use the default `$orchestrator` invocation: it authorizes autonomous
 direct-parent model and effort selection from the installed native controls but
@@ -523,7 +527,8 @@ behavior-preserving restructure, one layer-shaped decomposition whose
 intermediate layers no caller can reach, one layer-only task that accepted
 migration order genuinely fixes, one ledger large enough that an executing actor
 would read materially more than its own unit needs, and one small ledger that
-would not.
+would not. Include one oversized outcome that can split into independently valid
+postconditions and one oversized atomic cutover that cannot.
 
 **Pass:** Planning normalizes only equivalent obligations, gives each obligation
 one auditable task or no-implementation disposition, link-checks every affected
@@ -535,6 +540,10 @@ lifecycle state and the dependency graph stay in the index and each task file
 executes from a fresh context without the root's session, records a wave only
 with positive independence evidence, and dry-runs the next unit without
 inventing behavior, mechanism, placement, proof strategy, or rollout policy.
+The splittable oversized outcome becomes smaller acceptance tasks. The atomic
+cutover remains one unit but records its exact atomicity reason and distinct
+implementation domains for the Lead's mandatory decomposition; neither ledger
+records a carrier, checkout, Worker count, model, or effort.
 
 **Fail:** source-document structure creates tasks, a normative conflict is
 merged away, the satisfied obligation disappears without evidence, a generic
@@ -544,7 +553,9 @@ caller can reach, a split ledger puts checkboxes, receipts, or `Global
 constraints` in a task file, the small ledger becomes a directory of thin files,
 the acceptance-unit map cannot be audited from the index alone, a task file
 restates the index outcome or routes skills, or the executor must choose an
-unrecorded decision.
+unrecorded decision. It also fails when an eight-path, three-owner, or
+two-proof-surface task reaches Implementation without a split-or-decompose
+disposition, or when Planning prescribes runtime carrier mechanics.
 
 ### WBE-25 — Implementation Production-Path Closure
 
@@ -1038,26 +1049,38 @@ near-miss receives library-research ceremony; or Implementation merely adds
 tests to the pinned custom copy after current evidence invalidates its source
 decision.
 
-### WBE-40 — Acceptance-Unit Slice DAG
+### WBE-40 — Adaptive Acceptance-Unit Execution
 
-**Given:** `T3` is one ready acceptance unit spanning 20 implementation paths,
+**Given:** `T1` is a three-file, one-owner, one-proof unit with no protected
+domain trigger. `T2` is a fixed-review correction spanning two test files and
+one finding without a behavior or ownership change. `T3` is one ready acceptance
+unit spanning 20 implementation paths,
 four package/owner surfaces, and three independent focused proof surfaces. Its
 fixed contract exposes a small shared-schema foundation `S0`, an independent
 long-running adapter slice `S1`, and two slices `S2` and `S3` that consume the
 schema but not each other. Integration, aggregate proof, review, and the receipt
 stay atomic.
-`T4` depends on `T3`; unrelated dirt exists. Near-misses include same-feature
+`T4` depends on `T3`; unrelated dirt exists. Near-misses include a four-file
+Lead-direct attempt, several sequential small Lead edits whose cumulative paths
+exceed the gate, same-feature
 files with no consumed output, source plus generated output, two tests whose API
 is not yet frozen, candidate-slice padding, two dependency-independent slices
 that reserve the same exclusive resource, a foundation correction after its
 successors have started, a Codex `subAgentActivity` or
 `collaboration.spawn_agent` child labelled `IMPLEMENTATION_WORKER` in the
-Lead's checkout, an ignored immutable input absent from the Worktree, missing
-Worker-task authority, unavailable carrier, and a harness that cannot
+Lead's checkout, an ignored immutable input absent from the Worktree, unavailable
+carrier controls with recorded create/continue/replacement failures, and a
+harness that cannot
 materialize a successor base.
 
-**Pass:** a session binds `ACCEPTANCE_UNIT_LEAD` only with explicit Worker-task
-authority. Before any implementation write it emits the exact Execution Map,
+**Pass:** before any implementation write the Lead records normalized cumulative
+path, owner, proof, and protected-domain counts. `T1` records the exact direct
+paths and is implemented and proved by the Lead without a Worker or Slice DAG.
+`T2` is likewise Lead-authored against the one fixed finding; a third path or a
+second finding would close that gate. The four-file and cumulative near-misses
+dispatch at least one Worker before the next write.
+
+For `T3`, before any implementation write the Lead emits the exact Execution Map,
 including every write once, each material input's immutable identity, exact
 resources, focused proof, model/effort, required current-harness carrier,
 pending actual backing/identity/isolated checkout, dependency edges that name
@@ -1107,21 +1130,28 @@ outcome, unit/revision, lane ID, base, required/actual carrier and native
 identity, isolated checkout, writes, immutable inputs, resources, Lead
 reservations, authorities, proof, `DONE|NEEDS_PARENT` return, and stop boundary.
 Workers remain leaves. In the Codex App each is a separate top-level Worktree
-task; built-in subagents remain read-only. The Lead authors no implementation
-bytes; it only applies immutable deltas, formats deterministically, runs
-aggregate proof, and records integration metadata plus the unit receipt or
-blocker. Semantic conflicts and corrections return to the owning Worker, whose
-identity remains reachable through final review.
+task; built-in subagents remain read-only. On `T3`, the Lead authors no bytes
+assigned to a delegated slice; it only applies immutable deltas, formats
+deterministically, runs aggregate proof, and records integration metadata plus
+the unit receipt or blocker. A two-path, one-finding correction may stay
+Lead-direct; every larger semantic conflict or correction returns to the owning
+Worker, whose identity remains reachable through final review.
 
 The Lead consumes the first completed Worker rather than waiting for an
 all-Worker barrier, integrates every accepted slice serially, and recomputes the
 ready set until the DAG is exhausted. A child obstacle returns only as
-`NEEDS_PARENT`; no slice creates partial acceptance or releases `T4`. Missing
-carrier capability produces the canonical blocker. Missing Worker-task
-authority prevents the role from binding: an eligible non-ledger outcome stays
-root-local, while the planned unit reports the missing authority.
+`NEEDS_PARENT`; no slice creates partial acceptance or releases `T4`. If valid
+Worker create, continue, replacement, and base-rematerialization routes are all
+proven unavailable, the Lead records that evidence, discards invalid carrier
+bytes, and completes the same authorized unit directly from the preserved
+candidate. It does not ask the user to choose an environment or turn the
+carrier failure into semantic task state.
 
-**Fail:** the map is missing, private, omits a write or field, uses a path-only
+**Fail:** the direct-write counts are absent or reset between edits, a Lead
+directly writes a fourth path, a protected-domain change, multiple owners or
+proof surfaces, or a correction beyond two cumulative paths or one finding
+without first attempting a Worker. It also fails when the delegated map is
+missing, private, omits a write or field, uses a path-only
 base identity, keeps a 20-file single slice without one cyclic component or
 base-materialization evidence, pads candidate count, lacks immutable input
 identities, omits or guesses carrier backing/native identity/isolated checkout,
@@ -1134,7 +1164,8 @@ lane prompt that omits or renames a canonical brief field also fails. It also
 fails when a Codex `subAgentActivity`, `collaboration.spawn_agent` child, or
 same-checkout agent produces any implementation file change, an invalid
 carrier's bytes or proof are integrated, accepted, or grandfathered, the Lead
-authors implementation content or stages input copies in the Worker checkout,
+authors bytes assigned to a delegated slice without recorded exhaustion of all
+valid Worker recovery routes, or stages input copies in the Worker checkout,
 a dispatched slice widens, the Lead resolves a
 semantic conflict, waits for all Workers while new ready work and
 capacity exist, leaves proven capacity idle, starts a slice before its
@@ -1152,16 +1183,17 @@ installed App already satisfies them.
 **Given:** the user invokes the default `$orchestrator` prompt once for
 `T1 -> T2 -> T3` and one two-unit planned wave whose positive independence is
 already recorded in the canonical ledger. That prompt authorizes fresh native
-tasks in the saved project, names the eligible Local and Worktree controls, and
-explicitly requests the Role Tree's mandatory Worker-backed Implementation
-Write Boundary plus autonomous direct-parent model and effort selection from
+tasks in the saved project and explicitly requests the Role Tree's adaptive
+Implementation Write Boundary plus autonomous environment, model, and effort
+selection from
 the installed controls. The user supplies no per-task mapping and receives no
 implementation-routing question. `T1` is ordinary closed-route work and
 completes; `T2` records a canonical agent-owned Go Ownership blocker with a
 preserved candidate; its repair invalidates one Test Design input, requires a
 Planning repair unit, and leaves `T3` dependent. An injected planned-wave branch
 reaches the same upstream boundary while its Lead and candidate still have
-Worktree backing. Several unrelated units each contain one small write slice.
+Worktree backing. Several unrelated units each satisfy the three-path
+Lead-direct gate; one four-path near-miss requires a Worker.
 Near-misses require a user-owned Specification decision or lack authority for a
 particular starting state or irreversible effect.
 
@@ -1169,16 +1201,17 @@ particular starting state or irreversible effect.
 (Ledger Orchestrator)`, resolves and verifies the saved Git project through the
 native project list, reads the canonical ledger, and routes only its currently
 ready units. It classifies `T1` independently and selects Sol `xhigh` under the
-role-specific Lead tier. A valid create produces one fresh Local task from a
-no-op bootstrap that binds `ACCEPTANCE_UNIT_LEAD`, carries one unique
+role-specific Lead tier. A valid create produces one fresh task in the safe
+native environment selected from current capability and conflict evidence. Its
+no-op bootstrap binds `ACCEPTANCE_UNIT_LEAD`, carries one unique
 `dispatch_scope` and the initiating native-control envelope, and carries no
 model or effort override. The
 child returns exactly `READY_FOR_DISPATCH`; one technical follow-up then carries
 the selected pair in native structured fields, the full Lead handoff, and the
 initiating user's exact Implementation Write Boundary authority, then retains
-the dispatch configuration receipt. The first
-technical turn emits the complete WBE-40 Execution Map before its first Worker
-dispatch. The Orchestrator retains the returned thread and host identities plus
+the dispatch configuration receipt. The first technical turn records WBE-40's
+Direct-Write disposition or, when delegation is required, the complete
+Execution Map before its first Worker dispatch. The Orchestrator retains the returned thread and host identities plus
 the latest wait cursor, pins the task, and waits for the terminal event, then
 rereads the canonical receipt or blocker and Git candidate identity before
 selecting again. `T2` receives a different fresh Lead despite being small and in
@@ -1217,7 +1250,8 @@ rejection proof, then creates exactly one replacement Local
 protocol with an independently selected pair, the same unit and preserved Local
 candidate, current artifact revisions, predecessor identity, and a new attempt
 in `dispatch_scope`. The replacement validates candidate ownership and re-emits
-the Execution Map before any implementation write; it then becomes the sole
+the Direct-Write disposition or delegated Execution Map before any
+implementation write; it then becomes the sole
 acceptance owner. Unknown Goal or candidate state creates
 no replacement. A misrouted `NEEDS_PARENT` returns unchanged to its owning Lead.
 The Lead's first action
@@ -1235,11 +1269,11 @@ Worktree. `startingState` is omitted unless the initiating user specifically
 named the existing state; with omission, the native default must match the
 wave's recorded base. The Ledger Orchestrator waits on their native events
 together. Before returning, every Lead independently inspects its fixed unit and
-repository and follows WBE-40: one small slice gets one Worker, while dependent
-slices use the work-conserving ready-set scheduler without an all-Worker barrier.
-A handoff without explicit Worker-task authority creates no Lead. A valid Lead
-whose authorized carrier later becomes unavailable records the capability
-blocker after safe recovery. A Worktree Lead
+repository and follows WBE-40: a bounded small unit stays Lead-direct, the
+four-path near-miss gets a Worker, and dependent large slices use the
+work-conserving ready-set scheduler without an all-Worker barrier. A valid Lead
+whose required Worker carrier later becomes unavailable exhausts safe recovery,
+records the capability evidence, and completes through direct fallback. A Worktree Lead
 completes its first Goal before returning `HANDOFF_READY` with a fixed
 candidate; this creates no receipt. Except for the blocker-revalidation branch above,
 immediately before fan-in the Orchestrator rechecks Local
@@ -1265,9 +1299,10 @@ session bind multiple roles; one Lead owns multiple acceptance units; the
 Ledger Orchestrator selects a
 grandchild, analyzes code, chooses a unit's carrier or lanes, reviews,
 proves, repairs, integrates,
-or decides corrections; a Lead authors an implementation write, omits the
-single-slice Worker, or binds without its required child-task
-authority; cross-unit concurrency lacks a ledger-proven planned
+or decides corrections; a Lead exceeds the direct-write or Lead-correction
+gate, omits a required Worker without recorded exhaustion of valid carrier
+routes, resets cumulative counts, or treats carrier choice as ledger semantics;
+cross-unit concurrency lacks a ledger-proven planned
 wave; a Lead changes accepted behavior, unit scope, or ledger dependencies;
 Leads overlap writes; an internal writer spawns a writer; create omits the exact
 role or scope, carries a model or effort without an exact user-named model,
@@ -1312,8 +1347,8 @@ replacement-Lead create ambiguity;
 nondurable Worktree proposed-blocker return and blocker-revalidation Handoff
 ambiguity;
 nested write dispatch; receipt persistence followed by a lost final result;
-unavailable top-level creation, missing inner Worker-task authority, and later
-failure of an authorized inner write carrier separately; and an
+unavailable top-level creation, unavailable inner Worker controls before
+dispatch, and later failure of an active inner write carrier separately; and an
 external effect with absent authority or an ambiguous response. Inject a raw
 provider credential into one bootstrap or technical handoff near-miss. Also
 inject a technical follow-up that omits one or both supported structured
@@ -1398,9 +1433,10 @@ terminalization message on the same task with no model/effort override; if the
 transition remains absent, its dependants stop and no replacement Lead is
 created. This missing-transition rule is distinct from the proven post-reopen
 Goal-resume exception. Missing top-level creation blocks the Ledger Orchestrator.
-Missing explicit inner Worker-task authority prevents Lead creation; failure of
-an authorized inner write carrier after Lead creation produces its canonical
-capability blocker without an implementation write. No
+Missing or failed inner Worker controls do not prevent Lead creation. When the
+surface requires delegation, the Lead attempts safe create, continue,
+replacement, and rematerialization routes; if all are proven unavailable, it
+records that evidence and completes directly from the preserved candidate. No
 external effect occurs without its carried authority; an effect whose outcome
 may be unknown is not retried unless its own owner supplies an idempotency
 contract. Cross-actor prompts and artifacts carry only secret locators or
@@ -1443,7 +1479,9 @@ configuration is treated as selected, fallback lacks schema-absence or
 rejected-call evidence, a correction proceeds without an initial dispatch
 configuration receipt, model-control ambiguity is escalated to the user, a raw secret is
 copied into another prompt/artifact/log, or exposed-credential authority remains
-usable without rotation.
+usable without rotation. It also fails when an unavailable inner carrier becomes
+semantic `Blocked:` state or a user environment choice while the same authorized
+unit remains executable through Lead direct fallback.
 
 ### WBE-43 — Scope Fidelity And Verification Restraint
 
