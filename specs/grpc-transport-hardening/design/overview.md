@@ -618,7 +618,7 @@ honest.
 - If a service needs field-level violation details, `status.go` gains a second
   detail-shaping responsibility and the detail rendering moves out of it.
 
-[Implementation](../../../docs/spec-first-workflow/phases/implementation-validation-closeout.md#implement)
+[Implementation](../../../docs/spec-first-workflow/phases/implementation.md#execute)
 owns adapting the placement when that evidence appears in the real code.
 
 ## Review disposition

@@ -1,12 +1,9 @@
 # Bounded Work And Backpressure
 
-## Behavior Change Thesis
-When loaded for worker-pool, fan-out, queue, or semaphore symptoms, this file makes the model bound the goroutines and the waiting work, not just the critical section — the common defect is a limiter acquired after the goroutine already exists, which caps concurrent execution while leaving goroutine count and retained payloads proportional to the input.
-
-## When To Load
+## Load When
 Symptom: the diff launches a goroutine per item, adds a worker pool, `errgroup.SetLimit`, a semaphore, buffered job or result channels, an async send wrapper, a retry queue, or changes producer/consumer pressure.
 
-## Decision Rubric
+## Decide
 - Count both running work and waiting work: goroutines alive, items queued, retries held, result buffers, and the payloads all of them retain. A fixed worker count over a request-sized slice still holds the whole slice.
 - Acquire the limiter before launching the goroutine, and release it inside. Acquiring inside bounds the critical section only; every item still gets a goroutine and keeps its payload alive while it waits.
 - `errgroup.Group.Go` blocks at submission once `SetLimit` is reached, so the submitter is a blocking site too. Review where it blocks: under a lock, inside shutdown, or while holding responsibility for closing a channel, a full pool deadlocks even though the worker count is correct.
@@ -20,7 +17,7 @@ Symptom: the diff launches a goroutine per item, adds a worker pool, `errgroup.S
 - A bound proven only for workers, with pending items, retry lists, and result buffers uncounted.
 - A submission path with no cancellation: a producer parked on `jobs <- item` leaks exactly like a worker parked on a result send.
 
-## Validation Shape
+## Prove
 - Prove the bound by exceeding it: drive more items than the limit and fail on the first observed overflow of a counter the test owns.
 - Prove the submitter: fill the pool, cancel, and assert the producer returns.
 - Add `-race`, or `make test-race`, when the bound itself is tracked in shared state.

@@ -1,25 +1,17 @@
 # Subagent Brief Template
 
-Use only the fields that can change the lane's answer or stop decision.
+Use only the fields that can change the delegated result or stop decision.
 
 ```text
-Question: <one decision or falsification target>
-
-Context:
-- <accepted facts and minimal artifact paths>
-
-Evidence boundary:
-- inspect: <sources/files>
-- enough evidence: <threshold>
-
-Constraints:
-- <read-only boundary, non-goals, external-action limits>
-
-Output:
-- <required finding/evidence/recommendation shape>
-
-Stop:
-- <completion condition or missing-input blocker>
+Mode: decide | implement | investigate | verify | review
+Outcome: <one checkable result>
+Method: <phase adapter or skill; omit when obvious>
+References and constraints: <accepted facts and minimal authoritative paths>
+Writable scope: <only when non-obvious or required for isolation>
+Proof: <command, evidence threshold, or expected observable>
+Stop: <completion, scope, authority, or missing-input boundary>
 ```
 
-Do not copy repository-wide workflow rules, model catalogs, unrelated context, or generic strictness language into every brief.
+Pass model, effort, isolation, and native identity through tool fields. Do not
+copy repository-wide workflow rules, model catalogs, unrelated context, or
+generic strictness language into every brief.

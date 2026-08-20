@@ -1,20 +1,11 @@
 # Outbound Egress
 
-## When To Load
+## Load When
 
 Load this when the service dials something new — a provider API, a webhook
 delivery, or a destination influenced by a caller, a tenant, or config.
 
-## Behavior Change Thesis
-
-Without this file, SSRF is answered by hand: parse the URL, reject `localhost`
-and the private ranges, set a timeout. That check runs before DNS and before
-redirects, so a hostname that resolves to a private address and any redirect
-both walk past it. This repository already solved the problem once, in
-`internal/infra/httpclient`, and the finding worth writing is a new call that
-does not use it.
-
-## Decision Rubric
+## Decide
 
 - `internal/infra/httpclient` is the outbound transport. One client is built per
   fixed provider authority and pins it: scheme and host are enforced on every
@@ -48,7 +39,7 @@ does not use it.
 - Validating a destination at registration and dialing it later: the name can
   resolve somewhere else by then, which is the reason the gate sits at dial.
 
-## Validation Shape
+## Prove
 
 `httptest.Server` or a fake transport, asserting rejection at the boundary that
 owns it: refused scheme, refused resolved address, refused redirect, and the

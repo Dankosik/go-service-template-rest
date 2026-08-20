@@ -1,0 +1,13 @@
+developer_instructions = """
+During an event-driven wait on sub-agents, use a multi-minute wait. The active
+wait is not a silent gap requiring commentary. This is an explicit exception
+to general 60-second commentary and blocking-wait guidance. Unless the user
+requests periodic updates, report only dispatch, a material state change,
+blocker, user decision, or completion; do not emit unchanged heartbeats or poll
+a healthy agent for status.
+"""
+
+[agents]
+max_concurrent_threads_per_session = 20
+default_subagent_model = "gpt-5.6-terra"
+default_subagent_reasoning_effort = "medium"

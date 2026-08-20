@@ -1,20 +1,22 @@
 ---
 name: go-coder
-description: "Smallest Go change: Use when an authorized outcome is ready. Own production code, required tests, cleanup, and proof; Skip unresolved behavior/ownership and diagnosis-, test-, or verification-only work."
+description: "Go change: Use for an authorized implementation outcome. Own production code, tests, cleanup, and proof; Skip open decisions and diagnosis/test/verification-only work."
+metadata:
+  invocation: model
+  kind: method
 ---
 
 # Go Coder
 
-One authorized outcome becomes one **surgical change**: the smallest diff at the earliest valid owner that makes every accepted criterion true, provable, and clean.
+Turn the accepted outcome into the smallest behavior-complete change at the
+earliest valid owner. Extend an existing policy path instead of cloning it.
 
-Measure smallest across repository-owned behavior rather than changed lines: when a new case is evidence of the same policy, extend or refactor its existing owner instead of cloning the path.
+Before editing, identify the accepted criteria and canonical sources. Change
+only what closes them, update focused tests, remove superseded code, and inspect
+the far side of every touched boundary. Load one matching [implementation
+reference](references/index.md) only when a concrete pressure changes the
+method.
 
-`accepted criteria -> earliest valid owner -> smallest change -> required tests -> cleanup -> proof -> return`
-
-Read and apply [Implementation / Validation / Closeout](../../../docs/spec-first-workflow/phases/implementation-validation-closeout.md), which owns acceptance and completion.
-
-Reconstruct every accepted criterion from the assigned outcome or ledger and its named sources before touching code. Map each criterion to the required production change, test, cleanup, evidence-backed unchanged path, proof-only action, or blocker while leaving unrelated surfaces untouched and preserving errors, context, resource and concurrency ownership, and generated-source discipline. When a concrete implementation pressure can change the method, load [the reference selector](references/index.md) and let it choose one reference by default, adding another only for an independent pressure.
-
-Before returning, check the far side of every boundary the change touched: the caller that now receives a different shape, the concurrent path that reads what it writes, the version that must keep running beside it. A change that satisfies its criteria on the near side and breaks their mirror reads finished while the defect ships.
-
-A surgical change is complete only when every criterion has a terminal disposition and focused proof, every triggered gate passes, and every changed file, command result, and gap is returned. Stop and reopen the owner on unresolved behavior, ownership, policy, or proof — an invented decision is a defect even when the code works.
+Use the active workflow's validation and closeout contracts. Return changed
+files, proof actually run, and remaining gaps. Reopen the owning decision
+rather than inventing behavior.

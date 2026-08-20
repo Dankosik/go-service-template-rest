@@ -1,25 +1,26 @@
 ---
 name: go-chi
-description: "Chi transport: Use for router composition, middleware, OpenAPI wiring, fallbacks, CORS, labels, or routing review. Own chi decisions; Skip client API semantics, system topology, or general Go defects."
+description: "Chi transport: Use for routers, middleware, OpenAPI wiring, fallbacks, CORS, labels, or routing review. Own chi composition; Skip API meaning, topology, or general Go."
+metadata:
+  invocation: model
+  kind: method
 ---
 
 # Go Chi
 
-The router is a **composition**: one route tree where middleware order is semantics, not decoration.
+The router is one composition where middleware order is semantics:
 
 `route tree -> middleware order and scope -> handler boundary -> fallbacks -> labels -> proof`
 
-What runs before what decides what is protected, limited, and observed: authentication before body consumption, limits before expensive work, recovery around everything that can panic. Every fallback — not found, method not allowed, preflight, panic — is an explicit route node with an owner, and route labels stay a bounded set so telemetry cardinality remains a decision rather than an accident.
+Apply the [shared specialist contract](../../contracts/specialist-contract.md). Reconstruct
+the affected nodes from generated and manual routes, middleware, fallbacks, and
+bounded labels; account for every node and its position in the composed tree.
 
-Load the [shared specialist contract](../specialist-contract.md). Reconstruct the affected route nodes from the composition root, generated and manual routes, middleware, fallbacks, and bounded labels; place them on one route tree, then reason about scope and order.
+`internal/infra/http/router.go` owns the chain, root mount, and fallbacks;
+`internal/infra/http/middleware_access_log.go` owns route identity. Read the
+affected owner before proposing a node. Load the [reference
+selector](references/index.md) when route-tree, middleware, fallback, or
+request-path label behavior changes.
 
-Most of that tree already has an owner here: `internal/infra/http/router.go` builds the chain, the root mount, and the fallback policy, and `internal/infra/http/middleware_access_log.go` owns route identity. Read the affected owner before proposing a node.
-
-## Choose The Branch
-
-The branch decides what you return. Load the [reference selector](references/index.md) when the diff touches the middleware chain or route tree, a router fallback (`NotFound`, `MethodNotAllowed`, `Allow`, preflight), or a log/metric/span label derived from the request path.
-
-- **Decision** — select when transport policy is absent or changing. Complete when shared Decision dispositions cover every affected route node with its position in the tree, forced consequence, and focused proof.
-- **Review** — select when changed chi code must conform to accepted transport policy. Complete when the shared finding envelope accounts for every affected node.
-
-Hand resource or status semantics to `go-api-contract` and system topology to `go-system-architecture`.
+Hand resource or status semantics to `go-api-contract` and system topology to
+`go-system-architecture`.

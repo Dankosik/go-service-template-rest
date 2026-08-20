@@ -1,20 +1,11 @@
 # Error Contract Profile
 
-## When To Load
+## Load When
 
 Load this when an operation gains, moves, or removes an error response, or when
 a `Problem` body needs a field it does not already have.
 
-## Behavior Change Thesis
-
-Without this file, a new error is answered by inventing a per-API problem `type`
-URI and an ad-hoc `errors[]` member — the shape most public API guidance
-teaches. Here that is three defects at once: `type` is owned by the shared
-catalog in `internal/problem`, `code` is the member clients match on, and the
-published `Problem` schema is closed, so the extra member is a contract change
-that fails validation rather than a free addition.
-
-## Decision Rubric
+## Decide
 
 - `internal/problem` is the single source of `Code`, `Title`, `TypeURI`, and
   `Status`. Answer a new failure with an existing `problem.Code`; add a catalog
@@ -54,7 +45,7 @@ that fails validation rather than a free addition.
 - Concealing a resource with `404` on one operation and `403` on another: split
   answers let a caller distinguish the two by probing.
 
-## Validation Shape
+## Prove
 
 `make openapi-check` runs `TestOpenAPIRuntimeContract*`.
 `...OperationsDeclareSecurityDecisions` iterates the spec automatically;

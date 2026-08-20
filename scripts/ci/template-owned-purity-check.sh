@@ -76,11 +76,16 @@ done
 for required in \
 	"${manifest}" \
 	scripts/template-sync.sh \
+	scripts/agent-roles-sync.sh \
+	scripts/harness-skills-sync.sh \
 	scripts/claude-skills-sync.sh \
+	scripts/qwen-skills-sync.sh \
 	scripts/codex-agents-sync.sh \
+	.agents/codex-project.toml \
 	scripts/lib/manifest.sh \
 	scripts/lib/sync-cli.sh \
 	scripts/ci/claude-skills-check.sh \
+	scripts/ci/qwen-skills-check.sh \
 	scripts/ci/template-owned-purity-check.sh; do
 	contains_path "${required}" ||
 		fail "${manifest} must list ${required} so the sync mechanism propagates itself"
@@ -131,6 +136,16 @@ service_marker=$(find .agents/skills -mindepth 2 -maxdepth 2 -name .service-owne
 [[ -z "${service_marker}" ]] ||
 	fail "${service_marker} marks a template skill as service-owned; choose one owner"
 
+if ! role_report=$(bash scripts/agent-roles-sync.sh --check --repo . 2>&1); then
+	fail "harness role carriers are not generated from .agents/roles: ${role_report}"
+fi
+if ! skill_report=$(bash scripts/claude-skills-sync.sh --check --repo . 2>&1); then
+	fail "Claude skill discovery is stale: ${skill_report}"
+fi
+if ! skill_report=$(bash scripts/qwen-skills-sync.sh --check --repo . 2>&1); then
+	fail "Qwen skill discovery is stale: ${skill_report}"
+fi
+
 for role_file in .codex/agents/*.toml; do
 	role=$(basename "${role_file}" .toml)
 	grep -Fxq "[agents.${role}]" .codex/config.toml ||
@@ -151,7 +166,7 @@ while IFS= read -r role; do
 		fail ".codex/config.toml registers agents.${role}, but its role file is missing"
 done < <(sed -n 's/^\[agents\.\([^]]*\)\]$/\1/p' .codex/config.toml)
 if ! codex_registry_report=$(bash scripts/codex-agents-sync.sh --check --repo . 2>&1); then
-	fail "Codex role registry is not the generated current block: ${codex_registry_report}"
+	fail "Codex project runtime or role registry is stale: ${codex_registry_report}"
 fi
 
 if ((failed != 0)); then
@@ -159,15 +174,20 @@ if ((failed != 0)); then
 fi
 
 template_sync_behavior_check() (
-	local fixture template target target_dirty_local target_empty_claude target_invalid_codex target_missing_owner target_without_local_skill target_with_directory target_with_link outside sync_script check_output failure_output
+	local fixture template target target_dirty_local target_empty_claude target_empty_qwen target_invalid_codex target_missing_codex_source target_nonportable_codex target_secret_codex target_missing_owner target_missing_secret_carrier target_without_local_skill target_with_directory target_with_link outside sync_script check_output failure_output
 	fixture=$(mktemp -d "${TMPDIR:-/tmp}/template-sync-check.XXXXXX")
 	trap 'rm -rf -- "${fixture}"' EXIT
 	template="${fixture}/template"
 	target="${fixture}/target"
 	target_dirty_local="${fixture}/target-dirty-local"
 	target_empty_claude="${fixture}/target-empty-claude"
+	target_empty_qwen="${fixture}/target-empty-qwen"
 	target_invalid_codex="${fixture}/target-invalid-codex"
+	target_missing_codex_source="${fixture}/target-missing-codex-source"
+	target_nonportable_codex="${fixture}/target-nonportable-codex"
+	target_secret_codex="${fixture}/target-secret-codex"
 	target_missing_owner="${fixture}/target-missing-owner"
+	target_missing_secret_carrier="${fixture}/target-missing-secret-carrier"
 	target_without_local_skill="${fixture}/target-without-local-skill"
 	target_with_directory="${fixture}/target-with-directory"
 	target_with_link="${fixture}/target-with-link"
@@ -176,29 +196,63 @@ template_sync_behavior_check() (
 
 	mkdir -p \
 		"${template}/owned" \
+		"${template}/.agents/role-classes" \
+		"${template}/.agents/roles" \
 		"${template}/.agents/skills/fixture-one" \
+		"${template}/.claude/agents" \
 		"${template}/.codex/agents" \
+		"${template}/.qwen/agents" \
 		"${template}/docs" \
+		"${template}/docs/validation" \
 		"${template}/scripts/ci" \
 		"${template}/scripts/lib" \
 		"${template}/test" \
 		"${outside}"
 	printf '%s\n' \
 		'owned/' \
+		'.agents/role-classes/' \
+		'.agents/codex-project.toml' \
+		'.agents/roles/' \
 		'.agents/skills/' \
+		'.claude/agents/' \
 		'.codex/agents/' \
+		'.qwen/agents/' \
+		'docs/validation/' \
+		'scripts/agent-roles-sync.sh' \
+		'scripts/harness-skills-sync.sh' \
 		'scripts/claude-skills-sync.sh' \
+		'scripts/qwen-skills-sync.sh' \
 		'scripts/codex-agents-sync.sh' \
 		'scripts/lib/sync-cli.sh' \
 		'scripts/ci/claude-skills-check.sh' \
+		'scripts/ci/qwen-skills-check.sh' \
+		'scripts/ci/secret-scan.sh' \
 		>"${template}/template-owned.paths"
 	printf 'v1\n' >"${template}/owned/version"
-	printf '%s\n' '---' 'name: fixture-one' 'description: fixture' '---' \
+	printf '%s\n' '---' 'name: fixture-one' 'description: fixture' \
+		'metadata:' '  invocation: model' '  kind: method' '---' \
 		>"${template}/.agents/skills/fixture-one/SKILL.md"
-	printf '%s\n' 'name = "fixture-agent"' 'description = "fixture"' \
-		>"${template}/.codex/agents/fixture-agent.toml"
-	printf '%s\n' '[agents]' 'max_depth = 1' '' '[fixture]' 'retained = true' \
+	printf '%s\n' \
+		"Apply \`docs/spec-first-workflow/shared/read-only-delegation.md\`." \
+		>"${template}/.agents/role-classes/read-only-specialist.md"
+	printf '%s\n' 'This lane is read-only.' \
+		>"${template}/.agents/role-classes/read-only-specialist-fallback.md"
+	printf '%s\n' \
+		'name = "fixture-agent"' \
+		'description = "fixture"' \
+		'class = "read-only-specialist"' \
+		'claude_model = "sonnet"' \
+		'output_schema = "lane-result-v1"' \
+		'' \
+		'instructions = """' \
+		'Own fixture evidence.' \
+		'"""' \
+		>"${template}/.agents/roles/fixture-agent.toml"
+	printf '%s\n' '[agents]' 'max_depth = 4' \
 		>"${template}/.codex/config.toml"
+	cp .agents/codex-project.toml "${template}/.agents/codex-project.toml"
+	cp docs/validation/instructions.md "${template}/docs/validation/instructions.md"
+	cp docs/validation/security.md "${template}/docs/validation/security.md"
 	for repo_owned in \
 		docs/repo-architecture.md \
 		docs/project-structure-and-module-organization.md \
@@ -208,37 +262,62 @@ template_sync_behavior_check() (
 		test/README.md; do
 		printf 'fixture repository owner\n' >"${template}/${repo_owned}"
 	done
+	cp scripts/agent-roles-sync.sh "${template}/scripts/agent-roles-sync.sh"
+	cp scripts/harness-skills-sync.sh "${template}/scripts/harness-skills-sync.sh"
 	cp scripts/claude-skills-sync.sh "${template}/scripts/claude-skills-sync.sh"
+	cp scripts/qwen-skills-sync.sh "${template}/scripts/qwen-skills-sync.sh"
 	cp scripts/codex-agents-sync.sh "${template}/scripts/codex-agents-sync.sh"
 	# The synced sync scripts are executed from the target below, so the library
 	# they source has to travel with them exactly as the manifest makes it.
 	cp scripts/lib/sync-cli.sh "${template}/scripts/lib/sync-cli.sh"
 	cp scripts/ci/claude-skills-check.sh "${template}/scripts/ci/claude-skills-check.sh"
+	cp scripts/ci/qwen-skills-check.sh "${template}/scripts/ci/qwen-skills-check.sh"
+	cp scripts/ci/secret-scan.sh "${template}/scripts/ci/secret-scan.sh"
+	bash "${template}/scripts/agent-roles-sync.sh" --apply --repo "${template}" >/dev/null
+	bash "${template}/scripts/claude-skills-sync.sh" --apply --repo "${template}" >/dev/null
+	bash "${template}/scripts/qwen-skills-sync.sh" --apply --repo "${template}" >/dev/null
+	bash "${template}/scripts/codex-agents-sync.sh" --apply --repo "${template}" >/dev/null
 	git -C "${template}" init -q
 	git -C "${template}" add \
 		template-owned.paths \
 		owned/version \
+		.agents/codex-project.toml \
+		.agents/role-classes \
+		.agents/roles \
 		.agents/skills/fixture-one/SKILL.md \
+		.claude/skills/fixture-one \
+		.claude/agents/fixture-agent.md \
 		.codex/agents/fixture-agent.toml \
+		.qwen/agents/fixture-agent.md \
+		.qwen/skills/fixture-one \
 		.codex/config.toml \
+		docs/validation/instructions.md \
+		docs/validation/security.md \
 		docs/repo-architecture.md \
 		docs/project-structure-and-module-organization.md \
 		docs/build-test-and-development-commands.md \
 		docs/ci-cd-production-ready.md \
 		docs/railway-deployment-profile.md \
+		scripts/agent-roles-sync.sh \
+		scripts/harness-skills-sync.sh \
 		scripts/claude-skills-sync.sh \
+		scripts/qwen-skills-sync.sh \
 		scripts/codex-agents-sync.sh \
 		scripts/lib/sync-cli.sh \
 		scripts/ci/claude-skills-check.sh \
+		scripts/ci/qwen-skills-check.sh \
+		scripts/ci/secret-scan.sh \
 		test/README.md
 	git -C "${template}" -c user.name=template-sync-check -c user.email=template-sync-check@example.invalid commit -qm v1
 	git clone -q "${template}" "${target}"
 	git clone -q "${template}" "${target_empty_claude}"
+	git clone -q "${template}" "${target_empty_qwen}"
 	git clone -q "${template}" "${target_without_local_skill}"
 	git -C "${target}" config user.name template-sync-check
 	git -C "${target}" config user.email template-sync-check@example.invalid
 	mkdir -p "${target}/.agents/skills/service-local"
-	printf '%s\n' '---' 'name: service-local' 'description: local fixture' '---' \
+	printf '%s\n' '---' 'name: service-local' 'description: local fixture' \
+		'metadata:' '  invocation: model' '  kind: method' '---' \
 		>"${target}/.agents/skills/service-local/SKILL.md"
 	printf 'owned by fixture service\n' >"${target}/.agents/skills/service-local/.service-owned"
 	git -C "${target}" add .agents/skills/service-local
@@ -252,11 +331,13 @@ template_sync_behavior_check() (
 
 	printf 'v2\n' >"${template}/owned/version"
 	mkdir -p "${template}/.agents/skills/fixture-two"
-	printf '%s\n' '---' 'name: fixture-two' 'description: fixture' '---' \
+	printf '%s\n' '---' 'name: fixture-two' 'description: fixture' \
+		'metadata:' '  invocation: model' '  kind: method' '---' \
 		>"${template}/.agents/skills/fixture-two/SKILL.md"
 	git -C "${template}" add owned/version .agents/skills/fixture-two/SKILL.md
 	git -C "${template}" -c user.name=template-sync-check -c user.email=template-sync-check@example.invalid commit -qm v2
 
+	rm -rf "${target_empty_claude}/.claude/skills"
 	mkdir -p "${target_empty_claude}/.claude/skills"
 	if failure_output=$(bash "${target_empty_claude}/scripts/claude-skills-sync.sh" --check --repo "${target_empty_claude}" 2>&1); then
 		echo "template-owned purity: Claude check accepted an empty generated view" >&2
@@ -271,6 +352,21 @@ template_sync_behavior_check() (
 		echo "template-owned purity: Claude sync did not repair an empty generated view" >&2
 		return 1
 	}
+	rm -rf "${target_empty_qwen}/.qwen/skills"
+	mkdir -p "${target_empty_qwen}/.qwen/skills"
+	if failure_output=$(bash "${target_empty_qwen}/scripts/qwen-skills-sync.sh" --check --repo "${target_empty_qwen}" 2>&1); then
+		echo "template-owned purity: Qwen check accepted an empty generated view" >&2
+		return 1
+	fi
+	grep -Fq 'qwen skills: .qwen/skills/fixture-one is missing' <<<"${failure_output}" || {
+		echo "template-owned purity: Qwen check rejected an empty generated view for the wrong reason" >&2
+		return 1
+	}
+	bash "${target_empty_qwen}/scripts/qwen-skills-sync.sh" --apply --repo "${target_empty_qwen}" >/dev/null
+	[[ -L "${target_empty_qwen}/.qwen/skills/fixture-one" ]] || {
+		echo "template-owned purity: Qwen sync did not repair an empty generated view" >&2
+		return 1
+	}
 	bash "${sync_script}" --apply --no-commit --from "${template}" --repo "${target_without_local_skill}" >/dev/null
 	grep -Fxq v2 "${target_without_local_skill}/owned/version" || {
 		echo "template-owned purity: sync failed for a target without service-owned skills" >&2
@@ -280,7 +376,8 @@ template_sync_behavior_check() (
 	printf 'dirty local work\n' >>"${target_dirty_local}/.agents/skills/service-local/SKILL.md"
 	git -C "${target_dirty_local}" add .agents/skills/service-local/SKILL.md
 	mkdir -p "${target_dirty_local}/.agents/skills/untracked-local"
-	printf '%s\n' '---' 'name: untracked-local' 'description: untracked fixture' '---' \
+	printf '%s\n' '---' 'name: untracked-local' 'description: untracked fixture' \
+		'metadata:' '  invocation: model' '  kind: method' '---' \
 		>"${target_dirty_local}/.agents/skills/untracked-local/SKILL.md"
 	printf 'owned by fixture service\n' >"${target_dirty_local}/.agents/skills/untracked-local/.service-owned"
 	bash "${sync_script}" --apply --from "${template}" --repo "${target_dirty_local}" >/dev/null
@@ -302,7 +399,11 @@ template_sync_behavior_check() (
 		return 1
 	}
 	[[ -L "${target_dirty_local}/.claude/skills/untracked-local" ]] || {
-		echo "template-owned purity: sync omitted an untracked service-owned skill link" >&2
+		echo "template-owned purity: sync omitted an untracked service-owned Claude skill link" >&2
+		return 1
+	}
+	[[ -L "${target_dirty_local}/.qwen/skills/untracked-local" ]] || {
+		echo "template-owned purity: sync omitted an untracked service-owned Qwen skill link" >&2
 		return 1
 	}
 	git -C "${target_dirty_local}" status --porcelain -- .agents/skills/untracked-local |
@@ -313,6 +414,11 @@ template_sync_behavior_check() (
 	git -C "${target_dirty_local}" status --porcelain -- .claude/skills/untracked-local |
 		grep -Fq '?? .claude/skills/untracked-local' || {
 		echo "template-owned purity: sync staged an untracked service-owned skill link" >&2
+		return 1
+	}
+	git -C "${target_dirty_local}" status --porcelain -- .qwen/skills/untracked-local |
+		grep -Fq '?? .qwen/skills/untracked-local' || {
+		echo "template-owned purity: sync staged an untracked service-owned Qwen skill link" >&2
 		return 1
 	}
 	if git -C "${target_dirty_local}" show --format= --name-only HEAD |
@@ -370,19 +476,78 @@ template_sync_behavior_check() (
 		return 1
 	}
 	[[ -L "${target}/.claude/skills/service-local" ]] || {
-		echo "template-owned purity: sync omitted the service-owned skill discovery link" >&2
+		echo "template-owned purity: sync omitted the service-owned Claude skill discovery link" >&2
+		return 1
+	}
+	[[ -L "${target}/.qwen/skills/service-local" ]] || {
+		echo "template-owned purity: sync omitted the service-owned Qwen skill discovery link" >&2
 		return 1
 	}
 	bash "${target}/scripts/ci/claude-skills-check.sh" >/dev/null || {
 		echo "template-owned purity: synced Claude link checker rejected generated links" >&2
 		return 1
 	}
-	bash "${target}/scripts/codex-agents-sync.sh" --check --repo "${target}" >/dev/null || {
-		echo "template-owned purity: synced Codex registry checker rejected generated roles" >&2
+	bash "${target}/scripts/ci/qwen-skills-check.sh" >/dev/null || {
+		echo "template-owned purity: synced Qwen link checker rejected generated links" >&2
 		return 1
 	}
-	grep -Fxq 'retained = true' "${target}/.codex/config.toml" || {
-		echo "template-owned purity: Codex registry sync changed repository-specific config" >&2
+	bash "${target}/scripts/agent-roles-sync.sh" --check --repo "${target}" >/dev/null || {
+		echo "template-owned purity: synced role checker rejected generated carriers" >&2
+		return 1
+	}
+	grep -Fq 'bash scripts/agent-roles-sync.sh --check --repo .' \
+		"${target}/docs/validation/instructions.md" || {
+		echo "template-owned purity: derived validation does not use the synced role checker" >&2
+		return 1
+	}
+	grep -Fq 'bash scripts/ci/qwen-skills-check.sh' \
+		"${target}/docs/validation/instructions.md" || {
+		echo "template-owned purity: derived validation does not use the synced Qwen skill checker" >&2
+		return 1
+	}
+	if grep -Eq "\`make (agent-roles-check|codex-agents-check|claude-skills-check|qwen-skills-check)\`" \
+		"${target}/docs/validation/instructions.md"; then
+		echo "template-owned purity: derived validation depends on a repository-owned Make target" >&2
+		return 1
+	fi
+	grep -Fq 'bash scripts/ci/secret-scan.sh change origin/main' \
+		"${target}/docs/validation/security.md" || {
+		echo "template-owned purity: derived security validation does not use the repository-owned change scanner" >&2
+		return 1
+	}
+	grep -Fq 'bash scripts/ci/secret-scan.sh history' \
+		"${target}/docs/validation/security.md" || {
+		echo "template-owned purity: derived security validation does not expose explicit history proof" >&2
+		return 1
+	}
+	if grep -Fq 'make secret-scan' "${target}/docs/validation/security.md"; then
+		echo "template-owned purity: derived security validation depends on a repository-owned Make target" >&2
+		return 1
+	fi
+	grep -Fq 'template checkout only' "${target}/docs/validation/instructions.md" || {
+		echo "template-owned purity: derived validation does not bound the template-only purity gate" >&2
+		return 1
+	}
+	printf '\n# manual drift\n' >>"${target}/.codex/agents/fixture-agent.toml"
+	if bash "${target}/scripts/agent-roles-sync.sh" --check --repo "${target}" >/dev/null 2>&1; then
+		echo "template-owned purity: role checker accepted a manually changed carrier" >&2
+		return 1
+	fi
+	bash "${target}/scripts/agent-roles-sync.sh" --apply --repo "${target}" >/dev/null
+	bash "${target}/scripts/codex-agents-sync.sh" --check --repo "${target}" >/dev/null || {
+		echo "template-owned purity: synced Codex project checker rejected runtime or roles" >&2
+		return 1
+	}
+	grep -Fxq 'max_concurrent_threads_per_session = 20' "${target}/.codex/config.toml" || {
+		echo "template-owned purity: Codex project sync omitted portable concurrency" >&2
+		return 1
+	}
+	if grep -Eq '^max_depth[[:space:]]*=' "${target}/.codex/config.toml"; then
+		echo "template-owned purity: Codex project sync retained unsupported max_depth" >&2
+		return 1
+	fi
+	grep -Fq 'do not emit unchanged heartbeats' "${target}/.codex/config.toml" || {
+		echo "template-owned purity: Codex project sync omitted portable wait policy" >&2
 		return 1
 	}
 	rm "${target}/.claude/skills/fixture-two"
@@ -446,12 +611,41 @@ template_sync_behavior_check() (
 	git -C "${target_missing_owner}" rm -q docs/repo-architecture.md
 	git -C "${target_missing_owner}" commit -qm missing-repository-owner
 
+	git clone -q "${template}" "${target_missing_secret_carrier}"
+	git -C "${target_missing_secret_carrier}" config user.name template-sync-check
+	git -C "${target_missing_secret_carrier}" config user.email template-sync-check@example.invalid
+	git -C "${target_missing_secret_carrier}" rm -q scripts/ci/secret-scan.sh
+	git -C "${target_missing_secret_carrier}" commit -qm missing-secret-scan-carrier
+
 	git clone -q "${template}" "${target_invalid_codex}"
 	git -C "${target_invalid_codex}" config user.name template-sync-check
 	git -C "${target_invalid_codex}" config user.email template-sync-check@example.invalid
 	printf '%s\n' '# template-owned-codex-agents:start' >"${target_invalid_codex}/.codex/config.toml"
 	git -C "${target_invalid_codex}" add .codex/config.toml
 	git -C "${target_invalid_codex}" commit -qm malformed-codex-registry
+
+	git clone -q "${template}" "${target_nonportable_codex}"
+	git -C "${target_nonportable_codex}" config user.name template-sync-check
+	git -C "${target_nonportable_codex}" config user.email template-sync-check@example.invalid
+	printf '%s\n' '' '[mcp_servers.local-tool]' \
+		"command = '/private/var/run/local-tool'" \
+		>>"${target_nonportable_codex}/.codex/config.toml"
+	git -C "${target_nonportable_codex}" add .codex/config.toml
+	git -C "${target_nonportable_codex}" commit -qm nonportable-codex-config
+
+	git clone -q "${template}" "${target_secret_codex}"
+	git -C "${target_secret_codex}" config user.name template-sync-check
+	git -C "${target_secret_codex}" config user.email template-sync-check@example.invalid
+	printf '%s\n' '' '[mcp_servers.literal-secret]' 'bearer_token = ""' \
+		>>"${target_secret_codex}/.codex/config.toml"
+	git -C "${target_secret_codex}" add .codex/config.toml
+	git -C "${target_secret_codex}" commit -qm literal-secret-codex-config
+
+	git clone -q "${template}" "${target_missing_codex_source}"
+	git -C "${target_missing_codex_source}" config user.name template-sync-check
+	git -C "${target_missing_codex_source}" config user.email template-sync-check@example.invalid
+	git -C "${target_missing_codex_source}" rm -q .agents/codex-project.toml
+	git -C "${target_missing_codex_source}" commit -qm missing-codex-runtime-source
 
 	printf 'v4\n' >"${template}/owned/version"
 	git -C "${template}" add owned/version
@@ -484,16 +678,68 @@ template_sync_behavior_check() (
 		echo "template-owned purity: repository-owner refusal happened after manifest writes" >&2
 		return 1
 	}
+	if ! bash "${sync_script}" --apply --no-commit --from "${template}" --repo "${target_missing_secret_carrier}" >/dev/null; then
+		echo "template-owned purity: sync could not restore a missing secret-scan carrier" >&2
+		return 1
+	fi
+	cmp -s "${template}/scripts/ci/secret-scan.sh" "${target_missing_secret_carrier}/scripts/ci/secret-scan.sh" || {
+		echo "template-owned purity: sync restored the wrong secret-scan carrier" >&2
+		return 1
+	}
+	grep -Fxq v4 "${target_missing_secret_carrier}/owned/version" || {
+		echo "template-owned purity: secret-scan carrier upgrade omitted manifest writes" >&2
+		return 1
+	}
 	if failure_output=$(bash "${sync_script}" --apply --no-commit --from "${template}" --repo "${target_invalid_codex}" 2>&1); then
 		echo "template-owned purity: sync accepted malformed Codex registry markers" >&2
 		return 1
 	fi
-	grep -Fq 'refused: generated Codex agent registry cannot be rebuilt safely' <<<"${failure_output}" || {
+	grep -Fq 'refused: generated Codex project config cannot be rebuilt safely' <<<"${failure_output}" || {
 		echo "template-owned purity: Codex preflight refused for the wrong reason" >&2
 		return 1
 	}
 	grep -Fxq v3 "${target_invalid_codex}/owned/version" || {
 		echo "template-owned purity: Codex registry refusal happened after manifest writes" >&2
+		return 1
+	}
+	if ! bash "${sync_script}" --apply --no-commit --from "${template}" --repo "${target_nonportable_codex}" >/dev/null; then
+		echo "template-owned purity: sync could not replace machine-local Codex config" >&2
+		return 1
+	fi
+	if grep -Fq '/private/var/run/local-tool' "${target_nonportable_codex}/.codex/config.toml"; then
+		echo "template-owned purity: sync retained a host-absolute Codex path" >&2
+		return 1
+	fi
+	grep -Fxq v4 "${target_nonportable_codex}/owned/version" || {
+		echo "template-owned purity: machine-local Codex cleanup omitted manifest writes" >&2
+		return 1
+	}
+	if ! bash "${sync_script}" --apply --no-commit --from "${template}" --repo "${target_secret_codex}" >/dev/null; then
+		echo "template-owned purity: sync could not replace literal Codex credentials" >&2
+		return 1
+	fi
+	if grep -Eq '^[[:space:]]*bearer_token[[:space:]]*=' "${target_secret_codex}/.codex/config.toml"; then
+		echo "template-owned purity: sync retained a literal Codex credential" >&2
+		return 1
+	fi
+	grep -Fxq v4 "${target_secret_codex}/owned/version" || {
+		echo "template-owned purity: literal Codex cleanup omitted manifest writes" >&2
+		return 1
+	}
+	if ! bash "${sync_script}" --apply --no-commit --from "${template}" --repo "${target_missing_codex_source}" >/dev/null; then
+		echo "template-owned purity: sync could not upgrade a consumer without the new Codex runtime source" >&2
+		return 1
+	fi
+	[[ -f "${target_missing_codex_source}/.agents/codex-project.toml" ]] || {
+		echo "template-owned purity: sync omitted the new Codex runtime source" >&2
+		return 1
+	}
+	grep -Fxq 'max_concurrent_threads_per_session = 20' "${target_missing_codex_source}/.codex/config.toml" || {
+		echo "template-owned purity: upgraded consumer omitted generated Codex runtime" >&2
+		return 1
+	}
+	grep -Fxq v4 "${target_missing_codex_source}/owned/version" || {
+		echo "template-owned purity: Codex runtime-source upgrade omitted manifest writes" >&2
 		return 1
 	}
 )

@@ -1,9 +1,6 @@
 # Domain Test Traceability
 
-## Behavior Change Thesis
-When loaded for symptom "a changed business rule has no proof that would fail on the risky regression", this file makes the model name the regression that can pass green instead of likely mistake "ask for more tests, higher coverage, or table-driven style."
-
-## Decision Rubric
+## Decide
 - Missing proof is a finding only when a changed production or test line lets a named business regression pass unnoticed. Name that regression concretely; it is the whole finding.
 - The strongest domain proof is usually a **negative** assertion — that the rejected path performed no effect, that the replay performed one. A test asserting only the returned error leaves the effect free to move.
 - Anchor on the changed production line when the defect is missing proof, and on the changed test line when the defect is weakened proof — a renamed test, a dropped assertion, or a fake that no longer records the call.
@@ -22,5 +19,5 @@ Coverage on this package dropped.
 ```
 Failure: a coverage delta is not a domain finding; it names no rule that a regression could break.
 
-## Validation Shape
+## Prove
 One targeted proof is enough: the forbidden transition rejects, the rejected command triggers no effect, the duplicate is a no-op or a rejection by contract, stale input does not overwrite newer state, or the renamed test still asserts the accepted rule.

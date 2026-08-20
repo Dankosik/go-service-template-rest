@@ -155,18 +155,9 @@ and test dependencies; [`tools/go.mod`](tools/go.mod) owns development tools.
 ### What the agent workflow costs
 
 Initialization keeps the workflow byte-for-byte; there is no option to decline
-it. Be deliberate about that, because a generated service owns all of it:
-
-| Inherited | Size |
-| --- | --- |
-| `.agents/skills/` | 35 skills, 304 files, ~17,200 lines, 1.7 MB |
-| `.codex/agents/`, `.claude/agents/`, `.qwen/agents/` | 18 specialist definitions each |
-| `docs/` | 29 files, ~4,600 lines |
-
-Across the repository that is roughly 383 Markdown files and 22,600 lines of
-prose against about 27,600 lines of Go. If your team is going to drive changes
-through Codex, Claude Code, or Qwen, that content is the point of this template
-and the largest thing it gives you. If not, plan to delete it: keep
+it. A generated service inherits the repository contract, conditional domain
+methods, five generic capability roles, and their generated Codex, Claude, and
+Qwen carriers. If your team will not use those harnesses, keep
 [`AGENTS.md`](AGENTS.md) and `docs/`, and drop `.agents/`, `.codex/`,
 `.claude/`, and `.qwen/`.
 
@@ -239,24 +230,21 @@ flowchart TD
     orchestrator["LEDGER_ORCHESTRATOR<br/>routes ready units only"]
     lead["ACCEPTANCE_UNIT_LEAD<br/>owns one unit end to end"]
     strategy{"Lead chooses the fastest safe strategy"}
-    serial["Serial implementation"]
-    specialist["READ_ONLY_SPECIALIST<br/>optional investigation"]
-    worker["IMPLEMENTATION_WORKER<br/>optional isolated write slice"]
+    direct["Lead implements directly"]
+    delegated["worker-agent<br/>implement · investigate · verify"]
     fanin["Lead fan-in<br/>integration · proof · self-review"]
     review{"Independent review required?"}
-    reviewer["ACCEPTANCE_REVIEWER<br/>fresh read-only review"]
+    reviewer["reviewer-agent<br/>independent falsification"]
     receipt["One receipt or precise blocker"]
     done["Ledger exhausted"]
 
     user --> orchestrator
     orchestrator -->|"dispatches one ready unit"| lead
     lead --> strategy
-    strategy -->|"no useful split"| serial
-    strategy -->|"independent question"| specialist
-    strategy -->|"independent write slices"| worker
-    serial --> fanin
-    specialist --> fanin
-    worker --> fanin
+    strategy -->|"handoff costs more"| direct
+    strategy -->|"bounded useful work"| delegated
+    direct --> fanin
+    delegated --> fanin
     fanin --> review
     review -->|"yes"| reviewer
     review -->|"no"| receipt
@@ -266,29 +254,28 @@ flowchart TD
 ```
 
 The orchestrator does not implement or review units. Each fresh Lead chooses
-whether its unit benefits from parallel leaves, selects the model and reasoning
-effort for every direct child from that child's exact work, owns serial fan-in,
-and accepts the result. Only positively independent work runs concurrently;
-integration and acceptance stay with one owner. A leaf resolves obstacles at
-its own level first, then escalates to exactly one parent, so recoverable
-problems do not stop the whole ledger.
+the simplest reliable workflow, may write directly, delegates only when the
+boundary saves time, cost, or context, and owns integration and acceptance.
+Only genuinely independent work runs concurrently. Recoverable problems may
+change the route, reuse a useful agent context, start fresh, or repair the
+smallest invalid upstream decision without creating another semantic role.
 
-The detailed contracts live in the [Agent Harness](docs/agent-harness.md), its
-[Codex App selection tree](docs/agent-harness.md#codex-app-selection-tree), and
-[Implementation Worker Execution](docs/spec-first-workflow/phases/implementation-worker-execution.md).
+The detailed contracts live in [Implementation](docs/spec-first-workflow/phases/implementation.md),
+[Review](docs/spec-first-workflow/shared/review.md), and the selected [Agent
+Harness](docs/agent-harness.md) adapter.
 
 ## Agent Support
 
 | Harness | Entry point | Project-native support |
 | --- | --- | --- |
-| Codex | `AGENTS.md` | `.codex/agents`, `.agents/skills` |
-| Claude Code | `CLAUDE.md` | `.claude/agents`, `.claude/skills` |
-| Qwen Code | `QWEN.md` | Shared repository contract and skills |
+| Codex | `AGENTS.md`, `$orchestrator` | `.codex/agents`, `.agents/skills` |
+| Claude Code | `CLAUDE.md`, `/orchestrator` | `.claude/agents`, `.claude/skills` |
+| Qwen Code | `QWEN.md`, `/orchestrator` | `.qwen/agents`, `.qwen/skills` |
 
-Representative specialists cover API contracts, architecture, data, domain
-invariants, security, reliability, concurrency, observability, performance,
-testing, delivery, and Go maintainability. Skills are loaded only when the
-current decision or failure needs them.
+Five generic capability roles provide evidence, specialist judgment, mutable
+work, independent review, and adjudication. Domain skills cover API contracts,
+architecture, data, security, reliability, concurrency, testing, delivery, and
+Go maintainability only when the current pressure needs them.
 
 See [Agent Harness](docs/agent-harness.md) and
 [Spec-First Workflow](docs/spec-first-workflow.md) for the complete routing
@@ -310,8 +297,8 @@ internal/openapi/                generated OpenAPI artifacts
 examples/reference-service/      worked feature-slice example (upstream only)
 migrations/                      SQL migrations (PostgreSQL profile)
 specs/                           durable task decisions (upstream only)
-.agents/skills/                  reusable skills
-.codex/agents/                   Codex specialists
+.agents/skills/                  reusable domain methods
+.codex/agents/                   generated Codex capability roles
 ```
 
 <!-- profile:grpc:start -->

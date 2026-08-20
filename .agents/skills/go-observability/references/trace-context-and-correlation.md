@@ -1,12 +1,9 @@
 # Trace Context And Correlation
 
-## Behavior Change Thesis
-When loaded for propagation, correlation identifiers, or "pass this value to the downstream service", this file makes the model choose an explicit egress policy for the target instead of the likely mistake: designing an allowlisted-baggage solution, which in this repository propagates nothing — baggage is never injected and is stripped on the way out, so the design silently no-ops and the value never arrives.
-
-## When To Load
+## Load When
 Load this when a change crosses a service boundary with correlation attached: a new outbound client, a value that must reach a downstream, async lineage, or log-to-trace correlation.
 
-## Decision Rubric
+## Decide
 
 **Baggage does not travel here.** `SetupTracing` registers `propagation.TraceContext{}` alone — no composite, no `propagation.Baggage`. Both outbound clients go further: `internal/infra/httpclient/propagation.go` and `internal/infra/grpcclient/propagation.go` strip `traceparent`, `tracestate`, `baggage`, and the request-ID header from every attempt before injecting. A value that must reach a downstream travels as an explicit field of the request, or the policy is extended deliberately by its owner.
 
@@ -23,7 +20,7 @@ Load this when a change crosses a service boundary with correlation attached: a 
 - A new outbound client that leaves `Propagation` at its zero value while expecting distributed traces, because the zero value is `PropagationNone` and the trace ends at this service.
 - Re-adding `trace_id` or `request_id` to a log call, because `logctx` already published them and the second copy is what drifts.
 
-## Validation Shape
+## Prove
 - Name the `PropagationPolicy` chosen for each new target and what it asserts about that target's trust.
 - For async work, state whether lineage is parent-child or linked, and why.
 - Confirm one alert-to-trace-to-log pivot works from the keys `logctx` already publishes.

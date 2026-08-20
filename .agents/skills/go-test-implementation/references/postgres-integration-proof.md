@@ -1,18 +1,10 @@
 # Postgres Integration Proof
 
-## Behavior Change Thesis
-When loaded for repository, migration, transaction, or cache proof, this file
-makes the model run the cases the engine decides against a real PostgreSQL — the
-common defect is a fake querier standing in for the database on behavior the
-database owns, where `SKIP LOCKED` exclusion, constraint violation, and query
-ordering are whatever the fake was written to return, so the test agrees with
-itself and rejects nothing.
-
-## When To Load
+## Load When
 Symptom: the obligation involves SQL, migrations, transactions, row locks,
 concurrent claims, tenant isolation, or a cache whose backend behavior matters.
 
-## Decision Rubric
+## Decide
 - Split by owner. The engine decides lock exclusion, `ORDER BY`, unique and
   foreign-key violations, serialization failures, rollback visibility, and
   redelivery after a claim expires; none survive a fake. Go code decides error
@@ -48,7 +40,7 @@ concurrent claims, tenant isolation, or a cache whose backend behavior matters.
 - Integration proof reported as skipped-because-Docker without saying so; the run
   produced no evidence for the claim it was cited under.
 
-## Validation Shape
+## Prove
 - Repository unit test: focused package command with `-count=1 -vet=off`.
 - Integration test: `make test-integration`, or the tagged package directly while
   iterating.

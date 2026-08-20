@@ -1,6 +1,10 @@
 ---
 name: spec-first-brainstorming
-description: "Problem frame: Use when a chosen feature/refactor needs a behavior delta, scope, constraints, assumptions, and readiness. Own that frame/next owner; Skip raw ideation, final design, or task breakdown."
+description: "Problem frame: Use when a chosen change needs behavior delta, scope, constraints, or readiness. Own frame/next owner; Skip ideation, design, and tasks."
+metadata:
+  invocation: user
+  kind: workflow
+disable-model-invocation: true
 ---
 
 # Spec First Brainstorming

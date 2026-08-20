@@ -1,20 +1,11 @@
 # Verified Principal
 
-## When To Load
+## Load When
 
 Load this when a change touches bearer-token verification, an identity header,
 or what a handler is allowed to conclude about who is calling.
 
-## Behavior Change Thesis
-
-Without this file, an identity requirement is written as if this service had
-none: a fresh JWT policy naming issuer, audience, and an algorithm allowlist,
-and a `Principal.HasScope` check to authorize on. Both are defects here. The
-first is a second credential path beside the one that already runs, and the
-second denies every caller — `internal/infra/oidcjwt` fills the verified issuer,
-subject, and OAuth client ID but leaves `Scopes` empty.
-
-## Decision Rubric
+## Decide
 
 - `internal/infra/oidcjwt` is the only credential verifier. It reaches handlers
   through `httpx.Authenticated`, which publishes a `reqctx.Principal` onto the
@@ -52,7 +43,7 @@ subject, and OAuth client ID but leaves `Scopes` empty.
   attacker-supplied input, and RFC 8725 puts algorithm selection on the
   verifier.
 
-## Validation Shape
+## Prove
 
 The deny-path matrix spans two files: `internal/infra/oidcjwt/token_test.go`
 holds what one token can be wrong about — tampered header and payload,

@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Mirror the template-owned instruction surface between this template and the
 # repositories derived from it. The manifest `template-owned.paths` owns copied
-# content; generated Claude skill links and the managed Codex agent-registry
-# block are derived from that content and travel with the same sync.
+# content; generated Claude/Qwen skill links and the managed Codex
+# agent-registry block are derived from that content and travel with the same
+# sync.
 #
 # The sync never commits work it did not produce. A target whose manifest paths
 # hold uncommitted changes is refused, except for a marked service-owned skill
@@ -23,11 +24,11 @@ usage:
   --targets   apply to several targets in one run
   --no-commit leave the mirrored result in the working tree without committing
 
-Uncommitted work outside the manifest and its generated `.claude/skills` and
-`.codex/config.toml` views is never staged or touched. Changes inside those
+Uncommitted work outside the manifest and its generated `.claude/skills`,
+`.qwen/skills`, and `.codex/config.toml` views is never staged or touched. Changes inside those
 owned/generated paths refuse the target before any write, except a skill
-directory with a `.service-owned` marker and its matching Claude discovery
-link. Commit or discard other owned paths yourself, then sync again.
+directory with a `.service-owned` marker and its matching harness discovery
+links. Commit or discard other owned paths yourself, then sync again.
 EOF
 }
 
@@ -141,9 +142,9 @@ first_manifest_symlink() {
 }
 
 # Tracked paths the sync regenerates from template-owned skills and roles. They
-# are absent from the manifest because one is a symlink view and the other keeps
-# repository-specific config outside its managed block.
-generated_paths=(.claude/skills .codex/config.toml)
+# are absent from the manifest because two are harness discovery views and the
+# Codex config keeps repository-specific content outside its managed block.
+generated_paths=(.claude/skills .qwen/skills .codex/config.toml)
 # Historical generated receipts removed by the sync.
 retired_paths=(.template-sync)
 # These files carry service-specific decisions and therefore cannot be mirrored,
@@ -196,6 +197,12 @@ fi
 claude_skills_helper="${source_root}/scripts/claude-skills-sync.sh"
 [[ -f "${claude_skills_helper}" ]] ||
 	fail "template-owned Claude skill helper is missing: scripts/claude-skills-sync.sh"
+qwen_skills_helper="${source_root}/scripts/qwen-skills-sync.sh"
+[[ -f "${qwen_skills_helper}" ]] ||
+	fail "template-owned Qwen skill helper is missing: scripts/qwen-skills-sync.sh"
+agent_roles_helper="${source_root}/scripts/agent-roles-sync.sh"
+[[ -f "${agent_roles_helper}" ]] ||
+	fail "template-owned role helper is missing: scripts/agent-roles-sync.sh"
 codex_agents_helper="${source_root}/scripts/codex-agents-sync.sh"
 [[ -f "${codex_agents_helper}" ]] ||
 	fail "template-owned Codex agent helper is missing: scripts/codex-agents-sync.sh"
@@ -331,6 +338,7 @@ collect_service_skill_exclusions() {
 			":(exclude).agents/skills/${name}"
 			":(exclude).agents/skills/${name}/**"
 			":(exclude).claude/skills/${name}"
+			":(exclude).qwen/skills/${name}"
 		)
 	done < <(service_owned_skill_names "${repo}")
 }
@@ -471,6 +479,18 @@ for target in "${targets[@]}"; do
 			[[ -n "${line}" ]] && report+="  ! ${line}"$'\n'
 		done <<<"${generated_report}"
 	fi
+	if ! generated_report=$(bash "${qwen_skills_helper}" --check --repo "${repo}" 2>&1); then
+		drift=1
+		while IFS= read -r line; do
+			[[ -n "${line}" ]] && report+="  ! ${line}"$'\n'
+		done <<<"${generated_report}"
+	fi
+	if ! generated_report=$(bash "${agent_roles_helper}" --check --repo "${repo}" 2>&1); then
+		drift=1
+		while IFS= read -r line; do
+			[[ -n "${line}" ]] && report+="  ! ${line}"$'\n'
+		done <<<"${generated_report}"
+	fi
 	if ! generated_report=$(bash "${codex_agents_helper}" --check --repo "${repo}" 2>&1); then
 		drift=1
 		while IFS= read -r line; do
@@ -536,10 +556,22 @@ for target in "${targets[@]}"; do
 		reject "generated Claude skill links cannot be rebuilt safely"
 		continue
 	fi
+	if ! preflight_report=$(bash "${qwen_skills_helper}" --preflight --repo "${repo}" 2>&1); then
+		[[ -z "${preflight_report}" ]] ||
+			printf '%s\n' "${preflight_report}" | sed 's/^/   /'
+		reject "generated Qwen skill links cannot be rebuilt safely"
+		continue
+	fi
+	if ! preflight_report=$(bash "${agent_roles_helper}" --preflight --repo "${repo}" 2>&1); then
+		[[ -z "${preflight_report}" ]] ||
+			printf '%s\n' "${preflight_report}" | sed 's/^/   /'
+		reject "generated agent roles cannot be rebuilt safely"
+		continue
+	fi
 	if ! preflight_report=$(bash "${codex_agents_helper}" --preflight --repo "${repo}" 2>&1); then
 		[[ -z "${preflight_report}" ]] ||
 			printf '%s\n' "${preflight_report}" | sed 's/^/   /'
-		reject "generated Codex agent registry cannot be rebuilt safely"
+		reject "generated Codex project config cannot be rebuilt safely"
 		continue
 	fi
 
@@ -549,13 +581,25 @@ for target in "${targets[@]}"; do
 	if [[ -f "${repo}/scripts/template-sync.sh" ]]; then
 		chmod +x \
 			"${repo}/scripts/template-sync.sh" \
+			"${repo}/scripts/agent-roles-sync.sh" \
+			"${repo}/scripts/harness-skills-sync.sh" \
 			"${repo}/scripts/claude-skills-sync.sh" \
+			"${repo}/scripts/qwen-skills-sync.sh" \
 			"${repo}/scripts/codex-agents-sync.sh" \
 			"${repo}/scripts/ci/claude-skills-check.sh" \
+			"${repo}/scripts/ci/qwen-skills-check.sh" \
 			"${repo}/scripts/ci/template-owned-purity-check.sh"
 	fi
 	if ! bash "${repo}/scripts/claude-skills-sync.sh" --apply --repo "${repo}"; then
 		reject "Claude skill link rebuild failed; the mirror is in the working tree and was not committed"
+		continue
+	fi
+	if ! bash "${repo}/scripts/qwen-skills-sync.sh" --apply --repo "${repo}"; then
+		reject "Qwen skill link rebuild failed; the mirror is in the working tree and was not committed"
+		continue
+	fi
+	if ! bash "${repo}/scripts/agent-roles-sync.sh" --apply --repo "${repo}"; then
+		reject "agent role rebuild failed; the mirror is in the working tree and was not committed"
 		continue
 	fi
 	if ! bash "${repo}/scripts/codex-agents-sync.sh" --apply --repo "${repo}"; then

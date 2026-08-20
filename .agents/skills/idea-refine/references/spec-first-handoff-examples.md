@@ -1,15 +1,12 @@
 # Spec-First Handoff Examples
 
-## Behavior Change Thesis
-When loaded for symptom "the idea-refine pass has converged and needs a handoff," this file makes the model hand off a refined product direction to `spec-first-brainstorming` instead of smuggling architecture, endpoints, or task plans into the next step.
-
-## When To Load
+## Load When
 Load this only after convergence, when the output needs to become a compact handoff artifact for engineering framing.
 
 ## The Move
 Hand off a product direction, not architecture or tasks: problem, target actor, recommended direction, why, assumptions, MVP scope, `Not Doing`, open questions, and an explicit next handoff — `spec-first-brainstorming` unless the user chose another step. Preserve uncertainty so weak assumptions stay visible for the next skill, and record rejected options only where they prevent obvious scope re-expansion.
 
-## Imitate
+## Inspect
 Input: "Incidents are hard to understand fast. Maybe an incident cockpit with AI summaries, timeline reconstruction, service maps, and Slack integration."
 
 ```markdown

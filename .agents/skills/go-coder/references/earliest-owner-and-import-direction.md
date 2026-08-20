@@ -1,18 +1,11 @@
 # Earliest Owner And Import Direction
 
-## Behavior Change Thesis
-
-When loaded for placement pressure, this file makes the change land in the
-package whose import direction already permits it, instead of at the file where
-the symptom appeared — a distinction this repository enforces with `depguard`,
-so the wrong owner fails `make lint` rather than review.
-
-## When To Load
+## Load When
 
 Load this when the change adds a file, moves code between packages, introduces a
 helper or interface, or when the obvious edit site would need a new import.
 
-## Decision Rubric
+## Decide
 
 `depguard` in `.golangci.yml` fixes the direction. A feature package under
 `internal/**` — anything outside `cmd/`, `internal/config`, `internal/infra`,
@@ -50,7 +43,7 @@ Narrower rules sit on top — `internal/config` may import only
   `iface`, and `interfacebloat` are enabled, so a returned interface or an
   unused, identical, or oversized one fails lint rather than review.
 
-## Validation Shape
+## Prove
 
 - Run `make lint` after any cross-package move; `depguard` and `iface` fail on
   direction before tests reach the behavior.
