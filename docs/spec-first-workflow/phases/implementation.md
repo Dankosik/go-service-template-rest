@@ -3,8 +3,17 @@
 Use when one accepted implementation unit is ready and authorized. Own that
 fixed unit through integration, proof, required review, and acceptance.
 
-Apply `go-coder`; select only domain skills exposed by the changed surface. Use
-[Validation Routing](../../validation-routing.md) and the [Evidence
+Before editing, choose the cheapest ownership shape that preserves one coherent
+unit. Apply `go-coder` directly when the Lead already holds the needed context,
+the change stays in one owner with bounded proof, and handoff costs more than
+the edit. Delegate a fixed `worker-agent` lane when separate context,
+specialized work, or independent parallel execution reduces total work;
+dispatch independent ready lanes concurrently and keep coupled files,
+resources, and assumptions in one lane. The Lead retains decisions,
+integration, proof, review, and acceptance.
+
+Select only domain skills exposed by the changed surface. Use [Validation
+Routing](../../validation-routing.md) and the [Evidence
 Contract](../shared/evidence-contract.md) for claims, and bind one fixed
 candidate through shared [Review](../shared/review.md) before acceptance.
 

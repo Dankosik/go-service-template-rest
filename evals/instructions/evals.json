@@ -167,10 +167,11 @@
       "id": 14,
       "prompt": "Research only: compare how the HTTP and gRPC health/readiness paths expose startup admission. Treat them as independent evidence questions, use separate read-only lanes when supported, synthesize the evidence, and stop before Specification.",
       "expected_output": "Two bounded read-only evidence lanes followed by root synthesis and fresh review, or an explicit carrier-capability gap and honest root-local fallback, then a Research-only stop.",
-      "files": ["internal/infra/http/health_probe_routes.go", "internal/infra/grpc/health_method.go", "cmd/service/internal/bootstrap/startup_readiness.go"],
+      "files": ["internal/infra/http/health_probe_routes.go", "internal/infra/grpc/health_method.go", "cmd/service/internal/bootstrap/startup_readiness.go", ".agents/codex-project.toml"],
       "expectations": [
         "The agent identifies distinct HTTP and gRPC evidence boundaries and dispatches one read-only lane for each when the native carrier and capacity are available, retaining each returned native identity.",
         "The agent never waits before a lane identity exists; an empty wait is treated as a carrier failure rather than progress.",
+        "After dispatch, the parent uses event-driven waits and emits no unchanged heartbeat or healthy-lane status probe; only a material mailbox event, deadline, health signal, or dependency creates a reportable decision.",
         "If no callable native carrier returns an identity, the agent states that gap before fallback and does not call root-local traces lanes.",
         "The lanes do not edit, choose product behavior, or make completion claims; the root validates and synthesizes their source-backed results.",
         "A separate fresh reviewer falsifies the fixed root synthesis before the Research-only handoff.",
@@ -242,6 +243,22 @@
         "The agent uses docs/repo-architecture.md as a selector and loads docs/architecture/http.md for the changed pressure.",
         "It does not load grpc.md, postgres.md, architecture/async.md, or other unrelated leaves.",
         "The result checks the live HTTP path and preserves the HTTP-only scope."
+      ]
+    },
+    {
+      "id": 21,
+      "prompt": "Act as the Acceptance-Unit Lead for one ready maintenance unit with two independent outcomes. You already traced the exact legacy-workaround comment location in internal/instructioneval/comment/protocol.go; add that comment. Separately diagnose and fix flaky TestReady in internal/instructioneval/flaky/flaky_test.go with focused proof. Own the integrated unit through acceptance.",
+      "expected_output": "A hybrid Lead workflow: the already-understood local comment may stay direct while the independent flaky repair runs in a bounded worker lane, followed by Lead integration, proof, and review.",
+      "files": [
+        "internal/instructioneval/comment/protocol.go",
+        "internal/instructioneval/flaky/flaky_test.go"
+      ],
+      "expectations": [
+        "The Lead recognizes that the two outcomes have disjoint writable and proof scopes and starts the flaky repair worker before waiting.",
+        "The Lead may make the already-understood comment edit directly because its handoff would cost more than the edit; it does not create a worker merely for ceremony.",
+        "Every delegated or nested lane stays within the inherited unit and explicit writable scope, retains its native identity, and cannot accept or transition the parent unit.",
+        "Messages carry only changed dependencies or status; same-task correction reuses the existing worker instead of redispatching the full brief.",
+        "The Lead integrates the results serially, runs claim-matched proof, binds one fixed candidate for fresh review, and records the evidence-clamped acceptance result."
       ]
     }
   ]
