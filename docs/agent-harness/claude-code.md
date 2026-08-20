@@ -29,7 +29,8 @@ same Agent while its context helps; replace it for a clean-context review,
 invalidated base, stall, or changed strategy. Message active write work only
 for a safety stop or accepted-input invalidation.
 
-Use one fresh `reviewer-agent` with Implementation Review as its Method for
+Use one fresh `reviewer-agent` with [Implementation
+Review](../spec-first-workflow/phases/implementation-review.md) as its Method for
 independent implementation review. Select a stronger model only for a justified
 highest-consequence boundary. Keep the fixed candidate unchanged.
 

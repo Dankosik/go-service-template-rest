@@ -110,16 +110,13 @@ for source_file in "${sources}"/*.toml; do
 	case "${output_schema}" in
 	lane-result-v1) schema_line="" ;;
 	decision-result-v1)
-		schema_line=$'Return \x60.agents/contracts/decision-result-v1.md\x60.'
+		schema_line=$'Return \x60docs/spec-first-workflow/interfaces/decision-result-v1.md\x60.'
 		;;
 	review-result-v1)
 		schema_line=$'Return \x60docs/spec-first-workflow/interfaces/review-result-v1.md\x60.'
 		;;
 	delegated-result-v1)
 		schema_line=$'Return \x60docs/spec-first-workflow/interfaces/delegated-result-v1.md\x60.'
-		;;
-	api-contract-finding-v1)
-		schema_line=$'Return \x60.agents/roles/interfaces/api-contract-finding-v1.md\x60.'
 		;;
 	*) fail "${source_file#"${repo}/"} has unsupported output schema ${output_schema}" ;;
 	esac

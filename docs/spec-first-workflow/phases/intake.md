@@ -1,36 +1,13 @@
 # Intake
 
-Use when outcome, scope, authority, observable success, or the first owner is
-ambiguous. Skip when the request and current authority already fix them.
+Use when outcome, meaningful scope, authority, observable success, or the first
+owner is unresolved.
 
-## Ownership And Inputs
+Own only the routing-sufficient brief. Return the accepted outcome, material
+scope and non-goals, authority, observable success, first owner, and only the
+assumptions or questions that can change that routing. Consume the request,
+corrections, continuation artifacts, and bounded repository facts; route
+decision-changing evidence to Research.
 
-Own the routing-sufficient task contract, not research, behavior, mechanism,
-placement, proof strategy, or execution. Consume the user's request and
-corrections, existing continuation artifacts, and only bounded repository facts
-that can change routing.
-
-## Method
-
-1. Distill one accepted outcome, meaningful scope/non-goals, granted authority,
-   and user- or operator-observable success. Separate the requested result from
-   suggested means.
-2. Inspect only unresolved repository facts named by the selected Intake brief
-   that can change its result. Evidence-changing questions route to Research.
-3. Use a bounded assumption only when being wrong leaves the first owner's
-   result usable; state its boundary and objective reopen condition.
-4. Ask one blocking question only when a user-owned decision leaves materially
-   different permitted outcomes and no bounded assumption is honest.
-
-## Output
-
-Return the compact accepted brief and smallest path/first owner. Omit inherited
-defaults and empty fields. Every unresolved item is either the single blocking
-question, a bounded assumption, or a downstream question with its owner and
-routing consequence.
-
-## Exit And Reopen
-
-Exit when the first owner can act without choosing Intake-owned meaning, scope,
-authority, or success. Reopen Intake only when later evidence exposes one of
-those user-intent decisions as unresolved.
+Ready when the first owner can act without inventing user intent or authority.
+Reopen only when later evidence exposes one of those decisions as unresolved.

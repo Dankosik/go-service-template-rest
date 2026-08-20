@@ -1,26 +1,11 @@
 # Proto Contract Gates
 
-## When To Load
+## Load When
 
 Load this when a `.proto` is added, changed, moved, or removed, or when a claim
 depends on what the protobuf gates actually proved.
 
-## Behavior Change Thesis
-
-Without this file, a green protobuf gate is read as wire-compatibility proof.
-`make proto-check` is `scripts/proto.sh check`: format-check, lint, and
-generated-drift. It does not compare against a base, and `ci-local` inherits
-that scope. The breaking comparison is a separate target that runs only from
-`make pr-check`, which supplies `BASE_REF`. Worse in this repository:
-`breaking_proto()` compares `api/proto` only, that directory does not exist
-here, and the one checked-in schema lives under
-`examples/grpc-reference-service/api/proto`. `BASE_REF=origin/main make
-proto-breaking` prints `no owned protobuf contract; breaking check not
-applicable` and exits 0 — while format, lint, and drift *do* cover that example
-module through `module_roots()`. The reference schema has no breaking-change
-gate at all.
-
-## Decision Rubric
+## Decide
 
 - For a schema outside root `api/proto`, the compatibility argument is made by
   hand: name the retired field numbers and names you reserved, the enum zero
@@ -50,7 +35,7 @@ gate at all.
 - Reporting `breaking check not applicable` as compatibility proof. It means the
   comparison never ran.
 
-## Validation Shape
+## Prove
 
 `make proto-check` proves format, lint, schema policy, and generated-drift for
 every module `module_roots()` finds. `BASE_REF=origin/main make proto-breaking`

@@ -1,17 +1,10 @@
 # Deterministic Time And Concurrency
 
-## Behavior Change Thesis
-When loaded for timers, backoff, deadlines, or goroutine handoff, this file makes
-the model run the code inside a `synctest` bubble on a fake clock — the common
-defect is a real-time test built from `time.Sleep` and a polling loop, which pays
-wall-clock for every schedule it proves and still flakes on a loaded machine,
-because a sleep is a guess about scheduling rather than an observation of it.
-
-## When To Load
+## Load When
 Symptom: the behavior under test is a schedule, a timeout, a backoff, a
 cancellation, a shutdown ordering, or a handoff between goroutines.
 
-## Decision Rubric
+## Decide
 - `synctest.Test(t, func(t *testing.T) { ... })` is the entry point in
   `testing/synctest` on this toolchain (Go 1.26.5; GA since 1.25). The Go 1.24
   spelling — `synctest.Run` behind `GOEXPERIMENT=synctest` — no longer applies,
@@ -50,6 +43,6 @@ cancellation, a shutdown ordering, or a handoff between goroutines.
 - A clean `-race` run read as proof of liveness, ordering, or cancellation. It
   reports conflicting access on the paths that executed, and nothing else.
 
-## Validation Shape
+## Prove
 - Focused test with `-count=1 -vet=off`.
 - `make test-race` when the changed path shares state across goroutines.

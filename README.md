@@ -155,18 +155,9 @@ and test dependencies; [`tools/go.mod`](tools/go.mod) owns development tools.
 ### What the agent workflow costs
 
 Initialization keeps the workflow byte-for-byte; there is no option to decline
-it. Be deliberate about that, because a generated service owns all of it:
-
-| Inherited | Size |
-| --- | --- |
-| `.agents/skills/` | 35 skills, 304 files, ~17,200 lines, 1.7 MB |
-| `.codex/agents/`, `.claude/agents/`, `.qwen/agents/` | 18 specialist definitions each |
-| `docs/` | 29 files, ~4,600 lines |
-
-Across the repository that is roughly 383 Markdown files and 22,600 lines of
-prose against about 27,600 lines of Go. If your team is going to drive changes
-through Codex, Claude Code, or Qwen, that content is the point of this template
-and the largest thing it gives you. If not, plan to delete it: keep
+it. A generated service inherits the repository contract, conditional domain
+methods, five generic capability roles, and their generated Codex, Claude, and
+Qwen carriers. If your team will not use those harnesses, keep
 [`AGENTS.md`](AGENTS.md) and `docs/`, and drop `.agents/`, `.codex/`,
 `.claude/`, and `.qwen/`.
 
@@ -281,10 +272,10 @@ Harness](docs/agent-harness.md) adapter.
 | Claude Code | `CLAUDE.md` | `.claude/agents`, `.claude/skills` |
 | Qwen Code | `QWEN.md` | Shared repository contract and skills |
 
-Representative specialists cover API contracts, architecture, data, domain
-invariants, security, reliability, concurrency, observability, performance,
-testing, delivery, and Go maintainability. Skills are loaded only when the
-current decision or failure needs them.
+Five generic capability roles provide evidence, specialist judgment, mutable
+work, independent review, and adjudication. Domain skills cover API contracts,
+architecture, data, security, reliability, concurrency, testing, delivery, and
+Go maintainability only when the current pressure needs them.
 
 See [Agent Harness](docs/agent-harness.md) and
 [Spec-First Workflow](docs/spec-first-workflow.md) for the complete routing
@@ -306,8 +297,8 @@ internal/openapi/                generated OpenAPI artifacts
 examples/reference-service/      worked feature-slice example (upstream only)
 migrations/                      SQL migrations (PostgreSQL profile)
 specs/                           durable task decisions (upstream only)
-.agents/skills/                  reusable skills
-.codex/agents/                   Codex specialists
+.agents/skills/                  reusable domain methods
+.codex/agents/                   generated Codex capability roles
 ```
 
 <!-- profile:grpc:start -->

@@ -12,7 +12,7 @@ interface.
 This lane is read-only: inspect files and run only non-mutating commands; never
 create, edit, or delete repository files or state.
 
-Return `.agents/contracts/decision-result-v1.md`.
+Return `docs/spec-first-workflow/interfaces/decision-result-v1.md`.
 
 Apply exactly the Method named in the brief. Own its bounded domain judgment and
 return one decision record with evidence, consequences, rejected alternative,

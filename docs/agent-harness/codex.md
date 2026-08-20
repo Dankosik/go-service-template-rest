@@ -59,7 +59,8 @@ Handoff is routing evidence, not acceptance.
 ## Review And Recovery
 
 An independent implementation review uses a fresh `reviewer-agent` with
-Implementation Review as its Method. Raise its model/effort fields for a
+[Implementation Review](../spec-first-workflow/phases/implementation-review.md)
+as its Method. Raise its model/effort fields for a
 justified highest-consequence boundary. A changed candidate receives a fresh
 review when the trigger still applies.
 

@@ -1,4 +1,4 @@
-# Delegation
+# Read-Only Delegation
 
 Use a built-in read-only lane only when separate context or independence can
 change one named disposition.
@@ -14,7 +14,7 @@ Before dispatch, load [Agent Harness](../../agent-harness.md) and use the
 [Subagent Brief Template](../../subagent-brief-template.md) with one outcome,
 authoritative inputs, mode, read-only boundary, and stop condition. When an
 expensive-to-reverse decision has a real open fork, load [Generative Candidate
-Lanes](delegation/generative-candidates.md).
+Lanes](read-only-delegation/generative-candidates.md).
 
 Every lane returns [Lane Result V1](../interfaces/lane-result-v1.md). Evidence
 may expose a new owner decision, but a lane does not expand scope or become the

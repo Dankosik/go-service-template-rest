@@ -220,7 +220,7 @@ template_sync_behavior_check() (
 		'metadata:' '  invocation: model' '  kind: method' '---' \
 		>"${template}/.agents/skills/fixture-one/SKILL.md"
 	printf '%s\n' \
-		"Apply \`docs/spec-first-workflow/shared/delegation.md\`." \
+		"Apply \`docs/spec-first-workflow/shared/read-only-delegation.md\`." \
 		>"${template}/.agents/role-classes/read-only-specialist.md"
 	printf '%s\n' 'This lane is read-only.' \
 		>"${template}/.agents/role-classes/read-only-specialist-fallback.md"

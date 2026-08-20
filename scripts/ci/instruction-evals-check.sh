@@ -58,12 +58,41 @@ actual_roles=$(find "${ROOT_DIR}/.agents/roles" -maxdepth 1 -type f -name '*.tom
 	fail "canonical roles must be the five capability roles"
 
 for retired in \
-	phase-movement.md handoff.md acceptance-unit-closure.md review-findings.md; do
+	phase-movement.md handoff.md acceptance-unit-closure.md review-findings.md \
+	delegation.md; do
 	[[ ! -e "${ROOT_DIR}/docs/spec-first-workflow/shared/${retired}" ]] ||
 		fail "retired shared owner remains: ${retired}"
 done
 [[ -f "${ROOT_DIR}/docs/spec-first-workflow/shared/transition.md" ]] ||
 	fail "shared transition owner is missing"
+[[ -f "${ROOT_DIR}/docs/spec-first-workflow/shared/read-only-delegation.md" ]] ||
+	fail "read-only delegation owner is missing"
+
+for retired in \
+	.agents/contracts/decision-result-v1.md \
+	.agents/roles/interfaces/api-contract-finding-v1.md; do
+	[[ ! -e "${ROOT_DIR}/${retired}" ]] || fail "retired schema owner remains: ${retired}"
+done
+for interface in \
+	decision-result-v1.md evidence-result-v1.md transition-result-v1.md; do
+	[[ -f "${ROOT_DIR}/docs/spec-first-workflow/interfaces/${interface}" ]] ||
+		fail "canonical interface is missing: ${interface}"
+done
+[[ -f "${ROOT_DIR}/docs/spec-first-workflow/phases/implementation-review.md" ]] ||
+	fail "implementation review adapter is missing"
+! grep -Fq '## Implementation Review' \
+	"${ROOT_DIR}/docs/spec-first-workflow/shared/review.md" ||
+	fail "shared review still owns implementation review method"
+
+schema_markers='^(decision_or_constraint|strongest_rejected_alternative|gap_or_next_owner|movement_evidence):'
+if misplaced_schema=$(grep -RInE "${schema_markers}" \
+	"${ROOT_DIR}/.agents/contracts" \
+	"${ROOT_DIR}/.agents/roles" \
+	"${ROOT_DIR}/docs/spec-first-workflow/phases" \
+	"${ROOT_DIR}/docs/spec-first-workflow/shared" \
+	--include='*.md' 2>/dev/null); then
+	fail "output field is owned outside interfaces: ${misplaced_schema%%$'\n'*}"
+fi
 
 reverse_links=""
 for skill_file in "${ROOT_DIR}"/.agents/skills/*/SKILL.md; do
@@ -85,6 +114,57 @@ while IFS= read -r selector; do
 	[[ "$(sed -n '/[^[:space:]]/{p;q;}' "${selector}")" == '# Reference Selector' ]] ||
 		fail "reference index is not a selector: ${selector#"${ROOT_DIR}/"}"
 done < <(find "${ROOT_DIR}/.agents/skills" -path '*/references/index.md' -type f | sort)
+
+legacy_leaf='^## (When To Load|Behavior Change Thesis|Decision Rubric|Imitate|Agent Traps|Validation Shape)$|Behavior Change Thesis|this file (makes|supplies)'
+if procedural_leaf=$(grep -RInE "${legacy_leaf}" "${ROOT_DIR}/.agents/skills" \
+	--include='*.md' 2>/dev/null); then
+	fail "leaf reference retains procedural template prose: ${procedural_leaf%%$'\n'*}"
+fi
+
+for selector in "${ROOT_DIR}"/docs/universal-disciplines/*/SKILL.md; do
+	grep -Fq 'Inherit' "${selector}" ||
+		fail "universal selector does not inherit active context: ${selector#"${ROOT_DIR}/"}"
+	grep -Fq 'Load one branch:' "${selector}" ||
+		fail "universal selector lacks one-branch routing: ${selector#"${ROOT_DIR}/"}"
+	(( $(wc -w <"${selector}") <= 160 )) ||
+		fail "universal selector exceeds 160 words: ${selector#"${ROOT_DIR}/"}"
+	if mode_reselection=$(grep -nE '^## (Choose|Authority|Report)|Global completion criterion|Run only the branch|For build or fix' \
+		"${selector}" 2>/dev/null); then
+		fail "universal selector reselects higher-layer mechanics: ${selector#"${ROOT_DIR}/"}:${mode_reselection%%$'\n'*}"
+	fi
+done
+
+if grep -Eq '[0-9]+ skills|specialist definitions each|[0-9]+ Markdown files' \
+	"${ROOT_DIR}/README.md"; then
+	fail "README contains a manually maintained agent inventory count"
+fi
+
+instruction_roots=(
+	AGENTS.md CLAUDE.md QWEN.md
+	docs/spec-first-workflow.md docs/spec-first-workflow
+	docs/prompt-maintenance.md docs/prompt-composition.md docs/skill-authoring.md
+	docs/agent-harness.md docs/agent-harness docs/universal-disciplines .agents
+)
+while IFS= read -r markdown; do
+	while IFS= read -r target; do
+		target="${target%%#*}"
+		case "${target}" in
+		'' | http://* | https://* | mailto:* | skill://*) continue ;;
+		esac
+		[[ -e "$(dirname "${markdown}")/${target}" ]] ||
+			fail "broken instruction link: ${markdown#"${ROOT_DIR}/"} -> ${target}"
+	done < <(grep -oE '\]\([^)]+\)' "${markdown}" 2>/dev/null |
+		sed -e 's/^](//' -e 's/)$//' || true)
+done < <(
+	for path in "${instruction_roots[@]}"; do
+		path="${ROOT_DIR}/${path}"
+		if [[ -d "${path}" ]]; then
+			find "${path}" -type f -name '*.md'
+		elif [[ -f "${path}" ]]; then
+			printf '%s\n' "${path}"
+		fi
+	done | sort -u
+)
 
 [[ -f "${ROOT_DIR}/docs/architecture/http.md" ]] ||
 	fail "HTTP architecture leaf is missing"

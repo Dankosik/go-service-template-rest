@@ -1,21 +1,12 @@
 # Evidence And Profile Fit
 
-## When To Load
+## Load When
 
 Load this when a change carries a performance claim and the review question is
 whether the supplied proof can observe it: pasted benchmark tables, `benchstat`
 output, or a CPU, heap, allocs, goroutine, block, mutex, or trace artifact.
 
-## Behavior Change Thesis
-
-A pasted `go test -bench` table reads as evidence because it has numbers, and
-the reflex correction is "run it again under `benchstat`". That misses what
-makes results comparable here: the metadata `make bench-compare` checks, which a
-raw command never records. The other half is profile semantics — a mutex profile
-read as "where goroutines are stuck" points the fix at the waiters instead of
-the holder that made them wait.
-
-## Decision Rubric
+## Decide
 
 - Comparability is enforced by `make bench-compare`, which fails when the
   recorded package, pattern, count, benchmark time, build tags, Go environment,
@@ -51,7 +42,7 @@ the holder that made them wait.
   rule before capture; for small decision-critical deltas alternate baseline and
   candidate batches on one idle testbed rather than running each side once.
 
-## Validation Shape
+## Prove
 
 Name the one artifact that discriminates the disputed claim and the command that
 produces it. [Benchmarking](../../../../../docs/benchmarking.md) owns proof level,

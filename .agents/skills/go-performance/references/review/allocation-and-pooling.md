@@ -1,21 +1,12 @@
 # Allocation And Pooling
 
-## When To Load
+## Load When
 
 Load this when a change reuses memory to reduce allocation: `sync.Pool`, a
 shared buffer, a reset-and-refill struct, a preallocated slice kept between
 calls, or a claim about GC pressure.
 
-## Behavior Change Thesis
-
-Fewer allocations per operation reads as proof that GC pressure fell, and a
-pool's benchmark reads as proof that reuse happens. Both are weaker than they
-look: `sync.Pool` is documented as a hint that may return nothing it was given,
-so a tight benchmark loop measures a hit rate a bursty request path will not
-see, and per-operation churn and retained heap are different measurements that
-can move in opposite directions.
-
-## Decision Rubric
+## Decide
 
 - `sync.Pool`'s contract is explicit: any item may be removed automatically at
   any time without notification, and `Get` may ignore the pool and treat it as
@@ -42,7 +33,7 @@ can move in opposite directions.
   sizing a slice at its known length usually removes the same allocations
   without reuse discipline to maintain.
 
-## Validation Shape
+## Prove
 
 Old-versus-new `-benchmem` through `make bench-baseline` / `make bench` /
 `make bench-compare`, plus a case that does not keep the pool hot when the claim

@@ -1,17 +1,10 @@
 # Proving Layer And Oracle
 
-## Behavior Change Thesis
-When loaded to turn an approved obligation into a Go test, this file makes the
-model choose an oracle it could have written from the behavior statement alone —
-the common defect is an assertion read back off the implementation (the cache key
-it builds, the SQL text it emits, the message it formats), which passes while the
-behavior is wrong and fails when a refactor leaves the behavior intact.
-
-## When To Load
+## Load When
 Symptom: an approved requirement, invariant, review finding, or bug report has to
 become named Go tests, or the layer that should carry the proof is unsettled.
 
-## Decision Rubric
+## Decide
 - Name the observable before the package: returned value, persisted row, response
   status and body, count of effects performed, wrapped error category, or a
   goroutine that exited. The observable picks the layer, never the reverse.
@@ -45,7 +38,7 @@ become named Go tests, or the layer that should carry the proof is unsettled.
 - A name like `TestCreate` over one stating condition and outcome: the failure
   line then reports which call broke, not which behavior regressed.
 
-## Validation Shape
+## Prove
 - Run the named test with `-count=1 -vet=off`, matching the repository's own test
   commands and leaving vet to `make lint`.
 - Add the package command when helpers, fixtures, or shared setup changed.

@@ -1,19 +1,12 @@
 # Gates And Policy Ownership
 
-## Behavior Change Thesis
-
-When loaded for idiom or cleanup pressure, this file keeps the diff on its
-accepted criterion instead of absorbing mechanical modernization the gates
-already own, and makes a stdlib swap the modernizer suggests get checked against
-the policy the replaced code carried before it is accepted.
-
-## When To Load
+## Load When
 
 Load this when adjacent code looks modernizable, when a local helper looks
 replaceable by `slices`, `maps`, or `cmp`, or when deciding how much of a
 mechanical concern still needs proof in this change.
 
-## Decision Rubric
+## Decide
 
 Both modules pin `go 1.26.5`, so every version gate below 1.26 is already
 satisfied: `slices`, `maps`, `min`/`max`, `clear`, `cmp.Or`, `t.Context`,
@@ -46,7 +39,7 @@ proof:
   wiring, its tests, its config keys and env defaults, its generated output, and
   the docs and comments that named it. Tidying anything else is a separate change.
 
-## Validation Shape
+## Prove
 
 - `make lint` is the mechanical gate; do not re-argue in the diff what it decides.
 - `make modernize-check` reports modernizations as a diff without applying them.

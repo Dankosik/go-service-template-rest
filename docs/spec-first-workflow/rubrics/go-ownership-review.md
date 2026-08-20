@@ -14,7 +14,8 @@ Partition one fixed [Ownership Map V1](../interfaces/ownership-map-v1.md) into:
 3. file cohesion, naming, declaration grouping, and fixture placement.
 
 Each read-only lane returns only its lens result through shared
-[Delegation](../shared/delegation.md) and [Review](../shared/review.md). The root
+[Read-Only Delegation](../shared/read-only-delegation.md) and
+[Review](../shared/review.md). The root
 synthesizes compatibility. The panel passes only when every triggered lens is
 `PASS` on the same candidate; repair or reopen findings, then re-run only each
 materially affected lens in fresh context. A broader triggered Technical Design
