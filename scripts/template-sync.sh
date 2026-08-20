@@ -196,6 +196,9 @@ fi
 claude_skills_helper="${source_root}/scripts/claude-skills-sync.sh"
 [[ -f "${claude_skills_helper}" ]] ||
 	fail "template-owned Claude skill helper is missing: scripts/claude-skills-sync.sh"
+agent_roles_helper="${source_root}/scripts/agent-roles-sync.sh"
+[[ -f "${agent_roles_helper}" ]] ||
+	fail "template-owned role helper is missing: scripts/agent-roles-sync.sh"
 codex_agents_helper="${source_root}/scripts/codex-agents-sync.sh"
 [[ -f "${codex_agents_helper}" ]] ||
 	fail "template-owned Codex agent helper is missing: scripts/codex-agents-sync.sh"
@@ -471,6 +474,12 @@ for target in "${targets[@]}"; do
 			[[ -n "${line}" ]] && report+="  ! ${line}"$'\n'
 		done <<<"${generated_report}"
 	fi
+	if ! generated_report=$(bash "${agent_roles_helper}" --check --repo "${repo}" 2>&1); then
+		drift=1
+		while IFS= read -r line; do
+			[[ -n "${line}" ]] && report+="  ! ${line}"$'\n'
+		done <<<"${generated_report}"
+	fi
 	if ! generated_report=$(bash "${codex_agents_helper}" --check --repo "${repo}" 2>&1); then
 		drift=1
 		while IFS= read -r line; do
@@ -536,6 +545,12 @@ for target in "${targets[@]}"; do
 		reject "generated Claude skill links cannot be rebuilt safely"
 		continue
 	fi
+	if ! preflight_report=$(bash "${agent_roles_helper}" --preflight --repo "${repo}" 2>&1); then
+		[[ -z "${preflight_report}" ]] ||
+			printf '%s\n' "${preflight_report}" | sed 's/^/   /'
+		reject "generated agent roles cannot be rebuilt safely"
+		continue
+	fi
 	if ! preflight_report=$(bash "${codex_agents_helper}" --preflight --repo "${repo}" 2>&1); then
 		[[ -z "${preflight_report}" ]] ||
 			printf '%s\n' "${preflight_report}" | sed 's/^/   /'
@@ -549,6 +564,7 @@ for target in "${targets[@]}"; do
 	if [[ -f "${repo}/scripts/template-sync.sh" ]]; then
 		chmod +x \
 			"${repo}/scripts/template-sync.sh" \
+			"${repo}/scripts/agent-roles-sync.sh" \
 			"${repo}/scripts/claude-skills-sync.sh" \
 			"${repo}/scripts/codex-agents-sync.sh" \
 			"${repo}/scripts/ci/claude-skills-check.sh" \
@@ -556,6 +572,10 @@ for target in "${targets[@]}"; do
 	fi
 	if ! bash "${repo}/scripts/claude-skills-sync.sh" --apply --repo "${repo}"; then
 		reject "Claude skill link rebuild failed; the mirror is in the working tree and was not committed"
+		continue
+	fi
+	if ! bash "${repo}/scripts/agent-roles-sync.sh" --apply --repo "${repo}"; then
+		reject "agent role rebuild failed; the mirror is in the working tree and was not committed"
 		continue
 	fi
 	if ! bash "${repo}/scripts/codex-agents-sync.sh" --apply --repo "${repo}"; then

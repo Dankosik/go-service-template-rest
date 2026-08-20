@@ -132,6 +132,7 @@ SHELLCHECK_IMAGE ?= koalaman/shellcheck:v0.11.0@sha256:61862eba1fcf09a484ebcc6fe
 ZIZMOR_IMAGE ?= ghcr.io/zizmorcore/zizmor:1.28.0@sha256:8e6b3e4fb74d1aa5d23e83ea369f386c66eced0d1fb944d32cd8b2aac100b00d
 CLAUDE_SKILLS_CHECK_SCRIPT := bash ./scripts/ci/claude-skills-check.sh
 CLAUDE_SKILLS_SYNC_SCRIPT := bash ./scripts/claude-skills-sync.sh
+AGENT_ROLES_SYNC_SCRIPT := bash ./scripts/agent-roles-sync.sh
 CODEX_AGENTS_SYNC_SCRIPT := bash ./scripts/codex-agents-sync.sh
 CI_CHANGE_SCOPE_SCRIPT := bash ./scripts/ci/ci-change-scope.sh
 GENERATED_DRIFT_CHECK_SCRIPT := bash ./scripts/ci/generated-drift-check.sh
@@ -174,7 +175,7 @@ BENCHMARK_REMOTE_SCRIPT := bash ./scripts/dev/benchmark-remote.sh
 	actionlint zizmor shellcheck dockerfile-check delivery-quality \
 	openapi-generate openapi-drift-check openapi-reference-compile openapi-runtime-contract-check openapi-lint openapi-validate openapi-breaking openapi-check \
 	proto-format proto-format-check proto-lint proto-generate proto-drift-check proto-breaking proto-check \
-	sqlc-check runtime-image-build container-security run build build-pgo docker-build docker-run vendor claude-skills-sync claude-skills-check codex-agents-sync codex-agents-check \
+	sqlc-check runtime-image-build container-security run build build-pgo docker-build docker-run vendor claude-skills-sync claude-skills-check agent-roles-sync agent-roles-check codex-agents-sync codex-agents-check \
 	template-sync template-sync-check template-sync-all template-owned-purity-check
 # profile:object-storage:start
 .PHONY: test-s3-source-receipt test-s3-envelope test-s3-conformance-amazon test-s3-conformance-r2
@@ -204,7 +205,7 @@ help:
 	@echo "  make check              # formatting, lint, and unit tests"
 	@echo "  make check-gentle       # same checks with bounded Go concurrency"
 	@echo "  make project-structure-check"
-	@echo "  make codex-agents-check | claude-skills-check"
+	@echo "  make agent-roles-check | codex-agents-check | claude-skills-check"
 	@echo "  make template-sync-check TEMPLATE=<path>   # drift against the template instructions"
 	@echo "  make template-sync TEMPLATE=<path>         # adopt them as its own commit"
 	@echo "  make ci-local           # deterministic native CI aggregate"
@@ -288,6 +289,12 @@ claude-skills-sync:
 
 claude-skills-check:
 	$(CLAUDE_SKILLS_CHECK_SCRIPT)
+
+agent-roles-sync:
+	$(AGENT_ROLES_SYNC_SCRIPT) --apply --repo .
+
+agent-roles-check:
+	$(AGENT_ROLES_SYNC_SCRIPT) --check --repo .
 
 codex-agents-sync:
 	$(CODEX_AGENTS_SYNC_SCRIPT) --apply --repo .

@@ -9,8 +9,8 @@ A completion claim is only as true as its **freshest matching evidence**: every 
 
 `intended claims -> claim-to-command map -> scope match -> fresh or validly reused evidence -> per-claim status -> gaps`
 
-The root [Task Contract](../../../AGENTS.md#task-contract) owns direct completion
-claims. Load [Implementation / Validation / Closeout](../../../docs/spec-first-workflow/phases/implementation-validation-closeout.md)
+The [Direct Work stop rule](../../../docs/spec-first-workflow/direct-work.md#stop-rule)
+owns direct completion claims. Load [Implementation / Validation / Closeout](../../../docs/spec-first-workflow/phases/implementation-validation-closeout.md)
 only when its structured or conditional boundary applies.
 
 Reconstruct every claim the answer intends to make from the accepted outcome, proposed response, changed scope, and named rollout/readiness assertions; map each claim to current proof of equal scope and reject stale or narrower evidence. Reuse or rerun proof under the Implementation [Evidence Contract](../../../docs/spec-first-workflow/phases/implementation-validation-closeout.md#evidence-contract); rerun when equal scope, identity, provenance, preconditions, or risk surface cannot be established. Load [the reference selector](references/index.md) only when one concrete proof pressure can change the command or conclusion.

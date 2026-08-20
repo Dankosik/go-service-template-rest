@@ -5,19 +5,13 @@ description: "Go readability: Use for opaque control flow, predicates, names, or
 
 # Go Language Simplifier
 
-The measure of local code is the next reader's **time to intent**: control flow, predicates, names, and helpers either carry intent directly or stand between the reader and it.
+Apply the [shared specialist contract](../specialist-contract.md).
 
-`intent path -> control flow -> predicates and names -> helper shape -> behavior-preserving change -> proof`
+Reduce the next reader's time to intent without changing behavior. Prefer
+deletion over indirection, names over narration, and ordinary control flow over
+hidden temporal coupling; retain a helper only when it uniquely carries a
+current constraint.
 
-Simplification preserves behavior. Prefer deletion over indirection and names
-over narration, while retaining a helper that uniquely carries a constraint.
-Hidden temporal coupling remains complexity.
-
-Load the [shared specialist contract](../specialist-contract.md). Reconstruct
-affected intent paths from control flow, predicates, names, temporal coupling,
-and helper call sites; flatten or delete indirection without changing semantics.
-
-Mandatory lint owns mechanical style, so review does not repeat it. Load the
-[review selector](references/index.md) only for a helper boundary or merged
-branch. Complete when every affected path has a behavior-preserving disposition.
-Hand semantics, ownership, and cross-file overbuild to their matching skills.
+Load the [reference selector](references/index.md) only for a helper boundary or
+merged branch. Route Go semantics, placement, and whole-diff structural cost to
+their matching skills.

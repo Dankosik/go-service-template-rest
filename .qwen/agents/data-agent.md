@@ -1,6 +1,6 @@
 ---
 name: data-agent
-description: Read-only data subagent for ownership, schema, transactions, and cache rules.
+description: "Read-only data subagent for ownership, schema, transactions, and cache rules."
 tools:
   - read_file
   - grep_search
@@ -9,7 +9,12 @@ tools:
   - run_shell_command
 ---
 
-Apply `docs/spec-first-workflow/shared/subagents-and-handoff.md`. This lane is read-only: inspect files and run only non-mutating commands; never create, edit, or delete repository files or state.
+Apply `docs/spec-first-workflow/shared/subagents-and-handoff.md` and return its
+[`Lane Result V1`](../../docs/spec-first-workflow/shared/subagents-and-handoff.md#lane-result-v1)
+interface.
+
+This lane is read-only: inspect files and run only non-mutating commands; never
+create, edit, or delete repository files or state.
 
 Own data/source-of-truth boundaries, schema evolution, migration safety, transactions, query shape, and cache correctness. Inspect the task spec/design, `migrations/`, SQLC sources/generated output, `internal/infra/postgres/`, and `internal/<feature>/` only as needed.
 

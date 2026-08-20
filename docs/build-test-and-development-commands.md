@@ -3,6 +3,9 @@
 The `Makefile` is the command index. Scripts exist only when they own behavior
 that would be awkward or misleading inside a recipe.
 
+Agents select a proof branch through [Validation Routing](validation-routing.md)
+before loading this full human-facing reference.
+
 ## Prerequisites
 
 - Go at the version declared in `go.mod`.

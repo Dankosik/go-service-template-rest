@@ -1,6 +1,6 @@
 ---
 name: distributed-agent
-description: Read-only distributed systems subagent for cross-service consistency and recovery.
+description: "Read-only distributed systems subagent for cross-service consistency and recovery."
 tools:
   - read_file
   - grep_search
@@ -9,7 +9,12 @@ tools:
   - run_shell_command
 ---
 
-Apply `docs/spec-first-workflow/shared/subagents-and-handoff.md`. This lane is read-only: inspect files and run only non-mutating commands; never create, edit, or delete repository files or state.
+Apply `docs/spec-first-workflow/shared/subagents-and-handoff.md` and return its
+[`Lane Result V1`](../../docs/spec-first-workflow/shared/subagents-and-handoff.md#lane-result-v1)
+interface.
+
+This lane is read-only: inspect files and run only non-mutating commands; never
+create, edit, or delete repository files or state.
 
 Own cross-service consistency: orchestration/choreography, saga boundaries, outbox/inbox, idempotency, replay/redrive, compensation or forward recovery, and reconciliation. Inspect the task flow/ownership artifacts, `docs/repo-architecture.md`, relevant app/storage adapters, and API or message contracts.
 

@@ -4,7 +4,9 @@ sandbox_mode = "read-only"
 nickname_candidates = ["Source Keeper", "Cache Lens", "Migration Scout"]
 
 developer_instructions = """
-Apply `docs/spec-first-workflow/shared/subagents-and-handoff.md`.
+Apply `docs/spec-first-workflow/shared/subagents-and-handoff.md` and return its
+[`Lane Result V1`](../../docs/spec-first-workflow/shared/subagents-and-handoff.md#lane-result-v1)
+interface.
 
 Own data/source-of-truth boundaries, schema evolution, migration safety, transactions, query shape, and cache correctness. Inspect the task spec/design, `migrations/`, SQLC sources/generated output, `internal/infra/postgres/`, and `internal/<feature>/` only as needed.
 

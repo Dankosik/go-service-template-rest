@@ -20,7 +20,7 @@ Skip when the request already supplies a clear outcome, scope, authority, constr
 
 ## Outputs
 
-An Intake brief, usually in chat, that lets the workflow router and first owner recover the user's intent without reinterpreting the raw request. Under the [Task Contract](../../../AGENTS.md#task-contract), state the accepted user-visible or operator-visible outcome and, when it disambiguates that outcome, its business meaning; granted authority and any external effect outside that grant; meaningful scope and non-goals; the user- or operator-observable state, response, or effect that would make the request complete, distinct from the test, command, or proof strategy that may establish it; routing-changing repository facts; and bounded assumptions with their boundaries and reopen conditions. Omit inherited defaults and empty fields. End with the smallest valid path and first owner.
+An Intake brief, usually in chat, that lets the workflow router and first owner recover the user's intent without reinterpreting the raw request. State the accepted user-visible or operator-visible outcome and, when it disambiguates that outcome, its business meaning; granted authority and any external effect outside that grant; meaningful scope and non-goals; the user- or operator-observable state, response, or effect that would make the request complete, distinct from the test, command, or proof strategy that may establish it; routing-changing repository facts; and bounded assumptions with their boundaries and reopen conditions. Omit inherited defaults and empty fields. End with the smallest valid path and first owner.
 
 ## Method
 

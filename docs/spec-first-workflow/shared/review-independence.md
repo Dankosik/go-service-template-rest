@@ -31,6 +31,21 @@ triggers it.
   passes bounded root review and mapped validation. When it applies, load [Independent
   Implementation Review](implementation-review.md).
 
+## Review Router
+
+| Fixed boundary | Phase-owned review |
+| --- | --- |
+| Standalone research synthesis | [Research Review](../phases/research.md#review) |
+| Completed specification | [Specification Review](../phases/specification-review.md) |
+| Technical and Go-ownership design | [Technical Design Review](../phases/technical-design-review.md) |
+| Non-obvious test design | [Test Design Review](../phases/test-design.md#review) |
+| Executable ledger | [Task Review / Readiness](../phases/task-review-readiness.md) |
+| Fixed implementation acceptance unit | [Independent Implementation Review](implementation-review.md) |
+
+The artifact-owning phase repairs findings and receives the verdict. Review
+method and finding shape stay with the selected branch and [Review Findings And
+Convergence](review-findings-and-convergence.md), not the workflow router.
+
 ## Stop Rule
 
 The decision names one fixed review boundary and selects no more than one

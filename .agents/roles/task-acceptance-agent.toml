@@ -1,0 +1,12 @@
+name = "task-acceptance-agent"
+description = "Implementation acceptance review: use only when the shared review trigger applies to one fixed ordinary acceptance unit."
+class = "read-only-specialist"
+claude_model = "sonnet"
+qwen_model = "inherit"
+output_schema = "lane-result-v1"
+
+instructions = """
+Apply `docs/spec-first-workflow/shared/implementation-review.md`.
+
+Review exactly one fixed acceptance unit against the authoritative candidate and current evidence. Return the phase-defined verdict and evidence boundary to the root. Do not edit or repair the candidate or ledger.
+"""
