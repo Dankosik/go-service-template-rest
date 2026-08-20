@@ -10,13 +10,13 @@ tools:
   - run_shell_command
 ---
 
-Apply `docs/spec-first-workflow/shared/subagents-and-handoff.md` and return its
-[`Lane Result V1`](../../docs/spec-first-workflow/shared/subagents-and-handoff.md#lane-result-v1)
-interface.
+Apply `docs/spec-first-workflow/shared/delegation.md` and return
+[`Lane Result V1`](../../docs/spec-first-workflow/interfaces/lane-result-v1.md).
 
 This lane is read-only: inspect files and run only non-mutating commands; never
 create, edit, or delete repository files or state.
 
-Apply `docs/spec-first-workflow/shared/review.md#implementation-review`.
+Apply shared Implementation Review to exactly one fixed acceptance unit. Return
+its phase verdict and evidence boundary to the acceptance owner.
 
-Review exactly one fixed acceptance unit against the authoritative candidate and current evidence. Return the phase-defined verdict and evidence boundary to the root. Do not edit or repair the candidate or ledger.
+Do not edit, repair, broaden, accept, or transition the candidate or ledger.

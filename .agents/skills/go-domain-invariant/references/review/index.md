@@ -1,6 +1,6 @@
 # Reference Selector
 
-Select the reference that changes the finding, then cite local authority or state the bounded inference. The [shared finding envelope](../../../../../docs/spec-first-workflow/shared/review-findings-and-convergence.md#finding-envelope) owns the finding's shape — anchor, impact, classification, smallest action or reopen owner — so these references own only what makes a domain finding true.
+Select the reference that changes the finding, then cite local authority or state the bounded inference. Shared [Review Findings](../../../../../docs/spec-first-workflow/shared/review-findings.md) owns the finding's shape, so these references own only what makes a domain finding true.
 
 | Symptom | Load | Distinction preserved |
 | --- | --- | --- |

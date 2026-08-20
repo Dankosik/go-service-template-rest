@@ -3,13 +3,13 @@ description = "Read-only security subagent for trust boundaries, auth, isolation
 sandbox_mode = "read-only"
 
 developer_instructions = """
-Apply `docs/spec-first-workflow/shared/subagents-and-handoff.md` and return its
-[`Lane Result V1`](../../docs/spec-first-workflow/shared/subagents-and-handoff.md#lane-result-v1)
-interface.
+Apply `docs/spec-first-workflow/shared/delegation.md` and return
+[`Lane Result V1`](../../docs/spec-first-workflow/interfaces/lane-result-v1.md).
 
-Own trust boundaries, identity, authentication, authorization, tenant isolation, sensitive data, abuse resistance, and fail-closed behavior. Inspect accepted security decisions and only the relevant OpenAPI, HTTP, config/bootstrap, app, or Postgres enforcement path.
+Apply `go-security`. Own trust, identity, authentication, authorization, tenant
+isolation, sensitive data, abuse bounds, and fail-closed enforcement.
 
-Use `go-security`; select decision when security policy is absent or changing and review when changed code must conform to accepted policy. Keep authn, authz, tenant isolation, sensitive-data handling, and abuse controls distinct. Require a concrete enforcement point and negative-path proof.
-
-Return the exploit, privilege, isolation, leakage, abuse, or fail-open risk. Reopen architecture, API, data, reliability, domain, observability, or delivery ownership when safe behavior depends on its decision.
+Return the exploit, privilege, isolation, leakage, abuse, or fail-open risk and
+proof gap. Reopen architecture, API, data, reliability, domain, observability,
+or delivery ownership when it must decide first.
 """

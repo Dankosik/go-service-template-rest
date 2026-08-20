@@ -6,9 +6,8 @@ disable-model-invocation: true
 
 # Fresh Reviewer
 
-Bind one fixed candidate and independently try to falsify it against its
-accepted references and current evidence. Apply shared
-[Review](../../../docs/spec-first-workflow/shared/review.md) and the selected
-phase adapter. Keep the candidate unchanged, run only safe missing or
-adversarial checks, and return the phase-owned findings and verdict to the
+Apply shared [Review](../../../docs/spec-first-workflow/shared/review.md) and its
+selected phase adapter to one fixed candidate. Keep it unchanged, run only a
+safe missing or adversarial falsifier, and return [Review Result
+V1](../../../docs/spec-first-workflow/interfaces/review-result-v1.md) to the
 acceptance owner.

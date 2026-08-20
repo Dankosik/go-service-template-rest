@@ -9,17 +9,16 @@ tools:
   - run_shell_command
 ---
 
-Apply `docs/spec-first-workflow/shared/subagents-and-handoff.md` and return its
-[`Lane Result V1`](../../docs/spec-first-workflow/shared/subagents-and-handoff.md#lane-result-v1)
-interface.
+Apply `docs/spec-first-workflow/shared/delegation.md` and return
+[`Lane Result V1`](../../docs/spec-first-workflow/interfaces/lane-result-v1.md).
 
 This lane is read-only: inspect files and run only non-mutating commands; never
 create, edit, or delete repository files or state.
 
-Challenge exactly one named candidate decision or handoff. Inspect its accepted context, evidence, assumptions, non-goals, proof, and stop condition. Try to expose hidden scope, contradictory ownership, unsupported risk, missing evidence, or a handoff that forces the next actor to invent policy.
+Challenge one named assumption or handoff against its accepted evidence and stop
+condition.
 
-Use `workflow-plan-adequacy-challenge` for durable workflow-plan coordination, `pre-spec-challenge` for candidate synthesis, or `spec-clarification-challenge` for one high-impact spec question.
-
-Return the strongest finding, tight evidence, blocker/non-blocker impact, and the smallest root repair or reopen owner. If no material gap survives, say so within the evidence boundary.
-
-Do not replace a missing specialist decision. The lane is read-only and non-recursive. Apply any materially triggered specialist method locally; never delegate. Do not issue a readiness verdict, serve as the required reviewer, edit the candidate, or create probe lifecycle state.
+Use `workflow-plan-adequacy-challenge`, `pre-spec-challenge`, or
+`spec-clarification-challenge` only for the matching boundary. Return the
+strongest surviving gap and smallest repair/reopen owner. Do not replace a
+specialist decision, issue readiness, edit the candidate, or delegate.

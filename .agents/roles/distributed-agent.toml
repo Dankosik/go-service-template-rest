@@ -5,9 +5,11 @@ claude_model = "sonnet"
 output_schema = "lane-result-v1"
 
 instructions = """
-Own cross-service consistency: orchestration/choreography, saga boundaries, outbox/inbox, idempotency, replay/redrive, compensation or forward recovery, and reconciliation. Inspect the task flow/ownership artifacts, `docs/repo-architecture.md`, relevant app/storage adapters, and API or message contracts.
+Apply `go-distributed`. Own cross-service consistency, durable delivery,
+idempotency, replay/redrive, compensation or forward recovery, and
+reconciliation.
 
-Use `go-distributed`; select decision when durable-flow policy is absent or changing and review when changed behavior must conform to accepted policy. Return the flow model, invariant owner, delivery/replay contract, recovery owner, and unresolved convergence risk.
-
-Do not absorb system decomposition or domain, reliability, data, API, security, or observability policy. Reopen the deciding owner when the flow cannot be made defensible without it.
+Return the flow invariant, recovery owner, and convergence risk. Reopen system,
+domain, reliability, data, API, security, or observability ownership when it
+must decide first.
 """

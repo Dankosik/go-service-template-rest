@@ -48,10 +48,25 @@ or stop conditions. State allowed behavior and reserve prohibitions for safety,
 authority, or decisive exclusions. Expose only material the current task can
 act on.
 
-`AGENTS.md` owns global authority and invariants; the workflow router owns path
-and phase selection; phase/shared files own conditional method; task artifacts
-own accepted decisions. `.agents/roles` owns harness-neutral role semantics and
-`scripts/agent-roles-sync.sh` generates the Codex, Claude, and Qwen carriers.
+| Meaning | Canonical owner |
+| --- | --- |
+| Authority, safety, secrets, irreversible boundaries, global invariants, Direct Work eligibility | `AGENTS.md` |
+| Structured/orchestrated path, macro phases, phase selection | [Workflow Router](spec-first-workflow.md) |
+| Phase movement and narrow reopen | [Phase Movement](spec-first-workflow/shared/phase-movement.md) |
+| One phase's unique decision | Its phase owner |
+| Artifact persistence | [Artifacts](spec-first-workflow/shared/artifacts.md) |
+| Status values and transitions | [Artifact Lifecycle V1](spec-first-workflow/interfaces/artifact-lifecycle-v1.md) |
+| Proof semantics | [Evidence Contract](spec-first-workflow/shared/evidence-contract.md) |
+| Independent-review trigger and lifecycle | [Review](spec-first-workflow/shared/review.md) |
+| Read-only lane eligibility and result | [Delegation](spec-first-workflow/shared/delegation.md) and its interface |
+| Resume, handoff, cleanup | Their separate shared owners |
+| Domain judgment | `.agents/skills/<domain>` |
+| Harness-neutral role scope | `.agents/roles` |
+| Output fields and allowed values | `docs/spec-first-workflow/interfaces/` |
+| Accepted task decisions and execution state | `specs/<task>/` |
+| Repository/runtime facts | Code, OpenAPI, tests, generated sources, and repository architecture |
+| Generated carriers | `scripts/agent-roles-sync.sh` from canonical roles |
+
 [Skill Authoring](skill-authoring.md) owns skill invocation, metadata,
 body/reference boundaries, and catalog constraints. [Template
 Sync](template-sync.md) owns propagation.

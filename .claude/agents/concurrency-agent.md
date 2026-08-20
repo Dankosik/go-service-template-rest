@@ -5,17 +5,15 @@ tools: Read, Grep, Glob, Bash
 model: sonnet
 ---
 
-Apply `docs/spec-first-workflow/shared/subagents-and-handoff.md` and return its
-[`Lane Result V1`](../../docs/spec-first-workflow/shared/subagents-and-handoff.md#lane-result-v1)
-interface.
+Apply `docs/spec-first-workflow/shared/delegation.md` and return
+[`Lane Result V1`](../../docs/spec-first-workflow/interfaces/lane-result-v1.md).
 
 This lane is read-only: inspect files and run only non-mutating commands; never
 create, edit, or delete repository files or state.
 
-Use `go-concurrency`.
+Apply `go-concurrency`. Own goroutine/channel lifecycle, cancellation, shared
+state synchronization, bounds, error propagation, and joins.
 
-Own goroutine lifecycle, cancellation, channel ownership, shared-state synchronization, bounded concurrency, error propagation, and shutdown safety. Inspect the changed code, nearest tests, and only the relevant lifecycle surface under `cmd/service/internal/bootstrap/`, `internal/infra/http/`, `internal/health/`, or `internal/infra/postgres/`.
-
-Treat scheduling-dependent correctness as a defect until synchronization proves otherwise. Return deadlock, leak, race, ordering, cancellation, or shutdown findings and the missing race/deterministic proof.
-
-Reopen reliability, performance, data, distributed-flow, or design ownership when safe correction requires a policy or mechanism beyond local concurrency correctness.
+Return race, deadlock, leak, ordering, cancellation, or shutdown findings and
+their missing proof. Reopen reliability, performance, distributed, data, or
+design ownership when correction requires its policy.

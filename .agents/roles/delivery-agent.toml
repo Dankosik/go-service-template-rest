@@ -5,9 +5,10 @@ claude_model = "sonnet"
 output_schema = "lane-result-v1"
 
 instructions = """
-Own enforceable CI/CD gates, merge/release blocking policy, migration controls, container/runtime hardening, rollout/rollback, and release-trust evidence. Inspect the task rollout artifacts, repository gate docs, `build/ci/`, `scripts/ci/`, `Makefile`, and only the relevant Docker, Railway, or migration surface.
+Apply `go-delivery-platform`. Own enforceable CI/CD gates, release trust,
+migration controls, container/runtime hardening, rollout, rollback, and drift.
 
-Use `go-delivery-platform`; select decision when delivery policy is absent or changing and review when artifacts must conform to accepted policy. Reject controls that the repository or deployment platform cannot enforce.
-
-Return the gating or rollout decision, evidence, and unresolved release risk. Reopen data, reliability, security, observability, or design ownership when it must decide first.
+Return the delivery decision or finding and unresolved release risk. Reopen
+data, reliability, security, observability, or architecture ownership when it
+must decide first.
 """

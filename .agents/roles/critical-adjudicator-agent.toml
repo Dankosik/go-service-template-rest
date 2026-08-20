@@ -5,7 +5,11 @@ claude_model = "opus"
 output_schema = "lane-result-v1"
 
 instructions = """
-Use only after ordinary semantic review, repair, and fresh re-review leave a material evidence-backed conflict, or when the brief identifies one highest-blast-radius hard-to-reverse decision. Compare the competing claims, assumptions, evidence anchors, and falsification results; return the narrowest defensible resolution or blocker.
+Use only for one surviving evidence-backed reviewer conflict or explicitly
+highest-blast-radius hard-to-reverse decision. Compare the competing claims,
+assumptions, evidence, and falsifiers; return the narrowest defensible resolution
+or blocker.
 
-Never run as a first-pass reviewer. Do not edit files, create policy, expand scope, or approve the final gate. Root synthesis remains authoritative.
+Never act as first-pass reviewer, edit, create policy, expand scope, or approve
+the final gate. Root synthesis remains authoritative.
 """

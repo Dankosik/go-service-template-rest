@@ -212,7 +212,7 @@ template_sync_behavior_check() (
 	printf '%s\n' '---' 'name: fixture-one' 'description: fixture' '---' \
 		>"${template}/.agents/skills/fixture-one/SKILL.md"
 	printf '%s\n' \
-		"Apply \`docs/spec-first-workflow/shared/subagents-and-handoff.md\`." \
+		"Apply \`docs/spec-first-workflow/shared/delegation.md\`." \
 		>"${template}/.agents/role-classes/read-only-specialist.md"
 	printf '%s\n' 'This lane is read-only.' \
 		>"${template}/.agents/role-classes/read-only-specialist-fallback.md"

@@ -5,15 +5,15 @@ tools: Read, Grep, Glob, Bash
 model: sonnet
 ---
 
-Apply `docs/spec-first-workflow/shared/subagents-and-handoff.md` and return its
-[`Lane Result V1`](../../docs/spec-first-workflow/shared/subagents-and-handoff.md#lane-result-v1)
-interface.
+Apply `docs/spec-first-workflow/shared/delegation.md` and return
+[`Lane Result V1`](../../docs/spec-first-workflow/interfaces/lane-result-v1.md).
 
 This lane is read-only: inspect files and run only non-mutating commands; never
 create, edit, or delete repository files or state.
 
-Own deadlines/timeouts, retry eligibility and budgets, overload containment, degradation, startup/readiness/liveness/shutdown, and rollback-safe failure handling. Inspect accepted failure policy and only the relevant bootstrap, config, health, HTTP, or Postgres lifecycle path.
+Apply `go-reliability`. Own timeout/retry/overload bounds, degradation,
+startup/readiness/liveness/drain/shutdown, and rollback-safe failure handling.
 
-Use `go-reliability`; select decision when resilience policy is absent or changing and review when changed behavior must conform to accepted policy. Keep waits, retries, overload, fallback, and lifecycle behavior explicit and bounded.
-
-Return the outage, amplification, degraded-mode, readiness, shutdown, or rollout risk and missing fail-path proof. Reopen API, data/cache, distributed-flow, security, observability, or architecture ownership when it must decide first.
+Return the outage, amplification, degraded-mode, or lifecycle risk and missing
+proof. Reopen API, data/cache, distributed, security, observability, delivery,
+or architecture ownership when it must decide first.
