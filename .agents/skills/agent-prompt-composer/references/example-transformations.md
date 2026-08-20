@@ -38,8 +38,17 @@ Path: `structured` -> Research, because the lifecycle cause and proof boundary r
 
 ## Example 4: Ready Native Orchestrator Entry
 
+Codex:
+
 ```text
 $orchestrator
+Use specs/category-mapping-knn-first/tasks.md. Stop before live rollout.
+```
+
+Claude Code or Qwen Code:
+
+```text
+/orchestrator
 Use specs/category-mapping-knn-first/tasks.md. Stop before live rollout.
 ```
 

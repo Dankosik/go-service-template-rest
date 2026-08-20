@@ -231,10 +231,10 @@ flowchart TD
     lead["ACCEPTANCE_UNIT_LEAD<br/>owns one unit end to end"]
     strategy{"Lead chooses the fastest safe strategy"}
     direct["Lead implements directly"]
-    delegated["DELEGATED_AGENT<br/>implement · investigate · verify"]
+    delegated["worker-agent<br/>implement · investigate · verify"]
     fanin["Lead fan-in<br/>integration · proof · self-review"]
     review{"Independent review required?"}
-    reviewer["FRESH_REVIEWER<br/>independent falsification"]
+    reviewer["reviewer-agent<br/>independent falsification"]
     receipt["One receipt or precise blocker"]
     done["Ledger exhausted"]
 
@@ -268,9 +268,9 @@ Harness](docs/agent-harness.md) adapter.
 
 | Harness | Entry point | Project-native support |
 | --- | --- | --- |
-| Codex | `AGENTS.md` | `.codex/agents`, `.agents/skills` |
-| Claude Code | `CLAUDE.md` | `.claude/agents`, `.claude/skills` |
-| Qwen Code | `QWEN.md` | Shared repository contract and skills |
+| Codex | `AGENTS.md`, `$orchestrator` | `.codex/agents`, `.agents/skills` |
+| Claude Code | `CLAUDE.md`, `/orchestrator` | `.claude/agents`, `.claude/skills` |
+| Qwen Code | `QWEN.md`, `/orchestrator` | `.qwen/agents`, `.qwen/skills` |
 
 Five generic capability roles provide evidence, specialist judgment, mutable
 work, independent review, and adjudication. Domain skills cover API contracts,

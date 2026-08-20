@@ -77,12 +77,15 @@ for required in \
 	"${manifest}" \
 	scripts/template-sync.sh \
 	scripts/agent-roles-sync.sh \
+	scripts/harness-skills-sync.sh \
 	scripts/claude-skills-sync.sh \
+	scripts/qwen-skills-sync.sh \
 	scripts/codex-agents-sync.sh \
 	.agents/codex-project.toml \
 	scripts/lib/manifest.sh \
 	scripts/lib/sync-cli.sh \
 	scripts/ci/claude-skills-check.sh \
+	scripts/ci/qwen-skills-check.sh \
 	scripts/ci/template-owned-purity-check.sh; do
 	contains_path "${required}" ||
 		fail "${manifest} must list ${required} so the sync mechanism propagates itself"
@@ -136,6 +139,12 @@ service_marker=$(find .agents/skills -mindepth 2 -maxdepth 2 -name .service-owne
 if ! role_report=$(bash scripts/agent-roles-sync.sh --check --repo . 2>&1); then
 	fail "harness role carriers are not generated from .agents/roles: ${role_report}"
 fi
+if ! skill_report=$(bash scripts/claude-skills-sync.sh --check --repo . 2>&1); then
+	fail "Claude skill discovery is stale: ${skill_report}"
+fi
+if ! skill_report=$(bash scripts/qwen-skills-sync.sh --check --repo . 2>&1); then
+	fail "Qwen skill discovery is stale: ${skill_report}"
+fi
 
 for role_file in .codex/agents/*.toml; do
 	role=$(basename "${role_file}" .toml)
@@ -165,13 +174,14 @@ if ((failed != 0)); then
 fi
 
 template_sync_behavior_check() (
-	local fixture template target target_dirty_local target_empty_claude target_invalid_codex target_missing_codex_source target_nonportable_codex target_secret_codex target_missing_owner target_missing_secret_carrier target_without_local_skill target_with_directory target_with_link outside sync_script check_output failure_output
+	local fixture template target target_dirty_local target_empty_claude target_empty_qwen target_invalid_codex target_missing_codex_source target_nonportable_codex target_secret_codex target_missing_owner target_missing_secret_carrier target_without_local_skill target_with_directory target_with_link outside sync_script check_output failure_output
 	fixture=$(mktemp -d "${TMPDIR:-/tmp}/template-sync-check.XXXXXX")
 	trap 'rm -rf -- "${fixture}"' EXIT
 	template="${fixture}/template"
 	target="${fixture}/target"
 	target_dirty_local="${fixture}/target-dirty-local"
 	target_empty_claude="${fixture}/target-empty-claude"
+	target_empty_qwen="${fixture}/target-empty-qwen"
 	target_invalid_codex="${fixture}/target-invalid-codex"
 	target_missing_codex_source="${fixture}/target-missing-codex-source"
 	target_nonportable_codex="${fixture}/target-nonportable-codex"
@@ -209,10 +219,13 @@ template_sync_behavior_check() (
 		'.qwen/agents/' \
 		'docs/validation/' \
 		'scripts/agent-roles-sync.sh' \
+		'scripts/harness-skills-sync.sh' \
 		'scripts/claude-skills-sync.sh' \
+		'scripts/qwen-skills-sync.sh' \
 		'scripts/codex-agents-sync.sh' \
 		'scripts/lib/sync-cli.sh' \
 		'scripts/ci/claude-skills-check.sh' \
+		'scripts/ci/qwen-skills-check.sh' \
 		'scripts/ci/secret-scan.sh' \
 		>"${template}/template-owned.paths"
 	printf 'v1\n' >"${template}/owned/version"
@@ -250,14 +263,19 @@ template_sync_behavior_check() (
 		printf 'fixture repository owner\n' >"${template}/${repo_owned}"
 	done
 	cp scripts/agent-roles-sync.sh "${template}/scripts/agent-roles-sync.sh"
+	cp scripts/harness-skills-sync.sh "${template}/scripts/harness-skills-sync.sh"
 	cp scripts/claude-skills-sync.sh "${template}/scripts/claude-skills-sync.sh"
+	cp scripts/qwen-skills-sync.sh "${template}/scripts/qwen-skills-sync.sh"
 	cp scripts/codex-agents-sync.sh "${template}/scripts/codex-agents-sync.sh"
 	# The synced sync scripts are executed from the target below, so the library
 	# they source has to travel with them exactly as the manifest makes it.
 	cp scripts/lib/sync-cli.sh "${template}/scripts/lib/sync-cli.sh"
 	cp scripts/ci/claude-skills-check.sh "${template}/scripts/ci/claude-skills-check.sh"
+	cp scripts/ci/qwen-skills-check.sh "${template}/scripts/ci/qwen-skills-check.sh"
 	cp scripts/ci/secret-scan.sh "${template}/scripts/ci/secret-scan.sh"
 	bash "${template}/scripts/agent-roles-sync.sh" --apply --repo "${template}" >/dev/null
+	bash "${template}/scripts/claude-skills-sync.sh" --apply --repo "${template}" >/dev/null
+	bash "${template}/scripts/qwen-skills-sync.sh" --apply --repo "${template}" >/dev/null
 	bash "${template}/scripts/codex-agents-sync.sh" --apply --repo "${template}" >/dev/null
 	git -C "${template}" init -q
 	git -C "${template}" add \
@@ -267,9 +285,11 @@ template_sync_behavior_check() (
 		.agents/role-classes \
 		.agents/roles \
 		.agents/skills/fixture-one/SKILL.md \
+		.claude/skills/fixture-one \
 		.claude/agents/fixture-agent.md \
 		.codex/agents/fixture-agent.toml \
 		.qwen/agents/fixture-agent.md \
+		.qwen/skills/fixture-one \
 		.codex/config.toml \
 		docs/validation/instructions.md \
 		docs/validation/security.md \
@@ -279,15 +299,19 @@ template_sync_behavior_check() (
 		docs/ci-cd-production-ready.md \
 		docs/railway-deployment-profile.md \
 		scripts/agent-roles-sync.sh \
+		scripts/harness-skills-sync.sh \
 		scripts/claude-skills-sync.sh \
+		scripts/qwen-skills-sync.sh \
 		scripts/codex-agents-sync.sh \
 		scripts/lib/sync-cli.sh \
 		scripts/ci/claude-skills-check.sh \
+		scripts/ci/qwen-skills-check.sh \
 		scripts/ci/secret-scan.sh \
 		test/README.md
 	git -C "${template}" -c user.name=template-sync-check -c user.email=template-sync-check@example.invalid commit -qm v1
 	git clone -q "${template}" "${target}"
 	git clone -q "${template}" "${target_empty_claude}"
+	git clone -q "${template}" "${target_empty_qwen}"
 	git clone -q "${template}" "${target_without_local_skill}"
 	git -C "${target}" config user.name template-sync-check
 	git -C "${target}" config user.email template-sync-check@example.invalid
@@ -313,6 +337,7 @@ template_sync_behavior_check() (
 	git -C "${template}" add owned/version .agents/skills/fixture-two/SKILL.md
 	git -C "${template}" -c user.name=template-sync-check -c user.email=template-sync-check@example.invalid commit -qm v2
 
+	rm -rf "${target_empty_claude}/.claude/skills"
 	mkdir -p "${target_empty_claude}/.claude/skills"
 	if failure_output=$(bash "${target_empty_claude}/scripts/claude-skills-sync.sh" --check --repo "${target_empty_claude}" 2>&1); then
 		echo "template-owned purity: Claude check accepted an empty generated view" >&2
@@ -325,6 +350,21 @@ template_sync_behavior_check() (
 	bash "${target_empty_claude}/scripts/claude-skills-sync.sh" --apply --repo "${target_empty_claude}" >/dev/null
 	[[ -L "${target_empty_claude}/.claude/skills/fixture-one" ]] || {
 		echo "template-owned purity: Claude sync did not repair an empty generated view" >&2
+		return 1
+	}
+	rm -rf "${target_empty_qwen}/.qwen/skills"
+	mkdir -p "${target_empty_qwen}/.qwen/skills"
+	if failure_output=$(bash "${target_empty_qwen}/scripts/qwen-skills-sync.sh" --check --repo "${target_empty_qwen}" 2>&1); then
+		echo "template-owned purity: Qwen check accepted an empty generated view" >&2
+		return 1
+	fi
+	grep -Fq 'qwen skills: .qwen/skills/fixture-one is missing' <<<"${failure_output}" || {
+		echo "template-owned purity: Qwen check rejected an empty generated view for the wrong reason" >&2
+		return 1
+	}
+	bash "${target_empty_qwen}/scripts/qwen-skills-sync.sh" --apply --repo "${target_empty_qwen}" >/dev/null
+	[[ -L "${target_empty_qwen}/.qwen/skills/fixture-one" ]] || {
+		echo "template-owned purity: Qwen sync did not repair an empty generated view" >&2
 		return 1
 	}
 	bash "${sync_script}" --apply --no-commit --from "${template}" --repo "${target_without_local_skill}" >/dev/null
@@ -359,7 +399,11 @@ template_sync_behavior_check() (
 		return 1
 	}
 	[[ -L "${target_dirty_local}/.claude/skills/untracked-local" ]] || {
-		echo "template-owned purity: sync omitted an untracked service-owned skill link" >&2
+		echo "template-owned purity: sync omitted an untracked service-owned Claude skill link" >&2
+		return 1
+	}
+	[[ -L "${target_dirty_local}/.qwen/skills/untracked-local" ]] || {
+		echo "template-owned purity: sync omitted an untracked service-owned Qwen skill link" >&2
 		return 1
 	}
 	git -C "${target_dirty_local}" status --porcelain -- .agents/skills/untracked-local |
@@ -370,6 +414,11 @@ template_sync_behavior_check() (
 	git -C "${target_dirty_local}" status --porcelain -- .claude/skills/untracked-local |
 		grep -Fq '?? .claude/skills/untracked-local' || {
 		echo "template-owned purity: sync staged an untracked service-owned skill link" >&2
+		return 1
+	}
+	git -C "${target_dirty_local}" status --porcelain -- .qwen/skills/untracked-local |
+		grep -Fq '?? .qwen/skills/untracked-local' || {
+		echo "template-owned purity: sync staged an untracked service-owned Qwen skill link" >&2
 		return 1
 	}
 	if git -C "${target_dirty_local}" show --format= --name-only HEAD |
@@ -427,11 +476,19 @@ template_sync_behavior_check() (
 		return 1
 	}
 	[[ -L "${target}/.claude/skills/service-local" ]] || {
-		echo "template-owned purity: sync omitted the service-owned skill discovery link" >&2
+		echo "template-owned purity: sync omitted the service-owned Claude skill discovery link" >&2
+		return 1
+	}
+	[[ -L "${target}/.qwen/skills/service-local" ]] || {
+		echo "template-owned purity: sync omitted the service-owned Qwen skill discovery link" >&2
 		return 1
 	}
 	bash "${target}/scripts/ci/claude-skills-check.sh" >/dev/null || {
 		echo "template-owned purity: synced Claude link checker rejected generated links" >&2
+		return 1
+	}
+	bash "${target}/scripts/ci/qwen-skills-check.sh" >/dev/null || {
+		echo "template-owned purity: synced Qwen link checker rejected generated links" >&2
 		return 1
 	}
 	bash "${target}/scripts/agent-roles-sync.sh" --check --repo "${target}" >/dev/null || {
@@ -443,7 +500,12 @@ template_sync_behavior_check() (
 		echo "template-owned purity: derived validation does not use the synced role checker" >&2
 		return 1
 	}
-	if grep -Eq "\`make (agent-roles-check|codex-agents-check|claude-skills-check)\`" \
+	grep -Fq 'bash scripts/ci/qwen-skills-check.sh' \
+		"${target}/docs/validation/instructions.md" || {
+		echo "template-owned purity: derived validation does not use the synced Qwen skill checker" >&2
+		return 1
+	}
+	if grep -Eq "\`make (agent-roles-check|codex-agents-check|claude-skills-check|qwen-skills-check)\`" \
 		"${target}/docs/validation/instructions.md"; then
 		echo "template-owned purity: derived validation depends on a repository-owned Make target" >&2
 		return 1

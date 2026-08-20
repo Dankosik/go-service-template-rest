@@ -30,10 +30,10 @@ metadata:
 ```
 
 `model/method` entries remain autonomously discoverable. `user/workflow` and
-`role/carrier` entries set Claude's `disable-model-invocation: true` and Codex
-`agents/openai.yaml` policy `allow_implicit_invocation: false`; they remain
-available through an explicit `$skill` or bound carrier. The skill sync checker
-enforces these projections. Qwen reads the canonical metadata directly.
+`role/carrier` entries set `disable-model-invocation: true` for Claude and Qwen
+and Codex `agents/openai.yaml` policy `allow_implicit_invocation: false`; they
+remain available through the harness's explicit skill syntax or bound carrier.
+The generated Claude/Qwen views and skill sync checks enforce these projections.
 
 Codex starts with names, descriptions, and paths and may shorten a crowded
 catalog. Put the leading word and decisive trigger first. The repository gate

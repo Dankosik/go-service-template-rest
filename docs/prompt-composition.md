@@ -13,10 +13,13 @@ When the target has a native skill or default prompt and its artifact is ready,
 return only:
 
 ```text
-$<skill>
+<native-skill-entry>
 Use <artifact path>.          # only when discovery is ambiguous
 <new authority or stop delta> # only when absent from the artifact
 ```
+
+Use `$<skill>` in Codex and `/<skill>` in Claude Code or Qwen Code. The syntax
+selects a carrier; it does not change the skill's semantic contract.
 
 This is normally one to three lines. Omit any line already supplied by the
 native entrypoint, current repository, or named artifact.

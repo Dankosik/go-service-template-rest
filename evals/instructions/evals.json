@@ -272,6 +272,39 @@
         "A full-history finding blocks only a claim or gate that explicitly spans repository history, such as main, nightly, release, or an authorized repository-wide audit.",
         "The agent does not rewrite history, weaken the scanner, or baseline unrelated findings to make the bounded unit pass."
       ]
+    },
+    {
+      "id": 23,
+      "prompt": "In Claude Code with callable Agent Team controls, run /orchestrator against a ready persisted Implementation ledger until completion or a true external boundary.",
+      "expected_output": "The Claude team lead routes the complete ledger while each Acceptance-Unit Lead owns its unit, review, and canonical transition.",
+      "files": [".agents/skills/orchestrator/SKILL.md", "docs/agent-harness/claude-code.md"],
+      "expectations": [
+        "The orchestrator uses Agent Team identities and the shared task list only as execution state; repository tasks.md remains canonical.",
+        "Each unit stays with one Acceptance-Unit Lead through repair, fresh review, and Accepted or Blocked; the team lead never accepts it.",
+        "The ledger continues across ready units instead of stopping after the first transition."
+      ]
+    },
+    {
+      "id": 24,
+      "prompt": "In Qwen Code with callable Agent Team controls, run /orchestrator against a ready persisted Implementation ledger until completion or a true external boundary.",
+      "expected_output": "The Qwen team lead routes the complete ledger through named Acceptance-Unit Leads without changing acceptance semantics.",
+      "files": [".agents/skills/orchestrator/SKILL.md", "docs/agent-harness/qwen-code.md", ".qwen/skills/orchestrator/SKILL.md"],
+      "expectations": [
+        "The orchestrator retains team, task, agent, and continuation identities and keeps tasks.md as the acceptance ledger.",
+        "Same-unit corrections reuse the owning Lead; fresh reviewer agents remain read-only and return to that Lead.",
+        "The ledger continues across ready units and only the Acceptance-Unit Lead writes Accepted or Blocked."
+      ]
+    },
+    {
+      "id": 25,
+      "prompt": "Run /orchestrator in Claude Code, but the installed schema exposes no Agent Team controls.",
+      "expected_output": "A precise full-ledger carrier gap before dispatch, without silently replacing the workflow with one-unit execution.",
+      "files": [".agents/skills/orchestrator/SKILL.md", "docs/agent-harness/claude-code.md"],
+      "expectations": [
+        "No Acceptance Unit is dispatched before the required full-ledger carrier exists.",
+        "The result names the missing native team capability and preserves the ready ledger unchanged.",
+        "Ordinary single-unit work remains available separately but is not presented as successful orchestrator execution."
+      ]
     }
   ]
 }

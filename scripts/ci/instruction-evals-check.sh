@@ -51,6 +51,24 @@ jq -e '
 ' "${EVAL_FILE}" >/dev/null ||
 	fail "change-scoped acceptance regression eval is missing"
 
+jq -e '
+  .evals as $evals |
+  all([23, 24, 25][]; . as $id | any($evals[]; .id == $id))
+' "${EVAL_FILE}" >/dev/null ||
+	fail "cross-harness orchestrator evals are missing"
+
+grep -Fq 'the current adapter selected by [Agent' \
+	"${ROOT_DIR}/.agents/skills/orchestrator/SKILL.md" ||
+	fail "orchestrator skill is not harness-neutral"
+if grep -RIFq 'has no Ledger Orchestrator carrier' \
+	"${ROOT_DIR}/docs/agent-harness"; then
+	fail "a harness adapter still prohibits ledger orchestration by product name"
+fi
+if ! grep -Fq 'in Codex and ' "${ROOT_DIR}/docs/prompt-composition.md" ||
+	! grep -Fq 'in Claude Code or Qwen Code.' "${ROOT_DIR}/docs/prompt-composition.md"; then
+	fail "native skill syntax is not mapped across harnesses"
+fi
+
 expected_roles=$'adjudicator-agent\nevidence-agent\nreviewer-agent\nspecialist-agent\nworker-agent'
 actual_roles=$(find "${ROOT_DIR}/.agents/roles" -maxdepth 1 -type f -name '*.toml' \
 	-exec basename {} .toml \; | sort)

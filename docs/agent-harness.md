@@ -35,3 +35,8 @@ Do not mix control planes inside one outcome. A task, subagent, worktree,
 model, or Goal is a carrier; it never expands authorization or transfers unit
 ownership. Use a durable Goal only when the work is genuinely long-running or
 resumable and the installed harness supports it.
+
+All adapters preserve the same ledger, unit ownership, review, and transition
+semantics. Select topology from callable native controls, not the product name.
+When a full-ledger carrier is unavailable, report that capability gap instead
+of replacing the accepted workflow with a smaller one.

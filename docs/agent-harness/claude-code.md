@@ -4,8 +4,19 @@ Use the installed Agent and Goal controls as native authority.
 
 ## Native Map
 
-- Claude Code has no Ledger Orchestrator carrier; the current root owns one
-  Acceptance-Unit Lead and stops at that unit's transition.
+- `/orchestrator` binds the current session as Ledger Orchestrator when Agent
+  Team controls are callable. It uses the shared task list only for execution;
+  repository `tasks.md` remains the acceptance ledger.
+- One teammate owns each ready Acceptance Unit through proof, fresh review, and
+  its canonical transition. The team lead routes that result and never accepts
+  the unit itself.
+- Bind that teammate to the canonical `acceptance-unit-lead` carrier in its
+  spawn brief; do not substitute generic worker semantics.
+- Without Agent Team controls, ordinary single-unit work remains available, but
+  full-ledger invocation returns the exact carrier gap before dispatch. A
+  one-shot subagent cannot substitute because it cannot spawn descendants.
+- Agent Teams are experimental and user-configured. Name the missing team
+  capability or enablement condition; do not write user settings implicitly.
 - The Lead may implement directly.
 - A delegated Agent uses `mode: implement | investigate | verify | review` and
   `isolation: "worktree"` only when separate writable state is useful.
@@ -28,6 +39,11 @@ Retain its returned ID before waiting or sending a follow-up. Continue with the
 same Agent while its context helps; replace it for a clean-context review,
 invalidated base, stall, or changed strategy. Message active write work only
 for a safety stop or accepted-input invalidation.
+
+For Agent Teams, retain the team, teammate, and shared-task identities. Route
+review or worker creation from the Acceptance-Unit Lead's fixed brief; the team
+lead may carry the spawn only when Claude exposes that control solely to the
+lead, but ownership and the returned verdict remain with the unit Lead.
 
 Use one fresh `reviewer-agent` with [Implementation
 Review](../spec-first-workflow/phases/implementation-review.md) as its Method for
