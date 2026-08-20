@@ -2,6 +2,21 @@
 
 This template uses a strict split between non-secret and secret configuration.
 
+## Agent Runtime Configuration
+
+Portable Codex behavior is repository state. `.agents/codex-project.toml` owns
+the supported project defaults, and `scripts/codex-agents-sync.sh` renders its
+marked block plus the project-agent registry into `.codex/config.toml`. A new
+Codex session loads that project view only after the user trusts the checkout.
+
+Keep identity, credentials, provider or MCP endpoints, notification commands,
+telemetry, selected profiles, UI preferences, host-absolute paths, sandbox, and
+approval choices in the user or system Codex config. The generated project view
+contains only the universal template runtime and role registry. The installed
+Codex version and configured model availability remain host prerequisites; an
+unsupported model is a capability gap, not permission to silently change the
+repository policy.
+
 ## Source Of Truth
 
 - YAML (`env/config/*.yaml`) is for baseline non-secret defaults.

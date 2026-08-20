@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# Keep Codex's explicit custom-agent registry aligned with template-owned role
-# files while preserving repository-specific config outside the managed block.
+# Generate Codex's portable project runtime and custom-agent registry from
+# template-owned sources. Machine-specific settings stay in user config.
 set -euo pipefail
 
+runtime_start_marker="# template-owned-codex-runtime:start"
+runtime_end_marker="# template-owned-codex-runtime:end"
 start_marker="# template-owned-codex-agents:start"
 end_marker="# template-owned-codex-agents:end"
 
@@ -14,14 +16,14 @@ usage:
   codex-agents-sync.sh --check [--repo <repository>]
 
   --preflight  refuse target path and marker shapes that cannot be rebuilt safely
-  --apply  replace the managed role registry in .codex/config.toml
-  --check  verify exact role coverage without changing files
+  --apply  replace the managed project runtime and role registry in .codex/config.toml
+  --check  verify portable runtime and exact role coverage without changing files
   --repo   repository root (default: current working directory)
 EOF
 }
 
 fail() {
-	printf 'codex agents: %s\n' "$1" >&2
+	printf 'codex project: %s\n' "$1" >&2
 	exit 1
 }
 
@@ -33,10 +35,12 @@ repo="${SYNC_REPO}"
 
 roles_root="${repo}/.codex/agents"
 config="${repo}/.codex/config.toml"
+portable_source="${repo}/.agents/codex-project.toml"
 
 [[ ! -L "${repo}/.codex" ]] || fail ".codex is a symlink"
 [[ ! -L "${roles_root}" ]] || fail ".codex/agents is a symlink"
 [[ ! -L "${config}" ]] || fail ".codex/config.toml is a symlink"
+[[ ! -L "${portable_source}" ]] || fail ".agents/codex-project.toml is a symlink"
 if [[ -e "${repo}/.codex" && ! -d "${repo}/.codex" ]]; then
 	fail ".codex is not a directory"
 fi
@@ -46,16 +50,41 @@ fi
 if [[ -e "${config}" && ! -f "${config}" ]]; then
 	fail ".codex/config.toml is not a regular file"
 fi
+[[ -f "${portable_source}" ]] || fail ".agents/codex-project.toml is missing"
+
+validate_portable_source() {
+	local unexpected_tables
+	grep -Eq '^developer_instructions[[:space:]]*=' "${portable_source}" ||
+		fail ".agents/codex-project.toml has no developer_instructions"
+	grep -Fxq '[agents]' "${portable_source}" ||
+		fail ".agents/codex-project.toml has no [agents] table"
+	grep -Eq '^max_concurrent_threads_per_session[[:space:]]*=' "${portable_source}" ||
+		fail ".agents/codex-project.toml has no concurrency ceiling"
+	unexpected_tables=$(sed -n 's/^\(\[[^]]*\]\)$/\1/p' "${portable_source}" |
+		grep -Fvx '[agents]' || true)
+	[[ -z "${unexpected_tables}" ]] ||
+		fail ".agents/codex-project.toml may contain only top-level keys and [agents]"
+	grep -Fq "${runtime_start_marker}" "${portable_source}" &&
+		fail ".agents/codex-project.toml contains a generated runtime marker"
+	grep -Fq "${runtime_end_marker}" "${portable_source}" &&
+		fail ".agents/codex-project.toml contains a generated runtime marker"
+	return 0
+}
 
 validate_config_shape() {
-	local start_count=0 end_count=0
+	local runtime_start_count=0 runtime_end_count=0 start_count=0 end_count=0
 	[[ -f "${config}" ]] || return 0
+	runtime_start_count=$(grep -Fxc "${runtime_start_marker}" "${config}" || true)
+	runtime_end_count=$(grep -Fxc "${runtime_end_marker}" "${config}" || true)
 	start_count=$(grep -Fxc "${start_marker}" "${config}" || true)
 	end_count=$(grep -Fxc "${end_marker}" "${config}" || true)
+	[[ "${runtime_start_count}" -le 1 && "${runtime_end_count}" -le 1 && "${runtime_start_count}" == "${runtime_end_count}" ]] ||
+		fail ".codex/config.toml has an invalid managed runtime marker pair"
 	[[ "${start_count}" -le 1 && "${end_count}" -le 1 && "${start_count}" == "${end_count}" ]] ||
 		fail ".codex/config.toml has an invalid managed registry marker pair"
 }
 
+validate_portable_source
 validate_config_shape
 [[ "${mode}" != "preflight" ]] || exit 0
 [[ -d "${roles_root}" ]] || fail ".codex/agents is missing"
@@ -67,12 +96,6 @@ for role_file in "${roles_root}"/*.toml; do
 done
 shopt -u nullglob
 ((${#role_names[@]} > 0)) || fail ".codex/agents contains no role files"
-
-role_csv=""
-for role in "${role_names[@]}"; do
-	[[ -z "${role_csv}" ]] || role_csv+=","
-	role_csv+="${role}"
-done
 
 render_registry() {
 	local role
@@ -86,45 +109,13 @@ render_registry() {
 }
 
 expected_config() {
-	local output="$1" stripped trimmed
-	stripped=$(mktemp "${TMPDIR:-/tmp}/codex-agents-stripped.XXXXXX")
-	trimmed=$(mktemp "${TMPDIR:-/tmp}/codex-agents-trimmed.XXXXXX")
-
-	if [[ -f "${config}" ]]; then
-		awk -v roles="${role_csv}" -v start="${start_marker}" -v end="${end_marker}" '
-			BEGIN {
-				count = split(roles, names, ",")
-				for (i = 1; i <= count; i++) known["agents." names[i]] = 1
-			}
-			$0 == start { in_managed = 1; next }
-			$0 == end { in_managed = 0; next }
-			in_managed { next }
-			$0 == "# Registry compatibility: agents.<name>.config_file entries are required by Codex." { next }
-			/^\[[^]]+\]$/ {
-				section = substr($0, 2, length($0) - 2)
-				in_known = known[section]
-				if (in_known) next
-			}
-			!in_known { print }
-		' "${config}" >"${stripped}"
-	else
-		printf '[agents]\nmax_depth = 1\n' >"${stripped}"
-	fi
-
-	# Drop only trailing blank lines so repeated applies are byte-stable.
-	awk '
-		NF {
-			for (i = 0; i < blanks; i++) print ""
-			blanks = 0
-			print
-			next
-		}
-		{ blanks++ }
-	' "${stripped}" >"${trimmed}"
-	cp "${trimmed}" "${output}"
-	printf '\n' >>"${output}"
-	render_registry >>"${output}"
-	rm -f -- "${stripped}" "${trimmed}"
+	local output="$1"
+	{
+		printf '%s\n' "${runtime_start_marker}"
+		cat "${portable_source}"
+		printf '%s\n\n' "${runtime_end_marker}"
+		render_registry
+	} >"${output}"
 }
 
 expected=$(mktemp "${TMPDIR:-/tmp}/codex-agents-config.XXXXXX")
@@ -135,14 +126,14 @@ case "${mode}" in
 apply)
 	mkdir -p "$(dirname "${config}")"
 	cp "${expected}" "${config}"
-	printf 'codex agents: %d roles registered\n' "${#role_names[@]}"
+	printf 'codex project: portable runtime and %d roles registered\n' "${#role_names[@]}"
 	;;
 check)
 	[[ -f "${config}" ]] || fail ".codex/config.toml is missing"
 	if ! cmp -s "${expected}" "${config}"; then
 		diff -u "${config}" "${expected}" >&2 || true
-		fail ".codex/config.toml role registry is stale; run scripts/codex-agents-sync.sh --apply"
+		fail ".codex/config.toml project runtime or role registry is stale; run scripts/codex-agents-sync.sh --apply"
 	fi
-	printf 'codex agents: %d role registrations current\n' "${#role_names[@]}"
+	printf 'codex project: portable runtime and %d role registrations current\n' "${#role_names[@]}"
 	;;
 esac

@@ -5,7 +5,7 @@ Use for instruction, role, skill, mirror, or template-propagation changes.
 | Surface | Command |
 | --- | --- |
 | Canonical role carrier parity | `bash scripts/agent-roles-sync.sh --check --repo .` |
-| Codex role registry | `bash scripts/codex-agents-sync.sh --check --repo .` |
+| Codex project runtime and role registry | `bash scripts/codex-agents-sync.sh --check --repo .` |
 | Claude skill discovery | `bash scripts/ci/claude-skills-check.sh` |
 | Template-source ownership and sync behavior | `make template-owned-purity-check` in the template checkout only |
 | Structural workflow behavior | `bash scripts/ci/instruction-evals-check.sh` |

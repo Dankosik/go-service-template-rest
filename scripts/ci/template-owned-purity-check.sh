@@ -79,6 +79,7 @@ for required in \
 	scripts/agent-roles-sync.sh \
 	scripts/claude-skills-sync.sh \
 	scripts/codex-agents-sync.sh \
+	.agents/codex-project.toml \
 	scripts/lib/manifest.sh \
 	scripts/lib/sync-cli.sh \
 	scripts/ci/claude-skills-check.sh \
@@ -156,7 +157,7 @@ while IFS= read -r role; do
 		fail ".codex/config.toml registers agents.${role}, but its role file is missing"
 done < <(sed -n 's/^\[agents\.\([^]]*\)\]$/\1/p' .codex/config.toml)
 if ! codex_registry_report=$(bash scripts/codex-agents-sync.sh --check --repo . 2>&1); then
-	fail "Codex role registry is not the generated current block: ${codex_registry_report}"
+	fail "Codex project runtime or role registry is stale: ${codex_registry_report}"
 fi
 
 if ((failed != 0)); then
@@ -164,7 +165,7 @@ if ((failed != 0)); then
 fi
 
 template_sync_behavior_check() (
-	local fixture template target target_dirty_local target_empty_claude target_invalid_codex target_missing_owner target_without_local_skill target_with_directory target_with_link outside sync_script check_output failure_output
+	local fixture template target target_dirty_local target_empty_claude target_invalid_codex target_nonportable_codex target_secret_codex target_missing_owner target_without_local_skill target_with_directory target_with_link outside sync_script check_output failure_output
 	fixture=$(mktemp -d "${TMPDIR:-/tmp}/template-sync-check.XXXXXX")
 	trap 'rm -rf -- "${fixture}"' EXIT
 	template="${fixture}/template"
@@ -172,6 +173,8 @@ template_sync_behavior_check() (
 	target_dirty_local="${fixture}/target-dirty-local"
 	target_empty_claude="${fixture}/target-empty-claude"
 	target_invalid_codex="${fixture}/target-invalid-codex"
+	target_nonportable_codex="${fixture}/target-nonportable-codex"
+	target_secret_codex="${fixture}/target-secret-codex"
 	target_missing_owner="${fixture}/target-missing-owner"
 	target_without_local_skill="${fixture}/target-without-local-skill"
 	target_with_directory="${fixture}/target-with-directory"
@@ -196,6 +199,7 @@ template_sync_behavior_check() (
 	printf '%s\n' \
 		'owned/' \
 		'.agents/role-classes/' \
+		'.agents/codex-project.toml' \
 		'.agents/roles/' \
 		'.agents/skills/' \
 		'.claude/agents/' \
@@ -228,8 +232,9 @@ template_sync_behavior_check() (
 		'Own fixture evidence.' \
 		'"""' \
 		>"${template}/.agents/roles/fixture-agent.toml"
-	printf '%s\n' '[agents]' 'max_depth = 1' '' '[fixture]' 'retained = true' \
+	printf '%s\n' '[agents]' 'max_depth = 4' \
 		>"${template}/.codex/config.toml"
+	cp .agents/codex-project.toml "${template}/.agents/codex-project.toml"
 	cp docs/validation/instructions.md "${template}/docs/validation/instructions.md"
 	for repo_owned in \
 		docs/repo-architecture.md \
@@ -248,10 +253,12 @@ template_sync_behavior_check() (
 	cp scripts/lib/sync-cli.sh "${template}/scripts/lib/sync-cli.sh"
 	cp scripts/ci/claude-skills-check.sh "${template}/scripts/ci/claude-skills-check.sh"
 	bash "${template}/scripts/agent-roles-sync.sh" --apply --repo "${template}" >/dev/null
+	bash "${template}/scripts/codex-agents-sync.sh" --apply --repo "${template}" >/dev/null
 	git -C "${template}" init -q
 	git -C "${template}" add \
 		template-owned.paths \
 		owned/version \
+		.agents/codex-project.toml \
 		.agents/role-classes \
 		.agents/roles \
 		.agents/skills/fixture-one/SKILL.md \
@@ -445,11 +452,19 @@ template_sync_behavior_check() (
 	fi
 	bash "${target}/scripts/agent-roles-sync.sh" --apply --repo "${target}" >/dev/null
 	bash "${target}/scripts/codex-agents-sync.sh" --check --repo "${target}" >/dev/null || {
-		echo "template-owned purity: synced Codex registry checker rejected generated roles" >&2
+		echo "template-owned purity: synced Codex project checker rejected runtime or roles" >&2
 		return 1
 	}
-	grep -Fxq 'retained = true' "${target}/.codex/config.toml" || {
-		echo "template-owned purity: Codex registry sync changed repository-specific config" >&2
+	grep -Fxq 'max_concurrent_threads_per_session = 20' "${target}/.codex/config.toml" || {
+		echo "template-owned purity: Codex project sync omitted portable concurrency" >&2
+		return 1
+	}
+	if grep -Eq '^max_depth[[:space:]]*=' "${target}/.codex/config.toml"; then
+		echo "template-owned purity: Codex project sync retained unsupported max_depth" >&2
+		return 1
+	fi
+	grep -Fq 'do not emit unchanged heartbeats' "${target}/.codex/config.toml" || {
+		echo "template-owned purity: Codex project sync omitted portable wait policy" >&2
 		return 1
 	}
 	rm "${target}/.claude/skills/fixture-two"
@@ -520,6 +535,23 @@ template_sync_behavior_check() (
 	git -C "${target_invalid_codex}" add .codex/config.toml
 	git -C "${target_invalid_codex}" commit -qm malformed-codex-registry
 
+	git clone -q "${template}" "${target_nonportable_codex}"
+	git -C "${target_nonportable_codex}" config user.name template-sync-check
+	git -C "${target_nonportable_codex}" config user.email template-sync-check@example.invalid
+	printf '%s\n' '' '[mcp_servers.local-tool]' \
+		"command = '/private/var/run/local-tool'" \
+		>>"${target_nonportable_codex}/.codex/config.toml"
+	git -C "${target_nonportable_codex}" add .codex/config.toml
+	git -C "${target_nonportable_codex}" commit -qm nonportable-codex-config
+
+	git clone -q "${template}" "${target_secret_codex}"
+	git -C "${target_secret_codex}" config user.name template-sync-check
+	git -C "${target_secret_codex}" config user.email template-sync-check@example.invalid
+	printf '%s\n' '' '[mcp_servers.literal-secret]' 'bearer_token = ""' \
+		>>"${target_secret_codex}/.codex/config.toml"
+	git -C "${target_secret_codex}" add .codex/config.toml
+	git -C "${target_secret_codex}" commit -qm literal-secret-codex-config
+
 	printf 'v4\n' >"${template}/owned/version"
 	git -C "${template}" add owned/version
 	git -C "${template}" -c user.name=template-sync-check -c user.email=template-sync-check@example.invalid commit -qm v4
@@ -555,12 +587,36 @@ template_sync_behavior_check() (
 		echo "template-owned purity: sync accepted malformed Codex registry markers" >&2
 		return 1
 	fi
-	grep -Fq 'refused: generated Codex agent registry cannot be rebuilt safely' <<<"${failure_output}" || {
+	grep -Fq 'refused: generated Codex project config cannot be rebuilt safely' <<<"${failure_output}" || {
 		echo "template-owned purity: Codex preflight refused for the wrong reason" >&2
 		return 1
 	}
 	grep -Fxq v3 "${target_invalid_codex}/owned/version" || {
 		echo "template-owned purity: Codex registry refusal happened after manifest writes" >&2
+		return 1
+	}
+	if ! bash "${sync_script}" --apply --no-commit --from "${template}" --repo "${target_nonportable_codex}" >/dev/null; then
+		echo "template-owned purity: sync could not replace machine-local Codex config" >&2
+		return 1
+	fi
+	if grep -Fq '/private/var/run/local-tool' "${target_nonportable_codex}/.codex/config.toml"; then
+		echo "template-owned purity: sync retained a host-absolute Codex path" >&2
+		return 1
+	fi
+	grep -Fxq v4 "${target_nonportable_codex}/owned/version" || {
+		echo "template-owned purity: machine-local Codex cleanup omitted manifest writes" >&2
+		return 1
+	}
+	if ! bash "${sync_script}" --apply --no-commit --from "${template}" --repo "${target_secret_codex}" >/dev/null; then
+		echo "template-owned purity: sync could not replace literal Codex credentials" >&2
+		return 1
+	fi
+	if grep -Eq '^[[:space:]]*bearer_token[[:space:]]*=' "${target_secret_codex}/.codex/config.toml"; then
+		echo "template-owned purity: sync retained a literal Codex credential" >&2
+		return 1
+	fi
+	grep -Fxq v4 "${target_secret_codex}/owned/version" || {
+		echo "template-owned purity: literal Codex cleanup omitted manifest writes" >&2
 		return 1
 	}
 )

@@ -42,6 +42,7 @@ docs/universal-disciplines/
 
 evals/instructions/
 
+.agents/codex-project.toml
 .agents/role-classes/
 .agents/roles/
 .agents/contracts/

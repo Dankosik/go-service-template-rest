@@ -554,7 +554,7 @@ for target in "${targets[@]}"; do
 	if ! preflight_report=$(bash "${codex_agents_helper}" --preflight --repo "${repo}" 2>&1); then
 		[[ -z "${preflight_report}" ]] ||
 			printf '%s\n' "${preflight_report}" | sed 's/^/   /'
-		reject "generated Codex agent registry cannot be rebuilt safely"
+		reject "generated Codex project config cannot be rebuilt safely"
 		continue
 	fi
 

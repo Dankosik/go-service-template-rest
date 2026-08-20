@@ -10,7 +10,7 @@ This template is the single source of truth for the workflow instruction set. A 
 
 ## The Ownership Split
 
-`template-owned.paths` is the manifest. Every path it lists is mirrored verbatim into a derived repository, including deletions inside listed directories. `.agents/roles` owns role semantics; `scripts/agent-roles-sync.sh` generates the listed Codex, Claude, and Qwen carriers. Two target-local generated views are rebuilt after mirroring: `.claude/skills` exposes the canonical skill set, and the marked role-registry block in `.codex/config.toml` exposes template-owned Codex agents while preserving every repository-specific table outside that block.
+`template-owned.paths` is the manifest. Every path it lists is mirrored verbatim into a derived repository, including deletions inside listed directories. `.agents/roles` owns role semantics; `scripts/agent-roles-sync.sh` generates the listed Codex, Claude, and Qwen carriers. `.agents/codex-project.toml` owns portable Codex runtime defaults. Two target-local generated views are rebuilt after mirroring: `.claude/skills` exposes the canonical skill set, while `.codex/config.toml` is generated exactly from the portable runtime and role registry. Machine-specific Codex settings belong only in user or system config.
 
 A path may appear in the manifest only while it carries no repository-specific content: no service name, no module path, no deployment target, no owner, no service-specific invariant, and no initialization-profile marker. A profile marker means different derived repositories retain different content, which a verbatim mirror cannot preserve. That restriction is what makes mirroring safe — there is nothing in an owned file for a derived repository to lose.
 
@@ -55,7 +55,7 @@ bash ../go-service-template-rest/scripts/template-sync.sh \
 ```
 
 `--check` compares owned content, generated role carriers, Claude skill links,
-and the Codex role registry directly, prints drift, and exits non-zero. It also requires every
+and the Codex project runtime and role registry directly, prints drift, and exits non-zero. It also requires every
 repository-owned authority listed above except `README.md` and the template-only
 onboarding document; it verifies their presence but never copies their
 service-specific content. `--apply` mirrors the exact committed `HEAD`, rebuilds
