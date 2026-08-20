@@ -165,7 +165,7 @@ if ((failed != 0)); then
 fi
 
 template_sync_behavior_check() (
-	local fixture template target target_dirty_local target_empty_claude target_invalid_codex target_nonportable_codex target_secret_codex target_missing_owner target_without_local_skill target_with_directory target_with_link outside sync_script check_output failure_output
+	local fixture template target target_dirty_local target_empty_claude target_invalid_codex target_missing_codex_source target_nonportable_codex target_secret_codex target_missing_owner target_without_local_skill target_with_directory target_with_link outside sync_script check_output failure_output
 	fixture=$(mktemp -d "${TMPDIR:-/tmp}/template-sync-check.XXXXXX")
 	trap 'rm -rf -- "${fixture}"' EXIT
 	template="${fixture}/template"
@@ -173,6 +173,7 @@ template_sync_behavior_check() (
 	target_dirty_local="${fixture}/target-dirty-local"
 	target_empty_claude="${fixture}/target-empty-claude"
 	target_invalid_codex="${fixture}/target-invalid-codex"
+	target_missing_codex_source="${fixture}/target-missing-codex-source"
 	target_nonportable_codex="${fixture}/target-nonportable-codex"
 	target_secret_codex="${fixture}/target-secret-codex"
 	target_missing_owner="${fixture}/target-missing-owner"
@@ -552,6 +553,12 @@ template_sync_behavior_check() (
 	git -C "${target_secret_codex}" add .codex/config.toml
 	git -C "${target_secret_codex}" commit -qm literal-secret-codex-config
 
+	git clone -q "${template}" "${target_missing_codex_source}"
+	git -C "${target_missing_codex_source}" config user.name template-sync-check
+	git -C "${target_missing_codex_source}" config user.email template-sync-check@example.invalid
+	git -C "${target_missing_codex_source}" rm -q .agents/codex-project.toml
+	git -C "${target_missing_codex_source}" commit -qm missing-codex-runtime-source
+
 	printf 'v4\n' >"${template}/owned/version"
 	git -C "${template}" add owned/version
 	git -C "${template}" -c user.name=template-sync-check -c user.email=template-sync-check@example.invalid commit -qm v4
@@ -617,6 +624,22 @@ template_sync_behavior_check() (
 	fi
 	grep -Fxq v4 "${target_secret_codex}/owned/version" || {
 		echo "template-owned purity: literal Codex cleanup omitted manifest writes" >&2
+		return 1
+	}
+	if ! bash "${sync_script}" --apply --no-commit --from "${template}" --repo "${target_missing_codex_source}" >/dev/null; then
+		echo "template-owned purity: sync could not upgrade a consumer without the new Codex runtime source" >&2
+		return 1
+	fi
+	[[ -f "${target_missing_codex_source}/.agents/codex-project.toml" ]] || {
+		echo "template-owned purity: sync omitted the new Codex runtime source" >&2
+		return 1
+	}
+	grep -Fxq 'max_concurrent_threads_per_session = 20' "${target_missing_codex_source}/.codex/config.toml" || {
+		echo "template-owned purity: upgraded consumer omitted generated Codex runtime" >&2
+		return 1
+	}
+	grep -Fxq v4 "${target_missing_codex_source}/owned/version" || {
+		echo "template-owned purity: Codex runtime-source upgrade omitted manifest writes" >&2
 		return 1
 	}
 )
