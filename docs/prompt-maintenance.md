@@ -11,8 +11,10 @@ owns current Codex model guidance. Anthropic's [context-engineering
 guidance](https://claude.com/blog/the-new-rules-of-context-engineering-for-claude-5-generation-models),
 [Claude Code documentation](https://code.claude.com/docs), and [prompting best
 practices](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices)
-own current Claude guidance. Product system-prompt history is observational
-evidence, not a harness contract.
+own current Claude guidance. Installed Grok native schemas own Grok controls;
+the same context-engineering density rules apply when writing Grok carriers.
+Product system-prompt history is observational evidence, not a harness
+contract.
 
 Re-derive old constraints against the current target model and harness. [Agent
 Harness](agent-harness.md) owns native controls.

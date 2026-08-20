@@ -30,6 +30,7 @@ critical quality tier instead of creating another semantic role.
 | Codex App or Codex CLI | [Codex](agent-harness/codex.md) |
 | Claude Code CLI, desktop, web, or IDE | [Claude Code](agent-harness/claude-code.md) |
 | Qwen Code CLI or IDE | [Qwen Code](agent-harness/qwen-code.md) |
+| Grok Build CLI, TUI, or ACP | [Grok Build](agent-harness/grok-build.md) |
 
 Do not mix control planes inside one outcome. A task, subagent, worktree,
 model, or Goal is a carrier; it never expands authorization or transfers unit

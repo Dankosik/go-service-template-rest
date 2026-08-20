@@ -3,8 +3,8 @@ set -euo pipefail
 
 is_docs_path() {
   case "$1" in
-    docs/*.md | specs/*.md | .agents/*.md | .codex/*.md | .claude/*.md | .qwen/*.md | \
-      AGENTS.md | CLAUDE.md | QWEN.md | CONTRIBUTING.md | README.md | SECURITY.md | CODE_OF_CONDUCT.md)
+    docs/*.md | specs/*.md | .agents/*.md | .codex/*.md | .claude/*.md | .grok/*.md | .qwen/*.md | \
+      AGENTS.md | CLAUDE.md | Grok.md | QWEN.md | CONTRIBUTING.md | README.md | SECURITY.md | CODE_OF_CONDUCT.md)
       return 0
       ;;
     *)

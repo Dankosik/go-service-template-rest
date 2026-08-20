@@ -3,6 +3,8 @@ description = "Fresh read-only reviewer for one fixed candidate and named review
 class = "read-only-specialist"
 claude_model = "sonnet"
 qwen_model = "inherit"
+grok_model = "inherit"
+grok_effort = "high"
 output_schema = "review-result-v1"
 
 instructions = """

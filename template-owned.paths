@@ -23,6 +23,7 @@
 
 AGENTS.md
 CLAUDE.md
+Grok.md
 QWEN.md
 
 docs/agent-harness.md
@@ -49,6 +50,9 @@ evals/instructions/
 .agents/skills/
 .claude/agents/
 .codex/agents/
+.grok/agents/
+.grok/roles/
+.grok/rules/
 .qwen/agents/
 
 template-owned.paths

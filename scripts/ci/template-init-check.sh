@@ -163,10 +163,11 @@ new_fixture() {
 	cp \
 		"${ROOT_DIR}/scripts/profiles/database-none/startup_dependencies.go.tmpl" \
 		"${root}/scripts/profiles/database-none/startup_dependencies.go.tmpl"
-	mkdir -p "${root}/.agents" "${root}/.codex" "${root}/.claude" "${root}/.qwen" "${root}/specs"
-	touch "${root}/.agents/fixture" "${root}/.codex/fixture" "${root}/.claude/fixture" "${root}/.qwen/fixture" "${root}/specs/fixture"
+	mkdir -p "${root}/.agents" "${root}/.codex" "${root}/.claude" "${root}/.grok" "${root}/.qwen" "${root}/specs"
+	touch "${root}/.agents/fixture" "${root}/.codex/fixture" "${root}/.claude/fixture" "${root}/.grok/fixture" "${root}/.qwen/fixture" "${root}/specs/fixture"
 	printf '# Full agent contract\n' >"${root}/AGENTS.md"
 	printf '# Claude\n' >"${root}/CLAUDE.md"
+	printf '# Grok\n' >"${root}/Grok.md"
 	printf '# Qwen\n' >"${root}/QWEN.md"
 
 	{
@@ -201,7 +202,7 @@ workflow_snapshot() {
 	(
 		cd "${root}"
 		{
-			for path in .agents .codex .claude .qwen; do
+			for path in .agents .codex .claude .grok .qwen; do
 				if [[ ! -e "${path}" && ! -L "${path}" ]]; then
 					printf 'missing %s\n' "${path}"
 					continue
@@ -214,7 +215,7 @@ workflow_snapshot() {
 				done
 				find "${path}" -type f -exec shasum -a 256 {} +
 			done
-			for path in AGENTS.md CLAUDE.md QWEN.md; do
+			for path in AGENTS.md CLAUDE.md Grok.md QWEN.md; do
 				if [[ -f "${path}" ]]; then
 					shasum -a 256 "${path}"
 				else

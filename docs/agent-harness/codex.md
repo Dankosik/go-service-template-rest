@@ -69,7 +69,10 @@ ledger, and Git candidate identity. Zero or multiple exact matches remain an
 unknown outcome; do not redispatch or repeat Handoff blindly. If implementation
 invalidates an upstream decision, the Lead repairs the smallest owner when it
 can, or the Orchestrator opens a fresh task for that phase and resumes the same
-unit. Add no scheduler, journal, or recovery database.
+unit. A phase task may stop after its durable handoff, but the saved Orchestrator
+keeps its identity, waits for that task, re-reads the transition, and continues.
+It does not ask the user to confirm an agent-owned route or phase reopen. Add no
+scheduler, journal, or recovery database.
 
 Archive a child only after its result and candidate are safe and no continuation
 needs its identity.
