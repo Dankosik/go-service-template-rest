@@ -50,7 +50,6 @@ fi
 if [[ -e "${config}" && ! -f "${config}" ]]; then
 	fail ".codex/config.toml is not a regular file"
 fi
-[[ -f "${portable_source}" ]] || fail ".agents/codex-project.toml is missing"
 
 validate_portable_source() {
 	local unexpected_tables
@@ -84,9 +83,10 @@ validate_config_shape() {
 		fail ".codex/config.toml has an invalid managed registry marker pair"
 }
 
-validate_portable_source
 validate_config_shape
 [[ "${mode}" != "preflight" ]] || exit 0
+[[ -f "${portable_source}" ]] || fail ".agents/codex-project.toml is missing"
+validate_portable_source
 [[ -d "${roles_root}" ]] || fail ".codex/agents is missing"
 
 role_names=()
