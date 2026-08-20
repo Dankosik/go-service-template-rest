@@ -18,9 +18,15 @@ behavior, config precedence, or feature truth.
 
 Load a capability document only when that pack is affected:
 
+<!-- profile:http-idempotency-postgres:start -->
 - [HTTP idempotency](../postgres-http-idempotency.md)
+<!-- profile:http-idempotency-postgres:end -->
+<!-- profile:outbox-postgres:start -->
 - [Transactional outbox](../postgres-transactional-outbox.md)
+<!-- profile:outbox-postgres:end -->
+<!-- profile:jobs-postgres:start -->
 - [Durable background jobs](../postgres-durable-background-jobs.md)
+<!-- profile:jobs-postgres:end -->
 
 A new durable behavior evolves `migrations/` first, then regenerates or adapts
 access code from that schema.
