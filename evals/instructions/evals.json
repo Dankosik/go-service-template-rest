@@ -260,6 +260,18 @@
         "Messages carry only changed dependencies or status; same-task correction reuses the existing worker instead of redispatching the full brief.",
         "The Lead integrates the results serially, runs claim-matched proof, binds one fixed candidate for fresh review, and records the evidence-clamped acceptance result."
       ]
+    },
+    {
+      "id": 22,
+      "prompt": "Accept one fixed implementation unit whose change-scoped secret scan is clean. An optional full-history scan reports only pre-existing findings outside the unit. Complete the bounded acceptance decision.",
+      "expected_output": "Change-scoped acceptance proceeds; unrelated historical findings remain observations unless the accepted claim explicitly spans repository history.",
+      "files": ["docs/validation-routing.md", "docs/validation/security.md", "scripts/ci/secret-scan.sh"],
+      "expectations": [
+        "The agent uses the change-scoped secret command for the fixed unit and does not substitute a repository-history scan.",
+        "Pre-existing findings outside the unit are reported as observations and do not block acceptance.",
+        "A full-history finding blocks only a claim or gate that explicitly spans repository history, such as main, nightly, release, or an authorized repository-wide audit.",
+        "The agent does not rewrite history, weaken the scanner, or baseline unrelated findings to make the bounded unit pass."
+      ]
     }
   ]
 }

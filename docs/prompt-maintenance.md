@@ -63,15 +63,20 @@ act on.
 | Authority, safety, secrets, irreversible boundaries, global invariants, Direct Work eligibility | `AGENTS.md` |
 | Structured/orchestrated path, macro phases, phase selection | [Workflow Router](spec-first-workflow.md) |
 | Movement, narrow reopen, and boundary handoff | [Transition](spec-first-workflow/shared/transition.md) |
+| Durable movement receipt fields | [Transition Result V1](spec-first-workflow/interfaces/transition-result-v1.md) |
 | One phase's unique decision | Its phase owner |
 | Artifact persistence | [Artifacts](spec-first-workflow/shared/artifacts.md) |
 | Status values and transitions | [Artifact Lifecycle V1](spec-first-workflow/interfaces/artifact-lifecycle-v1.md) |
 | Proof semantics | [Evidence Contract](spec-first-workflow/shared/evidence-contract.md) |
+| Proof result fields | [Evidence Result V1](spec-first-workflow/interfaces/evidence-result-v1.md) |
 | Independent-review trigger and lifecycle | [Review](spec-first-workflow/shared/review.md) |
-| Read-only lane eligibility and result | [Delegation](spec-first-workflow/shared/delegation.md) and its interface |
+| Review result fields and verdict values | [Review Result V1](spec-first-workflow/interfaces/review-result-v1.md) |
+| Read-only lane eligibility | [Read-Only Delegation](spec-first-workflow/shared/read-only-delegation.md) |
+| Read-only lane result fields | [Lane Result V1](spec-first-workflow/interfaces/lane-result-v1.md) |
 | Prompt packaging and no-duplication contract | [Prompt Composition](prompt-composition.md) |
 | Resume after interruption and terminal cleanup | Their separate shared owners |
 | Domain judgment | `.agents/skills/<domain>` |
+| Domain decision result fields | [Decision Result V1](spec-first-workflow/interfaces/decision-result-v1.md) |
 | Harness-neutral role scope | `.agents/roles` |
 | Output fields and allowed values | `docs/spec-first-workflow/interfaces/` |
 | Accepted task decisions and execution state | `specs/<task>/` |

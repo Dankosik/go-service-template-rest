@@ -1,23 +1,12 @@
 # Compatibility And Versioning
 
-## When To Load
+## Load When
 
 Load this when a change touches an already-published operation: a status, error
 `code`, enum value, default, nullability, pagination behavior, consistency
 guarantee, or a deprecation and removal plan.
 
-## Behavior Change Thesis
-
-Without this file, `make openapi-breaking` is treated as the backstop that
-catches a breaking change. It is a schema differ. Measured against the reference
-contract with the repository's own `--fail-on ERR` setting: a new required
-request property and a decreased `maxLength` fail the gate, while **removing a
-documented `409` response passes**, and adding a `page_size` parameter to a
-previously complete collection passes. Anything whose client impact lives in
-semantics rather than schema must be classified by hand, and a green gate is not
-evidence that it was.
-
-## Decision Rubric
+## Decide
 
 - Classify each change as `additive`, `behavior-change`, or `breaking`, and name
   the client assumption that makes it so. "Additive" is a claim about client
@@ -52,7 +41,7 @@ evidence that it was.
   the breaking check. It runs only from `pr-check`, which supplies `BASE_REF` and
   extracts the base spec with `git show`.
 
-## Validation Shape
+## Prove
 
 `make pr-check BASE_REF=origin/main`, or `make openapi-breaking
 BASE_OPENAPI=<base spec>` directly. A pass proves no schema-detectable

@@ -1,15 +1,12 @@
 # Scope Constraints And Non-Goals
 
-## Behavior Change Thesis
-When loaded for the symptom "scope is expanding or constraints are mixed with delivery promises," this file makes the model choose explicit in-scope work, non-goals, and design-shaping constraints instead of carrying adjacent features or implementation commitments into the handoff.
-
-## When To Load
+## Load When
 Load this when the request bundles adjacent ideas, contains vague words like "fast" or "compliant," or risks treating downstream implementation and rollout details as already approved.
 
 ## The Move
 Keep only behavior framing in scope and route architecture, API, data, security, and reliability details downstream. Write non-goals as the plausible adjacent work a model might otherwise include — each one means "not approved for this pass," not a forbidden future, and a short pointed list beats a thoroughness display. Keep a constraint only when it changes downstream choices, stated as the requirement rather than a hidden decision ("GDPR" surfaces the retention conflict; it does not mean "hard delete immediately"). When "fast," "simple," "compliant," or "secure" lacks an acceptance threshold or policy owner, make it a question, and admit a delivery commitment only when it materially constrains the frame and has an owner.
 
-## Imitate
+## Inspect
 Input:
 ```text
 Add tenant-aware export limits, plus maybe cache export files and show admin analytics while we are in there.

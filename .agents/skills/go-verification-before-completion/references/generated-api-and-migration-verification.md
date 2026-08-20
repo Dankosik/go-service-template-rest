@@ -1,18 +1,11 @@
 # Generated API And Migration Verification
 
-## Behavior Change Thesis
-
-When loaded for a contract or schema claim, this file fixes what the drift and
-rehearsal targets actually cover, so the conclusion neither stops at "handler
-tests pass" nor stretches a green rehearsal into a claim about behavior over the
-new schema.
-
-## When To Load
+## Load When
 
 Load this when the claim depends on an OpenAPI spec, generated API or sqlc
 output, a SQL query, or a migration.
 
-## Decision Rubric
+## Decide
 
 `go-coder`'s generated-source reference owns which file is canonical and which
 command regenerates it, including the fact that a `*-check` target regenerates in
@@ -52,7 +45,7 @@ stale generated code compiles and its tests pass, and the linters never see it �
 ended by modifying files as a clean result; the artifacts are reconciled only
 once the check reruns without changing anything.
 
-## Validation Shape
+## Prove
 
 Name the surface, the drift or rehearsal command and whether it altered files or
 skipped, and — separately — the behavior tests that prove code works over that

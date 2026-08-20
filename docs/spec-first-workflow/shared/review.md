@@ -1,7 +1,6 @@
 # Review
 
-Use independent review at required structured/orchestrated boundaries and when
-fresh context can materially improve confidence in another fixed boundary.
+Use fresh independent review at the boundaries selected by this contract.
 
 ## Trigger
 
@@ -11,32 +10,20 @@ Planning result, and Implementation acceptance unit before movement or
 acceptance.
 
 Direct Work and supporting phase-internal work use root self-review unless the
-boundary is high-impact, broad, hard-to-reverse, hard to verify,
-protected-domain, materially contested, or explicitly requested. Re-evaluate
-only after a material candidate or risk change.
+boundary is high-impact, broad, hard to reverse or verify, protected-domain,
+materially contested, or explicitly requested.
 
 ## Lifecycle
 
-The artifact or acceptance owner fixes the candidate, brief, authoritative
-inputs, and evidence boundary. The reviewer independently falsifies that
-boundary, keeps it unchanged, and returns [Review Result
-V1](../interfaces/review-result-v1.md) using the phase adapter's lenses and
-threshold. Review never takes ownership of repair, integration, acceptance, or
-movement.
+The owner fixes one candidate, its authoritative inputs, phase adapter, and
+evidence boundary. The reviewer keeps that boundary read-only, attempts to
+falsify it, and returns [Review Result V1](../interfaces/review-result-v1.md).
+Review never owns repair, integration, acceptance, or movement.
 
-Lead with surviving findings in severity order. Each finding names its anchor,
-impact on the accepted outcome, blocker/concern/non-blocking classification,
-smallest repair or reopen owner, and current evidence boundary. Falsify before
-classifying: when disproof was not attempted or could not run, report the gap as
-a concern rather than a blocker.
-
-`PASS` moves;
-`CONCERNS` moves only when every concern has a proof/risk owner, observable, and
-reopen condition and leaves no downstream semantic choice; otherwise the result
-is `FAIL`. The owner repairs or reopens the smallest decision. A material
-mutation invalidates affected findings and proof; when the trigger still
-applies, review that affected fixed boundary in fresh context. Reuse unaffected
-findings.
+A material candidate mutation invalidates affected findings and proof. When the
+trigger still applies, review the changed boundary in fresh context; reuse only
+unaffected findings. The phase adapter owns lenses and threshold, while the
+artifact, ledger, or [Transition](transition.md) owner decides movement.
 
 ## Route
 
@@ -47,27 +34,8 @@ findings.
 | Technical and Go-ownership design | [Technical Design Review](../phases/technical-design-review.md) |
 | Completed Test Design | [Test Design](../phases/test-design.md#review) |
 | Planning result | [Task Review / Readiness](../phases/task-review-readiness.md) |
-| Fixed implementation unit | [Implementation Review](#implementation-review) |
+| Fixed implementation unit | [Implementation Review](../phases/implementation-review.md) |
 
 A phase-owned complementary panel replaces the default reviewer only when its
 trigger partitions one fixed candidate into named non-overlapping lenses and
-defines one synthesis threshold.
-
-## Implementation Review
-
-Run after one fixed unit or inline outcome passes owner self-review and mapped
-validation. Give the reviewer its accepted sources, immutable candidate
-identity when crossing a boundary, current proof, and irreproducible external
-evidence.
-
-The reviewer tries to disprove the postcondition and important constraints on
-the real path, retained scope, dependencies, and claim-scoped proof. Reuse valid
-receipts and run only a missing or adversarial falsifier. Use the Implementation
-verdicts in [Review Result V1](../interfaces/review-result-v1.md): `PASS`
-returns for acceptance, `FAIL` returns anchored candidate-caused findings, and
-`NEEDS_PARENT` names proof or action outside reviewer authority.
-
-## Stop Rule
-
-Stop after one evidence-bounded result for one fixed boundary. A standalone
-review remains read-only and does not repair or move its candidate.
+defines one synthesis threshold. Stop after one result for one fixed boundary.

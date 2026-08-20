@@ -1,9 +1,6 @@
 # Assumptions And Open Questions
 
-## Behavior Change Thesis
-When loaded for the symptom "the frame depends on implied facts, missing owner decisions, or an unprioritized question pile," this file makes the model choose labeled assumptions and decided technical defaults instead of inventing answers, producing a generic TODO list, or exporting agent-owned branches to the user as questions.
-
-## When To Load
+## Load When
 Load this when the request says "should be fine," "obviously," "just," "we know," or similar, or when the open questions do not say who owns the answer and what answer would unblock design.
 
 ## The Move
@@ -17,7 +14,7 @@ Label every uncertainty and decide everything technical:
 
 Ask the questions that change framing or route the next spec lanes; everything else is a labeled assumption or a decision.
 
-## Imitate
+## Inspect
 Input:
 ```text
 Let's require email verification before users can create projects. That should stop abuse.

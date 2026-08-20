@@ -19,3 +19,7 @@ human-facing explanation.
 Start with the focused target that can falsify the change. Run an aggregate only
 when the completion claim spans that aggregate. Missing Docker or an external
 provider narrows the claim; it does not become a passing skip.
+
+Validation and blockers stay within the fixed accepted unit and its required
+evidence. Unrelated or pre-existing defects are observations, not blockers,
+unless the intended claim explicitly spans that broader surface.

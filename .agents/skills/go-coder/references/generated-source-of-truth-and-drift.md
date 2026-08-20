@@ -1,18 +1,11 @@
 # Generated Source Of Truth And Drift
 
-## Behavior Change Thesis
-
-When loaded for generated-code pressure, this file makes the change land in the
-canonical source and run that source's own generator, instead of hand-editing
-generated output, running the drift *check* as if it were the generator, or
-reading a clean `make lint` as evidence that generated code is correct.
-
-## When To Load
+## Load When
 
 Load this when the change touches an OpenAPI operation or schema, a SQL query or
 migration, a `.proto` service, a generator config, or a drift-check failure.
 
-## Decision Rubric
+## Decide
 
 The phase already owns the policy — change the canonical source first, regenerate,
 and remove superseded generated output. What it cannot tell you is which file is
@@ -57,7 +50,7 @@ path, and `exclusions.generated: strict` drops every file carrying the canonical
 generated header. Linters never run on these files; only the drift check
 constrains them.
 
-## Validation Shape
+## Prove
 
 - Run the single `*-check` for the surface you regenerated before any broader gate.
 - Inspect `git diff` over the generated path and keep only hunks that trace back

@@ -1,9 +1,6 @@
 # Invariant Register Patterns
 
-## Behavior Change Thesis
-When loaded for symptom "the rules read as descriptive prose with no owner or enforcement point", this file makes the model write one falsifiable row per rule instead of likely mistake "business-logic bullets that no failing check could contradict."
-
-## Decision Rubric
+## Decide
 - One row per condition that must stay true. Split a bundled `and` rule when its halves fail differently.
 - Each row states: the rule in accepted business terms; the **false case** — the input, sequence, or replay that would violate it; the owner with authority to keep it true; the source of truth; the enforcement point; the violation outcome; and the proof that fails when the rule breaks. A row without a false case is a wish, not an invariant.
 - The owner is the actor or policy with authority over the rule, which is usually not the component that first detects the violation. `docs/repo-architecture.md#source-of-truth` records accepted authority; `#domain-vocabulary` records a term whose two readings would change an outcome. Define a term only then.
@@ -22,5 +19,5 @@ Eventual consistency makes this hold.
 ```
 Failure: an unowned repair path. Either one boundary prevents the violation synchronously, or the row names the reconciliation that restores the rule and how long it may be false.
 
-## Validation Shape
+## Prove
 Every row should imply a positive proof, a proof that its false case is rejected, and — when replay or concurrency can reach it — a proof that the enforcement point still holds with two writers.

@@ -65,7 +65,7 @@ Load a conditional owner immediately before its trigger:
 | --- | --- |
 | Decide whether or what to persist | [Artifacts](spec-first-workflow/shared/artifacts.md) |
 | Interpret or update artifact status | [Artifact Lifecycle V1](spec-first-workflow/interfaces/artifact-lifecycle-v1.md) |
-| Dispatch a non-implementation read-only lane | [Delegation](spec-first-workflow/shared/delegation.md) |
+| Dispatch a non-implementation read-only lane | [Read-Only Delegation](spec-first-workflow/shared/read-only-delegation.md) |
 | Decide or run independent review | [Review](spec-first-workflow/shared/review.md) |
 | Resume after interruption or actor/session change | [Resume](spec-first-workflow/shared/resume.md) |
 | Move, reopen, or cross an actor/session/macro-phase boundary | [Transition](spec-first-workflow/shared/transition.md) |

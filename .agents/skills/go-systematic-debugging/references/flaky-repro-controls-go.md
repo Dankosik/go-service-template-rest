@@ -1,14 +1,6 @@
 # Flaky Reproduction Controls For Go
 
-## Behavior Change Thesis
-
-When loaded for an intermittent Go test failure, this file makes the model move
-one control variable at a time and keep the failing seed as a replayable
-reproducer — instead of stacking `-race -shuffle -cpu -count` into a single
-command that reproduces *something* without naming which knob did it, and
-instead of reading one green local run as evidence against a CI-only flake.
-
-## When To Load
+## Load When
 
 Load when a Go test fails only under repetition, on CI, under `-race`,
 `-shuffle`, a specific `-cpu`, or in wider package scope.
@@ -19,7 +11,7 @@ problem, not a reproduction problem: `go-test-implementation` owns
 (`internal/health/cached_test.go`, `internal/background`, the bootstrap
 lifecycle tests). Reach for a fake clock there before widening any timeout here.
 
-## Decision Rubric
+## Decide
 
 - **Read the recorded failure before reproducing it.** `make test-report` writes
   `.artifacts/test/junit.xml` and `.artifacts/test/test2json.json`. The JSON
@@ -62,7 +54,7 @@ the residual risk in those terms.
 Reject skipping or deleting the test before deciding whether the flake is
 test-only or a real production race that the test merely exposes intermittently.
 
-## Validation Shape
+## Prove
 
 Capture the exact command, package and test selector, `-count`, `-race`, `-cpu`,
 `-shuffle` seed, tags, relevant env, the first distinct failing stack or

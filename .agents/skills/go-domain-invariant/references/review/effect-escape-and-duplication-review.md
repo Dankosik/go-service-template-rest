@@ -1,9 +1,6 @@
 # Effect Escape And Duplication Review
 
-## Behavior Change Thesis
-When loaded for symptom "an external or durable effect can happen before acceptance, or happen twice", this file makes the model prove the escaped or repeated effect instead of likely mistake "prescribe a saga, an outbox, or dedupe before any partial or duplicate outcome is shown."
-
-## Decision Rubric
+## Decide
 - One test, two directions: an effect the domain never accepted, or an effect the domain accepted once that can happen twice. Both are the same defect — the count of effects does not match the count of accepted operations.
 - A finding names the rejected or replayed operation **and** the lasting effect together. One without the other is not yet this lane.
 - Review the entity key, the current-state guard, the processed-event key, the version check, and the effect's own idempotency as one picture. Stale input that overwrites newer business state counts as a repeated effect on the state.
@@ -24,5 +21,5 @@ This consumer is not idempotent. Add dedupe.
 ```
 Failure: no transition and no repeated business effect named, so the fix cannot be sized and the risk cannot be ranked.
 
-## Validation Shape
+## Prove
 The finding is complete when it names the effect, the path that reaches it without acceptance or reaches it twice, and one focused assertion — the rejected path performs zero effects, or the replayed path performs one.

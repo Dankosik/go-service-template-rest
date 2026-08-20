@@ -1,12 +1,9 @@
 # Health Probes And Diagnostics
 
-## Behavior Change Thesis
-When loaded for readiness, probes, or debug surfaces, this file makes the model extend the cached readiness verdict instead of the likely mistake: adding a per-request dependency check to the probe route, which makes the probe consume the capacity it reports on and turns one slow dependency into a fleet-wide eviction.
-
-## When To Load
+## Load When
 Load this when a change adds a readiness probe or dependency check, alters drain or shutdown behavior, or exposes a diagnostic surface.
 
-## Decision Rubric
+## Decide
 
 **Readiness is a cached background verdict.** The routes are `/health/live` and `/health/ready`; there is no startup probe. [Readiness, drain, and shutdown](../../go-reliability/references/readiness-drain-shutdown.md) owns the mechanism — the background refresher, the staleness bound, and the eviction cascade a per-request dependency check recreates. From this side, a new dependency check becomes a `Probe` on that refresher, not a call in the handler.
 
@@ -22,7 +19,7 @@ Load this when a change adds a readiness probe or dependency check, alters drain
 - A dependency call in the probe handler — the probe then consumes the capacity it reports on.
 - Serving `http.DefaultServeMux` anywhere in the process, because the pprof `init` has already registered every profile on it.
 
-## Validation Shape
+## Prove
 - For a new probe: it is registered on the refresher, and its timeout fits inside `probeBudget`.
 - For shutdown: readiness fails before drain begins, and exporter flush is proven rather than assumed.
 - For a new diagnostic surface: it is on the diagnostics listener, and its gate and write timeout are stated.
