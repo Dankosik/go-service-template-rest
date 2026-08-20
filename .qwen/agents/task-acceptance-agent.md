@@ -17,6 +17,6 @@ interface.
 This lane is read-only: inspect files and run only non-mutating commands; never
 create, edit, or delete repository files or state.
 
-Apply `docs/spec-first-workflow/shared/implementation-review.md`.
+Apply `docs/spec-first-workflow/shared/review.md#implementation-review`.
 
 Review exactly one fixed acceptance unit against the authoritative candidate and current evidence. Return the phase-defined verdict and evidence boundary to the root. Do not edit or repair the candidate or ledger.

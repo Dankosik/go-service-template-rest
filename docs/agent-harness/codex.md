@@ -1,51 +1,63 @@
 # Codex Harness Adapter
 
-## Read When
-
-Read after the [Agent Harness](../agent-harness.md) selects Codex and a native
-task, Worktree, subagent, Goal, model, effort, Handoff, or recovery control is
-needed. Callable installed schemas outrank public prose.
+Use the installed Codex schemas as native authority; callable fields outrank
+public prose.
 
 ## Native Map
 
-- A Goal is thread-local and evidence-aware.
-- An isolated `IMPLEMENTATION_WORKER` is a separate top-level App task created
-  in Worktree mode. A built-in `collaboration.spawn_agent` child is read-only
-  for this workflow, regardless of its prompt or tools.
-- Read-only specialists and reviewers use fresh project subagents with no
-  inherited turns unless irreproducible user context requires the smallest
-  bounded recent set.
-- A Ledger Orchestrator is `$orchestrator` in a dedicated saved-project task.
+- A saved-project task using `$orchestrator` can own a persisted ledger.
+- A Local Acceptance-Unit Lead may implement directly or delegate shared work.
+- Use a Worktree task when isolated candidate state prevents collisions or
+  makes handoff useful; isolation is not a correctness ceremony for every edit.
+- Use a fresh project subagent with no inherited turns for independent review.
+- A Goal is optional and thread-local; use one only for a genuinely long-running
+  or resumable stage.
 
-The Worktree task's `threadId`, `hostId`, backing, and checkout must satisfy the
-shared [Write-Carrier Gate](shared/write-carrier.md#write-carrier-gate).
+## Models
 
-## Conditional Controls
+Use Sol with `xhigh` reasoning effort for the Acceptance-Unit Lead. `ultra` is
+a Codex workflow mode, not a reasoning-effort value, and must not be sent in
+the effort field. Use Luna at low effort for closed mechanical work, Terra at
+balanced effort for ordinary delegated work or review, and Sol for complex,
+cross-cutting, protected-domain, or high-consequence reasoning. Preserve a
+user-named model. If a structured field is unsupported or rejected, retain the
+native evidence and use the effective configured value; do not encode a model
+name only in prompt text.
 
-| Trigger | Read before |
-| --- | --- |
-| Create, wait on, correct, Handoff, or clean up an Implementation or orchestration task. | [Codex Orchestration](codex/codex-orchestration.md) |
-| Spawn or wait on research, challenge, or review. | [Codex Read-Only Lanes](codex/codex-read-only-lanes.md) |
-| Reconcile unknown create/Handoff state, terminalize a known Lead, or resume an upstream reopen. | [Codex Recovery](codex/codex-recovery.md) |
-| Start, inspect, resume, or clear a Goal. | [Codex Goals](codex/codex-goals.md) |
+## Dispatch And Coordination
 
-## Model And Effort
+Pass the [delegation interface](../agent-harness.md#delegation-interface)
+through installed structured fields where available. Retain every returned
+`threadId`, `hostId`, task or operation identity, worktree identity, and wait
+cursor. Never wait on a lane that returned no identity. Run concurrent work
+only when files, resources, interfaces, and assumptions are independent;
+consume and integrate results serially under the Lead.
 
-Apply the shared [selection policy](shared/model-selection.md) using installed
-model names and supported fields. Preserve a user-named model. Otherwise:
+When initial task creation cannot carry the selected model or effort, bootstrap
+with role and scope only, require exact `READY_FOR_DISPATCH`, then send one
+technical follow-up using the supported structured fields. Do not repeat an
+ambiguously delivered dispatch. Continue with the same agent when its context
+is useful; use a fresh agent when a clean context or changed strategy is more
+reliable.
 
-| Lane | Model |
-| --- | --- |
-| Closed mechanical Worker | Luna with `low` effort |
-| Ordinary or complex Worker or review | Terra at `medium`, raised to `high` or `xhigh` for closed-route complex, cross-cutting, protected-domain, or high-consequence work |
-| Acceptance-Unit Lead or hardest critical review | Sol with `xhigh`, falling back to Sol `high` only on a recorded unsupported or rejected `xhigh` override |
+For isolated work, validate the actual worktree and base before accepting its
+bytes. A Worktree Lead returns exact `HANDOFF_READY` with a fixed candidate;
+the Local Lead integrates and validates it before any ledger transition.
+Handoff is routing evidence, not acceptance.
 
-Apply the shared effort policy through the installed supported fields. When the
-installed schema exposes `model` or `thinking`, omitting it is an invalid
-dispatch: inherited settings and a model or effort named only in prompt text do
-not satisfy selection. Treat a field as unavailable only when the installed
-schema lacks it, and as rejected only from the control's actual rejection;
-then continue on the effective configured value and retain that capability
-evidence. [Codex Orchestration](codex/codex-orchestration.md) owns the dispatch
-configuration receipt. Only after that receipt do corrections and continuations
-omit overrides so the established configuration stays intact.
+## Review And Recovery
+
+An independent implementation review uses a fresh `task-acceptance-agent`, or
+`critical-reviewer-agent` only for a justified highest-consequence boundary,
+and applies shared [Review](../spec-first-workflow/shared/review.md). A changed
+candidate receives a fresh review when the trigger still applies.
+
+Reconcile unknown create or handoff state from native task state, the canonical
+ledger, and Git candidate identity. Zero or multiple exact matches remain an
+unknown outcome; do not redispatch or repeat Handoff blindly. If implementation
+invalidates an upstream decision, the Lead repairs the smallest owner when it
+can, or the Orchestrator opens a fresh task for that phase and resumes the same
+unit. Add no scheduler, journal, or recovery database.
+
+Archive a child only after its result and candidate are safe and no continuation
+needs its identity.

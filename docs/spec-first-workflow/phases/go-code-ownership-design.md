@@ -80,7 +80,7 @@ directory, package, file, owner, surface, or file responsibility.
 Fix one placement from current evidence instead of deferring alternatives, but
 do not present it as infallible. Name the concrete code-shape evidence that
 would invalidate the file map, such as independently changing responsibilities
-or an ownership transition that becomes hard to trace. [Implementation](implementation-validation-closeout.md#implement)
+or an ownership transition that becomes hard to trace. [Implementation](implementation.md#execute)
 owns adapting the placement or reopening this decision when that evidence
 appears in the real code.
 

@@ -1,36 +1,40 @@
 # Claude Code Harness Adapter
 
-## Read When
-
-Read after the [Agent Harness](../agent-harness.md) selects Claude Code and a
-native Agent lane, Goal, model, effort, peer message, or programmatic run is
-needed.
+Use the installed Agent and Goal controls as native authority.
 
 ## Native Map
 
-- `/goal <condition>` is the durable execution control; its evaluator sees only
-  the conversation.
-- An isolated Implementation Worker is a background `Agent` lane with
-  `isolation: "worktree"` and an effort-carrier `subagent_type`.
-- Read-only lanes use fresh background `Agent` contexts without worktree
+- Claude Code has no Ledger Orchestrator carrier; the current root owns one
+  Acceptance-Unit Lead and stops at that unit's transition.
+- The Lead may implement directly.
+- A delegated Agent uses `mode: implement | investigate | verify | review` and
+  `isolation: "worktree"` only when separate writable state is useful.
+- Independent review uses a fresh one-shot Agent context without worktree
   isolation.
-- Claude Code has no Ledger Orchestrator carrier; the current root binds one
-  Acceptance-Unit Lead and stops at that unit's canonical transition.
+- `/goal <condition>` is optional for genuinely long-running or resumable work;
+  its evaluator sees the conversation rather than repository files.
 
-## Conditional Controls
+## Models And Dispatch
 
-| Trigger | Read before |
-| --- | --- |
-| Start, resume, or clear a Goal. | [Goals](claude-code/goals.md) |
-| Dispatch, monitor, or correct an Implementation Worker. | [Workers](claude-code/workers.md) |
-| Dispatch or wait on research, challenge, or review. | [Read-Only Lanes](claude-code/read-only-lanes.md) |
-| Discover or message another session. | [Cross-Session Messaging](claude-code/cross-session.md) |
-| Drive this harness programmatically. | [Claude Agent SDK](claude-code/sdk.md) |
+Use Opus for the Lead and complex or high-consequence work; use Sonnet for
+mechanical and ordinary delegated work. Preserve a user-selected model. Carry
+model, effort, isolation, objective, references, writable scope when needed,
+and proof through installed Agent fields or role carriers rather than repeating
+them as workflow prose.
 
-## Model And Effort
+A delegated Agent does not receive the root conversation or prior command
+output, so include every execution-changing fact absent from canonical files.
+Retain its returned ID before waiting or sending a follow-up. Continue with the
+same Agent while its context helps; replace it for a clean-context review,
+invalidated base, stall, or changed strategy. Message active write work only
+for a safety stop or accepted-input invalidation.
 
-Apply the shared [selection policy](shared/model-selection.md).
-Map it to Sonnet for mechanical and ordinary lanes and Opus for
-Acceptance-Unit Leads and complex or high-consequence lanes. Carry effort
-through the installed role carrier; remove that carrier when Claude gains a
-per-dispatch effort field.
+Use one fresh `task-acceptance-agent` for ordinary independent implementation
+review and a critical reviewer only for a justified highest-consequence
+boundary. Apply shared [Review](../spec-first-workflow/shared/review.md) and keep
+the candidate unchanged.
+
+Cross-session messages are evidence inputs, not proof receipts, acceptance, or
+ledger state. Programmatic use goes through the Claude Agent SDK; direct
+Anthropic Messages API calls are a different control plane and do not
+substitute for repository harness controls.

@@ -1,5 +1,0 @@
-interface:
-  display_name: "Implementation Worker"
-  short_description: "Implement one exact write slice"
-policy:
-  allow_implicit_invocation: false

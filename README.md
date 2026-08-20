@@ -239,24 +239,21 @@ flowchart TD
     orchestrator["LEDGER_ORCHESTRATOR<br/>routes ready units only"]
     lead["ACCEPTANCE_UNIT_LEAD<br/>owns one unit end to end"]
     strategy{"Lead chooses the fastest safe strategy"}
-    serial["Serial implementation"]
-    specialist["READ_ONLY_SPECIALIST<br/>optional investigation"]
-    worker["IMPLEMENTATION_WORKER<br/>optional isolated write slice"]
+    direct["Lead implements directly"]
+    delegated["DELEGATED_AGENT<br/>implement · investigate · verify"]
     fanin["Lead fan-in<br/>integration · proof · self-review"]
     review{"Independent review required?"}
-    reviewer["ACCEPTANCE_REVIEWER<br/>fresh read-only review"]
+    reviewer["FRESH_REVIEWER<br/>independent falsification"]
     receipt["One receipt or precise blocker"]
     done["Ledger exhausted"]
 
     user --> orchestrator
     orchestrator -->|"dispatches one ready unit"| lead
     lead --> strategy
-    strategy -->|"no useful split"| serial
-    strategy -->|"independent question"| specialist
-    strategy -->|"independent write slices"| worker
-    serial --> fanin
-    specialist --> fanin
-    worker --> fanin
+    strategy -->|"handoff costs more"| direct
+    strategy -->|"bounded useful work"| delegated
+    direct --> fanin
+    delegated --> fanin
     fanin --> review
     review -->|"yes"| reviewer
     review -->|"no"| receipt
@@ -266,16 +263,15 @@ flowchart TD
 ```
 
 The orchestrator does not implement or review units. Each fresh Lead chooses
-whether its unit benefits from parallel leaves, selects the model and reasoning
-effort for every direct child from that child's exact work, owns serial fan-in,
-and accepts the result. Only positively independent work runs concurrently;
-integration and acceptance stay with one owner. A leaf resolves obstacles at
-its own level first, then escalates to exactly one parent, so recoverable
-problems do not stop the whole ledger.
+the simplest reliable workflow, may write directly, delegates only when the
+boundary saves time, cost, or context, and owns integration and acceptance.
+Only genuinely independent work runs concurrently. Recoverable problems may
+change the route, reuse a useful agent context, start fresh, or repair the
+smallest invalid upstream decision without creating another semantic role.
 
-The detailed contracts live in the [Agent Harness](docs/agent-harness.md), its
-[Codex App selection tree](docs/agent-harness.md#codex-app-selection-tree), and
-[Implementation Worker Execution](docs/spec-first-workflow/phases/implementation-worker-execution.md).
+The detailed contracts live in [Implementation](docs/spec-first-workflow/phases/implementation.md),
+[Review](docs/spec-first-workflow/shared/review.md), and the selected [Agent
+Harness](docs/agent-harness.md) adapter.
 
 ## Agent Support
 

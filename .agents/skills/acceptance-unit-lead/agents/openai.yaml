@@ -1,5 +1,5 @@
 interface:
   display_name: "Acceptance-Unit Lead"
-  short_description: "Close one fixed implementation unit"
+  short_description: "Own one implementation unit end to end"
 policy:
   allow_implicit_invocation: false

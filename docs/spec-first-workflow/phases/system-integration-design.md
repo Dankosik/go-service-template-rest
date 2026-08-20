@@ -103,7 +103,7 @@ For each security or trust, performance or capacity, observability or operabilit
 
 ## Go Runtime Closure
 
-When a material flow enters or changes Go runtime code, apply [Go Change Surface](../../../AGENTS.md#go-change-surface) only to pressures that can change the system mechanism or required proof. Leave package/file placement to [Go Code / Ownership Design](go-code-ownership-design.md); changed-code conformance remains owned by [Implementation / Validation / Closeout](implementation-validation-closeout.md).
+When a material flow enters or changes Go runtime code, apply [Go Change Surface](../../../AGENTS.md#go-change-surface) only to pressures that can change the system mechanism or required proof. Leave package/file placement to [Go Code / Ownership Design](go-code-ownership-design.md); changed-code conformance remains owned by [Implementation](implementation.md).
 
 ## Architecture Rule
 

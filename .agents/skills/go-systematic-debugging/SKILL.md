@@ -24,7 +24,7 @@ when it changes the next experiment.
 Test the highest-information hypothesis and record its observation as rejected,
 supported, or blocked. Continue until one causal chain survives reproduction or
 current incident evidence and the smallest available falsifier. In
-`fix_authorized`, apply [Implementation](../../../docs/spec-first-workflow/phases/implementation-validation-closeout.md),
+`fix_authorized`, apply [Implementation](../../../docs/spec-first-workflow/phases/implementation.md),
 only when its structured or conditional boundary applies; direct repair follows
 the root [Direct Work](../../../AGENTS.md#direct-work) contract. Repair the
 earliest shared owner and replay the signal. Otherwise return the unproven state

@@ -12,8 +12,7 @@ non-obvious assumption that would change the result and its reopen condition.
 Self-review the bounded diff and observable path. Use [Validation
 Routing](../validation-routing.md) for the smallest matching check and apply the
 shared [Evidence Contract](shared/evidence-contract.md) to
-the intended claims. Load [Implementation / Validation /
-Closeout](phases/implementation-validation-closeout.md)
+the intended claims. Load [Implementation](phases/implementation.md)
 only for a non-obvious integration, deployment, review, or blocked-closeout
 boundary.
 

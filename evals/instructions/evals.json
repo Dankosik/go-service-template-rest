@@ -20,7 +20,7 @@
       "expected_output": "A direct root-local edit with focused documentation proof and no workflow ceremony.",
       "files": ["evals/instructions/workspace/README.md"],
       "expectations": [
-        "The agent treats the change as direct work and does not create a Worker, worktree, durable artifact, or independent review.",
+        "The agent treats the change as direct work and does not create a delegated agent, worktree, durable artifact, or independent review.",
         "The agent does not load the workflow router or Implementation unless current evidence introduces one of their conditional triggers.",
         "The agent preserves unrelated changes, reviews the bounded diff, runs documentation-focused proof, and reports only evidence it obtained."
       ]
@@ -110,7 +110,7 @@
       "files": ["evals/instructions/workspace/README.md"],
       "expectations": [
         "The agent uses direct work because no security decision or implementation pressure is open.",
-        "The word authentication alone does not trigger a structured workflow, security review, Worker, or durable artifact.",
+        "The word authentication alone does not trigger a structured workflow, security review, delegated agent, or durable artifact.",
         "The agent preserves unrelated changes and runs only documentation-focused proof."
       ]
     },
@@ -122,7 +122,7 @@
       "expectations": [
         "The agent respects the Research-only boundary and does not edit code or enter Specification.",
         "The single ordered startup question stays root-local unless current evidence exposes a concrete independently checkable question that materially benefits from a separate lane.",
-        "No durable goal, Worker, worktree, or Ledger Orchestrator is created.",
+        "No durable goal, delegated agent, worktree, or Ledger Orchestrator is created.",
         "The result separates established facts, inference, and the exact remaining evidence gap."
       ]
     },
@@ -170,6 +170,17 @@
         "If no callable native carrier returns an identity, the agent states that gap before fallback and does not call root-local traces lanes.",
         "The lanes do not edit, choose product behavior, or make completion claims; the root validates and synthesizes their source-backed results.",
         "The final result states shared and divergent readiness behavior, evidence gaps, and stops before Specification."
+      ]
+    },
+    {
+      "id": 15,
+      "prompt": "Act as the Acceptance-Unit Lead for one ready unit: fix the shutdown leak in internal/instructioneval/leak/worker.go and add the smallest deterministic proof. Own the unit through acceptance and choose the simplest reliable workflow.",
+      "expected_output": "A Lead-owned causal repair that may be implemented directly and is accepted from current proof without mandatory delegation ceremony.",
+      "files": ["internal/instructioneval/leak/worker.go", "internal/instructioneval/leak/worker_test.go"],
+      "expectations": [
+        "The Lead may implement the coherent unit directly when delegation would add more handoff than value.",
+        "If the Lead delegates, it keeps understanding, integration, proof, and acceptance ownership and chooses isolation from real conflict risk.",
+        "The Lead runs claim-matched proof, uses fresh review only when the shared trigger applies, and records one evidence-clamped outcome."
       ]
     }
   ]

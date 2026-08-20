@@ -1,13 +1,24 @@
 # Agent Harness
 
-Harness-neutral index for native execution controls. `AGENTS.md` owns
-authorization; workflow phases own when a control is used; adapters own its
-native mechanics.
+Harness-neutral index for native delegation and durable execution controls.
+`AGENTS.md` owns authority and workflow phases own why a control is used; the
+selected adapter owns how the current harness provides it.
 
-## Read When
+## Delegation Interface
 
-Read only when selecting or operating a durable task, Worker, read-only lane,
-Goal, model, or reasoning effort. Select exactly one adapter:
+Give a delegated agent only the semantic fields in the [Subagent Brief
+Template](subagent-brief-template.md). Select `shared` or `worktree` isolation
+only when the harness supports it and current collision or candidate-state risk
+justifies the choice.
+
+Carry model, reasoning effort, isolation, native identity, and task lifecycle in
+tool fields rather than prompt prose. The Acceptance-Unit Lead uses the
+adapter's quality-first configuration; child work uses the cheapest
+configuration likely to close its fixed brief. Raise capability for complex
+reasoning, a weak oracle, protected domains, or high consequence. Preserve an
+exact user-selected model.
+
+## Select One Adapter
 
 | Current harness | Adapter |
 | --- | --- |
@@ -15,20 +26,7 @@ Goal, model, or reasoning effort. Select exactly one adapter:
 | Claude Code CLI, desktop, web, or IDE | [Claude Code](agent-harness/claude-code.md) |
 | Qwen Code CLI or IDE | [Qwen Code](agent-harness/qwen-code.md) |
 
-Do not load another adapter, emulate its controls, shell out to its CLI, or mix
-control planes inside one outcome. A native task, subagent, model, or worktree
-is a carrier; role authority comes only from the Implementation [Role
-Tree](spec-first-workflow/phases/implementation-worker-execution.md#execution-role-tree).
-
-## Conditional Contracts
-
-Load only the contract activated by the next native action:
-
-| Trigger | Shared contract |
-| --- | --- |
-| An `IMPLEMENTATION_WORKER` is about to write. | [Write Carrier](agent-harness/shared/write-carrier.md) |
-| Research, challenge, or review needs a read-only lane. | [Read-Only Carrier](agent-harness/shared/read-only-carrier.md) |
-| A native lane needs model or effort selection. | [Model And Effort Selection](agent-harness/shared/model-selection.md) |
-| A durable Goal may be warranted. | [Goal Mechanics](agent-harness/shared/goals.md) |
-
-Then apply only the selected adapter's matching conditional control.
+Do not mix control planes inside one outcome. A task, subagent, worktree,
+model, or Goal is a carrier; it never expands authorization or transfers unit
+ownership. Use a durable Goal only when the work is genuinely long-running or
+resumable and the installed harness supports it.
