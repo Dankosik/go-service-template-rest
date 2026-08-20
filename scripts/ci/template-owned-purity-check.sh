@@ -165,7 +165,7 @@ if ((failed != 0)); then
 fi
 
 template_sync_behavior_check() (
-	local fixture template target target_dirty_local target_empty_claude target_invalid_codex target_missing_codex_source target_nonportable_codex target_secret_codex target_missing_owner target_without_local_skill target_with_directory target_with_link outside sync_script check_output failure_output
+	local fixture template target target_dirty_local target_empty_claude target_invalid_codex target_missing_codex_source target_nonportable_codex target_secret_codex target_missing_owner target_missing_secret_carrier target_without_local_skill target_with_directory target_with_link outside sync_script check_output failure_output
 	fixture=$(mktemp -d "${TMPDIR:-/tmp}/template-sync-check.XXXXXX")
 	trap 'rm -rf -- "${fixture}"' EXIT
 	template="${fixture}/template"
@@ -177,6 +177,7 @@ template_sync_behavior_check() (
 	target_nonportable_codex="${fixture}/target-nonportable-codex"
 	target_secret_codex="${fixture}/target-secret-codex"
 	target_missing_owner="${fixture}/target-missing-owner"
+	target_missing_secret_carrier="${fixture}/target-missing-secret-carrier"
 	target_without_local_skill="${fixture}/target-without-local-skill"
 	target_with_directory="${fixture}/target-with-directory"
 	target_with_link="${fixture}/target-with-link"
@@ -212,6 +213,7 @@ template_sync_behavior_check() (
 		'scripts/codex-agents-sync.sh' \
 		'scripts/lib/sync-cli.sh' \
 		'scripts/ci/claude-skills-check.sh' \
+		'scripts/ci/secret-scan.sh' \
 		>"${template}/template-owned.paths"
 	printf 'v1\n' >"${template}/owned/version"
 	printf '%s\n' '---' 'name: fixture-one' 'description: fixture' \
@@ -237,6 +239,7 @@ template_sync_behavior_check() (
 		>"${template}/.codex/config.toml"
 	cp .agents/codex-project.toml "${template}/.agents/codex-project.toml"
 	cp docs/validation/instructions.md "${template}/docs/validation/instructions.md"
+	cp docs/validation/security.md "${template}/docs/validation/security.md"
 	for repo_owned in \
 		docs/repo-architecture.md \
 		docs/project-structure-and-module-organization.md \
@@ -253,6 +256,7 @@ template_sync_behavior_check() (
 	# they source has to travel with them exactly as the manifest makes it.
 	cp scripts/lib/sync-cli.sh "${template}/scripts/lib/sync-cli.sh"
 	cp scripts/ci/claude-skills-check.sh "${template}/scripts/ci/claude-skills-check.sh"
+	cp scripts/ci/secret-scan.sh "${template}/scripts/ci/secret-scan.sh"
 	bash "${template}/scripts/agent-roles-sync.sh" --apply --repo "${template}" >/dev/null
 	bash "${template}/scripts/codex-agents-sync.sh" --apply --repo "${template}" >/dev/null
 	git -C "${template}" init -q
@@ -268,6 +272,7 @@ template_sync_behavior_check() (
 		.qwen/agents/fixture-agent.md \
 		.codex/config.toml \
 		docs/validation/instructions.md \
+		docs/validation/security.md \
 		docs/repo-architecture.md \
 		docs/project-structure-and-module-organization.md \
 		docs/build-test-and-development-commands.md \
@@ -278,6 +283,7 @@ template_sync_behavior_check() (
 		scripts/codex-agents-sync.sh \
 		scripts/lib/sync-cli.sh \
 		scripts/ci/claude-skills-check.sh \
+		scripts/ci/secret-scan.sh \
 		test/README.md
 	git -C "${template}" -c user.name=template-sync-check -c user.email=template-sync-check@example.invalid commit -qm v1
 	git clone -q "${template}" "${target}"
@@ -442,6 +448,20 @@ template_sync_behavior_check() (
 		echo "template-owned purity: derived validation depends on a repository-owned Make target" >&2
 		return 1
 	fi
+	grep -Fq 'bash scripts/ci/secret-scan.sh change origin/main' \
+		"${target}/docs/validation/security.md" || {
+		echo "template-owned purity: derived security validation does not use the repository-owned change scanner" >&2
+		return 1
+	}
+	grep -Fq 'bash scripts/ci/secret-scan.sh history' \
+		"${target}/docs/validation/security.md" || {
+		echo "template-owned purity: derived security validation does not expose explicit history proof" >&2
+		return 1
+	}
+	if grep -Fq 'make secret-scan' "${target}/docs/validation/security.md"; then
+		echo "template-owned purity: derived security validation depends on a repository-owned Make target" >&2
+		return 1
+	fi
 	grep -Fq 'template checkout only' "${target}/docs/validation/instructions.md" || {
 		echo "template-owned purity: derived validation does not bound the template-only purity gate" >&2
 		return 1
@@ -529,6 +549,12 @@ template_sync_behavior_check() (
 	git -C "${target_missing_owner}" rm -q docs/repo-architecture.md
 	git -C "${target_missing_owner}" commit -qm missing-repository-owner
 
+	git clone -q "${template}" "${target_missing_secret_carrier}"
+	git -C "${target_missing_secret_carrier}" config user.name template-sync-check
+	git -C "${target_missing_secret_carrier}" config user.email template-sync-check@example.invalid
+	git -C "${target_missing_secret_carrier}" rm -q scripts/ci/secret-scan.sh
+	git -C "${target_missing_secret_carrier}" commit -qm missing-secret-scan-carrier
+
 	git clone -q "${template}" "${target_invalid_codex}"
 	git -C "${target_invalid_codex}" config user.name template-sync-check
 	git -C "${target_invalid_codex}" config user.email template-sync-check@example.invalid
@@ -588,6 +614,18 @@ template_sync_behavior_check() (
 	}
 	grep -Fxq v3 "${target_missing_owner}/owned/version" || {
 		echo "template-owned purity: repository-owner refusal happened after manifest writes" >&2
+		return 1
+	}
+	if ! bash "${sync_script}" --apply --no-commit --from "${template}" --repo "${target_missing_secret_carrier}" >/dev/null; then
+		echo "template-owned purity: sync could not restore a missing secret-scan carrier" >&2
+		return 1
+	fi
+	cmp -s "${template}/scripts/ci/secret-scan.sh" "${target_missing_secret_carrier}/scripts/ci/secret-scan.sh" || {
+		echo "template-owned purity: sync restored the wrong secret-scan carrier" >&2
+		return 1
+	}
+	grep -Fxq v4 "${target_missing_secret_carrier}/owned/version" || {
+		echo "template-owned purity: secret-scan carrier upgrade omitted manifest writes" >&2
 		return 1
 	}
 	if failure_output=$(bash "${sync_script}" --apply --no-commit --from "${template}" --repo "${target_invalid_codex}" 2>&1); then

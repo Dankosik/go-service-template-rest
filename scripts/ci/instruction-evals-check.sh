@@ -38,6 +38,19 @@ jq -e '
   )
 ' "${EVAL_FILE}" >/dev/null
 
+grep -Fq 'Unrelated or pre-existing defects are observations, not blockers' \
+	"${ROOT_DIR}/docs/validation-routing.md" ||
+	fail "validation routing lost the bounded pre-existing-defect policy"
+
+jq -e '
+  any(.evals[];
+    .id == 22 and
+    (.prompt | contains("full-history")) and
+    any(.expectations[]; contains("do not block acceptance"))
+  )
+' "${EVAL_FILE}" >/dev/null ||
+	fail "change-scoped acceptance regression eval is missing"
+
 expected_roles=$'adjudicator-agent\nevidence-agent\nreviewer-agent\nspecialist-agent\nworker-agent'
 actual_roles=$(find "${ROOT_DIR}/.agents/roles" -maxdepth 1 -type f -name '*.toml' \
 	-exec basename {} .toml \; | sort)

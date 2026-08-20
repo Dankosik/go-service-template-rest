@@ -12,7 +12,17 @@ if [[ -z "${MODE}" ]]; then
 fi
 
 REPOSITORY="$(cd "${REPOSITORY}" && pwd)"
-GITLEAKS=(bash "${ROOT_DIR}/scripts/run-go-tool.sh" gitleaks)
+if [[ -x "${ROOT_DIR}/scripts/run-go-tool.sh" ]]; then
+	GITLEAKS=(bash "${ROOT_DIR}/scripts/run-go-tool.sh" gitleaks)
+elif GITLEAKS_BIN="$(go -C "${ROOT_DIR}" tool -n gitleaks 2>/dev/null)"; then
+	GITLEAKS=("${GITLEAKS_BIN}")
+elif [[ -f "${ROOT_DIR}/tools/go.mod" ]] &&
+	GITLEAKS_BIN="$(go -C "${ROOT_DIR}/tools" tool -n gitleaks 2>/dev/null)"; then
+	GITLEAKS=("${GITLEAKS_BIN}")
+else
+	echo "secret scan: gitleaks is not registered in this repository" >&2
+	exit 2
+fi
 GITLEAKS_ARGS=(--no-banner --redact --exit-code 1)
 if [[ "${SECRET_SCAN_VERBOSE:-}" == "1" ]]; then
 	GITLEAKS_ARGS+=(--verbose)
@@ -51,29 +61,46 @@ copy_current_path() {
 	cp -pP "${REPOSITORY}/${path}" "${snapshot}/${path}"
 }
 
+copy_index_path() {
+	local snapshot="$1"
+	local path="$2"
+	local parent
+
+	git -C "${REPOSITORY}" cat-file -e ":${path}" 2>/dev/null || return
+	parent="${path%/*}"
+	if [[ "${parent}" != "${path}" ]]; then
+		mkdir -p "${snapshot}/${parent}"
+	fi
+	git -C "${REPOSITORY}" show ":${path}" >"${snapshot}/${path}"
+}
+
 scan_worktree() {
-	local snapshot
+	local snapshot staged worktree
 	local status
 	local path
 
 	snapshot="$(mktemp -d -t secret-scan-worktree.XXXXXX)"
 	CLEANUP_DIR="${snapshot}"
-	if ! git -C "${REPOSITORY}" checkout-index --all --prefix="${snapshot}/"; then
-		rm -rf "${snapshot}"
-		CLEANUP_DIR=""
-		return 1
-	fi
-
+	staged="${snapshot}/staged"
+	worktree="${snapshot}/worktree"
+	mkdir "${staged}" "${worktree}"
 	while IFS= read -r -d '' path; do
-		copy_current_path "${snapshot}" "${path}"
+		copy_index_path "${staged}" "${path}"
+	done < <(git -C "${REPOSITORY}" diff --cached --name-only --diff-filter=ACMRTUXB -z)
+	while IFS= read -r -d '' path; do
+		copy_current_path "${worktree}" "${path}"
 	done < <(git -C "${REPOSITORY}" ls-files -z --modified --deleted)
 	while IFS= read -r -d '' path; do
-		copy_current_path "${snapshot}" "${path}"
+		copy_current_path "${worktree}" "${path}"
 	done < <(git -C "${REPOSITORY}" ls-files -z --others --exclude-standard)
 
 	status=0
 	(
-		cd "${snapshot}"
+		cd "${staged}"
+		"${GITLEAKS[@]}" dir "${GITLEAKS_ARGS[@]}" .
+	) || status=$?
+	(
+		cd "${worktree}"
 		"${GITLEAKS[@]}" dir "${GITLEAKS_ARGS[@]}" .
 	) || status=$?
 	rm -rf "${snapshot}"
@@ -163,10 +190,14 @@ self_test() {
 	printf 'title = "secret-scan self-test"\n\n[extend]\nuseDefault = true\n' >"${fixture}/.gitleaks.toml"
 	printf '[]\n' >"${fixture}/.gitleaks.baseline.json"
 	printf 'safe\n' >"${fixture}/README.md"
+	printf 'token=%s\n' "${fake_secret}" >"${fixture}/legacy.txt"
 	git -C "${fixture}" add .
 	git -C "${fixture}" -c user.name=secret-scan-check \
 		-c user.email=secret-scan-check@example.com commit -qm initial
+	bash "${BASH_SOURCE[0]}" change main "${fixture}" >/dev/null
 
+	if grep -Fq 's3-source-receipt' "${ROOT_DIR}/.gitleaks.toml" &&
+		grep -Fq 's3-compatible-object-storage' "${ROOT_DIR}/.gitleaks.toml"; then
 	mkdir -p "${fixture}/scripts/ci" "${fixture}/specs/s3-compatible-object-storage/design"
 	printf '%s\n' "${script_receipt}" >"${fixture}/scripts/ci/s3-source-receipt.sh"
 	expect_rule "S3 source receipt before its exception" "generic-api-key" \
@@ -217,6 +248,7 @@ self_test() {
 	expect_rule "S3 design receipt in an unapproved path" "generic-api-key" \
 		bash "${BASH_SOURCE[0]}" change main "${fixture}"
 	rm -f "${fixture}/unapproved.txt"
+	fi
 
 	printf 'token=%s\n' "${fake_secret}" >"${fixture}/leak.txt"
 	expect_rule "untracked worktree secret" "github-pat" \

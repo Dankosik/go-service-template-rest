@@ -35,6 +35,11 @@ These documents stay repository-owned and the sync never touches them:
 | `test/README.md` | This service's integration-test topology and commands |
 | `docs/first-production-feature.md` | Template-only onboarding; not shipped to services |
 
+`scripts/ci/secret-scan.sh` is a template-owned portable validation carrier. It
+resolves the repository's registered gitleaks tool without owning that
+repository's module or Makefile and exposes explicit `change` and `history`
+modes.
+
 Record a service-specific decision in one of those, or in a task-local artifact.
 Never in an owned path. `make template-owned-purity-check` validates safe
 manifest paths, existing non-empty owners, non-overlap, repository-owned
