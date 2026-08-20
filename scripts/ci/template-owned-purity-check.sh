@@ -209,7 +209,8 @@ template_sync_behavior_check() (
 		'scripts/ci/claude-skills-check.sh' \
 		>"${template}/template-owned.paths"
 	printf 'v1\n' >"${template}/owned/version"
-	printf '%s\n' '---' 'name: fixture-one' 'description: fixture' '---' \
+	printf '%s\n' '---' 'name: fixture-one' 'description: fixture' \
+		'metadata:' '  invocation: model' '  kind: method' '---' \
 		>"${template}/.agents/skills/fixture-one/SKILL.md"
 	printf '%s\n' \
 		"Apply \`docs/spec-first-workflow/shared/delegation.md\`." \
@@ -277,7 +278,8 @@ template_sync_behavior_check() (
 	git -C "${target}" config user.name template-sync-check
 	git -C "${target}" config user.email template-sync-check@example.invalid
 	mkdir -p "${target}/.agents/skills/service-local"
-	printf '%s\n' '---' 'name: service-local' 'description: local fixture' '---' \
+	printf '%s\n' '---' 'name: service-local' 'description: local fixture' \
+		'metadata:' '  invocation: model' '  kind: method' '---' \
 		>"${target}/.agents/skills/service-local/SKILL.md"
 	printf 'owned by fixture service\n' >"${target}/.agents/skills/service-local/.service-owned"
 	git -C "${target}" add .agents/skills/service-local
@@ -291,7 +293,8 @@ template_sync_behavior_check() (
 
 	printf 'v2\n' >"${template}/owned/version"
 	mkdir -p "${template}/.agents/skills/fixture-two"
-	printf '%s\n' '---' 'name: fixture-two' 'description: fixture' '---' \
+	printf '%s\n' '---' 'name: fixture-two' 'description: fixture' \
+		'metadata:' '  invocation: model' '  kind: method' '---' \
 		>"${template}/.agents/skills/fixture-two/SKILL.md"
 	git -C "${template}" add owned/version .agents/skills/fixture-two/SKILL.md
 	git -C "${template}" -c user.name=template-sync-check -c user.email=template-sync-check@example.invalid commit -qm v2
@@ -319,7 +322,8 @@ template_sync_behavior_check() (
 	printf 'dirty local work\n' >>"${target_dirty_local}/.agents/skills/service-local/SKILL.md"
 	git -C "${target_dirty_local}" add .agents/skills/service-local/SKILL.md
 	mkdir -p "${target_dirty_local}/.agents/skills/untracked-local"
-	printf '%s\n' '---' 'name: untracked-local' 'description: untracked fixture' '---' \
+	printf '%s\n' '---' 'name: untracked-local' 'description: untracked fixture' \
+		'metadata:' '  invocation: model' '  kind: method' '---' \
 		>"${target_dirty_local}/.agents/skills/untracked-local/SKILL.md"
 	printf 'owned by fixture service\n' >"${target_dirty_local}/.agents/skills/untracked-local/.service-owned"
 	bash "${sync_script}" --apply --from "${template}" --repo "${target_dirty_local}" >/dev/null

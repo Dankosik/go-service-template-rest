@@ -1,6 +1,9 @@
 ---
 name: digitalocean-benchmark-runner
 description: "DigitalOcean benchmark: Use for authorized Go/PostgreSQL/HTTP measurement on ephemeral Droplets. Own evidence/cleanup; Skip local or undecided work."
+metadata:
+  invocation: model
+  kind: method
 ---
 
 # DigitalOcean Benchmark Runner

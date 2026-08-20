@@ -12,8 +12,8 @@ Use installed Qwen task and agent controls as native authority.
   or review mode to a built-in or project agent.
 - Use `isolation: "worktree"` only when separate writable state prevents a real
   collision or preserves a useful candidate.
-- Independent review uses one fresh `task-acceptance-agent` and keeps the fixed
-  candidate unchanged.
+- Independent review uses one fresh `reviewer-agent`, names its Method, and
+  keeps the fixed candidate unchanged.
 
 ## Models And Dispatch
 

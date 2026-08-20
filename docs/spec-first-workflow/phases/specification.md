@@ -17,9 +17,9 @@ spec findings.
    scope, policy, invariants, compatibility, source-of-truth semantics, failure,
    replay/recovery/finality outcomes, proof expectations, and bounded risks only
    where they can change meaning.
-3. For each rule, test whether two reasonable implementations could satisfy it
-   yet differ observably. Load [Material Rule](../rubrics/material-rule.md) only
-   when that divergence is not already closed.
+3. Apply [Material Rule](../rubrics/material-rule.md) to every materially
+   affected rule. Its coverage and two-implementation test close observable
+   divergence before Design.
 4. Ground normative choices in the accepted outcome or named owner and factual
    claims in current evidence. Missing user/external policy blocks its owner;
    Design may choose only behaviorally equivalent realizations.
@@ -44,8 +44,8 @@ contracts instead of copying them. Persist `spec.md` only through
 
 ## Review
 
-When shared [Review](../shared/review.md) triggers, load [Specification
-Review](specification-review.md).
+Apply shared [Review](../shared/review.md) through [Specification
+Review](specification-review.md) before returning `ready`.
 
 ## Exit And Reopen
 

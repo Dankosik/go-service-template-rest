@@ -47,10 +47,10 @@ Handoff is routing evidence, not acceptance.
 
 ## Review And Recovery
 
-An independent implementation review uses a fresh `task-acceptance-agent`, or
-`critical-reviewer-agent` only for a justified highest-consequence boundary,
-and applies shared [Review](../spec-first-workflow/shared/review.md). A changed
-candidate receives a fresh review when the trigger still applies.
+An independent implementation review uses a fresh `reviewer-agent` with
+Implementation Review as its Method. Raise its model/effort fields for a
+justified highest-consequence boundary. A changed candidate receives a fresh
+review when the trigger still applies.
 
 Reconcile unknown create or handoff state from native task state, the canonical
 ledger, and Git candidate identity. Zero or multiple exact matches remain an

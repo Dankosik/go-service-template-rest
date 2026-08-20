@@ -6,8 +6,7 @@ behavior change before loading.
 
 Proof level, workload definition, capture, comparison, PGO lifecycle, and
 completion policy have no reference here: [Benchmarking](../../../../../docs/benchmarking.md)
-owns them and `AGENTS.md` already loads it for any performance claim. Database
-attribution belongs to
+owns them. Database attribution belongs to
 [`postgres-performance`](../../../../../docs/universal-disciplines/postgres-performance/SKILL.md).
 Adding a reference back requires a decision it would change.
 

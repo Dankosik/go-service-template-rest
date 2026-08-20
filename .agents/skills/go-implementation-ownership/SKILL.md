@@ -1,6 +1,9 @@
 ---
 name: go-implementation-ownership
 description: "Go ownership: Use for package/file/dependency or boundary decisions. Own code placement; Skip topology, policy, semantics, and readability."
+metadata:
+  invocation: model
+  kind: method
 ---
 
 # Go Implementation Ownership
@@ -10,7 +13,7 @@ means placement is not decided.
 
 `responsibilities -> owner -> dependency direction -> generated/manual authority -> proof placement -> cleanup`
 
-Load the [shared specialist contract](../specialist-contract.md). Reconstruct
+Load the [shared specialist contract](../../contracts/specialist-contract.md). Reconstruct
 changed responsibilities and executable paths from accepted behavior, callers,
 wiring, generated and manual sources, tests, and cleanup. Assign one source of
 truth, package/file owner, dependency direction, sequence owner, and proof

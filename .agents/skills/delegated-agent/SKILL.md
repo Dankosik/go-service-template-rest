@@ -1,6 +1,9 @@
 ---
 name: delegated-agent
 description: "Delegated execution: Use when a Lead assigns one bounded implementation, investigation, verification, or review outcome. Own the delegated result; Skip unit acceptance and scope expansion."
+metadata:
+  invocation: role
+  kind: carrier
 disable-model-invocation: true
 ---
 

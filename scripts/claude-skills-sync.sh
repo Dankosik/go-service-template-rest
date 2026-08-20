@@ -31,6 +31,37 @@ repo="${SYNC_REPO}"
 skills_root="${repo}/.agents/skills"
 links_root="${repo}/.claude/skills"
 
+metadata_value() {
+	local key="$1" file="$2"
+	sed -n "s/^  ${key}: //p" "${file}"
+}
+
+validate_metadata() {
+	local entry="$1" file invocation kind policy
+	file="${entry}/SKILL.md"
+	[[ -f "${file}" ]] || fail "${file#"${repo}/"} is missing"
+	invocation=$(metadata_value invocation "${file}")
+	kind=$(metadata_value kind "${file}")
+	case "${invocation}/${kind}" in
+	model/method) ;;
+	user/workflow | role/carrier)
+		grep -Fxq 'disable-model-invocation: true' "${file}" ||
+			fail "${file#"${repo}/"} must disable implicit Claude invocation"
+		policy="${entry}/agents/openai.yaml"
+		[[ -f "${policy}" ]] ||
+			fail "${policy#"${repo}/"} is required for ${invocation} invocation"
+		grep -Fxq '  allow_implicit_invocation: false' "${policy}" ||
+			fail "${policy#"${repo}/"} must disable implicit Codex invocation"
+		;;
+	*)
+		fail "${file#"${repo}/"} has unsupported invocation/kind ${invocation}/${kind}"
+		;;
+	esac
+	if [[ "${invocation}" == model ]] && grep -Fxq 'disable-model-invocation: true' "${file}"; then
+		fail "${file#"${repo}/"} disables its model invocation"
+	fi
+}
+
 preflight() {
 	local entry
 	local -a entries=()
@@ -68,6 +99,7 @@ skill_directories() {
 		[[ -d "${entry}" ]] || continue
 		[[ ! -L "${entry}" ]] ||
 			fail "${entry#"${repo}/"} is a symlink; canonical skill directories must be real"
+		validate_metadata "${entry}"
 		skill_dirs+=("${entry}")
 	done
 	shopt -u nullglob

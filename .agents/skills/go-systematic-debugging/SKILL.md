@@ -1,6 +1,9 @@
 ---
 name: go-systematic-debugging
 description: "Root cause: Use for bugs, flaky tests, builds, hangs, deadlocks, timeouts, or regressions. Own diagnosis and authorized repair; Skip features."
+metadata:
+  invocation: model
+  kind: method
 ---
 
 # Go Systematic Debugging
@@ -15,20 +18,18 @@ make it deterministic or record its failure rate. For a live incident, capture
 volatile evidence before reproduction can stale it.
 
 Map every service, client, job, and managed dependency on the failing path and
-mark which side of each hop the evidence covers. Use the System Neighbors table
-in [Repository Architecture](../../../docs/repo-architecture.md) for the far
-side's contract and runtime locator. One-sided evidence leaves an open
+mark which side of each hop the evidence covers. Use [Integration
+Boundaries](../../../docs/architecture/integration.md) for the far side's
+contract and runtime locator. One-sided evidence leaves an open
 hypothesis. Load one matching [debugging reference](references/index.md) only
 when it changes the next experiment.
 
 Test the highest-information hypothesis and record its observation as rejected,
 supported, or blocked. Continue until one causal chain survives reproduction or
 current incident evidence and the smallest available falsifier. In
-`fix_authorized`, apply [Implementation](../../../docs/spec-first-workflow/phases/implementation.md),
-only when its structured or conditional boundary applies; direct repair follows
-the root [Direct Work](../../../AGENTS.md#work-selection-and-loading) contract. Repair the
-earliest shared owner and replay the signal. Otherwise return the unproven state
-and next experiment.
+`fix_authorized`, repair the earliest shared owner within the route supplied by
+the caller and replay the signal. Otherwise return the unproven state and next
+experiment.
 
 Use [production diagnosis](../../../docs/universal-disciplines/production-diagnosis/SKILL.md)
 for a running multi-service symptom. Hand policy, semantics, deterministic

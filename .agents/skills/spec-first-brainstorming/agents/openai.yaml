@@ -1,0 +1,5 @@
+interface:
+  display_name: "Spec-First Brainstorming"
+  short_description: "Frame a chosen change before specification"
+policy:
+  allow_implicit_invocation: false

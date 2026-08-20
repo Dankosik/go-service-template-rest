@@ -2,18 +2,12 @@
 
 Apply after `AGENTS.md` has selected Direct Work.
 
-## Method
-
-Reconstruct the outcome from current repository authority. Inspect the current
-diff, affected callers, and observable path, then change the narrowest causal
-owner while preserving unrelated work and generated/manual authority.
-
-Self-review the bounded diff and observable path. Use [Validation
-Routing](../validation-routing.md) for the smallest matching check and apply the
-shared [Evidence Contract](shared/evidence-contract.md) to the intended claims.
-
-## Stop Rule
+Apply the matching implementation (`go-coder`), investigation, or verification
+method without durable workflow artifacts, delegation, or independent review
+unless a concrete trigger emerges. Use [Validation
+Routing](../validation-routing.md) and the [Evidence
+Contract](shared/evidence-contract.md) for claims.
 
 Return the changed outcome, proof actually run, and unverified remainder or
-next owner. Re-enter the workflow router when the work no longer fits one local
-owner.
+next owner. Re-enter the workflow router when the outcome is no longer local,
+reversible, single-owner, or safely provable.

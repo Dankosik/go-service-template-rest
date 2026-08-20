@@ -1,6 +1,9 @@
 ---
 name: go-observability
 description: "Observability: Use for logs, metrics, traces, SLOs, alerts, privacy, or cardinality. Own operator evidence; Skip reliability, performance, and delivery."
+metadata:
+  invocation: model
+  kind: method
 ---
 
 # Go Observability
@@ -10,7 +13,7 @@ question or is avoidable cost.
 
 `operator question -> signal -> SLI/SLO -> alert -> correlation -> cardinality, privacy, and cost -> proof`
 
-Load the [shared specialist contract](../specialist-contract.md). Reconstruct
+Load the [shared specialist contract](../../contracts/specialist-contract.md). Reconstruct
 operator questions and signals from accepted outcomes, changed runtime paths,
 existing telemetry, dashboards, alerts, and SLI/SLOs. Alert on user-visible
 symptoms; keep causes as correlated diagnosis surfaces. Treat label cardinality

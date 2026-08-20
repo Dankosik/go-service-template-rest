@@ -1,6 +1,6 @@
 # Reference Selector
 
-Select the reference that changes the finding, then cite local authority or state the bounded inference. Shared [Review Findings](../../../../../docs/spec-first-workflow/shared/review-findings.md) owns the finding's shape, so these references own only what makes a domain finding true.
+Select the reference that changes the finding, then cite local authority or state the bounded inference. Shared [Review](../../../../../docs/spec-first-workflow/shared/review.md) owns the finding shape, so these references own only what makes a domain finding true.
 
 | Symptom | Load | Distinction preserved |
 | --- | --- | --- |

@@ -28,8 +28,7 @@ mode="${SYNC_MODE}"
 repo="${SYNC_REPO}"
 
 sources="${repo}/.agents/roles"
-class_file="${repo}/.agents/role-classes/read-only-specialist.md"
-fallback_file="${repo}/.agents/role-classes/read-only-specialist-fallback.md"
+classes="${repo}/.agents/role-classes"
 
 for path in \
 	"${repo}/.agents" \
@@ -45,8 +44,6 @@ for path in \
 done
 [[ "${mode}" != "preflight" ]] || exit 0
 [[ -d "${sources}" ]] || fail ".agents/roles is missing"
-[[ -f "${class_file}" ]] || fail ".agents/role-classes/read-only-specialist.md is missing"
-[[ -f "${fallback_file}" ]] || fail ".agents/role-classes/read-only-specialist-fallback.md is missing"
 source_link=$(find "${sources}" "${repo}/.agents/role-classes" -type l -print -quit 2>/dev/null || true)
 [[ -z "${source_link}" ]] || fail "${source_link#"${repo}/"} is a symlink"
 
@@ -73,8 +70,6 @@ tmp=$(mktemp -d "${TMPDIR:-/tmp}/agent-roles.XXXXXX")
 trap 'rm -rf -- "${tmp}"' EXIT
 mkdir -p "${tmp}/codex" "${tmp}/claude" "${tmp}/qwen"
 
-common=$(<"${class_file}")
-fallback=$(<"${fallback_file}")
 role_names=()
 shopt -s nullglob
 for source_file in "${sources}"/*.toml; do
@@ -90,10 +85,39 @@ for source_file in "${sources}"/*.toml; do
 	[[ -n "${name}" && "${name}" == "$(basename "${source_file}" .toml)" ]] ||
 		fail "${source_file#"${repo}/"} name must match its filename"
 	[[ -n "${description}" ]] || fail "${source_file#"${repo}/"} has no description"
-	[[ "${class}" == "read-only-specialist" ]] || fail "${source_file#"${repo}/"} has unsupported class ${class}"
+	case "${class}" in
+	read-only-specialist)
+		class_file="${classes}/read-only-specialist.md"
+		fallback_file="${classes}/read-only-specialist-fallback.md"
+		sandbox_mode="read-only"
+		claude_tools="Read, Grep, Glob, Bash"
+		qwen_tools=$'  - read_file\n  - grep_search\n  - glob\n  - list_directory\n  - run_shell_command'
+		;;
+	mutable-worker)
+		class_file="${classes}/mutable-worker.md"
+		fallback_file="${classes}/mutable-worker-fallback.md"
+		sandbox_mode="workspace-write"
+		claude_tools="Read, Grep, Glob, Bash, Edit, Write"
+		qwen_tools=$'  - read_file\n  - grep_search\n  - glob\n  - list_directory\n  - run_shell_command\n  - write_file\n  - edit'
+		;;
+	*) fail "${source_file#"${repo}/"} has unsupported class ${class}" ;;
+	esac
+	[[ -f "${class_file}" ]] || fail "${class_file#"${repo}/"} is missing"
+	[[ -f "${fallback_file}" ]] || fail "${fallback_file#"${repo}/"} is missing"
+	common=$(<"${class_file}")
+	fallback=$(<"${fallback_file}")
 	[[ -n "${claude_model}" ]] || fail "${source_file#"${repo}/"} has no Claude model"
 	case "${output_schema}" in
 	lane-result-v1) schema_line="" ;;
+	decision-result-v1)
+		schema_line=$'Return \x60.agents/contracts/decision-result-v1.md\x60.'
+		;;
+	review-result-v1)
+		schema_line=$'Return \x60docs/spec-first-workflow/interfaces/review-result-v1.md\x60.'
+		;;
+	delegated-result-v1)
+		schema_line=$'Return \x60docs/spec-first-workflow/interfaces/delegated-result-v1.md\x60.'
+		;;
 	api-contract-finding-v1)
 		schema_line=$'Return \x60.agents/roles/interfaces/api-contract-finding-v1.md\x60.'
 		;;
@@ -104,7 +128,7 @@ for source_file in "${sources}"/*.toml; do
 	{
 		printf 'name = "%s"\n' "${name}"
 		printf 'description = "%s"\n' "${description}"
-		printf 'sandbox_mode = "read-only"\n'
+		printf 'sandbox_mode = "%s"\n' "${sandbox_mode}"
 		[[ -z "${nicknames}" ]] || printf 'nickname_candidates = %s\n' "${nicknames}"
 		printf '\ndeveloper_instructions = """\n%s\n' "${common}"
 		[[ -z "${schema_line}" ]] || printf '\n%s\n' "${schema_line}"
@@ -115,7 +139,7 @@ for source_file in "${sources}"/*.toml; do
 		printf '%s\n' '---'
 		printf 'name: %s\n' "${name}"
 		printf 'description: "%s"\n' "${description}"
-		printf 'tools: Read, Grep, Glob, Bash\n'
+		printf 'tools: %s\n' "${claude_tools}"
 		printf 'model: %s\n' "${claude_model}"
 		printf '%s\n\n' '---'
 		printf '%s\n\n%s\n' "${common}" "${fallback}"
@@ -128,7 +152,7 @@ for source_file in "${sources}"/*.toml; do
 		printf 'name: %s\n' "${name}"
 		printf 'description: "%s"\n' "${description}"
 		[[ -z "${qwen_model}" ]] || printf 'model: %s\n' "${qwen_model}"
-		printf '%s\n' 'tools:' '  - read_file' '  - grep_search' '  - glob' '  - list_directory' '  - run_shell_command' '---' ''
+		printf '%s\n' 'tools:' "${qwen_tools}" '---' ''
 		printf '%s\n\n%s\n' "${common}" "${fallback}"
 		[[ -z "${schema_line}" ]] || printf '\n%s\n' "${schema_line}"
 		printf '\n%s\n' "${body}"
@@ -152,7 +176,6 @@ check_extra() {
 	shopt -s nullglob
 	for file in "${target}"/*."${extension}"; do
 		role=$(basename "${file}" ".${extension}")
-		[[ "${harness}" == claude && "${role}" == worker-* ]] && continue
 		[[ -f "${tmp}/${harness}/${role}.${extension}" ]] ||
 			fail "${file#"${repo}/"} has no canonical role source"
 	done
@@ -168,7 +191,6 @@ apply)
 		shopt -s nullglob
 		for file in "${target}"/*."${extension}"; do
 			role=$(basename "${file}" ".${extension}")
-			[[ "${harness}" == claude && "${role}" == worker-* ]] && continue
 			[[ -f "${tmp}/${harness}/${role}.${extension}" ]] || rm -f -- "${file}"
 		done
 		for file in "${tmp}/${harness}"/*."${extension}"; do

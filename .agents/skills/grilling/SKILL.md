@@ -1,6 +1,10 @@
 ---
 name: grilling
 description: "Grill: Use only on an explicit ask to grill/stress-test a plan or decision. Own one question per turn with a recommendation; Skip ordinary answers."
+metadata:
+  invocation: user
+  kind: workflow
+disable-model-invocation: true
 ---
 
 # Grill

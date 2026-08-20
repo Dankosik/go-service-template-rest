@@ -4,9 +4,13 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 EVAL_FILE="${ROOT_DIR}/evals/instructions/evals.json"
 
-command -v jq >/dev/null 2>&1 || {
-	printf 'instruction evals: jq is required\n' >&2
+fail() {
+	printf 'instruction evals: %s\n' "$1" >&2
 	exit 1
+}
+
+command -v jq >/dev/null 2>&1 || {
+	fail "jq is required"
 }
 
 jq -e '
@@ -33,6 +37,44 @@ jq -e '
     all(.expectations[]; type == "string" and length > 0)
   )
 ' "${EVAL_FILE}" >/dev/null
+
+expected_roles=$'adjudicator-agent\nevidence-agent\nreviewer-agent\nspecialist-agent\nworker-agent'
+actual_roles=$(find "${ROOT_DIR}/.agents/roles" -maxdepth 1 -type f -name '*.toml' \
+	-exec basename {} .toml \; | sort)
+[[ "${actual_roles}" == "${expected_roles}" ]] ||
+	fail "canonical roles must be the five capability roles"
+
+for retired in \
+	phase-movement.md handoff.md acceptance-unit-closure.md review-findings.md; do
+	[[ ! -e "${ROOT_DIR}/docs/spec-first-workflow/shared/${retired}" ]] ||
+		fail "retired shared owner remains: ${retired}"
+done
+[[ -f "${ROOT_DIR}/docs/spec-first-workflow/shared/transition.md" ]] ||
+	fail "shared transition owner is missing"
+
+reverse_links=""
+for skill_file in "${ROOT_DIR}"/.agents/skills/*/SKILL.md; do
+	grep -Fxq '  invocation: model' "${skill_file}" || continue
+	if match=$(grep -RInE 'AGENTS\.md|docs/spec-first-workflow\.md|docs/spec-first-workflow/phases' \
+		"$(dirname "${skill_file}")" --include='*.md' 2>/dev/null); then
+		reverse_links+="${match}"$'\n'
+	fi
+done
+[[ -z "${reverse_links}" ]] ||
+	fail "model method/reference layer reselects bootstrap, router, or phase: ${reverse_links%%$'\n'*}"
+
+if phase_reverse=$(grep -RInE 'AGENTS\.md|spec-first-workflow\.md' \
+	"${ROOT_DIR}/docs/spec-first-workflow/phases" --include='*.md' 2>/dev/null); then
+	fail "phase layer reselects bootstrap or router: ${phase_reverse%%$'\n'*}"
+fi
+
+while IFS= read -r selector; do
+	[[ "$(sed -n '/[^[:space:]]/{p;q;}' "${selector}")" == '# Reference Selector' ]] ||
+		fail "reference index is not a selector: ${selector#"${ROOT_DIR}/"}"
+done < <(find "${ROOT_DIR}/.agents/skills" -path '*/references/index.md' -type f | sort)
+
+[[ -f "${ROOT_DIR}/docs/architecture/http.md" ]] ||
+	fail "HTTP architecture leaf is missing"
 
 fixture_patch="$(jq -r '.fixture.setup_patch' "${EVAL_FILE}")"
 fixture_patch_path="${ROOT_DIR}/${fixture_patch}"

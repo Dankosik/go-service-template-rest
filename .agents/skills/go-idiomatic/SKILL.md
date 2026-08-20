@@ -1,11 +1,14 @@
 ---
 name: go-idiomatic
 description: "Go semantics: Use for errors, context, nil/zero, method sets, aliasing, or resource lifetimes. Own correctness; Skip readability, structure, or ownership."
+metadata:
+  invocation: model
+  kind: method
 ---
 
 # Go Idiomatic
 
-Apply the [shared specialist contract](../specialist-contract.md).
+Apply the [shared specialist contract](../../contracts/specialist-contract.md).
 
 Inspect Go semantic obligations that configured linters cannot prove: error
 identity and wrapping, context cancellation, nil and zero behavior, receiver and

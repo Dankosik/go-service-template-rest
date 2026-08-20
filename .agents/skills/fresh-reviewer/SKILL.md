@@ -1,6 +1,9 @@
 ---
 name: fresh-reviewer
-description: "Fresh review: Use when independent context materially improves confidence in one fixed artifact or implementation unit. Own one verdict; Skip repair and acceptance."
+description: "Fresh review: Use when shared Review requires one fixed artifact or implementation unit. Own one verdict; Skip repair and acceptance."
+metadata:
+  invocation: role
+  kind: carrier
 disable-model-invocation: true
 ---
 

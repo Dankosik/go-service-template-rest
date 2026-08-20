@@ -1,11 +1,14 @@
 ---
 name: go-language-simplifier
 description: "Go readability: Use for opaque control flow, predicates, names, or helpers. Own behavior-preserving simplification; Skip semantics, ownership, or architecture."
+metadata:
+  invocation: model
+  kind: method
 ---
 
 # Go Language Simplifier
 
-Apply the [shared specialist contract](../specialist-contract.md).
+Apply the [shared specialist contract](../../contracts/specialist-contract.md).
 
 Reduce the next reader's time to intent without changing behavior. Prefer
 deletion over indirection, names over narration, and ordinary control flow over

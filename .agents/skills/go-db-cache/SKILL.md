@@ -1,6 +1,9 @@
 ---
 name: go-db-cache
 description: "DB/cache: Use for runtime SQL, transactions, freshness, invalidation, or fallback. Own access policy; Skip schema, distributed consistency, and API semantics."
+metadata:
+  invocation: model
+  kind: method
 ---
 
 # Go DB Cache
@@ -10,7 +13,7 @@ query shape, and any cache's authority, freshness, invalidation, and fallback.
 
 `caller intent -> transaction -> query -> cache contract -> fallback -> observability -> proof`
 
-Load the [shared specialist contract](../specialist-contract.md). Reconstruct
+Load the [shared specialist contract](../../contracts/specialist-contract.md). Reconstruct
 affected paths from callers, queries, transactions, cache/config surfaces,
 fallbacks, and DB resource lifetime. What must be atomically true together
 defines the transaction. A cache needs measured value, tenant-scoped keys, a

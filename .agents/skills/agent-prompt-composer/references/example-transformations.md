@@ -35,3 +35,14 @@ If bounded inspection cannot identify the failing owner or reproducer, stop with
 
 Path: `structured` -> Research, because the lifecycle cause and proof boundary remain open.
 ```
+
+## Example 4: Ready Native Orchestrator Entry
+
+```text
+$orchestrator
+Use specs/category-mapping-knn-first/tasks.md. Stop before live rollout.
+```
+
+The native skill and ledger own role behavior, workflow, accepted decisions,
+proof, and current state; the prompt carries only the locator and missing stop
+delta.

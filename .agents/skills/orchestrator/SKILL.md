@@ -1,6 +1,9 @@
 ---
 name: orchestrator
 description: "Codex ledger: Use only as LEDGER_ORCHESTRATOR for a ready persisted Implementation ledger. Own routing; Skip unit work and other harnesses."
+metadata:
+  invocation: role
+  kind: carrier
 disable-model-invocation: true
 ---
 

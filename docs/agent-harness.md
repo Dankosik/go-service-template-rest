@@ -18,6 +18,11 @@ configuration likely to close its fixed brief. Raise capability for complex
 reasoning, a weak oracle, protected domains, or high consequence. Preserve an
 exact user-selected model.
 
+Choose roles by capability: `evidence-agent`, `specialist-agent`,
+`worker-agent`, `reviewer-agent`, or `adjudicator-agent`. Put domain expertise or
+a phase review lens in the brief's `Method`; use model/effort fields for a
+critical quality tier instead of creating another semantic role.
+
 ## Select One Adapter
 
 | Current harness | Adapter |

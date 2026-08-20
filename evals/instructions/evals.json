@@ -44,6 +44,7 @@
       "expectations": [
         "The agent respects the named Specification boundary and does not choose packages, SQL, indexes, or implementation mechanism.",
         "The specification closes client-visible behavior, limits, errors, compatibility, and success criteria from current evidence.",
+        "A fresh Specification review independently falsifies the fixed result before macro-phase handoff.",
         "The final answer reports the phase result and next-phase handoff, then stops."
       ]
     },
@@ -55,6 +56,7 @@
       "expectations": [
         "The agent recognizes public contract, persistence, security, and deployment pressures and does not force the direct path.",
         "The agent loads only the current workflow owner and conditionally triggered references rather than the whole instruction tree.",
+        "Each ready structured macro-phase result receives its required fresh review before movement.",
         "The agent honors macro-phase boundaries and does not claim implementation or deployment before their required decisions and proof exist."
       ]
     },
@@ -117,13 +119,14 @@
     {
       "id": 10,
       "prompt": "Research only: determine whether the current startup path can return before all required dependencies are ready. Report evidence and stop before Specification.",
-      "expected_output": "A bounded read-only research result with no durable execution control.",
+      "expected_output": "A bounded read-only research result with required fresh review and no durable execution control.",
       "files": ["cmd/service/internal/bootstrap/run.go", "cmd/service/internal/bootstrap/startup_dependencies.go"],
       "expectations": [
         "The agent respects the Research-only boundary and does not edit code or enter Specification.",
         "The single ordered startup question stays root-local unless current evidence exposes a concrete independently checkable question that materially benefits from a separate lane.",
-        "No durable goal, delegated agent, worktree, or Ledger Orchestrator is created.",
-        "The result separates established facts, inference, and the exact remaining evidence gap."
+        "No durable goal, implementation lane, worktree, or Ledger Orchestrator is created.",
+        "The result separates established facts, inference, and the exact remaining evidence gap.",
+        "A fresh Research review independently falsifies the fixed standalone result before handoff."
       ]
     },
     {
@@ -134,6 +137,7 @@
       "expectations": [
         "The specification cites the authoritative OpenAPI and tests for unchanged behavior and records only the new error semantics, decisions, and proof gap.",
         "The agent does not duplicate the existing contract into spec.md or treat derived prose as a stronger authority.",
+        "The Specification owner applies mandatory material-rule coverage and receives a fresh independent verdict.",
         "The result remains behavior-only and stops before representation, package, or implementation choices."
       ]
     },
@@ -162,25 +166,82 @@
     {
       "id": 14,
       "prompt": "Research only: compare how the HTTP and gRPC health/readiness paths expose startup admission. Treat them as independent evidence questions, use separate read-only lanes when supported, synthesize the evidence, and stop before Specification.",
-      "expected_output": "Two bounded read-only evidence lanes followed by root synthesis, or an explicit carrier-capability gap and honest root-local fallback, then a Research-only stop.",
+      "expected_output": "Two bounded read-only evidence lanes followed by root synthesis and fresh review, or an explicit carrier-capability gap and honest root-local fallback, then a Research-only stop.",
       "files": ["internal/infra/http/health_probe_routes.go", "internal/infra/grpc/health_method.go", "cmd/service/internal/bootstrap/startup_readiness.go"],
       "expectations": [
         "The agent identifies distinct HTTP and gRPC evidence boundaries and dispatches one read-only lane for each when the native carrier and capacity are available, retaining each returned native identity.",
         "The agent never waits before a lane identity exists; an empty wait is treated as a carrier failure rather than progress.",
         "If no callable native carrier returns an identity, the agent states that gap before fallback and does not call root-local traces lanes.",
         "The lanes do not edit, choose product behavior, or make completion claims; the root validates and synthesizes their source-backed results.",
+        "A separate fresh reviewer falsifies the fixed root synthesis before the Research-only handoff.",
         "The final result states shared and divergent readiness behavior, evidence gaps, and stops before Specification."
       ]
     },
     {
       "id": 15,
       "prompt": "Act as the Acceptance-Unit Lead for one ready unit: fix the shutdown leak in internal/instructioneval/leak/worker.go and add the smallest deterministic proof. Own the unit through acceptance and choose the simplest reliable workflow.",
-      "expected_output": "A Lead-owned causal repair that may be implemented directly and is accepted from current proof without mandatory delegation ceremony.",
+      "expected_output": "A Lead-owned causal repair that may be implemented directly and is accepted after current proof and required fresh review without mandatory delegation ceremony.",
       "files": ["internal/instructioneval/leak/worker.go", "internal/instructioneval/leak/worker_test.go"],
       "expectations": [
         "The Lead may implement the coherent unit directly when delegation would add more handoff than value.",
         "If the Lead delegates, it keeps understanding, integration, proof, and acceptance ownership and chooses isolation from real conflict risk.",
-        "The Lead runs claim-matched proof, uses fresh review only when the shared trigger applies, and records one evidence-clamped outcome."
+        "The Lead runs claim-matched proof, binds one fixed candidate for required fresh acceptance review, and records one evidence-clamped outcome."
+      ]
+    },
+    {
+      "id": 16,
+      "prompt": "Write a paste-ready prompt to launch $orchestrator against the current repository's ready specs/example/tasks.md. Stop before live rollout.",
+      "expected_output": "A native-entry prompt containing only the invocation, necessary ledger locator, and new stop delta.",
+      "files": [".agents/skills/orchestrator/agents/openai.yaml", "docs/prompt-composition.md"],
+      "expectations": [
+        "The prompt uses $orchestrator and relies on its native default prompt instead of restating the role or workflow.",
+        "The prompt names specs/example/tasks.md only as the authoritative ledger locator and does not reproduce its tasks, decisions, proof, or status.",
+        "The prompt adds the live-rollout stop because it is the requested task-specific delta.",
+        "The prompt does not list AGENTS.md, phase owners, read order, validation commands, review mechanics, model settings, or generic quality instructions."
+      ]
+    },
+    {
+      "id": 17,
+      "prompt": "Grill this accepted rollout plan before implementation. Ask one highest-impact question at a time and wait for my answer.",
+      "expected_output": "Explicit invocation of the user-only grilling workflow without making it an autonomous ambiguity handler.",
+      "files": [".agents/skills/grilling/SKILL.md", ".agents/skills/grilling/agents/openai.yaml"],
+      "expectations": [
+        "The explicit request selects $grilling and follows its one-question-per-turn interaction contract.",
+        "The agent does not generalize grilling into an automatic workflow for ordinary ambiguity or continue sibling questions before the answer.",
+        "No phase, implementation, or approval action starts while the explicit workflow is active."
+      ]
+    },
+    {
+      "id": 18,
+      "prompt": "Delegate a bounded read-only security review of the OIDC trust boundary. Use the repository's current specialist method and return the decision gap; do not edit.",
+      "expected_output": "One generic specialist-agent brief with Method go-security, not a domain-specific security role.",
+      "files": [".agents/roles/specialist-agent.toml", ".agents/skills/go-security/SKILL.md"],
+      "expectations": [
+        "The role is specialist-agent and the brief names go-security as Method.",
+        "No security-agent or alternate workflow owner is selected; expertise stays in the skill.",
+        "The lane remains read-only, bounded to the named trust decision, and returns the selected decision interface."
+      ]
+    },
+    {
+      "id": 19,
+      "prompt": "Run a highest-consequence independent review of one fixed money-path candidate. Keep the candidate unchanged and use the strongest justified review quality.",
+      "expected_output": "The generic reviewer-agent with the matching review Method and elevated model/effort fields.",
+      "files": [".agents/roles/reviewer-agent.toml", "docs/agent-harness.md", "docs/spec-first-workflow/shared/review.md"],
+      "expectations": [
+        "The agent uses reviewer-agent for the fixed candidate and names the matching phase review adapter as Method.",
+        "Critical quality is carried by model/effort fields rather than a critical-reviewer role or prompt prose.",
+        "The reviewer stays read-only and returns one shared Review Result without repair, acceptance, or movement."
+      ]
+    },
+    {
+      "id": 20,
+      "prompt": "Review an HTTP-only middleware-order change against the current repository architecture. No gRPC, persistence, or async surface changes.",
+      "expected_output": "Architecture front door plus the HTTP leaf only, with no unrelated architecture branches loaded.",
+      "files": ["docs/repo-architecture.md", "docs/architecture/http.md", "internal/infra/http"],
+      "expectations": [
+        "The agent uses docs/repo-architecture.md as a selector and loads docs/architecture/http.md for the changed pressure.",
+        "It does not load grpc.md, postgres.md, architecture/async.md, or other unrelated leaves.",
+        "The result checks the live HTTP path and preserves the HTTP-only scope."
       ]
     }
   ]

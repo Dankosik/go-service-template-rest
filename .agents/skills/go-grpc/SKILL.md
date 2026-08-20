@@ -1,6 +1,9 @@
 ---
 name: go-grpc
 description: "gRPC transport: Use for grpc-go, interceptors/status, streaming, credentials, Protobuf/Buf, limits, or shutdown. Own RPC behavior; Skip REST, policy, and domain meaning."
+metadata:
+  invocation: model
+  kind: method
 ---
 
 # Go gRPC
@@ -10,7 +13,7 @@ and metadata, and that mapping is policy.
 
 `proto -> registration/interceptors -> deadlines/limits -> status -> stream lifecycle -> health/shutdown -> proof`
 
-Load the [shared specialist contract](../specialist-contract.md). Reconstruct the
+Load the [shared specialist contract](../../contracts/specialist-contract.md). Reconstruct the
 affected slice from canonical `.proto` and generated API through registration,
 interceptors, handler, client-visible status and metadata, channel behavior,
 health, shutdown, telemetry, and proof. Schema evolution uses Buf gates rather

@@ -52,6 +52,7 @@ load only the owner it selects.
 | Accepted work first enters another checkout | [Repository Boundaries](docs/spec-first-workflow/shared/repository-boundaries.md) |
 | Repository boundary, generated-source ownership, contract capability, integration, persistence/durable flow, durable schema, or executable surface changes | [Repository Architecture](docs/repo-architecture.md) |
 | Proof must be selected | [Validation Routing](docs/validation-routing.md) |
+| A prompt for another agent, session, phase, or native entry skill must be written | [Prompt Composition](docs/prompt-composition.md) |
 | Instructions, tools, roles, or skills change | [Prompt Maintenance](docs/prompt-maintenance.md); also [Skill Authoring](docs/skill-authoring.md) for skills |
 | A durable control, carrier, model, or effort must be chosen or operated | [Agent Harness](docs/agent-harness.md) |
 

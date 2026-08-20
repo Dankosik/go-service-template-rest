@@ -9,61 +9,19 @@ ANTHROPIC_BASE_URL = "https://api.gonkagate.com"
 
 # template-owned-codex-agents:start
 # Registry compatibility: agents.<name>.config_file entries are required by Codex.
-[agents.api-agent]
-config_file = "agents/api-agent.toml"
-
-[agents.architecture-agent]
-config_file = "agents/architecture-agent.toml"
-
-[agents.challenger-agent]
-config_file = "agents/challenger-agent.toml"
-
-[agents.concurrency-agent]
-config_file = "agents/concurrency-agent.toml"
-
-[agents.critical-adjudicator-agent]
-config_file = "agents/critical-adjudicator-agent.toml"
-
-[agents.critical-reviewer-agent]
-config_file = "agents/critical-reviewer-agent.toml"
-
-[agents.data-agent]
-config_file = "agents/data-agent.toml"
-
-[agents.delivery-agent]
-config_file = "agents/delivery-agent.toml"
-
-[agents.design-integrator-agent]
-config_file = "agents/design-integrator-agent.toml"
-
-[agents.distributed-agent]
-config_file = "agents/distributed-agent.toml"
-
-[agents.domain-agent]
-config_file = "agents/domain-agent.toml"
+[agents.adjudicator-agent]
+config_file = "agents/adjudicator-agent.toml"
 
 [agents.evidence-agent]
 config_file = "agents/evidence-agent.toml"
 
-[agents.observability-agent]
-config_file = "agents/observability-agent.toml"
+[agents.reviewer-agent]
+config_file = "agents/reviewer-agent.toml"
 
-[agents.performance-agent]
-config_file = "agents/performance-agent.toml"
+[agents.specialist-agent]
+config_file = "agents/specialist-agent.toml"
 
-[agents.qa-agent]
-config_file = "agents/qa-agent.toml"
-
-[agents.quality-agent]
-config_file = "agents/quality-agent.toml"
-
-[agents.reliability-agent]
-config_file = "agents/reliability-agent.toml"
-
-[agents.security-agent]
-config_file = "agents/security-agent.toml"
-
-[agents.task-acceptance-agent]
-config_file = "agents/task-acceptance-agent.toml"
+[agents.worker-agent]
+config_file = "agents/worker-agent.toml"
 
 # template-owned-codex-agents:end

@@ -1,6 +1,10 @@
 ---
 name: spec-document-designer
 description: "Spec authoring: Use for delegated spec.md synthesis or repair from accepted inputs. Own falsifiable behavior; Skip phase and review ownership."
+metadata:
+  invocation: user
+  kind: workflow
+disable-model-invocation: true
 ---
 
 # Spec Document Designer

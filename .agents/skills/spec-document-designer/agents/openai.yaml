@@ -1,0 +1,5 @@
+interface:
+  display_name: "Spec Document Designer"
+  short_description: "Author a specification from accepted inputs"
+policy:
+  allow_implicit_invocation: false
