@@ -54,18 +54,15 @@ Load a conditional owner immediately before the first action in its row.
 
 Re-run routing only when phase movement or current evidence activates a new row.
 
-### Review Routing
-
 [Review Independence](spec-first-workflow/shared/review-independence.md#review-router)
-owns the phase-specific review map, trigger, and return path.
+owns the phase-specific review map, trigger, and return path. [Planning
+obligation reconciliation](spec-first-workflow/phases/planning.md#obligation-reconciliation)
+owns implementation input closure.
 
 ### Implementation-Input Closure
 
-[Planning](spec-first-workflow/phases/planning.md#obligation-reconciliation)
-owns closing inputs for the next acceptance unit or wave. System design and
-research record external inputs only through that owner; Implementation reopens
-the smallest owner when a required input is not canonical, mechanically
-derivable without semantic choice, or available from its named owner.
+Implementation reopens the smallest owner when a required input is unavailable
+from its named authority.
 
 ## Phase Movement
 

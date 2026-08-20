@@ -42,7 +42,8 @@ limit.
 
 Reserve a slice's writes, resources, and proof gates at dispatch. Before its
 first write, record the actual native identity and checkout and apply the Agent
-Harness [Write-Carrier Gate](../../agent-harness.md#write-carrier-gate). A
+Harness [Write-Carrier
+Gate](../../agent-harness/shared/write-carrier.md#write-carrier-gate). A
 carrier mismatch invalidates the lane; post-write bytes are diagnostic only.
 
 Treat a Worker checkout as mutable until `DONE`. Observe completion and stable

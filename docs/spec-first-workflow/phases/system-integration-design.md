@@ -204,7 +204,7 @@ unchanged; after failure, repeat only invalidated or still-uncovered gates.
 After the design drivers and current evidence identify affected domains and
 decision slots, apply the shared [Delegation
 Decision](../shared/subagents-and-handoff.md#delegation-decision) and the
-matching methods under [Routing](../../../AGENTS.md#routing). Route eligible
+matching methods under [Routing And Loading](../../../AGENTS.md#routing-and-loading). Route eligible
 architecture, contract, data, security, reliability, delivery, observability,
 performance, and Go-ownership questions to their specialist read-only lanes.
 Keep dependent decisions sequential in the root, synthesize every material lane

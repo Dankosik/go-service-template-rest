@@ -35,7 +35,8 @@ When that trigger applies, load [Parallel Slice
 Execution](implementation-lead-parallel.md) before dispatch. Otherwise dispatch
 one serial Worker from the compact brief, record its native identity and
 checkout, and apply the Agent Harness [Write-Carrier
-Gate](../../agent-harness.md#write-carrier-gate) before its first write. On
+Gate](../../agent-harness/shared/write-carrier.md#write-carrier-gate) before its
+first write. On
 `DONE`, validate scope, base, inputs, proof provenance, and mergeability before
 integrating the returned delta.
 

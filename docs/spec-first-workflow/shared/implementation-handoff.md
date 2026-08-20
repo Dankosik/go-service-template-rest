@@ -49,7 +49,7 @@ Set one thread-local Goal for this stage and role and execute the Role Tree. A m
 
 Local ends only at its canonical `Accepted:` or `Blocked:` transition. Worktree
 may return `HANDOFF_READY`; the same Lead continues in Local through the [Codex
-fan-in](../../agent-harness/codex.md#worktree-fan-in). The Ledger Orchestrator
+fan-in](../../agent-harness/codex/codex-orchestration.md#worktree-fan-in). The Ledger Orchestrator
 rereads the ledger transition and never routes internal lane results.
 
 ## Worktree To Local Continuation
@@ -106,7 +106,7 @@ Reopen <one macro phase> only to close <condition> for <blocked unit>.
 Load the router, named phase, and triggered owners. Close that phase and its review loop without an Implementation Goal, return its result and next owner to the Ledger Orchestrator, and stop before another phase or Implementation.
 ```
 
-After closure, the [Codex adapter](../../agent-harness/codex.md#upstream-reopen-and-implementation-return)
+After closure, [Codex Recovery](../../agent-harness/codex/codex-recovery.md#upstream-reopen-return)
 selects native resume or its narrowly allowed replacement. For resume, send the
 same Lead header followed by:
 
