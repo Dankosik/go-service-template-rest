@@ -5,7 +5,7 @@ Load for required status checks, branch protection or ruleset contexts, merge qu
 
 ## Decide
 - Require exactly one context from `ci.yml`: `ci-required`. It runs `if: ${{ always() }}`, `needs` every other job, and asserts through `jq` that each job either succeeded or was legitimately skipped for the current change scope. Renaming or adding a job then cannot silently drop a gate.
-- Job execution is routed by `repo-integrity` outputs `expensive_required` and `template_required`, not by trigger path filters — `ci.yml` deliberately has none. A docs-only change legitimately skips most jobs, and `ci-required` still evaluates them. Keep new scope rules in those outputs.
+- Job execution is routed by `repo-integrity` outputs, not by trigger path filters — `ci.yml` deliberately has none. `expensive_required` skips runtime-heavy jobs for docs-only changes. Template jobs are split: `template_init_profiles` (JSON matrix for `template-init`), `template_postgres_required`, and `template_s3_envelope_required`. `template_required` is the OR of those and remains the coarse skip. Keep new scope rules in those outputs. `ci-required` still evaluates skipped jobs.
 - A job skipped by its own `if:` reports success and satisfies a required context; a *workflow* skipped by a path or branch filter never reports at all and leaves the context pending. This asymmetry is why scope lives in job conditions here.
 - `openapi-breaking` runs its comparison only when the base commit already contains `api/openapi/service.yaml`; otherwise the step is skipped and the job is green. On a branch that introduces the spec, green means "not compared," not "not breaking."
 - `migration-validate` is a step inside `container-security`, not a job, and cannot be named as a status context.

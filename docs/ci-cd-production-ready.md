@@ -237,11 +237,13 @@ through a ruleset in one repository.
   and container security.
 - `make pr-check BASE_REF=origin/main` — full proof plus template,
   downloaded-module, and base-relative OpenAPI compatibility.
-- CI's parallel `template-minimal-feature` and `template-postgres-feature` jobs
-  initialize temporary generated services independently. The PostgreSQL job
-  generates its first POST contract and sqlc query, and proves valid,
-  rejected, commit, and rollback paths against the pinned PostgreSQL image.
-  The fixture is not shipped in the base runtime.
+- CI's `template-init` matrix, `template-postgres-feature`, and
+  `template-s3-envelope` jobs initialize temporary generated services
+  independently and run in parallel. The PostgreSQL job generates its first POST
+  contract and sqlc query, and proves valid, rejected, commit, and rollback
+  paths against the pinned PostgreSQL image. The fixture is not shipped in the
+  base runtime. Change-scope selects the matrix cells and sibling jobs; a
+  harness-only change runs only the `minimal` cell.
 - Nightly does not rerun deterministic merge gates on the same commit. It owns
   repeated flake/fuzz execution, fresh container integration, benchmark
   lifecycle verification, current vulnerability analysis, and a fresh runtime
@@ -249,10 +251,9 @@ through a ruleset in one repository.
 
 <!-- profile:grpc:start -->
 For the gRPC profile, `make pr-check BASE_REF=origin/main` uses the same base
-for protobuf compatibility when `api/proto` exists. The
-`template-minimal-feature` CI job also initializes the native gRPC profile and
-proves retained adapters, generation, all-cardinality compilation, and
-idempotence.
+for protobuf compatibility when `api/proto` exists. The `template-init` matrix
+cell for `grpc` also initializes the native gRPC profile and proves retained
+adapters, generation, all-cardinality compilation, and idempotence.
 <!-- profile:grpc:end -->
 
 Use the smallest command that proves the current change while iterating. Before
