@@ -114,6 +114,8 @@ done
 # that the harness cannot discover is indistinguishable from a missing rule.
 grep -Fxq '@AGENTS.md' CLAUDE.md ||
 	fail "CLAUDE.md must import AGENTS.md with the native @AGENTS.md directive"
+grep -Fxq '@AGENTS.md' Grok.md ||
+	fail "Grok.md must import AGENTS.md with the native @AGENTS.md directive"
 if grep -Fxq '@AGENTS.md' QWEN.md; then
 	fail "QWEN.md must not re-import AGENTS.md; Qwen loads it natively"
 fi
@@ -154,10 +156,19 @@ for role_file in .codex/agents/*.toml; do
 		fail "${role_file} has no Claude role mirror"
 	[[ -f ".qwen/agents/${role}.md" ]] ||
 		fail "${role_file} has no Qwen role mirror"
+	[[ -f ".grok/agents/${role}.md" ]] ||
+		fail "${role_file} has no Grok role mirror"
+	[[ -f ".grok/roles/${role}.toml" ]] ||
+		fail "${role_file} has no Grok role default"
 done
-for role_file in .claude/agents/*.md .qwen/agents/*.md; do
+for extra in orchestrator acceptance-unit-lead; do
+	[[ -f ".grok/agents/${extra}.md" ]] ||
+		fail ".grok/agents/${extra}.md is required as a Grok primary-session agent"
+done
+for role_file in .claude/agents/*.md .qwen/agents/*.md .grok/agents/*.md; do
 	role=$(basename "${role_file}" .md)
 	[[ "${role}" == worker-* ]] && continue
+	[[ "${role}" == orchestrator || "${role}" == acceptance-unit-lead ]] && continue
 	[[ -f ".codex/agents/${role}.toml" ]] ||
 		fail "${role_file} has no Codex role mirror"
 done
@@ -201,6 +212,8 @@ template_sync_behavior_check() (
 		"${template}/.agents/skills/fixture-one" \
 		"${template}/.claude/agents" \
 		"${template}/.codex/agents" \
+		"${template}/.grok/agents" \
+		"${template}/.grok/roles" \
 		"${template}/.qwen/agents" \
 		"${template}/docs" \
 		"${template}/docs/validation" \
@@ -216,6 +229,8 @@ template_sync_behavior_check() (
 		'.agents/skills/' \
 		'.claude/agents/' \
 		'.codex/agents/' \
+		'.grok/agents/' \
+		'.grok/roles/' \
 		'.qwen/agents/' \
 		'docs/validation/' \
 		'scripts/agent-roles-sync.sh' \
@@ -242,6 +257,8 @@ template_sync_behavior_check() (
 		'description = "fixture"' \
 		'class = "read-only-specialist"' \
 		'claude_model = "sonnet"' \
+		'grok_model = "inherit"' \
+		'grok_effort = "low"' \
 		'output_schema = "lane-result-v1"' \
 		'' \
 		'instructions = """' \
@@ -288,6 +305,8 @@ template_sync_behavior_check() (
 		.claude/skills/fixture-one \
 		.claude/agents/fixture-agent.md \
 		.codex/agents/fixture-agent.toml \
+		.grok/agents/fixture-agent.md \
+		.grok/roles/fixture-agent.toml \
 		.qwen/agents/fixture-agent.md \
 		.qwen/skills/fixture-one \
 		.codex/config.toml \

@@ -305,6 +305,23 @@
         "The result names the missing native team capability and preserves the ready ledger unchanged.",
         "Ordinary single-unit work remains available separately but is not presented as successful orchestrator execution."
       ]
+    },
+    {
+      "id": 26,
+      "prompt": "Continue as Ledger Orchestrator. The current implementation unit has a Blocked result and names Technical Design as its executable next owner. User intent and authority are unchanged, the reopen is agent-owned, and no other unit is ready.",
+      "expected_output": "The orchestrator treats the technical reopen as owner-held recovery, routes it in fresh context, waits for its canonical transition, repairs Planning state when needed, and resumes the same unit without user confirmation.",
+      "files": [
+        ".agents/skills/orchestrator/SKILL.md",
+        "docs/agent-harness/codex.md",
+        "docs/spec-first-workflow/phases/planning/ledger-contract.md",
+        "docs/spec-first-workflow/shared/transition.md"
+      ],
+      "expectations": [
+        "A Blocked unit result does not make the ledger blocked while an authorized agent-owned recovery remains executable.",
+        "The orchestrator does not ask the user to confirm technical routing, delegation, or a phase reopen.",
+        "It opens the named phase owner in fresh context, retains and waits on the native identity, re-reads the durable transition, and resumes the same unit.",
+        "A conflicting blocked ledger status reopens Planning; user input is reserved for an actually unresolved user-owned decision, external input, or authority boundary."
+      ]
     }
   ]
 }

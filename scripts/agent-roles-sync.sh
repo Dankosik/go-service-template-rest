@@ -10,7 +10,7 @@ usage:
   agent-roles-sync.sh --check     [--repo <repository>]
 
   --preflight  validate source and generated path shapes
-  --apply      regenerate Codex, Claude, and Qwen role carriers
+  --apply      regenerate Codex, Claude, Qwen, and Grok role carriers
   --check      verify byte-stable generated carriers without changing files
   --repo       repository root (default: current working directory)
 EOF
@@ -39,7 +39,10 @@ for path in \
 	"${repo}/.claude" \
 	"${repo}/.claude/agents" \
 	"${repo}/.qwen" \
-	"${repo}/.qwen/agents"; do
+	"${repo}/.qwen/agents" \
+	"${repo}/.grok" \
+	"${repo}/.grok/agents" \
+	"${repo}/.grok/roles"; do
 	[[ ! -L "${path}" ]] || fail "${path#"${repo}/"} is a symlink"
 done
 [[ "${mode}" != "preflight" ]] || exit 0
@@ -66,9 +69,16 @@ read_body() {
 	' "$1"
 }
 
+is_grok_session_agent() {
+	case "$1" in
+	orchestrator.md | acceptance-unit-lead.md) return 0 ;;
+	*) return 1 ;;
+	esac
+}
+
 tmp=$(mktemp -d "${TMPDIR:-/tmp}/agent-roles.XXXXXX")
 trap 'rm -rf -- "${tmp}"' EXIT
-mkdir -p "${tmp}/codex" "${tmp}/claude" "${tmp}/qwen"
+mkdir -p "${tmp}/codex" "${tmp}/claude" "${tmp}/qwen" "${tmp}/grok" "${tmp}/grok-roles"
 
 role_names=()
 shopt -s nullglob
@@ -78,6 +88,8 @@ for source_file in "${sources}"/*.toml; do
 	class=$(read_string class "${source_file}")
 	claude_model=$(read_string claude_model "${source_file}")
 	qwen_model=$(read_string qwen_model "${source_file}")
+	grok_model=$(read_string grok_model "${source_file}")
+	grok_effort=$(read_string grok_effort "${source_file}")
 	output_schema=$(read_string output_schema "${source_file}")
 	nicknames=$(read_raw nickname_candidates "${source_file}")
 	body=$(read_body "${source_file}") || fail "${source_file#"${repo}/"} has no closed instructions block"
@@ -92,6 +104,8 @@ for source_file in "${sources}"/*.toml; do
 		sandbox_mode="read-only"
 		claude_tools="Read, Grep, Glob, Bash"
 		qwen_tools=$'  - read_file\n  - grep_search\n  - glob\n  - list_directory\n  - run_shell_command'
+		grok_permission_mode="bypassPermissions"
+		grok_capability="read-only"
 		;;
 	mutable-worker)
 		class_file="${classes}/mutable-worker.md"
@@ -99,6 +113,8 @@ for source_file in "${sources}"/*.toml; do
 		sandbox_mode="workspace-write"
 		claude_tools="Read, Grep, Glob, Bash, Edit, Write"
 		qwen_tools=$'  - read_file\n  - grep_search\n  - glob\n  - list_directory\n  - run_shell_command\n  - write_file\n  - edit'
+		grok_permission_mode="bypassPermissions"
+		grok_capability="all"
 		;;
 	*) fail "${source_file#"${repo}/"} has unsupported class ${class}" ;;
 	esac
@@ -107,6 +123,11 @@ for source_file in "${sources}"/*.toml; do
 	common=$(<"${class_file}")
 	fallback=$(<"${fallback_file}")
 	[[ -n "${claude_model}" ]] || fail "${source_file#"${repo}/"} has no Claude model"
+	[[ -n "${grok_model}" ]] || fail "${source_file#"${repo}/"} has no Grok model"
+	case "${grok_effort}" in
+	inherit | low | medium | high | xhigh) ;;
+	*) fail "${source_file#"${repo}/"} has unsupported grok_effort ${grok_effort:-<empty>}" ;;
+	esac
 	case "${output_schema}" in
 	lane-result-v1) schema_line="" ;;
 	decision-result-v1)
@@ -154,6 +175,29 @@ for source_file in "${sources}"/*.toml; do
 		[[ -z "${schema_line}" ]] || printf '\n%s\n' "${schema_line}"
 		printf '\n%s\n' "${body}"
 	} >"${tmp}/qwen/${name}.md"
+
+	{
+		printf '%s\n' '---'
+		printf 'name: %s\n' "${name}"
+		printf 'description: "%s"\n' "${description}"
+		[[ "${grok_model}" == inherit ]] || printf 'model: %s\n' "${grok_model}"
+		printf 'permission_mode: %s\n' "${grok_permission_mode}"
+		printf 'agents_md: true\n'
+		printf '%s\n\n' '---'
+		printf '%s\n' "${common}"
+		if [[ "${class}" == mutable-worker ]]; then
+			printf '\n%s\n' "${fallback}"
+		fi
+		[[ -z "${schema_line}" ]] || printf '\n%s\n' "${schema_line}"
+		printf '\n%s\n' "${body}"
+	} >"${tmp}/grok/${name}.md"
+
+	{
+		printf 'description = "%s"\n' "${description}"
+		printf 'default_capability_mode = "%s"\n' "${grok_capability}"
+		[[ "${grok_model}" == inherit ]] || printf 'model = "%s"\n' "${grok_model}"
+		[[ "${grok_effort}" == inherit ]] || printf 'reasoning_effort = "%s"\n' "${grok_effort}"
+	} >"${tmp}/grok-roles/${name}.toml"
 done
 shopt -u nullglob
 ((${#role_names[@]} > 0)) || fail ".agents/roles contains no canonical role files"
@@ -163,6 +207,8 @@ generated_path() {
 	codex) printf '%s/.codex/agents' "${repo}" ;;
 	claude) printf '%s/.claude/agents' "${repo}" ;;
 	qwen) printf '%s/.qwen/agents' "${repo}" ;;
+	grok) printf '%s/.grok/agents' "${repo}" ;;
+	grok-roles) printf '%s/.grok/roles' "${repo}" ;;
 	esac
 }
 
@@ -173,45 +219,63 @@ check_extra() {
 	shopt -s nullglob
 	for file in "${target}"/*."${extension}"; do
 		role=$(basename "${file}" ".${extension}")
+		if [[ "${harness}" == grok ]] && is_grok_session_agent "${role}.${extension}"; then
+			continue
+		fi
 		[[ -f "${tmp}/${harness}/${role}.${extension}" ]] ||
 			fail "${file#"${repo}/"} has no canonical role source"
 	done
 	shopt -u nullglob
 }
 
+sync_generated() {
+	local harness="$1" extension="$2" target file role
+	target=$(generated_path "${harness}")
+	mkdir -p "${target}"
+	shopt -s nullglob
+	for file in "${target}"/*."${extension}"; do
+		role=$(basename "${file}" ".${extension}")
+		if [[ "${harness}" == grok ]] && is_grok_session_agent "${role}.${extension}"; then
+			continue
+		fi
+		[[ -f "${tmp}/${harness}/${role}.${extension}" ]] || rm -f -- "${file}"
+	done
+	for file in "${tmp}/${harness}"/*."${extension}"; do
+		cp "${file}" "${target}/$(basename "${file}")"
+	done
+	shopt -u nullglob
+}
+
+check_generated() {
+	local harness="$1" extension="$2" target role actual expected
+	check_extra "${harness}" "${extension}"
+	target=$(generated_path "${harness}")
+	for role in "${role_names[@]}"; do
+		actual="${target}/${role}.${extension}"
+		expected="${tmp}/${harness}/${role}.${extension}"
+		[[ -f "${actual}" ]] || fail "${actual#"${repo}/"} is missing"
+		if ! cmp -s "${expected}" "${actual}"; then
+			diff -u "${actual}" "${expected}" >&2 || true
+			fail "${actual#"${repo}/"} is stale; run scripts/agent-roles-sync.sh --apply"
+		fi
+	done
+}
+
 case "${mode}" in
 apply)
-	for harness in codex claude qwen; do
-		target=$(generated_path "${harness}")
-		mkdir -p "${target}"
-		case "${harness}" in codex) extension=toml ;; *) extension=md ;; esac
-		shopt -s nullglob
-		for file in "${target}"/*."${extension}"; do
-			role=$(basename "${file}" ".${extension}")
-			[[ -f "${tmp}/${harness}/${role}.${extension}" ]] || rm -f -- "${file}"
-		done
-		for file in "${tmp}/${harness}"/*."${extension}"; do
-			cp "${file}" "${target}/$(basename "${file}")"
-		done
-		shopt -u nullglob
-	done
-	printf 'agent roles: %d role carriers generated for 3 harnesses\n' "${#role_names[@]}"
+	sync_generated codex toml
+	sync_generated claude md
+	sync_generated qwen md
+	sync_generated grok md
+	sync_generated grok-roles toml
+	printf 'agent roles: %d role carriers generated for 4 harnesses\n' "${#role_names[@]}"
 	;;
 check)
-	for harness in codex claude qwen; do
-		case "${harness}" in codex) extension=toml ;; *) extension=md ;; esac
-		check_extra "${harness}" "${extension}"
-		target=$(generated_path "${harness}")
-		for role in "${role_names[@]}"; do
-			actual="${target}/${role}.${extension}"
-			expected="${tmp}/${harness}/${role}.${extension}"
-			[[ -f "${actual}" ]] || fail "${actual#"${repo}/"} is missing"
-			if ! cmp -s "${expected}" "${actual}"; then
-				diff -u "${actual}" "${expected}" >&2 || true
-				fail "${actual#"${repo}/"} is stale; run scripts/agent-roles-sync.sh --apply"
-			fi
-		done
-	done
-	printf 'agent roles: %d canonical roles current for 3 harnesses\n' "${#role_names[@]}"
+	check_generated codex toml
+	check_generated claude md
+	check_generated qwen md
+	check_generated grok md
+	check_generated grok-roles toml
+	printf 'agent roles: %d canonical roles current for 4 harnesses\n' "${#role_names[@]}"
 	;;
 esac

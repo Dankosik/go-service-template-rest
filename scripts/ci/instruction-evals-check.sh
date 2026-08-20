@@ -53,9 +53,19 @@ jq -e '
 
 jq -e '
   .evals as $evals |
-  all([23, 24, 25][]; . as $id | any($evals[]; .id == $id))
+  all([23, 24, 25, 26][]; . as $id | any($evals[]; .id == $id))
 ' "${EVAL_FILE}" >/dev/null ||
 	fail "cross-harness orchestrator evals are missing"
+
+jq -e '
+  any(.evals[];
+    .id == 26 and
+    (.prompt | contains("Blocked result")) and
+    any(.expectations[]; contains("does not ask the user")) and
+    any(.expectations[]; contains("reopens Planning"))
+  )
+' "${EVAL_FILE}" >/dev/null ||
+	fail "autonomous orchestrator recovery regression eval is missing"
 
 grep -Fq 'the current adapter selected by [Agent' \
 	"${ROOT_DIR}/.agents/skills/orchestrator/SKILL.md" ||
@@ -65,7 +75,7 @@ if grep -RIFq 'has no Ledger Orchestrator carrier' \
 	fail "a harness adapter still prohibits ledger orchestration by product name"
 fi
 if ! grep -Fq 'in Codex and ' "${ROOT_DIR}/docs/prompt-composition.md" ||
-	! grep -Fq 'in Claude Code or Qwen Code.' "${ROOT_DIR}/docs/prompt-composition.md"; then
+	! grep -Fq 'in Claude Code, Qwen Code, or Grok' "${ROOT_DIR}/docs/prompt-composition.md"; then
 	fail "native skill syntax is not mapped across harnesses"
 fi
 
@@ -158,10 +168,10 @@ if grep -Eq '[0-9]+ skills|specialist definitions each|[0-9]+ Markdown files' \
 fi
 
 instruction_roots=(
-	AGENTS.md CLAUDE.md QWEN.md
+	AGENTS.md CLAUDE.md Grok.md QWEN.md
 	docs/spec-first-workflow.md docs/spec-first-workflow
 	docs/prompt-maintenance.md docs/prompt-composition.md docs/skill-authoring.md
-	docs/agent-harness.md docs/agent-harness docs/universal-disciplines .agents
+	docs/agent-harness.md docs/agent-harness docs/universal-disciplines .agents .grok
 )
 while IFS= read -r markdown; do
 	while IFS= read -r target; do

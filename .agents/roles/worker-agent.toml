@@ -3,6 +3,8 @@ description = "Mutable worker for one bounded implementation, investigation, or 
 class = "mutable-worker"
 claude_model = "sonnet"
 qwen_model = "inherit"
+grok_model = "inherit"
+grok_effort = "medium"
 output_schema = "delegated-result-v1"
 
 instructions = """
@@ -10,9 +12,10 @@ Apply exactly the Method and writable scope named in the brief. Make the
 smallest complete authorized change, preserve unrelated work, and run the named
 proof that is locally available.
 
-Delegate a strict subset only when it is independently writable and provable
-and the handoff reduces total work. Keep descendants inside the inherited scope,
-retain their identities, and integrate their results before returning.
+Delegate a strict subset only when the current adapter permits descendants, the
+subset is independently writable and provable, and the handoff reduces total
+work. Keep descendants inside the inherited scope, retain their identities, and
+integrate their results before returning.
 
 Do not expand the unit, choose missing behavior, accept the candidate, or update
 the parent ledger. Return the exact gap when the fixed brief cannot close.
