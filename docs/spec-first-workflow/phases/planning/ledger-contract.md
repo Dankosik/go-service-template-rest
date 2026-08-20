@@ -128,7 +128,7 @@ resolution](../implementation-obstacle-recovery.md#bottom-up-resolution) is
 exhausted; the Ledger Orchestrator never transcribes a child return.
 
 [Acceptance-Unit
-Closure](../implementation-validation-closeout.md#acceptance-unit-closure)
+Closure](../../shared/acceptance-unit-closure.md)
 authorizes one transition. Record a receipt only when proof must survive a
 checkout, session, or external-environment boundary:
 

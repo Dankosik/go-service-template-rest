@@ -65,6 +65,10 @@ untracked empty content does not enter that snapshot. Generated paths stay out
 of the manifest, but the sync commits the template-owned ones it changed. A
 service-owned skill and its Claude link retain their existing Git status.
 
+Portable validation invokes the synced helper scripts directly. A derived
+repository's `Makefile` is repository-owned, so template Make targets are
+convenience aliases for the template checkout, not propagated interfaces.
+
 To fan out from this template to several local checkouts in one run:
 
 ```

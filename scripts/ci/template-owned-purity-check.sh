@@ -188,6 +188,7 @@ template_sync_behavior_check() (
 		"${template}/.codex/agents" \
 		"${template}/.qwen/agents" \
 		"${template}/docs" \
+		"${template}/docs/validation" \
 		"${template}/scripts/ci" \
 		"${template}/scripts/lib" \
 		"${template}/test" \
@@ -200,6 +201,7 @@ template_sync_behavior_check() (
 		'.claude/agents/' \
 		'.codex/agents/' \
 		'.qwen/agents/' \
+		'docs/validation/' \
 		'scripts/agent-roles-sync.sh' \
 		'scripts/claude-skills-sync.sh' \
 		'scripts/codex-agents-sync.sh' \
@@ -227,6 +229,7 @@ template_sync_behavior_check() (
 		>"${template}/.agents/roles/fixture-agent.toml"
 	printf '%s\n' '[agents]' 'max_depth = 1' '' '[fixture]' 'retained = true' \
 		>"${template}/.codex/config.toml"
+	cp docs/validation/instructions.md "${template}/docs/validation/instructions.md"
 	for repo_owned in \
 		docs/repo-architecture.md \
 		docs/project-structure-and-module-organization.md \
@@ -255,6 +258,7 @@ template_sync_behavior_check() (
 		.codex/agents/fixture-agent.toml \
 		.qwen/agents/fixture-agent.md \
 		.codex/config.toml \
+		docs/validation/instructions.md \
 		docs/repo-architecture.md \
 		docs/project-structure-and-module-organization.md \
 		docs/build-test-and-development-commands.md \
@@ -414,6 +418,20 @@ template_sync_behavior_check() (
 	}
 	bash "${target}/scripts/agent-roles-sync.sh" --check --repo "${target}" >/dev/null || {
 		echo "template-owned purity: synced role checker rejected generated carriers" >&2
+		return 1
+	}
+	grep -Fq 'bash scripts/agent-roles-sync.sh --check --repo .' \
+		"${target}/docs/validation/instructions.md" || {
+		echo "template-owned purity: derived validation does not use the synced role checker" >&2
+		return 1
+	}
+	if grep -Eq "\`make (agent-roles-check|codex-agents-check|claude-skills-check)\`" \
+		"${target}/docs/validation/instructions.md"; then
+		echo "template-owned purity: derived validation depends on a repository-owned Make target" >&2
+		return 1
+	fi
+	grep -Fq 'template checkout only' "${target}/docs/validation/instructions.md" || {
+		echo "template-owned purity: derived validation does not bound the template-only purity gate" >&2
 		return 1
 	}
 	printf '\n# manual drift\n' >>"${target}/.codex/agents/fixture-agent.toml"

@@ -18,20 +18,21 @@ needed. Callable installed schemas outrank public prose.
 - A Ledger Orchestrator is `$orchestrator` in a dedicated saved-project task.
 
 The Worktree task's `threadId`, `hostId`, backing, and checkout must satisfy the
-shared [Write-Carrier Gate](../agent-harness.md#write-carrier-gate).
+shared [Write-Carrier Gate](shared/write-carrier.md#write-carrier-gate).
 
 ## Conditional Controls
 
 | Trigger | Read before |
 | --- | --- |
-| Create, wait on, correct, Handoff, or clean up a known task. | [Codex Orchestration](codex/codex-orchestration.md) |
+| Create, wait on, correct, Handoff, or clean up an Implementation or orchestration task. | [Codex Orchestration](codex/codex-orchestration.md) |
+| Spawn or wait on research, challenge, or review. | [Codex Read-Only Lanes](codex/codex-read-only-lanes.md) |
 | Reconcile unknown create/Handoff state, terminalize a known Lead, or resume an upstream reopen. | [Codex Recovery](codex/codex-recovery.md) |
 | Start, inspect, resume, or clear a Goal. | [Codex Goals](codex/codex-goals.md) |
 
 ## Model And Effort
 
-Use installed model names and supported fields. Preserve a user-named model.
-Otherwise:
+Apply the shared [selection policy](shared/model-selection.md) using installed
+model names and supported fields. Preserve a user-named model. Otherwise:
 
 | Lane | Model |
 | --- | --- |
