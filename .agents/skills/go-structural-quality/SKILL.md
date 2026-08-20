@@ -1,11 +1,14 @@
 ---
 name: go-structural-quality
 description: "Structural quality: Use for whole-diff overbuild or mixed responsibility. Own abstraction cost/deletion; Skip Go semantics, local readability, and architecture."
+metadata:
+  invocation: model
+  kind: method
 ---
 
 # Go Structural Quality
 
-Apply the [shared specialist contract](../specialist-contract.md).
+Apply the [shared specialist contract](../../contracts/specialist-contract.md).
 
 Judge the whole diff by present responsibility and deletion cost. Every
 abstraction, layer, file, compatibility shim, and duplicate path must solve

@@ -1,6 +1,10 @@
 ---
 name: planning-and-task-breakdown
 description: "Task ledger: Use when closed decisions need ordered tasks.md. Own boundaries, proof, and reopen conditions; Skip behavior and implementation."
+metadata:
+  invocation: user
+  kind: workflow
+disable-model-invocation: true
 ---
 
 # Planning And Task Breakdown

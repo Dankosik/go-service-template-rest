@@ -1,6 +1,9 @@
 ---
 name: go-chi
 description: "Chi transport: Use for routers, middleware, OpenAPI wiring, fallbacks, CORS, labels, or routing review. Own chi composition; Skip API meaning, topology, or general Go."
+metadata:
+  invocation: model
+  kind: method
 ---
 
 # Go Chi
@@ -9,7 +12,7 @@ The router is one composition where middleware order is semantics:
 
 `route tree -> middleware order and scope -> handler boundary -> fallbacks -> labels -> proof`
 
-Apply the [shared specialist contract](../specialist-contract.md). Reconstruct
+Apply the [shared specialist contract](../../contracts/specialist-contract.md). Reconstruct
 the affected nodes from generated and manual routes, middleware, fallbacks, and
 bounded labels; account for every node and its position in the composed tree.
 

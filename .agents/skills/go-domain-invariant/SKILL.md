@@ -1,6 +1,9 @@
 ---
 name: go-domain-invariant
 description: "Domain rules: Use for business transitions, violations, replay, or effect order. Own invariants; Skip transport, data, security, and tests."
+metadata:
+  invocation: model
+  kind: method
 ---
 
 # Go Domain Invariant
@@ -13,7 +16,7 @@ State each invariant in accepted business terms with the input, sequence, or
 replay that falsifies it and the surface that rejects the attempt. The domain
 owns effect order, duplicate meaning, and out-of-order meaning.
 
-Load the [shared specialist contract](../specialist-contract.md). Reconstruct affected invariants and transitions from accepted behavior, current accepting paths, state/effect owners, rejection surfaces, replay, and mixed-version constraints.
+Load the [shared specialist contract](../../contracts/specialist-contract.md). Reconstruct affected invariants and transitions from accepted behavior, current accepting paths, state/effect owners, rejection surfaces, replay, and mixed-version constraints.
 
 ## Choose The Branch
 

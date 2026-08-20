@@ -1,2 +1,3 @@
-Apply `docs/spec-first-workflow/shared/delegation.md` and return
-[`Lane Result V1`](../../docs/spec-first-workflow/interfaces/lane-result-v1.md).
+Apply the fixed [Subagent Brief](../../docs/subagent-brief-template.md) and its
+named Method. Keep the candidate read-only and return the selected output
+interface.

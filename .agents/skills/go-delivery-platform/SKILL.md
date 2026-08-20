@@ -1,6 +1,9 @@
 ---
 name: go-delivery-platform
 description: "Delivery: Use for CI/CD, release trust, drift, containers, migrations, rollout, or control review. Own delivery acceptance; Skip implementation."
+metadata:
+  invocation: model
+  kind: method
 ---
 
 # Go Delivery Platform
@@ -14,7 +17,7 @@ Treat each status, parity check, provenance rule, container, migration, or
 rollout control as a gate. A waiver has an owner and expiry; drift between
 declared and actual controls is a finding.
 
-Load the [shared specialist contract](../specialist-contract.md). Reconstruct required gates from accepted delivery policy, repository workflows, build and deploy surfaces, migrations, generated/docs controls, and rollout dependencies.
+Load the [shared specialist contract](../../contracts/specialist-contract.md). Reconstruct required gates from accepted delivery policy, repository workflows, build and deploy surfaces, migrations, generated/docs controls, and rollout dependencies.
 
 ## Choose The Branch
 

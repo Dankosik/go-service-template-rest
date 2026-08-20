@@ -1,14 +1,19 @@
 # Review
 
-Use independent review when fresh context can materially improve confidence in
-one fixed artifact or implementation unit.
+Use independent review at required structured/orchestrated boundaries and when
+fresh context can materially improve confidence in another fixed boundary.
 
 ## Trigger
 
-Open one fresh reviewer when the boundary is high-impact, broad,
-hard-to-reverse, hard to verify, protected-domain, materially contested, or
-explicitly requested. Ordinary work uses root self-review. Re-evaluate only
-after a material candidate or risk change.
+One fresh reviewer is required for a standalone Research macro result and each
+fixed Specification, completed Technical Design, triggered Test Design,
+Planning result, and Implementation acceptance unit before movement or
+acceptance.
+
+Direct Work and supporting phase-internal work use root self-review unless the
+boundary is high-impact, broad, hard-to-reverse, hard to verify,
+protected-domain, materially contested, or explicitly requested. Re-evaluate
+only after a material candidate or risk change.
 
 ## Lifecycle
 
@@ -19,7 +24,13 @@ V1](../interfaces/review-result-v1.md) using the phase adapter's lenses and
 threshold. Review never takes ownership of repair, integration, acceptance, or
 movement.
 
-Use the shared [Finding Envelope](review-findings.md). `PASS` moves;
+Lead with surviving findings in severity order. Each finding names its anchor,
+impact on the accepted outcome, blocker/concern/non-blocking classification,
+smallest repair or reopen owner, and current evidence boundary. Falsify before
+classifying: when disproof was not attempted or could not run, report the gap as
+a concern rather than a blocker.
+
+`PASS` moves;
 `CONCERNS` moves only when every concern has a proof/risk owner, observable, and
 reopen condition and leaves no downstream semantic choice; otherwise the result
 is `FAIL`. The owner repairs or reopens the smallest decision. A material
@@ -34,8 +45,8 @@ findings.
 | Standalone research synthesis | [Research](../phases/research.md#review) |
 | Completed specification | [Specification Review](../phases/specification-review.md) |
 | Technical and Go-ownership design | [Technical Design Review](../phases/technical-design-review.md) |
-| Non-obvious test design | [Test Design](../phases/test-design.md#review) |
-| Executable ledger | [Task Review / Readiness](../phases/task-review-readiness.md) |
+| Completed Test Design | [Test Design](../phases/test-design.md#review) |
+| Planning result | [Task Review / Readiness](../phases/task-review-readiness.md) |
 | Fixed implementation unit | [Implementation Review](#implementation-review) |
 
 A phase-owned complementary panel replaces the default reviewer only when its

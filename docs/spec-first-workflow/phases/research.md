@@ -50,11 +50,11 @@ and saturation rationale without selecting the architecture. Persist under
 
 ## Review
 
-For an accepted `research only` boundary, when shared [Review](../shared/review.md)
-triggers, the reviewer checks question/lens coverage, authority, applicability,
-freshness, falsification, conflicts, and downstream disposition. A missing
-Research-owned answer is `FAIL`; a bounded later proof risk may be
-`CONCERNS`.
+For an accepted `research only` boundary, apply shared
+[Review](../shared/review.md) before returning `ready`. The reviewer checks
+question/lens coverage, authority, applicability, freshness, falsification,
+conflicts, and downstream disposition. A missing Research-owned answer is
+`FAIL`; a bounded later proof risk may be `CONCERNS`.
 
 ## Exit And Reopen
 

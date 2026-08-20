@@ -1,6 +1,9 @@
 ---
 name: go-verification-before-completion
 description: "Verification: Use for correctness, readiness, or completion claims. Own matching evidence and gaps; Skip changes, diagnosis, and strategy."
+metadata:
+  invocation: model
+  kind: method
 ---
 
 # Go Verification Before Completion

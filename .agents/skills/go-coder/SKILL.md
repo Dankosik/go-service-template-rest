@@ -1,6 +1,9 @@
 ---
 name: go-coder
 description: "Go change: Use for an authorized implementation outcome. Own production code, tests, cleanup, and proof; Skip open decisions and diagnosis/test/verification-only work."
+metadata:
+  invocation: model
+  kind: method
 ---
 
 # Go Coder

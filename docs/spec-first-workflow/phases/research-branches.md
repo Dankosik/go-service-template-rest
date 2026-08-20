@@ -35,4 +35,9 @@ For freshness-sensitive evidence, record `valid as of` plus an objective refresh
 
 ## Downstream Input Closure
 
-When research already identifies a concrete external input required by a downstream phase, apply the router's [implementation-input closure](../../spec-first-workflow.md#implementation-input-closure): record its owner, authoritative source, required shape, availability, and earliest required checkpoint without inventing later design inputs. When an implication requires proof, name the current observable or proving surface and setup availability/derivability, or the missing-proof owner; test design still owns scenario and proof-level selection.
+When research identifies a concrete external input required downstream, record
+its owner, authoritative source, required shape, availability, and earliest
+required checkpoint without inventing later design inputs. When an implication
+requires proof, name the current observable or proving surface and setup
+availability/derivability, or the missing-proof owner; Test Design still owns
+scenario and proof-level selection.

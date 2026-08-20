@@ -1,6 +1,9 @@
 ---
 name: go-performance
 description: "Performance: Use for latency, throughput, allocs, contention, capacity, complexity, scaling, benchmarks. Own policy; Skip correctness."
+metadata:
+  invocation: model
+  kind: method
 ---
 
 # Go Performance
@@ -13,7 +16,7 @@ Performance decisions and optimizations use different evidence loops:
 
 A budget without a unit, percentile, and owner is a mood. Before implementation, reject mechanisms whose amplification or ceiling cannot satisfy the accepted envelope. After implementation, claim an improvement only from comparable measurements under that workload.
 
-Load the [shared specialist contract](../specialist-contract.md). Reconstruct
+Load the [shared specialist contract](../../contracts/specialist-contract.md). Reconstruct
 budgets and hot paths from accepted workloads, SLOs, execution paths,
 measurements, and rollout constraints. Bind every budget to a unit, percentile
 or capacity measure, protocol, and owner.

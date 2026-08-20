@@ -1,6 +1,9 @@
 ---
 name: go-reliability
 description: "Reliability: Use for timeout/retry/overload/readiness/startup/drain/shutdown/recovery/rollout. Own resilience; Skip synchronization/durable replay/context semantics."
+metadata:
+  invocation: model
+  kind: method
 ---
 
 # Go Reliability
@@ -10,7 +13,7 @@ caller's remaining end-to-end budget.
 
 `budget -> per-hop deadline -> failure disposition -> retry, degrade, or shed -> lifecycle -> rollout -> proof`
 
-Load the [shared specialist contract](../specialist-contract.md). Reconstruct
+Load the [shared specialist contract](../../contracts/specialist-contract.md). Reconstruct
 affected dependencies and lifecycle stages from accepted behavior, call paths,
 configuration, startup/shutdown wiring, and rollout topology. Derive timeouts
 from the accepted bound. A retry needs a bounded budget, jitter, and a safely

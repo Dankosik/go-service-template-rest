@@ -21,9 +21,19 @@ boundary changes a predictable process.
 ## Machine Contract
 
 The canonical `.agents/skills` entry keeps non-empty `name` and `description`
-metadata. Claude discovery uses `make claude-skills-sync`; Qwen reads the
-canonical directory directly. Harness-specific invocation policy belongs to its
-adapter.
+plus exactly one invocation class and kind:
+
+```yaml
+metadata:
+  invocation: model | user | role
+  kind: method | workflow | carrier
+```
+
+`model/method` entries remain autonomously discoverable. `user/workflow` and
+`role/carrier` entries set Claude's `disable-model-invocation: true` and Codex
+`agents/openai.yaml` policy `allow_implicit_invocation: false`; they remain
+available through an explicit `$skill` or bound carrier. The skill sync checker
+enforces these projections. Qwen reads the canonical metadata directly.
 
 Codex starts with names, descriptions, and paths and may shorten a crowded
 catalog. Put the leading word and decisive trigger first. The repository gate

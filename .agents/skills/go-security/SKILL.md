@@ -1,6 +1,9 @@
 ---
 name: go-security
 description: "Security: Use for identity, authorization, tenancy, tokens, secrets, injection, SSRF, or trust boundaries. Own policy; Skip placement."
+metadata:
+  invocation: model
+  kind: method
 ---
 
 # Go Security
@@ -10,7 +13,7 @@ authority, asset, enforcement point, attacker action, and observable denial.
 
 `boundary -> principal -> enforcement -> action -> failure -> negative proof`
 
-Load the [shared specialist contract](../specialist-contract.md). Reconstruct
+Load the [shared specialist contract](../../contracts/specialist-contract.md). Reconstruct
 every reachable path across route exposure, verified identity, objects reached,
 outbound destinations, secrets, and caller-controlled work. Missing identity,
 ambiguous tenant, or absent policy denies. Every accepted control needs focused

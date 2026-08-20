@@ -10,6 +10,6 @@ Use one status when durable state changes an action:
 | `done` | Execution and global completion are proved; this status is not evidence by itself. |
 
 A material invalidation moves `ready` back to `draft` or `blocked`. Only the
-artifact owner changes status. Triggered review follows the shared [Review](../shared/review.md)
-lifecycle. Task receipts and executable-ledger transitions use [Task Ledger
-V1](task-ledger-v1.md).
+artifact owner changes status. Required or conditionally triggered independent
+review follows the shared [Review](../shared/review.md) lifecycle. Task receipts
+and executable-ledger transitions use [Task Ledger V1](task-ledger-v1.md).

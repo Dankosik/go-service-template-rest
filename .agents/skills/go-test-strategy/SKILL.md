@@ -1,6 +1,9 @@
 ---
 name: go-test-strategy
 description: "Test strategy: Use for risk scenarios, proof levels, or deterministic oracles. Own proof design; Skip behavior, test code, and completion claims."
+metadata:
+  invocation: model
+  kind: method
 ---
 
 # Go Test Strategy
@@ -11,7 +14,7 @@ Proof is designed around **falsifiers**: for every obligation, the scenario that
 
 A test earns existence through a failure it can catch; determinism is designed with controls and fixtures rather than hoped for; and exact source text is an oracle only when the text itself is the accepted external artifact — string presence otherwise proves nothing about behavior.
 
-Load the [shared specialist contract](../specialist-contract.md). Reconstruct every accepted proof obligation from approved behavior, design/test handoffs, affected contract, state, trust and lifecycle boundaries, and current proof surfaces. Build one falsifier for each obligation from a scenario, fail-before discriminator, deterministic control and fixtures, independent oracle, proving layer, command, cleanup proof, and reopen condition.
+Load the [shared specialist contract](../../contracts/specialist-contract.md). Reconstruct every accepted proof obligation from approved behavior, design/test handoffs, affected contract, state, trust and lifecycle boundaries, and current proof surfaces. Build one falsifier for each obligation from a scenario, fail-before discriminator, deterministic control and fixtures, independent oracle, proving layer, command, cleanup proof, and reopen condition.
 
 ## Choose The Branch
 

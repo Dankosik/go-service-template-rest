@@ -37,6 +37,12 @@ proof obligations, and decision-changing Research.
   Closure](../rubrics/release-closure.md);
 - non-mechanical Go placement -> [Go Code / Ownership Design](go-code-ownership-design.md).
 
+When two or more independent material domain questions would compete for root
+attention, apply [Delegation](../shared/delegation.md) once per checkable
+boundary through the matching specialist role. Keep dependent or single-domain
+reasoning in the root; the root validates and synthesizes every result before
+selection.
+
 A hash/signature-sensitive shape also fixes exact bytes, algorithm, and one
 deterministic non-secret golden vector. Current official evidence owns external
 platform behavior.
@@ -51,9 +57,9 @@ reopen conditions. Distinguish retained, replaced, and removed surfaces. Persist
 
 ## Review
 
-After System and any triggered Go Ownership output are fixed, use root
-self-review. Load [Technical Design Review](technical-design-review.md) only
-when shared [Review](../shared/review.md) triggers.
+After System and any triggered Go Ownership output are fixed, self-review the
+coherent design, then apply shared [Review](../shared/review.md) through
+[Technical Design Review](technical-design-review.md) before returning `ready`.
 
 ## Exit And Reopen
 

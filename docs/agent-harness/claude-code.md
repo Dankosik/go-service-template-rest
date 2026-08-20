@@ -29,10 +29,9 @@ same Agent while its context helps; replace it for a clean-context review,
 invalidated base, stall, or changed strategy. Message active write work only
 for a safety stop or accepted-input invalidation.
 
-Use one fresh `task-acceptance-agent` for ordinary independent implementation
-review and a critical reviewer only for a justified highest-consequence
-boundary. Apply shared [Review](../spec-first-workflow/shared/review.md) and keep
-the candidate unchanged.
+Use one fresh `reviewer-agent` with Implementation Review as its Method for
+independent implementation review. Select a stronger model only for a justified
+highest-consequence boundary. Keep the fixed candidate unchanged.
 
 Cross-session messages are evidence inputs, not proof receipts, acceptance, or
 ledger state. Programmatic use goes through the Claude Agent SDK; direct

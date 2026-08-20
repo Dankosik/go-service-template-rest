@@ -40,8 +40,9 @@ repository facts in their canonical owners.
 
 ## Review
 
-Self-review every result. Load [Task Review / Readiness](task-review-readiness.md)
-only for a persisted ledger when shared [Review](../shared/review.md) triggers.
+Self-review every fixed inline or persisted result, then apply shared
+[Review](../shared/review.md) through [Task Review /
+Readiness](task-review-readiness.md) before returning `ready`.
 
 ## Exit And Reopen
 

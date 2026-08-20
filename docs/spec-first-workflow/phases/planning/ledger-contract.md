@@ -32,7 +32,7 @@ Otherwise run serially; no persisted wave protocol is required.
 
 ## Acceptance Transition
 
-After the fixed unit satisfies postcondition, mapped proof, and triggered review,
+After the fixed unit satisfies postcondition, mapped proof, and required review,
 the Acceptance-Unit Lead writes exactly one [Task Ledger
 V1](../../interfaces/task-ledger-v1.md) `Accepted` or `Blocked` result.
 Check every member task in the same edit. A delegated result, review return,

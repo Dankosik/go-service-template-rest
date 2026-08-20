@@ -1,6 +1,9 @@
 ---
 name: acceptance-unit-lead
 description: "Unit: Use when bound ACCEPTANCE_UNIT_LEAD. Own one implementation unit end to end; Skip other units."
+metadata:
+  invocation: role
+  kind: carrier
 disable-model-invocation: true
 ---
 
@@ -8,6 +11,6 @@ disable-model-invocation: true
 
 Own one fixed unit. Apply
 [Implementation](../../../docs/spec-first-workflow/phases/implementation.md),
-integrate any bounded delegation, run its proof and triggered review, then write
+integrate any bounded delegation, run its proof and required review, then write
 one canonical accepted result or precise blocker. Reopen only the smallest
 invalid owner and resume the same unit. Start no other unit.

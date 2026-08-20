@@ -15,14 +15,12 @@ that can change routing.
 1. Distill one accepted outcome, meaningful scope/non-goals, granted authority,
    and user- or operator-observable success. Separate the requested result from
    suggested means.
-2. Inspect only unresolved [Phase Selection](../../spec-first-workflow.md#phase-selection)
-   facts that can change the path or first owner. Evidence-changing questions
-   route to Research.
+2. Inspect only unresolved repository facts named by the selected Intake brief
+   that can change its result. Evidence-changing questions route to Research.
 3. Use a bounded assumption only when being wrong leaves the first owner's
    result usable; state its boundary and objective reopen condition.
-4. Ask one blocking question only when [Decision Ownership](../../../AGENTS.md#decision-ownership)
-   leaves materially different permitted outcomes and no bounded assumption is
-   honest.
+4. Ask one blocking question only when a user-owned decision leaves materially
+   different permitted outcomes and no bounded assumption is honest.
 
 ## Output
 

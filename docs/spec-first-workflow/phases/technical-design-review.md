@@ -4,15 +4,9 @@ Use when shared [Review](../shared/review.md) routes one fixed completed
 technical design or the user explicitly requests that standalone review. This
 adapter owns only technical-design falsifiers and threshold.
 
-## Inputs
+## Lenses
 
-Read the ready Specification, fixed System / Integration Design and triggered Go
-Ownership map, current repository/runtime/generated/consumer authority, accepted
-risk/proof obligations, and still-valid findings or Go-panel receipts.
-
-## Method
-
-Independently reconstruct each material trace:
+Reconstruct each material trace:
 
 `behavior/drivers -> viable same-level alternatives or no-fork evidence ->
 selected mechanism -> material flow/finality -> contract/truth -> system and Go
@@ -26,9 +20,7 @@ panel-receipt compatibility, performance/scale, proof feasibility, release
 closure, and necessity of each included component/edge/store/dependency.
 
 Consume current [Go Ownership Review](../rubrics/go-ownership-review.md) receipts
-without repeating their lenses. Use shared [Review Findings](../shared/review-findings.md).
-
-## Threshold And Reopen
+without repeating their lenses.
 
 `PASS` requires every reconstructed trace and triggered lens to be supported
 without downstream invention. `CONCERNS` may carry only bounded proof/risk.

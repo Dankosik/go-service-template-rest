@@ -1,6 +1,10 @@
 ---
 name: idea-refine
 description: "Idea convergence: Use when a raw or solution-led idea lacks one buildable direction. Own problem/outcome/MVP/assumptions/decision; Skip engineering-ready work."
+metadata:
+  invocation: user
+  kind: workflow
+disable-model-invocation: true
 ---
 
 # Idea Refine

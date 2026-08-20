@@ -1,6 +1,9 @@
 ---
 name: go-distributed
 description: "Recovery: Use for cross-service consistency, sagas, replay, ordering, compensation, redrive, or reconciliation. Own recovery; Skip local concurrency."
+metadata:
+  invocation: model
+  kind: method
 ---
 
 # Go Distributed
@@ -9,7 +12,7 @@ A cross-service flow is defined by its **recovery**.
 
 `flow contract -> durable steps -> partial failure -> ordering and duplicates -> compensation -> redrive -> reconciliation -> proof`
 
-Load the [shared specialist contract](../specialist-contract.md). Reconstruct
+Load the [shared specialist contract](../../contracts/specialist-contract.md). Reconstruct
 every durable step from accepted flows, producers, consumers, persistence or
 broker boundaries, recovery paths, and success semantics. Replay duplicate
 delivery, reordering, partial completion, process loss, redrive, and mixed

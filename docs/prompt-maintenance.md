@@ -43,6 +43,16 @@ routing. Routers choose the next owner; they do not explain that owner's method.
 Move repeatable fields, allowed values, tool capabilities, sandbox guarantees,
 and generated carriers into interfaces rather than narrative checklists.
 
+The instruction graph flows `bootstrap -> router -> phase -> method ->
+reference`. Lower layers do not reselect higher layers. A selector selects; it
+does not restate the selected owner's method. Reference indexes contain only
+selection pressures, links, and the decision effect of loading them.
+
+Roles encode capability, permission, isolation, and context freshness. Skills
+encode expertise and method. A model-invoked skill needs an independent
+observable trigger that changes the method; aliases and explicit workflows do
+not compete in autonomous discovery.
+
 Write durable instructions as observable triggers, actions, completion criteria,
 or stop conditions. State allowed behavior and reserve prohibitions for safety,
 authority, or decisive exclusions. Expose only material the current task can
@@ -52,14 +62,15 @@ act on.
 | --- | --- |
 | Authority, safety, secrets, irreversible boundaries, global invariants, Direct Work eligibility | `AGENTS.md` |
 | Structured/orchestrated path, macro phases, phase selection | [Workflow Router](spec-first-workflow.md) |
-| Phase movement and narrow reopen | [Phase Movement](spec-first-workflow/shared/phase-movement.md) |
+| Movement, narrow reopen, and boundary handoff | [Transition](spec-first-workflow/shared/transition.md) |
 | One phase's unique decision | Its phase owner |
 | Artifact persistence | [Artifacts](spec-first-workflow/shared/artifacts.md) |
 | Status values and transitions | [Artifact Lifecycle V1](spec-first-workflow/interfaces/artifact-lifecycle-v1.md) |
 | Proof semantics | [Evidence Contract](spec-first-workflow/shared/evidence-contract.md) |
 | Independent-review trigger and lifecycle | [Review](spec-first-workflow/shared/review.md) |
 | Read-only lane eligibility and result | [Delegation](spec-first-workflow/shared/delegation.md) and its interface |
-| Resume, handoff, cleanup | Their separate shared owners |
+| Prompt packaging and no-duplication contract | [Prompt Composition](prompt-composition.md) |
+| Resume after interruption and terminal cleanup | Their separate shared owners |
 | Domain judgment | `.agents/skills/<domain>` |
 | Harness-neutral role scope | `.agents/roles` |
 | Output fields and allowed values | `docs/spec-first-workflow/interfaces/` |
@@ -77,6 +88,9 @@ Change one instruction group at a time and prefer removal. Preserve exact hard
 boundaries and move text before rewriting its meaning. Compare bootstrap and
 mandatory read sets before and after; word count proves context cost, not
 behavior.
+
+Also compare active semantic owners and catalog branches on representative
+routes. A shorter file that adds another selector has increased context cost.
 
 Instruction edits prove only an instruction-level mitigation. Claim changed
 behavior only after a live evaluation exercises the target model, harness,
