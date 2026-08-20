@@ -125,8 +125,9 @@ Use additional fields only when they change an action or verdict.
 3. Then read the decision artifact named there: usually `spec.md`, followed by only the design, test, research, or rollout files needed for the next action.
 4. If artifacts conflict, stop and reopen the narrowest decision owner; do not merge the conflict silently.
 5. Before continuing Implementation, apply [Implementation
-   Handoff](implementation-handoff.md) and the shared [Evidence
-   Contract](evidence-contract.md) to candidate and proof reuse.
+   continuation](../phases/implementation.md#acceptance-and-continuation) and
+   the shared [Evidence Contract](evidence-contract.md) to candidate and proof
+   reuse.
 
 Keep only active task bundles. At closeout, remove execution-only state such as
 `tasks.md` with any `tasks/` directory and `workflow-plan.md`. Retain a completed spec or

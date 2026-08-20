@@ -1,10 +1,10 @@
 # Technical Design Review
 
-Apply the shared [Review Independence](../shared/review-independence.md) contract. This adapter adds only the technical-design falsification kernel and design-specific verdict threshold; it does not define another workflow phase.
+Apply shared [Review](../shared/review.md). This adapter adds only the technical-design falsification kernel and design-specific verdict threshold; it does not define another workflow phase.
 
 ## Read When
 
-- The shared [independent-review trigger](../shared/review-independence.md) applies to a completed fixed technical design.
+- The shared [review trigger](../shared/review.md#trigger) applies to a completed fixed technical design.
 - The user requests a standalone independent review of a completed fixed technical design.
 
 ## Inputs

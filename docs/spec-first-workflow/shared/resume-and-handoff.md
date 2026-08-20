@@ -9,8 +9,9 @@ macro-phase boundary.
 - The current actor or session cannot continue and another owner must act.
 - A ready macro phase has reached its user-started boundary.
 
-Implementation entry, continuation, terminalization, and upstream-reopen return
-use the conditional [Implementation Handoff](implementation-handoff.md) branch.
+Implementation entry and continuation use [Implementation
+continuation](../phases/implementation.md#acceptance-and-continuation) and the
+selected harness adapter.
 
 ## Resume
 
@@ -53,8 +54,8 @@ record](../phases/planning.md#obligation-reconciliation).
 Treat handoff as chain of custody. Emit a short standalone `Next Session Prompt`
 only when the current macro phase and every triggered review permit movement to
 a different macro phase, then stop. Implementation entry uses [Implementation
-Handoff](implementation-handoff.md#implementation-entry-and-continuation-handoff)
-instead. An `UPSTREAM_REOPEN_LEAD` returns through that branch without a
+continuation](../phases/implementation.md#acceptance-and-continuation) instead.
+An implementation-owned upstream repair returns to the same unit without a
 user-visible prompt.
 
 An incomplete or blocked phase, same-phase reopen, or context rollover reports

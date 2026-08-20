@@ -45,9 +45,9 @@ Direct changes may keep their execution plan inline.
    replacement surface one disposition: coupled into the outcome, assigned to
    a named delta with a valid handoff, or proved unchanged. Missing accepted
    ownership or placement reopens design.
-5. Record a planned wave only when multiple ready acceptance units will actually
-   run concurrently and current evidence proves their independence.
-6. Prove the next acceptance unit or real wave executable from closed inputs;
+5. Record only real output or safety dependencies; Implementation chooses
+   concurrency from current files, resources, interfaces, and assumptions.
+6. Prove the next acceptance unit executable from closed inputs;
    later work needs owners and dependencies, not prematurely materialized
    inputs.
 
@@ -78,7 +78,7 @@ Return the smallest execution form that preserves the accepted decisions:
 - one fixed inline acceptance unit when there is one owner and proof boundary,
   the current session can continue, and no durable resume or actor boundary is
   needed;
-- a compact `tasks.md` when work has multiple units, dependencies or waves,
+- a compact `tasks.md` when work has multiple units or dependencies,
   crosses an actor/session boundary, or needs durable status.
 
 When `tasks.md` is triggered, load [Planning Ledger
@@ -100,17 +100,16 @@ repair or material candidate change.
 
 The plan is ready only when obligation reconciliation passes; the selected
 inline or ledger form contains every owner, surface, resource, dependency,
-handoff, proof, and objective reopen condition needed by its next unit or wave;
+handoff, proof, and objective reopen condition needed by its next unit;
 and [Planning Proof And Readiness](planning/proof-and-readiness.md) reaches
 acceptance without chat history or a new behavior, mechanism, placement,
 ownership, proof, rollout, concurrency, or carrier decision.
 
 When a ledger is present, every applicable contract in [Planning Ledger
-Contract](planning/ledger-contract.md) also passes. Every actual wave has
-current positive pairwise independence evidence. Any triggered review has
+Contract](planning/ledger-contract.md) also passes. Any triggered review has
 returned `PASS` or dispositioned `CONCERNS`.
 
 Readiness locks the next Implementation entry to the fixed inline unit or first
-executable ledger unit or real wave. Status checks and compaction preserve that
+executable ledger unit. Status checks and compaction preserve that
 entry; only concrete evidence invalidating a named input or readiness
 disposition reopens its smallest owner.

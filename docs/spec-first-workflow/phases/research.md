@@ -82,7 +82,7 @@ The reviewer checks the Outputs against the Method: affected-lens and question c
 - `CONCERNS`: a bounded residual evidence risk or downstream proof obligation may move after its owner, observable, and refresh/reopen condition are recorded; it may not carry a missing answer owned by research;
 - `FAIL`: missing, stale, conflicting, or unavailable evidence makes a required material conclusion unreliable or prevents closure.
 
-The owning root applies [Review Independence](../shared/review-independence.md)
+The owning root applies [Review](../shared/review.md)
 and [Review Findings And
 Convergence](../shared/review-findings-and-convergence.md) for finding
 disposition, convergence, and standalone-review boundaries.

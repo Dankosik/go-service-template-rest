@@ -33,7 +33,7 @@ Planning remain required.
 | Place the design in Go when ownership is not already forced. | [Go Code / Ownership Design](spec-first-workflow/phases/go-code-ownership-design.md) | Package, file, dependency, composition, cleanup, and proof owners. |
 | Define non-obvious proof. | [Test Design](spec-first-workflow/phases/test-design.md) | Risks, observables, proof levels, and commands. |
 | Make execution ready. | [Planning](spec-first-workflow/phases/planning.md) | One fixed unit or the smallest dependency-ordered ledger. |
-| Change and close the outcome. | [Implementation / Validation / Closeout](spec-first-workflow/phases/implementation-validation-closeout.md) | Working change and evidence-clamped completion. |
+| Change and close the outcome. | [Implementation](spec-first-workflow/phases/implementation.md) | Working change and evidence-clamped completion. |
 
 One root session owns at most one macro phase. Supporting work, review, repair,
 and the smallest upstream reopen stay inside it. A different macro phase starts
@@ -47,14 +47,14 @@ Load a conditional owner immediately before the first action in its row.
 | --- | --- |
 | Persist, inspect, or resume task artifacts. | [Artifact Model](spec-first-workflow/shared/artifact-model.md) |
 | Dispatch a non-implementation read-only lane. | [Read-Only Lanes](spec-first-workflow/shared/subagents-and-handoff.md) |
-| Decide or run an independent review. | [Review Independence](spec-first-workflow/shared/review-independence.md) |
+| Decide or run an independent review. | [Review](spec-first-workflow/shared/review.md) |
 | Resume after interruption or cross an actor or macro-phase boundary. | [Resume And Macro-Phase Handoff](spec-first-workflow/shared/resume-and-handoff.md) |
-| Enter or continue Implementation across a session, terminalize a Lead, or route an upstream reopen. | [Implementation Handoff](spec-first-workflow/shared/implementation-handoff.md) |
+| Enter or continue Implementation across a session or checkout boundary. | [Implementation](spec-first-workflow/phases/implementation.md#acceptance-and-continuation) |
 | Choose or operate a durable control, carrier, model, or reasoning effort. | [Agent Harness](agent-harness.md) |
 
 Re-run routing only when phase movement or current evidence activates a new row.
 
-[Review Independence](spec-first-workflow/shared/review-independence.md#review-router)
+[Review](spec-first-workflow/shared/review.md#route)
 owns the phase-specific review map, trigger, and return path. [Planning
 obligation reconciliation](spec-first-workflow/phases/planning.md#obligation-reconciliation)
 owns implementation input closure.

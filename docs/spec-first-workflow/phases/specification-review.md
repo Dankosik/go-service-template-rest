@@ -3,7 +3,7 @@
 Review the fixed candidate through one kernel:
 reconstruct -> falsify -> disposition -> verdict.
 
-Apply the shared [Review Independence](../shared/review-independence.md) trigger
+Apply the shared [Review](../shared/review.md) trigger
 and [Review Findings And
 Convergence](../shared/review-findings-and-convergence.md) contract. Those shared
 owners provide verdict routing, the finding envelope, and convergence. This file
@@ -12,7 +12,7 @@ evidence anchors, and completion coverage.
 
 ## Read When
 
-- The shared Review Independence contract selects or requires independent review
+- The shared Review contract selects or requires independent review
   of a fixed specification.
 - The user explicitly requests a standalone independent specification review.
 

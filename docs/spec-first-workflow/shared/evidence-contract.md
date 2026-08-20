@@ -21,8 +21,8 @@ boundary; the current bounded diff is sufficient for local work. Reuse proof
 only while its content, claim, provenance, preconditions, and risk surface are
 unchanged; otherwise rerun it.
 
-Assign one final owner to each deterministic gate. A Worker owns iterative
-focused checks. The acceptance owner may reuse its receipt when the same tree
+Assign one final owner to each deterministic gate. The actor making a bounded
+change owns its iterative focused checks. The acceptance owner may reuse its receipt when the same tree
 and preconditions cross integration unchanged; otherwise that owner runs the
 gate on the integrated tree. The acceptance owner validates scope, identity,
 provenance, preconditions, and the claimed observable instead of automatically

@@ -18,10 +18,10 @@ status to `done`.
 
 When the transition cannot occur, the unit remains selected for phase-owned
 correction, reopen, or blocker disposition. When later implementation work
-remains across a session boundary, apply [Implementation Entry And Continuation
-Handoff](implementation-handoff.md#implementation-entry-and-continuation-handoff)
-after the transition so the receiving session selects the next ready unit from
-current evidence.
+remains across a session boundary, apply [Implementation
+continuation](../phases/implementation.md#acceptance-and-continuation) after the
+transition so the receiving session selects the next ready unit from current
+evidence.
 
 A fixed inline unit keeps the same boundary through implementation, proof,
 review, and closeout and creates no synthetic ledger transition.

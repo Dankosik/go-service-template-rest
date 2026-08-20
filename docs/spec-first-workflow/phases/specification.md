@@ -175,7 +175,7 @@ unaffected concerns create no decision.
 Apply focused root self-review. Run independent [Specification
 Review](specification-review.md) only when the shared review trigger applies.
 
-Use [Review Independence](../shared/review-independence.md) and [Review Findings
+Use [Review](../shared/review.md) and [Review Findings
 And Convergence](../shared/review-findings-and-convergence.md) for disposition,
 repair, and convergence.
 

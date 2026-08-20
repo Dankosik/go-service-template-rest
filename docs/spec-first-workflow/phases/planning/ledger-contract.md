@@ -1,197 +1,122 @@
 # Planning Ledger Contract
 
-Read only when Planning must persist `tasks.md` because work has multiple
-acceptance units, dependencies or waves, crosses an actor/session boundary, or
-needs durable resume state.
+Use `tasks.md` only when Implementation has multiple acceptance units,
+dependencies, or a real actor/session boundary.
 
-## Ledger shape
+## Ledger Shape
+
+Keep the ledger centered on postconditions and proof:
 
 ```markdown
 # Goal
 status: draft | ready | blocked | done
 Completion: <observable successful condition>
-Blocked stop: <what remains incomplete, evidence to record, and owner to reopen>
-Global constraints: <exact constraints shared by multiple tasks; omit when none>
+Blocked stop: <unavailable required input and owner; omit when none>
+Global constraints: <only constraints shared by several tasks; omit when none>
 
-- [ ] T1: <verifiable postcondition; execution-changing accepted constraints>
-  - Source: <narrow stable spec/design/test/rollout/code anchor(s)>
-  - Owner/surface/resources: <canonical owner for each writable surface; initial authorized writable paths or bounded discovery rule; mutable, exclusive, or non-concurrent resources, or none>
-  - Depends on: <ID — output handoff, exact consumed state, or exact safety/proof gate; needed to start, complete, or prove; or none>
-  - Handoff: <for an output dependency: exact produced output and consumed input/acceptance condition; omit when none>
-  - Alias of: <task ID and exact accepted receipt consumed; use only when this entry has no implementation delta; omit otherwise>
-  - External input/gate: <required non-ledger input or rollout gate; named owner; objective availability checkpoint; omit when none>
-  - Proof: <claim; command/check; expected observable>
-  - Reopen if: <concrete objective future invalidation condition; upstream owner; omit when none>
+- [ ] T1: <verifiable postcondition>
+  - Depends on: <task ID and consumed output or gate; or none>
+  - Constraints/references: <important accepted constraints and narrow sources>
+  - Done when: <claim; command/check; expected observable>
+  - Owner/surface/resources: <only when non-obvious or concurrency-sensitive>
+  - External gate: <required non-ledger input and owner; omit when none>
+  - Reopen if: <objective invalidation condition and owner; omit when none>
 ```
 
-## Ledger layout
+Add only fields that change execution. Ordinary owners, paths, and repository
+structure remain discoverable from current code. Record a writable boundary,
+exclusive resource, generated owner, handoff shape, or exact order only when it
+is non-obvious or two ready units could otherwise conflict.
 
-Keep every field inline in `tasks.md` by default. Move each task's execution
-detail into one task file under `tasks/<ID>-<postcondition-slug>.md` when an
-executing actor would otherwise read materially more ledger than its own unit
-needs, or when a task's execution-critical content does not fit its entry. The
-split moves detail only:
+When one entry is too large for its executor, move only that entry's outcome,
+constraints, references, optional owner/surface/resources, and proof to
+`tasks/<ID>-<slug>.md`. Keep status, checkboxes, dependencies, acceptance units,
+receipts, completion, and blockers in `tasks.md`.
 
-- `tasks.md` stays the index and sole owner of lifecycle state, checkboxes,
-  receipts, completion and blocked conditions, global constraints, acceptance
-  units, planned waves, and dependency edges.
-- The task file owns the outcome body, its constraints, and remaining entry
-  fields. It carries no lifecycle state.
+## Task Boundaries
 
-A split index entry keeps the postcondition title and dependency only:
+Each task must leave the repository and any deployment or migration state it
+creates internally consistent and provable without unfinished companion work.
+Group canonical source, generated output, tests, fixtures, required wiring,
+documentation, and replacement cleanup needed for that postcondition.
 
-```markdown
-- [ ] T1: <verifiable postcondition> — file: tasks/T1-<postcondition-slug>.md
-  - Depends on: <ID — output handoff, exact consumed state, or exact safety/proof gate; needed to start, complete, or prove; or none>
-```
+Prefer an end-to-end behavior through its real entry point. Split only for a
+distinct postcondition, owner, required dependency, rollout or migration
+sequence, independently valid handoff, materially different proof boundary, or
+a separate result that can be accepted on its own. File count, desired agent
+count, and estimated time do not create a task boundary.
 
-Obligation reconciliation, the acceptance-unit map, and dependency graph stay
-auditable from the index alone.
+## Acceptance Units
 
-### Task file
-
-Write a task file for one actor that receives only the [Worker dispatch
-contract](../implementation-worker-contract.md#dispatch-contract) plus this
-file.
-
-```markdown
-# T1 — <postcondition title>
-
-<the observable behavior that becomes true on the real production path, stated
-as the caller sees it, with execution-changing constraints and preserved or
-forbidden behavior>
-
-- Source: <narrow stable anchors>
-- Owner/surface/resources: <canonical owner; authorized paths or discovery rule; mutable resources, or none>
-- Handoff / Alias of / External input/gate: <when present>
-- Proof: <claim; command/check; expected observable>
-- Reopen if: <omit when none>
-```
-
-Inline a schema, interface, state transition, error body, or other shape only
-when it fixes an accepted decision more precisely than prose. A task file adds
-no restatement of the index outcome and no skill routing.
-
-## Ledger entry
-
-Add only fields that change execution. Put a constraint in `Global constraints`
-only when its exact meaning applies across multiple tasks; keep task-specific
-constraints in the task outcome. Write each task title as the postcondition that
-becomes true. Put paths and symbols in `Owner/surface/resources` and commands in
-`Proof`; neither creates a task boundary.
-
-## Task boundary
-
-A split boundary is valid only when the completed task leaves the repository
-and every deployment or migration state it creates or assumes internally
-consistent, supported by accepted compatibility or rollback policy,
-independently reviewable, and provable without unfinished companion work. Group
-canonical source, generated or mirrored output, required tests and fixtures,
-migration/runtime compatibility, documentation, and replacement cleanup needed
-for that state in the same task.
-
-Prefer a boundary that makes one accepted behavior reachable end to end through
-its real production entry point. A layer-only task is valid when accepted
-rollout, migration, or `expand -> migrate -> contract` order fixes it, when the
-layer is the whole outcome, or when it is an enabling change. Split an oversized
-outcome only for a distinct owner, review/proof, failure/recovery, rollback,
-required handoff, evidence-backed parallel wave, or independently shippable
-accepted result. File count, estimated minutes, and desired Worker count do not
-create a boundary.
-
-## Acceptance units
-
-An **acceptance unit** is the smallest fixed candidate that one Acceptance-Unit
-Lead can deliver through implementation slices, prove, review when triggered,
-and integrate without a consumer depending on an intermediate state. Every
-implementation task is a singleton unit unless exactly one recorded
-`Acceptance units` entry contains its task ID; overlapping membership is
-invalid. Group adjacent ready tasks only when they share the canonical owner,
-editable boundary, proof preconditions, and final-state validity:
+Each implementation task is one acceptance unit by default. Group adjacent
+tasks only when none can be accepted independently and one Lead must integrate
+and prove them together:
 
 ```markdown
 ## Acceptance units
-- A1: T2, T3 — <shared owner, boundary, and proof reason>
+- A1: T2, T3 — <why only the combined state is valid and provable>
 ```
 
-The unit is the Lead, final-proof, review, and integration boundary. Internal
-Workers create no acceptance state. A receipt alias names `Alias of`, has no
-writable surface or proof command, and closes mechanically when the named
-accepted receipt exists.
+Membership cannot overlap. A Lead may implement a unit directly or create any
+useful delegated subtree; internal delegation creates no acceptance state.
 
-## Implementation transitions
+## Dependencies And Concurrency
 
-A leaf or reviewer `NEEDS_PARENT` return is a one-level message to its direct
-parent, never ledger state. Only the Acceptance-Unit Lead may promote the issue
-to a unit `Blocked:` record after [bottom-up
-resolution](../implementation-obstacle-recovery.md#bottom-up-resolution) is
-exhausted; the Ledger Orchestrator never transcribes a child return.
+Record `Depends on` only when a task consumes another task's concrete output or
+must cross its safety or proof gate. Name the consumed output or condition.
+Shared labels, packages, broad final checks, or possible merge effort do not by
+themselves create an edge.
 
-[Acceptance-Unit
-Closure](../../shared/acceptance-unit-closure.md)
-authorizes one transition. Record a receipt only when proof must survive a
-checkout, session, or external-environment boundary:
+The Ledger Orchestrator may run currently ready units concurrently when their
+accepted dependencies, files, mutable resources, interfaces, and assumptions
+are genuinely independent. No persisted wave or execution map is required. If
+independence cannot be established cheaply, run them serially or improve the
+task split.
+
+## Execution Readiness
+
+A fresh Lead must be able to execute the next unit from the ledger, cited
+sources, and current repository without chat history or inventing behavior,
+mechanism, ownership, proof strategy, rollout policy, or authority. State the
+postcondition as the caller or operator observes it; keep important constraints
+close to that task and point to real code, tests, contracts, or accepted
+artifacts instead of copying them.
+
+Known required external input belongs in `External gate`; when it is already
+unavailable and blocks all work, use `Blocked stop`. A future invalidation
+condition belongs in `Reopen if`, not in an implementation procedure.
+
+## Implementation Transitions
+
+The Acceptance-Unit Lead records one transition after the fixed unit satisfies
+its postcondition, mapped proof, and any triggered fresh review:
 
 ```markdown
-  - Accepted: <unit or task IDs>; evidence: <command or source and result>; candidate: <bounded diff or commit/tree>
+  - Accepted: <unit or task IDs>; evidence: <command or source and result>; candidate: <current bounded diff, commit, or tree>
 ```
 
-Use `current bounded diff` for same-checkout proof and a commit/tree only across
-a checkout or integration boundary. When implementation is complete but
-required proof is unavailable, leave the unit unchecked and keep one line:
+Use `current bounded diff` in the same checkout and an immutable commit or tree
+only across a checkout or integration boundary. Check every member task in the
+same edit; after the final unit, set `status: done` and verify `Completion`.
+
+When required proof or authority is unavailable, leave the unit unchecked and
+keep one replaceable line:
 
 ```markdown
-  - Blocked: <unit or task IDs>; unverified: <claim>; evidence: <narrower evidence>; next proof owner: <owner and condition>; candidate: <bounded diff or commit/tree>
+  - Blocked: <unit or task IDs>; unverified: <claim>; evidence: <narrower evidence>; next owner: <owner and condition>; candidate: <bounded diff, commit, tree, or none>
 ```
 
-Replace that line with the accepted receipt after proof rather than accumulating
-attempts. A blocked unit blocks its dependants. Keep ledger `status: ready` while
-another unit or authorized recovery is executable; use `status: blocked` only
-when neither remains.
+Keep `status: ready` while another unit or agent-owned recovery is executable;
+use `status: blocked` only when neither remains. A delegated result, reviewer
+return, candidate handoff, or attempted action is not ledger state. Replace the
+blocker with the accepted receipt after closure rather than accumulating an
+attempt log.
 
-The accepted transition checks every member task in one edit. Receipt aliases
-close mechanically in that edit and create no candidate or proof. After the
-final task and aliases, set `status: done` in the same edit. Add no second
-lifecycle field.
+## Stop Rule
 
-## Dependencies and waves
-
-For sequential work, `Depends on` is the complete ordering authority; do not
-create one-task waves. Record an edge only when the downstream task consumes an
-upstream output or state, or must cross its safety/proof gate, and name whether
-the edge is required to start, complete, or prove the downstream task. Put an
-output contract in `Handoff`; keep `Depends on` to the edge and need.
-
-Add `Planned waves` only when at least two ready acceptance units will actually
-run concurrently:
-
-```markdown
-## Planned waves
-- W1: A1, T4
-  - Base: <same accepted commit, tree, or recorded frozen base>
-  - Independence: <current anchors proving disjoint writes/resources, preserved canonical/generated and migration/rollout coupling, and no produced/consumed interface or assumption>
-```
-
-Only positive evidence establishes a wave. A unit without that evidence remains
-dependency-scheduled.
-
-## Execution-ready entries
-
-Cite the narrowest stable source anchor and state enough of the accepted
-obligation to make execution unambiguous without copying source prose. Record
-only execution-changing constraints and name an exact method or order only when
-accepted design, generated-source, migration, rollout, or proof dependencies
-fix it. Do not make implementation recover a critical invariant, non-goal,
-value, interface, or proof expectation from a broad link or chat history.
-
-`Owner/surface/resources` names every canonical writable owner, the initial
-authorized paths or bounded discovery rule, and mutable or exclusive resources.
-It does not select a carrier. A missing owner or generated authority reopens
-design. `External input/gate` records later non-ledger availability; a mandatory
-unavailable input belongs in `Blocked stop`.
-
-Every Go task carries its owning package or bounded discovery rule, canonical
-and derived surfaces, accepted semantic constraints, and the narrowest
-repository-native proof with its expected observable. A known decision-changing
-ambiguity blocks readiness now. `Reopen if` records only objective future
-invalidation of an input accepted at readiness.
+The ledger is ready only when every accepted implementation obligation has one
+task disposition, every task is independently valid at its boundary, the next
+unit can start from closed inputs, every dependency names a real consumed
+output or gate, and each `Done when` can falsify its postcondition. Detail that
+does not change execution stays in its canonical code, contract, test, or
+artifact owner.

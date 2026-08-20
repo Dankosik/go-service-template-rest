@@ -25,9 +25,8 @@ question; independent questions may run concurrently within current carrier
 capacity. Repeating the same question over the same evidence is duplicate
 confidence, not coverage.
 
-Before native dispatch, load the [Agent Harness](../../agent-harness.md), its
-shared [Read-Only Carrier](../../agent-harness/shared/read-only-carrier.md), and
-the selected adapter's matching control. Evidence may sharpen the next
+Before native dispatch, load the [Agent Harness](../../agent-harness.md) and
+the selected adapter. Evidence may sharpen the next
 question, but a lane returns a newly exposed owner decision rather than
 expanding scope.
 
@@ -39,17 +38,10 @@ frontier](resume-and-handoff.md#open-decisions-and-fog).
 
 ## Lane Brief
 
-```text
-Question: <one decision or falsification target>
-Context: <accepted facts and minimal artifact paths>
-Evidence boundary: <what to inspect and what counts>
-Constraints: <read-only boundary, non-goals, external-action limits>
-Output: <finding/evidence/recommendation shape>
-Stop: <missing input, conflict, or completion condition>
-```
-
-Do not copy the repository workflow, generic strictness language, or unrelated
-artifact summaries into the brief.
+Use the [Subagent Brief Template](../../subagent-brief-template.md) with `Mode:
+investigate | verify | review`, a read-only constraint, and one checkable
+outcome. Do not copy the repository workflow, generic strictness language, or
+unrelated artifact summaries into the brief.
 
 ## Lane Result V1
 
