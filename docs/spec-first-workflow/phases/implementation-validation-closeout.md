@@ -65,7 +65,7 @@ its execution strategy from current evidence.
 
 ## Implement
 
-Direct work follows root [Direct Work](../../../AGENTS.md#direct-work).
+Direct work follows [Direct Work](../direct-work.md).
 Structured and orchestrated work binds one role from the [Execution Role
 Tree](implementation-worker-execution.md#execution-role-tree); the bound role's
 skill loads its method. Apply only the Go and domain skills selected by [Go
@@ -112,7 +112,7 @@ suspicions as observations.
 
 Apply `go-verification-before-completion` to intended readiness or completion
 claims and use repository [Validation
-Routing](../../build-test-and-development-commands.md#validation-routing) to
+Routing](../../validation-routing.md) to
 select the smallest matching proof. The Evidence Contract decides whether the
 result permits acceptance or only an explicit unverified remainder.
 
@@ -150,7 +150,7 @@ the stop.
 
 ## Close Out
 
-State what changed, the important behavior consequence, proof actually run, and remaining gap or reopen owner. Apply the [Task Contract](../../../AGENTS.md#task-contract) to readiness and completion language. Move each durable decision to its canonical owner with the provenance and reopen condition required by [Artifact Model](../shared/artifact-model.md#resume-order) before removing the completed bundle.
+State what changed, the important behavior consequence, proof actually run, and remaining gap or reopen owner. Keep readiness and completion language within the [Evidence Contract](#evidence-contract). Move each durable decision to its canonical owner with the provenance and reopen condition required by [Artifact Model](../shared/artifact-model.md#resume-order) before removing the completed bundle.
 
 ## Stop Rule
 

@@ -35,10 +35,14 @@ docs/spec-first-workflow.md
 docs/subagent-brief-template.md
 docs/template-sync.md
 docs/spec-first-workflow/
+docs/validation-routing.md
+docs/validation/
 docs/universal-disciplines/
 
 evals/instructions/
 
+.agents/role-classes/
+.agents/roles/
 .agents/skills/
 .claude/agents/
 .codex/agents/
@@ -46,6 +50,7 @@ evals/instructions/
 
 template-owned.paths
 scripts/template-sync.sh
+scripts/agent-roles-sync.sh
 scripts/claude-skills-sync.sh
 scripts/codex-agents-sync.sh
 scripts/lib/manifest.sh

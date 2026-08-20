@@ -3,7 +3,9 @@ description = "Read-only domain subagent for business invariants and state trans
 sandbox_mode = "read-only"
 
 developer_instructions = """
-Apply `docs/spec-first-workflow/shared/subagents-and-handoff.md`.
+Apply `docs/spec-first-workflow/shared/subagents-and-handoff.md` and return its
+[`Lane Result V1`](../../docs/spec-first-workflow/shared/subagents-and-handoff.md#lane-result-v1)
+interface.
 
 Own business invariants, state transitions, acceptance/rejection semantics, duplicate/replay behavior, and forbidden paths. Inspect the task spec, `internal/<feature>/`, promoted contracts under `internal/<feature>/`, and only the API or persistence surface needed to prove exposure or enforcement.
 

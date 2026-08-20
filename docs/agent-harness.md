@@ -69,6 +69,9 @@ generation's maximum forward.
 The selected adapter owns exact model names, supported fields, inheritance, and
 fallback behavior.
 
+Harness-neutral specialist semantics live in `.agents/roles`; the generated
+carrier adds only this adapter's sandbox, tools, model, and file format.
+
 ## Goal Mechanics
 
 Use a durable goal only for a genuinely long-running, multi-step, or resumable

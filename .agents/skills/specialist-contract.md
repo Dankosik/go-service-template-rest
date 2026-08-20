@@ -9,4 +9,7 @@ proof or explicit gap, including the caller, concurrent actor, or successor on
 the far side of each changed boundary. Delete material required by neither the
 request nor the selected policy.
 
+Configured formatters and linters own mechanical style; specialist work reports
+only domain judgment they cannot prove.
+
 During [Implementation](../../docs/spec-first-workflow/phases/implementation-validation-closeout.md), `go-coder` owns the change and the phase's Review and Validate sections own specialist composition; the root owns acceptance.

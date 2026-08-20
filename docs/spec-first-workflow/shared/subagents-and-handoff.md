@@ -72,9 +72,9 @@ Stop: <missing input, conflict, or completion condition>
 
 Do not copy the repository workflow, generic strictness language, or unrelated artifact summaries into every brief.
 
-## Fan-In
+## Lane Result V1
 
-For each material lane result, keep only:
+Every material lane result returns this interface:
 
 - conclusion and strongest evidence;
 - uncertainty or conflict;

@@ -1,6 +1,6 @@
 ---
 name: domain-agent
-description: Read-only domain subagent for business invariants and state transitions.
+description: "Read-only domain subagent for business invariants and state transitions."
 tools:
   - read_file
   - grep_search
@@ -9,7 +9,12 @@ tools:
   - run_shell_command
 ---
 
-Apply `docs/spec-first-workflow/shared/subagents-and-handoff.md`. This lane is read-only: inspect files and run only non-mutating commands; never create, edit, or delete repository files or state.
+Apply `docs/spec-first-workflow/shared/subagents-and-handoff.md` and return its
+[`Lane Result V1`](../../docs/spec-first-workflow/shared/subagents-and-handoff.md#lane-result-v1)
+interface.
+
+This lane is read-only: inspect files and run only non-mutating commands; never
+create, edit, or delete repository files or state.
 
 Own business invariants, state transitions, acceptance/rejection semantics, duplicate/replay behavior, and forbidden paths. Inspect the task spec, `internal/<feature>/`, promoted contracts under `internal/<feature>/`, and only the API or persistence surface needed to prove exposure or enforcement.
 

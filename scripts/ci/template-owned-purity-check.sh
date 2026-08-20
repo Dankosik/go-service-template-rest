@@ -76,6 +76,7 @@ done
 for required in \
 	"${manifest}" \
 	scripts/template-sync.sh \
+	scripts/agent-roles-sync.sh \
 	scripts/claude-skills-sync.sh \
 	scripts/codex-agents-sync.sh \
 	scripts/lib/manifest.sh \
@@ -131,6 +132,10 @@ service_marker=$(find .agents/skills -mindepth 2 -maxdepth 2 -name .service-owne
 [[ -z "${service_marker}" ]] ||
 	fail "${service_marker} marks a template skill as service-owned; choose one owner"
 
+if ! role_report=$(bash scripts/agent-roles-sync.sh --check --repo . 2>&1); then
+	fail "harness role carriers are not generated from .agents/roles: ${role_report}"
+fi
+
 for role_file in .codex/agents/*.toml; do
 	role=$(basename "${role_file}" .toml)
 	grep -Fxq "[agents.${role}]" .codex/config.toml ||
@@ -176,8 +181,12 @@ template_sync_behavior_check() (
 
 	mkdir -p \
 		"${template}/owned" \
+		"${template}/.agents/role-classes" \
+		"${template}/.agents/roles" \
 		"${template}/.agents/skills/fixture-one" \
+		"${template}/.claude/agents" \
 		"${template}/.codex/agents" \
+		"${template}/.qwen/agents" \
 		"${template}/docs" \
 		"${template}/scripts/ci" \
 		"${template}/scripts/lib" \
@@ -185,8 +194,13 @@ template_sync_behavior_check() (
 		"${outside}"
 	printf '%s\n' \
 		'owned/' \
+		'.agents/role-classes/' \
+		'.agents/roles/' \
 		'.agents/skills/' \
+		'.claude/agents/' \
 		'.codex/agents/' \
+		'.qwen/agents/' \
+		'scripts/agent-roles-sync.sh' \
 		'scripts/claude-skills-sync.sh' \
 		'scripts/codex-agents-sync.sh' \
 		'scripts/lib/sync-cli.sh' \
@@ -195,8 +209,22 @@ template_sync_behavior_check() (
 	printf 'v1\n' >"${template}/owned/version"
 	printf '%s\n' '---' 'name: fixture-one' 'description: fixture' '---' \
 		>"${template}/.agents/skills/fixture-one/SKILL.md"
-	printf '%s\n' 'name = "fixture-agent"' 'description = "fixture"' \
-		>"${template}/.codex/agents/fixture-agent.toml"
+	printf '%s\n' \
+		"Apply \`docs/spec-first-workflow/shared/subagents-and-handoff.md\`." \
+		>"${template}/.agents/role-classes/read-only-specialist.md"
+	printf '%s\n' 'This lane is read-only.' \
+		>"${template}/.agents/role-classes/read-only-specialist-fallback.md"
+	printf '%s\n' \
+		'name = "fixture-agent"' \
+		'description = "fixture"' \
+		'class = "read-only-specialist"' \
+		'claude_model = "sonnet"' \
+		'output_schema = "lane-result-v1"' \
+		'' \
+		'instructions = """' \
+		'Own fixture evidence.' \
+		'"""' \
+		>"${template}/.agents/roles/fixture-agent.toml"
 	printf '%s\n' '[agents]' 'max_depth = 1' '' '[fixture]' 'retained = true' \
 		>"${template}/.codex/config.toml"
 	for repo_owned in \
@@ -208,24 +236,31 @@ template_sync_behavior_check() (
 		test/README.md; do
 		printf 'fixture repository owner\n' >"${template}/${repo_owned}"
 	done
+	cp scripts/agent-roles-sync.sh "${template}/scripts/agent-roles-sync.sh"
 	cp scripts/claude-skills-sync.sh "${template}/scripts/claude-skills-sync.sh"
 	cp scripts/codex-agents-sync.sh "${template}/scripts/codex-agents-sync.sh"
 	# The synced sync scripts are executed from the target below, so the library
 	# they source has to travel with them exactly as the manifest makes it.
 	cp scripts/lib/sync-cli.sh "${template}/scripts/lib/sync-cli.sh"
 	cp scripts/ci/claude-skills-check.sh "${template}/scripts/ci/claude-skills-check.sh"
+	bash "${template}/scripts/agent-roles-sync.sh" --apply --repo "${template}" >/dev/null
 	git -C "${template}" init -q
 	git -C "${template}" add \
 		template-owned.paths \
 		owned/version \
+		.agents/role-classes \
+		.agents/roles \
 		.agents/skills/fixture-one/SKILL.md \
+		.claude/agents/fixture-agent.md \
 		.codex/agents/fixture-agent.toml \
+		.qwen/agents/fixture-agent.md \
 		.codex/config.toml \
 		docs/repo-architecture.md \
 		docs/project-structure-and-module-organization.md \
 		docs/build-test-and-development-commands.md \
 		docs/ci-cd-production-ready.md \
 		docs/railway-deployment-profile.md \
+		scripts/agent-roles-sync.sh \
 		scripts/claude-skills-sync.sh \
 		scripts/codex-agents-sync.sh \
 		scripts/lib/sync-cli.sh \
@@ -377,6 +412,16 @@ template_sync_behavior_check() (
 		echo "template-owned purity: synced Claude link checker rejected generated links" >&2
 		return 1
 	}
+	bash "${target}/scripts/agent-roles-sync.sh" --check --repo "${target}" >/dev/null || {
+		echo "template-owned purity: synced role checker rejected generated carriers" >&2
+		return 1
+	}
+	printf '\n# manual drift\n' >>"${target}/.codex/agents/fixture-agent.toml"
+	if bash "${target}/scripts/agent-roles-sync.sh" --check --repo "${target}" >/dev/null 2>&1; then
+		echo "template-owned purity: role checker accepted a manually changed carrier" >&2
+		return 1
+	fi
+	bash "${target}/scripts/agent-roles-sync.sh" --apply --repo "${target}" >/dev/null
 	bash "${target}/scripts/codex-agents-sync.sh" --check --repo "${target}" >/dev/null || {
 		echo "template-owned purity: synced Codex registry checker rejected generated roles" >&2
 		return 1

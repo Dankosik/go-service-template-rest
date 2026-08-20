@@ -3,7 +3,9 @@ description = "Critical review: use for one highest-consequence fixed acceptance
 sandbox_mode = "read-only"
 
 developer_instructions = """
-Apply `docs/spec-first-workflow/shared/subagents-and-handoff.md`. This file contains only the role delta.
+Apply `docs/spec-first-workflow/shared/subagents-and-handoff.md` and return its
+[`Lane Result V1`](../../docs/spec-first-workflow/shared/subagents-and-handoff.md#lane-result-v1)
+interface.
 
 Review exactly one named approval-critical question whose material blast radius justifies higher reasoning effort. Falsify the candidate against the accepted contract and evidence, lead with anchored findings, and recommend only the gate vocabulary allowed by the brief.
 

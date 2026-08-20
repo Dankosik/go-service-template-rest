@@ -10,7 +10,7 @@ This template is the single source of truth for the workflow instruction set. A 
 
 ## The Ownership Split
 
-`template-owned.paths` is the manifest. Every path it lists is mirrored verbatim into a derived repository, including deletions inside listed directories. Two generated views are also owned by the sync: `.claude/skills` exposes the canonical skill set, and the marked role-registry block in `.codex/config.toml` exposes template-owned Codex agents while preserving every repository-specific table outside that block.
+`template-owned.paths` is the manifest. Every path it lists is mirrored verbatim into a derived repository, including deletions inside listed directories. `.agents/roles` owns role semantics; `scripts/agent-roles-sync.sh` generates the listed Codex, Claude, and Qwen carriers. Two target-local generated views are rebuilt after mirroring: `.claude/skills` exposes the canonical skill set, and the marked role-registry block in `.codex/config.toml` exposes template-owned Codex agents while preserving every repository-specific table outside that block.
 
 A path may appear in the manifest only while it carries no repository-specific content: no service name, no module path, no deployment target, no owner, no service-specific invariant, and no initialization-profile marker. A profile marker means different derived repositories retain different content, which a verbatim mirror cannot preserve. That restriction is what makes mirroring safe — there is nothing in an owned file for a derived repository to lose.
 
@@ -54,12 +54,12 @@ bash ../go-service-template-rest/scripts/template-sync.sh \
   --apply --from ../go-service-template-rest --repo .
 ```
 
-`--check` compares owned content, generated Claude skill links, and the Codex
-role registry directly, prints drift, and exits non-zero. It also requires every
+`--check` compares owned content, generated role carriers, Claude skill links,
+and the Codex role registry directly, prints drift, and exits non-zero. It also requires every
 repository-owned authority listed above except `README.md` and the template-only
 onboarding document; it verifies their presence but never copies their
 service-specific content. `--apply` mirrors the exact committed `HEAD`, rebuilds
-both generated views through template-owned helpers without depending on the
+role carriers and target-local generated views through template-owned helpers without depending on the
 target `Makefile`, and removes the retired `.template-sync` file. Ignored and
 untracked empty content does not enter that snapshot. Generated paths stay out
 of the manifest, but the sync commits the template-owned ones it changed. A
