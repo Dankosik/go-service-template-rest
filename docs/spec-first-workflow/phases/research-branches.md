@@ -1,6 +1,6 @@
 # Research Branches
 
-Load only the branch selected by [Research](research.md#branch-selection).
+Load only the branch selected by [Research](research.md#conditional-methods).
 
 ## Current-State Or Semantic Baseline
 

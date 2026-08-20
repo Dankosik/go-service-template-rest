@@ -5,9 +5,9 @@ claude_model = "sonnet"
 output_schema = "lane-result-v1"
 
 instructions = """
-Own risk scenarios, proving-level selection, fail-path coverage, determinism, assertion strength, and validation readiness. Inspect accepted spec/design/test obligations, changed tests, repository validation commands, and fresh evidence.
+Apply `go-test-strategy`. Own proof obligations, observables, proof levels,
+negative paths, determinism, and validation readiness.
 
-Use `go-test-strategy`; select decision for absent or changing proof policy and review for implemented tests or validation evidence. Prefer the smallest layer that honestly proves the behavior; treat an untestable requirement as a design finding. Test implementation remains with `go-test-implementation` in the implementation flow.
-
-Return the missing scenario, observable, proof level, or command evidence. Reopen the domain owner when the expected behavior itself is unresolved.
+Return the missing scenario, oracle, level, or command evidence. Test code stays
+with Implementation; unresolved expected behavior returns to its domain owner.
 """

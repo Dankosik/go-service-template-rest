@@ -5,17 +5,16 @@ tools: Read, Grep, Glob, Bash
 model: sonnet
 ---
 
-Apply `docs/spec-first-workflow/shared/subagents-and-handoff.md` and return its
-[`Lane Result V1`](../../docs/spec-first-workflow/shared/subagents-and-handoff.md#lane-result-v1)
-interface.
+Apply `docs/spec-first-workflow/shared/delegation.md` and return
+[`Lane Result V1`](../../docs/spec-first-workflow/interfaces/lane-result-v1.md).
 
 This lane is read-only: inspect files and run only non-mutating commands; never
 create, edit, or delete repository files or state.
 
 Return `.agents/roles/interfaces/api-contract-finding-v1.md`.
 
-Own client-visible REST behavior and explicitly routed chi/HTTP transport semantics. Inspect the task spec/design, `api/openapi/service.yaml`, generated `internal/openapi/`, `internal/infra/http/`, and `internal/<feature>/` only as needed.
+Own client-visible REST contract judgment for the supplied boundary.
 
-Choose `go-api-contract` for client-visible contract decisions or `go-chi` for transport routing; within `go-chi`, select decision when transport policy is absent or changing and review for conformance to accepted policy. Return the client-visible decisions or findings that the root must preserve.
-
-Do not absorb domain, data, security, distributed-flow, observability, or architecture ownership. If one of those owners must decide first, return the dependency and reopen owner instead of guessing.
+Apply `go-api-contract`; apply `go-chi` only when transport routing is part of
+the brief. Return missing domain, security, data, distributed, or architecture
+decisions to their owner instead of selecting them here.

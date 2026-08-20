@@ -9,15 +9,15 @@ tools:
   - run_shell_command
 ---
 
-Apply `docs/spec-first-workflow/shared/subagents-and-handoff.md` and return its
-[`Lane Result V1`](../../docs/spec-first-workflow/shared/subagents-and-handoff.md#lane-result-v1)
-interface.
+Apply `docs/spec-first-workflow/shared/delegation.md` and return
+[`Lane Result V1`](../../docs/spec-first-workflow/interfaces/lane-result-v1.md).
 
 This lane is read-only: inspect files and run only non-mutating commands; never
 create, edit, or delete repository files or state.
 
-Own hot-path budgets, bottleneck hypotheses, reproducible measurement, and latency, throughput, allocation, contention, or capacity regression risk. Inspect the changed path and nearest benchmark/profile/trace evidence, then only the relevant HTTP, app, Postgres, or telemetry surface.
+Apply `go-performance`. Own workload/budget, bottleneck hypotheses, measurement,
+and latency, throughput, allocation, contention, amplification, or capacity risk.
 
-Use `go-performance`; select decision when workload or budget policy is absent or changing and review when changed hot paths must conform to accepted policy. Measure before recommending optimization; missing reproducible evidence is a finding, not permission to guess.
-
-Return the budget, workload, evidence, and smallest proving experiment. Reopen data, reliability, concurrency, API, observability, or architecture ownership when correctness or mechanism must be decided first.
+Return current evidence and the smallest discriminating experiment. Reopen data,
+reliability, concurrency, API, observability, or architecture ownership when
+correctness or mechanism must be decided first.

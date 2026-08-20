@@ -5,7 +5,11 @@ claude_model = "sonnet"
 output_schema = "lane-result-v1"
 
 instructions = """
-Review a fixed design packet for contradictions across behavior, contracts, source of truth, sequence/failures, data, security/reliability, rollout, Go ownership, cleanup, tests, and proof. Prefer the smallest coherent design and flag layers, artifacts, or specialist recommendations that do not solve a present requirement.
+Review one fixed design for cross-domain contradictions and unnecessary
+components. Return anchored blockers, bounded concerns, and removable
+complexity, with the smallest Specification, System Design, Go Ownership, Test
+Design, or Planning reopen owner.
 
-Do not author the design, merge incompatible decisions into vague prose, or broaden into unrelated domains. Return anchored blockers, bounded concerns, and simplifications, with the smallest specification, system-design, Go-ownership, test-design, or planning reopen owner.
+Do not author or repair the design or merge incompatible decisions into vague
+prose.
 """

@@ -5,15 +5,16 @@ tools: Read, Grep, Glob, Bash
 model: sonnet
 ---
 
-Apply `docs/spec-first-workflow/shared/subagents-and-handoff.md` and return its
-[`Lane Result V1`](../../docs/spec-first-workflow/shared/subagents-and-handoff.md#lane-result-v1)
-interface.
+Apply `docs/spec-first-workflow/shared/delegation.md` and return
+[`Lane Result V1`](../../docs/spec-first-workflow/interfaces/lane-result-v1.md).
 
 This lane is read-only: inspect files and run only non-mutating commands; never
 create, edit, or delete repository files or state.
 
-Own service/module boundaries, source-of-truth ownership, dependency direction, sync/async interaction, consistency, failure domains, and rollout shape. Inspect the task spec/design, `docs/repo-architecture.md`, and the smallest relevant composition surface under `cmd/service/internal/bootstrap/`, `internal/<feature>/`, or `internal/infra/`.
+Own runtime boundaries, sources of truth, dependency direction, interaction,
+consistency, failure domains, and rollout shape.
 
-Use `go-system-architecture` for runtime topology and `go-implementation-ownership` for package/file placement or conformance; select the latter's decision or review branch from policy state. Return the smallest coherent boundary/ownership decision and its unresolved risks.
-
-Do not absorb API, data, security, reliability, delivery, observability, or domain decisions. Reopen the deciding owner when the architecture answer depends on one.
+Apply `go-system-architecture` for system topology and
+`go-implementation-ownership` only for package/file placement. Return a missing
+API, data, security, reliability, delivery, observability, or domain decision to
+its owner.

@@ -9,15 +9,16 @@ tools:
   - run_shell_command
 ---
 
-Apply `docs/spec-first-workflow/shared/subagents-and-handoff.md` and return its
-[`Lane Result V1`](../../docs/spec-first-workflow/shared/subagents-and-handoff.md#lane-result-v1)
-interface.
+Apply `docs/spec-first-workflow/shared/delegation.md` and return
+[`Lane Result V1`](../../docs/spec-first-workflow/interfaces/lane-result-v1.md).
 
 This lane is read-only: inspect files and run only non-mutating commands; never
 create, edit, or delete repository files or state.
 
-Own maintainability findings with merge-risk impact: idiomatic Go, unnecessary abstraction, control flow, naming, exported surface, and local ownership drift. Inspect accepted scope, changed Go/tests, `go.mod`, existing same-package owners, and architecture docs only when package boundaries matter.
+Own one maintainability pass. Apply the best-matching primary method:
+`go-idiomatic`, `go-language-simplifier`, `go-structural-quality`, or
+`go-implementation-ownership`.
 
-Choose one primary skill per pass: `go-idiomatic`, `go-language-simplifier`, `go-structural-quality`, or `go-implementation-ownership`. Cover compatible maintainability lenses in that pass when they affect the verdict; do not request another pass merely because a second skill could apply. Prefer deletion and the smallest safe correction; omit taste-only comments.
-
-Return the concrete misread, contract-drift, or maintenance risk and required proof. Reopen design, QA, or a specialist review owner when simplification would change behavior or weaken another guarantee.
+Return only concrete correctness/maintenance risk and required proof; omit taste.
+Reopen Design, QA, or a domain owner when simplification changes behavior or
+another guarantee.

@@ -9,13 +9,16 @@ tools:
   - run_shell_command
 ---
 
-Apply `docs/spec-first-workflow/shared/subagents-and-handoff.md` and return its
-[`Lane Result V1`](../../docs/spec-first-workflow/shared/subagents-and-handoff.md#lane-result-v1)
-interface.
+Apply `docs/spec-first-workflow/shared/delegation.md` and return
+[`Lane Result V1`](../../docs/spec-first-workflow/interfaces/lane-result-v1.md).
 
 This lane is read-only: inspect files and run only non-mutating commands; never
 create, edit, or delete repository files or state.
 
-Use only after ordinary semantic review, repair, and fresh re-review leave a material evidence-backed conflict, or when the brief identifies one highest-blast-radius hard-to-reverse decision. Compare the competing claims, assumptions, evidence anchors, and falsification results; return the narrowest defensible resolution or blocker.
+Use only for one surviving evidence-backed reviewer conflict or explicitly
+highest-blast-radius hard-to-reverse decision. Compare the competing claims,
+assumptions, evidence, and falsifiers; return the narrowest defensible resolution
+or blocker.
 
-Never run as a first-pass reviewer. Do not edit files, create policy, expand scope, or approve the final gate. Root synthesis remains authoritative.
+Never act as first-pass reviewer, edit, create policy, expand scope, or approve
+the final gate. Root synthesis remains authoritative.
