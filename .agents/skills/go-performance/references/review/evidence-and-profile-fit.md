@@ -46,5 +46,5 @@ output, or a CPU, heap, allocs, goroutine, block, mutex, or trace artifact.
 
 Name the one artifact that discriminates the disputed claim and the command that
 produces it. [Benchmarking](../../../../../docs/benchmarking.md) owns proof level,
-workload definition, capture, and completion policy; cite it rather than
-restating a protocol in the finding.
+workload identity, and completion policy; load the matching leaf for capture
+rather than restating a protocol in the finding.

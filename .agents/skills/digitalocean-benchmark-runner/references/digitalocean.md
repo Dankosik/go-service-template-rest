@@ -592,9 +592,9 @@ materialize the baseline in a separate clean worktree and invoke `sync` there
 with the same absolute `DO_BENCH_STATE_FILE`; do not reset or overwrite user
 work.
 
-For a small or noisy decision-critical delta, follow `docs/benchmarking.md`:
-alternate baseline and candidate batches on the same Droplet and retain each
-raw batch. A single baseline-then-candidate sequence is only adequate for a
+For a small or noisy decision-critical delta, follow
+`docs/benchmarking/go.md`: alternate baseline and candidate batches on the
+same Droplet and retain each raw batch. A single baseline-then-candidate sequence is only adequate for a
 stable material delta.
 
 ## External HTTP load

@@ -89,8 +89,9 @@
 //     composition root.
 //   - handler error boundary — sanitizes what the handler returns.
 //
-// This package doc is the one prose owner of that order; docs/grpc.md describes
-// what the chain guarantees a caller and points here for the positions.
+// This package doc is the one prose owner of that order;
+// docs/grpc/operations-and-proof.md describes what the chain guarantees a
+// caller and points here for the positions.
 //
 // The two error boundaries are the same mechanism and differ only in how much of
 // an error they already trust, which is what fixes their order: a policy
@@ -118,8 +119,7 @@
 // streaming halves genuinely differ in how they publish response metadata: one
 // through grpc.SetHeader, the other through the stream.
 //
-// See docs/grpc.md for the service author's contract — the proto and generation
-// workflow, the full failure.Code to gRPC code table, and the bootstrap
-// registration step — and docs/repo-architecture.md for where this sits among the
-// repository's extension seams.
+// See docs/grpc.md to select the service author's contract leaf, and
+// docs/repo-architecture.md for where this sits among the repository's
+// extension seams.
 package grpcx

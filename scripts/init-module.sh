@@ -913,7 +913,8 @@ fi
 			internal/grpclimits \
 			internal/infra/grpc \
 			internal/infra/grpcclient \
-			examples/grpc-reference-service
+			examples/grpc-reference-service \
+			docs/grpc
 		rm -f -- \
 			buf.yaml \
 			buf.gen.yaml \
