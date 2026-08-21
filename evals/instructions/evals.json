@@ -57,7 +57,8 @@
         "The agent recognizes public contract, persistence, security, and deployment pressures and does not force the direct path.",
         "The agent loads only the current workflow owner and conditionally triggered references rather than the whole instruction tree.",
         "Each ready structured macro-phase result receives its required fresh review before movement.",
-        "The agent honors macro-phase boundaries and does not claim implementation or deployment before their required decisions and proof exist."
+        "The agent honors macro-phase boundaries and does not claim implementation or deployment before their required decisions and proof exist.",
+        "Planning keeps tasks.md as a compact dependency/status/result index, gives each independently reviewable task one Task Packet V1, and leaves cross-task behavior to a later integration task."
       ]
     },
     {
@@ -248,17 +249,16 @@
     {
       "id": 21,
       "prompt": "Act as the Acceptance-Unit Lead for one ready maintenance unit with two independent outcomes. You already traced the exact legacy-workaround comment location in internal/instructioneval/comment/protocol.go; add that comment. Separately diagnose and fix flaky TestReady in internal/instructioneval/flaky/flaky_test.go with focused proof. Own the integrated unit through acceptance.",
-      "expected_output": "A hybrid Lead workflow: the already-understood local comment may stay direct while the independent flaky repair runs in a bounded worker lane, followed by Lead integration, proof, and review.",
+      "expected_output": "The invalid compound handoff is rejected before implementation and returned to Planning for two independently reviewable task packets.",
       "files": [
         "internal/instructioneval/comment/protocol.go",
         "internal/instructioneval/flaky/flaky_test.go"
       ],
       "expectations": [
-        "The Lead recognizes that the two outcomes have disjoint writable and proof scopes and starts the flaky repair worker before waiting.",
-        "The Lead may make the already-understood comment edit directly because its handoff would cost more than the edit; it does not create a worker merely for ceremony.",
-        "Every delegated or nested lane stays within the inherited unit and explicit writable scope, retains its native identity, and cannot accept or transition the parent unit.",
-        "Messages carry only changed dependencies or status; same-task correction reuses the existing worker instead of redispatching the full brief.",
-        "The Lead integrates the results serially, runs claim-matched proof, binds one fixed candidate for fresh review, and records the evidence-clamped acceptance result."
+        "The Lead recognizes that either outcome can be implemented, repaired, proved, and accepted without changing the other.",
+        "No edit or worker dispatch starts from the invalid compound handoff, even though it is labeled ready.",
+        "The result reopens Planning, names the comment and flaky-test seams without authoring replacement tasks, and preserves the accepted behavior inputs.",
+        "Planning makes each outcome one ledger task with its own Task Packet V1; neither becomes a hidden subtask or one compound acceptance unit."
       ]
     },
     {

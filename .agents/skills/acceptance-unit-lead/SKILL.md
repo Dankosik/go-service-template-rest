@@ -12,5 +12,7 @@ disable-model-invocation: true
 Own one fixed unit. Apply
 [Implementation](../../../docs/spec-first-workflow/phases/implementation.md),
 integrate any bounded delegation, run its proof and required review, then write
-one canonical accepted result or precise blocker. Reopen only the smallest
-invalid owner and resume the same unit. Start no other unit.
+one canonical accepted result or precise blocker. For a persisted ledger, load
+the current task packet and consumed outputs without absorbing adjacent work.
+Reopen only the smallest invalid owner and resume the same unit. Start no other
+unit.

@@ -7,6 +7,12 @@ proof, required independent review, and one accepted or blocked result. It may
 edit directly or delegate bounded independent work; coupled work, decisions,
 integration, repair, proof, and acceptance remain with the Lead.
 
+The ledger task is the acceptance unit by default. A compound unit requires the
+ledger's exact inseparability reason. Load the current task packet and consumed
+outputs; repair only within that boundary. A new postcondition, responsibility,
+behavior, proof oracle, or packet change reopens Planning instead of expanding
+the task.
+
 Load only methods exposed by the changed surface. Apply [Validation
 Routing](../../validation-routing.md), the [Evidence
 Contract](../shared/evidence-contract.md), and [Implementation

@@ -4,6 +4,13 @@ Use when shared [Review](../shared/review.md) routes one fixed inline unit or
 persisted ledger, or the user explicitly requests standalone plan/readiness
 review. This adapter owns only Planning falsifiers and threshold.
 
+## Atomicity Gate
+
+Before simulating execution, test whether the task admits one review verdict.
+If one part could be accepted while another fails, or one finding could be
+repaired without changing the rest, return `FAIL` to Planning and name the
+independently acceptable boundaries. Do not author the replacement ledger.
+
 ## Lenses
 
 Simulate the next executable unit from selection through
@@ -22,8 +29,8 @@ valid, or proved unchanged. Stop a blocked path at its earliest unrecorded choic
 or unavailable input, but continue independent paths. Inspect later units only
 for a decision/dependency that can invalidate the next accepted result.
 
-Do not reslice tasks or choose missing behavior, mechanism, ownership, proof,
-rollout, authority, or concurrency.
+Do not reslice tasks, author replacement packets, or choose missing behavior,
+mechanism, ownership, proof, rollout, authority, or concurrency.
 
 `PASS` requires the next unit to be executable and claim-provable from closed
 inputs. `CONCERNS` may carry only a later bounded risk that cannot invalidate

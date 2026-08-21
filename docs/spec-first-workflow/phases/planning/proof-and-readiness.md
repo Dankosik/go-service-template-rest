@@ -36,11 +36,11 @@ condition. Keep reconciliation inline unless it is too dense to audit.
 
 ## Readiness dry run
 
-Walk the next inline acceptance unit or ledger unit through its
-proof using current inputs. Resolve any later decision that could invalidate
-that work. A later unavailable input remains owned and pending; it blocks now
-only when the next accepted result would otherwise be unusable or final
-completion is being claimed.
+Walk the next inline acceptance unit or ledger task packet through its proof
+using current inputs. Resolve any later decision that could invalidate that
+work. A later unavailable input remains owned and pending; it blocks now only
+when the next accepted result would otherwise be unusable or final completion
+is being claimed.
 
 Readiness passes only when that rehearsal can reach acceptance using the fixed
 plan, cited current inputs, and available mandatory gates without chat history,

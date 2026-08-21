@@ -4,14 +4,11 @@ Read only when one of these execution shapes is present.
 
 ## Integration-first slice
 
-When integration is the primary uncertainty, make the next acceptance unit the
-smallest production-grade end-to-end slice. The slice establishes one supported
-behavior through the real production entry point, every uncertain integration
-seam, and the final observable response, effect, or authoritative state,
-together with the narrow failure or negative path required to falsify that
-integration. Scaffolding, interface-only work, TODOs, mock success, and test-only
-wiring do not satisfy the slice outcome; fixtures or test doubles may support
-proof only behind an accepted seam. Prove that slice before expanding from it.
+When integration is the primary uncertainty, create the smallest production-real
+task that retires one named integration uncertainty. If several seams can be
+falsified independently, plan separate tasks and a later integrated proof.
+Scaffolding, TODOs, mock success, and test-only wiring do not satisfy the task;
+fixtures or test doubles may support proof only behind an accepted seam.
 Otherwise keep local or already-proven work on its existing direct path.
 
 ## Expand, migrate, contract
