@@ -16,8 +16,7 @@ make template-init \
   CODEOWNER=@your-org/backend \
   DATABASE=none \
   GRPC=none \
-  AUTHN=oidc-jwt \
-  OUTBOUND_HTTP=none
+  AUTHN=oidc-jwt
 ```
 
 Supply only the issuer and this API's audience:

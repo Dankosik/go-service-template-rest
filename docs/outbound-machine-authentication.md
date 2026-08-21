@@ -1,8 +1,8 @@
 # Outbound machine authentication
 
 `OUTBOUND_AUTH=oauth2-client-credentials` retains a client factory for one
-OAuth 2.0 client-credentials dependency. Select it with
-`OUTBOUND_HTTP=bounded`, `GRPC=enabled`, or both.
+OAuth 2.0 client-credentials dependency. Its HTTP adapter is retained by
+default; `GRPC=enabled` additionally retains the gRPC adapter.
 
 ## Configuration
 

@@ -25,7 +25,7 @@ PROTO_GENERATED_GO_FILES := internal/gen/proto/% examples/grpc-reference-service
 GOIMPORTS_FILES := $(filter-out $(PROTO_GENERATED_GO_FILES),$(GO_FILES))
 GOFUMPT_FILES := $(filter-out internal/openapi/openapi.gen.go internal/infra/postgres/sqlcgen/% $(PROTO_GENERATED_GO_FILES),$(GO_FILES))
 SHELL_FILES := $(shell git ls-files --cached --others --exclude-standard -- '*.sh' 2>/dev/null | awk '!/^(\.agents|\.cache|vendor)\//' | while IFS= read -r file; do [ -f "$$file" ] && printf '%s\n' "$$file"; done)
-REDOCLY_CLI_VERSION := 2.46.2
+REDOCLY_CLI_VERSION := 2.40.0
 REDOCLY_CLI ?= npx --yes @redocly/cli@$(REDOCLY_CLI_VERSION)
 GO_TOOL := bash ./scripts/run-go-tool.sh
 GOLANGCI_LINT ?= $(GO_TOOL) golangci-lint
@@ -113,7 +113,7 @@ HTTP_BENCH_ENV_FILE ?= .env.bench
 HTTP_BENCH_DOCKER_NETWORK ?=
 HTTP_BENCH_RAW_SAMPLES ?= 0
 
-TRIVY_IMAGE ?= aquasec/trivy:0.74.0@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969
+TRIVY_IMAGE ?= aquasec/trivy:0.72.0@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f
 TRIVY_CACHE_VOLUME ?= trivy-cache
 ACTIONLINT_IMAGE ?= rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
 SHELLCHECK_IMAGE ?= koalaman/shellcheck:v0.11.0@sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d
@@ -750,9 +750,9 @@ migration-validate:
 	docker stop --time 45 "$$runtime" >/dev/null; \
 	exit_code="$$(docker inspect -f '{{.State.ExitCode}}' "$$runtime")"; \
 	test "$$exit_code" = "0" || { echo "runtime image exited with code $$exit_code after SIGTERM"; docker logs "$$runtime"; exit 1; }; \
-	docker run --rm --network "$${project}_default" --entrypoint psql "postgres:17@sha256:e38411452a464af89e5adadb8d223bf53b898d47d6ef918b2d58c08707350449" "postgres://app:app@postgres:5432/app?sslmode=disable" -c 'ALTER ROLE app SET default_transaction_read_only = on'; \
+	docker run --rm --network "$${project}_default" --entrypoint psql "postgres:17@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d" "postgres://app:app@postgres:5432/app?sslmode=disable" -c 'ALTER ROLE app SET default_transaction_read_only = on'; \
 	assert_active_failure; \
-	docker run --rm --network "$${project}_default" --entrypoint psql "postgres:17@sha256:e38411452a464af89e5adadb8d223bf53b898d47d6ef918b2d58c08707350449" "postgres://app:app@postgres:5432/app?sslmode=disable" -c 'SET default_transaction_read_only = off' -c 'ALTER ROLE app RESET default_transaction_read_only'
+	docker run --rm --network "$${project}_default" --entrypoint psql "postgres:17@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d" "postgres://app:app@postgres:5432/app?sslmode=disable" -c 'SET default_transaction_read_only = off' -c 'ALTER ROLE app RESET default_transaction_read_only'
 # profile:database-postgres:end
 
 container-security:

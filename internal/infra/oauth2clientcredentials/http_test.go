@@ -7,37 +7,25 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/example/go-service-template-rest/internal/infra/httpclient"
 	"golang.org/x/oauth2"
 )
 
-type recordingAuthorizedClient struct {
-	attempts       int
-	authorizations []string
+type recordingResourceClient struct {
+	authorization string
 }
 
-func (c *recordingAuthorizedClient) DoWithAuthorization(
-	request *http.Request,
-	authorize httpclient.AttemptAuthorizer,
-) (*http.Response, error) {
-	for range c.attempts {
-		attempt := request.Clone(request.Context())
-		attempt.Header = request.Header.Clone()
-		if err := authorize(attempt); err != nil {
-			return nil, err
-		}
-		c.authorizations = append(c.authorizations, attempt.Header.Get("Authorization"))
-	}
+func (c *recordingResourceClient) Do(request *http.Request) (*http.Response, error) {
+	c.authorization = request.Header.Get("Authorization")
 	return &http.Response{StatusCode: http.StatusOK, Body: http.NoBody, Request: request}, nil
 }
 
-func TestHTTPClientAttachesLibraryTokenInsideEveryAttempt(t *testing.T) {
+func TestHTTPClientAttachesLibraryTokenToRequestCopy(t *testing.T) {
 	var calls atomic.Int32
 	owner := newClient(func(context.Context) (*oauth2.Token, error) {
 		calls.Add(1)
 		return validTestToken("opaque"), nil
 	}, nil)
-	base := &recordingAuthorizedClient{attempts: 2}
+	base := &recordingResourceClient{}
 	client := &HTTPClient{client: owner, base: base}
 	request, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://resource.example.com/items", http.NoBody)
 	if err != nil {
@@ -51,10 +39,11 @@ func TestHTTPClientAttachesLibraryTokenInsideEveryAttempt(t *testing.T) {
 	if calls.Load() != 1 {
 		t.Fatalf("provider calls = %d, want 1", calls.Load())
 	}
-	for _, authorization := range base.authorizations {
-		if authorization != "Bearer opaque" {
-			t.Fatalf("Authorization = %q", authorization)
-		}
+	if base.authorization != "Bearer opaque" {
+		t.Fatalf("Authorization = %q", base.authorization)
+	}
+	if request.Header.Get("Authorization") != "" {
+		t.Fatal("Do() mutated the caller request")
 	}
 
 	request.Header.Set("Authorization", "Bearer caller")
@@ -75,7 +64,7 @@ func TestHTTPClientCallerCancellationStopsOnlyItsWait(t *testing.T) {
 		<-release
 		return validTestToken("opaque"), nil
 	}, nil)
-	client := &HTTPClient{client: owner, base: &recordingAuthorizedClient{attempts: 1}}
+	client := &HTTPClient{client: owner, base: &recordingResourceClient{}}
 	ctx, cancel := context.WithCancel(context.Background())
 	request, _ := http.NewRequestWithContext(ctx, http.MethodGet, "https://resource.example.com/items", http.NoBody)
 	done := make(chan error, 1)

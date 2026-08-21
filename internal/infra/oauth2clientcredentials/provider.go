@@ -14,8 +14,6 @@ import (
 
 const (
 	defaultAcquisitionTimeout = 5 * time.Second
-	maxProviderHeaderBytes    = 32 << 10
-	maxProviderBodyBytes      = 64 << 10
 )
 
 type doerRoundTripper struct {
@@ -23,24 +21,11 @@ type doerRoundTripper struct {
 }
 
 func (t doerRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
-	return t.client.Do(request) //nolint:wrapcheck // The bounded client owns the safe public error.
+	return t.client.Do(request) //nolint:wrapcheck // The fixed-target client owns the safe public error.
 }
 
 func newTokenHTTPClient(cfg Config) (*httpclient.Client, error) {
-	client, err := httpclient.New(httpclient.Config{
-		DependencyName:         "oauth-token",
-		BaseURL:                cfg.TokenURL,
-		TargetClass:            cfg.TokenTargetClass,
-		OneAttempt:             true,
-		DisableInstrumentation: true,
-		PrivateHostSuffix:      cfg.TokenPrivateHostSuffix,
-		RequestTimeout:         defaultAcquisitionTimeout,
-		ResponseHeaderTimeout:  defaultAcquisitionTimeout,
-		MaxResponseHeaderBytes: maxProviderHeaderBytes,
-		MaxResponseBodyBytes:   maxProviderBodyBytes,
-		MaxConnsPerHost:        1,
-		MaxIdleConnsPerHost:    1,
-	}, nil)
+	client, err := httpclient.NewExternalHTTPS(cfg.TokenURL)
 	if err != nil {
 		return nil, ErrInvalidConfiguration
 	}

@@ -16,15 +16,14 @@ tokens, or customer data.
 `internal/infra/oauth2clientcredentials` owns one process-local OAuth
 client-credentials factory for one fixed dependency. A concrete provider
 adapter constructs and closes the owner, then gives feature code only its
-generated client over an authenticated bounded HTTP client or authenticated
+generated client over an authenticated fixed-target HTTP client or authenticated
 gRPC connection. Token sources, tokens, provider bodies, and raw retrieval
 errors stay private. Configuration is immutable and the secret remains
 environment-only.
 <!-- profile:outbound-auth-oauth2-client-credentials:end -->
 
-Provider adapters live under `internal/infra/<integration>` and start with
-`net/http`; reuse the bounded client for fixed-authority transport safety when
-enabled. The provider adapter owns authentication, budgets, retry eligibility,
+Provider adapters live under `internal/infra/<integration>` and start with the
+always-available fixed-target HTTP client. The provider adapter owns authentication, budgets, retry eligibility,
 provider errors, and generated clients. Bootstrap owns wiring and cleanup. A
 dynamic or caller-controlled URL requires a separate security decision.
 

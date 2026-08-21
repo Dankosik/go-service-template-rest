@@ -45,7 +45,6 @@ make template-init \
   OUTBOX=none \
   GRPC=none \
   AUTHN=none \
-  OUTBOUND_HTTP=none \
   OBJECT_STORAGE=none \
   OUTBOUND_AUTH=none \
   MESSAGING=none
@@ -55,8 +54,8 @@ make run
 
 The defaults create a service with no database dependency. The complete agent
 workflow is always retained. Choose `DATABASE=postgres` when the service owns
-PostgreSQL, and choose `OUTBOUND_HTTP=bounded` only when a shared
-fixed-authority client removes repeated provider code.
+PostgreSQL. The fixed-authority HTTP client is always retained so feature code
+only supplies its dependency target.
 <!-- profile:object-storage:start -->
 Choose `OBJECT_STORAGE=s3` only when this service needs the S3-compatible
 capability. It requires a complete static tuple supplied by deployment and
@@ -75,8 +74,7 @@ business transaction and executed by the separate jobs worker; see
 [PostgreSQL background jobs](docs/postgres-durable-background-jobs.md).
 <!-- profile:jobs-postgres:end -->
 <!-- profile:outbound-auth-oauth2-client-credentials:start -->
-Choose `OUTBOUND_AUTH=oauth2-client-credentials` only with
-`OUTBOUND_HTTP=bounded`, `GRPC=enabled`, or both; it retains the small factory
+Choose `OUTBOUND_AUTH=oauth2-client-credentials` to retain the small factory
 that gives a concrete dependency adapter authenticated clients without exposing
 tokens. See [outbound machine authentication](docs/outbound-machine-authentication.md).
 <!-- profile:outbound-auth-oauth2-client-credentials:end -->
@@ -294,7 +292,7 @@ internal/<feature>/              feature-owned business behavior (when added)
 internal/config/                 runtime configuration
 internal/health/                 readiness and drain behavior
 internal/infra/http/             HTTP transport and middleware
-internal/infra/httpclient/       bounded outbound HTTP transport (optional profile)
+internal/infra/httpclient/       fixed-authority outbound HTTP transport
 internal/infra/postgres/         PostgreSQL adapters (PostgreSQL profile)
 api/openapi/service.yaml         API source of truth
 internal/openapi/                generated OpenAPI artifacts

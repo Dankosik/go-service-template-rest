@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -36,13 +37,17 @@ func initMessagingRuntime(ctx context.Context, cfg config.MessagingConfig, log *
 // reach the feature that creates a domainevent.Event.
 func (m messagingRuntime) Publisher(routes ...natsjs.Route) (*natsjs.Publisher, error) {
 	if m.client == nil {
-		return nil, fmt.Errorf("messaging is disabled")
+		return nil, errors.New("messaging is disabled")
 	}
 	registry, err := natsjs.NewRegistry(routes...)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("build messaging registry: %w", err)
 	}
-	return registry.Publisher(m.client.Producer())
+	publisher, err := registry.Publisher(m.client.Producer())
+	if err != nil {
+		return nil, fmt.Errorf("build messaging publisher: %w", err)
+	}
+	return publisher, nil
 }
 
 // ConnectionRun is the client's connection supervisor loop, or nil when

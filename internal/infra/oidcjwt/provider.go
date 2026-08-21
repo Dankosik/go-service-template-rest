@@ -20,13 +20,13 @@ type discoveryDocument struct {
 	JWKSURI string `json:"jwks_uri"`
 }
 
-func discoverJWKSURI(ctx context.Context, policy Policy, provider metric.MeterProvider) (string, error) {
+func discoverJWKSURI(ctx context.Context, policy Policy, _ metric.MeterProvider) (string, error) {
 	issuerURL, err := url.Parse(policy.issuer)
 	if err != nil || issuerURL == nil {
 		return "", errors.New("OIDC startup failed at issuer validation")
 	}
 	authority := (&url.URL{Scheme: issuerURL.Scheme, Host: issuerURL.Host}).String()
-	client, err := httpclient.New(providerHTTPConfig(authority), provider)
+	client, err := httpclient.NewExternalHTTPS(authority)
 	if err != nil {
 		return "", errors.New("OIDC startup failed at discovery client")
 	}
@@ -51,13 +51,13 @@ func validateDiscovery(body []byte, policy Policy) (string, error) {
 	return document.JWKSURI, nil
 }
 
-func newJWKSClient(jwksURI string, provider metric.MeterProvider) (*http.Client, func(), error) {
+func newJWKSClient(jwksURI string, _ metric.MeterProvider) (*http.Client, func(), error) {
 	parsed, err := url.Parse(jwksURI)
 	if err != nil || parsed == nil {
 		return nil, nil, errors.New("OIDC startup failed at JWKS URL validation")
 	}
 	authority := (&url.URL{Scheme: parsed.Scheme, Host: parsed.Host}).String()
-	bounded, err := httpclient.New(providerHTTPConfig(authority), provider)
+	bounded, err := httpclient.NewExternalHTTPS(authority)
 	if err != nil {
 		return nil, nil, errors.New("OIDC startup failed at JWKS client")
 	}
@@ -83,27 +83,14 @@ func (t jwksRoundTripper) RoundTrip(request *http.Request) (*http.Response, erro
 	return response, nil
 }
 
-func providerHTTPConfig(baseURL string) httpclient.Config {
-	return httpclient.Config{
-		DependencyName:         "oidc",
-		BaseURL:                baseURL,
-		TargetClass:            httpclient.ExternalHTTPS,
-		DisableInstrumentation: true,
-		RequestTimeout:         ProviderTimeout,
-		ResponseHeaderTimeout:  ProviderTimeout,
-		MaxResponseHeaderBytes: providerHeaderLimit,
-		MaxResponseBodyBytes:   MaxProviderBody,
-		MaxConnsPerHost:        1,
-		MaxIdleConnsPerHost:    1,
-	}
-}
-
 type requestClient interface {
 	Do(request *http.Request) (*http.Response, error)
 }
 
 func fetchDocument(ctx context.Context, client requestClient, target string) ([]byte, error) {
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, target, http.NoBody)
+	requestCtx, cancel := context.WithTimeout(ctx, ProviderTimeout)
+	defer cancel()
+	request, err := http.NewRequestWithContext(requestCtx, http.MethodGet, target, http.NoBody)
 	if err != nil {
 		return nil, errors.New("provider request is invalid")
 	}
@@ -119,12 +106,15 @@ func fetchDocument(ctx context.Context, client requestClient, target string) ([]
 	if response.StatusCode != http.StatusOK {
 		return nil, errors.New("provider returned an unsuccessful status")
 	}
-	body, err := io.ReadAll(response.Body)
+	body, err := io.ReadAll(io.LimitReader(response.Body, MaxProviderBody+1))
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return nil, fmt.Errorf("provider response canceled: %w", ctxErr)
 		}
 		return nil, errors.New("provider response failed")
+	}
+	if len(body) > MaxProviderBody {
+		return nil, errors.New("provider response is too large")
 	}
 	return body, nil
 }

@@ -7,7 +7,7 @@ TEMPLATE_OWNER="@Dankosik"
 TEMPLATE_API_TITLE="go-service-template-rest"
 
 usage() {
-	echo "usage: CODEOWNER=@user-or-org/team DATABASE=none|postgres HTTP_IDEMPOTENCY=none|postgres JOBS=none|postgres WEBHOOKS=none|durable OUTBOX=none|postgres GRPC=none|enabled AUTHN=none|oidc-jwt OUTBOUND_HTTP=none|bounded OBJECT_STORAGE=none|s3 OUTBOUND_AUTH=none|oauth2-client-credentials MESSAGING=none|nats-jetstream REFERENCE_EXAMPLE=remove|keep $0 [module-path]"
+	echo "usage: CODEOWNER=@user-or-org/team DATABASE=none|postgres HTTP_IDEMPOTENCY=none|postgres JOBS=none|postgres WEBHOOKS=none|durable OUTBOX=none|postgres GRPC=none|enabled AUTHN=none|oidc-jwt OBJECT_STORAGE=none|s3 OUTBOUND_AUTH=none|oauth2-client-credentials MESSAGING=none|nats-jetstream REFERENCE_EXAMPLE=remove|keep $0 [module-path]"
 	echo "module-path is derived from git remote origin when omitted"
 }
 
@@ -246,13 +246,12 @@ write_template_lock() {
 	local outbox="$3"
 	local grpc="$4"
 	local authn="$5"
-	local outbound_http="$6"
-	local outbound_auth="$7"
-	local messaging="$8"
-	local reference_example="$9"
-	local object_storage="${10}"
-	local jobs="${11}"
-	local webhooks="${12}"
+	local outbound_auth="$6"
+	local messaging="$7"
+	local reference_example="$8"
+	local object_storage="$9"
+	local jobs="${10}"
+	local webhooks="${11}"
 	local source_revision
 
 	source_revision="$(git rev-parse HEAD 2>/dev/null || true)"
@@ -272,7 +271,6 @@ http_idempotency = "${http_idempotency}"
 outbox = "${outbox}"
 grpc = "${grpc}"
 authn = "${authn}"
-outbound_http = "${outbound_http}"
 outbound_auth = "${outbound_auth}"
 messaging = "${messaging}"
 reference_example = "${reference_example}"
@@ -473,15 +471,6 @@ none | oidc-jwt) ;;
 	;;
 esac
 
-outbound_http="${OUTBOUND_HTTP:-none}"
-case "${outbound_http}" in
-none | bounded) ;;
-*)
-	echo "OUTBOUND_HTTP must be one of: none, bounded"
-	exit 1
-	;;
-esac
-
 if [[ "${OBJECT_STORAGE+x}" == "x" && -z "${OBJECT_STORAGE-}" ]]; then
 	echo "OBJECT_STORAGE must be one of: none, s3"
 	exit 1
@@ -507,11 +496,6 @@ none | oauth2-client-credentials) ;;
 	exit 1
 	;;
 esac
-if [[ "${outbound_auth}" == "oauth2-client-credentials" && "${outbound_http}" != "bounded" && "${grpc}" != "enabled" ]]; then
-	echo "OUTBOUND_AUTH=oauth2-client-credentials requires OUTBOUND_HTTP=bounded or GRPC=enabled"
-	exit 1
-fi
-
 if [[ "${MESSAGING+x}" == "x" && -z "${MESSAGING-}" ]]; then
 	echo "MESSAGING must be one of: none, nats-jetstream"
 	exit 1
@@ -610,7 +594,6 @@ if [[ -f template.lock ]]; then
 		"outbox = \"${outbox}\"" \
 		"grpc = \"${grpc}\"" \
 		"authn = \"${authn}\"" \
-		"outbound_http = \"${outbound_http}\"" \
 		"outbound_auth = \"${outbound_auth}\"" \
 		"messaging = \"${messaging}\"" \
 		"reference_example = \"${reference_example}\"" \
@@ -628,7 +611,6 @@ if [[ -f template.lock ]]; then
 	echo "  outbox: ${outbox}"
 	echo "  gRPC: ${grpc}"
 	echo "  authentication: ${authn}"
-	echo "  outbound HTTP: ${outbound_http}"
 	echo "  object storage: ${object_storage}"
 	echo "  outbound authentication: ${outbound_auth}"
 	echo "  messaging: ${messaging}"
@@ -687,9 +669,6 @@ if [[ "${source_checkout}" != true ]]; then
 
 	if [[ "${outbox}" == "none" ]]; then
 		rm -rf -- cmd/outbox-relay internal/infra/postgresoutbox
-		if [[ "${messaging}" == "none" ]]; then
-			rm -rf -- internal/domainevent
-		fi
 		rm -f -- \
 			internal/infra/natsjs/outbox.go \
 			internal/infra/natsjs/outbox_test.go \
@@ -854,18 +833,16 @@ if [[ "${source_checkout}" != true ]]; then
 		strip_profile object-storage keep
 	fi
 
-	if [[ "${authn}" == "none" && "${outbound_auth}" == "none" && "${object_storage}" == "none" ]]; then
+	if [[ "${authn}" == "none" && "${object_storage}" == "none" ]]; then
 		strip_profile bootstrap-config remove
 	else
 		strip_profile bootstrap-config keep
 	fi
 
-if [[ "${outbound_auth}" == "oauth2-client-credentials" && "${outbound_http}" == "bounded" ]]; then
+if [[ "${outbound_auth}" == "oauth2-client-credentials" ]]; then
 	strip_profile outbound-auth-http keep
 else
 	rm -f -- \
-		internal/infra/httpclient/attempt_authorization.go \
-		internal/infra/httpclient/attempt_authorization_test.go \
 		internal/infra/oauth2clientcredentials/http.go \
 		internal/infra/oauth2clientcredentials/http_test.go
 	strip_profile outbound-auth-http remove
@@ -879,13 +856,6 @@ else
 		internal/infra/oauth2clientcredentials/grpc_test.go
 	strip_profile outbound-auth-grpc remove
 fi
-
-	if [[ "${authn}" == "none" && "${outbound_auth}" == "none" ]]; then
-		rm -f -- internal/infra/httpclient/credential_provider_contract_test.go
-		strip_profile credential-provider-http remove
-	else
-		strip_profile credential-provider-http keep
-	fi
 
 	if [[ "${messaging}" == "none" ]]; then
 		rm -rf -- cmd/worker internal/domainevent internal/infra/natsjs
@@ -977,13 +947,6 @@ fi
 	# template rather than for this service.
 	rm -rf -- .github/assets .github/ISSUE_TEMPLATE
 
-		if [[ "${outbound_http}" == "none" && "${authn}" == "none" && "${outbound_auth}" == "none" && "${webhooks}" == "none" ]]; then
-			rm -rf -- internal/infra/httpclient
-		fi
-	if [[ "${outbound_http}" == "none" && "${authn}" == "none" && "${outbound_auth}" == "none" && "${webhooks}" == "none" ]]; then
-		rm -rf -- internal/outboundtrust
-	fi
-
 	if [[ "${reference_example}" == "remove" ]]; then
 		rm -rf -- examples
 	fi
@@ -995,7 +958,7 @@ fi
 		go generate ./internal/openapi
 	fi
 
-	write_template_lock "${database}" "${http_idempotency}" "${outbox}" "${grpc}" "${authn}" "${outbound_http}" "${outbound_auth}" "${messaging}" "${reference_example}" "${object_storage}" "${jobs}" "${webhooks}"
+	write_template_lock "${database}" "${http_idempotency}" "${outbox}" "${grpc}" "${authn}" "${outbound_auth}" "${messaging}" "${reference_example}" "${object_storage}" "${jobs}" "${webhooks}"
 
 fi
 
@@ -1016,7 +979,6 @@ echo "  webhooks: ${webhooks}"
 echo "  outbox: ${outbox}"
 echo "  gRPC: ${grpc}"
 echo "  authentication: ${authn}"
-echo "  outbound HTTP: ${outbound_http}"
 echo "  object storage: ${object_storage}"
 echo "  outbound authentication: ${outbound_auth}"
 echo "  messaging: ${messaging}"

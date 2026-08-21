@@ -44,6 +44,16 @@ func TestFetchDocumentPreservesCallerCancellationAndRedactsProviderContent(t *te
 	if err == nil || strings.Contains(err.Error(), "secret") || strings.Contains(err.Error(), "502") {
 		t.Fatalf("fetchDocument() error = %v", err)
 	}
+
+	_, err = fetchDocument(t.Context(), requestClientFunc(func(*http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(strings.Repeat("x", MaxProviderBody+1))),
+		}, nil
+	}), "https://issuer.example/document")
+	if err == nil {
+		t.Fatal("fetchDocument() accepted an oversized provider document")
+	}
 }
 
 type requestClientFunc func(*http.Request) (*http.Response, error)
