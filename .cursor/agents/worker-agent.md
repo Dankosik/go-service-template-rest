@@ -1,7 +1,7 @@
 ---
 name: worker-agent
 description: "Mutable worker for one bounded implementation, investigation, or verification result."
-model: inherit
+model: grok-4.6[effort=medium]
 readonly: false
 ---
 

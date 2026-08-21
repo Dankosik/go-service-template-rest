@@ -273,7 +273,7 @@ Harness](docs/agent-harness.md) adapter.
 | Claude Code | `CLAUDE.md`, `/orchestrator` | `.claude/agents`, `.claude/skills` |
 | Qwen Code | `QWEN.md`, `/orchestrator` | `.qwen/agents`, `.qwen/skills` |
 | Grok Build | `Grok.md` | `.grok/agents`, `.grok/roles`, `.agents/skills` |
-| Cursor | `AGENTS.md`, `/orchestrator` | `.cursor/agents`, `.cursor/rules`, `.agents/skills` |
+| Cursor | `AGENTS.md`, Grok 4.6, `/orchestrator` | `.cursor/agents`, `.cursor/rules`, `.agents/skills` |
 
 Five generic capability roles provide evidence, specialist judgment, mutable
 work, independent review, and adjudication. Domain skills cover API contracts,

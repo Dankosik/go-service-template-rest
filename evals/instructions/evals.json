@@ -383,7 +383,7 @@
     },
     {
       "id": 31,
-      "prompt": "In Cursor with a callable Task control, run /orchestrator against a ready persisted Implementation ledger until completion or a true external boundary.",
+      "prompt": "In Cursor with a callable Task control, a ready persisted Implementation ledger is present. Route it until completion or a true external boundary.",
       "expected_output": "The Cursor session routes the complete ledger through named Acceptance-Unit Leads without changing acceptance semantics.",
       "files": [".agents/skills/orchestrator/SKILL.md", "docs/agent-harness/cursor.md", ".cursor/agents/acceptance-unit-lead.md"],
       "expectations": [

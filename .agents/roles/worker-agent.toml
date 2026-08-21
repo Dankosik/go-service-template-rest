@@ -3,7 +3,7 @@ description = "Mutable worker for one bounded implementation, investigation, or 
 class = "mutable-worker"
 claude_model = "sonnet"
 qwen_model = "inherit"
-cursor_model = "inherit"
+cursor_model = "grok-4.6[effort=medium]"
 grok_model = "inherit"
 grok_effort = "medium"
 output_schema = "delegated-result-v1"

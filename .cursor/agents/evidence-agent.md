@@ -1,7 +1,7 @@
 ---
 name: evidence-agent
 description: "Fast read-only evidence subagent for bounded discovery, drift checks, and mechanical repair proposals without gate authority."
-model: inherit
+model: grok-4.6[effort=low]
 readonly: true
 ---
 
