@@ -164,8 +164,8 @@ new_fixture() {
 	cp \
 		"${ROOT_DIR}/scripts/profiles/database-none/startup_dependencies.go.tmpl" \
 		"${root}/scripts/profiles/database-none/startup_dependencies.go.tmpl"
-	mkdir -p "${root}/.agents" "${root}/.codex" "${root}/.claude" "${root}/.grok" "${root}/.qwen" "${root}/specs"
-	touch "${root}/.agents/fixture" "${root}/.codex/fixture" "${root}/.claude/fixture" "${root}/.grok/fixture" "${root}/.qwen/fixture" "${root}/specs/fixture"
+	mkdir -p "${root}/.agents" "${root}/.codex" "${root}/.claude" "${root}/.cursor" "${root}/.grok" "${root}/.qwen" "${root}/specs"
+	touch "${root}/.agents/fixture" "${root}/.codex/fixture" "${root}/.claude/fixture" "${root}/.cursor/fixture" "${root}/.grok/fixture" "${root}/.qwen/fixture" "${root}/specs/fixture"
 	printf '# Full agent contract\n' >"${root}/AGENTS.md"
 	printf '# Claude\n' >"${root}/CLAUDE.md"
 	printf '# Grok\n' >"${root}/Grok.md"
@@ -203,7 +203,7 @@ workflow_snapshot() {
 	(
 		cd "${root}"
 		{
-			for path in .agents .codex .claude .grok .qwen; do
+			for path in .agents .codex .claude .cursor .grok .qwen; do
 				if [[ ! -e "${path}" && ! -L "${path}" ]]; then
 					printf 'missing %s\n' "${path}"
 					continue

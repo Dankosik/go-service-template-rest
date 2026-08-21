@@ -51,6 +51,8 @@ evals/instructions/
 .agents/skills/
 .claude/agents/
 .codex/agents/
+.cursor/agents/
+.cursor/rules/
 .grok/agents/
 .grok/roles/
 .grok/rules/

@@ -13,6 +13,9 @@ guidance](https://claude.com/blog/the-new-rules-of-context-engineering-for-claud
 practices](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices)
 own current Claude guidance. Installed Grok native schemas own Grok controls;
 the same context-engineering density rules apply when writing Grok carriers.
+Cursor's [rules](https://cursor.com/docs/rules.md),
+[skills](https://cursor.com/docs/skills.md), and
+[subagents](https://cursor.com/docs/subagents.md) own current Cursor controls.
 Product system-prompt history is observational evidence, not a harness
 contract.
 
