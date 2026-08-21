@@ -380,6 +380,18 @@
         "The result rejects a fake or narrower layer when it cannot observe PostgreSQL rollback visibility or real retry classification.",
         "The agent returns a deterministic falsification design and stops before test implementation or completion claims."
       ]
+    },
+    {
+      "id": 31,
+      "prompt": "In Cursor with a callable Task control, run /orchestrator against a ready persisted Implementation ledger until completion or a true external boundary.",
+      "expected_output": "The Cursor session routes the complete ledger through named Acceptance-Unit Leads without changing acceptance semantics.",
+      "files": [".agents/skills/orchestrator/SKILL.md", "docs/agent-harness/cursor.md", ".cursor/agents/acceptance-unit-lead.md"],
+      "expectations": [
+        "The orchestrator uses Task identities and keeps repository tasks.md as the acceptance ledger.",
+        "Each unit is spawned as acceptance-unit-lead; generalPurpose, explore, and shell are not substitutes.",
+        "Independent ready units are dispatched in one parent message before waiting, within capacity.",
+        "The ledger continues across ready units and only the Acceptance-Unit Lead writes Accepted or Blocked."
+      ]
     }
   ]
 }

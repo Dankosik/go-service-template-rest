@@ -3,6 +3,7 @@ description = "Read-only specialist that applies one named method to one bounded
 class = "read-only-specialist"
 claude_model = "sonnet"
 qwen_model = "inherit"
+cursor_model = "inherit"
 grok_model = "inherit"
 grok_effort = "high"
 output_schema = "decision-result-v1"

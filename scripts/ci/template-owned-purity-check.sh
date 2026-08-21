@@ -119,6 +119,12 @@ grep -Fxq '@AGENTS.md' Grok.md ||
 if grep -Fxq '@AGENTS.md' QWEN.md; then
 	fail "QWEN.md must not re-import AGENTS.md; Qwen loads it natively"
 fi
+[[ -f .cursor/rules/agent-harness.mdc ]] ||
+	fail ".cursor/rules/agent-harness.mdc must select the Cursor adapter"
+grep -Fq 'alwaysApply: true' .cursor/rules/agent-harness.mdc ||
+	fail ".cursor/rules/agent-harness.mdc must always apply in Cursor sessions"
+grep -Fq 'docs/agent-harness/cursor.md' .cursor/rules/agent-harness.mdc ||
+	fail ".cursor/rules/agent-harness.mdc must point at the Cursor adapter"
 
 skill_metadata_bytes=$(
 	for skill_file in .agents/skills/*/SKILL.md; do
@@ -160,12 +166,16 @@ for role_file in .codex/agents/*.toml; do
 		fail "${role_file} has no Grok role mirror"
 	[[ -f ".grok/roles/${role}.toml" ]] ||
 		fail "${role_file} has no Grok role default"
+	[[ -f ".cursor/agents/${role}.md" ]] ||
+		fail "${role_file} has no Cursor role mirror"
 done
 for extra in orchestrator acceptance-unit-lead; do
 	[[ -f ".grok/agents/${extra}.md" ]] ||
 		fail ".grok/agents/${extra}.md is required as a Grok primary-session agent"
 done
-for role_file in .claude/agents/*.md .qwen/agents/*.md .grok/agents/*.md; do
+[[ -f .cursor/agents/acceptance-unit-lead.md ]] ||
+	fail ".cursor/agents/acceptance-unit-lead.md is required as a Cursor Acceptance-Unit Lead agent"
+for role_file in .claude/agents/*.md .qwen/agents/*.md .grok/agents/*.md .cursor/agents/*.md; do
 	role=$(basename "${role_file}" .md)
 	[[ "${role}" == worker-* ]] && continue
 	[[ "${role}" == orchestrator || "${role}" == acceptance-unit-lead ]] && continue
@@ -212,6 +222,7 @@ template_sync_behavior_check() (
 		"${template}/.agents/skills/fixture-one" \
 		"${template}/.claude/agents" \
 		"${template}/.codex/agents" \
+		"${template}/.cursor/agents" \
 		"${template}/.grok/agents" \
 		"${template}/.grok/roles" \
 		"${template}/.qwen/agents" \
@@ -229,6 +240,7 @@ template_sync_behavior_check() (
 		'.agents/skills/' \
 		'.claude/agents/' \
 		'.codex/agents/' \
+		'.cursor/agents/' \
 		'.grok/agents/' \
 		'.grok/roles/' \
 		'.qwen/agents/' \
@@ -257,6 +269,7 @@ template_sync_behavior_check() (
 		'description = "fixture"' \
 		'class = "read-only-specialist"' \
 		'claude_model = "sonnet"' \
+		'cursor_model = "inherit"' \
 		'grok_model = "inherit"' \
 		'grok_effort = "low"' \
 		'output_schema = "lane-result-v1"' \
@@ -305,6 +318,7 @@ template_sync_behavior_check() (
 		.claude/skills/fixture-one \
 		.claude/agents/fixture-agent.md \
 		.codex/agents/fixture-agent.toml \
+		.cursor/agents/fixture-agent.md \
 		.grok/agents/fixture-agent.md \
 		.grok/roles/fixture-agent.toml \
 		.qwen/agents/fixture-agent.md \

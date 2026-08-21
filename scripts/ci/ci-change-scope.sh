@@ -230,8 +230,8 @@ profiles_for_path() {
       printf '\n'
       return
       ;;
-    .agents/roles/* | .codex/agents/* | .claude/agents/* | .grok/roles/* | .grok/agents/* | \
-      .grok/rules/* | .qwen/agents/* | \
+    .agents/roles/* | .codex/agents/* | .claude/agents/* | .cursor/agents/* | .cursor/rules/* | \
+      .grok/roles/* | .grok/agents/* | .grok/rules/* | .qwen/agents/* | \
       template-owned.paths | scripts/agent-roles-sync.sh | scripts/ci/template-owned-purity-check.sh)
       printf '%s\n' "minimal"
       return
@@ -399,6 +399,7 @@ self_test() {
   assert_template_scope true "${all_init}" true .github/workflows/ci.yml
   assert_template_scope true "${all_init}" true assets/logo.png
   assert_template_scope true '["minimal"]' false .grok/roles/worker-agent.toml
+  assert_template_scope true '["minimal"]' false .cursor/agents/worker-agent.md
   assert_template_scope true '["minimal"]' false template-owned.paths
   assert_template_scope true '["minimal"]' false \
     internal/greeting/service.go .agents/roles/worker-agent.toml

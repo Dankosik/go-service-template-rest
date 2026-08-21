@@ -1,0 +1,9 @@
+---
+description: Select the Cursor Agent Harness adapter
+alwaysApply: true
+---
+
+This is a Cursor session. When a native control is needed, load
+[Agent Harness](../../docs/agent-harness.md) and only its
+[Cursor adapter](../../docs/agent-harness/cursor.md). Sibling bootstrap
+files select other harnesses; do not follow their adapter choice.
