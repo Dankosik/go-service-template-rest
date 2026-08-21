@@ -26,30 +26,35 @@ authority.
 <!-- profile:object-storage:start -->
 `internal/objectstorage/` owns the provider-neutral port;
 `internal/infra/s3/` owns one fixed-authority Amazon S3 or Cloudflare R2
-adapter, credential snapshot, provider authority check, bounded reads,
-streaming integrity, multipart cleanup, and lifecycle wiring.
+adapter, provider tuple, bounded admission, portable errors, and SDK mapping.
+AWS SDK for Go v2 owns signing, HTTP/XML, endpoints, retries, checksums,
+presigning, and multipart execution; deployment owns abandoned-upload lifecycle.
 <!-- profile:object-storage:end -->
 
 <!-- profile:grpc:start -->
 `api/proto/` owns protobuf contracts, `internal/gen/proto/` their generated
 messages and interfaces, `internal/infra/grpc/` native server policy/lifecycle,
-and `internal/infra/grpcclient/` bounded shared connections and explicit
-outbound correlation/routing policy. None owns feature semantics, storage,
+and `internal/infra/grpcclient/` bounded shared native connections. None owns feature semantics, storage,
 authentication, per-operation deadlines, retry eligibility, dependency
 criticality, or trust for a concrete neighbor.
 <!-- profile:grpc:end -->
 
 <!-- profile:authn-oidc-jwt:start -->
-`internal/authntrust/` owns only the pure provider-URL and trusted-peer
+`internal/authntrust/` owns only the pure provider-URL and token-profile
 predicates shared by config and the OIDC verifier. It owns no configured value,
 credential verification, policy object, or authorization decision.
 <!-- profile:authn-oidc-jwt:end -->
 
 <!-- profile:outbox-postgres:start -->
-`internal/domainevent/` owns typed event identity/version/time/encoding;
 `internal/infra/postgresoutbox/` owns transactional append; `cmd/outbox-relay/`
 owns River-to-NATS composition, readiness, drain, and cleanup.
 <!-- profile:outbox-postgres:end -->
+
+<!-- profile:messaging-nats-jetstream:start -->
+`internal/domainevent/` owns typed event identity/version/time/encoding;
+`internal/infra/natsjs/` owns composition routes and JetStream publication and
+settlement without exposing broker vocabulary to feature code.
+<!-- profile:messaging-nats-jetstream:end -->
 
 <!-- profile:jobs-postgres:start -->
 `cmd/jobs-worker/` and River own default-off typed PostgreSQL job execution;

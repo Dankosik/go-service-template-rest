@@ -22,10 +22,7 @@ import (
 const workerTestMaxDeliveryBytes = 1 << 20
 
 func workerTestProducerConfig() natsjs.Config {
-	return natsjs.Config{
-		MinStreamReplicas: 1, MinStreamRetention: 24 * time.Hour,
-		MaxPayloadBytes: 256 << 10, MaxPendingPublishes: 64,
-	}
+	return natsjs.Config{MaxPayloadBytes: 256 << 10}
 }
 
 func TestNATSWorkerComposition(t *testing.T) {
@@ -34,24 +31,29 @@ func TestNATSWorkerComposition(t *testing.T) {
 
 	setWorkerEnvironment(t, url, "composition-worker", diagnosticsAddress)
 
-	entered := make(chan natsjs.Message, 1)
+	entered := make(chan string, 1)
 	release := make(chan struct{})
 	cleaned := make(chan struct{})
+	loadedGrace := make(chan time.Duration, 1)
 	runCtx, cancelRun := context.WithCancel(t.Context())
 	runErr := make(chan error, 1)
 	go func() {
-		runErr <- run(runCtx, nil, func(_ context.Context, _ config.Config, _ *slog.Logger) (natsjs.Handler, func(context.Context), error) {
-			return func(_ context.Context, msg natsjs.Message) error {
-				entered <- msg
+		runErr <- run(runCtx, nil, func(_ context.Context, cfg config.Config, _ *slog.Logger) (*natsjs.Registry, func(context.Context), error) {
+			loadedGrace <- cfg.HTTP.GracePeriod
+			return testRegistry(t, "composition.test", func(_ context.Context, payload string) error {
+				entered <- payload
 				<-release
 				return nil
-			}, func(context.Context) { close(cleaned) }, nil
+			}), func(context.Context) { close(cleaned) }, nil
 		})
 	}()
 	waittest.Until(t, 10*time.Second, func() bool {
 		_, err := js.Consumer(t.Context(), "EVENTS", "composition-worker")
 		return err == nil
 	}, "worker consumer admission")
+	if grace := <-loadedGrace; grace != 45*time.Second {
+		t.Fatalf("worker grace period = %s, want 45s", grace)
+	}
 
 	producerCfg := workerTestProducerConfig()
 	producerCfg.URLs = []string{url}
@@ -65,14 +67,14 @@ func TestNATSWorkerComposition(t *testing.T) {
 	t.Cleanup(producer.Close)
 	if _, err := producer.Producer().Publish(t.Context(), natsjs.Event{
 		Subject: "events.test", MessageID: natsjs.NewID(), PublicationID: natsjs.NewID(),
-		Type: "composition.test", Schema: "v1", CreatedAt: time.Now().UTC(), Payload: []byte("worker composition"),
+		Type: "composition.test", Schema: "v1", CreatedAt: time.Now().UTC(), Payload: []byte(`"worker composition"`),
 	}); err != nil {
 		t.Fatalf("publish worker fixture: %v", err)
 	}
 	select {
 	case got := <-entered:
-		if string(got.Payload()) != "worker composition" {
-			t.Fatalf("handler payload = %q", got.Payload())
+		if got != "worker composition" {
+			t.Fatalf("handler payload = %q", got)
 		}
 	case err := <-runErr:
 		t.Fatalf("worker stopped before delivery: %v", err)
@@ -102,7 +104,11 @@ func TestNATSWorkerForcedShutdownDoesNotRaceHandlerCleanup(t *testing.T) {
 	url, js := workerNATSFixture(t)
 	diagnosticsAddress := waittest.FreeTCPAddr(t, "worker diagnostics")
 	setWorkerEnvironment(t, url, "forced-cleanup-worker", diagnosticsAddress)
-	t.Setenv("APP__MESSAGING__WORKER__DRAIN_TIMEOUT", "50ms")
+	t.Setenv("APP__HTTP__GRACE_PERIOD", "1s")
+	t.Setenv("APP__HTTP__SHUTDOWN_TIMEOUT", "1s")
+	t.Setenv("APP__HTTP__WRITE_TIMEOUT", "1s")
+	t.Setenv("APP__HTTP__REQUEST_TIMEOUT", "1s")
+	t.Setenv("APP__HTTP__READINESS_TIMEOUT", "500ms")
 
 	entered := make(chan struct{})
 	release := make(chan struct{})
@@ -111,16 +117,21 @@ func TestNATSWorkerForcedShutdownDoesNotRaceHandlerCleanup(t *testing.T) {
 	runCtx, cancelRun := context.WithCancel(t.Context())
 	runErr := make(chan error, 1)
 	go func() {
-		runErr <- run(runCtx, nil, func(context.Context, config.Config, *slog.Logger) (natsjs.Handler, func(context.Context), error) {
-			return func(context.Context, natsjs.Message) error {
+		runErr <- run(runCtx, nil, func(context.Context, config.Config, *slog.Logger) (*natsjs.Registry, func(context.Context), error) {
+			return testRegistry(t, "composition.forced-cleanup", func(context.Context, string) error {
 				close(entered)
 				<-release
 				close(exited)
 				return nil
-			}, func(context.Context) { cleaned <- struct{}{} }, nil
+			}), func(context.Context) { cleaned <- struct{}{} }, nil
 		})
 	}()
 	waittest.Until(t, 10*time.Second, func() bool {
+		select {
+		case err := <-runErr:
+			t.Fatalf("forced-cleanup worker stopped before admission: %v", err)
+		default:
+		}
 		_, err := js.Consumer(t.Context(), "EVENTS", "forced-cleanup-worker")
 		return err == nil
 	}, "forced-cleanup worker admission")
@@ -137,7 +148,7 @@ func TestNATSWorkerForcedShutdownDoesNotRaceHandlerCleanup(t *testing.T) {
 	t.Cleanup(producer.Close)
 	if _, err := producer.Producer().Publish(t.Context(), natsjs.Event{
 		Subject: "events.test", MessageID: natsjs.NewID(), PublicationID: natsjs.NewID(),
-		Type: "composition.forced-cleanup", Schema: "v1", CreatedAt: time.Now().UTC(), Payload: []byte("forced cleanup"),
+		Type: "composition.forced-cleanup", Schema: "v1", CreatedAt: time.Now().UTC(), Payload: []byte(`"forced cleanup"`),
 	}); err != nil {
 		t.Fatalf("publish forced-cleanup fixture: %v", err)
 	}
@@ -163,10 +174,10 @@ func TestNATSWorkerHandlerPanicIsSupervised(t *testing.T) {
 	defer cancelRun()
 	runErr := make(chan error, 1)
 	go func() {
-		runErr <- run(runCtx, nil, func(context.Context, config.Config, *slog.Logger) (natsjs.Handler, func(context.Context), error) {
-			return func(context.Context, natsjs.Message) error {
+		runErr <- run(runCtx, nil, func(context.Context, config.Config, *slog.Logger) (*natsjs.Registry, func(context.Context), error) {
+			return testRegistry(t, "composition.panic", func(context.Context, string) error {
 				panic("worker panic canary")
-			}, nil, nil
+			}), nil, nil
 		})
 	}()
 	waittest.Until(t, 10*time.Second, func() bool {
@@ -185,7 +196,7 @@ func TestNATSWorkerHandlerPanicIsSupervised(t *testing.T) {
 	t.Cleanup(producer.Close)
 	if _, err := producer.Producer().Publish(t.Context(), natsjs.Event{
 		Subject: "events.test", MessageID: natsjs.NewID(), PublicationID: natsjs.NewID(),
-		Type: "composition.panic", Schema: "v1", CreatedAt: time.Now().UTC(), Payload: []byte("panic"),
+		Type: "composition.panic", Schema: "v1", CreatedAt: time.Now().UTC(), Payload: []byte(`"panic"`),
 	}); err != nil {
 		t.Fatalf("publish panic fixture: %v", err)
 	}
@@ -215,25 +226,17 @@ func setWorkerEnvironment(t *testing.T, url, consumer, diagnosticsAddress string
 	configtest.IsolateEnv(t)
 	for key, value := range map[string]string{
 		// profile:authn-oidc-jwt:start
-		"APP__AUTHN__ISSUER":              "https://issuer.example.com",
-		"APP__AUTHN__AUDIENCE":            "https://api.example.com",
-		"APP__AUTHN__TRUSTED_PROXY_CIDRS": "127.0.0.0/8",
+		"APP__AUTHN__ISSUER":   "https://issuer.example.com",
+		"APP__AUTHN__AUDIENCE": "https://api.example.com",
 		// profile:authn-oidc-jwt:end
 		"APP__HTTP__READINESS_PROPAGATION_DELAY":            "0s",
-		"APP__MESSAGING__ENABLED":                           "true",
 		"APP__MESSAGING__URLS":                              url,
 		"APP__MESSAGING__ALLOW_PLAINTEXT":                   "true",
 		"APP__MESSAGING__ALLOW_UNAUTHENTICATED":             "true",
 		"APP__MESSAGING__STREAM":                            "EVENTS",
-		"APP__MESSAGING__MIN_STREAM_REPLICAS":               "1",
-		"APP__MESSAGING__MIN_STREAM_RETENTION":              "24h",
 		"APP__MESSAGING__WORKER__CONSUMER":                  consumer,
 		"APP__MESSAGING__WORKER__FILTER_SUBJECT":            "events.test",
 		"APP__MESSAGING__WORKER__DEAD_LETTER_SUBJECT":       "dead.events.test",
-		"APP__MESSAGING__WORKER__HANDLER_TIMEOUT":           "1s",
-		"APP__MESSAGING__WORKER__RETRY_DELAYS":              "50ms",
-		"APP__MESSAGING__WORKER__DEAD_LETTER_RETRY_DELAY":   "50ms",
-		"APP__MESSAGING__WORKER__DRAIN_TIMEOUT":             "2s",
 		"APP__OBSERVABILITY__METRICS__ADDR":                 diagnosticsAddress,
 		"APP__OBSERVABILITY__OTEL__EXPORTER__OTLP_ENDPOINT": "",
 	} {

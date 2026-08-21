@@ -45,7 +45,7 @@ build_image() {
 # profile:messaging-nats-jetstream:start
 verify_worker_image() {
 	local output
-	if output="$(docker run --rm --read-only --network none --env APP__MESSAGING__ENABLED=false --entrypoint /worker "${IMAGE}" 2>&1)"; then
+	if output="$(docker run --rm --read-only --network none --entrypoint /worker "${IMAGE}" 2>&1)"; then
 		echo "runtime image worker exited successfully under its fail-closed smoke configuration" >&2
 		exit 1
 	fi

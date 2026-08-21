@@ -105,16 +105,12 @@ func assertAuthnBootstrapConfig(t *testing.T, cfg config.Config) {
 	t.Helper()
 	if cfg.Authn.Issuer != "https://issuer.example.com" ||
 		cfg.Authn.Audience != "service-api" ||
-		cfg.Authn.TrustedProxyCIDRs != "127.0.0.0/8,::1/128" {
+		cfg.Authn.TokenProfile != "resource-server" {
 		t.Fatalf("validated authn config = %+v, want exact test policy", cfg.Authn)
 	}
 }
 
 type fakeAuthnRuntime struct{}
-
-func (fakeAuthnRuntime) CheckReady() error {
-	return nil
-}
 
 func (fakeAuthnRuntime) Close() {}
 
@@ -128,14 +124,6 @@ func (fakeAuthnRuntime) ResolveHTTP(
 		input.RequestValidationInput.Request.Header.Del("Authorization")
 	}
 	return reqctx.Principal{Subject: "bootstrap-test-subject"}, nil
-}
-
-func (fakeAuthnRuntime) Run(ctx context.Context, publish func(bool)) error {
-	if publish != nil {
-		publish(true)
-	}
-	<-ctx.Done()
-	return nil
 }
 
 // profile:grpc:start

@@ -79,7 +79,6 @@ func resetConfigEnv(t *testing.T) {
 	// profile:authn-oidc-jwt:start
 	t.Setenv("APP__AUTHN__ISSUER", "https://issuer.example.com")
 	t.Setenv("APP__AUTHN__AUDIENCE", "https://api.example.com")
-	t.Setenv("APP__AUTHN__TRUSTED_PROXY_CIDRS", "127.0.0.0/8,::1/128")
 	// profile:authn-oidc-jwt:end
 	// profile:outbound-auth-oauth2-client-credentials:start
 	setOutboundAuthTestEnv(t)
@@ -95,18 +94,11 @@ func resetConfigEnv(t *testing.T) {
 func setOutboundAuthTestEnv(t *testing.T) {
 	t.Helper()
 	for key, value := range map[string]string{
-		"APP__OUTBOUND_AUTH__DEPENDENCY":                "payments",
-		"APP__OUTBOUND_AUTH__CLIENT_ID":                 "test-client",
-		"APP__OUTBOUND_AUTH__CLIENT_SECRET":             "test-client-secret",
-		"APP__OUTBOUND_AUTH__CLIENT_AUTHENTICATION":     "client_secret_basic",
-		"APP__OUTBOUND_AUTH__TOKEN_ENDPOINT":            "https://auth.example.com/oauth/token",
-		"APP__OUTBOUND_AUTH__TOKEN_TARGET_CLASS":        "external_https",
-		"APP__OUTBOUND_AUTH__TOKEN_PRIVATE_HOST_SUFFIX": "",
-		"APP__OUTBOUND_AUTH__SCOPES":                    "payments.read payments.write",
-		"APP__OUTBOUND_AUTH__RESOURCE":                  "https://payments.example.com",
-		"APP__OUTBOUND_AUTH__AUDIENCE":                  "",
-		"APP__OUTBOUND_AUTH__RESOURCE_AUTHORITY":        "https://payments.example.com",
-		"APP__OUTBOUND_AUTH__ACQUISITION_TIMEOUT":       "5s",
+		"APP__OUTBOUND_AUTH__TOKEN_URL":     "https://auth.example.com/oauth/token",
+		"APP__OUTBOUND_AUTH__CLIENT_ID":     "test-client",
+		"APP__OUTBOUND_AUTH__CLIENT_SECRET": "test-client-secret",
+		"APP__OUTBOUND_AUTH__SCOPES":        "payments.read payments.write",
+		"APP__OUTBOUND_AUTH__RESOURCE":      "https://payments.example.com",
 	} {
 		t.Setenv(key, value)
 	}
@@ -119,19 +111,11 @@ func setOutboundAuthTestEnv(t *testing.T) {
 func setObjectStorageTestEnv(t *testing.T) {
 	t.Helper()
 	t.Setenv("APP__OBJECT_STORAGE__PROVIDER", "amazon_s3")
-	t.Setenv("APP__OBJECT_STORAGE__ENDPOINT", "https://s3.us-east-1.amazonaws.com")
 	t.Setenv("APP__OBJECT_STORAGE__REGION", "us-east-1")
 	t.Setenv("APP__OBJECT_STORAGE__BUCKET", "examplebucket")
-	t.Setenv("APP__OBJECT_STORAGE__ACCESS_KEY_ID", "test-access-key")
-	t.Setenv("APP__OBJECT_STORAGE__SECRET_ACCESS_KEY", "test-secret-key")
+	t.Setenv("APP__OBJECT_STORAGE__EXPECTED_BUCKET_OWNER", "123456789012")
+	t.Setenv("APP__OBJECT_STORAGE__CREDENTIAL_SOURCE", "aws_default")
 	t.Setenv("APP__OBJECT_STORAGE__MAX_OBJECT_BYTES", "10485760")
-	t.Setenv("APP__OBJECT_STORAGE__MULTIPART_CHUNK_BYTES", "5242880")
-	t.Setenv("APP__OBJECT_STORAGE__MAX_ACTIVE_OPERATIONS", "2")
-	t.Setenv("APP__OBJECT_STORAGE__MAX_OPERATION_DURATION", "1s")
-	t.Setenv("APP__OBJECT_STORAGE__MAX_PRESIGN_LIFETIME", "1m")
-	t.Setenv("APP__OBJECT_STORAGE__MAX_RESPONSE_HEADER_BYTES", "1024")
-	t.Setenv("APP__OBJECT_STORAGE__MAX_CONTROL_RESPONSE_BYTES", "1024")
-	t.Setenv("APP__OBJECT_STORAGE__MAX_WORKING_MEMORY_BYTES", "62145920")
 }
 
 // profile:object-storage:end

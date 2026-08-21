@@ -3,9 +3,7 @@ package oidcjwt
 import (
 	"context"
 	"errors"
-	"net"
 	"net/http"
-	"net/netip"
 	"strings"
 
 	"github.com/example/go-service-template-rest/internal/reqctx"
@@ -38,53 +36,15 @@ func (v *Verifier) ResolveHTTP(
 	if request == nil {
 		return reqctx.Principal{}, v.recordRejection(ctx, transportHTTP, failure(KindMalformed))
 	}
-	if !v.trustedHTTPRequest(request) {
-		return reqctx.Principal{}, v.recordRejection(ctx, transportHTTP, failure(KindUntrustedTransport))
-	}
 
 	// The credential is taken off the request as soon as this boundary owns it,
 	// so no handler, logger, or downstream client can reach it. The untrusted
-	// transport check above returns before this point on purpose: that request
-	// never became ours to authenticate, and rewriting a rejected caller's
-	// headers would hide from them what was actually sent.
+	// transport is owned by the listener/ingress deployment rather than inferred
+	// from caller-controlled forwarding headers.
 	values := request.Header.Values("Authorization")
 	request.Header.Del("Authorization")
 	verified, err := v.verifyCredential(ctx, values, transportHTTP)
 	return verified.principal, err
-}
-
-// trustedHTTPRequest reports whether this request reached the service the way
-// the deployment says it must: through a proxy named in trusted_proxy_cidrs, and
-// over TLS as that proxy reports it.
-//
-// Both terms are needed and neither substitutes for the other. The peer check is
-// what makes the forwarded header worth reading at all — anyone can send
-// X-Forwarded-Proto, so only a peer the operator listed gets to state it. The
-// header check is what stops a trusted proxy's plaintext port from carrying
-// credentials.
-//
-// Exactly one value, with no comma inside it, is the strict reading on purpose. A
-// repeated or comma-joined header is a chain's accumulated claim, not the
-// immediate peer's, and picking one entry out of it would be this boundary
-// guessing which hop to believe. A deployment that terminates TLS further out
-// than its trusted peer is one where the value is no longer that peer's to make;
-// the fix is the CIDR list, not a laxer reading here. bearerToken owns the same
-// single-reading rule for the credential header, and the RFC 9110 argument for
-// it; trimming is free here only because this compares a fixed token rather than
-// carrying opaque bytes onward.
-func (v *Verifier) trustedHTTPRequest(request *http.Request) bool {
-	host, _, err := net.SplitHostPort(request.RemoteAddr)
-	if err != nil {
-		return false
-	}
-	address, err := netip.ParseAddr(host)
-	if err != nil || !v.policy.trustedProxy(address) {
-		return false
-	}
-	forwardedProto := request.Header.Values("X-Forwarded-Proto")
-	return len(forwardedProto) == 1 &&
-		!strings.Contains(forwardedProto[0], ",") &&
-		strings.EqualFold(strings.TrimSpace(forwardedProto[0]), "https")
 }
 
 // bearerSecurityScheme reports whether the requirement being validated is the

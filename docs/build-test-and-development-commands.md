@@ -189,8 +189,8 @@ Merge CI skips generated-service jobs when every changed path is an ordinary
 Go or API implementation path that initialization does not transform, a
 docs/instruction path, or a classifier/eval script that does not change
 generated trees. Harness, role, and `template-owned.paths` changes run only the
-`minimal` `template-init` cell. Feature-owned generator paths run that profile
-(`object-storage` also runs `template-s3-envelope`). Changes to generator
+`minimal` `template-init` cell. Feature-owned generator paths run that profile.
+Changes to generator
 scripts, profiles, bootstrap/config/PostgreSQL ownership, modules, Make,
 Docker, environment, workflows, or any unknown path run every template job.
 An empty or unresolvable comparison also runs every template job. Generated
@@ -528,20 +528,16 @@ each test still owns and drops an isolated database.
 <!-- profile:object-storage:start -->
 ## S3-compatible object storage
 
-Run `S3_RECEIPT_PLATFORM=linux/amd64 make test-s3-source-receipt` and
-`S3_RECEIPT_PLATFORM=linux/arm64 make test-s3-source-receipt` to bind each
-supported Dockerfile Go image, source files, module versions, and final-image
-root bundle. Run `GOMAXPROCS=1 S3_ENVELOPE_PLATFORM=<platform> make
-test-s3-envelope` for the corresponding Linux real-SDK process
-memory/resource envelope. These are credential-free local evidence; neither is
-a provider or deployed-runtime receipt.
+Ordinary Go tests and the `object-storage` template-init cell own local adapter,
+configuration, dependency-pruning, and generated-tree proof. Multipart,
+checksums, retry execution, presigning, and HTTP/XML are library behavior rather
+than source identities re-proved by this repository.
 
 `make test-s3-conformance-amazon` and `make test-s3-conformance-r2` are
 separate fail-closed certification entrypoints implemented by the isolated
 `test/s3conformance` package. They require explicit mutation authorization,
-provider-specific primary and concealment credentials, policy/lifecycle/
-versioning receipts, and exact production image/root-bundle evidence before the
-first request. A deterministic local run without those inputs fails before
+provider-specific primary and concealment credentials plus policy, lifecycle,
+and versioning receipts before the first request. A deterministic local run without those inputs fails before
 provider I/O and certifies neither provider.
 <!-- profile:object-storage:end -->
 The disposable cluster passes `POSTGRES_INITDB_ARGS=--no-sync`; together with
@@ -630,13 +626,6 @@ make bench-http
 make bench-http-inspect
 ```
 
-<!-- profile:grpc-reference-benchmark:start -->
-```bash
-make bench-grpc-inspect
-make bench-grpc-smoke
-make bench-grpc
-```
-<!-- profile:grpc-reference-benchmark:end -->
 
 ```bash
 make benchmark-infra-check
@@ -646,23 +635,6 @@ Go and in-process HTTP benchmarks use the host toolchain of the selected
 environment. Database benchmarks use the existing Testcontainers seam.
 External HTTP load uses the digest-pinned k6 image owned by
 `scripts/dev/benchmark.sh`.
-<!-- profile:grpc-reference-benchmark:start -->
-The gRPC targets use that same image against a
-benchmark-only loopback command composed through the production gRPC adapter:
-`bench-grpc-inspect` checks the canonical schema and scenario,
-`bench-grpc-smoke` proves all four RPC cardinalities once, and `bench-grpc`
-runs the warmup plus measured synthetic workload.
-
-The main gRPC controls are `GRPC_BENCH_WORKLOAD_ID`,
-`GRPC_BENCH_PAYLOAD_BYTES`, `GRPC_BENCH_STREAM_MESSAGES`, `GRPC_BENCH_VUS`,
-`GRPC_BENCH_WARMUP_DURATION`, `GRPC_BENCH_DURATION`,
-`GRPC_BENCH_RPC_TIMEOUT`, and `GRPC_BENCH_RAW_SAMPLES`. Results are
-mode-scoped under `.artifacts/bench/grpc/`. A Docker daemon that can run the
-repository-pinned image is mandatory for inspect, smoke, and synthetic
-activation; shell lifecycle proof alone does not validate the k6 schema or
-claim performance. Workload, comparison, and evidence rules are in
-[Benchmarking](benchmarking.md).
-<!-- profile:grpc-reference-benchmark:end -->
 
 For faster fresh-Droplet startup, source the non-secret reference produced by
 `benchmark-remote-image`, then return to the normal least-privilege context:

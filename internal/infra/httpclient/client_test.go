@@ -552,10 +552,9 @@ func TestClientReusesConnectionsAcrossBursts(t *testing.T) {
 
 // TestRetryReusesTheConnectionItAbandons covers the other half of the same cost.
 //
-// drainResponse used to close the abandoned response without reading it, which
-// net/http reports to its read loop as a body that never reached EOF — so the
-// connection was destroyed instead of pooled and every retry dialed again,
-// against a dependency that had just answered 503.
+// Go 1.27 closes small abandoned HTTP/1 response bodies by draining them under
+// net/http's own byte and time limits. This keeps that runtime behavior wired
+// through the retry path so a 503 does not force the next attempt to redial.
 func TestRetryReusesTheConnectionItAbandons(t *testing.T) {
 	t.Parallel()
 

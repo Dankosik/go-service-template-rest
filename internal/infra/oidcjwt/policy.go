@@ -2,8 +2,6 @@ package oidcjwt
 
 import (
 	"errors"
-	"fmt"
-	"net/netip"
 	"strings"
 
 	"github.com/example/go-service-template-rest/internal/authntrust"
@@ -12,9 +10,9 @@ import (
 // Policy is the immutable trust configuration shared by both transports. The
 // capability limits no deployment may change are in trust_envelope.go.
 type Policy struct {
-	issuer         string
-	audience       string
-	trustedProxies []netip.Prefix
+	issuer       string
+	audience     string
+	tokenProfile string
 }
 
 // PolicyInput carries the configured trust values one deployment holds. doc.go's
@@ -31,9 +29,9 @@ type Policy struct {
 // new field is stating it does not vary that value, while a composition root
 // that omits one is shipping it unset.
 type PolicyInput struct {
-	Issuer            string
-	Audience          string
-	TrustedProxyCIDRs string
+	Issuer       string
+	Audience     string
+	TokenProfile string
 }
 
 // NewPolicy validates and copies the complete trust policy.
@@ -46,29 +44,24 @@ type PolicyInput struct {
 func NewPolicy(input PolicyInput) (Policy, error) {
 	issuer := strings.TrimSpace(input.Issuer)
 	audience := strings.TrimSpace(input.Audience)
+	tokenProfile := strings.ToLower(strings.TrimSpace(input.TokenProfile))
 	if !authntrust.ValidIssuerURL(issuer) {
 		return Policy{}, errors.New("authn issuer must be an absolute HTTPS URL without user info, query, or fragment")
 	}
 	if audience == "" {
 		return Policy{}, errors.New("authn audience cannot be empty")
 	}
-	trusted, err := authntrust.ParseProxyCIDRs(input.TrustedProxyCIDRs)
-	if err != nil {
-		return Policy{}, fmt.Errorf("authn %w", err)
+	if !authntrust.ValidTokenProfile(tokenProfile) {
+		return Policy{}, errors.New("authn token profile must be one of resource-server or rfc9068")
 	}
 
 	return Policy{
-		issuer:         issuer,
-		audience:       audience,
-		trustedProxies: trusted,
+		issuer:       issuer,
+		audience:     audience,
+		tokenProfile: tokenProfile,
 	}, nil
 }
 
-func (p Policy) trustedProxy(address netip.Addr) bool {
-	for _, prefix := range p.trustedProxies {
-		if prefix.Contains(address.Unmap()) {
-			return true
-		}
-	}
-	return false
+func (p Policy) strictRFC9068() bool {
+	return p.tokenProfile == authntrust.TokenProfileRFC9068
 }

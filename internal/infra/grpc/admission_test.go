@@ -32,7 +32,7 @@ func TestAdmissionBudgetIsProcessWide(t *testing.T) {
 	cfg := testServerConfig()
 	// One slot for the whole process, so a second budget is the only way both
 	// RPCs below can be admitted.
-	cfg.MaxConcurrentRPCs = 1
+	cfg.maxConcurrentRPCs = 1
 
 	occupied := make(chan struct{})
 	release := make(chan struct{})
@@ -89,7 +89,7 @@ func TestAdmissionBudgetIsProcessWide(t *testing.T) {
 func TestHealthServiceSurvivesBusinessSaturation(t *testing.T) {
 	cfg := testServerConfig()
 	// One business slot, held for the whole test by the stream below.
-	cfg.MaxConcurrentRPCs = 1
+	cfg.maxConcurrentRPCs = 1
 
 	occupied := make(chan struct{})
 	release := make(chan struct{})

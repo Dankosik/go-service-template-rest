@@ -28,29 +28,18 @@ const (
 	outcomeCanceled  = "canceled"
 	outcomeTimeout   = "timeout"
 	outcomeRetryable = "retryable"
-	// Drain outcomes.
-	outcomeGraceful = "graceful"
-	outcomeForced   = "forced"
-	outcomeFailed   = "failed"
 	// boundedOther is what an unrecognized outcome or connection event
 	// collapses to, so a value this list forgot cannot mint a time series.
 	boundedOther = "other"
 )
 
-// The connection events messaging.connection.events counts.
-const (
-	connectionDisconnected = "disconnected"
-	connectionReconnected  = "reconnected"
-	connectionClosed       = "closed"
-	connectionAsyncError   = "async_error"
-)
+const connectionAsyncError = "async_error"
 
 // The reason field on an operator log record. It never reaches a metric.
 const (
 	reasonNone                = "none"
 	reasonInvalidMessage      = "invalid_message"
 	reasonContextDone         = "context_done_before_dispatch"
-	reasonCapacity            = "capacity"
 	reasonDraining            = "draining"
 	reasonBrokerRejected      = "broker_rejected"
 	reasonAckUnavailable      = "ack_unavailable"
@@ -82,24 +71,14 @@ const (
 
 // boundedOutcome is the closed vocabulary for the outcome attribute, shared by
 // messaging.publish.operations, messaging.handler.operations,
-// messaging.dlq.transfers, and messaging.drain.operations. Each metric uses a
+// messaging.dlq.transfers. Each metric uses a
 // subset; the union is bounded once because one unrecognized value is the same
 // failure however it arrives.
 func boundedOutcome(value string) string {
 	switch value {
 	case outcomeAccepted, outcomeRejected, outcomeAmbiguous,
 		outcomeSuccess, outcomeTerminal, outcomePermanent, outcomeCanceled,
-		outcomeTimeout, outcomeRetryable,
-		outcomeGraceful, outcomeForced, outcomeFailed:
-		return value
-	default:
-		return boundedOther
-	}
-}
-
-func boundedConnectionEvent(value string) string {
-	switch value {
-	case connectionDisconnected, connectionReconnected, connectionClosed, connectionAsyncError:
+		outcomeTimeout, outcomeRetryable:
 		return value
 	default:
 		return boundedOther

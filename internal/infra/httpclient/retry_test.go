@@ -244,10 +244,11 @@ func TestRetryStopsAtMaxAttempts(t *testing.T) {
 	}
 }
 
-func TestRetryCancellationNeverReturnsADrainedResponse(t *testing.T) {
+func TestRetryCancellationNeverReturnsAClosedResponse(t *testing.T) {
 	t.Parallel()
 
 	ctx, cancel := context.WithCancel(context.Background())
+	body := &cancelCloseBody{cancel: cancel}
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://provider.example", http.NoBody)
 	if err != nil {
 		t.Fatalf("build request: %v", err)
@@ -257,9 +258,7 @@ func TestRetryCancellationNeverReturnsADrainedResponse(t *testing.T) {
 			return &http.Response{
 				StatusCode: http.StatusServiceUnavailable,
 				Header:     make(http.Header),
-				Body: cancelReadCloser{
-					cancel: cancel,
-				},
+				Body:       body,
 			}, nil
 		}),
 		policy: RetryPolicy{MaxAttempts: 2, BaseDelay: time.Hour},
@@ -270,10 +269,13 @@ func TestRetryCancellationNeverReturnsADrainedResponse(t *testing.T) {
 		if response.Body != nil {
 			_ = response.Body.Close()
 		}
-		t.Fatalf("RoundTrip() response = %#v, want nil after its body was drained", response)
+		t.Fatalf("RoundTrip() response = %#v, want nil after its body was closed", response)
 	}
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("RoundTrip() error = %v, want context.Canceled", err)
+	}
+	if body.read {
+		t.Fatal("replaced response body was synchronously read before Close")
 	}
 }
 
@@ -442,13 +444,17 @@ func TestNewRejectsIncoherentRetryPolicy(t *testing.T) {
 	}
 }
 
-type cancelReadCloser struct {
+type cancelCloseBody struct {
 	cancel context.CancelFunc
+	read   bool
 }
 
-func (c cancelReadCloser) Read([]byte) (int, error) {
-	c.cancel()
+func (c *cancelCloseBody) Read([]byte) (int, error) {
+	c.read = true
 	return 0, io.EOF
 }
 
-func (cancelReadCloser) Close() error { return nil }
+func (c *cancelCloseBody) Close() error {
+	c.cancel()
+	return nil
+}

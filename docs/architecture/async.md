@@ -24,8 +24,9 @@ River's completion/retry contract.
 
 <!-- profile:messaging-nats-jetstream:start -->
 NATS JetStream uses a separate `cmd/worker` root and concrete
-`internal/infra/natsjs` producer/consumer. The service remains producer-only;
-the worker requires a duplicate-safe feature handler. With outbox enabled, the
+`internal/infra/natsjs` adapter behind transport-neutral typed events. Business
+code sees only event kinds, publishers, and typed handlers; composition owns
+subjects and the worker owns duplicate-safe settlement. With outbox enabled, the
 same package restores stored W3C creation context and publishes the stored event
 without inventing consumer ordering.
 <!-- profile:messaging-nats-jetstream:end -->

@@ -1,2 +1,2 @@
-// Package objectstorage defines the provider-neutral object-storage feature contract.
+// Package objectstorage defines the small provider-neutral object-storage port.
 package objectstorage

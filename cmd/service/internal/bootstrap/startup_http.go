@@ -44,13 +44,11 @@ func newHTTPHandler(
 		bindings.Handlers,
 		metrics,
 		httpx.RouterConfig{
-			HardenConfig: httpx.HardenConfig{
-				MaxBodyBytes:    cfg.HTTP.MaxBodyBytes,
-				RequestTimeout:  cfg.HTTP.RequestTimeout,
-				MaxInFlight:     cfg.HTTP.MaxInFlight,
-				OTelServerName:  cfg.Observability.OTel.ServiceName,
-				LogHealthProbes: cfg.HTTP.AccessLogHealthProbes,
-			},
+			MaxBodyBytes:    cfg.HTTP.MaxBodyBytes,
+			RequestTimeout:  cfg.HTTP.RequestTimeout,
+			MaxInFlight:     cfg.HTTP.MaxInFlight,
+			OTelServerName:  cfg.Observability.OTel.ServiceName,
+			LogHealthProbes: cfg.HTTP.AccessLogHealthProbes,
 			// The active profile's dependency failures, classified once here
 			// rather than in every operation. A service appends its own domain
 			// mappers at runtimeDependencies.DomainErrors; see failure.Mapper

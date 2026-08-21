@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"math/rand/v2"
 	"net/http"
 	"strconv"
@@ -74,7 +73,9 @@ func (t retryTransport) RoundTrip(request *http.Request) (*http.Response, error)
 		}
 		// Only once another attempt is certain, so a caller never receives a
 		// response whose body this closed.
-		drainResponse(response)
+		if response != nil && response.Body != nil {
+			_ = response.Body.Close()
+		}
 
 		select {
 		case <-request.Context().Done():
@@ -255,20 +256,4 @@ func fitsRemainingBudget(request *http.Request, delay time.Duration) bool {
 		return true
 	}
 	return time.Until(deadline) > 2*delay
-}
-
-// maxDrainBytes bounds the drain read: past this, rereading costs more than the
-// one handshake draining exists to save.
-const maxDrainBytes = 64 << 10
-
-// drainResponse consumes and closes a response that is about to be replaced, so
-// its connection returns to the pool instead of being torn down. The read is what
-// matters: net/http discards a connection whose body was closed before EOF, so
-// closing alone makes every retry pay a fresh TCP and TLS handshake.
-func drainResponse(response *http.Response) {
-	if response == nil || response.Body == nil {
-		return
-	}
-	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxDrainBytes))
-	_ = response.Body.Close()
 }

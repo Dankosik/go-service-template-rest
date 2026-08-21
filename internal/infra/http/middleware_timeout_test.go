@@ -136,9 +136,7 @@ func TestRouterAppliesRequestTimeoutToHandlers(t *testing.T) {
 			deadlines <- deadline
 			return nil
 		},
-	}, nil, RouterConfig{
-		HardenConfig: HardenConfig{RequestTimeout: requestBudget},
-	})
+	}, nil, RouterConfig{RequestTimeout: requestBudget})
 
 	before := time.Now()
 	resp := doRequest(handler, http.MethodGet, "/health/ready")

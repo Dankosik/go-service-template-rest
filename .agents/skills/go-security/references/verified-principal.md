@@ -11,25 +11,25 @@ or what a handler is allowed to conclude about who is calling.
   through `httpx.Authenticated`, which publishes a `reqctx.Principal` onto the
   request; a handler that re-reads `Authorization` is the second path, and the
   one nobody audits.
-- What it already enforces, and what a change must not weaken: RS256 only,
-  checked in the protected header and again as the sole algorithm passed to
-  `jose.ParseSignedCompact`, which go-jose v4 requires the caller to name;
-  `crit`, `b64`, `jku`, `x5u`, and `jwk` headers rejected outright; an RFC 9068
-  `typ` of `at+jwt`; exact `iss`; `aud` containing the configured audience;
-  `sub`, `client_id`, and `jti` present; `exp` and `iat` required within 30s
-  skew; and keys selected by `kid` from the fetched JWKS alone.
-- Trust is time-bounded. A key set older than `MaxKeySetAge` verifies nothing
-  and answers `KindUnavailable`, and a key miss triggers at most one refresh per
-  `RefreshCooldown` so an invalid-`kid` flood cannot drive JWKS traffic. Both
-  fail closed; a fallback that accepts a token because refresh failed inverts
-  them.
+- The default resource-server profile enforces RS256, exact `iss`, `aud`
+  containing the configured audience, required `exp`, optional `nbf`, 30s skew,
+  and at least one stable subject or client identity. `golang-jwt` owns parsing
+  and signature/claim validation; `keyfunc` owns cached JWKS key selection,
+  periodic refresh, and cooldown-limited unknown-`kid` recovery.
+- Mainstream client identifiers use `client_id`, `azp`, `appid`, or `cid`. The
+  verifier accepts one value or several identical values and rejects a conflict.
+  The explicit `rfc9068` token profile additionally requires `typ=at+jwt`,
+  `client_id`, `iat`, and `jti`; those are not ordinary-profile defaults.
+- Initial Discovery and JWKS admission fail startup closed. Later refresh
+  failures never replace the last valid set; a request that needs the failed
+  refresh answers `KindUnavailable`, while dynamic provider health does not
+  evict an otherwise healthy instance from readiness.
 - Scope, role, and tenant are not carried by this credential. Authorizing on any
   of them needs its own source and its own decision, derived from the verified
   subject rather than from a request field.
-- HTTP identity additionally requires the peer address inside
-  `authn.trusted_proxy_cidrs` and exactly one `X-Forwarded-Proto: https`;
-  anything else is `KindUntrustedTransport` before the token is parsed. A new
-  ingress path inherits that requirement or states why it does not.
+- HTTP and gRPC remove the credential before the handler runs. TLS termination,
+  CA roots, DNS/egress, and public-edge rate limiting are deployment controls;
+  the verifier does not infer them from forwarding headers.
 - A secured operation reaching a handler with no principal is a wiring defect,
   not an anonymous caller: `reqctx` documents 500 for it, never 401.
 
@@ -42,16 +42,16 @@ or what a handler is allowed to conclude about who is calling.
 - Widening the allowlist to whatever the issuer signs with: the header `alg` is
   attacker-supplied input, and RFC 8725 puts algorithm selection on the
   verifier.
+- Accepting an audience-less token because one issuer omits `aud`: configure a
+  resource binding at the issuer instead of removing the API boundary.
 
 ## Prove
 
-The deny-path matrix spans two files: `internal/infra/oidcjwt/token_test.go`
-holds what one token can be wrong about — tampered header and payload,
-duplicate members, wrong issuer and audience, expiry and skew — and
-`verifier_test.go` holds what needs a live key set, unknown `kid` and a stale
-set. Extend those tables rather than re-proving a verifier control at the
-handler; add a `request_errors_test.go` case only for what the transport seam
-itself decides.
+`internal/infra/oidcjwt/verifier_test.go` owns the default/strict claim matrix,
+identity aliases, issuer/audience/time failures, and unavailable refresh;
+`http_test.go` and `grpc_tls_contract_test.go` prove carrier removal and the
+principal at the real transport seams. Extend the earliest owner rather than
+re-proving verifier behavior in a handler.
 
 Credential lifecycle, permission-model shape, tenant partitioning, and the
 revocation window belong to

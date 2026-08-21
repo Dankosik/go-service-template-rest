@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/example/go-service-template-rest/cmd/internal/runtimeopts"
 	"github.com/example/go-service-template-rest/internal/config"
@@ -45,6 +44,9 @@ func TestMessagingConfigRulesMatchAdapter(t *testing.T) {
 				// broken fixture cannot read as the config side doing its job.
 				return
 			}
+			if cfg.URLs == "" {
+				return // Disabled transport is accepted by shared config and rejected by the worker root.
+			}
 			if err := natsjs.ValidateConfig(runtimeopts.Messaging(*cfg)); err != nil {
 				t.Fatalf("internal/config accepted a configuration natsjs.ValidateConfig refuses: %v\n"+
 					"This is the direction that must never diverge: the fault now surfaces at connect "+
@@ -80,8 +82,7 @@ func TestMessagingSchemeVocabularyMatchesAdapter(t *testing.T) {
 		cfg := natsjs.Config{
 			URLs: []string{scheme + "://broker.example:4222"}, Stream: "EVENTS",
 			AllowPlaintext: true, AllowUnauthenticated: true,
-			MinStreamReplicas: 1, MinStreamRetention: time.Hour,
-			MaxPayloadBytes: 1 << 10, MaxPendingPublishes: 1,
+			MaxPayloadBytes: 1 << 10,
 		}
 		if err := natsjs.ValidateConfig(cfg); err != nil {
 			t.Errorf("natsjs.ValidateConfig(%s) error = %v, want the scheme accepted", scheme, err)
@@ -91,8 +92,7 @@ func TestMessagingSchemeVocabularyMatchesAdapter(t *testing.T) {
 		cfg := natsjs.Config{
 			URLs: []string{scheme + "://broker.example:4222"}, Stream: "EVENTS",
 			AllowPlaintext: true, AllowUnauthenticated: true,
-			MinStreamReplicas: 1, MinStreamRetention: time.Hour,
-			MaxPayloadBytes: 1 << 10, MaxPendingPublishes: 1,
+			MaxPayloadBytes: 1 << 10,
 		}
 		if err := natsjs.ValidateConfig(cfg); !errors.Is(err, natsjs.ErrRejected) {
 			t.Errorf("natsjs.ValidateConfig(%q) error = %v, want ErrRejected", scheme, err)
@@ -103,8 +103,7 @@ func TestMessagingSchemeVocabularyMatchesAdapter(t *testing.T) {
 		cfg := natsjs.Config{
 			URLs: []string{scheme + "://broker.example:4222"}, Stream: "EVENTS",
 			AllowUnauthenticated: true,
-			MinStreamReplicas:    1, MinStreamRetention: time.Hour,
-			MaxPayloadBytes: 1 << 10, MaxPendingPublishes: 1,
+			MaxPayloadBytes:      1 << 10,
 		}
 		err := natsjs.ValidateConfig(cfg)
 		if err == nil || !errors.Is(err, natsjs.ErrRejected) || !strings.Contains(err.Error(), "plaintext") {

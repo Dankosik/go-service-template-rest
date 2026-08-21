@@ -1,30 +1,23 @@
 # Native gRPC
 
-The `GRPC=enabled` initialization profile adds an optional native gRPC-Go
-client/server capability beside the existing REST API. It does not replace
-OpenAPI, add a gateway, or create a second business layer.
+`GRPC=enabled` adds native grpc-go server and client support beside REST. It
+uses a separate listener and the same feature services, readiness, telemetry,
+and shutdown budget.
 
 ```text
-REST :8080 ─────┐
-                ├─> internal/<feature> ─> dependencies
-gRPC :9091 ─────┘
-
-metrics :9090 (private diagnostics)
+REST :8080 ─┐
+            ├─> internal/<feature>
+gRPC :9091 ─┘
 ```
 
-REST and gRPC use separate listeners in one process. They share startup
-admission, dependency readiness, request IDs, telemetry, shutdown budgeting,
-and feature services. The native gRPC path keeps unary, server-streaming,
-client-streaming, and bidirectional-streaming APIs available without routing
-them through `net/http`.
+The feature author owns protobuf messages, generated service methods, domain
+errors, and business stream/deadline behavior. The template owns transport
+composition; a feature must not build interceptors, health, validation,
+credentials, retry, load balancing, telemetry, limits, or shutdown.
 
-## Select one leaf
-
-| Changed pressure | Load |
+| Task | Read |
 | --- | --- |
-| Protobuf schema, generated API, compatibility, or Buf | [Contract And Generation](grpc/contract-and-generation.md) |
-| Registration, status mapping, client, or streaming behavior | [Runtime And Streaming](grpc/runtime-and-streaming.md) |
-| Plaintext, TLS, mTLS, trust, or certificate rotation | [Transport Security](grpc/transport-security.md) |
-| Profile initialization, health, readiness, drain, telemetry, deployment, or proof | [Operations And Proof](grpc/operations-and-proof.md) |
-
-Load another leaf only for an independent changed pressure.
+| Schema, generation, compatibility | [Contract and generation](grpc/contract-and-generation.md) |
+| Server implementation, registration, client use | [Runtime and streaming](grpc/runtime-and-streaming.md) |
+| Plaintext, TLS, or mTLS | [Transport security](grpc/transport-security.md) |
+| Health, readiness, lifecycle, profile, proof | [Operations and proof](grpc/operations-and-proof.md) |

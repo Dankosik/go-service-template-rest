@@ -61,9 +61,10 @@ authority, or operator flow; line count alone is not an owner.
 ## Removable Profile Packs
 
 <!-- profile:outbound-auth-oauth2-client-credentials:start -->
-`internal/infra/oauth2clientcredentials` owns one fixed machine-credential
-client and its HTTP/gRPC adapters; bootstrap maps config into it. It remains one
-removable outbound-auth pack.
+`internal/infra/oauth2clientcredentials` owns the fixed token endpoint,
+context-aware cache, and authenticated HTTP/gRPC client factories. Concrete
+provider adapters close the owner and give feature packages only generated
+authenticated clients. It remains one removable outbound-auth pack.
 <!-- profile:outbound-auth-oauth2-client-credentials:end -->
 
 <!-- profile:jobs-postgres:start -->
@@ -73,10 +74,16 @@ without a second job framework.
 <!-- profile:jobs-postgres:end -->
 
 <!-- profile:outbox-postgres:start -->
-`internal/domainevent`, `internal/infra/postgresoutbox`, and `cmd/outbox-relay`
-are one removable River-backed outbox pack. Event meaning owns no broker
-address; NATS routing remains in `internal/infra/natsjs`.
+`internal/infra/postgresoutbox` and `cmd/outbox-relay` are the removable
+River-backed outbox pack. Event meaning owns no broker address; NATS routing
+remains in `internal/infra/natsjs`.
 <!-- profile:outbox-postgres:end -->
+
+<!-- profile:messaging-nats-jetstream:start -->
+`internal/domainevent` and `internal/infra/natsjs` form the removable typed
+messaging pack. The domain package owns typed event identity and encoding; the
+adapter owns composition routes and JetStream mechanics.
+<!-- profile:messaging-nats-jetstream:end -->
 
 <!-- profile:webhooks-durable:start -->
 `internal/outboundtrust`, `internal/infra/postgreswebhook`, and the enabled jobs

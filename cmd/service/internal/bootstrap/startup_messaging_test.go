@@ -13,8 +13,11 @@ func TestMessagingCompositionDisabledHasNoRuntimeOrReadiness(t *testing.T) {
 	if err != nil {
 		t.Fatalf("initMessagingRuntime(disabled) error = %v", err)
 	}
-	if runtime.Producer() != nil || len(runtime.ReadinessProbes()) != 0 {
-		t.Fatalf("disabled messaging runtime = producer %v, probes %d", runtime.Producer(), len(runtime.ReadinessProbes()))
+	if publisher, publisherErr := runtime.Publisher(natsjs.Route{Type: "test", Version: 1, Subject: "events.test"}); publisher != nil || publisherErr == nil {
+		t.Fatalf("disabled messaging runtime = publisher %v, error %v", publisher, publisherErr)
+	}
+	if len(runtime.ReadinessProbes()) != 0 {
+		t.Fatalf("disabled messaging probes = %d", len(runtime.ReadinessProbes()))
 	}
 	if !runtime.Ready() {
 		t.Fatal("disabled messaging runtime is not ready")

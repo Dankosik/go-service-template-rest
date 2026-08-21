@@ -143,8 +143,7 @@ func TestMessagingMappingRetainsBlankAddressesForAdapterValidation(t *testing.T)
 
 	cfg := config.MessagingConfig{
 		URLs: "nats://one, , nats://two,", CredentialsFile: "/run/secrets/nats.creds", RootCAFile: "/run/secrets/nats-ca.pem",
-		AllowPlaintext: true, AllowUnauthenticated: true, Stream: "EVENTS", MinStreamReplicas: 3,
-		MinStreamRetention: 3600, MaxPayloadBytes: 1024, MaxPendingPublishes: 4,
+		AllowPlaintext: true, AllowUnauthenticated: true, Stream: "EVENTS", MaxPayloadBytes: 1024,
 	}
 	got := Messaging(cfg)
 	want := Messaging(config.MessagingConfig{})
@@ -154,10 +153,7 @@ func TestMessagingMappingRetainsBlankAddressesForAdapterValidation(t *testing.T)
 	want.AllowPlaintext = true
 	want.AllowUnauthenticated = true
 	want.Stream = "EVENTS"
-	want.MinStreamReplicas = 3
-	want.MinStreamRetention = 3600
 	want.MaxPayloadBytes = 1024
-	want.MaxPendingPublishes = 4
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Fatalf("Messaging() mismatch (-want +got):\n%s", diff)
 	}

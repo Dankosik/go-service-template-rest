@@ -38,15 +38,10 @@ func unitClient(t *testing.T, broker jetstream.JetStream, role Role) *Client {
 	cfg := testConfig()
 	cfg.Stream = "EVENTS"
 	client := &Client{
-		cfg:         cfg,
-		js:          broker,
-		telemetry:   sig,
-		events:      make(chan connectionEvent, 1),
-		reconnected: make(chan struct{}, 1),
-		terminal:    make(chan error, 1),
-		closed:      make(chan struct{}),
+		cfg: cfg, js: broker, telemetry: sig,
+		terminal: make(chan error, 1), closed: make(chan struct{}),
 	}
-	client.producer = newProducer(client, 1, cfg.MaxPayloadBytes)
+	client.producer = newProducer(client, cfg.MaxPayloadBytes)
 	return client
 }
 
@@ -64,6 +59,7 @@ func unitWorker(t *testing.T, broker jetstream.JetStream, handler Handler) *Work
 		handler:   handler,
 		fatal:     make(chan error, 1),
 		runDone:   make(chan struct{}),
+		drain:     make(chan struct{}),
 	}
 }
 
@@ -94,7 +90,6 @@ func validTestEvent() Event {
 		PublicationID: "publication-1",
 		Type:          "created",
 		Schema:        "v1",
-		OrderingKey:   "account-1",
 		CreatedAt:     time.Unix(123, 456).UTC(),
 		Payload:       []byte("payload"),
 	}
@@ -103,10 +98,9 @@ func validTestEvent() Event {
 func eventHeaders(event Event) nats.Header {
 	header := make(nats.Header)
 	header.Set(headerMessageID, event.MessageID)
-	header.Set(headerPublicationID, event.PublicationID)
+	header.Set(jetstream.MsgIDHeader, event.PublicationID)
 	header.Set(headerEventType, event.Type)
 	header.Set(headerEventSchema, event.Schema)
-	header.Set(headerOrderingKey, event.OrderingKey)
 	header.Set(headerCreatedAt, event.CreatedAt.Format(time.RFC3339Nano))
 	return header
 }

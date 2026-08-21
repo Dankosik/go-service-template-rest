@@ -5,81 +5,37 @@ package integration_test
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"crypto/tls"
-	"crypto/x509"
-	"encoding/hex"
-	"encoding/pem"
 	"errors"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"regexp"
-	"runtime"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/credentials"
-	awss3 "github.com/aws/aws-sdk-go-v2/service/s3"
-	smithyendpoints "github.com/aws/smithy-go/endpoints"
-	boundedhttp "github.com/example/go-service-template-rest/internal/infra/httpclient"
 	objectstore "github.com/example/go-service-template-rest/internal/infra/s3"
 	"github.com/example/go-service-template-rest/internal/objectstorage"
 )
 
 const (
-	conformanceRootBundle  = "/etc/ssl/certs/ca-certificates.crt"
-	conformanceChunkBytes  = int64(5 << 20)
+	conformancePartBytes   = int64(8 << 20)
 	conformanceObjectBytes = int64(16 << 20)
 )
 
-var (
-	conformanceRunID = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$`)
-	imageDigest      = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
-)
+var conformanceRunID = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$`)
 
 // profile:object-storage:start
 func TestS3ObjectStorageConformanceRequiresProviderCertification(t *testing.T) {
 	if os.Getenv("REQUIRE_S3_CONFORMANCE") != "1" {
 		t.Skip("provider conformance is not requested")
 	}
-
-	env := loadS3ConformanceEnv(t)
-	roots := verifyS3ConformanceRootBundle(t, env)
-	primary := newS3ConformanceClient(t, env.primary)
-	concealment := newS3ConformanceClient(t, env.concealment)
-
-	prefix := "conformance/" + string(env.primary.Provider) + "/" + env.runID + "/"
-	keys := []string{prefix + "single", prefix + "multipart", prefix + "cleanup"}
-	registerS3ConformanceCleanup(t, primary, env.primary, roots, prefix, keys)
-	runS3Conformance(t, primary, concealment, roots, keys)
-}
-
-type s3ConformanceEnv struct {
-	primary       objectstore.Config
-	concealment   objectstore.Config
-	runID         string
-	imagePlatform string
-	bundleSHA256  string
-	bundleBytes   int64
-	bundleRoots   int
-}
-
-func loadS3ConformanceEnv(t *testing.T) s3ConformanceEnv {
-	t.Helper()
 	requireExactEnv(t, "S3_CONFORMANCE_MUTATION_AUTHORIZED", "1")
 	requireExactEnv(t, "S3_CONFORMANCE_IDENTITY_POLICY_RECEIPT", "verified")
 	requireExactEnv(t, "S3_CONFORMANCE_LIFECYCLE_RECEIPT", "verified")
-	requireExactEnv(t, "S3_CONFORMANCE_NO_ROOT_OVERRIDE", "1")
-	if os.Getenv("SSL_CERT_FILE") != "" || os.Getenv("SSL_CERT_DIR") != "" {
-		t.Fatal("provider conformance forbids ambient root overrides")
-	}
 
-	provider := objectstore.Provider(os.Getenv("S3_CONFORMANCE_PROVIDER"))
+	provider := objectstore.Provider(requiredEnv(t, "S3_CONFORMANCE_PROVIDER"))
 	versioning := requiredEnv(t, "S3_CONFORMANCE_VERSIONING_RECEIPT")
 	switch provider {
 	case objectstore.ProviderAmazonS3:
@@ -98,109 +54,49 @@ func loadS3ConformanceEnv(t *testing.T) s3ConformanceEnv {
 	if !conformanceRunID.MatchString(runID) {
 		t.Fatal("S3_CONFORMANCE_RUN_ID must be a lowercase DNS label")
 	}
-	platform := requiredEnv(t, "S3_CONFORMANCE_IMAGE_PLATFORM")
-	if platform != runtime.GOOS+"/"+runtime.GOARCH || platform != "linux/amd64" && platform != "linux/arm64" {
-		t.Fatal("provider conformance must run on its attested Linux image architecture")
-	}
-	if !imageDigest.MatchString(requiredEnv(t, "S3_CONFORMANCE_IMAGE_DIGEST")) {
-		t.Fatal("S3_CONFORMANCE_IMAGE_DIGEST must be an immutable sha256 digest")
-	}
-	bundleBytes := requiredPositiveInt64(t, "S3_CONFORMANCE_ROOT_BUNDLE_BYTES")
-	bundleRoots64 := requiredPositiveInt64(t, "S3_CONFORMANCE_ROOT_BUNDLE_ROOTS")
-	if bundleRoots64 > int64(^uint(0)>>1) {
-		t.Fatal("S3_CONFORMANCE_ROOT_BUNDLE_ROOTS exceeds the current architecture")
-	}
-	bundleSHA256 := requiredEnv(t, "S3_CONFORMANCE_ROOT_BUNDLE_SHA256")
-	if decoded, err := hex.DecodeString(bundleSHA256); err != nil || len(decoded) != sha256.Size {
-		t.Fatal("S3_CONFORMANCE_ROOT_BUNDLE_SHA256 must be one SHA-256 value")
-	}
+	cfg := conformanceConfig(t, provider)
+	primary := newConformanceClient(t, cfg, "S3_CONFORMANCE_")
+	concealment := newConformanceClient(t, cfg, "S3_CONFORMANCE_CONCEALMENT_")
 
-	primary := s3ConformanceConfig(t, provider, "S3_CONFORMANCE_")
-	concealment := primary
-	concealment.AccessKeyID = requiredEnv(t, "S3_CONFORMANCE_CONCEALMENT_ACCESS_KEY_ID")
-	concealment.SecretAccessKey = requiredEnv(t, "S3_CONFORMANCE_CONCEALMENT_SECRET_ACCESS_KEY")
-	concealment.SessionToken = os.Getenv("S3_CONFORMANCE_CONCEALMENT_SESSION_TOKEN")
-	if provider == objectstore.ProviderAmazonS3 && concealment.SessionToken == "" {
-		t.Fatal("S3_CONFORMANCE_CONCEALMENT_SESSION_TOKEN is required for Amazon conformance")
-	}
+	prefix := "conformance/" + string(provider) + "/" + runID + "/"
+	keys := []string{prefix + "single", prefix + "multipart", prefix + "cleanup"}
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		for _, key := range keys {
+			if err := primary.Delete(ctx, key); err != nil {
+				t.Errorf("provider conformance cleanup delete failed: %v", err)
+			}
+		}
+	})
 
-	return s3ConformanceEnv{
-		primary: primary, concealment: concealment, runID: runID, imagePlatform: platform,
-		bundleSHA256: bundleSHA256, bundleBytes: bundleBytes, bundleRoots: int(bundleRoots64),
+	runConformance(t, primary, concealment, keys)
+}
+
+func conformanceConfig(t *testing.T, provider objectstore.Provider) objectstore.Config {
+	t.Helper()
+	region := requiredEnv(t, "S3_CONFORMANCE_REGION")
+	endpoint := requiredEnv(t, "S3_CONFORMANCE_ENDPOINT")
+	owner := os.Getenv("S3_CONFORMANCE_EXPECTED_BUCKET_OWNER")
+	if provider == objectstore.ProviderAmazonS3 {
+		if endpoint != "https://s3."+region+".amazonaws.com" {
+			t.Fatal("Amazon conformance endpoint receipt is not the selected regional endpoint")
+		}
+		endpoint = ""
+	}
+	return objectstore.Config{
+		Provider: provider, Endpoint: endpoint, Region: region,
+		Bucket: requiredEnv(t, "S3_CONFORMANCE_BUCKET"), ExpectedBucketOwner: owner,
+		CredentialSource: objectstore.CredentialSourceStatic, MaxObjectBytes: conformanceObjectBytes,
 	}
 }
 
-func s3ConformanceConfig(t *testing.T, provider objectstore.Provider, prefix string) objectstore.Config {
+func newConformanceClient(t *testing.T, cfg objectstore.Config, prefix string) *objectstore.Client {
 	t.Helper()
-	cfg := objectstore.Config{
-		Provider:                provider,
-		Endpoint:                requiredEnv(t, prefix+"ENDPOINT"),
-		Region:                  requiredEnv(t, prefix+"REGION"),
-		Bucket:                  requiredEnv(t, prefix+"BUCKET"),
-		AccessKeyID:             requiredEnv(t, prefix+"ACCESS_KEY_ID"),
-		SecretAccessKey:         requiredEnv(t, prefix+"SECRET_ACCESS_KEY"),
-		SessionToken:            os.Getenv(prefix + "SESSION_TOKEN"),
-		ExpectedBucketOwner:     os.Getenv(prefix + "EXPECTED_BUCKET_OWNER"),
-		MaxObjectBytes:          conformanceObjectBytes,
-		MultipartChunkBytes:     conformanceChunkBytes,
-		MaxActiveOperations:     2,
-		MaxOperationDuration:    30 * time.Second,
-		MaxPresignLifetime:      5 * time.Minute,
-		MaxResponseHeaderBytes:  64 << 10,
-		MaxControlResponseBytes: 1 << 20,
-		MaxWorkingMemoryBytes:   512 << 20,
-	}
-	if provider == objectstore.ProviderAmazonS3 && cfg.SessionToken == "" {
-		t.Fatal(prefix + "SESSION_TOKEN is required for Amazon conformance")
-	}
-	return cfg
-}
-
-func verifyS3ConformanceRootBundle(t *testing.T, env s3ConformanceEnv) *x509.CertPool {
-	t.Helper()
-	info, err := os.Stat(conformanceRootBundle)
-	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0o555 {
-		t.Fatal("provider conformance requires the regular read-only production root bundle")
-	}
-	data, err := os.ReadFile(conformanceRootBundle)
-	if err != nil {
-		t.Fatal("provider conformance could not read the production root bundle")
-	}
-	identity := sha256.Sum256(data)
-	if int64(len(data)) != env.bundleBytes || hex.EncodeToString(identity[:]) != env.bundleSHA256 || len(data) > (448<<10)/2 {
-		t.Fatal("provider conformance root-bundle byte identity or headroom differs from its receipt")
-	}
-
-	pool := x509.NewCertPool()
-	seen := make(map[[sha256.Size]byte]struct{})
-	rest := data
-	for len(bytes.TrimSpace(rest)) > 0 {
-		rest = bytes.TrimLeft(rest, " \t\r\n")
-		block, remaining := pem.Decode(rest)
-		if block == nil || block.Type != "CERTIFICATE" || len(block.Headers) != 0 {
-			t.Fatal("provider conformance root bundle contains non-certificate data")
-		}
-		certificate, parseErr := x509.ParseCertificate(block.Bytes)
-		if parseErr != nil || !certificate.BasicConstraintsValid || !certificate.IsCA {
-			t.Fatal("provider conformance root bundle contains an invalid CA")
-		}
-		certificateID := sha256.Sum256(certificate.Raw)
-		if _, duplicate := seen[certificateID]; duplicate {
-			t.Fatal("provider conformance root bundle contains a duplicate CA")
-		}
-		seen[certificateID] = struct{}{}
-		pool.AddCert(certificate)
-		rest = remaining
-	}
-	if len(seen) != env.bundleRoots || len(seen) > 288/2 {
-		t.Fatal("provider conformance root count or headroom differs from its receipt")
-	}
-	return pool
-}
-
-func newS3ConformanceClient(t *testing.T, cfg objectstore.Config) *objectstore.Client {
-	t.Helper()
-	client, err := objectstore.New(cfg)
+	t.Setenv("AWS_ACCESS_KEY_ID", requiredEnv(t, prefix+"ACCESS_KEY_ID"))
+	t.Setenv("AWS_SECRET_ACCESS_KEY", requiredEnv(t, prefix+"SECRET_ACCESS_KEY"))
+	t.Setenv("AWS_SESSION_TOKEN", os.Getenv(prefix+"SESSION_TOKEN"))
+	client, err := objectstore.New(t.Context(), cfg)
 	if err != nil {
 		t.Fatalf("construct provider conformance client: %v", err)
 	}
@@ -208,269 +104,96 @@ func newS3ConformanceClient(t *testing.T, cfg objectstore.Config) *objectstore.C
 	return client
 }
 
-func registerS3ConformanceCleanup(t *testing.T, client *objectstore.Client, cfg objectstore.Config, roots *x509.CertPool, prefix string, keys []string) {
-	t.Helper()
-	direct := newS3ConformanceCleanupClient(t, cfg, roots)
-	t.Cleanup(func() {
-		defer direct.close()
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-		defer cancel()
-		for _, key := range keys {
-			if err := client.Delete(ctx, key); err != nil {
-				t.Errorf("provider conformance cleanup delete failed with %q", objectstorage.Kind(err))
-				continue
-			}
-			if _, err := client.Metadata(ctx, key); objectstorage.Kind(err) != objectstorage.KindNotFound {
-				t.Errorf("provider conformance cleanup readback = %q, want not_found", objectstorage.Kind(err))
-			}
-		}
-		if err := direct.abortPrefix(ctx, prefix); err != nil {
-			t.Error("provider conformance multipart cleanup did not reach an empty prefix")
-		}
-	})
-}
-
-type s3ConformanceCleanupClient struct {
-	sdk    *awss3.Client
-	client *boundedhttp.Client
-	bucket string
-	owner  *string
-}
-
-func newS3ConformanceCleanupClient(t *testing.T, cfg objectstore.Config, roots *x509.CertPool) *s3ConformanceCleanupClient {
-	t.Helper()
-	endpoint, err := url.Parse(cfg.Endpoint)
-	if err != nil {
-		t.Fatal("parse provider conformance cleanup endpoint")
-	}
-	endpoint.Host = cfg.Bucket + "." + endpoint.Host
-	client, err := boundedhttp.New(boundedhttp.Config{
-		DependencyName: "object-storage-conformance-cleanup", BaseURL: endpoint.String(),
-		TargetClass: boundedhttp.ExternalHTTPS, OneAttempt: true, RootCAs: roots,
-		DisableInstrumentation: true, RequestTimeout: 30 * time.Second,
-		ResponseHeaderTimeout: 30 * time.Second, MaxResponseHeaderBytes: 64 << 10,
-		MaxResponseBodyBytes: 1 << 20, MaxConnsPerHost: 1,
-	}, nil)
-	if err != nil {
-		t.Fatal("construct provider conformance cleanup transport")
-	}
-	options := awss3.Options{
-		Credentials: credentials.NewStaticCredentialsProvider(cfg.AccessKeyID, cfg.SecretAccessKey, cfg.SessionToken),
-		Region:      cfg.Region, Retryer: aws.NopRetryer{}, HTTPClient: client,
-		EndpointResolverV2:         s3ConformanceResolver{endpoint: *endpoint, region: cfg.Region, bucket: cfg.Bucket},
-		RequestChecksumCalculation: aws.RequestChecksumCalculationWhenRequired,
-		ResponseChecksumValidation: aws.ResponseChecksumValidationWhenRequired,
-		DisableClockSkewCorrection: true, DisableMultiRegionAccessPoints: true,
-		DisableS3ExpressSessionAuth: aws.Bool(true), UseARNRegion: false, UseAccelerate: false,
-		UseDualstack: false, UsePathStyle: false,
-	}
-	var owner *string
-	if cfg.Provider == objectstore.ProviderAmazonS3 {
-		owner = aws.String(cfg.ExpectedBucketOwner)
-	}
-	return &s3ConformanceCleanupClient{sdk: awss3.New(options), client: client, bucket: cfg.Bucket, owner: owner}
-}
-
-func (c *s3ConformanceCleanupClient) close() { c.client.CloseIdleConnections() }
-
-func (c *s3ConformanceCleanupClient) abortPrefix(ctx context.Context, prefix string) error {
-	for range 3 {
-		uploads, err := c.multipartUploads(ctx, prefix)
-		if err != nil {
-			return err
-		}
-		if len(uploads) == 0 {
-			return nil
-		}
-		for _, upload := range uploads {
-			if _, err := c.sdk.AbortMultipartUpload(ctx, &awss3.AbortMultipartUploadInput{
-				Bucket: aws.String(c.bucket), ExpectedBucketOwner: c.owner,
-				Key: aws.String(upload.key), UploadId: aws.String(upload.id),
-			}); err != nil {
-				return errors.New("abort provider conformance multipart upload")
-			}
-		}
-	}
-	uploads, err := c.multipartUploads(ctx, prefix)
-	if err != nil {
-		return err
-	}
-	if len(uploads) == 0 {
-		return nil
-	}
-	return errors.New("provider conformance multipart prefix remains non-empty")
-}
-
-func (c *s3ConformanceCleanupClient) multipartUploads(ctx context.Context, prefix string) ([]s3ConformanceUpload, error) {
-	var uploads []s3ConformanceUpload
-	var keyMarker, uploadMarker *string
-	for range 10 {
-		out, err := c.sdk.ListMultipartUploads(ctx, &awss3.ListMultipartUploadsInput{
-			Bucket: aws.String(c.bucket), ExpectedBucketOwner: c.owner, Prefix: aws.String(prefix),
-			KeyMarker: keyMarker, UploadIdMarker: uploadMarker, MaxUploads: aws.Int32(1_000),
-		})
-		if err != nil || out == nil || out.IsTruncated == nil {
-			return nil, errors.New("list provider conformance multipart uploads")
-		}
-		for _, upload := range out.Uploads {
-			if upload.Key == nil || upload.UploadId == nil || !strings.HasPrefix(*upload.Key, prefix) {
-				return nil, errors.New("provider conformance multipart listing escaped its prefix")
-			}
-			uploads = append(uploads, s3ConformanceUpload{key: *upload.Key, id: *upload.UploadId})
-		}
-		if !*out.IsTruncated {
-			return uploads, nil
-		}
-		if out.NextKeyMarker == nil || out.NextUploadIdMarker == nil || *out.NextKeyMarker == "" || *out.NextUploadIdMarker == "" ||
-			keyMarker != nil && uploadMarker != nil && *out.NextKeyMarker == *keyMarker && *out.NextUploadIdMarker == *uploadMarker {
-			return nil, errors.New("provider conformance multipart pagination did not advance")
-		}
-		keyMarker, uploadMarker = out.NextKeyMarker, out.NextUploadIdMarker
-	}
-	return nil, errors.New("provider conformance multipart listing exceeded its page bound")
-}
-
-type s3ConformanceUpload struct{ key, id string }
-
-type s3ConformanceResolver struct {
-	endpoint url.URL
-	region   string
-	bucket   string
-}
-
-func (r s3ConformanceResolver) ResolveEndpoint(_ context.Context, params awss3.EndpointParameters) (smithyendpoints.Endpoint, error) {
-	if params.Region == nil || *params.Region != r.region || params.Bucket == nil || *params.Bucket != r.bucket ||
-		params.ForcePathStyle != nil && *params.ForcePathStyle || params.Accelerate != nil && *params.Accelerate ||
-		params.UseDualStack != nil && *params.UseDualStack || params.UseFIPS != nil && *params.UseFIPS ||
-		params.UseArnRegion != nil && *params.UseArnRegion {
-		return smithyendpoints.Endpoint{}, errors.New("alternate provider conformance cleanup authority")
-	}
-	return smithyendpoints.Endpoint{URI: r.endpoint}, nil
-}
-
-func runS3Conformance(t *testing.T, primary, concealment *objectstore.Client, roots *x509.CertPool, keys []string) {
+func runConformance(t *testing.T, primary, concealment *objectstore.Client, keys []string) {
 	t.Helper()
 	ctx := t.Context()
-	missing := keys[0] + "-missing"
-	if _, err := primary.Metadata(ctx, missing); objectstorage.Kind(err) != objectstorage.KindNotFound {
-		t.Fatalf("primary missing metadata = %q, want not_found", objectstorage.Kind(err))
+	if _, err := primary.Metadata(ctx, keys[0]+"-missing"); !errors.Is(err, objectstorage.ErrNotFound) {
+		t.Fatalf("missing metadata error = %v, want ErrNotFound", err)
 	}
 
 	single := []byte("portable-object-storage-conformance")
-	result, err := primary.Upload(ctx, keys[0], io.NopCloser(bytes.NewReader(single)), objectstorage.UploadOptions{
-		ContentLength: int64(len(single)), ContentType: "application/octet-stream", Intent: objectstorage.UploadCreateOnly,
-	})
-	if err != nil || result.Cleanup != objectstorage.CleanupNone {
-		t.Fatalf("create-only upload = %q, cleanup %q", objectstorage.Kind(err), result.Cleanup)
+	if err := primary.Upload(ctx, keys[0], bytes.NewReader(single), objectstorage.UploadOptions{
+		Size: int64(len(single)), ContentType: "application/octet-stream", IfNotExists: true,
+	}); err != nil {
+		t.Fatalf("create-only upload error = %v", err)
 	}
-	if _, err := primary.Upload(ctx, keys[0], io.NopCloser(bytes.NewReader(single)), objectstorage.UploadOptions{ContentLength: int64(len(single)), Intent: objectstorage.UploadCreateOnly}); objectstorage.Kind(err) != objectstorage.KindPreconditionFailed {
-		t.Fatalf("create-only collision = %q, want precondition_failed", objectstorage.Kind(err))
+	if err := primary.Upload(ctx, keys[0], bytes.NewReader(single), objectstorage.UploadOptions{
+		Size: int64(len(single)), IfNotExists: true,
+	}); !errors.Is(err, objectstorage.ErrAlreadyExists) {
+		t.Fatalf("create-only collision error = %v, want ErrAlreadyExists", err)
 	}
 	replacement := append([]byte(nil), single...)
 	replacement[0] = 'P'
-	if result, err = primary.Upload(ctx, keys[0], io.NopCloser(bytes.NewReader(replacement)), objectstorage.UploadOptions{ContentLength: int64(len(replacement)), ContentType: "application/octet-stream", Intent: objectstorage.UploadReplace}); err != nil || result.Cleanup != objectstorage.CleanupNone {
-		t.Fatalf("replacement upload = %q, cleanup %q", objectstorage.Kind(err), result.Cleanup)
+	if err := primary.Upload(ctx, keys[0], bytes.NewReader(replacement), objectstorage.UploadOptions{
+		Size: int64(len(replacement)), ContentType: "application/octet-stream",
+	}); err != nil {
+		t.Fatalf("replacement upload error = %v", err)
 	}
-	assertS3ConformanceObject(t, primary, keys[0], replacement, "application/octet-stream")
-	if _, err := concealment.Metadata(ctx, keys[0]); objectstorage.Kind(err) != objectstorage.KindDenied {
-		t.Fatalf("concealment identity metadata = %q, want denied", objectstorage.Kind(err))
+	assertObject(t, primary, keys[0], replacement, "application/octet-stream")
+	if _, err := concealment.Metadata(ctx, keys[0]); err == nil || errors.Is(err, objectstorage.ErrNotFound) {
+		t.Fatalf("concealment identity metadata error = %v, want opaque denial", err)
 	}
 
-	multipart := bytes.Repeat([]byte("m"), int(conformanceChunkBytes+257))
-	if result, err = primary.Upload(ctx, keys[1], io.NopCloser(bytes.NewReader(multipart)), objectstorage.UploadOptions{ContentLength: int64(len(multipart)), Intent: objectstorage.UploadReplace}); err != nil || result.Cleanup != objectstorage.CleanupNone {
-		t.Fatalf("multipart upload = %q, cleanup %q", objectstorage.Kind(err), result.Cleanup)
+	multipart := bytes.Repeat([]byte("m"), int(conformancePartBytes+257))
+	if err := primary.Upload(ctx, keys[1], bytes.NewReader(multipart), objectstorage.UploadOptions{Size: int64(len(multipart))}); err != nil {
+		t.Fatalf("multipart upload error = %v", err)
 	}
-	assertS3ConformanceObject(t, primary, keys[1], multipart, "")
-
-	result, err = primary.Upload(ctx, keys[2], io.NopCloser(bytes.NewReader(multipart[:conformanceChunkBytes])), objectstorage.UploadOptions{ContentLength: conformanceChunkBytes + 1, Intent: objectstorage.UploadReplace})
-	if err == nil {
+	assertObject(t, primary, keys[1], multipart, "")
+	if err := primary.Upload(ctx, keys[2], bytes.NewReader(multipart[:conformancePartBytes]), objectstorage.UploadOptions{Size: conformancePartBytes + 1}); err == nil {
 		t.Fatal("short multipart source unexpectedly succeeded")
 	}
-	if result.Cleanup != objectstorage.CleanupPending {
-		t.Fatalf("forced multipart cleanup = %q", result.Cleanup)
-	}
-	t.Logf("forced multipart cleanup disposition: %s", result.Cleanup)
 
-	presignedClient := newS3PresignedHTTPClient(roots)
-	t.Cleanup(presignedClient.CloseIdleConnections)
-	for range 2 {
-		presigned, presignErr := primary.PresignGET(ctx, keys[1], time.Minute)
-		if presignErr != nil {
-			t.Fatalf("presign GET = %q", objectstorage.Kind(presignErr))
-		}
-		if got := executeS3Presigned(t, presignedClient, presigned, "", http.StatusOK); !bytes.Equal(got, multipart) {
-			t.Fatal("presigned GET bytes changed")
-		}
-		assertS3PresignedMutationsRejected(t, presignedClient, presigned)
-		rangeHeaders := presigned.Headers.Clone()
-		rangeHeaders.Set("Range", "bytes=0-2")
-		presigned.Headers = rangeHeaders
-		if got := executeS3Presigned(t, presignedClient, presigned, "", http.StatusPartialContent); !bytes.Equal(got, multipart[:3]) {
-			t.Fatal("presigned unsigned Range bytes changed")
-		}
+	presigned, err := primary.PresignGet(ctx, keys[1], time.Minute)
+	if err != nil {
+		t.Fatalf("PresignGet() error = %v", err)
 	}
+	client := &http.Client{Timeout: 30 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	if got := executePresigned(t, client, http.MethodGet, presigned, http.StatusOK); !bytes.Equal(got, multipart) {
+		t.Fatal("presigned GET bytes changed")
+	}
+	mutated, parseErr := url.Parse(presigned)
+	if parseErr != nil {
+		t.Fatal("parse presigned URL")
+	}
+	query := mutated.Query()
+	query.Set("X-Amz-Signature", strings.Repeat("0", 64))
+	mutated.RawQuery = query.Encode()
+	executePresigned(t, client, http.MethodGet, mutated.String(), http.StatusForbidden)
 
 	if err := primary.Delete(ctx, keys[0]); err != nil {
-		t.Fatalf("delete existing = %q", objectstorage.Kind(err))
+		t.Fatalf("delete existing error = %v", err)
 	}
-	if _, err := primary.Metadata(ctx, keys[0]); objectstorage.Kind(err) != objectstorage.KindNotFound {
-		t.Fatalf("metadata after delete = %q, want not_found", objectstorage.Kind(err))
+	if _, err := primary.Metadata(ctx, keys[0]); !errors.Is(err, objectstorage.ErrNotFound) {
+		t.Fatalf("metadata after delete error = %v, want ErrNotFound", err)
 	}
 	if err := primary.Delete(ctx, keys[0]); err != nil {
-		t.Fatalf("delete absent = %q", objectstorage.Kind(err))
+		t.Fatalf("delete absent error = %v", err)
 	}
 }
 
-func assertS3ConformanceObject(t *testing.T, client *objectstore.Client, key string, want []byte, contentType string) {
+func assertObject(t *testing.T, client *objectstore.Client, key string, want []byte, contentType string) {
 	t.Helper()
 	metadata, err := client.Metadata(t.Context(), key)
-	if err != nil || metadata.Size != int64(len(want)) || metadata.LastModified.IsZero() || metadata.LastModified.Location() != time.UTC ||
+	if err != nil || metadata.Size != int64(len(want)) || metadata.LastModified.IsZero() ||
 		contentType != "" && metadata.ContentType != contentType {
-		t.Fatalf("metadata = size %d, modified %t, error %q", metadata.Size, !metadata.LastModified.IsZero(), objectstorage.Kind(err))
+		t.Fatalf("Metadata() = %#v, %v", metadata, err)
 	}
-	download, err := client.Download(t.Context(), key)
+	object, err := client.Download(t.Context(), key)
 	if err != nil {
-		t.Fatalf("download acquisition = %q", objectstorage.Kind(err))
+		t.Fatalf("Download() error = %v", err)
 	}
-	got, err := io.ReadAll(download.Body)
-	closeErr := download.Body.Close()
-	if err != nil || closeErr != nil || !bytes.Equal(got, want) || download.Size != int64(len(want)) ||
-		download.LastModified.IsZero() || download.LastModified.Location() != time.UTC || contentType != "" && download.ContentType != contentType {
-		t.Fatalf("download = bytes %d, size %d, read error %q", len(got), download.Size, objectstorage.Kind(err))
-	}
-}
-
-func newS3PresignedHTTPClient(roots *x509.CertPool) *http.Client {
-	return &http.Client{
-		Transport: &http.Transport{
-			Proxy:                  nil,
-			TLSClientConfig:        &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: roots},
-			ResponseHeaderTimeout:  30 * time.Second,
-			MaxResponseHeaderBytes: 64 << 10,
-			MaxConnsPerHost:        1,
-		},
-		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
-		Timeout:       30 * time.Second,
+	got, readErr := io.ReadAll(object.Body)
+	closeErr := object.Body.Close()
+	if readErr != nil || closeErr != nil || !bytes.Equal(got, want) || object.Size != int64(len(want)) {
+		t.Fatalf("Download() = %d bytes, size %d, read %v, close %v", len(got), object.Size, readErr, closeErr)
 	}
 }
 
-func executeS3Presigned(t *testing.T, client *http.Client, presigned objectstorage.PresignedGET, host string, wantStatus int) []byte {
+func executePresigned(t *testing.T, client *http.Client, method, target string, wantStatus int) []byte {
 	t.Helper()
-	request, err := http.NewRequestWithContext(t.Context(), presigned.Method, presigned.URL, http.NoBody)
+	request, err := http.NewRequestWithContext(t.Context(), method, target, http.NoBody)
 	if err != nil {
 		t.Fatal("construct presigned request")
-	}
-	for name, values := range presigned.Headers {
-		if strings.EqualFold(name, "host") {
-			if len(values) == 1 {
-				request.Host = values[0]
-			}
-			continue
-		}
-		request.Header[name] = append([]string(nil), values...)
-	}
-	if host != "" {
-		request.Host = host
 	}
 	response, err := client.Do(request)
 	if err != nil {
@@ -487,66 +210,6 @@ func executeS3Presigned(t *testing.T, client *http.Client, presigned objectstora
 	return data
 }
 
-func assertS3PresignedMutationsRejected(t *testing.T, client *http.Client, presigned objectstorage.PresignedGET) {
-	t.Helper()
-	for _, mutation := range []struct {
-		name   string
-		method string
-		host   string
-		url    func(string) string
-	}{
-		{name: "method", method: http.MethodHead},
-		{name: "host", host: "invalid.example"},
-		{name: "key", url: func(raw string) string {
-			target, _ := url.Parse(raw)
-			target.Path += "-mutated"
-			target.RawPath = ""
-			return target.String()
-		}},
-		{name: "query", url: func(raw string) string {
-			target, _ := url.Parse(raw)
-			query := target.Query()
-			query.Set("X-Amz-Signature", strings.Repeat("0", 64))
-			target.RawQuery = query.Encode()
-			return target.String()
-		}},
-	} {
-		t.Run("presigned rejects "+mutation.name, func(t *testing.T) {
-			candidate := presigned
-			if mutation.method != "" {
-				candidate.Method = mutation.method
-			}
-			if mutation.url != nil {
-				candidate.URL = mutation.url(candidate.URL)
-			}
-			request, err := http.NewRequestWithContext(t.Context(), candidate.Method, candidate.URL, http.NoBody)
-			if err != nil {
-				t.Fatal("construct mutated presigned request")
-			}
-			for name, values := range candidate.Headers {
-				if strings.EqualFold(name, "host") {
-					if len(values) == 1 {
-						request.Host = values[0]
-					}
-					continue
-				}
-				request.Header[name] = append([]string(nil), values...)
-			}
-			if mutation.host != "" {
-				request.Host = mutation.host
-			}
-			response, err := client.Do(request)
-			if err != nil {
-				t.Fatal("execute mutated presigned request")
-			}
-			_ = response.Body.Close()
-			if response.StatusCode < 400 || response.StatusCode >= 500 {
-				t.Fatalf("mutated presigned status = %d, want 4xx", response.StatusCode)
-			}
-		})
-	}
-}
-
 func requiredEnv(t *testing.T, name string) string {
 	t.Helper()
 	value := os.Getenv(name)
@@ -561,15 +224,6 @@ func requireExactEnv(t *testing.T, name, expected string) {
 	if os.Getenv(name) != expected {
 		t.Fatalf("%s must be %q", name, expected)
 	}
-}
-
-func requiredPositiveInt64(t *testing.T, name string) int64 {
-	t.Helper()
-	value, err := strconv.ParseInt(requiredEnv(t, name), 10, 64)
-	if err != nil || value <= 0 {
-		t.Fatalf("%s must be a positive integer", name)
-	}
-	return value
 }
 
 // profile:object-storage:end

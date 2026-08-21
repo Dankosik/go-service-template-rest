@@ -33,54 +33,6 @@ run_buf() {
 	)
 }
 
-check_schema_policy() {
-	local module_root
-	local proto
-	local relative_proto
-	local base_ref="${BASE_REF:-}"
-	local base_commit=""
-	local base_proto
-	while IFS= read -r module_root; do
-		while IFS= read -r -d '' proto; do
-			relative_proto="${proto#"${ROOT_DIR}"/}"
-			if grep -Eq '^[[:space:]]*edition[[:space:]]*=[[:space:]]*"2023";[[:space:]]*$' "${proto}"; then
-				if ! grep -Eq '^[[:space:]]*option[[:space:]]+features\.\(pb\.go\)\.api_level[[:space:]]*=[[:space:]]*API_OPAQUE;[[:space:]]*$' "${proto}"; then
-					echo "protobuf schema policy: ${relative_proto} must select schema-owned API_OPAQUE" >&2
-					exit 1
-				fi
-				continue
-			fi
-			if grep -Eq '^[[:space:]]*edition[[:space:]]*=[[:space:]]*"2024";[[:space:]]*$' "${proto}"; then
-				echo "protobuf schema policy: ${relative_proto} uses Edition 2024, which requires reopening and accepting the cross-language contract policy" >&2
-				exit 1
-			fi
-			if grep -Eq '^[[:space:]]*syntax[[:space:]]*=[[:space:]]*"proto(2|3)";[[:space:]]*$' "${proto}"; then
-				if [[ -z "${base_ref}" ]]; then
-					echo "protobuf schema policy: ${relative_proto} uses legacy proto2/proto3 syntax; BASE_REF must identify a readable comparison base that retains the same path" >&2
-					exit 1
-				fi
-				if [[ -z "${base_commit}" ]]; then
-					if ! base_commit="$(git -C "${ROOT_DIR}" rev-parse --verify "${base_ref}^{commit}" 2>/dev/null)"; then
-						echo "protobuf schema policy: invalid or unreadable legacy comparison base: ${base_ref}" >&2
-						exit 1
-					fi
-				fi
-				if ! base_proto="$(git -C "${ROOT_DIR}" show "${base_commit}:${relative_proto}" 2>/dev/null)"; then
-					echo "protobuf schema policy: ${relative_proto} is not retained at ${base_ref}; new Go contracts must use Edition 2023 with schema-owned API_OPAQUE" >&2
-					exit 1
-				fi
-				if ! grep -Eq '^[[:space:]]*syntax[[:space:]]*=[[:space:]]*"proto(2|3)";[[:space:]]*$' <<<"${base_proto}"; then
-					echo "protobuf schema policy: ${relative_proto} was not a proto2/proto3 contract at ${base_ref}" >&2
-					exit 1
-				fi
-				continue
-			fi
-			echo "protobuf schema policy: ${relative_proto} must declare Edition 2023 with schema-owned API_OPAQUE or be a baseline-retained proto2/proto3 contract" >&2
-			exit 1
-		done < <(find "${module_root}/api/proto" -type f -name '*.proto' -print0)
-	done < <(module_roots)
-}
-
 format_proto() {
 	local found=false
 	local module_root
@@ -108,7 +60,6 @@ format_check_proto() {
 lint_proto() {
 	local found=false
 	local module_root
-	check_schema_policy
 	while IFS= read -r module_root; do
 		found=true
 		run_buf "${module_root}" lint

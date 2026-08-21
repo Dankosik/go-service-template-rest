@@ -34,10 +34,7 @@ type Server struct {
 	// Health inputs, all guarded by healthMu and combined by publishHealthLocked.
 	healthMu sync.Mutex
 	draining bool
-	admitted bool
-	// profile:authn-oidc-jwt:start
-	authnReady bool
-	// profile:authn-oidc-jwt:end
+	ready    bool
 
 	gracefulOnce sync.Once
 	stopOnce     sync.Once
@@ -48,53 +45,29 @@ type Server struct {
 // publishHealthLocked republishes standard health from the current inputs. It
 // owns the whole rule so each caller below only records its own input:
 //
-//	SERVING iff startup admitted the process and authentication trust is
-//	current. Drain is terminal and is published by StartDrain instead, so a
-//	later input can never make a draining server serving again.
+//	SERVING iff the process's cached readiness is current. Drain is terminal,
+//	so a late recovery can never make a draining server serving again.
 //
 // Adding a readiness input means adding a field and one term here, not another
 // copy of the composite in a third method.
 func (s *Server) publishHealthLocked() {
-	serving := s.admitted
-	// profile:authn-oidc-jwt:start
-	serving = serving && s.authnReady
-	// profile:authn-oidc-jwt:end
 	status := healthgrpc.HealthCheckResponse_NOT_SERVING
-	if serving {
+	if s.ready {
 		status = healthgrpc.HealthCheckResponse_SERVING
 	}
 	s.health.SetServingStatus("", status)
 }
 
-// MarkServing publishes the shared startup admission result to gRPC health.
-func (s *Server) MarkServing() {
+// SetServing publishes the same cached readiness state as the HTTP probe.
+func (s *Server) SetServing(ready bool) {
 	s.healthMu.Lock()
 	defer s.healthMu.Unlock()
 	if s.draining {
 		return
 	}
-	s.admitted = true
+	s.ready = ready
 	s.publishHealthLocked()
 }
-
-// profile:authn-oidc-jwt:start
-
-// SetAuthnReady composes current authentication trust into standard health.
-//
-// Its proof lives in authn_health_test.go rather than server_test.go, because
-// this method and that file are both removed when a service is generated with
-// AUTHN=none.
-func (s *Server) SetAuthnReady(ready bool) {
-	s.healthMu.Lock()
-	defer s.healthMu.Unlock()
-	if s.draining {
-		return
-	}
-	s.authnReady = ready
-	s.publishHealthLocked()
-}
-
-// profile:authn-oidc-jwt:end
 
 // StartDrain makes every registered health service NOT_SERVING and prevents a
 // later startup result from making it serving again.

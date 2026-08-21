@@ -1,10 +1,9 @@
 package postgreswebhook
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
-	"io"
 	"strings"
 )
 
@@ -48,17 +47,9 @@ func ParseEndpointManifest(raw string) (*EndpointManifest, error) {
 	if raw == "" || len(raw) > MaxEndpointManifestBytes {
 		return nil, errors.New("parse webhook endpoints: document size is invalid")
 	}
-	if err := rejectDuplicateJSONFields(raw); err != nil {
-		return nil, errors.New("parse webhook endpoints: duplicate field")
-	}
-	decoder := json.NewDecoder(strings.NewReader(raw))
-	decoder.DisallowUnknownFields()
 	var document endpointDocument
-	if err := decoder.Decode(&document); err != nil {
+	if err := json.UnmarshalRead(strings.NewReader(raw), &document, json.RejectUnknownMembers(true)); err != nil {
 		return nil, errors.New("parse webhook endpoints: invalid JSON")
-	}
-	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
-		return nil, errors.New("parse webhook endpoints: trailing data")
 	}
 	if len(document.Endpoints) == 0 || len(document.Endpoints) > MaxEndpointManifestEntries {
 		return nil, errors.New("parse webhook endpoints: entries are required")

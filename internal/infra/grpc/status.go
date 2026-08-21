@@ -22,13 +22,16 @@ import (
 //
 // This one is innermost and sanitizes what a generated handler returns. Standard
 // health RPCs pass through untouched so their own status semantics survive.
-func handlerErrorBoundary(log *slog.Logger, rendering errorRendering) aroundRPC {
+func handlerErrorBoundary(log *slog.Logger, mappers []failure.Mapper) aroundRPC {
 	return func(ctx context.Context, fullMethod string, call func(context.Context) error) error {
 		err := call(ctx)
 		if isHealthMethod(fullMethod) {
 			return err
 		}
-		mapped, sanitized := mapError(err, ownedStatusOnly, rendering)
+		mapped, sanitized := mapError(err, ownedStatusOnly, errorRendering{
+			mappers: mappers,
+			domain:  methodDomain(fullMethod),
+		})
 		if sanitized {
 			recordUnhandledFailure(ctx, log, fullMethod, err)
 		}
@@ -120,10 +123,25 @@ func mapError(err error, trusted trustedStatus, rendering errorRendering) (error
 	if owned, ok := trusted(err); ok {
 		return owned, false
 	}
+	// Generated Unimplemented<Service>Server methods return an ordinary status.
+	// Preserve forward-compatible generated behavior without trusting its text.
+	if statusErr, ok := err.(interface{ GRPCStatus() *status.Status }); ok &&
+		statusErr.GRPCStatus() != nil && statusErr.GRPCStatus().Code() == codes.Unimplemented {
+		return ownedStatus(codes.Unimplemented, "method not implemented"), false
+	}
 	if mapped, ok := failure.Classify(err, rendering.mappers); ok {
 		return mappedStatus(mapped, rendering.domain), false
 	}
 	return ownedStatus(codes.Internal, failure.SanitizedDetail), true
+}
+
+func methodDomain(fullMethod string) string {
+	method := strings.TrimPrefix(fullMethod, "/")
+	service, _, found := strings.Cut(method, "/")
+	if !found {
+		return ""
+	}
+	return service
 }
 
 // recordUnhandledFailure writes down the failure behind a generic INTERNAL.

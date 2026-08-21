@@ -111,7 +111,7 @@ For service-to-service traffic in one Railway environment, bind the gRPC
 listener to `::` and call `<service>.railway.internal:<grpc-port>` through
 Railway private networking. Choose application TLS when the service contract
 requires endpoint identity beyond the private encrypted mesh; otherwise
-plaintext still requires the explicit `ALLOW_PLAINTEXT` acknowledgement.
+plaintext remains an explicit deployment trust decision.
 
 For public native gRPC, either prove the current public HTTP path end to end
 with unary and streaming trailer checks or configure Railway TCP Proxy. A TCP

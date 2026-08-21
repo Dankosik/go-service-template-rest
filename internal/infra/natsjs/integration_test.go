@@ -8,15 +8,17 @@ import (
 	"testing"
 	"time"
 
+	"github.com/example/go-service-template-rest/internal/domainevent"
 	"github.com/example/go-service-template-rest/internal/infra/natsjs/natsjstest"
 	"github.com/example/go-service-template-rest/internal/waittest"
 	dockerclient "github.com/moby/moby/client"
+	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 )
 
 func newPackageNATSFixture(t *testing.T) *natsjstest.Server {
 	t.Helper()
-	return natsjstest.Start(t, natsjstest.WithStreams(
+	return natsjstest.Start(t, natsjstest.WithFixedHostPort(), natsjstest.WithStreams(
 		jetstream.StreamConfig{
 			Name: "EVENTS", Subjects: []string{"events.>"},
 			Storage: jetstream.FileStorage, MaxMsgSize: testMaxDeliveryBytes,
@@ -35,7 +37,7 @@ func packageClient(t *testing.T, f *natsjstest.Server, pending int) *Client {
 	cfg.AllowPlaintext = true
 	cfg.AllowUnauthenticated = true
 	cfg.Stream = "EVENTS"
-	cfg.MaxPendingPublishes = pending
+	_ = pending
 	client, err := Connect(t.Context(), cfg, RoleWorker, Observability{})
 	if err != nil {
 		t.Fatalf("connect messaging client: %v", err)
@@ -92,30 +94,74 @@ func TestNATSWorkerRegistrationIsSingleton(t *testing.T) {
 	}
 }
 
-func TestNATSConnectedTopologyErrorDoesNotEnterReconnect(t *testing.T) {
+func TestNATSReadinessProbeRestoresStateAfterReconnect(t *testing.T) {
 	f := newPackageNATSFixture(t)
 	client := packageClient(t, f, testMaxPending)
-	client.ready.Store(false)
-	if client.waitForReconnect(t.Context(), jetstream.ErrConsumerDeleted) {
-		t.Fatal("connected topology error entered reconnect recovery")
+	client.ready.Store(false) // The reconnect callback leaves readiness false until the cached probe succeeds.
+	if err := client.Check(t.Context()); err != nil {
+		t.Fatalf("Check() error = %v", err)
+	}
+	if !client.Ready() {
+		t.Fatal("successful readiness probe did not restore client readiness")
 	}
 }
 
-func TestNATSReconnectProbeStopsWithRunContext(t *testing.T) {
+func TestNATSNativeConsumeSurvivesBrokerRestart(t *testing.T) {
 	f := newPackageNATSFixture(t)
 	client := packageClient(t, f, testMaxPending)
-	probeEntered := make(chan struct{}, 1)
-	client.js = blockingStreamLookup{JetStream: client.js, entered: probeEntered}
-
-	runCtx, cancelRun := context.WithCancel(t.Context())
+	cfg := testWorkerConfig()
+	cfg.Consumer = "restart-worker"
+	cfg.FilterSubject = "events.test"
+	cfg.DeadLetterSubject = "dead.events.test"
+	received := make(chan string, 1)
+	worker, err := client.NewWorker(t.Context(), cfg, func(_ context.Context, message Message) error {
+		received <- string(message.Payload())
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("NewWorker() error = %v", err)
+	}
 	runErr := make(chan error, 1)
-	client.events <- eventReconnect
-	go func() { runErr <- client.Run(runCtx) }()
+	go func() { runErr <- worker.Run(t.Context()) }()
 
-	waittest.Receive(t, probeEntered, 5*time.Second, "reconnect probe")
-	cancelRun()
-	if err := waittest.Receive(t, runErr, time.Second, "messaging client cancellation"); !errors.Is(err, context.Canceled) {
-		t.Fatalf("Run() error = %v, want context.Canceled", err)
+	stopTimeout := 10 * time.Second
+	if err := f.Container.Stop(t.Context(), &stopTimeout); err != nil {
+		t.Fatalf("stop NATS container: %v", err)
+	}
+	waittest.Until(t, 10*time.Second, func() bool { return !client.Ready() }, "worker disconnect")
+	if err := f.Container.Start(t.Context()); err != nil {
+		t.Fatalf("restart NATS container: %v", err)
+	}
+	waittest.Until(t, 10*time.Second, func() bool {
+		fresh, connectErr := nats.Connect(f.URL, nats.Timeout(250*time.Millisecond), nats.NoReconnect())
+		if connectErr != nil {
+			return false
+		}
+		fresh.Close()
+		return true
+	}, "restarted NATS listener")
+	waittest.Until(t, 20*time.Second, func() bool {
+		select {
+		case err := <-runErr:
+			t.Fatalf("worker stopped during broker transition: %v", err)
+		default:
+		}
+		probeCtx, cancel := context.WithTimeout(t.Context(), time.Second)
+		defer cancel()
+		return client.Check(probeCtx) == nil
+	}, "worker reconnect")
+	if _, err := client.Producer().Publish(t.Context(), Event{
+		Subject: "events.test", MessageID: NewID(), PublicationID: NewID(),
+		Type: "restart.test", Schema: "v1", CreatedAt: time.Now().UTC(), Payload: []byte("after restart"),
+	}); err != nil {
+		t.Fatalf("Publish(after reconnect) error = %v", err)
+	}
+	if got := waittest.Receive(t, received, 10*time.Second, "post-restart delivery"); got != "after restart" {
+		t.Fatalf("post-restart payload = %q", got)
+	}
+	worker.StartDrain()
+	if err := waittest.Receive(t, runErr, 10*time.Second, "restart worker drain"); err != nil {
+		t.Fatalf("Run() error = %v", err)
 	}
 }
 
@@ -176,12 +222,6 @@ func TestNATSPublishDispatchCancellationAndNoRetry(t *testing.T) {
 		deadlineErr <- err
 	}()
 	waittest.Until(t, 3*time.Second, func() bool { return client.nc.Stats().OutMsgs >= dispatchedBefore+2 }, "publish dispatches")
-	if _, err := client.Producer().Publish(t.Context(), Event{
-		Subject: "events.test", MessageID: NewID(), PublicationID: NewID(),
-		Type: "test", Schema: "v1", CreatedAt: time.Now().UTC(), Payload: []byte("over capacity"),
-	}); !errors.Is(err, ErrCapacity) {
-		t.Fatalf("Publish(over capacity) error = %v, want ErrCapacity", err)
-	}
 	cancelPublish()
 	if err := <-canceledErr; !errors.Is(err, ErrAmbiguous) {
 		t.Fatalf("Publish(canceled after dispatch) error = %v, want ErrAmbiguous", err)
@@ -191,9 +231,6 @@ func TestNATSPublishDispatchCancellationAndNoRetry(t *testing.T) {
 	}
 	if delta := client.nc.Stats().OutMsgs - dispatchedBefore; delta != 2 {
 		t.Fatalf("ambiguous publish wire attempts = %d, want exactly one per call", delta)
-	}
-	if got := len(client.Producer().tokens); got != 0 {
-		t.Fatalf("producer capacity tokens after ambiguous completion = %d, want 0", got)
 	}
 	if _, err := docker.ContainerUnpause(t.Context(), f.Container.GetContainerID(), dockerclient.ContainerUnpauseOptions{}); err != nil {
 		t.Fatalf("resume NATS: %v", err)
@@ -212,8 +249,8 @@ func TestNATSPublishDispatchCancellationAndNoRetry(t *testing.T) {
 		if getErr != nil {
 			t.Fatalf("read source sequence %d: %v", sequence, getErr)
 		}
-		if _, tracked := counts[stored.Header.Get(headerPublicationID)]; tracked {
-			counts[stored.Header.Get(headerPublicationID)]++
+		if _, tracked := counts[stored.Header.Get(jetstream.MsgIDHeader)]; tracked {
+			counts[stored.Header.Get(jetstream.MsgIDHeader)]++
 		}
 	}
 	for publicationID, count := range counts {
@@ -270,7 +307,7 @@ func TestNATSDLQSourceAckAmbiguityDeduplicates(t *testing.T) {
 	doubleAcks := make(chan struct{}, 2)
 	worker, err := client.NewWorker(t.Context(), cfg, func(_ context.Context, msg Message) error {
 		deliveries <- msg.Metadata().NumDelivered
-		return Permanent(errors.New("poison"))
+		return domainevent.Permanent(errors.New("poison"))
 	})
 	if err != nil {
 		t.Fatalf("create worker: %v", err)
@@ -312,28 +349,10 @@ type wrappingConsumer struct {
 	doubleAcks    chan<- struct{}
 }
 
-type blockingStreamLookup struct {
-	jetstream.JetStream
-	entered chan<- struct{}
-}
-
-func (s blockingStreamLookup) Stream(ctx context.Context, _ string) (jetstream.Stream, error) {
-	s.entered <- struct{}{}
-	<-ctx.Done()
-	return nil, ctx.Err()
-}
-
-func (c wrappingConsumer) Fetch(batch int, opts ...jetstream.FetchOpt) (jetstream.MessageBatch, error) {
-	result, err := c.pullConsumer.Fetch(batch, opts...)
-	if err != nil {
-		return nil, err
-	}
-	messages := make(chan jetstream.Msg, batch)
-	for msg := range result.Messages() {
-		messages <- wrappingMsg{Msg: msg, failDoubleAck: c.failDoubleAck, doubleAcks: c.doubleAcks}
-	}
-	close(messages)
-	return staticBatch{messages: messages, err: result.Error()}, nil
+func (c wrappingConsumer) Consume(handler jetstream.MessageHandler, opts ...jetstream.PullConsumeOpt) (jetstream.ConsumeContext, error) {
+	return c.pullConsumer.Consume(func(msg jetstream.Msg) {
+		handler(wrappingMsg{Msg: msg, failDoubleAck: c.failDoubleAck, doubleAcks: c.doubleAcks})
+	}, opts...)
 }
 
 type wrappingMsg struct {
@@ -351,11 +370,3 @@ func (m wrappingMsg) DoubleAck(ctx context.Context) error {
 	}
 	return m.Msg.DoubleAck(ctx)
 }
-
-type staticBatch struct {
-	messages <-chan jetstream.Msg
-	err      error
-}
-
-func (b staticBatch) Messages() <-chan jetstream.Msg { return b.messages }
-func (b staticBatch) Error() error                   { return b.err }

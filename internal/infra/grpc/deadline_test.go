@@ -29,10 +29,10 @@ func TestUnaryDeadlineCutsTheHandlerAndReleasesItsSlot(t *testing.T) {
 	const budget = 150 * time.Millisecond
 
 	cfg := testServerConfig()
-	cfg.UnaryTimeout = budget
+	cfg.unaryTimeout = budget
 	// One slot, so a slot that did not come back answers the probe below with
 	// ResourceExhausted instead of OK.
-	cfg.MaxConcurrentRPCs = 1
+	cfg.maxConcurrentRPCs = 1
 
 	register := func(registrar grpc.ServiceRegistrar) {
 		registerUnaryTestService(registrar, testUnaryFullMethod,
@@ -72,7 +72,7 @@ func TestCallerDeadlineEarlierThanTheBudgetWins(t *testing.T) {
 	cfg := testServerConfig()
 	// Far enough out that a handler seeing anything near it proves the cap
 	// replaced the caller's deadline rather than bounding it.
-	cfg.UnaryTimeout = time.Hour
+	cfg.unaryTimeout = time.Hour
 
 	observed := make(chan time.Duration, 1)
 	register := func(registrar grpc.ServiceRegistrar) {
@@ -101,54 +101,28 @@ func TestCallerDeadlineEarlierThanTheBudgetWins(t *testing.T) {
 	}
 }
 
-func TestStreamDeadlineIsOffByDefaultAndCutsWhenConfigured(t *testing.T) {
-	t.Run("off by default", func(t *testing.T) {
-		cfg := testServerConfig()
-		// The unary bound is short and the stream bound is the shipped zero, so
-		// a stream cut here would mean the two chains share one value.
-		cfg.UnaryTimeout = 100 * time.Millisecond
-
-		register := func(registrar grpc.ServiceRegistrar) {
-			registerStreamTestService(registrar, deadlineStreamFullMethod,
-				func(stream grpc.ServerStream) error {
-					var request emptypb.Empty
-					if err := stream.RecvMsg(&request); err != nil {
-						return fmt.Errorf("receive deadline stream request: %w", err)
-					}
-					select {
-					case <-time.After(4 * cfg.UnaryTimeout):
-					case <-stream.Context().Done():
-						return stream.Context().Err()
-					}
-					return stream.SendMsg(&emptypb.Empty{})
-				})
-		}
-		_, connection := startTestServer(t, cfg, register)
-
-		if err := driveDeadlineStream(t, connection, &emptypb.Empty{}); err != nil {
-			t.Fatalf("stream outliving the unary budget ended with %v", err)
-		}
-	})
-
-	t.Run("configured", func(t *testing.T) {
-		cfg := testServerConfig()
-		cfg.StreamTimeout = 150 * time.Millisecond
-
-		register := func(registrar grpc.ServiceRegistrar) {
-			registerStreamTestService(registrar, deadlineStreamFullMethod,
-				func(stream grpc.ServerStream) error {
-					var request emptypb.Empty
-					if err := stream.RecvMsg(&request); err != nil {
-						return fmt.Errorf("receive deadline stream request: %w", err)
-					}
-					<-stream.Context().Done()
+func TestStreamIsNotBoundedByTheUnaryDefault(t *testing.T) {
+	cfg := testServerConfig()
+	cfg.unaryTimeout = 100 * time.Millisecond
+	register := func(registrar grpc.ServiceRegistrar) {
+		registerStreamTestService(registrar, deadlineStreamFullMethod,
+			func(stream grpc.ServerStream) error {
+				var request emptypb.Empty
+				if err := stream.RecvMsg(&request); err != nil {
+					return fmt.Errorf("receive deadline stream request: %w", err)
+				}
+				select {
+				case <-time.After(4 * cfg.unaryTimeout):
+				case <-stream.Context().Done():
 					return stream.Context().Err()
-				})
-		}
-		_, connection := startTestServer(t, cfg, register)
-
-		assertStatusCode(t, driveDeadlineStream(t, connection, &emptypb.Empty{}), codes.DeadlineExceeded)
-	})
+				}
+				return stream.SendMsg(&emptypb.Empty{})
+			})
+	}
+	_, connection := startTestServer(t, cfg, register)
+	if err := driveDeadlineStream(t, connection, &emptypb.Empty{}); err != nil {
+		t.Fatalf("stream outliving the unary budget ended with %v", err)
+	}
 }
 
 // driveDeadlineStream opens the stream, sends one message, and returns the

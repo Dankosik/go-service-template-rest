@@ -18,13 +18,12 @@ import (
 
 const startupTimeout = 30 * time.Second
 
-// HandlerBuilder constructs the binary-local transport adapter that invokes
-// feature-owned behavior after messaging topology admission. Any returned
+// HandlerBuilder registers binary-local typed event handlers. Any returned
 // cleanup normally runs before Run returns, including when the builder returns
 // an invalid result.
 // If forced shutdown leaves an uncooperative handler running, process exit owns
 // its resources instead of racing that cleanup with the handler.
-type HandlerBuilder func(context.Context, config.Config, *slog.Logger) (handler natsjs.Handler, cleanup func(context.Context), err error)
+type HandlerBuilder func(context.Context, config.Config, *slog.Logger) (registry *natsjs.Registry, cleanup func(context.Context), err error)
 
 func Run(args []string, buildHandler HandlerBuilder) error {
 	signalCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -46,14 +45,11 @@ func run(signalCtx context.Context, args []string, buildHandler HandlerBuilder) 
 	if err != nil {
 		return fmt.Errorf("load worker config: %w", err)
 	}
-	if !cfg.Messaging.Enabled {
+	if strings.TrimSpace(cfg.Messaging.URLs) == "" {
 		return fmt.Errorf("%w: messaging must be enabled for worker", natsjs.ErrRejected)
 	}
 	workerCfg, err := messagingWorkerConfig(cfg.Messaging)
 	if err != nil {
-		return err
-	}
-	if err := validateWorkerShutdownBudget(cfg.HTTP.GracePeriod, cfg.Messaging.Worker.DrainTimeout); err != nil {
 		return err
 	}
 	if strings.TrimSpace(cfg.Observability.Metrics.Addr) == "" {
@@ -84,7 +80,7 @@ func run(signalCtx context.Context, args []string, buildHandler HandlerBuilder) 
 		return fmt.Errorf("initialize worker messaging: %w", err)
 	}
 	defer client.Close()
-	handler, handlerCleanup, err := buildHandler(startupCtx, cfg, log)
+	registry, handlerCleanup, err := buildHandler(startupCtx, cfg, log)
 	defer func() {
 		if handlerCleanup != nil {
 			cleanupCtx, cleanupCancel := runtimeopts.TeardownStage(signalCtx, cleanupDeadline, handlerClose)
@@ -95,8 +91,12 @@ func run(signalCtx context.Context, args []string, buildHandler HandlerBuilder) 
 	if err != nil {
 		return fmt.Errorf("initialize worker feature handler: %w", err)
 	}
-	if handler == nil {
+	if registry == nil {
 		return fmt.Errorf("%w: worker feature handler is not registered", natsjs.ErrRejected)
+	}
+	handler, err := registry.Handler()
+	if err != nil {
+		return fmt.Errorf("initialize typed event handlers: %w", err)
 	}
 	worker, err := client.NewWorker(startupCtx, workerCfg, handler)
 	if err != nil {

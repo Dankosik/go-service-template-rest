@@ -24,6 +24,23 @@ type WorkerConfig struct {
 	DeadLetterRetryDelay time.Duration
 }
 
+// DefaultWorkerConfig keeps delivery policy out of operator configuration.
+// Reopen these defaults only for a measured handler or recovery requirement.
+func DefaultWorkerConfig(consumer, filterSubject, deadLetterSubject string, maxConcurrency, maxPayloadBytes int) WorkerConfig {
+	return WorkerConfig{
+		Consumer: consumer, FilterSubject: filterSubject, DeadLetterSubject: deadLetterSubject,
+		MaxConcurrency: maxConcurrency, MaxDeliveryBytes: maxPayloadBytes + HeaderLimitBytes,
+		HandlerTimeout: 30 * time.Second,
+		RetryDelays: []time.Duration{
+			time.Second,
+			5 * time.Second,
+			30 * time.Second,
+			2 * time.Minute,
+		},
+		DeadLetterRetryDelay: 30 * time.Second,
+	}
+}
+
 func ValidateWorkerConfig(cfg WorkerConfig, maxPayloadBytes int) error {
 	if !validConsumerName(cfg.Consumer) {
 		return fmt.Errorf("%w: invalid durable consumer", ErrRejected)

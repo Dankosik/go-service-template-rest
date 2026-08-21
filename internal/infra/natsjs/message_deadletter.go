@@ -41,11 +41,11 @@ const (
 func deadLetterMessage(source jetstream.Msg, metadata *jetstream.MsgMetadata, decoded Message, reason string) (*nats.Msg, string) {
 	header := make(nats.Header)
 	carryIdentityHeaders(header, source.Headers())
-	setOriginHeaders(header, source, metadata)
+	header.Set(headerOriginalSubject, source.Subject())
 	header.Set(headerDeadLetterReason, reason)
 
 	transferID := deadLetterTransferID(source, metadata)
-	header.Set(headerPublicationID, transferID)
+	header.Set(jetstream.MsgIDHeader, transferID)
 	// Message-Id in descending order of what it is worth to whoever reads the
 	// dead-letter stream: the decoded id when the envelope parsed, otherwise
 	// whatever carryIdentityHeaders forwarded, otherwise the transfer id so the
@@ -105,13 +105,12 @@ func RestoreDeadLetter(msg jetstream.Msg) (Event, error) {
 			metadata.Stream,
 			metadata.Sequence.Stream,
 			metadata.Timestamp,
-			header.Get(headerPublicationID),
+			header.Get(jetstream.MsgIDHeader),
 		),
-		Type:        header.Get(headerEventType),
-		Schema:      header.Get(headerEventSchema),
-		OrderingKey: header.Get(headerOrderingKey),
-		CreatedAt:   createdAt.UTC(),
-		Payload:     slices.Clone(msg.Data()),
+		Type:      header.Get(headerEventType),
+		Schema:    header.Get(headerEventSchema),
+		CreatedAt: createdAt.UTC(),
+		Payload:   slices.Clone(msg.Data()),
 	}
 	// The payload bound belongs to the producer this event is about to go
 	// through, which owns the configured maximum; everything checked here is the
@@ -142,28 +141,13 @@ func DeadLetterReason(msg jetstream.Msg) string {
 // a consumer can tell "the publisher did not send this" from "it sent a blank".
 func carryIdentityHeaders(header, source nats.Header) {
 	for _, name := range []string{
-		headerMessageID, headerPublicationID, headerEventType, headerEventSchema,
-		headerOrderingKey, headerCreatedAt, headerCorrelationID,
+		headerMessageID, headerEventType, headerEventSchema, headerCreatedAt,
 		"traceparent", "tracestate",
 	} {
 		if value := source.Get(name); value != "" {
 			header.Set(name, value)
 		}
 	}
-}
-
-// setOriginHeaders records where the message came from. Every value is the
-// broker's own account of the delivery, which the transfer would otherwise
-// lose: the dead-letter stream assigns its own sequence and consumer.
-func setOriginHeaders(header nats.Header, source jetstream.Msg, metadata *jetstream.MsgMetadata) {
-	header.Set(headerOriginalSubject, source.Subject())
-	header.Set(headerOriginalStream, metadata.Stream)
-	header.Set(headerOriginalConsumer, metadata.Consumer)
-	header.Set(headerOriginalStreamSeq, strconv.FormatUint(metadata.Sequence.Stream, 10))
-	header.Set(headerOriginalConsumerSeq, strconv.FormatUint(metadata.Sequence.Consumer, 10))
-	header.Set(headerOriginalNumDelivered, strconv.FormatUint(metadata.NumDelivered, 10))
-	header.Set(headerOriginalStoredAt, metadata.Timestamp.UTC().Format(time.RFC3339Nano))
-	header.Set(headerOriginalPublicationID, source.Headers().Get(headerPublicationID))
 }
 
 // deadLetterTransferID derives the transfer's deduplication id from the origin
@@ -177,7 +161,7 @@ func deadLetterTransferID(source jetstream.Msg, metadata *jetstream.MsgMetadata)
 		metadata.Stream,
 		metadata.Sequence.Stream,
 		metadata.Timestamp,
-		source.Headers().Get(headerPublicationID),
+		source.Headers().Get(jetstream.MsgIDHeader),
 	)
 }
 

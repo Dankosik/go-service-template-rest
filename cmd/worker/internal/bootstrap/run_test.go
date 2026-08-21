@@ -34,13 +34,11 @@ func TestMessagingCompositionRejectsDisabledTransportWithRegisteredHandler(t *te
 	// profile:authn-oidc-jwt:start
 	t.Setenv("APP__AUTHN__ISSUER", "https://issuer.example.com")
 	t.Setenv("APP__AUTHN__AUDIENCE", "https://api.example.com")
-	t.Setenv("APP__AUTHN__TRUSTED_PROXY_CIDRS", "127.0.0.0/8")
 	// profile:authn-oidc-jwt:end
-	t.Setenv("APP__MESSAGING__ENABLED", "false")
 	built := false
-	err := run(t.Context(), nil, func(context.Context, config.Config, *slog.Logger) (natsjs.Handler, func(context.Context), error) {
+	err := run(t.Context(), nil, func(context.Context, config.Config, *slog.Logger) (*natsjs.Registry, func(context.Context), error) {
 		built = true
-		return func(context.Context, natsjs.Message) error { return nil }, nil, nil
+		return nil, nil, nil
 	})
 	if !errors.Is(err, natsjs.ErrRejected) || !strings.Contains(err.Error(), "messaging must be enabled for worker") {
 		t.Fatalf("run(disabled messaging) error = %v, want disabled ErrRejected", err)
@@ -55,32 +53,22 @@ func TestMessagingCompositionParsesWorkerBounds(t *testing.T) {
 		MaxPayloadBytes: 256 << 10,
 		Worker: config.MessagingWorkerConfig{
 			Consumer: "events-worker", FilterSubject: "events.>", DeadLetterSubject: "dead.events",
-			MaxConcurrency: 8, MaxDeliveryBytes: 1 << 20, HandlerTimeout: time.Second,
-			RetryDelays: "10ms, 20ms", DeadLetterRetryDelay: time.Second, DrainTimeout: 2 * time.Second,
+			MaxConcurrency: 8,
 		},
 	}
 	got, err := messagingWorkerConfig(cfg)
 	if err != nil {
 		t.Fatalf("messagingWorkerConfig() error = %v", err)
 	}
-	if len(got.RetryDelays) != 2 || got.RetryDelays[0] != 10*time.Millisecond || got.RetryDelays[1] != 20*time.Millisecond {
-		t.Fatalf("retry delays = %v", got.RetryDelays)
+	if got.MaxDeliveryBytes != cfg.MaxPayloadBytes+natsjs.HeaderLimitBytes || got.HandlerTimeout != 30*time.Second || len(got.RetryDelays) != 4 {
+		t.Fatalf("worker defaults = %#v", got)
 	}
 }
 
 func TestMessagingCompositionRejectsInvalidWorkerBeforeConnection(t *testing.T) {
-	cfg := config.MessagingConfig{MaxPayloadBytes: 256 << 10, Worker: config.MessagingWorkerConfig{DrainTimeout: time.Second}}
+	cfg := config.MessagingConfig{MaxPayloadBytes: 256 << 10}
 	if _, err := messagingWorkerConfig(cfg); !errors.Is(err, natsjs.ErrRejected) {
 		t.Fatalf("messagingWorkerConfig(invalid) error = %v, want ErrRejected", err)
-	}
-}
-
-func TestWorkerShutdownBudgetFitsProcessGrace(t *testing.T) {
-	if err := validateWorkerShutdownBudget(45*time.Second, 20*time.Second); err != nil {
-		t.Fatalf("shipped worker shutdown budget does not fit: %v", err)
-	}
-	if err := validateWorkerShutdownBudget(36*time.Second, 20*time.Second); !errors.Is(err, config.ErrValidate) {
-		t.Fatalf("validateWorkerShutdownBudget(overrun) error = %v, want ErrValidate", err)
 	}
 }
 
@@ -249,9 +237,9 @@ func TestMessagingCompositionDoesNotBuildHandlerBeforeBrokerAdmission(t *testing
 	}
 	setWorkerTestEnvironment(t, url, "127.0.0.1:0")
 	built := false
-	err = run(t.Context(), nil, func(context.Context, config.Config, *slog.Logger) (natsjs.Handler, func(context.Context), error) {
+	err = run(t.Context(), nil, func(context.Context, config.Config, *slog.Logger) (*natsjs.Registry, func(context.Context), error) {
 		built = true
-		return func(context.Context, natsjs.Message) error { return nil }, nil, nil
+		return testRegistry(t, "test", func(context.Context, string) error { return nil }), nil, nil
 	})
 	if err == nil {
 		t.Fatal("run(unavailable broker) error = nil")
@@ -299,8 +287,8 @@ func TestMessagingCompositionRejectsMissingDiagnosticsBeforeConnection(t *testin
 		}
 	}()
 	setWorkerTestEnvironment(t, "nats://"+listener.Addr().String(), "")
-	err = run(t.Context(), nil, func(context.Context, config.Config, *slog.Logger) (natsjs.Handler, func(context.Context), error) {
-		return func(context.Context, natsjs.Message) error { return nil }, nil, nil
+	err = run(t.Context(), nil, func(context.Context, config.Config, *slog.Logger) (*natsjs.Registry, func(context.Context), error) {
+		return testRegistry(t, "test", func(context.Context, string) error { return nil }), nil, nil
 	})
 	if !errors.Is(err, natsjs.ErrRejected) {
 		t.Fatalf("run(missing diagnostics) error = %v, want ErrRejected", err)
@@ -321,28 +309,18 @@ func setWorkerTestEnvironment(t *testing.T, messagingURL, diagnosticsAddr string
 	configtest.IsolateEnv(t)
 	for key, value := range map[string]string{
 		// profile:authn-oidc-jwt:start
-		"APP__AUTHN__ISSUER":              "https://issuer.example.com",
-		"APP__AUTHN__AUDIENCE":            "https://api.example.com",
-		"APP__AUTHN__TRUSTED_PROXY_CIDRS": "127.0.0.0/8",
+		"APP__AUTHN__ISSUER":   "https://issuer.example.com",
+		"APP__AUTHN__AUDIENCE": "https://api.example.com",
 		// profile:authn-oidc-jwt:end
-		"APP__MESSAGING__ENABLED":                         "true",
-		"APP__MESSAGING__URLS":                            messagingURL,
-		"APP__MESSAGING__ALLOW_PLAINTEXT":                 "true",
-		"APP__MESSAGING__ALLOW_UNAUTHENTICATED":           "true",
-		"APP__MESSAGING__STREAM":                          "EVENTS",
-		"APP__MESSAGING__MIN_STREAM_REPLICAS":             "1",
-		"APP__MESSAGING__MIN_STREAM_RETENTION":            "24h",
-		"APP__MESSAGING__WORKER__CONSUMER":                "missing-diagnostics-worker",
-		"APP__MESSAGING__WORKER__FILTER_SUBJECT":          "events.test",
-		"APP__MESSAGING__WORKER__DEAD_LETTER_SUBJECT":     "dead.events.test",
-		"APP__MESSAGING__WORKER__HANDLER_TIMEOUT":         "1s",
-		"APP__MESSAGING__WORKER__RETRY_DELAYS":            "50ms",
-		"APP__MESSAGING__WORKER__DEAD_LETTER_RETRY_DELAY": "50ms",
-		"APP__MESSAGING__WORKER__DRAIN_TIMEOUT":           "2s",
-		"APP__OBSERVABILITY__METRICS__ADDR":               diagnosticsAddr,
+		"APP__MESSAGING__URLS":                        messagingURL,
+		"APP__MESSAGING__ALLOW_PLAINTEXT":             "true",
+		"APP__MESSAGING__ALLOW_UNAUTHENTICATED":       "true",
+		"APP__MESSAGING__STREAM":                      "EVENTS",
+		"APP__MESSAGING__WORKER__CONSUMER":            "missing-diagnostics-worker",
+		"APP__MESSAGING__WORKER__FILTER_SUBJECT":      "events.test",
+		"APP__MESSAGING__WORKER__DEAD_LETTER_SUBJECT": "dead.events.test",
+		"APP__OBSERVABILITY__METRICS__ADDR":           diagnosticsAddr,
 	} {
 		t.Setenv(key, value)
 	}
 }
-
-var _ natsjs.Handler = func(context.Context, natsjs.Message) error { return nil }

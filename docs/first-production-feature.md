@@ -352,22 +352,12 @@ constructor is lazy: successful construction does not prove that the target is
 reachable. Each operation still owns its deadline, retry eligibility, and
 provider-error mapping.
 
-Select propagation at the dependency's trust boundary. `PropagationNone` is
-the zero value: it retains local client telemetry while sending no remote
-correlation. `PropagationTraceContext` sends only W3C Trace Context.
-`PropagationTrustedService` additionally sends the valid request ID already in
-the operation context. Private DNS or TLS does not by itself justify the
-trusted-service policy. Every policy removes stale `traceparent`,
-`tracestate`, `baggage`, and `x-request-id` metadata before the call; baggage
-is never propagated.
-
 ```go
 clientConfig := grpcclient.DefaultConfig("dns:///orders.railway.internal:9000")
 connection, err := grpcclient.New(
     clientConfig,
     grpcclient.Options{
         TransportCredentials: credentials.NewTLS(tlsConfig),
-        Propagation:          grpcclient.PropagationTrustedService,
     },
 )
 if err != nil {
@@ -381,20 +371,11 @@ _ = healthClient // Provider-generated clients use the same grpc.ClientConnInter
 ```
 
 Pass the operation context unchanged to the generated method. The shared
-connection deliberately ignores environment proxies and resolver-provided
-service configurations, so a proxy, a resolver-selected balancer, or a
-configured retry cannot silently bypass its metadata policy. It does carry its
-own address-selection policy — round robin by default, reaching every resolved
-address and following the standard health state for the empty service name.
-Set `clientConfig.HealthCheck = false` only when the named dependency does not
-publish that whole-process health contract. If it protects `Health/Watch`, pass
-its provider-owned dynamic credential through `Options.PerRPCCredentials`; a
-per-call credential cannot authenticate grpc-go's health stream. Idle keepalive is off by default;
-set both positive keepalive fields only for a concrete intermediary timeout and
-use values the peer accepts. A dependency that requires a proxy or a
-resolver-provided service config needs a separate design. grpc-go's native
-transparent retry may still occur before commitment; application retry remains
-an explicit per-operation adapter decision.
+connection uses native DNS, reconnects, `pick_first`, transparent retry, and W3C
+Trace Context. Resolver service config is disabled, so application retry,
+client-side health, or a different load-balancing policy cannot appear without
+a separate dependency decision. Pass provider-owned dynamic credentials through
+`Options.PerRPCCredentials`. The template sets no client keepalive policy.
 <!-- profile:grpc:end -->
 
 ## 7. Wire, observe, and prove

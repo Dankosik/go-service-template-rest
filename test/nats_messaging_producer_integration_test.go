@@ -10,7 +10,7 @@ import (
 	"github.com/example/go-service-template-rest/internal/infra/natsjs"
 )
 
-func TestNATSProducerOutcomesAndCapacity(t *testing.T) {
+func TestNATSProducerOutcomes(t *testing.T) {
 	f := newNATSFixture(t)
 	client := f.client(t, natsjs.RoleProducer)
 	event := testEvent("accepted")

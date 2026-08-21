@@ -113,6 +113,21 @@ func TestAuthenticatedRejectsPrincipalWithoutSubject(t *testing.T) {
 	assertProblemCode(t, resp, problem.CodeUnauthorized)
 }
 
+func TestAuthenticatedAcceptsClientPrincipalWithoutSubject(t *testing.T) {
+	t.Parallel()
+
+	authenticate := Authenticated(func(context.Context, *openapi3filter.AuthenticationInput) (reqctx.Principal, error) {
+		return reqctx.Principal{Issuer: "https://issuer.example", ClientID: "service-client"}, nil
+	})
+	if err := authenticate(context.Background(), &openapi3filter.AuthenticationInput{
+		RequestValidationInput: &openapi3filter.RequestValidationInput{
+			Request: httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody),
+		},
+	}); err != nil {
+		t.Fatalf("Authenticated() client principal error = %v", err)
+	}
+}
+
 // TestAuthenticatedNilResolverStaysFailClosed keeps the unwired default the same
 // as leaving RouterConfig.Authenticate nil: 401, not an admitted request with no
 // principal.

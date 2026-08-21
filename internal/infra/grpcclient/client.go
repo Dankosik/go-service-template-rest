@@ -5,16 +5,20 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/example/go-service-template-rest/internal/observability/correlationpolicy"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/otel/metric"
 	metricnoop "go.opentelemetry.io/otel/metric/noop"
+	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
 	tracenoop "go.opentelemetry.io/otel/trace/noop"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
-	_ "google.golang.org/grpc/health" // Install grpc-go's standard client health checker.
-	"google.golang.org/grpc/keepalive"
+)
+
+const (
+	maxHeaderListBytes     = 16 << 10
+	maxReceiveMessageBytes = 4 << 20
+	maxSendMessageBytes    = 4 << 20
 )
 
 // What the composition root supplies, and the construction that turns it plus a
@@ -31,20 +35,14 @@ type Options struct {
 	// is about to send credentials to.
 	TransportCredentials credentials.TransportCredentials
 	// PerRPCCredentials optionally supplies one connection credential for both
-	// application RPCs and grpc-go control streams such as standard health Watch.
-	// The dependency adapter creates and refreshes it; New only removes reserved
-	// correlation metadata before grpc-go sends what remains.
+	// application RPCs and any grpc-go control streams explicitly enabled by the
+	// dependency owner.
 	PerRPCCredentials credentials.PerRPCCredentials
 
 	// Optional observability collaborators. Both fall back to their no-op
 	// implementations, so a test can leave them unset.
 	MeterProvider  metric.MeterProvider
 	TracerProvider trace.TracerProvider
-
-	// Propagation selects which locally owned correlation values cross this
-	// client's trust boundary, once per dependency rather than per call. The
-	// zero value emits none; the package doc owns how to choose among the three.
-	Propagation PropagationPolicy
 }
 
 // New constructs a shareable ClientConn without performing network I/O. The
@@ -59,38 +57,22 @@ func New(cfg Config, options Options) (*grpc.ClientConn, error) {
 
 	dialOptions := []grpc.DialOption{
 		grpc.WithTransportCredentials(options.TransportCredentials),
+		// A dependency must explicitly reopen retry, health, or load-balancing
+		// policy. Resolver addresses and reconnects remain native grpc-go behavior.
 		grpc.WithDisableServiceConfig(),
-		// This client's own default service config, which the option above does
-		// not refuse: it rejects only what a resolver supplies. The policy's own
-		// doc owns why that leaves the trust boundary unchanged.
-		grpc.WithDefaultServiceConfig(cfg.LoadBalancing.serviceConfig(cfg.HealthCheck)),
-		grpc.WithNoProxy(),
-		grpc.WithResolvers(sanitizingResolverBuilders(cfg.Target)...),
-		grpc.WithChainUnaryInterceptor(propagationUnaryInterceptor),
-		grpc.WithChainStreamInterceptor(propagationStreamInterceptor),
-		grpc.WithMaxHeaderListSize(cfg.MaxHeaderListBytes),
+		grpc.WithMaxHeaderListSize(maxHeaderListBytes),
 		grpc.WithDefaultCallOptions(
-			grpc.MaxCallRecvMsgSize(cfg.MaxReceiveMessageBytes),
-			grpc.MaxCallSendMsgSize(cfg.MaxSendMessageBytes),
+			grpc.MaxCallRecvMsgSize(maxReceiveMessageBytes),
+			grpc.MaxCallSendMsgSize(maxSendMessageBytes),
 		),
 		grpc.WithStatsHandler(otelgrpc.NewClientHandler(
 			otelgrpc.WithMeterProvider(options.MeterProvider),
 			otelgrpc.WithTracerProvider(options.TracerProvider),
-			otelgrpc.WithPropagators(correlationpolicy.NewPropagator(options.Propagation, requestIDMetadataKey)),
+			otelgrpc.WithPropagators(propagation.TraceContext{}),
 		)),
 	}
 	if options.PerRPCCredentials != nil {
-		dialOptions = append(
-			dialOptions,
-			grpc.WithPerRPCCredentials(wrapPerRPCCredentials(options.PerRPCCredentials)),
-		)
-	}
-	if cfg.KeepalivePingInterval > 0 {
-		dialOptions = append(dialOptions, grpc.WithKeepaliveParams(keepalive.ClientParameters{
-			Time:                cfg.KeepalivePingInterval,
-			Timeout:             cfg.KeepalivePingTimeout,
-			PermitWithoutStream: true,
-		}))
+		dialOptions = append(dialOptions, grpc.WithPerRPCCredentials(options.PerRPCCredentials))
 	}
 
 	connection, err := grpc.NewClient(cfg.Target, dialOptions...)
@@ -123,26 +105,6 @@ func validateConfig(cfg Config, options Options) error {
 	}
 	if options.TransportCredentials == nil {
 		return errors.New("build gRPC client: transport credentials are required")
-	}
-	if cfg.MaxHeaderListBytes == 0 {
-		return errors.New("build gRPC client: max header list bytes must be positive")
-	}
-	if cfg.MaxReceiveMessageBytes <= 0 {
-		return errors.New("build gRPC client: max receive message bytes must be positive")
-	}
-	if cfg.MaxSendMessageBytes <= 0 {
-		return errors.New("build gRPC client: max send message bytes must be positive")
-	}
-	if !options.Propagation.Valid() {
-		return errors.New("build gRPC client: propagation policy is invalid")
-	}
-	if !cfg.LoadBalancing.valid() {
-		return errors.New("build gRPC client: load-balancing policy is invalid")
-	}
-	if cfg.KeepalivePingInterval < 0 ||
-		cfg.KeepalivePingTimeout < 0 ||
-		(cfg.KeepalivePingInterval == 0) != (cfg.KeepalivePingTimeout == 0) {
-		return errors.New("build gRPC client: keepalive ping interval and timeout must both be positive or both be zero")
 	}
 	return nil
 }

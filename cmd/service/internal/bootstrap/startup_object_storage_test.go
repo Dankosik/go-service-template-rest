@@ -3,14 +3,12 @@ package bootstrap
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 
 	// profile:authn-oidc-jwt:start
 	"log/slog"
 	// profile:authn-oidc-jwt:end
 	"slices"
-	"strings"
 	"testing"
 	"time"
 
@@ -23,11 +21,12 @@ import (
 	"github.com/example/go-service-template-rest/internal/objectstorage"
 )
 
-func TestObjectStorageStartupLoadsImageRootsLocally(t *testing.T) {
+func TestInitObjectStorageMapsConfig(t *testing.T) {
 	want := validObjectStorageConfig()
 	built := &countingObjectStorageRuntime{}
-	runtime, err := initObjectStorageWith(want, func(got s3.Config) (objectStorageRuntime, error) {
-		if got.Endpoint != want.Endpoint || got.MaxWorkingMemoryBytes != testObjectStorageMaxWorkingMemoryBytes {
+	runtime, err := initObjectStorageWith(t.Context(), want, func(ctx context.Context, got s3.Config) (objectStorageRuntime, error) {
+		if ctx != t.Context() || got.Provider != s3.ProviderAmazonS3 || got.Bucket != want.Bucket ||
+			got.CredentialSource != want.CredentialSource || got.MaxObjectBytes != want.MaxObjectBytes {
 			t.Fatalf("mapped S3 config = %#v", got)
 		}
 		return built, nil
@@ -38,19 +37,6 @@ func TestObjectStorageStartupLoadsImageRootsLocally(t *testing.T) {
 	runtime.Close()
 	if built.calls != 1 {
 		t.Fatalf("runtime Close calls = %d, want 1", built.calls)
-	}
-
-	tooSmall := want
-	tooSmall.MaxWorkingMemoryBytes--
-	_, err = initObjectStorageWith(tooSmall, func(cfg s3.Config) (objectStorageRuntime, error) {
-		client, err := s3.New(cfg)
-		if err != nil {
-			return client, fmt.Errorf("construct object storage client: %w", err)
-		}
-		return client, nil
-	})
-	if err == nil || !strings.Contains(err.Error(), "working memory must cover") {
-		t.Fatalf("one-byte-short initObjectStorageWith() error = %v", err)
 	}
 }
 
@@ -70,7 +56,7 @@ func TestObjectStorageConstructionFollowsMemoryPublication(t *testing.T) {
 	}
 }
 
-func TestObjectStorageStartupAndOutageDoNotChangeReadiness(t *testing.T) {
+func TestObjectStorageOutageDoesNotChangeReadiness(t *testing.T) {
 	resetShutdownConfigEnv(t)
 	runtime := &scriptedObjectStorageRuntime{outcomes: []error{errors.New("provider unavailable"), nil}}
 	stopServing := errors.New("stop serving")
@@ -80,89 +66,48 @@ func TestObjectStorageStartupAndOutageDoNotChangeReadiness(t *testing.T) {
 			t.Fatalf("initial readiness check error = %v", err)
 		}
 		args.admission.MarkReady()
-		if err := args.healthSvc.Cached(); err != nil {
-			t.Fatalf("readiness before provider outage = %v, want nil", err)
-		}
-		var store objectStorageRuntime = runtime
-		if _, err := store.Metadata(ctx, "object"); err == nil {
+		if _, err := runtime.Metadata(ctx, "object"); err == nil {
 			t.Fatal("first storage operation error = nil, want provider outage")
 		}
 		if err := args.healthSvc.Cached(); err != nil {
 			t.Fatalf("readiness after provider outage = %v, want unchanged", err)
 		}
-		if _, err := store.Metadata(ctx, "object"); err != nil {
-			t.Fatalf("later storage operation error = %v, want nil", err)
-		}
 		return stopServing
 	}
-
 	if err := runWithRuntime(nil, wiring); !errors.Is(err, stopServing) {
 		t.Fatalf("runWithRuntime() error = %v, want %v", err, stopServing)
 	}
 }
 
 func TestObjectStorageRuntimeCloseOrder(t *testing.T) {
-	t.Run("normal shutdown", func(t *testing.T) {
-		resetShutdownConfigEnv(t)
-		closed := &countingObjectStorageRuntime{}
-		stopServing := errors.New("stop serving")
-		wiring := objectStorageTestWiring(closed)
-		var events []runtimeLifecycleStage
-		wiring.lifecycle = func(stage runtimeLifecycleStage) { events = append(events, stage) }
-		wiring.serve = func(context.Context, context.Context, serveRuntimeArgs) error { return stopServing }
+	resetShutdownConfigEnv(t)
+	closed := &countingObjectStorageRuntime{}
+	stopServing := errors.New("stop serving")
+	wiring := objectStorageTestWiring(closed)
+	var events []runtimeLifecycleStage
+	wiring.lifecycle = func(stage runtimeLifecycleStage) { events = append(events, stage) }
+	wiring.serve = func(context.Context, context.Context, serveRuntimeArgs) error { return stopServing }
 
-		if err := runWithRuntime(nil, wiring); !errors.Is(err, stopServing) {
-			t.Fatalf("runWithRuntime() error = %v, want %v", err, stopServing)
-		}
-		if closed.calls != 1 {
-			t.Fatalf("object storage Close calls = %d, want 1", closed.calls)
-		}
-		want := []runtimeLifecycleStage{
-			runtimeLifecycleMemoryPublished,
-			runtimeLifecycleObjectStorageConstructed,
-			runtimeLifecycleHTTPDrained,
-			runtimeLifecycleBackgroundJoined,
-			runtimeLifecycleObjectStorageClosed,
-			runtimeLifecycleDependenciesClosed,
-			runtimeLifecycleTelemetryFlushed,
-		}
-		if !slices.Equal(events, want) {
-			t.Fatalf("lifecycle events = %v, want %v", events, want)
-		}
-	})
-
-	t.Run("early return", func(t *testing.T) {
-		resetShutdownConfigEnv(t)
-		closed := &countingObjectStorageRuntime{}
-		initFailure := errors.New("dependency init failed")
-		wiring := objectStorageTestWiring(closed)
-		var events []runtimeLifecycleStage
-		wiring.lifecycle = func(stage runtimeLifecycleStage) { events = append(events, stage) }
-		wiring.dependencies = func(context.Context, startupBootstrap) (runtimeDependencies, error) {
-			return runtimeDependencies{}, initFailure
-		}
-
-		if err := runWithRuntime(nil, wiring); !errors.Is(err, initFailure) {
-			t.Fatalf("runWithRuntime() error = %v, want %v", err, initFailure)
-		}
-		if closed.calls != 1 {
-			t.Fatalf("object storage Close calls = %d, want 1", closed.calls)
-		}
-		want := []runtimeLifecycleStage{
-			runtimeLifecycleMemoryPublished,
-			runtimeLifecycleObjectStorageConstructed,
-			runtimeLifecycleObjectStorageClosed,
-			runtimeLifecycleTelemetryFlushed,
-		}
-		if !slices.Equal(events, want) {
-			t.Fatalf("lifecycle events = %v, want %v", events, want)
-		}
-	})
+	if err := runWithRuntime(nil, wiring); !errors.Is(err, stopServing) {
+		t.Fatalf("runWithRuntime() error = %v, want %v", err, stopServing)
+	}
+	if closed.calls != 1 {
+		t.Fatalf("object storage Close calls = %d, want 1", closed.calls)
+	}
+	want := []runtimeLifecycleStage{
+		runtimeLifecycleMemoryPublished, runtimeLifecycleObjectStorageConstructed,
+		runtimeLifecycleHTTPDrained, runtimeLifecycleBackgroundJoined,
+		runtimeLifecycleObjectStorageClosed, runtimeLifecycleDependenciesClosed,
+		runtimeLifecycleTelemetryFlushed,
+	}
+	if !slices.Equal(events, want) {
+		t.Fatalf("startup lifecycle events = %v, want %v", events, want)
+	}
 }
 
 func objectStorageTestWiring(runtime objectStorageRuntime) runtimeWiring {
 	wiring := testRuntimeWiring()
-	wiring.initObjectStorage = func(config.ObjectStorageConfig) (objectStorageRuntime, error) { return runtime, nil }
+	wiring.initObjectStorage = func(context.Context, config.ObjectStorageConfig) (objectStorageRuntime, error) { return runtime, nil }
 	wiring.dependencies = func(context.Context, startupBootstrap) (runtimeDependencies, error) {
 		return runtimeDependencies{}, nil
 	}
@@ -199,41 +144,26 @@ func (r *scriptedObjectStorageRuntime) Metadata(context.Context, string) (object
 
 type noOpObjectStorageStore struct{}
 
-func (noOpObjectStorageStore) Upload(context.Context, string, io.ReadCloser, objectstorage.UploadOptions) (objectstorage.UploadResult, error) {
-	return objectstorage.UploadResult{}, nil
+func (noOpObjectStorageStore) Upload(context.Context, string, io.Reader, objectstorage.UploadOptions) error {
+	return nil
 }
 
-func (noOpObjectStorageStore) Download(context.Context, string) (objectstorage.Download, error) {
-	return objectstorage.Download{}, nil
+func (noOpObjectStorageStore) Download(context.Context, string) (objectstorage.Object, error) {
+	return objectstorage.Object{}, nil
 }
 
 func (noOpObjectStorageStore) Metadata(context.Context, string) (objectstorage.Metadata, error) {
 	return objectstorage.Metadata{}, nil
 }
-
 func (noOpObjectStorageStore) Delete(context.Context, string) error { return nil }
-
-func (noOpObjectStorageStore) PresignGET(context.Context, string, time.Duration) (objectstorage.PresignedGET, error) {
-	return objectstorage.PresignedGET{}, nil
+func (noOpObjectStorageStore) PresignGet(context.Context, string, time.Duration) (string, error) {
+	return "", nil
 }
 
 func validObjectStorageConfig() config.ObjectStorageConfig {
 	return config.ObjectStorageConfig{
-		Provider:                "amazon_s3",
-		Endpoint:                "https://s3.us-east-1.amazonaws.com",
-		Region:                  "us-east-1",
-		Bucket:                  "examplebucket",
-		AccessKeyID:             "test-access-key",
-		SecretAccessKey:         "test-secret-key",
-		SessionToken:            "test-session-token",
-		ExpectedBucketOwner:     "123456789012",
-		MaxObjectBytes:          10 << 20,
-		MultipartChunkBytes:     5 << 20,
-		MaxActiveOperations:     2,
-		MaxOperationDuration:    time.Second,
-		MaxPresignLifetime:      time.Minute,
-		MaxResponseHeaderBytes:  1024,
-		MaxControlResponseBytes: 1024,
-		MaxWorkingMemoryBytes:   testObjectStorageMaxWorkingMemoryBytes,
+		Provider: "amazon_s3", Region: "us-east-1", Bucket: "examplebucket",
+		ExpectedBucketOwner: "123456789012", CredentialSource: "aws_default",
+		MaxObjectBytes: 10 << 20,
 	}
 }

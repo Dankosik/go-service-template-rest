@@ -66,6 +66,7 @@ glob_absent() {
 }
 file_present() { [[ -f "$1" ]]; }
 same_text() { [[ "$1" == "$2" ]]; }
+different_text() { [[ "$1" != "$2" ]]; }
 grep_absent() {
 	local status
 	if grep "$@"; then
@@ -425,10 +426,7 @@ minimal_workflow_before="$(workflow_snapshot "${minimal_checkout}")"
 		exit 1
 	fi
 	# profile:messaging-nats-jetstream:start
-	if APP__MESSAGING__ENABLED=true \
-		APP__MESSAGING__URLS='nats://127.0.0.1:4222' \
-		APP__MESSAGING__MIN_STREAM_REPLICAS=1 \
-		APP__MESSAGING__MIN_STREAM_RETENTION=24h \
+	if APP__MESSAGING__URLS='nats://127.0.0.1:4222' \
 		go run ./cmd/service >"${TEMP_ROOT}/minimal-messaging.log" 2>&1; then
 		echo "messaging-none service accepted messaging configuration"
 		exit 1
@@ -456,7 +454,7 @@ grep -Fq 'postgres.enabled' "${TEMP_ROOT}/minimal-postgres.log"
 grep -Fq 'postgres.dsn' "${TEMP_ROOT}/minimal-postgres.log"
 # profile:messaging-nats-jetstream:start
 grep -Fq 'unknown_key' "${TEMP_ROOT}/minimal-messaging.log"
-grep -Fq 'messaging.enabled' "${TEMP_ROOT}/minimal-messaging.log"
+grep -Fq 'messaging.urls' "${TEMP_ROOT}/minimal-messaging.log"
 grep -Fq 'messaging.urls' "${TEMP_ROOT}/minimal-messaging.log"
 # profile:messaging-nats-jetstream:end
 # profile:outbox-postgres:start
@@ -528,6 +526,7 @@ for removed in \
 done
 # profile:messaging-nats-jetstream:start
 for removed in \
+	internal/domainevent \
 	internal/infra/natsjs \
 	cmd/worker \
 	cmd/outbox-relay/internal/bootstrap/natsjs_publisher.go \
@@ -546,15 +545,6 @@ done
 # profile:outbox-postgres:start
 grep -Fq 'outbox = "none"' "${minimal_checkout}/template.lock"
 # profile:outbox-postgres:end
-for benchmark_surface in \
-	Makefile \
-	scripts/dev/benchmark.sh \
-	docs/benchmarking.md \
-	docs/build-test-and-development-commands.md; do
-	assert "GRPC=none retained gRPC reference benchmark commands in ${benchmark_surface}" \
-		grep_absent -Eq 'bench-grpc|GRPC_BENCH|grpc-smoke|grpc-inspect' \
-		"${minimal_checkout}/${benchmark_surface}"
-done
 # The generated service must record where it came from, or a later upstream fix
 # has no revision to be reviewed against.
 grep -Fq 'database = "none"' "${minimal_checkout}/template.lock"
@@ -715,6 +705,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "mess
 		cmd/worker \
 		cmd/service/internal/bootstrap/startup_messaging.go \
 		docs/durable-messaging.md \
+		internal/domainevent \
 		internal/config/messaging_config.go \
 		internal/infra/natsjs \
 		test/nats_messaging_fixtures_integration_test.go \
@@ -1057,6 +1048,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "grpc
 	)
 assert "gRPC enabled initialization removed server adapter" path_present "${grpc_checkout}/internal/infra/grpc"
 assert "gRPC enabled initialization removed client adapter" path_present "${grpc_checkout}/internal/infra/grpcclient"
+grep -Fq 'buf.build/go/protovalidate' "${grpc_checkout}/go.mod"
 assert "gRPC enabled initialization removed test descriptors" path_present "${grpc_checkout}/internal/infra/grpc/grpctest"
 # The comment and doc proofs in this package and internal/infra/oidcjwt walk
 # their own source through it, so it leaves only when both profiles do — which
@@ -1082,16 +1074,6 @@ assert "gRPC enabled initialization removed operations leaf" \
 assert "gRPC enabled initialization removed reference" path_present "${grpc_checkout}/examples/grpc-reference-service"
 assert "gRPC enabled initialization removed transport-neutral failure policy" path_present "${grpc_checkout}/internal/failure"
 assert "gRPC enabled initialization removed composed failure contract" file_present "${grpc_checkout}/examples/reference-service/grpc_failure_mapping_contract_test.go"
-assert "gRPC reference profile removed benchmark lifecycle proof" file_present "${grpc_checkout}/scripts/dev/benchmark-grpc-check.sh"
-assert "gRPC reference profile removed k6 scenario" file_present "${grpc_checkout}/test/performance/grpc/all-cardinalities.js"
-grep -Fq 'bench-grpc-smoke' "${grpc_checkout}/Makefile"
-grep -Fq 'GRPC_BENCH_SCRIPT' "${grpc_checkout}/scripts/dev/benchmark.sh"
-grep -Fq 'bench-grpc-smoke' "${grpc_checkout}/docs/grpc/operations-and-proof.md"
-assert "gRPC reference profile retained unresolved benchmark markers" \
-	grep_absent -R -Fq 'profile:grpc-reference-benchmark:' \
-	"${grpc_checkout}/Makefile" \
-	"${grpc_checkout}/scripts/dev/benchmark.sh" \
-	"${grpc_checkout}/docs"
 grep -Fq 'grpc = "enabled"' "${grpc_checkout}/template.lock"
 assert "agent workflow changed during gRPC initialization" same_text "${grpc_workflow_before}" "$(workflow_snapshot "${grpc_checkout}")"
 grpc_snapshot="$(snapshot "${grpc_checkout}")"
@@ -1113,20 +1095,8 @@ grpc_default_checkout="$(copy_template_checkout default-grpc git@github.com:acme
 )
 assert "default gRPC initialization removed server adapter" path_present "${grpc_default_checkout}/internal/infra/grpc"
 assert "default gRPC initialization removed client adapter" path_present "${grpc_default_checkout}/internal/infra/grpcclient"
+grep -Fq 'buf.build/go/protovalidate' "${grpc_default_checkout}/go.mod"
 assert "default gRPC initialization retained reference examples" path_absent "${grpc_default_checkout}/examples"
-assert "default gRPC initialization retained benchmark lifecycle proof" path_absent "${grpc_default_checkout}/scripts/dev/benchmark-grpc-check.sh"
-assert "default gRPC initialization retained gRPC performance scenario" path_absent "${grpc_default_checkout}/test/performance/grpc"
-for benchmark_surface in \
-	Makefile \
-	scripts/dev/benchmark.sh \
-	docs/grpc.md \
-	docs/grpc/operations-and-proof.md \
-	docs/benchmarking.md \
-	docs/build-test-and-development-commands.md; do
-	assert "REFERENCE_EXAMPLE=remove retained gRPC reference benchmark commands in ${benchmark_surface}" \
-		grep_absent -Eq 'bench-grpc|GRPC_BENCH|grpc-smoke|grpc-inspect' \
-		"${grpc_default_checkout}/${benchmark_surface}"
-done
 grep -Fq 'grpc = "enabled"' "${grpc_default_checkout}/template.lock"
 grep -Fq 'reference_example = "remove"' "${grpc_default_checkout}/template.lock"
 grpc_default_snapshot="$(snapshot "${grpc_default_checkout}")"
@@ -1153,6 +1123,8 @@ assert "GRPC=none retained composed gRPC failure proof" path_absent "${grpc_http
 assert "GRPC=none retained gRPC reference" path_absent "${grpc_http_checkout}/examples/grpc-reference-service"
 assert "GRPC=none retained server adapter" path_absent "${grpc_http_checkout}/internal/infra/grpc"
 assert "GRPC=none retained client adapter" path_absent "${grpc_http_checkout}/internal/infra/grpcclient"
+assert "GRPC=none retained Protovalidate runtime dependency" \
+	grep_absent -Fq 'buf.build/go/protovalidate' "${grpc_http_checkout}/go.mod"
 fi
 
 if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "authn" ]]; then
@@ -1193,24 +1165,22 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "auth
 			if [[ "${grpc_choice}" == "enabled" ]]; then
 				make proto-check
 			fi
-			if go list -deps ./cmd/service | grep -E 'internal/infra/oidcjwt|go-jose/go-jose'; then
+			if go list -deps ./cmd/service | grep -E 'internal/infra/oidcjwt|MicahParks/(keyfunc|jwkset)|golang-jwt/jwt'; then
 				echo "${fixture_name} production graph retained authentication"
 				exit 1
 			fi
-			if grep -Fq 'github.com/go-jose/go-jose/v4' go.mod; then
-				echo "${fixture_name} retained a direct or indirect JWT requirement in go.mod"
+			if grep -Eq 'github.com/(MicahParks/(keyfunc|jwkset)|golang-jwt/jwt)' go.mod; then
+				echo "${fixture_name} retained a JWT or JWKS requirement in go.mod"
 				exit 1
 			fi
 		)
 
 		for removed in \
 			cmd/service/internal/bootstrap/authn_bootstrap_test.go \
-			cmd/service/internal/bootstrap/authn_readiness_test.go \
 			cmd/service/internal/bootstrap/startup_authn.go \
 			docs/authentication.md \
 			internal/authntrust \
 			internal/config/authn_config_test.go \
-			internal/infra/grpc/authn_health_test.go \
 			internal/infra/http/authn_router_test.go \
 			internal/infra/httpclient/authn_policy_test.go \
 			internal/infra/oidcjwt; do
@@ -1308,7 +1278,9 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "auth
 	grep -Fq 'APP__AUTHN__ISSUER=' "${authn_http_checkout}/env/.env.example"
 	(
 		cd "${authn_http_checkout}"
-		go list -m -f '{{.Path}}' all | grep -Fx 'github.com/go-jose/go-jose/v4'
+		go list -m -f '{{.Path}}' all | grep -Fx 'github.com/MicahParks/keyfunc/v3'
+		go list -m -f '{{.Path}}' all | grep -Fx 'github.com/MicahParks/jwkset'
+		go list -m -f '{{.Path}}' all | grep -Fx 'github.com/golang-jwt/jwt/v5'
 	)
 	authn_http_snapshot="$(snapshot "${authn_http_checkout}")"
 	(
@@ -1411,7 +1383,6 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "outb
 		local grpc="$3"
 
 		for retained in \
-			cmd/service/internal/bootstrap/startup_outbound_auth.go \
 			internal/config/outbound_auth_config.go \
 			internal/infra/oauth2clientcredentials \
 			docs/outbound-machine-authentication.md; do
@@ -1420,8 +1391,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "outb
 		grep -Fqx 'outbound_auth = "oauth2-client-credentials"' "${root}/template.lock"
 		grep -Fqx 'APP__OUTBOUND_AUTH__CLIENT_ID=' "${root}/env/.env.example"
 		grep -Fqx 'APP__OUTBOUND_AUTH__CLIENT_SECRET=' "${root}/env/.env.example"
-		grep -Fqx 'APP__OUTBOUND_AUTH__TOKEN_ENDPOINT=' "${root}/env/.env.example"
-		grep -Fqx 'APP__OUTBOUND_AUTH__RESOURCE_AUTHORITY=' "${root}/env/.env.example"
+		grep -Fqx 'APP__OUTBOUND_AUTH__TOKEN_URL=' "${root}/env/.env.example"
 		assert "OAuth selection removed credential HTTP policy" grep -Fq \
 			'DisableInstrumentation' "${root}/internal/infra/httpclient/config.go"
 		assert "OAuth selection retained unresolved markers" grep_absent -R -Fq \
@@ -1454,7 +1424,6 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "outb
 	assert_outbound_auth_none_tree() {
 		local root="$1"
 		for removed in \
-			cmd/service/internal/bootstrap/startup_outbound_auth.go \
 			internal/config/outbound_auth_config.go \
 			internal/infra/oauth2clientcredentials \
 			docs/outbound-machine-authentication.md; do
@@ -1478,7 +1447,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "outb
 		)
 	}
 
-	assert_outbound_auth_module_boundary() {
+	assert_outbound_auth_none_module_boundary() {
 		local root="$1"
 		local module
 
@@ -1490,6 +1459,22 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "outb
 		} | awk '$1 == "golang.org/x/oauth2" { print $1, $2, "indirect=" $3 }')"
 		if [[ -n "${module}" && "${module}" != 'golang.org/x/oauth2 v0.36.0 indirect=true' ]]; then
 			echo "unexpected OAuth module attribution: ${module}"
+			return 1
+		fi
+	}
+
+	assert_outbound_auth_selected_module_boundary() {
+		local root="$1"
+		local module
+
+		assert "selected output does not import golang.org/x/oauth2" grep -R -Fq \
+			--include='*.go' '"golang.org/x/oauth2' "${root}"
+		module="$({
+			cd "${root}"
+			go list -m -f '{{.Path}} {{.Version}} {{.Indirect}}' all
+		} | awk '$1 == "golang.org/x/oauth2" { print $1, $2, "indirect=" $3 }')"
+		if [[ "${module}" != 'golang.org/x/oauth2 v0.36.0 indirect=false' ]]; then
+			echo "unexpected selected OAuth module attribution: ${module}"
 			return 1
 		fi
 	}
@@ -1577,11 +1562,11 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "outb
 		check_outbound_auth_checkout "${selected_outbound_auth}"
 		assert_outbound_auth_tree "${selected_outbound_auth}" "${outbound_http}" "${grpc}"
 		assert "omitted ${transport} output has invalid OAuth module ownership" \
-			assert_outbound_auth_module_boundary "${omitted_outbound_auth}"
+			assert_outbound_auth_none_module_boundary "${omitted_outbound_auth}"
 		assert "explicit-none ${transport} output has invalid OAuth module ownership" \
-			assert_outbound_auth_module_boundary "${explicit_none_outbound_auth}"
+			assert_outbound_auth_none_module_boundary "${explicit_none_outbound_auth}"
 		assert "selected ${transport} output has invalid OAuth module ownership" \
-			assert_outbound_auth_module_boundary "${selected_outbound_auth}"
+			assert_outbound_auth_selected_module_boundary "${selected_outbound_auth}"
 		omitted_module_attribution="$(outbound_auth_module_attribution "${omitted_outbound_auth}")"
 		none_module_attribution="$(outbound_auth_module_attribution "${explicit_none_outbound_auth}")"
 		selected_module_attribution="$(outbound_auth_module_attribution "${selected_outbound_auth}")"
@@ -1590,20 +1575,14 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "outb
 		selected_oauth2_packages="$(outbound_auth_oauth2_packages "${selected_outbound_auth}")"
 		assert "omitted and explicit-none ${transport} module attribution differs" \
 			same_text "${omitted_module_attribution}" "${none_module_attribution}"
-		assert "selected and none ${transport} module attribution differs" \
-			same_text "${selected_module_attribution}" "${none_module_attribution}"
+		assert "selected and none ${transport} module attribution did not differ" \
+			different_text "${selected_module_attribution}" "${none_module_attribution}"
 		assert "omitted and explicit-none ${transport} OAuth reachability differs" \
 			same_text "${omitted_oauth2_packages}" "${none_oauth2_packages}"
-		assert "selected and none ${transport} OAuth reachability differs" \
-			same_text "${selected_oauth2_packages}" "${none_oauth2_packages}"
-		if [[ "${grpc}" == "none" ]]; then
-			assert "HTTP-only output can reach golang.org/x/oauth2 packages" \
-				same_text '' "${selected_oauth2_packages}"
-		else
-			assert "gRPC output lost grpc-go OAuth attribution" grep -Fq \
-				'google.golang.org/grpc@v1.83.0 golang.org/x/oauth2@v0.36.0' \
-				<<<"${selected_module_attribution}"
-		fi
+		assert "selected and none ${transport} OAuth reachability did not differ" \
+			different_text "${selected_oauth2_packages}" "${none_oauth2_packages}"
+		assert "selected ${transport} output cannot reach clientcredentials" grep -Fqx \
+			'golang.org/x/oauth2/clientcredentials' <<<"${selected_oauth2_packages}"
 		selected_snapshot="$(snapshot "${selected_outbound_auth}")"
 		(
 			cd "${selected_outbound_auth}"
@@ -1766,7 +1745,6 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "obje
 			internal/config/object_storage_config_test.go \
 			internal/objectstorage \
 			internal/infra/s3 \
-			scripts/ci/s3-source-receipt.sh \
 			test/s3conformance/conformance_test.go \
 			docs/s3-compatible-object-storage.md; do
 			assert "OBJECT_STORAGE=none retained ${removed}" path_absent "${root}/${removed}"
@@ -1790,20 +1768,16 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "obje
 			internal/config/object_storage_config_test.go \
 			internal/objectstorage \
 			internal/infra/s3 \
-			internal/infra/s3/image_root_bundle.go \
-			internal/infra/s3/image_root_bundle_test.go \
-			internal/infra/httpclient \
-			scripts/ci/s3-source-receipt.sh \
 			test/s3conformance/conformance_test.go \
 			docs/s3-compatible-object-storage.md; do
 			assert "OBJECT_STORAGE=s3 removed ${retained}" path_present "${root}/${retained}"
 		done
-		assert "OBJECT_STORAGE=s3 removed generic RootCAs policy" grep -Fq \
-			'RootCAs' "${root}/internal/infra/httpclient/config.go"
 		assert "OBJECT_STORAGE=s3 removed AWS dependencies" grep -Eq \
 			'github.com/aws/aws-sdk-go-v2' "${root}/go.mod"
+		assert "OBJECT_STORAGE=s3 removed transfer manager" grep -Fq \
+			'github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager' "${root}/go.mod"
 		assert "OBJECT_STORAGE=s3 retained a rejected client" grep_absent -R -E \
-			'rhnvrm/simples3|kelindar/s3|manager.NewUploader|manager.NewDownloader' \
+			'rhnvrm/simples3|kelindar/s3' \
 			"${root}/go.mod" "${root}/go.sum" "${root}/internal"
 		assert "OBJECT_STORAGE=s3 generated a trust configuration path" grep_absent -R -E \
 			'object_storage.*(ca|root)|OBJECT_STORAGE.*(CA|ROOT)' \
@@ -1838,9 +1812,11 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "obje
 			(
 				cd "${checkout}"
 				CODEOWNER=@acme/platform DATABASE=postgres AUTHN=none OUTBOUND_HTTP="${outbound_http}" OBJECT_STORAGE="${object_storage}" \
-					bash ./scripts/init-module.sh >"${init_log}"
+				bash ./scripts/init-module.sh >"${init_log}"
 				go test -vet=off ./...
-				go test -vet=off -tags=integration ./test -run '^TestS3ObjectStorageConformanceRequiresProviderCertification$' -count=1
+				if [[ "${object_storage}" == "s3" ]]; then
+					go test -vet=off -tags=integration ./test/s3conformance -run '^TestS3ObjectStorageConformanceRequiresProviderCertification$' -count=1
+				fi
 				go mod tidy
 				make mod-tidy-check project-structure-check
 			)

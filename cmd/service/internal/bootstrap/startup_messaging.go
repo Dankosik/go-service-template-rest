@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/example/go-service-template-rest/cmd/internal/runtimeopts"
 	"github.com/example/go-service-template-rest/internal/config"
@@ -16,7 +17,7 @@ type messagingRuntime struct {
 }
 
 func initMessagingRuntime(ctx context.Context, cfg config.MessagingConfig, log *slog.Logger) (messagingRuntime, error) {
-	if !cfg.Enabled {
+	if strings.TrimSpace(cfg.URLs) == "" {
 		return messagingRuntime{}, nil
 	}
 	client, err := natsjs.Connect(
@@ -31,15 +32,17 @@ func initMessagingRuntime(ctx context.Context, cfg config.MessagingConfig, log *
 	return messagingRuntime{client: client}, nil
 }
 
-// Producer is the seam a feature takes to publish from the API process. The
-// template wires no publisher, so nothing here calls it yet. Deleting it as
-// unused would remove the one accessor a feature needs; the worked wiring is in
-// docs/durable-messaging.md.
-func (m messagingRuntime) Producer() *natsjs.Producer {
+// Publisher is the typed business seam. Routes stay in composition and never
+// reach the feature that creates a domainevent.Event.
+func (m messagingRuntime) Publisher(routes ...natsjs.Route) (*natsjs.Publisher, error) {
 	if m.client == nil {
-		return nil
+		return nil, fmt.Errorf("messaging is disabled")
 	}
-	return m.client.Producer()
+	registry, err := natsjs.NewRegistry(routes...)
+	if err != nil {
+		return nil, err
+	}
+	return registry.Publisher(m.client.Producer())
 }
 
 // ConnectionRun is the client's connection supervisor loop, or nil when

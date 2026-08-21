@@ -163,17 +163,17 @@ func TestOpenAPIRuntimeContractRequiresRouterDependencies(t *testing.T) {
 			name:     "missing logger",
 			handlers: Handlers{Health: health.New(), ReadinessGate: func(context.Context) error { return nil }},
 			metrics:  telemetry.New(),
-			cfg:      RouterConfig{HardenConfig: HardenConfig{MaxBodyBytes: testRouterMaxBodyBytes}},
+			cfg:      RouterConfig{MaxBodyBytes: testRouterMaxBodyBytes},
 			wantErr:  "logger is required",
 		},
 		{
 			name:    "missing health",
 			log:     log,
 			metrics: telemetry.New(),
-			cfg: RouterConfig{HardenConfig: HardenConfig{
+			cfg: RouterConfig{
 				MaxBodyBytes:   testRouterMaxBodyBytes,
 				RequestTimeout: time.Second,
-			}},
+			},
 			handlers: Handlers{
 				API:           unimplementedAPI{},
 				ReadinessGate: func(context.Context) error { return nil },
@@ -184,10 +184,10 @@ func TestOpenAPIRuntimeContractRequiresRouterDependencies(t *testing.T) {
 			name:    "missing readiness gate",
 			log:     log,
 			metrics: telemetry.New(),
-			cfg: RouterConfig{HardenConfig: HardenConfig{
+			cfg: RouterConfig{
 				MaxBodyBytes:   testRouterMaxBodyBytes,
 				RequestTimeout: time.Second,
-			}},
+			},
 			handlers: Handlers{
 				API:    unimplementedAPI{},
 				Health: health.New(),
@@ -197,7 +197,7 @@ func TestOpenAPIRuntimeContractRequiresRouterDependencies(t *testing.T) {
 		{
 			name: "missing metrics",
 			log:  log,
-			cfg:  RouterConfig{HardenConfig: HardenConfig{MaxBodyBytes: testRouterMaxBodyBytes}},
+			cfg:  RouterConfig{MaxBodyBytes: testRouterMaxBodyBytes},
 			handlers: Handlers{
 				API:           unimplementedAPI{},
 				Health:        health.New(),
@@ -209,11 +209,11 @@ func TestOpenAPIRuntimeContractRequiresRouterDependencies(t *testing.T) {
 			name:    "negative max in flight",
 			log:     log,
 			metrics: telemetry.New(),
-			cfg: RouterConfig{HardenConfig: HardenConfig{
+			cfg: RouterConfig{
 				MaxBodyBytes:   testRouterMaxBodyBytes,
 				RequestTimeout: time.Second,
 				MaxInFlight:    -1,
-			}},
+			},
 			handlers: Handlers{
 				API:           unimplementedAPI{},
 				Health:        health.New(),
@@ -225,7 +225,7 @@ func TestOpenAPIRuntimeContractRequiresRouterDependencies(t *testing.T) {
 			name:    "missing max body bytes",
 			log:     log,
 			metrics: telemetry.New(),
-			cfg:     RouterConfig{HardenConfig: HardenConfig{RequestTimeout: time.Second}},
+			cfg:     RouterConfig{RequestTimeout: time.Second},
 			handlers: Handlers{
 				API:           unimplementedAPI{},
 				Health:        health.New(),
@@ -237,7 +237,7 @@ func TestOpenAPIRuntimeContractRequiresRouterDependencies(t *testing.T) {
 			name:    "missing request timeout",
 			log:     log,
 			metrics: telemetry.New(),
-			cfg:     RouterConfig{HardenConfig: HardenConfig{MaxBodyBytes: testRouterMaxBodyBytes}},
+			cfg:     RouterConfig{MaxBodyBytes: testRouterMaxBodyBytes},
 			handlers: Handlers{
 				API:           unimplementedAPI{},
 				Health:        health.New(),
@@ -405,9 +405,7 @@ func TestOpenAPIRuntimeContractResponsesMatchSpec(t *testing.T) {
 	notReady := mustNewRouter(t, log, Handlers{
 		Health: health.New(failingProbe{name: "db", err: errors.New("down")}),
 	}, telemetry.New(), RouterConfig{})
-	tinyBodyLimit := mustNewRouter(t, log, Handlers{Health: health.New()}, telemetry.New(), RouterConfig{
-		HardenConfig: HardenConfig{MaxBodyBytes: 1},
-	})
+	tinyBodyLimit := mustNewRouter(t, log, Handlers{Health: health.New()}, telemetry.New(), RouterConfig{MaxBodyBytes: 1})
 
 	testCases := []struct {
 		name       string

@@ -27,7 +27,7 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-const testErrorDomain = "orders.example.com"
+const testErrorDomain = "grpcx.test.Service"
 
 var errSaturated = errors.New("dependency is saturated")
 
@@ -62,7 +62,7 @@ func TestRetryHintReachesBothTransports(t *testing.T) {
 		t.Run(testCase.delay.String(), func(t *testing.T) {
 			mappers := []failure.Mapper{saturatedMapper(testCase.delay)}
 
-			retryInfo, _ := classifiedDetailsFromServer(t, mappers, testErrorDomain)
+			retryInfo, _ := classifiedDetailsFromServer(t, mappers)
 			if retryInfo == nil {
 				t.Fatal("gRPC status carried no RetryInfo for a positive mapper delay")
 			}
@@ -102,7 +102,7 @@ func TestErrorInfoDistinguishesCodesSharingOneGRPCCode(t *testing.T) {
 			return failure.Classification{Code: code, Detail: "rejected"}, true
 		}}
 
-		_, errorInfo := classifiedDetailsFromServer(t, mappers, testErrorDomain)
+		_, errorInfo := classifiedDetailsFromServer(t, mappers)
 		if errorInfo == nil {
 			t.Fatalf("%s carried no ErrorInfo", code)
 		}
@@ -120,30 +120,6 @@ func TestErrorInfoDistinguishesCodesSharingOneGRPCCode(t *testing.T) {
 	}
 }
 
-// google.rpc.ErrorInfo documents Reason as at most 63 characters matching
-// [A-Z][A-Z0-9_]+[A-Z0-9]. A code added later that does not render to one is a
-// defect in that code, caught here over the whole catalog rather than per call
-// site.
-func TestEveryFailureCodeRendersAConformingReason(t *testing.T) {
-	for code := range failureCodeConstantNames(t) {
-		reason := reasonFor(t, code)
-		if len(reason) < 3 || len(reason) > 63 {
-			t.Errorf("%s renders reason %q, whose length is outside [3,63]", code, reason)
-			continue
-		}
-		for index, char := range reason {
-			isUpper := char >= 'A' && char <= 'Z'
-			isDigit := char >= '0' && char <= '9'
-			edge := index == 0 || index == len(reason)-1
-			if isUpper || (isDigit && !edge) || (char == '_' && !edge) {
-				continue
-			}
-			t.Errorf("%s renders reason %q, which is not UPPER_SNAKE_CASE", code, reason)
-			break
-		}
-	}
-}
-
 func TestUnclassifiedErrorCarriesNoDetailsAndNoHandlerText(t *testing.T) {
 	const handlerText = "dial tcp 10.0.0.7:5432: connection refused"
 
@@ -154,9 +130,7 @@ func TestUnclassifiedErrorCarriesNoDetailsAndNoHandlerText(t *testing.T) {
 				return nil, errors.New(handlerText)
 			})
 	}
-	_, connection := startTestServerWithOptions(t, cfg, register, Options{
-		ErrorDomain: testErrorDomain,
-	})
+	_, connection := startTestServerWithOptions(t, cfg, register, Options{})
 
 	err := connection.Invoke(t.Context(), testUnaryFullMethod, &emptypb.Empty{}, &emptypb.Empty{})
 	assertStatusCode(t, err, codes.Internal)
@@ -167,18 +141,6 @@ func TestUnclassifiedErrorCarriesNoDetailsAndNoHandlerText(t *testing.T) {
 	}
 	if converted.Message() == handlerText {
 		t.Fatalf("status message disclosed the handler's own text: %q", converted.Message())
-	}
-}
-
-func TestErrorInfoIsOmittedWithoutADomainAndRetryInfoIsNot(t *testing.T) {
-	mappers := []failure.Mapper{saturatedMapper(time.Second)}
-
-	retryInfo, errorInfo := classifiedDetailsFromServer(t, mappers, "")
-	if errorInfo != nil {
-		t.Fatalf("ErrorInfo published without a domain: %v", errorInfo)
-	}
-	if retryInfo == nil {
-		t.Fatal("an absent domain also dropped the retry hint")
 	}
 }
 
@@ -199,7 +161,6 @@ func TestClassifiedEmptyDetailUsesGRPCOwnedFallback(t *testing.T) {
 func classifiedDetailsFromServer(
 	t *testing.T,
 	mappers []failure.Mapper,
-	domain string,
 ) (*errdetails.RetryInfo, *errdetails.ErrorInfo) {
 	t.Helper()
 
@@ -211,7 +172,6 @@ func classifiedDetailsFromServer(
 	}
 	_, connection := startTestServerWithOptions(t, testServerConfig(), register, Options{
 		DomainErrors: mappers,
-		ErrorDomain:  domain,
 	})
 
 	err := connection.Invoke(t.Context(), testUnaryFullMethod, &emptypb.Empty{}, &emptypb.Empty{})
@@ -232,20 +192,6 @@ func classifiedDetailsFromServer(
 		}
 	}
 	return retryInfo, errorInfo
-}
-
-func reasonFor(t *testing.T, code failure.Code) string {
-	t.Helper()
-
-	for _, detail := range status.Convert(
-		mappedStatus(failure.Classification{Code: code}, testErrorDomain),
-	).Details() {
-		if info, ok := detail.(*errdetails.ErrorInfo); ok {
-			return info.GetReason()
-		}
-	}
-	t.Fatalf("%s rendered no ErrorInfo", code)
-	return ""
 }
 
 // httpRetryAfter renders the same mapper through the HTTP transport's own

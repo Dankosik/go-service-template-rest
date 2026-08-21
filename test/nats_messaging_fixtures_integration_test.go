@@ -35,20 +35,13 @@ const (
 )
 
 func testClientConfig() natsjs.Config {
-	return natsjs.Config{
-		MinStreamReplicas: 1, MinStreamRetention: 24 * time.Hour,
-		MaxPayloadBytes: testMaxPayloadBytes, MaxPendingPublishes: testMaxPending,
-	}
+	return natsjs.Config{MaxPayloadBytes: testMaxPayloadBytes}
 }
 
 func testWorkerConfig() natsjs.WorkerConfig {
-	return natsjs.WorkerConfig{
-		MaxConcurrency:       testMaxConcurrency,
-		MaxDeliveryBytes:     testMaxDeliveryBytes,
-		HandlerTimeout:       30 * time.Second,
-		RetryDelays:          []time.Duration{time.Second, 5 * time.Second, 30 * time.Second, 2 * time.Minute},
-		DeadLetterRetryDelay: 30 * time.Second,
-	}
+	cfg := natsjs.DefaultWorkerConfig("events-worker", sourceSubject, deadLetterSubject, testMaxConcurrency, testMaxPayloadBytes)
+	cfg.MaxDeliveryBytes = testMaxDeliveryBytes
+	return cfg
 }
 
 type natsFixture struct {
@@ -278,7 +271,6 @@ func testEvent(payload string) natsjs.Event {
 		PublicationID: natsjs.NewID(),
 		Type:          "test.event",
 		Schema:        "v1",
-		OrderingKey:   "account-1",
 		CreatedAt:     time.Now().UTC(),
 		Payload:       []byte(payload),
 	}

@@ -5,8 +5,8 @@ http:
   addr: ":8080"
 
 # profile:authn-oidc-jwt:start
-# Replace these with a real local HTTPS issuer and proxy boundary. The
-# reserved example host intentionally cannot provide production trust.
+# Replace these with a real local HTTPS issuer and API audience. The reserved
+# example host intentionally cannot provide production trust.
 authn:
 # profile:jobs-postgres:start
 # The source template keeps the jobs worker inactive. A selected service enables
@@ -16,7 +16,7 @@ jobs:
 # profile:jobs-postgres:end
   issuer: "https://issuer.example.com"
   audience: "https://api.example.com"
-  trusted_proxy_cidrs: "127.0.0.0/8,::1/128"
+  token_profile: "resource-server"
 # profile:authn-oidc-jwt:end
 
 # profile:http-idempotency-postgres:start
@@ -30,18 +30,12 @@ http_idempotency:
 # OAuth client credentials are environment-only. Keep this non-secret shape
 # empty until deployment supplies one complete fixed dependency.
 outbound_auth:
-  dependency: ""
+  token_url: ""
   client_id: ""
   client_secret: ""
-  client_authentication: ""
-  token_endpoint: ""
-  token_target_class: ""
-  token_private_host_suffix: ""
   scopes: ""
-  resource: ""
   audience: ""
-  resource_authority: ""
-  acquisition_timeout: 0s
+  resource: ""
 # profile:outbound-auth-oauth2-client-credentials:end
 
 log:
@@ -55,18 +49,9 @@ object_storage:
   endpoint: ""
   region: ""
   bucket: ""
-  access_key_id: ""
-  secret_access_key: ""
-  session_token: ""
   expected_bucket_owner: ""
+  credential_source: ""
   max_object_bytes: 0
-  multipart_chunk_bytes: 0
-  max_active_operations: 0
-  max_operation_duration: 0s
-  max_presign_lifetime: 0s
-  max_response_header_bytes: 0
-  max_control_response_bytes: 0
-  max_working_memory_bytes: 0
 # profile:object-storage:end
 
 # profile:database-postgres:start

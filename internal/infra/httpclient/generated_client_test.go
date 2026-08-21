@@ -262,17 +262,13 @@ func TestMain(m *testing.M) {
 
 func TestGeneratedClientUsesAuthenticatedDoer(t *testing.T) {
 	cfg := oauth2clientcredentials.Config{
-		DependencyName: "generated-fixture",
-		ClientID: "generated-client",
-		ClientSecret: "generated-secret",
-		ClientAuthentication: "client_secret_basic",
-		TokenEndpoint: os.Getenv("OUTBOUND_AUTH_TEST_TOKEN_URL"),
-		TokenTargetClass: httpclient.PrivateHTTPS,
+		ClientID:               "generated-client",
+		ClientSecret:           "generated-secret",
+		TokenURL:               os.Getenv("OUTBOUND_AUTH_TEST_TOKEN_URL"),
+		TokenTargetClass:       httpclient.PrivateHTTPS,
 		TokenPrivateHostSuffix: "generated.internal",
-		ResourceAuthority: os.Getenv("OUTBOUND_AUTH_TEST_RESOURCE_URL"),
-		AcquisitionTimeout: time.Second,
 	}
-	owner, err := oauth2clientcredentials.New(cfg, nil, nil)
+	owner, err := oauth2clientcredentials.New(cfg)
 	if err != nil {
 		t.Fatalf("oauth2clientcredentials.New() error = %v", err)
 	}
@@ -287,7 +283,7 @@ func TestGeneratedClientUsesAuthenticatedDoer(t *testing.T) {
 	})
 	resource, err = httpclient.New(httpclient.Config{
 		DependencyName: "generated-fixture",
-		BaseURL: cfg.ResourceAuthority,
+		BaseURL: os.Getenv("OUTBOUND_AUTH_TEST_RESOURCE_URL"),
 		TargetClass: httpclient.PrivateHTTPS,
 		PrivateHostSuffix: "generated.internal",
 		RequestTimeout: time.Second,
@@ -299,9 +295,9 @@ func TestGeneratedClientUsesAuthenticatedDoer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("httpclient.New() error = %v", err)
 	}
-	authenticated, err := oauth2clientcredentials.NewHTTPClient(owner, resource)
+	authenticated, err := owner.HTTP(resource)
 	if err != nil {
-		t.Fatalf("NewHTTPClient() error = %v", err)
+		t.Fatalf("HTTP() error = %v", err)
 	}
 	var _ HttpRequestDoer = authenticated
 	client, err := NewClient(resource.BaseURL(), WithHTTPClient(authenticated))

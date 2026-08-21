@@ -344,12 +344,12 @@ The client API contract is \`api/openapi/service.yaml\`. Start with
 \`docs/repo-architecture.md\` for ownership boundaries.
 
 <!-- profile:authn-oidc-jwt:start -->
-Authentication uses strict OIDC discovery and signed JWT access tokens. Configure it
+Authentication uses OIDC discovery and signed JWT access tokens. Configure it
 using \`docs/authentication.md\` before starting the service.
 <!-- profile:authn-oidc-jwt:end -->
 <!-- profile:messaging-nats-jetstream:start -->
-This service includes the direct NATS JetStream messaging pack. Configure streams,
-publisher limits, and the separate consumer worker using
+This service includes typed events over NATS JetStream. Configure operator-owned
+streams, composition-owned routes, and the separate consumer worker using
 \`docs/durable-messaging.md\` before enabling it.
 <!-- profile:messaging-nats-jetstream:end -->
 <!-- profile:outbox-postgres:start -->
@@ -686,7 +686,10 @@ if [[ "${source_checkout}" != true ]]; then
 	rebase_coverage_floor
 
 	if [[ "${outbox}" == "none" ]]; then
-		rm -rf -- cmd/outbox-relay internal/domainevent internal/infra/postgresoutbox
+		rm -rf -- cmd/outbox-relay internal/infra/postgresoutbox
+		if [[ "${messaging}" == "none" ]]; then
+			rm -rf -- internal/domainevent
+		fi
 		rm -f -- \
 			internal/infra/natsjs/outbox.go \
 			internal/infra/natsjs/outbox_test.go \
@@ -812,11 +815,9 @@ if [[ "${source_checkout}" != true ]]; then
 		rm -rf -- internal/infra/oidcjwt internal/authntrust
 		rm -f -- \
 			cmd/service/internal/bootstrap/authn_bootstrap_test.go \
-			cmd/service/internal/bootstrap/authn_readiness_test.go \
 			cmd/service/internal/bootstrap/startup_authn.go \
 			internal/config/authn_config.go \
 			internal/config/authn_config_test.go \
-			internal/infra/grpc/authn_health_test.go \
 			internal/infra/http/authn_router_test.go \
 			internal/infra/httpclient/authn_policy_test.go \
 			docs/authentication.md
@@ -831,8 +832,6 @@ if [[ "${source_checkout}" != true ]]; then
 	if [[ "${outbound_auth}" == "none" ]]; then
 		rm -rf -- internal/infra/oauth2clientcredentials
 		rm -f -- \
-			cmd/service/internal/bootstrap/startup_outbound_auth.go \
-			cmd/service/internal/bootstrap/startup_outbound_auth_test.go \
 			internal/config/outbound_auth_config.go \
 			internal/config/outbound_auth_config_test.go \
 			docs/outbound-machine-authentication.md
@@ -848,7 +847,6 @@ if [[ "${source_checkout}" != true ]]; then
 			cmd/service/internal/bootstrap/startup_object_storage_test.go \
 			internal/config/object_storage_config.go \
 			internal/config/object_storage_config_test.go \
-			scripts/ci/s3-source-receipt.sh \
 			test/s3conformance/conformance_test.go \
 			docs/s3-compatible-object-storage.md
 		strip_profile object-storage remove
@@ -882,7 +880,7 @@ else
 	strip_profile outbound-auth-grpc remove
 fi
 
-	if [[ "${authn}" == "none" && "${outbound_auth}" == "none" && "${object_storage}" == "none" ]]; then
+	if [[ "${authn}" == "none" && "${outbound_auth}" == "none" ]]; then
 		rm -f -- internal/infra/httpclient/credential_provider_contract_test.go
 		strip_profile credential-provider-http remove
 	else
@@ -890,7 +888,7 @@ fi
 	fi
 
 	if [[ "${messaging}" == "none" ]]; then
-		rm -rf -- cmd/worker internal/infra/natsjs
+		rm -rf -- cmd/worker internal/domainevent internal/infra/natsjs
 		rm -f -- \
 			cmd/internal/runtimeopts/messaging.go \
 			cmd/service/internal/bootstrap/startup_messaging.go \
@@ -910,7 +908,6 @@ fi
 	if [[ "${grpc}" == "none" ]]; then
 		rm -rf -- \
 			internal/gen/proto \
-			internal/grpclimits \
 			internal/infra/grpc \
 			internal/infra/grpcclient \
 			examples/grpc-reference-service \
@@ -919,11 +916,11 @@ fi
 			buf.yaml \
 			buf.gen.yaml \
 			examples/reference-service/grpc_failure_mapping_contract_test.go \
-			cmd/service/internal/bootstrap/authn_readiness_test.go \
 			cmd/service/internal/bootstrap/startup_grpc.go \
 			cmd/service/internal/bootstrap/startup_grpc_test.go \
 			cmd/service/internal/bootstrap/startup_grpc_tls.go \
 			cmd/service/internal/bootstrap/startup_grpc_tls_test.go \
+			cmd/service/internal/bootstrap/startup_readiness_test.go \
 			docs/grpc.md \
 			internal/config/grpc_config.go \
 			internal/config/grpc_config_test.go \
@@ -942,21 +939,10 @@ fi
 		bash ./scripts/proto.sh generate
 	fi
 
-	# The end-to-end gRPC benchmark imports the removable reference schema and
-	# command. Keep its shared runner/Make/docs surface only when both owners are
-	# retained; the in-package grpcx microbenchmarks remain gRPC-runtime-owned.
-	if [[ "${grpc}" == "enabled" && "${reference_example}" == "keep" ]]; then
-		strip_profile grpc-reference-benchmark keep
-	else
-		rm -rf -- test/performance/grpc
-		rm -f -- scripts/dev/benchmark-grpc-check.sh
-		strip_profile grpc-reference-benchmark remove
-	fi
-
 	# internal/config/configtest exists for parity tests that hold runtime owners
-	# and internal/config to one answer. Retained Postgres, jobs, outbox, and
-	# outbound-auth tests also use it, so it leaves only after every current importer.
-	if [[ "${database}" == "none" && "${jobs}" == "none" && "${outbox}" == "none" && "${grpc}" == "none" && "${authn}" == "none" && "${outbound_auth}" == "none" && "${messaging}" == "none" ]]; then
+	# and internal/config to one answer. Retained Postgres, jobs, outbox, authn,
+	# outbound-auth, and messaging tests use it, so it leaves only after them.
+	if [[ "${database}" == "none" && "${jobs}" == "none" && "${outbox}" == "none" && "${authn}" == "none" && "${outbound_auth}" == "none" && "${messaging}" == "none" ]]; then
 		rm -rf -- internal/config/configtest
 	fi
 
@@ -991,10 +977,10 @@ fi
 	# template rather than for this service.
 	rm -rf -- .github/assets .github/ISSUE_TEMPLATE
 
-		if [[ "${outbound_http}" == "none" && "${authn}" == "none" && "${outbound_auth}" == "none" && "${object_storage}" == "none" && "${webhooks}" == "none" ]]; then
+		if [[ "${outbound_http}" == "none" && "${authn}" == "none" && "${outbound_auth}" == "none" && "${webhooks}" == "none" ]]; then
 			rm -rf -- internal/infra/httpclient
 		fi
-	if [[ "${outbound_http}" == "none" && "${authn}" == "none" && "${outbound_auth}" == "none" && "${object_storage}" == "none" && "${webhooks}" == "none" ]]; then
+	if [[ "${outbound_http}" == "none" && "${authn}" == "none" && "${outbound_auth}" == "none" && "${webhooks}" == "none" ]]; then
 		rm -rf -- internal/outboundtrust
 	fi
 

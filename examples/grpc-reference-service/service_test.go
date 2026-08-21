@@ -26,7 +26,6 @@ import (
 
 	grpcreference "github.com/example/go-service-template-rest/examples/grpc-reference-service"
 	referencev1 "github.com/example/go-service-template-rest/examples/grpc-reference-service/internal/gen/proto/reference/v1"
-	"github.com/example/go-service-template-rest/internal/config"
 	grpcx "github.com/example/go-service-template-rest/internal/infra/grpc"
 	"github.com/example/go-service-template-rest/internal/infra/grpc/grpctest"
 	"github.com/example/go-service-template-rest/internal/waittest"
@@ -261,32 +260,7 @@ func newConnectionWithService(t *testing.T, service referencev1.EchoServiceServe
 	// Every client-visible status asserted below is produced by that interceptor
 	// chain, not by the handler alone: against a bare server the assertions would
 	// still pass while the composed service returned INTERNAL.
-	// Every bound comes from the canonical defaults, the same crossing
-	// cmd/benchmark-server/main.go performs, so this example shows a composition
-	// root exactly one way to fill Config rather than two.
-	defaults := config.DefaultGRPCServerConfig()
 	server, err := grpcx.NewServer(
-		grpcx.Config{
-			MaxConcurrentRPCs:          defaults.MaxConcurrentRPCs,
-			MaxConcurrentHealthRPCs:    defaults.MaxConnections,
-			MaxConcurrentStreams:       defaults.MaxConcurrentStreams,
-			MaxHeaderListBytes:         defaults.MaxHeaderListBytes,
-			MaxReceiveMessageBytes:     defaults.MaxReceiveMessageBytes,
-			MaxSendMessageBytes:        defaults.MaxSendMessageBytes,
-			AccessLogHealthChecks:      defaults.AccessLogHealthChecks,
-			AccessLogSuccessSampleRate: defaults.AccessLogSuccessSampleRate,
-			AccessLogSlowThreshold:     defaults.AccessLogSlowThreshold,
-			TelemetryHealthChecks:      defaults.TelemetryHealthChecks,
-			UnaryTimeout:               defaults.UnaryTimeout,
-			StreamTimeout:              defaults.StreamTimeout,
-			MaxConnectionIdle:          defaults.MaxConnectionIdle,
-			ServerPingInterval:         defaults.ServerPingInterval,
-			ServerPingTimeout:          defaults.ServerPingTimeout,
-			MinClientPingInterval:      defaults.MinClientPingInterval,
-			PermitPingWithoutStream:    defaults.PermitPingWithoutStream,
-			MaxConnectionAge:           defaults.MaxConnectionAge,
-			MaxConnectionAgeGrace:      defaults.MaxConnectionAgeGrace,
-		},
 		grpcx.Options{
 			Logger:       slog.New(slog.DiscardHandler),
 			DomainErrors: grpcreference.DomainErrors(),

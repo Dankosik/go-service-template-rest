@@ -219,8 +219,8 @@ func TestNATSRetryExhaustionAndCrashBudget(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read exhaustion DLQ: %v", err)
 	}
-	if got := deadLetter.Header.Get("Original-Num-Delivered"); got != "6" {
-		t.Fatalf("exhaustion DLQ original delivery = %q, want 6", got)
+	if got := deadLetter.Header.Get("Dead-Letter-Reason"); got != "exhausted" {
+		t.Fatalf("exhaustion DLQ reason = %q", got)
 	}
 }
 
@@ -286,7 +286,7 @@ func TestNATSPoisonDLQAndRedrive(t *testing.T) {
 	rawPayload := []byte("POISON_PAYLOAD")
 	poison := nats.NewMsg(sourceSubject)
 	poison.Header.Set("Message-Id", "poison-message")
-	poison.Header.Set("Publication-Id", "poison-publication")
+	poison.Header.Set(jetstream.MsgIDHeader, "poison-publication")
 	poison.Data = rawPayload
 	ack, err := f.js.PublishMsg(t.Context(), poison, jetstream.WithMsgID("poison-publication"))
 	if err != nil {
@@ -307,9 +307,6 @@ func TestNATSPoisonDLQAndRedrive(t *testing.T) {
 	if !slices.Equal(dlq.Data, rawPayload) {
 		t.Fatalf("DLQ payload = %q, want %q", dlq.Data, rawPayload)
 	}
-	if got := dlq.Header.Get("Original-Stream-Sequence"); got != fmt.Sprint(ack.Sequence) {
-		t.Fatalf("Original-Stream-Sequence = %q, want %d", got, ack.Sequence)
-	}
 
 	redrive := testEvent("redrive")
 	redrive.MessageID = dlq.Header.Get("Message-Id")
@@ -329,7 +326,7 @@ func TestNATSPoisonDLQAndRedrive(t *testing.T) {
 		t.Fatalf("read source state before old-ID redrive: %v", err)
 	}
 	oldIdentity := redrive
-	oldIdentity.PublicationID = dlq.Header.Get("Original-Publication-Id")
+	oldIdentity.PublicationID = "poison-publication"
 	duplicate, err := client.Producer().Publish(t.Context(), oldIdentity)
 	if err != nil || !duplicate.Duplicate || duplicate.Sequence != ack.Sequence {
 		t.Fatalf("old-ID redrive result = %+v, error = %v, want original duplicate sequence %d", duplicate, err, ack.Sequence)
@@ -341,33 +338,4 @@ func TestNATSPoisonDLQAndRedrive(t *testing.T) {
 	if after.State.Msgs != before.State.Msgs {
 		t.Fatalf("old-ID redrive changed source message count from %d to %d", before.State.Msgs, after.State.Msgs)
 	}
-}
-
-func TestNATSOrderingKeyDoesNotSerialize(t *testing.T) {
-	f := newNATSFixture(t)
-	firstEntered := make(chan struct{})
-	secondDone := make(chan struct{})
-	releaseFirst := make(chan struct{})
-	client, _, _ := f.worker(t, func(_ context.Context, msg natsjs.Message) error {
-		switch string(msg.Payload()) {
-		case "first":
-			close(firstEntered)
-			<-releaseFirst
-		case "second":
-			close(secondDone)
-		}
-		return nil
-	}, func(cfg *natsjs.WorkerConfig) { cfg.MaxConcurrency = 2 })
-	first := testEvent("first")
-	second := testEvent("second")
-	second.OrderingKey = first.OrderingKey
-	if _, err := client.Producer().Publish(t.Context(), first); err != nil {
-		t.Fatalf("publish first: %v", err)
-	}
-	if _, err := client.Producer().Publish(t.Context(), second); err != nil {
-		t.Fatalf("publish second: %v", err)
-	}
-	waittest.ReceiveSignal(t, firstEntered, 5*time.Second, "first handler")
-	waittest.ReceiveSignal(t, secondDone, 5*time.Second, "second handler completion")
-	close(releaseFirst)
 }

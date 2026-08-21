@@ -1,6 +1,7 @@
 package domainevent
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -37,5 +38,16 @@ func TestNew(t *testing.T) {
 				t.Fatal("Validate() error = nil")
 			}
 		})
+	}
+}
+
+func TestPermanent(t *testing.T) {
+	want := errors.New("poison")
+	err := Permanent(want)
+	if !IsPermanent(err) || !errors.Is(err, want) {
+		t.Fatalf("Permanent() = %v", err)
+	}
+	if Permanent(nil) != nil {
+		t.Fatal("Permanent(nil) must be nil")
 	}
 }
