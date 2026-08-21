@@ -7,13 +7,19 @@ Callable Task fields outrank public prose.
 
 - This session is Cursor. Load only this adapter. Sibling bootstrap files
   select other harnesses; do not follow their adapter choice.
-- `/orchestrator` binds the current session as Ledger Orchestrator. Cursor
-  reads `.agents/skills` directly.
+- The ordinary user-facing Cursor session is the Orchestrator carrier. A
+  user prompt here is the launch. Do not require `/orchestrator`, a Custom
+  Mode, or a nested Task for routing. `/orchestrator` remains an optional
+  explicit bind; a Custom Mode that pins that skill keeps the playbook on
+  every turn. Cursor reads `.agents/skills` directly.
+- When a persisted Implementation ledger is ready, this session binds as
+  LEDGER_ORCHESTRATOR: it routes ready units and owner-held recovery. It
+  does not implement, review, or accept unit work.
 - Dispatch every mutually independent ready unit before waiting, within
   current capacity. Spawn one fresh `acceptance-unit-lead` per ready unit
-  through Task. That Lead owns proof, review, and the canonical transition;
-  this session only routes. Land each Accepted candidate onto the current
-  checkout serially from the ledger receipt.
+  through Task. That Lead owns implementation, proof, review, and the
+  canonical transition; this session only routes. Land each Accepted
+  candidate onto the current checkout serially from the ledger receipt.
 - Bind that teammate to `acceptance-unit-lead`. Do not substitute
   `generalPurpose`, `explore`, `shell`, or generic worker semantics.
 - Full-ledger work requires Task plus returned agent identities. If Task
@@ -31,15 +37,18 @@ Callable Task fields outrank public prose.
 - Independent review uses one fresh `reviewer-agent` with no `resume` and no
   worktree isolation. `readonly: true` is the role default.
 - `/goal` is optional and rolling out; use it only for genuinely long-running
-  or resumable work.
+  or resumable work. Direct Work stays on this session and is not ledger
+  orchestration.
 
 ## Models And Dispatch
 
-Project agents default to `inherit`. Use the strongest configured model for
-the Lead, adjudicator, or complex, weak-oracle, protected-domain, or
-high-consequence work. Use inherit or a faster configured model for
-mechanical lanes. Preserve a user-selected model. Carry model through the
-Task `model` field; do not encode a model name only in prompt text.
+Project agents pin `grok-4.6` with the role's effort in frontmatter. Use
+`grok-4.6[effort=high]` for this Orchestrator session and
+`grok-4.6[effort=xhigh]` on each Lead. Child lanes inherit the Lead pin
+unless a role pins a different effort. The repository cannot set the
+primary-session model picker; prefer Grok 4.6 there. Preserve a
+user-selected model. Carry model through the Task `model` field as `inherit`
+unless raising effort; do not encode a model name only in prompt text.
 
 Pass the [delegation interface](../agent-harness.md#delegation-interface)
 through Task fields: `subagent_type`, `prompt`, `description`, `model`,
@@ -61,8 +70,9 @@ An independent implementation review uses a fresh `reviewer-agent` with
 [Implementation Review](../spec-first-workflow/phases/implementation-review.md)
 as its Method. When Review requires integrated-candidate review, this
 session binds one fresh `reviewer-agent` to that boundary and still does not
-accept units. Raise its Task `model` field only for a justified
-highest-consequence boundary. Keep the fixed candidate unchanged.
+accept units. Raise its Task `model` field to `grok-4.6[effort=xhigh]`
+only for a justified highest-consequence boundary. Keep the fixed
+candidate unchanged.
 
 If implementation invalidates an upstream decision, the Lead repairs the
 smallest owner when it can, or this session opens a fresh

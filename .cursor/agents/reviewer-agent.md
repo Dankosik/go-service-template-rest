@@ -1,7 +1,7 @@
 ---
 name: reviewer-agent
 description: "Fresh read-only reviewer for one fixed candidate and named review method."
-model: inherit
+model: grok-4.6[effort=high]
 readonly: true
 ---
 

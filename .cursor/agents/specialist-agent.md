@@ -1,7 +1,7 @@
 ---
 name: specialist-agent
 description: "Read-only specialist that applies one named method to one bounded decision."
-model: inherit
+model: grok-4.6[effort=high]
 readonly: true
 ---
 

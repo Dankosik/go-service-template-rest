@@ -1,7 +1,7 @@
 ---
 name: adjudicator-agent
 description: "Read-only adjudicator for one surviving material reviewer conflict."
-model: inherit
+model: grok-4.6[effort=xhigh]
 readonly: true
 ---
 
