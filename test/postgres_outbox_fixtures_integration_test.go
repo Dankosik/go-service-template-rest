@@ -26,7 +26,7 @@ func newOutboxFixture(t *testing.T) (context.Context, *pgxpool.Pool, *postgresou
 		t.Fatalf("postgres.Open(): %v", err)
 	}
 	t.Cleanup(pool.Close)
-	appender, err := natsjs.NewOutboxAppender(testMaxPayloadBytes, natsjs.OutboxRoute{
+	appender, err := natsjs.NewOutboxAppender(testMaxPayloadBytes, natsjs.Route{
 		Type: "example.changed", Version: 1, Subject: sourceSubject,
 	})
 	if err != nil {

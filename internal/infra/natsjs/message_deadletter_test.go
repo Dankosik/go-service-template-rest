@@ -50,9 +50,6 @@ func TestRestoreDeadLetterReturnsTheOriginalPublication(t *testing.T) {
 	if restored.Type != original.Type || restored.Schema != original.Schema {
 		t.Errorf("Type/Schema = %q/%q, want %q/%q", restored.Type, restored.Schema, original.Type, original.Schema)
 	}
-	if restored.OrderingKey != original.OrderingKey {
-		t.Errorf("OrderingKey = %q, want %q", restored.OrderingKey, original.OrderingKey)
-	}
 	if !restored.CreatedAt.Equal(original.CreatedAt) {
 		t.Errorf("CreatedAt = %v, want %v", restored.CreatedAt, original.CreatedAt)
 	}
@@ -72,7 +69,7 @@ func TestRestoreDeadLetterReplacesThePublicationID(t *testing.T) {
 	if restored.PublicationID == validTestEvent().PublicationID {
 		t.Fatal("PublicationID was carried over; the broker would discard the redrive as a duplicate")
 	}
-	if restored.PublicationID == record.header.Get(headerPublicationID) {
+	if restored.PublicationID == record.header.Get(jetstream.MsgIDHeader) {
 		t.Fatal("PublicationID reused the dead-letter transfer id")
 	}
 
@@ -171,7 +168,7 @@ func TestRestoredDeadLetterRepublishesOnTheOriginalSubject(t *testing.T) {
 	if got := broker.published.Header.Get(headerMessageID); got != original.MessageID {
 		t.Errorf("republished Message-Id = %q, want the preserved logical id %q", got, original.MessageID)
 	}
-	if got := broker.published.Header.Get(headerPublicationID); got == original.PublicationID {
+	if got := broker.published.Header.Get(jetstream.MsgIDHeader); got == original.PublicationID {
 		t.Error("republished with the original publication id; the broker would discard it as a duplicate")
 	}
 	if !bytes.Equal(broker.published.Data, original.Payload) {

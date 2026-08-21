@@ -7,7 +7,7 @@ TEMPLATE_OWNER="@Dankosik"
 TEMPLATE_API_TITLE="go-service-template-rest"
 
 usage() {
-	echo "usage: CODEOWNER=@user-or-org/team DATABASE=none|postgres HTTP_IDEMPOTENCY=none|postgres JOBS=none|postgres WEBHOOKS=none|durable OUTBOX=none|postgres GRPC=none|enabled AUTHN=none|oidc-jwt OUTBOUND_HTTP=none|bounded OBJECT_STORAGE=none|s3 OUTBOUND_AUTH=none|oauth2-client-credentials MESSAGING=none|nats-jetstream REFERENCE_EXAMPLE=remove|keep $0 [module-path]"
+	echo "usage: CODEOWNER=@user-or-org/team DATABASE=none|postgres HTTP_IDEMPOTENCY=none|postgres JOBS=none|postgres WEBHOOKS=none|durable OUTBOX=none|postgres GRPC=none|enabled AUTHN=none|oidc-jwt OBJECT_STORAGE=none|s3 OUTBOUND_AUTH=none|oauth2-client-credentials MESSAGING=none|nats-jetstream REFERENCE_EXAMPLE=remove|keep $0 [module-path]"
 	echo "module-path is derived from git remote origin when omitted"
 }
 
@@ -246,13 +246,12 @@ write_template_lock() {
 	local outbox="$3"
 	local grpc="$4"
 	local authn="$5"
-	local outbound_http="$6"
-	local outbound_auth="$7"
-	local messaging="$8"
-	local reference_example="$9"
-	local object_storage="${10}"
-	local jobs="${11}"
-	local webhooks="${12}"
+	local outbound_auth="$6"
+	local messaging="$7"
+	local reference_example="$8"
+	local object_storage="$9"
+	local jobs="${10}"
+	local webhooks="${11}"
 	local source_revision
 
 	source_revision="$(git rev-parse HEAD 2>/dev/null || true)"
@@ -272,7 +271,6 @@ http_idempotency = "${http_idempotency}"
 outbox = "${outbox}"
 grpc = "${grpc}"
 authn = "${authn}"
-outbound_http = "${outbound_http}"
 outbound_auth = "${outbound_auth}"
 messaging = "${messaging}"
 reference_example = "${reference_example}"
@@ -344,12 +342,12 @@ The client API contract is \`api/openapi/service.yaml\`. Start with
 \`docs/repo-architecture.md\` for ownership boundaries.
 
 <!-- profile:authn-oidc-jwt:start -->
-Authentication uses strict OIDC discovery and signed JWT access tokens. Configure it
+Authentication uses OIDC discovery and signed JWT access tokens. Configure it
 using \`docs/authentication.md\` before starting the service.
 <!-- profile:authn-oidc-jwt:end -->
 <!-- profile:messaging-nats-jetstream:start -->
-This service includes the direct NATS JetStream messaging pack. Configure streams,
-publisher limits, and the separate consumer worker using
+This service includes typed events over NATS JetStream. Configure operator-owned
+streams, composition-owned routes, and the separate consumer worker using
 \`docs/durable-messaging.md\` before enabling it.
 <!-- profile:messaging-nats-jetstream:end -->
 <!-- profile:outbox-postgres:start -->
@@ -473,15 +471,6 @@ none | oidc-jwt) ;;
 	;;
 esac
 
-outbound_http="${OUTBOUND_HTTP:-none}"
-case "${outbound_http}" in
-none | bounded) ;;
-*)
-	echo "OUTBOUND_HTTP must be one of: none, bounded"
-	exit 1
-	;;
-esac
-
 if [[ "${OBJECT_STORAGE+x}" == "x" && -z "${OBJECT_STORAGE-}" ]]; then
 	echo "OBJECT_STORAGE must be one of: none, s3"
 	exit 1
@@ -507,11 +496,6 @@ none | oauth2-client-credentials) ;;
 	exit 1
 	;;
 esac
-if [[ "${outbound_auth}" == "oauth2-client-credentials" && "${outbound_http}" != "bounded" && "${grpc}" != "enabled" ]]; then
-	echo "OUTBOUND_AUTH=oauth2-client-credentials requires OUTBOUND_HTTP=bounded or GRPC=enabled"
-	exit 1
-fi
-
 if [[ "${MESSAGING+x}" == "x" && -z "${MESSAGING-}" ]]; then
 	echo "MESSAGING must be one of: none, nats-jetstream"
 	exit 1
@@ -610,7 +594,6 @@ if [[ -f template.lock ]]; then
 		"outbox = \"${outbox}\"" \
 		"grpc = \"${grpc}\"" \
 		"authn = \"${authn}\"" \
-		"outbound_http = \"${outbound_http}\"" \
 		"outbound_auth = \"${outbound_auth}\"" \
 		"messaging = \"${messaging}\"" \
 		"reference_example = \"${reference_example}\"" \
@@ -628,7 +611,6 @@ if [[ -f template.lock ]]; then
 	echo "  outbox: ${outbox}"
 	echo "  gRPC: ${grpc}"
 	echo "  authentication: ${authn}"
-	echo "  outbound HTTP: ${outbound_http}"
 	echo "  object storage: ${object_storage}"
 	echo "  outbound authentication: ${outbound_auth}"
 	echo "  messaging: ${messaging}"
@@ -686,7 +668,7 @@ if [[ "${source_checkout}" != true ]]; then
 	rebase_coverage_floor
 
 	if [[ "${outbox}" == "none" ]]; then
-		rm -rf -- cmd/outbox-relay internal/domainevent internal/infra/postgresoutbox
+		rm -rf -- cmd/outbox-relay internal/infra/postgresoutbox
 		rm -f -- \
 			internal/infra/natsjs/outbox.go \
 			internal/infra/natsjs/outbox_test.go \
@@ -812,11 +794,9 @@ if [[ "${source_checkout}" != true ]]; then
 		rm -rf -- internal/infra/oidcjwt internal/authntrust
 		rm -f -- \
 			cmd/service/internal/bootstrap/authn_bootstrap_test.go \
-			cmd/service/internal/bootstrap/authn_readiness_test.go \
 			cmd/service/internal/bootstrap/startup_authn.go \
 			internal/config/authn_config.go \
 			internal/config/authn_config_test.go \
-			internal/infra/grpc/authn_health_test.go \
 			internal/infra/http/authn_router_test.go \
 			internal/infra/httpclient/authn_policy_test.go \
 			docs/authentication.md
@@ -831,8 +811,6 @@ if [[ "${source_checkout}" != true ]]; then
 	if [[ "${outbound_auth}" == "none" ]]; then
 		rm -rf -- internal/infra/oauth2clientcredentials
 		rm -f -- \
-			cmd/service/internal/bootstrap/startup_outbound_auth.go \
-			cmd/service/internal/bootstrap/startup_outbound_auth_test.go \
 			internal/config/outbound_auth_config.go \
 			internal/config/outbound_auth_config_test.go \
 			docs/outbound-machine-authentication.md
@@ -848,7 +826,6 @@ if [[ "${source_checkout}" != true ]]; then
 			cmd/service/internal/bootstrap/startup_object_storage_test.go \
 			internal/config/object_storage_config.go \
 			internal/config/object_storage_config_test.go \
-			scripts/ci/s3-source-receipt.sh \
 			test/s3conformance/conformance_test.go \
 			docs/s3-compatible-object-storage.md
 		strip_profile object-storage remove
@@ -856,18 +833,16 @@ if [[ "${source_checkout}" != true ]]; then
 		strip_profile object-storage keep
 	fi
 
-	if [[ "${authn}" == "none" && "${outbound_auth}" == "none" && "${object_storage}" == "none" ]]; then
+	if [[ "${authn}" == "none" && "${object_storage}" == "none" ]]; then
 		strip_profile bootstrap-config remove
 	else
 		strip_profile bootstrap-config keep
 	fi
 
-if [[ "${outbound_auth}" == "oauth2-client-credentials" && "${outbound_http}" == "bounded" ]]; then
+if [[ "${outbound_auth}" == "oauth2-client-credentials" ]]; then
 	strip_profile outbound-auth-http keep
 else
 	rm -f -- \
-		internal/infra/httpclient/attempt_authorization.go \
-		internal/infra/httpclient/attempt_authorization_test.go \
 		internal/infra/oauth2clientcredentials/http.go \
 		internal/infra/oauth2clientcredentials/http_test.go
 	strip_profile outbound-auth-http remove
@@ -882,15 +857,8 @@ else
 	strip_profile outbound-auth-grpc remove
 fi
 
-	if [[ "${authn}" == "none" && "${outbound_auth}" == "none" && "${object_storage}" == "none" ]]; then
-		rm -f -- internal/infra/httpclient/credential_provider_contract_test.go
-		strip_profile credential-provider-http remove
-	else
-		strip_profile credential-provider-http keep
-	fi
-
 	if [[ "${messaging}" == "none" ]]; then
-		rm -rf -- cmd/worker internal/infra/natsjs
+		rm -rf -- cmd/worker internal/domainevent internal/infra/natsjs
 		rm -f -- \
 			cmd/internal/runtimeopts/messaging.go \
 			cmd/service/internal/bootstrap/startup_messaging.go \
@@ -910,7 +878,6 @@ fi
 	if [[ "${grpc}" == "none" ]]; then
 		rm -rf -- \
 			internal/gen/proto \
-			internal/grpclimits \
 			internal/infra/grpc \
 			internal/infra/grpcclient \
 			examples/grpc-reference-service \
@@ -919,11 +886,11 @@ fi
 			buf.yaml \
 			buf.gen.yaml \
 			examples/reference-service/grpc_failure_mapping_contract_test.go \
-			cmd/service/internal/bootstrap/authn_readiness_test.go \
 			cmd/service/internal/bootstrap/startup_grpc.go \
 			cmd/service/internal/bootstrap/startup_grpc_test.go \
 			cmd/service/internal/bootstrap/startup_grpc_tls.go \
 			cmd/service/internal/bootstrap/startup_grpc_tls_test.go \
+			cmd/service/internal/bootstrap/startup_readiness_test.go \
 			docs/grpc.md \
 			internal/config/grpc_config.go \
 			internal/config/grpc_config_test.go \
@@ -942,21 +909,10 @@ fi
 		bash ./scripts/proto.sh generate
 	fi
 
-	# The end-to-end gRPC benchmark imports the removable reference schema and
-	# command. Keep its shared runner/Make/docs surface only when both owners are
-	# retained; the in-package grpcx microbenchmarks remain gRPC-runtime-owned.
-	if [[ "${grpc}" == "enabled" && "${reference_example}" == "keep" ]]; then
-		strip_profile grpc-reference-benchmark keep
-	else
-		rm -rf -- test/performance/grpc
-		rm -f -- scripts/dev/benchmark-grpc-check.sh
-		strip_profile grpc-reference-benchmark remove
-	fi
-
 	# internal/config/configtest exists for parity tests that hold runtime owners
-	# and internal/config to one answer. Retained Postgres, jobs, outbox, and
-	# outbound-auth tests also use it, so it leaves only after every current importer.
-	if [[ "${database}" == "none" && "${jobs}" == "none" && "${outbox}" == "none" && "${grpc}" == "none" && "${authn}" == "none" && "${outbound_auth}" == "none" && "${messaging}" == "none" ]]; then
+	# and internal/config to one answer. Retained Postgres, jobs, outbox, authn,
+	# outbound-auth, and messaging tests use it, so it leaves only after them.
+	if [[ "${database}" == "none" && "${jobs}" == "none" && "${outbox}" == "none" && "${authn}" == "none" && "${outbound_auth}" == "none" && "${messaging}" == "none" ]]; then
 		rm -rf -- internal/config/configtest
 	fi
 
@@ -991,13 +947,6 @@ fi
 	# template rather than for this service.
 	rm -rf -- .github/assets .github/ISSUE_TEMPLATE
 
-		if [[ "${outbound_http}" == "none" && "${authn}" == "none" && "${outbound_auth}" == "none" && "${object_storage}" == "none" && "${webhooks}" == "none" ]]; then
-			rm -rf -- internal/infra/httpclient
-		fi
-	if [[ "${outbound_http}" == "none" && "${authn}" == "none" && "${outbound_auth}" == "none" && "${object_storage}" == "none" && "${webhooks}" == "none" ]]; then
-		rm -rf -- internal/outboundtrust
-	fi
-
 	if [[ "${reference_example}" == "remove" ]]; then
 		rm -rf -- examples
 	fi
@@ -1009,7 +958,7 @@ fi
 		go generate ./internal/openapi
 	fi
 
-	write_template_lock "${database}" "${http_idempotency}" "${outbox}" "${grpc}" "${authn}" "${outbound_http}" "${outbound_auth}" "${messaging}" "${reference_example}" "${object_storage}" "${jobs}" "${webhooks}"
+	write_template_lock "${database}" "${http_idempotency}" "${outbox}" "${grpc}" "${authn}" "${outbound_auth}" "${messaging}" "${reference_example}" "${object_storage}" "${jobs}" "${webhooks}"
 
 fi
 
@@ -1030,7 +979,6 @@ echo "  webhooks: ${webhooks}"
 echo "  outbox: ${outbox}"
 echo "  gRPC: ${grpc}"
 echo "  authentication: ${authn}"
-echo "  outbound HTTP: ${outbound_http}"
 echo "  object storage: ${object_storage}"
 echo "  outbound authentication: ${outbound_auth}"
 echo "  messaging: ${messaging}"

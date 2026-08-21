@@ -36,10 +36,6 @@ a client timeout can hide whether a mutation happened.
   2025-10-15 and is now expired and archived without becoming an RFC. Write the
   syntax and semantics as this API's published rule; a client cannot look them
   up.
-- Reusing the outbound key policy in `internal/infra/httpclient`: that key
-  exists so this service may retry a non-idempotent request to a provider. It is
-  the caller side of the boundary, owned by `external-api-integration`, and the
-  inbound clause is a separate contract with its own scope and TTL.
 
 ## Prove
 

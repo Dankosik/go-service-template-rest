@@ -68,19 +68,12 @@ func handleGeneratedRequestError(log *slog.Logger, challenge string) func(http.R
 					code:   problem.CodeRequestHeaderFieldsTooLarge,
 					detail: "authentication credential is too large",
 				})
-			// KindLifetime shares this arm rather than getting one of its own: it
-			// means the issuer mints longer-lived access tokens than the service
-			// accepts, which is an operator's problem and nothing the caller can
-			// act on, so it reaches them as an ordinary rejected token. The
-			// authn.reason metric is where the two separate.
-			case oidcjwt.KindInvalid, oidcjwt.KindLifetime:
+			case oidcjwt.KindInvalid:
 				w.Header().Set("WWW-Authenticate", `Bearer error="invalid_token"`)
 				writeProblem(w, r, problemResponse{code: problem.CodeUnauthorized, detail: "credentials are invalid"})
 			case oidcjwt.KindUnavailable:
 				w.Header().Set("Retry-After", "30")
 				writeProblem(w, r, problemResponse{code: problem.CodeServiceUnavailable, detail: "authentication trust is unavailable"})
-			case oidcjwt.KindUntrustedTransport:
-				writeProblem(w, r, problemResponse{code: problem.CodeBadRequest, detail: "authentication transport is untrusted"})
 			default:
 				w.Header().Set("WWW-Authenticate", challenge)
 				writeProblem(w, r, problemResponse{code: problem.CodeUnauthorized, detail: "credentials are invalid"})

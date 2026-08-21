@@ -166,18 +166,12 @@ expect_rule() {
 
 self_test() {
 	local fixture
-	local script_receipt
 	local design_receipt
 	local generic_api_key
 	local fake_secret
 
 	fixture="$(mktemp -d -t secret-scan-check.XXXXXX)"
 	CLEANUP_DIR="${fixture}"
-	script_receipt=$'\t'
-	script_receipt+="'github.com/aws/aws-sdk-go-v2/"
-	script_receipt+='credentials v1.19.34 h1:'
-	script_receipt+='y6GkSmcv5myd1ngrYbGmiLlwQqB6TQhOuN/tbSSuWDY='
-	script_receipt+="' \\"
 	design_receipt='github.com/aws/aws-sdk-go-v2/'
 	design_receipt+='credentials v1.19.34 h1:'
 	design_receipt+='y6GkSmcv5myd1ngrYbGmiLlwQqB6TQhOuN/tbSSuWDY='
@@ -196,58 +190,23 @@ self_test() {
 		-c user.email=secret-scan-check@example.com commit -qm initial
 	bash "${BASH_SOURCE[0]}" change main "${fixture}" >/dev/null
 
-	if grep -Fq 's3-source-receipt' "${ROOT_DIR}/.gitleaks.toml" &&
-		grep -Fq 's3-compatible-object-storage' "${ROOT_DIR}/.gitleaks.toml"; then
-	mkdir -p "${fixture}/scripts/ci" "${fixture}/specs/s3-compatible-object-storage/design"
-	printf '%s\n' "${script_receipt}" >"${fixture}/scripts/ci/s3-source-receipt.sh"
-	expect_rule "S3 source receipt before its exception" "generic-api-key" \
-		bash "${BASH_SOURCE[0]}" change main "${fixture}"
-	rm -f "${fixture}/scripts/ci/s3-source-receipt.sh"
-	printf '%s\n' "${design_receipt}" >"${fixture}/specs/s3-compatible-object-storage/design/overview.md"
-	expect_rule "S3 design receipt before its exception" "generic-api-key" \
-		bash "${BASH_SOURCE[0]}" change main "${fixture}"
-	rm -f "${fixture}/specs/s3-compatible-object-storage/design/overview.md"
+	if grep -Fq 's3-compatible-object-storage' "${ROOT_DIR}/.gitleaks.toml"; then
+		mkdir -p "${fixture}/specs/s3-compatible-object-storage/design"
+		printf '%s\n' "${design_receipt}" >"${fixture}/specs/s3-compatible-object-storage/design/overview.md"
+		expect_rule "S3 design receipt before its exception" "generic-api-key" \
+			bash "${BASH_SOURCE[0]}" change main "${fixture}"
 
-	cp "${ROOT_DIR}/.gitleaks.toml" "${fixture}/.gitleaks.toml"
-	printf '%s\n' "${script_receipt}" >"${fixture}/scripts/ci/s3-source-receipt.sh"
-	bash "${BASH_SOURCE[0]}" change main "${fixture}" >/dev/null
-	printf '%s\n' "${design_receipt}" >"${fixture}/specs/s3-compatible-object-storage/design/overview.md"
-	bash "${BASH_SOURCE[0]}" change main "${fixture}" >/dev/null
+		cp "${ROOT_DIR}/.gitleaks.toml" "${fixture}/.gitleaks.toml"
+		bash "${BASH_SOURCE[0]}" change main "${fixture}" >/dev/null
 
-	printf '%s\n' "${script_receipt}" >"${fixture}/specs/s3-compatible-object-storage/design/overview.md"
-	expect_rule "S3 source receipt at the design path" "generic-api-key" \
-		bash "${BASH_SOURCE[0]}" change main "${fixture}"
-	printf '%s\n' "${design_receipt}" >"${fixture}/specs/s3-compatible-object-storage/design/overview.md"
-	printf '%s\n' "${design_receipt}" >"${fixture}/scripts/ci/s3-source-receipt.sh"
-	expect_rule "S3 design receipt at the source path" "generic-api-key" \
-		bash "${BASH_SOURCE[0]}" change main "${fixture}"
-	printf '%s\n' "${script_receipt}" >"${fixture}/scripts/ci/s3-source-receipt.sh"
-
-	printf 'api_key = %s\n' "${generic_api_key}" >>"${fixture}/scripts/ci/s3-source-receipt.sh"
-	expect_rule "generic API key on a separate S3 source receipt line" "generic-api-key" \
-		bash "${BASH_SOURCE[0]}" change main "${fixture}"
-	printf '%s\n' "${script_receipt}" >"${fixture}/scripts/ci/s3-source-receipt.sh"
-	printf 'api_key = %s\n' "${generic_api_key}" >>"${fixture}/specs/s3-compatible-object-storage/design/overview.md"
-	expect_rule "generic API key on a separate S3 design receipt line" "generic-api-key" \
-		bash "${BASH_SOURCE[0]}" change main "${fixture}"
-	printf '%s\n' "${design_receipt}" >"${fixture}/specs/s3-compatible-object-storage/design/overview.md"
-
-	printf '%s api_key = %s\n' "${script_receipt}" "${generic_api_key}" >"${fixture}/scripts/ci/s3-source-receipt.sh"
-	expect_rule "generic API key appended to the S3 source receipt line" "generic-api-key" \
-		bash "${BASH_SOURCE[0]}" change main "${fixture}"
-	printf '%s\n' "${script_receipt}" >"${fixture}/scripts/ci/s3-source-receipt.sh"
-	printf '%s api_key = %s\n' "${design_receipt}" "${generic_api_key}" >"${fixture}/specs/s3-compatible-object-storage/design/overview.md"
-	expect_rule "generic API key appended to the S3 design receipt line" "generic-api-key" \
-		bash "${BASH_SOURCE[0]}" change main "${fixture}"
-	printf '%s\n' "${design_receipt}" >"${fixture}/specs/s3-compatible-object-storage/design/overview.md"
-
-	printf '%s\n' "${script_receipt}" >"${fixture}/unapproved.txt"
-	expect_rule "S3 source receipt in an unapproved path" "generic-api-key" \
-		bash "${BASH_SOURCE[0]}" change main "${fixture}"
-	printf '%s\n' "${design_receipt}" >"${fixture}/unapproved.txt"
-	expect_rule "S3 design receipt in an unapproved path" "generic-api-key" \
-		bash "${BASH_SOURCE[0]}" change main "${fixture}"
-	rm -f "${fixture}/unapproved.txt"
+		printf '%s api_key = %s\n' "${design_receipt}" "${generic_api_key}" >"${fixture}/specs/s3-compatible-object-storage/design/overview.md"
+		expect_rule "generic API key appended to the S3 design receipt line" "generic-api-key" \
+			bash "${BASH_SOURCE[0]}" change main "${fixture}"
+		printf '%s\n' "${design_receipt}" >"${fixture}/specs/s3-compatible-object-storage/design/overview.md"
+		printf '%s\n' "${design_receipt}" >"${fixture}/unapproved.txt"
+		expect_rule "S3 design receipt in an unapproved path" "generic-api-key" \
+			bash "${BASH_SOURCE[0]}" change main "${fixture}"
+		rm -f "${fixture}/unapproved.txt"
 	fi
 
 	printf 'token=%s\n' "${fake_secret}" >"${fixture}/leak.txt"

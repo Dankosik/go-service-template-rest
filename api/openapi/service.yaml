@@ -77,7 +77,7 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
-      description: Strict RFC 9068 access token issued by the configured OIDC issuer.
+      description: JWT access token issued by the configured OIDC issuer for this API audience.
   # profile:authn-oidc-jwt:end
   schemas:
     Problem:

@@ -46,11 +46,8 @@
 // This package may not import a runtime adapter, so a rule that this package and
 // an adapter must agree on can live in neither. It goes to a pure leaf both
 // import, and a parity test pins the two together.
-// profile:grpc:start
-// internal/grpclimits is that leaf for the gRPC access-log and lifetime bounds.
-// profile:grpc:end
 // profile:authn-oidc-jwt:start
-// internal/authntrust is that leaf for the issuer, JWKS, and trusted-proxy trust
+// internal/authntrust is that leaf for the issuer, JWKS, and token-profile trust
 // rules.
 // profile:authn-oidc-jwt:end
 // internal/observability/otelconfig is that leaf for the OpenTelemetry sampler

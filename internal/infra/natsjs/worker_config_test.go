@@ -1,31 +1,16 @@
 package natsjs
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
+
+	"github.com/nats-io/nats.go/jetstream"
 )
 
-const (
-	testMaxConcurrency   = 8
-	testMaxDeliveryBytes = 1 << 20
-)
-
-func testWorkerConfig() WorkerConfig {
-	return WorkerConfig{
-		MaxConcurrency:       testMaxConcurrency,
-		MaxDeliveryBytes:     testMaxDeliveryBytes,
-		HandlerTimeout:       30 * time.Second,
-		RetryDelays:          []time.Duration{time.Second, 5 * time.Second, 30 * time.Second, 2 * time.Minute},
-		DeadLetterRetryDelay: 30 * time.Second,
-	}
-}
-
-func TestWorkerAdmissionBound(t *testing.T) {
+func TestWorkerConfigBoundsAndConsumerPolicy(t *testing.T) {
 	valid := testWorkerConfig()
-	valid.Consumer = "events-worker"
-	valid.FilterSubject = "events.>"
-	valid.DeadLetterSubject = "dead.events"
 	if err := ValidateWorkerConfig(valid, testMaxPayloadBytes); err != nil {
 		t.Fatalf("ValidateWorkerConfig(valid) error = %v", err)
 	}
@@ -55,5 +40,31 @@ func TestWorkerAdmissionBound(t *testing.T) {
 				t.Fatalf("ValidateWorkerConfig() error = %v, want ErrRejected", err)
 			}
 		})
+	}
+
+	desired := desiredConsumerConfig(valid)
+	if desired.Name != valid.Consumer || desired.Durable != valid.Consumer ||
+		desired.AckPolicy != jetstream.AckExplicitPolicy || desired.MaxDeliver != -1 ||
+		desired.MaxAckPending != valid.MaxConcurrency || desired.FilterSubject != valid.FilterSubject {
+		t.Fatalf("desired consumer policy = %#v", desired)
+	}
+	if want := valid.HandlerTimeout + 2*operationTimeout + settlementSchedulingSlack; desired.AckWait != want {
+		t.Fatalf("AckWait = %v, want %v", desired.AckWait, want)
+	}
+}
+
+func TestNewWorkerRejectsBeforeBrokerMutation(t *testing.T) {
+	client := unitClient(t, &recordingJetStream{}, RoleWorker)
+	if _, err := client.NewWorker(t.Context(), testWorkerConfig(), nil); !errors.Is(err, ErrRejected) {
+		t.Fatalf("NewWorker(nil handler) error = %v", err)
+	}
+	invalid := testWorkerConfig()
+	invalid.Consumer = "bad consumer"
+	if _, err := client.NewWorker(t.Context(), invalid, func(context.Context, Message) error { return nil }); !errors.Is(err, ErrRejected) {
+		t.Fatalf("NewWorker(invalid config) error = %v", err)
+	}
+	client.workerClaimed.Store(true)
+	if _, err := client.NewWorker(t.Context(), testWorkerConfig(), func(context.Context, Message) error { return nil }); !errors.Is(err, ErrRejected) {
+		t.Fatalf("NewWorker(second worker) error = %v", err)
 	}
 }

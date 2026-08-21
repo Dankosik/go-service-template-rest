@@ -20,27 +20,15 @@ import (
 // errWorkerPanic reports a run loop that ended in a recovered panic rather than
 // by returning. It explains the exit; whether cleanup is still safe is decided
 // by handlerStoppedBeforeReturn, which asks the drain instead, because the
-// handlers a panicking fetch loop leaves running are the ones that matter.
+// handlers a panicking consume loop leaves running are the ones that matter.
 var errWorkerPanic = errors.New("worker run loop panicked")
 
-// The post-drain budgets, kept together because validateWorkerShutdownBudget
-// charges http.grace_period for their sum and every one of them is spent on the
-// same shutdown path.
 const (
-	diagnosticsClose = 2 * time.Second
+	diagnosticsClose = 5 * time.Second
 	backgroundClose  = 5 * time.Second
 	handlerClose     = 5 * time.Second
 	telemetryClose   = 5 * time.Second
 )
-
-func validateWorkerShutdownBudget(gracePeriod, drainTimeout time.Duration) error {
-	return runtimeopts.ValidateGracePeriod(
-		gracePeriod,
-		"messaging.worker.drain_timeout",
-		drainTimeout,
-		diagnosticsClose+backgroundClose+handlerClose+telemetryClose,
-	)
-}
 
 func runWorkerLifecycle(
 	signalCtx context.Context,
@@ -94,9 +82,7 @@ func runWorkerLifecycle(
 	worker.StartDrain()
 	processCtx, processCancel, shutdownDeadline := runtimeopts.ArmTeardown(signalCtx, cfg.HTTP.GracePeriod)
 	defer processCancel()
-	workerCtx, workerCancel := context.WithTimeout(processCtx, cfg.Messaging.Worker.DrainTimeout)
-	workerErr := worker.Shutdown(workerCtx)
-	workerCancel()
+	workerErr := worker.Shutdown(processCtx)
 	diagnosticsErr := diagnostics.Stop(processCtx, diagnosticsClose)
 	backgroundCtx, backgroundCancel := context.WithTimeout(processCtx, backgroundClose)
 	backgroundErr := supervisor.Shutdown(backgroundCtx)
@@ -131,8 +117,7 @@ func workerReady(messagingReady func() bool, healthSvc *health.Service) func() b
 // superviseWorkerRun contains a panic in the loop this process exists to run.
 // runWorkerLifecycle's two background helpers are background.Supervisor tasks,
 // which recover for themselves; this loop cannot be one, because the drain reads
-// its exit through done and charges it messaging.worker.drain_timeout rather
-// than the supervisor's own budget. Left bare, a panic here ends the process
+// its exit through done under the process grace budget. Left bare, a panic here ends the process
 // where it happened, without the ordered drain, the handler join, or the
 // telemetry flush that would record why.
 //

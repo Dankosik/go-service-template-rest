@@ -61,7 +61,7 @@ COVERAGE_GOTOOLCHAIN ?= go$(GO_REQUIRED_VERSION)
 # counting their own statements measures nothing and drops the effective total
 # by roughly two points. Keep every <owner>test/ package listed here, or the
 # floor moves whenever one of them grows.
-COVERAGE_EXCLUDE_REGEX ?= (^|/)internal/openapi/openapi\.gen\.go:|(^|/)internal/infra/postgres/sqlcgen/|(^|/)internal/infra/postgres/pgtest/|(^|/)internal/infra/telemetry/telemetrytest/|(^|/)internal/config/configtest/|(^|/)internal/waittest/|(^|/)internal/gen/proto/|(^|/)examples/grpc-reference-service/cmd/benchmark-server/|(^|/)cmd/service/main\.go:|(^|/)cmd/migrate/main\.go:
+COVERAGE_EXCLUDE_REGEX ?= (^|/)internal/openapi/openapi\.gen\.go:|(^|/)internal/infra/postgres/sqlcgen/|(^|/)internal/infra/postgres/pgtest/|(^|/)internal/infra/telemetry/telemetrytest/|(^|/)internal/config/configtest/|(^|/)internal/waittest/|(^|/)internal/gen/proto/|(^|/)cmd/service/main\.go:|(^|/)cmd/migrate/main\.go:
 # profile:grpc:start
 COVERAGE_EXCLUDE_REGEX := $(COVERAGE_EXCLUDE_REGEX)|(^|/)internal/infra/grpc/grpctest/
 # profile:grpc:end
@@ -69,8 +69,20 @@ COVERAGE_EXCLUDE_REGEX := $(COVERAGE_EXCLUDE_REGEX)|(^|/)internal/infra/grpc/grp
 COVERAGE_EXCLUDE_REGEX := $(COVERAGE_EXCLUDE_REGEX)|(^|/)internal/infra/natsjs/natsjstest/
 # profile:messaging-nats-jetstream:end
 # profile:outbox-postgres:start
-COVERAGE_EXCLUDE_REGEX := $(COVERAGE_EXCLUDE_REGEX)|(^|/)cmd/outbox-relay/main\.go:
+# Relay composition is exercised with real PostgreSQL, River, and NATS; fake
+# process dependencies would decide the lifecycle behavior under test.
+COVERAGE_EXCLUDE_REGEX := $(COVERAGE_EXCLUDE_REGEX)|(^|/)cmd/outbox-relay/(main\.go:|internal/bootstrap/run\.go:)
 # profile:outbox-postgres:end
+# profile:jobs-postgres:start
+# Worker startup and drain are proved by the generated process and real River
+# integration matrix, not by a fake client that returns the expected order.
+COVERAGE_EXCLUDE_REGEX := $(COVERAGE_EXCLUDE_REGEX)|(^|/)cmd/jobs-worker/internal/bootstrap/run\.go:
+# profile:jobs-postgres:end
+# profile:database-postgres:start
+# Goose session locking, applied-version state, and rollback are real-PostgreSQL
+# decisions covered by migration rehearsal and integration tests.
+COVERAGE_EXCLUDE_REGEX := $(COVERAGE_EXCLUDE_REGEX)|(^|/)internal/infra/postgresmigrate/migrate\.go:
+# profile:database-postgres:end
 # profile:http-idempotency-postgres:start
 # Store and executor behavior is owned by the real-PostgreSQL integration
 # matrix; a fake DB would decide the unique-conflict behavior it claims to test.
@@ -112,18 +124,6 @@ HTTP_BENCH_ARTIFACT_DIR ?= .artifacts/bench/http
 HTTP_BENCH_ENV_FILE ?= .env.bench
 HTTP_BENCH_DOCKER_NETWORK ?=
 HTTP_BENCH_RAW_SAMPLES ?= 0
-# profile:grpc-reference-benchmark:start
-GRPC_BENCH_SCRIPT ?= test/performance/grpc/all-cardinalities.js
-GRPC_BENCH_ARTIFACT_DIR ?= .artifacts/bench/grpc
-GRPC_BENCH_RAW_SAMPLES ?= 0
-GRPC_BENCH_WORKLOAD_ID ?= grpc-reference-all-cardinalities
-GRPC_BENCH_PAYLOAD_BYTES ?= 64
-GRPC_BENCH_STREAM_MESSAGES ?= 4
-GRPC_BENCH_VUS ?= 1
-GRPC_BENCH_WARMUP_DURATION ?= 3s
-GRPC_BENCH_DURATION ?= 10s
-GRPC_BENCH_RPC_TIMEOUT ?= 10s
-# profile:grpc-reference-benchmark:end
 
 TRIVY_IMAGE ?= aquasec/trivy:0.72.0@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f
 TRIVY_CACHE_VOLUME ?= trivy-cache
@@ -140,15 +140,6 @@ CI_CHANGE_SCOPE_SCRIPT := bash ./scripts/ci/ci-change-scope.sh
 GENERATED_DRIFT_CHECK_SCRIPT := bash ./scripts/ci/generated-drift-check.sh
 PROJECT_STRUCTURE_CHECK_SCRIPT := bash ./scripts/ci/project-structure-check.sh
 # profile:object-storage:start
-S3_SOURCE_RECEIPT_SCRIPT := bash ./scripts/ci/s3-source-receipt.sh
-S3_RECEIPT_PLATFORM ?= linux/arm64
-S3_ENVELOPE_PLATFORM ?= linux/arm64
-S3_ENVELOPE_GO_IMAGE_BASE := $(shell awk '$$1 == "FROM" { for (i = 1; i <= NF; i++) if ($$i ~ /^golang:/) { split($$i, ref, "@"); print ref[1]; exit } }' build/docker/Dockerfile)
-S3_ENVELOPE_GO_MANIFEST_linux_amd64 := sha256:433f9dc4f8ea3a1ce4e28f9f15d0f7c056b10475307f886d6f1ac1ccc4abd976
-S3_ENVELOPE_GO_MANIFEST_linux_arm64 := sha256:7939e2c75db3d059fc944bb6464a916d0fa64bd5a3bd7b3528f2a1ac7673a0eb
-S3_ENVELOPE_GO_MANIFEST := $(S3_ENVELOPE_GO_MANIFEST_$(subst /,_,$(S3_ENVELOPE_PLATFORM)))
-S3_ENVELOPE_GO_IMAGE := $(S3_ENVELOPE_GO_IMAGE_BASE)@$(S3_ENVELOPE_GO_MANIFEST)
-S3_ENVELOPE_GOMODCACHE := $(shell go env GOMODCACHE)
 S3_CONFORMANCE_TEST := go test -mod=readonly -vet=off -tags=integration ./test/s3conformance -run '^TestS3ObjectStorageConformanceRequiresProviderCertification$$' -count=1
 # profile:object-storage:end
 # profile:database-postgres:start
@@ -180,7 +171,7 @@ BENCHMARK_REMOTE_SCRIPT := bash ./scripts/dev/benchmark-remote.sh
 	sqlc-check runtime-image-build container-security run build build-pgo docker-build docker-run vendor claude-skills-sync claude-skills-check qwen-skills-sync qwen-skills-check agent-roles-sync agent-roles-check codex-agents-sync codex-agents-check \
 	template-sync template-sync-check template-sync-all template-owned-purity-check
 # profile:object-storage:start
-.PHONY: test-s3-source-receipt test-s3-envelope test-s3-conformance-amazon test-s3-conformance-r2
+.PHONY: test-s3-conformance-amazon test-s3-conformance-r2
 # profile:object-storage:end
 # profile:messaging-nats-jetstream:start
 .PHONY: run-worker build-worker test-messaging-race
@@ -194,9 +185,6 @@ BENCHMARK_REMOTE_SCRIPT := bash ./scripts/dev/benchmark-remote.sh
 # profile:webhooks-durable:start
 .PHONY: test-webhook-race
 # profile:webhooks-durable:end
-# profile:grpc-reference-benchmark:start
-.PHONY: bench-grpc bench-grpc-smoke bench-grpc-inspect
-# profile:grpc-reference-benchmark:end
 # profile:database-postgres:start
 .PHONY: bench-db bench-db-baseline bench-db-compare sqlc-generate migration-source-check migration-history-check migration-check migration-check-self-test migration-publication-check migration-validate compose-up compose-down
 # profile:database-postgres:end
@@ -247,9 +235,6 @@ help:
 	@echo "  make bench-db BENCH_DB_WORKLOAD_ID=<fixture-state> | bench-db-baseline | bench-db-compare"
 # profile:database-postgres:end
 	@echo "  make bench-http | bench-http-inspect | benchmark-infra-check | benchmark-remote-check | benchmark-remote-image"
-# profile:grpc-reference-benchmark:start
-	@echo "  make bench-grpc | bench-grpc-smoke | bench-grpc-inspect"
-# profile:grpc-reference-benchmark:end
 	@echo ""
 	@echo "Reference: docs/build-test-and-development-commands.md"
 
@@ -397,7 +382,7 @@ test-race:
 
 # profile:messaging-nats-jetstream:start
 test-messaging-race:
-	go test -vet=off -p=1 -count=1 -race -tags=integration $(MESSAGING_RACE_PACKAGES) -run '^(TestOutboxWorkerPublishesStableWireIdentityAndTrace|TestNATSWorkerRegistrationIsSingleton|TestNATSReconnectProbeStopsWithRunContext|TestNATSPublishDispatchCancellationAndNoRetry|TestNATSWorkerComposition|TestNATSWorkerForcedShutdownDoesNotRaceHandlerCleanup|TestNATSWorkerConnectionLossAndReconnect|TestNATSConsumerSaturation|TestNATSForcedShutdownRedelivers|TestNATSGracefulDrain)$$'
+	go test -vet=off -p=1 -count=1 -race -tags=integration $(MESSAGING_RACE_PACKAGES) -run '^(TestOutboxWorkerPublishesStableWireIdentityAndTrace|TestNATSWorkerRegistrationIsSingleton|TestNATSNativeConsumeSurvivesBrokerRestart|TestWorkerUsesNativeBoundedConsumeContextsAndJoinsDrain|TestTypedPublisherAndHandlerHideBrokerFields|TestNATSPublishDispatchCancellationAndNoRetry|TestNATSWorkerComposition|TestNATSWorkerForcedShutdownDoesNotRaceHandlerCleanup|TestNATSConsumerSaturation|TestNATSForcedShutdownRedelivers|TestNATSGracefulDrain)$$'
 # profile:messaging-nats-jetstream:end
 
 # profile:outbox-postgres:start
@@ -528,16 +513,6 @@ bench-http:
 bench-http-inspect:
 	HTTP_BENCH_SCRIPT="$(HTTP_BENCH_SCRIPT)" HTTP_BENCH_ARTIFACT_DIR="$(HTTP_BENCH_ARTIFACT_DIR)" HTTP_BENCH_ENV_FILE="$(HTTP_BENCH_ENV_FILE)" HTTP_BENCH_DOCKER_NETWORK="$(HTTP_BENCH_DOCKER_NETWORK)" HTTP_BENCH_RAW_SAMPLES=0 $(BENCHMARK_SCRIPT) http-inspect
 
-# profile:grpc-reference-benchmark:start
-bench-grpc:
-	GRPC_BENCH_SCRIPT="$(GRPC_BENCH_SCRIPT)" GRPC_BENCH_ARTIFACT_DIR="$(GRPC_BENCH_ARTIFACT_DIR)" GRPC_BENCH_RAW_SAMPLES="$(GRPC_BENCH_RAW_SAMPLES)" GRPC_BENCH_WORKLOAD_ID="$(GRPC_BENCH_WORKLOAD_ID)" GRPC_BENCH_PAYLOAD_BYTES="$(GRPC_BENCH_PAYLOAD_BYTES)" GRPC_BENCH_STREAM_MESSAGES="$(GRPC_BENCH_STREAM_MESSAGES)" GRPC_BENCH_VUS="$(GRPC_BENCH_VUS)" GRPC_BENCH_WARMUP_DURATION="$(GRPC_BENCH_WARMUP_DURATION)" GRPC_BENCH_DURATION="$(GRPC_BENCH_DURATION)" GRPC_BENCH_RPC_TIMEOUT="$(GRPC_BENCH_RPC_TIMEOUT)" $(BENCHMARK_SCRIPT) grpc
-
-bench-grpc-smoke:
-	GRPC_BENCH_SCRIPT="$(GRPC_BENCH_SCRIPT)" GRPC_BENCH_ARTIFACT_DIR="$(GRPC_BENCH_ARTIFACT_DIR)" GRPC_BENCH_RAW_SAMPLES=0 GRPC_BENCH_WORKLOAD_ID="$(GRPC_BENCH_WORKLOAD_ID)" GRPC_BENCH_PAYLOAD_BYTES="$(GRPC_BENCH_PAYLOAD_BYTES)" GRPC_BENCH_STREAM_MESSAGES="$(GRPC_BENCH_STREAM_MESSAGES)" GRPC_BENCH_RPC_TIMEOUT="$(GRPC_BENCH_RPC_TIMEOUT)" $(BENCHMARK_SCRIPT) grpc-smoke
-
-bench-grpc-inspect:
-	GRPC_BENCH_SCRIPT="$(GRPC_BENCH_SCRIPT)" GRPC_BENCH_ARTIFACT_DIR="$(GRPC_BENCH_ARTIFACT_DIR)" GRPC_BENCH_RAW_SAMPLES=0 $(BENCHMARK_SCRIPT) grpc-inspect
-# profile:grpc-reference-benchmark:end
 
 benchmark-infra-check:
 	$(BENCHMARK_SCRIPT) check
@@ -749,7 +724,7 @@ migration-validate:
 	fi; \
 	active_image="$${image}-http-idempotency-active"; \
 	$(MAKE) runtime-image-build RUNTIME_IMAGE="$$active_image" RUNTIME_IMAGE_FIXTURE=postgres-http-idempotency-active || exit 1; \
-	active_env='-e APP__AUTHN__ISSUER=https://127.0.0.1:1 -e APP__AUTHN__AUDIENCE=fixture -e APP__AUTHN__TRUSTED_PROXY_CIDRS=127.0.0.0/8 -e APP__HTTP_IDEMPOTENCY__RETENTION=24h'; \
+	active_env='-e APP__AUTHN__ISSUER=https://127.0.0.1:1 -e APP__AUTHN__AUDIENCE=fixture -e APP__HTTP_IDEMPOTENCY__RETENTION=24h'; \
 	assert_active_failure() { output="$$(eval docker run --rm --network "$${project}_default" -e APP__POSTGRES__ENABLED=true -e APP__POSTGRES__DSN="postgres://app:app@postgres:5432/app?sslmode=disable" $$active_env "$$active_image" 2>&1 || true)"; echo "$$output" | grep -Fq 'initialize HTTP idempotency cleanup' || { echo "active fixture did not reject idempotency before OIDC"; echo "$$output"; exit 1; }; echo "$$output" | grep -Fq 'oidc' && { echo "active fixture reached OIDC before idempotency rejection"; echo "$$output"; exit 1; }; true; }; \
 	assert_active_failure; \
 	docker run --rm --network "$${project}_default" \
@@ -813,19 +788,6 @@ runtime-image-build:
 	bash ./scripts/ci/runtime-image-build.sh "$(RUNTIME_IMAGE)" "$(RUNTIME_IMAGE_FIXTURE)"
 
 # profile:object-storage:start
-test-s3-source-receipt:
-	S3_RECEIPT_PLATFORM="$(S3_RECEIPT_PLATFORM)" $(S3_SOURCE_RECEIPT_SCRIPT)
-
-test-s3-envelope:
-	@bash ./scripts/lib/require-docker.sh "make test-s3-envelope"
-	@test "$(GOMAXPROCS)" = "1" || { echo "GOMAXPROCS=1 is required" >&2; exit 2; }
-	@test -n "$(S3_ENVELOPE_GO_MANIFEST)" || { echo "S3_ENVELOPE_PLATFORM must be linux/amd64 or linux/arm64" >&2; exit 2; }
-	docker run --rm --platform "$(S3_ENVELOPE_PLATFORM)" --network none \
-		-v "$(CURDIR):/src:ro" \
-		-v "$(S3_ENVELOPE_GOMODCACHE):/go/pkg/mod:ro" \
-		-w /src -e GOMAXPROCS=1 "$(S3_ENVELOPE_GO_IMAGE)" \
-		go test -mod=readonly -vet=off -count=1 -v ./internal/infra/s3 -run '^TestLinuxProcessEnvelope$$'
-
 test-s3-conformance-amazon:
 	@REQUIRE_S3_CONFORMANCE=1 S3_CONFORMANCE_PROVIDER=amazon_s3 $(S3_CONFORMANCE_TEST)
 

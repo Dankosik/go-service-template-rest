@@ -38,8 +38,8 @@ func TestWorkerRunDrainsGracefully(t *testing.T) {
 	cleaned := make(chan struct{}, 1)
 	result := make(chan error, 1)
 	go func() {
-		result <- run(runCtx, nil, func(context.Context, config.Config, *slog.Logger) (natsjs.Handler, func(context.Context), error) {
-			return func(context.Context, natsjs.Message) error { return nil }, func(context.Context) { cleaned <- struct{}{} }, nil
+		result <- run(runCtx, nil, func(context.Context, config.Config, *slog.Logger) (*natsjs.Registry, func(context.Context), error) {
+			return testRegistry(t, "test", func(context.Context, string) error { return nil }), func(context.Context) { cleaned <- struct{}{} }, nil
 		})
 	}()
 
@@ -79,20 +79,13 @@ func setDefaultWorkerTestEnvironment(t *testing.T, messagingURL, diagnosticsAddr
 	configtest.IsolateEnv(t)
 	for key, value := range map[string]string{
 		"APP__HTTP__READINESS_PROPAGATION_DELAY":            "0s",
-		"APP__MESSAGING__ENABLED":                           "true",
 		"APP__MESSAGING__URLS":                              messagingURL,
 		"APP__MESSAGING__ALLOW_PLAINTEXT":                   "true",
 		"APP__MESSAGING__ALLOW_UNAUTHENTICATED":             "true",
 		"APP__MESSAGING__STREAM":                            "EVENTS",
-		"APP__MESSAGING__MIN_STREAM_REPLICAS":               "1",
-		"APP__MESSAGING__MIN_STREAM_RETENTION":              "24h",
 		"APP__MESSAGING__WORKER__CONSUMER":                  "coverage-worker",
 		"APP__MESSAGING__WORKER__FILTER_SUBJECT":            "events.test",
 		"APP__MESSAGING__WORKER__DEAD_LETTER_SUBJECT":       "dead.events.test",
-		"APP__MESSAGING__WORKER__HANDLER_TIMEOUT":           "1s",
-		"APP__MESSAGING__WORKER__RETRY_DELAYS":              "50ms",
-		"APP__MESSAGING__WORKER__DEAD_LETTER_RETRY_DELAY":   "50ms",
-		"APP__MESSAGING__WORKER__DRAIN_TIMEOUT":             "2s",
 		"APP__OBSERVABILITY__METRICS__ADDR":                 diagnosticsAddr,
 		"APP__OBSERVABILITY__OTEL__EXPORTER__OTLP_ENDPOINT": "",
 	} {

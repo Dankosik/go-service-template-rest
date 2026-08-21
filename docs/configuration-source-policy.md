@@ -20,7 +20,12 @@ repository policy.
 ## Source Of Truth
 
 - YAML (`env/config/*.yaml`) is for baseline non-secret defaults.
-- ENV (`APP__...`) is for per-environment overrides and all secret values.
+- ENV (`APP__...`) is for per-environment overrides and application-owned
+  secret values. The selected object-storage profile is the sole exception:
+  `credential_source=static` delegates the standard `AWS_ACCESS_KEY_ID`,
+  `AWS_SECRET_ACCESS_KEY`, and optional `AWS_SESSION_TOKEN` variables directly
+  to the AWS SDK, while `aws_default` delegates the SDK's documented credential
+  chain. Those values never enter the typed application snapshot.
 - CLI flags are loader controls: `--config` selects the base file and
   `--config-overlay` adds ordered overlays. They do not provide arbitrary
   runtime config key overrides.

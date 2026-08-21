@@ -39,7 +39,7 @@ func TestOutboxWorkerPublishesStableWireIdentityAndTrace(t *testing.T) {
 
 	if broker.published.Subject != args.Subject ||
 		broker.published.Header.Get(headerMessageID) != args.ID ||
-		broker.published.Header.Get(headerPublicationID) != args.ID ||
+		broker.published.Header.Get(jetstream.MsgIDHeader) != args.ID ||
 		broker.published.Header.Get(headerEventType) != args.Type ||
 		broker.published.Header.Get(headerEventSchema) != "v1" ||
 		broker.published.Header.Get("traceparent") != traceparent ||
@@ -51,7 +51,7 @@ func TestOutboxWorkerPublishesStableWireIdentityAndTrace(t *testing.T) {
 func TestNewOutboxAppenderRejectsInvalidRoutes(t *testing.T) {
 	t.Parallel()
 
-	for name, routes := range map[string][]OutboxRoute{
+	for name, routes := range map[string][]Route{
 		"empty":    nil,
 		"wildcard": {{Type: "order.updated", Version: 1, Subject: "events.*"}},
 		"version":  {{Type: "order.updated", Subject: "events.orders"}},

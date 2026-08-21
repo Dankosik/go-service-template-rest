@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/example/go-service-template-rest/internal/domainevent"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 )
@@ -51,7 +52,7 @@ func TestWorkerHandleOutcomes(t *testing.T) {
 		} {
 			t.Run(name, func(t *testing.T) {
 				broker := &recordingJetStream{ack: &jetstream.PubAck{Stream: "EVENTS_DLQ", Sequence: 1}}
-				handler := func(context.Context, Message) error { return Permanent(errors.New("poison")) }
+				handler := func(context.Context, Message) error { return domainevent.Permanent(errors.New("poison")) }
 				if name == "malformed" {
 					source.header.Del(headerEventType)
 					handler = func(context.Context, Message) error { t.Fatal("malformed message reached handler"); return nil }
@@ -100,7 +101,7 @@ func TestWorkerHandleOutcomes(t *testing.T) {
 			t.Run(name, func(t *testing.T) {
 				source := unitSource(t, 1)
 				worker := unitWorker(t, &recordingJetStream{err: brokerErr}, func(context.Context, Message) error {
-					return Permanent(errors.New("poison"))
+					return domainevent.Permanent(errors.New("poison"))
 				})
 				err := worker.handle(t.Context(), source)
 				if name == "rejected" && !errors.Is(err, ErrTerminal) {
@@ -117,7 +118,7 @@ func TestWorkerHandleOutcomes(t *testing.T) {
 		source := unitSource(t, 1)
 		source.nakErr = errors.New("redelivery unavailable")
 		worker := unitWorker(t, &recordingJetStream{err: errors.New("ack unavailable")}, func(context.Context, Message) error {
-			return Permanent(errors.New("poison"))
+			return domainevent.Permanent(errors.New("poison"))
 		})
 		if err := worker.handle(t.Context(), source); !errors.Is(err, ErrTerminal) {
 			t.Fatalf("handle(ambiguous DLQ NAK failure) error = %v, want ErrTerminal", err)
@@ -126,7 +127,7 @@ func TestWorkerHandleOutcomes(t *testing.T) {
 		source = unitSource(t, 1)
 		source.ackErr = errors.New("source ack unavailable")
 		worker = unitWorker(t, &recordingJetStream{ack: &jetstream.PubAck{}}, func(context.Context, Message) error {
-			return Permanent(errors.New("poison"))
+			return domainevent.Permanent(errors.New("poison"))
 		})
 		if err := worker.handle(t.Context(), source); err != nil || source.nakDelay != worker.cfg.DeadLetterRetryDelay {
 			t.Fatalf("handle(ambiguous source ack) error = %v, delay = %v", err, source.nakDelay)

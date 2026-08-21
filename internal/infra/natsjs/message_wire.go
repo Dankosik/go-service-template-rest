@@ -9,7 +9,6 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/example/go-service-template-rest/internal/reqctx"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	"go.opentelemetry.io/otel/propagation"
@@ -25,22 +24,12 @@ import (
 // change — while message_deadletter.go owns the transfer that writes and reads
 // that second group.
 const (
-	headerMessageID             = "Message-Id"
-	headerPublicationID         = "Publication-Id"
-	headerEventType             = "Event-Type"
-	headerEventSchema           = "Event-Schema"
-	headerOrderingKey           = "Ordering-Key"
-	headerCreatedAt             = "Created-At"
-	headerCorrelationID         = "Correlation-Id"
-	headerOriginalSubject       = "Original-Subject"
-	headerOriginalStream        = "Original-Stream"
-	headerOriginalConsumer      = "Original-Consumer"
-	headerOriginalStreamSeq     = "Original-Stream-Sequence"
-	headerOriginalConsumerSeq   = "Original-Consumer-Sequence"
-	headerOriginalNumDelivered  = "Original-Num-Delivered"
-	headerOriginalStoredAt      = "Original-Stored-At"
-	headerOriginalPublicationID = "Original-Publication-Id"
-	headerDeadLetterReason      = "Dead-Letter-Reason"
+	headerMessageID        = "Message-Id"
+	headerEventType        = "Event-Type"
+	headerEventSchema      = "Event-Schema"
+	headerCreatedAt        = "Created-At"
+	headerOriginalSubject  = "Original-Subject"
+	headerDeadLetterReason = "Dead-Letter-Reason"
 )
 
 func validateEvent(event Event, maxPayloadBytes int) error {
@@ -57,9 +46,6 @@ func validateEvent(event Event, maxPayloadBytes int) error {
 		return err
 	}
 	if err := validateRequiredValue("event schema", event.Schema); err != nil {
-		return err
-	}
-	if err := validateOptionalValue("ordering key", event.OrderingKey); err != nil {
 		return err
 	}
 	if event.CreatedAt.IsZero() || event.CreatedAt.Location() != time.UTC {
@@ -112,16 +98,10 @@ func buildNATSMessage(ctx context.Context, event Event, maxPayloadBytes int) (*n
 	}
 	header := make(nats.Header)
 	header.Set(headerMessageID, event.MessageID)
-	header.Set(headerPublicationID, event.PublicationID)
+	header.Set(jetstream.MsgIDHeader, event.PublicationID)
 	header.Set(headerEventType, event.Type)
 	header.Set(headerEventSchema, event.Schema)
 	header.Set(headerCreatedAt, event.CreatedAt.Format(time.RFC3339Nano))
-	if event.OrderingKey != "" {
-		header.Set(headerOrderingKey, event.OrderingKey)
-	}
-	if correlationID := reqctx.RequestID(ctx); reqctx.ValidRequestID(correlationID) {
-		header.Set(headerCorrelationID, correlationID)
-	}
 	propagation.TraceContext{}.Inject(ctx, headerCarrier(header))
 	msg := &nats.Msg{Subject: event.Subject, Header: header, Data: slices.Clone(event.Payload)}
 	if err := validateEncodedMessage(msg, maxPayloadBytes); err != nil {
@@ -157,13 +137,9 @@ func encodedHeaderBytes(header nats.Header) int {
 	return size
 }
 
-// remoteContext is the caller's context exactly as it arrived in the headers:
-// the W3C trace parent and the correlation id, extracted but not yet attached
-// to any local context. Keeping it as data means a rejected message needs no
-// stand-in context to return.
+// remoteContext is the W3C parent extracted but not yet attached to a local context.
 type remoteContext struct {
-	span          trace.SpanContext
-	correlationID string
+	span trace.SpanContext
 }
 
 func decodeMessage(msg jetstream.Msg, metadata *jetstream.MsgMetadata) (Message, remoteContext, error) {
@@ -177,7 +153,7 @@ func decodeMessage(msg jetstream.Msg, metadata *jetstream.MsgMetadata) (Message,
 	// trimming or canonicalizing rather than only rejecting — must reach the
 	// delivered message, and re-reading the header would silently skip it.
 	messageID := header.Get(headerMessageID)
-	publicationID := header.Get(headerPublicationID)
+	publicationID := header.Get(jetstream.MsgIDHeader)
 	eventType := header.Get(headerEventType)
 	schema := header.Get(headerEventSchema)
 	for _, field := range []struct {
@@ -185,7 +161,7 @@ func decodeMessage(msg jetstream.Msg, metadata *jetstream.MsgMetadata) (Message,
 		value string
 	}{
 		{headerMessageID, messageID},
-		{headerPublicationID, publicationID},
+		{jetstream.MsgIDHeader, publicationID},
 		{headerEventType, eventType},
 		{headerEventSchema, schema},
 	} {
@@ -193,24 +169,14 @@ func decodeMessage(msg jetstream.Msg, metadata *jetstream.MsgMetadata) (Message,
 			return Message{}, remoteContext{}, err
 		}
 	}
-	orderingKey := header.Get(headerOrderingKey)
-	if err := validateOptionalValue(headerOrderingKey, orderingKey); err != nil {
-		return Message{}, remoteContext{}, err
-	}
-	correlationID := header.Get(headerCorrelationID)
-	if correlationID != "" && !reqctx.ValidRequestID(correlationID) {
-		return Message{}, remoteContext{}, fmt.Errorf("%w: invalid correlation ID", ErrRejected)
-	}
 	extracted := propagation.TraceContext{}.Extract(context.Background(), headerCarrier(header))
-	remote := remoteContext{span: trace.SpanContextFromContext(extracted), correlationID: correlationID}
+	remote := remoteContext{span: trace.SpanContextFromContext(extracted)}
 	return Message{
 		subject:       msg.Subject(),
 		messageID:     messageID,
 		publicationID: publicationID,
 		eventType:     eventType,
 		schema:        schema,
-		orderingKey:   orderingKey,
-		correlationID: correlationID,
 		createdAt:     createdAt.UTC(),
 		payload:       slices.Clone(msg.Data()),
 		metadata: DeliveryMetadata{
@@ -225,15 +191,10 @@ func decodeMessage(msg jetstream.Msg, metadata *jetstream.MsgMetadata) (Message,
 	}, remote, nil
 }
 
-// contextWithRemoteParent attaches the message's origin to the handler's local
-// context: the remote span becomes the parent of the consume span, and the
-// correlation id joins every record the handler emits.
+// contextWithRemoteParent attaches the message's origin to the handler context.
 func contextWithRemoteParent(base context.Context, remote remoteContext) context.Context {
 	if remote.span.IsValid() {
 		base = trace.ContextWithRemoteSpanContext(base, remote.span)
-	}
-	if remote.correlationID != "" {
-		base = reqctx.ContextWithRequestID(base, remote.correlationID)
 	}
 	return base
 }

@@ -14,7 +14,6 @@ import (
 
 	"github.com/example/go-service-template-rest/internal/infra/natsjs"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry/telemetrytest"
-	"github.com/example/go-service-template-rest/internal/reqctx"
 	"github.com/example/go-service-template-rest/internal/waittest"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
@@ -85,13 +84,13 @@ func TestNATSOversizedHeadersAreDeadLettered(t *testing.T) {
 	payload := []byte("oversized-header-payload")
 	msg := nats.NewMsg(sourceSubject)
 	msg.Header.Set("Message-Id", "oversized-header-message")
-	msg.Header.Set("Publication-Id", "oversized-header-publication")
+	msg.Header.Set(jetstream.MsgIDHeader, "oversized-header-publication")
 	msg.Header.Set("Event-Type", "test.event")
 	msg.Header.Set("Event-Schema", "v1")
 	msg.Header.Set("Created-At", time.Now().UTC().Format(time.RFC3339Nano))
 	msg.Header.Set("X-Oversized", strings.Repeat("h", natsjs.HeaderLimitBytes))
 	msg.Data = payload
-	ack, err := f.js.PublishMsg(t.Context(), msg, jetstream.WithMsgID("oversized-header-publication"))
+	_, err := f.js.PublishMsg(t.Context(), msg, jetstream.WithMsgID("oversized-header-publication"))
 	if err != nil {
 		t.Fatalf("publish oversized headers: %v", err)
 	}
@@ -107,8 +106,8 @@ func TestNATSOversizedHeadersAreDeadLettered(t *testing.T) {
 	if handlerCalls.Load() != 0 {
 		t.Fatalf("handler calls for oversized headers = %d, want 0", handlerCalls.Load())
 	}
-	if !slices.Equal(deadLetter.Data, payload) || deadLetter.Header.Get("Original-Stream-Sequence") != fmt.Sprint(ack.Sequence) {
-		t.Fatalf("oversized-header DLQ transfer did not preserve source identity and payload")
+	if !slices.Equal(deadLetter.Data, payload) || deadLetter.Header.Get("Dead-Letter-Reason") != "malformed" {
+		t.Fatalf("oversized-header DLQ transfer did not preserve payload and reason")
 	}
 	waitConsumerSettled(t, f, "oversized-header-worker")
 }
@@ -123,10 +122,9 @@ func TestNATSTraceCorrelation(t *testing.T) {
 	f := newNATSFixture(t)
 	recorder, provider := telemetrytest.NewRecordingTracerProvider(t)
 	observed := make(chan struct {
-		requestID string
-		traceID   string
-		spanID    string
-		baggage   int
+		traceID string
+		spanID  string
+		baggage int
 	}, 1)
 	cfg := testClientConfig()
 	cfg.URLs = []string{f.url}
@@ -144,11 +142,10 @@ func TestNATSTraceCorrelation(t *testing.T) {
 	workerCfg.DeadLetterSubject = deadLetterSubject
 	worker, err := client.NewWorker(t.Context(), workerCfg, func(ctx context.Context, _ natsjs.Message) error {
 		observed <- struct {
-			requestID string
-			traceID   string
-			spanID    string
-			baggage   int
-		}{reqctx.RequestID(ctx), traceID(ctx), trace.SpanContextFromContext(ctx).SpanID().String(), baggage.FromContext(ctx).Len()}
+			traceID string
+			spanID  string
+			baggage int
+		}{traceID(ctx), trace.SpanContextFromContext(ctx).SpanID().String(), baggage.FromContext(ctx).Len()}
 		return nil
 	})
 	if err != nil {
@@ -158,7 +155,6 @@ func TestNATSTraceCorrelation(t *testing.T) {
 	defer cancel()
 	go func() { _ = worker.Run(runCtx) }()
 	parentCtx, parent := provider.Tracer("test").Start(t.Context(), "parent")
-	parentCtx = reqctx.ContextWithRequestID(parentCtx, "request-123")
 	member, err := baggage.NewMember("untrusted", baggageCanary)
 	if err != nil {
 		t.Fatalf("create baggage canary: %v", err)
@@ -175,8 +171,8 @@ func TestNATSTraceCorrelation(t *testing.T) {
 		t.Fatalf("Publish() error = %v", err)
 	}
 	got := waittest.Receive(t, observed, 5*time.Second, "trace delivery")
-	if got.requestID != "request-123" || got.traceID != parent.SpanContext().TraceID().String() || got.baggage != 0 {
-		t.Fatalf("handler correlation = %+v, want request-123/%s and no baggage", got, parent.SpanContext().TraceID())
+	if got.traceID != parent.SpanContext().TraceID().String() || got.baggage != 0 {
+		t.Fatalf("handler correlation = %+v, want trace %s and no baggage", got, parent.SpanContext().TraceID())
 	}
 	parent.End()
 	waittest.Until(t, 5*time.Second, func() bool { return len(recorder.Ended()) >= 3 }, "producer, consumer, and parent spans")

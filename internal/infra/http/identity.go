@@ -16,7 +16,7 @@ import (
 // admitting an unattributed request if some future version changes that.
 var errUnresolvableAuthenticatedRequest = errors.New("authenticated request is unavailable")
 
-var errInvalidAuthenticatedPrincipal = errors.New("authenticated principal subject is empty")
+var errInvalidAuthenticatedPrincipal = errors.New("authenticated principal identity is empty")
 
 // PrincipalResolver validates one security requirement and reports who the
 // caller is. Returning an error rejects the request exactly as an
@@ -51,7 +51,7 @@ func Authenticated(resolve PrincipalResolver) openapi3filter.AuthenticationFunc 
 		if err != nil {
 			return err
 		}
-		if strings.TrimSpace(principal.Subject) == "" {
+		if strings.TrimSpace(principal.Subject) == "" && strings.TrimSpace(principal.ClientID) == "" {
 			return errInvalidAuthenticatedPrincipal
 		}
 

@@ -117,7 +117,7 @@ func validateRuntimeConfig(cfg config.Config) error {
 	if !cfg.Postgres.Enabled {
 		return fmt.Errorf("%w: postgres must be enabled for outbox relay", postgresoutbox.ErrConfig)
 	}
-	if !cfg.Messaging.Enabled {
+	if strings.TrimSpace(cfg.Messaging.URLs) == "" {
 		return fmt.Errorf("%w: messaging must be enabled for outbox relay", postgresoutbox.ErrConfig)
 	}
 	if strings.TrimSpace(cfg.Observability.Metrics.Addr) == "" {
@@ -138,9 +138,9 @@ func riverClientConfig(cfg config.Config, workers *river.Workers, log *slog.Logg
 		PollOnly:                    true,
 		Plugins:                     []rivertype.Plugin{plugin},
 		Queues: map[string]river.QueueConfig{
-			postgresoutbox.Queue: {MaxWorkers: min(defaultOutboxWorkers, cfg.Messaging.MaxPendingPublishes)},
+			postgresoutbox.Queue: {MaxWorkers: defaultOutboxWorkers},
 		},
-		SoftStopTimeout: cfg.Messaging.Worker.DrainTimeout,
+		SoftStopTimeout: cfg.HTTP.ShutdownTimeout,
 		Workers:         workers,
 	}
 }
@@ -156,15 +156,15 @@ func runLifecycle[TTx any](
 	riverClient *river.Client[TTx],
 ) (cleanupSafe bool, deadline time.Time, result error) {
 	var ready atomic.Bool
-	postgresHealth := health.New(postgresReadinessProbe{pool: pool})
-	if err := postgresHealth.Refresh(startupCtx, cfg.HTTP.ReadinessTimeout, cfg.Health.FailureThreshold); err != nil {
+	readiness := health.New(postgresReadinessProbe{pool: pool}, client)
+	if err := readiness.Refresh(startupCtx, cfg.HTTP.ReadinessTimeout, cfg.Health.FailureThreshold); err != nil {
 		return true, time.Time{}, fmt.Errorf("admit outbox readiness: %w", err)
 	}
 	diagnostics, err := runtimeopts.ListenDiagnostics(
 		startupCtx,
 		cfg.Observability.Metrics.Addr,
 		"outbox",
-		func() bool { return ready.Load() && client.Ready() && postgresHealth.Cached() == nil },
+		func() bool { return ready.Load() && client.Ready() && readiness.Cached() == nil },
 		metrics,
 	)
 	if err != nil {
@@ -174,9 +174,9 @@ func runLifecycle[TTx any](
 	supervisor := background.New(runtimeCtx, log)
 	supervisor.Go(background.Task{Name: "messaging_connection", Run: client.Run})
 	supervisor.Go(background.Task{
-		Name: "postgres_readiness",
+		Name: "dependency_readiness",
 		Run: func(ctx context.Context) error {
-			return postgresHealth.Watch(
+			return readiness.Watch(
 				ctx,
 				cfg.Health.RefreshInterval,
 				cfg.HTTP.ReadinessTimeout,
@@ -202,7 +202,7 @@ func runLifecycle[TTx any](
 		trigger = errors.New("outbox diagnostics stopped unexpectedly")
 	}
 	ready.Store(false)
-	postgresHealth.StartDrain()
+	readiness.StartDrain()
 	processCtx, cancelProcess, shutdownDeadline := runtimeopts.ArmTeardown(signalCtx, cfg.HTTP.GracePeriod)
 	defer cancelProcess()
 	riverErr := riverClient.Stop(processCtx)

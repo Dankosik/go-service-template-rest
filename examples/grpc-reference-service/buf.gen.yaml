@@ -7,6 +7,7 @@ plugins:
     out: internal/gen/proto
     opt:
       - paths=source_relative
+      - default_api_level=API_OPAQUE
   - local:
       - bash
       - ../../scripts/run-go-tool.sh

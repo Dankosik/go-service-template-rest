@@ -51,13 +51,10 @@ func TestNATSServiceProducerOnlyProcess(t *testing.T) {
 			// readiness gate, rather than a completed background probe, returns 503.
 			"APP__HEALTH__FAILURE_THRESHOLD=100",
 			"APP__OBSERVABILITY__METRICS__ADDR=",
-			"APP__MESSAGING__ENABLED=true",
 			"APP__MESSAGING__URLS="+f.url,
 			"APP__MESSAGING__ALLOW_PLAINTEXT=true",
 			"APP__MESSAGING__ALLOW_UNAUTHENTICATED=true",
 			"APP__MESSAGING__STREAM="+sourceStream,
-			"APP__MESSAGING__MIN_STREAM_REPLICAS=1",
-			"APP__MESSAGING__MIN_STREAM_RETENTION=24h",
 		)
 		process.Stdout = output
 		process.Stderr = output
@@ -152,15 +149,11 @@ func TestNATSWorkerMainRejectsEmptyHandler(t *testing.T) {
 		// assertion below only when these match the compiled-in profile exactly.
 		"APP__AUTHN__ISSUER=https://issuer.example.com",
 		"APP__AUTHN__AUDIENCE=https://api.example.com",
-		"APP__AUTHN__TRUSTED_PROXY_CIDRS=127.0.0.0/8",
 		// profile:authn-oidc-jwt:end
-		"APP__MESSAGING__ENABLED=true",
 		"APP__MESSAGING__URLS=nats://"+listener.Addr().String(),
 		"APP__MESSAGING__ALLOW_PLAINTEXT=true",
 		"APP__MESSAGING__ALLOW_UNAUTHENTICATED=true",
 		"APP__MESSAGING__STREAM=EVENTS",
-		"APP__MESSAGING__MIN_STREAM_REPLICAS=1",
-		"APP__MESSAGING__MIN_STREAM_RETENTION=24h",
 		"APP__MESSAGING__WORKER__CONSUMER=unregistered-worker",
 		"APP__MESSAGING__WORKER__FILTER_SUBJECT=events.test",
 		"APP__MESSAGING__WORKER__DEAD_LETTER_SUBJECT=dead.events.test",
@@ -191,6 +184,11 @@ func initializedMessagingServiceRoot(t *testing.T, repositoryRoot string) string
 	if output, err := initializeGit.CombinedOutput(); err != nil {
 		t.Fatalf("initialize messaging fixture Git repository: %v\n%s", err, output)
 	}
+	stage := exec.CommandContext(t.Context(), "git", "add", "-A")
+	stage.Dir = serviceRoot
+	if output, err := stage.CombinedOutput(); err != nil {
+		t.Fatalf("stage messaging fixture repository: %v\n%s", err, output)
+	}
 	commit := exec.CommandContext(t.Context(), "git", "-c", "user.name=messaging-process-integration", "-c", "user.email=messaging-process-integration@example.com", "commit", "-q", "--allow-empty", "-m", "template checkout")
 	commit.Dir = serviceRoot
 	if output, err := commit.CombinedOutput(); err != nil {
@@ -203,7 +201,6 @@ func initializedMessagingServiceRoot(t *testing.T, repositoryRoot string) string
 		"DATABASE=none",
 		"GRPC=none",
 		"AUTHN=none",
-		"OUTBOUND_HTTP=bounded",
 		"MESSAGING=nats-jetstream",
 		"REFERENCE_EXAMPLE=remove",
 	)
@@ -221,7 +218,7 @@ func cleanMessagingEnvironment(environment []string) []string {
 			continue
 		}
 		switch key {
-		case "CODEOWNER", "DATABASE", "GRPC", "AUTHN", "OUTBOUND_HTTP", "MESSAGING", "REFERENCE_EXAMPLE":
+		case "CODEOWNER", "DATABASE", "GRPC", "AUTHN", "MESSAGING", "REFERENCE_EXAMPLE":
 			continue
 		}
 		clean = append(clean, entry)

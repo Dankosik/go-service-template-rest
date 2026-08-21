@@ -237,9 +237,8 @@ through a ruleset in one repository.
   and container security.
 - `make pr-check BASE_REF=origin/main` — full proof plus template,
   downloaded-module, and base-relative OpenAPI compatibility.
-- CI's `template-init` matrix, `template-postgres-feature`, and
-  `template-s3-envelope` jobs initialize temporary generated services
-  independently and run in parallel. The PostgreSQL job generates its first POST
+- CI's `template-init` matrix and `template-postgres-feature` job initialize
+  temporary generated services independently and run in parallel. The PostgreSQL job generates its first POST
   contract and sqlc query, and proves valid, rejected, commit, and rollback
   paths against the pinned PostgreSQL image. The fixture is not shipped in the
   base runtime. Change-scope selects the matrix cells and sibling jobs; a

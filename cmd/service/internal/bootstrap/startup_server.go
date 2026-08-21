@@ -12,6 +12,10 @@ import (
 
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/health"
+
+	// profile:grpc:start
+	grpcx "github.com/example/go-service-template-rest/internal/infra/grpc"
+	// profile:grpc:end
 	"golang.org/x/net/netutil"
 )
 
@@ -27,22 +31,9 @@ type runtimeServer interface {
 // profile:grpc:start
 type grpcRuntimeServer interface {
 	runtimeServer
-	MarkServing()
+	SetServing(ready bool)
 	StartDrain()
-	// profile:authn-oidc-jwt:start
-	SetAuthnReady(ready bool)
-	// profile:authn-oidc-jwt:end
 }
-
-// profile:authn-oidc-jwt:start
-
-func setGRPCAuthnReady(server grpcRuntimeServer, ready bool) {
-	if server != nil {
-		server.SetAuthnReady(ready)
-	}
-}
-
-// profile:authn-oidc-jwt:end
 
 // profile:grpc:end
 
@@ -98,7 +89,7 @@ func bindRuntimeListeners(ctx context.Context, args serveRuntimeArgs) (runtimeLi
 			listeners.close()
 			return runtimeListeners{}, "startup.grpc_listen", fmt.Errorf("listen gRPC server: %w", grpcErr)
 		}
-		listeners.grpc = boundedAPIListener(grpcListener, args.cfg.GRPC.Server.MaxConnections)
+		listeners.grpc = boundedAPIListener(grpcListener, grpcx.MaxConnections)
 	}
 	// profile:grpc:end
 

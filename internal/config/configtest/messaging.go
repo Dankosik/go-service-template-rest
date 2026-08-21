@@ -24,7 +24,7 @@ func MessagingCases() []MessagingCase {
 		{Name: "unsupported scheme", URLs: "amqp://broker.example:5672", Stream: eventsStream, ConfigRejects: true},
 		{Name: "plaintext without opt-in", URLs: "nats://broker.example:4222", Stream: eventsStream, ConfigRejects: true},
 		{Name: "no host", URLs: "tls://", Stream: eventsStream, ConfigRejects: true},
-		{Name: "empty urls", URLs: "", Stream: eventsStream, ConfigRejects: true},
+		{Name: "empty urls", URLs: "", Stream: eventsStream},
 		{Name: "empty stream", URLs: tlsBrokerURL, Stream: "", ConfigRejects: true},
 		{Name: "stream with separator", URLs: tlsBrokerURL, Stream: "EV.ENTS", ConfigRejects: true},
 		{Name: "stream with wildcard", URLs: tlsBrokerURL, Stream: "EV*NTS", ConfigRejects: true},

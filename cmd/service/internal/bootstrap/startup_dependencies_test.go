@@ -342,7 +342,6 @@ func resetBootstrapConfigEnv(t *testing.T) {
 	// authentication policy without introducing executable defaults.
 	t.Setenv("APP__AUTHN__ISSUER", "https://issuer.example.com")
 	t.Setenv("APP__AUTHN__AUDIENCE", "service-api")
-	t.Setenv("APP__AUTHN__TRUSTED_PROXY_CIDRS", "127.0.0.0/8,::1/128")
 	// profile:authn-oidc-jwt:end
 	// profile:outbound-auth-oauth2-client-credentials:start
 	setOutboundAuthBootstrapTestEnv(t)

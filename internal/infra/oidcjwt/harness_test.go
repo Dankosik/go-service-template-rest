@@ -1,519 +1,201 @@
 package oidcjwt
 
-// Shared test harness for package oidcjwt: the scripted provider, the movable
-// clock, the verifier constructors, and the token and JWKS builders. They live
-// here rather than beside one suite because nearly every test file depends on
-// them, and a reader opening any one of them should not have to know which
-// other file owns the verifier under test.
-
 import (
-	"bytes"
 	"context"
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
-	"errors"
-	"fmt"
-	"io"
-	"log/slog"
 	"math/big"
 	"net/http"
 	"os"
-	"path/filepath"
-	"strings"
-	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/example/go-service-template-rest/internal/reqctx"
+	"github.com/MicahParks/jwkset"
+	"github.com/MicahParks/keyfunc/v3"
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/getkin/kin-openapi/openapi3filter"
-	jose "github.com/go-jose/go-jose/v4"
-	"go.opentelemetry.io/otel/metric"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 const (
-	testIssuer   = "https://issuer.example.com"
-	testAudience = "service-api"
-	testJWKSURI  = "https://keys.example.net/jwks"
-)
-
-// The fixed RSA keys every case signs with. Two are enough to state both kinds
-// of rotation: a new key id, and a new key under the id already installed.
-const (
+	testIssuer     = "https://issuer.example.com"
+	testAudience   = "https://api.example.com"
 	testSigningKey = "test-key-1.pem"
-	testRotatedKey = "test-key-2.pem"
 )
 
-// testNow is the instant cases build tokens and key sets around. Fixing it
-// makes an expiry or staleness assertion read as an offset from one known
-// point rather than from whenever the suite happened to run.
 var testNow = time.Unix(1_900_000_000, 0)
 
-// bootstrapProviderCalls is what initialResponses scripts: one Discovery
-// request and one JWKS request. Every provider-call assertion in this package
-// is stated as this baseline plus the refreshes the case expects, so a change
-// to startup does not have to be re-counted into unrelated tests.
-const bootstrapProviderCalls = 2
-
-// testClock is a clock a test can move, or make fail, after the verifier has
-// captured it. The indirection is atomic because a refresh goroutine may read
-// the clock while the test changes it; a plain time.Time closed over by the
-// clock function is a data race as soon as a refresh is in flight.
-type testClock struct {
-	read atomic.Pointer[func() time.Time]
+type tokenClaims struct {
+	Issuer          string
+	Subject         string
+	Audience        string
+	ClientID        string
+	AuthorizedParty string
+	ApplicationID   string
+	OktaClientID    string
+	JWTID           string
+	IssuedAt        *time.Time
+	ExpiresAt       *time.Time
+	NotBefore       *time.Time
 }
 
-func newTestClock(start time.Time) *testClock {
-	clock := &testClock{}
-	clock.set(start)
-	return clock
-}
-
-// now is the clock function handed to newVerifier.
-func (c *testClock) now() time.Time {
-	return (*c.read.Load())()
-}
-
-func (c *testClock) set(value time.Time) {
-	c.setFunc(func() time.Time { return value })
-}
-
-func (c *testClock) advance(delta time.Duration) {
-	c.set(c.now().Add(delta))
-}
-
-// setFunc replaces how the clock answers, for a test that needs reading the
-// time to fail rather than to return a different instant.
-func (c *testClock) setFunc(read func() time.Time) {
-	c.read.Store(&read)
-}
-
-type scriptedResponse struct {
-	status  int
-	body    []byte
-	err     error
-	wait    <-chan struct{}
-	started chan<- struct{}
-	panic   any
-}
-
-type scriptedClient struct {
-	mu        sync.Mutex
-	responses []scriptedResponse
-	calls     int
-}
-
-func (c *scriptedClient) Do(request *http.Request) (*http.Response, error) {
-	c.mu.Lock()
-	c.calls++
-	if len(c.responses) == 0 {
-		c.mu.Unlock()
-		return nil, errors.New("poison network error")
+func validClaims(now time.Time) tokenClaims {
+	expires := now.Add(time.Hour)
+	return tokenClaims{
+		Issuer:    testIssuer,
+		Subject:   "subject-1",
+		Audience:  testAudience,
+		ClientID:  "client-1",
+		JWTID:     "token-1",
+		IssuedAt:  &now,
+		ExpiresAt: &expires,
 	}
-	response := c.responses[0]
-	c.responses = c.responses[1:]
-	c.mu.Unlock()
-	if response.started != nil {
-		close(response.started)
-	}
-	if response.wait != nil {
-		select {
-		case <-response.wait:
-		case <-request.Context().Done():
-			return nil, fmt.Errorf("scripted provider request: %w", request.Context().Err())
-		}
-	}
-	select {
-	case <-request.Context().Done():
-		return nil, fmt.Errorf("scripted provider request: %w", request.Context().Err())
-	default:
-	}
-	if response.panic != nil {
-		panic(response.panic)
-	}
-	if response.err != nil {
-		return nil, response.err
-	}
-	return &http.Response{
-		StatusCode: response.status,
-		Body:       io.NopCloser(strings.NewReader(string(response.body))),
-		Header:     make(http.Header),
-	}, nil
-}
-
-func (c *scriptedClient) callCount() int {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.calls
-}
-
-// testVerifierOptions varies the parts of a verifier one case cares about. The
-// zero value builds a verifier on a fixed clock at testNow, served by a
-// provider scripted with one successful bootstrap signed by testSigningKey,
-// with telemetry and logs discarded — so a case states only what it changes.
-type testVerifierOptions struct {
-	// bootstrapCtx supplies the context trust is established under. It is a
-	// function rather than a context so these options stay an ordinary value a
-	// case can declare inline; a case that does not care leaves it nil and
-	// bootstrap runs under t.Context().
-	bootstrapCtx func() context.Context
-	now          func() time.Time
-	jitter       func(time.Duration) time.Duration
-	client       *scriptedClient
-	provider     metric.MeterProvider
-	log          *slog.Logger
-	// onClose counts or observes the release of an owned provider client. The
-	// bootstrap client is released before newVerifier returns and the JWKS
-	// client on Close, so a case watching this sees both.
-	onClose func()
-}
-
-// buildTestVerifier returns exactly what newVerifier returned. It is the only
-// place a test wires the provider-client factory, so a case whose subject is a
-// startup failure, a cancelled bootstrap, or a close count states just the one
-// input that causes it instead of restating the whole construction.
-func buildTestVerifier(t *testing.T, opts testVerifierOptions) (*Verifier, error) {
-	t.Helper()
-	bootstrapCtx := opts.bootstrapCtx
-	if bootstrapCtx == nil {
-		bootstrapCtx = t.Context
-	}
-	now := opts.now
-	if now == nil {
-		now = newTestClock(testNow).now
-	}
-	client := opts.client
-	if client == nil {
-		client = &scriptedClient{responses: initialResponses(t, loadTestRSAKey(t, testSigningKey))}
-	}
-	onClose := opts.onClose
-	if onClose == nil {
-		onClose = func() {}
-	}
-	verifier, err := newVerifier(
-		bootstrapCtx(),
-		testPolicy(t),
-		func(string) (providerClient, error) {
-			return providerClient{request: client, close: onClose}, nil
-		},
-		now,
-		opts.provider,
-		opts.log,
-	)
-	if verifier != nil {
-		verifier.jitter = opts.jitter
-		if verifier.jitter == nil {
-			verifier.jitter = func(delay time.Duration) time.Duration { return delay }
-		}
-	}
-	return verifier, err
-}
-
-// requireTestVerifier builds a verifier whose trust is established and closes
-// it with the test, failing when bootstrap does not succeed.
-func requireTestVerifier(t *testing.T, opts testVerifierOptions) *Verifier {
-	t.Helper()
-	verifier, err := buildTestVerifier(t, opts)
-	if err != nil {
-		t.Fatalf("newVerifier() error = %v", err)
-	}
-	t.Cleanup(verifier.Close)
-	return verifier
-}
-
-// newTestVerifier is the shorthand for the most common subject: a verifier fixed
-// at testNow, served by a provider that answers one successful bootstrap signed
-// by key. The clock is not a parameter because a case that has to move it states
-// its own options through requireTestVerifier instead, which keeps what varies
-// visible at the call site rather than encoded in a constructor name.
-func newTestVerifier(t *testing.T, key *rsa.PrivateKey) *Verifier {
-	t.Helper()
-	return requireTestVerifier(t, testVerifierOptions{
-		now:    newTestClock(testNow).now,
-		client: &scriptedClient{responses: initialResponses(t, key)},
-	})
-}
-
-// requireProviderCalls states an expected provider-call count as the bootstrap
-// baseline plus the refreshes the case should have caused.
-func requireProviderCalls(t *testing.T, client *scriptedClient, refreshes int, when string) {
-	t.Helper()
-	want := bootstrapProviderCalls + refreshes
-	if got := client.callCount(); got != want {
-		t.Fatalf(
-			"provider calls %s = %d, want %d (%d bootstrap + %d refresh)",
-			when, got, want, bootstrapProviderCalls, refreshes,
-		)
-	}
-}
-
-// bearerAuthInput is what the OpenAPI validator hands a resolver for the HTTP
-// Bearer requirement this repository's contract declares.
-//
-// It is built in one place so every case asks [Verifier.ResolveHTTP] the
-// question production asks. An input carrying no declared scheme is a shape the
-// validator never produces, and bearerSecurityScheme refuses it — so a test
-// leaving it out would prove that refusal rather than whatever it meant to
-// prove.
-func bearerAuthInput(request *http.Request) *openapi3filter.AuthenticationInput {
-	return &openapi3filter.AuthenticationInput{
-		RequestValidationInput: &openapi3filter.RequestValidationInput{Request: request},
-		SecuritySchemeName:     "bearerAuth",
-		SecurityScheme:         &openapi3.SecurityScheme{Type: "http", Scheme: "bearer"},
-	}
-}
-
-// otherSchemeAuthInput is the same input for a security requirement this
-// Verifier does not implement. The validator asks about every scheme a contract
-// declares, so this is the shape a second one arrives in.
-func otherSchemeAuthInput(request *http.Request) *openapi3filter.AuthenticationInput {
-	input := bearerAuthInput(request)
-	input.SecuritySchemeName = "apiKeyAuth"
-	input.SecurityScheme = &openapi3.SecurityScheme{Type: "apiKey", In: "header", Name: "X-API-Key"}
-	return input
 }
 
 func testPolicy(t *testing.T) Policy {
 	t.Helper()
-	policy, err := NewPolicy(PolicyInput{
-		Issuer:            testIssuer,
-		Audience:          testAudience,
-		TrustedProxyCIDRs: "127.0.0.0/8,::1/128",
-	})
+	return testPolicyWithProfile(t, "resource-server")
+}
+
+func testPolicyWithProfile(t *testing.T, profile string) Policy {
+	t.Helper()
+	policy, err := NewPolicy(PolicyInput{Issuer: testIssuer, Audience: testAudience, TokenProfile: profile})
 	if err != nil {
 		t.Fatalf("NewPolicy() error = %v", err)
 	}
 	return policy
 }
 
-func initialResponses(t *testing.T, key *rsa.PrivateKey) []scriptedResponse {
+func newTestVerifier(t *testing.T, key *rsa.PrivateKey) *Verifier {
 	t.Helper()
-	discovery, err := json.Marshal(discoveryDocument{Issuer: testIssuer, JWKSURI: testJWKSURI})
+	return newTestVerifierWithUse(t, key, "sig")
+}
+
+func newTestVerifierWithUse(t *testing.T, key *rsa.PrivateKey, use string) *Verifier {
+	t.Helper()
+	keys, err := keyfunc.NewJWKSetJSON(testJWKSet(t, &key.PublicKey, "key-1", use))
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("keyfunc.NewJWKSetJSON() error = %v", err)
 	}
-	return []scriptedResponse{
-		{status: http.StatusOK, body: discovery},
-		{status: http.StatusOK, body: jwksDocument(t, key, "key-1")},
-	}
-}
-
-type jwkEntry struct {
-	key   *rsa.PrivateKey
-	keyID string
-}
-
-func jwksDocument(t *testing.T, key *rsa.PrivateKey, keyID string) []byte {
-	t.Helper()
-	return jwksDocumentOf(t, jwkEntry{key: key, keyID: keyID})
-}
-
-// jwksDocumentOf builds a JWKS from the given entries, so a test can state an
-// ambiguous or multi-key set as data rather than by splicing JSON text.
-func jwksDocumentOf(t *testing.T, entries ...jwkEntry) []byte {
-	t.Helper()
-	keys := make([]json.RawMessage, 0, len(entries))
-	for _, entry := range entries {
-		encoded, err := publicJWK(&entry.key.PublicKey, entry.keyID)
-		if err != nil {
-			t.Fatal(err)
-		}
-		keys = append(keys, encoded)
-	}
-	document, err := json.Marshal(map[string]any{"keys": keys})
-	if err != nil {
-		t.Fatalf("marshal JWKS document: %v", err)
-	}
-	return document
-}
-
-func publicJWK(key *rsa.PublicKey, keyID string) ([]byte, error) {
-	if key == nil {
-		return nil, errors.New("nil RSA key")
-	}
-	exponent := big.NewInt(int64(key.E)).Bytes()
-	encoded, err := json.Marshal(map[string]string{
-		"kty": "RSA",
-		"kid": keyID,
-		"alg": AllowedAlgorithm,
-		"use": "sig",
-		"n":   base64.RawURLEncoding.EncodeToString(key.N.Bytes()),
-		"e":   base64.RawURLEncoding.EncodeToString(exponent),
+	signingKeys, err := keyfunc.New(keyfunc.Options{
+		Ctx:          context.Background(),
+		Storage:      keys.Storage(),
+		UseWhitelist: []jwkset.USE{"", jwkset.UseSig},
 	})
 	if err != nil {
-		return nil, fmt.Errorf("marshal public JWK: %w", err)
+		t.Fatalf("signingKeyFunc() error = %v", err)
 	}
-	return encoded, nil
+	return newVerifier(
+		testPolicy(t),
+		signingKeys.KeyfuncCtx,
+		func() time.Time { return testNow },
+		newAuthnMetrics(nil),
+		nil,
+		nil,
+	)
+}
+
+func testJWKSet(t *testing.T, key *rsa.PublicKey, keyID, use string) []byte {
+	t.Helper()
+	encoded, err := json.Marshal(map[string]any{
+		"keys": []map[string]any{{
+			"kty": "RSA",
+			"use": use,
+			"alg": AllowedAlgorithm,
+			"kid": keyID,
+			"n":   base64.RawURLEncoding.EncodeToString(key.N.Bytes()),
+			"e":   base64.RawURLEncoding.EncodeToString(big.NewInt(int64(key.E)).Bytes()),
+		}},
+	})
+	if err != nil {
+		t.Fatalf("marshal test JWKS: %v", err)
+	}
+	return encoded
 }
 
 func loadTestRSAKey(t *testing.T, name string) *rsa.PrivateKey {
 	t.Helper()
-	encoded, err := os.ReadFile(filepath.Join("testdata", name))
+	encoded, err := os.ReadFile("testdata/" + name)
 	if err != nil {
-		t.Fatalf("read fixed test key: %v", err)
+		t.Fatalf("read test key: %v", err)
 	}
-	block, rest := pem.Decode(encoded)
-	if block == nil || block.Type != "PRIVATE KEY" || len(rest) != 0 {
-		t.Fatalf("decode fixed test key %q", name)
+	block, _ := pem.Decode(encoded)
+	if block == nil {
+		t.Fatal("decode test key: no PEM block")
 	}
-	parsed, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+	key, err := x509.ParsePKCS8PrivateKey(block.Bytes)
 	if err != nil {
-		t.Fatalf("parse fixed test key: %v", err)
+		pkcs1, pkcs1Err := x509.ParsePKCS1PrivateKey(block.Bytes)
+		if pkcs1Err != nil {
+			t.Fatalf("parse test key: %v", err)
+		}
+		return pkcs1
 	}
-	key, ok := parsed.(*rsa.PrivateKey)
-	if !ok || key.N.BitLen() != 2048 {
-		t.Fatalf("fixed test key %q is not RSA-2048", name)
+	rsaKey, ok := key.(*rsa.PrivateKey)
+	if !ok {
+		t.Fatalf("test key type = %T, want *rsa.PrivateKey", key)
 	}
-	return key
-}
-
-type tokenClaims struct {
-	Issuer    string   `json:"iss"`
-	Subject   string   `json:"sub,omitempty"`
-	Audience  any      `json:"aud"`
-	ClientID  string   `json:"client_id"`
-	JWTID     string   `json:"jti"`
-	Expires   int64    `json:"exp"`
-	IssuedAt  int64    `json:"iat"`
-	NotBefore *int64   `json:"nbf,omitempty"`
-	Scope     []string `json:"scope,omitempty"`
-	Roles     []string `json:"roles,omitempty"`
-}
-
-func validClaims(now time.Time) tokenClaims {
-	return tokenClaims{
-		Issuer:   testIssuer,
-		Subject:  "opaque-subject",
-		Audience: []string{"another", testAudience},
-		ClientID: "client-1",
-		JWTID:    "token-1",
-		Expires:  now.Add(5 * time.Minute).Unix(),
-		IssuedAt: now.Unix(),
-		Scope:    []string{"admin"},
-		Roles:    []string{"owner"},
-	}
-}
-
-// claimsMap renders a claim set as the map a case mutates when it needs a value
-// tokenClaims cannot express: a JSON number that is not an integer, or an
-// explicit null. Deriving it from validClaims is what keeps one definition of a
-// complete claim set — a term added to parseAccessTokenClaims is added to
-// tokenClaims once, rather than once per test that builds a payload by hand.
-//
-// Decoding through UseNumber keeps every integer exactly as it was written, so
-// a re-marshalled exp is still the NumericDate the verifier requires.
-func claimsMap(t *testing.T, claims tokenClaims) map[string]any {
-	t.Helper()
-	encoded, err := json.Marshal(claims)
-	if err != nil {
-		t.Fatalf("marshal claims: %v", err)
-	}
-	decoder := json.NewDecoder(bytes.NewReader(encoded))
-	decoder.UseNumber()
-	var rendered map[string]any
-	if err := decoder.Decode(&rendered); err != nil {
-		t.Fatalf("decode claims into a map: %v", err)
-	}
-	// Callers index into the result, so a payload that decoded to a JSON null
-	// fails here rather than at the assignment that would panic.
-	if rendered == nil {
-		t.Fatal("claims decoded to a nil map")
-	}
-	return rendered
+	return rsaKey
 }
 
 func signToken(t *testing.T, key *rsa.PrivateKey, keyID, typ string, claims tokenClaims) string {
 	t.Helper()
-	return signTokenWithHeader(t, key, map[jose.HeaderKey]any{"typ": typ, "kid": keyID}, claims)
-}
-
-func signTokenWithHeader(
-	t *testing.T,
-	key *rsa.PrivateKey,
-	headers map[jose.HeaderKey]any,
-	claims tokenClaims,
-) string {
-	t.Helper()
-	options := &jose.SignerOptions{}
-	for name, value := range headers {
-		options.WithHeader(name, value)
+	values := jwt.MapClaims{
+		"iss": claims.Issuer,
+		"sub": claims.Subject,
+		"aud": claims.Audience,
 	}
-	payload, err := json.Marshal(claims)
+	for name, value := range map[string]string{
+		"client_id": claims.ClientID,
+		"azp":       claims.AuthorizedParty,
+		"appid":     claims.ApplicationID,
+		"cid":       claims.OktaClientID,
+		"jti":       claims.JWTID,
+	} {
+		if value != "" {
+			values[name] = value
+		}
+	}
+	if claims.IssuedAt != nil {
+		values["iat"] = claims.IssuedAt.Unix()
+	}
+	if claims.ExpiresAt != nil {
+		values["exp"] = claims.ExpiresAt.Unix()
+	}
+	if claims.NotBefore != nil {
+		values["nbf"] = claims.NotBefore.Unix()
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodRS256, values)
+	if keyID != "" {
+		token.Header["kid"] = keyID
+	}
+	if typ != "" {
+		token.Header["typ"] = typ
+	}
+	signed, err := token.SignedString(key)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("sign token: %v", err)
 	}
-	return signPayloadWithOptions(t, key, options, payload)
+	return signed
 }
 
-func signPayload(t *testing.T, key *rsa.PrivateKey, payload []byte) string {
-	t.Helper()
-	options := (&jose.SignerOptions{}).WithHeader("typ", "at+jwt").WithHeader("kid", "key-1")
-	return signPayloadWithOptions(t, key, options, payload)
-}
-
-func signPayloadWithOptions(
-	t *testing.T,
-	key *rsa.PrivateKey,
-	options *jose.SignerOptions,
-	payload []byte,
-) string {
-	t.Helper()
-	signer, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.RS256, Key: key}, options)
-	if err != nil {
-		t.Fatalf("jose.NewSigner() error = %v", err)
-	}
-	signed, err := signer.Sign(payload)
-	if err != nil {
-		t.Fatalf("Sign() error = %v", err)
-	}
-	compact, err := signed.CompactSerialize()
-	if err != nil {
-		t.Fatalf("CompactSerialize() error = %v", err)
-	}
-	return compact
-}
-
-// ageInstalledKeys rewinds the installed set's fetch time in place, without
-// announcing a replacement. It reaches past [trustStore.install] deliberately:
-// what it stages is a set that aged where it stands, which is the one way a
-// Verifier reaches staleness and the one thing install cannot express.
-func ageInstalledKeys(verifier *Verifier, fetchedAt time.Time) {
-	aged := *verifier.trust.current()
-	aged.fetchedAt = fetchedAt
-	verifier.trust.keys.Store(&aged)
-}
-
-// verify is the principal-only view of verifyToken, and exists for the tests
-// that assert on a principal rather than on a stream's expiry. It is a method so
-// that those tests read as calls on the verifier under test, and it lives here
-// because production has no caller for it: both transport adapters need the
-// expiry, so both reach verifyToken through verifyCredential.
-func (v *Verifier) verify(
-	ctx context.Context,
-	compact string,
-	transport transport,
-) (reqctx.Principal, error) {
-	verified, err := v.verifyToken(ctx, compact, transport)
-	return verified.principal, err
-}
-
-// requireKind asserts the sanitized category err carries. The zero Kind means no
-// error at all, which is why the declared run starts at iota + 1 in errors.go: a
-// table row that omits wantKind is stating that the case must succeed.
 func requireKind(t *testing.T, err error, want Kind) {
 	t.Helper()
-	if want == 0 {
-		if err != nil {
-			t.Fatalf("error = %v, want nil", err)
-		}
-		return
-	}
 	got, ok := KindOf(err)
 	if !ok || got != want {
-		t.Fatalf("error = %v, kind = (%v, %v), want %v", err, got, ok, want)
+		t.Fatalf("KindOf(%v) = %v, %v; want %v, true", err, got, ok, want)
+	}
+}
+
+func bearerAuthInput(request *http.Request) *openapi3filter.AuthenticationInput {
+	return &openapi3filter.AuthenticationInput{
+		SecuritySchemeName: "bearerAuth",
+		SecurityScheme:     &openapi3.SecurityScheme{Type: "http", Scheme: "bearer"},
+		RequestValidationInput: &openapi3filter.RequestValidationInput{
+			Request: request,
+		},
 	}
 }

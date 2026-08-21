@@ -108,13 +108,6 @@ func splitAuthorizationMetadata(ctx context.Context) (context.Context, metadata.
 // The arms are grouped by the answer rather than in [Kind] declaration order,
 // which makes the two categories that get their own status visible as the
 // exceptions they are; the exhaustive linter holds the set complete either way.
-//
-// KindUntrustedTransport is named here and cannot arrive here: only the HTTP
-// adapter produces it, and this transport's equivalent is
-// validateGRPCAuthnTransport in internal/config, which refuses to start a
-// service whose gRPC server is not TLS while this profile is on. The arm is not
-// dead code — a Kind may not be omitted from this switch — and answering it as a
-// rejected credential keeps the set complete without inventing a status.
 func grpcAuthenticationError(err error) error {
 	if errors.Is(err, context.Canceled) {
 		return status.Error(codes.Canceled, "authentication canceled")
@@ -128,7 +121,7 @@ func grpcAuthenticationError(err error) error {
 		return status.Error(codes.ResourceExhausted, "authentication credential is too large")
 	case KindUnavailable:
 		return status.Error(codes.Unavailable, "authentication trust is unavailable")
-	case KindMissing, KindMalformed, KindInvalid, KindLifetime, KindUntrustedTransport:
+	case KindMissing, KindMalformed, KindInvalid:
 		return unauthenticatedCredential()
 	default:
 		// Unreachable for a declared Kind, because the mandatory exhaustive linter

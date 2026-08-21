@@ -11,18 +11,14 @@ package grpcx
 import (
 	"context"
 	"errors"
-	"math"
-	"slices"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/example/go-service-template-rest/internal/reqctx"
 	"github.com/example/go-service-template-rest/internal/waittest"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
@@ -32,7 +28,7 @@ func TestServerHealthFollowsAdmissionAndDrain(t *testing.T) {
 	healthClient := healthgrpc.NewHealthClient(connection)
 
 	assertHealthStatus(t, healthClient, healthgrpc.HealthCheckResponse_NOT_SERVING)
-	server.MarkServing()
+	server.SetServing(true)
 	assertHealthStatus(t, healthClient, healthgrpc.HealthCheckResponse_SERVING)
 	server.StartDrain()
 	assertHealthStatus(t, healthClient, healthgrpc.HealthCheckResponse_NOT_SERVING)
@@ -180,68 +176,18 @@ func TestServerSanitizesUntrustedHandlerStatus(t *testing.T) {
 	}
 }
 
-func TestServerCorrelationReturnsAcceptedRequestID(t *testing.T) {
-	observed := make(chan string, 2)
+func TestServerPreservesGeneratedUnimplementedStatusWithoutItsText(t *testing.T) {
 	register := func(registrar grpc.ServiceRegistrar) {
 		registerUnaryTestService(registrar, testUnaryFullMethod,
-			func(ctx context.Context, _ *emptypb.Empty) (*emptypb.Empty, error) {
-				observed <- reqctx.RequestID(ctx)
-				return &emptypb.Empty{}, nil
+			func(context.Context, *emptypb.Empty) (*emptypb.Empty, error) {
+				return nil, status.Error(codes.Unimplemented, "generated implementation detail")
 			})
 	}
 	_, connection := startTestServer(t, testServerConfig(), register)
-
-	for _, testCase := range []struct {
-		name       string
-		candidates []string
-		want       string
-	}{
-		{name: "accepted", candidates: []string{"request_123"}, want: "request_123"},
-		{name: "replaced", candidates: []string{"user@example.com"}},
-		{name: "absent"},
-		{
-			// Two values would make the accepted identifier depend on an
-			// ordering the caller controls, so neither is a candidate.
-			name:       "duplicated",
-			candidates: []string{"request_123", "request_456"},
-		},
-	} {
-		t.Run(testCase.name, func(t *testing.T) {
-			pairs := make([]string, 0, 2*len(testCase.candidates))
-			for _, candidate := range testCase.candidates {
-				pairs = append(pairs, requestIDMetadataKey, candidate)
-			}
-			ctx := metadata.NewOutgoingContext(
-				t.Context(),
-				metadata.Pairs(pairs...),
-			)
-			var header metadata.MD
-			if err := connection.Invoke(
-				ctx,
-				testUnaryFullMethod,
-				&emptypb.Empty{},
-				&emptypb.Empty{},
-				grpc.Header(&header),
-			); err != nil {
-				t.Fatalf("Invoke() error = %v", err)
-			}
-			got := header.Get(requestIDMetadataKey)
-			if len(got) != 1 {
-				t.Fatalf("response request IDs = %v, want one", got)
-			}
-			if !reqctx.ValidRequestID(got[0]) {
-				t.Fatalf("response request ID %q is invalid", got[0])
-			}
-			if testCase.want != "" && got[0] != testCase.want {
-				t.Fatalf("response request ID = %q, want %q", got[0], testCase.want)
-			}
-			if testCase.want == "" && slices.Contains(testCase.candidates, got[0]) {
-				t.Fatalf("unaccepted request ID %q was echoed", got[0])
-			}
-			if handlerRequestID := <-observed; handlerRequestID != got[0] {
-				t.Fatalf("handler request ID = %q, want %q", handlerRequestID, got[0])
-			}
-		})
+	err := connection.Invoke(t.Context(), testUnaryFullMethod, &emptypb.Empty{}, &emptypb.Empty{})
+	assertStatusCode(t, err, codes.Unimplemented)
+	if got := status.Convert(err).Message(); got != "method not implemented" {
+		t.Fatalf("status detail = %q", got)
 	}
 }
 
@@ -345,23 +291,20 @@ func TestNewServerRejectsUnboundedConfig(t *testing.T) {
 	valid := testServerConfig()
 	for _, testCase := range []struct {
 		name   string
-		mutate func(*Config)
+		mutate func(*serverConfig)
 	}{
-		{name: "RPCs", mutate: func(cfg *Config) { cfg.MaxConcurrentRPCs = 0 }},
-		{name: "streams", mutate: func(cfg *Config) { cfg.MaxConcurrentStreams = 0 }},
-		{name: "headers", mutate: func(cfg *Config) { cfg.MaxHeaderListBytes = 0 }},
-		{name: "receive message", mutate: func(cfg *Config) { cfg.MaxReceiveMessageBytes = 0 }},
-		{name: "send message", mutate: func(cfg *Config) { cfg.MaxSendMessageBytes = 0 }},
-		{name: "negative sample rate", mutate: func(cfg *Config) { cfg.AccessLogSuccessSampleRate = -0.1 }},
-		{name: "large sample rate", mutate: func(cfg *Config) { cfg.AccessLogSuccessSampleRate = 1.1 }},
-		{name: "NaN sample rate", mutate: func(cfg *Config) { cfg.AccessLogSuccessSampleRate = math.NaN() }},
-		{name: "infinite sample rate", mutate: func(cfg *Config) { cfg.AccessLogSuccessSampleRate = math.Inf(1) }},
-		{name: "negative slow threshold", mutate: func(cfg *Config) { cfg.AccessLogSlowThreshold = -time.Nanosecond }},
+		{name: "RPCs", mutate: func(cfg *serverConfig) { cfg.maxConcurrentRPCs = 0 }},
+		{name: "health RPCs", mutate: func(cfg *serverConfig) { cfg.maxConcurrentHealthRPCs = 0 }},
+		{name: "streams", mutate: func(cfg *serverConfig) { cfg.maxConcurrentStreams = 0 }},
+		{name: "headers", mutate: func(cfg *serverConfig) { cfg.maxHeaderListBytes = 0 }},
+		{name: "receive message", mutate: func(cfg *serverConfig) { cfg.maxReceiveMessageBytes = 0 }},
+		{name: "send message", mutate: func(cfg *serverConfig) { cfg.maxSendMessageBytes = 0 }},
+		{name: "unary timeout", mutate: func(cfg *serverConfig) { cfg.unaryTimeout = 0 }},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			cfg := valid
 			testCase.mutate(&cfg)
-			if _, err := NewServer(cfg, Options{}); err == nil {
+			if _, err := newServer(cfg, Options{}); err == nil {
 				t.Fatal("NewServer() error = nil, want invalid bound rejected")
 			}
 		})
@@ -387,7 +330,7 @@ func assertHealthStatus(
 // produce a server that starts and serves without the method it was meant to
 // publish — which no probe and no test of the other services can see.
 func TestNewServerRejectsNilServiceRegistration(t *testing.T) {
-	server, err := NewServer(testServerConfig(), Options{
+	server, err := NewServer(Options{
 		Services: []RegisterService{nil},
 	})
 	if err == nil {

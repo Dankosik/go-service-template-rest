@@ -1,12 +1,11 @@
 package bootstrap
 
 import (
+	// profile:object-storage:start
+	"context"
+	// profile:object-storage:end
 	"errors"
 	"os"
-
-	// profile:object-storage:start
-	"strconv"
-	// profile:object-storage:end
 	"strings"
 	"testing"
 	"testing/synctest"
@@ -15,11 +14,6 @@ import (
 	"github.com/example/go-service-template-rest/cmd/internal/runtimeopts"
 	"github.com/example/go-service-template-rest/internal/config"
 )
-
-// profile:object-storage:start
-const testObjectStorageMaxWorkingMemoryBytes int64 = 62149760
-
-// profile:object-storage:end
 
 func TestParseLoadOptions(t *testing.T) {
 	t.Parallel()
@@ -223,7 +217,6 @@ func resetShutdownConfigEnv(t *testing.T) {
 	// shipped shutdown budgets, so it supplies the unrelated required policy.
 	t.Setenv("APP__AUTHN__ISSUER", "https://issuer.example.com")
 	t.Setenv("APP__AUTHN__AUDIENCE", "service-api")
-	t.Setenv("APP__AUTHN__TRUSTED_PROXY_CIDRS", "127.0.0.0/8,::1/128")
 	// profile:authn-oidc-jwt:end
 	// profile:outbound-auth-oauth2-client-credentials:start
 	setOutboundAuthBootstrapTestEnv(t)
@@ -239,15 +232,10 @@ func resetShutdownConfigEnv(t *testing.T) {
 func setOutboundAuthBootstrapTestEnv(t *testing.T) {
 	t.Helper()
 	for key, value := range map[string]string{
-		"APP__OUTBOUND_AUTH__DEPENDENCY":            "payments",
-		"APP__OUTBOUND_AUTH__CLIENT_ID":             "test-client",
-		"APP__OUTBOUND_AUTH__CLIENT_SECRET":         "test-secret",
-		"APP__OUTBOUND_AUTH__CLIENT_AUTHENTICATION": "client_secret_basic",
-		"APP__OUTBOUND_AUTH__TOKEN_ENDPOINT":        "https://auth.example.com/oauth/token",
-		"APP__OUTBOUND_AUTH__TOKEN_TARGET_CLASS":    "external_https",
-		"APP__OUTBOUND_AUTH__SCOPES":                "payments.read",
-		"APP__OUTBOUND_AUTH__RESOURCE_AUTHORITY":    "https://payments.example.com",
-		"APP__OUTBOUND_AUTH__ACQUISITION_TIMEOUT":   "1s",
+		"APP__OUTBOUND_AUTH__TOKEN_URL":     "https://auth.example.com/oauth/token",
+		"APP__OUTBOUND_AUTH__CLIENT_ID":     "test-client",
+		"APP__OUTBOUND_AUTH__CLIENT_SECRET": "test-secret",
+		"APP__OUTBOUND_AUTH__SCOPES":        "payments.read",
 	} {
 		t.Setenv(key, value)
 	}
@@ -260,22 +248,12 @@ func setOutboundAuthBootstrapTestEnv(t *testing.T) {
 func setObjectStorageBootstrapTestEnv(t *testing.T) {
 	t.Helper()
 	for key, value := range map[string]string{
-		"APP__OBJECT_STORAGE__PROVIDER":                   "amazon_s3",
-		"APP__OBJECT_STORAGE__ENDPOINT":                   "https://s3.us-east-1.amazonaws.com",
-		"APP__OBJECT_STORAGE__REGION":                     "us-east-1",
-		"APP__OBJECT_STORAGE__BUCKET":                     "examplebucket",
-		"APP__OBJECT_STORAGE__ACCESS_KEY_ID":              "test-access-key",
-		"APP__OBJECT_STORAGE__SECRET_ACCESS_KEY":          "test-secret-key",
-		"APP__OBJECT_STORAGE__SESSION_TOKEN":              "test-session-token",
-		"APP__OBJECT_STORAGE__EXPECTED_BUCKET_OWNER":      "123456789012",
-		"APP__OBJECT_STORAGE__MAX_OBJECT_BYTES":           "10485760",
-		"APP__OBJECT_STORAGE__MULTIPART_CHUNK_BYTES":      "5242880",
-		"APP__OBJECT_STORAGE__MAX_ACTIVE_OPERATIONS":      "2",
-		"APP__OBJECT_STORAGE__MAX_OPERATION_DURATION":     "1s",
-		"APP__OBJECT_STORAGE__MAX_PRESIGN_LIFETIME":       "1m",
-		"APP__OBJECT_STORAGE__MAX_RESPONSE_HEADER_BYTES":  "1024",
-		"APP__OBJECT_STORAGE__MAX_CONTROL_RESPONSE_BYTES": "1024",
-		"APP__OBJECT_STORAGE__MAX_WORKING_MEMORY_BYTES":   strconv.FormatInt(testObjectStorageMaxWorkingMemoryBytes, 10),
+		"APP__OBJECT_STORAGE__PROVIDER":              "amazon_s3",
+		"APP__OBJECT_STORAGE__REGION":                "us-east-1",
+		"APP__OBJECT_STORAGE__BUCKET":                "examplebucket",
+		"APP__OBJECT_STORAGE__EXPECTED_BUCKET_OWNER": "123456789012",
+		"APP__OBJECT_STORAGE__CREDENTIAL_SOURCE":     "aws_default",
+		"APP__OBJECT_STORAGE__MAX_OBJECT_BYTES":      "10485760",
 	} {
 		t.Setenv(key, value)
 	}
@@ -286,7 +264,7 @@ func setObjectStorageBootstrapTestEnv(t *testing.T) {
 func testRuntimeWiring() runtimeWiring {
 	wiring := productionRuntimeWiring()
 	// profile:object-storage:start
-	wiring.initObjectStorage = func(config.ObjectStorageConfig) (objectStorageRuntime, error) {
+	wiring.initObjectStorage = func(context.Context, config.ObjectStorageConfig) (objectStorageRuntime, error) {
 		return &countingObjectStorageRuntime{}, nil
 	}
 	// profile:object-storage:end

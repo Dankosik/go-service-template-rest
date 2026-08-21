@@ -1,12 +1,11 @@
-// Package correlationpolicy owns which locally produced correlation values a
-// bounded outbound client may put on the wire for one fixed target.
+// Package correlationpolicy owns the reserved outbound correlation fields and
+// the explicit gRPC policy for one fixed target. Fixed HTTP targets emit none.
 //
 // It is a leaf for the same reason internal/authntrust is: internal/infra/httpclient
-// and internal/infra/grpcclient answer the identical question at the identical
-// trust boundary and neither may import the other, so a rule written in one of
-// them is a rule the other can silently disagree with. The two adapters differ
-// only in how their transport spells the request identifier, which is why that
-// spelling is the one thing this package takes as an argument rather than owns —
+// and internal/infra/grpcclient share the reserved-field rule at the same trust
+// boundary and neither may import the other. The two adapters differ only in
+// how their transport spells the request identifier, which is why that spelling
+// is the one thing this package takes as an argument rather than owns —
 // internal/reqctx owns both spellings.
 //
 // Stripping what a caller supplied is deliberately not here. A carrier is

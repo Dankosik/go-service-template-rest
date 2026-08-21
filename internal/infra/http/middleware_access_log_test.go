@@ -89,9 +89,7 @@ func TestAccessLogRecordsHealthProbesWhenEnabled(t *testing.T) {
 
 	var out bytes.Buffer
 	log := newTestServiceLogger(&out)
-	handler := mustNewRouter(t, log, Handlers{}, nil, RouterConfig{
-		HardenConfig: HardenConfig{LogHealthProbes: true},
-	})
+	handler := mustNewRouter(t, log, Handlers{}, nil, RouterConfig{LogHealthProbes: true})
 
 	if resp := doRequest(handler, http.MethodGet, "/health/ready"); resp.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", resp.Code, http.StatusOK)
@@ -203,9 +201,7 @@ func TestAccessLogCarriesTheProblemCode(t *testing.T) {
 
 	var out bytes.Buffer
 	log := newTestServiceLogger(&out)
-	handler := mustNewRouter(t, log, Handlers{}, nil, RouterConfig{
-		HardenConfig: HardenConfig{MaxInFlight: 1},
-	})
+	handler := mustNewRouter(t, log, Handlers{}, nil, RouterConfig{MaxInFlight: 1})
 
 	// A route the contract does not declare, so the runtime answers its own
 	// problem rather than a handler's typed response.
@@ -230,9 +226,7 @@ func TestAccessLogOmitsProblemCodeForSuccess(t *testing.T) {
 
 	var out bytes.Buffer
 	log := newTestServiceLogger(&out)
-	handler := mustNewRouter(t, log, Handlers{}, nil, RouterConfig{
-		HardenConfig: HardenConfig{LogHealthProbes: true},
-	})
+	handler := mustNewRouter(t, log, Handlers{}, nil, RouterConfig{LogHealthProbes: true})
 
 	if resp := doRequest(handler, http.MethodGet, "/health/live"); resp.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", resp.Code, http.StatusOK)

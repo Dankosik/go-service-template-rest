@@ -57,7 +57,6 @@ func TestHTTPAuthnBoundary(t *testing.T) {
 		kind          oidcjwt.Kind
 		err           error
 		headers       []string
-		remoteAddr    string
 		wantStatus    int
 		wantChallenge string
 		wantRetry     string
@@ -83,18 +82,6 @@ func TestHTTPAuthnBoundary(t *testing.T) {
 			name:          "invalid token",
 			kind:          oidcjwt.KindInvalid,
 			headers:       []string{"Bearer invalid-token"},
-			wantStatus:    http.StatusUnauthorized,
-			wantChallenge: `Bearer error="invalid_token"`,
-			wantCode:      problem.CodeUnauthorized,
-			wantDetail:    "credentials are invalid",
-		},
-		{
-			// The same answer as an invalid token, deliberately: the category
-			// exists for the authn.reason metric an operator reads, and a caller
-			// can do nothing with the distinction.
-			name:          "token issued for longer than the service accepts",
-			kind:          oidcjwt.KindLifetime,
-			headers:       []string{"Bearer over-long-token"},
 			wantStatus:    http.StatusUnauthorized,
 			wantChallenge: `Bearer error="invalid_token"`,
 			wantCode:      problem.CodeUnauthorized,
@@ -134,15 +121,6 @@ func TestHTTPAuthnBoundary(t *testing.T) {
 			wantRetry:  "30",
 			wantCode:   problem.CodeServiceUnavailable,
 			wantDetail: "authentication trust is unavailable",
-		},
-		{
-			name:       "untrusted transport",
-			kind:       oidcjwt.KindUntrustedTransport,
-			headers:    []string{"Bearer opaque-token"},
-			remoteAddr: "198.51.100.10:1234",
-			wantStatus: http.StatusBadRequest,
-			wantCode:   problem.CodeBadRequest,
-			wantDetail: "authentication transport is untrusted",
 		},
 		{
 			name:       "authentication deadline",
@@ -202,11 +180,6 @@ func TestHTTPAuthnBoundary(t *testing.T) {
 
 			response := httptest.NewRecorder()
 			request := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/secure", nil)
-			request.RemoteAddr = testCase.remoteAddr
-			if request.RemoteAddr == "" {
-				request.RemoteAddr = "127.0.0.1:1234"
-			}
-			request.Header.Set("X-Forwarded-Proto", "https")
 			for _, value := range testCase.headers {
 				request.Header.Add("Authorization", value)
 			}

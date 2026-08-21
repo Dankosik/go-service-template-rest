@@ -108,7 +108,7 @@ func waitForStartupAdmission(
 		default:
 			// profile:grpc:start
 			if args.grpcSrv != nil {
-				args.grpcSrv.MarkServing()
+				args.grpcSrv.SetServing(true)
 			}
 			// profile:grpc:end
 			args.admission.MarkReady()

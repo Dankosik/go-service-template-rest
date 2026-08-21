@@ -75,35 +75,27 @@ type fakeGRPCRuntimeServer struct {
 	*fakeRuntimeServer
 
 	markServing     chan struct{}
+	serving         chan bool
 	startDrain      chan struct{}
 	markServingOnce sync.Once
 	startDrainOnce  sync.Once
-	// profile:authn-oidc-jwt:start
-	authnReadiness chan bool
-	// profile:authn-oidc-jwt:end
 }
 
 func newFakeGRPCRuntimeServer() *fakeGRPCRuntimeServer {
 	return &fakeGRPCRuntimeServer{
 		fakeRuntimeServer: newFakeRuntimeServer(),
 		markServing:       make(chan struct{}),
+		serving:           make(chan bool, 8),
 		startDrain:        make(chan struct{}),
-		// profile:authn-oidc-jwt:start
-		authnReadiness: make(chan bool, 8),
-		// profile:authn-oidc-jwt:end
 	}
 }
 
-func (f *fakeGRPCRuntimeServer) MarkServing() {
-	f.markServingOnce.Do(func() { close(f.markServing) })
+func (f *fakeGRPCRuntimeServer) SetServing(ready bool) {
+	f.serving <- ready
+	if ready {
+		f.markServingOnce.Do(func() { close(f.markServing) })
+	}
 }
-
-// profile:authn-oidc-jwt:start
-func (f *fakeGRPCRuntimeServer) SetAuthnReady(ready bool) {
-	f.authnReadiness <- ready
-}
-
-// profile:authn-oidc-jwt:end
 
 func (f *fakeGRPCRuntimeServer) StartDrain() {
 	f.startDrainOnce.Do(func() { close(f.startDrain) })
@@ -498,8 +490,7 @@ func TestServeRuntimeCoordinatesGRPCReadinessAndDrain(t *testing.T) {
 				App:  config.AppConfig{Env: "test"},
 				HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second},
 				GRPC: config.GRPCConfig{Server: config.GRPCServerConfig{
-					Addr:           "127.0.0.1:0",
-					MaxConnections: 4,
+					Addr: "127.0.0.1:0",
 				}},
 			},
 			log:            slog.New(slog.DiscardHandler),
@@ -546,8 +537,7 @@ func TestServeRuntimeRejectsGRPCListenFailureBeforeServing(t *testing.T) {
 		cfg: config.Config{
 			HTTP: config.HTTPConfig{Addr: "127.0.0.1:0", ShutdownTimeout: time.Second},
 			GRPC: config.GRPCConfig{Server: config.GRPCServerConfig{
-				Addr:           occupied.Addr().String(),
-				MaxConnections: 4,
+				Addr: occupied.Addr().String(),
 			}},
 		},
 		log:       slog.New(slog.DiscardHandler),

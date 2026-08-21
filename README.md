@@ -45,7 +45,6 @@ make template-init \
   OUTBOX=none \
   GRPC=none \
   AUTHN=none \
-  OUTBOUND_HTTP=none \
   OBJECT_STORAGE=none \
   OUTBOUND_AUTH=none \
   MESSAGING=none
@@ -55,8 +54,8 @@ make run
 
 The defaults create a service with no database dependency. The complete agent
 workflow is always retained. Choose `DATABASE=postgres` when the service owns
-PostgreSQL, and choose `OUTBOUND_HTTP=bounded` only when a shared
-fixed-authority client removes repeated provider code.
+PostgreSQL. The fixed-authority HTTP client is always retained so feature code
+only supplies its dependency target.
 <!-- profile:object-storage:start -->
 Choose `OBJECT_STORAGE=s3` only when this service needs the S3-compatible
 capability. It requires a complete static tuple supplied by deployment and
@@ -75,9 +74,9 @@ business transaction and executed by the separate jobs worker; see
 [PostgreSQL background jobs](docs/postgres-durable-background-jobs.md).
 <!-- profile:jobs-postgres:end -->
 <!-- profile:outbound-auth-oauth2-client-credentials:start -->
-Choose `OUTBOUND_AUTH=oauth2-client-credentials` only with
-`OUTBOUND_HTTP=bounded`, `GRPC=enabled`, or both; it retains one fixed machine
-credential owner. See [outbound machine authentication](docs/outbound-machine-authentication.md).
+Choose `OUTBOUND_AUTH=oauth2-client-credentials` to retain the small factory
+that gives a concrete dependency adapter authenticated clients without exposing
+tokens. See [outbound machine authentication](docs/outbound-machine-authentication.md).
 <!-- profile:outbound-auth-oauth2-client-credentials:end -->
 <!-- profile:outbox-postgres:start -->
 Choose `DATABASE=postgres OUTBOX=postgres MESSAGING=nats-jetstream` when a
@@ -93,7 +92,7 @@ jobs worker. Receiver processing is at-least-once; see
 [outbound webhook delivery](docs/outbound-webhook-delivery.md).
 <!-- profile:webhooks-durable:end -->
 <!-- profile:authn-oidc-jwt:start -->
-Choose `AUTHN=oidc-jwt` for strict OIDC discovery and signed JWT access-token
+Choose `AUTHN=oidc-jwt` for OIDC discovery and signed JWT access-token
 authentication; see [OIDC/JWT authentication](docs/authentication.md).
 <!-- profile:authn-oidc-jwt:end -->
 <!-- profile:grpc:start -->
@@ -102,8 +101,8 @@ when the service publishes or consumes native gRPC; see the
 [gRPC guide](docs/grpc.md).
 <!-- profile:grpc:end -->
 <!-- profile:messaging-nats-jetstream:start -->
-Choose `MESSAGING=nats-jetstream` for bounded direct JetStream publishing and a
-separate durable pull-consumer worker; see [durable messaging](docs/durable-messaging.md).
+Choose `MESSAGING=nats-jetstream` for typed event publishing and handler
+registration over a separate durable worker; see [durable messaging](docs/durable-messaging.md).
 Together with `DATABASE=postgres OUTBOX=postgres`, it supplies the outbox
 relay's concrete NATS producer and W3C trace continuity. The generator rejects
 outbox without messaging.
@@ -136,7 +135,7 @@ it, and read it here or in
 | Messaging | Optional direct NATS JetStream producer and separate bounded durable pull-consumer worker |
 <!-- profile:messaging-nats-jetstream:end -->
 <!-- profile:authn-oidc-jwt:start -->
-| Authentication | Optional strict OIDC discovery and RS256 JWT access-token verification for HTTP and native gRPC |
+| Authentication | Optional OIDC discovery and RS256 JWT access-token verification for HTTP and native gRPC, with an explicit RFC 9068 profile |
 <!-- profile:authn-oidc-jwt:end -->
 | Observability | OpenTelemetry 1.x traces and metrics, Prometheus export, and structured logs |
 | Testing | Race detection and goroutine leak checks; PostgreSQL Testcontainers coverage in the database profile |
@@ -227,7 +226,7 @@ boundary.
 ```mermaid
 flowchart TD
     user["User<br/>one orchestration launch"]
-    orchestrator["LEDGER_ORCHESTRATOR<br/>routes ready units only"]
+    orchestrator["LEDGER_ORCHESTRATOR<br/>fills independent ready frontier"]
     lead["ACCEPTANCE_UNIT_LEAD<br/>owns one unit end to end"]
     strategy{"Lead chooses the fastest safe strategy"}
     direct["Lead implements directly"]
@@ -239,7 +238,7 @@ flowchart TD
     done["Ledger exhausted"]
 
     user --> orchestrator
-    orchestrator -->|"dispatches one ready unit"| lead
+    orchestrator -->|"dispatches independent ready frontier"| lead
     lead --> strategy
     strategy -->|"handoff costs more"| direct
     strategy -->|"bounded useful work"| delegated
@@ -249,16 +248,18 @@ flowchart TD
     review -->|"yes"| reviewer
     review -->|"no"| receipt
     reviewer --> receipt
-    receipt -->|"re-read ledger and route again"| orchestrator
-    orchestrator -->|"no ready or pending units"| done
+    receipt -->|"canonical transition; refill frontier"| orchestrator
+    orchestrator -->|"no ready unit or owner-held recovery"| done
 ```
 
-The orchestrator does not implement or review units. Each fresh Lead chooses
-the simplest reliable workflow, may write directly, delegates only when the
-boundary saves time, cost, or context, and owns integration and acceptance.
-Only genuinely independent work runs concurrently. Recoverable problems may
-change the route, reuse a useful agent context, start fresh, or repair the
-smallest invalid upstream decision without creating another semantic role.
+The orchestrator does not implement or review units. It computes the ready
+frontier and dispatches every mutually independent unit before waiting, within
+capacity. Each fresh Lead chooses the simplest reliable workflow, may write
+directly, delegates only when the boundary saves time, cost, or context, and
+owns integration and acceptance of that unit. Only genuinely independent work
+runs concurrently. Recoverable problems may change the route, reuse a useful
+agent context, start fresh, or repair the smallest invalid upstream decision
+without creating another semantic role.
 
 The detailed contracts live in [Implementation](docs/spec-first-workflow/phases/implementation.md),
 [Review](docs/spec-first-workflow/shared/review.md), and the selected [Agent
@@ -291,7 +292,7 @@ internal/<feature>/              feature-owned business behavior (when added)
 internal/config/                 runtime configuration
 internal/health/                 readiness and drain behavior
 internal/infra/http/             HTTP transport and middleware
-internal/infra/httpclient/       bounded outbound HTTP transport (optional profile)
+internal/infra/httpclient/       fixed-authority outbound HTTP transport
 internal/infra/postgres/         PostgreSQL adapters (PostgreSQL profile)
 api/openapi/service.yaml         API source of truth
 internal/openapi/                generated OpenAPI artifacts

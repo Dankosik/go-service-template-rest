@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/example/go-service-template-rest/examples/reference-service/internal/article"
 	"github.com/example/go-service-template-rest/internal/failure"
@@ -22,23 +21,9 @@ import (
 const articleCreateFullMethod = "/reference.test.Article/Create"
 
 func TestArticleAlreadyExistsMapsThroughGRPCTransport(t *testing.T) {
-	server, err := grpcx.NewServer(grpcx.Config{
-		MaxConcurrentRPCs:          4,
-		MaxConcurrentHealthRPCs:    4,
-		MaxConcurrentStreams:       4,
-		MaxHeaderListBytes:         16 << 10,
-		MaxReceiveMessageBytes:     4 << 20,
-		MaxSendMessageBytes:        4 << 20,
-		AccessLogSuccessSampleRate: 1,
-		MaxConnectionIdle:          time.Minute,
-		ServerPingInterval:         time.Minute,
-		ServerPingTimeout:          20 * time.Second,
-		MinClientPingInterval:      10 * time.Second,
-		PermitPingWithoutStream:    true,
-	}, grpcx.Options{
+	server, err := grpcx.NewServer(grpcx.Options{
 		Logger:       slog.New(slog.DiscardHandler),
 		DomainErrors: []failure.Mapper{article.ClassifyError},
-		ErrorDomain:  "reference-service.test",
 		Services: []grpcx.RegisterService{func(registrar grpc.ServiceRegistrar) {
 			grpctest.Register(registrar, grpctest.Unary(articleCreateFullMethod,
 				func(context.Context, *emptypb.Empty) (*emptypb.Empty, error) {
@@ -63,7 +48,7 @@ func TestArticleAlreadyExistsMapsThroughGRPCTransport(t *testing.T) {
 		t.Fatalf("details = %v, want one ErrorInfo and no RetryInfo", details)
 	}
 	info, ok := details[0].(*errdetails.ErrorInfo)
-	if !ok || info.GetReason() != "ALREADY_EXISTS" || info.GetDomain() != "reference-service.test" {
+	if !ok || info.GetReason() != "ALREADY_EXISTS" || info.GetDomain() != "reference.test.Article" {
 		t.Fatalf("details = %v, want ALREADY_EXISTS ErrorInfo", details)
 	}
 }

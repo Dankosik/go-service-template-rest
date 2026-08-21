@@ -11,6 +11,7 @@ import (
 
 	"github.com/nats-io/nats.go/jetstream"
 
+	"github.com/example/go-service-template-rest/internal/domainevent"
 	"github.com/example/go-service-template-rest/internal/observability/logctx"
 )
 
@@ -68,10 +69,8 @@ func (w *Worker) handle(handlerRoot context.Context, source jetstream.Msg) error
 	defer span.End()
 	handlerCtx, cancel := context.WithTimeout(ctx, w.cfg.HandlerTimeout)
 	result := handlerResult{started: time.Now()}
-	w.client.telemetry.countConsumeActive(ctx, 1)
 	result.panicked, result.err = w.invokeHandler(handlerCtx, decoded)
 	result.contextErr = handlerCtx.Err()
-	w.client.telemetry.countConsumeActive(ctx, -1)
 	cancel()
 
 	return w.settle(ctx, handlerRoot, current, result)
@@ -99,9 +98,6 @@ func (w *Worker) admit(handlerRoot context.Context, current delivery) (Message, 
 	}
 	if encodedHeaderBytes(source.Headers()) > HeaderLimitBytes {
 		return Message{}, nil, settled(w.deadLetter(handlerRoot, source, metadata, Message{}, deadLetterMalformed))
-	}
-	if metadata.NumDelivered > 1 {
-		w.client.telemetry.countRedelivery(handlerRoot)
 	}
 	decoded, remote, decodeErr := decodeMessage(source, metadata)
 	if decodeErr != nil {
@@ -142,7 +138,7 @@ func (w *Worker) settle(ctx, handlerRoot context.Context, current delivery, resu
 		telemetry.recordHandler(ctx, current.message, outcomeCanceled, reasonShutdown, result.started)
 		return nil //nolint:nilerr // Shutdown is not a worker fault; the message is left for redelivery.
 	}
-	if isPermanent(result.err) {
+	if domainevent.IsPermanent(result.err) {
 		telemetry.recordHandler(ctx, current.message, outcomePermanent, reasonHandlerPermanent, result.started)
 		return w.deadLetter(handlerRoot, current.source, current.metadata, current.message, deadLetterPermanent)
 	}
@@ -153,7 +149,6 @@ func (w *Worker) settle(ctx, handlerRoot context.Context, current delivery, resu
 		return w.deadLetter(handlerRoot, current.source, current.metadata, current.message, deadLetterExhausted)
 	}
 	telemetry.recordHandler(ctx, current.message, outcome, reasonHandlerRetry, result.started)
-	telemetry.countRetry(ctx)
 	return w.requestRedelivery(
 		ctx, current.source, current.metadata,
 		w.retryDelayFor(current.metadata.NumDelivered), redeliveryHandler,

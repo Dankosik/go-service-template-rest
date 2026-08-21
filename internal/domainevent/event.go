@@ -1,6 +1,7 @@
 package domainevent
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/json"
 	"errors"
@@ -21,6 +22,75 @@ type Event struct {
 	Version    uint16
 	OccurredAt time.Time
 	Payload    json.RawMessage
+}
+
+// Kind binds one Go payload type to its stable event name and version. It is
+// transport-neutral: broker routing is supplied separately by composition.
+type Kind[T any] struct {
+	Type    string
+	Version uint16
+}
+
+// Define declares a typed event kind. Invalid constants are rejected when New
+// validates the event, keeping declaration convenient without an init panic.
+func Define[T any](eventType string, version uint16) Kind[T] {
+	return Kind[T]{Type: eventType, Version: version}
+}
+
+// Typed is the shape delivered to a typed handler.
+type Typed[T any] struct {
+	ID         string
+	OccurredAt time.Time
+	Payload    T
+}
+
+func (k Kind[T]) New(id string, occurredAt time.Time, payload T) (Event, error) {
+	return New(id, k.Type, k.Version, occurredAt, payload)
+}
+
+// Registrar is the transport-neutral seam implemented by a messaging adapter.
+type Registrar interface {
+	Register(eventType string, version uint16, handler func(context.Context, Event) error) error
+}
+
+// Handle registers a typed handler without exposing subjects, headers,
+// delivery attempts, or acknowledgements to business code.
+func Handle[T any](registrar Registrar, kind Kind[T], handler func(context.Context, Typed[T]) error) error {
+	if registrar == nil {
+		return errors.New("event registrar is required")
+	}
+	if handler == nil {
+		return errors.New("event handler is required")
+	}
+	err := registrar.Register(kind.Type, kind.Version, func(ctx context.Context, event Event) error {
+		var payload T
+		if err := json.Unmarshal(event.Payload, &payload); err != nil {
+			return Permanent(fmt.Errorf("decode %s v%d: %w", event.Type, event.Version, err))
+		}
+		return handler(ctx, Typed[T]{ID: event.ID, OccurredAt: event.OccurredAt, Payload: payload})
+	})
+	if err != nil {
+		return fmt.Errorf("register typed event handler: %w", err)
+	}
+	return nil
+}
+
+type permanentError struct{ err error }
+
+func (e permanentError) Error() string { return e.err.Error() }
+func (e permanentError) Unwrap() error { return e.err }
+
+// Permanent marks bytes that retrying unchanged cannot make processable.
+func Permanent(err error) error {
+	if err == nil {
+		return nil
+	}
+	return permanentError{err: err}
+}
+
+func IsPermanent(err error) bool {
+	var target permanentError
+	return errors.As(err, &target)
 }
 
 // New encodes a typed payload once, before the caller enters its transaction.

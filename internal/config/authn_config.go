@@ -13,35 +13,29 @@ import (
 // and time policy is fixed by the capability rather than provider-controlled
 // configuration.
 type AuthnConfig struct {
-	Issuer            string `koanf:"issuer"`
-	Audience          string `koanf:"audience"`
-	TrustedProxyCIDRs string `koanf:"trusted_proxy_cidrs"`
+	Issuer       string `koanf:"issuer"`
+	Audience     string `koanf:"audience"`
+	TokenProfile string `koanf:"token_profile"`
 }
 
 func authnDefaults() map[string]any {
 	// Trust policy has no executable placeholder. OIDC profiles fail config
 	// validation until deployment supplies every required value.
 	return map[string]any{
-		"authn.issuer":              "",
-		"authn.audience":            "",
-		"authn.trusted_proxy_cidrs": "",
+		"authn.issuer":        "",
+		"authn.audience":      "",
+		"authn.token_profile": authntrust.TokenProfileResourceServer,
 	}
 }
 
 // validateAuthnConfig applies the shared trust rules at configuration load, so a
-// bad issuer, audience, or proxy CIDR stops the process instead of surfacing at
+// bad issuer, audience, or token profile stops the process instead of surfacing at
 // authn startup. internal/authntrust owns the rules and why they live in a leaf
 // package: this one may not import the verifier that applies them too.
-//
-// It also rewrites what it accepts, which is more than the trimming the other
-// validators here do: trusted_proxy_cidrs is stored back in masked canonical
-// form, so 10.0.0.5/8 is held as 10.0.0.0/8. That rewritten string is the one
-// startup_authn.go hands oidcjwt.NewPolicy, which runs it through the same
-// parse and so cannot reach a different set of peers.
 func validateAuthnConfig(cfg *AuthnConfig) error {
 	cfg.Issuer = strings.TrimSpace(cfg.Issuer)
 	cfg.Audience = strings.TrimSpace(cfg.Audience)
-	cfg.TrustedProxyCIDRs = strings.TrimSpace(cfg.TrustedProxyCIDRs)
+	cfg.TokenProfile = strings.ToLower(strings.TrimSpace(cfg.TokenProfile))
 
 	if !authntrust.ValidIssuerURL(cfg.Issuer) {
 		return fmt.Errorf(
@@ -53,15 +47,12 @@ func validateAuthnConfig(cfg *AuthnConfig) error {
 		return fmt.Errorf("%w: authn.audience cannot be empty", ErrValidate)
 	}
 
-	trusted, err := authntrust.ParseProxyCIDRs(cfg.TrustedProxyCIDRs)
-	if err != nil {
-		return fmt.Errorf("%w: authn.%w", ErrValidate, err)
+	if !authntrust.ValidTokenProfile(cfg.TokenProfile) {
+		return fmt.Errorf(
+			"%w: authn.token_profile must be one of resource-server or rfc9068",
+			ErrValidate,
+		)
 	}
-	canonical := make([]string, 0, len(trusted))
-	for _, prefix := range trusted {
-		canonical = append(canonical, prefix.String())
-	}
-	cfg.TrustedProxyCIDRs = strings.Join(canonical, ",")
 	return nil
 }
 

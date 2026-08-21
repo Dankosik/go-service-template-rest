@@ -25,10 +25,7 @@ func Messaging(cfg config.MessagingConfig) natsjs.Config {
 		AllowPlaintext:       cfg.AllowPlaintext,
 		AllowUnauthenticated: cfg.AllowUnauthenticated,
 		Stream:               cfg.Stream,
-		MinStreamReplicas:    cfg.MinStreamReplicas,
-		MinStreamRetention:   cfg.MinStreamRetention,
 		MaxPayloadBytes:      cfg.MaxPayloadBytes,
-		MaxPendingPublishes:  cfg.MaxPendingPublishes,
 	}
 }
 

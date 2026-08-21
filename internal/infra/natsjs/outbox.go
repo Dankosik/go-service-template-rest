@@ -12,42 +12,18 @@ import (
 	"go.opentelemetry.io/otel/propagation"
 )
 
-type OutboxRoute struct {
-	Type    string
-	Version uint16
-	Subject string
-}
-
-type outboxRouteKey struct {
-	eventType string
-	version   uint16
-}
-
 // NewOutboxAppender builds the service-owned event routing table once. Domain
 // code appends events without ever seeing the selected NATS subject.
-func NewOutboxAppender(maxPayloadBytes int, routes ...OutboxRoute) (*postgresoutbox.Appender, error) {
+func NewOutboxAppender(maxPayloadBytes int, routes ...Route) (*postgresoutbox.Appender, error) {
 	if len(routes) == 0 {
 		return nil, fmt.Errorf("%w: at least one outbox route is required", ErrRejected)
 	}
-	subjects := make(map[outboxRouteKey]string, len(routes))
-	for _, route := range routes {
-		if err := validateRequiredValue("event type", route.Type); err != nil {
-			return nil, err
-		}
-		if route.Version == 0 {
-			return nil, fmt.Errorf("%w: event version must be positive", ErrRejected)
-		}
-		if !validSubject(route.Subject, false) {
-			return nil, fmt.Errorf("%w: invalid outbox subject", ErrRejected)
-		}
-		key := outboxRouteKey{eventType: route.Type, version: route.Version}
-		if _, exists := subjects[key]; exists {
-			return nil, fmt.Errorf("%w: duplicate outbox route for %s v%d", ErrRejected, route.Type, route.Version)
-		}
-		subjects[key] = route.Subject
+	subjects, err := buildRoutes(routes)
+	if err != nil {
+		return nil, err
 	}
 	appender, err := postgresoutbox.NewAppender(maxPayloadBytes, func(event domainevent.Event) (string, error) {
-		subject, ok := subjects[outboxRouteKey{eventType: event.Type, version: event.Version}]
+		subject, ok := subjects[routeKey{typeName: event.Type, version: event.Version}]
 		if !ok {
 			return "", fmt.Errorf("no outbox route for %s v%d", event.Type, event.Version)
 		}

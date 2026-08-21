@@ -2,117 +2,145 @@ package oidcjwt
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"log/slog"
+	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
+	"github.com/MicahParks/jwkset"
+	"github.com/MicahParks/keyfunc/v3"
+	"github.com/golang-jwt/jwt/v5"
 	"go.opentelemetry.io/otel/metric"
+	"golang.org/x/time/rate"
 )
 
-// Verifier owns one issuer's trusted keys, refresh lifecycle, and both transport
-// adapters.
-//
-// Its state is split across four owners, and each guards itself: the fields
-// below are immutable, [trustStore] owns the installed keys, [refreshAdmission]
-// owns which fetches run, and the lifecycle group owns Run and Close. Mixing
-// them is what a change here has to avoid.
-type Verifier struct {
-	policy        Policy
-	jwksURI       string
-	client        providerClient
-	now           func() time.Time
-	jitter        func(time.Duration) time.Duration
-	log           *slog.Logger
-	metrics       authnMetrics
-	unregisterAge func()
-	trust         *trustStore
-	admission     *refreshAdmission
+type contextKey uint8
 
-	// baseCtx is the Verifier's own lifetime expressed as a context, which is
-	// what a fetch outliving the request that triggered it runs under. Close
-	// cancels it, and that cancellation is the stop signal for Run and for any
-	// refresh in flight.
-	baseCtx context.Context //nolint:containedctx // Verifier owns this lifecycle context and cancels it in Close.
-	cancel  context.CancelFunc
+const refreshFailureKey contextKey = iota
 
-	// lifecycleMu guards the two questions Run and Close ask each other: has Run
-	// started, and has this Verifier been retired. Between them they admit at
-	// most one Run and one shutdown. runDone reports that Run has left, and
-	// closeOnce both releases the owned client and gauge exactly once and holds a
-	// second Close until the first has finished. lifecycle.go is the only file
-	// that reads or writes any of it.
-	lifecycleMu sync.Mutex
-	runStarted  bool
-	retired     bool
-	runDone     chan struct{}
-	closeOnce   sync.Once
+type refreshFailure struct {
+	failed atomic.Bool
 }
 
-// New establishes initial OIDC trust synchronously. It starts no goroutine.
+// Verifier owns one issuer's parser, cached JWKS resolver, transport adapters,
+// and refresh lifetime.
+type Verifier struct {
+	policy    Policy
+	parser    *jwt.Parser
+	keyFunc   func(context.Context) jwt.Keyfunc
+	metrics   authnMetrics
+	cancel    context.CancelFunc
+	closeIdle func()
+	closeOnce sync.Once
+}
+
+// New discovers the issuer's JWKS, installs the first key set synchronously,
+// and starts the library-owned refresh loop.
 func New(
 	ctx context.Context,
 	policy Policy,
 	meterProvider metric.MeterProvider,
 	log *slog.Logger,
 ) (*Verifier, error) {
-	return newVerifier(
-		ctx,
-		policy,
-		productionClientFactory(meterProvider),
-		time.Now,
-		meterProvider,
-		log,
-	)
-}
-
-func newVerifier(
-	ctx context.Context,
-	policy Policy,
-	factory clientFactory,
-	now func() time.Time,
-	meterProvider metric.MeterProvider,
-	log *slog.Logger,
-) (*Verifier, error) {
-	if now == nil {
-		now = time.Now
-	}
 	if log == nil {
 		log = slog.Default()
 	}
-	reportDegraded := newDegradedWarning(log)
-	metrics := newAuthnMetrics(meterProvider, reportDegraded)
-	startedAt := time.Now()
-	trust, err := bootstrapTrust(ctx, policy, factory, now, log)
-	metrics.recordRefresh(ctx, triggerStartup, err, time.Since(startedAt))
+	jwksURI, err := discoverJWKSURI(ctx, policy, meterProvider)
 	if err != nil {
 		return nil, err
 	}
-	baseCtx, cancel := context.WithCancel(context.Background())
-	store := newTrustStore(trust.keys)
-	verifier := &Verifier{
-		policy:        policy,
-		jwksURI:       trust.jwksURI,
-		client:        trust.client,
-		now:           now,
-		jitter:        refreshJitter,
-		log:           log,
-		metrics:       metrics,
-		unregisterAge: registerKeyAgeGauge(meterProvider, store.current, now, reportDegraded),
-		trust:         store,
-		baseCtx:       baseCtx,
-		cancel:        cancel,
-		runDone:       make(chan struct{}),
+	jwksClient, closeIdle, err := newJWKSClient(jwksURI, meterProvider)
+	if err != nil {
+		return nil, err
 	}
-	// admission refers to the verifier being built, so it cannot move into the
-	// literal above.
-	verifier.admission = &refreshAdmission{owner: verifier}
-	return verifier, nil
+	processCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
+	metrics := newAuthnMetrics(meterProvider)
+	returnFirstError := false
+	keys, err := keyfunc.NewDefaultOverrideCtx(processCtx, []string{jwksURI}, keyfunc.Override{
+		Client:                    jwksClient,
+		HTTPTimeout:               ProviderTimeout,
+		NoErrorReturnFirstHTTPReq: &returnFirstError,
+		RateLimitWaitMax:          time.Nanosecond,
+		RefreshInterval:           RefreshInterval,
+		RefreshUnknownKID:         rate.NewLimiter(rate.Every(RefreshCooldown), 1),
+		RefreshErrorHandlerFunc: func(string) func(context.Context, error) {
+			return func(refreshCtx context.Context, _ error) {
+				if refreshCtx.Err() != nil {
+					return
+				}
+				if observed, ok := refreshCtx.Value(refreshFailureKey).(*refreshFailure); ok {
+					observed.failed.Store(true)
+				}
+				metrics.recordRefreshFailure(context.WithoutCancel(refreshCtx))
+				log.WarnContext(refreshCtx, "authn_jwks_refresh_failed", "component", "authn")
+			}
+		},
+		ValidationSkipAll: false,
+	})
+	if err != nil {
+		cancel()
+		closeIdle()
+		return nil, failure(KindUnavailable)
+	}
+	signingKeys, err := keyfunc.New(keyfunc.Options{
+		Ctx:          processCtx,
+		Storage:      keys.Storage(),
+		UseWhitelist: []jwkset.USE{"", jwkset.UseSig},
+	})
+	if err != nil {
+		cancel()
+		closeIdle()
+		return nil, failure(KindUnavailable)
+	}
+	return newVerifier(policy, signingKeys.KeyfuncCtx, time.Now, metrics, cancel, closeIdle), nil
 }
 
-// transport names the adapter a verification arrived through. Keeping it
-// private prevents package consumers from bypassing the adapter's credential
-// stripping and transport-trust checks while choosing arbitrary metric labels.
+func newVerifier(
+	policy Policy,
+	keyFunc func(context.Context) jwt.Keyfunc,
+	now func() time.Time,
+	metrics authnMetrics,
+	cancel context.CancelFunc,
+	closeIdle func(),
+) *Verifier {
+	if now == nil {
+		now = time.Now
+	}
+	if cancel == nil {
+		cancel = func() {}
+	}
+	if closeIdle == nil {
+		closeIdle = func() {}
+	}
+	return &Verifier{
+		policy: policy,
+		parser: jwt.NewParser(
+			jwt.WithValidMethods([]string{AllowedAlgorithm}),
+			jwt.WithIssuer(policy.issuer),
+			jwt.WithAudience(policy.audience),
+			jwt.WithExpirationRequired(),
+			jwt.WithLeeway(ClockSkew),
+			jwt.WithStrictDecoding(),
+			jwt.WithJSONNumber(),
+			jwt.WithTimeFunc(now),
+		),
+		keyFunc:   keyFunc,
+		metrics:   metrics,
+		cancel:    cancel,
+		closeIdle: closeIdle,
+	}
+}
+
+// Close stops library-owned refresh work and releases idle provider connections.
+func (v *Verifier) Close() {
+	v.closeOnce.Do(func() {
+		v.cancel()
+		v.closeIdle()
+	})
+}
+
 type transport string
 
 const (
@@ -120,127 +148,51 @@ const (
 	transportGRPC transport = "grpc"
 )
 
-// verifyToken returns the parsed token only after its signature and current
-// trust have both been verified.
-//
-// Two error shapes leave here and an adapter has to answer both. Almost every
-// failure is an [Error] carrying a [Kind], and the mandatory exhaustive linter
-// holds every switch on one to the full set. The exception is callerAborted,
-// which carries no Kind and so takes a switch on the Kind alone through its
-// default arm; that predicate owns why, and an adapter tests it first.
-// profile:grpc:start
-// grpcAuthenticationError is the worked example.
-// profile:grpc:end
-// No linter names that obligation, because it is not a member of any enum.
-//
-// The results are named so the deferred recovery can replace a panic with a
-// sanitized failure, and so one metric record covers every exit.
-func (v *Verifier) verifyToken(
-	ctx context.Context,
-	compact string,
-	transport transport,
-) (verified parsedToken, err error) {
-	defer func() {
-		if recovered := recover(); recovered != nil {
-			verified = parsedToken{}
-			err = failure(KindUnavailable)
-			logRecoveredPanic(ctx, v.log, "verify", recovered)
-		}
-		v.metrics.recordVerification(ctx, transport, err)
-	}()
-
-	parsed, err := parseToken(compact, v.policy, v.now())
+func (v *Verifier) verifyCredential(ctx context.Context, values []string, carrier transport) (parsedToken, error) {
+	compact, err := bearerToken(values)
 	if err != nil {
+		v.metrics.recordVerification(ctx, carrier, err)
 		return parsedToken{}, err
 	}
-
-	// Only a key miss is worth a refresh: it is what a provider rotation looks
-	// like from here, and one coalesced, cooldown-limited fetch is the recovery. A
-	// refresh the cooldown refused or the provider failed leaves the installed set
-	// in place, so the decision below still answers from it. Staleness gets no
-	// second attempt — this token already matched, so only a replacement the
-	// scheduled cadence owns can clear the age.
-	snapshot := v.trust.current()
-	signed := snapshot.verifies(parsed)
-	if !signed {
-		refreshErr := v.refresh(ctx)
-		// A context identity is the caller's only when the caller's own context
-		// carries it. ProviderTimeout also uses context internally, but that budget
-		// is an unavailable trust dependency rather than a client cancellation.
-		if ctxErr := ctx.Err(); ctxErr != nil && errors.Is(refreshErr, ctxErr) {
-			return parsedToken{}, refreshErr
-		}
-		if errors.Is(refreshErr, errRefreshInProgress) ||
-			errors.Is(refreshErr, errProviderCanceled) ||
-			errors.Is(refreshErr, errProviderTimeout) {
-			return parsedToken{}, failure(KindUnavailable)
-		}
-		snapshot = v.trust.current()
-		signed = snapshot.verifies(parsed)
-	}
-
-	// Age answers before the signature, and the categories differ because the
-	// question does: against a current set, "no key signs this" is a complete
-	// answer and the credential is invalid, while against a set we could not
-	// replace the matching key may be in the one the refresh failed to fetch —
-	// so the honest report is that trust is unavailable.
-	if !v.keysCurrent(snapshot) {
-		return parsedToken{}, failure(KindUnavailable)
-	}
-	if !signed {
-		return parsedToken{}, failure(KindInvalid)
-	}
-	return parsed, nil
+	return v.verifyToken(ctx, compact, carrier)
 }
 
-// verifyCredential extracts the bearer credential one transport carried and
-// verifies it.
-//
-// Both adapters reach verifyToken through here, which is what keeps
-// authn.verifications the complete count of what this boundary answered:
-// verifyToken counts its own exits, but a header refused before it — missing,
-// duplicated, or oversized — would otherwise go uncounted. Pairing the
-// extraction with the count in one function means an adapter cannot take the
-// first without the second.
-func (v *Verifier) verifyCredential(
-	ctx context.Context,
-	values []string,
-	transport transport,
-) (parsedToken, error) {
-	token, err := bearerToken(values)
-	if err != nil {
-		return parsedToken{}, v.recordRejection(ctx, transport, err)
-	}
-	return v.verifyToken(ctx, token, transport)
-}
-
-// recordRejection counts a refusal verifyToken never saw, and returns that same
-// error. An adapter calls it directly for what only an adapter can know: that a
-// request never arrived in a shape this boundary may authenticate at all.
-//
-// One refusal deliberately does not reach it, and naming that here is what keeps
-// the count meaning something: errUnsupportedSecurityScheme is a requirement
-// this boundary declined to answer rather than a credential it judged, so
-// counting it would inflate the very series that reports how often callers are
-// refused. Its declaration in http.go owns the rest of why.
-func (v *Verifier) recordRejection(ctx context.Context, transport transport, err error) error {
-	v.metrics.recordVerification(ctx, transport, err)
+func (v *Verifier) recordRejection(ctx context.Context, carrier transport, err error) error {
+	v.metrics.recordVerification(ctx, carrier, err)
 	return err
 }
 
-// CheckReady reports whether a completely validated key set is still current.
-func (v *Verifier) CheckReady() error {
-	if !v.keysCurrent(v.trust.current()) {
-		return failure(KindUnavailable)
+func (v *Verifier) verifyToken(ctx context.Context, compact string, carrier transport) (parsed parsedToken, result error) {
+	defer func() { v.metrics.recordVerification(ctx, carrier, result) }()
+	if len(compact) > MaxTokenBytes {
+		return parsedToken{}, failure(KindOversize)
 	}
-	return nil
+	refresh := new(refreshFailure)
+	verifyCtx := context.WithValue(ctx, refreshFailureKey, refresh)
+	claims := new(accessTokenClaims)
+	token, err := v.parser.ParseWithClaims(compact, claims, func(token *jwt.Token) (any, error) {
+		if v.policy.strictRFC9068() && !validAccessTokenType(token.Header["typ"]) {
+			return nil, failure(KindInvalid)
+		}
+		if v.keyFunc == nil {
+			return nil, failure(KindUnavailable)
+		}
+		return v.keyFunc(verifyCtx)(token)
+	})
+	if err != nil || token == nil || !token.Valid {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return parsedToken{}, fmt.Errorf("verify access token: %w", ctxErr)
+		}
+		if refresh.failed.Load() {
+			return parsedToken{}, failure(KindUnavailable)
+		}
+		return parsedToken{}, failure(KindInvalid)
+	}
+	principal, err := principalFromClaims(claims, v.policy.strictRFC9068())
+	if err != nil || claims.ExpiresAt == nil {
+		return parsedToken{}, failure(KindInvalid)
+	}
+	return parsedToken{principal: principal, expiresAt: claims.ExpiresAt.Time}, nil
 }
 
-// keysCurrent is the single staleness policy every caller asks: a set past
-// MaxKeySetAge is refused even though it is still installed and would still
-// verify signatures. MaxKeySetAge owns why. The nil arm is unreachable through
-// [trustStore] and answers fail-closed anyway, which is also what the deep lint
-// gate's nil analysis requires of a dereference behind a pointer parameter.
-func (v *Verifier) keysCurrent(keys *keySet) bool {
-	return keys != nil && v.now().Before(keys.fetchedAt.Add(MaxKeySetAge))
-}
+var _ http.RoundTripper = jwksRoundTripper{}

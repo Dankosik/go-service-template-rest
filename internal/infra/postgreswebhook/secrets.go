@@ -4,10 +4,9 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/base64"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
-	"io"
 	"strings"
 )
 
@@ -41,17 +40,9 @@ func ParseSecretManifest(raw string) (*SecretManifest, error) {
 	if raw == "" || len(raw) > MaxSecretManifestBytes {
 		return nil, errors.New("parse webhook secret manifest: document size is invalid")
 	}
-	if err := rejectDuplicateJSONFields(raw); err != nil {
-		return nil, errors.New("parse webhook secret manifest: duplicate field")
-	}
-	decoder := json.NewDecoder(strings.NewReader(raw))
-	decoder.DisallowUnknownFields()
 	var document secretDocument
-	if err := decoder.Decode(&document); err != nil {
+	if err := json.UnmarshalRead(strings.NewReader(raw), &document, json.RejectUnknownMembers(true)); err != nil {
 		return nil, errors.New("parse webhook secret manifest: invalid JSON")
-	}
-	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
-		return nil, errors.New("parse webhook secret manifest: trailing data")
 	}
 	if len(document.Entries) == 0 || len(document.Entries) > MaxSecretManifestEntries {
 		return nil, errors.New("parse webhook secret manifest: entries are required")
@@ -86,62 +77,6 @@ func ParseSecretManifest(raw string) (*SecretManifest, error) {
 		manifest.entries[tuple] = bytes.Clone(secret)
 	}
 	return manifest, nil
-}
-
-func rejectDuplicateJSONFields(raw string) error {
-	decoder := json.NewDecoder(strings.NewReader(raw))
-	if err := inspectJSONValue(decoder); err != nil {
-		return err
-	}
-	if _, err := decoder.Token(); !errors.Is(err, io.EOF) {
-		return errors.New("trailing JSON data")
-	}
-	return nil
-}
-
-func inspectJSONValue(decoder *json.Decoder) error {
-	token, err := decoder.Token()
-	if err != nil {
-		return fmt.Errorf("read JSON token: %w", err)
-	}
-	delimiter, ok := token.(json.Delim)
-	if !ok {
-		return nil
-	}
-	switch delimiter {
-	case '{':
-		seen := make(map[string]struct{})
-		for decoder.More() {
-			field, err := decoder.Token()
-			if err != nil {
-				return fmt.Errorf("read JSON object field: %w", err)
-			}
-			name, ok := field.(string)
-			if !ok {
-				return errors.New("invalid object field")
-			}
-			if _, exists := seen[name]; exists {
-				return errors.New("duplicate object field")
-			}
-			seen[name] = struct{}{}
-			if err := inspectJSONValue(decoder); err != nil {
-				return err
-			}
-		}
-	case '[':
-		for decoder.More() {
-			if err := inspectJSONValue(decoder); err != nil {
-				return err
-			}
-		}
-	default:
-		return errors.New("invalid JSON delimiter")
-	}
-	_, err = decoder.Token()
-	if err != nil {
-		return fmt.Errorf("close JSON value: %w", err)
-	}
-	return nil
 }
 
 func (m *SecretManifest) Resolve(owner, receiver, reference string) (SigningKey, error) {

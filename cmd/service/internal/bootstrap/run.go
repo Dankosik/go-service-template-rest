@@ -74,18 +74,13 @@ const (
 )
 
 // runtimeWiring carries the one process edge that tests must stop without
-// binding sockets. Authentication adds only capability-owned construction and
-// stage observation fields; initialization removes those fields and values with
-// the rest of the profile.
+// binding sockets.
 type runtimeWiring struct {
 	dependencies func(context.Context, startupBootstrap) (runtimeDependencies, error)
 	serve        func(context.Context, context.Context, serveRuntimeArgs) error
 	lifecycle    func(runtimeLifecycleStage)
-	// profile:outbound-auth-oauth2-client-credentials:start
-	initOutboundAuth func(config.OutboundAuthConfig, *telemetry.Metrics, *slog.Logger) (outboundAuthRuntime, error)
-	// profile:outbound-auth-oauth2-client-credentials:end
 	// profile:object-storage:start
-	initObjectStorage func(config.ObjectStorageConfig) (objectStorageRuntime, error)
+	initObjectStorage func(context.Context, config.ObjectStorageConfig) (objectStorageRuntime, error)
 	// profile:object-storage:end
 	// profile:authn-oidc-jwt:start
 	initAuthn  func(context.Context, config.Config, *telemetry.Metrics, *slog.Logger) (authnRuntime, error)
@@ -114,9 +109,6 @@ func productionRuntimeWiring() runtimeWiring {
 		dependencies: initRuntimeDependencies,
 		serve:        serveRuntime,
 		lifecycle:    func(runtimeLifecycleStage) {},
-		// profile:outbound-auth-oauth2-client-credentials:start
-		initOutboundAuth: initOutboundAuth,
-		// profile:outbound-auth-oauth2-client-credentials:end
 		// profile:object-storage:start
 		initObjectStorage: initObjectStorage,
 		// profile:object-storage:end
@@ -140,9 +132,6 @@ func checkRuntimeReadiness(
 	// profile:messaging-nats-jetstream:start
 	messaging messagingRuntime,
 	// profile:messaging-nats-jetstream:end
-	// profile:authn-oidc-jwt:start
-	authnVerifier authnRuntime,
-	// profile:authn-oidc-jwt:end
 ) error {
 	if err := startupAdmission.CheckReady(ctx); err != nil {
 		return err
@@ -152,11 +141,6 @@ func checkRuntimeReadiness(
 		return errors.New("messaging is not ready")
 	}
 	// profile:messaging-nats-jetstream:end
-	// profile:authn-oidc-jwt:start
-	if err := authnVerifier.CheckReady(); err != nil {
-		return fmt.Errorf("check authentication readiness: %w", err)
-	}
-	// profile:authn-oidc-jwt:end
 	return nil
 }
 
@@ -164,7 +148,6 @@ func Run(args []string) error {
 	return runWithRuntime(args, productionRuntimeWiring())
 }
 
-//nolint:cyclop // Bootstrap keeps startup and shutdown ordering in the composition root.
 func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 	loadOptions, err := parseLoadOptions(args)
 	if err != nil {
@@ -218,7 +201,7 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 	reportRequestBufferBudget(bootstrap.log, bootstrap.cfg, memoryLimit)
 
 	// profile:object-storage:start
-	objectStorage, err := wiring.initObjectStorage(bootstrap.cfg.ObjectStorage)
+	objectStorage, err := wiring.initObjectStorage(startupCtx, bootstrap.cfg.ObjectStorage)
 	if err != nil {
 		return err
 	}
@@ -240,10 +223,6 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 	// returns below; the ordered shutdown path closes it explicitly, before the
 	// telemetry flush and after background work has been joined.
 	dependenciesClosed := false
-	// profile:outbound-auth-oauth2-client-credentials:start
-	var outboundAuth outboundAuthRuntime
-	outboundAuthClosed := true
-	// profile:outbound-auth-oauth2-client-credentials:end
 	closeOwners := func() {
 		if dependenciesClosed {
 			return
@@ -257,25 +236,11 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 			wiring.lifecycle(runtimeLifecycleObjectStorageClosed)
 		}
 		// profile:object-storage:end
-		// profile:outbound-auth-oauth2-client-credentials:start
-		if !outboundAuthClosed {
-			runErr = errors.Join(runErr, outboundAuth.Close(runtimeCloseCtx))
-			outboundAuthClosed = true
-		}
-		// profile:outbound-auth-oauth2-client-credentials:end
 		dependencies.Close(runtimeCloseCtx)
 		dependenciesClosed = true
 		wiring.lifecycle(runtimeLifecycleDependenciesClosed)
 	}
 	defer closeOwners()
-
-	// profile:outbound-auth-oauth2-client-credentials:start
-	outboundAuth, err = wiring.initOutboundAuth(bootstrap.cfg.OutboundAuth, metrics, bootstrap.log)
-	if err != nil {
-		return err
-	}
-	outboundAuthClosed = false
-	// profile:outbound-auth-oauth2-client-credentials:end
 
 	// profile:authn-oidc-jwt:start
 	authnVerifier, err := wiring.initAuthn(startupCtx, bootstrap.cfg, metrics, bootstrap.log)
@@ -283,11 +248,12 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 		return err
 	}
 	wiring.authnStage(authnStageTrustEstablished)
-	// Close is the pre-Run partial-start safety net and is idempotent after the
-	// supervised runtime has joined. Once the background budget expires, process
-	// exit owns cleanup instead of a second unbounded join delaying telemetry.
-	authnCloseAllowed := true
-	defer func() { closeAuthnWithinBudget(authnVerifier, authnCloseAllowed) }()
+	authnClosed := false
+	defer func() {
+		if !authnClosed {
+			authnVerifier.Close()
+		}
+	}()
 	// profile:authn-oidc-jwt:end
 
 	startupAdmission := new(startupAdmissionController)
@@ -297,20 +263,9 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 	// the early returns between here and there: with cancellation detached from
 	// the signal, a return that skipped Shutdown would leave supervised
 	// goroutines running past Run.
-	// profile:authn-oidc-jwt:start
-	backgroundShutdownDone := false
-	// profile:authn-oidc-jwt:end
 	defer func() {
-		// profile:authn-oidc-jwt:start
-		if backgroundShutdownDone {
-			return
-		}
-		// profile:authn-oidc-jwt:end
 		backgroundCtx := shutdown.stage(signalCtx, backgroundShutdownTimeout)
 		_ = supervisor.Shutdown(backgroundCtx)
-		// profile:authn-oidc-jwt:start
-		authnCloseAllowed = backgroundCtx.Err() == nil
-		// profile:authn-oidc-jwt:end
 	}()
 
 	// profile:messaging-nats-jetstream:start
@@ -343,7 +298,7 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 	// profile:messaging-nats-jetstream:start
 	readinessProbes = append(readinessProbes, messaging.ReadinessProbes()...)
 	// profile:messaging-nats-jetstream:end
-	healthSvc := newReadinessService(bootstrap.cfg, bootstrap.log, readinessProbes, supervisor)
+	healthSvc := newReadinessService(readinessProbes, supervisor)
 
 	domainErrors := dependencies.DomainErrors()
 	// profile:http-idempotency-postgres:start
@@ -364,9 +319,6 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 						// profile:messaging-nats-jetstream:start
 						messaging,
 						// profile:messaging-nats-jetstream:end
-						// profile:authn-oidc-jwt:start
-						authnVerifier,
-						// profile:authn-oidc-jwt:end
 					)
 				},
 			},
@@ -411,26 +363,19 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 		grpcSrv = builtGRPC
 		// profile:authn-oidc-jwt:start
 		wiring.authnStage(authnStageGRPCServerBuilt)
-		setGRPCAuthnReady(grpcSrv, authnVerifier.CheckReady() == nil)
 		// profile:authn-oidc-jwt:end
 	}
 	// profile:grpc:end
 
-	// profile:authn-oidc-jwt:start
-	supervisor.Go(background.Task{
-		Name: "authn_jwks_refresh",
-		Run: func(ctx context.Context) error {
-			if err := authnVerifier.Run(ctx, func(current bool) {
-				// profile:grpc:start
-				setGRPCAuthnReady(grpcSrv, current)
-				// profile:grpc:end
-			}); err != nil {
-				return fmt.Errorf("run authentication trust refresh: %w", err)
-			}
-			return nil
-		},
-	})
-	// profile:authn-oidc-jwt:end
+	superviseReadiness(
+		bootstrap.cfg,
+		bootstrap.log,
+		healthSvc,
+		supervisor,
+		// profile:grpc:start
+		grpcSrv,
+		// profile:grpc:end
+	)
 
 	var metricsSrv runtimeServer
 	if bootstrap.cfg.Observability.Metrics.Addr != "" {
@@ -455,11 +400,6 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 			if err := healthSvc.Refresh(ctx, bootstrap.cfg.HTTP.ReadinessTimeout, bootstrap.cfg.Health.FailureThreshold); err != nil {
 				return fmt.Errorf("refresh initial readiness: %w", err)
 			}
-			// profile:authn-oidc-jwt:start
-			if err := authnVerifier.CheckReady(); err != nil {
-				return fmt.Errorf("check authentication readiness: %w", err)
-			}
-			// profile:authn-oidc-jwt:end
 			return nil
 		},
 		admission:     startupAdmission,
@@ -482,8 +422,8 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 	backgroundErr := supervisor.Shutdown(backgroundCtx)
 	wiring.lifecycle(runtimeLifecycleBackgroundJoined)
 	// profile:authn-oidc-jwt:start
-	backgroundShutdownDone = true
-	authnCloseAllowed = backgroundCtx.Err() == nil
+	authnVerifier.Close()
+	authnClosed = true
 	// profile:authn-oidc-jwt:end
 	closeOwners()
 
@@ -496,18 +436,6 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 		backgroundErr,
 	)
 }
-
-// profile:authn-oidc-jwt:start
-func closeAuthnWithinBudget(authn authnRuntime, allowed bool) {
-	if !allowed {
-		// ponytail: process exit owns cleanup after the shared budget expires; add
-		// context-aware verifier retirement only if Run must return without exiting.
-		return
-	}
-	authn.Close()
-}
-
-// profile:authn-oidc-jwt:end
 
 // newSupervisedBackground builds the supervisor for runtime background work,
 // deliberately detached from the signal context so that Shutdown is the only

@@ -6,9 +6,8 @@
 // Everything here is proven in-process somewhere else. What only this file can
 // answer is whether the pieces hold once separated by a binary boundary and
 // driven by environment variables: that the generated service turns APP__GRPC__*
-// into an endpoint reporting SERVING, that a request ID sent by
-// grpcclient.PropagationTrustedService comes back in a real hop's response
-// metadata, and that SIGTERM ends the process through graceful shutdown.
+// into an endpoint reporting SERVING and that SIGTERM ends the process through
+// graceful shutdown.
 //
 // It is behind the integration tag because it compiles a service and needs a
 // database, so it does not belong in the edit loop.
@@ -31,13 +30,10 @@ import (
 
 	"github.com/example/go-service-template-rest/internal/infra/grpcclient"
 	"github.com/example/go-service-template-rest/internal/infra/postgres/pgtest"
-	"github.com/example/go-service-template-rest/internal/reqctx"
 	"github.com/example/go-service-template-rest/internal/waittest"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
@@ -75,7 +71,6 @@ func TestGRPCProcessLifecycle(t *testing.T) {
 		"APP__GRPC__SERVER__ENABLED=true",
 		"APP__GRPC__SERVER__ADDR="+grpcAddr,
 		"APP__GRPC__SERVER__TRANSPORT_SECURITY=plaintext",
-		"APP__GRPC__SERVER__ALLOW_PLAINTEXT=true",
 	)
 	process.Stdout = &output
 	process.Stderr = &output
@@ -103,7 +98,6 @@ func TestGRPCProcessLifecycle(t *testing.T) {
 		grpcclient.DefaultConfig(grpcAddr),
 		grpcclient.Options{
 			TransportCredentials: insecure.NewCredentials(),
-			Propagation:          grpcclient.PropagationTrustedService,
 		},
 	)
 	if err != nil {
@@ -114,15 +108,11 @@ func TestGRPCProcessLifecycle(t *testing.T) {
 	readyCtx, cancelReady := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancelReady()
 	healthClient := healthgrpc.NewHealthClient(conn)
-	const requestID = "grpc_process_integration_123"
-	readyCallCtx := reqctx.ContextWithRequestID(readyCtx, requestID)
-	var responseHeader metadata.MD
 	var checkErr error
 	waittest.UntilFunc(t, 10*time.Second, func() bool {
 		response, err := healthClient.Check(
-			readyCallCtx,
+			readyCtx,
 			&healthgrpc.HealthCheckRequest{},
-			grpc.Header(&responseHeader),
 		)
 		checkErr = err
 		if checkErr == nil && response.GetStatus() == healthgrpc.HealthCheckResponse_SERVING {
@@ -130,9 +120,6 @@ func TestGRPCProcessLifecycle(t *testing.T) {
 		}
 		return false
 	}, func() string { return fmt.Sprintf("gRPC health to become serving: %v\n%s", checkErr, output.String()) })
-	if got := responseHeader.Get("x-request-id"); len(got) != 1 || got[0] != requestID {
-		t.Fatalf("gRPC health response request IDs = %v, want %q", got, requestID)
-	}
 	_, err = healthClient.Check(readyCtx, &healthgrpc.HealthCheckRequest{
 		Service: "service.not.registered",
 	})
@@ -207,7 +194,6 @@ func initializedProcessServiceRoot(t *testing.T, repositoryRoot string) string {
 		"DATABASE=postgres",
 		"GRPC=enabled",
 		"AUTHN=none",
-		"OUTBOUND_HTTP=bounded",
 		"REFERENCE_EXAMPLE=remove",
 	)
 	if output, err := initialize.CombinedOutput(); err != nil {
@@ -224,7 +210,7 @@ func cleanServiceEnvironment(environment []string) []string {
 			continue
 		}
 		switch key {
-		case "CODEOWNER", "DATABASE", "GRPC", "AUTHN", "OUTBOUND_HTTP", "REFERENCE_EXAMPLE":
+		case "CODEOWNER", "DATABASE", "GRPC", "AUTHN", "REFERENCE_EXAMPLE":
 			continue
 		}
 		clean = append(clean, entry)

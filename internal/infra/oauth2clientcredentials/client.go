@@ -2,192 +2,116 @@ package oauth2clientcredentials
 
 import (
 	"context"
-	"log/slog"
+	"fmt"
 	"sync"
-	"time"
 
-	"go.opentelemetry.io/otel/metric"
+	"golang.org/x/oauth2"
 )
 
-type acquireToken func(context.Context) (accessToken, error)
+type acquireToken func(context.Context) (*oauth2.Token, error)
 
 type acquisitionWave struct {
-	done        chan struct{}
-	cancel      context.CancelFunc
-	startedAt   time.Time
-	failedUntil time.Time
-	token       accessToken
-	err         error
+	done   chan struct{}
+	cancel context.CancelFunc
+	token  *oauth2.Token
+	err    error
 }
 
-type operationToken struct {
-	value     string
-	expiresAt time.Time
-	now       func() time.Time
-}
-
-func (t operationToken) authorization() (string, error) {
-	if t.value == "" || t.expiresAt.Sub(t.now()) <= earlyExpiryMargin {
-		return "", failure(FailureTokenUnusable)
-	}
-	return t.value, nil
-}
-
-// Client owns one process-local credential and its acquisition lifecycle.
+// Client owns one process-local cache and one cancelable provider acquisition.
+// Composition code owns Client; feature code receives only HTTP or gRPC clients.
 type Client struct {
-	config     Config
-	now        func() time.Time
 	acquire    acquireToken
 	closeIdle  func()
-	telemetry  telemetry
-	processCtx context.Context //nolint:containedctx // Client owns this process lifetime and cancels it in Close.
+	processCtx context.Context //nolint:containedctx // Client owns and cancels this lifetime in Close.
 	cancel     context.CancelFunc
 
-	mu          sync.Mutex
-	token       accessToken
-	failure     error
-	failedUntil time.Time
-	wave        *acquisitionWave
-	retired     bool
-	closeDone   chan struct{}
-	closeOnce   sync.Once
+	mu        sync.Mutex
+	token     *oauth2.Token
+	wave      *acquisitionWave
+	retired   bool
+	closeDone chan struct{}
+	closeOnce sync.Once
 }
 
-// New builds one idle credential owner without contacting the provider.
-func New(cfg Config, meterProvider metric.MeterProvider, log *slog.Logger) (*Client, error) {
+// New validates cfg and builds an idle client factory without provider I/O.
+func New(cfg Config) (*Client, error) {
 	validated, err := validateConfig(cfg)
 	if err != nil {
 		return nil, err
 	}
-	tokenClient, err := newTokenHTTPClient(validated, meterProvider)
+	bounded, err := newTokenHTTPClient(validated)
 	if err != nil {
 		return nil, err
 	}
-	provider, err := newProvider(validated, tokenClient, time.Now)
-	if err != nil {
-		tokenClient.CloseIdleConnections()
-		return nil, err
-	}
-	client, err := newClient(
-		validated,
-		meterProvider,
-		log,
-		time.Now,
-		provider.acquire,
-		tokenClient.CloseIdleConnections,
-	)
-	if err != nil {
-		tokenClient.CloseIdleConnections()
-		return nil, err
-	}
-	return client, nil
+	return newClient(newAcquirer(validated, bounded), bounded.CloseIdleConnections), nil
 }
 
-func newClient(
-	cfg Config,
-	meterProvider metric.MeterProvider,
-	log *slog.Logger,
-	now func() time.Time,
-	acquire acquireToken,
-	closeIdle func(),
-) (*Client, error) {
-	validated, err := validateConfig(cfg)
-	if err != nil || now == nil || acquire == nil {
-		return nil, failure(FailureInvalidConfiguration)
-	}
+func newClient(acquire acquireToken, closeIdle func()) *Client {
 	if closeIdle == nil {
 		closeIdle = func() {}
 	}
 	processCtx, cancel := context.WithCancel(context.Background())
 	return &Client{
-		config:     validated,
-		now:        now,
 		acquire:    acquire,
 		closeIdle:  closeIdle,
-		telemetry:  newTelemetry(meterProvider, validated.DependencyName, log),
 		processCtx: processCtx,
 		cancel:     cancel,
 		closeDone:  make(chan struct{}),
-	}, nil
+	}
 }
 
-func (c *Client) resolve(ctx context.Context) (operationToken, error) {
+func (c *Client) resolve(ctx context.Context) (*oauth2.Token, error) {
+	if c == nil || ctx == nil || c.acquire == nil {
+		return nil, ErrInvalidConfiguration
+	}
 	if err := ctx.Err(); err != nil {
-		return operationToken{}, c.resolutionFailure(ctx, callerFailure(err))
+		return nil, fmt.Errorf("resolve outbound authentication: %w", err)
 	}
 
 	c.mu.Lock()
 	if c.retired {
 		c.mu.Unlock()
-		return operationToken{}, c.resolutionFailure(ctx, failure(FailureProviderUnavailable))
+		return nil, ErrUnavailable
 	}
-	now := c.now()
-	if c.token.value != "" && c.token.expiresAt.Sub(now) > earlyExpiryMargin {
-		token := c.operationToken(c.token)
+	if c.token.Valid() {
+		token := c.token
 		c.mu.Unlock()
-		c.telemetry.recordResolution(ctx, sourceCache, nil)
 		return token, nil
 	}
-	c.token = accessToken{}
-	if c.failure != nil && now.Before(c.failedUntil) {
-		err := c.failure
-		c.mu.Unlock()
-		return operationToken{}, c.resolutionFailure(ctx, err)
-	}
-
+	c.token = nil
 	wave := c.wave
 	if wave == nil {
-		providerCtx, cancel := context.WithTimeout(c.processCtx, c.config.AcquisitionTimeout)
-		wave = &acquisitionWave{
-			done:        make(chan struct{}),
-			cancel:      cancel,
-			startedAt:   time.Now(),
-			failedUntil: now.Add(c.config.AcquisitionTimeout),
-		}
-		c.failure = nil
-		c.failedUntil = time.Time{}
+		providerCtx, cancel := context.WithTimeout(c.processCtx, defaultAcquisitionTimeout)
+		wave = &acquisitionWave{done: make(chan struct{}), cancel: cancel}
 		c.wave = wave
-		go c.runAcquisition(providerCtx, wave) //nolint:contextcheck // Provider work is process-owned and must outlive each caller.
+		go c.runAcquisition(providerCtx, wave) //nolint:contextcheck // The process owns shared provider work.
 	}
 	c.mu.Unlock()
 
 	select {
 	case <-ctx.Done():
-		return operationToken{}, c.resolutionFailure(ctx, callerFailure(ctx.Err()))
+		return nil, fmt.Errorf("resolve outbound authentication: %w", ctx.Err())
 	case <-wave.done:
 		if err := ctx.Err(); err != nil {
-			return operationToken{}, c.resolutionFailure(ctx, callerFailure(err))
+			return nil, fmt.Errorf("resolve outbound authentication: %w", err)
 		}
-		if wave.err != nil {
-			return operationToken{}, c.resolutionFailure(ctx, wave.err)
-		}
-		c.telemetry.recordResolution(ctx, sourceAcquisition, nil)
-		return c.operationToken(wave.token), nil
+		return wave.token, wave.err
 	}
 }
 
 func (c *Client) runAcquisition(ctx context.Context, wave *acquisitionWave) {
 	token, err := c.acquire(ctx)
 	wave.cancel()
-	if err == nil && (token.value == "" || token.expiresAt.Sub(c.now()) <= earlyExpiryMargin) {
-		token = accessToken{}
-		err = failure(FailureUnsupportedResponse)
+	if err == nil {
+		token, err = sanitizeToken(token)
 	}
-	c.telemetry.recordProviderAttempt(context.WithoutCancel(ctx), err, time.Since(wave.startedAt))
 
 	c.mu.Lock()
-	switch {
-	case c.retired:
-		token = accessToken{}
-		err = failure(FailureProviderUnavailable)
-	case err == nil:
+	if c.retired {
+		token = nil
+		err = ErrUnavailable
+	} else if err == nil {
 		c.token = token
-		c.failure = nil
-		c.failedUntil = time.Time{}
-	default:
-		c.token = accessToken{}
-		c.failure = err
-		c.failedUntil = wave.failedUntil
 	}
 	wave.token = token
 	wave.err = err
@@ -203,24 +127,26 @@ func (c *Client) runAcquisition(ctx context.Context, wave *acquisitionWave) {
 	}
 }
 
-func (c *Client) operationToken(token accessToken) operationToken {
-	return operationToken{value: token.value, expiresAt: token.expiresAt, now: c.now}
+func (c *Client) available() bool {
+	if c == nil {
+		return false
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.acquire != nil && !c.retired
 }
 
-func (c *Client) resolutionFailure(ctx context.Context, err error) error {
-	c.telemetry.recordResolution(context.WithoutCancel(ctx), sourceAcquisition, err)
-	return err
-}
-
-// Close retires admission, joins provider work, and releases the token pool.
+// Close rejects new acquisitions, cancels and joins active provider work, and
+// releases the token transport's idle connection.
 func (c *Client) Close(ctx context.Context) error {
+	if c == nil || ctx == nil {
+		return ErrInvalidConfiguration
+	}
 	c.mu.Lock()
 	first := !c.retired
 	if first {
 		c.retired = true
-		c.token = accessToken{}
-		c.failure = nil
-		c.failedUntil = time.Time{}
+		c.token = nil
 	}
 	wave := c.wave
 	c.mu.Unlock()
@@ -237,18 +163,8 @@ func (c *Client) Close(ctx context.Context) error {
 	select {
 	case <-c.closeDone:
 		return nil
-	default:
-	}
-	select {
-	case <-c.closeDone:
-		return nil
 	case <-ctx.Done():
-		select {
-		case <-c.closeDone:
-			return nil
-		default:
-			return failure(FailureProviderUnavailable)
-		}
+		return fmt.Errorf("close outbound authentication: %w", ctx.Err())
 	}
 }
 

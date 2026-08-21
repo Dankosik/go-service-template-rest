@@ -31,8 +31,7 @@ func TestSupervisorRunsTaskUntilShutdown(t *testing.T) {
 			}
 		}})
 
-		time.Sleep(3 * time.Second)
-		synctest.Wait()
+		synctest.Sleep(3 * time.Second)
 		if got := iterations.Load(); got != 3 {
 			t.Fatalf("iterations = %d, want 3", got)
 		}

@@ -1,9 +1,7 @@
 package natsjs
 
 import (
-	"errors"
 	"slices"
-	"strings"
 	"testing"
 	"time"
 
@@ -36,9 +34,9 @@ func TestMessageIsImmutable(t *testing.T) {
 		t.Fatalf("decoded payload mutated through alias: %q", got)
 	}
 	if decoded.MessageID() != "message-1" || decoded.PublicationID() != "publication-1" || decoded.Type() != "created" || decoded.Schema() != "v1" ||
-		decoded.OrderingKey() != "account-1" || decoded.CorrelationID() != "" || !decoded.CreatedAt().Equal(validTestEvent().CreatedAt) {
-		t.Fatalf("decoded accessors returned inconsistent envelope: message=%q publication=%q type=%q schema=%q key=%q correlation=%q created=%v",
-			decoded.MessageID(), decoded.PublicationID(), decoded.Type(), decoded.Schema(), decoded.OrderingKey(), decoded.CorrelationID(), decoded.CreatedAt())
+		!decoded.CreatedAt().Equal(validTestEvent().CreatedAt) {
+		t.Fatalf("decoded accessors returned inconsistent envelope: message=%q publication=%q type=%q schema=%q created=%v",
+			decoded.MessageID(), decoded.PublicationID(), decoded.Type(), decoded.Schema(), decoded.CreatedAt())
 	}
 	if id := NewID(); id == "" {
 		t.Fatal("NewID() returned empty identity")
@@ -47,19 +45,5 @@ func TestMessageIsImmutable(t *testing.T) {
 	carrier.Set("test", "value")
 	if carrier.Get("test") != "value" || !slices.Contains(carrier.Keys(), "test") {
 		t.Fatalf("header carrier = %#v", carrier)
-	}
-}
-
-func TestPermanent(t *testing.T) {
-	want := errors.New("poison")
-	err := Permanent(want)
-	if !isPermanent(err) || !errors.Is(err, want) {
-		t.Fatalf("Permanent() = %v, want permanent wrapped error", err)
-	}
-	if !strings.Contains(err.Error(), "poison") {
-		t.Fatalf("Permanent().Error() = %q", err.Error())
-	}
-	if Permanent(nil) != nil {
-		t.Fatal("Permanent(nil) must be nil")
 	}
 }

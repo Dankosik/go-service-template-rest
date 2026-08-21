@@ -277,51 +277,21 @@ omit migrations, CI, image, and deployment ownership.
 ## 6. Call an external HTTP service
 
 Create a provider adapter under `internal/infra/<provider>`. Reuse
-`net/http` directly for an ordinary provider-specific client. If the repository
-was initialized with `OUTBOUND_HTTP=bounded`, reuse
-`internal/infra/httpclient` for fixed-authority URL validation, transport
-bounds, explicit correlation-policy enforcement, response-size limits, and
-idle-connection cleanup.
-Select `TargetClass: ExternalHTTPS` for public providers, or `PrivateHTTP` for
-a service reachable only on the platform's private network. `PrivateHTTP`
-requires `PrivateHostSuffix`, your platform's private DNS zone — for example
-`railway.internal`, or `svc.cluster.local` on Kubernetes. There is no default
-on purpose: a platform-specific default would succeed silently on one platform
-and fail confusingly everywhere else. The bounded client
+`internal/infra/httpclient` for one fixed public HTTPS authority. A deployment
+with an existing private HTTPS route uses `NewPrivateHTTPS` and supplies its
+private DNS suffix; there is no platform-specific default. The fixed client
 ignores `HTTP_PROXY`/`HTTPS_PROXY` on purpose, because a proxy would dial on
 the client's behalf and bypass the post-DNS address gate; a provider that must
 be reached through a mandatory egress proxy uses a plain `net/http` client.
-Keep provider authentication, per-operation timeout, retry eligibility,
-provider error mapping, and generated client ownership in the adapter. Let the
-deployment platform enforce network egress. Add tests for
-timeout/cancellation, oversized responses, redirects, error bodies, and
-cleanup. Dynamic or user-controlled URLs require a separate SSRF design.
-
-The zero propagation policy is `PropagationNone`: local client telemetry
-remains, but no trace or request ID is disclosed remotely. Select
-`PropagationTraceContext` for an approved W3C-only boundary, or
-`PropagationTrustedService` for a service allowed to receive both W3C Trace
-Context and the valid request ID already in the operation context. Private DNS
-or TLS alone does not establish that trust. All modes remove caller-supplied
-`traceparent`, `tracestate`, `baggage`, and `X-Request-ID` before each attempt;
-baggage is never propagated.
+Authentication, operation deadlines, response parsing and limits, retries,
+provider errors, and telemetry stay in the provider adapter or official SDK.
+Dynamic or user-controlled URLs require a feature-specific SSRF design.
 
 Generate the provider client from its authoritative versioned OpenAPI schema,
-then give it the bounded client through oapi-codegen's generated seam:
+then give it the fixed-target client through oapi-codegen's generated seam:
 
 ```go
-bounded, err := httpclient.New(httpclient.Config{
-    DependencyName:         "orders",
-    BaseURL:                "http://orders.railway.internal:8080",
-    TargetClass:            httpclient.PrivateHTTP,
-    PrivateHostSuffix:      "railway.internal",
-    RequestTimeout:         2 * time.Second,
-    ResponseHeaderTimeout:  time.Second,
-    MaxResponseHeaderBytes: 16 << 10,
-    MaxResponseBodyBytes:   1 << 20,
-    MaxConnsPerHost:        16,
-    Propagation:            httpclient.PropagationTrustedService,
-}, metrics.MeterProvider())
+bounded, err := httpclient.NewExternalHTTPS(cfg.OrdersBaseURL)
 if err != nil {
     return err
 }
@@ -352,22 +322,12 @@ constructor is lazy: successful construction does not prove that the target is
 reachable. Each operation still owns its deadline, retry eligibility, and
 provider-error mapping.
 
-Select propagation at the dependency's trust boundary. `PropagationNone` is
-the zero value: it retains local client telemetry while sending no remote
-correlation. `PropagationTraceContext` sends only W3C Trace Context.
-`PropagationTrustedService` additionally sends the valid request ID already in
-the operation context. Private DNS or TLS does not by itself justify the
-trusted-service policy. Every policy removes stale `traceparent`,
-`tracestate`, `baggage`, and `x-request-id` metadata before the call; baggage
-is never propagated.
-
 ```go
 clientConfig := grpcclient.DefaultConfig("dns:///orders.railway.internal:9000")
 connection, err := grpcclient.New(
     clientConfig,
     grpcclient.Options{
         TransportCredentials: credentials.NewTLS(tlsConfig),
-        Propagation:          grpcclient.PropagationTrustedService,
     },
 )
 if err != nil {
@@ -381,20 +341,11 @@ _ = healthClient // Provider-generated clients use the same grpc.ClientConnInter
 ```
 
 Pass the operation context unchanged to the generated method. The shared
-connection deliberately ignores environment proxies and resolver-provided
-service configurations, so a proxy, a resolver-selected balancer, or a
-configured retry cannot silently bypass its metadata policy. It does carry its
-own address-selection policy — round robin by default, reaching every resolved
-address and following the standard health state for the empty service name.
-Set `clientConfig.HealthCheck = false` only when the named dependency does not
-publish that whole-process health contract. If it protects `Health/Watch`, pass
-its provider-owned dynamic credential through `Options.PerRPCCredentials`; a
-per-call credential cannot authenticate grpc-go's health stream. Idle keepalive is off by default;
-set both positive keepalive fields only for a concrete intermediary timeout and
-use values the peer accepts. A dependency that requires a proxy or a
-resolver-provided service config needs a separate design. grpc-go's native
-transparent retry may still occur before commitment; application retry remains
-an explicit per-operation adapter decision.
+connection uses native DNS, reconnects, `pick_first`, transparent retry, and W3C
+Trace Context. Resolver service config is disabled, so application retry,
+client-side health, or a different load-balancing policy cannot appear without
+a separate dependency decision. Pass provider-owned dynamic credentials through
+`Options.PerRPCCredentials`. The template sets no client keepalive policy.
 <!-- profile:grpc:end -->
 
 ## 7. Wire, observe, and prove

@@ -21,10 +21,8 @@ import (
 // startup proof; the concrete verifier remains the only production
 // implementation.
 type authnRuntime interface {
-	CheckReady() error
 	Close()
 	ResolveHTTP(ctx context.Context, input *openapi3filter.AuthenticationInput) (reqctx.Principal, error)
-	Run(ctx context.Context, publish func(bool)) error
 	// profile:grpc:start
 	UnaryInterceptor() grpc.UnaryServerInterceptor
 	StreamInterceptor() grpc.StreamServerInterceptor
@@ -51,9 +49,9 @@ func initAuthn(
 	log *slog.Logger,
 ) (*oidcjwt.Verifier, error) {
 	policy, err := oidcjwt.NewPolicy(oidcjwt.PolicyInput{
-		Issuer:            cfg.Authn.Issuer,
-		Audience:          cfg.Authn.Audience,
-		TrustedProxyCIDRs: cfg.Authn.TrustedProxyCIDRs,
+		Issuer:       cfg.Authn.Issuer,
+		Audience:     cfg.Authn.Audience,
+		TokenProfile: cfg.Authn.TokenProfile,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("initialize authentication policy: %w", err)

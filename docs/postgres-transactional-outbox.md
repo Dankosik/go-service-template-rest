@@ -23,7 +23,7 @@ The pack guarantees at-least-once publication:
 3. `cmd/outbox-relay` works the River job through the concrete NATS producer.
 4. A JetStream acknowledgement followed by process loss may run the job again.
    Every attempt uses the same logical event ID for both `Message-Id` and
-   `Publication-Id`.
+   `Nats-Msg-Id`.
 
 Consumers must make non-idempotent effects duplicate-safe. The pack does not
 provide exactly-once delivery or generic ordering.
@@ -60,7 +60,7 @@ subject:
 ```go
 outbox, err := natsjs.NewOutboxAppender(
     cfg.Messaging.MaxPayloadBytes,
-    natsjs.OutboxRoute{
+    natsjs.Route{
         Type: "order.updated", Version: 1, Subject: "events.orders",
     },
 )
@@ -120,9 +120,8 @@ publication.
 
 ## Runtime and operations
 
-`cmd/outbox-relay` runs one River queue named `outbox`. It uses at most 16
-workers and never exceeds `messaging.max_pending_publishes`. River polling is
-used instead of `LISTEN` because this repository applies a finite
+`cmd/outbox-relay` runs one River queue named `outbox` with at most 16 workers.
+River polling is used instead of `LISTEN` because this repository applies a finite
 `statement_timeout` to every pooled PostgreSQL connection; a long-lived
 `LISTEN` session would be cancelled by that safety bound.
 

@@ -36,7 +36,7 @@ classify() {
 all_job_tokens() {
   printf 'minimal'
   # profile:object-storage:start
-  printf ' object-storage s3-envelope'
+  printf ' object-storage'
   # profile:object-storage:end
   # profile:authn-oidc-jwt:start
   printf ' authn'
@@ -110,7 +110,7 @@ ordered_jobs() {
 
 is_init_profile() {
   case "$1" in
-    s3-envelope | postgres) return 1 ;;
+    postgres) return 1 ;;
     *) return 0 ;;
   esac
 }
@@ -144,7 +144,7 @@ init_profiles_json() {
 }
 
 # Generator, module, workflow, and shared bootstrap changes re-prove every
-# template job. S3 envelope runs in parallel, so it does not extend wall-clock.
+# template job.
 shared_generator_jobs() {
   all_job_tokens
 }
@@ -166,9 +166,8 @@ profiles_for_path() {
       cmd/service/internal/bootstrap/startup_object_storage*.go | \
       internal/config/object_storage_config*.go | \
       test/s3conformance/conformance_test.go | \
-      docs/s3-compatible-object-storage.md | \
-      scripts/ci/s3-source-receipt.sh)
-      printf '%s\n' "object-storage s3-envelope"
+      docs/s3-compatible-object-storage.md)
+      printf '%s\n' "object-storage"
       return
       ;;
   esac
@@ -283,25 +282,19 @@ template_required() {
 }
 
 template_scope() {
-  local jobs required postgres s3
+  local jobs required postgres
   jobs="$(collect_jobs)"
   required="false"
   postgres="false"
-  s3="false"
   if [[ -n "${jobs}" ]]; then
     required="true"
   fi
   if has_job "${jobs}" postgres; then
     postgres="true"
   fi
-  if has_job "${jobs}" s3-envelope; then
-    s3="true"
-  fi
-
   printf 'required=%s\n' "${required}"
   printf 'init_profiles=%s\n' "$(init_profiles_json "${jobs}")"
   printf 'postgres_required=%s\n' "${postgres}"
-  printf 's3_envelope_required=%s\n' "${s3}"
 }
 
 assert_scope() {
@@ -330,19 +323,16 @@ assert_template_scope() {
   local expected_required="$1"
   local expected_init="$2"
   local expected_postgres="$3"
-  local expected_s3="$4"
-  shift 4
-  local actual required init postgres s3
+  shift 3
+  local actual required init postgres
   actual="$(printf '%s\0' "$@" | template_scope)"
   required="$(printf '%s\n' "${actual}" | sed -n 's/^required=//p')"
   init="$(printf '%s\n' "${actual}" | sed -n 's/^init_profiles=//p')"
   postgres="$(printf '%s\n' "${actual}" | sed -n 's/^postgres_required=//p')"
-  s3="$(printf '%s\n' "${actual}" | sed -n 's/^s3_envelope_required=//p')"
   [[ "${required}" == "${expected_required}" &&
     "${init}" == "${expected_init}" &&
-    "${postgres}" == "${expected_postgres}" &&
-    "${s3}" == "${expected_s3}" ]] || {
-    echo "expected required=${expected_required} init=${expected_init} postgres=${expected_postgres} s3=${expected_s3}" >&2
+    "${postgres}" == "${expected_postgres}" ]] || {
+    echo "expected required=${expected_required} init=${expected_init} postgres=${expected_postgres}" >&2
     printf '%s\n' "${actual}" >&2
     echo "paths: $*" >&2
     exit 1
@@ -378,15 +368,15 @@ self_test() {
 	assert_template_required true scripts/ci/fixtures/postgres-http-idempotency-active.patch
 	assert_template_required true internal/httpidempotency/contract.go
 	assert_template_required true internal/infra/postgresidempotency/store.go
-	assert_template_scope true '[]' true false internal/httpidempotency/contract.go
+	assert_template_scope true '[]' true internal/httpidempotency/contract.go
 	# profile:http-idempotency-postgres:end
   # profile:object-storage:start
   assert_template_required true internal/objectstorage/store.go
   assert_template_required true internal/infra/s3/client.go
   assert_template_required true test/s3conformance/conformance_test.go
   assert_template_required true docs/s3-compatible-object-storage.md
-  assert_template_scope true '["object-storage"]' false true internal/objectstorage/store.go
-  assert_template_scope true '["object-storage"]' false true internal/infra/s3/client.go
+  assert_template_scope true '["object-storage"]' false internal/objectstorage/store.go
+  assert_template_scope true '["object-storage"]' false internal/infra/s3/client.go
   # profile:object-storage:end
   # profile:webhooks-durable:start
   assert_template_required true internal/outboundtrust/public_address.go
@@ -395,25 +385,25 @@ self_test() {
   assert_template_required true cmd/jobs-worker/builder.go
   assert_template_required true test/webhook_network_integration_test.go
   assert_template_required true docs/outbound-webhook-delivery.md
-  assert_template_scope true '["webhooks"]' false false internal/outboundtrust/public_address.go
+  assert_template_scope true '["webhooks"]' false internal/outboundtrust/public_address.go
   # profile:webhooks-durable:end
   # profile:outbox-postgres:start
-  assert_template_scope true '["outbox"]' false false internal/domainevent/event.go
+  assert_template_scope true '["outbox"]' false internal/domainevent/event.go
   # profile:outbox-postgres:end
   assert_template_required true test/postgres_integration_test.go
   assert_template_required true go.mod
   assert_template_required true .github/workflows/ci.yml
   assert_template_required true assets/logo.png
   assert_template_required true internal/greeting/service.go Makefile
-  assert_template_scope true "${all_init}" true true scripts/init-module.sh
-  assert_template_scope true "${all_init}" true true .github/workflows/ci.yml
-  assert_template_scope true "${all_init}" true true assets/logo.png
-  assert_template_scope true '["minimal"]' false false .grok/roles/worker-agent.toml
-  assert_template_scope true '["minimal"]' false false template-owned.paths
-  assert_template_scope true '["minimal"]' false false \
+  assert_template_scope true "${all_init}" true scripts/init-module.sh
+  assert_template_scope true "${all_init}" true .github/workflows/ci.yml
+  assert_template_scope true "${all_init}" true assets/logo.png
+  assert_template_scope true '["minimal"]' false .grok/roles/worker-agent.toml
+  assert_template_scope true '["minimal"]' false template-owned.paths
+  assert_template_scope true '["minimal"]' false \
     internal/greeting/service.go .agents/roles/worker-agent.toml
-  assert_template_scope false '[]' false false scripts/ci/ci-change-scope.sh
-  assert_template_scope false '[]' false false evals/instructions/evals.json
+  assert_template_scope false '[]' false scripts/ci/ci-change-scope.sh
+  assert_template_scope false '[]' false evals/instructions/evals.json
   echo "CI change-scope routing check passed"
 }
 

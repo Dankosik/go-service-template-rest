@@ -66,6 +66,7 @@ glob_absent() {
 }
 file_present() { [[ -f "$1" ]]; }
 same_text() { [[ "$1" == "$2" ]]; }
+different_text() { [[ "$1" != "$2" ]]; }
 grep_absent() {
 	local status
 	if grep "$@"; then
@@ -425,10 +426,7 @@ minimal_workflow_before="$(workflow_snapshot "${minimal_checkout}")"
 		exit 1
 	fi
 	# profile:messaging-nats-jetstream:start
-	if APP__MESSAGING__ENABLED=true \
-		APP__MESSAGING__URLS='nats://127.0.0.1:4222' \
-		APP__MESSAGING__MIN_STREAM_REPLICAS=1 \
-		APP__MESSAGING__MIN_STREAM_RETENTION=24h \
+	if APP__MESSAGING__URLS='nats://127.0.0.1:4222' \
 		go run ./cmd/service >"${TEMP_ROOT}/minimal-messaging.log" 2>&1; then
 		echo "messaging-none service accepted messaging configuration"
 		exit 1
@@ -456,7 +454,6 @@ grep -Fq 'postgres.enabled' "${TEMP_ROOT}/minimal-postgres.log"
 grep -Fq 'postgres.dsn' "${TEMP_ROOT}/minimal-postgres.log"
 # profile:messaging-nats-jetstream:start
 grep -Fq 'unknown_key' "${TEMP_ROOT}/minimal-messaging.log"
-grep -Fq 'messaging.enabled' "${TEMP_ROOT}/minimal-messaging.log"
 grep -Fq 'messaging.urls' "${TEMP_ROOT}/minimal-messaging.log"
 # profile:messaging-nats-jetstream:end
 # profile:outbox-postgres:start
@@ -493,13 +490,8 @@ postgres_paths=(
 	scripts/ci/migration-publication-check.sh
 	env/docker-compose.yml
 )
-bounded_http_paths=(
-	internal/infra/httpclient
-)
-
 for removed in \
 	"${postgres_paths[@]}" \
-	"${bounded_http_paths[@]}" \
 	buf.yaml \
 	buf.gen.yaml \
 	cmd/service/internal/bootstrap/startup_grpc.go \
@@ -526,6 +518,10 @@ for removed in \
 	.github/ISSUE_TEMPLATE; do
 	assert "${removed} must not survive DATABASE=none initialization" path_absent "${minimal_checkout}/${removed}"
 done
+assert "agent-first HTTP client was removed from the minimal service" \
+	path_present "${minimal_checkout}/internal/infra/httpclient"
+assert "outbound target predicate was removed from the minimal service" \
+	path_present "${minimal_checkout}/internal/outboundtrust"
 # profile:messaging-nats-jetstream:start
 for removed in \
 	internal/infra/natsjs \
@@ -546,21 +542,11 @@ done
 # profile:outbox-postgres:start
 grep -Fq 'outbox = "none"' "${minimal_checkout}/template.lock"
 # profile:outbox-postgres:end
-for benchmark_surface in \
-	Makefile \
-	scripts/dev/benchmark.sh \
-	docs/benchmarking.md \
-	docs/build-test-and-development-commands.md; do
-	assert "GRPC=none retained gRPC reference benchmark commands in ${benchmark_surface}" \
-		grep_absent -Eq 'bench-grpc|GRPC_BENCH|grpc-smoke|grpc-inspect' \
-		"${minimal_checkout}/${benchmark_surface}"
-done
 # The generated service must record where it came from, or a later upstream fix
 # has no revision to be reviewed against.
 grep -Fq 'database = "none"' "${minimal_checkout}/template.lock"
 grep -Fq 'grpc = "none"' "${minimal_checkout}/template.lock"
 grep -Fq 'authn = "none"' "${minimal_checkout}/template.lock"
-grep -Fq 'outbound_http = "none"' "${minimal_checkout}/template.lock"
 # profile:messaging-nats-jetstream:start
 grep -Fq 'messaging = "none"' "${minimal_checkout}/template.lock"
 # profile:messaging-nats-jetstream:end
@@ -757,7 +743,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "mess
 	(
 		cd "${messaging_full_checkout}"
 		CODEOWNER=@acme/platform DATABASE=postgres GRPC=enabled AUTHN=oidc-jwt \
-			OUTBOUND_HTTP=bounded MESSAGING=nats-jetstream REFERENCE_EXAMPLE=keep \
+			MESSAGING=nats-jetstream REFERENCE_EXAMPLE=keep \
 			bash ./scripts/init-module.sh
 		go test -vet=off ./...
 		go build ./cmd/service ./cmd/worker ./cmd/migrate
@@ -767,7 +753,6 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "mess
 		'database = "postgres"' \
 		'grpc = "enabled"' \
 		'authn = "oidc-jwt"' \
-		'outbound_http = "bounded"' \
 		'messaging = "nats-jetstream"' \
 		'reference_example = "keep"'; do
 		grep -Fqx "${choice}" "${messaging_full_checkout}/template.lock"
@@ -776,7 +761,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "mess
 	(
 		cd "${messaging_full_checkout}"
 		CODEOWNER=@acme/platform DATABASE=postgres GRPC=enabled AUTHN=oidc-jwt \
-			OUTBOUND_HTTP=bounded MESSAGING=nats-jetstream REFERENCE_EXAMPLE=keep \
+			MESSAGING=nats-jetstream REFERENCE_EXAMPLE=keep \
 			bash ./scripts/init-module.sh
 	)
 	assert "repeated full messaging initialization changed the checkout" \
@@ -967,12 +952,11 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "post
 		scripts/ci/migration-publication-check.sh
 		env/docker-compose.yml
 	)
-	bounded_http_paths=(internal/infra/httpclient)
 	postgres_checkout="$(copy_template_checkout full-postgres git@github.com:acme/postgres-service.git)"
 	postgres_workflow_before="$(workflow_snapshot "${postgres_checkout}")"
 	(
 		cd "${postgres_checkout}"
-		CODEOWNER=@acme/platform DATABASE=postgres OUTBOUND_HTTP=bounded REFERENCE_EXAMPLE=keep \
+		CODEOWNER=@acme/platform DATABASE=postgres REFERENCE_EXAMPLE=keep \
 			bash ./scripts/init-module.sh
 		go test ./...
 		go build ./cmd/service ./cmd/migrate
@@ -980,10 +964,10 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "post
 # REFERENCE_EXAMPLE=keep is the opt-in escape hatch for teams that want the
 # worked example in tree.
 assert "REFERENCE_EXAMPLE=keep did not retain examples/" path_present "${postgres_checkout}/examples/reference-service"
-assert "agent workflow changed during postgres+bounded initialization" same_text "${postgres_workflow_before}" "$(workflow_snapshot "${postgres_checkout}")"
-assert "specs/ must not survive postgres+bounded initialization" path_absent "${postgres_checkout}/specs"
+assert "agent workflow changed during postgres initialization" same_text "${postgres_workflow_before}" "$(workflow_snapshot "${postgres_checkout}")"
+assert "specs/ must not survive postgres initialization" path_absent "${postgres_checkout}/specs"
 assert "scripts/profiles/ must not survive postgres initialization" path_absent "${postgres_checkout}/scripts/profiles"
-	for retained in "${postgres_paths[@]}" "${bounded_http_paths[@]}"; do
+	for retained in "${postgres_paths[@]}" internal/infra/httpclient internal/outboundtrust; do
 		assert "${retained} must survive DATABASE=postgres initialization" path_present "${postgres_checkout}/${retained}"
 	done
 	assert "generated PostgreSQL service retained removed inbox runtime" \
@@ -995,7 +979,6 @@ assert "scripts/profiles/ must not survive postgres initialization" path_absent 
 	assert "generated PostgreSQL service retained removed inbox lock field" \
 		grep_absent -Fq 'inbox = ' "${postgres_checkout}/template.lock"
 	grep -Fq 'database = "postgres"' "${postgres_checkout}/template.lock"
-grep -Fq 'outbound_http = "bounded"' "${postgres_checkout}/template.lock"
 (
 	cd "${postgres_checkout}"
 	make template-init-check >"${TEMP_ROOT}/postgres-init-check.log"
@@ -1027,9 +1010,6 @@ if [[ "${TEMPLATE_POSTGRES_PROOF:-0}" == "1" ]]; then
 	)
 fi
 
-malformed_outbound="$(new_fixture malformed-outbound git@github.com:acme/malformed-outbound.git)"
-expect_unchanged_failure "${malformed_outbound}" \
-	env CODEOWNER=@acme/platform OUTBOUND_HTTP=custom bash "${ROOT_DIR}/scripts/init-module.sh"
 	if (
 	cd "${postgres_checkout}"
 		go list -deps ./cmd/service |
@@ -1057,6 +1037,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "grpc
 	)
 assert "gRPC enabled initialization removed server adapter" path_present "${grpc_checkout}/internal/infra/grpc"
 assert "gRPC enabled initialization removed client adapter" path_present "${grpc_checkout}/internal/infra/grpcclient"
+grep -Fq 'buf.build/go/protovalidate' "${grpc_checkout}/go.mod"
 assert "gRPC enabled initialization removed test descriptors" path_present "${grpc_checkout}/internal/infra/grpc/grpctest"
 # The comment and doc proofs in this package and internal/infra/oidcjwt walk
 # their own source through it, so it leaves only when both profiles do — which
@@ -1082,16 +1063,6 @@ assert "gRPC enabled initialization removed operations leaf" \
 assert "gRPC enabled initialization removed reference" path_present "${grpc_checkout}/examples/grpc-reference-service"
 assert "gRPC enabled initialization removed transport-neutral failure policy" path_present "${grpc_checkout}/internal/failure"
 assert "gRPC enabled initialization removed composed failure contract" file_present "${grpc_checkout}/examples/reference-service/grpc_failure_mapping_contract_test.go"
-assert "gRPC reference profile removed benchmark lifecycle proof" file_present "${grpc_checkout}/scripts/dev/benchmark-grpc-check.sh"
-assert "gRPC reference profile removed k6 scenario" file_present "${grpc_checkout}/test/performance/grpc/all-cardinalities.js"
-grep -Fq 'bench-grpc-smoke' "${grpc_checkout}/Makefile"
-grep -Fq 'GRPC_BENCH_SCRIPT' "${grpc_checkout}/scripts/dev/benchmark.sh"
-grep -Fq 'bench-grpc-smoke' "${grpc_checkout}/docs/grpc/operations-and-proof.md"
-assert "gRPC reference profile retained unresolved benchmark markers" \
-	grep_absent -R -Fq 'profile:grpc-reference-benchmark:' \
-	"${grpc_checkout}/Makefile" \
-	"${grpc_checkout}/scripts/dev/benchmark.sh" \
-	"${grpc_checkout}/docs"
 grep -Fq 'grpc = "enabled"' "${grpc_checkout}/template.lock"
 assert "agent workflow changed during gRPC initialization" same_text "${grpc_workflow_before}" "$(workflow_snapshot "${grpc_checkout}")"
 grpc_snapshot="$(snapshot "${grpc_checkout}")"
@@ -1113,20 +1084,8 @@ grpc_default_checkout="$(copy_template_checkout default-grpc git@github.com:acme
 )
 assert "default gRPC initialization removed server adapter" path_present "${grpc_default_checkout}/internal/infra/grpc"
 assert "default gRPC initialization removed client adapter" path_present "${grpc_default_checkout}/internal/infra/grpcclient"
+grep -Fq 'buf.build/go/protovalidate' "${grpc_default_checkout}/go.mod"
 assert "default gRPC initialization retained reference examples" path_absent "${grpc_default_checkout}/examples"
-assert "default gRPC initialization retained benchmark lifecycle proof" path_absent "${grpc_default_checkout}/scripts/dev/benchmark-grpc-check.sh"
-assert "default gRPC initialization retained gRPC performance scenario" path_absent "${grpc_default_checkout}/test/performance/grpc"
-for benchmark_surface in \
-	Makefile \
-	scripts/dev/benchmark.sh \
-	docs/grpc.md \
-	docs/grpc/operations-and-proof.md \
-	docs/benchmarking.md \
-	docs/build-test-and-development-commands.md; do
-	assert "REFERENCE_EXAMPLE=remove retained gRPC reference benchmark commands in ${benchmark_surface}" \
-		grep_absent -Eq 'bench-grpc|GRPC_BENCH|grpc-smoke|grpc-inspect' \
-		"${grpc_default_checkout}/${benchmark_surface}"
-done
 grep -Fq 'grpc = "enabled"' "${grpc_default_checkout}/template.lock"
 grep -Fq 'reference_example = "remove"' "${grpc_default_checkout}/template.lock"
 grpc_default_snapshot="$(snapshot "${grpc_default_checkout}")"
@@ -1153,6 +1112,8 @@ assert "GRPC=none retained composed gRPC failure proof" path_absent "${grpc_http
 assert "GRPC=none retained gRPC reference" path_absent "${grpc_http_checkout}/examples/grpc-reference-service"
 assert "GRPC=none retained server adapter" path_absent "${grpc_http_checkout}/internal/infra/grpc"
 assert "GRPC=none retained client adapter" path_absent "${grpc_http_checkout}/internal/infra/grpcclient"
+assert "GRPC=none retained Protovalidate runtime dependency" \
+	grep_absent -Fq 'buf.build/go/protovalidate' "${grpc_http_checkout}/go.mod"
 fi
 
 if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "authn" ]]; then
@@ -1167,8 +1128,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "auth
 	verify_authn_none_profile() {
 		local authn_choice="$1"
 		local grpc_choice="$2"
-		local outbound_choice="$3"
-		local fixture_name="authn-${authn_choice}-${grpc_choice}-${outbound_choice}"
+		local fixture_name="authn-${authn_choice}-${grpc_choice}"
 		local checkout
 		local revision
 		local before
@@ -1176,7 +1136,6 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "auth
 			"CODEOWNER=@acme/platform"
 			"DATABASE=none"
 			"GRPC=${grpc_choice}"
-			"OUTBOUND_HTTP=${outbound_choice}"
 		)
 
 		checkout="$(copy_template_checkout "${fixture_name}" "git@github.com:acme/${fixture_name}-service.git")"
@@ -1193,26 +1152,23 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "auth
 			if [[ "${grpc_choice}" == "enabled" ]]; then
 				make proto-check
 			fi
-			if go list -deps ./cmd/service | grep -E 'internal/infra/oidcjwt|go-jose/go-jose'; then
+			if go list -deps ./cmd/service | grep -E 'internal/infra/oidcjwt|MicahParks/(keyfunc|jwkset)|golang-jwt/jwt'; then
 				echo "${fixture_name} production graph retained authentication"
 				exit 1
 			fi
-			if grep -Fq 'github.com/go-jose/go-jose/v4' go.mod; then
-				echo "${fixture_name} retained a direct or indirect JWT requirement in go.mod"
+			if grep -Eq 'github.com/(MicahParks/(keyfunc|jwkset)|golang-jwt/jwt)' go.mod; then
+				echo "${fixture_name} retained a JWT or JWKS requirement in go.mod"
 				exit 1
 			fi
 		)
 
 		for removed in \
 			cmd/service/internal/bootstrap/authn_bootstrap_test.go \
-			cmd/service/internal/bootstrap/authn_readiness_test.go \
 			cmd/service/internal/bootstrap/startup_authn.go \
 			docs/authentication.md \
 			internal/authntrust \
 			internal/config/authn_config_test.go \
-			internal/infra/grpc/authn_health_test.go \
 			internal/infra/http/authn_router_test.go \
-			internal/infra/httpclient/authn_policy_test.go \
 			internal/infra/oidcjwt; do
 			assert "${fixture_name} retained ${removed}" path_absent "${checkout}/${removed}"
 		done
@@ -1233,16 +1189,10 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "auth
 			"${checkout}/env" \
 			"${checkout}/internal" \
 			"${checkout}/.github"
-		if [[ "${outbound_choice}" == "bounded" ]]; then
-			assert "${fixture_name} removed requested bounded HTTP client" \
-				path_present "${checkout}/internal/infra/httpclient"
-		else
-			assert "${fixture_name} retained dormant HTTP client" \
-				path_absent "${checkout}/internal/infra/httpclient"
-		fi
+		assert "${fixture_name} removed the agent-first HTTP client" \
+			path_present "${checkout}/internal/infra/httpclient"
 		grep -Fq 'authn = "none"' "${checkout}/template.lock"
 		grep -Fq "grpc = \"${grpc_choice}\"" "${checkout}/template.lock"
-		grep -Fq "outbound_http = \"${outbound_choice}\"" "${checkout}/template.lock"
 		grep -Fqx "source_revision = \"${revision}\"" "${checkout}/template.lock"
 
 		before="$(snapshot "${checkout}")"
@@ -1259,19 +1209,17 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "auth
 	}
 
 	for grpc_choice in none enabled; do
-		for outbound_choice in none bounded; do
-			verify_authn_none_profile explicit "${grpc_choice}" "${outbound_choice}"
-		done
+		verify_authn_none_profile explicit "${grpc_choice}"
 	done
-	# Unset AUTHN is the default-none path; the grpc/outbound matrix above uses
+	# Unset AUTHN is the default-none path; the gRPC matrix above uses
 	# explicit AUTHN=none. One representative proves the omitted selector.
-	verify_authn_none_profile default none none
+	verify_authn_none_profile default none
 
 	authn_http_checkout="$(copy_template_checkout authn-http git@github.com:acme/authn-http-service.git)"
 	authn_http_revision="$(git -C "${authn_http_checkout}" rev-parse HEAD)"
 	(
 		cd "${authn_http_checkout}"
-		CODEOWNER=@acme/platform DATABASE=none GRPC=none AUTHN=oidc-jwt OUTBOUND_HTTP=none \
+		CODEOWNER=@acme/platform DATABASE=none GRPC=none AUTHN=oidc-jwt \
 			bash ./scripts/init-module.sh
 		prove_generated_authn_module
 		make openapi-check
@@ -1308,48 +1256,23 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "auth
 	grep -Fq 'APP__AUTHN__ISSUER=' "${authn_http_checkout}/env/.env.example"
 	(
 		cd "${authn_http_checkout}"
-		go list -m -f '{{.Path}}' all | grep -Fx 'github.com/go-jose/go-jose/v4'
+		go list -m -f '{{.Path}}' all | grep -Fx 'github.com/MicahParks/keyfunc/v3'
+		go list -m -f '{{.Path}}' all | grep -Fx 'github.com/MicahParks/jwkset'
+		go list -m -f '{{.Path}}' all | grep -Fx 'github.com/golang-jwt/jwt/v5'
 	)
 	authn_http_snapshot="$(snapshot "${authn_http_checkout}")"
 	(
 		cd "${authn_http_checkout}"
-		CODEOWNER=@acme/platform DATABASE=none GRPC=none AUTHN=oidc-jwt OUTBOUND_HTTP=none \
+		CODEOWNER=@acme/platform DATABASE=none GRPC=none AUTHN=oidc-jwt \
 			bash ./scripts/init-module.sh
 	)
 	assert "repeated HTTP OIDC initialization changed the checkout" \
 		same_text "${authn_http_snapshot}" "$(snapshot "${authn_http_checkout}")"
 
-	authn_http_bounded_checkout="$(copy_template_checkout authn-http-bounded git@github.com:acme/authn-http-bounded-service.git)"
-	(
-		cd "${authn_http_bounded_checkout}"
-		CODEOWNER=@acme/platform DATABASE=none GRPC=none AUTHN=oidc-jwt OUTBOUND_HTTP=bounded \
-			bash ./scripts/init-module.sh
-		prove_generated_authn_module
-		make openapi-check
-	)
-	assert "AUTHN=oidc-jwt with OUTBOUND_HTTP=bounded removed shared HTTP client" \
-		path_present "${authn_http_bounded_checkout}/internal/infra/httpclient"
-	assert "AUTHN=oidc-jwt HTTP bounded profile retained the gRPC adapter" \
-		path_absent "${authn_http_bounded_checkout}/internal/infra/oidcjwt/grpc.go"
-	assert "AUTHN=oidc-jwt HTTP bounded profile retained the old gRPC TLS proof path" \
-		path_absent "${authn_http_bounded_checkout}/internal/infra/oidcjwt/grpc_tls_test.go"
-	assert "AUTHN=oidc-jwt HTTP bounded profile retained the gRPC TLS contract proof" \
-		path_absent "${authn_http_bounded_checkout}/internal/infra/oidcjwt/grpc_tls_contract_test.go"
-	grep -Fq 'authn = "oidc-jwt"' "${authn_http_bounded_checkout}/template.lock"
-	grep -Fq 'outbound_http = "bounded"' "${authn_http_bounded_checkout}/template.lock"
-	authn_http_bounded_snapshot="$(snapshot "${authn_http_bounded_checkout}")"
-	(
-		cd "${authn_http_bounded_checkout}"
-		CODEOWNER=@acme/platform DATABASE=none GRPC=none AUTHN=oidc-jwt OUTBOUND_HTTP=bounded \
-			bash ./scripts/init-module.sh
-	)
-	assert "repeated bounded HTTP OIDC initialization changed the checkout" \
-		same_text "${authn_http_bounded_snapshot}" "$(snapshot "${authn_http_bounded_checkout}")"
-
 	authn_grpc_checkout="$(copy_template_checkout authn-grpc git@github.com:acme/authn-grpc-service.git)"
 	(
 		cd "${authn_grpc_checkout}"
-		CODEOWNER=@acme/platform DATABASE=none GRPC=enabled AUTHN=oidc-jwt OUTBOUND_HTTP=none \
+		CODEOWNER=@acme/platform DATABASE=none GRPC=enabled AUTHN=oidc-jwt \
 			bash ./scripts/init-module.sh
 		prove_generated_authn_module
 		make proto-check
@@ -1367,39 +1290,12 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "auth
 	authn_grpc_snapshot="$(snapshot "${authn_grpc_checkout}")"
 	(
 		cd "${authn_grpc_checkout}"
-		CODEOWNER=@acme/platform DATABASE=none GRPC=enabled AUTHN=oidc-jwt OUTBOUND_HTTP=none \
+		CODEOWNER=@acme/platform DATABASE=none GRPC=enabled AUTHN=oidc-jwt \
 			bash ./scripts/init-module.sh
 	)
 	assert "repeated gRPC OIDC initialization changed the checkout" \
 		same_text "${authn_grpc_snapshot}" "$(snapshot "${authn_grpc_checkout}")"
 
-	authn_grpc_bounded_checkout="$(copy_template_checkout authn-grpc-bounded git@github.com:acme/authn-grpc-bounded-service.git)"
-	(
-		cd "${authn_grpc_bounded_checkout}"
-		CODEOWNER=@acme/platform DATABASE=none GRPC=enabled AUTHN=oidc-jwt OUTBOUND_HTTP=bounded \
-			bash ./scripts/init-module.sh
-		prove_generated_authn_module
-		make proto-check
-	)
-	assert "AUTHN=oidc-jwt gRPC bounded profile removed shared HTTP client" \
-		path_present "${authn_grpc_bounded_checkout}/internal/infra/httpclient"
-	assert "AUTHN=oidc-jwt gRPC bounded profile removed gRPC adapter" \
-		file_present "${authn_grpc_bounded_checkout}/internal/infra/oidcjwt/grpc.go"
-	assert "AUTHN=oidc-jwt gRPC bounded profile removed the gRPC TLS contract proof" \
-		file_present "${authn_grpc_bounded_checkout}/internal/infra/oidcjwt/grpc_tls_contract_test.go"
-	assert "AUTHN=oidc-jwt gRPC bounded profile retained the old gRPC TLS proof path" \
-		path_absent "${authn_grpc_bounded_checkout}/internal/infra/oidcjwt/grpc_tls_test.go"
-	grep -Fq 'authn = "oidc-jwt"' "${authn_grpc_bounded_checkout}/template.lock"
-	grep -Fq 'grpc = "enabled"' "${authn_grpc_bounded_checkout}/template.lock"
-	grep -Fq 'outbound_http = "bounded"' "${authn_grpc_bounded_checkout}/template.lock"
-	authn_grpc_bounded_snapshot="$(snapshot "${authn_grpc_bounded_checkout}")"
-	(
-		cd "${authn_grpc_bounded_checkout}"
-		CODEOWNER=@acme/platform DATABASE=none GRPC=enabled AUTHN=oidc-jwt OUTBOUND_HTTP=bounded \
-			bash ./scripts/init-module.sh
-	)
-	assert "repeated bounded gRPC OIDC initialization changed the checkout" \
-		same_text "${authn_grpc_bounded_snapshot}" "$(snapshot "${authn_grpc_bounded_checkout}")"
 fi
 
 # profile:outbound-auth-oauth2-client-credentials:start
@@ -1407,11 +1303,9 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "outb
 	outbound_auth_marker='profile:outbound-auth''-'
 	assert_outbound_auth_tree() {
 		local root="$1"
-		local http="$2"
-		local grpc="$3"
+		local grpc="$2"
 
 		for retained in \
-			cmd/service/internal/bootstrap/startup_outbound_auth.go \
 			internal/config/outbound_auth_config.go \
 			internal/infra/oauth2clientcredentials \
 			docs/outbound-machine-authentication.md; do
@@ -1420,27 +1314,15 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "outb
 		grep -Fqx 'outbound_auth = "oauth2-client-credentials"' "${root}/template.lock"
 		grep -Fqx 'APP__OUTBOUND_AUTH__CLIENT_ID=' "${root}/env/.env.example"
 		grep -Fqx 'APP__OUTBOUND_AUTH__CLIENT_SECRET=' "${root}/env/.env.example"
-		grep -Fqx 'APP__OUTBOUND_AUTH__TOKEN_ENDPOINT=' "${root}/env/.env.example"
-		grep -Fqx 'APP__OUTBOUND_AUTH__RESOURCE_AUTHORITY=' "${root}/env/.env.example"
-		assert "OAuth selection removed credential HTTP policy" grep -Fq \
-			'DisableInstrumentation' "${root}/internal/infra/httpclient/config.go"
+		grep -Fqx 'APP__OUTBOUND_AUTH__TOKEN_URL=' "${root}/env/.env.example"
 		assert "OAuth selection retained unresolved markers" grep_absent -R -Fq \
 			"${outbound_auth_marker}" "${root}/README.md" "${root}/cmd" "${root}/docs" \
 			"${root}/env" "${root}/internal" "${root}/scripts/ci"
 
-		if [[ "${http}" == "bounded" ]]; then
-			assert "HTTP OAuth selection removed adapter" file_present \
-				"${root}/internal/infra/oauth2clientcredentials/http.go"
-			assert "HTTP OAuth selection removed attempt seam" file_present \
-				"${root}/internal/infra/httpclient/attempt_authorization.go"
-		else
-			assert "gRPC-only OAuth retained HTTP adapter" path_absent \
-				"${root}/internal/infra/oauth2clientcredentials/http.go"
-			assert "gRPC-only OAuth retained HTTP attempt seam" path_absent \
-				"${root}/internal/infra/httpclient/attempt_authorization.go"
-			assert "gRPC-only OAuth removed token HTTP owner" path_present \
-				"${root}/internal/infra/httpclient"
-		fi
+		assert "OAuth selection removed HTTP adapter" file_present \
+			"${root}/internal/infra/oauth2clientcredentials/http.go"
+		assert "OAuth selection removed fixed-target client" path_present \
+			"${root}/internal/infra/httpclient"
 
 		if [[ "${grpc}" == "enabled" ]]; then
 			assert "gRPC OAuth selection removed adapter" file_present \
@@ -1454,7 +1336,6 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "outb
 	assert_outbound_auth_none_tree() {
 		local root="$1"
 		for removed in \
-			cmd/service/internal/bootstrap/startup_outbound_auth.go \
 			internal/config/outbound_auth_config.go \
 			internal/infra/oauth2clientcredentials \
 			docs/outbound-machine-authentication.md; do
@@ -1478,7 +1359,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "outb
 		)
 	}
 
-	assert_outbound_auth_module_boundary() {
+	assert_outbound_auth_none_module_boundary() {
 		local root="$1"
 		local module
 
@@ -1490,6 +1371,22 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "outb
 		} | awk '$1 == "golang.org/x/oauth2" { print $1, $2, "indirect=" $3 }')"
 		if [[ -n "${module}" && "${module}" != 'golang.org/x/oauth2 v0.36.0 indirect=true' ]]; then
 			echo "unexpected OAuth module attribution: ${module}"
+			return 1
+		fi
+	}
+
+	assert_outbound_auth_selected_module_boundary() {
+		local root="$1"
+		local module
+
+		assert "selected output does not import golang.org/x/oauth2" grep -R -Fq \
+			--include='*.go' '"golang.org/x/oauth2' "${root}"
+		module="$({
+			cd "${root}"
+			go list -m -f '{{.Path}} {{.Version}} {{.Indirect}}' all
+		} | awk '$1 == "golang.org/x/oauth2" { print $1, $2, "indirect=" $3 }')"
+		if [[ "${module}" != 'golang.org/x/oauth2 v0.36.0 indirect=false' ]]; then
+			echo "unexpected selected OAuth module attribution: ${module}"
 			return 1
 		fi
 	}
@@ -1521,15 +1418,10 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "outb
 				bash "${ROOT_DIR}/scripts/init-module.sh"
 		fi
 	done
-	no_consumer_outbound_auth="$(copy_template_checkout outbound-auth-no-consumer git@github.com:acme/outbound-auth-no-consumer.git)"
-	expect_unchanged_failure "${no_consumer_outbound_auth}" env CODEOWNER=@acme/platform DATABASE=postgres GRPC=none \
-		OUTBOUND_HTTP=none OUTBOUND_AUTH=oauth2-client-credentials bash "${ROOT_DIR}/scripts/init-module.sh"
-
-	for transport in http grpc both; do
+	for transport in http both; do
 		case "${transport}" in
-		http) outbound_http=bounded; grpc=none ;;
-		grpc) outbound_http=none; grpc=enabled ;;
-		both) outbound_http=bounded; grpc=enabled ;;
+		http) grpc=none ;;
+		both) grpc=enabled ;;
 		esac
 		base_outbound_auth="$(copy_template_checkout "outbound-auth-${transport}-base" "git@github.com:acme/outbound-auth-${transport}.git")"
 		omitted_outbound_auth="${TEMP_ROOT}/outbound-auth-${transport}-omitted"
@@ -1540,12 +1432,11 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "outb
 		cp -R "${base_outbound_auth}" "${selected_outbound_auth}"
 		(
 			cd "${omitted_outbound_auth}"
-			CODEOWNER=@acme/platform GRPC="${grpc}" OUTBOUND_HTTP="${outbound_http}" \
-				bash ./scripts/init-module.sh
+			CODEOWNER=@acme/platform GRPC="${grpc}" bash ./scripts/init-module.sh
 		)
 		(
 			cd "${explicit_none_outbound_auth}"
-			CODEOWNER=@acme/platform GRPC="${grpc}" OUTBOUND_HTTP="${outbound_http}" OUTBOUND_AUTH=none \
+			CODEOWNER=@acme/platform GRPC="${grpc}" OUTBOUND_AUTH=none \
 				bash ./scripts/init-module.sh
 		)
 		assert "omitted OUTBOUND_AUTH differs from explicit none for ${transport}" \
@@ -1556,32 +1447,31 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "outb
 		omitted_snapshot="$(snapshot "${omitted_outbound_auth}")"
 		(
 			cd "${omitted_outbound_auth}"
-			CODEOWNER=@acme/platform GRPC="${grpc}" OUTBOUND_HTTP="${outbound_http}" \
-				bash ./scripts/init-module.sh
+			CODEOWNER=@acme/platform GRPC="${grpc}" bash ./scripts/init-module.sh
 		)
 		assert "repeated omitted ${transport} OAuth initialization changed the checkout" \
 			same_text "${omitted_snapshot}" "$(snapshot "${omitted_outbound_auth}")"
 		none_snapshot="$(snapshot "${explicit_none_outbound_auth}")"
 		(
 			cd "${explicit_none_outbound_auth}"
-			CODEOWNER=@acme/platform GRPC="${grpc}" OUTBOUND_HTTP="${outbound_http}" OUTBOUND_AUTH=none \
+			CODEOWNER=@acme/platform GRPC="${grpc}" OUTBOUND_AUTH=none \
 				bash ./scripts/init-module.sh
 		)
 		assert "repeated explicit-none ${transport} OAuth initialization changed the checkout" \
 			same_text "${none_snapshot}" "$(snapshot "${explicit_none_outbound_auth}")"
 		(
 			cd "${selected_outbound_auth}"
-			CODEOWNER=@acme/platform GRPC="${grpc}" OUTBOUND_HTTP="${outbound_http}" \
-				OUTBOUND_AUTH=oauth2-client-credentials bash ./scripts/init-module.sh
+			CODEOWNER=@acme/platform GRPC="${grpc}" OUTBOUND_AUTH=oauth2-client-credentials \
+				bash ./scripts/init-module.sh
 		)
 		check_outbound_auth_checkout "${selected_outbound_auth}"
-		assert_outbound_auth_tree "${selected_outbound_auth}" "${outbound_http}" "${grpc}"
+		assert_outbound_auth_tree "${selected_outbound_auth}" "${grpc}"
 		assert "omitted ${transport} output has invalid OAuth module ownership" \
-			assert_outbound_auth_module_boundary "${omitted_outbound_auth}"
+			assert_outbound_auth_none_module_boundary "${omitted_outbound_auth}"
 		assert "explicit-none ${transport} output has invalid OAuth module ownership" \
-			assert_outbound_auth_module_boundary "${explicit_none_outbound_auth}"
+			assert_outbound_auth_none_module_boundary "${explicit_none_outbound_auth}"
 		assert "selected ${transport} output has invalid OAuth module ownership" \
-			assert_outbound_auth_module_boundary "${selected_outbound_auth}"
+			assert_outbound_auth_selected_module_boundary "${selected_outbound_auth}"
 		omitted_module_attribution="$(outbound_auth_module_attribution "${omitted_outbound_auth}")"
 		none_module_attribution="$(outbound_auth_module_attribution "${explicit_none_outbound_auth}")"
 		selected_module_attribution="$(outbound_auth_module_attribution "${selected_outbound_auth}")"
@@ -1590,45 +1480,24 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "outb
 		selected_oauth2_packages="$(outbound_auth_oauth2_packages "${selected_outbound_auth}")"
 		assert "omitted and explicit-none ${transport} module attribution differs" \
 			same_text "${omitted_module_attribution}" "${none_module_attribution}"
-		assert "selected and none ${transport} module attribution differs" \
-			same_text "${selected_module_attribution}" "${none_module_attribution}"
+		assert "selected and none ${transport} module attribution did not differ" \
+			different_text "${selected_module_attribution}" "${none_module_attribution}"
 		assert "omitted and explicit-none ${transport} OAuth reachability differs" \
 			same_text "${omitted_oauth2_packages}" "${none_oauth2_packages}"
-		assert "selected and none ${transport} OAuth reachability differs" \
-			same_text "${selected_oauth2_packages}" "${none_oauth2_packages}"
-		if [[ "${grpc}" == "none" ]]; then
-			assert "HTTP-only output can reach golang.org/x/oauth2 packages" \
-				same_text '' "${selected_oauth2_packages}"
-		else
-			assert "gRPC output lost grpc-go OAuth attribution" grep -Fq \
-				'google.golang.org/grpc@v1.83.0 golang.org/x/oauth2@v0.36.0' \
-				<<<"${selected_module_attribution}"
-		fi
+		assert "selected and none ${transport} OAuth reachability did not differ" \
+			different_text "${selected_oauth2_packages}" "${none_oauth2_packages}"
+		assert "selected ${transport} output cannot reach clientcredentials" grep -Fqx \
+			'golang.org/x/oauth2/clientcredentials' <<<"${selected_oauth2_packages}"
 		selected_snapshot="$(snapshot "${selected_outbound_auth}")"
 		(
 			cd "${selected_outbound_auth}"
-			CODEOWNER=@acme/platform GRPC="${grpc}" OUTBOUND_HTTP="${outbound_http}" \
-				OUTBOUND_AUTH=oauth2-client-credentials bash ./scripts/init-module.sh
+			CODEOWNER=@acme/platform GRPC="${grpc}" OUTBOUND_AUTH=oauth2-client-credentials \
+				bash ./scripts/init-module.sh
 		)
 		assert "repeated ${transport} OAuth initialization changed the checkout" \
 			same_text "${selected_snapshot}" "$(snapshot "${selected_outbound_auth}")"
 	done
 
-	none_union_outbound_auth="$(copy_template_checkout outbound-auth-none-union git@github.com:acme/outbound-auth-none-union.git)"
-	(
-		cd "${none_union_outbound_auth}"
-		CODEOWNER=@acme/platform DATABASE=postgres AUTHN=none OUTBOUND_HTTP=bounded OUTBOUND_AUTH=none \
-			bash ./scripts/init-module.sh
-	)
-	assert "no credential profile retained credential option" grep_absent -R -Fq \
-		'DisableInstrumentation' "${none_union_outbound_auth}/internal/infra/httpclient"
-	oidc_union_outbound_auth="$(copy_template_checkout outbound-auth-oidc-union git@github.com:acme/outbound-auth-oidc-union.git)"
-	(
-		cd "${oidc_union_outbound_auth}"
-		CODEOWNER=@acme/platform DATABASE=postgres AUTHN=oidc-jwt OUTBOUND_HTTP=none OUTBOUND_AUTH=none \
-			bash ./scripts/init-module.sh
-	)
-	grep -Fq 'DisableInstrumentation' "${oidc_union_outbound_auth}/internal/infra/httpclient/config.go"
 fi
 # profile:outbound-auth-oauth2-client-credentials:end
 
@@ -1686,7 +1555,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "http
 	cp -R "${base_http_idempotency}" "${explicit_none_http_idempotency}"
 	(
 		cd "${omitted_http_idempotency}"
-		CODEOWNER=@acme/platform DATABASE=postgres OUTBOX=postgres MESSAGING=nats-jetstream AUTHN=oidc-jwt GRPC=enabled OUTBOUND_HTTP=bounded \
+		CODEOWNER=@acme/platform DATABASE=postgres OUTBOX=postgres MESSAGING=nats-jetstream AUTHN=oidc-jwt GRPC=enabled \
 			bash ./scripts/init-module.sh
 		go test -vet=off ./...
 		go build -o "${TEMP_ROOT}/http-idempotency-service" ./cmd/service
@@ -1695,7 +1564,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "http
 	)
 	(
 		cd "${explicit_none_http_idempotency}"
-		CODEOWNER=@acme/platform DATABASE=postgres HTTP_IDEMPOTENCY=none OUTBOX=postgres MESSAGING=nats-jetstream AUTHN=oidc-jwt GRPC=enabled OUTBOUND_HTTP=bounded \
+		CODEOWNER=@acme/platform DATABASE=postgres HTTP_IDEMPOTENCY=none OUTBOX=postgres MESSAGING=nats-jetstream AUTHN=oidc-jwt GRPC=enabled \
 			bash ./scripts/init-module.sh
 	)
 	assert "omitted HTTP_IDEMPOTENCY differs from explicit none" \
@@ -1766,7 +1635,6 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "obje
 			internal/config/object_storage_config_test.go \
 			internal/objectstorage \
 			internal/infra/s3 \
-			scripts/ci/s3-source-receipt.sh \
 			test/s3conformance/conformance_test.go \
 			docs/s3-compatible-object-storage.md; do
 			assert "OBJECT_STORAGE=none retained ${removed}" path_absent "${root}/${removed}"
@@ -1790,20 +1658,16 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "obje
 			internal/config/object_storage_config_test.go \
 			internal/objectstorage \
 			internal/infra/s3 \
-			internal/infra/s3/image_root_bundle.go \
-			internal/infra/s3/image_root_bundle_test.go \
-			internal/infra/httpclient \
-			scripts/ci/s3-source-receipt.sh \
 			test/s3conformance/conformance_test.go \
 			docs/s3-compatible-object-storage.md; do
 			assert "OBJECT_STORAGE=s3 removed ${retained}" path_present "${root}/${retained}"
 		done
-		assert "OBJECT_STORAGE=s3 removed generic RootCAs policy" grep -Fq \
-			'RootCAs' "${root}/internal/infra/httpclient/config.go"
 		assert "OBJECT_STORAGE=s3 removed AWS dependencies" grep -Eq \
 			'github.com/aws/aws-sdk-go-v2' "${root}/go.mod"
+		assert "OBJECT_STORAGE=s3 removed transfer manager" grep -Fq \
+			'github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager' "${root}/go.mod"
 		assert "OBJECT_STORAGE=s3 retained a rejected client" grep_absent -R -E \
-			'rhnvrm/simples3|kelindar/s3|manager.NewUploader|manager.NewDownloader' \
+			'rhnvrm/simples3|kelindar/s3' \
 			"${root}/go.mod" "${root}/go.sum" "${root}/internal"
 		assert "OBJECT_STORAGE=s3 generated a trust configuration path" grep_absent -R -E \
 			'object_storage.*(ca|root)|OBJECT_STORAGE.*(CA|ROOT)' \
@@ -1832,15 +1696,16 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "obje
 	done
 
 	for object_storage in none s3; do
-		for outbound_http in none bounded; do
-			checkout="$(copy_template_checkout "object-storage-${object_storage}-${outbound_http}" "git@github.com:acme/object-storage-${object_storage}-${outbound_http}.git")"
-			init_log="${TEMP_ROOT}/object-storage-${object_storage}-${outbound_http}.log"
+			checkout="$(copy_template_checkout "object-storage-${object_storage}" "git@github.com:acme/object-storage-${object_storage}.git")"
+			init_log="${TEMP_ROOT}/object-storage-${object_storage}.log"
 			(
 				cd "${checkout}"
-				CODEOWNER=@acme/platform DATABASE=postgres AUTHN=none OUTBOUND_HTTP="${outbound_http}" OBJECT_STORAGE="${object_storage}" \
+				CODEOWNER=@acme/platform DATABASE=postgres AUTHN=none OBJECT_STORAGE="${object_storage}" \
 					bash ./scripts/init-module.sh >"${init_log}"
 				go test -vet=off ./...
-				go test -vet=off -tags=integration ./test -run '^TestS3ObjectStorageConformanceRequiresProviderCertification$' -count=1
+				if [[ "${object_storage}" == "s3" ]]; then
+					go test -vet=off -tags=integration ./test/s3conformance -run '^TestS3ObjectStorageConformanceRequiresProviderCertification$' -count=1
+				fi
 				go mod tidy
 				make mod-tidy-check project-structure-check
 			)
@@ -1867,7 +1732,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "obje
 			snapshot_before_repeat="$(snapshot "${checkout}")"
 			(
 				cd "${checkout}"
-				CODEOWNER=@acme/platform DATABASE=postgres AUTHN=none OUTBOUND_HTTP="${outbound_http}" OBJECT_STORAGE="${object_storage}" \
+				CODEOWNER=@acme/platform DATABASE=postgres AUTHN=none OBJECT_STORAGE="${object_storage}" \
 					bash ./scripts/init-module.sh
 			)
 			assert "repeated OBJECT_STORAGE=${object_storage} initialization changed the checkout" \
@@ -1876,15 +1741,14 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "obje
 			if [[ "${object_storage}" == "none" ]]; then
 				other_object_storage=s3
 			fi
-			expect_unchanged_failure "${checkout}" env CODEOWNER=@acme/platform DATABASE=postgres AUTHN=none OUTBOUND_HTTP="${outbound_http}" OBJECT_STORAGE="${other_object_storage}" \
+			expect_unchanged_failure "${checkout}" env CODEOWNER=@acme/platform DATABASE=postgres AUTHN=none OBJECT_STORAGE="${other_object_storage}" \
 				bash "${ROOT_DIR}/scripts/init-module.sh"
-		done
 	done
 
 	authn_control="$(copy_template_checkout object-storage-authn-control git@github.com:acme/object-storage-authn-control.git)"
 	(
 		cd "${authn_control}"
-		CODEOWNER=@acme/platform DATABASE=postgres AUTHN=oidc-jwt OUTBOUND_HTTP=none OBJECT_STORAGE=none \
+		CODEOWNER=@acme/platform DATABASE=postgres AUTHN=oidc-jwt OBJECT_STORAGE=none \
 			bash ./scripts/init-module.sh
 		go test -vet=off ./...
 	)
@@ -1977,7 +1841,6 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "jobs
 				WEBHOOKS=durable
 				GRPC=enabled
 				AUTHN=oidc-jwt
-				OUTBOUND_HTTP=bounded
 				OBJECT_STORAGE=s3
 				OUTBOUND_AUTH=oauth2-client-credentials
 				REFERENCE_EXAMPLE=remove
@@ -2041,7 +1904,6 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "webh
 		docs/outbound-webhook-delivery.md
 		internal/config/webhooks_config.go
 		internal/infra/postgreswebhook
-		internal/outboundtrust
 		migrations/000005_postgres_webhooks.sql
 		migrations/000006_postgres_webhook_reference_repairs.sql
 		migrations/000007_postgres_webhooks_retire.sql
@@ -2059,6 +1921,8 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "webh
 	for removed in "${webhook_paths[@]}"; do
 		assert "WEBHOOKS=none retained ${removed}" path_absent "${webhooks_none}/${removed}"
 	done
+	assert "WEBHOOKS=none removed the always-retained outbound target predicate" \
+		path_present "${webhooks_none}/internal/outboundtrust"
 	grep -Fqx 'webhooks = "none"' "${webhooks_none}/template.lock"
 	assert "WEBHOOKS=none retained webhook profile markers" grep_absent -R -Fq \
 		'profile:webhooks-'"durable:" "${webhooks_none}/Makefile" "${webhooks_none}/README.md" \

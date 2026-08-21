@@ -10,15 +10,14 @@ import (
 	"github.com/riverqueue/river"
 )
 
-func TestRiverClientConfigUsesExistingMessagingCapacity(t *testing.T) {
+func TestRiverClientConfigUsesFixedBoundedCapacity(t *testing.T) {
 	t.Parallel()
 
 	cfg := config.Config{}
-	cfg.Messaging.MaxPendingPublishes = 8
-	cfg.Messaging.Worker.DrainTimeout = 3 * time.Second
+	cfg.HTTP.ShutdownTimeout = 3 * time.Second
 	got := riverClientConfig(cfg, river.NewWorkers(), slog.Default())
-	if got.Queues[postgresoutbox.Queue].MaxWorkers != 8 {
-		t.Fatalf("MaxWorkers = %d, want 8", got.Queues[postgresoutbox.Queue].MaxWorkers)
+	if got.Queues[postgresoutbox.Queue].MaxWorkers != defaultOutboxWorkers {
+		t.Fatalf("MaxWorkers = %d, want %d", got.Queues[postgresoutbox.Queue].MaxWorkers, defaultOutboxWorkers)
 	}
 	if got.CancelledJobRetentionPeriod != -1 || got.DiscardedJobRetentionPeriod != -1 {
 		t.Fatal("unfinished outbox jobs can be deleted")
@@ -36,14 +35,14 @@ func TestValidateRuntimeConfig(t *testing.T) {
 
 	valid := config.Config{}
 	valid.Postgres.Enabled = true
-	valid.Messaging.Enabled = true
+	valid.Messaging.URLs = "tls://nats.example:4222"
 	valid.Observability.Metrics.Addr = "127.0.0.1:9090"
 	if err := validateRuntimeConfig(valid); err != nil {
 		t.Fatalf("validateRuntimeConfig() error = %v", err)
 	}
 	for name, mutate := range map[string]func(*config.Config){
 		"postgres":    func(cfg *config.Config) { cfg.Postgres.Enabled = false },
-		"messaging":   func(cfg *config.Config) { cfg.Messaging.Enabled = false },
+		"messaging":   func(cfg *config.Config) { cfg.Messaging.URLs = "" },
 		"diagnostics": func(cfg *config.Config) { cfg.Observability.Metrics.Addr = "" },
 	} {
 		t.Run(name, func(t *testing.T) {

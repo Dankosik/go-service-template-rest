@@ -5,13 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"math"
-	"sync"
-	"sync/atomic"
 	"time"
 
-	// infratelemetry is aliased because this package declares its own telemetry
-	// type, which an unaliased import would collide with.
 	infratelemetry "github.com/example/go-service-template-rest/internal/infra/telemetry"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
@@ -24,42 +19,13 @@ import (
 
 const instrumentationScope = "service.messaging.nats"
 
-// Span attributes come from semconv rather than from string literals of this
-// package's own, for the reason the literals they replaced did not survive: the
-// convention renamed the producer's messaging.operation.type from "publish" to
-// "send", and a hardcoded key or value cannot be carried across that by the
-// version bump that performs it.
-//
-// The metric and log label vocabulary is vocabulary.go; the dead-letter reasons
-// that travel on the wire are message_deadletter.go.
 const (
-	// attributeOutcome has no semconv equivalent at the pinned version. It stays
-	// a literal because it is this repository's own attribute, bounded by
-	// boundedOutcome, and naming it beside the semconv calls is what keeps that
-	// distinction visible.
-	attributeOutcome = "messaging.operation.outcome"
-
-	// systemNATS is a literal because messaging.system is an open enum and the
-	// pinned semconv ships no NATS member; "nats" is the value NATS
-	// instrumentations already publish.
-	systemNATS = "nats"
-
-	// The messaging.operation.name values. They are the broker's own verbs
-	// rather than the normalized messaging.operation.type enum, and each is also
-	// the first word of its span name — semconv names a messaging span
-	// "{operation name} {destination}".
+	attributeOutcome     = "messaging.operation.outcome"
+	systemNATS           = "nats"
 	operationNamePublish = "publish"
 	operationNameProcess = "process"
 )
 
-// publishSpanName and consumeSpanName build the two span names.
-//
-// The publish name carries the concrete subject, which is the publisher's own
-// choice and matches what the outbox worker names a publication. The consume name
-// carries the worker's configured filter rather than the delivered subject:
-// semconv asks for the destination template when a subscription has one, and a
-// filter with a wildcard is exactly the case where the delivered subject would
-// put an unbounded value in the one field a tracing backend groups on.
 func publishSpanName(subject string) string { return operationNamePublish + " " + subject }
 func consumeSpanName(filter string) string  { return operationNameProcess + " " + filter }
 
@@ -77,47 +43,16 @@ type Observability struct {
 }
 
 type telemetry struct {
-	log                   *slog.Logger
-	tracer                trace.Tracer
-	publishOperations     metric.Int64Counter
-	publishDuration       metric.Float64Histogram
-	connectionEvents      metric.Int64Counter
-	readiness             metric.Int64ObservableGauge
-	fetchMessages         metric.Int64Counter
-	fetchBytes            metric.Int64Counter
-	consumeActive         metric.Int64UpDownCounter
-	handlerOperations     metric.Int64Counter
-	handlerDuration       metric.Float64Histogram
-	redeliveries          metric.Int64Counter
-	retries               metric.Int64Counter
-	dlqTransfers          metric.Int64Counter
-	drainOperations       metric.Int64Counter
-	forcedShutdowns       metric.Int64Counter
-	consumerPending       metric.Int64ObservableGauge
-	consumerAckPending    metric.Int64ObservableGauge
-	streamMessages        metric.Int64ObservableGauge
-	streamMessageLimit    metric.Int64ObservableGauge
-	streamStorage         metric.Int64ObservableGauge
-	streamStorageLimit    metric.Int64ObservableGauge
-	streamOldestTimestamp metric.Int64ObservableGauge
-	observationTimestamp  metric.Int64ObservableGauge
-	brokerObservation     atomic.Pointer[brokerObservation]
-	readinessRegistration metric.Registration
-	closeOnce             sync.Once
+	log               *slog.Logger
+	tracer            trace.Tracer
+	publishOperations metric.Int64Counter
+	publishDuration   metric.Float64Histogram
+	handlerOperations metric.Int64Counter
+	handlerDuration   metric.Float64Histogram
+	dlqTransfers      metric.Int64Counter
 }
 
-type brokerObservation struct {
-	consumerPending       int64
-	consumerAckPending    int64
-	streamMessages        int64
-	streamMessageLimit    int64
-	streamStorage         int64
-	streamStorageLimit    int64
-	streamOldestTimestamp int64
-	observationTimestamp  int64
-}
-
-func newTelemetry(obs Observability, role Role, readiness func() bool) (*telemetry, error) {
+func newTelemetry(obs Observability, role Role, _ func() bool) (*telemetry, error) {
 	if role != RoleProducer && role != RoleWorker {
 		return nil, fmt.Errorf("%w: invalid messaging role", ErrRejected)
 	}
@@ -128,127 +63,26 @@ func newTelemetry(obs Observability, role Role, readiness func() bool) (*telemet
 	if obs.Tracer == nil {
 		obs.Tracer = otel.GetTracerProvider().Tracer(instrumentationScope)
 	}
-	s := &telemetry{log: obs.Logger, tracer: obs.Tracer}
-	if err := s.registerMetrics(obs.Meter); err != nil {
+	t := &telemetry{log: obs.Logger, tracer: obs.Tracer}
+	set := infratelemetry.NewInstrumentSet(obs.Meter)
+	set.Int64Counter(&t.publishOperations, "messaging.publish.operations")
+	set.Float64Histogram(&t.publishDuration, "messaging.publish.duration", metric.WithUnit("s"))
+	set.Int64Counter(&t.handlerOperations, "messaging.handler.operations")
+	set.Float64Histogram(&t.handlerDuration, "messaging.handler.duration", metric.WithUnit("s"))
+	set.Int64Counter(&t.dlqTransfers, "messaging.dlq.transfers")
+	if err := set.Err(); err != nil {
 		return nil, err
 	}
-	observables := []metric.Observable{s.readiness}
-	if role == RoleWorker {
-		observables = append(observables,
-			s.consumerPending, s.consumerAckPending,
-			s.streamMessages, s.streamMessageLimit,
-			s.streamStorage, s.streamStorageLimit,
-			s.streamOldestTimestamp, s.observationTimestamp,
-		)
-	}
-	registration, err := obs.Meter.RegisterCallback(func(_ context.Context, observer metric.Observer) error {
-		value := int64(0)
-		if readiness() {
-			value = 1
-		}
-		observer.ObserveInt64(s.readiness, value, metric.WithAttributes(attribute.String("role", string(role))))
-		if role == RoleWorker {
-			s.observeBrokerState(observer)
-		}
-		return nil
-	}, observables...)
-	if err != nil {
-		return nil, fmt.Errorf("register messaging readiness metric: %w", err)
-	}
-	s.readinessRegistration = registration
-	return s, nil
+	return t, nil
 }
 
-func (s *telemetry) registerMetrics(meter metric.Meter) error {
-	set := infratelemetry.NewInstrumentSet(meter)
-	set.Int64Counter(&s.publishOperations, "messaging.publish.operations")
-	set.Float64Histogram(&s.publishDuration, "messaging.publish.duration", metric.WithUnit("s"))
-	set.Int64Counter(&s.connectionEvents, "messaging.connection.events")
-	set.Int64ObservableGauge(&s.readiness, "messaging.readiness")
-	set.Int64Counter(&s.fetchMessages, "messaging.fetch.messages")
-	set.Int64Counter(&s.fetchBytes, "messaging.fetch.bytes", metric.WithUnit("By"))
-	set.Int64UpDownCounter(&s.consumeActive, "messaging.consume.active")
-	set.Int64Counter(&s.handlerOperations, "messaging.handler.operations")
-	set.Float64Histogram(&s.handlerDuration, "messaging.handler.duration", metric.WithUnit("s"))
-	set.Int64Counter(&s.redeliveries, "messaging.redeliveries")
-	set.Int64Counter(&s.retries, "messaging.retries")
-	set.Int64Counter(&s.dlqTransfers, "messaging.dlq.transfers")
-	set.Int64Counter(&s.drainOperations, "messaging.drain.operations")
-	set.Int64Counter(&s.forcedShutdowns, "messaging.forced_shutdowns")
-	set.Int64ObservableGauge(&s.consumerPending, "messaging.consumer.pending", metric.WithUnit("{message}"))
-	set.Int64ObservableGauge(&s.consumerAckPending, "messaging.consumer.ack_pending", metric.WithUnit("{message}"))
-	set.Int64ObservableGauge(&s.streamMessages, "messaging.stream.messages", metric.WithUnit("{message}"))
-	set.Int64ObservableGauge(&s.streamMessageLimit, "messaging.stream.messages.limit", metric.WithUnit("{message}"))
-	set.Int64ObservableGauge(&s.streamStorage, "messaging.stream.storage", metric.WithUnit("By"))
-	set.Int64ObservableGauge(&s.streamStorageLimit, "messaging.stream.storage.limit", metric.WithUnit("By"))
-	set.Int64ObservableGauge(&s.streamOldestTimestamp, "messaging.stream.oldest.timestamp", metric.WithUnit("s"))
-	set.Int64ObservableGauge(&s.observationTimestamp, "messaging.observation.timestamp", metric.WithUnit("s"))
-	return set.Err()
-}
+func (*telemetry) close() {}
 
-func (s *telemetry) recordBrokerObservation(observedAt time.Time, stream *jetstream.StreamInfo, consumer *jetstream.ConsumerInfo) {
-	if s == nil || stream == nil {
-		return
-	}
-	observation := &brokerObservation{
-		streamMessages:       boundedUint64(stream.State.Msgs),
-		streamMessageLimit:   stream.Config.MaxMsgs,
-		streamStorage:        boundedUint64(stream.State.Bytes),
-		streamStorageLimit:   stream.Config.MaxBytes,
-		observationTimestamp: observedAt.UTC().Unix(),
-	}
-	if !stream.State.FirstTime.IsZero() {
-		observation.streamOldestTimestamp = stream.State.FirstTime.UTC().Unix()
-	}
-	if consumer != nil {
-		observation.consumerPending = boundedUint64(consumer.NumPending)
-		observation.consumerAckPending = int64(consumer.NumAckPending)
-	}
-	s.brokerObservation.Store(observation)
-}
-
-func (s *telemetry) observeBrokerState(observer metric.Observer) {
-	observation := s.brokerObservation.Load()
-	if observation == nil {
-		return
-	}
-	observer.ObserveInt64(s.consumerPending, observation.consumerPending)
-	observer.ObserveInt64(s.consumerAckPending, observation.consumerAckPending)
-	observer.ObserveInt64(s.streamMessages, observation.streamMessages)
-	observer.ObserveInt64(s.streamMessageLimit, observation.streamMessageLimit)
-	observer.ObserveInt64(s.streamStorage, observation.streamStorage)
-	observer.ObserveInt64(s.streamStorageLimit, observation.streamStorageLimit)
-	observer.ObserveInt64(s.streamOldestTimestamp, observation.streamOldestTimestamp)
-	observer.ObserveInt64(s.observationTimestamp, observation.observationTimestamp)
-}
-
-func boundedUint64(value uint64) int64 {
-	return int64(min(value, uint64(math.MaxInt64)))
-}
-
-func (s *telemetry) close() {
-	if s != nil && s.readinessRegistration != nil {
-		s.closeOnce.Do(func() { _ = s.readinessRegistration.Unregister() })
-	}
-}
-
-// outcomeAttribute is the only producer of the outcome attribute. Every
-// counter that carries one goes through it, so no call site can skip the
-// bounding by building its own metric.WithAttributes.
-//
-//nolint:ireturn // metric.WithAttributes returns OTel's own option interface.
+//nolint:ireturn // metric.WithAttributes returns OTel's option interface.
 func outcomeAttribute(outcome string) metric.MeasurementOption {
 	return metric.WithAttributes(attribute.String("outcome", boundedOutcome(outcome)))
 }
 
-// publishSpanOptions and consumeSpanOptions return options rather than a started
-// span so tracer.Start stays at the call site, where spancheck can still prove
-// the span is ended.
-//
-// They are spelled out separately rather than sharing a constructor because the
-// values that differ are adjacent strings, and a helper taking them as parameters
-// would let a call site transpose the destination and the message id without the
-// compiler noticing.
 func publishSpanOptions(event Event) []trace.SpanStartOption {
 	return []trace.SpanStartOption{
 		trace.WithSpanKind(trace.SpanKindProducer),
@@ -261,10 +95,6 @@ func publishSpanOptions(event Event) []trace.SpanStartOption {
 	}
 }
 
-// consumeSpanOptions takes the worker's configured filter beside the message
-// because the two answer different questions: the delivered subject is what
-// arrived, and the filter is what this consumer subscribes to. Both are
-// recorded, and only the filter reaches the span name.
 func consumeSpanOptions(msg Message, filter string) []trace.SpanStartOption {
 	return []trace.SpanStartOption{
 		trace.WithSpanKind(trace.SpanKindConsumer),
@@ -278,46 +108,29 @@ func consumeSpanOptions(msg Message, filter string) []trace.SpanStartOption {
 	}
 }
 
-// setSpanOutcome records how one operation ended. It bounds the value through
-// the same vocabulary the outcome metric attribute uses, so a span and the
-// counter that recorded the same operation cannot disagree about its name.
 func setSpanOutcome(span trace.Span, outcome string) {
 	span.SetAttributes(attribute.String(attributeOutcome, boundedOutcome(outcome)))
 }
 
-func (s *telemetry) recordPublish(ctx context.Context, event Event, outcome, reason string, started time.Time) {
+func (t *telemetry) recordPublish(ctx context.Context, event Event, outcome, reason string, started time.Time) {
 	duration := time.Since(started).Seconds()
 	attrs := outcomeAttribute(outcome)
-	s.publishOperations.Add(ctx, 1, attrs)
-	s.publishDuration.Record(ctx, duration, attrs)
-	s.log.InfoContext(ctx, "messaging_publish",
-		"operation", "publish", "subject", event.Subject,
-		"outcome", outcome, "duration_seconds", duration, "reason", reason,
-	)
+	t.publishOperations.Add(ctx, 1, attrs)
+	t.publishDuration.Record(ctx, duration, attrs)
+	if outcome != outcomeAccepted {
+		t.log.WarnContext(ctx, "messaging_publish_failed",
+			"operation", "publish", "subject", event.Subject,
+			"outcome", outcome, "duration_seconds", duration, "reason", reason,
+		)
+	}
 }
 
-func (s *telemetry) recordDeadLetterTransfer(ctx context.Context, outcome string) {
-	s.dlqTransfers.Add(ctx, 1, outcomeAttribute(outcome))
+func (t *telemetry) recordDeadLetterTransfer(ctx context.Context, outcome string) {
+	t.dlqTransfers.Add(ctx, 1, outcomeAttribute(outcome))
 }
 
-func (s *telemetry) recordDrain(ctx context.Context, outcome string) {
-	s.drainOperations.Add(ctx, 1, outcomeAttribute(outcome))
-}
-
-// countConnectionEvent is the only producer of the event attribute; the two
-// recorders below differ in log level and fields, not in what they count.
-func (s *telemetry) countConnectionEvent(ctx context.Context, event string) {
-	s.connectionEvents.Add(ctx, 1, metric.WithAttributes(attribute.String("event", boundedConnectionEvent(event))))
-}
-
-func (s *telemetry) recordConnection(ctx context.Context, event string) {
-	s.countConnectionEvent(ctx, event)
-	s.log.InfoContext(ctx, "messaging_connection", "operation", "connection", "outcome", event)
-}
-
-func (s *telemetry) recordAsyncError(ctx context.Context, err error) {
-	s.countConnectionEvent(ctx, connectionAsyncError)
-	s.log.WarnContext(ctx, "messaging_connection",
+func (t *telemetry) recordAsyncError(ctx context.Context, err error) {
+	t.log.WarnContext(ctx, "messaging_connection",
 		"operation", "connection", "outcome", connectionAsyncError, "reason", asyncErrorReason(err),
 	)
 }
@@ -339,18 +152,20 @@ func asyncErrorReason(err error) string {
 	}
 }
 
-func (s *telemetry) recordHandler(ctx context.Context, msg Message, outcome, reason string, started time.Time) {
+func (t *telemetry) recordHandler(ctx context.Context, msg Message, outcome, reason string, started time.Time) {
 	duration := time.Since(started).Seconds()
 	attrs := outcomeAttribute(outcome)
-	s.handlerOperations.Add(ctx, 1, attrs)
-	s.handlerDuration.Record(ctx, duration, attrs)
-	s.log.InfoContext(ctx, "messaging_delivery",
-		"operation", "consume", "subject", msg.Subject(), "attempt", msg.Metadata().NumDelivered,
-		"outcome", outcome, "duration_seconds", duration, "reason", reason,
-	)
+	t.handlerOperations.Add(ctx, 1, attrs)
+	t.handlerDuration.Record(ctx, duration, attrs)
+	if outcome != outcomeSuccess {
+		t.log.WarnContext(ctx, "messaging_delivery_failed",
+			"operation", "consume", "subject", msg.Subject(), "attempt", msg.Metadata().NumDelivered,
+			"outcome", outcome, "duration_seconds", duration, "reason", reason,
+		)
+	}
 }
 
-func (s *telemetry) logTerminalDelivery(ctx context.Context, subject string, metadata *jetstream.MsgMetadata, reason string, panicked *handlerPanic) {
+func (t *telemetry) logTerminalDelivery(ctx context.Context, subject string, metadata *jetstream.MsgMetadata, reason string, panicked *handlerPanic) {
 	args := []any{"operation", "consume", "subject", subject, "outcome", outcomeTerminal, "reason", reason}
 	if metadata != nil {
 		args = append(args, "attempt", metadata.NumDelivered)
@@ -358,30 +173,5 @@ func (s *telemetry) logTerminalDelivery(ctx context.Context, subject string, met
 	if panicked != nil {
 		args = append(args, "panic.class", panicked.class, "handler_frames", panicked.frames)
 	}
-	s.log.ErrorContext(ctx, "messaging_terminal_delivery", args...)
-}
-
-// The counters below carry no log line of their own: each is one number on a
-// path recordHandler, recordDrain, or logTerminalDelivery already narrates. They
-// are methods anyway, so an attribute added to any of them is added here rather
-// than at whichever delivery site noticed first.
-func (s *telemetry) countFetch(ctx context.Context, messages int64, messageBytes int64) {
-	s.fetchMessages.Add(ctx, messages)
-	s.fetchBytes.Add(ctx, messageBytes)
-}
-
-func (s *telemetry) countConsumeActive(ctx context.Context, delta int64) {
-	s.consumeActive.Add(ctx, delta)
-}
-
-func (s *telemetry) countRedelivery(ctx context.Context) {
-	s.redeliveries.Add(ctx, 1)
-}
-
-func (s *telemetry) countRetry(ctx context.Context) {
-	s.retries.Add(ctx, 1)
-}
-
-func (s *telemetry) countForcedShutdown(ctx context.Context) {
-	s.forcedShutdowns.Add(ctx, 1)
+	t.log.ErrorContext(ctx, "messaging_terminal_delivery", args...)
 }

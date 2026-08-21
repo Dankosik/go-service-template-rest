@@ -138,8 +138,7 @@ func TestWatchRefreshesOnIntervalAndStopsOnCancel(t *testing.T) {
 			t.Fatalf("probe calls before first tick = %d, want 1 immediate evaluation", got)
 		}
 
-		time.Sleep(3 * testRefreshInterval)
-		synctest.Wait()
+		synctest.Sleep(3 * testRefreshInterval)
 		if got := probe.calls.Load(); got != 4 {
 			t.Fatalf("probe calls after 3 intervals = %d, want 4", got)
 		}
@@ -151,8 +150,7 @@ func TestWatchRefreshesOnIntervalAndStopsOnCancel(t *testing.T) {
 		}
 
 		observed := probe.calls.Load()
-		time.Sleep(3 * testRefreshInterval)
-		synctest.Wait()
+		synctest.Sleep(3 * testRefreshInterval)
 		if got := probe.calls.Load(); got != observed {
 			t.Fatalf("probe calls after cancellation = %d, want %d", got, observed)
 		}
@@ -171,8 +169,7 @@ func TestWatchBoundsEachEvaluationByProbeBudget(t *testing.T) {
 		defer cancel()
 		go func() { _ = svc.Watch(ctx, testRefreshInterval, testProbeBudget, 1, nil) }()
 
-		time.Sleep(testProbeBudget + time.Millisecond)
-		synctest.Wait()
+		synctest.Sleep(testProbeBudget + time.Millisecond)
 
 		err := svc.Cached()
 		if !errors.Is(err, context.DeadlineExceeded) {
@@ -229,8 +226,7 @@ func TestCachedRefusesAStaleVerdict(t *testing.T) {
 		cancel()
 		synctest.Wait()
 
-		time.Sleep(staleBudget(testRefreshInterval, testProbeBudget) + time.Second)
-		synctest.Wait()
+		synctest.Sleep(staleBudget(testRefreshInterval, testProbeBudget) + time.Second)
 
 		if err := svc.Cached(); !errors.Is(err, ErrStale) {
 			t.Fatalf("Cached() after the refresher stopped error = %v, want ErrStale", err)
@@ -292,27 +288,23 @@ func TestWatchReportsOnlyEffectiveReadinessTransitions(t *testing.T) {
 		}
 
 		probe.err.Store(&downErr)
-		time.Sleep(2 * testRefreshInterval)
-		synctest.Wait()
+		synctest.Sleep(2 * testRefreshInterval)
 		if got := len(transitions); got != 0 {
 			t.Fatalf("transition count below failure threshold = %d, want 0", got)
 		}
 
-		time.Sleep(testRefreshInterval)
-		synctest.Wait()
+		synctest.Sleep(testRefreshInterval)
 		if err := <-transitions; !errors.Is(err, downErr) {
 			t.Fatalf("unhealthy transition error = %v, want wrapped %v", err, downErr)
 		}
 
-		time.Sleep(testRefreshInterval)
-		synctest.Wait()
+		synctest.Sleep(testRefreshInterval)
 		if got := len(transitions); got != 0 {
 			t.Fatalf("duplicate unhealthy transition count = %d, want 0", got)
 		}
 
 		probe.err.Store(nil)
-		time.Sleep(testRefreshInterval)
-		synctest.Wait()
+		synctest.Sleep(testRefreshInterval)
 		if err := <-transitions; err != nil {
 			t.Fatalf("healthy transition error = %v, want nil", err)
 		}

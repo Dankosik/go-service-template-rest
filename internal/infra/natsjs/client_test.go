@@ -7,29 +7,19 @@ import (
 	"time"
 )
 
-func TestClientStateTransitions(t *testing.T) {
+func TestClientLifecycleWithoutBroker(t *testing.T) {
 	client := unitClient(t, &recordingJetStream{}, RoleProducer)
 	client.ready.Store(true)
 	if client.Name() != "messaging" || client.Producer() == nil || !client.Ready() {
-		t.Fatal("client accessors did not expose admitted producer state")
+		t.Fatal("client accessors did not expose ready producer state")
 	}
-	client.draining.Store(true)
+	client.StopPublish()
 	if client.Ready() {
 		t.Fatal("draining client remained ready")
 	}
-	client.draining.Store(false)
-	if err := client.Check(t.Context()); err == nil || client.Ready() {
-		t.Fatalf("Check(without connection) error = %v, ready = %t", err, client.Ready())
+	if err := client.Check(t.Context()); !errors.Is(err, ErrRejected) {
+		t.Fatalf("Check() error = %v, want ErrRejected", err)
 	}
-	var nilClient *Client
-	if err := nilClient.Check(t.Context()); err == nil {
-		t.Fatal("nil Client.Check() error = nil")
-	}
-	if err := nilClient.Shutdown(t.Context()); err != nil {
-		t.Fatalf("nil Client.Shutdown() error = %v", err)
-	}
-	nilClient.StopPublish()
-	nilClient.Close()
 
 	canceled, cancel := context.WithCancel(t.Context())
 	cancel()
@@ -42,13 +32,47 @@ func TestClientStateTransitions(t *testing.T) {
 	if err := client.Run(t.Context()); !errors.Is(err, want) {
 		t.Fatalf("Run(terminal) error = %v", err)
 	}
-	if client.waitForReconnect(t.Context(), errors.New("failure")) {
-		t.Fatal("client without connection reported reconnect")
-	}
 	if err := client.Shutdown(t.Context()); err != nil {
 		t.Fatalf("Shutdown(without connection) error = %v", err)
 	}
 	client.Close()
+	client.Close()
+
+	var nilClient *Client
+	if nilClient.Ready() {
+		t.Fatal("nil client reported ready")
+	}
+	if err := nilClient.Check(t.Context()); !errors.Is(err, ErrRejected) {
+		t.Fatalf("nil Check() error = %v", err)
+	}
+	if err := nilClient.Shutdown(t.Context()); err != nil {
+		t.Fatalf("nil Shutdown() error = %v", err)
+	}
+	nilClient.StopPublish()
+	nilClient.Close()
+}
+
+func TestClientConnectionAdmissionAndTimeoutOptions(t *testing.T) {
+	valid := Config{
+		URLs: []string{"nats://127.0.0.1:4222"}, Stream: "EVENTS", MaxPayloadBytes: testMaxPayloadBytes,
+		AllowPlaintext: true, AllowUnauthenticated: true,
+	}
+	canceled, cancel := context.WithCancel(t.Context())
+	cancel()
+	if _, err := Connect(canceled, valid, RoleProducer, Observability{}); !errors.Is(err, ErrRejected) {
+		t.Fatalf("Connect(canceled) error = %v, want ErrRejected", err)
+	}
+	if _, err := Connect(t.Context(), Config{}, RoleProducer, Observability{}); !errors.Is(err, ErrRejected) {
+		t.Fatalf("Connect(invalid) error = %v, want ErrRejected", err)
+	}
+
+	client := unitClient(t, &recordingJetStream{}, RoleProducer)
+	withCredentials := valid
+	withCredentials.CredentialsFile = "/run/secrets/nats.creds"
+	withCredentials.RootCAFile = "/run/secrets/nats-ca.pem"
+	if options := client.connectOptions(t.Context(), withCredentials); len(options) < 10 {
+		t.Fatalf("connectOptions() count = %d", len(options))
+	}
 
 	expired, expiredCancel := context.WithDeadline(t.Context(), time.Now().Add(-time.Second))
 	defer expiredCancel()
