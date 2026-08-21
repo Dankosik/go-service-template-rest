@@ -322,6 +322,64 @@
         "It opens the named phase owner in fresh context, retains and waits on the native identity, re-reads the durable transition, and resumes the same unit.",
         "A conflicting blocked ledger status reopens Planning; user input is reserved for an actually unresolved user-owned decision, external input, or authority boundary."
       ]
+    },
+    {
+      "id": 27,
+      "prompt": "In cmd/internal/runtimeopts/diagnostics.go, change the existing ListenDiagnostics error prefix from `listen for <component> diagnostics` to `bind <component> diagnostics` and update its focused test. Do not add a route, binary, package, or integration.",
+      "expected_output": "A direct local Go edit through the existing owner without opening Repository Architecture.",
+      "files": [
+        "cmd/internal/runtimeopts/diagnostics.go",
+        "cmd/internal/runtimeopts/diagnostics_test.go"
+      ],
+      "expectations": [
+        "The agent treats the bounded edit as Direct Work through the existing implementation owner.",
+        "Changing executable Go code alone does not load Repository Architecture when no repository boundary, generated owner, or new entry surface is introduced.",
+        "The agent updates the existing focused assertion, runs scoped proof, and preserves unrelated work."
+      ]
+    },
+    {
+      "id": 28,
+      "prompt": "Add a new cmd/diagnostics-check executable entry point that operators can run independently. Close the required repository placement and ownership decision before implementation.",
+      "expected_output": "Repository Architecture is loaded because the request adds an executable entry point.",
+      "files": [
+        "AGENTS.md",
+        "docs/repo-architecture.md",
+        "cmd/service/main.go"
+      ],
+      "expectations": [
+        "The new executable entry point triggers Repository Architecture before implementation placement is accepted.",
+        "The agent selects only architecture leaves whose pressure can change the entry-point decision.",
+        "The result does not treat the new binary as ordinary local executable-code maintenance."
+      ]
+    },
+    {
+      "id": 29,
+      "prompt": "In cmd/internal/runtimeopts/runtimeopts.go, include the already configured service commit in LoggerFields after the service version and update the existing exact focused assertion. Complete the production change and its routine test.",
+      "expected_output": "A routine production change whose obvious focused test remains with go-coder and does not invoke go-test-strategy.",
+      "files": [
+        "cmd/internal/runtimeopts/runtimeopts.go",
+        "cmd/internal/runtimeopts/runtimeopts_test.go"
+      ],
+      "expectations": [
+        "The agent keeps the production edit and its routine focused assertion with go-coder.",
+        "An obvious exact assertion does not invoke go-test-strategy or a separate Test Design phase.",
+        "The agent runs the smallest repository-native focused proof and reports only that evidence."
+      ]
+    },
+    {
+      "id": 30,
+      "prompt": "Test Design only: the accepted PostgreSQL transaction retry policy needs proof, but it is disputed whether the unit, fake-backed, or real PostgreSQL layer can establish retry classification and rollback visibility deterministically. Choose the proving layer and oracle, then stop before writing test code.",
+      "expected_output": "go-test-strategy resolves the non-obvious proving layer, deterministic controls, and independent oracle without implementing tests.",
+      "files": [
+        "internal/infra/postgres/transaction.go",
+        "internal/infra/postgres/transaction_test.go",
+        "internal/infra/postgres/transaction_integration_test.go"
+      ],
+      "expectations": [
+        "The disputed proving layer and oracle trigger Test Design and go-test-strategy.",
+        "The result rejects a fake or narrower layer when it cannot observe PostgreSQL rollback visibility or real retry classification.",
+        "The agent returns a deterministic falsification design and stops before test implementation or completion claims."
+      ]
     }
   ]
 }
