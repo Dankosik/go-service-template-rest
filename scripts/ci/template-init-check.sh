@@ -1904,7 +1904,6 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "webh
 		docs/outbound-webhook-delivery.md
 		internal/config/webhooks_config.go
 		internal/infra/postgreswebhook
-		internal/outboundtrust
 		migrations/000005_postgres_webhooks.sql
 		migrations/000006_postgres_webhook_reference_repairs.sql
 		migrations/000007_postgres_webhooks_retire.sql
@@ -1922,6 +1921,8 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "webh
 	for removed in "${webhook_paths[@]}"; do
 		assert "WEBHOOKS=none retained ${removed}" path_absent "${webhooks_none}/${removed}"
 	done
+	assert "WEBHOOKS=none removed the always-retained outbound target predicate" \
+		path_present "${webhooks_none}/internal/outboundtrust"
 	grep -Fqx 'webhooks = "none"' "${webhooks_none}/template.lock"
 	assert "WEBHOOKS=none retained webhook profile markers" grep_absent -R -Fq \
 		'profile:webhooks-'"durable:" "${webhooks_none}/Makefile" "${webhooks_none}/README.md" \

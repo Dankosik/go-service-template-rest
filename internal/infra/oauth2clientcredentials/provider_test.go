@@ -56,6 +56,9 @@ func TestProviderErrorsAndUnusableTokensAreOpaque(t *testing.T) {
 	t.Cleanup(server.Close)
 	acquire := newProviderAcquirer(Config{TokenURL: server.URL, ClientID: "client", ClientSecret: "secret"}, server.Client())
 	_, err := acquire(context.Background())
+	if err == nil {
+		t.Fatal("acquire() error = nil, want opaque ErrUnavailable")
+	}
 	if !errors.Is(err, ErrUnavailable) || strings.Contains(err.Error(), canary) {
 		t.Fatalf("acquire() error = %q, want opaque ErrUnavailable", err)
 	}

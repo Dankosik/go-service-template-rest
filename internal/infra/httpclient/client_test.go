@@ -104,6 +104,9 @@ func TestAuthorityAndCorrelationPolicy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RoundTrip() error = %v", err)
 	}
+	if response == nil || response.Body == nil || received == nil {
+		t.Fatal("RoundTrip() returned an incomplete response")
+	}
 	_ = response.Body.Close()
 	for _, name := range []string{"Traceparent", "Baggage", "X-Request-ID"} {
 		if got := received.Header.Get(name); got != "" {
