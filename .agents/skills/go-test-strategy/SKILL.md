@@ -26,4 +26,6 @@ Load the [shared specialist contract](../../contracts/specialist-contract.md). R
   concrete false-pass or flake risk. Return one shared finding-envelope
   disposition per obligation.
 
-Hand unresolved behavior to its domain skill, executable test code to `go-test-implementation`, and completion claims to `go-verification-before-completion`.
+Hand unresolved behavior to its domain skill, executable test code to
+`go-test-implementation`, and non-obvious or disputed claim-to-proof mapping to
+`go-verification-before-completion`.
