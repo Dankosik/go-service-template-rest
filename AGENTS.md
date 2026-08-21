@@ -50,7 +50,7 @@ load only the owner it selects.
 | --- | --- |
 | Authorized external, costly, sensitive, destructive, or irreversible action | [External Effects](docs/spec-first-workflow/shared/external-effects.md) |
 | Accepted work first enters another checkout | [Repository Boundaries](docs/spec-first-workflow/shared/repository-boundaries.md) |
-| Repository boundary, generated-source ownership, contract capability, integration, persistence/durable flow, durable schema, or executable surface changes | [Repository Architecture](docs/repo-architecture.md) |
+| Repository boundary or generated-source ownership changes, or a new contract capability, integration adapter or outbound target, persistence or durable flow, durable schema, or executable entry point is added | [Repository Architecture](docs/repo-architecture.md) |
 | Proof must be selected | [Validation Routing](docs/validation-routing.md) |
 | A prompt for another agent, session, phase, or native entry skill must be written | [Prompt Composition](docs/prompt-composition.md) |
 | Instructions, tools, roles, or skills change | [Prompt Maintenance](docs/prompt-maintenance.md); also [Skill Authoring](docs/skill-authoring.md) for skills |

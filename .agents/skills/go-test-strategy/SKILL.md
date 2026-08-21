@@ -1,6 +1,6 @@
 ---
 name: go-test-strategy
-description: "Test strategy: Use for risk scenarios, proof levels, or deterministic oracles. Own proof design; Skip behavior, test code, and completion claims."
+description: "Test strategy: Use when material proof obligations, proving layer, determinism, or oracle are non-obvious or disputed. Own falsification design; Skip routine tests, behavior, test code, and completion claims."
 metadata:
   invocation: model
   kind: method
