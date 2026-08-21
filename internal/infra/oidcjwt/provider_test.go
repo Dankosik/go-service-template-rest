@@ -56,6 +56,27 @@ func TestFetchDocumentPreservesCallerCancellationAndRedactsProviderContent(t *te
 	}
 }
 
+func TestJWKSClientRejectsOversizedDocumentBeforeDecode(t *testing.T) {
+	t.Parallel()
+	request, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "https://issuer.example/jwks", http.NoBody)
+	if err != nil {
+		t.Fatal(err)
+	}
+	transport := jwksRoundTripper{client: requestClientFunc(func(*http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(strings.Repeat("x", MaxProviderBody+1))),
+		}, nil
+	})}
+	response, err := transport.RoundTrip(request)
+	if response != nil && response.Body != nil {
+		_ = response.Body.Close()
+	}
+	if response != nil || err == nil {
+		t.Fatalf("RoundTrip() = response %#v, error %v; want bounded rejection", response, err)
+	}
+}
+
 type requestClientFunc func(*http.Request) (*http.Response, error)
 
 func (f requestClientFunc) Do(request *http.Request) (*http.Response, error) {

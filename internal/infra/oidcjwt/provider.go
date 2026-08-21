@@ -1,6 +1,7 @@
 package oidcjwt
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -72,7 +73,7 @@ func newJWKSClient(jwksURI string, _ metric.MeterProvider) (*http.Client, func()
 }
 
 type jwksRoundTripper struct {
-	client *httpclient.Client
+	client requestClient
 }
 
 func (t jwksRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
@@ -80,6 +81,19 @@ func (t jwksRoundTripper) RoundTrip(request *http.Request) (*http.Response, erro
 	if err != nil {
 		return response, fmt.Errorf("send JWKS request: %w", err)
 	}
+	if response == nil || response.Body == nil {
+		return nil, errors.New("JWKS provider returned an empty response")
+	}
+	body, readErr := io.ReadAll(io.LimitReader(response.Body, MaxProviderBody+1))
+	closeErr := response.Body.Close()
+	if readErr != nil || closeErr != nil {
+		return nil, errors.New("read JWKS provider response")
+	}
+	if len(body) > MaxProviderBody {
+		return nil, errors.New("JWKS provider response is too large")
+	}
+	response.Body = io.NopCloser(bytes.NewReader(body))
+	response.ContentLength = int64(len(body))
 	return response, nil
 }
 
