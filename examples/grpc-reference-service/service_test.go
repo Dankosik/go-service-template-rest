@@ -9,7 +9,7 @@
 //
 // This is the example a service author copies, so it doubles as the worked proof
 // that a handler never picks its own codes.Code — see DomainErrors in service.go
-// and docs/grpc.md.
+// and docs/grpc/runtime-and-streaming.md.
 
 package grpcreference_test
 

@@ -180,18 +180,22 @@ Module validation is split without weakening the aggregate:
 
 `ci-local` and `check-full` intentionally use `mod-tidy-check`; downloaded
 content and the generator contract belong to `pr-check` and their focused
-targets. Merge CI still runs `mod-check`, and its minimal and PostgreSQL
-generator proofs run as independent jobs. Generated services no longer own
-`scripts/profiles`, so those jobs stop after checkout instead of installing Go,
-Node, or golangci-lint. Run `make mod-verify` or
+targets. Merge CI still runs `mod-check`, and its generator proofs run as independent
+jobs selected by change-scope. Run `make mod-verify` or
 `make template-init-check` while changing their owning inputs, and run
 `make pr-check BASE_REF=origin/main` for the complete pre-PR proof.
 
-Merge CI skips both generated-service jobs when every changed path is an
-ordinary Go or API implementation path that initialization does not transform.
-Changes to generator scripts, profiles, bootstrap/config/PostgreSQL ownership,
-modules, Make, Docker, environment, workflows, or any unknown path run both
-profiles. An empty or unresolvable comparison also runs both profiles.
+Merge CI skips generated-service jobs when every changed path is an ordinary
+Go or API implementation path that initialization does not transform, a
+docs/instruction path, or a classifier/eval script that does not change
+generated trees. Harness, role, and `template-owned.paths` changes run only the
+`minimal` `template-init` cell. Feature-owned generator paths run that profile
+(`object-storage` also runs `template-s3-envelope`). Changes to generator
+scripts, profiles, bootstrap/config/PostgreSQL ownership, modules, Make,
+Docker, environment, workflows, or any unknown path run every template job.
+An empty or unresolvable comparison also runs every template job. Generated
+services have no `scripts/profiles/`, so those jobs are skipped rather than
+started for a checkout-and-noop.
 
 `check-full` fails immediately when Docker is unavailable. It never converts a
 missing container runtime into a successful skip. `test-integration` disables

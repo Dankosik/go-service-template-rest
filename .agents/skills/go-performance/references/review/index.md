@@ -4,9 +4,10 @@ Each row names a pressure where this repository, a pinned version, or a
 documented API contract overrides the obvious answer. State the expected
 behavior change before loading.
 
-Proof level, workload definition, capture, comparison, PGO lifecycle, and
-completion policy have no reference here: [Benchmarking](../../../../../docs/benchmarking.md)
-owns them. Database attribution belongs to
+Proof level, workload identity, comparability, and completion policy have no
+reference here: [Benchmarking](../../../../../docs/benchmarking.md) owns them.
+Capture, PGO, and harness details live in the matching Benchmarking leaf.
+Database attribution belongs to
 [`postgres-performance`](../../../../../docs/universal-disciplines/postgres-performance/SKILL.md).
 Adding a reference back requires a decision it would change.
 

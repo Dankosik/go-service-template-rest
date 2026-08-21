@@ -64,7 +64,7 @@ const (
 // measuring something other than what its name claims with nothing to say so.
 //
 // name reaches recorded benchmark output, so changing one orphans every number
-// filed under it; docs/grpc.md names full_json in its profiling example.
+// filed under it; docs/grpc/operations-and-proof.md names full_json in its profiling example.
 type benchmarkVariant struct {
 	name  string
 	shape benchmarkShape

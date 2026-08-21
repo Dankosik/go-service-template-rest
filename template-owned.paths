@@ -29,6 +29,7 @@ QWEN.md
 docs/agent-harness.md
 docs/agent-harness/
 docs/benchmarking.md
+docs/benchmarking/
 docs/configuration-source-policy.md
 docs/prompt-maintenance.md
 docs/prompt-composition.md

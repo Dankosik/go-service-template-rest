@@ -1,5 +1,0 @@
-interface:
-  display_name: "Delegated Agent"
-  short_description: "Complete one bounded Lead-owned outcome"
-policy:
-  allow_implicit_invocation: false

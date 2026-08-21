@@ -63,7 +63,8 @@ for stable domain decisions.
 | S3-compatible object storage | [S3-Compatible Object Storage](s3-compatible-object-storage.md) |
 | Configuration source, precedence, or secret input | [Configuration Source Policy](configuration-source-policy.md) |
 | File placement or full repository tree | [Project Structure](project-structure-and-module-organization.md) |
-| Build, generation, and validation commands | [Build, Test, and Development Commands](build-test-and-development-commands.md) |
+| Proof or validation must be selected | [Validation Routing](validation-routing.md) |
+| Build or generator command composition changes | [`Makefile`](../Makefile) and the invoked script |
 | Delivery gates and production readiness | [CI/CD Production-Ready Checklist](ci-cd-production-ready.md) |
 
 Load another leaf only for an independent changed pressure.

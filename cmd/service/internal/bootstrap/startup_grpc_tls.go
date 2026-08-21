@@ -26,8 +26,9 @@ func grpcServerTLS(settings config.GRPCTLSConfig, log *slog.Logger) (*tls.Config
 	}
 
 	// TLS 1.3 is a floor rather than a configured value. Every gRPC runtime this
-	// listener can serve has supported it for years, docs/grpc.md's own client
-	// example already pins it, and a knob here would exist only to lower it.
+	// listener can serve has supported it for years, docs/grpc/transport-security.md
+	// records that floor, the client example in docs/grpc/runtime-and-streaming.md
+	// already pins it, and a knob here would exist only to lower it.
 	built := &tls.Config{
 		MinVersion:     tls.VersionTLS13,
 		GetCertificate: reloader.certificate,

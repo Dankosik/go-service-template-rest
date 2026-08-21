@@ -1,4 +1,4 @@
-// Proof for the two claims docs/grpc.md makes about this package's code: the
+// Proof for the two claims docs/grpc/runtime-and-streaming.md makes about this package's code: the
 // failure.Code to gRPC code table it publishes to service authors, and the list
 // of gRPC codes it tells them that table cannot produce.
 //
@@ -38,24 +38,24 @@ const documentedTableHeader = "| `failure.Code` | gRPC code |"
 func TestDocumentedFailureCodeTableMatchesStatusMapping(t *testing.T) {
 	documented := documentedProblemCodes(t)
 	if len(documented) == 0 {
-		t.Fatalf("docs/grpc.md has no rows under %q", documentedTableHeader)
+		t.Fatalf("docs/grpc/runtime-and-streaming.md has no rows under %q", documentedTableHeader)
 	}
 	constantNames := failureCodeConstantNames(t)
 
 	for code, name := range constantNames {
 		want, published := documented[name]
 		if !published {
-			t.Errorf("docs/grpc.md publishes no gRPC code for %s", name)
+			t.Errorf("docs/grpc/runtime-and-streaming.md publishes no gRPC code for %s", name)
 			continue
 		}
 		delete(documented, name)
 		if got := status.Code(mappedStatus(failure.Classification{Code: code}, "")); got.String() != want {
-			t.Errorf("mappedStatus(%s) = %s, but docs/grpc.md publishes %s", name, got, want)
+			t.Errorf("mappedStatus(%s) = %s, but docs/grpc/runtime-and-streaming.md publishes %s", name, got, want)
 		}
 	}
 
 	for name, grpcCode := range documented {
-		t.Errorf("docs/grpc.md maps %s to %s, which internal/failure no longer publishes", name, grpcCode)
+		t.Errorf("docs/grpc/runtime-and-streaming.md maps %s to %s, which internal/failure no longer publishes", name, grpcCode)
 	}
 }
 
@@ -132,7 +132,7 @@ const documentedUnreachableHeader = "The gRPC codes this table cannot produce:"
 func TestDocumentedUnreachableCodesAreActuallyUnreachable(t *testing.T) {
 	documented := documentedUnreachableCodes(t)
 	if len(documented) == 0 {
-		t.Fatalf("docs/grpc.md has no entries under %q", documentedUnreachableHeader)
+		t.Fatalf("docs/grpc/runtime-and-streaming.md has no entries under %q", documentedUnreachableHeader)
 	}
 
 	answered := make(map[string]struct{})
@@ -148,7 +148,7 @@ func TestDocumentedUnreachableCodesAreActuallyUnreachable(t *testing.T) {
 
 	for _, name := range documented {
 		if _, reachable := answered[name]; reachable {
-			t.Errorf("docs/grpc.md lists %s as unreachable, but this transport answers with it", name)
+			t.Errorf("docs/grpc/runtime-and-streaming.md lists %s as unreachable, but this transport answers with it", name)
 		}
 	}
 }
@@ -190,9 +190,9 @@ func documentedUnreachableCodes(t *testing.T) []string {
 func grpcGuide(t *testing.T) string {
 	t.Helper()
 
-	document, err := os.ReadFile(filepath.Join("..", "..", "..", "docs", "grpc.md"))
+	document, err := os.ReadFile(filepath.Join("..", "..", "..", "docs", "grpc", "runtime-and-streaming.md"))
 	if err != nil {
-		t.Fatalf("read gRPC guide: %v", err)
+		t.Fatalf("read gRPC runtime leaf: %v", err)
 	}
 	return string(document)
 }

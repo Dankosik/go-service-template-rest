@@ -25,10 +25,9 @@ depends on what the protobuf gates actually proved.
 - Generated Go under `internal/gen/proto` is derived. `proto-drift` regenerates
   into place and diffs, so schema and generated output land in one commit or the
   gate fails.
-- [docs/grpc.md](../../../../docs/grpc.md) owns how to author and register a
-  service — schema layout, the Opaque API, bootstrap wiring, client
-  construction, runtime interceptor order, health, drain, limits, and the
-  focused-proof command set. Read it there rather than reconstructing it.
+- [Native gRPC](../../../../docs/grpc.md) selects how to author and register a
+  service. Load the matching leaf rather than reconstructing schema layout,
+  generation, bootstrap wiring, client construction, runtime behavior, or proof.
 
 ## Reject
 

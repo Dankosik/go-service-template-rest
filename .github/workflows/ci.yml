@@ -32,6 +32,9 @@ jobs:
     outputs:
       expensive_required: ${{ steps.change_scope.outputs.expensive_required }}
       template_required: ${{ steps.change_scope.outputs.template_required }}
+      template_init_profiles: ${{ steps.change_scope.outputs.template_init_profiles }}
+      template_postgres_required: ${{ steps.change_scope.outputs.template_postgres_required }}
+      template_s3_envelope_required: ${{ steps.change_scope.outputs.template_s3_envelope_required }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -73,12 +76,41 @@ jobs:
             echo "history_mode=${HISTORY_MODE}"
           } >> "$GITHUB_OUTPUT"
 
-          if [ "${HISTORY_MODE}" = "worktree" ]; then
+          publish_template_scope() {
+            local required=false
+            local init_profiles='[]'
+            local postgres_required=false
+            local s3_envelope_required=false
+            local line
+
+            # Generated services own no generator; skip the upstream-only jobs
+            # instead of starting them for a checkout-and-noop.
+            if [ -d scripts/profiles ]; then
+              while IFS= read -r line; do
+                case "${line}" in
+                  required=*) required="${line#required=}" ;;
+                  init_profiles=*) init_profiles="${line#init_profiles=}" ;;
+                  postgres_required=*) postgres_required="${line#postgres_required=}" ;;
+                  s3_envelope_required=*) s3_envelope_required="${line#s3_envelope_required=}" ;;
+                esac
+              done
+            fi
+
             {
-              echo "scope=full"
-              echo "expensive_required=true"
-              echo "template_required=true"
+              echo "template_required=${required}"
+              echo "template_init_profiles<<EOF"
+              printf '%s\n' "${init_profiles}"
+              echo "EOF"
+              echo "template_postgres_required=${postgres_required}"
+              echo "template_s3_envelope_required=${s3_envelope_required}"
             } >> "$GITHUB_OUTPUT"
+          }
+
+          if [ "${HISTORY_MODE}" = "worktree" ]; then
+            echo "scope=full" >> "$GITHUB_OUTPUT"
+            echo "expensive_required=true" >> "$GITHUB_OUTPUT"
+            bash ./scripts/ci/ci-change-scope.sh template-scope < /dev/null |
+              publish_template_scope
             exit 0
           fi
 
@@ -86,20 +118,19 @@ jobs:
             [ "${BASE_SHA}" = "0000000000000000000000000000000000000000" ] ||
             ! git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
             SCOPE="full"
-            TEMPLATE_REQUIRED="true"
+            bash ./scripts/ci/ci-change-scope.sh template-scope < /dev/null |
+              publish_template_scope
           else
             SCOPE="$(
               git diff --name-only -z "${BASE_SHA}" "${HEAD_SHA}" |
                 bash ./scripts/ci/ci-change-scope.sh classify
             )"
-            TEMPLATE_REQUIRED="$(
-              git diff --name-only -z "${BASE_SHA}" "${HEAD_SHA}" |
-                bash ./scripts/ci/ci-change-scope.sh template-required
-            )"
+            git diff --name-only -z "${BASE_SHA}" "${HEAD_SHA}" |
+              bash ./scripts/ci/ci-change-scope.sh template-scope |
+              publish_template_scope
           fi
 
           echo "scope=${SCOPE}" >> "$GITHUB_OUTPUT"
-          echo "template_required=${TEMPLATE_REQUIRED}" >> "$GITHUB_OUTPUT"
           if [ "${SCOPE}" = "docs-only" ]; then
             echo "expensive_required=false" >> "$GITHUB_OUTPUT"
           else
@@ -178,11 +209,16 @@ jobs:
       - name: Check workflows, shell scripts, and Dockerfile
         run: make delivery-quality
 
-  template-minimal-feature:
-    if: needs.repo-integrity.outputs.expensive_required == 'true' && needs.repo-integrity.outputs.template_required == 'true'
+  template-init:
+    name: template-init (${{ matrix.profile }})
+    if: needs.repo-integrity.outputs.expensive_required == 'true' && needs.repo-integrity.outputs.template_init_profiles != '[]'
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 20
     needs: repo-integrity
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: ${{ fromJSON(needs.repo-integrity.outputs.template_init_profiles) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -208,63 +244,38 @@ jobs:
           cache: ${{ env.GO_CACHE_ENABLED }}
 
       - name: Setup golangci-lint
-        if: steps.template_source.outputs.required == 'true'
+        if: steps.template_source.outputs.required == 'true' && matrix.profile == 'minimal'
         uses: ./.github/actions/setup-golangci-lint
 
-      - name: Prove generated minimal service
+      - name: Prove generated service profile
         if: steps.template_source.outputs.required == 'true'
-        run: TEMPLATE_INIT_PROFILE=minimal make template-init-check GOLANGCI_LINT_BIN=golangci-lint
+        env:
+          TEMPLATE_INIT_PROFILE: ${{ matrix.profile }}
+          GOLANGCI_LINT_BIN: golangci-lint
+        run: make template-init-check
 
-      # profile:object-storage:start
-      - name: Prove generated S3-compatible object storage services
-        if: steps.template_source.outputs.required == 'true'
-        run: TEMPLATE_INIT_PROFILE=object-storage make template-init-check GOLANGCI_LINT_BIN=golangci-lint
+  # profile:object-storage:start
+  template-s3-envelope:
+    if: needs.repo-integrity.outputs.expensive_required == 'true' && needs.repo-integrity.outputs.template_s3_envelope_required == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: repo-integrity
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Go
+        uses: ./.github/actions/setup-go
+        with:
+          cache: ${{ env.GO_CACHE_ENABLED }}
 
       - name: Prove S3 source and Linux process envelopes
-        if: steps.template_source.outputs.required == 'true'
         run: |
           S3_RECEIPT_PLATFORM=linux/amd64 make test-s3-source-receipt
           GOMAXPROCS=1 S3_ENVELOPE_PLATFORM=linux/amd64 make test-s3-envelope
-      # profile:object-storage:end
-
-      # profile:authn-oidc-jwt:start
-      - name: Prove generated OIDC JWT services
-        if: steps.template_source.outputs.required == 'true'
-        run: TEMPLATE_INIT_PROFILE=authn make template-init-check GOLANGCI_LINT_BIN=golangci-lint
-      # profile:authn-oidc-jwt:end
-
-      # profile:grpc:start
-      - name: Prove generated native gRPC service
-        if: steps.template_source.outputs.required == 'true'
-        run: TEMPLATE_INIT_PROFILE=grpc make template-init-check GOLANGCI_LINT_BIN=golangci-lint
-      # profile:grpc:end
-
-      # profile:messaging-nats-jetstream:start
-      - name: Prove generated NATS JetStream service
-        if: steps.template_source.outputs.required == 'true'
-        run: TEMPLATE_INIT_PROFILE=messaging make template-init-check GOLANGCI_LINT_BIN=golangci-lint
-      # profile:messaging-nats-jetstream:end
-
-      # profile:outbox-postgres:start
-      - name: Prove generated PostgreSQL outbox services
-        if: steps.template_source.outputs.required == 'true'
-        run: TEMPLATE_INIT_PROFILE=outbox make template-init-check GOLANGCI_LINT_BIN=golangci-lint
-      # profile:outbox-postgres:end
-
-      # profile:jobs-postgres:start
-      - name: Prove generated PostgreSQL durable jobs services
-        if: steps.template_source.outputs.required == 'true'
-        run: TEMPLATE_INIT_PROFILE='jobs' make template-init-check GOLANGCI_LINT_BIN=golangci-lint
-      # profile:jobs-postgres:end
-
-      # profile:webhooks-durable:start
-      - name: Prove generated PostgreSQL durable webhook services
-        if: steps.template_source.outputs.required == 'true'
-        run: TEMPLATE_INIT_PROFILE=webhooks make template-init-check GOLANGCI_LINT_BIN=golangci-lint
-      # profile:webhooks-durable:end
+  # profile:object-storage:end
 
   template-postgres-feature:
-    if: needs.repo-integrity.outputs.expensive_required == 'true' && needs.repo-integrity.outputs.template_required == 'true'
+    if: needs.repo-integrity.outputs.expensive_required == 'true' && needs.repo-integrity.outputs.template_postgres_required == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: repo-integrity
@@ -645,8 +656,11 @@ jobs:
       - repo-integrity
       - lint
       - delivery-quality
-      - template-minimal-feature
+      - template-init
       - template-postgres-feature
+      # profile:object-storage:start
+      - template-s3-envelope
+      # profile:object-storage:end
       - openapi-contract
       - openapi-breaking
       - test-race
@@ -662,20 +676,29 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           EXPENSIVE_REQUIRED: ${{ needs.repo-integrity.outputs.expensive_required }}
           TEMPLATE_REQUIRED: ${{ needs.repo-integrity.outputs.template_required }}
+          TEMPLATE_INIT_PROFILES: ${{ needs.repo-integrity.outputs.template_init_profiles }}
+          TEMPLATE_POSTGRES_REQUIRED: ${{ needs.repo-integrity.outputs.template_postgres_required }}
+          TEMPLATE_S3_ENVELOPE_REQUIRED: ${{ needs.repo-integrity.outputs.template_s3_envelope_required }}
           RESULTS: ${{ toJSON(needs) }}
         run: |
           jq -e \
             --arg event "$EVENT_NAME" \
             --arg expensive "$EXPENSIVE_REQUIRED" \
-            --arg template "$TEMPLATE_REQUIRED" '
+            --arg template "$TEMPLATE_REQUIRED" \
+            --arg init_profiles "$TEMPLATE_INIT_PROFILES" \
+            --arg postgres "$TEMPLATE_POSTGRES_REQUIRED" \
+            --arg s3 "$TEMPLATE_S3_ENVELOPE_REQUIRED" '
             all(
               to_entries[];
               if (
                 $expensive == "false" and (
                   .key == "lint" or
                   .key == "delivery-quality" or
-                  .key == "template-minimal-feature" or
+                  .key == "template-init" or
                   .key == "template-postgres-feature" or
+                  # profile:object-storage:start
+                  .key == "template-s3-envelope" or
+                  # profile:object-storage:end
                   .key == "openapi-contract" or
                   .key == "openapi-breaking" or
                   .key == "test-race" or
@@ -687,10 +710,22 @@ jobs:
                 )
               ) or (
                 $template == "false" and (
-                  .key == "template-minimal-feature" or
+                  .key == "template-init" or
+                  # profile:object-storage:start
+                  .key == "template-s3-envelope" or
+                  # profile:object-storage:end
                   .key == "template-postgres-feature"
                 )
+              ) or (
+                .key == "template-init" and $init_profiles == "[]"
+              ) or (
+                .key == "template-postgres-feature" and $postgres != "true"
               )
+              # profile:object-storage:start
+              or (
+                .key == "template-s3-envelope" and $s3 != "true"
+              )
+              # profile:object-storage:end
               then .value.result == "skipped"
               elif (
                 (.key == "openapi-breaking" or .key == "dependency-review") and
