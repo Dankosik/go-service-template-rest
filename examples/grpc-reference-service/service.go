@@ -29,7 +29,7 @@ var ErrStreamLimit = errors.New("stream exceeds the reference aggregation limit"
 
 // DomainErrors classifies this example's domain identities for the shared gRPC
 // transport. A composition root passes the result as grpcx.Options.DomainErrors;
-// see docs/grpc.md for the equivalent step in a production service.
+// see docs/grpc/runtime-and-streaming.md for the equivalent step in a production service.
 func DomainErrors() []failure.Mapper {
 	return []failure.Mapper{
 		func(err error) (failure.Classification, bool) {

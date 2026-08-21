@@ -39,8 +39,13 @@ Check every member task in the same edit. A delegated result, review return,
 candidate handoff, or attempted action is not ledger state.
 
 Keep `status: ready` while another unit or owner-held recovery is executable;
-use `blocked` only when none remains. After the final accepted unit, verify the
-global Completion condition before `done`.
+an agent-owned technical, review, proof, or Planning repair with available
+authority is owner-held recovery even when the current unit result is `Blocked`.
+Use `blocked` only when no ready unit or owner-held recovery remains because a
+required user/external input or authority is unavailable. A conflicting
+`status: blocked` reopens Planning; it is not a user confirmation question.
+After the final accepted unit, verify the global Completion condition before
+`done`.
 
 ## Stop Rule
 

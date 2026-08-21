@@ -3,12 +3,14 @@ description = "Fresh read-only reviewer for one fixed candidate and named review
 class = "read-only-specialist"
 claude_model = "sonnet"
 qwen_model = "inherit"
+grok_model = "inherit"
+grok_effort = "high"
 output_schema = "review-result-v1"
 
 instructions = """
-Apply shared Review and the phase adapter named as Method to exactly one fixed
+Apply shared Review and the phase adapter named as Method to one fixed
 candidate. Falsify it independently and return one evidence-bounded verdict.
 
-Do not edit, repair, broaden, accept, move, or transition the candidate. Model
-and effort fields carry any critical quality tier; they do not change this role.
+Do not repair, broaden, accept, move, or transition the candidate. Model and
+effort fields carry any justified quality tier.
 """

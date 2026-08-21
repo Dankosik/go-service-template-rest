@@ -91,7 +91,7 @@ TEMP_ROOT="$(mktemp -d -t template-init-check.XXXXXX)"
 # Go and golangci-lint normally own the cache paths restored by CI. Keep those
 # canonical paths here; the generated fixture lint below documents its one
 # narrow isolation exception.
-if [[ "${TEMPLATE_INIT_PROFILE}" != "postgres" ]]; then
+if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "minimal" ]]; then
 	if [[ -n "${GOLANGCI_LINT_BIN:-}" ]]; then
 		LINTER="${GOLANGCI_LINT_BIN}"
 	else
@@ -163,10 +163,11 @@ new_fixture() {
 	cp \
 		"${ROOT_DIR}/scripts/profiles/database-none/startup_dependencies.go.tmpl" \
 		"${root}/scripts/profiles/database-none/startup_dependencies.go.tmpl"
-	mkdir -p "${root}/.agents" "${root}/.codex" "${root}/.claude" "${root}/.qwen" "${root}/specs"
-	touch "${root}/.agents/fixture" "${root}/.codex/fixture" "${root}/.claude/fixture" "${root}/.qwen/fixture" "${root}/specs/fixture"
+	mkdir -p "${root}/.agents" "${root}/.codex" "${root}/.claude" "${root}/.grok" "${root}/.qwen" "${root}/specs"
+	touch "${root}/.agents/fixture" "${root}/.codex/fixture" "${root}/.claude/fixture" "${root}/.grok/fixture" "${root}/.qwen/fixture" "${root}/specs/fixture"
 	printf '# Full agent contract\n' >"${root}/AGENTS.md"
 	printf '# Claude\n' >"${root}/CLAUDE.md"
+	printf '# Grok\n' >"${root}/Grok.md"
 	printf '# Qwen\n' >"${root}/QWEN.md"
 
 	{
@@ -201,7 +202,7 @@ workflow_snapshot() {
 	(
 		cd "${root}"
 		{
-			for path in .agents .codex .claude .qwen; do
+			for path in .agents .codex .claude .grok .qwen; do
 				if [[ ! -e "${path}" && ! -L "${path}" ]]; then
 					printf 'missing %s\n' "${path}"
 					continue
@@ -214,7 +215,7 @@ workflow_snapshot() {
 				done
 				find "${path}" -type f -exec shasum -a 256 {} +
 			done
-			for path in AGENTS.md CLAUDE.md QWEN.md; do
+			for path in AGENTS.md CLAUDE.md Grok.md QWEN.md; do
 				if [[ -f "${path}" ]]; then
 					shasum -a 256 "${path}"
 				else
@@ -229,13 +230,26 @@ copy_template_checkout() {
 	local name="$1"
 	local origin="$2"
 	local root="${TEMP_ROOT}/${name}"
+	local list="${TEMP_ROOT}/${name}.files"
+	local file
 
 	mkdir -p "${root}"
-	while IFS= read -r -d '' file; do
+	# Copy the working tree, including uncommitted files. checkout-index would
+	# drop local edits that `make template-init-check` is meant to prove.
+	: >"${list}"
+	while IFS= read -r file; do
 		[[ -f "${ROOT_DIR}/${file}" || -L "${ROOT_DIR}/${file}" ]] || continue
-		mkdir -p "${root}/$(dirname "${file}")"
-		cp -P "${ROOT_DIR}/${file}" "${root}/${file}"
-	done < <(git -C "${ROOT_DIR}" ls-files -z --cached --others --exclude-standard)
+		printf '%s\n' "${file}"
+	done < <(git -C "${ROOT_DIR}" ls-files --cached --others --exclude-standard) >>"${list}"
+	if command -v rsync >/dev/null 2>&1; then
+		rsync -a --files-from="${list}" "${ROOT_DIR}/" "${root}/"
+	else
+		while IFS= read -r file; do
+			mkdir -p "${root}/$(dirname "${file}")"
+			cp -P "${ROOT_DIR}/${file}" "${root}/${file}"
+		done <"${list}"
+	fi
+	rm -f "${list}"
 
 	git -C "${root}" init -q
 	git -C "${root}" remote add origin "${origin}"
@@ -245,6 +259,17 @@ copy_template_checkout() {
 	git -C "${root}" -c user.email=template-init-check@example.com -c user.name=template-init-check \
 		commit -q --allow-empty -m "template checkout"
 	printf '%s\n' "${root}"
+}
+
+# Inventory and lock own retention/removal. Source-tree CI owns package behavior.
+# Compile the generated module, and execute retained authn tests because the
+# composed gRPC TLS contract only exists after initialization.
+prove_generated_authn_module() {
+	go test -vet=off -run '^$' ./...
+	go build ./cmd/service
+	if [[ -d internal/infra/oidcjwt ]]; then
+		go test -vet=off ./internal/infra/oidcjwt
+	fi
 }
 
 expect_unchanged_failure() {
@@ -268,7 +293,7 @@ expect_unchanged_failure() {
 	}
 }
 
-if [[ "${TEMPLATE_INIT_PROFILE}" != "postgres" && "${TEMPLATE_INIT_PROFILE}" != "outbound-auth" && "${TEMPLATE_INIT_PROFILE}" != "object-storage" && "${TEMPLATE_INIT_PROFILE}" != "jobs" && "${TEMPLATE_INIT_PROFILE}" != "webhooks" ]]; then
+if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "minimal" ]]; then
 	derived="$(new_fixture derived git@github.com:acme/orders.git true)"
 	env_before="$(shasum -a 256 "${derived}/.env")"
 	derived_workflow_before="$(workflow_snapshot "${derived}")"
@@ -482,6 +507,7 @@ for removed in \
 	cmd/service/internal/bootstrap/startup_authn.go \
 	docs/authentication.md \
 	docs/grpc.md \
+	docs/grpc \
 	internal/config/authn_config_test.go \
 	internal/config/grpc_config_test.go \
 	internal/infra/oidcjwt \
@@ -1045,6 +1071,14 @@ assert "gRPC enabled initialization removed Buf config" file_present "${grpc_che
 assert "gRPC enabled initialization removed protobuf workflow" file_present "${grpc_checkout}/scripts/proto.sh"
 assert "gRPC enabled initialization removed bootstrap wiring" file_present "${grpc_checkout}/cmd/service/internal/bootstrap/startup_grpc.go"
 assert "gRPC enabled initialization removed guide" file_present "${grpc_checkout}/docs/grpc.md"
+assert "gRPC enabled initialization removed contract leaf" \
+	file_present "${grpc_checkout}/docs/grpc/contract-and-generation.md"
+assert "gRPC enabled initialization removed runtime leaf" \
+	file_present "${grpc_checkout}/docs/grpc/runtime-and-streaming.md"
+assert "gRPC enabled initialization removed transport leaf" \
+	file_present "${grpc_checkout}/docs/grpc/transport-security.md"
+assert "gRPC enabled initialization removed operations leaf" \
+	file_present "${grpc_checkout}/docs/grpc/operations-and-proof.md"
 assert "gRPC enabled initialization removed reference" path_present "${grpc_checkout}/examples/grpc-reference-service"
 assert "gRPC enabled initialization removed transport-neutral failure policy" path_present "${grpc_checkout}/internal/failure"
 assert "gRPC enabled initialization removed composed failure contract" file_present "${grpc_checkout}/examples/reference-service/grpc_failure_mapping_contract_test.go"
@@ -1052,7 +1086,7 @@ assert "gRPC reference profile removed benchmark lifecycle proof" file_present "
 assert "gRPC reference profile removed k6 scenario" file_present "${grpc_checkout}/test/performance/grpc/all-cardinalities.js"
 grep -Fq 'bench-grpc-smoke' "${grpc_checkout}/Makefile"
 grep -Fq 'GRPC_BENCH_SCRIPT' "${grpc_checkout}/scripts/dev/benchmark.sh"
-grep -Fq 'bench-grpc-smoke' "${grpc_checkout}/docs/grpc.md"
+grep -Fq 'bench-grpc-smoke' "${grpc_checkout}/docs/grpc/operations-and-proof.md"
 assert "gRPC reference profile retained unresolved benchmark markers" \
 	grep_absent -R -Fq 'profile:grpc-reference-benchmark:' \
 	"${grpc_checkout}/Makefile" \
@@ -1086,6 +1120,7 @@ for benchmark_surface in \
 	Makefile \
 	scripts/dev/benchmark.sh \
 	docs/grpc.md \
+	docs/grpc/operations-and-proof.md \
 	docs/benchmarking.md \
 	docs/build-test-and-development-commands.md; do
 	assert "REFERENCE_EXAMPLE=remove retained gRPC reference benchmark commands in ${benchmark_surface}" \
@@ -1153,8 +1188,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "auth
 			else
 				env "${init_environment[@]}" AUTHN=none bash ./scripts/init-module.sh
 			fi
-			go test -vet=off ./...
-			go build ./cmd/service
+			prove_generated_authn_module
 			make openapi-check
 			if [[ "${grpc_choice}" == "enabled" ]]; then
 				make proto-check
@@ -1224,13 +1258,14 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "auth
 			same_text "${before}" "$(snapshot "${checkout}")"
 	}
 
-	for authn_choice in default explicit; do
-		for grpc_choice in none enabled; do
-			for outbound_choice in none bounded; do
-				verify_authn_none_profile "${authn_choice}" "${grpc_choice}" "${outbound_choice}"
-			done
+	for grpc_choice in none enabled; do
+		for outbound_choice in none bounded; do
+			verify_authn_none_profile explicit "${grpc_choice}" "${outbound_choice}"
 		done
 	done
+	# Unset AUTHN is the default-none path; the grpc/outbound matrix above uses
+	# explicit AUTHN=none. One representative proves the omitted selector.
+	verify_authn_none_profile default none none
 
 	authn_http_checkout="$(copy_template_checkout authn-http git@github.com:acme/authn-http-service.git)"
 	authn_http_revision="$(git -C "${authn_http_checkout}" rev-parse HEAD)"
@@ -1238,8 +1273,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "auth
 		cd "${authn_http_checkout}"
 		CODEOWNER=@acme/platform DATABASE=none GRPC=none AUTHN=oidc-jwt OUTBOUND_HTTP=none \
 			bash ./scripts/init-module.sh
-		go test -vet=off ./...
-		go build ./cmd/service
+		prove_generated_authn_module
 		make openapi-check
 	)
 	for retained in \
@@ -1290,8 +1324,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "auth
 		cd "${authn_http_bounded_checkout}"
 		CODEOWNER=@acme/platform DATABASE=none GRPC=none AUTHN=oidc-jwt OUTBOUND_HTTP=bounded \
 			bash ./scripts/init-module.sh
-		go test -vet=off ./...
-		go build ./cmd/service
+		prove_generated_authn_module
 		make openapi-check
 	)
 	assert "AUTHN=oidc-jwt with OUTBOUND_HTTP=bounded removed shared HTTP client" \
@@ -1318,8 +1351,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "auth
 		cd "${authn_grpc_checkout}"
 		CODEOWNER=@acme/platform DATABASE=none GRPC=enabled AUTHN=oidc-jwt OUTBOUND_HTTP=none \
 			bash ./scripts/init-module.sh
-		go test -vet=off ./...
-		go build ./cmd/service
+		prove_generated_authn_module
 		make proto-check
 	)
 	assert "AUTHN=oidc-jwt with GRPC=enabled removed the unary/stream adapter" \
@@ -1346,8 +1378,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "auth
 		cd "${authn_grpc_bounded_checkout}"
 		CODEOWNER=@acme/platform DATABASE=none GRPC=enabled AUTHN=oidc-jwt OUTBOUND_HTTP=bounded \
 			bash ./scripts/init-module.sh
-		go test -vet=off ./...
-		go build ./cmd/service
+		prove_generated_authn_module
 		make proto-check
 	)
 	assert "AUTHN=oidc-jwt gRPC bounded profile removed shared HTTP client" \

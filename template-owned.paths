@@ -23,11 +23,13 @@
 
 AGENTS.md
 CLAUDE.md
+Grok.md
 QWEN.md
 
 docs/agent-harness.md
 docs/agent-harness/
 docs/benchmarking.md
+docs/benchmarking/
 docs/configuration-source-policy.md
 docs/prompt-maintenance.md
 docs/prompt-composition.md
@@ -49,6 +51,9 @@ evals/instructions/
 .agents/skills/
 .claude/agents/
 .codex/agents/
+.grok/agents/
+.grok/roles/
+.grok/rules/
 .qwen/agents/
 
 template-owned.paths

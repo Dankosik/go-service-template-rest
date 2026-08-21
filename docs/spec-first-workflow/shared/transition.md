@@ -24,3 +24,7 @@ synthetic ledger transition.
 Reopen only the smallest owner invalidated by current evidence and preserve
 unaffected decisions and proof. Stop at an explicit phase boundary, unavailable
 required external input, new authority boundary, or required durable handoff.
+That stop applies to the current phase actor. A durable Orchestrator continues
+through an authorized agent-owned handoff by opening the next owner, waiting for
+its transition, and resuming the same unit without asking the user to confirm
+technical routing.

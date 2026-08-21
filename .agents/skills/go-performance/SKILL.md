@@ -21,7 +21,10 @@ budgets and hot paths from accepted workloads, SLOs, execution paths,
 measurements, and rollout constraints. Bind every budget to a unit, percentile
 or capacity measure, protocol, and owner.
 
-[Benchmarking](../../../docs/benchmarking.md) owns proof level, workload definition, capture, comparison, PGO lifecycle, remote execution, and completion policy. Read it for measurement; the references below cover decisions.
+[Benchmarking](../../../docs/benchmarking.md) owns proof level, workload
+identity, comparable evidence, and completion policy. Load one matching leaf
+for capture. Authorized remote execution uses `digitalocean-benchmark-runner`.
+Read those owners for measurement; the references below cover decisions.
 
 ## Choose The Branch
 

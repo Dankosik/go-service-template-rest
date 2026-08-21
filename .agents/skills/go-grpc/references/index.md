@@ -5,10 +5,10 @@ obvious gRPC answer. State the expected behavior change before loading.
 
 Server composition, interceptor order, streaming cardinalities and concurrency,
 client channel construction and propagation, health and drain, transport limits,
-and telemetry have no reference here. [docs/grpc.md](../../../../docs/grpc.md) owns
-them with the current code, and `internal/infra/grpc` plus
-`internal/infra/grpcclient` are the authorities it describes. Adding a reference
-back requires a decision it would change.
+and telemetry have no reference here. [Native gRPC](../../../../docs/grpc.md)
+selects the matching architecture leaf; `internal/infra/grpc` plus
+`internal/infra/grpcclient` remain the authorities those leaves describe.
+Adding a reference back requires a decision it would change.
 
 | Pressure | Load | Required effect |
 | --- | --- | --- |

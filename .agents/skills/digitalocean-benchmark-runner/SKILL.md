@@ -8,7 +8,8 @@ metadata:
 
 # DigitalOcean Benchmark Runner
 
-Read [Benchmarking](../../../docs/benchmarking.md) and the complete [DigitalOcean
+Read [Benchmarking](../../../docs/benchmarking.md) for workload and
+performance-claim semantics, then the complete [DigitalOcean
 runbook](references/digitalocean.md) before a paid action. Keep measurement in
 the existing `make bench*` targets; this skill owns remote execution only.
 
