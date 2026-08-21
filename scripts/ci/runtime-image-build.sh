@@ -141,7 +141,6 @@ profile_environment=(
 	"JOBS=none"
 	"GRPC=enabled"
 	"AUTHN=none"
-	"OUTBOUND_HTTP=bounded"
 	"OBJECT_STORAGE=none"
 	# profile:outbound-auth-oauth2-client-credentials:start
 	"OUTBOUND_AUTH=none"
@@ -180,7 +179,6 @@ if [[ "${FIXTURE}" == "postgres-http-idempotency-active" ]]; then
 else
 	grep -Fqx 'authn = "none"' "${CHECKOUT}/template.lock"
 fi
-grep -Fqx 'outbound_http = "bounded"' "${CHECKOUT}/template.lock"
 # profile:outbox-postgres:start
 grep -Fqx 'outbox = "postgres"' "${CHECKOUT}/template.lock"
 # profile:outbox-postgres:end

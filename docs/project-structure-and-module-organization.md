@@ -86,9 +86,10 @@ adapter owns composition routes and JetStream mechanics.
 <!-- profile:messaging-nats-jetstream:end -->
 
 <!-- profile:webhooks-durable:start -->
-`internal/outboundtrust`, `internal/infra/postgreswebhook`, and the enabled jobs
-worker surfaces form the removable durable-webhook pack. The public-address
-predicate owns no URL, resolver, dialer, HTTP, or config policy.
+`internal/infra/postgreswebhook` and the enabled jobs-worker surfaces form the
+removable durable-webhook pack. The always-retained `internal/outboundtrust`
+predicate is shared with fixed-target HTTP and owns no URL, resolver, dialer,
+HTTP, or config policy.
 <!-- profile:webhooks-durable:end -->
 
 <!-- profile:object-storage:start -->

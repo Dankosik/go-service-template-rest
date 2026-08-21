@@ -14,12 +14,12 @@ authority.
 | `internal/<feature>/` | Use cases, business types, ports, invariants, and domain errors. | HTTP details, drivers, runtime config, process lifecycle. |
 | `internal/failure/` | Transport-neutral client-visible failure codes and mapper ordering. | Feature error identities, HTTP envelopes, gRPC statuses, or I/O. |
 | `internal/infra/http/` | HTTP server, middleware, mapping, route policy, and transport-edge observability. | Business rules or config loading. |
-| `internal/infra/httpclient/` | Optional bounded outbound target validation, transport bounds, correlation policy, and cleanup. | Provider auth, trust, operation budgets, retries, error mapping, or readiness. |
+| `internal/infra/httpclient/` | Always-available fixed HTTPS authority validation, post-DNS address admission, correlation stripping, and pooled-client cleanup. | Provider auth, operation budgets, response limits, retries, telemetry, error mapping, or readiness. |
 | `internal/infra/postgres/` | PostgreSQL admission, commit-outcome policy, and repository code over `pgxpool`. | Pool lifecycle, migrations, HTTP behavior, config precedence. |
 | `internal/infra/postgresmigrate/` | Migration execution for `cmd/migrate`. | Runtime pool ownership or application startup. |
 | `internal/infra/telemetry/` | OpenTelemetry SDK setup and Prometheus export. | Feature semantics, startup logging, request routing. |
 | `internal/observability/otelconfig/` | Shared OTel vocabulary, defaults, and pure validation. | Config loading or SDK construction. |
-| `internal/observability/correlationpolicy/` | Outbound correlation policy shared by bounded HTTP and gRPC clients. | Carrier stripping, transport construction, wire spelling. |
+| `internal/observability/correlationpolicy/` | Reserved correlation fields and explicit gRPC propagation policy. | HTTP carrier stripping, transport construction, wire spelling. |
 | `internal/observability/logctx/` | The process logger and context correlation fields. | Feature field choice, sinks, or request-ID meaning. |
 | `migrations/` | SQL schema source of truth. | Runtime repositories or generated Go. |
 

@@ -201,7 +201,6 @@ func initializedMessagingServiceRoot(t *testing.T, repositoryRoot string) string
 		"DATABASE=none",
 		"GRPC=none",
 		"AUTHN=none",
-		"OUTBOUND_HTTP=bounded",
 		"MESSAGING=nats-jetstream",
 		"REFERENCE_EXAMPLE=remove",
 	)
@@ -219,7 +218,7 @@ func cleanMessagingEnvironment(environment []string) []string {
 			continue
 		}
 		switch key {
-		case "CODEOWNER", "DATABASE", "GRPC", "AUTHN", "OUTBOUND_HTTP", "MESSAGING", "REFERENCE_EXAMPLE":
+		case "CODEOWNER", "DATABASE", "GRPC", "AUTHN", "MESSAGING", "REFERENCE_EXAMPLE":
 			continue
 		}
 		clean = append(clean, entry)

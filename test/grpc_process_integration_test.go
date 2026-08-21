@@ -194,7 +194,6 @@ func initializedProcessServiceRoot(t *testing.T, repositoryRoot string) string {
 		"DATABASE=postgres",
 		"GRPC=enabled",
 		"AUTHN=none",
-		"OUTBOUND_HTTP=bounded",
 		"REFERENCE_EXAMPLE=remove",
 	)
 	if output, err := initialize.CombinedOutput(); err != nil {
@@ -211,7 +210,7 @@ func cleanServiceEnvironment(environment []string) []string {
 			continue
 		}
 		switch key {
-		case "CODEOWNER", "DATABASE", "GRPC", "AUTHN", "OUTBOUND_HTTP", "REFERENCE_EXAMPLE":
+		case "CODEOWNER", "DATABASE", "GRPC", "AUTHN", "REFERENCE_EXAMPLE":
 			continue
 		}
 		clean = append(clean, entry)

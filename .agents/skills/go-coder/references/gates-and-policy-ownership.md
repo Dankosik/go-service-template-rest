@@ -12,8 +12,7 @@ Both modules pin `go 1.26.5`, so every version gate below 1.26 is already
 satisfied: `slices`, `maps`, `min`/`max`, `clear`, `cmp.Or`, `t.Context`,
 `sync.WaitGroup.Go`, `testing/synctest`, `errors.AsType`, and `t.ArtifactDir`
 are all available without checking. `errors.AsType` is already the repository
-idiom — see `internal/infra/http/router.go` and
-`internal/infra/httpclient/client.go`.
+idiom — see `internal/infra/http/router.go`.
 
 These concerns are gate-owned. Leaving them to the gate is correct; hand-applying
 them across files the criterion did not touch widens the diff without adding

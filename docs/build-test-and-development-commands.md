@@ -504,9 +504,9 @@ the rehearsal begins.
 `runtime-image-build` builds the current checkout directly after template
 initialization. In the unresolved upstream template only, it first creates a
 temporary deterministic `DATABASE=postgres`, `GRPC=enabled`, `AUTHN=none`,
-`OUTBOUND_HTTP=bounded` service and builds that production-shaped source. This
-keeps missing OIDC trust configuration fail-closed while giving migration,
-startup, shutdown, and container-security checks one runnable image to share.
+service and builds that production-shaped source. This keeps missing OIDC trust
+configuration fail-closed while giving migration, startup, shutdown, and
+container-security checks one runnable image to share.
 When messaging is selected, the check also executes the image's `/worker`
 entrypoint with messaging explicitly disabled. The unresolved template must
 fail at its unregistered-handler boundary; a derived service with a registered
