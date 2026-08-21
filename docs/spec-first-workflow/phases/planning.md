@@ -6,12 +6,15 @@ and proof placement; never invent behavior, design, ownership, or proof strategy
 
 Consume ready behavior, design, proof, rollout, risk, repository-owner, and
 validation inputs. Reconcile every accepted implementation-changing obligation
-to one unit, named unit deltas, proved no-implementation, or scope exit. Split
-only for a distinct postcondition, owner, consumed dependency, rollout sequence,
-valid handoff, or independently acceptable proof boundary.
+to one independently reviewable task, named task deltas, proved
+no-implementation, or scope exit.
 
 Return one fixed inline unit when no durable boundary exists. Otherwise persist
-[Task Ledger V1](../interfaces/task-ledger-v1.md) and apply the [Planning Ledger
+[Task Ledger V1](../interfaces/task-ledger-v1.md), keep dependency, status, and
+results in `tasks.md`, and put each task's outcome, inputs, boundary, acceptance,
+and handoff in `tasks/<ID>-<slug>.md` using [Task Packet
+V1](../interfaces/task-packet-v1.md). The packet defines what must become true;
+Implementation chooses how. Apply the [Planning Ledger
 Contract](planning/ledger-contract.md). Load [Conditional Planning
 Branches](planning/conditional-branches.md) only for integration-first
 uncertainty or broad contract fan-out, and [Planning Proof And

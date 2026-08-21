@@ -3,20 +3,26 @@
 Use only after Planning selects a persisted [Task Ledger
 V1](../../interfaces/task-ledger-v1.md).
 
-## Unit Boundaries
+## Task Boundaries
 
-Each task leaves repository and any deployment/migration state internally
-consistent and provable without unfinished companion work. Group canonical
-source, generated output, wiring, tests/fixtures, documentation, and replacement
-cleanup required by one postcondition.
+A task is the smallest repository-valid candidate that one fresh reviewer can
+accept or reject with one verdict. It changes one primary responsibility and
+produces one concrete postcondition or stable handoff.
 
-Prefer one end-to-end behavior through its real entry point. Split only for a
-distinct postcondition, owner, consumed dependency, rollout/migration sequence,
-independently valid handoff, or separately acceptable proof boundary. File
-count, desired agent count, and estimated time do not create a unit.
+Split when any part can be implemented, proved, repaired, or accepted
+independently. Keep parts together only when splitting would leave an invalid
+intermediate state, separate canonical source from required generated output,
+or separate a change from the focused proof needed to accept it.
 
-Group adjacent tasks into one non-overlapping acceptance unit only when none can
-be accepted independently and one Lead must integrate/prove the combined state.
+File count, diff size, desired agent count, and elapsed time are diagnostic
+signals, not boundaries by themselves. When they expose multiple owners,
+postconditions, repair boundaries, or proof oracles, split on those semantic
+boundaries.
+
+Each task is its own acceptance unit by default. A compound acceptance unit is
+allowed only when no member can be accepted separately in a valid repository
+state; record the exact inseparability reason. Prefer a later integration task
+over a broad end-to-end implementation unit.
 
 ## Dependencies And Readiness
 
@@ -50,5 +56,5 @@ After the final accepted unit, verify the global Completion condition before
 ## Stop Rule
 
 The ledger is ready when every accepted obligation has one unit disposition,
-each boundary is independently valid, every dependency names a consumed output
-or gate, and each `Done when` can falsify its postcondition.
+each task packet admits one verdict, every dependency names a consumed output or
+gate, and each `Accept when` can falsify its postcondition.
