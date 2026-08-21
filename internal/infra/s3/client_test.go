@@ -158,6 +158,135 @@ func TestPresignGetReturnsLibraryURL(t *testing.T) {
 	}
 }
 
+func TestNewBuildsLibraryClientWithoutProviderIO(t *testing.T) {
+	t.Setenv("AWS_ACCESS_KEY_ID", "test-access-key")
+	t.Setenv("AWS_SECRET_ACCESS_KEY", "test-secret-key")
+	client, err := New(t.Context(), testConfig())
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	if client.sdk == nil || client.uploader == nil || client.presigner == nil || client.transport == nil {
+		t.Fatal("New() returned an incomplete library client")
+	}
+	client.Close()
+	client.Close()
+}
+
+func TestStoreRejectsInvalidCallsBeforeProviderIO(t *testing.T) {
+	client := testClient(&fakeObjectAPI{}, nil)
+	canceled, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	for name, run := range map[string]func() error{
+		"nil context": func() error {
+			return client.Upload(nil, "object", strings.NewReader("x"), objectstorage.UploadOptions{Size: 1}) //nolint:staticcheck // Nil is the trust-boundary input under test.
+		},
+		"canceled context": func() error {
+			return client.Upload(canceled, "object", strings.NewReader("x"), objectstorage.UploadOptions{Size: 1})
+		},
+		"invalid key": func() error {
+			return client.Upload(t.Context(), "", strings.NewReader("x"), objectstorage.UploadOptions{Size: 1})
+		},
+		"nil source": func() error {
+			return client.Upload(t.Context(), "object", nil, objectstorage.UploadOptions{Size: 1})
+		},
+		"negative size": func() error {
+			return client.Upload(t.Context(), "object", strings.NewReader("x"), objectstorage.UploadOptions{Size: -1})
+		},
+		"oversized object": func() error {
+			return client.Upload(t.Context(), "object", strings.NewReader("x"), objectstorage.UploadOptions{Size: client.config.MaxObjectBytes + 1})
+		},
+		"invalid content type": func() error {
+			return client.Upload(t.Context(), "object", strings.NewReader("x"), objectstorage.UploadOptions{Size: 1, ContentType: "bad\nvalue"})
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := run(); err == nil {
+				t.Fatal("operation error = nil")
+			}
+		})
+	}
+}
+
+func TestStoreMapsOperationResults(t *testing.T) {
+	modified := time.Unix(10, 0)
+	api := &fakeObjectAPI{
+		get: func(context.Context, *awss3.GetObjectInput) (*awss3.GetObjectOutput, error) {
+			return nil, providerTestError{status: http.StatusNotFound, code: "NoSuchKey"}
+		},
+		head: func(context.Context, *awss3.HeadObjectInput) (*awss3.HeadObjectOutput, error) {
+			return &awss3.HeadObjectOutput{ContentLength: aws.Int64(3), ContentType: aws.String("text/plain"), LastModified: &modified}, nil
+		},
+		delete: func(context.Context, *awss3.DeleteObjectInput) (*awss3.DeleteObjectOutput, error) {
+			return &awss3.DeleteObjectOutput{}, nil
+		},
+	}
+	client := testClient(api, nil)
+	metadata, err := client.Metadata(t.Context(), "object")
+	if err != nil || metadata.Size != 3 || metadata.ContentType != "text/plain" || !metadata.LastModified.Equal(modified.UTC()) {
+		t.Fatalf("Metadata() = %#v, %v", metadata, err)
+	}
+	if err := client.Delete(t.Context(), "object"); err != nil {
+		t.Fatalf("Delete() error = %v", err)
+	}
+	if _, err := client.Download(t.Context(), "missing"); !errors.Is(err, objectstorage.ErrNotFound) {
+		t.Fatalf("Download() error = %v, want ErrNotFound", err)
+	}
+
+	api.head = func(context.Context, *awss3.HeadObjectInput) (*awss3.HeadObjectOutput, error) {
+		return nil, nil //nolint:nilnil // Incomplete SDK result under test.
+	}
+	if _, err := client.Metadata(t.Context(), "object"); !errors.Is(err, errRequestFailed) {
+		t.Fatalf("Metadata(nil) error = %v, want request failure", err)
+	}
+	api.delete = func(context.Context, *awss3.DeleteObjectInput) (*awss3.DeleteObjectOutput, error) {
+		return nil, providerTestError{status: http.StatusInternalServerError, code: "InternalError"}
+	}
+	if err := client.Delete(t.Context(), "object"); !errors.Is(err, objectstorage.ErrOutcomeUnknown) {
+		t.Fatalf("Delete() error = %v, want ErrOutcomeUnknown", err)
+	}
+}
+
+func TestStoreRejectsIncompleteLibraryResults(t *testing.T) {
+	api := &fakeObjectAPI{
+		put: func(context.Context, *awss3.PutObjectInput) (*awss3.PutObjectOutput, error) {
+			return nil, nil //nolint:nilnil // Incomplete SDK result under test.
+		},
+		get: func(context.Context, *awss3.GetObjectInput) (*awss3.GetObjectOutput, error) {
+			return nil, nil //nolint:nilnil // Incomplete SDK result under test.
+		},
+		head: func(context.Context, *awss3.HeadObjectInput) (*awss3.HeadObjectOutput, error) {
+			return &awss3.HeadObjectOutput{ContentLength: aws.Int64(-1), LastModified: aws.Time(time.Unix(1, 0))}, nil
+		},
+	}
+	uploader := fakeUploader(func(context.Context, *transfermanager.UploadObjectInput) (*transfermanager.UploadObjectOutput, error) {
+		return nil, nil //nolint:nilnil // Incomplete SDK result under test.
+	})
+	client := testClient(api, uploader)
+	if err := client.Upload(t.Context(), "small", strings.NewReader("x"), objectstorage.UploadOptions{Size: 1}); !errors.Is(err, objectstorage.ErrIntegrity) {
+		t.Fatalf("small Upload() error = %v, want ErrIntegrity", err)
+	}
+	if err := client.Upload(t.Context(), "large", strings.NewReader("x"), objectstorage.UploadOptions{Size: multipartPartBytes + 1}); !errors.Is(err, objectstorage.ErrIntegrity) {
+		t.Fatalf("multipart Upload() error = %v, want ErrIntegrity", err)
+	}
+	if _, err := client.Download(t.Context(), "object"); !errors.Is(err, objectstorage.ErrIntegrity) {
+		t.Fatalf("Download() error = %v, want ErrIntegrity", err)
+	}
+	if _, err := client.Metadata(t.Context(), "object"); !errors.Is(err, errRequestFailed) {
+		t.Fatalf("Metadata() error = %v, want request failure", err)
+	}
+
+	client.presigner = fakePresigner(func(context.Context, *awss3.GetObjectInput) (*signer.PresignedHTTPRequest, error) {
+		return nil, nil //nolint:nilnil // Incomplete SDK result under test.
+	})
+	if _, err := client.PresignGet(t.Context(), "object", time.Minute); !errors.Is(err, errRequestFailed) {
+		t.Fatalf("PresignGet() error = %v, want request failure", err)
+	}
+	if _, err := client.PresignGet(t.Context(), "object", time.Millisecond); !errors.Is(err, objectstorage.ErrInvalid) {
+		t.Fatalf("PresignGet(invalid TTL) error = %v, want ErrInvalid", err)
+	}
+}
+
 func testConfig() Config {
 	return Config{
 		Provider: ProviderAmazonS3, Region: "us-east-1", Bucket: "examplebucket",

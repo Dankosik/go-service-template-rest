@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/example/go-service-template-rest/internal/infra/httpclient"
 	"golang.org/x/oauth2"
 )
 
@@ -83,5 +84,23 @@ func TestHTTPClientCallerCancellationStopsOnlyItsWait(t *testing.T) {
 	close(release)
 	if err := owner.Close(t.Context()); err != nil {
 		t.Fatalf("Close() error = %v", err)
+	}
+}
+
+func TestHTTPClientConstructionRequiresBothOwners(t *testing.T) {
+	owner := newClient(func(context.Context) (*oauth2.Token, error) {
+		return validTestToken("opaque"), nil
+	}, nil)
+	base, err := httpclient.NewExternalHTTPS("https://resource.example.com")
+	if err != nil {
+		t.Fatalf("NewExternalHTTPS() error = %v", err)
+	}
+	defer base.CloseIdleConnections()
+	client, err := owner.HTTP(base)
+	if err != nil || client == nil {
+		t.Fatalf("HTTP() = %#v, %v", client, err)
+	}
+	if _, err := owner.HTTP(nil); !errors.Is(err, ErrInvalidConfiguration) {
+		t.Fatalf("HTTP(nil) error = %v", err)
 	}
 }

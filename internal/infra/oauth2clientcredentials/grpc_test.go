@@ -33,6 +33,9 @@ func TestGRPCCredentialUsesCallerContextAndRequiresSecureTransport(t *testing.T)
 		return validTestToken("opaque"), nil
 	}, nil)
 	credential := grpcCredential{client: owner}
+	if !credential.RequireTransportSecurity() {
+		t.Fatal("credential does not require transport security")
+	}
 	secure := credentials.NewContextWithRequestInfo(context.Background(), credentials.RequestInfo{
 		AuthInfo: testAuthInfo{CommonAuthInfo: credentials.CommonAuthInfo{SecurityLevel: credentials.PrivacyAndIntegrity}},
 	})
@@ -115,5 +118,17 @@ func TestGRPCClientRejectsCompetingAuthorizationBeforeResourceRPC(t *testing.T) 
 	}
 	if base.invokes.Load() != 0 || base.streams.Load() != 0 {
 		t.Fatalf("resource calls = invokes:%d streams:%d, want zero", base.invokes.Load(), base.streams.Load())
+	}
+	if err := client.Invoke(t.Context(), "/provider.Service/Get", nil, nil); !errors.Is(err, errUnexpectedResourceCall) {
+		t.Fatalf("Invoke() error = %v", err)
+	}
+	if _, err := client.NewStream(t.Context(), new(grpc.StreamDesc), "/provider.Service/Watch"); !errors.Is(err, errUnexpectedResourceCall) {
+		t.Fatalf("NewStream() error = %v", err)
+	}
+	if err := client.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+	if err := new(GRPCClient).Close(); err != nil {
+		t.Fatalf("empty Close() error = %v", err)
 	}
 }

@@ -69,8 +69,20 @@ COVERAGE_EXCLUDE_REGEX := $(COVERAGE_EXCLUDE_REGEX)|(^|/)internal/infra/grpc/grp
 COVERAGE_EXCLUDE_REGEX := $(COVERAGE_EXCLUDE_REGEX)|(^|/)internal/infra/natsjs/natsjstest/
 # profile:messaging-nats-jetstream:end
 # profile:outbox-postgres:start
-COVERAGE_EXCLUDE_REGEX := $(COVERAGE_EXCLUDE_REGEX)|(^|/)cmd/outbox-relay/main\.go:
+# Relay composition is exercised with real PostgreSQL, River, and NATS; fake
+# process dependencies would decide the lifecycle behavior under test.
+COVERAGE_EXCLUDE_REGEX := $(COVERAGE_EXCLUDE_REGEX)|(^|/)cmd/outbox-relay/(main\.go:|internal/bootstrap/run\.go:)
 # profile:outbox-postgres:end
+# profile:jobs-postgres:start
+# Worker startup and drain are proved by the generated process and real River
+# integration matrix, not by a fake client that returns the expected order.
+COVERAGE_EXCLUDE_REGEX := $(COVERAGE_EXCLUDE_REGEX)|(^|/)cmd/jobs-worker/internal/bootstrap/run\.go:
+# profile:jobs-postgres:end
+# profile:database-postgres:start
+# Goose session locking, applied-version state, and rollback are real-PostgreSQL
+# decisions covered by migration rehearsal and integration tests.
+COVERAGE_EXCLUDE_REGEX := $(COVERAGE_EXCLUDE_REGEX)|(^|/)internal/infra/postgresmigrate/migrate\.go:
+# profile:database-postgres:end
 # profile:http-idempotency-postgres:start
 # Store and executor behavior is owned by the real-PostgreSQL integration
 # matrix; a fake DB would decide the unique-conflict behavior it claims to test.
