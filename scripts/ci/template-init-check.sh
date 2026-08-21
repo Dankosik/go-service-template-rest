@@ -91,7 +91,7 @@ TEMP_ROOT="$(mktemp -d -t template-init-check.XXXXXX)"
 # Go and golangci-lint normally own the cache paths restored by CI. Keep those
 # canonical paths here; the generated fixture lint below documents its one
 # narrow isolation exception.
-if [[ "${TEMPLATE_INIT_PROFILE}" != "postgres" ]]; then
+if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "minimal" ]]; then
 	if [[ -n "${GOLANGCI_LINT_BIN:-}" ]]; then
 		LINTER="${GOLANGCI_LINT_BIN}"
 	else
@@ -293,7 +293,7 @@ expect_unchanged_failure() {
 	}
 }
 
-if [[ "${TEMPLATE_INIT_PROFILE}" != "postgres" && "${TEMPLATE_INIT_PROFILE}" != "outbound-auth" && "${TEMPLATE_INIT_PROFILE}" != "object-storage" && "${TEMPLATE_INIT_PROFILE}" != "jobs" && "${TEMPLATE_INIT_PROFILE}" != "webhooks" ]]; then
+if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "minimal" ]]; then
 	derived="$(new_fixture derived git@github.com:acme/orders.git true)"
 	env_before="$(shasum -a 256 "${derived}/.env")"
 	derived_workflow_before="$(workflow_snapshot "${derived}")"
