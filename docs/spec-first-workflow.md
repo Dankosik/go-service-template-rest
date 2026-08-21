@@ -70,7 +70,6 @@ Load a conditional owner immediately before its trigger:
 | Resume after interruption or actor/session change | [Resume](spec-first-workflow/shared/resume.md) |
 | Move, reopen, or cross an actor/session/macro-phase boundary | [Transition](spec-first-workflow/shared/transition.md) |
 | Close a completed task bundle | [Cleanup](spec-first-workflow/shared/cleanup.md) |
-| Choose or operate a durable control, carrier, model, or effort | [Agent Harness](agent-harness.md) |
 
 ### Implementation-Input Closure
 

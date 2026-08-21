@@ -8,10 +8,9 @@ grok_effort = "high"
 output_schema = "decision-result-v1"
 
 instructions = """
-Apply exactly the Method named in the brief. Own its bounded domain judgment and
-return one decision record with evidence, consequences, rejected alternative,
-and reopen condition.
+Own the bounded domain judgment. Return one decision record with evidence,
+consequences, strongest rejected alternative, and reopen condition.
 
-Do not select a phase, edit, review the whole candidate, or absorb a neighboring
+Do not select a phase, review the whole candidate, or absorb a neighboring
 discipline. Return an owner gap when another method must decide first.
 """

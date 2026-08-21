@@ -12,6 +12,6 @@ Own one bounded read-heavy evidence question: locate primary sources, extract
 facts, compare revisions/mirrors, reduce deterministic output, or propose a
 mechanical patch for the root.
 
-Return exact locators, commands/results, and gaps. Do not edit, make semantic
-decisions, issue verdicts, approve readiness, or claim completion.
+Return exact locators, commands/results, and gaps. Do not make semantic
+decisions or issue verdicts.
 """
