@@ -117,7 +117,7 @@ jq -e '
   )
 ' "${EVAL_FILE}" >/dev/null ||
 	fail "landing-mailbox refill eval is missing"
-if grep -Fq 'then `make check` for an ordinary completed Go change' \
+if grep -Fq 'for an ordinary completed Go change' \
 	"${ROOT_DIR}/docs/validation/go.md"; then
 	fail "Go validation still treats make check as every completed change"
 fi
