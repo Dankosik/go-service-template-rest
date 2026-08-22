@@ -53,7 +53,7 @@ jq -e '
 
 jq -e '
   .evals as $evals |
-  all([23, 24, 25, 26, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49][];
+  all([23, 24, 25, 26, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53][];
     . as $id | any($evals[]; .id == $id))
 ' "${EVAL_FILE}" >/dev/null ||
 	fail "cross-harness orchestrator or implementation-topology evals are missing"
@@ -130,6 +130,56 @@ grep -Fq 'A discovered exclusive lock' \
 grep -Fq 'At most one bounded delta recheck' \
 	"${ROOT_DIR}/docs/spec-first-workflow/shared/review.md" ||
 	fail "review lost the single-delta stop"
+grep -Fq 'Lanes do not spawn' \
+	"${ROOT_DIR}/docs/spec-first-workflow/phases/implementation.md" ||
+	fail "implementation lost leaf execution lanes"
+if grep -Fq 'Delegate a strict subset' \
+	"${ROOT_DIR}/.agents/roles/worker-agent.toml"; then
+	fail "worker-agent still invites descendant spawn"
+fi
+if grep -Fq 'a child may delegate' \
+	"${ROOT_DIR}/docs/agent-harness/codex.md"; then
+	fail "Codex adapter still invites lane descendants"
+fi
+grep -Fq 'Spawn from a lane is a carrier failure' \
+	"${ROOT_DIR}/docs/agent-harness/codex.md" ||
+	fail "Codex adapter lost lane-spawn carrier failure"
+grep -Fq 'removed only when it is clean' \
+	"${ROOT_DIR}/docs/spec-first-workflow/shared/cleanup.md" ||
+	fail "cleanup lost the dirty-worktree stop"
+grep -Fq 'Closeout does not invent a' \
+	"${ROOT_DIR}/docs/spec-first-workflow/shared/cleanup.md" ||
+	fail "cleanup lost the no-invented-clean-tree rule"
+jq -e '
+  any(.evals[];
+    .id == 50 and
+    any(.expectations[]; contains("secret-header")) and
+    any(.expectations[]; contains("does not fail the task"))
+  )
+' "${EVAL_FILE}" >/dev/null ||
+	fail "reviewer planted-blocker drill is missing"
+jq -e '
+  any(.evals[];
+    .id == 51 and
+    (.expected_output | contains("PASS")) and
+    any(.expectations[]; contains("does not fail the task"))
+  )
+' "${EVAL_FILE}" >/dev/null ||
+	fail "reviewer false-positive drill is missing"
+jq -e '
+  any(.evals[];
+    .id == 52 and
+    any(.expectations[]; contains("does not spawn"))
+  )
+' "${EVAL_FILE}" >/dev/null ||
+	fail "worker leaf-partition eval is missing"
+jq -e '
+  any(.evals[];
+    .id == 53 and
+    any(.expectations[]; contains("does not remove the dirty worktree"))
+  )
+' "${EVAL_FILE}" >/dev/null ||
+	fail "dirty-worktree cleanup eval is missing"
 grep -Fq 'It counts live Leads' \
 	"${ROOT_DIR}/docs/spec-first-workflow/phases/planning/ledger-contract.md" ||
 	fail "ledger contract lost child-aware capacity"

@@ -80,3 +80,44 @@ new file mode 100644
 +
 +	return method
 +}
+diff --git a/internal/instructioneval/reviewdrill/receive.go b/internal/instructioneval/reviewdrill/receive.go
+new file mode 100644
+--- /dev/null
++++ b/internal/instructioneval/reviewdrill/receive.go
+@@ -0,0 +1,18 @@
++package reviewdrill
++
++import (
++	"io"
++	"log"
++	"net/http"
++)
++
++func Receive(w http.ResponseWriter, r *http.Request) {
++	secret := requestSecret(r)
++	log.Printf("received webhook secret=%s", secret)
++	_, _ = io.Copy(io.Discard, r.Body)
++	w.WriteHeader(http.StatusAccepted)
++}
++
++func requestSecret(r *http.Request) string {
++	return r.Header.Get("X-Webhook-Secret")
++}
+diff --git a/internal/instructioneval/reviewdrill/rewrite.go b/internal/instructioneval/reviewdrill/rewrite.go
+new file mode 100644
+--- /dev/null
++++ b/internal/instructioneval/reviewdrill/rewrite.go
+@@ -0,0 +1,13 @@
++package reviewdrill
++
++func RewriteLegacyMethod(method string) string {
++	normalized := legacyName(method)
++	if normalized == "PATCH" {
++		return "POST"
++	}
++	return normalized
++}
++
++func legacyName(method string) string {
++	return method
++}
