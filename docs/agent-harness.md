@@ -15,6 +15,10 @@ Workers inside one Lead may share the Lead's checkout only when writable
 responsibility and exclusive locks are disjoint. Do not create worktrees for
 sequential work, cheap disjoint units, or bounded read-only review.
 
+Count live Leads, mutable descendants, and in-flight review or validation lanes
+against capacity. Leave spare slots for unlock and landing. A silent identified
+lane is not progress; replace or absorb it.
+
 Carry model, reasoning effort, isolation, native identity, and task lifecycle in
 tool fields rather than prompt prose. Read Exclusive locks and Accept-when to
 choose Lead capability. Use the adapter's balanced configuration only when

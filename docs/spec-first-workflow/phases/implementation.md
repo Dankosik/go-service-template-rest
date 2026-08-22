@@ -14,15 +14,17 @@ continue after individual completions, execution must survive session or actor
 changes, or canonical ledger transitions require one routing owner.
 
 The Orchestrator never implements unit work. The Lead does not schedule sibling
-acceptance units.
+acceptance units. Do not bind the Orchestrator for a single unit. Do not bind
+one Lead when sibling units still need scheduling.
 
 ## Execution
 
 The Acceptance-Unit Lead owns the fixed unit through integration, claim-matched
 proof, required independent review, and one accepted or blocked result. Load
 the current task packet and consumed outputs; repair only within that boundary.
-A new postcondition, responsibility, behavior, proof oracle, or packet change
-reopens Planning instead of expanding the task.
+A new postcondition, responsibility, behavior, or proof oracle reopens Planning
+instead of expanding the task. A discovered mutable owner or exclusive lock
+updates the live frontier without reopening Outcome.
 
 Choose the smallest reliable execution topology. Implement directly when the
 unit has one coherent mutable owner, delegation would duplicate context, or
@@ -32,7 +34,12 @@ Fan out execution lanes when two or more strict subsets have disjoint writable
 responsibility, no shared exclusive lock, stable accepted interfaces,
 independently checkable focused proof, and a result the Lead can integrate
 without delegating a missing decision. Dispatch every independent lane before
-waiting. Integrate returned lane results serially under the Lead.
+waiting. Integrate returned lane results serially under the Lead. When the Lead
+cannot reliably hold the whole edit surface, fan out lanes and keep one review.
+
+An identified lane that produces no material result at a stall signal is a
+carrier failure. Replace it or finish that subset directly. Do not wait
+indefinitely.
 
 Execution lanes are not acceptance units. Workers do not accept, transition, or
 review the parent unit.

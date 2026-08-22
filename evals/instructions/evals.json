@@ -621,9 +621,9 @@
         ".agents/skills/orchestrator/SKILL.md"
       ],
       "expectations": [
-        "Workers and Leads do not each run make check or another repository-wide aggregate.",
+        "Workers and Leads do not each run make check or another repository-wide aggregate, including when they load Go validation.",
         "After serial landing, aggregate Go proof runs once on the integrated delivery tree.",
-        "Valid focused evidence is reused while claim, bytes, provenance, preconditions, and risk surface remain unchanged."
+        "Valid focused evidence is reused while claim, bytes, provenance, preconditions, and risk surface remain unchanged; it is not rerun as ceremony."
       ]
     },
     {
@@ -699,6 +699,65 @@
         "After landing T1 the orchestrator refills the frontier and starts T4 before landing T2.",
         "Serial landing does not become a wave barrier.",
         "Already-running T3 continues while T4 starts."
+      ]
+    },
+    {
+      "id": 46,
+      "prompt": "Planning only: three sibling feature units do not mutate go.mod, generated sources, or bootstrap. Their focused checks are package tests. Write the packets.",
+      "expected_output": "Locks stay none and Integrated check is omitted; make check is not copied into every packet.",
+      "files": [
+        "docs/spec-first-workflow/interfaces/task-packet-v1.md",
+        "docs/spec-first-workflow/phases/planning/proof-and-readiness.md",
+        "docs/validation/go.md"
+      ],
+      "expectations": [
+        "Exclusive locks are none unless the unit will mutate that surface; go.mod is not attached as precaution.",
+        "Integrated check is omitted because focused package tests can falsify each unit claim.",
+        "The ordinary Go aggregate is not treated as each unit's Accept-when check."
+      ]
+    },
+    {
+      "id": 47,
+      "prompt": "Continue as Ledger Orchestrator. T2 is running and listed Exclusive locks none. Its Lead reports it must now change go.mod. T3 is running with a disjoint owner and none. T4 consumes only T1, which is already accepted. Update the frontier.",
+      "expected_output": "The discovered manifest lock stops only units that now need that lock; unrelated work continues and Outcome is not reopened.",
+      "files": [
+        ".agents/skills/orchestrator/SKILL.md",
+        "docs/spec-first-workflow/phases/planning/ledger-contract.md",
+        "docs/spec-first-workflow/phases/implementation.md"
+      ],
+      "expectations": [
+        "T2 now holds the dependency-manifest lock; another unit that must mutate go.mod waits.",
+        "T3 continues because it does not mutate the manifest.",
+        "T4 may start if otherwise ready; Planning is not reopened merely because a write surface was discovered."
+      ]
+    },
+    {
+      "id": 48,
+      "prompt": "Continue as Ledger Orchestrator. Eight units are ready. Each Lead will still need a reviewer after freeze. Current capacity is eight concurrent children. Dispatch the frontier.",
+      "expected_output": "The orchestrator leaves spare capacity for review and unlock instead of filling the ceiling with Leads.",
+      "files": [
+        ".agents/skills/orchestrator/SKILL.md",
+        "docs/agent-harness.md",
+        "docs/spec-first-workflow/phases/planning/ledger-contract.md"
+      ],
+      "expectations": [
+        "Capacity counts live Leads, mutable workers, and in-flight review lanes, not Leads alone.",
+        "The orchestrator does not start eight Leads that each still need a child reviewer when that would exhaust capacity.",
+        "Newly unlocked work and review can still start without waiting for the whole first batch to finish."
+      ]
+    },
+    {
+      "id": 49,
+      "prompt": "Act as the Acceptance-Unit Lead. The same reviewer already did one bounded delta recheck and still returned FAIL with a new TASK_DEFECT on the repaired candidate. Outcome is unchanged. Continue review.",
+      "expected_output": "No third delta cycle; one fresh reviewer inspects the repaired candidate.",
+      "files": [
+        "docs/spec-first-workflow/shared/review.md",
+        "docs/spec-first-workflow/phases/implementation-review.md"
+      ],
+      "expectations": [
+        "The agent does not send the same reviewer a second delta recheck.",
+        "One fresh reviewer inspects the repaired candidate, or Planning reopens if Outcome is invalid.",
+        "If the original reviewer identity is gone, a fresh review covers the repair delta, not a replay of the first whole-unit review, unless risk expanded."
       ]
     }
   ]

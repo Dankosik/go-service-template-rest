@@ -16,9 +16,10 @@ human-facing explanation.
 | Secrets, dependencies, Go or image vulnerability claims | [Security](validation/security.md) | matching security target |
 | Latency, throughput, allocation, contention, or capacity | [Benchmarking](benchmarking.md) | workload-matched benchmark |
 
-Start with the focused target that can falsify the change. Run an aggregate only
-when the completion claim spans that aggregate. Missing Docker or an external
-provider narrows the claim; it does not become a passing skip.
+Start with the focused target that can falsify the change. The table names each
+leaf's aggregate command; run that aggregate only when the completion claim
+spans it. Missing Docker or an external provider narrows the claim; it does not
+become a passing skip.
 
 Validation and blockers stay within the fixed accepted unit and its required
 evidence. Unrelated or pre-existing defects are observations, not blockers,
