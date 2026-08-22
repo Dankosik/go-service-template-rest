@@ -130,5 +130,5 @@ still at-least-once and the consumer's durable idempotency remains authoritative
 go test -vet=off ./internal/domainevent ./internal/infra/natsjs ./cmd/worker/...
 go test -vet=off -tags=integration ./internal/infra/natsjs
 REQUIRE_DOCKER=1 make test-integration
-make test-messaging-race template-init-check
+make test-messaging-race
 ```

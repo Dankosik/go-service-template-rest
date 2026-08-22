@@ -1,3 +1,3 @@
 package openapi
 
-//go:generate bash ../../scripts/run-go-tool.sh oapi-codegen -config oapi-codegen.yaml ../../api/openapi/service.yaml
+//go:generate go tool -modfile=../../tools/go.mod oapi-codegen -config oapi-codegen.yaml ../../api/openapi/service.yaml

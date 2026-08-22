@@ -8,11 +8,11 @@ human-facing explanation.
 | Changed surface or claim | Load | Primary proof |
 | --- | --- | --- |
 | Agent instructions, roles, skills, mirrors, or template propagation | [Instructions](validation/instructions.md) | `make agent-roles-check template-owned-purity-check` |
-| Ordinary Go behavior, formatting, analysis, or unit tests | [Go](validation/go.md) | `make check` |
+| Ordinary Go behavior, formatting, analysis, or unit tests | [Go](validation/go.md) | matching Go leaf |
 | OpenAPI, protobuf, SQLC, or generated drift | [Generated Contracts](validation/generated.md) | matching `*-check` |
 | PostgreSQL transactions, migrations, or integration semantics | [PostgreSQL](validation/postgres.md) | `REQUIRE_DOCKER=1 make test-integration` |
 | Runtime image, container behavior, or migration rehearsal | [Containers](validation/containers.md) | `make runtime-image-build` |
-| CI/CD, workflows, Dockerfile, or shell scripts | [Delivery](validation/delivery.md) | `make delivery-quality` |
+| CI/CD, workflows, Dockerfile, or shell scripts | [Delivery](validation/delivery.md) | matching delivery leaf |
 | Secrets, dependencies, Go or image vulnerability claims | [Security](validation/security.md) | matching security target |
 | Latency, throughput, allocation, contention, or capacity | [Benchmarking](benchmarking.md) | workload-matched benchmark |
 

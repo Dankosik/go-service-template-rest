@@ -8,13 +8,10 @@ output, or a CPU, heap, allocs, goroutine, block, mutex, or trace artifact.
 
 ## Decide
 
-- Comparability is enforced by `make bench-compare`, which fails when the
-  recorded package, pattern, count, benchmark time, build tags, Go environment,
-  workload identity, dependency image, schema fingerprint, CPU identity and
-  count, or `GOMAXPROCS` differ between sides. A hand-run `go test -bench`
-  captures none of it, so the correction is to re-capture through
-  `make bench-baseline` → change → `make bench` → `make bench-compare` with a
-  `BENCH_WORKLOAD_ID`, not to add a `benchstat` invocation.
+- Compare only samples with matching recorded package, pattern, count,
+  benchmark time, build tags, Go environment, workload identity, dependency
+  image, schema identity, CPU, and `GOMAXPROCS`. Re-capture mismatched sides
+  with the same `go test -bench` command before using `benchstat`.
 - The mutex profile records the stack at the **end** of the critical section —
   the holder whose lock made others wait. The block profile records the
   **blocking site** — the waiter. They answer different questions and suggest
@@ -26,8 +23,8 @@ output, or a CPU, heap, allocs, goroutine, block, mutex, or trace artifact.
 - A live profile is not a step available by default here.
   `observability.pprof.enabled` is `false` and the handlers ride the diagnostics
   listener, which binds every interface — turning it on is a deployment decision
-  about who can reach that port. The reachable diagnostic is
-  `make bench-profile BENCH_PROFILE=cpu|memory|block|mutex|trace`.
+  about who can reach that port. The local diagnostic is the matching `go test`
+  profile flag and `go tool pprof` or `go tool trace`.
 - Ask for the smallest proof that would change the decision. A benchmark that
   clears a local CPU or allocation claim is not improved by a load test, and a
   microbenchmark never clears a service-level percentile.

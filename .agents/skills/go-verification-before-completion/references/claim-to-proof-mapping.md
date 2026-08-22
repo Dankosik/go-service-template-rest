@@ -7,14 +7,16 @@ current environment behavior and the evidence boundary is not obvious.
 
 ## Decide
 
-The aggregates are not nested supersets:
+Leaf gates are independent:
 
 | Gate | Proves | Does not prove |
 | --- | --- | --- |
-| `make check` | structure, format, lint, unit tests | build, deep lint, generated drift, security, Docker |
-| `make ci-local` | host CI including deep lint, race, coverage, generated checks, Go security, secrets | integration, migrations, images, containers |
-| `make check-full` | delivery, host CI, required Docker integration, image, migration, container security | base-relative template/module/API/proto breaking checks |
-| `make pr-check BASE_REF=...` | base-relative PR surface | production/runtime evidence |
+| `make fmt-check` | Go formatting | behavior or analysis |
+| `make lint` | mandatory static analysis | tests, deep lint, generated drift, Docker |
+| `make test` | ordinary Go tests | race, integration, images, external state |
+| matching `*-check` | one generated-contract surface | compatibility unless its breaking check also ran |
+| `REQUIRE_DOCKER=1 make test-integration` | real integration paths in scope | production image lifecycle |
+| `make migration-validate` | migration and exact-image runtime rehearsal | data recoverability or rollout safety |
 
 `make build` is not implied by test targets. `make lint` omits `lint-deep`.
 Security surfaces remain separate. Performance uses the benchmarking owner.
@@ -22,7 +24,7 @@ Security surfaces remain separate. Performance uses the benchmarking owner.
 Go exits zero for `-run` matching no tests and packages with no tests. When one
 named test carries the claim, verify a real run event as the OpenAPI contract
 check does. Integration may skip without Docker unless `REQUIRE_DOCKER=1`; the
-required aggregate fails closed instead.
+required integration command fails closed instead.
 
 Cached unit results support unchanged code behavior, not a claim that Docker,
 database, image, or other external state was exercised now. Use `-count=1` when

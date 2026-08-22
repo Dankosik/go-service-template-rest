@@ -1,62 +1,27 @@
 # PostgreSQL Benchmarks
 
-Load for database, pool, or query measurement.
+Put real-database benchmarks under `test/` with the `integration` build tag and
+reuse the existing PostgreSQL 17 Testcontainers harness, migrations, and pool
+construction.
 
-Put real-PostgreSQL benchmarks under `test/`, use `package integration_test`,
-and start the file with `//go:build integration`. Reuse
-`runPostgresContainer`, the digest-pinned PostgreSQL 17 Testcontainers
-dependency, migration owner, and pool construction instead of adding a mock
-database or a second container harness.
-
-The benchmark must:
-
-1. start PostgreSQL, apply migrations, create the pool, seed the declared
-   fixture size, and run `ANALYZE` before the timed loop;
-2. separate row-count, selectivity, warm/cold, and pool-concurrency cases by
-   sub-benchmark name;
-3. keep transaction creation, network round trips, row decoding, and commit in
-   the timed interval when production owns them;
-4. reset write fixtures outside the timed interval, or use a fresh transaction
-   and rollback when rollback is not part of the claimed production cost;
-5. enforce a per-operation or benchmark-level timeout and verify the smallest
-   result invariant;
-6. close rows, transactions, pools, contexts, and the container through
-   `b.Cleanup`.
-
-Run and compare:
+Run directly:
 
 ```bash
-make bench-db-baseline \
-  BENCH_DB_PATTERN=BenchmarkOrderRepository \
-  BENCH_DB_WORKLOAD_ID=orders-100k-warm
-# Apply the candidate change.
-make bench-db \
-  BENCH_DB_PATTERN=BenchmarkOrderRepository \
-  BENCH_DB_WORKLOAD_ID=orders-100k-warm
-make bench-db-compare
+REQUIRE_DOCKER=1 go test -run '^$' -bench BenchmarkOrderRepository \
+  -benchmem -count 10 -tags=integration ./test \
+  > .artifacts/bench/db/baseline.txt
+
+# Apply the candidate and repeat to current.txt.
+go tool -modfile=tools/go.mod benchstat \
+  .artifacts/bench/db/baseline.txt .artifacts/bench/db/current.txt
 ```
 
-The target sets `REQUIRE_DOCKER=1`, uses the `integration` build tag, fails if
-Docker, `BENCH_DB_WORKLOAD_ID`, or a matching benchmark is unavailable, and
-writes results under `.artifacts/bench/db/`. Metadata records the exact
-PostgreSQL image digest, a fingerprint of `migrations`, and the named
-fixture/workload. The infrastructure check keeps the Testcontainers and
-Compose images identical and digest-pinned.
+Seed the declared fixture size and run `ANALYZE` before timing. Separate row
+count, selectivity, warm/cold state, and concurrency by sub-benchmark. Keep
+production-owned transactions, network round trips, decoding, and commit in the
+timed interval; reset mutable fixtures outside it.
 
-The Testcontainers PostgreSQL dependency runs with `fsync=off`, which is what
-makes a per-test database affordable. It also means these benchmarks cannot
-measure anything whose cost is a WAL flush: commit durability, `synchronous_commit`,
-`commit_delay`, and group commit all look free here, and every absolute number
-understates a durably configured server. Take such a claim to a server
-configured for durability instead of concluding from this harness.
-
-Use `EXPLAIN (ANALYZE, BUFFERS, WAL, FORMAT JSON)` only as a diagnostic plan
-artifact for a representative query. `EXPLAIN ANALYZE` executes the statement,
-adds measurement overhead, and does not replace the repeated client-visible
-benchmark. Run write plans in a rolled-back transaction or disposable
-database. Do not extrapolate a plan from toy data or stale statistics.
-
-## References
-
-- Testcontainers for Go [PostgreSQL module](https://golang.testcontainers.org/modules/postgres/)
-- PostgreSQL 17 [`ANALYZE`](https://www.postgresql.org/docs/17/sql-analyze.html) and [`EXPLAIN`](https://www.postgresql.org/docs/17/using-explain.html)
+The test cluster uses `fsync=off`, so it cannot measure WAL flush or durable
+commit cost. Use a durability-configured disposable server for those claims.
+`EXPLAIN (ANALYZE, BUFFERS, WAL, FORMAT JSON)` is diagnostic evidence, not a
+replacement for repeated client-visible measurement.

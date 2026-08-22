@@ -327,6 +327,64 @@ while IFS= read -r file; do
 	}
 done < <(jq -r '[.evals[].files[]] | unique[]' "${EVAL_FILE}")
 
-bash "${ROOT_DIR}/scripts/ci/hard-skill-evals-check.sh" >/dev/null
+HARD_EVAL_FILE="${ROOT_DIR}/evals/hard-skills/evals.json"
+HARD_COVERAGE_FILE="${ROOT_DIR}/evals/hard-skills/coverage.json"
+
+jq -e '
+  ["go-api-contract", "go-coder", "go-idiomatic", "go-language-simplifier",
+   "go-structural-quality", "go-systematic-debugging",
+   "go-verification-before-completion"] as $skills |
+  ["trigger", "non_trigger", "collision", "decision", "completion"] as $categories |
+  . as $catalog |
+  .skill_name == "repository-hard-skills" and
+  .execution == {
+    "repository_state": "disposable_copy",
+    "production_credentials": "absent",
+    "external_writes": "deny"
+  } and
+  .measurement == {
+    "required_run_metadata": ["harness", "model", "reasoning_effort", "tool_profile", "agent_command_label"],
+    "required_metrics": ["input_tokens", "output_tokens", "tool_calls", "skill_loads", "lane_identities", "empty_waits"],
+    "behavior_verdict": "manual_expectation_grading"
+  } and
+  (.fixture.setup_patch | type == "string" and length > 0) and
+  (.evals | type == "array" and length == 35) and
+  ([.evals[].id] | length == (unique | length)) and
+  all(.evals[];
+    (.id | type == "number") and
+    (.skill as $skill | ($skills | index($skill)) != null) and
+    (.category as $category | ($categories | index($category)) != null) and
+    (.prompt | type == "string" and length > 0) and
+    (.expected_output | type == "string" and length > 0) and
+    (.files | type == "array" and length > 0 and all(.[]; type == "string" and length > 0)) and
+    (.expectations | type == "array" and length >= 2 and all(.[]; type == "string" and length > 0))
+  ) and
+  all($skills[]; . as $skill |
+    all($categories[]; . as $category |
+      ([ $catalog.evals[] | select(.skill == $skill and .category == $category) ] | length) == 1
+    )
+  )
+' "${HARD_EVAL_FILE}" >/dev/null || fail "hard-skill eval catalog is invalid"
+
+jq -e --slurpfile catalog "${HARD_EVAL_FILE}" '
+  ["trigger", "non_trigger", "collision", "decision", "completion"] as $categories |
+  .required_categories == $categories and
+  (.skills | keys | sort) == ([ $catalog[0].evals[].skill ] | unique | sort) and
+  all(.skills | to_entries[]; . as $entry |
+    ($entry.value | keys | sort) == ($categories | sort) and
+    all($entry.value | to_entries[]; . as $case |
+      any($catalog[0].evals[];
+        .id == $case.value and .skill == $entry.key and .category == $case.key
+      )
+    )
+  )
+' "${HARD_COVERAGE_FILE}" >/dev/null || fail "hard-skill coverage map is invalid"
+
+hard_fixture="$(jq -r '.fixture.setup_patch' "${HARD_EVAL_FILE}")"
+[[ -f "${ROOT_DIR}/${hard_fixture}" ]] || fail "hard-skill fixture is missing: ${hard_fixture}"
+git -C "${ROOT_DIR}" apply --check "${ROOT_DIR}/${hard_fixture}"
+while IFS= read -r file; do
+	[[ -e "${ROOT_DIR}/${file}" ]] || fail "hard-skill eval file is missing: ${file}"
+done < <(jq -r '[.evals[].files[]] | unique[]' "${HARD_EVAL_FILE}")
 
 printf 'instruction eval surface is valid\n'

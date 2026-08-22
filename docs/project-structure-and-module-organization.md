@@ -115,7 +115,7 @@ boundary invariant, not a stronger-sounding unit test. `test/` remains reserved
 for real database, container, external process, or multi-package black-box
 proof; ordinary package tests do not require Docker.
 
-`make project-structure-check`, depguard, generator drift checks, migration
-checks, and package contract tests own enforced facts. If a proposal still has
+Depguard, generator drift, migration checks, and package contract tests own
+enforced facts. If a proposal still has
 no owner after this fallback, reopen Repository Architecture instead of creating
 a generic service, helper, or shared directory.

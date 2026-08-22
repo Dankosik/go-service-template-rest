@@ -29,8 +29,6 @@ railway.toml
 template-owned.paths
 **/*_test.go
 **/testdata
-coverage.out
-coverage.*
 *.log
 *.tmp
 tmp

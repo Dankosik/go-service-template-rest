@@ -20,7 +20,7 @@ func TestGeneratedClientComposition(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(generatedDirectory) })
 
-	generate := exec.CommandContext(t.Context(), "bash", filepath.Join(repositoryRoot, "scripts", "run-go-tool.sh"),
+	generate := exec.CommandContext(t.Context(), "go", "tool", "-modfile="+filepath.Join(repositoryRoot, "tools", "go.mod"),
 		"oapi-codegen", "-generate", "types,client", "-package", "generatedclient", "-o",
 		filepath.Join(generatedDirectory, "client.gen.go"), filepath.Join(packageDirectory, "testdata", "generated-client.yaml"))
 	generate.Dir = repositoryRoot

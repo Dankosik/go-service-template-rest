@@ -5,24 +5,20 @@
 # agent-registry block are derived from that content and travel with the same
 # sync.
 #
-# The sync never commits work it did not produce. A target whose manifest paths
-# hold uncommitted changes is refused, except for a marked service-owned skill
-# that the mirror and sync commit both exclude.
+# A target whose manifest paths hold uncommitted changes is refused, except for
+# a marked service-owned skill that the mirror excludes.
 set -euo pipefail
 
 usage() {
 	cat <<'EOF'
 usage:
   template-sync.sh --check  [--from <template-dir>] [--repo <target-dir>]
-  template-sync.sh --apply  [--from <template-dir>] [--repo <target-dir>] [--no-commit]
-  template-sync.sh --apply  --targets <dir> [<dir>...] [--no-commit]
+  template-sync.sh --apply  [--from <template-dir>] [--repo <target-dir>]
 
-  --check     report drift for every manifest path; exit 1 when any target drifts
-  --apply     mirror the manifest into the target, then commit only those paths
+  --check     report drift for every manifest path
+  --apply     mirror the manifest into the target working tree
   --from      template checkout that owns the manifest (default: this script's repo)
   --repo      target repository (default: the current working directory)
-  --targets   apply to several targets in one run
-  --no-commit leave the mirrored result in the working tree without committing
 
 Uncommitted work outside the manifest and its generated `.claude/skills`,
 `.qwen/skills`, and `.codex/config.toml` views is never staged or touched. Changes inside those
@@ -50,7 +46,6 @@ mode=""
 template="${default_template}"
 targets=()
 explicit_repo=""
-commit=true
 
 while (($# > 0)); do
 	case "$1" in
@@ -68,18 +63,6 @@ while (($# > 0)); do
 		[[ $# -ge 2 ]] || fail "--repo needs a directory"
 		explicit_repo="$2"
 		shift 2
-		;;
-	--targets)
-		shift
-		[[ $# -ge 1 ]] || fail "--targets needs at least one directory"
-		while (($# > 0)) && [[ "$1" != --* ]]; do
-			targets+=("$1")
-			shift
-		done
-		;;
-	--no-commit)
-		commit=false
-		shift
 		;;
 	-h | --help)
 		usage
@@ -102,9 +85,7 @@ template=$(CDPATH='' cd -- "${template}" 2>/dev/null && pwd) || fail "template d
 manifest="${template}/template-owned.paths"
 [[ -f "${manifest}" ]] || fail "manifest not found: ${manifest}"
 
-if ((${#targets[@]} == 0)); then
-	targets+=("${explicit_repo:-$PWD}")
-fi
+targets=("${explicit_repo:-$PWD}")
 
 # shellcheck source=scripts/lib/manifest.sh
 source "$(dirname -- "${BASH_SOURCE[0]}")/lib/manifest.sh"
@@ -194,12 +175,9 @@ if [[ "${mode}" == "apply" ]]; then
 		fail "template revision contains symlink ${source_symlink}; owned paths must not redirect outside the repository"
 fi
 
-claude_skills_helper="${source_root}/scripts/claude-skills-sync.sh"
-[[ -f "${claude_skills_helper}" ]] ||
-	fail "template-owned Claude skill helper is missing: scripts/claude-skills-sync.sh"
-qwen_skills_helper="${source_root}/scripts/qwen-skills-sync.sh"
-[[ -f "${qwen_skills_helper}" ]] ||
-	fail "template-owned Qwen skill helper is missing: scripts/qwen-skills-sync.sh"
+harness_skills_helper="${source_root}/scripts/harness-skills-sync.sh"
+[[ -f "${harness_skills_helper}" ]] ||
+	fail "template-owned harness skill helper is missing: scripts/harness-skills-sync.sh"
 agent_roles_helper="${source_root}/scripts/agent-roles-sync.sh"
 [[ -f "${agent_roles_helper}" ]] ||
 	fail "template-owned role helper is missing: scripts/agent-roles-sync.sh"
@@ -473,13 +451,13 @@ for target in "${targets[@]}"; do
 			report+="  - ${entry} (retired)"$'\n'
 		fi
 	done
-	if ! generated_report=$(bash "${claude_skills_helper}" --check --repo "${repo}" 2>&1); then
+	if ! generated_report=$(bash "${harness_skills_helper}" claude --check --repo "${repo}" 2>&1); then
 		drift=1
 		while IFS= read -r line; do
 			[[ -n "${line}" ]] && report+="  ! ${line}"$'\n'
 		done <<<"${generated_report}"
 	fi
-	if ! generated_report=$(bash "${qwen_skills_helper}" --check --repo "${repo}" 2>&1); then
+	if ! generated_report=$(bash "${harness_skills_helper}" qwen --check --repo "${repo}" 2>&1); then
 		drift=1
 		while IFS= read -r line; do
 			[[ -n "${line}" ]] && report+="  ! ${line}"$'\n'
@@ -516,11 +494,6 @@ for target in "${targets[@]}"; do
 		reject "not a git repository"
 		continue
 	fi
-	if [[ "${commit}" == true ]] && ! git -C "${repo}" symbolic-ref -q HEAD >/dev/null; then
-		reject "detached HEAD, so a sync commit would not belong to any branch"
-		continue
-	fi
-
 	conflicts=$(type_conflicts "${repo}")
 	if [[ -n "${conflicts}" ]]; then
 		reject "path type conflict: ${conflicts}"
@@ -550,13 +523,13 @@ for target in "${targets[@]}"; do
 	fi
 
 	assert_no_identity_leak "${repo}"
-	if ! preflight_report=$(bash "${claude_skills_helper}" --preflight --repo "${repo}" 2>&1); then
+	if ! preflight_report=$(bash "${harness_skills_helper}" claude --preflight --repo "${repo}" 2>&1); then
 		[[ -z "${preflight_report}" ]] ||
 			printf '%s\n' "${preflight_report}" | sed 's/^/   /'
 		reject "generated Claude skill links cannot be rebuilt safely"
 		continue
 	fi
-	if ! preflight_report=$(bash "${qwen_skills_helper}" --preflight --repo "${repo}" 2>&1); then
+	if ! preflight_report=$(bash "${harness_skills_helper}" qwen --preflight --repo "${repo}" 2>&1); then
 		[[ -z "${preflight_report}" ]] ||
 			printf '%s\n' "${preflight_report}" | sed 's/^/   /'
 		reject "generated Qwen skill links cannot be rebuilt safely"
@@ -583,18 +556,14 @@ for target in "${targets[@]}"; do
 			"${repo}/scripts/template-sync.sh" \
 			"${repo}/scripts/agent-roles-sync.sh" \
 			"${repo}/scripts/harness-skills-sync.sh" \
-			"${repo}/scripts/claude-skills-sync.sh" \
-			"${repo}/scripts/qwen-skills-sync.sh" \
 			"${repo}/scripts/codex-agents-sync.sh" \
-			"${repo}/scripts/ci/claude-skills-check.sh" \
-			"${repo}/scripts/ci/qwen-skills-check.sh" \
 			"${repo}/scripts/ci/template-owned-purity-check.sh"
 	fi
-	if ! bash "${repo}/scripts/claude-skills-sync.sh" --apply --repo "${repo}"; then
+	if ! bash "${repo}/scripts/harness-skills-sync.sh" claude --apply --repo "${repo}"; then
 		reject "Claude skill link rebuild failed; the mirror is in the working tree and was not committed"
 		continue
 	fi
-	if ! bash "${repo}/scripts/qwen-skills-sync.sh" --apply --repo "${repo}"; then
+	if ! bash "${repo}/scripts/harness-skills-sync.sh" qwen --apply --repo "${repo}"; then
 		reject "Qwen skill link rebuild failed; the mirror is in the working tree and was not committed"
 		continue
 	fi
@@ -606,32 +575,7 @@ for target in "${targets[@]}"; do
 		reject "Codex agent registry rebuild failed; the mirror is in the working tree and was not committed"
 		continue
 	fi
-	if [[ "${commit}" == false ]]; then
-		printf '   synced into the working tree, not committed\n'
-		synced_targets=$((synced_targets + 1))
-		continue
-	fi
-
-	# The manifest was clean before the mirror ran, so everything staged here was
-	# produced by this sync. No work in progress can enter this commit.
-	collect_present "${repo}"
-	collect_service_skill_exclusions "${repo}"
-	commit_paths=("${present[@]}")
-	if ((${#service_skill_exclusions[@]} > 0)); then
-		commit_paths+=("${service_skill_exclusions[@]}")
-	fi
-	for entry in "${retired_paths[@]}"; do
-		if git -C "${repo}" ls-files --error-unmatch "${entry}" >/dev/null 2>&1; then
-			commit_paths+=("${entry}")
-		fi
-	done
-	git -C "${repo}" add -A -- "${commit_paths[@]}"
-	if [[ -n "$(git -C "${repo}" diff --cached --name-only -- "${commit_paths[@]}")" ]]; then
-		git -C "${repo}" commit -q \
-			-m "Sync template-owned instructions to ${template_revision}" \
-			-- "${commit_paths[@]}"
-		printf '   synced and committed at template %s\n' "${template_revision}"
-	fi
+	printf '   synced into the working tree at template %s\n' "${template_revision}"
 	synced_targets=$((synced_targets + 1))
 done
 

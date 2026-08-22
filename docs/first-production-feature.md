@@ -189,8 +189,8 @@ a misspelled deployment variable cannot silently fall back to a default.
 
 Initialize the service with `DATABASE=postgres` before building a persistence
 feature. Neither `migrations/` nor `internal/infra/postgres/queries/` exists yet:
-`project-structure-check` rejects both until they hold real content, so you
-create each one with its first file rather than inheriting an empty placeholder.
+Create each one with its first real file rather than inheriting an empty
+placeholder.
 
 Goose applies migrations by the fixed-width numeric prefix. Every change is one
 file with explicit directions:
@@ -364,10 +364,11 @@ Use focused tests while iterating, then run:
 
 ```bash
 go test ./internal/<feature> ./internal/infra/http
-make check
+make fmt-check
+make lint
 ```
 
-Run `make check-full` when the change touches the container, PostgreSQL,
-migrations, or deployment proof. Before merge, inspect the generated diff and
+Run the matching container, PostgreSQL, migration, or deployment leaf when the
+change touches it. Before merge, inspect the generated diff and
 verify that the OpenAPI YAML, migrations/query sources, and generated outputs
 still have one unambiguous source of truth.

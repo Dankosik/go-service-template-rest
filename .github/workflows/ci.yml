@@ -2,697 +2,103 @@ name: ci
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
+    branches: [main]
   workflow_dispatch:
-    inputs:
-      go_cache_enabled:
-        description: Restore and save the setup-go module/build cache
-        required: true
-        type: boolean
-        default: true
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
 
 env:
   GOFLAGS: -mod=readonly
-  GO_CACHE_ENABLED: ${{ github.event_name != 'workflow_dispatch' || inputs.go_cache_enabled }}
-  TRIVY_DB_REPOSITORY: ghcr.io/aquasecurity/trivy-db:2
 
 jobs:
-  repo-integrity:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    outputs:
-      expensive_required: ${{ steps.change_scope.outputs.expensive_required }}
-      template_required: ${{ steps.change_scope.outputs.template_required }}
-      template_init_profiles: ${{ steps.change_scope.outputs.template_init_profiles }}
-      template_postgres_required: ${{ steps.change_scope.outputs.template_postgres_required }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-
-      - name: Classify change scope
-        id: change_scope
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          PUSH_BASE_SHA: ${{ github.event.before }}
-          HEAD_SHA: ${{ github.sha }}
-        run: |
-          # The one place this workflow decides which commit the change is
-          # measured against, published so every later step reads the same
-          # answer. Two steps derived it independently, and a pair that
-          # disagrees routes the gates off one diff while proving migration
-          # history against another — with both steps still green.
-          case "${EVENT_NAME}" in
-            pull_request)
-              BASE_SHA="${PR_BASE_SHA}"
-              HISTORY_MODE="merge-base"
-              ;;
-            push)
-              BASE_SHA="${PUSH_BASE_SHA}"
-              HISTORY_MODE="exact-base"
-              ;;
-            *)
-              BASE_SHA=""
-              HISTORY_MODE="worktree"
-              ;;
-          esac
-          # Published before the reachability check below, because the two
-          # consumers answer an unreachable base differently and both answers are
-          # right: scope classification falls back to the full gate, while
-          # migration history is proven against the base the event named.
-          {
-            echo "base_sha=${BASE_SHA}"
-            echo "history_mode=${HISTORY_MODE}"
-          } >> "$GITHUB_OUTPUT"
-
-          publish_template_scope() {
-            local required=false
-            local init_profiles='[]'
-            local postgres_required=false
-            local line
-
-            # Generated services own no generator; skip the upstream-only jobs
-            # instead of starting them for a checkout-and-noop.
-            if [ -d scripts/profiles ]; then
-              while IFS= read -r line; do
-                case "${line}" in
-                  required=*) required="${line#required=}" ;;
-                  init_profiles=*) init_profiles="${line#init_profiles=}" ;;
-                  postgres_required=*) postgres_required="${line#postgres_required=}" ;;
-                esac
-              done
-            fi
-
-            {
-              echo "template_required=${required}"
-              echo "template_init_profiles<<EOF"
-              printf '%s\n' "${init_profiles}"
-              echo "EOF"
-              echo "template_postgres_required=${postgres_required}"
-            } >> "$GITHUB_OUTPUT"
-          }
-
-          if [ "${HISTORY_MODE}" = "worktree" ]; then
-            echo "scope=full" >> "$GITHUB_OUTPUT"
-            echo "expensive_required=true" >> "$GITHUB_OUTPUT"
-            bash ./scripts/ci/ci-change-scope.sh template-scope < /dev/null |
-              publish_template_scope
-            exit 0
-          fi
-
-          if [ -z "${BASE_SHA}" ] ||
-            [ "${BASE_SHA}" = "0000000000000000000000000000000000000000" ] ||
-            ! git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
-            SCOPE="full"
-            bash ./scripts/ci/ci-change-scope.sh template-scope < /dev/null |
-              publish_template_scope
-          else
-            SCOPE="$(
-              git diff --name-only -z "${BASE_SHA}" "${HEAD_SHA}" |
-                bash ./scripts/ci/ci-change-scope.sh classify
-            )"
-            git diff --name-only -z "${BASE_SHA}" "${HEAD_SHA}" |
-              bash ./scripts/ci/ci-change-scope.sh template-scope |
-              publish_template_scope
-          fi
-
-          echo "scope=${SCOPE}" >> "$GITHUB_OUTPUT"
-          if [ "${SCOPE}" = "docs-only" ]; then
-            echo "expensive_required=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "expensive_required=true" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Setup Go
-        uses: ./.github/actions/setup-go
-        with:
-          cache: ${{ env.GO_CACHE_ENABLED }}
-
-      - name: Verify module integrity
-        if: steps.change_scope.outputs.expensive_required == 'true'
-        run: make mod-check
-
-      - name: Verify project structure
-        run: make project-structure-check
-
-      # profile:database-postgres:start
-      - name: Verify migration source and append-only history
-        env:
-          HISTORY_MODE: ${{ steps.change_scope.outputs.history_mode }}
-          BASE_SHA: ${{ steps.change_scope.outputs.base_sha }}
-          HEAD_SHA: ${{ github.sha }}
-        run: |
-          make migration-check \
-            MIGRATION_HISTORY_MODE="${HISTORY_MODE}" \
-            BASE_REF="${BASE_SHA}" \
-            HEAD_REF="${HEAD_SHA}"
-      # profile:database-postgres:end
-
-      - name: Verify CI change-scope routing
-        run: make ci-change-scope-check
-
-      - name: Verify template-owned paths carry no repository-specific content
-        run: make template-owned-purity-check
-
-      - name: Verify Claude skill links match the canonical skill set
-        run: make claude-skills-check
-
-      - name: Verify formatting drift
-        if: steps.change_scope.outputs.expensive_required == 'true'
-        run: make fmt-check
-
-      - name: Verify sqlc generation drift
-        if: steps.change_scope.outputs.expensive_required == 'true'
-        run: make sqlc-check
-
-  lint:
-    if: needs.repo-integrity.outputs.expensive_required == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    needs: repo-integrity
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Setup Go
-        uses: ./.github/actions/setup-go
-        with:
-          cache: ${{ env.GO_CACHE_ENABLED }}
-
-      - name: Setup golangci-lint
-        uses: ./.github/actions/setup-golangci-lint
-
-      - name: Lint
-        run: make lint lint-deep GOLANGCI_LINT=golangci-lint
-
-  delivery-quality:
-    if: needs.repo-integrity.outputs.expensive_required == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    needs: repo-integrity
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Check workflows, shell scripts, and Dockerfile
-        run: make delivery-quality
-
-  template-init:
-    name: template-init (${{ matrix.profile }})
-    if: needs.repo-integrity.outputs.expensive_required == 'true' && needs.repo-integrity.outputs.template_init_profiles != '[]'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    needs: repo-integrity
-    strategy:
-      fail-fast: false
-      matrix:
-        profile: ${{ fromJSON(needs.repo-integrity.outputs.template_init_profiles) }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Detect template source checkout
-        id: template_source
-        run: |
-          if [ -d scripts/profiles ]; then
-            echo "required=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "required=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Setup Node
-        if: steps.template_source.outputs.required == 'true'
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version-file: .nvmrc
-
-      - name: Setup Go
-        if: steps.template_source.outputs.required == 'true'
-        uses: ./.github/actions/setup-go
-        with:
-          cache: ${{ env.GO_CACHE_ENABLED }}
-
-      - name: Setup golangci-lint
-        if: steps.template_source.outputs.required == 'true' && matrix.profile == 'minimal'
-        uses: ./.github/actions/setup-golangci-lint
-
-      - name: Prove generated service profile
-        if: steps.template_source.outputs.required == 'true'
-        env:
-          TEMPLATE_INIT_PROFILE: ${{ matrix.profile }}
-          GOLANGCI_LINT_BIN: golangci-lint
-        run: make template-init-check
-
-  template-postgres-feature:
-    if: needs.repo-integrity.outputs.expensive_required == 'true' && needs.repo-integrity.outputs.template_postgres_required == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    needs: repo-integrity
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Detect template source checkout
-        id: template_source
-        run: |
-          if [ -d scripts/profiles ]; then
-            echo "required=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "required=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Setup Go
-        if: steps.template_source.outputs.required == 'true'
-        uses: ./.github/actions/setup-go
-        with:
-          cache: ${{ env.GO_CACHE_ENABLED }}
-
-      - name: Prove generated PostgreSQL POST vertical slice
-        if: steps.template_source.outputs.required == 'true'
-        run: REQUIRE_DOCKER=1 TEMPLATE_INIT_PROFILE=postgres TEMPLATE_POSTGRES_PROOF=1 make template-init-check
-
-  openapi-contract:
-    if: needs.repo-integrity.outputs.expensive_required == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    needs: repo-integrity
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        # profile:grpc:start
-        with:
-          fetch-depth: 0
-        # profile:grpc:end
-
-      - name: Setup Node
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version-file: .nvmrc
-
-      - name: Setup Go
-        uses: ./.github/actions/setup-go
-        with:
-          cache: ${{ env.GO_CACHE_ENABLED }}
-
-      - name: Detect OpenAPI codegen drift
-        run: make openapi-drift-check
-
-      - name: Compile reference OpenAPI package
-        run: make openapi-reference-compile
-
-      - name: Verify OpenAPI runtime contract
-        run: make openapi-runtime-contract-check
-
-      - name: Validate OpenAPI schema
-        run: make openapi-validate
-
-      - name: Lint OpenAPI rules
-        run: make openapi-lint
-
-      # profile:grpc:start
-      - name: Verify Protobuf format, lint, generation drift, and failure branches
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          PUSH_BASE_SHA: ${{ github.event.before }}
-        run: |
-          case "${EVENT_NAME}" in
-            pull_request) BASE_SHA="${PR_BASE_SHA}" ;;
-            push) BASE_SHA="${PUSH_BASE_SHA}" ;;
-            *) BASE_SHA="$(git rev-parse HEAD^ 2>/dev/null || true)" ;;
-          esac
-          if [ -n "${BASE_SHA}" ] &&
-            [ "${BASE_SHA}" != "0000000000000000000000000000000000000000" ] &&
-            git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
-            BASE_REF="${BASE_SHA}" make proto-check
-          else
-            make proto-check
-          fi
-          bash ./scripts/ci/proto-check.sh
-      # profile:grpc:end
-
-  openapi-breaking:
-    if: github.event_name == 'pull_request' && needs.repo-integrity.outputs.expensive_required == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    needs:
-      - repo-integrity
-      - openapi-contract
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-
-      - name: Setup Go
-        uses: ./.github/actions/setup-go
-        with:
-          cache: ${{ env.GO_CACHE_ENABLED }}
-
-      - name: Extract base OpenAPI spec
-        run: |
-          BASE_SHA="${{ github.event.pull_request.base.sha }}"
-          if git show "${BASE_SHA}:api/openapi/service.yaml" > /tmp/openapi-base.yaml 2>/dev/null; then
-            echo "BASE_SPEC_FOUND=true" >> "$GITHUB_ENV"
-          else
-            echo "BASE_SPEC_FOUND=false" >> "$GITHUB_ENV"
-            echo "No base OpenAPI spec found in base commit. Skipping breaking-change check."
-          fi
-
-      - name: Check OpenAPI breaking changes
-        if: env.BASE_SPEC_FOUND == 'true'
-        run: BASE_OPENAPI=/tmp/openapi-base.yaml make openapi-breaking
-
-      # profile:grpc:start
-      - name: Check Protobuf breaking changes
-        run: BASE_REF="${{ github.event.pull_request.base.sha }}" make proto-breaking
-      # profile:grpc:end
-
-  test-race:
-    if: needs.repo-integrity.outputs.expensive_required == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    needs: repo-integrity
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Setup Go
-        uses: ./.github/actions/setup-go
-        with:
-          cache: ${{ env.GO_CACHE_ENABLED }}
-
-      - name: Race detector
-        run: make test-race
-
-  test-coverage:
-    if: needs.repo-integrity.outputs.expensive_required == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    needs: repo-integrity
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Setup Go
-        uses: ./.github/actions/setup-go
-        with:
-          cache: ${{ env.GO_CACHE_ENABLED }}
-
-      - name: Coverage + JUnit + JSON
-        run: make test-report
-
-      - name: Write test coverage summary
-        if: always()
-        run: |
-          {
-            echo "## Test coverage"
-            echo
-            if [ -f coverage.out ]; then
-              coverage_details="$(go tool cover -func=coverage.out 2>&1 || true)"
-              make --no-print-directory coverage-summary
-              echo "- Required minimum: $(make --no-print-directory coverage-min)%"
-              echo
-              echo "<details><summary>Coverage details</summary>"
-              echo
-              echo '```text'
-              printf '%s\n' "${coverage_details}"
-              echo '```'
-              echo
-              echo "</details>"
-            else
-              echo "- coverage.out was not produced."
-            fi
-
-            echo
-            echo "## Test report"
-            echo
-            if [ -f .artifacts/test/test2json.json ]; then
-              awk '
-                /"Test":/ && /"Action":"pass"/ { passed++ }
-                /"Test":/ && /"Action":"fail"/ { failed++ }
-                /"Test":/ && /"Action":"skip"/ { skipped++ }
-                END {
-                  printf "- Test events: %d passed, %d failed, %d skipped\n", passed + 0, failed + 0, skipped + 0
-                }
-              ' .artifacts/test/test2json.json
-            else
-              echo "- test2json report was not produced."
-            fi
-            echo
-            echo "### Slowest tests"
-            echo
-            echo '```text'
-            if ! bash ./scripts/run-go-tool.sh gotestsum tool slowest \
-              --jsonfile .artifacts/test/test2json.json \
-              --threshold 0s \
-              --num 10; then
-              echo "slow-test report was unavailable"
-            fi
-            echo '```'
-            echo "- JUnit artifact: .artifacts/test/junit.xml"
-            echo "- test2json artifact: .artifacts/test/test2json.json"
-          } >> "${GITHUB_STEP_SUMMARY}"
-
-      - name: Upload coverage report
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: coverage-report
-          path: coverage.out
-          if-no-files-found: error
-
-      - name: Upload test report artifacts
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: test-report-artifacts
-          path: |
-            .artifacts/test/junit.xml
-            .artifacts/test/test2json.json
-          if-no-files-found: error
-
-  test-integration:
-    if: needs.repo-integrity.outputs.expensive_required == 'true'
+  quality:
     runs-on: ubuntu-latest
     timeout-minutes: 25
-    needs: repo-integrity
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Setup Go
-        uses: ./.github/actions/setup-go
         with:
-          cache: ${{ env.GO_CACHE_ENABLED }}
+          fetch-depth: 0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: |
+            go.sum
+            tools/go.sum
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+      - name: Module drift
+        run: make mod-tidy-check
+      - name: Format
+        run: make fmt-check
+      - name: Lint
+        run: make lint
+      - name: Unit tests
+        run: make test
+      - name: Generated contracts
+        run: make openapi-check sqlc-check proto-check
+      - name: Initializer contract
+        run: make template-init-check
+      - name: Instruction ownership
+        run: |
+          make agent-roles-check codex-agents-check claude-skills-check qwen-skills-check template-owned-purity-check
+          bash scripts/ci/instruction-evals-check.sh
+      - name: Breaking contracts
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if git show "${BASE_SHA}:api/openapi/service.yaml" >/tmp/openapi-base.yaml 2>/dev/null; then
+            make openapi-breaking BASE_OPENAPI=/tmp/openapi-base.yaml
+          fi
+          make proto-breaking BASE_REF="${BASE_SHA}"
 
-      - name: Integration tests
-        run: REQUIRE_DOCKER=1 make test-integration
-
-  dependency-review:
-    if: github.event_name == 'pull_request' && needs.repo-integrity.outputs.expensive_required == 'true'
+  security:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    needs: repo-integrity
-    permissions:
-      contents: read
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Dependency Review
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: |
+            go.sum
+            tools/go.sum
+      - name: Dependency review
+        if: github.event_name == 'pull_request'
         uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
         with:
           fail-on-severity: high
           comment-summary-in-pr: never
-
-  go-security:
-    if: needs.repo-integrity.outputs.expensive_required == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    needs: repo-integrity
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Setup Go
-        uses: ./.github/actions/setup-go
-        with:
-          cache: ${{ env.GO_CACHE_ENABLED }}
-
-      - name: Run govulncheck
-        run: make govulncheck
-
-      - name: Run gosec
-        run: make gosec
-
-  secret-scan:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    needs: repo-integrity
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-
-      - name: Setup Go
-        uses: ./.github/actions/setup-go
-        with:
-          cache: ${{ env.GO_CACHE_ENABLED }}
-
-      - name: Verify secret-scan routing
-        run: make secret-scan-check
-
-      - name: Scan pull-request worktree and commits
-        if: github.event_name == 'pull_request'
-        run: make secret-scan SECRET_SCAN_BASE_REF="${{ github.event.pull_request.base.sha }}"
-
-      - name: Scan full repository history
-        if: github.event_name != 'pull_request'
-        run: make secret-scan-history
-
-  container-security:
-    if: needs.repo-integrity.outputs.expensive_required == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    needs: repo-integrity
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-
-      # profile:database-postgres:start
-      - name: Detect migration changes
-        id: migration_changes
+      - name: Go security
+        run: make govulncheck gosec
+      - name: Secret scan
         env:
-          EVENT_NAME: ${{ github.event_name }}
-          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          PUSH_BASE_SHA: ${{ github.event.before }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          case "${EVENT_NAME}" in
-            pull_request) BASE_SHA="${PR_BASE_SHA}" ;;
-            push) BASE_SHA="${PUSH_BASE_SHA}" ;;
-            workflow_dispatch)
-              echo "should_run=true" >> "$GITHUB_OUTPUT"
-              exit 0
-              ;;
-            *)
-              echo "should_run=false" >> "$GITHUB_OUTPUT"
-              exit 0
-              ;;
-          esac
-
-          if [ -z "${BASE_SHA}" ] ||
-            [ "${BASE_SHA}" = "0000000000000000000000000000000000000000" ] ||
-            ! git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
-            echo "should_run=true" >> "$GITHUB_OUTPUT"
-          elif git diff --name-only "${BASE_SHA}" "${GITHUB_SHA}" |
-            grep -Eq '^(migrations/|env/docker-compose\.yml$|cmd/(migrate|service)/|internal/|build/docker/Dockerfile$|scripts/ci/runtime-image-build\.sh$|scripts/ci/fixtures/postgres-http-idempotency-active\.patch$|scripts/profiles/http-idempotency-postgres/|Makefile$|go\.(mod|sum)$|\.github/workflows/ci\.yml$)'; then
-            echo "should_run=true" >> "$GITHUB_OUTPUT"
+          if [ "${{ github.event_name }}" = pull_request ]; then
+            make secret-scan BASE_REF="${BASE_SHA}"
           else
-            echo "should_run=false" >> "$GITHUB_OUTPUT"
+            make secret-scan-history
           fi
-      # profile:database-postgres:end
 
-      - name: Build production runtime image
-        id: runtime_image
-        run: |
-          VERSION="sha-${GITHUB_SHA:0:12}"
-          APP_VERSION="${VERSION}" \
-            VCS_REF="${GITHUB_SHA}" \
-            SOURCE_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
-            make runtime-image-build RUNTIME_IMAGE=service:ci
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-
-      - name: Scan image with Trivy
-        uses: aquasecurity/trivy-action@d2a0b60797ff03db6132bd4e2b293f9b37081297 # 0.34.2
-        with:
-          image-ref: service:ci
-          format: table
-          exit-code: "1"
-          ignore-unfixed: true
-          severity: CRITICAL,HIGH
-
-      # profile:database-postgres:start
-      - name: Validate migrations and production runtime image
-        if: ${{ always() && !cancelled() && steps.runtime_image.outcome == 'success' && steps.migration_changes.outputs.should_run == 'true' }}
-        run: |
-          make migration-validate \
-            RUNTIME_IMAGE=service:ci \
-            RUNTIME_EXPECTED_VERSION="${{ steps.runtime_image.outputs.version }}"
-
-      - name: Skip migration validation
-        if: ${{ steps.migration_changes.outputs.should_run != 'true' }}
-        run: echo "no migration files changed"
-      # profile:database-postgres:end
-
-  ci-required:
-    name: ci-required
-    if: ${{ always() }}
+  delivery:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
-    needs:
-      - repo-integrity
-      - lint
-      - delivery-quality
-      - template-init
-      - template-postgres-feature
-      - openapi-contract
-      - openapi-breaking
-      - test-race
-      - test-coverage
-      - test-integration
-      - dependency-review
-      - go-security
-      - secret-scan
-      - container-security
+    timeout-minutes: 10
     steps:
-      - name: Require every applicable CI job
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          EXPENSIVE_REQUIRED: ${{ needs.repo-integrity.outputs.expensive_required }}
-          TEMPLATE_REQUIRED: ${{ needs.repo-integrity.outputs.template_required }}
-          TEMPLATE_INIT_PROFILES: ${{ needs.repo-integrity.outputs.template_init_profiles }}
-          TEMPLATE_POSTGRES_REQUIRED: ${{ needs.repo-integrity.outputs.template_postgres_required }}
-          RESULTS: ${{ toJSON(needs) }}
-        run: |
-          jq -e \
-            --arg event "$EVENT_NAME" \
-            --arg expensive "$EXPENSIVE_REQUIRED" \
-            --arg template "$TEMPLATE_REQUIRED" \
-            --arg init_profiles "$TEMPLATE_INIT_PROFILES" \
-            --arg postgres "$TEMPLATE_POSTGRES_REQUIRED" '
-            all(
-              to_entries[];
-              if (
-                $expensive == "false" and (
-                  .key == "lint" or
-                  .key == "delivery-quality" or
-                  .key == "template-init" or
-                  .key == "template-postgres-feature" or
-                  .key == "openapi-contract" or
-                  .key == "openapi-breaking" or
-                  .key == "test-race" or
-                  .key == "test-coverage" or
-                  .key == "test-integration" or
-                  .key == "dependency-review" or
-                  .key == "go-security" or
-                  .key == "container-security"
-                )
-              ) or (
-                $template == "false" and (
-                  .key == "template-init" or
-                  .key == "template-postgres-feature"
-                )
-              ) or (
-                .key == "template-init" and $init_profiles == "[]"
-              ) or (
-                .key == "template-postgres-feature" and $postgres != "true"
-              )
-              then .value.result == "skipped"
-              elif (
-                (.key == "openapi-breaking" or .key == "dependency-review") and
-                $event != "pull_request"
-              )
-              then .value.result == "skipped"
-              else .value.result == "success"
-              end
-            )
-          ' <<<"$RESULTS"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Workflows
+        run: make actionlint
+      - name: Shell
+        run: make shellcheck
+      - name: Dockerfile
+        run: make dockerfile-check

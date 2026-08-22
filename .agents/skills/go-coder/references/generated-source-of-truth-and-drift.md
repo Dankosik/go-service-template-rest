@@ -37,7 +37,7 @@ canonical here and which command turns it into the artifact:
   behavior change edits `service.yaml`, not Go.
 - The proto row is empty in the shipped template: `api/proto/` must not exist
   before the first owned `.proto`, and `make proto-generate` reports "gRPC
-  capability disabled" without `scripts/proto.sh`. The worked layout lives in
+  capability disabled" without the profile-owned Buf targets. The worked layout lives in
   `examples/grpc-reference-service/`, which carries its own `buf.yaml`.
 - Keep regeneration scoped to the source you changed. Generated churn with no
   source change is a separate finding to report, not diff to absorb.

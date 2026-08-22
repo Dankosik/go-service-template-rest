@@ -1,27 +1,34 @@
 # Required Checks And Change Scope
 
 ## Load When
-Load for required status checks, branch protection or ruleset contexts, merge queue readiness, change-scope routing, or a claim that a check "passed" when it was skipped.
+
+Load for required statuses, Rulesets, merge queues, path routing, or a green
+check that did not exercise its claimed surface.
 
 ## Decide
-- Require exactly one context from `ci.yml`: `ci-required`. It runs `if: ${{ always() }}`, `needs` every other job, and asserts through `jq` that each job either succeeded or was legitimately skipped for the current change scope. Renaming or adding a job then cannot silently drop a gate.
-- Job execution is routed by `repo-integrity` outputs, not by trigger path filters — `ci.yml` deliberately has none. `expensive_required` skips runtime-heavy jobs for docs-only changes. Template jobs are split: `template_init_profiles` (JSON matrix for `template-init`), `template_postgres_required`, and `template_s3_envelope_required`. `template_required` is the OR of those and remains the coarse skip. Keep new scope rules in those outputs. `ci-required` still evaluates skipped jobs.
-- A job skipped by its own `if:` reports success and satisfies a required context; a *workflow* skipped by a path or branch filter never reports at all and leaves the context pending. This asymmetry is why scope lives in job conditions here.
-- `openapi-breaking` runs its comparison only when the base commit already contains `api/openapi/service.yaml`; otherwise the step is skipped and the job is green. On a branch that introduces the spec, green means "not compared," not "not breaking."
-- `migration-validate` is a step inside `container-security`, not a job, and cannot be named as a status context.
-- CodeQL reports per-language contexts named `Analyze (<language>)`. Require the aggregate `CodeQL`, which survives a matrix change.
-- Merge queue needs the `merge_group` trigger on `ci.yml` before a ruleset requires those checks for queued merges.
 
-## Inspect
-- "Branch protection requires `ci-required` and `CodeQL`; the job inventory stays owned by `ci.yml`." Copy the single-stable-context habit.
+- `ci.yml` exposes three stable always-reported contexts: `quality`, `security`,
+  and `delivery`. Require those contexts instead of a script-maintained job
+  inventory.
+- `integration.yml` uses native path filters for PostgreSQL, migration, image,
+  and integration-test owners. It is not an always-reported context. Ruleset
+  policy must require it only where the platform can match the same scope;
+  otherwise remove the filters and run it universally.
+- OpenAPI and Protobuf breaking comparisons run only on pull requests with the
+  event's exact base SHA. A missing base OpenAPI contract means no comparison,
+  not proof of compatibility.
+- CodeQL reports its own Go and Actions analysis contexts. Keep it independent
+  from repository CI.
+- Add `merge_group` before requiring these contexts for merge queue events.
 
 ## Reject
-- "Require every job in `ci.yml`." Jobs skipped by change scope never report, so the ruleset blocks the merge with no way to satisfy it.
-- "Add path filters to the workflow trigger to save minutes." That converts a reported skip into a pending required context.
 
-## Reopen
-- `ci-required`'s `jq` expression names jobs as literal strings, so a rename compiles fine and fails closed at merge time until the expression is updated in the same change.
-- Nightly `reliability` and the `scorecard` workflow report separately and are not reachable through `ci-required`; treating either as merge evidence skips the gate that actually blocks.
+- Reintroducing a jq aggregator that restates every job name.
+- Treating a path-skipped workflow as a passing required context.
+- Treating generation, integration, or migration steps that did not run as
+  passing evidence.
 
 ## Prove
-Use the Actions run URL, the `ci-required` conclusion on the merge SHA, and the `repo-integrity` scope outputs that explain each skip.
+
+Use the Actions run URL, exact SHA, applicable job conclusions, and the event or
+path scope that caused every required workflow to run.

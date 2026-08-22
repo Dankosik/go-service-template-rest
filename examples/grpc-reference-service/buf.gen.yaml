@@ -1,16 +1,18 @@
 version: v2
 plugins:
   - local:
-      - bash
-      - ../../scripts/run-go-tool.sh
+      - go
+      - tool
+      - -modfile=../../tools/go.mod
       - protoc-gen-go
     out: internal/gen/proto
     opt:
       - paths=source_relative
       - default_api_level=API_OPAQUE
   - local:
-      - bash
-      - ../../scripts/run-go-tool.sh
+      - go
+      - tool
+      - -modfile=../../tools/go.mod
       - protoc-gen-go-grpc
     out: internal/gen/proto
     opt:

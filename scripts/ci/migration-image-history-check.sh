@@ -2,7 +2,7 @@
 set -euo pipefail
 
 usage() {
-	echo "usage: $0 compare <prior-dir> <candidate-dir> | package-mode" >&2
+	echo "usage: $0 compare <prior-dir> <candidate-dir> | package-mode | self-test" >&2
 	exit 2
 }
 
@@ -80,6 +80,23 @@ package_mode() {
 	echo "bootstrap"
 }
 
+self_test() (
+	local fixture
+	fixture="$(mktemp -d -t migration-image-history.XXXXXX)"
+	trap 'rm -rf -- "${fixture}"' EXIT
+	mkdir -p "${fixture}/prior" "${fixture}/candidate"
+	printf 'one\n' >"${fixture}/prior/000001_create.sql"
+	cp "${fixture}/prior/000001_create.sql" "${fixture}/candidate/000001_create.sql"
+	printf 'two\n' >"${fixture}/candidate/000002_add.sql"
+	compare_corpus "${fixture}/prior" "${fixture}/candidate" >/dev/null
+	printf 'changed\n' >"${fixture}/candidate/000001_create.sql"
+	if (compare_corpus "${fixture}/prior" "${fixture}/candidate") >/dev/null 2>&1; then
+		echo "migration image history self-test: rewrite passed" >&2
+		exit 1
+	fi
+	echo "migration image history self-test passed"
+)
+
 case "${1:-}" in
 compare)
 	[[ $# -eq 3 ]] || usage
@@ -88,6 +105,10 @@ compare)
 package-mode)
 	[[ $# -eq 1 ]] || usage
 	package_mode
+	;;
+self-test)
+	[[ $# -eq 1 ]] || usage
+	self_test
 	;;
 *)
 	usage

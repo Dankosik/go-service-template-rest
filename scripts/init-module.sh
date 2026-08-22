@@ -52,6 +52,8 @@ replace_literal() {
 	local new="$3"
 	local temporary
 
+	[[ "${old}" != "${new}" ]] || return 0
+
 	temporary="$(mktemp)"
 	awk -v old="${old}" -v new="${new}" '{
 		line = $0
@@ -280,30 +282,6 @@ webhooks = "${webhooks}"
 EOF
 }
 
-# rebase_coverage_floor turns the template's own coverage gate into a starting
-# ratchet the new service can actually move.
-#
-# The gate measures effective coverage across the whole module, and on day one
-# that denominator is almost entirely template code sitting near 82%. Against an
-# 80.0 floor a team can add only about forty uncovered statements — one handler
-# and a repository method — before CI goes red for a structural reason they did
-# not create, in the week they are least equipped to debug it. The usual reaction
-# is to raise the floor or switch it off, which is the wrong lesson to learn on
-# day three.
-#
-# 70.0 leaves roughly two hundred and forty statements of runway while still
-# failing on wholesale untested code. Raise it as the service's own tests land.
-#
-# The Makefile declares the floor and the workflows read it from there, so this
-# one substitution moves the gate everywhere. An `if` rather than a trailing
-# `&&`: this is the function's last statement, and under `set -e` a missing
-# Makefile would abort initialization instead of skipping the rebase.
-rebase_coverage_floor() {
-	if [[ -f Makefile ]]; then
-		replace_literal Makefile "COVERAGE_MIN ?= 80.0" "COVERAGE_MIN ?= 70.0"
-	fi
-}
-
 replace_codeowner_rules() {
 	local owner="$1"
 	local temporary
@@ -334,7 +312,9 @@ Module: \`${module}\`
 \`\`\`bash
 cp env/.env.example .env
 make run
-make check
+make fmt-check
+make lint
+make test
 \`\`\`
 
 The client API contract is \`api/openapi/service.yaml\`. Start with
@@ -665,8 +645,6 @@ if [[ "${source_checkout}" != true ]]; then
 		"title: \"${TEMPLATE_API_TITLE}\"" \
 		"title: \"${service_name}\""
 	write_derived_readme "${service_name}" "${new_module}"
-	rebase_coverage_floor
-
 	if [[ "${outbox}" == "none" ]]; then
 		rm -rf -- cmd/outbox-relay internal/infra/postgresoutbox
 		rm -f -- \
@@ -765,11 +743,8 @@ if [[ "${source_checkout}" != true ]]; then
 			internal/config/postgres_config.go \
 			internal/config/postgres_config_test.go \
 			internal/infra/telemetry/telemetrytest/metrics.go \
-			scripts/ci/migration-source-check.sh \
 			scripts/ci/migration-history-check.sh \
-			scripts/ci/migration-check-self-test.sh \
 			scripts/ci/migration-image-history-check.sh \
-			scripts/ci/migration-publication-check.sh \
 			env/docker-compose.yml
 		cp \
 			scripts/profiles/database-none/startup_dependencies.go.tmpl \
@@ -897,16 +872,14 @@ fi
 			internal/infra/oidcjwt/grpc.go \
 			internal/infra/oidcjwt/grpc_test.go \
 			internal/infra/oidcjwt/grpc_tls_contract_test.go \
-			test/grpc_process_integration_test.go \
-			scripts/proto.sh \
-			scripts/run-buf.sh \
-			scripts/ci/proto-check.sh
+			test/grpc_process_integration_test.go
 		strip_profile grpc remove
+		go -C tools mod edit -droptool=github.com/bufbuild/buf/cmd/buf
 		go -C tools mod edit -droptool=google.golang.org/protobuf/cmd/protoc-gen-go
 		go -C tools mod edit -droptool=google.golang.org/grpc/cmd/protoc-gen-go-grpc
 	else
 		strip_profile grpc keep
-		bash ./scripts/proto.sh generate
+		make proto-generate
 	fi
 
 	# internal/config/configtest exists for parity tests that hold runtime owners

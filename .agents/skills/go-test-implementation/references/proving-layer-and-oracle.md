@@ -43,6 +43,6 @@ become named Go tests, or the layer that should carry the proof is unsettled.
   commands and leaving vet to `make lint`.
 - Add the package command when helpers, fixtures, or shared setup changed.
 - A plain `go test` run over a fuzz target executes the seed corpus only, so it
-  proves the seeds and not exploration; `make test-fuzz-smoke` is the bounded run
+  proves the seeds and not exploration; a focused `go test -fuzz` is the bounded run
   that explores.
 - Report the observable each test rejects. A count of added tests is not evidence.

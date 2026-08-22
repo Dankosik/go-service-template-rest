@@ -13,10 +13,9 @@ lifecycle tests). Reach for a fake clock there before widening any timeout here.
 
 ## Decide
 
-- **Read the recorded failure before reproducing it.** `make test-report` writes
-  `.artifacts/test/junit.xml` and `.artifacts/test/test2json.json`. The JSON
-  stream carries per-test output and ordering that the CI summary drops, which is
-  usually what names the failure class before a single command is run.
+- **Read the recorded failure before reproducing it.** CI and `gotestsum`
+  preserve per-test output and ordering, which usually names the failure class
+  before a single command is rerun.
 
 - **Move one variable per command**, and name the class before combining: `-count`
   for repetition, `-race` for shared state, `-cpu` for scheduler sensitivity,
@@ -31,7 +30,7 @@ lifecycle tests). Reach for a fake clock there before widening any timeout here.
 - **Repeated test commands take `-vet=off`** here: mandatory lint owns `govet` for
   the current tree, so leaving default vet on re-lints the package on every one of
   100 iterations. The repository's own flake gate is
-  `make test-flake-smoke` (`go test -vet=off -count=5 -shuffle=on ./...`); the
+  a bounded `go test -vet=off -count=5 -shuffle=on <scope>` run; the
   race gate is `make test-race`.
 
 - **Integration-tagged flakes have pinned commands.** `make test-messaging-race`

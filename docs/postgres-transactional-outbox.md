@@ -156,5 +156,5 @@ separate authorized production action.
 go test -vet=off ./internal/domainevent ./internal/infra/postgresoutbox \
   ./internal/infra/natsjs ./cmd/outbox-relay/...
 go test -vet=off -tags=integration ./test -run '^TestPostgresOutbox' -count=1
-make sqlc-check migration-check template-init-check
+make sqlc-check migration-check test-outbox-race
 ```
