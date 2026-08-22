@@ -1,0 +1,6 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "xai/grok-4.6",
+  "subagent_depth": 2,
+  "instructions": [".opencode/rules/harness.md"]
+}

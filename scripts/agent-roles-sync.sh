@@ -10,7 +10,7 @@ usage:
   agent-roles-sync.sh --check     [--repo <repository>]
 
   --preflight  validate source and generated path shapes
-  --apply      regenerate Codex, Claude, Qwen, Grok, and Cursor role carriers
+  --apply      regenerate Codex, Claude, Qwen, Grok, Cursor, and OpenCode role carriers
   --check      verify byte-stable generated carriers without changing files
   --repo       repository root (default: current working directory)
 EOF
@@ -44,7 +44,9 @@ for path in \
 	"${repo}/.grok/agents" \
 	"${repo}/.grok/roles" \
 	"${repo}/.cursor" \
-	"${repo}/.cursor/agents"; do
+	"${repo}/.cursor/agents" \
+	"${repo}/.opencode" \
+	"${repo}/.opencode/agents"; do
 	[[ ! -L "${path}" ]] || fail "${path#"${repo}/"} is a symlink"
 done
 [[ "${mode}" != "preflight" ]] || exit 0
@@ -85,9 +87,16 @@ is_cursor_session_agent() {
 	esac
 }
 
+is_opencode_session_agent() {
+	case "$1" in
+	orchestrator.md | acceptance-unit-lead.md) return 0 ;;
+	*) return 1 ;;
+	esac
+}
+
 tmp=$(mktemp -d "${TMPDIR:-/tmp}/agent-roles.XXXXXX")
 trap 'rm -rf -- "${tmp}"' EXIT
-mkdir -p "${tmp}/codex" "${tmp}/claude" "${tmp}/qwen" "${tmp}/grok" "${tmp}/grok-roles" "${tmp}/cursor"
+mkdir -p "${tmp}/codex" "${tmp}/claude" "${tmp}/qwen" "${tmp}/grok" "${tmp}/grok-roles" "${tmp}/cursor" "${tmp}/opencode"
 
 role_names=()
 shopt -s nullglob
@@ -223,6 +232,21 @@ for source_file in "${sources}"/*.toml; do
 		[[ -z "${schema_line}" ]] || printf '\n%s\n' "${schema_line}"
 		printf '\n%s\n' "${body}"
 	} >"${tmp}/cursor/${name}.md"
+
+	{
+		printf '%s\n' '---'
+		printf 'description: "%s"\n' "${description}"
+		printf 'mode: subagent\n'
+		[[ "${grok_model}" == inherit ]] || printf 'model: xai/%s\n' "${grok_model}"
+		printf '%s\n' 'permission:'
+		if [[ "${class}" == read-only-specialist ]]; then
+			printf '%s\n' '  edit: deny'
+		fi
+		printf '%s\n' '  task: deny' '  question: deny' '---' ''
+		printf '%s\n\n%s\n' "${common}" "${fallback}"
+		[[ -z "${schema_line}" ]] || printf '\n%s\n' "${schema_line}"
+		printf '\n%s\n' "${body}"
+	} >"${tmp}/opencode/${name}.md"
 done
 shopt -u nullglob
 ((${#role_names[@]} > 0)) || fail ".agents/roles contains no canonical role files"
@@ -235,6 +259,7 @@ generated_path() {
 	grok) printf '%s/.grok/agents' "${repo}" ;;
 	grok-roles) printf '%s/.grok/roles' "${repo}" ;;
 	cursor) printf '%s/.cursor/agents' "${repo}" ;;
+	opencode) printf '%s/.opencode/agents' "${repo}" ;;
 	esac
 }
 
@@ -249,6 +274,9 @@ check_extra() {
 			continue
 		fi
 		if [[ "${harness}" == cursor ]] && is_cursor_session_agent "${role}.${extension}"; then
+			continue
+		fi
+		if [[ "${harness}" == opencode ]] && is_opencode_session_agent "${role}.${extension}"; then
 			continue
 		fi
 		[[ -f "${tmp}/${harness}/${role}.${extension}" ]] ||
@@ -268,6 +296,9 @@ sync_generated() {
 			continue
 		fi
 		if [[ "${harness}" == cursor ]] && is_cursor_session_agent "${role}.${extension}"; then
+			continue
+		fi
+		if [[ "${harness}" == opencode ]] && is_opencode_session_agent "${role}.${extension}"; then
 			continue
 		fi
 		[[ -f "${tmp}/${harness}/${role}.${extension}" ]] || rm -f -- "${file}"
@@ -301,7 +332,8 @@ apply)
 	sync_generated grok md
 	sync_generated grok-roles toml
 	sync_generated cursor md
-	printf 'agent roles: %d role carriers generated for 5 harnesses\n' "${#role_names[@]}"
+	sync_generated opencode md
+	printf 'agent roles: %d role carriers generated for 6 harnesses\n' "${#role_names[@]}"
 	;;
 check)
 	check_generated codex toml
@@ -310,6 +342,7 @@ check)
 	check_generated grok md
 	check_generated grok-roles toml
 	check_generated cursor md
-	printf 'agent roles: %d canonical roles current for 5 harnesses\n' "${#role_names[@]}"
+	check_generated opencode md
+	printf 'agent roles: %d canonical roles current for 6 harnesses\n' "${#role_names[@]}"
 	;;
 esac

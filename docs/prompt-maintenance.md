@@ -16,6 +16,9 @@ the same context-engineering density rules apply when writing Grok carriers.
 Cursor's [rules](https://cursor.com/docs/rules.md),
 [skills](https://cursor.com/docs/skills.md), and
 [subagents](https://cursor.com/docs/subagents.md) own current Cursor controls.
+OpenCode's [agents](https://opencode.ai/docs/agents),
+[skills](https://opencode.ai/docs/skills), [config](https://opencode.ai/docs/config),
+and [CLI](https://opencode.ai/docs/cli) own current OpenCode 1 controls.
 Product system-prompt history is observational evidence, not a harness
 contract.
 

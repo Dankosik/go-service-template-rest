@@ -31,11 +31,13 @@ metadata:
 
 `model/method` entries remain autonomously discoverable. `user/workflow` and
 `role/carrier` entries set `disable-model-invocation: true` for Claude, Qwen,
-Grok, and Cursor and Codex `agents/openai.yaml` policy `allow_implicit_invocation:
+Grok, Cursor, and OpenCode and Codex `agents/openai.yaml` policy `allow_implicit_invocation:
 false`; they remain available through the harness's explicit skill syntax or
 bound carrier. The generated Claude/Qwen views and skill sync checks enforce
-these projections. Grok and Cursor read the canonical `.agents/skills` set
-directly and need no generated skill symlink.
+these projections. Grok, Cursor, and OpenCode read the canonical `.agents/skills`
+set directly and need no generated skill symlink. OpenCode ignores
+`disable-model-invocation`; keep those entries behind `/orchestrator` or the
+bound agent file rather than relying on implicit `skill` loading.
 
 Codex starts with names, descriptions, and paths and may shorten a crowded
 catalog. Put the leading word and decisive trigger first. The repository gate

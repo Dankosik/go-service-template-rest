@@ -14,7 +14,7 @@ Use for instruction, role, skill, mirror, or template-propagation changes.
 After adding or removing canonical skills, run `bash
 scripts/claude-skills-sync.sh --apply --repo .` and `bash
 scripts/qwen-skills-sync.sh --apply --repo .`, then check both generated views.
-Cursor and Grok discover `.agents/skills` directly and have no generated skill
+Cursor, Grok, and OpenCode discover `.agents/skills` directly and have no generated skill
 view.
 A derived repository verifies adoption with the source template's
 `scripts/template-sync.sh --check`; it does not run the template-only purity
