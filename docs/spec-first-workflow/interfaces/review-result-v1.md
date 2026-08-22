@@ -26,6 +26,7 @@ Implementation finding classification is closed:
 
 Non-implementation adapters use `PASS | CONCERNS | FAIL`. Implementation uses
 `PASS | FAIL | NEEDS_PARENT`; `NEEDS_PARENT` also names the unverified claim and
-unavailable proof/action owner. An unresolved or multi-unit implementation
-boundary returns `REVIEW_HANDOFF_INVALID` without a verdict and names the
-acceptance owner that must repair the handoff.
+unavailable proof/action owner. An unresolved implementation boundary, or a
+review that still must accept more than one unit, returns
+`REVIEW_HANDOFF_INVALID` without a verdict and names the acceptance owner that
+must repair the handoff.

@@ -6,10 +6,13 @@ public prose.
 ## Native Map
 
 - A saved-project task using `$orchestrator` can own a persisted ledger.
-- A Local Acceptance-Unit Lead applies Implementation's direct-versus-delegate
-  rule and uses shared `worker-agent` lanes for delegated mutable work.
-- Use a Worktree task when isolated candidate state prevents collisions or
-  makes handoff useful; isolation is not a correctness ceremony for every edit.
+- A Local Acceptance-Unit Lead applies Implementation's execution topology
+  and uses shared `worker-agent` lanes for delegated mutable work.
+- A Worktree task is the isolation control when [Agent
+  Harness](../agent-harness.md) selects isolation for a concurrent mutable
+  Lead. Isolation is not a ceremony for sequential edits, cheap disjoint
+  units, or read-only review. Workers inside one Lead may share that Lead's
+  checkout when writable responsibility and exclusive locks are disjoint.
 - When the callable collaboration schema permits it, a child may delegate a
   strict subset of its brief to descendants without broadening writable scope
   or authority.
@@ -19,7 +22,8 @@ public prose.
 
 ## Models
 
-Use Sol with `xhigh` reasoning effort for the Acceptance-Unit Lead. `ultra` is
+Use Sol with `high` reasoning effort for the Acceptance-Unit Lead, and `xhigh`
+when remaining uncertainty or protected-risk surface requires it. `ultra` is
 a Codex workflow mode, not a reasoning-effort value, and must not be sent in
 the effort field. Use Luna at low effort for closed mechanical work, Terra at
 balanced effort for ordinary delegated work or review, and Sol for complex,
@@ -35,9 +39,11 @@ through installed structured fields where available. Retain every returned
 `threadId`, `hostId`, task or operation identity, worktree identity, and wait
 cursor. Never wait on a lane that returned no identity. Dispatch all independent
 ready lanes before waiting, within current capacity; capacity is a ceiling, not
-a fan-out target. Concurrent mutable lanes require disjoint files, resources,
-interfaces, and assumptions. Consume and integrate results serially under the
-Lead.
+a fan-out target. Concurrent mutable units and lanes require disjoint packet
+mutable owners and exclusive locks. Consume and integrate results serially
+under the Lead. Land candidates onto the shared checkout serially from the
+[Acceptance Result](../spec-first-workflow/interfaces/acceptance-result-v1.md)
+and record the Lead-owned verdict without re-adjudicating it.
 
 Send only the changed dependency, question, status, or identity: use a direct
 message for an active agent and a follow-up to resume an idle one. Send sibling
@@ -52,17 +58,19 @@ ambiguously delivered dispatch. Use a fresh agent when a clean context or
 changed strategy is more reliable.
 
 For isolated work, validate the actual worktree and base before accepting its
-bytes. A Worktree Lead returns exact `HANDOFF_READY` with a fixed candidate;
-the Local Lead integrates and validates it before any ledger transition.
+bytes. A Worktree Lead returns an Acceptance Result with a fixed candidate
+and exact `HANDOFF_READY`. The Orchestrator, or a root-local Lead, lands that
+candidate serially and records the verdict without re-adjudicating it.
 Handoff is routing evidence, not acceptance.
 
 ## Review And Recovery
 
 An independent implementation review uses a fresh `reviewer-agent` with
 [Implementation Review](../spec-first-workflow/phases/implementation-review.md)
-as its Method. Raise its model/effort fields for a
-justified highest-consequence boundary. A changed candidate receives a fresh
-review when the trigger still applies.
+as its Method. When Review requires integrated-candidate review, the
+Orchestrator task binds one fresh `reviewer-agent` to that boundary and still
+does not accept units. Raise its model/effort fields for a
+justified highest-consequence boundary. Keep the fixed candidate unchanged.
 
 Reconcile unknown create or handoff state from native task state, the canonical
 ledger, and Git candidate identity. Zero or multiple exact matches remain an

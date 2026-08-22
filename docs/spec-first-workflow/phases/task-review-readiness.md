@@ -6,20 +6,20 @@ review. This adapter owns only Planning falsifiers and threshold.
 
 ## Atomicity Gate
 
-Before simulating execution, test whether every task in the candidate admits
-one review verdict. If one part of any task could be accepted while another
-fails, or one finding could be repaired without changing the rest, return
-`FAIL` to Planning and name the independently acceptable boundaries. Do not
-author the replacement ledger.
+Before simulating execution, test whether the packet is one independently
+acceptable repository outcome. Return `FAIL` to Planning and name the
+boundaries when the packet contains more than one Outcome, or when it is only a
+layer of another Outcome and cannot be consumed without still-planned companion
+work. Independent implementation, investigation, or repair inside one
+postcondition is not a split. Do not author the replacement ledger.
 
 ## Lenses
 
-Apply the atomicity gate and contract falsification to every task. Simulate
-the next executable unit from selection through acceptance using only the
-fixed plan, cited sources, and current evidence. Resolve prerequisites and
-handoffs, trace canonical/generated order, locate non-obvious writable
-surfaces/resources, and follow the postcondition through its named check and
-oracle to the real path.
+Simulate the next executable unit from selection through
+acceptance using only the fixed plan, cited sources, and current evidence. Resolve
+prerequisites and handoffs, trace canonical/generated order, locate non-obvious
+writable surfaces/resources, and follow the postcondition through its named
+check and oracle to the real path.
 
 Trace persisted artifact custody and status through each actor boundary; the
 next actor must proceed from canonical state without chat reconstruction.
@@ -34,8 +34,8 @@ for a decision/dependency that can invalidate the next accepted result.
 Do not reslice tasks, author replacement packets, or choose missing behavior,
 mechanism, ownership, proof, rollout, authority, or concurrency.
 
-`PASS` requires every task packet to admit one verdict and the next unit to
-be executable and claim-provable from closed inputs. `CONCERNS` may carry
-only a later bounded risk that cannot invalidate that result. Any hidden
-decision, unavailable mandatory gate/input, invalid split, or non-dispositive
-check is `FAIL` and reopens Planning or the smallest upstream owner.
+`PASS` requires the next unit to be executable and claim-provable from closed
+inputs. `CONCERNS` may carry only a later bounded risk that cannot invalidate
+that result. Any hidden decision, unavailable mandatory gate/input, invalid
+split, or non-dispositive check is `FAIL` and reopens Planning or the smallest
+upstream owner.

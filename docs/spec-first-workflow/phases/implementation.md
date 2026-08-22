@@ -2,16 +2,61 @@
 
 Use when one accepted implementation unit is ready and authorized.
 
-The Acceptance-Unit Lead owns the fixed unit through integration, claim-matched
-proof, required independent review, and one accepted or blocked result. It may
-edit directly or delegate bounded independent work; coupled work, decisions,
-integration, repair, proof, and acceptance remain with the Lead.
+## Carrier
 
-The ledger task is the acceptance unit by default. A compound unit requires the
-ledger's exact inseparability reason. Load the current task packet and consumed
-outputs; repair only within that boundary. A new postcondition, responsibility,
-behavior, proof oracle, or packet change reopens Planning instead of expanding
-the task.
+Use one root-local Acceptance-Unit Lead when exactly one fixed unit is in
+scope, no sibling unit must be scheduled, and no durable multi-session recovery
+or isolated candidate handoff is required.
+
+Use the Ledger Orchestrator when several acceptance units may become ready,
+concurrent mutable candidates must be coordinated, dependency unlocking must
+continue after individual completions, execution must survive session or actor
+changes, or canonical ledger transitions require one routing owner.
+
+The Orchestrator never implements unit work. The Lead does not schedule sibling
+acceptance units.
+
+## Execution
+
+The Acceptance-Unit Lead owns the fixed unit through integration, claim-matched
+proof, required independent review, and one accepted or blocked result. Load
+the current task packet and consumed outputs; repair only within that boundary.
+A new postcondition, responsibility, behavior, proof oracle, or packet change
+reopens Planning instead of expanding the task.
+
+Choose the smallest reliable execution topology. Implement directly when the
+unit has one coherent mutable owner, delegation would duplicate context, or
+handoff and integration would cost as much as doing the subset directly.
+
+Fan out execution lanes when two or more strict subsets have disjoint writable
+responsibility, no shared exclusive lock, stable accepted interfaces,
+independently checkable focused proof, and a result the Lead can integrate
+without delegating a missing decision. Dispatch every independent lane before
+waiting. Integrate returned lane results serially under the Lead.
+
+Execution lanes are not acceptance units. Workers do not accept, transition, or
+review the parent unit.
+
+## Candidate Freeze And Proof
+
+After focused proof passes, freeze one candidate identity. Dispatch independent
+review and remaining read-only or non-mutating validation concurrently. Do not
+mutate the candidate while those lanes are active. Acceptance waits for every
+mandatory result; the lanes do not wait for one another.
+
+Workers run only the focused proof named by their brief. The Lead reruns
+claim-matched proof on the integrated candidate. Repository-wide aggregate proof
+runs once on the integrated delivery tree unless the unit's own acceptance claim
+requires that aggregate.
+
+The same Lead owns every candidate-caused repair. [Review](../shared/review.md)
+selects bounded delta recheck versus a fresh reviewer. During orchestrated
+execution, return [Acceptance Result
+V1](../interfaces/acceptance-result-v1.md) instead of writing the ledger.
+
+If the packet cannot reach its Accept-when without still-planned companion
+work, reopen Planning rather than silently absorbing the companion or shipping
+a layer.
 
 Load only methods exposed by the changed surface. Apply [Validation
 Routing](../../validation-routing.md), the [Evidence

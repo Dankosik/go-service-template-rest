@@ -4,7 +4,7 @@ Use after compaction, interruption, or an actor/session change.
 
 1. Inspect the current workspace and Git status. Read `tasks.md` first when
    implementation or validation is active; for a split ledger, read the index
-   and only the next ready unit's file.
+   and only the files of the current ready frontier.
 2. Otherwise read `workflow-plan.md` when it exists for real multi-session
    coordination.
 3. Read only the decision, design, test, research, or rollout artifacts needed
