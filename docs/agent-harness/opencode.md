@@ -10,20 +10,24 @@ those control planes.
 - This session is OpenCode. Load only this adapter. Sibling bootstrap files
   select other harnesses; do not follow their adapter choice. Default `build`
   remains Direct Work and is not ledger orchestration.
-- `/orchestrator` binds the current session as Ledger Orchestrator. OpenCode
-  reads `.agents/skills` through the `skill` tool. Do not require a second
-  process for that bind.
+- `/orchestrator` or `/agent orchestrator` binds the current session as Ledger
+  Orchestrator. The session footer must show orchestrator, not `build`. If it
+  still shows `build`, switch before dispatch. OpenCode reads `.agents/skills`
+  through the `skill` tool. Do not require a second process for that bind.
 - Dispatch every mutually independent ready unit before waiting, within
   current capacity. Spawn one fresh `acceptance-unit-lead` per ready unit
   through Task. That Lead owns proof, review, and the canonical transition;
   this session only routes. Land each Accepted candidate onto the current
   checkout serially from the ledger receipt.
-- Bind that teammate to `acceptance-unit-lead`. Do not substitute `general`,
-  `explore`, `scout`, or generic worker semantics.
+- Bind that teammate to `acceptance-unit-lead`. Task `subagent_type` is a free
+  string. OpenCode 1.18 does not enumerate project agents in the Task blurb;
+  pass `acceptance-unit-lead` anyway. Do not treat a built-in-only blurb as a
+  missing Lead. Do not substitute `general`, `explore`, `scout`, or generic
+  worker semantics.
 - Full-ledger work requires Task, returned session identities, and
-  `subagent_depth` of at least 2 so a Lead can spawn child lanes. If Task
-  cannot spawn `acceptance-unit-lead`, returns no identity, or a Lead cannot
-  spawn because depth is 1, report that exact carrier gap before dispatch.
+  `subagent_depth` of at least 2 so a Lead can spawn child lanes. Report a
+  carrier gap only after Task rejects the call, returns unknown agent, returns
+  no identity, or a Lead cannot spawn because depth is 1.
 - The Lead may implement directly. Delegated implement, investigate, verify,
   or review uses Task with `worker-agent`, `specialist-agent`,
   `evidence-agent`, `reviewer-agent`, or `adjudicator-agent`.
