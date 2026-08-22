@@ -53,9 +53,10 @@ jq -e '
 
 jq -e '
   .evals as $evals |
-  all([23, 24, 25, 26, 31, 32][]; . as $id | any($evals[]; .id == $id))
+  all([23, 24, 25, 26, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45][];
+    . as $id | any($evals[]; .id == $id))
 ' "${EVAL_FILE}" >/dev/null ||
-	fail "cross-harness orchestrator evals are missing"
+	fail "cross-harness orchestrator or implementation-topology evals are missing"
 
 jq -e '
   any(.evals[];
@@ -70,6 +71,52 @@ jq -e '
 grep -Fq 'the current adapter selected by [Agent' \
 	"${ROOT_DIR}/.agents/skills/orchestrator/SKILL.md" ||
 	fail "orchestrator skill is not harness-neutral"
+grep -Fq 'independently acceptable repository outcome' \
+	"${ROOT_DIR}/docs/spec-first-workflow/phases/planning/ledger-contract.md" ||
+	fail "ledger contract lost the independently-acceptable task boundary"
+grep -Fq 'Keep layers of one Outcome in one unit' \
+	"${ROOT_DIR}/docs/spec-first-workflow/phases/planning/ledger-contract.md" ||
+	fail "ledger contract lost the too-small versus too-big sandwich"
+grep -Fq 'Isolate concurrent mutation only when it' \
+	"${ROOT_DIR}/docs/agent-harness.md" ||
+	fail "agent harness lost isolation cost routing"
+if grep -Fq 'implemented, proved, repaired, or accepted independently' \
+	"${ROOT_DIR}/docs/spec-first-workflow/phases/planning/ledger-contract.md"; then
+	fail "ledger contract still splits on independently implementable parts"
+fi
+grep -Fq 'Mutable owners:' \
+	"${ROOT_DIR}/docs/spec-first-workflow/interfaces/task-packet-v1.md" ||
+	fail "task packet is missing mutable owners"
+grep -Fq 'Exclusive locks:' \
+	"${ROOT_DIR}/docs/spec-first-workflow/interfaces/task-packet-v1.md" ||
+	fail "task packet is missing exclusive locks"
+grep -Fq 'do not write canonical ledger state' \
+	"${ROOT_DIR}/.agents/skills/acceptance-unit-lead/SKILL.md" ||
+	fail "acceptance-unit-lead still writes the canonical ledger under orchestration"
+if grep -Fq 'only the Acceptance-Unit Lead writes' "${EVAL_FILE}"; then
+	fail "instruction evals still expect the Lead to write canonical ledger state"
+fi
+if grep -RFq 'primary session is the Orchestrator carrier' \
+	"${ROOT_DIR}/Grok.md" \
+	"${ROOT_DIR}/docs/agent-harness/grok-build.md" \
+	"${ROOT_DIR}/docs/prompt-composition.md" \
+	"${ROOT_DIR}/.grok/rules"; then
+	fail "Grok still binds every primary session as Orchestrator"
+fi
+jq -e '
+  any(.evals[];
+    .id == 37 and
+    any(.expectations[]; contains("does not wait for every member"))
+  )
+' "${EVAL_FILE}" >/dev/null ||
+	fail "ready-frontier refill eval is missing"
+jq -e '
+  any(.evals[];
+    .id == 45 and
+    any(.expectations[]; contains("before landing T2"))
+  )
+' "${EVAL_FILE}" >/dev/null ||
+	fail "landing-mailbox refill eval is missing"
 if grep -RIFq 'has no Ledger Orchestrator carrier' \
 	"${ROOT_DIR}/docs/agent-harness"; then
 	fail "a harness adapter still prohibits ledger orchestration by product name"
@@ -102,7 +149,8 @@ for retired in \
 	[[ ! -e "${ROOT_DIR}/${retired}" ]] || fail "retired schema owner remains: ${retired}"
 done
 for interface in \
-	decision-result-v1.md evidence-result-v1.md transition-result-v1.md; do
+	decision-result-v1.md evidence-result-v1.md transition-result-v1.md \
+	task-packet-v1.md acceptance-result-v1.md; do
 	[[ -f "${ROOT_DIR}/docs/spec-first-workflow/interfaces/${interface}" ]] ||
 		fail "canonical interface is missing: ${interface}"
 done
@@ -187,7 +235,7 @@ done < <(
 	for path in "${instruction_roots[@]}"; do
 		path="${ROOT_DIR}/${path}"
 		if [[ -d "${path}" ]]; then
-			find "${path}" \( -path '*/node_modules/*' -o -path '*/node_modules' \) -prune -o -type f -name '*.md' -print
+			find "${path}" \( -name node_modules -o -name .git \) -prune -o -type f -name '*.md' -print
 		elif [[ -f "${path}" ]]; then
 			printf '%s\n' "${path}"
 		fi

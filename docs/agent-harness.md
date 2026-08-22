@@ -7,16 +7,26 @@ selected adapter owns how the current harness provides it.
 ## Delegation Interface
 
 Give a delegated agent only the semantic fields in the [Subagent Brief
-Template](subagent-brief-template.md). Select `shared` or `worktree` isolation
-only when the harness supports it and current collision or candidate-state risk
-justifies the choice.
+Template](subagent-brief-template.md). Isolate concurrent mutation only when it
+is cheaper than waiting for the current checkout. Shared live checkout is
+allowed only with disjoint mutable owners and no exclusive lock. Overlapping
+owners or locks stay serial. Read-only lanes may share the current checkout.
+Workers inside one Lead may share the Lead's checkout only when writable
+responsibility and exclusive locks are disjoint. Do not create worktrees for
+sequential work, cheap disjoint units, or bounded read-only review.
 
 Carry model, reasoning effort, isolation, native identity, and task lifecycle in
-tool fields rather than prompt prose. The Acceptance-Unit Lead uses the
-adapter's quality-first configuration; child work uses the cheapest
-configuration likely to close its fixed brief. Raise capability for complex
-reasoning, a weak oracle, protected domains, or high consequence. Preserve an
-exact user-selected model.
+tool fields rather than prompt prose. Read Exclusive locks and Accept-when to
+choose Lead capability. Use the adapter's balanced configuration only when
+locks are `none`, the focused check is a named mechanical command, and Boundary
+has no protected-risk reason. Raise to the strongest configuration when the
+lock is not `none`, the oracle is weak, the unit is cross-cutting, an earlier
+causal attempt failed, or review exposed a previously unknown invariant. If
+those signals disagree, raise. After a causal focused-proof or review miss,
+raise capability for the remaining repair of that unit; do not keep the cheaper
+configuration that missed the invariant. Child work uses the cheapest
+configuration likely to close its fixed brief. Preserve an exact user-selected
+model.
 
 Choose roles by capability: `evidence-agent`, `specialist-agent`,
 `worker-agent`, `reviewer-agent`, or `adjudicator-agent`. Put domain expertise or

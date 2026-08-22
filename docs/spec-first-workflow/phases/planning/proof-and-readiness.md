@@ -24,8 +24,8 @@ Make these explicit when triggered:
 - migration, backfill, rollout, and rollback gates;
 - cleanup of replaced code, tests, fixtures, config, docs, skills, or mirrors;
 - fresh validation and negative proof for retired identifiers;
-- enough current evidence for Implementation to recognize conflicting files,
-  resources, interfaces, or assumptions before choosing concurrency;
+- packet mutable owners and exclusive locks sufficient to compute the ready
+  frontier without a new concurrency decision;
 - one successful completion condition distinct from blocked stop.
 
 Preserve an accepted example only when it defines behavior or proof. Use local
@@ -45,5 +45,7 @@ is being claimed.
 Readiness passes only when that rehearsal can reach acceptance using the fixed
 plan, cited current inputs, and available mandatory gates without chat history,
 unfinished companion work, or a new behavior, mechanism, placement, ownership,
-proof, rollout, concurrency, or carrier decision. Implementation decides
-parallelism from current evidence rather than a persisted wave protocol.
+proof, rollout, concurrency, or carrier decision. Do not persist waves. The
+Orchestrator recomputes the unit frontier after each result or canonical
+transition and immediately dispatches newly ready units; a Lead decides
+intra-unit parallelism from current evidence.
