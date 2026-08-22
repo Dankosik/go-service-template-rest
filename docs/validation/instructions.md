@@ -9,7 +9,7 @@ Use for instruction, role, skill, mirror, or template-propagation changes.
 | Claude skill discovery | `bash scripts/ci/claude-skills-check.sh` |
 | Qwen skill discovery | `bash scripts/ci/qwen-skills-check.sh` |
 | Template-source ownership and sync behavior | `make template-owned-purity-check` in the template checkout only |
-| Structural workflow behavior, schema ownership, selectors, and links | `bash scripts/ci/instruction-evals-check.sh` |
+| Structural workflow and hard-skill behavior catalogs, schema ownership, selectors, and links | `bash scripts/ci/instruction-evals-check.sh` |
 
 After adding or removing canonical skills, run `bash
 scripts/claude-skills-sync.sh --apply --repo .` and `bash

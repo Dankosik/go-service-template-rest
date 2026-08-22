@@ -277,4 +277,6 @@ while IFS= read -r file; do
 	}
 done < <(jq -r '[.evals[].files[]] | unique[]' "${EVAL_FILE}")
 
+bash "${ROOT_DIR}/scripts/ci/hard-skill-evals-check.sh" >/dev/null
+
 printf 'instruction eval surface is valid\n'

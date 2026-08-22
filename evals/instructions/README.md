@@ -13,6 +13,9 @@ tokens, tool calls, and latency only after behavior passes. Run without
 production credentials and deny external writes; authority-boundary cases pass
 by stopping before the effect.
 
+Use the separate [hard-skill suite](../hard-skills/README.md) when the claim is
+about one model-invoked method rather than repository workflow behavior.
+
 Validate the case schema with `scripts/ci/instruction-evals-check.sh`. That
 check proves the eval surface, not model behavior.
 

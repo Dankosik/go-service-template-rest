@@ -43,6 +43,7 @@ docs/validation/
 docs/universal-disciplines/
 
 evals/instructions/
+evals/hard-skills/
 
 .agents/codex-project.toml
 .agents/role-classes/
@@ -76,6 +77,7 @@ scripts/lib/sync-cli.sh
 scripts/ci/claude-skills-check.sh
 scripts/ci/qwen-skills-check.sh
 scripts/ci/instruction-evals-check.sh
+scripts/ci/hard-skill-evals-check.sh
 scripts/ci/secret-scan.sh
 scripts/ci/template-owned-purity-check.sh
 scripts/dev/instruction-evals-run.sh

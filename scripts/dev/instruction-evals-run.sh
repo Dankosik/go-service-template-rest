@@ -2,7 +2,10 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-EVAL_FILE="${ROOT_DIR}/evals/instructions/evals.json"
+EVAL_FILE="${INSTRUCTION_EVAL_FILE:-evals/instructions/evals.json}"
+if [[ "${EVAL_FILE}" != /* ]]; then
+	EVAL_FILE="${ROOT_DIR}/${EVAL_FILE}"
+fi
 BASELINE_REF="${INSTRUCTION_EVAL_BASELINE_REF:-HEAD}"
 CANDIDATE_SOURCE="${INSTRUCTION_EVAL_CANDIDATE:-worktree}"
 CASE_FILTER="${INSTRUCTION_EVAL_CASES:-}"
@@ -40,6 +43,7 @@ esac
 command -v jq >/dev/null 2>&1 || fail 'jq is required'
 command -v git >/dev/null 2>&1 || fail 'git is required'
 command -v tar >/dev/null 2>&1 || fail 'tar is required'
+[[ -f "${EVAL_FILE}" ]] || fail "eval catalog is missing: ${EVAL_FILE}"
 
 bash "${ROOT_DIR}/scripts/ci/instruction-evals-check.sh" >/dev/null
 git -C "${ROOT_DIR}" rev-parse --verify "${BASELINE_REF}^{commit}" >/dev/null
