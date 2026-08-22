@@ -231,10 +231,10 @@ flowchart TD
     strategy{"Lead chooses the fastest safe strategy"}
     direct["Lead implements directly"]
     delegated["worker-agent<br/>implement · investigate · verify"]
-    fanin["Lead fan-in<br/>integration · proof · self-review"]
+    fanin["Lead fan-in<br/>integration · focused proof"]
     review{"Independent review required?"}
     reviewer["reviewer-agent<br/>independent falsification"]
-    receipt["One receipt or precise blocker"]
+    receipt["Acceptance Result"]
     done["Ledger exhausted"]
 
     user --> orchestrator
@@ -248,18 +248,20 @@ flowchart TD
     review -->|"yes"| reviewer
     review -->|"no"| receipt
     reviewer --> receipt
-    receipt -->|"canonical transition; refill frontier"| orchestrator
+    receipt -->|"land candidate; record verdict; refill frontier"| orchestrator
     orchestrator -->|"no ready unit or owner-held recovery"| done
 ```
 
 The orchestrator does not implement or review units. It computes the ready
 frontier and dispatches every mutually independent unit before waiting, within
-capacity. Each fresh Lead chooses the simplest reliable workflow, may write
-directly, delegates only when the boundary saves time, cost, or context, and
-owns integration and acceptance of that unit. Only genuinely independent work
-runs concurrently. Recoverable problems may change the route, reuse a useful
-agent context, start fresh, or repair the smallest invalid upstream decision
-without creating another semantic role.
+capacity, then immediately refills as units complete. Each fresh Lead chooses
+the smallest reliable workflow, may write directly or fan out internal
+execution lanes, and owns integration, review, and the acceptance verdict of
+that unit. The orchestrator lands candidates serially and records that verdict
+without re-adjudicating it. Only units with disjoint mutable owners and
+exclusive locks run concurrently. Recoverable problems may change the route,
+reuse a useful agent context, start fresh, or repair the smallest invalid
+upstream decision without creating another semantic role.
 
 The detailed contracts live in [Implementation](docs/spec-first-workflow/phases/implementation.md),
 [Review](docs/spec-first-workflow/shared/review.md), and the selected [Agent

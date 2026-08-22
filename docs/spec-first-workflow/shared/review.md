@@ -25,7 +25,13 @@ Use a bounded delta recheck by the same reviewer when repair addresses only
 that reviewer's anchored findings, leaves Outcome, Boundary, accepted inputs,
 interfaces, and risk surface unchanged, and introduces no unrelated behavior or
 writable owner. The reviewer remains read-only and does not prescribe or
-perform the repair.
+perform the repair. At most one bounded delta recheck per review result. If that
+still FAILs, one fresh reviewer inspects the repaired candidate, or reopen if
+Outcome is invalid. Do not start a third cycle on the same candidate.
+
+If the same-reviewer identity is unavailable, one fresh review covers the
+bounded repair delta and invalidated proof, not the original unit, unless the
+repair expanded the risk surface.
 
 Use a fresh reviewer when repair changes the acceptance boundary, invalidates
 unaffected review reasoning, introduces a new interface or behavior, or expands

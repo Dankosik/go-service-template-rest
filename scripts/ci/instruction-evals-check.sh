@@ -53,7 +53,7 @@ jq -e '
 
 jq -e '
   .evals as $evals |
-  all([23, 24, 25, 26, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45][];
+  all([23, 24, 25, 26, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49][];
     . as $id | any($evals[]; .id == $id))
 ' "${EVAL_FILE}" >/dev/null ||
 	fail "cross-harness orchestrator or implementation-topology evals are missing"
@@ -117,6 +117,22 @@ jq -e '
   )
 ' "${EVAL_FILE}" >/dev/null ||
 	fail "landing-mailbox refill eval is missing"
+if grep -Fq 'for an ordinary completed Go change' \
+	"${ROOT_DIR}/docs/validation/go.md"; then
+	fail "Go validation still treats make check as every completed change"
+fi
+grep -Fq 'not a per-lane or per-sibling default' \
+	"${ROOT_DIR}/docs/validation/go.md" ||
+	fail "Go validation lost the aggregate-once default"
+grep -Fq 'A discovered exclusive lock' \
+	"${ROOT_DIR}/docs/spec-first-workflow/phases/planning/ledger-contract.md" ||
+	fail "ledger contract lost discovered-lock frontier update"
+grep -Fq 'At most one bounded delta recheck' \
+	"${ROOT_DIR}/docs/spec-first-workflow/shared/review.md" ||
+	fail "review lost the single-delta stop"
+grep -Fq 'It counts live Leads' \
+	"${ROOT_DIR}/docs/spec-first-workflow/phases/planning/ledger-contract.md" ||
+	fail "ledger contract lost child-aware capacity"
 if grep -RIFq 'has no Ledger Orchestrator carrier' \
 	"${ROOT_DIR}/docs/agent-harness"; then
 	fail "a harness adapter still prohibits ledger orchestration by product name"

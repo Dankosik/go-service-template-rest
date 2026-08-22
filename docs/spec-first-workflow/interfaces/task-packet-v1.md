@@ -36,6 +36,9 @@ Reopen if:
 
 Mutable owners are semantic (package, contract, bootstrap), not a guessed file
 list. Exclusive locks cannot be mutated concurrently even when files differ.
+Write `none` unless this unit will mutate that surface. Do not list a lock or an
+Integrated check as precaution. Omit Integrated check unless this unit's own
+claim requires proof that the focused check cannot give.
 
 A working checklist is optional and non-canonical. Checklist items are
 execution lanes, not ledger tasks.

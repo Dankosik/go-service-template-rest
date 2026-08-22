@@ -25,7 +25,10 @@ Make these explicit when triggered:
 - cleanup of replaced code, tests, fixtures, config, docs, skills, or mirrors;
 - fresh validation and negative proof for retired identifiers;
 - packet mutable owners and exclusive locks sufficient to compute the ready
-  frontier without a new concurrency decision;
+  frontier without a new concurrency decision, naming only surfaces this unit
+  mutates;
+- Integrated check omitted unless this unit's postcondition requires
+  post-landing proof the focused check cannot give;
 - one successful completion condition distinct from blocked stop.
 
 Preserve an accepted example only when it defines behavior or proof. Use local

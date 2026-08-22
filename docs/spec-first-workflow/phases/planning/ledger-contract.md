@@ -28,7 +28,14 @@ Acceptance-Unit Lead when they share one postcondition and one integrated
 acceptance verdict.
 
 One ledger task is one acceptance unit. File count, diff size, desired agent
-count, and elapsed time are diagnostic signals, not boundaries.
+count, and elapsed time are diagnostic signals, not boundaries. If one candidate
+cannot be integrated, reviewed, or repaired because context cannot hold it, fan
+out execution lanes or split only on a new independently acceptable Outcome or
+stable Provides. Do not slice layers to shrink context.
+
+An exclusive lock is held only by the unit that mutates that surface. A
+dependency-manifest change stays a lane of the unit that requires the
+dependency unless the manifest change is itself independently acceptable.
 
 ## Ready Frontier
 
@@ -50,7 +57,19 @@ canonical ledger state, release completed locks, recompute the frontier, and
 immediately dispatch newly ready units. Continue waiting only when no additional
 unit can start. Do not wait for an earlier frontier to drain.
 
-Capacity is a ceiling, not a fan-out target. Do not persist waves.
+Capacity is a ceiling, not a fan-out target. It counts live Leads, their
+mutable workers, and in-flight review or validation lanes. Leave spare slots
+for unlock, review, and landing. Do not fill the ceiling with Leads that still
+need children. Do not persist waves.
+
+A discovered exclusive lock or overlapping mutable owner updates the live
+frontier immediately. Stop only units that now conflict. Do not cancel
+unrelated running units. Outcome, Boundary, and Accept-when stay with Planning;
+a discovered write surface does not by itself reopen them.
+
+An invalidated accepted input or changed requirement stops units that consume
+it. Unrelated running units continue. Recompute the frontier; do not restart
+the ledger.
 
 ## Acceptance Transition
 
@@ -67,7 +86,9 @@ dispatching newly unlocked work.
 If the reviewed bytes and accepted inputs remain equivalent after landing, reuse
 the review and focused evidence. Conflict resolution, rebasing, generated
 output, dependency movement, or manual editing that changes candidate semantics
-invalidates that review.
+invalidates that review. On a landing conflict, do not silently merge. Return
+the candidate to its Lead for repair on the landed tree, rerun invalidated
+proof, and apply Review repair rules. Unrelated running units continue.
 
 When no Orchestrator exists, a root-local Lead may write its own fixed unit
 result.
@@ -79,6 +100,8 @@ handoff, or attempted action is not ledger state.
 Keep `status: ready` while another unit or owner-held recovery is executable;
 an agent-owned technical, review, proof, or Planning repair with available
 authority is owner-held recovery even when the current unit result is `Blocked`.
+Owner-held recovery or a Planning reopen for one unit does not pause or cancel
+unrelated ready or running units.
 Use `blocked` only when no ready unit or owner-held recovery remains because a
 required user/external input or authority is unavailable. A conflicting
 `status: blocked` reopens Planning; it is not a user confirmation question.

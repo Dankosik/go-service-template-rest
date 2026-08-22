@@ -13,7 +13,7 @@ Record the command or procedure, relevant environment and preconditions,
 result, and gaps. Attach commit or tree identity only across a checkout or
 integration boundary; the current bounded diff is enough for local work. Reuse
 proof only while its claim, content, provenance, preconditions, and risk surface
-remain unchanged.
+remain unchanged. Do not rerun unchanged evidence as ceremony.
 
 The bounded-change actor owns iterative focused checks. The acceptance owner
 assigns every deterministic gate, validates any reused receipt, and runs it on

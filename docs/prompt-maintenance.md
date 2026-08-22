@@ -77,6 +77,9 @@ act on.
 | Status values and transitions | [Artifact Lifecycle V1](spec-first-workflow/interfaces/artifact-lifecycle-v1.md) |
 | Proof semantics | [Evidence Contract](spec-first-workflow/shared/evidence-contract.md) |
 | Proof result fields | [Evidence Result V1](spec-first-workflow/interfaces/evidence-result-v1.md) |
+| Task/acceptance split and ready frontier | [Planning Ledger Contract](spec-first-workflow/phases/planning/ledger-contract.md) |
+| Implementation carrier and execution topology | [Implementation](spec-first-workflow/phases/implementation.md) |
+| Lead-owned acceptance decision fields | [Acceptance Result V1](spec-first-workflow/interfaces/acceptance-result-v1.md) |
 | Independent-review trigger and lifecycle | [Review](spec-first-workflow/shared/review.md) |
 | Review result fields and verdict values | [Review Result V1](spec-first-workflow/interfaces/review-result-v1.md) |
 | Read-only lane eligibility | [Read-Only Delegation](spec-first-workflow/shared/read-only-delegation.md) |

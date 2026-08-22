@@ -18,7 +18,8 @@ graph, not an ordered list.
 Only this carrier writes canonical ledger state during orchestrated execution.
 At each cycle, compute the ready frontier from packet mutable owners, exclusive
 locks, and accepted dependencies, then dispatch every ready unit to one fresh
-`acceptance-unit-lead` before waiting, within current capacity.
+`acceptance-unit-lead` before waiting, within current capacity counted across
+live Leads and their in-flight children.
 
 Each Lead returns one immutable [Acceptance Result
 V1](../../../docs/spec-first-workflow/interfaces/acceptance-result-v1.md). Land
@@ -26,7 +27,8 @@ the candidate serially, record the Lead-owned verdict without re-adjudicating
 it, then immediately refill the frontier before landing the next waiting
 result.
 
-Route the smallest upstream repair back to the same unit. An agent-owned
+Route the smallest upstream repair back to the same unit. Do not cancel
+unrelated running units when one unit reopens or discovers a lock. An agent-owned
 technical, proof, review, or phase reopen is owner-held recovery: open the named
 fresh task, wait for its canonical transition, repair ledger status through
 Planning when needed, and resume without asking the user to confirm routing,
