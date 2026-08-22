@@ -129,8 +129,14 @@ grep -Fq 'docs/agent-harness/cursor.md' .cursor/rules/agent-harness.mdc ||
 	fail ".opencode/rules/harness.md must select the OpenCode adapter"
 grep -Fq 'docs/agent-harness/opencode.md' .opencode/rules/harness.md ||
 	fail ".opencode/rules/harness.md must point at the OpenCode adapter"
+grep -Fq 'acceptance-unit-lead' .opencode/rules/harness.md ||
+	fail ".opencode/rules/harness.md must name Task subagent_type acceptance-unit-lead"
 [[ -f .opencode/commands/orchestrator.md ]] ||
 	fail ".opencode/commands/orchestrator.md is required as the OpenCode /orchestrator command"
+grep -Fq 'subtask: false' .opencode/commands/orchestrator.md ||
+	fail ".opencode/commands/orchestrator.md must bind in-session, not as a subtask"
+grep -Fq 'acceptance-unit-lead' .opencode/commands/orchestrator.md ||
+	fail ".opencode/commands/orchestrator.md must spawn via Task subagent_type acceptance-unit-lead"
 [[ -f opencode.json ]] ||
 	fail "opencode.json is required as the OpenCode project config"
 grep -Fq '"subagent_depth": 2' opencode.json ||

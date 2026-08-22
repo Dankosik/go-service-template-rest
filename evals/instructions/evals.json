@@ -400,7 +400,7 @@
       "files": [".agents/skills/orchestrator/SKILL.md", "docs/agent-harness/opencode.md", ".opencode/agents/acceptance-unit-lead.md", ".opencode/commands/orchestrator.md"],
       "expectations": [
         "The orchestrator uses Task identities and keeps repository tasks.md as the acceptance ledger.",
-        "Each unit is spawned as acceptance-unit-lead; general, explore, and scout are not substitutes.",
+        "Each unit is spawned as acceptance-unit-lead even if the Task blurb lists only built-in agents; general, explore, and scout are not substitutes.",
         "Independent ready units are dispatched in one parent message before waiting, within capacity.",
         "The ledger continues across ready units and only the Acceptance-Unit Lead writes Accepted or Blocked."
       ]
