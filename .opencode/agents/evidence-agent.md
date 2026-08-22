@@ -1,6 +1,9 @@
 ---
 description: "Fast read-only evidence subagent for bounded discovery, drift checks, and mechanical repair proposals without gate authority."
 mode: subagent
+hidden: true
+model: xai/grok-4.6
+variant: low
 permission:
   edit: deny
   task: deny

@@ -56,6 +56,7 @@ evals/instructions/
 .grok/agents/
 .grok/roles/
 .grok/rules/
+.opencode/.gitignore
 .opencode/agents/
 .opencode/commands/
 .opencode/rules/

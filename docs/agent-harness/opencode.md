@@ -35,18 +35,26 @@ those control planes.
   candidate-state risk justifies it. Isolation is not a ceremony for every
   edit. Do not require an experimental workspace flag or a community plugin.
 - Independent review uses one fresh `reviewer-agent` with no `task_id` and
-  no worktree isolation. `edit: deny` is the role default.
+  no worktree isolation. `edit: deny` is the role default. Generated lanes
+  set `hidden: true`; invoke them through Task, not `@`.
 - There is no native Goal. Do not invent one. Background Task requires
   `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS`; foreground is the default.
+- OpenCode ignores `disable-model-invocation`. `build` and `plan` deny
+  `user/workflow` and `role/carrier` skill names. Slash commands, `/orchestrator`,
+  and bound agent files still reach them.
+- Do not commit OpenCode runtime files. `.opencode/.gitignore` excludes
+  `node_modules/`, `package.json`, and `package-lock.json`.
 
 ## Models And Dispatch
 
-Connect xAI with `/connect` (SuperGrok or API key) and use `xai/grok-4.6` for
-this Orchestrator session and each Lead. Child lanes inherit that model unless
-a role pins `xai/grok-4.6`. Preserve a user-selected model. Carry model through
-agent `model` frontmatter; Task has no model field. Do not encode a model name
-only in prompt text. If the installed xAI model lists a `#variant` or CLI
-`--variant`, use it for effort; do not invent a variant.
+Connect xAI with `/connect` (SuperGrok or API key). Use `xai/grok-4.6` with
+variant `high` for this Orchestrator session and `xhigh` on each Lead. OpenCode
+applies `variant` only when the agent pins a model, so child lanes pin
+`xai/grok-4.6` plus the role's `grok_effort` variant instead of inheriting the
+parent's effort. Preserve a user-selected model on the primary session. Carry
+model and variant through agent frontmatter; Task has no model or variant
+field. Do not encode a model name only in prompt text. Do not invent a variant
+the installed model does not list.
 
 Pass the [delegation interface](../agent-harness.md#delegation-interface)
 through Task fields: `subagent_type`, `prompt`, `description`, and `task_id`
@@ -60,7 +68,9 @@ the Lead.
 Continue the same agent with `task_id` while its context helps; use a fresh
 agent for independent review, an invalidated base, a stall, or a changed
 strategy. A missing identity is a carrier failure, not a completed lane.
-Spawned children do not receive `question`. Do not wait on a child question.
+Spawned children do not receive `question`. The Orchestrator primary may use
+`question` for an `AGENTS.md` user-owned decision. Do not wait on a child
+question.
 
 ## Review And Recovery
 

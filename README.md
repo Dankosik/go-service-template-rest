@@ -309,7 +309,8 @@ specs/                           durable task decisions (upstream only)
 .opencode/agents/                OpenCode session agents and generated roles
 .opencode/commands/              OpenCode `/orchestrator` entry
 .opencode/rules/                 OpenCode harness bootstrap
-opencode.json                    OpenCode project model and subagent depth
+.opencode/.gitignore             OpenCode plugin runtime ignore
+opencode.json                    OpenCode project model, depth, and skill denies
 ```
 
 <!-- profile:grpc:start -->

@@ -1,6 +1,9 @@
 ---
 description: "Mutable worker for one bounded implementation, investigation, or verification result."
 mode: subagent
+hidden: true
+model: xai/grok-4.6
+variant: medium
 permission:
   task: deny
   question: deny

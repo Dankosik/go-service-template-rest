@@ -237,7 +237,14 @@ for source_file in "${sources}"/*.toml; do
 		printf '%s\n' '---'
 		printf 'description: "%s"\n' "${description}"
 		printf 'mode: subagent\n'
-		[[ "${grok_model}" == inherit ]] || printf 'model: xai/%s\n' "${grok_model}"
+		printf 'hidden: true\n'
+		# OpenCode applies variant only when the agent pins a model.
+		if [[ "${grok_model}" != inherit ]]; then
+			printf 'model: xai/%s\n' "${grok_model}"
+		elif [[ "${grok_effort}" != inherit ]]; then
+			printf 'model: xai/grok-4.6\n'
+		fi
+		[[ "${grok_effort}" == inherit ]] || printf 'variant: %s\n' "${grok_effort}"
 		printf '%s\n' 'permission:'
 		if [[ "${class}" == read-only-specialist ]]; then
 			printf '%s\n' '  edit: deny'

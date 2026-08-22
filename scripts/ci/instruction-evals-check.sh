@@ -187,7 +187,7 @@ done < <(
 	for path in "${instruction_roots[@]}"; do
 		path="${ROOT_DIR}/${path}"
 		if [[ -d "${path}" ]]; then
-			find "${path}" -type f -name '*.md'
+			find "${path}" \( -path '*/node_modules/*' -o -path '*/node_modules' \) -prune -o -type f -name '*.md' -print
 		elif [[ -f "${path}" ]]; then
 			printf '%s\n' "${path}"
 		fi

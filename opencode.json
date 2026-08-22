@@ -2,5 +2,35 @@
   "$schema": "https://opencode.ai/config.json",
   "model": "xai/grok-4.6",
   "subagent_depth": 2,
-  "instructions": [".opencode/rules/harness.md"]
+  "instructions": [".opencode/rules/harness.md"],
+  "agent": {
+    "build": {
+      "permission": {
+        "skill": {
+          "acceptance-unit-lead": "deny",
+          "agent-prompt-composer": "deny",
+          "grilling": "deny",
+          "idea-refine": "deny",
+          "orchestrator": "deny",
+          "planning-and-task-breakdown": "deny",
+          "spec-document-designer": "deny",
+          "spec-first-brainstorming": "deny"
+        }
+      }
+    },
+    "plan": {
+      "permission": {
+        "skill": {
+          "acceptance-unit-lead": "deny",
+          "agent-prompt-composer": "deny",
+          "grilling": "deny",
+          "idea-refine": "deny",
+          "orchestrator": "deny",
+          "planning-and-task-breakdown": "deny",
+          "spec-document-designer": "deny",
+          "spec-first-brainstorming": "deny"
+        }
+      }
+    }
+  }
 }

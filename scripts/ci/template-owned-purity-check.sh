@@ -139,6 +139,33 @@ grep -Fq 'xai/grok-4.6' opencode.json ||
 	fail "opencode.json must default to the xAI Grok model"
 grep -Fq '.opencode/rules/harness.md' opencode.json ||
 	fail "opencode.json must load the OpenCode harness bootstrap"
+[[ -f .opencode/.gitignore ]] ||
+	fail ".opencode/.gitignore must exclude OpenCode runtime files"
+grep -Fq 'node_modules/' .opencode/.gitignore ||
+	fail ".opencode/.gitignore must ignore node_modules/"
+grep -Fq 'package.json' .opencode/.gitignore ||
+	fail ".opencode/.gitignore must ignore package.json"
+grep -Fq 'package-lock.json' .opencode/.gitignore ||
+	fail ".opencode/.gitignore must ignore package-lock.json"
+grep -Fq 'variant: high' .opencode/agents/orchestrator.md ||
+	fail ".opencode/agents/orchestrator.md must pin variant high"
+grep -Fq 'variant: xhigh' .opencode/agents/acceptance-unit-lead.md ||
+	fail ".opencode/agents/acceptance-unit-lead.md must pin variant xhigh"
+if grep -q 'question: deny' .opencode/agents/orchestrator.md; then
+	fail ".opencode/agents/orchestrator.md must allow question on the primary session"
+fi
+for skill in \
+	acceptance-unit-lead \
+	agent-prompt-composer \
+	grilling \
+	idea-refine \
+	orchestrator \
+	planning-and-task-breakdown \
+	spec-document-designer \
+	spec-first-brainstorming; do
+	grep -Fq "\"${skill}\": \"deny\"" opencode.json ||
+		fail "opencode.json must deny ${skill} on build/plan so OpenCode matches disable-model-invocation"
+done
 
 skill_metadata_bytes=$(
 	for skill_file in .agents/skills/*/SKILL.md; do
