@@ -38,6 +38,11 @@ those control planes.
   no worktree isolation. `edit: deny` is the role default.
 - There is no native Goal. Do not invent one. Background Task requires
   `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS`; foreground is the default.
+- Project `opencode.json` enables built-in LSP (gopls on `.go`) and formatters
+  (gofmt on `.go`). Identity MCP such as Railway stays in user config. The
+  project adds only Context7 for library docs. Query tools `goToDefinition`
+  and `findReferences` need
+  `OPENCODE_EXPERIMENTAL_LSP_TOOL=true`. `.env` reads stay denied.
 
 ## Models And Dispatch
 

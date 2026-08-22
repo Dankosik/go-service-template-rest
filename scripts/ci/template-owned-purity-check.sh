@@ -139,6 +139,12 @@ grep -Fq 'xai/grok-4.6' opencode.json ||
 	fail "opencode.json must default to the xAI Grok model"
 grep -Fq '.opencode/rules/harness.md' opencode.json ||
 	fail "opencode.json must load the OpenCode harness bootstrap"
+grep -Fq '"lsp": true' opencode.json ||
+	fail "opencode.json must enable LSP so gopls can start"
+grep -Fq '"formatter": true' opencode.json ||
+	fail "opencode.json must enable formatters so gofmt can run after edits"
+grep -Fq 'mcp.context7.com' opencode.json ||
+	fail "opencode.json must register the portable Context7 MCP"
 
 skill_metadata_bytes=$(
 	for skill_file in .agents/skills/*/SKILL.md; do
