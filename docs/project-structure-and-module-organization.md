@@ -108,7 +108,7 @@ supported placement.
 | `api/openapi/service.yaml` and generation config | `internal/openapi/openapi.gen.go` | `make openapi-check` |
 | Example OpenAPI and generation config | example generated bindings | `make openapi-check` |
 | `migrations/*.sql` and SQL query source | PostgreSQL generated access | `make sqlc-check` |
-| `.agents/roles/` | Codex, Claude, Qwen, Grok, and Cursor role carriers | `make agent-roles-check` |
+| `.agents/roles/` | Codex, Claude, Qwen, Grok, Cursor, and OpenCode role carriers | `make agent-roles-check` |
 
 Use the narrowest real proof owner. `_contract_test.go` is for an executable
 boundary invariant, not a stronger-sounding unit test. `test/` remains reserved

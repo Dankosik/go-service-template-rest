@@ -392,6 +392,18 @@
         "Independent ready units are dispatched in one parent message before waiting, within capacity.",
         "The ledger continues across ready units and only the Acceptance-Unit Lead writes Accepted or Blocked."
       ]
+    },
+    {
+      "id": 32,
+      "prompt": "In OpenCode with a callable Task control and subagent_depth of 2, a ready persisted Implementation ledger is present. Route it until completion or a true external boundary.",
+      "expected_output": "The OpenCode session routes the complete ledger through named Acceptance-Unit Leads without changing acceptance semantics.",
+      "files": [".agents/skills/orchestrator/SKILL.md", "docs/agent-harness/opencode.md", ".opencode/agents/acceptance-unit-lead.md", ".opencode/commands/orchestrator.md"],
+      "expectations": [
+        "The orchestrator uses Task identities and keeps repository tasks.md as the acceptance ledger.",
+        "Each unit is spawned as acceptance-unit-lead; general, explore, and scout are not substitutes.",
+        "Independent ready units are dispatched in one parent message before waiting, within capacity.",
+        "The ledger continues across ready units and only the Acceptance-Unit Lead writes Accepted or Blocked."
+      ]
     }
   ]
 }

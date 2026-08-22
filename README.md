@@ -140,7 +140,7 @@ it, and read it here or in
 | Observability | OpenTelemetry 1.x traces and metrics, Prometheus export, and structured logs |
 | Testing | Race detection and goroutine leak checks; PostgreSQL Testcontainers coverage in the database profile |
 | Delivery | Docker and GitHub Actions security gates; opt-in GHCR publishing with Cosign, CycloneDX, and durable migration-history enforcement |
-| Agent workflow | The complete Codex, Claude Code, Qwen, Grok Build, and Cursor workflow, always retained ([what that costs](#what-the-agent-workflow-costs)) |
+| Agent workflow | The complete Codex, Claude Code, Qwen, Grok Build, Cursor, and OpenCode workflow, always retained ([what that costs](#what-the-agent-workflow-costs)) |
 
 <!-- profile:grpc:start -->
 The optional native gRPC profile adds gRPC-Go client/server support, Buf v2,
@@ -156,9 +156,9 @@ and test dependencies; [`tools/go.mod`](tools/go.mod) owns development tools.
 Initialization keeps the workflow byte-for-byte; there is no option to decline
 it. A generated service inherits the repository contract, conditional domain
 methods, five generic capability roles, and their generated Codex, Claude,
-Qwen, Grok, and Cursor carriers. If your team will not use those harnesses, keep
+Qwen, Grok, Cursor, and OpenCode carriers. If your team will not use those harnesses, keep
 [`AGENTS.md`](AGENTS.md) and `docs/`, and drop `.agents/`, `.codex/`,
-`.claude/`, `.cursor/`, `.qwen/`, and `.grok/`.
+`.claude/`, `.cursor/`, `.qwen/`, `.grok/`, `.opencode/`, and `opencode.json`.
 
 `specs/` is not in that table because initialization deletes it. Those bundles
 record decisions about building this template, and a generated service that kept
@@ -194,7 +194,7 @@ Before adding the first production feature, use the maintained
 
 ```mermaid
 flowchart LR
-    A["Codex / Claude Code / Qwen / Grok Build / Cursor"] --> B["Shared repository contract"]
+    A["Codex / Claude Code / Qwen / Grok Build / Cursor / OpenCode"] --> B["Shared repository contract"]
     B --> C{"Risk-proportional path"}
     C -->|Direct| D["Small local change"]
     C -->|Structured| E["Spec + design + tasks"]
@@ -274,6 +274,7 @@ Harness](docs/agent-harness.md) adapter.
 | Qwen Code | `QWEN.md`, `/orchestrator` | `.qwen/agents`, `.qwen/skills` |
 | Grok Build | `Grok.md` | `.grok/agents`, `.grok/roles`, `.agents/skills` |
 | Cursor | `AGENTS.md`, Grok 4.6, `/orchestrator` | `.cursor/agents`, `.cursor/rules`, `.agents/skills` |
+| OpenCode | `AGENTS.md`, Grok 4.6, `/orchestrator` | `.opencode/agents`, `.opencode/commands`, `.opencode/rules`, `opencode.json`, `.agents/skills` |
 
 Five generic capability roles provide evidence, specialist judgment, mutable
 work, independent review, and adjudication. Domain skills cover API contracts,
@@ -305,6 +306,10 @@ specs/                           durable task decisions (upstream only)
 .cursor/agents/                  generated Cursor capability roles
 .cursor/rules/                   Cursor harness bootstrap
 .grok/agents/                    Grok primary sessions and generated roles
+.opencode/agents/                OpenCode session agents and generated roles
+.opencode/commands/              OpenCode `/orchestrator` entry
+.opencode/rules/                 OpenCode harness bootstrap
+opencode.json                    OpenCode project model and subagent depth
 ```
 
 <!-- profile:grpc:start -->

@@ -56,7 +56,11 @@ evals/instructions/
 .grok/agents/
 .grok/roles/
 .grok/rules/
+.opencode/agents/
+.opencode/commands/
+.opencode/rules/
 .qwen/agents/
+opencode.json
 
 template-owned.paths
 scripts/template-sync.sh

@@ -125,6 +125,20 @@ grep -Fq 'alwaysApply: true' .cursor/rules/agent-harness.mdc ||
 	fail ".cursor/rules/agent-harness.mdc must always apply in Cursor sessions"
 grep -Fq 'docs/agent-harness/cursor.md' .cursor/rules/agent-harness.mdc ||
 	fail ".cursor/rules/agent-harness.mdc must point at the Cursor adapter"
+[[ -f .opencode/rules/harness.md ]] ||
+	fail ".opencode/rules/harness.md must select the OpenCode adapter"
+grep -Fq 'docs/agent-harness/opencode.md' .opencode/rules/harness.md ||
+	fail ".opencode/rules/harness.md must point at the OpenCode adapter"
+[[ -f .opencode/commands/orchestrator.md ]] ||
+	fail ".opencode/commands/orchestrator.md is required as the OpenCode /orchestrator command"
+[[ -f opencode.json ]] ||
+	fail "opencode.json is required as the OpenCode project config"
+grep -Fq '"subagent_depth": 2' opencode.json ||
+	fail "opencode.json must set subagent_depth to 2 so a Lead can spawn child lanes"
+grep -Fq 'xai/grok-4.6' opencode.json ||
+	fail "opencode.json must default to the xAI Grok model"
+grep -Fq '.opencode/rules/harness.md' opencode.json ||
+	fail "opencode.json must load the OpenCode harness bootstrap"
 
 skill_metadata_bytes=$(
 	for skill_file in .agents/skills/*/SKILL.md; do
@@ -168,14 +182,18 @@ for role_file in .codex/agents/*.toml; do
 		fail "${role_file} has no Grok role default"
 	[[ -f ".cursor/agents/${role}.md" ]] ||
 		fail "${role_file} has no Cursor role mirror"
+	[[ -f ".opencode/agents/${role}.md" ]] ||
+		fail "${role_file} has no OpenCode role mirror"
 done
 for extra in orchestrator acceptance-unit-lead; do
 	[[ -f ".grok/agents/${extra}.md" ]] ||
 		fail ".grok/agents/${extra}.md is required as a Grok primary-session agent"
+	[[ -f ".opencode/agents/${extra}.md" ]] ||
+		fail ".opencode/agents/${extra}.md is required as an OpenCode session agent"
 done
 [[ -f .cursor/agents/acceptance-unit-lead.md ]] ||
 	fail ".cursor/agents/acceptance-unit-lead.md is required as a Cursor Acceptance-Unit Lead agent"
-for role_file in .claude/agents/*.md .qwen/agents/*.md .grok/agents/*.md .cursor/agents/*.md; do
+for role_file in .claude/agents/*.md .qwen/agents/*.md .grok/agents/*.md .cursor/agents/*.md .opencode/agents/*.md; do
 	role=$(basename "${role_file}" .md)
 	[[ "${role}" == worker-* ]] && continue
 	[[ "${role}" == orchestrator || "${role}" == acceptance-unit-lead ]] && continue
@@ -225,6 +243,7 @@ template_sync_behavior_check() (
 		"${template}/.cursor/agents" \
 		"${template}/.grok/agents" \
 		"${template}/.grok/roles" \
+		"${template}/.opencode/agents" \
 		"${template}/.qwen/agents" \
 		"${template}/docs" \
 		"${template}/docs/validation" \
@@ -243,6 +262,7 @@ template_sync_behavior_check() (
 		'.cursor/agents/' \
 		'.grok/agents/' \
 		'.grok/roles/' \
+		'.opencode/agents/' \
 		'.qwen/agents/' \
 		'docs/validation/' \
 		'scripts/agent-roles-sync.sh' \
@@ -321,6 +341,7 @@ template_sync_behavior_check() (
 		.cursor/agents/fixture-agent.md \
 		.grok/agents/fixture-agent.md \
 		.grok/roles/fixture-agent.toml \
+		.opencode/agents/fixture-agent.md \
 		.qwen/agents/fixture-agent.md \
 		.qwen/skills/fixture-one \
 		.codex/config.toml \

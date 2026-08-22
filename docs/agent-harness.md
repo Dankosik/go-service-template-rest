@@ -32,6 +32,7 @@ critical quality tier instead of creating another semantic role.
 | Qwen Code CLI or IDE | [Qwen Code](agent-harness/qwen-code.md) |
 | Grok Build CLI, TUI, or ACP | [Grok Build](agent-harness/grok-build.md) |
 | Cursor IDE, CLI, or Cloud Agents | [Cursor](agent-harness/cursor.md) |
+| OpenCode CLI, TUI, desktop, or IDE | [OpenCode](agent-harness/opencode.md) |
 
 Do not mix control planes inside one outcome. A task, subagent, worktree,
 model, or Goal is a carrier; it never expands authorization or transfers unit
