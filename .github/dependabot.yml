@@ -46,35 +46,6 @@ updates:
   # entry above covers .github/workflows only. Without these, a SHA moved into a
   # composite action stops receiving updates while still looking pinned.
   #
-  # One entry per directory under .github/actions, and adding an action means
-  # adding its entry here: an uncovered action fails silently, still displaying a
-  # pinned SHA that nothing is watching.
-  - package-ecosystem: "github-actions"
-    directory: "/.github/actions/setup-go"
-    schedule:
-      interval: "weekly"
-    cooldown:
-      default-days: 7
-    commit-message:
-      prefix: "ci"
-    groups:
-      github-actions:
-        patterns:
-          - "*"
-
-  - package-ecosystem: "github-actions"
-    directory: "/.github/actions/setup-golangci-lint"
-    schedule:
-      interval: "weekly"
-    cooldown:
-      default-days: 7
-    commit-message:
-      prefix: "ci"
-    groups:
-      github-actions:
-        patterns:
-          - "*"
-
   # publish-image pins the actions that sign, attest, and scan every published
   # image, so an unwatched SHA here is a supply-chain gap rather than a stale pin.
   - package-ecosystem: "github-actions"

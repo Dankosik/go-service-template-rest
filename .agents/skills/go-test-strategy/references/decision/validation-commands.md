@@ -16,10 +16,9 @@ add a gate only for a wider surface.
 | OpenAPI or generated bindings | `make openapi-check` |
 | Docker/multi-package behavior | `REQUIRE_DOCKER=1 make test-integration` |
 | Shared-memory race | focused `go test -race` or `make test-race` |
-| Order/scheduler sensitivity | `make test-flake-smoke` |
+| Order/scheduler sensitivity | focused `go test -shuffle=on -count=<n>` |
 | `t.Parallel()` policy | `make test-parallelism-check` |
 | SQL/migration drift | `make sqlc-check`, `make migration-validate` |
-| Filtered coverage floor | `make test-report COVERAGE_MIN=<value>` |
 
 Use `-count=1` when cache could hide whether current code/environment ran. A
 zero-exit `-run` can match no tests; verify execution when one named test carries

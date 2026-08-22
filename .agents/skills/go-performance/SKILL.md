@@ -23,8 +23,8 @@ or capacity measure, protocol, and owner.
 
 [Benchmarking](../../../docs/benchmarking.md) owns proof level, workload
 identity, comparable evidence, and completion policy. Load one matching leaf
-for capture. Authorized remote execution uses `digitalocean-benchmark-runner`.
-Read those owners for measurement; the references below cover decisions.
+for capture. Read that owner for measurement; the references below cover
+decisions.
 
 ## Choose The Branch
 

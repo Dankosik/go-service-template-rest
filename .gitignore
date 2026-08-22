@@ -1,5 +1,4 @@
 bin/
-coverage.out
 .artifacts/test/
 .artifacts/bench/
 .artifacts/skill-evals/

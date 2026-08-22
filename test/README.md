@@ -56,7 +56,7 @@ Shared PostgreSQL harness:
   `t.Cleanup`, so tests stay isolated without paying container startup per
   test.
 - `pgtest.DefaultImage` in `internal/infra/postgres/pgtest/pgtest.go` is the
-  single test-image source; the Makefile and benchmark scripts extract it.
+  single test-image source.
 - The disposable cluster skips initdb and server crash-durability sync work.
   All runs retain Ryuk. Do not add cross-run reuse or copy the durability
   settings to persistent PostgreSQL.
@@ -68,15 +68,14 @@ Migration-backed helpers:
 - Use bounded contexts and clean up databases and pools with `t.Cleanup`.
 
 Database benchmark behavior:
-- `make bench-db` sets `REQUIRE_DOCKER=1`, selects the `integration` build tag,
-  and fails rather than skipping when Docker, `BENCH_DB_WORKLOAD_ID`, or a
-  matching benchmark is absent.
-- The shared PostgreSQL image is digest-pinned; result metadata records that
-  digest, the migration fingerprint, and the named fixture/workload.
+- Run `REQUIRE_DOCKER=1 go test -run '^$' -bench <pattern> -benchmem -count 10
+  -tags=integration ./test` so missing Docker or a matching benchmark fails.
+- Record the digest-pinned PostgreSQL image, migration identity, and named
+  fixture/workload beside each result.
 - Seed and `ANALYZE` representative fixtures before timing. Name row-count,
   selectivity, cache state, and concurrency cases separately.
 - Keep production-owned transactions, round trips, decoding, and commit inside
   the measured boundary. Reset mutable fixtures outside it and clean up with
   `b.Cleanup`.
-- Use `make bench-db-baseline` and `make bench-db-compare` for repeated A/B
-  evidence. See [Benchmarking](../docs/benchmarking.md) for the full protocol.
+- Compare repeated A/B evidence with `go tool -modfile=tools/go.mod benchstat`.
+  See [Benchmarking](../docs/benchmarking.md) for the full protocol.

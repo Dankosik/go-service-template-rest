@@ -220,7 +220,7 @@ health, and the external user path owned by the derived service.
 For changes to this profile:
 
 1. review the `railway.toml` and Dockerfile diff;
-2. run `make migration-validate` or `make check-full`;
+2. run `make migration-validate` and any other affected image leaf;
 3. confirm the runtime image becomes ready and exits cleanly on SIGTERM;
 4. leave project-specific settings and live deployment evidence to the derived
    service's operator.

@@ -8,6 +8,28 @@ mode="${MIGRATION_HISTORY_MODE:-worktree}"
 head_ref="${HEAD_REF:-HEAD}"
 base_ref="${BASE_REF:-}"
 
+if [[ "${mode}" == "self-test" ]]; then
+	fixture="$(mktemp -d -t migration-history.XXXXXX)"
+	trap 'rm -rf -- "${fixture}"' EXIT
+	git -C "${fixture}" init -q
+	git -C "${fixture}" config user.name migration-history
+	git -C "${fixture}" config user.email migration-history@example.invalid
+	mkdir -p "${fixture}/migrations"
+	printf '%s\n' '-- +goose Up' 'SELECT 1;' '-- +goose Down' 'SELECT 1;' >"${fixture}/migrations/000001_create.sql"
+	git -C "${fixture}" add .
+	git -C "${fixture}" commit -qm baseline
+	printf '%s\n' '-- rewritten' >>"${fixture}/migrations/000001_create.sql"
+	if MIGRATION_REPO_ROOT="${fixture}" MIGRATION_HISTORY_MODE=worktree bash "${BASH_SOURCE[0]}" >/dev/null 2>&1; then
+		echo "migration history self-test: rewrite passed" >&2
+		exit 1
+	fi
+	git -C "${fixture}" restore migrations/000001_create.sql
+	printf '%s\n' '-- +goose Up' 'SELECT 2;' '-- +goose Down' 'SELECT 2;' >"${fixture}/migrations/000002_add.sql"
+	MIGRATION_REPO_ROOT="${fixture}" MIGRATION_HISTORY_MODE=worktree bash "${BASH_SOURCE[0]}" >/dev/null
+	echo "migration history self-test passed"
+	exit 0
+fi
+
 case "${mode}" in
 worktree)
 	base_ref="HEAD"
@@ -57,9 +79,8 @@ esac
 # than accumulated as the history of how it was written. scripts/profiles is
 # what initialization removes, so its absence marks a generated service.
 #
-# migration-source-check still holds canonical Goose structure on both sides,
-# and cd.yml still holds published migrations immutable against the runtime
-# image it shipped them in.
+# Goose validation still holds canonical source structure on both sides, and
+# cd.yml keeps published migrations immutable against the runtime image.
 if [[ -d "${ROOT_DIR}/scripts/profiles" ]]; then
 	echo "migration history: template source authors migrations in place (${scope})"
 	exit 0

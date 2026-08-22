@@ -69,15 +69,9 @@ template-owned.paths
 scripts/template-sync.sh
 scripts/agent-roles-sync.sh
 scripts/harness-skills-sync.sh
-scripts/claude-skills-sync.sh
-scripts/qwen-skills-sync.sh
 scripts/codex-agents-sync.sh
 scripts/lib/manifest.sh
 scripts/lib/sync-cli.sh
-scripts/ci/claude-skills-check.sh
-scripts/ci/qwen-skills-check.sh
 scripts/ci/instruction-evals-check.sh
-scripts/ci/hard-skill-evals-check.sh
-scripts/ci/secret-scan.sh
 scripts/ci/template-owned-purity-check.sh
 scripts/dev/instruction-evals-run.sh

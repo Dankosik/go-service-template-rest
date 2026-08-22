@@ -23,10 +23,9 @@ with `make template-init-check`.
 Use the smallest command that proves the claim:
 
 ```bash
-make check          # format, lint, unit tests
-make ci-local       # broad host-toolchain CI aggregate
-make check-full     # ci-local plus Docker-backed integration and image gates
-make pr-check BASE_REF=origin/main
+make fmt-check
+make lint
+make test
 ```
 
 Focused commands remain available:
@@ -34,19 +33,18 @@ Focused commands remain available:
 ```bash
 make test-race
 make test-integration
-make test-report
 make mod-check
 make openapi-check
 make sqlc-check
 make migration-validate
-make go-security
+make govulncheck
+make gosec
 make secret-scan
 make secret-scan-history
 ```
 
-`make check-full` and the Docker-backed focused commands require a reachable
-Docker daemon. Do not describe a host-only result as full container or
-migration evidence.
+Docker-backed focused commands require a reachable Docker daemon. Do not
+describe a host-only result as container or migration evidence.
 
 `make mod-tidy-check` is the fast manifest-drift check used inside generated
 template fixtures. `make mod-verify` verifies downloaded module content;
@@ -54,16 +52,11 @@ template fixtures. `make mod-verify` verifies downloaded module content;
 
 Use `make secret-scan` for local and pull-request changes. Main and release use
 `make secret-scan-history`; do not replace the historical gate with
-a faster scan or a broader baseline. On a 10-core development Mac,
-`make check-gentle` and `make ci-local-gentle` retain the same checks while
-leaving CPU capacity and scheduling priority for the desktop. Do not overlap
-broad Go or Docker gates on one host; continue with focused checks or wait for
-the active aggregate.
+a faster scan or a broader baseline.
 
 For performance work, follow
 [Benchmarking](docs/benchmarking.md) and run only the benchmark level that
-matches the claim. When benchmark infrastructure changes, run
-`make benchmark-infra-check`.
+matches the claim.
 
 ## Pull requests and repository policy
 

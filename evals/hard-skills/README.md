@@ -8,7 +8,7 @@ uses the shared disposable baseline/candidate runner.
 Validate structure with:
 
 ```bash
-bash scripts/ci/hard-skill-evals-check.sh
+bash scripts/ci/instruction-evals-check.sh
 ```
 
 Run the same command documented by the [instruction evaluation

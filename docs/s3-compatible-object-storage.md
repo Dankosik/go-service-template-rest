@@ -68,7 +68,7 @@ Credential-free local proof is part of ordinary Go and profile checks:
 
 ```bash
 go test ./internal/objectstorage ./internal/infra/s3
-make template-init-check
+go test ./internal/objectstorage ./internal/infra/s3
 ```
 
 Provider certification remains two distinct, mutation-authorized gates:

@@ -15,8 +15,8 @@ the boundary of each proof:
 - `make openapi-check` is drift, reference compile, runtime contract, lint, and
   validation. It says nothing about **compatibility with the previous spec** —
   that is `make openapi-breaking BASE_OPENAPI=…`, which errors out without the
-  base, and which `make pr-check BASE_REF=…` supplies by extracting the base spec
-  from git. Add it only when the claim is about not breaking existing clients.
+  base. Pull-request CI extracts the event's exact base spec. Add it only when
+  the claim is about not breaking existing clients.
 - `make sqlc-check` catches generated output that no longer matches its queries,
   including output left behind after its sources were removed. Data-access tests
   pass over stale generated files, so they cannot stand in for it.

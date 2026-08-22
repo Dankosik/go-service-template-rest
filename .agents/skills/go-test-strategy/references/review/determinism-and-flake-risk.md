@@ -9,7 +9,7 @@ Load this when tests involve sleeps, timers, randomness, process-global state, `
 - Replace an uncontrolled source with the thing that makes the event observable: a gate, a channel, a recorded call order, an injected clock, or a controlled reader.
 - `testing/synctest` is this repository's form for time-driven behavior, and the bubble must contain every goroutine and timer under test. Real network I/O, external processes, and container-backed work disqualify it.
 - Read `-race` as shared-memory evidence over the interleavings that actually executed. It is not liveness proof, not ordering proof, and not evidence that no goroutine is stuck.
-- Reach for repetition only after the risky interleaving is controlled, and prefer the repository gate `make test-flake-smoke` (`-count=5 -shuffle=on`) over an ad-hoc high `-count`.
+- Reach for repetition only after the risky interleaving is controlled; use a bounded focused `go test -count=5 -shuffle=on` run.
 
 ## Inspect
 `cmd/service/internal/bootstrap/shutdown_test.go` is the house form: `t.Parallel()` outside, `synctest.Test(t, …)` inside, and an assertion that the propagation delay elapsed *exactly* — `time.Since(startedAt) != 20*time.Millisecond` fails the test. A fake clock inside a bubble turns a timing claim into an equality check, which is why the file needs no repetition flag at all.
@@ -26,4 +26,4 @@ Load this when tests involve sleeps, timers, randomness, process-global state, `
 - Real-time deadlines belong in a test as outer failure diagnostics, not as the mechanism that establishes the ordering.
 
 ## Prove
-Pair the deterministic correction with the narrow named test, then add instrumentation only where it matches the risk: `-race` for shared memory, `make test-flake-smoke` for ordering confidence, leak checks for goroutine lifetime.
+Pair the deterministic correction with the narrow named test, then add instrumentation only where it matches the risk: `-race` for shared memory, bounded `-count`/`-shuffle` for ordering confidence, leak checks for goroutine lifetime.

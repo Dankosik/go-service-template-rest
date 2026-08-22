@@ -143,7 +143,7 @@ Run:
 go test -vet=off ./internal/infra/oidcjwt
 go test -vet=off -race ./internal/infra/oidcjwt
 make openapi-check
-TEMPLATE_INIT_PROFILE=authn make template-init-check
+go test ./internal/infra/oidcjwt ./internal/config ./internal/infra/http
 ```
 
 Local tests prove the library composition and repository policy. Production
