@@ -16,9 +16,12 @@ materially contested, or explicitly requested.
 ## Lifecycle
 
 The owner fixes one candidate, its authoritative inputs, phase adapter, and
-evidence boundary. The reviewer keeps that boundary read-only, attempts to
-falsify it, and returns [Review Result V1](../interfaces/review-result-v1.md).
-Review never owns repair, integration, acceptance, or movement.
+evidence boundary. The triggering owner then dispatches one fresh reviewer
+context, applies the result, and remains until `PASS` or a true external
+blocker. Required review stays inside the active macro phase. The reviewer
+keeps that boundary read-only, attempts to falsify it, and returns [Review
+Result V1](../interfaces/review-result-v1.md). Review never owns repair,
+integration, acceptance, or movement.
 
 A material candidate mutation invalidates affected findings and proof. When the
 trigger still applies, review the changed boundary in fresh context; reuse only
