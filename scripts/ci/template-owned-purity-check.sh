@@ -131,6 +131,10 @@ grep -Fq 'docs/agent-harness/opencode.md' .opencode/rules/harness.md ||
 	fail ".opencode/rules/harness.md must point at the OpenCode adapter"
 grep -Fq 'acceptance-unit-lead' .opencode/rules/harness.md ||
 	fail ".opencode/rules/harness.md must name Task subagent_type acceptance-unit-lead"
+grep -Fq 'Do not ask the user' .opencode/rules/harness.md ||
+	fail ".opencode/rules/harness.md must dispatch a ledger without a manual agent switch"
+[[ -f .opencode/plugins/task-subagents.js ]] ||
+	fail ".opencode/plugins/task-subagents.js must advertise project Task subagent names"
 [[ -f .opencode/commands/orchestrator.md ]] ||
 	fail ".opencode/commands/orchestrator.md is required as the OpenCode /orchestrator command"
 grep -Fq 'subtask: false' .opencode/commands/orchestrator.md ||
@@ -165,13 +169,15 @@ for skill in \
 	agent-prompt-composer \
 	grilling \
 	idea-refine \
-	orchestrator \
 	planning-and-task-breakdown \
 	spec-document-designer \
 	spec-first-brainstorming; do
 	grep -Fq "\"${skill}\": \"deny\"" opencode.json ||
 		fail "opencode.json must deny ${skill} on build/plan so OpenCode matches disable-model-invocation"
 done
+if grep -Fq '"orchestrator": "deny"' opencode.json; then
+	fail "opencode.json must allow the orchestrator skill on build so a user request can dispatch"
+fi
 
 skill_metadata_bytes=$(
 	for skill_file in .agents/skills/*/SKILL.md; do

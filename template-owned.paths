@@ -59,6 +59,7 @@ evals/instructions/
 .opencode/.gitignore
 .opencode/agents/
 .opencode/commands/
+.opencode/plugins/
 .opencode/rules/
 .qwen/agents/
 opencode.json
