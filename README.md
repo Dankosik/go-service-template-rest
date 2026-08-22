@@ -308,6 +308,7 @@ specs/                           durable task decisions (upstream only)
 .grok/agents/                    Grok primary sessions and generated roles
 .opencode/agents/                OpenCode session agents and generated roles
 .opencode/commands/              OpenCode `/orchestrator` entry
+.opencode/plugins/               OpenCode Task subagent catalog
 .opencode/rules/                 OpenCode harness bootstrap
 .opencode/.gitignore             OpenCode plugin runtime ignore
 opencode.json                    OpenCode project model, depth, and skill denies

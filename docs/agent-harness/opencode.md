@@ -9,21 +9,22 @@ those control planes.
 
 - This session is OpenCode. Load only this adapter. Sibling bootstrap files
   select other harnesses; do not follow their adapter choice. Default `build`
-  remains Direct Work and is not ledger orchestration.
-- `/orchestrator` or `/agent orchestrator` binds the current session as Ledger
-  Orchestrator. The session footer must show orchestrator, not `build`. If it
-  still shows `build`, switch before dispatch. OpenCode reads `.agents/skills`
-  through the `skill` tool. Do not require a second process for that bind.
+  remains Direct Work until the user asks to orchestrate a persisted ledger.
+- A user request to orchestrate, or to run a ready Implementation ledger, is
+  the launch. This session routes from `build` or `orchestrator`. Do not ask
+  the user to Tab, `/agent`, `/orchestrator`, or start a second process.
+  `/orchestrator` remains an optional tighter bind (`permission.task` allowlist).
+  OpenCode reads `.agents/skills` through the `skill` tool; `build` may load
+  `orchestrator`.
 - Dispatch every mutually independent ready unit before waiting, within
   current capacity. Spawn one fresh `acceptance-unit-lead` per ready unit
   through Task. That Lead owns proof, review, and the canonical transition;
   this session only routes. Land each Accepted candidate onto the current
   checkout serially from the ledger receipt.
 - Bind that teammate to `acceptance-unit-lead`. Task `subagent_type` is a free
-  string. OpenCode 1.18 does not enumerate project agents in the Task blurb;
-  pass `acceptance-unit-lead` anyway. Do not treat a built-in-only blurb as a
-  missing Lead. Do not substitute `general`, `explore`, `scout`, or generic
-  worker semantics.
+  string. `.opencode/plugins/task-subagents.js` appends the project catalog to
+  the Task blurb. Pass `acceptance-unit-lead` anyway if the blurb is stale. Do
+  not substitute `general`, `explore`, `scout`, or generic worker semantics.
 - Full-ledger work requires Task, returned session identities, and
   `subagent_depth` of at least 2 so a Lead can spawn child lanes. Report a
   carrier gap only after Task rejects the call, returns unknown agent, returns
@@ -37,15 +38,16 @@ those control planes.
 - OpenCode Task has no isolation field. Use a Git worktree, or `opencode
   --agent acceptance-unit-lead --dir <worktree>`, only when collision or
   candidate-state risk justifies it. Isolation is not a ceremony for every
-  edit. Do not require an experimental workspace flag or a community plugin.
+  edit. Do not require an experimental workspace flag or a community plugin;
+  `.opencode/plugins/task-subagents.js` is repository-owned Task catalog.
 - Independent review uses one fresh `reviewer-agent` with no `task_id` and
   no worktree isolation. `edit: deny` is the role default. Generated lanes
   set `hidden: true`; invoke them through Task, not `@`.
 - There is no native Goal. Do not invent one. Background Task requires
   `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS`; foreground is the default.
 - OpenCode ignores `disable-model-invocation`. `build` and `plan` deny
-  `user/workflow` and `role/carrier` skill names. Slash commands, `/orchestrator`,
-  and bound agent files still reach them.
+  `user/workflow` skills. The `orchestrator` skill stays loadable on `build`.
+  Other `role/carrier` entries are Task `subagent_type` values.
 - Do not commit OpenCode runtime files. `.opencode/.gitignore` excludes
   `node_modules/`, `package.json`, and `package-lock.json`.
 
