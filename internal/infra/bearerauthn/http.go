@@ -1,4 +1,4 @@
-package oidcjwt
+package bearerauthn
 
 import (
 	"context"
@@ -12,20 +12,20 @@ import (
 
 // errUnsupportedSecurityScheme reports a security requirement this boundary does
 // not implement. It carries no [Kind] and is not counted: no credential was
-// read, and the requirement was never this Verifier's to answer, so it is not a
+// read, and the requirement was never this Runtime's to answer, so it is not a
 // verification outcome. The validator treats it as an unmet requirement, which
 // is the right answer under either OpenAPI reading — it fails an AND and moves
 // on from an OR.
 var errUnsupportedSecurityScheme = errors.New("authentication security scheme is not supported")
 
 // ResolveHTTP is the concrete PrincipalResolver used by httpx.Authenticated.
-func (v *Verifier) ResolveHTTP(
+func (r *Runtime) ResolveHTTP(
 	ctx context.Context,
 	input *openapi3filter.AuthenticationInput,
 ) (reqctx.Principal, error) {
 	// The scheme is checked first because this function consumes the credential,
 	// and the validator calls it once per scheme in every security requirement
-	// until one is met. Answering a scheme this Verifier does not implement would
+	// until one is met. Answering a scheme this Runtime does not implement would
 	// therefore do two things at once: accept a bearer access token as proof of
 	// some other scheme's credential, and strip the header before the requirement
 	// that actually wanted it is asked.
@@ -34,7 +34,7 @@ func (v *Verifier) ResolveHTTP(
 	}
 	request := authenticatedRequest(input)
 	if request == nil {
-		return reqctx.Principal{}, v.recordRejection(ctx, transportHTTP, failure(KindMalformed))
+		return reqctx.Principal{}, r.recordRejection(ctx, transportHTTP, failure(KindMalformed))
 	}
 
 	// The credential is taken off the request as soon as this boundary owns it,
@@ -43,12 +43,12 @@ func (v *Verifier) ResolveHTTP(
 	// from caller-controlled forwarding headers.
 	values := request.Header.Values("Authorization")
 	request.Header.Del("Authorization")
-	verified, err := v.verifyCredential(ctx, values, transportHTTP)
-	return verified.principal, err
+	verified, err := r.verifyCredential(ctx, values, transportHTTP)
+	return verified.Principal, err
 }
 
 // bearerSecurityScheme reports whether the requirement being validated is the
-// HTTP Bearer scheme this Verifier implements.
+// HTTP Bearer scheme this Runtime implements.
 //
 // It asks what the scheme is rather than what the contract named it, because the
 // name is the service's to choose and carries no meaning here. The declaration

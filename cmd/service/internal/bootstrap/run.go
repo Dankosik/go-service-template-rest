@@ -82,10 +82,10 @@ type runtimeWiring struct {
 	// profile:object-storage:start
 	initObjectStorage func(context.Context, config.ObjectStorageConfig) (objectStorageRuntime, error)
 	// profile:object-storage:end
-	// profile:authn-oidc-jwt:start
+	// profile:authn-bearer:start
 	initAuthn  func(context.Context, config.Config, *telemetry.Metrics, *slog.Logger) (authnRuntime, error)
 	authnStage func(authnBootstrapStage)
-	// profile:authn-oidc-jwt:end
+	// profile:authn-bearer:end
 }
 
 type runtimeLifecycleStage string
@@ -112,7 +112,7 @@ func productionRuntimeWiring() runtimeWiring {
 		// profile:object-storage:start
 		initObjectStorage: initObjectStorage,
 		// profile:object-storage:end
-		// profile:authn-oidc-jwt:start
+		// profile:authn-bearer:start
 		initAuthn: func(
 			ctx context.Context,
 			cfg config.Config,
@@ -122,7 +122,7 @@ func productionRuntimeWiring() runtimeWiring {
 			return initAuthn(ctx, cfg, metrics, log)
 		},
 		authnStage: func(authnBootstrapStage) {},
-		// profile:authn-oidc-jwt:end
+		// profile:authn-bearer:end
 	}
 }
 
@@ -242,7 +242,7 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 	}
 	defer closeOwners()
 
-	// profile:authn-oidc-jwt:start
+	// profile:authn-bearer:start
 	authnVerifier, err := wiring.initAuthn(startupCtx, bootstrap.cfg, metrics, bootstrap.log)
 	if err != nil {
 		return err
@@ -254,7 +254,7 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 			authnVerifier.Close()
 		}
 	}()
-	// profile:authn-oidc-jwt:end
+	// profile:authn-bearer:end
 
 	startupAdmission := new(startupAdmissionController)
 
@@ -322,26 +322,26 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 					)
 				},
 			},
-			// profile:authn-oidc-jwt:start
+			// profile:authn-bearer:start
 			Authenticate:          httpx.Authenticated(authnVerifier.ResolveHTTP),
 			AuthenticateChallenge: "Bearer",
-			// profile:authn-oidc-jwt:end
+			// profile:authn-bearer:end
 		},
 	)
 	if err != nil {
 		return err
 	}
-	// profile:authn-oidc-jwt:start
+	// profile:authn-bearer:start
 	wiring.authnStage(authnStageHTTPRouterBuilt)
-	// profile:authn-oidc-jwt:end
+	// profile:authn-bearer:end
 
 	// Shared with the diagnostics listener below, so both publish net/http's own
 	// reporting through the service logger; newHTTPServer owns why that matters.
 	errorLog := slog.NewLogLogger(bootstrap.log.Handler(), slog.LevelError)
 	srv := newHTTPServer(bootstrap.cfg.HTTP, handler, errorLog)
-	// profile:authn-oidc-jwt:start
+	// profile:authn-bearer:start
 	wiring.authnStage(authnStageHTTPServerBuilt)
-	// profile:authn-oidc-jwt:end
+	// profile:authn-bearer:end
 
 	// profile:grpc:start
 	var grpcSrv grpcRuntimeServer
@@ -352,18 +352,18 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 			metrics,
 			domainErrors,
 			serviceGRPCBindings(
-				// profile:authn-oidc-jwt:start
+				// profile:authn-bearer:start
 				authnVerifier,
-				// profile:authn-oidc-jwt:end
+				// profile:authn-bearer:end
 			),
 		)
 		if buildErr != nil {
 			return buildErr
 		}
 		grpcSrv = builtGRPC
-		// profile:authn-oidc-jwt:start
+		// profile:authn-bearer:start
 		wiring.authnStage(authnStageGRPCServerBuilt)
-		// profile:authn-oidc-jwt:end
+		// profile:authn-bearer:end
 	}
 	// profile:grpc:end
 
@@ -421,10 +421,10 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 	// profile:messaging-nats-jetstream:end
 	backgroundErr := supervisor.Shutdown(backgroundCtx)
 	wiring.lifecycle(runtimeLifecycleBackgroundJoined)
-	// profile:authn-oidc-jwt:start
+	// profile:authn-bearer:start
 	authnVerifier.Close()
 	authnClosed = true
-	// profile:authn-oidc-jwt:end
+	// profile:authn-bearer:end
 	closeOwners()
 
 	return errors.Join(

@@ -1,9 +1,10 @@
 package oidcjwt
 
 import (
+	"fmt"
 	"strings"
-	"time"
 
+	"github.com/example/go-service-template-rest/internal/infra/bearerauthn"
 	"github.com/example/go-service-template-rest/internal/reqctx"
 	"github.com/golang-jwt/jwt/v5"
 )
@@ -17,33 +18,6 @@ type accessTokenClaims struct {
 	OktaClientID    string `json:"cid"`
 }
 
-type parsedToken struct {
-	principal reqctx.Principal
-	expiresAt time.Time
-}
-
-func bearerToken(values []string) (string, error) {
-	if len(values) == 0 {
-		return "", failure(KindMissing)
-	}
-	if len(values) != 1 {
-		return "", failure(KindMalformed)
-	}
-	value := values[0]
-	if strings.TrimSpace(value) != value || strings.Contains(value, ",") {
-		return "", failure(KindMalformed)
-	}
-	scheme, token, found := strings.Cut(value, " ")
-	token = strings.TrimLeft(token, " ")
-	if !found || !strings.EqualFold(scheme, "Bearer") || token == "" || strings.ContainsAny(token, " \t\r\n") {
-		return "", failure(KindMalformed)
-	}
-	if len(token) > MaxTokenBytes {
-		return "", failure(KindOversize)
-	}
-	return token, nil
-}
-
 func validAccessTokenType(value any) bool {
 	typ, ok := value.(string)
 	return ok && (strings.EqualFold(typ, "at+jwt") || strings.EqualFold(typ, "application/at+jwt"))
@@ -51,7 +25,7 @@ func validAccessTokenType(value any) bool {
 
 func principalFromClaims(claims *accessTokenClaims, strict bool) (reqctx.Principal, error) {
 	if claims == nil {
-		return reqctx.Principal{}, failure(KindInvalid)
+		return reqctx.Principal{}, failure(bearerauthn.KindInvalid)
 	}
 	clientID, err := oneClientID(claims.ClientID, claims.AuthorizedParty, claims.ApplicationID, claims.OktaClientID)
 	if err != nil {
@@ -59,10 +33,10 @@ func principalFromClaims(claims *accessTokenClaims, strict bool) (reqctx.Princip
 	}
 	subject := claims.Subject
 	if strings.TrimSpace(subject) != subject || (subject == "" && clientID == "") {
-		return reqctx.Principal{}, failure(KindInvalid)
+		return reqctx.Principal{}, failure(bearerauthn.KindInvalid)
 	}
 	if strict && (strings.TrimSpace(claims.ClientID) == "" || strings.TrimSpace(claims.ID) == "" || claims.IssuedAt == nil) {
-		return reqctx.Principal{}, failure(KindInvalid)
+		return reqctx.Principal{}, failure(bearerauthn.KindInvalid)
 	}
 	return reqctx.Principal{Issuer: claims.Issuer, Subject: subject, ClientID: clientID}, nil
 }
@@ -74,12 +48,16 @@ func oneClientID(values ...string) (string, error) {
 			continue
 		}
 		if strings.TrimSpace(value) != value {
-			return "", failure(KindInvalid)
+			return "", failure(bearerauthn.KindInvalid)
 		}
 		if selected != "" && value != selected {
-			return "", failure(KindInvalid)
+			return "", failure(bearerauthn.KindInvalid)
 		}
 		selected = value
 	}
 	return selected, nil
+}
+
+func failure(kind bearerauthn.Kind) error {
+	return fmt.Errorf("verify access token: %w", bearerauthn.NewError(kind))
 }

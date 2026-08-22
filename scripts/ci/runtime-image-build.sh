@@ -192,6 +192,7 @@ grep -Fqx 'webhooks = "durable"' "${CHECKOUT}/template.lock"
 grep -Fqx 'messaging = "nats-jetstream"' "${CHECKOUT}/template.lock"
 # profile:messaging-nats-jetstream:end
 if [[ "${FIXTURE}" == "health-only" ]]; then
+	[[ ! -d "${CHECKOUT}/internal/infra/bearerauthn" ]]
 	[[ ! -d "${CHECKOUT}/internal/infra/oidcjwt" ]]
 fi
 

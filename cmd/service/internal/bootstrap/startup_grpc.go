@@ -26,9 +26,9 @@ type grpcRuntimeBindings struct {
 // instead: a build profile may have filled the policy slices already, and an
 // assignment compiles, passes every check, and silently drops what it replaced.
 func serviceGRPCBindings(
-	// profile:authn-oidc-jwt:start
+	// profile:authn-bearer:start
 	authn authnRuntime,
-	// profile:authn-oidc-jwt:end
+	// profile:authn-bearer:end
 ) grpcRuntimeBindings {
 	bindings := grpcRuntimeBindings{
 		// Register an owned service here, as
@@ -36,10 +36,10 @@ func serviceGRPCBindings(
 		// See docs/grpc/runtime-and-streaming.md, "Register it in bootstrap".
 		Services: nil,
 	}
-	// profile:authn-oidc-jwt:start
+	// profile:authn-bearer:start
 	bindings.UnaryPolicy = append(bindings.UnaryPolicy, authn.UnaryInterceptor())
 	bindings.StreamPolicy = append(bindings.StreamPolicy, authn.StreamInterceptor())
-	// profile:authn-oidc-jwt:end
+	// profile:authn-bearer:end
 	return bindings
 }
 

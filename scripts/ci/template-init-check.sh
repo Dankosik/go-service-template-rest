@@ -268,6 +268,9 @@ copy_template_checkout() {
 prove_generated_authn_module() {
 	go test -vet=off -run '^$' ./...
 	go build ./cmd/service
+	if [[ -d internal/infra/bearerauthn ]]; then
+		go test -vet=off ./internal/infra/bearerauthn
+	fi
 	if [[ -d internal/infra/oidcjwt ]]; then
 		go test -vet=off ./internal/infra/oidcjwt
 	fi
@@ -502,6 +505,7 @@ for removed in \
 	docs/grpc \
 	internal/config/authn_config_test.go \
 	internal/config/grpc_config_test.go \
+	internal/infra/bearerauthn \
 	internal/infra/oidcjwt \
 	internal/infra/grpc \
 	internal/infra/grpcclient \
@@ -1152,7 +1156,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "auth
 			if [[ "${grpc_choice}" == "enabled" ]]; then
 				make proto-check
 			fi
-			if go list -deps ./cmd/service | grep -E 'internal/infra/oidcjwt|MicahParks/(keyfunc|jwkset)|golang-jwt/jwt'; then
+			if go list -deps ./cmd/service | grep -E 'internal/infra/(bearerauthn|oidcjwt)|MicahParks/(keyfunc|jwkset)|golang-jwt/jwt'; then
 				echo "${fixture_name} production graph retained authentication"
 				exit 1
 			fi
@@ -1164,24 +1168,27 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "auth
 
 		for removed in \
 			cmd/service/internal/bootstrap/authn_bootstrap_test.go \
-			cmd/service/internal/bootstrap/startup_authn.go \
+		cmd/service/internal/bootstrap/startup_authn.go \
+		cmd/service/internal/bootstrap/startup_authn_profile.go \
+			cmd/service/internal/bootstrap/startup_authn_profile.go \
 			docs/authentication.md \
 			internal/authntrust \
 			internal/config/authn_config_test.go \
 			internal/infra/http/authn_router_test.go \
+			internal/infra/bearerauthn \
 			internal/infra/oidcjwt; do
 			assert "${fixture_name} retained ${removed}" path_absent "${checkout}/${removed}"
 		done
 		assert "${fixture_name} retained the old OIDC gRPC TLS proof path" \
 			path_absent "${checkout}/internal/infra/oidcjwt/grpc_tls_test.go"
-		assert "${fixture_name} retained the OIDC gRPC TLS contract proof" \
-			path_absent "${checkout}/internal/infra/oidcjwt/grpc_tls_contract_test.go"
+		assert "${fixture_name} retained the shared gRPC TLS contract proof" \
+			path_absent "${checkout}/internal/infra/bearerauthn/grpc_tls_contract_test.go"
 		assert "${fixture_name} retained bearer security" \
 			grep_absent -Fq 'bearerAuth' "${checkout}/api/openapi/service.yaml"
 		assert "${fixture_name} retained authentication environment" \
 			grep_absent -Fq 'APP__AUTHN__' "${checkout}/env/.env.example"
 		assert "${fixture_name} retained unresolved authentication markers" \
-			grep_absent -R -Fq 'profile:authn-oidc-jwt:' \
+			grep_absent -R -E -e 'profile:authn-(bearer|oidc-jwt):' \
 			"${checkout}/README.md" \
 			"${checkout}/api" \
 			"${checkout}/cmd" \
@@ -1229,19 +1236,20 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "auth
 		docs/authentication.md \
 		internal/config/authn_config_test.go \
 		internal/infra/httpclient \
+		internal/infra/bearerauthn \
 		internal/infra/oidcjwt; do
 		assert "AUTHN=oidc-jwt removed ${retained}" path_present "${authn_http_checkout}/${retained}"
 	done
-	assert "GRPC=none retained the OIDC gRPC adapter" \
-		path_absent "${authn_http_checkout}/internal/infra/oidcjwt/grpc.go"
-	assert "GRPC=none retained the OIDC gRPC proof" \
-		path_absent "${authn_http_checkout}/internal/infra/oidcjwt/grpc_test.go"
+	assert "GRPC=none retained the shared gRPC adapter" \
+		path_absent "${authn_http_checkout}/internal/infra/bearerauthn/grpc.go"
+	assert "GRPC=none retained the shared gRPC proof" \
+		path_absent "${authn_http_checkout}/internal/infra/bearerauthn/grpc_test.go"
 	assert "GRPC=none retained the old OIDC gRPC TLS proof path" \
 		path_absent "${authn_http_checkout}/internal/infra/oidcjwt/grpc_tls_test.go"
-	assert "GRPC=none retained the OIDC gRPC TLS contract proof" \
-		path_absent "${authn_http_checkout}/internal/infra/oidcjwt/grpc_tls_contract_test.go"
+	assert "GRPC=none retained the shared gRPC TLS contract proof" \
+		path_absent "${authn_http_checkout}/internal/infra/bearerauthn/grpc_tls_contract_test.go"
 	assert "AUTHN=oidc-jwt retained unresolved profile markers" \
-		grep_absent -R -Fq 'profile:authn-oidc-jwt:' \
+		grep_absent -R -E -e 'profile:authn-(bearer|oidc-jwt):' \
 		"${authn_http_checkout}/README.md" \
 		"${authn_http_checkout}/api" \
 		"${authn_http_checkout}/cmd" \
@@ -1278,11 +1286,11 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "auth
 		make proto-check
 	)
 	assert "AUTHN=oidc-jwt with GRPC=enabled removed the unary/stream adapter" \
-		file_present "${authn_grpc_checkout}/internal/infra/oidcjwt/grpc.go"
+		file_present "${authn_grpc_checkout}/internal/infra/bearerauthn/grpc.go"
 	assert "AUTHN=oidc-jwt with GRPC=enabled removed gRPC parity proof" \
-		file_present "${authn_grpc_checkout}/internal/infra/oidcjwt/grpc_test.go"
+		file_present "${authn_grpc_checkout}/internal/infra/bearerauthn/grpc_test.go"
 	assert "AUTHN=oidc-jwt with GRPC=enabled removed the gRPC TLS contract proof" \
-		file_present "${authn_grpc_checkout}/internal/infra/oidcjwt/grpc_tls_contract_test.go"
+		file_present "${authn_grpc_checkout}/internal/infra/bearerauthn/grpc_tls_contract_test.go"
 	assert "AUTHN=oidc-jwt with GRPC=enabled retained the old gRPC TLS proof path" \
 		path_absent "${authn_grpc_checkout}/internal/infra/oidcjwt/grpc_tls_test.go"
 	grep -Fq 'authn = "oidc-jwt"' "${authn_grpc_checkout}/template.lock"
@@ -1872,6 +1880,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "jobs
 			for retained in \
 				internal/infra/postgreswebhook \
 				internal/httpidempotency \
+				internal/infra/bearerauthn \
 				internal/infra/oidcjwt \
 				internal/infra/oauth2clientcredentials \
 				internal/objectstorage \

@@ -23,9 +23,9 @@ func TestCodesAreStableAndTransportNeutral(t *testing.T) {
 		"method_not_allowed",
 		"already_exists",
 		"request_entity_too_large",
-		// profile:authn-oidc-jwt:start
+		// profile:authn-bearer:start
 		"request_header_fields_too_large",
-		// profile:authn-oidc-jwt:end
+		// profile:authn-bearer:end
 		"unprocessable_content",
 		"too_many_requests",
 		// profile:http-idempotency-postgres:start

@@ -21,9 +21,9 @@ func isHealthCheck(fullMethod string) bool {
 // A policy deciding which RPCs are public must not share this definition: that
 // is a trust decision, and over-matching there publishes an RPC nobody meant to
 // publish.
-// profile:authn-oidc-jwt:start
+// profile:authn-bearer:start
 // internal/infra/oidcjwt/grpc.go names Check exactly for that reason.
-// profile:authn-oidc-jwt:end
+// profile:authn-bearer:end
 func isHealthMethod(fullMethod string) bool {
 	return strings.HasPrefix(fullMethod, healthMethodPrefix)
 }

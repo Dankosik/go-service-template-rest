@@ -1,4 +1,4 @@
-package oidcjwt
+package bearerauthn
 
 import "errors"
 
@@ -52,7 +52,8 @@ func failure(kind Kind) error {
 }
 
 // NewError builds one sanitized authentication category for transport contract
-// tests. Production failures come from a Verifier.
+// tests and concrete trust engines. Production transport failures come from a
+// [Runtime].
 func NewError(kind Kind) error {
 	return failure(kind)
 }

@@ -15,9 +15,9 @@ tags:
 paths:
   /health/live:
     get:
-      # profile:authn-oidc-jwt:start
+      # profile:authn-bearer:start
       security: []
-      # profile:authn-oidc-jwt:end
+      # profile:authn-bearer:end
       tags: [system]
       summary: Liveness probe
       operationId: healthLive
@@ -40,9 +40,9 @@ paths:
           $ref: "#/components/responses/InternalServerError"
   /health/ready:
     get:
-      # profile:authn-oidc-jwt:start
+      # profile:authn-bearer:start
       security: []
-      # profile:authn-oidc-jwt:end
+      # profile:authn-bearer:end
       tags: [system]
       summary: Readiness probe
       operationId: healthReady
@@ -71,14 +71,14 @@ paths:
                 type: string
                 example: not ready
 components:
-  # profile:authn-oidc-jwt:start
+  # profile:authn-bearer:start
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
       description: JWT access token issued by the configured OIDC issuer for this API audience.
-  # profile:authn-oidc-jwt:end
+  # profile:authn-bearer:end
   schemas:
     Problem:
       type: object

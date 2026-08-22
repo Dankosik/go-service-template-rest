@@ -251,11 +251,11 @@ func sentinelConfigSourceValues() map[string]any {
 		"http.max_connections":             1024,
 		"http.access_log_health_probes":    true,
 
-		// profile:authn-oidc-jwt:start
+		// profile:authn-bearer:start
 		"authn.issuer":        "https://issuer.snapshot.example",
 		"authn.audience":      "snapshot-api",
 		"authn.token_profile": "resource-server",
-		// profile:authn-oidc-jwt:end
+		// profile:authn-bearer:end
 
 		// profile:outbound-auth-oauth2-client-credentials:start
 		"outbound_auth.token_url":     "https://auth.snapshot.example/oauth/token",
@@ -360,11 +360,11 @@ func expectedSentinelSnapshotValues() map[string]any {
 		"http.max_connections":             1024,
 		"http.access_log_health_probes":    true,
 
-		// profile:authn-oidc-jwt:start
+		// profile:authn-bearer:start
 		"authn.issuer":        "https://issuer.snapshot.example",
 		"authn.audience":      "snapshot-api",
 		"authn.token_profile": "resource-server",
-		// profile:authn-oidc-jwt:end
+		// profile:authn-bearer:end
 
 		// profile:outbound-auth-oauth2-client-credentials:start
 		"outbound_auth.token_url":     "https://auth.snapshot.example/oauth/token",
