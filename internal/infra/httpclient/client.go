@@ -24,9 +24,23 @@ type Client struct {
 	httpClient *http.Client
 }
 
+// ResponseLimits are caller-supplied response-header guards.
+type ResponseLimits struct {
+	ResponseHeaderTimeout  time.Duration
+	MaxResponseHeaderBytes int64
+}
+
 // NewExternalHTTPS builds a client for one public HTTPS authority.
 func NewExternalHTTPS(baseURL string) (*Client, error) {
-	return newClient(baseURL, targetPolicy{})
+	return newClient(baseURL, targetPolicy{}, ResponseLimits{})
+}
+
+// NewExternalHTTPSWithLimits builds a public-HTTPS client with response-header guards.
+func NewExternalHTTPSWithLimits(baseURL string, limits ResponseLimits) (*Client, error) {
+	if err := validateResponseLimits(limits); err != nil {
+		return nil, err
+	}
+	return newClient(baseURL, targetPolicy{}, limits)
 }
 
 // NewPrivateHTTPS builds a client for one HTTPS authority under privateSuffix.
@@ -35,10 +49,29 @@ func NewPrivateHTTPS(baseURL, privateSuffix string) (*Client, error) {
 	if suffix == "" {
 		return nil, errors.New("build outbound HTTP client: private DNS suffix is required")
 	}
-	return newClient(baseURL, targetPolicy{privateSuffix: suffix})
+	return newClient(baseURL, targetPolicy{privateSuffix: suffix}, ResponseLimits{})
 }
 
-func newClient(rawBaseURL string, policy targetPolicy) (*Client, error) {
+// NewPrivateHTTPSWithLimits builds a private-HTTPS client with response-header guards.
+func NewPrivateHTTPSWithLimits(baseURL, privateSuffix string, limits ResponseLimits) (*Client, error) {
+	if err := validateResponseLimits(limits); err != nil {
+		return nil, err
+	}
+	suffix := privateHostSuffix(privateSuffix)
+	if suffix == "" {
+		return nil, errors.New("build outbound HTTP client: private DNS suffix is required")
+	}
+	return newClient(baseURL, targetPolicy{privateSuffix: suffix}, limits)
+}
+
+func validateResponseLimits(limits ResponseLimits) error {
+	if limits.ResponseHeaderTimeout <= 0 || limits.MaxResponseHeaderBytes <= 0 {
+		return errors.New("build outbound HTTP client: response limits must be positive")
+	}
+	return nil
+}
+
+func newClient(rawBaseURL string, policy targetPolicy, limits ResponseLimits) (*Client, error) {
 	baseURL, err := validateTarget(rawBaseURL, policy)
 	if err != nil {
 		return nil, err
@@ -50,6 +83,12 @@ func newClient(rawBaseURL string, policy targetPolicy) (*Client, error) {
 	}
 	transport := baseTransport.Clone()
 	transport.Proxy = nil
+	if limits.ResponseHeaderTimeout > 0 {
+		transport.ResponseHeaderTimeout = limits.ResponseHeaderTimeout
+	}
+	if limits.MaxResponseHeaderBytes > 0 {
+		transport.MaxResponseHeaderBytes = limits.MaxResponseHeaderBytes
+	}
 	dialer := &net.Dialer{
 		Timeout:   defaultDialTimeout,
 		KeepAlive: defaultKeepAlive,
