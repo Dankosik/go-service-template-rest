@@ -76,8 +76,7 @@ components:
     bearerAuth:
       type: http
       scheme: bearer
-      bearerFormat: JWT
-      description: JWT access token issued by the configured OIDC issuer for this API audience.
+      description: Bearer access token issued for this API audience.
   # profile:authn-bearer:end
   schemas:
     Problem:

@@ -14,6 +14,12 @@ type propagationSanitizer struct {
 	base http.RoundTripper
 }
 
+func (t propagationSanitizer) CloseIdleConnections() {
+	if closer, ok := t.base.(interface{ CloseIdleConnections() }); ok {
+		closer.CloseIdleConnections()
+	}
+}
+
 func (t propagationSanitizer) RoundTrip(request *http.Request) (*http.Response, error) {
 	attempt := request.Clone(request.Context())
 	attempt.Header = request.Header.Clone()

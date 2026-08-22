@@ -38,9 +38,9 @@ all_job_tokens() {
   # profile:object-storage:start
   printf ' object-storage'
   # profile:object-storage:end
-  # profile:authn-oidc-jwt:start
+  # profile:authn-bearer:start
   printf ' authn'
-  # profile:authn-oidc-jwt:end
+  # profile:authn-bearer:end
   # profile:grpc:start
   printf ' grpc'
   # profile:grpc:end

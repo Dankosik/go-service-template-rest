@@ -7,7 +7,7 @@ TEMPLATE_OWNER="@Dankosik"
 TEMPLATE_API_TITLE="go-service-template-rest"
 
 usage() {
-	echo "usage: CODEOWNER=@user-or-org/team DATABASE=none|postgres HTTP_IDEMPOTENCY=none|postgres JOBS=none|postgres WEBHOOKS=none|durable OUTBOX=none|postgres GRPC=none|enabled AUTHN=none|oidc-jwt OBJECT_STORAGE=none|s3 OUTBOUND_AUTH=none|oauth2-client-credentials MESSAGING=none|nats-jetstream REFERENCE_EXAMPLE=remove|keep $0 [module-path]"
+	echo "usage: CODEOWNER=@user-or-org/team DATABASE=none|postgres HTTP_IDEMPOTENCY=none|postgres JOBS=none|postgres WEBHOOKS=none|durable OUTBOX=none|postgres GRPC=none|enabled AUTHN=none|oidc-jwt|oidc-introspection OBJECT_STORAGE=none|s3 OUTBOUND_AUTH=none|oauth2-client-credentials MESSAGING=none|nats-jetstream REFERENCE_EXAMPLE=remove|keep $0 [module-path]"
 	echo "module-path is derived from git remote origin when omitted"
 }
 
@@ -345,6 +345,10 @@ The client API contract is \`api/openapi/service.yaml\`. Start with
 Authentication uses OIDC discovery and signed JWT access tokens. Configure it
 using \`docs/authentication.md\` before starting the service.
 <!-- profile:authn-oidc-jwt:end -->
+<!-- profile:authn-oidc-introspection:start -->
+Authentication uses uncached RFC 7662 token introspection. Configure it using
+\`docs/authentication.md\` before starting the service.
+<!-- profile:authn-oidc-introspection:end -->
 <!-- profile:messaging-nats-jetstream:start -->
 This service includes typed events over NATS JetStream. Configure operator-owned
 streams, composition-owned routes, and the separate consumer worker using
@@ -459,14 +463,14 @@ none | enabled) ;;
 esac
 
 if [[ "${AUTHN+x}" == "x" && -z "${AUTHN-}" ]]; then
-	echo "AUTHN must be one of: none, oidc-jwt"
+	echo "AUTHN must be one of: none, oidc-jwt, oidc-introspection"
 	exit 1
 fi
 authn="${AUTHN:-none}"
 case "${authn}" in
-none | oidc-jwt) ;;
+none | oidc-jwt | oidc-introspection) ;;
 *)
-	echo "AUTHN must be one of: none, oidc-jwt"
+	echo "AUTHN must be one of: none, oidc-jwt, oidc-introspection"
 	exit 1
 	;;
 esac
@@ -791,7 +795,7 @@ if [[ "${source_checkout}" != true ]]; then
 		# authntrust exists only to be shared by the verifier and internal/config's
 		# authn validation. With the profile off it has no caller at all, so it
 		# leaves with them rather than becoming an unreferenced leaf.
-		rm -rf -- internal/infra/bearerauthn internal/infra/oidcjwt internal/authntrust
+		rm -rf -- internal/infra/bearerauthn internal/infra/oidcjwt internal/infra/oauthintrospection internal/authntrust
 		rm -f -- \
 			cmd/service/internal/bootstrap/authn_bootstrap_test.go \
 			cmd/service/internal/bootstrap/startup_authn.go \
@@ -799,6 +803,7 @@ if [[ "${source_checkout}" != true ]]; then
 			internal/config/authn_config.go \
 			internal/config/authn_config_test.go \
 			internal/infra/http/authn_router_test.go \
+			internal/infra/http/introspection_disclosure_test.go \
 			internal/infra/httpclient/authn_policy_test.go \
 			docs/authentication.md
 		replace_literal api/openapi/service.yaml \
@@ -806,9 +811,35 @@ if [[ "${source_checkout}" != true ]]; then
 			'security: []'
 		strip_profile authn-bearer remove
 		strip_profile authn-oidc-jwt remove
+		strip_profile authn-oidc-introspection remove
+	elif [[ "${authn}" == "oidc-introspection" ]]; then
+		cp \
+			scripts/profiles/authn-oidc-introspection/authn_config.go.tmpl \
+			internal/config/authn_config.go
+		cp \
+			scripts/profiles/authn-oidc-introspection/startup_authn_profile.go.tmpl \
+			cmd/service/internal/bootstrap/startup_authn_profile.go
+		replace_literal internal/config/authn_config.go \
+			"${current_module}" \
+			"${new_module}"
+		replace_literal cmd/service/internal/bootstrap/startup_authn_profile.go \
+			"${current_module}" \
+			"${new_module}"
+		rm -rf -- internal/infra/oidcjwt
+		rm -f -- \
+			internal/authntrust/token_profile.go \
+			internal/authntrust/token_profile_test.go
+		strip_profile authn-bearer keep
+		strip_profile authn-oidc-jwt remove
+		strip_profile authn-oidc-introspection keep
 	else
+		rm -rf -- internal/infra/oauthintrospection
+		rm -f -- \
+			internal/authntrust/introspection.go \
+			internal/authntrust/introspection_test.go
 		strip_profile authn-bearer keep
 		strip_profile authn-oidc-jwt keep
+		strip_profile authn-oidc-introspection remove
 	fi
 
 	if [[ "${outbound_auth}" == "none" ]]; then

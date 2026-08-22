@@ -220,13 +220,13 @@ linters:
             - "**/internal/config/**/*.go"
             - "!**/internal/config/*_test.go"
           allow:
-            # profile:authn-oidc-jwt:start
+            # profile:authn-bearer:start
             # The authn trust rules are a leaf for the same reason otelconfig is:
             # this package must refuse a bad value at load, and the verifier must
             # enforce the same rule at startup and at runtime. Allowing the leaf
             # is what keeps one rule from being written twice.
             - github.com/example/go-service-template-rest/internal/authntrust
-            # profile:authn-oidc-jwt:end
+            # profile:authn-bearer:end
             - github.com/example/go-service-template-rest/internal/observability/otelconfig
           deny:
             - pkg: github.com/example/go-service-template-rest/internal
@@ -330,7 +330,7 @@ linters:
               desc: correlationpolicy is the pure outbound policy shared by the HTTP and gRPC clients; a dependency here would put it out of reach of one of them.
             - pkg: github.com/example/go-service-template-rest/cmd
               desc: correlationpolicy must not depend on composition roots.
-        # profile:authn-oidc-jwt:start
+        # profile:authn-bearer:start
         authntrust_is_pure_policy:
           list-mode: lax
           files:
@@ -342,6 +342,8 @@ linters:
               desc: authntrust is a pure trust-rule leaf shared by internal/config and the verifier; a dependency here would put it back out of reach of one of them.
             - pkg: github.com/example/go-service-template-rest/cmd
               desc: authntrust must not depend on composition roots.
+        # profile:authn-bearer:end
+        # profile:authn-oidc-jwt:start
         oidcjwt_core_is_transport_neutral:
           list-mode: lax
           files:
@@ -355,6 +357,24 @@ linters:
             - pkg: google.golang.org/grpc
               desc: inbound gRPC policy belongs in bearerauthn, not the JWT engine.
         # profile:authn-oidc-jwt:end
+        # profile:authn-oidc-introspection:start
+        oauthintrospection_core_is_transport_neutral:
+          list-mode: lax
+          files:
+            - "**/internal/infra/oauthintrospection/*.go"
+            - "!**/internal/infra/oauthintrospection/*_test.go"
+          deny:
+            - pkg: github.com/getkin/kin-openapi
+              desc: inbound HTTP security belongs in bearerauthn, not the introspection engine.
+            - pkg: github.com/go-chi/chi/v5
+              desc: the introspection engine never routes; chi belongs in internal/infra/http.
+            - pkg: google.golang.org/grpc
+              desc: inbound gRPC policy belongs in bearerauthn, not the introspection engine.
+            - pkg: github.com/example/go-service-template-rest/internal/config
+              desc: the introspection engine must not import configuration.
+            - pkg: github.com/example/go-service-template-rest/internal/infra/oidcjwt
+              desc: concrete trust engines must not import each other.
+        # profile:authn-oidc-introspection:end
         # profile:authn-bearer:start
         bearerauthn_core_is_transport_neutral:
           list-mode: lax
@@ -373,6 +393,8 @@ linters:
             - pkg: google.golang.org/grpc
               desc: gRPC interceptors, metadata, and status belong in bearerauthn's grpc.go adapter.
             - pkg: github.com/example/go-service-template-rest/internal/infra/oidcjwt
+              desc: the shared runtime must not import a concrete trust engine.
+            - pkg: github.com/example/go-service-template-rest/internal/infra/oauthintrospection
               desc: the shared runtime must not import a concrete trust engine.
             - pkg: github.com/example/go-service-template-rest/internal/config
               desc: the shared runtime must not import configuration.
@@ -481,6 +503,9 @@ linters:
         # this entry is what enforces that.
         - '^github\.com/example/go-service-template-rest/internal/infra/oidcjwt\.PolicyInput$'
         # profile:authn-oidc-jwt:end
+        # profile:authn-oidc-introspection:start
+        - '^github\.com/example/go-service-template-rest/internal/infra/oauthintrospection\.PolicyInput$'
+        # profile:authn-oidc-introspection:end
     forbidigo:
       analyze-types: true
       forbid:

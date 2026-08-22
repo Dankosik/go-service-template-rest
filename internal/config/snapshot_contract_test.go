@@ -252,9 +252,18 @@ func sentinelConfigSourceValues() map[string]any {
 		"http.access_log_health_probes":    true,
 
 		// profile:authn-bearer:start
-		"authn.issuer":        "https://issuer.snapshot.example",
-		"authn.audience":      "snapshot-api",
+		"authn.issuer":   "https://issuer.snapshot.example",
+		"authn.audience": "snapshot-api",
+		// profile:authn-oidc-jwt:start
 		"authn.token_profile": "resource-server",
+		// profile:authn-oidc-jwt:end
+		// profile:authn-oidc-introspection:start
+		"authn.introspection_endpoint":            "https://idp.snapshot.example/oauth/introspect",
+		"authn.introspection_target_class":        "external-https",
+		"authn.introspection_private_host_suffix": "",
+		"authn.introspection_client_id":           "snapshot-rs",
+		"authn.introspection_client_secret":       " snapshot-introspection-secret ",
+		// profile:authn-oidc-introspection:end
 		// profile:authn-bearer:end
 
 		// profile:outbound-auth-oauth2-client-credentials:start
@@ -361,9 +370,18 @@ func expectedSentinelSnapshotValues() map[string]any {
 		"http.access_log_health_probes":    true,
 
 		// profile:authn-bearer:start
-		"authn.issuer":        "https://issuer.snapshot.example",
-		"authn.audience":      "snapshot-api",
+		"authn.issuer":   "https://issuer.snapshot.example",
+		"authn.audience": "snapshot-api",
+		// profile:authn-oidc-jwt:start
 		"authn.token_profile": "resource-server",
+		// profile:authn-oidc-jwt:end
+		// profile:authn-oidc-introspection:start
+		"authn.introspection_endpoint":            "https://idp.snapshot.example/oauth/introspect",
+		"authn.introspection_target_class":        "external-https",
+		"authn.introspection_private_host_suffix": "",
+		"authn.introspection_client_id":           "snapshot-rs",
+		"authn.introspection_client_secret":       " snapshot-introspection-secret ",
+		// profile:authn-oidc-introspection:end
 		// profile:authn-bearer:end
 
 		// profile:outbound-auth-oauth2-client-credentials:start

@@ -1,5 +1,7 @@
 package authntrust
 
+// profile:authn-oidc-jwt:start
+
 const (
 	TokenProfileResourceServer = "resource-server"
 	TokenProfileRFC9068        = "rfc9068"
@@ -11,3 +13,5 @@ const (
 func ValidTokenProfile(raw string) bool {
 	return raw == TokenProfileResourceServer || raw == TokenProfileRFC9068
 }
+
+// profile:authn-oidc-jwt:end

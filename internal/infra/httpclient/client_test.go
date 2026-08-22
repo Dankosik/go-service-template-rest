@@ -342,7 +342,7 @@ func assertResponseHeaderLimit(t *testing.T, enableHTTP2 bool, wantProto, wantAL
 	if gotProto.Load() != wantProto {
 		t.Fatalf("under-limit proto = %v, want %s", gotProto.Load(), wantProto)
 	}
-	if alpn, _ := gotALPN.Load().(string); alpn != wantALPN && !(wantALPN == "http/1.1" && alpn == "") {
+	if alpn, _ := gotALPN.Load().(string); alpn != wantALPN && (wantALPN != "http/1.1" || alpn != "") {
 		t.Fatalf("under-limit ALPN = %q, want %s", alpn, wantALPN)
 	}
 
@@ -364,7 +364,7 @@ func assertResponseHeaderLimit(t *testing.T, enableHTTP2 bool, wantProto, wantAL
 	if gotProto.Load() != wantProto {
 		t.Fatalf("over-limit proto = %v, want %s", gotProto.Load(), wantProto)
 	}
-	if alpn, _ := gotALPN.Load().(string); alpn != wantALPN && !(wantALPN == "http/1.1" && alpn == "") {
+	if alpn, _ := gotALPN.Load().(string); alpn != wantALPN && (wantALPN != "http/1.1" || alpn != "") {
 		t.Fatalf("over-limit ALPN = %q, want %s", alpn, wantALPN)
 	}
 }
@@ -417,7 +417,7 @@ func doPinnedRequest(t *testing.T, client *Client, path string) string {
 	if err != nil {
 		t.Fatalf("Do(%s) error = %v", path, err)
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	body, err := io.ReadAll(response.Body)
 	if err != nil {
 		t.Fatalf("ReadAll(%s) error = %v", path, err)

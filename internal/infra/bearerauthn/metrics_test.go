@@ -11,6 +11,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
+
 	// profile:grpc:start
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"

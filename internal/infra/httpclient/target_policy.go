@@ -78,6 +78,12 @@ type authorityTransport struct {
 	authority string
 }
 
+func (t authorityTransport) CloseIdleConnections() {
+	if closer, ok := t.base.(interface{ CloseIdleConnections() }); ok {
+		closer.CloseIdleConnections()
+	}
+}
+
 func (t authorityTransport) RoundTrip(request *http.Request) (*http.Response, error) {
 	if request == nil || request.URL == nil || request.URL.User != nil ||
 		!strings.EqualFold(request.URL.Scheme, t.scheme) ||

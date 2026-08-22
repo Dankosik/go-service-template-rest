@@ -93,8 +93,12 @@ jobs worker. Receiver processing is at-least-once; see
 <!-- profile:webhooks-durable:end -->
 <!-- profile:authn-oidc-jwt:start -->
 Choose `AUTHN=oidc-jwt` for OIDC discovery and signed JWT access-token
-authentication; see [OIDC/JWT authentication](docs/authentication.md).
+authentication; see [authentication](docs/authentication.md).
 <!-- profile:authn-oidc-jwt:end -->
+<!-- profile:authn-oidc-introspection:start -->
+Choose `AUTHN=oidc-introspection` for uncached RFC 7662 token introspection;
+see [authentication](docs/authentication.md).
+<!-- profile:authn-oidc-introspection:end -->
 <!-- profile:grpc:start -->
 Choose `GRPC=enabled`
 when the service publishes or consumes native gRPC; see the
@@ -137,6 +141,9 @@ it, and read it here or in
 <!-- profile:authn-oidc-jwt:start -->
 | Authentication | Optional OIDC discovery and RS256 JWT access-token verification for HTTP and native gRPC, with an explicit RFC 9068 profile |
 <!-- profile:authn-oidc-jwt:end -->
+<!-- profile:authn-oidc-introspection:start -->
+| Authentication | Optional uncached RFC 7662 token introspection for HTTP and native gRPC |
+<!-- profile:authn-oidc-introspection:end -->
 | Observability | OpenTelemetry 1.x traces and metrics, Prometheus export, and structured logs |
 | Testing | Race detection and goroutine leak checks; PostgreSQL Testcontainers coverage in the database profile |
 | Delivery | Docker and GitHub Actions security gates; opt-in GHCR publishing with Cosign, CycloneDX, and durable migration-history enforcement |
@@ -354,10 +361,10 @@ benchmarks remain the supported fallback. See [Benchmarking](docs/benchmarking.m
 - [Benchmarking](docs/benchmarking.md)
 - [Railway Deployment Profile](docs/railway-deployment-profile.md)
 
-<!-- profile:authn-oidc-jwt:start -->
+<!-- profile:authn-bearer:start -->
 For trust configuration, token policy, rotation, local testing, and operational
-signals, see [OIDC/JWT Authentication](docs/authentication.md).
-<!-- profile:authn-oidc-jwt:end -->
+signals, see [Authentication](docs/authentication.md).
+<!-- profile:authn-bearer:end -->
 
 <!-- profile:grpc:start -->
 For schema, server, client, streaming, lifecycle, and deployment guidance, see

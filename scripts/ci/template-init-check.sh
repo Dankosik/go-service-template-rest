@@ -274,6 +274,9 @@ prove_generated_authn_module() {
 	if [[ -d internal/infra/oidcjwt ]]; then
 		go test -vet=off ./internal/infra/oidcjwt
 	fi
+	if [[ -d internal/infra/oauthintrospection ]]; then
+		go test -vet=off ./internal/infra/oauthintrospection
+	fi
 }
 
 expect_unchanged_failure() {
@@ -1156,7 +1159,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "auth
 			if [[ "${grpc_choice}" == "enabled" ]]; then
 				make proto-check
 			fi
-			if go list -deps ./cmd/service | grep -E 'internal/infra/(bearerauthn|oidcjwt)|MicahParks/(keyfunc|jwkset)|golang-jwt/jwt'; then
+			if go list -deps ./cmd/service | grep -E 'internal/infra/(bearerauthn|oidcjwt|oauthintrospection)|MicahParks/(keyfunc|jwkset)|golang-jwt/jwt'; then
 				echo "${fixture_name} production graph retained authentication"
 				exit 1
 			fi
@@ -1176,7 +1179,8 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "auth
 			internal/config/authn_config_test.go \
 			internal/infra/http/authn_router_test.go \
 			internal/infra/bearerauthn \
-			internal/infra/oidcjwt; do
+			internal/infra/oidcjwt \
+			internal/infra/oauthintrospection; do
 			assert "${fixture_name} retained ${removed}" path_absent "${checkout}/${removed}"
 		done
 		assert "${fixture_name} retained the old OIDC gRPC TLS proof path" \
@@ -1188,7 +1192,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "auth
 		assert "${fixture_name} retained authentication environment" \
 			grep_absent -Fq 'APP__AUTHN__' "${checkout}/env/.env.example"
 		assert "${fixture_name} retained unresolved authentication markers" \
-			grep_absent -R -E -e 'profile:authn-(bearer|oidc-jwt):' \
+			grep_absent -R -E -e 'profile:authn-(bearer|oidc-jwt|oidc-introspection):' \
 			"${checkout}/README.md" \
 			"${checkout}/api" \
 			"${checkout}/cmd" \
@@ -1240,6 +1244,8 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "auth
 		internal/infra/oidcjwt; do
 		assert "AUTHN=oidc-jwt removed ${retained}" path_present "${authn_http_checkout}/${retained}"
 	done
+	assert "AUTHN=oidc-jwt retained introspection engine" \
+		path_absent "${authn_http_checkout}/internal/infra/oauthintrospection"
 	assert "GRPC=none retained the shared gRPC adapter" \
 		path_absent "${authn_http_checkout}/internal/infra/bearerauthn/grpc.go"
 	assert "GRPC=none retained the shared gRPC proof" \
@@ -1249,7 +1255,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "auth
 	assert "GRPC=none retained the shared gRPC TLS contract proof" \
 		path_absent "${authn_http_checkout}/internal/infra/bearerauthn/grpc_tls_contract_test.go"
 	assert "AUTHN=oidc-jwt retained unresolved profile markers" \
-		grep_absent -R -E -e 'profile:authn-(bearer|oidc-jwt):' \
+		grep_absent -R -E -e 'profile:authn-(bearer|oidc-jwt|oidc-introspection):' \
 		"${authn_http_checkout}/README.md" \
 		"${authn_http_checkout}/api" \
 		"${authn_http_checkout}/cmd" \
@@ -1303,6 +1309,75 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "auth
 	)
 	assert "repeated gRPC OIDC initialization changed the checkout" \
 		same_text "${authn_grpc_snapshot}" "$(snapshot "${authn_grpc_checkout}")"
+
+	authn_introspection_checkout="$(copy_template_checkout authn-introspection git@github.com:acme/authn-introspection-service.git)"
+	authn_introspection_revision="$(git -C "${authn_introspection_checkout}" rev-parse HEAD)"
+	(
+		cd "${authn_introspection_checkout}"
+		CODEOWNER=@acme/platform DATABASE=none GRPC=none AUTHN=oidc-introspection \
+			bash ./scripts/init-module.sh
+		prove_generated_authn_module
+		make openapi-check
+		if go list -deps ./cmd/service | grep -E 'internal/infra/oidcjwt|MicahParks/(keyfunc|jwkset)|golang-jwt/jwt'; then
+			echo "AUTHN=oidc-introspection production graph retained JWT"
+			exit 1
+		fi
+		if grep -Eq 'github.com/(MicahParks/(keyfunc|jwkset)|golang-jwt/jwt)' go.mod; then
+			echo "AUTHN=oidc-introspection retained a JWT or JWKS requirement in go.mod"
+			exit 1
+		fi
+	)
+	for retained in \
+		cmd/service/internal/bootstrap/startup_authn.go \
+		docs/authentication.md \
+		internal/config/authn_config_test.go \
+		internal/infra/httpclient \
+		internal/infra/bearerauthn \
+		internal/infra/oauthintrospection; do
+		assert "AUTHN=oidc-introspection removed ${retained}" path_present "${authn_introspection_checkout}/${retained}"
+	done
+	assert "AUTHN=oidc-introspection retained JWT engine" \
+		path_absent "${authn_introspection_checkout}/internal/infra/oidcjwt"
+	assert "AUTHN=oidc-introspection retained token profile leaf" \
+		path_absent "${authn_introspection_checkout}/internal/authntrust/token_profile.go"
+	assert "AUTHN=oidc-introspection retained unresolved profile markers" \
+		grep_absent -R -E -e 'profile:authn-(bearer|oidc-jwt|oidc-introspection):' \
+		"${authn_introspection_checkout}/README.md" \
+		"${authn_introspection_checkout}/api" \
+		"${authn_introspection_checkout}/cmd" \
+		"${authn_introspection_checkout}/docs" \
+		"${authn_introspection_checkout}/env" \
+		"${authn_introspection_checkout}/internal" \
+		"${authn_introspection_checkout}/.github"
+	grep -Fq 'authn = "oidc-introspection"' "${authn_introspection_checkout}/template.lock"
+	grep -Fqx "source_revision = \"${authn_introspection_revision}\"" "${authn_introspection_checkout}/template.lock"
+	grep -Fq 'scheme: bearer' "${authn_introspection_checkout}/api/openapi/service.yaml"
+	grep_absent -Fq 'bearerFormat: JWT' "${authn_introspection_checkout}/api/openapi/service.yaml"
+	grep -Fq 'APP__AUTHN__INTROSPECTION_ENDPOINT=' "${authn_introspection_checkout}/env/.env.example"
+	grep_absent -Fq 'APP__AUTHN__TOKEN_PROFILE' "${authn_introspection_checkout}/env/.env.example"
+	authn_introspection_snapshot="$(snapshot "${authn_introspection_checkout}")"
+	(
+		cd "${authn_introspection_checkout}"
+		CODEOWNER=@acme/platform DATABASE=none GRPC=none AUTHN=oidc-introspection \
+			bash ./scripts/init-module.sh
+	)
+	assert "repeated HTTP introspection initialization changed the checkout" \
+		same_text "${authn_introspection_snapshot}" "$(snapshot "${authn_introspection_checkout}")"
+	expect_unchanged_failure "${authn_introspection_checkout}" \
+		env CODEOWNER=@acme/platform DATABASE=none GRPC=none AUTHN=oidc-jwt \
+		bash ./scripts/init-module.sh
+
+	authn_introspection_grpc_checkout="$(copy_template_checkout authn-introspection-grpc git@github.com:acme/authn-introspection-grpc-service.git)"
+	(
+		cd "${authn_introspection_grpc_checkout}"
+		CODEOWNER=@acme/platform DATABASE=none GRPC=enabled AUTHN=oidc-introspection \
+			bash ./scripts/init-module.sh
+		prove_generated_authn_module
+		make proto-check
+	)
+	assert "AUTHN=oidc-introspection with GRPC=enabled removed the unary/stream adapter" \
+		file_present "${authn_introspection_grpc_checkout}/internal/infra/bearerauthn/grpc.go"
+	grep -Fq 'authn = "oidc-introspection"' "${authn_introspection_grpc_checkout}/template.lock"
 
 fi
 
