@@ -197,10 +197,10 @@ func mappedStatus(mapped failure.Classification, domain string) error {
 		code = codes.AlreadyExists
 	case failure.CodeRequestEntityTooLarge, failure.CodeTooManyRequests:
 		code = codes.ResourceExhausted
-	// profile:authn-oidc-jwt:start
+	// profile:authn-bearer:start
 	case failure.CodeRequestHeaderFieldsTooLarge:
 		code = codes.ResourceExhausted
-	// profile:authn-oidc-jwt:end
+	// profile:authn-bearer:end
 	case failure.CodeServiceUnavailable:
 		code = codes.Unavailable
 	// profile:http-idempotency-postgres:start

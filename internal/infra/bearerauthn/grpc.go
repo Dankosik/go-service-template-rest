@@ -1,4 +1,4 @@
-package oidcjwt
+package bearerauthn
 
 import (
 	"context"
@@ -16,7 +16,7 @@ import (
 
 // UnaryInterceptor authenticates every unary RPC except the public health
 // Check probe once.
-func (v *Verifier) UnaryInterceptor() grpc.UnaryServerInterceptor {
+func (r *Runtime) UnaryInterceptor() grpc.UnaryServerInterceptor {
 	return func(
 		ctx context.Context,
 		request any,
@@ -27,7 +27,7 @@ func (v *Verifier) UnaryInterceptor() grpc.UnaryServerInterceptor {
 		if publicHealthMethod(info.FullMethod) {
 			return handler(clean, request)
 		}
-		authenticated, _, err := v.authenticateRPC(clean, incoming)
+		authenticated, _, err := r.authenticateRPC(clean, incoming)
 		if err != nil {
 			return nil, grpcAuthenticationError(err)
 		}
@@ -37,7 +37,7 @@ func (v *Verifier) UnaryInterceptor() grpc.UnaryServerInterceptor {
 
 // StreamInterceptor authenticates every stream once and bounds its
 // handler-visible context and message operations by the verified token lifetime.
-func (v *Verifier) StreamInterceptor() grpc.StreamServerInterceptor {
+func (r *Runtime) StreamInterceptor() grpc.StreamServerInterceptor {
 	return func(
 		server any,
 		stream grpc.ServerStream,
@@ -45,7 +45,7 @@ func (v *Verifier) StreamInterceptor() grpc.StreamServerInterceptor {
 		handler grpc.StreamHandler,
 	) error {
 		clean, incoming := splitAuthorizationMetadata(stream.Context())
-		authenticated, expiresAt, err := v.authenticateRPC(clean, incoming)
+		authenticated, expiresAt, err := r.authenticateRPC(clean, incoming)
 		if err != nil {
 			return grpcAuthenticationError(err)
 		}
@@ -72,15 +72,15 @@ func publicHealthMethod(fullMethod string) bool {
 // two cannot be swapped: ctx is the handler-visible context, whose authorization
 // metadata has already been removed, so reading the credential from it would
 // find nothing.
-func (v *Verifier) authenticateRPC(
+func (r *Runtime) authenticateRPC(
 	ctx context.Context,
 	incoming metadata.MD,
 ) (context.Context, time.Time, error) {
-	verified, err := v.verifyCredential(ctx, incoming.Get("authorization"), transportGRPC)
+	verified, err := r.verifyCredential(ctx, incoming.Get("authorization"), transportGRPC)
 	if err != nil {
 		return nil, time.Time{}, err
 	}
-	return reqctx.ContextWithPrincipal(ctx, verified.principal), verified.expiresAt, nil
+	return reqctx.ContextWithPrincipal(ctx, verified.Principal), verified.ExpiresAt, nil
 }
 
 // splitAuthorizationMetadata returns the context a handler may see and the

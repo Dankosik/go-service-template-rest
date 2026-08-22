@@ -342,27 +342,41 @@ linters:
               desc: authntrust is a pure trust-rule leaf shared by internal/config and the verifier; a dependency here would put it back out of reach of one of them.
             - pkg: github.com/example/go-service-template-rest/cmd
               desc: authntrust must not depend on composition roots.
-        # The verifier core answers both transports and must stay buildable
-        # without either. Only its two adapter files may name a transport
-        # library, so the split survives an edit that scripts/init-module.sh
-        # cannot see.
         oidcjwt_core_is_transport_neutral:
           list-mode: lax
           files:
             - "**/internal/infra/oidcjwt/*.go"
-            - "!**/internal/infra/oidcjwt/http.go"
-            # profile:grpc:start
-            - "!**/internal/infra/oidcjwt/grpc.go"
-            # profile:grpc:end
             - "!**/internal/infra/oidcjwt/*_test.go"
           deny:
             - pkg: github.com/getkin/kin-openapi
-              desc: the OpenAPI security-requirement seam belongs in oidcjwt's http.go adapter.
+              desc: inbound HTTP security belongs in bearerauthn, not the JWT engine.
             - pkg: github.com/go-chi/chi/v5
-              desc: the verifier answers a resolver seam and never routes; chi belongs in internal/infra/http.
+              desc: the JWT engine never routes; chi belongs in internal/infra/http.
             - pkg: google.golang.org/grpc
-              desc: gRPC interceptors, metadata, and status belong in oidcjwt's grpc.go adapter.
+              desc: inbound gRPC policy belongs in bearerauthn, not the JWT engine.
         # profile:authn-oidc-jwt:end
+        # profile:authn-bearer:start
+        bearerauthn_core_is_transport_neutral:
+          list-mode: lax
+          files:
+            - "**/internal/infra/bearerauthn/*.go"
+            - "!**/internal/infra/bearerauthn/http.go"
+            # profile:grpc:start
+            - "!**/internal/infra/bearerauthn/grpc.go"
+            # profile:grpc:end
+            - "!**/internal/infra/bearerauthn/*_test.go"
+          deny:
+            - pkg: github.com/getkin/kin-openapi
+              desc: the OpenAPI security-requirement seam belongs in bearerauthn's http.go adapter.
+            - pkg: github.com/go-chi/chi/v5
+              desc: the shared runtime answers a resolver seam and never routes; chi belongs in internal/infra/http.
+            - pkg: google.golang.org/grpc
+              desc: gRPC interceptors, metadata, and status belong in bearerauthn's grpc.go adapter.
+            - pkg: github.com/example/go-service-template-rest/internal/infra/oidcjwt
+              desc: the shared runtime must not import a concrete trust engine.
+            - pkg: github.com/example/go-service-template-rest/internal/config
+              desc: the shared runtime must not import configuration.
+        # profile:authn-bearer:end
         postgres_driver_boundary:
           list-mode: lax
           files:

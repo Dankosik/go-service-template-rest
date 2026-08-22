@@ -13,7 +13,21 @@ import (
 	"github.com/getkin/kin-openapi/openapi3filter"
 
 	// profile:grpc:start
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"sync/atomic"
+	"time"
+
+	"github.com/example/go-service-template-rest/internal/infra/bearerauthn"
+	grpcx "github.com/example/go-service-template-rest/internal/infra/grpc"
+	"github.com/example/go-service-template-rest/internal/infra/grpc/grpctest"
+	httpx "github.com/example/go-service-template-rest/internal/infra/http"
+	"github.com/example/go-service-template-rest/internal/waittest"
+	"github.com/getkin/kin-openapi/openapi3"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/protobuf/types/known/emptypb"
 	// profile:grpc:end
 )
 
@@ -100,6 +114,109 @@ func TestAuthnBootstrapOrder(t *testing.T) {
 		}
 	})
 }
+
+// profile:grpc:start
+
+func TestAuthnUsesIndependentTransportAdmission(t *testing.T) {
+	entered := make(chan struct{}, 2)
+	block := make(chan struct{})
+	verifier := &independentAdmissionVerifier{entered: entered, block: block}
+	runtime, err := bearerauthn.New(verifier, nil)
+	if err != nil {
+		t.Fatalf("bearerauthn.New() error = %v", err)
+	}
+	httpHandler := httpx.MaxInFlight(1, telemetry.ServerLoad{}, http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		_, resolveErr := runtime.ResolveHTTP(request.Context(), &openapi3filter.AuthenticationInput{
+			SecurityScheme:         &openapi3.SecurityScheme{Type: "http", Scheme: "bearer"},
+			RequestValidationInput: &openapi3filter.RequestValidationInput{Request: request},
+		})
+		if resolveErr != nil {
+			http.Error(w, resolveErr.Error(), http.StatusUnauthorized)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	const method = "/bootstrap.test.Admission/Call"
+	server, err := grpcx.NewServer(grpcx.Options{
+		UnaryPolicy: []grpc.UnaryServerInterceptor{runtime.UnaryInterceptor()},
+		Services: []grpcx.RegisterService{
+			func(registrar grpc.ServiceRegistrar) {
+				grpctest.Register(registrar, grpctest.Unary(
+					method,
+					func(context.Context, *emptypb.Empty) (*emptypb.Empty, error) {
+						return &emptypb.Empty{}, nil
+					},
+				))
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewServer() error = %v", err)
+	}
+	connection := grpctest.ServeBufconn(t, server)
+	credential := metadata.NewOutgoingContext(t.Context(), metadata.Pairs("authorization", "Bearer token"))
+
+	httpDone := make(chan struct{})
+	go func() {
+		defer close(httpDone)
+		request := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/secure", nil)
+		request.Header.Set("Authorization", "Bearer token")
+		httpHandler.ServeHTTP(httptest.NewRecorder(), request)
+	}()
+	grpcDone := make(chan error, 1)
+	go func() {
+		grpcDone <- connection.Invoke(credential, method, &emptypb.Empty{}, &emptypb.Empty{})
+	}()
+	waittest.ReceiveSignal(t, entered, 2*time.Second, "first transport to enter verifier")
+	waittest.ReceiveSignal(t, entered, 2*time.Second, "second transport to enter verifier")
+	if verifier.calls.Load() != 2 || verifier.peak.Load() != 2 {
+		t.Fatalf("verifier calls/peak = %d/%d, want 2/2", verifier.calls.Load(), verifier.peak.Load())
+	}
+	close(block)
+	<-httpDone
+	if err := waittest.Receive(t, grpcDone, 2*time.Second, "gRPC call to finish"); err != nil {
+		t.Fatalf("gRPC invoke error = %v", err)
+	}
+}
+
+type independentAdmissionVerifier struct {
+	entered  chan struct{}
+	block    <-chan struct{}
+	calls    atomic.Int64
+	inFlight atomic.Int64
+	peak     atomic.Int64
+}
+
+func (v *independentAdmissionVerifier) Verify(ctx context.Context, _ string) (bearerauthn.Result, error) {
+	v.calls.Add(1)
+	current := v.inFlight.Add(1)
+	defer v.inFlight.Add(-1)
+	for {
+		previous := v.peak.Load()
+		if current <= previous || v.peak.CompareAndSwap(previous, current) {
+			break
+		}
+	}
+	if v.entered != nil {
+		select {
+		case v.entered <- struct{}{}:
+		default:
+		}
+	}
+	if v.block != nil {
+		select {
+		case <-v.block:
+		case <-ctx.Done():
+			return bearerauthn.Result{}, fmt.Errorf("wait for test barrier: %w", ctx.Err())
+		}
+	}
+	return bearerauthn.Result{Principal: reqctx.Principal{Subject: "bootstrap-test-subject"}}, nil
+}
+
+func (v *independentAdmissionVerifier) Close() {}
+
+// profile:grpc:end
 
 func assertAuthnBootstrapConfig(t *testing.T, cfg config.Config) {
 	t.Helper()

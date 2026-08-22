@@ -17,9 +17,9 @@ import (
 type Config struct {
 	App  AppConfig  `koanf:"app"`
 	HTTP HTTPConfig `koanf:"http"`
-	// profile:authn-oidc-jwt:start
+	// profile:authn-bearer:start
 	Authn AuthnConfig `koanf:"authn"`
-	// profile:authn-oidc-jwt:end
+	// profile:authn-bearer:end
 	// profile:outbound-auth-oauth2-client-credentials:start
 	OutboundAuth OutboundAuthConfig `koanf:"outbound_auth"`
 	// profile:outbound-auth-oauth2-client-credentials:end

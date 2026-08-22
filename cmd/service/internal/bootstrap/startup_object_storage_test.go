@@ -5,9 +5,9 @@ import (
 	"errors"
 	"io"
 
-	// profile:authn-oidc-jwt:start
+	// profile:authn-bearer:start
 	"log/slog"
-	// profile:authn-oidc-jwt:end
+	// profile:authn-bearer:end
 	"slices"
 	"testing"
 	"time"
@@ -15,9 +15,9 @@ import (
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/infra/s3"
 
-	// profile:authn-oidc-jwt:start
+	// profile:authn-bearer:start
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
-	// profile:authn-oidc-jwt:end
+	// profile:authn-bearer:end
 	"github.com/example/go-service-template-rest/internal/objectstorage"
 )
 
@@ -111,11 +111,11 @@ func objectStorageTestWiring(runtime objectStorageRuntime) runtimeWiring {
 	wiring.dependencies = func(context.Context, startupBootstrap) (runtimeDependencies, error) {
 		return runtimeDependencies{}, nil
 	}
-	// profile:authn-oidc-jwt:start
+	// profile:authn-bearer:start
 	wiring.initAuthn = func(context.Context, config.Config, *telemetry.Metrics, *slog.Logger) (authnRuntime, error) {
 		return fakeAuthnRuntime{}, nil
 	}
-	// profile:authn-oidc-jwt:end
+	// profile:authn-bearer:end
 	return wiring
 }
 

@@ -38,11 +38,11 @@ func validateConfig(cfg *Config, unknownKeys []string) error {
 	if err := validateHTTPConfig(&cfg.HTTP); err != nil {
 		return err
 	}
-	// profile:authn-oidc-jwt:start
+	// profile:authn-bearer:start
 	if err := validateAuthnConfig(&cfg.Authn); err != nil {
 		return err
 	}
-	// profile:authn-oidc-jwt:end
+	// profile:authn-bearer:end
 	// profile:outbound-auth-oauth2-client-credentials:start
 	if err := validateOutboundAuthConfig(&cfg.OutboundAuth); err != nil {
 		return err

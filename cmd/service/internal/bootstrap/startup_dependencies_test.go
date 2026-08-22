@@ -337,12 +337,12 @@ func resetBootstrapConfigEnv(t *testing.T) {
 			t.Fatalf("os.Unsetenv(%q) error = %v", key, err)
 		}
 	}
-	// profile:authn-oidc-jwt:start
+	// profile:authn-bearer:start
 	// These tests own dependency/startup budgets; supply the unrelated required
 	// authentication policy without introducing executable defaults.
 	t.Setenv("APP__AUTHN__ISSUER", "https://issuer.example.com")
 	t.Setenv("APP__AUTHN__AUDIENCE", "service-api")
-	// profile:authn-oidc-jwt:end
+	// profile:authn-bearer:end
 	// profile:outbound-auth-oauth2-client-credentials:start
 	setOutboundAuthBootstrapTestEnv(t)
 	// profile:outbound-auth-oauth2-client-credentials:end

@@ -184,9 +184,9 @@ func TestMaxInFlightBounds(t *testing.T) {
 		{
 			name:  "zero disables shedding",
 			value: "0",
-			// profile:authn-oidc-jwt:start
+			// profile:authn-bearer:start
 			wantErr: true,
-			// profile:authn-oidc-jwt:end
+			// profile:authn-bearer:end
 			//nolint:paralleltest // This test mutates process-global environment or working directory.
 
 			// TestMaxConnectionsBounds covers the accept ceiling, which bounds what

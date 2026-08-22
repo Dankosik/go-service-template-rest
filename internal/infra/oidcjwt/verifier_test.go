@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/example/go-service-template-rest/internal/infra/bearerauthn"
 	"github.com/golang-jwt/jwt/v5"
 )
 
@@ -30,25 +31,24 @@ func TestResourceServerProfileAcceptsMainstreamClientIdentityClaims(t *testing.T
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
 			token := signToken(t, key, "key-1", testCase.typ, testCase.claims)
-			verified, err := verifier.verifyToken(t.Context(), token, transportHTTP)
+			verified, err := verifier.Verify(t.Context(), token)
 			if err != nil {
-				t.Fatalf("verifyToken() error = %v", err)
+				t.Fatalf("Verify() error = %v", err)
 			}
-			if verified.principal.Subject != "subject-1" || verified.principal.ClientID != testCase.clientID {
-				t.Fatalf("principal = %+v", verified.principal)
+			if verified.Principal.Subject != "subject-1" || verified.Principal.ClientID != testCase.clientID {
+				t.Fatalf("principal = %+v", verified.Principal)
 			}
 		})
 	}
 
 	clientOnly := validClaims(testNow)
 	clientOnly.Subject = ""
-	verified, err := verifier.verifyToken(
+	verified, err := verifier.Verify(
 		t.Context(),
 		signToken(t, key, "key-1", "JWT", clientOnly),
-		transportHTTP,
 	)
-	if err != nil || verified.principal.Subject != "" || verified.principal.ClientID != "client-1" {
-		t.Fatalf("client-only principal = %+v, error = %v", verified.principal, err)
+	if err != nil || verified.Principal.Subject != "" || verified.Principal.ClientID != "client-1" {
+		t.Fatalf("client-only principal = %+v, error = %v", verified.Principal, err)
 	}
 }
 
@@ -59,13 +59,13 @@ func TestRFC9068ProfileIsExplicit(t *testing.T) {
 		testPolicyWithProfile(t, "rfc9068"),
 		staticKeyFunc(key),
 		func() time.Time { return testNow },
-		newAuthnMetrics(nil),
+		newJWKSMetrics(nil),
 		nil,
 		nil,
 	)
 
 	valid := validClaims(testNow)
-	if _, err := strict.verifyToken(t.Context(), signToken(t, key, "key-1", "at+jwt", valid), transportHTTP); err != nil {
+	if _, err := strict.Verify(t.Context(), signToken(t, key, "key-1", "at+jwt", valid)); err != nil {
 		t.Fatalf("strict valid token error = %v", err)
 	}
 	for _, testCase := range []struct {
@@ -80,8 +80,8 @@ func TestRFC9068ProfileIsExplicit(t *testing.T) {
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
-			_, err := strict.verifyToken(t.Context(), signToken(t, key, "key-1", testCase.typ, testCase.claims), transportHTTP)
-			requireKind(t, err, KindInvalid)
+			_, err := strict.Verify(t.Context(), signToken(t, key, "key-1", testCase.typ, testCase.claims))
+			requireKind(t, err, bearerauthn.KindInvalid)
 		})
 	}
 }
@@ -109,16 +109,15 @@ func TestVerifierRejectsInvalidTrustAndIdentity(t *testing.T) {
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
-			_, err := verifier.verifyToken(t.Context(), signToken(t, key, "key-1", "JWT", testCase.claims), transportHTTP)
-			requireKind(t, err, KindInvalid)
+			_, err := verifier.Verify(t.Context(), signToken(t, key, "key-1", "JWT", testCase.claims))
+			requireKind(t, err, bearerauthn.KindInvalid)
 		})
 	}
 
 	wrongKey := loadTestRSAKey(t, "test-key-2.pem")
-	if _, err := verifier.verifyToken(
+	if _, err := verifier.Verify(
 		t.Context(),
 		signToken(t, wrongKey, "key-1", "JWT", validClaims(testNow)),
-		transportHTTP,
 	); err == nil {
 		t.Fatal("token signed by an untrusted key was accepted")
 	}
@@ -134,15 +133,14 @@ func TestVerifierRejectsInvalidTrustAndIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sign HMAC control: %v", err)
 	}
-	if _, err := verifier.verifyToken(t.Context(), signedHMAC, transportHTTP); err == nil {
+	if _, err := verifier.Verify(t.Context(), signedHMAC); err == nil {
 		t.Fatal("token using an unconfigured algorithm was accepted")
 	}
 
 	encryptionKeyVerifier := newTestVerifierWithUse(t, key, "enc")
-	if _, err := encryptionKeyVerifier.verifyToken(
+	if _, err := encryptionKeyVerifier.Verify(
 		t.Context(),
 		signToken(t, key, "key-1", "JWT", validClaims(testNow)),
-		transportHTTP,
 	); err == nil {
 		t.Fatal("JWK marked for encryption was accepted for signature verification")
 	}
@@ -163,13 +161,13 @@ func TestJWKSRefreshFailureIsUnavailable(t *testing.T) {
 			}
 		},
 		func() time.Time { return testNow },
-		newAuthnMetrics(nil),
+		newJWKSMetrics(nil),
 		nil,
 		nil,
 	)
 	key := loadTestRSAKey(t, testSigningKey)
-	_, err := verifier.verifyToken(t.Context(), signToken(t, key, "unknown", "JWT", validClaims(testNow)), transportHTTP)
-	requireKind(t, err, KindUnavailable)
+	_, err := verifier.Verify(t.Context(), signToken(t, key, "unknown", "JWT", validClaims(testNow)))
+	requireKind(t, err, bearerauthn.KindUnavailable)
 }
 
 func TestVerifierCloseIsIdempotent(t *testing.T) {
@@ -179,7 +177,7 @@ func TestVerifierCloseIsIdempotent(t *testing.T) {
 		testPolicy(t),
 		staticKeyFunc(loadTestRSAKey(t, testSigningKey)),
 		func() time.Time { return testNow },
-		newAuthnMetrics(nil),
+		newJWKSMetrics(nil),
 		func() { cancels++ },
 		func() { closes++ },
 	)

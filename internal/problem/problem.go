@@ -34,9 +34,9 @@ const (
 	CodeConflict              Code = "conflict"
 	CodeAlreadyExists         Code = Code(failure.CodeAlreadyExists)
 	CodeRequestEntityTooLarge Code = Code(failure.CodeRequestEntityTooLarge)
-	// profile:authn-oidc-jwt:start
+	// profile:authn-bearer:start
 	CodeRequestHeaderFieldsTooLarge Code = Code(failure.CodeRequestHeaderFieldsTooLarge)
-	// profile:authn-oidc-jwt:end
+	// profile:authn-bearer:end
 	CodeUnprocessableContent Code = Code(failure.CodeUnprocessableContent)
 	CodeTooManyRequests      Code = Code(failure.CodeTooManyRequests)
 	// profile:http-idempotency-postgres:start
@@ -116,14 +116,14 @@ var catalog = []Definition{
 		Title:   "request entity too large",
 		TypeURI: "https://www.rfc-editor.org/rfc/rfc9110#section-15.5.14",
 	},
-	// profile:authn-oidc-jwt:start
+	// profile:authn-bearer:start
 	{
 		Code:    CodeRequestHeaderFieldsTooLarge,
 		Status:  http.StatusRequestHeaderFieldsTooLarge,
 		Title:   "request header fields too large",
 		TypeURI: "https://www.rfc-editor.org/rfc/rfc6585#section-5",
 	},
-	// profile:authn-oidc-jwt:end
+	// profile:authn-bearer:end
 	{
 		Code:    CodeUnprocessableContent,
 		Status:  http.StatusUnprocessableEntity,

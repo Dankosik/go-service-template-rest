@@ -8,9 +8,9 @@ import (
 	"strings"
 
 	"github.com/example/go-service-template-rest/internal/failure"
-	// profile:authn-oidc-jwt:start
-	"github.com/example/go-service-template-rest/internal/infra/oidcjwt"
-	// profile:authn-oidc-jwt:end
+	// profile:authn-bearer:start
+	"github.com/example/go-service-template-rest/internal/infra/bearerauthn"
+	// profile:authn-bearer:end
 	"github.com/example/go-service-template-rest/internal/problem"
 	"github.com/getkin/kin-openapi/openapi3filter"
 )
@@ -51,27 +51,27 @@ func handleMalformedGeneratedRequest(log *slog.Logger, w http.ResponseWriter, r 
 // a 400.
 func handleGeneratedRequestError(log *slog.Logger, challenge string) func(http.ResponseWriter, *http.Request, error) {
 	return func(w http.ResponseWriter, r *http.Request, err error) {
-		// profile:authn-oidc-jwt:start
-		if kind, ok := oidcjwt.KindOf(err); ok {
+		// profile:authn-bearer:start
+		if kind, ok := bearerauthn.KindOf(err); ok {
 			logStrictRequestError(log, r, err)
-			// In oidcjwt.Kind declaration order, as that package's errors.go is, so
+			// In bearerauthn.Kind declaration order, as that package's errors.go is, so
 			// a category added there lands in one obvious place here.
 			switch kind {
-			case oidcjwt.KindMissing:
+			case bearerauthn.KindMissing:
 				w.Header().Set("WWW-Authenticate", "Bearer")
 				writeProblem(w, r, problemResponse{code: problem.CodeUnauthorized, detail: "credentials are missing"})
-			case oidcjwt.KindMalformed:
+			case bearerauthn.KindMalformed:
 				w.Header().Set("WWW-Authenticate", `Bearer error="invalid_request"`)
 				writeProblem(w, r, problemResponse{code: problem.CodeBadRequest, detail: "authentication credential is malformed"})
-			case oidcjwt.KindOversize:
+			case bearerauthn.KindOversize:
 				writeProblem(w, r, problemResponse{
 					code:   problem.CodeRequestHeaderFieldsTooLarge,
 					detail: "authentication credential is too large",
 				})
-			case oidcjwt.KindInvalid:
+			case bearerauthn.KindInvalid:
 				w.Header().Set("WWW-Authenticate", `Bearer error="invalid_token"`)
 				writeProblem(w, r, problemResponse{code: problem.CodeUnauthorized, detail: "credentials are invalid"})
-			case oidcjwt.KindUnavailable:
+			case bearerauthn.KindUnavailable:
 				w.Header().Set("Retry-After", "30")
 				writeProblem(w, r, problemResponse{code: problem.CodeServiceUnavailable, detail: "authentication trust is unavailable"})
 			default:
@@ -80,7 +80,7 @@ func handleGeneratedRequestError(log *slog.Logger, challenge string) func(http.R
 			}
 			return
 		}
-		// profile:authn-oidc-jwt:end
+		// profile:authn-bearer:end
 		if _, ok := errors.AsType[*openapi3filter.SecurityRequirementsError](err); ok {
 			logStrictRequestError(log, r, err)
 			// SecurityRequirementsError wraps resolver failures. Preserve a

@@ -791,10 +791,11 @@ if [[ "${source_checkout}" != true ]]; then
 		# authntrust exists only to be shared by the verifier and internal/config's
 		# authn validation. With the profile off it has no caller at all, so it
 		# leaves with them rather than becoming an unreferenced leaf.
-		rm -rf -- internal/infra/oidcjwt internal/authntrust
+		rm -rf -- internal/infra/bearerauthn internal/infra/oidcjwt internal/authntrust
 		rm -f -- \
 			cmd/service/internal/bootstrap/authn_bootstrap_test.go \
 			cmd/service/internal/bootstrap/startup_authn.go \
+			cmd/service/internal/bootstrap/startup_authn_profile.go \
 			internal/config/authn_config.go \
 			internal/config/authn_config_test.go \
 			internal/infra/http/authn_router_test.go \
@@ -803,8 +804,10 @@ if [[ "${source_checkout}" != true ]]; then
 		replace_literal api/openapi/service.yaml \
 			'security: [{bearerAuth: []}]' \
 			'security: []'
+		strip_profile authn-bearer remove
 		strip_profile authn-oidc-jwt remove
 	else
+		strip_profile authn-bearer keep
 		strip_profile authn-oidc-jwt keep
 	fi
 
@@ -894,9 +897,9 @@ fi
 			docs/grpc.md \
 			internal/config/grpc_config.go \
 			internal/config/grpc_config_test.go \
-			internal/infra/oidcjwt/grpc.go \
-			internal/infra/oidcjwt/grpc_test.go \
-			internal/infra/oidcjwt/grpc_tls_contract_test.go \
+			internal/infra/bearerauthn/grpc.go \
+			internal/infra/bearerauthn/grpc_test.go \
+			internal/infra/bearerauthn/grpc_tls_contract_test.go \
 			test/grpc_process_integration_test.go \
 			scripts/proto.sh \
 			scripts/run-buf.sh \
