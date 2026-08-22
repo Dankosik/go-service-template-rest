@@ -59,13 +59,38 @@ Co-locate a concept's rule, consequences, review signals, and proof. Keep
 `SKILL.md` below 500 lines. Before splitting a skill, disclose a reference and
 verify that a real trigger boundary remains.
 
+## Method Skills: Behavioral Compression
+
+A `model/method` skill exists to change one technical judgment the base model
+otherwise makes inconsistently. Before editing, state the ablation: what
+observable decision becomes worse when the body is absent?
+
+A promoted method skill binds four elements to the same domain judgment:
+
+1. **Operator** — one pretrained technical term repeated in the description and
+   opening.
+2. **Story** — one concrete path, lifecycle, matrix, table, graph, or ownership
+   map the agent must build.
+3. **Falsifier** — one plausible wrong default paired with the correct
+   replacement behavior.
+4. **Done** — one local, checkable, exhaustive completion criterion.
+
+Prove promotion with trigger, non-trigger, neighbor-collision, decision, and
+completion evals. Compare current and ablated baselines with the candidate
+before claiming changed model behavior.
+
 ## Structural Budget
 
 Use these per-artifact review heuristics:
 
 - 50–150 words for a session or index `SKILL.md` body;
-- 100–250 words for a specialist body;
+- 100–250 words for a flat decision/reference method;
+- 250–600 words for a sequential method with hard gates where premature
+  completion is a real risk;
 - 250–500 words for one non-obvious reference.
+
+Past 600 words, disclose branch-only detail in a reference without moving a
+mandatory sequence gate out of the body.
 
 The skill entry owns domain judgment only. Shared finding, completion, proof,
 handoff, workflow, and harness mechanics stay with their existing shared

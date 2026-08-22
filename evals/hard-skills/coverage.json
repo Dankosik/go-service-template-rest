@@ -1,0 +1,60 @@
+{
+  "required_categories": [
+    "trigger",
+    "non_trigger",
+    "collision",
+    "decision",
+    "completion"
+  ],
+  "skills": {
+    "go-api-contract": {
+      "trigger": 101,
+      "non_trigger": 102,
+      "collision": 103,
+      "decision": 104,
+      "completion": 105
+    },
+    "go-coder": {
+      "trigger": 106,
+      "non_trigger": 107,
+      "collision": 108,
+      "decision": 109,
+      "completion": 110
+    },
+    "go-systematic-debugging": {
+      "trigger": 111,
+      "non_trigger": 112,
+      "collision": 113,
+      "decision": 114,
+      "completion": 115
+    },
+    "go-verification-before-completion": {
+      "trigger": 116,
+      "non_trigger": 117,
+      "collision": 118,
+      "decision": 119,
+      "completion": 120
+    },
+    "go-idiomatic": {
+      "trigger": 121,
+      "non_trigger": 122,
+      "collision": 123,
+      "decision": 124,
+      "completion": 125
+    },
+    "go-language-simplifier": {
+      "trigger": 126,
+      "non_trigger": 127,
+      "collision": 128,
+      "decision": 129,
+      "completion": 130
+    },
+    "go-structural-quality": {
+      "trigger": 131,
+      "non_trigger": 132,
+      "collision": 133,
+      "decision": 134,
+      "completion": 135
+    }
+  }
+}

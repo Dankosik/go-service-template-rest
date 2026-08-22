@@ -1,0 +1,594 @@
+{
+  "skill_name": "repository-hard-skills",
+  "execution": {
+    "repository_state": "disposable_copy",
+    "production_credentials": "absent",
+    "external_writes": "deny"
+  },
+  "measurement": {
+    "required_run_metadata": [
+      "harness",
+      "model",
+      "reasoning_effort",
+      "tool_profile",
+      "agent_command_label"
+    ],
+    "required_metrics": [
+      "input_tokens",
+      "output_tokens",
+      "tool_calls",
+      "skill_loads",
+      "lane_identities",
+      "empty_waits"
+    ],
+    "behavior_verdict": "manual_expectation_grading"
+  },
+  "fixture": {
+    "setup_patch": "evals/instructions/fixtures/workspace.patch"
+  },
+  "evals": [
+    {
+      "id": 101,
+      "skill": "go-api-contract",
+      "category": "trigger",
+      "prompt": "Technical Design only. POST /items is retryable and a timeout can hide whether creation committed. The proposal only adds an Idempotency-Key header. Decide the client-visible contract without implementing it.",
+      "expected_output": "The API method builds the changed observable matrix and closes the whole retry clause, not only the header.",
+      "files": [
+        ".agents/skills/go-api-contract/SKILL.md",
+        ".agents/skills/go-api-contract/references/idempotency-and-replay.md"
+      ],
+      "expectations": [
+        "The agent selects go-api-contract from the retryable mutation pressure.",
+        "The decision names key scope, syntax or entropy, TTL, mismatch behavior, in-flight behavior, durable reservation, replay identity, and proof.",
+        "The result remains Technical Design only and does not edit code."
+      ]
+    },
+    {
+      "id": 102,
+      "skill": "go-api-contract",
+      "category": "non_trigger",
+      "prompt": "Review a change that only reorders existing chi middleware around an unchanged published operation. Statuses, bodies, validation, and retry behavior are fixed. Choose the owning method.",
+      "expected_output": "Route-tree composition stays with go-chi; the word operation does not activate API semantics.",
+      "files": [
+        ".agents/skills/go-api-contract/SKILL.md",
+        ".agents/skills/go-chi/SKILL.md"
+      ],
+      "expectations": [
+        "The agent selects go-chi as the owner of middleware order.",
+        "It does not invent or reopen client-visible API clauses.",
+        "It explains the non-trigger through the unchanged observable contract."
+      ]
+    },
+    {
+      "id": 103,
+      "skill": "go-api-contract",
+      "category": "collision",
+      "prompt": "Technical Design only. A correctly mounted chi route may return 202 while work outlives the request. Decide whether the response is honest and how clients recover. Router order is already accepted.",
+      "expected_output": "Observable async semantics win over route composition, with one durable acceptance boundary and recovery path.",
+      "files": [
+        ".agents/skills/go-api-contract/SKILL.md",
+        ".agents/skills/go-api-contract/references/async-operation-contracts.md",
+        ".agents/skills/go-chi/SKILL.md"
+      ],
+      "expectations": [
+        "The agent selects go-api-contract rather than go-chi for the open decision.",
+        "The matrix covers accepted, terminal success, terminal failure, retention, and cancellation observables.",
+        "The answer names the durable commit that makes 202 honest or rejects 202."
+      ]
+    },
+    {
+      "id": 104,
+      "skill": "go-api-contract",
+      "category": "decision",
+      "prompt": "Review a published GET /items change: default page size moves from 20 to 50 and a documented 409 response disappears. The schema differ is green. Decide compatibility.",
+      "expected_output": "The review hand-classifies both observable cells and rejects the green differ as sufficient proof.",
+      "files": [
+        ".agents/skills/go-api-contract/SKILL.md",
+        ".agents/skills/go-api-contract/references/compatibility-and-versioning.md"
+      ],
+      "expectations": [
+        "The agent builds an observable matrix with old behavior, proposed behavior, client consequence, owner, and proof.",
+        "It treats the default change and removed error response as hand-classified compatibility decisions.",
+        "It requires an accepted migration or version decision rather than a check waiver."
+      ]
+    },
+    {
+      "id": 105,
+      "skill": "go-api-contract",
+      "category": "completion",
+      "prompt": "The OpenAPI drift check passes after remapping conflict from code slug_conflict to conflict. No affected consumer was exercised. May the API contract review report PASS?",
+      "expected_output": "No: the changed client-visible error cell lacks compatibility disposition and consumer-runnable proof.",
+      "files": [
+        ".agents/skills/go-api-contract/SKILL.md",
+        ".agents/skills/go-api-contract/references/error-contract-profile.md"
+      ],
+      "expectations": [
+        "The agent refuses completion from schema drift alone.",
+        "It identifies the changed stable error code as a client-visible observable.",
+        "It returns the missing migration and consumer proof as a named evidence gap."
+      ]
+    },
+    {
+      "id": 106,
+      "skill": "go-coder",
+      "category": "trigger",
+      "prompt": "Implement the accepted Go outcome: protected requests must pass the resolved principal into the existing feature policy path. Behavior and package ownership are closed. Keep the change minimal and prove it.",
+      "expected_output": "The implementation binds the criterion to the earliest current owner and ships one causal vertical slice with routine proof.",
+      "files": [
+        ".agents/skills/go-coder/SKILL.md",
+        ".agents/skills/go-coder/references/earliest-owner-and-import-direction.md"
+      ],
+      "expectations": [
+        "The agent selects go-coder for authorized implementation.",
+        "It maps criterion, owner, observable, far-side caller, and focused proof before editing.",
+        "It extends the existing policy seam without a parallel path or speculative abstraction."
+      ]
+    },
+    {
+      "id": 107,
+      "skill": "go-coder",
+      "category": "non_trigger",
+      "prompt": "A CI test is flaky and nobody knows whether the test or production synchronization is wrong. Fix it.",
+      "expected_output": "Unknown cause routes to systematic debugging before implementation.",
+      "files": [
+        ".agents/skills/go-coder/SKILL.md",
+        ".agents/skills/go-systematic-debugging/SKILL.md"
+      ],
+      "expectations": [
+        "The agent does not start with go-coder or patch the symptom.",
+        "It establishes the failing signal and root cause first.",
+        "Implementation begins only after the owner and behavior are closed."
+      ]
+    },
+    {
+      "id": 108,
+      "skill": "go-coder",
+      "category": "collision",
+      "prompt": "Implement an accepted parser change. A routine focused table test covers every known behavior class; no oracle or proving layer is disputed. Decide whether go-test-strategy or go-coder owns the work.",
+      "expected_output": "Go Coder owns the production change and routine focused test; Test Design is not reopened.",
+      "files": [
+        ".agents/skills/go-coder/SKILL.md",
+        ".agents/skills/go-test-strategy/SKILL.md"
+      ],
+      "expectations": [
+        "The agent selects go-coder as the primary method.",
+        "It keeps the routine focused test in the same change.",
+        "It does not route to Test Design without a non-obvious oracle or proving layer."
+      ]
+    },
+    {
+      "id": 109,
+      "skill": "go-coder",
+      "category": "decision",
+      "prompt": "Implement an accepted request-field change. The quickest visible edit is internal/openapi/openapi.gen.go, while api/openapi/service.yaml is canonical. Choose the causal edit and proof path.",
+      "expected_output": "The canonical OpenAPI source changes first, generated output follows, callers migrate, and the drift check proves reconciliation.",
+      "files": [
+        ".agents/skills/go-coder/SKILL.md",
+        ".agents/skills/go-coder/references/generated-source-of-truth-and-drift.md"
+      ],
+      "expectations": [
+        "The agent rejects a hand edit to generated Go.",
+        "It binds the criterion to the canonical source, generated consumer path, and focused behavior proof.",
+        "It removes superseded generated or manual paths instead of retaining both."
+      ]
+    },
+    {
+      "id": 110,
+      "skill": "go-coder",
+      "category": "completion",
+      "prompt": "A new HTTP handler passes its package test, but its adapter is still a TODO stub and the old handler remains mounted as a fallback. Is implementation complete?",
+      "expected_output": "No: the criterion lacks one causal end-to-end edit and superseded paths remain.",
+      "files": [
+        ".agents/skills/go-coder/SKILL.md",
+        ".agents/skills/go-coder/references/earliest-owner-and-import-direction.md"
+      ],
+      "expectations": [
+        "The agent refuses completion from the layer-local test.",
+        "It identifies the missing far-side adapter behavior and parallel route.",
+        "It requires one matching proof for the accepted observable before completion."
+      ]
+    },
+    {
+      "id": 111,
+      "skill": "go-systematic-debugging",
+      "category": "trigger",
+      "prompt": "Diagnose and fix a Go test that fails about 1 in 30 CI runs. The proposed patch adds time.Sleep. Find and repair the root cause.",
+      "expected_output": "The debugger establishes a measurable red signal, minimizes it, and repairs the first broken synchronization invariant instead of adding sleep.",
+      "files": [
+        ".agents/skills/go-systematic-debugging/SKILL.md",
+        ".agents/skills/go-systematic-debugging/references/flaky-repro-controls-go.md"
+      ],
+      "expectations": [
+        "The agent selects go-systematic-debugging and runs a signal command before ranking causes.",
+        "It moves one reproduction control at a time and records failure frequency.",
+        "It rejects time.Sleep unless evidence establishes it as the accepted condition."
+      ]
+    },
+    {
+      "id": 112,
+      "skill": "go-systematic-debugging",
+      "category": "non_trigger",
+      "prompt": "Add a new health endpoint whose behavior and owner are fully specified. There is no regression or failing signal. Choose the method.",
+      "expected_output": "Authorized feature implementation uses go-coder; debugging is not loaded.",
+      "files": [
+        ".agents/skills/go-systematic-debugging/SKILL.md",
+        ".agents/skills/go-coder/SKILL.md"
+      ],
+      "expectations": [
+        "The agent does not invent a debugging phase without a symptom.",
+        "It selects go-coder for the closed implementation outcome.",
+        "It still chooses focused proof through the implementation method."
+      ]
+    },
+    {
+      "id": 113,
+      "skill": "go-systematic-debugging",
+      "category": "collision",
+      "prompt": "Requests consistently hit the documented 2 second deadline. Root cause is known: the accepted timeout budget is too small for a newly approved workload. Decide the new deadline and retry policy; do not implement.",
+      "expected_output": "Reliability owns the open budget policy; systematic debugging is not repeated for a known cause.",
+      "files": [
+        ".agents/skills/go-systematic-debugging/SKILL.md",
+        ".agents/skills/go-reliability/SKILL.md"
+      ],
+      "expectations": [
+        "The agent selects go-reliability for deadline and retry policy.",
+        "It does not rebuild hypotheses around an already established cause.",
+        "It keeps the response decision-only and does not edit code."
+      ]
+    },
+    {
+      "id": 114,
+      "skill": "go-systematic-debugging",
+      "category": "decision",
+      "prompt": "A handler returns 500 because its repository receives a zero tenant id. Logs show the handler victim, but no evidence yet shows where the valid principal became zero. Diagnose only.",
+      "expected_output": "The diagnosis walks backward across boundaries until the first valid-input/wrong-output invariant, using discriminating probes rather than blaming the handler.",
+      "files": [
+        ".agents/skills/go-systematic-debugging/SKILL.md",
+        "docs/architecture/integration.md"
+      ],
+      "expectations": [
+        "The agent establishes or names the exact missing reproducer before hypotheses.",
+        "Each hypothesis states the observation that would reject or support it.",
+        "No repository edit occurs in diagnosis_only."
+      ]
+    },
+    {
+      "id": 115,
+      "skill": "go-systematic-debugging",
+      "category": "completion",
+      "prompt": "One hypothesis fits a minimized reproducer and a local patch makes it pass. The original CI command was not replayed and temporary probes remain. May the fix be declared complete?",
+      "expected_output": "No: replay the original signal and remove temporary instrumentation before completion.",
+      "files": [
+        ".agents/skills/go-systematic-debugging/SKILL.md",
+        ".agents/skills/go-systematic-debugging/references/flaky-repro-controls-go.md"
+      ],
+      "expectations": [
+        "The agent refuses completion from the minimized case alone.",
+        "It requires the original unminimized signal and matching frequency evidence.",
+        "It requires temporary probes to be removed."
+      ]
+    },
+    {
+      "id": 116,
+      "skill": "go-verification-before-completion",
+      "category": "trigger",
+      "prompt": "Verification only. Decide whether a focused package test proves the whole repository is ready. Do not edit code.",
+      "expected_output": "The verifier maps the claim to what the focused command actually observes and weakens the repository-wide claim.",
+      "files": [
+        ".agents/skills/go-verification-before-completion/SKILL.md",
+        ".agents/skills/go-verification-before-completion/references/claim-to-proof-mapping.md"
+      ],
+      "expectations": [
+        "The agent selects go-verification-before-completion.",
+        "It names the observable, exact command, preconditions, freshness, exercised scope, and gap.",
+        "It makes no repository edit."
+      ]
+    },
+    {
+      "id": 117,
+      "skill": "go-verification-before-completion",
+      "category": "non_trigger",
+      "prompt": "Implement a one-line accepted Go guard and run the already-selected focused package test. No claim boundary is disputed. Choose the method.",
+      "expected_output": "Routine implementation validation stays with Direct Work and go-coder; the verification skill is not loaded.",
+      "files": [
+        ".agents/skills/go-verification-before-completion/SKILL.md",
+        ".agents/skills/go-coder/SKILL.md"
+      ],
+      "expectations": [
+        "The agent does not add a separate verification method for routine selected proof.",
+        "It selects go-coder and runs the focused check.",
+        "It reports only the scope actually exercised."
+      ]
+    },
+    {
+      "id": 118,
+      "skill": "go-verification-before-completion",
+      "category": "collision",
+      "prompt": "Verification reveals a focused test now fails for an unknown reason. Determine why and repair it. The original completion claim can wait.",
+      "expected_output": "Unknown cause routes to systematic debugging; verification does not mutate or diagnose.",
+      "files": [
+        ".agents/skills/go-verification-before-completion/SKILL.md",
+        ".agents/skills/go-systematic-debugging/SKILL.md",
+        "docs/spec-first-workflow/shared/evidence-contract.md"
+      ],
+      "expectations": [
+        "The agent selects go-systematic-debugging for the unknown cause and authorized repair.",
+        "It records the current claim as not verified before leaving verification.",
+        "It reruns only evidence invalidated by the eventual repair."
+      ]
+    },
+    {
+      "id": 119,
+      "skill": "go-verification-before-completion",
+      "category": "decision",
+      "prompt": "go test ./pkg/foo -run TestDoesNotExist exits 0. The completion claim is that the named regression test passed. Verify the claim.",
+      "expected_output": "The verifier rejects exit zero because no matching test event proves the observable.",
+      "files": [
+        ".agents/skills/go-verification-before-completion/SKILL.md",
+        ".agents/skills/go-verification-before-completion/references/claim-to-proof-mapping.md"
+      ],
+      "expectations": [
+        "The agent checks whether the named test actually ran.",
+        "It marks the claim not_verified despite exit code zero.",
+        "It names a command or event capture that would fail if the test were absent."
+      ]
+    },
+    {
+      "id": 120,
+      "skill": "go-verification-before-completion",
+      "category": "completion",
+      "prompt": "An integration target exits 0 after printing that Docker is unavailable and all integration tests were skipped. Can the PostgreSQL transaction claim be verified?",
+      "expected_output": "No: the result is narrowed to the skip boundary and the required real-PostgreSQL proof remains named.",
+      "files": [
+        ".agents/skills/go-verification-before-completion/SKILL.md",
+        "docs/spec-first-workflow/shared/evidence-contract.md"
+      ],
+      "expectations": [
+        "The agent refuses to treat a skipped suite as transaction evidence.",
+        "It returns not_verified or partially_verified at the actual scope.",
+        "It names the required fail-closed integration command and owner."
+      ]
+    },
+    {
+      "id": 121,
+      "skill": "go-idiomatic",
+      "category": "trigger",
+      "prompt": "Review an exported adapter method that returns fmt.Errorf(\"load user: %w\", pgx.ErrNoRows). wrapcheck is green. Decide the Go semantic contract.",
+      "expected_output": "Semantic ownership exposes the driver sentinel as caller-visible API and requires package-owned translation when callers need identity.",
+      "files": [
+        ".agents/skills/go-idiomatic/SKILL.md",
+        ".agents/skills/go-idiomatic/references/error-contracts.md"
+      ],
+      "expectations": [
+        "The agent selects go-idiomatic despite the green linter.",
+        "It traces error identity from producer to caller observation.",
+        "It chooses intentional package-owned identity or opaque diagnostics rather than praising percent-w mechanically."
+      ]
+    },
+    {
+      "id": 122,
+      "skill": "go-idiomatic",
+      "category": "non_trigger",
+      "prompt": "A function has deeply nested conditionals and vague names, but errors, lifetime, aliasing, nil behavior, and method sets are unchanged. Simplify it.",
+      "expected_output": "Local readability routes to go-language-simplifier, not go-idiomatic.",
+      "files": [
+        ".agents/skills/go-idiomatic/SKILL.md",
+        ".agents/skills/go-language-simplifier/SKILL.md"
+      ],
+      "expectations": [
+        "The agent selects go-language-simplifier.",
+        "It does not invent semantic ownership concerns without an observable boundary.",
+        "It preserves behavior while reducing reader cost."
+      ]
+    },
+    {
+      "id": 123,
+      "skill": "go-idiomatic",
+      "category": "collision",
+      "prompt": "A goroutine can outlive shutdown because no join edge exists. Context wrapping and nil behavior are correct. Decide between idiomatic semantics and concurrency lifecycle.",
+      "expected_output": "Go concurrency owns the missing happens-before and join lifecycle; idiomatic context review is not the primary method.",
+      "files": [
+        ".agents/skills/go-idiomatic/SKILL.md",
+        ".agents/skills/go-concurrency/SKILL.md"
+      ],
+      "expectations": [
+        "The agent selects go-concurrency for goroutine ownership, stop, unblock, and join.",
+        "It does not reduce the defect to passing a context parameter.",
+        "It names the missing happens-before edge and runnable lifecycle proof."
+      ]
+    },
+    {
+      "id": 124,
+      "skill": "go-idiomatic",
+      "category": "decision",
+      "prompt": "Review Config.Settings returning its internal map and a constructor returning a typed nil pointer as an interface on the disabled path. Build the required semantic analysis.",
+      "expected_output": "The review builds separate ownership stories for mutation authority and observable absence, then proves both at caller boundaries.",
+      "files": [
+        ".agents/skills/go-idiomatic/SKILL.md",
+        ".agents/skills/go-idiomatic/references/aliasing-and-ownership.md",
+        ".agents/skills/go-idiomatic/references/nil-zero-and-method-sets.md"
+      ],
+      "expectations": [
+        "The agent names who can mutate the returned backing store and how isolation is restored.",
+        "It identifies the non-nil interface observation on the absent path.",
+        "It proposes focused caller-visible proofs for both contracts."
+      ]
+    },
+    {
+      "id": 125,
+      "skill": "go-idiomatic",
+      "category": "completion",
+      "prompt": "A scanner loop now defers Close and all happy-path tests pass, but scanner.Err is never checked and no partial-failure case exists. May semantic review pass?",
+      "expected_output": "No: release is present but completion ownership and the failure observable remain unproved.",
+      "files": [
+        ".agents/skills/go-idiomatic/SKILL.md",
+        ".agents/skills/go-idiomatic/references/lifetime-and-release.md"
+      ],
+      "expectations": [
+        "The agent distinguishes release from successful completion.",
+        "It rejects Close presence and happy-path tests as exhaustive semantic proof.",
+        "It requires a partial-reader or scanner failure test and correct error propagation."
+      ]
+    },
+    {
+      "id": 126,
+      "skill": "go-language-simplifier",
+      "category": "trigger",
+      "prompt": "Simplify a helper called write(w, v, cached bool, private bool). Callers cannot tell which combinations are valid. Preserve behavior.",
+      "expected_output": "The simplifier prices the interface and replaces flag-shaped indirection with clearer stable outcomes or local branches.",
+      "files": [
+        ".agents/skills/go-language-simplifier/SKILL.md",
+        ".agents/skills/go-language-simplifier/references/indirection-economics.md"
+      ],
+      "expectations": [
+        "The agent selects go-language-simplifier.",
+        "It compares caller learning cost before and after rather than counting lines.",
+        "It preserves one focused case per behavior class."
+      ]
+    },
+    {
+      "id": 127,
+      "skill": "go-language-simplifier",
+      "category": "non_trigger",
+      "prompt": "Two compact branches now return different caller-visible error identities because percent-w was changed to percent-v. Readability is already clear. Review the defect.",
+      "expected_output": "Go idiomatic owns the error identity contract; simplification is not the method.",
+      "files": [
+        ".agents/skills/go-language-simplifier/SKILL.md",
+        ".agents/skills/go-idiomatic/SKILL.md"
+      ],
+      "expectations": [
+        "The agent selects go-idiomatic for caller-visible error semantics.",
+        "It does not frame the problem as shorter or clearer control flow.",
+        "It proves the intended identity with errors.Is or a negative opacity case."
+      ]
+    },
+    {
+      "id": 128,
+      "skill": "go-language-simplifier",
+      "category": "collision",
+      "prompt": "A whole diff adds a one-method interface, factory, adapter wrapper, and duplicate execution path. Local names are clear. Decide between local simplification and structural quality.",
+      "expected_output": "Whole-diff abstraction cost routes to structural quality; language simplification is not the primary owner.",
+      "files": [
+        ".agents/skills/go-language-simplifier/SKILL.md",
+        ".agents/skills/go-structural-quality/SKILL.md"
+      ],
+      "expectations": [
+        "The agent selects go-structural-quality.",
+        "It applies deletion and change-simulation tests across the diff.",
+        "It does not spend a local readability finding on already clear code."
+      ]
+    },
+    {
+      "id": 129,
+      "skill": "go-language-simplifier",
+      "category": "decision",
+      "prompt": "Review a deduplication that merges validation, conflict, and internal-error writers into one table. The old branches had distinct statuses and error identities.",
+      "expected_output": "The simplifier rejects the merge because it collapses observable behavior classes.",
+      "files": [
+        ".agents/skills/go-language-simplifier/SKILL.md",
+        ".agents/skills/go-language-simplifier/references/behavior-preserving-boundary.md"
+      ],
+      "expectations": [
+        "The agent enumerates the status and error-identity classes before judging the rewrite.",
+        "It does not treat reduced duplication as sufficient value.",
+        "It keeps or reshapes the branches so invalid combinations and durable ordering stay visible."
+      ]
+    },
+    {
+      "id": 130,
+      "skill": "go-language-simplifier",
+      "category": "completion",
+      "prompt": "A refactor removes 30 lines and broad tests pass, but no test distinguishes cleanup-error precedence from operation-error identity. Is behavior-preserving simplification complete?",
+      "expected_output": "No: the collapsed observable class lacks focused proof.",
+      "files": [
+        ".agents/skills/go-language-simplifier/SKILL.md",
+        ".agents/skills/go-language-simplifier/references/behavior-preserving-boundary.md"
+      ],
+      "expectations": [
+        "The agent refuses completion from line count and broad green tests.",
+        "It names the error-identity and cleanup-order distinction at risk.",
+        "It requires one focused case per surviving behavior class."
+      ]
+    },
+    {
+      "id": 131,
+      "skill": "go-structural-quality",
+      "category": "trigger",
+      "prompt": "Review a Go diff that adds an interface with one adapter, a factory, and a legacy fallback path for a requirement with one current implementation. Judge overbuild only.",
+      "expected_output": "Structural review applies deletion and realistic-change tests, collapsing machinery that carries no current responsibility.",
+      "files": [
+        ".agents/skills/go-structural-quality/SKILL.md",
+        ".agents/skills/go-implementation-ownership/SKILL.md"
+      ],
+      "expectations": [
+        "The agent selects go-structural-quality.",
+        "It records where complexity returns if each abstraction is deleted.",
+        "It removes the parallel fallback unless an accepted compatibility obligation requires it."
+      ]
+    },
+    {
+      "id": 132,
+      "skill": "go-structural-quality",
+      "category": "non_trigger",
+      "prompt": "One function has nested conditions and vague predicate names. No new layer, file, interface, responsibility split, or parallel path exists. Simplify it.",
+      "expected_output": "Local reader cost routes to go-language-simplifier, not whole-diff structural review.",
+      "files": [
+        ".agents/skills/go-structural-quality/SKILL.md",
+        ".agents/skills/go-language-simplifier/SKILL.md"
+      ],
+      "expectations": [
+        "The agent selects go-language-simplifier.",
+        "It does not invent a structural abstraction problem.",
+        "It preserves observable behavior while improving local intent."
+      ]
+    },
+    {
+      "id": 133,
+      "skill": "go-structural-quality",
+      "category": "collision",
+      "prompt": "A new helper sits in a feature package but requires importing internal/infra/postgres, violating the accepted import direction. Its abstraction size is otherwise reasonable. Choose the primary owner.",
+      "expected_output": "Implementation ownership decides the valid package boundary before structural quality judges abstraction cost.",
+      "files": [
+        ".agents/skills/go-structural-quality/SKILL.md",
+        ".agents/skills/go-implementation-ownership/SKILL.md",
+        ".agents/skills/go-coder/references/earliest-owner-and-import-direction.md"
+      ],
+      "expectations": [
+        "The agent selects go-implementation-ownership for the placement violation.",
+        "It moves the behavior to the earliest valid owner rather than approving a forbidden import.",
+        "Structural quality may review the fixed diff afterward but does not own the boundary decision."
+      ]
+    },
+    {
+      "id": 134,
+      "skill": "go-structural-quality",
+      "category": "decision",
+      "prompt": "Compare two designs for one adapter: direct construction in bootstrap versus interface plus factory plus registry. The only realistic next change is adding one constructor parameter. Decide structure.",
+      "expected_output": "The deletion test and change simulation favor direct construction because the extra layers do not improve locality or ownership.",
+      "files": [
+        ".agents/skills/go-structural-quality/SKILL.md",
+        ".agents/skills/go-implementation-ownership/SKILL.md"
+      ],
+      "expectations": [
+        "The agent identifies each design's present responsibility and deletion destination.",
+        "It counts the owners and files touched by the realistic parameter change.",
+        "It rejects speculative variation as justification for current machinery."
+      ]
+    },
+    {
+      "id": 135,
+      "skill": "go-structural-quality",
+      "category": "completion",
+      "prompt": "A candidate passes tests but retains both old and new execution paths and one wrapper whose only reason is future providers. Can structural review pass?",
+      "expected_output": "No: superseded paths remain and the speculative wrapper fails the deletion test.",
+      "files": [
+        ".agents/skills/go-structural-quality/SKILL.md"
+      ],
+      "expectations": [
+        "The agent refuses completion despite passing behavior tests.",
+        "It requires one current responsibility per remaining structure.",
+        "It collapses the duplicate path and speculative wrapper or names an accepted obligation that keeps them."
+      ]
+    }
+  ]
+}
