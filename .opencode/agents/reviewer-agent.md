@@ -1,6 +1,9 @@
 ---
 description: "Fresh read-only reviewer for one fixed candidate and named review method."
 mode: subagent
+hidden: true
+model: xai/grok-4.6
+variant: high
 permission:
   edit: deny
   task: deny

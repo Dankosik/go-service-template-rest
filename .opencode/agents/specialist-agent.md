@@ -1,6 +1,9 @@
 ---
 description: "Read-only specialist that applies one named method to one bounded decision."
 mode: subagent
+hidden: true
+model: xai/grok-4.6
+variant: high
 permission:
   edit: deny
   task: deny

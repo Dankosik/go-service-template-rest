@@ -1,7 +1,9 @@
 ---
 description: "Read-only adjudicator for one surviving material reviewer conflict."
 mode: subagent
+hidden: true
 model: xai/grok-4.6
+variant: xhigh
 permission:
   edit: deny
   task: deny
