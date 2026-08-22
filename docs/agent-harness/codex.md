@@ -13,9 +13,8 @@ public prose.
   Lead. Isolation is not a ceremony for sequential edits, cheap disjoint
   units, or read-only review. Workers inside one Lead may share that Lead's
   checkout when writable responsibility and exclusive locks are disjoint.
-- When the callable collaboration schema permits it, a child may delegate a
-  strict subset of its brief to descendants without broadening writable scope
-  or authority.
+- Only the bound Lead fans out lanes. Spawn from a lane is a carrier failure
+  even when the collaboration schema allows a child to spawn.
 - Use a fresh project subagent with no inherited turns for independent review.
 - A Goal is optional and thread-local; use one only for a genuinely long-running
   or resumable stage.

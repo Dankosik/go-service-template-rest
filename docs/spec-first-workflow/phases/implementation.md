@@ -42,7 +42,8 @@ carrier failure. Replace it or finish that subset directly. Do not wait
 indefinitely.
 
 Execution lanes are not acceptance units. Workers do not accept, transition, or
-review the parent unit.
+review the parent unit. Lanes do not spawn; a brief that still needs partition
+returns to the Lead.
 
 ## Candidate Freeze And Proof
 

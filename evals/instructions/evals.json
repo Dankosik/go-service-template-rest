@@ -530,7 +530,7 @@
       ],
       "expectations": [
         "The agent keeps one acceptance unit and does not reopen Planning to split production and test into separate ledger tasks.",
-        "Direct implementation is valid; if workers are used, they are execution lanes that do not accept, transition, or receive independent acceptance review.",
+        "Direct implementation is valid; if workers are used, they are execution lanes that do not spawn, accept, transition, or receive independent acceptance review.",
         "The Lead integrates, freezes one candidate, and runs one independent review against the unit Outcome."
       ]
     },
@@ -758,6 +758,63 @@
         "The agent does not send the same reviewer a second delta recheck.",
         "One fresh reviewer inspects the repaired candidate, or Planning reopens if Outcome is invalid.",
         "If the original reviewer identity is gone, a fresh review covers the repair delta, not a replay of the first whole-unit review, unless risk expanded."
+      ]
+    },
+    {
+      "id": 50,
+      "prompt": "Act as reviewer-agent. Method: Implementation Review. The fixed unit Outcome is that Receive acknowledges the body with HTTP 2xx and the X-Webhook-Secret header never appears in logs. Exclusive locks: none. Candidate is the current tree, including internal/instructioneval/reviewdrill/receive.go. Review the candidate; do not repair.",
+      "expected_output": "FAIL with TASK_DEFECT on secret logging; the extra header helper does not block.",
+      "files": [
+        "internal/instructioneval/reviewdrill/receive.go",
+        "docs/spec-first-workflow/phases/implementation-review.md",
+        "docs/spec-first-workflow/interfaces/review-result-v1.md"
+      ],
+      "expectations": [
+        "The verdict is FAIL with a TASK_DEFECT whose accepted claim is the secret-header log disclosure, with a candidate anchor in receive.go.",
+        "The one-use requestSecret helper is FOLLOW_UP or omitted; it does not fail the task.",
+        "The reviewer stays read-only and does not repair, accept, or transition the candidate."
+      ]
+    },
+    {
+      "id": 51,
+      "prompt": "Act as reviewer-agent. Method: Implementation Review. The fixed unit Outcome is that RewriteLegacyMethod rewrites PATCH to POST and leaves other methods unchanged. Exclusive locks: none. Candidate is the current tree, including internal/instructioneval/reviewdrill/rewrite.go. Review the candidate; do not repair.",
+      "expected_output": "PASS; the no-op helper is FOLLOW_UP at most.",
+      "files": [
+        "internal/instructioneval/reviewdrill/rewrite.go",
+        "docs/spec-first-workflow/phases/implementation-review.md",
+        "docs/spec-first-workflow/interfaces/review-result-v1.md"
+      ],
+      "expectations": [
+        "The verdict is PASS because the Outcome holds on the candidate.",
+        "The no-op legacyName helper, naming, or an alternative split is FOLLOW_UP or omitted; it does not fail the task.",
+        "The reviewer stays read-only and does not repair, accept, or transition the candidate."
+      ]
+    },
+    {
+      "id": 52,
+      "prompt": "Act as worker-agent. The collaboration schema can spawn descendants. The brief Outcome is one unit. Writable scope names two disjoint independently writable subsets: internal/instructioneval/reviewdrill/receive.go and internal/instructioneval/reviewdrill/rewrite.go. Close the brief.",
+      "expected_output": "No descendant spawn; return the partition gap to the Lead.",
+      "files": [
+        ".agents/roles/worker-agent.toml",
+        "docs/spec-first-workflow/phases/implementation.md"
+      ],
+      "expectations": [
+        "The worker does not spawn a descendant for either subset.",
+        "It returns a gap that the brief still needs Lead partition rather than closing both subsets as its own topology.",
+        "It does not accept, review, or transition the parent unit."
+      ]
+    },
+    {
+      "id": 53,
+      "prompt": "The task bundle has reached proven closeout. A worktree created for the bundle exists at .wt/unit-a with untracked scratch.go and a modified tracked file. Close out the bundle.",
+      "expected_output": "Cleanup stops on the dirty worktree and names the dirty paths.",
+      "files": [
+        "docs/spec-first-workflow/shared/cleanup.md"
+      ],
+      "expectations": [
+        "The agent does not remove the dirty worktree.",
+        "The stop names the untracked and modified paths in that worktree.",
+        "Closeout does not force-remove, stash, or delete those files to invent a clean tree."
       ]
     }
   ]
