@@ -21,6 +21,8 @@ uncertainty or broad contract fan-out, and [Planning Proof And
 Readiness](planning/proof-and-readiness.md) before declaring readiness.
 
 Apply [Task Review / Readiness](task-review-readiness.md) through shared
-[Review](../shared/review.md). Ready when the next unit can reach acceptance from
-closed inputs without chat history, companion work, or a new decision. Reopen
-the smallest upstream owner of any missing choice or input.
+[Review](../shared/review.md) in this session: dispatch the reviewer, repair
+from its result, and remain until the ledger is ready. Ready when every task
+packet admits one verdict and the next unit can reach acceptance from closed
+inputs without chat history, companion work, or a new decision. Reopen the
+smallest upstream owner of any missing choice or input.
