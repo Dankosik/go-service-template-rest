@@ -103,31 +103,28 @@ func TestOnePanicDoesNotStopSiblingWork(t *testing.T) {
 func TestFailedTaskLeavesSiblingsRunning(t *testing.T) {
 	t.Parallel()
 
-	failed := make(chan struct{})
 	sup := New(context.Background(), discardLogger())
 
-	sibling := make(chan struct{})
+	siblingCtx := make(chan context.Context, 1)
 	sup.Go(Task{Name: "sibling", Run: func(ctx context.Context) error {
+		siblingCtx <- ctx
 		<-ctx.Done()
-		close(sibling)
 		return nil
 	}})
-	sup.Go(Task{Name: "failing", Run: func(context.Context) error {
-		defer close(failed)
-		return errors.New("consumer lost its lease")
-	}})
+	ctx := <-siblingCtx
+	taskErr := errors.New("consumer lost its lease")
+	sup.Go(Task{Name: "failing", Run: func(context.Context) error { return taskErr }})
 
-	<-failed
-	select {
-	case <-sibling:
-		t.Fatal("sibling task was canceled by an unrelated task failure")
-	case <-time.After(100 * time.Millisecond):
+	if err := <-sup.Failures(); !errors.Is(err, taskErr) {
+		t.Fatalf("Failures() error = %v, want %v", err, taskErr)
+	}
+	if err := ctx.Err(); err != nil {
+		t.Fatalf("sibling task was canceled by an unrelated task failure: %v", err)
 	}
 
 	if err := sup.Shutdown(context.Background()); err == nil {
 		t.Fatal("Shutdown() error = nil, want the failing task's error")
 	}
-	<-sibling
 }
 
 // TestCheckReportsAFailedTask is what makes a dead worker reach readiness instead
@@ -143,8 +140,9 @@ func TestCheckReportsAFailedTask(t *testing.T) {
 	}
 
 	sup.Go(Task{Name: "outbox", Run: func(context.Context) error { return taskErr }})
+	<-sup.Failures()
 
-	err := waitForCheckFailure(t, sup)
+	err := sup.Check(context.Background())
 	if !errors.Is(err, ErrTaskFailed) || !errors.Is(err, taskErr) {
 		t.Fatalf("Check() = %v, want ErrTaskFailed wrapping %v", err, taskErr)
 	}
@@ -188,20 +186,6 @@ func TestUnexpectedTaskStopFailsTheProcess(t *testing.T) {
 	}
 }
 
-// waitForCheckFailure polls until the supervisor reports a failed task. The
-// record is published after Run returns, so a test cannot synchronize on the
-// task's own signal.
-func waitForCheckFailure(tb testing.TB, sup *Supervisor) error {
-	tb.Helper()
-
-	var result error
-	waittest.UntilFunc(tb, 2*time.Second, func() bool {
-		result = sup.Check(context.Background())
-		return result != nil
-	}, func() string { return "Check() to report the failed task" })
-	return result
-}
-
 func TestTaskErrorIsReported(t *testing.T) {
 	t.Parallel()
 
@@ -237,25 +221,47 @@ func TestCancellationIsNotATaskFailure(t *testing.T) {
 func TestShutdownIsBoundedByItsContext(t *testing.T) {
 	t.Parallel()
 
-	stuck := make(chan struct{})
-	defer close(stuck)
+	synctest.Test(t, func(t *testing.T) {
+		stuck := make(chan struct{})
+		defer close(stuck)
 
-	sup := New(context.Background(), discardLogger())
-	sup.Go(Task{Name: "stuck", Run: func(context.Context) error {
-		<-stuck
-		return nil
-	}})
+		sup := New(context.Background(), discardLogger())
+		sup.Go(Task{Name: "stuck", Run: func(context.Context) error {
+			<-stuck
+			return nil
+		}})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
-	defer cancel()
+		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+		defer cancel()
 
-	err := sup.Shutdown(ctx)
-	if !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("Shutdown() error = %v, want context.DeadlineExceeded", err)
-	}
-	if !strings.Contains(err.Error(), "did not stop within the shutdown budget") {
-		t.Fatalf("error = %q, want it to name the budget", err.Error())
-	}
+		err := sup.Shutdown(ctx)
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("Shutdown() error = %v, want context.DeadlineExceeded", err)
+		}
+		if !strings.Contains(err.Error(), "did not stop within the shutdown budget") {
+			t.Fatalf("error = %q, want it to name the budget", err.Error())
+		}
+	})
+}
+
+func TestParentDeadlineStopsTasksWithoutFailure(t *testing.T) {
+	t.Parallel()
+
+	synctest.Test(t, func(t *testing.T) {
+		parent, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		sup := New(parent, discardLogger())
+		sup.Go(Task{Name: "worker", Run: func(ctx context.Context) error {
+			<-ctx.Done()
+			return ctx.Err()
+		}})
+
+		time.Sleep(time.Second)
+		synctest.Wait()
+		if err := sup.Shutdown(context.Background()); err != nil {
+			t.Fatalf("Shutdown() after parent deadline error = %v, want nil", err)
+		}
+	})
 }
 
 // TestParentCancellationStopsTasks keeps the supervisor honest about the context

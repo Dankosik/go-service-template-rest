@@ -37,6 +37,8 @@ func TestValidateRuntimeConfig(t *testing.T) {
 	valid.Postgres.Enabled = true
 	valid.Messaging.URLs = "tls://nats.example:4222"
 	valid.Observability.Metrics.Addr = "127.0.0.1:9090"
+	valid.HTTP.GracePeriod = 45 * time.Second
+	valid.HTTP.ShutdownTimeout = 25 * time.Second
 	if err := validateRuntimeConfig(valid); err != nil {
 		t.Fatalf("validateRuntimeConfig() error = %v", err)
 	}
@@ -44,6 +46,7 @@ func TestValidateRuntimeConfig(t *testing.T) {
 		"postgres":    func(cfg *config.Config) { cfg.Postgres.Enabled = false },
 		"messaging":   func(cfg *config.Config) { cfg.Messaging.URLs = "" },
 		"diagnostics": func(cfg *config.Config) { cfg.Observability.Metrics.Addr = "" },
+		"grace":       func(cfg *config.Config) { cfg.HTTP.GracePeriod = 36 * time.Second },
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
