@@ -13,8 +13,8 @@ func TestJobsWorkerRuntimeConfig(t *testing.T) {
 	valid.Postgres.Enabled = true
 	valid.Jobs.MaxWorkers = 1
 	valid.Observability.Metrics.Addr = ":9090"
-	valid.HTTP.GracePeriod = 10 * time.Second
-	valid.HTTP.ShutdownTimeout = 5 * time.Second
+	valid.HTTP.GracePeriod = 22 * time.Second
+	valid.HTTP.ShutdownTimeout = 10 * time.Second
 	if err := validateRuntimeConfig(valid); err != nil {
 		t.Fatalf("validateRuntimeConfig(valid) error = %v", err)
 	}
@@ -27,7 +27,7 @@ func TestJobsWorkerRuntimeConfig(t *testing.T) {
 		{name: "postgres disabled", mutate: func(cfg *config.Config) { cfg.Postgres.Enabled = false }, contains: "postgres.enabled"},
 		{name: "workers disabled", mutate: func(cfg *config.Config) { cfg.Jobs.MaxWorkers = 0 }, contains: "jobs.max_workers"},
 		{name: "diagnostics disabled", mutate: func(cfg *config.Config) { cfg.Observability.Metrics.Addr = "" }, contains: "diagnostics address"},
-		{name: "grace too short", mutate: func(cfg *config.Config) { cfg.HTTP.GracePeriod = 9 * time.Second }, contains: "http.grace_period"},
+		{name: "grace too short", mutate: func(cfg *config.Config) { cfg.HTTP.GracePeriod = 21 * time.Second }, contains: "http.grace_period"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			cfg := valid
