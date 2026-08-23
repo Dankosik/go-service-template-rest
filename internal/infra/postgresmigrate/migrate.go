@@ -176,6 +176,9 @@ func migrate(
 		logMigrationResults(executionCtx, opts.Logger, applied, nil)
 		return result, stageError(FailureState, fmt.Errorf("read goose migration versions: %w", stateErr))
 	}
+	if len(applied) == 0 {
+		result.Before = after
+	}
 	result.After = after
 	logMigrationResults(executionCtx, opts.Logger, applied, nil)
 	return result, nil
