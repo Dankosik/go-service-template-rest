@@ -40,9 +40,6 @@ func FailureReason(err error) string {
 // process logger without publishing exporter error text, which can contain an
 // endpoint, certificate path, or other deployment detail.
 func InstallErrorHandler(ctx context.Context, log *slog.Logger) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	if log == nil {
 		log = slog.Default()
 	}
