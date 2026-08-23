@@ -15,6 +15,15 @@ import (
 
 const inboundUnavailableRetryAfter = 1
 
+var errInboundWebhookStrictFallback = errors.New("inbound webhook strict fallback is unreachable")
+
+// ReceiveWebhook fails closed if the raw standard-server override is ever
+// bypassed. The transport owns both paths; bootstrap does not implement an
+// operation it never serves.
+func (strictHandlers) ReceiveWebhook(context.Context, openapi.ReceiveWebhookRequestObject) (openapi.ReceiveWebhookResponseObject, error) {
+	return nil, errInboundWebhookStrictFallback
+}
+
 type inboundRawServer struct {
 	openapi.ServerInterface
 

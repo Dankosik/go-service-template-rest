@@ -8,9 +8,7 @@
 // middleware chain and fallback policy. [Harden] is that same chain without any
 // generated type, so a service whose OpenAPI contract lives in its own package
 // inherits the chain instead of rebuilding it by hand and silently getting none
-// of it. [Harden]'s doc comment is the one prose owner of the chain order, and
-// chain_order_test.go fails when that comment and the argument order it
-// describes disagree — so the order is stated once, not here as well.
+// of it. [Harden]'s doc comment is the one prose owner of the chain order.
 //
 // # Extending it
 //
@@ -65,7 +63,7 @@
 // timeout middlewares both have to know before writing.
 //
 // handlers.go owns the [Handlers] seam and the startup check that a contract
-// which grew past the platform probes cannot reach a nil [Handlers.API].
+// with an operation this transport does not own cannot reach a nil [Handlers.API].
 // health_handlers.go is the two probe bodies, kept apart because they shadow the
 // embedded interface. identity.go resolves the authenticated principal a secured
 // operation runs as.

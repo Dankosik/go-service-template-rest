@@ -35,9 +35,6 @@ func mustNewRouter(tb testing.TB, log *slog.Logger, h Handlers, metrics *telemet
 	if h.ReadinessGate == nil {
 		h.ReadinessGate = func(context.Context) error { return nil }
 	}
-	if h.API == nil {
-		h.API = unimplementedAPI{}
-	}
 	// Readiness is served from cached state, and an unevaluated cache fails
 	// closed. Seeding it here mirrors what bootstrap does before it admits
 	// traffic; a test that wants "not ready" supplies a failing probe.
@@ -129,18 +126,6 @@ func assertProblemCode(t *testing.T, resp *httptest.ResponseRecorder, wantCode p
 	if got := decoded.Code; got != string(wantCode) {
 		t.Fatalf("problem code = %q, want %q", got, wantCode)
 	}
-}
-
-// unimplementedAPI satisfies the generated server interface without implementing
-// any operation.
-//
-// Embedding leaves every method nil, which is what a test exercising only the
-// platform probes or the fallback policy needs. It exists so adding the first real
-// operation to the contract does not break every inherited router test — those
-// tests are not about that operation. A test that does exercise one passes a real
-// implementation instead.
-type unimplementedAPI struct {
-	openapi.StrictServerInterface
 }
 
 // newTestServiceLogger builds a logger with the same shape a service runs with:

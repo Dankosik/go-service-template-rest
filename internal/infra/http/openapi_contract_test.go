@@ -174,11 +174,8 @@ func TestOpenAPIRuntimeContractRequiresRouterDependencies(t *testing.T) {
 				MaxBodyBytes:   testRouterMaxBodyBytes,
 				RequestTimeout: time.Second,
 			},
-			handlers: Handlers{
-				API:           unimplementedAPI{},
-				ReadinessGate: func(context.Context) error { return nil },
-			},
-			wantErr: "health service is required",
+			handlers: Handlers{ReadinessGate: func(context.Context) error { return nil }},
+			wantErr:  "health service is required",
 		},
 		{
 			name:    "missing readiness gate",
@@ -188,18 +185,14 @@ func TestOpenAPIRuntimeContractRequiresRouterDependencies(t *testing.T) {
 				MaxBodyBytes:   testRouterMaxBodyBytes,
 				RequestTimeout: time.Second,
 			},
-			handlers: Handlers{
-				API:    unimplementedAPI{},
-				Health: health.New(),
-			},
-			wantErr: "readiness gate is required",
+			handlers: Handlers{Health: health.New()},
+			wantErr:  "readiness gate is required",
 		},
 		{
 			name: "missing metrics",
 			log:  log,
 			cfg:  RouterConfig{MaxBodyBytes: testRouterMaxBodyBytes},
 			handlers: Handlers{
-				API:           unimplementedAPI{},
 				Health:        health.New(),
 				ReadinessGate: func(context.Context) error { return nil },
 			},
@@ -215,7 +208,6 @@ func TestOpenAPIRuntimeContractRequiresRouterDependencies(t *testing.T) {
 				MaxInFlight:    -1,
 			},
 			handlers: Handlers{
-				API:           unimplementedAPI{},
 				Health:        health.New(),
 				ReadinessGate: func(context.Context) error { return nil },
 			},
@@ -227,7 +219,6 @@ func TestOpenAPIRuntimeContractRequiresRouterDependencies(t *testing.T) {
 			metrics: telemetry.New(),
 			cfg:     RouterConfig{RequestTimeout: time.Second},
 			handlers: Handlers{
-				API:           unimplementedAPI{},
 				Health:        health.New(),
 				ReadinessGate: func(context.Context) error { return nil },
 			},
@@ -239,7 +230,6 @@ func TestOpenAPIRuntimeContractRequiresRouterDependencies(t *testing.T) {
 			metrics: telemetry.New(),
 			cfg:     RouterConfig{MaxBodyBytes: testRouterMaxBodyBytes},
 			handlers: Handlers{
-				API:           unimplementedAPI{},
 				Health:        health.New(),
 				ReadinessGate: func(context.Context) error { return nil },
 			},
