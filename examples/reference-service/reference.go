@@ -39,16 +39,10 @@ import (
 // readable, but every one of them is set on purpose rather than left at a zero
 // value.
 const (
-	// RequestTimeout is the per-request handler budget.
-	RequestTimeout = 8 * time.Second
+	// requestTimeout is the per-request handler budget.
+	requestTimeout = 8 * time.Second
 	maxBodyBytes   = 1 << 20
 	maxInFlight    = 256
-
-	// rateLimitPerSecond and rateLimitBurst bound one caller rather than the
-	// whole instance. MaxInFlight stops the process from being overloaded; it
-	// cannot stop one caller from taking every slot, which is what this covers.
-	rateLimitPerSecond = 20
-	rateLimitBurst     = 40
 
 	// writeTokenSubject is who the demonstration credential stands for. A real
 	// service resolves this from the credential rather than pinning it, but the
@@ -60,37 +54,23 @@ const (
 	authenticateChallenge = "Bearer"
 )
 
-// Options is what the caller of this example supplies.
-type Options struct {
-	// WriteToken is the demonstration credential for protected operations. It is
-	// required rather than defaulted, so the example cannot run with a guessable
-	// token baked into source. It is not an authentication design.
-	WriteToken string
-	// Seed is the content the in-memory repository starts with.
-	Seed []article.Article
-}
-
 // NewHandler builds the reference service's HTTP handler.
 //
 // Composition happens here, not in the feature package: httpapi maps the feature
 // onto its contract, and this root supplies the transport policy and wraps the
 // result in the shared middleware chain.
-func NewHandler(log *slog.Logger, opts Options) (http.Handler, error) {
+func NewHandler(log *slog.Logger, writeToken string) (http.Handler, error) {
 	if log == nil {
 		return nil, errors.New("reference service: logger is required")
 	}
-	if strings.TrimSpace(opts.WriteToken) == "" {
+	if strings.TrimSpace(writeToken) == "" {
 		return nil, errors.New("reference service: write token is required")
 	}
 
-	repository, err := memory.New(opts.Seed)
-	if err != nil {
-		return nil, fmt.Errorf("build article repository: %w", err)
-	}
-	// The repository is both the store and the unit of work. A PostgreSQL adapter
-	// passes postgres.InTx behind the same article.Atomically port; nothing
-	// in the feature package changes.
-	articles, err := article.NewService(repository, repository)
+	repository := memory.New()
+	// A PostgreSQL store passes postgres.InTx behind the same article.Store port;
+	// nothing in the feature package changes.
+	articles, err := article.NewService(repository)
 	if err != nil {
 		return nil, fmt.Errorf("build article service: %w", err)
 	}
@@ -100,7 +80,7 @@ func NewHandler(log *slog.Logger, opts Options) (http.Handler, error) {
 	// against, which is what keeps the scope check out of the credential-parsing
 	// code and the credential out of the feature package.
 	apiHandler, err := httpapi.NewAPIHandler(articles, httpapi.Options{
-		Authenticate:  httpx.Authenticated(resolveWriter(opts.WriteToken)),
+		Authenticate:  httpx.Authenticated(resolveWriter(writeToken)),
 		RejectRequest: httpx.RejectRequest(log, authenticateChallenge),
 		// One classification table for the whole feature. Handlers return their
 		// use case's error and this decides what the client sees, so adding an
@@ -113,25 +93,13 @@ func NewHandler(log *slog.Logger, opts Options) (http.Handler, error) {
 		return nil, fmt.Errorf("build reference api handler: %w", err)
 	}
 
-	rateLimit, err := httpx.NewKeyedRateLimiter(rateLimitPerSecond, rateLimitBurst, 0)
-	if err != nil {
-		return nil, fmt.Errorf("build reference rate limiter: %w", err)
-	}
-
 	// The chain instruments every request, so it needs a registry to record into.
 	// This example exposes no scrape endpoint of its own.
 	handler, err := httpx.Harden(log, telemetry.New(), httpx.HardenConfig{
 		MaxBodyBytes:   maxBodyBytes,
-		RequestTimeout: RequestTimeout,
+		RequestTimeout: requestTimeout,
 		MaxInFlight:    maxInFlight,
 		OTelServerName: "reference-service",
-		RateLimit:      rateLimit,
-		// Keyed on the credential rather than the resolved principal: the limiter
-		// runs ahead of the generated validator, which is what resolves identity,
-		// and limiting after schema validation means an over-budget caller still
-		// got the expensive half of their request done for them. The key is
-		// hashed, so the credential never becomes a map key.
-		RateLimitKey: httpx.HeaderRateLimitKey("Authorization"),
 	}, apiHandler)
 	if err != nil {
 		return nil, fmt.Errorf("build reference router: %w", err)

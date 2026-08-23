@@ -5,6 +5,7 @@ package referenceservice_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/example/go-service-template-rest/examples/reference-service/internal/article"
 	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	"github.com/example/go-service-template-rest/internal/infra/postgres/pgtest"
+	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -21,7 +23,7 @@ func TestMain(m *testing.M) {
 	os.Exit(pgtest.Main(m, ""))
 }
 
-// This file is the proof that article.Atomically binds to a real transaction
+// This file is the proof that article.Store binds to a real transaction
 // without the feature package ever seeing pgx.
 //
 // The memory adapter proves the use case rolls back; it cannot prove the port has
@@ -56,46 +58,15 @@ type pgAdapter struct {
 	pool *pgxpool.Pool
 }
 
-func (a pgAdapter) Do(ctx context.Context, fn func(article.Repository) error) error {
+func (a pgAdapter) Do(ctx context.Context, fn func(article.Writer) error) error {
 	return postgres.InTx(ctx, a.pool, pgx.TxOptions{}, func(tx pgx.Tx) error {
-		return fn(pgRepository{querier: tx})
+		return fn(pgRepository{tx: tx})
 	})
 }
 
 func (a pgAdapter) FindBySlug(ctx context.Context, slug string) (article.Article, error) {
-	conn, err := a.pool.Acquire(ctx)
-	if err != nil {
-		return article.Article{}, err
-	}
-	defer conn.Release()
-	return pgRepository{querier: conn}.FindBySlug(ctx, slug)
-}
-
-func (a pgAdapter) Create(ctx context.Context, created article.Article) error {
-	return a.Do(ctx, func(repository article.Repository) error {
-		return repository.Create(ctx, created)
-	})
-}
-
-func (a pgAdapter) AppendEvent(ctx context.Context, event article.Event) error {
-	return a.Do(ctx, func(repository article.Repository) error {
-		return repository.AppendEvent(ctx, event)
-	})
-}
-
-type pgQuerier interface {
-	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
-	Query(context.Context, string, ...any) (pgx.Rows, error)
-	QueryRow(context.Context, string, ...any) pgx.Row
-}
-
-type pgRepository struct {
-	querier pgQuerier
-}
-
-func (r pgRepository) FindBySlug(ctx context.Context, slug string) (article.Article, error) {
 	var found article.Article
-	err := r.querier.QueryRow(
+	err := a.pool.QueryRow(
 		ctx,
 		"SELECT slug, title, summary, published FROM articles WHERE slug = $1",
 		slug,
@@ -109,22 +80,41 @@ func (r pgRepository) FindBySlug(ctx context.Context, slug string) (article.Arti
 	return found, nil
 }
 
+type pgRepository struct {
+	tx pgx.Tx
+}
+
 func (r pgRepository) Create(ctx context.Context, created article.Article) error {
-	_, err := r.querier.Exec(
+	_, err := r.tx.Exec(
 		ctx,
 		"INSERT INTO articles (slug, title, summary, published) VALUES ($1, $2, $3, $4)",
 		created.Slug, created.Title, created.Summary, created.Published,
 	)
+	if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok && pgErr.Code == pgerrcode.UniqueViolation {
+		return fmt.Errorf("%w: %w", article.ErrAlreadyExists, err)
+	}
 	return err
 }
 
 func (r pgRepository) AppendEvent(ctx context.Context, event article.Event) error {
-	_, err := r.querier.Exec(
+	_, err := r.tx.Exec(
 		ctx,
 		"INSERT INTO article_events (slug, kind) VALUES ($1, $2)",
 		event.Slug, string(event.Kind),
 	)
 	return err
+}
+
+func TestUnitOfWorkMapsDuplicateSlug(t *testing.T) {
+	_, service := newUnitOfWorkService(t)
+	draft := article.Draft{Slug: "same", Title: "Same", Summary: "Created once."}
+
+	if _, err := service.Create(t.Context(), draft); err != nil {
+		t.Fatalf("first Create() error = %v", err)
+	}
+	if _, err := service.Create(t.Context(), draft); !errors.Is(err, article.ErrAlreadyExists) {
+		t.Fatalf("second Create() error = %v, want %v", err, article.ErrAlreadyExists)
+	}
 }
 
 // TestUnitOfWorkCommitsBothWrites is the ordinary path: the article and the event
@@ -161,15 +151,15 @@ func TestUnitOfWorkRollsBackTheArticleWhenTheEventFails(t *testing.T) {
 	adapter, _ := newUnitOfWorkService(t)
 
 	const slug = "rolled-back"
-	err := adapter.Do(t.Context(), func(repository article.Repository) error {
-		if createErr := repository.Create(t.Context(), article.Article{
+	err := adapter.Do(t.Context(), func(writer article.Writer) error {
+		if createErr := writer.Create(t.Context(), article.Article{
 			Slug: slug, Title: "t", Summary: "s", Published: true,
 		}); createErr != nil {
 			return createErr
 		}
 		// An empty kind violates the CHECK constraint, so PostgreSQL refuses the
 		// insert and aborts the transaction that already holds the article.
-		return repository.AppendEvent(t.Context(), article.Event{Slug: slug, Kind: ""})
+		return writer.AppendEvent(t.Context(), article.Event{Slug: slug, Kind: ""})
 	})
 	if err == nil {
 		t.Fatal("the event insert succeeded, so this run proves nothing about rollback")
@@ -211,7 +201,7 @@ func newUnitOfWorkService(t *testing.T) (pgAdapter, *article.Service) {
 	conn.Release()
 
 	adapter := pgAdapter{pool: pool}
-	service, err := article.NewService(adapter, adapter)
+	service, err := article.NewService(adapter)
 	if err != nil {
 		t.Fatalf("article.NewService() error = %v", err)
 	}
@@ -221,14 +211,8 @@ func newUnitOfWorkService(t *testing.T) (pgAdapter, *article.Service) {
 func countEvents(t *testing.T, adapter pgAdapter, slug string) int {
 	t.Helper()
 
-	conn, err := adapter.pool.Acquire(t.Context())
-	if err != nil {
-		t.Fatalf("Acquire() error = %v", err)
-	}
-	defer conn.Release()
-
 	var count int
-	if err := conn.QueryRow(t.Context(), "SELECT count(*) FROM article_events WHERE slug = $1", slug).Scan(&count); err != nil {
+	if err := adapter.pool.QueryRow(t.Context(), "SELECT count(*) FROM article_events WHERE slug = $1", slug).Scan(&count); err != nil {
 		t.Fatalf("count events: %v", err)
 	}
 	return count
