@@ -10,9 +10,11 @@ import (
 )
 
 const (
-	startupTimeout   = 15 * time.Second
-	diagnosticsClose = 2 * time.Second
-	telemetryClose   = 5 * time.Second
+	startupTimeout     = 15 * time.Second
+	diagnosticsClose   = 2 * time.Second
+	telemetryClose     = 5 * time.Second
+	riverHardStopClose = 5 * time.Second
+	jobsTailBudget     = riverHardStopClose + diagnosticsClose + telemetryClose
 )
 
 func parseLoadOptions(args []string) (config.LoadOptions, error) {
@@ -33,6 +35,6 @@ func validateRuntimeConfig(cfg config.Config) error {
 		cfg.HTTP.GracePeriod,
 		"http.shutdown_timeout",
 		cfg.HTTP.ShutdownTimeout,
-		telemetryClose,
+		jobsTailBudget,
 	)
 }
