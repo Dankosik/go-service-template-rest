@@ -2,6 +2,7 @@ package natsjs
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -20,7 +21,7 @@ func TestTypedPublisherAndHandlerHideBrokerFields(t *testing.T) {
 		t.Fatalf("NewRegistry() error = %v", err)
 	}
 	seen := make(chan domainevent.Typed[typedPayload], 1)
-	if err := domainevent.Handle(registry, kind, func(_ context.Context, event domainevent.Typed[typedPayload]) error {
+	if err := Handle(registry, kind, func(_ context.Context, event domainevent.Typed[typedPayload]) error {
 		seen <- event
 		return nil
 	}); err != nil {
@@ -30,7 +31,7 @@ func TestTypedPublisherAndHandlerHideBrokerFields(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Handler() error = %v", err)
 	}
-	createdAt := time.Unix(10, 0).UTC()
+	createdAt := time.Unix(10, 0).In(time.FixedZone("UTC-like", 0))
 	if err := handler(t.Context(), Message{
 		messageID: "event-1", eventType: kind.Type, schema: "v1", createdAt: createdAt,
 		payload: []byte(`{"value":"handled"}`),
@@ -55,5 +56,56 @@ func TestTypedPublisherAndHandlerHideBrokerFields(t *testing.T) {
 	}
 	if broker.published.Subject != "events.example" || broker.published.Header.Get(headerMessageID) != "event-2" {
 		t.Fatalf("wire publication = %#v", broker.published)
+	}
+}
+
+func TestTypedHandlerContract(t *testing.T) {
+	t.Parallel()
+
+	kind := domainevent.Define[typedPayload]("example.updated", 1)
+	noop := func(context.Context, domainevent.Typed[typedPayload]) error { return nil }
+	if err := Handle(nil, kind, noop); !errors.Is(err, ErrRejected) {
+		t.Fatalf("Handle(nil registry) error = %v, want ErrRejected", err)
+	}
+	registry, err := NewRegistry(Route{Type: kind.Type, Version: kind.Version, Subject: "events.example"})
+	if err != nil {
+		t.Fatalf("NewRegistry() error = %v", err)
+	}
+	if err := Handle[typedPayload](registry, kind, nil); !errors.Is(err, ErrRejected) {
+		t.Fatalf("Handle(nil handler) error = %v, want ErrRejected", err)
+	}
+	called := false
+	if err := Handle(registry, kind, func(context.Context, domainevent.Typed[typedPayload]) error {
+		called = true
+		return nil
+	}); err != nil {
+		t.Fatalf("Handle() error = %v", err)
+	}
+	if err := Handle(registry, kind, noop); !errors.Is(err, ErrRejected) {
+		t.Fatalf("Handle(duplicate) error = %v, want ErrRejected", err)
+	}
+	handler, err := registry.Handler()
+	if err != nil {
+		t.Fatalf("Handler() error = %v", err)
+	}
+	err = handler(t.Context(), Message{
+		messageID: "event-1", eventType: kind.Type, schema: "v1",
+		createdAt: time.Unix(1, 0).UTC(), payload: []byte("{"),
+	})
+	if !IsPermanent(err) || called {
+		t.Fatalf("invalid payload error = %v, handler called = %t", err, called)
+	}
+}
+
+func TestSchemaVersionRequiresCanonicalSpelling(t *testing.T) {
+	t.Parallel()
+
+	if got, err := schemaVersion("v1"); err != nil || got != 1 {
+		t.Fatalf("schemaVersion(v1) = %d, %v", got, err)
+	}
+	for _, schema := range []string{"1", "v0", "v01", "v+1", "v65536"} {
+		if _, err := schemaVersion(schema); err == nil {
+			t.Errorf("schemaVersion(%q) error = nil", schema)
+		}
 	}
 }

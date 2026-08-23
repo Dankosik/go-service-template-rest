@@ -1,7 +1,6 @@
 package domainevent
 
 import (
-	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -19,6 +18,10 @@ func TestNew(t *testing.T) {
 	}
 	if string(event.Payload) != `{"order_id":"order-1"}` {
 		t.Fatalf("Payload = %s", event.Payload)
+	}
+	if event.ID != "event-1" || event.Type != "order.updated" || event.Version != 1 ||
+		!event.OccurredAt.Equal(time.Unix(1, 0)) {
+		t.Fatalf("Event = %#v", event)
 	}
 
 	for name, mutate := range map[string]func(*Event){
@@ -44,21 +47,30 @@ func TestNew(t *testing.T) {
 			}
 		})
 	}
+	zeroOffset := event
+	zeroOffset.OccurredAt = time.Unix(1, 0).In(time.FixedZone("UTC-like", 0))
+	if err := zeroOffset.Validate(); err != nil {
+		t.Fatalf("Validate(zero-offset time) error = %v", err)
+	}
 	if _, err := New("event-2", "order.updated", 1, time.Unix(1, 0).UTC(), func() {}); err == nil {
 		t.Fatal("New() accepted an unencodable payload")
 	}
-	if id := NewID(); id == "" {
-		t.Fatal("NewID() returned an empty identity")
-	}
 }
 
-func TestPermanent(t *testing.T) {
-	want := errors.New("poison")
-	err := Permanent(want)
-	if !IsPermanent(err) || !errors.Is(err, want) {
-		t.Fatalf("Permanent() = %v", err)
+func TestKindNew(t *testing.T) {
+	t.Parallel()
+
+	type payload struct {
+		Value string `json:"value"`
 	}
-	if Permanent(nil) != nil {
-		t.Fatal("Permanent(nil) must be nil")
+	kind := Define[payload]("example.changed", 2)
+	occurredAt := time.Unix(2, 0).UTC()
+	event, err := kind.New("event-2", occurredAt, payload{Value: "kept"})
+	if err != nil {
+		t.Fatalf("Kind.New() error = %v", err)
+	}
+	if event.ID != "event-2" || event.Type != kind.Type || event.Version != kind.Version ||
+		!event.OccurredAt.Equal(occurredAt) || string(event.Payload) != `{"value":"kept"}` {
+		t.Fatalf("Kind.New() = %#v", event)
 	}
 }

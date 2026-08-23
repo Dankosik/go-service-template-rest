@@ -4,6 +4,7 @@ package integration_test
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
 	"io"
 	"os"
@@ -267,8 +268,8 @@ func stopWorker(worker *natsjs.Worker) {
 func testEvent(payload string) natsjs.Event {
 	return natsjs.Event{
 		Subject:       sourceSubject,
-		MessageID:     natsjs.NewID(),
-		PublicationID: natsjs.NewID(),
+		MessageID:     rand.Text(),
+		PublicationID: rand.Text(),
 		Type:          "test.event",
 		Schema:        "v1",
 		CreatedAt:     time.Now().UTC(),

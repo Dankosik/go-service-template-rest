@@ -4,11 +4,11 @@ package natsjs
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"testing"
 	"time"
 
-	"github.com/example/go-service-template-rest/internal/domainevent"
 	"github.com/example/go-service-template-rest/internal/infra/natsjs/natsjstest"
 	"github.com/example/go-service-template-rest/internal/waittest"
 	dockerclient "github.com/moby/moby/client"
@@ -151,7 +151,7 @@ func TestNATSNativeConsumeSurvivesBrokerRestart(t *testing.T) {
 		return client.Check(probeCtx) == nil
 	}, "worker reconnect")
 	if _, err := client.Producer().Publish(t.Context(), Event{
-		Subject: "events.test", MessageID: NewID(), PublicationID: NewID(),
+		Subject: "events.test", MessageID: rand.Text(), PublicationID: rand.Text(),
 		Type: "restart.test", Schema: "v1", CreatedAt: time.Now().UTC(), Payload: []byte("after restart"),
 	}); err != nil {
 		t.Fatalf("Publish(after reconnect) error = %v", err)
@@ -171,7 +171,7 @@ func TestNATSPublishDispatchCancellationAndNoRetry(t *testing.T) {
 
 	before := client.nc.Stats().OutMsgs
 	if _, err := client.Producer().Publish(t.Context(), Event{
-		Subject: "unmatched.test", MessageID: NewID(), PublicationID: NewID(),
+		Subject: "unmatched.test", MessageID: rand.Text(), PublicationID: rand.Text(),
 		Type: "test", Schema: "v1", CreatedAt: time.Now().UTC(), Payload: []byte("one attempt"),
 	}); !errors.Is(err, ErrRejected) {
 		t.Fatalf("Publish(no responder) error = %v, want ErrRejected", err)
@@ -201,7 +201,7 @@ func TestNATSPublishDispatchCancellationAndNoRetry(t *testing.T) {
 	})
 	dispatchedBefore := client.nc.Stats().OutMsgs
 	canceledEvent := Event{
-		Subject: "events.test", MessageID: NewID(), PublicationID: NewID(),
+		Subject: "events.test", MessageID: rand.Text(), PublicationID: rand.Text(),
 		Type: "test", Schema: "v1", CreatedAt: time.Now().UTC(), Payload: []byte("cancel after dispatch"),
 	}
 	publishCtx, cancelPublish := context.WithCancel(t.Context())
@@ -211,7 +211,7 @@ func TestNATSPublishDispatchCancellationAndNoRetry(t *testing.T) {
 		canceledErr <- err
 	}()
 	deadlineEvent := Event{
-		Subject: "events.test", MessageID: NewID(), PublicationID: NewID(),
+		Subject: "events.test", MessageID: rand.Text(), PublicationID: rand.Text(),
 		Type: "test", Schema: "v1", CreatedAt: time.Now().UTC(), Payload: []byte("deadline after dispatch"),
 	}
 	deadlineCtx, cancelDeadline := context.WithTimeout(t.Context(), 2*time.Second)
@@ -236,7 +236,7 @@ func TestNATSPublishDispatchCancellationAndNoRetry(t *testing.T) {
 		t.Fatalf("resume NATS: %v", err)
 	}
 	fresh := Event{
-		Subject: "events.test", MessageID: NewID(), PublicationID: NewID(),
+		Subject: "events.test", MessageID: rand.Text(), PublicationID: rand.Text(),
 		Type: "test", Schema: "v1", CreatedAt: time.Now().UTC(), Payload: []byte("capacity released"),
 	}
 	accepted, err := client.Producer().Publish(t.Context(), fresh)
@@ -281,7 +281,7 @@ func TestNATSHandlerAckAmbiguityRedelivers(t *testing.T) {
 	defer cancelRun()
 	go func() { _ = worker.Run(runCtx) }()
 	if _, err := client.Producer().Publish(t.Context(), Event{
-		Subject: "events.test", MessageID: NewID(), PublicationID: NewID(),
+		Subject: "events.test", MessageID: rand.Text(), PublicationID: rand.Text(),
 		Type: "test", Schema: "v1", CreatedAt: time.Now().UTC(), Payload: []byte("ack ambiguity"),
 	}); err != nil {
 		t.Fatalf("Publish() error = %v", err)
@@ -307,7 +307,7 @@ func TestNATSDLQSourceAckAmbiguityDeduplicates(t *testing.T) {
 	doubleAcks := make(chan struct{}, 2)
 	worker, err := client.NewWorker(t.Context(), cfg, func(_ context.Context, msg Message) error {
 		deliveries <- msg.Metadata().NumDelivered
-		return domainevent.Permanent(errors.New("poison"))
+		return Permanent(errors.New("poison"))
 	})
 	if err != nil {
 		t.Fatalf("create worker: %v", err)
@@ -317,7 +317,7 @@ func TestNATSDLQSourceAckAmbiguityDeduplicates(t *testing.T) {
 	defer cancelRun()
 	go func() { _ = worker.Run(runCtx) }()
 	if _, err := client.Producer().Publish(t.Context(), Event{
-		Subject: "events.test", MessageID: NewID(), PublicationID: NewID(),
+		Subject: "events.test", MessageID: rand.Text(), PublicationID: rand.Text(),
 		Type: "test", Schema: "v1", CreatedAt: time.Now().UTC(), Payload: []byte("dlq ack ambiguity"),
 	}); err != nil {
 		t.Fatalf("Publish() error = %v", err)

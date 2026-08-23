@@ -12,6 +12,11 @@ func TestEventValidation(t *testing.T) {
 	if err := validateEvent(event, len(event.Payload)); err != nil {
 		t.Fatalf("validateEvent(valid) error = %v", err)
 	}
+	zeroOffset := event
+	zeroOffset.CreatedAt = event.CreatedAt.In(time.FixedZone("UTC-like", 0))
+	if err := validateEvent(zeroOffset, len(zeroOffset.Payload)); err != nil {
+		t.Fatalf("validateEvent(zero-offset time) error = %v", err)
+	}
 	cases := map[string]func(*Event){
 		"subject":        func(event *Event) { event.Subject = "events.*" },
 		"message ID":     func(event *Event) { event.MessageID = "" },
