@@ -2,6 +2,7 @@ package httpidempotency
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -14,21 +15,25 @@ import (
 func TestNewRequestUsesScopeAndSemanticInput(t *testing.T) {
 	t.Parallel()
 
-	base, err := NewRequest(Scope{Caller: "caller", Operation: "create"}, "key-1", struct{ Amount int }{Amount: 10})
+	base, err := NewRequest(Scope{Caller: "caller", Operation: "create"}, "key-1", 1, struct{ Amount int }{Amount: 10})
 	if err != nil {
 		t.Fatalf("NewRequest(): %v", err)
 	}
-	same, err := NewRequest(Scope{Caller: "caller", Operation: "create"}, "key-1", struct{ Amount int }{Amount: 10})
+	same, err := NewRequest(Scope{Caller: "caller", Operation: "create"}, "key-1", 1, struct{ Amount int }{Amount: 10})
 	if err != nil {
 		t.Fatalf("NewRequest(same): %v", err)
 	}
-	changed, err := NewRequest(Scope{Caller: "caller", Operation: "create"}, "key-1", struct{ Amount int }{Amount: 11})
+	changed, err := NewRequest(Scope{Caller: "caller", Operation: "create"}, "key-1", 1, struct{ Amount int }{Amount: 11})
 	if err != nil {
 		t.Fatalf("NewRequest(changed): %v", err)
 	}
-	otherCaller, err := NewRequest(Scope{Caller: "other", Operation: "create"}, "key-1", struct{ Amount int }{Amount: 10})
+	otherCaller, err := NewRequest(Scope{Caller: "other", Operation: "create"}, "key-1", 1, struct{ Amount int }{Amount: 10})
 	if err != nil {
 		t.Fatalf("NewRequest(other caller): %v", err)
+	}
+	otherVersion, err := NewRequest(Scope{Caller: "caller", Operation: "create"}, "key-1", 2, struct{ Amount int }{Amount: 10})
+	if err != nil {
+		t.Fatalf("NewRequest(other version): %v", err)
 	}
 
 	version, fingerprint := same.Fingerprint()
@@ -42,17 +47,24 @@ func TestNewRequestUsesScopeAndSemanticInput(t *testing.T) {
 	if bytes.Equal(base.Identity(), otherCaller.Identity()) {
 		t.Fatal("different callers shared an identity")
 	}
+	version, fingerprint = otherVersion.Fingerprint()
+	if base.MatchesFingerprint(version, fingerprint) {
+		t.Fatal("different semantic contract versions matched")
+	}
+	if _, err := NewRequest(Scope{Caller: "caller", Operation: "create"}, "key-1", 0, struct{}{}); !errors.Is(err, ErrInvalidFingerprint) {
+		t.Fatalf("NewRequest(invalid version) error = %v, want ErrInvalidFingerprint", err)
+	}
 }
 
 func TestParseKey(t *testing.T) {
 	t.Parallel()
 
-	if got, err := ParseKey([]string{"key-1"}); err != nil || got != "key-1" {
-		t.Fatalf("ParseKey() = %q, %v", got, err)
+	if got, err := parseKey([]string{"key-1"}); err != nil || got != "key-1" {
+		t.Fatalf("parseKey() = %q, %v", got, err)
 	}
 	for _, values := range [][]string{nil, {""}, {"a", "b"}, {"has space"}, {strings.Repeat("a", MaxKeyBytes+1)}} {
-		if _, err := ParseKey(values); !errors.Is(err, ErrInvalidKey) {
-			t.Fatalf("ParseKey(%q) error = %v, want ErrInvalidKey", values, err)
+		if _, err := parseKey(values); !errors.Is(err, ErrInvalidKey) {
+			t.Fatalf("parseKey(%q) error = %v, want ErrInvalidKey", values, err)
 		}
 	}
 }
@@ -61,45 +73,17 @@ func TestNewRequestFromContextRejectsMultipleWireValues(t *testing.T) {
 	t.Parallel()
 
 	scope := Scope{Caller: "caller", Operation: "create"}
-	ctx := ContextWithKeyValues(t.Context(), []string{"key-1", "key-2"})
-	if _, err := NewRequestFromContext(ctx, scope, struct{}{}); !errors.Is(err, ErrInvalidKey) {
+	ctx := contextWithKeyValues(t.Context(), []string{"key-1", "key-2"})
+	if _, err := NewRequestFromContext(ctx, scope, 1, struct{}{}); !errors.Is(err, ErrInvalidKey) {
 		t.Fatalf("NewRequestFromContext(multiple) error = %v, want ErrInvalidKey", err)
 	}
-	ctx = ContextWithKeyValues(t.Context(), []string{"key-1"})
-	if _, err := NewRequestFromContext(ctx, scope, struct{}{}); err != nil {
+	ctx = contextWithKeyValues(t.Context(), []string{"key-1"})
+	if _, err := NewRequestFromContext(ctx, scope, 1, struct{}{}); err != nil {
 		t.Fatalf("NewRequestFromContext(single): %v", err)
 	}
 }
 
 func TestResultRoundTripAndBounds(t *testing.T) {
-	t.Parallel()
-
-	want := Result{
-		Status: http.StatusCreated,
-		Header: http.Header{"Location": {"/widgets/1"}, "Content-Type": {"application/json"}},
-		Body:   []byte(`{"id":"1"}`),
-	}
-	encoded, err := EncodeResult(want)
-	if err != nil {
-		t.Fatalf("EncodeResult(): %v", err)
-	}
-	got, err := DecodeResult(encoded)
-	if err != nil {
-		t.Fatalf("DecodeResult(): %v", err)
-	}
-	if got.Status != want.Status || !bytes.Equal(got.Body, want.Body) || got.Header.Get("Location") != "/widgets/1" {
-		t.Fatalf("round trip = %#v, want %#v", got, want)
-	}
-
-	if _, err := EncodeResult(Result{Status: http.StatusInternalServerError}); !errors.Is(err, ErrInvalidResult) {
-		t.Fatalf("EncodeResult(500) error = %v, want ErrInvalidResult", err)
-	}
-	if _, err := EncodeResult(Result{Status: http.StatusOK, Header: http.Header{"Set-Cookie": {"secret"}}}); !errors.Is(err, ErrInvalidResult) {
-		t.Fatalf("EncodeResult(Set-Cookie) error = %v, want ErrInvalidResult", err)
-	}
-}
-
-func TestJSONCodecReconstructsGeneratedSuccess(t *testing.T) {
 	t.Parallel()
 
 	type response struct {
@@ -108,16 +92,40 @@ func TestJSONCodecReconstructsGeneratedSuccess(t *testing.T) {
 	}
 	codec := JSONCodec[response](http.StatusCreated)
 	want := response{Location: "/widgets/1", Body: "created"}
-	stored, err := codec.Encode(want)
+	encoded, err := codec.Encode(want)
 	if err != nil {
 		t.Fatalf("Encode(): %v", err)
 	}
-	got, err := codec.Decode(stored)
+	got, err := codec.Decode(encoded)
 	if err != nil {
 		t.Fatalf("Decode(): %v", err)
 	}
 	if got != want {
-		t.Fatalf("Decode() = %#v, want %#v", got, want)
+		t.Fatalf("round trip = %#v, want %#v", got, want)
+	}
+
+	if _, err := JSONCodec[response](http.StatusInternalServerError).Encode(want); !errors.Is(err, ErrInvalidResult) {
+		t.Fatalf("Encode(500) error = %v, want ErrInvalidResult", err)
+	}
+	if _, err := codec.Encode(response{Body: strings.Repeat("x", maxResultBytes)}); !errors.Is(err, ErrInvalidResult) {
+		t.Fatalf("Encode(oversized) error = %v, want ErrInvalidResult", err)
+	}
+
+	body, err := json.Marshal(want)
+	if err != nil {
+		t.Fatalf("marshal legacy body: %v", err)
+	}
+	legacy, err := json.Marshal(struct {
+		Schema int                 `json:"schema"`
+		Status int                 `json:"status"`
+		Header map[string][]string `json:"header"`
+		Body   []byte              `json:"body"`
+	}{Schema: resultSchema, Status: http.StatusCreated, Header: map[string][]string{"Location": {want.Location}}, Body: body})
+	if err != nil {
+		t.Fatalf("marshal legacy result: %v", err)
+	}
+	if got, err := codec.Decode(legacy); err != nil || got != want {
+		t.Fatalf("Decode(legacy) = %#v, %v; want %#v", got, err, want)
 	}
 }
 

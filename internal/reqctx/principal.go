@@ -10,26 +10,48 @@ package reqctx
 import (
 	"context"
 	"slices"
+	"strconv"
+	"strings"
 )
 
 // Principal is the authenticated caller of the current request.
 //
-// Issuer and Subject form the caller's stable identity. Scopes are reserved for
-// a verifier that actually proves them. A service whose credential proves more
+// Issuer and Subject form the caller's stable identity; ClientID is the
+// machine-caller fallback when Subject is absent. Scopes are reserved for a
+// verifier that actually proves them. A service whose credential proves more
 // attaches its own type under its own context key rather than re-reading the
 // credential.
 type Principal struct {
-	// Issuer is the verified namespace in which Subject is unique.
+	// Issuer is the verified namespace in which Subject and ClientID are unique.
 	Issuer string
 	// Subject is correlatable identity data, not a credential and not
 	// automatically safe to log.
-	Subject  string
+	Subject string
+	// ClientID is the stable machine identity when the token has no subject.
 	ClientID string
 	Scopes   []string
 }
 
 func (p Principal) HasScope(scope string) bool {
 	return slices.Contains(p.Scopes, scope)
+}
+
+// CallerIdentity returns the collision-free opaque identity a feature uses to
+// scope caller-owned state. Subject is authoritative when present; client ID is
+// the supported machine-caller fallback. The result is correlatable and must
+// not be logged.
+func (p Principal) CallerIdentity() (string, bool) {
+	if strings.TrimSpace(p.Issuer) == "" {
+		return "", false
+	}
+	kind, value := "subject", p.Subject
+	if strings.TrimSpace(value) == "" {
+		kind, value = "client", p.ClientID
+	}
+	if strings.TrimSpace(value) == "" {
+		return "", false
+	}
+	return kind + ":" + strconv.Itoa(len(p.Issuer)) + ":" + p.Issuer + ":" + strconv.Itoa(len(value)) + ":" + value, true
 }
 
 type principalContextKey struct{}
