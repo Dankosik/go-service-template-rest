@@ -137,9 +137,9 @@ func (s *Supervisor) runTask(name string, run func(context.Context) error) (runE
 	}()
 
 	if err := run(s.taskCtx); err != nil {
-		// Cancellation is how shutdown asks a task to stop, so it is not a task
-		// failure and must not poison the group's error.
-		if errors.Is(err, context.Canceled) && s.taskCtx.Err() != nil {
+		// The parent context and Shutdown own this context's terminal error, so a
+		// task returning that same cause stopped as asked rather than failed.
+		if taskErr := s.taskCtx.Err(); taskErr != nil && errors.Is(err, taskErr) {
 			s.log.Info("background_task_canceled", "component", "background", "task", name)
 			return nil
 		}

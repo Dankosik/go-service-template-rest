@@ -110,6 +110,58 @@ func TestArmTeardownIgnoresCanceledParentAndSetsDeadline(t *testing.T) {
 	}
 }
 
+func TestStartRuntimeCancelsOnlyDuringStartup(t *testing.T) {
+	t.Parallel()
+
+	t.Run("startup cancellation", func(t *testing.T) {
+		t.Parallel()
+
+		startupCtx, cancelStartup := context.WithCancel(context.Background())
+		runtimeCtx, cancelRuntime := context.WithCancel(context.Background())
+		defer cancelRuntime()
+		started, err := StartRuntime(startupCtx, runtimeCtx, cancelRuntime, func(ctx context.Context) error {
+			cancelStartup()
+			<-ctx.Done()
+			return ctx.Err()
+		})
+		if started || !errors.Is(err, context.Canceled) {
+			t.Fatalf("StartRuntime() = %t, %v, want false, context.Canceled", started, err)
+		}
+	})
+
+	t.Run("runtime after admission", func(t *testing.T) {
+		t.Parallel()
+
+		startupCtx, cancelStartup := context.WithCancel(context.Background())
+		runtimeCtx, cancelRuntime := context.WithCancel(context.Background())
+		defer cancelRuntime()
+		started, err := StartRuntime(startupCtx, runtimeCtx, cancelRuntime, func(context.Context) error { return nil })
+		if !started || err != nil {
+			t.Fatalf("StartRuntime() = %t, %v, want true, nil", started, err)
+		}
+		cancelStartup()
+		if err := runtimeCtx.Err(); err != nil {
+			t.Fatalf("runtime inherited cancellation after successful startup: %v", err)
+		}
+	})
+
+	t.Run("cancellation wins admission race", func(t *testing.T) {
+		t.Parallel()
+
+		startupCtx, cancelStartup := context.WithCancel(context.Background())
+		runtimeCtx, cancelRuntime := context.WithCancel(context.Background())
+		defer cancelRuntime()
+		started, err := StartRuntime(startupCtx, runtimeCtx, cancelRuntime, func(ctx context.Context) error {
+			cancelStartup()
+			<-ctx.Done()
+			return nil
+		})
+		if !started || !errors.Is(err, context.Canceled) {
+			t.Fatalf("StartRuntime() = %t, %v, want true, context.Canceled", started, err)
+		}
+	})
+}
+
 func TestInstallTelemetryReturnsUsableFlush(t *testing.T) {
 	t.Parallel()
 
