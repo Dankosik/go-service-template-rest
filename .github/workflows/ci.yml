@@ -34,22 +34,39 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
-      - name: Module drift
-        run: make mod-tidy-check
-      - name: Format
-        run: make fmt-check
-      - name: Lint
-        run: make lint
-      - name: Unit tests
-        run: make test
-      - name: Generated contracts
-        run: make openapi-check sqlc-check proto-check
+      - name: Detect changed surfaces
+        id: surfaces
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          set -euo pipefail
+          template=false
+          agents=false
+          if [ "${{ github.event_name }}" = pull_request ]; then
+            files="$(git diff --name-only "${BASE_SHA}" HEAD)"
+          elif [ "${{ github.event_name }}" = push ] && [ -n "${BASE_SHA}" ] && [ "${BASE_SHA}" != 0000000000000000000000000000000000000000 ]; then
+            files="$(git diff --name-only "${BASE_SHA}" HEAD)"
+          else
+            files="$(git ls-files)"
+          fi
+          if printf '%s\n' "${files}" | grep -Eq '^(scripts/init-module\.sh|scripts/ci/init-module-contract-check\.sh|scripts/ci/template-init-check\.sh|scripts/profiles/|Makefile$|template-owned\.paths$|template\.lock$)'; then
+            template=true
+          fi
+          if printf '%s\n' "${files}" | grep -Eq '^(AGENTS\.md|CLAUDE\.md|Grok\.md|QWEN\.md|evals/|\.agents/|\.claude/|\.codex/|\.cursor/|\.grok/|\.opencode/|\.qwen/|docs/agent-harness|docs/spec-first-workflow|docs/prompt-|docs/skill-authoring|docs/validation|scripts/agent-roles-sync\.sh|scripts/harness-skills-sync\.sh|scripts/codex-agents-sync\.sh|scripts/template-sync\.sh|scripts/ci/instruction-evals-check\.sh|scripts/ci/template-owned-purity-check\.sh)'; then
+            agents=true
+          fi
+          echo "template=${template}" >>"${GITHUB_OUTPUT}"
+          echo "agents=${agents}" >>"${GITHUB_OUTPUT}"
+      - name: Go quality
+        run: make check
       - name: Initializer contract
+        if: github.event_name != 'pull_request' || steps.surfaces.outputs.template == 'true'
         run: make template-init-check
       - name: Instruction ownership
+        if: github.event_name != 'pull_request' || steps.surfaces.outputs.agents == 'true'
         run: |
-          make template-owned-purity-check
-          bash scripts/ci/instruction-evals-check.sh
+          make agent-roles-check codex-agents-check claude-skills-check qwen-skills-check template-owned-purity-check
+          make instruction-evals-check
       - name: Breaking contracts
         if: github.event_name == 'pull_request'
         env:

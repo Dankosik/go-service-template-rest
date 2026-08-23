@@ -6,7 +6,7 @@ cancellation, a shutdown ordering, or a handoff between goroutines.
 
 ## Decide
 - `synctest.Test(t, func(t *testing.T) { ... })` is the entry point in
-  `testing/synctest` on this toolchain (Go 1.26.5; GA since 1.25). The Go 1.24
+  `testing/synctest` on this toolchain (Go 1.27.0; GA since 1.25). The Go 1.24
   spelling — `synctest.Run` behind `GOEXPERIMENT=synctest` — no longer applies,
   and the current form is already used in
   `internal/infra/postgresoutbox/relay_test.go` and eleven other files.
@@ -45,4 +45,4 @@ cancellation, a shutdown ordering, or a handoff between goroutines.
 
 ## Prove
 - Focused test with `-count=1 -vet=off`.
-- `make test-race` when the changed path shares state across goroutines.
+- `ALLOW_HEAVY=1 make test-race` when the changed path shares state across goroutines.

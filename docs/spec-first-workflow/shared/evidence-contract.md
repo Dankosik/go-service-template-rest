@@ -9,16 +9,18 @@ when its owner and wiring checks together establish that path. Status, file or
 symbol presence, unrelated checks, and implementation summaries do not qualify
 alone.
 
-Record the command or procedure, relevant environment and preconditions,
-result, and gaps. Attach commit or tree identity only across a checkout or
-integration boundary; the current bounded diff is enough for local work. Reuse
-proof only while its claim, content, provenance, preconditions, and risk surface
-remain unchanged. Do not rerun unchanged evidence as ceremony.
+Record the structured [Evidence Result V1](../interfaces/evidence-result-v1.md)
+fields. Attach commit or tree identity only across a checkout or integration
+boundary; the current bounded diff is enough for local work. Reuse a receipt
+only while `candidate`, `scope`, `command`, and `environment` are unchanged and
+the result is `pass`. Do not rerun unchanged evidence as ceremony.
 
 The bounded-change actor owns iterative focused checks. The acceptance owner
-assigns every deterministic gate, validates any reused receipt, and runs it on
-the integrated tree when identity or preconditions changed. A reviewer runs
-only a missing or adversarial falsifier for its independent question.
+assigns every deterministic gate, validates any reused receipt, and runs
+`make unit-check` on the integrated unit when identity or preconditions
+changed. A reviewer runs only a missing or adversarial falsifier for its
+independent question. `make check` runs once on the integrated delivery tree.
+Heavy targets require `ALLOW_HEAVY=1` or CI.
 
 Return [Evidence Result V1](../interfaces/evidence-result-v1.md) for each claim.
 When required proof cannot run, stop as `implementation complete; verification

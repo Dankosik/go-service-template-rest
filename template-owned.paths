@@ -20,6 +20,9 @@
 # Syntax: one path per line, relative to the repository root. A trailing slash
 # marks a directory, mirrored recursively with deletions. Blank lines and lines
 # starting with `#` are ignored.
+#
+# Eval catalogs, instruction-eval checks, and template-purity scripts stay in
+# the source template. Generated services do not inherit them.
 
 AGENTS.md
 CLAUDE.md
@@ -41,9 +44,6 @@ docs/spec-first-workflow/
 docs/validation-routing.md
 docs/validation/
 docs/universal-disciplines/
-
-evals/instructions/
-evals/hard-skills/
 
 .agents/codex-project.toml
 .agents/role-classes/
@@ -72,6 +72,3 @@ scripts/harness-skills-sync.sh
 scripts/codex-agents-sync.sh
 scripts/lib/manifest.sh
 scripts/lib/sync-cli.sh
-scripts/ci/instruction-evals-check.sh
-scripts/ci/template-owned-purity-check.sh
-scripts/dev/instruction-evals-run.sh

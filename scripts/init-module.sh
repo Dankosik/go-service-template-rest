@@ -7,7 +7,7 @@ TEMPLATE_OWNER="@Dankosik"
 TEMPLATE_API_TITLE="go-service-template-rest"
 
 usage() {
-	echo "usage: CODEOWNER=@user-or-org/team DATABASE=none|postgres HTTP_IDEMPOTENCY=none|postgres JOBS=none|postgres WEBHOOKS=none|durable INBOUND_WEBHOOKS=none|standard-webhooks OUTBOX=none|postgres GRPC=none|enabled AUTHN=none|oidc-jwt|oidc-introspection OUTBOUND_HTTP=none|bounded OBJECT_STORAGE=none|s3 OUTBOUND_AUTH=none|oauth2-client-credentials MESSAGING=none|nats-jetstream REFERENCE_EXAMPLE=remove|keep $0 [module-path]"
+	echo "usage: CODEOWNER=@user-or-org/team DATABASE=none|postgres HTTP_IDEMPOTENCY=none|postgres JOBS=none|postgres WEBHOOKS=none|durable INBOUND_WEBHOOKS=none|standard-webhooks OUTBOX=none|postgres GRPC=none|enabled AUTHN=none|oidc-jwt|oidc-introspection OUTBOUND_HTTP=none|bounded OBJECT_STORAGE=none|s3 OUTBOUND_AUTH=none|oauth2-client-credentials MESSAGING=none|nats-jetstream REFERENCE_EXAMPLE=remove|keep AGENT_HARNESS=core|cursor|claude|qwen|grok|opencode|codex|all $0 [module-path]"
 	echo "module-path is derived from git remote origin when omitted"
 }
 
@@ -256,6 +256,7 @@ write_template_lock() {
 	local jobs="${11}"
 	local webhooks="${12}"
 	local inbound_webhooks="${13}"
+	local agent_harness="${14}"
 	local source_revision
 
 	source_revision="$(git rev-parse HEAD 2>/dev/null || true)"
@@ -283,7 +284,48 @@ object_storage = "${object_storage}"
 jobs = "${jobs}"
 webhooks = "${webhooks}"
 inbound_webhooks = "${inbound_webhooks}"
+agent_harness = "${agent_harness}"
 EOF
+}
+
+# strip_unselected_harness removes template-only eval catalogs and unused
+# harness adapters from a derived service. AGENT_HARNESS=all keeps every
+# adapter and still drops evals: those catalogs test the source template.
+strip_unselected_harness() {
+	local harness="$1"
+
+	rm -rf -- evals
+	rm -f -- \
+		scripts/ci/instruction-evals-check.sh \
+		scripts/dev/instruction-evals-run.sh \
+		scripts/ci/template-owned-purity-check.sh
+
+	if [[ "${harness}" == "all" ]]; then
+		return 0
+	fi
+
+	if [[ "${harness}" != "claude" ]]; then
+		rm -rf -- .claude
+	fi
+	if [[ "${harness}" != "qwen" ]]; then
+		rm -rf -- .qwen
+	fi
+	if [[ "${harness}" != "codex" ]]; then
+		rm -rf -- .codex
+	fi
+	if [[ "${harness}" != "cursor" ]]; then
+		rm -rf -- .cursor/agents
+		if [[ "${harness}" != "core" ]]; then
+			rm -rf -- .cursor
+		fi
+	fi
+	if [[ "${harness}" != "grok" ]]; then
+		rm -rf -- .grok
+	fi
+	if [[ "${harness}" != "opencode" ]]; then
+		rm -rf -- .opencode
+		rm -f -- opencode.json
+	fi
 }
 
 replace_codeowner_rules() {
@@ -316,9 +358,7 @@ Module: \`${module}\`
 \`\`\`bash
 cp env/.env.example .env
 make run
-make fmt-check
-make lint
-make test
+make check
 \`\`\`
 
 The client API contract is \`api/openapi/service.yaml\`. Start with
@@ -543,6 +583,19 @@ remove | keep) ;;
 	;;
 esac
 
+if [[ "${AGENT_HARNESS+x}" == "x" && -z "${AGENT_HARNESS-}" ]]; then
+	echo "AGENT_HARNESS must be one of: core, cursor, claude, qwen, grok, opencode, codex, all"
+	exit 1
+fi
+agent_harness="${AGENT_HARNESS:-core}"
+case "${agent_harness}" in
+core | cursor | claude | qwen | grok | opencode | codex | all) ;;
+*)
+	echo "AGENT_HARNESS must be one of: core, cursor, claude, qwen, grok, opencode, codex, all"
+	exit 1
+	;;
+esac
+
 for required_file in go.mod tools/go.mod env/.env.example .github/CODEOWNERS .golangci.yml api/openapi/service.yaml; do
 	[[ -f "${required_file}" ]] || {
 		echo "required template file not found: ${required_file}"
@@ -617,7 +670,8 @@ if [[ -f template.lock ]]; then
 		"outbound_auth = \"${outbound_auth}\"" \
 		"messaging = \"${messaging}\"" \
 		"reference_example = \"${reference_example}\"" \
-		"object_storage = \"${object_storage}\""; do
+		"object_storage = \"${object_storage}\"" \
+		"agent_harness = \"${agent_harness}\""; do
 		grep -Fqx "${expected}" template.lock || {
 			echo "repository is already initialized with different profile choices"
 			exit 1
@@ -637,6 +691,7 @@ if [[ -f template.lock ]]; then
 	echo "  outbound authentication: ${outbound_auth}"
 	echo "  messaging: ${messaging}"
 	echo "  reference example: ${reference_example}"
+	echo "  agent harness: ${agent_harness}"
 	exit 0
 fi
 
@@ -1027,6 +1082,8 @@ fi
 	# repository it does not have. They stay readable upstream.
 	rm -rf -- specs
 
+	strip_unselected_harness "${agent_harness}"
+
 	# Upstream project furniture. The hero image is referenced only by the README
 	# initialization overwrites, and the issue forms route bug reports for the
 	# template rather than for this service.
@@ -1047,7 +1104,7 @@ fi
 		go generate ./internal/openapi
 	fi
 
-	write_template_lock "${database}" "${http_idempotency}" "${outbox}" "${grpc}" "${authn}" "${outbound_http}" "${outbound_auth}" "${messaging}" "${reference_example}" "${object_storage}" "${jobs}" "${webhooks}" "${inbound_webhooks}"
+	write_template_lock "${database}" "${http_idempotency}" "${outbox}" "${grpc}" "${authn}" "${outbound_http}" "${outbound_auth}" "${messaging}" "${reference_example}" "${object_storage}" "${jobs}" "${webhooks}" "${inbound_webhooks}" "${agent_harness}"
 
 fi
 
@@ -1074,6 +1131,7 @@ echo "  object storage: ${object_storage}"
 echo "  outbound authentication: ${outbound_auth}"
 echo "  messaging: ${messaging}"
 echo "  reference example: ${reference_example}"
+echo "  agent harness: ${agent_harness}"
 if [[ -n "${codeowner}" ]]; then
 	echo "  codeowner: ${codeowner}"
 fi

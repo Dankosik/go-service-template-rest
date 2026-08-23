@@ -8,7 +8,7 @@ mechanical concern still needs proof in this change.
 
 ## Decide
 
-Both modules pin `go 1.26.5`, so every version gate below 1.26 is already
+Both modules pin `go 1.27.0`, so every version gate below 1.27 is already
 satisfied: `slices`, `maps`, `min`/`max`, `clear`, `cmp.Or`, `t.Context`,
 `sync.WaitGroup.Go`, `testing/synctest`, `errors.AsType`, and `t.ArtifactDir`
 are all available without checking. `errors.AsType` is already the repository
@@ -40,7 +40,7 @@ proof:
 
 ## Prove
 
-- `make lint` is the mechanical gate; do not re-argue in the diff what it decides.
+- `make lint-all` is the mechanical gate; do not re-argue in the diff what it decides.
 - `make modernize-check` reports modernizations as a diff without applying them.
 - When a swap replaced a policy-carrying helper, add the test for the policy —
   nil versus empty, zero-value fallback, order, or shallow versus deep copy —

@@ -4,7 +4,7 @@
 Symptom: the diff touches `time.After`, `time.Tick`, `time.NewTimer`, `time.NewTicker`, `Timer.Reset`, `Ticker.Stop`, `time.AfterFunc`, `context.AfterFunc`, sleeps in loops or tests, retry timing, or shutdown behavior that depends on time.
 
 ## Decide
-- This module is `go 1.26.5` with no `godebug` directive, so Go 1.23+ timer semantics are in force. The garbage collector recovers unreferenced timers and tickers whether or not they were stopped: `time.After` in a loop is not a leak, `Tick` is not a leak, and `Stop` is no longer needed to help collection. A finding that says otherwise is repeating advice the standard library retracted.
+- This module is `go 1.27.0` with no `godebug` directive, so Go 1.23+ timer semantics are in force. The garbage collector recovers unreferenced timers and tickers whether or not they were stopped: `time.After` in a loop is not a leak, `Tick` is not a leak, and `Stop` is no longer needed to help collection. A finding that says otherwise is repeating advice the standard library retracted.
 - What `Stop` still buys is future work, not memory: ticks that would keep driving a loop after its owner is gone, and an `AfterFunc` callback that would still fire. Ask what the next fire would do, not whether `Stop` was called.
 - `Ticker.Stop` does not close `Ticker.C`. A goroutine ranging over that channel, or selecting only on it, is never woken by `Stop` — it needs a context or done arm.
 - Since Go 1.23 a channel timer needs no drain: after `Stop` returns, a receive on `t.C` is guaranteed to block rather than deliver a stale time, so the old `if !t.Stop() { <-t.C }` dance is obsolete and its `Reset` hazards are gone.

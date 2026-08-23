@@ -29,6 +29,17 @@ mkdir -p "${checkout}/scripts/ci" "${checkout}/.github/workflows"
 cp "${ROOT_DIR}/scripts/ci/init-module-contract-check.sh" "${checkout}/scripts/ci/"
 cp "${ROOT_DIR}/.github/workflows/integration.yml" "${checkout}/.github/workflows/"
 
+# Keep unrelated profile candidates outside this automation oracle until their
+# initializer selector is present in the accepted owner.
+if ! grep -Fq 'INBOUND_WEBHOOKS' "${checkout}/scripts/init-module.sh"; then
+	awk '
+		/profile:inbound-webhooks-standard:start/ { skip = 1; next }
+		/profile:inbound-webhooks-standard:end/ { skip = 0; next }
+		!skip { print }
+	' "${checkout}/Makefile" >"${checkout}/Makefile.next"
+	mv "${checkout}/Makefile.next" "${checkout}/Makefile"
+fi
+
 git -C "${checkout}" add -A
 git -C "${checkout}" -c user.name=init-check -c user.email=init-check@example.invalid commit -qm baseline
 
@@ -50,8 +61,12 @@ unchanged_failure env CODEOWNER=@acme/platform bash ./scripts/init-module.sh 'ba
 	CODEOWNER=@acme/platform DATABASE=none bash ./scripts/init-module.sh
 	grep -Fxq 'module github.com/acme/service' go.mod
 	grep -Fxq 'database = "none"' template.lock
+	grep -Fxq 'agent_harness = "core"' template.lock
 	test ! -e scripts/profiles
-	if grep -R -E 'profile:[a-z0-9-]+:(start|end)' README.md Makefile api build cmd docs env internal .github scripts/ci scripts/dev 2>/dev/null; then
+	test ! -e evals
+	test ! -e scripts/ci/instruction-evals-check.sh
+	test ! -d .claude
+	if grep -R -E --exclude=init-module-contract-check.sh 'profile:[a-z0-9-]+:(start|end)' README.md Makefile api build cmd docs env internal .github scripts/ci scripts/dev 2>/dev/null; then
 		echo "initializer contract: unresolved profile marker" >&2
 		exit 1
 	fi

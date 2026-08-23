@@ -16,31 +16,35 @@ make template-init \
 The command rewrites the Go module and module-qualified lint rules, updates
 CODEOWNERS, preserves an existing `.env`, creates it from `.env.example` only
 when absent, and rejects invalid input before mutation. Verify that contract
-with `make template-init-check`.
+with `ALLOW_HEAVY=1 make template-init-check`.
 
 ## Validate a change
 
 Use the smallest command that proves the claim:
 
 ```bash
-make fmt-check
-make lint
-make test
+go test -vet=off ./internal/<package>
+make unit-check PKG=./internal/<package> FILES='internal/<package>/*.go'
+make check
 ```
 
-Focused commands remain available:
+`make check` is the one full-repository owner. Do not also run `fmt-check`,
+`lint-all`, or `test-all` beside it. `make test` and `make lint` require `PKG`
+and do not default to `./...`.
+
+Heavy commands remain available with an explicit grant:
 
 ```bash
-make test-race
-make test-integration
+ALLOW_HEAVY=1 make test-race
+ALLOW_HEAVY=1 make test-integration
 make mod-check
 make openapi-check
 make sqlc-check
-make migration-validate
-make govulncheck
-make gosec
+ALLOW_HEAVY=1 make migration-validate
+ALLOW_HEAVY=1 make govulncheck
+ALLOW_HEAVY=1 make gosec
 make secret-scan
-make secret-scan-history
+ALLOW_HEAVY=1 make secret-scan-history
 ```
 
 Docker-backed focused commands require a reachable Docker daemon. Do not
@@ -78,7 +82,7 @@ For Railway policy changes:
 
 ## Code and generated sources
 
-- Format Go through `make fmt`; verify with `make fmt-check`.
+- Format Go through `make fmt`; verify with `make fmt-check` or `make check`.
 - Prefer explicit Go and existing repository seams over new framework layers.
 - Use the placement guide in
   [Project Structure & Module Organization](docs/project-structure-and-module-organization.md#3-deterministic-placement-algorithm).

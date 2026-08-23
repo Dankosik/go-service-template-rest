@@ -56,9 +56,7 @@ for required in \
 	scripts/harness-skills-sync.sh \
 	scripts/codex-agents-sync.sh \
 	scripts/lib/manifest.sh \
-	scripts/lib/sync-cli.sh \
-	scripts/ci/instruction-evals-check.sh \
-	scripts/ci/template-owned-purity-check.sh; do
+	scripts/lib/sync-cli.sh; do
 	contains_path "${required}" || fail "${manifest} must list ${required}"
 done
 

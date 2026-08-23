@@ -31,7 +31,7 @@ lifecycle tests). Reach for a fake clock there before widening any timeout here.
   the current tree, so leaving default vet on re-lints the package on every one of
   100 iterations. The repository's own flake gate is
   a bounded `go test -vet=off -count=5 -shuffle=on <scope>` run; the
-  race gate is `make test-race`.
+  race gate is `ALLOW_HEAVY=1 make test-race`.
 
 - **Integration-tagged flakes have pinned commands.** `make test-messaging-race`
   and `make test-outbox-race` run `-p=1 -count=1 -race -tags=integration` over a

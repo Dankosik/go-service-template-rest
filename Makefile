@@ -25,10 +25,6 @@ OPENAPI_FILES := $(OPENAPI_FILE) $(REFERENCE_OPENAPI_FILE) $(EXTERNAL_OPENAPI_FI
 OPENAPI_PACKAGES := ./internal/openapi $(REFERENCE_OPENAPI_PACKAGE) $(EXTERNAL_OPENAPI_PACKAGES)
 OPENAPI_GENERATED_FILES := internal/openapi/openapi.gen.go $(if $(REFERENCE_OPENAPI_FILE),examples/reference-service/internal/openapi/openapi.gen.go) $(EXTERNAL_OPENAPI_GENERATED_FILES)
 INTEGRATION_INIT_VARS := NAME TRANSPORT CONTRACT TARGET AUTH
-GO_FILES = $(shell git ls-files --cached --others --exclude-standard -- '*.go' 2>/dev/null | awk '!/^(\.agents|\.cache|vendor)\//' | while IFS= read -r file; do [ -f "$$file" ] && printf '%s\n' "$$file"; done)
-PROTO_GENERATED_GO_FILES := internal/gen/proto/% examples/grpc-reference-service/internal/gen/proto/%
-GOIMPORTS_FILES = $(filter-out $(PROTO_GENERATED_GO_FILES),$(GO_FILES))
-GOFUMPT_FILES = $(filter-out internal/openapi/openapi.gen.go internal/infra/%/internal/openapi/client.gen.go internal/infra/postgres/sqlcgen/% $(PROTO_GENERATED_GO_FILES),$(GO_FILES))
 SHELL_FILES = $(shell git ls-files --cached --others --exclude-standard -- '*.sh' 2>/dev/null | awk '!/^(\.agents|\.cache|vendor)\//' | while IFS= read -r file; do [ -f "$$file" ] && printf '%s\n' "$$file"; done)
 REDOCLY_CLI_VERSION := 2.40.0
 REDOCLY_CLI ?= npx --yes @redocly/cli@$(REDOCLY_CLI_VERSION)
@@ -57,8 +53,18 @@ INBOUND_WEBHOOK_RACE_PACKAGES := ./internal/inboundwebhook ./internal/infra/post
 # profile:inbound-webhooks-standard:end
 LINT_BASE_REF ?= origin/main
 LINT_CONCURRENCY ?= 4
-LINT_PACKAGES ?= ./...
+PKG ?=
+FILES ?=
+ALLOW_HEAVY ?=
+export ALLOW_HEAVY
+LINT_PACKAGE_LINTERS := govet,errcheck,staticcheck,ineffassign,unused,bodyclose,nilerr,errorlint,forcetypeassert,noctx
 SECRET_SCAN_BASE_REF ?= $(if $(strip $(BASE_REF)),$(BASE_REF),origin/main)
+
+# Not a security boundary: stop an agent from launching a costly matrix by accident.
+# GitHub Actions and other CI systems set CI=true, which is enough.
+HEAVY_GUARD = @if [ "$(ALLOW_HEAVY)" != "1" ] && [ "$(CI)" != "true" ]; then printf 'refusing %s: set ALLOW_HEAVY=1 (CI sets CI=true)\n' "$@"; exit 2; fi
+REQUIRE_PKG = @if [ -z "$(strip $(PKG))" ]; then printf '%s requires PKG=./path/to/package (use %s for the full module)\n' "$@" "test-all/lint-all/check"; exit 2; fi
+REQUIRE_FILES = @if [ -z "$(strip $(FILES))" ]; then printf '%s requires FILES="file.go ..."\n' "$@"; exit 2; fi
 
 TRIVY_IMAGE ?= aquasec/trivy:0.72.0@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f
 TRIVY_CACHE_VOLUME ?= trivy-cache
@@ -85,11 +91,13 @@ TEMPLATE ?= ../go-service-template-rest
 # One same-target A/B on the 10-core/16-GiB reference Mac measured 138.7s
 # serial versus 294.6s with make -j4. Re-measure after host, toolchain, or
 # aggregate membership changes before enabling parallel prerequisites.
-.NOTPARALLEL: mod-check lint-deep openapi-check proto-check
+.NOTPARALLEL: check verify mod-check lint-all lint-deep openapi-check proto-check
 
 .PHONY: help template-init template-init-check integration-init integration-init-check \
-	tidy fmt mod-check mod-tidy-check mod-verify fmt-check test test-watch test-race test-integration \
-	lint lint-deep lint-fast deadcode nilaway modernize-check test-parallelism-check govulncheck gosec secret-scan secret-scan-history \
+	tidy fmt mod-check mod-tidy-check mod-verify fmt-check unit-check check verify \
+	test test-package test-all test-watch test-race test-integration \
+	lint lint-package lint-all lint-deep lint-fast deadcode nilaway modernize-check test-parallelism-check \
+	govulncheck gosec secret-scan secret-scan-history instruction-evals-check \
 	actionlint actionlint-fast shellcheck shellcheck-fast dockerfile-check \
 	openapi-generate openapi-drift-check openapi-reference-compile openapi-runtime-contract-check openapi-lint openapi-validate openapi-breaking openapi-check \
 	proto-format proto-format-check proto-lint proto-generate proto-drift-check proto-breaking proto-check \
@@ -116,9 +124,12 @@ TEMPLATE ?= ../go-service-template-rest
 
 help:
 	@echo "Setup and everyday development:"
-	@echo "  make template-init MODULE=github.com/acme/service CODEOWNER=@acme/team"
-	@echo "  make fmt-check | lint | test"
-	@echo "  make lint-fast LINT_PACKAGES=./internal/config"
+	@echo "  make template-init MODULE=github.com/acme/service CODEOWNER=@acme/team AGENT_HARNESS=core"
+	@echo "  go test -vet=off ./internal/<package>     # edit loop"
+	@echo "  make unit-check PKG=./internal/<package> FILES='...'"
+	@echo "  make check                               # one full aggregate on the integrated tree"
+	@echo "  ALLOW_HEAVY=1 make verify                # CI/manual heavy matrix; refused otherwise"
+	@echo "  make lint-fast PKG=./internal/config      # local changed-code signal; not a lint claim"
 	@echo "  make integration-init NAME=billing TRANSPORT=http CONTRACT=api/external/billing/openapi.yaml TARGET=external-https AUTH=none"
 	@echo "  make agent-roles-check | codex-agents-check | claude-skills-check | qwen-skills-check"
 	@echo "  make template-sync-check TEMPLATE=<path>   # drift against the template instructions"
@@ -139,9 +150,11 @@ help:
 # profile:webhooks-durable:end
 	@echo ""
 	@echo "Focused validation:"
-	@echo "  make test | test-race | test-integration"
+	@echo "  make test-package PKG=./pkg | test-all"
+	@echo "  make lint-package PKG=./pkg | lint-all | lint-fast PKG=./pkg | lint-deep"
+	@echo "  make test-race | test-integration   # require ALLOW_HEAVY=1 or CI=true"
 	@echo "  make mod-check | mod-tidy-check | mod-verify"
-	@echo "  make lint | lint-deep | lint-fast | govulncheck | gosec | secret-scan | secret-scan-history"
+	@echo "  make govulncheck | gosec | secret-scan | secret-scan-history"
 	@echo "  local agents: actionlint-fast | shellcheck-fast"
 	@echo "  make openapi-check"
 	@echo "  make proto-check"
@@ -160,6 +173,7 @@ template-init:
 	fi
 
 template-init-check:
+	$(HEAVY_GUARD)
 	bash ./scripts/ci/init-module-contract-check.sh
 
 integration-init:
@@ -168,6 +182,9 @@ integration-init:
 	$(INTEGRATION_INIT_SCRIPT) "$(NAME)" "$(TRANSPORT)" "$(CONTRACT)" "$(TARGET)" "$(AUTH)"
 
 integration-init-check:
+	@if [ -z "$(strip $(INTEGRATION_INIT_ROWS))" ]; then \
+		if [ "$(ALLOW_HEAVY)" != "1" ] && [ "$(CI)" != "true" ]; then printf 'refusing %s: set ALLOW_HEAVY=1 (CI sets CI=true)\n' "$@"; exit 2; fi; \
+	fi
 	$(INTEGRATION_INIT_CHECK_SCRIPT) $(INTEGRATION_INIT_ROWS)
 
 template-owned-purity-check:
@@ -210,8 +227,12 @@ tidy:
 	go mod tidy
 
 fmt:
-	$(GO_TOOL) goimports -w $(GOIMPORTS_FILES)
-	$(GO_TOOL) gofumpt -w $(GOFUMPT_FILES)
+	@set -e; \
+	files="$$(git ls-files --cached --others --exclude-standard -- '*.go' 2>/dev/null | awk '!/^(\.agents|\.cache|vendor)\//' | while IFS= read -r file; do [ -f "$$file" ] && printf '%s\n' "$$file"; done)"; \
+	goimports_files="$$(printf '%s\n' "$$files" | grep -vE '^(internal/gen/proto/|examples/grpc-reference-service/internal/gen/proto/)')"; \
+	gofumpt_files="$$(printf '%s\n' "$$goimports_files" | grep -vE '^(internal/openapi/openapi\.gen\.go$$|examples/reference-service/internal/openapi/openapi\.gen\.go$$|internal/infra/.*/internal/openapi/client\.gen\.go$$|internal/infra/postgres/sqlcgen/)')"; \
+	$(GO_TOOL) goimports -w $$goimports_files; \
+	$(GO_TOOL) gofumpt -w $$gofumpt_files
 
 mod-check: mod-tidy-check mod-verify
 
@@ -228,46 +249,84 @@ mod-verify:
 	go -C tools mod verify
 
 fmt-check:
-	@unformatted="$$( $(GO_TOOL) goimports -l $(GOIMPORTS_FILES) )"; \
-	if [ -n "$$unformatted" ]; then \
-		echo "goimports required for:"; \
-		echo "$$unformatted"; \
-		echo "run 'make fmt'"; \
-		exit 1; \
-	fi
-	@gofumpt_unformatted="$$( $(GO_TOOL) gofumpt -l $(GOFUMPT_FILES) )"; \
-	if [ -n "$$gofumpt_unformatted" ]; then \
-		echo "gofumpt required for:"; \
-		echo "$$gofumpt_unformatted"; \
-		echo "run 'make fmt'"; \
-		exit 1; \
-	fi
+	@set -e; \
+	files="$$(git ls-files --cached --others --exclude-standard -- '*.go' 2>/dev/null | awk '!/^(\.agents|\.cache|vendor)\//' | while IFS= read -r file; do [ -f "$$file" ] && printf '%s\n' "$$file"; done)"; \
+	goimports_files="$$(printf '%s\n' "$$files" | grep -vE '^(internal/gen/proto/|examples/grpc-reference-service/internal/gen/proto/)')"; \
+	gofumpt_files="$$(printf '%s\n' "$$goimports_files" | grep -vE '^(internal/openapi/openapi\.gen\.go$$|examples/reference-service/internal/openapi/openapi\.gen\.go$$|internal/infra/.*/internal/openapi/client\.gen\.go$$|internal/infra/postgres/sqlcgen/)')"; \
+	unformatted="$$( $(GO_TOOL) goimports -l $$goimports_files )"; \
+	if [ -n "$$unformatted" ]; then echo "goimports required for:"; echo "$$unformatted"; echo "run 'make fmt'"; exit 1; fi; \
+	gofumpt_unformatted="$$( $(GO_TOOL) gofumpt -l $$gofumpt_files )"; \
+	if [ -n "$$gofumpt_unformatted" ]; then echo "gofumpt required for:"; echo "$$gofumpt_unformatted"; echo "run 'make fmt'"; exit 1; fi
 
-test:
+# One focused aggregate: format the named files, test the package, run the
+# small high-signal linter set. PKG and FILES are required; there is no ./... default.
+unit-check:
+	$(REQUIRE_PKG)
+	$(REQUIRE_FILES)
+	@unformatted="$$( $(GO_TOOL) goimports -l $(FILES) )"; \
+	if [ -n "$$unformatted" ]; then echo "goimports required for:"; echo "$$unformatted"; echo "run 'make fmt'"; exit 1; fi
+	@gofumpt_unformatted="$$( $(GO_TOOL) gofumpt -l $(FILES) )"; \
+	if [ -n "$$gofumpt_unformatted" ]; then echo "gofumpt required for:"; echo "$$gofumpt_unformatted"; echo "run 'make fmt'"; exit 1; fi
+	$(GO_TOOL) gotestsum --format=pkgname-and-test-fails -- -vet=off $(PKG)
+	@new_from=""; \
+	if git rev-parse --verify "$(LINT_BASE_REF)" >/dev/null 2>&1; then \
+		new_from="--new-from-merge-base=$(LINT_BASE_REF)"; \
+	fi; \
+	$(GOLANGCI_LINT) run --allow-serial-runners --enable-only=$(LINT_PACKAGE_LINTERS) $$new_from --concurrency=$(LINT_CONCURRENCY) --timeout=3m $(PKG)
+
+# One full-repository owner for the integrated candidate. Do not also run
+# fmt-check, lint-all, or test-all beside it.
+check: fmt-check lint-all test-all mod-tidy-check openapi-check sqlc-check
+
+verify:
+	$(HEAVY_GUARD)
+	$(MAKE) check
+	$(MAKE) lint-deep
+	$(MAKE) test-race
+	$(MAKE) test-integration
+	$(MAKE) template-init-check
+	$(MAKE) integration-init-check
+	$(MAKE) instruction-evals-check
+	$(MAKE) govulncheck
+	$(MAKE) gosec
+	$(MAKE) secret-scan-history
+	$(MAKE) migration-validate
+	$(MAKE) container-security
+
+test test-package:
+	$(REQUIRE_PKG)
+	$(GO_TOOL) gotestsum --format=pkgname-and-test-fails -- -vet=off $(PKG)
+
+test-all:
 	$(GO_TOOL) gotestsum --format=pkgname-and-test-fails -- -vet=off ./...
 
 test-watch:
 	$(GO_TOOL) gotestsum --watch --format=pkgname-and-test-fails -- -vet=off
 
 test-race:
-	go test -vet=off -count=1 -race ./...
+	$(HEAVY_GUARD)
+	go test -vet=off -race ./...
 
 # profile:messaging-nats-jetstream:start
 test-messaging-race:
+	$(HEAVY_GUARD)
 	go test -vet=off -p=1 -count=1 -race -tags=integration $(MESSAGING_RACE_PACKAGES) -run '^(TestOutboxWorkerPublishesStableWireIdentityAndTrace|TestNATSWorkerRegistrationIsSingleton|TestNATSNativeConsumeSurvivesBrokerRestart|TestWorkerUsesNativeBoundedConsumeContextsAndJoinsDrain|TestTypedPublisherAndHandlerHideBrokerFields|TestNATSPublishDispatchCancellationAndNoRetry|TestNATSWorkerComposition|TestNATSWorkerForcedShutdownDoesNotRaceHandlerCleanup|TestNATSConsumerSaturation|TestNATSForcedShutdownRedelivers|TestNATSGracefulDrain)$$'
 # profile:messaging-nats-jetstream:end
 
 # profile:outbox-postgres:start
 test-outbox-race:
+	$(HEAVY_GUARD)
 	go test -vet=off -p=1 -count=1 -race -tags=integration $(OUTBOX_RACE_PACKAGES) -run '^TestPostgresOutbox'
 # profile:outbox-postgres:end
 
 # profile:webhooks-durable:start
 test-webhook-race:
+	$(HEAVY_GUARD)
 	go test -vet=off -p=1 -count=1 -race -tags=integration $(WEBHOOK_RACE_PACKAGES) -run '^Test(PostgresWebhookAcceptance|WebhookNetwork)'
 # profile:webhooks-durable:end
 
 test-integration:
+	$(HEAVY_GUARD)
 	go test -p=1 -count=1 -tags=integration $(INTEGRATION_PACKAGES)
 # profile:messaging-nats-jetstream:start
 	$(MAKE) test-messaging-race
@@ -299,18 +358,32 @@ run-outbox-relay:
 	go run $(OUTBOX_RELAY_CMD)
 # profile:outbox-postgres:end
 
-lint:
-	$(GOLANGCI_LINT) run --allow-serial-runners --concurrency=$(LINT_CONCURRENCY) --timeout=3m $(LINT_PACKAGES)
+lint lint-package:
+	$(REQUIRE_PKG)
+	@new_from=""; \
+	if git rev-parse --verify "$(LINT_BASE_REF)" >/dev/null 2>&1; then \
+		new_from="--new-from-merge-base=$(LINT_BASE_REF)"; \
+	fi; \
+	$(GOLANGCI_LINT) run --allow-serial-runners --enable-only=$(LINT_PACKAGE_LINTERS) $$new_from --concurrency=$(LINT_CONCURRENCY) --timeout=3m $(PKG)
 
-lint-deep: deadcode nilaway
+lint-all:
+	$(GOLANGCI_LINT) run --allow-serial-runners --concurrency=$(LINT_CONCURRENCY) --timeout=3m
+
+lint-deep:
+	$(HEAVY_GUARD)
+	$(MAKE) deadcode
+	$(MAKE) nilaway
 
 lint-fast:
-	$(GOLANGCI_LINT) run --allow-serial-runners --fast-only --new-from-rev=$(LINT_BASE_REF) --concurrency=$(LINT_CONCURRENCY) --timeout=3m $(LINT_PACKAGES)
+	$(REQUIRE_PKG)
+	$(GOLANGCI_LINT) run --allow-serial-runners --fast-only --new-from-rev=$(LINT_BASE_REF) --concurrency=$(LINT_CONCURRENCY) --timeout=3m $(PKG)
 
 deadcode:
+	$(HEAVY_GUARD)
 	$(GO_TOOL) deadcode -test -tags=integration ./...
 
 nilaway:
+	$(HEAVY_GUARD)
 	@module_path="$$(go list -m)"; \
 	printf '$(GO_TOOL) nilaway -include-pkgs=%s -test ./...\n' "$$module_path"; \
 	$(GO_TOOL) nilaway -include-pkgs="$$module_path" -test ./...
@@ -354,9 +427,11 @@ dockerfile-check:
 	docker buildx build --check -f build/docker/Dockerfile .
 
 govulncheck:
+	$(HEAVY_GUARD)
 	$(GO_TOOL) govulncheck ./...
 
 gosec:
+	$(HEAVY_GUARD)
 	GOSECGOVERSION=go$(GO_REQUIRED_VERSION) $(GO_TOOL) gosec $(if $(strip $(GOMAXPROCS)),-concurrency=$(GOMAXPROCS)) -quiet -exclude-generated -exclude-dir=.agents -exclude-dir=.cache -exclude-dir=.artifacts ./...
 
 secret-scan:
@@ -365,7 +440,12 @@ secret-scan:
 	$(GO_TOOL) gitleaks git --no-banner --redact --verbose --exit-code 1 --config .gitleaks.toml --log-opts="$$base..HEAD" .
 
 secret-scan-history:
+	$(HEAVY_GUARD)
 	$(GO_TOOL) gitleaks git --no-banner --redact --verbose --exit-code 1 --config .gitleaks.toml .
+
+instruction-evals-check:
+	$(HEAVY_GUARD)
+	bash ./scripts/ci/instruction-evals-check.sh
 
 # profile:database-postgres:start
 sqlc-generate:
@@ -473,10 +553,12 @@ proto-breaking:
 	fi
 
 proto-check: proto-format-check proto-lint proto-drift-check
+check: proto-check
 # profile:grpc:end
 
 # profile:database-postgres:start
 migration-validate:
+	$(HEAVY_GUARD)
 	@project="service-migration-$$(date +%s)-$$$$"; \
 	runtime=""; \
 	compose() { POSTGRES_PORT=0 docker compose -p "$$project" -f env/docker-compose.yml "$$@"; }; \
@@ -536,6 +618,7 @@ migration-validate:
 # profile:database-postgres:end
 
 container-security:
+	$(HEAVY_GUARD)
 	@image="$(CONTAINER_IMAGE)"; \
 	if [ -z "$$image" ]; then image="$(SERVICE_NAME):ci"; docker build -f build/docker/Dockerfile -t "$$image" .; fi; \
 	docker run --rm \

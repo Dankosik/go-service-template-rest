@@ -17,7 +17,7 @@ sequences, or when the stated goal is deduplication with no narrower pressure.
   errors; `wrapcheck` fails an unwrapped external error. None of them sees a
   `map[error]T` lookup — verified against this repository's `.golangci.yml` — so
   a "table instead of a chain" refactor silently stops matching wrapped errors.
-- On Go 1.26.5, `fmt.Errorf` accepts more than one `%w` and `errors.Join` wraps a
+- On Go 1.27.0, `fmt.Errorf` accepts more than one `%w` and `errors.Join` wraps a
   set. A cleanup that must carry a cleanup failure alongside the operation
   failure can keep both identities inspectable; dropping one to `%v` is a loss to
   justify, not a default.
