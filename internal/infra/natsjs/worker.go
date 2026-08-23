@@ -117,12 +117,12 @@ func (w *Worker) StartDrain() {
 	if !w.draining.CompareAndSwap(false, true) {
 		return
 	}
-	w.client.StopPublish()
 	close(w.drain)
 	w.mu.Lock()
 	consumers := append([]jetstream.ConsumeContext(nil), w.consumers...)
 	w.mu.Unlock()
 	drainConsumers(consumers)
+	w.client.StopPublish()
 }
 
 func (w *Worker) Shutdown(ctx context.Context) error {

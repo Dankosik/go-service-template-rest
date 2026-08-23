@@ -11,12 +11,20 @@ import (
 )
 
 type fakeConsumeContext struct {
-	once   sync.Once
-	closed chan struct{}
+	once    sync.Once
+	closed  chan struct{}
+	onDrain func()
 }
 
-func (c *fakeConsumeContext) Stop()                   { c.once.Do(func() { close(c.closed) }) }
-func (c *fakeConsumeContext) Drain()                  { c.Stop() }
+func (c *fakeConsumeContext) Stop() { c.once.Do(func() { close(c.closed) }) }
+func (c *fakeConsumeContext) Drain() {
+	c.once.Do(func() {
+		if c.onDrain != nil {
+			c.onDrain()
+		}
+		close(c.closed)
+	})
+}
 func (c *fakeConsumeContext) Closed() <-chan struct{} { return c.closed }
 
 type fakePullConsumer struct {
@@ -75,5 +83,29 @@ func TestWorkerStopsWhenNativeConsumeContextCloses(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("Run() did not report an unexpectedly closed native consume context")
+	}
+}
+
+func TestWorkerClosesNativeIntakeBeforeReadinessFalls(t *testing.T) {
+	worker := unitWorker(t, &recordingJetStream{}, func(context.Context, Message) error { return nil })
+	worker.cfg.MaxConcurrency = 1
+	worker.client.ready.Store(true)
+	consumer := &fakePullConsumer{started: make(chan *fakeConsumeContext, 1)}
+	worker.consumer = consumer
+	runErr := make(chan error, 1)
+	go func() { runErr <- worker.Run(t.Context()) }()
+	native := <-consumer.started
+	readyDuringDrain := make(chan bool, 1)
+	native.onDrain = func() { readyDuringDrain <- worker.client.Ready() }
+
+	worker.StartDrain()
+	if ready := <-readyDuringDrain; !ready {
+		t.Fatal("worker refused publishes before closing native intake")
+	}
+	if worker.client.Ready() {
+		t.Fatal("worker remained ready after native intake closed")
+	}
+	if err := <-runErr; err != nil {
+		t.Fatalf("Run() error = %v", err)
 	}
 }
