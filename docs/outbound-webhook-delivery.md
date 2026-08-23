@@ -70,10 +70,10 @@ job backoff, capped at 24 hours. A failure after a possible request write is an
 ambiguous effect and retries with the same `Webhook-Id`. Receivers therefore
 remain responsible for deduplicating that ID.
 
-The fixed job policy allows 20 attempts within four days, with exponential
-backoff, bounded jitter, a 24-hour cap, and a 30-second attempt/termination
-envelope. `/jobs-worker` refuses startup when that envelope does not fit the
-configured process grace period.
+The fixed job policy allows at most 20 attempts before a four-day deadline,
+with exponential backoff from five seconds, stable bounded jitter, a 24-hour
+cap, and a 30-second attempt timeout. Process shutdown uses the separate
+`http.shutdown_timeout` and `http.grace_period` budgets.
 
 ## Endpoint safety
 

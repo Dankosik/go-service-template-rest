@@ -29,11 +29,10 @@ import (
 	// profile:inbound-webhooks-standard:end
 )
 
-// WorkersRuntime is the builder result: validated workers, cleanup, and an
-// optional post-pool binder.
+// WorkersRuntime is the builder result: validated workers and an optional
+// post-pool binder.
 type WorkersRuntime struct {
 	Workers *river.Workers
-	Cleanup func(context.Context)
 	// profile:inbound-webhooks-standard:start
 	Bind func(context.Context, *pgxpool.Pool, metric.MeterProvider) error
 	// profile:inbound-webhooks-standard:end
@@ -91,14 +90,6 @@ func run(signalCtx context.Context, args []string, buildWorkers WorkersBuilder) 
 	if runtime.Workers == nil {
 		return errors.New("jobs workers are not registered")
 	}
-	defer func() {
-		if runtime.Cleanup != nil && cleanupSafe {
-			cleanupCtx, cancel := runtimeopts.TeardownStage(signalCtx, cleanupDeadline, telemetryClose)
-			defer cancel()
-			runtime.Cleanup(cleanupCtx)
-		}
-	}()
-
 	pool, err := postgres.Open(startupCtx, runtimeopts.Postgres(cfg.Postgres))
 	if err != nil {
 		return fmt.Errorf("initialize jobs worker postgres: %w", err)
@@ -124,7 +115,6 @@ func run(signalCtx context.Context, args []string, buildWorkers WorkersBuilder) 
 		Logger:                      log,
 		MaxAttempts:                 river.MaxAttemptsDefault,
 		PollOnly:                    true,
-		SoftStopTimeout:             cfg.HTTP.ShutdownTimeout,
 		Plugins: []rivertype.Plugin{
 			otelriver.NewMiddleware(&otelriver.MiddlewareConfig{EnableTracePropagation: true}),
 		},
@@ -140,7 +130,7 @@ func run(signalCtx context.Context, args []string, buildWorkers WorkersBuilder) 
 		processCtx, cancelProcess, deadline := runtimeopts.ArmTeardown(signalCtx, cfg.HTTP.GracePeriod)
 		defer cancelProcess()
 		cleanupDeadline = deadline
-		stopCtx, cancelStop := context.WithTimeout(processCtx, cfg.HTTP.ShutdownTimeout)
+		stopCtx, cancelStop := runtimeopts.TeardownStage(processCtx, deadline, riverHardStopClose)
 		defer cancelStop()
 		stopErr := client.StopAndCancel(stopCtx)
 		cleanupSafe = riverStoppedBeforeReturn(stopErr, client.Stopped())
@@ -187,10 +177,22 @@ func run(signalCtx context.Context, args []string, buildWorkers WorkersBuilder) 
 	processCtx, cancelProcess, deadline := runtimeopts.ArmTeardown(signalCtx, cfg.HTTP.GracePeriod)
 	defer cancelProcess()
 	cleanupDeadline = deadline
-	stopErr := client.Stop(processCtx)
+	stopCtx, cancelStop := runtimeopts.TeardownStage(processCtx, deadline, cfg.HTTP.ShutdownTimeout)
+	stopErr := client.Stop(stopCtx)
+	cancelStop()
 	cleanupSafe = riverStoppedBeforeReturn(stopErr, client.Stopped())
 	if !cleanupSafe {
-		stopErr = errors.Join(stopErr, fmt.Errorf("join River client: %w", processCtx.Err()))
+		hardStopCtx, cancelHardStop := runtimeopts.TeardownStage(processCtx, deadline, riverHardStopClose)
+		stopErr = client.StopAndCancel(hardStopCtx)
+		cleanupSafe = riverStoppedBeforeReturn(stopErr, client.Stopped())
+		if !cleanupSafe {
+			stopErr = errors.Join(stopErr, fmt.Errorf("join River client: %w", hardStopCtx.Err()))
+		} else if errors.Is(stopErr, context.DeadlineExceeded) {
+			stopErr = nil
+		}
+		cancelHardStop()
+	} else if errors.Is(stopErr, context.DeadlineExceeded) {
+		stopErr = nil
 	}
 	if cleanupSafe {
 		cancelRun()

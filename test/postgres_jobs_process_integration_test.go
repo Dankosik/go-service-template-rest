@@ -39,7 +39,7 @@ func TestPostgresJobsWorkerProcess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create River producer: %v", err)
 	}
-	if _, err := producer.Insert(ctx, jobsWorkerProcessArgs{Value: "worked"}, nil); err != nil {
+	if _, err := producer.Insert(ctx, jobsWorkerProcessArgs{Value: "wait-for-cancel"}, nil); err != nil {
 		t.Fatalf("insert River job: %v", err)
 	}
 
@@ -61,6 +61,9 @@ func TestPostgresJobsWorkerProcess(t *testing.T) {
 		"APP__POSTGRES__DSN="+dsn,
 		"APP__POSTGRES__MAX_OPEN_CONNS=4",
 		"APP__JOBS__MAX_WORKERS=1",
+		"APP__HTTP__GRACE_PERIOD=22s",
+		"APP__HTTP__SHUTDOWN_TIMEOUT=10s",
+		"APP__HTTP__READINESS_PROPAGATION_DELAY=0s",
 		"APP__OBSERVABILITY__METRICS__ADDR="+waittest.FreeTCPAddr(t, "jobs diagnostics"),
 		"JOBS_WORKER_TEST_MARKER="+marker,
 	)
@@ -85,7 +88,7 @@ func TestPostgresJobsWorkerProcess(t *testing.T) {
 		default:
 		}
 		value, err := os.ReadFile(marker)
-		return err == nil && string(value) == "worked"
+		return err == nil && string(value) == "wait-for-cancel"
 	}, "jobs worker effect")
 	if earlyExit {
 		t.Fatalf("jobs worker exited before handling work: %v\n%s", earlyErr, output.String())
@@ -98,7 +101,7 @@ func TestPostgresJobsWorkerProcess(t *testing.T) {
 		if err != nil {
 			t.Fatalf("jobs worker exit: %v\n%s", err, output.String())
 		}
-	case <-time.After(15 * time.Second):
+	case <-time.After(20 * time.Second):
 		t.Fatalf("jobs worker did not stop\n%s", output.String())
 	}
 }
