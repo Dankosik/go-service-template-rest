@@ -24,7 +24,7 @@ All application fields use `APP__OBJECT_STORAGE__*`:
 | `ENDPOINT` | Empty; the SDK resolves the regional endpoint | Exact `https://<account>[.eu|.fedramp].r2.cloudflarestorage.com` origin |
 | `EXPECTED_BUCKET_OWNER` | Required 12-digit account ID | Empty; R2 does not support the field |
 | `CREDENTIAL_SOURCE` | `aws_default` or `static` | `static` |
-| `MAX_OBJECT_BYTES` | Positive, at most 80 GiB | Positive, at most 80 GiB |
+| `MAX_OBJECT_BYTES` | Positive, at most 80,000 MiB (78.125 GiB) | Positive, at most 80,000 MiB (78.125 GiB) |
 
 `credential_source=aws_default` delegates to the AWS SDK credential chain.
 Production should prefer workload identity. `static` reads the standard
@@ -32,8 +32,9 @@ Production should prefer workload identity. `static` reads the standard
 environment variables. No credential belongs in YAML, logs, errors, metrics,
 or traces.
 
-The 80 GiB product ceiling follows the fixed 8 MiB part size and S3's 10,000
-part limit. Raise it only with a measured buffer policy for a real adopter.
+The 80,000 MiB (78.125 GiB) product ceiling follows the fixed 8 MiB part size
+and S3's 10,000 part limit. Raise it only with a measured buffer policy for a
+real adopter.
 
 ## Runtime policy
 
@@ -67,7 +68,6 @@ result promises that all uploaded parts have disappeared.
 Credential-free local proof is part of ordinary Go and profile checks:
 
 ```bash
-go test ./internal/objectstorage ./internal/infra/s3
 go test ./internal/objectstorage ./internal/infra/s3
 ```
 
