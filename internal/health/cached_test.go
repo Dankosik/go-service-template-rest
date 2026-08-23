@@ -47,6 +47,33 @@ func TestCachedServesWithoutTouchingProbes(t *testing.T) {
 	}
 }
 
+func TestWatchReusesReadinessSeededByStartupAdmission(t *testing.T) {
+	t.Parallel()
+
+	synctest.Test(t, func(t *testing.T) {
+		probe := &countingProbe{name: "db"}
+		svc := New(probe)
+		if err := svc.Refresh(t.Context(), testRefreshInterval, 1); err != nil {
+			t.Fatalf("Refresh() error = %v", err)
+		}
+
+		ctx, cancel := context.WithCancel(t.Context())
+		done := make(chan error, 1)
+		go func() {
+			done <- svc.Watch(ctx, time.Hour, testRefreshInterval, 1, nil)
+		}()
+		synctest.Wait()
+		if got := probe.calls.Load(); got != 1 {
+			t.Fatalf("probe calls before first tick = %d, want seeded evaluation only", got)
+		}
+
+		cancel()
+		if err := <-done; err != nil {
+			t.Fatalf("Watch() error = %v", err)
+		}
+	})
+}
+
 func TestCachedHoldsHealthyUntilFailureThreshold(t *testing.T) {
 	t.Parallel()
 
@@ -213,9 +240,15 @@ func TestCachedRefusesAStaleVerdict(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		probe := &countingProbe{name: "db"}
 		svc := New(probe)
+		transitions := make(chan error, 1)
 
 		ctx, cancel := context.WithCancel(context.Background())
-		go func() { _ = svc.Watch(ctx, testRefreshInterval, testProbeBudget, testFailureThreshold, nil) }()
+		done := make(chan error, 1)
+		go func() {
+			done <- svc.Watch(ctx, testRefreshInterval, testProbeBudget, testFailureThreshold, func(err error) {
+				transitions <- err
+			})
+		}()
 		synctest.Wait()
 		if err := svc.Cached(); err != nil {
 			t.Fatalf("Cached() while refreshing error = %v, want nil", err)
@@ -224,9 +257,16 @@ func TestCachedRefusesAStaleVerdict(t *testing.T) {
 		// The refresher stops without the drain flag ever being set, which is what
 		// an unrelated failure or a panic in the supervisor looks like from here.
 		cancel()
-		synctest.Wait()
+		if err := <-done; err != nil {
+			t.Fatalf("Watch() error = %v", err)
+		}
 
 		synctest.Sleep(staleBudget(testRefreshInterval, testProbeBudget) + time.Second)
+		synctest.Wait()
+
+		if err := <-transitions; !errors.Is(err, ErrStale) {
+			t.Fatalf("stale transition error = %v, want ErrStale", err)
+		}
 
 		if err := svc.Cached(); !errors.Is(err, ErrStale) {
 			t.Fatalf("Cached() after the refresher stopped error = %v, want ErrStale", err)

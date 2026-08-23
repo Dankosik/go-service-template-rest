@@ -58,9 +58,6 @@ func TestAuthnBootstrapOrder(t *testing.T) {
 			events = append(events, "initial_trust")
 			return nil, trustFailure
 		}
-		wiring.authnStage = func(stage authnBootstrapStage) {
-			events = append(events, string(stage))
-		}
 		wiring.serve = func(context.Context, context.Context, serveRuntimeArgs) error {
 			events = append(events, "listener", "admission")
 			return nil
@@ -94,9 +91,6 @@ func TestAuthnBootstrapOrder(t *testing.T) {
 			events = append(events, "initial_trust")
 			return fakeAuthnRuntime{}, nil
 		}
-		wiring.authnStage = func(stage authnBootstrapStage) {
-			events = append(events, string(stage))
-		}
 		wiring.serve = func(_ context.Context, _ context.Context, args serveRuntimeArgs) error {
 			events = append(events, "listener")
 			args.admission.MarkReady()
@@ -108,14 +102,7 @@ func TestAuthnBootstrapOrder(t *testing.T) {
 		if !errors.Is(err, stopServing) {
 			t.Fatalf("runWithRuntime() error = %v, want test serving stop", err)
 		}
-		want := []string{
-			"initial_trust",
-			string(authnStageTrustEstablished),
-			string(authnStageHTTPRouterBuilt),
-			string(authnStageHTTPServerBuilt),
-			"listener",
-			"admission",
-		}
+		want := []string{"initial_trust", "listener", "admission"}
 		if !slices.Equal(events, want) {
 			t.Fatalf("bootstrap events = %v, want %v", events, want)
 		}
@@ -133,9 +120,6 @@ func TestAuthnBootstrapOrder(t *testing.T) {
 			events = append(events, "initial_trust")
 			return runtime, nil
 		}
-		wiring.authnStage = func(stage authnBootstrapStage) {
-			events = append(events, string(stage))
-		}
 		listenFail := errors.New("test listen failure")
 		wiring.serve = func(context.Context, context.Context, serveRuntimeArgs) error {
 			events = append(events, "listener")
@@ -148,30 +132,23 @@ func TestAuthnBootstrapOrder(t *testing.T) {
 		if runtime.closes.Load() != 1 {
 			t.Fatalf("authn closes = %d, want 1", runtime.closes.Load())
 		}
-		if !slices.Contains(events, string(authnStageTrustEstablished)) {
-			t.Fatalf("events = %v", events)
+		if !slices.Equal(events, []string{"initial_trust", "listener"}) {
+			t.Fatalf("events = %v, want trust before listener", events)
 		}
 	})
 
-	t.Run("drain closes authn before dependencies and telemetry", func(t *testing.T) {
+	// profile:object-storage:start
+	t.Run("drain closes authn before owned dependencies", func(t *testing.T) {
 		resetShutdownConfigEnv(t)
-		runtime := &recordingAuthnRuntime{}
 		var events []string
-		wiring := testRuntimeWiring()
-		wiring.dependencies = func(context.Context, startupBootstrap) (runtimeDependencies, error) {
-			return runtimeDependencies{}, nil
-		}
+		runtime := &recordingAuthnRuntime{onClose: func() { events = append(events, "authn_closed") }}
+		storage := &countingObjectStorageRuntime{onClose: func() { events = append(events, "object_storage_closed") }}
+		wiring := objectStorageTestWiring(storage)
 		wiring.initAuthn = func(context.Context, config.Config, *telemetry.Metrics, *slog.Logger) (authnRuntime, error) {
 			return runtime, nil
 		}
-		wiring.lifecycle = func(stage runtimeLifecycleStage) {
-			if runtime.closes.Load() > 0 {
-				events = append(events, "authn_closed", string(stage))
-				return
-			}
-			events = append(events, string(stage))
-		}
 		wiring.serve = func(_ context.Context, _ context.Context, args serveRuntimeArgs) error {
+			events = append(events, "serve")
 			args.admission.MarkReady()
 			return errors.New("test drain")
 		}
@@ -179,23 +156,15 @@ func TestAuthnBootstrapOrder(t *testing.T) {
 		if runtime.closes.Load() != 1 {
 			t.Fatalf("authn closes = %d, want 1", runtime.closes.Load())
 		}
-		if !slices.Contains(events, string(runtimeLifecycleHTTPDrained)) {
-			t.Fatalf("missing drain event: %v", events)
-		}
-		drained := slices.Index(events, string(runtimeLifecycleHTTPDrained))
-		closed := slices.Index(events, "authn_closed")
-		deps := slices.Index(events, string(runtimeLifecycleDependenciesClosed))
-		if closed < 0 || drained < 0 || closed < drained {
-			t.Fatalf("authn close was not after drain: %v", events)
-		}
-		if deps >= 0 && deps < closed {
-			t.Fatalf("dependencies closed before authn: %v", events)
+		if want := []string{"serve", "authn_closed", "object_storage_closed"}; !slices.Equal(events, want) {
+			t.Fatalf("events = %v, want %v", events, want)
 		}
 		runtime.Close()
 		if runtime.closes.Load() != 1 {
 			t.Fatalf("repeated close was not idempotent: %d", runtime.closes.Load())
 		}
 	})
+	// profile:object-storage:end
 
 	t.Run("forced drain cancels in-flight provider work before authn close", func(t *testing.T) {
 		resetShutdownConfigEnv(t)
@@ -232,12 +201,15 @@ func TestAuthnBootstrapOrder(t *testing.T) {
 type recordingAuthnRuntime struct {
 	fakeAuthnRuntime
 
-	closes atomic.Int64
-	block  chan struct{}
+	closes  atomic.Int64
+	block   chan struct{}
+	onClose func()
 }
 
 func (r *recordingAuthnRuntime) Close() {
-	r.closes.CompareAndSwap(0, 1)
+	if r.closes.CompareAndSwap(0, 1) && r.onClose != nil {
+		r.onClose()
+	}
 }
 
 func (r *recordingAuthnRuntime) ResolveHTTP(ctx context.Context, input *openapi3filter.AuthenticationInput) (reqctx.Principal, error) {

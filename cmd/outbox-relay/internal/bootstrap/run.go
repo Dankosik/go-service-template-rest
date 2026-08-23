@@ -65,7 +65,7 @@ func run(signalCtx context.Context, args []string) (runErr error) {
 	defer func() {
 		cleanupCtx, cancel := runtimeopts.TeardownStage(signalCtx, cleanupDeadline, telemetryClose)
 		defer cancel()
-		telemetryCleanup(cleanupCtx)
+		_ = telemetryCleanup(cleanupCtx)
 	}()
 
 	pool, err := postgres.Open(startupCtx, runtimeopts.Postgres(cfg.Postgres))
@@ -169,7 +169,7 @@ func runLifecycle[TTx any](
 		startupCtx,
 		cfg.Observability.Metrics.Addr,
 		"outbox",
-		func() bool { return ready.Load() && client.Ready() && readiness.Cached() == nil },
+		func() bool { return ready.Load() && readiness.Cached() == nil },
 		metrics,
 	)
 	if err != nil {

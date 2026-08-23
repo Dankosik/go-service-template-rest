@@ -6,12 +6,14 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/aws/retry"
 	signer "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager"
 	tmtypes "github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager/types"
@@ -26,6 +28,12 @@ func TestConfigAndTransportPolicy(t *testing.T) {
 	if err := valid.validate(); err != nil {
 		t.Fatalf("valid Amazon config error = %v", err)
 	}
+	minimum := valid
+	minimum.Bucket = "a1b"
+	minimum.MaxObjectBytes = maximumObjectBytes
+	if err := minimum.validate(); err != nil {
+		t.Fatalf("minimum bucket and maximum object config error = %v", err)
+	}
 	r2 := valid
 	r2.Provider = ProviderCloudflare
 	r2.Endpoint = "https://0123456789abcdef0123456789abcdef.r2.cloudflarestorage.com"
@@ -37,6 +45,9 @@ func TestConfigAndTransportPolicy(t *testing.T) {
 
 	for _, mutate := range []func(*Config){
 		func(cfg *Config) { cfg.Bucket = "" },
+		func(cfg *Config) { cfg.Bucket = "x" },
+		func(cfg *Config) { cfg.Bucket = "xx" },
+		func(cfg *Config) { cfg.Bucket = strings.Repeat("x", 64) },
 		func(cfg *Config) { cfg.MaxObjectBytes = maximumObjectBytes + 1 },
 		func(cfg *Config) { cfg.CredentialSource = "ambient" },
 		func(cfg *Config) { cfg.Endpoint = "https://override.example" },
@@ -59,6 +70,25 @@ func TestConfigAndTransportPolicy(t *testing.T) {
 	}
 	if err := client.CheckRedirect(request, nil); !errors.Is(err, http.ErrUseLastResponse) {
 		t.Fatalf("CheckRedirect() error = %v, want ErrUseLastResponse", err)
+	}
+}
+
+func TestSDKPolicyOptions(t *testing.T) {
+	retryOptions := retry.StandardOptions{}
+	configureRetry(&retryOptions)
+	if retryOptions.MaxAttempts != 3 || retryOptions.MaxBackoff != time.Second {
+		t.Fatalf("retry policy = attempts %d backoff %s", retryOptions.MaxAttempts, retryOptions.MaxBackoff)
+	}
+
+	transferOptions := transfermanager.Options{}
+	configureTransfer(&transferOptions)
+	if transferOptions.PartSizeBytes != multipartPartBytes ||
+		transferOptions.MultipartUploadThreshold != multipartPartBytes ||
+		transferOptions.Concurrency != 1 || transferOptions.FailTimeout != multipartFailureTimeout ||
+		transferOptions.MaxUploadParts != maximumUploadParts ||
+		transferOptions.ChecksumAlgorithm != tmtypes.ChecksumAlgorithm("CRC64NVME") ||
+		transferOptions.RequestChecksumCalculation != aws.RequestChecksumCalculationWhenRequired {
+		t.Fatalf("transfer policy = %#v", transferOptions)
 	}
 }
 
@@ -147,14 +177,26 @@ func TestDownloadReleasesAtValidatedEOF(t *testing.T) {
 	}
 }
 
-func TestPresignGetReturnsLibraryURL(t *testing.T) {
-	client := testClient(&fakeObjectAPI{}, nil)
-	client.presigner = fakePresigner(func(context.Context, *awss3.GetObjectInput) (*signer.PresignedHTTPRequest, error) {
-		return &signer.PresignedHTTPRequest{URL: "https://example.com/object?signature", Method: http.MethodGet}, nil
-	})
+func TestPresignGetReturnsSelfContainedLibraryURL(t *testing.T) {
+	t.Setenv("AWS_ACCESS_KEY_ID", "test-access-key")
+	t.Setenv("AWS_SECRET_ACCESS_KEY", "test-secret-key")
+	client, err := New(t.Context(), testConfig())
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	t.Cleanup(client.Close)
+
 	got, err := client.PresignGet(t.Context(), "object", time.Minute)
-	if err != nil || got != "https://example.com/object?signature" {
-		t.Fatalf("PresignGet() = %q, %v", got, err)
+	if err != nil {
+		t.Fatalf("PresignGet() error = %v", err)
+	}
+	parsed, err := url.Parse(got)
+	if err != nil {
+		t.Fatalf("parse presigned URL: %v", err)
+	}
+	query := parsed.Query()
+	if query.Get("x-amz-expected-bucket-owner") != "123456789012" || query.Get("X-Amz-SignedHeaders") != "host" {
+		t.Fatalf("presigned URL query = %v", query)
 	}
 }
 
@@ -177,35 +219,65 @@ func TestStoreRejectsInvalidCallsBeforeProviderIO(t *testing.T) {
 	canceled, cancel := context.WithCancel(t.Context())
 	cancel()
 
-	for name, run := range map[string]func() error{
-		"nil context": func() error {
+	for _, test := range []struct {
+		name string
+		run  func() error
+		want error
+	}{
+		{"nil context", func() error {
 			return client.Upload(nil, "object", strings.NewReader("x"), objectstorage.UploadOptions{Size: 1}) //nolint:staticcheck // Nil is the trust-boundary input under test.
-		},
-		"canceled context": func() error {
+		}, objectstorage.ErrInvalid},
+		{"canceled context", func() error {
 			return client.Upload(canceled, "object", strings.NewReader("x"), objectstorage.UploadOptions{Size: 1})
-		},
-		"invalid key": func() error {
+		}, context.Canceled},
+		{"invalid key", func() error {
 			return client.Upload(t.Context(), "", strings.NewReader("x"), objectstorage.UploadOptions{Size: 1})
-		},
-		"nil source": func() error {
+		}, objectstorage.ErrInvalid},
+		{"nil source", func() error {
 			return client.Upload(t.Context(), "object", nil, objectstorage.UploadOptions{Size: 1})
-		},
-		"negative size": func() error {
+		}, objectstorage.ErrInvalid},
+		{"negative size", func() error {
 			return client.Upload(t.Context(), "object", strings.NewReader("x"), objectstorage.UploadOptions{Size: -1})
-		},
-		"oversized object": func() error {
+		}, objectstorage.ErrInvalid},
+		{"oversized object", func() error {
 			return client.Upload(t.Context(), "object", strings.NewReader("x"), objectstorage.UploadOptions{Size: client.config.MaxObjectBytes + 1})
-		},
-		"invalid content type": func() error {
+		}, objectstorage.ErrTooLarge},
+		{"invalid content type", func() error {
 			return client.Upload(t.Context(), "object", strings.NewReader("x"), objectstorage.UploadOptions{Size: 1, ContentType: "bad\nvalue"})
-		},
+		}, objectstorage.ErrInvalid},
 	} {
-		t.Run(name, func(t *testing.T) {
-			if err := run(); err == nil {
-				t.Fatal("operation error = nil")
+		t.Run(test.name, func(t *testing.T) {
+			if err := test.run(); !errors.Is(err, test.want) {
+				t.Fatalf("operation error = %v, want %v", err, test.want)
 			}
 		})
 	}
+}
+
+func TestMutationErrorPreservesOutcomeAfterCancellation(t *testing.T) {
+	t.Run("definitive rejection", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		api := &fakeObjectAPI{put: func(context.Context, *awss3.PutObjectInput) (*awss3.PutObjectOutput, error) {
+			cancel()
+			return nil, providerTestError{status: http.StatusPreconditionFailed, code: "PreconditionFailed"}
+		}}
+		err := testClient(api, nil).Upload(ctx, "object", strings.NewReader("x"), objectstorage.UploadOptions{Size: 1, IfNotExists: true})
+		if !errors.Is(err, objectstorage.ErrAlreadyExists) {
+			t.Fatalf("Upload() error = %v, want ErrAlreadyExists", err)
+		}
+	})
+
+	t.Run("unknown outcome", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		api := &fakeObjectAPI{put: func(context.Context, *awss3.PutObjectInput) (*awss3.PutObjectOutput, error) {
+			cancel()
+			return nil, providerTestError{status: http.StatusInternalServerError, code: "InternalError"}
+		}}
+		err := testClient(api, nil).Upload(ctx, "object", strings.NewReader("x"), objectstorage.UploadOptions{Size: 1})
+		if !errors.Is(err, objectstorage.ErrOutcomeUnknown) || !errors.Is(err, context.Canceled) {
+			t.Fatalf("Upload() error = %v, want ErrOutcomeUnknown and context.Canceled", err)
+		}
+	})
 }
 
 func TestStoreMapsOperationResults(t *testing.T) {

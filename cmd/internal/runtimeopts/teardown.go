@@ -9,17 +9,6 @@ import (
 	"github.com/example/go-service-template-rest/internal/config"
 )
 
-// TeardownFloor is the smallest budget a teardown stage is given once the
-// process grace period is spent.
-//
-// A spent grace period yields this rather than zero: the process is about to be
-// killed either way, and a stage given no time at all cannot even report that it
-// was cut short — a telemetry flush handed an expired context exports nothing,
-// and an adapter cleanup handed one is indistinguishable from a cleanup that
-// hung. It is long enough for an already-idle stage to finish and record that it
-// did, and short enough not to extend a shutdown that is over.
-const TeardownFloor = 100 * time.Millisecond
-
 // TeardownBudget reports how long a stage asking for want may actually take.
 //
 // deadline is the one process-wide teardown deadline every stage draws from.
@@ -33,7 +22,7 @@ func TeardownBudget(want time.Duration, deadline time.Time) time.Duration {
 		return want
 	}
 	if remaining := time.Until(deadline); remaining < want {
-		return max(remaining, TeardownFloor)
+		return max(remaining, 0)
 	}
 	return want
 }
@@ -63,7 +52,15 @@ func TeardownStage(
 	deadline time.Time,
 	want time.Duration,
 ) (context.Context, context.CancelFunc) {
-	return context.WithTimeout(context.WithoutCancel(base), TeardownBudget(want, deadline))
+	base = context.WithoutCancel(base)
+	if deadline.IsZero() {
+		return context.WithTimeout(base, want)
+	}
+	stageDeadline := time.Now().Add(want)
+	if deadline.Before(stageDeadline) {
+		stageDeadline = deadline
+	}
+	return context.WithDeadline(base, stageDeadline)
 }
 
 // ValidateGracePeriod rejects a drain budget that cannot fit inside the

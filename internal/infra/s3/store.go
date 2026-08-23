@@ -231,12 +231,12 @@ func readError(ctx context.Context, err error) error {
 }
 
 func mutationError(ctx context.Context, err error) error {
-	if ctxErr := ctx.Err(); ctxErr != nil {
-		return fmt.Errorf("mutate object storage: %w", ctxErr)
-	}
 	status, code := providerError(err)
 	if status == http.StatusPreconditionFailed && code == "PreconditionFailed" {
 		return objectstorage.ErrAlreadyExists
+	}
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return errors.Join(objectstorage.ErrOutcomeUnknown, fmt.Errorf("mutate object storage: %w", ctxErr))
 	}
 	return objectstorage.ErrOutcomeUnknown
 }

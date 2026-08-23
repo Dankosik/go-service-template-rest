@@ -287,6 +287,9 @@ func TestValidateStartupBudgetCompatibilityAllowsDefaultPostgresReadiness(t *tes
 	if cfg.HTTP.ReadinessTimeout != 4*time.Second {
 		t.Fatalf("HTTP.ReadinessTimeout = %s, want 4s default", cfg.HTTP.ReadinessTimeout)
 	}
+	if got := readinessProbeBudget(cfg); got != cfg.HTTP.ReadinessTimeout {
+		t.Fatalf("readinessProbeBudget() = %s, want aggregate budget %s", got, cfg.HTTP.ReadinessTimeout)
+	}
 	if err := validateStartupBudgetCompatibility(cfg); err != nil {
 		t.Fatalf("validateStartupBudgetCompatibility() error = %v, want nil for default Postgres readiness headroom", err)
 	}
