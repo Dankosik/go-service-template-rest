@@ -31,6 +31,7 @@ func (c *HTTPClient) Do(request *http.Request) (*http.Response, error) {
 	if c == nil || c.client == nil || request == nil || request.URL == nil || hasAuthorization(request.Header) {
 		return nil, ErrInvalidConfiguration
 	}
+	// #nosec G704 -- the OAuth transport delegates to httpclient.Client, which pins authority and checks the resolved address.
 	response, err := c.client.Do(request)
 	if err != nil {
 		return response, fmt.Errorf("send authenticated resource request: %w", err)
