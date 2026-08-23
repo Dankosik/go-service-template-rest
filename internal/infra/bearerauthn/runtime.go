@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/reqctx"
@@ -67,7 +68,16 @@ func (r *Runtime) verifyCredential(ctx context.Context, values []string, carrier
 		return Result{}, r.recordRejection(ctx, carrier, err)
 	}
 	verified, err := r.verifier.Verify(ctx, token)
+	if err == nil && !validResult(verified) {
+		verified = Result{}
+		err = failure(KindUnavailable)
+	}
 	return verified, r.recordRejection(ctx, carrier, sanitizeVerifierError(err))
+}
+
+func validResult(result Result) bool {
+	return !result.ExpiresAt.IsZero() &&
+		(strings.TrimSpace(result.Principal.Subject) != "" || strings.TrimSpace(result.Principal.ClientID) != "")
 }
 
 func (r *Runtime) recordRejection(ctx context.Context, carrier transport, err error) error {

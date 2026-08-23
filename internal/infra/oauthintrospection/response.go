@@ -55,7 +55,7 @@ func admitResponse(body []byte, policy Policy, now time.Time) (bearerauthn.Resul
 		return bearerauthn.Result{}, failure(bearerauthn.KindUnavailable)
 	}
 
-	if issuer != policy.issuer || !containsExact(audiences, policy.audience) {
+	if issuer != policy.issuer || !slices.Contains(audiences, policy.audience) {
 		return bearerauthn.Result{}, failure(bearerauthn.KindInvalid)
 	}
 	if expiresAt.Add(bearerauthn.ClockSkew).Before(now) {
@@ -77,7 +77,6 @@ func admitResponse(body []byte, policy Policy, now time.Time) (bearerauthn.Resul
 
 func decodeObjectMembers(body []byte) (map[string]json.RawMessage, error) {
 	decoder := json.NewDecoder(bytes.NewReader(body))
-	decoder.UseNumber()
 	token, err := decoder.Token()
 	if err != nil {
 		return nil, failure(bearerauthn.KindUnavailable)
@@ -124,19 +123,11 @@ func booleanMember(members map[string]json.RawMessage, name string) (bool, error
 	if !ok {
 		return false, failure(bearerauthn.KindUnavailable)
 	}
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	token, err := decoder.Token()
-	if err != nil {
+	var value *bool
+	if err := json.Unmarshal(raw, &value); err != nil || value == nil {
 		return false, failure(bearerauthn.KindUnavailable)
 	}
-	value, ok := token.(bool)
-	if !ok {
-		return false, failure(bearerauthn.KindUnavailable)
-	}
-	if _, err := decoder.Token(); err != io.EOF {
-		return false, failure(bearerauthn.KindUnavailable)
-	}
-	return value, nil
+	return *value, nil
 }
 
 func requiredStringMember(members map[string]json.RawMessage, name string) (string, error) {
@@ -170,19 +161,11 @@ func optionalIdentityMember(members map[string]json.RawMessage, name string) (st
 }
 
 func exactJSONString(raw json.RawMessage) (string, error) {
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	token, err := decoder.Token()
-	if err != nil {
+	var value *string
+	if err := json.Unmarshal(raw, &value); err != nil || value == nil {
 		return "", failure(bearerauthn.KindUnavailable)
 	}
-	value, ok := token.(string)
-	if !ok {
-		return "", failure(bearerauthn.KindUnavailable)
-	}
-	if _, err := decoder.Token(); err != io.EOF {
-		return "", failure(bearerauthn.KindUnavailable)
-	}
-	return value, nil
+	return *value, nil
 }
 
 func audienceMember(members map[string]json.RawMessage) ([]string, error) {
@@ -190,47 +173,18 @@ func audienceMember(members map[string]json.RawMessage) ([]string, error) {
 	if !ok {
 		return nil, failure(bearerauthn.KindUnavailable)
 	}
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	token, err := decoder.Token()
-	if err != nil {
-		return nil, failure(bearerauthn.KindUnavailable)
-	}
-	if value, ok := token.(string); ok {
-		if _, err := decoder.Token(); err != io.EOF {
+	var single *string
+	if err := json.Unmarshal(raw, &single); err == nil && single != nil {
+		if *single == "" {
 			return nil, failure(bearerauthn.KindUnavailable)
 		}
-		if value == "" {
-			return nil, failure(bearerauthn.KindUnavailable)
-		}
-		return []string{value}, nil
-	}
-	delim, ok := token.(json.Delim)
-	if !ok || delim != '[' {
-		return nil, failure(bearerauthn.KindUnavailable)
+		return []string{*single}, nil
 	}
 	var audiences []string
-	for decoder.More() {
-		entry, err := decoder.Token()
-		if err != nil {
-			return nil, failure(bearerauthn.KindUnavailable)
-		}
-		value, ok := entry.(string)
-		if !ok || value == "" {
-			return nil, failure(bearerauthn.KindUnavailable)
-		}
-		audiences = append(audiences, value)
-	}
-	end, err := decoder.Token()
-	if err != nil {
+	if err := json.Unmarshal(raw, &audiences); err != nil || len(audiences) == 0 {
 		return nil, failure(bearerauthn.KindUnavailable)
 	}
-	if endDelim, ok := end.(json.Delim); !ok || endDelim != ']' {
-		return nil, failure(bearerauthn.KindUnavailable)
-	}
-	if _, err := decoder.Token(); err != io.EOF {
-		return nil, failure(bearerauthn.KindUnavailable)
-	}
-	if len(audiences) == 0 {
+	if slices.Contains(audiences, "") {
 		return nil, failure(bearerauthn.KindUnavailable)
 	}
 	return audiences, nil
@@ -261,32 +215,11 @@ func optionalNumericDate(members map[string]json.RawMessage, name string) (time.
 }
 
 func exactIntegralNumber(raw json.RawMessage) (int64, error) {
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.UseNumber()
-	token, err := decoder.Token()
-	if err != nil {
-		return 0, failure(bearerauthn.KindUnavailable)
-	}
-	number, ok := token.(json.Number)
-	if !ok {
-		return 0, failure(bearerauthn.KindUnavailable)
-	}
-	if _, err := decoder.Token(); err != io.EOF {
-		return 0, failure(bearerauthn.KindUnavailable)
-	}
-	text := number.String()
-	if text == "" || strings.ContainsAny(text, ".eE") {
-		return 0, failure(bearerauthn.KindUnavailable)
-	}
-	value, err := strconv.ParseInt(text, 10, 64)
+	value, err := strconv.ParseInt(strings.TrimSpace(string(raw)), 10, 64)
 	if err != nil {
 		return 0, failure(bearerauthn.KindUnavailable)
 	}
 	return value, nil
-}
-
-func containsExact(values []string, want string) bool {
-	return slices.Contains(values, want)
 }
 
 func failure(kind bearerauthn.Kind) error {

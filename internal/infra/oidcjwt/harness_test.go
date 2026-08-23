@@ -90,7 +90,6 @@ func newTestVerifierWithUse(t *testing.T, key *rsa.PrivateKey, use string) *Veri
 		testPolicy(t),
 		signingKeys.KeyfuncCtx,
 		func() time.Time { return testNow },
-		newJWKSMetrics(nil),
 		nil,
 		nil,
 	)

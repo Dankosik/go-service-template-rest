@@ -12,6 +12,7 @@ import (
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 )
 
 // UnaryInterceptor authenticates every unary RPC except the public health
@@ -157,27 +158,64 @@ func (s serverStreamWithContext) Context() context.Context {
 }
 
 func (s serverStreamWithContext) RecvMsg(message any) error {
+	received, ok := message.(proto.Message)
+	if !ok {
+		return s.recvMsg(message)
+	}
+	detached := received.ProtoReflect().Type().New().Interface()
+	if err := waitMessageOperation(s.ctx, func() error {
+		return s.ServerStream.RecvMsg(detached)
+	}); err != nil {
+		return fmt.Errorf("receive gRPC message: %w", err)
+	}
+	proto.Reset(received)
+	proto.Merge(received, detached)
+	return nil
+}
+
+func (s serverStreamWithContext) SendMsg(message any) error {
+	if sent, ok := message.(proto.Message); ok {
+		message = proto.Clone(sent)
+	}
+	if err := waitMessageOperation(s.ctx, func() error {
+		return s.ServerStream.SendMsg(message)
+	}); err != nil {
+		return fmt.Errorf("send gRPC message: %w", err)
+	}
+	return nil
+}
+
+func (s serverStreamWithContext) recvMsg(message any) error {
 	if err := s.ctx.Err(); err != nil {
 		return fmt.Errorf("receive authenticated gRPC message: %w", err)
 	}
 	if err := s.ServerStream.RecvMsg(message); err != nil {
 		return fmt.Errorf("receive gRPC message: %w", err)
 	}
-	// grpc-go receives through the embedded transport stream, whose context this
-	// wrapper cannot replace. Check again so a message that unblocked after token
-	// expiry is not reported to the handler as a successful authenticated receive.
 	if err := s.ctx.Err(); err != nil {
 		return fmt.Errorf("receive authenticated gRPC message: %w", err)
 	}
 	return nil
 }
 
-func (s serverStreamWithContext) SendMsg(message any) error {
-	if err := s.ctx.Err(); err != nil {
-		return fmt.Errorf("send authenticated gRPC message: %w", err)
+// waitMessageOperation lets the bounded authentication context end protobuf
+// stream I/O even though grpc-go performs it against the original transport
+// context. The detached message keeps an operation finishing during stream
+// teardown from racing with a handler that already observed expiry. The buffered
+// result lets that operation finish when grpc-go closes the original stream.
+func waitMessageOperation(ctx context.Context, operation func() error) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("authenticated gRPC stream context: %w", err)
 	}
-	if err := s.ServerStream.SendMsg(message); err != nil {
-		return fmt.Errorf("send gRPC message: %w", err)
+	done := make(chan error, 1)
+	go func() { done <- operation() }()
+	select {
+	case err := <-done:
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return fmt.Errorf("authenticated gRPC stream context: %w", ctxErr)
+		}
+		return err
+	case <-ctx.Done():
+		return fmt.Errorf("authenticated gRPC stream context: %w", ctx.Err())
 	}
-	return nil
 }
