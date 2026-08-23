@@ -44,14 +44,14 @@ registry, err := natsjs.NewRegistry(natsjs.Route{
 The worker builder registers the typed handler on that registry:
 
 ```go
-err = domainevent.Handle(registry, OrderUpdated,
+err = natsjs.Handle(registry, OrderUpdated,
     func(ctx context.Context, event domainevent.Typed[order.UpdatedV1]) error {
         return orders.Apply(ctx, event.Payload)
     },
 )
 ```
 
-Return `domainevent.Permanent(err)` only when retrying the same event bytes
+Return `natsjs.Permanent(err)` only when retrying the same event bytes
 cannot succeed.
 
 ## Operator topology and configuration
@@ -129,6 +129,6 @@ still at-least-once and the consumer's durable idempotency remains authoritative
 ```bash
 go test -vet=off ./internal/domainevent ./internal/infra/natsjs ./cmd/worker/...
 go test -vet=off -tags=integration ./internal/infra/natsjs
-REQUIRE_DOCKER=1 make test-integration
+REQUIRE_DOCKER=1 ALLOW_HEAVY=1 make test-integration-messaging
 make test-messaging-race
 ```

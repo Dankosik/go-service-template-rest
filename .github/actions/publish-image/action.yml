@@ -160,11 +160,16 @@ runs:
         trap - EXIT
     # profile:database-postgres:end
 
+    - name: Set up Buildx
+      uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+
     - name: Build image
       shell: bash
       env:
         APP_VERSION: ${{ steps.meta.outputs.version }}
         PRIMARY_IMAGE: ${{ steps.meta.outputs.primary_image }}
+        RUNTIME_IMAGE_CACHE_FROM: type=gha,scope=runtime-image
+        RUNTIME_IMAGE_CACHE_TO: type=gha,mode=max,scope=runtime-image
       run: |
         VCS_REF="${GITHUB_SHA}" \
           SOURCE_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
@@ -204,6 +209,7 @@ runs:
         TRIVY_DB_REPOSITORY: ${{ inputs.trivy_db_repository }}
       with:
         image-ref: ${{ steps.meta.outputs.primary_image }}
+        scanners: vuln
         format: table
         exit-code: "1"
         ignore-unfixed: true
@@ -215,6 +221,7 @@ runs:
         TRIVY_DB_REPOSITORY: ${{ inputs.trivy_db_repository }}
       with:
         image-ref: ${{ steps.meta.outputs.primary_image }}
+        scanners: vuln
         format: cyclonedx
         output: sbom.cdx.json
         skip-setup-trivy: true

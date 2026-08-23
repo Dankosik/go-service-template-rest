@@ -2,13 +2,22 @@
 
 ## Local leaves
 
-Use only the command that observes the changed claim:
+Use the surface-aware route for an ordinary integrated change:
+
+```bash
+make plan
+make verify
+```
+
+Use the full deterministic owner only for a full-repository claim:
 
 ```bash
 make check
 ```
 
-`make check` is the one local full-repository owner: format, `lint-all`,
+`make verify` selects a minimal non-overlapping set and records candidate,
+scope, command plan, environment, result, and duration under the worktree's Git
+metadata. `make check` remains the full-repository owner: format, `lint-all`,
 `test-all`, module tidy, and generated-contract drift. Package iteration uses
 `go test -vet=off ./internal/<package>` or `make unit-check`. Heavy leaves
 (`template-init-check`, `govulncheck`, `gosec`, `audit-full-manual`) require
@@ -20,13 +29,17 @@ separate Docker-backed leaves. A host-only result does not prove them.
 ## Pull-request and push CI
 
 [ci.yml](../.github/workflows/ci.yml) classifies the exact diff once and starts
-only applicable leaves. `quality` composes `check-go`, OpenAPI, Protobuf, SQLC,
-initializer, and instruction proof; `security` runs dependency and Go scanners;
-`secrets` always scans the pull-request range; `delivery` selects actionlint,
-ShellCheck, and BuildKit; `integration` owns real PostgreSQL, one production
-image, migration/runtime rehearsal, and Trivy. The always-reported `required`
-job fails when any applicable leaf fails or is cancelled and accepts deliberate
-path skips.
+only applicable leaves. Runtime Go, root/tool dependencies, lint config,
+initializers, workflows, dependency automation, database, messaging, process,
+race, migrations, runtime image, and image security are separate surfaces.
+Instruction-only quality does not install Go. Gitleaks uses a checksum-pinned
+binary and range scans pull requests, merge groups, and main pushes; tags and
+manual runs retain full-history proof. Integration builds one image only when a
+selected runtime gate needs it and reuses that image for lifecycle, migration,
+and vulnerability gates. The always-reported `required` job fails when any
+applicable leaf fails or is cancelled and accepts deliberate path skips.
+Pull requests and merge groups are path-aware; main pushes, tags, and manual
+runs deliberately select the full surface set.
 
 GitHub Rulesets or organization policy own merge admission. Require `required`
 and `codeql-required`; the repository does not rewrite its own protection
@@ -40,14 +53,16 @@ against the event's exact base SHA. Generated output is never edited by hand.
 
 ## Secrets and dependencies
 
-Pull requests run redacted gitleaks against the exact base-to-HEAD range. Local
-review additionally scans the current tree. Push and release admission use full
-history. Every mode consumes the reviewed baseline; missing base authority
-fails instead of widening or silently skipping the intended range.
+Pull requests, merge groups, and main pushes run redacted Gitleaks against the
+exact base-to-HEAD range. Local review additionally scans the current tree.
+Tag and manual admission use full history. Every mode consumes the reviewed
+baseline; missing base authority widens only to the explicit full-history gate.
 
 Dependency Review rejects new high-severity dependencies on pull requests.
-`govulncheck`, `gosec`, and CodeQL remain independent because they observe
-different source/dependency paths.
+`govulncheck` and `gosec` run on runtime Go pull requests. Go CodeQL is the
+latency-first main, tag, schedule, and manual gate; Actions CodeQL remains
+pull-request scoped when workflow source changes. These tools observe different
+source and dependency paths.
 
 ## Publication
 

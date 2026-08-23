@@ -36,7 +36,14 @@ fingerprint="$({
 	find . -type f -not -path './.git/*' -exec shasum -a 256 {} +
 } | LC_ALL=C sort | shasum -a 256 | awk '{print $1}')"
 
-docker build \
+build=(docker build)
+if [[ -n ${RUNTIME_IMAGE_CACHE_FROM:-}${RUNTIME_IMAGE_CACHE_TO:-} ]]; then
+	build=(docker buildx build --load)
+	[[ -z ${RUNTIME_IMAGE_CACHE_FROM:-} ]] || build+=(--cache-from "${RUNTIME_IMAGE_CACHE_FROM}")
+	[[ -z ${RUNTIME_IMAGE_CACHE_TO:-} ]] || build+=(--cache-to "${RUNTIME_IMAGE_CACHE_TO}")
+fi
+
+"${build[@]}" \
 	--build-arg "APP_VERSION=${APP_VERSION:-dev}" \
 	--build-arg "VCS_REF=${VCS_REF:-unknown}" \
 	--build-arg "SOURCE_URL=${SOURCE_URL:-}" \

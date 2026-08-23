@@ -15,13 +15,16 @@ make unit-check PKG=./internal/<package> FILES='internal/<package>/a.go internal
 
 `PKG` and `FILES` are required. There is no `./...` default.
 
-The integrated delivery owner or CI runs `make check` once. That target owns
-full formatting, unit tests, the complete golangci-lint policy, module tidy,
-and generated-contract drift. Do not also run `fmt-check`, `lint-all`, or
-`test-all` beside it. Repository-wide leaves are not a per-lane or per-sibling default.
+The integrated delivery owner runs `make verify` once. It selects changed-file
+formatting, `lint-changed`, package tests, and any other applicable surface
+owners without automatically appending a repository-wide aggregate. Use
+`make plan` to inspect that selection first. `make check` remains the explicit
+full formatting, `lint-all`, `test-all`, module-tidy, and generated-drift gate;
+do not run its leaves beside it.
 
-`make lint` and `make test` require `PKG` and are package-scoped. Full-module
-leaves are `lint-all` and `test-all`. `make lint-deep`, `make test-race`,
+`make lint-changed` and `make test` require `PKG` and are package-scoped.
+`lint-pr` is the PR correctness, architecture, resource, error, context, and
+interface set. Full-module leaves are `lint-all` and `test-all`. `make lint-deep`, `make test-race`,
 `make test-integration`, and `make audit-full-manual` require `ALLOW_HEAVY=1`
 or `CI=true`.
 

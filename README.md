@@ -353,14 +353,16 @@ gRPC outbound integration from a committed local contract. See
 | --- | --- |
 | `go test -vet=off ./internal/<package>` | Edit-loop falsifier |
 | `make unit-check PKG=./pkg FILES='...'` | One package aggregate (format, test, small lint set) |
-| `make check` | One full-repository aggregate on the integrated tree |
+| `make plan` / `make verify` | Explain and run the minimal integrated surface plan |
+| `make check` | Explicit full-repository aggregate |
 | `ALLOW_HEAVY=1 make audit-full-manual` | Rare full template/release audit (race, Docker, security, template) |
 | `make integration-init-check` | Initializer grammar, transaction, and fixture matrix |
 | `make openapi-check` | OpenAPI generation, drift, runtime, lint, and schema checks |
 | `make sqlc-check` | SQL generation drift (PostgreSQL profile) |
 | `make migration-check` | Goose validation and append-only review history (PostgreSQL profile) |
 | `make migration-validate` | Migration rehearsal (PostgreSQL profile) |
-| `make test-integration` | Container-backed integration tests when present |
+| `make test-integration-{db,messaging,process,race}` | Matching container-backed integration surface |
+| `make test-integration` | Full non-race integration pack |
 | `make govulncheck` / `make gosec` | Go vulnerability and static security checks |
 
 <!-- profile:grpc:start -->

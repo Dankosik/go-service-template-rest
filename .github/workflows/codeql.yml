@@ -28,12 +28,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
-      go: ${{ steps.surfaces.outputs.go }}
-      github_actions: ${{ steps.surfaces.outputs.github_actions }}
+      go_source: ${{ steps.surfaces.outputs.go_source }}
+      go_root_dependencies: ${{ steps.surfaces.outputs.go_root_dependencies }}
+      github_workflows: ${{ steps.surfaces.outputs.github_workflows }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
+          fetch-depth: 1
           persist-credentials: false
       - name: Classify changed surfaces
         id: surfaces
@@ -43,6 +44,7 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "${EVENT_NAME}" == pull_request || "${EVENT_NAME}" == merge_group ]]; then
+            git fetch --no-tags --depth=1 origin "${BASE_SHA}"
             git diff --name-only "${BASE_SHA}" HEAD | bash ./scripts/ci/changed-surfaces.sh >>"${GITHUB_OUTPUT}"
           else
             bash ./scripts/ci/changed-surfaces.sh --all >>"${GITHUB_OUTPUT}"
@@ -50,7 +52,7 @@ jobs:
 
   analyze-actions:
     needs: changes
-    if: needs.changes.outputs.github_actions == 'true'
+    if: needs.changes.outputs.github_workflows == 'true'
     name: Analyze (actions)
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -70,7 +72,10 @@ jobs:
 
   analyze-go:
     needs: changes
-    if: needs.changes.outputs.go == 'true'
+    if: >-
+      github.event_name != 'pull_request' &&
+      github.event_name != 'merge_group' &&
+      (needs.changes.outputs.go_source == 'true' || needs.changes.outputs.go_root_dependencies == 'true')
     name: Analyze (go)
     runs-on: ubuntu-latest
     timeout-minutes: 20
