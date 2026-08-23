@@ -3,12 +3,10 @@ package httpclient
 import (
 	"maps"
 	"net/http"
+	"strings"
 
-	"github.com/example/go-service-template-rest/internal/observability/correlationpolicy"
 	"github.com/example/go-service-template-rest/internal/reqctx"
 )
-
-var reservedPropagationHeader = correlationpolicy.Reserved(reqctx.RequestIDHeader)
 
 type propagationSanitizer struct {
 	base http.RoundTripper
@@ -31,6 +29,9 @@ func (t propagationSanitizer) RoundTrip(request *http.Request) (*http.Response, 
 
 func removeReservedHeaders(header http.Header) {
 	maps.DeleteFunc(header, func(name string, _ []string) bool {
-		return reservedPropagationHeader(name)
+		return strings.EqualFold(name, "traceparent") ||
+			strings.EqualFold(name, "tracestate") ||
+			strings.EqualFold(name, "baggage") ||
+			strings.EqualFold(name, reqctx.RequestIDHeader)
 	})
 }

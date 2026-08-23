@@ -101,6 +101,7 @@ func TestAuthorityAndCorrelationPolicy(t *testing.T) {
 		t.Fatal(err)
 	}
 	request.Header.Set("Traceparent", "stale")
+	request.Header.Set("Tracestate", "stale")
 	request.Header.Set("Baggage", "secret=value")
 	request.Header.Set("X-Request-ID", "stale")
 	request.Header.Set("X-Provider", "retained")
@@ -113,7 +114,7 @@ func TestAuthorityAndCorrelationPolicy(t *testing.T) {
 		t.Fatal("RoundTrip() returned an incomplete response")
 	}
 	_ = response.Body.Close()
-	for _, name := range []string{"Traceparent", "Baggage", "X-Request-ID"} {
+	for _, name := range []string{"Traceparent", "Tracestate", "Baggage", "X-Request-ID"} {
 		if got := received.Header.Get(name); got != "" {
 			t.Errorf("received %s = %q", name, got)
 		}
