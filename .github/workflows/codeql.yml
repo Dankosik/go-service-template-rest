@@ -21,7 +21,6 @@ permissions:
   security-events: write
 
 env:
-  GOFLAGS: -mod=readonly
   GOTOOLCHAIN: local
 
 jobs:
@@ -92,6 +91,8 @@ jobs:
           build-mode: manual
           queries: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && 'security-extended' || 'security-and-quality' }}
       - name: Build Go packages
+        env:
+          GOFLAGS: -mod=readonly
         run: go build ./...
       - name: Analyze
         uses: github/codeql-action/analyze@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
