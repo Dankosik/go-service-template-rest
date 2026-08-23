@@ -7,26 +7,17 @@ import (
 	"strings"
 )
 
-// MaxRequestIDLength is the shared wire limit for a correlation identifier.
-const MaxRequestIDLength = 128
+const maxRequestIDLength = 128
 
 var requestIDPattern = regexp.MustCompile(`^[A-Za-z0-9._~-]+$`)
 
-// RequestIDHeader and RequestIDMetadataKey are one wire name in the two
-// spellings the transports require: net/http canonicalizes header keys, gRPC
-// requires lowercase metadata keys. This package owns both because every
-// transport adapter must agree on them and none may import another;
-// TestRequestIDWireNamesAreOneName proves the two equal.
-const (
-	RequestIDHeader      = "X-Request-ID"
-	RequestIDMetadataKey = "x-request-id"
-)
+// RequestIDHeader is shared by the inbound HTTP adapter and the fixed outbound
+// HTTP sanitizer, which must agree on the field they accept or remove.
+const RequestIDHeader = "X-Request-ID"
 
 type requestIDContextKey struct{}
 
-// ContextWithRequestID returns ctx carrying the correlation identifier.
-// Generating and validating the value belongs to the transport adapter.
-func ContextWithRequestID(ctx context.Context, requestID string) context.Context {
+func contextWithRequestID(ctx context.Context, requestID string) context.Context {
 	return context.WithValue(ctx, requestIDContextKey{}, requestID)
 }
 
@@ -41,15 +32,12 @@ func RequestID(ctx context.Context) string {
 
 func ContextWithAcceptedRequestID(ctx context.Context, candidate string) (context.Context, string) {
 	requestID := strings.TrimSpace(candidate)
-	if !ValidRequestID(requestID) {
+	if !validRequestID(requestID) {
 		requestID = rand.Text()
 	}
-	return ContextWithRequestID(ctx, requestID), requestID
+	return contextWithRequestID(ctx, requestID), requestID
 }
 
-// ValidRequestID reports whether value is safe to carry in logs and response
-// metadata. The alphabet is transport-neutral and unchanged from the original
-// HTTP contract.
-func ValidRequestID(value string) bool {
-	return len(value) <= MaxRequestIDLength && requestIDPattern.MatchString(value)
+func validRequestID(value string) bool {
+	return len(value) <= maxRequestIDLength && requestIDPattern.MatchString(value)
 }

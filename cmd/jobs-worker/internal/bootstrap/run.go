@@ -136,11 +136,29 @@ func run(signalCtx context.Context, args []string, buildWorkers WorkersBuilder) 
 	if err != nil {
 		return fmt.Errorf("initialize River client: %w", err)
 	}
+	stopStartedRiver := func(trigger error) error {
+		processCtx, cancelProcess, deadline := runtimeopts.ArmTeardown(signalCtx, cfg.HTTP.GracePeriod)
+		defer cancelProcess()
+		cleanupDeadline = deadline
+		stopCtx, cancelStop := context.WithTimeout(processCtx, cfg.HTTP.ShutdownTimeout)
+		defer cancelStop()
+		stopErr := client.StopAndCancel(stopCtx)
+		cleanupSafe = riverStoppedBeforeReturn(stopErr, client.Stopped())
+		if !cleanupSafe {
+			stopErr = errors.Join(stopErr, fmt.Errorf("join River client: %w", stopCtx.Err()))
+		}
+		return errors.Join(trigger, stopErr)
+	}
 
 	runCtx, cancelRun := context.WithCancel(context.WithoutCancel(signalCtx))
 	defer cancelRun()
-	if err := client.Start(runCtx); err != nil {
-		return fmt.Errorf("start River client: %w", err)
+	started, err := runtimeopts.StartRuntime(startupCtx, runCtx, cancelRun, client.Start)
+	if err != nil {
+		startErr := fmt.Errorf("start River client: %w", err)
+		if started {
+			return stopStartedRiver(startErr)
+		}
+		return startErr
 	}
 
 	var ready atomic.Bool
@@ -153,9 +171,7 @@ func run(signalCtx context.Context, args []string, buildWorkers WorkersBuilder) 
 		metrics,
 	)
 	if err != nil {
-		stopCtx, cancel := context.WithTimeout(context.WithoutCancel(signalCtx), cfg.HTTP.ShutdownTimeout)
-		defer cancel()
-		return errors.Join(err, client.StopAndCancel(stopCtx))
+		return stopStartedRiver(err)
 	}
 
 	var trigger error
@@ -172,10 +188,8 @@ func run(signalCtx context.Context, args []string, buildWorkers WorkersBuilder) 
 	defer cancelProcess()
 	cleanupDeadline = deadline
 	stopErr := client.Stop(processCtx)
-	select {
-	case <-client.Stopped():
-	case <-processCtx.Done():
-		cleanupSafe = false
+	cleanupSafe = riverStoppedBeforeReturn(stopErr, client.Stopped())
+	if !cleanupSafe {
 		stopErr = errors.Join(stopErr, fmt.Errorf("join River client: %w", processCtx.Err()))
 	}
 	if cleanupSafe {
@@ -183,4 +197,17 @@ func run(signalCtx context.Context, args []string, buildWorkers WorkersBuilder) 
 	}
 	diagnosticsErr := diagnostics.Stop(processCtx, diagnosticsClose)
 	return errors.Join(trigger, stopErr, diagnosticsErr)
+}
+
+func riverStoppedBeforeReturn(stopErr error, stopped <-chan struct{}) bool {
+	if stopErr == nil {
+		<-stopped
+		return true
+	}
+	select {
+	case <-stopped:
+		return true
+	default:
+		return false
+	}
 }
