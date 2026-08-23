@@ -104,9 +104,9 @@ func TestNATSWorkerForcedShutdownDoesNotRaceHandlerCleanup(t *testing.T) {
 	url, js := workerNATSFixture(t)
 	diagnosticsAddress := waittest.FreeTCPAddr(t, "worker diagnostics")
 	setWorkerEnvironment(t, url, "forced-cleanup-worker", diagnosticsAddress)
-	t.Setenv("APP__HTTP__GRACE_PERIOD", "1s")
-	t.Setenv("APP__HTTP__SHUTDOWN_TIMEOUT", "1s")
-	t.Setenv("APP__HTTP__WRITE_TIMEOUT", "1s")
+	t.Setenv("APP__HTTP__GRACE_PERIOD", "2s")
+	t.Setenv("APP__HTTP__SHUTDOWN_TIMEOUT", "2s")
+	t.Setenv("APP__HTTP__WRITE_TIMEOUT", "2s")
 	t.Setenv("APP__HTTP__REQUEST_TIMEOUT", "1s")
 	t.Setenv("APP__HTTP__READINESS_TIMEOUT", "500ms")
 
