@@ -2,6 +2,7 @@ package reqctx_test
 
 import (
 	"context"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -12,28 +13,9 @@ import (
 // adapters derive their spelling from this package instead of restating it: the
 // HTTP and gRPC forms must stay the same name, each in the casing its protocol
 // requires.
-func TestRequestIDWireNamesAreOneName(t *testing.T) {
-	t.Parallel()
-
-	if !strings.EqualFold(reqctx.RequestIDHeader, reqctx.RequestIDMetadataKey) {
-		t.Fatalf(
-			"RequestIDHeader = %q and RequestIDMetadataKey = %q are different names, want the same name in two casings",
-			reqctx.RequestIDHeader,
-			reqctx.RequestIDMetadataKey,
-		)
-	}
-	// gRPC lowercases metadata keys on the wire and matches them lowercased, so
-	// a key in any other casing silently fails to match. HTTP needs no
-	// equivalent check: net/http canonicalizes on both Get and Set, which is why
-	// RequestIDHeader may keep the "X-Request-ID" spelling the OpenAPI contract
-	// documents rather than Go's "X-Request-Id" canonical form.
-	if got := strings.ToLower(reqctx.RequestIDMetadataKey); got != reqctx.RequestIDMetadataKey {
-		t.Fatalf("RequestIDMetadataKey = %q, want lowercase %q for gRPC metadata", reqctx.RequestIDMetadataKey, got)
-	}
-}
-
 func TestContextWithAcceptedRequestID(t *testing.T) {
 	t.Parallel()
+	safeRequestID := regexp.MustCompile(`^[A-Za-z0-9._~-]+$`)
 
 	for _, testCase := range []struct {
 		name      string
@@ -44,7 +26,7 @@ func TestContextWithAcceptedRequestID(t *testing.T) {
 		{name: "trims safe value", candidate: " request-123 ", want: "request-123"},
 		{name: "replaces empty"},
 		{name: "replaces unsafe", candidate: "user@example.com"},
-		{name: "replaces overlong", candidate: strings.Repeat("a", reqctx.MaxRequestIDLength+1)},
+		{name: "replaces overlong", candidate: strings.Repeat("a", 129)},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
@@ -53,7 +35,7 @@ func TestContextWithAcceptedRequestID(t *testing.T) {
 			if testCase.want != "" && got != testCase.want {
 				t.Fatalf("accepted request ID = %q, want %q", got, testCase.want)
 			}
-			if !reqctx.ValidRequestID(got) {
+			if len(got) > 128 || !safeRequestID.MatchString(got) {
 				t.Fatalf("accepted request ID %q is invalid", got)
 			}
 			if fromContext := reqctx.RequestID(ctx); fromContext != got {

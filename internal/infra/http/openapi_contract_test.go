@@ -296,6 +296,22 @@ func TestOpenAPIRuntimeContractOperationsDeclareSecurityDecisions(t *testing.T) 
 	}
 }
 
+func TestOpenAPIProblemSchemasAreClosed(t *testing.T) {
+	t.Parallel()
+
+	swagger := mustOpenAPISwagger(t)
+	for _, name := range []string{"Problem", "InvalidParam"} {
+		schema, ok := swagger.Components.Schemas[name]
+		if !ok || schema == nil || schema.Value == nil {
+			t.Fatalf("components.schemas.%s is missing", name)
+		}
+		closed := schema.Value.AdditionalProperties.Has
+		if closed == nil || *closed {
+			t.Fatalf("components.schemas.%s additionalProperties = %v, want false", name, closed)
+		}
+	}
+}
+
 func TestOpenAPIBearerSecurityAlternativesFailClosed(t *testing.T) {
 	t.Parallel()
 

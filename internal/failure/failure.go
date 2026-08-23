@@ -42,10 +42,8 @@ const (
 // internal/infra/http, which turns a classified 429 into a server fault.
 //
 // The list is maintained beside the constants above because Go cannot enumerate
-// a named string type. That leaves one seam this list cannot close on its own — a
-// constant added above and not added here — and internal/infra/grpc's
-// TestEveryFailureCodeRendersAConformingReason is what covers it, by walking the
-// constant block itself rather than any list.
+// a named string type. TestAllCodesEnumeratesEveryDeclaredConstant walks the
+// constant block and closes the one seam this list cannot close on its own.
 func AllCodes() []Code {
 	return []Code{
 		CodeBadRequest,

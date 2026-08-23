@@ -97,13 +97,16 @@ func ClassChain(err error) string {
 func chainLink(err error) string {
 	switch link := err.(type) { //nolint:errorlint // Rendering one layer is the whole contract; errors.As would search past it and repeat an inner Op's name on every layer above it.
 	case *opError:
-		// Byte length gates a rune slice: under the limit in bytes is under it in
-		// runes too, so the common name costs no allocation, and the one that has
-		// to be cut is not cut through a rune.
+		// The common ASCII name costs no allocation. A longer byte string may
+		// still contain fewer than opNameLimit runes, so count before slicing.
 		if len(link.op) <= opNameLimit {
 			return link.op
 		}
-		return string([]rune(link.op)[:opNameLimit]) + "…"
+		runes := []rune(link.op)
+		if len(runes) <= opNameLimit {
+			return link.op
+		}
+		return string(runes[:opNameLimit]) + "…"
 	default:
 		return fmt.Sprintf("%T", err)
 	}

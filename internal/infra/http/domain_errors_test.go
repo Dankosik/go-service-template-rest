@@ -172,10 +172,9 @@ func TestRejectResponseClassifiesDomainErrors(t *testing.T) {
 	}
 }
 
-// TestRejectResponseUsesTheFirstMatchingMapper keeps mapper order meaningful, so
-// a service can put a specific classification ahead of a broad one without every
-// mapper knowing about the others.
-func TestRejectResponseUsesTheFirstMatchingMapper(t *testing.T) {
+// TestRejectResponseSnapshotsMapperOrder keeps mapper order meaningful and fixed
+// after construction, so later caller mutation cannot change a serving router.
+func TestRejectResponseSnapshotsMapperOrder(t *testing.T) {
 	t.Parallel()
 
 	specific := func(error) (failure.Classification, bool) {
@@ -185,10 +184,14 @@ func TestRejectResponseUsesTheFirstMatchingMapper(t *testing.T) {
 		return failure.Classification{Code: failure.CodeBadRequest, Detail: "broad"}, true
 	}
 
+	// The nil mapper is deliberate: a profile that supplies no mapper must not have
+	// to be filtered out by the caller.
+	mappers := []failure.Mapper{nil, specific, broad}
+	reject := RejectResponse(slog.New(slog.DiscardHandler), mappers...)
+	mappers[1] = broad
+
 	response := httptest.NewRecorder()
-	// The nil mapper after the logger is deliberate: a profile that supplies no
-	// mapper must not have to be filtered out by the caller.
-	RejectResponse(slog.New(slog.DiscardHandler), nil, specific, broad)(
+	reject(
 		response,
 		httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/articles", nil),
 		errors.New("boom"),

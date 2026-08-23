@@ -147,6 +147,7 @@ components:
   schemas:
     Problem:
       type: object
+      additionalProperties: false
       required:
         - code
         - type
@@ -189,6 +190,7 @@ components:
             $ref: "#/components/schemas/InvalidParam"
     InvalidParam:
       type: object
+      additionalProperties: false
       required:
         - name
         - reason
