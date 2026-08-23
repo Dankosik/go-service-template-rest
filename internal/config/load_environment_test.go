@@ -78,19 +78,50 @@ http:
 http:
   addr: ":8082"
 `)
-
-	t.Setenv("APP__HTTP__ADDR", ":8083")
+	lastOverlayPath := writeTempConfig(t, `
+http:
+  addr: ":8083"
+`)
 
 	cfg, _, err := LoadDetailed(LoadOptions{
 		ConfigPath:     basePath,
-		ConfigOverlays: []string{overlayPath},
+		ConfigOverlays: []string{overlayPath, lastOverlayPath},
 	})
 	if err != nil {
 		t.Fatalf("LoadDetailed() error = %v", err)
 	}
-
 	if cfg.HTTP.Addr != ":8083" {
-		t.Fatalf("HTTP.Addr = %q, want :8083", cfg.HTTP.Addr)
+		t.Fatalf("HTTP.Addr = %q, want last overlay :8083", cfg.HTTP.Addr)
+	}
+
+	t.Setenv("APP__HTTP__ADDR", ":8084")
+	cfg, _, err = LoadDetailed(LoadOptions{
+		ConfigPath:     basePath,
+		ConfigOverlays: []string{overlayPath, lastOverlayPath},
+	})
+	if err != nil {
+		t.Fatalf("LoadDetailed() with namespace override error = %v", err)
+	}
+	if cfg.HTTP.Addr != ":8084" {
+		t.Fatalf("HTTP.Addr = %q, want namespace override :8084", cfg.HTTP.Addr)
+	}
+}
+
+func TestMalformedNamespaceEnvRejectsWithoutDisclosingValue(t *testing.T) {
+	for _, envKey := range []string{"APP__", "APP____HTTP__ADDR", "APP__HTTP____ADDR"} {
+		t.Run(envKey, func(t *testing.T) {
+			resetConfigEnv(t)
+			const canary = "malformed-env-secret-canary"
+			t.Setenv(envKey, canary)
+
+			_, _, err := LoadDetailed(LoadOptions{})
+			if !errors.Is(err, ErrUnknownKey) || !strings.Contains(err.Error(), envKey) {
+				t.Fatalf("LoadDetailed() error = %v, want malformed environment key rejection", err)
+			}
+			if strings.Contains(err.Error(), canary) {
+				t.Fatalf("LoadDetailed() error disclosed raw environment value: %v", err)
+			}
+		})
 	}
 }
 

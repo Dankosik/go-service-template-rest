@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -168,6 +169,13 @@ func TestIntrospectionDisclosureBoundary(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), canary) {
 		t.Fatalf("disclosed secret: %v", err)
+	}
+}
+
+func TestIntrospectionEnvExampleIncludesPrivateHostSuffix(t *testing.T) {
+	values := readEnvExample(t, filepath.Join("..", "..", "env", ".env.example"))
+	if _, ok := values["APP__AUTHN__INTROSPECTION_PRIVATE_HOST_SUFFIX"]; !ok {
+		t.Fatal("env/.env.example is missing APP__AUTHN__INTROSPECTION_PRIVATE_HOST_SUFFIX")
 	}
 }
 

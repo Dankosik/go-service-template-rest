@@ -54,7 +54,7 @@ func validateJobsWorkerConfig(cfg *Config, unknownKeys []string) error {
 	if err := validateHTTPConfig(&cfg.HTTP); err != nil {
 		return err
 	}
-	if err := validatePostgres(cfg.Postgres, cfg.HTTP); err != nil {
+	if err := validatePostgres(cfg.Postgres); err != nil {
 		return err
 	}
 	if err := validateJobs(cfg.Jobs, cfg.Postgres); err != nil {

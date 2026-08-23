@@ -72,7 +72,7 @@ func loadConfigFileWithMetadata(ctx context.Context, k *koanf.Koanf, path string
 		return nil, fmt.Errorf("%w: read config file %q: %w", ErrLoad, cleanPath, err)
 	}
 	if int64(len(content)) > maxConfigFileSizeBytes {
-		return nil, fmt.Errorf("%w: config file %q exceeds max size limit %d bytes", ErrSecretPolicy, cleanPath, maxConfigFileSizeBytes)
+		return nil, fmt.Errorf("%w: config file %q exceeds max size limit %d bytes", ErrLoad, cleanPath, maxConfigFileSizeBytes)
 	}
 
 	fileConfig := koanf.New(keyDelimiter)

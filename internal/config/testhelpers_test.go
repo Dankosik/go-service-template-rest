@@ -1,11 +1,8 @@
 package config
 
 import (
-	"maps"
 	"os"
 	"path/filepath"
-	"reflect"
-	"slices"
 	"strings"
 	"testing"
 )
@@ -20,7 +17,6 @@ func writeTempConfig(t *testing.T, content string) string {
 	return path
 }
 
-// profile:object-storage:start
 func readEnvExample(t *testing.T, path string) map[string]string {
 	t.Helper()
 
@@ -53,28 +49,10 @@ func readEnvExample(t *testing.T, path string) map[string]string {
 	return values
 }
 
-// profile:object-storage:end
-
 func resetConfigEnv(t *testing.T) {
 	t.Helper()
 
-	previousValues := make(map[string]string)
-	for _, key := range configEnvResetKeys(t) {
-		if value, ok := os.LookupEnv(key); ok {
-			previousValues[key] = value
-			t.Setenv(key, value)
-		}
-		if err := os.Unsetenv(key); err != nil {
-			t.Fatalf("os.Unsetenv(%q) error = %v", key, err)
-		}
-	}
-	t.Cleanup(func() {
-		for _, key := range configEnvResetKeys(t) {
-			if _, ok := previousValues[key]; !ok {
-				_ = os.Unsetenv(key)
-			}
-		}
-	})
+	clearConfigEnv(t)
 	t.Setenv("APP__APP__ENV", "local")
 	// profile:authn-bearer:start
 	t.Setenv("APP__AUTHN__ISSUER", "https://issuer.example.com")
@@ -92,6 +70,20 @@ func resetConfigEnv(t *testing.T) {
 	// profile:object-storage:start
 	setObjectStorageTestEnv(t)
 	// profile:object-storage:end
+}
+
+func clearConfigEnv(t *testing.T) {
+	t.Helper()
+	for _, entry := range os.Environ() {
+		key, value, found := strings.Cut(entry, "=")
+		if !found || !strings.HasPrefix(key, namespacePrefix) {
+			continue
+		}
+		t.Setenv(key, value)
+		if err := os.Unsetenv(key); err != nil {
+			t.Fatalf("os.Unsetenv(%q) error = %v", key, err)
+		}
+	}
 }
 
 // profile:outbound-auth-oauth2-client-credentials:start
@@ -125,19 +117,3 @@ func setObjectStorageTestEnv(t *testing.T) {
 }
 
 // profile:object-storage:end
-
-func configEnvResetKeys(t *testing.T) []string {
-	t.Helper()
-
-	knownKeys := configLeafKeysFromType(t, reflect.TypeFor[Config](), "")
-	knownSections := knownConfigSections()
-	keySet := make(map[string]struct{}, len(knownKeys)+len(knownSections))
-	for _, key := range knownKeys {
-		keySet[namespaceEnvForConfigKey(key)] = struct{}{}
-	}
-	for key := range knownSections {
-		keySet[namespaceEnvForConfigKey(key)] = struct{}{}
-	}
-
-	return slices.Sorted(maps.Keys(keySet))
-}

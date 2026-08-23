@@ -150,7 +150,6 @@ unknown:
 	t.Run("load_file_stage", func(t *testing.T) {
 		resetConfigEnv(t)
 		t.Setenv("APP__APP__ENV", "prod")
-		t.Setenv("APP_CONFIG_ALLOWED_ROOTS", t.TempDir())
 
 		_, report, err := LoadDetailed(LoadOptions{ConfigPath: "/nonexistent/config.yaml"})
 		if err == nil {

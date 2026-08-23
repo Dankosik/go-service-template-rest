@@ -6,8 +6,9 @@ import (
 
 const namespacePrefix = "APP__"
 
-func collectNamespaceValues(environ []string) map[string]any {
+func collectNamespaceValues(environ []string) (map[string]any, []string) {
 	values := make(map[string]any)
+	malformedKeys := make([]string, 0)
 
 	for _, entry := range environ {
 		envKey, envValue, ok := strings.Cut(entry, "=")
@@ -19,12 +20,13 @@ func collectNamespaceValues(environ []string) map[string]any {
 		}
 		targetKey := namespaceEnvToKey(envKey)
 		if targetKey == "" {
+			malformedKeys = append(malformedKeys, envKey)
 			continue
 		}
 		values[targetKey] = envValue
 	}
 
-	return values
+	return values, malformedKeys
 }
 
 func namespaceEnvToKey(envKey string) string {

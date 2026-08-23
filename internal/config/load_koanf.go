@@ -13,6 +13,7 @@ const keyDelimiter = "."
 
 type loadMetadata struct {
 	sectionScalarOverrideKeys []string
+	malformedEnvironmentKeys  []string
 	failedStage               string
 }
 
@@ -58,7 +59,8 @@ func loadKoanf(ctx context.Context, opts LoadOptions) (*koanf.Koanf, loadMetadat
 		return nil, metadata, err
 	}
 
-	namespaceValues := collectNamespaceValues(os.Environ())
+	namespaceValues, malformedEnvironmentKeys := collectNamespaceValues(os.Environ())
+	metadata.malformedEnvironmentKeys = malformedEnvironmentKeys
 	if len(namespaceValues) > 0 {
 		sectionScalarOverrideKeys := removeSectionScalarOverridesInPlace(namespaceValues)
 		metadata.sectionScalarOverrideKeys = append(metadata.sectionScalarOverrideKeys, sectionScalarOverrideKeys...)
