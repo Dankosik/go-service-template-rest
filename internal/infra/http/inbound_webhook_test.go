@@ -166,6 +166,19 @@ func TestInboundWebhookAdmissionBeforeDurableWork(t *testing.T) {
 	if over.Code != http.StatusRequestEntityTooLarge {
 		t.Fatalf("over limit status = %d", over.Code)
 	}
+	chunkedRequest := inboundRequest("123456789")
+	chunkedRequest.ContentLength = -1
+	chunked := httptest.NewRecorder()
+	limit.ServeHTTP(chunked, chunkedRequest)
+	if chunked.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("chunked over limit status = %d", chunked.Code)
+	}
+	receiver.mu.Lock()
+	limitedCalls := receiver.calls
+	receiver.mu.Unlock()
+	if limitedCalls != 1 {
+		t.Fatalf("body-limited receiver calls = %d, want 1", limitedCalls)
+	}
 
 	blocked := &recordingReceiver{
 		result:  inboundwebhook.Result{Outcome: inboundwebhook.OutcomeAccepted},
