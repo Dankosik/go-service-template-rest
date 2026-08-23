@@ -7,9 +7,13 @@ check that did not exercise its claimed surface.
 
 ## Decide
 
-- `ci.yml` exposes three stable always-reported contexts: `quality`, `security`,
-  and `delivery`. Require those contexts instead of a script-maintained job
-  inventory.
+- `ci.yml` exposes three stable always-reported contexts: `quality`,
+  `security`, and `delivery`. Require those contexts instead of a
+  script-maintained job inventory.
+- `quality` always runs `make check`. Template initializer and instruction
+  eval steps inside that job are path-gated on pull requests. A skipped step
+  is not evidence for the skipped surface; push and `workflow_dispatch` still
+  run them.
 - `integration.yml` uses native path filters for PostgreSQL, migration, image,
   and integration-test owners. It is not an always-reported context. Ruleset
   policy must require it only where the platform can match the same scope;

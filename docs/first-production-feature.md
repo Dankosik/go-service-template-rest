@@ -364,9 +364,11 @@ Use focused tests while iterating, then run:
 
 ```bash
 go test ./internal/<feature> ./internal/infra/http
-make fmt-check
-make lint
+make unit-check PKG=./internal/<feature> FILES='internal/<feature>/*.go'
 ```
+
+On the integrated candidate run `make check` once. Do not also run `fmt-check`,
+`lint-all`, or `test-all` beside it.
 
 Run the matching container, PostgreSQL, migration, or deployment leaf when the
 change touches it. Before merge, inspect the generated diff and

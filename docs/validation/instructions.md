@@ -9,7 +9,7 @@ Use for instruction, role, skill, mirror, or template-propagation changes.
 | Claude skill discovery | `bash scripts/harness-skills-sync.sh claude --check --repo .` |
 | Qwen skill discovery | `bash scripts/harness-skills-sync.sh qwen --check --repo .` |
 | Template-source ownership and sync behavior | `make template-owned-purity-check` in the template checkout only |
-| Structural workflow and hard-skill behavior catalogs, schema ownership, selectors, and links | `bash scripts/ci/instruction-evals-check.sh` |
+| Structural workflow and hard-skill behavior catalogs, schema ownership, selectors, and links | `ALLOW_HEAVY=1 make instruction-evals-check` in the template checkout only |
 
 Run one matching carrier leaf while iterating. The template-only purity target
 already runs all four carrier checks; it is the final aggregate, not an

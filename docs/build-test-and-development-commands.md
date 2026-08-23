@@ -21,7 +21,7 @@ pinned by the Makefile and invoked through `npx` with telemetry disabled.
 make template-init \
   MODULE=github.com/acme/service \
   CODEOWNER=@acme/platform
-make template-init-check
+ALLOW_HEAVY=1 make template-init-check
 ```
 
 The default is the documented minimal service. Supported selections are the
@@ -72,7 +72,7 @@ and package:
 go tool -modfile=tools/go.mod goimports -l path/to/changed.go
 go tool -modfile=tools/go.mod gofumpt -l path/to/changed.go
 go test -vet=off ./path/to/changed/package
-make lint-fast LINT_PACKAGES=./path/to/changed/package
+make lint-fast PKG=./path/to/changed/package
 ```
 
 When only the CLI exposes diagnostics, use `gopls check path/to/changed.go`.
@@ -82,24 +82,51 @@ package containing the saved file; press `a` for an explicit full run.
 
 ## Ordinary Go leaves
 
+Edit-loop proof is a focused package test, not a Makefile aggregate:
+
 ```bash
-make fmt-check
-make lint
-make test
+go test -vet=off ./internal/<package>
 ```
 
-Authoring commands remain separate:
+One acceptance-unit aggregate, with required package and file lists:
 
 ```bash
+make unit-check \
+  PKG=./internal/<package> \
+  FILES="internal/<package>/a.go internal/<package>/a_test.go"
+```
+
+One full-repository owner on the integrated candidate:
+
+```bash
+make check
+```
+
+`make check` runs formatting, `lint-all`, `test-all`, module tidy, and
+generated-contract drift. Do not also run `fmt-check`, `lint-all`, or
+`test-all` beside it.
+
+Package-scoped names refuse a missing `PKG`; they do not default to `./...`:
+
+```bash
+make test-package PKG=./internal/<package>
+make lint-package PKG=./internal/<package>
+make test-all
+make lint-all
 make fmt
-make tidy
-make mod-tidy-check
-make mod-verify
-make test-race
+```
+
+Heavy leaves require `ALLOW_HEAVY=1` or `CI=true`:
+
+```bash
+ALLOW_HEAVY=1 make test-race
+ALLOW_HEAVY=1 make lint-deep
+ALLOW_HEAVY=1 make verify
 ```
 
 Use `make lint-deep` only for whole-program dead-code and nil analysis. Use
 `make test-race` only when the claim spans concurrency-sensitive code.
+`make verify` is the explicit full matrix; it is not an iteration default.
 While editing one module, run only its direct `go mod tidy -diff` form; the
 combined `make mod-tidy-check` is the final root/tools parity leaf.
 
@@ -131,7 +158,7 @@ is never edited manually.
 
 ```bash
 make test-integration
-REQUIRE_DOCKER=1 make test-integration
+REQUIRE_DOCKER=1 ALLOW_HEAVY=1 make test-integration
 ```
 
 The second form is required evidence: Docker unavailability fails instead of
@@ -162,8 +189,12 @@ and clean SIGTERM shutdown.
 ## Instructions and template propagation
 
 ```bash
+make agent-roles-check
+make codex-agents-check
+make claude-skills-check
+make qwen-skills-check
 make template-owned-purity-check
-bash scripts/ci/instruction-evals-check.sh
+ALLOW_HEAVY=1 make instruction-evals-check
 ```
 
 Use the single matching carrier check from
@@ -242,7 +273,11 @@ Benchmarks are explicit evidence, not default CI gates.
 
 ## CI and publication
 
-`ci.yml` owns fast quality, security, and delivery contexts. `integration.yml`
-uses native path filters for PostgreSQL/image owners. `cd.yml` consumes
-successful exact-SHA CI and publishes through the single digest-bound
-`publish-image` action. GitHub Rulesets remain external repository policy.
+`ci.yml` owns always-reported `quality`, `security`, and `delivery` contexts.
+Quality runs `make check` on every event and path-gates template initializer
+and instruction proof so a Go-only change does not rebuild those matrices.
+`integration.yml` uses native path filters for PostgreSQL/image owners.
+`cd.yml` consumes successful exact-SHA CI and publishes through the single
+digest-bound `publish-image` action. GitHub Rulesets remain external
+repository policy. Local `make verify` is the explicit heavy matrix and
+requires `ALLOW_HEAVY=1`.

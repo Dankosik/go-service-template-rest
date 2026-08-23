@@ -40,7 +40,7 @@ become named Go tests, or the layer that should carry the proof is unsettled.
 
 ## Prove
 - Run the named test with `-count=1 -vet=off`, matching the repository's own test
-  commands and leaving vet to `make lint`.
+  commands and leaving vet to `make lint-package` or `make lint-all`.
 - Add the package command when helpers, fixtures, or shared setup changed.
 - A plain `go test` run over a fuzz target executes the seed corpus only, so it
   proves the seeds and not exploration; a focused `go test -fuzz` is the bounded run

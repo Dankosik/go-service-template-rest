@@ -5,18 +5,14 @@
 Use only the command that observes the changed claim:
 
 ```bash
-make mod-tidy-check
-make fmt-check
-make lint
-make test
-make openapi-check
-make sqlc-check
-make proto-check
-make template-init-check
-make govulncheck
-make gosec
-make secret-scan BASE_REF=origin/main
+make check
 ```
+
+`make check` is the one local full-repository owner: format, `lint-all`,
+`test-all`, module tidy, and generated-contract drift. Package iteration uses
+`go test -vet=off ./internal/<package>` or `make unit-check`. Heavy leaves
+(`template-init-check`, `govulncheck`, `gosec`, `verify`) require
+`ALLOW_HEAVY=1` or CI.
 
 Real PostgreSQL, migration rehearsal, runtime images, and image scanning remain
 separate Docker-backed leaves. A host-only result does not prove them.
@@ -25,7 +21,7 @@ separate Docker-backed leaves. A host-only result does not prove them.
 
 [ci.yml](../.github/workflows/ci.yml) exposes three stable contexts:
 
-- `quality`: module/format/lint/unit/generated/initializer/instruction proof;
+- `quality`: `make check` plus path-gated initializer and instruction proof;
 - `security`: dependency review, Go security, and gitleaks;
 - `delivery`: actionlint, ShellCheck, and BuildKit Dockerfile checks.
 

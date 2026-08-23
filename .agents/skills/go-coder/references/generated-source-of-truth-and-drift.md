@@ -44,7 +44,7 @@ canonical here and which command turns it into the artifact:
 
 ## Reject
 
-Reject `make lint` as evidence about generated code. `.golangci.yml` excludes
+Reject `make lint-all` as evidence about generated code. `.golangci.yml` excludes
 `internal/openapi/openapi.gen.go` and `internal/infra/postgres/sqlcgen/**` by
 path, and `exclusions.generated: strict` drops every file carrying the canonical
 generated header. Linters never run on these files; only the drift check

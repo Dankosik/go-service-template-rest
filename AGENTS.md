@@ -35,6 +35,24 @@ dependencies before adding machinery. Match the surrounding code's naming,
 comment density, idiom, and responsibility boundaries. Preserve unrelated work
 and generated/manual authority.
 
+## Validation budget
+
+During implementation, run one focused falsifier after a coherent edit batch.
+Do not rerun a successful check unless its candidate, inputs, scope, or
+preconditions changed. Workers must not run repository-wide, race, integration,
+security, container, template, instruction-eval, or initializer-matrix checks.
+A worker may run only the changed package's focused proof. The Acceptance-Unit
+Lead runs `make unit-check` once for the integrated unit. Only the integrated
+delivery owner or CI runs `make check`, exactly once. `make verify` and other
+heavy targets require an explicit claim and `ALLOW_HEAVY=1`. Never run two
+CPU-heavy validation processes concurrently. Do not clear Go or linter caches.
+Do not use `-count=1` unless the claim explicitly requires fresh execution.
+Reuse evidence produced for the same candidate and scope.
+
+[Validation Routing](docs/validation-routing.md) selects the leaf. The
+[Evidence Contract](docs/spec-first-workflow/shared/evidence-contract.md) owns
+reuse.
+
 ## Work Selection And Loading
 
 A Markdown link names an owner; it does not load it. Read the current owner

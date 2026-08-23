@@ -11,15 +11,14 @@
 
 ## Test Evidence
 
-- [ ] `make fmt-check`
-- [ ] `make lint`
-- [ ] `make test`
+- [ ] `make unit-check PKG=./<changed> FILES='...'` (acceptance unit)
+- [ ] `make check` (integrated candidate; do not also rerun fmt/lint/test-all)
 - [ ] claim-matched focused checks or CI evidence linked before merge
 - [ ] `make openapi-check` (when API/runtime contract changed)
-- [ ] `make test-race` (when concurrency-sensitive code changed)
-- [ ] `make test-integration` (when integration behavior changed)
+- [ ] `ALLOW_HEAVY=1 make test-race` (when concurrency-sensitive code changed)
+- [ ] `REQUIRE_DOCKER=1 ALLOW_HEAVY=1 make test-integration` (when integration behavior changed)
 - [ ] `make sqlc-check` (when SQL queries or migrations changed)
-- [ ] `make migration-validate` (when migrations, Docker runtime, or startup changed)
+- [ ] `ALLOW_HEAVY=1 make migration-validate` (when migrations, Docker runtime, or startup changed)
 
 Commands/output summary:
 

@@ -14,11 +14,11 @@ add a gate only for a wider surface.
 | Surface | Matching gate |
 | --- | --- |
 | OpenAPI or generated bindings | `make openapi-check` |
-| Docker/multi-package behavior | `REQUIRE_DOCKER=1 make test-integration` |
-| Shared-memory race | focused `go test -race` or `make test-race` |
+| Docker/multi-package behavior | `REQUIRE_DOCKER=1 ALLOW_HEAVY=1 make test-integration` |
+| Shared-memory race | focused `go test -race` or `ALLOW_HEAVY=1 make test-race` |
 | Order/scheduler sensitivity | focused `go test -shuffle=on -count=<n>` |
 | `t.Parallel()` policy | `make test-parallelism-check` |
-| SQL/migration drift | `make sqlc-check`, `make migration-validate` |
+| SQL/migration drift | `make sqlc-check`, `ALLOW_HEAVY=1 make migration-validate` |
 
 Use `-count=1` when cache could hide whether current code/environment ran. A
 zero-exit `-run` can match no tests; verify execution when one named test carries

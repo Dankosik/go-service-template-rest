@@ -46,15 +46,17 @@ make template-init \
   OUTBOUND_HTTP=none \
   OBJECT_STORAGE=none \
   OUTBOUND_AUTH=none \
-  MESSAGING=none
-make fmt-check
-make lint
-make test
+  MESSAGING=none \
+  AGENT_HARNESS=core
+make check
 make run
 ```
 
-The defaults create a service with no database dependency. The complete agent
-workflow is always retained. Choose `DATABASE=postgres` when the service owns
+The defaults create a service with no database dependency. `AGENT_HARNESS=core`
+keeps shared workflow instructions and canonical `.agents` methods; pass
+`cursor`, `claude`, `qwen`, `grok`, `opencode`, `codex`, or `all` to retain that
+adapter. Template eval catalogs and template-purity scripts are not copied into
+a generated service. Choose `DATABASE=postgres` when the service owns
 PostgreSQL, and choose `OUTBOUND_HTTP=bounded` to retain the shared
 fixed-authority HTTP client. Omitted `OUTBOUND_HTTP` is `none`. The client
 also stays when another selected capability still imports it.
@@ -130,7 +132,7 @@ it, and read it here or in
 
 | Area | Included |
 | --- | --- |
-| Service foundation | Go 1.26, `chi v5`, `koanf v2`, graceful shutdown, health and readiness |
+| Service foundation | Go 1.27, `chi v5`, `koanf v2`, graceful shutdown, health and readiness |
 | API contract | OpenAPI 3.0 and `oapi-codegen v2` with generated request bindings and typed responses |
 | Data | No database by default; optional PostgreSQL 17, `pgx v5`, `goose v3`, and `sqlc` profile |
 <!-- profile:jobs-postgres:start -->
@@ -349,9 +351,10 @@ gRPC outbound integration from a committed local contract. See
 
 | Command | Purpose |
 | --- | --- |
-| `make fmt-check` | Go formatting drift |
-| `make lint` | Mandatory static analysis |
-| `make test` | Ordinary unit tests |
+| `go test -vet=off ./internal/<package>` | Edit-loop falsifier |
+| `make unit-check PKG=./pkg FILES='...'` | One package aggregate (format, test, small lint set) |
+| `make check` | One full-repository aggregate on the integrated tree |
+| `ALLOW_HEAVY=1 make verify` | Heavy matrix (race, Docker, security, template, evals) |
 | `make integration-init-check` | Initializer grammar, transaction, and fixture matrix |
 | `make openapi-check` | OpenAPI generation, drift, runtime, lint, and schema checks |
 | `make sqlc-check` | SQL generation drift (PostgreSQL profile) |

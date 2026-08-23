@@ -556,8 +556,7 @@ for target in "${targets[@]}"; do
 			"${repo}/scripts/template-sync.sh" \
 			"${repo}/scripts/agent-roles-sync.sh" \
 			"${repo}/scripts/harness-skills-sync.sh" \
-			"${repo}/scripts/codex-agents-sync.sh" \
-			"${repo}/scripts/ci/template-owned-purity-check.sh"
+			"${repo}/scripts/codex-agents-sync.sh"
 	fi
 	if ! bash "${repo}/scripts/harness-skills-sync.sh" claude --apply --repo "${repo}"; then
 		reject "Claude skill link rebuild failed; the mirror is in the working tree and was not committed"
