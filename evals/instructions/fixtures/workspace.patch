@@ -121,3 +121,116 @@ new file mode 100644
 +func legacyName(method string) string {
 +	return method
 +}
+diff --git a/internal/instructioneval/hardmutations/mutations.go b/internal/instructioneval/hardmutations/mutations.go
+new file mode 100644
+--- /dev/null
++++ b/internal/instructioneval/hardmutations/mutations.go
+@@ -0,0 +1,82 @@
++package hardmutations
++
++import (
++	"context"
++	"errors"
++	"fmt"
++	"net/http"
++	"sync"
++	"time"
++)
++
++var DependencyNotFound = errors.New("dependency row not found")
++
++func WrappedDependencySentinel() error {
++	return fmt.Errorf("load user: %w", DependencyNotFound)
++}
++
++func BlockedSender(input <-chan int) <-chan int {
++	output := make(chan int)
++	go func() {
++		defer close(output)
++		for value := range input {
++			output <- value
++		}
++	}()
++	return output
++}
++
++func SleepUntilReady() {
++	time.Sleep(100 * time.Millisecond)
++}
++
++func MetricLabel(r *http.Request) string {
++	return r.URL.Path
++}
++
++func RetryBudget(call func(context.Context) error) error {
++	var lastErr error
++	for attempt := 0; attempt < 3; attempt++ {
++		attemptCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
++		lastErr = call(attemptCtx)
++		cancel()
++		if lastErr == nil {
++			return nil
++		}
++		time.Sleep(500 * time.Millisecond)
++	}
++	return lastErr
++}
++
++const PublishedDefaultPageSize = 20
++
++func DefaultPageSize(requested int) int {
++	if requested == 0 {
++		return 50
++	}
++	return requested
++}
++
++func ParallelHandlers(current, legacy http.Handler) http.Handler {
++	mux := http.NewServeMux()
++	mux.Handle("/items", current)
++	mux.Handle("/", legacy)
++	return mux
++}
++
++var users sync.Map
++
++func CachedUser(id string, load func() string) string {
++	if value, ok := users.Load(id); ok {
++		return value.(string)
++	}
++	value := load()
++	users.Store(id, value)
++	return value
++}
++
++func orderedMiddleware(next http.Handler) http.Handler {
++	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++		next.ServeHTTP(w, r)
++	})
++}
+diff --git a/internal/instructioneval/hardmutations/mutations_test.go b/internal/instructioneval/hardmutations/mutations_test.go
+new file mode 100644
+--- /dev/null
++++ b/internal/instructioneval/hardmutations/mutations_test.go
+@@ -0,0 +1,21 @@
++package hardmutations
++
++import (
++	"net/http"
++	"net/http/httptest"
++	"testing"
++)
++
++func TestMiddlewareOrder(t *testing.T) {
++	handler := orderedMiddleware(orderedMiddleware(http.HandlerFunc(
++		func(w http.ResponseWriter, _ *http.Request) {
++			w.WriteHeader(http.StatusNoContent)
++		},
++	)))
++
++	response := httptest.NewRecorder()
++	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/items", nil))
++	if response.Code != http.StatusNoContent {
++		t.Fatalf("status = %d, want %d", response.Code, http.StatusNoContent)
++	}
++}

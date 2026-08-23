@@ -1,6 +1,6 @@
 ---
 name: go-test-strategy
-description: "Test strategy: Use when material proof obligations, proving layer, determinism, or oracle are non-obvious or disputed. Own falsification design; Skip routine tests, behavior, test code, and completion claims."
+description: "Falsification design. Use before test code when the wrong behavior, deterministic controls, independent oracle, proving layer, or reopen condition is non-obvious or disputed."
 metadata:
   invocation: model
   kind: method
@@ -14,7 +14,11 @@ Proof is designed around **falsifiers**: for every obligation, the scenario that
 
 A test earns existence through a failure it can catch; determinism is designed with controls and fixtures rather than hoped for; and exact source text is an oracle only when the text itself is the accepted external artifact — string presence otherwise proves nothing about behavior.
 
-Load the [shared specialist contract](../../contracts/specialist-contract.md). Reconstruct every accepted proof obligation from approved behavior, design/test handoffs, affected contract, state, trust and lifecycle boundaries, and current proof surfaces. Build one falsifier for each obligation from a scenario, fail-before discriminator, deterministic control and fixtures, independent oracle, proving layer, command, cleanup proof, and reopen condition.
+Load the [shared specialist contract](../../contracts/specialist-contract.md).
+For every accepted behavior at risk, build `ProofObligation{wrong_behavior,
+fail_before, controls, fixture, oracle, layer, command, cleanup, reopen}` from
+approved behavior, handoffs, affected contract, state, trust and lifecycle
+boundaries, and current proof surfaces.
 
 ## Choose The Branch
 
@@ -26,6 +30,5 @@ Load the [shared specialist contract](../../contracts/specialist-contract.md). R
   concrete false-pass or flake risk. Return one shared finding-envelope
   disposition per obligation.
 
-Hand unresolved behavior to its domain skill, executable test code to
-`go-test-implementation`, and non-obvious or disputed claim-to-proof mapping to
-`go-verification-before-completion`.
+Complete only when every obligation has a falsifier that would fail before the
+repair, an independent oracle, deterministic controls, and a reopen condition.

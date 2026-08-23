@@ -1,6 +1,6 @@
 ---
 name: go-coder
-description: "Earliest valid owner: Use for an authorized Go outcome whose accepted behavior and owner are closed. Own causal production code, routine focused tests, cleanup, and proof; Skip open decisions and diagnosis/test/verification-only work."
+description: "Earliest valid owner. Use for an authorized Go outcome whose accepted behavior and owner are closed and need causal production code, routine focused tests, cleanup, and proof."
 metadata:
   invocation: model
   kind: method

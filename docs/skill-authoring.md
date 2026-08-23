@@ -9,7 +9,13 @@ wording, pruning, examples, prohibitions, and behavior-proof claims.
 Use a model-invoked skill when the agent or another skill must discover it.
 Front-load a likely domain word in the description and keep neighboring skills
 distinguishable. Encode the machine contract as a `Use` trigger, owned outcome,
-and decisive `Skip` exclusion in at most two sentences.
+and, only when evidence requires it, one decisive exclusion in at most two
+sentences.
+
+Treat the description as a routing discriminator, not a body summary: name the
+observable pressure and the decision it owns. Prefer positive discriminants.
+Add a negative exclusion only when a concrete collision eval demonstrates
+material over-trigger without it.
 
 Use a user-invoked skill when human judgment should select it and autonomous
 discovery has no value. Material with no independent trigger or steps is a
@@ -36,11 +42,8 @@ false`; they remain available through the harness's explicit skill syntax or
 bound carrier. The generated Claude/Qwen views and skill sync checks enforce
 these projections. Grok, Cursor, and OpenCode read the canonical `.agents/skills`
 set directly and need no generated skill symlink. OpenCode ignores
-`disable-model-invocation`; `opencode.json` denies `user/workflow` skill names
-on the built-in `build` and `plan` agents. The `orchestrator` carrier stays
-loadable on `build` so a user request to orchestrate a ledger can dispatch
-without a slash command. Keep other `role/carrier` entries behind Task
-`subagent_type` rather than implicit `skill` loading.
+`disable-model-invocation`; keep those entries behind `/orchestrator` or the
+bound agent file rather than relying on implicit `skill` loading.
 
 Codex starts with names, descriptions, and paths and may shorten a crowded
 catalog. Put the leading word and decisive trigger first. The repository gate
@@ -59,7 +62,7 @@ Co-locate a concept's rule, consequences, review signals, and proof. Keep
 `SKILL.md` below 500 lines. Before splitting a skill, disclose a reference and
 verify that a real trigger boundary remains.
 
-## Method Skills: Behavioral Compression
+## Method Skills: Behavioral Compression V2
 
 A `model/method` skill exists to change one technical judgment the base model
 otherwise makes inconsistently. Before editing, state the ablation: what
@@ -69,15 +72,29 @@ A promoted method skill binds four elements to the same domain judgment:
 
 1. **Operator** — one pretrained technical term repeated in the description and
    opening.
-2. **Story** — one concrete path, lifecycle, matrix, table, graph, or ownership
-   map the agent must build.
+2. **Materialized story** — finite typed domain records the agent must build
+   before packing the decision or findings into a shared result interface.
 3. **Falsifier** — one plausible wrong default paired with the correct
    replacement behavior.
 4. **Done** — one local, checkable, exhaustive completion criterion.
 
-Prove promotion with trigger, non-trigger, neighbor-collision, decision, and
-completion evals. Compare current and ablated baselines with the candidate
-before claiming changed model behavior.
+Every `every affected X` instruction names its traversal start and terminal
+closure. Done means every enumerated record has a disposition and rejecting
+proof or an exact gap; a lexical claim that all paths were considered is not a
+materialized story.
+
+The canonical [specialist neighbor map](../.agents/contracts/specialist-neighbors.json)
+owns catalog collisions. Prove promotion with trigger, non-trigger, every
+declared neighbor edge, decision, and completion evals. A selector also needs a
+reference-selection case; concrete wrong defaults use mutation cases.
+
+Compare the full candidate separately with routing ablation (description
+neutralized and explicit-only), method ablation (same description, body
+removed), and reference ablation (target leaf removed). Use at least three
+repeats on the same model, harness, effort, tools, and fixture. Behavior is the
+gate; token, latency, and tool-call improvements count only after behavior
+passes. Do not promote a new `model/method` slot until the candidate beats its
+method ablation without a substantive regression.
 
 ## Structural Budget
 

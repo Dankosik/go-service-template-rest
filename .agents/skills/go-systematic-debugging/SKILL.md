@@ -1,6 +1,6 @@
 ---
 name: go-systematic-debugging
-description: "First broken invariant: Use for bugs, flaky tests, builds, hangs, deadlocks, timeouts, or regressions. Own diagnosis and authorized root-cause repair; Skip features."
+description: "First broken invariant. Use when a bug, flaky test, build failure, hang, deadlock, timeout, or regression has an unknown cause and needs diagnosis or authorized root-cause repair."
 metadata:
   invocation: model
   kind: method

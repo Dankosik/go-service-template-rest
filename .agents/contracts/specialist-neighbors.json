@@ -1,0 +1,299 @@
+{
+  "schema_version": 1,
+  "clusters": {
+    "http_rpc": [
+      "go-api-contract",
+      "go-chi",
+      "go-grpc",
+      "go-observability",
+      "go-reliability",
+      "go-security"
+    ],
+    "state_consistency": [
+      "go-concurrency",
+      "go-data-architecture",
+      "go-db-cache",
+      "go-distributed",
+      "go-domain-invariant"
+    ],
+    "code_design": [
+      "go-coder",
+      "go-idiomatic",
+      "go-implementation-ownership",
+      "go-language-simplifier",
+      "go-structural-quality",
+      "go-system-architecture"
+    ],
+    "proof_diagnosis": [
+      "go-coder",
+      "go-systematic-debugging",
+      "go-test-implementation",
+      "go-test-strategy",
+      "go-verification-before-completion"
+    ],
+    "operations": [
+      "go-delivery-platform",
+      "go-observability",
+      "go-performance",
+      "go-reliability"
+    ],
+    "change_control": [
+      "go-coder",
+      "go-delivery-platform",
+      "go-verification-before-completion",
+      "merge-conflict-resolution"
+    ]
+  },
+  "edges": [
+    {
+      "skills": [
+        "go-api-contract",
+        "go-chi"
+      ],
+      "decisive_axis": {
+        "go-api-contract": "client-visible outcome",
+        "go-chi": "route composition"
+      }
+    },
+    {
+      "skills": [
+        "go-api-contract",
+        "go-reliability"
+      ],
+      "decisive_axis": {
+        "go-api-contract": "published failure and recovery semantics",
+        "go-reliability": "failure-handling budget and lifecycle policy"
+      }
+    },
+    {
+      "skills": [
+        "go-chi",
+        "go-observability"
+      ],
+      "decisive_axis": {
+        "go-chi": "route identity source and middleware position",
+        "go-observability": "signal policy, readers, labels, privacy, and cost"
+      }
+    },
+    {
+      "skills": [
+        "go-coder",
+        "go-idiomatic"
+      ],
+      "decisive_axis": {
+        "go-coder": "closed causal implementation",
+        "go-idiomatic": "caller-visible Go semantics"
+      }
+    },
+    {
+      "skills": [
+        "go-coder",
+        "go-systematic-debugging"
+      ],
+      "decisive_axis": {
+        "go-coder": "closed cause and accepted implementation",
+        "go-systematic-debugging": "unknown cause and first broken invariant"
+      }
+    },
+    {
+      "skills": [
+        "go-coder",
+        "go-test-strategy"
+      ],
+      "decisive_axis": {
+        "go-coder": "routine proof coupled to production implementation",
+        "go-test-strategy": "non-obvious falsifier, oracle, or proving layer"
+      }
+    },
+    {
+      "skills": [
+        "go-coder",
+        "merge-conflict-resolution"
+      ],
+      "decisive_axis": {
+        "go-coder": "ordinary accepted implementation",
+        "merge-conflict-resolution": "active operation and two-sided hunk intent"
+      }
+    },
+    {
+      "skills": [
+        "go-concurrency",
+        "go-distributed"
+      ],
+      "decisive_axis": {
+        "go-concurrency": "in-process happens-before and lifecycle",
+        "go-distributed": "durable replay and recovery across process or owner loss"
+      }
+    },
+    {
+      "skills": [
+        "go-concurrency",
+        "go-idiomatic"
+      ],
+      "decisive_axis": {
+        "go-concurrency": "goroutine stop, unblock, join, and publication edge",
+        "go-idiomatic": "context and resource semantics visible to a Go caller"
+      }
+    },
+    {
+      "skills": [
+        "go-concurrency",
+        "go-reliability"
+      ],
+      "decisive_axis": {
+        "go-concurrency": "join and unblock correctness",
+        "go-reliability": "timeout, retry, overload, and failure disposition"
+      }
+    },
+    {
+      "skills": [
+        "go-data-architecture",
+        "go-db-cache"
+      ],
+      "decisive_axis": {
+        "go-data-architecture": "durable authority and data lifecycle",
+        "go-db-cache": "runtime access, transaction, freshness, and fallback"
+      }
+    },
+    {
+      "skills": [
+        "go-data-architecture",
+        "go-domain-invariant"
+      ],
+      "decisive_axis": {
+        "go-data-architecture": "where a fact is authoritative",
+        "go-domain-invariant": "which business states and transitions are legal"
+      }
+    },
+    {
+      "skills": [
+        "go-db-cache",
+        "go-distributed"
+      ],
+      "decisive_axis": {
+        "go-db-cache": "one-process transaction and access outcome",
+        "go-distributed": "cross-owner unknown outcome and reconciliation"
+      }
+    },
+    {
+      "skills": [
+        "go-delivery-platform",
+        "go-observability"
+      ],
+      "decisive_axis": {
+        "go-delivery-platform": "release gate and rollout acceptance",
+        "go-observability": "operator signal semantics and evidence cost"
+      }
+    },
+    {
+      "skills": [
+        "go-grpc",
+        "go-security"
+      ],
+      "decisive_axis": {
+        "go-grpc": "RPC status, metadata, registration, and stream lifecycle",
+        "go-security": "principal, authority, asset, and denial path"
+      }
+    },
+    {
+      "skills": [
+        "go-implementation-ownership",
+        "go-structural-quality"
+      ],
+      "decisive_axis": {
+        "go-implementation-ownership": "valid source and dependency placement",
+        "go-structural-quality": "abstraction cost and collapse"
+      }
+    },
+    {
+      "skills": [
+        "go-language-simplifier",
+        "go-idiomatic"
+      ],
+      "decisive_axis": {
+        "go-language-simplifier": "behavior-preserving reader cost",
+        "go-idiomatic": "caller-visible language semantics"
+      }
+    },
+    {
+      "skills": [
+        "go-language-simplifier",
+        "go-structural-quality"
+      ],
+      "decisive_axis": {
+        "go-language-simplifier": "local readability and indirection economics",
+        "go-structural-quality": "whole-diff responsibility and deletion cost"
+      }
+    },
+    {
+      "skills": [
+        "go-observability",
+        "go-reliability"
+      ],
+      "decisive_axis": {
+        "go-observability": "operator question and signal",
+        "go-reliability": "resilience behavior and failure disposition"
+      }
+    },
+    {
+      "skills": [
+        "go-performance",
+        "go-reliability"
+      ],
+      "decisive_axis": {
+        "go-performance": "measured workload, capacity, and optimization delta",
+        "go-reliability": "overload and failure disposition"
+      }
+    },
+    {
+      "skills": [
+        "go-system-architecture",
+        "go-implementation-ownership"
+      ],
+      "decisive_axis": {
+        "go-system-architecture": "runtime crossing and interaction contract",
+        "go-implementation-ownership": "Go package, file, and dependency placement"
+      }
+    },
+    {
+      "skills": [
+        "go-systematic-debugging",
+        "go-reliability"
+      ],
+      "decisive_axis": {
+        "go-systematic-debugging": "unknown cause",
+        "go-reliability": "known cause with open failure-handling policy"
+      }
+    },
+    {
+      "skills": [
+        "go-systematic-debugging",
+        "go-verification-before-completion"
+      ],
+      "decisive_axis": {
+        "go-systematic-debugging": "why existing proof fails",
+        "go-verification-before-completion": "what existing proof establishes"
+      }
+    },
+    {
+      "skills": [
+        "go-test-implementation",
+        "go-test-strategy"
+      ],
+      "decisive_axis": {
+        "go-test-implementation": "accepted falsifier implemented as test code",
+        "go-test-strategy": "falsifier, oracle, layer, or controls still open"
+      }
+    },
+    {
+      "skills": [
+        "go-test-strategy",
+        "go-verification-before-completion"
+      ],
+      "decisive_axis": {
+        "go-test-strategy": "design a future falsifier",
+        "go-verification-before-completion": "bound an existing proof to a claim"
+      }
+    }
+  ]
+}

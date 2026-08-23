@@ -16,6 +16,8 @@ REASONING_EFFORT="${INSTRUCTION_EVAL_REASONING_EFFORT:-}"
 TOOL_PROFILE="${INSTRUCTION_EVAL_TOOL_PROFILE:-}"
 AGENT_COMMAND_LABEL="${INSTRUCTION_EVAL_COMMAND_LABEL:-}"
 TRACE_FORMAT="${INSTRUCTION_EVAL_TRACE_FORMAT:-raw}"
+RUN_VARIANTS="${INSTRUCTION_EVAL_VARIANTS:-baseline,candidate}"
+REPEAT_COUNT="${INSTRUCTION_EVAL_REPEATS:-1}"
 
 if [[ "${OUTPUT_ROOT}" != /* ]]; then
 	OUTPUT_ROOT="${ROOT_DIR}/${OUTPUT_ROOT}"
@@ -39,6 +41,16 @@ case "${TRACE_FORMAT}" in
 	raw | codex-jsonl) ;;
 	*) fail 'INSTRUCTION_EVAL_TRACE_FORMAT must be raw or codex-jsonl' ;;
 esac
+[[ "${REPEAT_COUNT}" =~ ^[1-9][0-9]*$ ]] || fail 'INSTRUCTION_EVAL_REPEATS must be a positive integer'
+
+IFS=',' read -r -a run_variants <<<"${RUN_VARIANTS}"
+(( ${#run_variants[@]} > 0 )) || fail 'INSTRUCTION_EVAL_VARIANTS is empty'
+for variant in "${run_variants[@]}"; do
+	case "${variant}" in
+		baseline | candidate | routing_ablation | method_ablation | reference_ablation) ;;
+		*) fail "unknown eval variant: ${variant}" ;;
+	esac
+done
 
 command -v jq >/dev/null 2>&1 || fail 'jq is required'
 command -v git >/dev/null 2>&1 || fail 'git is required'
@@ -59,6 +71,7 @@ paths+=("docs/build-test-and-development-commands.md")
 fixture_patch="$(jq -r '.fixture.setup_patch' "${EVAL_FILE}")"
 scratch_root="$(mktemp -d "${TMPDIR:-/tmp}/instruction-evals.XXXXXX")"
 trap 'rm -rf "${scratch_root}"' EXIT
+[[ ! -e "${OUTPUT_ROOT}" ]] || fail "output already exists: ${OUTPUT_ROOT}"
 mkdir -p "${OUTPUT_ROOT}"
 
 copy_current_path() {
@@ -68,21 +81,65 @@ copy_current_path() {
 	(cd "${ROOT_DIR}" && tar -cf - "${relative_path}") | (cd "${destination}" && tar -xf -)
 }
 
-materialize() {
-	local side="$1"
+apply_ablation() {
+	local variant="$1"
 	local destination="$2"
+	local skill_name="$3"
+	local target_reference="$4"
+	local skill_path="${destination}/.agents/skills/${skill_name}/SKILL.md"
+	local temporary_path="${skill_path}.ablation"
+
+	case "${variant}" in
+		routing_ablation)
+			[[ -f "${skill_path}" ]] || fail "routing ablation skill is missing: ${skill_name}"
+			awk '
+			  /^description:/ {
+			    print "description: \"Explicit invocation only.\""
+			    print "disable-model-invocation: true"
+			    next
+			  }
+			  { print }
+			' "${skill_path}" >"${temporary_path}"
+			mv "${temporary_path}" "${skill_path}"
+			mkdir -p "${destination}/.agents/skills/${skill_name}/agents"
+			printf 'policy:\n  allow_implicit_invocation: false\n' \
+				>"${destination}/.agents/skills/${skill_name}/agents/openai.yaml"
+			;;
+		method_ablation)
+			[[ -f "${skill_path}" ]] || fail "method ablation skill is missing: ${skill_name}"
+			awk '
+			  /^---$/ { delimiters++; print; if (delimiters == 2) exit; next }
+			  { print }
+			' "${skill_path}" >"${temporary_path}"
+			mv "${temporary_path}" "${skill_path}"
+			;;
+		reference_ablation)
+			[[ -n "${target_reference}" ]] || fail "reference ablation target is missing for ${skill_name}"
+			[[ -f "${destination}/${target_reference}" ]] || fail "reference ablation file is missing: ${target_reference}"
+			printf '# Ablated reference\n\nThis leaf is intentionally absent in this eval variant.\n' \
+				>"${destination}/${target_reference}"
+			;;
+		baseline | candidate) ;;
+	esac
+}
+
+materialize() {
+	local variant="$1"
+	local destination="$2"
+	local skill_name="$3"
+	local target_reference="$4"
 	local source_ref="${BASELINE_REF}"
 	local patch_file
 	local untracked
 
-	if [[ "${side}" == "candidate" && "${CANDIDATE_SOURCE}" != "worktree" ]]; then
+	if [[ "${variant}" != "baseline" && "${CANDIDATE_SOURCE}" != "worktree" ]]; then
 		source_ref="${CANDIDATE_SOURCE}"
 	fi
 
 	mkdir -p "${destination}"
 	git -C "${ROOT_DIR}" archive "${source_ref}" | tar -xf - -C "${destination}"
 
-	if [[ "${side}" == "candidate" && "${CANDIDATE_SOURCE}" == "worktree" ]]; then
+	if [[ "${variant}" != "baseline" && "${CANDIDATE_SOURCE}" == "worktree" ]]; then
 		patch_file="${scratch_root}/candidate.patch"
 		git -C "${ROOT_DIR}" diff --binary "${BASELINE_REF}" -- "${paths[@]}" >"${patch_file}"
 		if [[ -s "${patch_file}" ]]; then
@@ -93,11 +150,12 @@ materialize() {
 		done < <(git -C "${ROOT_DIR}" ls-files --others --exclude-standard -- "${paths[@]}")
 	fi
 
-	# Harness fixtures are identical on both sides and are not part of the
-	# instruction candidate under comparison.
-	rm -rf "${destination}/evals/instructions"
-	copy_current_path "evals/instructions" "${destination}"
+	# Evaluation catalogs contain prompts and expected outputs. Keep them out of
+	# every model-visible tree so neither side can read the answer oracle and a
+	# candidate catalog change cannot contaminate the measured instruction delta.
+	rm -rf "${destination}/evals/instructions" "${destination}/evals/hard-skills"
 	git -C "${destination}" apply "${ROOT_DIR}/${fixture_patch}"
+	apply_ablation "${variant}" "${destination}" "${skill_name}" "${target_reference}"
 
 	git -C "${destination}" init -q
 	git -C "${destination}" add -A
@@ -119,35 +177,49 @@ while IFS= read -r case_id; do
 	mkdir -p "${case_dir}"
 	printf '%s\n' "${case_json}" | jq . >"${case_dir}/case.json"
 	jq -r '.prompt' <<<"${case_json}" >"${case_dir}/prompt.txt"
+	skill_name="$(jq -r '.skill' <<<"${case_json}")"
+	target_reference="$(jq -r '.target_reference // empty' <<<"${case_json}")"
 
-	for side in baseline candidate; do
-		workdir="${scratch_root}/case-${case_id}-${side}"
-		materialize "${side}" "${workdir}"
-		side_dir="${case_dir}/${side}"
-		mkdir -p "${side_dir}"
-		started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-		start_seconds="$(date +%s)"
+	repeat=1
+	while (( repeat <= REPEAT_COUNT )); do
+		printf -v repeat_label '%02d' "${repeat}"
+		repeat_dir="${case_dir}/repeat-${repeat_label}"
+		mkdir -p "${repeat_dir}"
 
-		set +e
-		(
-			cd "${workdir}"
-			env -i \
-				HOME="${HOME}" \
-				PATH="${PATH}" \
-				SHELL="${SHELL:-/bin/sh}" \
-				TMPDIR="${TMPDIR:-/tmp}" \
-				USER="${USER:-instruction-eval}" \
-				LANG="${LANG:-C.UTF-8}" \
-				INSTRUCTION_EVAL_CASE_ID="${case_id}" \
-				INSTRUCTION_EVAL_SIDE="${side}" \
-				"${agent_command[@]}" <"${case_dir}/prompt.txt"
-		) >"${side_dir}/stdout.log" 2>"${side_dir}/stderr.log"
-		exit_code=$?
+		for variant in "${run_variants[@]}"; do
+			if [[ "${variant}" == "reference_ablation" && -z "${target_reference}" ]]; then
+				continue
+			fi
+
+			workdir="${scratch_root}/case-${case_id}-repeat-${repeat_label}-${variant}"
+			materialize "${variant}" "${workdir}" "${skill_name}" "${target_reference}"
+			variant_dir="${repeat_dir}/${variant}"
+			mkdir -p "${variant_dir}"
+			started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+			start_seconds="$(date +%s)"
+
+			set +e
+			(
+				cd "${workdir}"
+				env -i \
+					HOME="${HOME}" \
+					PATH="${PATH}" \
+					SHELL="${SHELL:-/bin/sh}" \
+					TMPDIR="${TMPDIR:-/tmp}" \
+					USER="${USER:-instruction-eval}" \
+					LANG="${LANG:-C.UTF-8}" \
+					INSTRUCTION_EVAL_CASE_ID="${case_id}" \
+					INSTRUCTION_EVAL_SIDE="${variant}" \
+					INSTRUCTION_EVAL_VARIANT="${variant}" \
+					INSTRUCTION_EVAL_REPEAT="${repeat}" \
+					"${agent_command[@]}" <"${case_dir}/prompt.txt"
+			) >"${variant_dir}/stdout.log" 2>"${variant_dir}/stderr.log"
+			exit_code=$?
 			set -e
 
 			end_seconds="$(date +%s)"
-			git -C "${workdir}" status --short >"${side_dir}/status.txt"
-			git -C "${workdir}" diff --binary >"${side_dir}/candidate.patch"
+			git -C "${workdir}" status --short >"${variant_dir}/status.txt"
+			git -C "${workdir}" diff --binary >"${variant_dir}/candidate.patch"
 			if [[ "${TRACE_FORMAT}" == "codex-jsonl" ]]; then
 				jq -s '
 				  def completed_tools:
@@ -168,12 +240,12 @@ while IFS= read -r case_id; do
 				    empty_waits: ([completed_tools[] | select(.type == "collab_tool_call" and .tool == "wait" and ((.receiver_thread_ids // []) | length == 0))] | length),
 				    source: "codex-jsonl"
 				  }
-				' "${side_dir}/stdout.log" >"${side_dir}/metrics.json"
+				' "${variant_dir}/stdout.log" >"${variant_dir}/metrics.json"
 			else
-				jq -n '{input_tokens: null, cached_input_tokens: null, output_tokens: null, tool_calls: null, skill_loads: [], lane_identities: [], empty_waits: null, source: "unavailable for raw trace"}' >"${side_dir}/metrics.json"
+				jq -n '{input_tokens: null, cached_input_tokens: null, output_tokens: null, tool_calls: null, skill_loads: [], lane_identities: [], empty_waits: null, source: "unavailable for raw trace"}' >"${variant_dir}/metrics.json"
 			fi
 			jq -n \
-				--arg side "${side}" \
+				--arg variant "${variant}" \
 				--arg started_at "${started_at}" \
 				--arg harness "${HARNESS_NAME}" \
 				--arg model "${MODEL_NAME}" \
@@ -181,15 +253,18 @@ while IFS= read -r case_id; do
 				--arg tool_profile "${TOOL_PROFILE}" \
 				--arg agent_command_label "${AGENT_COMMAND_LABEL}" \
 				--arg trace_format "${TRACE_FORMAT}" \
+				--argjson repeat "${repeat}" \
 				--argjson duration_seconds "$((end_seconds - start_seconds))" \
 				--argjson exit_code "${exit_code}" \
-				--slurpfile metrics "${side_dir}/metrics.json" \
-				'{side: $side, started_at: $started_at, harness: $harness, model: $model, reasoning_effort: $reasoning_effort, tool_profile: $tool_profile, agent_command_label: $agent_command_label, trace_format: $trace_format, duration_seconds: $duration_seconds, exit_code: $exit_code, metrics: $metrics[0], behavior_verdict: "ungraded"}' \
-				>"${side_dir}/run.json"
-		if (( exit_code != 0 )); then
-			failures=$((failures + 1))
-		fi
-		rm -rf "${workdir}"
+				--slurpfile metrics "${variant_dir}/metrics.json" \
+				'{side: $variant, variant: $variant, repeat: $repeat, started_at: $started_at, harness: $harness, model: $model, reasoning_effort: $reasoning_effort, tool_profile: $tool_profile, agent_command_label: $agent_command_label, trace_format: $trace_format, duration_seconds: $duration_seconds, exit_code: $exit_code, metrics: $metrics[0], behavior_verdict: "ungraded"}' \
+				>"${variant_dir}/run.json"
+			if (( exit_code != 0 )); then
+				failures=$((failures + 1))
+			fi
+			rm -rf "${workdir}"
+		done
+		repeat=$((repeat + 1))
 	done
 done <<<"${case_ids}"
 
@@ -203,8 +278,10 @@ jq -n \
 	--arg tool_profile "${TOOL_PROFILE}" \
 	--arg agent_command_label "${AGENT_COMMAND_LABEL}" \
 	--arg trace_format "${TRACE_FORMAT}" \
+	--arg variants "${RUN_VARIANTS}" \
+	--argjson repeats "${REPEAT_COUNT}" \
 	--argjson command_failures "${failures}" \
-	'{baseline_ref: $baseline_ref, candidate_source: $candidate_source, output: $output, harness: $harness, model: $model, reasoning_effort: $reasoning_effort, tool_profile: $tool_profile, agent_command_label: $agent_command_label, trace_format: $trace_format, command_failures: $command_failures, behavior_verdict: "ungraded"}' \
+	'{baseline_ref: $baseline_ref, candidate_source: $candidate_source, output: $output, harness: $harness, model: $model, reasoning_effort: $reasoning_effort, tool_profile: $tool_profile, agent_command_label: $agent_command_label, trace_format: $trace_format, variants: ($variants | split(",")), repeats: $repeats, command_failures: $command_failures, behavior_verdict: "ungraded"}' \
 	>"${OUTPUT_ROOT}/summary.json"
 
 printf 'instruction eval packets: %s\n' "${OUTPUT_ROOT}"
