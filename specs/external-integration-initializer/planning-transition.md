@@ -1,6 +1,7 @@
 # Planning transition
 
-status: ready
+status: superseded
+superseded_by: 2026-08-23 named-only OAuth maintainability repair
 owner: Planning
 result: `specs/external-integration-initializer/tasks.md` SHA-256 `70090d5907c3260c940e2420c2a627e331edc7c04dd7a5eda1762fb3a0d09824`; packets `T001` SHA-256 `f84d97fc92aab9de6cffad5053f28256f89037d7cb947b094f43a49479fd701c` and `T002` SHA-256 `c4bf2b1b05d7a8f1e9fddc6b8d89923b296cbba9245ecbb08c8507f5fbc46b91`
 review: `specs/external-integration-initializer/planning-review.md` SHA-256 `168cc4c7013a4fee78f3cf39fcf67f99a8f0612b33a5727263452021bfe23236` — fresh independent Task Review / Readiness `PASS`

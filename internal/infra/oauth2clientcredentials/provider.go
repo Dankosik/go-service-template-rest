@@ -3,17 +3,12 @@ package oauth2clientcredentials
 import (
 	"context"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/infra/httpclient"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/clientcredentials"
-)
-
-const (
-	defaultAcquisitionTimeout = 5 * time.Second
 )
 
 type doerRoundTripper struct {
@@ -33,42 +28,26 @@ func newTokenHTTPClient(cfg Config) (*httpclient.Client, error) {
 }
 
 func newAcquirer(cfg Config, bounded *httpclient.Client) acquireToken {
-	return newProviderAcquirer(cfg, &http.Client{
-		Transport: doerRoundTripper{client: bounded},
-		CheckRedirect: func(*http.Request, []*http.Request) error {
-			return http.ErrUseLastResponse
-		},
-	})
+	return newProviderAcquirer(cfg, &http.Client{Transport: doerRoundTripper{client: bounded}})
 }
 
 func newProviderAcquirer(cfg Config, tokenHTTP *http.Client) acquireToken {
-	params := make(url.Values, 1)
-	if cfg.Audience != "" {
-		params.Set("audience", cfg.Audience)
-	}
-	if cfg.Resource != "" {
-		params.Set("resource", cfg.Resource)
-	}
 	provider := clientcredentials.Config{
-		ClientID:       cfg.ClientID,
-		ClientSecret:   cfg.ClientSecret,
-		TokenURL:       cfg.TokenURL,
-		Scopes:         cfg.Scopes,
-		EndpointParams: params,
-		AuthStyle:      oauth2.AuthStyleInHeader,
+		ClientID:     cfg.ClientID,
+		ClientSecret: cfg.ClientSecret,
+		TokenURL:     cfg.TokenURL,
+		Scopes:       cfg.Scopes,
+		AuthStyle:    oauth2.AuthStyleInHeader,
 	}
 	return func(ctx context.Context) (*oauth2.Token, error) {
 		ctx = context.WithValue(ctx, oauth2.HTTPClient, tokenHTTP)
-		token, err := provider.Token(ctx)
-		if err != nil {
-			return nil, ErrUnavailable
-		}
-		return sanitizeToken(token)
+		return provider.Token(ctx)
 	}
 }
 
 func sanitizeToken(token *oauth2.Token) (*oauth2.Token, error) {
-	if token == nil || token.Expiry.IsZero() || !token.Valid() ||
+	if token == nil || token.AccessToken == "" || token.Expiry.IsZero() ||
+		!time.Now().Add(defaultEarlyExpiry).Before(token.Expiry) ||
 		!strings.EqualFold(token.TokenType, "Bearer") || strings.ContainsAny(token.AccessToken, "\r\n") {
 		return nil, ErrUnavailable
 	}

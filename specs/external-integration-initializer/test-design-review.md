@@ -1,5 +1,7 @@
 # Independent Test Design Review
 
+superseded_by: 2026-08-23 named-only OAuth maintainability repair; this receipt does not accept the current artifacts
+
 candidate: `specs/external-integration-initializer/test-plan.md` SHA-256 `4e5d409a6cc3f153d29740163817b2a01ebf64e67aca8a8dc4ac90259ca499d3`
 verdict: PASS
 findings: none

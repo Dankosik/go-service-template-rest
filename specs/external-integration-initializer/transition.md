@@ -1,6 +1,7 @@
 # Specification transition
 
-status: ready
+status: superseded
+superseded_by: 2026-08-23 named-only OAuth maintainability repair
 owner: Specification
 result: `specs/external-integration-initializer/spec.md` SHA-256 `9a54ee75953d242cd37cd27b56e791e2e7f92e1fbdb7e5e528f9917bb50fbbf1`
 review: `specs/external-integration-initializer/review.md` SHA-256 `0ce18e168e5f90ddcf631a164567f283e2a732b88e95aef235e6dc1791a71395` — fresh independent Specification Review `PASS`

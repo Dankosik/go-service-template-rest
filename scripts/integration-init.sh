@@ -16,7 +16,6 @@ AUTH="${5-}"
 reason_input="invalid initializer input"
 reason_precondition="initializer precondition failed"
 reason_contract="invalid integration contract"
-reason_env="move or preserve .env before the first OAuth integration; the initializer does not take custody of .env"
 
 die() {
 	local class="$1"
@@ -27,13 +26,6 @@ die() {
 
 usage() {
 	die "${reason_input}" "usage: $0 NAME TRANSPORT CONTRACT TARGET AUTH"
-}
-
-# env_entry_present observes only whether repository-root .env exists.
-# It never opens, reads, follows, or mutates the entry.
-env_entry_present() {
-	local root="$1"
-	[[ -n "$(find "${root}" -maxdepth 1 -name .env -print)" ]]
 }
 
 lock_path=""
@@ -170,10 +162,6 @@ path_exists() {
 	[[ -e "$1" || -L "$1" ]]
 }
 
-singleton_oauth_present() {
-	[[ -f "${ROOT_DIR}/internal/config/outbound_auth_config.go" ]]
-}
-
 classify_mode() {
 	local rec
 	rec="$(record_path)"
@@ -198,11 +186,6 @@ classify_mode() {
 		die "${reason_precondition}" "gRPC record must not declare target"
 	fi
 	printf 'refresh'
-}
-
-retires_singleton_oauth() {
-	local mode="$1"
-	[[ "${mode}" == "initial" && "${AUTH}" == "oauth2-client-credentials" && "$(singleton_oauth_present && echo yes || echo no)" == "yes" ]]
 }
 
 require_tools() {
@@ -349,55 +332,6 @@ path.write_text(text)
 PY
 }
 
-remove_singleton_oauth() {
-	rm -f \
-		"${ROOT_DIR}/internal/config/outbound_auth_config.go" \
-		"${ROOT_DIR}/internal/config/outbound_auth_config_test.go"
-	python3 - "${ROOT_DIR}" <<'PY'
-from pathlib import Path
-import re, sys
-root = Path(sys.argv[1])
-
-def strip_profile(path, start_mark, end_mark):
-    text = path.read_text()
-    pattern = re.compile(re.escape(start_mark) + r".*?" + re.escape(end_mark) + r"\n?", re.S)
-    path.write_text(pattern.sub("", text))
-
-start = "// profile:outbound-auth-oauth2-client-credentials:start"
-end = "// profile:outbound-auth-oauth2-client-credentials:end"
-for rel in [
-    "internal/config/types.go",
-    "internal/config/defaults.go",
-    "internal/config/validate.go",
-    "internal/config/snapshot_contract_test.go",
-    "internal/config/configtest/configtest.go",
-]:
-    path = root / rel
-    if path.exists():
-        strip_profile(path, start, end)
-
-types = root / "internal/config/types.go"
-if types.exists():
-    text = types.read_text()
-    text = re.sub(r"\tOutboundAuth OutboundAuthConfig `koanf:\"outbound_auth\"`\n", "", text)
-    types.write_text(text)
-defaults = root / "internal/config/defaults.go"
-if defaults.exists():
-    text = defaults.read_text()
-    text = text.replace("\tmaps.Copy(values, outboundAuthDefaults())\n", "")
-    defaults.write_text(text)
-validate = root / "internal/config/validate.go"
-if validate.exists():
-    text = validate.read_text()
-    text = re.sub(
-        r"\tif err := validateOutboundAuthConfig\(&cfg\.OutboundAuth\); err != nil \{\n\t\treturn err\n\t\}\n",
-        "",
-        text,
-    )
-    validate.write_text(text)
-PY
-}
-
 write_http_config() {
 	local field="$1"
 	local dest="${ROOT_DIR}/internal/config/${NAME}_integration_config.go"
@@ -428,15 +362,13 @@ EOF
 		"integrations.${NAME}.oauth.token_url":     "",
 		"integrations.${NAME}.oauth.client_id":     "",
 		"integrations.${NAME}.oauth.client_secret": "",
-		"integrations.${NAME}.oauth.scopes":        "",
-		"integrations.${NAME}.oauth.audience":      "",
-		"integrations.${NAME}.oauth.resource":      "",
+			"integrations.${NAME}.oauth.scopes":        "",
 EOF
 		)
 		oauth_validate=$(
 			cat <<EOF
 
-	if err := validateNamedOAuthConfig(&cfg.${field}.OAuth, "integrations.${NAME}.oauth"); err != nil {
+		if err := validateOutboundAuthConfig(&cfg.${field}.OAuth, "integrations.${NAME}.oauth"); err != nil {
 		return err
 	}
 EOF
@@ -476,9 +408,6 @@ ${suffix_validate}${oauth_validate}
 	return nil
 }
 EOF
-	if [[ "${AUTH}" == "oauth2-client-credentials" ]]; then
-		write_named_oauth_validator
-	fi
 	write_config_test "${field}" "http"
 }
 
@@ -496,15 +425,13 @@ write_grpc_config() {
 		"integrations.${NAME}.oauth.token_url":     "",
 		"integrations.${NAME}.oauth.client_id":     "",
 		"integrations.${NAME}.oauth.client_secret": "",
-		"integrations.${NAME}.oauth.scopes":        "",
-		"integrations.${NAME}.oauth.audience":      "",
-		"integrations.${NAME}.oauth.resource":      "",
+			"integrations.${NAME}.oauth.scopes":        "",
 EOF
 		)
 		oauth_validate=$(
 			cat <<EOF
 
-	if err := validateNamedOAuthConfig(&cfg.${field}.OAuth, "integrations.${NAME}.oauth"); err != nil {
+		if err := validateOutboundAuthConfig(&cfg.${field}.OAuth, "integrations.${NAME}.oauth"); err != nil {
 		return err
 	}
 EOF
@@ -557,56 +484,7 @@ func validateGRPCIntegrationTarget(raw, key string) error {
 	return nil
 }
 EOF
-	if [[ "${AUTH}" == "oauth2-client-credentials" ]]; then
-		write_named_oauth_validator
-	fi
 	write_config_test "${field}" "grpc"
-}
-
-write_named_oauth_validator() {
-	local dest="${ROOT_DIR}/internal/config/${NAME}_integration_config.go"
-	if grep -q 'func validateNamedOAuthConfig' "${ROOT_DIR}/internal/config/"*_integration_config.go 2>/dev/null; then
-		return
-	fi
-	if ! grep -q 'type OutboundAuthConfig struct' "${dest}"; then
-		cat >>"${dest}" <<'EOF'
-
-type OutboundAuthConfig struct {
-	TokenURL     string `koanf:"token_url"`
-	ClientID     string `koanf:"client_id"`
-	ClientSecret string `koanf:"client_secret"`
-	Scopes       string `koanf:"scopes"`
-	Audience     string `koanf:"audience"`
-	Resource     string `koanf:"resource"`
-}
-EOF
-	fi
-	cat >>"${dest}" <<'EOF'
-
-func validateNamedOAuthConfig(cfg *OutboundAuthConfig, prefix string) error {
-	cfg.TokenURL = strings.TrimSpace(cfg.TokenURL)
-	cfg.Scopes = strings.Join(strings.Fields(cfg.Scopes), " ")
-	if cfg.ClientID == "" {
-		return fmt.Errorf("%w: %s.client_id is required", ErrValidate, prefix)
-	}
-	if strings.TrimSpace(cfg.ClientSecret) == "" {
-		return fmt.Errorf("%w: %s.client_secret is required", ErrValidate, prefix)
-	}
-	endpoint, err := url.Parse(cfg.TokenURL)
-	if err != nil || endpoint == nil || !endpoint.IsAbs() || endpoint.Opaque != "" ||
-		!strings.EqualFold(endpoint.Scheme, "https") || endpoint.Host == "" || endpoint.Hostname() == "" ||
-		endpoint.User != nil || endpoint.RawQuery != "" || endpoint.ForceQuery || endpoint.Fragment != "" {
-		return fmt.Errorf("%w: %s.token_url must be an absolute HTTPS URL", ErrValidate, prefix)
-	}
-	endpoint.Scheme = "https"
-	endpoint.Host = strings.ToLower(endpoint.Host)
-	cfg.TokenURL = endpoint.String()
-	if cfg.Audience != "" && cfg.Resource != "" {
-		return fmt.Errorf("%w: %s.audience and %s.resource are mutually exclusive", ErrValidate, prefix, prefix)
-	}
-	return nil
-}
-EOF
 }
 
 write_config_test() {
@@ -721,8 +599,6 @@ EOF
 		ClientID:     cfg.OAuth.ClientID,
 		ClientSecret: cfg.OAuth.ClientSecret,
 		Scopes:       strings.Fields(cfg.OAuth.Scopes),
-		Audience:     cfg.OAuth.Audience,
-		Resource:     cfg.OAuth.Resource,
 	})
 	if err != nil {
 		transport.CloseIdleConnections()
@@ -730,7 +606,7 @@ EOF
 	}
 	authenticated, err := auth.HTTP(transport)
 	if err != nil {
-		_ = auth.Close(context.Background())
+		auth.Close()
 		transport.CloseIdleConnections()
 		return nil, fmt.Errorf("build ${NAME} client: %w", err)
 	}
@@ -741,10 +617,7 @@ EOF
 		auth_close=$(
 			cat <<'EOF'
 	if c.auth != nil {
-		if err := c.auth.Close(ctx); err != nil {
-			c.transport.CloseIdleConnections()
-			return err
-		}
+		c.auth.Close()
 	}
 EOF
 		)
@@ -753,7 +626,6 @@ EOF
 package ${NAME}
 
 import (
-	"context"
 	"fmt"$(if [[ "${AUTH}" == "oauth2-client-credentials" ]]; then printf '\n\t"strings"'; fi)
 
 	"${module}/internal/infra/${NAME}/internal/openapi"
@@ -770,8 +642,6 @@ $(if [[ "${AUTH}" == "oauth2-client-credentials" ]]; then
 		ClientID     string
 		ClientSecret string
 		Scopes       string
-		Audience     string
-		Resource     string
 	}
 INNER
 	fi)
@@ -792,7 +662,7 @@ func New(cfg Config) (*Client, error) {
 	${auth_bind}
 	generated, err := openapi.NewClient(transport.BaseURL(), openapi.WithHTTPClient(${doer}))
 	if err != nil {
-		$(if [[ "${AUTH}" == "oauth2-client-credentials" ]]; then echo '_ = auth.Close(context.Background())'; fi)
+		$(if [[ "${AUTH}" == "oauth2-client-credentials" ]]; then echo 'auth.Close()'; fi)
 		transport.CloseIdleConnections()
 		return nil, fmt.Errorf("build ${NAME} client: %w", err)
 	}
@@ -804,7 +674,7 @@ func New(cfg Config) (*Client, error) {
 }
 
 // Close retires authentication first, then idle HTTP connections.
-func (c *Client) Close(ctx context.Context) error {
+func (c *Client) Close() error {
 	if c == nil {
 		return nil
 	}
@@ -837,7 +707,6 @@ EOF
 package ${NAME}
 
 import (
-	"context"
 	"crypto/tls"
 	"fmt"
 	"net"
@@ -857,8 +726,6 @@ type Config struct {
 		ClientID     string
 		ClientSecret string
 		Scopes       string
-		Audience     string
-		Resource     string
 	}
 }
 
@@ -879,15 +746,13 @@ func New(cfg Config) (*Client, error) {
 		ClientID:     cfg.OAuth.ClientID,
 		ClientSecret: cfg.OAuth.ClientSecret,
 		Scopes:       strings.Fields(cfg.OAuth.Scopes),
-		Audience:     cfg.OAuth.Audience,
-		Resource:     cfg.OAuth.Resource,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("build ${NAME} client: %w", err)
 	}
 	authenticated, err := auth.GRPC(grpcclient.Config{Target: cfg.Target}, grpcclient.Options{TransportCredentials: creds})
 	if err != nil {
-		_ = auth.Close(context.Background())
+		auth.Close()
 		return nil, fmt.Errorf("build ${NAME} client: %w", err)
 	}
 	return &Client{conn: authenticated, closer: authenticated, auth: auth}, nil
@@ -906,17 +771,12 @@ func grpcHostname(raw string) (string, error) {
 	return hostname, nil
 }
 
-func (c *Client) Close(ctx context.Context) error {
+func (c *Client) Close() error {
 	if c == nil {
 		return nil
 	}
 	if c.auth != nil {
-		if err := c.auth.Close(ctx); err != nil {
-			if c.closer != nil {
-				_ = c.closer.Close()
-			}
-			return err
-		}
+		c.auth.Close()
 	}
 	if c.closer != nil {
 		return c.closer.Close()
@@ -929,7 +789,6 @@ EOF
 package ${NAME}
 
 import (
-	"context"
 	"crypto/tls"
 	"fmt"
 	"net"
@@ -976,7 +835,7 @@ func grpcHostname(raw string) (string, error) {
 	return hostname, nil
 }
 
-func (c *Client) Close(ctx context.Context) error {
+func (c *Client) Close() error {
 	if c == nil {
 		return nil
 	}
@@ -997,7 +856,6 @@ write_adapter_test() {
 package ${NAME}
 
 import (
-	"context"
 	"testing"
 )
 
@@ -1011,7 +869,7 @@ func TestNewRejectsEmptyTarget(t *testing.T) {
 func TestCloseIdempotent(t *testing.T) {
 	t.Parallel()
 	var client *Client
-	if err := client.Close(context.Background()); err != nil {
+	if err := client.Close(); err != nil {
 		t.Fatalf("nil Close() error = %v", err)
 	}
 }
@@ -1039,21 +897,17 @@ func init${field}(cfg config.${field}IntegrationConfig) (*${NAME}.Client, error)
 $(if [[ "${TARGET}" == "private-https" ]]; then echo '		PrivateDNSSuffix: cfg.PrivateDNSSuffix,'; fi)
 $(if [[ "${AUTH}" == "oauth2-client-credentials" ]]; then
 			cat <<'INNER'
-		OAuth: struct {
-			TokenURL     string
-			ClientID     string
-			ClientSecret string
-			Scopes       string
-			Audience     string
-			Resource     string
-		}{
-			TokenURL:     cfg.OAuth.TokenURL,
-			ClientID:     cfg.OAuth.ClientID,
-			ClientSecret: cfg.OAuth.ClientSecret,
-			Scopes:       cfg.OAuth.Scopes,
-			Audience:     cfg.OAuth.Audience,
-			Resource:     cfg.OAuth.Resource,
-		},
+			OAuth: struct {
+				TokenURL     string
+				ClientID     string
+				ClientSecret string
+				Scopes       string
+			}{
+				TokenURL:     cfg.OAuth.TokenURL,
+				ClientID:     cfg.OAuth.ClientID,
+				ClientSecret: cfg.OAuth.ClientSecret,
+				Scopes:       cfg.OAuth.Scopes,
+			},
 INNER
 		fi)
 	})
@@ -1079,21 +933,17 @@ func init${field}(cfg config.${field}IntegrationConfig) (*${NAME}.Client, error)
 		Target: cfg.Target,
 $(if [[ "${AUTH}" == "oauth2-client-credentials" ]]; then
 			cat <<'INNER'
-		OAuth: struct {
-			TokenURL     string
-			ClientID     string
-			ClientSecret string
-			Scopes       string
-			Audience     string
-			Resource     string
-		}{
-			TokenURL:     cfg.OAuth.TokenURL,
-			ClientID:     cfg.OAuth.ClientID,
-			ClientSecret: cfg.OAuth.ClientSecret,
-			Scopes:       cfg.OAuth.Scopes,
-			Audience:     cfg.OAuth.Audience,
-			Resource:     cfg.OAuth.Resource,
-		},
+			OAuth: struct {
+				TokenURL     string
+				ClientID     string
+				ClientSecret string
+				Scopes       string
+			}{
+				TokenURL:     cfg.OAuth.TokenURL,
+				ClientID:     cfg.OAuth.ClientID,
+				ClientSecret: cfg.OAuth.ClientSecret,
+				Scopes:       cfg.OAuth.Scopes,
+			},
 INNER
 		fi)
 	})
@@ -1151,7 +1001,7 @@ if marker not in text:
 	{name}Closed := false
 	defer func() {{
 		if !{name}Closed {{
-			_ = {name}Client.Close(shutdown.stage(signalCtx, dependencyCloseTimeout))
+			_ = {name}Client.Close()
 		}}
 	}}()
 '''
@@ -1159,8 +1009,8 @@ if marker not in text:
     if anchor not in text:
         raise SystemExit("run.go missing dependencies construction anchor")
     text = text.replace(anchor, construct + "\n" + anchor, 1)
-    close_anchor = "\tbackgroundErr := supervisor.Shutdown(backgroundCtx)\n\twiring.lifecycle(runtimeLifecycleBackgroundJoined)\n"
-    close_insert = close_anchor + f"\tif !{name}Closed {{\n\t\t_ = {name}Client.Close(shutdown.stage(signalCtx, dependencyCloseTimeout))\n\t\t{name}Closed = true\n\t}}\n"
+    close_anchor = "\tbackgroundErr := supervisor.Shutdown(backgroundCtx)\n"
+    close_insert = close_anchor + f"\tif !{name}Closed {{\n\t\t_ = {name}Client.Close()\n\t\t{name}Closed = true\n\t}}\n"
     if close_anchor not in text:
         raise SystemExit("run.go missing background join anchor")
     text = text.replace(close_anchor, close_insert, 1)
@@ -1194,8 +1044,6 @@ $(if [[ "${AUTH}" == "oauth2-client-credentials" ]]; then
 - \`integrations.${NAME}.oauth.client_id\`
 - \`integrations.${NAME}.oauth.client_secret\` (environment-only)
 - \`integrations.${NAME}.oauth.scopes\`
-- \`integrations.${NAME}.oauth.audience\`
-- \`integrations.${NAME}.oauth.resource\`
 INNER
 	fi)
 
@@ -1208,38 +1056,9 @@ EOF
 render_examples() {
 	local yaml="${ROOT_DIR}/env/config/local.yaml"
 	local envf="${ROOT_DIR}/env/.env.example"
-	if [[ "${AUTH}" == "oauth2-client-credentials" ]] && grep -q 'outbound_auth:' "${yaml}"; then
-		python3 - "${yaml}" "${NAME}" <<'PY'
-from pathlib import Path
-import re, sys
-path = Path(sys.argv[1])
-name = sys.argv[2]
-text = path.read_text()
-block = f"""integrations:
-  {name}:
-    base_url: ""
-    oauth:
-      token_url: ""
-      client_id: ""
-      client_secret: ""
-      scopes: ""
-      audience: ""
-      resource: ""
-"""
-if "transport" == "skip":
-    pass
-text = re.sub(r"# profile:outbound-auth-oauth2-client-credentials:start.*?outbound_auth:\n(?:  .*\n)+# profile:outbound-auth-oauth2-client-credentials:end\n", block, text, count=1, flags=re.S)
-if f"integrations:" not in text:
-    # fallback: append
-    text += "\n" + block
-path.write_text(text)
-PY
-		# The python above is too fragile because TRANSPORT isn't in that script.
-		# Do a simpler replacement below.
-	fi
 	python3 - "${yaml}" "${envf}" "${NAME}" "${TRANSPORT}" "${TARGET}" "${AUTH}" <<'PY'
 from pathlib import Path
-import re, sys
+import sys
 yaml_path, env_path, name, transport, target, auth = sys.argv[1:7]
 yaml = Path(yaml_path)
 env = Path(env_path)
@@ -1264,8 +1083,6 @@ if auth == "oauth2-client-credentials":
         "      client_id: \"\"",
         "      client_secret: \"\"",
         "      scopes: \"\"",
-        "      audience: \"\"",
-        "      resource: \"\"",
     ]
     prefix = f"APP__INTEGRATIONS__{name.upper()}__OAUTH__"
     env_keys += [
@@ -1273,37 +1090,18 @@ if auth == "oauth2-client-credentials":
         f"{prefix}CLIENT_ID=",
         f"{prefix}CLIENT_SECRET=",
         f"{prefix}SCOPES=",
-        f"{prefix}AUDIENCE=",
-        f"{prefix}RESOURCE=",
     ]
 
 section = "integrations:\n  " + name + ":\n" + "\n".join(fields) + "\n"
 env_block = "\n".join(env_keys) + "\n"
 
-singleton_yaml = re.compile(
-    r"# profile:outbound-auth-oauth2-client-credentials:start.*?outbound_auth:\n(?:  .*\n)+# profile:outbound-auth-oauth2-client-credentials:end\n",
-    re.S,
-)
-singleton_env = re.compile(
-    r"# profile:outbound-auth-oauth2-client-credentials:start.*?APP__OUTBOUND_AUTH__RESOURCE=\n# profile:outbound-auth-oauth2-client-credentials:end\n",
-    re.S,
-)
-
-if auth == "oauth2-client-credentials" and "outbound_auth:" in ytext:
-    ytext = singleton_yaml.sub(section, ytext, count=1)
-    if f"  {name}:" not in ytext:
+if f"  {name}:" not in ytext:
+    if "\nintegrations:\n" in ytext:
+        ytext = ytext.replace("\nintegrations:\n", "\nintegrations:\n  " + name + ":\n" + "\n".join(fields) + "\n", 1)
+    else:
         ytext += "\n" + section
-    etext = singleton_env.sub(env_block, etext, count=1)
-    if f"APP__INTEGRATIONS__{name.upper()}__" not in etext:
-        etext += "\n" + env_block
-else:
-    if f"  {name}:" not in ytext:
-        if "\nintegrations:\n" in ytext:
-            ytext = ytext.replace("\nintegrations:\n", "\nintegrations:\n  " + name + ":\n" + "\n".join(fields) + "\n", 1)
-        else:
-            ytext += "\n" + section
-    if f"APP__INTEGRATIONS__{name.upper()}__" not in etext:
-        etext += "\n" + env_block
+if f"APP__INTEGRATIONS__{name.upper()}__" not in etext:
+    etext += "\n" + env_block
 
 yaml.write_text(ytext)
 env.write_text(etext)
@@ -1360,16 +1158,12 @@ add_snapshot_keys() {
 		"integrations.${NAME}.oauth.client_id":     " snapshot-client:id ",
 		"integrations.${NAME}.oauth.client_secret": " snapshot-client-secret ",
 		"integrations.${NAME}.oauth.scopes":        "snapshot.read snapshot.write",
-		"integrations.${NAME}.oauth.resource":      "https://resource.snapshot.example",
-		"integrations.${NAME}.oauth.audience":      "",
 EOF
 		cat >>"${exp}" <<EOF
 		"integrations.${NAME}.oauth.token_url":     "https://auth.snapshot.example/oauth/token",
 		"integrations.${NAME}.oauth.client_id":     " snapshot-client:id ",
 		"integrations.${NAME}.oauth.client_secret": " snapshot-client-secret ",
 		"integrations.${NAME}.oauth.scopes":        "snapshot.read snapshot.write",
-		"integrations.${NAME}.oauth.resource":      "https://resource.snapshot.example",
-		"integrations.${NAME}.oauth.audience":      "",
 EOF
 	fi
 	python3 - "${ROOT_DIR}/internal/config/snapshot_contract_test.go" "${src}" "${exp}" <<'PY'
@@ -1466,54 +1260,43 @@ raise SystemExit(0)
 PY
 	fi
 	if [[ "${AUTH}" == "oauth2-client-credentials" ]]; then
-		migrate_oauth_helpers "$(field_name "${NAME}")"
+		install_named_oauth_test_env "${env_key}"
 	fi
 }
 
-migrate_oauth_helpers() {
-	local field="$1"
-	# Replace remaining singleton helper bodies with named keys when the helper file still exists.
-	local dest="${ROOT_DIR}/internal/config/testhelpers_test.go"
-	if [[ -f "${dest}" ]] && grep -q 'APP__OUTBOUND_AUTH__' "${dest}"; then
-		python3 - "${dest}" "${NAME}" <<'PY'
+install_named_oauth_test_env() {
+	local anchor_key="$1"
+	local item dest receiver
+	for item in \
+		"${ROOT_DIR}/internal/config/testhelpers_test.go|t" \
+		"${ROOT_DIR}/internal/config/configtest/configtest.go|tb" \
+		"${ROOT_DIR}/cmd/service/internal/bootstrap/run_test.go|t"; do
+		dest="${item%|*}"
+		receiver="${item##*|}"
+		[[ -f "${dest}" ]] || continue
+		python3 - "${dest}" "${receiver}" "${anchor_key}" "${NAME}" <<'PY'
 from pathlib import Path
 import sys
 path = Path(sys.argv[1])
-name = sys.argv[2].upper()
+receiver, anchor_key, name = sys.argv[2], sys.argv[3], sys.argv[4].upper()
 text = path.read_text()
-text = text.replace("APP__OUTBOUND_AUTH__", f"APP__INTEGRATIONS__{name}__OAUTH__")
-path.write_text(text)
+prefix = f"APP__INTEGRATIONS__{name}__OAUTH__"
+if prefix + "TOKEN_URL" in text:
+    raise SystemExit(0)
+anchor = f'{receiver}.Setenv("{anchor_key}",'
+start = text.find(anchor)
+if start < 0:
+    raise SystemExit(f"missing generated integration env anchor {anchor_key}")
+end = text.find("\n", start) + 1
+values = [
+    ("TOKEN_URL", "https://auth.example.com/oauth/token"),
+    ("CLIENT_ID", "test-client"),
+    ("CLIENT_SECRET", "test-client-secret"),
+    ("SCOPES", "payments.read payments.write"),
+]
+insert = "".join(f'\t{receiver}.Setenv("{prefix}{key}", "{value}")\n' for key, value in values)
+path.write_text(text[:end] + insert + text[end:])
 PY
-	fi
-	dest="${ROOT_DIR}/internal/config/configtest/configtest.go"
-	if [[ -f "${dest}" ]] && grep -q 'APP__OUTBOUND_AUTH__' "${dest}"; then
-		python3 - "${dest}" "${NAME}" <<'PY'
-from pathlib import Path
-import sys
-path = Path(sys.argv[1])
-name = sys.argv[2].upper()
-text = path.read_text()
-text = text.replace("APP__OUTBOUND_AUTH__", f"APP__INTEGRATIONS__{name}__OAUTH__")
-path.write_text(text)
-PY
-	fi
-	for dest in \
-		"${ROOT_DIR}/cmd/service/internal/bootstrap/run_test.go" \
-		"${ROOT_DIR}/internal/config/secret_policy_test.go" \
-		"${ROOT_DIR}/internal/config/load_environment_test.go"; do
-		if [[ -f "${dest}" ]] && grep -qE 'APP__OUTBOUND_AUTH__|outbound_auth\.|OutboundAuth|setOutboundAuthTestEnv' "${dest}"; then
-			python3 - "${dest}" "${NAME}" "$(field_name "${NAME}")" <<'PY'
-from pathlib import Path
-import sys
-path = Path(sys.argv[1])
-name, field = sys.argv[2], sys.argv[3]
-text = path.read_text()
-text = text.replace("APP__OUTBOUND_AUTH__", f"APP__INTEGRATIONS__{name.upper()}__OAUTH__")
-text = text.replace("outbound_auth.", f"integrations.{name}.oauth.")
-text = text.replace("cfg.OutboundAuth", f"cfg.Integrations.{field}.OAuth")
-path.write_text(text)
-PY
-		fi
 	done
 }
 
@@ -1591,18 +1374,13 @@ path_allowed_initial() {
 		internal/config/validate.go | \
 		internal/config/snapshot_contract_test.go | \
 		internal/config/testhelpers_test.go | \
-		internal/config/load_environment_test.go | \
-		internal/config/secret_policy_test.go | \
 		internal/config/configtest/configtest.go | \
-		internal/config/outbound_auth_config.go | \
-		internal/config/outbound_auth_config_test.go | \
 		cmd/service/internal/bootstrap/startup_"${NAME}".go | \
 		cmd/service/internal/bootstrap/startup_"${NAME}"_test.go | \
 		cmd/service/internal/bootstrap/run.go | \
 		cmd/service/internal/bootstrap/run_test.go | \
 		cmd/service/internal/bootstrap/startup_dependencies_test.go | \
 		docs/integrations/"${NAME}".md | \
-		docs/outbound-machine-authentication.md | \
 		env/config/local.yaml | \
 		env/.env.example | \
 		.golangci.yml | \
@@ -1659,10 +1437,6 @@ stage_work() {
 		write_bootstrap "${field}" "${module}"
 		write_docs
 		render_examples
-		if retires_singleton_oauth initial; then
-			remove_singleton_oauth
-			migrate_oauth_helpers "${field}"
-		fi
 		add_snapshot_keys
 		local generator_source
 		if [[ "${TRANSPORT}" == "http" ]]; then
@@ -1754,14 +1528,6 @@ parent_main() {
 
 	local start_head
 	start_head="$(git rev-parse HEAD)"
-	local retire=false
-	if retires_singleton_oauth "${mode}"; then
-		retire=true
-	fi
-	if [[ "${retire}" == true ]] && env_entry_present "${ROOT_DIR}"; then
-		die "${reason_env}" ".env"
-	fi
-
 	require_tools
 	validate_contract_schema
 
@@ -1794,10 +1560,6 @@ parent_main() {
 		return 0
 	fi
 	git apply --check "${patch}"
-	if [[ "${retire}" == true ]] && env_entry_present "${ROOT_DIR}"; then
-		rm -f "${patch}"
-		die "${reason_env}" ".env"
-	fi
 	git apply "${patch}"
 	rm -f "${patch}"
 }

@@ -5,12 +5,13 @@ import (
 	"errors"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"golang.org/x/oauth2"
 )
 
-func TestClientSharesAcquisitionWithoutSharingCallerCancellation(t *testing.T) {
+func TestClientUsesLibraryCacheForConcurrentCallers(t *testing.T) {
 	entered := make(chan struct{})
 	release := make(chan struct{})
 	var calls atomic.Int32
@@ -21,75 +22,66 @@ func TestClientSharesAcquisitionWithoutSharingCallerCancellation(t *testing.T) {
 		<-release
 		return validTestToken("shared"), nil
 	}, nil)
-	t.Cleanup(func() {
-		closeCtx, cancel := context.WithTimeout(context.Background(), time.Second)
-		defer cancel()
-		if err := client.Close(closeCtx); err != nil {
-			t.Errorf("Close() error = %v", err)
-		}
-	})
+	t.Cleanup(client.Close)
 
-	canceledCtx, cancel := context.WithCancel(context.Background())
-	canceled := make(chan error, 1)
-	go func() {
-		_, err := client.resolve(canceledCtx)
-		canceled <- err
-	}()
+	source := clientTokenSource{client: client}
+	results := make(chan *oauth2.Token, 2)
+	for range 2 {
+		go func() {
+			token, _ := source.Token()
+			results <- token
+		}()
+	}
 	<-entered
-
-	live := make(chan *oauth2.Token, 1)
-	go func() {
-		token, _ := client.resolve(context.Background())
-		live <- token
-	}()
-	cancel()
-	if err := <-canceled; !errors.Is(err, context.Canceled) {
-		t.Fatalf("canceled resolve error = %v, want context.Canceled", err)
-	}
-	if got := calls.Load(); got != 1 {
-		t.Fatalf("provider calls before release = %d, want 1", got)
-	}
-
 	close(release)
-	if token := <-live; token == nil || token.AccessToken != "shared" {
-		t.Fatalf("live token = %#v, want shared token", token)
-	}
-	if _, err := client.resolve(context.Background()); err != nil {
-		t.Fatalf("cached resolve error = %v", err)
+	for range 2 {
+		if token := <-results; token == nil || token.AccessToken != "shared" {
+			t.Fatalf("Token() = %#v, want shared token", token)
+		}
 	}
 	if got := calls.Load(); got != 1 {
-		t.Fatalf("provider calls after cache hit = %d, want 1", got)
+		t.Fatalf("provider calls = %d, want 1", got)
 	}
 }
 
-func TestClientCloseCancelsAndJoinsAcquisition(t *testing.T) {
-	entered := make(chan struct{})
-	closed := make(chan struct{})
-	client := newClient(func(ctx context.Context) (*oauth2.Token, error) {
-		close(entered)
-		<-ctx.Done()
-		return nil, ctx.Err()
-	}, func() { close(closed) })
+func TestClientAcquisitionTimeoutIsDeterministic(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		client := newClient(func(ctx context.Context) (*oauth2.Token, error) {
+			<-ctx.Done()
+			return nil, ctx.Err()
+		}, nil)
+		defer client.Close()
 
-	resolved := make(chan error, 1)
-	go func() {
-		_, err := client.resolve(context.Background())
-		resolved <- err
-	}()
-	<-entered
+		started := time.Now()
+		_, err := (clientTokenSource{client: client}).Token()
+		if !errors.Is(err, ErrUnavailable) {
+			t.Fatalf("Token() error = %v, want ErrUnavailable", err)
+		}
+		if elapsed := time.Since(started); elapsed != defaultAcquisitionTimeout {
+			t.Fatalf("acquisition elapsed = %v, want %v", elapsed, defaultAcquisitionTimeout)
+		}
+	})
+}
 
-	closeCtx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	if err := client.Close(closeCtx); err != nil {
-		t.Fatalf("Close() error = %v", err)
+func TestClientCloseRetiresCachedTokenAndClosesOnce(t *testing.T) {
+	new(Client).Close()
+
+	var closes atomic.Int32
+	client := newClient(func(context.Context) (*oauth2.Token, error) {
+		return validTestToken("cached"), nil
+	}, func() { closes.Add(1) })
+	source := clientTokenSource{client: client}
+	if _, err := source.Token(); err != nil {
+		t.Fatalf("Token() error = %v", err)
 	}
-	select {
-	case <-closed:
-	default:
-		t.Fatal("Close() returned before idle transport close")
+
+	client.Close()
+	client.Close()
+	if _, err := source.Token(); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("Token() after Close error = %v, want ErrUnavailable", err)
 	}
-	if err := <-resolved; !errors.Is(err, ErrUnavailable) {
-		t.Fatalf("resolve after Close error = %v, want ErrUnavailable", err)
+	if got := closes.Load(); got != 1 {
+		t.Fatalf("idle closes = %d, want 1", got)
 	}
 }
 
