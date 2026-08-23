@@ -11,41 +11,33 @@ import (
 	"github.com/riverqueue/river"
 )
 
-type Handler struct {
+type handler struct {
 	river.WorkerDefaults[deliveryArgs]
 
 	secrets  *SecretManifest
 	resolver *net.Resolver
 }
 
-func NewHandler(secrets *SecretManifest) (*Handler, error) {
-	if secrets == nil {
-		return nil, fmt.Errorf("%w: secret manifest is required", ErrConfig)
-	}
-	return &Handler{secrets: secrets, resolver: &net.Resolver{PreferGo: true}}, nil
-}
-
 func AddWorker(workers *river.Workers, secrets *SecretManifest) error {
 	if workers == nil {
 		return fmt.Errorf("%w: River workers are required", ErrConfig)
 	}
-	handler, err := NewHandler(secrets)
-	if err != nil {
-		return err
+	if secrets == nil {
+		return fmt.Errorf("%w: secret manifest is required", ErrConfig)
 	}
-	if err := river.AddWorkerSafely(workers, handler); err != nil {
+	if err := river.AddWorkerSafely(workers, &handler{secrets: secrets, resolver: &net.Resolver{PreferGo: true}}); err != nil {
 		return fmt.Errorf("register webhook worker: %w", err)
 	}
 	return nil
 }
 
-func (*Handler) Timeout(*river.Job[deliveryArgs]) time.Duration { return 30 * time.Second }
+func (*handler) Timeout(*river.Job[deliveryArgs]) time.Duration { return 30 * time.Second }
 
-func (*Handler) NextRetry(job *river.Job[deliveryArgs]) time.Time {
+func (*handler) NextRetry(job *river.Job[deliveryArgs]) time.Time {
 	return webhookNextRetry(job, time.Now().UTC())
 }
 
-func (h *Handler) Work(ctx context.Context, job *river.Job[deliveryArgs]) error {
+func (h *handler) Work(ctx context.Context, job *river.Job[deliveryArgs]) error {
 	if h == nil || h.resolver == nil || h.secrets == nil || job == nil {
 		return cancelJob("webhook worker is not configured")
 	}
@@ -84,14 +76,14 @@ func (h *Handler) Work(ctx context.Context, job *river.Job[deliveryArgs]) error 
 
 func prepareFailure(ctx context.Context, err error) error {
 	switch {
-	case errors.Is(err, ErrDestinationDenied):
+	case errors.Is(err, errDestinationDenied):
 		return cancelJob("webhook destination denied")
 	case errors.Is(err, context.DeadlineExceeded), errors.Is(ctx.Err(), context.DeadlineExceeded):
 		return context.DeadlineExceeded
 	case errors.Is(err, context.Canceled), errors.Is(ctx.Err(), context.Canceled):
 		return context.Canceled
 	default:
-		return errors.New("prepare webhook delivery")
+		return fmt.Errorf("prepare webhook delivery: %w", err)
 	}
 }
 
@@ -103,18 +95,25 @@ func classifyDelivery(result sendResult, err error) error {
 	case evidence.StatusCode >= http.StatusOK && evidence.StatusCode <= 299:
 		return nil
 	case retryableWebhookStatus(evidence.StatusCode):
-		return errors.New("webhook delivery retryable")
+		return fmt.Errorf("webhook delivery retryable: HTTP %d", evidence.StatusCode)
 	case evidence.StatusCode >= 100:
-		return cancelJob("webhook receiver rejected delivery")
+		return cancelJob(fmt.Sprintf("webhook receiver rejected delivery: HTTP %d", evidence.StatusCode))
 	case evidence.MayHaveSent:
-		return errors.New("webhook delivery outcome is ambiguous")
+		return deliveryFailure("webhook delivery outcome is ambiguous", err)
 	case errors.Is(err, context.DeadlineExceeded):
 		return context.DeadlineExceeded
 	case errors.Is(err, context.Canceled):
 		return context.Canceled
 	default:
-		return errors.New("webhook delivery failed")
+		return deliveryFailure("webhook delivery failed", err)
 	}
+}
+
+func deliveryFailure(message string, err error) error {
+	if err == nil {
+		return errors.New(message)
+	}
+	return fmt.Errorf("%s: %w", message, err)
 }
 
 func cancelJob(reason string) error {
