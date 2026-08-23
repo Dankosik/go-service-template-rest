@@ -23,7 +23,7 @@ func TestEventValidation(t *testing.T) {
 		"publication ID": func(event *Event) { event.PublicationID = "bad\nvalue" },
 		"type":           func(event *Event) { event.Type = "" },
 		"schema":         func(event *Event) { event.Schema = "" },
-		"creation time":  func(event *Event) { event.CreatedAt = time.Now() },
+		"creation time":  func(event *Event) { event.CreatedAt = time.Unix(1, 0).In(time.FixedZone("offset", 60)) },
 		"payload":        func(event *Event) { event.Payload = append(event.Payload, 0) },
 		// Ranging a string yields U+FFFD per invalid byte, and U+FFFD is not a
 		// control character, so the control scan alone accepted a header value
