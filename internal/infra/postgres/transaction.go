@@ -73,7 +73,7 @@ func runInTx(
 	}
 
 	if err := commit(ctx, tx); err != nil {
-		return ClassifyCommitError(err)
+		return classifyCommitError(err)
 	}
 	return nil
 }
@@ -85,9 +85,9 @@ func commitTx(ctx context.Context, tx pgx.Tx) error {
 	return nil
 }
 
-// ClassifyCommitError preserves failures known to have rejected commit and
+// classifyCommitError preserves failures known to have rejected commit and
 // marks every other commit response as an unknown durable outcome.
-func ClassifyCommitError(err error) error {
+func classifyCommitError(err error) error {
 	if err == nil || commitDefinitelyFailed(err) {
 		return err
 	}

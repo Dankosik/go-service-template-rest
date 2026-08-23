@@ -19,7 +19,7 @@ func TestApplyStatementTimeoutsPublishesSessionDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parsePoolConfig() error = %v", err)
 	}
-	applyStatementTimeouts(poolConfig.ConnConfig, DefaultStatementTimeout)
+	applyStatementTimeouts(poolConfig.ConnConfig, defaultStatementTimeout)
 	for _, name := range []string{"statement_timeout", "idle_in_transaction_session_timeout"} {
 		if got := poolConfig.ConnConfig.RuntimeParams[name]; got != "8000ms" {
 			t.Fatalf("RuntimeParams[%q] = %q, want 8000ms", name, got)
@@ -56,15 +56,15 @@ func TestApplyContextWatcherUsesCancelRequestWithServerFallback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parsePoolConfig() error = %v", err)
 	}
-	applyContextWatcher(poolConfig.ConnConfig, DefaultStatementTimeout)
+	applyContextWatcher(poolConfig.ConnConfig, defaultStatementTimeout)
 	handler := poolConfig.ConnConfig.BuildContextWatcherHandler(new(pgconn.PgConn))
 	watcher, ok := handler.(*contextWatcherHandler)
 	if !ok {
 		t.Fatalf("context watcher = %T, want *contextWatcherHandler", handler)
 	}
 	cancel, ok := watcher.handler.(*pgconn.CancelRequestContextWatcherHandler)
-	if !ok || cancel.CancelRequestDelay != 0 || cancel.DeadlineDelay != DefaultStatementTimeout {
-		t.Fatalf("cancel watcher = %#v, want immediate cancel with %s fallback", watcher.handler, DefaultStatementTimeout)
+	if !ok || cancel.CancelRequestDelay != 0 || cancel.DeadlineDelay != defaultStatementTimeout {
+		t.Fatalf("cancel watcher = %#v, want immediate cancel with %s fallback", watcher.handler, defaultStatementTimeout)
 	}
 }
 

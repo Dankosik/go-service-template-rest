@@ -19,6 +19,7 @@ package pgtest
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
 	"io/fs"
 	"log/slog"
@@ -49,8 +50,9 @@ const (
 )
 
 var (
-	adminDSN    string
-	databaseSeq atomic.Int64
+	adminDSN      string
+	databaseRunID = strings.ToLower(rand.Text())
+	databaseSeq   atomic.Int64
 )
 
 // Main starts one PostgreSQL container for the whole test binary, runs m against
@@ -121,7 +123,9 @@ func DSN(tb testing.TB) string {
 	ctx, cancel := context.WithTimeout(tb.Context(), databaseOpTimeout)
 	defer cancel()
 
-	name := fmt.Sprintf("test_db_%d", databaseSeq.Add(1))
+	// Multiple test binaries may share one external DSN, so the process-unique
+	// prefix keeps their package-local counters from naming the same database.
+	name := fmt.Sprintf("test_db_%s_%d", databaseRunID, databaseSeq.Add(1))
 	admin, err := pgxpool.New(ctx, adminDSN)
 	if err != nil {
 		tb.Fatalf("connect shared postgres admin database: %v", err)
