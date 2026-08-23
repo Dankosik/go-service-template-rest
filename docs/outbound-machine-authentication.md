@@ -1,7 +1,10 @@
 # Outbound machine authentication
 
-`OUTBOUND_AUTH=oauth2-client-credentials` retains a client factory for one
-OAuth 2.0 client-credentials dependency. Its HTTP adapter is retained by
+`OUTBOUND_AUTH=oauth2-client-credentials` retains the credential owner package.
+Each named integration constructed by `make integration-init` owns one
+`integrations.<name>.oauth.*` tuple. The first OAuth initializer retires the
+singleton `outbound_auth.*` config after `.env` is absent; later integrations
+add a disjoint named section. Its HTTP adapter is retained by
 default; `GRPC=enabled` additionally retains the gRPC adapter.
 
 ## Configuration

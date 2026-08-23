@@ -74,14 +74,14 @@ func validateGRPCConfig(cfg *GRPCConfig) error {
 			ErrValidate,
 		)
 	}
-	// profile:authn-oidc-jwt:start
+	// profile:authn-bearer:start
 	if server.TransportSecurity != secureTransportTLS {
 		return fmt.Errorf(
 			"%w: authn OIDC profile requires grpc.server.transport_security=tls",
 			ErrValidate,
 		)
 	}
-	// profile:authn-oidc-jwt:end
+	// profile:authn-bearer:end
 	return nil
 }
 

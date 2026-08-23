@@ -76,10 +76,16 @@ func resetConfigEnv(t *testing.T) {
 		}
 	})
 	t.Setenv("APP__APP__ENV", "local")
-	// profile:authn-oidc-jwt:start
+	// profile:authn-bearer:start
 	t.Setenv("APP__AUTHN__ISSUER", "https://issuer.example.com")
 	t.Setenv("APP__AUTHN__AUDIENCE", "https://api.example.com")
-	// profile:authn-oidc-jwt:end
+	// profile:authn-oidc-introspection:start
+	t.Setenv("APP__AUTHN__INTROSPECTION_ENDPOINT", "https://idp.example.com/oauth/introspect")
+	t.Setenv("APP__AUTHN__INTROSPECTION_TARGET_CLASS", "external-https")
+	t.Setenv("APP__AUTHN__INTROSPECTION_CLIENT_ID", "rs-client")
+	t.Setenv("APP__AUTHN__INTROSPECTION_CLIENT_SECRET", "rs-secret")
+	// profile:authn-oidc-introspection:end
+	// profile:authn-bearer:end
 	// profile:outbound-auth-oauth2-client-credentials:start
 	setOutboundAuthTestEnv(t)
 	// profile:outbound-auth-oauth2-client-credentials:end

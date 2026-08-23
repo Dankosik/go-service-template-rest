@@ -8,15 +8,13 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"math/big"
-	"net/http"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/MicahParks/jwkset"
 	"github.com/MicahParks/keyfunc/v3"
-	"github.com/getkin/kin-openapi/openapi3"
-	"github.com/getkin/kin-openapi/openapi3filter"
+	"github.com/example/go-service-template-rest/internal/infra/bearerauthn"
 	"github.com/golang-jwt/jwt/v5"
 )
 
@@ -92,7 +90,7 @@ func newTestVerifierWithUse(t *testing.T, key *rsa.PrivateKey, use string) *Veri
 		testPolicy(t),
 		signingKeys.KeyfuncCtx,
 		func() time.Time { return testNow },
-		newAuthnMetrics(nil),
+		newJWKSMetrics(nil),
 		nil,
 		nil,
 	)
@@ -182,20 +180,10 @@ func signToken(t *testing.T, key *rsa.PrivateKey, keyID, typ string, claims toke
 	return signed
 }
 
-func requireKind(t *testing.T, err error, want Kind) {
+func requireKind(t *testing.T, err error, want bearerauthn.Kind) {
 	t.Helper()
-	got, ok := KindOf(err)
+	got, ok := bearerauthn.KindOf(err)
 	if !ok || got != want {
 		t.Fatalf("KindOf(%v) = %v, %v; want %v, true", err, got, ok, want)
-	}
-}
-
-func bearerAuthInput(request *http.Request) *openapi3filter.AuthenticationInput {
-	return &openapi3filter.AuthenticationInput{
-		SecuritySchemeName: "bearerAuth",
-		SecurityScheme:     &openapi3.SecurityScheme{Type: "http", Scheme: "bearer"},
-		RequestValidationInput: &openapi3filter.RequestValidationInput{
-			Request: request,
-		},
 	}
 }

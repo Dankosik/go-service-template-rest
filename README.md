@@ -43,6 +43,7 @@ make template-init \
   OUTBOX=none \
   GRPC=none \
   AUTHN=none \
+  OUTBOUND_HTTP=none \
   OBJECT_STORAGE=none \
   OUTBOUND_AUTH=none \
   MESSAGING=none
@@ -54,8 +55,9 @@ make run
 
 The defaults create a service with no database dependency. The complete agent
 workflow is always retained. Choose `DATABASE=postgres` when the service owns
-PostgreSQL. The fixed-authority HTTP client is always retained so feature code
-only supplies its dependency target.
+PostgreSQL, and choose `OUTBOUND_HTTP=bounded` to retain the shared
+fixed-authority HTTP client. Omitted `OUTBOUND_HTTP` is `none`. The client
+also stays when another selected capability still imports it.
 <!-- profile:object-storage:start -->
 Choose `OBJECT_STORAGE=s3` only when this service needs the S3-compatible
 capability. It requires a complete static tuple supplied by deployment and
@@ -91,10 +93,20 @@ transaction must stage an immutable per-receiver webhook fan-out for the shared
 jobs worker. Receiver processing is at-least-once; see
 [outbound webhook delivery](docs/outbound-webhook-delivery.md).
 <!-- profile:webhooks-durable:end -->
+<!-- profile:inbound-webhooks-standard:start -->
+Choose `DATABASE=postgres JOBS=postgres INBOUND_WEBHOOKS=standard-webhooks`
+when the service must acknowledge Standard Webhooks callbacks before
+asynchronous processing; see
+[inbound webhook receipt](docs/inbound-webhook-receipt.md).
+<!-- profile:inbound-webhooks-standard:end -->
 <!-- profile:authn-oidc-jwt:start -->
 Choose `AUTHN=oidc-jwt` for OIDC discovery and signed JWT access-token
-authentication; see [OIDC/JWT authentication](docs/authentication.md).
+authentication; see [authentication](docs/authentication.md).
 <!-- profile:authn-oidc-jwt:end -->
+<!-- profile:authn-oidc-introspection:start -->
+Choose `AUTHN=oidc-introspection` for uncached RFC 7662 token introspection;
+see [authentication](docs/authentication.md).
+<!-- profile:authn-oidc-introspection:end -->
 <!-- profile:grpc:start -->
 Choose `GRPC=enabled`
 when the service publishes or consumes native gRPC; see the
@@ -137,6 +149,9 @@ it, and read it here or in
 <!-- profile:authn-oidc-jwt:start -->
 | Authentication | Optional OIDC discovery and RS256 JWT access-token verification for HTTP and native gRPC, with an explicit RFC 9068 profile |
 <!-- profile:authn-oidc-jwt:end -->
+<!-- profile:authn-oidc-introspection:start -->
+| Authentication | Optional uncached RFC 7662 token introspection for HTTP and native gRPC |
+<!-- profile:authn-oidc-introspection:end -->
 | Observability | OpenTelemetry 1.x traces and metrics, Prometheus export, and structured logs |
 | Testing | Race detection and goroutine leak checks; PostgreSQL Testcontainers coverage in the database profile |
 | Delivery | Docker and GitHub Actions security gates; opt-in GHCR publishing with Cosign, CycloneDX, and durable migration-history enforcement |
@@ -296,7 +311,7 @@ internal/<feature>/              feature-owned business behavior (when added)
 internal/config/                 runtime configuration
 internal/health/                 readiness and drain behavior
 internal/infra/http/             HTTP transport and middleware
-internal/infra/httpclient/       fixed-authority outbound HTTP transport
+internal/infra/httpclient/       bounded outbound HTTP transport (optional profile)
 internal/infra/postgres/         PostgreSQL adapters (PostgreSQL profile)
 api/openapi/service.yaml         API source of truth
 internal/openapi/                generated OpenAPI artifacts
@@ -326,6 +341,10 @@ client connections.
 Use the [placement guide](docs/project-structure-and-module-organization.md)
 before choosing packages or tests.
 
+After `make template-init`, `make integration-init` scaffolds one named HTTP or
+gRPC outbound integration from a committed local contract. See
+[External Integration Initializer](docs/external-integration-initializer.md).
+
 ## Quality Gates
 
 | Command | Purpose |
@@ -333,6 +352,7 @@ before choosing packages or tests.
 | `make fmt-check` | Go formatting drift |
 | `make lint` | Mandatory static analysis |
 | `make test` | Ordinary unit tests |
+| `make integration-init-check` | Initializer grammar, transaction, and fixture matrix |
 | `make openapi-check` | OpenAPI generation, drift, runtime, lint, and schema checks |
 | `make sqlc-check` | SQL generation drift (PostgreSQL profile) |
 | `make migration-check` | Goose validation and append-only review history (PostgreSQL profile) |
@@ -359,10 +379,10 @@ Performance work uses the narrowest matching standard benchmark command. See
 - [Benchmarking](docs/benchmarking.md)
 - [Railway Deployment Profile](docs/railway-deployment-profile.md)
 
-<!-- profile:authn-oidc-jwt:start -->
+<!-- profile:authn-bearer:start -->
 For trust configuration, token policy, rotation, local testing, and operational
-signals, see [OIDC/JWT Authentication](docs/authentication.md).
-<!-- profile:authn-oidc-jwt:end -->
+signals, see [Authentication](docs/authentication.md).
+<!-- profile:authn-bearer:end -->
 
 <!-- profile:grpc:start -->
 For schema, server, client, streaming, lifecycle, and deployment guidance, see

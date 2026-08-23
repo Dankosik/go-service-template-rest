@@ -148,6 +148,7 @@ linters:
         # fragment rule as above.
         - cmd/internal/runtimeopts\.ValidateGracePeriod\(
         - cmd/internal/runtimeopts\.ListenDiagnostics\(
+        - github.com/riverqueue/river\.JobSnooze\(
     staticcheck:
       checks:
         - all
@@ -189,10 +190,22 @@ linters:
         - generic
         - '^.*/internal/openapi\..*ResponseObject$'
         - '^go\.opentelemetry\.io/otel/metric\.MeterProvider$'
+        # profile:inbound-webhooks-standard:start
+        - '^.*/internal/inboundwebhook\.Receiver$'
+        # profile:inbound-webhooks-standard:end
         - '^go\.opentelemetry\.io/otel/sdk/metric\.Reader$'
         - '^go\.opentelemetry\.io/otel/sdk/trace\.Sampler$'
     depguard:
       rules:
+        generated_external_proto_stays_in_adapters:
+          list-mode: lax
+          files:
+            - "**/*.go"
+            - "!**/internal/infra/**/*.go"
+            - "!**/internal/gen/proto/**/*.go"
+          deny:
+            - pkg: github.com/example/go-service-template-rest/internal/gen/proto/external
+              desc: generated external gRPC types stay inside the named adapter.
         feature_packages_no_adapters:
           list-mode: lax
           files:
@@ -220,13 +233,13 @@ linters:
             - "**/internal/config/**/*.go"
             - "!**/internal/config/*_test.go"
           allow:
-            # profile:authn-oidc-jwt:start
+            # profile:authn-bearer:start
             # The authn trust rules are a leaf for the same reason otelconfig is:
             # this package must refuse a bad value at load, and the verifier must
             # enforce the same rule at startup and at runtime. Allowing the leaf
             # is what keeps one rule from being written twice.
             - github.com/example/go-service-template-rest/internal/authntrust
-            # profile:authn-oidc-jwt:end
+            # profile:authn-bearer:end
             - github.com/example/go-service-template-rest/internal/observability/otelconfig
           deny:
             - pkg: github.com/example/go-service-template-rest/internal
@@ -330,7 +343,7 @@ linters:
               desc: correlationpolicy is the pure outbound policy shared by the HTTP and gRPC clients; a dependency here would put it out of reach of one of them.
             - pkg: github.com/example/go-service-template-rest/cmd
               desc: correlationpolicy must not depend on composition roots.
-        # profile:authn-oidc-jwt:start
+        # profile:authn-bearer:start
         authntrust_is_pure_policy:
           list-mode: lax
           files:
@@ -342,27 +355,63 @@ linters:
               desc: authntrust is a pure trust-rule leaf shared by internal/config and the verifier; a dependency here would put it back out of reach of one of them.
             - pkg: github.com/example/go-service-template-rest/cmd
               desc: authntrust must not depend on composition roots.
-        # The verifier core answers both transports and must stay buildable
-        # without either. Only its two adapter files may name a transport
-        # library, so the split survives an edit that scripts/init-module.sh
-        # cannot see.
+        # profile:authn-bearer:end
+        # profile:authn-oidc-jwt:start
         oidcjwt_core_is_transport_neutral:
           list-mode: lax
           files:
             - "**/internal/infra/oidcjwt/*.go"
-            - "!**/internal/infra/oidcjwt/http.go"
-            # profile:grpc:start
-            - "!**/internal/infra/oidcjwt/grpc.go"
-            # profile:grpc:end
             - "!**/internal/infra/oidcjwt/*_test.go"
           deny:
             - pkg: github.com/getkin/kin-openapi
-              desc: the OpenAPI security-requirement seam belongs in oidcjwt's http.go adapter.
+              desc: inbound HTTP security belongs in bearerauthn, not the JWT engine.
             - pkg: github.com/go-chi/chi/v5
-              desc: the verifier answers a resolver seam and never routes; chi belongs in internal/infra/http.
+              desc: the JWT engine never routes; chi belongs in internal/infra/http.
             - pkg: google.golang.org/grpc
-              desc: gRPC interceptors, metadata, and status belong in oidcjwt's grpc.go adapter.
+              desc: inbound gRPC policy belongs in bearerauthn, not the JWT engine.
         # profile:authn-oidc-jwt:end
+        # profile:authn-oidc-introspection:start
+        oauthintrospection_core_is_transport_neutral:
+          list-mode: lax
+          files:
+            - "**/internal/infra/oauthintrospection/*.go"
+            - "!**/internal/infra/oauthintrospection/*_test.go"
+          deny:
+            - pkg: github.com/getkin/kin-openapi
+              desc: inbound HTTP security belongs in bearerauthn, not the introspection engine.
+            - pkg: github.com/go-chi/chi/v5
+              desc: the introspection engine never routes; chi belongs in internal/infra/http.
+            - pkg: google.golang.org/grpc
+              desc: inbound gRPC policy belongs in bearerauthn, not the introspection engine.
+            - pkg: github.com/example/go-service-template-rest/internal/config
+              desc: the introspection engine must not import configuration.
+            - pkg: github.com/example/go-service-template-rest/internal/infra/oidcjwt
+              desc: concrete trust engines must not import each other.
+        # profile:authn-oidc-introspection:end
+        # profile:authn-bearer:start
+        bearerauthn_core_is_transport_neutral:
+          list-mode: lax
+          files:
+            - "**/internal/infra/bearerauthn/*.go"
+            - "!**/internal/infra/bearerauthn/http.go"
+            # profile:grpc:start
+            - "!**/internal/infra/bearerauthn/grpc.go"
+            # profile:grpc:end
+            - "!**/internal/infra/bearerauthn/*_test.go"
+          deny:
+            - pkg: github.com/getkin/kin-openapi
+              desc: the OpenAPI security-requirement seam belongs in bearerauthn's http.go adapter.
+            - pkg: github.com/go-chi/chi/v5
+              desc: the shared runtime answers a resolver seam and never routes; chi belongs in internal/infra/http.
+            - pkg: google.golang.org/grpc
+              desc: gRPC interceptors, metadata, and status belong in bearerauthn's grpc.go adapter.
+            - pkg: github.com/example/go-service-template-rest/internal/infra/oidcjwt
+              desc: the shared runtime must not import a concrete trust engine.
+            - pkg: github.com/example/go-service-template-rest/internal/infra/oauthintrospection
+              desc: the shared runtime must not import a concrete trust engine.
+            - pkg: github.com/example/go-service-template-rest/internal/config
+              desc: the shared runtime must not import configuration.
+        # profile:authn-bearer:end
         postgres_driver_boundary:
           list-mode: lax
           files:
@@ -386,6 +435,13 @@ linters:
             # transaction; delivery itself owns no independent SQL schema.
             - "!**/internal/infra/postgreswebhook/*.go"
             # profile:webhooks-durable:end
+            # profile:inbound-webhooks-standard:start
+            - "!**/internal/infra/postgresinboundwebhook/*.go"
+            - "!**/cmd/jobs-worker/internal/bootstrap/run.go"
+            - "!**/cmd/jobs-worker/builder_webhooks.go"
+            - "!**/cmd/jobs-worker/inbound_webhook_bindings.go"
+            - "!**/cmd/service/internal/bootstrap/startup_inbound_webhooks.go"
+            # profile:inbound-webhooks-standard:end
           deny:
             - pkg: database/sql
               desc: database driver access belongs in PostgreSQL runtime or migration adapters.
@@ -401,6 +457,9 @@ linters:
             - "$all"
             - "!**/internal/infra/postgres/*.go"
             - "!**/internal/infra/postgresidempotency/store*.go"
+            # profile:inbound-webhooks-standard:start
+            - "!**/internal/infra/postgresinboundwebhook/*.go"
+            # profile:inbound-webhooks-standard:end
           deny:
             - pkg: github.com/example/go-service-template-rest/internal/infra/postgres/sqlcgen
               desc: generated sqlc types stay behind the hand-written internal/infra/postgres adapter.
@@ -467,6 +526,9 @@ linters:
         # this entry is what enforces that.
         - '^github\.com/example/go-service-template-rest/internal/infra/oidcjwt\.PolicyInput$'
         # profile:authn-oidc-jwt:end
+        # profile:authn-oidc-introspection:start
+        - '^github\.com/example/go-service-template-rest/internal/infra/oauthintrospection\.PolicyInput$'
+        # profile:authn-oidc-introspection:end
     forbidigo:
       analyze-types: true
       forbid:

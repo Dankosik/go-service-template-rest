@@ -212,12 +212,12 @@ func resetShutdownConfigEnv(t *testing.T) {
 			}
 		}
 	}
-	// profile:authn-oidc-jwt:start
+	// profile:authn-bearer:start
 	// Authentication trust has no executable defaults. This test is about the
 	// shipped shutdown budgets, so it supplies the unrelated required policy.
 	t.Setenv("APP__AUTHN__ISSUER", "https://issuer.example.com")
 	t.Setenv("APP__AUTHN__AUDIENCE", "service-api")
-	// profile:authn-oidc-jwt:end
+	// profile:authn-bearer:end
 	// profile:outbound-auth-oauth2-client-credentials:start
 	setOutboundAuthBootstrapTestEnv(t)
 	// profile:outbound-auth-oauth2-client-credentials:end

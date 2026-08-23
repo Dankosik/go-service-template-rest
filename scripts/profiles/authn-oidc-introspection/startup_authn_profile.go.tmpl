@@ -1,0 +1,43 @@
+package bootstrap
+
+import (
+	"context"
+	"fmt"
+	"log/slog"
+
+	"github.com/example/go-service-template-rest/internal/config"
+	"github.com/example/go-service-template-rest/internal/infra/bearerauthn"
+	"github.com/example/go-service-template-rest/internal/infra/oauthintrospection"
+	"github.com/example/go-service-template-rest/internal/infra/telemetry"
+)
+
+func initAuthn(
+	ctx context.Context,
+	cfg config.Config,
+	metrics *telemetry.Metrics,
+	_ *slog.Logger,
+) (*bearerauthn.Runtime, error) {
+	_ = ctx
+	policy, err := oauthintrospection.NewPolicy(oauthintrospection.PolicyInput{
+		Issuer:        cfg.Authn.Issuer,
+		Audience:      cfg.Authn.Audience,
+		Endpoint:      cfg.Authn.IntrospectionEndpoint,
+		TargetClass:   cfg.Authn.IntrospectionTargetClass,
+		PrivateSuffix: cfg.Authn.IntrospectionPrivateHostSuffix,
+		ClientID:      cfg.Authn.IntrospectionClientID,
+		ClientSecret:  cfg.Authn.IntrospectionClientSecret,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("initialize authentication policy: %w", err)
+	}
+	verifier, err := oauthintrospection.New(policy)
+	if err != nil {
+		return nil, fmt.Errorf("initialize authentication trust: %w", err)
+	}
+	runtime, err := bearerauthn.New(verifier, metrics.MeterProvider())
+	if err != nil {
+		verifier.Close()
+		return nil, fmt.Errorf("initialize authentication runtime: %w", err)
+	}
+	return runtime, nil
+}

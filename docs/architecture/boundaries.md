@@ -39,11 +39,24 @@ authentication, per-operation deadlines, retry eligibility, dependency
 criticality, or trust for a concrete neighbor.
 <!-- profile:grpc:end -->
 
+<!-- profile:authn-bearer:start -->
+`internal/infra/bearerauthn` owns inbound bearer grammar, sanitized failure
+taxonomy, verification telemetry, principal publication, and HTTP/gRPC
+adapters. Concrete engines implement its verifier contract.
+`internal/authntrust/` owns only the pure provider-URL, target-class, and
+token-profile predicates shared by config and those engines. It owns no
+configured value, credential verification, policy object, or authorization
+decision. `internal/infra/httpclient` enforces caller-supplied response-header
+guards without choosing provider budgets or parsing bodies.
+<!-- profile:authn-bearer:end -->
 <!-- profile:authn-oidc-jwt:start -->
-`internal/authntrust/` owns only the pure provider-URL and token-profile
-predicates shared by config and the OIDC verifier. It owns no configured value,
-credential verification, policy object, or authorization decision.
+`internal/infra/oidcjwt` owns JWT/JWKS discovery, verification, and refresh.
 <!-- profile:authn-oidc-jwt:end -->
+<!-- profile:authn-oidc-introspection:start -->
+`internal/infra/oauthintrospection` owns one RFC 7662 request, strict response
+admission, and idle-connection close. It caches, retries, and discovers
+nothing.
+<!-- profile:authn-oidc-introspection:end -->
 
 <!-- profile:outbox-postgres:start -->
 `internal/infra/postgresoutbox/` owns transactional append; `cmd/outbox-relay/`
@@ -67,6 +80,12 @@ feature/deployment decisions.
 address predicate and Standard Webhooks job adapter, not generic job state,
 subscriber administration, feature transactions, or deployment policy.
 <!-- profile:webhooks-durable:end -->
+
+<!-- profile:inbound-webhooks-standard:start -->
+`internal/inboundwebhook/` and `internal/infra/postgresinboundwebhook/` own
+Standard Webhooks verification, receipt identity, and River dispatch, not
+provider schemas, business effects, or deployment ingress.
+<!-- profile:inbound-webhooks-standard:end -->
 
 ## Dependency Direction
 

@@ -1,0 +1,7 @@
+# Independent Task Review / Readiness
+
+candidate: `tasks.md` SHA-256 `70090d5907c3260c940e2420c2a627e331edc7c04dd7a5eda1762fb3a0d09824`; `tasks/T001-retained-outbound-http-choice.md` SHA-256 `f84d97fc92aab9de6cffad5053f28256f89037d7cb947b094f43a49479fd701c`; `tasks/T002-external-integration-initializer.md` SHA-256 `c4bf2b1b05d7a8f1e9fddc6b8d89923b296cbba9245ecbb08c8507f5fbc46b91`
+verdict: PASS
+findings: none
+evidence_boundary: Independently verified all candidate hashes and the routing transition plus its fixed Specification, Technical Design, Test Plan, and review hashes. Atomicity passes: T001 is a separately consumable retained-capability lock outcome; T002 is one integrated initializer outcome, with all 25 fixed Test Design rows kept in one acceptance unit. The ready-frontier dry run found only T001 executable: its baseline commit, current Make-to-script owner, template-init harness, selection, lock/readback, dependency-aware retention, and cross-product oracle are closed by fixed inputs. T002 remains correctly behind accepted T001 output and explicit pinned-tool, readable-`origin/main`, Linux-`strace`, and Docker gates; their later availability cannot invalidate T001. T001's template-profile lock serializes the overlap. Canonical custody remains in `tasks.md` and its packets. No Implementation, validation ladder, actual `.env` inspection or mutation, or external effect occurred.
+reopen_owner: none

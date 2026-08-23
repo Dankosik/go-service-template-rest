@@ -22,6 +22,12 @@ errors stay private. Configuration is immutable and the secret remains
 environment-only.
 <!-- profile:outbound-auth-oauth2-client-credentials:end -->
 
+`make integration-init` adds one named adapter under `internal/infra/<name>`
+from a committed local OpenAPI or Protobuf contract. It reuses
+`internal/infra/httpclient`, `internal/infra/grpcclient`, and
+`internal/infra/oauth2clientcredentials`. It does not add a registry, provider
+SDK, or callable operation.
+
 Provider adapters live under `internal/infra/<integration>` and start with the
 always-available fixed-target HTTP client. The provider adapter owns authentication, budgets, retry eligibility,
 provider errors, and generated clients. Bootstrap owns wiring and cleanup. A

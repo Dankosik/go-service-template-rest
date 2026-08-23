@@ -12,9 +12,9 @@ import (
 	httpx "github.com/example/go-service-template-rest/internal/infra/http"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 
-	// profile:authn-oidc-jwt:start
+	// profile:authn-bearer:start
 	"github.com/getkin/kin-openapi/openapi3filter"
-	// profile:authn-oidc-jwt:end
+	// profile:authn-bearer:end
 )
 
 // httpRuntimeBindings is what this service composes into its HTTP transport,
@@ -23,10 +23,10 @@ import (
 // resolve through. Everything else the router needs comes from configuration.
 type httpRuntimeBindings struct {
 	Handlers httpx.Handlers
-	// profile:authn-oidc-jwt:start
+	// profile:authn-bearer:start
 	Authenticate          openapi3filter.AuthenticationFunc
 	AuthenticateChallenge string
-	// profile:authn-oidc-jwt:end
+	// profile:authn-bearer:end
 }
 
 // newHTTPHandler builds the hardened router for this service's own OpenAPI
@@ -54,10 +54,10 @@ func newHTTPHandler(
 			// mappers at runtimeDependencies.DomainErrors; see failure.Mapper
 			// for why the seam exists.
 			DomainErrors: domainErrors,
-			// profile:authn-oidc-jwt:start
+			// profile:authn-bearer:start
 			Authenticate:          bindings.Authenticate,
 			AuthenticateChallenge: bindings.AuthenticateChallenge,
-			// profile:authn-oidc-jwt:end
+			// profile:authn-bearer:end
 		},
 	)
 	if err != nil {
