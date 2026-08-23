@@ -70,7 +70,7 @@ func run(signalCtx context.Context, args []string, buildHandler HandlerBuilder) 
 	defer func() {
 		cleanupCtx, cleanupCancel := runtimeopts.TeardownStage(signalCtx, cleanupDeadline, telemetryClose)
 		defer cleanupCancel()
-		telemetryCleanup(cleanupCtx)
+		_ = telemetryCleanup(cleanupCtx)
 	}()
 	if err != nil {
 		return err

@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"log/slog"
+	"math"
 
 	"github.com/example/go-service-template-rest/internal/config"
 )
@@ -48,7 +49,10 @@ func reportRequestBufferBudget(log *slog.Logger, cfg config.Config, limit int64)
 		return
 	}
 
-	worstCase := int64(cfg.HTTP.MaxInFlight) * cfg.HTTP.MaxBodyBytes * requestBufferCopyCount()
+	worstCase := saturatingMul(
+		saturatingMul(int64(cfg.HTTP.MaxInFlight), cfg.HTTP.MaxBodyBytes),
+		requestBufferCopyCount(),
+	)
 	budget := int64(float64(limit) * cfg.Runtime.MemoryLimitRatio * requestBufferBudgetRatio)
 	if worstCase <= budget {
 		return
@@ -64,6 +68,16 @@ func reportRequestBufferBudget(log *slog.Logger, cfg config.Config, limit int64)
 		"request_buffers.budget_bytes", budget,
 		"limit.bytes", limit,
 	)
+}
+
+func saturatingMul(left, right int64) int64 {
+	if left <= 0 || right <= 0 {
+		return 0
+	}
+	if left > math.MaxInt64/right {
+		return math.MaxInt64
+	}
+	return left * right
 }
 
 func requestBufferCopyCount() int64 {
