@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-type TransportEvidence struct {
+type transportEvidence struct {
 	StatusCode        int
 	DefinitelyNotSent bool
 	MayHaveSent       bool

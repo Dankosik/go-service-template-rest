@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
@@ -91,7 +92,9 @@ func TestClientRejectsResolvedPrivateAddressAndRedirects(t *testing.T) {
 
 func TestAuthorityAndCorrelationPolicy(t *testing.T) {
 	var received *http.Request
+	var baseCalls int
 	base := roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		baseCalls++
 		received = request
 		return &http.Response{StatusCode: http.StatusNoContent, Body: http.NoBody}, nil
 	})
@@ -125,6 +128,19 @@ func TestAuthorityAndCorrelationPolicy(t *testing.T) {
 	if received.Header.Get("X-Provider") != "retained" || request.Header.Get("Traceparent") != "stale" {
 		t.Fatal("sanitizer changed an allowed or original header")
 	}
+	if baseCalls != 1 {
+		t.Fatalf("base calls = %d, want 1", baseCalls)
+	}
+
+	overriddenHost := request.Clone(request.Context())
+	overriddenHost.Host = "other.example.com"
+	response, err = transport.RoundTrip(overriddenHost)
+	if response != nil && response.Body != nil {
+		_ = response.Body.Close()
+	}
+	if !errors.Is(err, ErrTargetDenied) || baseCalls != 1 {
+		t.Fatalf("overridden Host error = %v, base calls = %d", err, baseCalls)
+	}
 
 	other, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "https://other.example.com/path", http.NoBody)
 	if err != nil {
@@ -134,8 +150,8 @@ func TestAuthorityAndCorrelationPolicy(t *testing.T) {
 	if response != nil && response.Body != nil {
 		_ = response.Body.Close()
 	}
-	if !errors.Is(err, ErrTargetDenied) {
-		t.Fatalf("alternate authority error = %v", err)
+	if !errors.Is(err, ErrTargetDenied) || baseCalls != 1 {
+		t.Fatalf("alternate authority error = %v, base calls = %d", err, baseCalls)
 	}
 }
 
@@ -239,6 +255,8 @@ func TestResponseLimitsAdmissionAndCompatibility(t *testing.T) {
 }
 
 func TestResponseHeaderTimeoutEnforced(t *testing.T) {
+	const testHeaderTimeout = 250 * time.Millisecond
+
 	received := make(chan struct{})
 	canceled := make(chan struct{})
 	blocked := newPinnedTLSServer(t, false, func(_ http.ResponseWriter, request *http.Request) {
@@ -249,7 +267,7 @@ func TestResponseHeaderTimeoutEnforced(t *testing.T) {
 	control := newPinnedTLSServer(t, false, func(response http.ResponseWriter, _ *http.Request) {
 		response.WriteHeader(http.StatusNoContent)
 	})
-	limits := ResponseLimits{ResponseHeaderTimeout: fixedHeaderTimeout, MaxResponseHeaderBytes: fixedMaxHeaderBytes}
+	limits := ResponseLimits{ResponseHeaderTimeout: testHeaderTimeout, MaxResponseHeaderBytes: fixedMaxHeaderBytes}
 
 	controlClient, err := NewExternalHTTPSWithLimits("https://example.com", limits)
 	if err != nil {
@@ -271,6 +289,8 @@ func TestResponseHeaderTimeoutEnforced(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	watchdog := time.NewTimer(5 * time.Second)
+	defer watchdog.Stop()
 	done := make(chan error, 1)
 	go func() {
 		response, requestErr := blockedClient.Do(request)
@@ -284,20 +304,21 @@ func TestResponseHeaderTimeoutEnforced(t *testing.T) {
 	}()
 	select {
 	case <-received:
-	case <-time.After(7 * time.Second):
+	case <-watchdog.C:
 		t.Fatal("server did not receive the withheld-header request")
 	}
 	select {
 	case err := <-done:
-		if err == nil {
-			t.Fatal("withheld-header request succeeded")
+		var timeoutError net.Error
+		if !errors.As(err, &timeoutError) || !timeoutError.Timeout() {
+			t.Fatalf("withheld-header error = %v, want timeout", err)
 		}
-	case <-time.After(7 * time.Second):
+	case <-watchdog.C:
 		t.Fatal("response-header timeout did not fire")
 	}
 	select {
 	case <-canceled:
-	case <-time.After(7 * time.Second):
+	case <-watchdog.C:
 		t.Fatal("server did not observe request cancellation")
 	}
 }

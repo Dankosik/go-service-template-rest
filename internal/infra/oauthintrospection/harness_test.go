@@ -13,7 +13,6 @@ import (
 
 	"github.com/example/go-service-template-rest/internal/authntrust"
 	"github.com/example/go-service-template-rest/internal/infra/bearerauthn"
-	"github.com/example/go-service-template-rest/internal/infra/httpclient"
 )
 
 const (
@@ -131,23 +130,27 @@ func newPinnedVerifier(t *testing.T, provider *loopbackProvider) *Verifier {
 
 func newPinnedVerifierWithPolicy(t *testing.T, provider *loopbackProvider, policy Policy) *Verifier {
 	t.Helper()
-	client, err := httpclient.NewExternalHTTPSWithLimits(policy.endpoint, httpclient.ResponseLimits{
-		ResponseHeaderTimeout:  ProviderTimeout,
-		MaxResponseHeaderBytes: MaxResponseHeaderBytes,
-	})
-	if err != nil {
-		t.Fatalf("NewExternalHTTPSWithLimits() error = %v", err)
-	}
-	t.Cleanup(client.CloseIdleConnections)
-	source, ok := provider.server.Client().Transport.(*http.Transport)
+	return newVerifier(policy, newLoopbackProviderClient(t, provider.server), func() time.Time { return testNow })
+}
+
+func newLoopbackProviderClient(t *testing.T, server *httptest.Server) *http.Client {
+	t.Helper()
+	source, ok := server.Client().Transport.(*http.Transport)
 	if !ok {
 		t.Fatal("httptest client transport has unexpected type")
 	}
-	httpclient.BindLoopbackTLS(client, source)
-	if !httpclient.ProxyDisabled(client) {
-		t.Fatal("loopback bind enabled a proxy")
+	transport := source.Clone()
+	transport.Proxy = nil
+	transport.ResponseHeaderTimeout = ProviderTimeout
+	transport.MaxResponseHeaderBytes = MaxResponseHeaderBytes
+	client := &http.Client{
+		Transport: transport,
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
 	}
-	return newVerifier(policy, client, func() time.Time { return testNow })
+	t.Cleanup(client.CloseIdleConnections)
+	return client
 }
 
 func requireKind(t *testing.T, err error, want bearerauthn.Kind) {
