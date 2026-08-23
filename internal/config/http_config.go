@@ -52,6 +52,10 @@ type HTTPConfig struct {
 	AccessLogHealthProbes bool `koanf:"access_log_health_probes"`
 }
 
+// httpTerminalResponseReserve leaves the connection write deadline enough time
+// to carry the small Problem response emitted after a request budget expires.
+const httpTerminalResponseReserve = time.Second
+
 func httpDefaults() map[string]any {
 	return map[string]any{
 		"http.addr": ":8080",
@@ -223,13 +227,15 @@ func validateHTTPReadinessWriteTimeout(cfg HTTPConfig) error {
 	return nil
 }
 
-// validateHTTPRequestWriteTimeout keeps the handler budget inside the response
-// write deadline. A request budget larger than http.write_timeout expires only
-// after the connection can no longer carry a response, so the timeout would be
-// reported to the client as a dropped connection instead of a 504.
+// validateHTTPRequestWriteTimeout keeps the handler budget plus the terminal
+// response reserve inside the connection write deadline.
 func validateHTTPRequestWriteTimeout(cfg HTTPConfig) error {
-	if cfg.RequestTimeout > cfg.WriteTimeout {
-		return fmt.Errorf("%w: http.request_timeout must be <= http.write_timeout", ErrValidate)
+	if cfg.RequestTimeout+httpTerminalResponseReserve > cfg.WriteTimeout {
+		return fmt.Errorf(
+			"%w: http.request_timeout must leave at least %s before http.write_timeout for the terminal response",
+			ErrValidate,
+			httpTerminalResponseReserve,
+		)
 	}
 	return nil
 }

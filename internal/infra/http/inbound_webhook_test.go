@@ -19,6 +19,7 @@ import (
 	"github.com/example/go-service-template-rest/internal/inboundwebhook"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 	"github.com/example/go-service-template-rest/internal/problem"
+	"github.com/example/go-service-template-rest/internal/waittest"
 )
 
 type recordingReceiver struct {
@@ -54,7 +55,6 @@ func inboundRouter(t *testing.T, receiver inboundwebhook.Receiver, cfg RouterCon
 	t.Helper()
 	return mustNewRouter(t, slog.New(slog.DiscardHandler), Handlers{
 		Health:         health.New(),
-		API:            unimplementedAPI{},
 		InboundWebhook: receiver,
 	}, telemetry.New(), cfg)
 }
@@ -172,18 +172,28 @@ func TestInboundWebhookAdmissionBeforeDurableWork(t *testing.T) {
 		block:   make(chan struct{}),
 		started: make(chan struct{}),
 	}
+	releaseBlocked := sync.OnceFunc(func() { close(blocked.block) })
+	t.Cleanup(releaseBlocked)
 	shed := inboundRouter(t, blocked, RouterConfig{MaxInFlight: 1})
+	firstDone := make(chan struct{})
 	go func() {
+		defer close(firstDone)
 		rec := httptest.NewRecorder()
 		shed.ServeHTTP(rec, inboundRequest(`{}`))
 	}()
-	<-blocked.started
-	second := httptest.NewRecorder()
-	shed.ServeHTTP(second, inboundRequest(`{}`))
-	close(blocked.block)
+	waittest.ReceiveSignal(t, blocked.started, 2*time.Second, "first webhook request to reach the receiver")
+	shedResponse := make(chan *httptest.ResponseRecorder, 1)
+	go func() {
+		response := httptest.NewRecorder()
+		shed.ServeHTTP(response, inboundRequest(`{}`))
+		shedResponse <- response
+	}()
+	second := waittest.Receive(t, shedResponse, 2*time.Second, "second webhook request to be shed")
 	if second.Code != http.StatusServiceUnavailable || second.Header().Get("Retry-After") == "" {
 		t.Fatalf("shed status = %d retry=%q", second.Code, second.Header().Get("Retry-After"))
 	}
+	releaseBlocked()
+	waittest.ReceiveSignal(t, firstDone, 2*time.Second, "admitted webhook request to return")
 
 	rateReceiver := &recordingReceiver{result: inboundwebhook.Result{Outcome: inboundwebhook.OutcomeAccepted}}
 	limited := inboundRouter(t, rateReceiver, RouterConfig{
@@ -259,6 +269,7 @@ func TestInboundWebhookResponseContract(t *testing.T) {
 
 	t.Run("timeout", func(t *testing.T) {
 		blocked := &recordingReceiver{block: make(chan struct{}), started: make(chan struct{})}
+		defer close(blocked.block)
 		handler := inboundRouter(t, blocked, RouterConfig{RequestTimeout: 20 * time.Millisecond})
 		resp := httptest.NewRecorder()
 		done := make(chan struct{})
@@ -266,9 +277,8 @@ func TestInboundWebhookResponseContract(t *testing.T) {
 			handler.ServeHTTP(resp, inboundRequest(`{}`))
 			close(done)
 		}()
-		<-blocked.started
-		<-done
-		close(blocked.block)
+		waittest.ReceiveSignal(t, blocked.started, 2*time.Second, "webhook request to reach the receiver")
+		waittest.ReceiveSignal(t, done, 2*time.Second, "webhook request to return after timeout")
 		if resp.Code != http.StatusGatewayTimeout {
 			t.Fatalf("status = %d want 504 body=%q", resp.Code, resp.Body.String())
 		}

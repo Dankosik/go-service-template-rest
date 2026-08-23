@@ -96,7 +96,7 @@ TEMPLATE ?= ../go-service-template-rest
 	lint lint-package lint-all lint-deep lint-fast deadcode nilaway modernize-check test-parallelism-check \
 	govulncheck gosec secret-scan secret-scan-history \
 	actionlint actionlint-fast shellcheck shellcheck-fast dockerfile-check \
-	openapi-generate openapi-drift-check openapi-reference-compile openapi-runtime-contract-check openapi-lint openapi-validate openapi-breaking openapi-check \
+	openapi-generate openapi-drift-check openapi-runtime-contract-check openapi-lint openapi-validate openapi-breaking openapi-check \
 	proto-format proto-format-check proto-lint proto-generate proto-drift-check proto-breaking proto-check check-proto \
 	sqlc-check runtime-image-build container-security run build build-pgo docker-build docker-run vendor claude-skills-sync claude-skills-check qwen-skills-sync qwen-skills-check agent-roles-sync agent-roles-check codex-agents-sync codex-agents-check \
 	template-sync template-sync-check template-owned-purity-check
@@ -496,23 +496,9 @@ openapi-drift-check:
 	after="$$(shasum -a 256 $(OPENAPI_GENERATED_FILES))"; \
 	test "$$before" = "$$after" || { git diff -- $(OPENAPI_GENERATED_FILES); exit 1; }
 
-openapi-reference-compile:
-	@if [ -n "$(REFERENCE_OPENAPI_PACKAGE)" ]; then \
-		go test -vet=off $(REFERENCE_OPENAPI_PACKAGE); \
-	fi
-
 openapi-runtime-contract-check:
-	@report="$$(mktemp)"; \
-	trap 'rm -f "$$report"' EXIT; \
-	if ! go test -vet=off -json ./internal/infra/http -run '^TestOpenAPIRuntimeContract' -count=1 >"$$report" 2>&1; then \
-		cat "$$report"; \
-		exit 1; \
-	fi; \
-	if ! grep -Eq '"Action":"run".*"Test":"TestOpenAPIRuntimeContract[^"]*"' "$$report"; then \
-		cat "$$report"; \
-		echo "no OpenAPI runtime contract tests matched"; \
-		exit 1; \
-	fi
+	go test -vet=off ./internal/infra/http $(OPENAPI_PACKAGES)
+	go test -vet=off ./cmd/service/internal/bootstrap -run '^TestInboundWebhookHeaderOverflowUsesListener431$$'
 
 openapi-lint:
 	REDOCLY_SUPPRESS_UPDATE_NOTICE=true REDOCLY_TELEMETRY=off npm_config_prefer_offline=true $(REDOCLY_CLI) lint --config .redocly.yaml $(OPENAPI_FILES)

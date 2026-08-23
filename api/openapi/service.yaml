@@ -253,11 +253,19 @@ components:
           schema:
             $ref: "#/components/schemas/Problem"
     RequestHeaderFieldsTooLarge:
-      description: request headers exceed the listener bound
+      description: >-
+        request headers exceed either the listener bound or an
+        application-level credential bound; listener rejections happen before
+        routing and use text/plain, while application rejections use Problem
+        Details
       content:
         application/problem+json:
           schema:
             $ref: "#/components/schemas/Problem"
+        text/plain:
+          schema:
+            type: string
+            example: 431 Request Header Fields Too Large
     ServiceUnavailable:
       description: durable acceptance is unavailable
       headers:

@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -19,6 +20,9 @@ import (
 	"github.com/example/go-service-template-rest/internal/inboundwebhook"
 	httpx "github.com/example/go-service-template-rest/internal/infra/http"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
+	"github.com/example/go-service-template-rest/internal/openapi"
+	"github.com/getkin/kin-openapi/openapi3filter"
+	"github.com/getkin/kin-openapi/routers/gorillamux"
 )
 
 func TestInboundWebhookServiceStartup(t *testing.T) {
@@ -51,7 +55,6 @@ func TestInboundWebhookHeaderOverflowUsesListener431(t *testing.T) {
 			Handlers: httpx.Handlers{
 				Health:         health.New(),
 				ReadinessGate:  func(context.Context) error { return nil },
-				API:            newServiceAPI(),
 				InboundWebhook: nil,
 			},
 		},
@@ -96,6 +99,45 @@ func TestInboundWebhookHeaderOverflowUsesListener431(t *testing.T) {
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusRequestHeaderFieldsTooLarge {
 		t.Fatalf("status = %d", resp.StatusCode)
+	}
+	if got := resp.Header.Get("Content-Type"); !strings.HasPrefix(got, "text/plain") {
+		t.Fatalf("Content-Type = %q, want text/plain listener response", got)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read response body: %v", err)
+	}
+	if got := string(body); got != "431 Request Header Fields Too Large" {
+		t.Fatalf("body = %q, want listener 431 text", got)
+	}
+
+	spec, err := openapi.GetSpec()
+	if err != nil {
+		t.Fatalf("load OpenAPI contract: %v", err)
+	}
+	spec.Servers = nil
+	contractRouter, err := gorillamux.NewRouter(spec)
+	if err != nil {
+		t.Fatalf("build OpenAPI contract router: %v", err)
+	}
+	contractRequest := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/webhooks/orders", nil)
+	route, pathParams, err := contractRouter.FindRoute(contractRequest)
+	if err != nil {
+		t.Fatalf("find webhook contract route: %v", err)
+	}
+	validation := &openapi3filter.ResponseValidationInput{
+		RequestValidationInput: &openapi3filter.RequestValidationInput{
+			Request:    contractRequest,
+			PathParams: pathParams,
+			Route:      route,
+		},
+		Status:  resp.StatusCode,
+		Header:  resp.Header,
+		Options: &openapi3filter.Options{IncludeResponseStatus: true},
+	}
+	validation.SetBodyBytes(body)
+	if err := openapi3filter.ValidateResponse(t.Context(), validation); err != nil {
+		t.Fatalf("listener response does not match OpenAPI contract: %v", err)
 	}
 }
 

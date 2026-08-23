@@ -328,7 +328,6 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 					)
 				},
 				// profile:inbound-webhooks-standard:start
-				API:            newServiceAPI(),
 				InboundWebhook: inboundReceiver,
 				// profile:inbound-webhooks-standard:end
 			},
