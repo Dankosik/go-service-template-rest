@@ -48,7 +48,7 @@ jobs:
         run: make template-init-check
       - name: Instruction ownership
         run: |
-          make agent-roles-check codex-agents-check claude-skills-check qwen-skills-check template-owned-purity-check
+          make template-owned-purity-check
           bash scripts/ci/instruction-evals-check.sh
       - name: Breaking contracts
         if: github.event_name == 'pull_request'

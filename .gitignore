@@ -1,4 +1,6 @@
 bin/
+/jobs-worker
+/s3.test
 .artifacts/test/
 .artifacts/bench/
 .artifacts/skill-evals/

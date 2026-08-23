@@ -838,34 +838,30 @@ row_e8_named() {
 
 same_text() { [[ "$1" == "$2" ]]; }
 
-row_e1_http
-row_e1_grpc
-row_e1_runtime
-row_e2_oauth
-row_e2_none
-row_e3_input
-row_e3_precondition
-row_e3_contract
-row_e3_env
-row_e3_env2
-row_e4_initial
-row_e4_repeat
-row_e4_refresh
-row_e5_openapi
-row_e5_proto
-row_e5_routing
-row_e5_boundary
-row_e5_gates
-row_e6_http
-row_e6_grpc
-row_e7_initial
-row_e7_refresh
-row_e8_disclosure
-row_e8_legacy
-row_e8_named
+rows=(
+	row_e1_http row_e1_grpc row_e1_runtime row_e2_oauth row_e2_none
+	row_e3_input row_e3_precondition row_e3_contract row_e3_env row_e3_env2
+	row_e4_initial row_e4_repeat row_e4_refresh row_e5_openapi row_e5_proto
+	row_e5_routing row_e5_boundary row_e5_gates row_e6_http row_e6_grpc
+	row_e7_initial row_e7_refresh row_e8_disclosure row_e8_legacy row_e8_named
+)
+if [[ "${1:-}" == "--list" ]]; then
+	printf '%s\n' "${rows[@]}"
+	exit 0
+fi
+if (($# > 0)); then
+	rows=("$@")
+fi
+for row in "${rows[@]}"; do
+	if [[ "${row}" != row_* ]] || ! declare -F "${row}" >/dev/null; then
+		echo "unknown integration-init row: ${row}" >&2
+		exit 2
+	fi
+	"${row}"
+done
 
-if [[ "${#PASSED[@]}" -ne 25 ]]; then
-	echo "expected 25 matrix IDs, got ${#PASSED[@]}: ${PASSED[*]}" >&2
+if [[ "${#PASSED[@]}" -ne "${#rows[@]}" ]]; then
+	echo "expected ${#rows[@]} matrix IDs, got ${#PASSED[@]}: ${PASSED[*]}" >&2
 	exit 1
 fi
-echo "case count: 25"
+echo "case count: ${#PASSED[@]}"

@@ -207,19 +207,19 @@ retires_singleton_oauth() {
 
 require_tools() {
 	if [[ "${TRANSPORT}" == "http" ]]; then
-		bash "${ROOT_DIR}/scripts/run-go-tool.sh" oapi-codegen -version >/dev/null
+		go -C "${ROOT_DIR}" tool -modfile=tools/go.mod oapi-codegen -version >/dev/null
 	else
-		bash "${ROOT_DIR}/scripts/run-buf.sh" --version >/dev/null
+		go -C "${ROOT_DIR}" tool -modfile=tools/go.mod buf --version >/dev/null
 	fi
 }
 
 validate_contract_schema() {
 	if [[ "${TRANSPORT}" == "http" ]]; then
-		bash "${ROOT_DIR}/scripts/run-go-tool.sh" validate -- "${ROOT_DIR}/${CONTRACT}"
+		go -C "${ROOT_DIR}" tool -modfile=tools/go.mod validate -- "${ROOT_DIR}/${CONTRACT}"
 	else
 		(
 			cd "${ROOT_DIR}"
-			bash ./scripts/run-buf.sh lint "${CONTRACT}"
+			go tool -modfile=tools/go.mod buf lint "${CONTRACT}"
 		)
 	fi
 }
@@ -691,7 +691,7 @@ EOF
 	cat >"${dir}/internal/openapi/doc.go" <<EOF
 package openapi
 
-//go:generate bash ../../../../../scripts/run-go-tool.sh oapi-codegen -config oapi-codegen.yaml ../../../../../${CONTRACT}
+//go:generate go tool -modfile=../../../../../tools/go.mod oapi-codegen -config oapi-codegen.yaml ../../../../../${CONTRACT}
 EOF
 	cat >"${dir}/internal/openapi/oapi-codegen.yaml" <<EOF
 package: openapi
@@ -1557,8 +1557,8 @@ format_manual_go() {
 	if ((${#present[@]} > 0)); then
 		(
 			cd "${ROOT_DIR}"
-			bash ./scripts/run-go-tool.sh goimports -w "${present[@]}"
-			bash ./scripts/run-go-tool.sh gofumpt -w "${present[@]}"
+			go tool -modfile=tools/go.mod goimports -w "${present[@]}"
+			go tool -modfile=tools/go.mod gofumpt -w "${present[@]}"
 		)
 	fi
 }
