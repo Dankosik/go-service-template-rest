@@ -60,10 +60,6 @@ func (m messagingRuntime) ConnectionRun() func(context.Context) error {
 	return m.client.Run
 }
 
-func (m messagingRuntime) Ready() bool {
-	return m.client == nil || m.client.Ready()
-}
-
 func (m messagingRuntime) ReadinessProbes() []health.Probe {
 	if m.client == nil {
 		return nil

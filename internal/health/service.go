@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -71,6 +72,46 @@ type readinessState struct {
 	evaluatedAt         time.Time
 }
 
+type readinessTransitions struct {
+	mu          sync.Mutex
+	previousErr error
+	notify      func(error)
+}
+
+func (t *readinessTransitions) publish(currentErr error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.notify != nil && (t.previousErr == nil) != (currentErr == nil) {
+		t.notify(currentErr)
+	}
+	t.previousErr = currentErr
+}
+
+func (t *readinessTransitions) publishStale(service *Service, state *readinessState) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if service.draining.Load() || service.state.Load() != state || t.previousErr != nil {
+		return
+	}
+	err := service.staleness(state)
+	if !errors.Is(err, ErrStale) {
+		return
+	}
+	t.previousErr = err
+	t.notify(err)
+}
+
+func (s *Service) armStaleness(state *readinessState, transitions *readinessTransitions) *time.Timer {
+	if transitions.notify == nil || state.err != nil || s.draining.Load() {
+		return nil
+	}
+	staleAfter := time.Duration(s.staleAfter.Load())
+	delay := max(time.Until(state.evaluatedAt.Add(staleAfter))+time.Nanosecond, time.Nanosecond)
+	return time.AfterFunc(delay, func() {
+		transitions.publishStale(s, state)
+	})
+}
+
 func New(probes ...Probe) *Service {
 	return &Service{probes: slices.Clone(probes)}
 }
@@ -113,6 +154,8 @@ func (s *Service) staleness(state *readinessState) error {
 // nil on cancellation so it can be supervised as an ordinary background task.
 // onTransition receives the cached failure on healthy-to-unhealthy changes and
 // nil on recovery; the initial evaluation is not a transition.
+// If Watch stops before drain, one final callback may report ErrStale when the
+// last healthy verdict expires. StartDrain suppresses that deferred transition.
 //
 // The first evaluation runs immediately: a service that has just been admitted
 // must not report ErrNotEvaluated for a whole interval. failureThreshold applies
@@ -121,9 +164,9 @@ func (s *Service) staleness(state *readinessState) error {
 //
 // probeBudget bounds one evaluation and is separate from interval so a configured
 // probe timeout is not clamped to the refresh period, which would let a
-// dependency pass startup admission and then flap out of rotation. Configuration
-// cross-validation keeps interval above probeBudget so evaluations cannot pile up
-// behind a slow dependency.
+// dependency pass startup admission and then flap out of rotation. Evaluations
+// are serial, and the staleness budget uses the larger of the interval and probe
+// budget when a probe is slower than the requested cadence.
 func (s *Service) Watch(
 	ctx context.Context,
 	interval, probeBudget time.Duration,
@@ -151,21 +194,31 @@ func (s *Service) Watch(
 	s.staleAfter.Store(int64(staleBudget(interval, probeBudget)))
 
 	_ = s.Refresh(ctx, probeBudget, failureThreshold)
-	previousErr := s.state.Load().err
+	state := s.state.Load()
+	transitions := readinessTransitions{previousErr: state.err, notify: onTransition}
+	staleTimer := s.armStaleness(state, &transitions)
 
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
+			if s.draining.Load() && staleTimer != nil {
+				staleTimer.Stop()
+			}
 			return nil
 		case <-ticker.C:
 			_ = s.Refresh(ctx, probeBudget, failureThreshold)
-			currentErr := s.state.Load().err
-			if onTransition != nil && (previousErr == nil) != (currentErr == nil) {
-				onTransition(currentErr)
+			if staleTimer != nil {
+				staleTimer.Stop()
 			}
-			previousErr = currentErr
+			state = s.state.Load()
+			currentErr := state.err
+			if s.draining.Load() {
+				currentErr = ErrDraining
+			}
+			transitions.publish(currentErr)
+			staleTimer = s.armStaleness(state, &transitions)
 		}
 	}
 }

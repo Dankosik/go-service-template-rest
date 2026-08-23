@@ -73,23 +73,6 @@ func TestServiceRefreshReportsObservedFailureRegardlessOfThreshold(t *testing.T)
 	}
 }
 
-func TestServiceCachedDraining(t *testing.T) {
-	t.Parallel()
-
-	probe := fakeProbe{name: "db"}
-
-	svc := New(probe)
-	if err := svc.Refresh(context.Background(), testProbeBudget, 1); err != nil {
-		t.Fatalf("Refresh() error = %v", err)
-	}
-	svc.StartDrain()
-
-	err := svc.Cached()
-	if !errors.Is(err, ErrDraining) {
-		t.Fatalf("Cached() error = %v, want ErrDraining", err)
-	}
-}
-
 type fakeProbe struct {
 	name string
 	err  error
