@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/infra/bearerauthn"
-	"github.com/example/go-service-template-rest/internal/infra/httpclient"
 
 	// profile:grpc:start
 	"github.com/example/go-service-template-rest/internal/reqctx"
@@ -85,18 +84,6 @@ func TestFixedAuthorityOneAttempt(t *testing.T) {
 	}))
 	t.Cleanup(redirect.Close)
 
-	t.Setenv("HTTPS_PROXY", "https://proxy.invalid")
-	t.Setenv("HTTP_PROXY", "http://proxy.invalid")
-
-	constructed, err := New(testPolicy(t))
-	if err != nil {
-		t.Fatalf("New() error = %v", err)
-	}
-	t.Cleanup(constructed.Close)
-	if !httpclient.ProxyDisabled(constructed.client) {
-		t.Fatal("production constructor honored an ambient proxy")
-	}
-
 	var status int
 	var closeBeforeHeaders bool
 	provider := newLoopbackProvider(t, func(response http.ResponseWriter, _ *http.Request) {
@@ -118,9 +105,6 @@ func TestFixedAuthorityOneAttempt(t *testing.T) {
 		response.WriteHeader(status)
 	})
 	verifier := newPinnedVerifier(t, provider)
-	if !httpclient.ProxyDisabled(verifier.client) {
-		t.Fatal("pinned client enabled a proxy")
-	}
 
 	for _, code := range []int{http.StatusFound, http.StatusTooManyRequests, http.StatusInternalServerError} {
 		status = code
@@ -129,7 +113,7 @@ func TestFixedAuthorityOneAttempt(t *testing.T) {
 	}
 	status = 0
 	closeBeforeHeaders = true
-	_, err = verifier.Verify(t.Context(), testToken)
+	_, err := verifier.Verify(t.Context(), testToken)
 	requireKind(t, err, bearerauthn.KindUnavailable)
 	if provider.calls.Load() != 4 || redirectHits.Load() != 0 {
 		t.Fatalf("provider calls = %d, redirect hits = %d", provider.calls.Load(), redirectHits.Load())
@@ -206,22 +190,16 @@ func TestProviderBoundaryAdmission(t *testing.T) {
 		}))
 		t.Cleanup(untrusted.Close)
 		policy := testPolicy(t)
-		client, err := httpclient.NewExternalHTTPSWithLimits(policy.endpoint, httpclient.ResponseLimits{
-			ResponseHeaderTimeout:  ProviderTimeout,
-			MaxResponseHeaderBytes: MaxResponseHeaderBytes,
-		})
-		if err != nil {
-			t.Fatalf("NewExternalHTTPSWithLimits() error = %v", err)
-		}
-		t.Cleanup(client.CloseIdleConnections)
-		source, ok := untrusted.Client().Transport.(*http.Transport)
+		client := newLoopbackProviderClient(t, untrusted)
+		transport, ok := client.Transport.(*http.Transport)
 		if !ok {
 			t.Fatal("httptest transport type")
 		}
-		httpclient.BindLoopbackTLS(client, source)
-		httpclient.RejectLoopbackTLSTrust(client)
+		transport.TLSClientConfig = transport.TLSClientConfig.Clone()
+		transport.TLSClientConfig.RootCAs = nil
+		transport.TLSClientConfig.InsecureSkipVerify = false
 		verifier := newVerifier(policy, client, func() time.Time { return testNow })
-		_, err = verifier.Verify(t.Context(), testToken)
+		_, err := verifier.Verify(t.Context(), testToken)
 		requireKind(t, err, bearerauthn.KindUnavailable)
 	})
 

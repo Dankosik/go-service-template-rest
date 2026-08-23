@@ -87,7 +87,8 @@ func (t authorityTransport) CloseIdleConnections() {
 func (t authorityTransport) RoundTrip(request *http.Request) (*http.Response, error) {
 	if request == nil || request.URL == nil || request.URL.User != nil ||
 		!strings.EqualFold(request.URL.Scheme, t.scheme) ||
-		!strings.EqualFold(request.URL.Host, t.authority) {
+		!strings.EqualFold(request.URL.Host, t.authority) ||
+		request.Host != "" && !strings.EqualFold(request.Host, t.authority) {
 		return nil, ErrTargetDenied
 	}
 	return t.base.RoundTrip(request) //nolint:wrapcheck // The transport error keeps its standard identity.
