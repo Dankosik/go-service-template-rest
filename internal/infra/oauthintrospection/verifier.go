@@ -25,10 +25,15 @@ const (
 	MaxProviderBody        = 1 << 20
 )
 
+type providerClient interface {
+	Do(request *http.Request) (*http.Response, error)
+	CloseIdleConnections()
+}
+
 // Verifier owns one fixed-authority introspection client and no background work.
 type Verifier struct {
 	policy    Policy
-	client    *httpclient.Client
+	client    providerClient
 	now       func() time.Time
 	closeOnce sync.Once
 }
@@ -42,7 +47,7 @@ func New(policy Policy) (*Verifier, error) {
 	return newVerifier(policy, client, time.Now), nil
 }
 
-func newVerifier(policy Policy, client *httpclient.Client, now func() time.Time) *Verifier {
+func newVerifier(policy Policy, client providerClient, now func() time.Time) *Verifier {
 	if now == nil {
 		now = time.Now
 	}
