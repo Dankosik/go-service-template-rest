@@ -35,6 +35,9 @@ INTEGRATION_PACKAGES := ./test/...
 # profile:http-idempotency-postgres:start
 INTEGRATION_PACKAGES += ./internal/infra/postgresidempotency
 # profile:http-idempotency-postgres:end
+# profile:inbound-webhooks-standard:start
+INTEGRATION_PACKAGES += ./internal/infra/postgresinboundwebhook
+# profile:inbound-webhooks-standard:end
 # profile:messaging-nats-jetstream:start
 INTEGRATION_PACKAGES += ./internal/infra/natsjs ./cmd/worker/internal/bootstrap
 MESSAGING_RACE_PACKAGES := ./internal/infra/natsjs ./cmd/worker/internal/bootstrap ./test
