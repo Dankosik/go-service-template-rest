@@ -107,19 +107,19 @@ func (d *DiagnosticsListener) Stopped() <-chan struct{} {
 
 // Stop drains in-flight scrapes until limit expires, then drops whatever is
 // still open, so Serve always returns and the join cannot outlast the budget.
-// The returned error carries whatever Serve reported, so a caller that selected
-// on [DiagnosticsListener.Stopped] only needs to say that it fired.
+// A local stage timeout is a degraded success once Close has forced the listener
+// down; a spent parent budget and Close or Serve failures remain errors.
 //
 // parent is the caller's own teardown context, and its deadline still binds:
 // limit is this stage's ceiling, not a fresh budget.
 func (d *DiagnosticsListener) Stop(parent context.Context, limit time.Duration) error {
 	ctx, cancel := context.WithTimeout(parent, limit)
 	defer cancel()
-	err := errors.Join(d.server.Shutdown(ctx), d.server.Close())
-	select {
-	case <-d.done:
-		return errors.Join(err, d.serveErr)
-	case <-ctx.Done():
-		return errors.Join(err, fmt.Errorf("join %s diagnostics: %w", d.component, ctx.Err()))
+	shutdownErr := d.server.Shutdown(ctx)
+	closeErr := d.server.Close()
+	<-d.done
+	if parent.Err() == nil && errors.Is(shutdownErr, context.DeadlineExceeded) {
+		shutdownErr = nil
 	}
+	return errors.Join(shutdownErr, closeErr, d.serveErr)
 }
