@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strconv"
 
 	"github.com/example/go-service-template-rest/internal/failure"
@@ -39,6 +40,7 @@ func RejectResponse(log *slog.Logger, domainErrors ...failure.Mapper) func(http.
 // answer this service chose, and the access log already carries its problem code;
 // recording it again at ERROR would put every 404 in the error stream.
 func handleGeneratedResponseError(log *slog.Logger, domainErrors []failure.Mapper) func(http.ResponseWriter, *http.Request, error) {
+	domainErrors = slices.Clone(domainErrors)
 	return func(w http.ResponseWriter, r *http.Request, err error) {
 		// A handler that returns its expired context is reporting a spent
 		// request budget, not an internal fault, and this is the path most

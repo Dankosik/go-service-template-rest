@@ -74,7 +74,7 @@ func TestPrincipalScopesAreNotAliased(t *testing.T) {
 func TestRequestIDRoundTrip(t *testing.T) {
 	t.Parallel()
 
-	ctx := reqctx.ContextWithRequestID(context.Background(), "caller-id")
+	ctx, _ := reqctx.ContextWithAcceptedRequestID(context.Background(), "caller-id")
 
 	if got := reqctx.RequestID(ctx); got != "caller-id" {
 		t.Fatalf("RequestID() = %q, want %q", got, "caller-id")

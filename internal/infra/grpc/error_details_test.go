@@ -14,7 +14,9 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -89,35 +91,86 @@ func TestRetryHintReachesBothTransports(t *testing.T) {
 	}
 }
 
-// The gRPC code space is coarser than failure.Code: InvalidArgument answers for
-// both CodeBadRequest and CodeUnprocessableContent. The reason is what lets a
-// caller tell them apart.
-func TestErrorInfoDistinguishesCodesSharingOneGRPCCode(t *testing.T) {
-	reasons := make(map[failure.Code]string, 2)
-	for _, code := range []failure.Code{failure.CodeBadRequest, failure.CodeUnprocessableContent} {
-		mappers := []failure.Mapper{func(err error) (failure.Classification, bool) {
-			if !errors.Is(err, errSaturated) {
-				return failure.Classification{}, false
+func TestEveryFailureCodeRendersAConformingReason(t *testing.T) {
+	t.Parallel()
+
+	expected := map[failure.Code]codes.Code{
+		failure.CodeBadRequest:                  codes.InvalidArgument,
+		failure.CodeUnauthorized:                codes.Unauthenticated,
+		failure.CodeForbidden:                   codes.PermissionDenied,
+		failure.CodeNotFound:                    codes.NotFound,
+		failure.CodeMethodNotAllowed:            codes.Unimplemented,
+		failure.CodeAlreadyExists:               codes.AlreadyExists,
+		failure.CodeRequestEntityTooLarge:       codes.ResourceExhausted,
+		failure.CodeRequestHeaderFieldsTooLarge: codes.ResourceExhausted,
+		failure.CodeUnprocessableContent:        codes.InvalidArgument,
+		failure.CodeTooManyRequests:             codes.ResourceExhausted,
+		failure.CodeIdempotencyKeyMismatch:      codes.InvalidArgument,
+		failure.CodeIdempotencyUnavailable:      codes.Unavailable,
+		failure.CodeIdempotencyOutcomeUnknown:   codes.Unavailable,
+		failure.CodeInternalError:               codes.Internal,
+		failure.CodeServiceUnavailable:          codes.Unavailable,
+		failure.CodeGatewayTimeout:              codes.DeadlineExceeded,
+	}
+	allCodes := failure.AllCodes()
+	if len(expected) != len(allCodes) {
+		t.Fatalf("mapping table has %d codes, failure catalog has %d", len(expected), len(allCodes))
+	}
+	reasonPattern := regexp.MustCompile(`^[A-Z][A-Z0-9_]{0,61}[A-Z0-9]$`)
+
+	for _, failureCode := range allCodes {
+		t.Run(string(failureCode), func(t *testing.T) {
+			t.Parallel()
+
+			wantCode, ok := expected[failureCode]
+			if !ok {
+				t.Fatalf("failure code %q has no expected gRPC status", failureCode)
 			}
-			return failure.Classification{Code: code, Detail: "rejected"}, true
-		}}
+			converted := status.Convert(mappedStatus(failure.Classification{
+				Code:   failureCode,
+				Detail: "classified failure",
+			}, testErrorDomain))
+			if converted.Code() != wantCode {
+				t.Fatalf("status code = %s, want %s", converted.Code(), wantCode)
+			}
 
-		_, errorInfo := classifiedDetailsFromServer(t, mappers)
-		if errorInfo == nil {
-			t.Fatalf("%s carried no ErrorInfo", code)
-		}
-		if errorInfo.GetDomain() != testErrorDomain {
-			t.Fatalf("ErrorInfo domain = %q, want %q", errorInfo.GetDomain(), testErrorDomain)
-		}
-		reasons[code] = errorInfo.GetReason()
+			var errorInfo *errdetails.ErrorInfo
+			for _, detail := range converted.Details() {
+				if typed, ok := detail.(*errdetails.ErrorInfo); ok {
+					errorInfo = typed
+				}
+			}
+			if errorInfo == nil {
+				t.Fatal("status carried no ErrorInfo")
+			}
+			wantReason := strings.ToUpper(string(failureCode))
+			if errorInfo.GetReason() != wantReason || !reasonPattern.MatchString(errorInfo.GetReason()) {
+				t.Fatalf("ErrorInfo reason = %q, want conforming %q", errorInfo.GetReason(), wantReason)
+			}
+			if errorInfo.GetDomain() != testErrorDomain {
+				t.Fatalf("ErrorInfo domain = %q, want %q", errorInfo.GetDomain(), testErrorDomain)
+			}
+		})
 	}
+}
 
-	if reasons[failure.CodeBadRequest] == reasons[failure.CodeUnprocessableContent] {
-		t.Fatalf(
-			"both codes rendered reason %q, so a caller cannot tell them apart",
-			reasons[failure.CodeBadRequest],
-		)
+func TestHandlerErrorBoundarySnapshotsDomainMappers(t *testing.T) {
+	t.Parallel()
+
+	specific := func(error) (failure.Classification, bool) {
+		return failure.Classification{Code: failure.CodeAlreadyExists, Detail: "specific"}, true
 	}
+	broad := func(error) (failure.Classification, bool) {
+		return failure.Classification{Code: failure.CodeBadRequest, Detail: "broad"}, true
+	}
+	mappers := []failure.Mapper{specific, broad}
+	boundary := handlerErrorBoundary(slog.New(slog.DiscardHandler), mappers)
+	mappers[0] = broad
+
+	err := boundary(t.Context(), "/"+testErrorDomain+"/Unary", func(context.Context) error {
+		return errSaturated
+	})
+	assertStatusCode(t, err, codes.AlreadyExists)
 }
 
 func TestUnclassifiedErrorCarriesNoDetailsAndNoHandlerText(t *testing.T) {

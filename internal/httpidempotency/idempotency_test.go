@@ -131,4 +131,9 @@ func TestClassifyError(t *testing.T) {
 	if _, ok := ClassifyError(errors.New("business error")); ok {
 		t.Fatal("ClassifyError classified an unrelated business error")
 	}
+	for _, internal := range []error{ErrIntegrity, ErrInvalidFingerprint, ErrInvalidResult} {
+		if got, ok := ClassifyError(fmt.Errorf("execute: %w", internal)); ok || got != (failure.Classification{}) {
+			t.Errorf("ClassifyError(%v) = (%+v, %t), want unclassified internal fault", internal, got, ok)
+		}
+	}
 }

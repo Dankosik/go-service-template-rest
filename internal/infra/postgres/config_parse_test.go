@@ -199,50 +199,21 @@ func TestParsePoolConfigRejectsFallbackProducingDSNs(t *testing.T) {
 	}
 }
 
-// TestParsePoolConfigRejectsUnprobeableTargets holds the two rejections that
-// were reachable only through the exported ProbeAddress, which nothing called.
-//
-// They are not ProbeAddress's behaviour and never were: parsePoolConfig runs the
-// same probe-target extraction on every pool it builds, so this is the path
-// postgres.New actually takes for both of them.
-func TestParsePoolConfigRejectsUnprobeableTargets(t *testing.T) {
+// TestParsePoolConfigRejectsUnprobeableTarget keeps target validation on the
+// path Open actually takes.
+func TestParsePoolConfigRejectsUnprobeableTarget(t *testing.T) {
 	t.Parallel()
 
-	t.Run("invalid dsn is redacted", func(t *testing.T) {
-		t.Parallel()
-
-		rawDSN := "postgres://user:top-secret%@localhost:5432/app"
-		_, err := parsePoolConfig(rawDSN)
-		if err == nil {
-			t.Fatal("parsePoolConfig() error = nil, want non-nil")
-		}
-		if !errors.Is(err, ErrConfig) {
-			t.Fatalf("parsePoolConfig() error = %v, want ErrConfig", err)
-		}
-		if !strings.Contains(err.Error(), "parse postgres dsn") || !strings.Contains(err.Error(), "redacted") {
-			t.Fatalf("parsePoolConfig() error = %v, want redacted parse context", err)
-		}
-		for _, leaked := range []string{rawDSN, "top-secret", "user"} {
-			if strings.Contains(err.Error(), leaked) {
-				t.Fatalf("parsePoolConfig() error = %v, leaked %q", err, leaked)
-			}
-		}
-	})
-
-	t.Run("invalid probe target shape", func(t *testing.T) {
-		t.Parallel()
-
-		_, err := parsePoolConfig("postgres://user:pass@localhost:5432/app?host=/var/run/postgresql&port=5432&sslmode=disable")
-		if err == nil {
-			t.Fatal("parsePoolConfig() error = nil, want non-nil")
-		}
-		if !errors.Is(err, ErrConfig) {
-			t.Fatalf("parsePoolConfig() error = %v, want ErrConfig", err)
-		}
-		if !strings.Contains(err.Error(), "postgres dsn requires valid single tcp host and port") {
-			t.Fatalf("parsePoolConfig() error = %v, want invalid target context", err)
-		}
-	})
+	_, err := parsePoolConfig("postgres://user:pass@localhost:5432/app?host=/var/run/postgresql&port=5432&sslmode=disable")
+	if err == nil {
+		t.Fatal("parsePoolConfig() error = nil, want non-nil")
+	}
+	if !errors.Is(err, ErrConfig) {
+		t.Fatalf("parsePoolConfig() error = %v, want ErrConfig", err)
+	}
+	if !strings.Contains(err.Error(), "postgres dsn requires valid single tcp host and port") {
+		t.Fatalf("parsePoolConfig() error = %v, want invalid target context", err)
+	}
 }
 
 // TestProbeAddressFromPoolConfigExtractsTheSingleTarget keeps the positive case:

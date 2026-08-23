@@ -379,40 +379,69 @@ func TestPostgresMigrateSessionLockSerializesConcurrentRunners(t *testing.T) {
 	defer cancel()
 
 	dsn := pgtest.DSN(t)
+	pool := openVerificationPool(t, ctx, dsn)
+	if _, err := pool.Exec(ctx, "CREATE TABLE migration_serialization_gate (id bigint)"); err != nil {
+		t.Fatalf("create serialization gate: %v", err)
+	}
+	blocker, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin serialization blocker: %v", err)
+	}
+	blockerReleased := false
+	defer func() {
+		if !blockerReleased {
+			_ = blocker.Rollback(ctx)
+		}
+	}()
+	if _, err := blocker.Exec(ctx, "LOCK TABLE migration_serialization_gate IN ACCESS EXCLUSIVE MODE"); err != nil {
+		t.Fatalf("lock serialization gate: %v", err)
+	}
 	source := fstest.MapFS{
 		"migrations/000001_once.sql": {
 			Data: migrationFile(
-				"SELECT pg_sleep(0.2); CREATE TABLE migration_once (id bigint);",
-				"DROP TABLE migration_once;",
+				"ALTER TABLE migration_serialization_gate ADD COLUMN migrated boolean;",
+				"ALTER TABLE migration_serialization_gate DROP COLUMN migrated;",
 			),
 		},
 	}
 	options := migrationOptions(dsn, source)
-	options.LockTimeout = 3 * time.Second
-	options.CleanupTimeout = 3 * time.Second
+	options.LockTimeout = 10 * time.Second
+	options.CleanupTimeout = 10 * time.Second
 
-	start := make(chan struct{})
-	results := make(chan postgresmigrate.RunResult, 2)
-	errs := make(chan error, 2)
-	for range 2 {
-		go func() {
-			<-start
-			result, err := postgresmigrate.MigrateUp(ctx, options)
-			results <- result
-			errs <- err
-		}()
+	type migrationRun struct {
+		result postgresmigrate.RunResult
+		err    error
 	}
-	close(start)
+	run := func(result chan<- migrationRun) {
+		migrationResult, runErr := postgresmigrate.MigrateUp(ctx, options)
+		result <- migrationRun{result: migrationResult, err: runErr}
+	}
+	firstResult := make(chan migrationRun, 1)
+	go run(firstResult)
+	waitForMigrationQuery(t, ctx, pool, "ALTER TABLE migration_serialization_gate")
 
-	totalApplied := 0
-	for range 2 {
-		if err := <-errs; err != nil {
-			t.Fatalf("concurrent MigrateUp() error: %v", err)
-		}
-		totalApplied += (<-results).AppliedCount
+	secondResult := make(chan migrationRun, 1)
+	go run(secondResult)
+	waitForMigrationConnections(t, ctx, pool, 2)
+
+	if err := blocker.Rollback(ctx); err != nil {
+		t.Fatalf("release serialization gate: %v", err)
 	}
-	if totalApplied != 1 {
-		t.Fatalf("concurrent applied count = %d, want exactly one", totalApplied)
+	blockerReleased = true
+
+	first := <-firstResult
+	if first.err != nil {
+		t.Fatalf("first MigrateUp() error: %v", first.err)
+	}
+	if first.result.Before != 0 || first.result.After != 1 || first.result.AppliedCount != 1 {
+		t.Fatalf("first MigrateUp() result = %+v, want 0 -> 1 with one applied", first.result)
+	}
+	second := <-secondResult
+	if second.err != nil {
+		t.Fatalf("second MigrateUp() error: %v", second.err)
+	}
+	if second.result.Before != 1 || second.result.After != 1 || second.result.AppliedCount != 0 {
+		t.Fatalf("second MigrateUp() result = %+v, want coherent no-change at 1", second.result)
 	}
 }
 
@@ -571,6 +600,30 @@ func waitForMigrationQuery(
 		}
 		return count > 0
 	}, "an active migration query matching "+queryFragment)
+}
+
+func waitForMigrationConnections(
+	t *testing.T,
+	ctx context.Context,
+	pool *pgxpool.Pool,
+	want int,
+) {
+	t.Helper()
+
+	waittest.Until(t, migrationQueryWait, func() bool {
+		var count int
+		err := pool.QueryRow(
+			ctx,
+			`SELECT count(*)
+			   FROM pg_stat_activity
+			  WHERE datname = current_database()
+			    AND application_name = 'goose-migrate'`,
+		).Scan(&count)
+		if err != nil {
+			t.Fatalf("observe migration connections: %v", err)
+		}
+		return count >= want
+	}, fmt.Sprintf("at least %d migration connections", want))
 }
 
 // migrationQueryWait bounds the wait above. It sits under the 20s budget each
