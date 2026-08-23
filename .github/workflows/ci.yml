@@ -86,8 +86,8 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/go/pkg/mod
-          key: go-mod-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('go.mod', 'go.sum', 'tools/go.mod', 'tools/go.sum') }}
-          restore-keys: go-mod-${{ runner.os }}-${{ runner.arch }}-
+          key: go-mod-quality-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('go.mod', 'go.sum', 'tools/go.mod', 'tools/go.sum') }}
+          restore-keys: go-mod-quality-${{ runner.os }}-${{ runner.arch }}-
       - name: Restore quality build cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -157,8 +157,8 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/go/pkg/mod
-          key: go-mod-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('go.mod', 'go.sum', 'tools/go.mod', 'tools/go.sum') }}
-          restore-keys: go-mod-${{ runner.os }}-${{ runner.arch }}-
+          key: go-mod-security-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('go.mod', 'go.sum', 'tools/go.mod', 'tools/go.sum') }}
+          restore-keys: go-mod-security-${{ runner.os }}-${{ runner.arch }}-
       - name: Restore security build cache
         if: needs.changes.outputs.go == 'true' || needs.changes.outputs.go_dependencies == 'true'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -202,8 +202,8 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/go/pkg/mod
-          key: go-mod-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('go.mod', 'go.sum', 'tools/go.mod', 'tools/go.sum') }}
-          restore-keys: go-mod-${{ runner.os }}-${{ runner.arch }}-
+          key: go-mod-secrets-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('tools/go.mod', 'tools/go.sum') }}
+          restore-keys: go-mod-secrets-${{ runner.os }}-${{ runner.arch }}-
       - name: Restore secret-scan build cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -261,8 +261,8 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/go/pkg/mod
-          key: go-mod-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('go.mod', 'go.sum', 'tools/go.mod', 'tools/go.sum') }}
-          restore-keys: go-mod-${{ runner.os }}-${{ runner.arch }}-
+          key: go-mod-integration-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('go.mod', 'go.sum', 'tools/go.mod', 'tools/go.sum') }}
+          restore-keys: go-mod-integration-${{ runner.os }}-${{ runner.arch }}-
       - name: Restore integration build cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
