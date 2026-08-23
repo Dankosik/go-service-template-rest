@@ -177,18 +177,18 @@ func (r *Receiver) signatureOK(delivery inboundwebhook.Delivery) bool {
 	headers.Set(standardwebhooks.HeaderWebhookID, delivery.DeliveryID)
 	headers.Set(standardwebhooks.HeaderWebhookTimestamp, delivery.Timestamp)
 	headers.Set(standardwebhooks.HeaderWebhookSignature, delivery.Signature)
-	if verifyWith(secrets.active, delivery.Body, headers) == nil {
+	if verifyWith(secrets.active, delivery.Body, headers) {
 		return true
 	}
-	return len(secrets.predecessor) > 0 && verifyWith(secrets.predecessor, delivery.Body, headers) == nil
+	return len(secrets.predecessor) > 0 && verifyWith(secrets.predecessor, delivery.Body, headers)
 }
 
-func verifyWith(key, body []byte, headers http.Header) error {
+func verifyWith(key, body []byte, headers http.Header) bool {
 	webhook, err := standardwebhooks.NewWebhookRaw(key)
 	if err != nil {
-		return err
+		return false
 	}
-	return webhook.VerifyIgnoringTimestamp(body, headers)
+	return webhook.VerifyIgnoringTimestamp(body, headers) == nil
 }
 
 func parseSignedTimestamp(raw string) (time.Time, bool) {

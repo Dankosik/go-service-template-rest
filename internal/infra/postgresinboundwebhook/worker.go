@@ -69,6 +69,7 @@ func AddWorker(workers *river.Workers, pool *pgxpool.Pool, registry *inboundwebh
 
 func (*Worker) Timeout(*river.Job[receiptJobArgs]) time.Duration { return 30 * time.Second }
 
+//nolint:cyclop // One River lifecycle owner keeps retry and terminal state in one linear path.
 func (w *Worker) Work(ctx context.Context, job *river.Job[receiptJobArgs]) (err error) {
 	if w == nil || w.store == nil || w.registry == nil || job == nil {
 		return errStorageUnavailable
