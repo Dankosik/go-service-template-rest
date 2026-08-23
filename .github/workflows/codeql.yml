@@ -2,11 +2,11 @@ name: CodeQL
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
+    tags: [v*]
   pull_request:
-    branches:
-      - main
+    branches: [main]
+  merge_group:
   schedule:
     - cron: "17 3 * * 1"
   workflow_dispatch:
@@ -20,35 +20,91 @@ permissions:
   contents: read
   security-events: write
 
+env:
+  GOTOOLCHAIN: local
+
 jobs:
-  analyze:
-    name: Analyze (${{ matrix.language }})
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      go: ${{ steps.surfaces.outputs.go }}
+      github_actions: ${{ steps.surfaces.outputs.github_actions }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Classify changed surfaces
+        id: surfaces
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+        run: |
+          set -euo pipefail
+          if [[ "${EVENT_NAME}" == pull_request || "${EVENT_NAME}" == merge_group ]]; then
+            git diff --name-only "${BASE_SHA}" HEAD | bash ./scripts/ci/changed-surfaces.sh >>"${GITHUB_OUTPUT}"
+          else
+            bash ./scripts/ci/changed-surfaces.sh --all >>"${GITHUB_OUTPUT}"
+          fi
+
+  analyze-actions:
+    needs: changes
+    if: needs.changes.outputs.github_actions == 'true'
+    name: Analyze (actions)
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - language: actions
-            build-mode: none
-          - language: go
-            build-mode: autobuild
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-
       - name: Initialize CodeQL
         uses: github/codeql-action/init@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
         with:
-          languages: ${{ matrix.language }}
-          build-mode: ${{ matrix.build-mode }}
-          queries: security-and-quality
-
-      - name: Autobuild
-        if: matrix.build-mode == 'autobuild'
-        uses: github/codeql-action/autobuild@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
-
+          languages: actions
+          build-mode: none
+          queries: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && 'security-extended' || 'security-and-quality' }}
       - name: Analyze
         uses: github/codeql-action/analyze@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
+
+  analyze-go:
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
+    name: Analyze (go)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
+        with:
+          languages: go
+          build-mode: manual
+          queries: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && 'security-extended' || 'security-and-quality' }}
+      - name: Build Go packages
+        env:
+          GOFLAGS: -mod=readonly
+        run: go build ./...
+      - name: Analyze
+        uses: github/codeql-action/analyze@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
+
+  codeql-required:
+    if: always()
+    needs: [changes, analyze-actions, analyze-go]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Reject failed or cancelled analyses
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1
+      - name: Accept applicable analyses
+        run: echo "all applicable CodeQL analyses passed"

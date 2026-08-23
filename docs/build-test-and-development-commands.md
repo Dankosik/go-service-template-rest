@@ -121,12 +121,14 @@ Heavy leaves require `ALLOW_HEAVY=1` or `CI=true`:
 ```bash
 ALLOW_HEAVY=1 make test-race
 ALLOW_HEAVY=1 make lint-deep
-ALLOW_HEAVY=1 make verify
+ALLOW_HEAVY=1 make audit-full-manual
 ```
 
 Use `make lint-deep` only for whole-program dead-code and nil analysis. Use
 `make test-race` only when the claim spans concurrency-sensitive code.
-`make verify` is the explicit full matrix; it is not an iteration default.
+`make audit-full-manual` is the rare template/release audit; it is not an
+iteration or ordinary pre-commit target. It builds one image and reuses it for
+migration rehearsal and image scanning.
 While editing one module, run only its direct `go mod tidy -diff` form; the
 combined `make mod-tidy-check` is the final root/tools parity leaf.
 
@@ -194,7 +196,6 @@ make codex-agents-check
 make claude-skills-check
 make qwen-skills-check
 make template-owned-purity-check
-ALLOW_HEAVY=1 make instruction-evals-check
 ```
 
 Use the single matching carrier check from
@@ -227,8 +228,9 @@ make secret-scan BASE_REF=origin/main
 make secret-scan-history
 ```
 
-Gitleaks runs directly from the tools module. Pull-request proof scans both the
-current tree and exact base-to-HEAD history; push/release proof scans full
+Gitleaks runs directly from the tools module and consumes the reviewed baseline.
+Local review scans the current tree and exact base-to-HEAD history. Clean pull
+request CI scans only that commit range; push and release admission scan full
 history.
 
 ## Runtime images
@@ -273,11 +275,11 @@ Benchmarks are explicit evidence, not default CI gates.
 
 ## CI and publication
 
-`ci.yml` owns always-reported `quality`, `security`, and `delivery` contexts.
-Quality runs `make check` on every event and path-gates template initializer
-and instruction proof so a Go-only change does not rebuild those matrices.
-`integration.yml` uses native path filters for PostgreSQL/image owners.
-`cd.yml` consumes successful exact-SHA CI and publishes through the single
-digest-bound `publish-image` action. GitHub Rulesets remain external
-repository policy. Local `make verify` is the explicit heavy matrix and
-requires `ALLOW_HEAVY=1`.
+`ci.yml` classifies the changed surface once, runs only the matching quality,
+security, delivery, contract, instruction, and integration leaves, and exposes
+one always-reported `required` context. Go module and build caches use separate
+quality, security, secret-scan, and integration keys; Node is set up only for
+OpenAPI work. `codeql.yml` uses the same classifier for pull requests and runs
+both languages on main, tags, schedule, and manual dispatch. `cd.yml` waits for
+exact-SHA CI and CodeQL before publishing through the digest-bound
+`publish-image` action. GitHub Rulesets remain external repository policy.

@@ -31,7 +31,7 @@ linters:
     - sqlclosecheck
     - errorlint
     - exhaustive
-    - exhaustruct
+    - exhaustruct_v5
     - exptostd
     - fatcontext
     - forbidigo
@@ -96,7 +96,7 @@ linters:
       - path: _test\.go
         linters:
           - cyclop
-          - exhaustruct
+          - exhaustruct_v5
           - gocognit
           - nestif
   settings:
@@ -512,9 +512,10 @@ linters:
               desc: use the standard log/slog logging surface configured by bootstrap.
     cyclop:
       max-complexity: 20
-    exhaustruct:
+    exhaustruct_v5:
       allow-empty-returns: true
-      include:
+      explicit-mode: true
+      enforce-patterns:
         - '^github\.com/example/go-service-template-rest/internal/openapi\.Problem$'
         - '^github\.com/example/go-service-template-rest/internal/config\.(Config|AppConfig|HTTPConfig|LogConfig|ObservabilityConfig|OTelConfig|OTelExporterConfig|PostgresConfig)$'
         # profile:grpc:start

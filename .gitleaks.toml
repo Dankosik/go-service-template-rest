@@ -35,6 +35,13 @@ regexTarget = "match"
 regexes = ['''^credentials (v1\.19\.5 h1:xMo63RlqP3ZZydpJDMBsH9uJ10hgHYfQFIk1cHDXrR4|v1\.19\.34 h1:y6GkSmcv5myd1ngrYbGmiLlwQqB6TQhOuN/tbSSuWDY)=$''']
 paths = ['''^specs/s3-compatible-object-storage/design/overview\.md$''']
 
+[[allowlists]]
+targetRules = ["curl-auth-header"]
+description = "Historical deterministic runtime-image Bearer canary in its original commit"
+condition = "AND"
+commits = ["10f72d71cd6182e3de56824d63cde646a45ed278"]
+paths = ['''^scripts/ci/runtime-image-build\.sh$''']
+
 # profile:authn-oidc-jwt:start
 [[allowlists]]
 targetRules = ["private-key"]

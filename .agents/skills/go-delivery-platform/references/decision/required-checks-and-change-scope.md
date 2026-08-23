@@ -7,32 +7,29 @@ check that did not exercise its claimed surface.
 
 ## Decide
 
-- `ci.yml` exposes three stable always-reported contexts: `quality`,
-  `security`, and `delivery`. Require those contexts instead of a
-  script-maintained job inventory.
-- `quality` always runs `make check`. Template initializer and instruction
-  eval steps inside that job are path-gated on pull requests. A skipped step
-  is not evidence for the skipped surface; push and `workflow_dispatch` still
-  run them.
-- `integration.yml` uses native path filters for PostgreSQL, migration, image,
-  and integration-test owners. It is not an always-reported context. Ruleset
-  policy must require it only where the platform can match the same scope;
-  otherwise remove the filters and run it universally.
+- `ci.yml` classifies the exact diff once. Its quality, security, secret,
+  delivery, and integration leaves are conditional; one `required` job is
+  always reported and rejects any failed or cancelled applicable leaf.
+- A skipped leaf is not evidence for that surface. The classifier makes the
+  skip explicit, while tag dispatch marks Go and release surfaces applicable so
+  integration cannot be path-skipped.
 - OpenAPI and Protobuf breaking comparisons run only on pull requests with the
   event's exact base SHA. A missing base OpenAPI contract means no comparison,
   not proof of compatibility.
-- CodeQL reports its own Go and Actions analysis contexts. Keep it independent
-  from repository CI.
-- Add `merge_group` before requiring these contexts for merge queue events.
+- CodeQL reports one stable `codeql-required` context over its conditional Go
+  and Actions analyses. Main, tag, schedule, and manual runs execute both.
+- Both workflows handle `merge_group` before their aggregate contexts are
+  required for merge queue events.
 
 ## Reject
 
-- Reintroducing a jq aggregator that restates every job name.
+- Reintroducing a script or jq aggregator that restates job policy instead of
+  using native `needs.*.result` conclusions.
 - Treating a path-skipped workflow as a passing required context.
 - Treating generation, integration, or migration steps that did not run as
   passing evidence.
 
 ## Prove
 
-Use the Actions run URL, exact SHA, applicable job conclusions, and the event or
-path scope that caused every required workflow to run.
+Use the Actions run URL, exact SHA, classifier outputs, applicable job
+conclusions, and the `required` and `codeql-required` conclusions.

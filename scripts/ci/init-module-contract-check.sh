@@ -27,7 +27,6 @@ git -C "${ROOT_DIR}" diff --binary HEAD -- \
 [[ ! -s "${patch}" ]] || git -C "${checkout}" apply "${patch}"
 mkdir -p "${checkout}/scripts/ci" "${checkout}/.github/workflows"
 cp "${ROOT_DIR}/scripts/ci/init-module-contract-check.sh" "${checkout}/scripts/ci/"
-cp "${ROOT_DIR}/.github/workflows/integration.yml" "${checkout}/.github/workflows/"
 
 # Keep unrelated profile candidates outside this automation oracle until their
 # initializer selector is present in the accepted owner.
@@ -63,8 +62,6 @@ unchanged_failure env CODEOWNER=@acme/platform bash ./scripts/init-module.sh 'ba
 	grep -Fxq 'database = "none"' template.lock
 	grep -Fxq 'agent_harness = "core"' template.lock
 	test ! -e scripts/profiles
-	test ! -e evals
-	test ! -e scripts/ci/instruction-evals-check.sh
 	test ! -d .claude
 	if grep -R -E --exclude=init-module-contract-check.sh 'profile:[a-z0-9-]+:(start|end)' README.md Makefile api build cmd docs env internal .github scripts/ci scripts/dev 2>/dev/null; then
 		echo "initializer contract: unresolved profile marker" >&2

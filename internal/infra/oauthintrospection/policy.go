@@ -20,7 +20,7 @@ type Policy struct {
 
 // PolicyInput carries the configured trust values one deployment holds.
 //
-// The exhaustruct include entry for this type in .golangci.yml is load-bearing:
+// The exhaustruct_v5 enforce pattern for this type in .golangci.yml is load-bearing:
 // a field added here fails lint at every production call site that does not set
 // it.
 type PolicyInput struct {
