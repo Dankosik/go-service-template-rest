@@ -22,7 +22,7 @@ trap 'rm -rf -- "${tmp}"' EXIT
 diff_file=${tmp}/tools.diff
 
 {
-	git diff "${base_ref}...HEAD" -- tools/go.mod
+	git diff "${base_ref}" HEAD -- tools/go.mod
 	git diff -- tools/go.mod
 	git diff --cached -- tools/go.mod
 } >"${diff_file}"
