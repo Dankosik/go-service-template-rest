@@ -329,7 +329,7 @@ func resetBootstrapConfigEnv(t *testing.T) {
 		if !ok {
 			continue
 		}
-		if !strings.HasPrefix(key, "APP__") && key != "APP_CONFIG_ALLOWED_ROOTS" {
+		if !strings.HasPrefix(key, "APP__") {
 			continue
 		}
 		t.Setenv(key, value)

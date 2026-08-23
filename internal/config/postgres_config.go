@@ -23,7 +23,7 @@ func postgresDefaults() map[string]any {
 	}
 }
 
-func validatePostgres(cfg PostgresConfig, _ HTTPConfig) error {
+func validatePostgres(cfg PostgresConfig) error {
 	if cfg.Enabled && strings.TrimSpace(cfg.DSN) == "" {
 		return fmt.Errorf("%w: postgres.dsn is required when postgres.enabled=true", ErrSecretPolicy)
 	}

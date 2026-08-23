@@ -66,7 +66,7 @@ func validateConfig(cfg *Config, unknownKeys []string) error {
 	// profile:messaging-nats-jetstream:end
 
 	// profile:database-postgres:start
-	if err := validatePostgres(cfg.Postgres, cfg.HTTP); err != nil {
+	if err := validatePostgres(cfg.Postgres); err != nil {
 		return err
 	}
 	// profile:database-postgres:end

@@ -2,45 +2,15 @@ package config
 
 import (
 	"errors"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 )
 
-func TestNonLocalRejectsSecretLikeValuesInConfigFile(t *testing.T) {
+func TestConfigFileRejectsSecretLikeValues(t *testing.T) {
 	resetConfigEnv(t)
-	t.Setenv("APP__APP__ENV", "prod")
-
-	allowedRoot := t.TempDir()
-	t.Setenv("APP_CONFIG_ALLOWED_ROOTS", allowedRoot)
-
-	path := filepath.Join(allowedRoot, "config.yaml")
-	content := `
+	path := writeTempConfig(t, `
 app:
   env: prod
-postgres:
-  enabled: true
-  dsn: "postgres://app:secret@localhost:5432/app?sslmode=disable"
-`
-	if err := os.WriteFile(path, []byte(strings.TrimSpace(content)), 0o600); err != nil {
-		t.Fatalf("os.WriteFile() error = %v", err)
-	}
-
-	_, _, err := LoadDetailed(LoadOptions{ConfigPath: path})
-	if err == nil {
-		t.Fatal("LoadDetailed() expected secret source policy rejection")
-	}
-	if !errors.Is(err, ErrSecretPolicy) {
-		t.Fatalf("error = %v, want ErrSecretPolicy", err)
-	}
-}
-
-//nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
-func TestLocalRejectsSecretLikeValuesInConfigFile(t *testing.T) {
-	resetConfigEnv(t)
-
-	path := writeTempConfig(t, `
 postgres:
   enabled: true
   dsn: "postgres://app:secret@localhost:5432/app?sslmode=disable"

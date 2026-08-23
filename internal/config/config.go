@@ -96,10 +96,9 @@ func loadDetailedWithContext(
 		return Config{}, report, err
 	}
 
-	err = validate(
-		&cfg,
-		append(unknownKeys, metadata.sectionScalarOverrideKeys...),
-	)
+	unknownKeys = append(unknownKeys, metadata.sectionScalarOverrideKeys...)
+	unknownKeys = append(unknownKeys, metadata.malformedEnvironmentKeys...)
+	err = validate(&cfg, unknownKeys)
 	report.ValidateDuration = time.Since(validateStarted)
 	if err != nil {
 		report.FailedStage = StageValidate

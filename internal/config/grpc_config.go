@@ -24,10 +24,6 @@ type GRPCTLSConfig struct {
 	ClientCAFile string `koanf:"client_ca_file"`
 }
 
-func DefaultGRPCServerConfig() GRPCServerConfig {
-	return GRPCServerConfig{}
-}
-
 func grpcDefaults() map[string]any {
 	return map[string]any{
 		"grpc.server.enabled":            false,
