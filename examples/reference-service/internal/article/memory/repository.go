@@ -1,9 +1,8 @@
-// Package memory adapts immutable in-memory data to the article repository port.
+// Package memory adapts in-memory data to the article store port.
 package memory
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"maps"
 	"slices"
@@ -13,9 +12,8 @@ import (
 )
 
 var (
-	_ article.Repository = (*Repository)(nil)
-	_ article.Atomically = (*Repository)(nil)
-	_ article.Repository = (*staged)(nil)
+	_ article.Store  = (*Repository)(nil)
+	_ article.Writer = (*staged)(nil)
 )
 
 type Repository struct {
@@ -26,18 +24,8 @@ type Repository struct {
 	events []article.Event
 }
 
-func New(articles []article.Article) (*Repository, error) {
-	bySlug := make(map[string]article.Article, len(articles))
-	for _, item := range articles {
-		if item.Slug == "" {
-			return nil, errors.New("memory article repository: slug is required")
-		}
-		if _, exists := bySlug[item.Slug]; exists {
-			return nil, fmt.Errorf("memory article repository: duplicate slug %q", item.Slug)
-		}
-		bySlug[item.Slug] = item
-	}
-	return &Repository{bySlug: bySlug}, nil
+func New() *Repository {
+	return &Repository{bySlug: make(map[string]article.Article)}
 }
 
 // Do runs fn against a staged copy of the whole store and keeps the result only
@@ -46,8 +34,8 @@ func New(articles []article.Article) (*Repository, error) {
 // A datastore adapter binds the same port to its own transaction — for
 // PostgreSQL, postgres.InTx, with fn handed a repository built over the
 // pgx.Tx rather than over the pool. What must not change is the signature: fn
-// receives an article.Repository, so the use case never sees a driver handle.
-func (r *Repository) Do(ctx context.Context, fn func(article.Repository) error) error {
+// receives an article.Writer, so the use case never sees a driver handle.
+func (r *Repository) Do(ctx context.Context, fn func(article.Writer) error) error {
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf("article unit of work: %w", err)
 	}
@@ -83,41 +71,14 @@ type staged struct {
 	events []article.Event
 }
 
-func (s *staged) FindBySlug(ctx context.Context, slug string) (article.Article, error) {
-	if err := ctx.Err(); err != nil {
-		return article.Article{}, fmt.Errorf("find article: %w", err)
-	}
-	return slugLookup(s.bySlug, slug)
-}
-
 func (s *staged) Create(ctx context.Context, created article.Article) error {
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf("create article: %w", err)
 	}
-	return slugInsert(s.bySlug, created)
-}
-
-// slugLookup and slugInsert are the slug rule both views answer with. The staged
-// view is the one production traffic reaches, through Do; *Repository implements
-// the same port directly, so the rule was written twice and only the staged copy
-// was exercised.
-//
-// They take the map rather than a receiver because that is the whole of what they
-// need, and each caller keeps its own context check and its own lock — which is
-// the part that genuinely differs between the two views.
-func slugLookup(bySlug map[string]article.Article, slug string) (article.Article, error) {
-	found, ok := bySlug[slug]
-	if !ok {
-		return article.Article{}, article.ErrNotFound
-	}
-	return found, nil
-}
-
-func slugInsert(bySlug map[string]article.Article, created article.Article) error {
-	if _, exists := bySlug[created.Slug]; exists {
+	if _, exists := s.bySlug[created.Slug]; exists {
 		return article.ErrAlreadyExists
 	}
-	bySlug[created.Slug] = created
+	s.bySlug[created.Slug] = created
 	return nil
 }
 
@@ -136,32 +97,9 @@ func (r *Repository) FindBySlug(ctx context.Context, slug string) (article.Artic
 
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	return slugLookup(r.bySlug, slug)
-}
-
-// Create inserts the article if its slug is free. A real datastore adapter
-// enforces this with a unique constraint and maps the driver's violation to
-// article.ErrAlreadyExists rather than reading before writing.
-func (r *Repository) Create(ctx context.Context, created article.Article) error {
-	if err := ctx.Err(); err != nil {
-		return fmt.Errorf("create article: %w", err)
+	found, ok := r.bySlug[slug]
+	if !ok {
+		return article.Article{}, article.ErrNotFound
 	}
-
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return slugInsert(r.bySlug, created)
-}
-
-// AppendEvent records an event outside any unit of work. The use case writes
-// events through Do instead; this exists so *Repository satisfies the same port
-// its staged view does.
-func (r *Repository) AppendEvent(ctx context.Context, event article.Event) error {
-	if err := ctx.Err(); err != nil {
-		return fmt.Errorf("append article event: %w", err)
-	}
-
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.events = append(r.events, event)
-	return nil
+	return found, nil
 }

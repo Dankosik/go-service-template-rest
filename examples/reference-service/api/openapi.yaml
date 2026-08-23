@@ -53,8 +53,6 @@ paths:
           $ref: "#/components/responses/Conflict"
         "413":
           $ref: "#/components/responses/RequestEntityTooLarge"
-        "429":
-          $ref: "#/components/responses/TooManyRequests"
         "500":
           $ref: "#/components/responses/InternalServerError"
         "503":
@@ -91,8 +89,6 @@ paths:
           $ref: "#/components/responses/NotFound"
         "413":
           $ref: "#/components/responses/RequestEntityTooLarge"
-        "429":
-          $ref: "#/components/responses/TooManyRequests"
         "500":
           $ref: "#/components/responses/InternalServerError"
         "503":
@@ -119,10 +115,17 @@ components:
       properties:
         slug:
           type: string
+          minLength: 1
+          maxLength: 64
+          pattern: "^[a-z][a-z0-9-]*$"
         title:
           type: string
+          minLength: 1
+          maxLength: 200
         summary:
           type: string
+          minLength: 1
+          maxLength: 500
     ArticleDraft:
       type: object
       additionalProperties: false
@@ -240,19 +243,6 @@ components:
             $ref: "#/components/schemas/Problem"
     RequestEntityTooLarge:
       description: request body exceeds configured limit
-      content:
-        application/problem+json:
-          schema:
-            $ref: "#/components/schemas/Problem"
-    TooManyRequests:
-      description: caller exceeded its request rate
-      headers:
-        Retry-After:
-          description: whole seconds before the caller should retry
-          required: true
-          schema:
-            type: integer
-            minimum: 1
       content:
         application/problem+json:
           schema:
