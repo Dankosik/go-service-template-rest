@@ -1,7 +1,7 @@
 <p align="center">
   <img src=".github/assets/go-service-template-hero.png" alt="Go Gopher conductor coordinating a robot agent orchestra" width="520" />
   <br />
-  <sub>Go Gopher character by <a href="https://go.dev/blog/gopher">Renée French</a>; adapted for this project under <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>.</sub>
+  <sub>Go Gopher character by <a href="https://go.dev/blog/gopher">Renée French</a>; anatomy reference by <a href="https://github.com/golang-samples/gopher-vector">Takuya Ueda</a>; adapted under <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a> and <a href="https://creativecommons.org/licenses/by/3.0/">CC BY 3.0</a>.</sub>
 </p>
 
 <h1 align="center">Go REST API &amp; Microservice Template</h1>
