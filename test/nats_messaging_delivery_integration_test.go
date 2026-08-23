@@ -12,11 +12,67 @@ import (
 	"testing"
 	"time"
 
+	"github.com/example/go-service-template-rest/internal/domainevent"
 	"github.com/example/go-service-template-rest/internal/infra/natsjs"
 	"github.com/example/go-service-template-rest/internal/waittest"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 )
+
+func TestNATSRegistryRejectsSubjectMismatch(t *testing.T) {
+	f := newNATSFixture(t)
+	kind := domainevent.Define[string]("route.checked", 1)
+	registry, err := natsjs.NewRegistry(natsjs.Route{
+		Type: kind.Type, Version: kind.Version, Subject: "events.expected",
+	})
+	if err != nil {
+		t.Fatalf("create route registry: %v", err)
+	}
+	called := make(chan struct{}, 1)
+	if err := domainevent.Handle(registry, kind, func(context.Context, domainevent.Typed[string]) error {
+		called <- struct{}{}
+		return nil
+	}); err != nil {
+		t.Fatalf("register route handler: %v", err)
+	}
+	handler, err := registry.Handler()
+	if err != nil {
+		t.Fatalf("build route handler: %v", err)
+	}
+	client, _, errCh := f.worker(t, handler, func(cfg *natsjs.WorkerConfig) {
+		cfg.Consumer = "route-subject-worker"
+		cfg.FilterSubject = "events.>"
+	})
+	event := testEvent(`"wrong route"`)
+	event.Subject = "events.other"
+	event.Type = kind.Type
+	if _, err := client.Producer().Publish(t.Context(), event); err != nil {
+		t.Fatalf("publish wrong-subject event: %v", err)
+	}
+
+	var deadLetter *jetstream.RawStreamMsg
+	waittest.Until(t, 5*time.Second, func(ctx context.Context) bool {
+		stream, streamErr := f.js.Stream(ctx, deadLetterStream)
+		if streamErr != nil {
+			return false
+		}
+		deadLetter, streamErr = stream.GetLastMsgForSubject(ctx, deadLetterSubject)
+		return streamErr == nil
+	}, "wrong-subject dead-letter transfer")
+	select {
+	case <-called:
+		t.Fatal("wrong-subject event reached typed handler")
+	default:
+	}
+	if got := deadLetter.Header.Get("Original-Subject"); got != event.Subject {
+		t.Fatalf("dead-letter original subject = %q, want %q", got, event.Subject)
+	}
+	select {
+	case err := <-errCh:
+		t.Fatalf("worker stopped after permanent route mismatch: %v", err)
+	default:
+	}
+}
 
 func TestNATSConsumerSaturation(t *testing.T) {
 	f := newNATSFixture(t)

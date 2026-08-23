@@ -28,7 +28,6 @@ const (
 	sourceSubject        = "events.test"
 	deadLetterSubject    = "dead.events.test"
 	testMaxPayloadBytes  = 256 << 10
-	testMaxPending       = 64
 	testMaxConcurrency   = 8
 	testMaxDeliveryBytes = 1 << 20
 	testOperationTimeout = 5 * time.Second

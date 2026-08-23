@@ -30,14 +30,13 @@ func newPackageNATSFixture(t *testing.T) *natsjstest.Server {
 	))
 }
 
-func packageClient(t *testing.T, f *natsjstest.Server, pending int) *Client {
+func packageClient(t *testing.T, f *natsjstest.Server) *Client {
 	t.Helper()
 	cfg := testConfig()
 	cfg.URLs = []string{f.URL}
 	cfg.AllowPlaintext = true
 	cfg.AllowUnauthenticated = true
 	cfg.Stream = "EVENTS"
-	_ = pending
 	client, err := Connect(t.Context(), cfg, Observability{})
 	if err != nil {
 		t.Fatalf("connect messaging client: %v", err)
@@ -48,7 +47,7 @@ func packageClient(t *testing.T, f *natsjstest.Server, pending int) *Client {
 
 func TestNATSWorkerRegistrationIsSingleton(t *testing.T) {
 	f := newPackageNATSFixture(t)
-	client := packageClient(t, f, testMaxPending)
+	client := packageClient(t, f)
 	cfg := testWorkerConfig()
 	cfg.Consumer = "singleton-first"
 	cfg.FilterSubject = "events.test"
@@ -65,7 +64,7 @@ func TestNATSWorkerRegistrationIsSingleton(t *testing.T) {
 		t.Fatalf("second consumer lookup error = %v, want no broker mutation", err)
 	}
 
-	concurrentClient := packageClient(t, f, testMaxPending)
+	concurrentClient := packageClient(t, f)
 	concurrent := cfg
 	concurrent.Consumer = "singleton-concurrent"
 	start := make(chan struct{})
@@ -96,7 +95,7 @@ func TestNATSWorkerRegistrationIsSingleton(t *testing.T) {
 
 func TestNATSReadinessProbeRestoresStateAfterReconnect(t *testing.T) {
 	f := newPackageNATSFixture(t)
-	client := packageClient(t, f, testMaxPending)
+	client := packageClient(t, f)
 	client.ready.Store(false) // The reconnect callback leaves readiness false until the cached probe succeeds.
 	if err := client.Check(t.Context()); err != nil {
 		t.Fatalf("Check() error = %v", err)
@@ -108,7 +107,7 @@ func TestNATSReadinessProbeRestoresStateAfterReconnect(t *testing.T) {
 
 func TestNATSNativeConsumeSurvivesBrokerRestart(t *testing.T) {
 	f := newPackageNATSFixture(t)
-	client := packageClient(t, f, testMaxPending)
+	client := packageClient(t, f)
 	cfg := testWorkerConfig()
 	cfg.Consumer = "restart-worker"
 	cfg.FilterSubject = "events.test"
@@ -167,7 +166,7 @@ func TestNATSNativeConsumeSurvivesBrokerRestart(t *testing.T) {
 
 func TestNATSPublishDispatchCancellationAndNoRetry(t *testing.T) {
 	f := newPackageNATSFixture(t)
-	client := packageClient(t, f, 2)
+	client := packageClient(t, f)
 
 	before := client.nc.Stats().OutMsgs
 	if _, err := client.Producer().Publish(t.Context(), Event{
@@ -262,7 +261,7 @@ func TestNATSPublishDispatchCancellationAndNoRetry(t *testing.T) {
 
 func TestNATSHandlerAckAmbiguityRedelivers(t *testing.T) {
 	f := newPackageNATSFixture(t)
-	client := packageClient(t, f, testMaxPending)
+	client := packageClient(t, f)
 	cfg := testWorkerConfig()
 	cfg.Consumer = "ack-ambiguity"
 	cfg.FilterSubject = "events.test"
@@ -296,7 +295,7 @@ func TestNATSHandlerAckAmbiguityRedelivers(t *testing.T) {
 
 func TestNATSDLQSourceAckAmbiguityDeduplicates(t *testing.T) {
 	f := newPackageNATSFixture(t)
-	client := packageClient(t, f, testMaxPending)
+	client := packageClient(t, f)
 	cfg := testWorkerConfig()
 	cfg.Consumer = "dlq-ack-ambiguity"
 	cfg.FilterSubject = "events.test"

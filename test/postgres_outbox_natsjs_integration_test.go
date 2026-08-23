@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/example/go-service-template-rest/cmd/outbox-relay/outboxworker"
 	"github.com/example/go-service-template-rest/internal/domainevent"
 	"github.com/example/go-service-template-rest/internal/infra/natsjs"
 	"github.com/example/go-service-template-rest/internal/infra/postgres"
@@ -41,9 +42,9 @@ func TestPostgresOutboxPublishesThroughRiverWithOriginalIdentityAndTrace(t *test
 	})
 
 	producerClient := fixture.client(t)
-	outboxWorker, err := natsjs.NewOutboxWorker(producerClient.Producer())
+	outboxWorker, err := outboxworker.New(producerClient.Producer())
 	if err != nil {
-		t.Fatalf("natsjs.NewOutboxWorker(): %v", err)
+		t.Fatalf("outboxworker.New(): %v", err)
 	}
 	workers := river.NewWorkers()
 	if err := river.AddWorkerSafely(workers, outboxWorker); err != nil {
