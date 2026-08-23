@@ -111,7 +111,7 @@ func TestWorkerTelemetrySetupCanBeCleanedWithinCallerBudget(t *testing.T) {
 	}
 	cleanupCtx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	cleanup(cleanupCtx)
+	_ = cleanup(cleanupCtx)
 }
 
 func TestWorkerCompositionHelpers(t *testing.T) {

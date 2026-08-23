@@ -14,13 +14,7 @@ import (
 
 // TestTeardownBudgetDrawsFromTheProcessDeadline holds the two properties every
 // composition root's teardown depends on: a stage never spends budget a later
-// stage needs, and a stage past the deadline still gets enough to report that it
-// was cut short.
-//
-// The second one is why this is not simply min(want, remaining). A stage handed
-// an expired context exports nothing and cleans up nothing, so the last stage of
-// a shutdown that ran long — normally the telemetry flush — would lose exactly
-// the record of why it ran long.
+// stage needs, and a spent process deadline cannot be extended by another stage.
 func TestTeardownBudgetDrawsFromTheProcessDeadline(t *testing.T) {
 	t.Parallel()
 
@@ -33,8 +27,8 @@ func TestTeardownBudgetDrawsFromTheProcessDeadline(t *testing.T) {
 	if got := runtimeopts.TeardownBudget(time.Hour, time.Now().Add(2*time.Second)); got > 2*time.Second {
 		t.Fatalf("TeardownBudget(1h, 2s left) = %s, want at most what is left", got)
 	}
-	if got := runtimeopts.TeardownBudget(time.Hour, time.Now().Add(-time.Second)); got != runtimeopts.TeardownFloor {
-		t.Fatalf("TeardownBudget(1h, spent) = %s, want the floor %s", got, runtimeopts.TeardownFloor)
+	if got := runtimeopts.TeardownBudget(time.Hour, time.Now().Add(-time.Second)); got != 0 {
+		t.Fatalf("TeardownBudget(1h, spent) = %s, want zero", got)
 	}
 }
 
@@ -59,15 +53,8 @@ func TestTeardownStageOutlivesACanceledSignalContext(t *testing.T) {
 
 	spent, spentCancel := runtimeopts.TeardownStage(signalCtx, time.Now().Add(-time.Second), time.Hour)
 	defer spentCancel()
-	deadline, ok := spent.Deadline()
-	if !ok {
-		t.Fatal("spent-grace teardown stage has no deadline")
-	}
-	if remaining := time.Until(deadline); remaining > runtimeopts.TeardownFloor {
-		t.Fatalf(
-			"teardown stage past the grace period = %s, want at most the floor %s",
-			remaining, runtimeopts.TeardownFloor,
-		)
+	if !errors.Is(spent.Err(), context.DeadlineExceeded) {
+		t.Fatalf("spent-grace teardown stage error = %v, want context deadline", spent.Err())
 	}
 }
 

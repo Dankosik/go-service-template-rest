@@ -174,7 +174,32 @@ func TestInstallTelemetryReturnsUsableFlush(t *testing.T) {
 	if err != nil {
 		t.Fatalf("InstallTelemetry() error = %v", err)
 	}
-	flush(context.Background())
+	if err := flush(context.Background()); err != nil {
+		t.Fatalf("flush() error = %v", err)
+	}
+}
+
+func TestTelemetryFlushReportsAndPreservesShutdownFailures(t *testing.T) {
+	t.Parallel()
+
+	traceErr := errors.New("trace flush failed")
+	metricErr := errors.New("metric flush failed")
+	var output bytes.Buffer
+	flush := newTelemetryFlush(
+		slog.New(slog.NewTextHandler(&output, nil)),
+		"worker",
+		func(context.Context) error { return traceErr },
+		func(context.Context) error { return metricErr },
+	)
+	err := flush(context.Background())
+	if !errors.Is(err, traceErr) || !errors.Is(err, metricErr) {
+		t.Fatalf("flush() error = %v, want both shutdown causes", err)
+	}
+	for _, field := range []string{"telemetry_flush_failed", "component=worker", "operation=telemetry_flush", "outcome=error"} {
+		if !bytes.Contains(output.Bytes(), []byte(field)) {
+			t.Fatalf("flush output %q does not contain %q", output.String(), field)
+		}
+	}
 }
 
 func TestLogDegradedSignalIncludesSafeClassification(t *testing.T) {

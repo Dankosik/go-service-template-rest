@@ -393,12 +393,8 @@ func TestServeHTTPRuntimeReturnsServeFailureBeforeAdmissionReady(t *testing.T) {
 		healthSvc: svc,
 		httpSrv:   srv,
 		readinessCheck: func(ctx context.Context) error {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-time.After(200 * time.Millisecond):
-				return nil
-			}
+			<-ctx.Done()
+			return ctx.Err()
 		},
 		admission: new(startupAdmissionController),
 		shutdown:  testShutdownBudget(),

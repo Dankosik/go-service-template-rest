@@ -14,6 +14,7 @@ import (
 	// profile:bootstrap-config:start
 	"github.com/example/go-service-template-rest/internal/config"
 	// profile:bootstrap-config:end
+	"github.com/example/go-service-template-rest/internal/failure"
 	// profile:http-idempotency-postgres:start
 	"github.com/example/go-service-template-rest/internal/httpidempotency"
 	// profile:http-idempotency-postgres:end
@@ -78,37 +79,18 @@ const (
 type runtimeWiring struct {
 	dependencies func(context.Context, startupBootstrap) (runtimeDependencies, error)
 	serve        func(context.Context, context.Context, serveRuntimeArgs) error
-	lifecycle    func(runtimeLifecycleStage)
 	// profile:object-storage:start
 	initObjectStorage func(context.Context, config.ObjectStorageConfig) (objectStorageRuntime, error)
 	// profile:object-storage:end
 	// profile:authn-bearer:start
-	initAuthn  func(context.Context, config.Config, *telemetry.Metrics, *slog.Logger) (authnRuntime, error)
-	authnStage func(authnBootstrapStage)
+	initAuthn func(context.Context, config.Config, *telemetry.Metrics, *slog.Logger) (authnRuntime, error)
 	// profile:authn-bearer:end
 }
-
-type runtimeLifecycleStage string
-
-const (
-	runtimeLifecycleMemoryPublished runtimeLifecycleStage = "memory_published"
-	// profile:object-storage:start
-	runtimeLifecycleObjectStorageConstructed runtimeLifecycleStage = "object_storage_constructed"
-	// profile:object-storage:end
-	runtimeLifecycleHTTPDrained      runtimeLifecycleStage = "http_drained"
-	runtimeLifecycleBackgroundJoined runtimeLifecycleStage = "background_joined"
-	// profile:object-storage:start
-	runtimeLifecycleObjectStorageClosed runtimeLifecycleStage = "object_storage_closed"
-	// profile:object-storage:end
-	runtimeLifecycleDependenciesClosed runtimeLifecycleStage = "dependencies_closed"
-	runtimeLifecycleTelemetryFlushed   runtimeLifecycleStage = "telemetry_flushed"
-)
 
 func productionRuntimeWiring() runtimeWiring {
 	return runtimeWiring{
 		dependencies: initRuntimeDependencies,
 		serve:        serveRuntime,
-		lifecycle:    func(runtimeLifecycleStage) {},
 		// profile:object-storage:start
 		initObjectStorage: initObjectStorage,
 		// profile:object-storage:end
@@ -121,7 +103,6 @@ func productionRuntimeWiring() runtimeWiring {
 		) (authnRuntime, error) {
 			return initAuthn(ctx, cfg, metrics, log)
 		},
-		authnStage: func(authnBootstrapStage) {},
 		// profile:authn-bearer:end
 	}
 }
@@ -169,14 +150,12 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 	// inside would start its clock at startup and hand the flush a spent budget.
 	defer func() {
 		bootstrap.telemetryCleanup(shutdown.stage(signalCtx, telemetryShutdownTimeout))
-		wiring.lifecycle(runtimeLifecycleTelemetryFlushed)
 	}()
 
 	// The GC limit is published before any dependency allocates, so the first
 	// large allocation is already collected against the container's real ceiling
 	// rather than against math.MaxInt64.
 	memoryLimit := applyMemoryLimit(bootstrap.log, bootstrap.cfg.Runtime.MemoryLimitRatio)
-	wiring.lifecycle(runtimeLifecycleMemoryPublished)
 	// Reported against the same number, because http.max_in_flight and
 	// http.max_body_bytes bound a heap the GC was just handed a ceiling for and
 	// nothing else multiplies the two.
@@ -187,12 +166,10 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 	if err != nil {
 		return err
 	}
-	wiring.lifecycle(runtimeLifecycleObjectStorageConstructed)
 	objectStorageClosed := false
 	defer func() {
 		if !objectStorageClosed {
 			objectStorage.Close()
-			wiring.lifecycle(runtimeLifecycleObjectStorageClosed)
 		}
 	}()
 	// profile:object-storage:end
@@ -215,12 +192,10 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 		if !objectStorageClosed {
 			objectStorage.Close()
 			objectStorageClosed = true
-			wiring.lifecycle(runtimeLifecycleObjectStorageClosed)
 		}
 		// profile:object-storage:end
 		dependencies.Close(runtimeCloseCtx)
 		dependenciesClosed = true
-		wiring.lifecycle(runtimeLifecycleDependenciesClosed)
 	}
 	defer closeOwners()
 
@@ -229,7 +204,6 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 	if err != nil {
 		return err
 	}
-	wiring.authnStage(authnStageTrustEstablished)
 	authnClosed := false
 	defer func() {
 		if !authnClosed {
@@ -266,12 +240,18 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 		startupCtx,
 		bootstrap.cfg,
 		dependencies.postgres,
-		bootstrap.log,
 	)
 	if err != nil {
 		return err
 	}
-	idempotency.Supervise(supervisor)
+	if idempotency != nil {
+		supervisor.Go(background.Task{
+			Name: "http_idempotency_maintenance",
+			Run: func(ctx context.Context) error {
+				return idempotency.Maintain(ctx, bootstrap.log)
+			},
+		})
+	}
 	// profile:http-idempotency-postgres:end
 
 	// The failure channel below terminates serving; the readiness probe makes the
@@ -282,7 +262,7 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 	// profile:messaging-nats-jetstream:end
 	healthSvc := newReadinessService(readinessProbes, supervisor)
 
-	domainErrors := dependencies.DomainErrors()
+	var domainErrors []failure.Mapper
 	// profile:http-idempotency-postgres:start
 	domainErrors = append(domainErrors, httpidempotency.ClassifyError)
 	// profile:http-idempotency-postgres:end
@@ -315,7 +295,6 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 		return err
 	}
 	// profile:authn-bearer:start
-	wiring.authnStage(authnStageHTTPRouterBuilt)
 	// profile:authn-bearer:end
 
 	// Shared with the diagnostics listener below, so both publish net/http's own
@@ -323,7 +302,6 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 	errorLog := slog.NewLogLogger(bootstrap.log.Handler(), slog.LevelError)
 	srv := newHTTPServer(bootstrap.cfg.HTTP, handler, errorLog)
 	// profile:authn-bearer:start
-	wiring.authnStage(authnStageHTTPServerBuilt)
 	// profile:authn-bearer:end
 
 	// profile:grpc:start
@@ -345,20 +323,9 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 		}
 		grpcSrv = builtGRPC
 		// profile:authn-bearer:start
-		wiring.authnStage(authnStageGRPCServerBuilt)
 		// profile:authn-bearer:end
 	}
 	// profile:grpc:end
-
-	superviseReadiness(
-		bootstrap.cfg,
-		bootstrap.log,
-		healthSvc,
-		supervisor,
-		// profile:grpc:start
-		grpcSrv,
-		// profile:grpc:end
-	)
 
 	var metricsSrv runtimeServer
 	if bootstrap.cfg.Observability.Metrics.Addr != "" {
@@ -385,14 +352,24 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 			}
 			return nil
 		},
-		admission:     startupAdmission,
+		admission: startupAdmission,
+		onReady: func() {
+			superviseReadiness(
+				bootstrap.cfg,
+				bootstrap.log,
+				healthSvc,
+				supervisor,
+				// profile:grpc:start
+				grpcSrv,
+				// profile:grpc:end
+			)
+		},
 		shutdownDelay: bootstrap.cfg.HTTP.ReadinessPropagationDelay,
 		// profile:messaging-nats-jetstream:start
 		preDrain: messaging.StartDrain,
 		// profile:messaging-nats-jetstream:end
 		shutdown: shutdown,
 	})
-	wiring.lifecycle(runtimeLifecycleHTTPDrained)
 
 	// Ordered teardown. HTTP is already drained, so this is the first moment
 	// nothing can still depend on background work: cancel and join it, then
@@ -403,7 +380,6 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 	messagingErr := messaging.Shutdown(backgroundCtx)
 	// profile:messaging-nats-jetstream:end
 	backgroundErr := supervisor.Shutdown(backgroundCtx)
-	wiring.lifecycle(runtimeLifecycleBackgroundJoined)
 	// profile:authn-bearer:start
 	authnVerifier.Close()
 	authnClosed = true

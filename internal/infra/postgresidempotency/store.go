@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/httpidempotency"
@@ -15,7 +16,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-const cleanupBatchSize = 500
+const (
+	cleanupBatchSize    = 500
+	maintenanceInterval = time.Minute
+)
 
 var ErrConfig = errors.New("postgres idempotency config")
 
@@ -260,6 +264,23 @@ func (s *Store) cleanupBatch(ctx context.Context) (int64, error) {
 		return 0, unavailable(ctx, "cleanup", err)
 	}
 	return rows, nil
+}
+
+// Maintain removes expired replay rows until ctx is canceled. Cleanup failures
+// are degraded maintenance, not a reason to stop serving idempotent requests.
+func (s *Store) Maintain(ctx context.Context, log *slog.Logger) error {
+	ticker := time.NewTicker(maintenanceInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("stop HTTP idempotency cleanup: %w", ctx.Err())
+		case <-ticker.C:
+			if _, err := s.Cleanup(ctx); err != nil && log != nil {
+				log.WarnContext(ctx, "http idempotency cleanup failed", "error", err)
+			}
+		}
+	}
 }
 
 func unavailable(ctx context.Context, stage string, err error) error {
