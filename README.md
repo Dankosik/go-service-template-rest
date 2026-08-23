@@ -10,8 +10,6 @@
 
 <p align="center">
   <a href="https://github.com/Dankosik/go-service-template-rest/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/Dankosik/go-service-template-rest/actions/workflows/ci.yml/badge.svg?branch=main&amp;event=push"></a>
-  <a href="https://github.com/Dankosik/go-service-template-rest/actions/workflows/nightly.yml"><img alt="Nightly reliability" src="https://github.com/Dankosik/go-service-template-rest/actions/workflows/nightly.yml/badge.svg?branch=main&amp;event=schedule"></a>
-  <a href="https://scorecard.dev/viewer/?uri=github.com/Dankosik/go-service-template-rest"><img alt="OpenSSF Scorecard" src="https://api.scorecard.dev/projects/github.com/Dankosik/go-service-template-rest/badge"></a>
   <a href="go.mod"><img alt="Go version" src="https://img.shields.io/github/go-mod/go-version/Dankosik/go-service-template-rest"></a>
   <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/github/license/Dankosik/go-service-template-rest"></a>
 </p>
@@ -45,17 +43,21 @@ make template-init \
   OUTBOX=none \
   GRPC=none \
   AUTHN=none \
+  OUTBOUND_HTTP=none \
   OBJECT_STORAGE=none \
   OUTBOUND_AUTH=none \
   MESSAGING=none
-make check
+make fmt-check
+make lint
+make test
 make run
 ```
 
 The defaults create a service with no database dependency. The complete agent
 workflow is always retained. Choose `DATABASE=postgres` when the service owns
-PostgreSQL. The fixed-authority HTTP client is always retained so feature code
-only supplies its dependency target.
+PostgreSQL, and choose `OUTBOUND_HTTP=bounded` to retain the shared
+fixed-authority HTTP client. Omitted `OUTBOUND_HTTP` is `none`. The client
+also stays when another selected capability still imports it.
 <!-- profile:object-storage:start -->
 Choose `OBJECT_STORAGE=s3` only when this service needs the S3-compatible
 capability. It requires a complete static tuple supplied by deployment and
@@ -293,7 +295,7 @@ internal/<feature>/              feature-owned business behavior (when added)
 internal/config/                 runtime configuration
 internal/health/                 readiness and drain behavior
 internal/infra/http/             HTTP transport and middleware
-internal/infra/httpclient/       fixed-authority outbound HTTP transport
+internal/infra/httpclient/       bounded outbound HTTP transport (optional profile)
 internal/infra/postgres/         PostgreSQL adapters (PostgreSQL profile)
 api/openapi/service.yaml         API source of truth
 internal/openapi/                generated OpenAPI artifacts
@@ -317,32 +319,33 @@ client connections.
 Use the [placement guide](docs/project-structure-and-module-organization.md)
 before choosing packages or tests.
 
+After `make template-init`, `make integration-init` scaffolds one named HTTP or
+gRPC outbound integration from a committed local contract. See
+[External Integration Initializer](docs/external-integration-initializer.md).
+
 ## Quality Gates
 
 | Command | Purpose |
 | --- | --- |
-| `make check` | Broad local format, lint, and unit-test baseline |
-| `make ci-local` | Native CI aggregate |
-| `make check-full` | Native checks plus Docker-backed integration and image gates |
-| `BASE_REF=origin/main make pr-check` | Pull-request checks and OpenAPI compatibility |
+| `make fmt-check` | Go formatting drift |
+| `make lint` | Mandatory static analysis |
+| `make test` | Ordinary unit tests |
+| `make integration-init-check` | Initializer grammar, transaction, and fixture matrix |
 | `make openapi-check` | OpenAPI generation, drift, runtime, lint, and schema checks |
 | `make sqlc-check` | SQL generation drift (PostgreSQL profile) |
-| `make migration-check` | Goose source grammar and append-only review history (PostgreSQL profile) |
+| `make migration-check` | Goose validation and append-only review history (PostgreSQL profile) |
 | `make migration-validate` | Migration rehearsal (PostgreSQL profile) |
 | `make test-integration` | Container-backed integration tests when present |
-| `make go-security` | Go static security and vulnerability checks |
+| `make govulncheck` / `make gosec` | Go vulnerability and static security checks |
 
 <!-- profile:grpc:start -->
 `make proto-check` owns protobuf format, contract documentation, lint, and
-generated-code drift. Repositories retaining proto2/proto3 contracts use
-`BASE_REF=origin/main make proto-check` so only paths present with legacy
-syntax at that base are accepted; use
-`BASE_REF=origin/main make proto-breaking` for compatibility.
+generated-code drift. Use `BASE_REF=origin/main make proto-breaking` for
+compatibility.
 <!-- profile:grpc:end -->
 
-Performance work uses the narrowest matching benchmark level. DigitalOcean is
-preferred only when `doctl` is already installed and authorized; local
-benchmarks remain the supported fallback. See [Benchmarking](docs/benchmarking.md).
+Performance work uses the narrowest matching standard benchmark command. See
+[Benchmarking](docs/benchmarking.md).
 
 ## Documentation
 

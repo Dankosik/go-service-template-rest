@@ -18,12 +18,15 @@ PGO_PROFILE ?= off
 OPENAPI_FILE := api/openapi/service.yaml
 REFERENCE_OPENAPI_FILE := $(wildcard examples/reference-service/api/openapi.yaml)
 REFERENCE_OPENAPI_PACKAGE := $(if $(REFERENCE_OPENAPI_FILE),./examples/reference-service/internal/openapi)
-OPENAPI_FILES := $(OPENAPI_FILE) $(REFERENCE_OPENAPI_FILE)
-OPENAPI_PACKAGES := ./internal/openapi $(REFERENCE_OPENAPI_PACKAGE)
+EXTERNAL_OPENAPI_FILES := $(wildcard api/external/*/openapi.yaml)
+EXTERNAL_OPENAPI_PACKAGES := $(patsubst api/external/%/openapi.yaml,./internal/infra/%/internal/openapi,$(EXTERNAL_OPENAPI_FILES))
+OPENAPI_FILES := $(OPENAPI_FILE) $(REFERENCE_OPENAPI_FILE) $(EXTERNAL_OPENAPI_FILES)
+OPENAPI_PACKAGES := ./internal/openapi $(REFERENCE_OPENAPI_PACKAGE) $(EXTERNAL_OPENAPI_PACKAGES)
+INTEGRATION_INIT_VARS := NAME TRANSPORT CONTRACT TARGET AUTH
 GO_FILES := $(shell git ls-files --cached --others --exclude-standard -- '*.go' 2>/dev/null | awk '!/^(\.agents|\.cache|vendor)\//' | while IFS= read -r file; do [ -f "$$file" ] && printf '%s\n' "$$file"; done)
 PROTO_GENERATED_GO_FILES := internal/gen/proto/% examples/grpc-reference-service/internal/gen/proto/%
 GOIMPORTS_FILES := $(filter-out $(PROTO_GENERATED_GO_FILES),$(GO_FILES))
-GOFUMPT_FILES := $(filter-out internal/openapi/openapi.gen.go internal/infra/postgres/sqlcgen/% $(PROTO_GENERATED_GO_FILES),$(GO_FILES))
+GOFUMPT_FILES := $(filter-out internal/openapi/openapi.gen.go internal/infra/%/internal/openapi/client.gen.go internal/infra/postgres/sqlcgen/% $(PROTO_GENERATED_GO_FILES),$(GO_FILES))
 SHELL_FILES := $(shell git ls-files --cached --others --exclude-standard -- '*.sh' 2>/dev/null | awk '!/^(\.agents|\.cache|vendor)\//' | while IFS= read -r file; do [ -f "$$file" ] && printf '%s\n' "$$file"; done)
 REDOCLY_CLI_VERSION := 2.40.0
 REDOCLY_CLI ?= npx --yes @redocly/cli@$(REDOCLY_CLI_VERSION)
@@ -139,6 +142,8 @@ CODEX_AGENTS_SYNC_SCRIPT := bash ./scripts/codex-agents-sync.sh
 CI_CHANGE_SCOPE_SCRIPT := bash ./scripts/ci/ci-change-scope.sh
 GENERATED_DRIFT_CHECK_SCRIPT := bash ./scripts/ci/generated-drift-check.sh
 PROJECT_STRUCTURE_CHECK_SCRIPT := bash ./scripts/ci/project-structure-check.sh
+INTEGRATION_INIT_SCRIPT := bash ./scripts/integration-init.sh
+INTEGRATION_INIT_CHECK_SCRIPT := bash ./scripts/ci/integration-init-check.sh
 # profile:object-storage:start
 S3_CONFORMANCE_TEST := go test -mod=readonly -vet=off -tags=integration ./test/s3conformance -run '^TestS3ObjectStorageConformanceRequiresProviderCertification$$' -count=1
 # profile:object-storage:end
@@ -161,7 +166,7 @@ BENCHMARK_REMOTE_SCRIPT := bash ./scripts/dev/benchmark-remote.sh
 # aggregate membership changes before enabling parallel prerequisites.
 .NOTPARALLEL: check mod-check lint-deep go-security openapi-check proto-check delivery-quality ci-local
 
-.PHONY: help template-init template-init-check project-structure-check ci-change-scope-check check check-gentle check-full check-full-gentle pr-check \
+.PHONY: help template-init template-init-check integration-init integration-init-check project-structure-check ci-change-scope-check check check-gentle check-full check-full-gentle pr-check \
 	tidy fmt mod-check mod-tidy-check mod-verify fmt-check test test-watch test-race test-cover test-report coverage-min coverage-effective-total coverage-summary coverage-check test-fuzz-smoke test-flake-smoke test-integration \
 	bench bench-baseline bench-compare bench-profile bench-http bench-http-inspect benchmark-infra-check benchmark-remote-check benchmark-remote-image \
 	lint lint-deep lint-fast deadcode nilaway modernize-check test-parallelism-check govulncheck gosec go-security secret-scan secret-scan-history secret-scan-check ci-local ci-local-gentle \
@@ -192,9 +197,10 @@ BENCHMARK_REMOTE_SCRIPT := bash ./scripts/dev/benchmark-remote.sh
 help:
 	@echo "Setup and everyday development:"
 	@echo "  make template-init MODULE=github.com/acme/service CODEOWNER=@acme/team"
+	@echo "  make integration-init NAME=billing TRANSPORT=http CONTRACT=api/external/billing/openapi.yaml TARGET=external-https AUTH=none"
 	@echo "  make check              # formatting, lint, and unit tests"
 	@echo "  make check-gentle       # same checks with bounded Go concurrency"
-	@echo "  make project-structure-check"
+	@echo "  make integration-init-check | project-structure-check"
 	@echo "  make agent-roles-check | codex-agents-check | claude-skills-check | qwen-skills-check"
 	@echo "  make template-sync-check TEMPLATE=<path>   # drift against the template instructions"
 	@echo "  make template-sync TEMPLATE=<path>         # adopt them as its own commit"
@@ -247,6 +253,14 @@ template-init:
 
 template-init-check:
 	bash ./scripts/ci/template-init-check.sh
+
+integration-init:
+	@extra="$(strip $(foreach v,$(.VARIABLES),$(and $(filter command line,$(origin $(v))),$(if $(filter $(INTEGRATION_INIT_VARS),$(v)),,$(v)))))"; \
+	if [ -n "$$extra" ]; then echo "unknown initializer variable(s): $$extra" >&2; exit 2; fi
+	$(INTEGRATION_INIT_SCRIPT) "$(NAME)" "$(TRANSPORT)" "$(CONTRACT)" "$(TARGET)" "$(AUTH)"
+
+integration-init-check:
+	$(INTEGRATION_INIT_CHECK_SCRIPT)
 
 project-structure-check:
 	$(PROJECT_STRUCTURE_CHECK_SCRIPT)

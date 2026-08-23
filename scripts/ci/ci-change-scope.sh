@@ -149,6 +149,46 @@ shared_generator_jobs() {
   all_job_tokens
 }
 
+# Focused validation gates one path must exercise. Empty means inherit prior routing.
+required_checks_for_path() {
+  local path="$1"
+  case "${path}" in
+    scripts/integration-init.sh | scripts/ci/integration-init-check.sh)
+      printf 'integration-init structure template-init delivery\n'
+      ;;
+    integrations/*)
+      printf 'integration-init structure template-init\n'
+      ;;
+    api/external/*)
+      printf 'openapi structure secret\n'
+      ;;
+    api/proto/external/*)
+      printf 'proto structure\n'
+      ;;
+    internal/infra/*/internal/openapi/*)
+      printf 'openapi go\n'
+      ;;
+    internal/gen/proto/external/*)
+      printf 'proto go\n'
+      ;;
+    internal/config/*_integration_config.go | internal/config/*_integration_config_test.go | internal/config/integrations_config.go)
+      printf 'go structure template-init\n'
+      ;;
+    internal/infra/*/client.go | internal/infra/*/doc.go)
+      printf 'go structure\n'
+      ;;
+    cmd/service/internal/bootstrap/startup_*.go)
+      printf 'go structure\n'
+      ;;
+    docs/integrations/* | docs/external-integration-initializer.md)
+      printf 'secret structure\n'
+      ;;
+    *)
+      printf '\n'
+      ;;
+  esac
+}
+
 # Space-separated template jobs that one path can falsify. Empty means skip.
 profiles_for_path() {
   local path="$1"
@@ -215,11 +255,17 @@ profiles_for_path() {
       migrations/* | \
       scripts/profiles/* | \
       scripts/init-module.sh | \
+      scripts/integration-init.sh | \
       scripts/ci/template-init-check.sh | \
+      scripts/ci/integration-init-check.sh | \
       api/openapi/service.yaml | \
       go.mod | go.sum | tools/* | \
       Makefile | railway.toml | build/* | env/* | .github/* | .golangci.yml)
       shared_generator_jobs
+      return
+      ;;
+    api/external/* | api/proto/external/* | integrations/* | docs/integrations/* | docs/external-integration-initializer.md)
+      printf '%s\n' "minimal"
       return
       ;;
     internal/*.go | cmd/*.go | test/*.go | api/*)
@@ -295,6 +341,18 @@ template_scope() {
   printf 'required=%s\n' "${required}"
   printf 'init_profiles=%s\n' "$(init_profiles_json "${jobs}")"
   printf 'postgres_required=%s\n' "${postgres}"
+}
+
+assert_required_checks() {
+  local expected="$1"
+  local path="$2"
+  local actual
+  actual="$(required_checks_for_path "${path}")"
+  actual="${actual%$'\n'}"
+  [[ "${actual}" == "${expected}" ]] || {
+    echo "expected required-checks ${expected}, got ${actual}: ${path}" >&2
+    exit 1
+  }
 }
 
 assert_scope() {
@@ -405,6 +463,21 @@ self_test() {
     internal/greeting/service.go .agents/roles/worker-agent.toml
   assert_template_scope false '[]' false scripts/ci/ci-change-scope.sh
   assert_template_scope false '[]' false evals/instructions/evals.json
+  assert_required_checks "integration-init structure template-init delivery" scripts/integration-init.sh
+  assert_required_checks "integration-init structure template-init delivery" scripts/ci/integration-init-check.sh
+  assert_required_checks "integration-init structure template-init" integrations/billing.toml
+  assert_required_checks "openapi structure secret" api/external/billing/openapi.yaml
+  assert_required_checks "proto structure" api/proto/external/identity/identity.proto
+  assert_required_checks "openapi go" internal/infra/billing/internal/openapi/client.gen.go
+  assert_required_checks "proto go" internal/gen/proto/external/identity/v1/identity.pb.go
+  assert_required_checks "go structure template-init" internal/config/billing_integration_config.go
+  assert_required_checks "go structure" internal/infra/billing/client.go
+  assert_required_checks "go structure" cmd/service/internal/bootstrap/startup_billing.go
+  assert_required_checks "secret structure" docs/integrations/billing.md
+  assert_required_checks "secret structure" docs/external-integration-initializer.md
+  assert_required_checks "" internal/greeting/service.go
+  assert_template_required true scripts/integration-init.sh
+  assert_template_required true scripts/ci/integration-init-check.sh
   echo "CI change-scope routing check passed"
 }
 

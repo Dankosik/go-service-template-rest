@@ -193,6 +193,15 @@ linters:
         - '^go\.opentelemetry\.io/otel/sdk/trace\.Sampler$'
     depguard:
       rules:
+        generated_external_proto_stays_in_adapters:
+          list-mode: lax
+          files:
+            - "**/*.go"
+            - "!**/internal/infra/**/*.go"
+            - "!**/internal/gen/proto/**/*.go"
+          deny:
+            - pkg: github.com/example/go-service-template-rest/internal/gen/proto/external
+              desc: generated external gRPC types stay inside the named adapter.
         feature_packages_no_adapters:
           list-mode: lax
           files:

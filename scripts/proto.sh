@@ -155,8 +155,53 @@ drift_proto() (
 		echo "generated protobuf output was updated; review and commit it" >&2
 		exit 1
 	fi
+	check_external_record_parity
 	echo "protobuf generated output is current"
 )
+
+check_external_record_parity() {
+	local rec name contract source output
+	if [[ ! -d "${ROOT_DIR}/integrations" ]]; then
+		return
+	fi
+	for rec in "${ROOT_DIR}"/integrations/*.toml; do
+		[[ -f "${rec}" ]] || continue
+		name="$(sed -n 's/^name = "\(.*\)"/\1/p' "${rec}" | head -n1)"
+		if [[ "$(sed -n 's/^transport = "\(.*\)"/\1/p' "${rec}" | head -n1)" != "grpc" ]]; then
+			continue
+		fi
+		contract="$(sed -n 's/^contract = "\(.*\)"/\1/p' "${rec}" | head -n1)"
+		source="$(sed -n 's/^generator_source = "\(.*\)"/\1/p' "${rec}" | head -n1)"
+		[[ -n "${name}" && -n "${contract}" ]] || {
+			echo "protobuf record parity: ${rec#"${ROOT_DIR}"/} is missing name or contract" >&2
+			exit 1
+		}
+		if [[ ! -f "${ROOT_DIR}/${contract}" ]]; then
+			echo "protobuf record/source mismatch: missing ${contract}" >&2
+			exit 1
+		fi
+		if [[ "${source}" != "buf.gen.yaml" || ! -f "${ROOT_DIR}/buf.gen.yaml" ]]; then
+			echo "protobuf record/source mismatch: ${name} generator_source must be buf.gen.yaml" >&2
+			exit 1
+		fi
+		output="${ROOT_DIR}/internal/gen/proto/external/${name}"
+		if [[ ! -d "${output}" ]] || ! find "${output}" -type f -name '*.go' -print -quit | grep -q .; then
+			echo "protobuf record/output mismatch: missing generated output for ${name}" >&2
+			exit 1
+		fi
+	done
+	if [[ -d "${ROOT_DIR}/internal/gen/proto/external" ]]; then
+		local dir
+		for dir in "${ROOT_DIR}"/internal/gen/proto/external/*; do
+			[[ -d "${dir}" ]] || continue
+			name="$(basename "${dir}")"
+			if [[ ! -f "${ROOT_DIR}/integrations/${name}.toml" ]]; then
+				echo "protobuf record/output mismatch: orphan generated output ${dir#"${ROOT_DIR}"/}" >&2
+				exit 1
+			fi
+		done
+	fi
+}
 
 breaking_proto() {
 	local base_ref="${BASE_REF:-}"

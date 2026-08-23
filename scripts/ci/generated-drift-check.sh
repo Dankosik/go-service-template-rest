@@ -21,16 +21,37 @@ check_openapi() (
 		packages+=("./examples/reference-service/internal/openapi")
 	fi
 
+	local external
+	while IFS= read -r external; do
+		local name
+		name="$(basename "$(dirname "${external}")")"
+		local generated="internal/infra/${name}/internal/openapi/client.gen.go"
+		local package="./internal/infra/${name}/internal/openapi"
+		paths+=("${generated}")
+		packages+=("${package}")
+	done < <(find "${ROOT_DIR}/api/external" -mindepth 2 -maxdepth 2 -type f -name openapi.yaml -print 2>/dev/null | LC_ALL=C sort)
+
 	snapshot="$(mktemp -d)"
 	trap 'rm -rf "${snapshot}"' EXIT
 	for path in "${paths[@]}"; do
 		mkdir -p "${snapshot}/$(dirname "${path}")"
-		cp "${ROOT_DIR}/${path}" "${snapshot}/${path}"
+		if [[ -f "${ROOT_DIR}/${path}" ]]; then
+			cp "${ROOT_DIR}/${path}" "${snapshot}/${path}"
+		else
+			: >"${snapshot}/${path}.absent"
+		fi
 	done
 
 	(cd "${ROOT_DIR}" && go generate "${packages[@]}")
 
 	for path in "${paths[@]}"; do
+		if [[ -f "${snapshot}/${path}.absent" ]]; then
+			if [[ -f "${ROOT_DIR}/${path}" ]]; then
+				drift=1
+				echo "openapi codegen drift detected: generation created ${path}"
+			fi
+			continue
+		fi
 		if cmp -s "${snapshot}/${path}" "${ROOT_DIR}/${path}"; then
 			continue
 		fi

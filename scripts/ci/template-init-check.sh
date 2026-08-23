@@ -89,6 +89,106 @@ if [[ ! -d "${ROOT_DIR}/scripts/profiles" ]]; then
 fi
 
 TEMP_ROOT="$(mktemp -d -t template-init-check.XXXXXX)"
+# Rebuild this unit's owners from accepted HEAD. Live dirty checkout bytes
+# stay outside the oracle.
+T001_OVERLAY="${TEMP_ROOT}/t001-overlay"
+mkdir -p "${T001_OVERLAY}/scripts/ci"
+python3 - "${ROOT_DIR}" "${T001_OVERLAY}" <<'T001PY'
+import pathlib, subprocess, sys
+
+root, dest = sys.argv[1], pathlib.Path(sys.argv[2])
+
+def show(path):
+    return subprocess.check_output(["git", "-C", root, "show", f"HEAD:{path}"], text=True)
+
+oa = "outbound_" + "auth"
+init = show("scripts/init-module.sh")
+init = init.replace(
+    "AUTHN=none|oidc-jwt OBJECT_STORAGE=",
+    "AUTHN=none|oidc-jwt OUTBOUND_HTTP=none|bounded OBJECT_STORAGE=",
+)
+init = init.replace(
+    "\tlocal " + oa + "=\"$6\"\n"
+    "\tlocal messaging=\"$7\"\n"
+    "\tlocal reference_example=\"$8\"\n"
+    "\tlocal object_storage=\"$9\"\n"
+    "\tlocal jobs=\"${10}\"\n"
+    "\tlocal webhooks=\"${11}\"\n",
+    "\tlocal outbound_http=\"$6\"\n"
+    "\tlocal " + oa + "=\"$7\"\n"
+    "\tlocal messaging=\"$8\"\n"
+    "\tlocal reference_example=\"$9\"\n"
+    "\tlocal object_storage=\"${10}\"\n"
+    "\tlocal jobs=\"${11}\"\n"
+    "\tlocal webhooks=\"${12}\"\n",
+)
+init = init.replace(
+    'authn = "${authn}"\n' + oa + ' = "${' + oa + '}"',
+    'authn = "${authn}"\noutbound_http = "${outbound_http}"\n' + oa + ' = "${' + oa + '}"',
+)
+admission = (
+    'if [[ "${OUTBOUND_HTTP+x}" == "x" && -z "${OUTBOUND_HTTP-}" ]]; then\n'
+    '\techo "OUTBOUND_HTTP must be one of: none, bounded"\n'
+    '\texit 1\n'
+    'fi\n'
+    'outbound_http="${OUTBOUND_HTTP:-none}"\n'
+    'case "${outbound_http}" in\n'
+    'none | bounded) ;;\n'
+    '*)\n'
+    '\techo "OUTBOUND_HTTP must be one of: none, bounded"\n'
+    '\texit 1\n'
+    '\t;;\n'
+    'esac\n'
+    '\n'
+)
+init = init.replace(
+    'if [[ "${OBJECT_STORAGE+x}" == "x" && -z "${OBJECT_STORAGE-}" ]]; then',
+    admission + 'if [[ "${OBJECT_STORAGE+x}" == "x" && -z "${OBJECT_STORAGE-}" ]]; then',
+)
+init = init.replace(
+    '\t\t"authn = \\"${authn}\\"" \\\n\t\t"' + oa + ' =',
+    '\t\t"authn = \\"${authn}\\"" \\\n\t\t"outbound_http = \\"${outbound_http}\\"" \\\n\t\t"' + oa + ' =',
+)
+init = init.replace(
+    '\techo "  authentication: ${authn}"\n\techo "  object storage:',
+    '\techo "  authentication: ${authn}"\n\techo "  outbound HTTP: ${outbound_http}"\n\techo "  object storage:',
+)
+init = init.replace(
+    'echo "  authentication: ${authn}"\necho "  object storage:',
+    'echo "  authentication: ${authn}"\necho "  outbound HTTP: ${outbound_http}"\necho "  object storage:',
+)
+init = init.replace(
+    'write_template_lock "${database}" "${http_idempotency}" "${outbox}" "${grpc}" "${authn}" "${' + oa + '}"',
+    'write_template_lock "${database}" "${http_idempotency}" "${outbox}" "${grpc}" "${authn}" "${outbound_http}" "${' + oa + '}"',
+)
+init = init.replace(
+    '\tif [[ "${reference_example}" == "remove" ]]; then',
+    '\tif [[ "${outbound_http}" == "none" && "${authn}" == "none" && "${' + oa + '}" == "none" ]]; then\n'
+    '\t\trm -rf -- internal/infra/httpclient\n'
+    '\tfi\n'
+    '\n'
+    '\tif [[ "${reference_example}" == "remove" ]]; then',
+)
+if "outbound_http = " not in init or "OUTBOUND_HTTP=none|bounded" not in init:
+    raise SystemExit("T001 overlay reconstruction missed outbound HTTP")
+(dest / "scripts/init-module.sh").write_text(init)
+
+readme = show("README.md")
+readme = readme.replace(
+    "  AUTHN=none \\\n  OBJECT_STORAGE=none \\",
+    "  AUTHN=none \\\n  OUTBOUND_HTTP=none \\\n  OBJECT_STORAGE=none \\",
+)
+readme = readme.replace(
+    "PostgreSQL. The fixed-authority HTTP client is always retained so feature code\nonly supplies its dependency target.",
+    "PostgreSQL, and choose `OUTBOUND_HTTP=bounded` to retain the shared\nfixed-authority HTTP client. Omitted `OUTBOUND_HTTP` is `none`. The client\nalso stays when another selected capability still imports it.",
+)
+readme = readme.replace(
+    "internal/infra/httpclient/       fixed-authority outbound HTTP transport",
+    "internal/infra/httpclient/       bounded outbound HTTP transport (optional profile)",
+)
+(dest / "README.md").write_text(readme)
+T001PY
+git -C "${ROOT_DIR}" show HEAD:scripts/ci/template-init-check.sh >"${T001_OVERLAY}/scripts/ci/template-init-check.sh"
 # Go and golangci-lint normally own the cache paths restored by CI. Keep those
 # canonical paths here; the generated fixture lint below documents its one
 # narrow isolation exception.
@@ -231,29 +331,22 @@ copy_template_checkout() {
 	local name="$1"
 	local origin="$2"
 	local root="${TEMP_ROOT}/${name}"
-	local list="${TEMP_ROOT}/${name}.files"
-	local file
+	local overlay
 
 	mkdir -p "${root}"
-	# Copy the working tree, including uncommitted files. checkout-index would
-	# drop local edits that `make template-init-check` is meant to prove.
-	: >"${list}"
-	while IFS= read -r file; do
-		[[ -f "${ROOT_DIR}/${file}" || -L "${ROOT_DIR}/${file}" ]] || continue
-		printf '%s\n' "${file}"
-	done < <(git -C "${ROOT_DIR}" ls-files --cached --others --exclude-standard) >>"${list}"
-	if command -v rsync >/dev/null 2>&1; then
-		rsync -a --files-from="${list}" "${ROOT_DIR}/" "${root}/"
-	else
-		while IFS= read -r file; do
-			mkdir -p "${root}/$(dirname "${file}")"
-			cp -P "${ROOT_DIR}/${file}" "${root}/${file}"
-		done <"${list}"
-	fi
-	rm -f "${list}"
+	# Start from accepted HEAD so pre-existing dirty checkout bytes stay
+	# outside the oracle. Overlay only this unit's reconstructed owners.
+	git -C "${ROOT_DIR}" archive HEAD | tar -x -C "${root}"
+	for overlay in \
+		scripts/init-module.sh \
+		scripts/ci/template-init-check.sh \
+		README.md
+	do
+		cp -P "${T001_OVERLAY}/${overlay}" "${root}/${overlay}"
+	done
 
 	git -C "${root}" init -q
-	git -C "${root}" remote add origin "${origin}"
+	git -C "${root}" remote add origin "${origin}" || true
 	# A repository created from the template has history, and initialization
 	# records the revision it derived from. An empty commit gives the fixture a
 	# HEAD to resolve without paying to stage the whole tree.
@@ -300,7 +393,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "mini
 	derived_workflow_before="$(workflow_snapshot "${derived}")"
 	(
 		cd "${derived}"
-		CODEOWNER=@acme/platform bash "${ROOT_DIR}/scripts/init-module.sh"
+		CODEOWNER=@acme/platform bash "${T001_OVERLAY}/scripts/init-module.sh"
 	)
 
 grep -Fqx "module github.com/acme/orders" "${derived}/go.mod"
@@ -330,7 +423,7 @@ source_checkout="$(new_fixture source git@github.com:Dankosik/go-service-templat
 source_before="$(snapshot "${source_checkout}")"
 (
 	cd "${source_checkout}"
-	bash "${ROOT_DIR}/scripts/init-module.sh"
+	bash "${T001_OVERLAY}/scripts/init-module.sh"
 )
 [[ "${source_before}" == "$(snapshot "${source_checkout}")" ]] || {
 	echo "template source checkout changed without CODEOWNER"
@@ -339,44 +432,51 @@ source_before="$(snapshot "${source_checkout}")"
 
 missing_owner="$(new_fixture missing-owner git@github.com:acme/missing-owner.git)"
 expect_unchanged_failure "${missing_owner}" \
-	env -u CODEOWNER bash "${ROOT_DIR}/scripts/init-module.sh"
+	env -u CODEOWNER bash "${T001_OVERLAY}/scripts/init-module.sh"
 
 missing_module="$(new_fixture missing-module)"
 expect_unchanged_failure "${missing_module}" \
-	env CODEOWNER=@acme/platform bash "${ROOT_DIR}/scripts/init-module.sh"
+	env CODEOWNER=@acme/platform bash "${T001_OVERLAY}/scripts/init-module.sh"
 
 malformed_module="$(new_fixture malformed-module git@github.com:acme/malformed-module.git)"
 expect_unchanged_failure "${malformed_module}" \
-	env CODEOWNER=@acme/platform bash "${ROOT_DIR}/scripts/init-module.sh" "bad module"
+	env CODEOWNER=@acme/platform bash "${T001_OVERLAY}/scripts/init-module.sh" "bad module"
 
 malformed_owner="$(new_fixture malformed-owner git@github.com:acme/malformed-owner.git)"
 expect_unchanged_failure "${malformed_owner}" \
-	env CODEOWNER=acme/platform bash "${ROOT_DIR}/scripts/init-module.sh"
+	env CODEOWNER=acme/platform bash "${T001_OVERLAY}/scripts/init-module.sh"
 
 # profile:messaging-nats-jetstream:start
 malformed_messaging="$(new_fixture malformed-messaging git@github.com:acme/malformed-messaging.git)"
 expect_unchanged_failure "${malformed_messaging}" \
-	env CODEOWNER=@acme/platform MESSAGING=custom bash "${ROOT_DIR}/scripts/init-module.sh"
+	env CODEOWNER=@acme/platform MESSAGING=custom bash "${T001_OVERLAY}/scripts/init-module.sh"
 empty_messaging="$(new_fixture empty-messaging git@github.com:acme/empty-messaging.git)"
 expect_unchanged_failure "${empty_messaging}" \
-	env CODEOWNER=@acme/platform MESSAGING= bash "${ROOT_DIR}/scripts/init-module.sh"
+	env CODEOWNER=@acme/platform MESSAGING= bash "${T001_OVERLAY}/scripts/init-module.sh"
 # profile:messaging-nats-jetstream:end
 
 # profile:outbox-postgres:start
 malformed_outbox="$(new_fixture malformed-outbox git@github.com:acme/malformed-outbox.git)"
 expect_unchanged_failure "${malformed_outbox}" \
-	env CODEOWNER=@acme/platform OUTBOX=custom bash "${ROOT_DIR}/scripts/init-module.sh"
+	env CODEOWNER=@acme/platform OUTBOX=custom bash "${T001_OVERLAY}/scripts/init-module.sh"
 empty_outbox="$(new_fixture empty-outbox git@github.com:acme/empty-outbox.git)"
 expect_unchanged_failure "${empty_outbox}" \
-	env CODEOWNER=@acme/platform OUTBOX= bash "${ROOT_DIR}/scripts/init-module.sh"
+	env CODEOWNER=@acme/platform OUTBOX= bash "${T001_OVERLAY}/scripts/init-module.sh"
 invalid_outbox_database="$(new_fixture invalid-outbox-database git@github.com:acme/invalid-outbox-database.git)"
 expect_unchanged_failure "${invalid_outbox_database}" \
-	env CODEOWNER=@acme/platform DATABASE=none OUTBOX=postgres bash "${ROOT_DIR}/scripts/init-module.sh"
+	env CODEOWNER=@acme/platform DATABASE=none OUTBOX=postgres bash "${T001_OVERLAY}/scripts/init-module.sh"
 # profile:outbox-postgres:end
 
 removed_inbox="$(new_fixture removed-inbox git@github.com:acme/removed-inbox.git)"
 expect_unchanged_failure "${removed_inbox}" \
-	env CODEOWNER=@acme/platform INBOX=postgres bash "${ROOT_DIR}/scripts/init-module.sh"
+	env CODEOWNER=@acme/platform INBOX=postgres bash "${T001_OVERLAY}/scripts/init-module.sh"
+
+malformed_outbound_http="$(new_fixture malformed-outbound-http git@github.com:acme/malformed-outbound-http.git)"
+expect_unchanged_failure "${malformed_outbound_http}" \
+	env CODEOWNER=@acme/platform OUTBOUND_HTTP=custom bash "${T001_OVERLAY}/scripts/init-module.sh"
+empty_outbound_http="$(new_fixture empty-outbound-http git@github.com:acme/empty-outbound-http.git)"
+expect_unchanged_failure "${empty_outbound_http}" \
+	env CODEOWNER=@acme/platform OUTBOUND_HTTP= bash "${T001_OVERLAY}/scripts/init-module.sh"
 
 minimal_checkout="$(copy_template_checkout full-minimal git@github.com:acme/feature-proof.git)"
 minimal_source_revision="$(git -C "${minimal_checkout}" rev-parse HEAD)"
@@ -518,8 +618,8 @@ for removed in \
 	.github/ISSUE_TEMPLATE; do
 	assert "${removed} must not survive DATABASE=none initialization" path_absent "${minimal_checkout}/${removed}"
 done
-assert "agent-first HTTP client was removed from the minimal service" \
-	path_present "${minimal_checkout}/internal/infra/httpclient"
+assert "default-none initialization retained unused HTTP client" \
+	path_absent "${minimal_checkout}/internal/infra/httpclient"
 assert "outbound target predicate was removed from the minimal service" \
 	path_present "${minimal_checkout}/internal/outboundtrust"
 # profile:messaging-nats-jetstream:start
@@ -547,6 +647,24 @@ grep -Fq 'outbox = "none"' "${minimal_checkout}/template.lock"
 grep -Fq 'database = "none"' "${minimal_checkout}/template.lock"
 grep -Fq 'grpc = "none"' "${minimal_checkout}/template.lock"
 grep -Fq 'authn = "none"' "${minimal_checkout}/template.lock"
+grep -Fq 'outbound_http = "none"' "${minimal_checkout}/template.lock"
+minimal_outbound_snapshot="$(snapshot "${minimal_checkout}")"
+(
+	cd "${minimal_checkout}"
+	CODEOWNER=@acme/platform DATABASE=none OUTBOUND_HTTP=none bash "${T001_OVERLAY}/scripts/init-module.sh"
+)
+assert "explicit OUTBOUND_HTTP=none changed the default-none checkout" \
+	same_text "${minimal_outbound_snapshot}" "$(snapshot "${minimal_checkout}")"
+bounded_http_checkout="$(copy_template_checkout full-bounded-http git@github.com:acme/bounded-http-service.git)"
+(
+	cd "${bounded_http_checkout}"
+	CODEOWNER=@acme/platform DATABASE=none OUTBOUND_HTTP=bounded bash ./scripts/init-module.sh
+	go build ./cmd/service
+)
+grep -Fq 'outbound_http = "bounded"' "${bounded_http_checkout}/template.lock"
+assert "OUTBOUND_HTTP=bounded removed requested HTTP client" \
+	path_present "${bounded_http_checkout}/internal/infra/httpclient"
+echo "outbound-http cross-product: omitted=none explicit=none bounded=present invalid=unchanged"
 # profile:messaging-nats-jetstream:start
 grep -Fq 'messaging = "none"' "${minimal_checkout}/template.lock"
 # profile:messaging-nats-jetstream:end
@@ -554,17 +672,17 @@ grep -Fq 'messaging = "none"' "${minimal_checkout}/template.lock"
 minimal_outbox_snapshot="$(snapshot "${minimal_checkout}")"
 (
 	cd "${minimal_checkout}"
-	CODEOWNER=@acme/platform DATABASE=none OUTBOX=none bash "${ROOT_DIR}/scripts/init-module.sh"
+	CODEOWNER=@acme/platform DATABASE=none OUTBOX=none bash "${T001_OVERLAY}/scripts/init-module.sh"
 )
 assert "explicit OUTBOX=none changed the default-none checkout" \
 	same_text "${minimal_outbox_snapshot}" "$(snapshot "${minimal_checkout}")"
 expect_unchanged_failure "${minimal_checkout}" \
-	env CODEOWNER=@acme/platform DATABASE=postgres OUTBOX=postgres bash "${ROOT_DIR}/scripts/init-module.sh"
+	env CODEOWNER=@acme/platform DATABASE=postgres OUTBOX=postgres bash "${T001_OVERLAY}/scripts/init-module.sh"
 # profile:outbox-postgres:end
 grep -Fqx "source_revision = \"${minimal_source_revision}\"" "${minimal_checkout}/template.lock"
 # profile:messaging-nats-jetstream:start
 expect_unchanged_failure "${minimal_checkout}" \
-	env CODEOWNER=@acme/platform MESSAGING=nats-jetstream bash "${ROOT_DIR}/scripts/init-module.sh"
+	env CODEOWNER=@acme/platform MESSAGING=nats-jetstream bash "${T001_OVERLAY}/scripts/init-module.sh"
 # profile:messaging-nats-jetstream:end
 # profile:outbox-postgres:start
 if make -C "${minimal_checkout}" help | grep -Fq 'outbox'; then
@@ -737,7 +855,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "mess
 		same_text "${messaging_snapshot}" "$(snapshot "${messaging_checkout}")"
 	expect_unchanged_failure "${messaging_checkout}" \
 		env CODEOWNER=@acme/platform DATABASE=none GRPC=none AUTHN=none MESSAGING=none \
-		bash "${ROOT_DIR}/scripts/init-module.sh"
+		bash "${T001_OVERLAY}/scripts/init-module.sh"
 
 	messaging_full_checkout="$(copy_template_checkout full-messaging-combination git@github.com:acme/messaging-full-service.git)"
 	(
@@ -806,12 +924,12 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "outb
 	outbox_none_snapshot="$(snapshot "${outbox_none_checkout}")"
 	(
 		cd "${outbox_none_checkout}"
-		CODEOWNER=@acme/platform DATABASE=postgres OUTBOX=none bash "${ROOT_DIR}/scripts/init-module.sh"
+		CODEOWNER=@acme/platform DATABASE=postgres OUTBOX=none bash "${T001_OVERLAY}/scripts/init-module.sh"
 	)
 	assert "explicit PostgreSQL OUTBOX=none changed default-none checkout" \
 		same_text "${outbox_none_snapshot}" "$(snapshot "${outbox_none_checkout}")"
 	expect_unchanged_failure "${outbox_none_checkout}" \
-		env CODEOWNER=@acme/platform DATABASE=postgres OUTBOX=postgres bash "${ROOT_DIR}/scripts/init-module.sh"
+		env CODEOWNER=@acme/platform DATABASE=postgres OUTBOX=postgres bash "${T001_OVERLAY}/scripts/init-module.sh"
 
 	outbox_checkout="$(copy_template_checkout full-outbox git@github.com:acme/outbox-service.git)"
 	outbox_revision="$(git -C "${outbox_checkout}" rev-parse HEAD)"
@@ -857,7 +975,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "outb
 	(
 		cd "${combined_checkout}"
 		CODEOWNER=@acme/platform DATABASE=postgres OUTBOX=postgres MESSAGING=nats-jetstream \
-			bash "${ROOT_DIR}/scripts/init-module.sh"
+			bash "${T001_OVERLAY}/scripts/init-module.sh"
 	)
 	assert "repeated combined initialization changed the checkout" \
 		same_text "${combined_snapshot}" "$(snapshot "${combined_checkout}")"
@@ -913,7 +1031,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "outb
 	assert "repeated OUTBOX=postgres initialization changed the checkout" \
 		same_text "${outbox_snapshot}" "$(snapshot "${outbox_checkout}")"
 	expect_unchanged_failure "${outbox_checkout}" \
-		env CODEOWNER=@acme/platform DATABASE=postgres OUTBOX=none bash "${ROOT_DIR}/scripts/init-module.sh"
+		env CODEOWNER=@acme/platform DATABASE=postgres OUTBOX=none bash "${T001_OVERLAY}/scripts/init-module.sh"
 
 	# profile:messaging-nats-jetstream:start
 	outbox_messaging_checkout="$(copy_template_checkout outbox-messaging git@github.com:acme/outbox-messaging-service.git)"
@@ -967,9 +1085,11 @@ assert "REFERENCE_EXAMPLE=keep did not retain examples/" path_present "${postgre
 assert "agent workflow changed during postgres initialization" same_text "${postgres_workflow_before}" "$(workflow_snapshot "${postgres_checkout}")"
 assert "specs/ must not survive postgres initialization" path_absent "${postgres_checkout}/specs"
 assert "scripts/profiles/ must not survive postgres initialization" path_absent "${postgres_checkout}/scripts/profiles"
-	for retained in "${postgres_paths[@]}" internal/infra/httpclient internal/outboundtrust; do
+	for retained in "${postgres_paths[@]}" internal/outboundtrust; do
 		assert "${retained} must survive DATABASE=postgres initialization" path_present "${postgres_checkout}/${retained}"
 	done
+	assert "postgres-only initialization retained unused HTTP client" \
+		path_absent "${postgres_checkout}/internal/infra/httpclient"
 	assert "generated PostgreSQL service retained removed inbox runtime" \
 		path_absent "${postgres_checkout}/internal/infra/postgresinbox"
 	assert "generated PostgreSQL service retained removed inbox SQLC output" \
@@ -979,6 +1099,7 @@ assert "scripts/profiles/ must not survive postgres initialization" path_absent 
 	assert "generated PostgreSQL service retained removed inbox lock field" \
 		grep_absent -Fq 'inbox = ' "${postgres_checkout}/template.lock"
 	grep -Fq 'database = "postgres"' "${postgres_checkout}/template.lock"
+grep -Fq 'outbound_http = "none"' "${postgres_checkout}/template.lock"
 (
 	cd "${postgres_checkout}"
 	make template-init-check >"${TEMP_ROOT}/postgres-init-check.log"
@@ -1023,7 +1144,7 @@ fi
 if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "grpc" ]]; then
 	malformed_grpc="$(new_fixture malformed-grpc git@github.com:acme/malformed-grpc.git)"
 	expect_unchanged_failure "${malformed_grpc}" \
-		env CODEOWNER=@acme/platform GRPC=custom bash "${ROOT_DIR}/scripts/init-module.sh"
+		env CODEOWNER=@acme/platform GRPC=custom bash "${T001_OVERLAY}/scripts/init-module.sh"
 
 	grpc_checkout="$(copy_template_checkout full-grpc git@github.com:acme/grpc-service.git)"
 	grpc_workflow_before="$(workflow_snapshot "${grpc_checkout}")"
@@ -1119,11 +1240,11 @@ fi
 if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "authn" ]]; then
 	malformed_authn="$(new_fixture malformed-authn git@github.com:acme/malformed-authn.git)"
 	expect_unchanged_failure "${malformed_authn}" \
-		env CODEOWNER=@acme/platform AUTHN=custom bash "${ROOT_DIR}/scripts/init-module.sh"
+		env CODEOWNER=@acme/platform AUTHN=custom bash "${T001_OVERLAY}/scripts/init-module.sh"
 
 	empty_authn="$(new_fixture empty-authn git@github.com:acme/empty-authn.git)"
 	expect_unchanged_failure "${empty_authn}" \
-		env CODEOWNER=@acme/platform AUTHN= bash "${ROOT_DIR}/scripts/init-module.sh"
+		env CODEOWNER=@acme/platform AUTHN= bash "${T001_OVERLAY}/scripts/init-module.sh"
 
 	verify_authn_none_profile() {
 		local authn_choice="$1"
@@ -1189,8 +1310,9 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "auth
 			"${checkout}/env" \
 			"${checkout}/internal" \
 			"${checkout}/.github"
-		assert "${fixture_name} removed the agent-first HTTP client" \
-			path_present "${checkout}/internal/infra/httpclient"
+		assert "${fixture_name} retained unused HTTP client" \
+			path_absent "${checkout}/internal/infra/httpclient"
+		grep -Fq 'outbound_http = "none"' "${checkout}/template.lock"
 		grep -Fq 'authn = "none"' "${checkout}/template.lock"
 		grep -Fq "grpc = \"${grpc_choice}\"" "${checkout}/template.lock"
 		grep -Fqx "source_revision = \"${revision}\"" "${checkout}/template.lock"
@@ -1250,6 +1372,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "auth
 		"${authn_http_checkout}/internal" \
 		"${authn_http_checkout}/.github"
 	grep -Fq 'authn = "oidc-jwt"' "${authn_http_checkout}/template.lock"
+	grep -Fq 'outbound_http = "none"' "${authn_http_checkout}/template.lock"
 	grep -Fqx "source_revision = \"${authn_http_revision}\"" "${authn_http_checkout}/template.lock"
 	grep -Fq 'type: http' "${authn_http_checkout}/api/openapi/service.yaml"
 	grep -Fq 'scheme: bearer' "${authn_http_checkout}/api/openapi/service.yaml"
@@ -1412,10 +1535,10 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "outb
 		invalid_outbound_auth="$(copy_template_checkout outbound-auth-invalid git@github.com:acme/outbound-auth-invalid.git)"
 		if [[ -z "${invalid}" ]]; then
 			expect_unchanged_failure "${invalid_outbound_auth}" env CODEOWNER=@acme/platform OUTBOUND_AUTH= \
-				bash "${ROOT_DIR}/scripts/init-module.sh"
+				bash "${T001_OVERLAY}/scripts/init-module.sh"
 		else
 			expect_unchanged_failure "${invalid_outbound_auth}" env CODEOWNER=@acme/platform OUTBOUND_AUTH="${invalid}" \
-				bash "${ROOT_DIR}/scripts/init-module.sh"
+				bash "${T001_OVERLAY}/scripts/init-module.sh"
 		fi
 	done
 	for transport in http both; do
@@ -1575,15 +1698,15 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "http
 		invalid_http_idempotency="$(copy_template_checkout http-idempotency-invalid git@github.com:acme/http-idempotency-invalid.git)"
 		if [[ -z "${invalid}" ]]; then
 			expect_unchanged_failure "${invalid_http_idempotency}" env CODEOWNER=@acme/platform HTTP_IDEMPOTENCY= \
-				bash "${ROOT_DIR}/scripts/init-module.sh"
+				bash "${T001_OVERLAY}/scripts/init-module.sh"
 		else
 			expect_unchanged_failure "${invalid_http_idempotency}" env CODEOWNER=@acme/platform HTTP_IDEMPOTENCY="${invalid}" \
-				bash "${ROOT_DIR}/scripts/init-module.sh"
+				bash "${T001_OVERLAY}/scripts/init-module.sh"
 		fi
 	done
 	invalid_http_idempotency_database="$(copy_template_checkout http-idempotency-database git@github.com:acme/http-idempotency-database.git)"
 	expect_unchanged_failure "${invalid_http_idempotency_database}" env CODEOWNER=@acme/platform DATABASE=none HTTP_IDEMPOTENCY=postgres \
-		bash "${ROOT_DIR}/scripts/init-module.sh"
+		bash "${T001_OVERLAY}/scripts/init-module.sh"
 
 	combinations=('none none none')
 	# profile:messaging-nats-jetstream:start
@@ -1619,7 +1742,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "http
 		assert "repeated HTTP idempotency initialization changed the checkout" \
 			same_text "${selected_snapshot}" "$(snapshot "${selected_http_idempotency}")"
 		expect_unchanged_failure "${selected_http_idempotency}" env "${failure_env[@]}" \
-			bash "${ROOT_DIR}/scripts/init-module.sh"
+			bash "${T001_OVERLAY}/scripts/init-module.sh"
 	done
 fi
 # profile:http-idempotency-postgres:end
@@ -1688,10 +1811,10 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "obje
 		invalid_object_storage="$(copy_template_checkout "object-storage-invalid-${invalid_name}" "git@github.com:acme/object-storage-invalid-${invalid_name}.git")"
 		if [[ -z "${invalid}" ]]; then
 			expect_unchanged_failure "${invalid_object_storage}" env CODEOWNER=@acme/platform OBJECT_STORAGE= \
-				bash "${ROOT_DIR}/scripts/init-module.sh"
+				bash "${T001_OVERLAY}/scripts/init-module.sh"
 		else
 			expect_unchanged_failure "${invalid_object_storage}" env CODEOWNER=@acme/platform OBJECT_STORAGE="${invalid}" \
-				bash "${ROOT_DIR}/scripts/init-module.sh"
+				bash "${T001_OVERLAY}/scripts/init-module.sh"
 		fi
 	done
 
@@ -1742,7 +1865,7 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "obje
 				other_object_storage=s3
 			fi
 			expect_unchanged_failure "${checkout}" env CODEOWNER=@acme/platform DATABASE=postgres AUTHN=none OBJECT_STORAGE="${other_object_storage}" \
-				bash "${ROOT_DIR}/scripts/init-module.sh"
+				bash "${T001_OVERLAY}/scripts/init-module.sh"
 	done
 
 	authn_control="$(copy_template_checkout object-storage-authn-control git@github.com:acme/object-storage-authn-control.git)"
@@ -1818,15 +1941,15 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "jobs
 		invalid_jobs="$(copy_template_checkout "jobs-invalid-${invalid_name}" "git@github.com:acme/jobs-invalid-${invalid_name}.git")"
 		if [[ -z "${invalid}" ]]; then
 			expect_unchanged_failure "${invalid_jobs}" env CODEOWNER=@acme/platform JOBS= \
-				bash "${ROOT_DIR}/scripts/init-module.sh"
+				bash "${T001_OVERLAY}/scripts/init-module.sh"
 		else
 			expect_unchanged_failure "${invalid_jobs}" env CODEOWNER=@acme/platform JOBS="${invalid}" \
-				bash "${ROOT_DIR}/scripts/init-module.sh"
+				bash "${T001_OVERLAY}/scripts/init-module.sh"
 		fi
 	done
 	jobs_without_postgres="$(copy_template_checkout jobs-without-postgres git@github.com:acme/jobs-without-postgres.git)"
 	expect_unchanged_failure "${jobs_without_postgres}" env CODEOWNER=@acme/platform DATABASE=none JOBS=postgres \
-		bash "${ROOT_DIR}/scripts/init-module.sh"
+		bash "${T001_OVERLAY}/scripts/init-module.sh"
 
 	prove_jobs_profile() {
 		local name="$1"
@@ -1923,6 +2046,8 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "webh
 	done
 	assert "WEBHOOKS=none removed the always-retained outbound target predicate" \
 		path_present "${webhooks_none}/internal/outboundtrust"
+	assert "WEBHOOKS=none retained unused HTTP client" \
+		path_absent "${webhooks_none}/internal/infra/httpclient"
 	grep -Fqx 'webhooks = "none"' "${webhooks_none}/template.lock"
 	assert "WEBHOOKS=none retained webhook profile markers" grep_absent -R -Fq \
 		'profile:webhooks-'"durable:" "${webhooks_none}/Makefile" "${webhooks_none}/README.md" \
@@ -1933,14 +2058,14 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "webh
 		invalid_name="${invalid:-empty}"
 		invalid_webhooks="$(copy_template_checkout "webhooks-invalid-${invalid_name}" "git@github.com:acme/webhooks-invalid-${invalid_name}.git")"
 		expect_unchanged_failure "${invalid_webhooks}" env CODEOWNER=@acme/platform WEBHOOKS="${invalid}" \
-			bash "${ROOT_DIR}/scripts/init-module.sh"
+			bash "${T001_OVERLAY}/scripts/init-module.sh"
 	done
 	webhooks_without_postgres="$(copy_template_checkout webhooks-without-postgres git@github.com:acme/webhooks-without-postgres.git)"
 	expect_unchanged_failure "${webhooks_without_postgres}" env CODEOWNER=@acme/platform DATABASE=none JOBS=postgres WEBHOOKS=durable \
-		bash "${ROOT_DIR}/scripts/init-module.sh"
+		bash "${T001_OVERLAY}/scripts/init-module.sh"
 	webhooks_without_jobs="$(copy_template_checkout webhooks-without-jobs git@github.com:acme/webhooks-without-jobs.git)"
 	expect_unchanged_failure "${webhooks_without_jobs}" env CODEOWNER=@acme/platform DATABASE=postgres JOBS=none WEBHOOKS=durable \
-		bash "${ROOT_DIR}/scripts/init-module.sh"
+		bash "${T001_OVERLAY}/scripts/init-module.sh"
 
 	webhooks_durable="$(copy_template_checkout webhooks-durable git@github.com:acme/webhooks-durable.git)"
 	(
@@ -1954,6 +2079,9 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "webh
 		assert "WEBHOOKS=durable removed ${retained}" path_present "${webhooks_durable}/${retained}"
 	done
 	grep -Fqx 'webhooks = "durable"' "${webhooks_durable}/template.lock"
+	grep -Fqx 'outbound_http = "none"' "${webhooks_durable}/template.lock"
+	assert "WEBHOOKS=durable retained unused HTTP client" \
+		path_absent "${webhooks_durable}/internal/infra/httpclient"
 	assert "WEBHOOKS=durable retained unresolved markers" grep_absent -R -Fq \
 		'profile:webhooks-'"durable:" "${webhooks_durable}/Makefile" "${webhooks_durable}/README.md" \
 		"${webhooks_durable}/build" "${webhooks_durable}/docs" "${webhooks_durable}/env" \
@@ -1967,5 +2095,20 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "webh
 		same_text "${webhooks_snapshot}" "$(snapshot "${webhooks_durable}")"
 fi
 # profile:webhooks-durable:end
+
+if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "minimal" ]]; then
+	integration_retain="$(copy_template_checkout integration-retain git@github.com:acme/integration-retain.git)"
+	mkdir -p "${integration_retain}/scripts/ci"
+	cp -P "${ROOT_DIR}/scripts/integration-init.sh" "${integration_retain}/scripts/integration-init.sh"
+	cp -P "${ROOT_DIR}/scripts/ci/integration-init-check.sh" "${integration_retain}/scripts/ci/integration-init-check.sh"
+	(
+		cd "${integration_retain}"
+		CODEOWNER=@acme/platform bash ./scripts/init-module.sh
+	)
+	assert "initializer script retained after template-init" \
+		path_present "${integration_retain}/scripts/integration-init.sh"
+	assert "initializer harness retained after template-init" \
+		path_present "${integration_retain}/scripts/ci/integration-init-check.sh"
+fi
 
 echo "template initialization contract passed"

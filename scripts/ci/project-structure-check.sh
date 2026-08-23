@@ -41,7 +41,9 @@ done
 while IFS= read -r file; do
 	base="${file##*/}"
 	if [[ "${base}" != "openapi.gen.go" &&
+		"${base}" != "client.gen.go" &&
 		"${file}" != internal/infra/postgres/sqlcgen/*.sql.go &&
+		"${file}" != internal/gen/proto/* &&
 		! "${base}" =~ ^[a-z0-9]+(_[a-z0-9]+)*(_test)?\.go$ ]]; then
 		fail "${file} must use lowercase snake_case Go file naming"
 	fi
@@ -124,6 +126,67 @@ if [[ -d migrations ]]; then
 		[[ "${name}" =~ ^[0-9]{6}_[a-z][a-z0-9]*(_[a-z0-9]+)*\.sql$ ]] ||
 			fail "${migration} must match NNNNNN_lower_snake.sql"
 	done < <(find migrations -mindepth 1 -maxdepth 1 -type f -print)
+fi
+
+if [[ -d integrations ]]; then
+	while IFS= read -r rec; do
+		[[ -n "${rec}" ]] || continue
+		name="$(sed -n 's/^name = "\(.*\)"/\1/p' "${rec}" | head -n1)"
+		transport="$(sed -n 's/^transport = "\(.*\)"/\1/p' "${rec}" | head -n1)"
+		contract="$(sed -n 's/^contract = "\(.*\)"/\1/p' "${rec}" | head -n1)"
+		[[ "${rec}" == "integrations/${name}.toml" ]] || fail "${rec} name does not match its path"
+		[[ -f "${contract}" ]] || fail "${rec} contract ${contract} is missing"
+		[[ -d "internal/infra/${name}" ]] || fail "missing adapter internal/infra/${name}"
+		[[ -f "internal/config/${name}_integration_config.go" ]] || fail "missing config for ${name}"
+		[[ -f "docs/integrations/${name}.md" ]] || fail "missing docs/integrations/${name}.md"
+		if [[ "${transport}" == "http" ]]; then
+			[[ "${contract}" == "api/external/${name}/openapi.yaml" ]] || fail "${rec} HTTP contract path is not canonical"
+			[[ -f "internal/infra/${name}/internal/openapi/doc.go" ]] || fail "missing HTTP generator for ${name}"
+		elif [[ "${transport}" == "grpc" ]]; then
+			case "${contract}" in
+			api/proto/external/"${name}"/*.proto) ;;
+			*) fail "${rec} gRPC contract path is not canonical" ;;
+			esac
+		else
+			fail "${rec} transport must be http or grpc"
+		fi
+	done < <(find integrations -maxdepth 1 -type f -name '*.toml' -print)
+fi
+
+if [[ -d api/external ]]; then
+	while IFS= read -r contract; do
+		[[ -n "${contract}" ]] || continue
+		name="$(basename "$(dirname "${contract}")")"
+		[[ -f "integrations/${name}.toml" ]] || fail "orphan external OpenAPI contract ${contract}"
+	done < <(find api/external -mindepth 2 -maxdepth 2 -type f -name openapi.yaml -print)
+fi
+
+if [[ -d api/proto/external ]]; then
+	while IFS= read -r contract; do
+		[[ -n "${contract}" ]] || continue
+		name="$(basename "$(dirname "${contract}")")"
+		[[ -f "integrations/${name}.toml" ]] || fail "orphan external Protobuf contract ${contract}"
+	done < <(find api/proto/external -type f -name '*.proto' -print)
+fi
+
+env_helper_ok=0
+if [[ -f scripts/integration-init.sh ]]; then
+	if grep -q '^env_entry_present()' scripts/integration-init.sh; then
+		calls="$(grep -c 'env_entry_present "' scripts/integration-init.sh || true)"
+		[[ "${calls}" == "2" ]] || fail "scripts/integration-init.sh must call env_entry_present exactly twice"
+		other="$(grep -nE '(^|[^[:alnum:]_.])\.env($|[^[:alnum:]_.])' scripts/integration-init.sh | grep -v env_entry_present | grep -v reason_env | grep -v 'move or preserve' | grep -v '\.env.example' || true)"
+		if [[ -n "${other}" ]]; then
+			while IFS= read -r line; do
+				[[ "${line}" == *'"${reason_env}" ".env"'* ]] && continue
+				[[ "${line}" == *'name .env'* ]] && continue
+				fail "scripts/integration-init.sh has an extra .env consumer: ${line}"
+			done <<<"${other}"
+		fi
+		env_helper_ok=1
+	else
+		fail "scripts/integration-init.sh must define env_entry_present"
+	fi
+	[[ "${env_helper_ok}" -eq 1 ]]
 fi
 
 if ((failed != 0)); then
