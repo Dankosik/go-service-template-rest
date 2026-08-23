@@ -34,7 +34,7 @@ individual choices and dependency combinations documented in the README:
 - `DATABASE=postgres JOBS=postgres INBOUND_WEBHOOKS=standard-webhooks`;
 - `DATABASE=postgres OUTBOX=postgres MESSAGING=nats-jetstream`;
 - `MESSAGING=nats-jetstream`, `GRPC=enabled`, `AUTHN=oidc-jwt`,
-  `OBJECT_STORAGE=s3`, and
+  `OUTBOUND_HTTP=bounded`, `OBJECT_STORAGE=s3`, and
   `OUTBOUND_AUTH=oauth2-client-credentials` with HTTP, gRPC, or both.
 
 Other cross-products are not a supported preset merely because the initializer
@@ -46,6 +46,39 @@ regenerates retained outputs, tidies modules, writes `template.lock`, and is
 idempotent for the same selection. The contract check uses invalid synthetic
 inputs and one default generated checkout; profile-owned Go tests retain their
 own behavior.
+
+## Add an outbound integration
+
+```bash
+make integration-init NAME=billing TRANSPORT=http \
+  CONTRACT=api/external/billing/openapi.yaml TARGET=external-https AUTH=none
+```
+
+While changing the initializer harness, select one named row and keep the
+25-row default for final acceptance:
+
+```bash
+bash scripts/ci/integration-init-check.sh --list
+INTEGRATION_INIT_ROWS=row_e1_http make integration-init-check
+make integration-init-check
+```
+
+## Fast Go iteration
+
+Use active gopls diagnostics first, then format and test only the changed files
+and package:
+
+```bash
+go tool -modfile=tools/go.mod goimports -l path/to/changed.go
+go tool -modfile=tools/go.mod gofumpt -l path/to/changed.go
+go test -vet=off ./path/to/changed/package
+make lint-fast LINT_PACKAGES=./path/to/changed/package
+```
+
+When only the CLI exposes diagnostics, use `gopls check path/to/changed.go`.
+Use `gopls references file.go:line:column` before a semantic rename or exported
+signature change. `make test-watch` watches all Go directories but runs the
+package containing the saved file; press `a` for an explicit full run.
 
 ## Ordinary Go leaves
 
@@ -67,6 +100,8 @@ make test-race
 
 Use `make lint-deep` only for whole-program dead-code and nil analysis. Use
 `make test-race` only when the claim spans concurrency-sensitive code.
+While editing one module, run only its direct `go mod tidy -diff` form; the
+combined `make mod-tidy-check` is the final root/tools parity leaf.
 
 ## Generated contracts
 
@@ -127,19 +162,29 @@ and clean SIGTERM shutdown.
 ## Instructions and template propagation
 
 ```bash
-make agent-roles-check
-make codex-agents-check
-make claude-skills-check
-make qwen-skills-check
 make template-owned-purity-check
 bash scripts/ci/instruction-evals-check.sh
 ```
+
+Use the single matching carrier check from
+[`validation/instructions.md`](validation/instructions.md) while iterating.
+The template purity target already runs every carrier check, so do not pair it
+with those leaves in the same final bundle.
 
 `scripts/harness-skills-sync.sh` is the one Claude/Qwen skill-view owner.
 `scripts/template-sync.sh` checks or applies one committed template snapshot to
 one target and leaves the result in that target's working tree.
 
 ## Delivery and security
+
+When the installed native versions match the Makefile pins, use the local-only
+fast targets during iteration and retain the containerized targets for final
+proof:
+
+```bash
+make actionlint-fast
+make shellcheck-fast
+```
 
 ```bash
 make actionlint

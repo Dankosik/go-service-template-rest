@@ -20,20 +20,21 @@ REFERENCE_OPENAPI_FILE := $(wildcard examples/reference-service/api/openapi.yaml
 REFERENCE_OPENAPI_PACKAGE := $(if $(REFERENCE_OPENAPI_FILE),./examples/reference-service/internal/openapi)
 EXTERNAL_OPENAPI_FILES := $(wildcard api/external/*/openapi.yaml)
 EXTERNAL_OPENAPI_PACKAGES := $(patsubst api/external/%/openapi.yaml,./internal/infra/%/internal/openapi,$(EXTERNAL_OPENAPI_FILES))
+EXTERNAL_OPENAPI_GENERATED_FILES := $(patsubst api/external/%/openapi.yaml,internal/infra/%/internal/openapi/client.gen.go,$(EXTERNAL_OPENAPI_FILES))
 OPENAPI_FILES := $(OPENAPI_FILE) $(REFERENCE_OPENAPI_FILE) $(EXTERNAL_OPENAPI_FILES)
 OPENAPI_PACKAGES := ./internal/openapi $(REFERENCE_OPENAPI_PACKAGE) $(EXTERNAL_OPENAPI_PACKAGES)
-OPENAPI_GENERATED_FILES := internal/openapi/openapi.gen.go $(if $(REFERENCE_OPENAPI_FILE),examples/reference-service/internal/openapi/openapi.gen.go)
+OPENAPI_GENERATED_FILES := internal/openapi/openapi.gen.go $(if $(REFERENCE_OPENAPI_FILE),examples/reference-service/internal/openapi/openapi.gen.go) $(EXTERNAL_OPENAPI_GENERATED_FILES)
 INTEGRATION_INIT_VARS := NAME TRANSPORT CONTRACT TARGET AUTH
-GO_FILES := $(shell git ls-files --cached --others --exclude-standard -- '*.go' 2>/dev/null | awk '!/^(\.agents|\.cache|vendor)\//' | while IFS= read -r file; do [ -f "$$file" ] && printf '%s\n' "$$file"; done)
+GO_FILES = $(shell git ls-files --cached --others --exclude-standard -- '*.go' 2>/dev/null | awk '!/^(\.agents|\.cache|vendor)\//' | while IFS= read -r file; do [ -f "$$file" ] && printf '%s\n' "$$file"; done)
 PROTO_GENERATED_GO_FILES := internal/gen/proto/% examples/grpc-reference-service/internal/gen/proto/%
-GOIMPORTS_FILES := $(filter-out $(PROTO_GENERATED_GO_FILES),$(GO_FILES))
-GOFUMPT_FILES := $(filter-out internal/openapi/openapi.gen.go internal/infra/%/internal/openapi/client.gen.go internal/infra/postgres/sqlcgen/% $(PROTO_GENERATED_GO_FILES),$(GO_FILES))
-SHELL_FILES := $(shell git ls-files --cached --others --exclude-standard -- '*.sh' 2>/dev/null | awk '!/^(\.agents|\.cache|vendor)\//' | while IFS= read -r file; do [ -f "$$file" ] && printf '%s\n' "$$file"; done)
+GOIMPORTS_FILES = $(filter-out $(PROTO_GENERATED_GO_FILES),$(GO_FILES))
+GOFUMPT_FILES = $(filter-out internal/openapi/openapi.gen.go internal/infra/%/internal/openapi/client.gen.go internal/infra/postgres/sqlcgen/% $(PROTO_GENERATED_GO_FILES),$(GO_FILES))
+SHELL_FILES = $(shell git ls-files --cached --others --exclude-standard -- '*.sh' 2>/dev/null | awk '!/^(\.agents|\.cache|vendor)\//' | while IFS= read -r file; do [ -f "$$file" ] && printf '%s\n' "$$file"; done)
 REDOCLY_CLI_VERSION := 2.40.0
 REDOCLY_CLI ?= npx --yes @redocly/cli@$(REDOCLY_CLI_VERSION)
 GO_TOOL := go tool -modfile=tools/go.mod
 GOLANGCI_LINT ?= $(GO_TOOL) golangci-lint
-GO_REQUIRED_VERSION := $(shell awk '/^go / {print $$2; exit}' go.mod)
+GO_REQUIRED_VERSION = $(shell awk '/^go / {print $$2; exit}' go.mod)
 INTEGRATION_PACKAGES := ./test/...
 # profile:http-idempotency-postgres:start
 INTEGRATION_PACKAGES += ./internal/infra/postgresidempotency
@@ -56,12 +57,15 @@ INBOUND_WEBHOOK_RACE_PACKAGES := ./internal/inboundwebhook ./internal/infra/post
 # profile:inbound-webhooks-standard:end
 LINT_BASE_REF ?= origin/main
 LINT_CONCURRENCY ?= 4
+LINT_PACKAGES ?= ./...
 SECRET_SCAN_BASE_REF ?= $(if $(strip $(BASE_REF)),$(BASE_REF),origin/main)
 
 TRIVY_IMAGE ?= aquasec/trivy:0.72.0@sha256:cffe3f5161a47a6823fbd23d985795b3ed72a4c806da4c4df16266c02accdd6f
 TRIVY_CACHE_VOLUME ?= trivy-cache
-ACTIONLINT_IMAGE ?= rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
-SHELLCHECK_IMAGE ?= koalaman/shellcheck:v0.11.0@sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d
+ACTIONLINT_VERSION := 1.7.12
+ACTIONLINT_IMAGE ?= rhysd/actionlint:$(ACTIONLINT_VERSION)@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
+SHELLCHECK_VERSION := 0.11.0
+SHELLCHECK_IMAGE ?= koalaman/shellcheck:v$(SHELLCHECK_VERSION)@sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d
 HARNESS_SKILLS_SYNC_SCRIPT := bash ./scripts/harness-skills-sync.sh
 AGENT_ROLES_SYNC_SCRIPT := bash ./scripts/agent-roles-sync.sh
 CODEX_AGENTS_SYNC_SCRIPT := bash ./scripts/codex-agents-sync.sh
@@ -86,7 +90,7 @@ TEMPLATE ?= ../go-service-template-rest
 .PHONY: help template-init template-init-check integration-init integration-init-check \
 	tidy fmt mod-check mod-tidy-check mod-verify fmt-check test test-watch test-race test-integration \
 	lint lint-deep lint-fast deadcode nilaway modernize-check test-parallelism-check govulncheck gosec secret-scan secret-scan-history \
-	actionlint shellcheck dockerfile-check \
+	actionlint actionlint-fast shellcheck shellcheck-fast dockerfile-check \
 	openapi-generate openapi-drift-check openapi-reference-compile openapi-runtime-contract-check openapi-lint openapi-validate openapi-breaking openapi-check \
 	proto-format proto-format-check proto-lint proto-generate proto-drift-check proto-breaking proto-check \
 	sqlc-check runtime-image-build container-security run build build-pgo docker-build docker-run vendor claude-skills-sync claude-skills-check qwen-skills-sync qwen-skills-check agent-roles-sync agent-roles-check codex-agents-sync codex-agents-check \
@@ -114,6 +118,7 @@ help:
 	@echo "Setup and everyday development:"
 	@echo "  make template-init MODULE=github.com/acme/service CODEOWNER=@acme/team"
 	@echo "  make fmt-check | lint | test"
+	@echo "  make lint-fast LINT_PACKAGES=./internal/config"
 	@echo "  make integration-init NAME=billing TRANSPORT=http CONTRACT=api/external/billing/openapi.yaml TARGET=external-https AUTH=none"
 	@echo "  make agent-roles-check | codex-agents-check | claude-skills-check | qwen-skills-check"
 	@echo "  make template-sync-check TEMPLATE=<path>   # drift against the template instructions"
@@ -137,6 +142,7 @@ help:
 	@echo "  make test | test-race | test-integration"
 	@echo "  make mod-check | mod-tidy-check | mod-verify"
 	@echo "  make lint | lint-deep | lint-fast | govulncheck | gosec | secret-scan | secret-scan-history"
+	@echo "  local agents: actionlint-fast | shellcheck-fast"
 	@echo "  make openapi-check"
 	@echo "  make proto-check"
 # profile:database-postgres:start
@@ -162,7 +168,7 @@ integration-init:
 	$(INTEGRATION_INIT_SCRIPT) "$(NAME)" "$(TRANSPORT)" "$(CONTRACT)" "$(TARGET)" "$(AUTH)"
 
 integration-init-check:
-	$(INTEGRATION_INIT_CHECK_SCRIPT)
+	$(INTEGRATION_INIT_CHECK_SCRIPT) $(INTEGRATION_INIT_ROWS)
 
 template-owned-purity-check:
 	$(TEMPLATE_OWNED_PURITY_CHECK_SCRIPT)
@@ -241,10 +247,10 @@ test:
 	$(GO_TOOL) gotestsum --format=pkgname-and-test-fails -- -vet=off ./...
 
 test-watch:
-	$(GO_TOOL) gotestsum --watch --format=pkgname-and-test-fails -- -vet=off ./...
+	$(GO_TOOL) gotestsum --watch --format=pkgname-and-test-fails -- -vet=off
 
 test-race:
-	go test -vet=off -race ./...
+	go test -vet=off -count=1 -race ./...
 
 # profile:messaging-nats-jetstream:start
 test-messaging-race:
@@ -294,12 +300,12 @@ run-outbox-relay:
 # profile:outbox-postgres:end
 
 lint:
-	$(GOLANGCI_LINT) run --allow-serial-runners --concurrency=$(LINT_CONCURRENCY) --timeout=3m
+	$(GOLANGCI_LINT) run --allow-serial-runners --concurrency=$(LINT_CONCURRENCY) --timeout=3m $(LINT_PACKAGES)
 
 lint-deep: deadcode nilaway
 
 lint-fast:
-	$(GOLANGCI_LINT) run --allow-serial-runners --fast-only --new-from-rev=$(LINT_BASE_REF) --concurrency=$(LINT_CONCURRENCY) --timeout=3m
+	$(GOLANGCI_LINT) run --allow-serial-runners --fast-only --new-from-rev=$(LINT_BASE_REF) --concurrency=$(LINT_CONCURRENCY) --timeout=3m $(LINT_PACKAGES)
 
 deadcode:
 	$(GO_TOOL) deadcode -test -tags=integration ./...
@@ -321,6 +327,13 @@ actionlint:
 		-w /src \
 		"$(ACTIONLINT_IMAGE)"
 
+actionlint-fast:
+	@test -z "$${CI:-}" || { echo "actionlint-fast is local-only; run make actionlint in CI"; exit 2; }
+	@command -v actionlint >/dev/null 2>&1 || { echo "actionlint $(ACTIONLINT_VERSION) is required; run make actionlint instead"; exit 2; }
+	@version="$$(actionlint -version | sed -n '1p')"; \
+	test "$$version" = "$(ACTIONLINT_VERSION)" || { echo "actionlint $$version found, expected $(ACTIONLINT_VERSION); run make actionlint instead"; exit 2; }
+	actionlint
+
 shellcheck:
 	@test -n "$(SHELL_FILES)" || { echo "no shell scripts found; skipping ShellCheck"; exit 0; }
 	docker run --rm --read-only --network none \
@@ -329,6 +342,13 @@ shellcheck:
 		"$(SHELLCHECK_IMAGE)" \
 		-x \
 		-- $(SHELL_FILES)
+
+shellcheck-fast:
+	@test -z "$${CI:-}" || { echo "shellcheck-fast is local-only; run make shellcheck in CI"; exit 2; }
+	@command -v shellcheck >/dev/null 2>&1 || { echo "ShellCheck $(SHELLCHECK_VERSION) is required; run make shellcheck instead"; exit 2; }
+	@version="$$(shellcheck --version | awk '$$1 == "version:" { print $$2; exit }')"; \
+	test "$$version" = "$(SHELLCHECK_VERSION)" || { echo "ShellCheck $$version found, expected $(SHELLCHECK_VERSION); run make shellcheck instead"; exit 2; }
+	shellcheck -x -- $(SHELL_FILES)
 
 dockerfile-check:
 	docker buildx build --check -f build/docker/Dockerfile .
@@ -426,19 +446,19 @@ openapi-check: openapi-drift-check openapi-reference-compile openapi-runtime-con
 # profile:grpc:start
 proto-format:
 	@if find api/proto -type f -name '*.proto' -print -quit 2>/dev/null | grep -q .; then $(GO_TOOL) buf format -w; fi
-	cd examples/grpc-reference-service && go tool -modfile=../../tools/go.mod buf format -w
+	@if [ -f examples/grpc-reference-service/buf.yaml ]; then cd examples/grpc-reference-service && go tool -modfile=../../tools/go.mod buf format -w; fi
 
 proto-format-check:
 	@if find api/proto -type f -name '*.proto' -print -quit 2>/dev/null | grep -q .; then $(GO_TOOL) buf format --diff --exit-code; fi
-	cd examples/grpc-reference-service && go tool -modfile=../../tools/go.mod buf format --diff --exit-code
+	@if [ -f examples/grpc-reference-service/buf.yaml ]; then cd examples/grpc-reference-service && go tool -modfile=../../tools/go.mod buf format --diff --exit-code; fi
 
 proto-lint:
 	@if find api/proto -type f -name '*.proto' -print -quit 2>/dev/null | grep -q .; then $(GO_TOOL) buf lint; fi
-	cd examples/grpc-reference-service && go tool -modfile=../../tools/go.mod buf lint
+	@if [ -f examples/grpc-reference-service/buf.yaml ]; then cd examples/grpc-reference-service && go tool -modfile=../../tools/go.mod buf lint; fi
 
 proto-generate:
 	@if find api/proto -type f -name '*.proto' -print -quit 2>/dev/null | grep -q .; then $(GO_TOOL) buf generate; fi
-	cd examples/grpc-reference-service && go tool -modfile=../../tools/go.mod buf generate
+	@if [ -f examples/grpc-reference-service/buf.yaml ]; then cd examples/grpc-reference-service && go tool -modfile=../../tools/go.mod buf generate; fi
 
 proto-drift-check:
 	@before="$$(find internal/gen/proto examples/grpc-reference-service/internal/gen/proto -type f -exec shasum -a 256 {} + 2>/dev/null | LC_ALL=C sort)"; \

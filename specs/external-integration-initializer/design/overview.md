@@ -122,7 +122,7 @@ For gRPC, `target` is absent and `generator_source = "buf.gen.yaml"`. These are
 the only two record shapes. The record contains no URL, hostname, scope,
 audience, client identifier, secret, token, provider body, or provider error.
 The generator source is a stable repository authority locator; exact versions
-remain pinned by that source and `tools/go.mod` or `scripts/run-buf.sh`.
+remain pinned by that source and `tools/go.mod`.
 
 - No record selects initial mode. Every reserved output must be absent, except
   the accepted contract.

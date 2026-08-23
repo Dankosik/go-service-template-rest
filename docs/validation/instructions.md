@@ -11,6 +11,10 @@ Use for instruction, role, skill, mirror, or template-propagation changes.
 | Template-source ownership and sync behavior | `make template-owned-purity-check` in the template checkout only |
 | Structural workflow and hard-skill behavior catalogs, schema ownership, selectors, and links | `bash scripts/ci/instruction-evals-check.sh` |
 
+Run one matching carrier leaf while iterating. The template-only purity target
+already runs all four carrier checks; it is the final aggregate, not an
+additional command beside those leaves.
+
 After adding or removing canonical skills, run `bash
 scripts/harness-skills-sync.sh claude --apply --repo .` and `bash
 scripts/harness-skills-sync.sh qwen --apply --repo .`, then check both generated views.

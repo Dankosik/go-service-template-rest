@@ -18,7 +18,7 @@ if [[ -d "${ROOT_DIR}/scripts/profiles" ]]; then
 	(
 		cd "${ROOT_DIR}"
 		git ls-files --cached --others --exclude-standard |
-			awk '!/^(\.artifacts|\.cache|bin)\// && $0 != "jobs-worker" && $0 != "s3.test"' |
+			awk '!/^(\.artifacts|\.cache|bin)\//' |
 			while IFS= read -r file; do
 				[[ -f "${file}" || -L "${file}" ]] && printf '%s\n' "${file}"
 			done |
