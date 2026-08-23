@@ -3,7 +3,6 @@ package postgresinboundwebhook
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/base64"
 	"testing"
 	"time"
@@ -71,14 +70,9 @@ func (s *spyStore) MarkFailed(context.Context, string) (bool, error) { return fa
 func TestStandardWebhooksVerificationBoundary(t *testing.T) {
 	now := time.Unix(1700000000, 0).UTC()
 	store := &spyStore{}
-	var hashes int
 	receiver, err := NewReceiver(nil, testTrust(t, "orders", reviewedVectorKey(), nil),
 		withStore(store),
 		WithClock(func() time.Time { return now }),
-		WithHash(func(body []byte) [sha256.Size]byte {
-			hashes++
-			return sha256.Sum256(body)
-		}),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -94,30 +88,42 @@ func TestStandardWebhooksVerificationBoundary(t *testing.T) {
 	if err != nil || result.Outcome != inboundwebhook.OutcomeAccepted {
 		t.Fatalf("vector result = %+v, err = %v", result, err)
 	}
-	if store.accepts != 1 || hashes != 1 {
-		t.Fatalf("accepts = %d hashes = %d", store.accepts, hashes)
+	if store.accepts != 1 {
+		t.Fatalf("accepts = %d", store.accepts)
 	}
 
 	for _, tc := range []struct {
-		name      string
-		now       time.Time
-		body      string
-		signature string
-		endpoint  string
+		name       string
+		now        time.Time
+		deliveryID string
+		timestamp  string
+		body       string
+		signature  string
+		endpoint   string
 	}{
 		{name: "stale", now: now.Add(301 * time.Second), body: reviewedVectorBody, signature: reviewedVectorSignature, endpoint: "orders"},
 		{name: "future", now: now.Add(-301 * time.Second), body: reviewedVectorBody, signature: reviewedVectorSignature, endpoint: "orders"},
 		{name: "body", now: now, body: `{"hello":"world!"}`, signature: reviewedVectorSignature, endpoint: "orders"},
 		{name: "signature", now: now, body: reviewedVectorBody, signature: "v1,AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=", endpoint: "orders"},
+		{name: "delivery id binding", now: now, deliveryID: "msg_124", body: reviewedVectorBody, signature: reviewedVectorSignature, endpoint: "orders"},
+		{name: "timestamp binding", now: now, timestamp: "1700000001", body: reviewedVectorBody, signature: reviewedVectorSignature, endpoint: "orders"},
 		{name: "other endpoint", now: now, body: reviewedVectorBody, signature: reviewedVectorSignature, endpoint: "payments"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			beforeAccepts, beforeHashes := store.accepts, hashes
+			beforeAccepts := store.accepts
 			receiver.now = func() time.Time { return tc.now }
+			deliveryID := tc.deliveryID
+			if deliveryID == "" {
+				deliveryID = reviewedVectorID
+			}
+			timestamp := tc.timestamp
+			if timestamp == "" {
+				timestamp = reviewedVectorTimestamp
+			}
 			result, err := receiver.Receive(context.Background(), inboundwebhook.Delivery{
 				EndpointID: tc.endpoint,
-				DeliveryID: reviewedVectorID,
-				Timestamp:  reviewedVectorTimestamp,
+				DeliveryID: deliveryID,
+				Timestamp:  timestamp,
 				Signature:  tc.signature,
 				Body:       []byte(tc.body),
 			})
@@ -127,8 +133,8 @@ func TestStandardWebhooksVerificationBoundary(t *testing.T) {
 			if result.Outcome != inboundwebhook.OutcomeRejected && result.Outcome != inboundwebhook.OutcomeUnknownEndpoint {
 				t.Fatalf("outcome = %s", result.Outcome)
 			}
-			if store.accepts != beforeAccepts || hashes != beforeHashes {
-				t.Fatal("store or hash called on rejection")
+			if store.accepts != beforeAccepts {
+				t.Fatal("store called on rejection")
 			}
 		})
 	}

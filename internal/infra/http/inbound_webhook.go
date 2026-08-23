@@ -42,6 +42,10 @@ func (s inboundRawServer) ReceiveWebhook(w http.ResponseWriter, r *http.Request,
 			writeProblem(w, r, timeBudgetExceededProblem())
 			return
 		}
+		if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
+			writeProblem(w, r, problemResponse{code: problem.CodeRequestEntityTooLarge, detail: "request body exceeds limit"})
+			return
+		}
 		writeProblem(w, r, problemResponse{code: problem.CodeInternalError, detail: "inbound webhook request failed"})
 		return
 	}

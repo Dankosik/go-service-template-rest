@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
 	"testing"
@@ -64,28 +65,61 @@ func TestInboundWebhookProcessRecovery(t *testing.T) {
 
 	first := startWorker()
 	waittest.Until(t, 30*time.Second, func(context.Context) bool {
-		_, err := os.Stat(marker)
-		return err == nil
+		marked, err := os.ReadFile(marker)
+		return err == nil && slices.Contains(strings.Fields(string(marked)), inboundVectorID)
 	}, "first inbound worker handled receipt")
 	_ = first.Process.Signal(syscall.SIGTERM)
 	_, _ = first.Process.Wait()
-	if _, err := os.Stat(marker); err != nil {
-		t.Fatalf("first worker did not handle receipt: %v", err)
-	}
-	if err := os.Remove(marker); err != nil {
+	pool, err := postgres.Open(ctx, postgres.Options{DSN: dsn, MaxOpenConns: 2})
+	if err != nil {
 		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+	var outcome string
+	if err := pool.QueryRow(ctx, `SELECT outcome FROM inbound_webhook_receipts WHERE delivery_id = $1`, inboundVectorID).Scan(&outcome); err != nil {
+		t.Fatal(err)
+	}
+	if outcome != "handled" {
+		t.Fatalf("first receipt outcome = %s", outcome)
 	}
 	second := startWorker()
 	t.Cleanup(func() {
 		_ = second.Process.Kill()
 		_, _ = second.Process.Wait()
 	})
-	deadline := time.Now().Add(3 * time.Second)
-	for time.Now().Before(deadline) {
-		if _, err := os.Stat(marker); err == nil {
-			t.Fatal("restart created a second effect")
+	controlID := "msg_restart_control"
+	controlBody := `{"hello":"control"}`
+	webhook, err := standardwebhooks.NewWebhookRaw(inboundKey())
+	if err != nil {
+		t.Fatal(err)
+	}
+	controlSignature, err := webhook.Sign(controlID, time.Unix(1700000000, 0).UTC(), []byte(controlBody))
+	if err != nil {
+		t.Fatal(err)
+	}
+	control, err := receiver.Receive(ctx, inboundDelivery("orders", controlID, controlBody, controlSignature))
+	if err != nil || control.Outcome != inboundwebhook.OutcomeAccepted {
+		t.Fatalf("control=%+v err=%v", control, err)
+	}
+	waittest.Until(t, 30*time.Second, func(context.Context) bool {
+		marked, err := os.ReadFile(marker)
+		return err == nil && slices.Contains(strings.Fields(string(marked)), controlID)
+	}, "restarted inbound worker handled control receipt")
+	marked, err := os.ReadFile(marker)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var originalCalls, controlCalls int
+	for _, id := range strings.Fields(string(marked)) {
+		switch id {
+		case inboundVectorID:
+			originalCalls++
+		case controlID:
+			controlCalls++
 		}
-		time.Sleep(50 * time.Millisecond)
+	}
+	if originalCalls != 1 || controlCalls != 1 {
+		t.Fatalf("marker calls original=%d control=%d: %q", originalCalls, controlCalls, marked)
 	}
 }
 

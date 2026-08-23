@@ -14,6 +14,7 @@ const (
 	logClassDecoderInternal          = "decoder_internal"
 	logClassHandlerRetryable         = "handler_retryable"
 	logClassStorageRetryable         = "storage_retryable"
+	logClassBindingUnavailable       = "binding_unavailable"
 	logClassPanicRecovered           = "panic_recovered"
 	logClassTerminalizationRetryable = "terminalization_retryable"
 )

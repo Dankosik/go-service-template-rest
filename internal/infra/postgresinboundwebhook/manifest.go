@@ -242,14 +242,6 @@ func (m *EndpointManifest) IDs() []string {
 	return ids
 }
 
-// Len returns the number of configured endpoints.
-func (m *EndpointManifest) Len() int {
-	if m == nil {
-		return 0
-	}
-	return len(m.endpoints)
-}
-
 func validateEndpointID(value string) error {
 	if value == "" || len(value) > maxEndpointIDBytes || !utf8.ValidString(value) {
 		return errors.New("invalid endpoint id")
