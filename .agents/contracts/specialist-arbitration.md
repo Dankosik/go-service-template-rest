@@ -11,5 +11,5 @@ open or violated. A secondary pressure becomes a separate judgment; the
 selected method does not re-route its own work.
 
 When no declared edge matches, choose directly from the selected skill's
-positive trigger. Add a new edge only after a concrete collision eval shows the
+positive trigger. Add a new edge only after an observed collision shows the
 missing distinction.

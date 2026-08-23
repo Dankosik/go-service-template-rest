@@ -14,7 +14,7 @@ sentences.
 
 Treat the description as a routing discriminator, not a body summary: name the
 observable pressure and the decision it owns. Prefer positive discriminants.
-Add a negative exclusion only when a concrete collision eval demonstrates
+Add a negative exclusion only when a concrete observed collision demonstrates
 material over-trigger without it.
 
 Use a user-invoked skill when human judgment should select it and autonomous
@@ -65,8 +65,7 @@ verify that a real trigger boundary remains.
 ## Method Skills: Behavioral Compression V2
 
 A `model/method` skill exists to change one technical judgment the base model
-otherwise makes inconsistently. Before editing, state the ablation: what
-observable decision becomes worse when the body is absent?
+otherwise makes inconsistently.
 
 A promoted method skill binds four elements to the same domain judgment:
 
@@ -84,17 +83,8 @@ proof or an exact gap; a lexical claim that all paths were considered is not a
 materialized story.
 
 The canonical [specialist neighbor map](../.agents/contracts/specialist-neighbors.json)
-owns catalog collisions. Prove promotion with trigger, non-trigger, every
-declared neighbor edge, decision, and completion evals. A selector also needs a
-reference-selection case; concrete wrong defaults use mutation cases.
-
-Compare the full candidate separately with routing ablation (description
-neutralized and explicit-only), method ablation (same description, body
-removed), and reference ablation (target leaf removed). Use at least three
-repeats on the same model, harness, effort, tools, and fixture. Behavior is the
-gate; token, latency, and tool-call improvements count only after behavior
-passes. Do not promote a new `model/method` slot until the candidate beats its
-method ablation without a substantive regression.
+owns catalog collisions. Keep neighboring triggers distinct and route concrete
+wrong defaults through the matching method or reference.
 
 ## Structural Budget
 

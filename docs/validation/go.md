@@ -22,7 +22,8 @@ and generated-contract drift. Do not also run `fmt-check`, `lint-all`, or
 
 `make lint` and `make test` require `PKG` and are package-scoped. Full-module
 leaves are `lint-all` and `test-all`. `make lint-deep`, `make test-race`,
-`make test-integration`, and `make verify` require `ALLOW_HEAVY=1` or `CI=true`.
+`make test-integration`, and `make audit-full-manual` require `ALLOW_HEAVY=1`
+or `CI=true`.
 
 Formatting and linters own mechanical style; tests own behavior. Use
 `-count=1` when a race or environment claim requires fresh execution.

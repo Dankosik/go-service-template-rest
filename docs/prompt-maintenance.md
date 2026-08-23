@@ -108,9 +108,5 @@ behavior.
 Also compare active semantic owners and catalog branches on representative
 routes. A shorter file that adds another selector has increased context cost.
 
-Instruction edits prove only an instruction-level mitigation. Claim changed
-behavior only after a live evaluation exercises the target model, harness,
-trigger, and completion case. Load the [instruction evaluation
-runbook](../evals/instructions/README.md) only when a live baseline/candidate
-comparison is authorized. Structural checks prove ownership, generation, links,
-and shape—not model behavior.
+Instruction edits prove only an instruction-level change. Structural checks
+prove ownership, generation, links, and shape—not model behavior.

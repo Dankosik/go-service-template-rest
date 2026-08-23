@@ -288,16 +288,11 @@ agent_harness = "${agent_harness}"
 EOF
 }
 
-# strip_unselected_harness removes template-only eval catalogs and unused
-# harness adapters from a derived service. AGENT_HARNESS=all keeps every
-# adapter and still drops evals: those catalogs test the source template.
+# strip_unselected_harness removes unused harness adapters from a derived service.
 strip_unselected_harness() {
 	local harness="$1"
 
-	rm -rf -- evals
 	rm -f -- \
-		scripts/ci/instruction-evals-check.sh \
-		scripts/dev/instruction-evals-run.sh \
 		scripts/ci/template-owned-purity-check.sh
 
 	if [[ "${harness}" == "all" ]]; then

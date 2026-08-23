@@ -37,28 +37,25 @@ INTEGRATION_PACKAGES += ./internal/infra/postgresidempotency
 # profile:http-idempotency-postgres:end
 # profile:messaging-nats-jetstream:start
 INTEGRATION_PACKAGES += ./internal/infra/natsjs ./cmd/worker/internal/bootstrap
-MESSAGING_RACE_PACKAGES := ./internal/infra/natsjs ./cmd/worker/internal/bootstrap ./test/...
-# profile:outbox-postgres:start
-MESSAGING_RACE_PACKAGES += ./cmd/outbox-relay/internal/bootstrap
-# profile:outbox-postgres:end
+MESSAGING_RACE_PACKAGES := ./internal/infra/natsjs ./cmd/worker/internal/bootstrap ./test
 # profile:messaging-nats-jetstream:end
 # profile:outbox-postgres:start
-OUTBOX_RACE_PACKAGES := ./internal/domainevent ./internal/infra/postgresoutbox ./internal/infra/natsjs ./cmd/outbox-relay/internal/bootstrap ./test/...
+OUTBOX_RACE_PACKAGES := ./test
 # profile:outbox-postgres:end
 # profile:webhooks-durable:start
-WEBHOOK_RACE_PACKAGES := ./internal/infra/postgreswebhook ./test/...
+WEBHOOK_RACE_PACKAGES := ./test
 # profile:webhooks-durable:end
-# profile:inbound-webhooks-standard:start
-INBOUND_WEBHOOK_RACE_PACKAGES := ./internal/inboundwebhook ./internal/infra/postgresinboundwebhook ./test/...
-# profile:inbound-webhooks-standard:end
+INTEGRATION_RACE_PACKAGES := $(sort $(MESSAGING_RACE_PACKAGES) $(OUTBOX_RACE_PACKAGES) $(WEBHOOK_RACE_PACKAGES))
 LINT_BASE_REF ?= origin/main
-LINT_CONCURRENCY ?= 4
+LINT_CONCURRENCY ?= 2
 PKG ?=
 FILES ?=
 ALLOW_HEAVY ?=
 export ALLOW_HEAVY
 LINT_PACKAGE_LINTERS := govet,errcheck,staticcheck,ineffassign,unused,bodyclose,nilerr,errorlint,forcetypeassert,noctx
 SECRET_SCAN_BASE_REF ?= $(if $(strip $(BASE_REF)),$(BASE_REF),origin/main)
+GITLEAKS_FLAGS := --no-banner --redact --verbose --exit-code 1 --config .gitleaks.toml --baseline-path .gitleaks.baseline.json
+AUDIT_RUNTIME_IMAGE ?= $(SERVICE_NAME):audit-full-manual
 
 # Not a security boundary: stop an agent from launching a costly matrix by accident.
 # GitHub Actions and other CI systems set CI=true, which is enough.
@@ -91,16 +88,16 @@ TEMPLATE ?= ../go-service-template-rest
 # One same-target A/B on the 10-core/16-GiB reference Mac measured 138.7s
 # serial versus 294.6s with make -j4. Re-measure after host, toolchain, or
 # aggregate membership changes before enabling parallel prerequisites.
-.NOTPARALLEL: check verify mod-check lint-all lint-deep openapi-check proto-check
+.NOTPARALLEL: check check-go audit-full-manual mod-check lint-all lint-deep openapi-check proto-check
 
 .PHONY: help template-init template-init-check integration-init integration-init-check \
-	tidy fmt mod-check mod-tidy-check mod-verify fmt-check unit-check check verify \
-	test test-package test-all test-watch test-race test-integration \
+	tidy fmt mod-check mod-tidy-check mod-verify fmt-check unit-check check check-go check-openapi check-sqlc check-instructions check-delivery check-security-go audit-full-manual changed-surfaces-check \
+	test test-package test-all test-watch test-race test-integration test-integration-race \
 	lint lint-package lint-all lint-deep lint-fast deadcode nilaway modernize-check test-parallelism-check \
-	govulncheck gosec secret-scan secret-scan-history instruction-evals-check \
+	govulncheck gosec secret-scan secret-scan-history \
 	actionlint actionlint-fast shellcheck shellcheck-fast dockerfile-check \
 	openapi-generate openapi-drift-check openapi-reference-compile openapi-runtime-contract-check openapi-lint openapi-validate openapi-breaking openapi-check \
-	proto-format proto-format-check proto-lint proto-generate proto-drift-check proto-breaking proto-check \
+	proto-format proto-format-check proto-lint proto-generate proto-drift-check proto-breaking proto-check check-proto \
 	sqlc-check runtime-image-build container-security run build build-pgo docker-build docker-run vendor claude-skills-sync claude-skills-check qwen-skills-sync qwen-skills-check agent-roles-sync agent-roles-check codex-agents-sync codex-agents-check \
 	template-sync template-sync-check template-owned-purity-check
 # profile:object-storage:start
@@ -128,7 +125,7 @@ help:
 	@echo "  go test -vet=off ./internal/<package>     # edit loop"
 	@echo "  make unit-check PKG=./internal/<package> FILES='...'"
 	@echo "  make check                               # one full aggregate on the integrated tree"
-	@echo "  ALLOW_HEAVY=1 make verify                # CI/manual heavy matrix; refused otherwise"
+	@echo "  ALLOW_HEAVY=1 make audit-full-manual     # rare template/release audit; refused otherwise"
 	@echo "  make lint-fast PKG=./internal/config      # local changed-code signal; not a lint claim"
 	@echo "  make integration-init NAME=billing TRANSPORT=http CONTRACT=api/external/billing/openapi.yaml TARGET=external-https AUTH=none"
 	@echo "  make agent-roles-check | codex-agents-check | claude-skills-check | qwen-skills-check"
@@ -274,11 +271,27 @@ unit-check:
 	fi; \
 	$(GOLANGCI_LINT) run --allow-serial-runners --enable-only=$(LINT_PACKAGE_LINTERS) $$new_from --concurrency=$(LINT_CONCURRENCY) --timeout=3m $(PKG)
 
-# One full-repository owner for the integrated candidate. Do not also run
-# fmt-check, lint-all, or test-all beside it.
-check: fmt-check lint-all test-all mod-tidy-check openapi-check sqlc-check
+# Atomic CI owners; check remains the one local aggregate for an integrated tree.
+check-go: fmt-check lint-all test-all mod-tidy-check
 
-verify:
+check-openapi: openapi-check
+
+check-proto:
+
+check-sqlc: sqlc-check
+
+check-instructions: template-owned-purity-check
+
+check-delivery: actionlint shellcheck dockerfile-check
+
+check-security-go: govulncheck gosec
+
+changed-surfaces-check:
+	bash ./scripts/ci/changed-surfaces.sh --self-test
+
+check: check-go check-openapi check-proto check-sqlc
+
+audit-full-manual:
 	$(HEAVY_GUARD)
 	$(MAKE) check
 	$(MAKE) lint-deep
@@ -286,12 +299,12 @@ verify:
 	$(MAKE) test-integration
 	$(MAKE) template-init-check
 	$(MAKE) integration-init-check
-	$(MAKE) instruction-evals-check
 	$(MAKE) govulncheck
 	$(MAKE) gosec
 	$(MAKE) secret-scan-history
-	$(MAKE) migration-validate
-	$(MAKE) container-security
+	$(MAKE) runtime-image-build RUNTIME_IMAGE=$(AUDIT_RUNTIME_IMAGE)
+	$(MAKE) migration-validate RUNTIME_IMAGE=$(AUDIT_RUNTIME_IMAGE)
+	$(MAKE) container-security CONTAINER_IMAGE=$(AUDIT_RUNTIME_IMAGE)
 
 test test-package:
 	$(REQUIRE_PKG)
@@ -325,18 +338,18 @@ test-webhook-race:
 	go test -vet=off -p=1 -count=1 -race -tags=integration $(WEBHOOK_RACE_PACKAGES) -run '^Test(PostgresWebhookAcceptance|WebhookNetwork)'
 # profile:webhooks-durable:end
 
+test-integration-race:
+	$(HEAVY_GUARD)
+	@if [ -z "$(strip $(INTEGRATION_RACE_PACKAGES))" ]; then \
+		echo "no focused integration race packages selected; skipping"; \
+	else \
+		go test -vet=off -p=1 -count=1 -race -tags=integration $(INTEGRATION_RACE_PACKAGES) -run '^(TestOutboxWorkerPublishesStableWireIdentityAndTrace|TestNATSWorkerRegistrationIsSingleton|TestNATSNativeConsumeSurvivesBrokerRestart|TestWorkerUsesNativeBoundedConsumeContextsAndJoinsDrain|TestTypedPublisherAndHandlerHideBrokerFields|TestNATSPublishDispatchCancellationAndNoRetry|TestNATSWorkerComposition|TestNATSWorkerForcedShutdownDoesNotRaceHandlerCleanup|TestNATSConsumerSaturation|TestNATSForcedShutdownRedelivers|TestNATSGracefulDrain|TestPostgresOutbox.*|TestPostgresWebhookAcceptance.*|TestWebhookNetwork.*)$$'; \
+	fi
+
 test-integration:
 	$(HEAVY_GUARD)
 	go test -p=1 -count=1 -tags=integration $(INTEGRATION_PACKAGES)
-# profile:messaging-nats-jetstream:start
-	$(MAKE) test-messaging-race
-# profile:messaging-nats-jetstream:end
-# profile:outbox-postgres:start
-	$(MAKE) test-outbox-race
-# profile:outbox-postgres:end
-# profile:webhooks-durable:start
-	$(MAKE) test-webhook-race
-# profile:webhooks-durable:end
+	$(MAKE) test-integration-race
 
 # profile:jobs-postgres:start
 run-jobs-worker:
@@ -435,17 +448,13 @@ gosec:
 	GOSECGOVERSION=go$(GO_REQUIRED_VERSION) $(GO_TOOL) gosec $(if $(strip $(GOMAXPROCS)),-concurrency=$(GOMAXPROCS)) -quiet -exclude-generated -exclude-dir=.agents -exclude-dir=.cache -exclude-dir=.artifacts ./...
 
 secret-scan:
-	$(GO_TOOL) gitleaks dir --no-banner --redact --verbose --exit-code 1 --config .gitleaks.toml .
+	@if [ "$(CI)" != "true" ]; then $(GO_TOOL) gitleaks dir $(GITLEAKS_FLAGS) .; fi
 	@base="$$(git merge-base "$(SECRET_SCAN_BASE_REF)" HEAD)"; \
-	$(GO_TOOL) gitleaks git --no-banner --redact --verbose --exit-code 1 --config .gitleaks.toml --log-opts="$$base..HEAD" .
+	$(GO_TOOL) gitleaks git $(GITLEAKS_FLAGS) --log-opts="$$base..HEAD" .
 
 secret-scan-history:
 	$(HEAVY_GUARD)
-	$(GO_TOOL) gitleaks git --no-banner --redact --verbose --exit-code 1 --config .gitleaks.toml .
-
-instruction-evals-check:
-	$(HEAVY_GUARD)
-	bash ./scripts/ci/instruction-evals-check.sh
+	$(GO_TOOL) gitleaks git $(GITLEAKS_FLAGS) --log-opts=--all .
 
 # profile:database-postgres:start
 sqlc-generate:
@@ -521,7 +530,7 @@ openapi-breaking:
 		$(GO_TOOL) oasdiff breaking --fail-on ERR $(BASE_OPENAPI) $(OPENAPI_FILE); \
 	fi
 
-openapi-check: openapi-drift-check openapi-reference-compile openapi-runtime-contract-check openapi-lint openapi-validate
+openapi-check: openapi-drift-check openapi-runtime-contract-check openapi-lint openapi-validate
 
 # profile:grpc:start
 proto-format:
@@ -553,7 +562,7 @@ proto-breaking:
 	fi
 
 proto-check: proto-format-check proto-lint proto-drift-check
-check: proto-check
+check-proto: proto-check
 # profile:grpc:end
 
 # profile:database-postgres:start

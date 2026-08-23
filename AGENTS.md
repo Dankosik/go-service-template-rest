@@ -40,11 +40,11 @@ and generated/manual authority.
 During implementation, run one focused falsifier after a coherent edit batch.
 Do not rerun a successful check unless its candidate, inputs, scope, or
 preconditions changed. Workers must not run repository-wide, race, integration,
-security, container, template, instruction-eval, or initializer-matrix checks.
+security, container, template, or initializer-matrix checks.
 A worker may run only the changed package's focused proof. The Acceptance-Unit
 Lead runs `make unit-check` once for the integrated unit. Only the integrated
-delivery owner or CI runs `make check`, exactly once. `make verify` and other
-heavy targets require an explicit claim and `ALLOW_HEAVY=1`. Never run two
+delivery owner or CI runs `make check`, exactly once. `make audit-full-manual`
+and other heavy targets require an explicit claim and `ALLOW_HEAVY=1`. Never run two
 CPU-heavy validation processes concurrently. Do not clear Go or linter caches.
 Do not use `-count=1` unless the claim explicitly requires fresh execution.
 Reuse evidence produced for the same candidate and scope.

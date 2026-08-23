@@ -3,8 +3,10 @@ name: ci
 on:
   push:
     branches: [main]
+    tags: [v*]
   pull_request:
     branches: [main]
+  merge_group:
   workflow_dispatch:
 
 concurrency:
@@ -16,106 +18,284 @@ permissions:
 
 env:
   GOFLAGS: -mod=readonly
+  GOTOOLCHAIN: local
+  LINT_CONCURRENCY: 4
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      go: ${{ steps.surfaces.outputs.go }}
+      go_dependencies: ${{ steps.surfaces.outputs.go_dependencies }}
+      openapi: ${{ steps.surfaces.outputs.openapi }}
+      protobuf: ${{ steps.surfaces.outputs.protobuf }}
+      sqlc: ${{ steps.surfaces.outputs.sqlc }}
+      migrations: ${{ steps.surfaces.outputs.migrations }}
+      runtime_image: ${{ steps.surfaces.outputs.runtime_image }}
+      shell: ${{ steps.surfaces.outputs.shell }}
+      github_actions: ${{ steps.surfaces.outputs.github_actions }}
+      agent_instructions: ${{ steps.surfaces.outputs.agent_instructions }}
+      template_generator: ${{ steps.surfaces.outputs.template_generator }}
+      documentation: ${{ steps.surfaces.outputs.documentation }}
+      integration: ${{ steps.surfaces.outputs.integration }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Classify changed surfaces
+        id: surfaces
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            bash ./scripts/ci/changed-surfaces.sh --release >>"${GITHUB_OUTPUT}"
+          elif [[ "${EVENT_NAME}" == workflow_dispatch ]]; then
+            bash ./scripts/ci/changed-surfaces.sh --all >>"${GITHUB_OUTPUT}"
+          elif [[ -n "${BASE_SHA}" && "${BASE_SHA}" != 0000000000000000000000000000000000000000 ]]; then
+            git diff --name-only "${BASE_SHA}" HEAD | bash ./scripts/ci/changed-surfaces.sh >>"${GITHUB_OUTPUT}"
+          else
+            bash ./scripts/ci/changed-surfaces.sh --all >>"${GITHUB_OUTPUT}"
+          fi
+
   quality:
+    needs: changes
+    if: >-
+      needs.changes.outputs.go == 'true' ||
+      needs.changes.outputs.go_dependencies == 'true' ||
+      needs.changes.outputs.openapi == 'true' ||
+      needs.changes.outputs.protobuf == 'true' ||
+      needs.changes.outputs.sqlc == 'true' ||
+      needs.changes.outputs.agent_instructions == 'true' ||
+      needs.changes.outputs.template_generator == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - name: Set up Go
+        id: setup-go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-          cache-dependency-path: |
-            go.sum
-            tools/go.sum
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+          cache: false
+      - name: Restore Go modules
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/go/pkg/mod
+          key: go-mod-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('go.mod', 'go.sum', 'tools/go.mod', 'tools/go.sum') }}
+          restore-keys: go-mod-${{ runner.os }}-${{ runner.arch }}-
+      - name: Restore quality build cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/go-build
+          key: go-build-quality-${{ runner.os }}-${{ runner.arch }}-${{ steps.setup-go.outputs.go-version }}-${{ hashFiles('go.mod', 'go.sum', 'tools/go.mod', 'tools/go.sum') }}
+          restore-keys: go-build-quality-${{ runner.os }}-${{ runner.arch }}-${{ steps.setup-go.outputs.go-version }}-
+      - name: Set up Node
+        if: needs.changes.outputs.openapi == 'true'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
-      - name: Detect changed surfaces
-        id: surfaces
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-        run: |
-          set -euo pipefail
-          template=false
-          agents=false
-          if [ "${{ github.event_name }}" = pull_request ]; then
-            files="$(git diff --name-only "${BASE_SHA}" HEAD)"
-          elif [ "${{ github.event_name }}" = push ] && [ -n "${BASE_SHA}" ] && [ "${BASE_SHA}" != 0000000000000000000000000000000000000000 ]; then
-            files="$(git diff --name-only "${BASE_SHA}" HEAD)"
-          else
-            files="$(git ls-files)"
-          fi
-          if printf '%s\n' "${files}" | grep -Eq '^(scripts/init-module\.sh|scripts/ci/init-module-contract-check\.sh|scripts/ci/template-init-check\.sh|scripts/profiles/|Makefile$|template-owned\.paths$|template\.lock$)'; then
-            template=true
-          fi
-          if printf '%s\n' "${files}" | grep -Eq '^(AGENTS\.md|CLAUDE\.md|Grok\.md|QWEN\.md|evals/|\.agents/|\.claude/|\.codex/|\.cursor/|\.grok/|\.opencode/|\.qwen/|docs/agent-harness|docs/spec-first-workflow|docs/prompt-|docs/skill-authoring|docs/validation|scripts/agent-roles-sync\.sh|scripts/harness-skills-sync\.sh|scripts/codex-agents-sync\.sh|scripts/template-sync\.sh|scripts/ci/instruction-evals-check\.sh|scripts/ci/template-owned-purity-check\.sh)'; then
-            agents=true
-          fi
-          echo "template=${template}" >>"${GITHUB_OUTPUT}"
-          echo "agents=${agents}" >>"${GITHUB_OUTPUT}"
       - name: Go quality
-        run: make check
+        if: needs.changes.outputs.go == 'true' || needs.changes.outputs.go_dependencies == 'true'
+        run: make check-go
+      - name: OpenAPI
+        if: needs.changes.outputs.openapi == 'true'
+        run: make check-openapi
+      - name: Protobuf
+        if: needs.changes.outputs.protobuf == 'true'
+        run: make check-proto
+      - name: SQLC
+        if: needs.changes.outputs.sqlc == 'true'
+        run: make check-sqlc
       - name: Initializer contract
-        if: github.event_name != 'pull_request' || steps.surfaces.outputs.template == 'true'
+        if: needs.changes.outputs.template_generator == 'true'
         run: make template-init-check
       - name: Instruction ownership
-        if: github.event_name != 'pull_request' || steps.surfaces.outputs.agents == 'true'
-        run: |
-          make agent-roles-check codex-agents-check claude-skills-check qwen-skills-check template-owned-purity-check
-          make instruction-evals-check
-      - name: Breaking contracts
-        if: github.event_name == 'pull_request'
+        if: needs.changes.outputs.agent_instructions == 'true'
+        run: make check-instructions
+      - name: OpenAPI compatibility
+        if: github.event_name == 'pull_request' && needs.changes.outputs.openapi == 'true'
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          if git show "${BASE_SHA}:api/openapi/service.yaml" >/tmp/openapi-base.yaml 2>/dev/null; then
-            make openapi-breaking BASE_OPENAPI=/tmp/openapi-base.yaml
-          fi
-          make proto-breaking BASE_REF="${BASE_SHA}"
+          git show "${BASE_SHA}:api/openapi/service.yaml" >/tmp/openapi-base.yaml
+          make openapi-breaking BASE_OPENAPI=/tmp/openapi-base.yaml
+      - name: Protobuf compatibility
+        if: github.event_name == 'pull_request' && needs.changes.outputs.protobuf == 'true'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: make proto-breaking BASE_REF="${BASE_SHA}"
 
   security:
+    needs: changes
+    if: >-
+      needs.changes.outputs.go == 'true' ||
+      needs.changes.outputs.go_dependencies == 'true' ||
+      (github.event_name == 'pull_request' && (
+        needs.changes.outputs.github_actions == 'true' ||
+        needs.changes.outputs.runtime_image == 'true'
+      ))
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - name: Set up Go
+        if: needs.changes.outputs.go == 'true' || needs.changes.outputs.go_dependencies == 'true'
+        id: setup-go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-          cache-dependency-path: |
-            go.sum
-            tools/go.sum
+          cache: false
+      - name: Restore Go modules
+        if: needs.changes.outputs.go == 'true' || needs.changes.outputs.go_dependencies == 'true'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/go/pkg/mod
+          key: go-mod-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('go.mod', 'go.sum', 'tools/go.mod', 'tools/go.sum') }}
+          restore-keys: go-mod-${{ runner.os }}-${{ runner.arch }}-
+      - name: Restore security build cache
+        if: needs.changes.outputs.go == 'true' || needs.changes.outputs.go_dependencies == 'true'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/go-build
+          key: go-build-security-${{ runner.os }}-${{ runner.arch }}-${{ steps.setup-go.outputs.go-version }}-${{ hashFiles('go.mod', 'go.sum', 'tools/go.mod', 'tools/go.sum') }}
+          restore-keys: go-build-security-${{ runner.os }}-${{ runner.arch }}-${{ steps.setup-go.outputs.go-version }}-
       - name: Dependency review
-        if: github.event_name == 'pull_request'
+        if: >-
+          github.event_name == 'pull_request' && (
+            needs.changes.outputs.go_dependencies == 'true' ||
+            needs.changes.outputs.github_actions == 'true' ||
+            needs.changes.outputs.runtime_image == 'true'
+          )
         uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
         with:
           fail-on-severity: high
           comment-summary-in-pr: never
-      - name: Go security
-        run: make govulncheck gosec
+      - name: Reachable Go vulnerabilities
+        if: needs.changes.outputs.go == 'true' || needs.changes.outputs.go_dependencies == 'true'
+        run: make govulncheck
+      - name: Go source security
+        if: needs.changes.outputs.go == 'true'
+        run: make gosec
+
+  secrets:
+    needs: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Set up Go
+        id: setup-go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Restore Go modules
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/go/pkg/mod
+          key: go-mod-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('go.mod', 'go.sum', 'tools/go.mod', 'tools/go.sum') }}
+          restore-keys: go-mod-${{ runner.os }}-${{ runner.arch }}-
+      - name: Restore secret-scan build cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/go-build
+          key: go-build-secrets-${{ runner.os }}-${{ runner.arch }}-${{ steps.setup-go.outputs.go-version }}-${{ hashFiles('tools/go.mod', 'tools/go.sum') }}
+          restore-keys: go-build-secrets-${{ runner.os }}-${{ runner.arch }}-${{ steps.setup-go.outputs.go-version }}-
       - name: Secret scan
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
         run: |
-          if [ "${{ github.event_name }}" = pull_request ]; then
+          if [[ "${{ github.event_name }}" == pull_request || "${{ github.event_name }}" == merge_group ]]; then
             make secret-scan BASE_REF="${BASE_SHA}"
           else
             make secret-scan-history
           fi
 
   delivery:
+    needs: changes
+    if: >-
+      needs.changes.outputs.shell == 'true' ||
+      needs.changes.outputs.github_actions == 'true' ||
+      needs.changes.outputs.runtime_image == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Workflows
+        if: needs.changes.outputs.github_actions == 'true'
         run: make actionlint
       - name: Shell
+        if: needs.changes.outputs.shell == 'true'
         run: make shellcheck
       - name: Dockerfile
+        if: needs.changes.outputs.runtime_image == 'true'
         run: make dockerfile-check
+
+  integration:
+    needs: changes
+    if: needs.changes.outputs.integration == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      TRIVY_DB_REPOSITORY: ghcr.io/aquasecurity/trivy-db:2
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Set up Go
+        id: setup-go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Restore Go modules
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/go/pkg/mod
+          key: go-mod-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('go.mod', 'go.sum', 'tools/go.mod', 'tools/go.sum') }}
+          restore-keys: go-mod-${{ runner.os }}-${{ runner.arch }}-
+      - name: Restore integration build cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/go-build
+          key: go-build-integration-${{ runner.os }}-${{ runner.arch }}-${{ steps.setup-go.outputs.go-version }}-${{ hashFiles('go.mod', 'go.sum', 'tools/go.mod', 'tools/go.sum') }}
+          restore-keys: go-build-integration-${{ runner.os }}-${{ runner.arch }}-${{ steps.setup-go.outputs.go-version }}-
+      - name: Real PostgreSQL integration
+        run: REQUIRE_DOCKER=1 make test-integration
+      - name: Production image
+        env:
+          APP_VERSION: sha-${{ github.sha }}
+          VCS_REF: ${{ github.sha }}
+          SOURCE_URL: ${{ github.server_url }}/${{ github.repository }}
+        run: make runtime-image-build RUNTIME_IMAGE=service:ci
+      - name: Migration and runtime rehearsal
+        run: make migration-validate RUNTIME_IMAGE=service:ci RUNTIME_EXPECTED_VERSION="sha-${GITHUB_SHA}"
+      - name: Image vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # 0.36.0
+        with:
+          image-ref: service:ci
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH
+
+  required:
+    if: always()
+    needs: [changes, quality, security, secrets, delivery, integration]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Reject failed or cancelled gates
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1
+      - name: Accept passed and intentionally skipped gates
+        run: echo "all applicable CI gates passed"
