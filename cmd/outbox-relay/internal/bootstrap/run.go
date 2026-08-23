@@ -81,7 +81,6 @@ func run(signalCtx context.Context, args []string) (runErr error) {
 	client, err := natsjs.Connect(
 		startupCtx,
 		runtimeopts.Messaging(cfg.Messaging),
-		natsjs.RoleProducer,
 		natsjs.Observability{Logger: log},
 	)
 	if err != nil {

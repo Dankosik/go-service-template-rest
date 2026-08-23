@@ -66,8 +66,9 @@ type MetricsResult struct {
 	ExportErr error
 }
 
-// PushConfigured reports whether metrics are actually being pushed over OTLP.
-func (r MetricsResult) PushConfigured() bool {
+// PushInitialized reports whether the OTLP metrics reader was built during
+// startup. Runtime delivery failures are reported by the OTel SDK error handler.
+func (r MetricsResult) PushInitialized() bool {
 	return r.ExportErr == nil && r.Endpoint.Configured()
 }
 
@@ -105,7 +106,7 @@ func SetupMetrics(ctx context.Context, metrics *Metrics, cfg MetricsConfig) (Met
 		sdkmetric.WithResource(res),
 	}
 
-	endpoint, exportErr := ResolveMetricExporterEndpoint(cfg.Exporter)
+	endpoint, exportErr := resolveMetricExporterEndpoint(cfg.Exporter)
 	if exportErr == nil && endpoint.Configured() {
 		var reader sdkmetric.Reader
 		if reader, exportErr = newOTLPMetricReader(ctx, endpoint, cfg.Exporter); exportErr == nil {
@@ -122,16 +123,12 @@ func SetupMetrics(ctx context.Context, metrics *Metrics, cfg MetricsConfig) (Met
 
 	// Shutdown flushes every reader the provider owns, so the periodic reader's
 	// last interval is exported rather than dropped on exit.
-	provider := sdkmetric.NewMeterProvider(options...)
-
-	// Registered on the provider rather than on the Prometheus registry, so they
-	// reach both readers. The Prometheus client's Go collector would reach only
-	// the /metrics handler, leaving a pushing deployment with no goroutine, heap,
-	// or GC series at all.
-	//
-	// This registers observable instruments and a callback; it starts no goroutine
-	// and no timer, which is what keeps the package's goleak check meaningful.
-	if err := otelruntime.Start(otelruntime.WithMeterProvider(provider)); err != nil {
+	provider, err := startMeterProvider(ctx, options, func(provider *sdkmetric.MeterProvider) error {
+		// Registered on the provider rather than on the Prometheus registry, so
+		// runtime instruments reach both readers.
+		return otelruntime.Start(otelruntime.WithMeterProvider(provider))
+	})
+	if err != nil {
 		return MetricsResult{}, fmt.Errorf("start go runtime metrics: %w", err)
 	}
 
@@ -139,6 +136,18 @@ func SetupMetrics(ctx context.Context, metrics *Metrics, cfg MetricsConfig) (Met
 	otel.SetMeterProvider(provider)
 
 	return MetricsResult{Shutdown: provider.Shutdown, Endpoint: endpoint, ExportErr: exportErr}, nil
+}
+
+func startMeterProvider(
+	ctx context.Context,
+	options []sdkmetric.Option,
+	start func(*sdkmetric.MeterProvider) error,
+) (*sdkmetric.MeterProvider, error) {
+	provider := sdkmetric.NewMeterProvider(options...)
+	if err := start(provider); err != nil {
+		return nil, errors.Join(err, provider.Shutdown(ctx))
+	}
+	return provider, nil
 }
 
 func newOTLPMetricReader(
@@ -149,7 +158,7 @@ func newOTLPMetricReader(
 	// Only when this service named the destination. When the platform's own
 	// variables named it, the platform owns the whole exporter configuration and
 	// its credentials belong to the collector it also named.
-	if endpoint.Source == MetricExporterConfigKey {
+	if endpoint.fromConfig() {
 		if err := rejectConflictingAmbientEnv(metricExporterEnvConflicts); err != nil {
 			return nil, err
 		}
@@ -171,14 +180,14 @@ func newOTLPMetricReader(
 	return sdkmetric.NewPeriodicReader(exporter), nil
 }
 
-// ResolveMetricExporterEndpoint reports which OTLP metrics endpoint the exporter
+// resolveMetricExporterEndpoint reports which OTLP metrics endpoint the exporter
 // will use, and which setting supplied it.
 //
 // The order mirrors trace resolution — [resolveOTLPEndpoint] owns what it means —
 // with one addition metrics alone have: a bare
 // observability.otel.exporter.otlp_endpoint serves both signals, because naming a
 // collector root is what an operator means by it.
-func ResolveMetricExporterEndpoint(cfg MetricExporterConfig) (ExporterEndpoint, error) {
+func resolveMetricExporterEndpoint(cfg MetricExporterConfig) (ExporterEndpoint, error) {
 	owned := []otlpCandidate{{source: MetricExporterConfigKey, raw: cfg.OTLPEndpoint}}
 	// A root only. Once the shared value carries a path it is an endpoint for one
 	// signal and says nothing about where the other one goes, so metrics fall

@@ -42,7 +42,7 @@ func TestTypedPublisherAndHandlerHideBrokerFields(t *testing.T) {
 	}
 
 	broker := &recordingJetStream{ack: &jetstream.PubAck{Stream: "EVENTS", Sequence: 1}}
-	publisher, err := registry.Publisher(unitClient(t, broker, RoleProducer).Producer())
+	publisher, err := registry.Publisher(unitClient(t, broker).Producer())
 	if err != nil {
 		t.Fatalf("Publisher() error = %v", err)
 	}

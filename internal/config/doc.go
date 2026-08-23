@@ -51,5 +51,5 @@
 // rules.
 // profile:authn-oidc-jwt:end
 // internal/observability/otelconfig is that leaf for the OpenTelemetry sampler
-// and exporter policy.
+// vocabulary and validation.
 package config

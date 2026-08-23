@@ -54,7 +54,7 @@ func TestWorkerConfigBoundsAndConsumerPolicy(t *testing.T) {
 }
 
 func TestNewWorkerRejectsBeforeBrokerMutation(t *testing.T) {
-	client := unitClient(t, &recordingJetStream{}, RoleWorker)
+	client := unitClient(t, &recordingJetStream{})
 	if _, err := client.NewWorker(t.Context(), testWorkerConfig(), nil); !errors.Is(err, ErrRejected) {
 		t.Fatalf("NewWorker(nil handler) error = %v", err)
 	}

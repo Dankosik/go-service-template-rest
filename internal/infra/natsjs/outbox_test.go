@@ -16,7 +16,7 @@ func TestOutboxWorkerPublishesStableWireIdentityAndTrace(t *testing.T) {
 	t.Parallel()
 
 	broker := &recordingJetStream{ack: &jetstream.PubAck{Stream: "EVENTS", Sequence: 1}}
-	worker, err := NewOutboxWorker(unitClient(t, broker, RoleProducer).Producer())
+	worker, err := NewOutboxWorker(unitClient(t, broker).Producer())
 	if err != nil {
 		t.Fatalf("NewOutboxWorker() error = %v", err)
 	}

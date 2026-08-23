@@ -38,7 +38,7 @@ func packageClient(t *testing.T, f *natsjstest.Server, pending int) *Client {
 	cfg.AllowUnauthenticated = true
 	cfg.Stream = "EVENTS"
 	_ = pending
-	client, err := Connect(t.Context(), cfg, RoleWorker, Observability{})
+	client, err := Connect(t.Context(), cfg, Observability{})
 	if err != nil {
 		t.Fatalf("connect messaging client: %v", err)
 	}

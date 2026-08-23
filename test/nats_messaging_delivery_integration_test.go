@@ -22,7 +22,7 @@ func TestNATSConsumerSaturation(t *testing.T) {
 	f := newNATSFixture(t)
 	const maxDeliveryBytes = testMaxDeliveryBytes
 	maxPayloadBytes := maxDeliveryBytes - natsjs.HeaderLimitBytes
-	client := f.client(t, natsjs.RoleWorker, func(cfg *natsjs.Config) {
+	client := f.client(t, func(cfg *natsjs.Config) {
 		cfg.MaxPayloadBytes = maxPayloadBytes
 	})
 	stream, err := f.js.Stream(t.Context(), sourceStream)
@@ -180,7 +180,7 @@ func TestNATSRetryExhaustionAndCrashBudget(t *testing.T) {
 		t.Fatalf("restore DLQ stream: %v", err)
 	}
 
-	secondClient := f.client(t, natsjs.RoleWorker)
+	secondClient := f.client(t)
 	secondCfg := testWorkerConfig()
 	secondCfg.Consumer = "exhaustion-worker"
 	secondCfg.FilterSubject = sourceSubject
@@ -251,7 +251,7 @@ func TestNATSRetryCrashConsumesAttemptBudget(t *testing.T) {
 	stopWorker(worker)
 	_ = waittest.Receive(t, firstDone, 5*time.Second, "crashed worker stop")
 
-	secondClient := f.client(t, natsjs.RoleWorker)
+	secondClient := f.client(t)
 	cfg := testWorkerConfig()
 	cfg.Consumer = "crash-budget-worker"
 	cfg.FilterSubject = sourceSubject
@@ -311,7 +311,7 @@ func TestNATSPoisonDLQAndRedrive(t *testing.T) {
 	redrive := testEvent("redrive")
 	redrive.MessageID = dlq.Header.Get("Message-Id")
 	redrive.Subject = dlq.Header.Get("Original-Subject")
-	client := f.client(t, natsjs.RoleProducer)
+	client := f.client(t)
 	result, err := client.Producer().Publish(t.Context(), redrive)
 	if err != nil || result.Duplicate {
 		t.Fatalf("redrive result = %+v, error = %v", result, err)

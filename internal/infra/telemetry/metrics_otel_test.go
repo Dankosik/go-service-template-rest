@@ -5,12 +5,16 @@ telemetry
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/example/go-service-template-rest/internal/infra/telemetry/telemetrytest"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -95,18 +99,18 @@ func TestSetupMetricsUsesPrivateRegistryAndConfigResource(t *testing.T) {
 	}
 }
 
-// A service exporting no traces still answers every request and reports
-// healthy, so trace-export state has to leave the boot log and reach a scrape.
+// Trace-export initialization has to leave the boot log and reach a scrape,
+// without claiming continuous collector delivery.
 //
 //nolint:paralleltest // Mutates the process-wide OpenTelemetry MeterProvider.
-func TestRecordTraceExporterStateIsScrapable(t *testing.T) {
+func TestRecordTraceExporterInitializationIsScrapable(t *testing.T) {
 	for _, tt := range []struct {
-		name      string
-		active    bool
-		wantValue string
+		name        string
+		initialized bool
+		wantValue   string
 	}{
-		{name: "active", active: true, wantValue: "1"},
-		{name: "degraded", active: false, wantValue: "0"},
+		{name: "initialized", initialized: true, wantValue: "1"},
+		{name: "degraded", initialized: false, wantValue: "0"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			telemetrytest.RestoreGlobals(t)
@@ -128,8 +132,8 @@ func TestRecordTraceExporterStateIsScrapable(t *testing.T) {
 				}
 			})
 
-			if err := metrics.RecordTraceExporterState(context.Background(), tt.active); err != nil {
-				t.Fatalf("RecordTraceExporterState() error = %v", err)
+			if err := metrics.RecordTraceExporterInitialization(context.Background(), tt.initialized); err != nil {
+				t.Fatalf("RecordTraceExporterInitialization() error = %v", err)
 			}
 
 			gotValue, ok := scrapedSampleValue(
@@ -165,13 +169,53 @@ func scrapedSampleValue(metricsText, name string) (string, bool) {
 
 // A nil or unconfigured Metrics falls back to a no-op provider, so recording
 // must not fail startup.
-func TestRecordTraceExporterStateToleratesNoopProvider(t *testing.T) {
+func TestRecordTraceExporterInitializationToleratesNoopProvider(t *testing.T) {
 	t.Parallel()
 
 	for _, metrics := range []*Metrics{nil, {}} {
-		if err := metrics.RecordTraceExporterState(context.Background(), true); err != nil {
-			t.Fatalf("RecordTraceExporterState() error = %v, want nil for a no-op provider", err)
+		if err := metrics.RecordTraceExporterInitialization(context.Background(), true); err != nil {
+			t.Fatalf("RecordTraceExporterInitialization() error = %v, want nil for a no-op provider", err)
 		}
+	}
+}
+
+type shutdownMetricExporter struct {
+	shutdown atomic.Bool
+}
+
+func (*shutdownMetricExporter) Temporality(kind sdkmetric.InstrumentKind) metricdata.Temporality {
+	return sdkmetric.DefaultTemporalitySelector(kind)
+}
+
+func (*shutdownMetricExporter) Aggregation(kind sdkmetric.InstrumentKind) sdkmetric.Aggregation { //nolint:ireturn // Implements the OTel metric exporter contract.
+	return sdkmetric.DefaultAggregationSelector(kind)
+}
+
+func (*shutdownMetricExporter) Export(context.Context, *metricdata.ResourceMetrics) error { return nil }
+
+func (*shutdownMetricExporter) ForceFlush(context.Context) error { return nil }
+
+func (e *shutdownMetricExporter) Shutdown(context.Context) error {
+	e.shutdown.Store(true)
+	return nil
+}
+
+func TestStartMeterProviderCleansUpAfterRuntimeInstrumentationFailure(t *testing.T) {
+	t.Parallel()
+
+	exporter := new(shutdownMetricExporter)
+	reader := sdkmetric.NewPeriodicReader(exporter)
+	startErr := errors.New("runtime metrics failed")
+	provider, err := startMeterProvider(
+		t.Context(),
+		[]sdkmetric.Option{sdkmetric.WithReader(reader)},
+		func(*sdkmetric.MeterProvider) error { return startErr },
+	)
+	if provider != nil || !errors.Is(err, startErr) {
+		t.Fatalf("startMeterProvider() = (%v, %v), want nil provider and start error", provider, err)
+	}
+	if !exporter.shutdown.Load() {
+		t.Fatal("metric exporter was not shut down after runtime instrumentation failure")
 	}
 }
 
@@ -221,11 +265,11 @@ func TestSetupMetricsDegradesToScrapeOnlyForUnusableEndpoint(t *testing.T) {
 	if result.ExportErr == nil {
 		t.Fatal("ExportErr = nil, want the unusable OTLP destination reported")
 	}
-	if result.PushConfigured() {
-		t.Fatal("PushConfigured() = true, want push reported as unavailable")
+	if result.PushInitialized() {
+		t.Fatal("PushInitialized() = true, want push reported as unavailable")
 	}
-	if err := metrics.RecordTraceExporterState(context.Background(), false); err != nil {
-		t.Fatalf("RecordTraceExporterState() error = %v, want a usable meter provider", err)
+	if err := metrics.RecordTraceExporterInitialization(context.Background(), false); err != nil {
+		t.Fatalf("RecordTraceExporterInitialization() error = %v, want a usable meter provider", err)
 	}
 	// The Go runtime instruments only exist once a meter provider is installed,
 	// so their presence is what proves scrape survived.

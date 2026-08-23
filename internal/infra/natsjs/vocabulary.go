@@ -17,6 +17,8 @@ package natsjs
 
 // Publication, handler, and drain outcomes.
 const (
+	attributeOutcome = "outcome"
+
 	// Publication outcomes.
 	outcomeAccepted  = "accepted"
 	outcomeRejected  = "rejected"

@@ -28,7 +28,7 @@ func TestNATSStartupAdmission(t *testing.T) {
 	unavailable.Stream = sourceStream
 	startupCtx, cancelStartup := context.WithTimeout(t.Context(), 250*time.Millisecond)
 	defer cancelStartup()
-	if _, err := natsjs.Connect(startupCtx, unavailable, natsjs.RoleProducer, natsjs.Observability{}); !errors.Is(err, natsjs.ErrRejected) {
+	if _, err := natsjs.Connect(startupCtx, unavailable, natsjs.Observability{}); !errors.Is(err, natsjs.ErrRejected) {
 		t.Fatalf("Connect(unavailable) error = %v, want ErrRejected", err)
 	}
 
@@ -38,7 +38,7 @@ func TestNATSStartupAdmission(t *testing.T) {
 	invalidCredentials.AllowPlaintext = true
 	invalidCredentials.CredentialsFile = filepath.Join(t.TempDir(), "missing.creds")
 	invalidCredentials.Stream = sourceStream
-	if _, err := natsjs.Connect(t.Context(), invalidCredentials, natsjs.RoleProducer, natsjs.Observability{}); !errors.Is(err, natsjs.ErrRejected) {
+	if _, err := natsjs.Connect(t.Context(), invalidCredentials, natsjs.Observability{}); !errors.Is(err, natsjs.ErrRejected) {
 		t.Fatalf("Connect(unusable credentials) error = %v, want ErrRejected", err)
 	}
 
@@ -47,11 +47,11 @@ func TestNATSStartupAdmission(t *testing.T) {
 	missing.AllowPlaintext = true
 	missing.AllowUnauthenticated = true
 	missing.Stream = "MISSING"
-	if _, err := natsjs.Connect(t.Context(), missing, natsjs.RoleProducer, natsjs.Observability{}); !errors.Is(err, natsjs.ErrRejected) {
+	if _, err := natsjs.Connect(t.Context(), missing, natsjs.Observability{}); !errors.Is(err, natsjs.ErrRejected) {
 		t.Fatalf("Connect(missing stream) error = %v, want ErrRejected", err)
 	}
 
-	client := f.client(t, natsjs.RoleWorker)
+	client := f.client(t)
 	cfg := testWorkerConfig()
 	cfg.Consumer = "startup-admission"
 	cfg.FilterSubject = sourceSubject
@@ -94,7 +94,7 @@ func TestNATSAuthenticatedStartupAdmission(t *testing.T) {
 	valid.AllowPlaintext = true
 	valid.CredentialsFile = f.credentialsFile
 	valid.Stream = sourceStream
-	client, err := natsjs.Connect(t.Context(), valid, natsjs.RoleProducer, natsjs.Observability{})
+	client, err := natsjs.Connect(t.Context(), valid, natsjs.Observability{})
 	if err != nil {
 		t.Fatalf("Connect(valid broker credentials) error = %v", err)
 	}
@@ -105,7 +105,7 @@ func TestNATSAuthenticatedStartupAdmission(t *testing.T) {
 
 	invalid := valid
 	invalid.CredentialsFile = f.invalidCredentialsFile
-	if _, err := natsjs.Connect(t.Context(), invalid, natsjs.RoleProducer, natsjs.Observability{}); !errors.Is(err, natsjs.ErrRejected) {
+	if _, err := natsjs.Connect(t.Context(), invalid, natsjs.Observability{}); !errors.Is(err, natsjs.ErrRejected) {
 		t.Fatalf("Connect(invalid broker credentials) error = %v, want ErrRejected", err)
 	}
 }

@@ -266,7 +266,7 @@ func TestHTTPAuthnRunsInsideMaxInFlight(t *testing.T) {
 	inner.Get("/secure", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
-	router := MaxInFlight(1, telemetry.ServerLoad{}, inner)
+	router := MaxInFlight(1, ServerLoad{}, inner)
 
 	var first sync.WaitGroup
 	first.Go(func() {

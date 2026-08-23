@@ -3,6 +3,10 @@ package telemetry
 import (
 	"context"
 	"errors"
+	"fmt"
+	"log/slog"
+
+	"go.opentelemetry.io/otel"
 )
 
 // Failure reasons a composition root records when telemetry setup degrades. They
@@ -30,4 +34,35 @@ func FailureReason(err error) string {
 	default:
 		return FailureReasonSetupError
 	}
+}
+
+// InstallErrorHandler routes asynchronous OpenTelemetry SDK failures through the
+// process logger without publishing exporter error text, which can contain an
+// endpoint, certificate path, or other deployment detail.
+func InstallErrorHandler(ctx context.Context, log *slog.Logger) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if log == nil {
+		log = slog.Default()
+	}
+	otel.SetErrorHandler(newSDKErrorHandler(context.WithoutCancel(ctx), log))
+}
+
+//nolint:ireturn // OpenTelemetry defines the process error handler as an interface.
+func newSDKErrorHandler(ctx context.Context, log *slog.Logger) otel.ErrorHandler {
+	return otel.ErrorHandlerFunc(func(err error) {
+		if err == nil {
+			return
+		}
+		log.ErrorContext(
+			ctx,
+			"otel_sdk_error",
+			"component", "telemetry",
+			"operation", "sdk_export",
+			"outcome", "error",
+			"reason", "sdk_error",
+			"error.type", fmt.Sprintf("%T", err),
+		)
+	})
 }

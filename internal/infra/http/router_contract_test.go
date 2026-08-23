@@ -412,6 +412,10 @@ func TestOpenAPIRuntimeContractRouteTemplateUsedForOTelSpanName(t *testing.T) {
 		t.Fatalf("custom method status = %d, want %d", customMethodResp.Code, http.StatusMethodNotAllowed)
 	}
 
+	// otelhttp records url.path before routing. A concrete webhook endpoint id is
+	// intentionally excluded from tracing rather than published to the trace sink.
+	doRequest(h, http.MethodPost, "/webhooks/private-endpoint-canary")
+
 	spans := recorder.Ended()
 	if len(spans) == 0 {
 		t.Fatal("expected ended spans")

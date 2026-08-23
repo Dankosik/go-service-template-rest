@@ -66,49 +66,44 @@ Do not migrate feature config into `NETWORK_*`. Outbound network admission belon
 
 ## OpenTelemetry Environment Policy
 
-This service configures OpenTelemetry from `observability.otel.*` only. It
-deliberately does not read the standard `OTEL_*` environment variables, so
-resource identity and exporter target cannot be retargeted by ambient process
-environment:
+Typed configuration owns service identity and takes precedence, while the
+official OpenTelemetry environment remains a supported platform fallback:
 
-- `OTEL_RESOURCE_ATTRIBUTES` and `OTEL_SERVICE_NAME` are ignored; the typed
-  config snapshot is the only resource source.
-- When `observability.otel.exporter.otlp_endpoint` is set, ambient
-  `OTEL_EXPORTER_OTLP_*` variables split in two. Variables the explicit
-  exporter options already override — `..._ENDPOINT`, `..._TRACES_ENDPOINT`,
-  `..._INSECURE`, `..._TRACES_INSECURE` — plus ones that carry no destination
-  or credential, such as `..._PROTOCOL`, `..._TIMEOUT`, and `..._COMPRESSION`,
-  are **ignored** and logged as `telemetry_ambient_env_ignored`. Tracing keeps
-  working. Credential and trust material — `..._HEADERS`,
-  `..._TRACES_HEADERS`, `..._CERTIFICATE`, `..._TRACES_CERTIFICATE`,
-  `..._CLIENT_CERTIFICATE`, `..._CLIENT_KEY`, and their `TRACES_` forms — is
-  **rejected**, because this service sets no client certificate or CA pool and
-  sets headers only from config, so an injected value would otherwise travel to
-  the collector unverified. The rejection degrades telemetry and is logged; it
-  does not stop the service.
-- When `observability.otel.exporter.otlp_endpoint` is empty, tracing is
-  disabled (valid trace IDs are still produced for propagation and log
-  correlation, but no span is exported). If ambient `OTEL_EXPORTER_OTLP_*`
-  variables are present in that case, startup logs
-  `telemetry_ambient_env_ignored` naming the ignored variables.
+- `service.name`, `service.version`, `vcs.revision`, `service.instance.id`, and
+  `deployment.environment.name` come from the typed snapshot. Additional
+  `OTEL_RESOURCE_ATTRIBUTES` survive underneath them; ambient values cannot
+  override those five fields.
+- A typed signal endpoint wins. Otherwise the signal-specific standard endpoint
+  variable is used, then `OTEL_EXPORTER_OTLP_ENDPOINT` as the shared collector
+  root. Configured collector headers pin the destination and therefore disable
+  ambient endpoint fallback.
+- When a typed endpoint selects the destination, ambient credential and trust
+  material (`..._HEADERS`, `..._CERTIFICATE`, `..._CLIENT_CERTIFICATE`, and
+  `..._CLIENT_KEY`, including signal-specific forms) is rejected. The same rule
+  applies when the shared typed root supplies the metrics endpoint.
+- Standard non-secret SDK tuning such as timeout and compression remains owned
+  by the official exporter. Explicit endpoint options still override ambient
+  endpoint and transport-security selection.
+- When the platform supplies the endpoint, it also owns the matching standard
+  credentials, trust material, and tuning for that collector.
 
-The override direction is not an assumption: `otlptracehttp` applies ambient
-environment first and explicit options second, and this service always passes
-`WithEndpointURL`, which owns the endpoint, the URL path, and the TLS scheme.
+Startup logs `telemetry_ambient_env_present` for additional ambient exporter
+variables after excluding the honored endpoint source and credential/trust
+settings already rejected by setup. The record reports names only, never values,
+and makes no false claim that SDK-owned tuning was ignored.
 
-This matters on platforms that inject the standard variables automatically
-(OpenTelemetry Operator auto-instrumentation, Grafana Alloy, vendor add-ons).
-Injection alone does **not** enable export here. Map the injected endpoint onto
-`APP__OBSERVABILITY__OTEL__EXPORTER__OTLP_ENDPOINT` explicitly, and treat
-`telemetry_ambient_env_ignored` as the alarm that this mapping is missing.
-Telemetry setup failures never block startup: they log
-`startup_dependency_degraded` with `reason` and the underlying `err`.
+Telemetry setup failures never block the service binary: they log a bounded
+reason and a sanitized setup error. Background binaries may choose a stricter
+policy when their own operator contract requires working metrics.
 
-Trace-export state is queryable rather than log-only. The startup summary
-carries `tracing.exporter` as `active`, `disabled`, or `degraded`, and the
+Trace-export initialization is queryable rather than log-only. The startup
+summary carries `tracing.exporter` as `initialized`, `disabled`, or
+`degraded`, and the
 Prometheus diagnostics listener exposes
-`service_startup_trace_exporter_active`. Alert on that gauge: a service that
-exports no traces still answers every request and reports healthy.
+`service_startup_trace_exporter_active`. This is a startup-configuration signal,
+not continuous delivery health. Runtime SDK/export failures are emitted as the
+bounded structured event `otel_sdk_error`; collector-side telemetry remains the
+authority for end-to-end delivery.
 
 `observability.metrics.addr` owns the Prometheus diagnostics listener. It
 defaults to `:9090`, which binds every interface so a scraper in another pod
