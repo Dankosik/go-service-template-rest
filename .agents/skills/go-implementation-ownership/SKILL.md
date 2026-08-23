@@ -1,6 +1,6 @@
 ---
 name: go-implementation-ownership
-description: "Go ownership: Use for package/file/dependency or boundary decisions. Own code placement; Skip topology, policy, semantics, and readability."
+description: "Source ownership in Go. Use when accepted behavior is closed but its package, file, canonical source, dependency direction, or proof location is not."
 metadata:
   invocation: model
   kind: method
@@ -13,11 +13,12 @@ means placement is not decided.
 
 `responsibilities -> owner -> dependency direction -> generated/manual authority -> proof placement -> cleanup`
 
-Load the [shared specialist contract](../../contracts/specialist-contract.md). Reconstruct
-changed responsibilities and executable paths from accepted behavior, callers,
-wiring, generated and manual sources, tests, and cleanup. Assign one source of
-truth, package/file owner, dependency direction, sequence owner, and proof
-surface to each path; ownerless, duplicated, or competing paths are findings.
+Load the [shared specialist contract](../../contracts/specialist-contract.md).
+For every changed responsibility, build `OwnerRecord{responsibility,
+canonical_source, package, file, dependency_direction, sequence_owner,
+proof_location, competing_paths, cleanup}` from accepted behavior through
+callers, wiring, generated and manual sources, tests, and cleanup. Ownerless,
+duplicated, or competing paths are findings.
 
 The nearest record wins: read package `doc.go`, `README.md`, and seam comments
 before [Repository Architecture](../../../docs/repo-architecture.md), [Project
@@ -28,9 +29,6 @@ subtract mechanical coverage rather than treating green as ownership evidence.
 
 For a **Decision**, apply Project Structure's placement rules and record forced
 consequences for every responsibility. For **Review**, account for every
-affected owner and competing path in the shared finding envelope. Complete only
-when implementation can proceed without choosing among packages, files,
-sources, dependencies, or proof levels.
-
-Hand runtime topology to `go-system-architecture`, behavior to its domain skill,
-and implementation mechanics to `go-coder`.
+affected owner and competing path. Complete only when implementation can
+proceed without choosing among packages, files, sources, dependencies, or
+proof levels.

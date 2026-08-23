@@ -1,6 +1,6 @@
 ---
 name: go-verification-before-completion
-description: "Evidence boundary: Use for a verification-only outcome or when a claim's proving scope is non-obvious or disputed. Own claim-to-evidence mapping and gaps; Skip routine validation already selected by Direct Work or Implementation."
+description: "Evidence boundaries for claims. Use for verification-only work or when existing evidence may not prove the requested scope."
 metadata:
   invocation: model
   kind: method

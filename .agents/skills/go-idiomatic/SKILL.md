@@ -1,6 +1,6 @@
 ---
 name: go-idiomatic
-description: "Semantic ownership: Use when errors, context, nil/zero, method sets, aliasing, or resource lifetimes change what a Go caller observes. Own language-level correctness; Skip readability, structure, or placement."
+description: "Semantic ownership. Use when errors, context, nil or zero values, method sets, aliasing, or resource lifetimes change what a Go caller observes."
 metadata:
   invocation: model
   kind: method

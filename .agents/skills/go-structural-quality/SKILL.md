@@ -1,6 +1,6 @@
 ---
 name: go-structural-quality
-description: "Deletion test: Use when a Go diff may overbuild, split responsibility, or add parallel structure. Own abstraction cost and collapse decisions; Skip language semantics, local readability, and system architecture."
+description: "Deletion test. Use when a Go diff may overbuild, split responsibility, or add parallel structure and needs an abstraction-cost or collapse decision."
 metadata:
   invocation: model
   kind: method

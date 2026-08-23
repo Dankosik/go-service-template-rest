@@ -329,62 +329,127 @@ done < <(jq -r '[.evals[].files[]] | unique[]' "${EVAL_FILE}")
 
 HARD_EVAL_FILE="${ROOT_DIR}/evals/hard-skills/evals.json"
 HARD_COVERAGE_FILE="${ROOT_DIR}/evals/hard-skills/coverage.json"
+HARD_NEIGHBOR_FILE="${ROOT_DIR}/.agents/contracts/specialist-neighbors.json"
 
-jq -e '
-  ["go-api-contract", "go-coder", "go-idiomatic", "go-language-simplifier",
-   "go-structural-quality", "go-systematic-debugging",
-   "go-verification-before-completion"] as $skills |
-  ["trigger", "non_trigger", "collision", "decision", "completion"] as $categories |
+catalog_names=""
+selector_names=""
+for skill_file in "${ROOT_DIR}"/.agents/skills/*/SKILL.md; do
+	frontmatter="$(sed -n '2,/^---$/p' "${skill_file}")"
+	grep -q '^  invocation: model$' <<<"${frontmatter}" || continue
+	grep -q '^  kind: method$' <<<"${frontmatter}" || continue
+
+	skill_name="$(sed -n 's/^name: //p' <<<"${frontmatter}")"
+	[[ -n "${skill_name}" ]] || fail "model/method skill has no name: ${skill_file}"
+	catalog_names+="${skill_name}"$'\n'
+
+	skill_dir="${skill_file%/SKILL.md}"
+	if [[ -f "${skill_dir}/references/index.md" ||
+		-f "${skill_dir}/references/decision/index.md" ||
+		-f "${skill_dir}/references/review/index.md" ]]; then
+		selector_names+="${skill_name}"$'\n'
+	fi
+done
+
+catalog_json="$(jq -Rsc 'split("\n") | map(select(length > 0)) | unique | sort' <<<"${catalog_names}")"
+selector_json="$(jq -Rsc 'split("\n") | map(select(length > 0)) | unique | sort' <<<"${selector_names}")"
+[[ "$(jq 'length' <<<"${catalog_json}")" -gt 0 ]] || fail "model/method catalog is empty"
+
+jq -e \
+	--argjson skills "${catalog_json}" \
+	--argjson selectors "${selector_json}" \
+	--slurpfile policy "${HARD_COVERAGE_FILE}" '
+  $policy[0] as $policy |
+  $policy.required_categories as $required |
+  ($required + [$policy.selector_category, $policy.mutation_category]) as $allowed |
   . as $catalog |
+  $policy.schema_version == 2 and
+  $required == ["trigger", "non_trigger", "collision", "decision", "completion"] and
   .skill_name == "repository-hard-skills" and
   .execution == {
     "repository_state": "disposable_copy",
     "production_credentials": "absent",
     "external_writes": "deny"
   } and
-  .measurement == {
-    "required_run_metadata": ["harness", "model", "reasoning_effort", "tool_profile", "agent_command_label"],
-    "required_metrics": ["input_tokens", "output_tokens", "tool_calls", "skill_loads", "lane_identities", "empty_waits"],
-    "behavior_verdict": "manual_expectation_grading"
-  } and
+  .measurement.behavior_verdict == "manual_expectation_grading" and
+  .measurement.required_run_metadata == ["harness", "model", "reasoning_effort", "tool_profile", "agent_command_label"] and
+  .measurement.required_metrics == ["input_tokens", "output_tokens", "tool_calls", "skill_loads", "lane_identities", "empty_waits"] and
   (.fixture.setup_patch | type == "string" and length > 0) and
-  (.evals | type == "array" and length == 35) and
+  (.evals | type == "array" and length > 0) and
   ([.evals[].id] | length == (unique | length)) and
   all(.evals[];
     (.id | type == "number") and
     (.skill as $skill | ($skills | index($skill)) != null) and
-    (.category as $category | ($categories | index($category)) != null) and
+    (.category as $category | ($allowed | index($category)) != null) and
     (.prompt | type == "string" and length > 0) and
     (.expected_output | type == "string" and length > 0) and
     (.files | type == "array" and length > 0 and all(.[]; type == "string" and length > 0)) and
-    (.expectations | type == "array" and length >= 2 and all(.[]; type == "string" and length > 0))
+    (.expectations | type == "array" and length >= 2 and all(.[]; type == "string" and length > 0)) and
+    (if .category == "collision" then
+       .neighbor as $neighbor |
+       ($neighbor | type == "string" and length > 0) and
+       $neighbor != .skill and ($skills | index($neighbor)) != null
+     else .neighbor == null end) and
+    (if .category == $policy.selector_category then
+       .target_reference as $target |
+       ($target | type == "string" and length > 0) and (.files | index($target)) != null
+     else .target_reference == null end) and
+    (if .category == $policy.mutation_category then
+       .mutation as $mutation |
+       ($mutation | type == "string" and length > 0) and
+       ($policy.required_mutations | index($mutation)) != null
+     else .mutation == null end)
   ) and
   all($skills[]; . as $skill |
-    all($categories[]; . as $category |
-      ([ $catalog.evals[] | select(.skill == $skill and .category == $category) ] | length) == 1
+    all(["trigger", "non_trigger", "decision", "completion"][]; . as $category |
+      any($catalog.evals[]; .skill == $skill and .category == $category)
+    ) and
+    any($catalog.evals[];
+      .category == "collision" and (.skill == $skill or .neighbor == $skill)
     )
-  )
+  ) and
+  all($selectors[]; . as $skill |
+    any($catalog.evals[]; .skill == $skill and .category == $policy.selector_category)
+  ) and
+  ([.evals[] | select(.category == $policy.mutation_category) | .mutation] | unique | sort) == ($policy.required_mutations | sort)
 ' "${HARD_EVAL_FILE}" >/dev/null || fail "hard-skill eval catalog is invalid"
 
-jq -e --slurpfile catalog "${HARD_EVAL_FILE}" '
-  ["trigger", "non_trigger", "collision", "decision", "completion"] as $categories |
-  .required_categories == $categories and
-  (.skills | keys | sort) == ([ $catalog[0].evals[].skill ] | unique | sort) and
-  all(.skills | to_entries[]; . as $entry |
-    ($entry.value | keys | sort) == ($categories | sort) and
-    all($entry.value | to_entries[]; . as $case |
-      any($catalog[0].evals[];
-        .id == $case.value and .skill == $entry.key and .category == $case.key
-      )
+jq -e \
+	--argjson skills "${catalog_json}" \
+	--slurpfile catalog "${HARD_EVAL_FILE}" '
+  . as $graph |
+  ([$graph.clusters[][]] | unique | sort) == $skills and
+  all($graph.clusters[]; . as $cluster |
+    all($cluster[]; . as $skill | ($skills | index($skill)) != null)
+  ) and
+  ([$graph.edges[] | (.skills | sort | join("|"))] as $edge_keys |
+    ($edge_keys | length) == ($edge_keys | unique | length)) and
+  all($graph.edges[]; . as $edge |
+    ($edge.skills | type == "array" and length == 2 and .[0] != .[1]) and
+    all($edge.skills[]; . as $skill | ($skills | index($skill)) != null) and
+    (($edge.decisive_axis | keys | sort) == ($edge.skills | sort)) and
+    all($edge.decisive_axis[]; . as $axis | ($axis | type == "string" and length > 0)) and
+    any($catalog[0].evals[]; . as $case |
+      $case.category == "collision" and
+      ([$case.skill, $case.neighbor] | sort) == ($edge.skills | sort)
+    )
+  ) and
+  all($skills[]; . as $skill |
+    any($graph.edges[]; . as $edge | ($edge.skills | index($skill)) != null)
+  ) and
+  all($catalog[0].evals[] | select(.category == "collision"); . as $case |
+    any($graph.edges[]; . as $edge |
+      ($edge.skills | sort) == ([$case.skill, $case.neighbor] | sort)
     )
   )
-' "${HARD_COVERAGE_FILE}" >/dev/null || fail "hard-skill coverage map is invalid"
+' "${HARD_NEIGHBOR_FILE}" >/dev/null || fail "hard-skill neighbor graph is invalid"
 
 hard_fixture="$(jq -r '.fixture.setup_patch' "${HARD_EVAL_FILE}")"
 [[ -f "${ROOT_DIR}/${hard_fixture}" ]] || fail "hard-skill fixture is missing: ${hard_fixture}"
 git -C "${ROOT_DIR}" apply --check "${ROOT_DIR}/${hard_fixture}"
+hard_fixture_files="$(git -C "${ROOT_DIR}" apply --numstat "${ROOT_DIR}/${hard_fixture}" | awk '{print $3}')"
 while IFS= read -r file; do
-	[[ -e "${ROOT_DIR}/${file}" ]] || fail "hard-skill eval file is missing: ${file}"
+	[[ -e "${ROOT_DIR}/${file}" ]] || grep -Fxq "${file}" <<<"${hard_fixture_files}" ||
+		fail "hard-skill eval file is missing: ${file}"
 done < <(jq -r '[.evals[].files[]] | unique[]' "${HARD_EVAL_FILE}")
 
-printf 'instruction eval surface is valid\n'
+printf 'instruction eval surface is valid: %s model/method skills\n' "$(jq 'length' <<<"${catalog_json}")"

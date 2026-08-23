@@ -1,6 +1,6 @@
 ---
 name: go-domain-invariant
-description: "Domain rules: Use for business transitions, violations, replay, or effect order. Own invariants; Skip transport, data, security, and tests."
+description: "Domain invariants. Use when business acceptance, rejection, transitions, replay meaning, or effect order changes what states and moves are legal."
 metadata:
   invocation: model
   kind: method
@@ -16,7 +16,11 @@ State each invariant in accepted business terms with the input, sequence, or
 replay that falsifies it and the surface that rejects the attempt. The domain
 owns effect order, duplicate meaning, and out-of-order meaning.
 
-Load the [shared specialist contract](../../contracts/specialist-contract.md). Reconstruct affected invariants and transitions from accepted behavior, current accepting paths, state/effect owners, rejection surfaces, replay, and mixed-version constraints.
+Load the [shared specialist contract](../../contracts/specialist-contract.md).
+From every changed accepting path through its false case and replay, build
+`InvariantRecord{rule, owner, accepting_paths, transitions, false_case,
+rejection, effect_order, replay, mixed_version, proof}`. A rule is incomplete
+until every accepting path and invalid move has a disposition.
 
 ## Choose The Branch
 
@@ -27,4 +31,6 @@ Load the [shared specialist contract](../../contracts/specialist-contract.md). R
   and follow every affected accepting path into the finding envelope with
   falsifying proof.
 
-This skill owns which rule must hold and what its violation means. `go-data-architecture` owns where truth lives and how a constraint and its migration are shaped, `go-api-contract` owns how the outcome reaches a client, and `go-distributed` owns durable coordination. Choosing a database constraint over an application convention is a domain decision made here; writing it is theirs.
+Complete when every invariant is falsifiable in accepted business terms, every
+invalid move has one deterministic rejection surface, and proof would fail if
+an alternate accepting path bypassed the rule.

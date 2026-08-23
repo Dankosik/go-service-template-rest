@@ -42,7 +42,10 @@ Use a target-harness command configured with the same model, reasoning effort,
 tools, sandbox, and approval policy on both sides. `codex-jsonl` traces produce
 token, tool-call, and skill-load metrics; other formats retain explicit
 unavailable values. The runner leaves `behavior_verdict` as `ungraded`; inspect
-`case.json`, both raw traces, status, patches, and final answers and grade every
-expectation before claiming behavior. A repository comparison keeps the same
-global harness instructions on both sides; evaluate a global-bootstrap candidate
-with fixed baseline and candidate harness profiles.
+`case.json`, every repeat/variant trace, status, patch, and final answer and
+grade every expectation before claiming behavior. Its default remains one
+`baseline,candidate` repeat; the hard-skill runbook selects routing, method, and
+reference ablations plus the required repeat count through the same runner. A
+repository comparison keeps the same global harness instructions on every
+variant; evaluate a global-bootstrap candidate with fixed baseline and
+candidate harness profiles.

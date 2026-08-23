@@ -1,4 +1,5 @@
 {
+  "schema_version": 2,
   "required_categories": [
     "trigger",
     "non_trigger",
@@ -6,55 +7,34 @@
     "decision",
     "completion"
   ],
-  "skills": {
-    "go-api-contract": {
-      "trigger": 101,
-      "non_trigger": 102,
-      "collision": 103,
-      "decision": 104,
-      "completion": 105
-    },
-    "go-coder": {
-      "trigger": 106,
-      "non_trigger": 107,
-      "collision": 108,
-      "decision": 109,
-      "completion": 110
-    },
-    "go-systematic-debugging": {
-      "trigger": 111,
-      "non_trigger": 112,
-      "collision": 113,
-      "decision": 114,
-      "completion": 115
-    },
-    "go-verification-before-completion": {
-      "trigger": 116,
-      "non_trigger": 117,
-      "collision": 118,
-      "decision": 119,
-      "completion": 120
-    },
-    "go-idiomatic": {
-      "trigger": 121,
-      "non_trigger": 122,
-      "collision": 123,
-      "decision": 124,
-      "completion": 125
-    },
-    "go-language-simplifier": {
-      "trigger": 126,
-      "non_trigger": 127,
-      "collision": 128,
-      "decision": 129,
-      "completion": 130
-    },
-    "go-structural-quality": {
-      "trigger": 131,
-      "non_trigger": 132,
-      "collision": 133,
-      "decision": 134,
-      "completion": 135
-    }
-  }
+  "selector_category": "reference_selection",
+  "mutation_category": "mutation",
+  "required_mutations": [
+    "blocked_sender",
+    "green_schema_compatibility",
+    "middleware_status_only",
+    "parallel_handler_fallback",
+    "raw_path_metric_label",
+    "retry_budget_overrun",
+    "sleep_flake_mask",
+    "unmeasured_cache",
+    "wrapped_dependency_sentinel"
+  ],
+  "required_ablations": [
+    "routing",
+    "method",
+    "reference"
+  ],
+  "minimum_repeats": 3,
+  "behavior_metrics": [
+    "route_precision",
+    "route_recall",
+    "abstain_accuracy",
+    "neighbor_collision_rate",
+    "method_delta_over_ablation",
+    "completion_false_positive_rate",
+    "reference_load_precision",
+    "behavior_pass_rate"
+  ],
+  "promotion_rule": "candidate_beats_method_ablation_without_substantive_regression"
 }
