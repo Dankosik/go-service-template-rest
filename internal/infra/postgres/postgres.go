@@ -24,7 +24,7 @@ const (
 
 	DefaultMaxOpenConns       = 4
 	DefaultHealthcheckTimeout = 3 * time.Second
-	DefaultStatementTimeout   = 8 * time.Second
+	defaultStatementTimeout   = 8 * time.Second
 	postgresConnectTimeout    = 3 * time.Second
 )
 
@@ -65,8 +65,8 @@ func Open(ctx context.Context, opts Options) (*pgxpool.Pool, error) {
 		return nil, err
 	}
 	poolConfig.ConnConfig.ConnectTimeout = postgresConnectTimeout
-	applyStatementTimeouts(poolConfig.ConnConfig, DefaultStatementTimeout)
-	applyContextWatcher(poolConfig.ConnConfig, DefaultStatementTimeout)
+	applyStatementTimeouts(poolConfig.ConnConfig, defaultStatementTimeout)
+	applyContextWatcher(poolConfig.ConnConfig, defaultStatementTimeout)
 	poolConfig.ConnConfig.Tracer = otelpgx.NewTracer(
 		otelpgx.WithTrimSQLInSpanName(),
 		otelpgx.WithSpanNameFunc(postgresOperationName),
