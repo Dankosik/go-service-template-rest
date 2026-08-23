@@ -5,16 +5,12 @@ import (
 
 	"github.com/example/go-service-template-rest/cmd/internal/runtimeopts"
 	"github.com/example/go-service-template-rest/internal/config"
-	"github.com/example/go-service-template-rest/internal/infra/natsjs"
 )
 
 func TestMessagingCompositionDisabledHasNoRuntimeOrReadiness(t *testing.T) {
 	runtime, err := initMessagingRuntime(t.Context(), config.MessagingConfig{}, nil)
 	if err != nil {
 		t.Fatalf("initMessagingRuntime(disabled) error = %v", err)
-	}
-	if publisher, publisherErr := runtime.Publisher(natsjs.Route{Type: "test", Version: 1, Subject: "events.test"}); publisher != nil || publisherErr == nil {
-		t.Fatalf("disabled messaging runtime = publisher %v, error %v", publisher, publisherErr)
 	}
 	if len(runtime.ReadinessProbes()) != 0 {
 		t.Fatalf("disabled messaging probes = %d", len(runtime.ReadinessProbes()))

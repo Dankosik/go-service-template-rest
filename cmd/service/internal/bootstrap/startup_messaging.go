@@ -2,7 +2,6 @@ package bootstrap
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -30,23 +29,6 @@ func initMessagingRuntime(ctx context.Context, cfg config.MessagingConfig, log *
 		return messagingRuntime{}, fmt.Errorf("initialize producer messaging: %w", err)
 	}
 	return messagingRuntime{client: client}, nil
-}
-
-// Publisher is the typed business seam. Routes stay in composition and never
-// reach the feature that creates a domainevent.Event.
-func (m messagingRuntime) Publisher(routes ...natsjs.Route) (*natsjs.Publisher, error) {
-	if m.client == nil {
-		return nil, errors.New("messaging is disabled")
-	}
-	registry, err := natsjs.NewRegistry(routes...)
-	if err != nil {
-		return nil, fmt.Errorf("build messaging registry: %w", err)
-	}
-	publisher, err := registry.Publisher(m.client.Producer())
-	if err != nil {
-		return nil, fmt.Errorf("build messaging publisher: %w", err)
-	}
-	return publisher, nil
 }
 
 // ConnectionRun is the client's connection supervisor loop, or nil when

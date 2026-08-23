@@ -65,7 +65,7 @@ func run(signalCtx context.Context, args []string) (runErr error) {
 	defer func() {
 		cleanupCtx, cancel := runtimeopts.TeardownStage(signalCtx, cleanupDeadline, telemetryClose)
 		defer cancel()
-		telemetryCleanup(cleanupCtx)
+		_ = telemetryCleanup(cleanupCtx)
 	}()
 
 	pool, err := postgres.Open(startupCtx, runtimeopts.Postgres(cfg.Postgres))

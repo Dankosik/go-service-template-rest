@@ -5,6 +5,7 @@ package bootstrap
 import (
 	"context"
 	"errors"
+	"io"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -252,6 +253,7 @@ func waitWorkerHTTPStatus(t *testing.T, address, path string, want int) {
 		if err != nil {
 			return false
 		}
+		_, _ = io.Copy(io.Discard, response.Body)
 		_ = response.Body.Close()
 		return response.StatusCode == want
 	}, path)

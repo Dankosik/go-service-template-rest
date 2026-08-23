@@ -77,7 +77,7 @@ func run(signalCtx context.Context, args []string, buildWorkers WorkersBuilder) 
 		if cleanupSafe {
 			cleanupCtx, cleanupCancel := runtimeopts.TeardownStage(signalCtx, cleanupDeadline, telemetryClose)
 			defer cleanupCancel()
-			telemetryCleanup(cleanupCtx)
+			_ = telemetryCleanup(cleanupCtx)
 		}
 	}()
 	if err != nil {
