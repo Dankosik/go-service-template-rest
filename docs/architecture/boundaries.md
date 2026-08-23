@@ -19,7 +19,6 @@ authority.
 | `internal/infra/postgresmigrate/` | Migration execution for `cmd/migrate`. | Runtime pool ownership or application startup. |
 | `internal/infra/telemetry/` | OpenTelemetry SDK setup and Prometheus export. | Feature semantics, startup logging, request routing. |
 | `internal/observability/otelconfig/` | Shared OTel vocabulary, defaults, and pure validation. | Config loading or SDK construction. |
-| `internal/observability/correlationpolicy/` | Reserved correlation fields and explicit gRPC propagation policy. | HTTP carrier stripping, transport construction, wire spelling. |
 | `internal/observability/logctx/` | The process logger and context correlation fields. | Feature field choice, sinks, or request-ID meaning. |
 | `migrations/` | SQL schema source of truth. | Runtime repositories or generated Go. |
 

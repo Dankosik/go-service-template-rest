@@ -307,11 +307,10 @@ linters:
               desc: otelconfig is pure OpenTelemetry policy and must not depend on repository runtime packages.
             - pkg: go.opentelemetry.io/otel/sdk
               desc: SDK construction belongs in internal/infra/telemetry.
-        # The other two internal/observability leaves are the same kind of package
-        # as otelconfig above and were held to the rule only by convention. Every
-        # composition root and both transports import them, so a runtime
-        # dependency added here for convenience would be a cycle waiting for the
-        # next importer rather than a local shortcut.
+        # This leaf is the same kind of package as otelconfig above and was held
+        # to the rule only by convention. Composition roots and both inbound
+        # transports import it, so a runtime dependency added here for convenience
+        # would be a cycle waiting for the next importer rather than a local shortcut.
         logctx_is_pure_policy:
           list-mode: lax
           files:
@@ -328,21 +327,6 @@ linters:
               desc: logctx is the shared process logger and must not depend on repository runtime packages.
             - pkg: github.com/example/go-service-template-rest/cmd
               desc: logctx must not depend on composition roots.
-        correlationpolicy_is_pure_policy:
-          list-mode: lax
-          files:
-            - "**/internal/observability/correlationpolicy/*.go"
-            - "**/internal/observability/correlationpolicy/**/*.go"
-            - "!**/internal/observability/correlationpolicy/*_test.go"
-          allow:
-            # The reserved correlation keys this policy strips are declared with
-            # the context they travel in, so the enum and the keys stay one owner.
-            - github.com/example/go-service-template-rest/internal/reqctx
-          deny:
-            - pkg: github.com/example/go-service-template-rest/internal
-              desc: correlationpolicy is the pure outbound policy shared by the HTTP and gRPC clients; a dependency here would put it out of reach of one of them.
-            - pkg: github.com/example/go-service-template-rest/cmd
-              desc: correlationpolicy must not depend on composition roots.
         # profile:authn-bearer:start
         authntrust_is_pure_policy:
           list-mode: lax
