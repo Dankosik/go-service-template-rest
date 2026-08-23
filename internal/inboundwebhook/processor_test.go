@@ -39,6 +39,9 @@ func TestInboundWebhookTypedBindings(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	if !reg.HasBinding("orders") || reg.HasBinding("payments") {
+		t.Fatal("registry binding lookup is inconsistent")
+	}
 
 	if err := Bind[payload](reg, "orders", nil, nil); !errors.Is(err, ErrInvalidBinding) {
 		t.Fatalf("nil binding error = %v", err)

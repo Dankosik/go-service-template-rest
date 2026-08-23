@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -20,6 +21,7 @@ type memoryStore struct {
 	failed       int
 	handlerCalls int
 	failHandled  bool
+	failLoad     bool
 	failTerminal bool
 	terminalOK   bool
 }
@@ -29,6 +31,9 @@ func (s *memoryStore) Accept(context.Context, receiptRecord) (inboundwebhook.Out
 }
 
 func (s *memoryStore) loadByID(context.Context, string) (storedReceipt, error) {
+	if s.failLoad {
+		return storedReceipt{}, errors.New("receipt load failed")
+	}
 	return s.receipt, nil
 }
 
@@ -112,6 +117,63 @@ func TestInboundWebhookQuarantine(t *testing.T) {
 		JobRow: &rivertype.JobRow{Attempt: 1, MaxAttempts: 25},
 	}); err != nil || handled != 0 {
 		t.Fatalf("terminal replay err=%v handled=%d", err, handled)
+	}
+}
+
+func TestInboundWebhookHandlerDecodeRejectionRetries(t *testing.T) {
+	t.Parallel()
+
+	store := &memoryStore{receipt: pendingReceipt()}
+	worker, err := newWorker(store, testRegistry(t, func(context.Context, inboundwebhook.VerifiedDelivery, json.RawMessage) error {
+		return fmt.Errorf("handler: %w", inboundwebhook.ErrDecodeRejected)
+	}, nil), newTelemetry(nil, nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = worker.Work(context.Background(), &river.Job[receiptJobArgs]{
+		Args:   receiptJobArgs{ReceiptID: "rcpt_1"},
+		JobRow: &rivertype.JobRow{Attempt: 1, MaxAttempts: 25},
+	})
+	if !errors.Is(err, errHandlerFailed) || store.quarantined != 0 || store.receipt.Outcome != "pending" {
+		t.Fatalf("err=%v quarantined=%d outcome=%s", err, store.quarantined, store.receipt.Outcome)
+	}
+}
+
+func TestInboundWebhookMissingBindingSnoozesAtAttemptLimit(t *testing.T) {
+	t.Parallel()
+
+	store := &memoryStore{receipt: pendingReceipt()}
+	worker, err := newWorker(store, inboundwebhook.NewRegistry(), newTelemetry(nil, nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = worker.Work(context.Background(), &river.Job[receiptJobArgs]{
+		Args:   receiptJobArgs{ReceiptID: "rcpt_1"},
+		JobRow: &rivertype.JobRow{Attempt: 3, MaxAttempts: 3},
+	})
+	var snooze *rivertype.JobSnoozeError
+	if !errors.As(err, &snooze) || store.failed != 0 || store.receipt.Outcome != "pending" {
+		t.Fatalf("err=%v failed=%d outcome=%s", err, store.failed, store.receipt.Outcome)
+	}
+}
+
+func TestInboundWebhookStorageFailureSnoozesAtAttemptLimit(t *testing.T) {
+	t.Parallel()
+
+	store := &memoryStore{receipt: pendingReceipt(), failLoad: true}
+	worker, err := newWorker(store, testRegistry(t, func(context.Context, inboundwebhook.VerifiedDelivery, json.RawMessage) error {
+		return nil
+	}, nil), newTelemetry(nil, nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = worker.Work(context.Background(), &river.Job[receiptJobArgs]{
+		Args:   receiptJobArgs{ReceiptID: "rcpt_1"},
+		JobRow: &rivertype.JobRow{Attempt: 3, MaxAttempts: 3},
+	})
+	var snooze *rivertype.JobSnoozeError
+	if !errors.As(err, &snooze) || store.failed != 0 {
+		t.Fatalf("err=%v failed=%d", err, store.failed)
 	}
 }
 

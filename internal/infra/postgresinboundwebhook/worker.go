@@ -86,18 +86,26 @@ func (w *Worker) Work(ctx context.Context, job *river.Job[receiptJobArgs]) (err 
 		}
 	}()
 
-	if job.Attempt >= job.MaxAttempts {
-		return w.finalize(ctx, receiptID)
-	}
-
 	receipt, err := w.store.loadByID(ctx, receiptID)
 	if err != nil {
 		w.telem.logFailure(ctx, receiptID, logClassStorageRetryable)
 		w.telem.recordProcessing(ctx, "retrying")
+		if job.Attempt >= job.MaxAttempts {
+			return river.JobSnooze(terminalSnooze)
+		}
 		return errStorageUnavailable
 	}
 	if receipt.Outcome != "pending" {
 		return nil
+	}
+	if !w.registry.HasBinding(receipt.EndpointID) {
+		w.telem.logFailure(ctx, receiptID, logClassBindingUnavailable)
+		w.telem.recordProcessing(ctx, "retrying")
+		// ponytail: reuse the existing snooze; isolate a queue if binding drift becomes load.
+		return river.JobSnooze(terminalSnooze)
+	}
+	if job.Attempt >= job.MaxAttempts {
+		return w.finalize(ctx, receiptID)
 	}
 
 	delivery := inboundwebhook.VerifiedDelivery{
@@ -121,7 +129,7 @@ func (w *Worker) Work(ctx context.Context, job *river.Job[receiptJobArgs]) (err 
 			w.telem.recordProcessing(ctx, "handled")
 		}
 		return nil
-	case errors.Is(dispatchErr, inboundwebhook.ErrDecodeRejected):
+	case inboundwebhook.IsDecodeError(dispatchErr) && errors.Is(dispatchErr, inboundwebhook.ErrDecodeRejected):
 		reason := quarantineReasonRejected
 		if !json.Valid(receipt.Payload) {
 			reason = quarantineReasonInvalidJSON
