@@ -7,8 +7,8 @@ behavior to the production service:
 OpenAPI contract and request validation
   -> strict HTTP handler
   -> article use case
-  -> consumer-owned repository port
-  -> immutable in-memory adapter
+  -> consumer-owned store port
+  -> transactional in-memory adapter
 ```
 
 It covers both halves of a REST contract: a **public read** and a **protected
@@ -25,9 +25,8 @@ go test ./examples/reference-service/...
 `TestReferenceServiceServesOverHTTP` and the other top-level tests in
 `reference_test.go` start a real `httptest.Server` from `NewHandler` and drive
 it with HTTP requests: a public `GET`, a bearer-protected `POST`, an oversized
-body, a missing credential, a panic in feature code, and one caller exhausting
-its rate limit without affecting another — proving the example inherits the
-shared hardened chain rather than merely compiling against it.
+body, a missing credential, and a panic in feature code — proving the example
+inherits the shared hardened chain rather than merely compiling against it.
 `internal/httpapi/router_test.go` covers the same contract one layer down,
 against `NewAPIHandler` directly.
 
@@ -36,7 +35,7 @@ The important boundaries are visible in the directory layout:
 - `api/openapi.yaml` owns the example's wire contract;
 - `internal/openapi/` contains generated, drift-checked bindings;
 - `internal/article/` owns business types, errors, the use case, and the
-  repository port it consumes; the use case keeps unpublished articles hidden;
+  store port it consumes; the use case keeps unpublished articles hidden;
 - `internal/article/memory/` adapts one concrete storage mechanism;
 - `internal/httpapi/` maps feature results to contract responses;
 - `reference.go` is the composition root: it wires the feature onto its
@@ -44,7 +43,7 @@ The important boundaries are visible in the directory layout:
   the demonstration bearer credential. It deliberately owns no process
   lifecycle — no `main`, listener, signal handling, or shutdown.
 
-`reference.go` is the only file in this example that may import
+`reference.go` is the only non-test file in this example that may import
 `internal/infra/*` (here, `httpx` and `telemetry`). That is not a convention;
 it falls out of where the file lives. `.golangci.yml`'s
 `feature_packages_no_adapters` rule matches `**/internal/**/*.go` and denies
