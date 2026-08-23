@@ -53,18 +53,18 @@ func (h *Handler) Work(ctx context.Context, job *river.Job[deliveryArgs]) error 
 		return cancelJob("webhook attempt deadline is required")
 	}
 	attemptedAt := time.Now().UTC()
-	attempt := DeliveryAttempt{
+	attempt := deliveryAttempt{
 		ID: job.Args.DeliveryID, OwnerScope: job.Args.OwnerScope,
 		ReceiverID: job.Args.ReceiverID, URL: job.Args.URL,
 		Body: job.Args.Body, AttemptedAt: attemptedAt, Deadline: deadline,
 		KeyReference:         job.Args.ActiveKeyReference,
 		PredecessorReference: job.Args.PredecessorKeyReference,
 	}
-	prepared, err := PrepareSend(ctx, h.resolver, attempt, h.secrets)
+	prepared, err := prepareSend(ctx, h.resolver, attempt, h.secrets)
 	if err != nil {
 		return prepareFailure(ctx, err)
 	}
-	result, sendErr := tryPreparedAddresses(ctx, prepared, Send)
+	result, sendErr := tryPreparedAddresses(ctx, prepared, send)
 	return classifyDelivery(result, sendErr)
 }
 
@@ -81,7 +81,7 @@ func prepareFailure(ctx context.Context, err error) error {
 	}
 }
 
-func classifyDelivery(result SendResult, err error) error {
+func classifyDelivery(result sendResult, err error) error {
 	evidence := result.Evidence
 	switch {
 	case evidence.LocalDenial:
