@@ -70,15 +70,14 @@ func TestHTTPIdempotencyMaintenanceJoinsAfterHTTPDrain(t *testing.T) {
 		signalCtx, signal := context.WithCancel(context.Background())
 		supervisor := newSupervisedBackground(signalCtx, shutdownTestLogger())
 		started := make(chan context.Context, 1)
-		runtime := httpIdempotencyRuntime{
-			interval: time.Second,
-			cleanup: func(ctx context.Context) (int64, error) {
+		supervisor.Go(background.Task{
+			Name: "http_idempotency_maintenance",
+			Run: func(ctx context.Context) error {
 				started <- ctx
 				<-ctx.Done()
-				return 0, ctx.Err()
+				return ctx.Err()
 			},
-		}
-		supervisor.Go(background.Task{Name: "http_idempotency_maintenance", Run: runtime.Run})
+		})
 		maintenanceCtx := <-started
 
 		signal()

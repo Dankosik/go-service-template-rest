@@ -157,10 +157,9 @@ func (s *Service) staleness(state *readinessState) error {
 // If Watch stops before drain, one final callback may report ErrStale when the
 // last healthy verdict expires. StartDrain suppresses that deferred transition.
 //
-// The first evaluation runs immediately: a service that has just been admitted
-// must not report ErrNotEvaluated for a whole interval. failureThreshold applies
-// only to the healthy-to-unhealthy transition; a service that has never been
-// healthy reports the failure at once.
+// The first evaluation runs immediately unless startup admission already seeded
+// the cache. failureThreshold applies only to the healthy-to-unhealthy
+// transition; a service that has never been healthy reports the failure at once.
 //
 // probeBudget bounds one evaluation and is separate from interval so a configured
 // probe timeout is not clamped to the refresh period, which would let a
@@ -193,7 +192,9 @@ func (s *Service) Watch(
 	// is needed.
 	s.staleAfter.Store(int64(staleBudget(interval, probeBudget)))
 
-	_ = s.Refresh(ctx, probeBudget, failureThreshold)
+	if s.state.Load() == nil {
+		_ = s.Refresh(ctx, probeBudget, failureThreshold)
+	}
 	state := s.state.Load()
 	transitions := readinessTransitions{previousErr: state.err, notify: onTransition}
 	staleTimer := s.armStaleness(state, &transitions)
