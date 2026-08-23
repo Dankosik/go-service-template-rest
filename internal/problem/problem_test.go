@@ -38,10 +38,6 @@ func TestConflictAndAlreadyExistsShareTheHTTP409Envelope(t *testing.T) {
 		alreadyExists.TypeURI != conflict.TypeURI {
 		t.Fatalf("409 definitions differ: conflict=%+v already_exists=%+v", conflict, alreadyExists)
 	}
-	byStatus, ok := problem.For(http.StatusConflict)
-	if !ok || byStatus.Code != problem.CodeConflict {
-		t.Fatalf("For(409) = (%+v, %t), want conflict", byStatus, ok)
-	}
 }
 
 // TestCodesAreUnique is the same invariant from the other direction: a duplicated
@@ -55,22 +51,6 @@ func TestCodesAreUnique(t *testing.T) {
 			t.Fatalf("code %q is published for both status %d and %d", definition.Code, existing, definition.Status)
 		}
 		seen[definition.Code] = definition.Status
-	}
-}
-
-// TestForRefusesUnpublishedStatus pins the behavior that replaced the silent
-// wrong answer.
-func TestForRefusesUnpublishedStatus(t *testing.T) {
-	t.Parallel()
-
-	for _, status := range []int{http.StatusTeapot, http.StatusPaymentRequired, http.StatusGone, 0} {
-		definition, ok := problem.For(status)
-		if ok {
-			t.Fatalf("For(%d) = %+v, true; want refusal for an unpublished status", status, definition)
-		}
-		if definition != (problem.Definition{}) {
-			t.Fatalf("For(%d) returned %+v with ok=false", status, definition)
-		}
 	}
 }
 

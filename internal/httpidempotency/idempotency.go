@@ -48,8 +48,6 @@ func ClassifyError(err error) (failure.Classification, bool) {
 		return failure.Classification{Code: failure.CodeIdempotencyUnavailable, Detail: "idempotency is unavailable"}, true
 	case errors.Is(err, ErrOutcomeUnknown):
 		return failure.Classification{Code: failure.CodeIdempotencyOutcomeUnknown, Detail: "idempotency outcome is unknown"}, true
-	case errors.Is(err, ErrIntegrity), errors.Is(err, ErrInvalidFingerprint), errors.Is(err, ErrInvalidResult):
-		return failure.Classification{Code: failure.CodeInternalError, Detail: failure.SanitizedDetail}, true
 	default:
 		return failure.Classification{}, false
 	}

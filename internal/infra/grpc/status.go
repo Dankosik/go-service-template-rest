@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"slices"
 	"strings"
 
 	"github.com/example/go-service-template-rest/internal/failure"
@@ -23,6 +24,7 @@ import (
 // This one is innermost and sanitizes what a generated handler returns. Standard
 // health RPCs pass through untouched so their own status semantics survive.
 func handlerErrorBoundary(log *slog.Logger, mappers []failure.Mapper) aroundRPC {
+	mappers = slices.Clone(mappers)
 	return func(ctx context.Context, fullMethod string, call func(context.Context) error) error {
 		err := call(ctx)
 		if isHealthMethod(fullMethod) {
