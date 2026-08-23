@@ -35,7 +35,7 @@ func principalFromClaims(claims *accessTokenClaims, strict bool) (reqctx.Princip
 	if strings.TrimSpace(subject) != subject || (subject == "" && clientID == "") {
 		return reqctx.Principal{}, failure(bearerauthn.KindInvalid)
 	}
-	if strict && (strings.TrimSpace(claims.ClientID) == "" || strings.TrimSpace(claims.ID) == "" || claims.IssuedAt == nil) {
+	if strict && (subject == "" || strings.TrimSpace(claims.ClientID) == "" || strings.TrimSpace(claims.ID) == "" || claims.IssuedAt == nil) {
 		return reqctx.Principal{}, failure(bearerauthn.KindInvalid)
 	}
 	return reqctx.Principal{Issuer: claims.Issuer, Subject: subject, ClientID: clientID}, nil

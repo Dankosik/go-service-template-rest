@@ -59,7 +59,6 @@ func TestRFC9068ProfileIsExplicit(t *testing.T) {
 		testPolicyWithProfile(t, "rfc9068"),
 		staticKeyFunc(key),
 		func() time.Time { return testNow },
-		newJWKSMetrics(nil),
 		nil,
 		nil,
 	)
@@ -75,6 +74,7 @@ func TestRFC9068ProfileIsExplicit(t *testing.T) {
 	}{
 		{name: "JWT type", typ: "JWT", claims: valid},
 		{name: "missing client_id", typ: "at+jwt", claims: withoutClientID(valid)},
+		{name: "missing sub", typ: "at+jwt", claims: func() tokenClaims { c := valid; c.Subject = ""; return c }()},
 		{name: "missing jti", typ: "at+jwt", claims: func() tokenClaims { c := valid; c.JWTID = ""; return c }()},
 		{name: "missing iat", typ: "at+jwt", claims: func() tokenClaims { c := valid; c.IssuedAt = nil; return c }()},
 	} {
@@ -161,7 +161,6 @@ func TestJWKSRefreshFailureIsUnavailable(t *testing.T) {
 			}
 		},
 		func() time.Time { return testNow },
-		newJWKSMetrics(nil),
 		nil,
 		nil,
 	)
@@ -177,7 +176,6 @@ func TestVerifierCloseIsIdempotent(t *testing.T) {
 		testPolicy(t),
 		staticKeyFunc(loadTestRSAKey(t, testSigningKey)),
 		func() time.Time { return testNow },
-		newJWKSMetrics(nil),
 		func() { cancels++ },
 		func() { closes++ },
 	)
@@ -185,6 +183,33 @@ func TestVerifierCloseIsIdempotent(t *testing.T) {
 	verifier.Close()
 	if cancels != 1 || closes != 1 {
 		t.Fatalf("Close() calls = cancel %d, close %d; want one each", cancels, closes)
+	}
+}
+
+func TestRefreshFailureReportingPolicy(t *testing.T) {
+	t.Parallel()
+
+	processCtx := t.Context()
+	scheduledCtx, cancelScheduled := context.WithCancel(processCtx)
+	cancelScheduled()
+	if !shouldReportRefreshFailure(processCtx, scheduledCtx) {
+		t.Fatal("scheduled refresh failure was suppressed after the library canceled its attempt context")
+	}
+
+	requestCtx := context.WithValue(processCtx, refreshFailureKey, new(refreshFailure))
+	if !shouldReportRefreshFailure(processCtx, requestCtx) {
+		t.Fatal("live request refresh failure was suppressed")
+	}
+	canceledRequestCtx, cancelRequest := context.WithCancel(requestCtx)
+	cancelRequest()
+	if shouldReportRefreshFailure(processCtx, canceledRequestCtx) {
+		t.Fatal("canceled request refresh was reported as a provider failure")
+	}
+
+	stoppedProcessCtx, stopProcess := context.WithCancel(processCtx)
+	stopProcess()
+	if shouldReportRefreshFailure(stoppedProcessCtx, scheduledCtx) {
+		t.Fatal("refresh failure was reported after process shutdown")
 	}
 }
 

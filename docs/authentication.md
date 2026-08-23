@@ -111,7 +111,7 @@ The verifier accepts compact JWT access tokens that satisfy all of these rules:
 
 The default does not require a `typ` header, `iat`, or `jti`. The explicit
 `rfc9068` profile additionally requires `typ=at+jwt` (or `application/at+jwt`),
-`client_id`, `iat`, and `jti`.
+`sub`, `client_id`, `iat`, and `jti`.
 
 Startup performs OIDC discovery and installs the first JWKS before serving.
 Authentication is an eager startup gate, not a dynamic readiness dependency.

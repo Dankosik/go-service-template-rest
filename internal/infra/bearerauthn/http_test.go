@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/example/go-service-template-rest/internal/reqctx"
 	"github.com/getkin/kin-openapi/openapi3"
@@ -79,7 +80,10 @@ func TestHTTPResolverPreservesBearerContract(t *testing.T) {
 func TestHTTPPublishesPrincipalWithoutForwardedTransportPolicy(t *testing.T) {
 	t.Parallel()
 	runtime := newTestRuntime(t, &fakeVerifier{
-		result: Result{Principal: reqctx.Principal{Issuer: "https://issuer.example.com", Subject: "subject-1", ClientID: "client-1"}},
+		result: Result{
+			Principal: reqctx.Principal{Issuer: "https://issuer.example.com", Subject: "subject-1", ClientID: "client-1"},
+			ExpiresAt: time.Unix(1_900_003_600, 0),
+		},
 	})
 	request := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "https://api.example.com/private", http.NoBody)
 	request.Header.Set("Authorization", "Bearer token")
@@ -97,6 +101,25 @@ func TestHTTPPublishesPrincipalWithoutForwardedTransportPolicy(t *testing.T) {
 	if stored, ok := reqctx.PrincipalFromContext(ctx); !ok ||
 		stored.Issuer != principal.Issuer || stored.Subject != principal.Subject || stored.ClientID != principal.ClientID {
 		t.Fatalf("PrincipalFromContext() = %+v, %v", stored, ok)
+	}
+}
+
+func TestRuntimeRejectsInvalidVerifierResult(t *testing.T) {
+	t.Parallel()
+
+	for _, result := range []Result{
+		{},
+		{Principal: reqctx.Principal{Subject: "subject-1"}},
+		{ExpiresAt: time.Unix(1_900_003_600, 0)},
+	} {
+		runtime := newTestRuntime(t, &fakeVerifier{result: result, returnResult: true})
+		verified, err := runtime.verifyCredential(t.Context(), []string{"Bearer token"}, transportHTTP)
+		requireKind(t, err, KindUnavailable)
+		if verified.Principal.Issuer != "" || verified.Principal.Subject != "" ||
+			verified.Principal.ClientID != "" || len(verified.Principal.Scopes) != 0 ||
+			!verified.ExpiresAt.IsZero() {
+			t.Fatalf("verified result = %+v, want zero", verified)
+		}
 	}
 }
 

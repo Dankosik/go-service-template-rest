@@ -135,21 +135,7 @@ func TestPostgresMigrateRepositorySourceRehearsal(t *testing.T) {
 }
 
 func TestPostgresHTTPIdempotencySchemaReplacementIsFailClosed(t *testing.T) {
-	legacyMigration, err := os.ReadFile("../migrations/000003_postgres_http_idempotency.sql")
-	if err != nil {
-		t.Fatalf("read legacy HTTP idempotency migration: %v", err)
-	}
-	replacementMigration, err := os.ReadFile("../migrations/000009_postgres_http_idempotency_simplify.sql")
-	if err != nil {
-		t.Fatalf("read replacement HTTP idempotency migration: %v", err)
-	}
-	legacySource := fstest.MapFS{
-		"migrations/000003_postgres_http_idempotency.sql": {Data: legacyMigration},
-	}
-	replacementSource := fstest.MapFS{
-		"migrations/000003_postgres_http_idempotency.sql":          {Data: legacyMigration},
-		"migrations/000009_postgres_http_idempotency_simplify.sql": {Data: replacementMigration},
-	}
+	legacySource, replacementSource := httpIDMigrationSources(t)
 
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
 	defer cancel()
@@ -221,6 +207,88 @@ func TestPostgresHTTPIdempotencySchemaReplacementIsFailClosed(t *testing.T) {
 	}
 	if relationExists(t, ctx, pool, "postgres_http_idempotency") {
 		t.Fatal("HTTP idempotency table exists after complete rollback")
+	}
+}
+
+func TestPostgresHTTPIdempotencySchemaReplacementBlocksConcurrentWriter(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
+	defer cancel()
+	legacySource, replacementSource := httpIDMigrationSources(t)
+	dsn := pgtest.DSN(t)
+	if _, err := postgresmigrate.MigrateUp(ctx, migrationOptions(dsn, legacySource)); err != nil {
+		t.Fatalf("apply published legacy migration: %v", err)
+	}
+	pool := openVerificationPool(t, ctx, dsn)
+	blocker, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin migration blocker: %v", err)
+	}
+	blockerReleased := false
+	defer func() {
+		if !blockerReleased {
+			_ = blocker.Rollback(ctx)
+		}
+	}()
+	if _, err := blocker.Exec(ctx, "LOCK TABLE postgres_http_idempotency IN ACCESS SHARE MODE"); err != nil {
+		t.Fatalf("lock legacy table: %v", err)
+	}
+
+	type migrationRun struct {
+		result postgresmigrate.RunResult
+		err    error
+	}
+	options := migrationOptions(dsn, replacementSource)
+	options.StatementTimeout = 10 * time.Second
+	options.LockTimeout = 10 * time.Second
+	options.CleanupTimeout = 10 * time.Second
+	migrationResult := make(chan migrationRun, 1)
+	go func() {
+		result, runErr := postgresmigrate.MigrateUp(ctx, options)
+		migrationResult <- migrationRun{result: result, err: runErr}
+	}()
+	waitForMigrationQuery(t, ctx, pool, "LOCK TABLE postgres_http_idempotency IN ACCESS EXCLUSIVE MODE")
+
+	writerResult := make(chan error, 1)
+	go func() {
+		_, writerErr := pool.Exec(ctx, `
+			INSERT INTO postgres_http_idempotency (
+				identity_token, generation, phase, provisional_fingerprint_version,
+				provisional_fingerprint, recover_after
+			) VALUES (
+				decode(repeat('01', 32), 'hex'),
+				nextval('postgres_http_idempotency_generation_seq'),
+				'reserved', 'v1', decode(repeat('02', 32), 'hex'), clock_timestamp() + interval '1 hour'
+			)`)
+		writerResult <- writerErr
+	}()
+	waittest.Until(t, migrationQueryWait, func() bool {
+		var waiting int
+		err := pool.QueryRow(ctx, `
+			SELECT count(*)
+			FROM pg_locks
+			WHERE relation = 'postgres_http_idempotency'::regclass
+			  AND mode = 'RowExclusiveLock'
+			  AND NOT granted`).Scan(&waiting)
+		if err != nil {
+			t.Fatalf("observe queued legacy writer: %v", err)
+		}
+		return waiting == 1
+	}, "legacy writer to queue behind schema replacement")
+
+	if err := blocker.Rollback(ctx); err != nil {
+		t.Fatalf("release migration blocker: %v", err)
+	}
+	blockerReleased = true
+	migrated := waittest.Receive(t, migrationResult, migrationQueryWait, "schema replacement result")
+	if migrated.err != nil || migrated.result.After != 9 {
+		t.Fatalf("schema replacement = %+v, error %v", migrated.result, migrated.err)
+	}
+	if err := waittest.Receive(t, writerResult, migrationQueryWait, "queued legacy writer result"); err == nil {
+		t.Fatal("legacy writer committed across schema replacement")
+	}
+	var rows int
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM postgres_http_idempotency").Scan(&rows); err != nil || rows != 0 {
+		t.Fatalf("replacement rows = %d, error %v", rows, err)
 	}
 }
 
@@ -529,6 +597,26 @@ func migrationOptions(dsn string, source fstest.MapFS) postgresmigrate.Migration
 		LockTimeout:      time.Second,
 		CleanupTimeout:   time.Second,
 	}
+}
+
+func httpIDMigrationSources(t *testing.T) (fstest.MapFS, fstest.MapFS) {
+	t.Helper()
+	legacyMigration, err := os.ReadFile("../migrations/000003_postgres_http_idempotency.sql")
+	if err != nil {
+		t.Fatalf("read legacy HTTP idempotency migration: %v", err)
+	}
+	replacementMigration, err := os.ReadFile("../migrations/000009_postgres_http_idempotency_simplify.sql")
+	if err != nil {
+		t.Fatalf("read replacement HTTP idempotency migration: %v", err)
+	}
+	legacySource := fstest.MapFS{
+		"migrations/000003_postgres_http_idempotency.sql": {Data: legacyMigration},
+	}
+	replacementSource := fstest.MapFS{
+		"migrations/000003_postgres_http_idempotency.sql":          {Data: legacyMigration},
+		"migrations/000009_postgres_http_idempotency_simplify.sql": {Data: replacementMigration},
+	}
+	return legacySource, replacementSource
 }
 
 func migrationFile(up, down string) []byte {

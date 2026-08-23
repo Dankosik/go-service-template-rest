@@ -139,13 +139,13 @@ func TestJWKSClientBoundsAndReconstructsProviderResponse(t *testing.T) {
 
 func TestProviderClientConstructionRejectsInvalidAuthority(t *testing.T) {
 	t.Parallel()
-	if _, err := discoverJWKSURI(t.Context(), Policy{issuer: ":"}, nil); err == nil {
+	if _, err := discoverJWKSURI(t.Context(), Policy{issuer: ":"}); err == nil {
 		t.Fatal("discoverJWKSURI() accepted an invalid issuer")
 	}
-	if client, closeIdle, err := newJWKSClient(":", nil); err == nil || client != nil || closeIdle != nil {
+	if client, closeIdle, err := newJWKSClient(":"); err == nil || client != nil || closeIdle != nil {
 		t.Fatalf("newJWKSClient(invalid) = client %#v, close %t, error %v", client, closeIdle != nil, err)
 	}
-	client, closeIdle, err := newJWKSClient("https://keys.example.com/jwks", nil)
+	client, closeIdle, err := newJWKSClient("https://keys.example.com/jwks")
 	if err != nil || client == nil || closeIdle == nil {
 		t.Fatalf("newJWKSClient(valid) = client %#v, close %t, error %v", client, closeIdle != nil, err)
 	}

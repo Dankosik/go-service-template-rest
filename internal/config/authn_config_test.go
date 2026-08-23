@@ -2,7 +2,9 @@ package config
 
 import (
 	"errors"
+	// profile:authn-oidc-introspection:start
 	"path/filepath"
+	// profile:authn-oidc-introspection:end
 	"strings"
 	"testing"
 )

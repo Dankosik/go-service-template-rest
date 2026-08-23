@@ -12,17 +12,17 @@ import (
 func TestWebhookDeliveryClassification(t *testing.T) {
 	tests := []struct {
 		name      string
-		result    SendResult
+		result    sendResult
 		err       error
 		cancelled bool
 		retry     bool
 	}{
-		{name: "accepted", result: SendResult{Evidence: TransportEvidence{StatusCode: http.StatusNoContent, MayHaveSent: true}}},
-		{name: "rate limited", result: SendResult{Evidence: TransportEvidence{StatusCode: http.StatusTooManyRequests, MayHaveSent: true}}, retry: true},
-		{name: "rejected", result: SendResult{Evidence: TransportEvidence{StatusCode: http.StatusBadRequest, MayHaveSent: true}}, cancelled: true},
-		{name: "ambiguous", result: SendResult{Evidence: TransportEvidence{MayHaveSent: true}}, retry: true},
-		{name: "local denial", result: SendResult{Evidence: TransportEvidence{DefinitelyNotSent: true, LocalDenial: true}}, cancelled: true},
-		{name: "deadline", result: SendResult{Evidence: TransportEvidence{DefinitelyNotSent: true}}, err: context.DeadlineExceeded, retry: true},
+		{name: "accepted", result: sendResult{Evidence: transportEvidence{StatusCode: http.StatusNoContent, MayHaveSent: true}}},
+		{name: "rate limited", result: sendResult{Evidence: transportEvidence{StatusCode: http.StatusTooManyRequests, MayHaveSent: true}}, retry: true},
+		{name: "rejected", result: sendResult{Evidence: transportEvidence{StatusCode: http.StatusBadRequest, MayHaveSent: true}}, cancelled: true},
+		{name: "ambiguous", result: sendResult{Evidence: transportEvidence{MayHaveSent: true}}, retry: true},
+		{name: "local denial", result: sendResult{Evidence: transportEvidence{DefinitelyNotSent: true, LocalDenial: true}}, cancelled: true},
+		{name: "deadline", result: sendResult{Evidence: transportEvidence{DefinitelyNotSent: true}}, err: context.DeadlineExceeded, retry: true},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
