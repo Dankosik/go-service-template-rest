@@ -128,11 +128,11 @@ func TestNATSNativeConsumeSurvivesBrokerRestart(t *testing.T) {
 	if err := f.Container.Stop(t.Context(), &stopTimeout); err != nil {
 		t.Fatalf("stop NATS container: %v", err)
 	}
-	waittest.Until(t, 10*time.Second, func() bool { return !client.Ready() }, "worker disconnect")
+	waittest.Until(t, 10*time.Second, func(context.Context) bool { return !client.Ready() }, "worker disconnect")
 	if err := f.Container.Start(t.Context()); err != nil {
 		t.Fatalf("restart NATS container: %v", err)
 	}
-	waittest.Until(t, 10*time.Second, func() bool {
+	waittest.Until(t, 10*time.Second, func(context.Context) bool {
 		fresh, connectErr := nats.Connect(f.URL, nats.Timeout(250*time.Millisecond), nats.NoReconnect())
 		if connectErr != nil {
 			return false
@@ -140,13 +140,13 @@ func TestNATSNativeConsumeSurvivesBrokerRestart(t *testing.T) {
 		fresh.Close()
 		return true
 	}, "restarted NATS listener")
-	waittest.Until(t, 20*time.Second, func() bool {
+	waittest.Until(t, 20*time.Second, func(ctx context.Context) bool {
 		select {
 		case err := <-runErr:
 			t.Fatalf("worker stopped during broker transition: %v", err)
 		default:
 		}
-		probeCtx, cancel := context.WithTimeout(t.Context(), time.Second)
+		probeCtx, cancel := context.WithTimeout(ctx, time.Second)
 		defer cancel()
 		return client.Check(probeCtx) == nil
 	}, "worker reconnect")
@@ -221,7 +221,7 @@ func TestNATSPublishDispatchCancellationAndNoRetry(t *testing.T) {
 		_, err := client.Producer().Publish(deadlineCtx, deadlineEvent)
 		deadlineErr <- err
 	}()
-	waittest.Until(t, 3*time.Second, func() bool { return client.nc.Stats().OutMsgs >= dispatchedBefore+2 }, "publish dispatches")
+	waittest.Until(t, 3*time.Second, func(context.Context) bool { return client.nc.Stats().OutMsgs >= dispatchedBefore+2 }, "publish dispatches")
 	cancelPublish()
 	if err := <-canceledErr; !errors.Is(err, ErrAmbiguous) {
 		t.Fatalf("Publish(canceled after dispatch) error = %v, want ErrAmbiguous", err)
@@ -328,8 +328,8 @@ func TestNATSDLQSourceAckAmbiguityDeduplicates(t *testing.T) {
 	if second := waittest.Receive(t, deliveries, 15*time.Second, "DLQ source-ack redelivery"); second != 2 {
 		t.Fatalf("second NumDelivered = %d, want 2", second)
 	}
-	waittest.Receive(t, doubleAcks, 5*time.Second, "first DLQ source ACK attempt")
-	waittest.Receive(t, doubleAcks, 5*time.Second, "second DLQ source ACK attempt")
+	waittest.ReceiveSignal(t, doubleAcks, 5*time.Second, "first DLQ source ACK attempt")
+	waittest.ReceiveSignal(t, doubleAcks, 5*time.Second, "second DLQ source ACK attempt")
 	dlq, err := f.JS.Stream(t.Context(), "EVENTS_DLQ")
 	if err != nil {
 		t.Fatalf("lookup DLQ stream: %v", err)

@@ -31,7 +31,7 @@ func TestReadinessTransitionsUpdateGRPCHealth(t *testing.T) {
 			FailureThreshold: 1,
 		},
 	}, log, service, supervisor, grpcServer)
-	waittest.UntilFunc(t, time.Second, func() bool {
+	waittest.UntilFunc(t, time.Second, func(context.Context) bool {
 		return service.Cached() == nil
 	}, func() string { return "initial readiness evaluation" })
 

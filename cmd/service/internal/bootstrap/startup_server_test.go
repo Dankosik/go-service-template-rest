@@ -199,7 +199,7 @@ func TestServeHTTPRuntimeStartsAndStopsApplicationAndMetricsServers(t *testing.T
 		waittest.ReceiveSignal(t, started, time.Second, name+" server start")
 	}
 
-	waittest.Until(t, time.Second, admission.Ready, "startup admission to be marked ready")
+	waittest.Until(t, time.Second, func(context.Context) bool { return admission.Ready() }, "startup admission to be marked ready")
 
 	cancelSignal()
 	if err := waittest.Receive(t, runErrCh, 2*time.Second, "serveRuntime to stop both servers"); err != nil {
@@ -233,7 +233,7 @@ func TestServeHTTPRuntimeStopsAfterBackgroundFailure(t *testing.T) {
 	}()
 
 	waittest.ReceiveSignal(t, srv.serveStarted, time.Second, "application server start")
-	waittest.Until(t, time.Second, admission.Ready, "startup admission to be marked ready")
+	waittest.Until(t, time.Second, func(context.Context) bool { return admission.Ready() }, "startup admission to be marked ready")
 
 	failures <- taskErr
 	if err := waittest.Receive(t, runErrCh, 2*time.Second, "serveRuntime to stop after the background failure"); !errors.Is(err, taskErr) {
@@ -301,7 +301,7 @@ func TestServeHTTPRuntimeMarksReadyWithoutExternalReadinessProbe(t *testing.T) {
 	}(signalCtx, bootstrapCtx)
 
 	waittest.ReceiveSignal(t, readinessChecked, time.Second, "internal readiness check")
-	waittest.Until(t, time.Second, admission.Ready, "startup admission to be marked ready")
+	waittest.Until(t, time.Second, func(context.Context) bool { return admission.Ready() }, "startup admission to be marked ready")
 
 	cancelSignal()
 

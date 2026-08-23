@@ -22,12 +22,12 @@ func TestWorkerRunDrainsGracefully(t *testing.T) {
 		jetstream.StreamConfig{Name: "EVENTS", Subjects: []string{"events.>"}, Storage: jetstream.FileStorage, MaxMsgSize: 1 << 20},
 		jetstream.StreamConfig{Name: "EVENTS_DLQ", Subjects: []string{"dead.>"}, Storage: jetstream.FileStorage, MaxMsgSize: 2 << 20},
 	))
-	waittest.Until(t, 5*time.Second, func() bool {
-		name, err := server.JS.StreamNameBySubject(t.Context(), "events.test")
+	waittest.Until(t, 5*time.Second, func(ctx context.Context) bool {
+		name, err := server.JS.StreamNameBySubject(ctx, "events.test")
 		return err == nil && name == "EVENTS"
 	}, "source stream availability")
-	waittest.Until(t, 5*time.Second, func() bool {
-		name, err := server.JS.StreamNameBySubject(t.Context(), "dead.events.test")
+	waittest.Until(t, 5*time.Second, func(ctx context.Context) bool {
+		name, err := server.JS.StreamNameBySubject(ctx, "dead.events.test")
 		return err == nil && name == "EVENTS_DLQ"
 	}, "dead-letter stream availability")
 	diagnosticsAddr := waittest.FreeTCPAddr(t, "worker diagnostics")
@@ -48,14 +48,14 @@ func TestWorkerRunDrainsGracefully(t *testing.T) {
 	// whose remaining probes then fail on the cancelled context and are reported
 	// as a rejected admission.
 	probe := &http.Client{Timeout: time.Second}
-	waittest.Until(t, startupTimeout, func() bool {
+	waittest.Until(t, startupTimeout, func(ctx context.Context) bool {
 		select {
 		case err := <-result:
 			t.Fatalf("run() before worker readiness: %v", err)
 		default:
 		}
 		request, err := http.NewRequestWithContext(
-			t.Context(), http.MethodGet, "http://"+diagnosticsAddr+"/health/ready", http.NoBody,
+			ctx, http.MethodGet, "http://"+diagnosticsAddr+"/health/ready", http.NoBody,
 		)
 		if err != nil {
 			return false
