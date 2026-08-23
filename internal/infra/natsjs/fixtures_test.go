@@ -28,13 +28,12 @@ func (s *recordingJetStream) PublishMsg(_ context.Context, msg *nats.Msg, _ ...j
 	return s.ack, s.err
 }
 
-func unitClient(t *testing.T, broker jetstream.JetStream, role Role) *Client {
+func unitClient(t *testing.T, broker jetstream.JetStream) *Client {
 	t.Helper()
-	sig, err := newTelemetry(Observability{Logger: slog.New(slog.DiscardHandler)}, role, func() bool { return false })
+	sig, err := newTelemetry(Observability{Logger: slog.New(slog.DiscardHandler)})
 	if err != nil {
 		t.Fatalf("newTelemetry() error = %v", err)
 	}
-	t.Cleanup(sig.close)
 	cfg := testConfig()
 	cfg.Stream = "EVENTS"
 	client := &Client{
@@ -47,7 +46,7 @@ func unitClient(t *testing.T, broker jetstream.JetStream, role Role) *Client {
 
 func unitWorker(t *testing.T, broker jetstream.JetStream, handler Handler) *Worker {
 	t.Helper()
-	client := unitClient(t, broker, RoleWorker)
+	client := unitClient(t, broker)
 	cfg := testWorkerConfig()
 	cfg.Consumer = "events-worker"
 	cfg.FilterSubject = "events.>"

@@ -35,7 +35,7 @@ func TestNATSForcedShutdownRedelivers(t *testing.T) {
 	}
 
 	redelivered := make(chan struct{}, 1)
-	secondClient := f.client(t, natsjs.RoleWorker)
+	secondClient := f.client(t)
 	cfg := testWorkerConfig()
 	cfg.Consumer = "forced-worker"
 	cfg.FilterSubject = sourceSubject
@@ -56,7 +56,7 @@ func TestNATSForcedShutdownRedelivers(t *testing.T) {
 
 func TestNATSHandlerPanicIsSupervised(t *testing.T) {
 	f := newNATSFixture(t)
-	producer := f.client(t, natsjs.RoleProducer)
+	producer := f.client(t)
 	blockEntered := make(chan struct{})
 	panicEntered := make(chan struct{})
 	startedAfterFailure := make(chan string, 1)
@@ -167,7 +167,7 @@ func TestNATSGracefulDrain(t *testing.T) {
 		t.Fatalf("publish in-flight message: %v", err)
 	}
 	waittest.ReceiveSignal(t, entered, 5*time.Second, "in-flight handler")
-	producer := f.client(t, natsjs.RoleProducer)
+	producer := f.client(t)
 	if _, err := producer.Producer().Publish(t.Context(), testEvent("pending")); err != nil {
 		t.Fatalf("publish pending message: %v", err)
 	}
@@ -195,7 +195,7 @@ func TestNATSGracefulDrain(t *testing.T) {
 	default:
 	}
 
-	recoveryClient := f.client(t, natsjs.RoleWorker)
+	recoveryClient := f.client(t)
 	recoveryCfg := testWorkerConfig()
 	recoveryCfg.Consumer = "graceful-worker"
 	recoveryCfg.FilterSubject = sourceSubject

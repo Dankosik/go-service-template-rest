@@ -131,7 +131,7 @@ func TestNATSTraceCorrelation(t *testing.T) {
 	cfg.AllowPlaintext = true
 	cfg.AllowUnauthenticated = true
 	cfg.Stream = sourceStream
-	client, err := natsjs.Connect(t.Context(), cfg, natsjs.RoleWorker, natsjs.Observability{Tracer: provider.Tracer("test")})
+	client, err := natsjs.Connect(t.Context(), cfg, natsjs.Observability{Tracer: provider.Tracer("test")})
 	if err != nil {
 		t.Fatalf("connect messaging client: %v", err)
 	}

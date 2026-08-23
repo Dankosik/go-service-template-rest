@@ -148,7 +148,7 @@ func TestRestoreDeadLetterRejectsWhatItCannotRebuild(t *testing.T) {
 // goes back onto the broker addressed to the subject it originally failed on.
 func TestRestoredDeadLetterRepublishesOnTheOriginalSubject(t *testing.T) {
 	broker := &recordingJetStream{ack: &jetstream.PubAck{Stream: "EVENTS", Sequence: 21}}
-	client := unitClient(t, broker, RoleProducer)
+	client := unitClient(t, broker)
 
 	event, err := RestoreDeadLetter(unitDeadLetter(t, deadLetterExhausted))
 	if err != nil {

@@ -207,7 +207,7 @@ func newTestNATSAccount(t *testing.T, operatorKey nkeys.KeyPair, enableJetStream
 	return testNATSAccount{public: accountPublic, claim: accountClaim, credentials: credentials}
 }
 
-func (f *natsFixture) client(t *testing.T, role natsjs.Role, configure ...func(*natsjs.Config)) *natsjs.Client {
+func (f *natsFixture) client(t *testing.T, configure ...func(*natsjs.Config)) *natsjs.Client {
 	t.Helper()
 	cfg := testClientConfig()
 	cfg.URLs = []string{f.url}
@@ -217,7 +217,7 @@ func (f *natsFixture) client(t *testing.T, role natsjs.Role, configure ...func(*
 	for _, apply := range configure {
 		apply(&cfg)
 	}
-	client, err := natsjs.Connect(t.Context(), cfg, role, natsjs.Observability{})
+	client, err := natsjs.Connect(t.Context(), cfg, natsjs.Observability{})
 	if err != nil {
 		t.Fatalf("connect messaging client: %v", err)
 	}
@@ -227,7 +227,7 @@ func (f *natsFixture) client(t *testing.T, role natsjs.Role, configure ...func(*
 
 func (f *natsFixture) worker(t *testing.T, handler natsjs.Handler, configure ...func(*natsjs.WorkerConfig)) (*natsjs.Client, *natsjs.Worker, <-chan error) {
 	t.Helper()
-	client := f.client(t, natsjs.RoleWorker)
+	client := f.client(t)
 	cfg := testWorkerConfig()
 	cfg.Consumer = fmt.Sprintf("worker-%d", time.Now().UnixNano())
 	cfg.FilterSubject = sourceSubject

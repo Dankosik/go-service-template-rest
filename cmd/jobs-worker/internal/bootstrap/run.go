@@ -71,9 +71,6 @@ func run(signalCtx context.Context, args []string, buildWorkers WorkersBuilder) 
 	log := runtimeopts.Logger(os.Stdout, cfg, "component", "jobs_worker")
 	metrics := telemetry.New()
 	telemetryCleanup, err := runtimeopts.InstallTelemetry(startupCtx, cfg, metrics, log, "jobs_worker")
-	if err != nil {
-		return err
-	}
 	cleanupSafe := true
 	var cleanupDeadline time.Time
 	defer func() {
@@ -83,6 +80,9 @@ func run(signalCtx context.Context, args []string, buildWorkers WorkersBuilder) 
 			telemetryCleanup(cleanupCtx)
 		}
 	}()
+	if err != nil {
+		return err
+	}
 
 	runtime, err := buildWorkers(startupCtx, cfg, log)
 	if err != nil {

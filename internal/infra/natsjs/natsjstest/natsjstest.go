@@ -6,7 +6,7 @@
 //	server := natsjstest.Start(t, natsjstest.WithStreams(jetstream.StreamConfig{
 //		Name: "EVENTS", Subjects: []string{"events.>"}, Storage: jetstream.FileStorage,
 //	}))
-//	client, err := natsjs.Connect(t.Context(), cfg(server.URL), natsjs.RoleWorker, natsjs.Observability{})
+//	client, err := natsjs.Connect(t.Context(), cfg(server.URL), natsjs.Observability{})
 //
 // A fixture the broker options below cannot express — an authenticated server,
 // for instance — builds its own [testcontainers.ContainerRequest] from [Request]

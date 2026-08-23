@@ -38,7 +38,7 @@ type TelemetryFlush func(context.Context)
 // reported here.
 //
 // cmd/service does not use this. Its telemetry stage carries per-signal startup
-// budgets, the ignored-ambient-endpoint report, and the trace-exporter state
+// budgets, the additional ambient-environment report, and trace-exporter initialization
 // metric, none of which a background binary publishes; see
 // bootstrapTelemetryStage in cmd/service/internal/bootstrap.
 func InstallTelemetry(
@@ -48,6 +48,8 @@ func InstallTelemetry(
 	log *slog.Logger,
 	component string,
 ) (TelemetryFlush, error) {
+	telemetry.InstallErrorHandler(ctx, log)
+
 	// Resolved once and shared by both signals, so a span and a metric from the
 	// same replica carry the same resource identity.
 	instanceID := telemetry.ResolveInstanceID(cfg.App.InstanceID)
