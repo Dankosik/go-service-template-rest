@@ -1,5 +1,7 @@
 <p align="center">
-  <img src=".github/assets/go-service-template-hero.png" alt="Built for Go. Ready for agents. AI-native Go REST API and microservice template" width="100%" />
+  <img src=".github/assets/go-service-template-hero.png" alt="Go Gopher conductor coordinating a robot agent orchestra" width="520" />
+  <br />
+  <sub>Go Gopher character by <a href="https://go.dev/blog/gopher">Renée French</a>; adapted for this project under <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>.</sub>
 </p>
 
 <h1 align="center">Go REST API &amp; Microservice Template</h1>
