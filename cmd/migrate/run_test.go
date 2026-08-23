@@ -13,12 +13,12 @@ import (
 	"github.com/example/go-service-template-rest/internal/infra/postgresmigrate"
 )
 
-func TestRunRejectsArgumentsWithSafeTerminalRecord(t *testing.T) {
+func TestRunRejectsPositionalArgumentsWithSafeTerminalRecord(t *testing.T) {
 	t.Parallel()
 
 	var output bytes.Buffer
 	err := run([]string{"down", "secret-canary"}, &output)
-	if err == nil || !strings.Contains(err.Error(), "no arguments") {
+	if err == nil || !strings.Contains(err.Error(), "unexpected positional arguments") {
 		t.Fatalf("run() error = %v, want usage error", err)
 	}
 	record := decodeLastJSONRecord(t, output.Bytes())
@@ -29,6 +29,33 @@ func TestRunRejectsArgumentsWithSafeTerminalRecord(t *testing.T) {
 	}
 	if strings.Contains(output.String(), "secret-canary") {
 		t.Fatalf("terminal output disclosed argument: %s", output.String())
+	}
+}
+
+func TestRunAcceptsConfigLoaderFlags(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		args []string
+	}{
+		{name: "base", args: []string{"--config", "/does/not/exist"}},
+		{name: "overlay", args: []string{"--config-overlay", "/does/not/exist"}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			var output bytes.Buffer
+			err := run(tc.args, &output)
+			if err == nil || !strings.Contains(err.Error(), "open config file") {
+				t.Fatalf("run() error = %v, want config file error", err)
+			}
+			record := decodeLastJSONRecord(t, output.Bytes())
+			if record["failure.stage"] != "config" || record["outcome"] != "error" {
+				t.Fatalf("terminal record = %#v", record)
+			}
+		})
 	}
 }
 

@@ -251,6 +251,17 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+      - name: Migration history
+        if: needs.changes.outputs.migrations == 'true'
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${BASE_REF}" && "${BASE_REF}" != 0000000000000000000000000000000000000000 ]]; then
+            MIGRATION_HISTORY_MODE=exact-base BASE_REF="${BASE_REF}" HEAD_REF=HEAD make migration-history-check
+          else
+            make migration-history-check
+          fi
       - name: Set up Go
         id: setup-go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
