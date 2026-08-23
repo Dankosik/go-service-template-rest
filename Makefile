@@ -189,7 +189,7 @@ integration-init-check:
 	@if [ -z "$(strip $(INTEGRATION_INIT_ROWS))" ]; then \
 		if [ "$(ALLOW_HEAVY)" != "1" ] && [ "$(CI)" != "true" ]; then printf 'refusing %s: set ALLOW_HEAVY=1 (CI sets CI=true)\n' "$@"; exit 2; fi; \
 	fi
-	$(INTEGRATION_INIT_CHECK_SCRIPT) $(INTEGRATION_INIT_ROWS)
+	MAKEFLAGS= MAKEOVERRIDES= INTEGRATION_INIT_ROWS= $(INTEGRATION_INIT_CHECK_SCRIPT) $(INTEGRATION_INIT_ROWS)
 
 template-owned-purity-check:
 	$(TEMPLATE_OWNED_PURITY_CHECK_SCRIPT)
