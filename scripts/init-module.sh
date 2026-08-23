@@ -7,7 +7,7 @@ TEMPLATE_OWNER="@Dankosik"
 TEMPLATE_API_TITLE="go-service-template-rest"
 
 usage() {
-	echo "usage: CODEOWNER=@user-or-org/team DATABASE=none|postgres HTTP_IDEMPOTENCY=none|postgres JOBS=none|postgres WEBHOOKS=none|durable OUTBOX=none|postgres GRPC=none|enabled AUTHN=none|oidc-jwt OBJECT_STORAGE=none|s3 OUTBOUND_AUTH=none|oauth2-client-credentials MESSAGING=none|nats-jetstream REFERENCE_EXAMPLE=remove|keep $0 [module-path]"
+	echo "usage: CODEOWNER=@user-or-org/team DATABASE=none|postgres HTTP_IDEMPOTENCY=none|postgres JOBS=none|postgres WEBHOOKS=none|durable INBOUND_WEBHOOKS=none|standard-webhooks OUTBOX=none|postgres GRPC=none|enabled AUTHN=none|oidc-jwt|oidc-introspection OUTBOUND_HTTP=none|bounded OBJECT_STORAGE=none|s3 OUTBOUND_AUTH=none|oauth2-client-credentials MESSAGING=none|nats-jetstream REFERENCE_EXAMPLE=remove|keep $0 [module-path]"
 	echo "module-path is derived from git remote origin when omitted"
 }
 
@@ -248,12 +248,14 @@ write_template_lock() {
 	local outbox="$3"
 	local grpc="$4"
 	local authn="$5"
-	local outbound_auth="$6"
-	local messaging="$7"
-	local reference_example="$8"
-	local object_storage="$9"
-	local jobs="${10}"
-	local webhooks="${11}"
+	local outbound_http="$6"
+	local outbound_auth="$7"
+	local messaging="$8"
+	local reference_example="$9"
+	local object_storage="${10}"
+	local jobs="${11}"
+	local webhooks="${12}"
+	local inbound_webhooks="${13}"
 	local source_revision
 
 	source_revision="$(git rev-parse HEAD 2>/dev/null || true)"
@@ -273,12 +275,14 @@ http_idempotency = "${http_idempotency}"
 outbox = "${outbox}"
 grpc = "${grpc}"
 authn = "${authn}"
+outbound_http = "${outbound_http}"
 outbound_auth = "${outbound_auth}"
 messaging = "${messaging}"
 reference_example = "${reference_example}"
 object_storage = "${object_storage}"
 jobs = "${jobs}"
 webhooks = "${webhooks}"
+inbound_webhooks = "${inbound_webhooks}"
 EOF
 }
 
@@ -325,6 +329,10 @@ The client API contract is \`api/openapi/service.yaml\`. Start with
 Authentication uses OIDC discovery and signed JWT access tokens. Configure it
 using \`docs/authentication.md\` before starting the service.
 <!-- profile:authn-oidc-jwt:end -->
+<!-- profile:authn-oidc-introspection:start -->
+Authentication uses uncached RFC 7662 token introspection. Configure it using
+\`docs/authentication.md\` before starting the service.
+<!-- profile:authn-oidc-introspection:end -->
 <!-- profile:messaging-nats-jetstream:start -->
 This service includes typed events over NATS JetStream. Configure operator-owned
 streams, composition-owned routes, and the separate consumer worker using
@@ -429,6 +437,23 @@ if [[ "${webhooks}" == "durable" && ( "${database}" != "postgres" || "${jobs}" !
 	exit 1
 fi
 
+if [[ "${INBOUND_WEBHOOKS+x}" == "x" && -z "${INBOUND_WEBHOOKS-}" ]]; then
+	echo "INBOUND_WEBHOOKS must be one of: none, standard-webhooks"
+	exit 1
+fi
+inbound_webhooks="${INBOUND_WEBHOOKS:-none}"
+case "${inbound_webhooks}" in
+none | standard-webhooks) ;;
+*)
+	echo "INBOUND_WEBHOOKS must be one of: none, standard-webhooks"
+	exit 1
+	;;
+esac
+if [[ "${inbound_webhooks}" == "standard-webhooks" && ( "${database}" != "postgres" || "${jobs}" != "postgres" ) ]]; then
+	echo "INBOUND_WEBHOOKS=standard-webhooks requires DATABASE=postgres JOBS=postgres"
+	exit 1
+fi
+
 grpc="${GRPC:-none}"
 case "${grpc}" in
 none | enabled) ;;
@@ -439,14 +464,27 @@ none | enabled) ;;
 esac
 
 if [[ "${AUTHN+x}" == "x" && -z "${AUTHN-}" ]]; then
-	echo "AUTHN must be one of: none, oidc-jwt"
+	echo "AUTHN must be one of: none, oidc-jwt, oidc-introspection"
 	exit 1
 fi
 authn="${AUTHN:-none}"
 case "${authn}" in
-none | oidc-jwt) ;;
+none | oidc-jwt | oidc-introspection) ;;
 *)
-	echo "AUTHN must be one of: none, oidc-jwt"
+	echo "AUTHN must be one of: none, oidc-jwt, oidc-introspection"
+	exit 1
+	;;
+esac
+
+if [[ "${OUTBOUND_HTTP+x}" == "x" && -z "${OUTBOUND_HTTP-}" ]]; then
+	echo "OUTBOUND_HTTP must be one of: none, bounded"
+	exit 1
+fi
+outbound_http="${OUTBOUND_HTTP:-none}"
+case "${outbound_http}" in
+none | bounded) ;;
+*)
+	echo "OUTBOUND_HTTP must be one of: none, bounded"
 	exit 1
 	;;
 esac
@@ -571,9 +609,11 @@ if [[ -f template.lock ]]; then
 		"http_idempotency = \"${http_idempotency}\"" \
 		"jobs = \"${jobs}\"" \
 		"webhooks = \"${webhooks}\"" \
+		"inbound_webhooks = \"${inbound_webhooks}\"" \
 		"outbox = \"${outbox}\"" \
 		"grpc = \"${grpc}\"" \
 		"authn = \"${authn}\"" \
+		"outbound_http = \"${outbound_http}\"" \
 		"outbound_auth = \"${outbound_auth}\"" \
 		"messaging = \"${messaging}\"" \
 		"reference_example = \"${reference_example}\"" \
@@ -588,9 +628,11 @@ if [[ -f template.lock ]]; then
 	echo "  database: ${database}"
 	echo "  jobs: ${jobs}"
 	echo "  webhooks: ${webhooks}"
+	echo "  inbound webhooks: ${inbound_webhooks}"
 	echo "  outbox: ${outbox}"
 	echo "  gRPC: ${grpc}"
 	echo "  authentication: ${authn}"
+	echo "  outbound HTTP: ${outbound_http}"
 	echo "  object storage: ${object_storage}"
 	echo "  outbound authentication: ${outbound_auth}"
 	echo "  messaging: ${messaging}"
@@ -699,8 +741,6 @@ if [[ "${source_checkout}" != true ]]; then
 		if [[ "${webhooks}" == "none" ]]; then
 			rm -rf -- internal/infra/postgreswebhook
 			rm -f -- \
-				cmd/jobs-worker/builder_webhooks.go \
-				cmd/jobs-worker/builder_webhooks_test.go \
 				docs/outbound-webhook-delivery.md \
 				internal/config/webhooks_config.go \
 				internal/config/webhooks_config_test.go \
@@ -709,12 +749,54 @@ if [[ "${source_checkout}" != true ]]; then
 				migrations/000007_postgres_webhooks_retire.sql \
 				test/postgres_webhook_*_test.go \
 				test/webhook_network_integration_test.go
+			if [[ "${inbound_webhooks}" == "none" ]]; then
+				rm -f -- \
+					cmd/jobs-worker/builder_webhooks.go \
+					cmd/jobs-worker/builder_webhooks_test.go
+			else
+				rm -f -- cmd/jobs-worker/builder_webhooks_test.go
+			fi
 			strip_profile webhooks-durable remove
 		else
 			strip_profile webhooks-durable keep
 		fi
 
-	if [[ "${jobs}" == "none" && "${outbox}" == "none" && "${webhooks}" == "none" ]]; then
+		if [[ "${inbound_webhooks}" == "none" ]]; then
+			rm -rf -- internal/inboundwebhook internal/infra/postgresinboundwebhook
+			rm -f -- \
+				cmd/jobs-worker/inbound_webhook_bindings.go \
+				cmd/jobs-worker/builder_inbound_testworker.go \
+				cmd/jobs-worker/builder_webhooks_inbound_test.go \
+				cmd/jobs-worker/internal/bootstrap/run_inbound_test.go \
+				cmd/service/internal/bootstrap/startup_inbound_webhooks.go \
+				cmd/service/internal/bootstrap/startup_inbound_webhooks_test.go \
+				cmd/service/internal/bootstrap/service_api.go \
+				internal/config/inbound_webhooks_config.go \
+				internal/config/inbound_webhooks_config_test.go \
+				internal/infra/http/inbound_webhook.go \
+				internal/infra/http/inbound_webhook_test.go \
+				migrations/000010_postgres_inbound_webhooks.sql \
+				internal/infra/postgres/queries/postgres_inbound_webhooks.sql \
+				internal/infra/postgres/sqlcgen/postgres_inbound_webhooks.sql.go \
+				docs/inbound-webhook-receipt.md \
+				test/postgres_inbound_webhook_integration_test.go \
+				test/inbound_webhook_process_integration_test.go
+			if [[ "${webhooks}" == "none" ]]; then
+				rm -f -- \
+					cmd/jobs-worker/builder_webhooks.go \
+					cmd/jobs-worker/builder_webhooks_test.go
+			fi
+			strip_profile inbound-webhooks-standard remove
+			if [[ -f cmd/jobs-worker/builder_webhooks.go ]]; then
+				temporary="$(mktemp)"
+				sed 's/ && !inbound_webhook_test_worker//' cmd/jobs-worker/builder_webhooks.go >"${temporary}"
+				mv "${temporary}" cmd/jobs-worker/builder_webhooks.go
+			fi
+		else
+			strip_profile inbound-webhooks-standard keep
+		fi
+
+	if [[ "${jobs}" == "none" && "${outbox}" == "none" && "${webhooks}" == "none" && "${inbound_webhooks}" == "none" ]]; then
 		rm -f -- migrations/000008_river.sql
 	fi
 
@@ -766,21 +848,51 @@ if [[ "${source_checkout}" != true ]]; then
 		# authntrust exists only to be shared by the verifier and internal/config's
 		# authn validation. With the profile off it has no caller at all, so it
 		# leaves with them rather than becoming an unreferenced leaf.
-		rm -rf -- internal/infra/oidcjwt internal/authntrust
+		rm -rf -- internal/infra/bearerauthn internal/infra/oidcjwt internal/infra/oauthintrospection internal/authntrust
 		rm -f -- \
 			cmd/service/internal/bootstrap/authn_bootstrap_test.go \
 			cmd/service/internal/bootstrap/startup_authn.go \
+			cmd/service/internal/bootstrap/startup_authn_profile.go \
 			internal/config/authn_config.go \
 			internal/config/authn_config_test.go \
 			internal/infra/http/authn_router_test.go \
+			internal/infra/http/introspection_disclosure_test.go \
 			internal/infra/httpclient/authn_policy_test.go \
 			docs/authentication.md
 		replace_literal api/openapi/service.yaml \
 			'security: [{bearerAuth: []}]' \
 			'security: []'
+		strip_profile authn-bearer remove
 		strip_profile authn-oidc-jwt remove
+		strip_profile authn-oidc-introspection remove
+	elif [[ "${authn}" == "oidc-introspection" ]]; then
+		cp \
+			scripts/profiles/authn-oidc-introspection/authn_config.go.tmpl \
+			internal/config/authn_config.go
+		cp \
+			scripts/profiles/authn-oidc-introspection/startup_authn_profile.go.tmpl \
+			cmd/service/internal/bootstrap/startup_authn_profile.go
+		replace_literal internal/config/authn_config.go \
+			"${current_module}" \
+			"${new_module}"
+		replace_literal cmd/service/internal/bootstrap/startup_authn_profile.go \
+			"${current_module}" \
+			"${new_module}"
+		rm -rf -- internal/infra/oidcjwt
+		rm -f -- \
+			internal/authntrust/token_profile.go \
+			internal/authntrust/token_profile_test.go
+		strip_profile authn-bearer keep
+		strip_profile authn-oidc-jwt remove
+		strip_profile authn-oidc-introspection keep
 	else
+		rm -rf -- internal/infra/oauthintrospection
+		rm -f -- \
+			internal/authntrust/introspection.go \
+			internal/authntrust/introspection_test.go
+		strip_profile authn-bearer keep
 		strip_profile authn-oidc-jwt keep
+		strip_profile authn-oidc-introspection remove
 	fi
 
 	if [[ "${outbound_auth}" == "none" ]]; then
@@ -869,9 +981,9 @@ fi
 			docs/grpc.md \
 			internal/config/grpc_config.go \
 			internal/config/grpc_config_test.go \
-			internal/infra/oidcjwt/grpc.go \
-			internal/infra/oidcjwt/grpc_test.go \
-			internal/infra/oidcjwt/grpc_tls_contract_test.go \
+			internal/infra/bearerauthn/grpc.go \
+			internal/infra/bearerauthn/grpc_test.go \
+			internal/infra/bearerauthn/grpc_tls_contract_test.go \
 			test/grpc_process_integration_test.go
 		strip_profile grpc remove
 		go -C tools mod edit -droptool=github.com/bufbuild/buf/cmd/buf
@@ -920,6 +1032,10 @@ fi
 	# template rather than for this service.
 	rm -rf -- .github/assets .github/ISSUE_TEMPLATE
 
+	if [[ "${outbound_http}" == "none" && "${authn}" == "none" && "${outbound_auth}" == "none" ]]; then
+		rm -rf -- internal/infra/httpclient
+	fi
+
 	if [[ "${reference_example}" == "remove" ]]; then
 		rm -rf -- examples
 	fi
@@ -931,7 +1047,7 @@ fi
 		go generate ./internal/openapi
 	fi
 
-	write_template_lock "${database}" "${http_idempotency}" "${outbox}" "${grpc}" "${authn}" "${outbound_auth}" "${messaging}" "${reference_example}" "${object_storage}" "${jobs}" "${webhooks}"
+	write_template_lock "${database}" "${http_idempotency}" "${outbox}" "${grpc}" "${authn}" "${outbound_http}" "${outbound_auth}" "${messaging}" "${reference_example}" "${object_storage}" "${jobs}" "${webhooks}" "${inbound_webhooks}"
 
 fi
 
@@ -949,9 +1065,11 @@ echo "  database: ${database}"
 echo "  HTTP idempotency: ${http_idempotency}"
 echo "  jobs: ${jobs}"
 echo "  webhooks: ${webhooks}"
+echo "  inbound webhooks: ${inbound_webhooks}"
 echo "  outbox: ${outbox}"
 echo "  gRPC: ${grpc}"
 echo "  authentication: ${authn}"
+echo "  outbound HTTP: ${outbound_http}"
 echo "  object storage: ${object_storage}"
 echo "  outbound authentication: ${outbound_auth}"
 echo "  messaging: ${messaging}"

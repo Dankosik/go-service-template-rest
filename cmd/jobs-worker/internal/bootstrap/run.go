@@ -15,15 +15,33 @@ import (
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/infra/postgres"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
+
+	// profile:inbound-webhooks-standard:start
+	"github.com/jackc/pgx/v5/pgxpool"
+	// profile:inbound-webhooks-standard:end
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
 	"github.com/riverqueue/river/rivertype"
 	"github.com/riverqueue/rivercontrib/otelriver"
+
+	// profile:inbound-webhooks-standard:start
+	"go.opentelemetry.io/otel/metric"
+	// profile:inbound-webhooks-standard:end
 )
+
+// WorkersRuntime is the builder result: validated workers, cleanup, and an
+// optional post-pool binder.
+type WorkersRuntime struct {
+	Workers *river.Workers
+	Cleanup func(context.Context)
+	// profile:inbound-webhooks-standard:start
+	Bind func(context.Context, *pgxpool.Pool, metric.MeterProvider) error
+	// profile:inbound-webhooks-standard:end
+}
 
 // WorkersBuilder is binary-local business composition. Derived services add
 // their typed River workers here; the reusable binary has no default job kind.
-type WorkersBuilder func(context.Context, config.Config, *slog.Logger) (*river.Workers, func(context.Context), error)
+type WorkersBuilder func(context.Context, config.Config, *slog.Logger) (WorkersRuntime, error)
 
 func Run(args []string, buildWorkers WorkersBuilder) error {
 	signalCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -66,18 +84,18 @@ func run(signalCtx context.Context, args []string, buildWorkers WorkersBuilder) 
 		}
 	}()
 
-	workers, cleanup, err := buildWorkers(startupCtx, cfg, log)
+	runtime, err := buildWorkers(startupCtx, cfg, log)
 	if err != nil {
 		return fmt.Errorf("build jobs workers: %w", err)
 	}
-	if workers == nil {
+	if runtime.Workers == nil {
 		return errors.New("jobs workers are not registered")
 	}
 	defer func() {
-		if cleanup != nil && cleanupSafe {
+		if runtime.Cleanup != nil && cleanupSafe {
 			cleanupCtx, cancel := runtimeopts.TeardownStage(signalCtx, cleanupDeadline, telemetryClose)
 			defer cancel()
-			cleanup(cleanupCtx)
+			runtime.Cleanup(cleanupCtx)
 		}
 	}()
 
@@ -90,6 +108,13 @@ func run(signalCtx context.Context, args []string, buildWorkers WorkersBuilder) 
 			pool.Close()
 		}
 	}()
+	// profile:inbound-webhooks-standard:start
+	if runtime.Bind != nil {
+		if err := runtime.Bind(startupCtx, pool, metrics.MeterProvider()); err != nil {
+			return fmt.Errorf("bind jobs workers: %w", err)
+		}
+	}
+	// profile:inbound-webhooks-standard:end
 
 	client, err := river.NewClient(riverpgxv5.New(pool), &river.Config{
 		CancelledJobRetentionPeriod: 24 * time.Hour,
@@ -106,7 +131,7 @@ func run(signalCtx context.Context, args []string, buildWorkers WorkersBuilder) 
 		Queues: map[string]river.QueueConfig{
 			river.QueueDefault: {MaxWorkers: cfg.Jobs.MaxWorkers},
 		},
-		Workers: workers,
+		Workers: runtime.Workers,
 	})
 	if err != nil {
 		return fmt.Errorf("initialize River client: %w", err)

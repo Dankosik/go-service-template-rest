@@ -249,6 +249,19 @@ type DeprecatedWebhookTombstone struct {
 	CreatedAt             pgtype.Timestamptz
 }
 
+type InboundWebhookReceipt struct {
+	ReceiptID      string
+	EndpointID     string
+	DeliveryID     string
+	BodySha256     []byte
+	SignedAt       pgtype.Timestamptz
+	ReceivedAt     pgtype.Timestamptz
+	Payload        []byte
+	Outcome        string
+	TerminalReason *string
+	TerminalAt     pgtype.Timestamptz
+}
+
 type OutboxCommitReceipt struct {
 	EventID             string
 	FingerprintVersion  int16

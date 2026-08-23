@@ -35,10 +35,10 @@ var buildWorkers bootstrap.WorkersBuilder = func(
 	context.Context,
 	config.Config,
 	*slog.Logger,
-) (*river.Workers, func(context.Context), error) {
+) (bootstrap.WorkersRuntime, error) {
 	workers := river.NewWorkers()
 	if err := river.AddWorkerSafely(workers, &jobsWorkerTestWorker{}); err != nil {
-		return nil, nil, err
+		return bootstrap.WorkersRuntime{}, err
 	}
-	return workers, nil, nil
+	return bootstrap.WorkersRuntime{Workers: workers}, nil
 }

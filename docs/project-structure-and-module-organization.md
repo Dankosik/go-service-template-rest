@@ -92,6 +92,13 @@ predicate is shared with fixed-target HTTP and owns no URL, resolver, dialer,
 HTTP, or config policy.
 <!-- profile:webhooks-durable:end -->
 
+<!-- profile:inbound-webhooks-standard:start -->
+`internal/inboundwebhook/` and `internal/infra/postgresinboundwebhook/` form the
+removable inbound receipt pack. The capability owns verification, receipt
+deduplication, and durable dispatch; feature adapters own provider JSON and
+idempotent effects.
+<!-- profile:inbound-webhooks-standard:end -->
+
 <!-- profile:object-storage:start -->
 `internal/objectstorage/` owns the provider-neutral port and
 `internal/infra/s3/` one fixed-authority S3-compatible adapter.

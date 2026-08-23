@@ -22,6 +22,12 @@ the adapter signs one bounded public-HTTPS request and maps the outcome into
 River's completion/retry contract.
 <!-- profile:webhooks-durable:end -->
 
+<!-- profile:inbound-webhooks-standard:start -->
+Inbound webhooks insert one receipt and one River job in the same PostgreSQL
+transaction. The jobs worker reloads the verified receipt by internal ID,
+invokes one typed binding, and writes the terminal outcome on the receipt.
+<!-- profile:inbound-webhooks-standard:end -->
+
 <!-- profile:messaging-nats-jetstream:start -->
 NATS JetStream uses a separate `cmd/worker` root and concrete
 `internal/infra/natsjs` adapter behind transport-neutral typed events. Business

@@ -38,10 +38,16 @@ func IsolateEnv(tb testing.TB) {
 		}
 	}
 	tb.Setenv("APP__APP__ENV", "local")
-	// profile:authn-oidc-jwt:start
+	// profile:authn-bearer:start
 	tb.Setenv("APP__AUTHN__ISSUER", "https://issuer.example.com")
 	tb.Setenv("APP__AUTHN__AUDIENCE", "https://api.example.com")
-	// profile:authn-oidc-jwt:end
+	// profile:authn-oidc-introspection:start
+	tb.Setenv("APP__AUTHN__INTROSPECTION_ENDPOINT", "https://idp.example.com/oauth/introspect")
+	tb.Setenv("APP__AUTHN__INTROSPECTION_TARGET_CLASS", "external-https")
+	tb.Setenv("APP__AUTHN__INTROSPECTION_CLIENT_ID", "rs-client")
+	tb.Setenv("APP__AUTHN__INTROSPECTION_CLIENT_SECRET", "rs-secret")
+	// profile:authn-oidc-introspection:end
+	// profile:authn-bearer:end
 	// profile:outbound-auth-oauth2-client-credentials:start
 	// #nosec G101 -- Deterministic test-only placeholders are installed only through testing.TB.Setenv.
 	for key, value := range map[string]string{

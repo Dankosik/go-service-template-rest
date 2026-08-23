@@ -21,9 +21,9 @@ const (
 	CodeMethodNotAllowed      Code = "method_not_allowed"
 	CodeAlreadyExists         Code = "already_exists"
 	CodeRequestEntityTooLarge Code = "request_entity_too_large"
-	// profile:authn-oidc-jwt:start
+	// profile:authn-bearer:start
 	CodeRequestHeaderFieldsTooLarge Code = "request_header_fields_too_large"
-	// profile:authn-oidc-jwt:end
+	// profile:authn-bearer:end
 	CodeUnprocessableContent Code = "unprocessable_content"
 	CodeTooManyRequests      Code = "too_many_requests"
 	// profile:http-idempotency-postgres:start
@@ -55,9 +55,9 @@ func AllCodes() []Code {
 		CodeMethodNotAllowed,
 		CodeAlreadyExists,
 		CodeRequestEntityTooLarge,
-		// profile:authn-oidc-jwt:start
+		// profile:authn-bearer:start
 		CodeRequestHeaderFieldsTooLarge,
-		// profile:authn-oidc-jwt:end
+		// profile:authn-bearer:end
 		CodeUnprocessableContent,
 		CodeTooManyRequests,
 		// profile:http-idempotency-postgres:start

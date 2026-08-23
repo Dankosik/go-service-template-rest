@@ -11,10 +11,13 @@ import (
 
 	"github.com/MicahParks/jwkset"
 	"github.com/MicahParks/keyfunc/v3"
+	"github.com/example/go-service-template-rest/internal/infra/bearerauthn"
 	"github.com/golang-jwt/jwt/v5"
 	"go.opentelemetry.io/otel/metric"
 	"golang.org/x/time/rate"
 )
+
+var _ bearerauthn.Verifier = (*Verifier)(nil)
 
 type contextKey uint8
 
@@ -24,13 +27,12 @@ type refreshFailure struct {
 	failed atomic.Bool
 }
 
-// Verifier owns one issuer's parser, cached JWKS resolver, transport adapters,
-// and refresh lifetime.
+// Verifier owns one issuer's parser, cached JWKS resolver, and refresh lifetime.
 type Verifier struct {
 	policy    Policy
 	parser    *jwt.Parser
 	keyFunc   func(context.Context) jwt.Keyfunc
-	metrics   authnMetrics
+	metrics   jwksMetrics
 	cancel    context.CancelFunc
 	closeIdle func()
 	closeOnce sync.Once
@@ -56,7 +58,7 @@ func New(
 		return nil, err
 	}
 	processCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
-	metrics := newAuthnMetrics(meterProvider)
+	metrics := newJWKSMetrics(meterProvider)
 	returnFirstError := false
 	keys, err := keyfunc.NewDefaultOverrideCtx(processCtx, []string{jwksURI}, keyfunc.Override{
 		Client:                    jwksClient,
@@ -82,7 +84,7 @@ func New(
 	if err != nil {
 		cancel()
 		closeIdle()
-		return nil, failure(KindUnavailable)
+		return nil, failure(bearerauthn.KindUnavailable)
 	}
 	signingKeys, err := keyfunc.New(keyfunc.Options{
 		Ctx:          processCtx,
@@ -92,7 +94,7 @@ func New(
 	if err != nil {
 		cancel()
 		closeIdle()
-		return nil, failure(KindUnavailable)
+		return nil, failure(bearerauthn.KindUnavailable)
 	}
 	return newVerifier(policy, signingKeys.KeyfuncCtx, time.Now, metrics, cancel, closeIdle), nil
 }
@@ -101,7 +103,7 @@ func newVerifier(
 	policy Policy,
 	keyFunc func(context.Context) jwt.Keyfunc,
 	now func() time.Time,
-	metrics authnMetrics,
+	metrics jwksMetrics,
 	cancel context.CancelFunc,
 	closeIdle func(),
 ) *Verifier {
@@ -121,7 +123,7 @@ func newVerifier(
 			jwt.WithIssuer(policy.issuer),
 			jwt.WithAudience(policy.audience),
 			jwt.WithExpirationRequired(),
-			jwt.WithLeeway(ClockSkew),
+			jwt.WithLeeway(bearerauthn.ClockSkew),
 			jwt.WithStrictDecoding(),
 			jwt.WithJSONNumber(),
 			jwt.WithTimeFunc(now),
@@ -141,58 +143,37 @@ func (v *Verifier) Close() {
 	})
 }
 
-type transport string
-
-const (
-	transportHTTP transport = "http"
-	transportGRPC transport = "grpc"
-)
-
-func (v *Verifier) verifyCredential(ctx context.Context, values []string, carrier transport) (parsedToken, error) {
-	compact, err := bearerToken(values)
-	if err != nil {
-		v.metrics.recordVerification(ctx, carrier, err)
-		return parsedToken{}, err
-	}
-	return v.verifyToken(ctx, compact, carrier)
-}
-
-func (v *Verifier) recordRejection(ctx context.Context, carrier transport, err error) error {
-	v.metrics.recordVerification(ctx, carrier, err)
-	return err
-}
-
-func (v *Verifier) verifyToken(ctx context.Context, compact string, carrier transport) (parsed parsedToken, result error) {
-	defer func() { v.metrics.recordVerification(ctx, carrier, result) }()
-	if len(compact) > MaxTokenBytes {
-		return parsedToken{}, failure(KindOversize)
+// Verify implements bearerauthn.Verifier for one already-parsed compact JWT.
+func (v *Verifier) Verify(ctx context.Context, compact string) (bearerauthn.Result, error) {
+	if len(compact) > bearerauthn.MaxTokenBytes {
+		return bearerauthn.Result{}, failure(bearerauthn.KindOversize)
 	}
 	refresh := new(refreshFailure)
 	verifyCtx := context.WithValue(ctx, refreshFailureKey, refresh)
 	claims := new(accessTokenClaims)
 	token, err := v.parser.ParseWithClaims(compact, claims, func(token *jwt.Token) (any, error) {
 		if v.policy.strictRFC9068() && !validAccessTokenType(token.Header["typ"]) {
-			return nil, failure(KindInvalid)
+			return nil, failure(bearerauthn.KindInvalid)
 		}
 		if v.keyFunc == nil {
-			return nil, failure(KindUnavailable)
+			return nil, failure(bearerauthn.KindUnavailable)
 		}
 		return v.keyFunc(verifyCtx)(token)
 	})
 	if err != nil || token == nil || !token.Valid {
 		if ctxErr := ctx.Err(); ctxErr != nil {
-			return parsedToken{}, fmt.Errorf("verify access token: %w", ctxErr)
+			return bearerauthn.Result{}, fmt.Errorf("verify access token: %w", ctxErr)
 		}
 		if refresh.failed.Load() {
-			return parsedToken{}, failure(KindUnavailable)
+			return bearerauthn.Result{}, failure(bearerauthn.KindUnavailable)
 		}
-		return parsedToken{}, failure(KindInvalid)
+		return bearerauthn.Result{}, failure(bearerauthn.KindInvalid)
 	}
 	principal, err := principalFromClaims(claims, v.policy.strictRFC9068())
 	if err != nil || claims.ExpiresAt == nil {
-		return parsedToken{}, failure(KindInvalid)
+		return bearerauthn.Result{}, failure(bearerauthn.KindInvalid)
 	}
-	return parsedToken{principal: principal, expiresAt: claims.ExpiresAt.Time}, nil
+	return bearerauthn.Result{Principal: principal, ExpiresAt: claims.ExpiresAt.Time}, nil
 }
 
 var _ http.RoundTripper = jwksRoundTripper{}

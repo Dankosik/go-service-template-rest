@@ -7,6 +7,9 @@ import (
 	"reflect"
 
 	"github.com/example/go-service-template-rest/internal/health"
+	// profile:inbound-webhooks-standard:start
+	"github.com/example/go-service-template-rest/internal/inboundwebhook"
+	// profile:inbound-webhooks-standard:end
 	"github.com/example/go-service-template-rest/internal/openapi"
 )
 
@@ -23,6 +26,9 @@ type Handlers struct {
 	// It is the seam a service composes through: adding an operation means
 	// implementing it here, not editing this package.
 	API openapi.StrictServerInterface
+	// profile:inbound-webhooks-standard:start
+	InboundWebhook inboundwebhook.Receiver
+	// profile:inbound-webhooks-standard:end
 }
 
 type strictHandlers struct {

@@ -37,9 +37,9 @@ func defaultValues() map[string]any {
 
 	maps.Copy(values, httpDefaults())
 	maps.Copy(values, observabilityDefaults())
-	// profile:authn-oidc-jwt:start
+	// profile:authn-bearer:start
 	maps.Copy(values, authnDefaults())
-	// profile:authn-oidc-jwt:end
+	// profile:authn-bearer:end
 	// profile:outbound-auth-oauth2-client-credentials:start
 	maps.Copy(values, outboundAuthDefaults())
 	// profile:outbound-auth-oauth2-client-credentials:end
@@ -58,6 +58,9 @@ func defaultValues() map[string]any {
 	// profile:webhooks-durable:start
 	maps.Copy(values, webhooksDefaults())
 	// profile:webhooks-durable:end
+	// profile:inbound-webhooks-standard:start
+	maps.Copy(values, inboundWebhooksDefaults())
+	// profile:inbound-webhooks-standard:end
 	// profile:object-storage:start
 	maps.Copy(values, objectStorageDefaults())
 	// profile:object-storage:end
