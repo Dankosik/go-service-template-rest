@@ -5,12 +5,19 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+
+	// profile:grpc:start
 	"net/http"
 	"net/http/httptest"
+
+	// profile:grpc:end
 	"slices"
 	"sync/atomic"
 	"testing"
+
+	// profile:grpc:start
 	"time"
+	// profile:grpc:end
 
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
@@ -338,7 +345,10 @@ func (v *independentAdmissionVerifier) Verify(ctx context.Context, _ string) (be
 			return bearerauthn.Result{}, fmt.Errorf("wait for test barrier: %w", ctx.Err())
 		}
 	}
-	return bearerauthn.Result{Principal: reqctx.Principal{Subject: "bootstrap-test-subject"}}, nil
+	return bearerauthn.Result{
+		Principal: reqctx.Principal{Subject: "bootstrap-test-subject"},
+		ExpiresAt: time.Now().Add(time.Hour),
+	}, nil
 }
 
 func (v *independentAdmissionVerifier) Close() {}
