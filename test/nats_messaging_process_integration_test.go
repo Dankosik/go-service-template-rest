@@ -47,9 +47,8 @@ func TestNATSServiceProducerOnlyProcess(t *testing.T) {
 			"APP__HTTP__ADDR="+httpAddress,
 			"APP__HTTP__READINESS_PROPAGATION_DELAY=0s",
 			"APP__HEALTH__REFRESH_INTERVAL=1s",
-			// A high cached-health threshold proves that messaging's immediate
-			// readiness gate, rather than a completed background probe, returns 503.
-			"APP__HEALTH__FAILURE_THRESHOLD=100",
+			// Messaging follows the same cached threshold as every other dependency.
+			"APP__HEALTH__FAILURE_THRESHOLD=3",
 			"APP__OBSERVABILITY__METRICS__ADDR=",
 			"APP__MESSAGING__URLS="+f.url,
 			"APP__MESSAGING__ALLOW_PLAINTEXT=true",
