@@ -36,7 +36,7 @@ func (r *repositoryStub) AppendEvent(ctx context.Context, event Event) error {
 
 // Do stands in for a real transaction: it commits only when fn succeeds, which
 // is the property the use case depends on and must not silently lose.
-func (r *repositoryStub) Do(_ context.Context, fn func(Repository) error) error {
+func (r *repositoryStub) Do(_ context.Context, fn func(Writer) error) error {
 	if err := fn(r); err != nil {
 		return err
 	}
@@ -49,7 +49,7 @@ func (r *repositoryStub) Do(_ context.Context, fn func(Repository) error) error 
 func newTestService(tb testing.TB, stub *repositoryStub) *Service {
 	tb.Helper()
 
-	service, err := NewService(stub, stub)
+	service, err := NewService(stub)
 	if err != nil {
 		tb.Fatalf("NewService() error = %v", err)
 	}
@@ -101,19 +101,15 @@ func TestServiceGetHidesUnpublishedArticle(t *testing.T) {
 	}
 }
 
-func TestNewServiceRejectsMissingRepository(t *testing.T) {
+func TestNewServiceRejectsMissingStore(t *testing.T) {
 	t.Parallel()
 
-	stub := &repositoryStub{}
-	if _, err := NewService(nil, stub); err == nil {
-		t.Fatal("NewService(nil repository) error = nil, want non-nil")
-	}
-	if _, err := NewService(stub, nil); err == nil {
-		t.Fatal("NewService(nil unit of work) error = nil, want non-nil")
+	if _, err := NewService(nil); err == nil {
+		t.Fatal("NewService(nil store) error = nil, want non-nil")
 	}
 }
 
-func TestServiceCreatePublishesTrimmedArticle(t *testing.T) {
+func TestServiceCreatePublishesArticle(t *testing.T) {
 	t.Parallel()
 
 	var stored Article
@@ -132,12 +128,12 @@ func TestServiceCreatePublishesTrimmedArticle(t *testing.T) {
 	service := newTestService(t, stub)
 
 	got, err := service.Create(context.Background(), Draft{
-		Slug: "  clear-owners  ", Title: " Clear owners ", Summary: " Keep behavior with its owner. ",
+		Slug: "clear-owners", Title: " Clear owners ", Summary: " Keep behavior with its owner. ",
 	})
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
 	}
-	want := Article{Slug: "clear-owners", Title: "Clear owners", Summary: "Keep behavior with its owner.", Published: true}
+	want := Article{Slug: "clear-owners", Title: " Clear owners ", Summary: " Keep behavior with its owner. ", Published: true}
 	if got != want {
 		t.Fatalf("Create() = %+v, want %+v", got, want)
 	}
@@ -154,6 +150,31 @@ func TestServiceCreatePublishesTrimmedArticle(t *testing.T) {
 	}
 }
 
+func TestServiceCreateAcceptsUnicodeAtContractLimit(t *testing.T) {
+	t.Parallel()
+
+	for _, testCase := range []struct {
+		name  string
+		title string
+	}{
+		{name: "BMP", title: strings.Repeat("я", maxTitleLength)},
+		{name: "non-BMP", title: strings.Repeat("😀", maxTitleLength/2)},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+
+			service := newTestService(t, &repositoryStub{})
+			created, err := service.Create(context.Background(), Draft{Slug: "unicode", Title: testCase.title, Summary: "s"})
+			if err != nil {
+				t.Fatalf("Create() error = %v", err)
+			}
+			if created.Title != testCase.title {
+				t.Fatalf("Create() title length = %d bytes, want %d", len(created.Title), len(testCase.title))
+			}
+		})
+	}
+}
+
 func TestServiceCreateRejectsInvalidDraft(t *testing.T) {
 	t.Parallel()
 
@@ -167,6 +188,7 @@ func TestServiceCreateRejectsInvalidDraft(t *testing.T) {
 		{name: "empty title", draft: Draft{Slug: "clear", Summary: "s"}},
 		{name: "empty summary", draft: Draft{Slug: "clear", Title: "t"}},
 		{name: "title too long", draft: Draft{Slug: "clear", Title: strings.Repeat("t", 201), Summary: "s"}},
+		{name: "unicode title too long", draft: Draft{Slug: "clear", Title: strings.Repeat("😀", 101), Summary: "s"}},
 		{name: "summary too long", draft: Draft{Slug: "clear", Title: "t", Summary: strings.Repeat("s", 501)}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

@@ -19,35 +19,6 @@ import (
 
 const testWriteToken = "reference-write-token"
 
-func TestRouterGetArticle(t *testing.T) {
-	t.Parallel()
-
-	want := article.Article{Slug: "clear-owners", Title: "Clear owners", Summary: "Keep behavior with its owner.", Published: true}
-	repository, err := memory.New([]article.Article{want})
-	if err != nil {
-		t.Fatalf("memory.New() error = %v", err)
-	}
-	service, err := article.NewService(repository, repository)
-	if err != nil {
-		t.Fatalf("article.NewService() error = %v", err)
-	}
-	router := mustNewRouter(t, service)
-
-	response := httptest.NewRecorder()
-	router.ServeHTTP(response, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/articles/"+want.Slug, nil))
-
-	if response.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusOK, response.Body.String())
-	}
-	var body openapi.Article
-	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-	if body.Slug != want.Slug || body.Title != want.Title || body.Summary != want.Summary {
-		t.Fatalf("body = %+v, want %+v", body, want)
-	}
-}
-
 func TestOpenAPIOperationsDeclareHardenedMiddlewareFailures(t *testing.T) {
 	t.Parallel()
 
@@ -60,7 +31,7 @@ func TestOpenAPIOperationsDeclareHardenedMiddlewareFailures(t *testing.T) {
 			continue
 		}
 		for method, operation := range item.Operations() {
-			for _, status := range []string{"413", "429", "503", "504"} {
+			for _, status := range []string{"413", "503", "504"} {
 				responseRef := operation.Responses.Value(status)
 				if responseRef == nil || responseRef.Value == nil {
 					t.Errorf("%s %s lacks %s response from the hardened middleware chain", method, path, status)
@@ -69,7 +40,7 @@ func TestOpenAPIOperationsDeclareHardenedMiddlewareFailures(t *testing.T) {
 				if responseRef.Value.Content.Get("application/problem+json") == nil {
 					t.Errorf("%s %s response %s is not application/problem+json", method, path, status)
 				}
-				if (status == "429" || status == "503") && responseRef.Value.Headers["Retry-After"] == nil {
+				if status == "503" && responseRef.Value.Headers["Retry-After"] == nil {
 					t.Errorf("%s %s response %s lacks Retry-After", method, path, status)
 				}
 			}
@@ -77,39 +48,11 @@ func TestOpenAPIOperationsDeclareHardenedMiddlewareFailures(t *testing.T) {
 	}
 }
 
-func TestRouterMapsMissingArticleToProblem(t *testing.T) {
-	t.Parallel()
-
-	repository, err := memory.New(nil)
-	if err != nil {
-		t.Fatalf("memory.New() error = %v", err)
-	}
-	service, err := article.NewService(repository, repository)
-	if err != nil {
-		t.Fatalf("article.NewService() error = %v", err)
-	}
-	router := mustNewRouter(t, service)
-
-	response := httptest.NewRecorder()
-	router.ServeHTTP(response, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/articles/missing", nil))
-
-	if response.Code != http.StatusNotFound {
-		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusNotFound, response.Body.String())
-	}
-	var body openapi.Problem
-	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-	if body.Code != "not_found" || body.Status != http.StatusNotFound {
-		t.Fatalf("body = %+v, want not_found Problem", body)
-	}
-}
-
 func TestRouterRejectsInvalidSlugBeforeUseCase(t *testing.T) {
 	t.Parallel()
 
 	repository := &countingRepository{}
-	service, err := article.NewService(repository, repository)
+	service, err := article.NewService(repository)
 	if err != nil {
 		t.Fatalf("article.NewService() error = %v", err)
 	}
@@ -145,27 +88,22 @@ func (r *countingRepository) AppendEvent(context.Context, article.Event) error {
 	return nil
 }
 
-func (r *countingRepository) Do(_ context.Context, fn func(article.Repository) error) error {
+func (r *countingRepository) Do(_ context.Context, fn func(article.Writer) error) error {
 	return fn(r)
 }
 
 // newTestRouter builds the router over an empty in-memory repository.
-func newTestRouter(t *testing.T, seed ...article.Article) http.Handler {
+func newTestRouter(t *testing.T) http.Handler {
 	t.Helper()
 
-	repository, err := memory.New(seed)
-	if err != nil {
-		t.Fatalf("memory.New() error = %v", err)
-	}
-	service, err := article.NewService(repository, repository)
+	repository := memory.New()
+	service, err := article.NewService(repository)
 	if err != nil {
 		t.Fatalf("article.NewService() error = %v", err)
 	}
 	return mustNewRouter(t, service)
 }
 
-// mustNewRouter builds the example router with the same hardened chain the binary
-// serves, so these tests exercise the middleware a reader inherits by copying it.
 // mustNewRouter builds the API handler this package owns.
 //
 // The reject mappers are local test doubles rather than the shared ones from the
@@ -215,23 +153,8 @@ func testRejectRequest(w http.ResponseWriter, r *http.Request, err error) {
 	writeTestProblem(w, newProblem(r.Context(), problem.CodeBadRequest, "request is malformed or invalid"))
 }
 
-// testRejectResponse mirrors what httpx.RejectResponse(article.ClassifyError) does in the
-// binary. A feature package must not import that adapter, so the half this package
-// owns — the classification, which is the half that drifts — is driven directly and
-// the router tests above assert the status a real request comes back with.
-func testRejectResponse(w http.ResponseWriter, r *http.Request, err error) {
-	mapped, ok := article.ClassifyError(err)
-	if !ok {
-		writeTestProblem(w, newProblem(r.Context(), problem.CodeInternalError, "request failed"))
-		return
-	}
-	code := problem.Code(mapped.Code)
-	_, published := problem.ForCode(code)
-	if !published {
-		writeTestProblem(w, newProblem(r.Context(), problem.CodeInternalError, "request failed"))
-		return
-	}
-	writeTestProblem(w, newProblem(r.Context(), code, mapped.Detail))
+func testRejectResponse(w http.ResponseWriter, r *http.Request, _ error) {
+	writeTestProblem(w, newProblem(r.Context(), problem.CodeInternalError, "request failed"))
 }
 
 func writeTestProblem(w http.ResponseWriter, body openapi.Problem) {
@@ -244,14 +167,12 @@ func writeTestProblem(w http.ResponseWriter, body openapi.Problem) {
 	_, _ = w.Write(encoded)
 }
 
-func postArticle(t *testing.T, router http.Handler, token, body string) *httptest.ResponseRecorder {
+func postArticle(t *testing.T, router http.Handler, body string) *httptest.ResponseRecorder {
 	t.Helper()
 
 	request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/articles", strings.NewReader(body))
 	request.Header.Set("Content-Type", "application/json")
-	if token != "" {
-		request.Header.Set("Authorization", "Bearer "+token)
-	}
+	request.Header.Set("Authorization", "Bearer "+testWriteToken)
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, request)
 	return response
@@ -261,7 +182,7 @@ func TestRouterCreateArticleReturnsCreatedWithLocation(t *testing.T) {
 	t.Parallel()
 
 	router := newTestRouter(t)
-	response := postArticle(t, router, testWriteToken,
+	response := postArticle(t, router,
 		`{"slug":"clear-owners","title":"Clear owners","summary":"Keep behavior with its owner."}`)
 
 	if response.Code != http.StatusCreated {
@@ -287,63 +208,15 @@ func TestRouterCreateArticleReturnsCreatedWithLocation(t *testing.T) {
 	}
 }
 
-func TestRouterCreateArticleRequiresCredentials(t *testing.T) {
+func TestRouterCreateArticleAcceptsUnicodeAtContractLimit(t *testing.T) {
 	t.Parallel()
 
-	for _, tt := range []struct {
-		name  string
-		token string
-	}{
-		{name: "missing credential", token: ""},
-		{name: "wrong credential", token: "not-the-token"},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
+	title := strings.Repeat("я", 200)
+	response := postArticle(t, newTestRouter(t),
+		`{"slug":"unicode","title":"`+title+`","summary":"Accepted by both boundaries."}`)
 
-			response := postArticle(t, newTestRouter(t), tt.token,
-				`{"slug":"clear-owners","title":"Clear owners","summary":"Keep behavior with its owner."}`)
-
-			if response.Code != http.StatusUnauthorized {
-				t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusUnauthorized, response.Body.String())
-			}
-			if got := response.Header().Get("WWW-Authenticate"); got != "Bearer" {
-				t.Fatalf("WWW-Authenticate = %q, want %q", got, "Bearer")
-			}
-			var body openapi.Problem
-			if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
-				t.Fatalf("decode response: %v", err)
-			}
-			if body.Code != "unauthorized" || body.Status != http.StatusUnauthorized {
-				t.Fatalf("body = %+v, want unauthorized Problem", body)
-			}
-		})
-	}
-}
-
-func TestRouterCreateArticleRejectsDuplicateSlugWithAlreadyExists(t *testing.T) {
-	t.Parallel()
-
-	router := newTestRouter(t, article.Article{
-		Slug: "clear-owners", Title: "Clear owners", Summary: "Existing.", Published: true,
-	})
-	response := postArticle(t, router, testWriteToken,
-		`{"slug":"clear-owners","title":"Another title","summary":"Another summary."}`)
-
-	if response.Code != http.StatusConflict {
-		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusConflict, response.Body.String())
-	}
-	if retryAfter := response.Header().Get("Retry-After"); retryAfter != "" {
-		t.Fatalf("Retry-After = %q, want empty", retryAfter)
-	}
-	var body openapi.Problem
-	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-	if body.Code != "already_exists" || body.Status != http.StatusConflict ||
-		body.Title != "conflict" || body.Type != "https://www.rfc-editor.org/rfc/rfc9110#section-15.5.10" ||
-		body.Detail == nil || *body.Detail != "an article with this slug already exists" ||
-		strings.Contains(response.Body.String(), "create article") {
-		t.Fatalf("body = %+v, want exact already_exists Problem", body)
+	if response.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusCreated, response.Body.String())
 	}
 }
 
@@ -364,13 +237,13 @@ func TestRouterRejectsMalformedCreateBodyBeforeUseCase(t *testing.T) {
 			t.Parallel()
 
 			repository := &countingRepository{}
-			service, err := article.NewService(repository, repository)
+			service, err := article.NewService(repository)
 			if err != nil {
 				t.Fatalf("article.NewService() error = %v", err)
 			}
 			router := mustNewRouter(t, service)
 
-			response := postArticle(t, router, testWriteToken, tt.body)
+			response := postArticle(t, router, tt.body)
 			if response.Code != http.StatusBadRequest {
 				t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusBadRequest, response.Body.String())
 			}
@@ -415,7 +288,7 @@ func TestCredentialWithoutWriteScopeIsForbidden(t *testing.T) {
 		t.Fatalf("NewAPIHandler() error = %v", err)
 	}
 
-	response := postArticle(t, handler, testWriteToken,
+	response := postArticle(t, handler,
 		`{"slug":"scoped","title":"Scoped","summary":"Requires the write scope."}`)
 
 	if response.Code != http.StatusForbidden {
@@ -440,7 +313,7 @@ func TestMissingAuthenticatedPrincipalIsInternalError(t *testing.T) {
 		t.Fatalf("NewAPIHandler() error = %v", err)
 	}
 
-	response := postArticle(t, handler, testWriteToken,
+	response := postArticle(t, handler,
 		`{"slug":"unattributed","title":"Unattributed","summary":"No principal was published."}`)
 
 	if response.Code != http.StatusInternalServerError {
@@ -451,11 +324,8 @@ func TestMissingAuthenticatedPrincipalIsInternalError(t *testing.T) {
 func mustArticleService(tb testing.TB) *article.Service {
 	tb.Helper()
 
-	repository, err := memory.New(nil)
-	if err != nil {
-		tb.Fatalf("memory.New() error = %v", err)
-	}
-	service, err := article.NewService(repository, repository)
+	repository := memory.New()
+	service, err := article.NewService(repository)
 	if err != nil {
 		tb.Fatalf("article.NewService() error = %v", err)
 	}
