@@ -6,8 +6,6 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-
-	"github.com/example/go-service-template-rest/internal/infra/telemetry/telemetrytest"
 )
 
 // TestMetricsHandlerExposesProcessCollectorOnly pins the split between the two
@@ -67,80 +65,4 @@ func collectMetricsText(t *testing.T, metrics *Metrics) string {
 	}
 
 	return resp.Body.String()
-}
-
-// TestServerLoadIsScrapable pins the admission signals the generic protocol
-// instrumentation cannot distinguish from other failures.
-func TestServerLoadIsScrapable(t *testing.T) {
-	telemetrytest.RestoreGlobals(t)
-	telemetrytest.ClearAmbientExporterEnv(t)
-
-	metrics := New()
-	result, err := SetupMetrics(context.Background(), metrics, MetricsConfig{Resource: ResourceConfig{ServiceName: "svc"}})
-	if err != nil {
-		t.Fatalf("SetupMetrics() error = %v", err)
-	}
-	t.Cleanup(func() {
-		if shutdownErr := result.Shutdown(context.Background()); shutdownErr != nil {
-			t.Errorf("shutdown meter provider: %v", shutdownErr)
-		}
-	})
-
-	load := metrics.ServerLoad()
-	release := load.Admitted(context.Background())
-	load.Shed(context.Background())
-
-	if got := scrapedSeriesValue(t, collectMetricsText(t, metrics), "http_server_active_requests"); got != "1" {
-		t.Fatalf("http_server_active_requests = %s, want 1 while a request is admitted", got)
-	}
-	if got := scrapedSeriesValue(t, collectMetricsText(t, metrics), "http_server_shed_requests_total"); got != "1" {
-		t.Fatalf("http_server_shed_requests_total = %s, want 1", got)
-	}
-
-	release()
-	if got := scrapedSeriesValue(t, collectMetricsText(t, metrics), "http_server_active_requests"); got != "0" {
-		t.Fatalf("http_server_active_requests = %s, want 0 after release", got)
-	}
-
-	metrics.GRPCServerLoad().HealthShed(context.Background())
-	if got := scrapedSeriesValue(t, collectMetricsText(t, metrics), "rpc_server_health_shed_requests_total"); got != "1" {
-		t.Fatalf("rpc_server_health_shed_requests_total = %s, want 1", got)
-	}
-}
-
-// scrapedSeriesValue returns the value of the first sample whose metric name
-// matches, so an assertion does not have to restate the scope labels the
-// exporter attaches.
-func scrapedSeriesValue(t *testing.T, scraped, name string) string {
-	t.Helper()
-
-	for line := range strings.Lines(scraped) {
-		line = strings.TrimSpace(line)
-		if !strings.HasPrefix(line, name+"{") && !strings.HasPrefix(line, name+" ") {
-			continue
-		}
-		fields := strings.Fields(line)
-		if len(fields) < 2 {
-			continue
-		}
-		return fields[len(fields)-1]
-	}
-	t.Fatalf("scrape has no sample named %q:\n%s", name, scraped)
-	return ""
-}
-
-// TestServerLoadToleratesNoopProvider keeps a chain built before telemetry setup
-// — the reference example is one — from panicking on a nil instrument.
-func TestServerLoadToleratesNoopProvider(t *testing.T) {
-	t.Parallel()
-
-	load := New().ServerLoad()
-	load.Shed(context.Background())
-	load.HealthShed(context.Background())
-	load.Admitted(context.Background())()
-
-	var zero ServerLoad
-	zero.Shed(context.Background())
-	zero.HealthShed(context.Background())
-	zero.Admitted(context.Background())()
 }

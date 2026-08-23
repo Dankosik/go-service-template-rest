@@ -178,18 +178,18 @@ func TestTraceOTLPEndpointRedactsInvalidAndSecretBearingEndpoints(t *testing.T) 
 		t.Run(tc.name, func(t *testing.T) {
 			telemetrytest.ClearAmbientExporterEnv(t)
 
-			_, err := ResolveTraceExporterEndpoint(TraceExporterConfig{
+			_, err := resolveTraceExporterEndpoint(TraceExporterConfig{
 				OTLPEndpoint: tc.raw,
 			})
 			if err == nil {
-				t.Fatal("ResolveTraceExporterEndpoint() error = nil, want non-nil")
+				t.Fatal("resolveTraceExporterEndpoint() error = nil, want non-nil")
 			}
 			if !strings.Contains(err.Error(), tc.wantErr) {
-				t.Fatalf("ResolveTraceExporterEndpoint() error = %v, want %q", err, tc.wantErr)
+				t.Fatalf("resolveTraceExporterEndpoint() error = %v, want %q", err, tc.wantErr)
 			}
 			for _, leaked := range []string{tc.raw, "secret-value", "Bearer"} {
 				if strings.Contains(err.Error(), leaked) {
-					t.Fatalf("ResolveTraceExporterEndpoint() error = %v, leaked %q", err, leaked)
+					t.Fatalf("resolveTraceExporterEndpoint() error = %v, leaked %q", err, leaked)
 				}
 			}
 		})
@@ -203,11 +203,11 @@ func TestParseOTLPHeaders(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parseOTLPHeaders() error = %v", err)
 	}
-	if headers["authorization"] != "Bearer token" {
-		t.Fatalf("headers[authorization] = %q, want %q", headers["authorization"], "Bearer token")
+	if headers["Authorization"] != "Bearer token" {
+		t.Fatalf("headers[Authorization] = %q, want %q", headers["Authorization"], "Bearer token")
 	}
-	if headers["x-api-key"] != "abc" {
-		t.Fatalf("headers[x-api-key] = %q, want %q", headers["x-api-key"], "abc")
+	if headers["X-Api-Key"] != "abc" {
+		t.Fatalf("headers[X-Api-Key] = %q, want %q", headers["X-Api-Key"], "abc")
 	}
 
 	_, err = parseOTLPHeaders("malformed")
@@ -242,6 +242,14 @@ func TestParseOTLPHeadersMalformedEntriesDoNotLeakRawValues(t *testing.T) {
 		{
 			name: "invalid header key",
 			raw:  "bad key=secret-value",
+		},
+		{
+			name: "invalid header value",
+			raw:  "authorization=Bearer secret-value\r\ninjected=true",
+		},
+		{
+			name: "case-insensitive duplicate",
+			raw:  "Authorization=first,authorization=secret-value",
 		},
 	}
 

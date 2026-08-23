@@ -60,7 +60,7 @@ func TestNATSWorkerComposition(t *testing.T) {
 	producerCfg.AllowPlaintext = true
 	producerCfg.AllowUnauthenticated = true
 	producerCfg.Stream = "EVENTS"
-	producer, err := natsjs.Connect(t.Context(), producerCfg, natsjs.RoleProducer, natsjs.Observability{})
+	producer, err := natsjs.Connect(t.Context(), producerCfg, natsjs.Observability{})
 	if err != nil {
 		t.Fatalf("connect fixture producer: %v", err)
 	}
@@ -141,7 +141,7 @@ func TestNATSWorkerForcedShutdownDoesNotRaceHandlerCleanup(t *testing.T) {
 	producerCfg.AllowPlaintext = true
 	producerCfg.AllowUnauthenticated = true
 	producerCfg.Stream = "EVENTS"
-	producer, err := natsjs.Connect(t.Context(), producerCfg, natsjs.RoleProducer, natsjs.Observability{})
+	producer, err := natsjs.Connect(t.Context(), producerCfg, natsjs.Observability{})
 	if err != nil {
 		t.Fatalf("connect forced-cleanup producer: %v", err)
 	}
@@ -189,7 +189,7 @@ func TestNATSWorkerHandlerPanicIsSupervised(t *testing.T) {
 	producerCfg.AllowPlaintext = true
 	producerCfg.AllowUnauthenticated = true
 	producerCfg.Stream = "EVENTS"
-	producer, err := natsjs.Connect(t.Context(), producerCfg, natsjs.RoleProducer, natsjs.Observability{})
+	producer, err := natsjs.Connect(t.Context(), producerCfg, natsjs.Observability{})
 	if err != nil {
 		t.Fatalf("connect panic fixture producer: %v", err)
 	}

@@ -130,13 +130,13 @@ func TestBootstrapTelemetryStageRejectsAmbientExporterEnv(t *testing.T) {
 	}
 }
 
-func TestReportIgnoredAmbientOTLPEnvWarnsWhenExporterUnconfigured(t *testing.T) {
+func TestReportAdditionalAmbientOTLPEnvWarnsWhenExporterUnconfigured(t *testing.T) {
 	telemetrytest.ClearAmbientExporterEnv(t)
 	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://injected-collector.example:4318")
 	t.Setenv("OTEL_EXPORTER_OTLP_HEADERS", "authorization=Bearer secret-value")
 
 	var buf bytes.Buffer
-	reportIgnoredAmbientOTLPEnv(
+	reportAdditionalAmbientOTLPEnv(
 		context.Background(),
 		slog.New(slog.NewJSONHandler(&buf, nil)),
 		telemetry.TraceExporterEndpoint{},
@@ -144,7 +144,7 @@ func TestReportIgnoredAmbientOTLPEnvWarnsWhenExporterUnconfigured(t *testing.T) 
 	)
 
 	logged := buf.String()
-	if !strings.Contains(logged, "telemetry_ambient_env_ignored") {
+	if !strings.Contains(logged, "telemetry_ambient_env_present") {
 		t.Fatalf("log = %q, want ambient env warning", logged)
 	}
 	for _, want := range []string{
@@ -163,12 +163,12 @@ func TestReportIgnoredAmbientOTLPEnvWarnsWhenExporterUnconfigured(t *testing.T) 
 	}
 }
 
-func TestReportIgnoredAmbientOTLPEnvWarnsOnOverriddenEndpointWhenConfigured(t *testing.T) {
+func TestReportAdditionalAmbientOTLPEnvWarnsOnOverriddenEndpointWhenConfigured(t *testing.T) {
 	telemetrytest.ClearAmbientExporterEnv(t)
 	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://injected-collector.example:4318")
 
 	var buf bytes.Buffer
-	reportIgnoredAmbientOTLPEnv(
+	reportAdditionalAmbientOTLPEnv(
 		context.Background(),
 		slog.New(slog.NewJSONHandler(&buf, nil)),
 		configuredTestTraceEndpoint(),
@@ -177,7 +177,7 @@ func TestReportIgnoredAmbientOTLPEnvWarnsOnOverriddenEndpointWhenConfigured(t *t
 
 	logged := buf.String()
 	for _, want := range []string{
-		"telemetry_ambient_env_ignored",
+		"telemetry_ambient_env_present",
 		"OTEL_EXPORTER_OTLP_ENDPOINT",
 		startupDependencyModeConfigured,
 		"observability.otel.exporter.otlp_endpoint",
@@ -188,13 +188,13 @@ func TestReportIgnoredAmbientOTLPEnvWarnsOnOverriddenEndpointWhenConfigured(t *t
 	}
 }
 
-func TestReportIgnoredAmbientOTLPEnvSkipsTheHonoredEndpointVariable(t *testing.T) {
+func TestReportAdditionalAmbientOTLPEnvSkipsTheHonoredEndpointVariable(t *testing.T) {
 	telemetrytest.ClearAmbientExporterEnv(t)
 	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://injected-collector.example:4318")
 	t.Setenv("OTEL_EXPORTER_OTLP_TIMEOUT", "15000")
 
 	var buf bytes.Buffer
-	reportIgnoredAmbientOTLPEnv(
+	reportAdditionalAmbientOTLPEnv(
 		context.Background(),
 		slog.New(slog.NewJSONHandler(&buf, nil)),
 		telemetry.TraceExporterEndpoint{
@@ -213,13 +213,13 @@ func TestReportIgnoredAmbientOTLPEnvSkipsTheHonoredEndpointVariable(t *testing.T
 	}
 }
 
-func TestReportIgnoredAmbientOTLPEnvSkipsTheHonoredMetricsEndpointVariable(t *testing.T) {
+func TestReportAdditionalAmbientOTLPEnvSkipsTheHonoredMetricsEndpointVariable(t *testing.T) {
 	telemetrytest.ClearAmbientExporterEnv(t)
 	t.Setenv("OTEL_EXPORTER_OTLP_METRICS_ENDPOINT", "http://injected-collector.example:4318/v1/metrics")
 	t.Setenv("OTEL_EXPORTER_OTLP_TIMEOUT", "15000")
 
 	var buf bytes.Buffer
-	reportIgnoredAmbientOTLPEnv(
+	reportAdditionalAmbientOTLPEnv(
 		context.Background(),
 		slog.New(slog.NewJSONHandler(&buf, nil)),
 		telemetry.TraceExporterEndpoint{},
@@ -238,32 +238,34 @@ func TestReportIgnoredAmbientOTLPEnvSkipsTheHonoredMetricsEndpointVariable(t *te
 	}
 }
 
-func TestReportIgnoredAmbientOTLPEnvSilentOnMetricsConflictWhenConfigured(t *testing.T) {
+func TestReportAdditionalAmbientOTLPEnvSilentOnMetricsConflictWhenConfigured(t *testing.T) {
 	telemetrytest.ClearAmbientExporterEnv(t)
 	t.Setenv("OTEL_EXPORTER_OTLP_METRICS_HEADERS", "authorization=Bearer secret-value")
 
-	var buf bytes.Buffer
-	reportIgnoredAmbientOTLPEnv(
-		context.Background(),
-		slog.New(slog.NewJSONHandler(&buf, nil)),
-		telemetry.TraceExporterEndpoint{},
-		telemetry.ExporterEndpoint{
-			URL:    "https://collector.example/v1/metrics",
-			Source: telemetry.MetricExporterConfigKey,
-		},
-	)
+	for _, source := range []string{telemetry.MetricExporterConfigKey, telemetry.TraceExporterConfigKey} {
+		var buf bytes.Buffer
+		reportAdditionalAmbientOTLPEnv(
+			context.Background(),
+			slog.New(slog.NewJSONHandler(&buf, nil)),
+			telemetry.TraceExporterEndpoint{},
+			telemetry.ExporterEndpoint{
+				URL:    "https://collector.example/v1/metrics",
+				Source: source,
+			},
+		)
 
-	if buf.Len() != 0 {
-		t.Fatalf("log = %q, want no warning for a variable that fails metrics exporter setup", buf.String())
+		if buf.Len() != 0 {
+			t.Fatalf("source %q log = %q, want no warning for a variable that fails metrics exporter setup", source, buf.String())
+		}
 	}
 }
 
-func TestReportIgnoredAmbientOTLPEnvSilentOnConflictWhenConfigured(t *testing.T) {
+func TestReportAdditionalAmbientOTLPEnvSilentOnConflictWhenConfigured(t *testing.T) {
 	telemetrytest.ClearAmbientExporterEnv(t)
 	t.Setenv("OTEL_EXPORTER_OTLP_HEADERS", "authorization=Bearer secret-value")
 
 	var buf bytes.Buffer
-	reportIgnoredAmbientOTLPEnv(
+	reportAdditionalAmbientOTLPEnv(
 		context.Background(),
 		slog.New(slog.NewJSONHandler(&buf, nil)),
 		configuredTestTraceEndpoint(),
@@ -275,11 +277,11 @@ func TestReportIgnoredAmbientOTLPEnvSilentOnConflictWhenConfigured(t *testing.T)
 	}
 }
 
-func TestReportIgnoredAmbientOTLPEnvSilentWithoutAmbientEnv(t *testing.T) {
+func TestReportAdditionalAmbientOTLPEnvSilentWithoutAmbientEnv(t *testing.T) {
 	telemetrytest.ClearAmbientExporterEnv(t)
 
 	var buf bytes.Buffer
-	reportIgnoredAmbientOTLPEnv(
+	reportAdditionalAmbientOTLPEnv(
 		context.Background(),
 		slog.New(slog.NewJSONHandler(&buf, nil)),
 		telemetry.TraceExporterEndpoint{},
@@ -311,23 +313,23 @@ func TestBootstrapReportStageRecordsTraceExporterState(t *testing.T) {
 		want     []string
 	}{
 		{
-			name:     "active from configuration",
+			name:     "initialized from configuration",
 			endpoint: configuredTestTraceEndpoint(),
 			want: []string{
-				`"tracing.exporter":"active"`,
+				`"tracing.exporter":"initialized"`,
 				`"tracing.endpoint_source":"observability.otel.exporter.otlp_endpoint"`,
 			},
 		},
 		{
 			// An operator debugging where traces went needs to see that the
 			// destination came from the platform, not from this service.
-			name: "active from the ambient endpoint variable",
+			name: "initialized from the ambient endpoint variable",
 			endpoint: telemetry.TraceExporterEndpoint{
 				URL:    "http://collector.example:4318/v1/traces",
 				Source: "OTEL_EXPORTER_OTLP_ENDPOINT",
 			},
 			want: []string{
-				`"tracing.exporter":"active"`,
+				`"tracing.exporter":"initialized"`,
 				`"tracing.endpoint_source":"OTEL_EXPORTER_OTLP_ENDPOINT"`,
 			},
 		},
@@ -435,8 +437,8 @@ func TestBootstrapTelemetryStageInstallsTracingWhenMetricsExportFails(t *testing
 	// The meter provider survives too, so the gauge that reports degraded trace
 	// export can still be recorded — it was unreachable when metrics setup failed
 	// as a unit.
-	if err := metrics.RecordTraceExporterState(context.Background(), true); err != nil {
-		t.Fatalf("RecordTraceExporterState() error = %v, want a usable meter provider", err)
+	if err := metrics.RecordTraceExporterInitialization(context.Background(), true); err != nil {
+		t.Fatalf("RecordTraceExporterInitialization() error = %v, want a usable meter provider", err)
 	}
 }
 

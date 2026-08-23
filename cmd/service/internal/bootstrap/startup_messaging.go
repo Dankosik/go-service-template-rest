@@ -24,7 +24,6 @@ func initMessagingRuntime(ctx context.Context, cfg config.MessagingConfig, log *
 	client, err := natsjs.Connect(
 		ctx,
 		runtimeopts.Messaging(cfg),
-		natsjs.RoleProducer,
 		natsjs.Observability{Logger: log},
 	)
 	if err != nil {

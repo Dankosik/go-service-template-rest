@@ -83,9 +83,9 @@ func TestResolveMetricExporterEndpoint(t *testing.T) {
 				t.Setenv(name, value)
 			}
 
-			endpoint, err := ResolveMetricExporterEndpoint(tc.cfg)
+			endpoint, err := resolveMetricExporterEndpoint(tc.cfg)
 			if err != nil {
-				t.Fatalf("ResolveMetricExporterEndpoint() error = %v", err)
+				t.Fatalf("resolveMetricExporterEndpoint() error = %v", err)
 			}
 			if endpoint.URL != tc.wantURL {
 				t.Fatalf("URL = %q, want %q", endpoint.URL, tc.wantURL)
@@ -117,9 +117,9 @@ func TestResolveMetricExporterEndpointRejectsInvalidValues(t *testing.T) {
 				t.Setenv(name, value)
 			}
 
-			_, err := ResolveMetricExporterEndpoint(tc.cfg)
+			_, err := resolveMetricExporterEndpoint(tc.cfg)
 			if err == nil {
-				t.Fatal("ResolveMetricExporterEndpoint() error = nil, want non-nil")
+				t.Fatal("resolveMetricExporterEndpoint() error = nil, want non-nil")
 			}
 			for _, leaked := range []string{"secret", "token"} {
 				if strings.Contains(err.Error(), leaked) {
@@ -169,8 +169,8 @@ func TestSetupMetricsPushesToOTLPCollector(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SetupMetrics() error = %v", err)
 	}
-	if !result.PushConfigured() {
-		t.Fatalf("SetupMetrics() is not pushing for a configured collector root: %+v", result)
+	if !result.PushInitialized() {
+		t.Fatalf("SetupMetrics() did not initialize push for a configured collector root: %+v", result)
 	}
 	if result.Endpoint.URL != collector.URL+"/v1/metrics" {
 		t.Fatalf("endpoint URL = %q, want %q", result.Endpoint.URL, collector.URL+"/v1/metrics")
@@ -195,6 +195,32 @@ func TestSetupMetricsPushesToOTLPCollector(t *testing.T) {
 	}
 	if !sawHeader.Load() {
 		t.Fatal("OTLP export did not carry the configured collector credential")
+	}
+}
+
+//nolint:paralleltest // Mutates process-wide exporter environment and meter provider.
+func TestSetupMetricsSharedRootRejectsAmbientCredentials(t *testing.T) {
+	telemetrytest.ClearAmbientExporterEnv(t)
+	telemetrytest.RestoreGlobals(t)
+	t.Setenv("OTEL_EXPORTER_OTLP_METRICS_HEADERS", "authorization=Bearer injected")
+
+	result, err := SetupMetrics(t.Context(), New(), MetricsConfig{
+		Resource: ResourceConfig{ServiceName: "metrics-shared-root-test"},
+		Exporter: MetricExporterConfig{SharedOTLPEndpoint: "https://collector.example"},
+	})
+	if err != nil {
+		t.Fatalf("SetupMetrics() error = %v, want scrape-only degradation", err)
+	}
+	t.Cleanup(func() {
+		if shutdownErr := result.Shutdown(context.Background()); shutdownErr != nil {
+			t.Errorf("shutdown metrics: %v", shutdownErr)
+		}
+	})
+	if result.Endpoint.Source != TraceExporterConfigKey {
+		t.Fatalf("endpoint source = %q, want shared config key %q", result.Endpoint.Source, TraceExporterConfigKey)
+	}
+	if result.ExportErr == nil || result.PushInitialized() {
+		t.Fatalf("metrics result = %+v, want ambient credential rejection and scrape-only provider", result)
 	}
 }
 

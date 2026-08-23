@@ -75,7 +75,6 @@ func newGRPCRuntime(
 			// The same slice the HTTP router receives. A service appends its
 			// mappers at runtimeDependencies.DomainErrors, never here.
 			DomainErrors: domainErrors,
-			Load:         metrics.GRPCServerLoad(),
 			Services:     bindings.Services,
 			UnaryPolicy:  bindings.UnaryPolicy,
 			StreamPolicy: bindings.StreamPolicy,

@@ -9,16 +9,14 @@
 //
 // # Extending it
 //
-// A feature or adapter that needs its own metrics builds them with
-// [NewInstrumentSet] in a telemetry.go of its own, beside the code they measure.
+// A feature or adapter that needs its own metrics builds them directly from the
+// OpenTelemetry meter in a telemetry.go of its own, beside the code they measure.
 // Do not add a feature's instruments here — this package would then change every
 // time an unrelated adapter gains a counter, and the instrument would sit a
 // package away from the operation it counts.
 //
-// Add to this package only what the process shares: an admission or load signal
-// the transports report through [Metrics.ServerLoad] and
-// [Metrics.GRPCServerLoad], plus every published series name (metrics.go),
-// provider and exporter construction with no series of their own (tracing.go,
+// Add to this package only what the process shares: provider and exporter
+// construction with no transport- or feature-owned series (tracing.go,
 // metrics_otel.go), the ambient OTEL_EXPORTER_OTLP_* environment policy
 // (exporter_env.go), endpoint resolution (otlp_endpoint.go), OTLP header parsing
 // (otlp_headers.go), the resource identity every signal carries (resource.go),

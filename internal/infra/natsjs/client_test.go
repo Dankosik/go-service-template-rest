@@ -8,7 +8,7 @@ import (
 )
 
 func TestClientLifecycleWithoutBroker(t *testing.T) {
-	client := unitClient(t, &recordingJetStream{}, RoleProducer)
+	client := unitClient(t, &recordingJetStream{})
 	client.ready.Store(true)
 	if client.Name() != "messaging" || client.Producer() == nil || !client.Ready() {
 		t.Fatal("client accessors did not expose ready producer state")
@@ -59,14 +59,14 @@ func TestClientConnectionAdmissionAndTimeoutOptions(t *testing.T) {
 	}
 	canceled, cancel := context.WithCancel(t.Context())
 	cancel()
-	if _, err := Connect(canceled, valid, RoleProducer, Observability{}); !errors.Is(err, ErrRejected) {
+	if _, err := Connect(canceled, valid, Observability{}); !errors.Is(err, ErrRejected) {
 		t.Fatalf("Connect(canceled) error = %v, want ErrRejected", err)
 	}
-	if _, err := Connect(t.Context(), Config{}, RoleProducer, Observability{}); !errors.Is(err, ErrRejected) {
+	if _, err := Connect(t.Context(), Config{}, Observability{}); !errors.Is(err, ErrRejected) {
 		t.Fatalf("Connect(invalid) error = %v, want ErrRejected", err)
 	}
 
-	client := unitClient(t, &recordingJetStream{}, RoleProducer)
+	client := unitClient(t, &recordingJetStream{})
 	withCredentials := valid
 	withCredentials.CredentialsFile = "/run/secrets/nats.creds"
 	withCredentials.RootCAFile = "/run/secrets/nats-ca.pem"

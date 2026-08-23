@@ -12,7 +12,7 @@ import (
 
 func TestNATSProducerOutcomes(t *testing.T) {
 	f := newNATSFixture(t)
-	client := f.client(t, natsjs.RoleProducer)
+	client := f.client(t)
 	event := testEvent("accepted")
 	first, err := client.Producer().Publish(t.Context(), event)
 	if err != nil {

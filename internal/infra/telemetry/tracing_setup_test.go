@@ -621,9 +621,9 @@ func TestResolveTraceExporterEndpointRejectsInvalidAmbientEndpoint(t *testing.T)
 	telemetrytest.ClearAmbientExporterEnv(t)
 	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "https://user:secret-value@collector.example:4318")
 
-	_, err := ResolveTraceExporterEndpoint(TraceExporterConfig{})
+	_, err := resolveTraceExporterEndpoint(TraceExporterConfig{})
 	if err == nil {
-		t.Fatal("ResolveTraceExporterEndpoint() error = nil, want non-nil")
+		t.Fatal("resolveTraceExporterEndpoint() error = nil, want non-nil")
 	}
 	if !strings.Contains(err.Error(), "OTEL_EXPORTER_OTLP_ENDPOINT") {
 		t.Fatalf("error = %v, want the variable name", err)

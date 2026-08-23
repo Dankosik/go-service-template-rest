@@ -81,14 +81,20 @@ func Harden(log *slog.Logger, metrics *telemetry.Metrics, cfg HardenConfig, apiS
 	// Built once here rather than per request. The meter provider is already
 	// installed by this point in startup, so these instruments reach both the
 	// Prometheus registry and the OTLP reader.
-	serverLoad := metrics.ServerLoad()
+	serverLoad := newServerLoad(metrics.MeterProvider())
 
-	otelMiddleware := otelhttp.NewMiddleware(
-		"http.server",
+	otelOptions := []otelhttp.Option{
 		otelhttp.WithMeterProvider(metrics.MeterProvider()),
 		otelhttp.WithPropagators(propagation.TraceContext{}),
 		otelhttp.WithServerName(otelServerName(cfg.OTelServerName)),
-	)
+	}
+	// profile:inbound-webhooks-standard:start
+	// otelhttp records url.path before routing. The endpoint id is caller supplied
+	// and belongs in neither trace attributes nor span names, so this public route
+	// stays correlated through its access log rather than exporting the raw path.
+	otelOptions = append(otelOptions, otelhttp.WithFilter(traceInboundWebhookRequest))
+	// profile:inbound-webhooks-standard:end
+	otelMiddleware := otelhttp.NewMiddleware("http.server", otelOptions...)
 
 	rootRouter := newRootRouter(
 		apiSubrouter,
@@ -115,6 +121,13 @@ func Harden(log *slog.Logger, metrics *telemetry.Metrics, cfg HardenConfig, apiS
 
 	return RequestCorrelation(rootRouter), nil
 }
+
+// profile:inbound-webhooks-standard:start
+func traceInboundWebhookRequest(request *http.Request) bool {
+	return request == nil || request.URL == nil || !strings.HasPrefix(request.URL.Path, "/webhooks/")
+}
+
+// profile:inbound-webhooks-standard:end
 
 func newRootRouter(
 	apiSubrouter http.Handler,

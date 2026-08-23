@@ -47,7 +47,7 @@ func withOptionDefaults(options Options) Options {
 		options.TracerProvider = tracenoop.NewTracerProvider()
 	}
 	if options.Load == nil {
-		options.Load = noopLoadRecorder{}
+		options.Load = newServerLoad(options.MeterProvider)
 	}
 	return options
 }
@@ -58,12 +58,6 @@ type LoadRecorder interface {
 	Shed(ctx context.Context)
 	HealthShed(ctx context.Context)
 }
-
-type noopLoadRecorder struct{}
-
-func (noopLoadRecorder) Admitted(context.Context) func() { return func() {} }
-func (noopLoadRecorder) Shed(context.Context)            {}
-func (noopLoadRecorder) HealthShed(context.Context)      {}
 
 // NewServer builds the complete native server product with fixed safe defaults.
 func NewServer(options Options) (*Server, error) {

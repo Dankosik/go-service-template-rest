@@ -137,6 +137,25 @@ func Int64GaugeValue(tb testing.TB, reader *sdkmetric.ManualReader, name string)
 	return value
 }
 
+// Int64SumValue is the value of a named unattributed int64 sum.
+func Int64SumValue(tb testing.TB, reader *sdkmetric.ManualReader, name string) int64 {
+	tb.Helper()
+
+	var value int64
+	found := false
+	ForEachMetric(tb, reader, func(measured metricdata.Metrics) {
+		if measured.Name != name {
+			return
+		}
+		value = SinglePoint(tb, name, Int64Sum(tb, measured).DataPoints)
+		found = true
+	})
+	if !found {
+		tb.Fatalf("metric %s was not collected", name)
+	}
+	return value
+}
+
 // AttributeSets is every point's attribute set for one instrument, whatever its
 // aggregation. Use it to assert on an instrument's label cardinality and
 // vocabulary without knowing which aggregation it carries.

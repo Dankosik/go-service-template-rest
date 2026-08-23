@@ -40,7 +40,7 @@ func TestPostgresOutboxPublishesThroughRiverWithOriginalIdentityAndTrace(t *test
 		config.Consumer = "river-outbox-conformance"
 	})
 
-	producerClient := fixture.client(t, natsjs.RoleProducer)
+	producerClient := fixture.client(t)
 	outboxWorker, err := natsjs.NewOutboxWorker(producerClient.Producer())
 	if err != nil {
 		t.Fatalf("natsjs.NewOutboxWorker(): %v", err)

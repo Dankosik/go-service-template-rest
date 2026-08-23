@@ -259,7 +259,7 @@ func TestAuthnUsesIndependentTransportAdmission(t *testing.T) {
 	if err != nil {
 		t.Fatalf("bearerauthn.New() error = %v", err)
 	}
-	httpHandler := httpx.MaxInFlight(1, telemetry.ServerLoad{}, http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+	httpHandler := httpx.MaxInFlight(1, httpx.ServerLoad{}, http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		_, resolveErr := runtime.ResolveHTTP(request.Context(), &openapi3filter.AuthenticationInput{
 			SecurityScheme:         &openapi3.SecurityScheme{Type: "http", Scheme: "bearer"},
 			RequestValidationInput: &openapi3filter.RequestValidationInput{Request: request},

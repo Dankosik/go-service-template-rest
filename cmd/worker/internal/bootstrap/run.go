@@ -75,7 +75,7 @@ func run(signalCtx context.Context, args []string, buildHandler HandlerBuilder) 
 	if err != nil {
 		return err
 	}
-	client, err := natsjs.Connect(startupCtx, runtimeopts.Messaging(cfg.Messaging), natsjs.RoleWorker, natsjs.Observability{Logger: log})
+	client, err := natsjs.Connect(startupCtx, runtimeopts.Messaging(cfg.Messaging), natsjs.Observability{Logger: log})
 	if err != nil {
 		return fmt.Errorf("initialize worker messaging: %w", err)
 	}

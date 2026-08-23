@@ -2,10 +2,24 @@ package grpcx
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/example/go-service-template-rest/internal/failure"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/metric"
 	"golang.org/x/sync/semaphore"
 	"google.golang.org/grpc/codes"
+)
+
+const (
+	serverMeterName           = "service.grpc.server"
+	activeRPCsInstrument      = "rpc.server.active_requests"
+	shedRPCsInstrument        = "rpc.server.shed_requests"
+	healthShedRPCsInstrument  = "rpc.server.health.shed_requests"
+	rpcInstrumentUnit         = "{rpc}"
+	activeRPCsDescription     = "RPCs currently executing a handler, against the grpc.server.max_concurrent_rpcs limit."
+	shedRPCsDescription       = "RPCs rejected before running a handler because the process RPC limit was reached."
+	healthShedRPCsDescription = "Standard health RPCs rejected before running a handler because the health admission limit was reached."
 )
 
 // admissionPolicy routes an RPC to the budget that owns it. The two budgets are
@@ -35,6 +49,61 @@ func newAdmissionPolicy(businessLimit, healthLimit int, load LoadRecorder) admis
 
 type healthShedRecorder struct {
 	LoadRecorder
+}
+
+type serverLoad struct {
+	active     metric.Int64UpDownCounter
+	shed       metric.Int64Counter
+	healthShed metric.Int64Counter
+}
+
+func newServerLoad(provider metric.MeterProvider) serverLoad {
+	meter := provider.Meter(serverMeterName)
+	active, err := meter.Int64UpDownCounter(
+		activeRPCsInstrument,
+		metric.WithDescription(activeRPCsDescription),
+		metric.WithUnit(rpcInstrumentUnit),
+	)
+	if err != nil {
+		otel.Handle(fmt.Errorf("create %s metric: %w", activeRPCsInstrument, err))
+	}
+	shed, err := meter.Int64Counter(
+		shedRPCsInstrument,
+		metric.WithDescription(shedRPCsDescription),
+		metric.WithUnit(rpcInstrumentUnit),
+	)
+	if err != nil {
+		otel.Handle(fmt.Errorf("create %s metric: %w", shedRPCsInstrument, err))
+	}
+	healthShed, err := meter.Int64Counter(
+		healthShedRPCsInstrument,
+		metric.WithDescription(healthShedRPCsDescription),
+		metric.WithUnit(rpcInstrumentUnit),
+	)
+	if err != nil {
+		otel.Handle(fmt.Errorf("create %s metric: %w", healthShedRPCsInstrument, err))
+	}
+	return serverLoad{active: active, shed: shed, healthShed: healthShed}
+}
+
+func (l serverLoad) Admitted(ctx context.Context) func() {
+	if l.active == nil {
+		return func() {}
+	}
+	l.active.Add(ctx, 1)
+	return func() { l.active.Add(ctx, -1) }
+}
+
+func (l serverLoad) Shed(ctx context.Context) {
+	if l.shed != nil {
+		l.shed.Add(ctx, 1)
+	}
+}
+
+func (l serverLoad) HealthShed(ctx context.Context) {
+	if l.healthShed != nil {
+		l.healthShed.Add(ctx, 1)
+	}
 }
 
 func (healthShedRecorder) Admitted(context.Context) func() { return func() {} }
