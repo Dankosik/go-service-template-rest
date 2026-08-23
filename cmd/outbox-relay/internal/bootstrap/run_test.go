@@ -1,14 +1,53 @@
 package bootstrap
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"log/slog"
 	"testing"
 	"time"
 
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/infra/postgresoutbox"
+	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 	"github.com/riverqueue/river"
 )
+
+type lifecycleMessaging struct {
+	stopPublishCalls int
+	shutdownCalls    int
+}
+
+func (*lifecycleMessaging) Name() string                { return "messaging" }
+func (*lifecycleMessaging) Check(context.Context) error { return nil }
+func (*lifecycleMessaging) Run(ctx context.Context) error {
+	<-ctx.Done()
+	return fmt.Errorf("run messaging fixture: %w", ctx.Err())
+}
+func (m *lifecycleMessaging) StopPublish() { m.stopPublishCalls++ }
+func (m *lifecycleMessaging) Shutdown(context.Context) error {
+	m.shutdownCalls++
+	return nil
+}
+
+type lifecycleRiver struct {
+	started chan struct{}
+	stopped chan struct{}
+	stopErr error
+}
+
+func (r *lifecycleRiver) Start(context.Context) error {
+	close(r.started)
+	return nil
+}
+func (r *lifecycleRiver) Stop(context.Context) error          { return r.stopErr }
+func (r *lifecycleRiver) StopAndCancel(context.Context) error { return r.stopErr }
+func (r *lifecycleRiver) Stopped() <-chan struct{}            { return r.stopped }
+
+type healthyPostgres struct{}
+
+func (healthyPostgres) Ping(context.Context) error { return nil }
 
 func TestRiverClientConfigUsesFixedBoundedCapacity(t *testing.T) {
 	t.Parallel()
@@ -57,5 +96,52 @@ func TestValidateRuntimeConfig(t *testing.T) {
 				t.Fatal("validateRuntimeConfig() error = nil")
 			}
 		})
+	}
+}
+
+func TestRunLifecycleDoesNotCloseMessagingBeforeRiverStops(t *testing.T) {
+	stopErr := errors.New("River jobs still running")
+	riverClient := &lifecycleRiver{
+		started: make(chan struct{}), stopped: make(chan struct{}), stopErr: stopErr,
+	}
+	messaging := &lifecycleMessaging{}
+	cfg := config.Config{}
+	cfg.HTTP.GracePeriod = time.Second
+	cfg.HTTP.ShutdownTimeout = 100 * time.Millisecond
+	cfg.HTTP.ReadinessTimeout = 100 * time.Millisecond
+	cfg.Health.RefreshInterval = time.Second
+	cfg.Health.FailureThreshold = 1
+	cfg.Observability.Metrics.Addr = "127.0.0.1:0"
+
+	signalCtx, cancel := context.WithCancel(t.Context())
+	t.Cleanup(cancel)
+	type outcome struct {
+		cleanupSafe bool
+		err         error
+	}
+	result := make(chan outcome, 1)
+	go func() {
+		cleanupSafe, _, err := runLifecycle(
+			signalCtx, t.Context(), cfg, slog.New(slog.DiscardHandler), telemetry.New(),
+			healthyPostgres{}, messaging, riverClient,
+		)
+		result <- outcome{cleanupSafe: cleanupSafe, err: err}
+	}()
+	<-riverClient.started
+	cancel()
+
+	select {
+	case got := <-result:
+		if got.cleanupSafe || !errors.Is(got.err, stopErr) {
+			t.Fatalf("runLifecycle() = cleanup safe %t, error %v", got.cleanupSafe, got.err)
+		}
+		if messaging.stopPublishCalls != 0 || messaging.shutdownCalls != 0 {
+			t.Fatalf(
+				"messaging cleanup before River join = stop publish %d, shutdown %d",
+				messaging.stopPublishCalls, messaging.shutdownCalls,
+			)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("runLifecycle() did not return after River stop failed")
 	}
 }

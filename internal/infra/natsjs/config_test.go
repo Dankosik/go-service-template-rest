@@ -7,7 +7,6 @@ import (
 
 const (
 	testMaxPayloadBytes  = 256 << 10
-	testMaxPending       = 64
 	testMaxDeliveryBytes = testMaxPayloadBytes + HeaderLimitBytes
 )
 

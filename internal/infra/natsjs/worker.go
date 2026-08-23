@@ -2,12 +2,10 @@ package natsjs
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
 
-	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 )
 
@@ -55,11 +53,27 @@ func (w *Worker) Run(ctx context.Context) error {
 	if draining {
 		drainConsumers(consumers)
 	}
+	unexpectedClose := make(chan struct{}, 1)
+	var watchers sync.WaitGroup
+	for _, consumer := range consumers {
+		watchers.Go(func() {
+			<-consumer.Closed()
+			if !w.draining.Load() {
+				select {
+				case unexpectedClose <- struct{}{}:
+				default:
+				}
+			}
+		})
+	}
 
 	var runErr error
 	select {
 	case <-w.drain:
 	case runErr = <-w.fatal:
+		w.StartDrain()
+	case <-unexpectedClose:
+		runErr = fmt.Errorf("%w: native consume context closed unexpectedly", ErrTerminal)
 		w.StartDrain()
 	case <-ctx.Done():
 		runErr = fmt.Errorf("run durable consumer: %w", ctx.Err())
@@ -67,6 +81,7 @@ func (w *Worker) Run(ctx context.Context) error {
 	}
 
 	waitConsumers(consumers)
+	watchers.Wait()
 	if runErr == nil {
 		select {
 		case runErr = <-w.fatal:
@@ -87,12 +102,6 @@ func (w *Worker) startConsumers(handlerRoot context.Context) ([]jetstream.Consum
 			},
 			jetstream.PullMaxMessages(1),
 			jetstream.PullExpiry(operationTimeout),
-			jetstream.ConsumeErrHandler(func(_ jetstream.ConsumeContext, consumeErr error) {
-				if w.draining.Load() || !terminalConsumeError(consumeErr) {
-					return
-				}
-				w.fail(fmt.Errorf("%w: consume source message: %w", ErrTerminal, consumeErr))
-			}),
 		)
 		if err != nil {
 			stopConsumers(consumers)
@@ -102,16 +111,6 @@ func (w *Worker) startConsumers(handlerRoot context.Context) ([]jetstream.Consum
 		consumers = append(consumers, consumer)
 	}
 	return consumers, nil
-}
-
-func terminalConsumeError(err error) bool {
-	// The native consume error callback receives both errors it recovers from
-	// and the small set for which it stops itself. Mirror that terminal set;
-	// everything else remains library-owned recovery.
-	return errors.Is(err, jetstream.ErrConsumerDeleted) ||
-		errors.Is(err, jetstream.ErrBadRequest) ||
-		errors.Is(err, jetstream.ErrConnectionClosed) ||
-		errors.Is(err, nats.ErrConnectionClosed)
 }
 
 func (w *Worker) StartDrain() {
