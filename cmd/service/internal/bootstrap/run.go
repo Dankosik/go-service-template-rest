@@ -304,6 +304,12 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 	// profile:http-idempotency-postgres:start
 	domainErrors = append(domainErrors, httpidempotency.ClassifyError)
 	// profile:http-idempotency-postgres:end
+	// profile:inbound-webhooks-standard:start
+	inboundReceiver, err := initInboundWebhookReceiver(bootstrap.cfg, dependencies.postgres, metrics, bootstrap.log)
+	if err != nil {
+		return err
+	}
+	// profile:inbound-webhooks-standard:end
 	handler, err := newHTTPHandler(
 		bootstrap.cfg,
 		bootstrap.log,
@@ -321,6 +327,10 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 						// profile:messaging-nats-jetstream:end
 					)
 				},
+				// profile:inbound-webhooks-standard:start
+				API:            newServiceAPI(),
+				InboundWebhook: inboundReceiver,
+				// profile:inbound-webhooks-standard:end
 			},
 			// profile:authn-oidc-jwt:start
 			Authenticate:          httpx.Authenticated(authnVerifier.ResolveHTTP),

@@ -7,7 +7,7 @@ TEMPLATE_OWNER="@Dankosik"
 TEMPLATE_API_TITLE="go-service-template-rest"
 
 usage() {
-	echo "usage: CODEOWNER=@user-or-org/team DATABASE=none|postgres HTTP_IDEMPOTENCY=none|postgres JOBS=none|postgres WEBHOOKS=none|durable OUTBOX=none|postgres GRPC=none|enabled AUTHN=none|oidc-jwt OBJECT_STORAGE=none|s3 OUTBOUND_AUTH=none|oauth2-client-credentials MESSAGING=none|nats-jetstream REFERENCE_EXAMPLE=remove|keep $0 [module-path]"
+	echo "usage: CODEOWNER=@user-or-org/team DATABASE=none|postgres HTTP_IDEMPOTENCY=none|postgres JOBS=none|postgres WEBHOOKS=none|durable INBOUND_WEBHOOKS=none|standard-webhooks OUTBOX=none|postgres GRPC=none|enabled AUTHN=none|oidc-jwt OBJECT_STORAGE=none|s3 OUTBOUND_AUTH=none|oauth2-client-credentials MESSAGING=none|nats-jetstream REFERENCE_EXAMPLE=remove|keep $0 [module-path]"
 	echo "module-path is derived from git remote origin when omitted"
 }
 
@@ -252,6 +252,7 @@ write_template_lock() {
 	local object_storage="$9"
 	local jobs="${10}"
 	local webhooks="${11}"
+	local inbound_webhooks="${12}"
 	local source_revision
 
 	source_revision="$(git rev-parse HEAD 2>/dev/null || true)"
@@ -277,6 +278,7 @@ reference_example = "${reference_example}"
 object_storage = "${object_storage}"
 jobs = "${jobs}"
 webhooks = "${webhooks}"
+inbound_webhooks = "${inbound_webhooks}"
 EOF
 }
 
@@ -449,6 +451,23 @@ if [[ "${webhooks}" == "durable" && ( "${database}" != "postgres" || "${jobs}" !
 	exit 1
 fi
 
+if [[ "${INBOUND_WEBHOOKS+x}" == "x" && -z "${INBOUND_WEBHOOKS-}" ]]; then
+	echo "INBOUND_WEBHOOKS must be one of: none, standard-webhooks"
+	exit 1
+fi
+inbound_webhooks="${INBOUND_WEBHOOKS:-none}"
+case "${inbound_webhooks}" in
+none | standard-webhooks) ;;
+*)
+	echo "INBOUND_WEBHOOKS must be one of: none, standard-webhooks"
+	exit 1
+	;;
+esac
+if [[ "${inbound_webhooks}" == "standard-webhooks" && ( "${database}" != "postgres" || "${jobs}" != "postgres" ) ]]; then
+	echo "INBOUND_WEBHOOKS=standard-webhooks requires DATABASE=postgres JOBS=postgres"
+	exit 1
+fi
+
 grpc="${GRPC:-none}"
 case "${grpc}" in
 none | enabled) ;;
@@ -591,6 +610,7 @@ if [[ -f template.lock ]]; then
 		"http_idempotency = \"${http_idempotency}\"" \
 		"jobs = \"${jobs}\"" \
 		"webhooks = \"${webhooks}\"" \
+		"inbound_webhooks = \"${inbound_webhooks}\"" \
 		"outbox = \"${outbox}\"" \
 		"grpc = \"${grpc}\"" \
 		"authn = \"${authn}\"" \
@@ -608,6 +628,7 @@ if [[ -f template.lock ]]; then
 	echo "  database: ${database}"
 	echo "  jobs: ${jobs}"
 	echo "  webhooks: ${webhooks}"
+	echo "  inbound webhooks: ${inbound_webhooks}"
 	echo "  outbox: ${outbox}"
 	echo "  gRPC: ${grpc}"
 	echo "  authentication: ${authn}"
@@ -721,8 +742,6 @@ if [[ "${source_checkout}" != true ]]; then
 		if [[ "${webhooks}" == "none" ]]; then
 			rm -rf -- internal/infra/postgreswebhook
 			rm -f -- \
-				cmd/jobs-worker/builder_webhooks.go \
-				cmd/jobs-worker/builder_webhooks_test.go \
 				docs/outbound-webhook-delivery.md \
 				internal/config/webhooks_config.go \
 				internal/config/webhooks_config_test.go \
@@ -731,12 +750,54 @@ if [[ "${source_checkout}" != true ]]; then
 				migrations/000007_postgres_webhooks_retire.sql \
 				test/postgres_webhook_*_test.go \
 				test/webhook_network_integration_test.go
+			if [[ "${inbound_webhooks}" == "none" ]]; then
+				rm -f -- \
+					cmd/jobs-worker/builder_webhooks.go \
+					cmd/jobs-worker/builder_webhooks_test.go
+			else
+				rm -f -- cmd/jobs-worker/builder_webhooks_test.go
+			fi
 			strip_profile webhooks-durable remove
 		else
 			strip_profile webhooks-durable keep
 		fi
 
-	if [[ "${jobs}" == "none" && "${outbox}" == "none" && "${webhooks}" == "none" ]]; then
+		if [[ "${inbound_webhooks}" == "none" ]]; then
+			rm -rf -- internal/inboundwebhook internal/infra/postgresinboundwebhook
+			rm -f -- \
+				cmd/jobs-worker/inbound_webhook_bindings.go \
+				cmd/jobs-worker/builder_inbound_testworker.go \
+				cmd/jobs-worker/builder_webhooks_inbound_test.go \
+				cmd/jobs-worker/internal/bootstrap/run_inbound_test.go \
+				cmd/service/internal/bootstrap/startup_inbound_webhooks.go \
+				cmd/service/internal/bootstrap/startup_inbound_webhooks_test.go \
+				cmd/service/internal/bootstrap/service_api.go \
+				internal/config/inbound_webhooks_config.go \
+				internal/config/inbound_webhooks_config_test.go \
+				internal/infra/http/inbound_webhook.go \
+				internal/infra/http/inbound_webhook_test.go \
+				migrations/000010_postgres_inbound_webhooks.sql \
+				internal/infra/postgres/queries/postgres_inbound_webhooks.sql \
+				internal/infra/postgres/sqlcgen/postgres_inbound_webhooks.sql.go \
+				docs/inbound-webhook-receipt.md \
+				test/postgres_inbound_webhook_integration_test.go \
+				test/inbound_webhook_process_integration_test.go
+			if [[ "${webhooks}" == "none" ]]; then
+				rm -f -- \
+					cmd/jobs-worker/builder_webhooks.go \
+					cmd/jobs-worker/builder_webhooks_test.go
+			fi
+			strip_profile inbound-webhooks-standard remove
+			if [[ -f cmd/jobs-worker/builder_webhooks.go ]]; then
+				temporary="$(mktemp)"
+				sed 's/ && !inbound_webhook_test_worker//' cmd/jobs-worker/builder_webhooks.go >"${temporary}"
+				mv "${temporary}" cmd/jobs-worker/builder_webhooks.go
+			fi
+		else
+			strip_profile inbound-webhooks-standard keep
+		fi
+
+	if [[ "${jobs}" == "none" && "${outbox}" == "none" && "${webhooks}" == "none" && "${inbound_webhooks}" == "none" ]]; then
 		rm -f -- migrations/000008_river.sql
 	fi
 
@@ -958,7 +1019,7 @@ fi
 		go generate ./internal/openapi
 	fi
 
-	write_template_lock "${database}" "${http_idempotency}" "${outbox}" "${grpc}" "${authn}" "${outbound_auth}" "${messaging}" "${reference_example}" "${object_storage}" "${jobs}" "${webhooks}"
+	write_template_lock "${database}" "${http_idempotency}" "${outbox}" "${grpc}" "${authn}" "${outbound_auth}" "${messaging}" "${reference_example}" "${object_storage}" "${jobs}" "${webhooks}" "${inbound_webhooks}"
 
 fi
 
@@ -976,6 +1037,7 @@ echo "  database: ${database}"
 echo "  HTTP idempotency: ${http_idempotency}"
 echo "  jobs: ${jobs}"
 echo "  webhooks: ${webhooks}"
+echo "  inbound webhooks: ${inbound_webhooks}"
 echo "  outbox: ${outbox}"
 echo "  gRPC: ${grpc}"
 echo "  authentication: ${authn}"

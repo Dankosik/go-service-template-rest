@@ -148,6 +148,7 @@ linters:
         # fragment rule as above.
         - cmd/internal/runtimeopts\.ValidateGracePeriod\(
         - cmd/internal/runtimeopts\.ListenDiagnostics\(
+        - github.com/riverqueue/river\.JobSnooze\(
     staticcheck:
       checks:
         - all
@@ -189,6 +190,9 @@ linters:
         - generic
         - '^.*/internal/openapi\..*ResponseObject$'
         - '^go\.opentelemetry\.io/otel/metric\.MeterProvider$'
+        # profile:inbound-webhooks-standard:start
+        - '^.*/internal/inboundwebhook\.Receiver$'
+        # profile:inbound-webhooks-standard:end
         - '^go\.opentelemetry\.io/otel/sdk/metric\.Reader$'
         - '^go\.opentelemetry\.io/otel/sdk/trace\.Sampler$'
     depguard:
@@ -386,6 +390,13 @@ linters:
             # transaction; delivery itself owns no independent SQL schema.
             - "!**/internal/infra/postgreswebhook/*.go"
             # profile:webhooks-durable:end
+            # profile:inbound-webhooks-standard:start
+            - "!**/internal/infra/postgresinboundwebhook/*.go"
+            - "!**/cmd/jobs-worker/internal/bootstrap/run.go"
+            - "!**/cmd/jobs-worker/builder_webhooks.go"
+            - "!**/cmd/jobs-worker/inbound_webhook_bindings.go"
+            - "!**/cmd/service/internal/bootstrap/startup_inbound_webhooks.go"
+            # profile:inbound-webhooks-standard:end
           deny:
             - pkg: database/sql
               desc: database driver access belongs in PostgreSQL runtime or migration adapters.
@@ -401,6 +412,9 @@ linters:
             - "$all"
             - "!**/internal/infra/postgres/*.go"
             - "!**/internal/infra/postgresidempotency/store*.go"
+            # profile:inbound-webhooks-standard:start
+            - "!**/internal/infra/postgresinboundwebhook/*.go"
+            # profile:inbound-webhooks-standard:end
           deny:
             - pkg: github.com/example/go-service-template-rest/internal/infra/postgres/sqlcgen
               desc: generated sqlc types stay behind the hand-written internal/infra/postgres adapter.

@@ -80,6 +80,11 @@ func validateConfig(cfg *Config, unknownKeys []string) error {
 		return err
 	}
 	// profile:webhooks-durable:end
+	// profile:inbound-webhooks-standard:start
+	if err := validateInboundWebhooks(cfg.InboundWebhooks); err != nil {
+		return err
+	}
+	// profile:inbound-webhooks-standard:end
 	// profile:object-storage:start
 	if err := validateObjectStorage(&cfg.ObjectStorage); err != nil {
 		return err

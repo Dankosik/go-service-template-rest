@@ -68,6 +68,9 @@ func NewRouter(log *slog.Logger, h Handlers, metrics *telemetry.Metrics, cfg Rou
 	// profile:http-idempotency-postgres:end
 
 	server := openapi.NewStrictHandlerWithOptions(strict, nil, generatedStrictServerOptions(log, rejectRequest, cfg.DomainErrors))
+	// profile:inbound-webhooks-standard:start
+	server = inboundRawServer{ServerInterface: server, receiver: h.InboundWebhook}
+	// profile:inbound-webhooks-standard:end
 
 	apiSubrouter := openapi.HandlerWithOptions(
 		server,

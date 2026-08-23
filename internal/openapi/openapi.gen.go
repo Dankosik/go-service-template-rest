@@ -17,6 +17,7 @@ import (
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/go-chi/chi/v5"
+	"github.com/oapi-codegen/runtime"
 )
 
 // InvalidParam defines model for InvalidParam.
@@ -66,11 +67,42 @@ type Problem struct {
 // BadRequest defines model for BadRequest.
 type BadRequest = Problem
 
+// Conflict defines model for Conflict.
+type Conflict = Problem
+
+// GatewayTimeout defines model for GatewayTimeout.
+type GatewayTimeout = Problem
+
 // InternalServerError defines model for InternalServerError.
 type InternalServerError = Problem
 
+// NotFound defines model for NotFound.
+type NotFound = Problem
+
 // RequestEntityTooLarge defines model for RequestEntityTooLarge.
 type RequestEntityTooLarge = Problem
+
+// RequestHeaderFieldsTooLarge defines model for RequestHeaderFieldsTooLarge.
+type RequestHeaderFieldsTooLarge = Problem
+
+// ServiceUnavailable defines model for ServiceUnavailable.
+type ServiceUnavailable = Problem
+
+// TooManyRequests defines model for TooManyRequests.
+type TooManyRequests = Problem
+
+// ReceiveWebhookJSONBody defines parameters for ReceiveWebhook.
+type ReceiveWebhookJSONBody interface{}
+
+// ReceiveWebhookParams defines parameters for ReceiveWebhook.
+type ReceiveWebhookParams struct {
+	WebhookId        string `json:"Webhook-Id"`
+	WebhookTimestamp string `json:"Webhook-Timestamp"`
+	WebhookSignature string `json:"Webhook-Signature"`
+}
+
+// ReceiveWebhookJSONRequestBody defines body for ReceiveWebhook for application/json ContentType.
+type ReceiveWebhookJSONRequestBody ReceiveWebhookJSONBody
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -80,6 +112,9 @@ type ServerInterface interface {
 	// HealthReady Readiness probe
 	// (GET /health/ready)
 	HealthReady(w http.ResponseWriter, r *http.Request)
+	// ReceiveWebhook Receive a Standard Webhooks delivery
+	// (POST /webhooks/{endpoint_id})
+	ReceiveWebhook(w http.ResponseWriter, r *http.Request, endpointId string, params ReceiveWebhookParams)
 }
 
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
@@ -95,6 +130,12 @@ func (_ Unimplemented) HealthLive(w http.ResponseWriter, r *http.Request) {
 // HealthReady Readiness probe
 // (GET /health/ready)
 func (_ Unimplemented) HealthReady(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// ReceiveWebhook Receive a Standard Webhooks delivery
+// (POST /webhooks/{endpoint_id})
+func (_ Unimplemented) ReceiveWebhook(w http.ResponseWriter, r *http.Request, endpointId string, params ReceiveWebhookParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -126,6 +167,106 @@ func (siw *ServerInterfaceWrapper) HealthReady(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.HealthReady(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReceiveWebhook operation middleware
+func (siw *ServerInterfaceWrapper) ReceiveWebhook(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "endpoint_id" -------------
+	var endpointId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "endpoint_id", chi.URLParam(r, "endpoint_id"), &endpointId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "endpoint_id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ReceiveWebhookParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Webhook-Id" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Webhook-Id")]; found {
+		var WebhookId string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Webhook-Id", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Webhook-Id", valueList[0], &WebhookId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Webhook-Id", Err: err})
+			return
+		}
+
+		params.WebhookId = WebhookId
+
+	} else {
+		err := fmt.Errorf("Header parameter Webhook-Id is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Webhook-Id", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Webhook-Timestamp" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Webhook-Timestamp")]; found {
+		var WebhookTimestamp string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Webhook-Timestamp", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Webhook-Timestamp", valueList[0], &WebhookTimestamp, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Webhook-Timestamp", Err: err})
+			return
+		}
+
+		params.WebhookTimestamp = WebhookTimestamp
+
+	} else {
+		err := fmt.Errorf("Header parameter Webhook-Timestamp is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Webhook-Timestamp", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Webhook-Signature" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Webhook-Signature")]; found {
+		var WebhookSignature string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Webhook-Signature", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Webhook-Signature", valueList[0], &WebhookSignature, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Webhook-Signature", Err: err})
+			return
+		}
+
+		params.WebhookSignature = WebhookSignature
+
+	} else {
+		err := fmt.Errorf("Header parameter Webhook-Signature is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Webhook-Signature", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReceiveWebhook(w, r, endpointId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -254,15 +395,44 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/health/ready", wrapper.HealthReady)
 	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/webhooks/{endpoint_id}", wrapper.ReceiveWebhook)
+	})
 
 	return r
 }
 
 type BadRequestApplicationProblemPlusJSONResponse Problem
 
+type ConflictApplicationProblemPlusJSONResponse Problem
+
+type GatewayTimeoutApplicationProblemPlusJSONResponse Problem
+
 type InternalServerErrorApplicationProblemPlusJSONResponse Problem
 
+type NotFoundApplicationProblemPlusJSONResponse Problem
+
 type RequestEntityTooLargeApplicationProblemPlusJSONResponse Problem
+
+type RequestHeaderFieldsTooLargeApplicationProblemPlusJSONResponse Problem
+
+type ServiceUnavailableResponseHeaders struct {
+	RetryAfter string
+}
+type ServiceUnavailableApplicationProblemPlusJSONResponse struct {
+	Body Problem
+
+	Headers ServiceUnavailableResponseHeaders
+}
+
+type TooManyRequestsResponseHeaders struct {
+	RetryAfter string
+}
+type TooManyRequestsApplicationProblemPlusJSONResponse struct {
+	Body Problem
+
+	Headers TooManyRequestsResponseHeaders
+}
 
 type HealthLiveRequestObject struct {
 }
@@ -407,6 +577,170 @@ func (response HealthReady503TextResponse) VisitHealthReadyResponse(w http.Respo
 	return err
 }
 
+type ReceiveWebhookRequestObject struct {
+	EndpointId string `json:"endpoint_id"`
+	Params     ReceiveWebhookParams
+	Body       *ReceiveWebhookJSONRequestBody
+}
+
+type ReceiveWebhookResponseObject interface {
+	VisitReceiveWebhookResponse(w http.ResponseWriter) error
+}
+
+type ReceiveWebhook204Response struct {
+}
+
+func (response ReceiveWebhook204Response) VisitReceiveWebhookResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type ReceiveWebhook400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response ReceiveWebhook400ApplicationProblemPlusJSONResponse) VisitReceiveWebhookResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReceiveWebhook404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response ReceiveWebhook404ApplicationProblemPlusJSONResponse) VisitReceiveWebhookResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReceiveWebhook409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response ReceiveWebhook409ApplicationProblemPlusJSONResponse) VisitReceiveWebhookResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReceiveWebhook413ApplicationProblemPlusJSONResponse struct {
+	RequestEntityTooLargeApplicationProblemPlusJSONResponse
+}
+
+func (response ReceiveWebhook413ApplicationProblemPlusJSONResponse) VisitReceiveWebhookResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(413)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReceiveWebhook429ApplicationProblemPlusJSONResponse struct {
+	TooManyRequestsApplicationProblemPlusJSONResponse
+}
+
+func (response ReceiveWebhook429ApplicationProblemPlusJSONResponse) VisitReceiveWebhookResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.Header().Set("Retry-After", fmt.Sprint(response.Headers.RetryAfter))
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReceiveWebhook431ApplicationProblemPlusJSONResponse struct {
+	RequestHeaderFieldsTooLargeApplicationProblemPlusJSONResponse
+}
+
+func (response ReceiveWebhook431ApplicationProblemPlusJSONResponse) VisitReceiveWebhookResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(431)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReceiveWebhook500ApplicationProblemPlusJSONResponse struct {
+	InternalServerErrorApplicationProblemPlusJSONResponse
+}
+
+func (response ReceiveWebhook500ApplicationProblemPlusJSONResponse) VisitReceiveWebhookResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReceiveWebhook503ApplicationProblemPlusJSONResponse struct {
+	ServiceUnavailableApplicationProblemPlusJSONResponse
+}
+
+func (response ReceiveWebhook503ApplicationProblemPlusJSONResponse) VisitReceiveWebhookResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.Header().Set("Retry-After", fmt.Sprint(response.Headers.RetryAfter))
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReceiveWebhook504ApplicationProblemPlusJSONResponse struct {
+	GatewayTimeoutApplicationProblemPlusJSONResponse
+}
+
+func (response ReceiveWebhook504ApplicationProblemPlusJSONResponse) VisitReceiveWebhookResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(504)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 	// HealthLive Liveness probe
@@ -415,6 +749,9 @@ type StrictServerInterface interface {
 	// HealthReady Readiness probe
 	// (GET /health/ready)
 	HealthReady(ctx context.Context, request HealthReadyRequestObject) (HealthReadyResponseObject, error)
+	// ReceiveWebhook Receive a Standard Webhooks delivery
+	// (POST /webhooks/{endpoint_id})
+	ReceiveWebhook(ctx context.Context, request ReceiveWebhookRequestObject) (ReceiveWebhookResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error)
@@ -504,33 +841,76 @@ func (sh *strictHandler) HealthReady(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// ReceiveWebhook operation middleware
+func (sh *strictHandler) ReceiveWebhook(w http.ResponseWriter, r *http.Request, endpointId string, params ReceiveWebhookParams) {
+	var request ReceiveWebhookRequestObject
+
+	request.EndpointId = endpointId
+	request.Params = params
+
+	var body ReceiveWebhookJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReceiveWebhook(ctx, request.(ReceiveWebhookRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReceiveWebhook")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReceiveWebhookResponseObject); ok {
+		if err := validResponse.VisitReceiveWebhookResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // Base64 encoded, compressed with deflate, json marshaled OpenAPI spec.
 // Stored as a slice of fixed-width chunks rather than one concatenated
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"1FZNbxs5D/4rhPreXn+l+dr41u22WBfdNki66KEIGlnieNRqpCnFSWwU/u8LasbjOHGb7WG72EOAjCWS",
-	"Dx8+JPVVmVjVMWDgpKZfFWGqY0iYP37V9gK/NJhYvkwMjCH/q+vaO6PZxTCuKc49Vv//lGKQs2RKrLT8",
-	"9z/CQk3Vk/E2xLg9TePz1kqt1+uBspgMuVrcqamiNiS4BJX2RaQKLUQCF260d1atB2oWGClof4l0g/SC",
-	"KNLPRNgEXNZoGC2kjAAK7XxDKNg6xl4Edrx6F+NrTQv8N/ibR7sCXBpEm8DEULhFQ2jBu8qxErvOmcSa",
-	"teSea9KVfNcUayR2rRCCrnIKu4GeBbh4+RxOziYH8Ory7Ruoo5PCQBEJNHQ4hhlHhdUcaQD55NrHNvmR",
-	"OL6GWjuC1JgSdILrLw3SapRRXneuaoGFjDRSA4VLXdUe1VSNk28WaqB4VctnYnJhITUg1B2bu4jflyvg",
-	"EoUNJm0YCD+1dXQ8gje6wrQ5T0zaBQYuNefyogUdLASUeqMpY3c3NfPKsfi40b7BXYSVXrqqqaCFBh7D",
-	"gktR9snRQ9wZ+JfGEVo1/dCS3udy1V+Pc8EsaW5E8KBeJto99bpkPfcIlTalCzgk1Db/gNI/IDa74Ofa",
-	"fuyKuI9ki6ydlzBbk65HN7WHgnQl1/eYu5BYB7MH558XMyAskDAYBGcxsCtWwh+XLkE0pqH27LbE0BYB",
-	"6cYZBFzWMWGCGHIuMjw0S8eSG/Yu96PJwD9mpaV9ynGmFB1ygljkmH2OrTiyfVb1AIrofbxtEWNukrOj",
-	"41PAJWNILoZh2w7QETeCc8KEgSEGv4IYQN9x14k0O94q0Gii1SbCHg06xio9NkV2un7d06KJ9Ep1csTE",
-	"H53dLfOZMWhsYc+emrOjk5NjfXRyNDkpfpnr00NjT0/3MZxYc5N2/BxNJndq5AIfPt1ausC4QMqwHHvc",
-	"RTDXvcj2BWt/+EYDfE9fCN08BuN1SrsNUTLXaToe397ejqgwQ7SOI40iLcZUGPk7OziYPElttYYHx6Pj",
-	"0cEPyPDeAMhd3F3akNDz+HAeCMdoGnK8upT6tqNgjpqQnjVcbr9ebvC8ev9O3V8fr96/A20MpgQcP2MA",
-	"l1KDFub96Nwskrez3563p+3Iz9357HwGurFOMhT2stRyxXLobdJCZru+XCiigPPOYEi4XTjqj5nga8jf",
-	"IT/WGFJsyGAmvjNKY7m71YpaxGE3FIaMVe01y8TLarlBSm2uk9HBaCJW4lTXTk3V4WgyOlQDVWsuM4Hj",
-	"ErXncuzdTYa2wLzCZdzm9pxZNVW/5zuv5cpg9w31dDK5t/wZlzyuvXb31v1WZ/HzHm082PPxsyA/mky+",
-	"1eU9jvGdh5yYHBw+brL/GbMeqOO/E3DfA+2uQNX0w9VApaaqNK3UVAlzQSQn3ZfVrhdJeiCtEmMlal8O",
-	"N8ZDi8a1FRTW6pgaQjVVdTP3zkgBcmF05rKmKFoe5skqMpBmBL+Jh8HmVwvcOi4hRLBYY7AYzAraBZda",
-	"7jcykK25ekQHF/nOTxNCC+m/pQWxPfxhPkJkoI7cR2nZXv6e8qRW7h+S3kZt1Mfo5ZZtZeVkXS4wIDnT",
-	"wgWZ8CgZ7cLeneUfrtaSR+Y05dPd7Ns3Evcvo0hu4UI/TcdqfdWnet/27UbT2veIUx7xfd/IQ6RPS+Z8",
-	"N7E70tZX678GAA==",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

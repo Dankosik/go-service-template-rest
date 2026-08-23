@@ -58,6 +58,9 @@ func defaultValues() map[string]any {
 	// profile:webhooks-durable:start
 	maps.Copy(values, webhooksDefaults())
 	// profile:webhooks-durable:end
+	// profile:inbound-webhooks-standard:start
+	maps.Copy(values, inboundWebhooksDefaults())
+	// profile:inbound-webhooks-standard:end
 	// profile:object-storage:start
 	maps.Copy(values, objectStorageDefaults())
 	// profile:object-storage:end

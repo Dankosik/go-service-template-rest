@@ -67,3 +67,11 @@ webhooks:
   endpoints: ""
   static_secrets: ""
 # profile:webhooks-durable:end
+
+# profile:inbound-webhooks-standard:start
+# Deployment supplies endpoint IDs here. Verification secrets stay in
+# APP__INBOUND_WEBHOOKS__STATIC_SECRETS on the service process only.
+inbound_webhooks:
+  endpoints: ""
+  static_secrets: ""
+# profile:inbound-webhooks-standard:end

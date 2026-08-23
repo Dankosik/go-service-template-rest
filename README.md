@@ -91,6 +91,12 @@ transaction must stage an immutable per-receiver webhook fan-out for the shared
 jobs worker. Receiver processing is at-least-once; see
 [outbound webhook delivery](docs/outbound-webhook-delivery.md).
 <!-- profile:webhooks-durable:end -->
+<!-- profile:inbound-webhooks-standard:start -->
+Choose `DATABASE=postgres JOBS=postgres INBOUND_WEBHOOKS=standard-webhooks`
+when the service must acknowledge Standard Webhooks callbacks before
+asynchronous processing; see
+[inbound webhook receipt](docs/inbound-webhook-receipt.md).
+<!-- profile:inbound-webhooks-standard:end -->
 <!-- profile:authn-oidc-jwt:start -->
 Choose `AUTHN=oidc-jwt` for OIDC discovery and signed JWT access-token
 authentication; see [OIDC/JWT authentication](docs/authentication.md).

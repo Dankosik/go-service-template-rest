@@ -68,6 +68,12 @@ address predicate and Standard Webhooks job adapter, not generic job state,
 subscriber administration, feature transactions, or deployment policy.
 <!-- profile:webhooks-durable:end -->
 
+<!-- profile:inbound-webhooks-standard:start -->
+`internal/inboundwebhook/` and `internal/infra/postgresinboundwebhook/` own
+Standard Webhooks verification, receipt identity, and River dispatch, not
+provider schemas, business effects, or deployment ingress.
+<!-- profile:inbound-webhooks-standard:end -->
+
 ## Dependency Direction
 
 ```text

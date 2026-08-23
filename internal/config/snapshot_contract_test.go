@@ -315,6 +315,10 @@ func sentinelConfigSourceValues() map[string]any {
 		"webhooks.endpoints":      `{"endpoints":[]}`,
 		"webhooks.static_secrets": `{"entries":[]}`,
 		// profile:webhooks-durable:end
+		// profile:inbound-webhooks-standard:start
+		"inbound_webhooks.endpoints":      `{"endpoints":[]}`,
+		"inbound_webhooks.static_secrets": `{"entries":[]}`,
+		// profile:inbound-webhooks-standard:end
 
 		// profile:object-storage:start
 		"object_storage.provider":              "amazon_s3",
@@ -424,6 +428,10 @@ func expectedSentinelSnapshotValues() map[string]any {
 		"webhooks.endpoints":      `{"endpoints":[]}`,
 		"webhooks.static_secrets": `{"entries":[]}`,
 		// profile:webhooks-durable:end
+		// profile:inbound-webhooks-standard:start
+		"inbound_webhooks.endpoints":      `{"endpoints":[]}`,
+		"inbound_webhooks.static_secrets": `{"entries":[]}`,
+		// profile:inbound-webhooks-standard:end
 
 		// profile:object-storage:start
 		"object_storage.provider":              "amazon_s3",

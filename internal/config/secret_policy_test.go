@@ -188,3 +188,21 @@ func TestWebhookSecretSourcePolicy(t *testing.T) {
 }
 
 // profile:webhooks-durable:end
+
+// profile:inbound-webhooks-standard:start
+//
+//nolint:paralleltest // resetConfigEnv mutates process-wide configuration environment.
+func TestInboundWebhookSecretSourcePolicy(t *testing.T) {
+	resetConfigEnv(t)
+	const canary = "inbound-secret-canary"
+	path := writeTempConfig(t, "inbound_webhooks:\n  static_secrets: "+canary+"\n")
+	_, _, err := LoadDetailed(LoadOptions{ConfigPath: path})
+	if !errors.Is(err, ErrSecretPolicy) {
+		t.Fatalf("LoadDetailed() error = %v, want ErrSecretPolicy", err)
+	}
+	if strings.Contains(err.Error(), canary) {
+		t.Fatalf("LoadDetailed() error disclosed inbound secret: %v", err)
+	}
+}
+
+// profile:inbound-webhooks-standard:end

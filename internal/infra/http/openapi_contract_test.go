@@ -444,6 +444,16 @@ func TestOpenAPIRuntimeContractResponsesMatchSpec(t *testing.T) {
 			body:       "ab",
 			wantStatus: http.StatusRequestEntityTooLarge,
 		},
+		// profile:inbound-webhooks-standard:start
+		{
+			name:       "inbound webhook 400 missing headers",
+			handler:    ready,
+			method:     http.MethodPost,
+			target:     "/webhooks/orders",
+			body:       "{}",
+			wantStatus: http.StatusBadRequest,
+		},
+		// profile:inbound-webhooks-standard:end
 	}
 
 	for _, tc := range testCases {

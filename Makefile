@@ -50,6 +50,9 @@ OUTBOX_RACE_PACKAGES := ./internal/domainevent ./internal/infra/postgresoutbox .
 # profile:webhooks-durable:start
 WEBHOOK_RACE_PACKAGES := ./internal/infra/postgreswebhook ./test/...
 # profile:webhooks-durable:end
+# profile:inbound-webhooks-standard:start
+INBOUND_WEBHOOK_RACE_PACKAGES := ./internal/inboundwebhook ./internal/infra/postgresinboundwebhook ./test/...
+# profile:inbound-webhooks-standard:end
 # Effective coverage is measured across the whole module, so a freshly generated
 # service already sits near this floor on template tests alone. Initialization
 # lowers it to 70.0 so early feature work has runway; raise it as your own tests

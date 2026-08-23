@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 TEMPLATE_INIT_PROFILE="${TEMPLATE_INIT_PROFILE:-all}"
-valid_profiles="all, minimal, postgres, grpc, authn, outbound-auth, http-idempotency, webhooks"
+valid_profiles="all, minimal, postgres, grpc, authn, outbound-auth, http-idempotency, webhooks, inbound-webhooks"
 # profile:jobs-postgres:start
 valid_profiles="${valid_profiles}, jobs"
 # profile:jobs-postgres:end
@@ -18,7 +18,7 @@ valid_profiles="${valid_profiles}, outbox"
 # profile:outbox-postgres:end
 
 case "${TEMPLATE_INIT_PROFILE}" in
-	all | minimal | postgres | grpc | authn | outbound-auth | http-idempotency | webhooks) ;;
+	all | minimal | postgres | grpc | authn | outbound-auth | http-idempotency | webhooks | inbound-webhooks) ;;
 	# profile:jobs-postgres:start
 	jobs) ;;
 	# profile:jobs-postgres:end
@@ -1967,5 +1967,131 @@ if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "webh
 		same_text "${webhooks_snapshot}" "$(snapshot "${webhooks_durable}")"
 fi
 # profile:webhooks-durable:end
+
+# profile:inbound-webhooks-standard:start
+if [[ "${TEMPLATE_INIT_PROFILE}" == "all" || "${TEMPLATE_INIT_PROFILE}" == "inbound-webhooks" ]]; then
+	inbound_paths=(
+		internal/inboundwebhook
+		internal/infra/postgresinboundwebhook
+		cmd/jobs-worker/inbound_webhook_bindings.go
+		cmd/jobs-worker/builder_inbound_testworker.go
+		cmd/service/internal/bootstrap/startup_inbound_webhooks.go
+		cmd/service/internal/bootstrap/service_api.go
+		internal/config/inbound_webhooks_config.go
+		internal/infra/http/inbound_webhook.go
+		migrations/000010_postgres_inbound_webhooks.sql
+		internal/infra/postgres/queries/postgres_inbound_webhooks.sql
+		docs/inbound-webhook-receipt.md
+		test/postgres_inbound_webhook_integration_test.go
+		test/inbound_webhook_process_integration_test.go
+	)
+
+	prove_inbound_absent() {
+		local root="$1"
+		local label="$2"
+		local removed
+		for removed in "${inbound_paths[@]}"; do
+			assert "${label} retained ${removed}" path_absent "${root}/${removed}"
+		done
+		grep -Fqx 'inbound_webhooks = "none"' "${root}/template.lock"
+		assert "${label} retained inbound profile markers" grep_absent -R -Fq \
+			'profile:inbound-webhooks-'"standard:" "${root}/Makefile" "${root}/README.md" \
+			"${root}/docs" "${root}/env" "${root}/internal" "${root}/scripts/ci"
+		assert "${label} retained inbound OpenAPI operation" grep_absent -Fq \
+			'/webhooks/{endpoint_id}' "${root}/api/openapi/service.yaml"
+		assert "${label} retained inbound webhook Receiver allowlist" grep_absent -Fq \
+			'inboundwebhook.Receiver' "${root}/.golangci.yml"
+		assert "${label} retained inbound webhook test-worker build tag" grep_absent -R -Fq \
+			'inbound_webhook_test_worker' "${root}/cmd/jobs-worker" "${root}/.golangci.yml"
+	}
+
+	inbound_unset="$(copy_template_checkout inbound-unset git@github.com:acme/inbound-unset.git)"
+	(
+		cd "${inbound_unset}"
+		CODEOWNER=@acme/platform DATABASE=postgres JOBS=postgres bash ./scripts/init-module.sh
+	)
+	prove_inbound_absent "${inbound_unset}" "omitted INBOUND_WEBHOOKS"
+	assert "omitted INBOUND_WEBHOOKS retained shared webhook builder" \
+		path_absent "${inbound_unset}/cmd/jobs-worker/builder_webhooks.go"
+	assert "omitted INBOUND_WEBHOOKS retained Standard Webhooks module" \
+		grep_absent -Fq 'standard-webhooks/libraries' "${inbound_unset}/go.mod"
+
+	inbound_none="$(copy_template_checkout inbound-none git@github.com:acme/inbound-none.git)"
+	(
+		cd "${inbound_none}"
+		CODEOWNER=@acme/platform DATABASE=postgres JOBS=postgres INBOUND_WEBHOOKS=none bash ./scripts/init-module.sh
+		go test -vet=off ./...
+		make sqlc-check mod-tidy-check project-structure-check
+	)
+	prove_inbound_absent "${inbound_none}" "INBOUND_WEBHOOKS=none"
+
+	for invalid in '' custom; do
+		invalid_name="${invalid:-empty}"
+		invalid_inbound="$(copy_template_checkout "inbound-invalid-${invalid_name}" "git@github.com:acme/inbound-invalid-${invalid_name}.git")"
+		expect_unchanged_failure "${invalid_inbound}" env CODEOWNER=@acme/platform INBOUND_WEBHOOKS="${invalid}" \
+			bash "${ROOT_DIR}/scripts/init-module.sh"
+	done
+	expect_unchanged_failure "$(copy_template_checkout inbound-without-postgres git@github.com:acme/inbound-without-postgres.git)" \
+		env CODEOWNER=@acme/platform DATABASE=none JOBS=postgres INBOUND_WEBHOOKS=standard-webhooks \
+		bash "${ROOT_DIR}/scripts/init-module.sh"
+	expect_unchanged_failure "$(copy_template_checkout inbound-without-jobs git@github.com:acme/inbound-without-jobs.git)" \
+		env CODEOWNER=@acme/platform DATABASE=postgres JOBS=none INBOUND_WEBHOOKS=standard-webhooks \
+		bash "${ROOT_DIR}/scripts/init-module.sh"
+
+	inbound_selected="$(copy_template_checkout inbound-selected git@github.com:acme/inbound-selected.git)"
+	(
+		cd "${inbound_selected}"
+		CODEOWNER=@acme/platform DATABASE=postgres JOBS=postgres INBOUND_WEBHOOKS=standard-webhooks bash ./scripts/init-module.sh
+		go test -vet=off ./...
+		go build ./cmd/jobs-worker ./cmd/migrate
+		make sqlc-check mod-tidy-check project-structure-check
+	)
+	for retained in "${inbound_paths[@]}"; do
+		assert "INBOUND_WEBHOOKS=standard-webhooks removed ${retained}" path_present "${inbound_selected}/${retained}"
+	done
+	grep -Fqx 'inbound_webhooks = "standard-webhooks"' "${inbound_selected}/template.lock"
+	assert "INBOUND_WEBHOOKS=standard-webhooks retained unresolved markers" grep_absent -R -Fq \
+		'profile:inbound-webhooks-'"standard:" "${inbound_selected}/Makefile" "${inbound_selected}/README.md" \
+		"${inbound_selected}/docs" "${inbound_selected}/env" "${inbound_selected}/internal" "${inbound_selected}/scripts/ci"
+	assert "INBOUND_WEBHOOKS=standard-webhooks removed shared webhook builder" \
+		path_present "${inbound_selected}/cmd/jobs-worker/builder_webhooks.go"
+	grep -Fq 'standard-webhooks/libraries' "${inbound_selected}/go.mod"
+	grep -Fq '/webhooks/{endpoint_id}' "${inbound_selected}/api/openapi/service.yaml"
+	inbound_snapshot="$(snapshot "${inbound_selected}")"
+	(
+		cd "${inbound_selected}"
+		CODEOWNER=@acme/platform DATABASE=postgres JOBS=postgres INBOUND_WEBHOOKS=standard-webhooks bash ./scripts/init-module.sh
+	)
+	assert "repeated INBOUND_WEBHOOKS=standard-webhooks initialization changed the checkout" \
+		same_text "${inbound_snapshot}" "$(snapshot "${inbound_selected}")"
+
+	inbound_with_outbound="$(copy_template_checkout inbound-with-outbound git@github.com:acme/inbound-with-outbound.git)"
+	(
+		cd "${inbound_with_outbound}"
+		CODEOWNER=@acme/platform DATABASE=postgres JOBS=postgres WEBHOOKS=durable INBOUND_WEBHOOKS=standard-webhooks \
+			bash ./scripts/init-module.sh
+	)
+	assert "inbound+outbound removed shared webhook builder" \
+		path_present "${inbound_with_outbound}/cmd/jobs-worker/builder_webhooks.go"
+	assert "inbound+outbound removed outbound adapter" \
+		path_present "${inbound_with_outbound}/internal/infra/postgreswebhook"
+	assert "inbound+outbound removed inbound adapter" \
+		path_present "${inbound_with_outbound}/internal/infra/postgresinboundwebhook"
+	grep -Fq 'standard-webhooks/libraries' "${inbound_with_outbound}/go.mod"
+	grep -Fqx 'webhooks = "durable"' "${inbound_with_outbound}/template.lock"
+	grep -Fqx 'inbound_webhooks = "standard-webhooks"' "${inbound_with_outbound}/template.lock"
+
+	outbound_keeps_shared="$(copy_template_checkout inbound-none-outbound git@github.com:acme/inbound-none-outbound.git)"
+	(
+		cd "${outbound_keeps_shared}"
+		CODEOWNER=@acme/platform DATABASE=postgres JOBS=postgres WEBHOOKS=durable INBOUND_WEBHOOKS=none \
+			bash ./scripts/init-module.sh
+	)
+	prove_inbound_absent "${outbound_keeps_shared}" "INBOUND_WEBHOOKS=none WEBHOOKS=durable"
+	assert "outbound-only removed shared webhook builder" \
+		path_present "${outbound_keeps_shared}/cmd/jobs-worker/builder_webhooks.go"
+	grep -Fq 'standard-webhooks/libraries' "${outbound_keeps_shared}/go.mod"
+fi
+# profile:inbound-webhooks-standard:end
 
 echo "template initialization contract passed"

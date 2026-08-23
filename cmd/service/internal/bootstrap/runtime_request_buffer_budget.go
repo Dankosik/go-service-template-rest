@@ -48,7 +48,7 @@ func reportRequestBufferBudget(log *slog.Logger, cfg config.Config, limit int64)
 		return
 	}
 
-	worstCase := int64(cfg.HTTP.MaxInFlight) * cfg.HTTP.MaxBodyBytes * requestBufferCopiesPerRequest
+	worstCase := int64(cfg.HTTP.MaxInFlight) * cfg.HTTP.MaxBodyBytes * requestBufferCopyCount()
 	budget := int64(float64(limit) * cfg.Runtime.MemoryLimitRatio * requestBufferBudgetRatio)
 	if worstCase <= budget {
 		return
@@ -64,4 +64,12 @@ func reportRequestBufferBudget(log *slog.Logger, cfg config.Config, limit int64)
 		"request_buffers.budget_bytes", budget,
 		"limit.bytes", limit,
 	)
+}
+
+func requestBufferCopyCount() int64 {
+	copies := int64(requestBufferCopiesPerRequest)
+	// profile:inbound-webhooks-standard:start
+	copies++
+	// profile:inbound-webhooks-standard:end
+	return copies
 }

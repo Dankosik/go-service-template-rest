@@ -16,13 +16,14 @@ func TestBuildWebhookWorkers(t *testing.T) {
 		Enabled:       true,
 		StaticSecrets: `{"entries":[{"owner_scope":"orders","receiver_id":"alpha","key_reference":"key-v1","secret":"whsec_` + secret + `"}]}`,
 	}}
-	workers, cleanup, err := buildWebhookWorkers(context.Background(), cfg, slog.Default())
+	runtime, err := buildWebhookWorkers(context.Background(), cfg, slog.Default())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cleanup != nil || workers == nil {
-		t.Fatalf("workers nil = %t, cleanup nil = %t", workers == nil, cleanup == nil)
+	if runtime.Cleanup != nil || runtime.Workers == nil {
+		t.Fatalf("workers nil = %t, cleanup nil = %t", runtime.Workers == nil, runtime.Cleanup == nil)
 	}
+	workers := runtime.Workers
 	secrets, err := postgreswebhook.ParseSecretManifest(cfg.Webhooks.StaticSecrets)
 	if err != nil {
 		t.Fatal(err)
