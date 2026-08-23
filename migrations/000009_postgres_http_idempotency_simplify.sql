@@ -1,5 +1,7 @@
 -- +goose Up
 
+LOCK TABLE postgres_http_idempotency IN ACCESS EXCLUSIVE MODE;
+
 -- +goose StatementBegin
 DO $$
 BEGIN
@@ -32,7 +34,13 @@ CREATE TABLE postgres_http_idempotency (
     )
 );
 
+CREATE INDEX postgres_http_idempotency_expires_idx
+    ON postgres_http_idempotency (expires_at, identity_token)
+    WHERE expires_at IS NOT NULL;
+
 -- +goose Down
+
+LOCK TABLE postgres_http_idempotency IN ACCESS EXCLUSIVE MODE;
 
 -- +goose StatementBegin
 DO $$
