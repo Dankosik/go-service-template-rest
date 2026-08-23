@@ -16,6 +16,7 @@ if [[ "${mode}" == "self-test" ]]; then
 	git -C "${fixture}" config user.email migration-history@example.invalid
 	mkdir -p "${fixture}/migrations"
 	printf '%s\n' '-- +goose Up' 'SELECT 1;' '-- +goose Down' 'SELECT 1;' >"${fixture}/migrations/000001_create.sql"
+	printf '%s\n' '-- +goose Up' 'SELECT 3;' '-- +goose Down' 'SELECT 3;' >"${fixture}/migrations/000003_extend.sql"
 	git -C "${fixture}" add .
 	git -C "${fixture}" commit -qm baseline
 	printf '%s\n' '-- rewritten' >>"${fixture}/migrations/000001_create.sql"
@@ -24,8 +25,15 @@ if [[ "${mode}" == "self-test" ]]; then
 		exit 1
 	fi
 	git -C "${fixture}" restore migrations/000001_create.sql
-	printf '%s\n' '-- +goose Up' 'SELECT 2;' '-- +goose Down' 'SELECT 2;' >"${fixture}/migrations/000002_add.sql"
+	printf '%s\n' '-- +goose Up' 'SELECT 4;' '-- +goose Down' 'SELECT 4;' >"${fixture}/migrations/000004_add.sql"
+	git -C "${fixture}" add migrations/000004_add.sql
 	MIGRATION_REPO_ROOT="${fixture}" MIGRATION_HISTORY_MODE=worktree bash "${BASH_SOURCE[0]}" >/dev/null
+	printf '%s\n' '-- +goose Up' 'SELECT 2;' '-- +goose Down' 'SELECT 2;' >"${fixture}/migrations/000002_late.sql"
+	git -C "${fixture}" add migrations/000002_late.sql
+	if MIGRATION_REPO_ROOT="${fixture}" MIGRATION_HISTORY_MODE=worktree bash "${BASH_SOURCE[0]}" >/dev/null 2>&1; then
+		echo "migration history self-test: out-of-order addition passed" >&2
+		exit 1
+	fi
 	echo "migration history self-test passed"
 	exit 0
 fi
@@ -86,13 +94,45 @@ if [[ -d "${ROOT_DIR}/scripts/profiles" ]]; then
 	exit 0
 fi
 
-changes="$(
-	git diff --name-status --find-renames --find-copies "${diff_args[@]}" -- migrations/ |
-		awk '$1 !~ /^A$/ { print }'
-)"
+diff_status="$(git diff --name-status --find-renames --find-copies "${diff_args[@]}" -- migrations/)"
+changes="$(printf '%s\n' "${diff_status}" | awk '$1 !~ /^A$/ { print }')"
 if [[ -n "${changes}" ]]; then
 	echo "migration history: applied migration files are append-only (${scope})" >&2
 	printf '%s\n' "${changes}" >&2
+	exit 1
+fi
+
+prior_max="$(
+	git ls-tree -r --name-only "${base_ref}" -- migrations/ |
+		LC_ALL=C awk -F/ '
+			$NF ~ /^[0-9]+_.+\.sql$/ {
+				name = $NF
+				sub(/_.*/, "", name)
+				if (name + 0 > max) max = name + 0
+			}
+			END { print max + 0 }
+		'
+)"
+added_paths="$(printf '%s\n' "${diff_status}" | awk '$1 == "A" { print $2 }')"
+if [[ "${mode}" != "exact-base" ]]; then
+	untracked="$(git ls-files --others --exclude-standard -- migrations/)"
+	if [[ -n "${untracked}" ]]; then
+		added_paths="${added_paths}${added_paths:+$'\n'}${untracked}"
+	fi
+fi
+out_of_order="$(
+	printf '%s\n' "${added_paths}" |
+		LC_ALL=C awk -F/ -v max="${prior_max}" '
+			$NF ~ /^[0-9]+_.+\.sql$/ {
+				name = $NF
+				sub(/_.*/, "", name)
+				if (name + 0 <= max) print
+			}
+		'
+)"
+if [[ -n "${out_of_order}" ]]; then
+	echo "migration history: new migrations must be newer than prior version ${prior_max} (${scope})" >&2
+	printf '%s\n' "${out_of_order}" >&2
 	exit 1
 fi
 
