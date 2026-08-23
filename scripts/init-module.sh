@@ -567,8 +567,8 @@ if [[ "${outbox}" == "postgres" && "${messaging}" != "nats-jetstream" ]]; then
 fi
 
 # The reference example is upstream teaching material. Keeping it would make a
-# generated service own five extra packages, a second OpenAPI contract, and a
-# second main() that it must lint, test, and regenerate forever.
+# generated service own extra packages and a second OpenAPI contract that it
+# must lint, test, and regenerate forever.
 reference_example="${REFERENCE_EXAMPLE:-remove}"
 case "${reference_example}" in
 remove | keep) ;;
@@ -1022,7 +1022,6 @@ fi
 		rm -f -- \
 			buf.yaml \
 			buf.gen.yaml \
-			examples/reference-service/grpc_failure_mapping_contract_test.go \
 			cmd/service/internal/bootstrap/startup_grpc.go \
 			cmd/service/internal/bootstrap/startup_grpc_test.go \
 			cmd/service/internal/bootstrap/startup_grpc_tls.go \
