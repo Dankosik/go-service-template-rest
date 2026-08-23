@@ -103,12 +103,12 @@ func TestClassifyCommitOutcome(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			got := ClassifyCommitError(tc.err)
+			got := classifyCommitError(tc.err)
 			if errors.Is(got, ErrCommitUnknown) != tc.wantUnknown {
-				t.Fatalf("ClassifyCommitError(%v) = %v, unknown=%t want %t", tc.err, got, errors.Is(got, ErrCommitUnknown), tc.wantUnknown)
+				t.Fatalf("classifyCommitError(%v) = %v, unknown=%t want %t", tc.err, got, errors.Is(got, ErrCommitUnknown), tc.wantUnknown)
 			}
 			if tc.err != nil && !errors.Is(got, tc.err) {
-				t.Fatalf("ClassifyCommitError(%v) = %v, want original cause", tc.err, got)
+				t.Fatalf("classifyCommitError(%v) = %v, want original cause", tc.err, got)
 			}
 		})
 	}
