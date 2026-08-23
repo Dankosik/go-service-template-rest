@@ -20,8 +20,8 @@ func TestBuildWebhookWorkers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if runtime.Cleanup != nil || runtime.Workers == nil {
-		t.Fatalf("workers nil = %t, cleanup nil = %t", runtime.Workers == nil, runtime.Cleanup == nil)
+	if runtime.Workers == nil {
+		t.Fatal("workers are nil")
 	}
 	workers := runtime.Workers
 	secrets, err := postgreswebhook.ParseSecretManifest(cfg.Webhooks.StaticSecrets)

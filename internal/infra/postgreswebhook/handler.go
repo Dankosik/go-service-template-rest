@@ -41,6 +41,10 @@ func AddWorker(workers *river.Workers, secrets *SecretManifest) error {
 
 func (*Handler) Timeout(*river.Job[deliveryArgs]) time.Duration { return 30 * time.Second }
 
+func (*Handler) NextRetry(job *river.Job[deliveryArgs]) time.Time {
+	return webhookNextRetry(job, time.Now().UTC())
+}
+
 func (h *Handler) Work(ctx context.Context, job *river.Job[deliveryArgs]) error {
 	if h == nil || h.resolver == nil || h.secrets == nil || job == nil {
 		return cancelJob("webhook worker is not configured")
@@ -53,6 +57,9 @@ func (h *Handler) Work(ctx context.Context, job *river.Job[deliveryArgs]) error 
 		return cancelJob("webhook attempt deadline is required")
 	}
 	attemptedAt := time.Now().UTC()
+	if webhookDeliveryExpired(job, attemptedAt) {
+		return cancelJob("webhook delivery deadline exhausted")
+	}
 	attempt := deliveryAttempt{
 		ID: job.Args.DeliveryID, OwnerScope: job.Args.OwnerScope,
 		ReceiverID: job.Args.ReceiverID, URL: job.Args.URL,
@@ -65,6 +72,13 @@ func (h *Handler) Work(ctx context.Context, job *river.Job[deliveryArgs]) error 
 		return prepareFailure(ctx, err)
 	}
 	result, sendErr := tryPreparedAddresses(ctx, prepared, send)
+	if retryableWebhookStatus(result.Evidence.StatusCode) {
+		if hint, ok := parseRetryAfter(result.RetryAfter, result.ResponseDate, attemptedAt, webhookMaxBackoff); ok {
+			if err := rememberRetryAfter(ctx, job, attemptedAt.Add(hint)); err != nil {
+				return errors.Join(errors.New("webhook delivery retryable"), err)
+			}
+		}
+	}
 	return classifyDelivery(result, sendErr)
 }
 
