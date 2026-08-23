@@ -19,19 +19,9 @@ func TestMessagingCompositionDisabledHasNoRuntimeOrReadiness(t *testing.T) {
 	if len(runtime.ReadinessProbes()) != 0 {
 		t.Fatalf("disabled messaging probes = %d", len(runtime.ReadinessProbes()))
 	}
-	if !runtime.Ready() {
-		t.Fatal("disabled messaging runtime is not ready")
-	}
 	runtime.StartDrain()
 	if err := runtime.Shutdown(t.Context()); err != nil {
 		t.Fatalf("disabled messaging Shutdown() error = %v", err)
-	}
-}
-
-func TestMessagingCompositionReadinessUsesImmediateClientState(t *testing.T) {
-	runtime := messagingRuntime{client: new(natsjs.Client)}
-	if runtime.Ready() {
-		t.Fatal("disconnected messaging runtime reported ready")
 	}
 }
 

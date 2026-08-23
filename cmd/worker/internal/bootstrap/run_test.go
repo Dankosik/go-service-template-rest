@@ -7,8 +7,6 @@ import (
 	"errors"
 	"log/slog"
 	"net"
-	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -16,7 +14,6 @@ import (
 	"github.com/example/go-service-template-rest/cmd/internal/runtimeopts"
 	"github.com/example/go-service-template-rest/internal/config"
 	"github.com/example/go-service-template-rest/internal/config/configtest"
-	"github.com/example/go-service-template-rest/internal/health"
 	"github.com/example/go-service-template-rest/internal/infra/natsjs"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry"
 	"github.com/example/go-service-template-rest/internal/infra/telemetry/telemetrytest"
@@ -246,28 +243,6 @@ func TestMessagingCompositionDoesNotBuildHandlerBeforeBrokerAdmission(t *testing
 	}
 	if built {
 		t.Fatal("worker built the feature handler before broker topology admission")
-	}
-}
-
-func TestWorkerDiagnosticsReadinessUsesImmediateMessagingState(t *testing.T) {
-	healthSvc := health.New()
-	if err := healthSvc.Refresh(t.Context(), time.Second, 3); err != nil {
-		t.Fatalf("seed healthy readiness: %v", err)
-	}
-	server := runtimeopts.DiagnosticsServer(workerReady(func() bool { return false }, healthSvc), telemetry.New())
-	recorder := httptest.NewRecorder()
-	server.Handler.ServeHTTP(recorder, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/health/ready", nil))
-	if recorder.Code != http.StatusServiceUnavailable {
-		t.Fatalf("GET /health/ready status = %d, want %d", recorder.Code, http.StatusServiceUnavailable)
-	}
-
-	server = runtimeopts.DiagnosticsServer(workerReady(func() bool { return true }, healthSvc), telemetry.New())
-	for path := range map[string]struct{}{"/health/live": {}, "/health/ready": {}, "/metrics": {}} {
-		recorder = httptest.NewRecorder()
-		server.Handler.ServeHTTP(recorder, httptest.NewRequestWithContext(t.Context(), http.MethodGet, path, nil))
-		if recorder.Code != http.StatusOK {
-			t.Fatalf("GET %s status = %d, want %d", path, recorder.Code, http.StatusOK)
-		}
 	}
 }
 

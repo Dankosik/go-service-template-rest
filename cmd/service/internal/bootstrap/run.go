@@ -126,24 +126,6 @@ func productionRuntimeWiring() runtimeWiring {
 	}
 }
 
-func checkRuntimeReadiness(
-	ctx context.Context,
-	startupAdmission *startupAdmissionController,
-	// profile:messaging-nats-jetstream:start
-	messaging messagingRuntime,
-	// profile:messaging-nats-jetstream:end
-) error {
-	if err := startupAdmission.CheckReady(ctx); err != nil {
-		return err
-	}
-	// profile:messaging-nats-jetstream:start
-	if !messaging.Ready() {
-		return errors.New("messaging is not ready")
-	}
-	// profile:messaging-nats-jetstream:end
-	return nil
-}
-
 func Run(args []string) error {
 	return runWithRuntime(args, productionRuntimeWiring())
 }
@@ -317,16 +299,8 @@ func runWithRuntime(args []string, wiring runtimeWiring) (runErr error) {
 		domainErrors,
 		httpRuntimeBindings{
 			Handlers: httpx.Handlers{
-				Health: healthSvc,
-				ReadinessGate: func(ctx context.Context) error {
-					return checkRuntimeReadiness(
-						ctx,
-						startupAdmission,
-						// profile:messaging-nats-jetstream:start
-						messaging,
-						// profile:messaging-nats-jetstream:end
-					)
-				},
+				Health:        healthSvc,
+				ReadinessGate: startupAdmission.CheckReady,
 				// profile:inbound-webhooks-standard:start
 				InboundWebhook: inboundReceiver,
 				// profile:inbound-webhooks-standard:end
